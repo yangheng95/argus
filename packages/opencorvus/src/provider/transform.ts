@@ -741,12 +741,20 @@ export namespace ProviderTransform {
 
     // Enable thinking for reasoning models on alibaba-cn (DashScope).
     // DashScope's OpenAI-compatible API requires `enable_thinking: true` in the request body
-    // to return reasoning_content. Without it, models like kimi-k2.5, qwen-plus, qwen3, qwq,
-    // deepseek-r1, etc. never output thinking/reasoning tokens.
-    // Note: kimi-k2-thinking is excluded as it returns reasoning_content by default.
+    // to return reasoning_content. Without it, models like qwen3, qwq, deepseek-r1, etc.
+    // never output thinking/reasoning tokens.
+    // Exclusions:
+    //   - kimi-k2-thinking: returns reasoning_content by default without enable_thinking
+    //   - interleaved models (e.g. kimi-k2.5): already output reasoning via an interleaved
+    //     field; sending enable_thinking is redundant and can trigger the same tool_calls
+    //     conflict (tool calls rendered as text JSON instead of structured tool_calls blocks)
+    // CAVEAT: enable_thinking conflicts with streaming tool_calls on DashScope — the model
+    // outputs tool calls as text content instead of structured tool_calls blocks.
+    // session/llm.ts strips this flag when real tools are present in the request.
     if (
       input.model.providerID.startsWith("alibaba") &&
       input.model.capabilities.reasoning &&
+      !input.model.capabilities.interleaved &&
       input.model.api.npm === "@ai-sdk/openai-compatible" &&
       !modelId.includes("kimi-k2-thinking")
     ) {

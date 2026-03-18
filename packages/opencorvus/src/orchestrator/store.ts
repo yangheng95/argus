@@ -962,7 +962,7 @@ export function viewDelivery(row: DeliveryRow) {
     status: row.status,
     summary: row.summary,
     result: {
-      summary: String(result.summary ?? row.summary),
+      summary: (typeof result.summary === "string" ? result.summary : undefined) ?? row.summary ?? "",
       changedFiles: arrayOfStrings(result.changed_files),
       diffs: arrayOfDiffs(result.diffs),
       artifacts: Array.isArray(result.artifacts)

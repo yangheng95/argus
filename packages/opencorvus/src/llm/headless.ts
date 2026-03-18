@@ -132,13 +132,30 @@ export async function completeHeadlessText<TOOLS extends ToolSet>(input: {
     model,
     options,
   )
+  const providerOptions = ProviderTransform.providerOptions(model, options)
+
+  // DashScope streaming: enable_thinking conflicts with structured tool_calls.
+  // Same fix as session/llm.ts — strip enable_thinking when real tools are present.
+  if (
+    model.providerID.startsWith("alibaba") &&
+    model.capabilities.reasoning &&
+    tools &&
+    Object.keys(tools).length > 0
+  ) {
+    const key = Object.keys(providerOptions).find((k) => k.startsWith("alibaba"))
+    if (key && providerOptions[key]?.enable_thinking) {
+      providerOptions[key] = { ...providerOptions[key] }
+      delete providerOptions[key].enable_thinking
+    }
+  }
+
   return completeText<TOOLS>({
     ...hooks,
     abortSignal,
     maxOutputTokens: maxOutputTokens ?? ProviderTransform.maxOutputTokens(model),
     model: language,
     messages,
-    providerOptions: ProviderTransform.providerOptions(model, options),
+    providerOptions,
     stopWhen,
     temperature: model.capabilities.temperature ? ProviderTransform.temperature(model) : undefined,
     timeoutMs,

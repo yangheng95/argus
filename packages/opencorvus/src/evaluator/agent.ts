@@ -442,7 +442,15 @@ function buildUserPrompt(
   const sections: string[] = []
 
   // Task context
-  sections.push(`# Task\n\nTitle: ${input.task.title}\nRequest: ${input.task.request}`)
+  const isPartialDelivery = input.goals.length === 1
+  sections.push(
+    isPartialDelivery
+      ? `# Task Context\n\nTitle: ${input.task.title}\n\n` +
+        `⚠️ SCOPE: You are evaluating ONE goal from a multi-goal task. Other goals run in separate sessions. ` +
+        `Do NOT assess whether the full task requirements are complete — only evaluate whether the single goal listed in # Goals is satisfied.\n\n` +
+        `Full request (background context only):\n${input.task.request}`
+      : `# Task\n\nTitle: ${input.task.title}\nRequest: ${input.task.request}`,
+  )
 
   // Goals — with verification guidance per goal
   sections.push(
@@ -624,6 +632,7 @@ Under \`# Replan Guidance\`, include whenever verdict is \`rejected\` — omit o
 - Evidence must be specific, not generic.
 - Section headings must always use the English names shown in Phase 3 above. Write body text (evidence, reasoning, summaries, guidance) in the same language as the task request.
 - If required evidence is missing, reject or mark inconclusive instead of guessing.
+- **Scope**: Evaluate ONLY the goals listed in \`# Goals\`. Do not assess whether the full task spec is complete — other goals are evaluated in separate runs. A goal passes if ITS OWN criteria is satisfied, regardless of what other parts of the codebase are missing.
 
 ## Quality Self-Check
 

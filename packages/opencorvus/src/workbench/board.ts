@@ -1028,7 +1028,7 @@ function viewBoardDelivery(
     status: row.status,
     summary: clipBoard(row.summary),
     result: {
-      summary: clipBoard(String(result.summary ?? row.summary)),
+      summary: clipBoard((typeof result.summary === "string" ? result.summary : undefined) ?? row.summary ?? ""),
       changedFiles: Array.isArray(result.changed_files)
         ? result.changed_files.filter((item): item is string => typeof item === "string").slice(0, BOARD_CHANGED_FILE_LIMIT)
         : [],

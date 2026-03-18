@@ -149,6 +149,28 @@ export namespace LLM {
 
     const tools = await resolveTools(input)
     const providerOptions = ProviderTransform.providerOptions(input.model, params.options)
+
+    // DashScope streaming API: enable_thinking conflicts with structured tool calling.
+    // When both are present the model outputs tool calls as text content (raw JSON)
+    // instead of structured tool_calls blocks, causing tools to render as plain text
+    // and preventing actual tool execution.
+    // Fix: strip enable_thinking when real tools are present for DashScope providers.
+    if (
+      input.model.providerID.startsWith("alibaba") &&
+      input.model.capabilities.reasoning &&
+      Object.keys(tools).filter((t) => t !== "_noop" && t !== "invalid").length > 0
+    ) {
+      const key = Object.keys(providerOptions).find((k) => k.startsWith("alibaba"))
+      if (key && providerOptions[key]?.enable_thinking) {
+        providerOptions[key] = { ...providerOptions[key] }
+        delete providerOptions[key].enable_thinking
+        l.info("disabled enable_thinking for DashScope streaming with tools", {
+          model: input.model.id,
+          toolCount: Object.keys(tools).length,
+        })
+      }
+    }
+
     const requestHeaders = {
       ...(input.model.providerID.startsWith("opencorvus")
         ? {
