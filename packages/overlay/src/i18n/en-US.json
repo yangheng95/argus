@@ -383,6 +383,10 @@
   "log.source.client": "CLIENT",
   "log.source.server": "SERVER",
   "log.title": "Logs",
+  "log.server_logs": "Server Logs",
+  "log.hide_server": "Hide Server",
+  "log.exec_graph": "Exec Graph",
+  "log.exec_graph_title": "Execution Graph",
   "plan.context.clarification": {
     "one": "**Clarification Needed**: {{count}} open question",
     "other": "**Clarification Needed**: {{count}} open questions"

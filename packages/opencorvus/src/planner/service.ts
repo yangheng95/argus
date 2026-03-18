@@ -193,9 +193,12 @@ export namespace HeadlessPlannerService {
     }
     const controller = new AbortController()
     let timedOut = false
-    const guard = createInactivityGuard(timeoutMs, () => {
+    // Use a short per-token inactivity window (2 min) so a hung API call doesn't
+    // block progress for the full planner budget.
+    const tokenInactivityMs = Math.min(timeoutMs, 2 * 60 * 1000)
+    const guard = createInactivityGuard(tokenInactivityMs, () => {
       timedOut = true
-      controller.abort(new PlannerFailureError(`planner stalled after ${timeoutMs}ms without activity`))
+      controller.abort(new PlannerFailureError(`planner stalled after ${tokenInactivityMs}ms without activity`))
     })
     const signal = controller.signal
     const stream = mergeTextHooks(input.stream, {
@@ -232,7 +235,7 @@ export namespace HeadlessPlannerService {
       stream,
       onStatus,
     }).catch((error) => {
-      if (timedOut) throw new PlannerFailureError(`planner stalled after ${timeoutMs}ms without activity`)
+      if (timedOut) throw new PlannerFailureError(`planner stalled after ${tokenInactivityMs}ms without activity`)
       throw new PlannerFailureError("planner agent failed", { cause: error })
     }).finally(() => {
       guard.clear()
@@ -345,9 +348,12 @@ export namespace HeadlessPlannerService {
     }
     const controller = new AbortController()
     let timedOut = false
-    const guard = createInactivityGuard(timeoutMs, () => {
+    // Use a short per-token inactivity window (2 min) so a hung API call doesn't
+    // block progress for the full planner budget.
+    const tokenInactivityMs = Math.min(timeoutMs, 2 * 60 * 1000)
+    const guard = createInactivityGuard(tokenInactivityMs, () => {
       timedOut = true
-      controller.abort(new PlannerFailureError(`planner stalled after ${timeoutMs}ms without activity`))
+      controller.abort(new PlannerFailureError(`planner stalled after ${tokenInactivityMs}ms without activity`))
     })
     const signal = controller.signal
     const stream = mergeTextHooks(input.stream, {
@@ -385,7 +391,7 @@ export namespace HeadlessPlannerService {
       stream,
       onStatus,
     }).catch((error) => {
-      if (timedOut) throw new PlannerFailureError(`planner stalled after ${timeoutMs}ms without activity`)
+      if (timedOut) throw new PlannerFailureError(`planner stalled after ${tokenInactivityMs}ms without activity`)
       throw new PlannerFailureError("planner agent replan failed", { cause: error })
     }).finally(() => {
       guard.clear()

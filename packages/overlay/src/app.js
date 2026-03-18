@@ -140,6 +140,8 @@ const state = {
   pendingTaskMessages: null,
   agentEvents: [],
   executorEvents: [],
+  ndjsonEvents: [],
+  ndjsonStartMs: 0,
   executorRunID: "",
   executorEventsFetchedAt: 0,
   conversationLoading: null,
@@ -591,6 +593,11 @@ const dom = {
   btnLogCopy: $("#btnLogCopy"),
   btnLogClear: $("#btnLogClear"),
   btnCloseLog: $("#btnCloseLog"),
+  btnLogServerLogs: $("#btnLogServerLogs"),
+  btnExecGraph: $("#btnExecGraph"),
+  execGraphDialog: $("#execGraphDialog"),
+  execGraphIframe: $("#execGraphIframe"),
+  btnCloseExecGraph: $("#btnCloseExecGraph"),
   prefEditDialog: $("#prefEditDialog"),
   prefEditForm: $("#prefEditForm"),
   prefEditTitle: $("#prefEditTitle"),
@@ -4554,6 +4561,8 @@ async function selectTask(taskID, options = {}) {
   state.snapshotVersion = "";
   state.taskSequence = 0;
   state.agentEvents = [];
+  state.ndjsonEvents = [];
+  state.ndjsonStartMs = Date.now();
   if (nextTaskID) {
     enterTaskWorkspace(nextTaskID, options);
   } else {
@@ -5446,6 +5455,27 @@ function appendAgentEvent(raw) {
 }
 
 function handleEventStreamEvent(event) {
+  // Buffer event in NDJSON format for log panel and exec-graph generation
+  if (event && event.type && !event.type.includes("message.") && event.type !== "task.heartbeat") {
+    const props = record(event.properties) ? event.properties : record(event.payload) ? event.payload : {};
+    if (!state.ndjsonStartMs) state.ndjsonStartMs = Date.now();
+    const ndjsonEntry = {
+      at: new Date().toISOString(),
+      elapsed_ms: Date.now() - state.ndjsonStartMs,
+      type: event.type.startsWith("orchestrator.") ? event.type : "orchestrator." + event.type,
+      taskID: state.selectedTaskID || "",
+      runID: String(props.runID ?? event.run_id ?? ""),
+      stage: String(props.stage ?? ""),
+      kind: String(props.kind ?? ""),
+      status: String(props.status ?? event.status ?? ""),
+      toolName: String(props.toolName ?? ""),
+      summary: String(props.summary ?? event.summary ?? ""),
+      text: String(props.text ?? ""),
+      progressType: String(props.progressType ?? props.type ?? ""),
+      goalRunID: String(props.goalRunID ?? ""),
+    };
+    state.ndjsonEvents.push(ndjsonEntry);
+  }
   const sync = acceptEventSequence(event);
   if (sync === "duplicate") return;
   const gap = sync === "gap";
@@ -10050,17 +10080,271 @@ if (dom.btnCancelPrefEdit) {
   dom.btnCancelPrefEdit.addEventListener("click", () => dom.prefEditDialog?.close());
 }
 
-// ── Log Viewer ──
+// ── Exec Graph Generator ──
+
+function buildExecGraphHtml(events) {
+  if (!events || events.length === 0) return "<p>No events to visualize.</p>";
+
+  const totalMs = events[events.length - 1]?.elapsed_ms ?? 1;
+  const taskID = events.find(e => e.taskID)?.taskID ?? "unknown";
+  const startAt = events[0]?.at ?? "";
+
+  // Build lanes
+  const lanesMap = new Map();
+  const goalNames = new Map();
+  const runFinalStatus = new Map();
+  const runLaneId = new Map();
+  const goalAttemptCount = new Map();
+  const pendingTools = new Map();
+  let finalTaskStatus = "running";
+  let planSummary = "";
+  let specSummary = "";
+
+  function getLane(id, label, type, ms, extra) {
+    if (!lanesMap.has(id)) {
+      lanesMap.set(id, { id, label, type, startMs: ms, endMs: ms, toolCalls: [], toolCounts: {}, textSnippet: "", ...(extra || {}) });
+    }
+    return lanesMap.get(id);
+  }
+
+  for (const ev of events) {
+    const ms = ev.elapsed_ms;
+    if (ev.type === "orchestrator.task.updated" && ev.status) finalTaskStatus = ev.status;
+    if (ev.type === "orchestrator.spec.created") specSummary = ev.summary;
+    if (ev.type === "orchestrator.plan.created") planSummary = ev.summary;
+
+    if (ev.type === "orchestrator.agent.updated") {
+      const stage = ev.stage;
+      if (!["spec", "planner", "judge"].includes(stage)) continue;
+      const laneId = (stage === "judge" && ev.runID) ? `judge:${ev.runID}` : stage;
+      const label = stage === "spec" ? "Spec Agent" : stage === "planner" ? "Planner Agent" : `Judge (${(ev.runID || "").slice(-6)})`;
+      const lane = getLane(laneId, label, stage, ms, { runID: ev.runID || undefined });
+      lane.endMs = Math.max(lane.endMs, ms);
+      const pendingKey = `${laneId}::${ev.toolName}`;
+      if (ev.kind === "tool_call") {
+        const old = pendingTools.get(pendingKey);
+        if (old) {
+          lane.toolCalls.push({ name: old.name, startMs: old.startMs, endMs: ms, args: old.argsBuffer });
+          lane.toolCounts[old.name] = (lane.toolCounts[old.name] || 0) + 1;
+        }
+        pendingTools.set(pendingKey, { name: ev.toolName, startMs: ms, endMs: ms, args: "", argsBuffer: "", laneId });
+      } else if (ev.kind === "tool_delta") {
+        const p = pendingTools.get(pendingKey);
+        if (p) p.argsBuffer += ev.text || ev.summary || "";
+      } else if (ev.kind === "tool_result") {
+        const p = pendingTools.get(pendingKey);
+        if (p) {
+          pendingTools.delete(pendingKey);
+          lane.toolCalls.push({ name: p.name, startMs: p.startMs, endMs: ms, args: p.argsBuffer });
+          lane.toolCounts[p.name] = (lane.toolCounts[p.name] || 0) + 1;
+        }
+      } else if (ev.kind === "message_delta") {
+        const txt = ev.summary || ev.text || "";
+        if (txt && lane.textSnippet.length < 400) lane.textSnippet += txt;
+      }
+    }
+
+    if (ev.type === "orchestrator.run.updated" && ev.runID) {
+      const m = (ev.summary || "").match(/Goal (?:queued|accepted|running): (.+)/i);
+      if (m) goalNames.set(ev.runID, m[1].trim());
+      if (!runLaneId.has(ev.runID)) {
+        const goalName = goalNames.get(ev.runID) || ev.runID.slice(-8);
+        const attempt = goalAttemptCount.get(goalName) || 0;
+        goalAttemptCount.set(goalName, attempt + 1);
+        const laneId = `goal:${ev.runID}`;
+        runLaneId.set(ev.runID, laneId);
+        const label = attempt === 0 ? `Goal: ${goalName}` : `Goal: ${goalName} (retry ${attempt})`;
+        getLane(laneId, label, "goal", ms, { goalName, runID: ev.runID, retryIndex: attempt });
+      }
+      const laneId = runLaneId.get(ev.runID);
+      if (laneId) {
+        const lane = lanesMap.get(laneId);
+        if (lane) {
+          lane.endMs = Math.max(lane.endMs, ms);
+          if (ev.status === "failed" || ev.status === "accepted") {
+            lane.status = ev.status;
+            runFinalStatus.set(ev.runID, ev.status);
+          } else if (ev.status === "running" && !lane.status) {
+            lane.status = "running";
+          }
+        }
+      }
+    }
+
+    if (ev.type === "orchestrator.run.output" && ev.runID) {
+      const laneId = runLaneId.get(ev.runID);
+      if (laneId) {
+        const lane = lanesMap.get(laneId);
+        if (lane) {
+          lane.endMs = Math.max(lane.endMs, ms);
+          if (ev.goalRunID && !lane.goalRunID) lane.goalRunID = ev.goalRunID;
+          if (ev.progressType === "text_delta" && ev.text && lane.textSnippet.length < 400) {
+            const txt = ev.text.trim();
+            if (txt && !txt.startsWith("{") && !txt.startsWith("[")) lane.textSnippet += txt;
+          }
+        }
+      }
+    }
+  }
+
+  // Flush pending tools
+  for (const [, p] of pendingTools) {
+    const lane = lanesMap.get(p.laneId);
+    if (lane) {
+      lane.toolCalls.push({ name: p.name, startMs: p.startMs, endMs: totalMs, args: p.argsBuffer });
+      lane.toolCounts[p.name] = (lane.toolCounts[p.name] || 0) + 1;
+    }
+  }
+
+  // Sort lanes
+  const typeOrder = { spec: 0, planner: 1, goal: 2, judge: 3 };
+  const sortedLanes = [...lanesMap.values()].sort((a, b) => {
+    if ((a.type === "goal" || a.type === "judge") && (b.type === "goal" || b.type === "judge")) return a.startMs - b.startMs;
+    return (typeOrder[a.type] || 99) - (typeOrder[b.type] || 99);
+  });
+
+  const allGoalLanes = sortedLanes.filter(l => l.type === "goal");
+  const acceptedGoals = allGoalLanes.filter(l => l.status === "accepted").length;
+  const failedGoals = allGoalLanes.filter(l => l.status === "failed").length;
+  const allToolCounts = {};
+  for (const lane of sortedLanes) {
+    for (const [tool, count] of Object.entries(lane.toolCounts)) {
+      allToolCounts[tool] = (allToolCounts[tool] || 0) + count;
+    }
+  }
+  const totalToolCalls = Object.values(allToolCounts).reduce((a, b) => a + b, 0);
+  const durationSec = Math.round(totalMs / 1000);
+
+  const LANE_COLORS = {
+    spec: { bg: "#EBF3FD", bar: "#3A86FF", text: "#1A5DAC" },
+    planner: { bg: "#F0EBFD", bar: "#7B54C9", text: "#4A2E8E" },
+    goal: { bg: "#EDFCF2", bar: "#2ECC71", text: "#1A7A44" },
+    judge: { bg: "#FFF8EC", bar: "#F39C12", text: "#8A5A00" },
+  };
+  const STATUS_COLORS = { accepted: "#27AE60", failed: "#E74C3C", running: "#F39C12" };
+  const TOOL_COLORS = {
+    read_file: "#3498DB", list_directory: "#5DADE2", find_files: "#76D7EA",
+    search_code: "#F39C12", memory_search: "#9B59B6", preference_list: "#8E44AD",
+    web_search: "#E67E22", write_file: "#27AE60", edit_file: "#2ECC71", bash: "#E74C3C",
+  };
+  function toolColor(name) { return TOOL_COLORS[name] || "#95A5A6"; }
+  function esc(s) { return String(s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+  function fmtMs(ms) { const s = ms/1000; if(s<60) return s.toFixed(1)+"s"; const m=Math.floor(s/60); return m+"m"+(s-m*60).toFixed(0)+"s"; }
+  function trunc(s, n) { return s.length > n ? s.slice(0,n)+"…" : s; }
+
+  const CHART_W = 1180, LANE_H = 38, LANE_GAP = 6, LABEL_W = 260;
+  const CHART_CONTENT_W = CHART_W - LABEL_W - 20;
+  const CHART_H = sortedLanes.length * (LANE_H + LANE_GAP) + 40;
+  function msToX(ms) { return Math.round((ms / totalMs) * CHART_CONTENT_W); }
+
+  const tickInterval = totalMs > 600000 ? 120000 : totalMs > 300000 ? 60000 : 30000;
+  const ticks = [];
+  for (let t = 0; t <= totalMs; t += tickInterval) ticks.push(t);
+
+  const svgLines = [`<svg xmlns="http://www.w3.org/2000/svg" width="${CHART_W}" height="${CHART_H}" font-family="monospace,sans-serif">`];
+  for (const t of ticks) {
+    const x = LABEL_W + msToX(t);
+    svgLines.push(`<line x1="${x}" y1="0" x2="${x}" y2="${CHART_H-20}" stroke="#E0E0E0" stroke-width="1"/>`);
+    svgLines.push(`<text x="${x}" y="${CHART_H-5}" fill="#999" font-size="10" text-anchor="middle">${fmtMs(t)}</text>`);
+  }
+  sortedLanes.forEach((lane, i) => {
+    const y = i * (LANE_H + LANE_GAP) + 4;
+    const colors = LANE_COLORS[lane.type] || LANE_COLORS.spec;
+    const statusColor = lane.status ? (STATUS_COLORS[lane.status] || colors.bar) : colors.bar;
+    svgLines.push(`<rect x="0" y="${y}" width="${LABEL_W-4}" height="${LANE_H}" rx="4" fill="${colors.bg}" stroke="${colors.bar}" stroke-width="1"/>`);
+    svgLines.push(`<circle cx="14" cy="${y+LANE_H/2}" r="5" fill="${statusColor}"/>`);
+    svgLines.push(`<text x="26" y="${y+LANE_H/2+4}" fill="${colors.text}" font-size="11" font-weight="600">${esc(trunc(lane.label, 32))}</text>`);
+    svgLines.push(`<text x="${LABEL_W-8}" y="${y+LANE_H/2+4}" fill="#999" font-size="10" text-anchor="end">${fmtMs(lane.endMs-lane.startMs)}</text>`);
+    const bx = LABEL_W + msToX(lane.startMs);
+    const bw = Math.max(2, msToX(lane.endMs) - msToX(lane.startMs));
+    svgLines.push(`<rect x="${bx}" y="${y+8}" width="${bw}" height="${LANE_H-16}" rx="3" fill="${colors.bg}" stroke="${colors.bar}" stroke-width="1" opacity="0.6"/>`);
+    for (const tc of lane.toolCalls) {
+      const tx = LABEL_W + msToX(tc.startMs);
+      const tw = Math.max(3, msToX(tc.endMs) - msToX(tc.startMs));
+      svgLines.push(`<rect x="${tx}" y="${y+10}" width="${tw}" height="${LANE_H-20}" rx="2" fill="${toolColor(tc.name)}" opacity="0.85"><title>${esc(tc.name)} (${fmtMs(tc.endMs-tc.startMs)})</title></rect>`);
+    }
+  });
+  svgLines.push("</svg>");
+
+  const dur = durationSec >= 60 ? Math.floor(durationSec/60)+"m"+(durationSec%60)+"s" : durationSec+"s";
+
+  const toolUsage = Object.entries(allToolCounts).sort((a,b)=>b[1]-a[1])
+    .map(([t,c]) => `<div style="display:flex;align-items:center;gap:8px;margin:3px 0"><span style="color:${toolColor(t)};font-family:monospace;min-width:180px">${esc(t)}</span><span style="background:${toolColor(t)};height:12px;border-radius:3px;width:${Math.round(c/Math.max(...Object.values(allToolCounts))*200)}px"></span><span style="color:#666;font-size:12px">×${c}</span></div>`).join("");
+
+  const phaseCards = sortedLanes.map(lane => {
+    const colors = LANE_COLORS[lane.type] || LANE_COLORS.spec;
+    const statusColor = lane.status ? (STATUS_COLORS[lane.status] || colors.bar) : colors.bar;
+    const tools = Object.entries(lane.toolCounts).sort((a,b)=>b[1]-a[1])
+      .map(([t,c]) => `<span style="font-size:11px;padding:1px 6px;border-radius:10px;border:1px solid ${toolColor(t)};color:${toolColor(t)};font-family:monospace">${esc(t)} ×${c}</span>`).join(" ");
+    const snippet = lane.textSnippet.trim();
+    return `<div style="border-left:4px solid ${colors.bar};background:#FAFBFC;border-radius:8px;padding:12px 14px;margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <span style="font-weight:700;font-size:13px">${esc(lane.label)}</span>
+        ${lane.status ? `<span style="background:${statusColor};color:#fff;border-radius:10px;padding:1px 8px;font-size:11px;font-weight:700">${esc(lane.status)}</span>` : ""}
+        <span style="color:#9CA3AF;font-size:11px">${fmtMs(lane.startMs)} → ${fmtMs(lane.endMs)} (${fmtMs(lane.endMs-lane.startMs)})</span>
+      </div>
+      ${tools ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin:4px 0">${tools}</div>` : ""}
+      ${snippet ? `<pre style="font-size:11px;color:#4B5563;background:#F3F4F6;border-radius:4px;padding:6px 8px;white-space:pre-wrap;word-break:break-word;max-height:80px;overflow-y:auto;margin-top:6px">${esc(trunc(snippet,300))}</pre>` : ""}
+    </div>`;
+  }).join("");
+
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8">
+<title>Exec Graph – ${esc(taskID.slice(-12))}</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#F7F9FC;color:#1A2332;line-height:1.5}
+header{background:#1A2332;color:#fff;padding:14px 20px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+header h1{font-size:16px;font-weight:700}
+.chip{padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;background:#2D3A4E;color:#CBD5E1}
+.chip.ok{background:#1A7A44;color:#fff}.chip.fail{background:#922B21;color:#fff}.chip.warn{background:#7A4800;color:#fff}
+main{max-width:1240px;margin:0 auto;padding:20px 16px}
+.section{background:#fff;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,.08);padding:18px;margin-bottom:16px}
+.section h2{font-size:13px;font-weight:700;color:#374151;margin-bottom:12px;text-transform:uppercase;letter-spacing:.03em}
+.gantt-wrap{overflow-x:auto}
+</style></head><body>
+<header>
+  <div><div style="font-size:10px;color:#94A3B8;margin-bottom:2px">Task ID</div><h1>${esc(taskID)}</h1></div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-left:auto">
+    <span class="chip">Started: ${esc(startAt.replace("T"," ").replace(/\.\d+Z$/," UTC"))}</span>
+    <span class="chip">Duration: ${dur}</span>
+    <span class="chip">Goals: ${allGoalLanes.length} (${acceptedGoals}✓ ${failedGoals}✗)</span>
+    <span class="chip">Tools: ${totalToolCalls}</span>
+    <span class="chip ${finalTaskStatus==="accepted"?"ok":finalTaskStatus==="failed"?"fail":"warn"}">Status: ${finalTaskStatus}</span>
+  </div>
+</header>
+<main>
+  ${specSummary ? `<div class="section"><h2>Task Summary</h2><div style="background:#F8FAFC;border-left:3px solid #7B54C9;padding:10px;border-radius:4px;font-size:13px;white-space:pre-wrap">${esc(trunc(specSummary,600))}</div></div>` : ""}
+  <div class="section"><h2>Execution Timeline</h2>
+    <div style="display:flex;gap:16px;margin-bottom:10px;font-size:12px;color:#6B7280">
+      ${[["Spec","#3A86FF"],["Planner","#7B54C9"],["Goal","#2ECC71"],["Judge","#F39C12"]].map(([l,c])=>`<span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;border-radius:50%;background:${c}"></span>${l}</span>`).join("")}
+    </div>
+    <div class="gantt-wrap">${svgLines.join("")}</div>
+  </div>
+  <div class="section"><h2>Tool Usage</h2>${toolUsage}</div>
+  <div class="section"><h2>Phase Details</h2>${phaseCards}</div>
+</main></body></html>`;
+}
+
+function openExecGraphPanel() {
+  if (!dom.execGraphDialog) return;
+  const html = buildExecGraphHtml(state.ndjsonEvents || []);
+  if (dom.execGraphIframe) {
+    dom.execGraphIframe.srcdoc = html;
+  }
+  dom.execGraphDialog.showModal();
+}
+
+// ── Log Viewer (NDJSON Events) ──
 
 let _serverLogLines = [];
 let _serverLogPath = "";
+let _showServerLogs = false;
 
 async function loadServerLogs() {
   try {
     const data = await apiJson("log/tail?n=500");
     _serverLogLines = Array.isArray(data?.lines) ? data.lines : [];
     _serverLogPath = typeof data?.path === "string" ? data.path : "";
-    AppLog.info("log", `Loaded ${_serverLogLines.length} server log lines`);
   } catch (e) {
     AppLog.warn("log", "Failed to load server logs", { error: String(e) });
     _serverLogLines = [];
@@ -10070,12 +10354,7 @@ async function loadServerLogs() {
 
 function stringifyLogValue(value, space = 0) {
   if (typeof value === "string") return value;
-  try {
-    return JSON.stringify(value, null, space);
-  } catch {
-    /* value contains circular references or is otherwise non-serializable */
-    return String(value ?? "");
-  }
+  try { return JSON.stringify(value, null, space); } catch { return String(value ?? ""); }
 }
 
 function displayString(value, space = 0) {
@@ -10092,11 +10371,7 @@ function parseLogValue(raw) {
   if (text === "false") return false;
   if (text === "null") return null;
   if (/^-?\d+(?:\.\d+)?$/.test(text)) return Number(text);
-  if (/^[\[{"]/.test(text)) {
-    try {
-      return JSON.parse(text);
-    } catch { /* not valid JSON, return as string */ }
-  }
+  if (/^[\[{"]/.test(text)) { try { return JSON.parse(text); } catch {} }
   return text;
 }
 
@@ -10105,62 +10380,41 @@ function scanBalancedLogValue(text, start) {
     let escaped = false;
     for (let index = start + 1; index < text.length; index += 1) {
       const char = text[index];
-      if (escaped) {
-        escaped = false;
-        continue;
-      }
-      if (char === "\\") {
-        escaped = true;
-        continue;
-      }
+      if (escaped) { escaped = false; continue; }
+      if (char === "\\") { escaped = true; continue; }
       if (char === '"') return index + 1;
     }
     return text.length;
   }
-
   const pairs = { "{": "}", "[": "]" };
   const stack = [text[start]];
   let quoted = false;
   let escaped = false;
-
   for (let index = start + 1; index < text.length; index += 1) {
     const char = text[index];
     if (quoted) {
-      if (escaped) {
-        escaped = false;
-        continue;
-      }
-      if (char === "\\") {
-        escaped = true;
-        continue;
-      }
+      if (escaped) { escaped = false; continue; }
+      if (char === "\\") { escaped = true; continue; }
       if (char === '"') quoted = false;
       continue;
     }
-    if (char === '"') {
-      quoted = true;
-      continue;
-    }
-    if (char === "{" || char === "[") {
-      stack.push(char);
-      continue;
-    }
+    if (char === '"') { quoted = true; continue; }
+    if (char === "{" || char === "[") { stack.push(char); continue; }
     if (char === "}" || char === "]") {
       const open = stack[stack.length - 1];
-      if (pairs[open] === char) stack.pop();
-      if (stack.length === 0) return index + 1;
+      if (pairs[open] === char) {
+        stack.pop();
+        if (stack.length === 0) return index + 1;
+      }
     }
   }
-
   return text.length;
 }
 
 function scanLogValueEnd(text, start) {
+  if (!text[start]) return start;
   const first = text[start];
-  if (first === '"' || first === "{" || first === "[") {
-    return scanBalancedLogValue(text, start);
-  }
-
+  if (first === '"' || first === "{" || first === "[") return scanBalancedLogValue(text, start);
   let cursor = start;
   while (cursor < text.length) {
     const nextSpace = text.indexOf(" ", cursor);
@@ -10176,7 +10430,6 @@ function scanLogValueEnd(text, start) {
 function parseLeadingLogFields(text) {
   const fields = {};
   let index = 0;
-
   while (index < text.length) {
     while (text[index] === " ") index += 1;
     const match = /^([A-Za-z0-9_.-]+)=/.exec(text.slice(index));
@@ -10187,27 +10440,17 @@ function parseLeadingLogFields(text) {
     fields[key] = parseLogValue(text.slice(index, end));
     index = end;
   }
-
   return { fields, end: index };
 }
 
 function parseServerLogLine(raw) {
-  // Format: "LEVEL  YYYY-MM-DDTHHMSS +Xms key=value ... message"
   const match = raw.match(/^(DEBUG|INFO|WARN|ERROR)\s+(\S+)\s+(\+\d+ms)\s+(.*)$/);
   if (!match) return { level: "info", ts: "", delta: "", service: "", message: raw, fields: {}, raw };
   const [, level, ts, delta, rest] = match;
   const parsed = parseLeadingLogFields(rest);
   const service = typeof parsed.fields.service === "string" ? parsed.fields.service : "";
   const message = rest.slice(parsed.end).trim() || rest.trim();
-  return {
-    level: level.toLowerCase(),
-    ts,
-    delta,
-    service,
-    message,
-    fields: parsed.fields,
-    raw,
-  };
+  return { level: level.toLowerCase(), ts, delta, service, message, fields: parsed.fields, raw };
 }
 
 function logDetailFields(fields) {
@@ -10215,9 +10458,7 @@ function logDetailFields(fields) {
   return Object.fromEntries(Object.entries(fields).filter(([key]) => key !== "service"));
 }
 
-function logPreviewValue(value) {
-  return clipText(stringifyLogValue(value), 80);
-}
+function logPreviewValue(value) { return clipText(stringifyLogValue(value), 80); }
 
 function logSourceLabel(source) {
   return source === "server" ? t("log.source.server") : t("log.source.client");
@@ -10227,29 +10468,14 @@ function renderLogEntryDetail(entry) {
   const fields = logDetailFields(entry.fields);
   const items = Object.entries(fields);
   const chips = items.length
-    ? `<div class="log-fields">${
-      items
-        .slice(0, 6)
-        .map(([key, value]) => `<span class="log-chip">${escapeHtml(key)}=${escapeHtml(logPreviewValue(value))}</span>`)
-        .join("")
-    }</div>`
+    ? `<div class="log-fields">${items.slice(0, 6).map(([key, value]) => `<span class="log-chip">${escapeHtml(key)}=${escapeHtml(logPreviewValue(value))}</span>`).join("")}</div>`
     : "";
   const blocks = [];
   if (items.length) {
-    blocks.push(
-      `<div class="log-detail-block">` +
-      `<div class="log-detail-title">${escapeHtml(t("log.fields"))}</div>` +
-      `<pre class="log-detail-pre">${escapeHtml(stringifyLogValue(fields, 2))}</pre>` +
-      `</div>`,
-    );
+    blocks.push(`<div class="log-detail-block"><div class="log-detail-title">${escapeHtml(t("log.fields"))}</div><pre class="log-detail-pre">${escapeHtml(stringifyLogValue(fields, 2))}</pre></div>`);
   }
   if (entry.raw) {
-    blocks.push(
-      `<div class="log-detail-block">` +
-      `<div class="log-detail-title">${escapeHtml(t("log.raw"))}</div>` +
-      `<pre class="log-detail-pre">${escapeHtml(entry.raw)}</pre>` +
-      `</div>`,
-    );
+    blocks.push(`<div class="log-detail-block"><div class="log-detail-title">${escapeHtml(t("log.raw"))}</div><pre class="log-detail-pre">${escapeHtml(entry.raw)}</pre></div>`);
   }
   const detail = blocks.length
     ? `<details class="log-detail"><summary>${escapeHtml(t("log.details"))}</summary>${blocks.join("")}</details>`
@@ -10260,23 +10486,15 @@ function renderLogEntryDetail(entry) {
 function logViewerEntries() {
   const minLevel = { debug: 0, info: 1, warn: 2, error: 3 };
   const threshold = minLevel[AppLog.filterLevel] || 0;
-
   const clientLines = AppLog.filtered().map((e) => ({
-    level: e.level,
-    ts: e.ts,
-    service: e.service,
-    delta: "",
-    message: e.message,
+    level: e.level, ts: e.ts, service: e.service, delta: "", message: e.message,
     fields: record(e.extra) ? e.extra : e.extra == null ? {} : { extra: e.extra },
-    raw: "",
-    source: "client",
+    raw: "", source: "client",
   }));
-
   const serverLines = _serverLogLines
     .map(parseServerLogLine)
     .filter((e) => (minLevel[e.level] || 0) >= threshold)
     .map((e) => ({ ...e, source: "server" }));
-
   return [...serverLines, ...clientLines];
 }
 
@@ -10294,38 +10512,131 @@ function formatLogViewerText(entries) {
     .join("\n");
 }
 
-function renderLogViewer() {
+// ── NDJSON Event Colors ──
+
+const NDJSON_STAGE_COLORS = {
+  spec: "#3A86FF",
+  planner: "#7B54C9",
+  goal: "#2ECC71",
+  judge: "#F39C12",
+};
+
+const NDJSON_TOOL_COLORS = {
+  read_file: "#3498DB",
+  list_directory: "#5DADE2",
+  find_files: "#76D7EA",
+  search_code: "#F39C12",
+  memory_search: "#9B59B6",
+  preference_list: "#8E44AD",
+  web_search: "#E67E22",
+  write_file: "#27AE60",
+  edit_file: "#2ECC71",
+  bash: "#E74C3C",
+};
+
+function ndjsonToolColor(name) {
+  return NDJSON_TOOL_COLORS[name] || "#95A5A6";
+}
+
+function fmtElapsed(ms) {
+  const s = ms / 1000;
+  if (s < 60) return s.toFixed(1) + "s";
+  const m = Math.floor(s / 60);
+  return m + "m" + (s - m * 60).toFixed(0) + "s";
+}
+
+function ndjsonEventTypeLabel(type) {
+  return (type || "").replace("orchestrator.", "").replace(/\./g, " › ");
+}
+
+function renderNdjsonEvent(ev) {
+  const stage = ev.stage || "";
+  const stageColor = NDJSON_STAGE_COLORS[stage] || "#6B7280";
+  const kind = ev.kind || "";
+  const toolName = ev.toolName || "";
+  const summary = ev.summary || ev.text || "";
+
+  let kindBadge = "";
+  if (kind === "tool_call") kindBadge = `<span class="ndjson-badge tool-call">call</span>`;
+  else if (kind === "tool_result") kindBadge = `<span class="ndjson-badge tool-result">result</span>`;
+  else if (kind === "tool_delta") return ""; // skip deltas
+  else if (kind === "message_delta") kindBadge = `<span class="ndjson-badge msg-delta">text</span>`;
+  else if (kind === "status") kindBadge = `<span class="ndjson-badge status-badge">status</span>`;
+
+  const typeLabel = ndjsonEventTypeLabel(ev.type);
+  const elapsed = `<span class="ndjson-elapsed">${fmtElapsed(ev.elapsed_ms)}</span>`;
+
+  let content = "";
+  if (stage) {
+    content += `<span class="ndjson-stage" style="color:${stageColor}">${escapeHtml(stage)}</span>`;
+  }
+  if (toolName && kind !== "message_delta") {
+    content += `<span class="ndjson-tool" style="color:${ndjsonToolColor(toolName)}">${escapeHtml(toolName)}</span>`;
+  }
+  if (summary && summary.length > 0 && kind !== "tool_delta") {
+    const summaryText = summary.length > 120 ? summary.slice(0, 120) + "…" : summary;
+    content += `<span class="ndjson-summary">${escapeHtml(summaryText)}</span>`;
+  }
+  if (ev.status) {
+    content += `<span class="ndjson-status ndjson-status-${ev.status}">${escapeHtml(ev.status)}</span>`;
+  }
+
+  return `<div class="ndjson-event">` +
+    `<div class="ndjson-event-head">${elapsed}<span class="ndjson-type">${escapeHtml(typeLabel)}</span>${kindBadge}</div>` +
+    (content ? `<div class="ndjson-event-body">${content}</div>` : "") +
+    `</div>`;
+}
+
+function renderNdjsonLogPanel() {
   if (!dom.logViewerBody) return;
-  const entries = logViewerEntries();
-  if (entries.length === 0) {
+  const events = state.ndjsonEvents || [];
+
+  if (events.length === 0 && !_showServerLogs) {
     dom.logViewerBody.innerHTML = `<div class="empty-hint">${escapeHtml(t("log.empty"))}</div>`;
     return;
   }
 
-  const path = _serverLogPath ? `<div class="log-path">${escapeHtml(t("log.path", { value: _serverLogPath }))}</div>` : "";
-  const html = entries
-    .map(
-      (e) =>
-        `<div class="log-line">` +
-        `<div class="log-line-head">` +
-        `<span class="log-source" data-source="${escapeHtml(e.source || "client")}">${escapeHtml(logSourceLabel(e.source))}</span>` +
-        `<span class="log-level log-level-${e.level}">${e.level.toUpperCase().padEnd(5)}</span>` +
-        `<span class="log-ts">${escapeHtml(e.ts)}</span>` +
-        (e.delta ? `<span class="log-delta">${escapeHtml(e.delta)}</span>` : "") +
-        (e.service ? `<span class="log-service">${escapeHtml(e.service)}</span>` : "") +
-        `</div>` +
-        `<div class="log-msg">${escapeHtml(e.message || e.raw || "")}</div>` +
-        renderLogEntryDetail(e) +
-        `</div>`,
-    )
-    .join("");
-  dom.logViewerBody.innerHTML = path + html;
+  let html = "";
+
+  // Show NDJSON events
+  if (events.length > 0) {
+    // Filter out tool_delta events (too noisy)
+    const filtered = events.filter(ev => ev.kind !== "tool_delta");
+    const rows = filtered.map(renderNdjsonEvent).filter(Boolean).join("");
+    html += `<div class="ndjson-panel">${rows}</div>`;
+  }
+
+  // Optionally show server logs
+  if (_showServerLogs) {
+    const entries = logViewerEntries();
+    const path = _serverLogPath ? `<div class="log-path">${escapeHtml(t("log.path", { value: _serverLogPath }))}</div>` : "";
+    const serverHtml = entries.map((e) =>
+      `<div class="log-line">` +
+      `<div class="log-line-head">` +
+      `<span class="log-source" data-source="${escapeHtml(e.source || "client")}">${escapeHtml(logSourceLabel(e.source))}</span>` +
+      `<span class="log-level log-level-${e.level}">${e.level.toUpperCase().padEnd(5)}</span>` +
+      `<span class="log-ts">${escapeHtml(e.ts)}</span>` +
+      (e.delta ? `<span class="log-delta">${escapeHtml(e.delta)}</span>` : "") +
+      (e.service ? `<span class="log-service">${escapeHtml(e.service)}</span>` : "") +
+      `</div>` +
+      `<div class="log-msg">${escapeHtml(e.message || e.raw || "")}</div>` +
+      renderLogEntryDetail(e) +
+      `</div>`
+    ).join("");
+    html += `<div class="log-divider">Server Logs</div>` + path + serverHtml;
+  }
+
+  dom.logViewerBody.innerHTML = html;
   dom.logViewerBody.scrollTop = dom.logViewerBody.scrollHeight;
+}
+
+function renderLogViewer() {
+  renderNdjsonLogPanel();
 }
 
 async function openLogViewer() {
   await loadServerLogs();
-  renderLogViewer();
+  renderNdjsonLogPanel();
   dom.logDialog?.showModal();
 }
 
@@ -10360,6 +10671,18 @@ dom.btnLogClear?.addEventListener("click", () => {
 dom.logLevelFilter?.addEventListener("change", () => {
   AppLog.filterLevel = dom.logLevelFilter.value;
   renderLogViewer();
+});
+dom.btnLogServerLogs?.addEventListener("click", async () => {
+  _showServerLogs = !_showServerLogs;
+  if (_showServerLogs) await loadServerLogs();
+  renderNdjsonLogPanel();
+  if (dom.btnLogServerLogs) dom.btnLogServerLogs.textContent = _showServerLogs ? t("log.hide_server") : t("log.server_logs");
+});
+dom.btnExecGraph?.addEventListener("click", () => {
+  openExecGraphPanel();
+});
+dom.btnCloseExecGraph?.addEventListener("click", () => {
+  dom.execGraphDialog?.close();
 });
 
 // ── Init ──
