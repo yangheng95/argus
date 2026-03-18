@@ -2404,6 +2404,23 @@ body[data-theme="light"] .section-badge {
   font-size: var(--ui-font-meta);
 }
 
+.btn-terminate {
+  color: var(--danger, #e55);
+  border-color: var(--danger, #e55);
+  font-size: var(--ui-font-meta);
+  padding: calc(1px * var(--ui-scale)) calc(6px * var(--ui-scale));
+  margin-left: calc(4px * var(--ui-scale));
+  line-height: 1.2;
+  white-space: nowrap;
+}
+.btn-terminate:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--danger, #e55) 12%, transparent);
+}
+.btn-terminate:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 .chat-count {
   font-size: var(--ui-font-meta);
   color: var(--text-muted);

@@ -721,9 +721,16 @@ function buildUserPrompt(
         retryContext.reasons.some((r) => r.includes("verification"))
           ? "- Add explicit verification language to subtasks (e.g., 'run bun test src/x.test.ts and confirm it passes')"
           : "",
-        retryContext.reasons.some((r) => r.includes("wave") || r.includes("iterative"))
-          ? "- Rewrite the plan into a strict iterative sequence with exactly one goal per wave in a single evolving workspace"
-          : "",
+        retryContext.reasons.some((r) => /missing goal indices/i.test(r))
+          ? (() => {
+              const missingStr = retryContext.reasons
+                .map((r) => r.match(/missing goal indices?:\s*([\d,\s]+)/i)?.[1]?.trim())
+                .filter(Boolean).join(", ") || "see wave structure errors above"
+              return `- CRITICAL wave fix: Your waves are missing goal indices ${missingStr}. You MUST add a wave for each missing index. If that goal was already completed in a prior run, add a brief "Verify: <goal description>" wave for it. Every goal 0..N-1 must appear in exactly one wave — the validator throws an error otherwise.`
+            })()
+          : retryContext.reasons.some((r) => r.includes("wave") || r.includes("iterative"))
+            ? "- Rewrite the plan into a strict iterative sequence with exactly one goal per wave in a single evolving workspace"
+            : "",
         retryContext.reasons.some((r) => r.includes("PRD"))
           ? "- Write a detailed PRD with bullet points (>300 chars)"
           : "",
@@ -808,6 +815,11 @@ function buildUserPrompt(
               ),
             ]
           : []),
+        "",
+        "## ⚠️ Wave Coverage Requirement (MANDATORY)",
+        "The wave validator requires EVERY goal index 0..N-1 to appear in your new waves.",
+        "Goals marked **passed** above MUST still appear in a wave — add a brief 'Verify completion: <goal>' wave for them.",
+        "If any goal index is missing from waves the plan FAILS validation and scores below threshold.",
       ].join("\n"),
     )
   }
@@ -922,6 +934,8 @@ Under \`# Clarifications\`, only emit execution blockers. Format each line as:
 - Every multi-goal plan must use iterative one-goal-per-wave stages in the same single workspace.
 - Write in the same language as the request.
 - If replanning, the new strategy must differ from the failed one.
+- When replanning: your new waves MUST cover every goal index 0 through N-1, including goals that were already completed in the previous run. Add a brief "Verify completion" wave for any already-done goal. Missing goal indices cause the plan to be REJECTED by the wave validator.
+- Do not create README.md, documentation files, or scaffold files unless the request explicitly requires them.
 - Do not emit generic advice like "follow best practices". Name files, modules, commands, and concrete changes.
 - clarifications are execution blockers only: emit them when the implementation path is genuinely unknowable (e.g., cannot determine which files to modify). Never ask about requirements, acceptance criteria, or scope — those are defined by the spec. Never ask what the user wants to build.
 

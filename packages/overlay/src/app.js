@@ -462,6 +462,7 @@ const dom = {
   statusDot: $("#statusIcon"),
   statusLabel: $("#statusLabel"),
   elapsed: $("#elapsed"),
+  btnTerminateRun: $("#btnTerminateRun"),
   overviewBadge: $("#overviewBadge"),
   overviewBody: $("#overviewBody"),
   specBadge: $("#specBadge"),
@@ -5663,6 +5664,11 @@ function setTaskStatus(status, options = {}) {
   dom.statusDot.dataset.status = next;
   dom.statusDot.innerHTML = statusIcon(next);
   dom.statusLabel.textContent = statusLabel(next);
+  // Show terminate button only for active (non-terminal) task states
+  const activeStates = ["running", "planning", "queued", "evaluating", "blocked"];
+  if (dom.btnTerminateRun) {
+    dom.btnTerminateRun.hidden = !visible || !activeStates.includes(next);
+  }
   if (!visible) {
     dom.taskStatus?.removeAttribute("title");
     dom.taskStatus?.removeAttribute("aria-label");
@@ -8792,6 +8798,35 @@ dom.chatSend.addEventListener("click", async (e) => {
   await stopChatRequest();
 });
 dom.btnChatCopyAll?.addEventListener("click", () => copyChatConversation());
+
+// Terminate button: cancel the current task and all its runs/sessions
+dom.btnTerminateRun?.addEventListener("click", async () => {
+  if (!state.selectedTaskID) return;
+  const ok = await nativeConfirm(t("task.terminate_confirm"), {
+    title: t("task.terminate_title"),
+    okLabel: t("task.terminate"),
+    kind: "warning",
+  });
+  if (!ok) return;
+  dom.btnTerminateRun.disabled = true;
+  try {
+    const targets = chatAbortTargets();
+    for (const target of targets) {
+      try {
+        await abortChatTarget(target);
+        break; // first successful abort is enough
+      } catch (e) {
+        AppLog.warn("ui", "terminate target failed", { target, error: String(e) });
+      }
+    }
+    scheduleTasks(0);
+    scheduleBoard(0);
+  } catch (e) {
+    AppLog.error("ui", "terminate failed", { error: String(e) });
+  } finally {
+    dom.btnTerminateRun.disabled = false;
+  }
+});
 sizeChat();
 renderChatComposer();
 

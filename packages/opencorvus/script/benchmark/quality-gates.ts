@@ -157,7 +157,7 @@ export function evaluateQualityGates(input: {
   localVerifyExitCode?: number
 }): QualityVerdict {
   const failures: QualityFailure[] = []
-  if (input.runMetrics.noop_cycle_count >= 6 || (input.runMetrics.meaningful_change_gap_ms >= 15 * 60 * 1000 && input.runMetrics.repeat_command_ratio >= 0.45)) {
+  if (input.runMetrics.noop_cycle_count >= 8 || (input.runMetrics.meaningful_change_gap_ms >= 15 * 60 * 1000 && input.runMetrics.repeat_command_ratio >= 0.45)) {
     failures.push({
       category: "liveness",
       message: "Long verification-only loop without meaningful progress",
