@@ -461,7 +461,14 @@ export namespace SessionLoop {
       messages: modelMessages,
       tools,
       model: input.model,
-      toolChoice: format.type === "json_schema" ? (input.model.capabilities.reasoning ? "auto" : "required") : undefined,
+      // Use "auto" only for non-interleaved alibaba reasoning models (qwen with enable_thinking).
+      // Those models reject toolChoice:"required" when enable_thinking is active.
+      // Interleaved models (GLM-5, kimi-k2.5) use reasoning_content natively and do NOT
+      // have this conflict — forcing "required" prevents them from bypassing StructuredOutput
+      // and producing invisible plain-text responses in the overlay.
+      toolChoice: format.type === "json_schema"
+        ? (input.model.capabilities.reasoning && !input.model.capabilities.interleaved && input.model.providerID.startsWith("alibaba") ? "auto" : "required")
+        : undefined,
     })
 
     if (structured !== undefined) {

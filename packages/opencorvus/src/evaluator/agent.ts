@@ -588,16 +588,15 @@ A shallow evaluation is worse than no evaluation. You must investigate deeply en
 - If checks failed, identify which checks failed and what they indicate.
 - If checks passed, still verify that the implementation actually satisfies the goals.
 
-### Phase 1.5: MECHANICAL VERIFICATION (when applicable)
+### Phase 1.5: MECHANICAL VERIFICATION (mandatory)
 
-If any goal's criteria explicitly states that a **command must pass** (e.g., \`bunx tsc --noEmit\`, \`bun test\`, \`bun run build\`), you MUST use \`run_command\` to actually execute it and use the real output as your primary evidence:
+**DELIVERY EVALUATION RULE** (applies when you are evaluating the FINAL DELIVERY — i.e., all goals together):
+Scan the original task request for explicit acceptance commands (lines containing \`bunx tsc\`, \`bun test\`, \`pytest\`, \`cargo test\`, \`go test\`, \`npm test\`, \`yarn build\`, etc.). Run ALL of them via \`run_command\`. If ANY command exits with a non-zero code:
+- **REJECT the delivery unconditionally**. The exit code is the verdict — there are no exceptions.
+- Do NOT accept because "the implementation is otherwise correct" or "it's a platform quirk" or "tests pass at runtime". If \`bunx tsc --noEmit\` fails, the delivery is rejected. Full stop.
 
-- Run \`bunx tsc --noEmit\` if the goal requires TypeScript to compile without errors.
-- Run \`bun test\` (or the specific test file) if the goal requires tests to pass.
-- If the command fails: reject the goal with the actual error output. Do NOT accept a goal where a required command fails.
-- If the command passes: treat this as strong evidence the goal's mechanical requirements are met.
-
-Do NOT run these commands for goals that do not mention them. Intermediate goals (e.g., "implement DB schema") should be evaluated semantically — the test suite may not exist yet.
+**PER-GOAL RULE** (when evaluating an intermediate goal):
+If a goal's criteria explicitly states a command must pass, run it and use the exit code as primary evidence. Reject the goal if the command fails. Skip commands for intermediate goals that don't mention them (e.g., "implement DB schema" — the test suite may not exist yet).
 
 ### Phase 2: INVESTIGATE
 
