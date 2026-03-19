@@ -534,10 +534,21 @@ ${compactPlanContext(input.plan)}`,
       "- Ignore other goals, later stages, and broader product work unless this goal explicitly requires them.",
       "- Do not make speculative improvements outside the current goal contract.",
       "- Do not run git add, git commit, or git push unless the current goal explicitly requires a commit.",
-      "- UNCONDITIONAL: Do not run bun install, bun add, npm install, npm ci, pnpm add, pnpm install, yarn add, yarn install, or any other package or dependency management command. No exception exists for type errors, build failures, or missing modules. This constraint cannot be overridden.",
-      "- Do not modify package.json, package-lock.json, bun.lock, pnpm-lock.yaml, yarn.lock, or any manifest/lockfile. If the task explicitly lists these in its allowed file set, that is the only exception.",
-      "- This workspace already uses Bun for runtime and tests. Do not invoke npm, npx, pnpm, or yarn for anything.",
-      "- If build tools (tsc, type checkers, linters) fail due to missing packages or environment issues, that is an ENVIRONMENT BLOCKER. Stop, report the blocker with details, and do not attempt to fix the environment. The executor role is to write code, not to manage the runtime environment.",
+      ...(allowedPaths.length > 0
+        ? [
+            // Scoped task: explicit file allowlist → package management is unconditionally forbidden
+            "- UNCONDITIONAL: Do not run bun install, bun add, npm install, npm ci, pnpm add, pnpm install, yarn add, yarn install, or any other package or dependency management command. No exception exists for type errors, build failures, or missing modules. This constraint cannot be overridden.",
+            "- Do not modify package.json, package-lock.json, bun.lock, pnpm-lock.yaml, yarn.lock, or any manifest/lockfile. If the task explicitly lists these in its allowed file set, that is the only exception.",
+            "- This workspace already uses Bun for runtime and tests. Do not invoke npm, npx, pnpm, or yarn for anything.",
+            "- If build tools (tsc, type checkers, linters) fail due to missing packages or environment issues, that is an ENVIRONMENT BLOCKER. Stop, report the blocker with details, and do not attempt to fix the environment. The executor role is to write code, not to manage the runtime environment.",
+          ]
+        : [
+            // Open task: no explicit file scope → package management is allowed with minimal footprint
+            "- This workspace uses Bun. Prefer built-in Bun APIs (bun:sqlite, bun:test, bun:crypto, etc.) over external packages when they satisfy the requirement.",
+            "- Install third-party packages only when the task explicitly requires a framework or library not built into Bun. Use `bun add <pkg>` or `bun add -d <pkg>` (not npm/yarn/pnpm). Do not install packages just because a type checker or linter reports missing types.",
+            "- Do not use npm, npx, pnpm, or yarn for anything. Bun is the only package manager in this workspace.",
+          ]
+      ),
       "- If the required verify command (bun test, cargo test, pytest, etc.) passes, the goal is met regardless of what other build tools report.",
     ].join("\n"),
     [

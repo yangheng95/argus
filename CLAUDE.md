@@ -1,9 +1,9 @@
 ---
-name: benchmark-debug-template
+name: debug
 description: Build or repair an end-to-end benchmark/eval loop for a large in-development project, then use it to iteratively debug until explicit acceptance criteria pass. Use when the task involves benchmark scaffolding, full-chain evaluation, timeout design, acceptance metrics, or repeated debug-eval-fix cycles. Do not use for one-off edits with no measurable success criteria.
 ---
 
-# benchmark 调试模板
+# 调试模板
 
 ## 目的
 
@@ -124,16 +124,20 @@ benchmark 至少必须包含：
 
 10. 如果用户的问题定义浮于表面，或当前路径无法根本解决问题，必须主动警示并重定向。
 
-- 不要迎合表面要求，更不要掩盖真正问题。
+    - 不要迎合表面要求，更不要掩盖真正问题。
 
-1. 每次改动前必须查看硬盘上的方案并进行 recall。
+11. 每次改动前必须查看硬盘上的方案并进行 recall。
 
-- 如果不先查看已落盘方案、设计记录、历史约束就直接修改，视为“瞎改”，一律不验收。
+    - 如果不先查看已落盘方案、设计记录、历史约束就直接修改，视为“瞎改”，一律不验收。
 
-1. 不要一味堆砌代码。
+12. 不要一味堆砌代码。
 
-- 如果发现死代码、无意义代码、过时代码或废弃逻辑，应先向用户说明并询问是否删除。
+    - 如果发现死代码、无意义代码、过时代码或废弃逻辑，应先向用户说明并询问是否删除。
 
+13. 禁止任何关键字匹配规则。
+
+    - 任何形式的关键词过滤或敏感词屏蔽都是不可接受的，视为严重违规。
+  
 ## 产出要求
 
 最终产出至少应包含：

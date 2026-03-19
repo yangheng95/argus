@@ -10216,16 +10216,16 @@ function buildExecGraphHtml(events) {
   const durationSec = Math.round(totalMs / 1000);
 
   const LANE_COLORS = {
-    spec: { bg: "#EBF3FD", bar: "#3A86FF", text: "#1A5DAC" },
-    planner: { bg: "#F0EBFD", bar: "#7B54C9", text: "#4A2E8E" },
-    goal: { bg: "#EDFCF2", bar: "#2ECC71", text: "#1A7A44" },
-    judge: { bg: "#FFF8EC", bar: "#F39C12", text: "#8A5A00" },
+    spec:    { bg: "rgba(84,138,247,0.13)",  bar: "#548af7", text: "#7eaaf9" },
+    planner: { bg: "rgba(130,100,240,0.13)", bar: "#8264f0", text: "#a68cf5" },
+    goal:    { bg: "rgba(95,173,86,0.13)",   bar: "#5fad56", text: "#7fcf72" },
+    judge:   { bg: "rgba(212,167,44,0.13)",  bar: "#d4a72c", text: "#e8c04a" },
   };
-  const STATUS_COLORS = { accepted: "#27AE60", failed: "#E74C3C", running: "#F39C12" };
+  const STATUS_COLORS = { accepted: "#5fad56", failed: "#f75464", running: "#d4a72c" };
   const TOOL_COLORS = {
-    read_file: "#3498DB", list_directory: "#5DADE2", find_files: "#76D7EA",
-    search_code: "#F39C12", memory_search: "#9B59B6", preference_list: "#8E44AD",
-    web_search: "#E67E22", write_file: "#27AE60", edit_file: "#2ECC71", bash: "#E74C3C",
+    read_file: "#4eaaef", list_directory: "#62c4f0", find_files: "#80d8f8",
+    search_code: "#e8c04a", memory_search: "#b07cf0", preference_list: "#9b6de8",
+    web_search: "#e8914a", write_file: "#5fad56", edit_file: "#41c985", bash: "#f77080",
   };
   function toolColor(name) { return TOOL_COLORS[name] || "#95A5A6"; }
   function esc(s) { return String(s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
@@ -10244,20 +10244,20 @@ function buildExecGraphHtml(events) {
   const svgLines = [`<svg xmlns="http://www.w3.org/2000/svg" width="${CHART_W}" height="${CHART_H}" font-family="monospace,sans-serif">`];
   for (const t of ticks) {
     const x = LABEL_W + msToX(t);
-    svgLines.push(`<line x1="${x}" y1="0" x2="${x}" y2="${CHART_H-20}" stroke="#E0E0E0" stroke-width="1"/>`);
-    svgLines.push(`<text x="${x}" y="${CHART_H-5}" fill="#999" font-size="10" text-anchor="middle">${fmtMs(t)}</text>`);
+    svgLines.push(`<line x1="${x}" y1="0" x2="${x}" y2="${CHART_H-20}" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>`);
+    svgLines.push(`<text x="${x}" y="${CHART_H-5}" fill="#6e7278" font-size="10" text-anchor="middle">${fmtMs(t)}</text>`);
   }
   sortedLanes.forEach((lane, i) => {
     const y = i * (LANE_H + LANE_GAP) + 4;
     const colors = LANE_COLORS[lane.type] || LANE_COLORS.spec;
     const statusColor = lane.status ? (STATUS_COLORS[lane.status] || colors.bar) : colors.bar;
-    svgLines.push(`<rect x="0" y="${y}" width="${LABEL_W-4}" height="${LANE_H}" rx="4" fill="${colors.bg}" stroke="${colors.bar}" stroke-width="1"/>`);
+    svgLines.push(`<rect x="0" y="${y}" width="${LABEL_W-4}" height="${LANE_H}" rx="4" fill="${colors.bg}" stroke="${colors.bar}" stroke-width="1" stroke-opacity="0.5"/>`);
     svgLines.push(`<circle cx="14" cy="${y+LANE_H/2}" r="5" fill="${statusColor}"/>`);
     svgLines.push(`<text x="26" y="${y+LANE_H/2+4}" fill="${colors.text}" font-size="11" font-weight="600">${esc(trunc(lane.label, 32))}</text>`);
-    svgLines.push(`<text x="${LABEL_W-8}" y="${y+LANE_H/2+4}" fill="#999" font-size="10" text-anchor="end">${fmtMs(lane.endMs-lane.startMs)}</text>`);
+    svgLines.push(`<text x="${LABEL_W-8}" y="${y+LANE_H/2+4}" fill="#6e7278" font-size="10" text-anchor="end">${fmtMs(lane.endMs-lane.startMs)}</text>`);
     const bx = LABEL_W + msToX(lane.startMs);
     const bw = Math.max(2, msToX(lane.endMs) - msToX(lane.startMs));
-    svgLines.push(`<rect x="${bx}" y="${y+8}" width="${bw}" height="${LANE_H-16}" rx="3" fill="${colors.bg}" stroke="${colors.bar}" stroke-width="1" opacity="0.6"/>`);
+    svgLines.push(`<rect x="${bx}" y="${y+8}" width="${bw}" height="${LANE_H-16}" rx="3" fill="${colors.bg}" stroke="${colors.bar}" stroke-width="1" stroke-opacity="0.5" opacity="0.75"/>`);
     for (const tc of lane.toolCalls) {
       const tx = LABEL_W + msToX(tc.startMs);
       const tw = Math.max(3, msToX(tc.endMs) - msToX(tc.startMs));
@@ -10269,22 +10269,22 @@ function buildExecGraphHtml(events) {
   const dur = durationSec >= 60 ? Math.floor(durationSec/60)+"m"+(durationSec%60)+"s" : durationSec+"s";
 
   const toolUsage = Object.entries(allToolCounts).sort((a,b)=>b[1]-a[1])
-    .map(([t,c]) => `<div style="display:flex;align-items:center;gap:8px;margin:3px 0"><span style="color:${toolColor(t)};font-family:monospace;min-width:180px">${esc(t)}</span><span style="background:${toolColor(t)};height:12px;border-radius:3px;width:${Math.round(c/Math.max(...Object.values(allToolCounts))*200)}px"></span><span style="color:#666;font-size:12px">×${c}</span></div>`).join("");
+    .map(([t,c]) => `<div style="display:flex;align-items:center;gap:8px;margin:4px 0"><span style="color:${toolColor(t)};font-family:monospace;min-width:180px;font-size:12px">${esc(t)}</span><span style="background:${toolColor(t)};height:10px;border-radius:3px;width:${Math.round(c/Math.max(...Object.values(allToolCounts))*200)}px;opacity:0.8"></span><span style="color:#6e7278;font-size:12px">×${c}</span></div>`).join("");
 
   const phaseCards = sortedLanes.map(lane => {
     const colors = LANE_COLORS[lane.type] || LANE_COLORS.spec;
     const statusColor = lane.status ? (STATUS_COLORS[lane.status] || colors.bar) : colors.bar;
     const tools = Object.entries(lane.toolCounts).sort((a,b)=>b[1]-a[1])
-      .map(([t,c]) => `<span style="font-size:11px;padding:1px 6px;border-radius:10px;border:1px solid ${toolColor(t)};color:${toolColor(t)};font-family:monospace">${esc(t)} ×${c}</span>`).join(" ");
+      .map(([t,c]) => `<span style="font-size:11px;padding:2px 7px;border-radius:10px;border:1px solid ${toolColor(t)};color:${toolColor(t)};font-family:monospace;opacity:0.9">${esc(t)} ×${c}</span>`).join(" ");
     const snippet = lane.textSnippet.trim();
-    return `<div style="border-left:4px solid ${colors.bar};background:#FAFBFC;border-radius:8px;padding:12px 14px;margin-bottom:10px">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-        <span style="font-weight:700;font-size:13px">${esc(lane.label)}</span>
-        ${lane.status ? `<span style="background:${statusColor};color:#fff;border-radius:10px;padding:1px 8px;font-size:11px;font-weight:700">${esc(lane.status)}</span>` : ""}
-        <span style="color:#9CA3AF;font-size:11px">${fmtMs(lane.startMs)} → ${fmtMs(lane.endMs)} (${fmtMs(lane.endMs-lane.startMs)})</span>
+    return `<div style="border:1px solid rgba(255,255,255,0.07);border-left:3px solid ${colors.bar};border-radius:8px;padding:12px 14px;margin-bottom:8px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap">
+        <span style="font-weight:700;font-size:13px;color:#dfe1e5">${esc(lane.label)}</span>
+        ${lane.status ? `<span style="background:${statusColor};color:#fff;border-radius:10px;padding:1px 8px;font-size:11px;font-weight:600">${esc(lane.status)}</span>` : ""}
+        <span style="color:#6e7278;font-size:11px;margin-left:auto">${fmtMs(lane.startMs)} → ${fmtMs(lane.endMs)} (${fmtMs(lane.endMs-lane.startMs)})</span>
       </div>
       ${tools ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin:4px 0">${tools}</div>` : ""}
-      ${snippet ? `<pre style="font-size:11px;color:#4B5563;background:#F3F4F6;border-radius:4px;padding:6px 8px;white-space:pre-wrap;word-break:break-word;max-height:80px;overflow-y:auto;margin-top:6px">${esc(trunc(snippet,300))}</pre>` : ""}
+      ${snippet ? `<pre style="font-size:11px;color:#a8adb3;background:rgba(0,0,0,0.25);border-radius:4px;padding:6px 8px;white-space:pre-wrap;word-break:break-word;max-height:80px;overflow-y:auto;margin-top:6px">${esc(trunc(snippet,300))}</pre>` : ""}
     </div>`;
   }).join("");
 
@@ -10292,19 +10292,22 @@ function buildExecGraphHtml(events) {
 <title>Exec Graph – ${esc(taskID.slice(-12))}</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#F7F9FC;color:#1A2332;line-height:1.5}
-header{background:#1A2332;color:#fff;padding:14px 20px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
-header h1{font-size:16px;font-weight:700}
-.chip{padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;background:#2D3A4E;color:#CBD5E1}
-.chip.ok{background:#1A7A44;color:#fff}.chip.fail{background:#922B21;color:#fff}.chip.warn{background:#7A4800;color:#fff}
+body{font-family:"Aptos","Segoe UI Variable Text",system-ui,sans-serif;background:#1a1b1e;color:#c0c4cc;line-height:1.5;scrollbar-color:rgba(255,255,255,0.16) transparent;scrollbar-width:thin}
+header{background:#242628;border-bottom:1px solid rgba(255,255,255,0.09);padding:13px 20px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+header h1{font-size:14px;font-weight:700;color:#dfe1e5;letter-spacing:-.01em}
+.chip{padding:3px 9px;border-radius:12px;font-size:11px;font-weight:500;background:rgba(255,255,255,0.07);color:#a8adb3;border:1px solid rgba(255,255,255,0.09)}
+.chip.ok{background:rgba(95,173,86,0.18);color:#7fcf72;border-color:rgba(95,173,86,0.32)}
+.chip.fail{background:rgba(247,84,100,0.16);color:#f77080;border-color:rgba(247,84,100,0.32)}
+.chip.warn{background:rgba(212,167,44,0.16);color:#e8c04a;border-color:rgba(212,167,44,0.32)}
 main{max-width:1240px;margin:0 auto;padding:20px 16px}
-.section{background:#fff;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,.08);padding:18px;margin-bottom:16px}
-.section h2{font-size:13px;font-weight:700;color:#374151;margin-bottom:12px;text-transform:uppercase;letter-spacing:.03em}
+.section{background:#242628;border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:18px;margin-bottom:14px}
+.section h2{font-size:10px;font-weight:700;color:#6e7278;margin-bottom:12px;text-transform:uppercase;letter-spacing:.07em}
 .gantt-wrap{overflow-x:auto}
+::-webkit-scrollbar{width:6px;height:6px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.16);border-radius:3px}
 </style></head><body>
 <header>
-  <div><div style="font-size:10px;color:#94A3B8;margin-bottom:2px">Task ID</div><h1>${esc(taskID)}</h1></div>
-  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-left:auto">
+  <div><div style="font-size:10px;color:#6e7278;margin-bottom:2px;text-transform:uppercase;letter-spacing:.05em">Task</div><h1>${esc(taskID)}</h1></div>
+  <div style="display:flex;gap:6px;flex-wrap:wrap;margin-left:auto">
     <span class="chip">Started: ${esc(startAt.replace("T"," ").replace(/\.\d+Z$/," UTC"))}</span>
     <span class="chip">Duration: ${dur}</span>
     <span class="chip">Goals: ${allGoalLanes.length} (${acceptedGoals}✓ ${failedGoals}✗)</span>
@@ -10313,10 +10316,10 @@ main{max-width:1240px;margin:0 auto;padding:20px 16px}
   </div>
 </header>
 <main>
-  ${specSummary ? `<div class="section"><h2>Task Summary</h2><div style="background:#F8FAFC;border-left:3px solid #7B54C9;padding:10px;border-radius:4px;font-size:13px;white-space:pre-wrap">${esc(trunc(specSummary,600))}</div></div>` : ""}
+  ${specSummary ? `<div class="section"><h2>Task Summary</h2><div style="background:rgba(130,100,240,0.10);border-left:3px solid #8264f0;padding:10px;border-radius:4px;font-size:13px;white-space:pre-wrap;color:#c0c4cc">${esc(trunc(specSummary,600))}</div></div>` : ""}
   <div class="section"><h2>Execution Timeline</h2>
-    <div style="display:flex;gap:16px;margin-bottom:10px;font-size:12px;color:#6B7280">
-      ${[["Spec","#3A86FF"],["Planner","#7B54C9"],["Goal","#2ECC71"],["Judge","#F39C12"]].map(([l,c])=>`<span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;border-radius:50%;background:${c}"></span>${l}</span>`).join("")}
+    <div style="display:flex;gap:16px;margin-bottom:10px;font-size:12px;color:#6e7278">
+      ${[["Spec","#548af7"],["Planner","#8264f0"],["Goal","#5fad56"],["Judge","#d4a72c"]].map(([l,c])=>`<span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;border-radius:50%;background:${c}"></span>${l}</span>`).join("")}
     </div>
     <div class="gantt-wrap">${svgLines.join("")}</div>
   </div>

@@ -44,6 +44,7 @@ import { plannerClarification } from "./planner-clarification"
 import { OrchestratorProtocol } from "./protocol"
 import { suppressClarifications, unattendedProject } from "./unattended"
 import { buildSpecReplanInput } from "./spec-goal-service"
+import { withStageRetry } from "./strategy"
 import { findGoalSnapshot, findPlan, findRequirements, findSpecSnapshot, findTask, goalSnapshotIDOfPlan, listGoalsForPlan, listMilestonesByPlan, listPlanNodesByPlan, type GoalRow, type PlanRow, type RequirementRow, type RunRow, type TaskRow } from "./store"
 import { agentStream } from "./agent-stream"
 import { type TextHooks } from "@/llm/api"
@@ -2296,7 +2297,7 @@ export async function createReplanRun(task: TaskRow, plan: PlanRow, run: RunRow,
   })
   const now = Date.now()
   try {
-    const compiled = await compileTransition({
+    const compiled = await withStageRetry("plan", () => compileTransition({
       mode: "replan",
       taskID: task.id,
       now,
@@ -2311,6 +2312,10 @@ export async function createReplanRun(task: TaskRow, plan: PlanRow, run: RunRow,
       previousRun: run,
       failureSummary: summary,
       replanContext,
+    }), {
+      onRetry: (attempt, error) => {
+        log.info("retrying replan compilation", { attempt, taskID: task.id, error: String(error) })
+      },
     })
     return persistReplanTransition({
       task,

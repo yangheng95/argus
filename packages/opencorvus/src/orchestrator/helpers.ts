@@ -14,6 +14,11 @@ function safeInt(value: string | undefined, fallback: number): number {
 export const SAME_PLAN_RETRY_LIMIT = safeInt(process.env.OPENCORVUS_SAME_PLAN_RETRY_LIMIT, 1)
 export const DEFAULT_MAX_RUNS = safeInt(process.env.OPENCORVUS_MAX_RUNS, 10)
 export const DEFAULT_MAX_REPLANS = safeInt(process.env.OPENCORVUS_MAX_REPLANS, 3)
+export const STAGE_RETRY_LIMIT = safeInt(process.env.OPENCORVUS_STAGE_RETRY_LIMIT, 2)
+
+export type Stage = "spec" | "plan" | "goal" | "execute" | "evaluate" | "deliver"
+
+export type StageFailureClassification = "transient" | "strategy" | "environment" | "input" | "permission"
 
 export const orchestratorState = Instance.state(
   () => ({

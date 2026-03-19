@@ -1,0 +1,75 @@
+为 Moment Diary 交付一个前端 Web 应用，与现有后端 API 对接。
+
+项目背景：后端已经实现完毕（Hono + SQLite，运行在 http://localhost:3000），包含完整的认证、日记 CRUD、时间轴 API。本次任务只实现前端，不修改后端业务逻辑。
+
+## 技术栈
+
+- 纯原生 HTML + CSS + JavaScript（无构建工具，无框架依赖）
+- 静态文件放在 public/ 目录
+- 在 src/app.ts 中添加 Hono serveStatic 中间件提供 public/ 静态文件服务
+- 根路由 GET / 返回 public/index.html
+
+## 必须交付的文件
+
+- public/index.html — 主页（单页应用入口）
+- public/app.js — 前端逻辑
+- public/styles.css — 样式
+
+## 功能要求
+
+### 认证流程
+1. 未登录时显示登录/注册表单
+2. 注册：POST /auth/register（email + password）
+3. 登录：POST /auth/login，获得 token，存入 localStorage（key: "moment_token"）
+4. 登录后隐藏认证表单，显示主界面
+5. 退出登录：清除 localStorage 中的 token，返回登录页
+
+### 日记列表
+1. 登录后自动加载 GET /diaries，展示日记列表
+2. 每条日记显示：标题、心情 emoji、标签列表、创建时间
+3. 点击日记可查看详情
+
+### 创建日记
+1. 提供表单：标题（必填）、内容（必填）、心情（可选，枚举：happy/sad/neutral/excited/anxious）、标签（可选，逗号分隔）
+2. 提交 POST /diaries，刷新列表
+
+### 编辑 / 删除日记
+1. 每条日记提供"编辑"和"删除"按钮
+2. 编辑：PATCH /diaries/:id，更新成功后刷新列表
+3. 删除：DELETE /diaries/:id，删除前弹出确认，成功后刷新列表
+
+### 时间轴视图
+1. 提供切换按钮在"日记列表"和"时间轴"两个视图间切换
+2. 时间轴视图调用 GET /timeline，支持按 tag 和 mood 筛选
+3. 筛选条件变更时自动重新加载
+
+## API 调用规范
+
+- 所有请求添加 Authorization: Bearer <token> 头（认证接口除外）
+- Content-Type: application/json
+- 错误处理：401 跳回登录页，其他错误显示 alert 提示
+
+## 修改后端入口文件
+
+在 src/app.ts 中添加（不要修改任何现有路由或业务逻辑）：
+
+```typescript
+import { serveStatic } from "hono/bun"
+
+// 静态文件服务（在所有 API 路由注册之后添加）
+app.use("/*", serveStatic({ root: "./public" }))
+```
+
+## 验收标准
+
+- bun test 通过（后端测试全部维持通过，不能破坏）
+- public/index.html、public/app.js、public/styles.css 均存在且非空（>1KB）
+- src/app.ts 包含 serveStatic 静态文件服务
+- 访问 http://localhost:3000 能返回 HTML 页面（HTTP 200）
+
+## 执行要求
+
+- 直接实现，不要提出澄清问题
+- 不需要 TypeScript 编译前端代码，直接用原生 ES Module JS
+- 不添加 README、文档、演示数据等无关产物
+- 前端代码风格：简洁、可读、有必要的注释
