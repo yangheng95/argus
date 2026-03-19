@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "zh-CN",
-    "panel_revision": "91226897afceaa2e"
+    "panel_revision": "30978e89690f6cc9"
   },
   "brand.guide_kicker": "快速说明",
   "brand.guide_positioning_body": "这不是一个装饰性浮层，而是任务驾驶舱：左边选择任务，中间推进执行，右边盯 spec、plan、评估和文件变更，防止 agent 一路跑偏。",
@@ -61,6 +61,7 @@
   "chat.placeholder": "发送消息……",
   "chat.placeholder_disabled": "请先连接 OpenCorvus，再开始任务。",
   "chat.role.assistant": "助手",
+  "chat.role.delivery": "交付",
   "chat.role.goal": "目标",
   "chat.role.message": "消息",
   "chat.role.planner": "计划",
@@ -159,6 +160,7 @@
   "prompt.desc.agent_generate": "内置 generate agent 输出最终回复时使用的系统提示词。",
   "prompt.desc.planner_system": "规划器生成执行计划时使用的系统提示词。",
   "prompt.desc.spec_system": "规格器提炼需求和约束时使用的系统提示词。",
+  "prompt.desc.delivery_system": "交付验证器在启动验证、修复 bug 和最终验收时使用的系统提示词。",
   "prompt.desc.evaluator_system": "评估器判断是否通过或是否需要重规划时使用的系统提示词。",
   "prompt.status.custom": "已覆盖",
   "prompt.status.default": "默认",
@@ -222,6 +224,7 @@
     "one": "隐藏了 {{count}} 行未变化内容",
     "other": "隐藏了 {{count}} 行未变化内容"
   },
+  "empty.delivery": "暂无交付记录",
   "empty.checks": "没有配置检查项",
   "empty.files": "还没有文件变更",
   "empty.goals": "尚未定义目标",
@@ -419,6 +422,7 @@
   "preference.value": "值 <em>*</em>",
   "preference.value_placeholder": "偏好值……",
   "preference.refresh_title": "从服务端重新加载偏好列表。",
+  "section.delivery": "交付",
   "section.evaluation": "评估",
   "section.budget": "运行预算",
   "section.files": "文件",
@@ -510,6 +514,7 @@
   "task.status.blocked": "阻塞",
   "task.status.cancelled": "已取消",
   "task.status.completed": "已完成",
+  "task.status.delivering": "交付验证中",
   "task.status.evaluating": "评估中",
   "task.status.failed": "失败",
   "task.status.idle": "无任务",

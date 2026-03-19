@@ -1483,10 +1483,7 @@ a { color: inherit; text-decoration: none; }
 }
 
 .engine-model-panel {
-  position: absolute;
-  top: calc(100% + calc(6px * var(--ui-scale)));
-  left: 50%;
-  transform: translateX(-50%);
+  position: fixed;
   min-width: calc(180px * var(--ui-scale));
   max-width: calc(260px * var(--ui-scale));
   max-height: calc(280px * var(--ui-scale));
@@ -1496,7 +1493,7 @@ a { color: inherit; text-decoration: none; }
   border-radius: calc(10px * var(--ui-scale));
   padding: calc(4px * var(--ui-scale));
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.32), 0 2px 8px rgba(0, 0, 0, 0.18);
-  z-index: 200;
+  z-index: 9999;
   scrollbar-width: thin;
   scrollbar-color: var(--subtle-5) transparent;
 }
@@ -1944,6 +1941,13 @@ body[data-theme="light"] .msg[data-role="system"] {
   --msg-role-bg: rgba(102, 112, 133, 0.09);
   --msg-role-border: rgba(102, 112, 133, 0.22);
   --msg-role-tone: #667085;
+}
+body[data-theme="light"] .msg[data-role="delivery"] {
+  --msg-surface: rgba(14, 150, 130, 0.06);
+  --msg-border: rgba(14, 150, 130, 0.22);
+  --msg-role-bg: rgba(14, 150, 130, 0.10);
+  --msg-role-border: rgba(14, 150, 130, 0.26);
+  --msg-role-tone: #0e9682;
 }
 body[data-theme="light"] .msg[data-role="goal_gate"] {
   --msg-surface: rgba(73, 156, 84, 0.06);
@@ -2937,6 +2941,15 @@ body[data-theme="light"] .section-badge {
   --msg-role-tone: var(--text-soft);
 }
 
+.msg[data-role="delivery"] {
+  align-items: flex-start;
+  --msg-surface: rgba(40, 180, 160, 0.09);
+  --msg-border: rgba(40, 180, 160, 0.28);
+  --msg-role-bg: rgba(40, 180, 160, 0.14);
+  --msg-role-border: rgba(40, 180, 160, 0.32);
+  --msg-role-tone: #28b4a0;
+}
+
 .msg[data-role="goal_gate"] {
   align-items: flex-start;
   --msg-surface: rgba(95, 173, 86, 0.09);
@@ -2967,6 +2980,7 @@ body[data-theme="light"] .section-badge {
 
 .msg[data-role="planner"] .msg-head,
 .msg[data-role="scheduler"] .msg-head,
+.msg[data-role="delivery"] .msg-head,
 .msg[data-role="spec"] .msg-head,
 .msg[data-role="system"] .msg-head,
 .msg[data-role="goal_gate"] .msg-head,
@@ -2993,6 +3007,7 @@ body[data-theme="light"] .section-badge {
 .msg[data-role="user"] .msg-role,
 .msg[data-role="planner"] .msg-role,
 .msg[data-role="scheduler"] .msg-role,
+.msg[data-role="delivery"] .msg-role,
 .msg[data-role="spec"] .msg-role,
 .msg[data-role="system"] .msg-role,
 .msg[data-role="goal_gate"] .msg-role {
@@ -3009,6 +3024,7 @@ body[data-theme="light"] .section-badge {
 .msg[data-role="user"] .msg-time,
 .msg[data-role="planner"] .msg-time,
 .msg[data-role="scheduler"] .msg-time,
+.msg[data-role="delivery"] .msg-time,
 .msg[data-role="spec"] .msg-time,
 .msg[data-role="system"] .msg-time,
 .msg[data-role="goal_gate"] .msg-time {
@@ -3064,6 +3080,7 @@ body[data-theme="light"] .section-badge {
 
 .msg[data-role="planner"] .msg-bubble,
 .msg[data-role="scheduler"] .msg-bubble,
+.msg[data-role="delivery"] .msg-bubble,
 .msg[data-role="spec"] .msg-bubble,
 .msg[data-role="system"] .msg-bubble,
 .msg[data-role="goal_gate"] .msg-bubble,
@@ -3096,6 +3113,7 @@ body[data-theme="light"] .section-badge {
 .msg[data-role="user"] .msg-text,
 .msg[data-role="planner"] .msg-text,
 .msg[data-role="scheduler"] .msg-text,
+.msg[data-role="delivery"] .msg-text,
 .msg[data-role="spec"] .msg-text,
 .msg[data-role="system"] .msg-text,
 .msg[data-role="goal_gate"] .msg-text {

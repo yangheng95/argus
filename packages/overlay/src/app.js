@@ -448,6 +448,9 @@ const dom = {
   planSection: $("#planSection"),
   goalsSection: $("#goalsSection"),
   criteriaSection: $("#criteriaSection"),
+  deliverySection: $("#deliverySection"),
+  deliveryBadge: $("#deliveryBadge"),
+  deliveryBody: $("#deliveryBody"),
   changesSection: $("#changesSection"),
   channelSection: $("#channelSection"),
   channelConfigBody: $("#channelConfigBody"),
@@ -933,6 +936,7 @@ function roleLabel(role) {
   if (role === "assistant") return t("chat.role.assistant");
   if (role === "planner") return t("chat.role.planner");
   if (role === "scheduler") return t("chat.role.scheduler");
+  if (role === "delivery") return t("chat.role.delivery");
   if (role === "spec") return t("chat.role.spec");
   if (role === "system") return t("chat.role.system");
   if (role === "goal_gate") return t("chat.role.goal");
@@ -2480,6 +2484,7 @@ function promptDescription(entry) {
   if (entry.key === "planner_system") return t("prompt.desc.planner_system");
   if (entry.key === "spec_system") return t("prompt.desc.spec_system");
   if (entry.key === "evaluator_system") return t("prompt.desc.evaluator_system");
+  if (entry.key === "delivery_system") return t("prompt.desc.delivery_system");
   return entry.description || "";
 }
 
@@ -2535,7 +2540,7 @@ function renderPromptCatalog() {
     dom.promptBody = newBody;
     return;
   }
-  const activeStatuses = ["running", "planning", "evaluating", "queued"];
+  const activeStatuses = ["running", "planning", "evaluating", "delivering", "queued"];
   const taskActive = activeStatuses.includes(state.board?.task?.status);
   const activeBanner = taskActive
     ? `<div class="config-status-box" data-status="warn" style="margin-bottom:var(--sp-2)">${escapeHtml(t("prompt.active_task_notice"))}</div>`
@@ -3929,6 +3934,13 @@ function openExecutorModelPanel(executorID) {
   const panel = executorModelPanel(executorID);
   if (!panel) return;
   renderExecutorModelPanel(executorID);
+  const caret = dom.engineBar?.querySelector(`[data-executor-caret="${executorID}"]`);
+  if (caret) {
+    const rect = caret.getBoundingClientRect();
+    panel.style.top = Math.round(rect.bottom + 6) + "px";
+    panel.style.left = Math.round(rect.left + rect.width / 2) + "px";
+    panel.style.transform = "translateX(-50%)";
+  }
   panel.hidden = false;
 }
 
@@ -4681,7 +4693,7 @@ async function selectTask(taskID, options = {}) {
 
   // Start SSE for running tasks
   const status = state.board?.task?.status;
-  if (["running", "planning", "evaluating", "blocked", "queued"].includes(status)) {
+  if (["running", "planning", "evaluating", "delivering", "blocked", "queued"].includes(status)) {
     startSSE(nextTaskID);
   }
 }
@@ -5126,12 +5138,14 @@ function agentRole(stage) {
   if (stage === "spec") return "spec";
   if (stage === "planner") return "planner";
   if (stage === "judge") return "scheduler";
+  if (stage === "delivery") return "delivery";
   return "assistant";
 }
 
 function agentStageActive(stage) {
   const status = String(state.board?.task?.status || "");
   if (stage === "judge") return status === "evaluating";
+  if (stage === "delivery") return status === "delivering";
   return status === "planning" || status === "queued";
 }
 
@@ -5139,6 +5153,7 @@ function agentStagePersisted(stage) {
   if (stage === "spec") return !!state.board?.spec?.content;
   if (stage === "planner") return !!state.board?.plan;
   if (stage === "judge") return !!state.board?.evaluation?.verdict;
+  if (stage === "delivery") return !!state.board?.delivery?.status;
   return false;
 }
 
@@ -5757,7 +5772,8 @@ function renderBoard() {
   renderBudget(task);
 
   // Evaluation
-  renderEvaluation(evaluation, delivery);
+  renderEvaluation(evaluation);
+  renderDeliverySection(delivery);
   syncSectionPhases();
 
   // Interactions
@@ -5778,7 +5794,7 @@ function setTaskStatus(status, options = {}) {
   dom.statusDot.innerHTML = statusIcon(next);
   dom.statusLabel.textContent = statusLabel(next);
   // Show terminate button only for active (non-terminal) task states
-  const activeStates = ["running", "planning", "queued", "evaluating", "blocked"];
+  const activeStates = ["running", "planning", "queued", "evaluating", "delivering", "blocked"];
   if (dom.btnTerminateRun) {
     dom.btnTerminateRun.hidden = !visible || !activeStates.includes(next);
   }
@@ -5798,6 +5814,7 @@ function statusLabel(status) {
     running: t("task.status.running"),
     blocked: t("task.status.blocked"),
     evaluating: t("task.status.evaluating"),
+    delivering: t("task.status.delivering"),
     completed: t("task.status.completed"),
     failed: t("task.status.failed"),
     cancelled: t("task.status.cancelled"),
@@ -5813,6 +5830,7 @@ function statusIcon(status) {
     running: `<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path data-fill="true" d="M6 4.6L11.3 8 6 11.4Z"/></svg>`,
     blocked: `<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path data-fill="true" d="M8 3.1L13 12H3Z"/><path data-stroke="true" d="M8 5.8v2.8"/><circle data-fill="true" cx="8" cy="10.8" r="0.9" style="fill: var(--surface-strong);"/></svg>`,
     evaluating: `<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle data-stroke="true" cx="6.7" cy="6.7" r="3.5"/><path data-stroke="true" d="M9.5 9.5l2.9 2.9"/><circle data-fill="true" cx="6.7" cy="6.7" r="1.2"/></svg>`,
+    delivering: `<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path data-stroke="true" d="M3.5 8h9"/><path data-stroke="true" d="M9 4.5L12.5 8 9 11.5"/><circle data-fill="true" cx="3.5" cy="8" r="1"/></svg>`,
     completed: `<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle data-stroke="true" cx="8" cy="8" r="4.5"/><path data-stroke="true" d="M5.1 8.2l2 2 3.8-3.8"/></svg>`,
     failed: `<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle data-stroke="true" cx="8" cy="8" r="4.5"/><path data-stroke="true" d="M5.4 5.4l5.2 5.2"/><path data-stroke="true" d="M10.6 5.4l-5.2 5.2"/></svg>`,
     cancelled: `<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle data-stroke="true" cx="8" cy="8" r="4.5"/><path data-stroke="true" d="M5.2 10.8l5.6-5.6"/></svg>`,
@@ -5872,6 +5890,7 @@ function phaseSections() {
     plan: dom.planSection,
     goals: dom.goalsSection,
     evaluation: dom.criteriaSection,
+    delivery: dom.deliverySection,
     files: dom.changesSection,
   };
 }
@@ -6024,8 +6043,16 @@ function syncSectionPhases(board = state.board) {
     if (state.changes.length > 0) related.push("files");
   }
 
-  if (board?.task && active.length === 0 && (board.task.status === "delivering" || board.task.status === "completed")) {
-    active.push(state.changes.length > 0 ? "files" : "overview");
+  if (board?.task && active.length === 0 && board.task.status === "delivering") {
+    active.push("delivery");
+    if (state.changes.length > 0) related.push("files");
+    if (board.evaluation) related.push("evaluation");
+    if (goals.length > 0) related.push("goals");
+  }
+
+  if (board?.task && active.length === 0 && board.task.status === "completed") {
+    active.push(board.delivery ? "delivery" : state.changes.length > 0 ? "files" : "overview");
+    if (board.delivery && state.changes.length > 0) related.push("files");
     if (board.evaluation) related.push("evaluation");
     if (goals.length > 0) related.push("goals");
   }
@@ -6083,7 +6110,7 @@ function renderOverview(overview, task) {
   badge.dataset.tone =
     task.status === "completed" ? "good" :
     task.status === "failed" ? "bad" :
-    ["running", "planning", "evaluating"].includes(task.status) ? "accent" :
+    ["running", "planning", "evaluating", "delivering"].includes(task.status) ? "accent" :
     task.status === "blocked" ? "warn" : "";
 
   body.innerHTML = `
@@ -6838,10 +6865,10 @@ function buildCheckConfig() {
 
 // ── Evaluation Rendering ──
 
-function renderEvaluation(evaluation, delivery) {
+function renderEvaluation(evaluation) {
   if (!evaluation) {
     if (dom.criteriaBadge) { dom.criteriaBadge.textContent = ""; delete dom.criteriaBadge.dataset.tone; }
-    if (dom.evalBody) dom.evalBody.innerHTML = delivery ? renderDeliveryCard(delivery) : "";
+    if (dom.evalBody) dom.evalBody.innerHTML = "";
     return;
   }
 
@@ -6879,10 +6906,6 @@ function renderEvaluation(evaluation, delivery) {
 
   if (evaluation.summary) {
     html += `<div class="eval-summary md-content">${renderMarkdown(evaluation.summary)}</div>`;
-  }
-
-  if (delivery) {
-    html += renderDeliveryCard(delivery);
   }
 
   if (dom.evalBody) dom.evalBody.innerHTML = html;
@@ -6969,6 +6992,23 @@ function renderDeliveryCard(delivery) {
     <div class="delivery-summary md-content">${renderMarkdown(delivery.summary || delivery.result?.summary || "")}</div>
     ${fileCount > 0 ? `<div class="delivery-files">${escapeHtml(tc("delivery.files_changed", fileCount, { count: fileCount }))}</div>` : ""}
   </div>`;
+}
+
+function renderDeliverySection(delivery) {
+  if (!dom.deliveryBody || !dom.deliveryBadge || !dom.deliverySection) return;
+  if (!delivery) {
+    dom.deliveryBody.innerHTML = `<p class="empty-hint">${escapeHtml(t("empty.delivery"))}</p>`;
+    dom.deliveryBadge.textContent = "";
+    delete dom.deliveryBadge.dataset.tone;
+    return;
+  }
+  const status = delivery.status;
+  const label = deliveryStatusLabel(status);
+  dom.deliveryBadge.textContent = label;
+  dom.deliveryBadge.dataset.tone =
+    status === "delivered" ? "good" :
+    status === "failed" ? "bad" : "accent";
+  dom.deliveryBody.innerHTML = renderDeliveryCard(delivery);
 }
 
 function setCriteriaResult(item, status) {
@@ -7871,7 +7911,7 @@ function mergeExecutorEventList(events = [], event) {
 async function loadExecutorEvents(runID = state.board?.task?.activeRunID || "") {
   const next = typeof runID === "string" ? runID : "";
   const activeTask = state.board?.task?.status;
-  const activeRun = ["queued", "planning", "running", "blocked", "evaluating"].includes(String(activeTask || ""));
+  const activeRun = ["queued", "planning", "running", "blocked", "evaluating", "delivering"].includes(String(activeTask || ""));
   if (!state.selectedTaskID) {
     state.executorEvents = [];
     state.executorRunID = "";
@@ -10255,9 +10295,9 @@ function buildExecGraphHtml(events) {
 
     if (ev.type === "orchestrator.agent.updated") {
       const stage = ev.stage;
-      if (!["spec", "planner", "judge"].includes(stage)) continue;
-      const laneId = (stage === "judge" && ev.runID) ? `judge:${ev.runID}` : stage;
-      const label = stage === "spec" ? "Spec Agent" : stage === "planner" ? "Planner Agent" : `Judge (${(ev.runID || "").slice(-6)})`;
+      if (!["spec", "planner", "judge", "delivery"].includes(stage)) continue;
+      const laneId = (stage === "judge" && ev.runID) ? `judge:${ev.runID}` : (stage === "delivery" && ev.runID) ? `delivery:${ev.runID}` : stage;
+      const label = stage === "spec" ? "Spec Agent" : stage === "planner" ? "Planner Agent" : stage === "delivery" ? `Delivery (${(ev.runID || "").slice(-6)})` : `Judge (${(ev.runID || "").slice(-6)})`;
       const lane = getLane(laneId, label, stage, ms, { runID: ev.runID || undefined });
       lane.endMs = Math.max(lane.endMs, ms);
       const pendingKey = `${laneId}::${ev.toolName}`;
@@ -10337,9 +10377,9 @@ function buildExecGraphHtml(events) {
   }
 
   // Sort lanes
-  const typeOrder = { spec: 0, planner: 1, goal: 2, judge: 3 };
+  const typeOrder = { spec: 0, planner: 1, goal: 2, judge: 3, delivery: 4 };
   const sortedLanes = [...lanesMap.values()].sort((a, b) => {
-    if ((a.type === "goal" || a.type === "judge") && (b.type === "goal" || b.type === "judge")) return a.startMs - b.startMs;
+    if ((a.type === "goal" || a.type === "judge" || a.type === "delivery") && (b.type === "goal" || b.type === "judge" || b.type === "delivery")) return a.startMs - b.startMs;
     return (typeOrder[a.type] || 99) - (typeOrder[b.type] || 99);
   });
 
@@ -10356,16 +10396,17 @@ function buildExecGraphHtml(events) {
   const durationSec = Math.round(totalMs / 1000);
 
   const LANE_COLORS = {
-    spec:    { bg: "rgba(84,138,247,0.13)",  bar: "#548af7", text: "#7eaaf9" },
-    planner: { bg: "rgba(130,100,240,0.13)", bar: "#8264f0", text: "#a68cf5" },
-    goal:    { bg: "rgba(95,173,86,0.13)",   bar: "#5fad56", text: "#7fcf72" },
-    judge:   { bg: "rgba(212,167,44,0.13)",  bar: "#d4a72c", text: "#e8c04a" },
+    spec:     { bg: "rgba(84,138,247,0.13)",  bar: "#548af7", text: "#7eaaf9" },
+    planner:  { bg: "rgba(130,100,240,0.13)", bar: "#8264f0", text: "#a68cf5" },
+    goal:     { bg: "rgba(95,173,86,0.13)",   bar: "#5fad56", text: "#7fcf72" },
+    judge:    { bg: "rgba(212,167,44,0.13)",  bar: "#d4a72c", text: "#e8c04a" },
+    delivery: { bg: "rgba(40,180,160,0.13)",  bar: "#28b4a0", text: "#4ed4c0" },
   };
   const STATUS_COLORS = { accepted: "#5fad56", failed: "#f75464", running: "#d4a72c" };
   const TOOL_COLORS = {
     read_file: "#4eaaef", list_directory: "#62c4f0", find_files: "#80d8f8",
     search_code: "#e8c04a", memory_search: "#b07cf0", preference_list: "#9b6de8",
-    web_search: "#e8914a", write_file: "#5fad56", edit_file: "#41c985", bash: "#f77080",
+    web_search: "#e8914a", write_file: "#5fad56", edit_file: "#41c985", run_command: "#e8644a", bash: "#f77080",
   };
   function toolColor(name) { return TOOL_COLORS[name] || "#95A5A6"; }
   function esc(s) { return String(s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
@@ -10662,6 +10703,7 @@ const NDJSON_STAGE_COLORS = {
   planner: "#7B54C9",
   goal: "#2ECC71",
   judge: "#F39C12",
+  delivery: "#28B4A0",
 };
 
 const NDJSON_TOOL_COLORS = {
@@ -10674,6 +10716,7 @@ const NDJSON_TOOL_COLORS = {
   web_search: "#E67E22",
   write_file: "#27AE60",
   edit_file: "#2ECC71",
+  run_command: "#E8644A",
   bash: "#E74C3C",
 };
 

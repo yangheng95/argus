@@ -348,6 +348,32 @@ async function run(input: {
     lastQuality = specQuality
 
     if (specQuality.score >= QUALITY_RETRY_THRESHOLD) {
+      // LLM-based coverage review for large PRDs: append missing features as new requirements
+      if (isLargeSpecRequest(input.request)) {
+        const coverageResult = await llmCoverageReview(input.request, parsed, input.sessionID, input.metadata)
+        if (coverageResult.uncovered.length > 0) {
+          log.info("spec coverage review found gaps, appending requirements", {
+            uncovered: coverageResult.uncovered.length,
+            existing: parsed.requirements.length,
+            attempt: attempt + 1,
+          })
+          for (const gap of coverageResult.uncovered) {
+            const id = `req_gap_${parsed.requirements.length + 1}`
+            parsed.requirements.push({
+              id,
+              title: gap.split("—")[0]?.trim() || gap,
+              description: gap,
+              acceptance: [`Feature described in PRD is implemented and functional: ${gap}`],
+              evidence_refs: [],
+            })
+          }
+          parsed.content += `\n\n## Coverage Gaps (auto-appended)\n\n${coverageResult.uncovered.map((g, i) => `${parsed.requirements.length - coverageResult.uncovered.length + i + 1}. ${g}`).join("\n")}`
+          log.info("spec requirements after coverage append", {
+            total: parsed.requirements.length,
+            attempt: attempt + 1,
+          })
+        }
+      }
       return parsed
     }
 
@@ -857,6 +883,68 @@ export function validateSpecQuality(
   }
 
   return { score: Math.min(score, 1), reasons, broadTitles: [] }
+}
+
+/**
+ * LLM-based coverage review: asks a lightweight LLM to compare the PRD
+ * against generated requirements and identify uncovered functional features.
+ */
+async function llmCoverageReview(
+  request: string,
+  spec: SpecOutputType,
+  sessionID?: string,
+  metadata?: Record<string, unknown>,
+): Promise<{ uncovered: string[] }> {
+  try {
+    const { model, language } = await resolveHeadlessLanguageModel({
+      label: "spec-coverage",
+      metadata,
+      sessionID,
+    })
+    const reqList = spec.requirements
+      .map((r, i) => `${i + 1}. ${r.title}: ${r.description}`)
+      .join("\n")
+    const { text } = await completeHeadlessText({
+      label: "spec-coverage",
+      model,
+      language,
+      system: "You compare a PRD against generated requirements and find gaps. Output only a JSON array of uncovered features. If everything is covered, output an empty array [].",
+      prompt: [
+        "# Task",
+        "Compare the PRD below against the generated requirements. Identify PRD functional features (sections describing what the app should DO) that are NOT covered by ANY requirement.",
+        "",
+        "Rules:",
+        "- Only flag FUNCTIONAL features (UI, API, business logic) that must be implemented",
+        "- Ignore background sections (vision, user personas, metrics, legal, UI mockups)",
+        "- A feature is 'covered' if any requirement addresses its core functionality, even under a different name",
+        "- If a PRD section says 'optional' or 'can be deferred', do NOT flag it",
+        "",
+        "# PRD (original request)",
+        request.length > 8000 ? request.slice(0, 8000) + "\n... (truncated)" : request,
+        "",
+        "# Generated Requirements",
+        reqList,
+        "",
+        "# Output",
+        "Return a JSON array of strings, each describing one uncovered functional feature.",
+        'Example: ["10.4.1 用户注册登录 — no requirement covers account creation or login flow", "10.2.3 日记详情页 — no requirement for a dedicated detail view page"]',
+        "If all functional features are covered, return: []",
+      ].join("\n"),
+      tools: {},
+      maxOutputTokens: 2048,
+      sessionID,
+      timeoutMs: 30000,
+    })
+    const cleaned = text?.trim() ?? "[]"
+    const match = cleaned.match(/\[[\s\S]*\]/)
+    if (!match) return { uncovered: [] }
+    const parsed = JSON.parse(match[0])
+    if (!Array.isArray(parsed)) return { uncovered: [] }
+    return { uncovered: parsed.filter((item): item is string => typeof item === "string" && item.trim().length > 0) }
+  } catch (err) {
+    log.warn("LLM coverage review failed, skipping", { error: err instanceof Error ? err.message : String(err) })
+    return { uncovered: [] }
+  }
 }
 
 function isLargeSpecRequest(request: string) {

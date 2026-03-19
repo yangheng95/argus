@@ -12,6 +12,7 @@ function stageLabel(stage: AgentStageType) {
   if (stage === "spec") return "Spec agent"
   if (stage === "goal") return "Goal agent"
   if (stage === "planner") return "Planner agent"
+  if (stage === "delivery") return "Delivery agent"
   return "Evaluator agent"
 }
 
