@@ -1,6 +1,7 @@
 import z from "zod"
 import path from "path"
 import { type TextHooks } from "@/llm/api"
+import { resolveHeadlessLanguageModel, completeHeadlessText } from "@/llm/headless"
 import { type ReplanContext } from "@/planner/agent"
 import {
   GoalKind,
@@ -174,45 +175,39 @@ function validateGoalGraph(goalDraft: GoalDraft, spec: SpecDraft, scope: GoalVal
 }
 
 type GoalCategory =
-  | "setup"
-  | "database"
-  | "auth"
-  | "middleware"
-  | "diary"
-  | "tag"
-  | "timeline"
-  | "integration"
-  | "quality"
-  | "verification"
-  | "other"
+  | "bootstrap"    // project setup, config, tooling, package management
+  | "data"         // data layer: models, schema, DB, migrations, repositories
+  | "auth"         // authentication, authorization, sessions, identity
+  | "middleware"   // cross-cutting concerns, middleware, guards, interceptors
+  | "feature"      // business logic, domain-specific features (catch-all)
+  | "integration"  // app wiring, routing, entry points, composition
+  | "quality"      // type safety, error handling, linting, code quality
+  | "verification" // automated tests, acceptance checks
+  | "other"        // uncategorized
 
 type RequirementDraft = NonNullable<SpecDraft["requirements"]>[number]
 
 const CATEGORY_RANK: Record<GoalCategory, number> = {
-  setup: 10,
-  database: 20,
+  bootstrap: 10,
+  data: 20,
   auth: 30,
   middleware: 40,
-  tag: 50,
-  diary: 60,
-  timeline: 70,
-  integration: 80,
-  quality: 90,
-  verification: 100,
-  other: 110,
+  feature: 50,
+  integration: 70,
+  quality: 80,
+  verification: 90,
+  other: 100,
 }
 
 const CATEGORY_DEPENDENCIES: Record<Exclude<GoalCategory, "verification">, GoalCategory[]> = {
-  setup: [],
-  database: ["setup"],
-  auth: ["setup", "database"],
+  bootstrap: [],
+  data: ["bootstrap"],
+  auth: ["bootstrap", "data"],
   middleware: ["auth"],
-  tag: ["database"],
-  diary: ["database", "auth", "tag"],
-  timeline: ["database", "auth", "diary", "tag"],
-  integration: ["setup", "database", "auth", "middleware", "tag", "diary", "timeline"],
-  quality: ["setup", "database", "auth", "middleware", "tag", "diary", "timeline", "integration"],
-  other: ["setup", "database"],
+  feature: ["data", "auth", "middleware"],
+  integration: ["bootstrap", "data", "auth", "middleware", "feature"],
+  quality: ["bootstrap"],
+  other: ["bootstrap", "data"],
 }
 
 function normalizeText(value: string) {
@@ -238,39 +233,107 @@ function sanitizeId(value: string) {
   return slug || "goal"
 }
 
-function classifyRequirement(requirement: RequirementDraft): GoalCategory {
-  const selectors = requirementSelectorMetadata(requirement).map((item) => normalizeText(item))
-  if (selectors.length > 0) {
-    if (selectors.every((item) => item.includes("test"))) return "verification"
-    if (selectors.every((item) => item.includes("build") || item.includes("lint") || item.includes("typecheck"))) return "quality"
+const VALID_GOAL_CATEGORIES = new Set<string>([
+  "bootstrap", "data", "auth", "middleware", "feature", "integration", "quality", "verification", "other",
+])
+
+async function classifyRequirementsWithLLM(
+  requirements: RequirementDraft[],
+  input: Pick<GoalCompileInput, "sessionID" | "metadata">,
+): Promise<GoalCategory[]> {
+  // Fast path: authoritative check_selector metadata — no LLM needed
+  const fastPaths = requirements.map((req): GoalCategory | null => {
+    const selectors = requirementSelectorMetadata(req).map(normalizeText)
+    if (selectors.length === 0) return null
+    if (selectors.every((s) => s.includes("test"))) return "verification"
+    if (selectors.every((s) => s.includes("build") || s.includes("lint") || s.includes("typecheck"))) return "quality"
+    return null
+  })
+
+  const needsLLM = requirements
+    .map((req, i) => ({ req, i }))
+    .filter((_, i) => fastPaths[i] === null)
+
+  const result: GoalCategory[] = fastPaths.map((cat) => cat ?? "feature")
+
+  if (needsLLM.length === 0) return result
+
+  const { model, language } = await resolveHeadlessLanguageModel({
+    label: "goal-classify",
+    metadata: input.metadata,
+    sessionID: input.sessionID,
+  })
+
+  const reqList = needsLLM
+    .map(({ req }, i) => {
+      const files = (req.evidence_refs ?? []).join(", ")
+      const acceptance = (req.acceptance ?? []).join("; ")
+      return [
+        `[${i}] Title: "${req.title}"`,
+        `    Description: ${req.description}`,
+        files ? `    Files: ${files}` : "",
+        acceptance ? `    Acceptance: ${acceptance}` : "",
+      ].filter(Boolean).join("\n")
+    })
+    .join("\n\n")
+
+  const prompt = `Classify each software requirement into exactly one category from this list:
+- bootstrap: project setup, config files, dependency installation, build tooling initialization
+- data: data models, database schema, migrations, ORM entities, repositories
+- auth: authentication, authorization, sessions, identity, login/logout/register
+- middleware: HTTP middleware, guards, interceptors, CORS, rate limiting
+- feature: business logic, domain features, API endpoints, UI components (catch-all for domain work)
+- integration: app wiring, routing configuration, entry points, module composition
+- quality: type checking, linting, static analysis, code quality tooling
+- verification: automated tests, test suites, E2E, acceptance checks
+- other: doesn't fit any above
+
+Requirements:
+${reqList}
+
+Reply with a JSON array of category names in the same order as the requirements.
+Example: ["bootstrap", "feature", "verification"]
+Output ONLY the JSON array, no other text.`
+
+  const { text } = await completeHeadlessText({
+    label: "goal-classify",
+    model,
+    language,
+    prompt,
+    system: "You classify software requirements into architectural categories. Output only a JSON array.",
+    tools: {},
+    maxOutputTokens: 300,
+    sessionID: input.sessionID,
+    timeoutMs: 30000,
+  })
+
+  let parsed: unknown
+  try {
+    const jsonStart = text.indexOf("[")
+    const jsonEnd = text.lastIndexOf("]")
+    if (jsonStart < 0 || jsonEnd <= jsonStart) {
+      throw new Error("no JSON array found in output")
+    }
+    parsed = JSON.parse(text.slice(jsonStart, jsonEnd + 1))
+  } catch (cause) {
+    throw new GoalFailureError(`Goal classifier returned unparseable output: ${text}`, { cause })
   }
-  const title = normalizeText(requirement.title)
-  const body = normalizeText([
-    requirement.title,
-    requirement.description,
-    ...(requirement.acceptance ?? []),
-    ...(requirement.evidence_refs ?? []),
-  ].join("\n"))
 
-  if (/\btest suite\b|\btests?\b|\bverification\b|验收|测试|校验|验证/.test(title)) return "verification"
-  if (/\btype safety\b|\berror handling\b|类型安全|错误处理/.test(title)) return "quality"
-  if (/\bapp entry\b|\broute organization\b|\bapplication entry\b|入口|路由组织/.test(title)) return "integration"
-  if (/\btimeline\b|时间轴|筛选/.test(title)) return "timeline"
-  if (/\bmiddleware\b|\bbearer token\b|\bauth middleware\b|中间件/.test(title)) return "middleware"
-  if (/\btag\b|标签/.test(title)) return "tag"
-  if (/\bcrud\b|\bdiary\b|日记/.test(title)) return "diary"
-  if (/\bauth\b|\bregister\b|\blogin\b|\bjwt\b|\btoken\b|认证|注册|登录/.test(title)) return "auth"
-  if (/\bschema\b|\bsqlite\b|\bdatabase\b|\bmigration\b|\bdb\b|数据库|表结构/.test(title)) return "database"
-  if (/\bsetup\b|\bdependencies\b|\bproject\b|\bconfig\b|配置|初始化|依赖/.test(title)) return "setup"
+  if (!Array.isArray(parsed) || parsed.length !== needsLLM.length) {
+    throw new GoalFailureError(
+      `Goal classifier returned ${Array.isArray(parsed) ? parsed.length : "non-array"} categories for ${needsLLM.length} requirements`,
+    )
+  }
 
-  if (/\btimeline\b|时间轴|筛选/.test(body)) return "timeline"
-  if (/\bmiddleware\b|\bbearer token\b|中间件/.test(body)) return "middleware"
-  if (/\bauth\b|\bregister\b|\blogin\b|\bjwt\b|\btoken\b|认证|注册|登录/.test(body)) return "auth"
-  if (/\btag\b|标签/.test(body) && !(/\bdiary crud\b|日记 crud/.test(body))) return "tag"
-  if (/\bschema\b|\bsqlite\b|\bdatabase\b|\bmigration\b|数据库|表结构/.test(body)) return "database"
-  if (/\bproject setup\b|\bdependencies\b|\bbun install\b|\btypecheck\b|项目配置|依赖/.test(body)) return "setup"
-  if (/\bdiary\b|日记/.test(body)) return "diary"
-  return "other"
+  for (let i = 0; i < needsLLM.length; i++) {
+    const raw = String(parsed[i]).trim().toLowerCase()
+    if (!VALID_GOAL_CATEGORIES.has(raw)) {
+      throw new GoalFailureError(`Goal classifier returned unknown category "${parsed[i]}" for requirement "${needsLLM[i]!.req.title}"`)
+    }
+    result[needsLLM[i]!.i] = raw as GoalCategory
+  }
+
+  return result
 }
 
 function goalIdForRequirement(requirement: RequirementDraft, index: number) {
@@ -350,7 +413,7 @@ function clusterSurfacePaths(category: GoalCategory, explicitOwnedPaths: string[
 }
 
 function clusterableCategory(category: GoalCategory) {
-  return category === "other" || category === "quality" || category === "verification"
+  return category === "other" || category === "quality" || category === "verification" || category === "feature"
 }
 
 function clusterKeyForRecord(input: {
@@ -410,24 +473,12 @@ function clusterObjective(input: {
 
 function defaultOwnedPaths(category: GoalCategory) {
   switch (category) {
-    case "setup":
-      return ["package.json", "tsconfig.json"]
-    case "database":
-      return ["src/db/schema.ts", "src/db/index.ts"]
-    case "auth":
-      return ["src/routes/auth.ts", "src/services/auth.ts"]
-    case "middleware":
-      return ["src/middleware/auth.ts"]
-    case "tag":
-      return ["src/services/tag.ts"]
-    case "diary":
-      return ["src/routes/diaries.ts", "src/services/diary.ts"]
-    case "timeline":
-      return ["src/routes/timeline.ts", "src/services/diary.ts"]
+    case "bootstrap":
+      return ["package.json"]
     case "integration":
-      return ["src/index.ts"]
+      return ["src/"]
     case "quality":
-      return ["src/types/index.ts", "src/index.ts"]
+      return ["src/"]
     case "verification":
       return ["tests/", "src/"]
     default:
@@ -551,8 +602,8 @@ function scopedGoalDraft(goalDraft: GoalDraft, input: GoalCompileInput): GoalDra
 
 function goalKindForCategory(category: GoalCategory): z.infer<typeof GoalKind> {
   switch (category) {
-    case "setup":
-    case "database":
+    case "bootstrap":
+    case "data":
       return "bootstrap"
     case "middleware":
     case "integration":
@@ -572,16 +623,9 @@ function ruleSelectorsForCategory(
     hasVerificationCluster?: boolean
   },
 ) {
-  switch (category) {
-    case "setup":
-      return ["build"]
-    case "quality":
-      return ["build"]
-    case "verification":
-      return ["test"]
-    default:
-      return options?.hasVerificationCluster ? ["build"] : ["build", "test"]
-  }
+  if (category === "bootstrap" || category === "quality") return ["build"]
+  if (category === "verification") return ["test"]
+  return options?.hasVerificationCluster ? ["build"] : ["build", "test"]
 }
 
 function explicitRuleSelectors(requirement: RequirementDraft) {
@@ -592,19 +636,23 @@ async function compile(input: GoalCompileInput): Promise<GoalDraft> {
   const requirements = Array.isArray(input.spec.requirements) ? input.spec.requirements : []
   if (requirements.length < 1) throw new GoalFailureError("Goal decomposition requires at least one formulated requirement")
 
+  await input.onStatus?.(`Goal compiler classifying ${requirements.length} requirements`)
+  const categories = await classifyRequirementsWithLLM(requirements, input)
+
   await input.onStatus?.(`Goal compiler mapping ${requirements.length} requirements`)
 
-  const records = requirements.map((requirement, index) => ({
-    requirement,
-    index,
-    category: classifyRequirement(requirement),
-    goalID: goalIdForRequirement(requirement, index),
-    explicitOwnedPaths: uniqueStrings(extractOwnedPaths(requirement)),
-    clusterOwnedPaths: clusterSurfacePaths(
-      classifyRequirement(requirement),
-      uniqueStrings(extractOwnedPaths(requirement)),
-    ),
-  }))
+  const records = requirements.map((requirement, index) => {
+    const category = categories[index]!
+    const explicitOwnedPaths = uniqueStrings(extractOwnedPaths(requirement))
+    return {
+      requirement,
+      index,
+      category,
+      goalID: goalIdForRequirement(requirement, index),
+      explicitOwnedPaths,
+      clusterOwnedPaths: clusterSurfacePaths(category, explicitOwnedPaths),
+    }
+  })
   const ordered = [...records].sort((a, b) => CATEGORY_RANK[a.category] - CATEGORY_RANK[b.category] || a.index - b.index)
   const clusters = [] as Array<{
     id: string

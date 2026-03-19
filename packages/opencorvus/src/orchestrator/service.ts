@@ -75,6 +75,7 @@ import {
   rejectReplanConfirmation,
 } from "./interaction-actions"
 import { OrchestratorInteractionActor } from "./interaction-actor"
+import { withStageRetry } from "./strategy"
 import { OrchestratorTaskActor } from "./task-actor"
 import { cleanupGoalWorkspace, removeGoalRunSession } from "./goal-runner"
 import {
@@ -564,7 +565,7 @@ type CreateTaskBootstrapInput = {
 }
 
 async function bootstrapCreatedTask(input: CreateTaskBootstrapInput) {
-  const compiled = await compileTransition({
+  const compiled = await withStageRetry("spec", () => compileTransition({
     mode: "initial",
     taskID: input.taskID,
     sessionID: input.sessionID,
@@ -576,6 +577,10 @@ async function bootstrapCreatedTask(input: CreateTaskBootstrapInput) {
     routing: input.input.routing,
     budget: input.input.budget,
     metadata: input.metadata,
+  }), {
+    onRetry: (attempt, error) => {
+      log.info("retrying initial spec/plan compilation", { attempt, taskID: input.taskID, error: String(error) })
+    },
   }).catch(async (error) => {
     if (!(error instanceof PlannerFailureError)) throw error
     try {

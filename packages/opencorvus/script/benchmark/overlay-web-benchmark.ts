@@ -57,7 +57,6 @@ const executor = (flag("--executor") || "opencode") as
 const requestFile = flag("--request-file")
 const deliveryVerifyCmd = flag("--delivery-verify-cmd")
 const skipLocalVerify = process.argv.includes("--skip-local-verify")
-const mode = (flag("--mode") || (requestFile ? "materialize" : "full")) === "materialize" ? "materialize" : "full"
 
 const DEFAULT_TASK_TITLE = "Overlay Web Benchmark NoteStore"
 const DEFAULT_TASK_REQUEST = `
@@ -129,6 +128,7 @@ const DIAG_TYPES = new Set([
 const PLANNING_VISIBLE_TIMEOUT_MS = Number(flag("--planning-timeout-ms")) || Math.min(timeoutMs, 2 * 60 * 1000)
 const TASK_CREATE_TIMEOUT_MS = Number(flag("--task-create-timeout-ms")) || timeoutMs
 const TASK_RESUME_TIMEOUT_MS = Number(flag("--task-resume-timeout-ms")) || Math.min(timeoutMs, 10 * 60 * 1000)
+const projectDir = flag("--project-dir")
 const temp = {
   dir: "",
   home: "",
@@ -136,7 +136,7 @@ const temp = {
 }
 
 temp.home = await fs.mkdtemp(path.join(os.tmpdir(), "opencorvus-overlay-benchmark-home-"))
-temp.dir = await fs.mkdtemp(path.join(os.tmpdir(), "opencorvus-overlay-benchmark-project-"))
+temp.dir = projectDir ? path.resolve(projectDir) : await fs.mkdtemp(path.join(os.tmpdir(), "opencorvus-overlay-benchmark-project-"))
 temp.config = path.join(temp.home, "config-override")
 process.env.OPENCORVUS_HOME = temp.home
 const { ensureBenchmarkModel, loadBenchmarkEnv, prepareDashscopeEnv, resolveBenchmarkModel } = await import("./env")
@@ -168,7 +168,7 @@ process.env.OPENCORVUS_SPEC_AGENT_MAX_STEPS = String(specMaxSteps)
 process.env.OPENCORVUS_PLANNER_AGENT_MAX_STEPS = String(plannerMaxSteps)
 
 await resetDatabase()
-await scaffoldProject(temp.dir, model)
+if (!projectDir) await scaffoldProject(temp.dir, model)
 
 await Instance.provide({
   directory: temp.dir,
@@ -472,7 +472,7 @@ try {
   marks.resumedAt = Date.now()
   board = await api(`/task/${taskID}/board?sync=1`).then((res) => res.json())
 
-  progress = mode === "full" ? await waitForFinal(taskID, stallTimeoutMs, api, completionHardTimeoutMs) : null
+  progress = await waitForFinal(taskID, stallTimeoutMs, api, completionHardTimeoutMs)
   marks.completedAt = Date.now()
   finalBoard = taskID ? await api(`/task/${taskID}/board?sync=1`).then((res) => res.json()).catch(() => board) : board
 
@@ -496,9 +496,7 @@ try {
   logLine(`events: ${eventFile}`)
   logLine(`events_ndjson: ${eventLogFile}`)
 
-  const pass = mode === "materialize"
-    ? out.assertions.planning_visible.pass && out.assertions.streaming_visible.pass && out.assertions.materialized.pass
-    : out.assertions.planning_visible.pass && out.assertions.streaming_visible.pass && out.assertions.materialized.pass && out.assertions.delivery.pass && out.failure_matrix.verdict === "accepted"
+  const pass = out.assertions.planning_visible.pass && out.assertions.streaming_visible.pass && out.assertions.materialized.pass && out.assertions.delivery.pass && out.failure_matrix.verdict === "accepted"
   if (!pass) {
     process.exit(1)
   }
@@ -668,7 +666,6 @@ async function buildBenchmarkReport(error?: unknown) {
 
   return {
     generated_at: new Date().toISOString(),
-    mode,
     title: TASK_TITLE,
     request_file: requestFile ? path.resolve(requestFile) : null,
     executor,
@@ -764,9 +761,7 @@ async function buildBenchmarkReport(error?: unknown) {
         },
       },
       delivery: {
-        pass: mode === "materialize"
-          ? null
-          : (progress?.task?.status || currentFinalBoard?.task?.status) === "completed" &&
+        pass: (progress?.task?.status || currentFinalBoard?.task?.status) === "completed" &&
             (progress?.evaluation?.verdict || currentFinalBoard?.evaluation?.verdict) === "accepted" &&
             localVerify.exitCode === 0 &&
             qualityVerdict.verdict === "accepted",

@@ -4,7 +4,10 @@ import {
   DEFAULT_MAX_REPLANS,
   DEFAULT_MAX_RUNS,
   SAME_PLAN_RETRY_LIMIT,
+  STAGE_RETRY_LIMIT,
   type RetryContext,
+  type Stage,
+  type StageFailureClassification,
 } from "./helpers"
 import {
   findDeliveryByGoalRun,
@@ -199,6 +202,56 @@ function inheritedChangedFiles(run: RunRow) {
   return files.size > 0 ? [...files] : undefined
 }
 
+
+// ---------------------------------------------------------------------------
+// Unified stage retry: classifyStageError + withStageRetry
+// All stages (spec, plan, goal, execute, evaluate) share the same retry
+// philosophy.  Agents stay pure (attempt once); the orchestrator decides
+// whether to retry, rewind, or fail.
+// ---------------------------------------------------------------------------
+
+const TRANSIENT_PATTERNS = [
+  "timeout", "timed out", "econnreset", "econnrefused", "enotfound",
+  "fetch failed", "socket hang up", "rate limit", "rate_limit",
+  "429", "503", "502", "network", "aborted",
+]
+
+export function classifyStageError(error: unknown): StageFailureClassification {
+  if (!(error instanceof Error)) return "transient"
+  const msg = error.message.toLowerCase()
+  for (const pattern of TRANSIENT_PATTERNS) {
+    if (msg.includes(pattern)) return "transient"
+  }
+  if (msg.includes("invalid input") || msg.includes("validation failed")) return "input"
+  if (msg.includes("permission denied") || msg.includes("unauthorized") || msg.includes("forbidden")) return "permission"
+  // Default to transient — safe to retry; if the error is truly permanent the
+  // budget will be exhausted and the task will fail naturally.
+  return "transient"
+}
+
+export async function withStageRetry<T>(
+  stage: Stage,
+  fn: () => Promise<T>,
+  options?: {
+    maxAttempts?: number
+    onRetry?: (attempt: number, error: unknown, classification: StageFailureClassification) => void
+  },
+): Promise<T> {
+  const maxAttempts = (options?.maxAttempts ?? STAGE_RETRY_LIMIT) + 1
+  let lastError: unknown
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await fn()
+    } catch (error) {
+      lastError = error
+      const classification = classifyStageError(error)
+      if (classification === "input" || classification === "permission") throw error
+      if (attempt >= maxAttempts) throw error
+      options?.onRetry?.(attempt, error, classification)
+    }
+  }
+  throw lastError
+}
 
 function summaryNeedsReplan(summary: string) {
   return /(placeholder|stub|todo|returns?\s+null|only\s+console\.log|only\s+log|not implemented|implementation is incomplete|critical .* incomplete|manual .* step|cannot be satisfied|\u65e0\u6cd5\u6ee1\u8db3|\u672a\u5b9e\u73b0|\u5360\u4f4d|\u4ec5\u65e5\u5fd7|\u8fd4\u56de\s*null)/i.test(summary)
