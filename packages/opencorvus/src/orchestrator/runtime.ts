@@ -111,7 +111,11 @@ function safeParseInt(value: string | undefined, fallback: number): number {
   const n = parseInt(value, 10)
   return Number.isFinite(n) ? n : fallback
 }
-const EVALUATION_HARD_TIMEOUT_MS = 10 * 60 * 1000 // 10 minutes total for entire evaluation phase
+// Hard safety net: if the evaluator produces NO events for this long it is considered hung.
+// Large tests (bun test on a big suite) can take 15-30 min inside the judge agent — do not
+// set this too low. The benchmark's stall timeout (default 10 min of no SSE activity) is the
+// primary signal for live hung detection; this constant is the orchestrator-level last resort.
+const EVALUATION_HARD_TIMEOUT_MS = safeParseInt(process.env.OPENCORVUS_EVALUATION_TIMEOUT_MS, 60 * 60 * 1000)
 const DELIVERY_SERVICE_TIMEOUT_MS = 60_000 // 60 seconds for DeliveryService.deliver()
 const evaluatingRuns = new Map<string, number>() // runID → start timestamp, guards against concurrent re-evaluation
 const finalizingRuns = new Set<string>() // guards against concurrent finalizeCoordinatorRun for the same run
@@ -121,6 +125,11 @@ const runAppliedFiles = new Map<string, Set<string>>() // runID → files applie
 const goalRunFinalizeLocks = new Map<string, Promise<void>>()
 const executorEventBridges = new Map<string, AbortController>()
 const EVALUATING_STALE_MS = EVALUATION_HARD_TIMEOUT_MS + 60_000 // consider stale after hard timeout + 1 min buffer
+// After server restart the in-memory maps are empty, so any task in evaluating/delivering with no
+// in-memory record is definitively orphaned. Use a short grace period to avoid false-positives from
+// tasks that just transitioned and haven't registered yet.
+const RESTART_RECOVERY_GRACE_MS = 2 * 60_000 // 2 minutes post-restart grace
+let startupTimestamp = Date.now()
 const FOLLOWUP_RUN_SYNC_GRACE_MS = 250
 const EXECUTOR_OUTPUT_FLUSH_MS = 100
 const EXECUTOR_OUTPUT_FLUSH_CHARS = 1024
@@ -665,8 +674,12 @@ async function _finalizeGoalRun(task: TaskRow, run: RunRow, goalRun: GoalRunRow,
       now: Date.now(),
       summary: `Evaluating goal delivery: ${goal.description}`,
     })
-    const { result, analysis, analysisError } = await provideWorkspace(goalDir, () =>
-      evaluateGoal({ task, goal, delivery: delivered })
+    // Wrap evaluateGoal with the hard timeout so the actor does not block forever
+    // if the LLM hangs. On timeout the pending evaluation record will be force-failed
+    // by the next syncRun call via evaluationTimedOut().
+    const { result, analysis, analysisError } = await withTimeout(
+      provideWorkspace(goalDir, () => evaluateGoal({ task, goal, delivery: delivered })),
+      EVALUATION_HARD_TIMEOUT_MS,
     )
     const outcome = goalEvaluationOutcome(result, analysis)
     const runScopedAnalysis = remapGoalAnalysisToRunScope(analysis, goals, goal)
@@ -1355,13 +1368,16 @@ function recoverStrandedTasks(hooks: RuntimeHooks) {
       .all(),
   )
   const now = Date.now()
+  const sinceStartup = now - startupTimestamp
   for (const task of strandedTasks) {
-    // Only recover if task has been in this state longer than the evaluation hard timeout
     const updated = task.time_updated ?? task.time_created ?? 0
     const age = now - updated
-    if (age < EVALUATING_STALE_MS) continue
     // Check if this task has an active in-memory evaluation
     if (task.active_run_id && (evaluatingRuns.has(task.active_run_id) || completingRuns.has(task.active_run_id))) continue
+    // After server restart the in-memory maps are empty. Any task with no in-memory record is
+    // definitively orphaned — use a short grace period instead of the full stale threshold.
+    const staleThreshold = sinceStartup < RESTART_RECOVERY_GRACE_MS ? RESTART_RECOVERY_GRACE_MS : EVALUATING_STALE_MS
+    if (age < staleThreshold) continue
     log.warn("recovering stranded task", { taskID: task.id, status: task.status, ageMs: age })
     const error = `Task was stranded in '${task.status}' state for ${Math.round(age / 60000)}min (server restart recovery)`
     hooks.updateTask(task, {

@@ -8,7 +8,7 @@ import {
   GoalQaProfile,
   GoalInput,
 } from "@/orchestrator/model"
-import { type SpecDraft } from "@/spec/agent"
+import { type SpecDraft, type ArchitecturalLayer } from "@/spec/agent"
 import { Log } from "@/util/log"
 
 const log = Log.create({ service: "goal-service" })
@@ -187,27 +187,115 @@ type GoalCategory =
 
 type RequirementDraft = NonNullable<SpecDraft["requirements"]>[number]
 
-const CATEGORY_RANK: Record<GoalCategory, number> = {
-  bootstrap: 10,
-  data: 20,
-  auth: 30,
-  middleware: 40,
-  feature: 50,
-  integration: 70,
-  quality: 80,
-  verification: 90,
-  other: 100,
+/**
+ * Unified layer definition used by compile().
+ * Can come from two sources:
+ *  1. Spec blueprint (architectural_layers) — task-specific, authoritative.
+ *  2. Generic GoalCategory table — used when spec provides no blueprint.
+ *
+ * This abstraction lets compile() work identically regardless of source,
+ * eliminating the need for any code path duplication.
+ */
+type LayerDef = {
+  id: string
+  name: string  // human-readable name for objective generation
+  rank: number
+  depends_on: string[]
+  kind: z.infer<typeof GoalKind>
+  isVerification: boolean
+  defaultRuleSelectors: (hasVerificationLayer: boolean) => string[]
 }
 
-const CATEGORY_DEPENDENCIES: Record<Exclude<GoalCategory, "verification">, GoalCategory[]> = {
-  bootstrap: [],
-  data: ["bootstrap"],
-  auth: ["bootstrap", "data"],
-  middleware: ["auth"],
-  feature: ["data", "auth", "middleware"],
-  integration: ["bootstrap", "data", "auth", "middleware", "feature"],
-  quality: ["bootstrap"],
-  other: ["bootstrap", "data"],
+/** Topological rank: foundational layers get low rank numbers. */
+function topoRankLayers(layers: ArchitecturalLayer[]): Map<string, number> {
+  const rankMap = new Map<string, number>()
+  const inDegree = new Map(layers.map((l) => [l.id, l.depends_on.filter((d) => layers.some((x) => x.id === d)).length]))
+  const queue = layers.filter((l) => (inDegree.get(l.id) ?? 0) === 0).map((l) => l.id)
+  let rank = 10
+  while (queue.length > 0) {
+    const next = queue.shift()!
+    rankMap.set(next, rank)
+    rank += 10
+    for (const layer of layers) {
+      if (layer.depends_on.includes(next)) {
+        const remaining = (inDegree.get(layer.id) ?? 0) - 1
+        inDegree.set(layer.id, remaining)
+        if (remaining === 0) queue.push(layer.id)
+      }
+    }
+  }
+  // Any layers left with cycles get max rank
+  for (const layer of layers) {
+    if (!rankMap.has(layer.id)) rankMap.set(layer.id, rank)
+  }
+  return rankMap
+}
+
+function kindFromLayerId(id: string, description: string): z.infer<typeof GoalKind> {
+  const text = `${id} ${description}`.toLowerCase()
+  if (/test|verif|spec|check|acceptance/.test(text)) return "verification"
+  if (/setup|bootstrap|scaffold|init|config|package|build|tooling/.test(text)) return "bootstrap"
+  if (/middleware|interceptor|guard|cors|rate.?limit|pipeline/.test(text)) return "integration"
+  if (/wiring|routing|entry|compose|main|app\.ts|index\.ts/.test(text)) return "integration"
+  if (/quality|lint|typecheck|type.?check|static.?analysis/.test(text)) return "system"
+  return "feature"
+}
+
+function isVerificationLayer(id: string, description: string): boolean {
+  return /test|verif|spec|check|acceptance/.test(`${id} ${description}`.toLowerCase())
+}
+
+/** Build LayerDef[] from a spec blueprint. Dependencies reflect actual architecture. */
+function layersFromBlueprint(blueprint: ArchitecturalLayer[]): LayerDef[] {
+  const rankMap = topoRankLayers(blueprint)
+  const verificationIds = new Set(blueprint.filter((l) => isVerificationLayer(l.id, l.description)).map((l) => l.id))
+  return blueprint.map((layer) => ({
+    id: layer.id,
+    name: layer.name,
+    rank: rankMap.get(layer.id) ?? 100,
+    depends_on: layer.depends_on,
+    kind: kindFromLayerId(layer.id, layer.description),
+    isVerification: verificationIds.has(layer.id),
+    defaultRuleSelectors: (hasVerificationLayer: boolean) =>
+      verificationIds.has(layer.id) ? ["test"] : hasVerificationLayer ? ["build"] : ["build", "test"],
+  }))
+}
+
+/** Build LayerDef[] from the generic GoalCategory taxonomy. Used when spec has no blueprint. */
+function layersFromCategories(): LayerDef[] {
+  const CATEGORY_RANK: Record<GoalCategory, number> = {
+    bootstrap: 10, data: 20, auth: 30, middleware: 40,
+    feature: 50, integration: 70, quality: 80, verification: 90, other: 100,
+  }
+  const CATEGORY_DEPENDENCIES: Record<Exclude<GoalCategory, "verification">, GoalCategory[]> = {
+    bootstrap: [], data: ["bootstrap"], auth: ["bootstrap", "data"],
+    middleware: ["auth"], feature: ["data", "auth", "middleware"],
+    integration: ["bootstrap", "data", "auth", "middleware", "feature"],
+    quality: ["bootstrap"], other: ["bootstrap", "data"],
+  }
+  const CAT_KIND: Record<GoalCategory, z.infer<typeof GoalKind>> = {
+    bootstrap: "bootstrap", data: "bootstrap", middleware: "integration",
+    integration: "integration", verification: "verification", quality: "system",
+    auth: "feature", feature: "feature", other: "feature",
+  }
+  const CAT_NAME: Record<GoalCategory, string> = {
+    bootstrap: "Setup", data: "Data Layer", auth: "Auth", middleware: "Middleware",
+    feature: "Feature", integration: "Integration", quality: "Quality", verification: "Tests", other: "Other",
+  }
+  const cats: GoalCategory[] = ["bootstrap", "data", "auth", "middleware", "feature", "integration", "quality", "verification", "other"]
+  return cats.map((cat) => ({
+    id: cat,
+    name: CAT_NAME[cat],
+    rank: CATEGORY_RANK[cat],
+    depends_on: cat === "verification" ? [] : CATEGORY_DEPENDENCIES[cat],
+    kind: CAT_KIND[cat],
+    isVerification: cat === "verification",
+    defaultRuleSelectors: (hasVerificationLayer: boolean) => {
+      if (cat === "bootstrap" || cat === "quality") return ["build"]
+      if (cat === "verification") return ["test"]
+      return hasVerificationLayer ? ["build"] : ["build", "test"]
+    },
+  }))
 }
 
 function normalizeText(value: string) {
@@ -237,6 +325,120 @@ const VALID_GOAL_CATEGORIES = new Set<string>([
   "bootstrap", "data", "auth", "middleware", "feature", "integration", "quality", "verification", "other",
 ])
 
+const CLASSIFY_CHUNK_SIZE = 10
+
+function buildRequirementSnippet(req: RequirementDraft, index: number): string {
+  const files = (req.evidence_refs ?? []).join(", ")
+  const acceptance = (req.acceptance ?? []).join("; ")
+  return [
+    `[${index}] Title: "${req.title}"`,
+    `    Description: ${req.description}`,
+    files ? `    Files: ${files}` : "",
+    acceptance ? `    Acceptance: ${acceptance}` : "",
+  ].filter(Boolean).join("\n")
+}
+
+async function parseLLMLayerArray(
+  text: string,
+  validIds: Set<string>,
+  expectedCount: number,
+  context: string,
+): Promise<string[]> {
+  let parsed: unknown
+  try {
+    const jsonStart = text.indexOf("[")
+    const jsonEnd = text.lastIndexOf("]")
+    if (jsonStart < 0 || jsonEnd <= jsonStart) throw new Error("no JSON array found")
+    parsed = JSON.parse(text.slice(jsonStart, jsonEnd + 1))
+  } catch (cause) {
+    throw new GoalFailureError(`Goal classifier (${context}) returned unparseable output: ${text}`, { cause })
+  }
+  if (!Array.isArray(parsed) || parsed.length !== expectedCount) {
+    throw new GoalFailureError(
+      `Goal classifier (${context}) returned ${Array.isArray(parsed) ? parsed.length : "non-array"} items for ${expectedCount} requirements`,
+    )
+  }
+  return (parsed as unknown[]).map((raw, i) => {
+    const value = String(raw).trim().toLowerCase()
+    if (!validIds.has(value)) {
+      throw new GoalFailureError(`Goal classifier (${context}) returned unknown id "${raw}" at index ${i}`)
+    }
+    return value
+  })
+}
+
+/**
+ * Classify requirements using the spec blueprint's architectural layers.
+ * Each requirement is assigned to one layer_id from the blueprint.
+ * The classification is chunked to avoid LLM count-drift on large inputs.
+ */
+async function classifyRequirementsWithLayers(
+  requirements: RequirementDraft[],
+  blueprint: ArchitecturalLayer[],
+  input: Pick<GoalCompileInput, "sessionID" | "metadata">,
+): Promise<string[]> {
+  const validLayerIds = new Set(blueprint.map((l) => l.id))
+  const layerList = blueprint.map((l) => `- ${l.id}: ${l.name} — ${l.description}`).join("\n")
+
+  // Fast path: authoritative check_selector metadata — no LLM needed
+  const verificationLayerId = blueprint.find((l) => isVerificationLayer(l.id, l.description))?.id
+  const fastPaths = requirements.map((req): string | null => {
+    const selectors = requirementSelectorMetadata(req).map(normalizeText)
+    if (selectors.length === 0) return null
+    if (selectors.every((s) => s.includes("test")) && verificationLayerId) return verificationLayerId
+    return null
+  })
+
+  const needsLLM = requirements.map((req, i) => ({ req, i })).filter((_, i) => fastPaths[i] === null)
+  const result: string[] = fastPaths.map((p, i) => p ?? blueprint[blueprint.length - 1]!.id)
+
+  if (needsLLM.length === 0) return result
+
+  const { model, language } = await resolveHeadlessLanguageModel({
+    label: "goal-classify",
+    metadata: input.metadata,
+    sessionID: input.sessionID,
+  })
+
+  for (let offset = 0; offset < needsLLM.length; offset += CLASSIFY_CHUNK_SIZE) {
+    const chunk = needsLLM.slice(offset, offset + CLASSIFY_CHUNK_SIZE)
+    const reqList = chunk.map(({ req }, j) => buildRequirementSnippet(req, j)).join("\n\n")
+    const prompt = `Assign each requirement to exactly one architectural layer from this list:
+${layerList}
+
+Requirements:
+${reqList}
+
+Reply with a JSON array of layer IDs in the same order as the requirements.
+Example: ["${blueprint[0]?.id ?? "layer_id"}", "${blueprint[1]?.id ?? "layer_id"}"]
+Output ONLY the JSON array, no other text.`
+
+    const { text } = await completeHeadlessText({
+      label: "goal-classify",
+      model,
+      language,
+      prompt,
+      system: "You assign software requirements to architectural layers. Output only a JSON array of layer IDs.",
+      tools: {},
+      maxOutputTokens: 1024,
+      sessionID: input.sessionID,
+      timeoutMs: 30000,
+    })
+
+    const values = await parseLLMLayerArray(text, validLayerIds, chunk.length, `layer chunk ${offset / CLASSIFY_CHUNK_SIZE + 1}`)
+    for (let j = 0; j < chunk.length; j++) {
+      result[chunk[j]!.i] = values[j]!
+    }
+  }
+
+  return result
+}
+
+/**
+ * Classify requirements using the generic 9-category taxonomy.
+ * Used when the spec provides no blueprint (simple single-feature tasks).
+ * Chunked to prevent LLM count-drift on larger inputs.
+ */
 async function classifyRequirementsWithLLM(
   requirements: RequirementDraft[],
   input: Pick<GoalCompileInput, "sessionID" | "metadata">,
@@ -250,10 +452,7 @@ async function classifyRequirementsWithLLM(
     return null
   })
 
-  const needsLLM = requirements
-    .map((req, i) => ({ req, i }))
-    .filter((_, i) => fastPaths[i] === null)
-
+  const needsLLM = requirements.map((req, i) => ({ req, i })).filter((_, i) => fastPaths[i] === null)
   const result: GoalCategory[] = fastPaths.map((cat) => cat ?? "feature")
 
   if (needsLLM.length === 0) return result
@@ -264,20 +463,10 @@ async function classifyRequirementsWithLLM(
     sessionID: input.sessionID,
   })
 
-  const reqList = needsLLM
-    .map(({ req }, i) => {
-      const files = (req.evidence_refs ?? []).join(", ")
-      const acceptance = (req.acceptance ?? []).join("; ")
-      return [
-        `[${i}] Title: "${req.title}"`,
-        `    Description: ${req.description}`,
-        files ? `    Files: ${files}` : "",
-        acceptance ? `    Acceptance: ${acceptance}` : "",
-      ].filter(Boolean).join("\n")
-    })
-    .join("\n\n")
-
-  const prompt = `Classify each software requirement into exactly one category from this list:
+  for (let offset = 0; offset < needsLLM.length; offset += CLASSIFY_CHUNK_SIZE) {
+    const chunk = needsLLM.slice(offset, offset + CLASSIFY_CHUNK_SIZE)
+    const reqList = chunk.map(({ req }, j) => buildRequirementSnippet(req, j)).join("\n\n")
+    const prompt = `Classify each software requirement into exactly one category from this list:
 - bootstrap: project setup, config files, dependency installation, build tooling initialization
 - data: data models, database schema, migrations, ORM entities, repositories
 - auth: authentication, authorization, sessions, identity, login/logout/register
@@ -295,49 +484,32 @@ Reply with a JSON array of category names in the same order as the requirements.
 Example: ["bootstrap", "feature", "verification"]
 Output ONLY the JSON array, no other text.`
 
-  const { text } = await completeHeadlessText({
-    label: "goal-classify",
-    model,
-    language,
-    prompt,
-    system: "You classify software requirements into architectural categories. Output only a JSON array.",
-    tools: {},
-    maxOutputTokens: 300,
-    sessionID: input.sessionID,
-    timeoutMs: 30000,
-  })
+    const { text } = await completeHeadlessText({
+      label: "goal-classify",
+      model,
+      language,
+      prompt,
+      system: "You classify software requirements into architectural categories. Output only a JSON array.",
+      tools: {},
+      maxOutputTokens: 1024,
+      sessionID: input.sessionID,
+      timeoutMs: 30000,
+    })
 
-  let parsed: unknown
-  try {
-    const jsonStart = text.indexOf("[")
-    const jsonEnd = text.lastIndexOf("]")
-    if (jsonStart < 0 || jsonEnd <= jsonStart) {
-      throw new Error("no JSON array found in output")
+    const values = await parseLLMLayerArray(text, VALID_GOAL_CATEGORIES, chunk.length, `category chunk ${offset / CLASSIFY_CHUNK_SIZE + 1}`)
+    for (let j = 0; j < chunk.length; j++) {
+      result[chunk[j]!.i] = values[j]! as GoalCategory
     }
-    parsed = JSON.parse(text.slice(jsonStart, jsonEnd + 1))
-  } catch (cause) {
-    throw new GoalFailureError(`Goal classifier returned unparseable output: ${text}`, { cause })
-  }
-
-  if (!Array.isArray(parsed) || parsed.length !== needsLLM.length) {
-    throw new GoalFailureError(
-      `Goal classifier returned ${Array.isArray(parsed) ? parsed.length : "non-array"} categories for ${needsLLM.length} requirements`,
-    )
-  }
-
-  for (let i = 0; i < needsLLM.length; i++) {
-    const raw = String(parsed[i]).trim().toLowerCase()
-    if (!VALID_GOAL_CATEGORIES.has(raw)) {
-      throw new GoalFailureError(`Goal classifier returned unknown category "${parsed[i]}" for requirement "${needsLLM[i]!.req.title}"`)
-    }
-    result[needsLLM[i]!.i] = raw as GoalCategory
   }
 
   return result
 }
 
 function goalIdForRequirement(requirement: RequirementDraft, index: number) {
-  const source = requirement.id.trim().replace(/^req[_-]?/i, "") || `requirement_${index + 1}`
+  const stripped = requirement.id.trim().replace(/^req[_-]?/i, "")
+  // Always append the positional index so that distinct requirements can never
+  // produce the same goal id even if their ids normalize to the same slug.
+  const source = stripped ? `${stripped}_${index}` : `requirement_${index + 1}`
   return `goal_${sanitizeId(source)}`
 }
 
@@ -396,9 +568,9 @@ function codeSurfacePaths(paths: string[]) {
   return normalized
 }
 
-function clusterSurfacePaths(category: GoalCategory, explicitOwnedPaths: string[]) {
+function clusterSurfacePaths(layerDef: LayerDef, explicitOwnedPaths: string[]) {
   const explicit = codeSurfacePaths(explicitOwnedPaths)
-  const fallback = codeSurfacePaths(defaultOwnedPaths(category))
+  const fallback = codeSurfacePaths(defaultOwnedPaths(layerDef))
   if (explicit.length === 0) return fallback
   const fallbackRoots = fallback
     .filter((item) => item.endsWith("/"))
@@ -412,21 +584,21 @@ function clusterSurfacePaths(category: GoalCategory, explicitOwnedPaths: string[
   return explicit
 }
 
-function clusterableCategory(category: GoalCategory) {
-  return category === "other" || category === "quality" || category === "verification" || category === "feature"
+function clusterableCategory(layerDef: LayerDef) {
+  return layerDef.kind === "feature" || layerDef.kind === "verification" || layerDef.kind === "system"
 }
 
 function clusterKeyForRecord(input: {
-  category: GoalCategory
+  layerDef: LayerDef
   goalID: string
   clusterOwnedPaths: string[]
 }) {
-  if (!clusterableCategory(input.category) || input.clusterOwnedPaths.length === 0) return input.goalID
-  return `${input.category}\u0000${[...input.clusterOwnedPaths].sort().join("|")}`
+  if (!clusterableCategory(input.layerDef) || input.clusterOwnedPaths.length === 0) return input.goalID
+  return `${input.layerDef.id}\u0000${[...input.clusterOwnedPaths].sort().join("|")}`
 }
 
 function clusterTitle(input: {
-  category: GoalCategory
+  layerDef: LayerDef
   records: Array<{
     requirement: RequirementDraft
     explicitOwnedPaths: string[]
@@ -452,7 +624,7 @@ function clusterTitle(input: {
 }
 
 function clusterObjective(input: {
-  category: GoalCategory
+  layerDef: LayerDef
   records: Array<{
     requirement: RequirementDraft
     clusterOwnedPaths: string[]
@@ -467,23 +639,14 @@ function clusterObjective(input: {
   const explicitPaths = uniqueStrings(input.records.flatMap((record) => record.clusterOwnedPaths))
   const scope = explicitPaths.length > 0
     ? `the shared surface ${explicitPaths.join(", ")}`
-    : `${input.category} requirements`
-  return `Implement the grouped contract for ${scope}: ${descriptions.join("; ")}`
+    : `${input.layerDef.name} layer`
+  return `Implement the grouped ${scope} contract: ${descriptions.join("; ")}`
 }
 
-function defaultOwnedPaths(category: GoalCategory) {
-  switch (category) {
-    case "bootstrap":
-      return ["package.json"]
-    case "integration":
-      return ["src/"]
-    case "quality":
-      return ["src/"]
-    case "verification":
-      return ["tests/", "src/"]
-    default:
-      return ["src/"]
-  }
+function defaultOwnedPaths(layerDef: LayerDef) {
+  if (layerDef.kind === "bootstrap") return ["package.json"]
+  if (layerDef.isVerification) return ["tests/", "src/"]
+  return ["src/"]
 }
 
 function metadataRecord(value: unknown) {
@@ -558,12 +721,19 @@ function scopedGoalDraft(goalDraft: GoalDraft, input: GoalCompileInput): GoalDra
   if (!input.replanContext) return goalDraft
   const hints = Array.isArray(input.goalHints) ? input.goalHints : []
   if (hints.length === 0) {
-    throw new GoalFailureError("Goal recompile requires unresolved goal scope from the previous plan")
+    log.warn("goal recompile has replanContext but no goal hints, running all goals")
+    return goalDraft
   }
 
   const seeds = hintedGoalSeeds(goalDraft.goals, hints, input.replanContext)
   if (seeds.size === 0) {
-    throw new GoalFailureError("Goal recompile could not resolve the unresolved goal scope")
+    // Spec was rewritten and goal IDs changed — old hints no longer map to the new goal graph.
+    // Fall back to running all goals rather than failing the replan entirely.
+    log.warn("goal recompile could not resolve unresolved scope from previous plan, running all goals", {
+      hintCount: hints.length,
+      newGoalCount: goalDraft.goals.length,
+    })
+    return goalDraft
   }
   if (seeds.size >= goalDraft.goals.length) return goalDraft
 
@@ -600,34 +770,6 @@ function scopedGoalDraft(goalDraft: GoalDraft, input: GoalCompileInput): GoalDra
   return scoped
 }
 
-function goalKindForCategory(category: GoalCategory): z.infer<typeof GoalKind> {
-  switch (category) {
-    case "bootstrap":
-    case "data":
-      return "bootstrap"
-    case "middleware":
-    case "integration":
-      return "integration"
-    case "verification":
-      return "verification"
-    case "quality":
-      return "system"
-    default:
-      return "feature"
-  }
-}
-
-function ruleSelectorsForCategory(
-  category: GoalCategory,
-  options?: {
-    hasVerificationCluster?: boolean
-  },
-) {
-  if (category === "bootstrap" || category === "quality") return ["build"]
-  if (category === "verification") return ["test"]
-  return options?.hasVerificationCluster ? ["build"] : ["build", "test"]
-}
-
 function explicitRuleSelectors(requirement: RequirementDraft) {
   return requirementSelectorMetadata(requirement)
 }
@@ -636,27 +778,37 @@ async function compile(input: GoalCompileInput): Promise<GoalDraft> {
   const requirements = Array.isArray(input.spec.requirements) ? input.spec.requirements : []
   if (requirements.length < 1) throw new GoalFailureError("Goal decomposition requires at least one formulated requirement")
 
+  // Spec blueprint (≥2 layers) is authoritative; fall back to generic taxonomy.
+  const blueprint = Array.isArray(input.spec.architectural_layers) && input.spec.architectural_layers.length >= 2
+    ? input.spec.architectural_layers
+    : undefined
+  const layers = blueprint ? layersFromBlueprint(blueprint) : layersFromCategories()
+  const layerDefMap = new Map(layers.map((l) => [l.id, l]))
+  const fallbackLayer = layers[layers.length - 1]!
+
   await input.onStatus?.(`Goal compiler classifying ${requirements.length} requirements`)
-  const categories = await classifyRequirementsWithLLM(requirements, input)
+  const layerIds = blueprint
+    ? await classifyRequirementsWithLayers(requirements, blueprint, input)
+    : await classifyRequirementsWithLLM(requirements, input)
 
   await input.onStatus?.(`Goal compiler mapping ${requirements.length} requirements`)
 
   const records = requirements.map((requirement, index) => {
-    const category = categories[index]!
+    const layerDef = layerDefMap.get(layerIds[index]!) ?? fallbackLayer
     const explicitOwnedPaths = uniqueStrings(extractOwnedPaths(requirement))
     return {
       requirement,
       index,
-      category,
+      layerDef,
       goalID: goalIdForRequirement(requirement, index),
       explicitOwnedPaths,
-      clusterOwnedPaths: clusterSurfacePaths(category, explicitOwnedPaths),
+      clusterOwnedPaths: clusterSurfacePaths(layerDef, explicitOwnedPaths),
     }
   })
-  const ordered = [...records].sort((a, b) => CATEGORY_RANK[a.category] - CATEGORY_RANK[b.category] || a.index - b.index)
+  const ordered = [...records].sort((a, b) => a.layerDef.rank - b.layerDef.rank || a.index - b.index)
   const clusters = [] as Array<{
     id: string
-    category: GoalCategory
+    layerDef: LayerDef
     records: typeof ordered
   }>
   const clusterIndexByKey = new Map<string, number>()
@@ -667,59 +819,61 @@ async function compile(input: GoalCompileInput): Promise<GoalDraft> {
       clusterIndexByKey.set(key, clusters.length)
       clusters.push({
         id: item.goalID,
-        category: item.category,
+        layerDef: item.layerDef,
         records: [item],
       })
       continue
     }
     clusters[index]!.records.push(item)
   }
-  const byCategory = new Map<GoalCategory, string[]>()
+  const byLayerId = new Map<string, string[]>()
   for (const cluster of clusters) {
-    const list = byCategory.get(cluster.category) ?? []
+    const list = byLayerId.get(cluster.layerDef.id) ?? []
     list.push(cluster.id)
-    byCategory.set(cluster.category, list)
+    byLayerId.set(cluster.layerDef.id, list)
   }
   const blockingNonVerification = clusters
     .filter((cluster) =>
-      cluster.category !== "verification"
+      !cluster.layerDef.isVerification
       && cluster.records.some((item) => (item.requirement.priority ?? "blocking") === "blocking")
     )
     .map((cluster) => cluster.id)
-  const hasVerificationCluster = clusters.some((cluster) => cluster.category === "verification")
+  const hasVerificationCluster = clusters.some((cluster) => cluster.layerDef.isVerification)
 
-  const priorByCategory = new Map<GoalCategory, string>()
+  const priorByLayerId = new Map<string, string>()
   const goals = clusters.map((cluster) => {
-    const { category } = cluster
+    const { layerDef } = cluster
     const dependencies = new Set<string>()
-    if (category === "verification") {
+    if (layerDef.isVerification) {
       for (const dependencyID of blockingNonVerification) {
         if (dependencyID !== cluster.id) dependencies.add(dependencyID)
       }
     } else {
-      for (const dependencyCategory of CATEGORY_DEPENDENCIES[category]) {
-        for (const dependencyID of byCategory.get(dependencyCategory) ?? []) {
+      for (const dependsOnId of layerDef.depends_on) {
+        for (const dependencyID of byLayerId.get(dependsOnId) ?? []) {
           if (dependencyID !== cluster.id) dependencies.add(dependencyID)
         }
       }
     }
-    const previousSameCategory = priorByCategory.get(category)
-    if (previousSameCategory && previousSameCategory !== cluster.id) {
-      dependencies.add(previousSameCategory)
+    const previousSameLayer = priorByLayerId.get(layerDef.id)
+    if (previousSameLayer && previousSameLayer !== cluster.id) {
+      dependencies.add(previousSameLayer)
     }
-    priorByCategory.set(category, cluster.id)
+    priorByLayerId.set(layerDef.id, cluster.id)
 
     const ownedPaths = uniqueStrings([
       ...cluster.records.flatMap((item) => item.explicitOwnedPaths),
-      ...defaultOwnedPaths(category),
+      ...defaultOwnedPaths(layerDef),
     ])
     const acceptance = uniqueStrings(cluster.records.flatMap((item) => item.requirement.acceptance.map((value) => value.trim()).filter(Boolean)))
     const selectors = uniqueStrings(cluster.records.flatMap((item) => explicitRuleSelectors(item.requirement)))
-    const primary = cluster.records[0]!
     const requirementIDs = cluster.records.map((item) => item.requirement.id)
     const priority = cluster.records.some((item) => (item.requirement.priority ?? "blocking") === "blocking") ? "blocking" as const : "advisory" as const
     const title = clusterTitle(cluster)
     const objective = clusterObjective(cluster)
+    // acceptance is guaranteed non-empty: RequirementSchema enforces .min(1)
+    // and spec normalization always falls back to [description].
+    const doneDefinition = acceptance.join("; ")
 
     return normalizedGoal({
       id: cluster.id,
@@ -728,14 +882,14 @@ async function compile(input: GoalCompileInput): Promise<GoalDraft> {
       requirement_ids: requirementIDs,
       depends_on_goal_ids: [...dependencies],
       owned_paths: ownedPaths,
-      done_definition: acceptance.join("; "),
+      done_definition: doneDefinition,
       qa_profile: {
-        rule_selectors: selectors.length > 0 ? selectors : ruleSelectorsForCategory(category, { hasVerificationCluster }),
+        rule_selectors: selectors.length > 0 ? selectors : layerDef.defaultRuleSelectors(hasVerificationCluster),
         goal_check_prompt: `Verify requirements ${requirementIDs.join(", ")} (${cluster.records.map((item) => item.requirement.title.trim()).join("; ")}) are fully satisfied.`,
         spec_scope: "mapped_requirements",
       },
       priority,
-      kind: goalKindForCategory(category),
+      kind: layerDef.kind,
     })
   })
 
@@ -747,6 +901,7 @@ async function compile(input: GoalCompileInput): Promise<GoalDraft> {
   log.info("goal compiler produced deterministic goal graph", {
     requirements: requirements.length,
     goals: goals.length,
+    blueprint: blueprint ? "spec-blueprint" : "generic-taxonomy",
   })
   return draft
 }

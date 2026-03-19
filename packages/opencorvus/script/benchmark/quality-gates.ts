@@ -67,6 +67,10 @@ export async function auditWorkspace(input: {
     return (PLACEHOLDER_MARKER_RE.test(content) || PLACEHOLDER_IMPL_RE.test(content)) ? [file] : []
   }))).flat()
 
+  // Frontend integration checks: detect hidden compatibility issues that backend tests won't catch.
+  const frontendIssues = await checkFrontendIntegration(input.rootDir, files)
+  placeholderHits.push(...frontendIssues)
+
   const nonSourceCount = Math.max(0, files.length - sourceFiles.length)
   const allowedDocs = /\b(add|create|write|update|document)\b[\s\S]{0,40}\b(readme|documentation|docs?)\b/i.test(requestText)
   const scopeRelevantFiles = input.changedFiles && input.changedFiles.length > 0 ? dedupeFiles(input.changedFiles) : []
@@ -248,6 +252,57 @@ async function latestMtime(rootDir: string, files: string[]) {
 
 function dedupeFiles(files: string[]) {
   return [...new Set(files.map((file) => file.replace(/\\/g, "/")).filter(Boolean))]
+}
+
+/**
+ * Frontend integration checks — catch silent failures that backend-only tests miss.
+ * Returns a list of "placeholder_hit" strings describing each detected issue.
+ *
+ * Current checks:
+ * 1. ES Module mismatch: app.js uses `export` but index.html loads it without type="module"
+ * 2. Missing referenced assets: files linked in index.html (<script src>, <link href>) that don't exist
+ */
+async function checkFrontendIntegration(rootDir: string, files: string[]): Promise<string[]> {
+  const issues: string[] = []
+  const publicDir = path.join(rootDir, "public")
+
+  // Only run if a public/index.html exists
+  const indexPath = path.join(publicDir, "index.html")
+  const indexContent = await fs.readFile(indexPath, "utf8").catch(() => null)
+  if (!indexContent) return issues
+
+  // Check 1: ES Module mismatch
+  // Find all <script src="..."> tags and check if the referenced JS uses export/import
+  const scriptSrcRe = /<script(?:[^>]*?)src=["']([^"']+\.js)["'][^>]*>/gi
+  let match: RegExpExecArray | null
+  while ((match = scriptSrcRe.exec(indexContent)) !== null) {
+    const src = match[0]
+    const jsFile = match[1]
+    const hasTypeModule = /type=["']module["']/i.test(src)
+    if (!hasTypeModule) {
+      const jsPath = path.join(publicDir, jsFile)
+      const jsContent = await fs.readFile(jsPath, "utf8").catch(() => null)
+      if (jsContent && /^\s*export\s+/m.test(jsContent)) {
+        issues.push(
+          `frontend-integration: public/${jsFile} uses ES Module \`export\` but index.html loads it without type="module" — JS will fail with SyntaxError in browser`,
+        )
+      }
+    }
+  }
+
+  // Check 2: Missing referenced assets (script src / link href)
+  const assetRe = /(?:<script[^>]+src|<link[^>]+href)=["']([^"'#?]+)["']/gi
+  while ((match = assetRe.exec(indexContent)) !== null) {
+    const asset = match[1]
+    if (asset.startsWith("http") || asset.startsWith("//") || asset.startsWith("data:")) continue
+    const assetPath = path.join(publicDir, asset)
+    const exists = await fs.stat(assetPath).then(() => true).catch(() => false)
+    if (!exists) {
+      issues.push(`frontend-integration: index.html references missing asset: ${asset}`)
+    }
+  }
+
+  return issues
 }
 
 function normalizeText(value: string) {
