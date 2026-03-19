@@ -140,6 +140,7 @@ export const PanelTool = Tool.define("panel", {
           checks: params.checks,
           routing: params.routing,
           source: params.source ?? ctx.extra?.source ?? (params.platform ? `channel:${params.platform}` : "panel"),
+          directory: typeof ctx.extra?.directory === "string" ? ctx.extra.directory : undefined,
           ...(params.platform && params.channel && params.thread
             ? {
                 channelBinding: {

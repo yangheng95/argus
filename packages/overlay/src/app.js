@@ -2030,6 +2030,7 @@ function panelRequestBody(text, metadata = {}, requestID) {
     request_id: requestID || undefined,
     allow_create: true,
     allow_session_mutation: false,
+    directory: activeDirectory() || undefined,
     metadata: {
       selectedTaskID: taskID,
       ...metadata,
@@ -3889,9 +3890,9 @@ async function loadMeta() {
   try {
     const [path, vcs] = await Promise.all([apiJson("path"), apiJson("vcs")]);
     if (epoch !== state.directoryEpoch) return;
-    state.path = path;
-    if (!state.directory && typeof path?.directory === "string" && path.directory.trim()) {
-      setWorkspaceDirectory(path.directory.trim(), "auto");
+    state.path = path ? { directory: typeof path.directory === "string" ? path.directory.trim() : "" } : null;
+    if (!state.savedDirectory && state.path?.directory) {
+      setWorkspaceDirectory(state.path.directory, "auto");
     }
     state.vcs = vcs;
     renderMeta();
@@ -3918,6 +3919,18 @@ function joinPath(base, value) {
   if (/[\\/]$/.test(base)) return `${base}${value}`;
   const sep = base.includes("\\") ? "\\" : "/";
   return `${base}${sep}${value}`;
+}
+
+function relativePathFrom(base, target) {
+  const baseText = typeof base === "string" ? base.replace(/[\\/]+$/, "") : "";
+  const targetText = typeof target === "string" ? target.replace(/[\\/]+$/, "") : "";
+  if (!baseText || !targetText) return "";
+  const lBase = baseText.toLowerCase();
+  const lTarget = targetText.toLowerCase();
+  if (lTarget.startsWith(lBase + "/") || lTarget.startsWith(lBase + "\\")) {
+    return targetText.slice(baseText.length + 1);
+  }
+  return "";
 }
 
 function pathItems(value) {
@@ -4214,9 +4227,10 @@ function renderMeta() {
   const path = dom.taskDir.querySelector(".task-dir-path");
   if (path) path.scrollLeft = path.scrollWidth;
   if (dom.taskWorkspaceDir) {
-    const showWorkspace = !!workspace && workspace !== dir;
+    const relWorkspace = relativePathFrom(dir, workspace);
+    const showWorkspace = !!relWorkspace;
     dom.taskWorkspaceDir.hidden = !showWorkspace;
-    dom.taskWorkspaceDir.textContent = showWorkspace ? t("cwd.execution_workspace", { value: workspace }) : "";
+    dom.taskWorkspaceDir.textContent = showWorkspace ? t("cwd.execution_workspace", { value: relWorkspace }) : "";
     dom.taskWorkspaceDir.title = showWorkspace ? workspace : "";
   }
 
@@ -5316,7 +5330,7 @@ function displayToolDetail(name, input, state) {
   const safeState = record(state) ? state : {};
   const n = toolNameKey(name);
   const path = safeInput.file_path || safeInput.filePath || safeInput.path || safeInput.filename || "";
-  if (path) return shortPath(path);
+  if (path) return shortRelativePath(path);
   if (n === "bash" || n === "shellcommand") return clipText(toolInputCommand(safeInput), 80);
   if (n === "grep" || n === "searchcode") return safeInput.pattern || safeInput.query || safeInput.q || "";
   if (n === "glob" || n === "findfiles") return safeInput.pattern || safeInput.glob || "";
@@ -8311,9 +8325,9 @@ function toolIcon(name) {
 
 function toolDetail(name, input, state) {
   const n = name.toLowerCase();
-  if (n === "read" || n === "readfile") return shortPath(input.file_path || input.filePath || input.path || "");
-  if (n === "edit" || n === "editfile") return shortPath(input.file_path || input.filePath || input.path || "");
-  if (n === "write" || n === "writefile") return shortPath(input.file_path || input.filePath || input.path || "");
+  if (n === "read" || n === "readfile") return shortRelativePath(input.file_path || input.filePath || input.path || "");
+  if (n === "edit" || n === "editfile") return shortRelativePath(input.file_path || input.filePath || input.path || "");
+  if (n === "write" || n === "writefile") return shortRelativePath(input.file_path || input.filePath || input.path || "");
   if (n === "bash") {
     const cmd = input.command || "";
     return cmd.length > 80 ? cmd.slice(0, 80) + "..." : cmd;
@@ -8332,6 +8346,12 @@ function shortPath(p) {
   return parts.length > 3 ? ".../" + parts.slice(-3).join("/") : p;
 }
 
+function shortRelativePath(p) {
+  if (!p) return "";
+  const rel = relativePathFrom(activeDirectory(), p);
+  return rel || shortPath(p);
+}
+
 function renderReasoningPart(part) {
   const text = displayString(part.text);
   if (!text.trim()) return "";
@@ -8345,7 +8365,7 @@ function renderReasoningPart(part) {
 function renderPatchPart(part) {
   const files = part.files || [];
   if (files.length === 0) return "";
-  const display = files.map((f) => shortPath(f)).join(", ");
+  const display = files.map((f) => shortRelativePath(f)).join(", ");
   return `<div class="msg-patch">\u2699 ${escapeHtml(display)}</div>`;
 }
 

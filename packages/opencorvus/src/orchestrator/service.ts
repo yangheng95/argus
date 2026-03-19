@@ -723,7 +723,7 @@ export namespace OrchestratorService {
       })
     }
     ExecutorRegistry.require(executor)
-    const session = await Session.create({ title })
+    const session = await Session.create({ title, directory: input.directory || undefined })
     const checks = initialTaskChecks(input.checks)
     const [resolvedChecks, discoveredChecks] = await Promise.all([
       CheckRunner.resolveChecks(checks ? { checks } : undefined),

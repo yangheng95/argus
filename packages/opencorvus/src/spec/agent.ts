@@ -65,10 +65,25 @@ export const RequirementSchema = z.object({
 })
 export type Requirement = z.infer<typeof RequirementSchema>
 
+/**
+ * An architectural layer produced by the spec agent.
+ * Layers are ordered from foundational (no dependencies) to most dependent.
+ * The goal stage uses this to partition requirements and derive build order —
+ * it is the single authoritative source for system structure on this task.
+ */
+export const ArchitecturalLayerSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  description: z.string(),
+  depends_on: z.array(z.string()).default([]),
+})
+export type ArchitecturalLayer = z.infer<typeof ArchitecturalLayerSchema>
+
 export const SpecDraftSchema = z.object({
   summary: z.string(),
   content: z.string(),
   requirements: z.array(RequirementSchema).default([]),
+  architectural_layers: z.array(ArchitecturalLayerSchema).optional(),
   assumptions: z.array(
     z.object({
       question: z.string(),
@@ -86,6 +101,7 @@ export const SpecOutput = z.object({
   scope: z.string().describe("What is in scope for this task"),
   out_of_scope: z.string().optional().describe("Explicitly excluded items"),
   requirements: z.array(RequirementSchema).describe("Formulated requirements — precise, verifiable, and grounded in explored evidence"),
+  architectural_layers: z.array(ArchitecturalLayerSchema).optional().describe("Ordered architectural layers for this task, from foundational to most dependent. Required when the task spans multiple system components."),
   assumptions: z.array(
     z.object({
       question: z.string(),
@@ -637,6 +653,10 @@ function extractJSON(text: string): SpecOutputType {
   if (Array.isArray(obj.clarifications)) {
     obj.clarifications = obj.clarifications.filter((c: any) => c && typeof c === "object" && c.question)
   }
+  if (Array.isArray(obj.architectural_layers)) {
+    obj.architectural_layers = normalizeArchitecturalLayers(obj.architectural_layers)
+    if (obj.architectural_layers.length === 0) delete obj.architectural_layers
+  }
 
   if (!obj.summary) obj.summary = ""
   if (!obj.content) obj.content = ""
@@ -664,6 +684,8 @@ function extractSpecText(text: string): SpecOutputType {
   const assumptions = parseNamedPairs(sectionBody(raw, ["Assumptions", "假设"], { respectHeadingLevel: true }))
   const risks = parseListSection(raw, ["Risks", "风险"], { respectHeadingLevel: true })
   const open = parseListSection(raw, ["Open Questions", "Unresolved Questions", "开放问题", "待确认问题"], { respectHeadingLevel: true })
+  const architecturalLayersRaw = parseArchitecturalLayersFromMarkdown(raw)
+  const architectural_layers = architecturalLayersRaw.length >= 2 ? architecturalLayersRaw : undefined
 
   return normalizeSpecOutput({
     summary: sectionBody(raw, ["Summary", "摘要"], { respectHeadingLevel: true }).split("\n")[0]?.trim() || firstContentLine(raw),
@@ -671,6 +693,7 @@ function extractSpecText(text: string): SpecOutputType {
     scope: sectionBody(raw, ["Scope", "范围"], { respectHeadingLevel: true }) || firstContentLine(raw),
     out_of_scope: sectionBody(raw, ["Out-of-Scope", "Out of Scope", "范围外"], { respectHeadingLevel: true }) || undefined,
     requirements,
+    architectural_layers,
     assumptions,
     risks,
     evidence_sources: evidence,
@@ -685,11 +708,64 @@ function normalizeSpecOutput(input: SpecOutputType): SpecOutputType {
     content: input.content ?? "",
     scope: input.scope ?? "",
     requirements: Array.isArray(input.requirements) ? input.requirements : [],
+    architectural_layers: Array.isArray(input.architectural_layers) && input.architectural_layers.length >= 2
+      ? input.architectural_layers
+      : undefined,
     assumptions: Array.isArray(input.assumptions) ? input.assumptions : [],
     risks: Array.isArray(input.risks) ? input.risks : [],
     evidence_sources: Array.isArray(input.evidence_sources) ? input.evidence_sources : [],
     unresolved_questions: Array.isArray(input.unresolved_questions) ? input.unresolved_questions : [],
   }
+}
+
+function normalizeArchitecturalLayers(raw: unknown[]): ArchitecturalLayer[] {
+  return raw
+    .filter((l): l is Record<string, unknown> => !!l && typeof l === "object" && !Array.isArray(l))
+    .filter((l) => typeof l.id === "string" && l.id.trim())
+    .map((l) => ({
+      id: String(l.id).trim().toLowerCase().replace(/[^a-z0-9_]/g, "_"),
+      name: typeof l.name === "string" && l.name.trim() ? l.name.trim() : String(l.id).trim(),
+      description: typeof l.description === "string" ? l.description.trim() : "",
+      depends_on: Array.isArray(l.depends_on)
+        ? l.depends_on.map(String).map((s) => s.trim().toLowerCase().replace(/[^a-z0-9_]/g, "_")).filter(Boolean)
+        : [],
+    }))
+}
+
+/**
+ * Parse the `# Architecture` section from spec markdown output.
+ *
+ * Each line format (produced by spec agent):
+ *   - id: <id> | name: <name> | description: <desc> | depends_on: [<id>, ...]
+ */
+function parseArchitecturalLayersFromMarkdown(text: string): ArchitecturalLayer[] {
+  const body = sectionBody(text, ["Architecture", "架构", "架构层"], { respectHeadingLevel: true })
+  if (!body.trim()) return []
+  const layers: ArchitecturalLayer[] = []
+  for (const line of body.split(/\r?\n/)) {
+    const trimmed = line.replace(/^[-*•]\s*/, "").trim()
+    if (!trimmed || trimmed.startsWith("#")) continue
+    const parts: Record<string, string> = {}
+    for (const segment of trimmed.split("|")) {
+      const colonIdx = segment.indexOf(":")
+      if (colonIdx < 0) continue
+      const key = segment.slice(0, colonIdx).trim().toLowerCase()
+      const value = segment.slice(colonIdx + 1).trim()
+      parts[key] = value
+    }
+    if (!parts.id?.trim()) continue
+    const dependsOnMatch = (parts.depends_on ?? parts["depends on"] ?? "").match(/\[([^\]]*)\]/)
+    const depends_on = dependsOnMatch
+      ? dependsOnMatch[1].split(",").map((s) => s.trim().toLowerCase().replace(/[^a-z0-9_]/g, "_")).filter(Boolean)
+      : []
+    layers.push({
+      id: parts.id.trim().toLowerCase().replace(/[^a-z0-9_]/g, "_"),
+      name: parts.name?.trim() || parts.id.trim(),
+      description: parts.description?.trim() || "",
+      depends_on,
+    })
+  }
+  return layers
 }
 
 // ---------------------------------------------------------------------------
@@ -1073,6 +1149,29 @@ For external APIs, unfamiliar libraries, or protocols, use web_search when neces
 
 Your spec must be CONCRETE, not abstract. Reference specific files, functions, types, routes, schemas, or configs discovered via tools.
 
+#### 2a. Architecture Layers (required for multi-component tasks)
+
+When the task spans 3 or more distinct system components, you MUST produce an \`# Architecture\` section. This is the single authoritative declaration of system structure — the downstream goal agent will use it to partition requirements and determine build order. It will NOT re-derive architecture on its own.
+
+Rules:
+- Layers must be SPECIFIC to this task. Bad: "backend", "frontend". Good: "diary_persistence", "auth_service", "diary_crud_api".
+- Order from foundational (no dependencies) to most dependent.
+- Each layer on its own line in this exact format:
+  \`- id: <snake_case_id> | name: <Human Name> | description: <what files/code lives here> | depends_on: [<id>, ...]\`
+- Use \`depends_on: []\` for foundational layers.
+
+Example for a diary app:
+- id: project_setup | name: Project Setup | description: package.json, tsconfig, build tooling | depends_on: []
+- id: persistence | name: Data Persistence | description: database schema, migrations, ORM models | depends_on: [project_setup]
+- id: auth | name: Authentication | description: auth routes, JWT, session management | depends_on: [persistence]
+- id: diary_core | name: Diary Core API | description: CRUD routes for diary entries, tags, moods | depends_on: [auth, persistence]
+- id: review_ui | name: Review & Timeline | description: timeline view, calendar, search | depends_on: [diary_core]
+- id: verification | name: Test Suite | description: automated tests covering all layers | depends_on: [diary_core, review_ui]
+
+Omit the Architecture section ONLY for simple single-feature tasks (≤ 2 requirements).
+
+#### 2b. Requirements
+
 The key output is a formulation-oriented \`# Requirements\` section. Each requirement must say:
 - What must be true
 - How acceptance will be judged
@@ -1094,6 +1193,7 @@ When you have finished exploring and are ready to deliver the spec, output plain
 
 Use these exact sections in order:
 - \`# Summary\`
+- \`# Architecture\` (if multi-component — see Phase 2a)
 - \`# Scope\`
 - \`# Requirements\`
 - \`# Constraints\`
@@ -1122,6 +1222,7 @@ Do NOT add a \`# Spec Items\` section unless the user explicitly asks for one. D
 - Write in the same language as the request.
 - If rewriting after failure, revise the formulation to address the discovered requirement or scope failure.
 - Clarifications are for requirement ambiguity only. Never ask about implementation approach, technical choices, file structure, or execution steps.
+- If the task spans 3+ components, the Architecture section is MANDATORY. A missing Architecture section forces the downstream goal agent to guess system structure, producing worse goal ordering and dependencies.
 
 ## Quality Self-Check
 
@@ -1134,6 +1235,7 @@ Before outputting the final markdown, verify each of these. If ANY answer is NO,
 5. Does the spec contain scope, constraints, and out-of-scope boundaries?
 6. Could a downstream goal agent decompose this workload without re-exploring the codebase?
 7. Does the summary accurately describe the specification in one line?
+8. If the task spans 3+ components, does the spec include an \`# Architecture\` section with task-specific layer IDs and \`depends_on\` edges?
 
 ## Output Format
 

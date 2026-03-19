@@ -13,12 +13,6 @@ function flag(name: string) {
   return process.argv.find((item) => item.startsWith(`${name}=`))?.slice(name.length + 1)
 }
 
-function stageTimeout(name: string, totalMs: number, share: number, fallback: number) {
-  const value = Number(flag(name))
-  if (Number.isFinite(value) && value > 0) return value
-  return Math.max(fallback, Math.min(totalMs, Math.floor(totalMs * share) || fallback))
-}
-
 function benchmarkRoutingForExecutor(executor: "opencode" | "codex" | "claude-code") {
   if (executor === "opencode") {
     return {
@@ -34,14 +28,18 @@ function benchmarkRoutingForExecutor(executor: "opencode" | "codex" | "claude-co
   }
 }
 
-const timeoutMs = Number(flag("--timeout-ms")) || 480_000
-const stallTimeoutMs = stageTimeout("--stall-timeout-ms", timeoutMs, 0.2, 15 * 60 * 1000)
-const requestTimeoutMs = stageTimeout("--request-timeout-ms", timeoutMs, 0.08, 30_000)
-const specTimeoutMs = stageTimeout("--spec-timeout-ms", timeoutMs, 0.4, 1_200_000)
-const plannerTimeoutMs = stageTimeout("--planner-timeout-ms", timeoutMs, 0.45, 1_500_000)
-const toolTimeoutMs = stageTimeout("--tool-timeout-ms", timeoutMs, 0.15, 10 * 60 * 1000)
-const standbyTimeoutMs = Number(flag("--standby-timeout-ms")) || timeoutMs
+// No overall hard timeout. The only execution gate is stall: if there is no
+// event/progress/log activity for stallTimeoutMs, the benchmark aborts.
+// All stage timeouts (spec, planner, standby) default to effectively unlimited
+// so that slow models are never killed mid-thought.
+const stallTimeoutMs = Number(flag("--stall-timeout-ms")) || 20 * 60 * 1000
+const requestTimeoutMs = Number(flag("--request-timeout-ms")) || 30_000
+const specTimeoutMs = Number(flag("--spec-timeout-ms")) || 24 * 60 * 60 * 1000
+const plannerTimeoutMs = Number(flag("--planner-timeout-ms")) || 24 * 60 * 60 * 1000
+const toolTimeoutMs = Number(flag("--tool-timeout-ms")) || 10 * 60 * 1000
+const standbyTimeoutMs = Number(flag("--standby-timeout-ms")) || 24 * 60 * 60 * 1000
 const completionHardTimeoutMs = Number(flag("--completion-hard-timeout-ms")) || 0
+// --timeout-ms accepted for backwards compat but no longer drives other timeouts
 const specMaxSteps = Number(flag("--spec-max-steps")) || 80
 const plannerMaxSteps = Number(flag("--planner-max-steps")) || 96
 const maxRuns = Number(flag("--max-runs")) || 20
@@ -125,9 +123,9 @@ const DIAG_TYPES = new Set([
   "orchestrator.interaction.requested",
   "orchestrator.interaction.resolved",
 ])
-const PLANNING_VISIBLE_TIMEOUT_MS = Number(flag("--planning-timeout-ms")) || Math.min(timeoutMs, 2 * 60 * 1000)
-const TASK_CREATE_TIMEOUT_MS = Number(flag("--task-create-timeout-ms")) || timeoutMs
-const TASK_RESUME_TIMEOUT_MS = Number(flag("--task-resume-timeout-ms")) || Math.min(timeoutMs, 10 * 60 * 1000)
+const PLANNING_VISIBLE_TIMEOUT_MS = Number(flag("--planning-timeout-ms")) || 2 * 60 * 1000
+const TASK_CREATE_TIMEOUT_MS = Number(flag("--task-create-timeout-ms")) || 5 * 60 * 1000
+const TASK_RESUME_TIMEOUT_MS = Number(flag("--task-resume-timeout-ms")) || 10 * 60 * 1000
 const projectDir = flag("--project-dir")
 const temp = {
   dir: "",
@@ -157,7 +155,7 @@ await ensureBenchmarkModel(import.meta.dir, model)
 
 process.env.OPENCORVUS_AUTO_DISCOVER_EXECUTORS = "1"
 process.env.OPENCORVUS_EXECUTOR_CLAUDE_PERMISSION_MODE = "bypassPermissions"
-process.env.OPENCORVUS_GOAL_RUN_TIMEOUT_MS = String(timeoutMs)
+process.env.OPENCORVUS_GOAL_RUN_TIMEOUT_MS = String(standbyTimeoutMs)
 process.env.OPENCORVUS_SPEC_TIMEOUT_MS = String(specTimeoutMs)
 process.env.OPENCORVUS_PLANNER_TIMEOUT_MS = String(plannerTimeoutMs)
 process.env.OPENCORVUS_SPEC_AGENT_TIMEOUT_MS = String(specTimeoutMs)
@@ -167,8 +165,34 @@ process.env.OPENCORVUS_STANDBY_TIMEOUT_MS = String(standbyTimeoutMs)
 process.env.OPENCORVUS_SPEC_AGENT_MAX_STEPS = String(specMaxSteps)
 process.env.OPENCORVUS_PLANNER_AGENT_MAX_STEPS = String(plannerMaxSteps)
 
+console.log(
+  `[overlay-benchmark] config model=${model} stall=${stallTimeoutMs / 1000}s spec=${specTimeoutMs === 86400000 ? "∞" : specTimeoutMs / 1000 + "s"} planner=${plannerTimeoutMs === 86400000 ? "∞" : plannerTimeoutMs / 1000 + "s"} tool=${toolTimeoutMs / 1000}s standby=${standbyTimeoutMs === 86400000 ? "∞" : standbyTimeoutMs / 1000 + "s"} request=${requestTimeoutMs / 1000}s hard=${completionHardTimeoutMs > 0 ? completionHardTimeoutMs / 1000 + "s" : "none"}`,
+)
+
+// Detect stale SQLite WAL lock from a crashed previous run
+const dbPath = path.join(os.homedir(), ".local", "share", "opencorvus", "opencorvus.db")
+const walPath = `${dbPath}-wal`
+try {
+  const walStat = await fs.stat(walPath)
+  const ageMs = Date.now() - walStat.mtimeMs
+  // WAL older than 5 minutes with no running bun process is a stale lock — remove it
+  if (ageMs > 5 * 60 * 1000) {
+    await fs.rm(walPath, { force: true })
+    await fs.rm(`${dbPath}-shm`, { force: true })
+  }
+} catch {
+  // no WAL file, fine
+}
+
 await resetDatabase()
-if (!projectDir) await scaffoldProject(temp.dir, model)
+if (!projectDir) {
+  await scaffoldProject(temp.dir, model)
+} else {
+  // Strip project-level opencorvus state to prevent old task IDs from bleeding into new runs
+  await fs.rm(path.join(temp.dir, "opencorvus.json"), { force: true })
+  await fs.rm(path.join(temp.dir, ".opencorvus"), { recursive: true, force: true })
+  await fs.mkdir(temp.config, { recursive: true })
+}
 
 await Instance.provide({
   directory: temp.dir,
@@ -400,7 +424,7 @@ try {
       request: TASK_REQUEST,
       executor,
       budget: {
-        maxWallTimeMs: timeoutMs,
+        maxWallTimeMs: undefined,
         maxRuns,
         maxReplans,
         maxEvaluations,
@@ -436,7 +460,7 @@ try {
     },
     body: JSON.stringify({
       budget: {
-        maxWallTimeMs: timeoutMs,
+        maxWallTimeMs: undefined,
         maxRuns,
         maxReplans,
         maxEvaluations,
@@ -589,7 +613,7 @@ async function scaffoldProject(dir: string, model: string) {
       provider: {
         [providerID]: {
           options: {
-            timeout: timeoutMs,
+            timeout: requestTimeoutMs,
           },
         },
       },
@@ -638,7 +662,11 @@ async function buildBenchmarkReport(error?: unknown) {
   const currentTimeline = timeline ?? (taskID ? await tryApiJson(`/control/timeline?taskID=${encodeURIComponent(taskID)}`, []) : [])
   const currentRuns = runs ?? (taskID ? await tryApiJson(`/task/${taskID}/runs`, []) : [])
   const localVerify = await runLocalVerify(temp.dir, DELIVERY_VERIFY_CMD)
-  const changedFiles = dedupePaths(progress?.delivery?.result?.changedFiles ?? currentFinalBoard?.delivery?.result?.changedFiles ?? [])
+  const deliveryChangedFiles = progress?.delivery?.result?.changedFiles ?? currentFinalBoard?.delivery?.result?.changedFiles ?? []
+  // When the task stalls before delivery completes, fall back to git to capture
+  // modified + untracked files (e.g. newly created public/ directories not yet committed).
+  const gitFallbackFiles = deliveryChangedFiles.length === 0 ? await gitChangedFiles(temp.dir) : []
+  const changedFiles = dedupePaths([...deliveryChangedFiles, ...gitFallbackFiles])
   const moduleBlocks = resolveModuleBlocks(progress, currentFinalBoard ?? currentBoard, TASK_REQUEST)
   const artifactAudit = await auditWorkspace({
     rootDir: temp.dir,
@@ -839,6 +867,23 @@ function elapsedOrNull(at: number) {
 
 function dedupePaths(files: string[]) {
   return [...new Set(files.filter((item): item is string => typeof item === "string" && item.length > 0).map((item) => item.replace(/\\/g, "/")))]
+}
+
+/** Fallback: compute changed+untracked files directly from project git when delivery result is empty. */
+async function gitChangedFiles(dir: string): Promise<string[]> {
+  try {
+    const run = (args: string[]) =>
+      Bun.spawn(["git", ...args], { cwd: dir, stdout: "pipe", stderr: "pipe" })
+        .stdout.text().then((t) => t.trim().split(/\r?\n/).filter(Boolean))
+        .catch(() => [] as string[])
+    const [modified, untracked] = await Promise.all([
+      run(["diff", "--name-only", "HEAD"]),
+      run(["ls-files", "--others", "--exclude-standard"]),
+    ])
+    return [...modified, ...untracked]
+  } catch {
+    return []
+  }
 }
 
 function resolveModuleBlocks(progress: any, board: any, request: string) {

@@ -67,6 +67,7 @@ export const ControlMessageInput = z.object({
   user_id: z.string().optional(),
   request_id: z.string().optional(),
   source: z.string().optional(),
+  directory: z.string().optional(),
   allow_create: z.boolean().default(true),
   allow_session_mutation: z.boolean().default(false),
   attachments: ControlMessageAttachment.array().optional(),

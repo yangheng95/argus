@@ -175,6 +175,7 @@ async function run(input: z.infer<typeof ControlMessageInput>, onEvent?: StreamC
       allowSessionMutation: input.allow_session_mutation,
       ...(asRecord(input.metadata?.create_task) ? { createTask: input.metadata?.create_task } : {}),
       ...(input.request_id ? { requestID: input.request_id } : {}),
+      ...(input.directory ? { directory: input.directory } : {}),
     }
 
     const result = await SessionPrompt.prompt({

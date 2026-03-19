@@ -229,6 +229,7 @@ export const CreateTaskInput = z.object({
   project: z.string().optional(),
   requestID: z.string().optional(),
   source: z.string().optional(),
+  directory: z.string().optional(),
   executor: ExecutorName.optional(),
   title: z.string().optional(),
   request: z.string(),
