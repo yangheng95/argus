@@ -881,7 +881,7 @@ export const ProtocolMessage = z.object({
   }),
 })
 
-export const AgentStage = z.enum(["spec", "goal", "planner", "judge"])
+export const AgentStage = z.enum(["spec", "goal", "planner", "judge", "delivery"])
 export type AgentStageType = z.infer<typeof AgentStage>
 export const AgentEventKind = z.enum(["status", "message_delta", "tool_call", "tool_delta", "tool_result", "error"])
 export type AgentEventKindType = z.infer<typeof AgentEventKind>

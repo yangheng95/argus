@@ -1579,10 +1579,16 @@ export function buildReplanContext(input: {
     },
     previousGoalStatuses: (Array.isArray(input.analysis.goal_statuses) ? input.analysis.goal_statuses : []).map((item) => {
       const goal = input.goals[item.goal_index]
+      const meta = goal?.metadata && typeof goal.metadata === "object" && !Array.isArray(goal.metadata)
+        ? goal.metadata as Record<string, unknown>
+        : undefined
       return {
         description: goal?.description ?? `Goal ${item.goal_index}`,
         status: item.status,
         evidence: item.evidence,
+        requirement_ids: Array.isArray(meta?.requirement_ids)
+          ? (meta.requirement_ids as unknown[]).filter((id): id is string => typeof id === "string")
+          : undefined,
       }
     }),
     ...(previousWaves.length > 0 ? { previousWaves } : {}),

@@ -20,6 +20,7 @@ import { DEFAULT_CORE_HEADER } from "@/session/system"
 import { PLANNER_SYSTEM } from "@/planner/agent"
 import { SPEC_SYSTEM } from "@/spec/agent"
 import { GOAL_JUDGE_SYSTEM } from "@/evaluator/agent"
+import { DELIVERY_AGENT_SYSTEM } from "@/delivery/agent"
 
 const log = Log.create({ service: "server" })
 
@@ -149,6 +150,16 @@ export const ConfigRoutes = lazy(() =>
             prompt: promptValue(config.prompt?.evaluator_system) ?? GOAL_JUDGE_SYSTEM,
             configured_prompt: promptValue(config.prompt?.evaluator_system),
             default_prompt: GOAL_JUDGE_SYSTEM,
+          },
+          {
+            key: "delivery_system",
+            scope: "system" as const,
+            group: "orchestrator",
+            label: "Delivery Agent",
+            description: "System prompt for the orchestrator delivery verification stage.",
+            prompt: promptValue(config.prompt?.delivery_system) ?? DELIVERY_AGENT_SYSTEM,
+            configured_prompt: promptValue(config.prompt?.delivery_system),
+            default_prompt: DELIVERY_AGENT_SYSTEM,
           },
         ]
         const agentItems = agents.map((item) => {

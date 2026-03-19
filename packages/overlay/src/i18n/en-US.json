@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "en-US",
-    "panel_revision": "91226897afceaa2e"
+    "panel_revision": "30978e89690f6cc9"
   },
   "brand.guide_kicker": "Quick Guide",
   "brand.guide_positioning_body": "This is the task cockpit, not decorative chrome: left selects tasks, center drives execution, right verifies spec, plan, evaluation, and file changes so the agent does not drift.",
@@ -61,6 +61,7 @@
   "chat.placeholder": "Send a message...",
   "chat.placeholder_disabled": "Connect to OpenCorvus to start a task.",
   "chat.role.assistant": "Assistant",
+  "chat.role.delivery": "Delivery",
   "chat.role.goal": "Goal",
   "chat.role.message": "Message",
   "chat.role.planner": "Plan",
@@ -159,6 +160,7 @@
   "prompt.desc.agent_generate": "System prompt used by the built-in generate agent for final responses.",
   "prompt.desc.planner_system": "System prompt used by the planner when it builds execution plans.",
   "prompt.desc.spec_system": "System prompt used by the spec agent when it extracts requirements and constraints.",
+  "prompt.desc.delivery_system": "System prompt used by the delivery agent when it verifies startup, fixes bugs, and makes the final acceptance decision.",
   "prompt.desc.evaluator_system": "System prompt used by the evaluator when it decides acceptance or replanning.",
   "prompt.status.custom": "Custom",
   "prompt.status.default": "Default",
@@ -222,6 +224,7 @@
     "one": "{{count}} unchanged line hidden",
     "other": "{{count}} unchanged lines hidden"
   },
+  "empty.delivery": "No delivery yet",
   "empty.checks": "No checks configured",
   "empty.files": "No file changes yet",
   "empty.goals": "No goals defined",
@@ -419,6 +422,7 @@
   "preference.value": "Value <em>*</em>",
   "preference.value_placeholder": "Preference value...",
   "preference.refresh_title": "Reload preferences from the server.",
+  "section.delivery": "Delivery",
   "section.evaluation": "Evaluation",
   "section.budget": "Budget",
   "section.files": "Files",
@@ -510,6 +514,7 @@
   "task.status.blocked": "Blocked",
   "task.status.cancelled": "Cancelled",
   "task.status.completed": "Completed",
+  "task.status.delivering": "Delivering",
   "task.status.evaluating": "Evaluating",
   "task.status.failed": "Failed",
   "task.status.idle": "No task",

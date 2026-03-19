@@ -734,11 +734,40 @@ function scopedGoalDraft(goalDraft: GoalDraft, input: GoalCompileInput): GoalDra
 
   const seeds = hintedGoalSeeds(goalDraft.goals, hints, input.replanContext)
   if (seeds.size === 0) {
-    // Spec was rewritten and goal IDs changed — old hints no longer map to the new goal graph.
-    // Fall back to running all goals rather than failing the replan entirely.
+    // Text-based matching failed. Fall back to requirement_ids: skip goals whose
+    // requirements were ALL covered by passed goals in the previous run.
+    const passedRequirementIDs = new Set(
+      (input.replanContext.previousGoalStatuses ?? [])
+        .filter((g) => g.status === "passed" && Array.isArray(g.requirement_ids))
+        .flatMap((g) => g.requirement_ids!),
+    )
+    if (passedRequirementIDs.size > 0) {
+      const unresolvedGoals = goalDraft.goals.filter((goal) =>
+        !goal.requirement_ids.every((id) => passedRequirementIDs.has(id)),
+      )
+      if (unresolvedGoals.length > 0 && unresolvedGoals.length < goalDraft.goals.length) {
+        log.info("goal recompile scoped by requirement_ids", {
+          passedReqs: passedRequirementIDs.size,
+          totalGoals: goalDraft.goals.length,
+          scopedGoals: unresolvedGoals.length,
+        })
+        const includedIDs = new Set(unresolvedGoals.map((g) => g.id))
+        const scoped = {
+          summary: `${unresolvedGoals.length} scoped goals (${goalDraft.goals.length - unresolvedGoals.length} skipped — requirements already passed)`,
+          goals: unresolvedGoals.map((goal) => ({
+            ...goal,
+            depends_on_goal_ids: goal.depends_on_goal_ids.filter((id) => includedIDs.has(id)),
+          })),
+        } satisfies GoalDraft
+        const requiredRequirementIDs = new Set(unresolvedGoals.flatMap((g) => g.requirement_ids))
+        validateGoalGraph(scoped, input.spec, { requiredRequirementIDs })
+        return scoped
+      }
+    }
     log.warn("goal recompile could not resolve unresolved scope from previous plan, running all goals", {
       hintCount: hints.length,
       newGoalCount: goalDraft.goals.length,
+      passedReqs: passedRequirementIDs.size,
     })
     return goalDraft
   }

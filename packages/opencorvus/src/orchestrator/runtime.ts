@@ -14,6 +14,8 @@ import { inactivityAgeMs } from "@/util/activity-timeout"
 import { withTimeout } from "@/util/timeout"
 import { OrchestratorRunActor } from "./run-actor"
 import { DeliveryService } from "./delivery"
+import { HeadlessDeliveryService } from "@/delivery/service"
+import type { DeliveryVerdictType } from "@/delivery/agent"
 import {
   applyGoalDelivery,
   buildGoalPrompt,
@@ -36,6 +38,7 @@ import { OrchestratorMemoryBridge } from "./memory-bridge"
 import { autoRejectInteraction } from "./interaction-actions"
 import { UNATTENDED_AUTO_REPLY, unattendedProject } from "./unattended"
 import {
+  OrchestratorDeliveryTable,
   OrchestratorGoalRunTable,
   OrchestratorEvaluationTable,
   OrchestratorInteractionRequestTable,
@@ -1540,6 +1543,44 @@ async function handleExecutionFailure(run: RunRow, summary: string, hooks: Runti
   await executeDecision(failedTask, failedRun, decision, hooks)
 }
 
+async function runDeliveryVerification(
+  task: TaskRow,
+  run: RunRow,
+  delivery: DeliveryRow,
+): Promise<DeliveryVerdictType | null> {
+  try {
+    const goals = goalsForRun(run)
+    const diffs = storedDiffs(delivery)
+    const changedFiles = diffs.map((d) => d.file)
+    const result = await HeadlessDeliveryService.verify({
+      task: {
+        title: task.title ?? "",
+        request: task.request ?? "",
+        sessionID: task.session_id ?? undefined,
+        metadata: task.metadata ?? undefined,
+      },
+      goals: goals.map((g) => ({
+        description: g.description,
+        criteria: g.criteria ?? "",
+        priority: g.priority as "blocking" | "advisory",
+      })),
+      delivery: {
+        summary: delivery.summary ?? "",
+        changedFiles,
+        diffs: diffs.map((d) => ({ file: d.file, diff: d.after })),
+      },
+    })
+    return result
+  } catch (error) {
+    log.warn("delivery agent failed, proceeding with publish", {
+      taskID: task.id,
+      runID: run.id,
+      error: String(error),
+    })
+    return null
+  }
+}
+
 async function publishAcceptedDelivery(task: TaskRow, run: RunRow, delivery: DeliveryRow, hooks: RuntimeHooks) {
   if (task.active_run_id !== run.id) return
   if (delivery.status === "delivered") {
@@ -1561,9 +1602,46 @@ async function publishAcceptedDelivery(task: TaskRow, run: RunRow, delivery: Del
   await hooks.updateTask(task, { status: "delivering", blocking_reason: null, error: null }, "Publishing accepted delivery")
   markDeliveryPublishing(delivery.id, now)
 
+  // --- Delivery agent verification ---
+  const deliveryVerdict = await runDeliveryVerification(task, run, delivery)
+  if (deliveryVerdict?.verdict === "rejected") {
+    log.warn("delivery agent rejected delivery", { taskID: task.id, runID: run.id, summary: deliveryVerdict.summary })
+    await hooks.updateTask(task, { status: "evaluating", blocking_reason: null, error: null }, "Delivery agent rejected")
+    await handleEvaluationFailure(requireTask(task.id), run, `Delivery agent rejected: ${deliveryVerdict.summary}`, hooks)
+    return
+  }
+  if (deliveryVerdict?.verdict === "fixed" && deliveryVerdict.fixes_applied.length > 0) {
+    log.info("delivery agent applied fixes, re-snapshotting", {
+      taskID: task.id,
+      runID: run.id,
+      fixes: deliveryVerdict.fixes_applied.length,
+    })
+    const baseRef = taskBaselineRef(task)
+    if (baseRef) {
+      const { delivery: refreshed } = await deliveryFromSnapshot(baseRef, "Task delivery (post-fix)")
+      const refreshedNow = Date.now()
+      Database.use((db) =>
+        db
+          .update(OrchestratorDeliveryTable)
+          .set({
+            summary: refreshed.summary,
+            result: {
+              summary: refreshed.summary,
+              changed_files: refreshed.diffs.map((d) => d.file),
+              diffs: refreshed.diffs,
+            },
+            time_updated: refreshedNow,
+          })
+          .where(eq(OrchestratorDeliveryTable.id, delivery.id))
+          .run(),
+      )
+    }
+  }
+  // --- End delivery agent verification ---
+
   let deliveryTimer: ReturnType<typeof setTimeout>
   const result = await Promise.race([
-    DeliveryService.deliver({ task, run, delivery }).finally(() => clearTimeout(deliveryTimer)),
+    DeliveryService.deliver({ task, run, delivery: findDeliveryByRun(run.id) ?? delivery }).finally(() => clearTimeout(deliveryTimer)),
     new Promise<never>((_, reject) => {
       deliveryTimer = setTimeout(() => reject(new Error("DeliveryService.deliver() timeout")), DELIVERY_SERVICE_TIMEOUT_MS)
     }),
