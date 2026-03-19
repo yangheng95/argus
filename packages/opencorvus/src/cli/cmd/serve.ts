@@ -6,6 +6,9 @@ import { Workspace } from "../../control-plane/workspace"
 import { Project } from "../../project/project"
 import { Installation } from "../../installation"
 import { createConnection } from "net"
+import { Config } from "../../config/config"
+import { Instance } from "../../project/instance"
+import path from "path"
 
 /** Hide the console window on Windows using Win32 API. */
 function hideConsoleWindow() {
@@ -117,6 +120,21 @@ export const ServeCommand = cmd({
     })
     process.on("unhandledRejection", (err) => {
       console.error("[serve] unhandledRejection:", err)
+    })
+
+    // First-run: snapshot all resolved config into .opencorvus/opencorvus.jsonc
+    // so project settings are fully persisted and never re-seeded on subsequent starts.
+    // Must run inside Instance.provide() because Config functions need an active instance context.
+    const initDir = projectDir ? path.resolve(projectDir) : process.cwd()
+    await Instance.provide({
+      directory: initDir,
+      fn: () =>
+        Config.ensureProjectConfigFile().catch((err) => {
+          console.warn(
+            "Warning: could not initialize project config file:",
+            err instanceof Error ? err.message : String(err),
+          )
+        }),
     })
 
     const server = Server.listen(opts)

@@ -60,6 +60,16 @@ export namespace Database {
     Client.reset()
   }
 
+  export function checkpoint(): void {
+    const sqlite = state.sqlite
+    if (!sqlite) return
+    try {
+      sqlite.run("PRAGMA wal_checkpoint(PASSIVE)")
+    } catch {
+      // ignore checkpoint errors
+    }
+  }
+
   export type TxOrDb = Transaction | Client
 
   const ctx = Context.create<{

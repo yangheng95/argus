@@ -1380,6 +1380,43 @@ export namespace Config {
     return candidates[0]
   }
 
+  export function isProjectConfigFilePresent(): boolean {
+    const dir = projectConfigDirectory()
+    return ["opencorvus.jsonc", "opencorvus.json"].some((f) => existsSync(path.join(dir, f)))
+  }
+
+  /**
+   * First-run initialization: if no project config file exists yet, snapshot the
+   * current resolved config (stripped of sensitive secrets) into
+   * `.opencorvus/opencorvus.jsonc`.  Subsequent starts are no-ops so user edits
+   * are never overwritten by defaults.
+   */
+  export async function ensureProjectConfigFile(): Promise<void> {
+    if (isProjectConfigFilePresent()) return
+    const cfg = await get()
+    // Strip API keys — they belong in user-level auth, not the project file
+    const safe = stripSecrets(cfg)
+    await update(safe)
+    log.info("config.ensureProjectConfigFile", {
+      path: projectConfigFile(),
+    })
+  }
+
+  function stripSecrets(cfg: Info): Info {
+    if (!cfg.provider) return cfg
+    return {
+      ...cfg,
+      provider: Object.fromEntries(
+        Object.entries(cfg.provider).map(([id, prov]) => {
+          if (!prov?.options?.apiKey) return [id, prov]
+          const { apiKey: _, ...rest } = prov.options
+          const options = Object.keys(rest).length > 0 ? rest : undefined
+          return [id, { ...prov, options } as Provider]
+        }),
+      ),
+    }
+  }
+
   export async function update(config: Info) {
     await fs.mkdir(projectConfigDirectory(), { recursive: true })
     await writeConfigFile(projectConfigFile(), config)

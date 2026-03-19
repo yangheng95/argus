@@ -380,13 +380,17 @@ async function classifyRequirementsWithLayers(
   const validLayerIds = new Set(blueprint.map((l) => l.id))
   const layerList = blueprint.map((l) => `- ${l.id}: ${l.name} — ${l.description}`).join("\n")
 
-  // Fast path: authoritative check_selector metadata — no LLM needed
+  // Fast path: authoritative check_selector metadata — no LLM needed.
+  // When a requirement already carries explicit selectors, the LLM classification
+  // only affects clustering/ordering (default rule_selectors are overridden anyway).
+  // Assigning a reasonable default avoids an unnecessary LLM round-trip.
   const verificationLayerId = blueprint.find((l) => isVerificationLayer(l.id, l.description))?.id
+  const defaultLayerId = blueprint.find((l) => !isVerificationLayer(l.id, l.description))?.id ?? blueprint[0]?.id
   const fastPaths = requirements.map((req): string | null => {
     const selectors = requirementSelectorMetadata(req).map(normalizeText)
     if (selectors.length === 0) return null
     if (selectors.every((s) => s.includes("test")) && verificationLayerId) return verificationLayerId
-    return null
+    return defaultLayerId ?? null
   })
 
   const needsLLM = requirements.map((req, i) => ({ req, i })).filter((_, i) => fastPaths[i] === null)
@@ -443,13 +447,16 @@ async function classifyRequirementsWithLLM(
   requirements: RequirementDraft[],
   input: Pick<GoalCompileInput, "sessionID" | "metadata">,
 ): Promise<GoalCategory[]> {
-  // Fast path: authoritative check_selector metadata — no LLM needed
+  // Fast path: authoritative check_selector metadata — no LLM needed.
+  // When a requirement already carries explicit selectors, the LLM classification
+  // only affects clustering/ordering (default rule_selectors are overridden anyway).
+  // Assigning a reasonable default avoids an unnecessary LLM round-trip.
   const fastPaths = requirements.map((req): GoalCategory | null => {
     const selectors = requirementSelectorMetadata(req).map(normalizeText)
     if (selectors.length === 0) return null
     if (selectors.every((s) => s.includes("test"))) return "verification"
     if (selectors.every((s) => s.includes("build") || s.includes("lint") || s.includes("typecheck"))) return "quality"
-    return null
+    return "feature"
   })
 
   const needsLLM = requirements.map((req, i) => ({ req, i })).filter((_, i) => fastPaths[i] === null)
@@ -826,6 +833,26 @@ async function compile(input: GoalCompileInput): Promise<GoalDraft> {
     }
     clusters[index]!.records.push(item)
   }
+  // Split oversized clusters: when a single cluster has >3 requirements,
+  // each requirement becomes its own goal to maintain granularity.
+  const MAX_REQUIREMENTS_PER_GOAL = 3
+  const expanded: typeof clusters = []
+  for (const cluster of clusters) {
+    if (cluster.records.length <= MAX_REQUIREMENTS_PER_GOAL) {
+      expanded.push(cluster)
+    } else {
+      for (const record of cluster.records) {
+        expanded.push({
+          id: record.goalID,
+          layerDef: cluster.layerDef,
+          records: [record],
+        })
+      }
+    }
+  }
+  clusters.length = 0
+  clusters.push(...expanded)
+
   const byLayerId = new Map<string, string[]>()
   for (const cluster of clusters) {
     const list = byLayerId.get(cluster.layerDef.id) ?? []

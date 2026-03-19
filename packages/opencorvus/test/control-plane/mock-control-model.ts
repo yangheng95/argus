@@ -386,8 +386,29 @@ class TestLanguageModel implements LanguageModelV2 {
     return this.input.modelId
   }
 
-  async doGenerate(): Promise<Awaited<ReturnType<LanguageModelV2["doGenerate"]>>> {
-    throw new Error("TestLanguageModel.doGenerate is not implemented")
+  async doGenerate(options: LanguageModelV2CallOptions): Promise<Awaited<ReturnType<LanguageModelV2["doGenerate"]>>> {
+    // Handle headless generateText calls (e.g. goal classification).
+    // Inspect the prompt to determine the expected response format.
+    const lastUser = [...(options.prompt)].reverse().find((p) => p.role === "user")
+    const userText = Array.isArray(lastUser?.content)
+      ? (lastUser.content as Array<{ type: string; text?: string }>)
+          .filter((p) => p.type === "text")
+          .map((p) => p.text ?? "")
+          .join("\n")
+      : typeof lastUser?.content === "string"
+        ? lastUser.content
+        : ""
+
+    // Goal classifier expects a JSON array of category/layer IDs.
+    const count = Math.max((userText.match(/^\[\d+\]/gm) ?? []).length, 1)
+    const labels = Array.from({ length: count }, () => "feature")
+
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify(labels) }],
+      finishReason: "stop" as const,
+      usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+      warnings: [],
+    }
   }
 
   async doStream(options: LanguageModelV2CallOptions) {

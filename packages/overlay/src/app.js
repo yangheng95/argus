@@ -173,6 +173,7 @@ const state = {
 const liveTextStreams = new Map();
 const reasoningVisibility = new Map();
 const reasoningHideTimers = new Map();
+let chatScrollPaused = false;
 const LIVE_TEXT_INTERVAL = 18;
 const LIVE_TEXT_MIN_CHUNK = 6;
 const LIVE_TEXT_MAX_CHUNK = 48;
@@ -431,6 +432,8 @@ const dom = {
   btnOpenCwd: $("#btnOpenCwd"),
   btnResetCwd: $("#btnResetCwd"),
   engineBar: $("#engineBar"),
+  codexModelPanel: $("#codexModelPanel"),
+  claudeCodeModelPanel: $("#claudeCodeModelPanel"),
   taskStatus: $("#taskStatus"),
   extensionsBadge: $("#extensionsBadge"),
   btnConfigToggle: $("#btnConfigToggle"),
@@ -635,7 +638,6 @@ const {
   clearProjectScopeData,
   enterEmptyWorkspace,
   enterTaskWorkspace,
-  enterSessionWorkspace,
 } = workspace;
 
 Object.assign(window, {
@@ -648,7 +650,6 @@ Object.assign(window, {
   clearProjectScopeData,
   enterEmptyWorkspace,
   enterTaskWorkspace,
-  enterSessionWorkspace,
 });
 
 let llmSaveTimer;
@@ -718,11 +719,6 @@ const AppLog = (() => {
 
   function log(level, service, message, extra) {
     const entry = add(level, service, message, extra);
-    const prefix = `[${entry.ts}] [${level.toUpperCase()}] [${service}]`;
-    if (level === "error") console.error(prefix, message, extra || "");
-    else if (level === "warn") console.warn(prefix, message, extra || "");
-    else if (level === "debug") console.debug(prefix, message, extra || "");
-    else console.log(prefix, message, extra || "");
     persist(entry);
     return entry;
   }
@@ -783,22 +779,6 @@ Object.assign(window, {
   isInteractionBusy,
   refreshInteractionAttention,
 });
-
-function interactionAlertHtml(interaction) {
-  return interactionAlertHtmlHelper(interaction);
-}
-
-function renderInteractions(interactions) {
-  return renderInteractionsHelper(interactions);
-}
-
-function showInteractionModal(interaction) {
-  return showInteractionModalHelper(interaction);
-}
-
-function dismissInteractionModal() {
-  return dismissInteractionModalHelper();
-}
 
 function sanitizeLocale(value) {
   const text = String(value || "").trim();
@@ -931,14 +911,6 @@ function evaluationVerdictLabel(status) {
   if (status === "accepted") return t("evaluation.verdict.accepted");
   if (status === "rejected") return t("evaluation.verdict.rejected");
   return t("evaluation.verdict.pending");
-}
-
-function checkResultLabel(status) {
-  if (status === "passed") return t("checks.pass");
-  if (status === "failed") return t("checks.fail");
-  if (status === "skipped") return t("checks.skip");
-  if (status === "off") return t("checks.off");
-  return t("checks.pending");
 }
 
 function toolStatusLabel(status) {
@@ -2295,8 +2267,12 @@ async function panelMessageStream(text, metadata, signal, workspaceEpoch = state
   }
 
   if (panelResultNavigates(result)) {
-    if (placeholder && result.message) {
-      streamMessagePart(placeholder.parts[0], result.message, "text", placeholder.parts[0].text || "");
+    const finalText1 = result.message || live;
+    if (placeholder && finalText1) {
+      streamMessagePart(placeholder.parts[0], finalText1, "text", placeholder.parts[0].text || "");
+      renderConversation();
+    } else if (placeholder && ["……", "...", t("chat.thinking")].includes(placeholder.parts[0]?.text)) {
+      streamMessagePart(placeholder.parts[0], t("chat.task_navigated"), "text", placeholder.parts[0].text || "");
       renderConversation();
     }
     if (result && typeof result === "object") result._request = text;
@@ -2305,8 +2281,12 @@ async function panelMessageStream(text, metadata, signal, workspaceEpoch = state
   }
 
   // Finalize the streamed placeholder, then apply side-effects
-  if (placeholder && result.message) {
-    streamMessagePart(placeholder.parts[0], result.message, "text", placeholder.parts[0].text || "");
+  const finalText = result.message || live;
+  if (placeholder && finalText) {
+    streamMessagePart(placeholder.parts[0], finalText, "text", placeholder.parts[0].text || "");
+    renderConversation();
+  } else if (placeholder && ["……", "...", t("chat.thinking")].includes(placeholder.parts[0]?.text)) {
+    placeholder.parts[0].text = "";
     renderConversation();
   }
 
@@ -2545,8 +2525,14 @@ function renderPromptCatalog() {
   renderConfigToggleMeta();
   if (!dom.promptBody) return;
   syncPromptDrafts();
+
+  // Clone node to remove event listeners before re-rendering
+  const newBody = dom.promptBody.cloneNode(false);
+
   if (!state.promptEntries.length) {
-    dom.promptBody.innerHTML = `<div class="empty-hint">${escapeHtml(t("prompt.none"))}</div>`;
+    newBody.innerHTML = `<div class="empty-hint">${escapeHtml(t("prompt.none"))}</div>`;
+    dom.promptBody.parentNode?.replaceChild(newBody, dom.promptBody);
+    dom.promptBody = newBody;
     return;
   }
   const activeStatuses = ["running", "planning", "evaluating", "queued"];
@@ -2554,7 +2540,7 @@ function renderPromptCatalog() {
   const activeBanner = taskActive
     ? `<div class="config-status-box" data-status="warn" style="margin-bottom:var(--sp-2)">${escapeHtml(t("prompt.active_task_notice"))}</div>`
     : "";
-  dom.promptBody.innerHTML = activeBanner + `<div class="prompt-grid">${state.promptEntries
+  newBody.innerHTML = activeBanner + `<div class="prompt-grid">${state.promptEntries
     .map((entry) => {
       const entryID = promptEntryID(entry);
       const value = promptEntryValue(entry);
@@ -2597,6 +2583,8 @@ function renderPromptCatalog() {
       </div>`;
     })
     .join("")}</div>`;
+  dom.promptBody.parentNode?.replaceChild(newBody, dom.promptBody);
+  dom.promptBody = newBody;
 }
 
 function applyPromptEntries(items) {
@@ -3736,6 +3724,7 @@ function renderVersions(coreVersion) {
     dom.chatVersion.textContent = version;
     dom.chatVersion.title = version;
   }
+
   if (dom.chatAuthor) {
     const author = t("version.author");
     dom.chatAuthor.textContent = author;
@@ -3861,8 +3850,17 @@ function renderExecutor(options = {}) {
     button.dataset.active = value === state.executor ? "true" : "false";
     button.dataset.available = selectable ? "true" : "false";
     button.disabled = !selectable;
-    button.title = executorTitle(value);
+    const model = executorCurrentModel(value);
+    const titleLines = [executorTitle(value)];
+    if (model) titleLines.push(`Model: ${model}`);
+    button.title = titleLines.join("\n");
     key.push(button.textContent?.trim() || "");
+    // Sync caret button state
+    const caret = dom.engineBar?.querySelector(`[data-executor-caret="${value}"]`);
+    if (caret) {
+      caret.disabled = !selectable;
+      caret.title = model ? `Model: ${model}` : t("model_picker.select");
+    }
   }
   const next = key.join("|");
   if (options.measure === true || state._executorMeasureKey !== next) {
@@ -3878,6 +3876,77 @@ function syncExecutorWidth() {
   const width = buttons.reduce((max, button) => Math.max(max, Math.ceil(button.getBoundingClientRect().width)), 0);
   if (width > 0) {
     dom.engineBar.style.setProperty("--engine-chip-width", `${width}px`);
+  }
+}
+
+// ── Executor Model Dropdowns ──
+
+const EXECUTOR_KNOWN_MODELS = {
+  "codex": [
+    "gpt-5.4",
+    "gpt-5.4-mini",
+    "gpt-5.3-codex",
+    "gpt-5.2-codex",
+    "gpt-5.2",
+    "gpt-5.1-codex-max",
+    "gpt-5.1-codex-mini",
+  ],
+  "claude-code": [
+    "claude-sonnet-4-6",
+    "claude-opus-4-6",
+    "claude-haiku-4-5-20251001",
+  ],
+};
+
+function executorModelPanel(executorID) {
+  if (executorID === "codex") return dom.codexModelPanel;
+  if (executorID === "claude-code") return dom.claudeCodeModelPanel;
+  return null;
+}
+
+function executorCurrentModel(executorID) {
+  const info = executorInfo(executorID);
+  return info?.model || "";
+}
+
+function renderExecutorModelPanel(executorID) {
+  const panel = executorModelPanel(executorID);
+  if (!panel) return;
+  const current = executorCurrentModel(executorID);
+  const known = EXECUTOR_KNOWN_MODELS[executorID] || [];
+  const currentLabel = current
+    ? `<div class="engine-model-current">${escapeHtml(t("executor.current_model"))}: <strong>${escapeHtml(current)}</strong></div>`
+    : "";
+  const items = known.map((mid) => {
+    const isActive = mid === current;
+    return `<button type="button" class="engine-model-item" data-executor-model="${escapeHtml(mid)}" data-active="${isActive}">${escapeHtml(mid)}</button>`;
+  }).join("");
+  panel.innerHTML = currentLabel + items;
+}
+
+function openExecutorModelPanel(executorID) {
+  closeAllExecutorModelPanels();
+  const panel = executorModelPanel(executorID);
+  if (!panel) return;
+  renderExecutorModelPanel(executorID);
+  panel.hidden = false;
+}
+
+function closeAllExecutorModelPanels() {
+  if (dom.codexModelPanel) dom.codexModelPanel.hidden = true;
+  if (dom.claudeCodeModelPanel) dom.claudeCodeModelPanel.hidden = true;
+}
+
+async function setExecutorModel(executorID, model) {
+  try {
+    await apiJson(`executor/${encodeURIComponent(executorID)}/model`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ model }),
+    });
+    await loadExecutors();
+  } catch (e) {
+    AppLog.error("ui", "Failed to set executor model", { error: String(e), executorID, model });
   }
 }
 
@@ -6086,11 +6155,17 @@ function changeRowsHtml(attr = "data-change-index") {
 function renderChanges() {
   if (!dom.changesBody || !dom.changesBadge) return;
   const files = state.changes;
+
+  // Clone node to remove event listeners before re-rendering
+  const newBody = dom.changesBody.cloneNode(false);
+
   if (!files.length) {
     dom.changesBadge.textContent = "";
     delete dom.changesBadge.dataset.tone;
     const hint = state.selectedTaskID ? t("files.unavailable") : t("files.select_target");
-    dom.changesBody.innerHTML = `<p class="empty-hint">${escapeHtml(hint)}</p>`;
+    newBody.innerHTML = `<p class="empty-hint">${escapeHtml(hint)}</p>`;
+    dom.changesBody.parentNode?.replaceChild(newBody, dom.changesBody);
+    dom.changesBody = newBody;
     syncSectionPhases();
     return;
   }
@@ -6099,7 +6174,7 @@ function renderChanges() {
   const deletions = files.reduce((sum, item) => sum + item.deletions, 0);
   dom.changesBadge.textContent = String(files.length);
   dom.changesBadge.dataset.tone = "accent";
-  dom.changesBody.innerHTML = `
+  newBody.innerHTML = `
     <div class="changes-summary">
       <span>${tc("files.changed", files.length)}</span>
       <span class="changes-total">
@@ -6109,6 +6184,8 @@ function renderChanges() {
     </div>
     <div class="changes-list">${changeRowsHtml()}</div>
   `;
+  dom.changesBody.parentNode?.replaceChild(newBody, dom.changesBody);
+  dom.changesBody = newBody;
   syncSectionPhases();
 }
 
@@ -7189,16 +7266,6 @@ function signGroup(group) {
 function boardArtifact(board, label) {
   const list = board?.artifacts || [];
   return list.find((item) => item.label === label);
-}
-
-function hashText(value) {
-  let hash = 2166136261;
-  const text = String(value || "");
-  for (let i = 0; i < text.length; i += 1) {
-    hash ^= text.charCodeAt(i);
-    hash = Math.imul(hash, 16777619);
-  }
-  return (hash >>> 0).toString(36);
 }
 
 function syntheticTextMessage(role, time, text) {
@@ -8530,9 +8597,9 @@ function renderConversation() {
 
   state._renderedGroupKey = targetKey;
   syncSectionPhases();
-  if (wasAtBottom) {
+  if (wasAtBottom && !chatScrollPaused) {
     requestAnimationFrame(() => {
-      el.scrollTop = el.scrollHeight;
+      if (!chatScrollPaused) el.scrollTop = el.scrollHeight;
     });
   }
 }
@@ -8560,7 +8627,14 @@ function renderTurn(group, sig = "") {
       bodyHtml += renderPart(part, role);
     }
   }
-  if (!bodyHtml.trim()) return null;
+  if (!bodyHtml.trim()) {
+    const firstKind = messages[0]?.info?.kind;
+    if (role === "assistant" && (firstKind === "task" || firstKind === "created")) {
+      bodyHtml = `<div class="msg-text">${escapeHtml(t("chat.task_navigated"))}</div>`;
+    } else {
+      return null;
+    }
+  }
 
   const el = document.createElement("article");
   el.className = "turn msg";
@@ -8849,6 +8923,11 @@ dom.chatSend.addEventListener("click", async (e) => {
 });
 dom.btnChatCopyAll?.addEventListener("click", () => copyChatConversation());
 
+dom.chatScroll?.addEventListener("scroll", () => {
+  const el = dom.chatScroll;
+  chatScrollPaused = el.scrollHeight - el.scrollTop - el.clientHeight >= 80;
+}, { passive: true });
+
 // Terminate button: cancel the current task and all its runs/sessions
 dom.btnTerminateRun?.addEventListener("click", async () => {
   if (!state.selectedTaskID) return;
@@ -9026,6 +9105,8 @@ dom.changesBody?.addEventListener("click", (e) => {
 });
 
 dom.engineBar.addEventListener("click", async (event) => {
+  // Skip if clicking on model caret, model panel items, or within model panels
+  if (eventClosest(event, "[data-executor-caret]") || eventClosest(event, "[data-executor-model]") || eventClosest(event, ".engine-model-panel")) return;
   const button = eventClosest(event, "[data-executor]");
   if (!button || button.disabled) return;
   const executor = button.dataset.executor || "opencode";
@@ -9522,6 +9603,45 @@ dom.llmProvider?.addEventListener("change", () => {
 dom.llmModel?.addEventListener("change", () => {
   renderLlmSummary();
   queueLlmSync(180);
+});
+
+// Executor model caret buttons
+dom.engineBar?.addEventListener("click", async (event) => {
+  const caret = eventClosest(event, "[data-executor-caret]");
+  if (caret) {
+    event.stopPropagation();
+    const executorID = caret.dataset.executorCaret;
+    const panel = executorModelPanel(executorID);
+    if (!panel) return;
+    if (panel.hidden) {
+      openExecutorModelPanel(executorID);
+    } else {
+      closeAllExecutorModelPanels();
+    }
+    return;
+  }
+  const modelItem = eventClosest(event, "[data-executor-model]");
+  if (modelItem) {
+    event.stopPropagation();
+    const model = modelItem.dataset.executorModel;
+    const panel = modelItem.closest(".engine-model-panel");
+    const wrap = panel?.closest("[data-executor-wrap]");
+    const executorID = wrap?.dataset.executorWrap;
+    if (executorID && model) {
+      closeAllExecutorModelPanels();
+      await setExecutorModel(executorID, model);
+    }
+    return;
+  }
+});
+
+document.addEventListener("click", (e) => {
+  if (e.target?.closest?.("[data-executor-caret]") || e.target?.closest?.(".engine-model-panel")) return;
+  closeAllExecutorModelPanels();
+});
+
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") closeAllExecutorModelPanels();
 });
 
 dom.llmApiKey?.addEventListener("input", () => {
@@ -10738,7 +10858,7 @@ async function loadConfigInfo() {
     applyPromptEntries(prompts);
 
     populateProviderSelect(config, catalog);
-    if (dom.cfgAvailableProviders) {
+      if (dom.cfgAvailableProviders) {
       const total = Array.isArray(catalog?.all) ? catalog.all.length : 0;
       const connected = Array.isArray(catalog?.connected) ? catalog.connected.length : 0;
       const text = t("llm.available_count", { total, connected });
@@ -10832,7 +10952,6 @@ async function init() {
 
 init().catch((err) => {
   AppLog.error("init", "fatal initialization error", { error: String(err) });
-  console.error("[OpenCorvus] init() failed:", err);
 });
 
 window.addEventListener("resize", renderScale);

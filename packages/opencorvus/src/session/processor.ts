@@ -290,6 +290,8 @@ export namespace SessionProcessor {
                   SessionSummary.summarize({
                     sessionID: input.sessionID,
                     messageID: input.assistantMessage.parentID,
+                  }).catch(() => {
+                    // Non-critical: session summary is best-effort background work
                   })
                   if (await SessionCompaction.isOverflow({ tokens: usage.tokens, model: input.model })) {
                     needsCompaction = true

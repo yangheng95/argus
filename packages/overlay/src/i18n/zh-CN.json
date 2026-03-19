@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "zh-CN",
-    "panel_revision": "ac90d1ef4bf64fde"
+    "panel_revision": "91226897afceaa2e"
   },
   "brand.guide_kicker": "快速说明",
   "brand.guide_positioning_body": "这不是一个装饰性浮层，而是任务驾驶舱：左边选择任务，中间推进执行，右边盯 spec、plan、评估和文件变更，防止 agent 一路跑偏。",
@@ -75,6 +75,7 @@
   "chat.stop_title": "停止当前生成并终止任务执行。",
   "chat.interrupted_notice": "已中断",
   "chat.thinking": "思考中",
+  "chat.task_navigated": "好的",
   "chat.tip": "Enter 发送 · Shift+Enter 换行",
   "chat.title": "任务",
   "budget.empty": "选择一个任务后再编辑运行 budget。",
@@ -241,6 +242,8 @@
   "evaluation.verdict.rejected": "拒绝",
   "executor.detected_not_selectable": "已检测到，但不可选",
   "executor.group": "执行器",
+  "model_picker.select": "选择模型",
+  "executor.current_model": "当前",
   "executor.manual_install_auth_required": "需手动安装并完成 auth 后才可使用",
   "executor.not_detected": "未检测到",
   "executor.version": "版本 {{version}}",
