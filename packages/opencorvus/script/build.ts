@@ -32,8 +32,6 @@ const baselineFlag = process.argv.includes("--baseline")
 const muslOnly = process.argv.includes("--musl-only")
 const noClean = process.argv.includes("--no-clean")
 const binaryOnly = process.argv.includes("--binary-only")
-const onefileFlag = process.argv.includes("--onefile") || process.env.OPENCORVUS_ONEFILE === "1"
-
 const embeddedEnv = (() => {
   const keys = (process.env.OPENCORVUS_EMBED_ENV_KEYS ?? "")
     .split(",")
@@ -74,10 +72,6 @@ if (Object.keys(embeddedEnv).length > 0) {
   console.log(`embedding env keys: ${Object.keys(embeddedEnv).join(", ")}`)
 }
 const embeddedEnvDefine = Object.keys(embeddedEnv).length > 0 ? JSON.stringify(embeddedEnv) : "undefined"
-if (onefileFlag) {
-  console.warn("onefile mode: overlay UI will be bundled as sidecar files in dist/*/ui/")
-}
-
 const allTargets: {
   os: string
   arch: "arm64" | "x64"
@@ -148,20 +142,6 @@ const runtimeName = (item: (typeof allTargets)[number]) =>
     .filter(Boolean)
     .join("-")
 type Target = (typeof allTargets)[number]
-
-async function installOverlay(_item: Target, name: string) {
-  const overlayDir = path.resolve(dir, "../overlay/src")
-  const destDir = path.join(dir, "dist", name, "ui")
-  const ASSET_EXTS = new Set([".html", ".js", ".css", ".png", ".svg", ".ico", ".json", ".woff", ".woff2"])
-  if (!fs.existsSync(path.join(overlayDir, "index.html"))) {
-    console.log(`  overlay: skipping (no frontend assets in ${overlayDir})`)
-    return
-  }
-  const allFiles = fs.readdirSync(overlayDir).filter((f) => ASSET_EXTS.has(path.extname(f)))
-  await fs.promises.mkdir(destDir, { recursive: true })
-  await Promise.all(allFiles.map((f) => fs.promises.copyFile(path.join(overlayDir, f), path.join(destDir, f))))
-  console.log(`  overlay: installed ${allFiles.length} UI files`)
-}
 
 // Dev and CI builds only need a native binary; full matrix is for release packaging.
 const single = singleFlag || (!allFlag && !Script.release)
@@ -251,7 +231,6 @@ for (const item of targets) {
   })
 
   await $`rm -rf ./dist/${name}/tui`
-  await installOverlay(item, name)
   if (binaryOnly) {
     const files = await fs.promises.readdir(path.join(dir, "dist", name))
     await Promise.all(

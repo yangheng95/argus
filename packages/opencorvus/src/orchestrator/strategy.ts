@@ -76,8 +76,14 @@ export function decideRetryOrReplan(
   }
 
   if (classification === "environment") {
-    log.info("failure classified as environment -> fail", { classification, taskID: task.id })
-    return { action: "fail", summary, retryContext: ctx }
+    // Environment failures (missing dep, broken tool) are often fixable by the executor.
+    // Replan so the planner gets the evaluator's guidance on what to fix.
+    log.info("failure classified as environment -> replan", { classification, taskID: task.id })
+    const replans = findPlans(task.id).length - 1
+    if (replans >= limits.maxReplans) {
+      return { action: "fail", summary, retryContext: ctx }
+    }
+    return { action: "replan", summary, analysis }
   }
 
   if (ctx.changedFiles?.length === 0) {

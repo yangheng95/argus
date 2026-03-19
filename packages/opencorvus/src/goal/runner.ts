@@ -762,7 +762,7 @@ export async function evaluateTask(input: {
   // Override the check-based result with the LLM judge's verdict so the orchestrator
   // can accept/retry correctly instead of always hard-failing.
   const noChecksRan = result.status === "failed" && result.summary === "No blocking evaluator checks ran."
-  const finalResult = noChecksRan
+  let finalResult = noChecksRan
     ? {
         ...result,
         status: analyzed.analysis.verdict === "accepted" ? ("passed" as const) : ("failed" as const),
@@ -770,6 +770,51 @@ export async function evaluateTask(input: {
         summary: analyzed.analysis.summary ?? result.summary,
       }
     : result
+
+  // Hard mechanical delivery acceptance check.
+  // If the task metadata includes `delivery_verify_cmd`, run it after the LLM analysis.
+  // A non-zero exit code unconditionally overrides any LLM "accepted" verdict — preventing
+  // the LLM from rationalizing away failures in required acceptance commands.
+  const deliveryVerifyCmd = typeof input.task.metadata?.delivery_verify_cmd === "string"
+    ? input.task.metadata.delivery_verify_cmd
+    : null
+  if (deliveryVerifyCmd && finalResult.status === "passed") {
+    const projectDir = Filesystem.resolve(Instance.directory)
+    const isWin = process.platform === "win32"
+    const shellArgs = isWin ? ["cmd", "/c", deliveryVerifyCmd] : ["bash", "-c", deliveryVerifyCmd]
+    try {
+      const proc = Bun.spawn(shellArgs, { cwd: projectDir, stdout: "pipe", stderr: "pipe" })
+      const [stdout, stderr, exitCode] = await Promise.all([
+        new Response(proc.stdout).text(),
+        new Response(proc.stderr).text(),
+        proc.exited,
+      ])
+      if (exitCode !== 0) {
+        const output = (stderr || stdout).slice(0, 800)
+        finalResult = {
+          ...finalResult,
+          status: "failed" as const,
+          verdict: "rejected" as const,
+          summary: `Delivery acceptance command failed (exit ${exitCode}): ${output}`,
+        }
+        analyzed.analysis = {
+          ...analyzed.analysis,
+          verdict: "rejected" as const,
+          classification: "evaluation" as const,
+          summary: `Delivery acceptance command failed (exit ${exitCode}). Output: ${output}`,
+          replan_guidance: {
+            root_cause: `Delivery command '${deliveryVerifyCmd}' exited with code ${exitCode}`,
+            what_failed: output,
+            suggested_strategy: "Fix the errors reported above before the next attempt. Check project dependencies, TypeScript configuration, and test setup.",
+            avoid_approaches: [],
+          },
+        }
+      }
+    } catch (err) {
+      log.warn("delivery_verify_cmd failed to execute", { cmd: deliveryVerifyCmd, err })
+    }
+  }
+
   return { result: finalResult, ...analyzed }
 }
 

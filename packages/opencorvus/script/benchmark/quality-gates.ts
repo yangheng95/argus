@@ -70,8 +70,9 @@ export async function auditWorkspace(input: {
   const nonSourceCount = Math.max(0, files.length - sourceFiles.length)
   const allowedDocs = /\b(add|create|write|update|document)\b[\s\S]{0,40}\b(readme|documentation|docs?)\b/i.test(requestText)
   const scopeRelevantFiles = input.changedFiles && input.changedFiles.length > 0 ? dedupeFiles(input.changedFiles) : []
-  const unmappedFiles = input.moduleBlocks && input.moduleBlocks.length > 0 && scopeRelevantFiles.length > 0
-    ? scopeRelevantFiles.filter((file) => !belongsToAnyBlock(file, input.moduleBlocks!))
+  const nonConfigScopeFiles = scopeRelevantFiles.filter((f) => !CONFIG_BASENAMES.has(path.basename(f.replace(/\\/g, "/"))))
+  const unmappedFiles = input.moduleBlocks && input.moduleBlocks.length > 0 && nonConfigScopeFiles.length > 0
+    ? nonConfigScopeFiles.filter((file) => !belongsToAnyBlock(file, input.moduleBlocks!))
     : []
 
   return ArtifactAudit.parse({
@@ -124,14 +125,18 @@ export async function deriveRunMetrics(input: {
   const totalChecks = checkStatuses.length
   const noopCycles = longestVerificationStreak(commandSummaries)
   const repeatedReasoning = repeatedSimilarity(commandSummaries)
-  const mappedChangedCount = changedFiles.length > 0 && input.moduleBlocks && input.moduleBlocks.length > 0
-    ? changedFiles.filter((file) => belongsToAnyBlock(file, input.moduleBlocks!)).length
+  // Exclude config infrastructure files from scope drift — modifying tsconfig.json,
+  // package.json, etc. is often necessary for the project to function (e.g., adding
+  // @types/bun to make `bunx tsc --noEmit` pass) and should not count as scope drift.
+  const scopeFiles = changedFiles.filter((f) => !CONFIG_BASENAMES.has(path.basename(f.replace(/\\/g, "/"))))
+  const mappedChangedCount = scopeFiles.length > 0 && input.moduleBlocks && input.moduleBlocks.length > 0
+    ? scopeFiles.filter((file) => belongsToAnyBlock(file, input.moduleBlocks!)).length
     : 0
-  const scopeDriftScore = changedFiles.length > 0 && input.moduleBlocks && input.moduleBlocks.length > 0
-    ? Math.max(0, 1 - mappedChangedCount / changedFiles.length)
+  const scopeDriftScore = scopeFiles.length > 0 && input.moduleBlocks && input.moduleBlocks.length > 0
+    ? Math.max(0, 1 - mappedChangedCount / scopeFiles.length)
     : 0
-  const traceability = changedFiles.length > 0 && input.moduleBlocks && input.moduleBlocks.length > 0
-    ? mappedChangedCount / changedFiles.length
+  const traceability = scopeFiles.length > 0 && input.moduleBlocks && input.moduleBlocks.length > 0
+    ? mappedChangedCount / scopeFiles.length
     : files.length > 0 ? 1 : 0
   return RunMetrics.parse({
     meaningful_change_gap_ms: latestChangeAt > 0 ? Math.max(0, input.completedAt - latestChangeAt) : input.completedAt,

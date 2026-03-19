@@ -416,6 +416,7 @@ try {
         },
       },
       goals: TASK_GOALS,
+      ...(DELIVERY_VERIFY_CMD ? { metadata: { delivery_verify_cmd: DELIVERY_VERIFY_CMD } } : {}),
     }),
   })
     .then((res) => res.json())
