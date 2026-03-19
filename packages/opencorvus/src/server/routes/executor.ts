@@ -1,5 +1,5 @@
 import { Hono } from "hono"
-import { describeRoute, resolver } from "hono-openapi"
+import { describeRoute, resolver, validator } from "hono-openapi"
 import z from "zod"
 import { ExecutorBootstrap } from "@/executor/bootstrap"
 import { ToolAdapterRegistry, protocolInfo } from "@/executor/protocol"
@@ -28,10 +28,22 @@ const ExecutorInfo = z.object({
   tools: ExecutorToolInfo.array(),
   detail: z.string(),
   version: z.string().optional(),
+  model: z.string().optional(),
 })
 
+const EXECUTOR_MODEL_ENV: Record<string, string> = {
+  codex: "OPENCORVUS_EXECUTOR_CODEX_MODEL",
+  "claude-code": "OPENCORVUS_EXECUTOR_CLAUDE_MODEL",
+}
+
+function executorModel(id: string): string {
+  const envKey = EXECUTOR_MODEL_ENV[id]
+  return envKey ? (process.env[envKey] || "") : ""
+}
+
 export const ExecutorRoutes = lazy(() =>
-  new Hono().get(
+  new Hono()
+  .get(
     "/",
     describeRoute({
       summary: "List executors",
@@ -105,6 +117,7 @@ export const ExecutorRoutes = lazy(() =>
           tools: tools.codex,
           detail: found.codex.detail,
           version: found.codex.version,
+          model: executorModel("codex"),
         },
         {
           id: "claude-code",
@@ -119,8 +132,42 @@ export const ExecutorRoutes = lazy(() =>
           tools: tools.claude,
           detail: found["claude-code"].detail,
           version: found["claude-code"].version,
+          model: executorModel("claude-code"),
         },
       ])
+    },
+  )
+  .patch(
+    "/:executorID/model",
+    describeRoute({
+      summary: "Set executor model",
+      description: "Set the model used by an external executor (codex or claude-code).",
+      operationId: "executor.setModel",
+      responses: {
+        200: {
+          description: "Model updated",
+          content: {
+            "application/json": {
+              schema: resolver(z.object({ model: z.string() })),
+            },
+          },
+        },
+      },
+    }),
+    validator("param", z.object({ executorID: z.enum(["codex", "claude-code"]) })),
+    validator("json", z.object({ model: z.string() })),
+    async (c) => {
+      const { executorID } = c.req.valid("param")
+      const { model } = c.req.valid("json")
+      const envKey = EXECUTOR_MODEL_ENV[executorID]
+      if (envKey) {
+        if (model) {
+          process.env[envKey] = model
+        } else {
+          delete process.env[envKey]
+        }
+      }
+      return c.json({ model: executorModel(executorID) })
     },
   ),
 )

@@ -88,6 +88,7 @@ export const TimelineMessage = z.object({
     surface: z.string(),
     taskID: z.string().optional(),
     sessionID: z.string().optional(),
+    kind: z.string().optional(),
     time: z.object({
       created: z.number(),
       updated: z.number(),
@@ -227,6 +228,7 @@ function view(row: typeof ControlMessageTable.$inferSelect) {
           ...(item.filename ? { filename: item.filename } : {}),
         })),
       ]
+  const kind = metadata && typeof metadata.kind === "string" ? metadata.kind : undefined
   return {
     info: {
       id: row.id,
@@ -235,6 +237,7 @@ function view(row: typeof ControlMessageTable.$inferSelect) {
       surface: row.surface,
       taskID: row.task_id ?? undefined,
       sessionID: row.session_id ?? undefined,
+      ...(kind ? { kind } : {}),
       time: {
         created: row.time_created,
         updated: row.time_updated,

@@ -282,8 +282,39 @@ function storedDiffs(delivery: DeliveryRow) {
 
 function planPrompt(plan: PlanRow, run: RunRow) {
   const override = typeof run.metadata?.prompt_override === "string" ? run.metadata.prompt_override.trim() : ""
-  if (!override) return plan.prompt
-  return [plan.prompt, "## Run Context", override].join("\n\n")
+  if (override) return [plan.prompt, "## Run Context", override].join("\n\n")
+
+  // For replan runs, inject failure context from the previous evaluation
+  // so the executor knows what went wrong and what to fix.
+  if (run.metadata?.strategy === "replan" && run.metadata?.replan_context) {
+    const ctx = run.metadata.replan_context as {
+      failureAnalysis?: { classification?: string; summary?: string; rootCause?: string; suggestedStrategy?: string; avoidApproaches?: string[] }
+      previousGoalStatuses?: Array<{ description?: string; status?: string; evidence?: string }>
+    }
+    const sections: string[] = []
+    if (ctx.failureAnalysis) {
+      const fa = ctx.failureAnalysis
+      sections.push(
+        "## Previous Attempt Failed",
+        fa.summary ?? "",
+        fa.rootCause ? `**Root cause:** ${fa.rootCause}` : "",
+        fa.suggestedStrategy ? `**Strategy:** ${fa.suggestedStrategy}` : "",
+      )
+      if (fa.avoidApproaches && fa.avoidApproaches.length > 0) {
+        sections.push("**Avoid:**\n" + fa.avoidApproaches.map((a) => `- ${a}`).join("\n"))
+      }
+    }
+    if (ctx.previousGoalStatuses && ctx.previousGoalStatuses.length > 0) {
+      sections.push(
+        "**Previous goal results:**",
+        ...ctx.previousGoalStatuses.map((g) => `- ${g.description}: **${g.status}** — ${g.evidence ?? ""}`),
+      )
+    }
+    const context = sections.filter(Boolean).join("\n")
+    if (context) return [plan.prompt, "## Replan Context", context].join("\n\n")
+  }
+
+  return plan.prompt
 }
 
 function evaluationTimedOut(time: number | null | undefined) {

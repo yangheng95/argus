@@ -79,6 +79,8 @@ export namespace MemorySearch {
     kinds?: Memory.Kind[]
     sources?: Memory.Source[]
   }) {
+    // Checkpoint WAL before FTS to prevent slow queries when WAL is large
+    Database.checkpoint()
     const nowMs = Date.now()
     const candidates = Math.min(200, input.limit * 6)
     const rows = Database.use((db) =>

@@ -411,6 +411,20 @@ function buildUserPrompt(
 ): string {
   const sections = [`# Task\n\nTitle: ${input.title}\n\nRequest:\n${input.request}`]
 
+  const minReqs = estimateMinimumRequirements(input.request)
+  if (minReqs >= 6) {
+    sections.push(
+      [
+        "# Large PRD Guidance",
+        "",
+        `This is a large, multi-feature request. You MUST generate at least ${minReqs} separate requirements.`,
+        "Each numbered sub-feature (e.g. 10.1.1, 10.1.2) in the PRD should map to its own requirement.",
+        "Do NOT collapse multiple sub-features into a single broad requirement.",
+        "Each requirement must be specific enough that a single coding session can implement and verify it.",
+      ].join("\n"),
+    )
+  }
+
   if (retryContext) {
     sections.push(
       [
@@ -780,7 +794,7 @@ export function validateSpecQuality(
   let score = 0
   const reasons: string[] = []
   const largeRequest = isLargeSpecRequest(request)
-  const minimumRequirements = largeRequest ? 4 : 2
+  const minimumRequirements = estimateMinimumRequirements(request)
   const requirementAcceptances = spec.requirements.reduce((count, item) => count + item.acceptance.length, 0)
 
   if (toolCallCount >= 5) {
@@ -850,6 +864,16 @@ function isLargeSpecRequest(request: string) {
   const bullets = lines.filter((line) => /^[-*\u2022]|^\d+[.)\u3001]/.test(line)).length
   const headings = lines.filter((line) => /^#{1,6}\s+/.test(line)).length
   return request.length >= 1200 || bullets >= 8 || headings >= 3
+}
+
+function estimateMinimumRequirements(request: string): number {
+  const lines = request.split(/\r?\n/).map((l) => l.trim()).filter(Boolean)
+  // Count hierarchical numbered sub-sections (e.g., "10.1.1 Feature Name")
+  const subSections = lines.filter((l) => /^\d+\.\d+\.\d+\s/.test(l)).length
+  if (subSections >= 10) return Math.max(8, Math.ceil(subSections / 2))
+  if (subSections >= 5) return Math.max(6, subSections)
+  if (isLargeSpecRequest(request)) return 4
+  return 2
 }
 
 function parseRequirements(text: string, defaultEvidence: string[]): Requirement[] {

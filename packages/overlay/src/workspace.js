@@ -107,10 +107,6 @@
       deps.renderTaskList();
     }
 
-    function enterSessionWorkspace(sessionID, options = {}) {
-      throw new Error("Overlay no longer supports session workspaces; use tasks instead.");
-    }
-
     return {
       workspaceMode,
       renderWorkspaceState,
@@ -121,7 +117,6 @@
       clearProjectScopeData,
       enterEmptyWorkspace,
       enterTaskWorkspace,
-      enterSessionWorkspace,
     };
   }
 

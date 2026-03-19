@@ -309,11 +309,27 @@ function extractGoalText(text: string, goalCount: number): GoalJudgmentType {
  * 2. Load that exact model and language surface
  * 3. If that fails, surface the evaluator failure directly
  */
+function normalizeClassification(raw: unknown): string {
+  if (typeof raw !== "string" || !raw.trim()) return "evaluation"
+  const value = raw.trim().toLowerCase().replace(/[^a-z]/g, "")
+  const VALID = new Set(["transient", "environment", "input", "permission", "evaluation", "strategy", "unknown"])
+  if (VALID.has(value)) return value
+  // Fuzzy match: extract first valid classification word from LLM output
+  for (const valid of VALID) {
+    if (value.includes(valid)) return valid
+  }
+  return "evaluation"
+}
+
 function normalizeAnalysis(input: unknown, goalCount: number): GoalJudgmentType {
   const obj = input && typeof input === "object" ? { ...(input as Record<string, unknown>) } : {}
 
-  if (!obj.classification) obj.classification = "evaluation"
-  if (!obj.verdict) obj.verdict = "rejected"
+  obj.classification = normalizeClassification(obj.classification)
+  const rawVerdict = typeof obj.verdict === "string" ? obj.verdict.trim().toLowerCase() : ""
+  obj.verdict = rawVerdict.includes("accepted") ? "accepted"
+    : rawVerdict.includes("rejected") ? "rejected"
+    : rawVerdict.includes("inconclusive") ? "inconclusive"
+    : "rejected"
   if (!obj.summary) obj.summary = "Evaluation analysis was truncated"
   if (!Array.isArray(obj.goal_statuses)) obj.goal_statuses = []
   if (!("replan_guidance" in obj)) obj.replan_guidance = undefined
@@ -464,7 +480,12 @@ function buildUserPrompt(
         `⚠️ SCOPE: You are evaluating ONE goal from a multi-goal task. Other goals run in separate sessions. ` +
         `Do NOT assess whether the full task requirements are complete — only evaluate whether the single goal listed in # Goals is satisfied.\n\n` +
         `Full request (background context only):\n${input.task.request}`
-      : `# Task\n\nTitle: ${input.task.title}\nRequest: ${input.task.request}`,
+      : `# Task (FINAL DELIVERY MODE)\n\nTitle: ${input.task.title}\n\n` +
+        `⚠️ FINAL DELIVERY: You are evaluating the COMPLETE delivery of all goals together. ` +
+        `You MUST execute Phase 2.5 (PRD Completeness Check) — verify the project is a working, ` +
+        `runnable application that faithfully implements the original task request, not just a ` +
+        `collection of passing tests.\n\n` +
+        `Request:\n${input.task.request}`,
   )
 
   // Goals — with verification guidance per goal
@@ -608,6 +629,19 @@ You must determine:
 - The concrete root cause of any failure
 - Whether conventions were violated in a task-relevant way
 
+### Phase 2.5: PRD COMPLETENESS CHECK (final delivery mode only)
+
+**Skip this phase entirely when evaluating a single goal in per-goal mode.**
+
+When evaluating the COMPLETE delivery (all goals together), you MUST verify the project holistically against the original task request BEFORE outputting your verdict:
+
+1. **Entry point**: Use \`list_directory\` and \`find_files\` to verify the project has a runnable entry file (e.g. src/app.ts, src/index.ts, main.ts). If the task describes a web app/API/server, verify the entry file actually sets up an HTTP server with routes.
+2. **Structural coverage**: Compare the delivered file tree against the task request. If the task asks for "an app with auth, CRUD, search, and timeline", verify there are route/handler files for each, not just models and services.
+3. **Startup test**: If the task describes a runnable application (web app, API server, CLI tool), use \`run_command\` to attempt starting it (e.g. \`timeout 5 bun run src/app.ts\` or the appropriate entry command). If it crashes immediately, the delivery is incomplete.
+4. **PRD fidelity**: Re-read the original task request. For each major section/module described, verify that corresponding implementation exists — not just tests or data models, but actual functional code that a user could interact with.
+
+If ANY of these checks fail, REJECT the delivery with classification \`strategy\` and provide specific replan guidance about what layers are missing (e.g. "project has models and services but no HTTP server, API routes, or entry point").
+
 ### Phase 3: OUTPUT
 
 Output plain markdown only. Do not output JSON. Do not call a submit tool.
@@ -658,7 +692,8 @@ Under \`# Replan Guidance\`, include whenever verdict is \`rejected\` — omit o
 - Evidence must be specific, not generic.
 - Section headings must always use the English names shown in Phase 3 above. Write body text (evidence, reasoning, summaries, guidance) in the same language as the task request.
 - If required evidence is missing, reject or mark inconclusive instead of guessing.
-- **Scope**: Evaluate ONLY the goals listed in \`# Goals\`. Do not assess whether the full task spec is complete — other goals are evaluated in separate runs. A goal passes if ITS OWN criteria is satisfied, regardless of what other parts of the codebase are missing.
+- **Scope (per-goal mode)**: When evaluating a SINGLE goal from a multi-goal task, evaluate ONLY that goal. A goal passes if ITS OWN criteria is satisfied, regardless of what other parts of the codebase are missing.
+- **Scope (final delivery mode)**: When evaluating the COMPLETE delivery (all goals together), you MUST also verify the project as a whole against the original task request. See Phase 2.5 below.
 
 ## Quality Self-Check
 
