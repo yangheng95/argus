@@ -32,7 +32,13 @@ function benchmarkRoutingForExecutor(executor: "opencode" | "codex" | "claude-co
 // event/progress/log activity for stallTimeoutMs, the benchmark aborts.
 // All stage timeouts (spec, planner, standby) default to effectively unlimited
 // so that slow models are never killed mid-thought.
+//
+// --planning-stall-timeout-ms: separate (usually longer) stall timeout applied
+// while the task is in "planning" status. During spec generation the task stays
+// in "planning" with no progress changes even when the spec agent is actively
+// making tool calls — using the normal stallTimeoutMs here causes false stalls.
 const stallTimeoutMs = Number(flag("--stall-timeout-ms")) || 20 * 60 * 1000
+const planningStallTimeoutMs = Number(flag("--planning-stall-timeout-ms")) || stallTimeoutMs
 const requestTimeoutMs = Number(flag("--request-timeout-ms")) || 30_000
 const specTimeoutMs = Number(flag("--spec-timeout-ms")) || 24 * 60 * 60 * 1000
 const plannerTimeoutMs = Number(flag("--planner-timeout-ms")) || 24 * 60 * 60 * 1000
@@ -137,6 +143,17 @@ temp.home = await fs.mkdtemp(path.join(os.tmpdir(), "opencorvus-overlay-benchmar
 temp.dir = projectDir ? path.resolve(projectDir) : await fs.mkdtemp(path.join(os.tmpdir(), "opencorvus-overlay-benchmark-project-"))
 temp.config = path.join(temp.home, "config-override")
 process.env.OPENCORVUS_HOME = temp.home
+// Copy real auth.json into temp home so OAuth providers (e.g. github-copilot) work in isolated home
+{
+  const appData = process.env.APPDATA || process.env.LOCALAPPDATA
+  const realDataDir = process.platform === "win32" && appData
+    ? path.join(appData, "opencorvus")
+    : path.join(os.homedir(), ".local", "share", "opencorvus")
+  const realAuth = path.join(realDataDir, "auth.json")
+  const tempDataDir = path.join(temp.home, "data")
+  await fs.mkdir(tempDataDir, { recursive: true })
+  await fs.copyFile(realAuth, path.join(tempDataDir, "auth.json")).catch(() => undefined)
+}
 const { ensureBenchmarkModel, loadBenchmarkEnv, prepareDashscopeEnv, resolveBenchmarkModel } = await import("./env")
 const { Log } = await import("../../src/util/log")
 Log.init({ print: true })
@@ -166,7 +183,7 @@ process.env.OPENCORVUS_SPEC_AGENT_MAX_STEPS = String(specMaxSteps)
 process.env.OPENCORVUS_PLANNER_AGENT_MAX_STEPS = String(plannerMaxSteps)
 
 console.log(
-  `[overlay-benchmark] config model=${model} stall=${stallTimeoutMs / 1000}s spec=${specTimeoutMs === 86400000 ? "∞" : specTimeoutMs / 1000 + "s"} planner=${plannerTimeoutMs === 86400000 ? "∞" : plannerTimeoutMs / 1000 + "s"} tool=${toolTimeoutMs / 1000}s standby=${standbyTimeoutMs === 86400000 ? "∞" : standbyTimeoutMs / 1000 + "s"} request=${requestTimeoutMs / 1000}s hard=${completionHardTimeoutMs > 0 ? completionHardTimeoutMs / 1000 + "s" : "none"}`,
+  `[overlay-benchmark] config model=${model} stall=${stallTimeoutMs / 1000}s planning-stall=${planningStallTimeoutMs / 1000}s spec=${specTimeoutMs === 86400000 ? "∞" : specTimeoutMs / 1000 + "s"} planner=${plannerTimeoutMs === 86400000 ? "∞" : plannerTimeoutMs / 1000 + "s"} tool=${toolTimeoutMs / 1000}s standby=${standbyTimeoutMs === 86400000 ? "∞" : standbyTimeoutMs / 1000 + "s"} request=${requestTimeoutMs / 1000}s hard=${completionHardTimeoutMs > 0 ? completionHardTimeoutMs / 1000 + "s" : "none"}`,
 )
 
 // Detect stale SQLite WAL lock from a crashed previous run
@@ -975,15 +992,20 @@ async function waitForFinal(
     const now = Date.now()
     const silentFor = inactivityAgeMs(now, lastEventAt, lastProgressAt)
     const logSilentFor = inactivityAgeMs(now, lastActivityLogAt)
+    // Use a separate (usually longer) stall timeout during the planning phase.
+    // In "planning" status the task shows no progress changes while the spec agent
+    // is actively making tool calls, so the normal stallTimeoutMs causes false stalls.
+    const taskStatus = progress?.task?.status || ""
+    const effectiveStallMs = taskStatus === "planning" ? planningStallTimeoutMs : stallTimeoutMs
     if (now - lastHeartbeatAt >= 60_000) {
       lastHeartbeatAt = now
       logLine(
-        `[overlay-benchmark] heartbeat status=${progress?.task?.status || ""} signal_age_ms=${silentFor} activity_log_age_ms=${logSilentFor} log_age_ms=${now - lastLogAt} last_progress=${lastProgressSignature || "none"}`,
+        `[overlay-benchmark] heartbeat status=${taskStatus} signal_age_ms=${silentFor} activity_log_age_ms=${logSilentFor} log_age_ms=${now - lastLogAt} effective_stall_ms=${effectiveStallMs} last_progress=${lastProgressSignature || "none"}`,
       )
     }
-    if (silentFor >= stallTimeoutMs || logSilentFor >= stallTimeoutMs) {
+    if (silentFor >= effectiveStallMs || logSilentFor >= effectiveStallMs) {
       throw new Error(
-        `Task stalled: no event/progress change for ${stallTimeoutMs}ms or no activity log output for ${stallTimeoutMs}ms (last progress: ${lastProgressSignature || "none"}, activity log age: ${logSilentFor}ms, last log age: ${now - lastLogAt}ms)`,
+        `Task stalled: no event/progress change for ${effectiveStallMs}ms or no activity log output for ${effectiveStallMs}ms (status: ${taskStatus}, last progress: ${lastProgressSignature || "none"}, activity log age: ${logSilentFor}ms, last log age: ${now - lastLogAt}ms)`,
       )
     }
     if (completionHardTimeoutMs > 0 && (now - startedAt) >= completionHardTimeoutMs) {

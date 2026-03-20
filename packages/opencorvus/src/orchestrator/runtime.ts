@@ -1,4 +1,5 @@
 import { Bus } from "@/bus"
+import { TaskReport } from "@/tool/task-report"
 import { type GoalJudgmentType } from "@/evaluator/agent"
 import { ExecutorRegistry } from "@/executor/registry"
 import { PlannerFailureError } from "@/planner/service"
@@ -32,7 +33,7 @@ import {
   goalRunLocalSessionID,
   removeGoalRunSession,
 } from "@/goal/runner"
-import { pendingBlockingGoals, readyGoalNodes } from "@/goal/scheduler"
+import { goalDependencyLayers, hasBlockingFailures, pendingBlockingGoals, readyGoalNodes } from "@/goal/scheduler"
 import { OrchestratorGit } from "./git"
 import { OrchestratorMemoryBridge } from "./memory-bridge"
 import { autoRejectInteraction } from "./interaction-actions"
@@ -48,6 +49,7 @@ import {
 import { Event } from "./model"
 import {
   buildOperatorPrompt,
+  MAX_CONCURRENT_GOALS,
   orchestratorState,
 } from "./helpers"
 import {
@@ -120,6 +122,9 @@ function safeParseInt(value: string | undefined, fallback: number): number {
 // primary signal for live hung detection; this constant is the orchestrator-level last resort.
 const EVALUATION_HARD_TIMEOUT_MS = safeParseInt(process.env.OPENCORVUS_EVALUATION_TIMEOUT_MS, 60 * 60 * 1000)
 const DELIVERY_SERVICE_TIMEOUT_MS = 60_000 // 60 seconds for DeliveryService.deliver()
+// Hard cap on delivery verification (the LLM agent that checks the app starts). Default 3 minutes.
+// The evaluator already confirmed correctness; verification is a bonus safety net, not a blocker.
+const DELIVERY_VERIFICATION_TIMEOUT_MS = safeParseInt(process.env.OPENCORVUS_DELIVERY_VERIFICATION_TIMEOUT_MS, 3 * 60 * 1000)
 const evaluatingRuns = new Map<string, number>() // runID → start timestamp, guards against concurrent re-evaluation
 const finalizingRuns = new Set<string>() // guards against concurrent finalizeCoordinatorRun for the same run
 const completingRuns = new Set<string>() // guards against concurrent completeRun for the same run
@@ -452,20 +457,57 @@ async function queueGoalRun(
   return goalRun
 }
 
+function effectiveMaxConcurrentGoals(task: TaskRow) {
+  return task.budget?.max_concurrent_goals ?? MAX_CONCURRENT_GOALS
+}
+
 async function queueReadyGoalRuns(task: TaskRow, run: RunRow, plan: PlanRow, hooks: RuntimeHooks) {
-  if (activeGoalRuns(run).length > 0) return 0
+  const maxConcurrent = effectiveMaxConcurrentGoals(task)
+  const activeRuns = activeGoalRuns(run)
+  const active = activeRuns.length
+  const slots = maxConcurrent - active
+  if (slots <= 0) return 0
   const nodes = listPlanNodesByPlan(plan.id)
-  const ready = readyGoalNodes(nodes, listGoalsForPlan(plan))
-  const next = ready[0]
-  if (!next) return 0
-  log.info("dispatching iterative goal stage", {
+  const goals = listGoalsForPlan(plan)
+  const ready = readyGoalNodes(nodes, goals)
+  if (ready.length === 0) return 0
+  // Exclude goals that already have an active goal run (goal.status stays "pending"
+  // while a goal run is executing, so readyGoalNodes would otherwise re-dispatch them).
+  const activeGoalIds = new Set(activeRuns.map((gr) => gr.goal_id).filter(Boolean))
+  const dispatchable = ready.filter((e) => !activeGoalIds.has(e.goal.id))
+  if (dispatchable.length === 0) return 0
+  // Log dependency layers on first dispatch of a run for visibility.
+  // Also reset the conflict-tracking context: when no goals are currently active, the
+  // new batch is sequential (not concurrent) with all previous batches, so files written
+  // by earlier sequential goals must not block later sequential goals from updating them.
+  // Conflict detection is only meaningful within a single concurrent batch.
+  if (active === 0) {
+    runAppliedFiles.delete(run.id)
+    const layers = goalDependencyLayers(nodes, goals)
+    log.info("goal dependency layers", {
+      runID: run.id,
+      maxConcurrent,
+      layers: layers.map((layer, i) => ({
+        layer: i,
+        goals: layer.map((e) => e.goal.description),
+      })),
+    })
+  }
+  const batch = dispatchable.slice(0, slots)
+  log.info("dispatching goal batch", {
     runID: run.id,
     ready: ready.length,
-    goal: next.goal.description,
-    wave: typeof nodeMeta(next.node).wave_title === "string" ? nodeMeta(next.node).wave_title : undefined,
+    dispatching: batch.length,
+    active,
+    maxConcurrent,
+    goals: batch.map((e) => e.goal.description),
   })
-  await queueGoalRun(task, run, plan, next, hooks)
-  return 1
+  let queued = 0
+  for (const next of batch) {
+    await queueGoalRun(task, run, plan, next, hooks)
+    queued++
+  }
+  return queued
 }
 
 async function continueGoalPipeline(task: TaskRow, run: RunRow, hooks: RuntimeHooks) {
@@ -476,7 +518,26 @@ async function continueGoalPipeline(task: TaskRow, run: RunRow, hooks: RuntimeHo
   if (hasPendingGoalEvaluations(refreshedRun)) return
   if (await queueReadyGoalRuns(refreshedTask, refreshedRun, plan, hooks)) return
   if (activeGoalRuns(refreshedRun).length > 0) return
-  const pending = pendingBlockingGoals(goalsForRun(refreshedRun))
+  // Check if any blocking goal failed — if other goals are still running, wait for them
+  const allGoalRuns = listGoalRunsByCoordinator(refreshedRun.id)
+  const hasRunning = allGoalRuns.some((gr) => gr.status === "running" || gr.status === "accepted" || gr.status === "blocked")
+  if (hasRunning) return
+  // Check if any blocking goal already failed — this covers the parallel case
+  // where a blocking goal failed while siblings were still running, and the
+  // siblings have now completed. pendingBlockingGoals only checks status=pending
+  // so it would miss failed goals.
+  const goals = goalsForRun(refreshedRun)
+  if (hasBlockingFailures(goals)) {
+    const failedGoals = goals.filter((g) => g.source !== "system" && g.priority === "blocking" && g.status === "failed")
+    await handleEvaluationFailure(
+      refreshedTask,
+      refreshedRun,
+      `Blocking goal(s) failed: ${failedGoals.map((g) => g.description).join(", ")}`,
+      hooks,
+    )
+    return
+  }
+  const pending = pendingBlockingGoals(goals)
   if (pending.length > 0) {
     await handleEvaluationFailure(
       refreshedTask,
@@ -668,7 +729,8 @@ async function _finalizeGoalRun(task: TaskRow, run: RunRow, goalRun: GoalRunRow,
         return
       }
       await dispose().catch((err) => log.warn("dispose failed after evaluation timeout", { error: String(err) }))
-      await handleEvaluationFailure(requireTask(task.id), run, summary, hooks)
+      if (activeGoalRuns(requireRun(run.id)).length > 0) return
+      await handleEvaluationFailure(requireTask(task.id), requireRun(run.id), summary, hooks)
       return
     }
     if (existingEvaluation.status === "passed" || goal.priority === "advisory") {
@@ -677,7 +739,8 @@ async function _finalizeGoalRun(task: TaskRow, run: RunRow, goalRun: GoalRunRow,
       return
     }
     await dispose().catch((err) => log.warn("dispose failed after failed evaluation", { error: String(err) }))
-    await handleEvaluationFailure(requireTask(task.id), run, existingEvaluation.summary, hooks)
+    if (activeGoalRuns(requireRun(run.id)).length > 0) return
+    await handleEvaluationFailure(requireTask(task.id), requireRun(run.id), existingEvaluation.summary, hooks)
     return
   }
   try {
@@ -740,31 +803,69 @@ async function _finalizeGoalRun(task: TaskRow, run: RunRow, goalRun: GoalRunRow,
       merge_ref: deliveredInfo.mergeRef ?? goalRun.merge_ref,
       time_completed: Date.now(),
     })
+    // Delivery merge is already serialized by the outer withGoalRunFinalizeLock in
+    // finalizeGoalRun(). Do NOT acquire the same lock here — it is non-reentrant
+    // and would deadlock.
+    let deliveryConflict = false
     if (outcome.status === "passed" || (goal.priority === "advisory" && delivered.diffs.length > 0)) {
       const appliedByRun = runAppliedFiles.get(run.id) ?? new Set<string>()
       const conflicts = delivered.diffs.filter((d) => d.status !== "deleted" && appliedByRun.has(d.file))
-      if (conflicts.length > 0) {
-        log.warn("goal delivery: file was already written by an earlier iterative stage in this run — later stage is overwriting it", {
+      if (conflicts.length > 0 && effectiveMaxConcurrentGoals(task) > 1) {
+        // In parallel mode, file conflicts are hard failures — no silent overwrite
+        log.error("parallel goal delivery: file conflict detected", {
           goal: goal.description,
           conflicts: conflicts.map((d) => d.file),
         })
-      }
-      for (const diff of delivered.diffs) {
-        if (diff.status !== "deleted") appliedByRun.add(diff.file)
-      }
-      runAppliedFiles.set(run.id, appliedByRun)
-      await provideWorkspace(await taskDirectory(task), () =>
-        applyGoalDelivery({
-          directory: Instance.directory,
-          delivery: delivered,
+        updateGoalRun(goalRun.id, {
+          status: "failed",
+          error: `File conflict with earlier goal: ${conflicts.map((d) => d.file).join(", ")}`,
+          time_completed: Date.now(),
         })
-      )
+        deliveryConflict = true
+      } else {
+        if (conflicts.length > 0) {
+          log.warn("goal delivery: file was already written by an earlier iterative stage in this run — later stage is overwriting it", {
+            goal: goal.description,
+            conflicts: conflicts.map((d) => d.file),
+          })
+        }
+        for (const diff of delivered.diffs) {
+          if (diff.status !== "deleted") appliedByRun.add(diff.file)
+        }
+        runAppliedFiles.set(run.id, appliedByRun)
+        await provideWorkspace(await taskDirectory(task), () =>
+          applyGoalDelivery({
+            directory: Instance.directory,
+            delivery: delivered,
+          })
+        )
+      }
+    }
+    // If delivery was rejected due to file conflict, treat as a blocking goal failure
+    if (deliveryConflict) {
+      const refreshedRun = requireRun(run.id)
+      if (activeGoalRuns(refreshedRun).length > 0) return
+      await handleEvaluationFailure(requireTask(task.id), refreshedRun, `File conflict in goal: ${goal.description}`, hooks, runScopedAnalysis)
+      return
     }
     if (outcome.status === "passed" || goal.priority === "advisory") {
       await continueGoalPipeline(requireTask(task.id), requireRun(run.id), hooks)
       return
     }
-    await handleEvaluationFailure(requireTask(task.id), run, outcome.summary, hooks, runScopedAnalysis)
+    // Blocking goal failed. If other goals are still running in parallel,
+    // defer failure handling — let continueGoalPipeline deal with it once
+    // all active goals have finished.
+    const refreshedRun = requireRun(run.id)
+    const stillActive = activeGoalRuns(refreshedRun)
+    if (stillActive.length > 0) {
+      log.info("blocking goal failed but other goals still active, deferring failure handling", {
+        failedGoal: goal.description,
+        activeGoals: stillActive.length,
+        runID: run.id,
+      })
+      return
+    }
+    await handleEvaluationFailure(requireTask(task.id), refreshedRun, outcome.summary, hooks, runScopedAnalysis)
   } finally {
     await dispose().catch((err) => log.warn("dispose failed after goal run finalization", { error: String(err) }))
   }
@@ -1148,6 +1249,10 @@ export namespace OrchestratorRuntime {
         await finalizeGoalRun(task, run, goalRun, hooks)
         run = requireRun(runID)
         task = requireTask(run.task_id)
+      }
+      // Check terminal states after ALL completed goal runs are finalized (not mid-loop)
+      // so parallel siblings don't orphan each other.
+      if (recoverableGoalRuns.length > 0) {
         const delivery = findDeliveryByRun(run.id)
         if (run.status === "completed" && delivery) {
           await completeRun(run, hooks)
@@ -1160,9 +1265,13 @@ export namespace OrchestratorRuntime {
       const failedGoalRun = listGoalRunsByCoordinator(run.id)
         .find((goalRun) => goalRun.status === "failed")
       if (failedGoalRun && run.status !== "failed" && run.status !== "aborted") {
-        const evaluation = findEvaluationByGoalRun(failedGoalRun.id)
-        await handleEvaluationFailure(task, run, evaluation?.summary ?? failedGoalRun.error ?? "Goal run failed", hooks)
-        return
+        // In parallel mode, wait for all active goals to finish before handling failure
+        const stillActive = activeGoalRuns(run)
+        if (stillActive.length === 0) {
+          const evaluation = findEvaluationByGoalRun(failedGoalRun.id)
+          await handleEvaluationFailure(task, run, evaluation?.summary ?? failedGoalRun.error ?? "Goal run failed", hooks)
+          return
+        }
       }
       const delivery = findDeliveryByRun(run.id)
       if (run.status === "completed" && delivery) {
@@ -1178,7 +1287,12 @@ export namespace OrchestratorRuntime {
           return
         }
       }
-      if (activeGoalRuns(run).length === 0 && await syncCoordinatorExecutor(task, run, hooks)) {
+      // In goal-based execution mode (any goal runs have been created for this coordinator run),
+      // skip coordinator executor sync — goal dispatch is handled entirely by continueGoalPipeline.
+      // syncCoordinatorExecutor would otherwise look at the stale Panel/planner session which
+      // has already "completed", prematurely calling completeRun before all goals are dispatched.
+      const inGoalMode = listGoalRunsByCoordinator(run.id).length > 0
+      if (activeGoalRuns(run).length === 0 && !inGoalMode && await syncCoordinatorExecutor(task, run, hooks)) {
         return
       }
       for (const goalRun of activeGoalRuns(run)) {
@@ -1603,7 +1717,39 @@ async function publishAcceptedDelivery(task: TaskRow, run: RunRow, delivery: Del
   markDeliveryPublishing(delivery.id, now)
 
   // --- Delivery agent verification ---
-  const deliveryVerdict = await runDeliveryVerification(task, run, delivery)
+  // Use Promise.race to enforce a hard cap: if the LLM-based verification agent does not
+  // complete within DELIVERY_VERIFICATION_TIMEOUT_MS, we proceed with publish anyway (null verdict).
+  // We avoid relying on AbortSignal propagation through nested any() chains which can silently fail.
+  let verificationTimedOut = false
+  let verificationTimeoutTimer: ReturnType<typeof setTimeout> | undefined
+  const deliveryVerdict = await Promise.race([
+    runDeliveryVerification(task, run, delivery).catch((err) => {
+      log.warn("delivery verification error, proceeding with publish", {
+        taskID: task.id,
+        runID: run.id,
+        error: String(err),
+      })
+      return null
+    }),
+    new Promise<null>((resolve) => {
+      verificationTimeoutTimer = setTimeout(() => {
+        verificationTimedOut = true
+        log.warn("delivery verification timeout, proceeding with publish", {
+          taskID: task.id,
+          runID: run.id,
+          timeoutMs: DELIVERY_VERIFICATION_TIMEOUT_MS,
+        })
+        resolve(null)
+      }, DELIVERY_VERIFICATION_TIMEOUT_MS)
+    }),
+  ])
+  clearTimeout(verificationTimeoutTimer)
+  if (verificationTimedOut) {
+    log.info("delivery verification skipped due to timeout, proceeding with accepted verdict", {
+      taskID: task.id,
+      runID: run.id,
+    })
+  }
   if (deliveryVerdict?.verdict === "rejected") {
     log.warn("delivery agent rejected delivery", { taskID: task.id, runID: run.id, summary: deliveryVerdict.summary })
     await hooks.updateTask(task, { status: "evaluating", blocking_reason: null, error: null }, "Delivery agent rejected")
@@ -1885,6 +2031,7 @@ function consumeExecutorEvents(
   executorEventBridges.set(sessionID, controller)
   const active = new Map<string, ReturnType<typeof executorSource>>()
   const outputs = new Map<string, { text: string; at: number; source: NonNullable<ReturnType<typeof executorSource>> }>()
+  let unsubTaskReport = () => {}
   const flushOutput = (id?: string) => {
     const ids = id ? [id] : [...outputs.keys()]
     for (const key of ids) {
@@ -2031,8 +2178,20 @@ function consumeExecutorEvents(
       if (executorEventBridges.get(sessionID) === controller) {
         executorEventBridges.delete(sessionID)
       }
+      // Unsubscribe the task.report listener when the event bridge ends.
+      unsubTaskReport()
     }
   })().catch((err) => log.error("executor event bridge crashed", { taskID, runID, error: String(err) }))
+
+  // Also complete the goal run when the executor reports task_report: done/failed via the bus.
+  // This handles cases where the agent is in a doom loop and session.idle never fires.
+  unsubTaskReport = Bus.subscribe(TaskReport.EventDef, (event) => {
+    if (event.properties.sessionID !== sessionID) return
+    if (event.properties.status === "done" || event.properties.status === "failed") {
+      log.info("completing goal run from task_report", { goalRunID, sessionID, status: event.properties.status })
+      completeGoalRunFromIdle(goalRunID)
+    }
+  })
 }
 
 function executorProgressPayload(

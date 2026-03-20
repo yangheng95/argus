@@ -79,6 +79,7 @@ type VerifyInput = {
   delivery: DeliveryInfo
   analysis?: GoalJudgmentType
   stream?: TextHooks
+  signal?: AbortSignal
 }
 
 export namespace DeliveryAgent {
@@ -108,8 +109,12 @@ export namespace DeliveryAgent {
     let lastError: Error | undefined
     let toolCallCount = 0
 
+    // Combine the per-attempt timeout with any external abort signal (e.g. from the orchestrator)
+    const externalSignal = input.signal
     for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
       if (attempt > 0) {
+        // Don't retry if the external abort signal has already fired — it would fail instantly
+        if (externalSignal?.aborted) break
         log.info("delivery agent retrying", { attempt, reason: lastError?.message })
       }
 
@@ -118,6 +123,9 @@ export namespace DeliveryAgent {
         finishReason?: string
         steps: Array<{ text?: string; toolCalls?: unknown[]; toolResults?: unknown[] }>
       }
+      const attemptSignal = externalSignal
+        ? AbortSignal.any([externalSignal, AbortSignal.timeout(timeoutMs)])
+        : AbortSignal.timeout(timeoutMs)
       try {
         result = await completeHeadlessText({
           label: "delivery",
@@ -128,14 +136,17 @@ export namespace DeliveryAgent {
           tools,
           maxOutputTokens: 16384,
           timeoutMs: false,
-          abortSignal: AbortSignal.timeout(timeoutMs),
+          abortSignal: attemptSignal,
           system: await deliveryAgentSystem(),
           prompt: userPrompt,
           ...(input.stream as TextHooks<typeof tools> | undefined),
         })
       } catch (err) {
         lastError = err instanceof Error ? err : new Error(String(err))
-        log.warn("delivery agent generateText failed", { attempt, error: lastError.message })
+        const isAborted = externalSignal?.aborted || (err instanceof Error && err.name === "AbortError")
+        log.warn("delivery agent generateText failed", { attempt, error: lastError.message, aborted: isAborted })
+        // If aborted externally, don't retry — signal is already dead
+        if (isAborted && externalSignal?.aborted) break
         continue
       }
 

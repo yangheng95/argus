@@ -1065,6 +1065,7 @@ function budgetModel(input?: OrchestratorBudget | null) {
     maxReplans: input.max_replans,
     maxEvaluations: input.max_evaluations,
     maxWallTimeMs: input.max_wall_time_ms,
+    maxConcurrentGoals: input.max_concurrent_goals,
   }
 }
 

@@ -75,6 +75,7 @@ export namespace HeadlessDeliveryService {
         delivery: input.delivery,
         analysis: input.analysis,
         stream,
+        signal,
       })
       log.info("delivery service verify completed", {
         title: input.task.title,

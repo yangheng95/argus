@@ -567,6 +567,7 @@ ${compactPlanContext(input.plan)}`,
       "- Do not create demo pages, dist/index.html, screenshot harnesses, or ad-hoc UI just to satisfy evaluator-managed checks unless the scoped request explicitly asks for them.",
       "- Do not start long-lived or background servers just to satisfy evaluator-managed checks unless this stage explicitly requires runtime wiring.",
       "- If this stage is a bootstrap/foundation step, create only the minimal scaffold required for this goal's owned files and checks. Do not pre-build later feature modules.",
+      "- Do not create README.md files, module-level documentation, or scaffold documentation (e.g. src/<module>/README.md, tests/README.md) unless the request explicitly requires documentation. Focus on source code and tests only.",
     ].join("\n"),
     "Do not redefine the goal or broaden scope. Implement only what is needed for this stage, verify it, and stop.",
   ].filter(Boolean).join("\n\n")

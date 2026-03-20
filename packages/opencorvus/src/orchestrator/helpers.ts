@@ -15,6 +15,7 @@ export const SAME_PLAN_RETRY_LIMIT = safeInt(process.env.OPENCORVUS_SAME_PLAN_RE
 export const DEFAULT_MAX_RUNS = safeInt(process.env.OPENCORVUS_MAX_RUNS, 10)
 export const DEFAULT_MAX_REPLANS = safeInt(process.env.OPENCORVUS_MAX_REPLANS, 3)
 export const STAGE_RETRY_LIMIT = safeInt(process.env.OPENCORVUS_STAGE_RETRY_LIMIT, 2)
+export const MAX_CONCURRENT_GOALS = safeInt(process.env.OPENCORVUS_MAX_CONCURRENT_GOALS, 2)
 
 export type Stage = "spec" | "plan" | "goal" | "execute" | "evaluate" | "deliver"
 
@@ -141,5 +142,6 @@ export function budgetRow(input?: z.infer<typeof Budget>): OrchestratorBudget | 
     max_replans: input.maxReplans,
     max_evaluations: input.maxEvaluations,
     max_wall_time_ms: input.maxWallTimeMs,
+    max_concurrent_goals: input.maxConcurrentGoals,
   }
 }
