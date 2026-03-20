@@ -88,7 +88,7 @@ function normalizedGoal(goal: GoalContractDraftType): GoalContractDraftType {
   }
 }
 
-function validateGoalGraph(goalDraft: GoalDraft, spec: SpecDraft, scope: GoalValidationScope = {}) {
+export function validateGoalGraph(goalDraft: GoalDraft, spec: SpecDraft, scope: GoalValidationScope = {}) {
   const requirements = Array.isArray(spec.requirements) ? spec.requirements : []
   if (requirements.length < 1) {
     throw new GoalFailureError("Goal decomposition requires at least one formulated requirement")

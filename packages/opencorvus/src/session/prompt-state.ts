@@ -7,6 +7,9 @@ import { Session } from "."
 export namespace SessionPromptState {
   export const log = Log.create({ service: "session.prompt" })
 
+  // Phase 5: Sessions manage their own lifecycle via explicit cancel(sessionID).
+  // Instance.dispose() no longer aborts running sessions — this prevents
+  // Config.update / overlay reconnect / verifyResume from killing active executor sessions.
   export const state = Instance.state(
     () => {
       const data: Record<
@@ -20,11 +23,6 @@ export namespace SessionPromptState {
         }
       > = {}
       return data
-    },
-    async (current) => {
-      for (const item of Object.values(current)) {
-        item.abort.abort()
-      }
     },
   )
 
@@ -59,6 +57,13 @@ export namespace SessionPromptState {
       return
     }
     match.abort.abort()
+    // Reject all pending callbacks before deleting state so that
+    // executePrompt() callers (task-queue-service) are unblocked.
+    const error = new Error("session cancelled")
+    for (const cb of match.callbacks) {
+      cb.reject(error)
+    }
+    match.callbacks = []
     delete s[sessionID]
     SessionStatus.set(sessionID, { type: "idle" })
     return

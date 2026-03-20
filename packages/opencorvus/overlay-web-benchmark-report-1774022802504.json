@@ -1,0 +1,305 @@
+{
+  "generated_at": "2026-03-20T16:30:39.760Z",
+  "title": "prd-moment-diary-frontend",
+  "request_file": "D:\\myhexin-local\\argus-opencode\\specs\\prd-moment-diary-frontend.txt",
+  "executor": "opencode",
+  "model": "github-copilot/gemini-3-flash-preview",
+  "directory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-ZMFacf",
+  "server": "http://127.0.0.1:58783/",
+  "taskID": "tsk_d0bffd21a001tnHMnqVqTk1lRk",
+  "error": "TimeoutError: The operation timed out.",
+  "stage_timeout_ms": {
+    "spec": 86400000,
+    "planner": 86400000,
+    "tool": 600000,
+    "standby": 86400000,
+    "stall": 1200000,
+    "request": 30000
+  },
+  "stage_max_steps": {
+    "spec": 80,
+    "planner": 96
+  },
+  "stall_timeout_ms": 1200000,
+  "completion_hard_timeout_ms": null,
+  "request_timeout_ms": 30000,
+  "taskStatus": "evaluating",
+  "evaluation": "",
+  "changedFiles": [],
+  "transcriptCount": 432,
+  "timelineCount": 0,
+  "runCount": 1,
+  "planning": {
+    "pendingCount": 0,
+    "taskList": "还没有任务",
+    "reasoning": "",
+    "assistantText": ""
+  },
+  "streaming": {
+    "reasoning": "",
+    "assistantText": "",
+    "liveRole": "spec",
+    "liveText": "Spec generat",
+    "reasoningVisible": false,
+    "assistantVisible": false,
+    "liveVisible": true
+  },
+  "materialization": {
+    "boardTaskID": "tsk_d0bffd21a001tnHMnqVqTk1lRk",
+    "boardStatus": "spec_generating",
+    "specVersion": null,
+    "goalCount": 0,
+    "goalRunCount": 0,
+    "criteriaCount": 0
+  },
+  "screenshot": "D:\\myhexin-local\\argus-opencode\\packages\\opencorvus\\overlay-web-benchmark-1774024238704.png",
+  "resume": {
+    "restored": true,
+    "selectedAt": 13577
+  },
+  "timings_ms": {
+    "online": 451,
+    "submit": 5312,
+    "planning_visible": 5616,
+    "streaming_visible": 6298,
+    "task_created": 5622,
+    "task_selected": 5768,
+    "board_loaded": 5772,
+    "resumed": 13577,
+    "completed": 1436061,
+    "execution": 1430749
+  },
+  "assertions": {
+    "planning_visible": {
+      "pass": true,
+      "sample": {
+        "directory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-ZMFacf",
+        "savedDirectory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-ZMFacf",
+        "workspaceDirectory": "",
+        "selectedTaskID": "",
+        "pendingCount": 0,
+        "taskIDs": [
+          "tsk_d0bffd21a001tnHMnqVqTk1lRk"
+        ],
+        "taskList": "还没有任务",
+        "reasoning": "",
+        "assistantText": "",
+        "liveRole": "",
+        "liveText": "",
+        "visibleTurns": [],
+        "storage": {
+          "directory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-ZMFacf",
+          "directoryMode": "",
+          "workspaceDirectory": "",
+          "workspaceTaskID": ""
+        }
+      }
+    },
+    "streaming_visible": {
+      "pass": true,
+      "sample": {
+        "directory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-ZMFacf",
+        "savedDirectory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-ZMFacf",
+        "workspaceDirectory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-ZMFacf",
+        "selectedTaskID": "tsk_d0bffd21a001tnHMnqVqTk1lRk",
+        "pendingCount": 0,
+        "taskIDs": [
+          "tsk_d0bffd21a001tnHMnqVqTk1lRk"
+        ],
+        "taskList": "进行中\n    \n    \n      \n        \n        prd-moment-diary-frontend\n      \n      排队中\n      00:06:48 / .../Local/Temp/opencorvus-overlay-benchmark-project-ZMFacf",
+        "reasoning": "",
+        "assistantText": "",
+        "liveRole": "spec",
+        "liveText": "Spec generat",
+        "visibleTurns": [
+          {
+            "role": "spec",
+            "text": "Spec generat"
+          }
+        ],
+        "storage": {
+          "directory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-ZMFacf",
+          "directoryMode": "",
+          "workspaceDirectory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-ZMFacf",
+          "workspaceTaskID": "tsk_d0bffd21a001tnHMnqVqTk1lRk"
+        }
+      }
+    },
+    "materialized": {
+      "pass": true,
+      "sample": {
+        "taskID": "tsk_d0bffd21a001tnHMnqVqTk1lRk",
+        "boardTaskID": "tsk_d0bffd21a001tnHMnqVqTk1lRk",
+        "resumed": true
+      }
+    },
+    "delivery": {
+      "pass": false,
+      "sample": {
+        "taskStatus": "evaluating",
+        "verdict": "",
+        "localExit": 0,
+        "qualityVerdict": "blocked"
+      }
+    }
+  },
+  "local_verify": {
+    "mode": "skipped",
+    "command": null,
+    "exitCode": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  "artifact_audit": {
+    "source_files_added": 0,
+    "config_files_added": 2,
+    "doc_files_added": 0,
+    "source_file_count": 0,
+    "doc_file_count": 0,
+    "non_source_churn_ratio": 1,
+    "readme_proliferation_count": 0,
+    "out_of_scope_file_count": 0,
+    "scaffold_noise_count": 0,
+    "placeholder_count": 0,
+    "out_of_scope_files": [],
+    "unmapped_files": [],
+    "placeholder_hits": [],
+    "duplicate_docs": [],
+    "scaffold_expansion_flags": []
+  },
+  "run_metrics": {
+    "meaningful_change_gap_ms": 1439102,
+    "noop_cycle_count": 0,
+    "repeat_command_ratio": 0.9953757225433526,
+    "repeat_reasoning_similarity": 0.9953757225433526,
+    "required_check_pass_rate": 0,
+    "critical_check_pass_rate": 0,
+    "check_relevance_score": 0,
+    "verification_edit_ratio": 0,
+    "feature_coverage_p0": 0,
+    "scope_drift_score": 0,
+    "plan_to_change_traceability": 1,
+    "delivery_focus_score": 1
+  },
+  "failure_matrix": {
+    "verdict": "blocked",
+    "primary_failure": "liveness",
+    "failures": [
+      {
+        "category": "liveness",
+        "message": "Long verification-only loop without meaningful progress",
+        "evidence": "noop_cycle_count=0, meaningful_change_gap_ms=1439102, repeat_command_ratio=1.00"
+      },
+      {
+        "category": "verification_gap",
+        "message": "Core delivery acceptance checks did not all pass",
+        "evidence": "taskStatus=evaluating, evaluationVerdict=, localVerifyExitCode=0"
+      }
+    ]
+  },
+  "manual_review_summary": "liveness: Benchmark timed out before task completion | liveness: Long verification-only loop without meaningful progress | verification_gap: Core delivery acceptance checks did not all pass",
+  "overlay": {
+    "directory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-ZMFacf",
+    "savedDirectory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-ZMFacf",
+    "workspaceDirectory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-ZMFacf",
+    "selectedTaskID": "tsk_d0bffd21a001tnHMnqVqTk1lRk",
+    "pendingCount": 0,
+    "taskIDs": [
+      "tsk_d0bffd21a001tnHMnqVqTk1lRk"
+    ],
+    "taskList": "进行中\n    \n    \n      \n        \n        prd-moment-diary-frontend\n      \n      spec_generating\n      00:06:48 / .../Local/Temp/opencorvus-overlay-benchmark-project-ZMFacf",
+    "reasoning": "",
+    "assistantText": "Message updated: assistant",
+    "liveRole": "assistant",
+    "liveText": "Message updated: assistant",
+    "visibleTurns": [
+      {
+        "role": "assistant",
+        "text": "Message updated: assistant"
+      },
+      {
+        "role": "assistant",
+        "text": "Message updated: assistant"
+      },
+      {
+        "role": "assistant",
+        "text": "Message updated: user"
+      },
+      {
+        "role": "task_tool",
+        "text": "Session error"
+      },
+      {
+        "role": "assistant",
+        "text": "Message updated: assistant"
+      }
+    ],
+    "storage": {
+      "directory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-ZMFacf",
+      "directoryMode": "",
+      "workspaceDirectory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-ZMFacf",
+      "workspaceTaskID": "tsk_d0bffd21a001tnHMnqVqTk1lRk"
+    }
+  },
+  "diagnostics": {
+    "event_file": "D:\\myhexin-local\\argus-opencode\\packages\\opencorvus\\overlay-web-benchmark-report-1774022802504.events.json",
+    "event_count": 5190,
+    "stage_summary": {
+      "types": {
+        "orchestrator.task.updated": 5,
+        "orchestrator.agent.updated": 8,
+        "orchestrator.run.updated": 3,
+        "orchestrator.run.progress": 5174
+      },
+      "stages": {
+        "spec": {
+          "event_count": 2,
+          "first_event_ms": 6301,
+          "first_message_ms": null,
+          "first_tool_call_ms": null,
+          "first_tool_result_ms": null,
+          "submit_tool_ms": null,
+          "error_ms": null,
+          "last_event_ms": 61147,
+          "kind_counts": {
+            "status": 2
+          },
+          "tool_calls": {}
+        },
+        "planner": {
+          "event_count": 2,
+          "first_event_ms": 67085,
+          "first_message_ms": null,
+          "first_tool_call_ms": null,
+          "first_tool_result_ms": null,
+          "submit_tool_ms": null,
+          "error_ms": null,
+          "last_event_ms": 126531,
+          "kind_counts": {
+            "status": 2
+          },
+          "tool_calls": {}
+        },
+        "execution": {
+          "event_count": 5174,
+          "first_event_ms": 127302,
+          "first_progress_ms": 127302,
+          "first_output_ms": null,
+          "last_event_ms": 1405503,
+          "types": {
+            "orchestrator.run.progress": 5174
+          },
+          "progress_types": {
+            "message.part.updated": 2152,
+            "message.updated": 1724,
+            "session.status": 864,
+            "session.diff": 431,
+            "session.error": 1,
+            "session.idle": 2
+          },
+          "goal_runs": []
+        }
+      }
+    }
+  }
+}

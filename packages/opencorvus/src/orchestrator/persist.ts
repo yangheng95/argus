@@ -1839,7 +1839,7 @@ export function insertRequirements(
         description: requirement.description,
         status: "pending",
         priority: requirement.priority === "advisory" ? "advisory" : "blocking",
-        acceptance: requirement.acceptance,
+        acceptance: Array.isArray(requirement.acceptance) ? JSON.stringify(requirement.acceptance) : requirement.acceptance,
         evidence_refs: requirement.evidence_refs.length > 0 ? requirement.evidence_refs : null,
         non_goals: requirement.non_goals && requirement.non_goals.length > 0 ? requirement.non_goals : null,
         metadata: {
@@ -3195,4 +3195,42 @@ function mergeRefs(current?: ProtocolRefsInfo, next?: ProtocolRefsInfo) {
     ...(next ?? {}),
   }
   return Object.keys(result).length > 0 ? result : undefined
+}
+
+// ---------------------------------------------------------------------------
+// Legacy compat: insertSpecItems (used by executor-planner flow in service.ts)
+// ---------------------------------------------------------------------------
+
+export function insertSpecItems(
+  db: Database.TxOrDb,
+  input: {
+    taskID: string
+    specSnapshotID: string
+    specItems: unknown[]
+    now: number
+  },
+) {
+  for (const raw of input.specItems) {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue
+    const item = raw as Record<string, unknown>
+    if (typeof item.title !== "string" || typeof item.description !== "string") continue
+    const checks = Array.isArray(item.check_selector)
+      ? item.check_selector.filter((value): value is string => typeof value === "string")
+      : undefined
+    db.insert(OrchestratorSpecItemTable)
+      .values({
+        id: Identifier.ascending("specitem"),
+        task_id: input.taskID,
+        spec_snapshot_id: input.specSnapshotID,
+        title: item.title,
+        description: item.description,
+        status: "pending",
+        priority: item.priority === "advisory" ? "advisory" : "blocking",
+        check_selector: checks && checks.length > 0 ? checks : null,
+        metadata: {},
+        time_created: input.now,
+        time_updated: input.now,
+      })
+      .run()
+  }
 }

@@ -133,7 +133,16 @@ export function normalizePlanWaves(input: {
     .map((_, goalIndex) => goalIndex)
     .filter((goalIndex) => !claimed.has(goalIndex))
   if (missing.length > 0) {
-    throw new Error(`plan waves must cover every goal explicitly; missing goal indices: ${missing.join(", ")}`)
+    // Auto-generate waves for uncovered goals instead of throwing.
+    // This supports the new pipeline where goals are decomposed independently
+    // from the planner, so the planner may not emit wave contracts for all goals.
+    for (const goalIndex of missing) {
+      waves.push(WaveContract.parse({
+        title: defaultWaveTitle(waves.length, input.goals[goalIndex]),
+        objective: cleanText(input.goals[goalIndex]?.description) || undefined,
+        goal_indices: [goalIndex],
+      }))
+    }
   }
   return waves
 }

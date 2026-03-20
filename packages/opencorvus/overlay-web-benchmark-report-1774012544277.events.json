@@ -1,0 +1,11 @@
+{
+  "generated_at": "2026-03-20T13:18:27.263Z",
+  "taskID": "",
+  "error": "Error: HTTP 500 /task",
+  "event_count": 0,
+  "stage_summary": {
+    "types": {},
+    "stages": {}
+  },
+  "events": []
+}

@@ -1,0 +1,44 @@
+{
+  "generated_at": "2026-03-20T15:41:28.071Z",
+  "taskID": "tsk_d0be6c8bf001sl6DVd2u6Jj4ew",
+  "error": "Error: Overlay did not render streamed task output within 120000ms",
+  "event_count": 2,
+  "stage_summary": {
+    "types": {
+      "orchestrator.task.updated": 2
+    },
+    "stages": {}
+  },
+  "events": [
+    {
+      "at": "2026-03-20T15:39:27.910Z",
+      "elapsed_ms": 6606,
+      "type": "orchestrator.task.updated",
+      "taskID": "tsk_d0be6c8bf001sl6DVd2u6Jj4ew",
+      "runID": "",
+      "stage": "",
+      "kind": "",
+      "status": "spec_generating",
+      "toolName": "",
+      "summary": "Spec generation started",
+      "text": "",
+      "progressType": "",
+      "goalRunID": ""
+    },
+    {
+      "at": "2026-03-20T15:40:51.569Z",
+      "elapsed_ms": 90265,
+      "type": "orchestrator.task.updated",
+      "taskID": "tsk_d0be6c8bf001sl6DVd2u6Jj4ew",
+      "runID": "",
+      "stage": "",
+      "kind": "",
+      "status": "failed",
+      "toolName": "",
+      "summary": "Spec failed: Binding expected string, TypedArray, boolean, number, bigint or null",
+      "text": "",
+      "progressType": "",
+      "goalRunID": ""
+    }
+  ]
+}

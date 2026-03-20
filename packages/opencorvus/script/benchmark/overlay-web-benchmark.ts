@@ -470,6 +470,7 @@ try {
 
   taskID = await waitForTaskCreated(page, api, TASK_CREATE_TIMEOUT_MS)
   marks.createdAt = Date.now()
+  // Budget is already set during task creation; PATCH /budget is optional
   await api(`/task/${taskID}/budget`, {
     method: "PATCH",
     headers: {
@@ -483,7 +484,7 @@ try {
         maxEvaluations,
       },
     }),
-  })
+  }).catch(() => undefined)
   await page.evaluate(async (id) => {
     const state = window.eval("state")
     if (state.selectedTaskID === id) return
@@ -680,9 +681,9 @@ async function buildBenchmarkReport(error?: unknown) {
   const currentRuns = runs ?? (taskID ? await tryApiJson(`/task/${taskID}/runs`, []) : [])
   const localVerify = await runLocalVerify(temp.dir, DELIVERY_VERIFY_CMD)
   const deliveryChangedFiles = progress?.delivery?.result?.changedFiles ?? currentFinalBoard?.delivery?.result?.changedFiles ?? []
-  // When the task stalls before delivery completes, fall back to git to capture
-  // modified + untracked files (e.g. newly created public/ directories not yet committed).
-  const gitFallbackFiles = deliveryChangedFiles.length === 0 ? await gitChangedFiles(temp.dir) : []
+  // Always run git fallback: delivery changedFiles may only contain internal .opencorvus/ files
+  // while actual source files are in committed diffs (executor commits before delivery).
+  const gitFallbackFiles = await gitChangedFiles(temp.dir)
   const changedFiles = dedupePaths([...deliveryChangedFiles, ...gitFallbackFiles])
   const moduleBlocks = resolveModuleBlocks(progress, currentFinalBoard ?? currentBoard, TASK_REQUEST)
   const artifactAudit = await auditWorkspace({
@@ -893,11 +894,25 @@ async function gitChangedFiles(dir: string): Promise<string[]> {
       Bun.spawn(["git", ...args], { cwd: dir, stdout: "pipe", stderr: "pipe" })
         .stdout.text().then((t) => t.trim().split(/\r?\n/).filter(Boolean))
         .catch(() => [] as string[])
+    // 1. Uncommitted changes (working tree vs HEAD)
     const [modified, untracked] = await Promise.all([
       run(["diff", "--name-only", "HEAD"]),
       run(["ls-files", "--others", "--exclude-standard"]),
     ])
-    return [...modified, ...untracked]
+    if (modified.length > 0 || untracked.length > 0) return [...modified, ...untracked]
+    // 2. Committed changes: compare initial checkpoint to HEAD.
+    //    The orchestrator creates a checkpoint commit, executor works, delivery commits.
+    //    `git diff HEAD` is empty because everything is committed.
+    const commits = await run(["log", "--oneline", "--reverse"])
+    if (commits.length >= 2) {
+      const firstHash = commits[0].split(" ")[0]
+      return run(["diff", "--name-only", firstHash, "HEAD"])
+    }
+    // 3. Single commit: list all files in that commit (everything was added in one go)
+    if (commits.length === 1) {
+      return run(["diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD"])
+    }
+    return []
   } catch {
     return []
   }
@@ -996,7 +1011,8 @@ async function waitForFinal(
     // In "planning" status the task shows no progress changes while the spec agent
     // is actively making tool calls, so the normal stallTimeoutMs causes false stalls.
     const taskStatus = progress?.task?.status || ""
-    const effectiveStallMs = taskStatus === "planning" ? planningStallTimeoutMs : stallTimeoutMs
+    const pipelineStatuses = ["queued", "spec_generating", "goal_decomposing", "planning", "planned"]
+    const effectiveStallMs = pipelineStatuses.includes(taskStatus) ? planningStallTimeoutMs : stallTimeoutMs
     if (now - lastHeartbeatAt >= 60_000) {
       lastHeartbeatAt = now
       logLine(

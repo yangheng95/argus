@@ -13,10 +13,14 @@ export { WorkbenchPreferenceTable, WorkbenchTaskNoteTable, WorkbenchBriefSnapsho
 export {
   OrchestratorSpecSnapshotTable,
   OrchestratorSpecItemTable,
+  OrchestratorRequirementTable,
+  OrchestratorGoalSnapshotTable,
   OrchestratorTaskTable,
   OrchestratorPlanVersionTable,
+  OrchestratorPlanNodeTable,
   OrchestratorMilestoneTable,
   OrchestratorGoalTable,
+  OrchestratorGoalRunTable,
   OrchestratorRunTable,
   OrchestratorInteractionRequestTable,
   OrchestratorArtifactTable,
@@ -27,3 +31,8 @@ export {
   OrchestratorExecutorEventTable,
   OrchestratorChannelBindingTable,
 } from "../orchestrator/orchestrator.sql"
+export {
+  ProtocolEventTable,
+  ProtocolInboxTable,
+  ProtocolStreamChunkTable,
+} from "../protocol/protocol.sql"

@@ -94,6 +94,10 @@ export function progressStatus(status: OrchestratorTaskStatus) {
   if (status === "completed") return "completed" as const
   if (status === "cancelled") return "cancelled" as const
   if (status === "failed") return "failed" as const
+  if (status === "spec_generating") return "spec_generating" as const
+  if (status === "goal_decomposing") return "goal_decomposing" as const
+  if (status === "planning") return "planning" as const
+  if (status === "planned") return "planned" as const
   return "running" as const
 }
 

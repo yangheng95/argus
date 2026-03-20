@@ -60,19 +60,7 @@ const startEventStream = (directory: string) => {
 
   ;(async () => {
     while (!signal.aborted) {
-      const events = await Promise.resolve(
-        sdk.event.subscribe(
-          {},
-          {
-            signal,
-          },
-        ),
-      ).catch(() => undefined)
-
-      if (!events) {
-        await Bun.sleep(250)
-        continue
-      }
+      const events = await sdk.event.subscribe({}, { signal })
 
       for await (const event of events.stream) {
         Rpc.emit("event", event as Event)
@@ -105,12 +93,17 @@ export const rpc = {
       directory: input.directory,
       init: InstanceBootstrap,
       fn: async () => {
-        await upgrade().catch(() => {})
+        await upgrade()
       },
     })
   },
   async reload() {
     Config.global.reset()
+    const { hasActiveSessions } = await import("@/orchestrator/runtime")
+    if (hasActiveSessions()) {
+      Log.Default.warn("skipping disposeAll during reload: active executor sessions")
+      return
+    }
     await Instance.disposeAll()
   },
   async shutdown() {

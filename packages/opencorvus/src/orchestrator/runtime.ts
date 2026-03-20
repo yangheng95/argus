@@ -13,7 +13,7 @@ import { MessageV2 } from "@/session/message"
 import { Database, and, eq, inArray } from "@/storage/db"
 import { Log } from "@/util/log"
 import { WorkbenchService } from "@/workbench/service"
-import { DeliveryService } from "./delivery"
+import { Publisher } from "./publisher"
 import { OrchestratorGit } from "./git"
 import { OrchestratorMemoryBridge } from "./memory-bridge"
 import {
@@ -38,7 +38,8 @@ import {
   persistEvaluation,
   persistFailedRunEvaluation,
   updateExecutorSessionStatus,
-} from "./transition"
+} from "./persist"
+import { advanceTaskStage } from "./pipeline"
 import { buildRetryContext, decideRetryOrReplan } from "./strategy"
 import {
   findDeliveryByRun,
@@ -61,13 +62,20 @@ import { Identifier } from "@/id/id"
 const log = Log.create({ service: "orchestrator-runtime" })
 const EVALUATION_HARD_TIMEOUT_MS = 10 * 60 * 1000 // 10 minutes total for entire evaluation phase
 const DELIVERY_FETCH_TIMEOUT_MS = 120_000 // 120 seconds for executor.delivery() (git operations can be slow on Windows)
-const DELIVERY_SERVICE_TIMEOUT_MS = 60_000 // 60 seconds for DeliveryService.deliver()
+const DELIVERY_SERVICE_TIMEOUT_MS = 60_000 // 60 seconds for Publisher.deliver()
+const SYNC_RUN_TIMEOUT_MS = parseInt(process.env.OPENCORVUS_SYNC_RUN_TIMEOUT_MS || String(5 * 60 * 1000), 10) // 5 min per syncRun
+const EXECUTOR_STATUS_TIMEOUT_MS = 30_000 // 30s for executor.status()
+const EXECUTOR_SUBMIT_TIMEOUT_MS = 60_000 // 60s for executor.submit()
 const evaluatingRuns = new Map<string, number>() // runID → start timestamp, guards against concurrent re-evaluation
+const eventBridgeAborts = new Map<string, AbortController>() // runID → AbortController for consumeExecutorEvents
 const EVALUATING_STALE_MS = EVALUATION_HARD_TIMEOUT_MS + 60_000 // consider stale after hard timeout + 1 min buffer
 
 // Unattended-mode safeguards
 const INTERACTION_STALE_MS = parseInt(process.env.OPENCORVUS_INTERACTION_TIMEOUT_MS || "30000", 10) // auto-reject stale interactions (30s default)
 const RUN_MAX_EXECUTION_MS = parseInt(process.env.OPENCORVUS_RUN_TIMEOUT_MS || String(2 * 60 * 60 * 1000), 10) // max run execution time (2h default)
+const PIPELINE_STALE_MS = 10 * 60 * 1000 // 10 min — pipeline tasks stuck longer without in-memory tracking are recovered
+const PIPELINE_STATUSES = ["queued", "spec_generating", "goal_decomposing", "planning", "planned"] as const
+const runningStages = new Map<string, Promise<void>>()
 
 type TranscriptState = {
   message: MessageV2.Assistant
@@ -355,12 +363,55 @@ async function prepareRun(task: TaskRow, run: RunRow, plan: PlanRow | undefined,
   return
 }
 
+/** Check if any executor session is active for the current project. Used as a guard before Instance.dispose(). */
+export function hasActiveSessions(): boolean {
+  try {
+    return Database.use((db) =>
+      db.select({ id: OrchestratorRunTable.id })
+        .from(OrchestratorRunTable)
+        .innerJoin(OrchestratorTaskTable, eq(OrchestratorRunTable.task_id, OrchestratorTaskTable.id))
+        .where(and(
+          eq(OrchestratorTaskTable.project_id, Instance.project.id),
+          inArray(OrchestratorRunTable.status, ["accepted", "running"]),
+        ))
+        .limit(1)
+        .get(),
+    ) !== undefined
+  } catch {
+    return false
+  }
+}
+
 export namespace OrchestratorRuntime {
   export async function poll(hooks: RuntimeHooks) {
     const current = orchestratorState()
     if (current.syncing) return
     current.syncing = true
     try {
+      // Pipeline advancement: find tasks in queued/planned states and advance them
+      const pipelineTasks = Database.use((db) =>
+        db.select({ id: OrchestratorTaskTable.id, status: OrchestratorTaskTable.status })
+          .from(OrchestratorTaskTable)
+          .where(and(
+            eq(OrchestratorTaskTable.project_id, Instance.project.id),
+            inArray(OrchestratorTaskTable.status, [...PIPELINE_STATUSES]),
+          ))
+          .all(),
+      )
+      for (const row of pipelineTasks) {
+        if (runningStages.has(row.id)) continue
+        // Only start new stages for queued and planned; others are in-progress
+        if (row.status !== "queued" && row.status !== "planned") continue
+        const p = (async () => {
+          const result = await advanceTaskStage(row.id, hooks.updateTask)
+          if (result?.runID) await OrchestratorRuntime.dispatch(result.runID, hooks)
+        })().catch((err) => {
+          log.error("pipeline advancement failed", { taskID: row.id, error: err instanceof Error ? err.message : String(err) })
+        }).finally(() => runningStages.delete(row.id))
+        runningStages.set(row.id, p)
+      }
+
+      // Sync active runs — concurrent with per-run timeout to prevent a single hung run from blocking all others
       const rows = Database.use((db) =>
         db
           .select({ id: OrchestratorRunTable.id })
@@ -374,11 +425,19 @@ export namespace OrchestratorRuntime {
           )
           .all(),
       )
-      for (const row of rows) {
-        await syncRun(row.id, hooks)
-      }
-      // Startup recovery: recover tasks stuck in transient states from a previous server instance
-      // Tasks in "evaluating" or "delivering" with no active in-memory evaluation are stranded
+      await Promise.allSettled(
+        rows.map((row) =>
+          Promise.race([
+            syncRun(row.id, hooks),
+            new Promise<void>((_, reject) =>
+              setTimeout(() => reject(new Error(`syncRun timeout for run ${row.id}`)), SYNC_RUN_TIMEOUT_MS),
+            ),
+          ]).catch((err) => {
+            log.error("syncRun failed or timed out", { runID: row.id, error: err instanceof Error ? err.message : String(err) })
+          }),
+        ),
+      )
+      // Recovery for stranded tasks
       recoverStrandedTasks(hooks)
     } finally {
       current.syncing = false
@@ -410,12 +469,17 @@ export namespace OrchestratorRuntime {
     const sessionID = task.session_id
     if (!sessionID) throw new Error(`Task ${task.id} has no session`)
     const executor = ExecutorRegistry.require(run.executor)
-    const submission = await executor.submit({
-      sessionID,
-      prompt,
-      priority: task.priority,
-      source,
-    })
+    const submission = await Promise.race([
+      executor.submit({
+        sessionID,
+        prompt,
+        priority: task.priority,
+        source,
+      }),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error(`executor.submit() timeout (${EXECUTOR_SUBMIT_TIMEOUT_MS}ms)`)), EXECUTOR_SUBMIT_TIMEOUT_MS),
+      ),
+    ])
     const now = Date.now()
     await hooks.updateRun(
       run,
@@ -450,7 +514,7 @@ export namespace OrchestratorRuntime {
       },
       started: now,
     })
-    appendExecutorEvent(session.id, task.id, run.id, run.executor, {
+    appendExecutorEvent(session.id, task.id, run.id, run.executor, undefined, {
       provider: run.executor,
       kind: "lifecycle",
       summary: "Run accepted by executor",
@@ -533,7 +597,12 @@ export namespace OrchestratorRuntime {
     const queueTaskID = run.executor_ref?.queue_task_id
     if (!queueTaskID) return
     const executor = ExecutorRegistry.require(run.executor)
-    const queue = await executor.status(queueTaskID)
+    const queue = await Promise.race([
+      executor.status(queueTaskID),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error(`executor.status() timeout (${EXECUTOR_STATUS_TIMEOUT_MS}ms)`)), EXECUTOR_STATUS_TIMEOUT_MS),
+      ),
+    ])
 
     if (queue.status === "queued" || queue.status === "retrying") {
       if (run.status === "blocked") {
@@ -646,6 +715,7 @@ export namespace OrchestratorRuntime {
 
 async function completeRun(run: RunRow, hooks: RuntimeHooks) {
   installRuntimeShims()
+  stopEventBridge(run.id)
   updateExecutorSessionStatus(run.id, "completed")
   const existingDelivery = findDeliveryByRun(run.id)
   if (existingDelivery) {
@@ -667,10 +737,8 @@ async function completeRun(run: RunRow, hooks: RuntimeHooks) {
         evaluatingRuns.delete(run.id)
       }
       const canReEval = task.active_run_id === run.id && run.session_id && !evaluatingRuns.has(run.id)
-      console.log(`[completeRun] no evaluation for run ${run.id}, canReEval=${canReEval}, activeRunMatch=${task.active_run_id === run.id}, sessionId=${!!run.session_id}, alreadyEvaluating=${evaluatingRuns.has(run.id)}`)
       if (canReEval) {
         evaluatingRuns.set(run.id, Date.now())
-        console.log(`[completeRun] starting runEvaluation for ${run.id}`)
         try {
           await Promise.race([
             runEvaluation(task, run, existingDelivery, hooks),
@@ -680,7 +748,6 @@ async function completeRun(run: RunRow, hooks: RuntimeHooks) {
           ])
         } catch (timeoutErr) {
           const msg = timeoutErr instanceof Error ? timeoutErr.message : String(timeoutErr)
-          console.log(`[completeRun] runEvaluation error for ${run.id}: ${msg}`)
           log.error("runEvaluation timed out or failed", { runID: run.id, error: msg })
           const now = Date.now()
           await hooks.updateRun(run, { status: "failed", error: msg, blocking_reason: null, time_completed: now }, msg)
@@ -689,7 +756,6 @@ async function completeRun(run: RunRow, hooks: RuntimeHooks) {
           }
         } finally {
           evaluatingRuns.delete(run.id)
-          console.log(`[completeRun] runEvaluation finished for ${run.id}, active evals: ${evaluatingRuns.size}`)
         }
       }
       return
@@ -871,8 +937,7 @@ async function completeRun(run: RunRow, hooks: RuntimeHooks) {
 }
 
 async function runEvaluation(task: TaskRow, run: RunRow, existingDelivery: DeliveryRow, hooks: RuntimeHooks) {
-  console.log(`[runEvaluation] START for run ${run.id}, task ${task.id}`)
-  if (!run.session_id) { console.log(`[runEvaluation] no session_id, skipping`); return }
+  if (!run.session_id) return
 
   const executor = ExecutorRegistry.require(run.executor)
   let delivery: Awaited<ReturnType<typeof executor.delivery>>
@@ -1014,39 +1079,43 @@ async function runEvaluation(task: TaskRow, run: RunRow, existingDelivery: Deliv
 }
 
 function recoverStrandedTasks(hooks: RuntimeHooks) {
-  // Find tasks stuck in transient states (evaluating/delivering) with no active in-memory evaluation
   const strandedTasks = Database.use((db) =>
-    db
-      .select()
-      .from(OrchestratorTaskTable)
-      .where(
-        and(
-          eq(OrchestratorTaskTable.project_id, Instance.project.id),
-          inArray(OrchestratorTaskTable.status, ["evaluating", "delivering"]),
-        ),
-      )
-      .all(),
+    db.select().from(OrchestratorTaskTable).where(and(
+      eq(OrchestratorTaskTable.project_id, Instance.project.id),
+      inArray(OrchestratorTaskTable.status, [
+        "spec_generating", "goal_decomposing", "planning",  // pipeline
+        "evaluating", "delivering",                          // execution
+      ]),
+    )).all(),
   )
   const now = Date.now()
   for (const task of strandedTasks) {
-    // Only recover if task has been in this state longer than the evaluation hard timeout
     const updated = task.time_updated ?? task.time_created ?? 0
     const age = now - updated
-    if (age < EVALUATING_STALE_MS) continue
-    // Check if this task has an active in-memory evaluation
+    const isPipeline = (PIPELINE_STATUSES as readonly string[]).includes(task.status)
+    const threshold = isPipeline ? PIPELINE_STALE_MS : EVALUATING_STALE_MS
+    if (age < threshold) continue
+    if (isPipeline && runningStages.has(task.id)) continue
     if (task.active_run_id && evaluatingRuns.has(task.active_run_id)) continue
+    // Pipeline recovery: re-trigger advancement instead of failing
+    if (isPipeline) {
+      log.warn("recovering stranded pipeline task", { taskID: task.id, status: task.status, ageMs: age })
+      const p = advanceTaskStage(task.id, hooks.updateTask, true)
+        .then(async (result) => { if (result?.runID) await OrchestratorRuntime.dispatch(result.runID, hooks) })
+        .catch((err) => log.error("pipeline recovery failed", { taskID: task.id, error: String(err) }))
+        .finally(() => runningStages.delete(task.id))
+      runningStages.set(task.id, p)
+      continue
+    }
     log.warn("recovering stranded task", { taskID: task.id, status: task.status, ageMs: age })
     const error = `Task was stranded in '${task.status}' state for ${Math.round(age / 60000)}min (server restart recovery)`
-    hooks.updateTask(task, {
-      status: "failed",
-      error,
-      blocking_reason: null,
-      time_completed: now,
-    }, error).catch((err) => log.error("failed to recover stranded task", { taskID: task.id, error: String(err) }))
+    hooks.updateTask(task, { status: "failed", error, blocking_reason: null, time_completed: now }, error)
+      .catch((err) => log.error("failed to recover stranded task", { taskID: task.id, error: String(err) }))
   }
 }
 
 async function failRun(run: RunRow, error: string, hooks: RuntimeHooks) {
+  stopEventBridge(run.id)
   updateExecutorSessionStatus(run.id, "failed")
   const task = requireTask(run.task_id)
   const now = Date.now()
@@ -1081,9 +1150,9 @@ async function publishAcceptedDelivery(task: TaskRow, run: RunRow, delivery: Del
   markDeliveryPublishing(delivery.id, now)
 
   const result = await Promise.race([
-    DeliveryService.deliver({ task, run, delivery }),
+    Publisher.deliver({ task, run, delivery }),
     new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error("DeliveryService.deliver() timeout")), DELIVERY_SERVICE_TIMEOUT_MS),
+      setTimeout(() => reject(new Error("Publisher.deliver() timeout")), DELIVERY_SERVICE_TIMEOUT_MS),
     ),
   ]).catch((error) => ({
     status: "failed" as const,
@@ -1245,13 +1314,17 @@ function consumeExecutorEvents(
 ) {
   const executor = ExecutorRegistry.require(executorName)
   if (!executor.capabilities().events) return
+  // Create an AbortController so we can stop the event bridge when the run completes/fails
+  const ctrl = new AbortController()
+  eventBridgeAborts.set(runID, ctrl)
   // 异步消费 — 不阻塞 dispatch 返回
   ;(async () => {
     try {
       for await (const event of executor.events({ sessionID })) {
+        if (ctrl.signal.aborted) break
         upsertExecutorInteraction(taskID, runID, sessionID, executorSessionID, executorName, event)
         await projectExecutorEventToSession(taskID, requireRun(runID), event)
-        appendExecutorEvent(executorSessionID, taskID, runID, executorName, {
+        appendExecutorEvent(executorSessionID, taskID, runID, executorName, undefined, {
           provider: executorName,
           kind: protocolEventKind(event.type),
           summary: event.summary ?? event.type,
@@ -1280,9 +1353,22 @@ function consumeExecutorEvents(
         }
       }
     } catch (err) {
-      log.warn("executor event bridge ended", { taskID, runID, error: String(err) })
+      if (!ctrl.signal.aborted) {
+        log.warn("executor event bridge ended", { taskID, runID, error: String(err) })
+      }
+    } finally {
+      eventBridgeAborts.delete(runID)
     }
   })()
+}
+
+/** Stop the event bridge for a run (called when run completes/fails/aborts). */
+function stopEventBridge(runID: string) {
+  const ctrl = eventBridgeAborts.get(runID)
+  if (ctrl) {
+    ctrl.abort()
+    eventBridgeAborts.delete(runID)
+  }
 }
 
 type RuntimeHooks = {

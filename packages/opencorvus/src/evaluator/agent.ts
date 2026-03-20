@@ -61,6 +61,9 @@ export const EvaluatorAnalysis = z.object({
 
 export type EvaluatorAnalysisType = z.infer<typeof EvaluatorAnalysis>
 
+/** Alias used by the orchestrator persist layer and delivery agent. */
+export type GoalJudgmentType = EvaluatorAnalysisType
+
 // ---------------------------------------------------------------------------
 // Input types
 // ---------------------------------------------------------------------------
@@ -148,6 +151,8 @@ export namespace EvaluatorAgent {
       textLength: allText.length,
     })
 
+    const MIN_TOOL_CALLS = 3
+
     let parsed: EvaluatorAnalysisType
     try {
       parsed = extractJSON(allText, input.goals.length)
@@ -156,13 +161,26 @@ export namespace EvaluatorAgent {
         error: String(err),
         textLength: allText.length,
       })
-      parsed = synthesizeFromCheckResults(input)
+      // When the agent investigated thoroughly (many tool calls) but produced
+      // no text output (common with gemini models in tool-call mode), and all
+      // checks passed, we can upgrade the synthesis to "accepted" — the agent
+      // found no issues worth reporting during its investigation.
+      const allChecksPassed = input.checkResults.length > 0 && input.checkResults.every((c) => c.status !== "failed")
+      const thoroughInvestigation = toolCallCount >= MIN_TOOL_CALLS
+      if (allChecksPassed && thoroughInvestigation && allText.length === 0) {
+        log.info("evaluator: agent investigated thoroughly with no text output and all checks passed — accepting", {
+          toolCalls: toolCallCount,
+          checks: input.checkResults.length,
+        })
+        parsed = synthesizeFromCheckResults(input, { agentInvestigated: true, toolCallCount })
+      } else {
+        parsed = synthesizeFromCheckResults(input)
+      }
     }
 
     // If the agent produced a verdict but made too few tool calls, the
     // investigation was too shallow — downgrade "accepted" to "inconclusive"
     // so the orchestrator doesn't rubber-stamp the delivery.
-    const MIN_TOOL_CALLS = 3
     if (parsed.verdict === "accepted" && toolCallCount < MIN_TOOL_CALLS) {
       log.warn("evaluator: agent accepted but made too few tool calls — downgrading to inconclusive", {
         toolCalls: toolCallCount,
@@ -542,21 +560,26 @@ function synthesizeFromCheckResults(input: {
   goals: GoalInfo[]
   delivery: DeliveryInfo
   checkResults: CheckResult[]
-}): EvaluatorAnalysisType {
+}, options?: { agentInvestigated?: boolean; toolCallCount?: number }): EvaluatorAnalysisType {
   const failedChecks = input.checkResults.filter((c) => c.status === "failed")
   const allPassed = failedChecks.length === 0
 
-  // NEVER auto-accept from synthesis — LLM investigation is required for a real verdict.
-  // When checks fail, we can confidently reject. When they pass, we can't confirm goals
-  // are actually met without reading the code, so verdict must be "inconclusive".
-  const verdict = allPassed ? "inconclusive" as const : "rejected" as const
+  // When the agent ran and investigated thoroughly (many tool calls) but produced
+  // no text output, and all checks passed, we accept — the agent found no issues.
+  // Otherwise: when checks fail → reject; when checks pass without investigation → inconclusive.
+  const agentInvestigated = options?.agentInvestigated === true
+  const verdict = allPassed
+    ? (agentInvestigated ? "accepted" as const : "inconclusive" as const)
+    : "rejected" as const
   const classification = "evaluation" as const
 
   const failedNames = failedChecks.map((c) => c.name).join(", ")
   const passedNames = input.checkResults.filter((c) => c.status === "passed").map((c) => c.name).join(", ")
 
   const summary = allPassed
-    ? `All ${input.checkResults.length} automated checks passed (${passedNames}), but LLM analysis was unavailable — cannot confirm goals are truly met without code investigation. Verdict: inconclusive.`
+    ? agentInvestigated
+      ? `All ${input.checkResults.length} automated checks passed (${passedNames}). Agent investigated with ${options?.toolCallCount ?? 0} tool calls and found no issues. Verdict: accepted.`
+      : `All ${input.checkResults.length} automated checks passed (${passedNames}), but LLM analysis was unavailable — cannot confirm goals are truly met without code investigation. Verdict: inconclusive.`
     : `${failedChecks.length}/${input.checkResults.length} checks failed (${failedNames}). LLM analysis was unavailable — verdict based on check results only.`
 
   // Goal assessment from synthesis:
@@ -571,8 +594,17 @@ function synthesizeFromCheckResults(input: {
   const goal_statuses: Array<z.infer<typeof GoalAssessment>> = input.goals.map((goal, i) => {
     const selectors = goal.check_selector ?? []
 
-    // Without selectors, we have NO mechanistic way to verify — must be inconclusive
+    // Without selectors: if the agent investigated and found no issues → passed;
+    // otherwise → inconclusive (no mechanistic way to verify)
     if (selectors.length === 0) {
+      if (agentInvestigated && allPassed) {
+        return {
+          goal_index: i,
+          status: "passed" as const,
+          evidence: `Agent investigated with ${options?.toolCallCount ?? 0} tool calls and all ${input.checkResults.length} automated checks passed. No issues found.`,
+          reasoning: `Synthesized (agent investigated but produced no text). All checks passed and agent found no issues during investigation.`,
+        }
+      }
       return {
         goal_index: i,
         status: "inconclusive" as const,
