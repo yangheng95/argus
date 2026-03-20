@@ -3,7 +3,6 @@ import { which } from "@/util/which"
 import path from "path"
 import { Global } from "../global"
 import fs from "fs/promises"
-import type { Dirent } from "node:fs"
 import z from "zod"
 import { NamedError } from "@opencorvus-ai/util/error"
 import { lazy } from "../util/lazy"
@@ -128,7 +127,7 @@ export namespace Ripgrep {
   )
 
   async function findFile(root: string, name: string): Promise<string | undefined> {
-    const entries = await fs.readdir(root, { withFileTypes: true }).catch(() => [] as Dirent[])
+    const entries = await fs.readdir(root, { withFileTypes: true }).catch(() => [])
     for (const entry of entries) {
       const full = path.join(root, entry.name)
       if (entry.isFile() && entry.name === name) return full
@@ -141,18 +140,9 @@ export namespace Ripgrep {
   const state = lazy(async () => {
     const system = which("rg")
     if (system) {
-      const resolved = await fs.realpath(system).catch(() => system)
-      const stat = await fs.stat(resolved).catch(() => undefined)
-      if (stat?.isFile()) {
-        const probe = await Process.run([resolved, "--version"], {
-          nothrow: true,
-          timeout: 3_000,
-        }).catch(() => undefined)
-        if (probe?.code === 0) return { filepath: resolved }
-        log.warn("system rg probe failed, falling back to managed binary", { filepath: resolved })
-      } else {
-        log.warn("which returned invalid rg path", { filepath: resolved })
-      }
+      const stat = await fs.stat(system).catch(() => undefined)
+      if (stat?.isFile()) return { filepath: system }
+      log.warn("bun.which returned invalid rg path", { filepath: system })
     }
     const filepath = path.join(Global.Path.bin, "rg" + (process.platform === "win32" ? ".exe" : ""))
 
@@ -196,11 +186,7 @@ export namespace Ripgrep {
           })
         }
         await fs.copyFile(extracted, filepath)
-        // Best-effort cleanup of the temp extraction directory; failure is
-        // harmless since the rg binary has already been copied to its target.
-        await fs.rm(extractDir, { recursive: true, force: true }).catch((err) => {
-          log.warn("rg extraction temp dir cleanup failed", { extractDir, error: String(err) })
-        })
+        await fs.rm(extractDir, { recursive: true, force: true }).catch(() => {})
       }
       if (config.extension === "zip") {
         const zipFileReader = new ZipReader(new BlobReader(new Blob([arrayBuffer])))
@@ -401,13 +387,8 @@ export namespace Ripgrep {
     // Parse JSON lines from ripgrep output
 
     return lines
-      .flatMap((line) => {
-        try {
-          return [Result.parse(JSON.parse(line))]
-        } catch {
-          return []
-        }
-      })
+      .map((line) => JSON.parse(line))
+      .map((parsed) => Result.parse(parsed))
       .filter((r) => r.type === "match")
       .map((r) => r.data)
   }

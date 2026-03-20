@@ -8,30 +8,10 @@ import { Flag } from "@/flag/flag"
 import { Global } from "@/global"
 
 export namespace ConfigPaths {
-  function testWorkspaceRoot(directory: string) {
-    const home = process.env.OPENCORVUS_TEST_HOME
-    if (!home) return
-    const workspacesRoot = Filesystem.resolve(path.join(home, "workspaces"))
-    const resolvedDirectory = Filesystem.resolve(directory)
-    if (!Filesystem.contains(workspacesRoot, resolvedDirectory)) return
-
-    const relative = path.relative(workspacesRoot, resolvedDirectory)
-    const [workspace] = relative.split(path.sep).filter(Boolean)
-    if (!workspace) return
-    return path.join(workspacesRoot, workspace)
-  }
-
-  function searchStop(directory: string, worktree: string) {
-    const testRoot = testWorkspaceRoot(directory)
-    if (testRoot) return testRoot
-    return worktree
-  }
-
   export async function projectFiles(name: string, directory: string, worktree: string) {
     const files: string[] = []
-    const stop = searchStop(directory, worktree)
     for (const file of [`${name}.jsonc`, `${name}.json`]) {
-      const found = await Filesystem.findUp(file, directory, stop)
+      const found = await Filesystem.findUp(file, directory, worktree)
       for (const resolved of found.toReversed()) {
         files.push(resolved)
       }
@@ -40,7 +20,6 @@ export namespace ConfigPaths {
   }
 
   export async function directories(directory: string, worktree: string) {
-    const stop = searchStop(directory, worktree)
     return [
       Global.Path.config,
       ...(!Flag.OPENCORVUS_DISABLE_PROJECT_CONFIG
@@ -48,7 +27,7 @@ export namespace ConfigPaths {
             Filesystem.up({
               targets: [".opencorvus"],
               start: directory,
-              stop,
+              stop: worktree,
             }),
           )
         : []),

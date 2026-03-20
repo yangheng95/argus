@@ -86,7 +86,7 @@ export namespace ToolRegistry {
             directory: Instance.directory,
             worktree: Instance.worktree,
           } as unknown as PluginToolContext
-          const result = await def.execute(args as Record<string, unknown>, pluginCtx)
+          const result = await def.execute(args as any, pluginCtx)
           const out = await Truncate.output(result, {}, initCtx?.agent)
           return {
             title: "",
@@ -112,7 +112,6 @@ export namespace ToolRegistry {
     const custom = await state().then((x) => x.custom)
     const config = await Config.get()
     const question = ["app", "cli", "desktop"].includes(Flag.OPENCORVUS_CLIENT) || Flag.OPENCORVUS_ENABLE_QUESTION_TOOL
-    const tui = Flag.OPENCORVUS_ENABLE_TUI_TOOL || Flag.OPENCORVUS_CLIENT !== "app"
 
     return [
       InvalidTool,
@@ -140,7 +139,7 @@ export namespace ToolRegistry {
       ScheduleTool,
       PlannerTool,
       PanelTool,
-      ...(tui ? [TuiTool] : []),
+      TuiTool,
       TaskReportTool,
       AnalyticsTool,
       ...(Flag.OPENCORVUS_EXPERIMENTAL_LSP_TOOL ? [LspTool] : []),

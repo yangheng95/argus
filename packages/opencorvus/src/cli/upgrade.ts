@@ -6,8 +6,7 @@ import { Installation } from "@/installation"
 export async function upgrade() {
   const config = await Config.global()
   const method = await Installation.method()
-  // Network unavailable → skip upgrade check silently
-  const latest = await Installation.latest(method).catch(() => undefined)
+  const latest = await Installation.latest(method).catch(() => {})
   if (!latest) return
   if (Installation.VERSION === latest) return
 
@@ -22,7 +21,5 @@ export async function upgrade() {
   if (method === "unknown") return
   await Installation.upgrade(method, latest)
     .then(() => Bus.publish(Installation.Event.Updated, { version: latest }))
-    .catch((err) => {
-      console.warn("[upgrade] auto-upgrade failed:", String(err))
-    })
+    .catch(() => {})
 }

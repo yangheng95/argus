@@ -17,7 +17,10 @@ import { AuthRoutes } from "./routes/auth"
 import { AppDocumentation, AppRoutes } from "./routes/app"
 import { GlobalRoutes } from "./routes/global"
 import { MDNS } from "./mdns"
+import { muteAISdkWarnings } from "@/runtime/shims"
 import { OverlayUI } from "./overlay-ui"
+
+muteAISdkWarnings()
 
 export namespace Server {
   const log = Log.create({ service: "server" })

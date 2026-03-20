@@ -2,6 +2,7 @@ import { Installation } from "@/installation"
 import { Provider } from "@/provider/provider"
 import { Log } from "@/util/log"
 import {
+  streamText,
   wrapLanguageModel,
   type ModelMessage,
   type StreamTextResult,
@@ -20,9 +21,9 @@ import { Plugin } from "@/plugin"
 import { SystemPrompt } from "./system"
 import { Flag } from "@/flag/flag"
 import { PermissionNext } from "@/permission/next"
+import { Auth } from "@/auth"
 import { LLMTrace } from "./llm-trace"
 import { ulid } from "ulid"
-import { streamText } from "@/llm/api"
 
 export namespace LLM {
   const log = Log.create({ service: "llm" })
@@ -57,19 +58,20 @@ export namespace LLM {
       modelID: input.model.id,
       providerID: input.model.providerID,
     })
-    const [language, cfg, provider] = await Promise.all([
+    const [language, cfg, provider, auth] = await Promise.all([
       Provider.getLanguage(input.model),
       Config.get(),
       Provider.getProvider(input.model.providerID),
+      Auth.get(input.model.providerID),
     ])
-    const isCodex = provider.id === "openai-codex"
+    const isCodex = provider.id === "openai" && auth?.type === "oauth"
 
     const system: string[] = []
     system.push(
       [
         // use agent prompt otherwise provider prompt
         // For Codex sessions, skip SystemPrompt.provider() since it's sent via options.instructions
-        ...(input.agent.prompt ? [input.agent.prompt] : isCodex ? [] : await SystemPrompt.provider(input.model)),
+        ...(input.agent.prompt ? [input.agent.prompt] : isCodex ? [] : SystemPrompt.provider(input.model)),
         // any custom prompt passed into this call
         ...input.system,
         // any custom prompt from last user message
@@ -108,7 +110,7 @@ export namespace LLM {
       mergeDeep(variant),
     )
     if (isCodex) {
-      options.instructions = await SystemPrompt.instructions()
+      options.instructions = SystemPrompt.instructions()
     }
 
     const params = await Plugin.trigger(
@@ -149,28 +151,6 @@ export namespace LLM {
 
     const tools = await resolveTools(input)
     const providerOptions = ProviderTransform.providerOptions(input.model, params.options)
-
-    // DashScope streaming API: enable_thinking conflicts with structured tool calling.
-    // When both are present the model outputs tool calls as text content (raw JSON)
-    // instead of structured tool_calls blocks, causing tools to render as plain text
-    // and preventing actual tool execution.
-    // Fix: strip enable_thinking when real tools are present for DashScope providers.
-    if (
-      input.model.providerID.startsWith("alibaba") &&
-      input.model.capabilities.reasoning &&
-      Object.keys(tools).filter((t) => t !== "_noop" && t !== "invalid").length > 0
-    ) {
-      const key = Object.keys(providerOptions).find((k) => k.startsWith("alibaba"))
-      if (key && providerOptions[key]?.enable_thinking) {
-        providerOptions[key] = { ...providerOptions[key] }
-        delete providerOptions[key].enable_thinking
-        l.info("disabled enable_thinking for DashScope streaming with tools", {
-          model: input.model.id,
-          toolCount: Object.keys(tools).length,
-        })
-      }
-    }
-
     const requestHeaders = {
       ...(input.model.providerID.startsWith("opencorvus")
         ? {
@@ -290,10 +270,9 @@ export namespace LLM {
       tools,
       toolChoice: input.toolChoice,
       maxOutputTokens,
-      timeoutMs: false,
       abortSignal: input.abort,
       headers: requestHeaders,
-      retries: input.retries ?? 0,
+      maxRetries: input.retries ?? 0,
       messages: requestMessages,
       model: wrapLanguageModel({
         model: language,

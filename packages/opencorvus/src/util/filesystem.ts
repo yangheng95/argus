@@ -91,8 +91,7 @@ export namespace Filesystem {
       await mkdir(dir, { recursive: true })
     }
 
-    // @ts-expect-error Bun's ReadableStream is compatible with Node's web stream but has slightly different type definitions
-    const nodeStream = stream instanceof ReadableStream ? Readable.fromWeb(stream) : stream
+    const nodeStream = stream instanceof ReadableStream ? Readable.fromWeb(stream as any) : stream
     const writeStream = createWriteStream(p)
     await pipeline(nodeStream, writeStream)
 

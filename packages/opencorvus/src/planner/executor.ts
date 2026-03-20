@@ -1,37 +1,11 @@
 import { ExecutorRegistry } from "@/executor/registry"
-import type { ExecutorNameInfo } from "@/executor/contracts"
+import type { ExecutorNameInfo } from "@/executor/compat"
 import { Instance } from "@/project/instance"
 import { Log } from "@/util/log"
-import { Env } from "@/env"
 import { PlannerOutput, parsePlannerOutput, type PlannerOutputType, type ReplanContext } from "./agent"
 import { SpecDraftSchema, type SpecDraft } from "@/spec/agent"
-import z from "zod"
 
 const log = Log.create({ service: "planner.executor" })
-
-function timeout(stage: "spec" | "plan") {
-  if (stage === "spec") return Number(Env.get("OPENCORVUS_SPEC_TIMEOUT_MS")) || 300_000
-  return Number(Env.get("OPENCORVUS_PLANNER_TIMEOUT_MS")) || 300_000
-}
-
-async function run<T>(stage: "spec" | "plan", signal: AbortSignal | undefined, fn: (signal: AbortSignal) => Promise<T>) {
-  const timeoutMs = timeout(stage)
-  const controller = new AbortController()
-  const merged = signal ? AbortSignal.any([signal, controller.signal]) : controller.signal
-  const timer = setTimeout(() => controller.abort(), timeoutMs)
-  let race: ReturnType<typeof setTimeout>
-  try {
-    return await Promise.race([
-      fn(merged).finally(() => clearTimeout(race)),
-      new Promise<never>((_, reject) => {
-        race = setTimeout(() => reject(new Error(`${stage} executor-native planning timed out after ${timeoutMs}ms`)), timeoutMs)
-      }),
-    ])
-  } finally {
-    clearTimeout(timer)
-    controller.abort()
-  }
-}
 
 export namespace ExecutorPlanner {
   export function supports(executor: ExecutorNameInfo, stage: "spec" | "plan") {
@@ -57,17 +31,14 @@ export namespace ExecutorPlanner {
       executor: input.executor,
       stage: "spec",
     })
-    const result = await run("spec", input.signal, (signal) =>
-      adapter.generatePlanning!({
-        stage: "spec",
-        cwd: workdir(),
-        maxTurns: 4,
-        system: SPEC_SYSTEM,
-        prompt: specPrompt(input),
-        outputSchema: z.toJSONSchema(SpecDraftSchema),
-        signal,
-      })
-    )
+    const result = await adapter.generatePlanning({
+      stage: "spec",
+      cwd: workdir(),
+      maxTurns: 4,
+      system: SPEC_SYSTEM,
+      prompt: specPrompt(input),
+      signal: input.signal,
+    })
     return SpecDraftSchema.parse(extractObject(result.output))
   }
 
@@ -88,31 +59,24 @@ export namespace ExecutorPlanner {
       executor: input.executor,
       stage: "plan",
     })
-    const result = await run("plan", input.signal, (signal) =>
-      adapter.generatePlanning!({
-        stage: "plan",
-        cwd: workdir(),
-        maxTurns: 4,
-        system: PLAN_SYSTEM,
-        prompt: planPrompt(input),
-        outputSchema: z.toJSONSchema(PlannerOutput),
-        signal,
-      })
-    )
+    const result = await adapter.generatePlanning({
+      stage: "plan",
+      cwd: workdir(),
+      maxTurns: 4,
+      system: PLAN_SYSTEM,
+      prompt: planPrompt(input),
+      signal: input.signal,
+    })
     return PlannerOutput.parse(parsePlannerOutput(result.output))
   }
 }
 
 function extractObject(text: string) {
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/)
-  if (fenced?.[1]) {
-    try { return JSON.parse(sanitizeJSON(fenced[1])) } catch { /* fall through to next strategy */ }
-  }
+  if (fenced?.[1]) return JSON.parse(sanitizeJSON(fenced[1]))
   const match = text.match(/\{[\s\S]*\}/)
-  if (match?.[0]) {
-    try { return JSON.parse(sanitizeJSON(match[0])) } catch { /* fall through to throw */ }
-  }
-  throw new Error("executor spec output did not contain valid JSON")
+  if (match?.[0]) return JSON.parse(sanitizeJSON(match[0]))
+  throw new Error("executor spec output did not contain JSON")
 }
 
 /**
@@ -232,8 +196,6 @@ function planPrompt(input: {
         ].filter(Boolean).join("\n")
       : "",
     "Return only JSON matching the planner schema.",
-    "For multi-goal plans, emit iterative waves with valid zero-based goal_indices.",
-    "Every wave must contain exactly one goal and continue the same workspace forward.",
   ].filter(Boolean).join("\n\n")
 }
 
@@ -250,9 +212,7 @@ const PLAN_SYSTEM = [
   "WARNING: This is a planning-only read-only session.",
   "You may inspect the codebase and documentation, but you must not modify files, apply patches, or run commands with side effects.",
   "Produce a detailed implementation plan as JSON only.",
-  "Use the authoritative goals from the specification as execution constraints, but do not redefine them in your output.",
-  "For multi-goal tasks, organize execution into dependency-driven iterative waves.",
-  "Each wave must contain exactly one goal and represent the next coding stage in the same workspace.",
+  "Every blocking goal must have concrete criteria and at least one relevant check_selector.",
 ].join("\n")
 
 const PLANNING_WARNING_PROMPT = [

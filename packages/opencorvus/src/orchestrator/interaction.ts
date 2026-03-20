@@ -4,31 +4,18 @@ import { Question } from "@/question"
 import { Database, eq } from "@/storage/db"
 import { OrchestratorInteractionRequestTable, type OrchestratorMetadata, type OrchestratorInteractionStatus } from "./orchestrator.sql"
 import { Event } from "./model"
-import { OrchestratorProtocol } from "./protocol"
 import { activeRunBySession, findInteractionByExternal, type InteractionRow } from "./store"
 import { Identifier } from "@/id/id"
 import { OrchestratorRuntime } from "./runtime"
-import { OrchestratorInteractionActor } from "./interaction-actor"
 
 export namespace OrchestratorInteraction {
-  export function subscribe(hooks: RuntimeHooks): () => void {
+  export function subscribe(hooks: RuntimeHooks) {
     const uses = () => hooks
-    const submit = <T>(key: string, exec: () => Promise<T>) => OrchestratorInteractionActor.submit(key, exec)
-    const unsubs = [
-      Bus.subscribe(PermissionNext.Event.Asked, ({ properties }) =>
-        submit(`session:${properties.sessionID}`, () => upsertPermission(properties, uses()))),
-      Bus.subscribe(PermissionNext.Event.Replied, ({ properties }) =>
-        submit(`session:${properties.sessionID}`, () => resolvePermission(properties, uses()))),
-      Bus.subscribe(Question.Event.Asked, ({ properties }) =>
-        submit(`session:${properties.sessionID}`, () => upsertQuestion(properties, uses()))),
-      Bus.subscribe(Question.Event.Replied, ({ properties }) =>
-        submit(`session:${properties.sessionID}`, () => resolveQuestion(properties, uses()))),
-      Bus.subscribe(Question.Event.Rejected, ({ properties }) =>
-        submit(`session:${properties.sessionID}`, () => rejectQuestion(properties, uses()))),
-    ]
-    return () => {
-      for (const unsub of unsubs) unsub()
-    }
+    Bus.subscribe(PermissionNext.Event.Asked, ({ properties }) => upsertPermission(properties, uses()))
+    Bus.subscribe(PermissionNext.Event.Replied, ({ properties }) => resolvePermission(properties, uses()))
+    Bus.subscribe(Question.Event.Asked, ({ properties }) => upsertQuestion(properties, uses()))
+    Bus.subscribe(Question.Event.Replied, ({ properties }) => resolveQuestion(properties, uses()))
+    Bus.subscribe(Question.Event.Rejected, ({ properties }) => rejectQuestion(properties, uses()))
   }
 }
 
@@ -62,13 +49,13 @@ async function upsertPermission(request: PermissionNext.Request, hooks: RuntimeH
       })
       .run()
     Database.effect(() =>
-      OrchestratorProtocol.emit(Event.InteractionRequested, {
+      Bus.publish(Event.InteractionRequested, {
         taskID: run.task_id,
         runID: run.id,
         interactionID,
         requestType: "permission",
         summary: `Permission requested: ${request.permission}`,
-      }, { source: "interaction.permission" }),
+      }),
     )
   })
   await OrchestratorRuntime.syncRun(run.id, hooks)
@@ -109,13 +96,13 @@ async function upsertQuestion(request: Question.Request, hooks: RuntimeHooks) {
       })
       .run()
     Database.effect(() =>
-      OrchestratorProtocol.emit(Event.InteractionRequested, {
+      Bus.publish(Event.InteractionRequested, {
         taskID: run.task_id,
         runID: run.id,
         interactionID,
         requestType: "question",
         summary: title,
-      }, { source: "interaction.question" }),
+      }),
     )
   })
   await OrchestratorRuntime.syncRun(run.id, hooks)
@@ -154,13 +141,13 @@ async function resolveInteraction(
       .where(eq(OrchestratorInteractionRequestTable.id, interaction.id))
       .run()
     Database.effect(() =>
-      OrchestratorProtocol.emit(Event.InteractionResolved, {
+      Bus.publish(Event.InteractionResolved, {
         taskID: interaction.task_id,
         runID: interaction.run_id,
         interactionID: interaction.id,
         status,
         summary: status === "answered" ? "Interaction answered" : "Interaction rejected",
-      }, { source: "interaction.resolve" }),
+      }),
     )
   })
   await OrchestratorRuntime.syncRun(interaction.run_id, hooks)

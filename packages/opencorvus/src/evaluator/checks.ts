@@ -1,77 +1,59 @@
-import { Env } from "@/env"
 import { Instance } from "@/project/instance"
 import { Shell } from "@/shell/shell"
+import { Shell as ShellUtil } from "@/shell/shell"
 import { CheckConfig } from "@/orchestrator/model"
 import { Snapshot } from "@/snapshot"
 import { Filesystem } from "@/util/filesystem"
 import { which } from "@/util/which"
 import { spawn } from "child_process"
-import path from "path"
 import z from "zod"
 import puppeteer from "puppeteer-core"
 import {
   type CommandGroup,
-  type CheckArtifact,
-  type CheckDelivery,
-  type CheckOutcome,
-  type CheckCommand,
+  type EvaluationArtifact,
+  type EvaluationDelivery,
+  type EvaluationOutcome,
+  type EvaluatorCommand,
   checkResult,
   clip,
   emptyOptional,
   softOrStrict,
   webPage,
 } from "./shared"
-import { Log } from "@/util/log"
-
-const evaluatorLog = Log.create({ service: "evaluator-checks" })
-const dependencyInstalls = new Map<string, Promise<void>>()
-const dependencyReady = new Set<string>()
-
-function commandShell(command: string) {
-  const shell = Shell.acceptable()
-  if (process.platform !== "win32") return shell
-  if (!/[&|]{2}/.test(command)) return shell
-  if (!/powershell|pwsh/i.test(String(shell))) return shell
-  return process.env.COMSPEC || "cmd.exe"
-}
 
 export async function commandChecks(
   commands: CommandGroup[],
   timeout: number,
-  delivery: CheckDelivery,
+  delivery: EvaluationDelivery,
 ) {
-  const tasks = commands.flatMap((group) =>
-    group.commands.map((command, index) => ({
-      group,
-      name: group.commands.length === 1 ? group.name : `${group.name}#${index + 1}`,
-      command,
-    })),
-  )
-  // Run checks sequentially to avoid spawning too many child processes at once
-  const results: Array<typeof tasks[number] & { result: Awaited<ReturnType<typeof commandResult>> }> = []
-  for (const task of tasks) {
-    const result = await commandResult(task.command, timeout)
-    results.push({ ...task, result })
+  const checks: { name: string; label?: string; family?: string; status: "passed" | "failed" | "skipped"; evidence?: string }[] = []
+  const artifacts: EvaluationArtifact[] = []
+
+  for (const group of commands) {
+    for (const [index, command] of group.commands.entries()) {
+      const name = group.commands.length === 1 ? group.name : `${group.name}#${index + 1}`
+      const result = await commandResult(command, timeout)
+      artifacts.push({
+        kind: "log",
+        label: `evaluation:${name}`,
+        payload: {
+          command: result.command,
+          cwd: result.cwd,
+          code: result.code,
+          output: clip(result.output),
+        },
+      })
+      checks.push({
+        ...checkResult({
+          name,
+          label: group.label,
+          family: group.family,
+          status: result.code === 0 ? "passed" : "failed",
+          evidence: clip(result.output) || `${command} ${result.code === 0 ? "passed" : "failed"}`,
+        }),
+      })
+    }
   }
-  const checks = results.map((item) => ({
-    ...checkResult({
-      name: item.name,
-      label: item.group.label,
-      family: item.group.family,
-      status: item.result.code === 0 ? "passed" : "failed",
-      evidence: clip(item.result.output) || `${typeof item.command === "string" ? item.command : item.command.command} ${item.result.code === 0 ? "passed" : "failed"}`,
-    }),
-  }))
-  const artifacts: CheckArtifact[] = results.map((item) => ({
-    kind: "log",
-    label: `evaluation:${item.name}`,
-    payload: {
-      command: item.result.command,
-      cwd: item.result.cwd,
-      code: item.result.code,
-      output: clip(item.result.output),
-    },
-  }))
 
   if (commands.length === 0) {
     checks.push(checkResult({
@@ -84,19 +66,14 @@ export async function commandChecks(
   return { checks, artifacts }
 }
 
-export async function commandResult(input: string | CheckCommand, timeout: number) {
+export async function commandResult(input: string | EvaluatorCommand, timeout: number) {
   const command = typeof input === "string" ? input : input.command
   const cwd = typeof input === "string" ? Instance.directory : input.cwd ?? Instance.directory
-  await ensureDependencies(cwd, timeout)
-  return runCommand(command, cwd, timeout)
-}
-
-async function runCommand(command: string, cwd: string, timeout: number) {
-  const shell = commandShell(command)
+  const shell = Shell.acceptable()
   const proc = spawn(command, {
     shell,
     cwd,
-    env: Env.all(),
+    env: process.env,
     stdio: ["ignore", "pipe", "pipe"],
     detached: process.platform !== "win32",
   })
@@ -110,7 +87,7 @@ async function runCommand(command: string, cwd: string, timeout: number) {
   })
 
   const timer = setTimeout(() => {
-    void Shell.killTree(proc, { exited: () => proc.exitCode !== null || proc.signalCode !== null })
+    void ShellUtil.killTree(proc, { exited: () => proc.exitCode !== null || proc.signalCode !== null })
   }, timeout)
   timer.unref()
 
@@ -125,10 +102,6 @@ async function runCommand(command: string, cwd: string, timeout: number) {
     })
   }).finally(() => {
     clearTimeout(timer)
-    // Ensure child process tree is fully killed after completion
-    if (proc.exitCode === null && proc.signalCode === null) {
-      Shell.killTree(proc, { exited: () => proc.exitCode !== null || proc.signalCode !== null }).catch(() => {})
-    }
   })
 
   return {
@@ -139,100 +112,16 @@ async function runCommand(command: string, cwd: string, timeout: number) {
   }
 }
 
-async function ensureDependencies(cwd: string, timeout: number) {
-  const plan = await dependencyInstallPlan(cwd)
-  if (!plan || dependencyReady.has(plan.cwd)) return
-  const pending = dependencyInstalls.get(plan.cwd)
-  if (pending) return pending
-  const install = runCommand(plan.command, plan.cwd, Math.max(timeout, 10 * 60 * 1000))
-    .then((result) => {
-      if (result.code !== 0) {
-        evaluatorLog.warn("dependency install failed before evaluator commands", {
-          cwd: plan.cwd,
-          command: plan.command,
-          code: result.code,
-          output: clip(result.output),
-        })
-        return
-      }
-      dependencyReady.add(plan.cwd)
-      evaluatorLog.info("dependency install completed before evaluator commands", {
-        cwd: plan.cwd,
-        command: plan.command,
-      })
-    })
-    .finally(() => {
-      dependencyInstalls.delete(plan.cwd)
-    })
-  dependencyInstalls.set(plan.cwd, install)
-  return install
-}
-
-export async function dependencyInstallPlan(cwd: string) {
-  const root = await dependencyInstallRoot(cwd)
-  if (!root || dependencyReady.has(root)) return
-  if (await Filesystem.exists(path.join(root, "node_modules"))) {
-    dependencyReady.add(root)
-    return
-  }
-  const command = await installCommand(root)
-  if (!command) return
-  return { cwd: root, command }
-}
-
-async function dependencyInstallRoot(cwd: string) {
-  let current = cwd
-  let candidate = ""
-  while (Filesystem.contains(Instance.directory, current)) {
-    const packageJson = await Filesystem.exists(path.join(current, "package.json"))
-    if (packageJson) {
-      candidate ||= current
-      if (await hasLockfile(current)) candidate = current
-    }
-    if (current === Instance.directory) break
-    const parent = path.dirname(current)
-    if (parent === current) break
-    current = parent
-  }
-  return candidate || undefined
-}
-
-async function hasLockfile(cwd: string) {
-  for (const file of [
-    "pnpm-workspace.yaml",
-    "pnpm-lock.yaml",
-    "bun.lock",
-    "bun.lockb",
-    "package-lock.json",
-    "yarn.lock",
-  ]) {
-    if (await Filesystem.exists(path.join(cwd, file))) return true
-  }
-  return false
-}
-
-async function installCommand(cwd: string) {
-  if (
-    (await Filesystem.exists(path.join(cwd, "pnpm-workspace.yaml")) || await Filesystem.exists(path.join(cwd, "pnpm-lock.yaml")))
-    && which("pnpm")
-  ) return "pnpm install"
-  if ((await Filesystem.exists(path.join(cwd, "bun.lock")) || await Filesystem.exists(path.join(cwd, "bun.lockb"))) && which("bun")) {
-    return "bun install"
-  }
-  if (await Filesystem.exists(path.join(cwd, "yarn.lock")) && which("yarn")) return "yarn install"
-  if (which("npm")) return "npm install"
-}
-
-export async function startupResult(config: z.infer<typeof CheckConfig>["startup"]): Promise<CheckOutcome> {
+export async function startupResult(config: z.infer<typeof CheckConfig>["startup"]): Promise<EvaluationOutcome> {
   if (!config) return emptyOptional()
   const mode = config.mode ?? "soft"
   const timeout = config.timeout_ms ?? 20_000
   const warmup = config.warmup_ms ?? 1_500
-  const shell = commandShell(config.command)
+  const shell = Shell.acceptable()
   const proc = spawn(config.command, {
     shell,
     cwd: Instance.directory,
-    env: Env.all(),
+    env: process.env,
     stdio: ["ignore", "pipe", "pipe"],
     detached: process.platform !== "win32",
   })
@@ -261,7 +150,7 @@ export async function startupResult(config: z.infer<typeof CheckConfig>["startup
   })
 
   if (proc.exitCode === null && proc.signalCode === null) {
-    await Shell.killTree(proc, { exited: () => proc.exitCode !== null || proc.signalCode !== null })
+    await ShellUtil.killTree(proc, { exited: () => proc.exitCode !== null || proc.signalCode !== null })
   }
 
   if (readiness.ok) {
@@ -321,23 +210,10 @@ async function waitForStartup(input: {
   while (Date.now() - started < input.timeout) {
     if (typeof input.proc.exitCode === "number" || input.proc.signalCode !== null) {
       const code = input.proc.exitCode ?? 1
-      // requireExitZero: one-shot processes that exit 0 are considered ready,
-      // even when readyURL is configured (the URL can't be checked after exit)
-      if (input.requireExitZero && code === 0) {
-        const textMatch = !input.readyText || input.output().includes(input.readyText)
-        if (textMatch) {
-          return {
-            ok: true,
-            evidence: input.readyText
-              ? `Process exited 0 and output matched "${input.readyText}".`
-              : "Process exited successfully (requireExitZero).",
-          }
-        }
-      }
       if (!input.readyURL && !input.readyText && code === 0) {
         return { ok: true, evidence: "Process exited successfully." }
       }
-      if (code === 0 && input.readyText && input.output().includes(input.readyText)) {
+      if (input.requireExitZero && code === 0 && input.readyText && input.output().includes(input.readyText)) {
         return { ok: true, evidence: `Process output matched "${input.readyText}".` }
       }
       return { ok: false, evidence: `Process exited before becoming ready (code ${code}).` }
@@ -370,7 +246,7 @@ async function waitForStartup(input: {
 export async function artifactResult(
   config: z.infer<typeof CheckConfig>["artifact"],
   delivery: { summary: string; diffs?: Snapshot.FileDiff[]; changedFiles?: string[] },
-): Promise<CheckOutcome> {
+): Promise<EvaluationOutcome> {
   if (!config) return emptyOptional()
   const changedFiles = delivery.changedFiles ?? delivery.diffs?.map((item) => item.file) ?? []
   const diffs = delivery.diffs ?? []
@@ -458,7 +334,7 @@ export async function artifactResult(
   }
 }
 
-export async function visualResult(config: z.infer<typeof CheckConfig>["visual"]): Promise<CheckOutcome> {
+export async function visualResult(config: z.infer<typeof CheckConfig>["visual"]): Promise<EvaluationOutcome> {
   if (!config) return emptyOptional()
   const mode = config.mode ?? "soft"
   const page = await webPage(config.url, config.timeout_ms ?? 10_000)
@@ -594,7 +470,7 @@ export async function visualResult(config: z.infer<typeof CheckConfig>["visual"]
   }
 }
 
-export async function puppeteerResult(config: z.infer<typeof CheckConfig>["puppeteer"]): Promise<CheckOutcome> {
+export async function puppeteerResult(config: z.infer<typeof CheckConfig>["puppeteer"]): Promise<EvaluationOutcome> {
   if (!config) return emptyOptional()
   const mode = config.mode ?? "soft"
   const executable = await resolvePuppeteerExecutable(config)
@@ -621,10 +497,7 @@ export async function puppeteerResult(config: z.infer<typeof CheckConfig>["puppe
       height: config.viewport?.height ?? 900,
     },
     args: ["--no-sandbox", "--disable-dev-shm-usage"],
-  }).catch((err) => {
-    evaluatorLog.warn("puppeteer launch failed", { executable, error: String(err) })
-    return undefined
-  })
+  }).catch(() => undefined)
 
   if (!browser) {
     return softOrStrict({
@@ -659,14 +532,8 @@ export async function puppeteerResult(config: z.infer<typeof CheckConfig>["puppe
     }
     await new Promise((resolve) => setTimeout(resolve, 500))
 
-    const title = await page.title().catch((err) => {
-      evaluatorLog.warn("puppeteer page.title() failed", { url: config.url, error: String(err) })
-      return ""
-    })
-    const content = await page.content().catch((err) => {
-      evaluatorLog.warn("puppeteer page.content() failed", { url: config.url, error: String(err) })
-      return ""
-    })
+    const title = await page.title().catch(() => "")
+    const content = await page.content().catch(() => "")
     const screenshot = await page.screenshot({
       type: "png",
       encoding: "base64",
@@ -766,9 +633,7 @@ export async function puppeteerResult(config: z.infer<typeof CheckConfig>["puppe
       },
     })
   } finally {
-    await browser.close().catch((err) => {
-      evaluatorLog.warn("puppeteer browser.close() failed", { error: String(err) })
-    })
+    await browser.close().catch(() => undefined)
   }
 }
 

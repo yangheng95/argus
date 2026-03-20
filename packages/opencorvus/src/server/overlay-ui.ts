@@ -12,32 +12,19 @@ const MIME: Record<string, string> = {
   ".json": "application/json",
 }
 
-let _overlayDirCache: string | undefined
-
-function isOverlayDir(dir: string) {
-  return fs.existsSync(path.join(dir, "index.html"))
-}
-
-function overlayDirCandidates() {
-  const binDir = path.dirname(process.execPath)
-  return [
-    process.env.OPENCORVUS_OVERLAY_UI_DIR?.trim(),
-    path.join(binDir, "ui"),
-    path.resolve(binDir, "../Resources/ui"),
-    path.resolve(binDir, "../../Resources/ui"),
-    path.resolve(process.cwd(), "packages/overlay/src"),
-    path.resolve(process.cwd(), "../overlay/src"),
-    path.resolve(process.cwd(), "overlay/src"),
-    path.resolve(import.meta.dir, "../../../overlay/src"),
-    path.resolve(import.meta.dir, "../../../../overlay/src"),
-  ].filter((dir, index, list): dir is string => !!dir && list.indexOf(dir) === index)
-}
-
 function resolveOverlayDir(): string | undefined {
-  if (_overlayDirCache && isOverlayDir(_overlayDirCache)) return _overlayDirCache
-  const dir = overlayDirCandidates().find(isOverlayDir)
-  _overlayDirCache = dir
-  return dir
+  // 1. Compiled binary: look for ui/ next to the executable
+  const binDir = path.dirname(process.execPath)
+  const distUi = path.join(binDir, "ui")
+  if (fs.existsSync(path.join(distUi, "index.html"))) return distUi
+
+  // 2. Source fallback: works in dev (any CHANNEL) when no compiled ui/ exists
+  // import.meta.dir = .../packages/opencorvus/src/server
+  const pkgRoot = import.meta.dir.replace(/[/\\]src[/\\]server$/, "")
+  const devUi = path.resolve(pkgRoot, "../overlay/src")
+  if (fs.existsSync(path.join(devUi, "index.html"))) return devUi
+
+  return undefined
 }
 
 export namespace OverlayUI {
@@ -47,7 +34,7 @@ export namespace OverlayUI {
     const handle = async (c: Context) => {
       const dir = resolveOverlayDir()
       if (!dir) {
-        return c.text("Overlay UI not found. Run build with overlay assets.", 404)
+        return c.text("Overlay UI not found. Run build with overlay assets or start in dev mode.", 404)
       }
 
       let reqPath = c.req.path.replace(/^\/ui/, "") || "/"
@@ -55,13 +42,12 @@ export namespace OverlayUI {
 
       const filePath = path.join(dir, reqPath)
       // Prevent directory traversal
-      if (!filePath.startsWith(dir + path.sep) && filePath !== dir) return c.text("Forbidden", 403)
+      if (!filePath.startsWith(dir)) return c.text("Forbidden", 403)
 
       try {
         const file = Bun.file(filePath)
         if (!(await file.exists())) {
-          if (path.extname(filePath)) return c.text("Not Found", 404)
-          // SPA fallback for client-side routes only
+          // SPA fallback
           const index = Bun.file(path.join(dir, "index.html"))
           return c.body(await index.arrayBuffer(), 200, {
             "Content-Type": "text/html; charset=utf-8",

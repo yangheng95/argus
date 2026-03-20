@@ -28,22 +28,21 @@ export namespace MemorySearch {
   }) {
     const limit = input.limit ?? 6
     const minScore = input.minScore ?? 0.1
-    const prepared = buildFtsQuery(input.query)
+    const query = buildFtsQuery(input.query)
     const scope = input.scope ?? "all"
 
-    if (!prepared) {
+    if (!query) {
       log.info("empty search query after tokenization")
       return []
     }
     if (scope === "session" && !input.sessionID) {
-      log.info("session-scoped memory search skipped without sessionID", { query: input.query })
+      log.info("session-scoped memory search skipped without sessionID", { query })
       return []
     }
 
     try {
       return searchFts({
-        query: prepared.query,
-        tokens: prepared.tokens,
+        query,
         projectId: input.projectId,
         sessionID: input.sessionID,
         scope,
@@ -56,7 +55,7 @@ export namespace MemorySearch {
     } catch (err) {
       log.warn("FTS search failed, falling back to LIKE", { err })
       return searchLike({
-        tokens: prepared.tokens,
+        query: input.query,
         projectId: input.projectId,
         sessionID: input.sessionID,
         scope,
@@ -69,7 +68,6 @@ export namespace MemorySearch {
 
   function searchFts(input: {
     query: string
-    tokens: string[]
     projectId: string
     sessionID?: string
     scope: Memory.QueryScope
@@ -79,8 +77,6 @@ export namespace MemorySearch {
     kinds?: Memory.Kind[]
     sources?: Memory.Source[]
   }) {
-    // Checkpoint WAL before FTS to prevent slow queries when WAL is large
-    Database.checkpoint()
     const nowMs = Date.now()
     const candidates = Math.min(200, input.limit * 6)
     const rows = Database.use((db) =>
@@ -129,10 +125,7 @@ export namespace MemorySearch {
       if (!matchesKinds(row.kind, input.kinds)) continue
       if (!matchesSources(row.source, input.sources)) continue
 
-      const coverage = tokenCoverage(row.title, row.content, input.tokens)
-      if (coverage === 0) continue
       let score = bm25RankToScore(row.rank)
-      score *= 0.2 + coverage * 0.8
       score *= KIND_WEIGHT[row.kind]
       score *= 0.8 + clampScore(row.importance, 60) / 200
       score *= 0.85 + clampScore(row.confidence, 75) / 250
@@ -173,7 +166,7 @@ export namespace MemorySearch {
   }
 
   function searchLike(input: {
-    tokens: string[]
+    query: string
     projectId: string
     sessionID?: string
     scope: Memory.QueryScope
@@ -181,6 +174,7 @@ export namespace MemorySearch {
     kinds?: Memory.Kind[]
     sources?: Memory.Source[]
   }) {
+    const pattern = `%${input.query}%`
     const rows = Database.use((db) =>
       db.all<{
         chunk_id: string
@@ -211,9 +205,10 @@ export namespace MemorySearch {
           mc.time_created
         FROM memory_chunk mc
         JOIN memory_file mf ON mf.id = mc.file_id
-        WHERE mc.project_id = ${input.projectId}
+        WHERE mc.content LIKE ${pattern}
+          AND mc.project_id = ${input.projectId}
         ORDER BY mc.time_created DESC
-        LIMIT ${Math.max(input.limit * 18, 80)}
+        LIMIT ${Math.max(input.limit * 6, 24)}
       `),
     )
 
@@ -221,12 +216,7 @@ export namespace MemorySearch {
       .filter((row) => matchesScope(row.scope, row.session_id ?? undefined, input.scope, input.sessionID))
       .filter((row) => matchesKinds(row.kind, input.kinds))
       .filter((row) => matchesSources(row.source, input.sources))
-      .map((row) => ({
-        row,
-        coverage: tokenCoverage(row.title, row.content, input.tokens),
-      }))
-      .filter((item) => item.coverage > 0)
-      .map(({ row, coverage }, idx) => ({
+      .map((row, idx) => ({
         chunkId: row.chunk_id,
         fileId: row.file_id,
         fileTitle: row.title,
@@ -240,7 +230,6 @@ export namespace MemorySearch {
         confidence: clampScore(row.confidence, 75),
         score:
           (1 - idx * 0.04) *
-          (0.2 + coverage * 0.8) *
           KIND_WEIGHT[row.kind] *
           (0.8 + clampScore(row.importance, 60) / 200) *
           (0.85 + clampScore(row.confidence, 75) / 250),
@@ -251,9 +240,9 @@ export namespace MemorySearch {
   }
 
   function compareResults(a: Memory.SearchResult, b: Memory.SearchResult) {
-    if (Math.abs(b.score - a.score) > 0.001) return b.score - a.score
     if (a.scope !== b.scope) return a.scope === "session" ? -1 : 1
     if (a.kind !== b.kind) return KIND_WEIGHT[b.kind] - KIND_WEIGHT[a.kind]
+    if (Math.abs(b.score - a.score) > 0.001) return b.score - a.score
     return b.timeCreated - a.timeCreated
   }
 
@@ -289,19 +278,9 @@ export namespace MemorySearch {
     return rowSessionID === sessionID
   }
 
-  function tokenCoverage(title: string, content: string, tokens: string[]) {
-    if (tokens.length === 0) return 0
-    const haystack = `${title}\n${content}`.toLowerCase()
-    const matched = tokens.filter((token) => haystack.includes(token)).length
-    return matched / tokens.length
-  }
-
   function buildFtsQuery(raw: string) {
-    const tokens = [...new Set(raw.match(/[\p{L}\p{N}_]+/gu)?.map((token) => token.toLowerCase()) ?? [])]
-    if (tokens.length === 0) return
-    return {
-      tokens,
-      query: tokens.map((token) => `"${token}"*`).join(" OR "),
-    }
+    const tokens = raw.match(/[\p{L}\p{N}_]+/gu)
+    if (!tokens || tokens.length === 0) return ""
+    return tokens.map((token) => `"${token}"`).join(" ")
   }
 }

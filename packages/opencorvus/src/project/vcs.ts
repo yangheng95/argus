@@ -93,7 +93,7 @@ export namespace Vcs {
       .cwd(Instance.worktree)
       .text()
       .then((x) => x.trim())
-      .catch(() => undefined) // Not a git repo or git unavailable
+      .catch(() => undefined)
   }
 
   const state = Instance.state(

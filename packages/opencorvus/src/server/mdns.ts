@@ -37,9 +37,7 @@ export namespace MDNS {
       if (bonjour) {
         try {
           bonjour.destroy()
-        } catch {
-          // best-effort cleanup — destroy may throw if already torn down
-        }
+        } catch {}
       }
       bonjour = undefined
       currentPort = undefined

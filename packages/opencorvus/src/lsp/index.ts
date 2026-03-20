@@ -313,10 +313,7 @@ export namespace LSP {
             character: input.character,
           },
         })
-        .catch((err) => {
-          log.warn("LSP hover request failed", { file: input.file, error: String(err) })
-          return null
-        })
+        .catch(() => null)
     })
   }
 
@@ -368,10 +365,7 @@ export namespace LSP {
         })
         .then((result: any) => result.filter((x: LSP.Symbol) => kinds.includes(x.kind)))
         .then((result: any) => result.slice(0, 10))
-        .catch((err) => {
-          log.warn("LSP workspace/symbol request failed", { query, error: String(err) })
-          return []
-        }),
+        .catch(() => []),
     ).then((result) => result.flat() as LSP.Symbol[])
   }
 
@@ -384,10 +378,7 @@ export namespace LSP {
             uri,
           },
         })
-        .catch((err) => {
-          log.warn("LSP documentSymbol request failed", { uri, error: String(err) })
-          return []
-        }),
+        .catch(() => []),
     )
       .then((result) => result.flat() as (LSP.DocumentSymbol | LSP.Symbol)[])
       .then((result) => result.filter(Boolean))
@@ -400,10 +391,7 @@ export namespace LSP {
           textDocument: { uri: pathToFileURL(input.file).href },
           position: { line: input.line, character: input.character },
         })
-        .catch((err) => {
-          log.warn("LSP definition request failed", { file: input.file, error: String(err) })
-          return null
-        }),
+        .catch(() => null),
     ).then((result) => result.flat().filter(Boolean))
   }
 
@@ -415,10 +403,7 @@ export namespace LSP {
           position: { line: input.line, character: input.character },
           context: { includeDeclaration: true },
         })
-        .catch((err) => {
-          log.warn("LSP references request failed", { file: input.file, error: String(err) })
-          return []
-        }),
+        .catch(() => []),
     ).then((result) => result.flat().filter(Boolean))
   }
 
@@ -429,10 +414,7 @@ export namespace LSP {
           textDocument: { uri: pathToFileURL(input.file).href },
           position: { line: input.line, character: input.character },
         })
-        .catch((err) => {
-          log.warn("LSP implementation request failed", { file: input.file, error: String(err) })
-          return null
-        }),
+        .catch(() => null),
     ).then((result) => result.flat().filter(Boolean))
   }
 
@@ -443,10 +425,7 @@ export namespace LSP {
           textDocument: { uri: pathToFileURL(input.file).href },
           position: { line: input.line, character: input.character },
         })
-        .catch((err) => {
-          log.warn("LSP prepareCallHierarchy request failed", { file: input.file, error: String(err) })
-          return []
-        }),
+        .catch(() => []),
     ).then((result) => result.flat().filter(Boolean))
   }
 
@@ -457,15 +436,9 @@ export namespace LSP {
           textDocument: { uri: pathToFileURL(input.file).href },
           position: { line: input.line, character: input.character },
         })
-        .catch((err) => {
-          log.warn("LSP prepareCallHierarchy failed (incoming)", { file: input.file, error: String(err) })
-          return []
-        })) as Record<string, unknown>[]
+        .catch(() => [])) as any[]
       if (!items?.length) return []
-      return client.connection.sendRequest("callHierarchy/incomingCalls", { item: items[0] }).catch((err) => {
-        log.warn("LSP incomingCalls request failed", { file: input.file, error: String(err) })
-        return []
-      })
+      return client.connection.sendRequest("callHierarchy/incomingCalls", { item: items[0] }).catch(() => [])
     }).then((result) => result.flat().filter(Boolean))
   }
 
@@ -476,15 +449,9 @@ export namespace LSP {
           textDocument: { uri: pathToFileURL(input.file).href },
           position: { line: input.line, character: input.character },
         })
-        .catch((err) => {
-          log.warn("LSP prepareCallHierarchy failed (outgoing)", { file: input.file, error: String(err) })
-          return []
-        })) as Record<string, unknown>[]
+        .catch(() => [])) as any[]
       if (!items?.length) return []
-      return client.connection.sendRequest("callHierarchy/outgoingCalls", { item: items[0] }).catch((err) => {
-        log.warn("LSP outgoingCalls request failed", { file: input.file, error: String(err) })
-        return []
-      })
+      return client.connection.sendRequest("callHierarchy/outgoingCalls", { item: items[0] }).catch(() => [])
     }).then((result) => result.flat().filter(Boolean))
   }
 

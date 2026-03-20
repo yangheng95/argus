@@ -1,20 +1,13 @@
 import z from "zod"
 import { query, type ElicitationRequest, type ElicitationResult, type PermissionResult } from "@anthropic-ai/claude-agent-sdk"
-import { CodingCapabilities, CodingRunInput, CodingResumeInput, type CodingEventInfo, type CodingProvider } from "./contracts"
-import { record, text } from "./contracts"
+import { CodingCapabilities, CodingRunInput, CodingResumeInput, type CodingEventInfo, type CodingProvider } from "./compat"
+import { record, text } from "./compat"
 import { ToolAdapterRegistry } from "./protocol"
-import { MCPServe } from "@/mcp/serve"
 
 export type ClaudeAgentHandle = {
   stream: AsyncIterable<Record<string, unknown>>
   interrupt(): Promise<void>
   close(): void
-}
-
-type Tool = {
-  id: string
-  name: string
-  input: string
 }
 
 export type ClaudeAgentClient = {
@@ -25,7 +18,6 @@ export type ClaudeAgentClient = {
     system?: string
     maxTurns?: number
     sessionID?: string
-    outputSchema?: Record<string, unknown>
     toolMode?: z.infer<typeof CodingRunInput>["toolMode"]
     sandbox?: z.infer<typeof CodingRunInput>["sandbox"]
     signal?: AbortSignal
@@ -49,8 +41,6 @@ type SessionState = {
   actualID?: string
   approval: Map<string, Deferred<PermissionResult>>
   input: Map<string, Deferred<ElicitationResult>>
-  tools: Map<number, Tool>
-  toolCalls: Set<string>
 }
 
 type Deferred<T> = {
@@ -65,7 +55,7 @@ export namespace ClaudeAgentExecutor {
   export function capabilities() {
     return CodingCapabilities.parse({
       builtinTools: true,
-      customTools: false,
+      customTools: true,
       stream: true,
       resume: true,
       interrupt: true,
@@ -118,7 +108,6 @@ export namespace ClaudeAgentExecutor {
         const allowed = input.toolMode === "none"
           ? []
           : split(process.env.OPENCORVUS_EXECUTOR_CLAUDE_ALLOWED_TOOLS)
-        const mcp = MCPServe.command(input.cwd ?? process.cwd())
         const handle = query({
           prompt: input.prompt,
           options: {
@@ -138,20 +127,6 @@ export namespace ClaudeAgentExecutor {
             allowDangerouslySkipPermissions: mode === "bypassPermissions",
             effort: effort(),
             maxBudgetUsd: maxBudget(),
-            mcpServers: {
-              opencorvus: {
-                type: "stdio",
-                command: mcp.command,
-                args: mcp.args,
-                env: mcp.env,
-              },
-            },
-            ...(input.outputSchema ? {
-              outputFormat: {
-                type: "json_schema" as const,
-                schema: input.outputSchema,
-              },
-            } : {}),
             allowedTools: allowed,
             disallowedTools: split(process.env.OPENCORVUS_EXECUTOR_CLAUDE_DISALLOWED_TOOLS),
             abortController: abortController(input.signal),
@@ -245,7 +220,6 @@ async function* execute(
     system: input.system,
     maxTurns: input.maxTurns,
     sessionID: "sessionID" in input ? input.sessionID : undefined,
-    outputSchema: input.outputSchema,
     toolMode: input.toolMode,
     sandbox: input.sandbox,
     signal,
@@ -315,13 +289,13 @@ function mapMessage(current: SessionState, message: Record<string, unknown>): Co
   const sessionID = typeof message.session_id === "string" ? message.session_id : current.actualID ?? current.logicalID
 
   if (type === "assistant") {
-    return fromAssistant(current, sessionID, record(message.message))
+    return fromAssistant(sessionID, record(message.message))
   }
   if (type === "user") {
     return fromUser(sessionID, record(message.message), message.tool_use_result)
   }
   if (type === "stream_event") {
-    return fromStreamEvent(current, sessionID, record(message.event))
+    return fromStreamEvent(sessionID, record(message.event))
   }
   if (type === "result") {
     const usage = {
@@ -340,7 +314,7 @@ function mapMessage(current: SessionState, message: Record<string, unknown>): Co
       }, {
         type: "done",
         sessionID,
-        output: message.structured_output ? JSON.stringify(message.structured_output) : text(message.result),
+        output: text(message.result),
         costUSD: number(message.total_cost_usd),
         turns: number(message.num_turns),
         meta: {
@@ -399,7 +373,7 @@ function mapMessage(current: SessionState, message: Record<string, unknown>): Co
   return []
 }
 
-function fromAssistant(current: SessionState, sessionID: string, message?: Record<string, unknown>): CodingEventInfo[] {
+function fromAssistant(sessionID: string, message?: Record<string, unknown>): CodingEventInfo[] {
   if (!message || !Array.isArray(message.content)) return []
   const out: CodingEventInfo[] = []
   for (const part of message.content) {
@@ -415,8 +389,6 @@ function fromAssistant(current: SessionState, sessionID: string, message?: Recor
       const id = typeof next.id === "string" ? next.id : ""
       const name = typeof next.name === "string" ? next.name : ""
       if (!id || !name) continue
-      if (current.toolCalls.has(id)) continue
-      current.toolCalls.add(id)
       const adapter = ToolAdapterRegistry.classify(name)
       out.push({
         type: "tool_call",
@@ -463,13 +435,13 @@ function fromUser(sessionID: string, message?: Record<string, unknown>, toolUseR
     out.push({
       type: "tool_result",
       id,
-      output: toolOutput(next.content),
+      output: text(next.content),
     })
   }
   return out
 }
 
-function fromStreamEvent(current: SessionState, sessionID: string, event?: Record<string, unknown>): CodingEventInfo[] {
+function fromStreamEvent(sessionID: string, event?: Record<string, unknown>): CodingEventInfo[] {
   if (!event) return []
   const type = typeof event.type === "string" ? event.type : ""
   if (type === "content_block_delta") {
@@ -492,13 +464,6 @@ function fromStreamEvent(current: SessionState, sessionID: string, event?: Recor
         },
       }]
     }
-    if (delta.type === "input_json_delta") {
-      const idx = typeof event.index === "number" ? event.index : -1
-      const tool = current.tools.get(idx)
-      if (!tool) return []
-      tool.input += text(delta.partial_json)
-      return []
-    }
   }
   if (type === "content_block_start") {
     const block = record(event.content_block)
@@ -506,25 +471,13 @@ function fromStreamEvent(current: SessionState, sessionID: string, event?: Recor
     if (block.type === "tool_use") {
       const id = typeof block.id === "string" ? block.id : ""
       const name = typeof block.name === "string" ? block.name : ""
-      const idx = typeof event.index === "number" ? event.index : -1
-      if (idx < 0 || !id || !name) return []
-      current.tools.set(idx, { id, name, input: seed(block.input) })
-      return []
-    }
-  }
-  if (type === "content_block_stop") {
-    const idx = typeof event.index === "number" ? event.index : -1
-    const tool = current.tools.get(idx)
-    if (tool) {
-      current.tools.delete(idx)
-      if (current.toolCalls.has(tool.id)) return []
-      current.toolCalls.add(tool.id)
-      const adapter = ToolAdapterRegistry.classify(tool.name)
+      if (!id || !name) return []
+      const adapter = ToolAdapterRegistry.classify(name)
       return [{
         type: "tool_call",
-        id: tool.id,
-        name: tool.name,
-        input: tool.input,
+        id,
+        name,
+        input: text(block.input),
         meta: {
           adapter: adapter?.id,
           tool_kind: adapter?.kind,
@@ -566,8 +519,6 @@ function ensureSession(logicalID: string) {
     logicalID,
     approval: new Map(),
     input: new Map(),
-    tools: new Map(),
-    toolCalls: new Set(),
   }
   sessions.set(logicalID, created)
   return created
@@ -651,26 +602,6 @@ function split(input?: string) {
 
 function provisionalID() {
   return `claude-sdk-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
-}
-
-function toolOutput(input: unknown): string {
-  if (typeof input === "string") return input
-  if (!Array.isArray(input)) return text(input)
-  return input
-    .flatMap((part) => {
-      const next = record(part)
-      if (!next) return []
-      if (next.type === "text" && typeof next.text === "string") return [next.text]
-      return [text(next)]
-    })
-    .join("")
-}
-
-function seed(input: unknown) {
-  if (Array.isArray(input) && input.length === 0) return ""
-  const item = record(input)
-  if (item && Object.keys(item).length === 0) return ""
-  return text(input)
 }
 
 function permissionMode() {

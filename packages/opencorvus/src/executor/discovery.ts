@@ -2,7 +2,7 @@ import os from "os"
 import path from "path"
 import fs from "fs"
 import { Process } from "@/util/process"
-import type { ExecutorNameInfo } from "./contracts"
+import type { ExecutorNameInfo } from "./compat"
 import { which } from "@/util/which"
 
 type Found = {
@@ -131,7 +131,6 @@ function codexBinary(input: string) {
 }
 
 async function version(command: string[]) {
-  // Command may not exist on this system — missing tool is handled by the undefined check below
   const result = await Process.run([...command, "--version"], {
     nothrow: true,
   }).catch(() => undefined)

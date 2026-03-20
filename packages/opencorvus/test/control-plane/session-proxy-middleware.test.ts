@@ -21,8 +21,8 @@ type State = {
 const remote = { type: "testing", name: "remote-a" } as unknown as typeof WorkspaceTable.$inferInsert.config
 
 async function setup(state: State) {
-  mock.module("../../src/control-plane/adapters", () => ({
-    getAdapter: () => ({
+  mock.module("../../src/control-plane/adaptors", () => ({
+    getAdaptor: () => ({
       request: async (_config: unknown, method: string, url: string, data?: BodyInit) => {
         const body = data ? await new Response(data).text() : undefined
         state.calls.push({ method, url, body })

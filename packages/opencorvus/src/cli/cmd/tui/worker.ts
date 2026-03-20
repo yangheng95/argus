@@ -9,9 +9,9 @@ import { Config } from "@/config/config"
 import { GlobalBus } from "@/bus/global"
 import { createOpenCorvusClient, type Event } from "@opencorvus-ai/sdk/v2"
 import { IN_PROCESS_BASE_URL, createInProcessFetch, fetchInProcessServer } from "@/server/in-process-client"
-import { installProcessBootstrap } from "@/runtime/bootstrap"
+import { installRuntimeShims } from "@/runtime/shims"
 
-installProcessBootstrap()
+installRuntimeShims()
 
 await Log.init({
   print: process.argv.includes("--print-logs"),
@@ -67,7 +67,7 @@ const startEventStream = (directory: string) => {
             signal,
           },
         ),
-      ).catch(() => undefined) // Subscribe failure triggers reconnect below
+      ).catch(() => undefined)
 
       if (!events) {
         await Bun.sleep(250)
@@ -105,9 +105,7 @@ export const rpc = {
       directory: input.directory,
       init: InstanceBootstrap,
       fn: async () => {
-        await upgrade().catch((err) => {
-          console.warn("[worker] upgrade check failed:", String(err))
-        })
+        await upgrade().catch(() => {})
       },
     })
   },
@@ -118,11 +116,10 @@ export const rpc = {
   async shutdown() {
     Log.Default.info("worker shutting down")
     if (eventStream.abort) eventStream.abort.abort()
-    let shutdownTimer: ReturnType<typeof setTimeout>
     await Promise.race([
-      Instance.disposeAll().finally(() => clearTimeout(shutdownTimer)),
+      Instance.disposeAll(),
       new Promise((resolve) => {
-        shutdownTimer = setTimeout(resolve, 5000)
+        setTimeout(resolve, 5000)
       }),
     ])
     if (server) server.stop(true)

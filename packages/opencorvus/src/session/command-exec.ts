@@ -10,10 +10,10 @@ import { $ } from "bun"
 import { ConfigMarkdown } from "../config/markdown"
 import { NamedError } from "@opencorvus-ai/util/error"
 import { Session } from "."
-import { SessionActor } from "./actor"
+import { SessionPromptState } from "./prompt-state"
 
 export namespace SessionCommand {
-  const { log, lastModel } = SessionActor
+  const { log, lastModel } = SessionPromptState
 
   export const CommandInput = z.object({
     messageID: Identifier.schema("message").optional(),

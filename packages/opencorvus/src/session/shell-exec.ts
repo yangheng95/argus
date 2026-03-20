@@ -11,10 +11,10 @@ import { ulid } from "ulid"
 import { SessionRevert } from "./revert"
 import { spawn } from "child_process"
 import { Shell } from "@/shell/shell"
-import { SessionActor } from "./actor"
+import { SessionPromptState } from "./prompt-state"
 
 export namespace SessionShell {
-  const { log, cancel, lastModel, pending, start } = SessionActor
+  const { log, state, start, cancel, lastModel } = SessionPromptState
 
   export const ShellInput = z.object({
     sessionID: Identifier.schema("session"),
@@ -35,14 +35,15 @@ export namespace SessionShell {
     }
 
     await using _ = defer(async () => {
-      if ((await pending(input.sessionID)) === 0) {
+      const callbacks = state()[input.sessionID]?.callbacks ?? []
+      if (callbacks.length === 0) {
         cancel(input.sessionID)
-        return
+      } else {
+        const { SessionLoop } = await import("./loop")
+        SessionLoop.loop({ sessionID: input.sessionID, resume_existing: true }).catch((error: any) => {
+          log.error("session loop failed to resume after shell command", { sessionID: input.sessionID, error })
+        })
       }
-      const { SessionLoop } = await import("./loop")
-      SessionLoop.loop({ sessionID: input.sessionID, resume_existing: true }).catch((error: unknown) => {
-        log.error("session loop failed to resume after shell command", { sessionID: input.sessionID, error })
-      })
     })
 
     const session = await Session.get(input.sessionID)

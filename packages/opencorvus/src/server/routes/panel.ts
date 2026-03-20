@@ -2,7 +2,7 @@ import { Hono } from "hono"
 import { describeRoute, resolver, validator } from "hono-openapi"
 import { streamSSE } from "hono/streaming"
 import { ControlMessage } from "@/control/message"
-import { PanelMessageInput, PanelMessageResult } from "@/control/message-schema"
+import { ControlMessageInput, ControlMessageResult } from "@/control/message-schema"
 import { PanelCapabilityQuery, PanelCapabilityResponse, panelCapabilities } from "@/panel/capability"
 
 export function PanelRoutes() {
@@ -40,15 +40,15 @@ export function PanelRoutes() {
             description: "Panel message handled",
             content: {
               "application/json": {
-                schema: resolver(PanelMessageResult),
+                schema: resolver(ControlMessageResult),
               },
             },
           },
         },
       }),
-      validator("json", PanelMessageInput),
+      validator("json", ControlMessageInput),
       async (c) => {
-        return c.json(PanelMessageResult.parse(await ControlMessage.handle(c.req.valid("json"))))
+        return c.json(await ControlMessage.handle(c.req.valid("json")))
       },
     )
     .post(
@@ -62,13 +62,13 @@ export function PanelRoutes() {
             description: "Streaming panel message events",
             content: {
               "text/event-stream": {
-                schema: resolver(PanelMessageResult),
+                schema: resolver(ControlMessageResult),
               },
             },
           },
         },
       }),
-      validator("json", PanelMessageInput),
+      validator("json", ControlMessageInput),
       async (c) => {
         const input = c.req.valid("json")
         c.header("X-Accel-Buffering", "no")
@@ -78,7 +78,7 @@ export function PanelRoutes() {
             stream.writeSSE({ data: JSON.stringify(event) })
           })
           await stream.writeSSE({
-            data: JSON.stringify({ type: "done", result: PanelMessageResult.parse(result) }),
+            data: JSON.stringify({ type: "done", result }),
           })
         })
       },

@@ -1,25 +1,3 @@
-export async function withKeyedLock<R>(
-  map: Map<string, Promise<void>>,
-  key: string,
-  fn: () => Promise<R>,
-): Promise<R> {
-  const previous = map.get(key) ?? Promise.resolve()
-  let release = () => {}
-  const current = new Promise<void>((resolve) => {
-    release = resolve
-  })
-  map.set(key, current)
-  await previous.catch(() => undefined)
-  try {
-    return await fn()
-  } finally {
-    release()
-    if (map.get(key) === current) {
-      map.delete(key)
-    }
-  }
-}
-
 export namespace Lock {
   const locks = new Map<
     string,

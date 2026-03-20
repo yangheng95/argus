@@ -2,7 +2,7 @@ import z from "zod"
 import { Identifier } from "@/id/id"
 import { TaskQueueService } from "@/scheduler/task-queue-service"
 import { TaskQueueTable } from "@/scheduler/task-queue.sql"
-import { GlobalBus } from "@/bus/global"
+import { Bus } from "@/bus"
 import { Session } from "@/session"
 import { MessageV2 } from "@/session/message"
 import { SessionSummary } from "@/session/summary"
@@ -12,8 +12,6 @@ import { Snapshot } from "@/snapshot"
 import { Database, eq } from "@/storage/db"
 import { PermissionNext } from "@/permission/next"
 import { Question } from "@/question"
-import { Log } from "@/util/log"
-import { Channel } from "@/util/channel"
 
 const SubmitInput = z.object({
   sessionID: Identifier.schema("session"),
@@ -35,8 +33,6 @@ const EventResult = z.object({
 })
 
 export namespace OpencodeExecutor {
-  const log = Log.create({ service: "opencode-executor" })
-
   export function capabilities() {
     return {
       submit: true,
@@ -64,16 +60,7 @@ export namespace OpencodeExecutor {
       source: "orchestrator.task",
       priority: input.priority,
     })
-    // Fire-and-forget: trigger immediate queue processing.  Errors inside
-    // individual task execution are already caught by TaskQueueService (fail()),
-    // but poll() itself can throw on database errors, so we catch here to
-    // prevent an unhandled promise rejection from crashing the process.
-    void TaskQueueService.runNow().catch((error) => {
-      log.error("task queue runNow failed", {
-        sessionID: input.sessionID,
-        error: error instanceof Error ? error.message : String(error),
-      })
-    })
+    void TaskQueueService.runNow()
     return {
       sessionID: input.sessionID,
       queueTaskID,
@@ -138,26 +125,39 @@ export namespace OpencodeExecutor {
   export async function* events(input: { sessionID?: string; queueTaskID?: string; signal?: AbortSignal }) {
     if (!input.sessionID) return
     const sessionID = input.sessionID
-    const queue = new Channel<z.infer<typeof EventResult>>()
-    const handler = (event: { payload: { type: string; properties: Record<string, unknown> } }) => {
-      const next = mapEvent(event.payload, sessionID)
-      if (!next) return
-      queue.send(next)
+    const queue: Array<z.infer<typeof EventResult>> = []
+    let done = false
+    let wake: (() => void) | undefined
+    const push = (event: z.infer<typeof EventResult>) => {
+      queue.push(event)
+      wake?.()
     }
-    GlobalBus.on("event", handler)
+    const unsub = Bus.subscribeAll((event) => {
+      const next = mapEvent(event, sessionID)
+      if (!next) return
+      push(next)
+    })
     const abort = () => {
-      GlobalBus.off("event", handler)
-      queue.close()
+      done = true
+      unsub()
+      wake?.()
     }
     input.signal?.addEventListener("abort", abort)
     try {
-      for await (const next of queue) {
-        yield next
+      while (!done) {
+        if (queue.length === 0) {
+          await new Promise<void>((resolve) => {
+            wake = resolve
+          })
+          wake = undefined
+          if (done && queue.length === 0) break
+        }
+        const next = queue.shift()
+        if (next) yield next
       }
     } finally {
       input.signal?.removeEventListener("abort", abort)
-      GlobalBus.off("event", handler)
-      queue.close()
+      unsub()
     }
   }
 }

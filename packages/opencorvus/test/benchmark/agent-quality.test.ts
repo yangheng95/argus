@@ -4,9 +4,9 @@
  * Architecture overview:
  *   - **PlannerAgent**: Independent LLM agent (30 steps, 5min timeout) with codebase exploration tools.
  *     Receives task request → explores codebase → produces structured plan (PRD, goals, subtasks, risks).
- *   - **GoalJudge**: Independent LLM agent (15 steps, 3min timeout) with investigation tools.
+ *   - **EvaluatorAgent**: Independent LLM agent (15 steps, 3min timeout) with investigation tools.
  *     Receives check results + delivery → investigates failures → produces verdict + per-goal assessment + replan guidance.
- *   - **Goal evaluation**: Two-layer — (1) automated checks (build/test/lint exit codes), (2) GoalJudge LLM assessment.
+ *   - **Goal evaluation**: Two-layer — (1) automated checks (build/test/lint exit codes), (2) EvaluatorAgent LLM assessment.
  *
  * Quality dimensions measured:
  *   Planner:
@@ -24,41 +24,35 @@
  *     E4. Evidence specificity — references files, tests, error messages (not vague)
  *     E5. Replan guidance quality — root cause is specific, strategy is actionable
  *
- * Requires a live benchmark model. Defaults to alibaba-cn/qwen3.5-plus when available.
- * Run once: bun run packages/opencorvus/src/index.ts auth login
- * Run: bun test test/benchmark/agent-quality.test.ts --timeout 300000
+ * Requires DASHSCOPE_API_KEY in environment.
+ * Run: DASHSCOPE_API_KEY=sk-sp-xxx bun test test/benchmark/agent-quality.test.ts --timeout 300000
  */
 import { describe, test, expect } from "bun:test"
 import { generateText, stepCountIs } from "ai"
+import { createOpenAICompatible } from "@ai-sdk/openai-compatible"
+import z from "zod"
 import { PlannerOutput, type PlannerOutputType } from "@/planner/agent"
-import { GoalJudgment, type GoalJudgmentType } from "@/evaluator/agent"
+import { EvaluatorAnalysis, type EvaluatorAnalysisType } from "@/evaluator/agent"
 import { createCodebaseTools } from "@/orchestrator/codebase-tools"
-import { Provider } from "@/provider/provider"
-import { Instance } from "@/project/instance"
-import { hasBenchmarkModel, loadBenchmarkEnv, prepareDashscopeEnv, resolveBenchmarkModel } from "../../script/benchmark/env"
 
 // ---------------------------------------------------------------------------
 // Setup
 // ---------------------------------------------------------------------------
 
-await loadBenchmarkEnv(import.meta.dir)
-prepareDashscopeEnv()
-
-const MODEL = await resolveBenchmarkModel(import.meta.dir)
-const HAS_LLM = await hasBenchmarkModel(import.meta.dir, MODEL)
+const DASHSCOPE_API_KEY = process.env.DASHSCOPE_API_KEY
+const HAS_LLM = !!DASHSCOPE_API_KEY
 const TIMEOUT = 180_000
-let lang: Promise<Awaited<ReturnType<typeof Provider.getLanguage>>> | undefined
 
 function createModel() {
-  lang ??= Instance.provide({
-    directory: process.cwd(),
-    fn: async () => {
-      const parsed = Provider.parseModel(MODEL)
-      const resolved = await Provider.getModel(parsed.providerID, parsed.modelID)
-      return Provider.getLanguage(resolved)
-    },
+  const baseURL = DASHSCOPE_API_KEY?.startsWith("sk-sp-")
+    ? "https://coding.dashscope.aliyuncs.com/v1"
+    : "https://dashscope.aliyuncs.com/compatible-mode/v1"
+  const provider = createOpenAICompatible({
+    name: "dashscope",
+    baseURL,
+    apiKey: DASHSCOPE_API_KEY!,
   })
-  return lang
+  return provider.languageModel("qwen3.5-plus")
 }
 
 // System prompts (same as production agents)
@@ -98,7 +92,7 @@ Respond with ONLY a JSON object (no markdown fences):
   "prd": "Expanded PRD with file paths and conventions from exploration...",
   "summary": "One-line summary",
   "goals": [{ "description": "...", "criteria": "...", "priority": "blocking", "check_selector": ["build","test"] }],
-  "waves": [{ "title": "...", "objective": "...", "goal_indices": [0], "owned_paths": ["src/app.tsx"] }],
+  "milestones": [{ "title": "...", "description": "...", "goal_indices": [0] }],
   "subtasks": [{ "title": "...", "description": "...", "order": 1 }],
   "risks": ["..."],
   "assumptions": [{ "question": "...", "assumption": "..." }],
@@ -109,12 +103,12 @@ Rules:
 - ALWAYS explore the codebase before planning
 - goals.criteria must be concrete and machine-verifiable
 - Every blocking goal MUST have at least one check_selector
-- check_selector options: build, test, lint, verify_cmd, startup, ui_review, code_quality, code_review, dead_code_review, spec_check
+- check_selector options: build, test, lint, verify_cmd, startup, ui_review, code_quality, code_review, dead_code_review, judge
 - subtasks should reference specific files from exploration
 - Write in the same language as the request
 - After finishing tool calls, STOP and output JSON immediately`
 
-const GOAL_JUDGE_SYSTEM = `You are a senior code reviewer and QA engineer. Analyze the results of a coding task.
+const EVALUATOR_SYSTEM = `You are a senior code reviewer and QA engineer. Analyze the results of a coding task.
 
 ## Available Tools
 - **read_file**: Read file contents with line numbers
@@ -227,7 +221,7 @@ describe.skipIf(!HAS_LLM)("Planner Agent Quality", () => {
   // B1: Simple task — should produce concise, accurate plan
   // ═══════════════════════════════════════════════════
   test("B1: Simple task — concise plan with correct scope", async () => {
-    const model = await createModel()
+    const model = createModel()
     const tools = createCodebaseTools(process.cwd())
 
     const result = await generateText({
@@ -305,7 +299,7 @@ describe.skipIf(!HAS_LLM)("Planner Agent Quality", () => {
   // B2: Complex task — should produce thorough, multi-goal plan
   // ═══════════════════════════════════════════════════
   test("B2: Complex task — thorough multi-goal plan", async () => {
-    const model = await createModel()
+    const model = createModel()
     const tools = createCodebaseTools(process.cwd())
 
     const result = await generateText({
@@ -382,11 +376,11 @@ describe.skipIf(!HAS_LLM)("Planner Agent Quality", () => {
       `${plan.risks.length} risks`,
     ))
 
-    // P7: Waves for complex tasks
+    // P7: Milestones for complex tasks
     scores.push(score(
-      "P7: Has waves",
-      (plan.waves?.length ?? 0) > 0,
-      `${plan.waves?.length ?? 0} waves`,
+      "P7: Has milestones",
+      (plan.milestones?.length ?? 0) > 0,
+      `${plan.milestones?.length ?? 0} milestones`,
     ))
 
     printScorecard("B2: Planner — Complex Task", scores)
@@ -401,7 +395,7 @@ describe.skipIf(!HAS_LLM)("Planner Agent Quality", () => {
   // B3: Chinese task — should respond in Chinese
   // ═══════════════════════════════════════════════════
   test("B3: Chinese task — responds in Chinese", async () => {
-    const model = await createModel()
+    const model = createModel()
     const tools = createCodebaseTools(process.cwd())
 
     const result = await generateText({
@@ -442,7 +436,7 @@ describe.skipIf(!HAS_LLM)("Planner Agent Quality", () => {
   // B4: Replan differentiation — new plan vs failed approach
   // ═══════════════════════════════════════════════════
   test("B4: Replan — produces different approach after failure", async () => {
-    const model = await createModel()
+    const model = createModel()
     const tools = createCodebaseTools(process.cwd())
 
     const replanPrompt = `# Task
@@ -524,13 +518,13 @@ describe.skipIf(!HAS_LLM)("Evaluator Agent Quality", () => {
   // B5: All checks pass — should accept
   // ═══════════════════════════════════════════════════
   test("B5: All pass — verdict accepted with correct goal assessment", async () => {
-    const model = await createModel()
+    const model = createModel()
 
     const result = await generateText({
       model,
       stopWhen: stepCountIs(5),
       abortSignal: AbortSignal.timeout(TIMEOUT),
-      system: GOAL_JUDGE_SYSTEM,
+      system: EVALUATOR_SYSTEM,
       prompt: `# Task
 
 Title: Add GET /health endpoint
@@ -574,7 +568,7 @@ Changed files (2):
 Analyze the results. Then produce your analysis as a JSON object.`,
     })
 
-    const analysis = extractJSON(result, GoalJudgment)
+    const analysis = extractJSON(result, EvaluatorAnalysis)
 
     const scores: Score[] = []
 
@@ -606,7 +600,7 @@ Analyze the results. Then produce your analysis as a JSON object.`,
   // B6: Test failure — should reject with evaluation classification
   // ═══════════════════════════════════════════════════
   test("B6: Test failure — correct rejection with replan guidance", async () => {
-    const model = await createModel()
+    const model = createModel()
     const tools = createCodebaseTools(process.cwd())
 
     const result = await generateText({
@@ -614,7 +608,7 @@ Analyze the results. Then produce your analysis as a JSON object.`,
       stopWhen: stepCountIs(10),
       tools: { read_file: tools.read_file, search_code: tools.search_code },
       abortSignal: AbortSignal.timeout(TIMEOUT),
-      system: GOAL_JUDGE_SYSTEM,
+      system: EVALUATOR_SYSTEM,
       prompt: `# Task
 
 Title: 实现用户列表 API
@@ -662,7 +656,7 @@ Changed files (2):
 Analyze the results. Investigate the failure using tools. Then produce your analysis as a JSON object.`,
     })
 
-    const analysis = extractJSON(result, GoalJudgment)
+    const analysis = extractJSON(result, EvaluatorAnalysis)
 
     const scores: Score[] = []
 
@@ -711,13 +705,13 @@ Analyze the results. Investigate the failure using tools. Then produce your anal
   // B7: Wrong framework — should classify as strategy failure
   // ═══════════════════════════════════════════════════
   test("B7: Wrong framework — strategy classification with avoid guidance", async () => {
-    const model = await createModel()
+    const model = createModel()
 
     const result = await generateText({
       model,
       stopWhen: stepCountIs(5),
       abortSignal: AbortSignal.timeout(TIMEOUT),
-      system: GOAL_JUDGE_SYSTEM,
+      system: EVALUATOR_SYSTEM,
       prompt: `# Task
 
 Title: Add REST API with Hono
@@ -754,7 +748,7 @@ Changed files (1):
 Analyze the results. Then produce your analysis as a JSON object.`,
     })
 
-    const analysis = extractJSON(result, GoalJudgment)
+    const analysis = extractJSON(result, EvaluatorAnalysis)
 
     const scores: Score[] = []
 
@@ -789,13 +783,13 @@ Analyze the results. Then produce your analysis as a JSON object.`,
   // B8: Flaky test — should classify as transient
   // ═══════════════════════════════════════════════════
   test("B8: Flaky test — transient classification", async () => {
-    const model = await createModel()
+    const model = createModel()
 
     const result = await generateText({
       model,
       stopWhen: stepCountIs(5),
       abortSignal: AbortSignal.timeout(TIMEOUT),
-      system: GOAL_JUDGE_SYSTEM,
+      system: EVALUATOR_SYSTEM,
       prompt: `# Task
 
 Title: Add cache expiry
@@ -841,7 +835,7 @@ Changed files (2):
 Analyze the results. Then produce your analysis as a JSON object.`,
     })
 
-    const analysis = extractJSON(result, GoalJudgment)
+    const analysis = extractJSON(result, EvaluatorAnalysis)
 
     const scores: Score[] = []
 
@@ -874,13 +868,13 @@ Analyze the results. Then produce your analysis as a JSON object.`,
   // B9: Mixed results — partial goal success
   // ═══════════════════════════════════════════════════
   test("B9: Mixed results — partial goals with accurate per-goal assessment", async () => {
-    const model = await createModel()
+    const model = createModel()
 
     const result = await generateText({
       model,
       stopWhen: stepCountIs(5),
       abortSignal: AbortSignal.timeout(TIMEOUT),
-      system: GOAL_JUDGE_SYSTEM,
+      system: EVALUATOR_SYSTEM,
       prompt: `# Task
 
 Title: Dashboard with charts and export
@@ -939,7 +933,7 @@ Changed files (4):
 Analyze the results. Then produce your analysis as a JSON object.`,
     })
 
-    const analysis = extractJSON(result, GoalJudgment)
+    const analysis = extractJSON(result, EvaluatorAnalysis)
 
     const scores: Score[] = []
 

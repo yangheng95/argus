@@ -72,6 +72,8 @@ export namespace Config {
     return process.env.OPENCORVUS_TEST_MANAGED_CONFIG_DIR || systemManagedConfigDir()
   }
 
+  const managedDir = managedConfigDir()
+
   // Custom merge function that concatenates array fields instead of replacing them
   function mergeConfigConcatArrays(target: Info, source: Info): Info {
     const merged = mergeDeep(target, source)
@@ -104,8 +106,8 @@ export namespace Config {
         if (!response.ok) {
           throw new Error(`failed to fetch remote config from ${key}: ${response.status}`)
         }
-        const wellknown = (await response.json()) as Record<string, unknown>
-        const remoteConfig = (wellknown.config as Record<string, unknown>) ?? {}
+        const wellknown = (await response.json()) as any
+        const remoteConfig = wellknown.config ?? {}
         // Add $schema to prevent load() from trying to write back to a non-existent file
         if (!remoteConfig.$schema) remoteConfig.$schema = "https://opencorvus.ai/config.json"
         result = mergeConfigConcatArrays(
@@ -189,7 +191,6 @@ export namespace Config {
     // Kept separate from directories array to avoid write operations when installing plugins
     // which would fail on system directories requiring elevated permissions
     // This way it only loads config file and not skills/plugins/commands
-    const managedDir = managedConfigDir()
     try {
       if (existsSync(managedDir)) {
         for (const file of ["opencorvus.jsonc", "opencorvus.json"]) {
@@ -218,15 +219,9 @@ export namespace Config {
     }
 
     if (Flag.OPENCORVUS_PERMISSION) {
-      let parsed: object
-      try {
-        parsed = JSON.parse(Flag.OPENCORVUS_PERMISSION)
-      } catch {
-        throw new Error(`OPENCORVUS_PERMISSION env var contains invalid JSON: ${Flag.OPENCORVUS_PERMISSION.slice(0, 100)}`)
-      }
       result.permission = mergeDeep(
         (result.permission ?? {}) as object,
-        parsed,
+        JSON.parse(Flag.OPENCORVUS_PERMISSION),
       ) as Config.Permission
     }
 
@@ -315,11 +310,6 @@ export namespace Config {
   }
 
   export async function needsInstall(dir: string) {
-    if (process.env.OPENCORVUS_SKIP_DEP_INSTALL === "1") {
-      log.debug("dependency install disabled by env", { dir })
-      return false
-    }
-
     // Some config dirs may be read-only.
     // Installing deps there will fail; skip installation in that case.
     const writable = await isWritable(dir)
@@ -335,10 +325,7 @@ export namespace Config {
     const pkgExists = await Filesystem.exists(pkg)
     if (!pkgExists) return true
 
-    const parsed = await Filesystem.readJson<{ dependencies?: Record<string, string> }>(pkg).catch((err) => {
-      log.warn("failed to parse package.json for dependency check", { pkg, error: String(err) })
-      return null
-    })
+    const parsed = await Filesystem.readJson<{ dependencies?: Record<string, string> }>(pkg).catch(() => null)
     const dependencies = parsed?.dependencies ?? {}
     const depVersion = dependencies["@opencorvus-ai/plugin"]
     if (!depVersion) return true
@@ -1090,10 +1077,6 @@ export namespace Config {
         .string()
         .optional()
         .describe("Custom username to display in conversations instead of system username"),
-      prompt: z
-        .record(z.string(), z.string())
-        .optional()
-        .describe("Prompt overrides for core agent headers and orchestrator system prompts"),
       mode: z
         .object({
           build: Agent.optional(),
@@ -1204,10 +1187,6 @@ export namespace Config {
         .optional(),
       experimental: z
         .object({
-          unattended: z
-            .boolean()
-            .optional()
-            .describe("Treat the project as unattended: prefer default assumptions over clarification blocking"),
           disable_paste_summary: z.boolean().optional(),
           batch_tool: z.boolean().optional().describe("Enable the batch tool"),
           openTelemetry: z
@@ -1274,9 +1253,7 @@ export namespace Config {
           await Filesystem.writeJson(path.join(Global.Path.config, "config.json"), result)
           await fs.unlink(legacy)
         })
-        .catch((err) => {
-          log.warn("failed to migrate legacy config", { path: legacy, error: err })
-        })
+        .catch(() => {})
     }
 
     return result
@@ -1317,9 +1294,7 @@ export namespace Config {
       if (!parsed.data.$schema && isFile) {
         parsed.data.$schema = "https://opencorvus.ai/config.json"
         const updated = original.replace(/^\s*\{/, '{\n  "$schema": "https://opencorvus.ai/config.json",')
-        await Bun.write(options.path, updated).catch((err) => {
-          log.warn("failed to write $schema to config", { path: options.path, error: err })
-        })
+        await Bun.write(options.path, updated).catch(() => {})
       }
       const data = parsed.data
       if (data.plugin && isFile) {
@@ -1378,43 +1353,6 @@ export namespace Config {
       if (existsSync(file)) return file
     }
     return candidates[0]
-  }
-
-  export function isProjectConfigFilePresent(): boolean {
-    const dir = projectConfigDirectory()
-    return ["opencorvus.jsonc", "opencorvus.json"].some((f) => existsSync(path.join(dir, f)))
-  }
-
-  /**
-   * First-run initialization: if no project config file exists yet, snapshot the
-   * current resolved config (stripped of sensitive secrets) into
-   * `.opencorvus/opencorvus.jsonc`.  Subsequent starts are no-ops so user edits
-   * are never overwritten by defaults.
-   */
-  export async function ensureProjectConfigFile(): Promise<void> {
-    if (isProjectConfigFilePresent()) return
-    const cfg = await get()
-    // Strip API keys — they belong in user-level auth, not the project file
-    const safe = stripSecrets(cfg)
-    await update(safe)
-    log.info("config.ensureProjectConfigFile", {
-      path: projectConfigFile(),
-    })
-  }
-
-  function stripSecrets(cfg: Info): Info {
-    if (!cfg.provider) return cfg
-    return {
-      ...cfg,
-      provider: Object.fromEntries(
-        Object.entries(cfg.provider).map(([id, prov]) => {
-          if (!prov?.options?.apiKey) return [id, prov]
-          const { apiKey: _, ...rest } = prov.options
-          const options = Object.keys(rest).length > 0 ? rest : undefined
-          return [id, { ...prov, options } as Provider]
-        }),
-      ),
-    }
   }
 
   export async function update(config: Info) {
@@ -1515,9 +1453,7 @@ export namespace Config {
 
     global.reset()
 
-    await Instance.disposeAll().catch((err) => {
-      log.warn("Instance.disposeAll failed after global config update", { error: String(err) })
-    })
+    await Instance.disposeAll().catch(() => undefined)
     GlobalBus.emit("event", {
       directory: "global",
       payload: {

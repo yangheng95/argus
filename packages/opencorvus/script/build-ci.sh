@@ -132,8 +132,8 @@ else
   echo "✓ Contents:"
   for d in "$OUT_DIR"/*/; do
     name=$(basename "$d")
-    files=$(ls "$d" 2>/dev/null | grep -v '\.map$' | tr '\n' ' ')
-    echo "  $name/  $files"
+    files=$(ls "$d/bin/" 2>/dev/null | grep -v '\.map$' | tr '\n' ' ')
+    echo "  $name/bin/  $files"
   done
 fi
 

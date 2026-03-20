@@ -43,11 +43,9 @@ export namespace LSPClient {
     const l = log.clone().tag("serverID", input.serverID)
     l.info("starting client")
 
-    // Bun's process streams are compatible with Node's ReadableStream/WritableStream
-    // but have slightly different type definitions, requiring the cast
     const connection = createMessageConnection(
-      new StreamMessageReader(input.server.process.stdout as NodeJS.ReadableStream),
-      new StreamMessageWriter(input.server.process.stdin as NodeJS.WritableStream),
+      new StreamMessageReader(input.server.process.stdout as any),
+      new StreamMessageWriter(input.server.process.stdin as any),
     )
 
     const diagnostics = new Map<string, Diagnostic[]>()
@@ -231,7 +229,7 @@ export namespace LSPClient {
           }),
           3000,
         )
-          .catch(() => {})  // timeout waiting for diagnostics is non-critical
+          .catch(() => {})
           .finally(() => {
             if (debounceTimer) clearTimeout(debounceTimer)
             unsub?.()

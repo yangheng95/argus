@@ -9,12 +9,7 @@
     "typecheck": "tsgo --noEmit",
     "test": "bun test --timeout 60000 test/acp test/agent test/bus test/cli test/config test/control-plane test/env test/file test/flag test/format test/id test/ide test/lsp test/mcp test/memory test/patch test/permission test/plugin test/project test/provider test/pty test/question test/scheduler test/server test/session test/skill test/snapshot test/storage test/tool test/tui test/util test/bun.test.ts test/keybind.test.ts test/permission-task.test.ts test/scheduler.test.ts",
     "build": "bun run script/build.ts",
-    "dev": "bun --preload @opentui/solid/preload --conditions=browser ./src/index.ts",
-    "benchmark:agent-quality": "bun run script/benchmark/agent-quality-benchmark.ts",
-    "benchmark:overlay-web": "bun run script/benchmark/overlay-web-benchmark.ts",
-    "benchmark:overlay-repro": "bun run script/benchmark/overlay-repro-benchmark.ts",
-    "benchmark:overlay-stream": "bun run script/benchmark/overlay-stream-benchmark.ts",
-    "benchmark:channel-v1": "bun run script/benchmark/channel-v1-benchmark.ts"
+    "dev": "bun --preload @opentui/solid/preload --conditions=browser ./src/index.ts"
   },
   "bin": {
     "opencorvus": "./bin/opencorvus"
@@ -33,12 +28,6 @@
     "@parcel/watcher-linux-x64-glibc": "2.5.1",
     "@parcel/watcher-linux-x64-musl": "2.5.1",
     "@parcel/watcher-win32-x64": "2.5.1",
-    "node-screenshots-darwin-arm64": "0.2.8",
-    "node-screenshots-darwin-x64": "0.2.8",
-    "node-screenshots-linux-arm64-gnu": "0.2.8",
-    "node-screenshots-linux-x64-gnu": "0.2.8",
-    "node-screenshots-linux-x64-musl": "0.2.8",
-    "node-screenshots-win32-x64-msvc": "0.2.8",
     "@tsconfig/bun": "catalog:",
     "@types/babel__core": "7.20.5",
     "@types/bun": "catalog:",

@@ -29,9 +29,9 @@ console.log("Generated models-snapshot.ts")
 const singleFlag = process.argv.includes("--single")
 const allFlag = process.argv.includes("--all")
 const baselineFlag = process.argv.includes("--baseline")
-const muslOnly = process.argv.includes("--musl-only")
-const noClean = process.argv.includes("--no-clean")
 const binaryOnly = process.argv.includes("--binary-only")
+const onefileFlag = process.argv.includes("--onefile") || process.env.OPENCORVUS_ONEFILE === "1"
+
 const embeddedEnv = (() => {
   const keys = (process.env.OPENCORVUS_EMBED_ENV_KEYS ?? "")
     .split(",")
@@ -72,6 +72,10 @@ if (Object.keys(embeddedEnv).length > 0) {
   console.log(`embedding env keys: ${Object.keys(embeddedEnv).join(", ")}`)
 }
 const embeddedEnvDefine = Object.keys(embeddedEnv).length > 0 ? JSON.stringify(embeddedEnv) : "undefined"
+if (onefileFlag) {
+  console.warn("onefile mode: overlay UI will be bundled as sidecar files in dist/*/bin/ui/")
+}
+
 const allTargets: {
   os: string
   arch: "arm64" | "x64"
@@ -143,17 +147,26 @@ const runtimeName = (item: (typeof allTargets)[number]) =>
     .join("-")
 type Target = (typeof allTargets)[number]
 
+async function installOverlay(_item: Target, name: string) {
+  const overlayDir = path.resolve(dir, "../overlay/src")
+  const destDir = path.join(dir, "dist", name, "bin", "ui")
+  const ASSET_EXTS = new Set([".html", ".js", ".css", ".png", ".svg", ".ico", ".json", ".woff", ".woff2"])
+  if (!fs.existsSync(path.join(overlayDir, "index.html"))) {
+    console.log(`  overlay: skipping (no frontend assets in ${overlayDir})`)
+    return
+  }
+  const allFiles = fs.readdirSync(overlayDir).filter((f) => ASSET_EXTS.has(path.extname(f)))
+  await fs.promises.mkdir(destDir, { recursive: true })
+  await Promise.all(allFiles.map((f) => fs.promises.copyFile(path.join(overlayDir, f), path.join(destDir, f))))
+  console.log(`  overlay: installed ${allFiles.length} UI files`)
+}
+
 // Dev and CI builds only need a native binary; full matrix is for release packaging.
 const single = singleFlag || (!allFlag && !Script.release)
 const targets = single
   ? allTargets.filter((item) => {
       if (item.os !== process.platform || item.arch !== process.arch) {
         return false
-      }
-
-      // --musl-only: build only musl abi variants (used in Alpine Docker for correct native modules)
-      if (muslOnly) {
-        return item.abi === "musl" && (item.avx2 !== false || baselineFlag)
       }
 
       // When building for the current platform, prefer a single native binary by default.
@@ -171,7 +184,7 @@ const targets = single
     })
   : allTargets
 
-if (!noClean) await $`rm -rf dist`.nothrow()
+await $`rm -rf dist`.nothrow()
 
 const binaries: Record<string, string> = {}
 for (const item of targets) {
@@ -186,7 +199,7 @@ for (const item of targets) {
     .filter(Boolean)
     .join("-")
   console.log(`building ${name}`)
-  await $`mkdir -p dist/${name}`
+  await $`mkdir -p dist/${name}/bin`
 
   const parserWorker = fs.realpathSync(path.resolve(dir, "./node_modules/@opentui/core/parser.worker.js"))
   const workerPath = "./src/cli/cmd/tui/worker.ts"
@@ -207,7 +220,7 @@ for (const item of targets) {
     autoloadTsconfig: true,
     autoloadPackageJson: true,
     target: name.replace(pkg.name, "bun"),
-    outfile: `dist/${name}/opencorvus`,
+    outfile: `dist/${name}/bin/opencorvus`,
     execArgv: [`--user-agent=opencorvus/${Script.version}`, "--use-system-ca", "--"],
     windows: {},
   }
@@ -230,24 +243,37 @@ for (const item of targets) {
     },
   })
 
-  await $`rm -rf ./dist/${name}/tui`
+  await $`rm -rf ./dist/${name}/bin/tui`
+  await installOverlay(item, name)
   if (binaryOnly) {
-    const files = await fs.promises.readdir(path.join(dir, "dist", name))
+    const files = await fs.promises.readdir(path.join(dir, "dist", name, "bin"))
     await Promise.all(
       files
         .filter((x) => x.endsWith(".map"))
-        .map((x) => fs.promises.rm(path.join(dir, "dist", name, x), { force: true })),
+        .map((x) => fs.promises.rm(path.join(dir, "dist", name, "bin", x), { force: true })),
     )
   }
+  await Bun.file(`dist/${name}/package.json`).write(
+    JSON.stringify(
+      {
+        name,
+        version: Script.version,
+        os: [item.os],
+        cpu: [item.arch],
+      },
+      null,
+      2,
+    ),
+  )
   binaries[name] = Script.version
 }
 
 if (Script.release) {
   for (const key of Object.keys(binaries)) {
     if (key.includes("linux")) {
-      await $`tar -czf ../${key}.tar.gz *`.cwd(`dist/${key}`)
+      await $`tar -czf ../../${key}.tar.gz *`.cwd(`dist/${key}/bin`)
     } else {
-      await $`zip -r ../${key}.zip *`.cwd(`dist/${key}`)
+      await $`zip -r ../../${key}.zip *`.cwd(`dist/${key}/bin`)
     }
   }
   const files = [

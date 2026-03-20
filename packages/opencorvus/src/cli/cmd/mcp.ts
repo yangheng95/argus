@@ -15,7 +15,6 @@ import { Global } from "../../global"
 import { modify, applyEdits } from "jsonc-parser"
 import { Filesystem } from "../../util/filesystem"
 import { Bus } from "../../bus"
-import { MCPServe } from "../../mcp/serve"
 
 function getAuthStatusIcon(status: MCP.AuthStatus): string {
   switch (status) {
@@ -56,7 +55,6 @@ export const McpCommand = cmd({
   describe: "manage MCP (Model Context Protocol) servers",
   builder: (yargs) =>
     yargs
-      .command(McpServeCommand)
       .command(McpAddCommand)
       .command(McpListCommand)
       .command(McpAuthCommand)
@@ -64,30 +62,6 @@ export const McpCommand = cmd({
       .command(McpDebugCommand)
       .demandCommand(),
   async handler() {},
-})
-
-export const McpServeCommand = cmd({
-  command: "serve",
-  describe: "start the OpenCorvus MCP server on stdio",
-  builder: (yargs) =>
-    yargs
-      .option("cwd", {
-        type: "string",
-        demandOption: true,
-        describe: "workspace directory exposed to executor tools",
-      })
-      .option("toolset", {
-        type: "string",
-        default: "executor",
-        choices: MCPServe.Toolset.options,
-        describe: "toolset exposed through this MCP server",
-      }),
-  async handler(args) {
-    await MCPServe.serve({
-      cwd: path.resolve(String(args.cwd)),
-      toolset: MCPServe.Toolset.parse(args.toolset),
-    })
-  },
 })
 
 export const McpListCommand = cmd({

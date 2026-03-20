@@ -1,11 +1,9 @@
 import { $ } from "bun"
 import path from "path"
 import fs from "fs/promises"
-import { createHash } from "crypto"
 import { Log } from "../util/log"
 import { Flag } from "../flag/flag"
 import { Global } from "../global"
-import { FileIgnore } from "../file/ignore"
 import z from "zod"
 import { Config } from "../config/config"
 import { Instance } from "../project/instance"
@@ -15,39 +13,10 @@ export namespace Snapshot {
   const log = Log.create({ service: "snapshot" })
   const hour = 60 * 60 * 1000
   const prune = "7.days"
-  const EXTRA_EXCLUDES = [
-    ".expo",
-    ".expo-shared",
-    ".yarn",
-    ".parcel-cache",
-    ".svelte-kit",
-    ".nuxt",
-    ".angular",
-    ".vercel",
-    "android/build",
-    "android/app/build",
-    "ios/build",
-    "Pods",
-  ]
   const coreAutocrlf =
     process.env.OPENCORVUS_SNAPSHOT_CORE_AUTOCRLF || (process.platform === "win32" ? "input" : "false")
   const coreSymlinks =
     process.env.OPENCORVUS_SNAPSHOT_CORE_SYMLINKS || (process.platform === "win32" ? "false" : "true")
-
-  async function env(git: string) {
-    await fs.mkdir(path.join(git, "indexes"), { recursive: true })
-    return {
-      ...process.env,
-      GIT_DIR: git,
-      GIT_WORK_TREE: Instance.worktree,
-      // Iterative goal stages share the object store but must not share one git index.
-      GIT_INDEX_FILE: path.join(
-        git,
-        "indexes",
-        createHash("sha1").update(Instance.worktree.replaceAll("\\", "/")).digest("hex"),
-      ),
-    }
-  }
 
   export function init() {
     Scheduler.register({
@@ -69,7 +38,6 @@ export namespace Snapshot {
       .catch(() => false)
     if (!exists) return
     const result = await $`git --git-dir ${git} --work-tree ${Instance.worktree} gc --prune=${prune}`
-      .env(await env(git))
       .quiet()
       .cwd(Instance.directory)
       .nothrow()
@@ -91,18 +59,21 @@ export namespace Snapshot {
     const git = gitdir()
     if (await fs.mkdir(git, { recursive: true })) {
       await $`git init`
-        .env(await env(git))
+        .env({
+          ...process.env,
+          GIT_DIR: git,
+          GIT_WORK_TREE: Instance.worktree,
+        })
         .quiet()
         .nothrow()
-      await $`git --git-dir ${git} config core.autocrlf ${coreAutocrlf}`.env(await env(git)).quiet().nothrow()
-      await $`git --git-dir ${git} config core.longpaths true`.env(await env(git)).quiet().nothrow()
-      await $`git --git-dir ${git} config core.symlinks ${coreSymlinks}`.env(await env(git)).quiet().nothrow()
-      await $`git --git-dir ${git} config core.fsmonitor false`.env(await env(git)).quiet().nothrow()
+      await $`git --git-dir ${git} config core.autocrlf ${coreAutocrlf}`.quiet().nothrow()
+      await $`git --git-dir ${git} config core.longpaths true`.quiet().nothrow()
+      await $`git --git-dir ${git} config core.symlinks ${coreSymlinks}`.quiet().nothrow()
+      await $`git --git-dir ${git} config core.fsmonitor false`.quiet().nothrow()
       log.info("initialized")
     }
     await add(git)
     const hash = await $`git --git-dir ${git} --work-tree ${Instance.worktree} write-tree`
-      .env(await env(git))
       .quiet()
       .cwd(Instance.directory)
       .nothrow()
@@ -122,7 +93,6 @@ export namespace Snapshot {
     await add(git)
     const result =
       await $`git -c core.autocrlf=${coreAutocrlf} -c core.longpaths=true -c core.symlinks=${coreSymlinks} -c core.quotepath=false --git-dir ${git} --work-tree ${Instance.worktree} diff --no-ext-diff --name-only ${hash} -- .`
-        .env(await env(git))
         .quiet()
         .cwd(Instance.directory)
         .nothrow()
@@ -150,7 +120,6 @@ export namespace Snapshot {
     const git = gitdir()
     const result =
       await $`git -c core.longpaths=true -c core.symlinks=${coreSymlinks} --git-dir ${git} --work-tree ${Instance.worktree} read-tree ${snapshot} && git -c core.longpaths=true -c core.symlinks=${coreSymlinks} --git-dir ${git} --work-tree ${Instance.worktree} checkout-index -a -f`
-        .env(await env(git))
         .quiet()
         .cwd(Instance.worktree)
         .nothrow()
@@ -174,7 +143,6 @@ export namespace Snapshot {
         log.info("reverting", { file, hash: item.hash })
         const result =
           await $`git -c core.longpaths=true -c core.symlinks=${coreSymlinks} --git-dir ${git} --work-tree ${Instance.worktree} checkout ${item.hash} -- ${file}`
-            .env(await env(git))
             .quiet()
             .cwd(Instance.worktree)
             .nothrow()
@@ -182,7 +150,6 @@ export namespace Snapshot {
           const relativePath = path.relative(Instance.worktree, file)
           const checkTree =
             await $`git -c core.longpaths=true -c core.symlinks=${coreSymlinks} --git-dir ${git} --work-tree ${Instance.worktree} ls-tree ${item.hash} -- ${relativePath}`
-              .env(await env(git))
               .quiet()
               .cwd(Instance.worktree)
               .nothrow()
@@ -192,9 +159,6 @@ export namespace Snapshot {
             })
           } else {
             log.info("file did not exist in snapshot, deleting", { file })
-            // Best-effort deletion: the file may already be gone or locked.
-            // Failure is non-critical since the revert goal is to match the
-            // snapshot state, and a missing file satisfies that.
             await fs.unlink(file).catch(() => {})
           }
         }
@@ -208,7 +172,6 @@ export namespace Snapshot {
     await add(git)
     const result =
       await $`git -c core.autocrlf=${coreAutocrlf} -c core.longpaths=true -c core.symlinks=${coreSymlinks} -c core.quotepath=false --git-dir ${git} --work-tree ${Instance.worktree} diff --no-ext-diff ${hash} -- .`
-        .env(await env(git))
         .quiet()
         .cwd(Instance.worktree)
         .nothrow()
@@ -246,7 +209,6 @@ export namespace Snapshot {
 
     const statuses =
       await $`git -c core.autocrlf=${coreAutocrlf} -c core.longpaths=true -c core.symlinks=${coreSymlinks} -c core.quotepath=false --git-dir ${git} --work-tree ${Instance.worktree} diff --no-ext-diff --name-status --no-renames ${from} ${to} -- .`
-        .env(await env(git))
         .quiet()
         .cwd(Instance.directory)
         .nothrow()
@@ -261,33 +223,27 @@ export namespace Snapshot {
     }
 
     for await (const line of $`git -c core.autocrlf=${coreAutocrlf} -c core.longpaths=true -c core.symlinks=${coreSymlinks} -c core.quotepath=false --git-dir ${git} --work-tree ${Instance.worktree} diff --no-ext-diff --no-renames --numstat ${from} ${to} -- .`
-      .env(await env(git))
       .quiet()
       .cwd(Instance.directory)
       .nothrow()
       .lines()) {
       if (!line) continue
-      const parts = line.split("\t")
-      if (parts.length < 3) continue
-      const [additions, deletions, file] = parts
-      if (ignore(file)) continue
+      const [additions, deletions, file] = line.split("\t")
       const isBinaryFile = additions === "-" && deletions === "-"
       const before = isBinaryFile
         ? ""
         : await $`git -c core.autocrlf=${coreAutocrlf} -c core.longpaths=true -c core.symlinks=${coreSymlinks} --git-dir ${git} --work-tree ${Instance.worktree} show ${from}:${file}`
-            .env(await env(git))
             .quiet()
             .nothrow()
             .text()
       const after = isBinaryFile
         ? ""
         : await $`git -c core.autocrlf=${coreAutocrlf} -c core.longpaths=true -c core.symlinks=${coreSymlinks} --git-dir ${git} --work-tree ${Instance.worktree} show ${to}:${file}`
-            .env(await env(git))
             .quiet()
             .nothrow()
             .text()
-      const added = isBinaryFile ? 0 : parseInt(additions, 10)
-      const deleted = isBinaryFile ? 0 : parseInt(deletions, 10)
+      const added = isBinaryFile ? 0 : parseInt(additions)
+      const deleted = isBinaryFile ? 0 : parseInt(deletions)
       result.push({
         file,
         before,
@@ -308,7 +264,6 @@ export namespace Snapshot {
   async function add(git: string) {
     await syncExclude(git)
     await $`git -c core.autocrlf=${coreAutocrlf} -c core.longpaths=true -c core.symlinks=${coreSymlinks} --git-dir ${git} --work-tree ${Instance.worktree} add .`
-      .env(await env(git))
       .quiet()
       .cwd(Instance.directory)
       .nothrow()
@@ -318,13 +273,14 @@ export namespace Snapshot {
     const file = await excludes()
     const target = path.join(git, "info", "exclude")
     await fs.mkdir(path.join(git, "info"), { recursive: true })
-    const text = file
-      ? await Bun.file(file)
-        .text()
-        .catch(() => "")
-      : ""
-    const defaults = [...FileIgnore.PATTERNS, ...EXTRA_EXCLUDES].join("\n")
-    await Bun.write(target, [text.trim(), defaults].filter(Boolean).join("\n") + "\n")
+    if (!file) {
+      await Bun.write(target, "")
+      return
+    }
+    const text = await Bun.file(file)
+      .text()
+      .catch(() => "")
+    await Bun.write(target, text)
   }
 
   async function excludes() {
@@ -340,9 +296,5 @@ export namespace Snapshot {
       .catch(() => false)
     if (!exists) return
     return file.trim()
-  }
-
-  function ignore(file: string) {
-    return FileIgnore.match(file, { extra: EXTRA_EXCLUDES })
   }
 }

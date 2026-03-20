@@ -7,6 +7,10 @@ import { Flag } from "../flag/flag"
 import { lazy } from "@/util/lazy"
 import { Filesystem } from "../util/filesystem"
 
+// Try to import bundled snapshot (generated at build time)
+// Falls back to undefined in dev mode when snapshot doesn't exist
+/* @ts-ignore */
+
 export namespace ModelsDev {
   const log = Log.create({ service: "models.dev" })
   const filepath = path.join(Global.Path.cache, "models.json")
@@ -82,24 +86,16 @@ export namespace ModelsDev {
   }
 
   export const Data = lazy(async () => {
-    const result = await Filesystem.readJson(Flag.OPENCORVUS_MODELS_PATH ?? filepath).catch((e) => {
-      log.info("models cache not available, falling back to snapshot", { error: String(e) })
-    })
+    const result = await Filesystem.readJson(Flag.OPENCORVUS_MODELS_PATH ?? filepath).catch(() => {})
     if (result) return result
+    // @ts-ignore
     const snapshot = await import("./models-snapshot")
       .then((m) => m.snapshot as Record<string, unknown>)
-      .catch((e) => {
-        log.info("models snapshot not bundled, will fetch from network", { error: String(e) })
-        return undefined
-      })
+      .catch(() => undefined)
     if (snapshot) return snapshot
     if (Flag.OPENCORVUS_DISABLE_MODELS_FETCH) return {}
     const json = await fetch(`${url()}/api.json`).then((x) => x.text())
-    try {
-      return JSON.parse(json)
-    } catch {
-      throw new Error("Failed to parse models API response as JSON")
-    }
+    return JSON.parse(json)
   })
 
   export async function get() {
@@ -129,12 +125,8 @@ if (!Flag.OPENCORVUS_DISABLE_MODELS_FETCH && !process.argv.includes("--get-yargs
   ModelsDev.refresh()
   setInterval(
     async () => {
-      await ModelsDev.refresh().catch((error) => {
-        Log.create({ service: "models-dev" }).warn("periodic refresh failed", {
-          error: error instanceof Error ? error.message : String(error),
-        })
-      })
+      await ModelsDev.refresh()
     },
-    60 * 60 * 1000,
+    60 * 1000 * 60,
   ).unref()
 }

@@ -1,4 +1,4 @@
-﻿import z from "zod"
+import z from "zod"
 import path from "path"
 import { Tool } from "./tool"
 import { Filesystem } from "../util/filesystem"
@@ -29,10 +29,8 @@ export const GlobTool = Tool.define("glob", {
       },
     })
 
-    let search = Filesystem.windowsPath(params.path ?? Instance.directory)
-    search = path.isAbsolute(search)
-      ? Filesystem.resolve(search)
-      : Filesystem.resolve(path.resolve(Instance.directory, search))
+    let search = params.path ?? Instance.directory
+    search = path.isAbsolute(search) ? search : path.resolve(Instance.directory, search)
     await assertExternalDirectory(ctx, search, { kind: "directory" })
 
     const limit = 100
@@ -47,7 +45,7 @@ export const GlobTool = Tool.define("glob", {
         truncated = true
         break
       }
-      const full = Filesystem.resolve(path.resolve(search, Filesystem.windowsPath(file)))
+      const full = path.resolve(search, file)
       const stats = Filesystem.stat(full)?.mtime.getTime() ?? 0
       files.push({
         path: full,
@@ -78,5 +76,3 @@ export const GlobTool = Tool.define("glob", {
     }
   },
 })
-
-

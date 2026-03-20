@@ -1,11 +1,10 @@
 import { $ } from "bun"
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
 import { existsSync } from "fs"
-import fs from "fs/promises"
 import path from "path"
 import { Database, eq } from "../../src/storage/db"
-import { CheckRunner } from "../../src/evaluator/service"
-import { type ExecutorAdapter } from "../../src/executor/contracts"
+import { EvaluatorService } from "../../src/evaluator/service"
+import { type ExecutorAdapter } from "../../src/executor/compat"
 import { ExecutorRegistry } from "../../src/executor/registry"
 import { OpencodeExecutor } from "../../src/executor/opencode"
 import { Global } from "../../src/global"
@@ -13,25 +12,17 @@ import { Identifier } from "../../src/id/id"
 import {
   OrchestratorInteractionRequestTable,
   OrchestratorEvaluationTable,
-  OrchestratorGoalRunTable,
-  OrchestratorGoalTable,
   OrchestratorPlanVersionTable,
-  OrchestratorRequirementTable,
   OrchestratorRunTable,
+  OrchestratorSpecItemTable,
   OrchestratorSpecSnapshotTable,
   OrchestratorTaskTable,
 } from "../../src/orchestrator/orchestrator.sql"
-import { createGoalSession } from "../../src/orchestrator/goal-runner"
-import { Event } from "../../src/orchestrator/model"
-import { OrchestratorRuntime } from "../../src/orchestrator/runtime"
 import { OrchestratorService } from "../../src/orchestrator/service"
-import { createGoalRun } from "../../src/orchestrator/transition"
 import { DeliveryService } from "../../src/orchestrator/delivery"
-import { ProtocolStore } from "../../src/protocol/store"
 import { Instance } from "../../src/project/instance"
 import { Project } from "../../src/project/project"
 import { Session } from "../../src/session"
-import { OrchestratorTaskActor } from "../../src/orchestrator/task-actor"
 import { PlannerFailureError, PlannerService } from "../../src/planner/service"
 import { SpecService } from "../../src/spec/service"
 import { Filesystem } from "../../src/util/filesystem"
@@ -51,124 +42,63 @@ function gitMeta(input: { metadata?: Record<string, unknown> | null } | undefine
   return dict(dict(input?.metadata).git)
 }
 
-function deferred<T>() {
-  let resolve!: (value: T | PromiseLike<T>) => void
-  return {
-    promise: new Promise<T>((next) => {
-      resolve = next
-    }),
-    resolve,
-  }
-}
-
-const DEFAULT_GOALS = [{
-  description: "Implement the requested change",
-  criteria: "The requested change is implemented and checks pass.",
-  priority: "blocking" as const,
-  metadata: {
-    check_selector: ["build", "test", "spec_check"],
-  },
-}]
-
-function normalizeGoals(input: { goals?: Array<{ description: string; criteria: string; priority?: "blocking" | "advisory"; metadata?: Record<string, unknown> }> }) {
-  const goals = Array.isArray(input.goals) && input.goals.length > 0
-    ? input.goals
-    : DEFAULT_GOALS
-  return goals.map((goal) => ({
-    description: goal.description,
-    criteria: goal.criteria,
-    priority: goal.priority ?? "blocking",
-    metadata: goal.metadata,
-  }))
-}
-
-function buildRequirements(goals: Array<{ description: string; criteria: string; priority?: "blocking" | "advisory"; metadata?: Record<string, unknown> }>) {
-  return goals.map((goal, index) => ({
-    id: `req_${index + 1}`,
-    title: goal.description,
-    description: goal.criteria,
-    priority: goal.priority ?? "blocking",
-    acceptance: [goal.criteria],
-    evidence_refs: goal.metadata?.check_selector ?? ["spec_check"],
-    metadata: goal.metadata,
-  }))
-}
-
-function planWaves(goals: Array<{ description: string }>) {
-  return goals.map((goal, index) => ({
-    title: `Wave ${index + 1}`,
-    objective: goal.description,
-    goal_indices: [index],
-    owned_paths: [`src/goal-${index + 1}.ts`],
-  }))
-}
-
-function planDraft(input: {
-  summary: string
-  prompt: string
-  goals: Array<{ description: string; criteria: string; priority?: "blocking" | "advisory"; metadata?: Record<string, unknown> }>
-  metadata: Record<string, unknown>
-}) {
-  return {
-    summary: input.summary,
-    prompt: input.prompt,
-    goals: input.goals,
-    metadata: {
-      ...input.metadata,
-      waves:
-        Array.isArray((input.metadata as { waves?: unknown }).waves)
-          ? (input.metadata as { waves: unknown[] }).waves
-          : planWaves(input.goals),
-    },
-  } as any
-}
-
 function stubSpec() {
-  const initial = spyOn(SpecService, "initial").mockImplementation(async (input: any) => {
-    const goals = normalizeGoals(input)
-    return {
-      summary: `Spec for: ${input.title}`,
-      content: `# Scope\n\nSpec content for ${input.title}`,
-      scope: `Scope for ${input.title}`,
-      requirements: buildRequirements(goals),
-      assumptions: [],
-      risks: [],
-      evidence_sources: [],
-      unresolved_questions: [],
-    }
-  })
-  const rewrite = spyOn(SpecService, "rewrite").mockImplementation(async (input: any) => {
-    const goals = normalizeGoals(input).map((goal) => ({
-      ...goal,
-      description: goal.description === DEFAULT_GOALS[0].description
-        ? "Implement the revised change"
-        : goal.description,
-      criteria: goal.criteria === DEFAULT_GOALS[0].criteria
-        ? "The revised change is implemented and checks pass."
-        : goal.criteria,
-    }))
-    return {
-      summary: `Revised spec for: ${input.title}`,
-      content: `# Scope\n\nRevised spec for ${input.title}`,
-      scope: `Revised scope for ${input.title}`,
-      requirements: buildRequirements(goals),
-      assumptions: [],
-      risks: [],
-      evidence_sources: [],
-      unresolved_questions: [],
-    }
-  })
+  const initial = spyOn(SpecService, "initial").mockImplementation(async (input: any) => ({
+    summary: `Spec for: ${input.title}`,
+    content: `# Scope\n\nSpec content for ${input.title}`,
+    scope: `Scope for ${input.title}`,
+    assumptions: [],
+    risks: [],
+    spec_items: [
+      {
+        title: "Implement the requested change",
+        description: "The requested change is correctly implemented.",
+        priority: "blocking",
+        check_selector: ["build", "test"],
+      },
+    ],
+    evidence_sources: [],
+    unresolved_questions: [],
+  }) as any)
+  const rewrite = spyOn(SpecService, "rewrite").mockImplementation(async (input: any) => ({
+    summary: `Revised spec for: ${input.title}`,
+    content: `# Scope\n\nRevised spec for ${input.title}`,
+    scope: `Revised scope for ${input.title}`,
+    assumptions: [],
+    risks: [],
+    spec_items: [
+      {
+        title: "Implement the revised change",
+        description: "The revised change is correctly implemented.",
+        priority: "blocking",
+        check_selector: ["build", "test"],
+      },
+    ],
+    evidence_sources: [],
+    unresolved_questions: [],
+  }) as any)
   return { initial, rewrite }
 }
 
 function stubPlanner() {
   stubSpec()
-  const goals = (input: { request: string; goals?: Array<{ description: string; criteria: string; priority?: "blocking" | "advisory"; metadata?: Record<string, unknown> }> }) =>
-    normalizeGoals(input)
-  const initial = spyOn(PlannerService, "initial").mockImplementation(async (input: any) => planDraft({
+  const initial = spyOn(PlannerService, "initial").mockImplementation(async (input: any) => ({
     summary: "Compiled plan",
     prompt: "Execute the compiled plan",
-    goals: goals(input),
+    goals: input.goals && input.goals.length > 0
+      ? input.goals.map((g: any) => ({
+          description: g.description,
+          criteria: g.criteria,
+          priority: g.priority ?? "blocking",
+          metadata: g.metadata,
+        }))
+      : [
+          {
+            description: "Implement the requested change",
+            criteria: "The requested change is implemented and checks pass.",
+            priority: "blocking",
+          },
+        ],
     metadata: {
       strategy: "initial",
       steps: ["Explore", "Plan", "Verify"],
@@ -181,11 +111,17 @@ function stubPlanner() {
       clarification: undefined,
       spec_analysis: undefined,
     },
-  }))
-  const replan = spyOn(PlannerService, "replan").mockImplementation(async (input: any) => planDraft({
+  }) as any)
+  const replan = spyOn(PlannerService, "replan").mockResolvedValue({
     summary: "Compiled replan",
     prompt: "Execute the replanned approach",
-    goals: goals(input),
+    goals: [
+      {
+        description: "Implement the requested change",
+        criteria: "The requested change is implemented and checks pass.",
+        priority: "blocking",
+      },
+    ],
     metadata: {
       strategy: "replan",
       steps: ["Re-evaluate", "Re-implement", "Verify"],
@@ -200,8 +136,8 @@ function stubPlanner() {
       clarification: undefined,
       spec_analysis: undefined,
     },
-  }))
-  const analyze = spyOn(CheckRunner, "analyzeDelivery").mockImplementation(async (input) => {
+  } as any)
+  const analyze = spyOn(EvaluatorService, "analyzeDelivery").mockImplementation(async (input) => {
     const failed = input.checkResults.some((item) => item.status === "failed")
     const goal_statuses = input.goals.map((goal, goal_index) => {
       const selectors = goal.check_selector ?? []
@@ -219,9 +155,9 @@ function stubPlanner() {
       if (selectors.length > 0 && relevant.length === 0) {
         return {
           goal_index,
-          status: "failed" as const,
+          status: "inconclusive" as const,
           evidence: "No matching automated check ran for this goal.",
-          reasoning: "Required checks were missing for this goal.",
+          reasoning: "The goal cannot be confirmed without its selected checks.",
         }
       }
       if (relevant.length > 0 && relevant.every((item) => item.status === "passed")) {
@@ -239,22 +175,19 @@ function stubPlanner() {
         reasoning: failed ? "Blocking checks failed." : "Relevant checks passed.",
       }
     })
-    const blockingFailed = goal_statuses.some((item) =>
-      item.status === "failed" && input.goals[item.goal_index]?.priority === "blocking",
-    )
-    const advisoryFailed = goal_statuses.some((item) =>
-      item.status === "failed" && input.goals[item.goal_index]?.priority === "advisory",
+    const pendingBlocking = goal_statuses.some((item) =>
+      item.status === "inconclusive" && input.goals[item.goal_index]?.priority === "blocking",
     )
     return {
-      verdict: failed || blockingFailed ? "rejected" : "accepted",
-      classification: failed || blockingFailed ? "evaluation" : "unknown",
-      summary: failed || blockingFailed
+      verdict: failed ? "rejected" : pendingBlocking ? "inconclusive" : "accepted",
+      classification: failed ? "evaluation" : "unknown",
+      summary: failed
         ? "Automated checks failed."
-        : advisoryFailed
-          ? "Blocking goals passed; advisory goals failed."
+        : pendingBlocking
+          ? "Required checks are incomplete for some blocking goals."
           : "All required checks passed.",
       goal_statuses,
-      replan_guidance: failed || blockingFailed
+      replan_guidance: failed
         ? {
             root_cause: "Automated checks failed",
             what_failed: "Evaluation rejected the candidate delivery",
@@ -271,7 +204,6 @@ describe("orchestrator.service", () => {
   afterEach(async () => {
     mock.restore()
     ExecutorRegistry.reset()
-    delete process.env.OPENCORVUS_UNATTENDED
     await resetDatabase()
   })
 
@@ -339,7 +271,7 @@ describe("orchestrator.service", () => {
     expect(submit).toHaveBeenCalledTimes(1)
   })
 
-  test("new tasks preserve explicit spec check disablement", async () => {
+  test("new tasks keep lint, typecheck, and spec checks enabled", async () => {
     await using tmp = await tmpdir({
       git: true,
       init: async (dir) => {
@@ -393,142 +325,8 @@ describe("orchestrator.service", () => {
         expect(checks?.lint).toEqual(["bun run lint"])
         expect(checks?.named?.typecheck?.enabled).toBe(true)
         expect(checks?.named?.typecheck?.commands).toEqual(["bun run typecheck"])
-        expect(checks?.spec_check?.enabled).toBe(false)
+        expect(checks?.spec_check?.enabled).toBe(true)
         expect(checks?.spec_check?.mode).toBe("strict")
-      },
-    })
-  })
-
-  test("materializes a planning task before spec compilation completes", async () => {
-    await using tmp = await tmpdir({ git: true })
-    const gate = deferred<void>()
-    spyOn(SpecService, "initial").mockImplementation(async (input: any) => {
-      await gate.promise
-      const goals = normalizeGoals(input)
-      return {
-        summary: `Spec for: ${input.title}`,
-        content: `# Scope\n\nSpec content for ${input.title}`,
-        scope: `Scope for ${input.title}`,
-        requirements: buildRequirements(goals),
-        assumptions: [],
-        risks: [],
-        evidence_sources: [],
-        unresolved_questions: [],
-      }
-    })
-    spyOn(PlannerService, "initial").mockResolvedValue(planDraft({
-      summary: "Compiled plan",
-      prompt: "Execute the compiled plan",
-      goals: [{
-        description: "Implement the requested change",
-        criteria: "The requested change is implemented and checks pass.",
-        priority: "blocking",
-        metadata: {
-          check_selector: ["build", "test", "spec_check"],
-        },
-      }],
-      metadata: {
-        strategy: "initial",
-        steps: ["Explore", "Plan", "Verify"],
-        planner: {
-          role: "headless_compiler",
-          quality: "compiled",
-          source: "planner_agent",
-          clarification_source: "none",
-        },
-      },
-    }))
-    spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
-      sessionID,
-      queueTaskID: Identifier.ascending("task"),
-    }))
-
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const request = "create a large orchestrated task before planning completes"
-        const taskID = await OrchestratorService.createTask({ request }, { background: true })
-        const row = Database.use((db) =>
-          db.select().from(OrchestratorTaskTable).where(eq(OrchestratorTaskTable.id, taskID)).get(),
-        )
-        expect(row?.request).toBe(request)
-        expect(row?.status).toBe("planning")
-
-        gate.resolve()
-        let task = row
-        for (const _ of Array.from({ length: 100 })) {
-          task = Database.use((db) =>
-            db.select().from(OrchestratorTaskTable).where(eq(OrchestratorTaskTable.id, taskID)).get(),
-          )
-          if (task?.active_plan_version_id && task.active_run_id) break
-          await Bun.sleep(20)
-        }
-        expect(task?.active_plan_version_id).toBeTruthy()
-        expect(task?.active_run_id).toBeTruthy()
-      },
-    })
-  })
-
-  test("getBoard skips task actor head-of-line blocking for read-only requests", async () => {
-    await using tmp = await tmpdir({ git: true })
-    const gate = deferred<void>()
-    stubPlanner()
-    spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
-      sessionID,
-      queueTaskID: Identifier.ascending("task"),
-    }))
-
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const taskID = await OrchestratorService.createTask({
-          request: "render a board while a task-scoped mutation is queued",
-        })
-        const lock = OrchestratorTaskActor.submit(taskID, async () => {
-          await gate.promise
-          return true
-        })
-        await Bun.sleep(25)
-        const board = await OrchestratorService.getBoard(taskID, { sync: false })
-        expect(board.task.id).toBe(taskID)
-        expect(board.task.status).toBeTruthy()
-        gate.resolve()
-        await lock
-      },
-    })
-  })
-
-  test("getProgress falls back to stale state when syncTask times out", async () => {
-    await using tmp = await tmpdir({ git: true })
-    stubPlanner()
-    spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
-      sessionID,
-      queueTaskID: Identifier.ascending("task"),
-    }))
-
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const taskID = await OrchestratorService.createTask({
-          request: "return progress even when task sync is slow",
-        })
-        const restore = process.env.OPENCORVUS_READ_SYNC_TIMEOUT_MS
-        process.env.OPENCORVUS_READ_SYNC_TIMEOUT_MS = "50"
-        const gate = deferred<void>()
-        const sync = spyOn(OrchestratorRuntime, "syncTask").mockImplementation(async () => {
-          await gate.promise
-        })
-        try {
-          const started = Date.now()
-          const progress = await OrchestratorService.getProgress(taskID)
-          expect(Date.now() - started).toBeLessThan(1000)
-          expect(progress.task.id).toBe(taskID)
-          expect(sync).toHaveBeenCalled()
-        } finally {
-          gate.resolve()
-          if (restore === undefined) delete process.env.OPENCORVUS_READ_SYNC_TIMEOUT_MS
-          else process.env.OPENCORVUS_READ_SYNC_TIMEOUT_MS = restore
-        }
       },
     })
   })
@@ -564,17 +362,13 @@ describe("orchestrator.service", () => {
         },
       ],
     })
-    spyOn(CheckRunner, "evaluate").mockResolvedValue({
+    spyOn(EvaluatorService, "evaluate").mockResolvedValue({
       status: "passed",
       verdict: "accepted",
       summary: "All checks passed.",
-      checks: [
-        { name: "build", status: "passed", evidence: "verified" },
-        { name: "test", status: "passed", evidence: "verified" },
-        { name: "spec_check", status: "passed", evidence: "verified" },
-      ],
+      checks: [{ name: "manual", status: "passed", evidence: "verified" }],
       artifacts: [],
-    } as Awaited<ReturnType<typeof CheckRunner.evaluate>>)
+    } as Awaited<ReturnType<typeof EvaluatorService.evaluate>>)
     spyOn(DeliveryService, "deliver").mockResolvedValue({
       status: "delivered",
       summary: "Delivery finalized.",
@@ -593,14 +387,6 @@ describe("orchestrator.service", () => {
           request: "update the landing page hero section copy",
         })
         await Bun.write(path.join(tmp.path, "note.txt"), "after\n")
-        for (const _ of Array.from({ length: 80 })) {
-          const current = Database.use((db) =>
-            db.select().from(OrchestratorTaskTable).where(eq(OrchestratorTaskTable.id, taskID)).get(),
-          )
-          if (current?.status === "completed") break
-          await OrchestratorService.getProgress(taskID).catch(() => undefined)
-          await Bun.sleep(50)
-        }
         const board = await OrchestratorService.getBoard(taskID)
         const task = Database.use((db) =>
           db.select().from(OrchestratorTaskTable).where(eq(OrchestratorTaskTable.id, taskID)).get(),
@@ -627,106 +413,10 @@ describe("orchestrator.service", () => {
     ])
   })
 
-  test("writes PRD, plan, goals, and evaluation markdown snapshots into the project directory", async () => {
-    await using tmp = await tmpdir({
-      git: true,
-      init: async (dir) => {
-        await Bun.write(path.join(dir, "note.txt"), "before\n")
-        await $`git add note.txt`.cwd(dir).quiet()
-        await $`git commit --no-gpg-sign -m "seed note"`.cwd(dir).quiet()
-      },
-    })
-    stubPlanner()
-    spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
-      sessionID,
-      queueTaskID: Identifier.ascending("task"),
-    }))
-    spyOn(OpencodeExecutor, "status").mockResolvedValue({
-      queueTaskID: Identifier.ascending("task"),
-      status: "completed",
-      error: null,
-    })
-    spyOn(OpencodeExecutor, "delivery").mockResolvedValue({
-      summary: "Updated note.txt and verified the change.",
-      diffs: [
-        {
-          file: "note.txt",
-          before: "before\n",
-          after: "after\n",
-          additions: 1,
-          deletions: 1,
-        },
-      ],
-    })
-    spyOn(CheckRunner, "evaluate").mockResolvedValue({
-      status: "passed",
-      verdict: "accepted",
-      summary: "All checks passed.",
-      checks: [
-        { name: "build", status: "passed", evidence: "verified" },
-        { name: "test", status: "passed", evidence: "verified" },
-        { name: "spec_check", status: "passed", evidence: "verified" },
-      ],
-      artifacts: [],
-    } as Awaited<ReturnType<typeof CheckRunner.evaluate>>)
-    spyOn(DeliveryService, "deliver").mockResolvedValue({
-      status: "delivered",
-      summary: "Delivery finalized.",
-      artifacts: [],
-      publish: {
-        mode: "manual",
-        adapters: [{ id: "delivery", status: "delivered", summary: "Delivery finalized." }],
-      },
-    })
-
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const taskID = await OrchestratorService.createTask({
-          request: "update the landing page hero section copy",
-        })
-        await Bun.write(path.join(tmp.path, "note.txt"), "after\n")
-        for (let i = 0; i < 200; i++) {
-          await OrchestratorService.getProgress(taskID).catch(() => undefined)
-          const evaluation = Database.use((db) =>
-            db.select().from(OrchestratorEvaluationTable).where(eq(OrchestratorEvaluationTable.task_id, taskID)).get(),
-          )
-          if (evaluation) return
-          await Bun.sleep(50)
-        }
-        throw new Error("evaluation did not complete in time")
-      },
-    })
-
-    const prds = (await fs.readdir(path.join(tmp.path, ".opencorvus", "prds"))).filter((item) => item.endsWith(".md"))
-    const plans = (await fs.readdir(path.join(tmp.path, ".opencorvus", "plans"))).filter((item) => item.endsWith(".md"))
-    const goals = (await fs.readdir(path.join(tmp.path, ".opencorvus", "goals"))).filter((item) => item.endsWith(".md"))
-    const evaluations = (await fs.readdir(path.join(tmp.path, ".opencorvus", "evaluations"))).filter((item) => item.endsWith(".md"))
-    const rx = /^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z-/
-
-    expect(prds.some((item) => rx.test(item))).toBe(true)
-    expect(plans.some((item) => rx.test(item))).toBe(true)
-    expect(goals.some((item) => rx.test(item))).toBe(true)
-    expect(evaluations.some((item) => rx.test(item))).toBe(true)
-
-    const planText = await fs.readFile(path.join(tmp.path, ".opencorvus", "plans", plans[0]!), "utf-8")
-    const evaluationText = await fs.readFile(path.join(tmp.path, ".opencorvus", "evaluations", evaluations[0]!), "utf-8")
-    const latestGoal = goals.toSorted().at(-1)
-    const goalText = await fs.readFile(path.join(tmp.path, ".opencorvus", "goals", latestGoal!), "utf-8")
-
-    expect(planText).toContain("# Plan")
-    expect(planText).toContain("Execute the compiled plan")
-    expect(goalText).toContain("# Goal Snapshot")
-    expect(goalText).toContain("[passed] [blocking] Implement the requested change")
-    expect(evaluationText).toContain("# Goal Run Evaluation Snapshot")
-    expect(evaluationText).toContain("Verdict: accepted")
-  }, 30000)
-
-  test("rewrites the authoritative spec when resuming a replanning clarification", async () => {
-    process.env.OPENCORVUS_UNATTENDED = "0"
+  test("persists spec items when resuming a legacy planner clarification", async () => {
     await using tmp = await tmpdir({ git: true })
     const { replan } = stubPlanner()
-    replan.mockResolvedValue(planDraft({
+    replan.mockResolvedValue({
       summary: "Clarified replan",
       prompt: "Execute the clarified replanned approach",
       goals: [
@@ -748,13 +438,24 @@ describe("orchestrator.service", () => {
           source: "planner_agent",
           clarification_source: "suppressed",
         },
+        spec: {
+          summary: "Clarified spec summary",
+          spec_items: [
+            {
+              title: "Preserve the acceptance gate",
+              description: "Spec items remain available to spec_check after clarification.",
+              priority: "blocking",
+              check_selector: ["spec_check"],
+            },
+          ],
+        },
         spec_analysis: {
-          expanded_spec: "# Scope\n\nKeep requirements attached after clarification.",
+          expanded_spec: "# Scope\n\nKeep spec items attached after clarification.",
           ambiguities: [],
           questions: [],
         },
       },
-    }))
+    } as any)
     spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
       sessionID,
       queueTaskID: Identifier.ascending("task"),
@@ -774,7 +475,6 @@ describe("orchestrator.service", () => {
         const task = Database.use((db) =>
           db.select().from(OrchestratorTaskTable).where(eq(OrchestratorTaskTable.id, taskID)).get(),
         )!
-        const previousSpecVersionID = task.active_spec_version_id
         const runID = Identifier.ascending("run")
         const interactionID = Identifier.ascending("interaction")
         const now = Date.now()
@@ -848,109 +548,16 @@ describe("orchestrator.service", () => {
         const next = Database.use((db) =>
           db.select().from(OrchestratorTaskTable).where(eq(OrchestratorTaskTable.id, taskID)).get(),
         )!
-        const requirements = Database.use((db) =>
+        const specItems = Database.use((db) =>
           db
             .select()
-            .from(OrchestratorRequirementTable)
-            .where(eq(OrchestratorRequirementTable.spec_snapshot_id, next.active_spec_version_id!))
+            .from(OrchestratorSpecItemTable)
+            .where(eq(OrchestratorSpecItemTable.spec_snapshot_id, next.active_spec_version_id!))
             .all(),
         )
-        expect(next.active_spec_version_id).not.toBe(previousSpecVersionID)
-        expect(requirements).toHaveLength(1)
-        expect(requirements[0]?.title).toBe("Implement the revised change")
-      },
-    })
-  })
-
-  test("auto-assumes specification clarification in unattended mode", async () => {
-    process.env.OPENCORVUS_UNATTENDED = "1"
-    await using tmp = await tmpdir({ git: true })
-
-    const planner = spyOn(PlannerService, "initial").mockResolvedValue(planDraft({
-      summary: "Compiled unattended plan",
-      prompt: "Execute the unattended compiled plan",
-      goals: [{
-        description: "Implement the requested change",
-        criteria: "The requested change is implemented and checks pass.",
-        priority: "blocking",
-        metadata: {
-          check_selector: ["build", "test", "spec_check"],
-        },
-      }],
-      metadata: {
-        strategy: "initial",
-        steps: ["Implement", "Verify"],
-        planner: {
-          role: "headless_compiler",
-          quality: "compiled",
-          source: "planner_agent",
-          clarification_source: "suppressed",
-        },
-        clarification: undefined,
-        spec_analysis: {
-          expanded_spec: "# Scope\n\nUse the default homepage path.",
-          ambiguities: [],
-          questions: [],
-        },
-      },
-    }))
-
-    spyOn(SpecService, "initial").mockResolvedValue({
-      summary: "Spec summary",
-      content: "# Scope\n\nUpdate the landing page hero copy.",
-      scope: "Update the landing page hero copy.",
-      requirements: [
-        {
-          id: "req_homepage_hero",
-          title: "Update landing page hero copy",
-          description: "Change the homepage hero copy without blocking for clarification.",
-          priority: "blocking",
-          acceptance: ["Homepage hero copy is updated."],
-          evidence_refs: ["spec_check"],
-          metadata: {
-            check_selector: ["spec_check"],
-          },
-        },
-      ],
-      assumptions: [],
-      risks: [],
-      evidence_sources: [],
-      unresolved_questions: [],
-      clarifications: [{
-        header: "Scope",
-        question: "Which page should change first?",
-        context: "The request does not name a specific page.",
-        default_assumption: "Start with the landing page hero section.",
-      }],
-    } as any)
-
-    spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
-      sessionID,
-      queueTaskID: Identifier.ascending("task"),
-    }))
-    spyOn(OpencodeExecutor, "status").mockResolvedValue({
-      queueTaskID: Identifier.ascending("task"),
-      status: "queued",
-      error: null,
-    })
-
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const taskID = await OrchestratorService.createTask({
-          request: "update the landing page hero copy",
-        })
-
-        const task = Database.use((db) =>
-          db.select().from(OrchestratorTaskTable).where(eq(OrchestratorTaskTable.id, taskID)).get(),
-        )
-        const interactions = await OrchestratorService.listTaskInteractions(taskID)
-        const plannerInput = planner.mock.calls[0]?.[0] as { allowClarification?: boolean; spec?: { assumptions?: Array<{ assumption: string }> } }
-
-        expect(["queued", "running"]).toContain(task?.status)
-        expect(interactions).toHaveLength(0)
-        expect(plannerInput.allowClarification).toBe(false)
-        expect(plannerInput.spec?.assumptions?.some((item) => item.assumption.includes("landing page hero section"))).toBe(true)
+        expect(next.active_spec_version_id).toBeTruthy()
+        expect(specItems).toHaveLength(1)
+        expect(specItems[0]?.title).toBe("Preserve the acceptance gate")
       },
     })
   })
@@ -970,31 +577,24 @@ describe("orchestrator.service", () => {
         ).rejects.toThrow("planner exploded")
 
         const task = Database.use((db) =>
-          db
-            .select()
-            .from(OrchestratorTaskTable)
-            .all()
-            .filter((item) => item.request === "update the landing page hero section copy")
-            .sort((a, b) => (b.time_created ?? 0) - (a.time_created ?? 0))[0],
+          db.select().from(OrchestratorTaskTable).get(),
         )
-        const run = task?.active_run_id
-          ? Database.use((db) => db.select().from(OrchestratorRunTable).where(eq(OrchestratorRunTable.id, task.active_run_id!)).get())
-          : undefined
-        const snapshot = task?.active_spec_version_id
-          ? Database.use((db) => db.select().from(OrchestratorSpecSnapshotTable).where(eq(OrchestratorSpecSnapshotTable.id, task.active_spec_version_id!)).get())
-          : undefined
-        const requirements = Database.use((db) =>
-          snapshot
-            ? db.select().from(OrchestratorRequirementTable).where(eq(OrchestratorRequirementTable.spec_snapshot_id, snapshot.id)).all()
-            : [],
+        const run = Database.use((db) =>
+          db.select().from(OrchestratorRunTable).get(),
+        )
+        const snapshot = Database.use((db) =>
+          db.select().from(OrchestratorSpecSnapshotTable).get(),
+        )
+        const specItems = Database.use((db) =>
+          db.select().from(OrchestratorSpecItemTable).all(),
         )
 
         expect(task?.status).toBe("failed")
         expect(task?.active_spec_version_id).toBe(snapshot?.id)
         expect(run?.status).toBe("failed")
         expect(snapshot?.summary).toContain("Spec for:")
-        expect(requirements).toHaveLength(1)
-        expect(requirements[0]?.title).toBe("Implement the requested change")
+        expect(specItems).toHaveLength(1)
+        expect(specItems[0]?.title).toBe("Implement the requested change")
       },
     })
   })
@@ -1002,17 +602,10 @@ describe("orchestrator.service", () => {
   test("retries same plan after first evaluation failure", async () => {
     await using tmp = await tmpdir({ git: true })
     stubPlanner()
-    const submit = spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => {
-      const session = await Session.get(sessionID)
-      await Bun.write(
-        path.join(session.directory, "src", `retry-${Identifier.ascending("part")}.ts`),
-        "export const changed = true\n",
-      )
-      return {
-        sessionID,
-        queueTaskID: Identifier.ascending("task"),
-      }
-    })
+    const submit = spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
+      sessionID,
+      queueTaskID: Identifier.ascending("task"),
+    }))
     spyOn(OpencodeExecutor, "status").mockResolvedValue({
       queueTaskID: Identifier.ascending("task"),
       status: "completed",
@@ -1026,22 +619,28 @@ describe("orchestrator.service", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
+        console.log("[DEBUG] Before createTask")
         const taskID = await OrchestratorService.createTask({
           request: "update the landing page hero section copy",
           checks: {
             verify_cmd: [`"${process.execPath}" -e "process.exit(1)"`],
           },
         })
-
-        await OrchestratorService.getProgress(taskID)
+        console.log("[DEBUG] After createTask, taskID:", taskID)
+        console.log("[DEBUG] Before getProgress")
+        try {
+          const progress = await OrchestratorService.getProgress(taskID)
+          console.log("[DEBUG] Progress:", progress.task.status, progress.run?.status)
+        } catch (e) {
+          console.log("[DEBUG] getProgress error:", e instanceof Error ? e.message : String(e))
+        }
+        console.log("[DEBUG] After getProgress (should not hang)")
         const progress = await OrchestratorService.getProgress(taskID)
+        console.log("[DEBUG] Second progress:", progress.task.status)
         expect(progress.task.status).toBe("running")
         expect(progress.run?.status).toBe("accepted")
+        expect(progress.run?.retryCount).toBe(1)
         expect(progress.run?.planVersionID).toBe(progress.plan?.id)
-        expect(submit.mock.calls[0]?.[0]?.prompt).toContain("Coordinator context:\n- Plan summary: Compiled plan")
-        expect(submit.mock.calls[1]?.[0]?.prompt).toContain("Coordinator context:\n- Plan summary: Compiled plan")
-        expect(submit.mock.calls[1]?.[0]?.prompt).toContain("## Run Context")
-        expect(submit.mock.calls[1]?.[0]?.prompt).toContain("The previous attempt did not satisfy the acceptance checks.")
 
         const runs = Database.use((db) =>
           db.select().from(OrchestratorRunTable).where(eq(OrchestratorRunTable.task_id, taskID)).all(),
@@ -1049,22 +648,20 @@ describe("orchestrator.service", () => {
         const evaluations = Database.use((db) =>
           db.select().from(OrchestratorEvaluationTable).where(eq(OrchestratorEvaluationTable.task_id, taskID)).all(),
         )
-        expect(runs.length).toBeGreaterThanOrEqual(2)
-        expect(evaluations.length).toBeGreaterThanOrEqual(1)
-        expect(evaluations.some((item) => item.status === "failed")).toBe(true)
-        expect(runs.some((item) => item.retry_count === 0 && item.status === "failed")).toBe(true)
-        expect(runs.some((item) => item.retry_count === 1)).toBe(true)
+        expect(runs.length).toBe(2)
+        expect(evaluations.length).toBe(1)
+        expect(evaluations[0]?.status).toBe("failed")
+        expect(runs.some((item) => item.status === "completed")).toBe(true)
+        expect(runs.some((item) => item.status === "accepted" && item.retry_count === 1)).toBe(true)
       },
     })
 
-    expect(submit.mock.calls.length).toBeGreaterThanOrEqual(1)
+    expect(submit).toHaveBeenCalledTimes(2)
   })
 
   test("preserves all planner clarification questions in blocked interactions", async () => {
-    process.env.OPENCORVUS_UNATTENDED = "0"
     await using tmp = await tmpdir({ git: true })
-    stubSpec()
-    spyOn(PlannerService, "initial").mockResolvedValue(planDraft({
+    spyOn(PlannerService, "initial").mockResolvedValue({
       summary: "Need answers",
       prompt: "Ask before executing",
       goals: [
@@ -1097,7 +694,7 @@ describe("orchestrator.service", () => {
           ],
         },
       },
-    }))
+    } as any)
 
     await Instance.provide({
       directory: tmp.path,
@@ -1178,17 +775,10 @@ describe("orchestrator.service", () => {
   test("replans after second evaluation failure", async () => {
     await using tmp = await tmpdir({ git: true })
     stubPlanner()
-    const submit = spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => {
-      const session = await Session.get(sessionID)
-      await Bun.write(
-        path.join(session.directory, "src", `replan-${Identifier.ascending("part")}.ts`),
-        "export const changed = true\n",
-      )
-      return {
-        sessionID,
-        queueTaskID: Identifier.ascending("task"),
-      }
-    })
+    const submit = spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
+      sessionID,
+      queueTaskID: Identifier.ascending("task"),
+    }))
     spyOn(OpencodeExecutor, "status").mockResolvedValue({
       queueTaskID: Identifier.ascending("task"),
       status: "completed",
@@ -1225,14 +815,10 @@ describe("orchestrator.service", () => {
         const evaluations = Database.use((db) =>
           db.select().from(OrchestratorEvaluationTable).where(eq(OrchestratorEvaluationTable.task_id, taskID)).all(),
         )
-        const runs = Database.use((db) =>
-          db.select().from(OrchestratorRunTable).where(eq(OrchestratorRunTable.task_id, taskID)).all(),
-        )
         expect(task?.active_plan_version_id).toBe(progress.plan?.id)
         expect(plans.length).toBe(2)
         expect(evaluations.length).toBe(2)
         expect(evaluations.every((item) => item.status === "failed")).toBe(true)
-        expect(runs.filter((item) => item.id !== task?.active_run_id).some((item) => item.status === "failed")).toBe(true)
         expect(plans.some((item) => item.status === "superseded")).toBe(true)
       },
     })
@@ -1240,74 +826,10 @@ describe("orchestrator.service", () => {
     expect(submit).toHaveBeenCalledTimes(3)
   })
 
-  test("fails the task when automatic replan creation fails", async () => {
-    await using tmp = await tmpdir({ git: true })
-    const { replan } = stubPlanner()
-    replan.mockRejectedValue(new PlannerFailureError("replan unavailable"))
-    const submit = spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
-      sessionID,
-      queueTaskID: Identifier.ascending("task"),
-    }))
-    spyOn(OpencodeExecutor, "status").mockResolvedValue({
-      queueTaskID: Identifier.ascending("task"),
-      status: "completed",
-      error: null,
-    })
-    spyOn(OpencodeExecutor, "delivery").mockResolvedValue({
-      summary: "executor finished",
-      diffs: [],
-    })
-
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const taskID = await OrchestratorService.createTask({
-          request: "update the landing page hero section copy",
-          checks: {
-            verify_cmd: [`"${process.execPath}" -e "process.exit(1)"`],
-          },
-        })
-
-        let progress = await OrchestratorService.getProgress(taskID)
-        for (const _ of Array.from({ length: 40 })) {
-          if (progress.task.status === "failed") break
-          await Bun.sleep(50)
-          progress = await OrchestratorService.getProgress(taskID)
-        }
-        const task = Database.use((db) =>
-          db.select().from(OrchestratorTaskTable).where(eq(OrchestratorTaskTable.id, taskID)).get(),
-        )
-        const plans = Database.use((db) =>
-          db.select().from(OrchestratorPlanVersionTable).where(eq(OrchestratorPlanVersionTable.task_id, taskID)).all(),
-        )
-        const evaluations = Database.use((db) =>
-          db.select().from(OrchestratorEvaluationTable).where(eq(OrchestratorEvaluationTable.task_id, taskID)).all(),
-        )
-        const interactions = Database.use((db) =>
-          db.select().from(OrchestratorInteractionRequestTable).where(eq(OrchestratorInteractionRequestTable.task_id, taskID)).all(),
-        )
-        const runs = Database.use((db) =>
-          db.select().from(OrchestratorRunTable).where(eq(OrchestratorRunTable.task_id, taskID)).all(),
-        )
-
-        expect(progress.task.status).toBe("failed")
-        expect(progress.run?.phase).not.toBe("replan")
-        expect(task?.time_completed).toBeNumber()
-        expect(plans).toHaveLength(1)
-        expect(evaluations.some((item) => item.status === "failed")).toBe(true)
-        expect(interactions).toHaveLength(0)
-        expect(runs.every((item) => item.phase !== "replan")).toBe(true)
-      },
-    })
-
-    expect(submit.mock.calls.length).toBeGreaterThanOrEqual(1)
-  })
-
   test("blocks automatic replan when replanning needs clarification", async () => {
-    process.env.OPENCORVUS_UNATTENDED = "0"
     await using tmp = await tmpdir({ git: true })
     const { replan } = stubPlanner()
-    replan.mockResolvedValue(planDraft({
+    replan.mockResolvedValue({
       summary: "Clarification required before planning",
       prompt: "Wait for clarification",
       goals: [
@@ -1336,7 +858,7 @@ describe("orchestrator.service", () => {
           ],
         },
       },
-    }))
+    } as any)
     const submit = spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
       sessionID,
       queueTaskID: Identifier.ascending("task"),
@@ -1376,7 +898,7 @@ describe("orchestrator.service", () => {
       },
     })
 
-    expect(submit.mock.calls.length).toBeGreaterThanOrEqual(1)
+    expect(submit).toHaveBeenCalledTimes(2)
   })
 
   test("marks task failed when retry and replan budgets are exhausted", async () => {
@@ -1403,7 +925,6 @@ describe("orchestrator.service", () => {
           request: "update the landing page hero section copy",
           budget: {
             maxRuns: 1,
-            maxReplans: 0,
           },
           checks: {
             verify_cmd: [`"${process.execPath}" -e "process.exit(1)"`],
@@ -1412,9 +933,8 @@ describe("orchestrator.service", () => {
 
         const progress = await OrchestratorService.getProgress(taskID)
         expect(progress.task.status).toBe("failed")
-        expect(["completed", "failed"]).toContain(progress.run?.status)
-        expect(progress.evaluation).toBeUndefined()
-        expect(progress.goalRuns.at(-1)?.status).toBe("failed")
+        expect(progress.run?.status).toBe("completed")
+        expect(progress.evaluation?.status).toBe("failed")
       },
     })
 
@@ -1456,7 +976,6 @@ describe("orchestrator.service", () => {
           request: "update the landing page hero section copy",
           budget: {
             maxRuns: 1,
-            maxReplans: 0,
           },
           checks: {
             verify_cmd: [`"${process.execPath}" -e "process.exit(1)"`],
@@ -1470,15 +989,12 @@ describe("orchestrator.service", () => {
         expect(note.resumed).toBe(true)
 
         const progress = await OrchestratorService.getProgress(taskID)
-        expect(["running", "failed"]).toContain(progress.task.status)
-        const runs = Database.use((db) =>
-          db.select().from(OrchestratorRunTable).where(eq(OrchestratorRunTable.task_id, taskID)).all(),
-        )
-        expect(runs.some((item) => item.metadata?.strategy === "operator_note")).toBe(true)
+        expect(progress.task.status).toBe("running")
+        expect(progress.run?.status).toBe("accepted")
       },
     })
 
-    expect(submit.mock.calls.length).toBeGreaterThanOrEqual(1)
+    expect(submit).toHaveBeenCalledTimes(2)
   })
 
   test("retryTask queues a deterministic retry run without task-message NLP", async () => {
@@ -1505,7 +1021,6 @@ describe("orchestrator.service", () => {
           request: "update the landing page hero section copy",
           budget: {
             maxRuns: 1,
-            maxReplans: 0,
           },
           checks: {
             verify_cmd: [`"${process.execPath}" -e "process.exit(1)"`],
@@ -1547,7 +1062,6 @@ describe("orchestrator.service", () => {
           request: "update the landing page hero section copy",
           budget: {
             maxRuns: 1,
-            maxReplans: 0,
           },
           checks: {
             verify_cmd: [`"${process.execPath}" -e "process.exit(1)"`],
@@ -1569,7 +1083,6 @@ describe("orchestrator.service", () => {
           db.select().from(OrchestratorPlanVersionTable).where(eq(OrchestratorPlanVersionTable.task_id, taskID)).all(),
         )
         expect(task?.active_plan_version_id).toBe(run.planVersionID)
-        expect(task?.active_spec_version_id).toBe(failed.task.activeSpecVersionID)
         expect(plans.length).toBe(2)
         expect(plans.some((item) => item.status === "superseded")).toBe(true)
       },
@@ -1578,7 +1091,7 @@ describe("orchestrator.service", () => {
     expect(submit).toHaveBeenCalledTimes(2)
   })
 
-  test("replanTask preserves existing requirements on the active spec version", async () => {
+  test("replanTask persists rewritten spec items on the new active spec version", async () => {
     await using tmp = await tmpdir({ git: true })
     stubPlanner()
     const submit = spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
@@ -1602,7 +1115,6 @@ describe("orchestrator.service", () => {
           request: "update the landing page hero section copy",
           budget: {
             maxRuns: 1,
-            maxReplans: 0,
           },
           checks: {
             verify_cmd: [`"${process.execPath}" -e "process.exit(1)"`],
@@ -1618,17 +1130,18 @@ describe("orchestrator.service", () => {
         const task = Database.use((db) =>
           db.select().from(OrchestratorTaskTable).where(eq(OrchestratorTaskTable.id, taskID)).get(),
         )
-        const requirements = Database.use((db) =>
+        const specItems = Database.use((db) =>
           db
             .select()
-            .from(OrchestratorRequirementTable)
-            .where(eq(OrchestratorRequirementTable.spec_snapshot_id, task?.active_spec_version_id!))
+            .from(OrchestratorSpecItemTable)
+            .where(eq(OrchestratorSpecItemTable.spec_snapshot_id, task?.active_spec_version_id!))
             .all(),
         )
 
-        expect(task?.active_spec_version_id).toBe(previousSpecVersionID)
-        expect(requirements).toHaveLength(1)
-        expect(typeof requirements[0]?.title).toBe("string")
+        expect(task?.active_spec_version_id).toBeTruthy()
+        expect(task?.active_spec_version_id).not.toBe(previousSpecVersionID)
+        expect(specItems).toHaveLength(1)
+        expect(typeof specItems[0]?.title).toBe("string")
       },
     })
 
@@ -1636,10 +1149,9 @@ describe("orchestrator.service", () => {
   })
 
   test("replanTask blocks when clarification is required before replanning", async () => {
-    process.env.OPENCORVUS_UNATTENDED = "0"
     await using tmp = await tmpdir({ git: true })
     const { replan } = stubPlanner()
-    replan.mockResolvedValue(planDraft({
+    replan.mockResolvedValue({
       summary: "Clarification required before planning",
       prompt: "Wait for clarification",
       goals: [
@@ -1668,7 +1180,7 @@ describe("orchestrator.service", () => {
           ],
         },
       },
-    }))
+    } as any)
     const submit = spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
       sessionID,
       queueTaskID: Identifier.ascending("task"),
@@ -1690,7 +1202,6 @@ describe("orchestrator.service", () => {
           request: "update the landing page hero section copy",
           budget: {
             maxRuns: 1,
-            maxReplans: 0,
           },
           checks: {
             verify_cmd: [`"${process.execPath}" -e "process.exit(1)"`],
@@ -1724,11 +1235,10 @@ describe("orchestrator.service", () => {
   })
 
   test("answering replanning clarification resumes PlannerService.replan and creates the next version", async () => {
-    process.env.OPENCORVUS_UNATTENDED = "0"
     await using tmp = await tmpdir({ git: true })
     const { replan } = stubPlanner()
     replan
-      .mockResolvedValueOnce(planDraft({
+      .mockResolvedValueOnce({
         summary: "Clarification required before planning",
         prompt: "Wait for clarification",
         goals: [
@@ -1771,8 +1281,8 @@ describe("orchestrator.service", () => {
             previousGoalStatuses: [],
           },
         },
-      }))
-      .mockResolvedValueOnce(planDraft({
+      } as any)
+      .mockResolvedValueOnce({
         summary: "Compiled replan after clarification",
         prompt: "Execute the clarified replanned approach",
         goals: [
@@ -1799,7 +1309,7 @@ describe("orchestrator.service", () => {
           clarification: undefined,
           spec_analysis: undefined,
         },
-      }))
+      } as any)
     const submit = spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
       sessionID,
       queueTaskID: Identifier.ascending("task"),
@@ -1821,7 +1331,6 @@ describe("orchestrator.service", () => {
           request: "update the landing page hero section copy",
           budget: {
             maxRuns: 1,
-            maxReplans: 0,
           },
           checks: {
             verify_cmd: [`"${process.execPath}" -e "process.exit(1)"`],
@@ -1855,9 +1364,9 @@ describe("orchestrator.service", () => {
         expect(progress.run?.status).toBe("accepted")
         expect(progress.run?.phase).toBe("replan")
         expect(progress.plan?.version).toBe(2)
-        expect(progress.task.activeSpecVersionID).not.toBe(failed.task.activeSpecVersionID)
         expect(plans.some((item) => item.status === "superseded")).toBe(true)
         expect(replan.mock.calls[1]?.[0]).toEqual(expect.objectContaining({
+          allowClarification: false,
           previousPlanID: failed.plan?.id,
         }))
         expect(replan.mock.calls[1]?.[0]?.request).toContain("Only update the marketing hero copy.")
@@ -1867,50 +1376,13 @@ describe("orchestrator.service", () => {
     expect(submit).toHaveBeenCalledTimes(2)
   })
 
-  test("fails when a blocking goal's required selector never runs", async () => {
+  test("only marks goals passed when evaluation checks match goal selectors", async () => {
     await using tmp = await tmpdir({ git: true })
     stubPlanner()
-    spyOn(CheckRunner, "evaluate").mockImplementation(async (input) => {
-      if (input.request?.includes("Focused goal:\nBuild passes")) {
-        return {
-          status: "passed",
-          verdict: "accepted",
-          summary: "Build checks passed.",
-          checks: [{ name: "build", status: "passed", evidence: "build ok" }],
-          artifacts: [],
-        }
-      }
-      if (input.request?.includes("Focused goal:\nTests pass")) {
-        return {
-          status: "failed",
-          verdict: "rejected",
-          summary: "No blocking evaluator checks ran.",
-          checks: [],
-          artifacts: [],
-        }
-      }
-      return {
-        status: "passed",
-        verdict: "accepted",
-        summary: "Final checks passed.",
-        checks: [
-          { name: "build", status: "passed", evidence: "build ok" },
-          { name: "spec_check", status: "passed", evidence: "spec ok" },
-        ],
-        artifacts: [],
-      }
-    })
-    const submit = spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => {
-      const session = await Session.get(sessionID)
-      await Bun.write(
-        path.join(session.directory, "src", `selector-${Identifier.ascending("part")}.ts`),
-        "export const changed = true\n",
-      )
-      return {
-        sessionID,
-        queueTaskID: Identifier.ascending("task"),
-      }
-    })
+    const submit = spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
+      sessionID,
+      queueTaskID: Identifier.ascending("task"),
+    }))
     spyOn(OpencodeExecutor, "status").mockResolvedValue({
       queueTaskID: Identifier.ascending("task"),
       status: "completed",
@@ -1949,57 +1421,23 @@ describe("orchestrator.service", () => {
           ],
         })
 
-        let progress = await OrchestratorService.getProgress(taskID)
-        for (const _ of Array.from({ length: 240 })) {
-          if (progress.task.status === "failed") break
-          await Bun.sleep(50)
-          progress = await OrchestratorService.getProgress(taskID)
-        }
-        const evaluations = Database.use((db) =>
-          db.select().from(OrchestratorEvaluationTable).where(eq(OrchestratorEvaluationTable.task_id, taskID)).all(),
-        )
-        expect(progress.task.status).toBe("failed")
-        expect(evaluations.some((item) => item.goal_run_id && item.status === "passed")).toBe(true)
-        expect(evaluations.some((item) => item.goal_run_id && item.status === "failed")).toBe(true)
+        const progress = await OrchestratorService.getProgress(taskID)
+        const goals = progress.goals
+        // With goal-gating: evaluation passed but "Tests pass" goal still pending
+        // so task should retry instead of completing
+        expect(progress.task.status).toBe("running")
+        expect(goals.find((item) => item.description === "Build passes")?.status).toBe("passed")
+        expect(goals.find((item) => item.description === "Tests pass")?.status).toBe("pending")
       },
     })
 
-    expect(submit.mock.calls.length).toBeGreaterThanOrEqual(1)
-  }, 60_000)
+    // Initial run + retry because pending blocking goals remain
+    expect(submit).toHaveBeenCalledTimes(2)
+  })
 
   test("completes task when evaluation passes and all blocking goals are satisfied", async () => {
     await using tmp = await tmpdir({ git: true })
     stubPlanner()
-    spyOn(CheckRunner, "evaluate").mockImplementation(async (input) => {
-      if (input.request?.includes("Focused goal:\nBuild passes")) {
-        return {
-          status: "passed",
-          verdict: "accepted",
-          summary: "Build checks passed.",
-          checks: [{ name: "build", status: "passed", evidence: "build ok" }],
-          artifacts: [],
-        }
-      }
-      if (input.request?.includes("Focused goal:\nNice to have")) {
-        return {
-          status: "failed",
-          verdict: "rejected",
-          summary: "No blocking evaluator checks ran.",
-          checks: [],
-          artifacts: [],
-        }
-      }
-      return {
-        status: "passed",
-        verdict: "accepted",
-        summary: "Final checks passed.",
-        checks: [
-          { name: "build", status: "passed", evidence: "build ok" },
-          { name: "spec_check", status: "passed", evidence: "spec ok" },
-        ],
-        artifacts: [],
-      }
-    })
     const submit = spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
       sessionID,
       queueTaskID: Identifier.ascending("task"),
@@ -2042,149 +1480,16 @@ describe("orchestrator.service", () => {
           ],
         })
 
-        let progress = await OrchestratorService.getProgress(taskID)
-        for (const _ of Array.from({ length: 240 })) {
-          if (progress.task.status === "completed") break
-          await Bun.sleep(50)
-          progress = await OrchestratorService.getProgress(taskID)
-        }
-        // Advisory goals still run, but they do not block final completion.
+        const progress = await OrchestratorService.getProgress(taskID)
+        // All blocking goals passed (only "Build passes" is blocking), so task completes
         expect(progress.task.status).toBe("completed")
         expect(progress.goals.find((item) => item.description === "Build passes")?.status).toBe("passed")
-        expect(progress.goals.find((item) => item.description === "Nice to have")?.status).toBe("failed")
+        // Advisory goal stays pending but doesn't block completion
+        expect(progress.goals.find((item) => item.description === "Nice to have")?.status).toBe("pending")
       },
     })
 
-    expect(submit.mock.calls.length).toBeGreaterThanOrEqual(2)
-  })
-
-  test("creates a distinct goal session for each goal run", async () => {
-    await using tmp = await tmpdir({ git: true })
-
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const now = Date.now()
-        const taskID = Identifier.ascending("task")
-        const specID = Identifier.ascending("spec")
-        const runID = Identifier.ascending("run")
-        const root = await Session.create({ title: "Task root" })
-        const task = {
-          id: taskID,
-          title: "run two independent goals",
-          session_id: root.id,
-        }
-        const goals = [
-          {
-            id: Identifier.ascending("goal"),
-            description: "Build passes",
-            criteria: "Build command passes.",
-          },
-          {
-            id: Identifier.ascending("goal"),
-            description: "Tests pass",
-            criteria: "Test command passes.",
-          },
-        ]
-
-        Database.transaction((db) => {
-          db.insert(OrchestratorTaskTable)
-            .values({
-              id: taskID,
-              project_id: Instance.project.id,
-              session_id: root.id,
-              title: task.title,
-              request: task.title,
-              status: "running",
-              time_created: now,
-              time_updated: now,
-            })
-            .run()
-          db.insert(OrchestratorSpecSnapshotTable)
-            .values({
-              id: specID,
-              task_id: taskID,
-              version: 1,
-              status: "ready",
-              summary: "spec",
-              content: "spec",
-              scope: "",
-              time_created: now,
-              time_updated: now,
-            })
-            .run()
-          for (const [index, goal] of goals.entries()) {
-            db.insert(OrchestratorGoalTable)
-              .values({
-                id: goal.id,
-                task_id: taskID,
-                spec_snapshot_id: specID,
-                description: goal.description,
-                criteria: goal.criteria,
-                priority: "blocking",
-                source: "spec",
-                status: "pending",
-                order_index: index,
-                time_created: now,
-                time_updated: now,
-              })
-              .run()
-          }
-          db.insert(OrchestratorRunTable)
-            .values({
-              id: runID,
-              task_id: taskID,
-              executor: "opencode",
-              status: "running",
-              phase: "dispatch",
-              retry_count: 0,
-              time_created: now,
-              time_updated: now,
-            })
-            .run()
-        })
-
-        const first = await createGoalSession(task as any, goals[0] as any, tmp.path)
-        const second = await createGoalSession(task as any, goals[1] as any, tmp.path)
-        createGoalRun({
-          taskID,
-          goalID: goals[0]!.id,
-          coordinatorRunID: runID,
-          sessionID: first.id,
-          executor: "opencode",
-          now,
-        })
-        createGoalRun({
-          taskID,
-          goalID: goals[1]!.id,
-          coordinatorRunID: runID,
-          sessionID: second.id,
-          executor: "opencode",
-          now,
-        })
-
-        const goalRuns = Database.use((db) =>
-          db
-            .select()
-            .from(OrchestratorGoalRunTable)
-            .where(eq(OrchestratorGoalRunTable.task_id, taskID))
-            .orderBy(OrchestratorGoalRunTable.time_created)
-            .all(),
-        )
-        const sessionIDs = goalRuns
-          .map((item) => {
-            const id = item.metadata && typeof item.metadata === "object" && !Array.isArray(item.metadata)
-              ? (item.metadata as Record<string, unknown>).local_session_id
-              : undefined
-            return typeof id === "string" && id ? id : item.session_id
-          })
-          .filter((item): item is string => !!item)
-
-        expect(goalRuns).toHaveLength(2)
-        expect(new Set(sessionIDs).size).toBe(2)
-        expect(sessionIDs.every((item) => item !== root.id)).toBe(true)
-      },
-    })
+    expect(submit).toHaveBeenCalledTimes(1)
   })
 
   test("dispatches with the configured executor when registered", async () => {
@@ -2251,24 +1556,18 @@ describe("orchestrator.service", () => {
         const run = Database.use((db) =>
           db.select().from(OrchestratorRunTable).where(eq(OrchestratorRunTable.task_id, taskID)).get(),
         )
-        const goalRun = Database.use((db) =>
-          db.select().from(OrchestratorGoalRunTable).where(eq(OrchestratorGoalRunTable.task_id, taskID)).get(),
-        )
         expect(run?.executor).toBe("codex")
-        expect(goalRun?.metadata?.queue_task_id).toBeTruthy()
+        expect(run?.executor_ref?.queue_task_id).toBeTruthy()
       },
     })
 
     expect(calls).toHaveLength(1)
-    expect(calls[0]?.prompt).toContain("iterative coding stage")
-    expect(calls[0]?.prompt).toContain("Implement the requested change")
+    expect(calls[0]?.prompt).toContain("update the landing page hero section copy")
   })
 
-  test("publishes managed executor output with stable stream metadata", async () => {
+  test("projects managed executor output into session messages", async () => {
     await using tmp = await tmpdir({ git: true })
     stubPlanner()
-    const progress: Array<Record<string, unknown>> = []
-    const outputs: Array<Record<string, unknown>> = []
     const codex: ExecutorAdapter = {
       capabilities() {
         return {
@@ -2310,208 +1609,20 @@ describe("orchestrator.service", () => {
       },
       async *events(input: { sessionID?: string }) {
         yield {
-          type: "tool.call",
-          summary: "Tool call: read_file",
-          payload: {
-            sessionID: input.sessionID,
-            id: "tool_1",
-            name: "read_file",
-          },
-        }
-        yield {
           type: "message.part.delta",
           summary: "Delta: text",
           payload: {
             sessionID: input.sessionID,
-            messageID: "msg_1",
-            partID: "part_1",
             field: "text",
             delta: "Hello from codex",
           },
         }
         yield {
-          type: "tool.call",
-          summary: "Tool call: rg",
-          payload: {
-            sessionID: input.sessionID,
-            id: "tool_2",
-            name: "rg",
-          },
-        }
-        yield {
-          type: "message.part.delta",
-          summary: "Delta: text",
-          payload: {
-            sessionID: input.sessionID,
-            messageID: "msg_2",
-            partID: "part_2",
-            field: "text",
-            delta: "Second stream",
-          },
-        }
-        yield {
-          type: "tool.result",
-          summary: "Tool result: tool_1",
-          payload: {
-            sessionID: input.sessionID,
-            id: "tool_1",
-            output: "Hello from codex",
-          },
-        }
-        yield {
-          type: "tool.result",
-          summary: "Tool result: tool_2",
-          payload: {
-            sessionID: input.sessionID,
-            id: "tool_2",
-            output: "Second stream",
-          },
-        }
-        yield {
           type: "session.idle",
           summary: "Session idle",
           payload: {
             sessionID: input.sessionID,
             output: "Hello from codex",
-          },
-        }
-      },
-    }
-    ExecutorRegistry.register("codex", codex)
-
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const stopProtocol = ProtocolStore.subscribeEvents((event) => {
-          if (event.type === Event.RunProgress.type && event.payload) progress.push(event.payload)
-          if (event.type === Event.RunOutput.type && event.payload) outputs.push(event.payload)
-        }, {
-          types: [Event.RunProgress.type, Event.RunOutput.type],
-        })
-        try {
-          await OrchestratorService.createTask({
-            request: "stream managed executor output",
-            executor: "codex",
-          })
-          for (const _ of Array.from({ length: 30 })) {
-            await new Promise((resolve) => setTimeout(resolve, 25))
-            if (
-              outputs.some((item) => item.sourceID === "tool_1" && item.text === "Hello from codex") &&
-              outputs.some((item) => item.sourceID === "tool_2" && item.text === "Second stream")
-            ) break
-          }
-          expect(outputs.some((item) => item.sourceID === "tool_1" && item.text === "Hello from codex")).toBe(true)
-        } finally {
-          stopProtocol()
-        }
-      },
-    })
-
-    expect(progress).toContainEqual(expect.objectContaining({
-      sourceID: "tool_1",
-      sourceKind: "tool",
-      sourceLabel: "read_file",
-      status: "running",
-    }))
-    expect(progress).toContainEqual(expect.objectContaining({
-      sourceID: "tool_2",
-      sourceKind: "tool",
-      sourceLabel: "rg",
-      status: "running",
-    }))
-    expect(outputs).toContainEqual(expect.objectContaining({
-      sourceID: "tool_1",
-      sourceKind: "tool",
-      sourceLabel: "read_file",
-      text: "Hello from codex",
-    }))
-    expect(outputs).toContainEqual(expect.objectContaining({
-      sourceID: "tool_2",
-      sourceKind: "tool",
-      sourceLabel: "rg",
-      text: "Second stream",
-    }))
-  })
-
-  test("completes a goal run when executor events go idle even if status polling still reports running", async () => {
-    await using tmp = await tmpdir({ git: true })
-    stubPlanner()
-    spyOn(CheckRunner, "evaluate").mockResolvedValue({
-      status: "passed",
-      verdict: "accepted",
-      summary: "All checks passed.",
-      checks: [
-        { name: "build", status: "passed", evidence: "verified" },
-        { name: "test", status: "passed", evidence: "verified" },
-        { name: "spec_check", status: "passed", evidence: "verified" },
-      ],
-      artifacts: [],
-    } as Awaited<ReturnType<typeof CheckRunner.evaluate>>)
-    spyOn(DeliveryService, "deliver").mockResolvedValue({
-      status: "delivered",
-      summary: "Delivery finalized.",
-      artifacts: [],
-      publish: {
-        mode: "manual",
-        adapters: [{ id: "delivery", status: "delivered", summary: "Delivery finalized." }],
-      },
-    })
-    const codex: ExecutorAdapter = {
-      capabilities() {
-        return {
-          submit: true,
-          status: true,
-          abort: true,
-          delivery: true,
-          resume: true,
-          events: true,
-        }
-      },
-      async submit(input: { sessionID: string }) {
-        return {
-          sessionID: input.sessionID,
-          queueTaskID: Identifier.ascending("task"),
-        }
-      },
-      async status(queueTaskID: string) {
-        return {
-          queueTaskID,
-          status: "running",
-          error: null,
-        }
-      },
-      async abort() {
-        return true
-      },
-      async delivery() {
-        return {
-          summary: "executor finished",
-          diffs: [],
-        }
-      },
-      async resume(input: { sessionID: string; message: string; priority?: "high" | "normal" | "low" }) {
-        return {
-          sessionID: input.sessionID,
-          queueTaskID: Identifier.ascending("task"),
-        }
-      },
-      async *events(input: { sessionID?: string }) {
-        yield {
-          type: "message.part.delta",
-          summary: "Delta: text",
-          payload: {
-            sessionID: input.sessionID,
-            messageID: "msg_idle",
-            partID: "part_idle",
-            field: "text",
-            delta: "done",
-          },
-        }
-        yield {
-          type: "session.idle",
-          summary: "Session idle",
-          payload: {
-            sessionID: input.sessionID,
           },
         }
       },
@@ -2522,27 +1633,31 @@ describe("orchestrator.service", () => {
       directory: tmp.path,
       fn: async () => {
         const taskID = await OrchestratorService.createTask({
-          request: "finish when idle arrives from executor events",
+          request: "stream managed executor output",
           executor: "codex",
         })
-
-        let progress = await OrchestratorService.getProgress(taskID)
-        for (const _ of Array.from({ length: 240 })) {
-          if (progress.task.status === "completed") break
-          await Bun.sleep(50)
-          progress = await OrchestratorService.getProgress(taskID)
+        const task = Database.use((db) =>
+          db.select().from(OrchestratorTaskTable).where(eq(OrchestratorTaskTable.id, taskID)).get(),
+        )!
+        let body = ""
+        for (const _ of Array.from({ length: 30 })) {
+          await new Promise((resolve) => setTimeout(resolve, 25))
+          const msg = (await Session.messages({ sessionID: task.session_id! }))
+            .findLast((item) => item.info.role === "assistant")
+          body = msg?.parts
+            .filter((part): part is Extract<typeof part, { type: "text" }> => part.type === "text")
+            .map((part) => part.text)
+            .join("\n") ?? ""
+          if (body.includes("Hello from codex")) break
         }
-
-        expect(progress.task.status).toBe("completed")
-        expect(progress.evaluation?.verdict).toBe("accepted")
+        expect(body).toContain("Hello from codex")
       },
     })
   })
 
   test("persists task-specific spec metadata and stage routing", async () => {
     await using tmp = await tmpdir({ git: true })
-    stubSpec()
-    spyOn(PlannerService, "initial").mockResolvedValue(planDraft({
+    spyOn(PlannerService, "initial").mockResolvedValue({
       summary: "Compiled plan",
       prompt: "Execute the compiled plan",
       goals: [
@@ -2589,7 +1704,7 @@ describe("orchestrator.service", () => {
           confidence: 0.9,
         },
       },
-    }))
+    } as any)
     spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
       sessionID,
       queueTaskID: Identifier.ascending("task"),

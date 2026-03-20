@@ -5,7 +5,6 @@ import { State } from "./state"
 import { iife } from "@/util/iife"
 import { GlobalBus } from "@/bus/global"
 import { Filesystem } from "@/util/filesystem"
-import { TestPathContext } from "@/global/test-context"
 
 interface Context {
   directory: string
@@ -48,11 +47,9 @@ export const Instance: InstanceApi = {
           worktree: sandbox,
           project,
         }
-        await TestPathContext.provide({ directory }, async () =>
-          context.provide(ctx, async () => {
-            await input.init?.()
-          }),
-        )
+        await context.provide(ctx, async () => {
+          await input.init?.()
+        })
         return ctx
       })
       // Remove rejected promises from cache so they can be retried on the next call.
@@ -62,11 +59,9 @@ export const Instance: InstanceApi = {
       cache.set(directory, existing)
     }
     const ctx = await existing
-    return TestPathContext.provide({ directory: ctx.directory }, async () =>
-      context.provide(ctx, async () => {
-        return input.fn()
-      }),
-    )
+    return context.provide(ctx, async () => {
+      return input.fn()
+    })
   },
   get directory() {
     return context.use().directory

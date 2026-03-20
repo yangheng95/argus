@@ -107,11 +107,7 @@ function stream(input: LanguageModelV2CallOptions) {
   if (tool) {
     return streamCall("StructuredOutput", structured(tool))
   }
-  const next = action(input.prompt)
-  if ("kind" in next) {
-    return streamCall("StructuredOutput", next)
-  }
-  return streamCall("panel", next)
+  return streamCall("panel", action(input.prompt))
 }
 
 function streamCall(toolName: string, value: Record<string, unknown>) {
@@ -162,24 +158,16 @@ function streamCall(toolName: string, value: Record<string, unknown>) {
 function action(prompt: LanguageModelV2Prompt) {
   const input = userInput(prompt)
   const meta = object(input.metadata) ?? {}
-  const scoped = object(meta.channel) ?? object(text(input.surface) ? meta[text(input.surface)!] : undefined) ?? {}
-  const sessionID = text(meta.sessionID, scoped.sessionID, input.sessionID)
-  const taskID = text(meta.taskID, scoped.taskID, input.taskID)
-  const interactionID = text(meta.interactionID, scoped.interactionID)
+  const sessionID = text(meta.sessionID, input.sessionID)
+  const taskID = text(meta.taskID, input.taskID)
+  const interactionID = text(meta.interactionID)
   const goalID = text(meta.goalID)
-  const executor = text(meta.executor, scoped.executor, input.executor)
-  const reply = text(meta.reply, scoped.reply)
-  const answer = text(meta.answer, scoped.answer)
-  const criteria = text(meta.criteria, scoped.criteria)
-  const description = text(meta.description, scoped.description)
-  const ui = text(meta.ui_context, scoped.ui_context)
-  const sessionIntent = /create .*session|new blank session|new session|fork session|fork |export session|export .*html|delete session|delete task session/i
-  if (input.surface === "panel" && sessionIntent.test(input.text)) {
-    return {
-      kind: "panel_response",
-      message: "Desktop overlay only exposes tasks. Session management is unavailable there.",
-    }
-  }
+  const executor = text(meta.executor, input.executor)
+  const reply = text(meta.reply)
+  const answer = text(meta.answer)
+  const criteria = text(meta.criteria)
+  const description = text(meta.description)
+  const ui = text(meta.ui_context)
   if (interactionID && /reject/i.test(input.text)) {
     return {
       action: "reject_interaction",
@@ -194,6 +182,20 @@ function action(prompt: LanguageModelV2Prompt) {
       ...(answer ? { message: answer } : {}),
     }
   }
+  if (goalID && /delete/i.test(input.text)) {
+    return {
+      action: "delete_goal",
+      goalID,
+    }
+  }
+  if (goalID && description) {
+    return {
+      action: "update_goal",
+      goalID,
+      description,
+      criteria: criteria ?? "The requested change is implemented and acceptance checks pass.",
+    }
+  }
   if (taskID && meta.selection && ui === "criteria") {
     return {
       action: "update_checks",
@@ -205,11 +207,6 @@ function action(prompt: LanguageModelV2Prompt) {
     return {
       action: "view_plan",
       taskID,
-    }
-  }
-  if (/(send me .*screenshot|capture .*screenshot|capture .*overlay|capture .*gui|show .*screenshot|截图|^screenshot$|open\s*corvus .*image)/i.test(input.text)) {
-    return {
-      action: "capture_overlay_screenshot",
     }
   }
   if (/switch executor|切换.*executor|use executor|executor/i.test(input.text) && executor) {
@@ -386,29 +383,8 @@ class TestLanguageModel implements LanguageModelV2 {
     return this.input.modelId
   }
 
-  async doGenerate(options: LanguageModelV2CallOptions): Promise<Awaited<ReturnType<LanguageModelV2["doGenerate"]>>> {
-    // Handle headless generateText calls (e.g. goal classification).
-    // Inspect the prompt to determine the expected response format.
-    const lastUser = [...(options.prompt)].reverse().find((p) => p.role === "user")
-    const userText = Array.isArray(lastUser?.content)
-      ? (lastUser.content as Array<{ type: string; text?: string }>)
-          .filter((p) => p.type === "text")
-          .map((p) => p.text ?? "")
-          .join("\n")
-      : typeof lastUser?.content === "string"
-        ? lastUser.content
-        : ""
-
-    // Goal classifier expects a JSON array of category/layer IDs.
-    const count = Math.max((userText.match(/^\[\d+\]/gm) ?? []).length, 1)
-    const labels = Array.from({ length: count }, () => "feature")
-
-    return {
-      content: [{ type: "text" as const, text: JSON.stringify(labels) }],
-      finishReason: "stop" as const,
-      usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
-      warnings: [],
-    }
+  async doGenerate(): Promise<Awaited<ReturnType<LanguageModelV2["doGenerate"]>>> {
+    throw new Error("TestLanguageModel.doGenerate is not implemented")
   }
 
   async doStream(options: LanguageModelV2CallOptions) {

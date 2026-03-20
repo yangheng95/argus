@@ -1,7 +1,6 @@
 import os from "os"
 import { Instance } from "../project/instance"
 import { Shell } from "@/shell/shell"
-import { Config } from "@/config/config"
 
 import PROMPT_CODEX from "./prompt/codex_header.txt"
 import type { Provider } from "@/provider/provider"
@@ -18,8 +17,6 @@ const TUI_WORKFLOW = [
   "Command aliases are exposed by `tui.status.commands.aliases`.",
   "</tui-workflow>",
 ].join("\n")
-
-export const DEFAULT_CORE_HEADER = PROMPT_CODEX.trim()
 
 function platformName(): string {
   switch (process.platform) {
@@ -51,13 +48,12 @@ function utcOffset(now: Date): string {
 }
 
 export namespace SystemPrompt {
-  export async function instructions() {
-    const config = await Config.get()
-    return typeof config.prompt?.core_header === "string" ? config.prompt.core_header : DEFAULT_CORE_HEADER
+  export function instructions() {
+    return PROMPT_CODEX.trim()
   }
 
-  export async function provider(_model: Provider.Model) {
-    return [await instructions()]
+  export function provider(model: Provider.Model) {
+    return [PROMPT_CODEX]
   }
 
   export async function environment(model: Provider.Model) {

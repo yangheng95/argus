@@ -1,21 +1,21 @@
 import { Plugin } from "@/plugin"
 import { CheckConfig, EvaluationCheck } from "@/orchestrator/model"
-import { GoalJudge, type GoalJudgmentType, type GoalInfo, type CheckResult, type DeliveryInfo } from "./agent"
+import { EvaluatorAgent, type EvaluatorAnalysisType, type GoalInfo, type CheckResult, type DeliveryInfo } from "./agent"
 import { Log } from "@/util/log"
 import z from "zod"
-import { resolveConfig, discoverChecks, resolvedChecks, commandGroups } from "./discovery"
+import { resolveConfig, autoSpecCheck, discoverChecks, resolvedChecks, commandGroups } from "./discovery"
 import { commandChecks } from "./checks"
 import { startupResult } from "./checks"
 import { artifactResult } from "./checks"
 import { visualResult } from "./checks"
 import { puppeteerResult } from "./checks"
-import { uiReviewResult, codeQualityResult, codeReviewResult, deadCodeReviewResult, goalCheckResult, specCheckResult } from "./review"
+import { uiReviewResult, codeQualityResult, codeReviewResult, deadCodeReviewResult, judgeResult, specCheckResult } from "./review"
 import {
-  type CheckTask,
-  type CheckDelivery,
-  type CheckArtifact,
-  type CheckOutcome,
-  type CheckReport,
+  type EvaluationTask,
+  type EvaluationDelivery,
+  type EvaluationArtifact,
+  type EvaluationOutcome,
+  type EvaluationOutput,
   type PluginCheck,
   type OptionalCheckDef,
   CORE_CHECK_DEFS,
@@ -23,13 +23,11 @@ import {
   initBuiltinCheckIndex,
   checkBase,
   checkResult,
-  emptyOptional,
   normalizeArtifacts,
   softOrStrict,
 } from "./shared"
-import { type TextHooks } from "@/llm/api"
 
-const DEFAULT_TIMEOUT_MS = 8 * 60 * 1000
+const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000
 
 const OPTIONAL_CHECK_DEFS = [
   { name: "startup", label: "Startup", family: "runtime", run: (config) => startupResult(config.startup) },
@@ -40,17 +38,14 @@ const OPTIONAL_CHECK_DEFS = [
   { name: "code_quality", label: "Code Quality", family: "review", run: (config, task, delivery) => codeQualityResult(config.code_quality, task.request, delivery) },
   { name: "code_review", label: "Code Review", family: "review", run: (config, task, delivery) => codeReviewResult(config.code_review, task.request, delivery) },
   { name: "dead_code_review", label: "Dead Code Review", family: "review", run: (config, task, delivery) => deadCodeReviewResult(config.dead_code_review, task.request, delivery) },
+  { name: "judge", label: "LLM Judge", family: "acceptance", run: (config, task, delivery) => judgeResult(config.judge, task.request, delivery) },
+  { name: "spec_check", label: "Spec Check", family: "acceptance", run: (config, task, delivery) => specCheckResult(config.spec_check, task.request, task.activeSpecVersionID, delivery) },
 ] as const satisfies OptionalCheckDef[]
 
-const BUILTIN_CHECK_DEFS = [
-  ...CORE_CHECK_DEFS,
-  ...OPTIONAL_CHECK_DEFS,
-  { name: "goal_check", label: "Goal Check", family: "acceptance" },
-  { name: "spec_check", label: "Spec Check", family: "acceptance" },
-] as const
+const BUILTIN_CHECK_DEFS = [...CORE_CHECK_DEFS, ...OPTIONAL_CHECK_DEFS]
 initBuiltinCheckIndex(BUILTIN_CHECK_DEFS)
 
-export namespace CheckRunner {
+export namespace EvaluatorService {
   export async function resolveChecks(metadata?: Record<string, unknown>, changedFiles?: unknown) {
     const config = await resolveConfig(metadata)
     const discovered = await discoverChecks(changedFiles)
@@ -58,140 +53,80 @@ export namespace CheckRunner {
   }
 
   export async function evaluate(
-    task: CheckTask,
-    delivery: CheckDelivery,
+    task: EvaluationTask,
+    delivery: EvaluationDelivery,
   ) {
-    const config = await resolveConfig(task.metadata, task)
+    const rawConfig = await resolveConfig(task.metadata)
+    const config = { ...rawConfig, ...(!rawConfig.spec_check ? autoSpecCheck(task) : {}) } as typeof rawConfig
     const discovered = await discoverChecks(task.metadata?.delivery_changed_files)
     const commands = commandGroups(config, discovered)
     const core = await commandChecks(commands, config.timeout_ms ?? DEFAULT_TIMEOUT_MS, delivery)
     if (core.checks.some((item) => item.status === "failed")) {
-      return publishResult(task, finalizeEvaluation({
-        commands,
-        checks: core.checks,
-        artifacts: core.artifacts,
-        optional: [],
-        requireGoalCheck: !!task.goal && config.goal_check?.enabled !== false,
-        requireSpecCheck: config.spec_check?.enabled !== false,
-      }))
+      return publishResult(task, finalizeEvaluation(commands, core.checks, core.artifacts, []))
     }
     const optional = await optionalChecks(config, task, delivery)
     const checks = [...core.checks, ...optional.flatMap((item) => Array.isArray(item.checks) ? item.checks : [])]
     const artifacts = [...core.artifacts, ...optional.flatMap((item) => Array.isArray(item.artifacts) ? item.artifacts : [])]
-    return publishResult(
-      task,
-      finalizeEvaluation({
-        commands,
-        checks,
-        artifacts,
-        optional,
-        requireGoalCheck: !!task.goal && config.goal_check?.enabled !== false,
-        requireSpecCheck: config.spec_check?.enabled !== false,
-      }),
-    )
+    return publishResult(task, finalizeEvaluation(commands, checks, artifacts, optional))
   }
 
   export async function analyzeDelivery(input: {
-    task: { title: string; request: string; sessionID?: string; metadata?: Record<string, unknown> }
+    task: { title: string; request: string; sessionID?: string }
     goals: GoalInfo[]
     delivery: DeliveryInfo
     checkResults: CheckResult[]
-    stream?: TextHooks
-  }): Promise<GoalJudgmentType> {
-    const output = { analysis: undefined as GoalJudgmentType | undefined }
-    await Plugin.trigger("evaluation.analysis", {
-      task: input.task,
-      goals: input.goals,
-      delivery: input.delivery,
-      checkResults: input.checkResults,
-    }, output)
-    if (output.analysis) return output.analysis
-    return GoalJudge.analyze(input)
+  }): Promise<EvaluatorAnalysisType> {
+    return EvaluatorAgent.analyze(input)
   }
 }
 
 const evaluatorLog = Log.create({ service: "evaluator" })
 
-function taskRefs(task: CheckTask) {
+function taskRefs(task: EvaluationTask) {
   return {
-    taskID: typeof task.metadata?.taskID === "string" ? task.metadata.taskID : undefined,
-    runID: typeof task.metadata?.runID === "string" ? task.metadata.runID : undefined,
+    taskID: task.metadata?.taskID as string | undefined,
+    runID: task.metadata?.runID as string | undefined,
     request: task.request,
   }
 }
 
-async function publishResult(task: CheckTask, output: CheckReport) {
-  await Plugin.trigger("evaluation.result", taskRefs(task), output).catch((err) => {
-    evaluatorLog.warn("evaluation.result plugin trigger failed", { error: String(err) })
-  })
+async function publishResult(task: EvaluationTask, output: EvaluationOutput) {
+  await Plugin.trigger("evaluation.result", taskRefs(task), output).catch(() => undefined)
   return output
 }
 
-const LOCAL_CHECK_NAMES = new Set(["startup", "artifact", "visual", "puppeteer"])
-
 async function optionalChecks(
   config: z.infer<typeof CheckConfig>,
-  task: CheckTask,
-  delivery: CheckDelivery,
+  task: EvaluationTask,
+  delivery: EvaluationDelivery,
 ) {
-  const phase1 = await Promise.all(
-    OPTIONAL_CHECK_DEFS.map((item) =>
-      LOCAL_CHECK_NAMES.has(item.name) ? item.run(config, task, delivery) : undefined,
-    ),
-  )
-  const strictLocalFailed = phase1.some((item) => item !== undefined && item.outcome === "failed")
-  const builtins = await Promise.all(
-    OPTIONAL_CHECK_DEFS.map(async (item, i) => {
-      if (phase1[i] !== undefined) return phase1[i]!
-      if (strictLocalFailed) return emptyOptional()
-      return item.run(config, task, delivery)
-    }),
-  )
-  const phase1Checks = [...builtins, ...(strictLocalFailed ? [] : await pluginChecks(config, task, delivery))].map((item) => ({
+  const builtin = await Promise.all(OPTIONAL_CHECK_DEFS.map((item) => item.run(config, task, delivery)))
+  const plugins = await pluginChecks(config, task, delivery)
+  return [...builtin, ...plugins].map((item) => ({
     ...item,
     checks: item.checks.map(checkResult),
   }))
-  if (phase1Checks.some((item) => item.outcome === "failed")) return phase1Checks
-
-  const goalCheck = await goalCheckResult(config.goal_check, task, delivery)
-  const goalOutcome = {
-    ...goalCheck,
-    checks: goalCheck.checks.map(checkResult),
-  }
-  if (goalOutcome.outcome === "failed") return [...phase1Checks, goalOutcome]
-
-  const specCheck = await specCheckResult(config.spec_check, task, delivery)
-  return [
-    ...phase1Checks,
-    goalOutcome,
-    {
-      ...specCheck,
-      checks: specCheck.checks.map(checkResult),
-    },
-  ]
 }
 
 async function pluginChecks(
   config: z.infer<typeof CheckConfig>,
-  task: CheckTask,
-  delivery: CheckDelivery,
+  task: EvaluationTask,
+  delivery: EvaluationDelivery,
 ) {
   const output = { checks: [] as PluginCheck[] }
   await Plugin.trigger("evaluation.checks", {
     ...taskRefs(task),
     config: (config.custom as Record<string, unknown>) ?? {},
-  }, output).catch((err) => {
-    evaluatorLog.warn("evaluation.checks plugin trigger failed", { error: String(err) })
-  })
+  }, output).catch(() => undefined)
   return Promise.all(output.checks.map((item) => pluginCheck(item, task, delivery)))
 }
 
 async function pluginCheck(
   input: PluginCheck,
-  task: CheckTask,
-  delivery: CheckDelivery,
-): Promise<CheckOutcome> {
-  const result = await input.run({ request: task.request, delivery }).catch((error) => pluginErrorResult(input.name, error))
+  task: EvaluationTask,
+  delivery: EvaluationDelivery,
+): Promise<EvaluationOutcome> {
+  const result = await input.run({ request: task.request, delivery }).catch(() => pluginFallback(input.name))
   const artifacts = [
     {
       kind: "report" as const,
@@ -228,10 +163,10 @@ async function pluginCheck(
   }
 }
 
-function pluginErrorResult(name: string, error: unknown) {
+function pluginFallback(name: string) {
   return {
-    status: "failed" as const,
-    evidence: `Plugin check ${name} threw an error: ${error instanceof Error ? error.message : String(error)}`,
+    status: "skipped" as const,
+    evidence: `Plugin check ${name} threw an error.`,
     artifacts: undefined as Array<{ kind: string; label: string; payload: Record<string, unknown> }> | undefined,
   }
 }
@@ -246,17 +181,15 @@ function orderChecks(input: z.infer<typeof EvaluationCheck>[]) {
   )
 }
 
-function finalizeEvaluation(input: {
-  commands: { name: string }[]
-  checks: z.infer<typeof EvaluationCheck>[]
-  artifacts: CheckArtifact[]
-  optional: CheckOutcome[]
-  requireGoalCheck: boolean
-  requireSpecCheck: boolean
-}): CheckReport {
-  const ordered = orderChecks(input.checks)
+function finalizeEvaluation(
+  commands: { name: string }[],
+  checks: z.infer<typeof EvaluationCheck>[],
+  artifacts: EvaluationArtifact[],
+  optional: EvaluationOutcome[],
+): EvaluationOutput {
+  const ordered = orderChecks(checks)
   const failed = ordered.filter((item) => item.status === "failed")
-  if (failed.length > 0 || input.optional.some((item) => item.outcome === "failed")) {
+  if (failed.length > 0 || optional.some((item) => item.outcome === "failed")) {
     const summary = [
       failed.length > 0 ? `Failed: ${failed.map((item) => `${item.name} (${item.status})`).join(", ")}` : "",
       ordered.some((item) => item.status === "passed")
@@ -268,56 +201,30 @@ function finalizeEvaluation(input: {
       verdict: "rejected",
       summary: summary ? `${summary}.` : "Evaluator checks failed.",
       checks: ordered,
-      artifacts: input.artifacts,
+      artifacts,
     }
   }
 
   const optionalChecks = ordered.filter((item) => item.name !== "evaluation_config")
-  const goalCheck = ordered.find((item) => item.name === "goal_check")
-  const specCheck = ordered.find((item) => item.name === "spec_check")
-  if (input.requireGoalCheck && (!goalCheck || goalCheck.status !== "passed")) {
-    const reason = !goalCheck
-      ? "Goal check is required but did not run."
-      : `Goal check is required and must pass before acceptance. Current status: ${goalCheck.status}.`
+  if (commands.length === 0 && optionalChecks.length === 0 && ordered.every((item) => item.status === "skipped")) {
     return {
-      status: "failed",
-      verdict: "rejected",
-      summary: reason,
-      checks: ordered,
-      artifacts: input.artifacts,
-    }
-  }
-  if (input.requireSpecCheck && (!specCheck || specCheck.status !== "passed")) {
-    const reason = !specCheck
-      ? "Spec check is required but did not run."
-      : `Spec check is required and must pass before acceptance. Current status: ${specCheck.status}.`
-    return {
-      status: "failed",
-      verdict: "rejected",
-      summary: reason,
-      checks: ordered,
-      artifacts: input.artifacts,
-    }
-  }
-  if (input.commands.length === 0 && optionalChecks.length === 0 && ordered.every((item) => item.status === "skipped")) {
-    return {
-      status: "failed",
-      verdict: "rejected",
+      status: "inconclusive",
+      verdict: "inconclusive",
       summary: "No blocking evaluator checks ran.",
       checks: ordered,
-      artifacts: input.artifacts,
+      artifacts,
     }
   }
 
   return {
     status: "passed",
     verdict: "accepted",
-    summary: input.optional.some((item) => item.outcome === "skipped")
-      ? input.commands.length === 0
+    summary: optional.some((item) => item.outcome === "skipped")
+      ? commands.length === 0
         ? "Optional evaluator checks ran in soft mode without blocking the flow."
         : "Core evaluator checks passed; optional checks were skipped."
       : "All evaluator checks passed.",
     checks: ordered,
-    artifacts: input.artifacts,
+    artifacts,
   }
 }

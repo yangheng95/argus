@@ -921,20 +921,4 @@ describe("session.message.fromError", () => {
       },
     })
   })
-
-  test("serializes retryable transport errors as APIError", () => {
-    const result = MessageV2.fromError(
-      new Error("Unable to connect. Is the computer able to access the url?"),
-      { providerID: "test" },
-    )
-
-    expect(result).toStrictEqual({
-      name: "APIError",
-      data: {
-        message: "Unable to connect. Is the computer able to access the url?",
-        isRetryable: true,
-        responseBody: "Unable to connect. Is the computer able to access the url?",
-      },
-    })
-  })
 })

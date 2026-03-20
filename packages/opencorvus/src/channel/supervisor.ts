@@ -150,7 +150,6 @@ async function stop(current: State) {
   current.child = undefined
   if (child && child.exitCode === null && child.signalCode === null) {
     child.kill("SIGTERM")
-    // Process was already killed — exit rejection is expected during teardown
     await child.exited.catch(() => undefined)
   }
 }

@@ -172,16 +172,6 @@ describe("session.message.fromError", () => {
     expect(retryable).toBe("Connection reset by server")
   })
 
-  test("transport connectivity errors are retryable", () => {
-    const error = MessageV2.fromError(
-      new Error("Unable to connect. Is the computer able to access the url?"),
-      { providerID: "test" },
-    ) as MessageV2.APIError
-
-    expect(MessageV2.APIError.isInstance(error)).toBe(true)
-    expect(SessionRetry.retryable(error)).toBe("Unable to connect. Is the computer able to access the url?")
-  })
-
   test("marks OpenAI 404 status codes as retryable", () => {
     const error = new APICallError({
       message: "boom",

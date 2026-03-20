@@ -214,6 +214,7 @@ export const GithubInstallCommand = cmd({
 
           const provider = await promptProvider()
           const model = await promptModel()
+          //const key = await promptKey()
 
           await addWorkflowFiles()
           printNextSteps()
@@ -857,6 +858,7 @@ export const GithubRunCommand = cmd({
         let text = ""
         Bus.subscribe(MessageV2.Event.PartUpdated, async (evt) => {
           if (evt.properties.part.sessionID !== session.id) return
+          //if (evt.properties.part.messageID === messageID) return
           const part = evt.properties.part
 
           if (part.type === "tool" && part.state.status === "completed") {
@@ -1172,9 +1174,9 @@ Co-authored-by: ${actor} <${actor}@users.noreply.github.com>"`
           await $`git fetch origin ${base} --depth=1`.nothrow()
           const retry = await $`git rev-list --count origin/${base}..${head}`.nothrow()
           if (retry.exitCode !== 0) return true // assume dirty if we can't tell
-          return parseInt(retry.stdout.toString().trim(), 10) > 0
+          return parseInt(retry.stdout.toString().trim()) > 0
         }
-        return parseInt(result.stdout.toString().trim(), 10) > 0
+        return parseInt(result.stdout.toString().trim()) > 0
       }
 
       async function assertPermissions() {
@@ -1419,7 +1421,7 @@ query($owner: String!, $repo: String!, $number: Int!) {
         // Only called for non-schedule events, so payload is defined
         const comments = (issue.comments?.nodes || [])
           .filter((c) => {
-            const id = parseInt(c.databaseId, 10)
+            const id = parseInt(c.databaseId)
             return id !== triggerCommentId
           })
           .map((c) => `  - ${c.author.login} at ${c.createdAt}: ${c.body}`)
@@ -1547,7 +1549,7 @@ query($owner: String!, $repo: String!, $number: Int!) {
         // Only called for non-schedule events, so payload is defined
         const comments = (pr.comments?.nodes || [])
           .filter((c) => {
-            const id = parseInt(c.databaseId, 10)
+            const id = parseInt(c.databaseId)
             return id !== triggerCommentId
           })
           .map((c) => `- ${c.author.login} at ${c.createdAt}: ${c.body}`)

@@ -374,80 +374,72 @@ export namespace File {
       if (Instance.directory === path.parse(Instance.directory).root) return
       fetching = true
 
-      const next = await (async () => {
-        if (isGlobalHome) {
-          const dirs = new Set<string>()
-          const ignore = new Set<string>()
+      if (isGlobalHome) {
+        const dirs = new Set<string>()
+        const ignore = new Set<string>()
 
-          if (process.platform === "darwin") {
-            ignore.add("Library")
-            ignore.add(".Trash")
-            ignore.add("Caches")
-          }
-          if (process.platform === "win32") {
-            ignore.add("AppData")
-            ignore.add("$Recycle.Bin")
-            ignore.add("System Volume Information")
-          }
-
-          const ignoreNested = new Set(["node_modules", "dist", "build", "target", "vendor"])
-          const shouldIgnore = (name: string) => name.startsWith(".") || ignore.has(name)
-          const shouldIgnoreNested = (name: string) => name.startsWith(".") || ignoreNested.has(name)
-
-          const top = await fs.promises
-            .readdir(Instance.directory, { withFileTypes: true })
-            .catch(() => [] as fs.Dirent[])
-
-          for (const entry of top) {
-            if (!entry.isDirectory()) continue
-            if (shouldIgnore(entry.name)) continue
-            dirs.add(entry.name + "/")
-
-            const base = path.join(Instance.directory, entry.name)
-            const children = await fs.promises.readdir(base, { withFileTypes: true }).catch(() => [] as fs.Dirent[])
-            for (const child of children) {
-              if (!child.isDirectory()) continue
-              if (shouldIgnoreNested(child.name)) continue
-              dirs.add(entry.name + "/" + child.name + "/")
-            }
-          }
-
-          result.dirs = Array.from(dirs).toSorted()
-          return result
+        if (process.platform === "darwin") {
+          ignore.add("Library")
+          ignore.add(".Trash")
+          ignore.add("Caches")
+        }
+        if (process.platform === "win32") {
+          ignore.add("AppData")
+          ignore.add("$Recycle.Bin")
+          ignore.add("System Volume Information")
         }
 
-        const set = new Set<string>()
-        for await (const file of Ripgrep.files({ cwd: Instance.directory })) {
-          result.files.push(file)
-          let current = file
-          while (true) {
-            const dir = path.dirname(current)
-            if (dir === ".") break
-            if (dir === current) break
-            current = dir
-            if (set.has(dir)) continue
-            set.add(dir)
-            result.dirs.push(dir + "/")
+        const ignoreNested = new Set(["node_modules", "dist", "build", "target", "vendor"])
+        const shouldIgnore = (name: string) => name.startsWith(".") || ignore.has(name)
+        const shouldIgnoreNested = (name: string) => name.startsWith(".") || ignoreNested.has(name)
+
+        const top = await fs.promises
+          .readdir(Instance.directory, { withFileTypes: true })
+          .catch(() => [] as fs.Dirent[])
+
+        for (const entry of top) {
+          if (!entry.isDirectory()) continue
+          if (shouldIgnore(entry.name)) continue
+          dirs.add(entry.name + "/")
+
+          const base = path.join(Instance.directory, entry.name)
+          const children = await fs.promises.readdir(base, { withFileTypes: true }).catch(() => [] as fs.Dirent[])
+          for (const child of children) {
+            if (!child.isDirectory()) continue
+            if (shouldIgnoreNested(child.name)) continue
+            dirs.add(entry.name + "/" + child.name + "/")
           }
         }
-        return result
-      })().catch((error) => {
-        log.warn("file index refresh failed", {
-          directory: Instance.directory,
-          error: String(error),
-        })
-        return undefined
-      })
 
-      if (next) cache = next
+        result.dirs = Array.from(dirs).toSorted()
+        cache = result
+        fetching = false
+        return
+      }
+
+      const set = new Set<string>()
+      for await (const file of Ripgrep.files({ cwd: Instance.directory })) {
+        result.files.push(file)
+        let current = file
+        while (true) {
+          const dir = path.dirname(current)
+          if (dir === ".") break
+          if (dir === current) break
+          current = dir
+          if (set.has(dir)) continue
+          set.add(dir)
+          result.dirs.push(dir + "/")
+        }
+      }
+      cache = result
       fetching = false
     }
-    void fn(cache)
+    fn(cache)
 
     return {
       async files() {
         if (!fetching) {
-          void fn({
+          fn({
             files: [],
             dirs: [],
           })
@@ -476,15 +468,11 @@ export namespace File {
     if (diffOutput.trim()) {
       const lines = diffOutput.trim().split("\n")
       for (const line of lines) {
-        const parts = line.split("\t")
-        if (parts.length < 3) continue
-        const [added, removed, filepath] = parts
-        const addedN = added === "-" ? 0 : parseInt(added, 10)
-        const removedN = removed === "-" ? 0 : parseInt(removed, 10)
+        const [added, removed, filepath] = line.split("\t")
         changedFiles.push({
           path: filepath,
-          added: Number.isFinite(addedN) ? addedN : 0,
-          removed: Number.isFinite(removedN) ? removedN : 0,
+          added: added === "-" ? 0 : parseInt(added, 10),
+          removed: removed === "-" ? 0 : parseInt(removed, 10),
           status: "modified",
         })
       }

@@ -6,9 +6,6 @@ import { Workspace } from "../../control-plane/workspace"
 import { Project } from "../../project/project"
 import { Installation } from "../../installation"
 import { createConnection } from "net"
-import { Config } from "../../config/config"
-import { Instance } from "../../project/instance"
-import path from "path"
 
 /** Hide the console window on Windows using Win32 API. */
 function hideConsoleWindow() {
@@ -25,9 +22,7 @@ function hideConsoleWindow() {
     if (hwnd) user32.symbols.ShowWindow(hwnd, 0) // SW_HIDE
     kernel32.close()
     user32.close()
-  } catch {
-    /* best-effort cosmetic: hiding the console window is non-critical */
-  }
+  } catch {}
 }
 
 /** Check if a port is in use. */
@@ -52,9 +47,7 @@ async function killOldProcess(port: number) {
     // Unix: use fuser
     try {
       Bun.spawnSync(["fuser", "-k", `${port}/tcp`], { stdio: ["ignore", "ignore", "ignore"] })
-    } catch {
-      /* fuser may not be installed; safe to ignore since port release is retried */
-    }
+    } catch {}
     return
   }
   // Windows: netstat → find PID → taskkill
@@ -73,9 +66,7 @@ async function killOldProcess(port: number) {
       if (pid === process.pid || pid <= 0) continue
       Bun.spawnSync(["taskkill", "/F", "/PID", String(pid)], { stdio: ["ignore", "ignore", "ignore"] })
     }
-  } catch {
-    /* best-effort cleanup: netstat/taskkill may fail; caller retries port availability */
-  }
+  } catch {}
 }
 
 export const ServeCommand = cmd({
@@ -99,7 +90,7 @@ export const ServeCommand = cmd({
     const opts = await resolveNetworkOptions(args)
 
     // Resolve --project-dir: CLI arg > env var > process.cwd()
-    const projectDir = (args as Record<string, unknown>)["project-dir"] as string | undefined || process.env.OPENCORVUS_PROJECT_DIR || undefined
+    const projectDir = (args as any)["project-dir"] || process.env.OPENCORVUS_PROJECT_DIR || undefined
     if (projectDir) {
       const resolved = require("path").resolve(projectDir)
       console.log(`Project directory (sandbox): ${resolved}`)
@@ -122,33 +113,18 @@ export const ServeCommand = cmd({
       console.error("[serve] unhandledRejection:", err)
     })
 
-    // First-run: snapshot all resolved config into .opencorvus/opencorvus.jsonc
-    // so project settings are fully persisted and never re-seeded on subsequent starts.
-    // Must run inside Instance.provide() because Config functions need an active instance context.
-    const initDir = projectDir ? path.resolve(projectDir) : process.cwd()
-    await Instance.provide({
-      directory: initDir,
-      fn: () =>
-        Config.ensureProjectConfigFile().catch((err) => {
-          console.warn(
-            "Warning: could not initialize project config file:",
-            err instanceof Error ? err.message : String(err),
-          )
-        }),
-    })
-
     const server = Server.listen(opts)
     console.log(`opencorvus server listening on http://${server.hostname}:${server.port}`)
     console.log(`overlay UI available at http://${server.hostname}:${server.port}/ui/`)
 
+    let workspaceSync: Array<ReturnType<typeof Workspace.startSyncing>> = []
     // Only available in development right now
     if (Installation.isLocal()) {
-      for (const project of Project.list()) {
-        Workspace.startSyncing(project)
-      }
+      workspaceSync = Project.list().map((project) => Workspace.startSyncing(project))
     }
 
-    // Block forever — server runs until process is killed.
     await new Promise(() => {})
+    await server.stop()
+    await Promise.all(workspaceSync.map((item) => item.stop()))
   },
 })

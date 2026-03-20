@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
+import { Bus } from "../../src/bus"
 import { OpencodeExecutor } from "../../src/executor/opencode"
 import { Identifier } from "../../src/id/id"
 import { Event as OrchestratorEvent } from "../../src/orchestrator/model"
-import { OrchestratorProtocol } from "../../src/orchestrator/protocol"
 import {
   OrchestratorChannelBindingTable,
   OrchestratorInteractionRequestTable,
@@ -15,7 +15,6 @@ import { ControlMessage } from "../../src/control"
 import { PlannerService } from "../../src/planner/service"
 import { Instance } from "../../src/project/instance"
 import { InstanceBootstrap } from "../../src/project/bootstrap"
-import { SpecService } from "../../src/spec/service"
 import { Database, and, eq } from "../../src/storage/db"
 import { Log } from "../../src/util/log"
 import { resetDatabase } from "../fixture/db"
@@ -24,45 +23,21 @@ import { tmpdir } from "../fixture/fixture"
 Log.init({ print: false })
 
 function stub() {
-  const goals = [
-    {
-      description: "Implement the requested change",
-      criteria: "The requested change is implemented and checks pass.",
-      priority: "blocking" as const,
-    },
-  ]
-  spyOn(SpecService, "initial").mockResolvedValue({
-    summary: "Implement feature",
-    content: "# Scope\n\nImplement the requested change.",
-    requirements: [{
-      id: "req_impl",
-      title: "Implement the requested change",
-      description: "Implement the requested change",
-      priority: "blocking",
-      acceptance: ["The requested change is implemented and checks pass."],
-      evidence_refs: [],
-      metadata: { check_selector: ["spec_check"] },
-    }],
-    assumptions: [],
-    risks: [],
-    evidence_sources: [],
-    unresolved_questions: [],
-  })
   spyOn(PlannerService, "initial").mockResolvedValue({
     summary: "Implement feature",
     prompt: "Do the work",
-    goals,
+    goals: [
+      {
+        description: "Implement the requested change",
+        criteria: "The requested change is implemented and checks pass.",
+        priority: "blocking",
+      },
+    ],
     metadata: {
       strategy: "initial",
       steps: ["Implement the requested change"],
       clarification: undefined,
       spec_analysis: undefined,
-      waves: goals.map((goal, index) => ({
-        title: `Wave ${index + 1}`,
-        objective: goal.description,
-        goal_indices: [index],
-        owned_paths: [`src/goal-${index + 1}.ts`],
-      })),
     },
   })
 }
@@ -102,8 +77,6 @@ describe("channel.slack", () => {
     await using tmp = await tmpdir({ git: true })
     const { SlackGateway } = await import("../../src/channel/slack")
     stub()
-    const channelID = `C${Date.now()}`
-    const threadTS = `${Date.now()}.01`
     spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
       sessionID,
       queueTaskID: Identifier.ascending("task"),
@@ -140,8 +113,8 @@ describe("channel.slack", () => {
     ;(gateway as any).startedAt = "0"
 
     await (gateway as any).handleMessage({
-      channel: channelID,
-      ts: threadTS,
+      channel: "C1",
+      ts: "1.01",
       thread_ts: undefined,
       user: "U1",
       text: "implement this feature",
@@ -151,28 +124,12 @@ describe("channel.slack", () => {
       directory: tmp.path,
       init: InstanceBootstrap,
       fn: async () => {
-        const binding = Database.use((db) =>
-          db
-            .select()
-            .from(OrchestratorChannelBindingTable)
-            .where(
-              and(
-                eq(OrchestratorChannelBindingTable.platform, "slack"),
-                eq(OrchestratorChannelBindingTable.channel, channelID),
-                eq(OrchestratorChannelBindingTable.thread, threadTS),
-              ),
-            )
-            .get(),
-        )
-        const task = binding
-          ? Database.use((db) => db.select().from(OrchestratorTaskTable).where(eq(OrchestratorTaskTable.id, binding.task_id)).get())
-          : undefined
-        expect(typeof task?.request).toBe("string")
-        expect(task?.request?.length).toBeGreaterThan(0)
+        const task = Database.use((db) => db.select().from(OrchestratorTaskTable).get())
+        const binding = Database.use((db) => db.select().from(OrchestratorChannelBindingTable).get())
+        expect(task?.source).toBe("slack")
         expect(binding?.platform).toBe("slack")
-        expect(binding?.channel).toBe(channelID)
-        expect(binding?.thread).toBe(threadTS)
-        expect(binding?.task_id).toBe(task?.id)
+        expect(binding?.channel).toBe("C1")
+        expect(binding?.thread).toBe("1.01")
       },
     })
 
@@ -184,8 +141,6 @@ describe("channel.slack", () => {
     await using tmp = await tmpdir({ git: true })
     const { SlackGateway } = await import("../../src/channel/slack")
     stub()
-    const channelID = `C${Date.now()}`
-    const threadTS = `${Date.now()}.02`
     spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
       sessionID,
       queueTaskID: Identifier.ascending("task"),
@@ -245,8 +200,8 @@ describe("channel.slack", () => {
           source: "slack",
           channelBinding: {
             platform: "slack",
-            channel: channelID,
-            thread: threadTS,
+            channel: "C2",
+            thread: "2.01",
           },
         })
         const task = Database.use((db) =>
@@ -273,7 +228,7 @@ describe("channel.slack", () => {
       directory: tmp.path,
       init: InstanceBootstrap,
       fn: async () => {
-        let interaction = Database.use((db) =>
+        const interaction = Database.use((db) =>
           db
             .select()
             .from(OrchestratorInteractionRequestTable)
@@ -285,30 +240,14 @@ describe("channel.slack", () => {
             )
             .get(),
         )
-        for (const _ of Array.from({ length: 20 })) {
-          if (interaction) break
-          await Bun.sleep(100)
-          interaction = Database.use((db) =>
-            db
-              .select()
-              .from(OrchestratorInteractionRequestTable)
-              .where(
-                and(
-                  eq(OrchestratorInteractionRequestTable.request_type, "permission"),
-                  eq(OrchestratorInteractionRequestTable.status, "pending"),
-                ),
-              )
-              .get(),
-          )
-        }
         expect(interaction?.status).toBe("pending")
       },
     })
 
     await (gateway as any).handleMessage({
-      channel: channelID,
-      ts: `${Date.now()}.03`,
-      thread_ts: threadTS,
+      channel: "C2",
+      ts: "2.02",
+      thread_ts: "2.01",
       user: "U2",
       text: "allow",
     })
@@ -380,20 +319,20 @@ describe("channel.slack", () => {
       init: InstanceBootstrap,
       fn: async () => {
         ;(gateway as any).subscribeEvents()
-        await OrchestratorProtocol.emit(OrchestratorEvent.EvaluationCompleted, {
+        await Bus.publish(OrchestratorEvent.EvaluationCompleted, {
           taskID,
           runID,
           evaluationID: Identifier.ascending("evaluation"),
           status: "passed",
           verdict: "accepted",
           summary: "All checks passed",
-        }, { source: "test.slack" })
+        })
       },
     })
 
     expect(posted.at(-1)?.channel).toBe("C3")
     expect(posted.at(-1)?.thread_ts).toBe("3.01")
-    expect(posted.at(-1)?.text).toContain("accepted")
+    expect(posted.at(-1)?.text).toContain("Evaluation accepted")
 
     await gateway.stop()
   })

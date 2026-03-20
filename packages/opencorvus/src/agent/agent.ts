@@ -1,13 +1,12 @@
 import { Config } from "../config/config"
 import z from "zod"
 import { Provider } from "../provider/provider"
-import { type ModelMessage } from "ai"
+import { generateObject, streamObject, type ModelMessage } from "ai"
 import { SystemPrompt } from "../session/system"
 import { Instance } from "../project/instance"
 import { Truncate } from "../tool/truncation"
 import { Auth } from "../auth"
 import { ProviderTransform } from "../provider/transform"
-import { generateObject, streamObject } from "@/llm/api"
 
 import PROMPT_GENERATE from "./generate.txt"
 import PROMPT_COMPACTION from "./prompt/compaction.txt"
@@ -20,12 +19,6 @@ import path from "path"
 import { Plugin } from "@/plugin"
 import { Skill } from "../skill"
 import { entries, values as objectValues } from "@/util/object"
-
-export const DEFAULT_GENERATE_PROMPT = PROMPT_GENERATE.trim()
-export const DEFAULT_COMPACTION_PROMPT = PROMPT_COMPACTION.trim()
-export const DEFAULT_EXPLORE_PROMPT = PROMPT_EXPLORE.trim()
-export const DEFAULT_SUMMARY_PROMPT = PROMPT_SUMMARY.trim()
-export const DEFAULT_TITLE_PROMPT = PROMPT_TITLE.trim()
 
 export namespace Agent {
   export const Info = z
@@ -165,7 +158,7 @@ export namespace Agent {
       },
       general: {
         name: "general",
-        description: `General-purpose agent for researching complex questions and executing multi-step tasks in one focused workspace.`,
+        description: `General-purpose agent for researching complex questions and executing multi-step tasks. Use this agent to execute multiple units of work in parallel.`,
         permission: PermissionNext.merge(
           defaults,
           PermissionNext.fromConfig({
@@ -200,7 +193,7 @@ export namespace Agent {
           user,
         ),
         description: `Fast agent specialized for exploring codebases. Use this when you need to quickly find files by patterns (eg. "src/components/**/*.tsx"), search code for keywords (eg. "API endpoints"), or answer questions about the codebase (eg. "how do API endpoints work?"). When calling this agent, specify the desired thoroughness level: "quick" for basic searches, "medium" for moderate exploration, or "very thorough" for comprehensive analysis across multiple locations and naming conventions.`,
-        prompt: DEFAULT_EXPLORE_PROMPT,
+        prompt: PROMPT_EXPLORE,
         options: {},
         mode: "subagent",
         native: true,
@@ -210,7 +203,7 @@ export namespace Agent {
         mode: "primary",
         native: true,
         hidden: true,
-        prompt: DEFAULT_COMPACTION_PROMPT,
+        prompt: PROMPT_COMPACTION,
         permission: PermissionNext.merge(
           defaults,
           PermissionNext.fromConfig({
@@ -234,7 +227,7 @@ export namespace Agent {
           }),
           user,
         ),
-        prompt: DEFAULT_TITLE_PROMPT,
+        prompt: PROMPT_TITLE,
       },
       summary: {
         name: "summary",
@@ -249,7 +242,7 @@ export namespace Agent {
           }),
           user,
         ),
-        prompt: DEFAULT_SUMMARY_PROMPT,
+        prompt: PROMPT_SUMMARY,
       },
     }
 
@@ -331,18 +324,13 @@ export namespace Agent {
     return primaryVisible.name
   }
 
-  export async function generatePrompt() {
-    const cfg = await Config.get()
-    return typeof cfg.prompt?.agent_generate === "string" ? cfg.prompt.agent_generate : DEFAULT_GENERATE_PROMPT
-  }
-
   export async function generate(input: { description: string; model?: { providerID: string; modelID: string } }) {
     const cfg = await Config.get()
     const defaultModel = input.model ?? (await Provider.defaultModel())
     const model = await Provider.getModel(defaultModel.providerID, defaultModel.modelID)
     const language = await Provider.getLanguage(model)
 
-    const system = [await generatePrompt()]
+    const system = [PROMPT_GENERATE]
     await Plugin.trigger("experimental.chat.system.transform", { model }, { system })
     const existing = await list()
 
@@ -377,9 +365,8 @@ export namespace Agent {
     if (defaultModel.providerID === "openai" && (await Auth.get(defaultModel.providerID))?.type === "oauth") {
       const result = streamObject({
         ...params,
-        timeoutMs: 30_000,
         providerOptions: ProviderTransform.providerOptions(model, {
-          instructions: await SystemPrompt.instructions(),
+          instructions: SystemPrompt.instructions(),
           store: false,
         }),
         onError: () => {},
@@ -390,10 +377,7 @@ export namespace Agent {
       return result.object
     }
 
-    const result = await generateObject({
-      ...params,
-      timeoutMs: 30_000,
-    })
+    const result = await generateObject(params)
     return result.object
   }
 }

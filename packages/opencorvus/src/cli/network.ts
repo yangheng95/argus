@@ -5,7 +5,7 @@ const options = {
   port: {
     type: "number" as const,
     describe: "port to listen on",
-    default: 7878,
+    default: 0,
   },
   hostname: {
     type: "string" as const,

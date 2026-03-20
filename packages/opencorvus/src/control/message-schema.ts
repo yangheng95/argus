@@ -1,42 +1,23 @@
 import z from "zod"
 import { ChannelSurface } from "@/channel/catalog"
 
-export const ControlMessageAttachment = z.object({
-  mime: z.string(),
-  url: z.string(),
-  filename: z.string().optional(),
-})
-
-const SetExecutorAction = z.object({
-  type: z.literal("set_executor"),
-  executor: z.enum(["opencode", "codex", "claude-code"]),
-})
-
-const SelectTaskAction = z.object({
-  type: z.literal("select_task"),
-  taskID: z.string(),
-})
-
-const SelectSessionAction = z.object({
-  type: z.literal("select_session"),
-  sessionID: z.string(),
-})
-
-const InvalidateSessionAction = z.object({
-  type: z.literal("invalidate_session"),
-  sessionID: z.string(),
-})
-
 export const ControlLocalAction = z.discriminatedUnion("type", [
-  SetExecutorAction,
-  SelectTaskAction,
-  SelectSessionAction,
-  InvalidateSessionAction,
-])
-
-export const PanelLocalAction = z.discriminatedUnion("type", [
-  SetExecutorAction,
-  SelectTaskAction,
+  z.object({
+    type: z.literal("set_executor"),
+    executor: z.enum(["opencode", "codex", "claude-code"]),
+  }),
+  z.object({
+    type: z.literal("select_task"),
+    taskID: z.string(),
+  }),
+  z.object({
+    type: z.literal("select_session"),
+    sessionID: z.string(),
+  }),
+  z.object({
+    type: z.literal("invalidate_session"),
+    sessionID: z.string(),
+  }),
 ])
 
 export const ControlAttachment = z.object({
@@ -58,7 +39,6 @@ export const ControlMessageResult = z.object({
 export const ControlMessageInput = z.object({
   surface: ChannelSurface,
   text: z.string(),
-  time_created: z.number().int().optional(),
   taskID: z.string().optional(),
   sessionID: z.string().optional(),
   executor: z.enum(["opencode", "codex", "claude-code"]).optional(),
@@ -67,22 +47,6 @@ export const ControlMessageInput = z.object({
   user_id: z.string().optional(),
   request_id: z.string().optional(),
   source: z.string().optional(),
-  directory: z.string().optional(),
   allow_create: z.boolean().default(true),
-  allow_session_mutation: z.boolean().default(false),
-  attachments: ControlMessageAttachment.array().optional(),
-  metadata: z.record(z.string(), z.unknown()).optional(),
-})
-
-export const PanelMessageInput = ControlMessageInput.extend({
-  surface: z.literal("panel"),
-  sessionID: z.undefined().optional(),
-  allow_session_mutation: z.literal(false).default(false),
-})
-
-export const PanelMessageResult = ControlMessageResult.omit({
-  session_id: true,
-  local_action: true,
-}).extend({
-  local_action: PanelLocalAction.optional(),
+  metadata: z.record(z.string(), z.any()).optional(),
 })

@@ -131,7 +131,7 @@ export namespace Provider {
     "@ai-sdk/perplexity": createPerplexity,
     "@ai-sdk/vercel": createVercel,
     "@gitlab/gitlab-ai-provider": createGitLab,
-    // @ts-expect-error createGitHubCopilotOpenAICompatible has a divergent type but is required for Copilot compatibility
+    // @ts-ignore (TODO: kill this code so we dont have to maintain it)
     "@ai-sdk/github-copilot": createGitHubCopilotOpenAICompatible,
   }
 
@@ -288,50 +288,6 @@ export namespace Provider {
     return m
   }
 
-  function zeroCost(model: Model): Model["cost"] {
-    return {
-      input: 0,
-      output: 0,
-      cache: { read: 0, write: 0 },
-      ...(model.cost.experimentalOver200K
-        ? {
-            experimentalOver200K: {
-              input: 0,
-              output: 0,
-              cache: { read: 0, write: 0 },
-            },
-          }
-        : {}),
-    }
-  }
-
-  function isOpenAICodexModel(modelID: string) {
-    return modelID.startsWith("gpt-5") || modelID.includes("codex")
-  }
-
-  function createOpenAICodexProvider(provider?: Info): Info | undefined {
-    if (!provider) return
-    const models = Object.fromEntries(
-      entries(provider.models).flatMap(([modelID, model]) => {
-        if (!isOpenAICodexModel(modelID)) return []
-        const next: Model = {
-          ...structuredClone(model),
-          providerID: "openai-codex",
-          cost: zeroCost(model),
-        }
-        next.variants = mapValues(ProviderTransform.variants(next), (variant) => variant)
-        return [[modelID, next] as const]
-      }),
-    )
-    return {
-      ...provider,
-      id: "openai-codex",
-      name: "OpenAI Codex",
-      env: [],
-      models,
-    }
-  }
-
   export function fromModelsDevProvider(provider: ModelsDev.Provider): Info {
     return {
       id: provider.id,
@@ -348,10 +304,6 @@ export namespace Provider {
     const config = await Config.get()
     const modelsDev = await ModelsDev.get()
     const database = mapValues(modelsDev, fromModelsDevProvider)
-    const openAICodex = createOpenAICodexProvider(database["openai"])
-    if (openAICodex) {
-      database["openai-codex"] = openAICodex
-    }
 
     const disabled = new Set(config.disabled_providers ?? [])
     const enabled = config.enabled_providers ? new Set(config.enabled_providers) : null
@@ -370,15 +322,6 @@ export namespace Provider {
     const sdk = new Map<number, SDK>()
 
     log.info("init")
-
-    if (enabled && enabled.size === 0) {
-      return {
-        models: languages,
-        providers,
-        sdk,
-        modelLoaders,
-      }
-    }
 
     const configProviders = entries((config.provider ?? {}) as NonNullable<Config.Info["provider"]>)
 
@@ -550,7 +493,7 @@ export namespace Provider {
 
       // Load for the main provider if auth exists
       if (auth) {
-        const options = await plugin.auth.loader(() => Auth.get(providerID), database[plugin.auth.provider])
+        const options = await plugin.auth.loader(() => Auth.get(providerID) as any, database[plugin.auth.provider])
         const opts = options ?? {}
         const patch: Partial<Info> = providers[providerID] ? { options: opts } : { source: "custom", options: opts }
         mergeProvider(providerID, patch)
@@ -563,7 +506,7 @@ export namespace Provider {
           const enterpriseAuth = await Auth.get(enterpriseProviderID)
           if (enterpriseAuth) {
             const enterpriseOptions = await plugin.auth.loader(
-              () => Auth.get(enterpriseProviderID),
+              () => Auth.get(enterpriseProviderID) as any,
               database[enterpriseProviderID],
             )
             const opts = enterpriseOptions ?? {}
@@ -731,6 +674,7 @@ export namespace Provider {
 
         return fetchFn(input, {
           ...opts,
+          // @ts-ignore see here: https://github.com/oven-sh/bun/issues/16682
           timeout: false,
         })
       }

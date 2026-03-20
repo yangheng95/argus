@@ -1,86 +1,31 @@
+import z from "zod"
 import { Tool } from "./tool"
 import { OrchestratorService } from "@/orchestrator/service"
-import { Budget } from "@/orchestrator/model"
+import { Session } from "@/session"
+import { Filesystem } from "@/util/filesystem"
+import { Global } from "@/global"
+import { LLMTrace } from "@/session/llm-trace"
+import { buildSessionTraceHtml } from "@/cli/cmd/export-html"
 import { captureWindowScreenshot } from "@/gui/screenshot"
 import { PanelActionSchema } from "@/panel/capability"
-import { PanelApi } from "@/panel/api"
-import { Server } from "@/server/server"
-import { Instance } from "@/project/instance"
-import { asRecord } from "@/util/object"
 
 const localOnly = (ctx: Tool.Context) => ctx.extra?.surface === "panel"
-const allowTaskCreate = (ctx: Tool.Context) => ctx.extra?.allowCreate !== false
-
-function createTaskBudget(metadata: unknown, extra: unknown) {
-  const raw = [
-    asRecord(asRecord(metadata)?.create_task)?.budget,
-    asRecord(extra)?.budget,
-  ]
-  for (const item of raw) {
-    const parsed = Budget.safeParse(item)
-    if (parsed.success) return parsed.data
-  }
-  return undefined
-}
-
-function createTaskMetadata(value: unknown) {
-  const raw = asRecord(value)
-  if (!raw) return undefined
-  const next = { ...raw }
-  delete next.create_task
-  return Object.keys(next).length > 0 ? next : undefined
-}
-
-function ignored(message: string) {
-  return {
-    title: "Ignored",
-    output: JSON.stringify({
-      kind: "panel_response",
-      message,
-    }),
-    metadata: {},
-  }
-}
 
 export const PanelTool = Tool.define("panel", {
-  description: "Operate the OpenCorvus control plane: inspect specs, plans, and task boards, manage task state, and reply to interactions.",
+  description: "Operate the OpenCorvus control plane: inspect plans/boards, manage task state, reply to interactions, and manage sessions.",
   parameters: PanelActionSchema,
   async execute(params, ctx) {
     switch (params.action) {
-      case "view_spec": {
-        // Control-plane read actions should return the current board snapshot
-        // immediately instead of blocking on a full task sync.
-        const board = await OrchestratorService.getBoard(params.taskID, { sync: false })
-        return {
-          title: "Spec",
-          output: [
-            `Task: ${board.task.title}`,
-            board.spec ? `Spec v${board.spec.version}: ${board.spec.summary}` : "Spec unavailable",
-            board.spec?.scope ? `Scope: ${board.spec.scope}` : undefined,
-            board.spec?.outOfScope ? `Out of scope: ${board.spec.outOfScope}` : undefined,
-            board.requirements.length > 0 ? "Requirements:" : undefined,
-            ...board.requirements.slice(0, 12).map((item, index) =>
-              `${index + 1}. ${item.title}${item.description ? ` - ${item.description}` : ""} [${item.status}]${item.acceptance.length > 0 ? ` {${item.acceptance.join("; ")}}` : ""}`),
-            board.requirements.length > 12 ? `... ${board.requirements.length - 12} more requirements` : undefined,
-          ].filter(Boolean).join("\n"),
-          metadata: {},
-        }
-      }
       case "view_plan": {
-        const board = await OrchestratorService.getBoard(params.taskID, { sync: false })
+        const board = await OrchestratorService.getBoard(params.taskID)
+        const goals = board.lanes.find((item) => item.id === "goals")?.cards ?? []
         return {
           title: "Plan",
           output: [
             `Task: ${board.task.title}`,
-            board.plan ? `Plan v${board.plan.version}: ${board.plan.summary}` : "Plan unavailable",
-            board.plan && board.spec && board.plan.specSnapshotID !== board.spec.id
-              ? `Plan spec: ${board.plan.specSnapshotID} (active spec: ${board.spec.id})`
-              : undefined,
-            board.milestones.length > 0 ? "Milestones:" : undefined,
-            ...board.milestones.slice(0, 8).map((item, index) => `${index + 1}. ${item.title}${item.description ? ` - ${item.description}` : ""} [${item.status}]`),
-            board.planNodes.length > 0 ? "Plan nodes:" : undefined,
-            ...board.planNodes.slice(0, 12).map((item, index) => `${index + 1}. ${item.title}${item.brief ? ` - ${item.brief}` : ""} [${item.kind}]`),
-            board.planNodes.length > 12 ? `... ${board.planNodes.length - 12} more nodes` : undefined,
+            board.plan ? `Plan: ${board.plan.summary}` : "Plan unavailable",
+            goals.length > 0 ? "Goals:" : undefined,
+            ...goals.map((goal, index) => `${index + 1}. ${goal.title}${goal.detail ? ` — ${goal.detail}` : ""} [${goal.status || "pending"}]`),
           ].filter(Boolean).join("\n"),
           metadata: {},
         }
@@ -96,7 +41,7 @@ export const PanelTool = Tool.define("panel", {
             metadata: {},
           }
         }
-        const board = await OrchestratorService.getBoard(params.taskID, { sync: false })
+        const board = await OrchestratorService.getBoard(params.taskID)
         return {
           title: "Board",
           output: [
@@ -104,15 +49,8 @@ export const PanelTool = Tool.define("panel", {
             `Status: ${board.task.status}`,
             board.overview?.headline,
             board.overview?.summary,
-            board.spec ? `Spec: ${board.spec.summary}` : undefined,
-            board.plan ? `Plan: ${board.plan.summary}` : undefined,
-            board.task.budget
-              ? `Budget: runs=${board.task.budget.maxRuns ?? "default"}, replans=${board.task.budget.maxReplans ?? "default"}, evaluations=${board.task.budget.maxEvaluations ?? "default"}, wall=${board.task.budget.maxWallTimeMs === undefined ? "default" : `${board.task.budget.maxWallTimeMs}ms`}`
-              : "Budget: defaults",
-            `Goals: ${board.goals.length}, requirements: ${board.requirements.length}`,
-            pendingCount(board) > 0 ? `Pending blockers: ${pendingCount(board)}` : undefined,
-            board.evaluation ? `Evaluation: ${board.evaluation.verdict} - ${board.evaluation.summary}` : undefined,
             board.delivery ? `Delivery: ${board.delivery.summary}` : undefined,
+            board.evaluation ? `Evaluation: ${board.evaluation.verdict} — ${board.evaluation.summary}` : undefined,
           ].filter(Boolean).join("\n"),
           metadata: {},
         }
@@ -128,32 +66,31 @@ export const PanelTool = Tool.define("panel", {
         }
       }
       case "create_task": {
-        if (params.allow_create === false || !allowTaskCreate(ctx)) {
-          return ignored("Task creation requires an explicit user request.")
+        if (params.allow_create === false) {
+          return {
+            title: "Ignored",
+            output: "No task is bound to this thread.",
+            metadata: {},
+          }
         }
-        const metadata = createTaskMetadata(params.metadata)
         const taskID = await OrchestratorService.createTask({
           requestID: params.request_id ?? ctx.extra?.requestID,
           request: params.request,
           executor: params.executor,
-          budget: params.budget ?? createTaskBudget(params.metadata, ctx.extra?.createTask),
           checks: params.checks,
           routing: params.routing,
           source: params.source ?? ctx.extra?.source ?? (params.platform ? `channel:${params.platform}` : "panel"),
-          directory: typeof ctx.extra?.directory === "string" ? ctx.extra.directory : undefined,
           ...(params.platform && params.channel && params.thread
             ? {
                 channelBinding: {
                   platform: params.platform,
                   channel: params.channel,
                   thread: params.thread,
-                  payload: metadata ?? {},
+                  payload: params.metadata ?? {},
                 },
               }
             : {}),
-          metadata,
-        }, {
-          background: true,
+          metadata: params.metadata,
         })
         return {
           title: "Task created",
@@ -209,16 +146,13 @@ export const PanelTool = Tool.define("panel", {
       case "cancel_task":
         await OrchestratorService.cancelTask(params.taskID)
         return { title: "Task cancelled", output: JSON.stringify({ kind: "message", task_id: params.taskID, message: "Task cancelled." }), metadata: {} }
-      case "update_budget":
-        await OrchestratorService.updateTaskBudget(params.taskID, { budget: params.budget })
-        return { title: "Budget updated", output: JSON.stringify({ kind: "message", task_id: params.taskID, message: "Task budget updated." }), metadata: {} }
       case "update_checks":
         if (params.checks) {
           await OrchestratorService.updateTaskChecks(params.taskID, { checks: params.checks })
         } else {
           await OrchestratorService.selectTaskChecks(params.taskID, params.selection ?? {})
         }
-        return { title: "Checks updated", output: JSON.stringify({ kind: "message", task_id: params.taskID, message: "Task checks updated. spec_check remains required." }), metadata: {} }
+        return { title: "Checks updated", output: JSON.stringify({ kind: "message", task_id: params.taskID, message: "Task checks updated." }), metadata: {} }
       case "capture_overlay_screenshot":
         try {
           const shot = await captureWindowScreenshot(params.match)
@@ -245,55 +179,6 @@ export const PanelTool = Tool.define("panel", {
             metadata: {},
           }
         }
-      case "list_panel_api":
-        return {
-          title: "Panel API catalog",
-          output: JSON.stringify({
-            kind: "panel_response",
-            message: "Allowlisted panel API routes.",
-            routes: PanelApi.list(),
-          }),
-          metadata: {},
-        }
-      case "call_panel_api": {
-        const query = new URLSearchParams(params.query ?? {}).toString()
-        const target = params.path.replace(/^\/+/, "")
-        if (!PanelApi.allow(params.method, target)) {
-          return {
-            title: "Panel API blocked",
-            output: JSON.stringify({
-              kind: "panel_response",
-              message: `Panel API route is not allowlisted: ${params.method} ${target}`,
-            }),
-            metadata: {},
-          }
-        }
-        const response = await Server.App().request(`/${target}${query ? `?${query}` : ""}`, {
-          method: params.method,
-          headers: {
-            "content-type": "application/json",
-            "x-opencorvus-directory": Instance.directory,
-          },
-          ...(params.body ? { body: JSON.stringify(params.body) } : {}),
-        })
-        const type = response.headers.get("content-type") || ""
-        const data = type.includes("application/json")
-          ? await response.json().catch(() => null)
-          : await response.text()
-        return {
-          title: "Panel API response",
-          output: JSON.stringify({
-            kind: "panel_response",
-            message: `${params.method} /${target} -> ${response.status}`,
-            response: {
-              status: response.status,
-              ok: response.ok,
-              data,
-            },
-          }),
-          metadata: {},
-        }
-      }
       case "set_executor":
         if (!localOnly(ctx)) throw new Error("Executor selection is only available in the desktop panel.")
         return {
@@ -317,12 +202,117 @@ export const PanelTool = Tool.define("panel", {
           }),
           metadata: {},
         }
-      default:
-        throw new Error(`Unknown panel action: ${String((params as { action: string }).action)}`)
+      case "select_session":
+        if (!localOnly(ctx)) throw new Error("Session selection is only available in the desktop panel.")
+        return {
+          title: "Session selected",
+          output: JSON.stringify({
+            kind: "panel_response",
+            session_id: params.sessionID,
+            message: `Selected session ${params.sessionID}.`,
+            local_action: { type: "select_session", sessionID: params.sessionID },
+          }),
+          metadata: {},
+        }
+      case "create_session": {
+        const session = await Session.create({})
+        return {
+          title: "Session created",
+          output: JSON.stringify({
+            kind: "panel_response",
+            session_id: session.id,
+            message: `Session created: ${session.id}`,
+            ...(localOnly(ctx)
+              ? {
+                  local_action: {
+                    type: "select_session",
+                    sessionID: session.id,
+                  },
+                }
+              : {}),
+          }),
+          metadata: {},
+        }
+      }
+      case "fork_session": {
+        const session = await Session.fork({ sessionID: params.sessionID })
+        return {
+          title: "Session forked",
+          output: JSON.stringify({
+            kind: "panel_response",
+            session_id: session.id,
+            message: `Session forked: ${session.id}`,
+            ...(localOnly(ctx)
+              ? {
+                  local_action: {
+                    type: "select_session",
+                    sessionID: session.id,
+                  },
+                }
+              : {}),
+          }),
+          metadata: {},
+        }
+      }
+      case "delete_session": {
+        await OrchestratorService.deleteSession(params.sessionID, { deleteTasks: true })
+        return {
+          title: "Session deleted",
+          output: JSON.stringify({
+            kind: "panel_response",
+            session_id: params.sessionID,
+            message: `Session deleted: ${params.sessionID}`,
+            ...(localOnly(ctx)
+              ? {
+                  local_action: {
+                    type: "invalidate_session",
+                    sessionID: params.sessionID,
+                  },
+                }
+              : {}),
+          }),
+          metadata: {},
+        }
+      }
+      case "export_session_html": {
+        const file = await exportSessionHtml(params.sessionID)
+        return {
+          title: "Session exported",
+          output: JSON.stringify({
+            kind: "panel_response",
+            session_id: params.sessionID,
+            message: `Session HTML exported to ${file}`,
+          }),
+          metadata: {},
+        }
+      }
+      case "update_goal":
+        await OrchestratorService.updateGoal(params.goalID, {
+          description: params.description,
+          criteria: params.criteria,
+        })
+        return { title: "Goal updated", output: JSON.stringify({ kind: "panel_response", message: "Goal updated." }), metadata: {} }
+      case "delete_goal":
+        await OrchestratorService.deleteGoal(params.goalID)
+        return { title: "Goal deleted", output: JSON.stringify({ kind: "panel_response", message: "Goal deleted." }), metadata: {} }
     }
   },
 })
 
-function pendingCount(board: Awaited<ReturnType<typeof OrchestratorService.getBoard>>) {
-  return board.interactions.filter((item) => item.status === "pending").length
+async function exportSessionHtml(sessionID: string) {
+  const session = await Session.get(sessionID)
+  const messages = await Session.messages({ sessionID })
+  const calls = await LLMTrace.read(sessionID)
+  const report = await buildSessionTraceHtml({
+    session: {
+      id: session.id,
+      title: session.title,
+      time: session.time,
+    },
+    messages,
+    calls,
+  })
+  const out = `${Global.Path.data}/panel-${sessionID}.html`
+  await Filesystem.write(out, report)
+  return out
 }

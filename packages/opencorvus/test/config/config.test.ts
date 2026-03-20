@@ -650,9 +650,7 @@ test("installs dependencies in writable OPENCORVUS_CONFIG_DIR", async () => {
   })
 
   const prev = process.env.OPENCORVUS_CONFIG_DIR
-  const prevSkipInstall = process.env.OPENCORVUS_SKIP_DEP_INSTALL
   process.env.OPENCORVUS_CONFIG_DIR = tmp.extra
-  delete process.env.OPENCORVUS_SKIP_DEP_INSTALL
 
   try {
     await Instance.provide({
@@ -668,8 +666,6 @@ test("installs dependencies in writable OPENCORVUS_CONFIG_DIR", async () => {
   } finally {
     if (prev === undefined) delete process.env.OPENCORVUS_CONFIG_DIR
     else process.env.OPENCORVUS_CONFIG_DIR = prev
-    if (prevSkipInstall === undefined) delete process.env.OPENCORVUS_SKIP_DEP_INSTALL
-    else process.env.OPENCORVUS_SKIP_DEP_INSTALL = prevSkipInstall
   }
 })
 

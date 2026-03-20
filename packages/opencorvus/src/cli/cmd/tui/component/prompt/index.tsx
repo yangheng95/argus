@@ -958,9 +958,7 @@ export function Prompt(props: PromptProps) {
                         return
                       }
                     }
-                  } catch {
-                    // Paste-as-file failed — fall through to plain text paste below
-                  }
+                  } catch {}
                 }
 
                 const lineCount = (pastedContent.match(/\n/g)?.length ?? 0) + 1

@@ -1,5 +1,5 @@
 /**
- * GoalJudge — An independent-context agent that analyzes evaluation results,
+ * EvaluatorAgent — An independent-context agent that analyzes evaluation results,
  * classifies failures, assesses each goal individually, and produces structured
  * replan guidance.
  *
@@ -10,20 +10,16 @@
  * 4. Evaluates each goal independently against the delivery
  * 5. Produces targeted replan guidance when needed
  */
-import { stepCountIs } from "ai"
+import { generateText, stepCountIs } from "ai"
+import type { LanguageModelV2 } from "@ai-sdk/provider"
 import z from "zod"
-import { verificationHints } from "@/check/policy"
-import { extractRawJSON, repairTruncatedJSON, sanitizeJSON, trimToLastComplete, tryParseJSON } from "@/llm/json-repair"
-import { completeHeadlessText, resolveHeadlessLanguageModel } from "@/llm/headless"
+import { verificationHints, matchSelectors } from "@/check/policy"
+import { Provider } from "@/provider/provider"
 import { createEvaluatorTools } from "./tools"
 import { Memory } from "@/memory"
 import { Preference } from "@/preference"
 import { Instance } from "@/project/instance"
 import { Log } from "@/util/log"
-import { Env } from "@/env"
-import { type TextHooks } from "@/llm/api"
-import { Config } from "@/config/config"
-import { collectText, countToolCalls, firstContentLine, sectionBody, splitBlocks } from "@/util/agent-text"
 
 const log = Log.create({ service: "evaluator-agent" })
 
@@ -55,7 +51,7 @@ export const GoalAssessment = z.object({
   reasoning: z.string().describe("Why this goal was assessed this way"),
 })
 
-export const GoalJudgment = z.object({
+export const EvaluatorAnalysis = z.object({
   verdict: z.enum(["accepted", "rejected", "inconclusive"]),
   classification: FailureClassification,
   summary: z.string(),
@@ -63,7 +59,7 @@ export const GoalJudgment = z.object({
   replan_guidance: ReplanGuidance.nullish(),
 })
 
-export type GoalJudgmentType = z.infer<typeof GoalJudgment>
+export type EvaluatorAnalysisType = z.infer<typeof EvaluatorAnalysis>
 
 // ---------------------------------------------------------------------------
 // Input types
@@ -89,38 +85,27 @@ export interface DeliveryInfo {
 }
 
 // ---------------------------------------------------------------------------
-// GoalJudge
+// EvaluatorAgent
 // ---------------------------------------------------------------------------
 
 const MAX_STEPS = 25
+const TIMEOUT_MS = 240_000
 
-function evaluatorTimeoutMs() {
-  const raw = Env.get("OPENCORVUS_EVALUATOR_AGENT_TIMEOUT_MS")
-  const parsed = Number.parseInt(raw ?? "", 10)
-  return Number.isFinite(parsed) ? parsed : 480_000
-}
-
-type AnalyzeInput = {
-  task: { title: string; request: string; sessionID?: string; metadata?: Record<string, unknown> }
-  goals: GoalInfo[]
-  delivery: DeliveryInfo
-  checkResults: CheckResult[]
-  stream?: TextHooks
-}
-
-export namespace GoalJudge {
-  export async function analyze(input: AnalyzeInput): Promise<GoalJudgmentType> {
-    const resolved = await resolveHeadlessLanguageModel({
-      label: "evaluator",
-      metadata: input.task.metadata,
-      sessionID: input.task.sessionID,
-    })
-    if (!resolved) throw new Error("Evaluator analysis model is unavailable")
-    const { language, model } = resolved
-    const timeoutMs = evaluatorTimeoutMs()
+export namespace EvaluatorAgent {
+  export async function analyze(input: {
+    task: { title: string; request: string; sessionID?: string }
+    goals: GoalInfo[]
+    delivery: DeliveryInfo
+    checkResults: CheckResult[]
+  }): Promise<EvaluatorAnalysisType> {
+    const language = await agentLanguageModel()
+    if (!language) {
+      log.warn("evaluator: no LLM model available — falling back to check-only synthesis")
+      return synthesizeFromCheckResults(input)
+    }
 
     // Full evaluator tool set: codebase exploration + memory + preferences
-    const explorationTools = createEvaluatorTools({ sessionID: input.task.sessionID })
+    const tools = createEvaluatorTools({ sessionID: input.task.sessionID })
 
     // Pre-fetch context: historical failures + preferences (like planner's prefetchContext)
     const context = prefetchEvaluatorContext(input)
@@ -135,95 +120,58 @@ export namespace GoalJudge {
       prefetchedContext: context.length > 0,
     })
 
-    const MAX_RETRIES = 2
-    let parsed: GoalJudgmentType | undefined
-    let lastError: Error | undefined
-    let toolCallCount = 0
+    const result = await generateText({
+      model: language,
+      stopWhen: stepCountIs(MAX_STEPS),
+      tools,
+      maxOutputTokens: 16384,
+      abortSignal: AbortSignal.timeout(TIMEOUT_MS),
+      system: EVALUATOR_SYSTEM,
+      prompt: userPrompt,
+    })
 
-    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-      if (attempt > 0) {
-        log.info("evaluator agent retrying", { attempt, reason: lastError?.message })
-      }
-
-      let result: {
-        text?: string
-        finishReason?: string
-        steps: Array<{ text?: string; toolCalls?: unknown[]; toolResults?: unknown[] }>
-      }
-      try {
-        result = await completeHeadlessText({
-          label: "evaluator",
-          model,
-          language,
-          sessionID: input.task.sessionID,
-          stopWhen: [stepCountIs(MAX_STEPS)],
-          tools: explorationTools,
-          maxOutputTokens: 16384,
-          timeoutMs: false,
-          abortSignal: AbortSignal.timeout(timeoutMs),
-          system: await goalJudgeSystem(),
-          prompt: userPrompt,
-          ...(input.stream as TextHooks<typeof explorationTools> | undefined),
-        })
-      } catch (err) {
-        lastError = err instanceof Error ? err : new Error(String(err))
-        log.warn("evaluator agent generateText failed", { attempt, error: lastError.message })
-        continue
-      }
-
-      toolCallCount = countToolCalls(result.steps)
-
-      log.info("evaluator agent finished", {
-        attempt,
-        steps: result.steps.length,
-        toolCalls: toolCallCount,
-        finishReason: result.finishReason,
-        textLength: collectText(result).length,
-      })
-
-      try {
-        const allText = collectText(result)
-        if (!allText.trim()) {
-          throw new Error("evaluator agent produced no markdown output")
-        }
-        parsed = extractGoalText(allText, input.goals.length)
-      } catch (err) {
-        lastError = new Error(`Evaluator analysis returned invalid output: ${err instanceof Error ? err.message : String(err)}`)
-        log.warn("evaluator: output extraction failed, will retry", {
-          attempt,
-          error: String(err),
-          textLength: collectText(result).length,
-        })
-        continue
-      }
-
-      const MIN_TOOL_CALLS = 3
-      if (toolCallCount < MIN_TOOL_CALLS) {
-        lastError = new Error(`Evaluator analysis was too shallow (${parsed.verdict}): only ${toolCallCount}/${MIN_TOOL_CALLS} required tool calls`)
-        log.warn("evaluator: agent made too few tool calls, will retry", { attempt, verdict: parsed.verdict, toolCalls: toolCallCount })
-        parsed = undefined
-        continue
-      }
-
-      break
+    let allText = result.text?.trim() || ""
+    if (!allText || !allText.includes("{")) {
+      allText = result.steps.map((s) => s.text).filter(Boolean).join("\n")
     }
 
-    if (!parsed) {
-      // Do NOT throw — a thrown error propagates to the orchestrator which marks the task as hard-failed.
-      // Instead, return an inconclusive verdict so the orchestrator can retry the execution run.
-      const errMsg = lastError?.message ?? "Evaluator analysis failed after retries"
-      log.error("evaluator agent failed to produce valid output after all retries, returning inconclusive", { error: errMsg })
-      return {
-        verdict: "inconclusive" as const,
-        classification: "environment" as const,
-        summary: `Evaluator produced no output: ${errMsg}`,
-        goal_statuses: Array.from({ length: input.goals.length }, (_, i) => ({
-          goal_index: i,
-          status: "inconclusive" as const,
-          evidence: "Evaluator analysis produced no output — retry required",
-          reasoning: errMsg,
-        })),
-        replan_guidance: null,
+    // Count actual tool calls — an evaluation without investigation is worthless
+    const toolCallCount = result.steps.reduce(
+      (sum, s) => sum + (Array.isArray((s as any).toolCalls) ? (s as any).toolCalls.length : 0),
+      0,
+    )
+
+    log.info("evaluator agent finished", {
+      steps: result.steps.length,
+      toolCalls: toolCallCount,
+      finishReason: result.finishReason,
+      textLength: allText.length,
+    })
+
+    let parsed: EvaluatorAnalysisType
+    try {
+      parsed = extractJSON(allText, input.goals.length)
+    } catch (err) {
+      log.warn("evaluator: JSON extraction failed, using synthesis fallback", {
+        error: String(err),
+        textLength: allText.length,
+      })
+      parsed = synthesizeFromCheckResults(input)
+    }
+
+    // If the agent produced a verdict but made too few tool calls, the
+    // investigation was too shallow — downgrade "accepted" to "inconclusive"
+    // so the orchestrator doesn't rubber-stamp the delivery.
+    const MIN_TOOL_CALLS = 3
+    if (parsed.verdict === "accepted" && toolCallCount < MIN_TOOL_CALLS) {
+      log.warn("evaluator: agent accepted but made too few tool calls — downgrading to inconclusive", {
+        toolCalls: toolCallCount,
+        minRequired: MIN_TOOL_CALLS,
+      })
+      parsed = {
+        ...parsed,
+        verdict: "inconclusive",
+        summary: `${parsed.summary} [Downgraded from accepted: evaluator made only ${toolCallCount}/${MIN_TOOL_CALLS} required tool calls — investigation was too shallow.]`,
       }
     }
 
@@ -239,16 +187,20 @@ export namespace GoalJudge {
   }
 }
 
-export const parseGoalJudgment = extractJSON
-
 // ---------------------------------------------------------------------------
 // Internals
 // ---------------------------------------------------------------------------
 
-function extractJSON(text: string, goalCount: number): GoalJudgmentType {
-  let raw = extractRawJSON(text)
+function extractJSON(text: string, goalCount: number): EvaluatorAnalysisType {
+  let raw = text.trim()
 
-  raw = sanitizeJSON(raw)
+  const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)```/)
+  if (fenced) raw = fenced[1].trim()
+
+  if (!raw.startsWith("{")) {
+    const match = raw.match(/(\{[\s\S]*\})/)
+    if (match) raw = match[1]
+  }
 
   // Handle truncated JSON — same repair logic as planner agent
   if (raw.startsWith("{") && !raw.endsWith("}")) {
@@ -257,12 +209,12 @@ function extractJSON(text: string, goalCount: number): GoalJudgmentType {
   }
 
   let obj: any
-  const parseErr = tryParseJSON(raw)
+  const parseErr = tryParse(raw)
   if (parseErr.ok) {
     obj = parseErr.value
   } else {
     const trimmed = trimToLastComplete(raw)
-    const retryErr = tryParseJSON(trimmed)
+    const retryErr = tryParse(trimmed)
     if (retryErr.ok) {
       log.warn("evaluator: repaired truncated JSON by trimming", {
         originalLength: raw.length,
@@ -280,21 +232,115 @@ function extractJSON(text: string, goalCount: number): GoalJudgmentType {
     }
   }
 
-  return normalizeAnalysis(obj, goalCount)
+  // Normalize empty classification (LLM sometimes leaves it empty for accepted verdicts)
+  if (!obj.classification) obj.classification = "evaluation"
+  // Fill missing required fields for truncated output
+  if (!obj.verdict) obj.verdict = "inconclusive"
+  if (!obj.summary) obj.summary = "Evaluation analysis was truncated"
+  if (!Array.isArray(obj.goal_statuses)) obj.goal_statuses = []
+
+  // Fill missing goal statuses (LLM may have been truncated mid-array)
+  if (obj.goal_statuses.length < goalCount) {
+    for (let i = obj.goal_statuses.length; i < goalCount; i++) {
+      obj.goal_statuses.push({
+        goal_index: i,
+        status: "inconclusive",
+        evidence: "Goal assessment was truncated in LLM output",
+        reasoning: "Unable to assess — output was cut off before this goal was evaluated",
+      })
+    }
+  }
+
+  return EvaluatorAnalysis.parse(obj)
 }
 
-function extractGoalText(text: string, goalCount: number): GoalJudgmentType {
-  const raw = text.trim()
-  if (!raw) throw new Error("evaluator output empty")
-  if (raw.startsWith("{") || raw.includes("```json")) return extractJSON(raw, goalCount)
+function tryParse(text: string): { ok: true; value: any } | { ok: false; error: Error } {
+  try {
+    return { ok: true, value: JSON.parse(text) }
+  } catch (err) {
+    return { ok: false, error: err as Error }
+  }
+}
 
-  return normalizeAnalysis({
-    verdict: sectionBody(raw, ["Verdict", "结论"]).split(/\r?\n/)[0]?.trim().toLowerCase(),
-    classification: sectionBody(raw, ["Classification", "分类"]).split(/\r?\n/)[0]?.trim().toLowerCase(),
-    summary: sectionBody(raw, ["Summary", "摘要"]) || firstContentLine(raw),
-    goal_statuses: parseGoalStatuses(sectionBody(raw, ["Goal Statuses", "Goals", "目标评估", "目标状态"])),
-    replan_guidance: parseReplanGuidance(sectionBody(raw, ["Replan Guidance", "Guidance", "改进建议", "重规划建议"])),
-  }, goalCount)
+function repairTruncatedJSON(raw: string): string {
+  let repaired = raw
+
+  // If truncated inside a string, close it
+  let inString = false
+  let escaped = false
+  for (let i = 0; i < repaired.length; i++) {
+    const ch = repaired[i]
+    if (escaped) { escaped = false; continue }
+    if (ch === "\\") { escaped = true; continue }
+    if (ch === '"') inString = !inString
+  }
+  if (inString) repaired += '"'
+
+  // Remove trailing partial key-value
+  repaired = repaired.replace(/,\s*"[^"]*"?\s*:?\s*"?[^"]*$/, "")
+  repaired = repaired.replace(/,\s*$/, "")
+
+  // Count and close unclosed brackets
+  const stack: string[] = []
+  inString = false
+  escaped = false
+  for (let i = 0; i < repaired.length; i++) {
+    const ch = repaired[i]
+    if (escaped) { escaped = false; continue }
+    if (ch === "\\") { escaped = true; continue }
+    if (ch === '"') { inString = !inString; continue }
+    if (inString) continue
+    if (ch === "{") stack.push("}")
+    else if (ch === "[") stack.push("]")
+    else if (ch === "}" || ch === "]") stack.pop()
+  }
+
+  repaired = repaired.replace(/,\s*$/, "")
+  while (stack.length > 0) repaired += stack.pop()
+
+  return repaired
+}
+
+function trimToLastComplete(raw: string): string {
+  let lastComplete = -1
+  let inString = false
+  let escaped = false
+
+  for (let i = 0; i < raw.length; i++) {
+    const ch = raw[i]
+    if (escaped) { escaped = false; continue }
+    if (ch === "\\") { escaped = true; continue }
+    if (ch === '"') {
+      inString = !inString
+      if (!inString) lastComplete = i
+      continue
+    }
+    if (inString) continue
+    if (ch === "{" || ch === "[") { /* depth++ */ }
+    else if (ch === "}" || ch === "]") lastComplete = i
+  }
+
+  if (lastComplete > 0 && lastComplete < raw.length - 1) {
+    let trimmed = raw.slice(0, lastComplete + 1)
+    trimmed = trimmed.replace(/,\s*$/, "")
+    const stack: string[] = []
+    inString = false
+    escaped = false
+    for (let i = 0; i < trimmed.length; i++) {
+      const ch = trimmed[i]
+      if (escaped) { escaped = false; continue }
+      if (ch === "\\") { escaped = true; continue }
+      if (ch === '"') { inString = !inString; continue }
+      if (inString) continue
+      if (ch === "{") stack.push("}")
+      else if (ch === "[") stack.push("]")
+      else if (ch === "}" || ch === "]") stack.pop()
+    }
+    while (stack.length > 0) trimmed += stack.pop()
+    return trimmed
+  }
+
+  return repairTruncatedJSON(raw)
 }
 
 // ---------------------------------------------------------------------------
@@ -309,99 +355,18 @@ function extractGoalText(text: string, goalCount: number): GoalJudgmentType {
  * 2. Load that exact model and language surface
  * 3. If that fails, surface the evaluator failure directly
  */
-function normalizeClassification(raw: unknown): string {
-  if (typeof raw !== "string" || !raw.trim()) return "evaluation"
-  const value = raw.trim().toLowerCase().replace(/[^a-z]/g, "")
-  const VALID = new Set(["transient", "environment", "input", "permission", "evaluation", "strategy", "unknown"])
-  if (VALID.has(value)) return value
-  // Fuzzy match: extract first valid classification word from LLM output
-  for (const valid of VALID) {
-    if (value.includes(valid)) return valid
-  }
-  return "evaluation"
-}
-
-function normalizeAnalysis(input: unknown, goalCount: number): GoalJudgmentType {
-  const obj = input && typeof input === "object" ? { ...(input as Record<string, unknown>) } : {}
-
-  obj.classification = normalizeClassification(obj.classification)
-  const rawVerdict = typeof obj.verdict === "string" ? obj.verdict.trim().toLowerCase() : ""
-  obj.verdict = rawVerdict.includes("accepted") ? "accepted"
-    : rawVerdict.includes("rejected") ? "rejected"
-    : rawVerdict.includes("inconclusive") ? "inconclusive"
-    : "rejected"
-  if (!obj.summary) obj.summary = "Evaluation analysis was truncated"
-  if (!Array.isArray(obj.goal_statuses)) obj.goal_statuses = []
-  if (!("replan_guidance" in obj)) obj.replan_guidance = undefined
-
-  obj.goal_statuses = (obj.goal_statuses as unknown[]).flatMap((item, index) => {
-    if (!item || typeof item !== "object") return []
-    const row = { ...(item as Record<string, unknown>) }
-    if (typeof row.goal_index !== "number") row.goal_index = index
-    if (!row.status) row.status = "failed"
-    if (!row.evidence) row.evidence = "Goal assessment was truncated in LLM output"
-    if (!row.reasoning) row.reasoning = "The evaluator did not provide a complete assessment for this goal."
-    return [row]
-  })
-
-  if ((obj.goal_statuses as unknown[]).length < goalCount) {
-    for (let i = (obj.goal_statuses as unknown[]).length; i < goalCount; i++) {
-      ;(obj.goal_statuses as Record<string, unknown>[]).push({
-        goal_index: i,
-        status: "failed",
-        evidence: "Goal assessment was truncated in LLM output",
-        reasoning: "The evaluator did not provide a complete assessment for this goal.",
-      })
-    }
-  }
-
-  return GoalJudgment.parse(obj)
-}
-
-function parseRecordLines(lines: string[]) {
-  const record: Record<string, string> = {}
-  for (const line of lines) {
-    const value = line.trim().replace(/^[-*•]\s+/, "")
-    const match = value.match(/^([a-zA-Z_ ]+|状态|证据|原因|根因|失败项|建议策略|避免方式)[:：]\s*(.+)$/)
-    if (!match) continue
-    record[match[1].trim().toLowerCase()] = match[2].trim()
-  }
-  return record
-}
-
-function parseGoalStatuses(text: string) {
-  return splitBlocks(text).map((block, index) => {
-    const title = block[0].replace(/^[-*•]\s+/, "").replace(/^\d+[.)、]\s+/, "").trim()
-    const record = parseRecordLines(block.slice(1))
-    const goalIndex = (() => {
-      const fromTitle = title.match(/\d+/)?.[0]
-      const next = Number.parseInt(record["goal_index"] || record["目标"] || fromTitle || String(index), 10)
-      return Number.isInteger(next) ? next : index
-    })()
-    return {
-      goal_index: goalIndex,
-      status: (record["status"] || record["状态"] || "inconclusive").toLowerCase(),
-      evidence: record["evidence"] || record["证据"] || title,
-      reasoning: record["reasoning"] || record["原因"] || title,
-    }
-  })
-}
-
-function parseReplanGuidance(text: string) {
-  if (!text.trim()) return undefined
-  const record = parseRecordLines(text.split(/\r?\n/))
-  const avoid = (record["avoid_approaches"] || record["避免方式"] || "")
-    .split(/[;\n,，；]+/)
-    .map((part) => part.trim())
-    .filter(Boolean)
-  if (!record["root_cause"] && !record["根因"] && !record["suggested_strategy"] && !record["建议策略"]) {
+async function agentLanguageModel(): Promise<LanguageModelV2 | undefined> {
+  try {
+    const def = await Provider.defaultModel()
+    if (!def) return undefined
+    log.info("evaluator: default model resolved", { providerID: def.providerID, modelID: def.modelID })
+    const model = await Provider.getModel(def.providerID, def.modelID)
+    const language = await Provider.getLanguage(model)
+    log.info("evaluator: model ready via Provider", { modelId: language.modelId })
+    return language
+  } catch (err) {
+    log.error("evaluator: model resolution failed", { error: String(err) })
     return undefined
-  }
-  return {
-    root_cause: record["root_cause"] || record["根因"] || "",
-    what_failed: record["what_failed"] || record["失败项"] || "",
-    suggested_strategy: record["suggested_strategy"] || record["建议策略"] || "",
-    avoid_approaches: avoid,
   }
 }
 
@@ -410,7 +375,7 @@ function parseReplanGuidance(text: string) {
 // ---------------------------------------------------------------------------
 
 function prefetchEvaluatorContext(input: {
-  task: { title: string; request: string; sessionID?: string; metadata?: Record<string, unknown> }
+  task: { title: string; request: string; sessionID?: string }
   checkResults: CheckResult[]
   delivery: DeliveryInfo
 }): string {
@@ -434,8 +399,8 @@ function prefetchEvaluatorContext(input: {
       })
       if (recalled) sections.push(recalled)
     }
-  } catch (err) {
-    log.warn("evaluator: memory prefetch failed", { error: err instanceof Error ? err.message : String(err) })
+  } catch {
+    // best-effort
   }
 
   // 2. Inject active preferences for convention checking
@@ -444,14 +409,10 @@ function prefetchEvaluatorContext(input: {
     const prefs = Preference.merged({ projectID: projectId })
     if (prefs.length > 0) {
       const items = prefs.map((p) => `- **${p.key}**: ${p.value}`).join("\n")
-      sections.push(
-        "## Active Preferences (default conventions — explicit task constraints win on conflict)\n\n" +
-          "Treat these as binding only when they do not conflict with the user request, approved spec, or explicit task boundaries.\n\n" +
-          items,
-      )
+      sections.push(`## Active Preferences (BINDING — check compliance)\n\n${items}`)
     }
-  } catch (err) {
-    log.warn("evaluator: preferences prefetch failed", { error: err instanceof Error ? err.message : String(err) })
+  } catch {
+    // best-effort
   }
 
   return sections.length > 0 ? sections.join("\n\n") : ""
@@ -473,20 +434,7 @@ function buildUserPrompt(
   const sections: string[] = []
 
   // Task context
-  const isPartialDelivery = input.goals.length === 1
-  sections.push(
-    isPartialDelivery
-      ? `# Task Context\n\nTitle: ${input.task.title}\n\n` +
-        `⚠️ SCOPE: You are evaluating ONE goal from a multi-goal task. Other goals run in separate sessions. ` +
-        `Do NOT assess whether the full task requirements are complete — only evaluate whether the single goal listed in # Goals is satisfied.\n\n` +
-        `Full request (background context only):\n${input.task.request}`
-      : `# Task (FINAL DELIVERY MODE)\n\nTitle: ${input.task.title}\n\n` +
-        `⚠️ FINAL DELIVERY: You are evaluating the COMPLETE delivery of all goals together. ` +
-        `You MUST execute Phase 2.5 (PRD Completeness Check) — verify the project is a working, ` +
-        `runnable application that faithfully implements the original task request, not just a ` +
-        `collection of passing tests.\n\n` +
-        `Request:\n${input.task.request}`,
-  )
+  sections.push(`# Task\n\nTitle: ${input.task.title}\nRequest: ${input.task.request}`)
 
   // Goals — with verification guidance per goal
   sections.push(
@@ -544,17 +492,17 @@ function buildUserPrompt(
   // Final instruction
   if (failedChecks.length > 0) {
     sections.push(
-      "IMPORTANT: There are FAILED checks. You MUST investigate each failure using tools before producing your final markdown evaluation.\n" +
+      "IMPORTANT: There are FAILED checks. You MUST investigate each failure using tools before producing your JSON output.\n" +
         "1. read_file on the failing test/source to understand WHAT failed\n" +
         "2. read_file on the changed files to understand WHAT was delivered\n" +
         "3. Compare: does the delivery match the goal criteria?\n" +
-        "4. Then produce your final markdown evaluation.",
+        "4. Then produce your JSON analysis.",
     )
   } else {
     sections.push(
       "All automated checks passed. Verify code quality by reading the changed files, checking convention compliance, " +
         "and assessing whether each goal's criteria is truly satisfied (not just that checks pass). " +
-        "Then produce your final markdown evaluation.",
+        "Then produce your JSON analysis.",
     )
   }
 
@@ -580,135 +528,269 @@ function indent(text: string, prefix = "   "): string {
 }
 
 // ---------------------------------------------------------------------------
+// Synthesis fallback — when LLM output is completely unparseable
+// ---------------------------------------------------------------------------
+
+/**
+ * When the evaluator agent's LLM output cannot be parsed as JSON at all
+ * (truncated, empty, or garbage), synthesize a reasonable analysis from
+ * the automated check results. This is a last resort — the analysis will
+ * be shallow but structurally correct.
+ */
+function synthesizeFromCheckResults(input: {
+  task: { title: string; request: string }
+  goals: GoalInfo[]
+  delivery: DeliveryInfo
+  checkResults: CheckResult[]
+}): EvaluatorAnalysisType {
+  const failedChecks = input.checkResults.filter((c) => c.status === "failed")
+  const allPassed = failedChecks.length === 0
+
+  // NEVER auto-accept from synthesis — LLM investigation is required for a real verdict.
+  // When checks fail, we can confidently reject. When they pass, we can't confirm goals
+  // are actually met without reading the code, so verdict must be "inconclusive".
+  const verdict = allPassed ? "inconclusive" as const : "rejected" as const
+  const classification = "evaluation" as const
+
+  const failedNames = failedChecks.map((c) => c.name).join(", ")
+  const passedNames = input.checkResults.filter((c) => c.status === "passed").map((c) => c.name).join(", ")
+
+  const summary = allPassed
+    ? `All ${input.checkResults.length} automated checks passed (${passedNames}), but LLM analysis was unavailable — cannot confirm goals are truly met without code investigation. Verdict: inconclusive.`
+    : `${failedChecks.length}/${input.checkResults.length} checks failed (${failedNames}). LLM analysis was unavailable — verdict based on check results only.`
+
+  // Goal assessment from synthesis:
+  // - Goals WITH check_selectors + matching checks ALL passed → "passed" (mechanistic verification)
+  // - Goals WITH check_selectors + some matching checks failed → "failed" (concrete evidence)
+  // - Goals WITHOUT check_selectors → "inconclusive" (no mechanistic evidence either way)
+  // - Goals with selectors but NO matching checks found → "inconclusive"
+  //
+  // This prevents rubber-stamping semantic goals (e.g., "clean separation") that can't be
+  // verified by automated checks alone, while still allowing mechanistic goals (e.g., "build
+  // passes") to be confirmed when their specific check succeeded.
+  const goal_statuses: Array<z.infer<typeof GoalAssessment>> = input.goals.map((goal, i) => {
+    const selectors = goal.check_selector ?? []
+
+    // Without selectors, we have NO mechanistic way to verify — must be inconclusive
+    if (selectors.length === 0) {
+      return {
+        goal_index: i,
+        status: "inconclusive" as const,
+        evidence: `No check_selector defined for this goal. Automated checks passed globally but cannot confirm this specific goal without code investigation.`,
+        reasoning: `Synthesized (LLM unavailable). This goal has no check_selectors — it requires code review to verify. ${goal.priority === "blocking" ? "Blocking goal." : "Advisory goal."}`,
+      }
+    }
+
+    // Match selectors against actual check results
+    const relevantChecks = matchSelectors(selectors, input.checkResults)
+
+    if (relevantChecks.length === 0) {
+      return {
+        goal_index: i,
+        status: "inconclusive" as const,
+        evidence: `Goal selectors [${selectors.join(", ")}] did not match any executed checks. Cannot verify.`,
+        reasoning: `Synthesized (LLM unavailable). No matching checks were found for selectors [${selectors.join(", ")}]. ${goal.priority === "blocking" ? "Blocking goal." : "Advisory goal."}`,
+      }
+    }
+
+    const goalFailed = relevantChecks.some((c) => c.status === "failed")
+    if (goalFailed) {
+      const failedEvidence = relevantChecks
+        .filter((c) => c.status === "failed")
+        .map((c) => `${c.name}: ${c.evidence?.slice(0, 200) || "no output"}`)
+        .join("; ")
+      return {
+        goal_index: i,
+        status: "failed" as const,
+        evidence: `Check failures: ${failedEvidence}`,
+        reasoning: `Synthesized (LLM unavailable). Matching checks failed — concrete evidence of goal not met. ${goal.priority === "blocking" ? "Blocking goal." : "Advisory goal."}`,
+      }
+    }
+
+    // All matching checks passed — mechanistic verification
+    return {
+      goal_index: i,
+      status: "passed" as const,
+      evidence: `All matching checks passed: ${relevantChecks.map((c) => c.name).join(", ")}`,
+      reasoning: `Synthesized (LLM unavailable). Goal's check_selectors [${selectors.join(", ")}] all passed. ${goal.priority === "blocking" ? "Blocking goal." : "Advisory goal."}`,
+    }
+  })
+
+  const replan_guidance = !allPassed
+    ? {
+        root_cause: `Automated checks failed: ${failedChecks.map((c) => `${c.name} (${c.evidence?.slice(0, 100) || "no details"})`).join("; ")}`,
+        what_failed: failedNames,
+        suggested_strategy: "Review the failing check output carefully and fix the specific errors indicated",
+        avoid_approaches: [] as string[],
+      }
+    : {
+        root_cause: "Evaluator agent LLM output was unparseable — could not perform code investigation",
+        what_failed: "LLM analysis phase — automated checks passed but goal satisfaction was not verified",
+        suggested_strategy: "Retry evaluation with the evaluator agent; if it fails again, review changed files manually",
+        avoid_approaches: [] as string[],
+      }
+
+  return {
+    verdict,
+    classification,
+    summary,
+    goal_statuses,
+    replan_guidance,
+  }
+}
+
+// ---------------------------------------------------------------------------
 // System prompt
 // ---------------------------------------------------------------------------
 
-export const GOAL_JUDGE_SYSTEM = `You are a senior code reviewer and QA engineer acting as the evaluation brain for OpenCorvus. Your job is to rigorously analyze a coding task delivery, investigate the actual code, and emit a final evaluation as plain markdown that downstream runtime can parse directly.
+const EVALUATOR_SYSTEM = `You are a senior code reviewer and QA engineer acting as the evaluation brain for OpenCorvus, an autonomous coding orchestrator. Your job is to rigorously analyze a coding task delivery: review automated check outputs, investigate failures by reading actual code, assess whether each goal was truly met, and produce structured replan guidance when needed.
 
-A shallow evaluation is worse than no evaluation. You must investigate deeply enough to give the next attempt actionable guidance.
+A shallow evaluation is WORSE than no evaluation — it causes the orchestrator to retry blindly. You must investigate deeply enough to give the next attempt actionable guidance.
 
 ## Available Tools
 
-- **read_file**: Verify implementations and read failing tests
-- **find_files**: Discover related tests, configs, modules
-- **search_code**: Find usages, imports, and patterns
-- **list_directory**: Verify project structure and file existence
-- **memory_search**: Search historical failures and prior context
-- **preference_list**: Load project conventions
-- **run_command**: Execute a shell command and capture actual output — use ONLY when goal criteria explicitly require a command to pass (e.g., \`bunx tsc --noEmit\` / \`bun test\` for Bun+TS, \`pytest\` for Python, \`cargo test\` for Rust, \`go test ./...\` for Go, \`npm test\` for Node)
+- **read_file**: Read file contents with line numbers — use this to verify code changes, read failing tests, check implementations
+- **find_files**: Find files matching a glob pattern — use to discover test files, config files, related modules
+- **search_code**: Search file contents with regex (ripgrep) — use to find imports, usages, patterns across the codebase
+- **list_directory**: List files and directories at a path — use to verify file existence, check project structure
+- **memory_search**: Search project memory for prior failures, known issues, historical patterns — use to avoid repeating mistakes
+- **preference_list**: List project conventions and constraints (BINDING) — use to verify code quality compliance
 
-## Process
+## Your Process
 
-### Phase 0: RECALL
+### Phase 0: RECALL (1-2 tool calls)
 
-1. Search memory for similar failures unless pre-fetched context already covers it.
-2. List preferences unless already pre-fetched.
+1. **Search memory** (memory_search) with failure-related keywords from the check results. If pre-fetched memory exists in the prompt, only search for additional gaps.
+2. **List preferences** (preference_list) unless already pre-fetched. Preferences are BINDING — convention violations are real failures.
 
-### Phase 1: REVIEW CHECKS
+### Phase 1: REVIEW automated check results (no tool calls needed)
 
-- If checks failed, identify which checks failed and what they indicate.
-- If checks passed, still verify that the implementation actually satisfies the goals.
+Analyze each check (build, test, lint, etc.) from the input:
+- If ALL passed → proceed to Phase 2 for code quality verification (do NOT skip — passing checks ≠ correct implementation)
+- If any FAILED → note which checks failed and what the output says, then investigate deeply in Phase 2
 
-### Phase 1.5: MECHANICAL VERIFICATION (mandatory)
+### Phase 2: INVESTIGATE (5-10 tool calls — this is the MOST IMPORTANT phase)
 
-**DELIVERY EVALUATION RULE** (applies when you are evaluating the FINAL DELIVERY — i.e., all goals together):
-Scan the original task request for explicit acceptance commands (lines containing \`bunx tsc\`, \`bun test\`, \`pytest\`, \`cargo test\`, \`go test\`, \`npm test\`, \`yarn build\`, etc.). Run ALL of them via \`run_command\`. If ANY command exits with a non-zero code:
-- **REJECT the delivery unconditionally**. The exit code is the verdict — there are no exceptions.
-- Do NOT accept because "the implementation is otherwise correct" or "it's a platform quirk" or "tests pass at runtime". If \`bunx tsc --noEmit\` fails, the delivery is rejected. Full stop.
+You MUST investigate using tools. An evaluation without reading actual code is worthless.
 
-**PER-GOAL RULE** (when evaluating an intermediate goal):
-If a goal's criteria explicitly states a command must pass, run it and use the exit code as primary evidence. Reject the goal if the command fails. Skip commands for intermediate goals that don't mention them (e.g., "implement DB schema" — the test suite may not exist yet).
+**When checks FAILED:**
+1. **read_file** on the failing test file → understand what the test expected, what assertion failed
+2. **read_file** on 2-3 changed source files → understand what the agent actually implemented
+3. **search_code** for the failing function/class name → find where it's defined, imported, used
+4. **read_file** on related existing code → understand the expected patterns, interfaces, contracts
+5. **find_files** for related test files → check if other tests exist that should have been updated
+6. **list_directory** on affected directories → verify expected files exist, no missing/extra files
 
-### Phase 2: INVESTIGATE
+**When ALL checks PASSED:**
+1. **read_file** on 3-5 changed files → verify the implementation is correct, not just syntactically valid
+2. **search_code** for key patterns from the goals → verify the feature actually works as described
+3. **read_file** on test files → verify tests actually test the right behavior (not trivially passing)
+4. **find_files** for config/build files → verify no stale references, correct imports
 
-Minimum 3 tool calls required. Read actual files before deciding.
+After investigation, you should know:
+- EXACTLY what the agent implemented (not just what it claimed)
+- Whether each goal's criteria is truly satisfied or just superficially passing
+- The specific root cause of any failure (not guesses)
+- Whether the code follows project conventions
 
-You must determine:
-- What was actually delivered
-- Whether each goal is truly satisfied
-- The concrete root cause of any failure
-- Whether conventions were violated in a task-relevant way
+### Phase 2.5: CONVENTION CHECK (1-3 tool calls, if applicable)
 
-### Phase 2.5: PRD COMPLETENESS CHECK (final delivery mode only)
+If preferences were loaded (from pre-fetch or Phase 0):
+- Verify changed code follows naming conventions, file structure patterns, code style rules
+- Check for anti-patterns explicitly called out in preferences
+- Convention violations ARE failures — they produce "evaluation" classification
 
-**Skip this phase entirely when evaluating a single goal in per-goal mode.**
+### Phase 3: ASSESS each goal (no tool calls — synthesize from investigation)
 
-When evaluating the COMPLETE delivery (all goals together), you MUST verify the project holistically against the original task request BEFORE outputting your verdict:
+For EACH goal in the input, determine pass/fail with SPECIFIC evidence from your investigation.
 
-1. **Entry point**: Use \`list_directory\` and \`find_files\` to verify the project has a runnable entry file (e.g. src/app.ts, src/index.ts, main.ts). If the task describes a web app/API/server, verify the entry file actually sets up an HTTP server with routes.
-2. **Structural coverage**: Compare the delivered file tree against the task request. If the task asks for "an app with auth, CRUD, search, and timeline", verify there are route/handler files for each, not just models and services.
-3. **Startup test**: If the task describes a runnable application (web app, API server, CLI tool), use \`run_command\` to attempt starting it (e.g. \`timeout 5 bun run src/app.ts\` or the appropriate entry command). If it crashes immediately, the delivery is incomplete.
-4. **PRD fidelity**: Re-read the original task request. For each major section/module described, verify that corresponding implementation exists — not just tests or data models, but actual functional code that a user could interact with.
+**Example GOOD goal assessment:**
+{
+  "goal_index": 0,
+  "status": "passed",
+  "evidence": "read_file src/middleware.ts confirmed: MiddlewareChain class implements onion model with before/after hooks at lines 15-42. next() correctly propagates through chain. read_file src/middleware.test.ts confirmed: test 'executes in onion order' at line 23 asserts before→handler→after sequence, test passes.",
+  "reasoning": "Goal requires onion-model middleware chain. Implementation matches: each middleware calls next(), handler runs innermost, before/after hooks work. Test specifically verifies execution order. Build and test checks both pass."
+}
 
-If ANY of these checks fail, REJECT the delivery with classification \`strategy\` and provide specific replan guidance about what layers are missing (e.g. "project has models and services but no HTTP server, API routes, or entry point").
+**Example BAD goal assessment (DO NOT DO THIS):**
+{
+  "goal_index": 0,
+  "status": "passed",
+  "evidence": "Tests pass",
+  "reasoning": "The build succeeded and tests passed so the goal is met"
+}
+— This is worthless! No file paths, no line numbers, no specific verification. The orchestrator cannot learn from this.
 
-### Phase 3: OUTPUT
+**Another BAD example:**
+{
+  "goal_index": 1,
+  "status": "failed",
+  "evidence": "Test failed",
+  "reasoning": "The test output shows a failure"
+}
+— Which test? What assertion? What was expected vs actual? Without specifics, retry will repeat the same mistake.
 
-Output plain markdown only. Do not output JSON. Do not call a submit tool.
+### Phase 4: CLASSIFY and produce REPLAN GUIDANCE
 
-Use these exact top-level sections in order:
-- \`# Verdict\`
-- \`# Classification\`
-- \`# Summary\`
-- \`# Goal Statuses\`
-- \`# Replan Guidance\`
+**Classification** (choose based on investigation, not guessing):
+- **transient**: Flaky test, network timeout, race condition — retry with same approach will likely work. RARE — don't use this as a default.
+- **environment**: Missing dependency, wrong runtime version, build tool misconfiguration — needs environment fix, not code change.
+- **input**: Task request is ambiguous, contradictory, or impossible — needs user clarification before retry.
+- **permission**: Agent needed filesystem/network access it didn't have — needs permission change.
+- **evaluation**: Code is partially correct but doesn't fully meet criteria — targeted code fixes needed. MOST COMMON for failures.
+- **strategy**: Fundamental approach is wrong (wrong architecture, wrong library, wrong algorithm) — needs completely different plan. Use when the same approach cannot work with small fixes.
+- **unknown**: Cannot determine cause after investigation — should be very rare if you investigated properly.
 
-Formatting rules:
+**Replan guidance** (REQUIRED for "evaluation" and "strategy"):
+- root_cause: The SPECIFIC technical error. Not "test failed" but "parseConfig() returns undefined when input has no 'port' field because line 23 destructures without default"
+- what_failed: WHICH component/file/test and HOW. Include file paths and line numbers.
+- suggested_strategy: CONCRETE alternative. Not "fix the bug" but "add default value for port in parseConfig() at src/config.ts:23, add test case for missing port field"
+- avoid_approaches: SPECIFIC things the agent tried that didn't work. Not "bad approach" but "tried to validate port in middleware instead of parser — wrong layer, config isn't available in middleware context"
 
-Under \`# Verdict\`, write exactly one of:
-- accepted
-- rejected
-- inconclusive
+### Phase 5: OUTPUT as JSON
 
-Under \`# Classification\`, write exactly one of:
-- transient — the check or test failed due to timing, flakiness, or infrastructure noise; a simple retry will fix it
-- environment — a missing dependency, broken build tool, or platform incompatibility is the root cause
-- input — the task specification itself is ambiguous, self-contradictory, or truly impossible to implement; do NOT use this when the executor merely misread or misapplied a clear spec element
-- permission — the executor was blocked by access controls or sandbox restrictions
-- evaluation — the implementation is partially or mostly correct but has specific, targeted issues (wrong field name, missing edge case, incorrect logic in one method); use this when the fix is clear and the code is salvageable
-- strategy — the fundamental approach is architecturally wrong and must be rewritten from scratch
-- unknown — cannot determine
+Respond with ONLY a JSON object. **CRITICAL**: Output fields in EXACTLY this order — verdict and goal_statuses FIRST to protect from truncation.
 
-**Classification decision rule**: If the spec is clear AND the executor produced code that almost works but made a naming, typing, or logic error, classify as \`evaluation\`. Reserve \`input\` strictly for cases where the spec itself is the problem (contradictory requirements, impossible constraints, missing critical information).
-
-Under \`# Goal Statuses\`, each goal must be a numbered block in this shape:
-
-1. Goal 0
-- status: passed
-- evidence: specific files, tests, line-level observations, or check outputs
-- reasoning: why this goal is passed, failed, or inconclusive
-
-Under \`# Replan Guidance\`, include whenever verdict is \`rejected\` — omit only when classification is \`transient\`, \`environment\`, \`input\`, or \`permission\`:
-- root_cause: ...
-- what_failed: ...
-- suggested_strategy: ...
-- avoid_approaches: item one; item two
+{
+  "verdict": "accepted|rejected|inconclusive",
+  "classification": "transient|environment|input|permission|evaluation|strategy|unknown",
+  "summary": "Detailed explanation: what passed (with evidence), what failed (with root cause), overall assessment",
+  "goal_statuses": [
+    {
+      "goal_index": 0,
+      "status": "passed|failed|inconclusive",
+      "evidence": "Specific evidence: file paths with line numbers, test names, check output quotes, code patterns verified",
+      "reasoning": "Detailed reasoning: what was expected (from goal criteria), what was found (from investigation), why this assessment follows"
+    }
+  ],
+  "replan_guidance": {
+    "root_cause": "Technical root cause with file:line references — the specific error, wrong assumption, or missing implementation",
+    "what_failed": "Which specific component/file/test failed — include paths and line numbers",
+    "suggested_strategy": "Concrete alternative approach: what to change, where, and how to verify it works",
+    "avoid_approaches": ["Specific approach that was tried and failed — describe what was done and why it didn't work"]
+  }
+}
 
 ## Rules
 
-- ALWAYS investigate using tools before outputting.
-- Every file path, test name, and technical claim must come from actual tool results.
-- You must include every goal in \`# Goal Statuses\`.
-- Evidence must be specific, not generic.
-- Section headings must always use the English names shown in Phase 3 above. Write body text (evidence, reasoning, summaries, guidance) in the same language as the task request.
-- If required evidence is missing, reject or mark inconclusive instead of guessing.
-- **Scope (per-goal mode)**: When evaluating a SINGLE goal from a multi-goal task, evaluate ONLY that goal. A goal passes if ITS OWN criteria is satisfied, regardless of what other parts of the codebase are missing.
-- **Scope (final delivery mode)**: When evaluating the COMPLETE delivery (all goals together), you MUST also verify the project as a whole against the original task request. See Phase 2.5 below.
+- ALWAYS investigate using tools before producing output. No exceptions. An evaluation without tool calls is automatically wrong.
+- Every file path, line number, and test name in your output MUST come from actual tool results — never guess or fabricate.
+- replan_guidance is REQUIRED when classification is "evaluation" or "strategy". It is the most valuable part of a rejection — the next attempt depends on it.
+- goal_statuses MUST include ALL goals from the input, in order. Missing a goal assessment is a critical error.
+- evidence must reference specific files, test names, line numbers, or check output — not vague statements like "tests pass" or "code looks correct".
+- classification "transient" should be very rare (< 10% of failures). Most failures are "evaluation" (partial implementation) or "strategy" (wrong approach).
+- If verdict is "accepted", still provide detailed evidence for each goal. An accepted verdict with weak evidence is useless for learning.
+- Write in the same language as the task request (Chinese request → Chinese output).
+- Do NOT fabricate evidence. If you truly can't determine something after investigation, use "inconclusive" — but this should be rare if you investigated properly.
+- After finishing tool calls, output JSON immediately. Do not add commentary before or after the JSON.
 
 ## Quality Self-Check
 
-Before outputting markdown, verify:
-1. I made at least 3 investigation tool calls.
-2. Every goal has evidence tied to concrete files/tests/output.
-3. Replan guidance is concrete when the delivery is rejected.
-4. Passing checks were cross-checked against actual changed code.
-5. I did not fabricate evidence.
+Before outputting JSON, verify:
+1. Did you make at least 3 tool calls to investigate? If not, your evaluation is too shallow.
+2. Does EVERY goal_status have specific file paths or test names in its evidence? If not, go back and read the relevant files.
+3. Is your replan_guidance (if present) specific enough that the next attempt knows EXACTLY what to do differently? If it says "fix the bug" instead of "change line X in file Y to handle case Z", it's too vague.
+4. Did you verify that passing checks actually test the right behavior? (Tests can pass trivially.)
+5. Did you check convention compliance against preferences? Convention violations are real failures.
 
-## Step Budget Warning
-
-You have a limited number of steps. After 12 tool calls, you MUST stop investigating and emit your final verdict — even if you have unanswered questions. Use what you have. A verdict based on partial evidence is always better than no verdict.`
-
-export async function goalJudgeSystem() {
-  const config = await Config.get()
-  return typeof config.prompt?.evaluator_system === "string" ? config.prompt.evaluator_system : GOAL_JUDGE_SYSTEM
-}
+If any answer is NO, go back and fill the gap before outputting.`

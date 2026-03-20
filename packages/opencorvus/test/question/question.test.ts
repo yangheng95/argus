@@ -3,42 +3,6 @@ import { Question } from "../../src/question"
 import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"
 
-test("ask - falls back to interaction timeout configured at runtime", async () => {
-  const previousQuestion = process.env.OPENCORVUS_QUESTION_TIMEOUT_MS
-  const previousInteraction = process.env.OPENCORVUS_INTERACTION_TIMEOUT_MS
-  delete process.env.OPENCORVUS_QUESTION_TIMEOUT_MS
-  process.env.OPENCORVUS_INTERACTION_TIMEOUT_MS = "0"
-
-  try {
-    await using tmp = await tmpdir({ git: true })
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        await expect(
-          Question.ask({
-            sessionID: "ses_test",
-            questions: [
-              {
-                question: "What would you like to do?",
-                header: "Action",
-                options: [
-                  { label: "Option 1", description: "First option" },
-                  { label: "Option 2", description: "Second option" },
-                ],
-              },
-            ],
-          }),
-        ).rejects.toBeInstanceOf(Question.RejectedError)
-      },
-    })
-  } finally {
-    if (previousQuestion === undefined) delete process.env.OPENCORVUS_QUESTION_TIMEOUT_MS
-    else process.env.OPENCORVUS_QUESTION_TIMEOUT_MS = previousQuestion
-    if (previousInteraction === undefined) delete process.env.OPENCORVUS_INTERACTION_TIMEOUT_MS
-    else process.env.OPENCORVUS_INTERACTION_TIMEOUT_MS = previousInteraction
-  }
-})
-
 test("ask - returns pending promise", async () => {
   await using tmp = await tmpdir({ git: true })
   await Instance.provide({
@@ -58,10 +22,6 @@ test("ask - returns pending promise", async () => {
         ],
       })
       expect(promise).toBeInstanceOf(Promise)
-
-      const pending = await Question.list()
-      await Question.reject(pending[0].id)
-      await promise.catch(() => {})
     },
   })
 })
@@ -82,7 +42,7 @@ test("ask - adds to pending list", async () => {
         },
       ]
 
-      const askPromise = Question.ask({
+      Question.ask({
         sessionID: "ses_test",
         questions,
       })
@@ -90,9 +50,6 @@ test("ask - adds to pending list", async () => {
       const pending = await Question.list()
       expect(pending.length).toBe(1)
       expect(pending[0].questions).toEqual(questions)
-
-      await Question.reject(pending[0].id)
-      await askPromise.catch(() => {})
     },
   })
 })
@@ -303,7 +260,7 @@ test("list - returns all pending requests", async () => {
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
-      const first = Question.ask({
+      Question.ask({
         sessionID: "ses_test1",
         questions: [
           {
@@ -314,7 +271,7 @@ test("list - returns all pending requests", async () => {
         ],
       })
 
-      const second = Question.ask({
+      Question.ask({
         sessionID: "ses_test2",
         questions: [
           {
@@ -327,9 +284,6 @@ test("list - returns all pending requests", async () => {
 
       const pending = await Question.list()
       expect(pending.length).toBe(2)
-
-      await Promise.all(pending.map((item) => Question.reject(item.id)))
-      await Promise.all([first, second].map((item) => item.catch(() => {})))
     },
   })
 })

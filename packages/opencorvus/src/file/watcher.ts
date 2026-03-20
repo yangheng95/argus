@@ -6,6 +6,7 @@ import { Log } from "../util/log"
 import { FileIgnore } from "./ignore"
 import { Config } from "../config/config"
 import path from "path"
+// @ts-ignore
 import { createWrapper } from "@parcel/watcher/wrapper"
 import { lazy } from "@/util/lazy"
 import { withTimeout } from "@/util/timeout"
@@ -95,9 +96,6 @@ export namespace FileWatcher {
     )
     const sub = await withTimeout(pending, SUBSCRIBE_TIMEOUT_MS).catch((err) => {
       log.error("failed to subscribe via parcel", { error: err, dir, backend })
-      // Best-effort cleanup: if the subscription resolved after the timeout,
-      // unsubscribe it to avoid leaked watchers. Safe to ignore errors here
-      // since we're already in a failure path and the subscription may not exist.
       pending.then((s) => s.unsubscribe()).catch(() => {})
       return undefined
     })
@@ -167,7 +165,7 @@ export namespace FileWatcher {
           .cwd(Instance.worktree)
           .text()
           .then((x) => path.resolve(Instance.worktree, x.trim()))
-          .catch(() => undefined) // git unavailable or not a repo
+          .catch(() => undefined)
         if (vcsDir && !cfgIgnores.includes(".git") && !cfgIgnores.includes(vcsDir)) {
           const gitDirContents = await readdir(vcsDir).catch(() => [])
           const ignoreList = gitDirContents.filter((entry) => entry !== "HEAD")

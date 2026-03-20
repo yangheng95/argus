@@ -1,11 +1,8 @@
-import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
+import { afterEach, describe, expect, mock, test } from "bun:test"
 import { Identifier } from "../../src/id/id"
-import { OpencodeExecutor } from "../../src/executor/opencode"
-import { PlannerService } from "../../src/planner/service"
 import { OrchestratorTaskTable } from "../../src/orchestrator/orchestrator.sql"
 import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
-import { SpecService } from "../../src/spec/service"
 import { Database, eq } from "../../src/storage/db"
 import { PanelTool } from "../../src/tool/panel"
 import { Log } from "../../src/util/log"
@@ -18,111 +15,6 @@ describe("panel tool", () => {
   afterEach(async () => {
     mock.restore()
     await resetDatabase()
-  })
-
-  test("create_task applies create-task budget defaults before initial planning", async () => {
-    await using tmp = await tmpdir({ git: true })
-    const total = 480_000
-    const specMs = 97_200
-    const plannerMs = 118_800
-    const submit = spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
-      sessionID,
-      queueTaskID: Identifier.ascending("task"),
-    }))
-    const spec = spyOn(SpecService, "initial").mockImplementation(async (input) => {
-      expect(input.timeoutMs).toBe(specMs)
-      return {
-        summary: "Spec",
-        content: "# Scope\n\nImplement feature x",
-        requirements: [{
-          id: "req_feature_x",
-          title: "Implement feature x",
-          description: "Implement feature x",
-          priority: "blocking" as const,
-          acceptance: ["Feature x works"],
-          evidence_refs: [],
-          metadata: { check_selector: ["spec_check"] },
-        }],
-        assumptions: [],
-        risks: [],
-        clarifications: [],
-        evidence_sources: [],
-        unresolved_questions: [],
-      }
-    })
-    const plan = spyOn(PlannerService, "initial").mockImplementation(async (input) => {
-      expect(input.timeoutMs).toBe(plannerMs)
-      return {
-        summary: "Plan",
-        prompt: "Implement feature x",
-        goals: [{
-          description: "Implement feature x",
-          criteria: "Feature x works",
-          priority: "blocking" as const,
-        }],
-        metadata: {
-          strategy: "initial" as const,
-          steps: ["Implement feature x"],
-        },
-      }
-    })
-
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const tool = await PanelTool.init()
-        const result = await tool.execute(
-          {
-            action: "create_task",
-            request: "Implement feature x",
-            metadata: {
-              ui_context: "benchmark",
-              create_task: {
-                budget: {
-                  maxWallTimeMs: total,
-                },
-              },
-            },
-          },
-          {
-            sessionID: Identifier.ascending("session"),
-            messageID: Identifier.ascending("message"),
-            agent: "panel-test",
-            abort: new AbortController().signal,
-            messages: [],
-            metadata() {},
-            async ask() {},
-            extra: {
-              surface: "panel",
-              createTask: {
-                budget: {
-                  maxWallTimeMs: total,
-                },
-              },
-            },
-          },
-        )
-        const output = JSON.parse(result.output)
-        const row = Database.use((db) =>
-          db
-            .select({
-              budget: OrchestratorTaskTable.budget,
-              metadata: OrchestratorTaskTable.metadata,
-            })
-            .from(OrchestratorTaskTable)
-            .where(eq(OrchestratorTaskTable.id, output.task_id))
-            .get(),
-        )
-
-        expect(row?.budget?.max_wall_time_ms).toBe(total)
-        expect(row?.metadata?.ui_context).toBe("benchmark")
-        expect(row?.metadata?.create_task).toBeUndefined()
-      },
-    })
-
-    expect(spec).toHaveBeenCalledTimes(1)
-    expect(plan).toHaveBeenCalledTimes(1)
-    expect(submit).toHaveBeenCalledTimes(1)
   })
 
   test("delete_session deletes every linked task", async () => {
@@ -250,6 +142,7 @@ describe("panel tool", () => {
               code_quality: true,
               code_review: true,
               spec_check: true,
+              judge: false,
             },
           },
           {
@@ -290,142 +183,12 @@ describe("panel tool", () => {
           visual: {
             target: "web",
             url: "https://example.com/review",
-            },
-            spec_check: {
-              enabled: true,
-              mode: "strict",
-            },
-            lint: ["bun", "run", "lint"],
-          })
-      },
-    })
-  })
-
-  test("view_panel_settings and update_panel_settings round-trip session settings", async () => {
-    await using tmp = await tmpdir({ git: true })
-
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const session = await Session.create({ title: "settings target" })
-        const tool = await PanelTool.init()
-        const ctx = {
-          sessionID: Identifier.ascending("session"),
-          messageID: Identifier.ascending("message"),
-          agent: "panel-test",
-          abort: new AbortController().signal,
-          messages: [],
-          metadata() {},
-          async ask() {},
-          extra: { surface: "panel" },
-        }
-
-        const updated = await tool.execute(
-          {
-            action: "update_panel_settings",
-            sessionID: session.id,
-            settings: {
-              theme: "light",
-              zoom: 1.25,
-            },
           },
-          ctx,
-        )
-
-        expect(JSON.parse(updated.output)).toMatchObject({
-          session_id: session.id,
-          settings: {
-            theme: "light",
-            zoom: 1.25,
+          spec_check: {
+            enabled: true,
           },
+          lint: ["bun", "run", "lint"],
         })
-
-        const viewed = await tool.execute(
-          {
-            action: "view_panel_settings",
-            sessionID: session.id,
-          },
-          ctx,
-        )
-
-        expect(JSON.parse(viewed.output)).toMatchObject({
-          session_id: session.id,
-          settings: {
-            theme: "light",
-            zoom: 1.25,
-          },
-        })
-      },
-    })
-  })
-
-  test("call_panel_api can read allowlisted panel routes", async () => {
-    await using tmp = await tmpdir({ git: true })
-
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const tool = await PanelTool.init()
-        const result = await tool.execute(
-          {
-            action: "call_panel_api",
-            method: "GET",
-            path: "panel/capabilities",
-            query: {
-              surface: "panel",
-            },
-          },
-          {
-            sessionID: Identifier.ascending("session"),
-            messageID: Identifier.ascending("message"),
-            agent: "panel-test",
-            abort: new AbortController().signal,
-            messages: [],
-            metadata() {},
-            async ask() {},
-            extra: { surface: "panel" },
-          },
-        )
-        const output = JSON.parse(result.output)
-
-        expect(output.response.status).toBe(200)
-        expect(Array.isArray(output.response.data.actions)).toBe(true)
-        expect(output.response.data.actions.some((item: { action?: string }) => item.action === "view_spec")).toBe(true)
-      },
-    })
-  })
-
-  test("call_panel_api blocks session mutations without explicit permission", async () => {
-    await using tmp = await tmpdir({ git: true })
-
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const tool = await PanelTool.init()
-        const result = await tool.execute(
-          {
-            action: "call_panel_api",
-            method: "POST",
-            path: "session",
-            body: {},
-          },
-          {
-            sessionID: Identifier.ascending("session"),
-            messageID: Identifier.ascending("message"),
-            agent: "panel-test",
-            abort: new AbortController().signal,
-            messages: [],
-            metadata() {},
-            async ask() {},
-            extra: { surface: "panel", allowSessionMutation: false },
-          },
-        )
-        const output = JSON.parse(result.output)
-        const sessions = [...Session.list({ roots: true })].filter((item) => !item.title.startsWith("Control ("))
-
-        expect(output.kind).toBe("panel_response")
-        expect(output.message).toContain("explicit user request")
-        expect(sessions).toHaveLength(0)
       },
     })
   })

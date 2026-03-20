@@ -10,7 +10,7 @@
  * - External documentation via web search
  * - Full codebase exploration via codebase tools
  */
-import { tool, type Tool } from "ai"
+import { tool } from "ai"
 import z from "zod"
 import { createCodebaseTools } from "@/orchestrator/codebase-tools"
 import { Memory } from "@/memory"
@@ -34,10 +34,8 @@ const EXA_BASE_URL = "https://mcp.exa.ai"
  * - 1 preference tool: preference_list
  * - 1 web search tool: web_search
  */
-export function createPlannerTools(taskWorkDir?: string, options?: { recall?: boolean; web?: boolean }) {
-  const codebase = createCodebaseTools(taskWorkDir) as Record<string, Tool>
-  const recall = options?.recall ?? true
-  const web = options?.web ?? true
+export function createPlannerTools(taskWorkDir?: string) {
+  const codebase = createCodebaseTools(taskWorkDir)
   let projectId: string
   try {
     projectId = Instance.project.id
@@ -45,23 +43,89 @@ export function createPlannerTools(taskWorkDir?: string, options?: { recall?: bo
     projectId = "default"
     log.warn("planner tools: Instance.project.id unavailable, using 'default'")
   }
-  const usage = {
-    memory: 0,
-    memory_nohit: 0,
-    preference: 0,
-    recall_closed: false,
-  }
-  const seenQueries = new Set<string>()
-  const normalizeQuery = (value: string) => value.trim().toLowerCase().replace(/\s+/g, " ")
-  const recallComplete = (reason: string) => {
-    usage.recall_closed = true
-    return `RECALL_COMPLETE: ${reason}. Stop calling memory_search, memory_get, or preference_list. Continue with codebase tools: list_directory, find_files, read_file, search_code.`
-  }
-  const tools: Record<string, Tool> = {
+
+  return {
+    // --- Codebase exploration (inherited) ---
     ...codebase,
-  }
-  if (web) {
-    tools.web_search = tool({
+
+    // --- Project memory ---
+    memory_search: tool({
+      description:
+        "Search project memory for prior work, known patterns, gotchas, and architectural decisions. " +
+        "ALWAYS search memory before planning to leverage past experience. " +
+        "Try 1-2 searches with different phrasings for better coverage.",
+      inputSchema: z.object({
+        query: z.string().describe("Search query — keywords, phrases, or question about past knowledge"),
+        scope: z.enum(["all", "global"]).optional().describe("Memory scope to search (default: all)"),
+        max_results: z.number().optional().describe("Max results to return (default: 8)"),
+      }),
+      execute: async ({ query, scope, max_results }) => {
+        try {
+          const results = Memory.search({
+            query,
+            projectId,
+            scope: scope ?? "all",
+            limit: max_results ?? 8,
+            minScore: 0.1,
+          })
+          if (results.length === 0) return "No memories found for this query."
+          return results
+            .map(
+              (r, i) =>
+                `[${i + 1}] ${r.fileTitle} (${r.kind}/${r.scope}, score: ${r.score.toFixed(2)}, id: ${r.fileId})\n${r.content.slice(0, 600)}`,
+            )
+            .join("\n\n---\n\n")
+        } catch (err) {
+          log.warn("memory search failed in planner", { query, err })
+          return "Memory search unavailable."
+        }
+      },
+    }),
+
+    memory_get: tool({
+      description:
+        "Read the full content of a specific memory file by ID. " +
+        "Use after memory_search when you need complete details of a promising result.",
+      inputSchema: z.object({
+        file_id: z.string().describe("Memory file ID from memory_search results"),
+      }),
+      execute: async ({ file_id }) => {
+        try {
+          const file = Memory.getFile(file_id)
+          if (!file) return `Memory file ${file_id} not found.`
+          const chunks = Memory.getChunks(file_id)
+          const text = chunks.map((c) => c.content).join("\n\n")
+          return `# ${file.title}\nKind: ${file.kind} | Scope: ${file.scope} | Source: ${file.source}\n\n${text}`
+        } catch (err) {
+          log.warn("memory get failed in planner", { file_id, err })
+          return "Failed to read memory file."
+        }
+      },
+    }),
+
+    // --- Project preferences ---
+    preference_list: tool({
+      description:
+        "List all active project preferences and conventions. " +
+        "Returns merged view: project-local cwd defaults → global overrides → session overrides. " +
+        "Preferences are BINDING — your plan must respect them.",
+      inputSchema: z.object({
+        scope: z.enum(["all", "global"]).optional().describe("Which scope to list (default: all, merged view)"),
+      }),
+      execute: async () => {
+        try {
+          const prefs = Preference.merged({ projectID: projectId })
+          if (prefs.length === 0) return "No preferences configured."
+          return prefs.map((p) => `- **${p.key}**: ${p.value} [source: ${p.source}]`).join("\n")
+        } catch (err) {
+          log.warn("preference list failed in planner", { err })
+          return "Preferences unavailable."
+        }
+      },
+    }),
+
+    // --- Web search ---
+    web_search: tool({
       description:
         "Search the web for current documentation, API references, changelogs, or guides. " +
         "Use when the task involves external APIs, third-party libraries, or unfamiliar systems. " +
@@ -99,14 +163,11 @@ export function createPlannerTools(taskWorkDir?: string, options?: { recall?: bo
           const text = await response.text()
           for (const line of text.split("\n")) {
             if (line.startsWith("data: ")) {
-              let data: Record<string, unknown>
-              try { data = JSON.parse(line.substring(6)) } catch { continue }
-              const content = (data.result as Record<string, unknown> | undefined)
-              const items = Array.isArray(content?.content) ? content!.content : undefined
-              const first = items?.[0] as Record<string, unknown> | undefined
-              if (typeof first?.text === "string") {
-                const text = first.text as string
-                return text.length > 4000 ? text.slice(0, 4000) + "\n... (truncated)" : text
+              const data = JSON.parse(line.substring(6))
+              if (data.result?.content?.[0]?.text) {
+                const content = data.result.content[0].text
+                // Truncate to avoid blowing up context
+                return content.length > 4000 ? content.slice(0, 4000) + "\n... (truncated)" : content
               }
             }
           }
@@ -116,103 +177,8 @@ export function createPlannerTools(taskWorkDir?: string, options?: { recall?: bo
           return "Web search unavailable or timed out."
         }
       },
-    })
+    }),
   }
-  if (!recall) return tools
-
-  tools.memory_search = tool({
-    description:
-      "Search project memory for prior work, known patterns, gotchas, and architectural decisions. " +
-      "ALWAYS search memory before planning to leverage past experience. " +
-      "Try 1-2 searches with different phrasings for better coverage.",
-    inputSchema: z.object({
-      query: z.string().describe("Search query — keywords, phrases, or question about past knowledge"),
-      scope: z.enum(["all", "global"]).optional().describe("Memory scope to search (default: all)"),
-      max_results: z.number().optional().describe("Max results to return (default: 8)"),
-    }),
-    execute: async ({ query, scope, max_results }) => {
-      if (usage.recall_closed) return recallComplete("recall phase already closed")
-      usage.memory += 1
-      if (usage.memory > 4) return recallComplete("memory search budget exhausted")
-      const normalized = normalizeQuery(query)
-      if (!normalized) return recallComplete("empty memory search query")
-      if (seenQueries.has(normalized)) return recallComplete("duplicate memory search query")
-      seenQueries.add(normalized)
-      try {
-        const results = Memory.search({
-          query,
-          projectId,
-          scope: scope ?? "all",
-          limit: max_results ?? 8,
-          minScore: 0.1,
-        })
-        if (results.length === 0) {
-          usage.memory_nohit += 1
-          if (usage.memory_nohit >= 2) {
-            return recallComplete("no relevant memories found after multiple queries")
-          }
-          return "No memories found for this query. You may try one alternate phrasing, then continue with codebase tools."
-        }
-        usage.memory_nohit = 0
-        return results
-          .map(
-            (r, i) =>
-              `[${i + 1}] ${r.fileTitle} (${r.kind}/${r.scope}, score: ${r.score.toFixed(2)}, id: ${r.fileId})\n${r.content.slice(0, 600)}`,
-          )
-          .join("\n\n---\n\n")
-      } catch (err) {
-        log.warn("memory search failed in planner", { query, err })
-        return "Memory search unavailable."
-      }
-    },
-  })
-  tools.memory_get = tool({
-    description:
-      "Read the full content of a specific memory file by ID. " +
-      "Use after memory_search when you need complete details of a promising result.",
-    inputSchema: z.object({
-      file_id: z.string().describe("Memory file ID from memory_search results"),
-    }),
-    execute: async ({ file_id }) => {
-      if (usage.recall_closed) return recallComplete("memory_get blocked because recall phase closed")
-      try {
-        const file = Memory.getFile(file_id)
-        if (!file) return `Memory file ${file_id} not found. Prefer codebase tools if no valid memory IDs are available.`
-        const chunks = Memory.getChunks(file_id)
-        const text = chunks.map((c) => c.content).join("\n\n")
-        return `# ${file.title}\nKind: ${file.kind} | Scope: ${file.scope} | Source: ${file.source}\n\n${text}`
-      } catch (err) {
-        log.warn("memory get failed in planner", { file_id, err })
-        return "Failed to read memory file."
-      }
-    },
-  })
-  tools.preference_list = tool({
-    description:
-      "List all active project preferences and conventions. " +
-      "Returns merged view: project-local cwd defaults → global overrides → session overrides. " +
-      "Preferences are BINDING — your plan must respect them.",
-    inputSchema: z.object({
-      scope: z.enum(["all", "global"]).optional().describe("Which scope to list (default: all, merged view)"),
-    }),
-    execute: async () => {
-      if (usage.recall_closed) return recallComplete("preference_list blocked because recall phase closed")
-      usage.preference += 1
-      if (usage.preference > 1) return recallComplete("preferences already listed once")
-      try {
-        const prefs = Preference.merged({ projectID: projectId })
-        if (prefs.length === 0) {
-          return recallComplete("no active preferences configured")
-        }
-        return prefs.map((p) => `- **${p.key}**: ${p.value} [source: ${p.source}]`).join("\n")
-      } catch (err) {
-        log.warn("preference list failed in planner", { err })
-        return "Preferences unavailable."
-      }
-    },
-  })
-
-  return tools
 }
 
 // ---------------------------------------------------------------------------
@@ -242,9 +208,9 @@ export function prefetchContext(taskTitle: string, taskRequest: string): string 
           includeEpisodes: true,
         })
       : null
-    sections.push(recalled ?? "## Auto-Recalled Memory\n\nNo relevant memory found for this task.")
+    if (recalled) sections.push(recalled)
   } catch {
-    sections.push("## Auto-Recalled Memory\n\nMemory prefetch unavailable.")
+    // best-effort
   }
 
   // 2. Inject active preferences
@@ -253,11 +219,9 @@ export function prefetchContext(taskTitle: string, taskRequest: string): string 
     if (prefs.length > 0) {
       const items = prefs.map((p) => `- **${p.key}**: ${p.value}`).join("\n")
       sections.push(`## Active Preferences (BINDING)\n\n${items}`)
-    } else {
-      sections.push("## Active Preferences (BINDING)\n\nNo active preferences configured.")
     }
   } catch {
-    sections.push("## Active Preferences (BINDING)\n\nPreference prefetch unavailable.")
+    // best-effort
   }
 
   return sections.length > 0 ? sections.join("\n\n") : ""

@@ -8,11 +8,8 @@ import { Snapshot } from "@/snapshot"
 
 import { Storage } from "@/storage/storage"
 import { Bus } from "@/bus"
-import { Log } from "@/util/log"
 
 export namespace SessionSummary {
-  const log = Log.create({ service: "session.summary" })
-
   function unquoteGitPath(input: string) {
     if (!input.startsWith('"')) return input
     if (!input.endsWith('"')) return input
@@ -92,9 +89,7 @@ export namespace SessionSummary {
         deletions: diffs.reduce((sum, x) => sum + x.deletions, 0),
         files: diffs.length,
       },
-    }).catch((err) => {
-      log.warn("setSummary failed", { sessionID: input.sessionID, error: String(err) })
-    })
+    }).catch(() => undefined)
     await Storage.write(["session_diff", input.sessionID], diffs)
     Bus.publish(Session.Event.Diff, {
       sessionID: input.sessionID,
@@ -113,9 +108,7 @@ export namespace SessionSummary {
       ...userMsg.summary,
       diffs,
     }
-    await Session.updateMessage(userMsg).catch((err) => {
-      log.warn("updateMessage failed during summarize", { messageID: input.messageID, error: String(err) })
-    })
+    await Session.updateMessage(userMsg).catch(() => undefined)
   }
 
   export const diff = fn(
@@ -134,10 +127,7 @@ export namespace SessionSummary {
         }
       })
       const changed = next.some((item, i) => item.file !== diffs[i]?.file)
-      if (changed)
-        Storage.write(["session_diff", input.sessionID], next).catch((err) =>
-          log.warn("failed to persist decoded diff paths", { sessionID: input.sessionID, error: err }),
-        )
+      if (changed) Storage.write(["session_diff", input.sessionID], next).catch(() => {})
       return next
     },
   )

@@ -1,5 +1,5 @@
 /**
- * Enhanced tool set for the GoalJudge.
+ * Enhanced tool set for the EvaluatorAgent.
  *
  * Extends basic codebase tools with memory search and preference awareness,
  * giving the evaluator deeper context for failure analysis and goal assessment.
@@ -10,24 +10,21 @@ import { createCodebaseTools } from "@/orchestrator/codebase-tools"
 import { Memory } from "@/memory"
 import { Preference } from "@/preference"
 import { Instance } from "@/project/instance"
-import { Filesystem } from "@/util/filesystem"
 import { Log } from "@/util/log"
 
 const log = Log.create({ service: "evaluator-tools" })
 
 /**
- * Creates the tool set for the GoalJudge.
+ * Creates the tool set for the EvaluatorAgent.
  *
  * Includes:
  * - 4 codebase tools: read_file, find_files, search_code, list_directory
  * - 1 memory tool: memory_search (for checking historical failure patterns)
  * - 1 preference tool: preference_list (for checking convention compliance)
- * - 1 execution tool: run_command (for mechanical verification — runs tsc/bun test when required by goal criteria)
  */
 export function createEvaluatorTools(input?: { sessionID?: string }) {
   const codebase = createCodebaseTools()
   const projectId = Instance.project.id
-  const projectDir = Filesystem.resolve(Instance.directory)
 
   return {
     // All 4 codebase tools (evaluator needs full exploration for deep analysis)
@@ -82,47 +79,6 @@ export function createEvaluatorTools(input?: { sessionID?: string }) {
         } catch (err) {
           log.warn("preference list failed in evaluator", { err })
           return "Preferences unavailable."
-        }
-      },
-    }),
-
-    // Mechanical verification — run a shell command and capture actual output
-    run_command: tool({
-      description:
-        "Run a shell command in the project directory and capture stdout/stderr/exit code. " +
-        "Use ONLY when goal criteria explicitly require verifying that a command passes " +
-        "(e.g., 'bunx tsc --noEmit', 'bun test', 'bun run build'). " +
-        "Do NOT use for exploration — use read_file/search_code/find_files for that.",
-      inputSchema: z.object({
-        command: z.string().describe("Shell command to run (runs in project root)"),
-        timeout_ms: z.number().optional().describe("Max execution time ms (default: 90000)"),
-      }),
-      execute: async ({ command, timeout_ms }) => {
-        const timeout = timeout_ms ?? 90_000
-        try {
-          const isWin = process.platform === "win32"
-          const shell = isWin ? ["cmd", "/c", command] : ["bash", "-c", command]
-          const proc = Bun.spawn(shell, {
-            cwd: projectDir,
-            stdout: "pipe",
-            stderr: "pipe",
-          })
-          const timer = setTimeout(() => {
-            try { proc.kill() } catch { /* ignore */ }
-          }, timeout)
-          const [stdout, stderr, exitCode] = await Promise.all([
-            new Response(proc.stdout).text(),
-            new Response(proc.stderr).text(),
-            proc.exited,
-          ])
-          clearTimeout(timer)
-          const parts = [`exit_code: ${exitCode}`]
-          if (stdout.trim()) parts.push(`stdout:\n${stdout.slice(0, 5000)}`)
-          if (stderr.trim()) parts.push(`stderr:\n${stderr.slice(0, 3000)}`)
-          return parts.join("\n") || `exit_code: ${exitCode} (no output)`
-        } catch (e) {
-          log.warn("run_command failed in evaluator", { command, err: e })
-          return `Error running command: ${e instanceof Error ? e.message : String(e)}`
         }
       },
     }),
