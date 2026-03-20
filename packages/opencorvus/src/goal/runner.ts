@@ -10,7 +10,7 @@ import { Instance } from "@/project/instance"
 import { Project } from "@/project/project"
 import { Session } from "@/session"
 import { Snapshot } from "@/snapshot"
-import { type CheckDelivery, type CheckReport } from "@/evaluator/shared"
+import { checkBase, type CheckDelivery, type CheckReport } from "@/evaluator/shared"
 import { type GoalJudgmentType } from "@/evaluator/agent"
 import { Worktree } from "@/worktree"
 import { Identifier } from "@/id/id"
@@ -27,7 +27,7 @@ import {
   type GoalRunRow,
   type PlanNodeRow,
 } from "@/orchestrator/store"
-import { updateGoalRun } from "@/orchestrator/transition"
+import { updateGoalRun } from "@/orchestrator/persist"
 import { agentStream } from "@/orchestrator/agent-stream"
 
 const log = Log.create({ service: "goal-runner" })
@@ -321,12 +321,11 @@ function goalChecks(goal: GoalRow, task: TaskRow) {
   return next
 }
 
-export async function createGoalWorkspace(input: {
+export async function createGoalWorkspace(_input: {
   task: TaskRow
   goal: GoalRow
   snapshot: string | undefined
 }) {
-  void input
   return Instance.directory
 }
 
@@ -797,17 +796,23 @@ export async function evaluateTask(input: {
   const deliveryVerifyCmd = typeof input.task.metadata?.delivery_verify_cmd === "string"
     ? input.task.metadata.delivery_verify_cmd
     : null
+  const DELIVERY_VERIFY_TIMEOUT_MS = 120_000 // 2 minutes max for delivery_verify_cmd
   if (deliveryVerifyCmd && finalResult.status === "passed") {
     const projectDir = Filesystem.resolve(Instance.directory)
     const isWin = process.platform === "win32"
     const shellArgs = isWin ? ["cmd", "/c", deliveryVerifyCmd] : ["bash", "-c", deliveryVerifyCmd]
     try {
       const proc = Bun.spawn(shellArgs, { cwd: projectDir, stdout: "pipe", stderr: "pipe" })
+      const verifyTimeout = setTimeout(() => {
+        try { proc.kill() } catch {}
+        log.warn("delivery_verify_cmd timed out, killed", { cmd: deliveryVerifyCmd, timeoutMs: DELIVERY_VERIFY_TIMEOUT_MS })
+      }, DELIVERY_VERIFY_TIMEOUT_MS)
       const [stdout, stderr, exitCode] = await Promise.all([
         new Response(proc.stdout).text(),
         new Response(proc.stderr).text(),
         proc.exited,
       ])
+      clearTimeout(verifyTimeout)
       if (exitCode !== 0) {
         const output = (stderr || stdout).slice(0, 800)
         finalResult = {
@@ -838,10 +843,6 @@ export async function evaluateTask(input: {
 }
 
 const REVIEW_CHECKS = new Set(["ui_review", "code_quality", "code_review", "dead_code_review"])
-
-function checkBase(name: string) {
-  return name.replace(/#\d+$/, "")
-}
 
 function reviewInfraFailure(check: { name: string; status: string; evidence?: string }) {
   if (check.status !== "failed") return false

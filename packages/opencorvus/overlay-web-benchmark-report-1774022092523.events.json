@@ -1,0 +1,74 @@
+{
+  "generated_at": "2026-03-20T15:58:10.390Z",
+  "taskID": "tsk_d0bf4fcf4001rinEuoJwkZ2whY",
+  "event_count": 3,
+  "stage_summary": {
+    "types": {
+      "orchestrator.task.updated": 2,
+      "orchestrator.agent.updated": 1
+    },
+    "stages": {
+      "spec": {
+        "event_count": 1,
+        "first_event_ms": 6360,
+        "first_message_ms": null,
+        "first_tool_call_ms": null,
+        "first_tool_result_ms": null,
+        "submit_tool_ms": null,
+        "error_ms": null,
+        "last_event_ms": 6360,
+        "kind_counts": {
+          "status": 1
+        },
+        "tool_calls": {}
+      }
+    }
+  },
+  "events": [
+    {
+      "at": "2026-03-20T15:54:58.883Z",
+      "elapsed_ms": 6360,
+      "type": "orchestrator.task.updated",
+      "taskID": "tsk_d0bf4fcf4001rinEuoJwkZ2whY",
+      "runID": "",
+      "stage": "",
+      "kind": "",
+      "status": "spec_generating",
+      "toolName": "",
+      "summary": "Spec generation started",
+      "text": "",
+      "progressType": "",
+      "goalRunID": ""
+    },
+    {
+      "at": "2026-03-20T15:54:58.883Z",
+      "elapsed_ms": 6360,
+      "type": "orchestrator.agent.updated",
+      "taskID": "tsk_d0bf4fcf4001rinEuoJwkZ2whY",
+      "runID": "",
+      "stage": "spec",
+      "kind": "status",
+      "status": "",
+      "toolName": "",
+      "summary": "Spec generation started",
+      "text": "",
+      "progressType": "",
+      "goalRunID": ""
+    },
+    {
+      "at": "2026-03-20T15:58:09.679Z",
+      "elapsed_ms": 197156,
+      "type": "orchestrator.task.updated",
+      "taskID": "tsk_d0bf4fcf4001rinEuoJwkZ2whY",
+      "runID": "",
+      "stage": "",
+      "kind": "",
+      "status": "failed",
+      "toolName": "",
+      "summary": "Spec failed: spec agent failed",
+      "text": "",
+      "progressType": "",
+      "goalRunID": ""
+    }
+  ]
+}

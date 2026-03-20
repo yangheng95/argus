@@ -1,0 +1,29 @@
+{
+  "generated_at": "2026-03-20T15:37:37.252Z",
+  "taskID": "tsk_d0be34294001sSscuXc83RbB74",
+  "error": "Error: Overlay did not render streamed task output within 120000ms",
+  "event_count": 1,
+  "stage_summary": {
+    "types": {
+      "orchestrator.task.updated": 1
+    },
+    "stages": {}
+  },
+  "events": [
+    {
+      "at": "2026-03-20T15:35:37.806Z",
+      "elapsed_ms": 7806,
+      "type": "orchestrator.task.updated",
+      "taskID": "tsk_d0be34294001sSscuXc83RbB74",
+      "runID": "",
+      "stage": "",
+      "kind": "",
+      "status": "spec_generating",
+      "toolName": "",
+      "summary": "Spec generation started",
+      "text": "",
+      "progressType": "",
+      "goalRunID": ""
+    }
+  ]
+}

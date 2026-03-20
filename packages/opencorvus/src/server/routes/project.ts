@@ -73,7 +73,10 @@ export const ProjectRoutes = lazy(() =>
       async (c) => {
         const result = await Project.initGit(Instance.directory)
         if (result.created) {
-          await Instance.dispose()
+          const { hasActiveSessions } = await import("@/orchestrator/runtime")
+          if (!hasActiveSessions()) {
+            await Instance.dispose()
+          }
         }
         return c.json(result)
       },

@@ -1,3 +1,35 @@
+const DEFAULT_KEYED_LOCK_TIMEOUT_MS = 30_000
+
+/**
+ * Run an async function under a keyed mutex (one concurrent execution per key).
+ * @param timeoutMs  Maximum time to wait for the lock before throwing (default 30s).
+ */
+export async function withKeyedLock<T>(
+  locks: Map<string, Promise<unknown>>,
+  key: string,
+  fn: () => Promise<T>,
+  timeoutMs = DEFAULT_KEYED_LOCK_TIMEOUT_MS,
+): Promise<T> {
+  const deadline = Date.now() + timeoutMs
+  while (locks.has(key)) {
+    const remaining = deadline - Date.now()
+    if (remaining <= 0) {
+      throw new Error(`withKeyedLock timeout: key="${key}" waited ${timeoutMs}ms`)
+    }
+    await Promise.race([
+      locks.get(key)!.catch(() => undefined),
+      new Promise<void>((resolve) => setTimeout(resolve, remaining)),
+    ])
+  }
+  const promise = fn()
+  locks.set(key, promise)
+  try {
+    return await promise
+  } finally {
+    if (locks.get(key) === promise) locks.delete(key)
+  }
+}
+
 export namespace Lock {
   const locks = new Map<
     string,
@@ -29,6 +61,8 @@ export namespace Lock {
     if (lock.waitingWriters.length > 0) {
       const nextWriter = lock.waitingWriters.shift()!
       nextWriter()
+      // Clean up after waking writer — nextWriter sets lock.writer = true
+      // so further cleanup happens when that writer releases
       return
     }
 
@@ -38,7 +72,7 @@ export namespace Lock {
       nextReader()
     }
 
-    // Clean up empty locks
+    // Clean up empty locks — must re-check because waking readers increments lock.readers
     if (lock.readers === 0 && !lock.writer && lock.waitingReaders.length === 0 && lock.waitingWriters.length === 0) {
       locks.delete(key)
     }

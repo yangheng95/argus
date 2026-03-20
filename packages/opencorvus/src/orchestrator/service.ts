@@ -72,7 +72,8 @@ import {
   persistInitialTransition,
   persistInitialTransitionFailure,
   specDraftFromFailure,
-} from "./transition"
+} from "./persist"
+import { persistQueuedTask } from "./pipeline"
 import {
   activeRunBySession,
   findArtifacts,
@@ -255,7 +256,7 @@ function taskSummary(rows: Array<{ time_started: number | null; time_completed: 
   return {
     total_tasks: rows.length,
     open_tasks: rows.filter((row) => !["completed", "failed", "cancelled"].includes(row.status)).length,
-    running_tasks: rows.filter((row) => row.status === "running" || row.status === "evaluating").length,
+    running_tasks: rows.filter((row) => ["spec_generating", "goal_decomposing", "planning", "planned", "running", "evaluating", "delivering"].includes(row.status)).length,
     blocked_tasks: rows.filter((row) => row.status === "blocked").length,
     completed_tasks: rows.filter((row) => row.status === "completed").length,
     failed_tasks: rows.filter((row) => row.status === "failed").length,
@@ -351,22 +352,15 @@ export namespace OrchestratorService {
     const resolvedChecks = await taskChecks(input.checks)
     const now = Date.now()
     const taskID = Identifier.ascending("task")
-    const planID = Identifier.ascending("plan")
-    const runID = Identifier.ascending("run")
     const metadata = {
       ...(input.metadata ?? {}),
       ...(input.routing ? { routing: input.routing } : {}),
       ...(Object.keys(resolvedChecks).length > 0 ? { checks: resolvedChecks } : {}),
     }
-    // Orchestrator-dispatched tasks: auto-approve common tools, ask for external/dangerous operations.
-    // When a tool requires "ask" permission, an interaction popup is created for the user.
-    // The user can click "Always Allow", "Allow Once", or "Reject" in the overlay.
     await Session.setPermission({
       sessionID: session.id,
       permission: [
-        // Default: allow all standard tools (task execution needs to be smooth)
         { permission: "*", pattern: "*", action: "allow" },
-        // Ask for external/potentially dangerous operations (popup interaction)
         { permission: "skill", pattern: "*", action: "ask" },
         { permission: "external_directory", pattern: "*", action: "ask" },
         { permission: "webfetch", pattern: "*", action: "ask" },
@@ -375,67 +369,14 @@ export namespace OrchestratorService {
         { permission: "schedule", pattern: "*", action: "ask" },
       ],
     })
-    const compiled = await compileTransition({
-        mode: "initial",
-        taskID,
-        now,
-        title,
-        request: input.request,
-        goals: input.goals,
-        executor,
-        routing: input.routing,
-        metadata,
-      }).catch(async (error) => {
-      if (!(error instanceof PlannerFailureError)) throw error
-      try {
-        persistInitialTransitionFailure({
-          taskID,
-          runID,
-          sessionID: session.id,
-          now,
-          executor,
-          title,
-          request: input.request,
-          requestID,
-          source: input.source,
-          priority: input.priority,
-          budget: input.budget,
-          metadata,
-          channelBinding: input.channelBinding,
-          projectID: Instance.project.id,
-          error,
-          specDraft: specDraftFromFailure(error),
-        })
-      } catch {
-        // Best effort: planner failure should still surface even if persistence also fails.
-      }
-      WorkbenchService.recordTaskRequest({
-        taskID,
-        content: input.request,
-        source: input.source ?? "api",
-        userID: slackUser(metadata),
-      })
-      throw error
-    })
-
+    // Async pipeline: persist task immediately, run stages in background
     try {
-      persistInitialTransition({
-        taskID,
-        planID,
-        runID,
-        sessionID: session.id,
-        now,
-        executor,
-        title,
-        request: input.request,
-        requestID,
-        source: input.source,
-        priority: input.priority,
-        budget: input.budget,
-        metadata,
-        channelBinding: input.channelBinding,
-        milestones: input.milestones,
-        compiled,
+      persistQueuedTask({
+        taskID, sessionID: session.id, now, executor, title,
+        request: input.request, requestID, source: input.source,
+        priority: input.priority, budget: input.budget, metadata,
+        channelBinding: input.channelBinding, milestones: input.milestones,
+        goals: input.goals, routing: input.routing,
         projectID: Instance.project.id,
       })
     } catch (error) {
@@ -446,25 +387,24 @@ export namespace OrchestratorService {
       throw error
     }
     WorkbenchService.recordTaskRequest({
-      taskID,
-      content: input.request,
-      source: input.source ?? "api",
-      userID: slackUser(metadata),
+      taskID, content: input.request,
+      source: input.source ?? "api", userID: slackUser(metadata),
     })
-
-    await OrchestratorRuntime.dispatch(runID, hooks())
+    // Pipeline advancement is driven by the poll loop in runtime.ts (every 1.5s).
+    // No fire-and-forget here — avoids race with poll loop picking up the same task.
     return taskID
   }
 
   export async function getTask(taskID: string) {
-    await OrchestratorRuntime.syncTask(taskID, hooks())
+    // Read-only — poll loop handles state advancement asynchronously.
     const task = requireTask(taskID)
     const item = listTaskRows([task])[0]
     return viewTask(task, { directory: item?.directory })
   }
 
   export async function getProgress(taskID: string) {
-    await OrchestratorRuntime.syncTask(taskID, hooks())
+    // Do NOT call syncTask here — it triggers synchronous evaluation inside the GET request,
+    // which blocks for minutes and causes request timeouts. The poll loop drives state advancement.
     const task = requireTask(taskID)
     const item = listTaskRows([task])[0]
     const plan = task.active_plan_version_id ? findPlan(task.active_plan_version_id) : undefined
@@ -828,7 +768,7 @@ export namespace OrchestratorService {
 
   export async function retryTask(taskID: string) {
     const task = requireTask(taskID)
-    if (["queued", "planning", "running", "evaluating"].includes(task.status)) {
+    if (["queued", "spec_generating", "goal_decomposing", "planning", "planned", "running", "evaluating", "delivering"].includes(task.status)) {
       throw new Error(`task ${taskID} is already active`)
     }
     const run = task.active_run_id ? findRun(task.active_run_id) : findRuns(task.id).at(-1)
@@ -840,7 +780,7 @@ export namespace OrchestratorService {
 
   export async function replanTask(taskID: string) {
     const task = requireTask(taskID)
-    if (["queued", "planning", "running", "evaluating"].includes(task.status)) {
+    if (["queued", "spec_generating", "goal_decomposing", "planning", "planned", "running", "evaluating", "delivering"].includes(task.status)) {
       throw new Error(`task ${taskID} is already active`)
     }
     const run = task.active_run_id ? findRun(task.active_run_id) : findRuns(task.id).at(-1)

@@ -36,14 +36,32 @@ export const StageRouting = z.object({
   evaluation: EvaluationProvider.optional(),
 })
 
+export const GoalKind = z.enum(["bootstrap", "feature", "verification", "integration", "system"])
+
+export const GoalQaProfile = z.object({
+  rule_selectors: z.array(z.string()),
+  goal_check_prompt: z.string().optional(),
+  spec_scope: z.enum(["mapped_requirements"]),
+})
+
 export const GoalInput = z.object({
   description: z.string(),
   criteria: z.string(),
   priority: z.enum(["blocking", "advisory"]).optional(),
+  source: z.string().optional(),
+  title: z.string().optional(),
+  objective: z.string().optional(),
+  requirement_ids: z.array(z.string()).optional(),
+  depends_on_goal_ids: z.array(z.string()).optional(),
+  owned_paths: z.array(z.string()).optional(),
+  done_definition: z.string().optional(),
+  qa_profile: GoalQaProfile.optional(),
+  kind: GoalKind.optional(),
   metadata: z
     .object({
       check_selector: z.array(z.string()).optional(),
     })
+    .passthrough()
     .optional(),
 })
 
@@ -200,7 +218,7 @@ export const Task = z.object({
   source: z.string(),
   title: z.string(),
   request: z.string(),
-  status: z.enum(["queued", "planning", "running", "blocked", "evaluating", "delivering", "completed", "failed", "cancelled"]),
+  status: z.enum(["queued", "spec_generating", "goal_decomposing", "planning", "planned", "running", "blocked", "evaluating", "delivering", "completed", "failed", "cancelled"]),
   priority: z.enum(["high", "normal", "low"]),
   blockingReason: z.string().optional(),
   error: z.string().optional(),
@@ -415,7 +433,7 @@ export const Evaluation = z.object({
 export const ProgressSnapshot = z.object({
   id: Identifier.schema("progress"),
   taskID: Identifier.schema("task"),
-  status: z.enum(["created", "running", "blocked", "completed", "failed", "cancelled"]),
+  status: z.enum(["created", "spec_generating", "goal_decomposing", "planning", "planned", "running", "blocked", "completed", "failed", "cancelled"]),
   summary: z.string(),
   payload: z.record(z.string(), z.any()).optional(),
   time: z.object({
@@ -633,7 +651,43 @@ export const TaskEvent = z.object({
   payload: z.record(z.string(), z.any()),
 })
 
+export const ArtifactAudit = z.object({
+  source_files_added: z.number(),
+  config_files_added: z.number(),
+  doc_files_added: z.number(),
+  source_file_count: z.number(),
+  doc_file_count: z.number(),
+  non_source_churn_ratio: z.number(),
+  readme_proliferation_count: z.number(),
+  out_of_scope_file_count: z.number(),
+  scaffold_noise_count: z.number(),
+  placeholder_count: z.number(),
+  out_of_scope_files: z.string().array(),
+  unmapped_files: z.string().array(),
+  placeholder_hits: z.string().array(),
+  duplicate_docs: z.string().array(),
+  scaffold_expansion_flags: z.string().array(),
+})
+
+export const RunMetrics = z.object({
+  meaningful_change_gap_ms: z.number(),
+  noop_cycle_count: z.number(),
+  repeat_command_ratio: z.number(),
+  repeat_reasoning_similarity: z.number(),
+  required_check_pass_rate: z.number(),
+  critical_check_pass_rate: z.number(),
+  check_relevance_score: z.number(),
+  verification_edit_ratio: z.number(),
+  feature_coverage_p0: z.number(),
+  scope_drift_score: z.number(),
+  plan_to_change_traceability: z.number(),
+  delivery_focus_score: z.number(),
+})
+
+export type AgentStageType = "spec" | "goal" | "planner" | "judge" | "delivery"
+
 export const Event = {
+  AgentUpdated: BusEvent.define("orchestrator.agent.updated", z.object({ taskID: z.string(), runID: z.string().optional(), stage: z.string(), kind: z.string(), id: z.string().optional(), toolName: z.string().optional(), text: z.string().optional(), summary: z.string() })),
   TaskCreated: BusEvent.define("orchestrator.task.created", z.object({ taskID: Identifier.schema("task"), status: Task.shape.status, summary: z.string() })),
   TaskUpdated: BusEvent.define("orchestrator.task.updated", z.object({ taskID: Identifier.schema("task"), status: Task.shape.status, summary: z.string() })),
   SpecCreated: BusEvent.define("orchestrator.spec.created", z.object({ taskID: Identifier.schema("task"), specID: Identifier.schema("spec"), summary: z.string() })),

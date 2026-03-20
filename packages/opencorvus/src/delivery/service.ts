@@ -1,5 +1,5 @@
 /**
- * HeadlessDeliveryService — orchestrator-facing delivery verification stage.
+ * DeliveryService — orchestrator-facing delivery verification stage.
  *
  * Wraps the DeliveryAgent with timeout handling and integration
  * with the orchestrator lifecycle.
@@ -29,7 +29,7 @@ export class DeliveryFailureError extends Error {
   }
 }
 
-export namespace HeadlessDeliveryService {
+export namespace DeliveryService {
   export async function verify(input: {
     task: { title: string; request: string; sessionID?: string; metadata?: Record<string, unknown> }
     goals: GoalInfo[]
@@ -100,4 +100,3 @@ export namespace HeadlessDeliveryService {
   }
 }
 
-export { HeadlessDeliveryService as DeliveryService2 }

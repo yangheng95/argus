@@ -74,6 +74,9 @@ export type EvaluationOutput = {
   artifacts: EvaluationArtifact[]
 }
 
+/** Structured check report used by persist layer for evaluation persistence. */
+export type CheckReport = EvaluationOutput
+
 export type PluginCheck = {
   name: string
   mode: "soft" | "strict"

@@ -1253,7 +1253,6 @@ export namespace Config {
           await Filesystem.writeJson(path.join(Global.Path.config, "config.json"), result)
           await fs.unlink(legacy)
         })
-        .catch(() => {})
     }
 
     return result
@@ -1294,7 +1293,7 @@ export namespace Config {
       if (!parsed.data.$schema && isFile) {
         parsed.data.$schema = "https://opencorvus.ai/config.json"
         const updated = original.replace(/^\s*\{/, '{\n  "$schema": "https://opencorvus.ai/config.json",')
-        await Bun.write(options.path, updated).catch(() => {})
+        await Bun.write(options.path, updated)
       }
       const data = parsed.data
       if (data.plugin && isFile) {
@@ -1358,7 +1357,10 @@ export namespace Config {
   export async function update(config: Info) {
     await fs.mkdir(projectConfigDirectory(), { recursive: true })
     await writeConfigFile(projectConfigFile(), config)
-    await Instance.dispose()
+    // Reset cached config state without destroying the instance.
+    // Instance.dispose() would kill running sessions (executor, evaluator)
+    // and cause race conditions with concurrent orchestrator operations.
+    global.reset()
   }
 
   function globalConfigFile() {
@@ -1452,8 +1454,7 @@ export namespace Config {
     const next = await writeConfigFile(filepath, config)
 
     global.reset()
-
-    await Instance.disposeAll().catch(() => undefined)
+    // Do NOT disposeAll — kills running executor sessions. global.reset() is sufficient.
     GlobalBus.emit("event", {
       directory: "global",
       payload: {

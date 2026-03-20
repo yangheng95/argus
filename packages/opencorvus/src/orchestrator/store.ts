@@ -12,10 +12,14 @@ import {
   OrchestratorExecutorSessionTable,
   OrchestratorEvaluationTable,
   OrchestratorGoalTable,
+  OrchestratorGoalRunTable,
+  OrchestratorGoalSnapshotTable,
   OrchestratorInteractionRequestTable,
   OrchestratorMilestoneTable,
+  OrchestratorPlanNodeTable,
   OrchestratorPlanVersionTable,
   OrchestratorProgressSnapshotTable,
+  OrchestratorRequirementTable,
   OrchestratorRunTable,
   OrchestratorSpecItemTable,
   OrchestratorSpecSnapshotTable,
@@ -36,6 +40,10 @@ export type ArtifactRow = typeof OrchestratorArtifactTable.$inferSelect
 export type EvaluationRow = typeof OrchestratorEvaluationTable.$inferSelect
 export type ProgressRow = typeof OrchestratorProgressSnapshotTable.$inferSelect
 export type ExecutorSessionRow = typeof OrchestratorExecutorSessionTable.$inferSelect
+export type RequirementRow = typeof OrchestratorRequirementTable.$inferSelect
+export type GoalSnapshotRow = typeof OrchestratorGoalSnapshotTable.$inferSelect
+export type GoalRunRow = typeof OrchestratorGoalRunTable.$inferSelect
+export type PlanNodeRow = typeof OrchestratorPlanNodeTable.$inferSelect
 export type ExecutorEventRow = typeof OrchestratorExecutorEventTable.$inferSelect
 export type SpecSnapshotRow = typeof OrchestratorSpecSnapshotTable.$inferSelect
 export type SpecItemRow = typeof OrchestratorSpecItemTable.$inferSelect
@@ -273,6 +281,47 @@ export function listMilestonesByPlan(planID: string) {
       .from(OrchestratorMilestoneTable)
       .where(eq(OrchestratorMilestoneTable.plan_version_id, planID))
       .orderBy(OrchestratorMilestoneTable.order_index)
+      .all(),
+  )
+}
+
+export function listGoalsForPlan(plan: PlanRow) {
+  return listGoalsByPlan(plan.id)
+}
+
+export function listPlanNodesByPlan(planID: string) {
+  return Database.use((db) =>
+    db
+      .select()
+      .from(OrchestratorPlanNodeTable)
+      .where(eq(OrchestratorPlanNodeTable.plan_version_id, planID))
+      .orderBy(OrchestratorPlanNodeTable.order_index)
+      .all(),
+  )
+}
+
+export function findGoalSnapshot(goalSnapshotID: string) {
+  return Database.use((db) =>
+    db
+      .select()
+      .from(OrchestratorGoalSnapshotTable)
+      .where(eq(OrchestratorGoalSnapshotTable.id, goalSnapshotID))
+      .get(),
+  )
+}
+
+export function goalSnapshotIDOfPlan(plan: PlanRow) {
+  const metadata = plan.metadata as Record<string, unknown> | null
+  return typeof metadata?.goal_snapshot_id === "string" ? metadata.goal_snapshot_id : undefined
+}
+
+export function findRequirements(specSnapshotID: string) {
+  return Database.use((db) =>
+    db
+      .select()
+      .from(OrchestratorRequirementTable)
+      .where(eq(OrchestratorRequirementTable.spec_snapshot_id, specSnapshotID))
+      .orderBy(OrchestratorRequirementTable.order_index)
       .all(),
   )
 }

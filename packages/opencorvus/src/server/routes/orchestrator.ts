@@ -31,6 +31,8 @@ import {
   UpdatePreferenceInput,
 } from "@/orchestrator/model"
 import { ExecutorNotConfiguredError, OrchestratorService, PlannerFailureError } from "@/orchestrator/service"
+import { Session } from "@/session"
+import { MessageV2 } from "@/session/message"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
 
@@ -290,6 +292,32 @@ export const OrchestratorRoutes = lazy(() =>
         }
         c.header("ETag", etag)
         return c.json(await OrchestratorService.getBoard(taskID, { sync: false }))
+      },
+    )
+    .get(
+      "/task/:taskID/transcript",
+      describeRoute({
+        summary: "Get task transcript",
+        operationId: "task.transcript",
+        responses: {
+          200: {
+            description: "Task session messages including tool calls",
+            content: {
+              "application/json": {
+                schema: resolver(MessageV2.WithParts.array()),
+              },
+            },
+          },
+          ...errors(404),
+        },
+      }),
+      validator("param", z.object({ taskID: Task.shape.id })),
+      async (c) => {
+        const task = await OrchestratorService.getTask(c.req.valid("param").taskID)
+        const sessionID = task.sessionID
+        if (!sessionID) return c.json([])
+        const messages = await Session.messages({ sessionID })
+        return c.json(messages)
       },
     )
     .get(

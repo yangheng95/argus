@@ -145,6 +145,7 @@ export namespace HeadlessPlannerService {
     allowClarification?: boolean
     executor?: ExecutorNameInfo
     routing?: z.infer<typeof StageRouting>
+    signal?: AbortSignal
   }): Promise<PlanDraft> {
     const hasUserGoals = input.goals && input.goals.length > 0
     const stages = resolveStages(input.executor, input.routing)
@@ -192,6 +193,11 @@ export namespace HeadlessPlannerService {
     const timeoutMs = plannerTimeoutMs()
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), timeoutMs)
+    // Wire external signal to our controller
+    if (input.signal) {
+      if (input.signal.aborted) { controller.abort(input.signal.reason); clearTimeout(timer) }
+      else input.signal.addEventListener("abort", () => { controller.abort(input.signal!.reason); clearTimeout(timer) }, { once: true })
+    }
     const agentResult = await Promise.race([
       PlannerAgent.plan({
         title: input.title,
@@ -270,6 +276,7 @@ export namespace HeadlessPlannerService {
     allowClarification?: boolean
     executor?: ExecutorNameInfo
     routing?: z.infer<typeof StageRouting>
+    signal?: AbortSignal
   }): Promise<PlanDraft> {
     const stages = resolveStages(input.executor, input.routing)
     const spec = input.spec
@@ -333,13 +340,30 @@ export namespace HeadlessPlannerService {
       )
     }
 
-    const agentResult = await PlannerAgent.plan({
-      title: input.title,
-      request: input.request,
-      replanContext: replanCtx,
-      spec: spec ? { summary: spec.summary, content: spec.content } : undefined,
-    }).catch((error) => {
-      throw new PlannerFailureError("planner agent replan failed", { cause: error })
+    const timeoutMs = plannerTimeoutMs()
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), timeoutMs)
+    // Wire external signal to our controller
+    if (input.signal) {
+      if (input.signal.aborted) { controller.abort(input.signal.reason); clearTimeout(timer) }
+      else input.signal.addEventListener("abort", () => { controller.abort(input.signal!.reason); clearTimeout(timer) }, { once: true })
+    }
+    const agentResult = await Promise.race([
+      PlannerAgent.plan({
+        title: input.title,
+        request: input.request,
+        replanContext: replanCtx,
+        spec: spec ? { summary: spec.summary, content: spec.content } : undefined,
+        signal: controller.signal,
+      }).catch((error) => {
+        throw new PlannerFailureError("planner agent replan failed", { cause: error })
+      }),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new PlannerFailureError(`replan timed out after ${timeoutMs}ms`)), timeoutMs),
+      ),
+    ]).finally(() => {
+      clearTimeout(timer)
+      controller.abort()
     })
     return agentOutputToDraft(
       input.title,

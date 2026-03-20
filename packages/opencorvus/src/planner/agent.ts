@@ -81,6 +81,16 @@ export type PlannerOutputType = z.infer<typeof PlannerOutput>
 // Replan context — structured failure information from the evaluator agent
 // ---------------------------------------------------------------------------
 
+export interface WaveStatus {
+  title: string
+  waveIndex: number
+  status: "passed" | "failed" | "partial" | "pending"
+  goals: Array<{
+    description: string
+    status: string
+  }>
+}
+
 export interface ReplanContext {
   previousSummary: string
   failureAnalysis: {
@@ -94,7 +104,9 @@ export interface ReplanContext {
     description: string
     status: string
     evidence: string
+    requirement_ids?: string[]
   }>
+  previousWaves?: WaveStatus[]
 }
 
 // ---------------------------------------------------------------------------

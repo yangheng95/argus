@@ -171,6 +171,10 @@ export const GlobalRoutes = lazy(() =>
         },
       }),
       async (c) => {
+        const { hasActiveSessions } = await import("@/orchestrator/runtime")
+        if (hasActiveSessions()) {
+          return c.json({ error: "Active executor sessions exist, skipping dispose" }, 409)
+        }
         await Instance.disposeAll()
         GlobalBus.emit("event", {
           directory: "global",

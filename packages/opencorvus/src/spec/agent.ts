@@ -38,6 +38,26 @@ export const Clarification = z.object({
 })
 export type ClarificationResult = z.infer<typeof Clarification>
 
+export const RequirementSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  description: z.string(),
+  acceptance: z.array(z.string()).default([]),
+  evidence_refs: z.array(z.string()).default([]),
+  non_goals: z.array(z.string()).optional(),
+  priority: z.enum(["blocking", "advisory"]).optional(),
+  metadata: z.record(z.string(), z.any()).optional(),
+})
+export type Requirement = z.infer<typeof RequirementSchema>
+
+export const ArchitecturalLayerSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  description: z.string(),
+  depends_on: z.array(z.string()).default([]),
+})
+export type ArchitecturalLayer = z.infer<typeof ArchitecturalLayerSchema>
+
 export const SpecDraftSchema = z.object({
   summary: z.string(),
   content: z.string(),
@@ -48,6 +68,10 @@ export const SpecDraftSchema = z.object({
     }),
   ).default([]),
   risks: z.array(z.string()).default([]),
+  evidence_sources: z.array(z.string()).default([]),
+  unresolved_questions: z.array(z.string()).default([]),
+  requirements: z.array(RequirementSchema).optional(),
+  architectural_layers: z.array(ArchitecturalLayerSchema).optional(),
   clarifications: Clarification.shape.questions.optional(),
 })
 export type SpecDraft = z.infer<typeof SpecDraftSchema>

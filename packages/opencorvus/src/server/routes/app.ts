@@ -97,6 +97,10 @@ export function AppRoutes(root: Hono) {
         },
       }),
       async (c) => {
+        const { hasActiveSessions } = await import("@/orchestrator/runtime")
+        if (hasActiveSessions()) {
+          return c.json({ error: "Active executor sessions exist, skipping dispose" }, 409)
+        }
         await Instance.dispose()
         return c.json(true)
       },
