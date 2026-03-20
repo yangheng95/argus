@@ -426,7 +426,7 @@ Output ONLY the JSON array, no other text.`
       tools: {},
       maxOutputTokens: 1024,
       sessionID: input.sessionID,
-      timeoutMs: 30000,
+      timeoutMs: 120000,
     })
 
     const values = await parseLLMLayerArray(text, validLayerIds, chunk.length, `layer chunk ${offset / CLASSIFY_CHUNK_SIZE + 1}`)
@@ -500,7 +500,7 @@ Output ONLY the JSON array, no other text.`
       tools: {},
       maxOutputTokens: 1024,
       sessionID: input.sessionID,
-      timeoutMs: 30000,
+      timeoutMs: 120000,
     })
 
     const values = await parseLLMLayerArray(text, VALID_GOAL_CATEGORIES, chunk.length, `category chunk ${offset / CLASSIFY_CHUNK_SIZE + 1}`)

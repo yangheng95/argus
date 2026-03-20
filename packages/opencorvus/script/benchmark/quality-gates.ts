@@ -127,7 +127,11 @@ export async function deriveRunMetrics(input: {
   const checkStatuses = input.evaluationChecks ?? []
   const passedChecks = checkStatuses.filter((item) => item.status === "passed").length
   const totalChecks = checkStatuses.length
-  const noopCycles = longestVerificationStreak(commandSummaries)
+  // Only count verification events from goal-run evaluations (stage=judge).
+  // Spec and planner events contain natural language that mentions "test" or "structure"
+  // in plan descriptions, which matches VERIFY_RE but is not a verification loop.
+  const judgeEvents = input.events.filter((e) => String(e.stage || "") === "judge")
+  const noopCycles = longestVerificationStreakByGoal(judgeEvents)
   const repeatedReasoning = repeatedSimilarity(commandSummaries)
   // Exclude config infrastructure files from scope drift — modifying tsconfig.json,
   // package.json, etc. is often necessary for the project to function (e.g., adding
@@ -329,6 +333,32 @@ function longestVerificationStreak(values: string[]) {
       continue
     }
     current = 0
+  }
+  return longest
+}
+
+// Per-goal-run version: resets the verification streak at goal-run boundaries.
+// Multi-goal tasks naturally produce consecutive verification events across goals
+// (each goal evaluation runs tests independently), which would otherwise inflate
+// the streak count and trigger false liveness failures.
+function longestVerificationStreakByGoal(events: EventEntry[]) {
+  let longest = 0
+  let current = 0
+  let lastGoalRunID = ""
+  for (const event of events) {
+    const summary = normalizeText(String(event.summary || event.text || event.toolName || ""))
+    if (!summary) continue
+    const goalRunID = String(event.goalRunID || "")
+    if (goalRunID && goalRunID !== lastGoalRunID) {
+      current = 0 // reset streak at each goal-run boundary
+      lastGoalRunID = goalRunID
+    }
+    if (VERIFY_RE.test(summary)) {
+      current += 1
+      longest = Math.max(longest, current)
+    } else {
+      current = 0
+    }
   }
   return longest
 }

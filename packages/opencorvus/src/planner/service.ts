@@ -915,7 +915,7 @@ function buildWorkflowSection(input: {
   }
 
   sections.push(
-    "\nNever split the implementation across sub-agents or parallel workspaces. Keep one agent advancing one shared workspace through these stages.",
+    "\nEach goal runs in its own isolated workspace. Independent goals (no dependency between them) may execute in parallel. Each agent only operates in its own workspace — do not try to coordinate across workspaces.",
   )
 
   sections.push(

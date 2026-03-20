@@ -9,6 +9,7 @@ export type OrchestratorBudget = {
   max_replans?: number
   max_evaluations?: number
   max_wall_time_ms?: number
+  max_concurrent_goals?: number
 }
 
 export type OrchestratorMetadata = Record<string, unknown>
