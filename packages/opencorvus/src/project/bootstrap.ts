@@ -17,7 +17,6 @@ import { TaskQueueService } from "../scheduler/task-queue-service"
 import { OrchestratorService } from "@/orchestrator/service"
 import { ChannelSupervisor } from "@/channel/supervisor"
 import { Config } from "@/config/config"
-import { OrchestratorEventLog } from "@/orchestrator/event-log"
 
 export async function InstanceBootstrap() {
   Log.Default.info("bootstrapping", { directory: Instance.directory })
@@ -42,5 +41,4 @@ export async function InstanceBootstrap() {
       await Project.setInitialized(Instance.project.id)
     }
   })
-  OrchestratorEventLog.init()
 }

@@ -126,17 +126,6 @@ export namespace SessionProcessor {
                   break
 
                 case "tool-input-delta":
-                  const match = toolcalls[value.id]
-                  if (match?.state.status === "pending") {
-                    match.state.raw += value.delta
-                    await Session.updatePartDelta({
-                      sessionID: match.sessionID,
-                      messageID: match.messageID,
-                      partID: match.id,
-                      field: "raw",
-                      delta: value.delta,
-                    })
-                  }
                   break
 
                 case "tool-input-end":
@@ -221,7 +210,7 @@ export namespace SessionProcessor {
                       state: {
                         status: "error",
                         input: value.input ?? match.state.input,
-                        error: value.error instanceof Error ? value.error.message : String(value.error),
+                        error: (value.error as any).toString(),
                         time: {
                           start: match.state.time.start,
                           end: Date.now(),
@@ -290,8 +279,6 @@ export namespace SessionProcessor {
                   SessionSummary.summarize({
                     sessionID: input.sessionID,
                     messageID: input.assistantMessage.parentID,
-                  }).catch(() => {
-                    // Non-critical: session summary is best-effort background work
                   })
                   if (await SessionCompaction.isOverflow({ tokens: usage.tokens, model: input.model })) {
                     needsCompaction = true
@@ -382,10 +369,7 @@ export namespace SessionProcessor {
                 message: retry,
                 next: Date.now() + delay,
               })
-              await SessionRetry.sleep(delay, input.abort).catch((err) => {
-                if (err instanceof DOMException && err.name === "AbortError") return
-                log.warn("retry sleep failed", { error: err })
-              })
+              await SessionRetry.sleep(delay, input.abort).catch(() => {})
               continue
             }
             input.assistantMessage.error = error

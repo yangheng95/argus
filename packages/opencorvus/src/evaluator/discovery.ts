@@ -1,3 +1,4 @@
+import { inferFamily } from "@/check/policy"
 import { Instance } from "@/project/instance"
 import { CheckConfig, NamedCheckConfig, NamedCheckFamily } from "@/orchestrator/model"
 import { Filesystem } from "@/util/filesystem"
@@ -5,41 +6,36 @@ import { which } from "@/util/which"
 import fs from "fs/promises"
 import path from "path"
 import z from "zod"
-import type { CheckCommand, CommandGroup, CheckTask } from "./shared"
-import { Log } from "@/util/log"
+import type { EvaluatorCommand, CommandGroup, EvaluationTask } from "./shared"
 
-const discoveryLog = Log.create({ service: "evaluator-discovery" })
-
-export async function resolveConfig(metadata?: Record<string, unknown>, task?: CheckTask) {
+export async function resolveConfig(metadata?: Record<string, unknown>) {
   const configured = CheckConfig.safeParse(metadata?.checks)
-  const next = configured.success ? configured.data : {}
-  return CheckConfig.parse({
-    ...next,
-    ...(task?.goal ? { goal_check: requiredGoalCheck(next.goal_check) } : {}),
-    spec_check: requiredSpecCheck(next.spec_check, task),
-  })
+  return CheckConfig.parse(configured.success ? configured.data : {})
 }
 
-export function autoSpecCheck(task?: CheckTask): Record<string, unknown> {
-  return {
-    ...(task?.goal ? { goal_check: requiredGoalCheck(undefined) } : {}),
-    spec_check: requiredSpecCheck(undefined, task),
+export function autoSpecCheck(task?: EvaluationTask): Record<string, unknown> {
+  if (task?.activeSpecVersionID) {
+    return { spec_check: { enabled: true, mode: "strict" } }
   }
+  try {
+    const specsDir = path.join(Instance.worktree, ".opencorvus", "specs")
+    const specFiles = require("fs").readdirSync(specsDir) as string[]
+    if (specFiles.some((f: string) => f.endsWith(".md"))) {
+      return { spec_check: { enabled: true, mode: "strict" } }
+    }
+  } catch {}
+  return {}
 }
 
 export function resolvedChecks(
   config: z.infer<typeof CheckConfig>,
   discovered: Awaited<ReturnType<typeof discoverChecks>>,
 ) {
-  const build = explicitCommands(config.build)
-  const test = explicitCommands(config.test)
-  const lint = explicitCommands(config.lint)
-  const verify_cmd = explicitCommands(config.verify_cmd)
   const next = {
-    ...(build !== undefined ? { build } : {}),
-    ...(test !== undefined ? { test } : {}),
-    ...(lint !== undefined ? { lint } : {}),
-    ...(verify_cmd !== undefined ? { verify_cmd } : {}),
+    ...(config.build !== undefined ? { build: config.build } : discovered.build.length > 0 ? { build: discovered.build.map((item) => item.command) } : {}),
+    ...(config.test !== undefined ? { test: config.test } : discovered.test.length > 0 ? { test: discovered.test.map((item) => item.command) } : {}),
+    ...(config.lint !== undefined ? { lint: config.lint } : discovered.lint.length > 0 ? { lint: discovered.lint.map((item) => item.command) } : {}),
+    ...(config.verify_cmd !== undefined ? { verify_cmd: config.verify_cmd } : {}),
     ...(config.startup ? { startup: config.startup } : {}),
     ...(config.artifact ? { artifact: config.artifact } : {}),
     ...(config.visual ? { visual: config.visual } : {}),
@@ -48,72 +44,35 @@ export function resolvedChecks(
     ...(config.code_quality ? { code_quality: config.code_quality } : {}),
     ...(config.code_review ? { code_review: config.code_review } : {}),
     ...(config.dead_code_review ? { dead_code_review: config.dead_code_review } : {}),
-    ...(config.goal_check ? { goal_check: config.goal_check } : {}),
-    spec_check: requiredSpecCheck(config.spec_check),
+    ...(config.judge ? { judge: config.judge } : {}),
+    ...(config.spec_check ? { spec_check: config.spec_check } : autoSpecCheck()),
     ...(config.custom ? { custom: config.custom } : {}),
     ...(config.timeout_ms ? { timeout_ms: config.timeout_ms } : {}),
   } as Record<string, unknown>
-  // Named checks: only include explicitly configured ones; discovered ones are opt-in
   const named = {
+    ...Object.fromEntries(
+      Object.entries(discovered.named).map(([key, value]) => [
+        key,
+        {
+          label: value.label ?? checkLabel(key),
+          family: value.family,
+          commands: value.commands.map((item) => item.command),
+          enabled: true,
+        },
+      ]),
+    ),
     ...(config.named ?? {}),
-  }
-  // Auto-discovered named checks only added if user explicitly enabled them
-  for (const [key, value] of Object.entries(discovered.named)) {
-    if (named[key]?.enabled !== false && named[key]) {
-      named[key] = { ...named[key], label: named[key].label ?? value.label ?? checkLabel(key), family: named[key].family ?? value.family }
-    }
   }
   if (Object.keys(named).length > 0) next.named = named
   return CheckConfig.parse(next)
 }
 
-function requiredGoalCheck(current: z.infer<typeof CheckConfig>["goal_check"]) {
-  if (current?.enabled === false) {
-    return {
-      ...current,
-      enabled: false,
-      mode: current.mode ?? ("strict" as const),
-    }
-  }
-  return {
-    ...(current ?? {}),
-    enabled: true,
-    mode: "strict" as const,
-  }
-}
-
-function requiredSpecCheck(current: z.infer<typeof CheckConfig>["spec_check"], task?: CheckTask) {
-  if (current?.enabled === false) {
-    return {
-      ...current,
-      enabled: false,
-      scope: current.scope ?? inferredSpecScope(task),
-      mode: current.mode ?? ("strict" as const),
-    }
-  }
-  return {
-    ...(current ?? {}),
-    enabled: true,
-    scope: current?.scope ?? inferredSpecScope(task),
-    mode: "strict" as const,
-  }
-}
-
-function inferredSpecScope(task?: CheckTask) {
-  if (task?.goal?.qaProfile?.specScope) return task.goal.qaProfile.specScope
-  if (Array.isArray(task?.requirementIDs) && task.requirementIDs.length > 0) return "mapped_requirements" as const
-  return "full_spec" as const
-}
-
 export async function discoverChecks(changedFiles?: unknown) {
   const cwd = await discoverPackageRoot(changedFiles)
   const file = Bun.file(path.join(cwd, "package.json"))
-  const json = await file.json().catch((err) => {
-    discoveryLog.warn("failed to parse package.json for check discovery", { cwd, error: String(err) })
-    return undefined
-  }) as { scripts?: Record<string, string> } | undefined
+  const json = await file.json().catch(() => undefined) as { scripts?: Record<string, string> } | undefined
   const scripts = json?.scripts ?? {}
-  const run = (name: string): CheckCommand[] => [{ command: `bun run ${name}`, cwd }]
+  const run = (name: string): EvaluatorCommand[] => [{ command: `bun run ${name}`, cwd }]
   const files = Array.isArray(changedFiles)
     ? changedFiles
         .filter((item): item is string => typeof item === "string" && /\.(spec|test)\.[cm]?[jt]sx?$/.test(item))
@@ -173,6 +132,13 @@ export function commandGroups(
       group(
         item.name,
         config[item.name],
+        item.name === "build"
+          ? discovered.build
+          : item.name === "test"
+            ? discovered.test
+            : item.name === "lint"
+              ? discovered.lint
+              : [],
         item.label,
         item.family,
       ),
@@ -181,27 +147,22 @@ export function commandGroups(
   ].flatMap((item) => item ?? [])
 }
 
-function explicitCommands(configured?: string[] | false) {
-  if (configured === false) return false
-  if (Array.isArray(configured)) return configured
-  return
-}
-
-function commandSpecs(configured?: string[] | false) {
+function commandSpecs(configured?: string[] | false, discovered: EvaluatorCommand[] = []) {
   if (configured === false) return []
   if (configured && configured.length > 0) {
     return configured.map((command) => ({ command }))
   }
-  return []
+  return discovered
 }
 
 function group(
   name: "build" | "test" | "lint" | "verify_cmd",
   configured: string[] | false | undefined,
+  discovered: EvaluatorCommand[],
   label: string,
   family: z.infer<typeof NamedCheckFamily>,
 ) {
-  const commands = commandSpecs(configured)
+  const commands = commandSpecs(configured, discovered)
   if (commands.length === 0) return
   return {
     name,
@@ -215,21 +176,27 @@ function namedGroups(
   configured: Record<string, z.infer<typeof NamedCheckConfig>> | undefined,
   discovered: Record<string, CommandGroup>,
 ) {
-  return Object.keys(configured ?? {}).flatMap((key) => {
+  const keys = new Set([
+    ...Object.keys(discovered),
+    ...Object.keys(configured ?? {}),
+  ])
+  return [...keys].flatMap((key) => {
     const current = configured?.[key]
     if (current?.enabled === false) return []
     if (current) {
       return [{
         name: key,
         label: current.label ?? discovered[key]?.label ?? checkLabel(key),
-        family: current.family ?? discovered[key]?.family,
+        family: current.family ?? discovered[key]?.family ?? inferFamily(key),
         commands: current.commands.map((command) => ({
           command,
           cwd: current.cwd,
         })),
       } satisfies CommandGroup]
     }
-    return []
+    const fallback = discovered[key]
+    if (!fallback) return []
+    return [fallback]
   })
 }
 
@@ -246,10 +213,7 @@ async function discoverPythonChecks(cwd: string, files: string[]) {
     exists(path.join(cwd, "ruff.toml")),
     exists(path.join(cwd, ".ruff.toml")),
   ])
-  const pyproject = await Bun.file(path.join(cwd, "pyproject.toml")).text().catch((err) => {
-    discoveryLog.warn("failed to read pyproject.toml", { cwd, error: String(err) })
-    return ""
-  })
+  const pyproject = await Bun.file(path.join(cwd, "pyproject.toml")).text().catch(() => "")
   const hasPythonFiles = files.some((item) => item.endsWith(".py")) || (await hasPythonTopLevel(cwd))
   const isPythonProject = hasPythonFiles || markers.some(Boolean)
   if (!isPythonProject) return {}
@@ -300,10 +264,7 @@ async function exists(filepath: string) {
 }
 
 async function hasPythonTopLevel(cwd: string) {
-  const entries = await fs.readdir(cwd).catch((err) => {
-    discoveryLog.warn("failed to read directory for Python detection", { cwd, error: String(err) })
-    return [] as string[]
-  })
+  const entries = await fs.readdir(cwd).catch(() => [])
   return entries.some((item) => item.endsWith(".py"))
 }
 
@@ -311,10 +272,10 @@ function pythonLauncher() {
   return ["python", "python3", "py"].find((item) => which(item))
 }
 
-function pythonToolCommand(module: string, executable: string) {
+function pythonToolCommand(module: string, fallback: string) {
   const python = pythonLauncher()
   if (python) return `${python} -m ${module}`
-  if (which(executable)) return executable
+  if (which(fallback)) return fallback
 }
 
 function checkLabel(key: string) {
@@ -340,10 +301,7 @@ async function classifyTests(files: string[], cwd: string) {
   const items = await Promise.all(
     files.map(async (file) => ({
       file,
-      text: await Bun.file(path.join(cwd, file)).text().catch((err) => {
-        discoveryLog.warn("failed to read test file for classification", { file, error: String(err) })
-        return ""
-      }),
+      text: await Bun.file(path.join(cwd, file)).text().catch(() => ""),
     })),
   )
   return {
@@ -374,9 +332,8 @@ async function discoverPackageRoot(changedFiles?: unknown) {
   }
 
   if (candidates.size === 0) return root
-  const sorted = [...candidates.entries()]
-    .sort((a, b) => b[1] - a[1] || b[0].length - a[0].length)
-  return sorted[0]?.[0] ?? root
+  return [...candidates.entries()]
+    .sort((a, b) => b[1] - a[1] || b[0].length - a[0].length)[0]![0]
 }
 
 function quote(input: string) {

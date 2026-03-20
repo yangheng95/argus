@@ -6,38 +6,28 @@ import { LLMTrace } from "@/session/llm-trace"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
 import {
-  findDeliveries,
-  findEvaluations,
-  findGoalSnapshot,
+  findDeliveryByRun,
+  findEvaluationByRun,
   findPlan,
-  findRequirements,
   findRuns,
-  findSpecSnapshot,
-  listGoalsForPlan,
-  listGoalRunsByTask,
+  listGoalsByPlan,
   listInteractions,
   listMilestones,
-  listPlanNodesByPlan,
   listSnapshots,
   requireTask,
   viewDelivery,
   viewEvaluation,
   viewGoal,
-  viewGoalSnapshot,
   viewInteraction,
   viewMilestone,
   viewPlan,
-  viewPlanNode,
-  viewRequirement,
   viewRun,
   viewSnapshot,
-  viewSpecSnapshot,
   viewTask,
-  viewGoalRun,
   findArtifacts,
   viewArtifact,
 } from "@/orchestrator/store"
-import { Task, TaskExport } from "@/orchestrator/model"
+import { Task } from "@/orchestrator/model"
 
 /**
  * Export routes — 提供任务和会话的完整导出接口，供外部工具消费。
@@ -54,7 +44,18 @@ export const ExportRoutes = lazy(() =>
             description: "Complete task export including plan, runs, evaluations, goals, milestones, interactions, snapshots, and artifacts",
             content: {
               "application/json": {
-                schema: resolver(TaskExport),
+                schema: resolver(z.object({
+                  task: z.any(),
+                  plan: z.any().optional(),
+                  goals: z.any().array(),
+                  milestones: z.any().array(),
+                  runs: z.any().array(),
+                  interactions: z.any().array(),
+                  snapshots: z.any().array(),
+                  deliveries: z.any().array(),
+                  evaluations: z.any().array(),
+                  artifacts: z.any().array(),
+                })),
               },
             },
           },
@@ -65,23 +66,10 @@ export const ExportRoutes = lazy(() =>
       async (c) => {
         const taskID = c.req.valid("param").taskID
         const task = requireTask(taskID)
-        const spec = task.active_spec_version_id ? findSpecSnapshot(task.active_spec_version_id) : undefined
         const plan = task.active_plan_version_id ? findPlan(task.active_plan_version_id) : undefined
-        const goalSnapshotID =
-          plan?.metadata && typeof plan.metadata.goal_snapshot_id === "string"
-            ? plan.metadata.goal_snapshot_id
-            : undefined
-        const goalSnapshot = goalSnapshotID ? findGoalSnapshot(goalSnapshotID) : undefined
-        const specSnapshotID = plan?.spec_snapshot_id ?? task.active_spec_version_id ?? undefined
-        const requirements = specSnapshotID ? findRequirements(specSnapshotID) : []
-        const goals = plan ? listGoalsForPlan(plan) : []
-        const planNodes = plan ? listPlanNodesByPlan(plan.id) : []
-        const goalRuns = listGoalRunsByTask(taskID)
+        const goals = plan ? listGoalsByPlan(plan.id) : []
         const milestones = listMilestones(taskID)
         const runs = findRuns(taskID)
-        const coordinatorRun = task.active_run_id
-          ? runs.find((run) => run.id === task.active_run_id)
-          : runs[0]
         const interactions = listInteractions(taskID)
         const snapshots = listSnapshots(taskID)
 
@@ -90,21 +78,17 @@ export const ExportRoutes = lazy(() =>
         const evaluations: ReturnType<typeof viewEvaluation>[] = []
         const artifacts: ReturnType<typeof viewArtifact>[] = []
         for (const run of runs) {
-          deliveries.push(...findDeliveries(run.id).map(viewDelivery))
-          evaluations.push(...findEvaluations(run.id).map(viewEvaluation))
+          const delivery = findDeliveryByRun(run.id)
+          if (delivery) deliveries.push(viewDelivery(delivery))
+          const evaluation = findEvaluationByRun(run.id)
+          if (evaluation) evaluations.push(viewEvaluation(evaluation))
           artifacts.push(...findArtifacts(run.id).map(viewArtifact))
         }
 
         return c.json({
           task: viewTask(task),
-          spec: spec ? viewSpecSnapshot(spec) : undefined,
-          goalSnapshot: goalSnapshot ? viewGoalSnapshot(goalSnapshot) : undefined,
-          requirements: requirements.map(viewRequirement),
           plan: plan ? viewPlan(plan) : undefined,
-          coordinatorRun: coordinatorRun ? viewRun(coordinatorRun) : undefined,
           goals: goals.map(viewGoal),
-          planNodes: planNodes.map(viewPlanNode),
-          goalRuns: goalRuns.map(viewGoalRun),
           milestones: milestones.map(viewMilestone),
           runs: runs.map(viewRun),
           interactions: interactions.map(viewInteraction),

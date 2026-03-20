@@ -1,26 +1,22 @@
-﻿/**
- * HeadlessSpecService â€” orchestrator-facing specification stage.
+/**
+ * HeadlessSpecService — orchestrator-facing specification stage.
  *
  * Wraps the SpecAgent with timeout handling, persistence, and integration
  * with the orchestrator lifecycle.
  *
- * Two entry points matching the current orchestrator lifecycle:
- *   - initial()  â€” Generate initial spec when task is created
- *   - rewrite()  â€” Revise spec based on failure analysis (replan)
+ * Three entry points matching the design document:
+ *   - initial()  — Generate initial spec when task is created
+ *   - compile()  — Fill gaps during spec compilation phase
+ *   - rewrite()  — Revise spec based on failure analysis (replan)
  */
 import z from "zod"
-import { SpecAgent, type SpecOutputType, type SpecRewriteContext, type SpecDraft, SpecDraftGoal } from "./agent"
+import { SpecAgent, type SpecOutputType, type SpecRewriteContext, type SpecDraft } from "./agent"
 import { Log } from "@/util/log"
-import { Env } from "@/env"
-import { type TextHooks } from "@/llm/api"
-import { mergeTextHooks } from "@/llm/tool-hooks"
-import { createInactivityGuard } from "@/util/inactivity-guard"
 
 const log = Log.create({ service: "spec-service" })
 
-function specTimeoutMs(timeoutMs?: number) {
-  if (timeoutMs && timeoutMs > 0) return timeoutMs
-  return Number(Env.get("OPENCORVUS_SPEC_TIMEOUT_MS")) || 120_000
+function specTimeoutMs() {
+  return Number(process.env.OPENCORVUS_SPEC_TIMEOUT_MS) || 300_000
 }
 
 export class SpecFailureError extends Error {
@@ -30,22 +26,17 @@ export class SpecFailureError extends Error {
   }
 }
 
-
 /**
- * Convert SpecAgent output to the shared spec draft used by the orchestrator.
+ * Convert SpecAgent output to the SpecDraft format expected by PlannerService.
+ * This bridges the new agent output to the existing planner interface.
  */
-function toSpecDraft(output: SpecOutputType, explicitGoals?: z.infer<typeof SpecDraftGoal>[]) {
-  void explicitGoals
+function toSpecDraft(output: SpecOutputType): SpecDraft {
   return {
-    draft: {
-      summary: output.summary,
-      content: output.content,
-      requirements: output.requirements,
-      assumptions: output.assumptions,
-      risks: output.risks,
-      clarifications: output.clarifications,
-    } satisfies SpecDraft,
-    derived: (explicitGoals?.length ?? 0) > 0,
+    summary: output.summary,
+    content: output.content,
+    assumptions: output.assumptions,
+    risks: output.risks,
+    clarifications: output.clarifications,
   }
 }
 
@@ -57,40 +48,13 @@ export namespace HeadlessSpecService {
   export async function initial(input: {
     title: string
     request: string
-    goals?: z.infer<typeof SpecDraftGoal>[]
-    sessionID?: string
-    metadata?: Record<string, unknown>
-    timeoutMs?: number
+    goals?: Array<{ description: string; criteria: string; priority?: "blocking" | "advisory" }>
     signal?: AbortSignal
-    stream?: TextHooks
-    onStatus?: (summary: string) => void | Promise<void>
-  }): Promise<SpecDraft & { scope: string; out_of_scope?: string; evidence_sources: string[]; unresolved_questions: string[] }> {
-    const timeoutMs = specTimeoutMs(input.timeoutMs)
+  }): Promise<SpecDraft & { spec_items: SpecOutputType["spec_items"]; evidence_sources: string[]; unresolved_questions: string[] }> {
+    const timeoutMs = specTimeoutMs()
     const controller = new AbortController()
-    let timedOut = false
-    const guard = createInactivityGuard(timeoutMs, () => {
-      timedOut = true
-      controller.abort(new SpecFailureError(`spec agent stalled after ${timeoutMs}ms without activity`))
-    })
-    const signal = input.signal ? AbortSignal.any([input.signal, controller.signal]) : controller.signal
-    const stream = mergeTextHooks(input.stream, {
-      onChunk: async () => {
-        guard.bump()
-      },
-      onStepFinish: async () => {
-        guard.bump()
-      },
-      onFinish: async () => {
-        guard.bump()
-      },
-      onError: async () => {
-        guard.bump()
-      },
-    })
-    const onStatus = async (summary: string) => {
-      guard.bump()
-      await input.onStatus?.(summary)
-    }
+    const timer = setTimeout(() => controller.abort(), timeoutMs)
+    const signal = input.signal ?? controller.signal
 
     log.info("spec service initial starting", {
       title: input.title,
@@ -98,43 +62,96 @@ export namespace HeadlessSpecService {
     })
 
     try {
-      const formulated = await SpecAgent.initial({
-        title: input.title,
-        request: input.request,
-        goals: input.goals,
-        sessionID: input.sessionID,
-        metadata: input.metadata,
-        signal,
-        stream,
-        onStatus,
-      })
+      const output = await Promise.race([
+        SpecAgent.initial({
+          title: input.title,
+          request: input.request,
+          goals: input.goals?.map(g => ({
+            description: g.description,
+            criteria: g.criteria,
+            priority: g.priority,
+          })),
+          signal,
+        }),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new SpecFailureError(`spec agent timed out after ${timeoutMs}ms`)), timeoutMs),
+        ),
+      ])
+
       log.info("spec service initial completed", {
         title: input.title,
-        requirements: formulated.requirements.length,
-        contentLength: formulated.content.length,
-        evidenceSources: formulated.evidence_sources.length,
-        hasClarifications: (formulated.clarifications?.length ?? 0) > 0,
+        specItems: output.spec_items.length,
+        contentLength: output.content.length,
+        evidenceSources: output.evidence_sources.length,
+        hasClarifications: (output.clarifications?.length ?? 0) > 0,
       })
-      const spec = toSpecDraft(formulated, input.goals)
 
       return {
-        ...spec.draft,
-        scope: formulated.scope,
-        out_of_scope: formulated.out_of_scope,
-        evidence_sources: formulated.evidence_sources,
-        unresolved_questions: formulated.unresolved_questions,
+        ...toSpecDraft(output),
+        spec_items: output.spec_items,
+        evidence_sources: output.evidence_sources,
+        unresolved_questions: output.unresolved_questions,
       }
     } catch (error) {
-      log.error("spec service initial failed", {
-        title: input.title,
-        error: String(error),
-        cause: error instanceof Error && "cause" in error ? String(error.cause) : undefined,
-      })
-      if (timedOut) throw new SpecFailureError(`spec agent stalled after ${timeoutMs}ms without activity`)
       if (error instanceof SpecFailureError) throw error
       throw new SpecFailureError("spec agent failed", { cause: error })
     } finally {
-      guard.clear()
+      clearTimeout(timer)
+      controller.abort()
+    }
+  }
+
+  /**
+   * Compile/fill gaps in a spec during the spec compilation phase.
+   */
+  export async function compile(input: {
+    title: string
+    request: string
+    previousSpec?: string
+    goals?: Array<{ description: string; criteria: string; priority?: "blocking" | "advisory" }>
+    signal?: AbortSignal
+  }): Promise<SpecDraft & { spec_items: SpecOutputType["spec_items"]; evidence_sources: string[]; unresolved_questions: string[] }> {
+    const timeoutMs = specTimeoutMs()
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), timeoutMs)
+    const signal = input.signal ?? controller.signal
+
+    log.info("spec service compile starting", { title: input.title })
+
+    try {
+      const output = await Promise.race([
+        SpecAgent.compile({
+          title: input.title,
+          request: input.request,
+          previousSpec: input.previousSpec,
+          goals: input.goals?.map(g => ({
+            description: g.description,
+            criteria: g.criteria,
+            priority: g.priority,
+          })),
+          signal,
+        }),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new SpecFailureError(`spec agent compile timed out after ${timeoutMs}ms`)), timeoutMs),
+        ),
+      ])
+
+      log.info("spec service compile completed", {
+        title: input.title,
+        specItems: output.spec_items.length,
+      })
+
+      return {
+        ...toSpecDraft(output),
+        spec_items: output.spec_items,
+        evidence_sources: output.evidence_sources,
+        unresolved_questions: output.unresolved_questions,
+      }
+    } catch (error) {
+      if (error instanceof SpecFailureError) throw error
+      throw new SpecFailureError("spec agent compile failed", { cause: error })
+    } finally {
+      clearTimeout(timer)
       controller.abort()
     }
   }
@@ -146,40 +163,13 @@ export namespace HeadlessSpecService {
     title: string
     request: string
     rewriteContext: SpecRewriteContext
-    goals?: z.infer<typeof SpecDraftGoal>[]
-    sessionID?: string
-    metadata?: Record<string, unknown>
-    timeoutMs?: number
+    goals?: Array<{ description: string; criteria: string; priority?: "blocking" | "advisory" }>
     signal?: AbortSignal
-    stream?: TextHooks
-    onStatus?: (summary: string) => void | Promise<void>
-  }): Promise<SpecDraft & { scope: string; out_of_scope?: string; evidence_sources: string[]; unresolved_questions: string[] }> {
-    const timeoutMs = specTimeoutMs(input.timeoutMs)
+  }): Promise<SpecDraft & { spec_items: SpecOutputType["spec_items"]; evidence_sources: string[]; unresolved_questions: string[] }> {
+    const timeoutMs = specTimeoutMs()
     const controller = new AbortController()
-    let timedOut = false
-    const guard = createInactivityGuard(timeoutMs, () => {
-      timedOut = true
-      controller.abort(new SpecFailureError(`spec agent rewrite stalled after ${timeoutMs}ms without activity`))
-    })
-    const signal = input.signal ? AbortSignal.any([input.signal, controller.signal]) : controller.signal
-    const stream = mergeTextHooks(input.stream, {
-      onChunk: async () => {
-        guard.bump()
-      },
-      onStepFinish: async () => {
-        guard.bump()
-      },
-      onFinish: async () => {
-        guard.bump()
-      },
-      onError: async () => {
-        guard.bump()
-      },
-    })
-    const onStatus = async (summary: string) => {
-      guard.bump()
-      await input.onStatus?.(summary)
-    }
+    const timer = setTimeout(() => controller.abort(), timeoutMs)
+    const signal = input.signal ?? controller.signal
 
     log.info("spec service rewrite starting", {
       title: input.title,
@@ -187,41 +177,39 @@ export namespace HeadlessSpecService {
     })
 
     try {
-      const formulated = await SpecAgent.rewrite({
-        title: input.title,
-        request: input.request,
-        rewriteContext: input.rewriteContext,
-        goals: input.goals,
-        sessionID: input.sessionID,
-        metadata: input.metadata,
-        signal,
-        stream,
-        onStatus,
-      })
+      const output = await Promise.race([
+        SpecAgent.rewrite({
+          title: input.title,
+          request: input.request,
+          rewriteContext: input.rewriteContext,
+          goals: input.goals?.map(g => ({
+            description: g.description,
+            criteria: g.criteria,
+            priority: g.priority,
+          })),
+          signal,
+        }),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new SpecFailureError(`spec agent rewrite timed out after ${timeoutMs}ms`)), timeoutMs),
+        ),
+      ])
+
       log.info("spec service rewrite completed", {
         title: input.title,
-        requirements: formulated.requirements.length,
+        specItems: output.spec_items.length,
       })
-      const spec = toSpecDraft(formulated, input.goals)
 
       return {
-        ...spec.draft,
-        scope: formulated.scope,
-        out_of_scope: formulated.out_of_scope,
-        evidence_sources: formulated.evidence_sources,
-        unresolved_questions: formulated.unresolved_questions,
+        ...toSpecDraft(output),
+        spec_items: output.spec_items,
+        evidence_sources: output.evidence_sources,
+        unresolved_questions: output.unresolved_questions,
       }
     } catch (error) {
-      log.error("spec service rewrite failed", {
-        title: input.title,
-        error: String(error),
-        cause: error instanceof Error && "cause" in error ? String(error.cause) : undefined,
-      })
-      if (timedOut) throw new SpecFailureError(`spec agent rewrite stalled after ${timeoutMs}ms without activity`)
       if (error instanceof SpecFailureError) throw error
       throw new SpecFailureError("spec agent rewrite failed", { cause: error })
     } finally {
-      guard.clear()
+      clearTimeout(timer)
       controller.abort()
     }
   }

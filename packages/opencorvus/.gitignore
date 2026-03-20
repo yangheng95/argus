@@ -3,15 +3,3 @@ dist
 gen
 app.log
 src/provider/models-snapshot.ts
-
-# Benchmark output files
-overlay-web-benchmark-*.png
-overlay-web-benchmark-*.json
-overlay-web-benchmark-*.ndjson
-prd-full-benchmark-*.log
-prd-full-benchmark-*.json
-prd-full-benchmark-*.ndjson
-prd-full-benchmark.pid
-*-benchmark-report*.json
-*-benchmark-report*.ndjson
-task-queue-test.log

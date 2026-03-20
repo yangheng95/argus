@@ -1,9 +1,6 @@
 import type { Hooks, PluginInput } from "@opencorvus-ai/plugin"
 import { Installation } from "@/installation"
-import { Log } from "@/util/log"
 import { iife } from "@/util/iife"
-
-const log = Log.create({ service: "plugin.copilot" })
 
 const CLIENT_ID = "Ov23li8tweQw6odWQebz"
 // Add a small safety buffer when polling to avoid hitting the server
@@ -43,6 +40,19 @@ export async function CopilotAuthPlugin(input: PluginInput): Promise<Hooks> {
               },
             }
 
+            // TODO: re-enable once messages api has higher rate limits
+            // TODO: move some of this hacky-ness to models.dev presets once we have better grasp of things here...
+            // const base = baseURL ?? model.api.url
+            // const claude = model.id.includes("claude")
+            // const url = iife(() => {
+            //   if (!claude) return base
+            //   if (base.endsWith("/v1")) return base
+            //   if (base.endsWith("/")) return `${base}v1`
+            //   return `${base}/v1`
+            // })
+
+            // model.api.url = url
+            // model.api.npm = claude ? "@ai-sdk/anthropic" : "@ai-sdk/github-copilot"
             model.api.npm = "@ai-sdk/github-copilot"
           }
         }
@@ -104,20 +114,13 @@ export async function CopilotAuthPlugin(input: PluginInput): Promise<Hooks> {
                     isAgent: !(last?.role === "user" && hasNonToolCalls),
                   }
                 }
-              } catch (err) {
-                log.warn("failed to parse request body for copilot headers", {
-                  error: err instanceof Error ? err.message : String(err),
-                })
-              }
+              } catch {}
               return { isVision: false, isAgent: false }
             })
 
-            const initHeaders = init?.headers && typeof init.headers === "object" && !Array.isArray(init.headers)
-              ? init.headers as Record<string, string>
-              : {}
             const headers: Record<string, string> = {
               "x-initiator": isAgent ? "agent" : "user",
-              ...initHeaders,
+              ...(init?.headers as Record<string, string>),
               "User-Agent": `opencorvus/${Installation.VERSION}`,
               Authorization: `Bearer ${info.refresh}`,
               "Openai-Intent": "conversation-edits",
@@ -313,7 +316,7 @@ export async function CopilotAuthPlugin(input: PluginInput): Promise<Hooks> {
           },
           { throwOnError: true },
         )
-        .catch(() => undefined)  // session not found or API unavailable — skip header injection
+        .catch(() => undefined)
       if (!session?.data?.parentID) return
       // mark subagent sessions as agent initiated matching standard that other copilot tools have
       output.headers["x-initiator"] = "agent"

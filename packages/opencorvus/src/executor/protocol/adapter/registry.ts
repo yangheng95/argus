@@ -1,4 +1,4 @@
-import { CodingTool, type CodingToolInfo, type ExecutorNameInfo } from "../../contracts"
+import { CodingTool, type CodingToolInfo, type ExecutorNameInfo } from "../../compat"
 import { ProtocolCapabilities, ProtocolSettings } from "../model"
 import type { ToolAdapter, ToolCallInfo, ToolContextInfo, ToolDefinitionInfo, ToolResultInfo } from "../tool"
 import { ApprovalToolAdapter } from "./approval"

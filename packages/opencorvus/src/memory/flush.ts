@@ -20,7 +20,7 @@ export namespace MemoryFlush {
       // Find the compaction summary message (the most recent assistant message with summary=true)
       let summaryMsg: MessageV2.WithParts | null = null
       for await (const msg of MessageV2.stream(sessionID)) {
-        if (msg.info.role === "assistant" && (msg.info as { summary?: boolean }).summary === true) {
+        if (msg.info.role === "assistant" && (msg.info as any).summary === true) {
           summaryMsg = msg
           break // stream returns newest first
         }

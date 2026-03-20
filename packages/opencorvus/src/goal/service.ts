@@ -257,7 +257,7 @@ function layersFromBlueprint(blueprint: ArchitecturalLayer[]): LayerDef[] {
     kind: kindFromLayerId(layer.id, layer.description),
     isVerification: verificationIds.has(layer.id),
     defaultRuleSelectors: (hasVerificationLayer: boolean) =>
-      verificationIds.has(layer.id) ? ["test"] : hasVerificationLayer ? ["build"] : ["build", "test"],
+      verificationIds.has(layer.id) ? ["test", "lint"] : hasVerificationLayer ? ["build"] : ["build", "test"],
   }))
 }
 
@@ -292,7 +292,7 @@ function layersFromCategories(): LayerDef[] {
     isVerification: cat === "verification",
     defaultRuleSelectors: (hasVerificationLayer: boolean) => {
       if (cat === "bootstrap" || cat === "quality") return ["build"]
-      if (cat === "verification") return ["test"]
+      if (cat === "verification") return ["test", "lint"]
       return hasVerificationLayer ? ["build"] : ["build", "test"]
     },
   }))

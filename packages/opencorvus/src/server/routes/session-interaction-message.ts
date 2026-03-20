@@ -1,5 +1,4 @@
 import { Hono } from "hono"
-import { HTTPException } from "hono/http-exception"
 import { describeRoute, validator, resolver } from "hono-openapi"
 import z from "zod"
 import { Session } from "../../session"
@@ -188,9 +187,9 @@ export function SessionInteractionMessageRoutes() {
         const params = c.req.valid("param")
         const body = c.req.valid("json")
         if (body.id !== params.partID || body.messageID !== params.messageID || body.sessionID !== params.sessionID) {
-          throw new HTTPException(400, {
-            message: "Part ID, message ID, or session ID in body does not match URL parameters",
-          })
+          throw new Error(
+            `Part mismatch: body.id='${body.id}' vs partID='${params.partID}', body.messageID='${body.messageID}' vs messageID='${params.messageID}', body.sessionID='${body.sessionID}' vs sessionID='${params.sessionID}'`,
+          )
         }
         const part = await Session.updatePart(body)
         return c.json(part)

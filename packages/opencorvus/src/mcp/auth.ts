@@ -29,9 +29,7 @@ export namespace McpAuth {
   })
   export type Entry = z.infer<typeof Entry>
 
-  function filepath() {
-    return path.join(Global.Path.data, "mcp-auth.json")
-  }
+  const filepath = path.join(Global.Path.data, "mcp-auth.json")
 
   export async function get(mcpName: string): Promise<Entry | undefined> {
     const data = await all()
@@ -56,7 +54,7 @@ export namespace McpAuth {
   }
 
   export async function all(): Promise<Record<string, Entry>> {
-    return Filesystem.readJson<Record<string, Entry>>(filepath()).catch(() => ({}))
+    return Filesystem.readJson<Record<string, Entry>>(filepath).catch(() => ({}))
   }
 
   export async function set(mcpName: string, entry: Entry, serverUrl?: string): Promise<void> {
@@ -65,13 +63,13 @@ export namespace McpAuth {
     if (serverUrl) {
       entry.serverUrl = serverUrl
     }
-    await Filesystem.writeJson(filepath(), { ...data, [mcpName]: entry }, 0o600)
+    await Filesystem.writeJson(filepath, { ...data, [mcpName]: entry }, 0o600)
   }
 
   export async function remove(mcpName: string): Promise<void> {
     const data = await all()
     delete data[mcpName]
-    await Filesystem.writeJson(filepath(), data, 0o600)
+    await Filesystem.writeJson(filepath, data, 0o600)
   }
 
   export async function updateTokens(mcpName: string, tokens: Tokens, serverUrl?: string): Promise<void> {

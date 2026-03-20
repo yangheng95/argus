@@ -4,17 +4,6 @@ import fs from "fs/promises"
 import { Glob } from "../../src/util/glob"
 import { tmpdir } from "../fixture/fixture"
 
-async function linkdir(target: string, link: string) {
-  try {
-    await fs.symlink(target, link, process.platform === "win32" ? "junction" : "dir")
-    return true
-  } catch (error) {
-    if (process.platform === "win32" && typeof error === "object" && error && "code" in error && error.code === "EPERM")
-      return false
-    throw error
-  }
-}
-
 describe("Glob", () => {
   describe("scan()", () => {
     test("finds files matching pattern", async () => {
@@ -89,7 +78,7 @@ describe("Glob", () => {
       await using tmp = await tmpdir()
       await fs.mkdir(path.join(tmp.path, "realdir"))
       await fs.writeFile(path.join(tmp.path, "realdir", "file.txt"), "", "utf-8")
-      if (!(await linkdir(path.join(tmp.path, "realdir"), path.join(tmp.path, "linkdir")))) return
+      await fs.symlink(path.join(tmp.path, "realdir"), path.join(tmp.path, "linkdir"))
 
       const results = await Glob.scan("**/*.txt", { cwd: tmp.path })
 
@@ -100,7 +89,7 @@ describe("Glob", () => {
       await using tmp = await tmpdir()
       await fs.mkdir(path.join(tmp.path, "realdir"))
       await fs.writeFile(path.join(tmp.path, "realdir", "file.txt"), "", "utf-8")
-      if (!(await linkdir(path.join(tmp.path, "realdir"), path.join(tmp.path, "linkdir")))) return
+      await fs.symlink(path.join(tmp.path, "realdir"), path.join(tmp.path, "linkdir"))
 
       const results = await Glob.scan("**/*.txt", { cwd: tmp.path, symlink: true })
 

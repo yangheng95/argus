@@ -1,37 +1,38 @@
 import { afterEach, describe, expect, test } from "bun:test"
-import type { CodingEventInfo, CodingProvider } from "../../src/executor/contracts"
+import { ClaudeCodeExecutor } from "../../src/executor/claude-code"
+import { CodexExecutor } from "../../src/executor/codex"
+import type { CodingEventInfo, CodingProvider } from "../../src/executor/compat"
 import { ExecutorRegistry } from "../../src/executor/registry"
+
+function feed(items: unknown[], wait = 0): AsyncIterable<unknown> {
+  return {
+    async *[Symbol.asyncIterator]() {
+      for (const item of items) {
+        if (wait > 0) await Bun.sleep(wait)
+        yield item
+      }
+    },
+  }
+}
 
 describe("managed coding executor", () => {
   afterEach(() => {
-    delete process.env.OPENCORVUS_EXECUTOR_TASK_RETENTION_MS
     ExecutorRegistry.reset()
   })
 
   test("registerCoding adapts codex provider to executor contract", async () => {
-    const provider: CodingProvider = {
-      name: "codex",
-      capabilities() {
-        return {
-          builtinTools: true,
-          customTools: true,
-          stream: true,
-          resume: true,
-          interrupt: true,
-          cwd: true,
-          system: true,
-        }
+    const provider = CodexExecutor.create({
+      responses: {
+        create() {
+          return feed([
+            { type: "response.created", response: { id: "resp_1" } },
+            { type: "response.output_text.delta", delta: "Hello" },
+            { type: "response.completed", response: { id: "resp_1", output_text: "Hello world" } },
+          ])
+        },
+        async cancel() {},
       },
-      async *run() {
-        yield { type: "status", status: "created", meta: { id: "resp_1" } }
-        yield { type: "text_delta", text: "Hello" }
-        yield { type: "done", sessionID: "resp_1", output: "Hello world" }
-      },
-      async *resume() {},
-      async interrupt() {
-        return true
-      },
-    }
+    })
 
     const executor = ExecutorRegistry.registerCoding("codex", provider, {
       model: "gpt-5.2-codex",
@@ -62,27 +63,17 @@ describe("managed coding executor", () => {
 
   test("registerCoding works without a hardcoded model", async () => {
     const seen: Array<string | undefined> = []
-    const provider: CodingProvider = {
-      name: "codex",
-      capabilities() {
-        return {
-          builtinTools: true,
-          customTools: true,
-          stream: true,
-          resume: true,
-          interrupt: true,
-          cwd: true,
-          system: true,
-        }
-      },
-      async *run(input) {
-        seen.push(input.model)
-        yield { type: "done", sessionID: "resp_2", output: "ok" }
-      },
-      async *resume() {},
-      async interrupt() {
-        return true
-      },
+    const provider = {
+      ...CodexExecutor.create({
+        responses: {
+          create(input: Record<string, unknown>) {
+            seen.push(typeof input.model === "string" ? input.model : undefined)
+            return feed([
+              { type: "response.completed", response: { id: "resp_2", output_text: "ok" } },
+            ])
+          },
+        },
+      }),
     }
 
     const executor = ExecutorRegistry.registerCoding("codex", provider, {
@@ -105,27 +96,17 @@ describe("managed coding executor", () => {
 
   test("registerCoding forwards declared tools to the provider", async () => {
     const seen: unknown[] = []
-    const provider: CodingProvider = {
-      name: "codex",
-      capabilities() {
-        return {
-          builtinTools: true,
-          customTools: true,
-          stream: true,
-          resume: true,
-          interrupt: true,
-          cwd: true,
-          system: true,
-        }
-      },
-      async *run(input) {
-        seen.push(input.tools)
-        yield { type: "done", sessionID: "resp_tools", output: "ok" }
-      },
-      async *resume() {},
-      async interrupt() {
-        return true
-      },
+    const provider = {
+      ...CodexExecutor.create({
+        responses: {
+          create(input: Record<string, unknown>) {
+            seen.push(input.tools)
+            return feed([
+              { type: "response.completed", response: { id: "resp_tools", output_text: "ok" } },
+            ])
+          },
+        },
+      }),
     }
 
     const executor = ExecutorRegistry.registerCoding("codex", provider, {
@@ -151,33 +132,22 @@ describe("managed coding executor", () => {
         type: "function",
         name: "shell_command",
         description: "run shell",
-        inputSchema: { type: "object" },
+        parameters: { type: "object" },
       },
     ]])
   })
 
   test("registerCoding adapts claude provider and supports abort", async () => {
     const stopped: string[] = []
-    const interruptible: CodingProvider = {
-      name: "claude-code",
-      capabilities() {
-        return {
-          builtinTools: true,
-          customTools: false,
-          stream: true,
-          resume: true,
-          interrupt: true,
-          cwd: true,
-          system: true,
-        }
-      },
-      async *run() {
-        yield { type: "status", status: "init", meta: { session_id: "claude_1" } }
-        yield { type: "text_delta", text: "A" }
-        await Bun.sleep(5)
-        yield { type: "done", sessionID: "claude_1", output: "done" }
-      },
-      async *resume() {},
+    const provider = ClaudeCodeExecutor.create(() =>
+      feed([
+        { type: "system", subtype: "init", session_id: "claude_1" },
+        { type: "stream_event", event: { type: "content_block_delta", index: 0, delta: { type: "text_delta", text: "A" } } },
+        { type: "result", subtype: "success", session_id: "claude_1", result: "done" },
+      ], 5),
+    )
+    const interruptible = {
+      ...provider,
       async interrupt(sessionID: string) {
         stopped.push(sessionID)
         return true
@@ -204,82 +174,21 @@ describe("managed coding executor", () => {
     expect(stopped).toEqual(["session_2"])
   })
 
-  test("unexpected stream end is treated as failed instead of completed", async () => {
-    const provider: CodingProvider = {
-      name: "codex",
-      capabilities() {
-        return {
-          builtinTools: true,
-          customTools: true,
-          stream: true,
-          resume: true,
-          interrupt: true,
-          cwd: true,
-          system: true,
-        }
-      },
-      async *run() {
-        yield { type: "status", status: "created", meta: { id: "resp_unexpected" } }
-        yield { type: "text_delta", text: "partial output" }
-      },
-      async *resume() {},
-      async interrupt() {
-        return true
-      },
-    }
-
-    const executor = ExecutorRegistry.registerCoding("codex", provider, {
-      model: "gpt-5.2-codex",
-    })
-
-    const submitted = await executor.submit({
-      sessionID: "session_unexpected",
-      prompt: "keep going",
-    })
-
-    let status = await executor.status(submitted.queueTaskID)
-    for (let index = 0; index < 10 && status.status !== "failed"; index++) {
-      await Bun.sleep(10)
-      status = await executor.status(submitted.queueTaskID)
-    }
-
-    expect(status.status).toBe("failed")
-    expect(status.error).toBe("executor stream ended unexpectedly")
-  })
-
   test("registerCoding exposes planning generation on the adapted executor", async () => {
-    const seen: Array<Record<string, unknown>> = []
-    const provider: CodingProvider = {
-      name: "codex",
-      capabilities() {
-        return {
-          builtinTools: true,
-          customTools: true,
-          stream: true,
-          resume: true,
-          interrupt: true,
-          cwd: true,
-          system: true,
-        }
+    const provider = CodexExecutor.create({
+      responses: {
+        create() {
+          return feed([
+            { type: "response.output_text.delta", delta: "{\"summary\":\"ok\"" },
+            { type: "response.completed", response: { id: "resp_plan", output_text: "{\"summary\":\"ok\"}" } },
+          ])
+        },
       },
-      async *run(input) {
-        seen.push(input as Record<string, unknown>)
-        yield { type: "text_delta", text: "{\"summary\":\"ok\"" }
-        yield { type: "done", sessionID: "resp_plan", output: "{\"summary\":\"ok\"}" }
-      },
-      async *resume() {},
-      async interrupt() {
-        return true
-      },
-    }
+    })
 
     const executor = ExecutorRegistry.registerCoding("codex", provider, {
       cwd: "/repo",
       system: "system",
-      planning: {
-        spec: true,
-        plan: true,
-      },
     })
 
     expect(executor.planningCapabilities?.()).toEqual({
@@ -290,23 +199,9 @@ describe("managed coding executor", () => {
     const result = await executor.generatePlanning?.({
       stage: "spec",
       prompt: "spec",
-      outputSchema: {
-        type: "object",
-        properties: {
-          summary: { type: "string" },
-        },
-        required: ["summary"],
-      },
     })
 
     expect(result?.output).toBe("{\"summary\":\"ok\"}")
-    expect(seen[0]?.outputSchema).toEqual({
-      type: "object",
-      properties: {
-        summary: { type: "string" },
-      },
-      required: ["summary"],
-    })
   })
 
   test("planning generation keeps read-only sandbox without forcing no-tool mode", async () => {
@@ -342,10 +237,6 @@ describe("managed coding executor", () => {
       tools: [
         { type: "function", name: "shell_command", description: "run shell", inputSchema: { type: "object" } },
       ],
-      planning: {
-        spec: true,
-        plan: true,
-      },
     })
 
     await executor.generatePlanning?.({
@@ -358,99 +249,5 @@ describe("managed coding executor", () => {
     })
     expect(seen[0]?.["toolMode"]).toBeUndefined()
     expect(seen[0]?.["tools"]).toBeUndefined()
-  })
-
-  test("terminal tasks are cleaned up after the retention window", async () => {
-    process.env.OPENCORVUS_EXECUTOR_TASK_RETENTION_MS = "1000"
-    const provider: CodingProvider = {
-      name: "codex",
-      capabilities() {
-        return {
-          builtinTools: true,
-          customTools: true,
-          stream: true,
-          resume: true,
-          interrupt: true,
-          cwd: true,
-          system: true,
-        }
-      },
-      async *run() {
-        yield { type: "done", sessionID: "resp_cleanup", output: "ok" }
-      },
-      async *resume() {},
-      async interrupt() {
-        return true
-      },
-    }
-
-    const executor = ExecutorRegistry.registerCoding("codex", provider, {})
-    const submitted = await executor.submit({
-      sessionID: "session_cleanup",
-      prompt: "cleanup",
-    })
-
-    let status = await executor.status(submitted.queueTaskID)
-    for (let index = 0; index < 10 && status.status !== "completed"; index++) {
-      await Bun.sleep(10)
-      status = await executor.status(submitted.queueTaskID)
-    }
-
-    expect(status.status).toBe("completed")
-    await Bun.sleep(1200)
-    await expect(executor.status(submitted.queueTaskID)).rejects.toThrow("executor task not found")
-    expect(await executor.delivery({ sessionID: "session_cleanup" })).toEqual({ summary: "", diffs: [] })
-  })
-
-  test("streams many deltas without losing output under backpressure", async () => {
-    const total = 1500
-    const chunks = Array.from({ length: total }, (_, index) => `${index},`)
-    const provider: CodingProvider = {
-      name: "claude-code",
-      capabilities() {
-        return {
-          builtinTools: true,
-          customTools: false,
-          stream: true,
-          resume: true,
-          interrupt: true,
-          cwd: true,
-          system: true,
-        }
-      },
-      async *run() {
-        for (const chunk of chunks) {
-          yield { type: "text_delta", text: chunk }
-        }
-        yield { type: "done", sessionID: "resp_pressure", output: chunks.join("") }
-      },
-      async *resume() {},
-      async interrupt() {
-        return true
-      },
-    }
-
-    const executor = ExecutorRegistry.registerCoding("claude-code", provider, {})
-    const submitted = await executor.submit({
-      sessionID: "session_pressure",
-      prompt: "pressure",
-    })
-
-    const seen: string[] = []
-    for await (const event of executor.events({ sessionID: "session_pressure" })) {
-      if (event.type === "message.part.delta" && event.payload?.delta) {
-        seen.push(String(event.payload.delta))
-        if (seen.length % 100 === 0) {
-          await Bun.sleep(1)
-        }
-      }
-    }
-
-    const status = await executor.status(submitted.queueTaskID)
-    const delivery = await executor.delivery({ sessionID: "session_pressure" })
-
-    expect(status.status).toBe("completed")
-    expect(seen).toEqual(chunks)
-    expect(delivery.summary).toBe(chunks.join(""))
   })
 })

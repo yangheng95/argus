@@ -1,12 +1,11 @@
 import { afterEach, expect, mock, spyOn, test } from "bun:test"
-import { CheckRunner } from "../../src/evaluator/service"
+import { EvaluatorService } from "../../src/evaluator/service"
 import { OpencodeExecutor } from "../../src/executor/opencode"
 import { ExecutorRegistry } from "../../src/executor/registry"
 import { Identifier } from "../../src/id/id"
 import { PlannerService } from "../../src/planner/service"
 import { Instance } from "../../src/project/instance"
 import { Server } from "../../src/server/server"
-import { SpecService } from "../../src/spec/service"
 import { Log } from "../../src/util/log"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
@@ -19,55 +18,11 @@ afterEach(async () => {
   await resetDatabase()
 })
 
-function mockSpec() {
-  spyOn(SpecService, "initial").mockImplementation(async (input) => ({
-    summary: `Spec: ${input.title}`,
-    content: `# Scope\n\n${input.request}`,
-    requirements: (input.goals ?? [{
-      description: input.request,
-      criteria: "Task completed successfully",
-      priority: "blocking" as const,
-    }]).map((goal, index) => ({
-      id: `req_${index + 1}`,
-      title: goal.description,
-      description: goal.description,
-      priority: goal.priority ?? ("blocking" as const),
-      acceptance: [goal.criteria],
-      evidence_refs: [],
-      metadata: { check_selector: ["verify_cmd"] },
-    })),
-    assumptions: [],
-    risks: [],
-    clarifications: [],
-    evidence_sources: [],
-    unresolved_questions: [],
-  }))
-}
-
 test(
   "GET /task/:id/progress replays a completed run after executor queue state disappears",
   async () => {
     await using tmp = await tmpdir({ git: true })
-    mockSpec()
-    spyOn(CheckRunner, "evaluate").mockResolvedValue({
-      status: "passed",
-      verdict: "accepted",
-      summary: "Automated checks passed.",
-      checks: [
-        {
-          name: "verify_cmd",
-          status: "passed",
-          evidence: "ok",
-        },
-        {
-          name: "spec_check",
-          status: "passed",
-          evidence: "ok",
-        },
-      ],
-      artifacts: [],
-    })
-    spyOn(CheckRunner, "analyzeDelivery").mockImplementation(async (input) => {
+    spyOn(EvaluatorService, "analyzeDelivery").mockImplementation(async (input) => {
       const allPassed = input.checkResults.every((c) => c.status === "passed")
       return {
         verdict: allPassed ? "accepted" : "rejected",
@@ -105,12 +60,6 @@ test(
       metadata: {
         strategy: "initial",
         steps: ["Execute the task"],
-        waves: [{
-          title: "Wave 1",
-          objective: "Ship the requested task",
-          goal_indices: [0],
-          owned_paths: ["src/task.ts"],
-        }],
         planner: {
           role: "headless_compiler",
           quality: "compiled",

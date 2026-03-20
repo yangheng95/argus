@@ -1,47 +1,22 @@
 import { Bus } from "@/bus"
-import { TaskReport } from "@/tool/task-report"
-import { type GoalJudgmentType } from "@/evaluator/agent"
+import { selectorList } from "@/check/policy"
+import { EvaluatorService } from "@/evaluator/service"
+import { type EvaluatorAnalysisType } from "@/evaluator/agent"
 import { ExecutorRegistry } from "@/executor/registry"
 import { PlannerFailureError } from "@/planner/service"
 import { Plugin } from "@/plugin"
 import { Instance } from "@/project/instance"
 import { Project } from "@/project/project"
+import { installRuntimeShims } from "@/runtime/shims"
 import { Session } from "@/session"
-import { Snapshot } from "@/snapshot"
+import { MessageV2 } from "@/session/message"
 import { Database, and, eq, inArray } from "@/storage/db"
 import { Log } from "@/util/log"
-import { withKeyedLock } from "@/util/lock"
-import { inactivityAgeMs } from "@/util/activity-timeout"
-import { withTimeout } from "@/util/timeout"
-import { OrchestratorRunActor } from "./run-actor"
+import { WorkbenchService } from "@/workbench/service"
 import { DeliveryService } from "./delivery"
-import { HeadlessDeliveryService } from "@/delivery/service"
-import type { DeliveryVerdictType } from "@/delivery/agent"
-import {
-  applyGoalDelivery,
-  buildGoalPrompt,
-  cleanupGoalWorkspace,
-  cleanupStaleGoalWorkspaces,
-  createGoalSession,
-  currentGoal,
-  deliveryFromSnapshot,
-  evaluateGoal,
-  evaluateTask,
-  GOAL_RUN_RETENTION_MS,
-  goalEvaluationOutcome,
-  goalRunExpired,
-  goalRunLocalSessionID,
-  removeGoalRunSession,
-} from "@/goal/runner"
-import { goalDependencyLayers, hasBlockingFailures, pendingBlockingGoals, readyGoalNodes } from "@/goal/scheduler"
 import { OrchestratorGit } from "./git"
 import { OrchestratorMemoryBridge } from "./memory-bridge"
-import { autoRejectInteraction } from "./interaction-actions"
-import { UNATTENDED_AUTO_REPLY, unattendedProject } from "./unattended"
 import {
-  OrchestratorDeliveryTable,
-  OrchestratorGoalRunTable,
-  OrchestratorEvaluationTable,
   OrchestratorInteractionRequestTable,
   OrchestratorRunTable,
   OrchestratorTaskTable,
@@ -49,14 +24,10 @@ import {
 import { Event } from "./model"
 import {
   buildOperatorPrompt,
-  MAX_CONCURRENT_GOALS,
   orchestratorState,
 } from "./helpers"
 import {
   appendExecutorEvent,
-  beginEvaluation,
-  claimExecutorSessionLease,
-  createGoalRun,
   createReplanRun,
   createRetryRun,
   ensureExecutorSession,
@@ -66,809 +37,306 @@ import {
   persistDelivery,
   persistEvaluation,
   persistFailedRunEvaluation,
-  renewExecutorSessionLease,
-  updateGoalRun,
-  updateGoalRunExecutorSessionStatus,
   updateExecutorSessionStatus,
 } from "./transition"
 import { buildRetryContext, decideRetryOrReplan } from "./strategy"
 import {
-  activeGoalRunByCoordinator,
-  findDeliveryByGoalRun,
   findDeliveryByRun,
-  findEvaluationByGoalRun,
   findEvaluationByRun,
-  findExecutorSessionByGoalRun,
-  findExecutorSessionByRun,
-  findGoalRun,
   findInteractionByExternal,
   findPendingInteractions,
   findPlan,
   findRun,
   findTask,
-  goalRunQueueTaskID,
-  latestExecutorEvent,
-  latestGoalRunByCoordinator,
-  listActiveGoalRunsByCoordinator,
-  listGoalsForPlan,
-  listGoalRunsByCoordinator,
-  listPlanNodesByPlan,
+  listGoalsByPlan,
   requireRun,
   requireTask,
   type DeliveryRow,
-  type GoalRow,
-  type GoalRunRow,
-  type InteractionRow,
   type PlanRow,
   type RunRow,
   type TaskRow,
 } from "./store"
 import { Identifier } from "@/id/id"
-import { StreamHub } from "@/protocol/stream-hub"
-import { EXECUTOR_LEASE_MS, executorLeaseHeldByOther, executorLeaseOwner } from "./lease"
-import { OrchestratorProtocol } from "./protocol"
-import { registerGoalRunSession, unregisterGoalRunSession } from "@/server/routes/task-event"
 
 const log = Log.create({ service: "orchestrator-runtime" })
-
-function safeParseInt(value: string | undefined, fallback: number): number {
-  if (!value) return fallback
-  const n = parseInt(value, 10)
-  return Number.isFinite(n) ? n : fallback
-}
-// Hard safety net: if the evaluator produces NO events for this long it is considered hung.
-// Large tests (bun test on a big suite) can take 15-30 min inside the judge agent — do not
-// set this too low. The benchmark's stall timeout (default 10 min of no SSE activity) is the
-// primary signal for live hung detection; this constant is the orchestrator-level last resort.
-const EVALUATION_HARD_TIMEOUT_MS = safeParseInt(process.env.OPENCORVUS_EVALUATION_TIMEOUT_MS, 60 * 60 * 1000)
+const EVALUATION_HARD_TIMEOUT_MS = 10 * 60 * 1000 // 10 minutes total for entire evaluation phase
+const DELIVERY_FETCH_TIMEOUT_MS = 120_000 // 120 seconds for executor.delivery() (git operations can be slow on Windows)
 const DELIVERY_SERVICE_TIMEOUT_MS = 60_000 // 60 seconds for DeliveryService.deliver()
-// Hard cap on delivery verification (the LLM agent that checks the app starts). Default 3 minutes.
-// The evaluator already confirmed correctness; verification is a bonus safety net, not a blocker.
-const DELIVERY_VERIFICATION_TIMEOUT_MS = safeParseInt(process.env.OPENCORVUS_DELIVERY_VERIFICATION_TIMEOUT_MS, 3 * 60 * 1000)
 const evaluatingRuns = new Map<string, number>() // runID → start timestamp, guards against concurrent re-evaluation
-const finalizingRuns = new Set<string>() // guards against concurrent finalizeCoordinatorRun for the same run
-const completingRuns = new Set<string>() // guards against concurrent completeRun for the same run
-const finalizingGoalRuns = new Set<string>() // guards against concurrent finalizeGoalRun for the same goal run
-const runAppliedFiles = new Map<string, Set<string>>() // runID → files applied by goal deliveries, for conflict detection
-const goalRunFinalizeLocks = new Map<string, Promise<void>>()
-const executorEventBridges = new Map<string, AbortController>()
 const EVALUATING_STALE_MS = EVALUATION_HARD_TIMEOUT_MS + 60_000 // consider stale after hard timeout + 1 min buffer
-// After server restart the in-memory maps are empty, so any task in evaluating/delivering with no
-// in-memory record is definitively orphaned. Use a short grace period to avoid false-positives from
-// tasks that just transitioned and haven't registered yet.
-const RESTART_RECOVERY_GRACE_MS = 2 * 60_000 // 2 minutes post-restart grace
-let startupTimestamp = Date.now()
-const FOLLOWUP_RUN_SYNC_GRACE_MS = 250
-const EXECUTOR_OUTPUT_FLUSH_MS = 100
-const EXECUTOR_OUTPUT_FLUSH_CHARS = 1024
 
 // Unattended-mode safeguards
-const RUN_MAX_EXECUTION_MS = safeParseInt(process.env.OPENCORVUS_RUN_TIMEOUT_MS, 2 * 60 * 60 * 1000) // max run execution time (2h default)
-function goalRunTimeoutMs() {
-  return safeParseInt(process.env.OPENCORVUS_GOAL_RUN_TIMEOUT_MS, 60_000)
-}
-const EXECUTOR_STATUS_TIMEOUT_MS = safeParseInt(process.env.OPENCORVUS_EXECUTOR_STATUS_TIMEOUT_MS, 15_000)
-// Set OPENCORVUS_REQUIRE_REPLAN_CONFIRM=1 to require user approval before spec rewrite.
-// Default is off so automated pipelines continue without interruption.
-const REQUIRE_REPLAN_CONFIRM = process.env.OPENCORVUS_REQUIRE_REPLAN_CONFIRM === "1"
+const INTERACTION_STALE_MS = parseInt(process.env.OPENCORVUS_INTERACTION_TIMEOUT_MS || "30000", 10) // auto-reject stale interactions (30s default)
+const RUN_MAX_EXECUTION_MS = parseInt(process.env.OPENCORVUS_RUN_TIMEOUT_MS || String(2 * 60 * 60 * 1000), 10) // max run execution time (2h default)
 
-function interactionStaleMs() {
-  return safeParseInt(process.env.OPENCORVUS_INTERACTION_TIMEOUT_MS, 60_000)
-}
-
-function goalsForRun(run: RunRow) {
-  const plan = run.plan_version_id ? findPlan(run.plan_version_id) : undefined
-  return plan ? listGoalsForPlan(plan) : []
-}
-
-function planForRun(run: RunRow) {
-  return run.plan_version_id ? findPlan(run.plan_version_id) : undefined
-}
-
-function taskBaselineRef(task: TaskRow) {
-  const git = task.metadata?.git
-  if (!git || typeof git !== "object" || Array.isArray(git)) return
-  const baseline = (git as Record<string, unknown>).baseline
-  if (!baseline || typeof baseline !== "object" || Array.isArray(baseline)) return
-  const snapshot = (baseline as Record<string, unknown>).snapshot
-  return typeof snapshot === "string" && snapshot ? snapshot : undefined
-}
-
-function activeGoalRun(run: RunRow) {
-  return activeGoalRunByCoordinator(run.id)
-}
-
-function activeGoalRuns(run: RunRow) {
-  return listActiveGoalRunsByCoordinator(run.id)
-}
-
-function hasPendingGoalEvaluations(run: RunRow) {
-  return listGoalRunsByCoordinator(run.id).some((goalRun) => {
-    if (finalizingGoalRuns.has(goalRun.id)) return true
-    if (goalRun.status !== "completed") return false
-    const evaluation = findEvaluationByGoalRun(goalRun.id)
-    return !evaluation || evaluation.status === "pending"
-  })
-}
-
-function activeExecutorSession(run: RunRow, goalRun = activeGoalRun(run)) {
-  return goalRun ? findExecutorSessionByGoalRun(goalRun.id) : findExecutorSessionByRun(run.id)
-}
-
-function executorLastActivityAt(executorSessionID: string | undefined) {
-  if (!executorSessionID) return 0
-  return latestExecutorEvent(executorSessionID)?.time_observed ?? 0
-}
-
-function goalRunLastActivityAt(run: RunRow, goalRun: GoalRunRow) {
-  const executorSession = findExecutorSessionByGoalRun(goalRun.id)
-  return Math.max(
-    goalRun.time_updated ?? 0,
-    goalRun.time_started ?? 0,
-    run.time_updated ?? 0,
-    run.time_started ?? 0,
-    run.time_created ?? 0,
-    executorLastActivityAt(executorSession?.id),
-  )
-}
-
-function runLastActivityAt(run: RunRow) {
-  const executorSession = findExecutorSessionByRun(run.id)
-  return Math.max(
-    run.time_updated ?? 0,
-    run.time_started ?? 0,
-    run.time_created ?? 0,
-    executorLastActivityAt(executorSession?.id),
-  )
-}
-
-function latestGoalRun(run: RunRow) {
-  return activeGoalRun(run) ?? latestGoalRunByCoordinator(run.id)
-}
-
-function runExecutionTarget(run: RunRow, goalRun = activeGoalRun(run)) {
-  return {
-    goalRun,
-    sessionID: goalRun?.session_id ?? run.session_id ?? undefined,
-    queueTaskID: goalRunQueueTaskID(goalRun) ?? run.executor_ref?.queue_task_id,
+type TranscriptState = {
+  message: MessageV2.Assistant
+  text?: MessageV2.TextPart
+  reasoning?: MessageV2.ReasoningPart
+  tools: Map<string, MessageV2.ToolPart>
+  usage: {
+    input: number
+    output: number
+    total: number
+    cost: number
   }
 }
 
-function withGoalRunFinalizeLock<R>(runID: string, fn: () => Promise<R>) {
-  return withKeyedLock(goalRunFinalizeLocks, runID, fn)
-}
+const transcript = new Map<string, TranscriptState>()
 
-async function provideWorkspace<R>(directory: string | undefined, fn: () => Promise<R>) {
-  if (!directory || directory === Instance.directory) return fn()
-  return Instance.provide({ directory, fn })
-}
+async function projectExecutorEventToSession(taskID: string, run: RunRow, event: {
+  type: string
+  summary?: string
+  payload?: Record<string, unknown>
+}) {
+  if (run.executor === "opencode" || !run.session_id) return
+  const payload = event.payload ?? {}
+  const sessionID = typeof payload.sessionID === "string" ? payload.sessionID : run.session_id
+  if (!sessionID) return
+  if (event.type === "executor.status") return
 
-function interactionAnswers(payload: Record<string, unknown> | null | undefined) {
-  const questions = Array.isArray(payload?.questions) ? payload.questions : []
-  const items = questions.flatMap((item) => {
-    if (!item || typeof item !== "object") return []
-    const row = item as Record<string, unknown>
-    const assumed =
-      typeof row.default_assumption === "string" && row.default_assumption.trim()
-        ? row.default_assumption.trim()
-        : UNATTENDED_AUTO_REPLY
-    return [[assumed]]
-  })
-  return items.length > 0 ? items : [[UNATTENDED_AUTO_REPLY]]
-}
+  const state = await ensureTranscriptState(taskID, run, sessionID)
+  if (!state) return
 
-async function autoAnswerInteraction(row: InteractionRow) {
-  if (row.request_type !== "question") return false
-  const { replyInteractionInternal } = await import("./service")
-  await replyInteractionInternal(row.id, {
-    answers: interactionAnswers(row.payload as Record<string, unknown> | undefined),
-    message: "Auto-answered with default assumptions for unattended execution",
-  }, { sync: false })
-  return true
-}
-
-async function taskDirectory(task: TaskRow) {
-  if (!task.session_id) return Instance.directory
-  const session = await Session.get(task.session_id).catch((err) => {
-    log.warn("failed to get session for task directory", { taskID: task.id, sessionID: task.session_id, error: String(err) })
-    return undefined
-  })
-  return session?.directory ?? Instance.directory
-}
-
-function storedDiffs(delivery: DeliveryRow) {
-  const result = delivery.result
-  const diffs = result && typeof result === "object" && !Array.isArray(result)
-    ? (result as Record<string, unknown>).diffs
-    : undefined
-  if (!Array.isArray(diffs)) return []
-  return diffs.flatMap((item) => {
-    const parsed = Snapshot.FileDiff.safeParse(item)
-    return parsed.success ? [parsed.data] : []
-  })
-}
-
-function planPrompt(plan: PlanRow, run: RunRow) {
-  const override = typeof run.metadata?.prompt_override === "string" ? run.metadata.prompt_override.trim() : ""
-  if (override) return [plan.prompt, "## Run Context", override].join("\n\n")
-
-  // For replan runs, inject failure context from the previous evaluation
-  // so the executor knows what went wrong and what to fix.
-  if (run.metadata?.strategy === "replan" && run.metadata?.replan_context) {
-    const ctx = run.metadata.replan_context as {
-      failureAnalysis?: { classification?: string; summary?: string; rootCause?: string; suggestedStrategy?: string; avoidApproaches?: string[] }
-      previousGoalStatuses?: Array<{ description?: string; status?: string; evidence?: string }>
+  if (event.type === "message.part.delta") {
+    if (payload.field !== "text" || typeof payload.delta !== "string" || payload.delta.length === 0) return
+    if (!state.text) {
+      state.text = await Session.updatePart({
+        id: Identifier.ascending("part"),
+        messageID: state.message.id,
+        sessionID,
+        type: "text",
+        text: "",
+      } satisfies MessageV2.TextPart)
     }
-    const sections: string[] = []
-    if (ctx.failureAnalysis) {
-      const fa = ctx.failureAnalysis
-      sections.push(
-        "## Previous Attempt Failed",
-        fa.summary ?? "",
-        fa.rootCause ? `**Root cause:** ${fa.rootCause}` : "",
-        fa.suggestedStrategy ? `**Strategy:** ${fa.suggestedStrategy}` : "",
-      )
-      if (fa.avoidApproaches && fa.avoidApproaches.length > 0) {
-        sections.push("**Avoid:**\n" + fa.avoidApproaches.map((a) => `- ${a}`).join("\n"))
+    state.text.text += payload.delta
+    await Session.updatePartDelta({
+      sessionID,
+      messageID: state.message.id,
+      partID: state.text.id,
+      field: "text",
+      delta: payload.delta,
+    })
+    return
+  }
+
+  if (event.type === "reasoning.delta") {
+    const delta = typeof event.summary === "string" ? event.summary : ""
+    if (!delta) return
+    if (!state.reasoning) {
+      state.reasoning = await Session.updatePart({
+        id: Identifier.ascending("part"),
+        messageID: state.message.id,
+        sessionID,
+        type: "reasoning",
+        text: "",
+        time: {
+          start: Date.now(),
+        },
+      } satisfies MessageV2.ReasoningPart)
+    }
+    state.reasoning.text += delta
+    await Session.updatePartDelta({
+      sessionID,
+      messageID: state.message.id,
+      partID: state.reasoning.id,
+      field: "text",
+      delta,
+    })
+    return
+  }
+
+  if (event.type === "tool.call") {
+    await flushTranscriptText(state)
+    state.text = undefined
+    state.reasoning = undefined
+    const id = typeof payload.id === "string" ? payload.id : Identifier.ascending("call")
+    const part = await Session.updatePart({
+      id: state.tools.get(id)?.id ?? Identifier.ascending("part"),
+      messageID: state.message.id,
+      sessionID,
+      type: "tool",
+      callID: id,
+      tool: typeof payload.name === "string" ? payload.name : "tool",
+      state: {
+        status: "running",
+        input: toolInput(payload.input),
+        title: typeof payload.name === "string" ? payload.name : "Tool call",
+        metadata: {},
+        time: {
+          start: Date.now(),
+        },
+      },
+    } satisfies MessageV2.ToolPart)
+    state.tools.set(id, part)
+    return
+  }
+
+  if (event.type === "tool.result") {
+    await flushTranscriptText(state)
+    state.text = undefined
+    state.reasoning = undefined
+    const id = typeof payload.id === "string" ? payload.id : ""
+    const match = id ? state.tools.get(id) : undefined
+    if (!match) return
+    const next = await Session.updatePart({
+      ...match,
+      state: {
+        status: "completed",
+        input: match.state.input,
+        output: typeof payload.output === "string" ? payload.output : "",
+        title: match.tool,
+        metadata: {},
+        time: {
+          start: match.state.time.start,
+          end: Date.now(),
+        },
+      },
+    } satisfies MessageV2.ToolPart)
+    state.tools.set(id, next)
+    return
+  }
+
+  if (event.type === "usage.updated") {
+    state.usage = {
+      input: toNumber(payload.inputTokens),
+      output: toNumber(payload.outputTokens),
+      total: toNumber(payload.totalTokens),
+      cost: toNumber(payload.costUSD),
+    }
+    return
+  }
+
+  if (event.type === "session.idle" || event.type === "session.error") {
+    await flushTranscriptText(state)
+    state.text = undefined
+    state.reasoning = undefined
+    if (event.type === "session.idle" && !state.text && typeof payload.output === "string" && payload.output.trim()) {
+      state.text = await Session.updatePart({
+        id: Identifier.ascending("part"),
+        messageID: state.message.id,
+        sessionID,
+        type: "text",
+        text: payload.output,
+      } satisfies MessageV2.TextPart)
+    }
+    if (event.type === "session.error" && typeof payload.error === "string" && payload.error) {
+      if (!state.text) {
+        state.text = await Session.updatePart({
+          id: Identifier.ascending("part"),
+          messageID: state.message.id,
+          sessionID,
+          type: "text",
+          text: payload.error,
+        } satisfies MessageV2.TextPart)
+      } else if (!state.text.text.trim()) {
+        state.text.text = payload.error
+        await Session.updatePart(state.text)
       }
     }
-    if (ctx.previousGoalStatuses && ctx.previousGoalStatuses.length > 0) {
-      sections.push(
-        "**Previous goal results:**",
-        ...ctx.previousGoalStatuses.map((g) => `- ${g.description}: **${g.status}** — ${g.evidence ?? ""}`),
-      )
-    }
-    const context = sections.filter(Boolean).join("\n")
-    if (context) return [plan.prompt, "## Replan Context", context].join("\n\n")
+    const completed = Date.now()
+    state.message = await Session.updateMessage({
+      ...state.message,
+      time: {
+        ...state.message.time,
+        completed,
+      },
+      cost: state.usage.cost,
+      tokens: {
+        total: state.usage.total || undefined,
+        input: state.usage.input,
+        output: state.usage.output,
+        reasoning: 0,
+        cache: {
+          read: 0,
+          write: 0,
+        },
+      },
+    } satisfies MessageV2.Assistant)
+    transcript.delete(run.id)
   }
-
-  return plan.prompt
 }
 
-function evaluationTimedOut(time: number | null | undefined) {
-  const started = time ?? 0
-  return started > 0 && (Date.now() - started) >= EVALUATION_HARD_TIMEOUT_MS
+async function ensureTranscriptState(taskID: string, run: RunRow, sessionID: string) {
+  const current = transcript.get(run.id)
+  if (current) return current
+  const parentID = await transcriptParentID(sessionID, taskID, run.id)
+  const message = await Session.updateMessage({
+    id: Identifier.ascending("message"),
+    sessionID,
+    role: "assistant",
+    parentID,
+    modelID: run.executor,
+    providerID: run.executor,
+    mode: run.executor,
+    agent: run.executor,
+    path: {
+      cwd: Instance.directory,
+      root: Instance.worktree,
+    },
+    time: {
+      created: Date.now(),
+    },
+    cost: 0,
+    tokens: {
+      input: 0,
+      output: 0,
+      reasoning: 0,
+      cache: {
+        read: 0,
+        write: 0,
+      },
+    },
+  } satisfies MessageV2.Assistant)
+  const next = {
+    message,
+    tools: new Map<string, MessageV2.ToolPart>(),
+    usage: {
+      input: 0,
+      output: 0,
+      total: 0,
+      cost: 0,
+    },
+    text: undefined as MessageV2.TextPart | undefined,
+    reasoning: undefined as MessageV2.ReasoningPart | undefined,
+  }
+  transcript.set(run.id, next)
+  return next
 }
 
-function stalledEvaluationSummary() {
-  return `Evaluation stalled after ${Math.round(EVALUATION_HARD_TIMEOUT_MS / 60000)}min without completion`
+async function transcriptParentID(sessionID: string, taskID: string, runID: string) {
+  const rows = await Session.messages({ sessionID, limit: 20 }).catch(() => [])
+  const user = rows.findLast((item) => item.info.role === "user")
+  if (user?.info.role === "user") return user.info.id
+  return `${taskID}:${runID}`
 }
 
-function nodeMeta(node: ReturnType<typeof listPlanNodesByPlan>[number]) {
-  return node.metadata && typeof node.metadata === "object" && !Array.isArray(node.metadata)
-    ? node.metadata as Record<string, unknown>
-    : {}
+async function flushTranscriptText(state: {
+  text?: MessageV2.TextPart
+  reasoning?: MessageV2.ReasoningPart
+}) {
+  if (state.text) await Session.updatePart(state.text)
+  if (state.reasoning) await Session.updatePart({
+    ...state.reasoning,
+    time: {
+      ...state.reasoning.time,
+      end: Date.now(),
+    },
+  } satisfies MessageV2.ReasoningPart)
 }
 
-async function queueGoalRun(
-  task: TaskRow,
-  run: RunRow,
-  plan: PlanRow,
-  next: ReturnType<typeof readyGoalNodes>[number],
-  hooks: RuntimeHooks,
-) {
-  const startRef = taskBaselineRef(task)
-  const baseRef = await Snapshot.track().catch(() => undefined)
-  const workspaceDir = await taskDirectory(task)
-  let session: Awaited<ReturnType<typeof createGoalSession>>
+function toolInput(input: unknown) {
+  if (input && typeof input === "object" && !Array.isArray(input)) return input as Record<string, unknown>
+  if (typeof input !== "string") return {}
   try {
-    session = await createGoalSession(task, next.goal, workspaceDir)
-  } catch (err) {
-    throw err
-  }
-  const goalRun = createGoalRun({
-    taskID: task.id,
-    goalID: next.goal.id,
-    planNodeID: next.node.id,
-    coordinatorRunID: run.id,
-    sessionID: session.id,
-    executor: run.executor,
-    workspaceDir,
-    baseRef,
-    metadata: {
-      title: next.goal.description,
-      selectors: next.goal.metadata?.check_selector,
-    },
-  })
-  // Register goal run session so its bus events reach the task SSE stream directly.
-  registerGoalRunSession(session.id, task.id)
-  const prompt = buildGoalPrompt({
-    plan: {
-      ...plan,
-      prompt: planPrompt(plan, run),
-    },
-    node: next.node,
-    goal: next.goal,
-    taskRequest: task.request,
-  })
-  const source: "planner" | "scheduler" | "system" = run.metadata?.strategy === "operator_note" ? "system" : "scheduler"
-  const executor = ExecutorRegistry.require(run.executor)
-  let submission: Awaited<ReturnType<typeof executor.submit>>
-  try {
-    submission = await provideWorkspace(workspaceDir, () =>
-      executor.submit({
-        sessionID: session.id,
-        prompt,
-        priority: task.priority,
-        source,
-      })
-    )
-  } catch (err) {
-    updateGoalRun(goalRun.id, { status: "failed", error: String(err), time_completed: Date.now() })
-    await removeGoalRunSession(goalRun).catch((e) => log.warn("cleanup session after submit failure", { error: String(e) }))
-    throw err
-  }
-  const now = Date.now()
-  updateGoalRun(goalRun.id, {
-    session_id: submission.sessionID,
-    status: "accepted",
-    time_started: now,
-    metadata: {
-      ...(goalRun.metadata ?? {}),
-      queue_task_id: submission.queueTaskID,
-      provider_session_id: submission.sessionID,
-      task_base_ref: startRef,
-    },
-  })
-  await hooks.updateRun(
-    run,
-    {
-      status: "accepted",
-      phase: run.phase === "replan" || run.metadata?.strategy === "replan" ? "replan" : "dispatch",
-      time_started: run.time_started ?? now,
-    },
-    `Goal queued: ${next.goal.description}`,
-  )
-  await hooks.updateTask(
-    task,
-    {
-      status: "running",
-      time_started: task.time_started ?? now,
-    },
-    `Running goal: ${next.goal.description}`,
-  )
-  const executorSession = ensureExecutorSession({
-    taskID: task.id,
-    runID: run.id,
-    goalRunID: goalRun.id,
-    provider: run.executor,
-    refs: {
-      provider_session_id: submission.sessionID,
-      queue_task_id: submission.queueTaskID,
-    },
-    settings: {
-      cwd: workspaceDir,
-    },
-    started: now,
-  })
-  appendExecutorEvent(executorSession.id, task.id, run.id, run.executor, goalRun.id, {
-    provider: run.executor,
-    kind: "lifecycle",
-    summary: "Goal accepted by executor",
-    refs: executorSession.refs ?? undefined,
-    payload: {
-      goal_id: next.goal.id,
-      goal_run_id: goalRun.id,
-      queue_task_id: submission.queueTaskID,
-      provider_session_id: submission.sessionID,
-    },
-  })
-  consumeExecutorEvents(task.id, run.id, goalRun.id, run.executor, submission.sessionID, executorSession.id)
-  return goalRun
+    const parsed = JSON.parse(input)
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) return parsed as Record<string, unknown>
+  } catch {}
+  return input ? { value: input } : {}
 }
 
-function effectiveMaxConcurrentGoals(task: TaskRow) {
-  return task.budget?.max_concurrent_goals ?? MAX_CONCURRENT_GOALS
-}
-
-async function queueReadyGoalRuns(task: TaskRow, run: RunRow, plan: PlanRow, hooks: RuntimeHooks) {
-  const maxConcurrent = effectiveMaxConcurrentGoals(task)
-  const activeRuns = activeGoalRuns(run)
-  const active = activeRuns.length
-  const slots = maxConcurrent - active
-  if (slots <= 0) return 0
-  const nodes = listPlanNodesByPlan(plan.id)
-  const goals = listGoalsForPlan(plan)
-  const ready = readyGoalNodes(nodes, goals)
-  if (ready.length === 0) return 0
-  // Exclude goals that already have an active goal run (goal.status stays "pending"
-  // while a goal run is executing, so readyGoalNodes would otherwise re-dispatch them).
-  const activeGoalIds = new Set(activeRuns.map((gr) => gr.goal_id).filter(Boolean))
-  const dispatchable = ready.filter((e) => !activeGoalIds.has(e.goal.id))
-  if (dispatchable.length === 0) return 0
-  // Log dependency layers on first dispatch of a run for visibility.
-  // Also reset the conflict-tracking context: when no goals are currently active, the
-  // new batch is sequential (not concurrent) with all previous batches, so files written
-  // by earlier sequential goals must not block later sequential goals from updating them.
-  // Conflict detection is only meaningful within a single concurrent batch.
-  if (active === 0) {
-    runAppliedFiles.delete(run.id)
-    const layers = goalDependencyLayers(nodes, goals)
-    log.info("goal dependency layers", {
-      runID: run.id,
-      maxConcurrent,
-      layers: layers.map((layer, i) => ({
-        layer: i,
-        goals: layer.map((e) => e.goal.description),
-      })),
-    })
-  }
-  const batch = dispatchable.slice(0, slots)
-  log.info("dispatching goal batch", {
-    runID: run.id,
-    ready: ready.length,
-    dispatching: batch.length,
-    active,
-    maxConcurrent,
-    goals: batch.map((e) => e.goal.description),
-  })
-  let queued = 0
-  for (const next of batch) {
-    await queueGoalRun(task, run, plan, next, hooks)
-    queued++
-  }
-  return queued
-}
-
-async function continueGoalPipeline(task: TaskRow, run: RunRow, hooks: RuntimeHooks) {
-  const plan = planForRun(run)
-  if (!plan) throw new Error(`Task ${task.id} has no plan`)
-  const refreshedTask = requireTask(task.id)
-  const refreshedRun = requireRun(run.id)
-  if (hasPendingGoalEvaluations(refreshedRun)) return
-  if (await queueReadyGoalRuns(refreshedTask, refreshedRun, plan, hooks)) return
-  if (activeGoalRuns(refreshedRun).length > 0) return
-  // Check if any blocking goal failed — if other goals are still running, wait for them
-  const allGoalRuns = listGoalRunsByCoordinator(refreshedRun.id)
-  const hasRunning = allGoalRuns.some((gr) => gr.status === "running" || gr.status === "accepted" || gr.status === "blocked")
-  if (hasRunning) return
-  // Check if any blocking goal already failed — this covers the parallel case
-  // where a blocking goal failed while siblings were still running, and the
-  // siblings have now completed. pendingBlockingGoals only checks status=pending
-  // so it would miss failed goals.
-  const goals = goalsForRun(refreshedRun)
-  if (hasBlockingFailures(goals)) {
-    const failedGoals = goals.filter((g) => g.source !== "system" && g.priority === "blocking" && g.status === "failed")
-    await handleEvaluationFailure(
-      refreshedTask,
-      refreshedRun,
-      `Blocking goal(s) failed: ${failedGoals.map((g) => g.description).join(", ")}`,
-      hooks,
-    )
-    return
-  }
-  const pending = pendingBlockingGoals(goals)
-  if (pending.length > 0) {
-    await handleEvaluationFailure(
-      refreshedTask,
-      refreshedRun,
-      `No ready blocking goals remain for dispatch: ${pending.map((goal) => goal.description).join(", ")}`,
-      hooks,
-    )
-    return
-  }
-  await finalizeCoordinatorRun(requireTask(task.id), requireRun(run.id), hooks)
-}
-
-async function finalizeCoordinatorRun(task: TaskRow, run: RunRow, hooks: RuntimeHooks) {
-  if (activeGoalRuns(run).length > 0) return
-  if (finalizingRuns.has(run.id)) {
-    log.info("already finalizing run, skipping concurrent call", { runID: run.id })
-    return
-  }
-  finalizingRuns.add(run.id)
-  evaluatingRuns.set(run.id, Date.now())
-  try {
-    await _finalizeCoordinatorRun(task, run, hooks)
-  } finally {
-    finalizingRuns.delete(run.id)
-    evaluatingRuns.delete(run.id)
-    runAppliedFiles.delete(run.id)
-  }
-}
-
-async function _finalizeCoordinatorRun(task: TaskRow, run: RunRow, hooks: RuntimeHooks) {
-  const existingDelivery = findDeliveryByRun(run.id)
-  if (existingDelivery) {
-    const evaluation = findEvaluationByRun(run.id)
-    if (!evaluation) {
-      await runEvaluation(task, run, existingDelivery, hooks)
-      return
-    }
-    if (evaluation.status === "pending") {
-      if (!evaluationTimedOut(evaluation.time_updated ?? evaluation.time_created)) return
-      const summary = stalledEvaluationSummary()
-      const now = Date.now()
-      Database.use((db) =>
-        db
-          .update(OrchestratorEvaluationTable)
-          .set({
-            status: "failed",
-            verdict: "rejected",
-            summary,
-            checks: [{
-              name: "evaluation_timeout",
-              status: "failed",
-              evidence: summary,
-            }],
-            time_completed: now,
-            time_updated: now,
-          })
-          .where(eq(OrchestratorEvaluationTable.id, evaluation.id))
-          .run(),
-      )
-      await hooks.updateRun(run, { status: "failed", error: summary, blocking_reason: null, time_completed: now }, summary)
-      await hooks.updateTask(task, { status: "failed", error: summary, blocking_reason: null, time_completed: now }, summary)
-      return
-    }
-    if (evaluation.status === "passed") {
-      await publishAcceptedDelivery(task, run, existingDelivery, hooks)
-      return
-    }
-    await handleEvaluationFailure(task, run, evaluation.summary, hooks)
-    return
-  }
-  const baseRef = taskBaselineRef(task)
-  if (!baseRef) throw new Error(`Task ${task.id} has no baseline snapshot`)
-  const completedAt = Date.now()
-  await hooks.updateRun(run, { status: "completed", phase: "evaluate", blocking_reason: null, error: null, time_completed: completedAt }, "All goals executed")
-  await hooks.updateTask(task, { status: "evaluating", blocking_reason: null, error: null }, "Evaluating final delivery")
-  const { delivery } = await deliveryFromSnapshot(baseRef, "Task delivery")
-  const deliveryID = Identifier.ascending("delivery")
-  const evaluationID = Identifier.ascending("evaluation")
-  persistDelivery({ task, run, deliveryID, delivery, now: Date.now() })
-  beginEvaluation({
-    task,
-    run,
-    deliveryID,
-    evaluationID,
-    now: Date.now(),
-    summary: "Evaluating task delivery",
-  })
-  await Plugin.trigger("delivery.ready", {
-    taskID: task.id,
-    runID: run.id,
-    deliveryID,
-    delivery: {
-      summary: delivery.summary,
-      changedFiles: delivery.diffs.map((item) => item.file),
-      diffs: delivery.diffs,
-    },
-  }, { actions: [] }).catch((err) => {
-    log.warn("delivery.ready plugin trigger failed", { taskID: task.id, runID: run.id, deliveryID, error: String(err) })
-  })
-  const goals = goalsForRun(run)
-  const { result, analysis, analysisError } = await evaluateTask({ task, goals, delivery })
-  const finalVerdict = result.verdict
-  const finalStatus = result.status
-  const finalSummary = result.summary
-  persistEvaluation({
-    task,
-    run,
-    deliveryID,
-    evaluationID,
-    delivery,
-    result,
-    analysis,
-    finalVerdict,
-    finalStatus,
-    finalSummary,
-    goals,
-    analysisError,
-  })
-  if (finalStatus === "passed") {
-    if (pendingBlockingGoals(goalsForRun(run)).length === 0) {
-      const accepted = findDeliveryByRun(run.id)
-      if (!accepted) {
-        await hooks.updateTask(task, { status: "completed", blocking_reason: null, error: null, time_completed: Date.now() }, "Task completed")
-        return
-      }
-      await publishAcceptedDelivery(task, run, accepted, hooks)
-      return
-    }
-  }
-  await handleEvaluationFailure(requireTask(task.id), run, finalSummary, hooks, analysis)
-}
-
-async function finalizeGoalRun(task: TaskRow, run: RunRow, goalRun: GoalRunRow, hooks: RuntimeHooks) {
-  if (finalizingGoalRuns.has(goalRun.id)) {
-    log.info("already finalizing goal run, skipping concurrent call", { goalRunID: goalRun.id })
-    return
-  }
-  finalizingGoalRuns.add(goalRun.id)
-  try {
-    await withGoalRunFinalizeLock(run.id, () => _finalizeGoalRun(task, run, goalRun, hooks))
-  } finally {
-    finalizingGoalRuns.delete(goalRun.id)
-  }
-}
-
-async function _finalizeGoalRun(task: TaskRow, run: RunRow, goalRun: GoalRunRow, hooks: RuntimeHooks) {
-  OrchestratorRuntime.stopExecutorEventBridge(goalRun.session_id ?? undefined)
-  if (goalRun.session_id) unregisterGoalRunSession(goalRun.session_id)
-  const goals = goalsForRun(run)
-  const goal = currentGoal(goalRun, goals)
-  if (!goal) throw new Error(`Goal ${goalRun.goal_id} not found for run ${run.id}`)
-  const workspaceDir = goalRun.workspace_dir ?? undefined
-  const existingDelivery = findDeliveryByGoalRun(goalRun.id)
-  const existingEvaluation = findEvaluationByGoalRun(goalRun.id)
-  let disposed = false
-  const dispose = async () => {
-    if (disposed) return
-    disposed = true
-    await cleanupGoalWorkspace(workspaceDir)
-    await removeGoalRunSession(goalRun)
-  }
-  if (existingEvaluation) {
-    if (existingEvaluation.status === "pending") {
-      if (!evaluationTimedOut(existingEvaluation.time_updated ?? existingEvaluation.time_created)) return
-      const summary = stalledEvaluationSummary()
-      const now = Date.now()
-      Database.use((db) =>
-        db
-          .update(OrchestratorEvaluationTable)
-          .set({
-            status: "failed",
-            verdict: "rejected",
-            summary,
-            checks: [{
-              name: "evaluation_timeout",
-              status: "failed",
-              evidence: summary,
-            }],
-            time_completed: now,
-            time_updated: now,
-          })
-          .where(eq(OrchestratorEvaluationTable.id, existingEvaluation.id))
-          .run(),
-      )
-      updateGoalRun(goalRun.id, { status: "failed", error: summary, blocking_reason: null, time_completed: now })
-      if (goal.priority === "advisory") {
-        await dispose().catch((err) => log.warn("dispose failed after advisory timeout", { error: String(err) }))
-        await continueGoalPipeline(requireTask(task.id), requireRun(run.id), hooks)
-        return
-      }
-      await dispose().catch((err) => log.warn("dispose failed after evaluation timeout", { error: String(err) }))
-      if (activeGoalRuns(requireRun(run.id)).length > 0) return
-      await handleEvaluationFailure(requireTask(task.id), requireRun(run.id), summary, hooks)
-      return
-    }
-    if (existingEvaluation.status === "passed" || goal.priority === "advisory") {
-      await dispose().catch((err) => log.warn("dispose failed after passed evaluation", { error: String(err) }))
-      await continueGoalPipeline(requireTask(task.id), requireRun(run.id), hooks)
-      return
-    }
-    await dispose().catch((err) => log.warn("dispose failed after failed evaluation", { error: String(err) }))
-    if (activeGoalRuns(requireRun(run.id)).length > 0) return
-    await handleEvaluationFailure(requireTask(task.id), requireRun(run.id), existingEvaluation.summary, hooks)
-    return
-  }
-  try {
-    const deliveryID = existingDelivery?.id ?? Identifier.ascending("delivery")
-    const evaluationID = Identifier.ascending("evaluation")
-    const goalDir = workspaceDir ?? Instance.directory
-    const deliveredInfo = existingDelivery
-      ? {
-          mergeRef: goalRun.merge_ref,
-          delivery: {
-            summary: existingDelivery.summary,
-            diffs: storedDiffs(existingDelivery),
-          },
-        }
-      : await provideWorkspace(goalDir, () =>
-          deliveryFromSnapshot(goalRun.base_ref ?? undefined, `Goal delivery: ${goal.description}`)
-        )
-    const delivered = deliveredInfo.delivery
-    if (!existingDelivery) {
-      persistDelivery({ task, run, goalRunID: goalRun.id, deliveryID, delivery: delivered, now: Date.now() })
-    }
-    beginEvaluation({
-      task,
-      run,
-      goalRunID: goalRun.id,
-      deliveryID,
-      evaluationID,
-      now: Date.now(),
-      summary: `Evaluating goal delivery: ${goal.description}`,
-    })
-    // Wrap evaluateGoal with the hard timeout so the actor does not block forever
-    // if the LLM hangs. On timeout the pending evaluation record will be force-failed
-    // by the next syncRun call via evaluationTimedOut().
-    const { result, analysis, analysisError } = await withTimeout(
-      provideWorkspace(goalDir, () => evaluateGoal({ task, goal, delivery: delivered })),
-      EVALUATION_HARD_TIMEOUT_MS,
-    )
-    const outcome = goalEvaluationOutcome(result, analysis)
-    const runScopedAnalysis = remapGoalAnalysisToRunScope(analysis, goals, goal)
-    persistEvaluation({
-      task,
-      run,
-      goalRunID: goalRun.id,
-      deliveryID,
-      evaluationID,
-      delivery: delivered,
-      result,
-      analysis: runScopedAnalysis,
-      finalVerdict: outcome.verdict,
-      finalStatus: outcome.status,
-      finalSummary: outcome.summary,
-      goals: [goal],
-      finalizeSpec: false,
-      analysisError,
-    })
-    updateGoalRun(goalRun.id, {
-      status: outcome.status === "passed" ? "completed" : "failed",
-      error: outcome.status === "passed" ? null : outcome.summary,
-      blocking_reason: null,
-      merge_ref: deliveredInfo.mergeRef ?? goalRun.merge_ref,
-      time_completed: Date.now(),
-    })
-    // Delivery merge is already serialized by the outer withGoalRunFinalizeLock in
-    // finalizeGoalRun(). Do NOT acquire the same lock here — it is non-reentrant
-    // and would deadlock.
-    let deliveryConflict = false
-    if (outcome.status === "passed" || (goal.priority === "advisory" && delivered.diffs.length > 0)) {
-      const appliedByRun = runAppliedFiles.get(run.id) ?? new Set<string>()
-      const conflicts = delivered.diffs.filter((d) => d.status !== "deleted" && appliedByRun.has(d.file))
-      if (conflicts.length > 0 && effectiveMaxConcurrentGoals(task) > 1) {
-        // In parallel mode, file conflicts are hard failures — no silent overwrite
-        log.error("parallel goal delivery: file conflict detected", {
-          goal: goal.description,
-          conflicts: conflicts.map((d) => d.file),
-        })
-        updateGoalRun(goalRun.id, {
-          status: "failed",
-          error: `File conflict with earlier goal: ${conflicts.map((d) => d.file).join(", ")}`,
-          time_completed: Date.now(),
-        })
-        deliveryConflict = true
-      } else {
-        if (conflicts.length > 0) {
-          log.warn("goal delivery: file was already written by an earlier iterative stage in this run — later stage is overwriting it", {
-            goal: goal.description,
-            conflicts: conflicts.map((d) => d.file),
-          })
-        }
-        for (const diff of delivered.diffs) {
-          if (diff.status !== "deleted") appliedByRun.add(diff.file)
-        }
-        runAppliedFiles.set(run.id, appliedByRun)
-        await provideWorkspace(await taskDirectory(task), () =>
-          applyGoalDelivery({
-            directory: Instance.directory,
-            delivery: delivered,
-          })
-        )
-      }
-    }
-    // If delivery was rejected due to file conflict, treat as a blocking goal failure
-    if (deliveryConflict) {
-      const refreshedRun = requireRun(run.id)
-      if (activeGoalRuns(refreshedRun).length > 0) return
-      await handleEvaluationFailure(requireTask(task.id), refreshedRun, `File conflict in goal: ${goal.description}`, hooks, runScopedAnalysis)
-      return
-    }
-    if (outcome.status === "passed" || goal.priority === "advisory") {
-      await continueGoalPipeline(requireTask(task.id), requireRun(run.id), hooks)
-      return
-    }
-    // Blocking goal failed. If other goals are still running in parallel,
-    // defer failure handling — let continueGoalPipeline deal with it once
-    // all active goals have finished.
-    const refreshedRun = requireRun(run.id)
-    const stillActive = activeGoalRuns(refreshedRun)
-    if (stillActive.length > 0) {
-      log.info("blocking goal failed but other goals still active, deferring failure handling", {
-        failedGoal: goal.description,
-        activeGoals: stillActive.length,
-        runID: run.id,
-      })
-      return
-    }
-    await handleEvaluationFailure(requireTask(task.id), refreshedRun, outcome.summary, hooks, runScopedAnalysis)
-  } finally {
-    await dispose().catch((err) => log.warn("dispose failed after goal run finalization", { error: String(err) }))
-  }
+function toNumber(value: unknown) {
+  return Number.isFinite(Number(value)) ? Number(value) : 0
 }
 
 async function prepareRun(task: TaskRow, run: RunRow, plan: PlanRow | undefined, hooks: RuntimeHooks) {
@@ -887,272 +355,7 @@ async function prepareRun(task: TaskRow, run: RunRow, plan: PlanRow | undefined,
   return
 }
 
-function goalRunSyncState(goalRun: GoalRunRow) {
-  if (goalRun.status === "running") return "running" as const
-  if (goalRun.status === "blocked") return "blocked" as const
-  return "accepted" as const
-}
-
-async function syncActiveGoalRun(task: TaskRow, run: RunRow, goalRun: GoalRunRow, hooks: RuntimeHooks) {
-  const target = runExecutionTarget(run, goalRun)
-  const queueTaskID = target.queueTaskID
-  if (!queueTaskID) return goalRunSyncState(goalRun)
-  let executorSession = activeExecutorSession(run, goalRun)
-  if (executorSession?.status === "completed") {
-    await finalizeGoalRun(task, run, findGoalRun(goalRun.id) ?? goalRun, hooks)
-    return "handled" as const
-  }
-  const now = Date.now()
-  if (executorSession?.status === "active") {
-    const previousOwner = executorSession.lease_owner
-    const claimed = claimExecutorSessionLease({
-      executorSessionID: executorSession.id,
-      now,
-    })
-    if (!claimed) {
-      executorSession = activeExecutorSession(run, goalRun)
-    } else {
-      executorSession = claimed
-    }
-    if (executorLeaseHeldByOther(executorSession, now)) {
-      log.info("skipping goal run sync because executor lease is owned by another runtime", {
-        runID: run.id,
-        goalRunID: goalRun.id,
-        taskID: task.id,
-        leaseOwner: executorSession?.lease_owner,
-        leaseUntil: executorSession?.lease_until,
-      })
-      return goalRunSyncState(goalRun)
-    }
-    if (!claimed) {
-      await handleExecutionFailure(
-        run,
-        `Executor lease expired after ${Math.round(EXECUTOR_LEASE_MS / 1000)}s without renewal`,
-        hooks,
-        goalRun,
-      )
-      return "handled" as const
-    }
-    if (previousOwner && previousOwner !== executorLeaseOwner() && previousOwner !== claimed.lease_owner) {
-      log.info("claimed expired executor lease from another runtime", {
-        runID: run.id,
-        goalRunID: goalRun.id,
-        taskID: task.id,
-        previousOwner,
-        leaseOwner: claimed.lease_owner,
-      })
-    }
-  }
-  const executor = ExecutorRegistry.require(run.executor)
-  let queue
-  try {
-    queue = await withTimeout(executor.status(queueTaskID), EXECUTOR_STATUS_TIMEOUT_MS)
-  } catch (error) {
-    await handleExecutionFailure(run, `Executor status unavailable: ${String(error)}`, hooks, goalRun)
-    return "handled" as const
-  }
-  if (executorSession?.id) {
-    renewExecutorSessionLease({ executorSessionID: executorSession.id })
-  }
-
-  if (queue.status === "blocked") {
-    if (goalRun.status !== "blocked") {
-      updateGoalRun(goalRun.id, { status: "blocked", blocking_reason: "executor" })
-    }
-    return "blocked" as const
-  }
-
-  if (queue.status === "queued" || queue.status === "retrying") {
-    if (goalRun.status === "blocked") {
-      updateGoalRun(goalRun.id, { status: "accepted", blocking_reason: null })
-    }
-    return "accepted" as const
-  }
-
-  if (queue.status === "running") {
-    const now = Date.now()
-    const maxMs = goalRunTimeoutMs()
-    const lastActivityAt = goalRunLastActivityAt(run, goalRun)
-    const inactiveFor = inactivityAgeMs(now, lastActivityAt)
-    if (lastActivityAt > 0 && inactiveFor > maxMs) {
-      log.warn("goal run exceeded inactivity timeout", {
-        runID: run.id,
-        goalRunID: goalRun.id,
-        maxMs,
-        inactiveFor,
-        lastActivityAt,
-      })
-      try {
-        await executor.abort({
-          sessionID: target.sessionID,
-          queueTaskID,
-        })
-      } catch (abortErr) {
-        log.warn("failed to abort stalled goal run executor", {
-          runID: run.id,
-          goalRunID: goalRun.id,
-          error: String(abortErr),
-        })
-      }
-      await handleExecutionFailure(
-        run,
-        `Goal run stalled after ${Math.round(maxMs / 60000)}min without execution activity`,
-        hooks,
-        goalRun,
-      )
-      return "handled" as const
-    }
-    if (goalRun.status !== "running") {
-      updateGoalRun(goalRun.id, { status: "running", blocking_reason: null })
-    }
-    return "running" as const
-  }
-
-  if (queue.status === "failed") {
-    await handleExecutionFailure(run, queue.error ?? "Executor run failed", hooks, goalRun)
-    return "handled" as const
-  }
-
-  if (queue.status === "completed") {
-    await finalizeGoalRun(task, run, goalRun, hooks)
-    return "handled" as const
-  }
-
-  return goalRunSyncState(goalRun)
-}
-
-async function syncCoordinatorExecutor(task: TaskRow, run: RunRow, hooks: RuntimeHooks) {
-  const target = runExecutionTarget(run, undefined)
-  const queueTaskID = target.queueTaskID
-  if (!queueTaskID) return false
-  let executorSession = activeExecutorSession(run, undefined)
-  const now = Date.now()
-  if (executorSession?.status === "active") {
-    const previousOwner = executorSession.lease_owner
-    const claimed = claimExecutorSessionLease({
-      executorSessionID: executorSession.id,
-      now,
-    })
-    if (!claimed) {
-      executorSession = activeExecutorSession(run, undefined)
-    } else {
-      executorSession = claimed
-    }
-    if (executorLeaseHeldByOther(executorSession, now)) {
-      log.info("skipping coordinator executor sync because executor lease is owned by another runtime", {
-        runID: run.id,
-        taskID: task.id,
-        leaseOwner: executorSession?.lease_owner,
-        leaseUntil: executorSession?.lease_until,
-      })
-      return true
-    }
-    if (!claimed) {
-      await handleExecutionFailure(
-        run,
-        `Executor lease expired after ${Math.round(EXECUTOR_LEASE_MS / 1000)}s without renewal`,
-        hooks,
-      )
-      return true
-    }
-    if (previousOwner && previousOwner !== executorLeaseOwner() && previousOwner !== claimed.lease_owner) {
-      log.info("claimed expired coordinator executor lease from another runtime", {
-        runID: run.id,
-        taskID: task.id,
-        previousOwner,
-        leaseOwner: claimed.lease_owner,
-      })
-    }
-  }
-  const executor = ExecutorRegistry.require(run.executor)
-  let queue
-  try {
-    queue = await withTimeout(executor.status(queueTaskID), EXECUTOR_STATUS_TIMEOUT_MS)
-  } catch (error) {
-    await handleExecutionFailure(run, `Executor status unavailable: ${String(error)}`, hooks)
-    return true
-  }
-  if (executorSession?.id) {
-    renewExecutorSessionLease({ executorSessionID: executorSession.id })
-  }
-
-  if (queue.status === "blocked") {
-    if (run.status !== "blocked") {
-      await hooks.updateRun(run, { status: "blocked", blocking_reason: "executor" }, "Executor is awaiting input")
-    }
-    if (task.status !== "blocked") {
-      await hooks.updateTask(task, { status: "blocked", blocking_reason: "executor" }, "Executor is awaiting input")
-    }
-    return true
-  }
-
-  if (queue.status === "queued" || queue.status === "retrying") {
-    if (run.status === "blocked") {
-      await hooks.updateRun(run, { status: "accepted", blocking_reason: null }, "Run resumed")
-    }
-    if (task.status === "blocked") {
-      await hooks.updateTask(task, { status: "running", blocking_reason: null }, "Run resumed")
-    }
-    return true
-  }
-
-  if (queue.status === "running") {
-    const now = Date.now()
-    const lastActivityAt = runLastActivityAt(run)
-    const inactiveFor = inactivityAgeMs(now, lastActivityAt)
-    if (lastActivityAt > 0 && inactiveFor > RUN_MAX_EXECUTION_MS) {
-      log.warn("run exceeded inactivity timeout", {
-        runID: run.id,
-        maxMs: RUN_MAX_EXECUTION_MS,
-        inactiveFor,
-        lastActivityAt,
-      })
-      try {
-        await executor.abort({
-          sessionID: target.sessionID,
-          queueTaskID,
-        })
-      } catch (abortErr) {
-        log.warn("failed to abort stalled executor", { runID: run.id, error: String(abortErr) })
-      }
-      await handleExecutionFailure(
-        run,
-        `Run stalled after ${Math.round(RUN_MAX_EXECUTION_MS / 60000)}min without execution activity`,
-        hooks,
-      )
-      return true
-    }
-    if (run.status !== "running") {
-      await hooks.updateRun(run, { status: "running", blocking_reason: null }, "Run executing")
-    }
-    if (task.status !== "running") {
-      await hooks.updateTask(task, { status: "running", blocking_reason: null }, "Run executing")
-    }
-    return true
-  }
-
-  if (queue.status === "failed") {
-    await handleExecutionFailure(run, queue.error ?? "Executor run failed", hooks)
-    return true
-  }
-
-  if (queue.status === "completed") {
-    await completeRun(run, hooks)
-    return true
-  }
-
-  return true
-}
-
 export namespace OrchestratorRuntime {
-  export function stopExecutorEventBridge(sessionID?: string) {
-    if (!sessionID) return
-    const controller = executorEventBridges.get(sessionID)
-    if (!controller) return
-    executorEventBridges.delete(sessionID)
-    controller.abort()
-  }
-
   export async function poll(hooks: RuntimeHooks) {
     const current = orchestratorState()
     if (current.syncing) return
@@ -1177,26 +380,88 @@ export namespace OrchestratorRuntime {
       // Startup recovery: recover tasks stuck in transient states from a previous server instance
       // Tasks in "evaluating" or "delivering" with no active in-memory evaluation are stranded
       recoverStrandedTasks(hooks)
-      await pruneGoalRuns()
     } finally {
       current.syncing = false
     }
   }
 
   export async function dispatch(runID: string, hooks: RuntimeHooks) {
-    await OrchestratorRunActor.submit(runID, async () => {
-      const run = requireRun(runID)
-      if (run.status !== "queued") return
-      let task = requireTask(run.task_id)
-      const plan = planForRun(run)
-      if (!task.session_id) throw new Error(`Task ${task.id} has no session`)
-      if (!plan) throw new Error(`Task ${task.id} has no plan`)
-      const prepared = await prepareRun(task, run, plan, hooks)
-      if (!prepared) return
-      task = prepared
-      if (await queueReadyGoalRuns(task, run, plan, hooks)) return
-      await finalizeCoordinatorRun(task, run, hooks)
+    installRuntimeShims()
+    const run = requireRun(runID)
+    if (run.status !== "queued") return
+    let task = requireTask(run.task_id)
+    const plan = run.plan_version_id ? findPlan(run.plan_version_id) : undefined
+    if (!task.session_id) throw new Error(`Task ${task.id} has no session`)
+    if (!plan) throw new Error(`Task ${task.id} has no plan`)
+    const base = typeof run.metadata?.prompt_override === "string" ? run.metadata.prompt_override : plan.prompt
+    const brief = WorkbenchService.compileBrief({
+      taskID: task.id,
+      runID: run.id,
+      planVersionID: plan.id,
+      sessionID: task.session_id,
     })
+    const prompt = [brief.content, base].join("\n\n")
+    const strategy = run.metadata?.strategy as string | undefined
+    const source: "planner" | "scheduler" | "system" =
+      strategy === "operator_note" ? "system" : strategy === "retry_same_plan" ? "scheduler" : "planner"
+    const prepared = await prepareRun(task, run, plan, hooks)
+    if (!prepared) return
+    task = prepared
+    const sessionID = task.session_id
+    if (!sessionID) throw new Error(`Task ${task.id} has no session`)
+    const executor = ExecutorRegistry.require(run.executor)
+    const submission = await executor.submit({
+      sessionID,
+      prompt,
+      priority: task.priority,
+      source,
+    })
+    const now = Date.now()
+    await hooks.updateRun(
+      run,
+      {
+        status: "accepted",
+        executor_ref: {
+          session_id: submission.sessionID,
+          queue_task_id: submission.queueTaskID,
+        },
+        time_started: now,
+      },
+      "Run accepted by executor",
+    )
+    await hooks.updateTask(
+      task,
+      {
+        status: "running",
+        time_started: task.time_started ?? now,
+      },
+      "Run dispatched",
+    )
+    const session = ensureExecutorSession({
+      taskID: task.id,
+      runID: run.id,
+      provider: run.executor,
+      refs: {
+        provider_session_id: submission.sessionID,
+        queue_task_id: submission.queueTaskID,
+      },
+      settings: {
+        cwd: Instance.directory,
+      },
+      started: now,
+    })
+    appendExecutorEvent(session.id, task.id, run.id, run.executor, {
+      provider: run.executor,
+      kind: "lifecycle",
+      summary: "Run accepted by executor",
+      refs: session.refs ?? undefined,
+      payload: {
+        queue_task_id: submission.queueTaskID,
+        provider_session_id: submission.sessionID,
+      },
+    })
+    // Start executor event bridge (fire-and-forget background coroutine)
+    consumeExecutorEvents(task.id, run.id, run.executor, sessionID, session.id)
   }
 
   export async function syncTask(taskID: string, hooks: RuntimeHooks) {
@@ -1207,155 +472,105 @@ export namespace OrchestratorRuntime {
   }
 
   export async function syncRun(runID: string, hooks: RuntimeHooks) {
-    await OrchestratorRunActor.submit(runID, async () => {
-      let run = findRun(runID)
-      if (!run) throw new Error(`Run not found: ${runID}`)
-      let task = requireTask(run.task_id)
-      const pending = findPendingInteractions(run.id)
-      if (pending.length > 0) {
-        const unattended = await unattendedProject()
-        if (unattended) {
-          for (const interaction of pending) {
-            const answered = await autoAnswerInteraction(interaction).catch((error) => {
-              log.warn("failed to auto-answer unattended interaction", { id: interaction.id, error: String(error) })
-              return false
-            })
-            if (!answered) continue
+    const run = findRun(runID)
+    if (!run) throw new Error(`Run not found: ${runID}`)
+    const task = requireTask(run.task_id)
+    const delivery = findDeliveryByRun(run.id)
+    const pending = findPendingInteractions(run.id)
+    if (pending.length > 0) {
+      // Auto-reject stale interactions for unattended operation
+      const now = Date.now()
+      const stale = pending.filter((p) => (now - (p.time_created ?? 0)) > INTERACTION_STALE_MS)
+      if (stale.length > 0) {
+        for (const interaction of stale) {
+          log.info("auto-rejecting stale interaction", { id: interaction.id, type: interaction.request_type, ageMs: now - (interaction.time_created ?? 0) })
+          Database.use((db) =>
+            db.update(OrchestratorInteractionRequestTable)
+              .set({ status: "rejected", time_resolved: now, time_updated: now })
+              .where(eq(OrchestratorInteractionRequestTable.id, interaction.id))
+              .run(),
+          )
+        }
+        // Re-check after auto-rejection
+        const stillPending = findPendingInteractions(run.id)
+        if (stillPending.length === 0) {
+          if (run.status === "blocked") {
+            await hooks.updateRun(run, { status: "accepted", blocking_reason: null }, "Stale interactions auto-rejected")
           }
-          run = requireRun(runID)
-          task = requireTask(run.task_id)
-          const now = Date.now()
-          const timeout = interactionStaleMs()
-          const stale = findPendingInteractions(run.id).filter((p) => (now - (p.time_created ?? 0)) > timeout)
-          if (stale.length > 0) {
-            for (const interaction of stale) {
-              log.info("auto-rejecting stale interaction", {
-                id: interaction.id,
-                type: interaction.request_type,
-                ageMs: now - (interaction.time_created ?? 0),
-                timeoutMs: timeout,
-              })
-              await autoRejectInteraction(interaction, "Timed out waiting for operator response")
-            }
-            run = requireRun(runID)
-            task = requireTask(run.task_id)
+          if (task.status === "blocked") {
+            await hooks.updateTask(task, { status: "running", blocking_reason: null }, "Stale interactions auto-rejected")
           }
-        }
-      }
-      const interactionReason = findPendingInteractions(run.id)[0]?.request_type
-      const recoverableGoalRuns = listGoalRunsByCoordinator(run.id)
-        .filter((goalRun) => goalRun.status === "completed")
-      for (const goalRun of recoverableGoalRuns) {
-        await finalizeGoalRun(task, run, goalRun, hooks)
-        run = requireRun(runID)
-        task = requireTask(run.task_id)
-      }
-      // Check terminal states after ALL completed goal runs are finalized (not mid-loop)
-      // so parallel siblings don't orphan each other.
-      if (recoverableGoalRuns.length > 0) {
-        const delivery = findDeliveryByRun(run.id)
-        if (run.status === "completed" && delivery) {
-          await completeRun(run, hooks)
+          // Fall through to continue sync
+        } else {
+          if (run.status !== "blocked") {
+            await hooks.updateRun(run, { status: "blocked", blocking_reason: stillPending[0].request_type }, "Run blocked")
+          }
+          if (task.status !== "blocked") {
+            await hooks.updateTask(task, { status: "blocked", blocking_reason: stillPending[0].request_type }, "Awaiting user input")
+          }
           return
         }
-        if (run.status === "failed" || run.status === "aborted") {
-          return
+      } else {
+        if (run.status !== "blocked") {
+          await hooks.updateRun(run, { status: "blocked", blocking_reason: pending[0].request_type }, "Run blocked")
         }
-      }
-      const failedGoalRun = listGoalRunsByCoordinator(run.id)
-        .find((goalRun) => goalRun.status === "failed")
-      if (failedGoalRun && run.status !== "failed" && run.status !== "aborted") {
-        // In parallel mode, wait for all active goals to finish before handling failure
-        const stillActive = activeGoalRuns(run)
-        if (stillActive.length === 0) {
-          const evaluation = findEvaluationByGoalRun(failedGoalRun.id)
-          await handleEvaluationFailure(task, run, evaluation?.summary ?? failedGoalRun.error ?? "Goal run failed", hooks)
-          return
+        if (task.status !== "blocked") {
+          await hooks.updateTask(task, { status: "blocked", blocking_reason: pending[0].request_type }, "Awaiting user input")
         }
-      }
-      const delivery = findDeliveryByRun(run.id)
-      if (run.status === "completed" && delivery) {
-        await completeRun(run, hooks)
         return
       }
-      if (run.status === "failed" || run.status === "aborted") {
-        return
-      }
-      if (run.status === "accepted" && typeof run.metadata?.previous_run_id === "string") {
-        const started = run.time_started ?? run.time_created ?? 0
-        if (activeGoalRuns(run).length === 0 && started > 0 && (Date.now() - started) < FOLLOWUP_RUN_SYNC_GRACE_MS) {
-          return
-        }
-      }
-      // In goal-based execution mode (any goal runs have been created for this coordinator run),
-      // skip coordinator executor sync — goal dispatch is handled entirely by continueGoalPipeline.
-      // syncCoordinatorExecutor would otherwise look at the stale Panel/planner session which
-      // has already "completed", prematurely calling completeRun before all goals are dispatched.
-      const inGoalMode = listGoalRunsByCoordinator(run.id).length > 0
-      if (activeGoalRuns(run).length === 0 && !inGoalMode && await syncCoordinatorExecutor(task, run, hooks)) {
-        return
-      }
-      for (const goalRun of activeGoalRuns(run)) {
-        await syncActiveGoalRun(task, run, goalRun, hooks)
-        run = requireRun(runID)
-        task = requireTask(run.task_id)
-        const nextDelivery = findDeliveryByRun(run.id)
-        if (run.status === "completed" && nextDelivery) {
-          await completeRun(run, hooks)
-          return
-        }
-        if (run.status === "failed" || run.status === "aborted") {
-          return
-        }
-      }
+    }
 
-      run = requireRun(runID)
-      task = requireTask(run.task_id)
-      if (!interactionReason && !["failed", "aborted", "completed"].includes(run.status) && planForRun(run)) {
-        await continueGoalPipeline(task, run, hooks)
-        run = requireRun(runID)
-        task = requireTask(run.task_id)
-      }
-      const nextDelivery = findDeliveryByRun(run.id)
-      if (run.status === "completed" && nextDelivery) {
-        await completeRun(run, hooks)
-        return
-      }
-      if (run.status === "failed" || run.status === "aborted") {
-        return
-      }
-      const active = activeGoalRuns(run)
-      const hasRunning = active.some((goalRun) => goalRun.status === "running")
-      const hasAccepted = active.some((goalRun) => goalRun.status === "accepted" || goalRun.status === "queued")
-      const hasBlocked = active.some((goalRun) => goalRun.status === "blocked") || !!interactionReason
+    if (run.status === "completed" && delivery) {
+      await completeRun(run, hooks)
+      return
+    }
 
-      if (hasRunning) {
-        if (run.status !== "running") {
-          await hooks.updateRun(run, { status: "running", blocking_reason: null }, "Run executing")
-        }
-        if (task.status !== "running") {
-          await hooks.updateTask(task, { status: "running", blocking_reason: null }, "Run executing")
-        }
+    if (run.status === "failed" || run.status === "aborted") {
+      return
+    }
+
+    const queueTaskID = run.executor_ref?.queue_task_id
+    if (!queueTaskID) return
+    const executor = ExecutorRegistry.require(run.executor)
+    const queue = await executor.status(queueTaskID)
+
+    if (queue.status === "queued" || queue.status === "retrying") {
+      if (run.status === "blocked") {
+        await hooks.updateRun(run, { status: "accepted", blocking_reason: null }, "Run resumed")
+      }
+      if (task.status === "blocked") {
+        await hooks.updateTask(task, { status: "running", blocking_reason: null }, "Run resumed")
+      }
+      return
+    }
+
+    if (queue.status === "running") {
+      // Run execution timeout — fail runs that have been running too long
+      const started = run.time_started ?? run.time_created
+      if (started && (Date.now() - started) > RUN_MAX_EXECUTION_MS) {
+        log.warn("run exceeded max execution time", { runID: run.id, maxMs: RUN_MAX_EXECUTION_MS, elapsedMs: Date.now() - started })
+        try { await executor.abort({ sessionID: run.session_id ?? undefined, queueTaskID }) } catch {}
+        await failRun(run, `Run exceeded maximum execution time (${Math.round(RUN_MAX_EXECUTION_MS / 60000)}min)`, hooks)
         return
       }
-      if (hasAccepted) {
-        if (run.status !== "accepted" || run.blocking_reason) {
-          await hooks.updateRun(run, { status: "accepted", blocking_reason: null }, "Run resumed")
-        }
-        if (task.status !== "running" || task.blocking_reason) {
-          await hooks.updateTask(task, { status: "running", blocking_reason: null }, "Run resumed")
-        }
-        return
+      if (run.status !== "running") {
+        await hooks.updateRun(run, { status: "running", blocking_reason: null }, "Run executing")
       }
-      if (hasBlocked) {
-        if (run.status !== "blocked" || run.blocking_reason !== (interactionReason ?? "executor")) {
-          await hooks.updateRun(run, { status: "blocked", blocking_reason: interactionReason ?? "executor" }, "Run blocked")
-        }
-        if (task.status !== "blocked" || task.blocking_reason !== (interactionReason ?? "executor")) {
-          await hooks.updateTask(task, { status: "blocked", blocking_reason: interactionReason ?? "executor" }, "Awaiting user input")
-        }
+      if (task.status !== "running") {
+        await hooks.updateTask(task, { status: "running", blocking_reason: null }, "Run executing")
       }
-    })
+      return
+    }
+
+    if (queue.status === "failed") {
+      await failRun(run, queue.error ?? "Executor run failed", hooks)
+      return
+    }
+
+    if (queue.status === "completed") {
+      await completeRun(run, hooks)
+    }
   }
 
   export async function createOperatorRun(task: TaskRow, run: RunRow, note: string) {
@@ -1367,10 +582,10 @@ export namespace OrchestratorRuntime {
           id: nextRunID,
           task_id: task.id,
           plan_version_id: task.active_plan_version_id,
-          session_id: task.session_id,
+          session_id: run.session_id,
           executor: run.executor,
           status: "queued",
-          phase: "dispatch",
+          phase: "execute",
           retry_count: 0,
           metadata: {
             previous_run_id: run.id,
@@ -1393,19 +608,19 @@ export namespace OrchestratorRuntime {
         .where(eq(OrchestratorTaskTable.id, task.id))
         .run()
       Database.effect(() =>
-        OrchestratorProtocol.emit(Event.RunCreated, {
+        Bus.publish(Event.RunCreated, {
           taskID: task.id,
           runID: nextRunID,
           status: "queued",
           summary: "Run queued from operator note",
-        }, { source: "runtime.operator_note" }),
+        }),
       )
       Database.effect(() =>
-        OrchestratorProtocol.emit(Event.TaskUpdated, {
+        Bus.publish(Event.TaskUpdated, {
           taskID: task.id,
           status: "running",
           summary: "Operator note queued a follow-up run",
-        }, { source: "runtime.operator_note" }),
+        }),
       )
     })
     return nextRunID
@@ -1430,59 +645,356 @@ export namespace OrchestratorRuntime {
 }
 
 async function completeRun(run: RunRow, hooks: RuntimeHooks) {
-  if (completingRuns.has(run.id)) {
-    log.info("already completing run, skipping concurrent call", { runID: run.id })
-    return
-  }
-  completingRuns.add(run.id)
-  try {
-    await _completeRun(run, hooks)
-  } finally {
-    completingRuns.delete(run.id)
-  }
-}
-
-async function _completeRun(run: RunRow, hooks: RuntimeHooks) {
-  const task = requireTask(run.task_id)
-  const goalRun = latestGoalRun(run)
-  OrchestratorRuntime.stopExecutorEventBridge(goalRun?.session_id ?? run.session_id ?? undefined)
-  if (goalRun?.status === "completed" && !findDeliveryByRun(run.id)) {
-    updateGoalRunExecutorSessionStatus(goalRun.id, "completed")
-    await finalizeGoalRun(task, run, goalRun, hooks)
-    return
-  }
+  installRuntimeShims()
   updateExecutorSessionStatus(run.id, "completed")
-  await finalizeCoordinatorRun(task, run, hooks)
-}
-
-async function runEvaluation(task: TaskRow, run: RunRow, existingDelivery: DeliveryRow, hooks: RuntimeHooks) {
-  const delivery = {
-    summary: existingDelivery.summary,
-    diffs: storedDiffs(existingDelivery),
+  const existingDelivery = findDeliveryByRun(run.id)
+  if (existingDelivery) {
+    const task = requireTask(run.task_id)
+    const evaluation = findEvaluationByRun(run.id)
+    if (run.status !== "completed") {
+      await hooks.updateRun(run, { status: "completed", blocking_reason: null, error: null, time_completed: Date.now() }, "Run completed")
+    }
+    if (!evaluation) {
+      if (task.active_run_id === run.id) {
+        await hooks.updateTask(task, { status: "evaluating", blocking_reason: null, error: null }, "Evaluating delivery")
+      }
+      // Re-run evaluation for this existing delivery (evaluation was interrupted by prior restart)
+      // Check if already evaluating (with stale detection)
+      const evalStart = evaluatingRuns.get(run.id)
+      const isStale = evalStart !== undefined && (Date.now() - evalStart) > EVALUATING_STALE_MS
+      if (isStale) {
+        log.warn("clearing stale evaluatingRuns entry", { runID: run.id, ageMs: Date.now() - evalStart })
+        evaluatingRuns.delete(run.id)
+      }
+      const canReEval = task.active_run_id === run.id && run.session_id && !evaluatingRuns.has(run.id)
+      console.log(`[completeRun] no evaluation for run ${run.id}, canReEval=${canReEval}, activeRunMatch=${task.active_run_id === run.id}, sessionId=${!!run.session_id}, alreadyEvaluating=${evaluatingRuns.has(run.id)}`)
+      if (canReEval) {
+        evaluatingRuns.set(run.id, Date.now())
+        console.log(`[completeRun] starting runEvaluation for ${run.id}`)
+        try {
+          await Promise.race([
+            runEvaluation(task, run, existingDelivery, hooks),
+            new Promise<never>((_, reject) =>
+              setTimeout(() => reject(new Error("runEvaluation hard timeout")), EVALUATION_HARD_TIMEOUT_MS),
+            ),
+          ])
+        } catch (timeoutErr) {
+          const msg = timeoutErr instanceof Error ? timeoutErr.message : String(timeoutErr)
+          console.log(`[completeRun] runEvaluation error for ${run.id}: ${msg}`)
+          log.error("runEvaluation timed out or failed", { runID: run.id, error: msg })
+          const now = Date.now()
+          await hooks.updateRun(run, { status: "failed", error: msg, blocking_reason: null, time_completed: now }, msg)
+          if (task.active_run_id === run.id) {
+            await hooks.updateTask(task, { status: "failed", error: msg, blocking_reason: null, time_completed: now }, msg)
+          }
+        } finally {
+          evaluatingRuns.delete(run.id)
+          console.log(`[completeRun] runEvaluation finished for ${run.id}, active evals: ${evaluatingRuns.size}`)
+        }
+      }
+      return
+    }
+    if (task.active_run_id !== run.id) return
+    if (evaluation.status === "passed" && existingDelivery.status === "delivered") {
+      await publishAcceptedDelivery(task, run, existingDelivery, hooks)
+      return
+    }
+    if (evaluation.status === "passed" && existingDelivery.status !== "delivered") {
+      await publishAcceptedDelivery(task, run, existingDelivery, hooks)
+      return
+    }
+    if (evaluation.status !== "passed") {
+      await handleEvaluationFailure(task, run, evaluation.summary, hooks)
+    }
+    return
   }
-  const deliveryID = existingDelivery.id
+
+  if (!run.session_id) throw new Error(`Run ${run.id} has no session`)
+  const task = requireTask(run.task_id)
+  const completedAt = Date.now()
+  await hooks.updateRun(run, { status: "completed", blocking_reason: null, error: null, time_completed: completedAt }, "Run completed")
+  await hooks.updateTask(task, { status: "evaluating", blocking_reason: null, error: null }, "Evaluating delivery")
+  const executor = ExecutorRegistry.require(run.executor)
+  const delivery = await Promise.race([
+    executor.delivery({
+      sessionID: run.session_id,
+      since: run.time_started ?? run.time_created,
+    }),
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("executor.delivery() timeout")), DELIVERY_FETCH_TIMEOUT_MS),
+    ),
+  ])
+  const now = Date.now()
+  const deliveryID = Identifier.ascending("delivery")
   const evaluationID = Identifier.ascending("evaluation")
-  beginEvaluation({
+
+  persistDelivery({ task, run, deliveryID, delivery, now })
+
+  await Plugin.trigger("delivery.ready", {
+    taskID: task.id,
+    runID: run.id,
+    deliveryID,
+    delivery: {
+      summary: delivery.summary,
+      changedFiles: delivery.diffs.map((item) => item.file),
+      diffs: delivery.diffs,
+    },
+  }, { actions: [] }).catch(() => undefined)
+
+  const hardTimeoutPromise = <T>() =>
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("evaluation hard timeout")), EVALUATION_HARD_TIMEOUT_MS),
+    )
+
+  let result: Awaited<ReturnType<typeof EvaluatorService.evaluate>>
+  try {
+    result = await Promise.race([
+      EvaluatorService.evaluate(
+        {
+          taskID: task.id,
+          activeSpecVersionID: task.active_spec_version_id ?? undefined,
+          request: task.request,
+          metadata: {
+            ...(task.metadata ?? {}),
+            delivery_changed_files: delivery.diffs.map((item) => item.file),
+          },
+        },
+        {
+          summary: delivery.summary,
+          diffs: delivery.diffs,
+          changedFiles: delivery.diffs.map((item) => item.file),
+        },
+      ),
+      hardTimeoutPromise<typeof result>(),
+    ])
+  } catch (evalErr) {
+    const msg = evalErr instanceof Error ? evalErr.message : String(evalErr)
+    log.error("Phase 1 evaluate() threw or timed out", { error: msg })
+    const errorSummary = `Evaluator Phase 1 failure: ${msg}`
+    persistEvaluation({
+      task, run, deliveryID, evaluationID, delivery,
+      result: { status: "failed", verdict: "rejected", summary: errorSummary, checks: [], artifacts: [] },
+      analysis: fallbackAnalysis({ verdict: "rejected", summary: errorSummary }, 0, msg),
+      analysisError: msg,
+      finalVerdict: "rejected",
+      finalStatus: "failed",
+      finalSummary: errorSummary,
+      goals: [],
+    })
+    updateExecutorSessionStatus(run.id, "failed")
+    const failNow = Date.now()
+    await hooks.updateRun(run, { status: "failed", error: errorSummary, blocking_reason: null, time_completed: failNow }, errorSummary)
+    if (task.active_run_id === run.id) {
+      await hooks.updateTask(task, { status: "failed", error: errorSummary, blocking_reason: null, time_completed: failNow }, errorSummary)
+    }
+    return
+  }
+
+  // Phase 2: Independent-context EvaluatorAgent analysis
+  // Analyzes check results, investigates failures, assesses each goal, classifies failure type
+  const goals = run.plan_version_id ? listGoalsByPlan(run.plan_version_id) : []
+  let analysis: EvaluatorAnalysisType
+  let analysisError: string | undefined
+  try {
+    analysis = await Promise.race([
+      EvaluatorService.analyzeDelivery({
+        task: { title: task.title, request: task.request, sessionID: task.session_id ?? undefined },
+        goals: goals.map((g) => ({
+          description: g.description,
+          criteria: g.criteria,
+          priority: g.priority as "blocking" | "advisory",
+          check_selector: selectorList(g.metadata) as string[],
+        })),
+        delivery: {
+          summary: delivery.summary,
+          changedFiles: delivery.diffs.map((d) => d.file),
+          diffs: delivery.diffs,
+        },
+        checkResults: result.checks.map((c) => ({
+          name: c.name,
+          status: c.status,
+          evidence: c.evidence,
+        })),
+      }),
+      hardTimeoutPromise<typeof analysis>(),
+    ])
+  } catch (err) {
+    analysisError = err instanceof Error ? err.message : String(err)
+    log.error("evaluator agent analysis failed or timed out", { error: analysisError })
+    analysis = fallbackAnalysis(result, goals.length, analysisError)
+  }
+
+  // If Phase 1 evaluation failed (e.g. strict spec_check or build/test failures),
+  // do not let Phase 2 EvaluatorAgent override the verdict
+  const phase1Failed = result.status === "failed"
+  const finalVerdict = phase1Failed ? "rejected" : analysis.verdict
+  const finalStatus =
+    (finalVerdict === "accepted" ? "passed" : finalVerdict === "rejected" ? "failed" : "inconclusive") as typeof result.status
+  const finalSummary = phase1Failed && analysis.verdict === "accepted"
+    ? `Rejected: automated checks failed. ${result.summary}`
+    : analysis.summary
+
+  persistEvaluation({
     task,
     run,
     deliveryID,
     evaluationID,
-    now: Date.now(),
-    summary: "Evaluating task delivery",
+    delivery,
+    result,
+    analysis,
+    analysisError,
+    finalVerdict,
+    finalStatus,
+    finalSummary,
+    goals,
   })
-  const goals = goalsForRun(run)
-  const { result, analysis, analysisError } = await evaluateTask({ task, goals, delivery })
-  const finalVerdict = result.verdict
-  const finalStatus = result.status
-  const finalSummary = result.summary
+
+  if (finalStatus === "passed" || finalStatus === "inconclusive") {
+    const allGoals = run.plan_version_id ? listGoalsByPlan(run.plan_version_id) : []
+    const pendingBlocking = allGoals.filter((g) => g.priority === "blocking" && g.status === "pending")
+
+    if (pendingBlocking.length === 0) {
+      const accepted = findDeliveryByRun(run.id)
+      if (!accepted) {
+        await hooks.updateTask(task, { status: "completed", blocking_reason: null, error: null, time_completed: Date.now() }, "Task completed")
+        return
+      }
+      await publishAcceptedDelivery(task, run, accepted, hooks)
+      return
+    }
+    const remaining = pendingBlocking.map((g) => g.description).join(", ")
+    await handleEvaluationFailure(requireTask(task.id), run, `Evaluation ${finalStatus} but blocking goals still pending: ${remaining}`, hooks, analysis)
+    return
+  }
+
+  await handleEvaluationFailure(requireTask(task.id), run, finalSummary, hooks, analysis)
+}
+
+async function runEvaluation(task: TaskRow, run: RunRow, existingDelivery: DeliveryRow, hooks: RuntimeHooks) {
+  console.log(`[runEvaluation] START for run ${run.id}, task ${task.id}`)
+  if (!run.session_id) { console.log(`[runEvaluation] no session_id, skipping`); return }
+
+  const executor = ExecutorRegistry.require(run.executor)
+  let delivery: Awaited<ReturnType<typeof executor.delivery>>
+  try {
+    delivery = await Promise.race([
+      executor.delivery({
+        sessionID: run.session_id,
+        since: run.time_started ?? run.time_created,
+      }),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("executor.delivery() timeout")), DELIVERY_FETCH_TIMEOUT_MS),
+      ),
+    ])
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    log.error("re-evaluation: failed to fetch delivery from executor", { error: msg })
+    // Use minimal delivery from DB row
+    delivery = {
+      summary: existingDelivery.summary,
+      diffs: [],
+    }
+  }
+
+  const deliveryID = existingDelivery.id
+  const evaluationID = Identifier.ascending("evaluation")
+
+  const reEvalHardTimeout = <T>() =>
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("re-evaluation hard timeout")), EVALUATION_HARD_TIMEOUT_MS),
+    )
+
+  let result: Awaited<ReturnType<typeof EvaluatorService.evaluate>>
+  try {
+    result = await Promise.race([
+      EvaluatorService.evaluate(
+        {
+          taskID: task.id,
+          activeSpecVersionID: task.active_spec_version_id ?? undefined,
+          request: task.request,
+          metadata: {
+            ...(task.metadata ?? {}),
+            delivery_changed_files: delivery.diffs.map((item) => item.file),
+          },
+        },
+        {
+          summary: delivery.summary,
+          diffs: delivery.diffs,
+          changedFiles: delivery.diffs.map((item) => item.file),
+        },
+      ),
+      reEvalHardTimeout<typeof result>(),
+    ])
+  } catch (evalErr) {
+    const msg = evalErr instanceof Error ? evalErr.message : String(evalErr)
+    log.error("re-evaluation Phase 1 failed", { error: msg })
+    const errorSummary = `Evaluator Phase 1 failure: ${msg}`
+    persistEvaluation({
+      task, run, deliveryID, evaluationID, delivery,
+      result: { status: "failed", verdict: "rejected", summary: errorSummary, checks: [], artifacts: [] },
+      analysis: fallbackAnalysis({ verdict: "rejected", summary: errorSummary }, 0, msg),
+      analysisError: msg,
+      finalVerdict: "rejected",
+      finalStatus: "failed",
+      finalSummary: errorSummary,
+      goals: [],
+    })
+    updateExecutorSessionStatus(run.id, "failed")
+    const failNow = Date.now()
+    await hooks.updateRun(run, { status: "failed", error: errorSummary, blocking_reason: null, time_completed: failNow }, errorSummary)
+    if (task.active_run_id === run.id) {
+      await hooks.updateTask(task, { status: "failed", error: errorSummary, blocking_reason: null, time_completed: failNow }, errorSummary)
+    }
+    return
+  }
+
+  const goals = run.plan_version_id ? listGoalsByPlan(run.plan_version_id) : []
+  let analysis: EvaluatorAnalysisType
+  let analysisError: string | undefined
+  try {
+    analysis = await Promise.race([
+      EvaluatorService.analyzeDelivery({
+        task: { title: task.title, request: task.request, sessionID: task.session_id ?? undefined },
+        goals: goals.map((g) => ({
+          description: g.description,
+          criteria: g.criteria,
+          priority: g.priority as "blocking" | "advisory",
+          check_selector: selectorList(g.metadata) as string[],
+        })),
+        delivery: {
+          summary: delivery.summary,
+          changedFiles: delivery.diffs.map((d) => d.file),
+          diffs: delivery.diffs,
+        },
+        checkResults: result.checks.map((c) => ({
+          name: c.name,
+          status: c.status,
+          evidence: c.evidence,
+        })),
+      }),
+      reEvalHardTimeout<typeof analysis>(),
+    ])
+  } catch (err) {
+    analysisError = err instanceof Error ? err.message : String(err)
+    log.error("re-evaluation agent analysis failed or timed out", { error: analysisError })
+    analysis = fallbackAnalysis(result, goals.length, analysisError)
+  }
+
+  const phase1Failed = result.status === "failed"
+  const finalVerdict = phase1Failed ? "rejected" : analysis.verdict
+  const finalStatus =
+    (finalVerdict === "accepted" ? "passed" : finalVerdict === "rejected" ? "failed" : "inconclusive") as typeof result.status
+  const finalSummary = phase1Failed && analysis.verdict === "accepted"
+    ? `Rejected: automated checks failed. ${result.summary}`
+    : analysis.summary
 
   persistEvaluation({
     task, run, deliveryID, evaluationID, delivery, result,
-    analysis, finalVerdict, finalStatus, finalSummary, goals, analysisError,
+    analysis, analysisError, finalVerdict, finalStatus, finalSummary, goals,
   })
 
-  if (finalStatus === "passed") {
-    const allGoals = goalsForRun(run)
+  if (finalStatus === "passed" || finalStatus === "inconclusive") {
+    const allGoals = run.plan_version_id ? listGoalsByPlan(run.plan_version_id) : []
     const pendingBlocking = allGoals.filter((g) => g.priority === "blocking" && g.status === "pending")
     if (pendingBlocking.length === 0) {
       const accepted = findDeliveryByRun(run.id)
@@ -1516,16 +1028,13 @@ function recoverStrandedTasks(hooks: RuntimeHooks) {
       .all(),
   )
   const now = Date.now()
-  const sinceStartup = now - startupTimestamp
   for (const task of strandedTasks) {
+    // Only recover if task has been in this state longer than the evaluation hard timeout
     const updated = task.time_updated ?? task.time_created ?? 0
     const age = now - updated
+    if (age < EVALUATING_STALE_MS) continue
     // Check if this task has an active in-memory evaluation
-    if (task.active_run_id && (evaluatingRuns.has(task.active_run_id) || completingRuns.has(task.active_run_id))) continue
-    // After server restart the in-memory maps are empty. Any task with no in-memory record is
-    // definitively orphaned — use a short grace period instead of the full stale threshold.
-    const staleThreshold = sinceStartup < RESTART_RECOVERY_GRACE_MS ? RESTART_RECOVERY_GRACE_MS : EVALUATING_STALE_MS
-    if (age < staleThreshold) continue
+    if (task.active_run_id && evaluatingRuns.has(task.active_run_id)) continue
     log.warn("recovering stranded task", { taskID: task.id, status: task.status, ageMs: age })
     const error = `Task was stranded in '${task.status}' state for ${Math.round(age / 60000)}min (server restart recovery)`
     hooks.updateTask(task, {
@@ -1534,164 +1043,19 @@ function recoverStrandedTasks(hooks: RuntimeHooks) {
       blocking_reason: null,
       time_completed: now,
     }, error).catch((err) => log.error("failed to recover stranded task", { taskID: task.id, error: String(err) }))
-    cleanupStaleGoalWorkspaces(task.id).catch((err) =>
-      log.warn("failed to clean up stale goal workspaces", { taskID: task.id, error: String(err) }),
-    )
   }
 }
 
-async function pruneGoalRuns() {
-  const now = Date.now()
-  const rows = Database.use((db) =>
-    db
-      .select({ goalRun: OrchestratorGoalRunTable })
-      .from(OrchestratorGoalRunTable)
-      .innerJoin(OrchestratorTaskTable, eq(OrchestratorGoalRunTable.task_id, OrchestratorTaskTable.id))
-      .where(
-        and(
-          eq(OrchestratorTaskTable.project_id, Instance.project.id),
-          inArray(OrchestratorGoalRunTable.status, ["completed", "failed", "aborted", "superseded"]),
-        ),
-      )
-      .all(),
-  ).map((item) => item.goalRun)
-  for (const goalRun of rows) {
-    const id = goalRunLocalSessionID(goalRun)
-    if (id) {
-      OrchestratorRuntime.stopExecutorEventBridge(goalRun.session_id ?? id)
-      if (goalRun.session_id && goalRun.session_id !== id) {
-        OrchestratorRuntime.stopExecutorEventBridge(id)
-      }
-      await removeGoalRunSession(goalRun)
-    }
-    if (!goalRun.workspace_dir || !goalRunExpired(goalRun, now, GOAL_RUN_RETENTION_MS)) continue
-    await cleanupGoalWorkspace(goalRun.workspace_dir)
-  }
-}
-
-async function abortActiveGoalRuns(run: RunRow, summary: string, exceptGoalRunID?: string) {
-  const executor = ExecutorRegistry.require(run.executor)
-  for (const goalRun of activeGoalRuns(run).filter((item) => item.id !== exceptGoalRunID)) {
-    const target = runExecutionTarget(run, goalRun)
-    OrchestratorRuntime.stopExecutorEventBridge(target.sessionID)
-    if (target.sessionID || target.queueTaskID) {
-      await withTimeout(
-        executor.abort({
-          sessionID: target.sessionID,
-          queueTaskID: target.queueTaskID,
-        }),
-        5_000,
-      ).catch((error) => {
-        log.warn("failed to abort active goal run", {
-          runID: run.id,
-          goalRunID: goalRun.id,
-          error: String(error),
-        })
-        return false
-      })
-    }
-    updateGoalRun(goalRun.id, {
-      status: "aborted",
-      error: summary,
-      blocking_reason: null,
-      time_completed: Date.now(),
-    })
-    updateGoalRunExecutorSessionStatus(goalRun.id, "aborted")
-    await cleanupGoalWorkspace(goalRun.workspace_dir ?? undefined)
-    await removeGoalRunSession(goalRun)
-  }
-}
-
-async function failRun(run: RunRow, error: string, hooks: RuntimeHooks, goalRun = activeGoalRun(run)) {
+async function failRun(run: RunRow, error: string, hooks: RuntimeHooks) {
+  updateExecutorSessionStatus(run.id, "failed")
   const task = requireTask(run.task_id)
-  OrchestratorRuntime.stopExecutorEventBridge(goalRun?.session_id ?? run.session_id ?? undefined)
   const now = Date.now()
-  if (goalRun) {
-    updateGoalRunExecutorSessionStatus(goalRun.id, "failed")
-    if (!findEvaluationByGoalRun(goalRun.id)) {
-      persistFailedRunEvaluation({ task, run, goalRunID: goalRun.id, error, now })
-    }
-    updateGoalRun(goalRun.id, { status: "failed", error, blocking_reason: null, time_completed: now })
-    await cleanupGoalWorkspace(goalRun.workspace_dir ?? undefined)
-    await removeGoalRunSession(goalRun)
-    const goal = currentGoal(goalRun, goalsForRun(run))
-    if (goal?.priority === "advisory") {
-      await continueGoalPipeline(task, requireRun(run.id), hooks)
-      return
-    }
-  } else {
-    updateExecutorSessionStatus(run.id, "failed")
-    if (!findEvaluationByRun(run.id)) {
-      persistFailedRunEvaluation({ task, run, error, now })
-    }
+  if (!findEvaluationByRun(run.id)) {
+    persistFailedRunEvaluation({ task, run, error, now })
   }
   await hooks.updateRun(run, { status: "failed", error, blocking_reason: null, time_completed: now }, error)
   if (task.active_run_id === run.id) {
     await hooks.updateTask(task, { status: "failed", error, blocking_reason: null, time_completed: now }, error)
-  }
-}
-
-async function handleExecutionFailure(run: RunRow, summary: string, hooks: RuntimeHooks, goalRun = activeGoalRun(run)) {
-  const task = requireTask(run.task_id)
-  const goal = goalRun ? currentGoal(goalRun, goalsForRun(run)) : undefined
-  const target = runExecutionTarget(run, goalRun)
-  try {
-    const executor = ExecutorRegistry.require(run.executor)
-    await withTimeout(
-      executor.abort({
-        sessionID: target.sessionID,
-        queueTaskID: target.queueTaskID,
-      }),
-      5_000,
-    ).catch(() => false)
-  } catch (error) {
-    log.warn("failed to abort executor after execution failure", { runID: run.id, error: String(error) })
-  }
-  await failRun(run, summary, hooks, goalRun)
-  if (goal?.priority === "advisory") return
-  await abortActiveGoalRuns(requireRun(run.id), summary, goalRun?.id)
-  const failedTask = requireTask(task.id)
-  const failedRun = requireRun(run.id)
-  const retryContext = buildRetryContext(failedRun, summary)
-  const decision = decideRetryOrReplan(failedTask, failedRun, summary, undefined, retryContext)
-  await executeDecision(failedTask, failedRun, decision, hooks)
-}
-
-async function runDeliveryVerification(
-  task: TaskRow,
-  run: RunRow,
-  delivery: DeliveryRow,
-): Promise<DeliveryVerdictType | null> {
-  try {
-    const goals = goalsForRun(run)
-    const diffs = storedDiffs(delivery)
-    const changedFiles = diffs.map((d) => d.file)
-    const result = await HeadlessDeliveryService.verify({
-      task: {
-        title: task.title ?? "",
-        request: task.request ?? "",
-        sessionID: task.session_id ?? undefined,
-        metadata: task.metadata ?? undefined,
-      },
-      goals: goals.map((g) => ({
-        description: g.description,
-        criteria: g.criteria ?? "",
-        priority: g.priority as "blocking" | "advisory",
-      })),
-      delivery: {
-        summary: delivery.summary ?? "",
-        changedFiles,
-        diffs: diffs.map((d) => ({ file: d.file, diff: d.after })),
-      },
-    })
-    return result
-  } catch (error) {
-    log.warn("delivery agent failed, proceeding with publish", {
-      taskID: task.id,
-      runID: run.id,
-      error: String(error),
-    })
-    return null
   }
 }
 
@@ -1716,81 +1080,11 @@ async function publishAcceptedDelivery(task: TaskRow, run: RunRow, delivery: Del
   await hooks.updateTask(task, { status: "delivering", blocking_reason: null, error: null }, "Publishing accepted delivery")
   markDeliveryPublishing(delivery.id, now)
 
-  // --- Delivery agent verification ---
-  // Use Promise.race to enforce a hard cap: if the LLM-based verification agent does not
-  // complete within DELIVERY_VERIFICATION_TIMEOUT_MS, we proceed with publish anyway (null verdict).
-  // We avoid relying on AbortSignal propagation through nested any() chains which can silently fail.
-  let verificationTimedOut = false
-  let verificationTimeoutTimer: ReturnType<typeof setTimeout> | undefined
-  const deliveryVerdict = await Promise.race([
-    runDeliveryVerification(task, run, delivery).catch((err) => {
-      log.warn("delivery verification error, proceeding with publish", {
-        taskID: task.id,
-        runID: run.id,
-        error: String(err),
-      })
-      return null
-    }),
-    new Promise<null>((resolve) => {
-      verificationTimeoutTimer = setTimeout(() => {
-        verificationTimedOut = true
-        log.warn("delivery verification timeout, proceeding with publish", {
-          taskID: task.id,
-          runID: run.id,
-          timeoutMs: DELIVERY_VERIFICATION_TIMEOUT_MS,
-        })
-        resolve(null)
-      }, DELIVERY_VERIFICATION_TIMEOUT_MS)
-    }),
-  ])
-  clearTimeout(verificationTimeoutTimer)
-  if (verificationTimedOut) {
-    log.info("delivery verification skipped due to timeout, proceeding with accepted verdict", {
-      taskID: task.id,
-      runID: run.id,
-    })
-  }
-  if (deliveryVerdict?.verdict === "rejected") {
-    log.warn("delivery agent rejected delivery", { taskID: task.id, runID: run.id, summary: deliveryVerdict.summary })
-    await hooks.updateTask(task, { status: "evaluating", blocking_reason: null, error: null }, "Delivery agent rejected")
-    await handleEvaluationFailure(requireTask(task.id), run, `Delivery agent rejected: ${deliveryVerdict.summary}`, hooks)
-    return
-  }
-  if (deliveryVerdict?.verdict === "fixed" && deliveryVerdict.fixes_applied.length > 0) {
-    log.info("delivery agent applied fixes, re-snapshotting", {
-      taskID: task.id,
-      runID: run.id,
-      fixes: deliveryVerdict.fixes_applied.length,
-    })
-    const baseRef = taskBaselineRef(task)
-    if (baseRef) {
-      const { delivery: refreshed } = await deliveryFromSnapshot(baseRef, "Task delivery (post-fix)")
-      const refreshedNow = Date.now()
-      Database.use((db) =>
-        db
-          .update(OrchestratorDeliveryTable)
-          .set({
-            summary: refreshed.summary,
-            result: {
-              summary: refreshed.summary,
-              changed_files: refreshed.diffs.map((d) => d.file),
-              diffs: refreshed.diffs,
-            },
-            time_updated: refreshedNow,
-          })
-          .where(eq(OrchestratorDeliveryTable.id, delivery.id))
-          .run(),
-      )
-    }
-  }
-  // --- End delivery agent verification ---
-
-  let deliveryTimer: ReturnType<typeof setTimeout>
   const result = await Promise.race([
-    DeliveryService.deliver({ task, run, delivery: findDeliveryByRun(run.id) ?? delivery }).finally(() => clearTimeout(deliveryTimer)),
-    new Promise<never>((_, reject) => {
-      deliveryTimer = setTimeout(() => reject(new Error("DeliveryService.deliver() timeout")), DELIVERY_SERVICE_TIMEOUT_MS)
-    }),
+    DeliveryService.deliver({ task, run, delivery }),
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("DeliveryService.deliver() timeout")), DELIVERY_SERVICE_TIMEOUT_MS),
+    ),
   ]).catch((error) => ({
     status: "failed" as const,
     summary: String(error),
@@ -1842,10 +1136,9 @@ async function publishAcceptedDelivery(task: TaskRow, run: RunRow, delivery: Del
   await hooks.updateTask(task, { status: "failed", blocking_reason: null, error: result.summary, time_completed: completed }, result.summary)
 }
 
-async function handleEvaluationFailure(task: TaskRow, run: RunRow, summary: string, hooks: RuntimeHooks, analysis?: GoalJudgmentType) {
+async function handleEvaluationFailure(task: TaskRow, run: RunRow, summary: string, hooks: RuntimeHooks, analysis?: EvaluatorAnalysisType) {
   if (task.active_run_id !== run.id) return
 
-  await abortActiveGoalRuns(run, summary)
   const retryContext = buildRetryContext(run, summary, analysis)
   const decision = decideRetryOrReplan(task, run, summary, analysis, retryContext)
 
@@ -1872,36 +1165,7 @@ async function handleEvaluationFailure(task: TaskRow, run: RunRow, summary: stri
     summary,
     retryContext,
   }).catch((err) => log.warn("failed to flush failure learnings", { error: String(err) }))
-  await hooks.updateRun(
-    run,
-    {
-      status: run.status === "completed" ? "completed" : "failed",
-      error: summary,
-      blocking_reason: null,
-      time_completed: Date.now(),
-    },
-    summary,
-  )
   await hooks.updateTask(task, { status: "failed", blocking_reason: null, error: summary, time_completed: Date.now() }, summary)
-}
-
-export function remapGoalAnalysisToRunScope(
-  analysis: GoalJudgmentType | undefined,
-  goals: GoalRow[],
-  currentGoal: GoalRow,
-) {
-  if (!analysis) return analysis
-  const statuses = Array.isArray(analysis.goal_statuses) ? analysis.goal_statuses : []
-  if (statuses.length !== 1) return analysis
-  const goalIndex = goals.findIndex((item) => item.id === currentGoal.id)
-  if (goalIndex < 0 || statuses[0]?.goal_index === goalIndex) return analysis
-  return {
-    ...analysis,
-    goal_statuses: statuses.map((item) => ({
-      ...item,
-      goal_index: goalIndex,
-    })),
-  } satisfies GoalJudgmentType
 }
 
 async function executeDecision(
@@ -1914,420 +1178,111 @@ async function executeDecision(
 
   if (decision.action === "retry") {
     const nextRunID = createRetryRun(task, run, decision.summary, decision.retryContext)
-    await hooks.updateRun(
-      run,
-      {
-        status: "failed",
-        error: decision.summary,
-        blocking_reason: null,
-        time_completed: Date.now(),
-      },
-      decision.summary,
-    )
     await OrchestratorRuntime.dispatch(nextRunID, hooks)
     return true
   }
 
   const currentPlan = run.plan_version_id ? findPlan(run.plan_version_id) : undefined
   if (!currentPlan) return false
-
-  // Before rewriting the spec, ask user to confirm (only when OPENCORVUS_REQUIRE_REPLAN_CONFIRM=1).
-  // Spec rewrite silently overwrites the original requirements, so confirmation protects user intent.
-  if (!REQUIRE_REPLAN_CONFIRM) {
-    const next = await createReplanRun(task, currentPlan, run, decision.summary, decision.analysis)
-    if (!next.queued) return false
-    if (!next.runID) return false
-    await hooks.updateRun(
-      run,
-      {
-        status: "failed",
-        error: decision.summary,
-        blocking_reason: null,
-        time_completed: Date.now(),
-      },
-      decision.summary,
-    )
-    await OrchestratorRuntime.dispatch(next.runID, hooks)
-    return true
-  }
-  const interactionID = Identifier.ascending("interaction")
-  const guidance = decision.analysis?.replan_guidance
-  const rootCause = guidance?.root_cause ?? decision.summary
-  const strategy = guidance?.suggested_strategy ?? "Rewrite the spec and retry with an updated plan."
-  const body = [
-    `**Evaluation failed** — the plan requires a rewrite before retrying.`,
-    ``,
-    `**Root cause:** ${rootCause}`,
-    `**Suggested strategy:** ${strategy}`,
-    ``,
-    `Approve to proceed with spec rewrite, or reject to fail the task.`,
-  ].join("\n")
-  const now = Date.now()
-  Database.transaction((db) => {
-    db.insert(OrchestratorInteractionRequestTable)
-      .values({
-        id: interactionID,
-        task_id: task.id,
-        run_id: run.id,
-        external_id: interactionID,
-        request_type: "question",
-        status: "pending",
-        title: "Confirm replan",
-        body,
-        payload: {
-          replan_confirm: true,
-          failure_summary: decision.summary,
-          plan_id: currentPlan.id,
-          analysis: decision.analysis ?? null,
-        },
-        time_created: now,
-        time_updated: now,
-      })
-      .run()
-  })
-  await hooks.updateRun(run, { status: "blocked", blocking_reason: "pending_replan" }, "Waiting for replan confirmation")
-  await hooks.updateTask(task, { status: "blocked", blocking_reason: "pending_replan" }, "Waiting for replan confirmation")
-  Database.effect(() =>
-    OrchestratorProtocol.emit(Event.InteractionRequested, {
-      taskID: task.id,
-      runID: run.id,
-      interactionID,
-      requestType: "question",
-      summary: "Confirm replan",
-    }, { source: "runtime.replan_confirmation" }),
-  )
+  const next = await createReplanRun(task, currentPlan, run, decision.summary, decision.analysis)
+  if (!next.queued) return !!next.error
+  if (!next.runID) return false
+  await OrchestratorRuntime.dispatch(next.runID, hooks)
   return true
 }
 
-function completeGoalRunFromIdle(goalRunID: string | undefined) {
-  if (!goalRunID) return
-  const goalRun = findGoalRun(goalRunID)
-  if (!goalRun) return
-  if (!["queued", "accepted", "running", "blocked"].includes(goalRun.status)) return
-  updateGoalRun(goalRunID, {
-    status: "completed",
-    blocking_reason: null,
-    error: null,
-    time_completed: Date.now(),
-  })
-  updateGoalRunExecutorSessionStatus(goalRunID, "completed")
+function fallbackAnalysis(
+  result: {
+    verdict: "accepted" | "rejected" | "inconclusive"
+    summary: string
+  },
+  goalCount: number,
+  message: string,
+): EvaluatorAnalysisType {
+  const goalStatus =
+    result.verdict === "accepted"
+      ? "passed"
+      : result.verdict === "rejected"
+        ? "failed"
+        : "inconclusive"
+  const summary =
+    result.verdict === "accepted"
+      ? result.summary
+      : `${result.summary} Evaluator agent unavailable: ${message}`
+  const reasoning =
+    result.verdict === "accepted"
+      ? "Automated evaluator checks passed; fell back because evaluator agent analysis was unavailable."
+      : `Fell back to automated evaluator result because evaluator agent analysis failed: ${message}`
+  return {
+    verdict: result.verdict,
+    classification: "evaluation",
+    summary,
+    goal_statuses: Array.from({ length: goalCount }, (_, goal_index) => ({
+      goal_index,
+      status: goalStatus,
+      evidence: summary,
+      reasoning,
+    })),
+    replan_guidance: result.verdict === "rejected"
+      ? {
+          root_cause: `Evaluator agent unavailable: ${message}`,
+          what_failed: result.summary,
+          suggested_strategy: "Fix the failing automated checks and retry the current plan.",
+          avoid_approaches: [],
+        }
+      : null,
+  }
 }
-
 
 
 /** 将 executor 的实时事件桥接到 Bus，供 SSE 转发给前端 */
 function consumeExecutorEvents(
   taskID: string,
   runID: string,
-  goalRunID: string | undefined,
   executorName: Parameters<typeof ExecutorRegistry.require>[0],
   sessionID: string,
   executorSessionID: string,
 ) {
   const executor = ExecutorRegistry.require(executorName)
   if (!executor.capabilities().events) return
-  OrchestratorRuntime.stopExecutorEventBridge(sessionID)
-  const controller = new AbortController()
-  executorEventBridges.set(sessionID, controller)
-  const active = new Map<string, ReturnType<typeof executorSource>>()
-  const outputs = new Map<string, { text: string; at: number; source: NonNullable<ReturnType<typeof executorSource>> }>()
-  let unsubTaskReport = () => {}
-  const flushOutput = (id?: string) => {
-    const ids = id ? [id] : [...outputs.keys()]
-    for (const key of ids) {
-      const item = outputs.get(key)
-      if (!item?.text) continue
-      const payload = {
-        sourceID: item.source.id,
-        sourceKind: item.source.kind,
-        sourceLabel: item.source.label,
-        status: item.source.status,
-        text: item.text,
-        goalRunID,
-        executorSessionID,
-      }
-      appendExecutorEvent(executorSessionID, taskID, runID, executorName, goalRunID, {
-        provider: executorName,
-        kind: "message_delta",
-        summary: item.source.label,
-        payload,
-        raw: {
-          type: "message.part.delta",
-          summary: item.source.label,
-          payload,
-        },
-      })
-      OrchestratorProtocol.emit(Event.RunOutput, {
-        taskID,
-        runID,
-        goalRunID,
-        executorSessionID,
-        type: "text_delta",
-        text: item.text,
-        summary: item.source.label,
-        sourceID: item.source.id,
-        sourceKind: item.source.kind,
-        sourceLabel: item.source.label,
-        status: item.source.status,
-        payload,
-      }, { source: "runtime.executor_output", executorSessionID })
-      const streamChunk = {
-        streamID: StreamHub.id({
-          taskID,
-          runID,
-          goalRunID,
-          sessionID,
-          executorSessionID,
-          sourceID: item.source.id,
-        }),
-        kind: "text_delta" as const,
-        text: item.text,
-        taskID,
-        runID,
-        goalRunID,
-        sessionID,
-        payload,
-      }
-      StreamHub.append(streamChunk).catch(async (error) => {
-        log.warn("protocol stream chunk append failed, retrying", { taskID, runID, error: String(error) })
-        StreamHub.append(streamChunk).catch((retryError) => {
-          log.error("protocol stream chunk append failed after retry", { taskID, runID, error: String(retryError) })
-        })
-      })
-      outputs.set(key, {
-        ...item,
-        text: "",
-        at: Date.now(),
-      })
-    }
-  }
   // 异步消费 — 不阻塞 dispatch 返回
   ;(async () => {
     try {
-      for await (const event of executor.events({ sessionID, signal: controller.signal })) {
-        try {
-          const source = executorSource(event, active)
-          if (event.type === "message.part.delta") {
-            const delta = typeof event.payload?.delta === "string" ? event.payload.delta : event.summary ?? ""
-            if (delta) {
-              const next = source ?? {
-                id: "assistant",
-                kind: "assistant",
-                label: "Assistant",
-                status: "running",
-              }
-              const now = Date.now()
-              const current = outputs.get(next.id) ?? {
-                text: "",
-                at: now,
-                source: next,
-              }
-              outputs.set(next.id, {
-                text: current.text + delta,
-                at: current.at,
-                source: next,
-              })
-              if (current.text.length + delta.length >= EXECUTOR_OUTPUT_FLUSH_CHARS || now - current.at >= EXECUTOR_OUTPUT_FLUSH_MS) {
-                flushOutput(next.id)
-              }
-            }
-            continue
-          }
-
-          flushOutput()
-          syncExecutorSource(active, source)
-          const payload = executorProgressPayload(event, source)
-          upsertExecutorInteraction(taskID, runID, goalRunID, sessionID, executorSessionID, executorName, event)
-          if (shouldPersistExecutorEvent(event.type)) {
-            appendExecutorEvent(executorSessionID, taskID, runID, executorName, goalRunID, {
-              provider: executorName,
-              kind: protocolEventKind(event.type),
-              summary: event.summary ?? event.type,
-              payload,
-              raw: {
-                type: event.type,
-                summary: event.summary,
-                payload,
-              },
-            })
-          }
-          if (shouldPublishExecutorProgress(event.type)) {
-            OrchestratorProtocol.emit(Event.RunProgress, {
-              taskID,
-              runID,
-              goalRunID,
-              executorSessionID,
-              type: event.type,
-              summary: event.summary ?? event.type,
-              sourceID: source?.id,
-              sourceKind: source?.kind,
-              sourceLabel: source?.label,
-              status: source?.status,
-              payload,
-            }, { source: "runtime.executor_progress", executorSessionID })
-          }
-          if (event.type === "session.idle") completeGoalRunFromIdle(goalRunID)
-        } catch (eventErr) {
-          log.warn("executor event handler failed, continuing", { taskID, runID, error: String(eventErr) })
+      for await (const event of executor.events({ sessionID })) {
+        upsertExecutorInteraction(taskID, runID, sessionID, executorSessionID, executorName, event)
+        await projectExecutorEventToSession(taskID, requireRun(runID), event)
+        appendExecutorEvent(executorSessionID, taskID, runID, executorName, {
+          provider: executorName,
+          kind: protocolEventKind(event.type),
+          summary: event.summary ?? event.type,
+          payload: event.payload,
+          raw: {
+            type: event.type,
+            summary: event.summary,
+            payload: event.payload,
+          },
+        })
+        if (event.type === "text_delta") {
+          Bus.publish(Event.RunOutput, {
+            taskID,
+            runID,
+            type: "text_delta",
+            text: event.summary ?? "",
+          })
+        } else {
+          Bus.publish(Event.RunProgress, {
+            taskID,
+            runID,
+            type: event.type,
+            summary: event.summary ?? event.type,
+            payload: event.payload,
+          })
         }
       }
     } catch (err) {
       log.warn("executor event bridge ended", { taskID, runID, error: String(err) })
-    } finally {
-      flushOutput()
-      if (executorEventBridges.get(sessionID) === controller) {
-        executorEventBridges.delete(sessionID)
-      }
-      // Unsubscribe the task.report listener when the event bridge ends.
-      unsubTaskReport()
     }
-  })().catch((err) => log.error("executor event bridge crashed", { taskID, runID, error: String(err) }))
-
-  // Also complete the goal run when the executor reports task_report: done/failed via the bus.
-  // This handles cases where the agent is in a doom loop and session.idle never fires.
-  unsubTaskReport = Bus.subscribe(TaskReport.EventDef, (event) => {
-    if (event.properties.sessionID !== sessionID) return
-    if (event.properties.status === "done" || event.properties.status === "failed") {
-      log.info("completing goal run from task_report", { goalRunID, sessionID, status: event.properties.status })
-      completeGoalRunFromIdle(goalRunID)
-    }
-  })
-}
-
-function executorProgressPayload(
-  event: {
-    type: string
-    summary?: string
-    payload?: Record<string, unknown>
-  },
-  source?: {
-    id: string
-    kind: string
-    label: string
-    status: string
-  },
-) {
-  if (!source) return event.payload
-  return {
-    ...(event.payload ?? {}),
-    sourceID: source.id,
-    sourceKind: source.kind,
-    sourceLabel: source.label,
-    status: source.status,
-  }
-}
-
-function executorSource(
-  event: {
-    type: string
-    summary?: string
-    payload?: Record<string, unknown>
-  },
-  active = new Map<string, { id: string; kind: string; label: string; status: string } | undefined>(),
-) {
-  const payload = event.payload ?? {}
-  if (event.type === "message.part.delta") {
-    const live = Array.from(active.values()).pop()
-    if (live) return live
-    const partID = typeof payload.partID === "string" && payload.partID
-      ? payload.partID
-      : typeof payload.messageID === "string" && payload.messageID
-        ? payload.messageID
-        : "assistant"
-    return {
-      id: `assistant:${partID}`,
-      kind: "assistant",
-      label: "Assistant",
-      status: "running",
-    }
-  }
-  const kind = executorSourceKind(event.type)
-  const id = executorSourceID(kind, payload)
-  if (!id) return
-  return {
-    id,
-    kind,
-    label: executorSourceLabel(kind, event.summary, payload),
-    status: executorSourceStatus(event.type, event.summary, payload),
-  }
-}
-
-function executorSourceKind(type: string) {
-  const text = type.toLowerCase()
-  if (text.includes("command")) return "command"
-  if (text.includes("tool")) return "tool"
-  if (text.includes("approval")) return "approval"
-  if (text.includes("input")) return "input"
-  if (text.includes("mcp")) return "mcp"
-  if (text.includes("error")) return "error"
-  if (text.includes("reason")) return "assistant"
-  if (text.includes("message")) return "assistant"
-  return "status"
-}
-
-function executorSourceID(kind: string, payload: Record<string, unknown>) {
-  for (const key of ["sourceID", "id", "itemID", "item_id", "callID", "call_id", "requestID", "request_id"]) {
-    const value = payload[key]
-    if (typeof value === "string" && value.trim()) return value.trim()
-  }
-  const command = executorSourceCommand(payload)
-  if (kind === "command" && command) return `command:${command}`
-  if (kind === "tool" && typeof payload.name === "string" && payload.name.trim()) return `tool:${payload.name.trim()}`
-  if (kind === "mcp" && typeof payload.serverName === "string" && payload.serverName.trim()) return `mcp:${payload.serverName.trim()}`
-  if (kind === "approval" && typeof payload.approval === "string" && payload.approval.trim()) {
-    return `approval:${payload.approval.trim()}`
-  }
-  return ""
-}
-
-function executorSourceLabel(kind: string, summary: string | undefined, payload: Record<string, unknown>) {
-  const command = executorSourceCommand(payload)
-  if (kind === "command" && command) return command
-  if (kind === "tool" && typeof payload.name === "string" && payload.name.trim()) return payload.name.trim()
-  if (kind === "approval" && typeof payload.approval === "string" && payload.approval.trim()) return payload.approval.trim()
-  if (kind === "mcp" && typeof payload.serverName === "string" && payload.serverName.trim()) return payload.serverName.trim()
-  if (typeof summary === "string" && summary.trim()) return summary.trim()
-  return kind
-}
-
-function executorSourceStatus(type: string, summary: string | undefined, payload: Record<string, unknown>) {
-  const state = typeof payload.status === "string" ? payload.status.trim().toLowerCase() : ""
-  if (state.includes("fail") || state.includes("error")) return "failed"
-  if (state.includes("complete") || state.includes("done")) return "completed"
-  if (state.includes("block")) return "blocked"
-  if (state.includes("queue") || state.includes("pending")) return "queued"
-  if (state.includes("run") || state.includes("start")) return "running"
-  const text = `${type} ${summary ?? ""}`.toLowerCase()
-  if (text.includes("fail") || text.includes("error")) return "failed"
-  if (text.includes("complete") || text.includes("done") || text.includes("result")) return "completed"
-  if (text.includes("block")) return "blocked"
-  if (text.includes("queue") || text.includes("pending")) return "queued"
-  return "running"
-}
-
-function executorSourceCommand(payload: Record<string, unknown>) {
-  const value = payload.command ?? payload.argv ?? payload.cmd
-  if (typeof value === "string") return value.trim()
-  if (!Array.isArray(value)) return ""
-  return value
-    .flatMap((item) => typeof item === "string" && item.trim() ? [item.trim()] : [])
-    .join(" ")
-    .trim()
-}
-
-function syncExecutorSource(
-  active: Map<string, { id: string; kind: string; label: string; status: string } | undefined>,
-  source?: {
-    id: string
-    kind: string
-    label: string
-    status: string
-  },
-) {
-  if (!source || source.kind === "assistant" || source.kind === "status") return
-  active.delete(source.id)
-  if (source.status === "completed" || source.status === "failed") return
-  active.set(source.id, source)
+  })()
 }
 
 type RuntimeHooks = {
@@ -2358,28 +1313,9 @@ function protocolEventKind(type: string) {
   return "status"
 }
 
-export function shouldPersistExecutorEvent(type: string) {
-  return type !== "message.part.delta" &&
-    type !== "protocol.raw" &&
-    type !== "usage.updated" &&
-    type !== "executor.status"
-}
-
-export function shouldPublishExecutorProgress(type: string) {
-  // message.* events are already forwarded to the UI via the direct session bus event
-  // mechanism (Bus.subscribeAll in the task SSE endpoint). Publishing them as RunProgress
-  // events causes the UI to misclassify them as "message_delta" kind and display their
-  // summary strings ("Part updated: text", "Message updated: user") as assistant message text.
-  if (type.startsWith("message.")) return false
-  return type !== "protocol.raw" &&
-    type !== "usage.updated" &&
-    type !== "executor.status"
-}
-
 function upsertExecutorInteraction(
   taskID: string,
   runID: string,
-  goalRunID: string | undefined,
   sessionID: string,
   executorSessionID: string,
   provider: RunRow["executor"],
@@ -2420,7 +1356,6 @@ function upsertExecutorInteraction(
         payload: {
           protocol_request: true,
           provider,
-          goal_run_id: goalRunID,
           executor_session_id: executorSessionID,
           request_id: requestID,
           request_kind: event.type,
@@ -2431,13 +1366,13 @@ function upsertExecutorInteraction(
       })
       .run()
     Database.effect(() =>
-      OrchestratorProtocol.emit(Event.InteractionRequested, {
+      Bus.publish(Event.InteractionRequested, {
         taskID,
         runID,
         interactionID,
         requestType: event.type === "approval_request" ? "permission" : "question",
         summary: title,
-      }, { source: "runtime.executor_interaction", executorSessionID }),
+      }),
     )
   })
 }

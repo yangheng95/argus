@@ -1,8 +1,8 @@
-import { Database, and, eq } from "@/storage/db"
+import { Bus } from "@/bus"
+import { Database, eq } from "@/storage/db"
 import { Event } from "./model"
 import { progressStatus } from "./helpers"
 import { OrchestratorProgressSnapshotTable, OrchestratorRunTable, OrchestratorTaskTable } from "./orchestrator.sql"
-import { OrchestratorProtocol } from "./protocol"
 import { requireRun, requireTask, type RunRow, type TaskRow } from "./store"
 import { Identifier } from "@/id/id"
 
@@ -49,7 +49,7 @@ export async function updateTask(
         time_updated: now,
       })
       .run()
-    Database.effect(() => OrchestratorProtocol.emit(Event.TaskUpdated, { taskID: row.id, status: nextStatus, summary }, { source: "state.task" }))
+    Database.effect(() => Bus.publish(Event.TaskUpdated, { taskID: row.id, status: nextStatus, summary }))
   })
   return requireTask(row.id)
 }
@@ -77,27 +77,22 @@ export async function updateRun(
   ) {
     return row
   }
-  const now = Date.now()
   Database.transaction((db) => {
     db.update(OrchestratorRunTable)
       .set({
         ...values,
-        time_updated: now,
+        time_updated: Date.now(),
       })
       .where(eq(OrchestratorRunTable.id, row.id))
       .run()
     db.update(OrchestratorTaskTable)
       .set({
-        time_updated: now,
+        active_run_id: row.id,
+        time_updated: Date.now(),
       })
-      .where(
-        and(
-          eq(OrchestratorTaskTable.id, row.task_id),
-          eq(OrchestratorTaskTable.active_run_id, row.id),
-        ),
-      )
+      .where(eq(OrchestratorTaskTable.id, row.task_id))
       .run()
-    Database.effect(() => OrchestratorProtocol.emit(Event.RunUpdated, { taskID: row.task_id, runID: row.id, status: nextStatus, summary }, { source: "state.run" }))
+    Database.effect(() => Bus.publish(Event.RunUpdated, { taskID: row.task_id, runID: row.id, status: nextStatus, summary }))
   })
   return requireRun(row.id)
 }

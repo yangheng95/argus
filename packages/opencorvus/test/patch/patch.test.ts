@@ -133,24 +133,6 @@ PATCH`
     })
   })
 
-  describe("maybeParseApplyPatchVerified", () => {
-    test("resolves /mnt-style paths on Windows", async () => {
-      if (process.platform !== "win32") return
-      const cwd = tempDir
-      const patchRoot = cwd.replace(/\\/g, "/").replace(/^([A-Za-z]):/, (_, drive) => `/mnt/${drive.toLowerCase()}`)
-      const patchText = `*** Begin Patch
-*** Add File: ${patchRoot}/verified.txt
-+verified content
-*** End Patch`
-
-      const result = await Patch.maybeParseApplyPatchVerified(["apply_patch", patchText], cwd)
-      expect(result.type).toBe(Patch.MaybeApplyPatchVerified.Body)
-      if (result.type === Patch.MaybeApplyPatchVerified.Body) {
-        expect(result.action.changes.has(path.join(cwd, "verified.txt"))).toBe(true)
-      }
-    })
-  })
-
   describe("applyPatch", () => {
     test("should add a new file", async () => {
       const patchText = `*** Begin Patch

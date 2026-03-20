@@ -4,10 +4,6 @@ import { streamSSE } from "hono/streaming"
 import { HTTPException } from "hono/http-exception"
 import z from "zod"
 import { Bus } from "@/bus"
-import { Session } from "@/session"
-import { MessageV2 } from "@/session/message"
-import { Identifier } from "@/id/id"
-import { ProtocolStore } from "@/protocol/store"
 import {
   Artifact,
   CreateTaskInput,
@@ -18,7 +14,6 @@ import {
   GlobalTaskBoard,
   InjectMessageInput,
   Interaction,
-  ProtocolMessage,
   Progress,
   ProjectBoard,
   RejectInteractionInput,
@@ -29,14 +24,13 @@ import {
   TaskMessageInput,
   TaskMessageResult,
   TaskAccepted,
+  TaskEvent,
   Task,
+  UpdateGoalInput,
   UpdateTaskChecksInput,
-  UpdateTaskBudgetInput,
   UpdatePreferenceInput,
 } from "@/orchestrator/model"
 import { ExecutorNotConfiguredError, OrchestratorService, PlannerFailureError } from "@/orchestrator/service"
-import { requireTask } from "@/orchestrator/store"
-import { matchesTaskEvent, taskSession } from "./task-event"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
 
@@ -66,8 +60,6 @@ export const OrchestratorRoutes = lazy(() =>
         const taskID = await OrchestratorService.createTask({
           ...input,
           requestID: input.requestID ?? requestID,
-        }, {
-          background: true,
         }).catch((error) => {
           if (error instanceof ExecutorNotConfiguredError) {
             throw new HTTPException(400, {
@@ -103,8 +95,7 @@ export const OrchestratorRoutes = lazy(() =>
       async (c) => {
         const query = c.req.query("q") || undefined
         const status = c.req.query("status") || undefined
-        const limitRaw = c.req.query("limit")
-        const limit = limitRaw ? (() => { const n = parseInt(limitRaw, 10); return Number.isFinite(n) && n > 0 ? n : undefined })() : undefined
+        const limit = c.req.query("limit") ? parseInt(c.req.query("limit")!, 10) : undefined
         return c.json(await OrchestratorService.getProjectBoard({ query, status, limit }))
       },
     )
@@ -167,28 +158,6 @@ export const OrchestratorRoutes = lazy(() =>
         return c.json(await OrchestratorService.getTask(c.req.valid("param").taskID))
       },
     )
-    .delete(
-      "/task/:taskID",
-      describeRoute({
-        summary: "Delete task",
-        operationId: "task.delete",
-        responses: {
-          200: {
-            description: "Task deleted",
-            content: {
-              "application/json": {
-                schema: resolver(z.boolean()),
-              },
-            },
-          },
-          ...errors(404),
-        },
-      }),
-      validator("param", z.object({ taskID: Task.shape.id })),
-      async (c) => {
-        return c.json(await OrchestratorService.deleteTask(c.req.valid("param").taskID))
-      },
-    )
     .get(
       "/task/:taskID/progress",
       describeRoute({
@@ -221,48 +190,45 @@ export const OrchestratorRoutes = lazy(() =>
             description: "Task event stream",
             content: {
               "text/event-stream": {
-                schema: resolver(ProtocolMessage),
+                schema: resolver(TaskEvent),
               },
             },
           },
         },
       }),
       validator("param", z.object({ taskID: Task.shape.id })),
-      validator("query", z.object({ after: z.coerce.number().int().min(0).optional() })),
       async (c) => {
         const taskID = c.req.valid("param").taskID
-        const after = c.req.valid("query").after
-        const sessionID = taskSession(taskID)
         c.header("X-Accel-Buffering", "no")
         c.header("X-Content-Type-Options", "nosniff")
         return streamSSE(c, async (stream) => {
-          let sequence = after ?? ProtocolStore.latestTaskSequence(taskID)
-          const stopProtocol = ProtocolStore.subscribeEvents(async (event) => {
-            if (event.sequence <= sequence) return
-            sequence = Math.max(sequence, event.sequence)
-            await stream.writeSSE({ data: JSON.stringify(routeMessage(event)) })
-          }, { taskID })
-          for (const item of ProtocolStore.listTaskEventsAfter(taskID, sequence).map(routeMessage)) {
-            if (item.sequence <= sequence) continue
-            sequence = Math.max(sequence, item.sequence)
-            await stream.writeSSE({ data: JSON.stringify(item) })
-          }
+          await stream.writeSSE({
+            data: JSON.stringify(taskEvent(taskID, {
+              type: "task.connected",
+              properties: {
+                taskID,
+                summary: "Task event stream connected",
+              },
+            })),
+          })
           const unsub = Bus.subscribeAll(async (event) => {
-            if (!matchesTaskEvent(event, taskID, sessionID)) return
-            await stream.writeSSE({ data: JSON.stringify(ephemeralEvent(taskID, event.type, event.properties)) })
+            if (event.properties?.taskID !== taskID) return
+            await stream.writeSSE({ data: JSON.stringify(taskEvent(taskID, event)) })
           })
           const heartbeat = setInterval(() => {
             stream.writeSSE({
-              data: JSON.stringify(ephemeralEvent(taskID, "task.heartbeat", {
-                taskID,
-                summary: "Task event stream heartbeat",
+              data: JSON.stringify(taskEvent(taskID, {
+                type: "task.heartbeat",
+                properties: {
+                  taskID,
+                  summary: "Task event stream heartbeat",
+                },
               })),
             })
           }, 10_000)
           await new Promise<void>((resolve) => {
             stream.onAbort(() => {
               clearInterval(heartbeat)
-              stopProtocol()
               unsub()
               resolve()
             })
@@ -323,31 +289,7 @@ export const OrchestratorRoutes = lazy(() =>
           })
         }
         c.header("ETag", etag)
-        return c.json(await OrchestratorService.getBoard(taskID, { sync }))
-      },
-    )
-    .get(
-      "/task/:taskID/transcript",
-      describeRoute({
-        summary: "Get task transcript",
-        operationId: "task.transcript",
-        responses: {
-          200: {
-            description: "Task transcript",
-            content: {
-              "application/json": {
-                schema: resolver(MessageV2.WithParts.array()),
-              },
-            },
-          },
-          ...errors(404),
-        },
-      }),
-      validator("param", z.object({ taskID: Task.shape.id })),
-      async (c) => {
-        const task = requireTask(c.req.valid("param").taskID)
-        if (!task.session_id) return c.json([])
-        return c.json(await Session.messages({ sessionID: task.session_id }))
+        return c.json(await OrchestratorService.getBoard(taskID, { sync: false }))
       },
     )
     .get(
@@ -438,29 +380,6 @@ export const OrchestratorRoutes = lazy(() =>
       validator("json", InjectMessageInput),
       async (c) => {
         return c.json(await OrchestratorService.injectMessage(c.req.valid("param").taskID, c.req.valid("json").message))
-      },
-    )
-    .patch(
-      "/task/:taskID/budget",
-      describeRoute({
-        summary: "Update task budget",
-        operationId: "task.budget.update",
-        responses: {
-          200: {
-            description: "Task budget updated",
-            content: {
-              "application/json": {
-                schema: resolver(Task),
-              },
-            },
-          },
-          ...errors(400, 404),
-        },
-      }),
-      validator("param", z.object({ taskID: Task.shape.id })),
-      validator("json", UpdateTaskBudgetInput),
-      async (c) => {
-        return c.json(await OrchestratorService.updateTaskBudget(c.req.valid("param").taskID, c.req.valid("json")))
       },
     )
     .patch(
@@ -801,35 +720,32 @@ export const OrchestratorRoutes = lazy(() =>
       async (c) => {
         return c.json(await OrchestratorService.deletePreference(c.req.valid("param").preferenceID))
       },
+    )
+    .patch(
+      "/goal/:goalID",
+      validator("param", z.object({ goalID: z.string() })),
+      validator("json", UpdateGoalInput),
+      async (c) => {
+        return c.json(await OrchestratorService.updateGoal(c.req.valid("param").goalID, c.req.valid("json")))
+      },
+    )
+    .delete(
+      "/goal/:goalID",
+      validator("param", z.object({ goalID: z.string() })),
+      async (c) => {
+        return c.json(await OrchestratorService.deleteGoal(c.req.valid("param").goalID))
+      },
     ),
 )
 
-function ephemeralEvent(taskID: string, type: string, payload: Record<string, unknown>) {
+function taskEvent(taskID: string, event: { type: string; properties: Record<string, unknown> }) {
   return {
-    id: Identifier.ascending("protocol_event"),
-    taskID,
-    runID: typeof payload.runID === "string" ? payload.runID : undefined,
-    goalRunID: typeof payload.goalRunID === "string" ? payload.goalRunID : undefined,
-    sessionID: typeof payload.sessionID === "string" ? payload.sessionID : undefined,
-    interactionID: typeof payload.interactionID === "string" ? payload.interactionID : undefined,
-    executorSessionID: typeof payload.executorSessionID === "string" ? payload.executorSessionID : undefined,
-    kind: "event" as const,
-    type: type.replace("orchestrator.", ""),
-    source: "orchestrator.route",
-    sequence: 0,
-    summary: typeof payload.summary === "string" ? payload.summary : type,
-    payload,
-    time: {
-      emitted: Date.now(),
-      created: Date.now(),
-      updated: Date.now(),
-    },
-  }
-}
-
-function routeMessage<T extends { type: string }>(message: T) {
-  return {
-    ...message,
-    type: message.type.replace("orchestrator.", ""),
+    event_id: `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+    task_id: taskID,
+    run_id: typeof event.properties.runID === "string" ? event.properties.runID : undefined,
+    type: event.type.replace("orchestrator.", ""),
+    timestamp: Date.now(),
+    summary: typeof event.properties.summary === "string" ? event.properties.summary : event.type,
+    payload: event.properties,
   }
 }

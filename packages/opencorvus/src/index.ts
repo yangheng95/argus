@@ -1,6 +1,6 @@
-import { installProcessBootstrap } from "@/runtime/bootstrap"
+import { installProcessShims } from "@/runtime/shims"
 
-installProcessBootstrap()
+installProcessShims()
 
 import yargs from "yargs"
 import { hideBin } from "yargs/helpers"

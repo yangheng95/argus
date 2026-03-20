@@ -25,16 +25,14 @@ import { fn } from "@/util/fn"
 import { Tool } from "@/tool/tool"
 import { PermissionNext } from "@/permission/next"
 import { fileURLToPath, pathToFileURL } from "bun"
-import { SessionActor } from "./actor"
+import { SessionPromptState } from "./prompt-state"
 import { SessionLoop } from "./loop"
 import { SessionShell } from "./shell-exec"
 import { SessionCommand } from "./command-exec"
-import PLAN_REMINDER from "./prompt/plan-reminder-anthropic.txt"
-import SPEC_REMINDER from "./prompt/spec-reminder-anthropic.txt"
 
 export namespace SessionPrompt {
-  export const assertNotBusy = SessionActor.assertNotBusy
-  export const cancel = SessionActor.cancel
+  export const assertNotBusy = SessionPromptState.assertNotBusy
+  export const cancel = SessionPromptState.cancel
 
   export const { LoopInput, loop, resolveTools, createStructuredOutputTool } = SessionLoop
   export const { ShellInput, shell } = SessionShell
@@ -112,34 +110,29 @@ export namespace SessionPrompt {
 
   export const prompt = fn(PromptInput, async (input) => {
     const session = await Session.get(input.sessionID)
-    return Instance.provide({
-      directory: session.directory,
-      fn: async () => {
-        await SessionRevert.cleanup(session)
+    await SessionRevert.cleanup(session)
 
-        const message = await createUserMessage(input)
-        await Session.touch(input.sessionID)
+    const message = await createUserMessage(input)
+    await Session.touch(input.sessionID)
 
-        const permissions: PermissionNext.Ruleset = []
-        for (const [tool, enabled] of Object.entries(input.tools ?? {})) {
-          permissions.push({
-            permission: tool,
-            action: enabled ? "allow" : "deny",
-            pattern: "*",
-          })
-        }
-        if (permissions.length > 0) {
-          session.permission = permissions
-          await Session.setPermission({ sessionID: session.id, permission: permissions })
-        }
+    const permissions: PermissionNext.Ruleset = []
+    for (const [tool, enabled] of Object.entries(input.tools ?? {})) {
+      permissions.push({
+        permission: tool,
+        action: enabled ? "allow" : "deny",
+        pattern: "*",
+      })
+    }
+    if (permissions.length > 0) {
+      session.permission = permissions
+      await Session.setPermission({ sessionID: session.id, permission: permissions })
+    }
 
-        if (input.noReply === true) {
-          return message
-        }
+    if (input.noReply === true) {
+      return message
+    }
 
-        return loop({ sessionID: input.sessionID })
-      },
-    })
+    return loop({ sessionID: input.sessionID })
   })
 
   export async function resolvePromptParts(template: string): Promise<PromptInput["parts"]> {
@@ -160,7 +153,6 @@ export namespace SessionPrompt {
           ? path.join(os.homedir(), name.slice(2))
           : path.resolve(Instance.worktree, name)
 
-        // File may not exist — fall through to agent name lookup below
         const stats = await fs.stat(filepath).catch(() => undefined)
         if (!stats) {
           const agent = await Agent.get(name)
@@ -195,17 +187,16 @@ export namespace SessionPrompt {
   }
 
   async function lastModel(sessionID: string) {
-    return SessionActor.lastModel(sessionID)
+    return SessionPromptState.lastModel(sessionID)
   }
 
   async function createUserMessage(input: PromptInput) {
     const agent = await Agent.get(input.agent ?? (await Agent.defaultAgent()))
-    const session = await Session.get(input.sessionID)
 
     const model = input.model ?? agent.model ?? (await lastModel(input.sessionID))
     const full =
       !input.variant && agent.variant
-        ? await Provider.getModel(model.providerID, model.modelID).catch(() => undefined) // Model lookup failure → skip variant
+        ? await Provider.getModel(model.providerID, model.modelID).catch(() => undefined)
         : undefined
     const variant = input.variant ?? (agent.variant && full?.variants?.[agent.variant] ? agent.variant : undefined)
 
@@ -232,14 +223,8 @@ export namespace SessionPrompt {
       id: part.id ?? Identifier.ascending("part"),
     })
 
-    const reminders = await reminderParts({
-      session,
-      sessionID: input.sessionID,
-      agent: agent.name,
-    })
-
     const parts = await Promise.all(
-      [...reminders, ...input.parts].map(async (part): Promise<Draft<MessageV2.Part>[]> => {
+      input.parts.map(async (part): Promise<Draft<MessageV2.Part>[]> => {
         if (part.type === "file") {
           if (part.source?.type === "resource") {
             const { clientName, uri } = part.source
@@ -350,8 +335,8 @@ export namespace SessionPrompt {
                 }
                 if (range.start != null) {
                   const filePathURI = part.url.split("?")[0]
-                  let start = parseInt(range.start, 10)
-                  let end = range.end ? parseInt(range.end, 10) : undefined
+                  let start = parseInt(range.start)
+                  let end = range.end ? parseInt(range.end) : undefined
                   if (start === end) {
                     const symbols = await LSP.documentSymbol(filePathURI).catch(() => [])
                     for (const symbol of symbols) {
@@ -561,56 +546,5 @@ export namespace SessionPrompt {
       info,
       parts,
     }
-  }
-
-  async function reminderParts(input: {
-    session: Session.Info
-    sessionID: string
-    agent: string
-  }): Promise<PromptInput["parts"]> {
-    const remind = (text: string): PromptInput["parts"][number] => ({
-      type: "text",
-      synthetic: true,
-      text,
-    })
-
-    if (input.agent === "plan") {
-      return [
-        remind(
-          PLAN_REMINDER.replace(
-            "{{plan_file_info}}",
-            `Plan file: \`${Session.plan(input.session)}\`\nKeep the plan in \`.opencorvus/plans\` and exit with \`plan_exit\`.`,
-          ),
-        ),
-      ]
-    }
-
-    if (input.agent === "spec") {
-      return [
-        remind(
-          SPEC_REMINDER.replace(
-            "{{spec_file_info}}",
-            `Spec file: \`${Session.spec(input.session)}\`\nKeep the spec in \`.opencorvus/specs\` and exit with \`spec_exit\`.`,
-          ),
-        ),
-      ]
-    }
-
-    const messages = await Session.messages({
-      sessionID: input.sessionID,
-      limit: 20,
-    })
-    const lastUser = [...messages].reverse().find((message) => message.info.role === "user")
-    if (lastUser?.info.agent !== "plan") return []
-
-    return [
-      remind(
-        [
-          "Plan mode has ended.",
-          "Use the plan in `.opencorvus/plans` as the execution source of truth.",
-          "Implement the approved plan instead of rewriting it in chat.",
-        ].join("\n"),
-      ),
-    ]
   }
 }

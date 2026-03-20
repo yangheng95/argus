@@ -1,5 +1,5 @@
 import z from "zod"
-import { ExecutorName } from "../contracts"
+import { ExecutorName } from "../compat"
 import { ProtocolCapabilities, ProtocolEvent, ProtocolRefs, ProtocolSettings, ProtocolToolKind } from "./model"
 
 export const ToolDefinition = z.object({

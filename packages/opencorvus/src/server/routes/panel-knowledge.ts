@@ -2,17 +2,11 @@ import { Hono } from "hono"
 import { describeRoute, resolver, validator } from "hono-openapi"
 import z from "zod"
 import { Memory } from "@/memory"
-import { requireTask } from "@/orchestrator/store"
 import { Preference } from "@/preference"
 import { Instance } from "@/project/instance"
 
 function projectId() {
   return Instance.project.id
-}
-
-function taskSessionID(taskID?: string) {
-  if (!taskID) return
-  return requireTask(taskID).session_id ?? undefined
 }
 
 export function PanelKnowledgeRoutes() {
@@ -49,11 +43,10 @@ export function PanelKnowledgeRoutes() {
           },
         },
       }),
-      validator("query", z.object({ sessionID: z.string().optional(), taskID: z.string().optional() })),
+      validator("query", z.object({ sessionID: z.string().optional() })),
       async (c) => {
-        const { sessionID, taskID } = c.req.valid("query")
-        const scoped = taskSessionID(taskID) ?? sessionID
-        const files = Memory.listFiles({ projectId: projectId(), sessionID: scoped })
+        const { sessionID } = c.req.valid("query")
+        const files = Memory.listFiles({ projectId: projectId(), sessionID })
         return c.json(files)
       },
     )
@@ -135,14 +128,12 @@ export function PanelKnowledgeRoutes() {
         z.object({
           query: z.string(),
           sessionID: z.string().optional(),
-          taskID: z.string().optional(),
           limit: z.number().int().min(1).max(50).optional(),
         }),
       ),
       async (c) => {
-        const { query, sessionID, taskID, limit } = c.req.valid("json")
-        const scoped = taskSessionID(taskID) ?? sessionID
-        const results = Memory.search({ query, projectId: projectId(), sessionID: scoped, limit })
+        const { query, sessionID, limit } = c.req.valid("json")
+        const results = Memory.search({ query, projectId: projectId(), sessionID, limit })
         return c.json(results)
       },
     )

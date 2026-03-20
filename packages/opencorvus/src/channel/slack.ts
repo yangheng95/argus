@@ -1,8 +1,8 @@
 import { App } from "@slack/bolt"
-import { ChannelProtocol } from "@/channel/protocol"
+import { Bus } from "@/bus"
+import { ChannelIngress } from "@/channel/ingress"
 import { Event as OrchestratorEvent } from "@/orchestrator/model"
 import { OrchestratorChannelBindingTable } from "@/orchestrator/orchestrator.sql"
-import { ProtocolStore } from "@/protocol/store"
 import { Instance } from "@/project/instance"
 import { InstanceBootstrap } from "@/project/bootstrap"
 import { Database, and, eq } from "@/storage/db"
@@ -33,8 +33,7 @@ export class SlackGateway {
     this.botUserId = auth.user_id
     this.subscribeEvents()
     this.app.message(async ({ message }) => {
-      // Slack bolt message event is a complex union; extract the fields we need
-      await this.handleMessage(message as { subtype?: string; user?: string; text?: string; ts: string; thread_ts?: string; channel: string }).catch((error) => {
+      await this.handleMessage(message as any).catch((error) => {
         log.error("slack message handler failed", { error })
       })
     })
@@ -50,68 +49,34 @@ export class SlackGateway {
 
   private subscribeEvents() {
     this.unsub?.()
-    void this.withInstance(async () => {
-      this.unsub = ProtocolStore.subscribeEvents(async (event) => {
-        if (!event.taskID) return
-        await this.withInstance(async () => {
-          const binding = this.findBinding(event.taskID!)
-          if (!binding) return
-          if (event.type === OrchestratorEvent.TaskUpdated.type) {
-            const status = typeof event.payload?.status === "string" ? event.payload.status : "queued"
-            const icon = taskStatusIcon(status)
-            await this.sendThread(
-              binding.channel,
-              binding.thread,
-              `${icon} 任务状态: *${status}*\n📁 \`${Instance.directory}\`\n${event.summary}`,
+    this.unsub = Bus.subscribe(OrchestratorEvent.EvaluationCompleted, async (event) => {
+      await this.withInstance(async () => {
+        const binding = Database.use((db) =>
+          db
+            .select()
+            .from(OrchestratorChannelBindingTable)
+            .where(
+              and(
+                eq(OrchestratorChannelBindingTable.task_id, event.properties.taskID),
+                eq(OrchestratorChannelBindingTable.platform, "slack"),
+              ),
             )
-            return
-          }
-          if (event.type === OrchestratorEvent.RunCreated.type) {
-            const runID = typeof event.payload?.runID === "string" ? event.payload.runID : event.runID
-            if (!runID) return
-            await this.sendThread(
-              binding.channel,
-              binding.thread,
-              `🚀 开始执行轮次 \`${runID}\`\n📁 \`${Instance.directory}\``,
-            )
-            return
-          }
-          if (event.type !== OrchestratorEvent.EvaluationCompleted.type) return
-          const verdict = typeof event.payload?.verdict === "string" ? event.payload.verdict : "rejected"
-          const icon = verdict === "accepted" ? "✅" : "❌"
-          await this.sendThread(
-            binding.channel,
-            binding.thread,
-            `${icon} 评估完成: verdict=*${verdict}*\n📁 \`${Instance.directory}\`\n${event.summary}`,
-          )
-        }).catch((error) => {
-          log.error("slack protocol publish failed", { error, taskID: event.taskID, type: event.type })
-        })
-      }, {
-        types: [
-          OrchestratorEvent.TaskUpdated.type,
-          OrchestratorEvent.RunCreated.type,
-          OrchestratorEvent.EvaluationCompleted.type,
-        ],
-      })
-    }).catch((error) => {
-      log.error("slack protocol subscribe failed", { error })
-    })
-  }
-
-  private findBinding(taskID: string) {
-    return Database.use((db) =>
-      db
-        .select()
-        .from(OrchestratorChannelBindingTable)
-        .where(
-          and(
-            eq(OrchestratorChannelBindingTable.task_id, taskID),
-            eq(OrchestratorChannelBindingTable.platform, "slack"),
-          ),
+            .get(),
         )
-        .get(),
-    )
+        if (!binding) return
+        await this.sendThread(
+          binding.channel,
+          binding.thread,
+          `Evaluation ${event.properties.verdict}: ${event.properties.summary}`,
+        )
+      }).catch((error) => {
+        log.error("slack event publish failed", {
+          error,
+          event: event.type,
+          taskID: event.properties.taskID,
+        })
+      })
+    })
   }
 
   private async handleMessage(message: {
@@ -137,29 +102,17 @@ export class SlackGateway {
     const thread = message.thread_ts ?? message.ts
 
     await this.withInstance(async () => {
-      const result = await ChannelProtocol.ingress({
-        type: "channel_ingress",
-        version: "channel.v1",
-        request_id: message.ts,
+      const result = await ChannelIngress.message({
         platform: "slack",
         channel,
         thread,
-        ...(message.user
-          ? {
-              user: {
-                id: message.user,
-              },
-            }
-          : {}),
-        message: {
-          text,
-        },
-        context: {
-          allow_create: thread === message.ts,
-        },
+        text,
+        user_id: message.user,
+        request_id: message.ts,
         source: "slack",
+        allow_create: thread === message.ts,
       })
-      await this.sendThread(channel, thread, result.result.message, result.result.attachments)
+      await this.sendThread(channel, thread, result.message, result.attachments)
     })
   }
 
@@ -208,17 +161,4 @@ function defaultFileName(mime: string) {
   if (mime === "image/png") return "opencorvus-gui.png"
   if (mime === "image/jpeg") return "opencorvus-gui.jpg"
   return "opencorvus-gui.bin"
-}
-
-function taskStatusIcon(status: string) {
-  switch (status) {
-    case "planning": return "🧠"
-    case "running": return "⚙️"
-    case "evaluating": return "🔍"
-    case "delivering": return "📦"
-    case "completed": return "🎉"
-    case "failed": return "💥"
-    case "cancelled": return "🚫"
-    default: return "📋"
-  }
 }

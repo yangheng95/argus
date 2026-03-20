@@ -17,8 +17,6 @@ test("exposes local action metadata and input schemas", () => {
   const view = panel.actions.find((item) => item.action === "view_plan")
   const task = panel.actions.find((item) => item.action === "create_task")
   const screenshot = panel.actions.find((item) => item.action === "capture_overlay_screenshot")
-  const settings = panel.actions.find((item) => item.action === "update_panel_settings")
-  const api = panel.actions.find((item) => item.action === "call_panel_api")
 
   expect(create?.local_action_types).toEqual(["select_session"])
   expect(create?.local_action_surfaces).toEqual(["panel"])
@@ -40,26 +38,6 @@ test("exposes local action metadata and input schemas", () => {
   expect(screenshot?.schema).toMatchObject({
     properties: {
       match: {
-        type: "string",
-      },
-    },
-  })
-  expect(settings?.schema).toMatchObject({
-    properties: {
-      sessionID: {
-        type: "string",
-      },
-      settings: {
-        type: "object",
-      },
-    },
-  })
-  expect(api?.schema).toMatchObject({
-    properties: {
-      method: {
-        enum: ["GET", "POST", "PATCH", "DELETE"],
-      },
-      path: {
         type: "string",
       },
     },

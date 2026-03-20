@@ -1,10 +1,10 @@
 import z from "zod"
-import { Budget, CheckConfig, StageRouting } from "@/orchestrator/model"
+import { CheckConfig, StageRouting } from "@/orchestrator/model"
 import { ChannelId, ChannelSurface as SharedChannelSurface } from "@/channel/catalog"
 
 export const PanelSurface = SharedChannelSurface
 export const PanelCapabilityKind = z.enum(["query", "mutation"])
-export const PanelLocalActionType = z.enum(["set_executor", "select_task"])
+export const PanelLocalActionType = z.enum(["set_executor", "select_task", "select_session", "invalidate_session"])
 export const PanelCapabilityQuery = z.object({
   surface: PanelSurface.default("panel"),
 })
@@ -58,17 +58,8 @@ function schemas<const T extends readonly Capability[]>(items: T) {
 
 export const PanelCapabilityRegistry = list(
   item({
-    action: "view_spec",
-    description: "Inspect the active task spec and acceptance contract.",
-    kind: "query",
-    surfaces: all,
-    params: {
-      taskID: z.string(),
-    },
-  }),
-  item({
     action: "view_plan",
-    description: "Inspect the active execution plan, milestones, and plan nodes.",
+    description: "Inspect a task plan and goal list.",
     kind: "query",
     surfaces: all,
     params: {
@@ -77,7 +68,7 @@ export const PanelCapabilityRegistry = list(
   }),
   item({
     action: "view_board",
-    description: "Inspect the task overview panel or list recent tasks when taskID is omitted.",
+    description: "Inspect a task board or list recent tasks when taskID is omitted.",
     kind: "query",
     surfaces: all,
     params: {
@@ -100,7 +91,6 @@ export const PanelCapabilityRegistry = list(
       request: z.string(),
       request_id: z.string().optional(),
       executor: z.enum(["opencode", "codex", "claude-code"]).optional(),
-      budget: Budget.optional(),
       checks: CheckConfig.optional(),
       routing: StageRouting.optional(),
       channel: z.string().optional(),
@@ -172,18 +162,8 @@ export const PanelCapabilityRegistry = list(
     },
   }),
   item({
-    action: "update_budget",
-    description: "Update the run budget for a task.",
-    kind: "mutation",
-    surfaces: all,
-    params: {
-      taskID: z.string(),
-      budget: Budget.nullish(),
-    },
-  }),
-  item({
     action: "update_checks",
-    description: "Update the selected verification checks for a task, or replace the full evaluation config. spec_check remains required.",
+    description: "Update the selected verification checks for a task, or replace the full evaluation config.",
     kind: "mutation",
     surfaces: all,
     params: {
@@ -199,25 +179,6 @@ export const PanelCapabilityRegistry = list(
     surfaces: all,
     params: {
       match: z.string().optional(),
-    },
-  }),
-  item({
-    action: "list_panel_api",
-    description: "List allowlisted raw panel API routes that LLMs may call directly.",
-    kind: "query",
-    surfaces: all,
-    params: {},
-  }),
-  item({
-    action: "call_panel_api",
-    description: "Call an allowlisted raw panel API route directly and return its JSON/text response.",
-    kind: "mutation",
-    surfaces: all,
-    params: {
-      method: z.enum(["GET", "POST", "PATCH", "DELETE"]),
-      path: z.string(),
-      query: z.record(z.string(), z.string()).optional(),
-      body: z.record(z.string(), z.unknown()).optional(),
     },
   }),
   item({
@@ -241,6 +202,77 @@ export const PanelCapabilityRegistry = list(
     },
     local_action_types: ["select_task"],
     local_action_surfaces: panel,
+  }),
+  item({
+    action: "select_session",
+    description: "Focus a session in the desktop panel chat.",
+    kind: "mutation",
+    surfaces: panel,
+    params: {
+      sessionID: z.string(),
+    },
+    local_action_types: ["select_session"],
+    local_action_surfaces: panel,
+  }),
+  item({
+    action: "create_session",
+    description: "Create a blank session.",
+    kind: "mutation",
+    surfaces: all,
+    params: {},
+    local_action_types: ["select_session"],
+    local_action_surfaces: panel,
+  }),
+  item({
+    action: "fork_session",
+    description: "Fork an existing session.",
+    kind: "mutation",
+    surfaces: all,
+    params: {
+      sessionID: z.string(),
+    },
+    local_action_types: ["select_session"],
+    local_action_surfaces: panel,
+  }),
+  item({
+    action: "delete_session",
+    description: "Delete a session and its linked tasks.",
+    kind: "mutation",
+    surfaces: all,
+    params: {
+      sessionID: z.string(),
+    },
+    local_action_types: ["invalidate_session"],
+    local_action_surfaces: panel,
+  }),
+  item({
+    action: "export_session_html",
+    description: "Export a session transcript as HTML.",
+    kind: "mutation",
+    surfaces: all,
+    params: {
+      sessionID: z.string(),
+    },
+  }),
+  item({
+    action: "update_goal",
+    description: "Update a goal description and criteria.",
+    kind: "mutation",
+    surfaces: all,
+    params: {
+      goalID: z.string(),
+      description: z.string(),
+      criteria: z.string(),
+    },
+  }),
+  item({
+    action: "delete_goal",
+    description: "Delete a goal.",
+    kind: "mutation",
+    surfaces: all,
+    params: {
+      goalID: z.string(),
+    },
   }),
 )
 
@@ -289,12 +321,7 @@ export function panelCapabilityPrompt(surface: Surface) {
       const action = item.local_action_types?.length
         ? ` Emits local actions: ${item.local_action_types.join(", ")} on ${item.local_action_surfaces?.join(", ")}.`
         : ""
-      const hint = item.action === "create_task"
-        ? " Required params: request:string. checks.build/test/lint/verify_cmd must be string arrays or false, never bare true."
-        : item.action === "update_checks"
-          ? " Use selection for simple toggles, or checks for the full evaluation config."
-          : ""
-      return `- ${item.action}: ${item.description}${local}${action}${hint}`
+      return `- ${item.action}: ${item.description}${local}${action}`
     })
     .join("\n")
 }

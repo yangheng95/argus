@@ -58,7 +58,7 @@ describe("executor session routes", () => {
             session_id: session.id,
             executor: "codex",
             status: "completed",
-            phase: "dispatch",
+            phase: "execute",
             retry_count: 0,
             time_created: now,
             time_updated: now,
@@ -72,8 +72,8 @@ describe("executor session routes", () => {
             task_id: taskID,
             run_id: runID,
             provider: "codex",
-            protocol: "codex-app-server",
-            protocol_version: "v2",
+            protocol: "codex-cli-json",
+            protocol_version: "v1",
             transport: "stdio",
             status: "completed",
             refs: {
@@ -82,20 +82,20 @@ describe("executor session routes", () => {
             capabilities: {
               stream: true,
               resume: true,
-              interrupt: true,
+              interrupt: false,
               builtin_tools: true,
               custom_tools: false,
-              structured_output: true,
-              approvals: ["command", "file_change", "patch", "user_input", "dynamic_tool"],
-              reasoning: true,
-              plan_updates: true,
-              diff_updates: true,
-              mcp: true,
-              usage: true,
-              realtime: true,
-              spec_generation: true,
-              plan_generation: true,
-              tool_kinds: ["builtin", "dynamic", "approval", "input", "mcp", "shell", "patch", "read", "review", "plan", "structured_output", "unknown"],
+              structured_output: false,
+              approvals: [],
+              reasoning: false,
+              plan_updates: false,
+              diff_updates: false,
+              mcp: false,
+              usage: false,
+              realtime: false,
+              spec_generation: false,
+              plan_generation: false,
+              tool_kinds: ["builtin"],
             },
             settings: {
               cwd: tmp.path,
@@ -140,7 +140,7 @@ describe("executor session routes", () => {
           status: string
         }
         expect(executorSession.provider).toBe("codex")
-        expect(executorSession.protocol).toBe("codex-app-server")
+        expect(executorSession.protocol).toBe("codex-cli-json")
         expect(["active", "completed"]).toContain(executorSession.status)
 
         const eventsRes = await app.request(`/run/${runID}/executor-events`, {
@@ -152,132 +152,6 @@ describe("executor session routes", () => {
         const events = await eventsRes.json() as Array<{ kind: string }>
         expect(events.length).toBeGreaterThan(0)
         expect(events.some((item) => item.kind === "lifecycle")).toBe(true)
-      },
-    })
-  })
-
-  test("GET /run/:id/executor-events aggregates every executor session for the run", async () => {
-    await using tmp = await tmpdir({ git: true })
-
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const app = Server.App()
-        const session = await Session.create({ title: "executor-session-aggregate-test" })
-        const taskID = Identifier.ascending("task")
-        const runID = Identifier.ascending("run")
-        const first = Identifier.ascending("executor_session")
-        const second = Identifier.ascending("executor_session")
-        const now = Date.now()
-
-        Database.use((db) =>
-          db.insert(OrchestratorTaskTable).values({
-            id: taskID,
-            project_id: Instance.project.id,
-            session_id: session.id,
-            active_run_id: runID,
-            source: "test",
-            title: "executor aggregation test",
-            request: "executor aggregation test",
-            status: "running",
-            priority: "normal",
-            time_created: now,
-            time_updated: now,
-            time_started: now,
-          }).run(),
-        )
-        Database.use((db) =>
-          db.insert(OrchestratorRunTable).values({
-            id: runID,
-            task_id: taskID,
-            session_id: session.id,
-            executor: "codex",
-            status: "running",
-            phase: "dispatch",
-            retry_count: 0,
-            time_created: now,
-            time_updated: now,
-            time_started: now,
-          }).run(),
-        )
-        for (const [index, executorSessionID] of [first, second].entries()) {
-          Database.use((db) =>
-            db.insert(OrchestratorExecutorSessionTable).values({
-              id: executorSessionID,
-              task_id: taskID,
-              run_id: runID,
-              provider: "codex",
-              protocol: "codex-app-server",
-              protocol_version: "v2",
-              transport: "stdio",
-              status: "active",
-              refs: {
-                provider_session_id: `resp_codex_${index + 1}`,
-              },
-              capabilities: {
-                stream: true,
-                resume: true,
-                interrupt: true,
-                builtin_tools: true,
-                custom_tools: false,
-                structured_output: true,
-                approvals: ["command"],
-                reasoning: true,
-                plan_updates: true,
-                diff_updates: true,
-                mcp: true,
-                usage: true,
-                realtime: true,
-                spec_generation: true,
-                plan_generation: true,
-                tool_kinds: ["builtin", "shell"],
-              },
-              settings: {
-                cwd: tmp.path,
-                model: "gpt-5.3-codex",
-              },
-              time_created: now + index,
-              time_updated: now + index,
-              time_started: now + index,
-            }).run(),
-          )
-          Database.use((db) =>
-            db.insert(OrchestratorExecutorEventTable).values({
-              id: Identifier.ascending("executor_event"),
-              executor_session_id: executorSessionID,
-              task_id: taskID,
-              run_id: runID,
-              sequence: 1,
-              kind: "tool_call",
-              summary: `Tool call: worker-${index + 1}`,
-              payload: {
-                provider: "codex",
-                id: "shared-tool",
-                name: `worker-${index + 1}`,
-              },
-              raw: {
-                type: "tool.call",
-              },
-              time_observed: now + index,
-              time_created: now + index,
-              time_updated: now + index,
-            }).run(),
-          )
-        }
-
-        const eventsRes = await app.request(`/run/${runID}/executor-events`, {
-          headers: {
-            "x-opencorvus-directory": tmp.path,
-          },
-        })
-        expect(eventsRes.status).toBe(200)
-        const events = await eventsRes.json() as Array<{ executorSessionID: string; summary?: string }>
-        expect(events).toHaveLength(2)
-        expect(new Set(events.map((item) => item.executorSessionID))).toEqual(new Set([first, second]))
-        expect(events.map((item) => item.summary)).toEqual([
-          "Tool call: worker-1",
-          "Tool call: worker-2",
-        ])
       },
     })
   })

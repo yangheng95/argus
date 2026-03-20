@@ -12,9 +12,6 @@ import { Process } from "@/util/process"
 import { Discovery } from "./discovery"
 import { Skill } from "./skill"
 import { which } from "@/util/which"
-import { Log } from "@/util/log"
-
-const log = Log.create({ service: "skill-manager" })
 
 const MANIFEST = ".opencorvus-skill-source.json"
 const SkillInfo = z.object({
@@ -106,12 +103,13 @@ export namespace SkillManager {
       id: "openai-skills",
       name: "OpenAI Skills",
       provider: "OpenAI",
-      description: "Official public repository for agent skill resources and examples.",
+      description: "Official public repository for Agent Skills and related skill plugins.",
       homepage: "https://github.com/openai/skills",
-      install_kind: "manual",
+      source: "https://github.com/openai/skills.git",
+      install_kind: "git",
       trust: "official",
       recommended_policy: "ask",
-      notes: "Discovery resource only; the repository does not currently expose installable SKILL.md bundles for direct import.",
+      notes: "Installable as a Git source; review individual skills before allowing always.",
     },
     {
       id: "anthropic-skills",
@@ -166,10 +164,7 @@ export namespace SkillManager {
    */
   export async function market() {
     const entries = [...BUILTIN_MARKET]
-    const global = await Config.getGlobal().catch((err) => {
-      log.warn("failed to load global config for skill market", { error: String(err) })
-      return undefined
-    })
+    const global = await Config.getGlobal().catch(() => undefined)
     const registries = ((global?.skills as Record<string, unknown> | undefined)?.registries ?? []) as string[]
     const seenIDs = new Set(entries.map((e) => e.id))
 
@@ -317,9 +312,7 @@ export namespace SkillManager {
     })
 
     if (Filesystem.contains(managedRoot(), source)) {
-      await rm(source, { recursive: true, force: true }).catch((err) => {
-        log.warn("failed to remove skill directory", { source, error: String(err) })
-      })
+      await rm(source, { recursive: true, force: true }).catch(() => undefined)
     }
 
     return true
@@ -379,13 +372,8 @@ function slug(value: string) {
 async function ensureManagedRepo(source: string, dest: string) {
   const git = which("git")
   if (!git) throw new Error("git is required to install skills from repositories")
-  // Touch and remove .keep to ensure destination parent directory exists
-  await Filesystem.write(path.join(dest, ".keep"), "").catch((err) => {
-    log.warn("failed to create .keep for managed repo", { dest, error: String(err) })
-  })
-  await rm(path.join(dest, ".keep"), { force: true }).catch((err) => {
-    log.warn("failed to remove .keep for managed repo", { dest, error: String(err) })
-  })
+  await Filesystem.write(path.join(dest, ".keep"), "").catch(() => undefined)
+  await rm(path.join(dest, ".keep"), { force: true }).catch(() => undefined)
 
   if (await Filesystem.isDir(path.join(dest, ".git"))) {
     await Process.run([git, "-C", dest, "pull", "--ff-only"])
@@ -507,7 +495,6 @@ async function readManifest(dir: string, ...roots: string[]) {
   let current = dir
   while (true) {
     const file = path.join(current, MANIFEST)
-    // Manifest file may not exist at this directory level — walk continues upward
     const manifest = await Filesystem.readJson<{ kind?: string; source?: string }>(file).catch(() => undefined)
     if (manifest) return manifest
     const parent = path.dirname(current)

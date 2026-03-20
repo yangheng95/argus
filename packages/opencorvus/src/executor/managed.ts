@@ -1,20 +1,13 @@
 import { Identifier } from "@/id/id"
-import { Log } from "@/util/log"
 import { Snapshot } from "@/snapshot"
-import { PlanningCapabilities, type CodingEventInfo, type CodingProvider, type CodingToolInfo, type ExecutorStatusInfo } from "./contracts"
-import type { ExecutorAdapter } from "./contracts"
-
-const log = Log.create({ service: "executor.managed" })
+import { PlanningCapabilities, type CodingEventInfo, type CodingProvider, type CodingToolInfo, type ExecutorStatusInfo } from "./compat"
+import type { ExecutorAdapter } from "./compat"
 
 type Status = Exclude<ExecutorStatusInfo, "blocked">
 type Notify = {
   type: string
   summary?: string
   payload?: Record<string, unknown>
-}
-
-type Cursor = {
-  index: number
 }
 
 type State = {
@@ -25,12 +18,9 @@ type State = {
   error: string | null
   output: string
   events: Notify[]
-  base: number
-  readers: Set<Cursor>
   wake?: () => void
   abort: AbortController
   startHash?: string
-  cleanup?: ReturnType<typeof setTimeout>
 }
 
 export const ManagedCodingExecutor = {
@@ -42,10 +32,6 @@ export const ManagedCodingExecutor = {
       system?: string | (() => string | undefined)
       maxTurns?: number | (() => number | undefined)
       tools?: CodingToolInfo[] | (() => CodingToolInfo[] | undefined)
-      planning?: {
-        spec: boolean
-        plan: boolean
-      }
     },
   ): ExecutorAdapter {
     const tasks = new Map<string, State>()
@@ -80,16 +66,7 @@ export const ManagedCodingExecutor = {
         },
       })
 
-      void consume(stream, state, tasks, latest).catch((err) => {
-        const message = err instanceof Error ? err.message : String(err)
-        if (state.status === "running" || state.status === "retrying") {
-          state.status = "failed"
-          state.error = message
-          finalize(tasks, latest, state)
-        } else {
-          log.warn("executor stream error after terminal state", { status: state.status, error: message })
-        }
-      })
+      void consume(stream, state, latest)
     }
 
     return {
@@ -105,11 +82,6 @@ export const ManagedCodingExecutor = {
       },
       async submit(input) {
         const id = Identifier.ascending("task")
-        // Snapshot.track() is best-effort: it captures a git tree hash so delivery()
-        // can later compute file diffs.  Failures are safe to ignore because delivery()
-        // guards with `state.startHash && currentHash` and returns an empty diff array
-        // when either hash is missing (e.g. non-git project, snapshots disabled, or
-        // git index locked by a concurrent process).
         const startHash = await Snapshot.track().catch(() => undefined)
         const state: State = {
           id,
@@ -118,8 +90,6 @@ export const ManagedCodingExecutor = {
           error: null,
           output: "",
           events: [],
-          base: 0,
-          readers: new Set(),
           abort: new AbortController(),
           startHash,
         }
@@ -165,15 +135,11 @@ export const ManagedCodingExecutor = {
             error: "task cancelled",
           },
         })
-        finalize(tasks, latest, state)
         return true
       },
       async delivery(input) {
         const state = pick(tasks, latest, { sessionID: input.sessionID })
         if (!state) return { summary: "", diffs: [] }
-        // Best-effort: capture current working tree so we can diff against startHash.
-        // If this fails the guard below produces an empty diff array, which is acceptable
-        // because the text summary is still returned and diffs are supplementary.
         const currentHash = await Snapshot.track().catch(() => undefined)
         const diffs = state.startHash && currentHash
           ? await Snapshot.diffFull(state.startHash, currentHash).catch(() => [])
@@ -186,9 +152,6 @@ export const ManagedCodingExecutor = {
       async resume(input) {
         const id = Identifier.ascending("task")
         const prev = pick(tasks, latest, { sessionID: input.sessionID })
-        // Capture a fresh startHash so delivery() can diff from this point.
-        // Same pattern as submit() — failures are safe to ignore.
-        const startHash = await Snapshot.track().catch(() => undefined)
         const state: State = {
           id,
           sessionID: input.sessionID,
@@ -197,10 +160,7 @@ export const ManagedCodingExecutor = {
           error: null,
           output: "",
           events: [],
-          base: 0,
-          readers: new Set(),
           abort: new AbortController(),
-          startHash,
         }
         tasks.set(id, state)
         latest.set(input.sessionID, id)
@@ -235,22 +195,16 @@ export const ManagedCodingExecutor = {
         const MAX_IDLE_MS = 30 * 60 * 1000 // 30 minutes max idle before giving up
         const state = pick(tasks, latest, input)
         if (!state) return
-        const cursor: Cursor = {
-          index: state.base,
-        }
-        state.readers.add(cursor)
+        let index = 0
         const abort = () => {
           state.wake?.()
         }
         input.signal?.addEventListener("abort", abort)
         try {
           while (true) {
-            while (cursor.index < state.base + state.events.length) {
-              const item = state.events[cursor.index - state.base]
-              if (!item) break
-              yield item
-              cursor.index += 1
-              compact(state)
+            while (index < state.events.length) {
+              yield state.events[index]!
+              index += 1
             }
             if (input.signal?.aborted) return
             if (state.status === "completed" || state.status === "failed") return
@@ -268,14 +222,12 @@ export const ManagedCodingExecutor = {
           }
         } finally {
           input.signal?.removeEventListener("abort", abort)
-          state.readers.delete(cursor)
-          compact(state)
         }
       },
       planningCapabilities() {
-        return PlanningCapabilities.parse(options.planning ?? {
-          spec: false,
-          plan: false,
+        return PlanningCapabilities.parse({
+          spec: true,
+          plan: true,
         })
       },
       async generatePlanning(input) {
@@ -285,7 +237,6 @@ export const ManagedCodingExecutor = {
           cwd: input.cwd ?? value(options.cwd),
           system: input.system ?? value(options.system),
           maxTurns: input.maxTurns ?? value(options.maxTurns) ?? 4,
-          ...(input.outputSchema ? { outputSchema: input.outputSchema } : {}),
           sandbox: input.sandbox ?? "read-only",
           ...(input.toolMode ? { toolMode: input.toolMode } : {}),
           ...(input.toolMode === "none" ? { tools: [] } : {}),
@@ -319,12 +270,7 @@ function value<T>(input: T | (() => T)) {
   return input
 }
 
-async function consume(
-  stream: AsyncIterable<CodingEventInfo>,
-  state: State,
-  tasks: Map<string, State>,
-  latest: Map<string, string>,
-) {
+async function consume(stream: AsyncIterable<CodingEventInfo>, state: State, latest: Map<string, string>) {
   for await (const event of stream) {
     if (state.abort.signal.aborted || state.status === "failed") return
     sync(state, event)
@@ -337,7 +283,6 @@ async function consume(
     if (event.type === "error") {
       state.status = "failed"
       state.error = event.message
-      finalize(tasks, latest, state)
       return
     }
     if (event.type === "done") {
@@ -345,24 +290,12 @@ async function consume(
       state.error = null
       if (event.output) state.output = event.output
       latest.set(state.sessionID, state.id)
-      finalize(tasks, latest, state)
       return
     }
   }
 
   if (!state.abort.signal.aborted && (state.status === "running" || state.status === "retrying" || state.status === "queued")) {
-    state.status = "failed"
-    state.error = "executor stream ended unexpectedly"
-    push(state, {
-      type: "session.error",
-      summary: "executor stream ended unexpectedly",
-      payload: {
-        sessionID: state.sessionID,
-        queueTaskID: state.id,
-        error: "executor stream ended unexpectedly",
-      },
-    })
-    finalize(tasks, latest, state)
+    state.status = "completed"
   }
 }
 
@@ -392,49 +325,7 @@ function sync(state: State, event: CodingEventInfo) {
 
 function push(state: State, event: Notify) {
   state.events.push(event)
-  compact(state)
   state.wake?.()
-}
-
-const MAX_BUFFERED_EVENTS = 256
-
-function retentionMs() {
-  const raw = Number(process.env.OPENCORVUS_EXECUTOR_TASK_RETENTION_MS)
-  if (!Number.isFinite(raw) || raw <= 0) return 60_000
-  return Math.max(1_000, Math.floor(raw))
-}
-
-function finalize(tasks: Map<string, State>, latest: Map<string, string>, state: State) {
-  compact(state)
-  if (state.cleanup) clearTimeout(state.cleanup)
-  const timer = setTimeout(() => {
-    tasks.delete(state.id)
-    if (latest.get(state.sessionID) === state.id) latest.delete(state.sessionID)
-  }, retentionMs())
-  timer.unref()
-  state.cleanup = timer
-}
-
-function compact(state: State) {
-  if (state.readers.size === 0) {
-    if (state.status === "completed" || state.status === "failed") {
-      state.events.length = 0
-      state.base = 0
-      return
-    }
-    if (state.events.length > MAX_BUFFERED_EVENTS) {
-      const trim = state.events.length - MAX_BUFFERED_EVENTS
-      state.events.splice(0, trim)
-      state.base += trim
-    }
-    return
-  }
-
-  const min = Math.min(...[...state.readers].map((reader) => reader.index))
-  const trim = min - state.base
-  if (trim <= 0) return
-  state.events.splice(0, trim)
-  state.base = min
 }
 
 function map(state: State, event: CodingEventInfo): Notify {
@@ -559,21 +450,6 @@ function map(state: State, event: CodingEventInfo): Notify {
         totalTokens: event.totalTokens,
         costUSD: event.costUSD,
         ...(event.meta ?? {}),
-      },
-    }
-  }
-  if (event.type === "progress") {
-    const kind = event.kind === "command" || event.kind === "mcp" ? event.kind : "tool"
-    return {
-      type: `${kind}.progress`,
-      summary: event.summary ?? `${kind} progress`,
-      payload: {
-        sessionID: state.sessionID,
-        queueTaskID: state.id,
-        ...(event.meta ?? {}),
-        id: event.id,
-        status: event.status,
-        ...(event.output ? { output: event.output } : {}),
       },
     }
   }

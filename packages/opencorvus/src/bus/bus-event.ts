@@ -31,8 +31,6 @@ export namespace BusEvent {
                 ref: "Event" + "." + def.type,
               })
           })
-          // Zod discriminatedUnion requires a non-empty tuple but toArray() returns a generic array;
-          // registry is guaranteed non-empty at boot time
           .toArray() as any,
       )
       .meta({

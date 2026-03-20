@@ -220,12 +220,9 @@ export namespace TuiRuntime {
 
     const start = Date.now()
     const timeoutMs = input.timeoutMs ?? 5 * 60 * 1000
-    let timer: ReturnType<typeof setTimeout>
     const result = await Promise.race([
-      run().then((message) => ({ kind: "done" as const, message })).finally(() => clearTimeout(timer)),
-      new Promise<{ kind: "timeout" }>((resolve) => {
-        timer = setTimeout(() => resolve({ kind: "timeout" }), timeoutMs)
-      }),
+      run().then((message) => ({ kind: "done" as const, message })),
+      new Promise<{ kind: "timeout" }>((resolve) => setTimeout(() => resolve({ kind: "timeout" }), timeoutMs)),
     ])
 
     if (result.kind === "done") {

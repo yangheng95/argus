@@ -56,7 +56,7 @@ function findBinary() {
     // Use require.resolve to find the package
     const packageJsonPath = require.resolve(`${packageName}/package.json`)
     const packageDir = path.dirname(packageJsonPath)
-    const binaryPath = path.join(packageDir, binaryName)
+    const binaryPath = path.join(packageDir, "bin", binaryName)
 
     if (!fs.existsSync(binaryPath)) {
       throw new Error(`Binary not found at ${binaryPath}`)

@@ -100,45 +100,4 @@ describe("memory typed recall", () => {
       },
     })
   })
-
-  test("search broadens recall and ranks stronger matches above weaker profile hits", async () => {
-    await using tmp = await tmpdir({ git: true })
-
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        Memory.writeFile({
-          title: "Profile: Slack habits",
-          content: "## Profile\nAlways keep Slack open during rollout.",
-          source: "reflection",
-          projectId: Instance.project.id,
-          scope: "global",
-          kind: "profile",
-          key: "slack-profile",
-        })
-        Memory.captureEpisode({
-          title: "Failed: Slack bot rollout",
-          content: [
-            "# Failure review",
-            "",
-            "## Root Cause",
-            "- Socket Mode must be enabled before the bot will receive events.",
-          ].join("\n"),
-          source: "compaction",
-          projectId: Instance.project.id,
-          scope: "global",
-        })
-
-        const results = Memory.search({
-          query: "socket mode receive events slack delivery",
-          projectId: Instance.project.id,
-          limit: 3,
-        })
-
-        expect(results.length).toBeGreaterThan(0)
-        expect(results[0]?.kind).toBe("lesson")
-        expect(results.some((item) => item.kind === "profile")).toBe(true)
-      },
-    })
-  })
 })

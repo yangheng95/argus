@@ -1,7 +1,7 @@
 import { OpencodeExecutor } from "./opencode"
 import { ManagedCodingExecutor } from "./managed"
-import type { CodingProvider, CodingToolInfo, ExecutorAdapter, ExecutorNameInfo } from "./contracts"
-import { ExecutorNotConfiguredError } from "./contracts"
+import type { CodingProvider, CodingToolInfo, ExecutorAdapter, ExecutorNameInfo } from "./compat"
+import { ExecutorNotConfiguredError } from "./compat"
 
 const base = () =>
   new Map<ExecutorNameInfo, ExecutorAdapter>([
@@ -41,10 +41,6 @@ export namespace ExecutorRegistry {
       system?: string | (() => string | undefined)
       maxTurns?: number | (() => number | undefined)
       tools?: CodingToolInfo[] | (() => CodingToolInfo[] | undefined)
-      planning?: {
-        spec: boolean
-        plan: boolean
-      }
     },
   ) {
     return register(name, ManagedCodingExecutor.create(provider, options))

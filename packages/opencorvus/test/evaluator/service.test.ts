@@ -1,14 +1,10 @@
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
 import path from "path"
-import { GoalJudge } from "../../src/evaluator/agent"
 import { BunProc } from "../../src/bun"
-import { CheckRunner } from "../../src/evaluator/service"
-import { Identifier } from "../../src/id/id"
-import { OrchestratorSpecSnapshotTable, OrchestratorTaskTable } from "../../src/orchestrator/orchestrator.sql"
+import { EvaluatorService } from "../../src/evaluator/service"
 import { Plugin } from "../../src/plugin"
 import { Instance } from "../../src/project/instance"
 import { Provider } from "../../src/provider/provider"
-import { Database } from "../../src/storage/db"
 import { Log } from "../../src/util/log"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
@@ -21,7 +17,7 @@ describe("evaluator.service", () => {
     await resetDatabase()
   })
 
-  test("keeps discovered build test and lint scripts disabled by default", async () => {
+  test("discovers build test and lint scripts from package.json", async () => {
     await using tmp = await tmpdir({ git: true })
     await Bun.write(
       path.join(tmp.path, "package.json"),
@@ -38,82 +34,12 @@ describe("evaluator.service", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const resolved = await CheckRunner.resolveChecks()
-        expect(resolved).toEqual({
-          spec_check: {
-            enabled: true,
-            mode: "strict",
-          },
-        })
-        const result = await CheckRunner.evaluate({}, { summary: "delivery ready" })
+        const result = await EvaluatorService.evaluate({}, { summary: "delivery ready" })
         expect(result.status).toBe("passed")
         expect(result.verdict).toBe("accepted")
-        expect(result.checks.find((item) => item.name === "build")).toBeUndefined()
-        expect(result.checks.find((item) => item.name === "test")).toBeUndefined()
-        expect(result.checks.find((item) => item.name === "lint")).toBeUndefined()
-        expect(result.checks.find((item) => item.name === "spec_check")?.status).toBe("passed")
+        expect(result.checks.map((item) => item.name)).toEqual(["build", "test", "lint"])
       },
     })
-  })
-
-  test("uses plugin supplied evaluation analysis before calling the evaluator agent", async () => {
-    const analyze = spyOn(GoalJudge, "analyze").mockRejectedValue(new Error("should not be called"))
-    spyOn(Plugin, "trigger").mockImplementation(async (name, _input, output) => {
-      if (name !== "evaluation.analysis") return output
-      const next = output as {
-        analysis?: {
-          verdict: "accepted" | "rejected" | "inconclusive"
-          classification: "transient" | "environment" | "input" | "permission" | "evaluation" | "strategy" | "unknown"
-          summary: string
-          goal_statuses: Array<{
-            goal_index: number
-            status: "passed" | "failed" | "inconclusive"
-            evidence: string
-            reasoning: string
-          }>
-          replan_guidance?: null
-        }
-      }
-      next.analysis = {
-        verdict: "accepted",
-        classification: "evaluation",
-        summary: "Plugin accepted the delivery.",
-        goal_statuses: [{
-          goal_index: 0,
-          status: "passed",
-          evidence: "All required checks passed.",
-          reasoning: "Benchmark evaluator plugin accepted the delivery.",
-        }],
-        replan_guidance: null,
-      }
-      return output
-    })
-
-    const result = await CheckRunner.analyzeDelivery({
-      task: {
-        title: "benchmark",
-        request: "benchmark",
-      },
-      goals: [{
-        description: "Ship the change",
-        criteria: "Checks pass",
-        priority: "blocking",
-      }],
-      delivery: {
-        summary: "done",
-        changedFiles: ["src/catalog.ts"],
-        diffs: [],
-      },
-      checkResults: [{
-        name: "catalog_test",
-        status: "passed",
-        evidence: "ok",
-      }],
-    })
-
-    expect(result.verdict).toBe("accepted")
-    expect(result.summary).toBe("Plugin accepted the delivery.")
-    expect(analyze).not.toHaveBeenCalled()
   })
 
   test("fails when verify_cmd exits non-zero", async () => {
@@ -122,7 +48,7 @@ describe("evaluator.service", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const result = await CheckRunner.evaluate(
+        const result = await EvaluatorService.evaluate(
           {
             metadata: {
               checks: {
@@ -146,7 +72,7 @@ describe("evaluator.service", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const result = await CheckRunner.evaluate(
+        const result = await EvaluatorService.evaluate(
           {
             metadata: {
               checks: {
@@ -172,10 +98,9 @@ describe("evaluator.service", () => {
           },
           { summary: "delivery ready" },
         )
-        expect(result.status).toBe("failed")
-        expect(result.checks.map((item) => item.name)).toEqual(expect.arrayContaining(["py_compile", "pytest", "typecheck", "spec_check"]))
-        expect(result.checks.map((item) => item.label)).toEqual(expect.arrayContaining(["Python Compile", "Pytest", "Type Check", "Spec Check"]))
-        expect(result.checks.find((item) => item.name === "spec_check")?.status).toBe("failed")
+        expect(result.status).toBe("passed")
+        expect(result.checks.map((item) => item.name)).toEqual(["py_compile", "pytest", "typecheck"])
+        expect(result.checks.map((item) => item.label)).toEqual(["Python Compile", "Pytest", "Type Check"])
       },
     })
   })
@@ -188,7 +113,7 @@ describe("evaluator.service", () => {
       directory: tmp.path,
       fn: async () => {
         const started = Date.now()
-        const result = await CheckRunner.evaluate(
+        const result = await EvaluatorService.evaluate(
           {
             metadata: {
               checks: {
@@ -210,9 +135,9 @@ describe("evaluator.service", () => {
           { summary: "delivery ready" },
         )
         const elapsed = Date.now() - started
-        expect(result.status).toBe("failed")
-        expect(result.checks.map((item) => item.name)).toEqual(["spec_check", "alpha", "beta"])
-        expect(elapsed).toBeLessThan(3000)
+        expect(result.status).toBe("passed")
+        expect(result.checks.map((item) => item.name)).toEqual(["alpha", "beta"])
+        expect(elapsed).toBeLessThan(1600)
       },
     })
   })
@@ -225,7 +150,7 @@ describe("evaluator.service", () => {
       directory: tmp.path,
       fn: async () => {
         const started = Date.now()
-        const result = await CheckRunner.evaluate(
+        const result = await EvaluatorService.evaluate(
           {
             metadata: {
               checks: {
@@ -239,14 +164,14 @@ describe("evaluator.service", () => {
           { summary: "delivery ready" },
         )
         const elapsed = Date.now() - started
-        expect(result.status).toBe("failed")
-        expect(result.checks.map((item) => item.name)).toEqual(["lint#1", "lint#2", "spec_check"])
-        expect(elapsed).toBeLessThan(3000)
+        expect(result.status).toBe("passed")
+        expect(result.checks.map((item) => item.name)).toEqual(["lint#1", "lint#2"])
+        expect(elapsed).toBeLessThan(1600)
       },
     })
   })
 
-  test("keeps discovered named checks disabled by default", async () => {
+  test("discovers typecheck script as a named lint check", async () => {
     await using tmp = await tmpdir({ git: true })
     await Bun.write(
       path.join(tmp.path, "package.json"),
@@ -261,23 +186,20 @@ describe("evaluator.service", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const resolved = await CheckRunner.resolveChecks()
-        expect(resolved).toEqual({
-          spec_check: {
-            enabled: true,
-            mode: "strict",
-          },
-        })
+        const resolved = await EvaluatorService.resolveChecks()
+        expect(resolved.named?.typecheck?.label).toBe("Type Check")
+        expect(resolved.named?.typecheck?.family).toBe("lint")
+        expect(resolved.named?.typecheck?.commands).toEqual(["bun run typecheck"])
 
-        const result = await CheckRunner.evaluate({}, { summary: "delivery ready" })
+        const result = await EvaluatorService.evaluate({}, { summary: "delivery ready" })
         expect(result.status).toBe("passed")
-        expect(result.checks.find((item) => item.name === "typecheck")).toBeUndefined()
-        expect(result.checks.find((item) => item.name === "spec_check")?.status).toBe("passed")
+        expect(result.checks.map((item) => item.name)).toEqual(["typecheck"])
+        expect(result.checks[0]?.family).toBe("lint")
       },
     })
   })
 
-  test("preserves explicitly disabled core checks", async () => {
+  test("honors build, test, and lint being explicitly disabled", async () => {
     await using tmp = await tmpdir({ git: true })
     await Bun.write(
       path.join(tmp.path, "package.json"),
@@ -294,79 +216,22 @@ describe("evaluator.service", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const resolved = await CheckRunner.resolveChecks({
-          checks: {
-            build: false,
-            test: false,
-            lint: false,
-            verify_cmd: false,
-          },
-        })
-        expect(resolved.build).toBe(false)
-        expect(resolved.test).toBe(false)
-        expect(resolved.lint).toBe(false)
-        expect(resolved.verify_cmd).toBe(false)
-
-        const result = await CheckRunner.evaluate(
+        const result = await EvaluatorService.evaluate(
           {
             metadata: {
               checks: {
                 build: false,
                 test: false,
                 lint: false,
-                verify_cmd: false,
               },
             },
           },
           { summary: "delivery ready" },
         )
+        expect(result.status).toBe("inconclusive")
         expect(result.checks.find((item) => item.name === "build")).toBeUndefined()
         expect(result.checks.find((item) => item.name === "test")).toBeUndefined()
         expect(result.checks.find((item) => item.name === "lint")).toBeUndefined()
-        expect(result.checks.find((item) => item.name === "verify_cmd")).toBeUndefined()
-      },
-    })
-  })
-
-  test("respects an explicitly disabled spec_check even when a spec version exists", async () => {
-    await using tmp = await tmpdir({ git: true })
-
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const resolved = await CheckRunner.resolveChecks({
-          checks: {
-            verify_cmd: [`"${BunProc.which()}" -e "process.exit(0)"`],
-            spec_check: {
-              enabled: false,
-              mode: "strict",
-            },
-          },
-        })
-        expect(resolved.spec_check).toEqual({
-          enabled: false,
-          mode: "strict",
-        })
-
-        const result = await CheckRunner.evaluate(
-          {
-            activeSpecVersionID: Identifier.ascending("spec"),
-            metadata: {
-              checks: {
-                verify_cmd: [`"${BunProc.which()}" -e "process.exit(0)"`],
-                spec_check: {
-                  enabled: false,
-                  mode: "strict",
-                },
-              },
-            },
-          },
-          { summary: "delivery ready", changedFiles: ["src/types.ts"], diffs: [] },
-        )
-        expect(result.status).toBe("passed")
-        expect(result.verdict).toBe("accepted")
-        expect(result.checks.find((item) => item.name === "verify_cmd")?.status).toBe("passed")
-        expect(result.checks.find((item) => item.name === "spec_check")).toBeUndefined()
       },
     })
   })
@@ -377,7 +242,7 @@ describe("evaluator.service", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const result = await CheckRunner.evaluate(
+        const result = await EvaluatorService.evaluate(
           {
             metadata: {
               checks: {
@@ -390,9 +255,8 @@ describe("evaluator.service", () => {
           },
           { summary: "delivery ready", changedFiles: [], diffs: [] },
         )
-        expect(result.status).toBe("failed")
+        expect(result.status).toBe("passed")
         expect(result.checks.find((item) => item.name === "artifact")?.status).toBe("skipped")
-        expect(result.checks.find((item) => item.name === "spec_check")?.status).toBe("failed")
       },
     })
   })
@@ -403,7 +267,7 @@ describe("evaluator.service", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const result = await CheckRunner.evaluate(
+        const result = await EvaluatorService.evaluate(
           {
             metadata: {
               checks: {
@@ -439,7 +303,7 @@ describe("evaluator.service", () => {
       await Instance.provide({
         directory: tmp.path,
         fn: async () => {
-          const result = await CheckRunner.evaluate(
+          const result = await EvaluatorService.evaluate(
             {
               metadata: {
                 checks: {
@@ -454,9 +318,8 @@ describe("evaluator.service", () => {
             },
             { summary: "delivery ready", changedFiles: [], diffs: [] },
           )
-          expect(result.status).toBe("failed")
+          expect(result.status).toBe("passed")
           expect(result.checks.find((item) => item.name === "visual")?.status).toBe("passed")
-          expect(result.checks.find((item) => item.name === "spec_check")?.status).toBe("failed")
         },
       })
     } finally {
@@ -464,49 +327,21 @@ describe("evaluator.service", () => {
     }
   })
 
-  test("spec check fails when no model is available", async () => {
+  test("judge check fails when no model is available", async () => {
     await using tmp = await tmpdir({ git: true })
     spyOn(Provider, "defaultModel").mockRejectedValue(new Error("no model"))
-    const taskID = Identifier.ascending("task")
-    const specID = Identifier.ascending("spec")
 
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const now = Date.now()
-        Database.use((db) => {
-          db.insert(OrchestratorTaskTable)
-            .values({
-              id: taskID,
-              project_id: Instance.project.id,
-              title: "implement feature",
-              request: "implement feature",
-              time_created: now,
-              time_updated: now,
-            })
-            .run()
-          db.insert(OrchestratorSpecSnapshotTable)
-            .values({
-              id: specID,
-              task_id: taskID,
-              version: 1,
-              status: "ready",
-              summary: "Compiled spec",
-              content: "# Scope\n\nImplement feature",
-              scope: "Implement feature",
-              time_created: now,
-              time_updated: now,
-            })
-            .run()
-        })
-        const result = await CheckRunner.evaluate(
+        const result = await EvaluatorService.evaluate(
           {
             request: "implement feature",
-            activeSpecVersionID: specID,
             metadata: {
               checks: {
-                spec_check: {
+                judge: {
                   enabled: true,
+                  mode: "soft",
                 },
               },
             },
@@ -514,100 +349,18 @@ describe("evaluator.service", () => {
           { summary: "delivery ready", changedFiles: [], diffs: [] },
         )
         expect(result.status).toBe("failed")
-        expect(result.checks.find((item) => item.name === "spec_check")?.status).toBe("failed")
+        expect(result.checks.find((item) => item.name === "judge")?.status).toBe("failed")
       },
     })
   })
 
-  test("does not fail spec check early for large diffs that exceed the old total review limit", async () => {
-    await using tmp = await tmpdir({ git: true })
-    const defaultModel = spyOn(Provider, "defaultModel").mockRejectedValue(new Error("no model"))
-    const taskID = Identifier.ascending("task")
-    const specID = Identifier.ascending("spec")
-
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const now = Date.now()
-        Database.use((db) => {
-          db.insert(OrchestratorTaskTable)
-            .values({
-              id: taskID,
-              project_id: Instance.project.id,
-              title: "implement feature",
-              request: "implement feature",
-              time_created: now,
-              time_updated: now,
-            })
-            .run()
-          db.insert(OrchestratorSpecSnapshotTable)
-            .values({
-              id: specID,
-              task_id: taskID,
-              version: 1,
-              status: "ready",
-              summary: "Compiled spec",
-              content: "# Scope\n\nImplement feature",
-              scope: "Implement feature",
-              time_created: now,
-              time_updated: now,
-            })
-            .run()
-        })
-
-        const result = await CheckRunner.evaluate(
-          {
-            request: "implement feature",
-            activeSpecVersionID: specID,
-            metadata: {
-              checks: {
-                spec_check: {
-                  enabled: true,
-                },
-              },
-            },
-          },
-          {
-            summary: "delivery ready",
-            changedFiles: ["big-a.ts", "big-b.ts"],
-            diffs: [
-              {
-                file: "big-a.ts",
-                before: "",
-                after: "a".repeat(50_000),
-                additions: 50_000,
-                deletions: 0,
-                status: "added",
-              },
-              {
-                file: "big-b.ts",
-                before: "",
-                after: "b".repeat(40_000),
-                additions: 40_000,
-                deletions: 0,
-                status: "added",
-              },
-            ],
-          },
-        )
-
-        expect(result.status).toBe("failed")
-        expect(result.checks.find((item) => item.name === "spec_check")).toMatchObject({
-          status: "failed",
-        })
-        expect(result.checks.find((item) => item.name === "spec_check")?.evidence).toContain("No evaluator model available")
-        expect(defaultModel).toHaveBeenCalledTimes(1)
-      },
-    })
-  })
-
-  test("fails spec check when no active spec exists", async () => {
+  test("skips spec check when no active spec exists", async () => {
     await using tmp = await tmpdir({ git: true })
 
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const result = await CheckRunner.evaluate(
+        const result = await EvaluatorService.evaluate(
           {
             request: "validate delivery",
             metadata: {
@@ -622,13 +375,9 @@ describe("evaluator.service", () => {
           },
           { summary: "delivery ready", changedFiles: [], diffs: [] },
         )
-        expect(result.status).toBe("failed")
-        expect(result.verdict).toBe("rejected")
-        expect(result.checks.find((item) => item.name === "spec_check")).toMatchObject({
-          status: "failed",
-          label: "Spec Check",
-          family: "acceptance",
-        })
+        expect(result.status).toBe("passed")
+        expect(result.verdict).toBe("accepted")
+        expect(result.checks.find((item) => item.name === "spec_check")).toBeUndefined()
       },
     })
   })
@@ -653,7 +402,7 @@ describe("evaluator.service", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const result = await CheckRunner.evaluate(
+        const result = await EvaluatorService.evaluate(
           {
             request: "start the service",
             metadata: {
@@ -670,9 +419,8 @@ describe("evaluator.service", () => {
           },
           { summary: "delivery ready", changedFiles: [], diffs: [] },
         )
-        expect(result.status).toBe("failed")
+        expect(result.status).toBe("passed")
         expect(result.checks.find((item) => item.name === "startup")?.status).toBe("passed")
-        expect(result.checks.find((item) => item.name === "spec_check")?.status).toBe("failed")
       },
     })
   })
@@ -689,7 +437,7 @@ describe("evaluator.service", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const result = await CheckRunner.evaluate(
+        const result = await EvaluatorService.evaluate(
           {
             request: "start the service",
             metadata: {
@@ -728,7 +476,7 @@ describe("evaluator.service", () => {
       await Instance.provide({
         directory: tmp.path,
         fn: async () => {
-          const result = await CheckRunner.evaluate(
+          const result = await EvaluatorService.evaluate(
             {
               request: "verify browser render",
               metadata: {
@@ -745,10 +493,9 @@ describe("evaluator.service", () => {
             },
             { summary: "delivery ready", changedFiles: ["index.html"], diffs: [] },
           )
-          expect(result.status).toBe("failed")
+          expect(result.status).toBe("passed")
           const status = result.checks.find((item) => item.name === "puppeteer")?.status
           expect(status === "skipped" || status === "passed").toBe(true)
-          expect(result.checks.find((item) => item.name === "spec_check")?.status).toBe("failed")
         },
       })
     } finally {
@@ -756,14 +503,14 @@ describe("evaluator.service", () => {
     }
   })
 
-  test("ui review skips when no review model is available in soft mode", async () => {
+  test("ui review fails when no review model is available", async () => {
     await using tmp = await tmpdir({ git: true })
     spyOn(Provider, "defaultModel").mockRejectedValue(new Error("no model"))
 
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const result = await CheckRunner.evaluate(
+        const result = await EvaluatorService.evaluate(
           {
             request: "Review the UI hierarchy.",
             metadata: {
@@ -778,19 +525,19 @@ describe("evaluator.service", () => {
           { summary: "Updated the dashboard layout.", changedFiles: ["ui.tsx"], diffs: [] },
         )
         expect(result.status).toBe("failed")
-        expect(result.checks.find((item) => item.name === "ui_review")?.status).toBe("skipped")
+        expect(result.checks.find((item) => item.name === "ui_review")?.status).toBe("failed")
       },
     })
   })
 
-  test("code quality review skips when no review model is available in soft mode", async () => {
+  test("code quality review fails when no review model is available", async () => {
     await using tmp = await tmpdir({ git: true })
     spyOn(Provider, "defaultModel").mockRejectedValue(new Error("no model"))
 
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const result = await CheckRunner.evaluate(
+        const result = await EvaluatorService.evaluate(
           {
             request: "Check code quality.",
             metadata: {
@@ -818,19 +565,19 @@ describe("evaluator.service", () => {
           },
         )
         expect(result.status).toBe("failed")
-        expect(result.checks.find((item) => item.name === "code_quality")?.status).toBe("skipped")
+        expect(result.checks.find((item) => item.name === "code_quality")?.status).toBe("failed")
       },
     })
   })
 
-  test("code review skips when no review model is available in soft mode", async () => {
+  test("code review fails when no review model is available", async () => {
     await using tmp = await tmpdir({ git: true })
     spyOn(Provider, "defaultModel").mockRejectedValue(new Error("no model"))
 
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const result = await CheckRunner.evaluate(
+        const result = await EvaluatorService.evaluate(
           {
             request: "Do a code review.",
             metadata: {
@@ -858,19 +605,19 @@ describe("evaluator.service", () => {
           },
         )
         expect(result.status).toBe("failed")
-        expect(result.checks.find((item) => item.name === "code_review")?.status).toBe("skipped")
+        expect(result.checks.find((item) => item.name === "code_review")?.status).toBe("failed")
       },
     })
   })
 
-  test("dead code review skips when no review model is available in soft mode", async () => {
+  test("dead code review fails when no review model is available", async () => {
     await using tmp = await tmpdir({ git: true })
     spyOn(Provider, "defaultModel").mockRejectedValue(new Error("no model"))
 
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const result = await CheckRunner.evaluate(
+        const result = await EvaluatorService.evaluate(
           {
             request: "Review dead code cleanup.",
             metadata: {
@@ -898,7 +645,7 @@ describe("evaluator.service", () => {
           },
         )
         expect(result.status).toBe("failed")
-        expect(result.checks.find((item) => item.name === "dead_code_review")?.status).toBe("skipped")
+        expect(result.checks.find((item) => item.name === "dead_code_review")?.status).toBe("failed")
       },
     })
   })
@@ -910,7 +657,7 @@ describe("evaluator.service", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const result = await CheckRunner.evaluate(
+        const result = await EvaluatorService.evaluate(
           {
             request: "Review the implementation quality.",
             metadata: {
@@ -947,48 +694,11 @@ describe("evaluator.service", () => {
         )
         expect(result.status).toBe("failed")
         expect(defaultModel).toHaveBeenCalledTimes(1)
-        expect(
-          result.checks
-            .filter((item) => item.name === "code_quality" || item.name === "code_review" || item.name === "dead_code_review")
-            .map((item) => item.name),
-        ).toEqual([
+        expect(result.checks.filter((item) => item.name !== "evaluation_config").map((item) => item.name)).toEqual([
           "code_quality",
           "code_review",
           "dead_code_review",
         ])
-        expect(
-          result.checks
-            .filter((item) => item.name === "code_quality" || item.name === "code_review" || item.name === "dead_code_review")
-            .every((item) => item.status === "skipped"),
-        ).toBe(true)
-      },
-    })
-  })
-
-  test("startup check passes when a one-shot process prints ready text then exits zero", async () => {
-    await using tmp = await tmpdir({ git: true })
-    await Bun.write(path.join(tmp.path, "ready-once.ts"), `console.log("ready once")\n`)
-
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const result = await CheckRunner.evaluate(
-          {
-            request: "run the startup command once",
-            metadata: {
-              checks: {
-                startup: {
-                  command: `"${BunProc.which()}" ready-once.ts`,
-                  ready_text: "ready once",
-                  timeout_ms: 5_000,
-                  mode: "strict",
-                },
-              },
-            },
-          },
-          { summary: "delivery ready", changedFiles: [], diffs: [] },
-        )
-        expect(result.checks.find((item) => item.name === "startup")?.status).toBe("passed")
       },
     })
   })
@@ -1000,7 +710,7 @@ describe("evaluator.service", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const result = await CheckRunner.evaluate(
+        const result = await EvaluatorService.evaluate(
           {
             request: "Review the delivery.",
             metadata: {
@@ -1060,15 +770,14 @@ describe("evaluator.service", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const result = await CheckRunner.evaluate({}, { summary: "delivery ready", changedFiles: [], diffs: [] })
-        expect(result.status).toBe("failed")
+        const result = await EvaluatorService.evaluate({}, { summary: "delivery ready", changedFiles: [], diffs: [] })
+        expect(result.status).toBe("passed")
         expect(result.checks.find((item) => item.name === "plugin_gate")?.status).toBe("passed")
-        expect(result.checks.find((item) => item.name === "spec_check")?.status).toBe("failed")
       },
     })
   })
 
-  test("keeps soft plugin failures skipped without turning them into hard plugin failures", async () => {
+  test("keeps soft plugin checks non-blocking when the plugin reports failure", async () => {
     await using tmp = await tmpdir({ git: true })
     spyOn(Plugin, "trigger").mockImplementation(async (name, _input, output) => {
       if (name !== "evaluation.checks") return output
@@ -1097,9 +806,9 @@ describe("evaluator.service", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const result = await CheckRunner.evaluate({}, { summary: "delivery ready", changedFiles: [], diffs: [] })
-        expect(result.status).toBe("failed")
-        expect(result.checks.find((item) => item.name === "spec_check")?.status).toBe("failed")
+        const result = await EvaluatorService.evaluate({}, { summary: "delivery ready", changedFiles: [], diffs: [] })
+        expect(result.status).toBe("passed")
+        expect(result.summary).toBe("Optional evaluator checks ran in soft mode without blocking the flow.")
         expect(result.checks.find((item) => item.name === "plugin_gate")?.status).toBe("skipped")
       },
     })
@@ -1108,50 +817,22 @@ describe("evaluator.service", () => {
   test("annotates builtin optional checks with stable labels and families", async () => {
     await using tmp = await tmpdir({ git: true })
     spyOn(Provider, "defaultModel").mockRejectedValue(new Error("no model"))
-    const taskID = Identifier.ascending("task")
-    const specID = Identifier.ascending("spec")
 
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const now = Date.now()
-        Database.use((db) => {
-          db.insert(OrchestratorTaskTable)
-            .values({
-              id: taskID,
-              project_id: Instance.project.id,
-              title: "review the delivery",
-              request: "review the delivery",
-              time_created: now,
-              time_updated: now,
-            })
-            .run()
-          db.insert(OrchestratorSpecSnapshotTable)
-            .values({
-              id: specID,
-              task_id: taskID,
-              version: 1,
-              status: "ready",
-              summary: "Compiled spec",
-              content: "# Scope\n\nReview the delivery",
-              scope: "Review the delivery",
-              time_created: now,
-              time_updated: now,
-            })
-            .run()
-        })
-        const result = await CheckRunner.evaluate(
+        const result = await EvaluatorService.evaluate(
           {
             request: "review the delivery",
-            activeSpecVersionID: specID,
             metadata: {
               checks: {
                 artifact: {
                   require_changed_files: true,
                   mode: "soft",
                 },
-                spec_check: {
+                judge: {
                   enabled: true,
+                  mode: "soft",
                 },
               },
             },
@@ -1164,8 +845,8 @@ describe("evaluator.service", () => {
           family: "artifact",
           status: "skipped",
         })
-        expect(result.checks.find((item) => item.name === "spec_check")).toMatchObject({
-          label: "Spec Check",
+        expect(result.checks.find((item) => item.name === "judge")).toMatchObject({
+          label: "LLM Judge",
           family: "acceptance",
           status: "failed",
         })
@@ -1173,7 +854,7 @@ describe("evaluator.service", () => {
     })
   })
 
-  test("keeps changed puppeteer-core bun specs disabled by default", async () => {
+  test("prefers changed puppeteer-core bun specs over root test script discovery", async () => {
     await using tmp = await tmpdir({ git: true })
     await Bun.write(
       path.join(tmp.path, "package.json"),
@@ -1205,7 +886,7 @@ describe("evaluator.service", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const result = await CheckRunner.evaluate(
+        const result = await EvaluatorService.evaluate(
           {
             request: "run browser test",
             metadata: {
@@ -1215,13 +896,12 @@ describe("evaluator.service", () => {
           { summary: "delivery ready", changedFiles: ["sample.spec.ts"], diffs: [] },
         )
         expect(result.status).toBe("passed")
-        expect(result.checks.find((item) => item.name === "test")).toBeUndefined()
-        expect(result.checks.find((item) => item.name === "spec_check")?.status).toBe("passed")
+        expect(result.checks.find((item) => item.name === "test")?.status).toBe("passed")
       },
     })
   }, 30000)
 
-  test("keeps mixed changed bun specs disabled by default", async () => {
+  test("runs changed bun specs even when another test embeds puppeteer-core text", async () => {
     await using tmp = await tmpdir({ git: true })
     await Bun.write(
       path.join(tmp.path, "package.json"),
@@ -1266,7 +946,7 @@ describe("evaluator.service", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const result = await CheckRunner.evaluate(
+        const result = await EvaluatorService.evaluate(
           {
             request: "run browser test",
             metadata: {
@@ -1276,13 +956,12 @@ describe("evaluator.service", () => {
           { summary: "delivery ready", changedFiles: ["sample.spec.ts", "unit.test.ts"], diffs: [] },
         )
         expect(result.status).toBe("passed")
-        expect(result.checks.find((item) => item.name === "test")).toBeUndefined()
-        expect(result.checks.find((item) => item.name === "spec_check")?.status).toBe("passed")
+        expect(result.checks.find((item) => item.name === "test")?.status).toBe("passed")
       },
     })
   }, 30000)
 
-  test("keeps changed bun tests disabled by default", async () => {
+  test("runs changed bun tests before falling back to root scripts", async () => {
     await using tmp = await tmpdir({ git: true })
     await Bun.write(
       path.join(tmp.path, "package.json"),
@@ -1308,7 +987,7 @@ describe("evaluator.service", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const result = await CheckRunner.evaluate(
+        const result = await EvaluatorService.evaluate(
           {
             request: "run unit test",
             metadata: {
@@ -1318,13 +997,12 @@ describe("evaluator.service", () => {
           { summary: "delivery ready", changedFiles: ["unit.test.ts"], diffs: [] },
         )
         expect(result.status).toBe("passed")
-        expect(result.checks.find((item) => item.name === "test")).toBeUndefined()
-        expect(result.checks.find((item) => item.name === "spec_check")?.status).toBe("passed")
+        expect(result.checks.find((item) => item.name === "test")?.status).toBe("passed")
       },
     })
   })
 
-  test("keeps nearest subproject package scripts disabled by default", async () => {
+  test("prefers nearest subproject package scripts over repo root scripts", async () => {
     await using tmp = await tmpdir({ git: true })
     await Bun.write(
       path.join(tmp.path, "package.json"),
@@ -1355,7 +1033,7 @@ describe("evaluator.service", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const result = await CheckRunner.evaluate(
+        const result = await EvaluatorService.evaluate(
           {
             request: "create a tank battle game",
             metadata: {
@@ -1369,14 +1047,11 @@ describe("evaluator.service", () => {
           },
         )
         expect(result.status).toBe("passed")
-        expect(result.checks.find((item) => item.name === "build")).toBeUndefined()
-        expect(result.checks.find((item) => item.name === "test")).toBeUndefined()
-        expect(result.checks.find((item) => item.name === "lint")).toBeUndefined()
+        expect(result.checks.map((item) => item.name)).toEqual(["build", "test", "lint"])
         const commands = result.artifacts
           .filter((item) => item.kind === "log")
           .map((item) => String(item.payload.command ?? ""))
-        expect(commands).toHaveLength(0)
-        expect(result.checks.find((item) => item.name === "spec_check")?.status).toBe("passed")
+        expect(commands.every((item) => item.includes("bun run"))).toBe(true)
       },
     })
   })

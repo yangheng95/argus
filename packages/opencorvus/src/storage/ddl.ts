@@ -4,8 +4,9 @@
  * All tables use CREATE TABLE IF NOT EXISTS so the schema is idempotent —
  * safe to run on every startup whether the DB is fresh or already populated.
  *
- * This file is the only schema definition.
- * Breaking changes are applied directly and the local DB is recreated.
+ * When you need to add a new table, just add it here. No migration directory needed.
+ * When you need to alter an existing table (add column, etc.), add a guarded
+ * ALTER TABLE statement to SCHEMA_MIGRATIONS at the bottom.
  */
 
 // ---------------------------------------------------------------------------
@@ -386,23 +387,7 @@ CREATE TABLE IF NOT EXISTS orchestrator_spec_snapshot (
 );
 CREATE INDEX IF NOT EXISTS orchestrator_spec_snapshot_task_idx ON orchestrator_spec_snapshot (task_id);
 
-CREATE TABLE IF NOT EXISTS orchestrator_goal_snapshot (
-  id               text PRIMARY KEY,
-  task_id          text NOT NULL,
-  spec_snapshot_id text NOT NULL,
-  version          integer NOT NULL DEFAULT 1,
-  status           text NOT NULL DEFAULT 'ready',
-  summary          text NOT NULL,
-  metadata         text,
-  time_created     integer NOT NULL,
-  time_updated     integer NOT NULL,
-  FOREIGN KEY (task_id) REFERENCES orchestrator_task(id) ON DELETE CASCADE,
-  FOREIGN KEY (spec_snapshot_id) REFERENCES orchestrator_spec_snapshot(id) ON DELETE CASCADE
-);
-CREATE INDEX IF NOT EXISTS orchestrator_goal_snapshot_task_idx ON orchestrator_goal_snapshot (task_id);
-CREATE INDEX IF NOT EXISTS orchestrator_goal_snapshot_spec_idx ON orchestrator_goal_snapshot (spec_snapshot_id);
-
-CREATE TABLE IF NOT EXISTS orchestrator_requirement (
+CREATE TABLE IF NOT EXISTS orchestrator_spec_item (
   id               text PRIMARY KEY,
   task_id          text NOT NULL,
   spec_snapshot_id text NOT NULL,
@@ -410,23 +395,20 @@ CREATE TABLE IF NOT EXISTS orchestrator_requirement (
   description      text NOT NULL,
   status           text NOT NULL DEFAULT 'pending',
   priority         text NOT NULL DEFAULT 'blocking',
-  acceptance       text,
-  evidence_refs    text,
-  non_goals        text,
+  check_selector   text,
+  evidence         text,
   metadata         text,
-  order_index      integer NOT NULL DEFAULT 0,
   time_created     integer NOT NULL,
   time_updated     integer NOT NULL,
-  FOREIGN KEY (task_id) REFERENCES orchestrator_task(id) ON DELETE CASCADE,
+  FOREIGN KEY (task_id)          REFERENCES orchestrator_task(id)          ON DELETE CASCADE,
   FOREIGN KEY (spec_snapshot_id) REFERENCES orchestrator_spec_snapshot(id) ON DELETE CASCADE
 );
-CREATE INDEX IF NOT EXISTS orchestrator_requirement_task_idx ON orchestrator_requirement (task_id);
-CREATE INDEX IF NOT EXISTS orchestrator_requirement_spec_idx ON orchestrator_requirement (spec_snapshot_id);
+CREATE INDEX IF NOT EXISTS orchestrator_spec_item_task_idx     ON orchestrator_spec_item (task_id);
+CREATE INDEX IF NOT EXISTS orchestrator_spec_item_snapshot_idx ON orchestrator_spec_item (spec_snapshot_id);
 
 CREATE TABLE IF NOT EXISTS orchestrator_plan_version (
   id           text PRIMARY KEY,
   task_id      text NOT NULL,
-  spec_snapshot_id text NOT NULL,
   version      integer NOT NULL,
   status       text NOT NULL DEFAULT 'active',
   summary      text NOT NULL,
@@ -434,8 +416,7 @@ CREATE TABLE IF NOT EXISTS orchestrator_plan_version (
   metadata     text,
   time_created integer NOT NULL,
   time_updated integer NOT NULL,
-  FOREIGN KEY (task_id) REFERENCES orchestrator_task(id) ON DELETE CASCADE,
-  FOREIGN KEY (spec_snapshot_id) REFERENCES orchestrator_spec_snapshot(id) ON DELETE CASCADE
+  FOREIGN KEY (task_id) REFERENCES orchestrator_task(id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS orchestrator_plan_task_idx ON orchestrator_plan_version (task_id);
 
@@ -459,43 +440,23 @@ CREATE INDEX IF NOT EXISTS orchestrator_milestone_plan_idx ON orchestrator_miles
 CREATE TABLE IF NOT EXISTS orchestrator_goal (
   id              text PRIMARY KEY,
   task_id         text NOT NULL,
-  spec_snapshot_id text NOT NULL,
+  plan_version_id text NOT NULL,
+  milestone_id    text,
   description     text NOT NULL,
   criteria        text NOT NULL,
   metadata        text,
   priority        text NOT NULL DEFAULT 'blocking',
-  source          text NOT NULL DEFAULT 'spec',
-  kind            text,
   status          text NOT NULL DEFAULT 'pending',
   order_index     integer NOT NULL DEFAULT 0,
   time_created    integer NOT NULL,
   time_updated    integer NOT NULL,
   FOREIGN KEY (task_id)         REFERENCES orchestrator_task(id)         ON DELETE CASCADE,
-  FOREIGN KEY (spec_snapshot_id) REFERENCES orchestrator_spec_snapshot(id) ON DELETE CASCADE
+  FOREIGN KEY (plan_version_id) REFERENCES orchestrator_plan_version(id) ON DELETE CASCADE,
+  FOREIGN KEY (milestone_id)    REFERENCES orchestrator_milestone(id)    ON DELETE SET NULL
 );
 CREATE INDEX IF NOT EXISTS orchestrator_goal_task_idx      ON orchestrator_goal (task_id);
-CREATE INDEX IF NOT EXISTS orchestrator_goal_spec_idx      ON orchestrator_goal (spec_snapshot_id);
-
-CREATE TABLE IF NOT EXISTS orchestrator_plan_node (
-  id              text PRIMARY KEY,
-  task_id         text NOT NULL,
-  plan_version_id text NOT NULL,
-  kind            text NOT NULL DEFAULT 'goal',
-  goal_id         text,
-  title           text NOT NULL,
-  brief           text NOT NULL DEFAULT '',
-  depends_on_ids  text,
-  order_index     integer NOT NULL DEFAULT 0,
-  metadata        text,
-  time_created    integer NOT NULL,
-  time_updated    integer NOT NULL,
-  FOREIGN KEY (task_id)         REFERENCES orchestrator_task(id)         ON DELETE CASCADE,
-  FOREIGN KEY (plan_version_id) REFERENCES orchestrator_plan_version(id) ON DELETE CASCADE,
-  FOREIGN KEY (goal_id)         REFERENCES orchestrator_goal(id)         ON DELETE SET NULL
-);
-CREATE INDEX IF NOT EXISTS orchestrator_plan_node_task_idx ON orchestrator_plan_node (task_id);
-CREATE INDEX IF NOT EXISTS orchestrator_plan_node_plan_idx ON orchestrator_plan_node (plan_version_id);
-CREATE INDEX IF NOT EXISTS orchestrator_plan_node_goal_idx ON orchestrator_plan_node (goal_id);
+CREATE INDEX IF NOT EXISTS orchestrator_goal_plan_idx      ON orchestrator_goal (plan_version_id);
+CREATE INDEX IF NOT EXISTS orchestrator_goal_milestone_idx ON orchestrator_goal (milestone_id);
 
 CREATE TABLE IF NOT EXISTS orchestrator_run (
   id              text PRIMARY KEY,
@@ -504,7 +465,7 @@ CREATE TABLE IF NOT EXISTS orchestrator_run (
   session_id      text,
   executor        text NOT NULL DEFAULT 'opencode',
   status          text NOT NULL DEFAULT 'queued',
-  phase           text NOT NULL DEFAULT 'dispatch',
+  phase           text NOT NULL DEFAULT 'execute',
   blocking_reason text,
   error           text,
   retry_count     integer NOT NULL DEFAULT 0,
@@ -520,37 +481,6 @@ CREATE TABLE IF NOT EXISTS orchestrator_run (
 );
 CREATE INDEX IF NOT EXISTS orchestrator_run_task_idx   ON orchestrator_run (task_id);
 CREATE INDEX IF NOT EXISTS orchestrator_run_status_idx ON orchestrator_run (status);
-
-CREATE TABLE IF NOT EXISTS orchestrator_goal_run (
-  id                 text PRIMARY KEY,
-  task_id            text NOT NULL,
-  goal_id            text NOT NULL,
-  plan_node_id       text,
-  coordinator_run_id text NOT NULL,
-  session_id         text,
-  executor           text NOT NULL DEFAULT 'opencode',
-  status             text NOT NULL DEFAULT 'queued',
-  blocking_reason    text,
-  error              text,
-  retry_count        integer NOT NULL DEFAULT 0,
-  workspace_dir      text,
-  base_ref           text,
-  merge_ref          text,
-  metadata           text,
-  time_started       integer,
-  time_completed     integer,
-  time_created       integer NOT NULL,
-  time_updated       integer NOT NULL,
-  FOREIGN KEY (task_id)            REFERENCES orchestrator_task(id)      ON DELETE CASCADE,
-  FOREIGN KEY (goal_id)            REFERENCES orchestrator_goal(id)      ON DELETE CASCADE,
-  FOREIGN KEY (plan_node_id)       REFERENCES orchestrator_plan_node(id) ON DELETE SET NULL,
-  FOREIGN KEY (coordinator_run_id) REFERENCES orchestrator_run(id)       ON DELETE CASCADE,
-  FOREIGN KEY (session_id)         REFERENCES session(id)                ON DELETE SET NULL
-);
-CREATE INDEX IF NOT EXISTS orchestrator_goal_run_task_idx ON orchestrator_goal_run (task_id);
-CREATE INDEX IF NOT EXISTS orchestrator_goal_run_goal_idx ON orchestrator_goal_run (goal_id);
-CREATE INDEX IF NOT EXISTS orchestrator_goal_run_coord_idx ON orchestrator_goal_run (coordinator_run_id);
-CREATE INDEX IF NOT EXISTS orchestrator_goal_run_status_idx ON orchestrator_goal_run (status);
 
 CREATE TABLE IF NOT EXISTS orchestrator_interaction_request (
   id            text PRIMARY KEY,
@@ -579,24 +509,20 @@ CREATE TABLE IF NOT EXISTS orchestrator_delivery (
   id           text PRIMARY KEY,
   task_id      text NOT NULL,
   run_id       text NOT NULL,
-  goal_run_id  text,
-  status       text NOT NULL DEFAULT 'candidate',
+  status       text NOT NULL DEFAULT 'ready',
   summary      text NOT NULL,
   result       text,
   time_created integer NOT NULL,
   time_updated integer NOT NULL,
   FOREIGN KEY (task_id) REFERENCES orchestrator_task(id) ON DELETE CASCADE,
-  FOREIGN KEY (run_id)  REFERENCES orchestrator_run(id)  ON DELETE CASCADE,
-  FOREIGN KEY (goal_run_id) REFERENCES orchestrator_goal_run(id) ON DELETE SET NULL
+  FOREIGN KEY (run_id)  REFERENCES orchestrator_run(id)  ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS orchestrator_delivery_run_idx ON orchestrator_delivery (run_id);
-CREATE INDEX IF NOT EXISTS orchestrator_delivery_goal_run_idx ON orchestrator_delivery (goal_run_id);
 
 CREATE TABLE IF NOT EXISTS orchestrator_artifact (
   id           text PRIMARY KEY,
   task_id      text NOT NULL,
   run_id       text NOT NULL,
-  goal_run_id  text,
   delivery_id  text,
   kind         text NOT NULL,
   label        text NOT NULL,
@@ -605,18 +531,15 @@ CREATE TABLE IF NOT EXISTS orchestrator_artifact (
   time_updated integer NOT NULL,
   FOREIGN KEY (task_id)     REFERENCES orchestrator_task(id)     ON DELETE CASCADE,
   FOREIGN KEY (run_id)      REFERENCES orchestrator_run(id)      ON DELETE CASCADE,
-  FOREIGN KEY (goal_run_id) REFERENCES orchestrator_goal_run(id) ON DELETE SET NULL,
   FOREIGN KEY (delivery_id) REFERENCES orchestrator_delivery(id) ON DELETE SET NULL
 );
 CREATE INDEX IF NOT EXISTS orchestrator_artifact_run_idx      ON orchestrator_artifact (run_id);
-CREATE INDEX IF NOT EXISTS orchestrator_artifact_goal_run_idx ON orchestrator_artifact (goal_run_id);
 CREATE INDEX IF NOT EXISTS orchestrator_artifact_delivery_idx ON orchestrator_artifact (delivery_id);
 
 CREATE TABLE IF NOT EXISTS orchestrator_evaluation (
   id             text PRIMARY KEY,
   task_id        text NOT NULL,
   run_id         text NOT NULL,
-  goal_run_id    text,
   delivery_id    text,
   status         text NOT NULL DEFAULT 'pending',
   verdict        text NOT NULL DEFAULT 'inconclusive',
@@ -627,11 +550,9 @@ CREATE TABLE IF NOT EXISTS orchestrator_evaluation (
   time_updated   integer NOT NULL,
   FOREIGN KEY (task_id)     REFERENCES orchestrator_task(id)     ON DELETE CASCADE,
   FOREIGN KEY (run_id)      REFERENCES orchestrator_run(id)      ON DELETE CASCADE,
-  FOREIGN KEY (goal_run_id) REFERENCES orchestrator_goal_run(id) ON DELETE SET NULL,
   FOREIGN KEY (delivery_id) REFERENCES orchestrator_delivery(id) ON DELETE SET NULL
 );
 CREATE INDEX IF NOT EXISTS orchestrator_evaluation_run_idx ON orchestrator_evaluation (run_id);
-CREATE INDEX IF NOT EXISTS orchestrator_evaluation_goal_run_idx ON orchestrator_evaluation (goal_run_id);
 
 CREATE TABLE IF NOT EXISTS orchestrator_progress_snapshot (
   id           text PRIMARY KEY,
@@ -649,7 +570,6 @@ CREATE TABLE IF NOT EXISTS orchestrator_executor_session (
   id               text PRIMARY KEY,
   task_id          text NOT NULL,
   run_id           text NOT NULL,
-  goal_run_id      text,
   provider         text NOT NULL,
   protocol         text NOT NULL,
   protocol_version text NOT NULL,
@@ -658,28 +578,22 @@ CREATE TABLE IF NOT EXISTS orchestrator_executor_session (
   refs             text,
   capabilities     text,
   settings         text,
-  lease_owner      text,
-  lease_until      integer NOT NULL DEFAULT 0,
   time_started     integer,
   time_completed   integer,
   time_created     integer NOT NULL,
   time_updated     integer NOT NULL,
   FOREIGN KEY (task_id) REFERENCES orchestrator_task(id) ON DELETE CASCADE,
-  FOREIGN KEY (run_id)  REFERENCES orchestrator_run(id)  ON DELETE CASCADE,
-  FOREIGN KEY (goal_run_id) REFERENCES orchestrator_goal_run(id) ON DELETE SET NULL
+  FOREIGN KEY (run_id)  REFERENCES orchestrator_run(id)  ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS orchestrator_executor_session_task_idx ON orchestrator_executor_session (task_id);
-CREATE INDEX IF NOT EXISTS orchestrator_executor_session_run_idx ON orchestrator_executor_session (run_id);
-CREATE INDEX IF NOT EXISTS orchestrator_executor_session_goal_run_idx ON orchestrator_executor_session (goal_run_id);
+CREATE UNIQUE INDEX IF NOT EXISTS orchestrator_executor_session_run_idx ON orchestrator_executor_session (run_id);
 CREATE INDEX IF NOT EXISTS orchestrator_executor_session_status_idx ON orchestrator_executor_session (status);
-CREATE INDEX IF NOT EXISTS orchestrator_executor_session_lease_until_idx ON orchestrator_executor_session (lease_until);
 
 CREATE TABLE IF NOT EXISTS orchestrator_executor_event (
   id                  text PRIMARY KEY,
   executor_session_id text NOT NULL,
   task_id             text NOT NULL,
   run_id              text NOT NULL,
-  goal_run_id         text,
   sequence            integer NOT NULL,
   kind                text NOT NULL,
   summary             text,
@@ -691,96 +605,12 @@ CREATE TABLE IF NOT EXISTS orchestrator_executor_event (
   time_updated        integer NOT NULL,
   FOREIGN KEY (executor_session_id) REFERENCES orchestrator_executor_session(id) ON DELETE CASCADE,
   FOREIGN KEY (task_id)             REFERENCES orchestrator_task(id)             ON DELETE CASCADE,
-  FOREIGN KEY (run_id)              REFERENCES orchestrator_run(id)              ON DELETE CASCADE,
-  FOREIGN KEY (goal_run_id)         REFERENCES orchestrator_goal_run(id)         ON DELETE SET NULL
+  FOREIGN KEY (run_id)              REFERENCES orchestrator_run(id)              ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS orchestrator_executor_event_session_idx ON orchestrator_executor_event (executor_session_id, sequence);
 CREATE INDEX IF NOT EXISTS orchestrator_executor_event_run_idx ON orchestrator_executor_event (run_id, sequence);
-CREATE INDEX IF NOT EXISTS orchestrator_executor_event_goal_run_idx ON orchestrator_executor_event (goal_run_id, sequence);
 CREATE INDEX IF NOT EXISTS orchestrator_executor_event_task_idx ON orchestrator_executor_event (task_id, sequence);
 CREATE INDEX IF NOT EXISTS orchestrator_executor_event_kind_idx ON orchestrator_executor_event (kind);
-
--- ===== protocol_v2 =====
-
-CREATE TABLE IF NOT EXISTS protocol_event (
-  id             text PRIMARY KEY,
-  kind           text NOT NULL,
-  type           text NOT NULL,
-  aggregate_type text NOT NULL,
-  aggregate_id   text NOT NULL,
-  task_id        text,
-  run_id         text,
-  goal_run_id    text,
-  session_id     text,
-  interaction_id text,
-  stream_id      text,
-  source         text NOT NULL,
-  target         text,
-  causation_id   text,
-  correlation_id text,
-  reply_to       text,
-  seq            integer NOT NULL,
-  deadline_ms    integer,
-  emitted_at     integer NOT NULL,
-  payload        text,
-  time_created   integer NOT NULL,
-  time_updated   integer NOT NULL,
-  FOREIGN KEY (task_id) REFERENCES orchestrator_task(id) ON DELETE CASCADE,
-  FOREIGN KEY (run_id) REFERENCES orchestrator_run(id) ON DELETE SET NULL,
-  FOREIGN KEY (goal_run_id) REFERENCES orchestrator_goal_run(id) ON DELETE SET NULL,
-  FOREIGN KEY (session_id) REFERENCES session(id) ON DELETE SET NULL,
-  FOREIGN KEY (interaction_id) REFERENCES orchestrator_interaction_request(id) ON DELETE SET NULL
-);
-CREATE UNIQUE INDEX IF NOT EXISTS protocol_event_aggregate_seq_idx ON protocol_event (aggregate_type, aggregate_id, seq);
-CREATE INDEX IF NOT EXISTS protocol_event_task_idx ON protocol_event (task_id, seq);
-CREATE INDEX IF NOT EXISTS protocol_event_run_idx ON protocol_event (run_id, seq);
-CREATE INDEX IF NOT EXISTS protocol_event_session_idx ON protocol_event (session_id, seq);
-CREATE INDEX IF NOT EXISTS protocol_event_interaction_idx ON protocol_event (interaction_id, seq);
-CREATE INDEX IF NOT EXISTS protocol_event_stream_idx ON protocol_event (stream_id, seq);
-CREATE INDEX IF NOT EXISTS protocol_event_type_idx ON protocol_event (type);
-
-CREATE TABLE IF NOT EXISTS protocol_inbox (
-  id           text PRIMARY KEY,
-  envelope_id  text NOT NULL,
-  actor        text NOT NULL,
-  actor_id     text NOT NULL,
-  status       text NOT NULL,
-  lease_owner  text,
-  lease_until  integer,
-  attempt      integer NOT NULL DEFAULT 0,
-  visible_at   integer NOT NULL,
-  last_error   text,
-  time_created integer NOT NULL,
-  time_updated integer NOT NULL,
-  FOREIGN KEY (envelope_id) REFERENCES protocol_event(id) ON DELETE CASCADE
-);
-CREATE UNIQUE INDEX IF NOT EXISTS protocol_inbox_envelope_actor_idx ON protocol_inbox (envelope_id, actor, actor_id);
-CREATE INDEX IF NOT EXISTS protocol_inbox_visible_idx ON protocol_inbox (actor, status, visible_at);
-CREATE INDEX IF NOT EXISTS protocol_inbox_lease_idx ON protocol_inbox (actor, lease_until);
-
-CREATE TABLE IF NOT EXISTS protocol_stream_chunk (
-  id           text PRIMARY KEY,
-  stream_id    text NOT NULL,
-  task_id      text,
-  run_id       text,
-  goal_run_id  text,
-  session_id   text,
-  kind         text NOT NULL,
-  chunk_seq    integer NOT NULL,
-  text         text NOT NULL,
-  payload      text,
-  emitted_at   integer NOT NULL,
-  time_created integer NOT NULL,
-  time_updated integer NOT NULL,
-  FOREIGN KEY (task_id) REFERENCES orchestrator_task(id) ON DELETE CASCADE,
-  FOREIGN KEY (run_id) REFERENCES orchestrator_run(id) ON DELETE SET NULL,
-  FOREIGN KEY (goal_run_id) REFERENCES orchestrator_goal_run(id) ON DELETE SET NULL,
-  FOREIGN KEY (session_id) REFERENCES session(id) ON DELETE SET NULL
-);
-CREATE UNIQUE INDEX IF NOT EXISTS protocol_stream_chunk_stream_seq_idx ON protocol_stream_chunk (stream_id, chunk_seq);
-CREATE INDEX IF NOT EXISTS protocol_stream_chunk_task_idx ON protocol_stream_chunk (task_id, chunk_seq);
-CREATE INDEX IF NOT EXISTS protocol_stream_chunk_run_idx ON protocol_stream_chunk (run_id, chunk_seq);
-CREATE INDEX IF NOT EXISTS protocol_stream_chunk_session_idx ON protocol_stream_chunk (session_id, chunk_seq);
 
 CREATE TABLE IF NOT EXISTS orchestrator_channel_binding (
   id           text PRIMARY KEY,

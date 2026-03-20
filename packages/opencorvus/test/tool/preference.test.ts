@@ -166,49 +166,4 @@ describe("tool.preference", () => {
       },
     })
   })
-
-  test("accepts common action and field aliases used by live models", async () => {
-    await using tmp = await tmpdir({ git: true })
-
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const tool = await PreferenceTool.init()
-        const session = ctx("ses_pref_alias")
-
-        const write = await tool.execute(
-          {
-            action: "set",
-            preference_key: "review_style",
-            instruction: "findings first",
-            scope: "project",
-          },
-          session,
-        )
-        const writeData = JSON.parse(write.output) as { scope: string; key: string }
-        expect(writeData.scope).toBe("global")
-        expect(writeData.key).toBe("review_style")
-
-        const list = await tool.execute(
-          {
-            action: "read",
-            scope: "project",
-          },
-          session,
-        )
-        const listData = JSON.parse(list.output) as { preferences: Array<{ key: string; value: string }> }
-        expect(listData.preferences.some((item) => item.key === "review_style" && item.value === "findings first")).toBe(true)
-
-        const del = await tool.execute(
-          {
-            action: "remove",
-            name: "review_style",
-            scope: "project",
-          },
-          session,
-        )
-        expect(del.title).toContain("Deleted preference")
-      },
-    })
-  })
 })

@@ -151,9 +151,7 @@ export namespace PermissionNext {
 
   const PERMISSION_MIN_TIMEOUT_MS = 1000
   const PERMISSION_AUTO_APPROVE_MS = Math.max(
-    Number.isFinite(parseInt(process.env.OPENCORVUS_PERMISSION_TIMEOUT_MS ?? "", 10))
-      ? parseInt(process.env.OPENCORVUS_PERMISSION_TIMEOUT_MS!, 10)
-      : 5000,
+    parseInt(process.env.OPENCORVUS_PERMISSION_TIMEOUT_MS || "5000", 10),
     PERMISSION_MIN_TIMEOUT_MS,
   )
 
@@ -176,8 +174,14 @@ export namespace PermissionNext {
               id,
               ...request,
             }
+            s.pending[id] = {
+              info,
+              resolve,
+              reject,
+            }
+            Bus.publish(Event.Asked, info)
             // Auto-approve with "once" after timeout if still pending (always ≥ 1s)
-            const timer = setTimeout(() => {
+            setTimeout(() => {
                 if (s.pending[id]) {
                   log.info("auto-approve timeout", { id, permission: request.permission, patterns: request.patterns })
                   delete s.pending[id]
@@ -189,12 +193,6 @@ export namespace PermissionNext {
                   resolve()
                 }
               }, PERMISSION_AUTO_APPROVE_MS)
-            s.pending[id] = {
-              info,
-              resolve: () => { clearTimeout(timer); resolve() },
-              reject: (err) => { clearTimeout(timer); reject(err) },
-            }
-            Bus.publish(Event.Asked, info)
           })
         }
         if (rule.action === "allow") continue

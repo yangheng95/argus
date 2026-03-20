@@ -10,12 +10,11 @@ import { iife } from "@/util/iife"
 import { defer } from "@/util/defer"
 import { Config } from "../config/config"
 import { PermissionNext } from "@/permission/next"
-import { Log } from "../util/log"
 
 const parameters = z.object({
   description: z.string().describe("A short (3-5 words) description of the task"),
   prompt: z.string().describe("The task for the agent to perform"),
-  subagent_type: z.string().describe("The agent type to use for this task"),
+  subagent_type: z.string().describe("The type of specialized agent to use for this task"),
   task_id: z
     .string()
     .describe(
@@ -65,24 +64,15 @@ export const TaskTool = Tool.define("task", async (ctx) => {
 
       const hasTaskPermission = agent.permission.some((rule) => rule.permission === "task")
 
-      const log = Log.create({ service: "tool.task" })
       const session = await iife(async () => {
         if (params.task_id) {
-          const found = await Session.get(params.task_id).catch((err) => {
-            // Log unexpected errors so database issues don't go unnoticed.
-            // NotFoundError is expected when a task_id references a deleted/expired
-            // session -- in that case we fall through to create a fresh session.
-            if (err?.name !== "NotFoundError") {
-              log.warn("failed to resume task session", { task_id: params.task_id, error: err })
-            }
-            return undefined
-          })
+          const found = await Session.get(params.task_id).catch(() => {})
           if (found) return found
         }
 
         return await Session.create({
           parentID: ctx.sessionID,
-          title: params.description + ` (@${agent.name} agent)`,
+          title: params.description + ` (@${agent.name} subagent)`,
           permission: [
             ...(planMode
               ? [

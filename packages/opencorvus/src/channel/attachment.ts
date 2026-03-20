@@ -6,6 +6,7 @@ import { createHmac, timingSafeEqual } from "node:crypto"
 import path from "node:path"
 import z from "zod"
 
+const dir = path.join(Global.Path.data, "channel-attachments")
 const lifetime = 1000 * 60 * 60 * 24
 const loopback = new Set(["127.0.0.1", "localhost", "::1"])
 
@@ -23,7 +24,6 @@ export namespace ChannelAttachment {
   })
 
   export async function create(raw: z.input<typeof Input>) {
-    const dir = path.join(Global.Path.data, "channel-attachments")
     const input = Input.parse(raw)
     const base = await publicUrl()
     if (!base) {
@@ -50,12 +50,9 @@ export namespace ChannelAttachment {
   }
 
   export async function get(id: string) {
-    const dir = path.join(Global.Path.data, "channel-attachments")
-    const raw = await Bun.file(path.join(dir, `${id}.json`)).text().catch(() => undefined)  // attachment not found is expected
+    const raw = await Bun.file(path.join(dir, `${id}.json`)).text().catch(() => undefined)
     if (!raw) return
-    let parsed: unknown
-    try { parsed = JSON.parse(raw) } catch { return }
-    const meta = Meta.parse(parsed)
+    const meta = Meta.parse(JSON.parse(raw))
     return {
       ...meta,
       path: path.join(dir, meta.file),
@@ -77,7 +74,7 @@ export namespace ChannelAttachment {
 async function publicUrl() {
   const direct = text(process.env.OPENCORVUS_PUBLIC_URL)
   if (direct) return trim(direct)
-  const config = await Config.get().catch(() => undefined)  // config unavailable is non-fatal for URL resolution
+  const config = await Config.get().catch(() => undefined)
   const configured = text(config?.server?.publicUrl)
   if (configured) return trim(configured)
   const current = text(process.env.OPENCORVUS_SERVER_URL)

@@ -291,10 +291,17 @@ function goalChecks(goal: GoalRow, task: TaskRow) {
   const pick = (name: string, family?: string) => selectors.includes(name) || (family ? selectors.includes(family) : false)
   const next: Record<string, unknown> = {
     spec_check: { enabled: false, mode: "strict" },
-    build: selectors.includes("build") ? base.build : false,
-    test: selectors.includes("test") ? base.test : false,
-    lint: selectors.includes("lint") ? base.lint : false,
-    verify_cmd: selectors.includes("verify_cmd") ? base.verify_cmd : false,
+    // Matching selectors → undefined (auto-discovery fallback enabled)
+    // Non-matching selectors → false (explicitly disabled, no fallback)
+    build: selectors.includes("build") ? (base.build ?? undefined) : false,
+    test: selectors.includes("test") ? (base.test ?? undefined) : false,
+    lint: selectors.includes("lint") ? (base.lint ?? undefined) : false,
+    verify_cmd: selectors.includes("verify_cmd") ? (base.verify_cmd ?? undefined) : false,
+    // Enable named check auto-discovery only when the goal's selectors include
+    // lint or test families. This allows the verification goal (selectors: ["test", "lint"])
+    // to auto-discover typecheck/pytest/py_compile, while feature goals (selectors: ["build"])
+    // don't get irrelevant named checks.
+    _autoDiscoverNamed: selectors.includes("lint") || selectors.includes("test"),
   }
   const named =
     base.named && typeof base.named === "object" && !Array.isArray(base.named)

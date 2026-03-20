@@ -52,14 +52,6 @@ export namespace Scheduler {
     entry.timers.set(task.id, timer)
   }
 
-  export function reset() {
-    for (const timer of shared.timers.values()) {
-      clearInterval(timer)
-    }
-    shared.tasks.clear()
-    shared.timers.clear()
-  }
-
   async function run(task: Task) {
     log.info("run", { id: task.id })
     await task.run().catch((error) => {

@@ -10,7 +10,6 @@ import { Format } from "@/format"
 import { Log } from "@/util/log"
 import { Process } from "@/util/process"
 import { Hono } from "hono"
-import { HTTPException } from "hono/http-exception"
 import { describeRoute, openAPIRouteHandler, resolver, validator } from "hono-openapi"
 import { streamSSE } from "hono/streaming"
 import z from "zod"
@@ -202,26 +201,22 @@ export function AppRoutes(root: Hono) {
           ...errors(400),
         },
       }),
+      validator(
+        "json",
+        z.object({
+          path: z.string().trim().min(1),
+        }),
+      ),
       async (c) => {
-        const parsed = z
-          .object({
-            path: z.string(),
-          })
-          .safeParse(await c.req.json().catch(() => ({})))
-        if (!parsed.success) {
-          throw new HTTPException(400, { message: "Path is required" })
-        }
-        const target = parsed.data.path.trim()
-        if (!target) {
-          throw new HTTPException(400, { message: "Path is required" })
-        }
+        const target = c.req.valid("json").path
         const result = await Process.run(openPathCommand(target), {
           nothrow: true,
           stdin: "ignore",
           timeout: 1_000,
         })
         if (result.code !== 0) {
-          throw new HTTPException(500, { message: "Failed to open path" })
+          const detail = result.stderr.toString().trim() || `Failed to open path: ${target}`
+          throw new Error(detail)
         }
         return c.json({ opened: true })
       },

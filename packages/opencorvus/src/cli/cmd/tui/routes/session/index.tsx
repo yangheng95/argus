@@ -49,7 +49,7 @@ import { useKeyboard, useRenderer, useTerminalDimensions, type JSX } from "@open
 import { useSDK } from "@tui/context/sdk"
 import { useCommandDialog } from "@tui/component/dialog-command"
 import type { DialogContext } from "@tui/ui/dialog"
-import { useKeybind, type KeybindKey } from "@tui/context/keybind"
+import { useKeybind } from "@tui/context/keybind"
 import { Header } from "./header"
 import { parsePatch } from "diff"
 import { useDialog } from "../../ui/dialog"
@@ -500,7 +500,7 @@ export function Session() {
     {
       title: conceal() ? "Disable code concealment" : "Enable code concealment",
       value: "session.toggle.conceal",
-      keybind: "messages_toggle_conceal" as KeybindKey,
+      keybind: "messages_toggle_conceal" as any,
       category: "Session",
       onSelect: (dialog) => {
         setConceal((prev) => !prev)
@@ -1324,8 +1324,7 @@ function AssistantMessage(props: { message: AssistantMessage; parts: Part[]; las
               <Dynamic
                 last={index() === props.parts.length - 1}
                 component={component()}
-                // @ts-expect-error Dynamic dispatch: part type varies by component, union not narrowable here
-                part={part}
+                part={part as any}
                 message={props.message}
               />
             </Show>
@@ -1870,28 +1869,28 @@ function List(props: ToolProps<typeof ListTool>) {
 
 function WebFetch(props: ToolProps<typeof WebFetchTool>) {
   return (
-    <InlineTool icon="%" pending="Fetching from the web..." complete={(props.input as Record<string, unknown>).url as string} part={props.part}>
-      WebFetch {(props.input as Record<string, unknown>).url as string}
+    <InlineTool icon="%" pending="Fetching from the web..." complete={(props.input as any).url} part={props.part}>
+      WebFetch {(props.input as any).url}
     </InlineTool>
   )
 }
 
 function CodeSearch(props: ToolProps<any>) {
-  const input = props.input as Record<string, unknown>
-  const metadata = props.metadata as Record<string, unknown>
+  const input = props.input as any
+  const metadata = props.metadata as any
   return (
     <InlineTool icon="◇" pending="Searching code..." complete={input.query} part={props.part}>
-      Exa Code Search "{input.query}" <Show when={metadata.results}>({String(metadata.results)} results)</Show>
+      Exa Code Search "{input.query}" <Show when={metadata.results}>({metadata.results} results)</Show>
     </InlineTool>
   )
 }
 
 function WebSearch(props: ToolProps<any>) {
-  const input = props.input as Record<string, unknown>
-  const metadata = props.metadata as Record<string, unknown>
+  const input = props.input as any
+  const metadata = props.metadata as any
   return (
     <InlineTool icon="◈" pending="Searching web..." complete={input.query} part={props.part}>
-      Exa Web Search "{input.query}" <Show when={metadata.numResults}>({String(metadata.numResults)} results)</Show>
+      Exa Web Search "{input.query}" <Show when={metadata.numResults}>({metadata.numResults} results)</Show>
     </InlineTool>
   )
 }
@@ -1935,7 +1934,7 @@ function Task(props: ToolProps<typeof TaskTool>) {
             </text>
             <Show when={current()}>
               {(item) => {
-                const title = item().state.status === "completed" ? (item().state as Record<string, unknown>).title ?? "" : ""
+                const title = item().state.status === "completed" ? (item().state as any).title : ""
                 return (
                   <text style={{ fg: item().state.status === "error" ? theme.error : theme.textMuted }}>
                     └ {Locale.titlecase(item().tool)} {title}

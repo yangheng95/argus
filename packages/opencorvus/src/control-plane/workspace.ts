@@ -8,7 +8,7 @@ import { GlobalBus } from "@/bus/global"
 import { Log } from "@/util/log"
 import { WorkspaceTable } from "./workspace.sql"
 import { Config } from "./config"
-import { getAdapter } from "./adapters"
+import { getAdaptor } from "./adaptors"
 import { parseSSE } from "./sse"
 
 export namespace Workspace {
@@ -58,7 +58,7 @@ export namespace Workspace {
     async (input) => {
       const id = Identifier.ascending("workspace", input.id)
 
-      const { config, init } = await getAdapter(input.config).create(input.config, input.branch)
+      const { config, init } = await getAdaptor(input.config).create(input.config, input.branch)
 
       const info: Info = {
         id,
@@ -67,26 +67,28 @@ export namespace Workspace {
         config,
       }
 
-      await init()
+      setTimeout(async () => {
+        await init()
 
-      Database.use((db) => {
-        db.insert(WorkspaceTable)
-          .values({
-            id: info.id,
-            branch: info.branch,
-            project_id: info.projectID,
-            config: info.config,
-          })
-          .run()
-      })
+        Database.use((db) => {
+          db.insert(WorkspaceTable)
+            .values({
+              id: info.id,
+              branch: info.branch,
+              project_id: info.projectID,
+              config: info.config,
+            })
+            .run()
+        })
 
-      GlobalBus.emit("event", {
-        directory: id,
-        payload: {
-          type: Event.Ready.type,
-          properties: {},
-        },
-      })
+        GlobalBus.emit("event", {
+          directory: id,
+          payload: {
+            type: Event.Ready.type,
+            properties: {},
+          },
+        })
+      }, 0)
 
       return info
     },
@@ -109,7 +111,7 @@ export namespace Workspace {
     const row = Database.use((db) => db.select().from(WorkspaceTable).where(eq(WorkspaceTable.id, id)).get())
     if (row) {
       const info = fromRow(row)
-      await getAdapter(info.config).remove(info.config)
+      await getAdaptor(info.config).remove(info.config)
       Database.use((db) => db.delete(WorkspaceTable).where(eq(WorkspaceTable.id, id)).run())
       return info
     }
@@ -118,12 +120,9 @@ export namespace Workspace {
 
   async function workspaceEventLoop(space: Info, stop: AbortSignal) {
     while (!stop.aborted) {
-      const res = await getAdapter(space.config)
+      const res = await getAdaptor(space.config)
         .request(space.config, "GET", "/event", undefined, stop)
-        .catch((err) => {
-          log.warn("workspace event request failed", { workspaceID: space.id, error: String(err) })
-          return undefined
-        })
+        .catch(() => undefined)
       if (!res || !res.ok || !res.body) {
         await Bun.sleep(1000)
         continue

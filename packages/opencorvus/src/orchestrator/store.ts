@@ -1,11 +1,10 @@
 import { Instance } from "@/project/instance"
 import { ProjectTable } from "@/project/project.sql"
 import { SessionTable } from "@/session/session.sql"
-import { Database, NotFoundError, and, asc, desc, eq, inArray, isNull, like, lt } from "@/storage/db"
+import { Database, NotFoundError, and, desc, eq, inArray, like, lt } from "@/storage/db"
 import type { SQL } from "@/storage/db"
 import { Snapshot } from "@/snapshot"
 import { EvaluationCheck } from "./model"
-import { evaluationGroups } from "./evaluation-group"
 import {
   OrchestratorArtifactTable,
   OrchestratorDeliveryTable,
@@ -13,15 +12,12 @@ import {
   OrchestratorExecutorSessionTable,
   OrchestratorEvaluationTable,
   OrchestratorGoalTable,
-  OrchestratorGoalSnapshotTable,
-  OrchestratorGoalRunTable,
   OrchestratorInteractionRequestTable,
   OrchestratorMilestoneTable,
-  OrchestratorPlanNodeTable,
   OrchestratorPlanVersionTable,
   OrchestratorProgressSnapshotTable,
-  OrchestratorRequirementTable,
   OrchestratorRunTable,
+  OrchestratorSpecItemTable,
   OrchestratorSpecSnapshotTable,
   OrchestratorTaskTable,
   type OrchestratorBudget,
@@ -32,10 +28,8 @@ import {
 export type TaskRow = typeof OrchestratorTaskTable.$inferSelect
 export type PlanRow = typeof OrchestratorPlanVersionTable.$inferSelect
 export type GoalRow = typeof OrchestratorGoalTable.$inferSelect
-export type PlanNodeRow = typeof OrchestratorPlanNodeTable.$inferSelect
 export type MilestoneRow = typeof OrchestratorMilestoneTable.$inferSelect
 export type RunRow = typeof OrchestratorRunTable.$inferSelect
-export type GoalRunRow = typeof OrchestratorGoalRunTable.$inferSelect
 export type InteractionRow = typeof OrchestratorInteractionRequestTable.$inferSelect
 export type DeliveryRow = typeof OrchestratorDeliveryTable.$inferSelect
 export type ArtifactRow = typeof OrchestratorArtifactTable.$inferSelect
@@ -44,8 +38,7 @@ export type ProgressRow = typeof OrchestratorProgressSnapshotTable.$inferSelect
 export type ExecutorSessionRow = typeof OrchestratorExecutorSessionTable.$inferSelect
 export type ExecutorEventRow = typeof OrchestratorExecutorEventTable.$inferSelect
 export type SpecSnapshotRow = typeof OrchestratorSpecSnapshotTable.$inferSelect
-export type GoalSnapshotRow = typeof OrchestratorGoalSnapshotTable.$inferSelect
-export type RequirementRow = typeof OrchestratorRequirementTable.$inferSelect
+export type SpecItemRow = typeof OrchestratorSpecItemTable.$inferSelect
 export type TaskProjectRow = {
   id: string
   name?: string
@@ -127,41 +120,22 @@ export function findSpecSnapshots(taskID: string) {
   )
 }
 
-export function findGoalSnapshot(goalSnapshotID: string) {
-  return Database.use((db) =>
-    db.select().from(OrchestratorGoalSnapshotTable).where(eq(OrchestratorGoalSnapshotTable.id, goalSnapshotID)).get(),
-  )
-}
-
-export function findGoalSnapshots(taskID: string) {
+export function findSpecItems(specSnapshotID: string) {
   return Database.use((db) =>
     db
       .select()
-      .from(OrchestratorGoalSnapshotTable)
-      .where(eq(OrchestratorGoalSnapshotTable.task_id, taskID))
-      .orderBy(desc(OrchestratorGoalSnapshotTable.version))
+      .from(OrchestratorSpecItemTable)
+      .where(eq(OrchestratorSpecItemTable.spec_snapshot_id, specSnapshotID))
       .all(),
   )
 }
 
-export function findRequirements(specSnapshotID: string) {
+export function findSpecItemsByTask(taskID: string) {
   return Database.use((db) =>
     db
       .select()
-      .from(OrchestratorRequirementTable)
-      .where(eq(OrchestratorRequirementTable.spec_snapshot_id, specSnapshotID))
-      .orderBy(asc(OrchestratorRequirementTable.order_index))
-      .all(),
-  )
-}
-
-export function findRequirementsByTask(taskID: string) {
-  return Database.use((db) =>
-    db
-      .select()
-      .from(OrchestratorRequirementTable)
-      .where(eq(OrchestratorRequirementTable.task_id, taskID))
-      .orderBy(asc(OrchestratorRequirementTable.order_index))
+      .from(OrchestratorSpecItemTable)
+      .where(eq(OrchestratorSpecItemTable.task_id, taskID))
       .all(),
   )
 }
@@ -185,23 +159,7 @@ export function viewSpecSnapshot(row: SpecSnapshotRow) {
   }
 }
 
-export function viewGoalSnapshot(row: GoalSnapshotRow) {
-  return {
-    id: row.id,
-    taskID: row.task_id,
-    specSnapshotID: row.spec_snapshot_id,
-    version: row.version,
-    status: row.status,
-    summary: row.summary,
-    metadata: row.metadata ?? undefined,
-    time: {
-      created: row.time_created,
-      updated: row.time_updated,
-    },
-  }
-}
-
-export function viewRequirement(row: RequirementRow) {
+export function viewSpecItem(row: SpecItemRow) {
   return {
     id: row.id,
     taskID: row.task_id,
@@ -210,11 +168,9 @@ export function viewRequirement(row: RequirementRow) {
     description: row.description,
     status: row.status,
     priority: row.priority,
-    acceptance: row.acceptance ?? [],
-    evidenceRefs: row.evidence_refs ?? undefined,
-    nonGoals: row.non_goals ?? undefined,
+    checkSelector: row.check_selector ?? undefined,
+    evidence: row.evidence ?? undefined,
     metadata: row.metadata ?? undefined,
-    orderIndex: row.order_index,
     time: {
       created: row.time_created,
       updated: row.time_updated,
@@ -250,31 +206,9 @@ export function findDeliveryByRun(runID: string) {
     db
       .select()
       .from(OrchestratorDeliveryTable)
-      .where(and(eq(OrchestratorDeliveryTable.run_id, runID), isNull(OrchestratorDeliveryTable.goal_run_id)))
-      .orderBy(desc(OrchestratorDeliveryTable.time_created))
-      .get(),
-  )
-}
-
-export function findDeliveryByGoalRun(goalRunID: string) {
-  return Database.use((db) =>
-    db
-      .select()
-      .from(OrchestratorDeliveryTable)
-      .where(eq(OrchestratorDeliveryTable.goal_run_id, goalRunID))
-      .orderBy(desc(OrchestratorDeliveryTable.time_created))
-      .get(),
-  )
-}
-
-export function findDeliveries(runID: string) {
-  return Database.use((db) =>
-    db
-      .select()
-      .from(OrchestratorDeliveryTable)
       .where(eq(OrchestratorDeliveryTable.run_id, runID))
       .orderBy(desc(OrchestratorDeliveryTable.time_created))
-      .all(),
+      .get(),
   )
 }
 
@@ -283,18 +217,7 @@ export function findEvaluationByRun(runID: string) {
     db
       .select()
       .from(OrchestratorEvaluationTable)
-      .where(and(eq(OrchestratorEvaluationTable.run_id, runID), isNull(OrchestratorEvaluationTable.goal_run_id)))
-      .orderBy(desc(OrchestratorEvaluationTable.time_created))
-      .get(),
-  )
-}
-
-export function findEvaluationByGoalRun(goalRunID: string) {
-  return Database.use((db) =>
-    db
-      .select()
-      .from(OrchestratorEvaluationTable)
-      .where(eq(OrchestratorEvaluationTable.goal_run_id, goalRunID))
+      .where(eq(OrchestratorEvaluationTable.run_id, runID))
       .orderBy(desc(OrchestratorEvaluationTable.time_created))
       .get(),
   )
@@ -306,39 +229,6 @@ export function findExecutorSessionByRun(runID: string) {
       .select()
       .from(OrchestratorExecutorSessionTable)
       .where(eq(OrchestratorExecutorSessionTable.run_id, runID))
-      .orderBy(desc(OrchestratorExecutorSessionTable.time_created))
-      .get(),
-  )
-}
-
-export function listExecutorSessionsByRun(runID: string) {
-  return Database.use((db) =>
-    db
-      .select()
-      .from(OrchestratorExecutorSessionTable)
-      .where(eq(OrchestratorExecutorSessionTable.run_id, runID))
-      .orderBy(asc(OrchestratorExecutorSessionTable.time_created), asc(OrchestratorExecutorSessionTable.id))
-      .all(),
-  )
-}
-
-export function findExecutorSessionByGoalRun(goalRunID: string) {
-  return Database.use((db) =>
-    db
-      .select()
-      .from(OrchestratorExecutorSessionTable)
-      .where(eq(OrchestratorExecutorSessionTable.goal_run_id, goalRunID))
-      .orderBy(desc(OrchestratorExecutorSessionTable.time_created))
-      .get(),
-  )
-}
-
-export function findExecutorSession(executorSessionID: string) {
-  return Database.use((db) =>
-    db
-      .select()
-      .from(OrchestratorExecutorSessionTable)
-      .where(eq(OrchestratorExecutorSessionTable.id, executorSessionID))
       .get(),
   )
 }
@@ -354,17 +244,6 @@ export function listExecutorEvents(executorSessionID: string) {
   )
 }
 
-export function latestExecutorEvent(executorSessionID: string) {
-  return Database.use((db) =>
-    db
-      .select()
-      .from(OrchestratorExecutorEventTable)
-      .where(eq(OrchestratorExecutorEventTable.executor_session_id, executorSessionID))
-      .orderBy(desc(OrchestratorExecutorEventTable.sequence))
-      .get(),
-  )
-}
-
 export function listGoals(taskID: string) {
   return Database.use((db) =>
     db
@@ -376,124 +255,13 @@ export function listGoals(taskID: string) {
   )
 }
 
-export function listGoalsBySpec(specID: string) {
+export function listGoalsByPlan(planID: string) {
   return Database.use((db) =>
     db
       .select()
       .from(OrchestratorGoalTable)
-      .where(eq(OrchestratorGoalTable.spec_snapshot_id, specID))
+      .where(eq(OrchestratorGoalTable.plan_version_id, planID))
       .orderBy(OrchestratorGoalTable.order_index)
-      .all(),
-  )
-}
-
-function goalMetadata(row: GoalRow) {
-  return row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata)
-    ? row.metadata as Record<string, unknown>
-    : {}
-}
-
-export function goalSnapshotIDOfPlan(row: Pick<PlanRow, "metadata">) {
-  const metadata =
-    row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata)
-      ? row.metadata as Record<string, unknown>
-      : {}
-  return typeof metadata.goal_snapshot_id === "string" && metadata.goal_snapshot_id.trim()
-    ? metadata.goal_snapshot_id
-    : undefined
-}
-
-export function listGoalsByGoalSnapshot(goalSnapshotID: string) {
-  const snapshot = findGoalSnapshot(goalSnapshotID)
-  if (!snapshot) return []
-  return listGoalsBySpec(snapshot.spec_snapshot_id)
-    .filter((row) => goalMetadata(row).goal_snapshot_id === goalSnapshotID)
-}
-
-export function listGoalsForPlan(plan: Pick<PlanRow, "spec_snapshot_id" | "metadata">) {
-  const goalSnapshotID = goalSnapshotIDOfPlan(plan)
-  if (goalSnapshotID) return listGoalsByGoalSnapshot(goalSnapshotID)
-  return []
-}
-
-export function listPlanNodesByPlan(planID: string) {
-  return Database.use((db) =>
-    db
-      .select()
-      .from(OrchestratorPlanNodeTable)
-      .where(eq(OrchestratorPlanNodeTable.plan_version_id, planID))
-      .orderBy(OrchestratorPlanNodeTable.order_index)
-      .all(),
-  )
-}
-
-export function findGoalRun(goalRunID: string) {
-  return Database.use((db) =>
-    db.select().from(OrchestratorGoalRunTable).where(eq(OrchestratorGoalRunTable.id, goalRunID)).get(),
-  )
-}
-
-export function listGoalRunsByCoordinator(runID: string) {
-  return Database.use((db) =>
-    db
-      .select()
-      .from(OrchestratorGoalRunTable)
-      .where(eq(OrchestratorGoalRunTable.coordinator_run_id, runID))
-      .orderBy(OrchestratorGoalRunTable.time_created)
-      .all(),
-  )
-}
-
-export function activeGoalRunByCoordinator(runID: string) {
-  return Database.use((db) =>
-    db
-      .select()
-      .from(OrchestratorGoalRunTable)
-      .where(
-        and(
-          eq(OrchestratorGoalRunTable.coordinator_run_id, runID),
-          inArray(OrchestratorGoalRunTable.status, ["queued", "accepted", "running", "blocked"]),
-        ),
-      )
-      .orderBy(desc(OrchestratorGoalRunTable.time_created), desc(OrchestratorGoalRunTable.id))
-      .get(),
-  )
-}
-
-export function listActiveGoalRunsByCoordinator(runID: string) {
-  return Database.use((db) =>
-    db
-      .select()
-      .from(OrchestratorGoalRunTable)
-      .where(
-        and(
-          eq(OrchestratorGoalRunTable.coordinator_run_id, runID),
-          inArray(OrchestratorGoalRunTable.status, ["queued", "accepted", "running", "blocked"]),
-        ),
-      )
-      .orderBy(asc(OrchestratorGoalRunTable.time_created), asc(OrchestratorGoalRunTable.id))
-      .all(),
-  )
-}
-
-export function latestGoalRunByCoordinator(runID: string) {
-  return Database.use((db) =>
-    db
-      .select()
-      .from(OrchestratorGoalRunTable)
-      .where(eq(OrchestratorGoalRunTable.coordinator_run_id, runID))
-      .orderBy(desc(OrchestratorGoalRunTable.time_created), desc(OrchestratorGoalRunTable.id))
-      .get(),
-  )
-}
-
-export function listGoalRunsByTask(taskID: string) {
-  return Database.use((db) =>
-    db
-      .select()
-      .from(OrchestratorGoalRunTable)
-      .where(eq(OrchestratorGoalRunTable.task_id, taskID))
-      .orderBy(desc(OrchestratorGoalRunTable.time_created))
       .all(),
   )
 }
@@ -762,16 +530,9 @@ export function viewTask(row: TaskRow, input?: { directory?: string }) {
 }
 
 export function viewPlan(row: PlanRow) {
-  const metadata = row.metadata ?? undefined
-  const goalSnapshotID =
-    metadata && typeof metadata.goal_snapshot_id === "string"
-      ? metadata.goal_snapshot_id
-      : undefined
   return {
     id: row.id,
     taskID: row.task_id,
-    specSnapshotID: row.spec_snapshot_id,
-    goalSnapshotID,
     version: row.version,
     status: row.status,
     summary: row.summary,
@@ -785,57 +546,16 @@ export function viewPlan(row: PlanRow) {
 }
 
 export function viewGoal(row: GoalRow) {
-  const metadata = goalMetadata(row)
-  const title = typeof metadata.title === "string" && metadata.title.trim() ? metadata.title : row.description
-  const objective = typeof metadata.objective === "string" && metadata.objective.trim() ? metadata.objective : row.criteria
-  return {
-    id: row.id,
-    taskID: row.task_id,
-    specSnapshotID: row.spec_snapshot_id,
-    goalSnapshotID: typeof metadata.goal_snapshot_id === "string" ? metadata.goal_snapshot_id : undefined,
-    title,
-    objective,
-    requirementIDs: Array.isArray(metadata.requirement_ids)
-      ? metadata.requirement_ids.filter((item): item is string => typeof item === "string")
-      : undefined,
-    dependsOnGoalIDs: Array.isArray(metadata.depends_on_goal_ids)
-      ? metadata.depends_on_goal_ids.filter((item): item is string => typeof item === "string")
-      : undefined,
-    ownedPaths: Array.isArray(metadata.owned_paths)
-      ? metadata.owned_paths.filter((item): item is string => typeof item === "string")
-      : undefined,
-    doneDefinition: typeof metadata.done_definition === "string" ? metadata.done_definition : undefined,
-    qaProfile:
-      metadata.qa_profile && typeof metadata.qa_profile === "object" && !Array.isArray(metadata.qa_profile)
-        ? metadata.qa_profile as Record<string, unknown>
-        : undefined,
-    kind: typeof row.kind === "string" ? row.kind : typeof metadata.kind === "string" ? metadata.kind : undefined,
-    description: row.description,
-    criteria: row.criteria,
-    source: row.source,
-    metadata: row.metadata ?? undefined,
-    priority: row.priority,
-    status: row.status,
-    orderIndex: row.order_index,
-    time: {
-      created: row.time_created,
-      updated: row.time_updated,
-    },
-  }
-}
-
-export function viewPlanNode(row: PlanNodeRow) {
   return {
     id: row.id,
     taskID: row.task_id,
     planVersionID: row.plan_version_id,
-    kind: row.kind,
-    goalID: row.goal_id ?? undefined,
-    title: row.title,
-    brief: row.brief,
-    dependsOnIDs: row.depends_on_ids ?? undefined,
+    milestoneID: row.milestone_id ?? undefined,
+    description: row.description,
+    criteria: row.criteria,
+    priority: row.priority,
+    status: row.status,
     orderIndex: row.order_index,
-    metadata: row.metadata ?? undefined,
     time: {
       created: row.time_created,
       updated: row.time_updated,
@@ -883,37 +603,6 @@ export function viewRun(row: RunRow) {
   }
 }
 
-export function viewGoalRun(row: GoalRunRow) {
-  return {
-    id: row.id,
-    taskID: row.task_id,
-    goalID: row.goal_id,
-    planNodeID: row.plan_node_id ?? undefined,
-    coordinatorRunID: row.coordinator_run_id,
-    sessionID: row.session_id ?? undefined,
-    executor: row.executor,
-    status: row.status,
-    retryCount: row.retry_count,
-    blockingReason: row.blocking_reason ?? undefined,
-    error: row.error ?? undefined,
-    workspaceDir: row.workspace_dir ?? undefined,
-    baseRef: row.base_ref ?? undefined,
-    mergeRef: row.merge_ref ?? undefined,
-    metadata: row.metadata ?? undefined,
-    time: {
-      created: row.time_created,
-      updated: row.time_updated,
-      started: row.time_started ?? undefined,
-      completed: row.time_completed ?? undefined,
-    },
-  }
-}
-
-export function goalRunQueueTaskID(row: GoalRunRow | undefined) {
-  const value = row?.metadata?.queue_task_id
-  return typeof value === "string" && value ? value : undefined
-}
-
 export function viewInteraction(row: InteractionRow) {
   return {
     id: row.id,
@@ -940,7 +629,6 @@ export function viewArtifact(row: ArtifactRow) {
     id: row.id,
     taskID: row.task_id,
     runID: row.run_id,
-    goalRunID: row.goal_run_id ?? undefined,
     deliveryID: row.delivery_id ?? undefined,
     kind: row.kind,
     label: row.label,
@@ -958,11 +646,10 @@ export function viewDelivery(row: DeliveryRow) {
     id: row.id,
     taskID: row.task_id,
     runID: row.run_id,
-    goalRunID: row.goal_run_id ?? undefined,
     status: row.status,
     summary: row.summary,
     result: {
-      summary: (typeof result.summary === "string" ? result.summary : undefined) ?? row.summary ?? "",
+      summary: String(result.summary ?? row.summary),
       changedFiles: arrayOfStrings(result.changed_files),
       diffs: arrayOfDiffs(result.diffs),
       artifacts: Array.isArray(result.artifacts)
@@ -980,18 +667,15 @@ export function viewDelivery(row: DeliveryRow) {
 }
 
 export function viewEvaluation(row: EvaluationRow) {
-  const checks = arrayOfChecks(row.checks)
   return {
     id: row.id,
     taskID: row.task_id,
     runID: row.run_id,
-    goalRunID: row.goal_run_id ?? undefined,
     deliveryID: row.delivery_id ?? undefined,
     status: row.status,
     verdict: row.verdict,
     summary: row.summary,
-    groups: evaluationGroups(checks),
-    checks,
+    checks: arrayOfChecks(row.checks),
     time: {
       created: row.time_created,
       updated: row.time_updated,
@@ -1019,7 +703,6 @@ export function viewExecutorSession(row: ExecutorSessionRow) {
     id: row.id,
     taskID: row.task_id,
     runID: row.run_id,
-    goalRunID: row.goal_run_id ?? undefined,
     provider: row.provider,
     protocol: row.protocol,
     protocolVersion: row.protocol_version,
@@ -1043,7 +726,6 @@ export function viewExecutorEvent(row: ExecutorEventRow) {
     executorSessionID: row.executor_session_id,
     taskID: row.task_id,
     runID: row.run_id,
-    goalRunID: row.goal_run_id ?? undefined,
     sequence: row.sequence,
     kind: row.kind,
     summary: row.summary ?? undefined,
@@ -1065,7 +747,6 @@ function budgetModel(input?: OrchestratorBudget | null) {
     maxReplans: input.max_replans,
     maxEvaluations: input.max_evaluations,
     maxWallTimeMs: input.max_wall_time_ms,
-    maxConcurrentGoals: input.max_concurrent_goals,
   }
 }
 

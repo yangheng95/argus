@@ -175,7 +175,6 @@ export namespace InstructionPrompt {
 
       if (found && found !== target && !system.has(found) && !already.has(found) && !isClaimed(messageID, found)) {
         claim(messageID, found)
-        // Instruction file may have been removed between find and read
         const content = await Filesystem.readText(found).catch(() => undefined)
         if (content) {
           results.push({ filepath: found, content: "Instructions from: " + found + "\n" + content })

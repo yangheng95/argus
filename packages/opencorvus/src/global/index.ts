@@ -3,22 +3,16 @@ import { xdgData, xdgCache, xdgState } from "xdg-basedir"
 import path from "path"
 import os from "os"
 import { Filesystem } from "../util/filesystem"
-import { testScope } from "./test-context"
 
 const app = "opencorvus"
 const portableRoot = process.env.OPENCORVUS_HOME?.trim()
-function testRoot() {
-  return process.env.OPENCORVUS_TEST_HOME?.trim()
-}
 
 function resolveHome() {
-  if (testRoot()) return testRoot()!
+  if (process.env.OPENCORVUS_TEST_HOME) return process.env.OPENCORVUS_TEST_HOME
   try {
     const home = os.homedir()
     if (home) return home
-  } catch {
-    // os.homedir() can throw on misconfigured systems (missing $HOME, no passwd entry)
-  }
+  } catch {}
   return process.env.HOME || process.env.USERPROFILE || os.tmpdir()
 }
 
@@ -27,37 +21,16 @@ const isWin = process.platform === "win32"
 const winLocal = process.env.LOCALAPPDATA || path.join(home, "AppData", "Local")
 const cwd = process.cwd()
 
-function resolveConfig() {
-  if (testRoot()) return path.join(testScope(testRoot()!), "config")
-  return cwd
-}
-
-function resolveData() {
-  if (testRoot()) return path.join(testScope(testRoot()!), "data")
-  if (portableRoot) return path.join(portableRoot, "data")
-  return path.join(xdgData || (isWin ? winLocal : path.join(home, ".local", "share")), app)
-}
-
-function resolveCache() {
-  if (testRoot()) return path.join(testScope(testRoot()!), "cache")
-  if (portableRoot) return path.join(portableRoot, "cache")
-  return path.join(xdgCache || (isWin ? winLocal : path.join(home, ".cache")), app)
-}
-
-function resolveState() {
-  if (testRoot()) return path.join(testScope(testRoot()!), "state")
-  if (portableRoot) return path.join(portableRoot, "state")
-  return path.join(xdgState || (isWin ? winLocal : path.join(home, ".local", "state")), app)
-}
-
-function resolveBin() {
-  const root = testRoot()
-  if (root) {
-    // Managed binaries should outlive individual temporary workspaces during tests.
-    return path.join(root, "shared", "data", "bin")
-  }
-  return path.join(resolveData(), "bin")
-}
+const data = portableRoot
+  ? path.join(portableRoot, "data")
+  : path.join(xdgData || (isWin ? winLocal : path.join(home, ".local", "share")), app)
+const cache = portableRoot
+  ? path.join(portableRoot, "cache")
+  : path.join(xdgCache || (isWin ? winLocal : path.join(home, ".cache")), app)
+const config = cwd
+const state = portableRoot
+  ? path.join(portableRoot, "state")
+  : path.join(xdgState || (isWin ? winLocal : path.join(home, ".local", "state")), app)
 
 export namespace Global {
   export const Path = {
@@ -65,24 +38,12 @@ export namespace Global {
     get home() {
       return resolveHome()
     },
-    get data() {
-      return resolveData()
-    },
-    get bin() {
-      return resolveBin()
-    },
-    get log() {
-      return path.join(resolveData(), "log")
-    },
-    get cache() {
-      return resolveCache()
-    },
-    get config() {
-      return resolveConfig()
-    },
-    get state() {
-      return resolveState()
-    },
+    data,
+    bin: path.join(data, "bin"),
+    log: path.join(data, "log"),
+    cache,
+    config,
+    state,
   }
 }
 
@@ -118,9 +79,6 @@ if (version !== CACHE_VERSION) {
         }),
       ),
     )
-  } catch (e) {
-    const detail = e instanceof Error ? e.message : String(e)
-    console.warn(`[global] cache cleanup failed (version ${version} → ${CACHE_VERSION}): ${detail}`)
-  }
+  } catch (e) {}
   await Filesystem.write(path.join(Global.Path.cache, "version"), CACHE_VERSION)
 }

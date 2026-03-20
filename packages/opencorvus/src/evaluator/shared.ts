@@ -4,24 +4,31 @@ import { Snapshot } from "@/snapshot"
 
 const MAX_OUTPUT = 12000
 
+export const JudgeResult = z.object({
+  verdict: z.enum(["accepted", "rejected", "inconclusive"]),
+  rationale: z.string(),
+  strengths: z.array(z.string()).optional(),
+  concerns: z.array(z.string()).optional(),
+})
+
 export const SpecCheckResult = z.object({
-  verdict: z.enum(["accepted", "rejected"]),
+  verdict: z.enum(["accepted", "rejected", "inconclusive"]),
   rationale: z.string(),
   criteria: z.array(z.object({
     criterion: z.string(),
-    status: z.enum(["passed", "failed"]),
+    status: z.enum(["passed", "failed", "inconclusive"]),
     evidence: z.string(),
   })),
 })
 
 export const ReviewResultSchema = z.object({
-  verdict: z.enum(["accepted", "rejected"]),
+  verdict: z.enum(["accepted", "rejected", "inconclusive"]),
   rationale: z.string(),
   strengths: z.array(z.string()),
   concerns: z.array(z.string()),
 })
 
-export type CheckCommand = {
+export type EvaluatorCommand = {
   command: string
   cwd?: string
 }
@@ -30,57 +37,41 @@ export type CommandGroup = {
   name: string
   label?: string
   family?: z.infer<typeof NamedCheckFamily>
-  commands: CheckCommand[]
+  commands: EvaluatorCommand[]
 }
 
-export type CheckTask = {
+export type EvaluationTask = {
   taskID?: string
   activeSpecVersionID?: string
   request?: string
   metadata?: Record<string, unknown>
-  goal?: {
-    id?: string
-    title: string
-    description: string
-    objective?: string
-    criteria: string
-    priority: "blocking" | "advisory"
-    ownedPaths?: string[]
-    doneDefinition?: string
-    requirementIDs?: string[]
-    qaProfile?: {
-      goalCheckPrompt?: string
-      specScope?: "mapped_requirements" | "full_spec" | "both"
-    }
-  }
-  requirementIDs?: string[]
 }
 
-export type CheckDelivery = {
+export type EvaluationDelivery = {
   summary: string
   diffs?: Snapshot.FileDiff[]
   changedFiles?: string[]
 }
 
-export type CheckArtifact = {
+export type EvaluationArtifact = {
   kind: "log" | "report" | "image"
   label: string
   payload: Record<string, unknown>
 }
 
-export type CheckOutcome = {
+export type EvaluationOutcome = {
   outcome: "passed" | "failed" | "skipped"
   summary: string
   checks: z.infer<typeof EvaluationCheck>[]
-  artifacts: CheckArtifact[]
+  artifacts: EvaluationArtifact[]
 }
 
-export type CheckReport = {
-  status: "passed" | "failed"
-  verdict: "accepted" | "rejected"
+export type EvaluationOutput = {
+  status: "passed" | "failed" | "inconclusive"
+  verdict: "accepted" | "rejected" | "inconclusive"
   summary: string
   checks: z.infer<typeof EvaluationCheck>[]
-  artifacts: CheckArtifact[]
+  artifacts: EvaluationArtifact[]
 }
 
 export type PluginCheck = {
@@ -88,7 +79,7 @@ export type PluginCheck = {
   mode: "soft" | "strict"
   run: (ctx: {
     request?: string
-    delivery: CheckDelivery
+    delivery: EvaluationDelivery
   }) => Promise<{
     status: "passed" | "failed" | "skipped"
     evidence: string
@@ -103,7 +94,7 @@ export type CheckDef = {
 }
 
 export type OptionalCheckDef = CheckDef & {
-  run: (config: z.infer<typeof CheckConfig>, task: CheckTask, delivery: CheckDelivery) => Promise<CheckOutcome>
+  run: (config: z.infer<typeof CheckConfig>, task: EvaluationTask, delivery: EvaluationDelivery) => Promise<EvaluationOutcome>
 }
 
 export const CORE_CHECK_DEFS = [
@@ -146,12 +137,12 @@ export function clip(input: string, maxLength?: number) {
   return value.slice(0, limit) + "\n...[truncated]"
 }
 
-export function emptyOptional(): CheckOutcome & { artifacts: CheckArtifact[] } {
+export function emptyOptional(): EvaluationOutcome & { artifacts: EvaluationArtifact[] } {
   return {
     outcome: "passed" as const,
     summary: "",
     checks: [],
-    artifacts: [] as CheckArtifact[],
+    artifacts: [] as Array<{ kind: "log" | "report" | "image"; label: string; payload: Record<string, unknown> }>,
   }
 }
 
@@ -161,7 +152,7 @@ export function softOrStrict(input: {
   summary: string
   evidence: string
   payload: Record<string, unknown>
-}): CheckOutcome {
+}): EvaluationOutcome {
   if (input.mode === "strict") {
     return {
       outcome: "failed" as const,
@@ -210,16 +201,10 @@ export async function webPage(url: string, timeoutMs: number) {
     headers: {
       "user-agent": "OpenCorvus evaluator",
     },
-  }).catch((err) => {
-    console.warn("[evaluator] web page fetch failed:", url, String(err))
-    return undefined
-  })
+  }).catch(() => undefined)
   clearTimeout(timer)
   if (!response?.ok) return
-  const content = await response.text().catch((err) => {
-    console.warn("[evaluator] web page response.text() failed:", url, String(err))
-    return ""
-  })
+  const content = await response.text().catch(() => "")
   return {
     content,
     title: titleOf(content),
@@ -243,7 +228,7 @@ export function stripHtml(input: string) {
 
 export function normalizeArtifacts(input?: Array<{ kind: string; label: string; payload: Record<string, unknown> }>) {
   return (input ?? []).map((item) => ({
-    kind: item.kind as CheckArtifact["kind"],
+    kind: item.kind as EvaluationArtifact["kind"],
     label: item.label,
     payload: item.payload,
   }))

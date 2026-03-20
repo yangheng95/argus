@@ -2,7 +2,6 @@ import { test, expect } from "bun:test"
 import { $ } from "bun"
 import fs from "fs/promises"
 import path from "path"
-import { Global } from "../../src/global"
 import { Snapshot } from "../../src/snapshot"
 import { Instance } from "../../src/project/instance"
 import { Filesystem } from "../../src/util/filesystem"
@@ -12,17 +11,6 @@ import { tmpdir } from "../fixture/fixture"
 // with path.join (which produces \ on Windows) then normalizes back to /.
 // This helper does the same for expected values so assertions match cross-platform.
 const fwd = (...parts: string[]) => path.join(...parts).replaceAll("\\", "/")
-
-async function symlink(target: string, link: string, type: "file" | "dir") {
-  try {
-    await fs.symlink(target, link, process.platform === "win32" && type === "dir" ? "junction" : type)
-    return true
-  } catch (error) {
-    if (process.platform === "win32" && typeof error === "object" && error && "code" in error && error.code === "EPERM")
-      return false
-    throw error
-  }
-}
 
 async function bootstrap() {
   return tmpdir({
@@ -182,7 +170,7 @@ test("symlink handling", async () => {
       const before = await Snapshot.track()
       expect(before).toBeTruthy()
 
-      if (!(await symlink(`${tmp.path}/a.txt`, `${tmp.path}/link.txt`, "file"))) return
+      await fs.symlink(`${tmp.path}/a.txt`, `${tmp.path}/link.txt`, "file")
 
       expect((await Snapshot.patch(before!)).files).toContain(fwd(tmp.path, "link.txt"))
     },
@@ -454,14 +442,12 @@ test("nested symlinks", async () => {
 
       await $`mkdir -p ${tmp.path}/sub/dir`.quiet()
       await Filesystem.write(`${tmp.path}/sub/dir/target.txt`, "target content")
-      if (!(await symlink(`${tmp.path}/sub/dir/target.txt`, `${tmp.path}/sub/dir/link.txt`, "file"))) return
-      if (!(await symlink(`${tmp.path}/sub`, `${tmp.path}/sub-link`, "dir"))) return
+      await fs.symlink(`${tmp.path}/sub/dir/target.txt`, `${tmp.path}/sub/dir/link.txt`, "file")
+      await fs.symlink(`${tmp.path}/sub`, `${tmp.path}/sub-link`, "dir")
 
       const patch = await Snapshot.patch(before!)
       expect(patch.files).toContain(fwd(tmp.path, "sub", "dir", "link.txt"))
-      expect(
-        patch.files.some((item) => item === fwd(tmp.path, "sub-link") || item.startsWith(fwd(tmp.path, "sub-link") + "/")),
-      ).toBe(true)
+      expect(patch.files).toContain(fwd(tmp.path, "sub-link"))
     },
   })
 })
@@ -550,30 +536,6 @@ test("git info exclude changes", async () => {
       const diffs = await Snapshot.diffFull(before!, after!)
       expect(diffs.some((x) => x.file === "normal.txt")).toBe(true)
       expect(diffs.some((x) => x.file === "ignored.txt")).toBe(false)
-    },
-  })
-})
-
-test("diffFull ignores default vendor folders without project gitignore", async () => {
-  await using tmp = await bootstrap()
-  await Instance.provide({
-    directory: tmp.path,
-    fn: async () => {
-      const before = await Snapshot.track()
-      expect(before).toBeTruthy()
-
-      await fs.mkdir(path.join(tmp.path, "node_modules", "left-pad"), { recursive: true })
-      await Bun.write(path.join(tmp.path, "node_modules", "left-pad", "index.js"), "module.exports = 1\n")
-      await Bun.write(path.join(tmp.path, "src.txt"), "real change\n")
-
-      const patch = await Snapshot.patch(before!)
-      expect(patch.files).toContain(fwd(tmp.path, "src.txt"))
-      expect(patch.files.some((file) => file.includes("/node_modules/"))).toBe(false)
-
-      const after = await Snapshot.track()
-      const diffs = await Snapshot.diffFull(before!, after!)
-      expect(diffs.some((x) => x.file === "src.txt")).toBe(true)
-      expect(diffs.some((x) => x.file.includes("node_modules"))).toBe(false)
     },
   })
 })
@@ -698,35 +660,6 @@ test("patch detects changes in secondary worktree", async () => {
         expect(patch.files).toContain(worktreeFile)
       },
     })
-  } finally {
-    await $`git worktree remove --force ${worktreePath}`.cwd(tmp.path).quiet().nothrow()
-    await $`rm -rf ${worktreePath}`.quiet()
-  }
-})
-
-test("allocates a separate snapshot index per git worktree", async () => {
-  await using tmp = await bootstrap()
-  const worktreePath = `${tmp.path}-worktree`
-  await $`git worktree add ${worktreePath} HEAD`.cwd(tmp.path).quiet()
-
-  try {
-    const projectID = await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        expect(await Snapshot.track()).toBeTruthy()
-        return Instance.project.id
-      },
-    })
-
-    await Instance.provide({
-      directory: worktreePath,
-      fn: async () => {
-        expect(await Snapshot.track()).toBeTruthy()
-      },
-    })
-
-    const indexes = await fs.readdir(path.join(Global.Path.data, "snapshot", projectID, "indexes"))
-    expect(indexes.length).toBeGreaterThanOrEqual(2)
   } finally {
     await $`git worktree remove --force ${worktreePath}`.cwd(tmp.path).quiet().nothrow()
     await $`rm -rf ${worktreePath}`.quiet()

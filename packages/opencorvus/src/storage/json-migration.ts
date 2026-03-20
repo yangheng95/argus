@@ -151,7 +151,7 @@ export namespace JsonMigration {
     // Migrate projects first (no FK deps)
     // Derive all IDs from file paths, not JSON content
     const projectIds = new Set<string>()
-    const projectValues = [] as Record<string, unknown>[]
+    const projectValues = [] as any[]
     for (let i = 0; i < projectFiles.length; i += batchSize) {
       const end = Math.min(i + batchSize, projectFiles.length)
       const batch = await read(projectFiles, i, end)
@@ -185,7 +185,7 @@ export namespace JsonMigration {
     // migrations may have moved sessions to new directories without updating the JSON
     const sessionProjects = sessionFiles.map((file) => path.basename(path.dirname(file)))
     const sessionIds = new Set<string>()
-    const sessionValues = [] as Record<string, unknown>[]
+    const sessionValues = [] as any[]
     for (let i = 0; i < sessionFiles.length; i += batchSize) {
       const end = Math.min(i + batchSize, sessionFiles.length)
       const batch = await read(sessionFiles, i, end)
@@ -311,7 +311,7 @@ export namespace JsonMigration {
     for (let i = 0; i < todoFiles.length; i += batchSize) {
       const end = Math.min(i + batchSize, todoFiles.length)
       const batch = await read(todoFiles, i, end)
-      const values = [] as Record<string, unknown>[]
+      const values = [] as any[]
       for (let j = 0; j < batch.length; j++) {
         const data = batch[j]
         if (!data) continue
@@ -348,7 +348,7 @@ export namespace JsonMigration {
 
     // Migrate permissions
     const permProjects = permFiles.map((file) => path.basename(file, ".json"))
-    const permValues = [] as Record<string, unknown>[]
+    const permValues = [] as any[]
     for (let i = 0; i < permFiles.length; i += batchSize) {
       const end = Math.min(i + batchSize, permFiles.length)
       const batch = await read(permFiles, i, end)
@@ -373,7 +373,7 @@ export namespace JsonMigration {
 
     // Migrate session shares
     const shareSessions = shareFiles.map((file) => path.basename(file, ".json"))
-    const shareValues = [] as Record<string, unknown>[]
+    const shareValues = [] as any[]
     for (let i = 0; i < shareFiles.length; i += batchSize) {
       const end = Math.min(i + batchSize, shareFiles.length)
       const batch = await read(shareFiles, i, end)

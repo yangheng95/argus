@@ -17,9 +17,7 @@ export namespace Identifier {
     cron: "crn",
     task: "tsk",
     plan: "pln",
-    plan_node: "pnd",
     goal: "gol",
-    goal_run: "grn",
     run: "run",
     interaction: "int",
     artifact: "art",
@@ -34,12 +32,8 @@ export namespace Identifier {
     milestone: "mst",
     executor_session: "exs",
     executor_event: "exe",
-    goal_snapshot: "gsp",
-    protocol_event: "pte",
-    protocol_inbox: "pin",
-    protocol_stream_chunk: "psc",
-    requirement: "req",
     spec: "spc",
+    specitem: "spi",
   } as const
 
   export function schema(prefix: keyof typeof prefixes) {
@@ -104,11 +98,8 @@ export namespace Identifier {
 
   /** Extract timestamp from an ascending ID. Does not work with descending IDs. */
   export function timestamp(id: string): number {
-    const parts = id.split("_")
-    if (parts.length < 2) return 0
-    const prefix = parts[0]
+    const prefix = id.split("_")[0]
     const hex = id.slice(prefix.length + 1, prefix.length + 13)
-    if (!/^[0-9a-f]+$/i.test(hex)) return 0
     const encoded = BigInt("0x" + hex)
     return Number(encoded / BigInt(0x1000))
   }

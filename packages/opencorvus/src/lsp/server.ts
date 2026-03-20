@@ -112,9 +112,7 @@ export namespace LSPServer {
     ),
     extensions: [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".mts", ".cts"],
     async spawn(root) {
-      const tsserver = await Bun.resolve("typescript/lib/tsserver.js", Instance.directory).catch(() => {
-        // resolve fails when typescript is not installed in the project — safe to ignore
-      })
+      const tsserver = await Bun.resolve("typescript/lib/tsserver.js", Instance.directory).catch(() => {})
       log.info("typescript server", { tsserver })
       if (!tsserver) return
       const proc = spawn(BunProc.which(), ["x", "typescript-language-server", "--stdio"], {
@@ -189,9 +187,7 @@ export namespace LSPServer {
     root: NearestRoot(["package-lock.json", "bun.lockb", "bun.lock", "pnpm-lock.yaml", "yarn.lock"]),
     extensions: [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".mts", ".cts", ".vue"],
     async spawn(root) {
-      const eslint = await Bun.resolve("eslint", Instance.directory).catch(() => {
-        // resolve fails when eslint is not installed in the project — safe to ignore
-      })
+      const eslint = await Bun.resolve("eslint", Instance.directory).catch(() => {})
       if (!eslint) return
       log.info("spawning eslint server")
       const serverPath = path.join(Global.Path.bin, "vscode-eslint", "server", "out", "eslintServer.js")
@@ -216,7 +212,7 @@ export namespace LSPServer {
         const extractedPath = path.join(Global.Path.bin, "vscode-eslint-main")
         const finalPath = path.join(Global.Path.bin, "vscode-eslint")
 
-        const stats = await fs.stat(finalPath).catch(() => undefined) // May not exist yet
+        const stats = await fs.stat(finalPath).catch(() => undefined)
         if (stats) {
           log.info("removing old eslint installation", { path: finalPath })
           await fs.rm(finalPath, { force: true, recursive: true })
@@ -359,7 +355,7 @@ export namespace LSPServer {
       let args = ["lsp-proxy", "--stdio"]
 
       if (!bin) {
-        const resolved = await Bun.resolve("biome", root).catch(() => undefined) // biome not installed
+        const resolved = await Bun.resolve("biome", root).catch(() => undefined)
         if (!resolved) return
         bin = BunProc.which()
         args = ["x", "biome", "lsp-proxy", "--stdio"]
@@ -665,7 +661,7 @@ export namespace LSPServer {
           return
         }
 
-        const release = (await releaseResponse.json()) as { tag_name: string; name?: string; assets: Array<{ name: string; browser_download_url: string }> }
+        const release = (await releaseResponse.json()) as any
 
         const platform = process.platform
         const arch = process.arch
@@ -700,7 +696,7 @@ export namespace LSPServer {
           return
         }
 
-        const asset = release.assets.find((a) => a.name === assetName)
+        const asset = release.assets.find((a: any) => a.name === assetName)
         if (!asset) {
           log.error(`Could not find asset ${assetName} in latest zls release`)
           return
@@ -1044,7 +1040,6 @@ export namespace LSPServer {
       }
 
       const alias = path.join(Global.Path.bin, "clangd" + ext)
-      // remove stale alias before re-creating; ENOENT on first install is expected
       await fs.unlink(alias).catch(() => {})
       if (platform === "win32") {
         await fs.copyFile(bin, alias).catch((error) => {
@@ -1111,9 +1106,7 @@ export namespace LSPServer {
     extensions: [".astro"],
     root: NearestRoot(["package-lock.json", "bun.lockb", "bun.lock", "pnpm-lock.yaml", "yarn.lock"]),
     async spawn(root) {
-      const tsserver = await Bun.resolve("typescript/lib/tsserver.js", Instance.directory).catch(() => {
-        // resolve fails when typescript is not installed in the project — safe to ignore
-      })
+      const tsserver = await Bun.resolve("typescript/lib/tsserver.js", Instance.directory).catch(() => {})
       if (!tsserver) {
         log.info("typescript not found, required for Astro language server")
         return
@@ -1174,7 +1167,7 @@ export namespace LSPServer {
         .nothrow()
         .then(({ stderr }) => {
           const m = /"(\d+)\.\d+\.\d+"/.exec(stderr.toString())
-          return !m ? undefined : parseInt(m[1], 10)
+          return !m ? undefined : parseInt(m[1])
         })
       if (javaMajorVersion == null || javaMajorVersion < 21) {
         log.error("JDTLS requires at least Java 21.")
@@ -1291,7 +1284,7 @@ export namespace LSPServer {
           return
         }
 
-        const release = (await releaseResponse.json()) as { tag_name: string; name?: string; assets: Array<{ name: string; browser_download_url: string }> }
+        const release = await releaseResponse.json()
         const version = release.name?.replace(/^v/, "")
 
         if (!version) {
@@ -1426,7 +1419,7 @@ export namespace LSPServer {
           return
         }
 
-        const release = (await releaseResponse.json()) as { tag_name: string; name?: string; assets: Array<{ name: string; browser_download_url: string }> }
+        const release = await releaseResponse.json()
 
         const platform = process.platform
         const arch = process.arch
@@ -1461,7 +1454,7 @@ export namespace LSPServer {
           return
         }
 
-        const asset = release.assets.find((a) => a.name === assetName)
+        const asset = release.assets.find((a: any) => a.name === assetName)
         if (!asset) {
           log.error(`Could not find asset ${assetName} in latest lua-language-server release`)
           return
@@ -1483,7 +1476,7 @@ export namespace LSPServer {
         const installDir = path.join(Global.Path.bin, `lua-language-server-${lualsArch}-${lualsPlatform}`)
 
         // Remove old installation if exists
-        const stats = await fs.stat(installDir).catch(() => undefined) // May not exist on first install
+        const stats = await fs.stat(installDir).catch(() => undefined)
         if (stats) {
           await fs.rm(installDir, { force: true, recursive: true })
         }

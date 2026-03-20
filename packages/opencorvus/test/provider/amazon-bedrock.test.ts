@@ -1,10 +1,12 @@
 import { test, expect, describe } from "bun:test"
 import path from "path"
+import { unlink } from "fs/promises"
 
 import { tmpdir } from "../fixture/fixture"
 import { Instance } from "../../src/project/instance"
 import { Provider } from "../../src/provider/provider"
 import { Env } from "../../src/env"
+import { Global } from "../../src/global"
 import { Filesystem } from "../../src/util/filesystem"
 import { Auth } from "../../src/auth"
 
@@ -84,28 +86,63 @@ test("Bedrock: loads when bearer token from auth.json is present", async () => {
     },
   })
 
-  await Instance.provide({
-    directory: tmp.path,
-    init: async () => {
-      await Auth.set("amazon-bedrock", {
-        type: "api",
-        key: "test-bearer-token",
-      })
-      Env.set("AWS_PROFILE", "")
-      Env.set("AWS_ACCESS_KEY_ID", "")
-      Env.set("AWS_BEARER_TOKEN_BEDROCK", "")
-    },
-    fn: async () => {
-      const providers = await Provider.list()
-      expect(providers["amazon-bedrock"]).toBeDefined()
-      expect(providers["amazon-bedrock"].options?.region).toBe("eu-west-1")
-    },
-  })
+  const authPath = path.join(Global.Path.data, "auth.json")
+
+  // Save original auth.json if it exists
+  let originalAuth: string | undefined
+  try {
+    originalAuth = await Filesystem.readText(authPath)
+  } catch {
+    // File doesn't exist, that's fine
+  }
+
+  try {
+    // Write test auth.json
+    await Filesystem.write(
+      authPath,
+      JSON.stringify({
+        "amazon-bedrock": {
+          type: "api",
+          key: "test-bearer-token",
+        },
+      }),
+    )
+
+    await Instance.provide({
+      directory: tmp.path,
+      init: async () => {
+        Env.set("AWS_PROFILE", "")
+        Env.set("AWS_ACCESS_KEY_ID", "")
+        Env.set("AWS_BEARER_TOKEN_BEDROCK", "")
+      },
+      fn: async () => {
+        const providers = await Provider.list()
+        expect(providers["amazon-bedrock"]).toBeDefined()
+        expect(providers["amazon-bedrock"].options?.region).toBe("eu-west-1")
+      },
+    })
+  } finally {
+    // Restore original or delete
+    if (originalAuth !== undefined) {
+      await Filesystem.write(authPath, originalAuth)
+    } else {
+      try {
+        await unlink(authPath)
+      } catch {
+        // Ignore errors if file doesn't exist
+      }
+    }
+  }
 })
 
 test("Bedrock: auth loader does not leak bearer token into process.env", async () => {
+  const previousAuth = await Auth.get("amazon-bedrock")
   const previousBearer = process.env.AWS_BEARER_TOKEN_BEDROCK
   delete process.env.AWS_BEARER_TOKEN_BEDROCK
+  await Auth.set("amazon-bedrock", {
+    type: "api",
+    key: "test-bearer-token",
+  })
 
   try {
     await using tmp = await tmpdir({
@@ -128,10 +165,6 @@ test("Bedrock: auth loader does not leak bearer token into process.env", async (
     await Instance.provide({
       directory: tmp.path,
       init: async () => {
-        await Auth.set("amazon-bedrock", {
-          type: "api",
-          key: "test-bearer-token",
-        })
         Env.remove("AWS_BEARER_TOKEN_BEDROCK")
         Env.set("AWS_PROFILE", "")
         Env.set("AWS_ACCESS_KEY_ID", "")
@@ -144,6 +177,8 @@ test("Bedrock: auth loader does not leak bearer token into process.env", async (
       },
     })
   } finally {
+    if (previousAuth) await Auth.set("amazon-bedrock", previousAuth)
+    else await Auth.remove("amazon-bedrock")
     if (previousBearer === undefined) delete process.env.AWS_BEARER_TOKEN_BEDROCK
     else process.env.AWS_BEARER_TOKEN_BEDROCK = previousBearer
   }

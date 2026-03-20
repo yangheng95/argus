@@ -16,9 +16,6 @@ import { text } from "node:stream/consumers"
 import { entries } from "@/util/object"
 
 type PluginAuth = NonNullable<Hooks["auth"]>
-const BUILTIN_PROVIDER_NAMES: Record<string, string> = {
-  "openai-codex": "OpenAI Codex",
-}
 
 /**
  * Handle plugin-based authentication flow.
@@ -37,7 +34,7 @@ async function handlePluginAuth(plugin: { auth: PluginAuth }, provider: string):
       ],
     })
     if (prompts.isCancel(method)) throw new UI.CancelledError()
-    index = parseInt(method, 10)
+    index = parseInt(method)
   }
   const method = plugin.auth.methods[index]
 
@@ -219,7 +216,7 @@ export const AuthListCommand = cmd({
     const database = await ModelsDev.get()
 
     for (const [providerID, result] of results) {
-      const name = database[providerID]?.name || BUILTIN_PROVIDER_NAMES[providerID] || providerID
+      const name = database[providerID]?.name || providerID
       prompts.log.info(`${name} ${UI.Style.TEXT_DIM}${result.type}`)
     }
 
@@ -267,7 +264,7 @@ export const AuthLoginCommand = cmd({
         UI.empty()
         prompts.intro("Add credential")
         if (args.url) {
-          const wellknown = (await fetch(`${args.url}/.well-known/opencorvus`).then((x) => x.json())) as { auth: { command: string[]; env: string } }
+          const wellknown = await fetch(`${args.url}/.well-known/opencorvus`).then((x) => x.json() as any)
           prompts.log.info(`Running \`${wellknown.auth.command.join(" ")}\``)
           const proc = Process.spawn(wellknown.auth.command, {
             stdout: "pipe",
@@ -292,9 +289,7 @@ export const AuthLoginCommand = cmd({
           prompts.outro("Done")
           return
         }
-        await ModelsDev.refresh().catch((err) => {
-          console.warn("[auth] models.dev refresh failed:", String(err))
-        })
+        await ModelsDev.refresh().catch(() => {})
 
         const config = await Config.get()
 
@@ -325,15 +320,12 @@ export const AuthLoginCommand = cmd({
           existingProviders: providers,
           disabled,
           enabled,
-          providerNames: {
-            ...BUILTIN_PROVIDER_NAMES,
-            ...(Object.fromEntries(
-              entries((config.provider ?? {}) as NonNullable<Config.Info["provider"]>).map(([id, provider]) => [
-                id,
-                provider.name,
-              ]),
-            ) as Record<string, string | undefined>),
-          },
+          providerNames: Object.fromEntries(
+            entries((config.provider ?? {}) as NonNullable<Config.Info["provider"]>).map(([id, provider]) => [
+              id,
+              provider.name,
+            ]),
+          ) as Record<string, string | undefined>,
         })
         let provider = await prompts.autocomplete({
           message: "Select provider",
@@ -359,7 +351,7 @@ export const AuthLoginCommand = cmd({
             ...pluginProviders.map((x) => ({
               label: x.name,
               value: x.id,
-              hint: x.id === "openai-codex" ? "ChatGPT Plus/Pro OAuth" : "plugin",
+              hint: "plugin",
             })),
             {
               value: "other",

@@ -4,15 +4,10 @@ import { Instance } from "../project/instance"
 import { BusEvent } from "./bus-event"
 import { GlobalBus } from "./global"
 import { isBusTraceEnabled, traceBus } from "../util/debug-trace"
-import { Channel } from "../util/channel"
 
 export namespace Bus {
   const log = Log.create({ service: "bus" })
-  type Subscription = {
-    callback: (event: any) => void
-    dispatch(event: any): boolean
-    close(): void
-  }
+  type Subscription = (event: any) => void
   const source = new WeakMap<Subscription, string>()
 
   export const InstanceDisposed = BusEvent.define(
@@ -24,7 +19,7 @@ export namespace Bus {
 
   const state = Instance.state(
     () => {
-      const subscriptions = new Map<string, Subscription[]>()
+      const subscriptions = new Map<any, Subscription[]>()
 
       return {
         subscriptions,
@@ -40,7 +35,7 @@ export namespace Bus {
         },
       }
       for (const sub of [...wildcard]) {
-        sub.dispatch(event)
+        sub(event)
       }
     },
   )
@@ -48,15 +43,12 @@ export namespace Bus {
   const SUBSCRIBER_TIMEOUT_MS = 120_000 // 2 minutes per subscriber (last-resort safety net)
 
   function withTimeout(promise: unknown, timeoutMs: number, label: string): Promise<unknown> {
-    // Duck-type thenable check: subscriber callbacks may return void, a raw
-    // value, or a Promise.  We only need to race/timeout actual thenables.
-    if (!promise || typeof promise !== "object" || !("then" in promise) || typeof promise.then !== "function") return Promise.resolve(promise)
-    let timer: ReturnType<typeof setTimeout>
+    if (!promise || typeof (promise as any).then !== "function") return Promise.resolve(promise)
     return Promise.race([
-      (promise as Promise<unknown>).finally(() => clearTimeout(timer)),
-      new Promise<never>((_, reject) => {
-        timer = setTimeout(() => reject(new Error(`Bus subscriber timeout (${timeoutMs}ms): ${label}`)), timeoutMs)
-      }),
+      promise as Promise<unknown>,
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error(`Bus subscriber timeout (${timeoutMs}ms): ${label}`)), timeoutMs),
+      ),
     ])
   }
 
@@ -71,6 +63,7 @@ export namespace Bus {
     log.info("publishing", {
       type: def.type,
     })
+    const pending: Array<Promise<unknown>> = []
     let index = 0
     for (const key of [def.type, "*"]) {
       const match = state().subscriptions.get(key)
@@ -85,14 +78,19 @@ export namespace Bus {
             source: source.get(sub),
           })
         }
-        sub.dispatch(payload)
+        const result = sub(payload)
+        pending.push(
+          withTimeout(result, SUBSCRIBER_TIMEOUT_MS, `${def.type}/${source.get(sub) ?? "unknown"}`).catch((err) => {
+            log.warn("subscriber timed out or failed", { type: def.type, error: String(err) })
+          }),
+        )
       }
     }
     GlobalBus.emit("event", {
       directory: Instance.directory,
       payload,
     })
-    return Promise.resolve([])
+    return Promise.allSettled(pending)
   }
 
   export function subscribe<Definition extends BusEvent.Definition>(
@@ -120,25 +118,13 @@ export namespace Bus {
 
   function raw(type: string, callback: (event: any) => void) {
     log.info("subscribing", { type })
-    const events = new Channel<any>()
-    const controller = new AbortController()
-    const subscription: Subscription = {
-      callback,
-      dispatch(event) {
-        return events.send(event)
-      },
-      close() {
-        events.close()
-        controller.abort()
-      },
-    }
     if (isBusTraceEnabled()) {
       const stack = new Error().stack
         ?.split("\n")
         .slice(2, 6)
         .map((x) => x.trim())
         .join(" | ")
-      source.set(subscription, stack ?? "unknown")
+      source.set(callback, stack ?? "unknown")
       traceBus({
         phase: "subscribe",
         type,
@@ -146,36 +132,19 @@ export namespace Bus {
         source: stack,
       })
     }
-    void (async () => {
-      for await (const event of events) {
-        if (controller.signal.aborted) break
-        await withTimeout(
-          Promise.resolve(callback(event)),
-          SUBSCRIBER_TIMEOUT_MS,
-          `${type}/${source.get(subscription) ?? "unknown"}`,
-        ).catch((err) => {
-          log.warn("subscriber timed out or failed", {
-            type,
-            source: source.get(subscription),
-            error: err instanceof Error ? err : String(err),
-          })
-        })
-      }
-    })()
     const subscriptions = state().subscriptions
     let match = subscriptions.get(type) ?? []
-    if (match.some((item) => item.callback === callback)) return () => {}
-    match.push(subscription)
+    if (match.includes(callback)) return () => {}
+    match.push(callback)
     subscriptions.set(type, match)
 
     return () => {
       log.info("unsubscribing", { type })
       const match = subscriptions.get(type)
       if (!match) return
-      const index = match.indexOf(subscription)
+      const index = match.indexOf(callback)
       if (index === -1) return
       match.splice(index, 1)
-      subscription.close()
     }
   }
 }

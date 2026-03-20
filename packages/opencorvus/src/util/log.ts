@@ -63,8 +63,6 @@ export namespace Log {
       Global.Path.log,
       options.dev ? "dev.log" : new Date().toISOString().split(".")[0].replace(/:/g, "") + ".log",
     )
-    // Best-effort truncate: the file may not exist yet on first run.
-    // We proceed to open the write stream regardless.
     await fs.truncate(logpath).catch(() => {})
     const stream = createWriteStream(logpath, { flags: "a" })
     write = async (msg: any) => {
@@ -86,8 +84,6 @@ export namespace Log {
     if (files.length <= 5) return
 
     const filesToDelete = files.slice(0, -10)
-    // Best-effort cleanup of old log files. Failures (e.g. file already
-    // removed or locked) are harmless; they'll be retried on next cleanup.
     await Promise.all(filesToDelete.map((file) => fs.unlink(file).catch(() => {})))
   }
 

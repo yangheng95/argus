@@ -18,7 +18,6 @@ export namespace Plugin {
   const log = Log.create({ service: "plugin" })
 
   const BUILTIN = ["opencorvus-anthropic-auth@0.0.13"]
-  const skipBuiltinDependencyPlugins = process.env.OPENCORVUS_SKIP_DEP_INSTALL === "1"
 
   // Built-in plugins that are directly imported (not installed from npm)
   const INTERNAL_PLUGINS: PluginInstance[] = [CodexAuthPlugin, CopilotAuthPlugin, GitlabAuthPlugin]
@@ -50,7 +49,7 @@ export namespace Plugin {
 
     let plugins = config.plugin ?? []
     if (plugins.length) await Config.waitForDependencies()
-    if (!Flag.OPENCORVUS_DISABLE_DEFAULT_PLUGINS && !skipBuiltinDependencyPlugins) {
+    if (!Flag.OPENCORVUS_DISABLE_DEFAULT_PLUGINS) {
       plugins = [...BUILTIN, ...plugins]
     }
 
@@ -81,17 +80,10 @@ export namespace Plugin {
       await import(plugin)
         .then(async (mod) => {
           const seen = new Set<PluginInstance>()
-          for (const [name, value] of Object.entries(mod)) {
-            if (typeof value !== "function") continue
-            const fn = value as PluginInstance
+          for (const [_name, fn] of Object.entries<PluginInstance>(mod)) {
             if (seen.has(fn)) continue
             seen.add(fn)
-            try {
-              hooks.push(await fn(input))
-            } catch (fnErr) {
-              const detail = fnErr instanceof Error ? fnErr.message : String(fnErr)
-              log.error("plugin export initialization failed", { path: plugin, export: name, error: detail })
-            }
+            hooks.push(await fn(input))
           }
         })
         .catch((err) => {
@@ -120,14 +112,10 @@ export namespace Plugin {
     for (const hook of await state().then((x) => x.hooks)) {
       const fn = hook[name]
       if (!fn) continue
-      try {
-        // @ts-expect-error if you feel adventurous, please fix the typing, make sure to bump the try-counter if you
-        // give up.
-        // try-counter: 2
-        await fn(input, output)
-      } catch (err) {
-        log.error("plugin hook failed", { hook: name, error: err instanceof Error ? err.message : String(err) })
-      }
+      // @ts-expect-error if you feel adventurous, please fix the typing, make sure to bump the try-counter if you
+      // give up.
+      // try-counter: 2
+      await fn(input, output)
     }
     return output
   }
@@ -145,13 +133,9 @@ export namespace Plugin {
     Bus.subscribeAll(async (input) => {
       const hooks = await state().then((x) => x.hooks)
       for (const hook of hooks) {
-        try {
-          await hook["event"]?.({
-            event: input,
-          })
-        } catch (err) {
-          log.error("plugin event hook failed", { error: err instanceof Error ? err.message : String(err) })
-        }
+        hook["event"]?.({
+          event: input,
+        })
       }
     })
   }

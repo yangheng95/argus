@@ -12,7 +12,6 @@ import { fn } from "@opencorvus-ai/util/fn"
 import { BusEvent } from "@/bus/bus-event"
 import { iife } from "@/util/iife"
 import { GlobalBus } from "@/bus/global"
-import { Global } from "@/global"
 import { existsSync } from "fs"
 import { git } from "../util/git"
 import { Glob } from "../util/glob"
@@ -39,20 +38,7 @@ export namespace Project {
     return createHash("sha1").update(Filesystem.windowsPath(seed)).digest("hex")
   }
 
-  function internal(directory: string) {
-    return Filesystem.contains(path.join(Global.Path.data, "goal-workspace"), directory)
-  }
-
-  function visible(input: string[]) {
-    return [...new Set(input.filter((item) => item && !internal(item)))]
-  }
-
-  function same(a: string[], b: string[]) {
-    return a.length === b.length && a.every((item, index) => item === b[index])
-  }
-
   async function text(args: string[], cwd: string) {
-    // git may not be available or cwd may not be a repo — checked below
     const result = await git(args, { cwd }).catch(() => undefined)
     if (!result || result.exitCode !== 0) return
     const value = result.text().trim()
@@ -61,7 +47,6 @@ export namespace Project {
   }
 
   async function roots(cwd: string) {
-    // Not a git repo → return empty list
     const result = await git(["rev-list", "--max-parents=0", "--all"], { cwd }).catch(() => undefined)
     if (!result || result.exitCode !== 0) return []
     return result
@@ -72,15 +57,19 @@ export namespace Project {
       .toSorted()
   }
 
+  async function initRepo(directory: string) {
+    const result = await git(["init"], { cwd: directory }).catch(() => undefined)
+    if (!result || result.exitCode !== 0) return false
+    return Filesystem.exists(path.join(directory, ".git"))
+  }
+
   async function identify(cwd: string, common: string) {
-    // Marker file may not exist yet on first run
     const cached = await Filesystem.readText(marker(common))
       .then((x) => x.trim())
       .catch(() => undefined)
     if (cached) return cached
 
     const next = (await roots(cwd))[0] || generated(common)
-    // Best-effort cache write — failure is non-fatal, next call will regenerate
     await Filesystem.write(marker(common), next).catch(() => undefined)
     return next
   }
@@ -145,7 +134,7 @@ export namespace Project {
         updated: row.time_updated,
         initialized: row.time_initialized ?? undefined,
       },
-      sandboxes: visible(row.sandboxes),
+      sandboxes: row.sandboxes,
       commands: row.commands ?? undefined,
     }
   }
@@ -168,7 +157,6 @@ export namespace Project {
           }
         }
 
-        // Marker file may not exist on first run → fall back to generated ID
         const id =
           (await Filesystem.readText(marker(dotgit))
             .then((x) => x.trim())
@@ -183,7 +171,8 @@ export namespace Project {
       }
 
       const inherited = local ? undefined : await text(["rev-parse", "--show-toplevel"], directory)
-      const hasLocalGit = local || !!inherited
+      const root = inherited ? gitpath(directory, inherited) : undefined
+      const hasLocalGit = local || (!!root && root !== Filesystem.resolve(directory) && (await initRepo(directory)))
 
       if (hasLocalGit) {
         let sandbox = directory
@@ -226,6 +215,9 @@ export namespace Project {
           updated: Date.now(),
         },
       }
+      if (data.id !== "global") {
+        await migrateFromGlobal(data.id, data.worktree)
+      }
       return fresh
     })
 
@@ -240,9 +232,9 @@ export namespace Project {
         updated: Date.now(),
       },
     }
-    if (data.sandbox !== result.worktree && !internal(data.sandbox) && !result.sandboxes.includes(data.sandbox))
+    if (data.sandbox !== result.worktree && !result.sandboxes.includes(data.sandbox))
       result.sandboxes.push(data.sandbox)
-    result.sandboxes = visible(result.sandboxes).filter((x) => existsSync(x))
+    result.sandboxes = result.sandboxes.filter((x) => existsSync(x))
     const insert = {
       id: result.id,
       worktree: result.worktree,
@@ -270,9 +262,6 @@ export namespace Project {
     Database.use((db) =>
       db.insert(ProjectTable).values(insert).onConflictDoUpdate({ target: ProjectTable.id, set: updateSet }).run(),
     )
-    if (data.id !== "global") {
-      await migrateFromGlobal(data.id, data.worktree)
-    }
     GlobalBus.emit("event", {
       payload: {
         type: Event.Updated.type,
@@ -358,7 +347,7 @@ export namespace Project {
 
   export async function initGit(directory: string) {
     const current = await fromDirectory(directory)
-    if (current.project.vcs === "git" && (await Filesystem.exists(path.join(directory, ".git")))) {
+    if (current.project.vcs === "git") {
       return InitGitResult.parse({
         created: false,
         project: current.project,
@@ -431,13 +420,12 @@ export namespace Project {
   export async function addSandbox(id: string, directory: string) {
     const row = Database.use((db) => db.select().from(ProjectTable).where(eq(ProjectTable.id, id)).get())
     if (!row) throw new Error(`Project not found: ${id}`)
-    const sandboxes = visible(row.sandboxes)
-    const next = internal(directory) || sandboxes.includes(directory) ? sandboxes : [...sandboxes, directory]
-    if (same(next, row.sandboxes)) return fromRow(row)
+    const sandboxes = [...row.sandboxes]
+    if (!sandboxes.includes(directory)) sandboxes.push(directory)
     const result = Database.use((db) =>
       db
         .update(ProjectTable)
-        .set({ sandboxes: next, time_updated: Date.now() })
+        .set({ sandboxes, time_updated: Date.now() })
         .where(eq(ProjectTable.id, id))
         .returning()
         .get(),
@@ -456,8 +444,7 @@ export namespace Project {
   export async function removeSandbox(id: string, directory: string) {
     const row = Database.use((db) => db.select().from(ProjectTable).where(eq(ProjectTable.id, id)).get())
     if (!row) throw new Error(`Project not found: ${id}`)
-    const sandboxes = visible(row.sandboxes).filter((s) => s !== directory)
-    if (same(sandboxes, row.sandboxes)) return fromRow(row)
+    const sandboxes = row.sandboxes.filter((s) => s !== directory)
     const result = Database.use((db) =>
       db
         .update(ProjectTable)

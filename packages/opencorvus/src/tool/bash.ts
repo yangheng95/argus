@@ -25,30 +25,6 @@ export const log = Log.create({ service: "bash-tool" })
 const DYNAMIC_PATH_PATTERN = /[*?[\]{}$`~]/
 const FORBIDDEN_ENV_KEYS = new Set(["LD_PRELOAD", "LD_AUDIT", "DYLD_INSERT_LIBRARIES", "DYLD_FORCE_FLAT_NAMESPACE"])
 
-function shellName(shell: string) {
-  return (process.platform === "win32" ? path.win32.basename(shell, ".exe") : path.basename(shell)).toLowerCase()
-}
-
-function shellHint(shell: string) {
-  const name = shellName(shell)
-  if (name === "bash" || name === "sh" || name === "zsh") return "Use POSIX shell syntax."
-  if (name === "powershell" || name === "pwsh") {
-    return "Use PowerShell syntax. Avoid Unix-only aliases like `ls -la`; prefer `Get-ChildItem -Force`."
-  }
-  if (name === "cmd") return "Use cmd.exe syntax."
-  return `Use ${name || "shell"} syntax.`
-}
-
-function normalizeCommand(command: string, shell: string) {
-  if (process.platform !== "win32") return command
-  const name = shellName(shell)
-  if (name !== "powershell" && name !== "pwsh") return command
-  const trimmed = command.trim()
-  const aliases = new Set(["ls -la", "ls -al", "ls -lah", "ls -lha", "ls -a", "ls -l"])
-  if (aliases.has(trimmed)) return "Get-ChildItem -Force"
-  return command
-}
-
 const resolveWasm = (asset: string) => {
   if (asset.startsWith("file://")) return fileURLToPath(asset)
   if (asset.startsWith("/") || /^[a-z]:/i.test(asset)) return asset
@@ -93,10 +69,7 @@ async function resolveStaticPathArg(arg: string, cwd: string) {
   const cleaned = stripShellQuotes(arg)
   if (!cleaned || DYNAMIC_PATH_PATTERN.test(cleaned)) return undefined
 
-  const absolute =
-    process.platform === "win32" && cleaned.startsWith("/")
-      ? Filesystem.windowsPath(cleaned)
-      : path.resolve(cwd, cleaned)
+  const absolute = path.resolve(cwd, cleaned)
   const real = await fs.realpath(absolute).catch(() => absolute)
   return process.platform === "win32" ? Filesystem.windowsPath(real).replace(/\//g, "\\") : real
 }
@@ -119,8 +92,6 @@ export const BashTool = Tool.define("bash", async () => {
 
   return {
     description: DESCRIPTION.replaceAll("${directory}", Instance.directory)
-      .replaceAll("${shell}", shell)
-      .replaceAll("${shellHint}", shellHint(shell))
       .replaceAll("${maxLines}", String(Truncate.MAX_LINES))
       .replaceAll("${maxBytes}", String(Truncate.MAX_BYTES)),
     parameters: z.object({
@@ -139,16 +110,12 @@ export const BashTool = Tool.define("bash", async () => {
         ),
     }),
     async execute(params, ctx) {
-      const command = normalizeCommand(params.command, shell)
-      const cwd =
-        process.platform === "win32"
-          ? Filesystem.windowsPath(params.workdir || Instance.directory)
-          : params.workdir || Instance.directory
+      const cwd = params.workdir || Instance.directory
       if (params.timeout !== undefined && params.timeout < 0) {
         throw new Error(`Invalid timeout value: ${params.timeout}. Timeout must be a positive number.`)
       }
       const timeout = params.timeout ?? DEFAULT_TIMEOUT
-      const tree = await parser().then((p) => p.parse(command))
+      const tree = await parser().then((p) => p.parse(params.command))
       if (!tree) {
         throw new Error("Failed to parse command")
       }
@@ -229,12 +196,8 @@ export const BashTool = Tool.define("bash", async () => {
         { cwd, sessionID: ctx.sessionID, callID: ctx.callID },
         { env: {} },
       )
-      const sh =
-        typeof shell === "string" && path.isAbsolute(shell) && !Filesystem.stat(shell)?.size
-          ? process.env.COMSPEC || "cmd.exe"
-          : shell
-      const proc = spawn(command, {
-        shell: sh,
+      const proc = spawn(params.command, {
+        shell,
         cwd,
         env: sanitizeChildEnv(process.env, shellEnv.env),
         stdio: ["ignore", "pipe", "pipe"],

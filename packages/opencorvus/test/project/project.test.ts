@@ -6,7 +6,6 @@ import path from "path"
 import { tmpdir } from "../fixture/fixture"
 import { Filesystem } from "../../src/util/filesystem"
 import { GlobalBus } from "../../src/bus/global"
-import { Global } from "../../src/global"
 
 Log.init({ print: false })
 
@@ -113,7 +112,7 @@ describe("Project.fromDirectory", () => {
     })
   })
 
-  test("inherits parent git until initGit is explicitly requested for a nested directory", async () => {
+  test("initializes a local git repo instead of inheriting an unrelated parent git", async () => {
     const p = await loadProject()
     await using tmp = await tmpdir({ git: true })
     const child = path.join(tmp.path, "generated-project")
@@ -121,16 +120,12 @@ describe("Project.fromDirectory", () => {
 
     const parent = await p.fromDirectory(tmp.path)
     const nested = await p.fromDirectory(child)
-    const initialized = await p.initGit(child)
 
     expect(await Filesystem.exists(path.join(child, ".git"))).toBe(true)
     expect(nested.project.vcs).toBe("git")
-    expect(nested.project.worktree).toBe(tmp.path)
-    expect(nested.sandbox).toBe(tmp.path)
-    expect(nested.project.id).toBe(parent.project.id)
-    expect(initialized.created).toBe(true)
-    expect(initialized.project.worktree).toBe(child)
-    expect(initialized.project.id).not.toBe(parent.project.id)
+    expect(nested.project.worktree).toBe(child)
+    expect(nested.sandbox).toBe(child)
+    expect(nested.project.id).not.toBe(parent.project.id)
   })
 
   test("keeps standalone non-git directories outside git mode", async () => {
@@ -266,20 +261,6 @@ describe("Project.discover", () => {
     const updated = Project.get(project.id)
     expect(updated).toBeDefined()
     expect(updated!.icon).toBeUndefined()
-  })
-})
-
-describe("Project.addSandbox", () => {
-  test("does not expose internal goal workspaces as sandboxes", async () => {
-    await using tmp = await tmpdir({ git: true })
-    const { project } = await Project.fromDirectory(tmp.path)
-    const directory = path.join(Global.Path.data, "goal-workspace", project.id, "task", "run")
-
-    await Filesystem.write(path.join(directory, "README.md"), "temp")
-    const updated = await Project.addSandbox(project.id, directory)
-
-    expect(updated.sandboxes).not.toContain(directory)
-    expect(Project.get(project.id)?.sandboxes).not.toContain(directory)
   })
 })
 

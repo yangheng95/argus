@@ -138,8 +138,13 @@ test("provider loaded from config with apiKey option", async () => {
 })
 
 test("sap-ai-core auth does not leak service key into process.env", async () => {
+  const previousAuth = await Auth.get("sap-ai-core")
   const previousServiceKey = process.env.AICORE_SERVICE_KEY
   delete process.env.AICORE_SERVICE_KEY
+  await Auth.set("sap-ai-core", {
+    type: "api",
+    key: "test-service-key",
+  })
 
   try {
     await using tmp = await tmpdir({
@@ -156,10 +161,6 @@ test("sap-ai-core auth does not leak service key into process.env", async () => 
       directory: tmp.path,
       init: async () => {
         Env.remove("AICORE_SERVICE_KEY")
-        await Auth.set("sap-ai-core", {
-          type: "api",
-          key: "test-service-key",
-        })
       },
       fn: async () => {
         const providers = await Provider.list()
@@ -169,6 +170,8 @@ test("sap-ai-core auth does not leak service key into process.env", async () => 
       },
     })
   } finally {
+    if (previousAuth) await Auth.set("sap-ai-core", previousAuth)
+    else await Auth.remove("sap-ai-core")
     if (previousServiceKey === undefined) delete process.env.AICORE_SERVICE_KEY
     else process.env.AICORE_SERVICE_KEY = previousServiceKey
   }

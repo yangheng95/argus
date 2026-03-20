@@ -131,28 +131,27 @@ export namespace ProviderTransform {
 
     if (typeof model.capabilities.interleaved === "object" && model.capabilities.interleaved.field) {
       const field = model.capabilities.interleaved.field
-      return msgs.map((msg): ModelMessage => {
+      return msgs.map((msg) => {
         if (msg.role === "assistant" && Array.isArray(msg.content)) {
-          const reasoningParts = msg.content.filter((part) => part.type === "reasoning")
-          const reasoningText = reasoningParts.map((part) => ("text" in part ? part.text : "")).join("")
+          const reasoningParts = msg.content.filter((part: any) => part.type === "reasoning")
+          const reasoningText = reasoningParts.map((part: any) => part.text).join("")
 
           // Filter out reasoning parts from content
-          const filteredContent = msg.content.filter((part) => part.type !== "reasoning")
+          const filteredContent = msg.content.filter((part: any) => part.type !== "reasoning")
 
           // Include reasoning_content | reasoning_details directly on the message for all assistant messages
           if (reasoningText) {
-            const existing = (msg.providerOptions as Record<string, unknown> | undefined)?.openaiCompatible as Record<string, unknown> | undefined
             return {
               ...msg,
               content: filteredContent,
               providerOptions: {
                 ...msg.providerOptions,
                 openaiCompatible: {
-                  ...existing,
+                  ...(msg.providerOptions as any)?.openaiCompatible,
                   [field]: reasoningText,
                 },
               },
-            } as ModelMessage
+            }
           }
 
           return {
@@ -714,7 +713,7 @@ export namespace ProviderTransform {
       }
     }
 
-    if (["openai", "openai-codex"].includes(input.model.providerID) || input.providerOptions?.setCacheKey) {
+    if (input.model.providerID === "openai" || input.providerOptions?.setCacheKey) {
       result["promptCacheKey"] = input.sessionID
     }
 
@@ -741,20 +740,12 @@ export namespace ProviderTransform {
 
     // Enable thinking for reasoning models on alibaba-cn (DashScope).
     // DashScope's OpenAI-compatible API requires `enable_thinking: true` in the request body
-    // to return reasoning_content. Without it, models like qwen3, qwq, deepseek-r1, etc.
-    // never output thinking/reasoning tokens.
-    // Exclusions:
-    //   - kimi-k2-thinking: returns reasoning_content by default without enable_thinking
-    //   - interleaved models (e.g. kimi-k2.5): already output reasoning via an interleaved
-    //     field; sending enable_thinking is redundant and can trigger the same tool_calls
-    //     conflict (tool calls rendered as text JSON instead of structured tool_calls blocks)
-    // CAVEAT: enable_thinking conflicts with streaming tool_calls on DashScope — the model
-    // outputs tool calls as text content instead of structured tool_calls blocks.
-    // session/llm.ts strips this flag when real tools are present in the request.
+    // to return reasoning_content. Without it, models like kimi-k2.5, qwen-plus, qwen3, qwq,
+    // deepseek-r1, etc. never output thinking/reasoning tokens.
+    // Note: kimi-k2-thinking is excluded as it returns reasoning_content by default.
     if (
-      input.model.providerID.startsWith("alibaba") &&
+      input.model.providerID === "alibaba-cn" &&
       input.model.capabilities.reasoning &&
-      !input.model.capabilities.interleaved &&
       input.model.api.npm === "@ai-sdk/openai-compatible" &&
       !modelId.includes("kimi-k2-thinking")
     ) {
@@ -842,7 +833,7 @@ export namespace ProviderTransform {
     amazon: "bedrock",
   }
 
-  export function providerOptions(model: Provider.Model, options: Record<string, unknown>) {
+  export function providerOptions(model: Provider.Model, options: { [x: string]: any }) {
     if (model.api.npm === "@ai-sdk/gateway") {
       // Gateway providerOptions are split across two namespaces:
       // - `gateway`: gateway-native routing/caching controls (order, only, byok, etc.)
@@ -882,74 +873,27 @@ export namespace ProviderTransform {
   }
 
   export function schema(model: Provider.Model, schema: JSONSchema.BaseSchema | JSONSchema7): JSONSchema7 {
-    const clone = <T>(value: T): T => structuredClone(value)
-    const mergeProperty = (left: JSONSchema7 | undefined, right: JSONSchema7): JSONSchema7 => {
-      if (!left) return clone(right)
-      const lhs = clone(left)
-      const rhs = clone(right)
-
-      const leftConst = "const" in lhs ? lhs.const : undefined
-      const rightConst = "const" in rhs ? rhs.const : undefined
-      const leftEnum = Array.isArray(lhs.enum) ? lhs.enum : leftConst === undefined ? undefined : [leftConst]
-      const rightEnum = Array.isArray(rhs.enum) ? rhs.enum : rightConst === undefined ? undefined : [rightConst]
-      const leftType = typeof lhs.type === "string" ? lhs.type : undefined
-      const rightType = typeof rhs.type === "string" ? rhs.type : undefined
-
-      if (leftEnum && rightEnum && leftType === rightType) {
-        const merged = [...new Set([...leftEnum, ...rightEnum])]
-        return {
-          ...lhs,
-          ...rhs,
-          type: leftType,
-          enum: merged,
+    /*
+    if (["openai", "azure"].includes(providerID)) {
+      if (schema.type === "object" && schema.properties) {
+        for (const [key, value] of Object.entries(schema.properties)) {
+          if (schema.required?.includes(key)) continue
+          schema.properties[key] = {
+            anyOf: [
+              value as JSONSchema.JSONSchema,
+              {
+                type: "null",
+              },
+            ],
+          }
         }
       }
-
-      if (JSON.stringify(lhs) === JSON.stringify(rhs)) return lhs
-      return lhs
     }
-
-    const flattenRootObjectUnion = (value: JSONSchema.BaseSchema | JSONSchema7): JSONSchema7 => {
-      if (!value || typeof value !== "object" || Array.isArray(value) || "type" in value) return value as JSONSchema7
-      const variants = "anyOf" in value && Array.isArray(value.anyOf)
-        ? value.anyOf
-        : "oneOf" in value && Array.isArray(value.oneOf)
-          ? value.oneOf
-          : undefined
-      if (!variants?.length) return value as JSONSchema7
-      const objects = variants.filter(
-        (item): item is JSONSchema7 =>
-          !!item && typeof item === "object" && !Array.isArray(item) && "type" in item && item.type === "object",
-      )
-      if (objects.length !== variants.length) return value as JSONSchema7
-
-      const properties = new Map<string, JSONSchema7>()
-      const required = objects
-        .map((item) => new Set(Array.isArray(item.required) ? item.required : []))
-        .reduce((shared, item) => new Set([...shared].filter((key) => item.has(key))))
-
-      for (const item of objects) {
-        const entries = Object.entries(item.properties ?? {}) as Array<[string, JSONSchema7]>
-        for (const [key, prop] of entries) {
-          if (!prop || typeof prop !== "object" || Array.isArray(prop)) continue
-          properties.set(key, mergeProperty(properties.get(key), prop))
-        }
-      }
-
-      return {
-        ...("description" in value && value.description ? { description: value.description } : {}),
-        type: "object",
-        properties: Object.fromEntries(properties),
-        required: [...required],
-        additionalProperties: false,
-      } satisfies JSONSchema7
-    }
-
-    schema = flattenRootObjectUnion(schema)
+    */
 
     // Convert integer enums to string enums for Google/Gemini
     if (model.providerID === "google" || model.api.id.includes("gemini")) {
-      const sanitizeGemini = (obj: unknown): unknown => {
+      const sanitizeGemini = (obj: any): any => {
         if (obj === null || typeof obj !== "object") {
           return obj
         }
@@ -958,7 +902,7 @@ export namespace ProviderTransform {
           return obj.map(sanitizeGemini)
         }
 
-        const result: Record<string, unknown> = {}
+        const result: any = {}
         for (const [key, value] of Object.entries(obj)) {
           if (key === "enum" && Array.isArray(value)) {
             // Convert all enum values to strings
@@ -976,7 +920,7 @@ export namespace ProviderTransform {
 
         // Filter required array to only include fields that exist in properties
         if (result.type === "object" && result.properties && Array.isArray(result.required)) {
-          result.required = (result.required as string[]).filter((field: string) => field in (result.properties as Record<string, unknown>))
+          result.required = result.required.filter((field: any) => field in result.properties)
         }
 
         if (result.type === "array") {
@@ -985,9 +929,8 @@ export namespace ProviderTransform {
           }
           // Ensure items has at least a type if it's an empty object
           // This handles nested arrays like { type: "array", items: { type: "array", items: {} } }
-          const items = result.items
-          if (items && typeof items === "object" && !Array.isArray(items) && !("type" in items && items.type)) {
-            (items as Record<string, unknown>).type = "string"
+          if (typeof result.items === "object" && !Array.isArray(result.items) && !result.items.type) {
+            result.items.type = "string"
           }
         }
 
@@ -1000,7 +943,7 @@ export namespace ProviderTransform {
         return result
       }
 
-      schema = sanitizeGemini(schema) as JSONSchema7
+      schema = sanitizeGemini(schema)
     }
 
     return schema as JSONSchema7

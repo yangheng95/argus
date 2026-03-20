@@ -32,9 +32,11 @@ import { Scratchpad } from "@/memory/scratchpad"
 import { TaskPlan } from "@/memory/task-plan"
 import { messageControlOnly, textForBoth } from "./part-visibility"
 import { SessionSummary } from "./summary"
-import { SessionActor } from "./actor"
+import { SessionPromptState } from "./prompt-state"
 import { Preference } from "@/preference"
-import { Channel } from "@/util/channel"
+import { muteAISdkWarnings } from "@/runtime/shims"
+
+muteAISdkWarnings()
 
 const STRUCTURED_OUTPUT_DESCRIPTION = `Use this tool to return your final response in the requested structured format.
 
@@ -47,9 +49,7 @@ IMPORTANT:
 const STRUCTURED_OUTPUT_SYSTEM_PROMPT = `IMPORTANT: The user has requested structured output. You MUST use the StructuredOutput tool to provide your final response. Do NOT respond with plain text - you MUST call the StructuredOutput tool with your answer formatted according to the schema.`
 
 export namespace SessionLoop {
-  const { log, cancel, owns, reject, resolve, start, resume, wait } = SessionActor
-  const TOOL_TIMEOUT_MS = Math.max(Number.parseInt(process.env.OPENCORVUS_TOOL_TIMEOUT_MS ?? "", 10) || 30_000, 1_000)
-  const STANDBY_TIMEOUT_MS = Math.max(Number.parseInt(process.env.OPENCORVUS_STANDBY_TIMEOUT_MS ?? "", 10) || 30 * 60_000, 1_000)
+  const { log, state, cancel, flushCallbacks, start, resume } = SessionPromptState
 
   function collectLoopState(msgs: MessageV2.WithParts[]) {
     let lastUser: MessageV2.User | undefined
@@ -83,7 +83,7 @@ export namespace SessionLoop {
     SessionCompaction.prune({ sessionID: input.sessionID })
     log.info("entering standby", { sessionID: input.sessionID })
     SessionStatus.set(input.sessionID, { type: "idle" })
-    return waitForUserMessage(input.sessionID, input.abort, input.afterID)
+    await waitForUserMessage(input.sessionID, input.abort, input.afterID)
   }
 
   async function runSubtask(input: {
@@ -342,8 +342,6 @@ export namespace SessionLoop {
       SessionSummary.summarize({
         sessionID: input.sessionID,
         messageID: input.lastUser.id,
-      }).catch(() => {
-        // Non-critical: session summary is best-effort background work
       })
     }
 
@@ -461,14 +459,7 @@ export namespace SessionLoop {
       messages: modelMessages,
       tools,
       model: input.model,
-      // Use "auto" only for non-interleaved alibaba reasoning models (qwen with enable_thinking).
-      // Those models reject toolChoice:"required" when enable_thinking is active.
-      // Interleaved models (GLM-5, kimi-k2.5) use reasoning_content natively and do NOT
-      // have this conflict — forcing "required" prevents them from bypassing StructuredOutput
-      // and producing invisible plain-text responses in the overlay.
-      toolChoice: format.type === "json_schema"
-        ? (input.model.capabilities.reasoning && !input.model.capabilities.interleaved && input.model.providerID.startsWith("alibaba") ? "auto" : "required")
-        : undefined,
+      toolChoice: format.type === "json_schema" ? (input.model.capabilities.reasoning ? "auto" : "required") : undefined,
     })
 
     if (structured !== undefined) {
@@ -508,9 +499,15 @@ export namespace SessionLoop {
     const { sessionID, resume_existing } = input
 
     const abort = resume_existing ? resume(sessionID) : start(sessionID)
-    if (!abort) return wait(sessionID)
+    if (!abort) {
+      return new Promise<MessageV2.WithParts>((resolve, reject) => {
+        state()[sessionID].callbacks.push({ resolve, reject })
+      })
+    }
 
-    const firstResult = wait(sessionID)
+    const firstResult = new Promise<MessageV2.WithParts>((resolve, reject) => {
+      state()[sessionID].callbacks.push({ resolve, reject })
+    })
 
     void (async () => {
       try {
@@ -525,14 +522,14 @@ export namespace SessionLoop {
           if (shouldEnterStandby({ lastUser, lastAssistant })) {
             if (!lastAssistant) break
             const lastResult = msgs.find((m) => m.info.id === lastAssistant.id)
-            if (lastResult) resolve(sessionID, lastResult)
+            if (lastResult) flushCallbacks(sessionID, lastResult)
 
-            const standby = await enterStandby({
+            await enterStandby({
               sessionID,
               abort,
               afterID: lastAssistant.id,
             })
-            if (abort.aborted || standby !== "message") break
+            if (abort.aborted) break
 
             step = 0
             continue
@@ -606,60 +603,62 @@ export namespace SessionLoop {
           continue
         }
         SessionCompaction.prune({ sessionID })
-        let flushed = false
         for await (const item of MessageV2.stream(sessionID)) {
           if (item.info.role === "user") continue
-          resolve(sessionID, item)
-          flushed = true
+          flushCallbacks(sessionID, item)
           break
         }
-        if (!flushed) reject(sessionID, new Error("Session completed without response"))
       } catch (e) {
-        reject(sessionID, e)
+        const s = state()[sessionID]
+        if (s) {
+          for (const q of s.callbacks) q.reject(e)
+          s.callbacks = []
+        }
       } finally {
-        if (owns(sessionID, abort)) cancel(sessionID)
+        const s = state()[sessionID]
+        if (s?.abort.signal === abort) cancel(sessionID)
       }
     })()
 
     return firstResult
   })
 
-  function waitForUserMessage(
-    sessionID: string,
-    abort: AbortSignal,
-    afterID: string,
-  ): Promise<"message" | "abort" | "timeout"> {
-    const signal = AbortSignal.any([
-      abort,
-      AbortSignal.timeout(STANDBY_TIMEOUT_MS),
-    ])
-    const events = new Channel<"message">()
-    const settle = async () => {
-      const result = await events.recv(signal)
-      return result === "message" ? "message" : (abort.aborted ? "abort" : "timeout")
-    }
-    const unsub = Bus.subscribe(MessageV2.Event.Updated, (event) => {
-      if (
-        event.properties.info.role === "user" &&
-        event.properties.info.sessionID === sessionID &&
-        event.properties.info.id > afterID
-      ) {
-        events.send("message")
+  function waitForUserMessage(sessionID: string, abort: AbortSignal, afterID: string): Promise<void> {
+    return new Promise<void>((resolve) => {
+      if (abort.aborted) {
+        resolve()
+        return
       }
-    })
-    return Promise.resolve()
-      .then(async () => {
-        if (abort.aborted) return "abort" as const
+
+      let settled = false
+      const settle = () => {
+        if (settled) return
+        settled = true
+        unsub()
+        resolve()
+      }
+
+      const unsub = Bus.subscribe(MessageV2.Event.Updated, (event) => {
+        if (
+          event.properties.info.role === "user" &&
+          event.properties.info.sessionID === sessionID &&
+          event.properties.info.id > afterID
+        ) {
+          settle()
+        }
+      })
+      abort.addEventListener("abort", settle, { once: true })
+
+      void (async () => {
         for await (const item of MessageV2.stream(sessionID)) {
           if (item.info.id <= afterID) break
-          if (item.info.role === "user") return "message" as const
+          if (item.info.role === "user") {
+            settle()
+            return
+          }
         }
-        return settle()
-      })
-      .finally(() => {
-        unsub()
-        events.close()
-      })
+      })()
+    })
   }
 
   export async function resolveTools(input: {
@@ -675,9 +674,9 @@ export namespace SessionLoop {
     using _ = log.time("resolveTools")
     const tools: Record<string, AITool> = {}
 
-    const context = (args: any, options: ToolCallOptions, abort: AbortSignal = options.abortSignal!): Tool.Context => ({
+    const context = (args: any, options: ToolCallOptions): Tool.Context => ({
       sessionID: input.session.id,
-      abort,
+      abort: options.abortSignal!,
       messageID: input.processor.message.id,
       callID: options.toolCallId,
       extra: { ...(input.extra ?? {}), model: input.model, bypassAgentCheck: input.bypassAgentCheck },
@@ -716,14 +715,12 @@ export namespace SessionLoop {
     )) {
       if (input.tools !== undefined && !input.tools[item.id]) continue
       const schema = ProviderTransform.schema(input.model, z.toJSONSchema(item.parameters))
-      // AI SDK tool() overload doesn't accept `id` field and can't resolve dynamic schema type
       tools[item.id] = tool({
         id: item.id as any,
         description: item.description,
         inputSchema: jsonSchema(schema as any),
         async execute(args, options) {
-          const abort = AbortSignal.any([options.abortSignal!, AbortSignal.timeout(TOOL_TIMEOUT_MS)])
-          const ctx = context(args, options, abort)
+          const ctx = context(args, options)
           await Plugin.trigger(
             "tool.execute.before",
             {
@@ -861,7 +858,6 @@ export namespace SessionLoop {
   }): AITool {
     const { $schema, ...toolSchema } = input.schema
 
-    // AI SDK tool() overload doesn't accept `id` field and can't resolve dynamic schema type
     return tool({
       id: "StructuredOutput" as any,
       description: STRUCTURED_OUTPUT_DESCRIPTION,

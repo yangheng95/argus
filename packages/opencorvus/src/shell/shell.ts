@@ -8,10 +8,6 @@ import { which } from "@/util/which"
 const SIGKILL_TIMEOUT_MS = 200
 
 export namespace Shell {
-  function shellName(shell: string, platform = process.platform) {
-    return (platform === "win32" ? path.win32.basename(shell, ".exe") : path.basename(shell)).toLowerCase()
-  }
-
   function firstExisting(paths: Array<string | null | undefined>) {
     for (const item of paths) {
       if (!item) continue
@@ -83,15 +79,6 @@ export namespace Shell {
     }
   }
   const BLACKLIST = new Set(["fish", "nu"])
-  const WINDOWS_ALLOWED = new Set(["bash", "sh"])
-
-  export function fromEnv(shell = process.env.SHELL, platform = process.platform) {
-    if (!shell) return
-    const name = shellName(shell, platform)
-    if (BLACKLIST.has(name)) return
-    if (platform === "win32" && !WINDOWS_ALLOWED.has(name)) return
-    return shell
-  }
 
   function fallback() {
     if (process.platform === "win32") {
@@ -112,14 +99,14 @@ export namespace Shell {
   }
 
   export const preferred = lazy(() => {
-    const s = fromEnv()
+    const s = process.env.SHELL
     if (s) return s
     return fallback()
   })
 
   export const acceptable = lazy(() => {
-    const s = fromEnv()
-    if (s) return s
+    const s = process.env.SHELL
+    if (s && !BLACKLIST.has(process.platform === "win32" ? path.win32.basename(s) : path.basename(s))) return s
     return fallback()
   })
 }
