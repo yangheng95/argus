@@ -165,6 +165,43 @@ async function commit(input: { task: TaskRow; plan?: PlanRow; delivery?: Deliver
   }
 }
 
+const GITIGNORE_ESSENTIALS = `node_modules/
+dist/
+build/
+.output/
+.next/
+.nuxt/
+.svelte-kit/
+.env
+.env.*
+!.env.example
+*.db-shm
+*.db-wal
+*.tsbuildinfo
+coverage/
+.cache/
+.turbo/
+.DS_Store
+Thumbs.db
+`
+
+/** Ensure .gitignore exists so heavy directories (node_modules, dist) are never git-tracked. */
+async function ensureGitignore() {
+  const dir = Instance.directory
+  const file = Bun.file(`${dir}/.gitignore`)
+  if (await file.exists()) {
+    // Append missing essentials without overwriting user content
+    const existing = await file.text()
+    const lines = new Set(existing.split(/\r?\n/).map(l => l.trim()))
+    const missing = GITIGNORE_ESSENTIALS.split("\n").filter(l => l.trim() && !l.startsWith("!") && !lines.has(l.trim()))
+    if (missing.length > 0) {
+      await Bun.write(`${dir}/.gitignore`, existing.trimEnd() + "\n\n# Auto-added by OpenCorvus\n" + missing.join("\n") + "\n")
+    }
+  } else {
+    await Bun.write(`${dir}/.gitignore`, GITIGNORE_ESSENTIALS)
+  }
+}
+
 function baseline(task: TaskRow) {
   const value = dict(dict(task.metadata).git).baseline
   return value && typeof value === "object" && !Array.isArray(value)
@@ -194,6 +231,9 @@ export namespace OrchestratorGit {
       })
       return { task, error: summary }
     }
+
+    // Ensure .gitignore exists so node_modules/dist etc. are never tracked
+    await ensureGitignore()
 
     const before = await head()
     const next =

@@ -29,6 +29,7 @@ import {
 } from "@/orchestrator/store"
 import { updateGoalRun } from "@/orchestrator/persist"
 import { agentStream } from "@/orchestrator/agent-stream"
+import { registerGoalRunSession, unregisterGoalRunSession } from "@/server/routes/task-event"
 
 const log = Log.create({ service: "goal-runner" })
 export const GOAL_RUN_RETENTION_MS = 72 * 60 * 60 * 1000
@@ -401,6 +402,8 @@ export async function createGoalSession(task: TaskRow, goal: GoalRow, directory?
       permission: parent.permission,
     })
   }
+  // Register so SSE can match this session's events to the task
+  registerGoalRunSession(session.id, task.id)
   return session
 }
 

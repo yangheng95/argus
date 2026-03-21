@@ -56,6 +56,7 @@ export const ConfigRoutes = lazy(() =>
       async (c) => {
         const config = c.req.valid("json")
         await Config.update(config)
+        Provider.reset()
         await ChannelSupervisor.sync(config).catch((error) => {
           log.warn("channel runtime sync failed", { error: String(error) })
         })

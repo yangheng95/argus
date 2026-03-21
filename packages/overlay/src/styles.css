@@ -2715,6 +2715,33 @@ body[data-theme="light"] .section-badge {
     var(--hover-accent-shadow);
 }
 
+.chat-tabs {
+  display: flex;
+  gap: 0;
+  padding: 0;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  flex-shrink: 0;
+}
+.chat-tab {
+  flex: 1;
+  padding: 6px 0;
+  font-size: var(--ui-font-meta);
+  font-weight: 500;
+  color: var(--text-muted);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  text-align: center;
+  transition: color 0.15s, border-color 0.15s;
+}
+.chat-tab:hover { color: var(--text-strong); }
+.chat-tab.active {
+  color: var(--text-strong);
+  border-bottom-color: var(--accent);
+}
+
 .chat-header {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);

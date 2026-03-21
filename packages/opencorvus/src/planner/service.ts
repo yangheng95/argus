@@ -146,6 +146,7 @@ export namespace HeadlessPlannerService {
     executor?: ExecutorNameInfo
     routing?: z.infer<typeof StageRouting>
     signal?: AbortSignal
+    stream?: import("@/llm/api").TextHooks
   }): Promise<PlanDraft> {
     const hasUserGoals = input.goals && input.goals.length > 0
     const stages = resolveStages(input.executor, input.routing)
@@ -211,6 +212,7 @@ export namespace HeadlessPlannerService {
           : undefined,
         spec: spec ? { summary: spec.summary, content: spec.content } : undefined,
         signal: controller.signal,
+        stream: input.stream,
       }).catch((error) => {
         throw new PlannerFailureError("planner agent failed", { cause: error })
       }),
@@ -277,6 +279,7 @@ export namespace HeadlessPlannerService {
     executor?: ExecutorNameInfo
     routing?: z.infer<typeof StageRouting>
     signal?: AbortSignal
+    stream?: import("@/llm/api").TextHooks
   }): Promise<PlanDraft> {
     const stages = resolveStages(input.executor, input.routing)
     const spec = input.spec
@@ -355,6 +358,7 @@ export namespace HeadlessPlannerService {
         replanContext: replanCtx,
         spec: spec ? { summary: spec.summary, content: spec.content } : undefined,
         signal: controller.signal,
+        stream: input.stream,
       }).catch((error) => {
         throw new PlannerFailureError("planner agent replan failed", { cause: error })
       }),

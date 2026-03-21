@@ -43,6 +43,9 @@ import {
   type TaskRow,
 } from "./store"
 import { agentStream } from "./agent-stream"
+import { sessionStreamHooks } from "./session-stream"
+import { Session } from "@/session"
+import { registerGoalRunSession } from "@/server/routes/task-event"
 import { writeGoalSnapshot, writePlanSnapshot, writePrdSnapshot } from "./docs"
 import { writeSpec } from "./spec"
 import { normalizePlanWaves } from "./wave"
@@ -227,6 +230,14 @@ async function runSpecStage(
   try {
     const unattended = await unattendedProject()
     const specLive = agentStream({ taskID: task.id, stage: "spec" })
+    // Create a child session so spec agent output is persisted and streamed via message events
+    const specSession = await Session.createNext({
+      parentID: task.session_id ?? undefined,
+      title: `Spec: ${task.title}`,
+      directory: Instance.directory,
+    })
+    registerGoalRunSession(specSession.id, task.id)
+    const specContentHooks = sessionStreamHooks({ sessionID: specSession.id, taskID: task.id })
     await specLive.start("Spec generation started")
 
     const rawSpecDraft = await withStageRetry("spec", () =>
@@ -235,7 +246,16 @@ async function runSpecStage(
         request: task.request,
         goals: pipeline.goals as any,
         signal: ctrl.signal,
-        stream: specLive.hooks,
+        stream: {
+          onChunk: async (arg: any) => {
+            if (specContentHooks.onChunk) await specContentHooks.onChunk(arg)
+            if (specLive.hooks.onChunk) await specLive.hooks.onChunk(arg)
+          },
+          onError: async (arg: any) => {
+            if (specContentHooks.onError) await specContentHooks.onError(arg)
+            if (specLive.hooks.onError) await specLive.hooks.onError(arg)
+          },
+        },
       }),
       { signal: ctrl.signal },
     )
@@ -321,6 +341,13 @@ async function runGoalStage(
   const timer = setTimeout(() => ctrl.abort("goal stage timeout"), stageTimeout("goal"))
   try {
     const goalLive = agentStream({ taskID: task.id, stage: "goal" })
+    const goalSession = await Session.createNext({
+      parentID: task.session_id ?? undefined,
+      title: `Goals: ${task.title}`,
+      directory: Instance.directory,
+    })
+    registerGoalRunSession(goalSession.id, task.id)
+    const goalContentHooks = sessionStreamHooks({ sessionID: goalSession.id, taskID: task.id })
     await goalLive.start("Goal decomposition started")
 
     const goalDraft = await withStageRetry("goal", () =>
@@ -333,7 +360,16 @@ async function runGoalStage(
         goalHints: pipeline.goals as any,
         timeoutMs: stageTimeout("goal"),
         signal: ctrl.signal,
-        stream: goalLive.hooks,
+        stream: {
+          onChunk: async (arg: any) => {
+            if (goalContentHooks.onChunk) await goalContentHooks.onChunk(arg)
+            if (goalLive.hooks.onChunk) await goalLive.hooks.onChunk(arg)
+          },
+          onError: async (arg: any) => {
+            if (goalContentHooks.onError) await goalContentHooks.onError(arg)
+            if (goalLive.hooks.onError) await goalLive.hooks.onError(arg)
+          },
+        },
         onStatus: goalLive.statusHook.bind(goalLive),
       }),
       { signal: ctrl.signal },
@@ -452,6 +488,14 @@ async function runPlanStage(
       priority: g.priority as "blocking" | "advisory" | undefined,
     }))
     const planLive = agentStream({ taskID: task.id, stage: "planner" })
+    // Create a child session so planner agent output is persisted and streamed via message events
+    const planSession = await Session.createNext({
+      parentID: task.session_id ?? undefined,
+      title: `Plan: ${task.title}`,
+      directory: Instance.directory,
+    })
+    registerGoalRunSession(planSession.id, task.id)
+    const planContentHooks = sessionStreamHooks({ sessionID: planSession.id, taskID: task.id })
     await planLive.start("Planner started")
 
     let planDraft = await withStageRetry("plan", () =>
@@ -464,6 +508,16 @@ async function runPlanStage(
         executor: pipeline.executor as any,
         routing: pipeline.routing,
         signal: ctrl.signal,
+        stream: {
+          onChunk: async (arg: any) => {
+            if (planContentHooks.onChunk) await planContentHooks.onChunk(arg)
+            if (planLive.hooks.onChunk) await planLive.hooks.onChunk(arg)
+          },
+          onError: async (arg: any) => {
+            if (planContentHooks.onError) await planContentHooks.onError(arg)
+            if (planLive.hooks.onError) await planLive.hooks.onError(arg)
+          },
+        },
       }),
       { signal: ctrl.signal },
     )

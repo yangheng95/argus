@@ -498,6 +498,11 @@ const dom = {
   chatEmpty: $("#chatEmpty"),
   chatCount: $("#chatCount"),
   btnChatCopyAll: $("#btnChatCopyAll"),
+  chatTabs: $("#chatTabs"),
+  tabControl: $("#tabControl"),
+  tabCoding: $("#tabCoding"),
+  codingScroll: $("#codingScroll"),
+  codingEmpty: $("#codingEmpty"),
   chatForm: $("#chatForm"),
   chatTextarea: $("#chatTextarea"),
   btnTaskInterrupt: $("#btnTaskInterrupt"),
@@ -4658,6 +4663,7 @@ async function selectTask(taskID, options = {}) {
   state.agentEvents = [];
   state.ndjsonEvents = [];
   state.ndjsonStartMs = Date.now();
+  state._knownChildSessions = new Set();
   if (nextTaskID) {
     enterTaskWorkspace(nextTaskID, options);
   } else {
@@ -4805,9 +4811,9 @@ async function loadBoard(options = {}) {
       state.snapshotVersion = boardSnapshot(next);
       state.taskSequence = Math.max(state.taskSequence, nextSequence);
       clearBoardRetry();
-      pruneAgentEvents();
       state.boardUpdatedAt = Date.now();
       renderBoard();
+      renderConversation();
       await Promise.all([
         loadChanges(),
         loadExecutorEvents(state.board?.task?.activeRunID || ""),
@@ -4927,16 +4933,24 @@ function matchesCurrentSession(sessionID) {
   if (!sessionID) return false;
   const current = currentSessionID();
   if (!current) {
-    if (state.selectedTaskID) scheduleConversation(0);
+    if (state.selectedTaskID) scheduleConversation(CONVERSATION_EVENT_DEBOUNCE);
     return false;
   }
   if (current === sessionID) return true;
+  // Check previously-discovered child sessions first (fast O(1) lookup)
+  if (state._knownChildSessions && state._knownChildSessions.has(sessionID)) return true;
   // Also accept sessions that appear in already-loaded messages (e.g., goal run child sessions).
   // The task SSE is already task-scoped, so any session in state.messages is task-related.
   if (state.messages.some((msg) => msg.info?.sessionID === sessionID)) return true;
-  // Unknown session — could be a new goal run session not yet in state.messages.
-  // Trigger a conversation refresh so we discover it; subsequent events will then match.
-  scheduleConversation(CONVERSATION_EVENT_DEBOUNCE);
+  // The SSE stream is task-scoped (backend matchesTaskEvent filters by taskID + goalRunSessionRegistry).
+  // Any sessionID that arrives via SSE belongs to this task — accept it immediately and
+  // remember it so subsequent events match without a transcript reload.
+  if (state.selectedTaskID) {
+    // Track this child session so future lookups don't need to re-discover it
+    if (!state._knownChildSessions) state._knownChildSessions = new Set();
+    state._knownChildSessions.add(sessionID);
+    return true;
+  }
   return false;
 }
 
@@ -5134,116 +5148,9 @@ function mergeMessages(...lists) {
   );
 }
 
-function agentRole(stage) {
-  if (stage === "spec") return "spec";
-  if (stage === "planner") return "planner";
-  if (stage === "judge") return "scheduler";
-  if (stage === "delivery") return "delivery";
-  return "assistant";
-}
 
-function agentStageActive(stage) {
-  const status = String(state.board?.task?.status || "");
-  if (stage === "judge") return status === "evaluating";
-  if (stage === "delivery") return status === "delivering";
-  return status === "planning" || status === "queued";
-}
-
-function agentStagePersisted(stage) {
-  if (stage === "spec") return !!state.board?.spec?.content;
-  if (stage === "planner") return !!state.board?.plan;
-  if (stage === "judge") return !!state.board?.evaluation?.verdict;
-  if (stage === "delivery") return !!state.board?.delivery?.status;
-  return false;
-}
-
-function pruneAgentEvents() {
-  if (!Array.isArray(state.agentEvents) || state.agentEvents.length === 0) return;
-  state.agentEvents = state.agentEvents.filter((event) => {
-    if (!event?.stage) return false;
-    if (event.kind === "error") return true;
-    if (!agentStagePersisted(event.stage)) return true;
-    return agentStageActive(event.stage);
-  });
-}
-
-function agentEventEntry(raw) {
-  const payload = record(raw?.payload) ? raw.payload : {};
-  const stage = typeof raw?.stage === "string"
-    ? raw.stage
-    : typeof payload.stage === "string"
-      ? payload.stage
-      : "";
-  if (!stage) return null;
-  const kind = typeof raw?.kind === "string"
-    ? raw.kind
-    : typeof payload.kind === "string"
-      ? payload.kind
-      : "status";
-  const summary = typeof raw?.summary === "string"
-    ? raw.summary.trim()
-    : typeof payload.summary === "string"
-      ? payload.summary.trim()
-      : "";
-  const text = typeof raw?.text === "string"
-    ? raw.text
-    : typeof payload.text === "string"
-      ? payload.text
-      : typeof payload.result === "string"
-        ? payload.result
-        : "";
-  const toolName = typeof raw?.toolName === "string"
-    ? raw.toolName
-    : typeof payload.toolName === "string"
-      ? payload.toolName
-      : "";
-  const eventID = typeof raw?.id === "string" && raw.id
-    ? raw.id
-    : typeof raw?.eventID === "string" && raw.eventID
-      ? raw.eventID
-      : `${stage}-${Date.now()}`;
-  const streamID = typeof payload.id === "string" && payload.id ? payload.id : eventID;
-  return {
-    id: eventID,
-    streamID,
-    stage,
-    kind,
-    summary: summary || text || `${stage} ${kind}`,
-    text,
-    toolName,
-    payload,
-    time: {
-      created: Number(raw?.timestamp) || Number(raw?.time?.created) || Date.now(),
-    },
-  };
-}
-
-function agentTargetText(event) {
-  if (typeof event?._targetText === "string") return event._targetText;
-  const summary = String(event?.summary || "").trim();
-  const text = typeof event?.text === "string" && event.text.trim()
-    ? event.text
-    : typeof event?.payload?.text === "string" && event.payload.text.trim()
-      ? event.payload.text
-      : typeof event?.payload?.result === "string" && event.payload.result.trim()
-        ? event.payload.result
-        : "";
-  if (event?.kind === "message_delta") return text || summary;
-  if (event?.kind === "tool_call") {
-    if (summary && text && summary !== text) return `${summary}\n${text}`;
-    return text || summary;
-  }
-  if (event?.kind === "tool_result") {
-    if (summary && text && summary !== text) return `${summary}\n${text}`;
-    return text || summary;
-  }
-  return summary || text;
-}
-
-function agentText(event) {
-  if (typeof event?._liveText === "string") return event._liveText;
-  return agentTargetText(event);
-}
+// Agent content display functions removed — agent output now goes through
+// session/message system and is rendered via standard message handlers.
 
 function toolNameKey(name) {
   return String(name || "").toLowerCase().replace(/[\s_-]+/g, "");
@@ -5424,134 +5331,6 @@ function displayToolDetail(name, input, state) {
   return "";
 }
 
-function visibleAgentEvent(event) {
-  if (!event) return false;
-  if (event.kind === "message_delta") return !!agentText(event);
-  if (event.kind === "tool_call") return !!agentText(event);
-  if (event.kind === "tool_result") return !!agentText(event);
-  if (event.kind === "status") return !!agentText(event);
-  if (event.kind === "error") return !!agentText(event);
-  return false;
-}
-
-function agentMessage(event) {
-  const text = agentText(event);
-  if (!text || !visibleAgentEvent(event)) return null;
-  const part = event.kind === "tool_call" || event.kind === "tool_result"
-    ? eventToolPart(event)
-    : { type: "text", text };
-  return {
-    _synthetic: true,
-    info: {
-      id: event.streamID || event.id,
-      role: event.kind === "tool_call" || event.kind === "tool_result" ? "task_tool" : agentRole(event.stage),
-      time: { created: event.time?.created || Date.now() },
-    },
-    parts: [part],
-  };
-}
-
-function buildAgentMessages() {
-  if (!state.selectedTaskID) return [];
-  pruneAgentEvents();
-  return (Array.isArray(state.agentEvents) ? state.agentEvents : [])
-    .map((event) => agentMessage(event))
-    .filter(Boolean);
-}
-
-function syncAgentText(event) {
-  if (!event) return;
-  const key = `agent:${event.streamID || event.id || "unknown"}`;
-  const target = agentTargetText(event);
-  if (!target) {
-    delete event._targetText;
-    delete event._liveText;
-    stopLiveText(key);
-    return;
-  }
-  event._targetText = target;
-  startLiveText(key, target, typeof event._liveText === "string" ? event._liveText : "", (value) => {
-    event._liveText = value;
-  });
-}
-
-function appendAgentEvent(raw) {
-  const event = agentEventEntry(raw);
-  if (!event) return;
-  const index = state.agentEvents.findIndex((item) => (item.streamID || item.id) === (event.streamID || event.id));
-  if (index >= 0 && event.kind === "message_delta") {
-    const current = state.agentEvents[index];
-    const previous = agentTargetText(current);
-    const delta = event.text || event.summary || "";
-    const next = {
-      ...current,
-      kind: "message_delta",
-      summary: previous + delta,
-      text: previous + delta,
-      payload: {
-        ...(record(current.payload) ? current.payload : {}),
-        ...(record(event.payload) ? event.payload : {}),
-        text: previous + delta,
-      },
-      time: event.time,
-      _targetText: previous + delta,
-      _liveText: typeof current._liveText === "string" ? current._liveText : "",
-    };
-    state.agentEvents = [
-      ...state.agentEvents.slice(0, index),
-      next,
-      ...state.agentEvents.slice(index + 1),
-    ];
-    syncAgentText(next);
-  } else if (index >= 0 && event.kind === "tool_delta") {
-    const current = state.agentEvents[index];
-    const previous = agentTargetText(current);
-    const delta = event.text || event.summary || "";
-    const next = {
-      ...current,
-      kind: "tool_call",
-      summary: current.summary || event.summary,
-      text: previous + delta,
-      payload: {
-        ...(record(current.payload) ? current.payload : {}),
-        ...(record(event.payload) ? event.payload : {}),
-        text: previous + delta,
-      },
-      time: event.time,
-      _targetText: previous + delta,
-      _liveText: typeof current._liveText === "string" ? current._liveText : "",
-    };
-    state.agentEvents = [
-      ...state.agentEvents.slice(0, index),
-      next,
-      ...state.agentEvents.slice(index + 1),
-    ];
-    syncAgentText(next);
-  } else if (index >= 0) {
-    const next = {
-      ...state.agentEvents[index],
-      ...event,
-      payload: {
-        ...(record(state.agentEvents[index]?.payload) ? state.agentEvents[index].payload : {}),
-        ...(record(event.payload) ? event.payload : {}),
-      },
-      _targetText: event._targetText,
-      _liveText: typeof state.agentEvents[index]?._liveText === "string" ? state.agentEvents[index]._liveText : "",
-    };
-    state.agentEvents = [
-      ...state.agentEvents.slice(0, index),
-      next,
-      ...state.agentEvents.slice(index + 1),
-    ];
-    syncAgentText(next);
-  } else {
-    syncAgentText(event);
-    state.agentEvents = [...state.agentEvents, event].sort((a, b) => (a.time?.created || 0) - (b.time?.created || 0));
-  }
-  state.conversationUpdatedAt = Date.now();
-  renderConversation();
-}
-
 function handleEventStreamEvent(event) {
   // Buffer event in NDJSON format for log panel and exec-graph generation
   if (event && event.type && !event.type.includes("message.") && event.type !== "task.heartbeat") {
@@ -5585,35 +5364,36 @@ function handleEventStreamEvent(event) {
     if (!matchesCurrentSession(info?.sessionID)) return;
     const existing = state.messages.find((item) => item.info?.id === info.id);
     if (existing) {
+      // Metadata-only update (tokens, timestamps) — update silently, no re-render
       existing.info = info;
-    } else if (state.chatRequest) {
+      repairEventGap(gap);
+      return;
+    }
+    if (state.chatRequest) {
       const placeholder = chatPlaceholder();
       if (placeholder) {
         placeholder.info = { ...placeholder.info, ...info };
+        state.conversationUpdatedAt = Date.now();
+        renderConversation();
       } else {
-        state.messages.push({
-          info,
-          parts: [],
-        });
+        // Push message placeholder silently — don't render until parts arrive
+        state.messages.push({ info, parts: [] });
       }
     } else {
-      state.messages.push({
-        info,
-        parts: [],
-      });
+      // Push message placeholder silently — parts will trigger render via message.part.updated
+      state.messages.push({ info, parts: [] });
     }
-    state.conversationUpdatedAt = Date.now();
-    renderConversation();
     repairEventGap(gap);
     return;
   }
   if (type === "message.part.updated") {
     const part = record(properties.part) ? properties.part : null;
     if (!matchesCurrentSession(part?.sessionID)) return;
-    const message = state.messages.find((item) => item.info?.id === part.messageID);
+    let message = state.messages.find((item) => item.info?.id === part.messageID);
     if (!message) {
-      scheduleConversation(0);
-      return;
+      // Event arrived before message.updated — create a placeholder message
+      message = { info: { id: part.messageID, sessionID: part.sessionID, role: "assistant" }, parts: [] };
+      state.messages.push(message);
     }
     const index = message.parts.findIndex((item) => item.id === part.id);
     if (index >= 0) {
@@ -5630,18 +5410,20 @@ function handleEventStreamEvent(event) {
   }
   if (type === "message.part.delta") {
     if (!matchesCurrentSession(properties.sessionID) || properties.field !== "text" || typeof properties.delta !== "string") return;
-    const message = state.messages.find((item) => item.info?.id === properties.messageID);
+    let message = state.messages.find((item) => item.info?.id === properties.messageID);
     if (!message) {
-      scheduleConversation(0);
-      return;
+      // Delta arrived before message.updated — create a placeholder message
+      message = { info: { id: properties.messageID, sessionID: properties.sessionID, role: "assistant" }, parts: [] };
+      state.messages.push(message);
     }
-    const part = message.parts.find((item) =>
+    let part = message.parts.find((item) =>
       item.id === properties.partID &&
       (item.type === "text" || item.type === "reasoning"),
     );
     if (!part) {
-      scheduleConversation(0);
-      return;
+      // Delta arrived before part.updated — create a placeholder part
+      part = { id: properties.partID, type: "text", text: "", sessionID: properties.sessionID, messageID: properties.messageID };
+      message.parts.push(part);
     }
     if (part.type === "reasoning") touchReasoningPart(part);
     const target = `${typeof part._targetText === "string" ? part._targetText : part.text || ""}${properties.delta}`;
@@ -5676,12 +5458,14 @@ function handleEventStreamEvent(event) {
     return;
   }
   if (type === "agent.updated") {
-    appendAgentEvent({
-      id: event.event_id,
-      summary: event.summary,
-      payload: properties,
-      timestamp: event.timestamp,
-    });
+    // Agent status only — content is now persisted to sessions and arrives via message.part.* events
+    const stage = properties.stage || "";
+    const kind = properties.kind || "";
+    const summary = typeof event.summary === "string" ? event.summary : typeof properties.summary === "string" ? properties.summary : "";
+    if (stage && summary) {
+      state.agentStatus = { stage, kind, summary, timestamp: Date.now() };
+      renderBoard();
+    }
     repairEventGap(gap);
     return;
   }
@@ -5700,7 +5484,6 @@ function handleEventStreamEvent(event) {
   ) {
     scheduleTasks(BOARD_EVENT_DEBOUNCE);
     scheduleBoard(BOARD_EVENT_DEBOUNCE);
-    scheduleConversation(CONVERSATION_EVENT_DEBOUNCE);
     return;
   }
   repairEventGap(gap);
@@ -8136,26 +7919,8 @@ function buildBoardContextMessages() {
     });
   }
 
-  if (board.spec?.content) {
-    const message = syntheticTextMessage(
-      "spec",
-      board.spec.time?.created || (task?.time?.created || Date.now()) - 1,
-      specContextText(board.spec),
-    );
-    if (message) messages.push(message);
-  }
-
-  // 2. Plan — show plan steps and full context
-  if (plan) {
-    const goalsLane = (lanes || []).find((lane) => lane.id === "goals");
-    const goals = goalsLane?.cards || [];
-    const message = syntheticTextMessage(
-      "planner",
-      plan.time?.created || (task?.time?.created || 0) - 1,
-      planContextText(plan, goals),
-    );
-    if (message) messages.push(message);
-  }
+  // Spec and plan content now comes from session messages (streamed via SSE).
+  // Board context only provides structural metadata below.
 
   for (const interaction of Array.isArray(board.interactions) ? board.interactions : []) {
     const request = syntheticTextMessage("system", interaction.time?.created || Date.now(), interactionRequestText(interaction));
@@ -8233,12 +7998,7 @@ function hasConversationRequest(messages, request) {
 }
 
 function conversationMessages() {
-  const agentMsgs = buildAgentMessages();
-  const hiddenRoles = new Set(
-    (Array.isArray(state.agentEvents) ? state.agentEvents : [])
-      .flatMap((event) => agentStageActive(event.stage) ? [agentRole(event.stage)] : []),
-  );
-  const boardMsgs = buildBoardContextMessages().filter((message) => !hiddenRoles.has(message?.info?.role));
+  const boardMsgs = buildBoardContextMessages();
   const executorMsgs = buildExecutorMessages();
   let realMessages = state.messages || [];
   if (boardMsgs.length > 0 && realMessages.length > 0) {
@@ -8247,7 +8007,7 @@ function conversationMessages() {
       return !text.includes("<assistant-brief>") && !text.includes("You are executing a headless coding task");
     });
   }
-  return [...realMessages, ...agentMsgs, ...executorMsgs, ...boardMsgs].sort((a, b) => (a.info?.time?.created || 0) - (b.info?.time?.created || 0));
+  return [...realMessages, ...executorMsgs, ...boardMsgs].sort((a, b) => (a.info?.time?.created || 0) - (b.info?.time?.created || 0));
 }
 
 function renderFilePart(part) {
@@ -11045,3 +10805,206 @@ if (reducedMotionMedia) {
     reducedMotionMedia.addListener(onMotionChange);
   }
 }
+
+// ══════════════════════════════════════════════════════════════
+// ── Coding Tab ───────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════
+
+const coding = {
+  active: false,
+  sessionID: null,
+  messages: [],
+  busy: false,
+  controller: null,
+  textBuffer: new Map(), // partID → accumulated text
+};
+
+function isCodingTab() {
+  return coding.active;
+}
+
+function switchTab(tab) {
+  coding.active = tab === "coding";
+  if (dom.tabControl) dom.tabControl.classList.toggle("active", !coding.active);
+  if (dom.tabCoding) dom.tabCoding.classList.toggle("active", coding.active);
+  if (dom.chatScroll) dom.chatScroll.hidden = coding.active;
+  if (dom.codingScroll) dom.codingScroll.hidden = !coding.active;
+  if (dom.chatGoalsStrip) dom.chatGoalsStrip.hidden = coding.active;
+  // Hide task-specific header elements in coding mode
+  if (dom.taskStatus) dom.taskStatus.hidden = coding.active || !state.selectedTaskID;
+  if (dom.chatTitle) dom.chatTitle.textContent = coding.active ? "Coding" : t("chat.title");
+  if (coding.active) renderCodingMessages();
+}
+
+dom.tabControl?.addEventListener("click", () => switchTab("control"));
+dom.tabCoding?.addEventListener("click", () => switchTab("coding"));
+
+function codingMessageHTML(msg) {
+  if (msg.role === "user") {
+    return `<div class="message message-user"><div class="message-body"><p>${escapeHtml(msg.text)}</p></div></div>`;
+  }
+  // assistant
+  const parts = [];
+  for (const p of msg.parts || []) {
+    if (p.type === "text" && p.text) {
+      parts.push(`<div class="message-text">${renderMarkdown(p.text)}</div>`);
+    } else if (p.type === "tool") {
+      const status = p.state?.status || "running";
+      const icon = status === "completed" ? "done" : status === "error" ? "err" : "run";
+      const title = escapeHtml(p.state?.title || p.tool || "tool");
+      const output = p.state?.output ? `<pre class="tool-output">${escapeHtml(String(p.state.output).slice(0, 2000))}</pre>` : "";
+      parts.push(`<details class="tool-block tool-${status}"><summary>[${icon}] ${title}</summary>${output}</details>`);
+    }
+  }
+  if (parts.length === 0 && msg.streaming) {
+    parts.push(`<div class="message-text"><span class="typing">……</span></div>`);
+  }
+  return `<div class="message message-assistant"><div class="message-body">${parts.join("")}</div></div>`;
+}
+
+function renderMarkdown(text) {
+  // Minimal markdown: code blocks, inline code, bold
+  return escapeHtml(text)
+    .replace(/```(\w*)\n([\s\S]*?)```/g, '<pre class="code-block"><code>$2</code></pre>')
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\n/g, '<br>');
+}
+
+function renderCodingMessages() {
+  if (!dom.codingScroll) return;
+  if (coding.messages.length === 0) {
+    dom.codingScroll.innerHTML = `<div class="chat-empty">Build agent — ask anything about the codebase</div>`;
+    return;
+  }
+  const wasAtBottom = dom.codingScroll.scrollHeight - dom.codingScroll.scrollTop - dom.codingScroll.clientHeight < 80;
+  dom.codingScroll.innerHTML = coding.messages.map(codingMessageHTML).join("");
+  if (wasAtBottom) {
+    requestAnimationFrame(() => { dom.codingScroll.scrollTop = dom.codingScroll.scrollHeight; });
+  }
+}
+
+async function sendCodingMessage(text) {
+  if (coding.busy || !text.trim()) return;
+  coding.busy = true;
+
+  // Add user message
+  coding.messages.push({ role: "user", text });
+  // Add placeholder assistant message
+  const assistantMsg = { role: "assistant", parts: [], streaming: true };
+  coding.messages.push(assistantMsg);
+  renderCodingMessages();
+
+  const controller = new AbortController();
+  coding.controller = controller;
+
+  try {
+    const body = JSON.stringify({
+      text,
+      sessionID: coding.sessionID || undefined,
+    });
+    const res = await fetch(apiUrl("coding/message/stream"), {
+      method: "POST",
+      headers: { ...apiHeaders(), "Content-Type": "application/json" },
+      body,
+      signal: controller.signal,
+    });
+    if (!res.ok || !res.body) throw new Error(`Coding stream failed: ${res.status}`);
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || "";
+      for (const line of lines) {
+        if (!line.startsWith("data:")) continue;
+        try {
+          const event = JSON.parse(line.slice(5).trim());
+          handleCodingEvent(assistantMsg, event);
+        } catch {}
+      }
+    }
+    // process remaining buffer
+    if (buffer.startsWith("data:")) {
+      try {
+        const event = JSON.parse(buffer.slice(5).trim());
+        handleCodingEvent(assistantMsg, event);
+      } catch {}
+    }
+  } catch (err) {
+    if (err.name !== "AbortError") {
+      const errText = err.message || String(err);
+      assistantMsg.parts.push({ type: "text", text: `Error: ${errText}` });
+    }
+  } finally {
+    assistantMsg.streaming = false;
+    coding.busy = false;
+    coding.controller = null;
+    renderCodingMessages();
+  }
+}
+
+function handleCodingEvent(msg, event) {
+  if (event.type === "session") {
+    coding.sessionID = event.sessionID;
+    return;
+  }
+  if (event.type === "delta") {
+    // Accumulate text in buffer, update or create text part
+    const current = coding.textBuffer.get(event.partID) || "";
+    const next = current + (event.delta || "");
+    coding.textBuffer.set(event.partID, next);
+    // Find or create text part in message
+    let part = msg.parts.find((p) => p.type === "text" && p._partID === event.partID);
+    if (!part) {
+      part = { type: "text", text: "", _partID: event.partID };
+      msg.parts.push(part);
+    }
+    part.text = next;
+    renderCodingMessages();
+    return;
+  }
+  if (event.type === "part") {
+    const p = event.part;
+    if (p.type === "tool") {
+      let existing = msg.parts.find((x) => x.type === "tool" && x._partID === p.id);
+      if (!existing) {
+        existing = { type: "tool", tool: p.tool, state: p.state, _partID: p.id };
+        msg.parts.push(existing);
+      } else {
+        existing.state = p.state;
+        existing.tool = p.tool;
+      }
+      renderCodingMessages();
+    }
+    return;
+  }
+  if (event.type === "error") {
+    msg.parts.push({ type: "text", text: `Error: ${event.error?.message || JSON.stringify(event.error)}` });
+    renderCodingMessages();
+    return;
+  }
+  if (event.type === "done") {
+    coding.textBuffer.clear();
+    return;
+  }
+}
+
+// Override chat form submit to route based on active tab
+const _originalChatSubmit = dom.chatForm?.onsubmit;
+
+dom.chatForm?.addEventListener("submit", (e) => {
+  if (!isCodingTab()) return; // let original handler run
+  e.preventDefault();
+  e.stopImmediatePropagation();
+  const text = dom.chatTextarea?.value?.trim();
+  if (!text) return;
+  dom.chatTextarea.value = "";
+  sizeChat();
+  sendCodingMessage(text);
+}, true); // capture phase to intercept before existing handler

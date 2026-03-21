@@ -297,6 +297,10 @@
 
       <!-- Chat Window (left) -->
       <section class="chat" id="chatSection">
+        <nav class="chat-tabs" id="chatTabs">
+          <button type="button" class="chat-tab active" data-tab="control" id="tabControl">Task</button>
+          <button type="button" class="chat-tab" data-tab="coding" id="tabCoding">Coding</button>
+        </nav>
         <header class="chat-header">
           <span class="chat-title" id="chatTitle" data-i18n="chat.title">Task</span>
           <div class="chat-header-status">
@@ -333,6 +337,9 @@
         <div class="chat-goals-strip" id="chatGoalsStrip"></div>
         <div class="chat-scroll session-content" id="chatScroll">
           <div class="chat-empty" id="chatEmpty" data-i18n="chat.empty">Task messages appear here</div>
+        </div>
+        <div class="chat-scroll session-content" id="codingScroll" hidden>
+          <div class="chat-empty" id="codingEmpty">Build agent — ask anything about the codebase</div>
         </div>
         <form class="chat-input" id="chatForm">
           <div class="chat-compose-row">

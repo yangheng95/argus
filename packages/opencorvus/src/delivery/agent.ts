@@ -545,7 +545,22 @@ The evaluator has already verified goal completion and code quality. Your role i
 2. Run build/compile (\`bun run build\`, \`bunx tsc --noEmit\`, \`npm run build\`)
 3. Record any build errors
 
-### Phase 3: START & VERIFY
+### Phase 3: TEST COVERAGE AUDIT
+
+1. Read the spec requirements / goals passed in the task context
+2. Find all test files (\`find_files\` for \`**/*.test.ts\`, \`**/*.test.tsx\`, \`**/*.spec.ts\`)
+3. Read each test file and map test cases to spec requirements:
+   - For each requirement/goal, check if there is at least one test that verifies it
+   - A test "covers" a requirement if it exercises the described behavior (not just mentions it)
+4. If requirements are UNCOVERED by tests:
+   - Write new test files or add test cases to existing files using \`write_file\` / \`edit_file\`
+   - Tests must be runnable with the project's test runner (usually \`bun test\`)
+   - Follow the existing test patterns and conventions in the project
+   - Each new test must have a clear name describing what requirement it covers
+5. Run the full test suite with \`run_command\` to verify all tests pass (old + new)
+6. If new tests FAIL, the delivery has a real gap — fix the application code, not the test
+
+### Phase 4: START & VERIFY
 
 1. Start the application with a short timeout:
    - For servers: \`timeout 10 bun run src/app.ts\` or equivalent
@@ -560,23 +575,24 @@ The evaluator has already verified goal completion and code quality. Your role i
    - No obvious import or module resolution errors
    - Entry HTML references correct script paths
 
-### Phase 4: FIX (if needed)
+### Phase 5: FIX (if needed)
 
-If you discover bugs during Phase 2 or 3:
+If you discover bugs during Phase 2, 3 or 4:
 1. Analyze the root cause from error output
 2. Read the relevant source files to understand the issue
 3. Apply a targeted fix using \`edit_file\` or \`write_file\`
-4. **Re-verify** — go back to Phase 2/3 to confirm the fix works
+4. **Re-verify** — go back to Phase 2/3/4 to confirm the fix works
 5. Record all fixes in your output
 
 Do NOT apply cosmetic changes, refactoring, or "improvements" — only fix what prevents the application from building, starting, or running correctly.
 
-### Phase 5: VERDICT
+### Phase 6: VERDICT
 
 Output your final decision as plain markdown. Use these exact top-level sections in order:
 
 - \`# Verdict\` — exactly one of: accepted, rejected, fixed
 - \`# Summary\` — 1-3 sentence overview
+- \`# Test Coverage\` — requirements covered / total, tests added (if any), test suite result (pass/fail count)
 - \`# Startup Verification\` — attempted, command, success, output
 - \`# Frontend Check\` — attempted, renders_correctly, issues
 - \`# Fixes Applied\` — numbered list of fixes (empty if none)
@@ -622,7 +638,7 @@ Under \`# Issues Found\`, bullet list of remaining issues.
 
 ## Step Budget Warning
 
-You have a limited number of steps. After 30 tool calls, you MUST stop and emit your final verdict — even if you haven't finished all checks. A verdict based on partial evidence is better than no verdict.`
+You have a limited number of steps. After 35 tool calls, you MUST stop and emit your final verdict — even if you haven't finished all checks. A verdict based on partial evidence is better than no verdict. Budget hint: ~5 calls for discover, ~3 for build, ~10 for test coverage audit, ~8 for startup verify, ~5 for fixes, ~4 for verdict.`
 
 export async function deliveryAgentSystem() {
   const config = await Config.get()

@@ -127,9 +127,9 @@ export function createPlannerTools(taskWorkDir?: string) {
     // --- Web search ---
     web_search: tool({
       description:
-        "Search the web for current documentation, API references, changelogs, or guides. " +
-        "Use when the task involves external APIs, third-party libraries, or unfamiliar systems. " +
-        "Do NOT guess what can be looked up. Skip for internal-only tasks.",
+        "Search the web for current documentation, API references, changelogs, best practices, " +
+        "framework comparisons, and recommended tooling. USE PROACTIVELY for any greenfield project " +
+        "or when choosing frameworks/libraries. Do NOT assume — verify what is current and recommended.",
       inputSchema: z.object({
         query: z.string().describe("Web search query"),
         num_results: z.number().optional().describe("Number of results (default: 5)"),
