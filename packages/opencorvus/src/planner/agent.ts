@@ -219,9 +219,44 @@ export namespace HeadlessPlannerAgent {
         ...(input.stream?.onChunk ? { onChunk: input.stream.onChunk as any } : {}),
         ...(input.stream?.onError ? { onError: input.stream.onError } : {}),
       })
-      const [resultText, resultSteps, resultFinishReason] = await Promise.all([
-        stream.text, stream.steps, stream.finishReason,
-      ])
+
+      // Guard against providers that hang after tool call (see spec/agent.ts for details)
+      const SUBMIT_GRACE_MS = 30_000
+      let resultText = ""
+      let resultSteps: any[] = []
+      let resultFinishReason = "unknown"
+      try {
+        const streamDone = Promise.all([stream.text, stream.steps, stream.finishReason])
+        const submitGuard = new Promise<null>((resolve) => {
+          const check = () => {
+            if (submittedPlan) resolve(null)
+            else setTimeout(check, 2000)
+          }
+          setTimeout(check, 5000)
+        }).then(() =>
+          Promise.race([
+            streamDone,
+            new Promise<null>((resolve) => setTimeout(() => resolve(null), SUBMIT_GRACE_MS)),
+          ]),
+        )
+        const raced = await Promise.race([streamDone, submitGuard])
+        if (Array.isArray(raced)) {
+          ;[resultText, resultSteps, resultFinishReason] = raced as [string, any[], string]
+        } else if (submittedPlan) {
+          log.info("planner agent: stream did not finish but submit_plan captured — using captured result", {
+            attempt: attempt + 1,
+          })
+        }
+      } catch (err) {
+        if (submittedPlan) {
+          log.info("planner agent: stream errored but submit_plan captured — using captured result", {
+            attempt: attempt + 1,
+            error: String(err),
+          })
+        } else {
+          throw err
+        }
+      }
 
       // Count actual tool calls
       const toolCallCount = resultSteps.reduce(

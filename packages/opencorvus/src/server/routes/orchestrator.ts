@@ -3,7 +3,6 @@ import { describeRoute, resolver, validator } from "hono-openapi"
 import { streamSSE } from "hono/streaming"
 import { HTTPException } from "hono/http-exception"
 import z from "zod"
-import { Bus } from "@/bus"
 import {
   Artifact,
   CreateTaskInput,
@@ -31,15 +30,21 @@ import {
   UpdatePreferenceInput,
 } from "@/orchestrator/model"
 import { ExecutorNotConfiguredError, OrchestratorService, PlannerFailureError } from "@/orchestrator/service"
+import { ProtocolStore } from "@/protocol/store"
 import { Session } from "@/session"
 import { MessageV2 } from "@/session/message"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
-import { matchesTaskEvent, registerGoalRunSession, taskSession } from "./task-event"
-import { appendTaskEvent, replayTaskEvents } from "./task-event-log"
+import { registerGoalRunSession, taskSession } from "./task-event"
+import { ensureTaskMessageProtocolBridge } from "./task-message-protocol-bridge"
 
 export const OrchestratorRoutes = lazy(() =>
   new Hono()
+    .use(async (c, next) => {
+      // Initialize bridge lazily on first request — Instance context is available here
+      ensureTaskMessageProtocolBridge()
+      return next()
+    })
     .post(
       "/task",
       describeRoute({
@@ -208,7 +213,6 @@ export const OrchestratorRoutes = lazy(() =>
         c.header("X-Content-Type-Options", "nosniff")
         return streamSSE(c, async (stream) => {
           const sessionID = taskSession(taskID)
-          let sequence = 0
           // Seed the goal-run registry with any existing child sessions so
           // reconnecting SSE streams pick up events for already-running goals.
           if (sessionID) {
@@ -220,52 +224,60 @@ export const OrchestratorRoutes = lazy(() =>
               queue.push(...children.map((child) => child.id))
             }
           }
-
-          // Replay missed events on reconnect (B2 fix)
-          if (after > 0) {
-            const missed = replayTaskEvents(taskID, after)
-            if (missed === null) {
-              // Buffer too old — tell client to do a full reload
-              const reloadEvt = taskEvent(taskID, {
-                type: "task.replay_expired",
-                properties: { taskID, summary: "Event replay buffer expired, full reload required" },
-              }, ++sequence)
-              const reloadData = JSON.stringify(reloadEvt)
-              appendTaskEvent(taskID, sequence, reloadData)
-              await stream.writeSSE({ data: reloadData })
-            } else {
-              for (const data of missed) {
-                await stream.writeSSE({ data })
-              }
-              // Advance our sequence counter past the replayed events
-              if (missed.length > 0) {
-                try {
-                  const last = JSON.parse(missed[missed.length - 1])
-                  if (typeof last.sequence === "number" && last.sequence > sequence) {
-                    sequence = last.sequence
-                  }
-                } catch { /* ignore parse errors */ }
-              }
-            }
+          let cursor = after
+          let ready = false
+          const buffered: Array<{ sequence: number; data: string }> = []
+          let writes = Promise.resolve()
+          const writeData = (data: string) => {
+            writes = writes.then(() => stream.writeSSE({ data }))
+            return writes
           }
+          const enqueueProtocolEvent = (event: ReturnType<typeof ProtocolStore.listTaskEventsAfter>[number]) => {
+            if (!event.taskID || event.taskID !== taskID) return
+            const isEphemeral = event.sequence === 0
+            // Ephemeral events (sequence=0) always pass through — they're not sequenced
+            // and not replayed on reconnect. Sequenced events are deduplicated by cursor.
+            if (!isEphemeral && event.sequence <= cursor) return
+            const data = JSON.stringify(protocolTaskEvent(event))
+            if (!ready) {
+              if (isEphemeral) {
+                // Ephemeral events during replay phase: write immediately (they can't be buffered by sequence)
+                void writeData(data)
+              } else {
+                buffered.push({ sequence: event.sequence, data })
+              }
+              return
+            }
+            if (!isEphemeral) cursor = Math.max(cursor, event.sequence)
+            void writeData(data)
+          }
+          const stop = ProtocolStore.subscribeEvents(enqueueProtocolEvent, {
+            aggregate: "task",
+            taskID,
+          })
+          const replayed = ProtocolStore.listTaskEventsAfter(taskID, after)
+          for (const event of replayed) {
+            const data = JSON.stringify(protocolTaskEvent(event))
+            cursor = Math.max(cursor, event.sequence)
+            await writeData(data)
+          }
+          ready = true
+          buffered
+            .sort((a, b) => a.sequence - b.sequence)
+            .filter((item) => item.sequence > cursor)
+            .forEach((item) => {
+              cursor = Math.max(cursor, item.sequence)
+              void writeData(item.data)
+            })
 
-          const connEvt = taskEvent(taskID, {
+          const connData = JSON.stringify(taskEvent(taskID, {
             type: "task.connected",
             properties: {
               taskID,
               summary: "Task event stream connected",
             },
-          }, ++sequence)
-          const connData = JSON.stringify(connEvt)
-          appendTaskEvent(taskID, sequence, connData)
-          await stream.writeSSE({ data: connData })
-
-          const unsub = Bus.subscribeAll(async (event) => {
-            if (!matchesTaskEvent(event, taskID, sessionID)) return
-            const data = JSON.stringify(taskEvent(taskID, event, ++sequence))
-            appendTaskEvent(taskID, sequence, data)
-            await stream.writeSSE({ data })
-          })
+          }))
+          await writeData(connData)
           const heartbeat = setInterval(() => {
             const data = JSON.stringify(taskEvent(taskID, {
               type: "task.heartbeat",
@@ -273,17 +285,17 @@ export const OrchestratorRoutes = lazy(() =>
                 taskID,
                 summary: "Task event stream heartbeat",
               },
-            }, ++sequence))
-            // Don't store heartbeats in replay buffer — they're ephemeral
-            stream.writeSSE({ data })
+            }))
+            void writeData(data)
           }, 10_000)
           await new Promise<void>((resolve) => {
             stream.onAbort(() => {
               clearInterval(heartbeat)
-              unsub()
+              stop()
               resolve()
             })
           })
+          await writes
         })
       },
     )
@@ -822,7 +834,7 @@ export const OrchestratorRoutes = lazy(() =>
       async (c) => {
         return c.json(await OrchestratorService.deleteGoal(c.req.valid("param").goalID))
       },
-    ),
+    )
 )
 
 function taskEvent(taskID: string, event: { type: string; properties: Record<string, unknown> }, sequence?: number) {
@@ -835,5 +847,18 @@ function taskEvent(taskID: string, event: { type: string; properties: Record<str
     sequence: sequence ?? 0,
     summary: typeof event.properties.summary === "string" ? event.properties.summary : event.type,
     payload: event.properties,
+  }
+}
+
+function protocolTaskEvent(event: ReturnType<typeof ProtocolStore.listTaskEventsAfter>[number]) {
+  return {
+    event_id: event.id,
+    task_id: event.taskID,
+    run_id: event.runID,
+    type: event.type.replace("orchestrator.", ""),
+    timestamp: event.time.emitted || event.time.created || Date.now(),
+    sequence: event.sequence,
+    summary: event.summary,
+    payload: event.payload || {},
   }
 }

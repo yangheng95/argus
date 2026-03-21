@@ -293,6 +293,49 @@ export namespace ProtocolStore {
     }
   }
 
+  /**
+   * Push an event through live subscriptions WITHOUT writing to DB.
+   * Used for high-frequency ephemeral events (e.g. message.part.delta)
+   * that should reach SSE clients in real-time but don't need persistence
+   * or sequence numbering. On reconnect these events are NOT replayed —
+   * the client recovers full state from persisted message.part.updated events.
+   */
+  export function dispatchEphemeral(input: {
+    type: string
+    aggregate: ProtocolAggregate
+    taskID?: string
+    runID?: string
+    sessionID?: string
+    source: string
+    payload?: Payload | null
+  }) {
+    const now = Date.now()
+    dispatchEvent({
+      id: `ephemeral-${now}-${Math.random().toString(36).slice(2, 8)}`,
+      kind: "event",
+      type: input.type,
+      aggregate: input.aggregate,
+      aggregateID: input.taskID ?? "",
+      taskID: input.taskID,
+      runID: input.runID,
+      goalRunID: undefined,
+      sessionID: input.sessionID,
+      interactionID: undefined,
+      executorSessionID: undefined,
+      streamID: undefined,
+      source: input.source,
+      target: undefined,
+      causationID: undefined,
+      correlationID: undefined,
+      replyTo: undefined,
+      sequence: 0,
+      deadlineMs: undefined,
+      summary: input.type,
+      payload: input.payload ?? undefined,
+      time: { emitted: now, created: now, updated: now },
+    })
+  }
+
   export async function appendChunk(input: ChunkInput) {
     const now = input.emitted_at ?? Date.now()
     const insert = (chunkSeq: number) => {
