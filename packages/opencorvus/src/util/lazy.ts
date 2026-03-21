@@ -1,4 +1,4 @@
-export function lazy<T>(fn: () => T) {
+export function lazy<T>(fn: () => T): (() => T) & { reset(): void } {
   let value: T | undefined
   let loaded = false
 
@@ -19,5 +19,5 @@ export function lazy<T>(fn: () => T) {
     value = undefined
   }
 
-  return result
+  return result as (() => T) & { reset(): void }
 }

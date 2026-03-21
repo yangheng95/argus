@@ -186,6 +186,82 @@ export const ProviderRoutes = lazy(() =>
       },
     )
     .post(
+      "/:providerID/auth/prompts",
+      describeRoute({
+        summary: "Get auth prompts",
+        description: "Return the prompts needed for a specific authentication method.",
+        operationId: "provider.auth.prompts",
+        responses: {
+          200: {
+            description: "Auth prompts",
+            content: {
+              "application/json": {
+                schema: resolver(ProviderAuth.Prompt.array()),
+              },
+            },
+          },
+          ...errors(400),
+        },
+      }),
+      validator(
+        "param",
+        z.object({
+          providerID: z.string().meta({ description: "Provider ID" }),
+        }),
+      ),
+      validator(
+        "json",
+        z.object({
+          method: z.number().meta({ description: "Auth method index" }),
+          inputs: z.record(z.string(), z.string()).optional().meta({ description: "Already collected inputs" }),
+        }),
+      ),
+      async (c) => {
+        const providerID = c.req.valid("param").providerID
+        const { method, inputs } = c.req.valid("json")
+        const result = await ProviderAuth.prompts({ providerID, method, inputs })
+        return c.json(result)
+      },
+    )
+    .post(
+      "/:providerID/auth/execute",
+      describeRoute({
+        summary: "Execute auth method",
+        description: "Execute an authentication method with collected inputs.",
+        operationId: "provider.auth.execute",
+        responses: {
+          200: {
+            description: "Auth executed successfully",
+            content: {
+              "application/json": {
+                schema: resolver(z.boolean()),
+              },
+            },
+          },
+          ...errors(400),
+        },
+      }),
+      validator(
+        "param",
+        z.object({
+          providerID: z.string().meta({ description: "Provider ID" }),
+        }),
+      ),
+      validator(
+        "json",
+        z.object({
+          method: z.number().meta({ description: "Auth method index" }),
+          inputs: z.record(z.string(), z.string()).optional().meta({ description: "Collected inputs" }),
+        }),
+      ),
+      async (c) => {
+        const providerID = c.req.valid("param").providerID
+        const { method, inputs } = c.req.valid("json")
+        await ProviderAuth.execute({ providerID, method, inputs })
+        return c.json(true)
+      },
+    )
+    .post(
       "/:providerID/oauth/authorize",
       describeRoute({
         summary: "OAuth authorize",
@@ -213,14 +289,16 @@ export const ProviderRoutes = lazy(() =>
         "json",
         z.object({
           method: z.number().meta({ description: "Auth method index" }),
+          inputs: z.record(z.string(), z.string()).optional().meta({ description: "Collected inputs" }),
         }),
       ),
       async (c) => {
         const providerID = c.req.valid("param").providerID
-        const { method } = c.req.valid("json")
+        const { method, inputs } = c.req.valid("json")
         const result = await ProviderAuth.authorize({
           providerID,
           method,
+          inputs,
         })
         return c.json(result)
       },

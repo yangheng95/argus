@@ -48,6 +48,10 @@ import { buildSpecReplanInput } from "./spec-goal-service"
 import { withStageRetry } from "./strategy"
 import { findGoalSnapshot, findPlan, findRequirements, findSpecSnapshot, findTask, goalSnapshotIDOfPlan, listGoalsForPlan, listMilestonesByPlan, listPlanNodesByPlan, type GoalRow, type PlanRow, type RequirementRow, type RunRow, type TaskRow } from "./store"
 import { agentStream } from "./agent-stream"
+import { sessionStreamHooks } from "./session-stream"
+import { Session } from "@/session"
+import { Instance } from "@/project/instance"
+import { registerGoalRunSession } from "@/server/routes/task-event"
 import { type TextHooks } from "@/llm/api"
 import { normalizePlanWaves } from "./wave"
 
@@ -397,6 +401,30 @@ export async function compileTransition(input: CompileTransitionInput): Promise<
   const unattended = await unattendedProject()
   const timeouts = stageTimeouts(input)
   const specLive = agentStream({ taskID: input.taskID, stage: "spec" })
+
+  // Create child session for spec stage content persistence
+  const taskSessionID = input.mode === "replan" ? input.task.session_id : input.sessionID
+  const specSession = taskSessionID
+    ? await Session.createNext({
+        parentID: taskSessionID,
+        title: `Spec: ${input.title}`,
+        directory: Instance.directory,
+      })
+    : undefined
+  if (specSession) registerGoalRunSession(specSession.id, input.taskID)
+  const specContentHooks = specSession
+    ? sessionStreamHooks({ sessionID: specSession.id, taskID: input.taskID })
+    : undefined
+
+  function combineHooks(content?: TextHooks, status?: TextHooks): TextHooks {
+    if (!content) return status ?? {}
+    if (!status) return content
+    return {
+      onChunk: async (arg) => { await content.onChunk?.(arg); await status.onChunk?.(arg) },
+      onError: async (arg) => { await content.onError?.(arg); await status.onError?.(arg) },
+    }
+  }
+
   const [rawSpecDraft, specStrategy] = await (async () => {
     if (input.mode === "replan" && !input.rewriteSpec) {
       await specLive.start("Spec locked; reusing active specification")
@@ -405,7 +433,7 @@ export async function compileTransition(input: CompileTransitionInput): Promise<
       return [result, "reused"] as const
     }
     await specLive.start(input.mode === "replan" ? "Spec rewrite started" : "Spec generation started")
-    return compileSpec(input, specLive.hooks, timeouts.specMs, specLive.statusHook.bind(specLive)).then(async (result) => {
+    return compileSpec(input, combineHooks(specContentHooks, specLive.hooks), timeouts.specMs, specLive.statusHook.bind(specLive)).then(async (result) => {
       await specLive.finish(input.mode === "replan" ? "Spec rewrite finished" : "Spec generation finished")
       return [result, input.mode === "replan" ? "rewritten" : "generated"] as const
     }).catch(async (error) => {
@@ -446,6 +474,17 @@ export async function compileTransition(input: CompileTransitionInput): Promise<
     }
 
     const goalLive = agentStream({ taskID: input.taskID, stage: "goal" })
+    const goalSession = taskSessionID
+      ? await Session.createNext({
+          parentID: taskSessionID,
+          title: `Goals: ${input.title}`,
+          directory: Instance.directory,
+        })
+      : undefined
+    if (goalSession) registerGoalRunSession(goalSession.id, input.taskID)
+    const goalContentHooks = goalSession
+      ? sessionStreamHooks({ sessionID: goalSession.id, taskID: input.taskID })
+      : undefined
     await goalLive.start(input.mode === "replan" ? "Goal decomposition recompile started" : "Goal decomposition started")
     goalDraft = await (
       input.mode === "initial"
@@ -457,7 +496,7 @@ export async function compileTransition(input: CompileTransitionInput): Promise<
             metadata: input.metadata,
             goalHints: input.goals,
             timeoutMs: timeouts.goalMs,
-            stream: goalLive.hooks,
+            stream: combineHooks(goalContentHooks, goalLive.hooks),
             onStatus: goalLive.statusHook.bind(goalLive),
           })
         : HeadlessGoalService.recompile({
@@ -469,7 +508,7 @@ export async function compileTransition(input: CompileTransitionInput): Promise<
             goalHints: input.goals,
             replanContext: input.replanContext,
             timeoutMs: timeouts.goalMs,
-            stream: goalLive.hooks,
+            stream: combineHooks(goalContentHooks, goalLive.hooks),
             onStatus: goalLive.statusHook.bind(goalLive),
           })
     ).then(async (result) => {
@@ -485,6 +524,15 @@ export async function compileTransition(input: CompileTransitionInput): Promise<
     const plannerGoals = goalInputsFromDraft(goalDraft)
 
     const planLive = agentStream({ taskID: input.taskID, stage: "planner" })
+    // Create a child session so planner output is persisted and streamed via message events
+    const planSession = await Session.createNext({
+      parentID: taskSessionID ?? undefined,
+      title: `Plan: ${input.title}`,
+      directory: Instance.directory,
+    })
+    registerGoalRunSession(planSession.id, input.taskID)
+    const planContentHooks = sessionStreamHooks({ sessionID: planSession.id, taskID: input.taskID })
+    const planStream = combineHooks(planContentHooks, planLive.hooks)
     await planLive.start(input.mode === "replan" ? "Planner replan started" : "Planner started")
     const plan = await (
       input.mode === "initial"
@@ -496,6 +544,7 @@ export async function compileTransition(input: CompileTransitionInput): Promise<
             allowClarification: !unattended,
             executor: input.executor,
             routing: input.routing,
+            stream: planStream,
           })
         : PlannerService.replan({
             title: input.title,
@@ -509,6 +558,7 @@ export async function compileTransition(input: CompileTransitionInput): Promise<
             allowClarification: !unattended,
             executor: input.executor,
             routing: input.routing,
+            stream: planStream,
           })
     ).then(async (result) => {
       await planLive.finish(input.mode === "replan" ? "Planner replan finished" : "Planner finished")

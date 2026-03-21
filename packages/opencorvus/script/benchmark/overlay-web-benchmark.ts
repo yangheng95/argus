@@ -591,6 +591,11 @@ async function scaffoldProject(dir: string, model: string) {
   await fs.mkdir(path.join(dir, "data"), { recursive: true })
   await fs.mkdir(path.join(dir, ".opencorvus"), { recursive: true })
   await fs.mkdir(temp.config, { recursive: true })
+  // Generate .gitignore only if one doesn't already exist
+  const gitignorePath = path.join(dir, ".gitignore")
+  if (!(await Bun.file(gitignorePath).exists())) {
+    await Bun.write(gitignorePath, generateGitignore(model))
+  }
   await Bun.write(
     path.join(dir, "package.json"),
     JSON.stringify(
@@ -649,6 +654,77 @@ async function scaffoldProject(dir: string, model: string) {
   await Bun.write(path.join(dir, "opencorvus.json"), config)
   await Bun.write(path.join(dir, ".opencorvus", "opencorvus.json"), config)
   await Bun.write(path.join(temp.config, "opencorvus.json"), config)
+}
+
+/** Generate a .gitignore appropriate for the project context (inferred from request + model). */
+function generateGitignore(model: string): string {
+  const sections: string[] = []
+
+  // Core: always ignore these regardless of stack
+  sections.push(`# Dependencies
+node_modules/
+.pnp.*
+.yarn/
+
+# Build outputs
+dist/
+build/
+.output/
+.next/
+.nuxt/
+.svelte-kit/
+.astro/
+
+# Environment & secrets
+.env
+.env.*
+!.env.example
+
+# Data & databases
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+data/*.db*
+
+# IDE & OS
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# TypeScript
+*.tsbuildinfo
+tsconfig.tsbuildinfo
+
+# Test & coverage
+coverage/
+.nyc_output/
+
+# Logs
+*.log
+logs/
+
+# Caches
+.cache/
+.parcel-cache/
+.turbo/
+.vercel/
+
+# Lock files (keep bun.lock, ignore others if present)
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Misc
+*.tgz
+*.tar.gz
+`)
+
+  return sections.join("\n")
 }
 
 async function runLocalVerify(cwd: string, cmd: string) {

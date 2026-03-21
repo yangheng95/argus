@@ -79,63 +79,21 @@ async function publish(
 }
 
 export function agentStream(meta: Meta) {
-  const tools = new Map<string, string>()
   return {
+    /**
+     * Lightweight status-only hooks. Content events (text, tool calls) are
+     * handled by sessionStreamHooks which persists them to a session.
+     * These hooks only publish status events for the agent status indicator.
+     */
     hooks: {
       onChunk: async ({ chunk }) => {
-        if (chunk.type === "text-delta") {
-          if (!chunk.text) return
+        // Content events are handled by sessionStreamHooks — only publish
+        // tool-call status for the agent status indicator line.
+        if (chunk.type === "tool-input-start" || chunk.type === "tool-call") {
+          const toolName = chunk.type === "tool-call" ? chunk.toolName : chunk.toolName
           publishFireAndForget(meta, {
-            kind: "message_delta",
-            id: chunk.id,
-            text: chunk.text,
-            summary: chunk.text,
-          })
-          return
-        }
-
-        if (chunk.type === "tool-input-start") {
-          tools.set(chunk.id, chunk.toolName)
-          publishFireAndForget(meta, {
-            kind: "tool_call",
-            id: chunk.id,
-            toolName: chunk.toolName,
-            summary: `${stageLabel(meta.stage)} -> ${chunk.toolName}`,
-          })
-          return
-        }
-
-        if (chunk.type === "tool-call") {
-          tools.set(chunk.toolCallId, chunk.toolName)
-          publishFireAndForget(meta, {
-            kind: "tool_call",
-            id: chunk.toolCallId,
-            toolName: chunk.toolName,
-            summary: `${stageLabel(meta.stage)} -> ${chunk.toolName}`,
-          })
-          return
-        }
-
-        if (chunk.type === "tool-input-delta") {
-          const id = (chunk as { id?: string }).id
-          const delta = (chunk as { delta?: string }).delta
-          if (!delta) return
-          publishFireAndForget(meta, {
-            kind: "tool_delta",
-            id,
-            toolName: id ? tools.get(id) : undefined,
-            text: delta,
-            summary: delta,
-          })
-          return
-        }
-
-        if (chunk.type === "tool-result") {
-          publishFireAndForget(meta, {
-            kind: "tool_result",
-            id: chunk.toolCallId,
-            toolName: chunk.toolName,
-            summary: chunk.toolName ? `${chunk.toolName} completed` : `${stageLabel(meta.stage)} tool completed`,
+            kind: "status",
+            summary: `${stageLabel(meta.stage)} → ${toolName}`,
           })
         }
       },

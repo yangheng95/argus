@@ -65,7 +65,7 @@ import { OrchestratorArtifactTable } from "./orchestrator.sql"
 
 const log = Log.create({ service: "orchestrator-runtime" })
 const EVALUATION_HARD_TIMEOUT_MS = 10 * 60 * 1000 // 10 minutes total for entire evaluation phase
-const DELIVERY_FETCH_TIMEOUT_MS = 120_000 // 120 seconds for executor.delivery() (git operations can be slow on Windows)
+const DELIVERY_FETCH_TIMEOUT_MS = parseInt(process.env.OPENCORVUS_DELIVERY_FETCH_TIMEOUT_MS || "300000", 10) // 5 min for executor.delivery() (git operations can be slow on Windows with large repos)
 const DELIVERY_SERVICE_TIMEOUT_MS = 60_000 // 60 seconds for Publisher.deliver()
 const DELIVERY_VERIFY_TIMEOUT_MS = parseInt(process.env.OPENCORVUS_DELIVERY_VERIFY_TIMEOUT_MS || "600000", 10) // 10 min for delivery agent verification
 const SYNC_RUN_TIMEOUT_MS = parseInt(process.env.OPENCORVUS_SYNC_RUN_TIMEOUT_MS || String(EVALUATION_HARD_TIMEOUT_MS + DELIVERY_VERIFY_TIMEOUT_MS + 3 * 60 * 1000), 10) // must exceed eval + delivery verify + buffer

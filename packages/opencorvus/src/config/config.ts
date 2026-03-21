@@ -1364,6 +1364,7 @@ export namespace Config {
     // Reset cached config state without destroying the instance.
     // Instance.dispose() would kill running sessions (executor, evaluator)
     // and cause race conditions with concurrent orchestrator operations.
+    state.reset()
     global.reset()
   }
 

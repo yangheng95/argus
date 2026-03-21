@@ -10,7 +10,7 @@ export namespace State {
   const recordsByKey = new Map<string, Map<any, Entry>>()
 
   export function create<S>(root: () => string, init: () => S, dispose?: (state: Awaited<S>) => Promise<void>) {
-    return () => {
+    const fn = (() => {
       const key = root()
       let entries = recordsByKey.get(key)
       if (!entries) {
@@ -25,7 +25,13 @@ export namespace State {
         dispose,
       })
       return state
+    }) as (() => S) & { reset(): void }
+    fn.reset = () => {
+      const key = root()
+      const entries = recordsByKey.get(key)
+      if (entries) entries.delete(init)
     }
+    return fn
   }
 
   export async function dispose(key: string) {

@@ -134,6 +134,8 @@ export namespace HeadlessPlannerAgent {
     replanContext?: ReplanContext
     /** External abort signal (overrides internal timeout when provided) */
     signal?: AbortSignal
+    /** Stream hooks for onChunk/onError — routes AI SDK events to the caller */
+    stream?: import("@/llm/api").TextHooks
   }): Promise<PlannerOutputType> {
     // Check abort signal early -- setup calls (model resolution, memory search) can be slow
     if (input.signal?.aborted) throw new Error("planner aborted before model resolution")
@@ -214,6 +216,8 @@ export namespace HeadlessPlannerAgent {
         abortSignal: input.signal ?? AbortSignal.timeout(TIMEOUT_MS),
         system: PLANNER_SYSTEM,
         prompt: userPrompt,
+        ...(input.stream?.onChunk ? { onChunk: input.stream.onChunk as any } : {}),
+        ...(input.stream?.onError ? { onError: input.stream.onError } : {}),
       })
       const [resultText, resultSteps, resultFinishReason] = await Promise.all([
         stream.text, stream.steps, stream.finishReason,
@@ -1118,7 +1122,7 @@ CRITICAL: You MUST use tools to explore the codebase BEFORE producing any plan. 
 - **find_files**: Find files matching a glob pattern
 - **search_code**: Search file contents with regex (ripgrep)
 - **list_directory**: List files and directories at a path
-- **web_search**: Search the web for external documentation (use only when needed)
+- **web_search**: Search the web for documentation, best practices, framework comparisons, and latest API references. USE THIS PROACTIVELY — always research before choosing frameworks, libraries, or architectural patterns.
 - **submit_plan**: Submit the final plan (call ONCE after exploration is complete)
 
 ## Your Process
@@ -1163,7 +1167,7 @@ After exploration, you should know:
 
 ### Phase 1.5: RESEARCH (if needed)
 
-For external APIs, unfamiliar libraries, or protocols -- use web_search. Skip for internal-only tasks.
+ALWAYS use web_search to research current best practices, framework versions, and recommended tooling before planning the tech stack. Do not assume — verify what is current. For greenfield projects, search for reference implementations and mature scaffolding tools.
 
 ### Phase 2: PLAN -- Synthesize into Actionable Spec
 

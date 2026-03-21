@@ -35,6 +35,7 @@ import { Session } from "@/session"
 import { MessageV2 } from "@/session/message"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
+import { matchesTaskEvent, registerGoalRunSession, taskSession } from "./task-event"
 
 export const OrchestratorRoutes = lazy(() =>
   new Hono()
@@ -204,6 +205,18 @@ export const OrchestratorRoutes = lazy(() =>
         c.header("X-Accel-Buffering", "no")
         c.header("X-Content-Type-Options", "nosniff")
         return streamSSE(c, async (stream) => {
+          const sessionID = taskSession(taskID)
+          // Seed the goal-run registry with any existing child sessions so
+          // reconnecting SSE streams pick up events for already-running goals.
+          if (sessionID) {
+            const queue = [sessionID]
+            while (queue.length > 0) {
+              const id = queue.shift()!
+              if (id !== sessionID) registerGoalRunSession(id, taskID)
+              const children = await Session.children(id)
+              queue.push(...children.map((child) => child.id))
+            }
+          }
           await stream.writeSSE({
             data: JSON.stringify(taskEvent(taskID, {
               type: "task.connected",
@@ -214,7 +227,7 @@ export const OrchestratorRoutes = lazy(() =>
             })),
           })
           const unsub = Bus.subscribeAll(async (event) => {
-            if (event.properties?.taskID !== taskID) return
+            if (!matchesTaskEvent(event, taskID, sessionID)) return
             await stream.writeSSE({ data: JSON.stringify(taskEvent(taskID, event)) })
           })
           const heartbeat = setInterval(() => {
@@ -314,9 +327,19 @@ export const OrchestratorRoutes = lazy(() =>
       validator("param", z.object({ taskID: Task.shape.id })),
       async (c) => {
         const task = await OrchestratorService.getTask(c.req.valid("param").taskID)
-        const sessionID = task.sessionID
-        if (!sessionID) return c.json([])
-        const messages = await Session.messages({ sessionID })
+        const rootSessionID = task.sessionID
+        if (!rootSessionID) return c.json([])
+        // Collect all session IDs in the tree (primary + goal run children)
+        const sessionIDs: string[] = []
+        const queue = [rootSessionID]
+        while (queue.length > 0) {
+          const id = queue.shift()!
+          sessionIDs.push(id)
+          const children = await Session.children(id)
+          queue.push(...children.map((child) => child.id))
+        }
+        const all = await Promise.all(sessionIDs.map((id) => Session.messages({ sessionID: id })))
+        const messages = all.flat().sort((a, b) => (a.info.time?.created ?? 0) - (b.info.time?.created ?? 0))
         return c.json(messages)
       },
     )

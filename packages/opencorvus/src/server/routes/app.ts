@@ -33,6 +33,7 @@ import { OrchestratorRoutes } from "./orchestrator"
 import { PanelRoutes } from "./panel"
 import { PanelKnowledgeRoutes } from "./panel-knowledge"
 import { ControlRoutes } from "./control"
+import { CodingRoutes } from "./coding"
 
 const log = Log.create({ service: "server" })
 
@@ -74,6 +75,7 @@ export function AppRoutes(root: Hono) {
     .route("/panel", PanelRoutes())
     .route("/panel/knowledge", PanelKnowledgeRoutes())
     .route("/control", ControlRoutes())
+    .route("/coding", CodingRoutes())
     .route("/", OrchestratorRoutes())
     .route("/export", ExportRoutes())
     .route("/", FileRoutes())

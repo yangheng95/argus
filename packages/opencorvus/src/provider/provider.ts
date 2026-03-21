@@ -596,6 +596,10 @@ export namespace Provider {
     }
   })
 
+  export function reset() {
+    ;(state as any).reset()
+  }
+
   export async function list() {
     return state().then((state) => state.providers)
   }

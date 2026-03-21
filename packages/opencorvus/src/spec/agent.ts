@@ -946,7 +946,7 @@ CRITICAL: You MUST use tools to explore the codebase BEFORE producing any specif
 - **find_files**: Find files matching a glob pattern
 - **search_code**: Search file contents with regex (ripgrep)
 - **list_directory**: List files and directories at a path
-- **web_search**: Search the web for external documentation (use only when needed)
+- **web_search**: Search the web for documentation, best practices, framework comparisons, and latest API references. USE THIS PROACTIVELY — always research before choosing frameworks, libraries, or architectural patterns.
 - **submit_spec**: Submit the final specification (call ONCE after exploration is complete)
 
 ## Your Role
@@ -998,7 +998,7 @@ After exploration, you should know:
 
 ### Phase 1.5: RESEARCH (if needed)
 
-For external APIs, unfamiliar libraries, or protocols — use web_search.
+ALWAYS use web_search to research current best practices, framework versions, and recommended tooling before specifying the tech stack. Do not assume — verify what is current.
 
 ### Phase 2: SPECIFY — Synthesize into Grounded Specification
 
@@ -1061,6 +1061,6 @@ Before outputting JSON, verify each of these. If ANY answer is NO, use more tool
 
 - Content: Use markdown sections, target 2000-6000 chars. Be thorough and specific.
 - Spec Items: Be DETAILED — they drive downstream planning and acceptance. Include at least 4-6 spec items for non-trivial tasks. Each item should be independently verifiable.
-- For greenfield projects (creating something new with no existing codebase): Include detailed technical design in the content section — data structures, algorithms, UI layout, state management, interaction flows. Use web_search if needed for reference implementations.
+- For greenfield projects (creating something new with no existing codebase): FIRST use web_search to research current best-practice scaffolding, framework choices, and reference implementations. Then include detailed technical design in the content section — data structures, algorithms, UI layout, state management, interaction flows. Do not reinvent the wheel — use mature, well-maintained frameworks and tooling.
 - Call submit_spec exactly once after exploration is complete.
 - Do NOT output raw JSON. Use the submit_spec tool call.`
