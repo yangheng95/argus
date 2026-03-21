@@ -103,14 +103,11 @@ export namespace MCPServe {
   export const Toolset = TOOLSET
 
   export function command(cwd: string) {
-    const next = Installation.command(["mcp", "serve", "--cwd", cwd, "--toolset", "executor"], {
-      cwd: path.resolve(import.meta.dir, "..", ".."),
-    })
     return {
       name: "opencorvus",
-      command: next.command,
-      args: next.args,
-      env: next.env,
+      command: process.execPath,
+      args: [path.resolve(import.meta.dir, "..", "..", "src", "index.ts"), "mcp", "serve", "--cwd", cwd, "--toolset", "executor"],
+      env: {} as Record<string, string>,
     }
   }
 
@@ -151,7 +148,7 @@ export namespace MCPServe {
     await Instance.provide({
       directory: input.cwd,
       fn: async () => {
-        const session = await Session.create({
+        const session = await Session.createNext({
           title: `MCP ${input.toolset}`,
           directory: input.cwd,
         })
@@ -205,7 +202,7 @@ export namespace MCPServe {
             })),
           ],
         }))
-        server.server.setRequestHandler(CallToolRequestSchema, async (request) => {
+        server.server.setRequestHandler(CallToolRequestSchema, async (request, _extra) => {
           const args =
             request.params.arguments && typeof request.params.arguments === "object" && !Array.isArray(request.params.arguments)
               ? request.params.arguments as Record<string, unknown>
@@ -213,7 +210,7 @@ export namespace MCPServe {
           const local = byName.get(request.params.name)
           if (local) return executeLocal(server, local, session.id, approved, args)
           const proxy = await MCP.serverTools().then((items) => items.find((item) => item.key === request.params.name))
-          if (proxy) return MCP.callTool({ key: proxy.key, args })
+          if (proxy) return MCP.callTool({ key: proxy.key, args }) as any
           throw new McpError(ErrorCode.InvalidParams, `Tool ${request.params.name} not found`)
         })
         server.server.setRequestHandler(ListPromptsRequestSchema, async () => ({

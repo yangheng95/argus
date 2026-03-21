@@ -16,6 +16,7 @@ export async function withStageRetry<T>(
   fn: () => Promise<T>,
   options?: { onRetry?: (attempt: number, error: Error) => void; signal?: AbortSignal },
 ): Promise<T> {
+  const retryLog = Log.create({ service: "stage-retry" })
   let lastError: Error | undefined
   for (let attempt = 0; attempt <= STAGE_MAX_RETRIES; attempt++) {
     // Check signal before each attempt to avoid retrying after abort
@@ -26,6 +27,13 @@ export async function withStageRetry<T>(
       return await fn()
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err))
+      const cause = lastError.cause instanceof Error ? lastError.cause.message : undefined
+      retryLog.warn(`${stage} attempt ${attempt + 1}/${STAGE_MAX_RETRIES + 1} failed`, {
+        stage,
+        attempt: attempt + 1,
+        error: lastError.message,
+        cause,
+      })
       if (attempt < STAGE_MAX_RETRIES) {
         options?.onRetry?.(attempt + 1, lastError)
       }

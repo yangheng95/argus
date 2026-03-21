@@ -626,5 +626,8 @@ You have a limited number of steps. After 30 tool calls, you MUST stop and emit 
 
 export async function deliveryAgentSystem() {
   const config = await Config.get()
-  return typeof config.prompt?.delivery_system === "string" ? config.prompt.delivery_system : DELIVERY_AGENT_SYSTEM
+  const configAny = config as Record<string, unknown>
+  return typeof (configAny.prompt as Record<string, unknown> | undefined)?.delivery_system === "string"
+    ? (configAny.prompt as Record<string, unknown>).delivery_system as string
+    : DELIVERY_AGENT_SYSTEM
 }

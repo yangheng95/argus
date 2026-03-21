@@ -7,9 +7,12 @@ import { isBusTraceEnabled, traceBus } from "../util/debug-trace"
 
 // Lazy-loaded protocol store for dual-write (avoids circular import + per-call dynamic import)
 let _protocolStore: typeof import("../protocol/store").ProtocolStore | undefined
+let _protocolStoreLoading: Promise<void> | undefined
 function protocolStore() {
-  if (!_protocolStore) {
-    try { _protocolStore = require("../protocol/store").ProtocolStore } catch { /* not available */ }
+  if (!_protocolStore && !_protocolStoreLoading) {
+    _protocolStoreLoading = import("../protocol/store")
+      .then((m) => { _protocolStore = m.ProtocolStore })
+      .catch(() => { /* not available */ })
   }
   return _protocolStore
 }
@@ -49,7 +52,7 @@ export namespace Bus {
     },
   )
 
-  const SUBSCRIBER_TIMEOUT_MS = 120_000 // 2 minutes per subscriber (last-resort safety net)
+  const SUBSCRIBER_TIMEOUT_MS = 15_000 // 15s per subscriber — short enough to avoid back-pressuring pipeline stages
 
   function withTimeout(promise: unknown, timeoutMs: number, label: string): Promise<unknown> {
     if (!promise || typeof (promise as any).then !== "function") return Promise.resolve(promise)
@@ -99,15 +102,16 @@ export namespace Bus {
       directory: Instance.directory,
       payload,
     })
-    // Dual-write to protocol_event for audit trail
+    // Dual-write to protocol_event for audit trail (only for task-scoped events)
     const store = protocolStore()
-    if (store) {
+    const _taskID = (properties as any)?.taskID
+    if (store && _taskID) {
       void store.appendEvent({
         kind: "event",
         type: def.type,
         aggregate: "task" as const,
-        aggregate_id: (properties as any)?.taskID ?? null,
-        task_id: (properties as any)?.taskID ?? null,
+        aggregate_id: _taskID,
+        task_id: _taskID,
         run_id: (properties as any)?.runID ?? null,
         goal_run_id: null,
         session_id: null,

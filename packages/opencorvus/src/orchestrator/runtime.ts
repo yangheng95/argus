@@ -13,6 +13,8 @@ import { MessageV2 } from "@/session/message"
 import { Database, and, eq, inArray } from "@/storage/db"
 import { Log } from "@/util/log"
 import { WorkbenchService } from "@/workbench/service"
+import { DeliveryService } from "@/delivery/service"
+import type { DeliveryVerdictType } from "@/delivery/agent"
 import { Publisher } from "./publisher"
 import { OrchestratorGit } from "./git"
 import { OrchestratorMemoryBridge } from "./memory-bridge"
@@ -58,12 +60,15 @@ import {
   type TaskRow,
 } from "./store"
 import { Identifier } from "@/id/id"
+import { agentStream } from "./agent-stream"
+import { OrchestratorArtifactTable } from "./orchestrator.sql"
 
 const log = Log.create({ service: "orchestrator-runtime" })
 const EVALUATION_HARD_TIMEOUT_MS = 10 * 60 * 1000 // 10 minutes total for entire evaluation phase
 const DELIVERY_FETCH_TIMEOUT_MS = 120_000 // 120 seconds for executor.delivery() (git operations can be slow on Windows)
 const DELIVERY_SERVICE_TIMEOUT_MS = 60_000 // 60 seconds for Publisher.deliver()
-const SYNC_RUN_TIMEOUT_MS = parseInt(process.env.OPENCORVUS_SYNC_RUN_TIMEOUT_MS || String(5 * 60 * 1000), 10) // 5 min per syncRun
+const DELIVERY_VERIFY_TIMEOUT_MS = parseInt(process.env.OPENCORVUS_DELIVERY_VERIFY_TIMEOUT_MS || "600000", 10) // 10 min for delivery agent verification
+const SYNC_RUN_TIMEOUT_MS = parseInt(process.env.OPENCORVUS_SYNC_RUN_TIMEOUT_MS || String(EVALUATION_HARD_TIMEOUT_MS + DELIVERY_VERIFY_TIMEOUT_MS + 3 * 60 * 1000), 10) // must exceed eval + delivery verify + buffer
 const EXECUTOR_STATUS_TIMEOUT_MS = 30_000 // 30s for executor.status()
 const EXECUTOR_SUBMIT_TIMEOUT_MS = 60_000 // 60s for executor.submit()
 const evaluatingRuns = new Map<string, number>() // runID → start timestamp, guards against concurrent re-evaluation
@@ -115,13 +120,13 @@ async function projectExecutorEventToSession(taskID: string, run: RunRow, event:
         sessionID,
         type: "text",
         text: "",
-      } satisfies MessageV2.TextPart)
+      } satisfies MessageV2.TextPart) as MessageV2.TextPart
     }
-    state.text.text += payload.delta
+    state.text!.text += payload.delta
     await Session.updatePartDelta({
       sessionID,
       messageID: state.message.id,
-      partID: state.text.id,
+      partID: state.text!.id,
       field: "text",
       delta: payload.delta,
     })
@@ -141,13 +146,13 @@ async function projectExecutorEventToSession(taskID: string, run: RunRow, event:
         time: {
           start: Date.now(),
         },
-      } satisfies MessageV2.ReasoningPart)
+      } satisfies MessageV2.ReasoningPart) as MessageV2.ReasoningPart
     }
-    state.reasoning.text += delta
+    state.reasoning!.text += delta
     await Session.updatePartDelta({
       sessionID,
       messageID: state.message.id,
-      partID: state.reasoning.id,
+      partID: state.reasoning!.id,
       field: "text",
       delta,
     })
@@ -175,7 +180,7 @@ async function projectExecutorEventToSession(taskID: string, run: RunRow, event:
           start: Date.now(),
         },
       },
-    } satisfies MessageV2.ToolPart)
+    } satisfies MessageV2.ToolPart) as MessageV2.ToolPart
     state.tools.set(id, part)
     return
   }
@@ -187,6 +192,7 @@ async function projectExecutorEventToSession(taskID: string, run: RunRow, event:
     const id = typeof payload.id === "string" ? payload.id : ""
     const match = id ? state.tools.get(id) : undefined
     if (!match) return
+    const matchState = match.state as { input: Record<string, unknown>; time?: { start: number } }
     const next = await Session.updatePart({
       ...match,
       state: {
@@ -196,11 +202,11 @@ async function projectExecutorEventToSession(taskID: string, run: RunRow, event:
         title: match.tool,
         metadata: {},
         time: {
-          start: match.state.time.start,
+          start: matchState.time?.start ?? Date.now(),
           end: Date.now(),
         },
       },
-    } satisfies MessageV2.ToolPart)
+    } satisfies MessageV2.ToolPart) as MessageV2.ToolPart
     state.tools.set(id, next)
     return
   }
@@ -226,7 +232,7 @@ async function projectExecutorEventToSession(taskID: string, run: RunRow, event:
         sessionID,
         type: "text",
         text: payload.output,
-      } satisfies MessageV2.TextPart)
+      } satisfies MessageV2.TextPart) as MessageV2.TextPart
     }
     if (event.type === "session.error" && typeof payload.error === "string" && payload.error) {
       if (!state.text) {
@@ -236,7 +242,7 @@ async function projectExecutorEventToSession(taskID: string, run: RunRow, event:
           sessionID,
           type: "text",
           text: payload.error,
-        } satisfies MessageV2.TextPart)
+        } satisfies MessageV2.TextPart) as MessageV2.TextPart
       } else if (!state.text.text.trim()) {
         state.text.text = payload.error
         await Session.updatePart(state.text)
@@ -260,7 +266,7 @@ async function projectExecutorEventToSession(taskID: string, run: RunRow, event:
           write: 0,
         },
       },
-    } satisfies MessageV2.Assistant)
+    } satisfies MessageV2.Assistant) as MessageV2.Assistant
     transcript.delete(run.id)
   }
 }
@@ -295,7 +301,7 @@ async function ensureTranscriptState(taskID: string, run: RunRow, sessionID: str
         write: 0,
       },
     },
-  } satisfies MessageV2.Assistant)
+  } satisfies MessageV2.Assistant) as MessageV2.Assistant
   const next = {
     message,
     tools: new Map<string, MessageV2.ToolPart>(),
@@ -385,33 +391,34 @@ export function hasActiveSessions(): boolean {
 export namespace OrchestratorRuntime {
   export async function poll(hooks: RuntimeHooks) {
     const current = orchestratorState()
+
+    // Phase 1: Pipeline advancement — always runs, never blocked by slow run sync.
+    // Per-task exclusion via runningStages Map; no global guard needed.
+    const pipelineTasks = Database.use((db) =>
+      db.select({ id: OrchestratorTaskTable.id, status: OrchestratorTaskTable.status })
+        .from(OrchestratorTaskTable)
+        .where(and(
+          eq(OrchestratorTaskTable.project_id, Instance.project.id),
+          inArray(OrchestratorTaskTable.status, [...PIPELINE_STATUSES]),
+        ))
+        .all(),
+    )
+    for (const row of pipelineTasks) {
+      if (runningStages.has(row.id)) continue
+      if (row.status !== "queued" && row.status !== "planned") continue
+      const p = (async () => {
+        const result = await advanceTaskStage(row.id, hooks.updateTask)
+        if (result?.runID) await OrchestratorRuntime.dispatch(result.runID, hooks)
+      })().catch((err) => {
+        log.error("pipeline advancement failed", { taskID: row.id, error: err instanceof Error ? err.message : String(err) })
+      }).finally(() => runningStages.delete(row.id))
+      runningStages.set(row.id, p)
+    }
+
+    // Phase 2: Sync active runs — guarded to prevent overlapping sync waves.
     if (current.syncing) return
     current.syncing = true
     try {
-      // Pipeline advancement: find tasks in queued/planned states and advance them
-      const pipelineTasks = Database.use((db) =>
-        db.select({ id: OrchestratorTaskTable.id, status: OrchestratorTaskTable.status })
-          .from(OrchestratorTaskTable)
-          .where(and(
-            eq(OrchestratorTaskTable.project_id, Instance.project.id),
-            inArray(OrchestratorTaskTable.status, [...PIPELINE_STATUSES]),
-          ))
-          .all(),
-      )
-      for (const row of pipelineTasks) {
-        if (runningStages.has(row.id)) continue
-        // Only start new stages for queued and planned; others are in-progress
-        if (row.status !== "queued" && row.status !== "planned") continue
-        const p = (async () => {
-          const result = await advanceTaskStage(row.id, hooks.updateTask)
-          if (result?.runID) await OrchestratorRuntime.dispatch(result.runID, hooks)
-        })().catch((err) => {
-          log.error("pipeline advancement failed", { taskID: row.id, error: err instanceof Error ? err.message : String(err) })
-        }).finally(() => runningStages.delete(row.id))
-        runningStages.set(row.id, p)
-      }
-
-      // Sync active runs — concurrent with per-run timeout to prevent a single hung run from blocking all others
       const rows = Database.use((db) =>
         db
           .select({ id: OrchestratorRunTable.id })
@@ -437,7 +444,6 @@ export namespace OrchestratorRuntime {
           }),
         ),
       )
-      // Recovery for stranded tasks
       recoverStrandedTasks(hooks)
     } finally {
       current.syncing = false
@@ -729,16 +735,18 @@ async function completeRun(run: RunRow, hooks: RuntimeHooks) {
         await hooks.updateTask(task, { status: "evaluating", blocking_reason: null, error: null }, "Evaluating delivery")
       }
       // Re-run evaluation for this existing delivery (evaluation was interrupted by prior restart)
-      // Check if already evaluating (with stale detection)
+      // Atomic guard: check-and-set in a single synchronous block to prevent concurrent syncRuns
+      // from both starting evaluation for the same run (Promise.allSettled race).
       const evalStart = evaluatingRuns.get(run.id)
       const isStale = evalStart !== undefined && (Date.now() - evalStart) > EVALUATING_STALE_MS
       if (isStale) {
         log.warn("clearing stale evaluatingRuns entry", { runID: run.id, ageMs: Date.now() - evalStart })
         evaluatingRuns.delete(run.id)
       }
-      const canReEval = task.active_run_id === run.id && run.session_id && !evaluatingRuns.has(run.id)
-      if (canReEval) {
-        evaluatingRuns.set(run.id, Date.now())
+      if (task.active_run_id !== run.id || !run.session_id || evaluatingRuns.has(run.id)) return
+      // Atomic: set guard immediately in the same microtask as the check
+      evaluatingRuns.set(run.id, Date.now())
+      {
         try {
           await Promise.race([
             runEvaluation(task, run, existingDelivery, hooks),
@@ -870,6 +878,7 @@ async function completeRun(run: RunRow, hooks: RuntimeHooks) {
           criteria: g.criteria,
           priority: g.priority as "blocking" | "advisory",
           check_selector: selectorList(g.metadata) as string[],
+          requirement_ids: requirementIDsFromMetadata(g.metadata),
         })),
         delivery: {
           summary: delivery.summary,
@@ -1025,6 +1034,7 @@ async function runEvaluation(task: TaskRow, run: RunRow, existingDelivery: Deliv
           criteria: g.criteria,
           priority: g.priority as "blocking" | "advisory",
           check_selector: selectorList(g.metadata) as string[],
+          requirement_ids: requirementIDsFromMetadata(g.metadata),
         })),
         delivery: {
           summary: delivery.summary,
@@ -1147,7 +1157,98 @@ async function publishAcceptedDelivery(task: TaskRow, run: RunRow, delivery: Del
   const now = Date.now()
   await hooks.updateRun(run, { phase: "deliver" }, "Publishing accepted delivery")
   await hooks.updateTask(task, { status: "delivering", blocking_reason: null, error: null }, "Publishing accepted delivery")
-  markDeliveryPublishing(delivery.id, now)
+
+  // --- Delivery verification: run the DeliveryAgent to verify runtime behavior ---
+  const verifyGoals = run.plan_version_id ? listGoalsByPlan(run.plan_version_id) : []
+  if (verifyGoals.length > 0) {
+    const deliveryLive = agentStream({ taskID: task.id, runID: run.id, stage: "delivery" })
+    await deliveryLive.start("Delivery verification started")
+    let deliveryVerdict: DeliveryVerdictType | undefined
+    try {
+      const analysisArtifact = Database.use((db) =>
+        db.select().from(OrchestratorArtifactTable)
+          .where(and(eq(OrchestratorArtifactTable.run_id, run.id), eq(OrchestratorArtifactTable.label, "evaluator-agent-analysis")))
+          .limit(1).get(),
+      )
+      const analysis = analysisArtifact?.payload as EvaluatorAnalysisType | undefined
+      const deliveryResult = delivery.result ?? {}
+      const changedFiles = Array.isArray(deliveryResult.changed_files)
+        ? (deliveryResult.changed_files as unknown[]).filter((f): f is string => typeof f === "string")
+        : Array.isArray(deliveryResult.diffs)
+          ? (deliveryResult.diffs as Array<{ file?: string }>).map(d => d.file).filter(Boolean) as string[]
+          : []
+      deliveryVerdict = await Promise.race([
+        DeliveryService.verify({
+          task: { title: task.title, request: task.request, sessionID: task.session_id ?? undefined, metadata: task.metadata ?? undefined },
+          goals: verifyGoals.map(g => ({
+            description: g.description,
+            criteria: g.criteria,
+            priority: g.priority as "blocking" | "advisory",
+            check_selector: selectorList(g.metadata) as string[],
+          })),
+          delivery: {
+            summary: delivery.summary,
+            changedFiles,
+            diffs: Array.isArray(deliveryResult.diffs) ? deliveryResult.diffs : [],
+          },
+          analysis,
+          stream: deliveryLive.hooks,
+        }),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("delivery verification timeout")), DELIVERY_VERIFY_TIMEOUT_MS),
+        ),
+      ])
+      await deliveryLive.finish(`Delivery verification: ${deliveryVerdict.verdict}`)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      log.error("delivery verification failed, proceeding with publication", { runID: run.id, error: msg })
+      await deliveryLive.error(err).catch(() => undefined)
+    }
+    // Persist verdict as artifact
+    if (deliveryVerdict) {
+      try {
+        Database.use((db) =>
+          db.insert(OrchestratorArtifactTable).values({
+            id: Identifier.ascending("artifact"),
+            task_id: task.id,
+            run_id: run.id,
+            delivery_id: delivery.id,
+            kind: "report",
+            label: "delivery-agent-verdict",
+            payload: deliveryVerdict as unknown as Record<string, unknown>,
+            time_created: Date.now(),
+            time_updated: Date.now(),
+          }).run(),
+        )
+      } catch { /* non-critical */ }
+    }
+    // If rejected, route to retry/replan instead of publishing
+    if (deliveryVerdict?.verdict === "rejected") {
+      log.info("delivery verification rejected", { runID: run.id, issues: deliveryVerdict.issues_found })
+      const rejectionSummary = `Delivery verification rejected: ${deliveryVerdict.summary}`
+      const rejectionAnalysis: EvaluatorAnalysisType = {
+        verdict: "rejected",
+        classification: "evaluation",
+        summary: rejectionSummary,
+        goal_statuses: verifyGoals.map((_, i) => ({
+          goal_index: i,
+          status: "failed" as const,
+          evidence: deliveryVerdict!.issues_found.join("; "),
+          reasoning: rejectionSummary,
+        })),
+        replan_guidance: {
+          root_cause: deliveryVerdict.issues_found.join("; "),
+          what_failed: deliveryVerdict.startup_verification.success ? "Runtime behavior" : "Application startup",
+          suggested_strategy: `Fix the runtime issues: ${deliveryVerdict.issues_found.join("; ")}`,
+          avoid_approaches: [],
+        },
+      }
+      await handleEvaluationFailure(requireTask(task.id), run, rejectionSummary, hooks, rejectionAnalysis)
+      return
+    }
+  }
+
+  markDeliveryPublishing(delivery.id, Date.now())
 
   const result = await Promise.race([
     Publisher.deliver({ task, run, delivery }),
@@ -1258,6 +1359,15 @@ async function executeDecision(
   if (!next.runID) return false
   await OrchestratorRuntime.dispatch(next.runID, hooks)
   return true
+}
+
+function requirementIDsFromMetadata(metadata: unknown): string[] {
+  if (!metadata || typeof metadata !== "object") return []
+  const value = (metadata as Record<string, unknown>).source_requirement_ids
+  if (Array.isArray(value)) return value.filter((item): item is string => typeof item === "string" && item.length > 0)
+  const ids = (metadata as Record<string, unknown>).requirement_ids
+  if (Array.isArray(ids)) return ids.filter((item): item is string => typeof item === "string" && item.length > 0)
+  return []
 }
 
 function fallbackAnalysis(

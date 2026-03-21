@@ -228,3 +228,6 @@ function finalizeEvaluation(
     artifacts,
   }
 }
+
+// Alias for backward compatibility
+export { EvaluatorService as CheckRunner }

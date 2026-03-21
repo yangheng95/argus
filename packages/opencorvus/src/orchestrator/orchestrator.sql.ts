@@ -34,11 +34,11 @@ export type OrchestratorGoalPriority = "blocking" | "advisory"
 export type OrchestratorGoalStatus = "pending" | "passed" | "failed"
 export type OrchestratorMilestoneStatus = "pending" | "active" | "passed" | "failed"
 export type OrchestratorRunStatus = "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
-export type OrchestratorRunPhase = "plan" | "spec" | "execute" | "evaluate" | "deliver" | "replan"
+export type OrchestratorRunPhase = "plan" | "spec" | "execute" | "evaluate" | "deliver" | "replan" | "dispatch"
 export type OrchestratorInteractionType = "permission" | "question"
 export type OrchestratorInteractionStatus = "pending" | "answered" | "rejected" | "expired"
 
-export type OrchestratorSpecSnapshotStatus = "ready" | "blocked" | "completed"
+export type OrchestratorSpecSnapshotStatus = "ready" | "blocked" | "completed" | "superseded"
 export type OrchestratorSpecItemStatus = "pending" | "done" | "failed"
 
 export const OrchestratorSpecSnapshotTable = sqliteTable(
@@ -95,7 +95,7 @@ export type OrchestratorArtifactKind =
 export type OrchestratorDeliveryStatus = "candidate" | "publishing" | "delivered" | "failed"
 export type OrchestratorEvaluationStatus = "pending" | "passed" | "failed" | "inconclusive"
 export type OrchestratorEvaluationVerdict = "accepted" | "rejected" | "inconclusive"
-export type OrchestratorProgressStatus = "created" | "running" | "blocked" | "completed" | "failed" | "cancelled"
+export type OrchestratorProgressStatus = "created" | "running" | "blocked" | "completed" | "failed" | "cancelled" | "planning" | "planned" | "spec_generating" | "goal_decomposing"
 export type OrchestratorExecutorTransport = "inproc" | "stdio" | "ws" | "http"
 export type OrchestratorExecutorSessionStatus = "active" | "completed" | "failed" | "aborted"
 
@@ -258,7 +258,7 @@ export const OrchestratorGoalSnapshotTable = sqliteTable(
       .notNull()
       .references(() => OrchestratorSpecSnapshotTable.id, { onDelete: "cascade" }),
     version: integer().notNull().default(1),
-    status: text().notNull().$type<"ready" | "superseded">().default("ready"),
+    status: text().notNull().$type<"ready" | "superseded" | "completed">().default("ready"),
     summary: text().notNull(),
     metadata: text({ mode: "json" }).$type<OrchestratorMetadata>(),
     ...Timestamps,
@@ -345,6 +345,8 @@ export const OrchestratorGoalRunTable = sqliteTable(
     base_ref: text(),
     merge_ref: text(),
     metadata: text({ mode: "json" }).$type<OrchestratorMetadata>(),
+    time_started: integer(),
+    time_completed: integer(),
     ...Timestamps,
   },
   (table) => [

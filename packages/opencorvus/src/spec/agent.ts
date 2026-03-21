@@ -10,7 +10,8 @@
  * 5. Structured output — scope, requirements, acceptance criteria, spec items
  * 6. Rewrite — receives failure analysis and revises spec for replan
  */
-import { generateText, stepCountIs, tool } from "ai"
+import { streamText, stepCountIs, tool, type ToolSet } from "ai"
+import type { TextHooks } from "@/llm/api"
 import z from "zod"
 import { Provider } from "@/provider/provider"
 import { createPlannerTools, prefetchContext } from "@/planner/tools"
@@ -156,6 +157,7 @@ export namespace HeadlessSpecAgent {
     request: string
     goals?: Array<{ description: string; criteria: string; priority?: string }>
     signal?: AbortSignal
+    stream?: TextHooks
   }): Promise<SpecOutputType> {
     return run({ ...input, mode: "initial" })
   }
@@ -202,6 +204,7 @@ async function run(input: {
   previousSpec?: string
   rewriteContext?: SpecRewriteContext
   signal?: AbortSignal
+  stream?: TextHooks
 }): Promise<SpecOutputType> {
   if (input.signal?.aborted) throw new Error("spec agent aborted before model resolution")
 
@@ -270,7 +273,10 @@ async function run(input: {
       retryReason: retryContext ? `score ${retryContext.previousScore} < ${QUALITY_RETRY_THRESHOLD}` : undefined,
     })
 
-    const result = await generateText({
+    // Use streamText (not generateText) to keep the HTTP connection alive
+    // during extended thinking. Non-streaming requests timeout on reasoning
+    // models (kimi-k2.5, qwen3.5-plus) because no data flows during thinking.
+    const stream = streamText({
       model: language,
       stopWhen: stepCountIs(MAX_STEPS),
       tools: allTools,
@@ -278,9 +284,15 @@ async function run(input: {
       abortSignal: input.signal ?? AbortSignal.timeout(TIMEOUT_MS),
       system: SPEC_SYSTEM,
       prompt: userPrompt,
+      ...(input.stream?.onChunk ? { onChunk: input.stream.onChunk as any } : {}),
+      ...(input.stream?.onError ? { onError: input.stream.onError } : {}),
     })
+    // Collect resolved properties from the stream
+    const [resultText, resultSteps, resultFinishReason] = await Promise.all([
+      stream.text, stream.steps, stream.finishReason,
+    ])
 
-    const toolCallCount = result.steps.reduce(
+    const toolCallCount = resultSteps.reduce(
       (sum, s) => sum + (Array.isArray((s as any).toolCalls) ? (s as any).toolCalls.length : 0),
       0,
     )
@@ -294,7 +306,7 @@ async function run(input: {
     if (submittedSpec) {
       const submitted = submittedSpec as SpecOutputType
       log.info("spec agent finished via submit_spec tool call", {
-        steps: result.steps.length,
+        steps: resultSteps.length,
         specItems: submitted.spec_items?.length ?? 0,
         contentLength: submitted.content?.length ?? 0,
         attempt: attempt + 1,
@@ -313,14 +325,14 @@ async function run(input: {
       }
     } else {
       // Fallback: parse from text output
-      let allText = result.text?.trim() || ""
+      let allText = resultText?.trim() || ""
       if (!allText || !allText.includes("{")) {
-        allText = result.steps.map((s) => s.text).filter(Boolean).join("\n")
+        allText = resultSteps.map((s) => s.text).filter(Boolean).join("\n")
       }
 
       log.info("spec agent finished via text output (no submit_spec call)", {
-        steps: result.steps.length,
-        finishReason: result.finishReason,
+        steps: resultSteps.length,
+        finishReason: resultFinishReason,
         textLength: allText.length,
         textPreview: allText.slice(0, 200),
         attempt: attempt + 1,
@@ -335,7 +347,7 @@ async function run(input: {
         contentLength: parsed.content.length,
         specItemsCount: parsed.spec_items.length,
       })
-      parsed = synthesizeFromExploration(parsed, input, result.steps)
+      parsed = synthesizeFromExploration(parsed, input, resultSteps)
     }
 
     parsed.summary = ensureMeaningfulSummary(parsed.summary, input.title)

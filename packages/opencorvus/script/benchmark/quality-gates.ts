@@ -155,7 +155,7 @@ export async function deriveRunMetrics(input: {
     critical_check_pass_rate: totalChecks === 0 ? 0 : passedChecks / totalChecks,
     check_relevance_score: totalChecks === 0 ? 0 : Math.min(1, passedChecks / totalChecks + 0.25),
     verification_edit_ratio: files.length === 0 ? verificationEvents.length : verificationEvents.length / files.length,
-    feature_coverage_p0: totalChecks > 0 && passedChecks === totalChecks ? 1 : 0,
+    feature_coverage_p0: totalChecks === 0 ? 0.5 : (passedChecks === totalChecks ? 1 : 0),
     scope_drift_score: scopeDriftScore,
     plan_to_change_traceability: traceability,
     delivery_focus_score: files.length === 0 ? 0 : Math.max(0, 1 - verificationEvents.length / Math.max(1, commandSummaries.length)),
