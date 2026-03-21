@@ -36,6 +36,7 @@ import { MessageV2 } from "@/session/message"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
 import { matchesTaskEvent, registerGoalRunSession, taskSession } from "./task-event"
+import { appendTaskEvent, replayTaskEvents } from "./task-event-log"
 
 export const OrchestratorRoutes = lazy(() =>
   new Hono()
@@ -202,10 +203,12 @@ export const OrchestratorRoutes = lazy(() =>
       validator("param", z.object({ taskID: Task.shape.id })),
       async (c) => {
         const taskID = c.req.valid("param").taskID
+        const after = Math.max(0, parseInt(c.req.query("after") ?? "0", 10) || 0)
         c.header("X-Accel-Buffering", "no")
         c.header("X-Content-Type-Options", "nosniff")
         return streamSSE(c, async (stream) => {
           const sessionID = taskSession(taskID)
+          let sequence = 0
           // Seed the goal-run registry with any existing child sessions so
           // reconnecting SSE streams pick up events for already-running goals.
           if (sessionID) {
@@ -217,29 +220,62 @@ export const OrchestratorRoutes = lazy(() =>
               queue.push(...children.map((child) => child.id))
             }
           }
-          await stream.writeSSE({
-            data: JSON.stringify(taskEvent(taskID, {
-              type: "task.connected",
-              properties: {
-                taskID,
-                summary: "Task event stream connected",
-              },
-            })),
-          })
+
+          // Replay missed events on reconnect (B2 fix)
+          if (after > 0) {
+            const missed = replayTaskEvents(taskID, after)
+            if (missed === null) {
+              // Buffer too old — tell client to do a full reload
+              const reloadEvt = taskEvent(taskID, {
+                type: "task.replay_expired",
+                properties: { taskID, summary: "Event replay buffer expired, full reload required" },
+              }, ++sequence)
+              const reloadData = JSON.stringify(reloadEvt)
+              appendTaskEvent(taskID, sequence, reloadData)
+              await stream.writeSSE({ data: reloadData })
+            } else {
+              for (const data of missed) {
+                await stream.writeSSE({ data })
+              }
+              // Advance our sequence counter past the replayed events
+              if (missed.length > 0) {
+                try {
+                  const last = JSON.parse(missed[missed.length - 1])
+                  if (typeof last.sequence === "number" && last.sequence > sequence) {
+                    sequence = last.sequence
+                  }
+                } catch { /* ignore parse errors */ }
+              }
+            }
+          }
+
+          const connEvt = taskEvent(taskID, {
+            type: "task.connected",
+            properties: {
+              taskID,
+              summary: "Task event stream connected",
+            },
+          }, ++sequence)
+          const connData = JSON.stringify(connEvt)
+          appendTaskEvent(taskID, sequence, connData)
+          await stream.writeSSE({ data: connData })
+
           const unsub = Bus.subscribeAll(async (event) => {
             if (!matchesTaskEvent(event, taskID, sessionID)) return
-            await stream.writeSSE({ data: JSON.stringify(taskEvent(taskID, event)) })
+            const data = JSON.stringify(taskEvent(taskID, event, ++sequence))
+            appendTaskEvent(taskID, sequence, data)
+            await stream.writeSSE({ data })
           })
           const heartbeat = setInterval(() => {
-            stream.writeSSE({
-              data: JSON.stringify(taskEvent(taskID, {
-                type: "task.heartbeat",
-                properties: {
-                  taskID,
-                  summary: "Task event stream heartbeat",
-                },
-              })),
-            })
+            const data = JSON.stringify(taskEvent(taskID, {
+              type: "task.heartbeat",
+              properties: {
+                taskID,
+                summary: "Task event stream heartbeat",
+              },
+            }, ++sequence))
+            // Don't store heartbeats in replay buffer — they're ephemeral
+            stream.writeSSE({ data })
           }, 10_000)
           await new Promise<void>((resolve) => {
             stream.onAbort(() => {
@@ -789,13 +825,14 @@ export const OrchestratorRoutes = lazy(() =>
     ),
 )
 
-function taskEvent(taskID: string, event: { type: string; properties: Record<string, unknown> }) {
+function taskEvent(taskID: string, event: { type: string; properties: Record<string, unknown> }, sequence?: number) {
   return {
     event_id: `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
     task_id: taskID,
     run_id: typeof event.properties.runID === "string" ? event.properties.runID : undefined,
     type: event.type.replace("orchestrator.", ""),
     timestamp: Date.now(),
+    sequence: sequence ?? 0,
     summary: typeof event.properties.summary === "string" ? event.properties.summary : event.type,
     payload: event.properties,
   }

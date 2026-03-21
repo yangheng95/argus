@@ -3874,6 +3874,79 @@ test("hidden control parts do not relabel user turns as system", async () => {
   }
 }, { timeout: 20_000 })
 
+test("child session prompts render as planner turns instead of impersonating the user", async () => {
+  const exe = await browser()
+  const server = serve()
+  const page = await launchBrowser()
+
+  try {
+    const tab = await page.newPage()
+    await tab.goto(`http://127.0.0.1:${server.port}`, { waitUntil: "load" })
+    await tab.waitForFunction(() => {
+      try {
+        return typeof window.eval("renderConversation") === "function" && !!window.eval("state").i18nReady
+      } catch {
+        return false
+      }
+    })
+
+    const result = await tab.evaluate(() => {
+      const state = window.eval("state")
+      const renderConversation = window.eval("renderConversation")
+
+      state.selectedTaskID = "task-1"
+      state.board = {
+        task: {
+          id: "task-1",
+          sessionID: "session-root",
+          status: "planning",
+          request: "创建一个个人主页",
+          time: { created: 1, updated: 3 },
+        },
+        lanes: [],
+        interactions: [],
+      }
+      state.messages = [
+        {
+          info: {
+            id: "msg-user-root",
+            role: "user",
+            sessionID: "session-root",
+            time: { created: 1 },
+          },
+          parts: [{ type: "text", text: "创建一个个人主页" }],
+        },
+        {
+          info: {
+            id: "msg-user-child",
+            role: "user",
+            agent: "planner",
+            sessionID: "session-child",
+            time: { created: 2 },
+          },
+          parts: [{ type: "text", text: "拆解需求并生成执行计划。" }],
+        },
+      ]
+      state._renderedGroupKey = ""
+
+      renderConversation()
+
+      return [...document.querySelectorAll(".turn")].map((node) => ({
+        role: (node as HTMLElement).dataset.role || "",
+        text: (node.querySelector(".msg-body")?.textContent || "").trim(),
+      }))
+    })
+
+    expect(result[0]?.role).toBe("user")
+    expect(result[0]?.text).toContain("创建一个个人主页")
+    expect(result[1]?.role).toBe("planner")
+    expect(result[1]?.text).toContain("拆解需求并生成执行计划")
+  } finally {
+    await page.close()
+    server.stop(true)
+  }
+}, { timeout: 20_000 })
+
 test("selected task panel requests keep task context instead of binding the task session", async () => {
   const exe = await browser()
   const server = serve()

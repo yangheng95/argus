@@ -49,6 +49,10 @@
       return !!state.selectedTaskID;
     }
 
+    function enterSessionWorkspace() {
+      throw new Error("Overlay no longer supports session workspaces");
+    }
+
     function clearWorkspaceRuntime(options = {}) {
       state.workspaceEpoch = (state.workspaceEpoch || 0) + 1;
       deps.stopPolling();
@@ -116,6 +120,7 @@
       clearWorkspaceRuntime,
       clearProjectScopeData,
       enterEmptyWorkspace,
+      enterSessionWorkspace,
       enterTaskWorkspace,
     };
   }
