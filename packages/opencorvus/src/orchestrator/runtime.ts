@@ -42,6 +42,8 @@ import {
   updateExecutorSessionStatus,
 } from "./persist"
 import { advanceTaskStage } from "./pipeline"
+import { sessionStreamHooks } from "./session-stream"
+import { registerGoalRunSession } from "@/server/routes/task-event"
 import { buildRetryContext, decideRetryOrReplan } from "./strategy"
 import {
   findDeliveryByRun,
@@ -1162,6 +1164,14 @@ async function publishAcceptedDelivery(task: TaskRow, run: RunRow, delivery: Del
   const verifyGoals = run.plan_version_id ? listGoalsByPlan(run.plan_version_id) : []
   if (verifyGoals.length > 0) {
     const deliveryLive = agentStream({ taskID: task.id, runID: run.id, stage: "delivery" })
+    // Create a child session so delivery verification output is persisted and streamed
+    const deliverySession = await Session.createNext({
+      parentID: task.session_id ?? undefined,
+      title: `Delivery: ${task.title}`,
+      directory: Instance.directory,
+    })
+    registerGoalRunSession(deliverySession.id, task.id)
+    const deliveryContentHooks = sessionStreamHooks({ sessionID: deliverySession.id, taskID: task.id })
     await deliveryLive.start("Delivery verification started")
     let deliveryVerdict: DeliveryVerdictType | undefined
     try {
@@ -1192,7 +1202,16 @@ async function publishAcceptedDelivery(task: TaskRow, run: RunRow, delivery: Del
             diffs: Array.isArray(deliveryResult.diffs) ? deliveryResult.diffs : [],
           },
           analysis,
-          stream: deliveryLive.hooks,
+          stream: {
+            onChunk: async (arg: any) => {
+              if (deliveryContentHooks.onChunk) await deliveryContentHooks.onChunk(arg)
+              if (deliveryLive.hooks.onChunk) await deliveryLive.hooks.onChunk(arg)
+            },
+            onError: async (arg: any) => {
+              if (deliveryContentHooks.onError) await deliveryContentHooks.onError(arg)
+              if (deliveryLive.hooks.onError) await deliveryLive.hooks.onError(arg)
+            },
+          },
         }),
         new Promise<never>((_, reject) =>
           setTimeout(() => reject(new Error("delivery verification timeout")), DELIVERY_VERIFY_TIMEOUT_MS),

@@ -645,6 +645,7 @@ const {
   clearWorkspaceRuntime,
   clearProjectScopeData,
   enterEmptyWorkspace,
+  enterSessionWorkspace,
   enterTaskWorkspace,
 } = workspace;
 
@@ -657,6 +658,7 @@ Object.assign(window, {
   clearWorkspaceRuntime,
   clearProjectScopeData,
   enterEmptyWorkspace,
+  enterSessionWorkspace,
   enterTaskWorkspace,
 });
 
@@ -4313,11 +4315,17 @@ function renderMeta() {
   const path = dom.taskDir.querySelector(".task-dir-path");
   if (path) path.scrollLeft = path.scrollWidth;
   if (dom.taskWorkspaceDir) {
-    const relWorkspace = relativePathFrom(dir, workspace);
-    const showWorkspace = !!relWorkspace;
+    const dirText = typeof dir === "string" ? dir.trim().replace(/[\\/]+$/, "") : "";
+    const workspaceText = typeof workspace === "string" ? workspace.trim().replace(/[\\/]+$/, "") : "";
+    const sameWorkspace =
+      !!dirText &&
+      !!workspaceText &&
+      dirText.toLowerCase() === workspaceText.toLowerCase();
+    const workspaceLabel = relativePathFrom(dirText, workspaceText) || shortPath(workspaceText);
+    const showWorkspace = !!workspaceText && !sameWorkspace;
     dom.taskWorkspaceDir.hidden = !showWorkspace;
-    dom.taskWorkspaceDir.textContent = showWorkspace ? t("cwd.execution_workspace", { value: relWorkspace }) : "";
-    dom.taskWorkspaceDir.title = showWorkspace ? workspace : "";
+    dom.taskWorkspaceDir.textContent = showWorkspace ? t("cwd.execution_workspace", { value: workspaceLabel }) : "";
+    dom.taskWorkspaceDir.title = showWorkspace ? workspaceText : "";
   }
 
   const actionable = canInitGit();
@@ -4690,7 +4698,8 @@ async function selectTask(taskID, options = {}) {
       renderConversation();
     }
 
-  await Promise.all([loadBoard({ sync: true }), loadConversation(), loadMeta(), loadMemory()]);
+  await Promise.all([loadBoard({ sync: true }), loadMeta(), loadMemory()]);
+  await loadConversation();
   rememberWorkspace({
     taskID: nextTaskID,
   });
@@ -4812,6 +4821,7 @@ async function loadBoard(options = {}) {
       state.taskSequence = Math.max(state.taskSequence, nextSequence);
       clearBoardRetry();
       state.boardUpdatedAt = Date.now();
+      renderMeta();
       renderBoard();
       renderConversation();
       await Promise.all([
@@ -4929,11 +4939,18 @@ function currentSessionID() {
   return currentTaskSessionID();
 }
 
+function rootTaskSessionID() {
+  const sessionID = state.board?.task?.sessionID;
+  return typeof sessionID === "string" ? sessionID : "";
+}
+
 function matchesCurrentSession(sessionID) {
   if (!sessionID) return false;
   const current = currentSessionID();
   if (!current) {
-    if (state.selectedTaskID) scheduleConversation(CONVERSATION_EVENT_DEBOUNCE);
+    // We cannot classify task-scoped message events until the root session is known.
+    // Force a transcript refresh immediately so planner/spec child sessions resolve fast.
+    if (state.selectedTaskID) scheduleConversation(0);
     return false;
   }
   if (current === sessionID) return true;
@@ -5148,6 +5165,213 @@ function mergeMessages(...lists) {
   );
 }
 
+function agentStageRole(stage) {
+  const text = String(stage || "").trim().toLowerCase();
+  if (text === "planner" || text === "plan") return "planner";
+  if (text === "spec") return "spec";
+  if (text === "judge" || text === "evaluation" || text === "scheduler") return "scheduler";
+  if (text === "delivery" || text === "files") return "delivery";
+  return "system";
+}
+
+function activeAgentStages() {
+  const status = String(state.board?.task?.status || "").trim().toLowerCase();
+  if (status === "planning") return new Set(["spec", "planner"]);
+  if (status === "evaluating") return new Set(["judge"]);
+  if (status === "delivering") return new Set(["delivery"]);
+  if (!status && Array.isArray(state.agentEvents) && state.agentEvents.length > 0) {
+    return new Set(state.agentEvents.map((item) => String(item?.stage || "").trim().toLowerCase()).filter(Boolean));
+  }
+  return new Set();
+}
+
+function agentEventEntry(raw) {
+  const payload = record(raw?.payload) ? raw.payload : record(raw?.properties) ? raw.properties : {};
+  const stage = String(payload.stage || "").trim().toLowerCase();
+  const kind = String(payload.kind || "status").trim().toLowerCase();
+  const created = Number(raw?.timestamp || payload.timestamp || Date.now());
+  const toolName = typeof payload.toolName === "string" && payload.toolName.trim()
+    ? payload.toolName.trim()
+    : typeof payload.name === "string" && payload.name.trim()
+      ? payload.name.trim()
+      : "";
+  const text = displayString(payload.text);
+  const summary = displayString(raw?.summary || payload.summary || text);
+  const id =
+    typeof payload.id === "string" && payload.id
+      ? payload.id
+      : typeof raw?.event_id === "string" && raw.event_id
+        ? raw.event_id
+        : `${stage}:${kind}:${toolName || "event"}:${created}`;
+  if (!stage) return null;
+  if (!summary && !text && !toolName) return null;
+  return {
+    id,
+    eventID: typeof raw?.event_id === "string" ? raw.event_id : "",
+    stage,
+    kind,
+    toolName,
+    text,
+    summary,
+    payload,
+    time: {
+      created: Number.isFinite(created) ? created : Date.now(),
+    },
+  };
+}
+
+function agentEventTargetText(event) {
+  if (!event) return "";
+  if (event.kind === "message_delta" || event.kind === "reasoning_delta" || event.kind === "status") {
+    return displayString(event.text || event.summary);
+  }
+  if (event.kind === "tool_call" || event.kind === "tool_delta") {
+    return displayString(event.text || event.payload?.text || event.summary);
+  }
+  if (event.kind === "tool_result") {
+    return displayString(event.payload?.output || event.payload?.result || event.summary);
+  }
+  return displayString(event.summary);
+}
+
+function syncAgentText(event) {
+  if (!event) return;
+  const key = `agent:${event.stage}:${event.id || "unknown"}`;
+  const target = agentEventTargetText(event);
+  if (!target) {
+    delete event._targetText;
+    delete event._liveText;
+    stopLiveText(key);
+    return;
+  }
+  event._targetText = target;
+  startLiveText(key, target, typeof event._liveText === "string" ? event._liveText : "", (value) => {
+    event._liveText = value;
+  });
+}
+
+function mergeAgentEvent(existing, next) {
+  if (!existing) return next;
+  if (next.kind === "message_delta" || next.kind === "reasoning_delta") {
+    return {
+      ...existing,
+      ...next,
+      text: `${displayString(existing._targetText || existing.text || existing.summary)}${displayString(next.text || next.summary)}`,
+      summary: `${displayString(existing._targetText || existing.text || existing.summary)}${displayString(next.text || next.summary)}`,
+      payload: {
+        ...(record(existing.payload) ? existing.payload : {}),
+        ...(record(next.payload) ? next.payload : {}),
+      },
+    };
+  }
+  if (next.kind === "tool_delta") {
+    const mergedText = `${displayString(existing.text || existing.payload?.text || "")}${displayString(next.text || next.payload?.text || next.summary)}`;
+    return {
+      ...existing,
+      ...next,
+      kind: existing.kind === "tool_result" ? "tool_result" : "tool_call",
+      text: mergedText,
+      summary: displayString(existing.summary || next.summary),
+      payload: {
+        ...(record(existing.payload) ? existing.payload : {}),
+        ...(record(next.payload) ? next.payload : {}),
+        text: mergedText,
+      },
+    };
+  }
+  if (next.kind === "tool_result") {
+    return {
+      ...existing,
+      ...next,
+      payload: {
+        ...(record(existing.payload) ? existing.payload : {}),
+        ...(record(next.payload) ? next.payload : {}),
+        text: displayString(existing.payload?.text || existing.text || next.payload?.text || ""),
+      },
+    };
+  }
+  return {
+    ...existing,
+    ...next,
+    payload: {
+      ...(record(existing.payload) ? existing.payload : {}),
+      ...(record(next.payload) ? next.payload : {}),
+    },
+  };
+}
+
+function mergeAgentEventList(events = [], raw) {
+  const event = agentEventEntry(raw);
+  if (!event) return events;
+  const index = events.findIndex((item) => item.id === event.id && item.stage === event.stage);
+  const next = index >= 0
+    ? [
+      ...events.slice(0, index),
+      mergeAgentEvent(events[index], event),
+      ...events.slice(index + 1),
+    ]
+    : [...events, event];
+  const target = index >= 0 ? next[index] : next[next.length - 1];
+  syncAgentText(target);
+  return next.sort((a, b) => (a.time?.created || 0) - (b.time?.created || 0));
+}
+
+function appendAgentEvent(raw) {
+  state.agentEvents = mergeAgentEventList(state.agentEvents, raw);
+  state.conversationUpdatedAt = Date.now();
+  renderConversation();
+}
+
+function agentMessage(event) {
+  if (!event) return null;
+  const created = event.time?.created || Date.now();
+  if (event.kind === "tool_call" || event.kind === "tool_delta" || event.kind === "tool_result") {
+    const part = eventToolPart(event, {
+      status: event.kind === "tool_result" ? "completed" : "running",
+      output: event.kind === "tool_result" ? agentEventTargetText(event) : "",
+    });
+    if (!part) return null;
+    return {
+      _synthetic: true,
+      info: {
+        id: `agent:${event.stage}:${event.id}`,
+        role: "task_tool",
+        agent: event.stage,
+        time: { created },
+      },
+      parts: [part],
+    };
+  }
+  const text = typeof event._liveText === "string" ? event._liveText : agentEventTargetText(event);
+  if (!text.trim()) return null;
+  const type = event.kind === "reasoning_delta" ? "reasoning" : "text";
+  return {
+    _synthetic: true,
+    info: {
+      id: `agent:${event.stage}:${event.id}`,
+      role: agentStageRole(event.stage),
+      agent: event.stage,
+      time: { created },
+    },
+    parts: [{
+      id: `agent-part:${event.stage}:${event.id}`,
+      type,
+      text,
+      messageID: `agent:${event.stage}:${event.id}`,
+      sessionID: "",
+    }],
+  };
+}
+
+function buildAgentMessages() {
+  const stages = activeAgentStages();
+  if (stages.size === 0) return [];
+  return (Array.isArray(state.agentEvents) ? state.agentEvents : [])
+    .filter((event) => stages.has(String(event?.stage || "").trim().toLowerCase()))
+    .map((event) => agentMessage(event))
+    .filter(Boolean);
+}
+
 
 // Agent content display functions removed — agent output now goes through
 // session/message system and is rendered via standard message handlers.
@@ -5358,6 +5582,14 @@ function handleEventStreamEvent(event) {
   const gap = sync === "gap";
   const type = event.type || "";
   if (type === "task.heartbeat") return;
+  if (type === "task.replay_expired") {
+    // Server's replay buffer is too old — do a full transcript reload
+    AppLog.warn("sse", "replay buffer expired, performing full reload");
+    loadConversation();
+    scheduleTasks(0);
+    scheduleBoard(0);
+    return;
+  }
   const properties = eventData(event);
   if (type === "message.updated") {
     const info = record(properties.info) ? properties.info : null;
@@ -5458,10 +5690,10 @@ function handleEventStreamEvent(event) {
     return;
   }
   if (type === "agent.updated") {
-    // Agent status only — content is now persisted to sessions and arrives via message.part.* events
     const stage = properties.stage || "";
     const kind = properties.kind || "";
     const summary = typeof event.summary === "string" ? event.summary : typeof properties.summary === "string" ? properties.summary : "";
+    appendAgentEvent(event);
     if (stage && summary) {
       state.agentStatus = { stage, kind, summary, timestamp: Date.now() };
       renderBoard();
@@ -5484,6 +5716,7 @@ function handleEventStreamEvent(event) {
   ) {
     scheduleTasks(BOARD_EVENT_DEBOUNCE);
     scheduleBoard(BOARD_EVENT_DEBOUNCE);
+    scheduleConversation(BOARD_EVENT_DEBOUNCE);
     return;
   }
   repairEventGap(gap);
@@ -6996,6 +7229,11 @@ function effectiveRole(msg) {
   if (role !== "user") return role;
   const source = detectSource(msg);
   if (source) return source;
+  const rootSession = rootTaskSessionID();
+  const sessionID = typeof msg.info?.sessionID === "string" ? msg.info.sessionID : "";
+  if (rootSession && sessionID && sessionID !== rootSession) {
+    return agentStageRole(phaseFromMessage(msg) || msg.info?.agent || "system");
+  }
   return role;
 }
 
@@ -7909,6 +8147,20 @@ function buildBoardContextMessages() {
   if (!board) return [];
   const messages = [];
   const { task, plan, evaluation, delivery, lanes } = board;
+  const activeStages = activeAgentStages();
+  const liveStages = new Set(
+    (Array.isArray(state.agentEvents) ? state.agentEvents : [])
+      .map((event) => String(event?.stage || "").trim().toLowerCase())
+      .filter((stage) => activeStages.has(stage)),
+  );
+  const transcriptMessages = Array.isArray(state.messages) ? state.messages : [];
+  const hasStageMessage = (stage) => transcriptMessages.some((message) =>
+    message?.info?.role !== "user" &&
+    (
+      effectiveRole(message) === stage ||
+      phaseFromMessage(message) === phaseFromAgent(stage)
+    ),
+  );
 
   // 1. User request — show the original task request as a "user" turn
   if (task?.request && !hasConversationRequest(state.messages || [], task.request)) {
@@ -7919,8 +8171,15 @@ function buildBoardContextMessages() {
     });
   }
 
-  // Spec and plan content now comes from session messages (streamed via SSE).
-  // Board context only provides structural metadata below.
+  if (board.spec && !liveStages.has("spec") && !hasStageMessage("spec")) {
+    const message = syntheticTextMessage("spec", board.spec.time?.created || task?.time?.updated || Date.now(), specContextText(board.spec));
+    if (message) messages.push(message);
+  }
+  if (plan && !liveStages.has("planner") && !hasStageMessage("planner")) {
+    const goals = (lanes || []).find((lane) => lane.id === "goals")?.cards || [];
+    const message = syntheticTextMessage("planner", plan.time?.created || task?.time?.updated || Date.now(), planContextText(plan, goals));
+    if (message) messages.push(message);
+  }
 
   for (const interaction of Array.isArray(board.interactions) ? board.interactions : []) {
     const request = syntheticTextMessage("system", interaction.time?.created || Date.now(), interactionRequestText(interaction));
@@ -7999,6 +8258,7 @@ function hasConversationRequest(messages, request) {
 
 function conversationMessages() {
   const boardMsgs = buildBoardContextMessages();
+  const agentMsgs = buildAgentMessages();
   const executorMsgs = buildExecutorMessages();
   let realMessages = state.messages || [];
   if (boardMsgs.length > 0 && realMessages.length > 0) {
@@ -8007,7 +8267,7 @@ function conversationMessages() {
       return !text.includes("<assistant-brief>") && !text.includes("You are executing a headless coding task");
     });
   }
-  return [...realMessages, ...executorMsgs, ...boardMsgs].sort((a, b) => (a.info?.time?.created || 0) - (b.info?.time?.created || 0));
+  return [...realMessages, ...agentMsgs, ...executorMsgs, ...boardMsgs].sort((a, b) => (a.info?.time?.created || 0) - (b.info?.time?.created || 0));
 }
 
 function renderFilePart(part) {
