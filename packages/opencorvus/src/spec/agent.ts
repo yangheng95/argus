@@ -287,10 +287,49 @@ async function run(input: {
       ...(input.stream?.onChunk ? { onChunk: input.stream.onChunk as any } : {}),
       ...(input.stream?.onError ? { onError: input.stream.onError } : {}),
     })
-    // Collect resolved properties from the stream
-    const [resultText, resultSteps, resultFinishReason] = await Promise.all([
-      stream.text, stream.steps, stream.finishReason,
-    ])
+
+    // Collect resolved properties from the stream.
+    // Some providers (e.g. GitHub Copilot proxying Claude) hang after a tool call:
+    // the tool execute() fires and sets submittedSpec, but the stream never finishes.
+    // Race the normal stream completion against a grace-period timeout that checks
+    // whether submittedSpec was already captured by the tool execute() callback.
+    const SUBMIT_GRACE_MS = 30_000
+    let resultText = ""
+    let resultSteps: any[] = []
+    let resultFinishReason = "unknown"
+    try {
+      const streamDone = Promise.all([stream.text, stream.steps, stream.finishReason])
+      const submitGuard = new Promise<null>((resolve) => {
+        const check = () => {
+          if (submittedSpec) resolve(null)
+          else setTimeout(check, 2000)
+        }
+        setTimeout(check, 5000) // start checking after 5s
+      }).then(() =>
+        // submittedSpec is set — give the stream a grace period to finish normally
+        Promise.race([
+          streamDone,
+          new Promise<null>((resolve) => setTimeout(() => resolve(null), SUBMIT_GRACE_MS)),
+        ]),
+      )
+      const raced = await Promise.race([streamDone, submitGuard])
+      if (Array.isArray(raced)) {
+        ;[resultText, resultSteps, resultFinishReason] = raced as [string, any[], string]
+      } else if (submittedSpec) {
+        log.info("spec agent: stream did not finish but submit_spec captured — using captured result", {
+          attempt: attempt + 1,
+        })
+      }
+    } catch (err) {
+      if (submittedSpec) {
+        log.info("spec agent: stream errored but submit_spec captured — using captured result", {
+          attempt: attempt + 1,
+          error: String(err),
+        })
+      } else {
+        throw err
+      }
+    }
 
     const toolCallCount = resultSteps.reduce(
       (sum, s) => sum + (Array.isArray((s as any).toolCalls) ? (s as any).toolCalls.length : 0),

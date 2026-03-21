@@ -1,4 +1,5 @@
 import { OrchestratorTaskTable } from "@/orchestrator/orchestrator.sql"
+import { SessionTable } from "@/session/session.sql"
 import { Database, eq } from "@/storage/db"
 
 // In-memory registry of goal run session IDs → task IDs.
@@ -6,8 +7,15 @@ import { Database, eq } from "@/storage/db"
 // O(1) lookup with no DB queries at event-dispatch time.
 const goalRunSessionRegistry = new Map<string, string>()
 
+function cacheTaskSessions(taskID: string, ...sessionIDs: Array<string | undefined>) {
+  for (const sessionID of sessionIDs) {
+    if (!sessionID) continue
+    goalRunSessionRegistry.set(sessionID, taskID)
+  }
+}
+
 export function registerGoalRunSession(sessionID: string, taskID: string) {
-  goalRunSessionRegistry.set(sessionID, taskID)
+  cacheTaskSessions(taskID, sessionID)
 }
 
 export function unregisterGoalRunSession(sessionID: string) {
@@ -22,7 +30,44 @@ export function taskSession(taskID: string) {
       .where(eq(OrchestratorTaskTable.id, taskID))
       .get(),
   )
-  return row?.sessionID ?? undefined
+  const sessionID = row?.sessionID ?? undefined
+  cacheTaskSessions(taskID, sessionID)
+  return sessionID
+}
+
+export function taskIDForSession(sessionID: string) {
+  const initial = typeof sessionID === "string" ? sessionID.trim() : ""
+  if (!initial) return undefined
+  const visited: string[] = []
+  let current = initial
+  while (current && !visited.includes(current)) {
+    visited.push(current)
+    const cached = goalRunSessionRegistry.get(current)
+    if (cached) {
+      cacheTaskSessions(cached, ...visited)
+      return cached
+    }
+    const task = Database.use((db) =>
+      db
+        .select({ id: OrchestratorTaskTable.id })
+        .from(OrchestratorTaskTable)
+        .where(eq(OrchestratorTaskTable.session_id, current))
+        .get(),
+    )
+    if (task?.id) {
+      cacheTaskSessions(task.id, ...visited)
+      return task.id
+    }
+    const parent = Database.use((db) =>
+      db
+        .select({ parentID: SessionTable.parent_id })
+        .from(SessionTable)
+        .where(eq(SessionTable.id, current))
+        .get(),
+    )
+    current = typeof parent?.parentID === "string" ? parent.parentID : ""
+  }
+  return undefined
 }
 
 export function matchesTaskEvent(

@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
+import { Bus } from "../../src/bus"
+import { Identifier } from "../../src/id/id"
 import { Database, eq } from "../../src/storage/db"
 import { ProjectTable } from "../../src/project/project.sql"
 import { OrchestratorTaskTable } from "../../src/orchestrator/orchestrator.sql"
@@ -8,6 +10,9 @@ import { OrchestratorService } from "../../src/orchestrator/service"
 import { findTask } from "../../src/orchestrator/store"
 import { updateTask } from "../../src/orchestrator/state"
 import { Instance } from "../../src/project/instance"
+import { Session } from "../../src/session"
+import { MessageV2 } from "../../src/session/message"
+import { ensureTaskMessageProtocolBridge } from "../../src/server/routes/task-message-protocol-bridge"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 
@@ -126,6 +131,90 @@ describe("orchestrator protocol", () => {
             .get(),
         )
         expect(stored?.status).toBe("blocked")
+      },
+    })
+  })
+
+  test("bridges root and child session message events into task protocol events", async () => {
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        ensureTaskMessageProtocolBridge()
+
+        const now = Date.now()
+        const root = await Session.create({ title: "Task root" })
+        const child = await Session.create({ parentID: root.id, title: "Judge child" })
+        Database.use((db) =>
+          db.update(OrchestratorTaskTable)
+            .set({
+              session_id: root.id,
+              time_updated: now,
+            })
+            .where(eq(OrchestratorTaskTable.id, taskID))
+            .run(),
+        )
+
+        const rootMessageID = Identifier.ascending("message")
+        await Session.updateMessage({
+          id: rootMessageID,
+          sessionID: root.id,
+          role: "user",
+          time: { created: now },
+          agent: "planner",
+          model: { providerID: "test", modelID: "test" },
+        } satisfies MessageV2.User)
+        await Session.updatePart({
+          id: Identifier.ascending("part"),
+          sessionID: root.id,
+          messageID: rootMessageID,
+          type: "text",
+          text: "planner output",
+        } satisfies MessageV2.TextPart)
+
+        const childMessageID = Identifier.ascending("message")
+        await Session.updateMessage({
+          id: childMessageID,
+          sessionID: child.id,
+          role: "user",
+          time: { created: now + 2 },
+          agent: "judge",
+          model: { providerID: "test", modelID: "test" },
+        } satisfies MessageV2.User)
+        await Bus.publish(MessageV2.Event.PartDelta, {
+          sessionID: child.id,
+          messageID: childMessageID,
+          partID: Identifier.ascending("part"),
+          field: "text",
+          delta: "judge delta",
+        })
+
+        let events = await OrchestratorService.listProtocolEvents(taskID)
+        for (const _ of Array.from({ length: 25 })) {
+          if (
+            events.some((item) => item.type === "message.updated" && item.sessionID === root.id) &&
+            events.some((item) => item.type === "message.part.updated" && item.sessionID === root.id) &&
+            events.some((item) => item.type === "message.part.delta" && item.sessionID === child.id)
+          ) break
+          await Bun.sleep(20)
+          events = await OrchestratorService.listProtocolEvents(taskID)
+        }
+
+        const rootMessage = events.find((item) => item.type === "message.updated" && item.sessionID === root.id)
+        const rootPart = events.find((item) => item.type === "message.part.updated" && item.sessionID === root.id)
+        const childDelta = events.find((item) => item.type === "message.part.delta" && item.sessionID === child.id)
+
+        expect(rootMessage).toBeTruthy()
+        expect(rootPart).toBeTruthy()
+        expect(childDelta).toBeTruthy()
+        expect(rootMessage?.taskID).toBe(taskID)
+        expect(rootPart?.taskID).toBe(taskID)
+        expect(childDelta?.taskID).toBe(taskID)
+        expect(childDelta?.payload).toMatchObject({
+          sessionID: child.id,
+          messageID: childMessageID,
+          field: "text",
+          delta: "judge delta",
+        })
       },
     })
   })

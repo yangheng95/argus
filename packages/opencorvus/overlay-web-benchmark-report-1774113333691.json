@@ -1,0 +1,257 @@
+{
+  "generated_at": "2026-03-21T17:17:24.806Z",
+  "title": "blog-request",
+  "request_file": "D:\\myhexin-local\\argus-opencode\\specs\\blog-request.txt",
+  "executor": "claude-code",
+  "model": "github-copilot/claude-haiku-4.5",
+  "directory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-Fhhyvq",
+  "server": "http://127.0.0.1:56275/",
+  "taskID": "tsk_d11653775001I3M9k8kkYG3y5V",
+  "stage_timeout_ms": {
+    "spec": 86400000,
+    "planner": 86400000,
+    "tool": 600000,
+    "standby": 86400000,
+    "stall": 1200000,
+    "request": 300000
+  },
+  "stage_max_steps": {
+    "spec": 80,
+    "planner": 96
+  },
+  "stall_timeout_ms": 1200000,
+  "completion_hard_timeout_ms": null,
+  "request_timeout_ms": 300000,
+  "taskStatus": "failed",
+  "evaluation": "",
+  "changedFiles": [
+    ".gitignore",
+    ".opencorvus/opencorvus.json",
+    ".opencorvus/preferences.json",
+    "opencorvus.json",
+    "package.json",
+    "tsconfig.json"
+  ],
+  "transcriptCount": 1,
+  "timelineCount": 0,
+  "runCount": 0,
+  "planning": {
+    "pendingCount": 0,
+    "taskList": "还没有任务",
+    "reasoning": "",
+    "assistantText": ""
+  },
+  "streaming": {
+    "reasoning": "",
+    "assistantText": "I'll start by searching memory for any prior work on blog sy",
+    "liveRole": "assistant",
+    "liveText": "I'll start by searching memory for any prior work on blog sy",
+    "reasoningVisible": false,
+    "assistantVisible": true,
+    "liveVisible": true
+  },
+  "materialization": {
+    "boardTaskID": "tsk_d11653775001I3M9k8kkYG3y5V",
+    "boardStatus": "spec_generating",
+    "specVersion": null,
+    "goalCount": 0,
+    "goalRunCount": 0,
+    "criteriaCount": 0
+  },
+  "screenshot": "D:\\myhexin-local\\argus-opencode\\packages\\opencorvus\\overlay-web-benchmark-1774113444428.png",
+  "resume": {
+    "restored": true,
+    "selectedAt": 14195
+  },
+  "timings_ms": {
+    "online": 369,
+    "submit": 5251,
+    "planning_visible": 5590,
+    "streaming_visible": 9540,
+    "task_created": 5598,
+    "task_selected": 5761,
+    "board_loaded": 5764,
+    "resumed": 14195,
+    "completed": 110689,
+    "execution": 105438
+  },
+  "assertions": {
+    "planning_visible": {
+      "pass": true,
+      "sample": {
+        "directory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-Fhhyvq",
+        "savedDirectory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-Fhhyvq",
+        "workspaceDirectory": "",
+        "selectedTaskID": "",
+        "pendingCount": 0,
+        "taskIDs": [
+          "tsk_d11653775001I3M9k8kkYG3y5V"
+        ],
+        "taskList": "还没有任务",
+        "reasoning": "",
+        "assistantText": "",
+        "liveRole": "",
+        "liveText": "",
+        "visibleTurns": [],
+        "storage": {
+          "directory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-Fhhyvq",
+          "directoryMode": "",
+          "workspaceDirectory": "",
+          "workspaceTaskID": ""
+        }
+      }
+    },
+    "streaming_visible": {
+      "pass": true,
+      "sample": {
+        "directory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-Fhhyvq",
+        "savedDirectory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-Fhhyvq",
+        "workspaceDirectory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-Fhhyvq",
+        "selectedTaskID": "tsk_d11653775001I3M9k8kkYG3y5V",
+        "pendingCount": 0,
+        "taskIDs": [
+          "tsk_d11653775001I3M9k8kkYG3y5V"
+        ],
+        "taskList": "进行中\n    \n    \n      \n        \n        blog-request\n      \n      spec_generating\n      01:15:40 / .../Local/Temp/opencorvus-overlay-benchmark-project-Fhhyvq",
+        "reasoning": "",
+        "assistantText": "I'll start by searching memory for any prior work on blog sy",
+        "liveRole": "assistant",
+        "liveText": "I'll start by searching memory for any prior work on blog sy",
+        "visibleTurns": [
+          {
+            "role": "assistant",
+            "text": "I'll start by searching memory for any prior work on blog sy"
+          }
+        ],
+        "storage": {
+          "directory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-Fhhyvq",
+          "directoryMode": "",
+          "workspaceDirectory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-Fhhyvq",
+          "workspaceTaskID": "tsk_d11653775001I3M9k8kkYG3y5V"
+        }
+      }
+    },
+    "materialized": {
+      "pass": true,
+      "sample": {
+        "taskID": "tsk_d11653775001I3M9k8kkYG3y5V",
+        "boardTaskID": "tsk_d11653775001I3M9k8kkYG3y5V",
+        "resumed": true
+      }
+    },
+    "delivery": {
+      "pass": false,
+      "sample": {
+        "taskStatus": "failed",
+        "verdict": "",
+        "localExit": 0,
+        "qualityVerdict": "rejected"
+      }
+    }
+  },
+  "local_verify": {
+    "mode": "skipped",
+    "command": null,
+    "exitCode": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  "artifact_audit": {
+    "source_files_added": 0,
+    "config_files_added": 2,
+    "doc_files_added": 0,
+    "source_file_count": 0,
+    "doc_file_count": 0,
+    "non_source_churn_ratio": 1,
+    "readme_proliferation_count": 0,
+    "out_of_scope_file_count": 0,
+    "scaffold_noise_count": 0,
+    "placeholder_count": 0,
+    "out_of_scope_files": [],
+    "unmapped_files": [],
+    "placeholder_hits": [],
+    "duplicate_docs": [],
+    "scaffold_expansion_flags": []
+  },
+  "run_metrics": {
+    "meaningful_change_gap_ms": 109823,
+    "noop_cycle_count": 0,
+    "repeat_command_ratio": 0.6153846153846154,
+    "repeat_reasoning_similarity": 0.6153846153846154,
+    "required_check_pass_rate": 0,
+    "critical_check_pass_rate": 0,
+    "check_relevance_score": 0,
+    "verification_edit_ratio": 0,
+    "feature_coverage_p0": 0.5,
+    "scope_drift_score": 0,
+    "plan_to_change_traceability": 1,
+    "delivery_focus_score": 1
+  },
+  "failure_matrix": {
+    "verdict": "rejected",
+    "primary_failure": "verification_gap",
+    "failures": [
+      {
+        "category": "verification_gap",
+        "message": "Core delivery acceptance checks did not all pass",
+        "evidence": "taskStatus=failed, evaluationVerdict=, localVerifyExitCode=0"
+      }
+    ]
+  },
+  "manual_review_summary": "verification_gap: Core delivery acceptance checks did not all pass",
+  "overlay": {
+    "directory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-Fhhyvq",
+    "savedDirectory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-Fhhyvq",
+    "workspaceDirectory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-Fhhyvq",
+    "selectedTaskID": "tsk_d11653775001I3M9k8kkYG3y5V",
+    "pendingCount": 0,
+    "taskIDs": [
+      "tsk_d11653775001I3M9k8kkYG3y5V"
+    ],
+    "taskList": "进行中\n    \n    \n      \n        \n        blog-request\n      \n      spec_generating\n      01:15:40 / .../Local/Temp/opencorvus-overlay-benchmark-project-Fhhyvq",
+    "reasoning": "",
+    "assistantText": "",
+    "liveRole": "assistant",
+    "liveText": "⚡\n    memory_search\n    memory_search\n    已完成\n  No memories found for this query.\n    ⚡\n    memory_search\n    memory_search\n    已完成\n  No memories found for this query.\n    ⚡\n    preference_list\n    preference_list\n    已完成\n  - **code_comments**: Add clear comments where needed to explain intent, important logic, and non-obvious design decisions. [source: cwd_default]\n- **code_design_principle**: Keep generated code highly cohesive and loosely coupled: related logic should stay together and cross-module dependencies should be minimized. [source: cwd_default]\n- **problem_solving_approach**: Do not rely on patches or temporary workarounds. Resolve problems thoroughly at the root-cause and architectural level. [source: cwd_default]\n- **readme_policy**: Add or update a README for every new module or major feature change. Keep it concise but informative. [source: cwd_default]\n    ⚡\n    list_directory\n    .\n    已完成\n  [dir] .opencorvus\n[dir] data\n[dir] src\n      .gitignore\n      opencorvus.json\n      package.json\n      tsconfig.json\n    📄\n    read_file\n    package.json\n    已完成\n      1 | {\n    2 |   \"name\": \"overlay-web-benchmark\",\n    3 |   \"private\": true,\n    4 |   \"type\": \"module\"\n    5 | }\n    📄\n    read_file\n    opencorvus.json\n    已完成\n      1 | {\n    2 |   \"$schema\": \"https://opencorvus.ai/config.json\",\n    3 |   \"model\": \"github-copilot/claude-haiku-4.5\",\n    4 |   \"experimental\": {\n    5 |     \"unattended\": true\n    6 |   },\n    7 |   \"lsp\": {\n    8 |     \"biome\": {\n    9 |       \"disabled\": true\n   10 |     },\n   11 |     \"eslint\": {\n   12 |       \"disabled\": true\n   13 |     }\n   14 |   },\n   15 |   \"provider\": {\n   16 |     \"github-copilot\": {\n   17 |       \"options\": {\n   18 |         \"timeout\": 300000\n   19 |       }\n   20 |     }\n   21 |   }\n   22 | }\n    ⚡\n    list_directory\n    src\n    已完成\n  \n    ⚡\n    list_directory\n    data\n    已完成\n  \n    ⚡\n    list_directory\n    .opencorvus\n    已完成\n        .gitignore\n      opencorvus.json\n      package.json\n      preferences.json\n    📄\n    read_file\n    .opencorvus/package.json\n    已完成\n      1 | {\n    2 |   \"dependencies\": {\n    3 |     \"@opencorvus-ai/plugin\": \"*\"\n    4 |   }\n    5 | }\n    📄\n    read_file\n    tsconfig.json\n    已完成\n      1 | {\n    2 |   \"compilerOptions\": {\n    3 |     \"target\": \"ES2022\",\n    4 |     \"module\": \"Preserve\",\n    5 |     \"moduleResolution\": \"Bundler\",\n    6 |     \"strict\": true,\n    7 |     \"skipLibCheck\": true\n    8 |   }\n    9 | }\n    ⚡\n    web_search\n    web_search\n    已完成\n  Web search failed (HTTP 429).\n    ⚡\n    web_search\n    web_search\n    已完成\n  Web search failed (HTTP 429).\n    ⚡\n    submit_spec\n    submit_spec\n    已完成\n  Specification submitted successfully.",
+    "visibleTurns": [
+      {
+        "role": "assistant",
+        "text": "⚡\n    memory_search\n    memory_search\n    已完成\n  No memories found for this query.\n    ⚡\n    memory_search\n    memory_search\n    已完成\n  No memories found for this query.\n    ⚡\n    preference_list\n    preference_list\n    已完成\n  - **code_comments**: Add clear comments where needed to explain intent, important logic, and non-obvious design decisions. [source: cwd_default]\n- **code_design_principle**: Keep generated code highly cohesive and loosely coupled: related logic should stay together and cross-module dependencies should be minimized. [source: cwd_default]\n- **problem_solving_approach**: Do not rely on patches or temporary workarounds. Resolve problems thoroughly at the root-cause and architectural level. [source: cwd_default]\n- **readme_policy**: Add or update a README for every new module or major feature change. Keep it concise but informative. [source: cwd_default]\n    ⚡\n    list_directory\n    .\n    已完成\n  [dir] .opencorvus\n[dir] data\n[dir] src\n      .gitignore\n      opencorvus.json\n      package.json\n      tsconfig.json\n    📄\n    read_file\n    package.json\n    已完成\n      1 | {\n    2 |   \"name\": \"overlay-web-benchmark\",\n    3 |   \"private\": true,\n    4 |   \"type\": \"module\"\n    5 | }\n    📄\n    read_file\n    opencorvus.json\n    已完成\n      1 | {\n    2 |   \"$schema\": \"https://opencorvus.ai/config.json\",\n    3 |   \"model\": \"github-copilot/claude-haiku-4.5\",\n    4 |   \"experimental\": {\n    5 |     \"unattended\": true\n    6 |   },\n    7 |   \"lsp\": {\n    8 |     \"biome\": {\n    9 |       \"disabled\": true\n   10 |     },\n   11 |     \"eslint\": {\n   12 |       \"disabled\": true\n   13 |     }\n   14 |   },\n   15 |   \"provider\": {\n   16 |     \"github-copilot\": {\n   17 |       \"options\": {\n   18 |         \"timeout\": 300000\n   19 |       }\n   20 |     }\n   21 |   }\n   22 | }\n    ⚡\n    list_directory\n    src\n    已完成\n  \n    ⚡\n    list_directory\n    data\n    已完成\n  \n    ⚡\n    list_directory\n    .opencorvus\n    已完成\n        .gitignore\n      opencorvus.json\n      package.json\n      preferences.json\n    📄\n    read_file\n    .opencorvus/package.json\n    已完成\n      1 | {\n    2 |   \"dependencies\": {\n    3 |     \"@opencorvus-ai/plugin\": \"*\"\n    4 |   }\n    5 | }\n    📄\n    read_file\n    tsconfig.json\n    已完成\n      1 | {\n    2 |   \"compilerOptions\": {\n    3 |     \"target\": \"ES2022\",\n    4 |     \"module\": \"Preserve\",\n    5 |     \"moduleResolution\": \"Bundler\",\n    6 |     \"strict\": true,\n    7 |     \"skipLibCheck\": true\n    8 |   }\n    9 | }\n    ⚡\n    web_search\n    web_search\n    已完成\n  Web search failed (HTTP 429).\n    ⚡\n    web_search\n    web_search\n    已完成\n  Web search failed (HTTP 429).\n    ⚡\n    submit_spec\n    submit_spec\n    已完成\n  Specification submitted successfully."
+      }
+    ],
+    "storage": {
+      "directory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-Fhhyvq",
+      "directoryMode": "",
+      "workspaceDirectory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-Fhhyvq",
+      "workspaceTaskID": "tsk_d11653775001I3M9k8kkYG3y5V"
+    }
+  },
+  "diagnostics": {
+    "event_file": "D:\\myhexin-local\\argus-opencode\\packages\\opencorvus\\overlay-web-benchmark-report-1774113333691.events.json",
+    "event_count": 39,
+    "stage_summary": {
+      "types": {
+        "orchestrator.task.created": 1,
+        "orchestrator.task.updated": 3,
+        "orchestrator.agent.updated": 34,
+        "orchestrator.spec.created": 1
+      },
+      "stages": {
+        "spec": {
+          "event_count": 30,
+          "first_event_ms": 7142,
+          "first_message_ms": null,
+          "first_tool_call_ms": null,
+          "first_tool_result_ms": null,
+          "submit_tool_ms": null,
+          "error_ms": null,
+          "last_event_ms": 81652,
+          "kind_counts": {
+            "status": 30
+          },
+          "tool_calls": {}
+        }
+      }
+    }
+  }
+}

@@ -1,6 +1,6 @@
-import { Bus } from "@/bus"
 import { Database, eq } from "@/storage/db"
 import { Event } from "./model"
+import { OrchestratorProtocol } from "./protocol"
 import { progressStatus } from "./helpers"
 import { OrchestratorProgressSnapshotTable, OrchestratorRunTable, OrchestratorTaskTable } from "./orchestrator.sql"
 import { requireRun, requireTask, type RunRow, type TaskRow } from "./store"
@@ -49,7 +49,13 @@ export async function updateTask(
         time_updated: now,
       })
       .run()
-    Database.effect(() => Bus.publish(Event.TaskUpdated, { taskID: row.id, status: nextStatus, summary }))
+    Database.effect(() =>
+      OrchestratorProtocol.emit(
+        Event.TaskUpdated,
+        { taskID: row.id, status: nextStatus, summary },
+        { source: "state.task" },
+      ),
+    )
   })
   return requireTask(row.id)
 }
@@ -92,7 +98,13 @@ export async function updateRun(
       })
       .where(eq(OrchestratorTaskTable.id, row.task_id))
       .run()
-    Database.effect(() => Bus.publish(Event.RunUpdated, { taskID: row.task_id, runID: row.id, status: nextStatus, summary }))
+    Database.effect(() =>
+      OrchestratorProtocol.emit(
+        Event.RunUpdated,
+        { taskID: row.task_id, runID: row.id, status: nextStatus, summary },
+        { source: "state.run" },
+      ),
+    )
   })
   return requireRun(row.id)
 }

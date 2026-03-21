@@ -7452,6 +7452,7 @@ body[data-theme="light"]::after {
   overflow: hidden;
   pointer-events: none;
   opacity: 0.6;
+  display: none;
 }
 
 .tech-atlas-canvas,

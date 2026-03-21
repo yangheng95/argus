@@ -10,6 +10,8 @@ import { PermissionNext } from "@/permission/next"
 import { type ReplanContext } from "@/planner/agent"
 import { PlannerFailureError, PlannerService } from "@/planner/service"
 import { Provider } from "@/provider/provider"
+import { ProtocolStore } from "@/protocol/store"
+import { OrchestratorProtocol } from "./protocol"
 import { SpecFailureError } from "@/spec/service"
 import { Instance } from "@/project/instance"
 import { Project } from "@/project/project"
@@ -171,12 +173,12 @@ async function injectRunningTaskMessage(task: TaskRow, run: RunRow, message: str
       "Message injected into running session",
     )
   }
-  await Bus.publish(Event.MessageInjected, {
+  await OrchestratorProtocol.emit(Event.MessageInjected, {
     taskID: task.id,
     runID: run.id,
     text: message,
     summary: "Operator message injected into running session",
-  })
+  }, { taskID: task.id, runID: run.id, source: "service.inject" })
   return true
 }
 
@@ -532,6 +534,12 @@ export namespace OrchestratorService {
     return listExecutorProtocolEvents(row.id).map(viewExecutorEvent)
   }
 
+  export async function listProtocolEvents(taskID: string) {
+    // Read-only — protocol_event is the persisted task event source.
+    requireTask(taskID)
+    return ProtocolStore.listTaskEvents(taskID)
+  }
+
   export async function listTaskInteractions(taskID: string) {
     // Read-only — poll loop handles state advancement asynchronously.
     requireTask(taskID)
@@ -826,13 +834,13 @@ export namespace OrchestratorService {
       source: input.source ?? "user_message",
       userID: input.user_id,
     })
-    await Bus.publish(Event.TaskMessageRecorded, {
+    await OrchestratorProtocol.emit(Event.TaskMessageRecorded, {
       taskID,
       kind: result.kind,
       source: input.source ?? "user_message",
       text: input.text,
       summary: result.message,
-    })
+    }, { taskID, source: "service.message" })
     if (!result.should_resume) {
       return result
     }
@@ -1023,13 +1031,13 @@ function markProtocolInteraction(
       .where(eq(OrchestratorInteractionRequestTable.id, row.id))
       .run()
     Database.effect(() =>
-      Bus.publish(Event.InteractionResolved, {
+      OrchestratorProtocol.emit(Event.InteractionResolved, {
         taskID: row.task_id,
         runID: row.run_id,
         interactionID: row.id,
         status,
         summary: status === "answered" ? "Interaction answered" : "Interaction rejected",
-      }),
+      }, { taskID: row.task_id, runID: row.run_id, interactionID: row.id, source: "service.interaction" }),
     )
   })
 }
@@ -1289,36 +1297,36 @@ async function answerPlannerClarification(row: InteractionRow, answers: string[]
       })
       .run()
     Database.effect(() =>
-      Bus.publish(Event.InteractionResolved, {
+      OrchestratorProtocol.emit(Event.InteractionResolved, {
         taskID: task.id,
         runID: run.id,
         interactionID: row.id,
         status: "answered",
         summary: "Clarification answered",
-      }),
+      }, { taskID: task.id, runID: run.id, interactionID: row.id, source: "service.clarification" }),
     )
-    Database.effect(() => Bus.publish(Event.PlanCreated, { taskID: task.id, planID, summary: planDraft.summary }))
+    Database.effect(() => OrchestratorProtocol.emit(Event.PlanCreated, { taskID: task.id, planID, summary: planDraft.summary }, { taskID: task.id, source: "service.clarification" }))
     Database.effect(() =>
-      Bus.publish(Event.PlanActivated, {
+      OrchestratorProtocol.emit(Event.PlanActivated, {
         taskID: task.id,
         planID,
         summary: isReplan ? "Replanned version activated after clarification" : "Plan activated after clarification",
-      }),
+      }, { taskID: task.id, source: "service.clarification" }),
     )
     Database.effect(() =>
-      Bus.publish(Event.RunUpdated, {
+      OrchestratorProtocol.emit(Event.RunUpdated, {
         taskID: task.id,
         runID: run.id,
         status: "queued",
         summary: isReplan ? "Replanned run queued after clarification" : "Run queued after clarification",
-      }),
+      }, { taskID: task.id, runID: run.id, source: "service.clarification" }),
     )
     Database.effect(() =>
-      Bus.publish(Event.TaskUpdated, {
+      OrchestratorProtocol.emit(Event.TaskUpdated, {
         taskID: task.id,
         status: "queued",
         summary: isReplan ? "Clarification resolved; replanned task queued" : "Clarification resolved; task queued",
-      }),
+      }, { taskID: task.id, source: "service.clarification" }),
     )
   })
   await OrchestratorRuntime.dispatch(run.id, hooks())
@@ -1373,16 +1381,16 @@ async function rejectPlannerClarification(row: InteractionRow, message?: string)
       })
       .run()
     Database.effect(() =>
-      Bus.publish(Event.InteractionResolved, {
+      OrchestratorProtocol.emit(Event.InteractionResolved, {
         taskID: task.id,
         runID: run.id,
         interactionID: row.id,
         status: "rejected",
         summary: "Clarification rejected",
-      }),
+      }, { taskID: task.id, runID: run.id, interactionID: row.id, source: "service.clarification.reject" }),
     )
-    Database.effect(() => Bus.publish(Event.RunUpdated, { taskID: task.id, runID: run.id, status: "failed", summary: error }))
-    Database.effect(() => Bus.publish(Event.TaskUpdated, { taskID: task.id, status: "failed", summary: error }))
+    Database.effect(() => OrchestratorProtocol.emit(Event.RunUpdated, { taskID: task.id, runID: run.id, status: "failed", summary: error }, { taskID: task.id, runID: run.id, source: "service.clarification.reject" }))
+    Database.effect(() => OrchestratorProtocol.emit(Event.TaskUpdated, { taskID: task.id, status: "failed", summary: error }, { taskID: task.id, source: "service.clarification.reject" }))
   })
 }
 

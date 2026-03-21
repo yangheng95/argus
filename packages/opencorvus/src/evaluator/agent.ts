@@ -13,6 +13,7 @@
 import { streamText, stepCountIs } from "ai"
 import type { LanguageModelV2 } from "@ai-sdk/provider"
 import z from "zod"
+import type { TextHooks } from "@/llm/api"
 import { verificationHints, matchSelectors } from "@/check/policy"
 import { Provider } from "@/provider/provider"
 import { createEvaluatorTools } from "./tools"
@@ -101,6 +102,7 @@ export namespace EvaluatorAgent {
     goals: GoalInfo[]
     delivery: DeliveryInfo
     checkResults: CheckResult[]
+    stream?: TextHooks
   }): Promise<EvaluatorAnalysisType> {
     const language = await agentLanguageModel()
     if (!language) {
@@ -132,6 +134,7 @@ export namespace EvaluatorAgent {
       abortSignal: AbortSignal.timeout(TIMEOUT_MS),
       system: EVALUATOR_SYSTEM,
       prompt: userPrompt,
+      ...(input.stream as TextHooks<typeof tools> | undefined),
     })
     const [resultText, resultSteps, resultFinishReason] = await Promise.all([
       stream.text, stream.steps, stream.finishReason,

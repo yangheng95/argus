@@ -147,6 +147,7 @@ const state = {
   conversationLoading: null,
   conversationQueued: false,
   conversationKick: null,
+  conversationBootstrapPending: false,
   conversationUpdatedAt: 0,
   changes: [],
   chatRequest: null,
@@ -174,6 +175,7 @@ const liveTextStreams = new Map();
 const reasoningVisibility = new Map();
 const reasoningHideTimers = new Map();
 let chatScrollPaused = false;
+const TECH_FX_ENABLED = false;
 const LIVE_TEXT_INTERVAL = 18;
 const LIVE_TEXT_MIN_CHUNK = 6;
 const LIVE_TEXT_MAX_CHUNK = 48;
@@ -190,6 +192,11 @@ function clearLiveTextStreams() {
   for (const key of [...liveTextStreams.keys()]) {
     stopLiveText(key);
   }
+}
+
+function messageLiveTextKey(part, field = "text") {
+  if (!record(part)) return "";
+  return `message:${part.sessionID || ""}:${part.messageID || ""}:${part.id}:${field}`;
 }
 
 function stopReasoningHideTimer(key) {
@@ -330,7 +337,8 @@ function streamMessagePart(part, target, field = "text", current = "") {
   if (!record(part)) return;
   const nextTarget = typeof target === "string" ? target : "";
   if (field === "text") part._targetText = nextTarget;
-  const key = `message:${part.sessionID || ""}:${part.messageID || ""}:${part.id}:${field}`;
+  if (field === "output") part._targetOutput = nextTarget;
+  const key = messageLiveTextKey(part, field);
   startLiveText(key, nextTarget, current, (value) => {
     if (field === "text") part.text = value;
     if (field === "output" && record(part.state)) part.state.output = value;
@@ -1060,6 +1068,22 @@ const techFx = {
   width: 0,
 };
 
+function clearTechFxCanvas() {
+  if (!(dom.techAtlasCanvas instanceof HTMLCanvasElement)) return;
+  if (techFx.frame) cancelAnimationFrame(techFx.frame);
+  techFx.frame = 0;
+  techFx.last = 0;
+  techFx.running = false;
+  techFx.points = [];
+  techFx.width = 0;
+  techFx.height = 0;
+  techFx.ctx = null;
+  dom.techAtlasCanvas.width = 0;
+  dom.techAtlasCanvas.height = 0;
+  dom.techAtlasCanvas.style.width = "0px";
+  dom.techAtlasCanvas.style.height = "0px";
+}
+
 function reduceMotion() {
   return reducedMotionMedia?.matches === true;
 }
@@ -1207,6 +1231,10 @@ function techFxStep(ts) {
 
 function syncTechFx(force = false) {
   if (!(dom.techAtlasCanvas instanceof HTMLCanvasElement)) return;
+  if (!TECH_FX_ENABLED) {
+    clearTechFxCanvas();
+    return;
+  }
   syncTechFxSize(force);
   refreshTechFxPalette();
   if (document.visibilityState === "hidden" || reduceMotion()) {
@@ -2039,6 +2067,149 @@ function cloneMessages(list) {
   if (!Array.isArray(list) || list.length === 0) return [];
   if (typeof structuredClone === "function") return structuredClone(list);
   return JSON.parse(JSON.stringify(list));
+}
+
+function mergeSnapshotFieldTarget(existing, field, snapshotValue) {
+  const snapshotText = displayString(snapshotValue);
+  const currentText =
+    field === "output"
+      ? displayString(existing?._targetOutput || existing?.state?.output)
+      : displayString(existing?._targetText || existing?.text);
+  if (!snapshotText) return currentText;
+  if (!currentText) return snapshotText;
+  if (snapshotText === currentText) return snapshotText;
+  if (snapshotText.startsWith(currentText)) return snapshotText;
+  if (currentText.startsWith(snapshotText)) return currentText;
+  const key = messageLiveTextKey(existing, field);
+  return key && liveTextStreams.has(key) ? currentText : snapshotText;
+}
+
+function shouldPreserveSnapshotLiveText(existing, field) {
+  if (!record(existing)) return false;
+  const key = messageLiveTextKey(existing, field);
+  if (key && liveTextStreams.has(key)) return true;
+  if (field === "output") {
+    return typeof existing?._targetOutput === "string" && !!existing._targetOutput;
+  }
+  return typeof existing?._targetText === "string" && !!existing._targetText;
+}
+
+function mergeSnapshotPart(existing, part) {
+  if (!record(part)) return part;
+  if ((part.type === "text" || part.type === "reasoning") && typeof part.text === "string") {
+    const nextPart = {
+      ...part,
+      text: mergeSnapshotFieldTarget(existing, "text", part.text),
+    };
+    if (!shouldPreserveSnapshotLiveText(existing, "text")) {
+      const merged = {
+        ...(record(existing) ? existing : {}),
+        ...nextPart,
+      };
+      delete merged._targetText;
+      return merged;
+    }
+    return hydrateLivePart(existing, nextPart);
+  }
+  if (part.type === "tool" && record(part.state) && typeof part.state.output === "string") {
+    const nextPart = {
+      ...part,
+      state: {
+        ...part.state,
+        output: mergeSnapshotFieldTarget(existing, "output", part.state.output),
+      },
+    };
+    if (!shouldPreserveSnapshotLiveText(existing, "output")) {
+      const merged = {
+        ...(record(existing) ? existing : {}),
+        ...nextPart,
+      };
+      delete merged._targetOutput;
+      return merged;
+    }
+    return hydrateLivePart(existing, nextPart);
+  }
+  return {
+    ...(record(existing) ? existing : {}),
+    ...part,
+  };
+}
+
+function mergeSnapshotParts(existingParts, snapshotParts) {
+  const current = Array.isArray(existingParts) ? existingParts : [];
+  const next = Array.isArray(snapshotParts) ? snapshotParts : [];
+  const currentByID = new Map(
+    current
+      .filter((part) => typeof part?.id === "string" && part.id)
+      .map((part) => [part.id, part]),
+  );
+  const snapshotIDs = new Set(
+    next
+      .map((part) => (typeof part?.id === "string" ? part.id : ""))
+      .filter(Boolean),
+  );
+  const merged = next.map((part) => mergeSnapshotPart(currentByID.get(part?.id), part));
+  for (const part of current) {
+    const id = typeof part?.id === "string" ? part.id : "";
+    if (id && snapshotIDs.has(id)) continue;
+    if (next.length > 0 && isPendingPlaceholderPart(part)) continue;
+    merged.push(part);
+  }
+  return merged;
+}
+
+function mergeSnapshotMessage(existing, message) {
+  const merged = {
+    ...(record(existing) ? existing : {}),
+    ...message,
+    info: {
+      ...(record(existing?.info) ? existing.info : {}),
+      ...(record(message?.info) ? message.info : {}),
+    },
+  };
+  merged.parts = mergeSnapshotParts(existing?.parts, message?.parts);
+  return merged;
+}
+
+function pruneConversationLiveText(messages = []) {
+  const keep = new Set();
+  for (const message of Array.isArray(messages) ? messages : []) {
+    for (const part of Array.isArray(message?.parts) ? message.parts : []) {
+      const textKey = messageLiveTextKey(part, "text");
+      const outputKey = messageLiveTextKey(part, "output");
+      if (textKey && typeof part?._targetText === "string" && part._targetText) keep.add(textKey);
+      if (outputKey && typeof part?._targetOutput === "string" && part._targetOutput) keep.add(outputKey);
+    }
+  }
+  for (const key of [...liveTextStreams.keys()]) {
+    if (!key.startsWith("message:")) continue;
+    if (keep.has(key)) continue;
+    stopLiveText(key);
+  }
+}
+
+function mergeConversationSnapshot(snapshotMessages = []) {
+  const current = Array.isArray(state.messages) ? state.messages : [];
+  const snapshot = Array.isArray(snapshotMessages) ? snapshotMessages : [];
+  const currentByID = new Map(
+    current
+      .filter((message) => typeof message?.info?.id === "string" && message.info.id)
+      .map((message) => [message.info.id, message]),
+  );
+  const snapshotIDs = new Set(
+    snapshot
+      .map((message) => (typeof message?.info?.id === "string" ? message.info.id : ""))
+      .filter(Boolean),
+  );
+  const merged = snapshot.map((message) => mergeSnapshotMessage(currentByID.get(message?.info?.id), message));
+  for (const message of current) {
+    const id = typeof message?.info?.id === "string" ? message.info.id : "";
+    if (id && snapshotIDs.has(id)) continue;
+    merged.push(message);
+  }
+  const next = sortMessages(mergeMessages(merged));
+  pruneConversationLiveText(next);
+  return next;
 }
 
 function stashPendingTaskMessages() {
@@ -4671,6 +4842,7 @@ async function selectTask(taskID, options = {}) {
   state.agentEvents = [];
   state.ndjsonEvents = [];
   state.ndjsonStartMs = Date.now();
+  state.conversationBootstrapPending = !!nextTaskID;
   state._knownChildSessions = new Set();
   if (nextTaskID) {
     enterTaskWorkspace(nextTaskID, options);
@@ -4683,6 +4855,7 @@ async function selectTask(taskID, options = {}) {
     setTaskStatus("idle", { visible: false });
     state.messages = [];
     state.pendingTaskMessages = null;
+    pruneConversationLiveText([]);
     renderConversation();
     renderTaskList();
     clearWorkspaceMemory();
@@ -4898,31 +5071,34 @@ async function loadConversation() {
         ]);
         if (targetKey !== conversationTargetKey(conversationTarget())) return;
         const next = sortMessages(mergeMessages(timeline, transcript));
-        clearLiveTextStreams();
         if (next.length > 0) {
           state.pendingTaskMessages = null;
-          state.messages = next;
+          state.messages = mergeConversationSnapshot(next);
         } else if (Array.isArray(state.pendingTaskMessages) && state.pendingTaskMessages.length > 0) {
           state.messages = cloneMessages(state.pendingTaskMessages);
         } else {
-          state.messages = [];
+          state.messages = mergeConversationSnapshot([]);
         }
+        state.conversationBootstrapPending = false;
         state.conversationUpdatedAt = Date.now();
         renderConversation();
         return;
       }
       if (targetKey !== conversationTargetKey(conversationTarget())) return;
-      clearLiveTextStreams();
       state.messages = [];
+      pruneConversationLiveText([]);
+      state.conversationBootstrapPending = false;
       state.conversationUpdatedAt = Date.now();
       renderConversation();
     } catch (e) {
       AppLog.error("ui", "Failed to load conversation", { error: String(e) });
       if (targetKey !== conversationTargetKey(conversationTarget())) return;
-      clearLiveTextStreams();
-      state.messages = [];
-      state.conversationUpdatedAt = Date.now();
-      renderConversation();
+      if (!target.taskID) {
+        state.messages = [];
+        pruneConversationLiveText([]);
+        state.conversationUpdatedAt = Date.now();
+        renderConversation();
+      }
       return;
     } finally {
       state.conversationLoading = null;
@@ -4948,9 +5124,10 @@ function matchesCurrentSession(sessionID) {
   if (!sessionID) return false;
   const current = currentSessionID();
   if (!current) {
-    // We cannot classify task-scoped message events until the root session is known.
-    // Force a transcript refresh immediately so planner/spec child sessions resolve fast.
-    if (state.selectedTaskID) scheduleConversation(0);
+    const initialHydration =
+      state.conversationBootstrapPending ||
+      (!state.board && (!Array.isArray(state.messages) || state.messages.length === 0));
+    if (state.selectedTaskID && initialHydration) scheduleConversation(0);
     return false;
   }
   if (current === sessionID) return true;
@@ -5134,16 +5311,17 @@ function acceptEventSequence(event) {
       expected: state.taskSequence + 1,
       actual: sequence,
     });
+    return "gap";
   }
   state.taskSequence = sequence;
-  return gap ? "gap" : "ok";
+  return "ok";
 }
 
 function repairEventGap(gap) {
   if (!gap) return;
   scheduleTasks(0);
   scheduleBoard(0);
-  scheduleConversation(0);
+  if (state.selectedTaskID) queueMicrotask(() => startSSE(state.selectedTaskID));
 }
 
 function eventData(event) {
@@ -5579,12 +5757,17 @@ function handleEventStreamEvent(event) {
   }
   const sync = acceptEventSequence(event);
   if (sync === "duplicate") return;
-  const gap = sync === "gap";
+  if (sync === "gap") {
+    repairEventGap(true);
+    return;
+  }
   const type = event.type || "";
   if (type === "task.heartbeat") return;
+  if (type === "task.connected") return;
   if (type === "task.replay_expired") {
     // Server's replay buffer is too old — do a full transcript reload
     AppLog.warn("sse", "replay buffer expired, performing full reload");
+    state.conversationBootstrapPending = true;
     loadConversation();
     scheduleTasks(0);
     scheduleBoard(0);
@@ -5598,7 +5781,6 @@ function handleEventStreamEvent(event) {
     if (existing) {
       // Metadata-only update (tokens, timestamps) — update silently, no re-render
       existing.info = info;
-      repairEventGap(gap);
       return;
     }
     if (state.chatRequest) {
@@ -5615,7 +5797,6 @@ function handleEventStreamEvent(event) {
       // Push message placeholder silently — parts will trigger render via message.part.updated
       state.messages.push({ info, parts: [] });
     }
-    repairEventGap(gap);
     return;
   }
   if (type === "message.part.updated") {
@@ -5637,7 +5818,6 @@ function handleEventStreamEvent(event) {
     }
     state.conversationUpdatedAt = Date.now();
     renderConversation();
-    repairEventGap(gap);
     return;
   }
   if (type === "message.part.delta") {
@@ -5662,7 +5842,6 @@ function handleEventStreamEvent(event) {
     streamMessagePart(part, target, "text", part.text || "");
     state.conversationUpdatedAt = Date.now();
     renderConversation();
-    repairEventGap(gap);
     return;
   }
   if (type === "run.progress") {
@@ -5674,7 +5853,6 @@ function handleEventStreamEvent(event) {
       payload: properties,
       timestamp: event.timestamp,
     });
-    repairEventGap(gap);
     return;
   }
   if (type === "run.output") {
@@ -5686,7 +5864,6 @@ function handleEventStreamEvent(event) {
       payload: properties,
       timestamp: event.timestamp,
     });
-    repairEventGap(gap);
     return;
   }
   if (type === "agent.updated") {
@@ -5698,7 +5875,6 @@ function handleEventStreamEvent(event) {
       state.agentStatus = { stage, kind, summary, timestamp: Date.now() };
       renderBoard();
     }
-    repairEventGap(gap);
     return;
   }
   if (
@@ -5716,10 +5892,8 @@ function handleEventStreamEvent(event) {
   ) {
     scheduleTasks(BOARD_EVENT_DEBOUNCE);
     scheduleBoard(BOARD_EVENT_DEBOUNCE);
-    scheduleConversation(BOARD_EVENT_DEBOUNCE);
     return;
   }
-  repairEventGap(gap);
 }
 
 function handleSSEEvent(event) {
@@ -5737,8 +5911,12 @@ function startPolling() {
     loadMeta();
   }, POLL_INTERVAL);
   state.conversationTimer = setInterval(() => {
-    const live = state.sseConnected;
-    if (!live || Date.now() - state.conversationUpdatedAt > SSE_BACKSTOP) {
+    if (!state.selectedTaskID) return;
+    if (state.conversationBootstrapPending) {
+      loadConversation();
+      return;
+    }
+    if (!state.sseConnected && Date.now() - state.conversationUpdatedAt > SSE_BACKSTOP) {
       loadConversation();
     }
   }, CONVERSATION_POLL);

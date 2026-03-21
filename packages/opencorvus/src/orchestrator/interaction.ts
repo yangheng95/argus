@@ -4,6 +4,7 @@ import { Question } from "@/question"
 import { Database, eq } from "@/storage/db"
 import { OrchestratorInteractionRequestTable, type OrchestratorMetadata, type OrchestratorInteractionStatus } from "./orchestrator.sql"
 import { Event } from "./model"
+import { OrchestratorProtocol } from "./protocol"
 import { activeRunBySession, findInteractionByExternal, type InteractionRow } from "./store"
 import { Identifier } from "@/id/id"
 import { OrchestratorRuntime } from "./runtime"
@@ -49,13 +50,13 @@ async function upsertPermission(request: PermissionNext.Request, hooks: RuntimeH
       })
       .run()
     Database.effect(() =>
-      Bus.publish(Event.InteractionRequested, {
+      OrchestratorProtocol.emit(Event.InteractionRequested, {
         taskID: run.task_id,
         runID: run.id,
         interactionID,
         requestType: "permission",
         summary: `Permission requested: ${request.permission}`,
-      }),
+      }, { taskID: run.task_id, runID: run.id, interactionID, source: "interaction.permission" }),
     )
   })
   await OrchestratorRuntime.syncRun(run.id, hooks)
@@ -96,13 +97,13 @@ async function upsertQuestion(request: Question.Request, hooks: RuntimeHooks) {
       })
       .run()
     Database.effect(() =>
-      Bus.publish(Event.InteractionRequested, {
+      OrchestratorProtocol.emit(Event.InteractionRequested, {
         taskID: run.task_id,
         runID: run.id,
         interactionID,
         requestType: "question",
         summary: title,
-      }),
+      }, { taskID: run.task_id, runID: run.id, interactionID, source: "interaction.question" }),
     )
   })
   await OrchestratorRuntime.syncRun(run.id, hooks)
@@ -141,13 +142,13 @@ async function resolveInteraction(
       .where(eq(OrchestratorInteractionRequestTable.id, interaction.id))
       .run()
     Database.effect(() =>
-      Bus.publish(Event.InteractionResolved, {
+      OrchestratorProtocol.emit(Event.InteractionResolved, {
         taskID: interaction.task_id,
         runID: interaction.run_id,
         interactionID: interaction.id,
         status,
         summary: status === "answered" ? "Interaction answered" : "Interaction rejected",
-      }),
+      }, { taskID: interaction.task_id, runID: interaction.run_id, interactionID: interaction.id, source: "interaction.resolve" }),
     )
   })
   await OrchestratorRuntime.syncRun(interaction.run_id, hooks)

@@ -5,18 +5,6 @@ import { BusEvent } from "./bus-event"
 import { GlobalBus } from "./global"
 import { isBusTraceEnabled, traceBus } from "../util/debug-trace"
 
-// Lazy-loaded protocol store for dual-write (avoids circular import + per-call dynamic import)
-let _protocolStore: typeof import("../protocol/store").ProtocolStore | undefined
-let _protocolStoreLoading: Promise<void> | undefined
-function protocolStore() {
-  if (!_protocolStore && !_protocolStoreLoading) {
-    _protocolStoreLoading = import("../protocol/store")
-      .then((m) => { _protocolStore = m.ProtocolStore })
-      .catch(() => { /* not available */ })
-  }
-  return _protocolStore
-}
-
 export namespace Bus {
   const log = Log.create({ service: "bus" })
   type Subscription = (event: any) => void
@@ -102,30 +90,6 @@ export namespace Bus {
       directory: Instance.directory,
       payload,
     })
-    // Dual-write to protocol_event for audit trail (only for task-scoped events)
-    const store = protocolStore()
-    const _taskID = (properties as any)?.taskID
-    if (store && _taskID) {
-      void store.appendEvent({
-        kind: "event",
-        type: def.type,
-        aggregate: "task" as const,
-        aggregate_id: _taskID,
-        task_id: _taskID,
-        run_id: (properties as any)?.runID ?? null,
-        goal_run_id: null,
-        session_id: null,
-        interaction_id: null,
-        stream_id: null,
-        source: "bus",
-        target: null,
-        correlation_id: null,
-        causation_id: null,
-        reply_to: null,
-        emitted_at: Date.now(),
-        payload: properties as Record<string, unknown>,
-      })
-    }
     return Promise.allSettled(pending)
   }
 

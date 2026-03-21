@@ -1,6 +1,7 @@
 import { Plugin } from "@/plugin"
 import { CheckConfig, EvaluationCheck } from "@/orchestrator/model"
 import { EvaluatorAgent, type EvaluatorAnalysisType, type GoalInfo, type CheckResult, type DeliveryInfo } from "./agent"
+import type { TextHooks } from "@/llm/api"
 import { Log } from "@/util/log"
 import z from "zod"
 import { resolveConfig, autoSpecCheck, discoverChecks, resolvedChecks, commandGroups } from "./discovery"
@@ -75,6 +76,7 @@ export namespace EvaluatorService {
     goals: GoalInfo[]
     delivery: DeliveryInfo
     checkResults: CheckResult[]
+    stream?: TextHooks
   }): Promise<EvaluatorAnalysisType> {
     return EvaluatorAgent.analyze(input)
   }

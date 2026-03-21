@@ -844,7 +844,7 @@ test("sidebar typography keeps headers and primary actions above caption size", 
   }
 }, { timeout: 60_000 })
 
-test("overlay chrome keeps opacity, header, version, and capsule controls aligned", async () => {
+test("overlay chrome keeps opacity, header, version, and capsule controls aligned with visual fx disabled", async () => {
   const exe = await browser()
   const server = serve()
   const page = await launchBrowser()
@@ -884,8 +884,11 @@ test("overlay chrome keeps opacity, header, version, and capsule controls aligne
         if (!(node instanceof HTMLElement)) throw new Error(`Missing element: ${selector}`)
         return node
       }
+      const sidebarFooter = document.querySelector(".sidebar-footer")
 
       const size = (selector: string) => pick(selector).getBoundingClientRect()
+      const techAtlas = document.querySelector(".tech-atlas")
+      if (!(techAtlas instanceof HTMLElement)) throw new Error("Missing tech atlas")
       const techCanvas = document.querySelector("#techAtlasCanvas")
       if (!(techCanvas instanceof HTMLCanvasElement)) throw new Error("Missing tech atlas canvas")
       const titlebarHeight = size(".titlebar").height
@@ -908,6 +911,7 @@ test("overlay chrome keeps opacity, header, version, and capsule controls aligne
         sectionsGap: Number.parseFloat(getComputedStyle(pick(".sections-stack")).rowGap),
         engineRadius: Number.parseFloat(getComputedStyle(pick("#engineBar")).borderRadius),
         channelRadius: Number.parseFloat(getComputedStyle(pick("#brandVersion .brand-channel-group")).borderRadius),
+        techAtlasDisplay: getComputedStyle(techAtlas).display,
         techCanvasWidth: techCanvas.width,
         techCanvasHeight: techCanvas.height,
         techSweepAnimation: getComputedStyle(pick(".tech-sweep")).animationName,
@@ -915,7 +919,7 @@ test("overlay chrome keeps opacity, header, version, and capsule controls aligne
         titlebarHeightWithMenu: size(".titlebar").height,
         titlebarMenuPosition: getComputedStyle(menu).position,
         configBottomGap: sectionsBox.bottom - configAreaBox.bottom,
-        sidebarFooterDisplay: getComputedStyle(pick(".sidebar-footer")).display,
+        sidebarFooterDisplay: sidebarFooter instanceof HTMLElement ? getComputedStyle(sidebarFooter).display : "none",
         llmSummaryHeight: size("#llmSection").height,
         configToggleHeight: size("#btnConfigToggle").height,
       }
@@ -934,9 +938,9 @@ test("overlay chrome keeps opacity, header, version, and capsule controls aligne
     expect(result.sectionsGap).toBeLessThanOrEqual(6)
     expect(result.engineRadius).toBeGreaterThanOrEqual(100)
     expect(result.channelRadius).toBeGreaterThanOrEqual(100)
-    expect(result.techCanvasWidth).toBeGreaterThan(0)
-    expect(result.techCanvasHeight).toBeGreaterThan(0)
-    expect(result.techSweepAnimation).toBe("glassDrift")
+    expect(result.techAtlasDisplay).toBe("none")
+    expect(result.techCanvasWidth).toBe(0)
+    expect(result.techCanvasHeight).toBe(0)
     expect(Math.abs(result.titlebarHeightWithMenu - result.titlebarHeight)).toBeLessThanOrEqual(1)
     expect(result.titlebarMenuPosition).toBe("absolute")
     expect(result.configBottomGap).toBeLessThanOrEqual(12)
@@ -1054,7 +1058,7 @@ test("right-rail child content stays contained inside parent blocks", async () =
   }
 }, { timeout: 20_000 })
 
-test("task update events refresh board, conversation, and task list together", async () => {
+test("task update events refresh board and task list without forcing transcript reload", async () => {
   const exe = await browser()
   const server = serve()
   const page = await launchBrowser()
@@ -1099,7 +1103,7 @@ test("task update events refresh board, conversation, and task list together", a
     await tab.waitForFunction(() => {
       try {
         const value = window.__overlayTest
-        return value.board === 1 && value.conversation === 1 && value.tasks === 1
+        return value.board === 1 && value.conversation === 0 && value.tasks === 1
       } catch {
         return false
       }
@@ -1108,7 +1112,7 @@ test("task update events refresh board, conversation, and task list together", a
     const result = await tab.evaluate(() => window.__overlayTest)
     expect(result).toEqual({
       board: 1,
-      conversation: 1,
+      conversation: 0,
       tasks: 1,
     })
   } finally {
@@ -1317,7 +1321,7 @@ test("duplicate task event sequences are ignored", async () => {
   }
 }, { timeout: 20_000 })
 
-test("task event sequence gaps trigger a synced compensation refresh", async () => {
+test("task event sequence gaps trigger SSE replay reconnect without transcript reload", async () => {
   const exe = await browser()
   const server = serve()
   const page = await launchBrowser()
@@ -1333,7 +1337,7 @@ test("task event sequence gaps trigger a synced compensation refresh", async () 
       }
     })
 
-    const result = await tab.evaluate(() => {
+    const result = await tab.evaluate(async () => {
       const state = window.eval("state")
       state.selectedTaskID = "task-1"
       state.taskSequence = 4
@@ -1341,10 +1345,12 @@ test("task event sequence gaps trigger a synced compensation refresh", async () 
         board: 0,
         conversation: 0,
         tasks: 0,
+        reconnects: [],
       }
       window.eval("scheduleBoard = () => { window.__overlayTest.board += 1 }")
       window.eval("scheduleConversation = () => { window.__overlayTest.conversation += 1 }")
       window.eval("scheduleTasks = () => { window.__overlayTest.tasks += 1 }")
+      window.eval("startSSE = (taskID) => { window.__overlayTest.reconnects.push(taskID) }")
       window.eval("handleEventStreamEvent")({
         type: "orchestrator.task.updated",
         sequence: 7,
@@ -1352,16 +1358,18 @@ test("task event sequence gaps trigger a synced compensation refresh", async () 
           taskID: "task-1",
         },
       })
+      await Promise.resolve()
       return {
         taskSequence: state.taskSequence,
         counts: window.__overlayTest,
       }
     })
 
-    expect(result.taskSequence).toBe(7)
+    expect(result.taskSequence).toBe(4)
     expect(result.counts).toEqual({
       board: 1,
-      conversation: 1,
+      conversation: 0,
+      reconnects: ["task-1"],
       tasks: 1,
     })
   } finally {

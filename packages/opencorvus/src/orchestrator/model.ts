@@ -647,6 +647,7 @@ export const TaskEvent = z.object({
   run_id: Identifier.schema("run").optional(),
   type: z.string(),
   timestamp: z.number(),
+  sequence: z.number().int().nonnegative().optional(),
   summary: z.string(),
   payload: z.record(z.string(), z.any()),
 })

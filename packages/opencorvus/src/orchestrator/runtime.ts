@@ -15,6 +15,7 @@ import { Log } from "@/util/log"
 import { WorkbenchService } from "@/workbench/service"
 import { DeliveryService } from "@/delivery/service"
 import type { DeliveryVerdictType } from "@/delivery/agent"
+import { mergeTextHooks } from "@/llm/tool-hooks"
 import { Publisher } from "./publisher"
 import { OrchestratorGit } from "./git"
 import { OrchestratorMemoryBridge } from "./memory-bridge"
@@ -24,6 +25,8 @@ import {
   OrchestratorTaskTable,
 } from "./orchestrator.sql"
 import { Event } from "./model"
+import { OrchestratorProtocol } from "./protocol"
+import { ProtocolStore } from "@/protocol/store"
 import {
   buildOperatorPrompt,
   orchestratorState,
@@ -685,19 +688,19 @@ export namespace OrchestratorRuntime {
         .where(eq(OrchestratorTaskTable.id, task.id))
         .run()
       Database.effect(() =>
-        Bus.publish(Event.RunCreated, {
+        OrchestratorProtocol.emit(Event.RunCreated, {
           taskID: task.id,
           runID: nextRunID,
           status: "queued",
           summary: "Run queued from operator note",
-        }),
+        }, { taskID: task.id, runID: nextRunID, source: "runtime.operator" }),
       )
       Database.effect(() =>
-        Bus.publish(Event.TaskUpdated, {
+        OrchestratorProtocol.emit(Event.TaskUpdated, {
           taskID: task.id,
           status: "running",
           summary: "Operator note queued a follow-up run",
-        }),
+        }, { taskID: task.id, source: "runtime.operator" }),
       )
     })
     return nextRunID
@@ -869,8 +872,18 @@ async function completeRun(run: RunRow, hooks: RuntimeHooks) {
   // Phase 2: Independent-context EvaluatorAgent analysis
   // Analyzes check results, investigates failures, assesses each goal, classifies failure type
   const goals = run.plan_version_id ? listGoalsByPlan(run.plan_version_id) : []
+  const judgeLive = agentStream({ taskID: task.id, runID: run.id, stage: "judge" })
+  const judgeSession = await Session.createNext({
+    parentID: task.session_id ?? run.session_id ?? undefined,
+    title: `Evaluation: ${task.title}`,
+    directory: Instance.directory,
+  })
+  registerGoalRunSession(judgeSession.id, task.id)
+  const judgeContentHooks = sessionStreamHooks({ sessionID: judgeSession.id, taskID: task.id })
+  const judgeStream = mergeTextHooks(judgeContentHooks, judgeLive.hooks)
   let analysis: EvaluatorAnalysisType
   let analysisError: string | undefined
+  await judgeLive.start("Evaluator analysis started")
   try {
     analysis = await Promise.race([
       EvaluatorService.analyzeDelivery({
@@ -892,12 +905,15 @@ async function completeRun(run: RunRow, hooks: RuntimeHooks) {
           status: c.status,
           evidence: c.evidence,
         })),
+        stream: judgeStream,
       }),
       hardTimeoutPromise<typeof analysis>(),
     ])
+    await judgeLive.finish(`Evaluator analysis: ${analysis.verdict}`)
   } catch (err) {
     analysisError = err instanceof Error ? err.message : String(err)
     log.error("evaluator agent analysis failed or timed out", { error: analysisError })
+    await judgeLive.error(err).catch(() => undefined)
     analysis = fallbackAnalysis(result, goals.length, analysisError)
   }
 
@@ -1025,8 +1041,18 @@ async function runEvaluation(task: TaskRow, run: RunRow, existingDelivery: Deliv
   }
 
   const goals = run.plan_version_id ? listGoalsByPlan(run.plan_version_id) : []
+  const judgeLive = agentStream({ taskID: task.id, runID: run.id, stage: "judge" })
+  const judgeSession = await Session.createNext({
+    parentID: task.session_id ?? run.session_id ?? undefined,
+    title: `Evaluation: ${task.title}`,
+    directory: Instance.directory,
+  })
+  registerGoalRunSession(judgeSession.id, task.id)
+  const judgeContentHooks = sessionStreamHooks({ sessionID: judgeSession.id, taskID: task.id })
+  const judgeStream = mergeTextHooks(judgeContentHooks, judgeLive.hooks)
   let analysis: EvaluatorAnalysisType
   let analysisError: string | undefined
+  await judgeLive.start("Evaluator analysis started")
   try {
     analysis = await Promise.race([
       EvaluatorService.analyzeDelivery({
@@ -1048,12 +1074,15 @@ async function runEvaluation(task: TaskRow, run: RunRow, existingDelivery: Deliv
           status: c.status,
           evidence: c.evidence,
         })),
+        stream: judgeStream,
       }),
       reEvalHardTimeout<typeof analysis>(),
     ])
+    await judgeLive.finish(`Evaluator analysis: ${analysis.verdict}`)
   } catch (err) {
     analysisError = err instanceof Error ? err.message : String(err)
     log.error("re-evaluation agent analysis failed or timed out", { error: analysisError })
+    await judgeLive.error(err).catch(() => undefined)
     analysis = fallbackAnalysis(result, goals.length, analysisError)
   }
 
@@ -1172,6 +1201,7 @@ async function publishAcceptedDelivery(task: TaskRow, run: RunRow, delivery: Del
     })
     registerGoalRunSession(deliverySession.id, task.id)
     const deliveryContentHooks = sessionStreamHooks({ sessionID: deliverySession.id, taskID: task.id })
+    const deliveryStream = mergeTextHooks(deliveryContentHooks, deliveryLive.hooks)
     await deliveryLive.start("Delivery verification started")
     let deliveryVerdict: DeliveryVerdictType | undefined
     try {
@@ -1202,16 +1232,7 @@ async function publishAcceptedDelivery(task: TaskRow, run: RunRow, delivery: Del
             diffs: Array.isArray(deliveryResult.diffs) ? deliveryResult.diffs : [],
           },
           analysis,
-          stream: {
-            onChunk: async (arg: any) => {
-              if (deliveryContentHooks.onChunk) await deliveryContentHooks.onChunk(arg)
-              if (deliveryLive.hooks.onChunk) await deliveryLive.hooks.onChunk(arg)
-            },
-            onError: async (arg: any) => {
-              if (deliveryContentHooks.onError) await deliveryContentHooks.onError(arg)
-              if (deliveryLive.hooks.onError) await deliveryLive.hooks.onError(arg)
-            },
-          },
+          stream: deliveryStream,
         }),
         new Promise<never>((_, reject) =>
           setTimeout(() => reject(new Error("delivery verification timeout")), DELIVERY_VERIFY_TIMEOUT_MS),
@@ -1465,20 +1486,24 @@ function consumeExecutorEvents(
           },
         })
         if (event.type === "text_delta") {
-          Bus.publish(Event.RunOutput, {
+          // text_delta is high-frequency — dispatch ephemeral (no DB write)
+          ProtocolStore.dispatchEphemeral({
+            type: Event.RunOutput.type,
+            aggregate: "task",
             taskID,
             runID,
-            type: "text_delta",
-            text: event.summary ?? "",
+            source: "executor",
+            payload: { taskID, runID, type: "text_delta", text: event.summary ?? "" },
           })
         } else {
-          Bus.publish(Event.RunProgress, {
+          // Non-delta executor events are low-frequency — persist to protocol_event
+          void OrchestratorProtocol.emit(Event.RunProgress, {
             taskID,
             runID,
             type: event.type,
             summary: event.summary ?? event.type,
             payload: event.payload,
-          })
+          }, { taskID, runID, source: "executor" })
         }
       }
     } catch (err) {
@@ -1581,13 +1606,13 @@ function upsertExecutorInteraction(
       })
       .run()
     Database.effect(() =>
-      Bus.publish(Event.InteractionRequested, {
+      OrchestratorProtocol.emit(Event.InteractionRequested, {
         taskID,
         runID,
         interactionID,
         requestType: event.type === "approval_request" ? "permission" : "question",
         summary: title,
-      }),
+      }, { taskID, runID, interactionID, source: "runtime.interaction" }),
     )
   })
 }
