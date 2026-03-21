@@ -34,6 +34,14 @@ export namespace Identifier {
     executor_event: "exe",
     spec: "spc",
     specitem: "spi",
+    goal_snapshot: "gls",
+    goal_run: "glr",
+    plan_node: "pln_node",
+    requirement: "req",
+    call: "cal",
+    protocol_event: "pev",
+    protocol_inbox: "pib",
+    protocol_stream_chunk: "psc",
   } as const
 
   export function schema(prefix: keyof typeof prefixes) {

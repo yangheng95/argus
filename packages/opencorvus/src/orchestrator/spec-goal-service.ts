@@ -13,7 +13,7 @@ function passedGoalIndices(analysis?: GoalJudgmentType) {
   )
 }
 
-export function buildSpecReplanInput(task: TaskRow, plan: Pick<PlanRow, "spec_snapshot_id" | "metadata">, analysis?: GoalJudgmentType) {
+export function buildSpecReplanInput(task: TaskRow, plan: Pick<PlanRow, "id" | "spec_snapshot_id" | "metadata">, analysis?: GoalJudgmentType) {
   const notes = taskNotes(task.id, 24)
   const constraints = [...new Set(
     notes

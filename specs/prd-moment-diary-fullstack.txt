@@ -1,0 +1,101 @@
+基于 specs/prd.txt 的 Moment Diary PRD，交付一个商业级可运行的 MVP 全栈 Web 应用。
+
+## 技术栈建议
+
+- 后端：Bun + TypeScript + Hono + SQLite (bun:sqlite)
+- 前端：使用成熟的现代前端框架（React/Vue/Svelte 等，由你根据项目需要选择）
+- 构建工具：使用 Vite 或等价现代构建工具
+- UI：可选用 Tailwind CSS 或成熟 UI 组件库
+- 数据库文件：`data/moment-diary.db`
+- 启动方式：`bun run index.ts`，同时服务 API 和前端
+- 前端构建产物由后端静态托管
+
+## 交付范围（MVP P0 功能）
+
+### 后端 API
+
+1. **认证**
+   - `POST /api/auth/register` — 邮箱+密码注册
+   - `POST /api/auth/login` — 登录返回 Bearer token
+   - 密码哈希存储，Bearer session token 认证
+
+2. **日记 CRUD**
+   - `POST /api/diaries` — 创建日记（标题、正文、心情、标签、是否收藏）
+   - `GET /api/diaries` — 列表（支持 ?tag=&mood=&favorite=&limit=&offset= 筛选）
+   - `GET /api/diaries/:id` — 详情
+   - `PATCH /api/diaries/:id` — 更新（刷新 updated_at）
+   - `DELETE /api/diaries/:id` — 删除（同步清理 diary_tags）
+
+3. **时间轴**
+   - `GET /api/timeline` — 按 created_at 倒序，支持 tag/mood/limit/offset
+
+4. **日历**
+   - `GET /api/calendar?year=2026&month=3` — 返回该月每天的日记数量和心情
+
+5. **统计**
+   - `GET /api/stats` — 总篇数、连续记录天数、心情分布、高频标签 top5
+
+### 前端页面
+
+一个 SPA 应用，包含以下视图：
+
+1. **登录/注册页** — 现代表单设计，输入验证，错误提示
+2. **首页（时间轴）** — 日记卡片列表，按时间倒序，展示标题/摘要/心情emoji/标签/时间
+3. **新建/编辑日记** — 富文本或 textarea，心情选择器（7级：😄很开心/😊开心/😌平静/😔低落/😢难过/😰焦虑/😡愤怒），标签输入，收藏勾选
+4. **日记详情** — 完整展示，编辑/删除操作
+5. **日历视图** — 月历网格，有日记的日期高亮显示心情色彩，点击查看当日日记
+6. **统计面板** — 心情分布图表、连续记录天数、高频标签可视化
+
+### 视觉设计要求
+
+- 商业级设计品质，不是 demo 风格
+- 暗色/亮色主题切换
+- 移动端优先的响应式布局（手机/平板/桌面都美观）
+- 流畅的页面切换和交互动画
+- 空状态设计（无日记时的引导）
+- 加载状态指示
+
+## 数据表
+
+- `users`: id, email, password_hash, nickname, created_at
+- `sessions`: token, user_id, created_at
+- `diary_entries`: id, user_id, title, content, mood, is_favorite, created_at, updated_at
+- `tags`: id, user_id, name, normalized_name
+- `diary_tags`: diary_id, tag_id
+
+## 安全规则
+
+- 密码不能明文存储
+- 未认证请求不能访问受保护接口
+- 用户不能访问其他用户的日记
+- 标签按小写去重
+
+## 测试要求
+
+至少覆盖：
+1. 注册后密码是哈希
+2. 登录返回 token
+3. 创建日记带 mood + tags
+4. 时间轴倒序
+5. tag 过滤有效
+6. mood 过滤有效
+7. 用户隔离
+8. 更新刷新 updated_at
+9. 删除清理 diary_tags
+
+## 验收标准
+
+- `bunx tsc --noEmit` 通过
+- `bun test` 通过
+- `bun run index.ts` 可启动，浏览器打开 http://localhost:3000 能看到完整的商业级日记应用
+- 前端使用了现代框架和构建工具，不是原始 HTML 拼接
+- 可以注册、登录、写日记、查看时间轴、切换日历视图、查看统计
+- 暗色主题可切换
+- 移动端响应式正常
+- 没有 README、文档等无关产物
+
+## 执行要求
+
+- 先调研项目需要的前端框架和工具链，选择最合适的
+- 使用 Vite、Tailwind 等成熟生态工具
+- 优先交付可运行、可测试、在浏览器中体验良好的完整应用

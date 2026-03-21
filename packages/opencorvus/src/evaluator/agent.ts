@@ -10,7 +10,7 @@
  * 4. Evaluates each goal independently against the delivery
  * 5. Produces targeted replan guidance when needed
  */
-import { generateText, stepCountIs } from "ai"
+import { streamText, stepCountIs } from "ai"
 import type { LanguageModelV2 } from "@ai-sdk/provider"
 import z from "zod"
 import { verificationHints, matchSelectors } from "@/check/policy"
@@ -79,6 +79,7 @@ export interface GoalInfo {
   criteria: string
   priority: "blocking" | "advisory"
   check_selector?: string[]
+  requirement_ids?: string[]
 }
 
 export interface DeliveryInfo {
@@ -123,7 +124,7 @@ export namespace EvaluatorAgent {
       prefetchedContext: context.length > 0,
     })
 
-    const result = await generateText({
+    const stream = streamText({
       model: language,
       stopWhen: stepCountIs(MAX_STEPS),
       tools,
@@ -132,22 +133,25 @@ export namespace EvaluatorAgent {
       system: EVALUATOR_SYSTEM,
       prompt: userPrompt,
     })
+    const [resultText, resultSteps, resultFinishReason] = await Promise.all([
+      stream.text, stream.steps, stream.finishReason,
+    ])
 
-    let allText = result.text?.trim() || ""
+    let allText = resultText?.trim() || ""
     if (!allText || !allText.includes("{")) {
-      allText = result.steps.map((s) => s.text).filter(Boolean).join("\n")
+      allText = resultSteps.map((s) => s.text).filter(Boolean).join("\n")
     }
 
     // Count actual tool calls — an evaluation without investigation is worthless
-    const toolCallCount = result.steps.reduce(
+    const toolCallCount = resultSteps.reduce(
       (sum, s) => sum + (Array.isArray((s as any).toolCalls) ? (s as any).toolCalls.length : 0),
       0,
     )
 
     log.info("evaluator agent finished", {
-      steps: result.steps.length,
+      steps: resultSteps.length,
       toolCalls: toolCallCount,
-      finishReason: result.finishReason,
+      finishReason: resultFinishReason,
       textLength: allText.length,
     })
 
@@ -463,6 +467,7 @@ function buildUserPrompt(
           (g, i) =>
             `${i}. [${g.priority}] ${g.description}\n   Criteria: ${g.criteria}` +
             (g.check_selector?.length ? `\n   Checks: ${g.check_selector.join(", ")}` : "") +
+            (g.requirement_ids?.length ? `\n   Requirements: ${g.requirement_ids.join(", ")}` : "") +
             `\n   → Verification: ${goalVerificationHint(g)}`,
         )
         .join("\n\n"),
@@ -735,6 +740,7 @@ If preferences were loaded (from pre-fetch or Phase 0):
 ### Phase 3: ASSESS each goal (no tool calls — synthesize from investigation)
 
 For EACH goal in the input, determine pass/fail with SPECIFIC evidence from your investigation.
+Goals may list requirement IDs they cover. When a goal fails, note which requirements are affected — this feeds into replan guidance so the next attempt knows exactly which requirements still need work.
 
 **Example GOOD goal assessment:**
 {

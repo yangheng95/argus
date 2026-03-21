@@ -37,6 +37,8 @@ function toSpecDraft(output: SpecOutputType): SpecDraft {
     assumptions: output.assumptions,
     risks: output.risks,
     clarifications: output.clarifications,
+    evidence_sources: output.evidence_sources,
+    unresolved_questions: output.unresolved_questions,
   }
 }
 
@@ -50,6 +52,7 @@ export namespace HeadlessSpecService {
     request: string
     goals?: Array<{ description: string; criteria: string; priority?: "blocking" | "advisory" }>
     signal?: AbortSignal
+    stream?: import("@/llm/api").TextHooks
   }): Promise<SpecDraft & { spec_items: SpecOutputType["spec_items"]; evidence_sources: string[]; unresolved_questions: string[] }> {
     const timeoutMs = specTimeoutMs()
     const controller = new AbortController()
@@ -72,6 +75,7 @@ export namespace HeadlessSpecService {
             priority: g.priority,
           })),
           signal,
+          stream: input.stream,
         }),
         new Promise<never>((_, reject) =>
           setTimeout(() => reject(new SpecFailureError(`spec agent timed out after ${timeoutMs}ms`)), timeoutMs),

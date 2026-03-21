@@ -60,16 +60,24 @@ export namespace Lock {
     // Prioritize writers to prevent starvation
     if (lock.waitingWriters.length > 0) {
       const nextWriter = lock.waitingWriters.shift()!
-      nextWriter()
-      // Clean up after waking writer — nextWriter sets lock.writer = true
-      // so further cleanup happens when that writer releases
+      try {
+        nextWriter()
+      } catch {
+        // If the resolve callback throws, the writer never acquired the lock.
+        // Re-run process to wake the next waiter and prevent permanent deadlock.
+        process(key)
+      }
       return
     }
 
     // Wake up all waiting readers
     while (lock.waitingReaders.length > 0) {
       const nextReader = lock.waitingReaders.shift()!
-      nextReader()
+      try {
+        nextReader()
+      } catch {
+        // Same safety: if a reader resolve throws, continue waking others.
+      }
     }
 
     // Clean up empty locks — must re-check because waking readers increments lock.readers

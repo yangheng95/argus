@@ -220,6 +220,28 @@ export function findDeliveryByRun(runID: string) {
   )
 }
 
+export function findDeliveryByGoalRun(goalRunID: string) {
+  return Database.use((db) =>
+    db
+      .select()
+      .from(OrchestratorDeliveryTable)
+      .where(eq(OrchestratorDeliveryTable.goal_run_id, goalRunID))
+      .orderBy(desc(OrchestratorDeliveryTable.time_created))
+      .get(),
+  )
+}
+
+export function listGoalRunsByTask(taskID: string) {
+  return Database.use((db) =>
+    db
+      .select()
+      .from(OrchestratorGoalRunTable)
+      .where(eq(OrchestratorGoalRunTable.task_id, taskID))
+      .orderBy(desc(OrchestratorGoalRunTable.time_created))
+      .all(),
+  )
+}
+
 export function findEvaluationByRun(runID: string) {
   return Database.use((db) =>
     db
@@ -238,6 +260,48 @@ export function findExecutorSessionByRun(runID: string) {
       .from(OrchestratorExecutorSessionTable)
       .where(eq(OrchestratorExecutorSessionTable.run_id, runID))
       .get(),
+  )
+}
+
+export function findExecutorSession(executorSessionID: string) {
+  return Database.use((db) =>
+    db
+      .select()
+      .from(OrchestratorExecutorSessionTable)
+      .where(eq(OrchestratorExecutorSessionTable.id, executorSessionID))
+      .get(),
+  )
+}
+
+export function findGoalRun(goalRunID: string) {
+  return Database.use((db) =>
+    db
+      .select()
+      .from(OrchestratorGoalRunTable)
+      .where(eq(OrchestratorGoalRunTable.id, goalRunID))
+      .get(),
+  )
+}
+
+export function goalRunQueueTaskID(goalRun?: GoalRunRow) {
+  if (!goalRun) return undefined
+  const ref = goalRun.metadata as Record<string, unknown> | null
+  const queueTaskID = typeof ref?.queue_task_id === "string" ? ref.queue_task_id : undefined
+  return queueTaskID
+}
+
+export function listActiveGoalRunsByCoordinator(coordinatorRunID: string) {
+  return Database.use((db) =>
+    db
+      .select()
+      .from(OrchestratorGoalRunTable)
+      .where(
+        and(
+          eq(OrchestratorGoalRunTable.coordinator_run_id, coordinatorRunID),
+          inArray(OrchestratorGoalRunTable.status, ["queued", "accepted", "running", "blocked"]),
+        ),
+      )
+      .all(),
   )
 }
 
@@ -285,7 +349,7 @@ export function listMilestonesByPlan(planID: string) {
   )
 }
 
-export function listGoalsForPlan(plan: PlanRow) {
+export function listGoalsForPlan(plan: Pick<PlanRow, "id">) {
   return listGoalsByPlan(plan.id)
 }
 

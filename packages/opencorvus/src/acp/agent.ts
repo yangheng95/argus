@@ -632,16 +632,18 @@ export namespace ACP {
             return undefined
           })
 
-        const lastUser = messages?.findLast((m) => m.info.role === "user")?.info
-        if (lastUser?.role === "user") {
+        const lastUser = messages?.findLast((m) => m.info.role === "user")?.info as
+          | (Record<string, unknown> & { id: string; role: string; model?: { providerID: string; modelID: string }; agent?: string })
+          | undefined
+        if (lastUser?.role === "user" && lastUser.model) {
           result.models.currentModelId = `${lastUser.model.providerID}/${lastUser.model.modelID}`
           this.sessionManager.setModel(sessionId, {
             providerID: lastUser.model.providerID,
             modelID: lastUser.model.modelID,
           })
           if (result.modes?.availableModes.some((m) => m.id === lastUser.agent)) {
-            result.modes.currentModeId = lastUser.agent
-            this.sessionManager.setMode(sessionId, lastUser.agent)
+            result.modes.currentModeId = lastUser.agent as string
+            this.sessionManager.setMode(sessionId, lastUser.agent as string)
           }
         }
 
@@ -685,7 +687,7 @@ export namespace ACP {
 
         const entries: SessionInfo[] = page.map((session) => ({
           sessionId: session.id,
-          cwd: session.directory,
+          cwd: session.directory ?? "",
           title: session.title,
           updatedAt: new Date(session.time.updated).toISOString(),
         }))
@@ -808,17 +810,19 @@ export namespace ACP {
     private async processMessage(message: SessionMessageResponse) {
       log.debug("process message", message)
       if (message.info.role !== "assistant" && message.info.role !== "user") return
-      const sessionId = message.info.sessionID
+      const sessionId = message.info.sessionID as string
 
-      for (const part of message.parts) {
-        if (part.type === "tool") {
-          await this.toolStart(sessionId, part)
-          switch (part.state.status) {
+      for (const rawPart of message.parts) {
+        const part = rawPart as Record<string, unknown>
+        if (part["type"] === "tool") {
+          const toolPart = part as unknown as ToolPart
+          await this.toolStart(sessionId, toolPart)
+          switch (toolPart.state.status) {
             case "pending":
-              this.bashSnapshots.delete(part.callID)
+              this.bashSnapshots.delete(toolPart.callID)
               break
             case "running":
-              const output = this.bashOutput(part)
+              const output = this.bashOutput(toolPart)
               const runningContent: ToolCallContent[] = []
               if (output) {
                 runningContent.push({
@@ -834,12 +838,12 @@ export namespace ACP {
                   sessionId,
                   update: {
                     sessionUpdate: "tool_call_update",
-                    toolCallId: part.callID,
+                    toolCallId: toolPart.callID,
                     status: "in_progress",
-                    kind: toToolKind(part.tool),
-                    title: part.tool,
-                    locations: toLocations(part.tool, part.state.input),
-                    rawInput: part.state.input,
+                    kind: toToolKind(toolPart.tool),
+                    title: toolPart.tool,
+                    locations: toLocations(toolPart.tool, toolPart.state.input),
+                    rawInput: toolPart.state.input,
                     ...(runningContent.length > 0 && { content: runningContent }),
                   },
                 })
@@ -848,21 +852,21 @@ export namespace ACP {
                 })
               break
             case "completed":
-              this.toolStarts.delete(part.callID)
-              this.bashSnapshots.delete(part.callID)
-              const kind = toToolKind(part.tool)
+              this.toolStarts.delete(toolPart.callID)
+              this.bashSnapshots.delete(toolPart.callID)
+              const kind = toToolKind(toolPart.tool)
               const content: ToolCallContent[] = [
                 {
                   type: "content",
                   content: {
                     type: "text",
-                    text: part.state.output,
+                    text: toolPart.state.output,
                   },
                 },
               ]
 
               if (kind === "edit") {
-                const input = part.state.input
+                const input = toolPart.state.input
                 const filePath = typeof input["filePath"] === "string" ? input["filePath"] : ""
                 const oldText = typeof input["oldString"] === "string" ? input["oldString"] : ""
                 const newText =
@@ -879,8 +883,8 @@ export namespace ACP {
                 })
               }
 
-              if (part.tool === "todowrite") {
-                const parsedTodos = z.array(Todo.Info).safeParse(JSON.parse(part.state.output))
+              if (toolPart.tool === "todowrite") {
+                const parsedTodos = z.array(Todo.Info).safeParse(JSON.parse(toolPart.state.output))
                 if (parsedTodos.success) {
                   await this.connection
                     .sessionUpdate({
@@ -911,15 +915,15 @@ export namespace ACP {
                   sessionId,
                   update: {
                     sessionUpdate: "tool_call_update",
-                    toolCallId: part.callID,
+                    toolCallId: toolPart.callID,
                     status: "completed",
                     kind,
                     content,
-                    title: part.state.title,
-                    rawInput: part.state.input,
+                    title: toolPart.state.title,
+                    rawInput: toolPart.state.input,
                     rawOutput: {
-                      output: part.state.output,
-                      metadata: part.state.metadata,
+                      output: toolPart.state.output,
+                      metadata: toolPart.state.metadata,
                     },
                   },
                 })
@@ -928,30 +932,30 @@ export namespace ACP {
                 })
               break
             case "error":
-              this.toolStarts.delete(part.callID)
-              this.bashSnapshots.delete(part.callID)
+              this.toolStarts.delete(toolPart.callID)
+              this.bashSnapshots.delete(toolPart.callID)
               await this.connection
                 .sessionUpdate({
                   sessionId,
                   update: {
                     sessionUpdate: "tool_call_update",
-                    toolCallId: part.callID,
+                    toolCallId: toolPart.callID,
                     status: "failed",
-                    kind: toToolKind(part.tool),
-                    title: part.tool,
-                    rawInput: part.state.input,
+                    kind: toToolKind(toolPart.tool),
+                    title: toolPart.tool,
+                    rawInput: toolPart.state.input,
                     content: [
                       {
                         type: "content",
                         content: {
                           type: "text",
-                          text: part.state.error,
+                          text: toolPart.state.error,
                         },
                       },
                     ],
                     rawOutput: {
-                      error: part.state.error,
-                      metadata: part.state.metadata,
+                      error: toolPart.state.error,
+                      metadata: toolPart.state.metadata,
                     },
                   },
                 })
@@ -960,9 +964,10 @@ export namespace ACP {
                 })
               break
           }
-        } else if (part.type === "text") {
-          if (part.text) {
-            const scope = textAudience(part)
+        } else if (part["type"] === "text") {
+          const textStr = part["text"] as string | undefined
+          if (textStr) {
+            const scope = textAudience(part as Parameters<typeof textAudience>[0])
             const audience: Role[] | undefined = scope ? [scope] : undefined
             await this.connection
               .sessionUpdate({
@@ -971,7 +976,7 @@ export namespace ACP {
                   sessionUpdate: message.info.role === "user" ? "user_message_chunk" : "agent_message_chunk",
                   content: {
                     type: "text",
-                    text: part.text,
+                    text: textStr,
                     ...(audience && { annotations: { audience } }),
                   },
                 },
@@ -980,7 +985,7 @@ export namespace ACP {
                 log.error("failed to send text to ACP", { error: err })
               })
           }
-        } else if (part.type === "file") {
+        } else if (part["type"] === "file") {
           // Replay file attachments as appropriate ACP content blocks.
           // OpenCorvus stores files internally as { type: "file", url, filename, mime }.
           // We convert these back to ACP blocks based on the URL scheme and MIME type:
@@ -988,12 +993,12 @@ export namespace ACP {
           // - data: URLs with image/* → image block
           // - data: URLs with text/* or application/json → resource with text
           // - data: URLs with other types → resource with blob
-          const url = part.url
-          const filename = part.filename ?? "file"
-          const mime = part.mime || "application/octet-stream"
+          const url = part["url"] as string | undefined
+          const filename = (part["filename"] as string | undefined) ?? "file"
+          const mime = (part["mime"] as string | undefined) || "application/octet-stream"
           const messageChunk = message.info.role === "user" ? "user_message_chunk" : "agent_message_chunk"
 
-          if (url.startsWith("file://")) {
+          if (url && url.startsWith("file://")) {
             // Local file reference - send as resource_link
             await this.connection
               .sessionUpdate({
@@ -1006,7 +1011,7 @@ export namespace ACP {
               .catch((err) => {
                 log.error("failed to send resource_link to ACP", { error: err })
               })
-          } else if (url.startsWith("data:")) {
+          } else if (url && url.startsWith("data:")) {
             // Embedded content - parse data URL and send as appropriate block type
             const base64Match = url.match(/^data:([^;]+);base64,(.*)$/)
             const dataMime = base64Match?.[1]
@@ -1058,8 +1063,9 @@ export namespace ACP {
             }
           }
           // URLs that don't match file:// or data: are skipped (unsupported)
-        } else if (part.type === "reasoning") {
-          if (part.text) {
+        } else if (part["type"] === "reasoning") {
+          const textStr = part["text"] as string | undefined
+          if (textStr) {
             await this.connection
               .sessionUpdate({
                 sessionId,
@@ -1067,7 +1073,7 @@ export namespace ACP {
                   sessionUpdate: "agent_thought_chunk",
                   content: {
                     type: "text",
-                    text: part.text,
+                    text: textStr,
                   },
                 },
               })
@@ -1411,7 +1417,7 @@ export namespace ACP {
           agent,
           directory,
         })
-        const msg = response.data?.info
+        const msg = response.data?.info as AssistantMessage | undefined
 
         await sendUsageUpdate(this.connection, this.sdk, sessionID, directory)
 
@@ -1434,7 +1440,7 @@ export namespace ACP {
           agent,
           directory,
         })
-        const msg = response.data?.info
+        const msg = response.data?.info as AssistantMessage | undefined
 
         await sendUsageUpdate(this.connection, this.sdk, sessionID, directory)
 

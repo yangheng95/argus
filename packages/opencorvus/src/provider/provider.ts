@@ -644,6 +644,9 @@ export namespace Provider {
         const timeoutValue = (options["timeout"] !== undefined && options["timeout"] !== null)
           ? options["timeout"]
           : DEFAULT_FETCH_TIMEOUT_MS
+        if (timeoutValue !== false && typeof timeoutValue === "number" && timeoutValue < 60_000) {
+          log.warn("short fetch timeout detected", { timeoutValue, providerID: model.providerID, optionsTimeout: options["timeout"] })
+        }
         if (timeoutValue !== false && typeof timeoutValue === "number" && timeoutValue > 0) {
           const signals: AbortSignal[] = []
           if (opts.signal) signals.push(opts.signal)

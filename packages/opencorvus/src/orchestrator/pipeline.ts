@@ -54,13 +54,6 @@ const log = Log.create({ service: "orchestrator-pipeline" })
 // Types
 // ---------------------------------------------------------------------------
 
-/** §3.1 — Each stage is an independent async unit with its own timeout and AbortSignal. */
-export interface StageRunner<Input, Output> {
-  name: string
-  timeout: () => number
-  run(input: Input, signal: AbortSignal): Promise<Output>
-}
-
 type RoutingInput = z.infer<typeof CreateTaskInput>["routing"]
 type BudgetInput = z.infer<typeof CreateTaskInput>["budget"]
 type PriorityInput = z.infer<typeof CreateTaskInput>["priority"]
@@ -241,9 +234,8 @@ async function runSpecStage(
         title: task.title,
         request: task.request,
         goals: pipeline.goals as any,
-        sessionID: pipeline.sessionID,
-        metadata: task.metadata ?? {},
         signal: ctrl.signal,
+        stream: specLive.hooks,
       }),
       { signal: ctrl.signal },
     )
@@ -276,8 +268,10 @@ async function runSpecStage(
     return runGoalStage(task, pipeline, updateTask, specDraft)
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error)
-    log.error("spec stage failed", { taskID: task.id, error: msg })
-    await updateTask(task, { status: "failed", error: `Spec failed: ${msg}`, time_completed: Date.now() }, `Spec failed: ${msg}`)
+    const cause = error instanceof Error && error.cause instanceof Error ? error.cause.message : undefined
+    const fullMsg = cause ? `${msg}: ${cause}` : msg
+    log.error("spec stage failed", { taskID: task.id, error: fullMsg, cause: cause ?? undefined })
+    await updateTask(task, { status: "failed", error: `Spec failed: ${fullMsg}`, time_completed: Date.now() }, `Spec failed: ${fullMsg}`)
     return
   } finally {
     clearTimeout(timer)
@@ -400,8 +394,10 @@ async function runGoalStage(
     return runPlanStage(task, pipeline, updateTask, specDraft, reviewedGoalDraft, persistedGoals, goalSnapshotID)
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error)
-    log.error("goal stage failed", { taskID: task.id, error: msg })
-    await updateTask(task, { status: "failed", error: `Goal failed: ${msg}`, time_completed: Date.now() }, `Goal failed: ${msg}`)
+    const cause = error instanceof Error && error.cause instanceof Error ? error.cause.message : undefined
+    const fullMsg = cause ? `${msg}: ${cause}` : msg
+    log.error("goal stage failed", { taskID: task.id, error: fullMsg, cause: cause ?? undefined })
+    await updateTask(task, { status: "failed", error: `Goal failed: ${fullMsg}`, time_completed: Date.now() }, `Goal failed: ${fullMsg}`)
     return
   } finally {
     clearTimeout(timer)
@@ -553,8 +549,10 @@ async function runPlanStage(
     return { runID }
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error)
-    log.error("plan stage failed", { taskID: task.id, error: msg })
-    await updateTask(task, { status: "failed", error: `Plan failed: ${msg}`, time_completed: Date.now() }, `Plan failed: ${msg}`)
+    const cause = error instanceof Error && error.cause instanceof Error ? error.cause.message : undefined
+    const fullMsg = cause ? `${msg}: ${cause}` : msg
+    log.error("plan stage failed", { taskID: task.id, error: fullMsg, cause: cause ?? undefined })
+    await updateTask(task, { status: "failed", error: `Plan failed: ${fullMsg}`, time_completed: Date.now() }, `Plan failed: ${fullMsg}`)
     return
   } finally {
     clearTimeout(timer)

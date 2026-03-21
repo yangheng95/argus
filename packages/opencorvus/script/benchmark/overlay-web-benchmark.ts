@@ -52,7 +52,7 @@ const maxRuns = Number(flag("--max-runs")) || 20
 const maxReplans = Number(flag("--max-replans")) || 8
 const maxEvaluations = Number(flag("--max-evaluations")) || 200
 const report = flag("--report")
-const keep = process.argv.includes("--keep")
+const keep = !process.argv.includes("--no-keep")
 const headless = !process.argv.includes("--headed")
 const executor = (flag("--executor") || "opencode") as
   | "opencode"
@@ -364,6 +364,13 @@ const onEvent = ({ payload }: { payload: unknown }) => {
   if (line && line !== lastActivityLine) {
     lastActivityLine = line
     activityLine(line)
+  }
+  // Ensure tool_call/tool_result events always refresh the activity timer
+  // even when formatEventLine returns empty (e.g. during evaluation).
+  // Prevents false stall detection while evaluator is actively investigating.
+  if (!line && (entry.kind === "tool_call" || entry.kind === "tool_result" || entry.kind === "status")) {
+    lastActivityLogAt = Date.now()
+    lastLogAt = lastActivityLogAt
   }
   flushed = flushed
     .then(() => fs.appendFile(eventLogFile, `${JSON.stringify(entry)}\n`))
@@ -764,9 +771,15 @@ async function buildBenchmarkReport(error?: unknown) {
       boardTaskID: currentBoard?.task?.id || "",
       boardStatus: currentBoard?.task?.status || "",
       specVersion: currentBoard?.spec?.version ?? null,
-      goalCount: Array.isArray(currentBoard?.goals) ? currentBoard.goals.length : 0,
+      goalCount: (() => {
+        const lane = Array.isArray(currentBoard?.lanes) ? currentBoard.lanes.find((l: any) => l.id === "goals") : undefined
+        return Array.isArray(lane?.cards) ? lane.cards.length : 0
+      })(),
       goalRunCount: Array.isArray(currentBoard?.goalRuns) ? currentBoard.goalRuns.length : 0,
-      criteriaCount: Array.isArray(currentBoard?.checks) ? currentBoard.checks.length : 0,
+      criteriaCount: (() => {
+        const evalChecks = currentBoard?.evaluation?.checks
+        return Array.isArray(evalChecks) ? evalChecks.length : 0
+      })(),
     },
     screenshot,
     resume: {

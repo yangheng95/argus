@@ -67,7 +67,7 @@ async function run(input: z.infer<typeof ControlMessageInput>, onEvent?: StreamC
       reason: "model_unconfigured",
       result: loggedResult(result),
     })
-    return result
+    return { result, timeline: false } satisfies RunResult
   }
 
   let control: ControlSession | undefined
@@ -168,10 +168,10 @@ async function run(input: z.infer<typeof ControlMessageInput>, onEvent?: StreamC
   } finally {
     for (const unsub of unsubs) unsub()
     if (shouldRemoveSession(control)) {
-      await Session.remove(control.info.id).catch(() => undefined)
+      await Session.remove(control!.info.id).catch(() => undefined)
       log.info("panel control session removed", {
         input: payload,
-        panel_session_id: control.info.id,
+        panel_session_id: control!.info.id,
       })
     }
   }

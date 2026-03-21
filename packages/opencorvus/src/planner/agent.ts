@@ -11,7 +11,7 @@
  * 5. Structured output — PRD, goals, milestones, subtasks, risks, assumptions
  * 6. Replan — receives structured failure analysis and produces alternative strategies
  */
-import { generateText, stepCountIs, tool } from "ai"
+import { streamText, stepCountIs, tool } from "ai"
 import type { LanguageModelV2 } from "@ai-sdk/provider"
 import z from "zod"
 import { Provider } from "@/provider/provider"
@@ -105,6 +105,11 @@ export interface ReplanContext {
     status: string
     evidence: string
     requirement_ids?: string[]
+  }>
+  failedRequirements?: Array<{
+    id: string
+    title: string
+    reason: string
   }>
   previousWaves?: WaveStatus[]
 }
@@ -201,7 +206,7 @@ export namespace HeadlessPlannerAgent {
         retryReason: retryContext ? `score ${retryContext.previousScore} < ${QUALITY_RETRY_THRESHOLD}` : undefined,
       })
 
-      const result = await generateText({
+      const stream = streamText({
         model: language,
         stopWhen: stepCountIs(MAX_STEPS),
         tools: allTools,
@@ -210,9 +215,12 @@ export namespace HeadlessPlannerAgent {
         system: PLANNER_SYSTEM,
         prompt: userPrompt,
       })
+      const [resultText, resultSteps, resultFinishReason] = await Promise.all([
+        stream.text, stream.steps, stream.finishReason,
+      ])
 
       // Count actual tool calls
-      const toolCallCount = result.steps.reduce(
+      const toolCallCount = resultSteps.reduce(
         (sum, s) => sum + (Array.isArray((s as any).toolCalls) ? (s as any).toolCalls.length : 0),
         0,
       )
@@ -226,7 +234,7 @@ export namespace HeadlessPlannerAgent {
       if (submittedPlan) {
         const submitted = submittedPlan as PlannerOutputType
         log.info("planner agent finished via submit_plan tool call", {
-          steps: result.steps.length,
+          steps: resultSteps.length,
           goals: submitted.goals?.length ?? 0,
           subtasks: submitted.subtasks?.length ?? 0,
           prdLength: submitted.prd?.length ?? 0,
@@ -244,14 +252,14 @@ export namespace HeadlessPlannerAgent {
         }
       } else {
         // Fallback: parse from text output
-        let allText = result.text?.trim() || ""
+        let allText = resultText?.trim() || ""
         if (!allText || !allText.includes("{")) {
-          allText = result.steps.map((s) => s.text).filter(Boolean).join("\n")
+          allText = resultSteps.map((s) => s.text).filter(Boolean).join("\n")
         }
 
         log.info("planner agent finished via text output (no submit_plan call)", {
-          steps: result.steps.length,
-          finishReason: result.finishReason,
+          steps: resultSteps.length,
+          finishReason: resultFinishReason,
           textLength: allText.length,
           textPreview: allText.slice(0, 200),
           attempt: attempt + 1,
@@ -266,7 +274,7 @@ export namespace HeadlessPlannerAgent {
           prdLength: parsed.prd.length,
           subtasksCount: parsed.subtasks.length,
         })
-        parsed = synthesizeFromExploration(parsed, input, result.steps)
+        parsed = synthesizeFromExploration(parsed, input, resultSteps)
       }
 
       // Ensure summary is meaningful (not garbage like "## heading" or empty)
@@ -1066,6 +1074,15 @@ function buildUserPrompt(
         ...ctx.previousGoalStatuses.map(
           (g) => `- ${g.description}: **${g.status}** — ${g.evidence}`,
         ),
+        ...(ctx.failedRequirements && ctx.failedRequirements.length > 0
+          ? [
+              "",
+              `## Failed Requirements (must be addressed in this plan)`,
+              ...ctx.failedRequirements.map(
+                (r) => `- [${r.id}] **${r.title}**: ${r.reason}`,
+              ),
+            ]
+          : []),
       ].join("\n"),
     )
   }

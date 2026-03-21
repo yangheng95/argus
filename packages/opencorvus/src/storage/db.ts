@@ -101,6 +101,26 @@ export namespace Database {
     effects: (() => void | Promise<void>)[]
   }>("database")
 
+  const effectLog = Log.create({ service: "db-effect" })
+
+  /** Execute post-commit effects, catching and logging any failures. */
+  function drainEffects(effects: (() => void | Promise<void>)[]) {
+    for (const fn of effects) {
+      try {
+        const result = fn()
+        // If the effect returns a Promise (e.g. Bus.publish), attach a catch
+        // so unhandled rejections don't crash the process and failures are logged.
+        if (result && typeof (result as any).then === "function") {
+          ;(result as Promise<unknown>).catch((err) => {
+            effectLog.warn("post-commit effect failed", { error: err instanceof Error ? err.message : String(err) })
+          })
+        }
+      } catch (err) {
+        effectLog.warn("post-commit effect threw synchronously", { error: err instanceof Error ? err.message : String(err) })
+      }
+    }
+  }
+
   export function use<T>(callback: (trx: TxOrDb) => T): T {
     try {
       return callback(ctx.use().tx)
@@ -108,7 +128,7 @@ export namespace Database {
       if (err instanceof Context.NotFound) {
         const effects: (() => void | Promise<void>)[] = []
         const result = ctx.provide({ effects, tx: Client() }, () => callback(Client()))
-        for (const effect of effects) effect()
+        drainEffects(effects)
         return result
       }
       throw err
@@ -119,7 +139,16 @@ export namespace Database {
     try {
       ctx.use().effects.push(fn)
     } catch {
-      fn()
+      try {
+        const result = fn()
+        if (result && typeof (result as any).then === "function") {
+          ;(result as Promise<unknown>).catch((err) => {
+            effectLog.warn("immediate effect failed", { error: err instanceof Error ? err.message : String(err) })
+          })
+        }
+      } catch (err) {
+        effectLog.warn("immediate effect threw", { error: err instanceof Error ? err.message : String(err) })
+      }
     }
   }
 
@@ -132,7 +161,7 @@ export namespace Database {
         const result = Client().transaction((tx) => {
           return ctx.provide({ tx, effects }, () => callback(tx))
         })
-        for (const effect of effects) effect()
+        drainEffects(effects)
         return result
       }
       throw err

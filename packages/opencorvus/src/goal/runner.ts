@@ -389,10 +389,10 @@ export async function cleanupStaleGoalWorkspaces(taskID: string) {
 }
 
 export async function createGoalSession(task: TaskRow, goal: GoalRow, directory?: string) {
-  const session = await Session.create({
+  const session = await Session.createNext({
     parentID: task.session_id ?? undefined,
     title: `${task.title}: ${goal.description}`,
-    directory,
+    directory: directory ?? (await import("@/project/instance")).Instance.directory,
   })
   const parent = task.session_id ? await Session.get(task.session_id) : undefined
   if (parent?.permission) {
@@ -688,7 +688,6 @@ export async function evaluateGoal(input: {
   await live.start("Goal judge started")
   const analyzed = await CheckRunner.analyzeDelivery({
     ...analysisInput,
-    stream: live.hooks,
   })
     .then(async (analysis) => {
       await live.finish("Goal judge finished")
@@ -762,7 +761,6 @@ export async function evaluateTask(input: {
   await live.start("Goal judge started")
   const analyzed = await CheckRunner.analyzeDelivery({
     ...analysisInput,
-    stream: live.hooks,
   })
     .then(async (analysis) => {
       await live.finish("Goal judge finished")

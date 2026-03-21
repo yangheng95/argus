@@ -2,7 +2,7 @@ import { findSpecSnapshot, findSpecItems } from "@/orchestrator/store"
 import { Provider } from "@/provider/provider"
 import { CheckConfig } from "@/orchestrator/model"
 import { Snapshot } from "@/snapshot"
-import { generateObject, generateText } from "ai"
+import { generateObject, streamText } from "ai"
 import z from "zod"
 import { Log } from "@/util/log"
 import {
@@ -575,24 +575,24 @@ export async function specCheckResult(
   }).catch(() => undefined)
 
   if (!result) {
-    const textResult = await generateText({
+    const textResult = await streamText({
       model: language,
       temperature: model.providerID.startsWith("moonshotai") ? 1 : 0,
       abortSignal: AbortSignal.timeout(REVIEW_TIMEOUT_MS),
       messages: specCheckMessages,
-    }).catch((err) => {
+    }).text.catch((err) => {
       evaluatorLog.warn("spec_check text fallback failed", { error: String(err), model: `${model.providerID}/${model.id}` })
       return undefined
     })
-    if (textResult?.text) {
+    if (textResult) {
       try {
-        const jsonMatch = textResult.text.match(/\{[\s\S]*\}/)
+        const jsonMatch = textResult.match(/\{[\s\S]*\}/)
         if (jsonMatch) {
           const parsed = SpecCheckResult.parse(JSON.parse(jsonMatch[0]))
           result = { object: parsed }
         }
       } catch {
-        evaluatorLog.warn("spec_check JSON parse failed", { text: textResult.text.substring(0, 200) })
+        evaluatorLog.warn("spec_check JSON parse failed", { text: textResult.substring(0, 200) })
       }
     }
   }

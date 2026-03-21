@@ -67,6 +67,7 @@ import { OrchestratorRuntime } from "./runtime"
 import { hooks, updateRun, updateTask } from "./state"
 import {
   compileTransition,
+  insertGoalRows,
   insertPlanItems,
   insertSpecItems,
   persistInitialTransition,
@@ -426,22 +427,18 @@ export namespace OrchestratorService {
   }
 
   export async function listRuns(taskID: string) {
-    await OrchestratorRuntime.syncTask(taskID, hooks())
+    // Read-only — poll loop handles state advancement asynchronously.
     requireTask(taskID)
     return findRuns(taskID).map(viewRun)
   }
 
   export async function getRun(runID: string) {
-    await OrchestratorRuntime.syncRun(runID, hooks())
+    // Read-only — poll loop handles state advancement asynchronously.
     return viewRun(requireRun(runID))
   }
 
   export async function getBrief(input: { taskID: string; runID?: string }) {
-    if (input.runID) {
-      await OrchestratorRuntime.syncRun(input.runID, hooks()).catch(() => undefined)
-    } else {
-      await OrchestratorRuntime.syncTask(input.taskID, hooks()).catch(() => undefined)
-    }
+    // Read-only — poll loop handles state advancement asynchronously.
     const task = requireTask(input.taskID)
     return WorkbenchService.compileBrief({
       taskID: task.id,
@@ -451,17 +448,13 @@ export namespace OrchestratorService {
     })
   }
 
-  export async function getBoard(taskID: string, input?: { sync?: boolean }) {
-    if (input?.sync !== false) {
-      await OrchestratorRuntime.syncTask(taskID, hooks()).catch(() => undefined)
-    }
+  export async function getBoard(taskID: string, _input?: { sync?: boolean }) {
+    // Read-only — poll loop handles state advancement asynchronously.
     return WorkbenchService.compileBoard({ taskID })
   }
 
-  export async function getBoardTag(taskID: string, input?: { sync?: boolean }) {
-    if (input?.sync !== false) {
-      await OrchestratorRuntime.syncTask(taskID, hooks()).catch(() => undefined)
-    }
+  export async function getBoardTag(taskID: string, _input?: { sync?: boolean }) {
+    // Read-only — poll loop handles state advancement asynchronously.
     return WorkbenchService.boardTag({ taskID })
   }
 
@@ -505,26 +498,26 @@ export namespace OrchestratorService {
   }
 
   export async function getDelivery(runID: string) {
-    await OrchestratorRuntime.syncRun(runID, hooks())
+    // Read-only — poll loop handles state advancement asynchronously.
     const delivery = findDeliveryByRun(runID)
     if (!delivery) throw new NotFoundError({ message: `Delivery not found for run ${runID}` })
     return viewDelivery(delivery)
   }
 
   export async function listArtifacts(runID: string) {
-    await OrchestratorRuntime.syncRun(runID, hooks())
+    // Read-only — poll loop handles state advancement asynchronously.
     requireRun(runID)
     return findArtifacts(runID).map(viewArtifact)
   }
 
   export async function listEvaluations(runID: string) {
-    await OrchestratorRuntime.syncRun(runID, hooks())
+    // Read-only — poll loop handles state advancement asynchronously.
     requireRun(runID)
     return findEvaluations(runID).map(viewEvaluation)
   }
 
   export async function getExecutorSession(runID: string) {
-    await OrchestratorRuntime.syncRun(runID, hooks())
+    // Read-only — poll loop handles state advancement asynchronously.
     requireRun(runID)
     const row = findExecutorSessionByRun(runID)
     if (!row) throw new NotFoundError({ message: `Executor session not found for run ${runID}` })
@@ -532,7 +525,7 @@ export namespace OrchestratorService {
   }
 
   export async function listExecutorEvents(runID: string) {
-    await OrchestratorRuntime.syncRun(runID, hooks())
+    // Read-only — poll loop handles state advancement asynchronously.
     requireRun(runID)
     const row = findExecutorSessionByRun(runID)
     if (!row) return []
@@ -540,7 +533,7 @@ export namespace OrchestratorService {
   }
 
   export async function listTaskInteractions(taskID: string) {
-    await OrchestratorRuntime.syncTask(taskID, hooks())
+    // Read-only — poll loop handles state advancement asynchronously.
     requireTask(taskID)
     return listInteractions(taskID).map(viewInteraction)
   }
@@ -1229,9 +1222,23 @@ async function answerPlannerClarification(row: InteractionRow, answers: string[]
         time_updated: now,
       })
       .run()
+    const effectiveSpecSnapshotID = specSnapshotID ?? task.active_spec_version_id ?? ""
+    const persistedGoals = insertGoalRows(db, {
+      taskID: task.id,
+      specSnapshotID: effectiveSpecSnapshotID,
+      planVersionID: planID,
+      goals: planDraft.goals.map((g) => ({
+        description: g.description,
+        criteria: g.criteria,
+        priority: g.priority,
+        metadata: g.metadata as Record<string, unknown> | undefined,
+      })),
+      now,
+    })
     insertPlanItems(db, {
       taskID: task.id,
       planID,
+      goals: persistedGoals,
       planDraft,
       now,
       milestones: [],
