@@ -22,6 +22,7 @@ import { Log } from "@/util/log"
 import { Env } from "@/env"
 import { type TextHooks } from "@/llm/api"
 import { Config } from "@/config/config"
+import { OrchestratorConfig } from "@/orchestrator/config"
 import { collectText, countToolCalls, firstContentLine, sectionBody, splitBlocks } from "@/util/agent-text"
 import type { GoalJudgmentType, GoalInfo, DeliveryInfo } from "@/evaluator/agent"
 
@@ -65,13 +66,8 @@ export type DeliveryVerdictType = z.infer<typeof DeliveryVerdict>
 // DeliveryAgent
 // ---------------------------------------------------------------------------
 
-const MAX_STEPS = 40
-
-function deliveryTimeoutMs() {
-  const raw = Env.get("OPENCORVUS_DELIVERY_AGENT_TIMEOUT_MS")
-  const parsed = Number.parseInt(raw ?? "", 10)
-  return Number.isFinite(parsed) ? parsed : 600_000
-}
+// deliveryTimeoutMs 已迁移到 OrchestratorConfig.delivery.timeout_ms
+// 环境变量 OPENCORVUS_DELIVERY_AGENT_TIMEOUT_MS 仍然生效（最高优先级）
 
 type VerifyInput = {
   task: { title: string; request: string; sessionID?: string; metadata?: Record<string, unknown> }
@@ -91,7 +87,7 @@ export namespace DeliveryAgent {
     })
     if (!resolved) throw new Error("Delivery verification model is unavailable")
     const { language, model } = resolved
-    const timeoutMs = deliveryTimeoutMs()
+    const deliveryCfg = (await OrchestratorConfig.get()).delivery
 
     const tools = createDeliveryTools({ sessionID: input.task.sessionID })
     const context = prefetchDeliveryContext(input)
@@ -102,9 +98,10 @@ export namespace DeliveryAgent {
       goals: input.goals.length,
       changedFiles: input.delivery.changedFiles.length,
       model: language.modelId,
+      config: deliveryCfg,
     })
 
-    const MAX_RETRIES = 2
+    const MAX_RETRIES = deliveryCfg.max_retries
     let parsed: DeliveryVerdictType | undefined
     let lastError: Error | undefined
     let toolCallCount = 0
@@ -124,15 +121,15 @@ export namespace DeliveryAgent {
         steps: Array<{ text?: string; toolCalls?: unknown[]; toolResults?: unknown[] }>
       }
       const attemptSignal = externalSignal
-        ? AbortSignal.any([externalSignal, AbortSignal.timeout(timeoutMs)])
-        : AbortSignal.timeout(timeoutMs)
+        ? AbortSignal.any([externalSignal, AbortSignal.timeout(deliveryCfg.timeout_ms)])
+        : AbortSignal.timeout(deliveryCfg.timeout_ms)
       try {
         result = await completeHeadlessText({
           label: "delivery",
           model,
           language,
           sessionID: input.task.sessionID,
-          stopWhen: [stepCountIs(MAX_STEPS)],
+          stopWhen: [stepCountIs(deliveryCfg.max_steps)],
           tools,
           maxOutputTokens: 16384,
           timeoutMs: false,
@@ -176,7 +173,7 @@ export namespace DeliveryAgent {
         continue
       }
 
-      const MIN_TOOL_CALLS = 3
+      const MIN_TOOL_CALLS = deliveryCfg.min_tool_calls
       if (toolCallCount < MIN_TOOL_CALLS) {
         lastError = new Error(`Delivery verification was too shallow: only ${toolCallCount}/${MIN_TOOL_CALLS} required tool calls`)
         log.warn("delivery: agent made too few tool calls, will retry", { attempt, verdict: parsed.verdict, toolCalls: toolCallCount })

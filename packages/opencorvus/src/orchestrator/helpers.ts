@@ -1,12 +1,16 @@
 import z from "zod"
 import { Instance } from "@/project/instance"
 import { Budget } from "./model"
+import { OrchestratorConfig } from "./config"
 import type { OrchestratorBudget, OrchestratorTaskStatus } from "./orchestrator.sql"
 
 export const ORCHESTRATOR_POLL_INTERVAL_MS = 1500
-export const SAME_PLAN_RETRY_LIMIT = parseInt(process.env.OPENCORVUS_SAME_PLAN_RETRY_LIMIT || "2", 10)
-export const DEFAULT_MAX_RUNS = parseInt(process.env.OPENCORVUS_MAX_RUNS || "10", 10)
-export const DEFAULT_MAX_REPLANS = parseInt(process.env.OPENCORVUS_MAX_REPLANS || "3", 10)
+
+// 同步默认值 — 用于无法 await 的场景（如模块级 export）
+const syncDefaults = OrchestratorConfig.getDefaults()
+export const SAME_PLAN_RETRY_LIMIT = syncDefaults.same_plan_retry_limit
+export const DEFAULT_MAX_RUNS = syncDefaults.max_runs
+export const DEFAULT_MAX_REPLANS = syncDefaults.max_replans
 
 export const orchestratorState = Instance.state(() => ({
   booted: false,

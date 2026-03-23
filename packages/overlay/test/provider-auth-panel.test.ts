@@ -385,6 +385,13 @@ test("overlay oauth auth handles prompt-driven authorize flow and pasted redirec
     async (tab, state) => {
       await openProviderSettings(tab)
       await tab.select("#llmProvider", "openai-codex")
+      // Auth dialog is not auto-triggered when configDialog is open (WebView2 modal stacking fix).
+      // Click the Connect button to initiate the auth flow.
+      await tab.waitForFunction(() => {
+        const button = document.querySelector("#btnLlmAuthAction") as HTMLButtonElement | null
+        return !!button && !button.disabled && !button.classList.contains("hidden")
+      })
+      await tab.$eval("#btnLlmAuthAction", (node) => { ;(node as HTMLButtonElement).click() })
       const firstDialog = await dialogState(tab)
       if (!firstDialog.inputVisible && !firstDialog.selectVisible) await acceptDialog(tab)
       await submitDialogSelect(tab, "manual")

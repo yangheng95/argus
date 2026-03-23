@@ -1189,6 +1189,52 @@ export namespace Config {
             .describe("Token buffer for compaction. Leaves enough window to avoid overflow during compaction."),
         })
         .optional(),
+      orchestrator: z
+        .object({
+          spec: z
+            .object({
+              max_steps: z.number().int().min(1).optional().describe("Maximum agentic steps for spec agent (default: 30)"),
+              timeout_ms: z.number().int().min(1000).optional().describe("Spec agent timeout in milliseconds (default: 300000)"),
+              min_tool_calls: z.number().int().min(0).optional().describe("Minimum tool calls required before producing spec (default: 3)"),
+              quality_threshold: z.number().min(0).max(1).optional().describe("Quality score threshold for retry (0.0-1.0, default: 0.6)"),
+              max_attempts: z.number().int().min(1).optional().describe("Maximum spec generation attempts (default: 3)"),
+            })
+            .optional()
+            .describe("Spec agent configuration"),
+          planner: z
+            .object({
+              max_steps: z.number().int().min(1).optional().describe("Maximum agentic steps for planner agent (default: 30)"),
+              timeout_ms: z.number().int().min(1000).optional().describe("Planner agent timeout in milliseconds (default: 300000)"),
+              min_tool_calls: z.number().int().min(0).optional().describe("Minimum tool calls required before producing plan (default: 3)"),
+              quality_threshold: z.number().min(0).max(1).optional().describe("Quality score threshold for retry (0.0-1.0, default: 0.5)"),
+              max_attempts: z.number().int().min(1).optional().describe("Maximum plan generation attempts (default: 3)"),
+            })
+            .optional()
+            .describe("Planner agent configuration"),
+          evaluator: z
+            .object({
+              max_steps: z.number().int().min(1).optional().describe("Maximum agentic steps for evaluator agent (default: 25)"),
+              timeout_ms: z.number().int().min(1000).optional().describe("Evaluator agent timeout in milliseconds (default: 240000)"),
+              min_tool_calls: z.number().int().min(0).optional().describe("Minimum tool calls for evaluator (default: 3)"),
+            })
+            .optional()
+            .describe("Evaluator agent configuration"),
+          delivery: z
+            .object({
+              max_steps: z.number().int().min(1).optional().describe("Maximum agentic steps for delivery agent (default: 40)"),
+              timeout_ms: z.number().int().min(1000).optional().describe("Delivery agent timeout in milliseconds (default: 600000). Also overridable via OPENCORVUS_DELIVERY_AGENT_TIMEOUT_MS env var"),
+              max_retries: z.number().int().min(0).optional().describe("Maximum delivery generation retries (default: 2)"),
+              min_tool_calls: z.number().int().min(0).optional().describe("Minimum tool calls for delivery agent (default: 3)"),
+            })
+            .optional()
+            .describe("Delivery agent configuration"),
+          max_runs: z.number().int().min(1).optional().describe("Maximum total task runs (default: 10)"),
+          max_replans: z.number().int().min(0).optional().describe("Maximum replan cycles (default: 3)"),
+          same_plan_retry_limit: z.number().int().min(0).optional().describe("Max retries with the same plan (default: 2)"),
+          stage_max_retries: z.number().int().min(0).optional().describe("Max retries per orchestrator stage (default: 2)"),
+        })
+        .optional()
+        .describe("Orchestrator pipeline configuration — controls spec, planner, evaluator, and delivery agent behavior"),
       experimental: z
         .object({
           disable_paste_summary: z.boolean().optional(),

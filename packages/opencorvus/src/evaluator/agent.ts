@@ -21,6 +21,7 @@ import { Memory } from "@/memory"
 import { Preference } from "@/preference"
 import { Instance } from "@/project/instance"
 import { Log } from "@/util/log"
+import { OrchestratorConfig } from "@/orchestrator/config"
 
 const log = Log.create({ service: "evaluator-agent" })
 
@@ -93,9 +94,6 @@ export interface DeliveryInfo {
 // EvaluatorAgent
 // ---------------------------------------------------------------------------
 
-const MAX_STEPS = 25
-const TIMEOUT_MS = 240_000
-
 export namespace EvaluatorAgent {
   export async function analyze(input: {
     task: { title: string; request: string; sessionID?: string }
@@ -109,6 +107,8 @@ export namespace EvaluatorAgent {
       log.warn("evaluator: no LLM model available — falling back to check-only synthesis")
       return synthesizeFromCheckResults(input)
     }
+
+    const evalCfg = (await OrchestratorConfig.get()).evaluator
 
     // Full evaluator tool set: codebase exploration + memory + preferences
     const tools = createEvaluatorTools({ sessionID: input.task.sessionID })
@@ -124,14 +124,15 @@ export namespace EvaluatorAgent {
       changedFiles: input.delivery.changedFiles.length,
       model: language.modelId,
       prefetchedContext: context.length > 0,
+      config: evalCfg,
     })
 
     const stream = streamText({
       model: language,
-      stopWhen: stepCountIs(MAX_STEPS),
+      stopWhen: stepCountIs(evalCfg.max_steps),
       tools,
       maxOutputTokens: 16384,
-      abortSignal: AbortSignal.timeout(TIMEOUT_MS),
+      abortSignal: AbortSignal.timeout(evalCfg.timeout_ms),
       system: EVALUATOR_SYSTEM,
       prompt: userPrompt,
       ...(input.stream as TextHooks<typeof tools> | undefined),
@@ -158,7 +159,7 @@ export namespace EvaluatorAgent {
       textLength: allText.length,
     })
 
-    const MIN_TOOL_CALLS = 3
+    const MIN_TOOL_CALLS = evalCfg.min_tool_calls
 
     let parsed: EvaluatorAnalysisType
     try {
