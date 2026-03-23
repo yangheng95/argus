@@ -1,9 +1,13 @@
 import os from "os"
 import { Instance } from "../project/instance"
 import { Shell } from "@/shell/shell"
+import { Config } from "@/config/config"
 
 import PROMPT_CODEX from "./prompt/codex_header.txt"
 import type { Provider } from "@/provider/provider"
+
+// Note: instructions() removed per upstream PR #18337 — system prompt is now
+// unified and placed in options.instructions for OpenAI OAuth sessions in llm.ts
 
 const TUI_WORKFLOW = [
   "<tui-workflow>",
@@ -48,12 +52,10 @@ function utcOffset(now: Date): string {
 }
 
 export namespace SystemPrompt {
-  export function instructions() {
-    return PROMPT_CODEX.trim()
-  }
-
-  export function provider(model: Provider.Model) {
-    return [PROMPT_CODEX]
+  export async function provider(model: Provider.Model) {
+    const cfg = await Config.get()
+    const coreHeader = cfg.prompt?.["core_header"] ?? PROMPT_CODEX
+    return [coreHeader]
   }
 
   export async function environment(model: Provider.Model) {

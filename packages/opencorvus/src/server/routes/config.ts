@@ -4,6 +4,7 @@ import z from "zod"
 import { Config } from "../../config/config"
 import { ChannelSupervisor } from "@/channel/supervisor"
 import { Provider } from "../../provider/provider"
+import { PromptCatalog } from "../../config/prompt-catalog"
 import { mapValues } from "remeda"
 import { errors } from "../error"
 import { Log } from "../../util/log"
@@ -61,6 +62,28 @@ export const ConfigRoutes = lazy(() =>
           log.warn("channel runtime sync failed", { error: String(error) })
         })
         return c.json(config)
+      },
+    )
+    .get(
+      "/prompt",
+      describeRoute({
+        summary: "List prompt catalog",
+        description:
+          "Returns all configurable prompt slots (system-scope and agent-scope) with their defaults and any user overrides from config.",
+        operationId: "config.prompt",
+        responses: {
+          200: {
+            description: "Prompt catalog entries",
+            content: {
+              "application/json": {
+                schema: resolver(z.array(z.any())),
+              },
+            },
+          },
+        },
+      }),
+      async (c) => {
+        return c.json(await PromptCatalog.list())
       },
     )
     .get(

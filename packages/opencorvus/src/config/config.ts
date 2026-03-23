@@ -1169,6 +1169,10 @@ export namespace Config {
             error: "For custom LSP servers, 'extensions' array is required.",
           },
         ),
+      prompt: z
+        .record(z.string(), z.string())
+        .optional()
+        .describe("System-scope prompt overrides keyed by prompt identifier (e.g. core_header)"),
       instructions: z.array(z.string()).optional().describe("Additional instruction files or patterns to include"),
       layout: Layout.optional().describe("@deprecated Always uses stretch layout."),
       permission: Permission.optional(),

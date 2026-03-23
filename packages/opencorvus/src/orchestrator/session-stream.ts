@@ -24,6 +24,7 @@ const log = Log.create({ service: "session-stream" })
 export function sessionStreamHooks(input: {
   sessionID: string
   taskID: string
+  stage?: string
 }): TextHooks {
   let messageID: string | undefined
   let textPartID: string | undefined
@@ -42,7 +43,7 @@ export function sessionStreamHooks(input: {
       modelID: "agent",
       providerID: "agent",
       mode: "agent",
-      agent: "agent",
+      agent: input.stage || "agent",
       path: { cwd: "", root: "" },
       cost: 0,
       tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },

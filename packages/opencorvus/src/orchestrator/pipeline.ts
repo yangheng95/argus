@@ -237,7 +237,7 @@ async function runSpecStage(
       directory: Instance.directory,
     })
     registerGoalRunSession(specSession.id, task.id)
-    const specContentHooks = sessionStreamHooks({ sessionID: specSession.id, taskID: task.id })
+    const specContentHooks = sessionStreamHooks({ sessionID: specSession.id, taskID: task.id, stage: "spec" })
     await specLive.start("Spec generation started")
 
     const rawSpecDraft = await withStageRetry("spec", () =>
@@ -347,7 +347,7 @@ async function runGoalStage(
       directory: Instance.directory,
     })
     registerGoalRunSession(goalSession.id, task.id)
-    const goalContentHooks = sessionStreamHooks({ sessionID: goalSession.id, taskID: task.id })
+    const goalContentHooks = sessionStreamHooks({ sessionID: goalSession.id, taskID: task.id, stage: "goal" })
     await goalLive.start("Goal decomposition started")
 
     const goalDraft = await withStageRetry("goal", () =>
@@ -495,7 +495,7 @@ async function runPlanStage(
       directory: Instance.directory,
     })
     registerGoalRunSession(planSession.id, task.id)
-    const planContentHooks = sessionStreamHooks({ sessionID: planSession.id, taskID: task.id })
+    const planContentHooks = sessionStreamHooks({ sessionID: planSession.id, taskID: task.id, stage: "planner" })
     await planLive.start("Planner started")
 
     let planDraft = await withStageRetry("plan", () =>

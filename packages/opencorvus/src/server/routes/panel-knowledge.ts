@@ -221,6 +221,8 @@ export function PanelKnowledgeRoutes() {
       async (c) => {
         const { key, value } = c.req.valid("json")
         const entry = Preference.set({ projectID: projectId(), key, value, source: "overlay" })
+        // Also persist to cwd file so it survives DB loss
+        Preference.syncToCwd(key, value)
         return c.json(entry)
       },
     )
@@ -247,6 +249,8 @@ export function PanelKnowledgeRoutes() {
         const id = c.req.param("id")
         const { key, value } = c.req.valid("json")
         Preference.update({ preferenceID: id, key, value })
+        // Also persist to cwd file so it survives DB loss
+        Preference.syncToCwd(key, value)
         return c.json({ ok: true })
       },
     )
@@ -264,7 +268,10 @@ export function PanelKnowledgeRoutes() {
       }),
       async (c) => {
         const id = c.req.param("id")
+        // Get the preference key before deletion so we can remove from cwd file
+        const entry = Preference.get(id)
         Preference.remove(id)
+        if (entry) Preference.removeFromCwd(entry.key)
         return c.json({ ok: true })
       },
     )

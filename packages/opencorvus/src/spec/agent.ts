@@ -10,14 +10,14 @@
  * 5. Structured output — scope, requirements, acceptance criteria, spec items
  * 6. Rewrite — receives failure analysis and revises spec for replan
  */
-import { streamText, stepCountIs, tool, type ToolSet } from "ai"
+import { streamText, stepCountIs } from "ai"
 import type { TextHooks } from "@/llm/api"
 import z from "zod"
 import { Provider } from "@/provider/provider"
 import { createPlannerTools, prefetchContext } from "@/planner/tools"
-import { Filesystem } from "@/util/filesystem"
 import { Instance } from "@/project/instance"
 import { Log } from "@/util/log"
+import { parseSpecText } from "./parse-spec-text"
 import path from "path"
 
 const log = Log.create({ service: "spec-agent" })
@@ -221,28 +221,7 @@ async function run(input: {
     input.request.match(/(?:工作目录|working dir(?:ectory)?)[^\n]*?([A-Z]:[/\\][^\s)）]+|\/[^\s)）]+)/i)
   const taskWorkDir = cwdMatch ? cwdMatch[1].replace(/[/\\]+$/, "") : undefined
 
-  const explorationTools = createPlannerTools(taskWorkDir)
-
-  // -----------------------------------------------------------------------
-  // submit_spec tool — the model calls this to deliver structured spec data.
-  // Tool-call arguments are parsed by the provider API, guaranteeing valid
-  // JSON without any manual sanitize/repair.
-  // -----------------------------------------------------------------------
-  let submittedSpec: SpecOutputType | undefined
-  const allTools = {
-    ...explorationTools,
-    submit_spec: tool({
-      description:
-        "Submit the final specification after codebase exploration. " +
-        "Call this tool ONCE when you have finished exploring and are ready to deliver the spec. " +
-        "All fields are required except where noted optional.",
-      inputSchema: SpecOutput,
-      execute: async (args) => {
-        submittedSpec = args as SpecOutputType
-        return "Specification submitted successfully."
-      },
-    }),
-  }
+  const allTools = createPlannerTools(taskWorkDir)
 
   const fileRefs = await resolveFileReferences(input.request, taskWorkDir)
   if (input.signal?.aborted) throw new Error("spec agent aborted before context prefetch")
@@ -254,7 +233,6 @@ async function run(input: {
 
   for (let attempt = 0; attempt < MAX_SPEC_ATTEMPTS; attempt++) {
     if (input.signal?.aborted) throw new Error("spec agent aborted before attempt " + (attempt + 1))
-    submittedSpec = undefined
 
     const retryContext = attempt > 0 && lastQuality
       ? { previousScore: lastQuality.score, reasons: lastQuality.reasons, attempt }
@@ -288,97 +266,33 @@ async function run(input: {
       ...(input.stream?.onError ? { onError: input.stream.onError } : {}),
     })
 
-    // Collect resolved properties from the stream.
-    // Some providers (e.g. GitHub Copilot proxying Claude) hang after a tool call:
-    // the tool execute() fires and sets submittedSpec, but the stream never finishes.
-    // Race the normal stream completion against a grace-period timeout that checks
-    // whether submittedSpec was already captured by the tool execute() callback.
-    const SUBMIT_GRACE_MS = 30_000
-    let resultText = ""
-    let resultSteps: any[] = []
-    let resultFinishReason = "unknown"
-    try {
-      const streamDone = Promise.all([stream.text, stream.steps, stream.finishReason])
-      const submitGuard = new Promise<null>((resolve) => {
-        const check = () => {
-          if (submittedSpec) resolve(null)
-          else setTimeout(check, 2000)
-        }
-        setTimeout(check, 5000) // start checking after 5s
-      }).then(() =>
-        // submittedSpec is set — give the stream a grace period to finish normally
-        Promise.race([
-          streamDone,
-          new Promise<null>((resolve) => setTimeout(() => resolve(null), SUBMIT_GRACE_MS)),
-        ]),
-      )
-      const raced = await Promise.race([streamDone, submitGuard])
-      if (Array.isArray(raced)) {
-        ;[resultText, resultSteps, resultFinishReason] = raced as [string, any[], string]
-      } else if (submittedSpec) {
-        log.info("spec agent: stream did not finish but submit_spec captured — using captured result", {
-          attempt: attempt + 1,
-        })
-      }
-    } catch (err) {
-      if (submittedSpec) {
-        log.info("spec agent: stream errored but submit_spec captured — using captured result", {
-          attempt: attempt + 1,
-          error: String(err),
-        })
-      } else {
-        throw err
-      }
-    }
+    const [resultText, resultSteps, resultFinishReason] = await Promise.all([
+      stream.text,
+      stream.steps,
+      stream.finishReason,
+    ])
 
     const toolCallCount = resultSteps.reduce(
       (sum, s) => sum + (Array.isArray((s as any).toolCalls) ? (s as any).toolCalls.length : 0),
       0,
     )
 
-    // -----------------------------------------------------------------------
-    // Priority 1: extract from submit_spec tool call (guaranteed valid JSON)
-    // Priority 2: fallback to text JSON parsing (legacy / models that ignore tool)
-    // -----------------------------------------------------------------------
-    let parsed: SpecOutputType
-
-    if (submittedSpec) {
-      const submitted = submittedSpec as SpecOutputType
-      log.info("spec agent finished via submit_spec tool call", {
-        steps: resultSteps.length,
-        specItems: submitted.spec_items?.length ?? 0,
-        contentLength: submitted.content?.length ?? 0,
-        attempt: attempt + 1,
-      })
-      // Normalize arrays — tool call args may not have Zod defaults applied
-      parsed = {
-        ...submitted,
-        summary: submitted.summary ?? "",
-        content: submitted.content ?? "",
-        scope: submitted.scope ?? "",
-        spec_items: Array.isArray(submitted.spec_items) ? submitted.spec_items : [],
-        assumptions: Array.isArray(submitted.assumptions) ? submitted.assumptions : [],
-        risks: Array.isArray(submitted.risks) ? submitted.risks : [],
-        evidence_sources: Array.isArray(submitted.evidence_sources) ? submitted.evidence_sources : [],
-        unresolved_questions: Array.isArray(submitted.unresolved_questions) ? submitted.unresolved_questions : [],
-      }
-    } else {
-      // Fallback: parse from text output
-      let allText = resultText?.trim() || ""
-      if (!allText || !allText.includes("{")) {
-        allText = resultSteps.map((s) => s.text).filter(Boolean).join("\n")
-      }
-
-      log.info("spec agent finished via text output (no submit_spec call)", {
-        steps: resultSteps.length,
-        finishReason: resultFinishReason,
-        textLength: allText.length,
-        textPreview: allText.slice(0, 200),
-        attempt: attempt + 1,
-      })
-
-      parsed = extractJSON(allText)
+    // Collect all text output across steps (multi-step agents produce text per step)
+    let allText = resultText?.trim() || ""
+    if (!allText) {
+      allText = resultSteps.map((s) => s.text).filter(Boolean).join("\n")
     }
+
+    log.info("spec agent finished", {
+      steps: resultSteps.length,
+      finishReason: resultFinishReason,
+      textLength: allText.length,
+      toolCalls: toolCallCount,
+      attempt: attempt + 1,
+    })
+
+    // Parse structured sections from text output
+    let parsed: SpecOutputType = parseSpecText(allText)
 
     // If output was truncated or empty, synthesize from exploration
     if (parsed.content.length < 100 || parsed.spec_items.length < 1) {
@@ -532,252 +446,16 @@ function buildUserPrompt(
     sections.push(
       "Pre-read files are provided above — analyze them before making tool calls. " +
         "Then use tools to explore related files, dependencies, and patterns. " +
-        "Produce your specification by calling the submit_spec tool.",
+        "Output your specification using section tags as described in your instructions.",
     )
   } else {
     sections.push(
       "Now recall memory, check preferences, explore the codebase thoroughly, " +
-        "then produce your specification by calling the submit_spec tool.",
+        "then output your specification using section tags as described in your instructions.",
     )
   }
 
   return sections.join("\n\n")
-}
-
-// ---------------------------------------------------------------------------
-// JSON extraction & repair (mirrors planner/agent.ts logic)
-// ---------------------------------------------------------------------------
-
-function extractJSON(text: string): SpecOutputType {
-  let raw = text.trim()
-
-  const fencedComplete = raw.match(/```(?:json)?\s*([\s\S]*?)```/)
-  if (fencedComplete) {
-    raw = fencedComplete[1].trim()
-  } else {
-    const fencedOpen = raw.match(/```(?:json)?\s*([\s\S]*)/)
-    if (fencedOpen && fencedOpen[1].includes("{")) {
-      raw = fencedOpen[1].trim()
-    }
-  }
-
-  if (!raw.startsWith("{")) {
-    const match = raw.match(/(\{[\s\S]*\})/)
-    if (match) {
-      raw = match[1]
-    } else {
-      const idx = raw.indexOf("{")
-      if (idx >= 0) raw = raw.slice(idx)
-    }
-  }
-
-  // Sanitize FIRST — fix unescaped backslashes, raw newlines inside strings, etc.
-  // This must happen before truncation repair since raw control chars confuse the repairer.
-  raw = sanitizeJSON(raw)
-
-  if (raw.startsWith("{") && !raw.endsWith("}")) {
-    log.warn("spec: JSON appears truncated, attempting repair", { length: raw.length })
-    raw = repairTruncatedJSON(raw)
-  }
-
-  let obj: any
-  const parseErr = tryParse(raw)
-  if (parseErr.ok) {
-    obj = parseErr.value
-  } else {
-    const trimmed = trimToLastComplete(raw)
-    const retryErr = tryParse(trimmed)
-    if (retryErr.ok) {
-      obj = retryErr.value
-    } else {
-      log.error("spec: JSON parse failed after all repair attempts", {
-        error: String(parseErr.error),
-        rawLength: raw.length,
-      })
-      obj = { summary: "", content: "", scope: "", spec_items: [], assumptions: [], risks: [], evidence_sources: [], unresolved_questions: [] }
-    }
-  }
-
-  // Normalize
-  if (Array.isArray(obj.spec_items)) {
-    obj.spec_items = obj.spec_items.filter((s: any) => s && typeof s === "object" && s.title)
-    for (const s of obj.spec_items) {
-      if (!s.description) s.description = s.title
-      if (s.priority && s.priority !== "blocking" && s.priority !== "advisory") s.priority = "blocking"
-      if (s.check_selector && !Array.isArray(s.check_selector)) s.check_selector = [String(s.check_selector)]
-    }
-  }
-  if (Array.isArray(obj.assumptions)) {
-    obj.assumptions = obj.assumptions.filter((a: any) => a && typeof a === "object" && a.question && a.assumption)
-  }
-  if (Array.isArray(obj.clarifications)) {
-    obj.clarifications = obj.clarifications.filter((c: any) => c && typeof c === "object" && c.question)
-  }
-
-  if (!obj.summary) obj.summary = ""
-  if (!obj.content) obj.content = ""
-  if (!obj.scope) obj.scope = ""
-  if (!Array.isArray(obj.spec_items)) obj.spec_items = []
-  if (!Array.isArray(obj.assumptions)) obj.assumptions = []
-  if (!Array.isArray(obj.risks)) obj.risks = []
-  if (!Array.isArray(obj.evidence_sources)) obj.evidence_sources = []
-  if (!Array.isArray(obj.unresolved_questions)) obj.unresolved_questions = []
-
-  try {
-    return SpecOutput.parse(obj)
-  } catch (zodErr) {
-    log.error("spec: Zod validation failed, returning with defaults", { error: String(zodErr) })
-    return SpecOutput.parse({
-      summary: obj.summary || "",
-      content: obj.content || "",
-      scope: obj.scope || "",
-      spec_items: [],
-      assumptions: [],
-      risks: Array.isArray(obj.risks) ? obj.risks : [],
-      evidence_sources: [],
-      unresolved_questions: [],
-    })
-  }
-}
-
-/**
- * Sanitize common LLM JSON output issues:
- * - Unescaped backslashes (e.g., Windows paths: C:\Users)
- * - Real newlines inside JSON string values
- * - Markdown code fences inside string values (```javascript ... ```)
- */
-function sanitizeJSON(raw: string): string {
-  let result = ""
-  let inString = false
-  let i = 0
-  while (i < raw.length) {
-    const ch = raw[i]
-    if (!inString) {
-      if (ch === '"') inString = true
-      result += ch
-      i++
-      continue
-    }
-    // Inside a string
-    if (ch === "\\") {
-      const next = raw[i + 1]
-      // Valid JSON escapes: " \ / b f n r t u
-      if (next && '"\\\/bfnrtu'.includes(next)) {
-        result += ch + next
-        i += 2
-        continue
-      }
-      // Invalid escape: double the backslash to make it valid
-      result += "\\\\"
-      i++
-      continue
-    }
-    if (ch === '"') {
-      inString = false
-      result += ch
-      i++
-      continue
-    }
-    if (ch === "\n") {
-      result += "\\n"
-      i++
-      continue
-    }
-    if (ch === "\r") {
-      result += "\\r"
-      i++
-      continue
-    }
-    if (ch === "\t") {
-      result += "\\t"
-      i++
-      continue
-    }
-    result += ch
-    i++
-  }
-  return result
-}
-
-function tryParse(text: string): { ok: true; value: any } | { ok: false; error: Error } {
-  try {
-    return { ok: true, value: JSON.parse(text) }
-  } catch (err) {
-    return { ok: false, error: err as Error }
-  }
-}
-
-function repairTruncatedJSON(raw: string): string {
-  let repaired = raw
-  let inString = false
-  let escaped = false
-  for (let i = 0; i < repaired.length; i++) {
-    const ch = repaired[i]
-    if (escaped) { escaped = false; continue }
-    if (ch === "\\") { escaped = true; continue }
-    if (ch === '"') inString = !inString
-  }
-  if (inString) repaired += '"'
-
-  repaired = repaired.replace(/,\s*"[^"]*"?\s*:?\s*"?[^"]*$/, "")
-  repaired = repaired.replace(/,\s*$/, "")
-
-  const stack: string[] = []
-  inString = false
-  escaped = false
-  for (let i = 0; i < repaired.length; i++) {
-    const ch = repaired[i]
-    if (escaped) { escaped = false; continue }
-    if (ch === "\\") { escaped = true; continue }
-    if (ch === '"') { inString = !inString; continue }
-    if (inString) continue
-    if (ch === "{") stack.push("}")
-    else if (ch === "[") stack.push("]")
-    else if (ch === "}" || ch === "]") stack.pop()
-  }
-  repaired = repaired.replace(/,\s*$/, "")
-  while (stack.length > 0) repaired += stack.pop()
-  return repaired
-}
-
-function trimToLastComplete(raw: string): string {
-  let lastComplete = -1
-  let inString = false
-  let escaped = false
-
-  for (let i = 0; i < raw.length; i++) {
-    const ch = raw[i]
-    if (escaped) { escaped = false; continue }
-    if (ch === "\\") { escaped = true; continue }
-    if (ch === '"') {
-      inString = !inString
-      if (!inString) lastComplete = i
-      continue
-    }
-    if (inString) continue
-    if (ch === "}" || ch === "]") lastComplete = i
-  }
-
-  if (lastComplete > 0 && lastComplete < raw.length - 1) {
-    let trimmed = raw.slice(0, lastComplete + 1)
-    trimmed = trimmed.replace(/,\s*$/, "")
-    const stack: string[] = []
-    inString = false
-    escaped = false
-    for (let i = 0; i < trimmed.length; i++) {
-      const ch = trimmed[i]
-      if (escaped) { escaped = false; continue }
-      if (ch === "\\") { escaped = true; continue }
-      if (ch === '"') { inString = !inString; continue }
-      if (inString) continue
-      if (ch === "{") stack.push("}")
-      else if (ch === "[") stack.push("]")
-      else if (ch === "}" || ch === "]") stack.pop()
-    }
-    while (stack.length > 0) trimmed += stack.pop()
-    return trimmed
-  }
-  return repairTruncatedJSON(raw)
 }
 
 // ---------------------------------------------------------------------------
@@ -986,7 +664,6 @@ CRITICAL: You MUST use tools to explore the codebase BEFORE producing any specif
 - **search_code**: Search file contents with regex (ripgrep)
 - **list_directory**: List files and directories at a path
 - **web_search**: Search the web for documentation, best practices, framework comparisons, and latest API references. USE THIS PROACTIVELY — always research before choosing frameworks, libraries, or architectural patterns.
-- **submit_spec**: Submit the final specification (call ONCE after exploration is complete)
 
 ## Your Role
 
@@ -1056,21 +733,45 @@ Think: "Could a planner create implementation steps from this spec without explo
 - **Out-of-Scope**: What is explicitly excluded
 - **Open Questions**: Remaining ambiguities
 
-### Phase 3: OUTPUT — Call submit_spec tool
+### Phase 3: OUTPUT — Output Structured Text with Section Tags
 
-When you have finished exploring and are ready to deliver the spec, call the **submit_spec** tool with all the required fields. Do NOT output raw JSON text — use the tool call instead.
+After exploration, output your specification using section tags. Each section is wrapped in <tag>...</tag>.
 
-The submit_spec tool accepts these fields:
-- **summary**: One-line summary of the specification
-- **scope**: What is in scope for this task
-- **out_of_scope** (optional): What is explicitly excluded
-- **spec_items**: Array of verifiable items, each with title, description, check_selector, priority
-- **assumptions**: Array of {question, assumption} pairs
-- **risks**: Array of specific risks with codebase context
-- **evidence_sources**: Array of file paths, URLs, memory entries consulted
-- **unresolved_questions**: Questions that could not be answered
-- **content**: Full markdown specification with Scope, Requirements, Constraints, Acceptance Criteria sections. Reference specific file paths. For greenfield projects, include detailed technical design. Target 2000-6000 chars.
-- **clarifications** (optional): Array of {header, question, context, default_assumption}
+**Required sections:**
+- <summary> — One-line summary of the specification
+- <scope> — What is in scope for this task
+- <content> — Full markdown specification with Scope, Requirements, Constraints, Acceptance Criteria. Reference specific file paths. For greenfield projects, include detailed technical design. Target 2000-6000 chars.
+- <spec_items> — Verifiable items, each with title, description, check_selector, priority
+
+**Optional sections:**
+- <out_of_scope> — Explicitly excluded items
+- <assumptions> — Pairs of question and assumption
+- <risks> — Specific risks with codebase context
+- <evidence> — File paths, URLs, memory entries consulted
+- <unresolved> — Questions that could not be answered
+- <clarifications> — Items needing user clarification
+
+**List format** (for spec_items, assumptions, etc.):
+\`\`\`
+<spec_items>
+- title: Item title
+  description: What must be implemented
+  check_selector: build, test
+  priority: blocking
+
+- title: Another item
+  description: Details here
+  check_selector: test
+  priority: advisory
+</spec_items>
+
+<assumptions>
+- Q: Is X the case?
+  A: We assume yes because...
+</assumptions>
+\`\`\`
+
+Output text directly. Do NOT output JSON. Do NOT wrap in code blocks.
 
 ## Rules
 
@@ -1081,25 +782,22 @@ The submit_spec tool accepts these fields:
 - Every blocking spec item MUST have at least one check_selector.
 - Write in the same language as the request (Chinese request → Chinese spec).
 - If rewriting after failure: revise the spec to address the root cause.
-- After finishing exploration, call submit_spec with your specification. Do NOT output raw JSON text.
-- If submit_spec is unavailable, output JSON as a fallback.
 
 ## Quality Self-Check (MANDATORY)
 
-Before outputting JSON, verify each of these. If ANY answer is NO, use more tools:
+Before outputting, verify each of these. If ANY answer is NO, use more tools:
 
 1. Did I make at least ${MIN_TOOL_CALLS} tool calls to explore the codebase?
 2. Does the content reference specific file paths discovered via tools?
 3. Are all spec items concrete and verifiable (not vague aspirations)?
 4. Does each blocking spec item have a check_selector?
-5. Are evidence_sources populated with actual files I consulted?
+5. Are evidence sources populated with actual files I consulted?
 6. Could a planner create implementation steps from this spec WITHOUT further exploration?
 7. Does the summary accurately describe the specification in one line?
 
 ## Output Format
 
-- Content: Use markdown sections, target 2000-6000 chars. Be thorough and specific.
+- Content: Use markdown sections inside <content> tag, target 2000-6000 chars. Be thorough and specific.
 - Spec Items: Be DETAILED — they drive downstream planning and acceptance. Include at least 4-6 spec items for non-trivial tasks. Each item should be independently verifiable.
-- For greenfield projects (creating something new with no existing codebase): FIRST use web_search to research current best-practice scaffolding, framework choices, and reference implementations. Then include detailed technical design in the content section — data structures, algorithms, UI layout, state management, interaction flows. Do not reinvent the wheel — use mature, well-maintained frameworks and tooling.
-- Call submit_spec exactly once after exploration is complete.
-- Do NOT output raw JSON. Use the submit_spec tool call.`
+- For greenfield projects (creating something new with no existing codebase): FIRST use web_search to research current best-practice scaffolding, framework choices, and reference implementations. Then include detailed technical design in the content section.
+- Output all sections using <tag>...</tag> format. Do NOT output JSON.`

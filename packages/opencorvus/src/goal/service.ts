@@ -344,27 +344,48 @@ async function parseLLMLayerArray(
   expectedCount: number,
   context: string,
 ): Promise<string[]> {
+  const fallbackId = [...validIds][validIds.size - 1]!
+
+  // Strategy 1: standard JSON parse
   let parsed: unknown
-  try {
-    const jsonStart = text.indexOf("[")
+  const jsonStart = text.indexOf("[")
+  if (jsonStart >= 0) {
     const jsonEnd = text.lastIndexOf("]")
-    if (jsonStart < 0 || jsonEnd <= jsonStart) throw new Error("no JSON array found")
-    parsed = JSON.parse(text.slice(jsonStart, jsonEnd + 1))
-  } catch (cause) {
-    throw new GoalFailureError(`Goal classifier (${context}) returned unparseable output: ${text}`, { cause })
-  }
-  if (!Array.isArray(parsed) || parsed.length !== expectedCount) {
-    throw new GoalFailureError(
-      `Goal classifier (${context}) returned ${Array.isArray(parsed) ? parsed.length : "non-array"} items for ${expectedCount} requirements`,
-    )
-  }
-  return (parsed as unknown[]).map((raw, i) => {
-    const value = String(raw).trim().toLowerCase()
-    if (!validIds.has(value)) {
-      throw new GoalFailureError(`Goal classifier (${context}) returned unknown id "${raw}" at index ${i}`)
+    const slice = jsonEnd > jsonStart
+      ? text.slice(jsonStart, jsonEnd + 1)
+      // Truncated array — close it: remove trailing comma and add ]
+      : text.slice(jsonStart).replace(/,\s*"?[^"]*$/, "") + "]"
+    try {
+      parsed = JSON.parse(slice)
+    } catch {
+      // Strategy 2: extract quoted strings directly from text
+      const quoted = [...text.matchAll(/"([^"]+)"/g)].map((m) => m[1]!.trim().toLowerCase())
+      if (quoted.length > 0) {
+        parsed = quoted
+      }
     }
-    return value
+  }
+
+  if (!Array.isArray(parsed) || parsed.length === 0) {
+    // Strategy 3: extract bare words that match valid IDs
+    const words = text.split(/[\s,\[\]"]+/).map((w) => w.trim().toLowerCase()).filter((w) => validIds.has(w))
+    if (words.length > 0) {
+      parsed = words
+    } else {
+      log.warn("goal classifier returned unparseable output, using fallback for all", { context, text: text.slice(0, 300) })
+      return Array(expectedCount).fill(fallbackId)
+    }
+  }
+
+  // Validate and pad/trim to expected count
+  const arr = (parsed as unknown[]).map((raw) => {
+    const value = String(raw).trim().toLowerCase()
+    return validIds.has(value) ? value : fallbackId
   })
+
+  // Pad if truncated, trim if over
+  while (arr.length < expectedCount) arr.push(fallbackId)
+  return arr.slice(0, expectedCount)
 }
 
 /**

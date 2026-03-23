@@ -133,6 +133,35 @@ export namespace Preference {
     return readCwd(projectID)
   }
 
+  /**
+   * Sync a key-value pair into the cwd preferences file so it survives DB loss.
+   * Merges into existing entries without removing other keys.
+   */
+  export function syncToCwd(key: string, value: string) {
+    const projectID = currentProjectID()
+    if (!projectID) return
+    const existing = readCwd(projectID)
+    const items = existing
+      .filter((item) => item.key !== key)
+      .map((item) => ({ key: item.key, value: item.value }))
+    items.push({ key, value })
+    writeCwd(projectID, items)
+  }
+
+  /**
+   * Remove a key from the cwd preferences file.
+   */
+  export function removeFromCwd(key: string) {
+    const projectID = currentProjectID()
+    if (!projectID) return
+    const existing = readCwd(projectID)
+    if (!existing.some((item) => item.key === key)) return
+    writeCwd(
+      projectID,
+      existing.filter((item) => item.key !== key).map((item) => ({ key: item.key, value: item.value })),
+    )
+  }
+
   function fromRow(row: typeof WorkbenchPreferenceTable.$inferSelect): Entry {
     return {
       id: row.id,

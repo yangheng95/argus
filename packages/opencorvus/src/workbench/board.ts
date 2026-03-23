@@ -640,7 +640,17 @@ function viewBoardDelivery(
       changedFiles: Array.isArray(result.changed_files)
         ? result.changed_files.filter((item): item is string => typeof item === "string").slice(0, BOARD_CHANGED_FILE_LIMIT)
         : [],
-      diffs: [],
+      diffs: Array.isArray(result.diffs)
+        ? result.diffs
+            .filter((d: any): d is Record<string, unknown> => d && typeof d === "object" && typeof d.file === "string")
+            .slice(0, BOARD_CHANGED_FILE_LIMIT)
+            .map((d: any) => ({
+              file: d.file as string,
+              additions: typeof d.additions === "number" ? d.additions : 0,
+              deletions: typeof d.deletions === "number" ? d.deletions : 0,
+              status: d.status ?? (!d.before && d.after ? "added" : d.before && !d.after ? "deleted" : "modified"),
+            }))
+        : [],
       artifacts: Array.isArray(result.artifacts) ? result.artifacts.slice(0, 12) : [],
       publish: result.publish && typeof result.publish === "object" ? result.publish : undefined,
     },

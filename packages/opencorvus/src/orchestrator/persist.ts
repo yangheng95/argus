@@ -413,7 +413,7 @@ export async function compileTransition(input: CompileTransitionInput): Promise<
     : undefined
   if (specSession) registerGoalRunSession(specSession.id, input.taskID)
   const specContentHooks = specSession
-    ? sessionStreamHooks({ sessionID: specSession.id, taskID: input.taskID })
+    ? sessionStreamHooks({ sessionID: specSession.id, taskID: input.taskID, stage: "spec" })
     : undefined
 
   function combineHooks(content?: TextHooks, status?: TextHooks): TextHooks {
@@ -483,7 +483,7 @@ export async function compileTransition(input: CompileTransitionInput): Promise<
       : undefined
     if (goalSession) registerGoalRunSession(goalSession.id, input.taskID)
     const goalContentHooks = goalSession
-      ? sessionStreamHooks({ sessionID: goalSession.id, taskID: input.taskID })
+      ? sessionStreamHooks({ sessionID: goalSession.id, taskID: input.taskID, stage: "goal" })
       : undefined
     await goalLive.start(input.mode === "replan" ? "Goal decomposition recompile started" : "Goal decomposition started")
     goalDraft = await (
@@ -531,7 +531,7 @@ export async function compileTransition(input: CompileTransitionInput): Promise<
       directory: Instance.directory,
     })
     registerGoalRunSession(planSession.id, input.taskID)
-    const planContentHooks = sessionStreamHooks({ sessionID: planSession.id, taskID: input.taskID })
+    const planContentHooks = sessionStreamHooks({ sessionID: planSession.id, taskID: input.taskID, stage: "planner" })
     const planStream = combineHooks(planContentHooks, planLive.hooks)
     await planLive.start(input.mode === "replan" ? "Planner replan started" : "Planner started")
     const plan = await (

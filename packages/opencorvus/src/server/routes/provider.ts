@@ -1,11 +1,12 @@
 import { Hono } from "hono"
 import { describeRoute, validator, resolver } from "hono-openapi"
 import z from "zod"
-import { generateText } from "ai"
+import { streamText } from "ai"
 import { Config } from "../../config/config"
 import { Provider } from "../../provider/provider"
 import { ModelsDev } from "../../provider/models"
 import { ProviderAuth } from "../../provider/auth"
+import { Auth } from "../../auth"
 import { mapValues } from "remeda"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
@@ -155,17 +156,28 @@ export const ProviderRoutes = lazy(() =>
         try {
           const model = await Provider.getModel(providerID, modelID)
           const language = await Provider.getLanguage(model)
-          await generateText({
+          const auth = await Auth.get(providerID)
+          const isCodexOauth = providerID === "openai" && auth?.type === "oauth"
+          const stream = streamText({
             model: language,
-            maxOutputTokens: 1,
-            abortSignal: AbortSignal.timeout(20_000),
+            ...(isCodexOauth ? {} : { maxOutputTokens: 64 }),
+            abortSignal: AbortSignal.timeout(30_000),
             messages: [
               {
                 role: "user",
                 content: "Reply with OK.",
               },
             ],
+            ...(isCodexOauth && {
+              providerOptions: {
+                openai: {
+                  store: false,
+                  instructions: "You are a coding assistant. Reply concisely.",
+                },
+              },
+            }),
           })
+          await stream.text
 
           return c.json({
             ok: true,
