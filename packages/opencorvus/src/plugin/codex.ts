@@ -491,19 +491,51 @@ export async function CodexAuthPlugin(input: PluginInput): Promise<Hooks> {
             // Codex endpoint requirements:
             // - `instructions` must be non-null
             // - `store` must be false
-            // - `max_output_tokens` is unsupported
+            // - `max_output_tokens` is unsupported (causes 400 Bad Request)
             // - all function tool parameters must have `type: "object"`
             let body = init?.body
             if (isResponsesOrChat && typeof body === "string") {
               const json = JSON.parse(body)
+              // Codex prioritizes `instructions` over system messages in `input`.
+              // Extract system/developer messages from input and merge them into
+              // `instructions` so the full spec/planner system prompt is honored.
               if (!json.instructions) {
-                json.instructions =
-                  "You are OpenCorvus, an autonomous coding agent. " +
-                  "Act without asking. Write minimal, correct code. " +
-                  "Verify changes after making them. Be concise and action-oriented."
+                const systemParts: string[] = []
+                if (Array.isArray(json.input)) {
+                  for (let i = json.input.length - 1; i >= 0; i--) {
+                    const item = json.input[i]
+                    if (item.role === "system" || item.role === "developer") {
+                      systemParts.unshift(typeof item.content === "string" ? item.content : JSON.stringify(item.content))
+                      json.input.splice(i, 1)
+                    }
+                  }
+                }
+                json.instructions = systemParts.length > 0
+                  ? systemParts.join("\n\n")
+                  : "You are OpenCorvus, an autonomous coding agent. " +
+                    "Produce thorough, detailed, and complete output."
               }
               json.store = false
               delete json.max_output_tokens
+              delete json.previous_response_id
+              // ─── Codex store=false multi-turn compatibility ───
+              // Reference: github.com/openai/codex — all item id fields use
+              //   #[serde(skip_serializing)], so ids are NEVER sent back.
+              // Reference: sst/opencode — strips itemId from providerOptions.
+              //
+              // With store=false the server does not persist response items.
+              // Sending any id back causes "Item with id not found". Omitting
+              // id on some item types causes "Missing required parameter: id".
+              // The official pattern: strip ALL id fields so they are absent
+              // from the JSON payload. Only call_id (linking function_call ↔
+              // function_call_output) is preserved.
+              if (Array.isArray(json.input)) {
+                // Remove item_reference entries (only valid with store=true)
+                json.input = json.input.filter((item: any) => item.type !== "item_reference")
+                for (const item of json.input) {
+                  delete item.id
+                }
+              }
               // Fix tool schemas: Codex requires type:"object" for function parameters
               if (Array.isArray(json.tools)) {
                 for (const tool of json.tools) {

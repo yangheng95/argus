@@ -3964,6 +3964,8 @@ body[data-theme="light"] .section-badge {
   width: 100%;
   height: 100%;
 }
+/* appDialog must render above configDialog when both are modal (WebView2 top-layer fix) */
+#appDialog { z-index: 200; }
 .dialog::backdrop {
   background: var(--dialog-backdrop);
   backdrop-filter: blur(8px);

@@ -3539,9 +3539,12 @@ async function syncLlmSettings() {
     const needsAuth = !configuredKey && !current.apiKey.trim() && !providerConnected(current.providerID)
       && providerAuthMethods(current.providerID).length > 0;
     if (needsAuth) {
+      // Skip auto-auth when config dialog is open — let the user click the Connect button instead.
+      // The button click path goes through showAppDialog which handles configDialog close/reopen.
+      const configOpen = dom.configDialog?.open === true;
       const dismissed = state.providerAuthDismissed[current.providerID] === true;
-      const ready = dismissed ? false : await authenticateSelectedProvider();
-      if (!ready && !dismissed) state.providerAuthDismissed[current.providerID] = true;
+      const ready = (dismissed || configOpen) ? false : await authenticateSelectedProvider();
+      if (!ready && !dismissed && !configOpen) state.providerAuthDismissed[current.providerID] = true;
       if (serial !== llmSyncSerial) return;
       await loadConfigInfo();
       if (serial !== llmSyncSerial) return;
@@ -3796,7 +3799,8 @@ function showAppDialog(options = {}) {
     dom.appDialog.addEventListener("close", onClose);
     dom.appDialogInput.addEventListener("keydown", onKeydown);
     dom.appDialogSelect.addEventListener("keydown", onKeydown);
-    dom.appDialog.showModal();
+    if (dom.appDialog.open) dom.appDialog.close();
+    try { dom.appDialog.showModal(); } catch { finish(false); return; }
 
     requestAnimationFrame(() => {
       if (useInput) dom.appDialogInput.focus();

@@ -20,6 +20,7 @@ import { Filesystem } from "@/util/filesystem"
 import { Instance } from "@/project/instance"
 import { Log } from "@/util/log"
 import { parsePlanText } from "./parse-plan-text"
+import { OrchestratorConfig } from "@/orchestrator/config"
 import path from "path"
 
 const log = Log.create({ service: "planner-agent" })
@@ -119,11 +120,8 @@ export interface ReplanContext {
 // HeadlessPlannerAgent
 // ---------------------------------------------------------------------------
 
-const MAX_STEPS = 30
-const TIMEOUT_MS = 300_000
-const MIN_TOOL_CALLS = 3
-const QUALITY_RETRY_THRESHOLD = 0.5
-const MAX_PLAN_ATTEMPTS = 2
+// 默认值来自 OrchestratorConfig.defaults.planner，仅用于函数签名默认参数
+const { planner: PLANNER_DEFAULTS } = OrchestratorConfig.defaults
 
 export namespace HeadlessPlannerAgent {
   export async function plan(input: {
@@ -140,6 +138,9 @@ export namespace HeadlessPlannerAgent {
   }): Promise<PlannerOutputType> {
     // Check abort signal early -- setup calls (model resolution, memory search) can be slow
     if (input.signal?.aborted) throw new Error("planner aborted before model resolution")
+
+    const orchCfg = await OrchestratorConfig.get()
+    const { max_steps: MAX_STEPS, timeout_ms: TIMEOUT_MS, min_tool_calls: MIN_TOOL_CALLS, quality_threshold: QUALITY_RETRY_THRESHOLD, max_attempts: MAX_PLAN_ATTEMPTS } = orchCfg.planner
 
     const language = await agentLanguageModel()
     if (!language) throw new Error("no LLM model available for planner agent")
@@ -173,7 +174,7 @@ export namespace HeadlessPlannerAgent {
       const retryContext = attempt > 0 && lastQuality
         ? { previousScore: lastQuality.score, reasons: lastQuality.reasons, attempt }
         : undefined
-      const userPrompt = buildUserPrompt(input, fileRefs, context, retryContext)
+      const userPrompt = buildUserPrompt(input, fileRefs, context, retryContext, MIN_TOOL_CALLS, QUALITY_RETRY_THRESHOLD)
 
       log.info("planner agent starting", {
         title: input.title,
@@ -184,6 +185,7 @@ export namespace HeadlessPlannerAgent {
         taskWorkDir,
         toolCount: Object.keys(allTools).length,
         attempt: attempt + 1,
+        config: orchCfg.planner,
         retryReason: retryContext ? `score ${retryContext.previousScore} < ${QUALITY_RETRY_THRESHOLD}` : undefined,
       })
 
@@ -193,7 +195,7 @@ export namespace HeadlessPlannerAgent {
         tools: allTools,
         maxOutputTokens: 32768,
         abortSignal: input.signal ?? AbortSignal.timeout(TIMEOUT_MS),
-        system: PLANNER_SYSTEM,
+        system: PLANNER_SYSTEM(MIN_TOOL_CALLS),
         prompt: userPrompt,
         ...(input.stream?.onChunk ? { onChunk: input.stream.onChunk as any } : {}),
         ...(input.stream?.onError ? { onError: input.stream.onError } : {}),
@@ -228,20 +230,19 @@ export namespace HeadlessPlannerAgent {
       // Parse structured sections from text output
       let parsed: PlannerOutputType = parsePlanText(allText)
 
-      // If plan was truncated, synthesize from exploration + request
+      // Log if plan seems truncated — no fallback synthesis, force retry instead
       if (parsed.prd.length < 100 || parsed.subtasks.length < 2) {
-        log.warn("planner: plan seems truncated, synthesizing from exploration", {
+        log.warn("planner: plan seems truncated or empty, will retry via quality gate", {
           prdLength: parsed.prd.length,
           subtasksCount: parsed.subtasks.length,
         })
-        parsed = synthesizeFromExploration(parsed, input, resultSteps)
       }
 
       // Ensure summary is meaningful (not garbage like "## heading" or empty)
       parsed.summary = ensureMeaningfulSummary(parsed.summary, input.title)
 
       // Validate plan quality
-      const planQuality = validatePlanQuality(parsed, input.request, toolCallCount)
+      const planQuality = validatePlanQuality(parsed, input.request, toolCallCount, MIN_TOOL_CALLS)
       log.info("planner agent output", {
         goals: parsed.goals.length,
         subtasks: parsed.subtasks.length,
@@ -471,6 +472,7 @@ function validatePlanQuality(
   plan: PlannerOutputType,
   request: string,
   toolCallCount: number,
+  minToolCalls = PLANNER_DEFAULTS.min_tool_calls,
 ): { score: number; reasons: string[] } {
   let score = 0
   const reasons: string[] = []
@@ -482,7 +484,7 @@ function validatePlanQuality(
     score += 0.15
     reasons.push(`only ${toolCallCount} tool calls (need ≥5 for deep exploration)`)
   } else {
-    reasons.push(`${toolCallCount} tool calls — no codebase exploration`)
+    reasons.push(`${toolCallCount} tool calls — no codebase exploration (min ${minToolCalls})`)
   }
 
   // 2. PRD contains file paths not present in the request
@@ -640,6 +642,8 @@ function buildUserPrompt(
   fileRefs?: Array<{ ref: string; path: string; content: string }>,
   context?: string,
   retryContext?: { previousScore: number; reasons: string[]; attempt: number },
+  minToolCalls = PLANNER_DEFAULTS.min_tool_calls,
+  qualityThreshold = PLANNER_DEFAULTS.quality_threshold,
 ): string {
   const sections = [`# Task\n\nTitle: ${input.title}\n\nRequest:\n${input.request}`]
 
@@ -649,24 +653,20 @@ function buildUserPrompt(
       [
         "# QUALITY RETRY - Previous Attempt Was Insufficient",
         "",
-        `Your previous plan scored ${retryContext.previousScore.toFixed(2)} / 1.0 (threshold: ${QUALITY_RETRY_THRESHOLD}).`,
+        `Your previous plan scored ${retryContext.previousScore.toFixed(2)} / 1.0 (threshold: ${qualityThreshold}). Attempt ${retryContext.attempt + 1}.`,
         "",
         "**Issues found:**",
         ...retryContext.reasons.map((r) => `- ${r}`),
         "",
-        "**You MUST fix these issues this time:**",
-        retryContext.reasons.some((r) => r.includes("tool call"))
-          ? `- Make at least ${MIN_TOOL_CALLS} tool calls to explore the codebase (list_directory, read_file, search_code)`
-          : "",
-        retryContext.reasons.some((r) => r.includes("file path"))
-          ? "- Include specific file paths discovered from your exploration in PRD and subtasks"
-          : "",
-        retryContext.reasons.some((r) => r.includes("criteria"))
-          ? "- Write concrete, executable criteria for each goal (e.g., 'bun test src/x.test.ts passes')"
-          : "",
-        retryContext.reasons.some((r) => r.includes("PRD"))
-          ? "- Write a detailed PRD with bullet points (>300 chars)"
-          : "",
+        "**MANDATORY requirements for this attempt:**",
+        `- Make at least ${minToolCalls} tool calls to explore the codebase (list_directory, read_file, search_code)`,
+        "- Write a DETAILED PRD with bullet points — at least 500 characters, covering files, changes, patterns, and verification commands",
+        "- Each goal MUST have a detailed description AND concrete, executable criteria (e.g., 'bun test src/x.test.ts passes')",
+        "- Subtasks MUST reference specific file paths discovered from your exploration",
+        "- Include at least 3 goals with specific check_selectors",
+        "",
+        "**DO NOT be brief or concise.** Your output must be thorough and comprehensive.",
+        "A short plan is ALWAYS rejected. Produce detailed, specific, actionable output.",
       ]
         .filter(Boolean)
         .join("\n"),
@@ -765,7 +765,7 @@ function buildUserPrompt(
 // System prompt
 // ---------------------------------------------------------------------------
 
-const PLANNER_SYSTEM = `You are a senior software architect acting as the planning brain for OpenCorvus, an autonomous coding orchestrator. Your job is to explore the codebase deeply, then produce a plan so detailed and specific that an executor agent can implement it without guessing.
+const PLANNER_SYSTEM = (minToolCalls = PLANNER_DEFAULTS.min_tool_calls) => `You are a senior software architect acting as the planning brain for OpenCorvus, an autonomous coding orchestrator. Your job is to explore the codebase deeply, then produce a plan so detailed and specific that an executor agent can implement it without guessing.
 
 CRITICAL: You MUST use tools to explore the codebase BEFORE producing any plan. A plan produced without tool calls is ALWAYS rejected. You are scored on exploration depth -- plans that don't reference specific file paths, function signatures, and code patterns discovered via tools will be automatically retried.
 
@@ -792,7 +792,7 @@ Think of yourself as a tech lead doing code review BEFORE implementation starts.
 ### Phase 1: EXPLORE (5-15 tool calls -- this is the MOST IMPORTANT phase)
 
 You MUST explore the codebase thoroughly. A plan without specific file paths is worthless.
-Minimum ${MIN_TOOL_CALLS} tool calls required. Aim for 8-15 for complex tasks.
+Minimum ${minToolCalls} tool calls required. Aim for 8-15 for complex tasks.
 
 Strategy (adapt based on task type):
 
@@ -909,7 +909,7 @@ Output text directly. Do NOT output JSON. Do NOT wrap in code blocks.
 
 Before outputting, verify each of these. If ANY answer is NO, use more tools to fill the gap:
 
-1. Did I make at least ${MIN_TOOL_CALLS} tool calls to explore the codebase?
+1. Did I make at least ${minToolCalls} tool calls to explore the codebase?
 2. Does EVERY goal have a detailed description explaining the specific outcome? (not just "tests pass")
 3. Does every goal criteria include an exact command AND expected outcome?
 4. Do subtasks reference specific file paths (not "relevant files" -- actual paths)?
@@ -922,4 +922,14 @@ Before outputting, verify each of these. If ANY answer is NO, use more tools to 
 - PRD: Use bullet points inside <prd> tag, keep under 2000 chars.
 - Goals: Be DETAILED in description and criteria inside <goals> tag. Goals are the most important output.
 - Subtasks: Include file paths and verification steps inside <subtasks> tag.
-- Output all sections using <tag>...</tag> format. Do NOT output JSON.`
+- Output all sections using <tag>...</tag> format. Do NOT output JSON.
+
+## Output Length Requirements
+
+Your output MUST be thorough and detailed. Short, brief, or minimal outputs are ALWAYS rejected.
+- The <prd> section MUST be at least 500 characters with specific bullet points
+- Goals MUST have detailed descriptions (2+ sentences each) AND concrete criteria with exact commands
+- Subtasks MUST include specific file paths and describe exact changes
+- You MUST define at least 3 goals and 3 subtasks for non-trivial tasks
+- DO NOT summarize or abbreviate — be comprehensive and specific
+- A one-sentence plan is NEVER acceptable. Expand every section fully.`

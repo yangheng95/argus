@@ -73,7 +73,7 @@
     "@modelcontextprotocol/sdk": "1.25.2",
     "@octokit/graphql": "9.0.2",
     "@octokit/rest": "catalog:",
-    "@opencorvus-ai/plugin": "0.0.1-alpha",
+    "@opencorvus-ai/plugin": "0.0.0-master-202603230142",
     "@opencorvus-ai/channel-config": "workspace:*",
     "@opencorvus-ai/sdk": "workspace:*",
     "@opencorvus-ai/util": "workspace:*",

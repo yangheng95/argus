@@ -165,7 +165,9 @@ const { resetDatabase } = await import("../../test/fixture/db")
 
 await loadBenchmarkEnv(import.meta.dir)
 prepareDashscopeEnv()
-const model = await resolveBenchmarkModel(import.meta.dir)
+const model = await resolveBenchmarkModel(import.meta.dir, {
+  allowOpenAICodex: executor === "codex",
+})
 process.env.OPENCORVUS_BENCHMARK_MODEL = model
 process.env.OPENCORVUS_CONFIG_DIR = temp.config
 await ensureBenchmarkModel(import.meta.dir, model)

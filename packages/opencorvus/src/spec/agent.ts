@@ -18,6 +18,7 @@ import { createPlannerTools, prefetchContext } from "@/planner/tools"
 import { Instance } from "@/project/instance"
 import { Log } from "@/util/log"
 import { parseSpecText } from "./parse-spec-text"
+import { OrchestratorConfig } from "@/orchestrator/config"
 import path from "path"
 
 const log = Log.create({ service: "spec-agent" })
@@ -141,11 +142,8 @@ export interface SpecRewriteContext {
 // HeadlessSpecAgent
 // ---------------------------------------------------------------------------
 
-const MAX_STEPS = 30
-const TIMEOUT_MS = 300_000
-const MIN_TOOL_CALLS = 3
-const QUALITY_RETRY_THRESHOLD = 0.6
-const MAX_SPEC_ATTEMPTS = 2
+// 默认值来自 OrchestratorConfig.defaults.spec，仅用于函数签名默认参数
+const { spec: SPEC_DEFAULTS } = OrchestratorConfig.defaults
 
 export namespace HeadlessSpecAgent {
   /**
@@ -208,6 +206,9 @@ async function run(input: {
 }): Promise<SpecOutputType> {
   if (input.signal?.aborted) throw new Error("spec agent aborted before model resolution")
 
+  const orchCfg = await OrchestratorConfig.get()
+  const { max_steps: MAX_STEPS, timeout_ms: TIMEOUT_MS, min_tool_calls: MIN_TOOL_CALLS, quality_threshold: QUALITY_RETRY_THRESHOLD, max_attempts: MAX_SPEC_ATTEMPTS } = orchCfg.spec
+
   const def = await Provider.defaultModel().catch(() => undefined)
   if (!def) throw new Error("no LLM model available for spec agent")
   const model = await Provider.getModel(def.providerID, def.modelID)
@@ -237,7 +238,7 @@ async function run(input: {
     const retryContext = attempt > 0 && lastQuality
       ? { previousScore: lastQuality.score, reasons: lastQuality.reasons, attempt }
       : undefined
-    const userPrompt = buildUserPrompt(input, fileRefs, context, retryContext)
+    const userPrompt = buildUserPrompt(input, fileRefs, context, retryContext, MIN_TOOL_CALLS, QUALITY_RETRY_THRESHOLD)
 
     log.info("spec agent starting", {
       title: input.title,
@@ -248,6 +249,7 @@ async function run(input: {
       taskWorkDir,
       toolCount: Object.keys(allTools).length,
       attempt: attempt + 1,
+      config: orchCfg.spec,
       retryReason: retryContext ? `score ${retryContext.previousScore} < ${QUALITY_RETRY_THRESHOLD}` : undefined,
     })
 
@@ -260,7 +262,7 @@ async function run(input: {
       tools: allTools,
       maxOutputTokens: 32768,
       abortSignal: input.signal ?? AbortSignal.timeout(TIMEOUT_MS),
-      system: SPEC_SYSTEM,
+      system: SPEC_SYSTEM(MIN_TOOL_CALLS),
       prompt: userPrompt,
       ...(input.stream?.onChunk ? { onChunk: input.stream.onChunk as any } : {}),
       ...(input.stream?.onError ? { onError: input.stream.onError } : {}),
@@ -294,18 +296,17 @@ async function run(input: {
     // Parse structured sections from text output
     let parsed: SpecOutputType = parseSpecText(allText)
 
-    // If output was truncated or empty, synthesize from exploration
+    // Log if output seems truncated — no fallback synthesis, force retry instead
     if (parsed.content.length < 100 || parsed.spec_items.length < 1) {
-      log.warn("spec: output seems truncated, synthesizing from exploration", {
+      log.warn("spec: output seems truncated or empty, will retry via quality gate", {
         contentLength: parsed.content.length,
         specItemsCount: parsed.spec_items.length,
       })
-      parsed = synthesizeFromExploration(parsed, input, resultSteps)
     }
 
     parsed.summary = ensureMeaningfulSummary(parsed.summary, input.title)
 
-    const specQuality = validateSpecQuality(parsed, input.request, toolCallCount)
+    const specQuality = validateSpecQuality(parsed, input.request, toolCallCount, MIN_TOOL_CALLS)
     log.info("spec agent output", {
       specItems: parsed.spec_items.length,
       contentLength: parsed.content.length,
@@ -354,6 +355,8 @@ function buildUserPrompt(
   fileRefs: Array<{ ref: string; content: string }>,
   context: string,
   retryContext?: { previousScore: number; reasons: string[]; attempt: number },
+  minToolCalls = SPEC_DEFAULTS.min_tool_calls,
+  qualityThreshold = SPEC_DEFAULTS.quality_threshold,
 ): string {
   const sections = [`# Task\n\nTitle: ${input.title}\n\nRequest:\n${input.request}`]
 
@@ -362,24 +365,20 @@ function buildUserPrompt(
       [
         "# QUALITY RETRY - Previous Spec Was Insufficient",
         "",
-        `Your previous spec scored ${retryContext.previousScore.toFixed(2)} / 1.0 (threshold: ${QUALITY_RETRY_THRESHOLD}).`,
+        `Your previous spec scored ${retryContext.previousScore.toFixed(2)} / 1.0 (threshold: ${qualityThreshold}). Attempt ${retryContext.attempt + 1}.`,
         "",
         "**Issues found:**",
         ...retryContext.reasons.map((r) => `- ${r}`),
         "",
-        "**You MUST fix these issues this time:**",
-        retryContext.reasons.some((r) => r.includes("tool call"))
-          ? `- Make at least ${MIN_TOOL_CALLS} tool calls to explore the codebase`
-          : "",
-        retryContext.reasons.some((r) => r.includes("file path") || r.includes("evidence"))
-          ? "- Include specific file paths and evidence sources from your exploration"
-          : "",
-        retryContext.reasons.some((r) => r.includes("spec item"))
-          ? "- Define concrete spec items with verifiable acceptance criteria"
-          : "",
-        retryContext.reasons.some((r) => r.includes("content"))
-          ? "- Write a detailed specification with all required sections (>500 chars)"
-          : "",
+        "**MANDATORY requirements for this attempt:**",
+        `- Make at least ${minToolCalls} tool calls to explore the codebase before writing any spec`,
+        "- Write a DETAILED specification — the <content> section MUST be at least 2000 characters",
+        "- Define at least 4 concrete spec items with verifiable acceptance criteria",
+        "- Include specific file paths and evidence sources discovered from your exploration",
+        "- Each spec item MUST have a clear title, detailed description, and check_selector",
+        "",
+        "**DO NOT be brief or concise.** Your output must be thorough and comprehensive.",
+        "A short spec is ALWAYS rejected. Produce detailed, specific, grounded output.",
       ]
         .filter(Boolean)
         .join("\n"),
@@ -466,6 +465,7 @@ function validateSpecQuality(
   spec: SpecOutputType,
   request: string,
   toolCallCount: number,
+  minToolCalls = SPEC_DEFAULTS.min_tool_calls,
 ): { score: number; reasons: string[] } {
   let score = 0
   const reasons: string[] = []
@@ -476,7 +476,7 @@ function validateSpecQuality(
   } else if (toolCallCount >= 2) {
     score += 0.1
   } else {
-    reasons.push(`Only ${toolCallCount} tool calls — explore the codebase more thoroughly (min ${MIN_TOOL_CALLS})`)
+    reasons.push(`Only ${toolCallCount} tool calls — explore the codebase more thoroughly (min ${minToolCalls})`)
   }
 
   // Content depth (0.25 max — spec should be thorough)
@@ -650,7 +650,7 @@ function readFileSafe(absPath: string, maxLen = 6000): string | null {
 // System prompt
 // ---------------------------------------------------------------------------
 
-const SPEC_SYSTEM = `You are a senior software architect acting as the specification brain for OpenCorvus, an autonomous coding orchestrator. Your job is to explore the codebase deeply, understand the context, and produce a precise, grounded specification that downstream planning and execution agents can rely on.
+const SPEC_SYSTEM = (minToolCalls = SPEC_DEFAULTS.min_tool_calls) => `You are a senior software architect acting as the specification brain for OpenCorvus, an autonomous coding orchestrator. Your job is to explore the codebase deeply, understand the context, and produce a precise, grounded specification that downstream planning and execution agents can rely on.
 
 CRITICAL: You MUST use tools to explore the codebase BEFORE producing any specification. A spec produced without tool calls is ALWAYS rejected. You are scored on exploration depth — specs that don't reference specific file paths, types, APIs, and patterns discovered via tools will be automatically retried.
 
@@ -686,7 +686,7 @@ The downstream PlannerAgent will take your spec and create implementation plans.
 ### Phase 1: EXPLORE (5-15 tool calls — MOST IMPORTANT phase)
 
 You MUST explore thoroughly. A spec without specific file paths is worthless.
-Minimum ${MIN_TOOL_CALLS} tool calls required. Aim for 8-15 for complex tasks.
+Minimum ${minToolCalls} tool calls required. Aim for 8-15 for complex tasks.
 
 Strategy (adapt based on task type):
 
@@ -787,7 +787,7 @@ Output text directly. Do NOT output JSON. Do NOT wrap in code blocks.
 
 Before outputting, verify each of these. If ANY answer is NO, use more tools:
 
-1. Did I make at least ${MIN_TOOL_CALLS} tool calls to explore the codebase?
+1. Did I make at least ${minToolCalls} tool calls to explore the codebase?
 2. Does the content reference specific file paths discovered via tools?
 3. Are all spec items concrete and verifiable (not vague aspirations)?
 4. Does each blocking spec item have a check_selector?
@@ -800,4 +800,13 @@ Before outputting, verify each of these. If ANY answer is NO, use more tools:
 - Content: Use markdown sections inside <content> tag, target 2000-6000 chars. Be thorough and specific.
 - Spec Items: Be DETAILED — they drive downstream planning and acceptance. Include at least 4-6 spec items for non-trivial tasks. Each item should be independently verifiable.
 - For greenfield projects (creating something new with no existing codebase): FIRST use web_search to research current best-practice scaffolding, framework choices, and reference implementations. Then include detailed technical design in the content section.
-- Output all sections using <tag>...</tag> format. Do NOT output JSON.`
+- Output all sections using <tag>...</tag> format. Do NOT output JSON.
+
+## Output Length Requirements
+
+Your output MUST be thorough and detailed. Short, brief, or minimal outputs are ALWAYS rejected.
+- The <content> section MUST be at least 2000 characters (target 2000-6000 chars)
+- You MUST define at least 4 spec items for non-trivial tasks
+- Each spec item MUST have a detailed description (not just a title)
+- DO NOT summarize or abbreviate — be comprehensive and specific
+- A one-sentence spec is NEVER acceptable. Expand every section fully.`

@@ -1,7 +1,6 @@
 import { type EvaluatorAnalysisType } from "@/evaluator/agent"
+import { OrchestratorConfig } from "./config"
 import { Log } from "@/util/log"
-
-const STAGE_MAX_RETRIES = 2
 
 /**
  * Unified stage retry wrapper. Attempts fn once, retries up to STAGE_MAX_RETRIES
@@ -17,8 +16,9 @@ export async function withStageRetry<T>(
   options?: { onRetry?: (attempt: number, error: Error) => void; signal?: AbortSignal },
 ): Promise<T> {
   const retryLog = Log.create({ service: "stage-retry" })
+  const maxRetries = (await OrchestratorConfig.get()).stage_max_retries
   let lastError: Error | undefined
-  for (let attempt = 0; attempt <= STAGE_MAX_RETRIES; attempt++) {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
     // Check signal before each attempt to avoid retrying after abort
     if (options?.signal?.aborted) {
       throw lastError ?? new Error(`${stage} stage aborted before attempt ${attempt + 1}`)
@@ -28,13 +28,13 @@ export async function withStageRetry<T>(
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err))
       const cause = lastError.cause instanceof Error ? lastError.cause.message : undefined
-      retryLog.warn(`${stage} attempt ${attempt + 1}/${STAGE_MAX_RETRIES + 1} failed`, {
+      retryLog.warn(`${stage} attempt ${attempt + 1}/${maxRetries + 1} failed`, {
         stage,
         attempt: attempt + 1,
         error: lastError.message,
         cause,
       })
-      if (attempt < STAGE_MAX_RETRIES) {
+      if (attempt < maxRetries) {
         options?.onRetry?.(attempt + 1, lastError)
       }
     }
