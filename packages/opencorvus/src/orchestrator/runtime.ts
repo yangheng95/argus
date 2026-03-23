@@ -918,14 +918,27 @@ async function completeRun(run: RunRow, hooks: RuntimeHooks) {
   }
 
   // If Phase 1 evaluation failed (e.g. strict spec_check or build/test failures),
-  // do not let Phase 2 EvaluatorAgent override the verdict
+  // do not let Phase 2 EvaluatorAgent override the verdict.
+  // However, if Phase 1 is only "inconclusive" (not hard "failed") and the agent
+  // accepted, treat it as accepted — inconclusive automated checks (runtime metrics,
+  // UX criteria) cannot be resolved by retrying and must not cause infinite loops.
   const phase1Failed = result.status === "failed"
-  const finalVerdict = phase1Failed ? "rejected" : analysis.verdict
+  const phase1Inconclusive = result.status === "inconclusive"
+  const agentAccepted = analysis.verdict === "accepted"
+  const finalVerdict = phase1Failed && !agentAccepted
+    ? "rejected"
+    : phase1Inconclusive && agentAccepted
+      ? "accepted"
+      : phase1Failed && agentAccepted
+        ? "rejected"
+        : analysis.verdict
   const finalStatus =
     (finalVerdict === "accepted" ? "passed" : finalVerdict === "rejected" ? "failed" : "inconclusive") as typeof result.status
-  const finalSummary = phase1Failed && analysis.verdict === "accepted"
+  const finalSummary = phase1Failed && agentAccepted
     ? `Rejected: automated checks failed. ${result.summary}`
-    : analysis.summary
+    : phase1Inconclusive && agentAccepted
+      ? `Accepted: agent verified delivery; automated checks inconclusive. ${result.summary}`
+      : analysis.summary
 
   persistEvaluation({
     task,
@@ -1087,12 +1100,22 @@ async function runEvaluation(task: TaskRow, run: RunRow, existingDelivery: Deliv
   }
 
   const phase1Failed = result.status === "failed"
-  const finalVerdict = phase1Failed ? "rejected" : analysis.verdict
+  const phase1Inconclusive = result.status === "inconclusive"
+  const agentAccepted = analysis.verdict === "accepted"
+  const finalVerdict = phase1Failed && !agentAccepted
+    ? "rejected"
+    : phase1Inconclusive && agentAccepted
+      ? "accepted"
+      : phase1Failed && agentAccepted
+        ? "rejected"
+        : analysis.verdict
   const finalStatus =
     (finalVerdict === "accepted" ? "passed" : finalVerdict === "rejected" ? "failed" : "inconclusive") as typeof result.status
-  const finalSummary = phase1Failed && analysis.verdict === "accepted"
+  const finalSummary = phase1Failed && agentAccepted
     ? `Rejected: automated checks failed. ${result.summary}`
-    : analysis.summary
+    : phase1Inconclusive && agentAccepted
+      ? `Accepted: agent verified delivery; automated checks inconclusive. ${result.summary}`
+      : analysis.summary
 
   persistEvaluation({
     task, run, deliveryID, evaluationID, delivery, result,

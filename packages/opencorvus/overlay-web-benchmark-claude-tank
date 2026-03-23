@@ -1,0 +1,271 @@
+{
+  "generated_at": "2026-03-23T08:57:31.737Z",
+  "title": "Tank Battle",
+  "request_file": "C:\\Users\\chuan\\myhexin-local\\argus-opencode\\specs\\tank-battle-prd.txt",
+  "executor": "claude-code",
+  "model": "alibaba-coding-plan-cn/qwen3.5-plus",
+  "directory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-vzAU24",
+  "server": "http://127.0.0.1:63994/",
+  "taskID": "tsk_d19e7494e001eLfCJmKHxLtO9r",
+  "stage_timeout_ms": {
+    "spec": 86400000,
+    "planner": 86400000,
+    "tool": 600000,
+    "standby": 86400000,
+    "stall": 600000,
+    "request": 30000
+  },
+  "stage_max_steps": {
+    "spec": 80,
+    "planner": 96
+  },
+  "stall_timeout_ms": 600000,
+  "completion_hard_timeout_ms": null,
+  "request_timeout_ms": 30000,
+  "taskStatus": "failed",
+  "evaluation": "",
+  "changedFiles": [
+    ".gitignore",
+    ".opencorvus/opencorvus.json",
+    ".opencorvus/preferences.json",
+    "opencorvus.json",
+    "package.json",
+    "tsconfig.json"
+  ],
+  "transcriptCount": 1,
+  "timelineCount": 0,
+  "runCount": 0,
+  "planning": {
+    "pendingCount": 0,
+    "taskList": "还没有任务",
+    "reasoning": "",
+    "assistantText": ""
+  },
+  "streaming": {
+    "reasoning": "",
+    "assistantText": "",
+    "liveRole": "spec",
+    "liveText": "# Tank Battle 游戏规格说明书## 1. 项目概述本项目是一个经典坦克大战（Tank Battle）的 Web 版复刻，使用纯前端技术实现。游戏采用 2D 俯视角，玩家操控坦克在战场上消灭敌方坦克并保护基地。### 1.1 技术栈约束- 语言: TypeScript (ES2022)- 渲染: HTML5 Canvas API (fillRect/strokeRect)，不使用外部图片- 构建工具: Bun + esbuild (bun build src/main.ts --outdir=dist --minify)- 依赖: 零外部 npm 包- 目标浏览器: Chrome/Firefox/Safari/Edge（现代浏览器）### 1.2 项目结构（根据 PRD 定义）src/  index.html          — 入口 HTML 文件  main.ts             — 入口文件，初始化 Canvas 和 Game  game.ts             — Game 类，主循环 (requestAnimationFrame)  input.ts            — InputManager，键盘事件管理  renderer.ts         — Renderer，Canvas 绘制层  battlefield.ts      — BattleField 类，地图管理  tank.ts             — Tank 基类  player-tank.ts      — PlayerTank 类  enemy-tank.ts       — EnemyTank 类，含 AI 逻辑  bullet.ts           — Bullet 类  explosion.ts        — Explosion 动画  hud.ts              — HUD 右侧面板  collision.ts        — 碰撞检测模块  levels.ts           — 关卡数据定义  types.ts            — 公共类型定义  constants.ts        — 游戏常量（速度、尺寸、颜色等）## 2. 核心游戏对象规格### 2.1 战场地图 (BattleField)文件: src/battlefield.ts- 尺寸: 13×13 格，每格 48×48 像素，总画布 624×624- 数据结构: 二维数组 Tile[][]，每个元素为 Tile 枚举值- Tile 类型 (src/types.ts):  - EMPTY (0): 空地，可通行可射击  - BRICK (1): 砖墙，可被子弹摧毁，不可通行  - STEEL (2): 钢墙，普通子弹无法摧毁，不可通行  - WATER (3): 河流，不可通行，子弹可飞越  - TREES (4): 草丛，可通行，遮挡坦克（坦克在草丛下不可见）  - ICE (5): 冰面，可通行但坦克会滑行（惯性移动）  - BASE (6): 基地（鹰徽），被摧毁则游戏失败### 2.2 玩家坦克 (PlayerTank)文件: src/player-tank.ts，继承自 src/tank.ts- 初始位置: 地图底部中央偏左（具体坐标由关卡定义）- 移动速度: 2 像素/帧- 属性:  - lives: 初始 3 条命  - direction: 四方向枚举 (UP, DOWN, LEFT, RIGHT)  - bulletCooldown: 射击冷却 500ms  - invincible: 重生后 3 秒无敌（闪烁效果）- 操作:  - 方向键（↑↓←→）或 WASD 移动  - 空格键射击- 碰撞规则: 不能穿过砖墙、钢墙、河流、地图边界、其他坦克- 死亡逻辑: 被敌方子弹命中后爆炸，消耗一条命，在初始位置重生- 重生保护: 重生后 3 秒内闪烁且无敌（每 100ms 切换可见/不可见）### 2.3 敌方坦克 (EnemyTank)文件: src/enemy-tank.ts，继承自 src/tank.ts- 生成规则:  - 每关总共 20 辆敌方坦克  - 同时在场最多 4 辆  - 出生点：地图顶部左、中、右三个位置轮流出生- 4 种类型 (EnemyType 枚举):  - Basic: 速度慢 (1.5 像素/帧)，1 发子弹消灭，白色 (#FFFFFF)  - Fast: 速度快 (3 像素/帧)，1 发子弹消灭，浅蓝色 (#87CEEB)  - Power: 速度中等 (2 像素/帧)，1 发子弹消灭，子弹可摧毁钢墙，紫色 (#9370DB)  - Armor: 速度慢 (1.5 像素/帧)，需要 4 发子弹消灭（每次被击中变色：绿色→黄色→橙色→红色）- AI 行为:  - 每隔 1-3 秒随机改变方向  - 前方有障碍物时立即转向  - 30% 概率朝玩家方向移动  - 持续射击（冷却 1 秒）### 2.4 子弹 (Bullet)文件: src/bullet.ts- 速度: 4 像素/帧- 限制: 同一坦克同时只能存在 1 颗子弹（子弹消失后才能再次射击）- 碰撞规则:  - 击中砖墙：摧毁砖墙，子弹消失  - 击中钢墙：子弹消失（Power 型敌方坦克的子弹可摧毁钢墙）  - 击中河流：子弹飞越，不受影响  - 击中地图边界：子弹消失  - 击中敌方坦克（玩家子弹）：坦克受伤或被消灭  - 击中玩家坦克（敌方子弹）：玩家死亡（无敌状态除外）  - 击中基地：基地被摧毁，游戏失败  - 两颗子弹相撞：同时消失### 2.5 爆炸效果 (Explosion)文件: src/explosion.ts- 坦克爆炸: 3 帧动画，每帧 100ms，总时长 300ms- 子弹击中墙壁: 2 帧小爆炸动画- 渲染: 使用 Canvas 绘制同心圆或星形图案## 3. 游戏状态机规格文件: src/game.ts (GameState 枚举)### 3.1 状态定义- MENU: 主菜单（显示 \"TANK BATTLE\" 标题 + \"Press ENTER to Start\"）- PLAYING: 游戏进行中- PAUSED: 暂停（按 P 键切换，显示 \"PAUSED\" 文字）- GAME_OVER: 游戏结束（显示 \"GAME OVER\" 上升动画）- STAGE_CLEAR: 关卡通过（显示关卡统计：击杀数、得分）- STAGE_INTRO: 关卡开始前（显示 \"STAGE X\" 2 秒）### 3.2 状态转换- MENU → STAGE_INTRO: 按 Enter 键- STAGE_INTRO → PLAYING: 2 秒后自动- PLAYING → PAUSED: 按 P 键- PAUSED → PLAYING: 按 P 键- PLAYING → GAME_OVER: 生命耗尽或基地被摧毁- PLAYING → STAGE_CLEAR: 所有敌方坦克被消灭- STAGE_CLEAR → STAGE_INTRO: 3 秒后进入下一关- GAME_OVER → MENU: 3 秒后自动## 4. 关卡系统规格文件: src/levels.ts### 4.1 关卡配置至少实现 3 个关卡，每关地图布局不同：- 关卡 1: 砖墙为主，简单布局，Basic 和 Fast 敌人  - 敌人配置：Basic×10, Fast×6, Power×2, Armor×2- 关卡 2: 加入钢墙和河流，Mixed 敌人  - 敌人配置：Basic×6, Fast×6, Power×4, Armor×4- 关卡 3: 复杂地图，大量 Armor 敌人，有草丛遮挡  - 敌人配置：Basic×4, Fast×4, Power×6, Armor×6### 4.2 关卡循环通关后循环（关卡 3 → 关卡 1）## 5. 计分系统规格文件: src/game.ts (ScoreManager)- Basic 坦克: 100 分- Fast 坦克: 200 分- Power 坦克: 300 分- Armor 坦克: 400 分- 分数在 HUD 右侧面板显示- 关卡结束时显示击杀统计## 6. HUD 界面规格文件: src/hud.ts### 6.1 布局- 游戏区域: 左侧 624×624 画布- 信息面板: 右侧 150 像素宽，总宽度 774 像素### 6.2 显示内容- 剩余敌方坦克数量（用小坦克图标表示）- 当前关卡号- 玩家剩余生命- 当前得分## 7. 视觉风格规格文件: src/constants.ts (颜色定义)### 7.1 颜色方案- 背景：纯黑 #000000- 砖墙：#B85C38（砖红色）- 钢墙：#C0C0C0（银灰色）- 河流：#4A86C8（蓝色，可加波纹动画）- 草丛：#2E8B57（深绿色）- 冰面：#ADD8E6（浅蓝色）- 玩家坦克：#FFD700（金黄色）- 敌方坦克：按类型着色- 子弹：#FFFFFF（白色）- 基地鹰徽：#FFD700（金色）边框 + 内部图案- HUD 面板背景：#333333- 文字：#FFFFFF### 7.2 绘制要求- 所有图形用 Canvas API 绘制（fillRect/strokeRect）- 不使用外部图片资源- 经典 FC/NES 像素风格## 8. 技术架构规格### 8.1 游戏主循环文件: src/game.tsfunction gameLoop(timestamp: number) {  const deltaTime = timestamp - lastTime;  lastTime = timestamp;  update(deltaTime);   // 更新所有游戏对象  render();            // 绘制所有游戏对象  requestAnimationFrame(gameLoop);}### 8.2 碰撞检测模块文件: src/collision.ts- 算法: 矩形 AABB 碰撞检测- 检测类型:  - 坦克与地形碰撞（逐格检测移动方向上的格子）  - 子弹与地形碰撞  - 子弹与坦克碰撞  - 坦克与坦克碰撞  - 子弹与子弹碰撞### 8.3 输入管理文件: src/input.ts- 使用 KeyboardEvent 监听- 支持方向键和 WASD- 空格键射击- P 键暂停- Enter 键开始游戏### 8.4 渲染器文件: src/renderer.ts- 封装 Canvas 2D Context- 提供绘制矩形、圆形、文字等方法- 支持图层管理（背景层、坦克层、子弹层、爆炸层、UI 层）## 9. 性能要求- 帧率: 60 FPS 稳定运行- 内存: 无内存泄漏（正确清理已销毁的对象）- 输入响应: 流畅的键盘响应（无延迟）- 对象池: 子弹、爆炸等频繁创建销毁的对象考虑使用对象池优化## 10. 验收标准### P0（必须通过）- 游戏可以启动并显示主菜单- 按 Enter 进入游戏- 玩家坦克可以四方向移动- 玩家坦克可以射击- 子弹击中砖墙可以摧毁砖墙- 敌方坦克会移动和射击- 敌方坦克被子弹消灭- 基地被摧毁后游戏结束- 所有敌人消灭后关卡通过- 至少 3 个不同关卡可以循环### P1（应该通过）- 4 种敌方坦克类型行为正确- Armor 坦克需要 4 发子弹，每次变色- 玩家重生 3 秒无敌闪烁- 暂停功能正常- HUD 正确显示分数、生命、关卡- 爆炸动画播放- 草丛遮挡效果- 冰面滑行效果### P2（可以没有）- 音效- 道具系统- 双人模式- 本地最高分存储## 11. 构建与运行### 11.1 开发运行bun run src/main.ts  # 或直接打开 index.html### 11.2 生产构建bun build src/main.ts --outdir=dist --minify### 11.3 本地服务器bun serve dist/",
+    "reasoningVisible": false,
+    "assistantVisible": false,
+    "liveVisible": true
+  },
+  "materialization": {
+    "boardTaskID": "tsk_d19e7494e001eLfCJmKHxLtO9r",
+    "boardStatus": "goal_decomposing",
+    "specVersion": 1,
+    "goalCount": 0,
+    "goalRunCount": 0,
+    "criteriaCount": 0
+  },
+  "screenshot": "C:\\Users\\chuan\\myhexin-local\\argus-opencode\\packages\\opencorvus\\overlay-web-benchmark-1774256251295.png",
+  "resume": {
+    "restored": true,
+    "selectedAt": 133625
+  },
+  "timings_ms": {
+    "online": 384,
+    "submit": 1552,
+    "planning_visible": 1869,
+    "streaming_visible": 131934,
+    "task_created": 1874,
+    "task_selected": 2255,
+    "board_loaded": 2579,
+    "resumed": 133625,
+    "completed": 171834,
+    "execution": 170282
+  },
+  "assertions": {
+    "planning_visible": {
+      "pass": true,
+      "sample": {
+        "directory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-vzAU24",
+        "savedDirectory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-vzAU24",
+        "workspaceDirectory": "",
+        "selectedTaskID": "",
+        "pendingCount": 0,
+        "taskIDs": [
+          "tsk_d19e7494e001eLfCJmKHxLtO9r"
+        ],
+        "taskList": "还没有任务",
+        "reasoning": "",
+        "assistantText": "",
+        "liveRole": "",
+        "liveText": "",
+        "visibleTurns": [],
+        "storage": {
+          "directory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-vzAU24",
+          "directoryMode": "",
+          "workspaceDirectory": "",
+          "workspaceTaskID": ""
+        }
+      }
+    },
+    "streaming_visible": {
+      "pass": true,
+      "sample": {
+        "directory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-vzAU24",
+        "savedDirectory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-vzAU24",
+        "workspaceDirectory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-vzAU24",
+        "selectedTaskID": "tsk_d19e7494e001eLfCJmKHxLtO9r",
+        "pendingCount": 0,
+        "taskIDs": [
+          "tsk_d19e7494e001eLfCJmKHxLtO9r"
+        ],
+        "taskList": "进行中\n    \n    \n      \n        \n        Tank Battle\n      \n      goal_decomposing\n      16:56:51 / .../Local/Temp/opencorvus-overlay-benchmark-project-vzAU24",
+        "reasoning": "",
+        "assistantText": "",
+        "liveRole": "spec",
+        "liveText": "# Tank Battle 游戏规格说明书## 1. 项目概述本项目是一个经典坦克大战（Tank Battle）的 Web 版复刻，使用纯前端技术实现。游戏采用 2D 俯视角，玩家操控坦克在战场上消灭敌方坦克并保护基地。### 1.1 技术栈约束- 语言: TypeScript (ES2022)- 渲染: HTML5 Canvas API (fillRect/strokeRect)，不使用外部图片- 构建工具: Bun + esbuild (bun build src/main.ts --outdir=dist --minify)- 依赖: 零外部 npm 包- 目标浏览器: Chrome/Firefox/Safari/Edge（现代浏览器）### 1.2 项目结构（根据 PRD 定义）src/  index.html          — 入口 HTML 文件  main.ts             — 入口文件，初始化 Canvas 和 Game  game.ts             — Game 类，主循环 (requestAnimationFrame)  input.ts            — InputManager，键盘事件管理  renderer.ts         — Renderer，Canvas 绘制层  battlefield.ts      — BattleField 类，地图管理  tank.ts             — Tank 基类  player-tank.ts      — PlayerTank 类  enemy-tank.ts       — EnemyTank 类，含 AI 逻辑  bullet.ts           — Bullet 类  explosion.ts        — Explosion 动画  hud.ts              — HUD 右侧面板  collision.ts        — 碰撞检测模块  levels.ts           — 关卡数据定义  types.ts            — 公共类型定义  constants.ts        — 游戏常量（速度、尺寸、颜色等）## 2. 核心游戏对象规格### 2.1 战场地图 (BattleField)文件: src/battlefield.ts- 尺寸: 13×13 格，每格 48×48 像素，总画布 624×624- 数据结构: 二维数组 Tile[][]，每个元素为 Tile 枚举值- Tile 类型 (src/types.ts):  - EMPTY (0): 空地，可通行可射击  - BRICK (1): 砖墙，可被子弹摧毁，不可通行  - STEEL (2): 钢墙，普通子弹无法摧毁，不可通行  - WATER (3): 河流，不可通行，子弹可飞越  - TREES (4): 草丛，可通行，遮挡坦克（坦克在草丛下不可见）  - ICE (5): 冰面，可通行但坦克会滑行（惯性移动）  - BASE (6): 基地（鹰徽），被摧毁则游戏失败### 2.2 玩家坦克 (PlayerTank)文件: src/player-tank.ts，继承自 src/tank.ts- 初始位置: 地图底部中央偏左（具体坐标由关卡定义）- 移动速度: 2 像素/帧- 属性:  - lives: 初始 3 条命  - direction: 四方向枚举 (UP, DOWN, LEFT, RIGHT)  - bulletCooldown: 射击冷却 500ms  - invincible: 重生后 3 秒无敌（闪烁效果）- 操作:  - 方向键（↑↓←→）或 WASD 移动  - 空格键射击- 碰撞规则: 不能穿过砖墙、钢墙、河流、地图边界、其他坦克- 死亡逻辑: 被敌方子弹命中后爆炸，消耗一条命，在初始位置重生- 重生保护: 重生后 3 秒内闪烁且无敌（每 100ms 切换可见/不可见）### 2.3 敌方坦克 (EnemyTank)文件: src/enemy-tank.ts，继承自 src/tank.ts- 生成规则:  - 每关总共 20 辆敌方坦克  - 同时在场最多 4 辆  - 出生点：地图顶部左、中、右三个位置轮流出生- 4 种类型 (EnemyType 枚举):  - Basic: 速度慢 (1.5 像素/帧)，1 发子弹消灭，白色 (#FFFFFF)  - Fast: 速度快 (3 像素/帧)，1 发子弹消灭，浅蓝色 (#87CEEB)  - Power: 速度中等 (2 像素/帧)，1 发子弹消灭，子弹可摧毁钢墙，紫色 (#9370DB)  - Armor: 速度慢 (1.5 像素/帧)，需要 4 发子弹消灭（每次被击中变色：绿色→黄色→橙色→红色）- AI 行为:  - 每隔 1-3 秒随机改变方向  - 前方有障碍物时立即转向  - 30% 概率朝玩家方向移动  - 持续射击（冷却 1 秒）### 2.4 子弹 (Bullet)文件: src/bullet.ts- 速度: 4 像素/帧- 限制: 同一坦克同时只能存在 1 颗子弹（子弹消失后才能再次射击）- 碰撞规则:  - 击中砖墙：摧毁砖墙，子弹消失  - 击中钢墙：子弹消失（Power 型敌方坦克的子弹可摧毁钢墙）  - 击中河流：子弹飞越，不受影响  - 击中地图边界：子弹消失  - 击中敌方坦克（玩家子弹）：坦克受伤或被消灭  - 击中玩家坦克（敌方子弹）：玩家死亡（无敌状态除外）  - 击中基地：基地被摧毁，游戏失败  - 两颗子弹相撞：同时消失### 2.5 爆炸效果 (Explosion)文件: src/explosion.ts- 坦克爆炸: 3 帧动画，每帧 100ms，总时长 300ms- 子弹击中墙壁: 2 帧小爆炸动画- 渲染: 使用 Canvas 绘制同心圆或星形图案## 3. 游戏状态机规格文件: src/game.ts (GameState 枚举)### 3.1 状态定义- MENU: 主菜单（显示 \"TANK BATTLE\" 标题 + \"Press ENTER to Start\"）- PLAYING: 游戏进行中- PAUSED: 暂停（按 P 键切换，显示 \"PAUSED\" 文字）- GAME_OVER: 游戏结束（显示 \"GAME OVER\" 上升动画）- STAGE_CLEAR: 关卡通过（显示关卡统计：击杀数、得分）- STAGE_INTRO: 关卡开始前（显示 \"STAGE X\" 2 秒）### 3.2 状态转换- MENU → STAGE_INTRO: 按 Enter 键- STAGE_INTRO → PLAYING: 2 秒后自动- PLAYING → PAUSED: 按 P 键- PAUSED → PLAYING: 按 P 键- PLAYING → GAME_OVER: 生命耗尽或基地被摧毁- PLAYING → STAGE_CLEAR: 所有敌方坦克被消灭- STAGE_CLEAR → STAGE_INTRO: 3 秒后进入下一关- GAME_OVER → MENU: 3 秒后自动## 4. 关卡系统规格文件: src/levels.ts### 4.1 关卡配置至少实现 3 个关卡，每关地图布局不同：- 关卡 1: 砖墙为主，简单布局，Basic 和 Fast 敌人  - 敌人配置：Basic×10, Fast×6, Power×2, Armor×2- 关卡 2: 加入钢墙和河流，Mixed 敌人  - 敌人配置：Basic×6, Fast×6, Power×4, Armor×4- 关卡 3: 复杂地图，大量 Armor 敌人，有草丛遮挡  - 敌人配置：Basic×4, Fast×4, Power×6, Armor×6### 4.2 关卡循环通关后循环（关卡 3 → 关卡 1）## 5. 计分系统规格文件: src/game.ts (ScoreManager)- Basic 坦克: 100 分- Fast 坦克: 200 分- Power 坦克: 300 分- Armor 坦克: 400 分- 分数在 HUD 右侧面板显示- 关卡结束时显示击杀统计## 6. HUD 界面规格文件: src/hud.ts### 6.1 布局- 游戏区域: 左侧 624×624 画布- 信息面板: 右侧 150 像素宽，总宽度 774 像素### 6.2 显示内容- 剩余敌方坦克数量（用小坦克图标表示）- 当前关卡号- 玩家剩余生命- 当前得分## 7. 视觉风格规格文件: src/constants.ts (颜色定义)### 7.1 颜色方案- 背景：纯黑 #000000- 砖墙：#B85C38（砖红色）- 钢墙：#C0C0C0（银灰色）- 河流：#4A86C8（蓝色，可加波纹动画）- 草丛：#2E8B57（深绿色）- 冰面：#ADD8E6（浅蓝色）- 玩家坦克：#FFD700（金黄色）- 敌方坦克：按类型着色- 子弹：#FFFFFF（白色）- 基地鹰徽：#FFD700（金色）边框 + 内部图案- HUD 面板背景：#333333- 文字：#FFFFFF### 7.2 绘制要求- 所有图形用 Canvas API 绘制（fillRect/strokeRect）- 不使用外部图片资源- 经典 FC/NES 像素风格## 8. 技术架构规格### 8.1 游戏主循环文件: src/game.tsfunction gameLoop(timestamp: number) {  const deltaTime = timestamp - lastTime;  lastTime = timestamp;  update(deltaTime);   // 更新所有游戏对象  render();            // 绘制所有游戏对象  requestAnimationFrame(gameLoop);}### 8.2 碰撞检测模块文件: src/collision.ts- 算法: 矩形 AABB 碰撞检测- 检测类型:  - 坦克与地形碰撞（逐格检测移动方向上的格子）  - 子弹与地形碰撞  - 子弹与坦克碰撞  - 坦克与坦克碰撞  - 子弹与子弹碰撞### 8.3 输入管理文件: src/input.ts- 使用 KeyboardEvent 监听- 支持方向键和 WASD- 空格键射击- P 键暂停- Enter 键开始游戏### 8.4 渲染器文件: src/renderer.ts- 封装 Canvas 2D Context- 提供绘制矩形、圆形、文字等方法- 支持图层管理（背景层、坦克层、子弹层、爆炸层、UI 层）## 9. 性能要求- 帧率: 60 FPS 稳定运行- 内存: 无内存泄漏（正确清理已销毁的对象）- 输入响应: 流畅的键盘响应（无延迟）- 对象池: 子弹、爆炸等频繁创建销毁的对象考虑使用对象池优化## 10. 验收标准### P0（必须通过）- 游戏可以启动并显示主菜单- 按 Enter 进入游戏- 玩家坦克可以四方向移动- 玩家坦克可以射击- 子弹击中砖墙可以摧毁砖墙- 敌方坦克会移动和射击- 敌方坦克被子弹消灭- 基地被摧毁后游戏结束- 所有敌人消灭后关卡通过- 至少 3 个不同关卡可以循环### P1（应该通过）- 4 种敌方坦克类型行为正确- Armor 坦克需要 4 发子弹，每次变色- 玩家重生 3 秒无敌闪烁- 暂停功能正常- HUD 正确显示分数、生命、关卡- 爆炸动画播放- 草丛遮挡效果- 冰面滑行效果### P2（可以没有）- 音效- 道具系统- 双人模式- 本地最高分存储## 11. 构建与运行### 11.1 开发运行bun run src/main.ts  # 或直接打开 index.html### 11.2 生产构建bun build src/main.ts --outdir=dist --minify### 11.3 本地服务器bun serve dist/",
+        "visibleTurns": [
+          {
+            "role": "spec",
+            "text": "# Tank Battle 游戏规格说明书## 1. 项目概述本项目是一个经典坦克大战（Tank Battle）的 Web 版复刻，使用纯前端技术实现。游戏采用 2D 俯视角，玩家操控坦克在战场上消灭敌方坦克并保护基地。### 1.1 技术栈约束- 语言: TypeScript (ES2022)- 渲染: HTML5 Canvas API (fillRect/strokeRect)，不使用外部图片- 构建工具: Bun + esbuild (bun build src/main.ts --outdir=dist --minify)- 依赖: 零外部 npm 包- 目标浏览器: Chrome/Firefox/Safari/Edge（现代浏览器）### 1.2 项目结构（根据 PRD 定义）src/  index.html          — 入口 HTML 文件  main.ts             — 入口文件，初始化 Canvas 和 Game  game.ts             — Game 类，主循环 (requestAnimationFrame)  input.ts            — InputManager，键盘事件管理  renderer.ts         — Renderer，Canvas 绘制层  battlefield.ts      — BattleField 类，地图管理  tank.ts             — Tank 基类  player-tank.ts      — PlayerTank 类  enemy-tank.ts       — EnemyTank 类，含 AI 逻辑  bullet.ts           — Bullet 类  explosion.ts        — Explosion 动画  hud.ts              — HUD 右侧面板  collision.ts        — 碰撞检测模块  levels.ts           — 关卡数据定义  types.ts            — 公共类型定义  constants.ts        — 游戏常量（速度、尺寸、颜色等）## 2. 核心游戏对象规格### 2.1 战场地图 (BattleField)文件: src/battlefield.ts- 尺寸: 13×13 格，每格 48×48 像素，总画布 624×624- 数据结构: 二维数组 Tile[][]，每个元素为 Tile 枚举值- Tile 类型 (src/types.ts):  - EMPTY (0): 空地，可通行可射击  - BRICK (1): 砖墙，可被子弹摧毁，不可通行  - STEEL (2): 钢墙，普通子弹无法摧毁，不可通行  - WATER (3): 河流，不可通行，子弹可飞越  - TREES (4): 草丛，可通行，遮挡坦克（坦克在草丛下不可见）  - ICE (5): 冰面，可通行但坦克会滑行（惯性移动）  - BASE (6): 基地（鹰徽），被摧毁则游戏失败### 2.2 玩家坦克 (PlayerTank)文件: src/player-tank.ts，继承自 src/tank.ts- 初始位置: 地图底部中央偏左（具体坐标由关卡定义）- 移动速度: 2 像素/帧- 属性:  - lives: 初始 3 条命  - direction: 四方向枚举 (UP, DOWN, LEFT, RIGHT)  - bulletCooldown: 射击冷却 500ms  - invincible: 重生后 3 秒无敌（闪烁效果）- 操作:  - 方向键（↑↓←→）或 WASD 移动  - 空格键射击- 碰撞规则: 不能穿过砖墙、钢墙、河流、地图边界、其他坦克- 死亡逻辑: 被敌方子弹命中后爆炸，消耗一条命，在初始位置重生- 重生保护: 重生后 3 秒内闪烁且无敌（每 100ms 切换可见/不可见）### 2.3 敌方坦克 (EnemyTank)文件: src/enemy-tank.ts，继承自 src/tank.ts- 生成规则:  - 每关总共 20 辆敌方坦克  - 同时在场最多 4 辆  - 出生点：地图顶部左、中、右三个位置轮流出生- 4 种类型 (EnemyType 枚举):  - Basic: 速度慢 (1.5 像素/帧)，1 发子弹消灭，白色 (#FFFFFF)  - Fast: 速度快 (3 像素/帧)，1 发子弹消灭，浅蓝色 (#87CEEB)  - Power: 速度中等 (2 像素/帧)，1 发子弹消灭，子弹可摧毁钢墙，紫色 (#9370DB)  - Armor: 速度慢 (1.5 像素/帧)，需要 4 发子弹消灭（每次被击中变色：绿色→黄色→橙色→红色）- AI 行为:  - 每隔 1-3 秒随机改变方向  - 前方有障碍物时立即转向  - 30% 概率朝玩家方向移动  - 持续射击（冷却 1 秒）### 2.4 子弹 (Bullet)文件: src/bullet.ts- 速度: 4 像素/帧- 限制: 同一坦克同时只能存在 1 颗子弹（子弹消失后才能再次射击）- 碰撞规则:  - 击中砖墙：摧毁砖墙，子弹消失  - 击中钢墙：子弹消失（Power 型敌方坦克的子弹可摧毁钢墙）  - 击中河流：子弹飞越，不受影响  - 击中地图边界：子弹消失  - 击中敌方坦克（玩家子弹）：坦克受伤或被消灭  - 击中玩家坦克（敌方子弹）：玩家死亡（无敌状态除外）  - 击中基地：基地被摧毁，游戏失败  - 两颗子弹相撞：同时消失### 2.5 爆炸效果 (Explosion)文件: src/explosion.ts- 坦克爆炸: 3 帧动画，每帧 100ms，总时长 300ms- 子弹击中墙壁: 2 帧小爆炸动画- 渲染: 使用 Canvas 绘制同心圆或星形图案## 3. 游戏状态机规格文件: src/game.ts (GameState 枚举)### 3.1 状态定义- MENU: 主菜单（显示 \"TANK BATTLE\" 标题 + \"Press ENTER to Start\"）- PLAYING: 游戏进行中- PAUSED: 暂停（按 P 键切换，显示 \"PAUSED\" 文字）- GAME_OVER: 游戏结束（显示 \"GAME OVER\" 上升动画）- STAGE_CLEAR: 关卡通过（显示关卡统计：击杀数、得分）- STAGE_INTRO: 关卡开始前（显示 \"STAGE X\" 2 秒）### 3.2 状态转换- MENU → STAGE_INTRO: 按 Enter 键- STAGE_INTRO → PLAYING: 2 秒后自动- PLAYING → PAUSED: 按 P 键- PAUSED → PLAYING: 按 P 键- PLAYING → GAME_OVER: 生命耗尽或基地被摧毁- PLAYING → STAGE_CLEAR: 所有敌方坦克被消灭- STAGE_CLEAR → STAGE_INTRO: 3 秒后进入下一关- GAME_OVER → MENU: 3 秒后自动## 4. 关卡系统规格文件: src/levels.ts### 4.1 关卡配置至少实现 3 个关卡，每关地图布局不同：- 关卡 1: 砖墙为主，简单布局，Basic 和 Fast 敌人  - 敌人配置：Basic×10, Fast×6, Power×2, Armor×2- 关卡 2: 加入钢墙和河流，Mixed 敌人  - 敌人配置：Basic×6, Fast×6, Power×4, Armor×4- 关卡 3: 复杂地图，大量 Armor 敌人，有草丛遮挡  - 敌人配置：Basic×4, Fast×4, Power×6, Armor×6### 4.2 关卡循环通关后循环（关卡 3 → 关卡 1）## 5. 计分系统规格文件: src/game.ts (ScoreManager)- Basic 坦克: 100 分- Fast 坦克: 200 分- Power 坦克: 300 分- Armor 坦克: 400 分- 分数在 HUD 右侧面板显示- 关卡结束时显示击杀统计## 6. HUD 界面规格文件: src/hud.ts### 6.1 布局- 游戏区域: 左侧 624×624 画布- 信息面板: 右侧 150 像素宽，总宽度 774 像素### 6.2 显示内容- 剩余敌方坦克数量（用小坦克图标表示）- 当前关卡号- 玩家剩余生命- 当前得分## 7. 视觉风格规格文件: src/constants.ts (颜色定义)### 7.1 颜色方案- 背景：纯黑 #000000- 砖墙：#B85C38（砖红色）- 钢墙：#C0C0C0（银灰色）- 河流：#4A86C8（蓝色，可加波纹动画）- 草丛：#2E8B57（深绿色）- 冰面：#ADD8E6（浅蓝色）- 玩家坦克：#FFD700（金黄色）- 敌方坦克：按类型着色- 子弹：#FFFFFF（白色）- 基地鹰徽：#FFD700（金色）边框 + 内部图案- HUD 面板背景：#333333- 文字：#FFFFFF### 7.2 绘制要求- 所有图形用 Canvas API 绘制（fillRect/strokeRect）- 不使用外部图片资源- 经典 FC/NES 像素风格## 8. 技术架构规格### 8.1 游戏主循环文件: src/game.tsfunction gameLoop(timestamp: number) {  const deltaTime = timestamp - lastTime;  lastTime = timestamp;  update(deltaTime);   // 更新所有游戏对象  render();            // 绘制所有游戏对象  requestAnimationFrame(gameLoop);}### 8.2 碰撞检测模块文件: src/collision.ts- 算法: 矩形 AABB 碰撞检测- 检测类型:  - 坦克与地形碰撞（逐格检测移动方向上的格子）  - 子弹与地形碰撞  - 子弹与坦克碰撞  - 坦克与坦克碰撞  - 子弹与子弹碰撞### 8.3 输入管理文件: src/input.ts- 使用 KeyboardEvent 监听- 支持方向键和 WASD- 空格键射击- P 键暂停- Enter 键开始游戏### 8.4 渲染器文件: src/renderer.ts- 封装 Canvas 2D Context- 提供绘制矩形、圆形、文字等方法- 支持图层管理（背景层、坦克层、子弹层、爆炸层、UI 层）## 9. 性能要求- 帧率: 60 FPS 稳定运行- 内存: 无内存泄漏（正确清理已销毁的对象）- 输入响应: 流畅的键盘响应（无延迟）- 对象池: 子弹、爆炸等频繁创建销毁的对象考虑使用对象池优化## 10. 验收标准### P0（必须通过）- 游戏可以启动并显示主菜单- 按 Enter 进入游戏- 玩家坦克可以四方向移动- 玩家坦克可以射击- 子弹击中砖墙可以摧毁砖墙- 敌方坦克会移动和射击- 敌方坦克被子弹消灭- 基地被摧毁后游戏结束- 所有敌人消灭后关卡通过- 至少 3 个不同关卡可以循环### P1（应该通过）- 4 种敌方坦克类型行为正确- Armor 坦克需要 4 发子弹，每次变色- 玩家重生 3 秒无敌闪烁- 暂停功能正常- HUD 正确显示分数、生命、关卡- 爆炸动画播放- 草丛遮挡效果- 冰面滑行效果### P2（可以没有）- 音效- 道具系统- 双人模式- 本地最高分存储## 11. 构建与运行### 11.1 开发运行bun run src/main.ts  # 或直接打开 index.html### 11.2 生产构建bun build src/main.ts --outdir=dist --minify### 11.3 本地服务器bun serve dist/"
+          }
+        ],
+        "storage": {
+          "directory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-vzAU24",
+          "directoryMode": "",
+          "workspaceDirectory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-vzAU24",
+          "workspaceTaskID": "tsk_d19e7494e001eLfCJmKHxLtO9r"
+        }
+      }
+    },
+    "materialized": {
+      "pass": true,
+      "sample": {
+        "taskID": "tsk_d19e7494e001eLfCJmKHxLtO9r",
+        "boardTaskID": "tsk_d19e7494e001eLfCJmKHxLtO9r",
+        "resumed": true
+      }
+    },
+    "delivery": {
+      "pass": false,
+      "sample": {
+        "taskStatus": "failed",
+        "verdict": "",
+        "localExit": 0,
+        "qualityVerdict": "rejected"
+      }
+    }
+  },
+  "local_verify": {
+    "mode": "skipped",
+    "command": null,
+    "exitCode": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  "artifact_audit": {
+    "source_files_added": 0,
+    "config_files_added": 2,
+    "doc_files_added": 0,
+    "source_file_count": 0,
+    "doc_file_count": 0,
+    "non_source_churn_ratio": 1,
+    "readme_proliferation_count": 0,
+    "out_of_scope_file_count": 0,
+    "scaffold_noise_count": 0,
+    "placeholder_count": 0,
+    "out_of_scope_files": [],
+    "unmapped_files": [],
+    "placeholder_hits": [],
+    "duplicate_docs": [],
+    "scaffold_expansion_flags": []
+  },
+  "run_metrics": {
+    "meaningful_change_gap_ms": 170803,
+    "noop_cycle_count": 0,
+    "repeat_command_ratio": 0.5897435897435898,
+    "repeat_reasoning_similarity": 0.5897435897435898,
+    "required_check_pass_rate": 0,
+    "critical_check_pass_rate": 0,
+    "check_relevance_score": 0,
+    "verification_edit_ratio": 0,
+    "feature_coverage_p0": 0.5,
+    "scope_drift_score": 0,
+    "plan_to_change_traceability": 1,
+    "delivery_focus_score": 1
+  },
+  "failure_matrix": {
+    "verdict": "rejected",
+    "primary_failure": "verification_gap",
+    "failures": [
+      {
+        "category": "verification_gap",
+        "message": "Core delivery acceptance checks did not all pass",
+        "evidence": "taskStatus=failed, evaluationVerdict=, localVerifyExitCode=0"
+      }
+    ]
+  },
+  "manual_review_summary": "verification_gap: Core delivery acceptance checks did not all pass",
+  "overlay": {
+    "directory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-vzAU24",
+    "savedDirectory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-vzAU24",
+    "workspaceDirectory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-vzAU24",
+    "selectedTaskID": "tsk_d19e7494e001eLfCJmKHxLtO9r",
+    "pendingCount": 0,
+    "taskIDs": [
+      "tsk_d19e7494e001eLfCJmKHxLtO9r"
+    ],
+    "taskList": "进行中\n    \n    \n      \n        \n        Tank Battle\n      \n      goal_decomposing\n      16:56:51 / .../Local/Temp/opencorvus-overlay-benchmark-project-vzAU24",
+    "reasoning": "",
+    "assistantText": "",
+    "liveRole": "spec",
+    "liveText": "# Tank Battle 游戏规格说明书## 1. 项目概述本项目是一个经典坦克大战（Tank Battle）的 Web 版复刻，使用纯前端技术实现。游戏采用 2D 俯视角，玩家操控坦克在战场上消灭敌方坦克并保护基地。### 1.1 技术栈约束- 语言: TypeScript (ES2022)- 渲染: HTML5 Canvas API (fillRect/strokeRect)，不使用外部图片- 构建工具: Bun + esbuild (bun build src/main.ts --outdir=dist --minify)- 依赖: 零外部 npm 包- 目标浏览器: Chrome/Firefox/Safari/Edge（现代浏览器）### 1.2 项目结构（根据 PRD 定义）src/  index.html          — 入口 HTML 文件  main.ts             — 入口文件，初始化 Canvas 和 Game  game.ts             — Game 类，主循环 (requestAnimationFrame)  input.ts            — InputManager，键盘事件管理  renderer.ts         — Renderer，Canvas 绘制层  battlefield.ts      — BattleField 类，地图管理  tank.ts             — Tank 基类  player-tank.ts      — PlayerTank 类  enemy-tank.ts       — EnemyTank 类，含 AI 逻辑  bullet.ts           — Bullet 类  explosion.ts        — Explosion 动画  hud.ts              — HUD 右侧面板  collision.ts        — 碰撞检测模块  levels.ts           — 关卡数据定义  types.ts            — 公共类型定义  constants.ts        — 游戏常量（速度、尺寸、颜色等）## 2. 核心游戏对象规格### 2.1 战场地图 (BattleField)文件: src/battlefield.ts- 尺寸: 13×13 格，每格 48×48 像素，总画布 624×624- 数据结构: 二维数组 Tile[][]，每个元素为 Tile 枚举值- Tile 类型 (src/types.ts):  - EMPTY (0): 空地，可通行可射击  - BRICK (1): 砖墙，可被子弹摧毁，不可通行  - STEEL (2): 钢墙，普通子弹无法摧毁，不可通行  - WATER (3): 河流，不可通行，子弹可飞越  - TREES (4): 草丛，可通行，遮挡坦克（坦克在草丛下不可见）  - ICE (5): 冰面，可通行但坦克会滑行（惯性移动）  - BASE (6): 基地（鹰徽），被摧毁则游戏失败### 2.2 玩家坦克 (PlayerTank)文件: src/player-tank.ts，继承自 src/tank.ts- 初始位置: 地图底部中央偏左（具体坐标由关卡定义）- 移动速度: 2 像素/帧- 属性:  - lives: 初始 3 条命  - direction: 四方向枚举 (UP, DOWN, LEFT, RIGHT)  - bulletCooldown: 射击冷却 500ms  - invincible: 重生后 3 秒无敌（闪烁效果）- 操作:  - 方向键（↑↓←→）或 WASD 移动  - 空格键射击- 碰撞规则: 不能穿过砖墙、钢墙、河流、地图边界、其他坦克- 死亡逻辑: 被敌方子弹命中后爆炸，消耗一条命，在初始位置重生- 重生保护: 重生后 3 秒内闪烁且无敌（每 100ms 切换可见/不可见）### 2.3 敌方坦克 (EnemyTank)文件: src/enemy-tank.ts，继承自 src/tank.ts- 生成规则:  - 每关总共 20 辆敌方坦克  - 同时在场最多 4 辆  - 出生点：地图顶部左、中、右三个位置轮流出生- 4 种类型 (EnemyType 枚举):  - Basic: 速度慢 (1.5 像素/帧)，1 发子弹消灭，白色 (#FFFFFF)  - Fast: 速度快 (3 像素/帧)，1 发子弹消灭，浅蓝色 (#87CEEB)  - Power: 速度中等 (2 像素/帧)，1 发子弹消灭，子弹可摧毁钢墙，紫色 (#9370DB)  - Armor: 速度慢 (1.5 像素/帧)，需要 4 发子弹消灭（每次被击中变色：绿色→黄色→橙色→红色）- AI 行为:  - 每隔 1-3 秒随机改变方向  - 前方有障碍物时立即转向  - 30% 概率朝玩家方向移动  - 持续射击（冷却 1 秒）### 2.4 子弹 (Bullet)文件: src/bullet.ts- 速度: 4 像素/帧- 限制: 同一坦克同时只能存在 1 颗子弹（子弹消失后才能再次射击）- 碰撞规则:  - 击中砖墙：摧毁砖墙，子弹消失  - 击中钢墙：子弹消失（Power 型敌方坦克的子弹可摧毁钢墙）  - 击中河流：子弹飞越，不受影响  - 击中地图边界：子弹消失  - 击中敌方坦克（玩家子弹）：坦克受伤或被消灭  - 击中玩家坦克（敌方子弹）：玩家死亡（无敌状态除外）  - 击中基地：基地被摧毁，游戏失败  - 两颗子弹相撞：同时消失### 2.5 爆炸效果 (Explosion)文件: src/explosion.ts- 坦克爆炸: 3 帧动画，每帧 100ms，总时长 300ms- 子弹击中墙壁: 2 帧小爆炸动画- 渲染: 使用 Canvas 绘制同心圆或星形图案## 3. 游戏状态机规格文件: src/game.ts (GameState 枚举)### 3.1 状态定义- MENU: 主菜单（显示 \"TANK BATTLE\" 标题 + \"Press ENTER to Start\"）- PLAYING: 游戏进行中- PAUSED: 暂停（按 P 键切换，显示 \"PAUSED\" 文字）- GAME_OVER: 游戏结束（显示 \"GAME OVER\" 上升动画）- STAGE_CLEAR: 关卡通过（显示关卡统计：击杀数、得分）- STAGE_INTRO: 关卡开始前（显示 \"STAGE X\" 2 秒）### 3.2 状态转换- MENU → STAGE_INTRO: 按 Enter 键- STAGE_INTRO → PLAYING: 2 秒后自动- PLAYING → PAUSED: 按 P 键- PAUSED → PLAYING: 按 P 键- PLAYING → GAME_OVER: 生命耗尽或基地被摧毁- PLAYING → STAGE_CLEAR: 所有敌方坦克被消灭- STAGE_CLEAR → STAGE_INTRO: 3 秒后进入下一关- GAME_OVER → MENU: 3 秒后自动## 4. 关卡系统规格文件: src/levels.ts### 4.1 关卡配置至少实现 3 个关卡，每关地图布局不同：- 关卡 1: 砖墙为主，简单布局，Basic 和 Fast 敌人  - 敌人配置：Basic×10, Fast×6, Power×2, Armor×2- 关卡 2: 加入钢墙和河流，Mixed 敌人  - 敌人配置：Basic×6, Fast×6, Power×4, Armor×4- 关卡 3: 复杂地图，大量 Armor 敌人，有草丛遮挡  - 敌人配置：Basic×4, Fast×4, Power×6, Armor×6### 4.2 关卡循环通关后循环（关卡 3 → 关卡 1）## 5. 计分系统规格文件: src/game.ts (ScoreManager)- Basic 坦克: 100 分- Fast 坦克: 200 分- Power 坦克: 300 分- Armor 坦克: 400 分- 分数在 HUD 右侧面板显示- 关卡结束时显示击杀统计## 6. HUD 界面规格文件: src/hud.ts### 6.1 布局- 游戏区域: 左侧 624×624 画布- 信息面板: 右侧 150 像素宽，总宽度 774 像素### 6.2 显示内容- 剩余敌方坦克数量（用小坦克图标表示）- 当前关卡号- 玩家剩余生命- 当前得分## 7. 视觉风格规格文件: src/constants.ts (颜色定义)### 7.1 颜色方案- 背景：纯黑 #000000- 砖墙：#B85C38（砖红色）- 钢墙：#C0C0C0（银灰色）- 河流：#4A86C8（蓝色，可加波纹动画）- 草丛：#2E8B57（深绿色）- 冰面：#ADD8E6（浅蓝色）- 玩家坦克：#FFD700（金黄色）- 敌方坦克：按类型着色- 子弹：#FFFFFF（白色）- 基地鹰徽：#FFD700（金色）边框 + 内部图案- HUD 面板背景：#333333- 文字：#FFFFFF### 7.2 绘制要求- 所有图形用 Canvas API 绘制（fillRect/strokeRect）- 不使用外部图片资源- 经典 FC/NES 像素风格## 8. 技术架构规格### 8.1 游戏主循环文件: src/game.tsfunction gameLoop(timestamp: number) {  const deltaTime = timestamp - lastTime;  lastTime = timestamp;  update(deltaTime);   // 更新所有游戏对象  render();            // 绘制所有游戏对象  requestAnimationFrame(gameLoop);}### 8.2 碰撞检测模块文件: src/collision.ts- 算法: 矩形 AABB 碰撞检测- 检测类型:  - 坦克与地形碰撞（逐格检测移动方向上的格子）  - 子弹与地形碰撞  - 子弹与坦克碰撞  - 坦克与坦克碰撞  - 子弹与子弹碰撞### 8.3 输入管理文件: src/input.ts- 使用 KeyboardEvent 监听- 支持方向键和 WASD- 空格键射击- P 键暂停- Enter 键开始游戏### 8.4 渲染器文件: src/renderer.ts- 封装 Canvas 2D Context- 提供绘制矩形、圆形、文字等方法- 支持图层管理（背景层、坦克层、子弹层、爆炸层、UI 层）## 9. 性能要求- 帧率: 60 FPS 稳定运行- 内存: 无内存泄漏（正确清理已销毁的对象）- 输入响应: 流畅的键盘响应（无延迟）- 对象池: 子弹、爆炸等频繁创建销毁的对象考虑使用对象池优化## 10. 验收标准### P0（必须通过）- 游戏可以启动并显示主菜单- 按 Enter 进入游戏- 玩家坦克可以四方向移动- 玩家坦克可以射击- 子弹击中砖墙可以摧毁砖墙- 敌方坦克会移动和射击- 敌方坦克被子弹消灭- 基地被摧毁后游戏结束- 所有敌人消灭后关卡通过- 至少 3 个不同关卡可以循环### P1（应该通过）- 4 种敌方坦克类型行为正确- Armor 坦克需要 4 发子弹，每次变色- 玩家重生 3 秒无敌闪烁- 暂停功能正常- HUD 正确显示分数、生命、关卡- 爆炸动画播放- 草丛遮挡效果- 冰面滑行效果### P2（可以没有）- 音效- 道具系统- 双人模式- 本地最高分存储## 11. 构建与运行### 11.1 开发运行bun run src/main.ts  # 或直接打开 index.html### 11.2 生产构建bun build src/main.ts --outdir=dist --minify### 11.3 本地服务器bun serve dist/",
+    "visibleTurns": [
+      {
+        "role": "spec",
+        "text": "# Tank Battle 游戏规格说明书## 1. 项目概述本项目是一个经典坦克大战（Tank Battle）的 Web 版复刻，使用纯前端技术实现。游戏采用 2D 俯视角，玩家操控坦克在战场上消灭敌方坦克并保护基地。### 1.1 技术栈约束- 语言: TypeScript (ES2022)- 渲染: HTML5 Canvas API (fillRect/strokeRect)，不使用外部图片- 构建工具: Bun + esbuild (bun build src/main.ts --outdir=dist --minify)- 依赖: 零外部 npm 包- 目标浏览器: Chrome/Firefox/Safari/Edge（现代浏览器）### 1.2 项目结构（根据 PRD 定义）src/  index.html          — 入口 HTML 文件  main.ts             — 入口文件，初始化 Canvas 和 Game  game.ts             — Game 类，主循环 (requestAnimationFrame)  input.ts            — InputManager，键盘事件管理  renderer.ts         — Renderer，Canvas 绘制层  battlefield.ts      — BattleField 类，地图管理  tank.ts             — Tank 基类  player-tank.ts      — PlayerTank 类  enemy-tank.ts       — EnemyTank 类，含 AI 逻辑  bullet.ts           — Bullet 类  explosion.ts        — Explosion 动画  hud.ts              — HUD 右侧面板  collision.ts        — 碰撞检测模块  levels.ts           — 关卡数据定义  types.ts            — 公共类型定义  constants.ts        — 游戏常量（速度、尺寸、颜色等）## 2. 核心游戏对象规格### 2.1 战场地图 (BattleField)文件: src/battlefield.ts- 尺寸: 13×13 格，每格 48×48 像素，总画布 624×624- 数据结构: 二维数组 Tile[][]，每个元素为 Tile 枚举值- Tile 类型 (src/types.ts):  - EMPTY (0): 空地，可通行可射击  - BRICK (1): 砖墙，可被子弹摧毁，不可通行  - STEEL (2): 钢墙，普通子弹无法摧毁，不可通行  - WATER (3): 河流，不可通行，子弹可飞越  - TREES (4): 草丛，可通行，遮挡坦克（坦克在草丛下不可见）  - ICE (5): 冰面，可通行但坦克会滑行（惯性移动）  - BASE (6): 基地（鹰徽），被摧毁则游戏失败### 2.2 玩家坦克 (PlayerTank)文件: src/player-tank.ts，继承自 src/tank.ts- 初始位置: 地图底部中央偏左（具体坐标由关卡定义）- 移动速度: 2 像素/帧- 属性:  - lives: 初始 3 条命  - direction: 四方向枚举 (UP, DOWN, LEFT, RIGHT)  - bulletCooldown: 射击冷却 500ms  - invincible: 重生后 3 秒无敌（闪烁效果）- 操作:  - 方向键（↑↓←→）或 WASD 移动  - 空格键射击- 碰撞规则: 不能穿过砖墙、钢墙、河流、地图边界、其他坦克- 死亡逻辑: 被敌方子弹命中后爆炸，消耗一条命，在初始位置重生- 重生保护: 重生后 3 秒内闪烁且无敌（每 100ms 切换可见/不可见）### 2.3 敌方坦克 (EnemyTank)文件: src/enemy-tank.ts，继承自 src/tank.ts- 生成规则:  - 每关总共 20 辆敌方坦克  - 同时在场最多 4 辆  - 出生点：地图顶部左、中、右三个位置轮流出生- 4 种类型 (EnemyType 枚举):  - Basic: 速度慢 (1.5 像素/帧)，1 发子弹消灭，白色 (#FFFFFF)  - Fast: 速度快 (3 像素/帧)，1 发子弹消灭，浅蓝色 (#87CEEB)  - Power: 速度中等 (2 像素/帧)，1 发子弹消灭，子弹可摧毁钢墙，紫色 (#9370DB)  - Armor: 速度慢 (1.5 像素/帧)，需要 4 发子弹消灭（每次被击中变色：绿色→黄色→橙色→红色）- AI 行为:  - 每隔 1-3 秒随机改变方向  - 前方有障碍物时立即转向  - 30% 概率朝玩家方向移动  - 持续射击（冷却 1 秒）### 2.4 子弹 (Bullet)文件: src/bullet.ts- 速度: 4 像素/帧- 限制: 同一坦克同时只能存在 1 颗子弹（子弹消失后才能再次射击）- 碰撞规则:  - 击中砖墙：摧毁砖墙，子弹消失  - 击中钢墙：子弹消失（Power 型敌方坦克的子弹可摧毁钢墙）  - 击中河流：子弹飞越，不受影响  - 击中地图边界：子弹消失  - 击中敌方坦克（玩家子弹）：坦克受伤或被消灭  - 击中玩家坦克（敌方子弹）：玩家死亡（无敌状态除外）  - 击中基地：基地被摧毁，游戏失败  - 两颗子弹相撞：同时消失### 2.5 爆炸效果 (Explosion)文件: src/explosion.ts- 坦克爆炸: 3 帧动画，每帧 100ms，总时长 300ms- 子弹击中墙壁: 2 帧小爆炸动画- 渲染: 使用 Canvas 绘制同心圆或星形图案## 3. 游戏状态机规格文件: src/game.ts (GameState 枚举)### 3.1 状态定义- MENU: 主菜单（显示 \"TANK BATTLE\" 标题 + \"Press ENTER to Start\"）- PLAYING: 游戏进行中- PAUSED: 暂停（按 P 键切换，显示 \"PAUSED\" 文字）- GAME_OVER: 游戏结束（显示 \"GAME OVER\" 上升动画）- STAGE_CLEAR: 关卡通过（显示关卡统计：击杀数、得分）- STAGE_INTRO: 关卡开始前（显示 \"STAGE X\" 2 秒）### 3.2 状态转换- MENU → STAGE_INTRO: 按 Enter 键- STAGE_INTRO → PLAYING: 2 秒后自动- PLAYING → PAUSED: 按 P 键- PAUSED → PLAYING: 按 P 键- PLAYING → GAME_OVER: 生命耗尽或基地被摧毁- PLAYING → STAGE_CLEAR: 所有敌方坦克被消灭- STAGE_CLEAR → STAGE_INTRO: 3 秒后进入下一关- GAME_OVER → MENU: 3 秒后自动## 4. 关卡系统规格文件: src/levels.ts### 4.1 关卡配置至少实现 3 个关卡，每关地图布局不同：- 关卡 1: 砖墙为主，简单布局，Basic 和 Fast 敌人  - 敌人配置：Basic×10, Fast×6, Power×2, Armor×2- 关卡 2: 加入钢墙和河流，Mixed 敌人  - 敌人配置：Basic×6, Fast×6, Power×4, Armor×4- 关卡 3: 复杂地图，大量 Armor 敌人，有草丛遮挡  - 敌人配置：Basic×4, Fast×4, Power×6, Armor×6### 4.2 关卡循环通关后循环（关卡 3 → 关卡 1）## 5. 计分系统规格文件: src/game.ts (ScoreManager)- Basic 坦克: 100 分- Fast 坦克: 200 分- Power 坦克: 300 分- Armor 坦克: 400 分- 分数在 HUD 右侧面板显示- 关卡结束时显示击杀统计## 6. HUD 界面规格文件: src/hud.ts### 6.1 布局- 游戏区域: 左侧 624×624 画布- 信息面板: 右侧 150 像素宽，总宽度 774 像素### 6.2 显示内容- 剩余敌方坦克数量（用小坦克图标表示）- 当前关卡号- 玩家剩余生命- 当前得分## 7. 视觉风格规格文件: src/constants.ts (颜色定义)### 7.1 颜色方案- 背景：纯黑 #000000- 砖墙：#B85C38（砖红色）- 钢墙：#C0C0C0（银灰色）- 河流：#4A86C8（蓝色，可加波纹动画）- 草丛：#2E8B57（深绿色）- 冰面：#ADD8E6（浅蓝色）- 玩家坦克：#FFD700（金黄色）- 敌方坦克：按类型着色- 子弹：#FFFFFF（白色）- 基地鹰徽：#FFD700（金色）边框 + 内部图案- HUD 面板背景：#333333- 文字：#FFFFFF### 7.2 绘制要求- 所有图形用 Canvas API 绘制（fillRect/strokeRect）- 不使用外部图片资源- 经典 FC/NES 像素风格## 8. 技术架构规格### 8.1 游戏主循环文件: src/game.tsfunction gameLoop(timestamp: number) {  const deltaTime = timestamp - lastTime;  lastTime = timestamp;  update(deltaTime);   // 更新所有游戏对象  render();            // 绘制所有游戏对象  requestAnimationFrame(gameLoop);}### 8.2 碰撞检测模块文件: src/collision.ts- 算法: 矩形 AABB 碰撞检测- 检测类型:  - 坦克与地形碰撞（逐格检测移动方向上的格子）  - 子弹与地形碰撞  - 子弹与坦克碰撞  - 坦克与坦克碰撞  - 子弹与子弹碰撞### 8.3 输入管理文件: src/input.ts- 使用 KeyboardEvent 监听- 支持方向键和 WASD- 空格键射击- P 键暂停- Enter 键开始游戏### 8.4 渲染器文件: src/renderer.ts- 封装 Canvas 2D Context- 提供绘制矩形、圆形、文字等方法- 支持图层管理（背景层、坦克层、子弹层、爆炸层、UI 层）## 9. 性能要求- 帧率: 60 FPS 稳定运行- 内存: 无内存泄漏（正确清理已销毁的对象）- 输入响应: 流畅的键盘响应（无延迟）- 对象池: 子弹、爆炸等频繁创建销毁的对象考虑使用对象池优化## 10. 验收标准### P0（必须通过）- 游戏可以启动并显示主菜单- 按 Enter 进入游戏- 玩家坦克可以四方向移动- 玩家坦克可以射击- 子弹击中砖墙可以摧毁砖墙- 敌方坦克会移动和射击- 敌方坦克被子弹消灭- 基地被摧毁后游戏结束- 所有敌人消灭后关卡通过- 至少 3 个不同关卡可以循环### P1（应该通过）- 4 种敌方坦克类型行为正确- Armor 坦克需要 4 发子弹，每次变色- 玩家重生 3 秒无敌闪烁- 暂停功能正常- HUD 正确显示分数、生命、关卡- 爆炸动画播放- 草丛遮挡效果- 冰面滑行效果### P2（可以没有）- 音效- 道具系统- 双人模式- 本地最高分存储## 11. 构建与运行### 11.1 开发运行bun run src/main.ts  # 或直接打开 index.html### 11.2 生产构建bun build src/main.ts --outdir=dist --minify### 11.3 本地服务器bun serve dist/"
+      }
+    ],
+    "storage": {
+      "directory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-vzAU24",
+      "directoryMode": "",
+      "workspaceDirectory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-vzAU24",
+      "workspaceTaskID": "tsk_d19e7494e001eLfCJmKHxLtO9r"
+    }
+  },
+  "diagnostics": {
+    "event_file": "C:\\Users\\chuan\\myhexin-local\\argus-opencode\\packages\\opencorvus\\overlay-web-benchmark-claude-tank.events.json",
+    "event_count": 39,
+    "stage_summary": {
+      "types": {
+        "orchestrator.task.created": 1,
+        "orchestrator.task.updated": 4,
+        "orchestrator.agent.updated": 33,
+        "orchestrator.spec.created": 1
+      },
+      "stages": {
+        "spec": {
+          "event_count": 28,
+          "first_event_ms": 2582,
+          "first_message_ms": null,
+          "first_tool_call_ms": null,
+          "first_tool_result_ms": null,
+          "submit_tool_ms": null,
+          "error_ms": null,
+          "last_event_ms": 131687,
+          "kind_counts": {
+            "status": 28
+          },
+          "tool_calls": {}
+        },
+        "planner": {
+          "event_count": 1,
+          "first_event_ms": 168482,
+          "first_message_ms": null,
+          "first_tool_call_ms": null,
+          "first_tool_result_ms": null,
+          "submit_tool_ms": null,
+          "error_ms": null,
+          "last_event_ms": 168482,
+          "kind_counts": {
+            "status": 1
+          },
+          "tool_calls": {}
+        }
+      }
+    }
+  }
+}

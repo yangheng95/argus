@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "zh-CN",
-    "panel_revision": "b4d9bef6b62621fb"
+    "panel_revision": "f843ec518bc6f93b"
   },
   "brand.guide_kicker": "快速说明",
   "brand.guide_positioning_body": "这不是一个装饰性浮层，而是任务驾驶舱：左边选择任务，中间推进执行，右边盯 spec、plan、评估和文件变更，防止 agent 一路跑偏。",
@@ -78,6 +78,8 @@
   "chat.thinking": "思考中",
   "chat.task_navigated": "好的",
   "chat.tip": "Enter 发送 · Shift+Enter 换行",
+  "chat.attach_title": "添加文件或图片",
+  "chat.file_too_large": "文件过大（最大 10MB）",
   "chat.title": "任务",
   "budget.empty": "选择一个任务后再编辑运行 budget。",
   "budget.hint": "留空表示沿用 orchestrator 默认值。",
@@ -199,6 +201,8 @@
   "cwd.title": "工作目录",
   "cwd.unavailable": "工作目录不可用",
   "cwd.execution_workspace": "执行工作区：{{value}}",
+  "cwd.recent": "最近项目",
+  "cwd.recent_empty": "暂无最近目录",
   "delivery.files_changed": {
     "one": "变更 {{count}} 个文件",
     "other": "变更 {{count}} 个文件"

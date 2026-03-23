@@ -49,4 +49,5 @@ export const ControlMessageInput = z.object({
   source: z.string().optional(),
   allow_create: z.boolean().default(true),
   metadata: z.record(z.string(), z.any()).optional(),
+  attachments: ControlAttachment.array().optional(),
 })

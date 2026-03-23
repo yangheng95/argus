@@ -79,6 +79,7 @@
     "@opencorvus-ai/plugin": "workspace:*",
     "@opencorvus-ai/script": "workspace:*",
     "@opencorvus-ai/sdk": "workspace:*",
+    "quansync": "^1.0.0",
     "sharp": "0.34.5",
     "typescript": "catalog:"
   },

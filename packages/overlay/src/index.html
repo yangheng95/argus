@@ -188,7 +188,7 @@
                 <span class="titlebar-menu-meta" data-i18n="titlebar.opacity_hint">Lower values make the whole overlay more transparent.</span>
               </span>
               <span class="titlebar-menu-range-control">
-                <input class="titlebar-menu-slider" id="opacityRange" type="range" min="50" max="100" step="5" value="50">
+                <input class="titlebar-menu-slider" id="opacityRange" type="range" min="70" max="100" step="5" value="80">
                 <span class="titlebar-menu-value" id="opacityValue">50%</span>
               </span>
             </label>
@@ -219,6 +219,7 @@
       <div class="task-meta">
         <div class="task-cwd">
           <span class="task-dir" id="taskDir" title="" data-i18n="cwd.unavailable">Working directory unavailable</span>
+          <div class="recent-dir-panel" id="recentDirPanel" hidden></div>
           <span class="task-workspace" id="taskWorkspaceDir" hidden></span>
         </div>
         <div class="task-meta-actions">
@@ -342,9 +343,14 @@
           <div class="chat-empty" id="codingEmpty">Build agent — ask anything about the codebase</div>
         </div>
         <form class="chat-input" id="chatForm">
+          <div class="chat-attachments" id="chatAttachments" hidden></div>
+          <input type="file" id="chatFileInput" multiple accept="image/*,.pdf,.txt,.md,.json,.csv,.xml,.yaml,.yml,.log,.ts,.js,.py,.go,.rs,.c,.cpp,.h,.java,.rb,.sh,.bat,.ps1,.html,.css,.sql,.toml" hidden>
           <div class="chat-compose-row">
             <textarea class="chat-textarea" id="chatTextarea" placeholder="Send a message..." rows="2" data-i18n-placeholder="chat.placeholder"></textarea>
             <div class="chat-compose-actions">
+              <button type="button" class="chat-attach-btn" id="btnChatAttach" title="Add files or images" aria-label="Add files or images" data-i18n-title="chat.attach_title" data-i18n-aria-label="chat.attach_title">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M13.5 7.5l-5.8 5.8a3.2 3.2 0 01-4.5-4.5L9 3a2 2 0 012.8 2.8L6 11.6a.8.8 0 01-1.1-1.1L10.5 5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
               <button
                 class="chat-send chat-interrupt"
                 type="button"
@@ -750,151 +756,176 @@
 
   <dialog class="dialog dialog-wide" id="configDialog">
     <div class="dialog-form config-dialog-form">
-      <div class="dialog-head">
+      <div class="dialog-head config-dialog-head">
         <h3 class="dialog-title" data-i18n="config.title">Config &amp; Settings</h3>
-        <div class="dialog-actions compact">
-          <button type="button" class="btn btn-ghost" id="btnCloseConfigDialog" data-i18n="common.close">Close</button>
-        </div>
+        <button type="button" class="config-close-btn" id="btnCloseConfigDialog" aria-label="Close">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M11 3L3 11M3 3l8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        </button>
       </div>
-      <div class="config-dialog-sections">
-        <details class="config-section" id="promptSection">
-          <summary class="config-section-head"><span data-i18n="prompt.title">Agent Prompts</span> <span class="section-badge" id="promptBadge"></span></summary>
-          <div class="config-section-body" id="promptBody">
-            <div class="empty-hint" data-i18n="prompt.loading">Loading prompts...</div>
+      <div class="config-dialog-layout">
+        <nav class="config-sidebar" id="configSidebar">
+          <button class="config-nav-item active" data-config-tab="prompt">
+            <svg class="config-nav-icon" viewBox="0 0 24 24" fill="none"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <span data-i18n="prompt.title">Prompts</span>
+            <span class="config-nav-badge" id="promptBadge"></span>
+          </button>
+          <button class="config-nav-item" data-config-tab="channel">
+            <svg class="config-nav-icon" viewBox="0 0 24 24" fill="none"><path d="M4 11a9 9 0 0 1 9-9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M4 16a14 14 0 0 1 14-14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="5" cy="19" r="2" stroke="currentColor" stroke-width="1.5"/></svg>
+            <span data-i18n="channel.title">Channel</span>
+          </button>
+          <button class="config-nav-item" data-config-tab="extensions">
+            <svg class="config-nav-icon" viewBox="0 0 24 24" fill="none"><path d="M13.5 2H10v4a2 2 0 1 1-4 0V2H2v4.5C2 7.9 3.1 9 4.5 9S7 7.9 7 6.5V6h4v.5C11 7.9 12.1 9 13.5 9S16 7.9 16 6.5V2h-2.5z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" transform="translate(2,2) scale(0.85)"/><rect x="3" y="13" width="8" height="8" rx="1.5" stroke="currentColor" stroke-width="1.5"/><path d="M14 16h6M17 13v6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+            <span data-i18n="extensions.title">Extensions</span>
+            <span class="config-nav-badge" id="extensionsBadge"></span>
+          </button>
+          <button class="config-nav-item" data-config-tab="memory">
+            <svg class="config-nav-icon" viewBox="0 0 24 24" fill="none"><path d="M12 2a7 7 0 0 1 7 7c0 2.5-1.3 4.7-3.2 6H8.2C6.3 13.7 5 11.5 5 9a7 7 0 0 1 7-7z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M9 18h6M10 21h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+            <span data-i18n="memory.title">Task Context</span>
+            <span class="config-nav-badge" id="memoryBadge"></span>
+          </button>
+          <button class="config-nav-item" data-config-tab="preference">
+            <svg class="config-nav-icon" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.5"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <span data-i18n="preference.title">Preferences</span>
+            <span class="config-nav-badge" id="preferenceBadge"></span>
+          </button>
+          <button class="config-nav-item" data-config-tab="budget">
+            <svg class="config-nav-icon" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M3 9h18M9 3v18" stroke="currentColor" stroke-width="1.5"/><path d="M14 14l2 2 3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <span data-i18n="section.budget">Budget</span>
+          </button>
+        </nav>
+        <div class="config-content" id="configContent">
+          <div class="config-tab-panel active" id="promptSection" data-config-panel="prompt">
+            <div class="config-section-body" id="promptBody">
+              <div class="empty-hint" data-i18n="prompt.loading">Loading prompts...</div>
+            </div>
           </div>
-        </details>
 
-        <details class="config-section" id="channelSection">
-          <summary class="config-section-head" data-i18n="channel.title">Channel</summary>
-          <div class="config-section-body" id="channelConfigBody">
-            <div class="extension-head channel-public-url-head">
-              <label class="field">
-                <span class="field-label" data-i18n="channel.public_url">Public Base URL</span>
-                <input
-                  class="field-input"
-                  id="channelPublicUrl"
-                  type="url"
-                  placeholder="https://opencorvus.example.com"
-                  data-i18n-placeholder="channel.public_url_placeholder"
-                >
-              </label>
-              <div class="dialog-actions compact">
-                <button
-                  type="button"
-                  class="btn btn-ghost mini"
-                  id="btnSaveChannelPublicUrl"
-                  data-i18n="common.save"
-                  data-i18n-title="channel.public_url_save_title"
-                  data-i18n-aria-label="channel.public_url_save_title"
-                >Save</button>
+          <div class="config-tab-panel" id="channelSection" data-config-panel="channel">
+            <div class="config-section-body" id="channelConfigBody">
+              <div class="extension-head channel-public-url-head">
+                <label class="field">
+                  <span class="field-label" data-i18n="channel.public_url">Public Base URL</span>
+                  <input
+                    class="field-input"
+                    id="channelPublicUrl"
+                    type="url"
+                    placeholder="https://opencorvus.example.com"
+                    data-i18n-placeholder="channel.public_url_placeholder"
+                  >
+                </label>
+                <div class="dialog-actions compact">
+                  <button
+                    type="button"
+                    class="btn btn-ghost mini"
+                    id="btnSaveChannelPublicUrl"
+                    data-i18n="common.save"
+                    data-i18n-title="channel.public_url_save_title"
+                    data-i18n-aria-label="channel.public_url_save_title"
+                  >Save</button>
+                </div>
+              </div>
+              <div class="empty-hint" data-i18n="channel.public_url_hint">
+                Needed for screenshot delivery on Google Chat, Microsoft Teams, LINE, and DingTalk.
+              </div>
+              <div class="extension-list" id="channelList">
+                <div class="empty-hint" data-i18n="channel.none">No channels available</div>
               </div>
             </div>
-            <div class="empty-hint" data-i18n="channel.public_url_hint">
-              Needed for screenshot delivery on Google Chat, Microsoft Teams, LINE, and DingTalk.
-            </div>
-            <div class="extension-list" id="channelList">
-              <div class="empty-hint" data-i18n="channel.none">No channels available</div>
-            </div>
           </div>
-        </details>
 
-        <details class="config-section" id="extensionsSection">
-          <summary class="config-section-head"><span data-i18n="extensions.title">Extensions</span> <span class="section-badge" id="extensionsBadge"></span></summary>
-          <div class="config-section-body" id="extensionsBody">
-            <details class="config-subsection" id="skillSubsection">
-              <summary class="config-subsection-head" data-i18n="skill.title">Skills</summary>
-              <div class="config-subsection-body">
-                <div class="extension-head">
-                  <div class="dialog-actions compact">
-                    <button type="button" class="btn btn-ghost mini" id="btnSkillMarket" data-i18n="skill.market.button" data-i18n-title="skill.market.button_title" data-i18n-aria-label="skill.market.button_title">Market</button>
-                    <button type="button" class="btn btn-ghost mini" id="btnOpenSkillRoot" data-i18n="skill.open_dir" data-i18n-title="skill.open_dir_title" data-i18n-aria-label="skill.open_dir_title">Open Dir</button>
-                    <button type="button" class="btn btn-ghost mini" id="btnReloadSkills" data-i18n="common.reload" data-i18n-title="skill.reload_title" data-i18n-aria-label="skill.reload_title">Reload</button>
-                    <button type="button" class="btn btn-ghost mini" id="btnAddSkill" data-i18n="skill.add" data-i18n-title="skill.add_button_title" data-i18n-aria-label="skill.add_button_title">Add Skill</button>
-                    <button type="button" class="btn btn-ghost mini danger" id="btnDeleteAllSkills" data-i18n="common.delete_all" data-i18n-title="skill.delete_all_button_title" data-i18n-aria-label="skill.delete_all_button_title">Delete All</button>
+          <div class="config-tab-panel" data-config-panel="extensions">
+            <div class="config-section-body" id="extensionsBody">
+              <details class="config-subsection" id="skillSubsection">
+                <summary class="config-subsection-head" data-i18n="skill.title">Skills</summary>
+                <div class="config-subsection-body">
+                  <div class="extension-head">
+                    <div class="dialog-actions compact">
+                      <button type="button" class="btn btn-ghost mini" id="btnSkillMarket" data-i18n="skill.market.button" data-i18n-title="skill.market.button_title" data-i18n-aria-label="skill.market.button_title">Market</button>
+                      <button type="button" class="btn btn-ghost mini" id="btnOpenSkillRoot" data-i18n="skill.open_dir" data-i18n-title="skill.open_dir_title" data-i18n-aria-label="skill.open_dir_title">Open Dir</button>
+                      <button type="button" class="btn btn-ghost mini" id="btnReloadSkills" data-i18n="common.reload" data-i18n-title="skill.reload_title" data-i18n-aria-label="skill.reload_title">Reload</button>
+                      <button type="button" class="btn btn-ghost mini" id="btnAddSkill" data-i18n="skill.add" data-i18n-title="skill.add_button_title" data-i18n-aria-label="skill.add_button_title">Add Skill</button>
+                      <button type="button" class="btn btn-ghost mini danger" id="btnDeleteAllSkills" data-i18n="common.delete_all" data-i18n-title="skill.delete_all_button_title" data-i18n-aria-label="skill.delete_all_button_title">Delete All</button>
+                    </div>
+                  </div>
+                  <div class="extension-list" id="skillList">
+                    <div class="empty-hint" data-i18n="skill.none_custom">No custom skills configured</div>
                   </div>
                 </div>
-                <div class="extension-list" id="skillList">
-                  <div class="empty-hint" data-i18n="skill.none_custom">No custom skills configured</div>
-                </div>
-              </div>
-            </details>
-            <details class="config-subsection" id="mcpSubsection">
-              <summary class="config-subsection-head" data-i18n="mcp.title">MCP Servers</summary>
-              <div class="config-subsection-body">
-                <div class="extension-head">
-                  <div class="dialog-actions compact">
-                    <button type="button" class="btn btn-ghost mini" id="btnAddMcp" data-i18n="mcp.add_action" data-i18n-title="mcp.add_action_title" data-i18n-aria-label="mcp.add_action_title">Add MCP</button>
-                    <button type="button" class="btn btn-ghost mini danger" id="btnDeleteAllMcp" data-i18n="common.delete_all" data-i18n-title="mcp.delete_all_button_title" data-i18n-aria-label="mcp.delete_all_button_title">Delete All</button>
+              </details>
+              <details class="config-subsection" id="mcpSubsection">
+                <summary class="config-subsection-head" data-i18n="mcp.title">MCP Servers</summary>
+                <div class="config-subsection-body">
+                  <div class="extension-head">
+                    <div class="dialog-actions compact">
+                      <button type="button" class="btn btn-ghost mini" id="btnAddMcp" data-i18n="mcp.add_action" data-i18n-title="mcp.add_action_title" data-i18n-aria-label="mcp.add_action_title">Add MCP</button>
+                      <button type="button" class="btn btn-ghost mini danger" id="btnDeleteAllMcp" data-i18n="common.delete_all" data-i18n-title="mcp.delete_all_button_title" data-i18n-aria-label="mcp.delete_all_button_title">Delete All</button>
+                    </div>
+                  </div>
+                  <div class="extension-list" id="mcpList">
+                    <div class="empty-hint" data-i18n="mcp.none">No MCP servers configured</div>
                   </div>
                 </div>
-                <div class="extension-list" id="mcpList">
-                  <div class="empty-hint" data-i18n="mcp.none">No MCP servers configured</div>
-                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="config-tab-panel" data-config-panel="memory">
+            <div class="config-section-body" id="memoryBody">
+              <div class="knowledge-toolbar">
+                <input type="text" class="knowledge-search" id="memorySearch" placeholder="Search task context..." data-i18n-placeholder="memory.search_placeholder">
+                <button type="button" class="btn btn-ghost mini" id="btnMemorySearch" data-i18n="common.search" data-i18n-title="memory.search_button_title" data-i18n-aria-label="memory.search_button_title">Search</button>
+                <button type="button" class="btn btn-ghost mini" id="btnMemoryRefresh" data-i18n="common.refresh" data-i18n-title="memory.refresh_title" data-i18n-aria-label="memory.refresh_title">Refresh</button>
               </div>
-            </details>
+              <div class="knowledge-list" id="memoryList">
+                <div class="empty-hint" data-i18n="memory.none">No task context</div>
+              </div>
+            </div>
           </div>
-        </details>
 
-        <details class="config-section" id="memorySection">
-          <summary class="config-section-head"><span data-i18n="memory.title">Task Context</span> <span class="section-badge" id="memoryBadge"></span></summary>
-          <div class="config-section-body" id="memoryBody">
-            <div class="knowledge-toolbar">
-              <input type="text" class="knowledge-search" id="memorySearch" placeholder="Search task context..." data-i18n-placeholder="memory.search_placeholder">
-              <button type="button" class="btn btn-ghost mini" id="btnMemorySearch" data-i18n="common.search" data-i18n-title="memory.search_button_title" data-i18n-aria-label="memory.search_button_title">Search</button>
-              <button type="button" class="btn btn-ghost mini" id="btnMemoryRefresh" data-i18n="common.refresh" data-i18n-title="memory.refresh_title" data-i18n-aria-label="memory.refresh_title">Refresh</button>
-            </div>
-            <div class="knowledge-list" id="memoryList">
-              <div class="empty-hint" data-i18n="memory.none">No task context</div>
+          <div class="config-tab-panel" data-config-panel="preference">
+            <div class="config-section-body" id="preferenceBody">
+              <div class="knowledge-toolbar">
+                <button type="button" class="btn btn-ghost mini" id="btnPreferenceRefresh" data-i18n="common.refresh" data-i18n-title="preference.refresh_title" data-i18n-aria-label="preference.refresh_title">Refresh</button>
+                <button type="button" class="btn btn-ghost mini" id="btnPreferenceAdd" data-i18n="common.add" data-i18n-title="preference.add_title" data-i18n-aria-label="preference.add_title">Add</button>
+              </div>
+              <div class="knowledge-list" id="preferenceList">
+                <div class="empty-hint" data-i18n="preference.none">No preferences</div>
+              </div>
             </div>
           </div>
-        </details>
 
-        <details class="config-section" id="preferenceSection">
-          <summary class="config-section-head"><span data-i18n="preference.title">Preferences</span> <span class="section-badge" id="preferenceBadge"></span></summary>
-          <div class="config-section-body" id="preferenceBody">
-            <div class="knowledge-toolbar">
-              <button type="button" class="btn btn-ghost mini" id="btnPreferenceRefresh" data-i18n="common.refresh" data-i18n-title="preference.refresh_title" data-i18n-aria-label="preference.refresh_title">Refresh</button>
-              <button type="button" class="btn btn-ghost mini" id="btnPreferenceAdd" data-i18n="common.add" data-i18n-title="preference.add_title" data-i18n-aria-label="preference.add_title">Add</button>
-            </div>
-            <div class="knowledge-list" id="preferenceList">
-              <div class="empty-hint" data-i18n="preference.none">No preferences</div>
-            </div>
-          </div>
-          </details>
-
-        <details class="config-section" id="budgetConfigSection">
-          <summary class="config-section-head"><span data-i18n="section.budget">Budget</span></summary>
-          <div class="config-section-body" id="budgetConfigBody">
-            <div class="budget-note" id="budgetHint" data-i18n="budget.hint">Leave fields blank to use the orchestrator defaults.</div>
-            <div class="field-row budget-grid">
-              <label class="field">
-                <span class="field-label" data-i18n="budget.max_runs">Max Runs</span>
-                <input class="field-input" id="budgetMaxRuns" type="number" min="1" step="1" placeholder="Default" data-i18n-placeholder="budget.placeholder">
-              </label>
-              <label class="field">
-                <span class="field-label" data-i18n="budget.max_replans">Max Replans</span>
-                <input class="field-input" id="budgetMaxReplans" type="number" min="0" step="1" placeholder="Default" data-i18n-placeholder="budget.placeholder">
-              </label>
-            </div>
-            <div class="field-row budget-grid">
-              <label class="field">
-                <span class="field-label" data-i18n="budget.max_evaluations">Max Evaluations</span>
-                <input class="field-input" id="budgetMaxEvaluations" type="number" min="1" step="1" placeholder="Default" data-i18n-placeholder="budget.placeholder">
-              </label>
-              <label class="field">
-                <span class="field-label" data-i18n="budget.max_wall_time">Wall Time (Minutes)</span>
-                <input class="field-input" id="budgetMaxWallTime" type="number" min="0.5" step="0.5" placeholder="Default" data-i18n-placeholder="budget.placeholder">
-              </label>
-            </div>
-            <div class="section-actions budget-actions">
-              <button type="button" class="btn btn-ghost mini" id="btnBudgetReset" data-i18n="budget.reset">Reset</button>
-              <button type="button" class="btn btn-primary mini" id="btnBudgetSave" data-i18n="common.save">Save</button>
+          <div class="config-tab-panel" data-config-panel="budget">
+            <div class="config-section-body" id="budgetConfigBody">
+              <div class="budget-note" id="budgetHint" data-i18n="budget.hint">Leave fields blank to use the orchestrator defaults.</div>
+              <div class="field-row budget-grid">
+                <label class="field">
+                  <span class="field-label" data-i18n="budget.max_runs">Max Runs</span>
+                  <input class="field-input" id="budgetMaxRuns" type="number" min="1" step="1" placeholder="Default" data-i18n-placeholder="budget.placeholder">
+                </label>
+                <label class="field">
+                  <span class="field-label" data-i18n="budget.max_replans">Max Replans</span>
+                  <input class="field-input" id="budgetMaxReplans" type="number" min="0" step="1" placeholder="Default" data-i18n-placeholder="budget.placeholder">
+                </label>
+              </div>
+              <div class="field-row budget-grid">
+                <label class="field">
+                  <span class="field-label" data-i18n="budget.max_evaluations">Max Evaluations</span>
+                  <input class="field-input" id="budgetMaxEvaluations" type="number" min="1" step="1" placeholder="Default" data-i18n-placeholder="budget.placeholder">
+                </label>
+                <label class="field">
+                  <span class="field-label" data-i18n="budget.max_wall_time">Wall Time (Minutes)</span>
+                  <input class="field-input" id="budgetMaxWallTime" type="number" min="0.5" step="0.5" placeholder="Default" data-i18n-placeholder="budget.placeholder">
+                </label>
+              </div>
+              <div class="section-actions budget-actions">
+                <button type="button" class="btn btn-ghost mini" id="btnBudgetReset" data-i18n="budget.reset">Reset</button>
+                <button type="button" class="btn btn-primary mini" id="btnBudgetSave" data-i18n="common.save">Save</button>
+              </div>
             </div>
           </div>
-        </details>
-        </div>
         </div>
       </div>
+    </div>
   </dialog>
 
   <!-- Memory Detail Dialog -->

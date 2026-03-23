@@ -256,6 +256,20 @@ export namespace Config {
 
     result.plugin = deduplicatePlugins(result.plugin ?? [])
 
+    // Write resolved config to project directory on first load if no project config exists yet.
+    if (!Flag.OPENCORVUS_DISABLE_PROJECT_CONFIG && Instance.directory) {
+      const configFile = projectConfigFile()
+      if (!existsSync(configFile)) {
+        try {
+          await fs.mkdir(projectConfigDirectory(), { recursive: true })
+          await Filesystem.writeJson(configFile, result)
+          log.info("wrote default config to project directory", { path: configFile })
+        } catch (error) {
+          log.warn("failed to write default config to project directory", { path: configFile, error: String(error) })
+        }
+      }
+    }
+
     return {
       config: result,
       directories,
