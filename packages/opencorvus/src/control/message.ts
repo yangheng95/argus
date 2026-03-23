@@ -249,7 +249,7 @@ async function systemPrompt(input: z.infer<typeof ControlMessageInput>) {
 }
 
 function buildUserParts(input: z.infer<typeof ControlMessageInput>) {
-  return [
+  const parts: Array<Record<string, unknown>> = [
     {
       type: "text" as const,
       text: input.text,
@@ -278,6 +278,17 @@ function buildUserParts(input: z.infer<typeof ControlMessageInput>) {
       },
     },
   ]
+  if (input.attachments?.length) {
+    for (const att of input.attachments) {
+      parts.push({
+        type: "file" as const,
+        mime: att.mime,
+        url: att.url,
+        ...(att.filename ? { filename: att.filename } : {}),
+      })
+    }
+  }
+  return parts
 }
 
 async function panelTools() {

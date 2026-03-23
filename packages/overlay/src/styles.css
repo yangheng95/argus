@@ -1279,6 +1279,58 @@ a { color: inherit; text-decoration: none; }
   text-overflow: ellipsis;
 }
 
+/* ── Recent Directory Panel ── */
+.recent-dir-panel {
+  position: fixed;
+  min-width: calc(220px * var(--ui-scale));
+  max-width: calc(400px * var(--ui-scale));
+  max-height: calc(260px * var(--ui-scale));
+  overflow-y: auto;
+  background: var(--surface-1);
+  border: 1px solid var(--border-strong);
+  border-radius: calc(10px * var(--ui-scale));
+  padding: calc(4px * var(--ui-scale));
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.32), 0 2px 8px rgba(0, 0, 0, 0.18);
+  z-index: 9999;
+  scrollbar-width: thin;
+  scrollbar-color: var(--subtle-5) transparent;
+}
+.recent-dir-panel::-webkit-scrollbar { width: 4px; }
+.recent-dir-panel::-webkit-scrollbar-thumb { background: var(--subtle-5); border-radius: 4px; }
+
+.recent-dir-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 1px solid transparent;
+  border-radius: calc(6px * var(--ui-scale));
+  background: transparent;
+  color: var(--text-soft);
+  padding: calc(5px * var(--ui-scale)) calc(10px * var(--ui-scale));
+  font-size: var(--ui-font-small);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: background 80ms, color 80ms;
+}
+.recent-dir-item:hover {
+  background: var(--subtle-5);
+  border-color: var(--border);
+  color: var(--text-strong);
+}
+.recent-dir-item[data-active="true"] {
+  background: rgba(59, 130, 246, 0.16);
+  color: var(--text-strong);
+}
+
+.recent-dir-empty {
+  padding: calc(8px * var(--ui-scale)) calc(10px * var(--ui-scale));
+  font-size: var(--ui-font-small);
+  color: var(--text-muted);
+  text-align: center;
+}
+
 .task-meta-actions {
   display: flex;
   align-items: center;
@@ -2022,7 +2074,8 @@ body[data-theme="light"] .section-badge {
 }
 
 .sections,
-.config-dialog-sections {
+.config-dialog-sections,
+.config-dialog-layout {
   --section-stack-gap: calc(6px * var(--ui-scale));
   --section-field-gap: calc(4px * var(--ui-scale));
   --section-row-gap: calc(6px * var(--ui-scale));
@@ -3774,6 +3827,91 @@ body[data-theme="light"] .section-badge {
   box-shadow: none;
 }
 
+/* ── Chat Attachments ── */
+.chat-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(6px * var(--ui-scale));
+  padding: calc(6px * var(--ui-scale)) calc(4px * var(--ui-scale)) 0;
+}
+.chat-attachment-item {
+  display: flex;
+  align-items: center;
+  gap: calc(4px * var(--ui-scale));
+  background: var(--subtle-5);
+  border: 1px solid var(--border);
+  border-radius: calc(8px * var(--ui-scale));
+  padding: calc(3px * var(--ui-scale)) calc(6px * var(--ui-scale));
+  font-size: var(--ui-font-small);
+  color: var(--text-soft);
+  max-width: calc(180px * var(--ui-scale));
+  overflow: hidden;
+}
+.chat-attachment-thumb {
+  width: calc(28px * var(--ui-scale));
+  height: calc(28px * var(--ui-scale));
+  object-fit: cover;
+  border-radius: calc(4px * var(--ui-scale));
+  flex-shrink: 0;
+}
+.chat-attachment-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(28px * var(--ui-scale));
+  height: calc(28px * var(--ui-scale));
+  background: var(--subtle-10);
+  border-radius: calc(4px * var(--ui-scale));
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+.chat-attachment-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.chat-attachment-remove {
+  flex-shrink: 0;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0 calc(2px * var(--ui-scale));
+  font-size: 14px;
+  line-height: 1;
+}
+.chat-attachment-remove:hover { color: var(--text-strong); }
+
+.chat-attach-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  min-width: var(--ui-chat-send-size);
+  min-height: var(--ui-chat-send-size);
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: calc(10px * var(--ui-scale));
+  padding: 0 calc(6px * var(--ui-scale));
+  transition: color 80ms, background 80ms, border-color 80ms;
+}
+.chat-attach-btn:hover {
+  color: var(--text-strong);
+  background: var(--subtle-5);
+  border-color: var(--border-strong);
+}
+
+.chat-input[data-dragover] .chat-compose-row {
+  outline: 2px dashed rgba(59, 130, 246, 0.5);
+  outline-offset: -2px;
+  border-radius: calc(14px * var(--ui-scale));
+}
+
 .chat-compose-row {
   display: flex;
   align-items: stretch;
@@ -3816,7 +3954,7 @@ body[data-theme="light"] .section-badge {
   min-width: var(--ui-chat-send-size);
   min-height: var(--ui-chat-send-size);
   border: 1px solid transparent;
-  border-radius: 999px;
+  border-radius: calc(10px * var(--ui-scale));
   background: linear-gradient(135deg, rgba(146, 184, 252, 0.98), rgba(86, 126, 196, 0.96) 58%, rgba(66, 100, 159, 0.96));
   color: #fff;
   cursor: pointer;
@@ -5278,70 +5416,199 @@ select.field-input {
     var(--subtle-1);
 }
 
+/* ── Config Dialog: Sidebar + Content Layout ── */
 .config-dialog-form {
   max-width: 980px !important;
-  padding: calc(24px * var(--ui-scale));
-  gap: calc(18px * var(--ui-scale));
+  height: calc(80vh);
+  max-height: calc(80vh);
+  padding: 0;
+  gap: 0;
+  overflow: hidden;
 }
 
-.config-dialog-sections {
+.config-dialog-head {
+  padding: calc(16px * var(--ui-scale)) calc(20px * var(--ui-scale));
+  border-bottom: 1px solid var(--divider-soft);
+  flex-shrink: 0;
+}
+
+.config-close-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(28px * var(--ui-scale));
+  height: calc(28px * var(--ui-scale));
+  border: none;
+  border-radius: calc(6px * var(--ui-scale));
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 120ms, color 120ms;
+}
+.config-close-btn:hover {
+  background: var(--subtle-3);
+  color: var(--text-strong);
+}
+
+.config-dialog-layout {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* ── Sidebar Navigation ── */
+.config-sidebar {
   display: flex;
   flex-direction: column;
-  gap: calc(16px * var(--ui-scale));
-  padding-right: calc(6px * var(--ui-scale));
+  gap: calc(2px * var(--ui-scale));
+  width: calc(200px * var(--ui-scale));
+  min-width: calc(200px * var(--ui-scale));
+  padding: calc(12px * var(--ui-scale)) calc(10px * var(--ui-scale));
+  border-right: 1px solid var(--divider-soft);
+  background: var(--subtle-1);
+  overflow-y: auto;
+  flex-shrink: 0;
 }
 
-.config-dialog-sections > .config-section {
-  border: 1px solid var(--border);
-  border-radius: var(--section-corner);
+.config-nav-item {
+  display: flex;
+  align-items: center;
+  gap: calc(10px * var(--ui-scale));
+  width: 100%;
+  padding: calc(8px * var(--ui-scale)) calc(12px * var(--ui-scale));
+  border: none;
+  border-radius: calc(8px * var(--ui-scale));
+  background: transparent;
+  color: var(--text-soft);
+  font-size: var(--ui-font-body);
+  font-family: var(--font);
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition: background 120ms, color 120ms;
+  position: relative;
+}
+.config-nav-item:hover {
+  background: var(--subtle-2);
+  color: var(--text-strong);
+}
+.config-nav-item.active {
   background:
-    var(--surface-inset);
-  overflow: hidden;
-  box-shadow: none;
+    linear-gradient(135deg, rgba(84, 138, 247, 0.15), rgba(84, 138, 247, 0.06));
+  color: var(--accent-hover);
+  font-weight: 600;
+}
+.config-nav-item.active::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: calc(6px * var(--ui-scale));
+  bottom: calc(6px * var(--ui-scale));
+  width: calc(3px * var(--ui-scale));
+  border-radius: calc(2px * var(--ui-scale));
+  background: var(--accent);
 }
 
-.config-dialog-sections > .config-section[open] {
-  background:
-    var(--subtle-2);
+.config-nav-icon {
+  width: calc(18px * var(--ui-scale));
+  height: calc(18px * var(--ui-scale));
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+.config-nav-item.active .config-nav-icon {
+  opacity: 1;
 }
 
-.config-dialog-sections > .config-section:hover,
-.config-dialog-sections > .config-section:focus-within {
-  background:
-    linear-gradient(180deg, rgba(91, 141, 239, 0.08), rgba(91, 141, 239, 0.02) 62%, transparent),
-    var(--surface-inset);
+.config-nav-badge {
+  margin-left: auto;
+  min-width: calc(20px * var(--ui-scale));
+  height: calc(18px * var(--ui-scale));
+  padding: 0 calc(5px * var(--ui-scale));
+  border-radius: calc(9px * var(--ui-scale));
+  background: var(--subtle-3);
+  color: var(--text-soft);
+  font-size: var(--ui-font-tiny);
+  font-weight: 600;
+  line-height: calc(18px * var(--ui-scale));
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.config-nav-badge:empty {
+  display: none;
+}
+.config-nav-item.active .config-nav-badge {
+  background: rgba(84, 138, 247, 0.2);
+  color: var(--accent-hover);
 }
 
-.config-dialog-sections > .config-section[open]:hover,
-.config-dialog-sections > .config-section[open]:focus-within {
-  background:
-    linear-gradient(180deg, rgba(91, 141, 239, 0.08), rgba(91, 141, 239, 0.02) 62%, transparent),
-    var(--subtle-2);
+/* ── Content Panel ── */
+.config-content {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  padding: calc(20px * var(--ui-scale)) calc(24px * var(--ui-scale));
 }
 
-.config-dialog-sections .config-section-head {
-  min-height: calc(52px * var(--ui-scale));
-  padding: calc(12px * var(--ui-scale)) calc(16px * var(--ui-scale));
+.config-tab-panel {
+  display: none;
+}
+.config-tab-panel.active {
+  display: block;
 }
 
-.config-dialog-sections .config-section-body {
-  padding: calc(14px * var(--ui-scale)) calc(16px * var(--ui-scale)) calc(18px * var(--ui-scale));
+.config-tab-panel > .config-section-body {
+  display: flex;
+  flex-direction: column;
   gap: calc(14px * var(--ui-scale));
 }
 
-.config-dialog-sections .config-subsection-head {
+/* ── Subsections inside content (Extensions) ── */
+.config-content .config-subsection {
+  border: 1px solid var(--border);
+  border-radius: calc(10px * var(--ui-scale));
+  background: var(--subtle-1);
+  overflow: hidden;
+  margin-bottom: calc(8px * var(--ui-scale));
+}
+.config-content .config-subsection[open] {
+  background: var(--subtle-2);
+}
+.config-content .config-subsection-head {
   min-height: calc(40px * var(--ui-scale));
   padding: calc(9px * var(--ui-scale)) calc(14px * var(--ui-scale));
 }
-
-.config-dialog-sections .config-subsection-body {
+.config-content .config-subsection-body {
   padding: 0 calc(14px * var(--ui-scale)) calc(14px * var(--ui-scale));
   gap: calc(12px * var(--ui-scale));
 }
-
-.config-dialog-sections .extension-head,
-.config-dialog-sections .knowledge-toolbar {
+.config-content .extension-head,
+.config-content .knowledge-toolbar {
   gap: calc(12px * var(--ui-scale));
+}
+
+/* ── Light theme overrides ── */
+body[data-theme="light"] .config-sidebar {
+  background: rgba(0, 0, 0, 0.03);
+}
+body[data-theme="light"] .config-nav-item.active {
+  background:
+    linear-gradient(135deg, rgba(36, 112, 179, 0.12), rgba(36, 112, 179, 0.04));
+  color: var(--accent);
+}
+body[data-theme="light"] .config-nav-item.active::before {
+  background: var(--accent);
+}
+body[data-theme="light"] .config-nav-badge {
+  background: rgba(0, 0, 0, 0.08);
+  color: var(--text-soft);
+}
+body[data-theme="light"] .config-nav-item.active .config-nav-badge {
+  background: rgba(36, 112, 179, 0.14);
+  color: var(--accent);
+}
+body[data-theme="light"] .config-close-btn:hover {
+  background: rgba(0, 0, 0, 0.08);
 }
 
 #channelConfigBody {
@@ -6039,7 +6306,8 @@ select.field-input {
   letter-spacing: var(--subhead-track);
 }
 
-.config-dialog-sections .btn.mini {
+.config-dialog-sections .btn.mini,
+.config-content .btn.mini {
   font-size: var(--ui-font-control);
 }
 
@@ -6131,78 +6399,39 @@ select.field-input {
   transition: border-color 120ms, background 120ms, box-shadow 120ms, transform 120ms;
 }
 
-/* Unify config dialog hover with the brand-guide-card surface. */
-.config-dialog-sections > .config-section:hover,
-.config-dialog-sections > .config-section:focus-within,
-.config-dialog-sections > .config-section[open]:hover,
-.config-dialog-sections > .config-section[open]:focus-within,
-.config-dialog-sections .config-section:hover,
-.config-dialog-sections .config-section:focus-within,
-.config-dialog-sections .config-section[open]:hover,
-.config-dialog-sections .config-section[open]:focus-within,
-.config-dialog-sections .config-subsection:hover,
-.config-dialog-sections .config-subsection:focus-within,
-.config-dialog-sections .config-subsection[open]:hover,
-.config-dialog-sections .config-subsection[open]:focus-within,
-.config-dialog-sections .extension-head:hover,
-.config-dialog-sections .extension-head:focus-within,
-.config-dialog-sections .knowledge-toolbar:hover,
-.config-dialog-sections .knowledge-toolbar:focus-within,
-.config-dialog-sections .channel-doc-card:hover,
-.config-dialog-sections .channel-doc-card:focus-within,
-.config-dialog-sections .extension-row:hover,
-.config-dialog-sections .market-card:hover,
-.config-dialog-sections .knowledge-item:hover,
-.config-dialog-sections .pref-item:hover {
+/* Unify config content hover with the brand-guide-card surface. */
+.config-content .config-subsection:hover,
+.config-content .config-subsection:focus-within,
+.config-content .config-subsection[open]:hover,
+.config-content .config-subsection[open]:focus-within,
+.config-content .extension-head:hover,
+.config-content .extension-head:focus-within,
+.config-content .knowledge-toolbar:hover,
+.config-content .knowledge-toolbar:focus-within,
+.config-content .channel-doc-card:hover,
+.config-content .channel-doc-card:focus-within,
+.config-content .extension-row:hover,
+.config-content .market-card:hover,
+.config-content .knowledge-item:hover,
+.config-content .pref-item:hover {
   border-color: var(--guide-card-border) !important;
   background: var(--guide-card-bg) !important;
   box-shadow: var(--guide-card-shadow) !important;
   transform: none !important;
 }
 
-.config-dialog-sections .config-section-head:hover,
-.config-dialog-sections .config-section-head:focus-visible,
-.config-dialog-sections .config-subsection-head:hover,
-.config-dialog-sections .config-subsection-head:focus-visible {
-  border-color: var(--guide-card-border) !important;
-  background: var(--guide-card-bg) !important;
-  box-shadow: var(--guide-card-shadow) !important;
-  transform: none !important;
-}
-
-.config-dialog-sections .config-section:hover > .config-section-body,
-.config-dialog-sections .config-section:focus-within > .config-section-body,
-.config-dialog-sections .config-section[open]:hover > .config-section-body,
-.config-dialog-sections .config-section[open]:focus-within > .config-section-body,
-.config-dialog-sections .config-subsection:hover > .config-subsection-body,
-.config-dialog-sections .config-subsection:focus-within > .config-subsection-body,
-.config-dialog-sections .config-subsection[open]:hover > .config-subsection-body,
-.config-dialog-sections .config-subsection[open]:focus-within > .config-subsection-body {
-  background: var(--guide-card-bg) !important;
-  border-color: var(--guide-card-border) !important;
-  border-top-color: transparent !important;
-  box-shadow: var(--guide-card-shadow) !important;
-  transform: none !important;
-}
-
-.config-dialog-sections .config-section-head:hover,
-.config-dialog-sections .config-section-head:focus-visible,
-.config-dialog-sections .config-subsection-head:hover,
-.config-dialog-sections .config-subsection-head:focus-visible {
+.config-content .config-subsection-head:hover,
+.config-content .config-subsection-head:focus-visible {
   border-color: var(--hover-accent-border);
   background: var(--hover-accent-wash);
   box-shadow: var(--hover-accent-shadow);
   transform: translateY(calc(-1px * var(--ui-scale)));
 }
 
-.config-dialog-sections .config-section:hover > .config-section-body,
-.config-dialog-sections .config-section:focus-within > .config-section-body,
-.config-dialog-sections .config-section[open]:hover > .config-section-body,
-.config-dialog-sections .config-section[open]:focus-within > .config-section-body,
-.config-dialog-sections .config-subsection:hover > .config-subsection-body,
-.config-dialog-sections .config-subsection:focus-within > .config-subsection-body,
-.config-dialog-sections .config-subsection[open]:hover > .config-subsection-body,
-.config-dialog-sections .config-subsection[open]:focus-within > .config-subsection-body {
+.config-content .config-subsection:hover > .config-subsection-body,
+.config-content .config-subsection:focus-within > .config-subsection-body,
+.config-content .config-subsection[open]:hover > .config-subsection-body,
+.config-content .config-subsection[open]:focus-within > .config-subsection-body {
   background: var(--hover-accent-wash);
   border-color: var(--hover-accent-border);
   border-top-color: transparent;

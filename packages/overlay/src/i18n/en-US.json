@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "en-US",
-    "panel_revision": "b4d9bef6b62621fb"
+    "panel_revision": "f843ec518bc6f93b"
   },
   "brand.guide_kicker": "Quick Guide",
   "brand.guide_positioning_body": "This is the task cockpit, not decorative chrome: left selects tasks, center drives execution, right verifies spec, plan, evaluation, and file changes so the agent does not drift.",
@@ -78,6 +78,8 @@
   "chat.thinking": "Thinking...",
   "chat.task_navigated": "OK",
   "chat.tip": "Enter to send · Shift+Enter for newline",
+  "chat.attach_title": "Add files or images",
+  "chat.file_too_large": "File too large (max 10MB)",
   "chat.title": "Task",
   "budget.empty": "Select a task to edit run budget.",
   "budget.hint": "Leave fields blank to use the orchestrator defaults.",
@@ -199,6 +201,8 @@
   "cwd.title": "Working Directory",
   "cwd.unavailable": "Working directory unavailable",
   "cwd.execution_workspace": "Execution workspace: {{value}}",
+  "cwd.recent": "Recent",
+  "cwd.recent_empty": "No recent directories",
   "delivery.files_changed": {
     "one": "{{count}} file changed",
     "other": "{{count}} files changed"

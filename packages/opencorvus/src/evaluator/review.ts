@@ -543,12 +543,23 @@ export async function specCheckResult(
     {
       role: "system" as const,
       content:
-        "Evaluate whether the delivery satisfies ALL acceptance criteria in the specification. " +
+        "Evaluate whether the delivery satisfies the acceptance criteria in the specification. " +
         "You are provided with the actual file contents after changes. Use them to verify each criterion. " +
-        "For each criterion in the spec, determine pass/fail with evidence from the code. " +
+        "For each criterion in the spec, determine pass/fail with evidence from the code.\n\n" +
+        "PRIORITY: Focus on core functionality delivery. A working implementation with minor gaps " +
+        "is better than blocking on criteria that cannot be verified from code alone.\n\n" +
+        "CLASSIFICATION RULES:\n" +
+        "- 'passed': Criterion is verifiably met from the code (file exists, logic correct, tests pass)\n" +
+        "- 'failed': Criterion is verifiably NOT met (missing file, wrong logic, broken test)\n" +
+        "- 'inconclusive': Criterion CANNOT be verified from code alone (runtime metrics like '99% uptime', " +
+        "UX criteria like 'path < 3 steps', performance like '< 2s load time', device-specific like " +
+        "'biometric on real device'). Mark these inconclusive, do NOT mark them failed.\n\n" +
+        "VERDICT RULES:\n" +
+        "- 'accepted': All verifiable criteria pass. Inconclusive criteria do NOT block acceptance.\n" +
+        "- 'rejected': One or more verifiable criteria FAIL (code-level problems that CAN be fixed).\n" +
+        "- 'inconclusive': Cannot determine (e.g. no code provided). Should be rare.\n\n" +
         "Pay special attention to the 'Required Spec Items' section — each item marked [blocking] " +
         "MUST be individually verified as passed for acceptance. " +
-        "ALL criteria must pass for acceptance. Be thorough and precise. " +
         "Respond with a JSON object: {\"verdict\":\"accepted\"|\"rejected\"|\"inconclusive\",\"rationale\":\"...\",\"criteria\":[{\"criterion\":\"...\",\"status\":\"passed\"|\"failed\"|\"inconclusive\",\"evidence\":\"...\"}]}",
     },
     {
@@ -618,11 +629,21 @@ export async function specCheckResult(
     }
   }
 
-  const allPassed = result.object.criteria.every((c) => c.status === "passed")
-  if (allPassed && result.object.verdict === "accepted") {
+  // Only hard-failed criteria block acceptance. "inconclusive" criteria
+  // (e.g. runtime metrics like "sync success rate ≥ 99%" or UX criteria
+  // like "first-write path < 3 steps") cannot be verified from code alone
+  // and must not cause infinite retry loops.
+  const hardFailed = result.object.criteria.filter((c) => c.status === "failed")
+  const inconclusive = result.object.criteria.filter((c) => c.status === "inconclusive")
+  const noneHardFailed = hardFailed.length === 0
+
+  if (noneHardFailed && (result.object.verdict === "accepted" || result.object.verdict === "inconclusive")) {
+    const suffix = inconclusive.length > 0
+      ? ` (${inconclusive.length} criteria inconclusive — require runtime verification)`
+      : ""
     return {
       outcome: "passed" as const,
-      summary: "Spec check: all criteria passed.",
+      summary: `Spec check: all verifiable criteria passed.${suffix}`,
       checks: [
         {
           name: "spec_check",
@@ -643,11 +664,11 @@ export async function specCheckResult(
     }
   }
 
-  const failedCriteria = result.object.criteria.filter((c) => c.status !== "passed")
+  const failedCriteria = result.object.criteria.filter((c) => c.status === "failed")
   return softOrStrict({
     mode,
     name: "spec_check",
-    summary: `Spec check: ${failedCriteria.length} criteria not passed.`,
+    summary: `Spec check: ${failedCriteria.length} criteria failed.`,
     evidence: clip(
       failedCriteria.map((c) => `[${c.status}] ${c.criterion}: ${c.evidence}`).join("\n"),
     ),

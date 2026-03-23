@@ -6,7 +6,6 @@ import { ToolAdapterRegistry, protocolInfo } from "./protocol"
 import { CodexCLIExecutor } from "./codex-cli"
 import { CodexAppServerClientProcess } from "./codex-app-server-client"
 import { CodexAppServerExecutor } from "./codex-app-server"
-import { ClaudeCLIExecutor } from "./claude-cli"
 import { ClaudeAgentExecutor } from "./claude-agent"
 
 const log = Log.create({ service: "executor.bootstrap" })
@@ -93,8 +92,5 @@ function codexProvider(command: string[]) {
 }
 
 function claudeProvider(command: string[]) {
-  if (process.env.OPENCORVUS_EXECUTOR_CLAUDE_PROTOCOL === "cli") {
-    return ClaudeCLIExecutor.create({ command })
-  }
-  return ClaudeAgentExecutor.createSdk()
+  return ClaudeAgentExecutor.createSdk(command[0])
 }

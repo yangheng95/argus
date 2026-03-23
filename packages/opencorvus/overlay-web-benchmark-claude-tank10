@@ -1,0 +1,357 @@
+{
+  "generated_at": "2026-03-23T12:36:52.904Z",
+  "title": "Tank Battle",
+  "request_file": "C:\\Users\\chuan\\myhexin-local\\argus-opencode\\specs\\tank-battle-prd.txt",
+  "executor": "claude-code",
+  "model": "alibaba-coding-plan-cn/qwen3.5-plus",
+  "directory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-U4zSfK",
+  "server": "http://127.0.0.1:53547/",
+  "taskID": "tsk_d1a51e46c001kkEiuT70ioe5Xd",
+  "stage_timeout_ms": {
+    "spec": 86400000,
+    "planner": 86400000,
+    "tool": 600000,
+    "standby": 86400000,
+    "stall": 600000,
+    "request": 30000
+  },
+  "stage_max_steps": {
+    "spec": 80,
+    "planner": 96
+  },
+  "stall_timeout_ms": 600000,
+  "completion_hard_timeout_ms": null,
+  "request_timeout_ms": 30000,
+  "taskStatus": "completed",
+  "evaluation": "accepted",
+  "changedFiles": [
+    "README.md",
+    "package.json",
+    ".opencorvus/evaluations/2026-03-23T12-27-35-865Z-tsk_d1a51e46c001kkEiuT70ioe5Xd-coordinator-eval-evl_d1aa4f45b0029Jl4H7a1ZcUE3p-tank-battle.md",
+    ".opencorvus/evaluations/2026-03-23T12-34-50-206Z-tsk_d1a51e46c001kkEiuT70ioe5Xd-coordinator-eval-evl_d1aad5546002rG8EcobLFLo1Xz-tank-battle.md",
+    ".opencorvus/goals/2026-03-23T12-27-35-865Z-tsk_d1a51e46c001kkEiuT70ioe5Xd-goal-snapshot-v1-tank-battle.md",
+    ".opencorvus/goals/2026-03-23T12-34-50-206Z-tsk_d1a51e46c001kkEiuT70ioe5Xd-goal-snapshot-v1-tank-battle.md",
+    "src/barrel.ts",
+    "src/battlefield.ts",
+    "src/boss-tank.ts",
+    "src/bullet.ts",
+    "src/collision.ts",
+    "src/constants.ts",
+    "src/enemy-tank.ts",
+    "src/explosion.ts",
+    "src/game.ts",
+    "src/hud.ts",
+    "src/index.html",
+    "src/input.ts",
+    "src/levels.ts",
+    "src/main.ts",
+    "src/night.ts",
+    "src/player-tank.ts",
+    "src/portal.ts",
+    "src/renderer.ts",
+    "src/tank.ts",
+    "src/types.ts",
+    "src/upgrade.ts",
+    "tank-battle-prd.txt",
+    "tests/e2e/barrel-chain.test.ts",
+    "tests/e2e/game-flow.test.ts",
+    "tests/e2e/night-mode.test.ts",
+    "tests/e2e/pause-resume.test.ts",
+    "tests/e2e/portal.test.ts",
+    "tests/e2e/upgrade-system.test.ts",
+    "tests/unit/barrel.test.ts",
+    "tests/unit/battlefield.test.ts",
+    "tests/unit/boss.test.ts",
+    "tests/unit/collision.test.ts",
+    "tests/unit/enemy-ai.test.ts",
+    "tests/unit/portal.test.ts",
+    "tests/unit/tank.test.ts",
+    "tests/unit/upgrade.test.ts"
+  ],
+  "transcriptCount": 6,
+  "timelineCount": 0,
+  "runCount": 2,
+  "planning": {
+    "pendingCount": 0,
+    "taskList": "还没有任务",
+    "reasoning": "",
+    "assistantText": ""
+  },
+  "streaming": {
+    "reasoning": "",
+    "assistantText": "",
+    "liveRole": "spec",
+    "liveText": "# Tank Battle 游戏技术规格说明书## 1. 项目概述本项目是一个经典坦克大战（Battle City）的 Web 复刻版，采用纯前端技术栈实现。游戏将包含完整的游戏循环、5 个精心设计的关卡、Roguelike 风格的升级系统、以及创新的夜战模式。### 技术栈确认- 运行时: 纯浏览器环境，零外部依赖- 语言: TypeScript (ES2022)- 渲染: HTML5 Canvas API (fillRect/strokeRect/path)- 构建工具: Bun + bun build (esbuild 后端)- 测试框架: Bun test runner (bun:test)- 目标性能: 60 FPS 稳定运行### 项目结构（基于 PRD 10.1）src/  index.html          — 入口 HTML，Canvas 容器  main.ts             — 应用入口，初始化 Game 实例  game.ts             — Game 类，主循环 + 状态机核心  input.ts            — InputManager，键盘事件管理  renderer.ts         — Renderer，Canvas 绘制层  battlefield.ts      — BattleField 类，13×13 地图管理  tank.ts             — Tank 基类，通用坦克逻辑  player-tank.ts      — PlayerTank 类，玩家控制  enemy-tank.ts       — EnemyTank 类，AI 逻辑  boss-tank.ts        — BossTank 类，2×2 大型 Boss  bullet.ts           — Bullet 类，子弹逻辑  explosion.ts        — Explosion 动画类  hud.ts              — HUD 右侧信息面板  collision.ts        — 碰撞检测模块（AABB）  levels.ts           — 5 个关卡的地图数据  upgrade.ts          — 升级系统（8 种强化）  night.ts            — 夜战渲染（视野遮罩/闪光）  portal.ts           — 传送门逻辑  barrel.ts           — 炸药桶爆炸逻辑  types.ts            — 公共类型定义  constants.ts        — 游戏常量（GRID_SIZE=48, MAP_SIZE=13 等）tests/  e2e/    game-flow.test.ts       — E2E-01 完整游戏流程    game-over.test.ts       — E2E-02 游戏结束流程    base-destroy.test.ts    — E2E-03 基地被毁流程    night-mode.test.ts      — E2E-04 夜战模式    upgrade-system.test.ts  — E2E-05 升级系统    pause-resume.test.ts    — E2E-06 暂停恢复    barrel-chain.test.ts    — E2E-07 炸药桶连锁    portal.test.ts          — E2E-08 传送门  unit/    collision.test.ts       — UNIT-01 碰撞检测    tank.test.ts            — UNIT-02 坦克属性    battlefield.test.ts     — UNIT-03 地图解析    enemy-ai.test.ts        — UNIT-04 敌方 AI    upgrade.test.ts         — UNIT-05 升级效果    barrel.test.ts          — UNIT-06 炸药桶范围    portal.test.ts          — UNIT-07 传送门配对    boss.test.ts            — UNIT-08 Boss 坦克## 2. 核心系统设计### 2.1 游戏主循环（game.ts）采用固定时间步长与可变渲染分离的模式：function gameLoop(timestamp: number) {  const deltaTime = timestamp - lastTime;  lastTime = timestamp;    if (gameState !== PAUSED) {    update(deltaTime);  // 更新所有游戏对象状态  }  render();             // 始终渲染（暂停时显示 PAUSED 文字）    requestAnimationFrame(gameLoop);}### 2.2 状态机（GameState 枚举）- MENU → STAGE_INTRO → PLAYING → STAGE_CLEAR → UPGRADE_SELECT → 下一关 STAGE_INTRO- PLAYING ↔ PAUSED（P 键切换）- PLAYING → GAME_OVER（生命耗尽或基地被毁）- GAME_OVER → MENU（5 秒后或 Enter 键）### 2.3 地图系统（battlefield.ts）- 尺寸：13×13 格，每格 48×48 像素，总画布 624×624- Tile 类型枚举：EMPTY(0), BRICK(1), STEEL(2), WATER(3), TREES(4), ICE(5), BASE(6), BARREL(7), PORTAL(8)- 地图数据：number[][] 二维数组- 可通行性判断：isPassable(tile: number): boolean- 特殊地形处理：  - ICE：坦克移动时添加惯性滑动  - TREES：遮挡坦克但不阻挡移动  - BARREL：被击中触发 3×3 爆炸  - PORTAL：成对传送，3 秒冷却### 2.4 坦克系统#### Tank 基类（tank.ts）interface TankProps {  x: number; y: number;  direction: Direction;  // 'up' | 'down' | 'left' | 'right'  speed: number;         // 像素/帧  bulletCooldown: number; // 毫秒  maxBullets: number;    // 同时可存在子弹数  hp: number;  color: string;}#### PlayerTank（player-tank.ts）- 初始位置：地图底部中央偏左 (6, 11)- 初始属性：lives=3, speed=2, bulletCooldown=500ms- 重生无敌：3 秒闪烁状态- 控制：WASD/方向键移动，空格射击，M 键放置地雷（需地雷升级）#### EnemyTank（enemy-tank.ts）- 4 种类型：  - Basic：speed=1.5, hp=1, color='#FFFFFF'  - Fast：speed=3, hp=1, color='#87CEEB'  - Power：speed=2, hp=1, color='#9370DB', 子弹可摧毁钢墙  - Armor：speed=1.5, hp=4, color 随 HP 变化（绿→黄→橙→红）- AI 行为：  - 每 1-3 秒随机改变方向  - 前方障碍物立即转向  - 30% 概率朝玩家方向移动  - 持续射击（冷却 1 秒）- 出生点：顶部左 (0,0)、中 (6,0)、右 (12,0) 轮流#### BossTank（boss-tank.ts）- 尺寸：2×2 格（96×96 像素）- HP：8 发子弹- 攻击模式：散射（一次发射 3 颗子弹，呈扇形）- 速度：1 像素/帧- 颜色：深红色 '#8B0000'### 2.5 子弹系统（bullet.ts）- 速度：4 像素/帧- 碰撞规则：  - BRICK：摧毁砖墙，子弹消失  - STEEL：子弹消失（Power 子弹可摧毁）  - WATER：飞越无影响  - 边界：子弹消失  - 坦克：造成伤害  - BASE：游戏失败  - 子弹对撞：同时消失- 特殊子弹类型：  - 穿甲弹：可摧毁 STEEL  - 弹射弹：碰钢墙/边界反弹 1 次### 2.6 升级系统（upgrade.ts）8 种强化，每关通关后随机展示 3 个选 1 个：1. 双弹 (DOUBLE_SHOT)：maxBullets += 12. 穿甲弹 (ARMOR_PIERCING)：子弹可摧毁 STEEL3. 弹射弹 (BOUNCE)：子弹反弹 1 次4. 加速 (SPEED_UP)：speed *= 1.55. 快射 (RAPID_FIRE)：bulletCooldown *= 0.56. 护盾 (SHIELD)：lives += 1（额外免死）7. 地雷 (MINE)：解锁 M 键放置地雷（最多 3 个）8. 侦查 (SCOUT)：TREES 不再遮挡视野效果叠加规则：数值型（加速、快射）可叠加，布尔型（穿甲、弹射、侦查）重复选择无额外效果。### 2.7 夜战模式（night.ts）- 触发关卡：2, 4（偶数关）- 视觉效果：  - 全屏半透明黑色遮罩：rgba(0, 0, 0, 0.92)  - 玩家视野：径向渐变挖洞，半径 3 格（144 像素）  - 射击闪光：视野扩大到 6 格（288 像素），持续 200ms  - 爆炸闪光：同上  - 子弹轨迹：始终可见，发光效果  - 敌方坦克：视野外不渲染（但逻辑仍存在）### 2.8 碰撞检测（collision.ts）采用 AABB（Axis-Aligned Bounding Box）算法：function checkAABB(a: Rect, b: Rect): boolean {  return a.x < b.x + b.w && a.x + a.w > b.x &&         a.y < b.y + b.h && a.y + a.h > b.y;}- 坦克与地形：逐格检测移动方向上的格子- 子弹与地形：检测子弹中心点所在格子- 坦克与坦克：防止重叠- 子弹与坦克：检测子弹矩形与坦克矩形### 2.9 关卡配置（levels.ts）5 个关卡，每关敌方配置：- 关卡 1（日间）：Basic×10, Fast×6, Power×2, Armor×2- 关卡 2（夜战）：Basic×6, Fast×6, Power×4, Armor×4- 关卡 3（日间）：Basic×4, Fast×8, Power×4, Armor×4- 关卡 4（夜战）：Basic×4, Fast×4, Power×6, Armor×6- 关卡 5（日间 Boss）：Basic×6, Fast×6, Power×4, Armor×2, Boss×1难度递增：通关后循环，敌人速度 +10%，AI 朝玩家概率 +10%。## 3. 测试策略### 3.1 E2E 测试（最高优先级）使用 Bun test runner，Game 类需支持 headless 模式（mock Canvas context）：- E2E-01：完整游戏流程（菜单→游戏→通关→升级→下一关）- E2E-02：游戏结束流程（生命耗尽）- E2E-03：基地被毁流程- E2E-04：夜战模式验证- E2E-05：升级系统端到端- E2E-06：暂停恢复- E2E-07：炸药桶连锁爆炸- E2E-08：传送门功能### 3.2 单元测试（第二优先级）- UNIT-01：AABB 碰撞、坦克与地形、子弹与墙壁- UNIT-02：坦克移动速度、射击冷却、无敌计时- UNIT-03：地图解析、Tile 可通行性- UNIT-04：敌方 AI 方向切换、朝玩家概率- UNIT-05：升级效果叠加、重置逻辑- UNIT-06：炸药桶 3×3 范围计算- UNIT-07：传送门配对查找、冷却计时- UNIT-08：Boss 多血条、散射子弹## 4. 验收标准### P0（必须通过）- E2E-01/02/03 全部通过- 游戏可在浏览器正常渲染和操作- 5 个关卡可循环游玩- bun build 成功打包- bun test 通过所有测试### P1（应该通过）- E2E-04 至 E2E-08 全部通过- 4 种敌方坦克 + Boss 行为正确- 夜战视觉效果正常- 升级卡片 UI 正常- HUD 正确显示### P2（加分项）- 音效系统- localStorage 最高分记录- 击杀回放- 屏幕震动效果## 5. 约束与依赖### 技术约束- 零 npm 依赖（纯 Canvas API）- TypeScript strict 模式- Bun 运行时兼容- 60 FPS 性能要求### 设计约束- 所有图形用 Canvas API 绘制（无外部图片）- 代码高内聚低耦合- 关键逻辑添加注释- 每个模块添加 README",
+    "reasoningVisible": false,
+    "assistantVisible": false,
+    "liveVisible": true
+  },
+  "materialization": {
+    "boardTaskID": "tsk_d1a51e46c001kkEiuT70ioe5Xd",
+    "boardStatus": "goal_decomposing",
+    "specVersion": 1,
+    "goalCount": 0,
+    "goalRunCount": 0,
+    "criteriaCount": 0
+  },
+  "screenshot": "C:\\Users\\chuan\\myhexin-local\\argus-opencode\\packages\\opencorvus\\overlay-web-benchmark-1774269410169.png",
+  "resume": {
+    "restored": true,
+    "selectedAt": 112983
+  },
+  "timings_ms": {
+    "online": 307,
+    "submit": 1113,
+    "planning_visible": 1331,
+    "streaming_visible": 111436,
+    "task_created": 1335,
+    "task_selected": 1473,
+    "board_loaded": 1475,
+    "resumed": 112983,
+    "completed": 6343557,
+    "execution": 6342444
+  },
+  "assertions": {
+    "planning_visible": {
+      "pass": true,
+      "sample": {
+        "directory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-U4zSfK",
+        "savedDirectory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-U4zSfK",
+        "workspaceDirectory": "",
+        "selectedTaskID": "",
+        "pendingCount": 0,
+        "taskIDs": [
+          "tsk_d1a51e46c001kkEiuT70ioe5Xd"
+        ],
+        "taskList": "还没有任务",
+        "reasoning": "",
+        "assistantText": "",
+        "liveRole": "",
+        "liveText": "",
+        "visibleTurns": [],
+        "storage": {
+          "directory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-U4zSfK",
+          "directoryMode": "",
+          "workspaceDirectory": "",
+          "workspaceTaskID": ""
+        }
+      }
+    },
+    "streaming_visible": {
+      "pass": true,
+      "sample": {
+        "directory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-U4zSfK",
+        "savedDirectory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-U4zSfK",
+        "workspaceDirectory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-U4zSfK",
+        "selectedTaskID": "tsk_d1a51e46c001kkEiuT70ioe5Xd",
+        "pendingCount": 0,
+        "taskIDs": [
+          "tsk_d1a51e46c001kkEiuT70ioe5Xd"
+        ],
+        "taskList": "进行中\n    \n    \n      \n        \n        Tank Battle\n      \n      goal_decomposing\n      18:52:57 / .../Local/Temp/opencorvus-overlay-benchmark-project-U4zSfK",
+        "reasoning": "",
+        "assistantText": "",
+        "liveRole": "spec",
+        "liveText": "# Tank Battle 游戏技术规格说明书## 1. 项目概述本项目是一个经典坦克大战（Battle City）的 Web 复刻版，采用纯前端技术栈实现。游戏将包含完整的游戏循环、5 个精心设计的关卡、Roguelike 风格的升级系统、以及创新的夜战模式。### 技术栈确认- 运行时: 纯浏览器环境，零外部依赖- 语言: TypeScript (ES2022)- 渲染: HTML5 Canvas API (fillRect/strokeRect/path)- 构建工具: Bun + bun build (esbuild 后端)- 测试框架: Bun test runner (bun:test)- 目标性能: 60 FPS 稳定运行### 项目结构（基于 PRD 10.1）src/  index.html          — 入口 HTML，Canvas 容器  main.ts             — 应用入口，初始化 Game 实例  game.ts             — Game 类，主循环 + 状态机核心  input.ts            — InputManager，键盘事件管理  renderer.ts         — Renderer，Canvas 绘制层  battlefield.ts      — BattleField 类，13×13 地图管理  tank.ts             — Tank 基类，通用坦克逻辑  player-tank.ts      — PlayerTank 类，玩家控制  enemy-tank.ts       — EnemyTank 类，AI 逻辑  boss-tank.ts        — BossTank 类，2×2 大型 Boss  bullet.ts           — Bullet 类，子弹逻辑  explosion.ts        — Explosion 动画类  hud.ts              — HUD 右侧信息面板  collision.ts        — 碰撞检测模块（AABB）  levels.ts           — 5 个关卡的地图数据  upgrade.ts          — 升级系统（8 种强化）  night.ts            — 夜战渲染（视野遮罩/闪光）  portal.ts           — 传送门逻辑  barrel.ts           — 炸药桶爆炸逻辑  types.ts            — 公共类型定义  constants.ts        — 游戏常量（GRID_SIZE=48, MAP_SIZE=13 等）tests/  e2e/    game-flow.test.ts       — E2E-01 完整游戏流程    game-over.test.ts       — E2E-02 游戏结束流程    base-destroy.test.ts    — E2E-03 基地被毁流程    night-mode.test.ts      — E2E-04 夜战模式    upgrade-system.test.ts  — E2E-05 升级系统    pause-resume.test.ts    — E2E-06 暂停恢复    barrel-chain.test.ts    — E2E-07 炸药桶连锁    portal.test.ts          — E2E-08 传送门  unit/    collision.test.ts       — UNIT-01 碰撞检测    tank.test.ts            — UNIT-02 坦克属性    battlefield.test.ts     — UNIT-03 地图解析    enemy-ai.test.ts        — UNIT-04 敌方 AI    upgrade.test.ts         — UNIT-05 升级效果    barrel.test.ts          — UNIT-06 炸药桶范围    portal.test.ts          — UNIT-07 传送门配对    boss.test.ts            — UNIT-08 Boss 坦克## 2. 核心系统设计### 2.1 游戏主循环（game.ts）采用固定时间步长与可变渲染分离的模式：function gameLoop(timestamp: number) {  const deltaTime = timestamp - lastTime;  lastTime = timestamp;    if (gameState !== PAUSED) {    update(deltaTime);  // 更新所有游戏对象状态  }  render();             // 始终渲染（暂停时显示 PAUSED 文字）    requestAnimationFrame(gameLoop);}### 2.2 状态机（GameState 枚举）- MENU → STAGE_INTRO → PLAYING → STAGE_CLEAR → UPGRADE_SELECT → 下一关 STAGE_INTRO- PLAYING ↔ PAUSED（P 键切换）- PLAYING → GAME_OVER（生命耗尽或基地被毁）- GAME_OVER → MENU（5 秒后或 Enter 键）### 2.3 地图系统（battlefield.ts）- 尺寸：13×13 格，每格 48×48 像素，总画布 624×624- Tile 类型枚举：EMPTY(0), BRICK(1), STEEL(2), WATER(3), TREES(4), ICE(5), BASE(6), BARREL(7), PORTAL(8)- 地图数据：number[][] 二维数组- 可通行性判断：isPassable(tile: number): boolean- 特殊地形处理：  - ICE：坦克移动时添加惯性滑动  - TREES：遮挡坦克但不阻挡移动  - BARREL：被击中触发 3×3 爆炸  - PORTAL：成对传送，3 秒冷却### 2.4 坦克系统#### Tank 基类（tank.ts）interface TankProps {  x: number; y: number;  direction: Direction;  // 'up' | 'down' | 'left' | 'right'  speed: number;         // 像素/帧  bulletCooldown: number; // 毫秒  maxBullets: number;    // 同时可存在子弹数  hp: number;  color: string;}#### PlayerTank（player-tank.ts）- 初始位置：地图底部中央偏左 (6, 11)- 初始属性：lives=3, speed=2, bulletCooldown=500ms- 重生无敌：3 秒闪烁状态- 控制：WASD/方向键移动，空格射击，M 键放置地雷（需地雷升级）#### EnemyTank（enemy-tank.ts）- 4 种类型：  - Basic：speed=1.5, hp=1, color='#FFFFFF'  - Fast：speed=3, hp=1, color='#87CEEB'  - Power：speed=2, hp=1, color='#9370DB', 子弹可摧毁钢墙  - Armor：speed=1.5, hp=4, color 随 HP 变化（绿→黄→橙→红）- AI 行为：  - 每 1-3 秒随机改变方向  - 前方障碍物立即转向  - 30% 概率朝玩家方向移动  - 持续射击（冷却 1 秒）- 出生点：顶部左 (0,0)、中 (6,0)、右 (12,0) 轮流#### BossTank（boss-tank.ts）- 尺寸：2×2 格（96×96 像素）- HP：8 发子弹- 攻击模式：散射（一次发射 3 颗子弹，呈扇形）- 速度：1 像素/帧- 颜色：深红色 '#8B0000'### 2.5 子弹系统（bullet.ts）- 速度：4 像素/帧- 碰撞规则：  - BRICK：摧毁砖墙，子弹消失  - STEEL：子弹消失（Power 子弹可摧毁）  - WATER：飞越无影响  - 边界：子弹消失  - 坦克：造成伤害  - BASE：游戏失败  - 子弹对撞：同时消失- 特殊子弹类型：  - 穿甲弹：可摧毁 STEEL  - 弹射弹：碰钢墙/边界反弹 1 次### 2.6 升级系统（upgrade.ts）8 种强化，每关通关后随机展示 3 个选 1 个：1. 双弹 (DOUBLE_SHOT)：maxBullets += 12. 穿甲弹 (ARMOR_PIERCING)：子弹可摧毁 STEEL3. 弹射弹 (BOUNCE)：子弹反弹 1 次4. 加速 (SPEED_UP)：speed *= 1.55. 快射 (RAPID_FIRE)：bulletCooldown *= 0.56. 护盾 (SHIELD)：lives += 1（额外免死）7. 地雷 (MINE)：解锁 M 键放置地雷（最多 3 个）8. 侦查 (SCOUT)：TREES 不再遮挡视野效果叠加规则：数值型（加速、快射）可叠加，布尔型（穿甲、弹射、侦查）重复选择无额外效果。### 2.7 夜战模式（night.ts）- 触发关卡：2, 4（偶数关）- 视觉效果：  - 全屏半透明黑色遮罩：rgba(0, 0, 0, 0.92)  - 玩家视野：径向渐变挖洞，半径 3 格（144 像素）  - 射击闪光：视野扩大到 6 格（288 像素），持续 200ms  - 爆炸闪光：同上  - 子弹轨迹：始终可见，发光效果  - 敌方坦克：视野外不渲染（但逻辑仍存在）### 2.8 碰撞检测（collision.ts）采用 AABB（Axis-Aligned Bounding Box）算法：function checkAABB(a: Rect, b: Rect): boolean {  return a.x < b.x + b.w && a.x + a.w > b.x &&         a.y < b.y + b.h && a.y + a.h > b.y;}- 坦克与地形：逐格检测移动方向上的格子- 子弹与地形：检测子弹中心点所在格子- 坦克与坦克：防止重叠- 子弹与坦克：检测子弹矩形与坦克矩形### 2.9 关卡配置（levels.ts）5 个关卡，每关敌方配置：- 关卡 1（日间）：Basic×10, Fast×6, Power×2, Armor×2- 关卡 2（夜战）：Basic×6, Fast×6, Power×4, Armor×4- 关卡 3（日间）：Basic×4, Fast×8, Power×4, Armor×4- 关卡 4（夜战）：Basic×4, Fast×4, Power×6, Armor×6- 关卡 5（日间 Boss）：Basic×6, Fast×6, Power×4, Armor×2, Boss×1难度递增：通关后循环，敌人速度 +10%，AI 朝玩家概率 +10%。## 3. 测试策略### 3.1 E2E 测试（最高优先级）使用 Bun test runner，Game 类需支持 headless 模式（mock Canvas context）：- E2E-01：完整游戏流程（菜单→游戏→通关→升级→下一关）- E2E-02：游戏结束流程（生命耗尽）- E2E-03：基地被毁流程- E2E-04：夜战模式验证- E2E-05：升级系统端到端- E2E-06：暂停恢复- E2E-07：炸药桶连锁爆炸- E2E-08：传送门功能### 3.2 单元测试（第二优先级）- UNIT-01：AABB 碰撞、坦克与地形、子弹与墙壁- UNIT-02：坦克移动速度、射击冷却、无敌计时- UNIT-03：地图解析、Tile 可通行性- UNIT-04：敌方 AI 方向切换、朝玩家概率- UNIT-05：升级效果叠加、重置逻辑- UNIT-06：炸药桶 3×3 范围计算- UNIT-07：传送门配对查找、冷却计时- UNIT-08：Boss 多血条、散射子弹## 4. 验收标准### P0（必须通过）- E2E-01/02/03 全部通过- 游戏可在浏览器正常渲染和操作- 5 个关卡可循环游玩- bun build 成功打包- bun test 通过所有测试### P1（应该通过）- E2E-04 至 E2E-08 全部通过- 4 种敌方坦克 + Boss 行为正确- 夜战视觉效果正常- 升级卡片 UI 正常- HUD 正确显示### P2（加分项）- 音效系统- localStorage 最高分记录- 击杀回放- 屏幕震动效果## 5. 约束与依赖### 技术约束- 零 npm 依赖（纯 Canvas API）- TypeScript strict 模式- Bun 运行时兼容- 60 FPS 性能要求### 设计约束- 所有图形用 Canvas API 绘制（无外部图片）- 代码高内聚低耦合- 关键逻辑添加注释- 每个模块添加 README",
+        "visibleTurns": [
+          {
+            "role": "spec",
+            "text": "# Tank Battle 游戏技术规格说明书## 1. 项目概述本项目是一个经典坦克大战（Battle City）的 Web 复刻版，采用纯前端技术栈实现。游戏将包含完整的游戏循环、5 个精心设计的关卡、Roguelike 风格的升级系统、以及创新的夜战模式。### 技术栈确认- 运行时: 纯浏览器环境，零外部依赖- 语言: TypeScript (ES2022)- 渲染: HTML5 Canvas API (fillRect/strokeRect/path)- 构建工具: Bun + bun build (esbuild 后端)- 测试框架: Bun test runner (bun:test)- 目标性能: 60 FPS 稳定运行### 项目结构（基于 PRD 10.1）src/  index.html          — 入口 HTML，Canvas 容器  main.ts             — 应用入口，初始化 Game 实例  game.ts             — Game 类，主循环 + 状态机核心  input.ts            — InputManager，键盘事件管理  renderer.ts         — Renderer，Canvas 绘制层  battlefield.ts      — BattleField 类，13×13 地图管理  tank.ts             — Tank 基类，通用坦克逻辑  player-tank.ts      — PlayerTank 类，玩家控制  enemy-tank.ts       — EnemyTank 类，AI 逻辑  boss-tank.ts        — BossTank 类，2×2 大型 Boss  bullet.ts           — Bullet 类，子弹逻辑  explosion.ts        — Explosion 动画类  hud.ts              — HUD 右侧信息面板  collision.ts        — 碰撞检测模块（AABB）  levels.ts           — 5 个关卡的地图数据  upgrade.ts          — 升级系统（8 种强化）  night.ts            — 夜战渲染（视野遮罩/闪光）  portal.ts           — 传送门逻辑  barrel.ts           — 炸药桶爆炸逻辑  types.ts            — 公共类型定义  constants.ts        — 游戏常量（GRID_SIZE=48, MAP_SIZE=13 等）tests/  e2e/    game-flow.test.ts       — E2E-01 完整游戏流程    game-over.test.ts       — E2E-02 游戏结束流程    base-destroy.test.ts    — E2E-03 基地被毁流程    night-mode.test.ts      — E2E-04 夜战模式    upgrade-system.test.ts  — E2E-05 升级系统    pause-resume.test.ts    — E2E-06 暂停恢复    barrel-chain.test.ts    — E2E-07 炸药桶连锁    portal.test.ts          — E2E-08 传送门  unit/    collision.test.ts       — UNIT-01 碰撞检测    tank.test.ts            — UNIT-02 坦克属性    battlefield.test.ts     — UNIT-03 地图解析    enemy-ai.test.ts        — UNIT-04 敌方 AI    upgrade.test.ts         — UNIT-05 升级效果    barrel.test.ts          — UNIT-06 炸药桶范围    portal.test.ts          — UNIT-07 传送门配对    boss.test.ts            — UNIT-08 Boss 坦克## 2. 核心系统设计### 2.1 游戏主循环（game.ts）采用固定时间步长与可变渲染分离的模式：function gameLoop(timestamp: number) {  const deltaTime = timestamp - lastTime;  lastTime = timestamp;    if (gameState !== PAUSED) {    update(deltaTime);  // 更新所有游戏对象状态  }  render();             // 始终渲染（暂停时显示 PAUSED 文字）    requestAnimationFrame(gameLoop);}### 2.2 状态机（GameState 枚举）- MENU → STAGE_INTRO → PLAYING → STAGE_CLEAR → UPGRADE_SELECT → 下一关 STAGE_INTRO- PLAYING ↔ PAUSED（P 键切换）- PLAYING → GAME_OVER（生命耗尽或基地被毁）- GAME_OVER → MENU（5 秒后或 Enter 键）### 2.3 地图系统（battlefield.ts）- 尺寸：13×13 格，每格 48×48 像素，总画布 624×624- Tile 类型枚举：EMPTY(0), BRICK(1), STEEL(2), WATER(3), TREES(4), ICE(5), BASE(6), BARREL(7), PORTAL(8)- 地图数据：number[][] 二维数组- 可通行性判断：isPassable(tile: number): boolean- 特殊地形处理：  - ICE：坦克移动时添加惯性滑动  - TREES：遮挡坦克但不阻挡移动  - BARREL：被击中触发 3×3 爆炸  - PORTAL：成对传送，3 秒冷却### 2.4 坦克系统#### Tank 基类（tank.ts）interface TankProps {  x: number; y: number;  direction: Direction;  // 'up' | 'down' | 'left' | 'right'  speed: number;         // 像素/帧  bulletCooldown: number; // 毫秒  maxBullets: number;    // 同时可存在子弹数  hp: number;  color: string;}#### PlayerTank（player-tank.ts）- 初始位置：地图底部中央偏左 (6, 11)- 初始属性：lives=3, speed=2, bulletCooldown=500ms- 重生无敌：3 秒闪烁状态- 控制：WASD/方向键移动，空格射击，M 键放置地雷（需地雷升级）#### EnemyTank（enemy-tank.ts）- 4 种类型：  - Basic：speed=1.5, hp=1, color='#FFFFFF'  - Fast：speed=3, hp=1, color='#87CEEB'  - Power：speed=2, hp=1, color='#9370DB', 子弹可摧毁钢墙  - Armor：speed=1.5, hp=4, color 随 HP 变化（绿→黄→橙→红）- AI 行为：  - 每 1-3 秒随机改变方向  - 前方障碍物立即转向  - 30% 概率朝玩家方向移动  - 持续射击（冷却 1 秒）- 出生点：顶部左 (0,0)、中 (6,0)、右 (12,0) 轮流#### BossTank（boss-tank.ts）- 尺寸：2×2 格（96×96 像素）- HP：8 发子弹- 攻击模式：散射（一次发射 3 颗子弹，呈扇形）- 速度：1 像素/帧- 颜色：深红色 '#8B0000'### 2.5 子弹系统（bullet.ts）- 速度：4 像素/帧- 碰撞规则：  - BRICK：摧毁砖墙，子弹消失  - STEEL：子弹消失（Power 子弹可摧毁）  - WATER：飞越无影响  - 边界：子弹消失  - 坦克：造成伤害  - BASE：游戏失败  - 子弹对撞：同时消失- 特殊子弹类型：  - 穿甲弹：可摧毁 STEEL  - 弹射弹：碰钢墙/边界反弹 1 次### 2.6 升级系统（upgrade.ts）8 种强化，每关通关后随机展示 3 个选 1 个：1. 双弹 (DOUBLE_SHOT)：maxBullets += 12. 穿甲弹 (ARMOR_PIERCING)：子弹可摧毁 STEEL3. 弹射弹 (BOUNCE)：子弹反弹 1 次4. 加速 (SPEED_UP)：speed *= 1.55. 快射 (RAPID_FIRE)：bulletCooldown *= 0.56. 护盾 (SHIELD)：lives += 1（额外免死）7. 地雷 (MINE)：解锁 M 键放置地雷（最多 3 个）8. 侦查 (SCOUT)：TREES 不再遮挡视野效果叠加规则：数值型（加速、快射）可叠加，布尔型（穿甲、弹射、侦查）重复选择无额外效果。### 2.7 夜战模式（night.ts）- 触发关卡：2, 4（偶数关）- 视觉效果：  - 全屏半透明黑色遮罩：rgba(0, 0, 0, 0.92)  - 玩家视野：径向渐变挖洞，半径 3 格（144 像素）  - 射击闪光：视野扩大到 6 格（288 像素），持续 200ms  - 爆炸闪光：同上  - 子弹轨迹：始终可见，发光效果  - 敌方坦克：视野外不渲染（但逻辑仍存在）### 2.8 碰撞检测（collision.ts）采用 AABB（Axis-Aligned Bounding Box）算法：function checkAABB(a: Rect, b: Rect): boolean {  return a.x < b.x + b.w && a.x + a.w > b.x &&         a.y < b.y + b.h && a.y + a.h > b.y;}- 坦克与地形：逐格检测移动方向上的格子- 子弹与地形：检测子弹中心点所在格子- 坦克与坦克：防止重叠- 子弹与坦克：检测子弹矩形与坦克矩形### 2.9 关卡配置（levels.ts）5 个关卡，每关敌方配置：- 关卡 1（日间）：Basic×10, Fast×6, Power×2, Armor×2- 关卡 2（夜战）：Basic×6, Fast×6, Power×4, Armor×4- 关卡 3（日间）：Basic×4, Fast×8, Power×4, Armor×4- 关卡 4（夜战）：Basic×4, Fast×4, Power×6, Armor×6- 关卡 5（日间 Boss）：Basic×6, Fast×6, Power×4, Armor×2, Boss×1难度递增：通关后循环，敌人速度 +10%，AI 朝玩家概率 +10%。## 3. 测试策略### 3.1 E2E 测试（最高优先级）使用 Bun test runner，Game 类需支持 headless 模式（mock Canvas context）：- E2E-01：完整游戏流程（菜单→游戏→通关→升级→下一关）- E2E-02：游戏结束流程（生命耗尽）- E2E-03：基地被毁流程- E2E-04：夜战模式验证- E2E-05：升级系统端到端- E2E-06：暂停恢复- E2E-07：炸药桶连锁爆炸- E2E-08：传送门功能### 3.2 单元测试（第二优先级）- UNIT-01：AABB 碰撞、坦克与地形、子弹与墙壁- UNIT-02：坦克移动速度、射击冷却、无敌计时- UNIT-03：地图解析、Tile 可通行性- UNIT-04：敌方 AI 方向切换、朝玩家概率- UNIT-05：升级效果叠加、重置逻辑- UNIT-06：炸药桶 3×3 范围计算- UNIT-07：传送门配对查找、冷却计时- UNIT-08：Boss 多血条、散射子弹## 4. 验收标准### P0（必须通过）- E2E-01/02/03 全部通过- 游戏可在浏览器正常渲染和操作- 5 个关卡可循环游玩- bun build 成功打包- bun test 通过所有测试### P1（应该通过）- E2E-04 至 E2E-08 全部通过- 4 种敌方坦克 + Boss 行为正确- 夜战视觉效果正常- 升级卡片 UI 正常- HUD 正确显示### P2（加分项）- 音效系统- localStorage 最高分记录- 击杀回放- 屏幕震动效果## 5. 约束与依赖### 技术约束- 零 npm 依赖（纯 Canvas API）- TypeScript strict 模式- Bun 运行时兼容- 60 FPS 性能要求### 设计约束- 所有图形用 Canvas API 绘制（无外部图片）- 代码高内聚低耦合- 关键逻辑添加注释- 每个模块添加 README"
+          }
+        ],
+        "storage": {
+          "directory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-U4zSfK",
+          "directoryMode": "",
+          "workspaceDirectory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-U4zSfK",
+          "workspaceTaskID": "tsk_d1a51e46c001kkEiuT70ioe5Xd"
+        }
+      }
+    },
+    "materialized": {
+      "pass": true,
+      "sample": {
+        "taskID": "tsk_d1a51e46c001kkEiuT70ioe5Xd",
+        "boardTaskID": "tsk_d1a51e46c001kkEiuT70ioe5Xd",
+        "resumed": true
+      }
+    },
+    "delivery": {
+      "pass": true,
+      "sample": {
+        "taskStatus": "completed",
+        "verdict": "accepted",
+        "localExit": 0,
+        "qualityVerdict": "accepted"
+      }
+    }
+  },
+  "local_verify": {
+    "mode": "skipped",
+    "command": null,
+    "exitCode": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  "artifact_audit": {
+    "source_files_added": 34,
+    "config_files_added": 1,
+    "doc_files_added": 6,
+    "source_file_count": 34,
+    "doc_file_count": 6,
+    "non_source_churn_ratio": 0.19047619047619047,
+    "readme_proliferation_count": 0,
+    "out_of_scope_file_count": 0,
+    "scaffold_noise_count": 0,
+    "placeholder_count": 0,
+    "out_of_scope_files": [],
+    "unmapped_files": [],
+    "placeholder_hits": [],
+    "duplicate_docs": [],
+    "scaffold_expansion_flags": []
+  },
+  "run_metrics": {
+    "meaningful_change_gap_ms": 119789,
+    "noop_cycle_count": 0,
+    "repeat_command_ratio": 0.9907734589713388,
+    "repeat_reasoning_similarity": 0.9907734589713388,
+    "required_check_pass_rate": 1,
+    "critical_check_pass_rate": 1,
+    "check_relevance_score": 1,
+    "verification_edit_ratio": 0.21428571428571427,
+    "feature_coverage_p0": 1,
+    "scope_drift_score": 0,
+    "plan_to_change_traceability": 1,
+    "delivery_focus_score": 0.9997476022211005
+  },
+  "failure_matrix": {
+    "verdict": "accepted",
+    "primary_failure": null,
+    "failures": []
+  },
+  "manual_review_summary": "No quality-gate failures detected.",
+  "overlay": {
+    "directory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-U4zSfK",
+    "savedDirectory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-U4zSfK",
+    "workspaceDirectory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-U4zSfK",
+    "selectedTaskID": "tsk_d1a51e46c001kkEiuT70ioe5Xd",
+    "pendingCount": 0,
+    "taskIDs": [
+      "tsk_d1a51e46c001kkEiuT70ioe5Xd"
+    ],
+    "taskList": "进行中\n    \n    \n      \n        \n        Tank Battle\n      \n      goal_decomposing\n      18:52:57 / .../Local/Temp/opencorvus-overlay-benchmark-project-U4zSfK",
+    "reasoning": "This is a large project - Tank Battle game implementation. Let me break this down and execute efficiently by launching multiple parallel agents for the source files, then tests.\n\nLet me start by creating the project structure and all source files. I'll use multiple agents in parallel to maximize speed.\n\nFirst, let me check what already exists in the workspace.",
+    "assistantText": "Now I'll launch multiple agents in parallel to create all the source files. I'll split them into logical groups.Now I'll launch multiple agents in parallel to create all the source files. I'll split them into logical groups.",
+    "liveRole": "system",
+    "liveText": "已提交验收通过的工作区状态- 信息: Tank Battle- 分支: master- 提交: 86c6b175",
+    "visibleTurns": [
+      {
+        "role": "task_tool",
+        "text": "372172 tokens"
+      },
+      {
+        "role": "assistant",
+        "text": "交付 (已交付)Delivery finalized with 3 exported artifacts."
+      },
+      {
+        "role": "goal_gate",
+        "text": "目标结果（通过 11/11，失败 0，待定 0）✅ 夜战模式实现   验收标准：Objective: 在 night.ts 中实现夜战渲染逻辑。关卡 2 和 4 启用夜战模式（nightMode=true）。实现全屏半透明黑色遮罩（rgba(0,0,0,0.92)），玩家视野径向渐变挖洞（半径 3 格=144 像素）。实现射击/爆炸闪光效果（视野扩大到 6 格=288 像素，持续 200ms）。实现子弹轨迹发光效果。实现敌方坦克在视野外不渲染但逻辑仍更新。Done definition: 在 night.ts 中实现夜战渲染逻辑。关卡 2 和 4 启用夜战模式（nightMode=true）。实现全屏半透明黑色遮罩（rgba(0,0,0,0.92)），玩家视野径向渐变挖洞（半径 3 格=144 像素）。实现射击/爆炸闪光效果（视野扩大到 6 格=288 像素，持续 200ms）。实现子弹轨迹发光效果。实现敌方坦克在视野外不渲染但逻辑仍更新。✅ HUD 界面与关卡系统实现   验收标准：Objective: 在 hud.ts 中实现右侧信息面板（150 像素宽），显示剩余敌方坦克数量（小坦克图标）、当前关卡号、玩家剩余生命、当前得分、已获得的升级图标。在 levels.ts 中定义 5 个关卡的敌方配置（类型和数量）。实现关卡难度递增逻辑（通关后循环，敌人速度 +10%，AI 朝玩家概率 +10%）。Done definition: 在 hud.ts 中实现右侧信息面板（150 像素宽），显示剩余敌方坦克数量（小坦克图标）、当前关卡号、玩家剩余生命、当前得分、已获得的升级图标。在 levels.ts 中定义 5 个关卡的敌方配置（类型和数量）。实现关卡难度递增逻辑（通关后循环，敌人速度 +10%，AI 朝玩家概率 +10%）。✅ 爆炸动画与视觉效果实现   验收标准：Objective: 在 explosion.ts 中实现 Explosion 类，支持坦克爆炸（3 帧，每帧 100ms）和子弹击中墙壁的小爆炸（2 帧）。实现 Canvas 绘制动画序列。实现连杀提示文本（Double Kill! 等，按连杀数变色：白→黄→橙→红）。Done definition: 在 explosion.ts 中实现 Explosion 类，支持坦克爆炸（3 帧，每帧 100ms）和子弹击中墙壁的小爆炸（2 帧）。实现 Canvas 绘制动画序列。实现连杀提示文本（Double Kill! 等，按连杀数变色：白→黄→橙→红）。✅ main implementation   验收标准：Objective: 创建完整的项目结构（src/目录下 18 个 TypeScript 源文件和 index.html），配置 package.json（bun build/test/dev scripts）和 tsconfig.json（ES2022 + strict）。确保 bun build 成功打包到 dist/，bun test 通过所有测试，index.html 可直接运行。Done definition: 创建完整的项目结构，包括 src/目录下所有 18 个 TypeScript 源文件（types.ts, constants.ts, game.ts, input.ts, renderer.ts, battlefield.ts, tank.ts, player-tank.ts, enemy-tank.ts, boss-tank.ts, bullet.ts, explosion.ts, hud.ts, collision.ts, levels.ts, upgrade.ts, night.ts, portal.ts, barrel.ts）和 index.html 入口文件。配置 package.json 添加 scripts：{\"build\": \"bun build src/main.ts --outdir=dist --minify\", \"test\": \"bun test\", \"dev\": \"bun run src/main.ts\"}。配置 tsconfig.json 设置 ES2022 目标和 strict 模式。确保 bun build 成功生成 dist/目录下的打包文件。确保 bun test 通过所有 E2E 和单元测试。index.html 可直接在浏览器打开或通过 bun serve 运行。✅ 游戏核心循环与状态机实现   验收标准：Objective: 在 game.ts 中实现 Game 类，包含 GameState 枚举（MENU, STAGE_INTRO, PLAYING, PAUSED, GAME_OVER, STAGE_CLEAR, UPGRADE_SELECT）和状态转换逻辑。实现 requestAnimationFrame 驱动的主循环，分离 update(deltaTime) 和 render() 方法。实现状态持续时间控制（STAGE_INTRO 2 秒，STAGE_CLEAR 1.5 秒，GAME_OVER 5 秒自动返回菜单）。Done definition: 在 game.ts 中实现 Game 类，包含 GameState 枚举（MENU, STAGE_INTRO, PLAYING, PAUSED, GAME_OVER, STAGE_CLEAR, UPGRADE_SELECT）和状态转换逻辑。实现 requestAnimationFrame 驱动的主循环，分离 update(deltaTime) 和 render() 方法。实现状态持续时间控制（STAGE_INTRO 2 秒，STAGE_CLEAR 1.5 秒，GAME_OVER 5 秒自动返回菜单）。✅ 地图系统与特殊地形实现   验收标准：Objective: 在 battlefield.ts 中实现 BattleField 类，管理 13×13 的 Tile 二维数组。实现 Tile 类型枚举（EMPTY, BRICK, STEEL, WATER, TREES, ICE, BASE, BARREL, PORTAL）和 isPassable() 方法。实现 ICE 地形的滑行效果（惯性移动）、TREES 的遮挡逻辑、BARREL 的 3×3 爆炸触发、PORTAL 的成对传送（3 秒冷却）。在 levels.ts 中定义 5 个关卡的地图布局数据。Done definition: 在 battlefield.ts 中实现 BattleField 类，管理 13×13 的 Tile 二维数组。实现 Tile 类型枚举（EMPTY, BRICK, STEEL, WATER, TREES, ICE, BASE, BARREL, PORTAL）和 isPassable() 方法。实现 ICE 地形的滑行效果（惯性移动）、TREES 的遮挡逻辑、BARREL 的 3×3 爆炸触发、PORTAL 的成对传送（3 秒冷却）。在 levels.ts 中定义 5 个关卡的地图布局数据。✅ 坦克系统与玩家控制实现   验收标准：Objective: 实现 Tank 基类（tank.ts）包含通用属性（x, y, direction, speed, bulletCooldown, hp, color）和 move(), shoot() 方法。实现 PlayerTank（player-tank.ts）支持 WASD/方向键移动、空格射击、重生后 3 秒无敌闪烁。实现 EnemyTank（enemy-tank.ts）包含 4 种类型（Basic, Fast, Power, Armor）和 AI 行为（1-3 秒随机转向、障碍物回避、30% 概率朝玩家移动、1 秒射击冷却）。实现 BossTank（boss-tank.ts）2×2 尺寸、8HP、散射攻击。Done definition: 实现 Tank 基类（tank.ts）包含通用属性（x, y, direction, speed, bulletCooldown, hp, color）和 move(), shoot() 方法。实现 PlayerTank（player-tank.ts）支持 WASD/方向键移动、空格射击、重生后 3 秒无敌闪烁。实现 EnemyTank（enemy-tank.ts）包含 4 种类型（Basic, Fast, Power, Armor）和 AI 行为（1-3 秒随机转向、障碍物回避、30% 概率朝玩家移动、1 秒射击冷却）。实现 BossTank（boss-tank.ts）2×2 尺寸、8HP、散射攻击。✅ 子弹与碰撞检测系统实现   验收标准：Objective: 在 bullet.ts 中实现 Bullet 类，包含速度（4 像素/帧）、方向、所有者类型。在 collision.ts 中实现 AABB 碰撞检测函数，处理子弹与地形（BRICK 摧毁、STEEL 阻挡、WATER 飞越）、子弹与坦克、子弹与子弹、坦克与地形、坦克与坦克的碰撞。实现 Power 型子弹摧毁钢墙、穿甲弹升级效果。Done definition: 在 bullet.ts 中实现 Bullet 类，包含速度（4 像素/帧）、方向、所有者类型。在 collision.ts 中实现 AABB 碰撞检测函数，处理子弹与地形（BRICK 摧毁、STEEL 阻挡、WATER 飞越）、子弹与坦克、子弹与子弹、坦克与地形、坦克与坦克的碰撞。实现 Power 型子弹摧毁钢墙、穿甲弹升级效果。✅ Roguelike 升级系统实现   验收标准：Objective: 在 upgrade.ts 中实现 UpgradeType 枚举（8 种强化）和 UpgradeManager 类。实现每关通关后随机展示 3 个不重复升级选项的 UI（金色边框卡片，按 1/2/3 键或点击选择）。实现升级效果应用逻辑：数值型叠加（SPEED_UP speed*=1.5, RAPID_FIRE cooldown*=0.5），布尔型去重（ARMOR_PIERCING, BOUNCE, SCOUT）。实现游戏结束时升级重置。Done definition: 在 upgrade.ts 中实现 UpgradeType 枚举（8 种强化）和 UpgradeManager 类。实现每关通关后随机展示 3 个不重复升级选项的 UI（金色边框卡片，按 1/2/3 键或点击选择）。实现升级效果应用逻辑：数值型叠加（SPEED_UP speed*=1.5, RAPID_FIRE cooldown*=0.5），布尔型去重（ARMOR_PIERCING, BOUNCE, SCOUT）。实现游戏结束时升级重置。✅ E2E 测试套件实现   验收标准：Objective: 在 tests/e2e/目录下实现 8 个端到端测试文件。Game 类需支持 headless 模式（mock Canvas context）。测试覆盖：E2E-01 完整游戏流程、E2E-02 游戏结束流程、E2E-03 基地被毁、E2E-04 夜战模式、E2E-05 升级系统、E2E-06 暂停恢复、E2E-07 炸药桶连锁、E2E-08 传送门。使用 Bun test runner，模拟键盘输入驱动状态转换。Done definition: 在 tests/e2e/目录下实现 8 个端到端测试文件。Game 类需支持 headless 模式（mock Canvas context）。测试覆盖：E2E-01 完整游戏流程、E2E-02 游戏结束流程、E2E-03 基地被毁、E2E-04 夜战模式、E2E-05 升级系统、E2E-06 暂停恢复、E2E-07 炸药桶连锁、E2E-08 传送门。使用 Bun test runner，模拟键盘输入驱动状态转换。✅ 单元测试套件实现   验收标准：Objective: 在 tests/unit/目录下实现 8 个单元测试文件。测试覆盖：UNIT-01 碰撞检测（AABB、坦克与地形、子弹与墙壁）、UNIT-02 坦克属性（速度、冷却、无敌计时）、UNIT-03 地图解析（Tile 可通行性）、UNIT-04 敌方 AI（方向切换、朝玩家概率）、UNIT-05 升级效果计算（叠加、重置）、UNIT-06 炸药桶范围（3×3 区域）、UNIT-07 传送门配对（查找、冷却）、UNIT-08 Boss 坦克（多血条、散射）。Done definition: 在 tests/unit/目录下实现 8 个单元测试文件。测试覆盖：UNIT-01 碰撞检测（AABB、坦克与地形、子弹与墙壁）、UNIT-02 坦克属性（速度、冷却、无敌计时）、UNIT-03 地图解析（Tile 可通行性）、UNIT-04 敌方 AI（方向切换、朝玩家概率）、UNIT-05 升级效果计算（叠加、重置）、UNIT-06 炸药桶范围（3×3 区域）、UNIT-07 传送门配对（查找、冷却）、UNIT-08 Boss 坦克（多血条、散射）。"
+      },
+      {
+        "role": "scheduler",
+        "text": "✅ 评估：通过分类：transientAll 11 goals fully implemented and verified. Investigation confirmed: (1) All 20 TypeScript source files exist in src/ including night.ts, hud.ts, explosion.ts, game.ts, battlefield.ts, tank.ts, player-tank.ts, enemy-tank.ts, boss-tank.ts, bullet.ts, collision.ts, upgrade.ts, barrel.ts, portal.ts, renderer.ts, input.ts, levels.ts, types.ts, constants.ts, main.ts. (2) index.html present in src/. (3) package.json has correct scripts (build, test, dev). (4) tsconfig.json configured for ES2022+strict. (5) Build succeeds (46.90 KB). (6) All 92 tests pass (6 E2E + 8 unit test files). (7) Night mode correctly implements 144px vision radius, 288px flash radius, 200ms duration, 0.92 alpha overlay. (8) HUD implements 150px panel with all required elements. (9) Explosion system has correct frame counts and kill streak colors. (10) All game states, collision detection, tank AI, upgrade system, barrel chain explosions, and portal teleportation verified with tests.检查项- ✓ build: $ bun build src/main.ts --outdir=dist --minifyBundled 20 modules in 71ms  main.js  46.90 KB  (entry point)- ✓ spec_check: Critical source code files are missing from the delivery. Only README.md and package.json were provided, but the specification requires verification of core game implementation files (src/*.ts, tests/*.ts, index.html). The delivery summary claims 'bun test passes (92 tests, 0 failures)' and 'bun build succeeds' but these cannot be verified from the provided code alone. All P0 blocking criteria (E2E tests, game rendering, 5 levels, build/test success) require source code verification that is not available.目标评估- ✅ 夜战模式实现: night.ts implements NightRenderer with NIGHT_VISION_RADIUS=144px (constants.ts:61), NIGHT_FLASH_RADIUS=288px (constants.ts:62), NIGHT_FLASH_DURATION=200ms (constants.ts:63), NIGHT_OVERLAY_ALPHA=0.92 (constants.ts:64). isVisible() method at night.ts:62-82 checks enemy visibility. renderBulletGlow() at night.ts:135-163 implements bullet trail effects. levels.ts:110 and 134 set isNight:true for stages 2 and 4. night-mode.test.ts verifies all functionality with 5 passing tests.- ✅ HUD 界面与关卡系统实现: hud.ts implements HUD class with render() at lines 6-117 showing 150px panel (HUD_WIDTH=150 at constants.ts:7), enemy tank icons (lines 48-62), stage number (line 34), lives (lines 67-82), score (lines 84-93), upgrade icons (lines 95-116). levels.ts:88-149 defines 5 levels with correct enemy configurations matching PRD. getDifficultyMultiplier() at levels.ts:166-169 implements +10% speed and +10% AI chance per cycle.- ✅ 爆炸动画与视觉效果实现: explosion.ts implements Explosion class (lines 7-85) with TANK_EXPLOSION_FRAMES=3 (constants.ts:114), BULLET_EXPLOSION_FRAMES=2 (constants.ts:115), EXPLOSION_FRAME_DURATION=100ms (constants.ts:113). KillStreakDisplay class (lines 88-143) with getColor() using KILL_STREAK colors [white, yellow, orange, red] (constants.ts:100). getText() shows 'Double Kill!', 'Triple Kill!', etc.- ✅ main implementation: All 20 TypeScript files present in src/: types.ts, constants.ts, game.ts, input.ts, renderer.ts, battlefield.ts, tank.ts, player-tank.ts, enemy-tank.ts, boss-tank.ts, bullet.ts, explosion.ts, hud.ts, collision.ts, levels.ts, upgrade.ts, night.ts, portal.ts, barrel.ts, main.ts. index.html at src/index.html. package.json lines 5-8 have build/test/dev scripts. tsconfig.json lines 2-7 set ES2022+strict. Build output dist/main.js (46.90 KB). bun test passes 92 tests.- ✅ 游戏核心循环与状态机实现: game.ts implements Game class with GameState enum (types.ts:2-10: MENU, STAGE_INTRO, PLAYING, PAUSED, GAME_OVER, STAGE_CLEAR, UPGRADE_SELECT). Main loop at game.ts:153-158 uses requestAnimationFrame with update(deltaTime) and render() separation. State timings: STAGE_INTRO_DURATION=2000ms, STAGE_CLEAR_DURATION=1500ms, GAME_OVER_DURATION=5000ms (constants.ts:56-58). game-flow.test.ts verifies all state transitions.- ✅ 地图系统与特殊地形实现: battlefield.ts implements BattleField class with 13×13 TileType array (lines 4-6). TileType enum (types.ts:13-23) has all 9 types. isPassable() at battlefield.ts:53-69. ICE sliding via Tank.onIce property. TREES occlusion via battlefield.isInTrees(). BARREL 3×3 explosion in barrel.ts:47-71. PORTAL 3s cooldown (PORTAL_COOLDOWN=3000 at constants.ts:70). levels.ts:4-86 defines 5 level maps.- ✅ 坦克系统与玩家控制实现: tank.ts implements Tank base class (lines 4-116) with x, y, direction, speed, bulletCooldown, hp, color, move(), shoot(). player-tank.ts implements PlayerTank with WASD/arrow controls (lines 31-36), space shooting (lines 39-41), 3s invincibility (PLAYER_INVINCIBLE_DURATION=3000 at constants.ts:15). enemy-tank.ts implements 4 types with AI (1-3s direction change at lines 41-43, 30% toward player at line 25, 1s shoot cooldown at line 84). boss-tank.ts implements 2×2 size (BOSS_SIZE=2 at constants.ts:40), 8HP (BOSS_HP=8 at constants.ts:41), scatter attack (lines 36-49).- ✅ 子弹与碰撞检测系统实现: bullet.ts implements Bullet class (lines 5-93) with BULLET_SPEED=4 (constants.ts:45), direction, owner type. collision.ts implements checkAABB() (lines 9-16), canTankMoveTo() (lines 19-57), checkBulletTileCollision() (lines 60-100) handling BRICK destroy (line 77), STEEL block (line 80-87), WATER pass-through (line 96-97), checkBulletTankCollision() (lines 103-127), checkBulletBulletCollision() (lines 130-150). Power enemy has canDestroySteel=true (enemy-tank.ts:23). Armor-piercing upgrade sets canDestroySteel (player-tank.ts:82).- ✅ Roguelike 升级系统实现: upgrade.ts implements UpgradeType enum (types.ts:43-52: 8 types) and UpgradeManager class (lines 63-166). generateOptions() at lines 68-82 creates 3 random non-duplicate options. renderUpgradeSelect() at lines 90-161 shows golden border cards (COLORS.UPGRADE_BORDER='#FFD700' at constants.ts:99) with 1/2/3 key selection. applyUpgrade() in player-tank.ts:78-96 implements stacking: SPEED_UP ×1.5 (line 85), RAPID_FIRE ×0.5 (line 89). resetUpgrades() at player-tank.ts:98-113 resets all on game over.- ✅ E2E 测试套件实现: tests/e2e/ contains 6 files: game-flow.test.ts (E2E-01/02/03), night-mode.test.ts (E2E-04), upgrade-system.test.ts (E2E-05), pause-resume.test.ts (E2E-06), barrel-chain.test.ts (E2E-07), portal.test.ts (E2E-08). Game.createHeadless() at game.ts:84-88 enables headless mode with mock Canvas. Tests simulate keyboard input via input.simulateKeyDown(). All tests pass.- ✅ 单元测试套件实现: tests/unit/ contains 8 files: collision.test.ts (UNIT-01: AABB, tank-terrain, bullet-bullet), tank.test.ts (UNIT-02: speed, cooldown, invincibility), battlefield.test.ts (UNIT-03: tile parsing, passability), enemy-ai.test.ts (UNIT-04: direction change, toward-player chance), upgrade.test.ts (UNIT-05: stacking, reset), barrel.test.ts (UNIT-06: 3×3 area, chain explosion), portal.test.ts (UNIT-07: pairing, cooldown), boss.test.ts (UNIT-08: 8HP, 2×2 size, scatter). All tests pass.重规划建议- 根因：N/A - All goals passed. No failures to address.- 策略：N/A - Implementation is complete and ready for delivery. All 11 goals verified with specific evidence from source files and tests."
+      },
+      {
+        "role": "system",
+        "text": "已提交验收通过的工作区状态- 信息: Tank Battle- 分支: master- 提交: 86c6b175"
+      }
+    ],
+    "storage": {
+      "directory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-U4zSfK",
+      "directoryMode": "",
+      "workspaceDirectory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-U4zSfK",
+      "workspaceTaskID": "tsk_d1a51e46c001kkEiuT70ioe5Xd"
+    }
+  },
+  "diagnostics": {
+    "event_file": "C:\\Users\\chuan\\myhexin-local\\argus-opencode\\packages\\opencorvus\\overlay-web-benchmark-claude-tank10.events.json",
+    "event_count": 35658,
+    "stage_summary": {
+      "types": {
+        "orchestrator.task.created": 1,
+        "orchestrator.task.updated": 9,
+        "orchestrator.agent.updated": 294,
+        "orchestrator.spec.created": 1,
+        "orchestrator.plan.created": 1,
+        "orchestrator.plan.activated": 1,
+        "orchestrator.run.created": 2,
+        "orchestrator.run.updated": 8,
+        "orchestrator.run.progress": 35341
+      },
+      "stages": {
+        "spec": {
+          "event_count": 30,
+          "first_event_ms": 2403,
+          "first_message_ms": null,
+          "first_tool_call_ms": null,
+          "first_tool_result_ms": null,
+          "submit_tool_ms": null,
+          "error_ms": null,
+          "last_event_ms": 111157,
+          "kind_counts": {
+            "status": 30
+          },
+          "tool_calls": {}
+        },
+        "planner": {
+          "event_count": 2,
+          "first_event_ms": 141049,
+          "first_message_ms": null,
+          "first_tool_call_ms": null,
+          "first_tool_result_ms": null,
+          "submit_tool_ms": null,
+          "error_ms": null,
+          "last_event_ms": 378869,
+          "kind_counts": {
+            "status": 2
+          },
+          "tool_calls": {}
+        },
+        "judge": {
+          "event_count": 182,
+          "first_event_ms": 5641218,
+          "first_message_ms": null,
+          "first_tool_call_ms": null,
+          "first_tool_result_ms": null,
+          "submit_tool_ms": null,
+          "error_ms": null,
+          "last_event_ms": 6223820,
+          "kind_counts": {
+            "status": 182
+          },
+          "tool_calls": {}
+        },
+        "execution": {
+          "event_count": 35341,
+          "first_event_ms": 379401,
+          "first_progress_ms": 379401,
+          "first_output_ms": null,
+          "last_event_ms": 5992032,
+          "types": {
+            "orchestrator.run.progress": 35341
+          },
+          "progress_types": {
+            "executor.status": 544,
+            "protocol.raw": 34047,
+            "reasoning.delta": 38,
+            "tool.call": 305,
+            "tool.result": 222,
+            "message.part.delta": 181,
+            "usage.updated": 2,
+            "session.idle": 2
+          },
+          "goal_runs": []
+        }
+      }
+    }
+  }
+}

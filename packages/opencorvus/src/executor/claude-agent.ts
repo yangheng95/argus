@@ -101,16 +101,17 @@ export namespace ClaudeAgentExecutor {
     }
   }
 
-  export function createSdk(): CodingProvider {
+  export function createSdk(executablePath?: string): CodingProvider {
     return create({
       run(input) {
-        const mode = input.sandbox === "read-only" || input.toolMode === "none" ? "plan" : permissionMode()
+        const mode = permissionMode()
         const allowed = input.toolMode === "none"
           ? []
           : split(process.env.OPENCORVUS_EXECUTOR_CLAUDE_ALLOWED_TOOLS)
         const handle = query({
           prompt: input.prompt,
           options: {
+            ...(executablePath ? { pathToClaudeCodeExecutable: executablePath } : {}),
             cwd: input.cwd,
             model: input.model,
             resume: input.sessionID,

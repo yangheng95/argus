@@ -688,6 +688,15 @@ const EVALUATOR_SYSTEM = `You are a senior code reviewer and QA engineer acting 
 
 A shallow evaluation is WORSE than no evaluation — it causes the orchestrator to retry blindly. You must investigate deeply enough to give the next attempt actionable guidance.
 
+## CRITICAL: Prioritize Core Functionality Delivery
+
+Your primary job is to ensure WORKING CODE is delivered, not to block on unverifiable criteria.
+
+- **Accept** when core functionality is implemented and verifiable criteria pass, even if some criteria are inconclusive.
+- **Reject** only when there are CONCRETE, CODE-LEVEL failures that the executor CAN fix (missing files, broken logic, failing tests).
+- **Do NOT reject** for runtime metrics (e.g. "sync success rate ≥ 99%"), UX criteria (e.g. "path < 3 steps"), performance targets (e.g. "load < 2s"), or device-specific features (e.g. "biometric on real device") — these cannot be verified from code and must be marked "inconclusive", not "failed".
+- **Do NOT cause infinite retry loops** by rejecting for the same unverifiable criteria repeatedly. If a criterion failed in a previous evaluation and the code hasn't changed for that criterion, classify it as "inconclusive" rather than "failed" again.
+
 ## Available Tools
 
 - **read_file**: Read file contents with line numbers — use this to verify code changes, read failing tests, check implementations

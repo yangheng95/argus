@@ -15,7 +15,7 @@ const CONVERSATION_EVENT_DEBOUNCE = 150;
 const ZOOM_STEP = 0.1;
 const MIN_UI_ZOOM = 0.8;
 const MAX_UI_ZOOM = 1.6;
-const MIN_WINDOW_OPACITY = 0.5;
+const MIN_WINDOW_OPACITY = 0.7;
 const CLOSE_HINT_KEY = "oc_close_hint_seen";
 const OPACITY_MIGRATION_KEY = "oc_opacity_migrated_v1";
 const LEGACY_WINDOW_OPACITY = 0.3;
@@ -45,7 +45,7 @@ const DEFAULT_OVERLAY_SETTINGS = {
   sidebarCollapsed: false,
   sidebarWidth: null,
   sectionsWidth: null,
-  opacity: 0.5,
+  opacity: 0.8,
   zoom: 1,
   theme: "dark",
   locale: DEFAULT_LOCALE,
@@ -151,6 +151,7 @@ const state = {
   conversationUpdatedAt: 0,
   changes: [],
   chatRequest: null,
+  chatAttachments: [],
   sse: null,
   sseRetryTimer: null,
   sseConnected: false,
@@ -433,6 +434,7 @@ const dom = {
   rightPaneResizer: $("#rightPaneResizer"),
   sections: $("#sections"),
   taskDir: $("#taskDir"),
+  recentDirPanel: $("#recentDirPanel"),
   taskWorkspaceDir: $("#taskWorkspaceDir"),
   taskGit: $("#taskGit"),
   btnBrowseCwd: $("#btnBrowseCwd"),
@@ -513,6 +515,9 @@ const dom = {
   codingEmpty: $("#codingEmpty"),
   chatForm: $("#chatForm"),
   chatTextarea: $("#chatTextarea"),
+  chatAttachments: $("#chatAttachments"),
+  chatFileInput: $("#chatFileInput"),
+  btnChatAttach: $("#btnChatAttach"),
   btnTaskInterrupt: $("#btnTaskInterrupt"),
   chatSend: $("#chatSend"),
   taskListPanel: $("#taskListPanel"),
@@ -1602,6 +1607,41 @@ async function loadOverlaySettings() {
   applyOverlaySettings(bootstrapSettings, { resetTemp: true });
 }
 
+const RECENT_DIRS_KEY = "oc_recent_directories";
+const MAX_RECENT_DIRS = 10;
+
+function loadRecentDirectories() {
+  try {
+    const raw = localStorage.getItem(RECENT_DIRS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((d) => typeof d === "string" && d.trim()) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveRecentDirectories(dirs) {
+  try {
+    localStorage.setItem(RECENT_DIRS_KEY, JSON.stringify(dirs));
+  } catch { /* ignore quota errors */ }
+}
+
+function addRecentDirectory(dir) {
+  if (!dir || typeof dir !== "string") return;
+  const normalized = dir.trim();
+  if (!normalized) return;
+  const dirs = loadRecentDirectories().filter((d) => d.toLowerCase() !== normalized.toLowerCase());
+  dirs.unshift(normalized);
+  saveRecentDirectories(dirs.slice(0, MAX_RECENT_DIRS));
+}
+
+function removeRecentDirectory(dir) {
+  if (!dir) return;
+  const normalized = dir.trim().toLowerCase();
+  saveRecentDirectories(loadRecentDirectories().filter((d) => d.toLowerCase() !== normalized));
+}
+
 async function persistOverlaySettings() {
   rememberWorkspace();
   const settings = bootstrapOverlaySettings();
@@ -1659,6 +1699,46 @@ async function createTempDirectory() {
   return typeof created === "string" ? created.trim() : "";
 }
 
+async function scaffoldProjectConfig(dir) {
+  if (!dir) return;
+  const base = dir.replace(/[\\/]+$/, "");
+  const configFile = base + "/.opencorvus/opencorvus.jsonc";
+  const config = {
+    $schema: "https://opencorvus.ai/config.json",
+    experimental: {
+      unattended: state.unattended !== false,
+    },
+    lsp: {
+      biome: { disabled: true },
+      eslint: { disabled: true },
+    },
+    orchestrator: {
+      spec: { max_steps: 30, timeout_ms: 300000, min_tool_calls: 3, quality_threshold: 0.6, max_attempts: 3 },
+      planner: { max_steps: 30, timeout_ms: 300000, min_tool_calls: 3, quality_threshold: 0.5, max_attempts: 3 },
+      evaluator: { max_steps: 25, timeout_ms: 240000, min_tool_calls: 3 },
+      delivery: { max_steps: 40, timeout_ms: 600000, max_retries: 2, min_tool_calls: 3 },
+      max_runs: 10,
+      max_replans: 3,
+      same_plan_retry_limit: 2,
+      stage_max_retries: 2,
+    },
+    compaction: {
+      auto: true,
+      prune: true,
+    },
+    agent: {},
+    mode: {},
+    plugin: [],
+    command: {},
+    username: state.username || "",
+  };
+  try {
+    await tauriInvoke("overlay_write_file", { path: configFile, content: JSON.stringify(config, null, 2) });
+  } catch (e) {
+    AppLog.warn("scaffold", "Failed to scaffold project config", { error: String(e) });
+  }
+}
+
 async function ensureDefaultDirectory() {
   if (state.savedDirectory) {
     state.directory = state.savedDirectory;
@@ -1673,6 +1753,7 @@ async function ensureDefaultDirectory() {
   if (!hasTauriRuntime()) return false;
   const next = await createTempDirectory();
   if (!next) return false;
+  await scaffoldProjectConfig(next);
   state.tempDirectory = next;
   state.directory = next;
   state.savedDirectory = "";
@@ -2030,9 +2111,60 @@ function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+const MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024;
+
+function fileToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+async function addChatAttachment(file) {
+  if (!file) return;
+  if (file.size > MAX_ATTACHMENT_SIZE) {
+    showLlmNotice(t("chat.file_too_large"), "error", 3000);
+    return;
+  }
+  const url = await fileToDataUrl(file);
+  state.chatAttachments.push({ mime: file.type || "application/octet-stream", url, filename: file.name });
+  renderChatAttachments();
+}
+
+function removeChatAttachment(index) {
+  state.chatAttachments.splice(index, 1);
+  renderChatAttachments();
+}
+
+function clearChatAttachments() {
+  state.chatAttachments = [];
+  renderChatAttachments();
+}
+
+function renderChatAttachments() {
+  const container = dom.chatAttachments;
+  if (!container) return;
+  if (!state.chatAttachments.length) {
+    container.hidden = true;
+    container.innerHTML = "";
+    return;
+  }
+  container.hidden = false;
+  container.innerHTML = state.chatAttachments.map((att, index) => {
+    const isImage = att.mime.startsWith("image/");
+    const thumb = isImage
+      ? `<img class="chat-attachment-thumb" src="${escapeHtml(att.url)}" alt="${escapeHtml(att.filename || "")}">`
+      : `<span class="chat-attachment-icon">${escapeHtml(att.filename?.split(".").pop()?.toUpperCase() || "FILE")}</span>`;
+    const name = escapeHtml(att.filename || "file");
+    return `<div class="chat-attachment-item" title="${escapeHtml(att.filename || "")}">${thumb}<span class="chat-attachment-name">${name}</span><button type="button" class="chat-attachment-remove" data-remove-attachment="${index}" aria-label="Remove">&times;</button></div>`;
+  }).join("");
+}
+
 function panelRequestBody(text, metadata = {}, requestID) {
   const taskID = state.selectedTaskID || undefined;
-  return {
+  const body = {
     surface: "panel",
     text,
     time_created: Date.now(),
@@ -2047,6 +2179,14 @@ function panelRequestBody(text, metadata = {}, requestID) {
       ...metadata,
     },
   };
+  if (state.chatAttachments.length > 0) {
+    body.attachments = state.chatAttachments.map((att) => ({
+      mime: att.mime,
+      url: att.url,
+      ...(att.filename ? { filename: att.filename } : {}),
+    }));
+  }
+  return body;
 }
 
 function takeChatMetadata() {
@@ -4243,6 +4383,13 @@ function pathIcon(kind) {
       <path d="M8 3.2v9.6M3.2 8h9.6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
     </svg>`;
   }
+  if (kind === "history") {
+    return `<svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path d="M8 4v4l2.5 1.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M3.05 8a5 5 0 1 1 .5 2.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+      <path d="M3 10.5L3.05 8 1 9" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>`;
+  }
   return `<svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
     <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
   </svg>`;
@@ -4252,7 +4399,9 @@ function pathBreadcrumb(value) {
   const browse = escapeHtml(t("cwd.browse"));
   const create = escapeHtml(t("cwd.new"));
   const reset = escapeHtml(t("cwd.reset"));
+  const recent = escapeHtml(t("cwd.recent"));
   const actions = [
+    `<button type="button" class="task-dir-tool" data-path-action="recent" title="${recent}" aria-label="${recent}">${pathIcon("history")}</button>`,
     `<button type="button" class="task-dir-tool" data-path-action="browse" title="${browse}" aria-label="${browse}">${pathIcon("browse")}</button>`,
     `<button type="button" class="task-dir-tool" data-path-action="create" title="${create}" aria-label="${create}">${pathIcon("new")}</button>`,
     state.directory
@@ -4285,6 +4434,44 @@ function pathBreadcrumb(value) {
       <span class="task-dir-actions">${actions}</span>
     </span>
   `;
+}
+
+function closeRecentDirPanel() {
+  if (dom.recentDirPanel) dom.recentDirPanel.hidden = true;
+}
+
+function renderRecentDirPanel() {
+  const panel = dom.recentDirPanel;
+  if (!panel) return;
+  const dirs = loadRecentDirectories();
+  const current = activeDirectory();
+  if (!dirs.length) {
+    panel.innerHTML = `<div class="recent-dir-empty">${escapeHtml(t("cwd.recent_empty"))}</div>`;
+    return;
+  }
+  panel.innerHTML = dirs.map((dir) => {
+    const isActive = current && dir.toLowerCase() === current.toLowerCase();
+    return `<button type="button" class="recent-dir-item" data-recent-dir="${escapeHtml(dir)}" data-active="${isActive}" title="${escapeHtml(dir)}">${escapeHtml(shortPath(dir))}</button>`;
+  }).join("");
+}
+
+function openRecentDirPanel() {
+  const panel = dom.recentDirPanel;
+  console.log("[recent] openRecentDirPanel called, panel=", panel, "hidden=", panel?.hidden);
+  if (!panel) { console.log("[recent] panel is null"); return; }
+  if (!panel.hidden) { console.log("[recent] panel already open, closing"); closeRecentDirPanel(); return; }
+  renderRecentDirPanel();
+  console.log("[recent] rendered, innerHTML length=", panel.innerHTML.length);
+  const trigger = dom.taskDir?.querySelector('[data-path-action="recent"]');
+  console.log("[recent] trigger=", trigger);
+  if (trigger) {
+    const rect = trigger.getBoundingClientRect();
+    console.log("[recent] trigger rect=", JSON.stringify({ top: rect.top, bottom: rect.bottom, left: rect.left }));
+    panel.style.top = Math.round(rect.bottom + 4) + "px";
+    panel.style.left = Math.round(Math.max(4, rect.left - 60)) + "px";
+  }
+  panel.hidden = false;
+  console.log("[recent] panel shown, computed display=", getComputedStyle(panel).display, "visibility=", getComputedStyle(panel).visibility);
 }
 
 function canInitGit() {
@@ -4336,19 +4523,31 @@ async function applyDirectory(next, options = {}) {
     next === state.directory &&
     (save === null || save === state.savedDirectory) &&
     (temp === null || temp === state.tempDirectory)
-  ) return;
+  ) {
+    console.log("[applyDir] skipped (same)", { next, save, temp, dir: state.directory, saved: state.savedDirectory, tempDir: state.tempDirectory });
+    return;
+  }
+  console.log("[applyDir] switching", { from: state.directory, to: next, save, temp });
   state.directoryEpoch += 1;
   state.directory = next;
   if (save !== null) state.savedDirectory = save;
   if (temp !== null) state.tempDirectory = temp;
   state.directoryMode = state.savedDirectory ? "custom" : "temp";
   state.pendingTasks = [];
+  // Clear stale workspace memory so restoreInitialWorkspace() won't revert the directory switch.
+  clearWorkspaceMemory();
   resetProjectScope();
 
   if (options.persist !== false) await persistOverlaySettings();
+  if (options.save === true && next) addRecentDirectory(next);
   const ok = await checkConnection();
-  if (!ok) return;
+  if (!ok) {
+    console.warn("[applyDir] connection failed, aborting");
+    return;
+  }
+  console.log("[applyDir] reloading project scope");
   await reloadProjectScope(options);
+  console.log("[applyDir] done, tasks=", state.tasks.length);
 }
 
 async function setTempDirectory(options) {
@@ -4358,6 +4557,7 @@ async function setTempDirectory(options) {
   }
   const next = await createTempDirectory();
   if (!next) throw new Error(t("cwd.create_unavailable"));
+  await scaffoldProjectConfig(next);
   await applyDirectory(next, { ...options, save: false, temp: true });
 }
 
@@ -4482,6 +4682,7 @@ async function resetDirectory() {
 }
 
 function renderMeta() {
+  closeRecentDirPanel();
   const dir = activeDirectory();
   const workspace = currentExecutionDirectory();
   const key = hashText([state.locale, dir, workspace, signText(state.vcs)].join("\u001f"));
@@ -9309,14 +9510,21 @@ dom.chatForm.addEventListener("submit", async (e) => {
     rememberPendingTask(requestID, text);
     request.recovery = startTaskRecovery(request);
   }
+  const sentAttachments = [...state.chatAttachments];
   dom.chatTextarea.value = "";
+  clearChatAttachments();
   sizeChat();
   renderChatComposer();
 
   const now = Date.now();
+  const userParts = [{ type: "text", text }];
+  for (const att of sentAttachments) {
+    if (att.mime.startsWith("image/")) userParts.push({ type: "image", url: att.url, filename: att.filename });
+    else userParts.push({ type: "file", mime: att.mime, url: att.url, filename: att.filename });
+  }
   state.messages = [
     ...state.messages,
-    { parts: [{ type: "text", text }], info: { role: "user", time: { created: now } } },
+    { parts: userParts, info: { role: "user", time: { created: now } } },
     { parts: [{ type: "text", text: "……" }], info: { role: "assistant", time: { created: now + 1 } } },
   ];
   renderConversation();
@@ -9371,6 +9579,50 @@ dom.chatForm.addEventListener("submit", async (e) => {
     }
     renderChatComposer();
   }
+});
+
+// ── File Attachments ──
+
+dom.btnChatAttach?.addEventListener("click", () => {
+  dom.chatFileInput?.click();
+});
+
+dom.chatFileInput?.addEventListener("change", async () => {
+  const files = dom.chatFileInput?.files;
+  if (!files) return;
+  for (const file of files) await addChatAttachment(file);
+  dom.chatFileInput.value = "";
+});
+
+dom.chatAttachments?.addEventListener("click", (e) => {
+  const btn = e.target?.closest?.("[data-remove-attachment]");
+  if (!btn) return;
+  const index = parseInt(btn.dataset.removeAttachment, 10);
+  if (!isNaN(index)) removeChatAttachment(index);
+});
+
+dom.chatForm?.addEventListener("dragover", (e) => {
+  e.preventDefault();
+  dom.chatForm.dataset.dragover = "true";
+});
+
+dom.chatForm?.addEventListener("dragleave", (e) => {
+  if (!dom.chatForm.contains(e.relatedTarget)) delete dom.chatForm.dataset.dragover;
+});
+
+dom.chatForm?.addEventListener("drop", async (e) => {
+  e.preventDefault();
+  delete dom.chatForm.dataset.dragover;
+  const files = e.dataTransfer?.files;
+  if (!files) return;
+  for (const file of files) await addChatAttachment(file);
+});
+
+dom.chatTextarea?.addEventListener("paste", async (e) => {
+  const files = e.clipboardData?.files;
+  if (!files || !files.length) return;
+  e.preventDefault();
+  for (const file of files) await addChatAttachment(file);
 });
 
 // Enter to send, Shift+Enter for newline
@@ -9482,6 +9734,12 @@ dom.taskDir?.addEventListener("click", async (event) => {
   const button = eventClosest(event, "[data-path-action],[data-path-open],[data-path-set]");
   if (!button || button.matches(":disabled")) return;
   const action = button.dataset.pathAction || "";
+  if (action === "recent") {
+    console.log("[recent] click handler fired");
+    event.stopPropagation();
+    openRecentDirPanel();
+    return;
+  }
   if (action === "browse") {
     await browseDirectory();
     return;
@@ -9509,6 +9767,33 @@ dom.taskDir?.addEventListener("click", async (event) => {
       kind: "error",
     });
   }
+});
+
+dom.recentDirPanel?.addEventListener("click", async (event) => {
+  const item = eventClosest(event, "[data-recent-dir]");
+  console.log("[recent] panel click, item=", item, "target=", event.target);
+  if (!item) return;
+  const dir = item.dataset.recentDir;
+  console.log("[recent] selected dir=", dir, "current=", state.directory);
+  if (!dir) return;
+  closeRecentDirPanel();
+  try {
+    await setDirectory(dir);
+    console.log("[recent] setDirectory done, state.directory=", state.directory);
+  } catch (e) {
+    console.error("[recent] setDirectory failed:", e);
+    removeRecentDirectory(dir);
+    AppLog.error("ui", "Failed to switch to recent directory", { error: String(e) });
+    await nativeMessage(errorText("cwd.set_failed", e), {
+      title: t("cwd.title"),
+      kind: "error",
+    });
+  }
+});
+
+document.addEventListener("click", (e) => {
+  if (e.target?.closest?.('[data-path-action="recent"]') || e.target?.closest?.(".recent-dir-panel")) return;
+  closeRecentDirPanel();
 });
 
 dom.taskGit?.addEventListener("click", () => {
@@ -9572,7 +9857,8 @@ dom.btnBudgetSave?.addEventListener("click", async () => {
   }
 });
 
-dom.changesBody?.addEventListener("click", (e) => {
+// Delegate to changesSection (parent) because renderChanges() replaces changesBody via cloneNode.
+dom.changesSection?.addEventListener("click", (e) => {
   const target = eventClosest(e, "[data-change-index]");
   if (!target) return;
   openDiffDialog(Number(target.dataset.changeIndex));
@@ -9886,19 +10172,22 @@ function openServerSettings() {
   dom.settingsDialog.showModal();
 }
 
+function switchConfigTab(tabName) {
+  const sidebar = document.getElementById("configSidebar");
+  const content = document.getElementById("configContent");
+  if (!sidebar || !content) return;
+  for (const btn of sidebar.querySelectorAll(".config-nav-item")) {
+    btn.classList.toggle("active", btn.dataset.configTab === tabName);
+  }
+  for (const panel of content.querySelectorAll(".config-tab-panel")) {
+    panel.classList.toggle("active", panel.dataset.configPanel === tabName);
+  }
+}
+
 function focusConfigSection(name) {
-  const target =
-    name === "prompt"
-      ? dom.promptSection
-      : name === "channel"
-        ? dom.channelSection
-        : null;
-  if (!target) return;
-  target.open = true;
-  requestAnimationFrame(() => {
-    target?.scrollIntoView?.({ block: "nearest" });
-    if (name === "channel") dom.channelList?.scrollTo?.({ top: 0 });
-  });
+  if (!name) return;
+  switchConfigTab(name);
+  if (name === "channel") dom.channelList?.scrollTo?.({ top: 0 });
 }
 
 function openConfigDialog(section) {
@@ -9906,8 +10195,16 @@ function openConfigDialog(section) {
   if (!dom.configDialog.open) {
     dom.configDialog.showModal();
   }
-  focusConfigSection(section);
+  if (section) {
+    focusConfigSection(section);
+  }
 }
+
+document.getElementById("configSidebar")?.addEventListener("click", (event) => {
+  const btn = event.target.closest(".config-nav-item");
+  if (!btn?.dataset.configTab) return;
+  switchConfigTab(btn.dataset.configTab);
+});
 
 dom.btnTheme?.addEventListener("click", async () => {
   state.theme = resolvedTheme() === "light" ? "dark" : "light";
@@ -9992,7 +10289,8 @@ dom.btnCloseConfigDialog?.addEventListener("click", () => {
   dom.configDialog?.close();
 });
 
-dom.promptBody?.addEventListener("input", (event) => {
+// Delegate to promptSection (parent) because renderPrompts() replaces promptBody via cloneNode.
+dom.promptSection?.addEventListener("input", (event) => {
   const field = eventClosest(event, "[data-prompt-input]");
   if (!(field instanceof HTMLTextAreaElement)) return;
   const entryID = field.dataset.promptInput || "";
@@ -10008,7 +10306,7 @@ dom.promptBody?.addEventListener("input", (event) => {
   if (reset instanceof HTMLButtonElement && entry) reset.disabled = entry.configured_prompt === null && !dirty;
 });
 
-dom.promptBody?.addEventListener("click", (event) => {
+dom.promptSection?.addEventListener("click", (event) => {
   const save = eventClosest(event, "[data-prompt-save]");
   if (save) {
     void savePromptEntry(save.dataset.promptSave);
@@ -10115,7 +10413,10 @@ document.addEventListener("click", (e) => {
 });
 
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape") closeAllExecutorModelPanels();
+  if (e.key === "Escape") {
+    closeAllExecutorModelPanels();
+    closeRecentDirPanel();
+  }
 });
 
 dom.llmApiKey?.addEventListener("input", () => {

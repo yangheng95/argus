@@ -12,5 +12,8 @@
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2"
+  },
+  "dependencies": {
+    "@opencorvus-ai/plugin": "0.0.1-alpha"
   }
 }

@@ -182,6 +182,20 @@ fn overlay_create_dir(path: String) -> Result<bool, String> {
 }
 
 #[tauri::command]
+fn overlay_write_file(path: String, content: String) -> Result<bool, String> {
+    let path = path.trim();
+    if path.is_empty() {
+        return Ok(false);
+    }
+    let p = std::path::Path::new(path);
+    if let Some(parent) = p.parent() {
+        fs::create_dir_all(parent).map_err(|err| err.to_string())?;
+    }
+    fs::write(p, content).map_err(|err| err.to_string())?;
+    Ok(true)
+}
+
+#[tauri::command]
 fn overlay_create_temp_dir() -> Result<String, String> {
     let root = std::env::temp_dir();
     let stamp = SystemTime::now()
@@ -656,6 +670,7 @@ fn main() {
             overlay_open_url,
             overlay_create_dir,
             overlay_create_temp_dir,
+            overlay_write_file,
             overlay_pick_dir,
             overlay_attention_set
         ])
