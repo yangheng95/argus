@@ -4,6 +4,7 @@ import { Instance } from "@/project/instance"
 import { Log } from "@/util/log"
 import { PlannerOutput, parsePlannerOutput, type PlannerOutputType, type ReplanContext } from "./agent"
 import { SpecDraftSchema, type SpecDraft } from "@/spec/agent"
+import { parseSpecText } from "@/spec/parse-spec-text"
 
 const log = Log.create({ service: "planner.executor" })
 
@@ -39,7 +40,9 @@ export namespace ExecutorPlanner {
       prompt: specPrompt(input),
       signal: input.signal,
     })
-    return SpecDraftSchema.parse(extractObject(result.output))
+    // Parse section tags from executor output, then validate with Zod
+    const parsed = parseSpecText(result.output)
+    return SpecDraftSchema.parse(parsed)
   }
 
   export async function plan(input: {
@@ -67,75 +70,9 @@ export namespace ExecutorPlanner {
       prompt: planPrompt(input),
       signal: input.signal,
     })
+    // Parse section tags from executor output, then validate with Zod
     return PlannerOutput.parse(parsePlannerOutput(result.output))
   }
-}
-
-function extractObject(text: string) {
-  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/)
-  if (fenced?.[1]) return JSON.parse(sanitizeJSON(fenced[1]))
-  const match = text.match(/\{[\s\S]*\}/)
-  if (match?.[0]) return JSON.parse(sanitizeJSON(match[0]))
-  throw new Error("executor spec output did not contain JSON")
-}
-
-/**
- * Sanitize common LLM JSON output issues:
- * - Unescaped backslashes (e.g., Windows paths: C:\Users)
- * - Real newlines inside JSON string values
- * - Markdown code fences inside string values (```javascript ... ```)
- */
-function sanitizeJSON(raw: string): string {
-  let result = ""
-  let inString = false
-  let i = 0
-  while (i < raw.length) {
-    const ch = raw[i]
-    if (!inString) {
-      if (ch === '"') inString = true
-      result += ch
-      i++
-      continue
-    }
-    // Inside a string
-    if (ch === "\\") {
-      const next = raw[i + 1]
-      // Valid JSON escapes: " \ / b f n r t u
-      if (next && '"\\\/bfnrtu'.includes(next)) {
-        result += ch + next
-        i += 2
-        continue
-      }
-      // Invalid escape: double the backslash to make it valid
-      result += "\\\\"
-      i++
-      continue
-    }
-    if (ch === '"') {
-      inString = false
-      result += ch
-      i++
-      continue
-    }
-    if (ch === "\n") {
-      result += "\\n"
-      i++
-      continue
-    }
-    if (ch === "\r") {
-      result += "\\r"
-      i++
-      continue
-    }
-    if (ch === "\t") {
-      result += "\\t"
-      i++
-      continue
-    }
-    result += ch
-    i++
-  }
-  return result
 }
 
 function specPrompt(input: {
@@ -163,7 +100,7 @@ function specPrompt(input: {
             : "",
         ].filter(Boolean).join("\n")
       : "",
-    "Return only one JSON object matching the requested schema.",
+    "Output your specification using <tag>...</tag> section format as described in the system prompt.",
   ].filter(Boolean).join("\n\n")
 }
 
@@ -195,7 +132,7 @@ function planPrompt(input: {
             : "",
         ].filter(Boolean).join("\n")
       : "",
-    "Return only JSON matching the planner schema.",
+    "Output your plan using <tag>...</tag> section format as described in the system prompt.",
   ].filter(Boolean).join("\n\n")
 }
 
@@ -204,14 +141,17 @@ const SPEC_SYSTEM = [
   "WARNING: This is a planning-only read-only session.",
   "You may inspect the codebase and documentation, but you must not modify files, apply patches, or run commands with side effects.",
   "Expand the task into a precise markdown specification.",
-  "Return JSON only.",
+  "Output using section tags: <summary>, <scope>, <content>, <spec_items>, <assumptions>, <risks>, <evidence>, <unresolved>.",
+  "Each section wrapped in <tag>content</tag>. List items use: - key: value format.",
 ].join("\n")
 
 const PLAN_SYSTEM = [
   "You are the executor-native planning stage for OpenCorvus.",
   "WARNING: This is a planning-only read-only session.",
   "You may inspect the codebase and documentation, but you must not modify files, apply patches, or run commands with side effects.",
-  "Produce a detailed implementation plan as JSON only.",
+  "Produce a detailed implementation plan.",
+  "Output using section tags: <summary>, <prd>, <goals>, <subtasks>, <risks>, <milestones>, <assumptions>.",
+  "Each section wrapped in <tag>content</tag>. List items use: - key: value format.",
   "Every blocking goal must have concrete criteria and at least one relevant check_selector.",
 ].join("\n")
 

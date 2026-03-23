@@ -176,9 +176,9 @@ const reasoningVisibility = new Map();
 const reasoningHideTimers = new Map();
 let chatScrollPaused = false;
 const TECH_FX_ENABLED = false;
-const LIVE_TEXT_INTERVAL = 18;
-const LIVE_TEXT_MIN_CHUNK = 6;
-const LIVE_TEXT_MAX_CHUNK = 48;
+const LIVE_TEXT_INTERVAL = 0;
+const LIVE_TEXT_MIN_CHUNK = 9999;
+const LIVE_TEXT_MAX_CHUNK = 9999;
 const DEFAULT_REASONING_AUTO_CLOSE_MS = 5000;
 
 function stopLiveText(key) {
@@ -3178,20 +3178,24 @@ function providerPreferredOauthMethod(providerID) {
 
 async function authorizeProvider(providerID, methodIndex) {
   const methods = providerAuthMethods(providerID).map((item, index) => ({ ...item, index }));
-  const match = typeof methodIndex === "number"
+  const explicitChoice = typeof methodIndex === "number";
+  const match = explicitChoice
     ? methods.find((item) => item.index === methodIndex)
     : providerPreferredOauthMethod(providerID);
   if (!match) return false;
 
-  const confirmed = await nativeConfirm(`${providerLabel(providerID)} ${t("llm.status.auth_required")}: ${match.label}`, {
-    title: t("llm.title"),
-    okLabel: t("common.open"),
-    cancelLabel: t("common.cancel"),
-    kind: "info",
-  });
-  if (!confirmed) {
-    state.providerAuthDismissed[providerID] = true;
-    return false;
+  // Skip confirm dialog when user already explicitly chose this method from the selection
+  if (!explicitChoice) {
+    const confirmed = await nativeConfirm(`${providerLabel(providerID)} ${t("llm.status.auth_required")}: ${match.label}`, {
+      title: t("llm.title"),
+      okLabel: t("common.open"),
+      cancelLabel: t("common.cancel"),
+      kind: "info",
+    });
+    if (!confirmed) {
+      state.providerAuthDismissed[providerID] = true;
+      return false;
+    }
   }
 
   const inputs = await providerAuthInputs(providerID, match.index);
@@ -3532,11 +3536,12 @@ async function syncLlmSettings() {
     await loadConfigInfo();
 
     const configuredKey = state.config?.provider?.[current.providerID]?.options?.apiKey || providerEntry(current.providerID)?.key;
-    const needsOauth = !configuredKey && !current.apiKey.trim() && !providerConnected(current.providerID)
-      && !!providerPreferredOauthMethod(current.providerID);
-    if (needsOauth) {
+    const needsAuth = !configuredKey && !current.apiKey.trim() && !providerConnected(current.providerID)
+      && providerAuthMethods(current.providerID).length > 0;
+    if (needsAuth) {
       const dismissed = state.providerAuthDismissed[current.providerID] === true;
-      const ready = dismissed ? false : await authorizeProvider(current.providerID);
+      const ready = dismissed ? false : await authenticateSelectedProvider();
+      if (!ready && !dismissed) state.providerAuthDismissed[current.providerID] = true;
       if (serial !== llmSyncSerial) return;
       await loadConfigInfo();
       if (serial !== llmSyncSerial) return;
@@ -5352,6 +5357,38 @@ function agentStageRole(stage) {
   return "system";
 }
 
+// ── Agent Channel Classification ──
+// Messages tagged with these agent stages are separated from the main conversation
+// and rendered in collapsible agent cards instead.
+const AGENT_STAGES = new Set(["spec", "planner", "goal", "judge", "delivery"]);
+
+/** Classify a message as "main" conversation or an agent stage channel.
+ *  Must be cheap — called once per message per render. Avoids expensive phaseFromMessage(). */
+function classifyMessage(msg) {
+  const agent = String(msg?.info?.agent || "").trim().toLowerCase();
+  if (AGENT_STAGES.has(agent)) return agent;
+  // Legacy: messages with agent="agent" from child sessions — separate from main
+  if (agent === "agent") {
+    const rootSession = rootTaskSessionID();
+    const sessionID = typeof msg?.info?.sessionID === "string" ? msg.info.sessionID : "";
+    if (rootSession && sessionID && sessionID !== rootSession) {
+      // Child session with generic tag — put in "agent" bucket (shown as generic card)
+      return "agent";
+    }
+  }
+  return "main";
+}
+
+/** Get the display label for an agent stage used in card headers. */
+function agentStageLabel(stage) {
+  if (stage === "spec") return t("chat.role.spec");
+  if (stage === "planner") return t("chat.role.planner");
+  if (stage === "goal") return t("chat.role.goal");
+  if (stage === "judge" || stage === "scheduler") return t("chat.role.scheduler");
+  if (stage === "delivery") return t("chat.role.delivery");
+  return t("chat.role.message");
+}
+
 function activeAgentStages() {
   const status = String(state.board?.task?.status || "").trim().toLowerCase();
   if (status === "planning") return new Set(["spec", "planner"]);
@@ -5542,12 +5579,10 @@ function agentMessage(event) {
 }
 
 function buildAgentMessages() {
-  const stages = activeAgentStages();
-  if (stages.size === 0) return [];
-  return (Array.isArray(state.agentEvents) ? state.agentEvents : [])
-    .filter((event) => stages.has(String(event?.stage || "").trim().toLowerCase()))
-    .map((event) => agentMessage(event))
-    .filter(Boolean);
+  // Agent messages are now rendered in dedicated agent cards via classifyMessage().
+  // No longer build synthetic messages from agentEvents — this was causing duplicates
+  // and garbled content (.update noise) alongside real session-persisted messages.
+  return [];
 }
 
 
@@ -5817,7 +5852,12 @@ function handleEventStreamEvent(event) {
       message.parts.push(hydrateLivePart(null, part));
     }
     state.conversationUpdatedAt = Date.now();
-    renderConversation();
+    // Render immediately for main messages, debounce for agent channel messages
+    if (classifyMessage(message) === "main") {
+      renderConversation();
+    } else {
+      debouncedRenderConversation();
+    }
     return;
   }
   if (type === "message.part.delta") {
@@ -5841,10 +5881,18 @@ function handleEventStreamEvent(event) {
     const target = `${typeof part._targetText === "string" ? part._targetText : part.text || ""}${properties.delta}`;
     streamMessagePart(part, target, "text", part.text || "");
     state.conversationUpdatedAt = Date.now();
-    renderConversation();
+    // Skip full re-render for agent-channel deltas — they're in collapsed cards.
+    // Only render immediately for main conversation deltas.
+    if (classifyMessage(message) === "main") {
+      renderConversation();
+    }
     return;
   }
   if (type === "run.progress") {
+    // Skip internal message lifecycle events — these are metadata updates
+    // (role, tokens, timestamps) already handled by message.updated/part.updated/part.delta
+    const progressType = properties.type || "";
+    if (progressType === "message.updated" || progressType === "message.part.updated" || progressType === "message.part.delta") return;
     appendExecutorEvent({
       id: event.event_id,
       runID: event.run_id || properties.runID,
@@ -6158,6 +6206,13 @@ function liveConversationPhase(messages = state.messages) {
     const running = parts.some((part) => part?.type === "tool" && ["running", "pending"].includes(part?.state?.status || ""));
     const incomplete = message?.info?.role === "assistant" && !message?.info?.time?.completed;
     if (!running && !incomplete) continue;
+    // Prefer explicit agent tag over keyword matching
+    const agent = String(message?.info?.agent || "").trim().toLowerCase();
+    if (agent === "spec") return "spec";
+    if (agent === "planner") return "plan";
+    if (agent === "goal") return "goals";
+    if (agent === "judge") return "evaluation";
+    if (agent === "delivery") return "files";
     return phaseFromMessage(message);
   }
   return "";
@@ -6972,10 +7027,9 @@ function renderCriteria(task, evaluation) {
               <span class="check-mark"></span>
               <span class="criteria-copy">
                 <span class="criteria-name">${escapeHtml(spec.label)}</span>
-                <span class="criteria-desc">${escapeHtml(joinBullet([
-                  checkFamilyLabel(spec.family || "", spec.name),
-                  spec.readOnly ? t("detail.observed") : spec.enabled ? t("detail.enabled") : t("detail.disabled"),
-                ]))}</span>
+                <span class="criteria-desc">${escapeHtml(
+                  spec.readOnly ? t("detail.observed") : spec.enabled ? t("detail.enabled") : t("detail.disabled")
+                )}</span>
               </span>
               <span class="criteria-status" data-result="pending"></span>
               <span class="criteria-result">${escapeHtml(t("checks.pending"))}</span>
@@ -7418,6 +7472,12 @@ function effectiveRole(msg) {
 function groupMessagesByRole(sorted) {
   const groups = [];
   for (const msg of sorted) {
+    // Agent card placeholders are always isolated groups
+    if (msg._agentCard) {
+      groups.push({ role: "agent-card", messages: [msg] });
+      continue;
+    }
+
     const role = effectiveRole(msg);
     const parts = msg.parts || [];
     // Skip completely empty messages
@@ -7493,6 +7553,17 @@ function signPart(part) {
 }
 
 function signGroup(group) {
+  // Agent cards: sign based on stage, status, and inner message count + latest part signatures
+  if (group.role === "agent-card") {
+    const card = group.messages[0];
+    const innerMsgs = card?._agentMessages || [];
+    const lastMsg = innerMsgs[innerMsgs.length - 1];
+    const lastParts = Array.isArray(lastMsg?.parts) ? lastMsg.parts : [];
+    return hashText(
+      ["agent-card", card?._agentStage || "", card?._agentStatus || "",
+       String(innerMsgs.length), ...lastParts.map(signPart)].join("\u001d"),
+    );
+  }
   return hashText(
     [group.role, ...group.messages.map((message) => [
       message._synthetic ? "1" : "0",
@@ -8320,7 +8391,7 @@ function interactionResponseText(interaction) {
   return t("interaction.answer");
 }
 
-function buildBoardContextMessages() {
+function buildBoardContextMessages(preClassifiedMainMessages) {
   const board = state.board;
   if (!board) return [];
   const messages = [];
@@ -8331,7 +8402,9 @@ function buildBoardContextMessages() {
       .map((event) => String(event?.stage || "").trim().toLowerCase())
       .filter((stage) => activeStages.has(stage)),
   );
-  const transcriptMessages = Array.isArray(state.messages) ? state.messages : [];
+  // Use pre-classified main messages if provided (avoids re-classifying all messages).
+  const transcriptMessages = preClassifiedMainMessages
+    || (Array.isArray(state.messages) ? state.messages : []);
   const hasStageMessage = (stage) => transcriptMessages.some((message) =>
     message?.info?.role !== "user" &&
     (
@@ -8435,17 +8508,70 @@ function hasConversationRequest(messages, request) {
 }
 
 function conversationMessages() {
-  const boardMsgs = buildBoardContextMessages();
-  const agentMsgs = buildAgentMessages();
+  const allMessages = state.messages || [];
+
+  // Classify messages into main conversation vs agent channels — single pass
+  const mainMessages = [];
+  const agentChannels = {}; // { [stage]: { messages: [], startTime, endTime } }
+
+  for (const msg of allMessages) {
+    const channel = classifyMessage(msg);
+    if (channel === "main") {
+      mainMessages.push(msg);
+    } else {
+      if (!agentChannels[channel]) {
+        agentChannels[channel] = { messages: [], startTime: Infinity, endTime: 0 };
+      }
+      agentChannels[channel].messages.push(msg);
+      const created = msg.info?.time?.created || 0;
+      if (created < agentChannels[channel].startTime) agentChannels[channel].startTime = created;
+      const completed = msg.info?.time?.completed || created;
+      if (completed > agentChannels[channel].endTime) agentChannels[channel].endTime = completed;
+    }
+  }
+
+  // Build board context and executor messages AFTER classification
+  // so we can pass pre-classified main messages (avoids double classification).
+  const boardMsgs = buildBoardContextMessages(mainMessages);
   const executorMsgs = buildExecutorMessages();
-  let realMessages = state.messages || [];
-  if (boardMsgs.length > 0 && realMessages.length > 0) {
-    realMessages = realMessages.filter((message) => {
+
+  // Filter orchestrator boilerplate from main messages when board context is available
+  let filteredMain = mainMessages;
+  if (boardMsgs.length > 0 && filteredMain.length > 0) {
+    filteredMain = filteredMain.filter((message) => {
       const text = (message.parts || []).map((part) => part.text || "").join("");
       return !text.includes("<assistant-brief>") && !text.includes("You are executing a headless coding task");
     });
   }
-  return [...realMessages, ...agentMsgs, ...executorMsgs, ...boardMsgs].sort((a, b) => (a.info?.time?.created || 0) - (b.info?.time?.created || 0));
+
+  // Create synthetic agent-card placeholder messages for each active channel
+  const agentCardMsgs = [];
+  for (const [stage, channel] of Object.entries(agentChannels)) {
+    if (channel.messages.length === 0) continue;
+    // Determine status from agent events
+    const stageEvents = (Array.isArray(state.agentEvents) ? state.agentEvents : [])
+      .filter((e) => String(e?.stage || "").toLowerCase() === stage);
+    const lastEvent = stageEvents[stageEvents.length - 1];
+    const isFinished = lastEvent?.kind === "status" && /finished|completed|done/i.test(lastEvent?.summary || "");
+    const isError = lastEvent?.kind === "error";
+    const cardStatus = isError ? "error" : isFinished ? "completed" : "running";
+    agentCardMsgs.push({
+      _synthetic: true,
+      _agentCard: true,
+      _agentStage: stage,
+      _agentStatus: cardStatus,
+      _agentMessages: channel.messages,
+      info: {
+        role: "agent-card",
+        agent: stage,
+        time: { created: channel.startTime === Infinity ? Date.now() : channel.startTime },
+      },
+      parts: [],
+    });
+  }
+
+  return [...filteredMain, ...executorMsgs, ...boardMsgs, ...agentCardMsgs]
+    .sort((a, b) => (a.info?.time?.created || 0) - (b.info?.time?.created || 0));
 }
 
 function renderFilePart(part) {
@@ -8788,6 +8914,16 @@ function evaluationContextText(board, goals) {
   return lines.join("\n");
 }
 
+// Debounced render for agent-channel updates — avoids re-rendering on every token
+let _debouncedRenderTimer = null;
+function debouncedRenderConversation() {
+  if (_debouncedRenderTimer) return;
+  _debouncedRenderTimer = setTimeout(() => {
+    _debouncedRenderTimer = null;
+    renderConversation();
+  }, CONVERSATION_EVENT_DEBOUNCE);
+}
+
 function renderConversation() {
   const sorted = conversationMessages();
   if (sorted.length === 0) {
@@ -8859,6 +8995,12 @@ async function copyChatConversation() {
 
 function renderTurn(group, sig = "") {
   const { role, messages } = group;
+
+  // Agent card: collapsible card for an agent stage's messages
+  if (role === "agent-card") {
+    return renderAgentCard(messages[0], sig);
+  }
+
   let bodyHtml = "";
   for (const message of messages) {
     for (const part of orderedMessageParts(message)) {
@@ -8891,6 +9033,94 @@ function renderTurn(group, sig = "") {
     </div>
   `;
   return el;
+}
+
+/** Render a collapsible agent card that contains all messages for one agent stage.
+ *  Body is rendered lazily — only built on first expand to avoid DOM cost for collapsed cards. */
+function renderAgentCard(cardMsg, sig = "") {
+  const stage = cardMsg._agentStage || "agent";
+  const status = cardMsg._agentStatus || "running";
+  const agentMessages = cardMsg._agentMessages || [];
+  const label = agentStageLabel(stage);
+  const timeStr = cardMsg.info?.time?.created ? stamp(cardMsg.info.time.created) : "";
+  const msgCount = agentMessages.length;
+
+  // Preserve expanded state from previous render
+  const prevCard = dom.chatScroll?.querySelector(`.agent-card[data-stage="${stage}"]`);
+  const wasExpanded = prevCard?.classList.contains("agent-card--expanded") || false;
+
+  // Status badge
+  const statusBadge = status === "completed"
+    ? `<span class="agent-card-badge agent-card-badge--done" title="Completed">&#10003;</span>`
+    : status === "error"
+      ? `<span class="agent-card-badge agent-card-badge--error" title="Error">&#10007;</span>`
+      : `<span class="agent-card-badge agent-card-badge--running" title="Running"><span class="agent-card-spinner"></span></span>`;
+
+  const el = document.createElement("article");
+  el.className = `turn msg agent-card${wasExpanded ? " agent-card--expanded" : ""}`;
+  el.dataset.role = "agent-card";
+  el.dataset.stage = stage;
+  el.dataset.groupSig = sig;
+
+  // Lazy rendering: only build body HTML when expanded.
+  // For collapsed cards, start with an empty body placeholder.
+  let bodyRendered = wasExpanded;
+  let bodyHtml = "";
+  if (wasExpanded) {
+    bodyHtml = renderAgentCardBody(agentMessages);
+  }
+
+  el.innerHTML = `
+    <div class="agent-card-header" role="button" tabindex="0" aria-expanded="${wasExpanded}">
+      ${statusBadge}
+      <span class="agent-card-label">${escapeHtml(label)}</span>
+      <span class="agent-card-count">${msgCount > 0 ? `(${msgCount})` : ""}</span>
+      <span class="agent-card-time">${escapeHtml(timeStr)}</span>
+      <span class="agent-card-chevron" aria-hidden="true">&#9660;</span>
+    </div>
+    <div class="agent-card-body"${wasExpanded ? "" : " hidden"}>
+      <div class="msg-body">${bodyHtml}</div>
+    </div>
+  `;
+
+  // Toggle collapse on header click
+  const header = el.querySelector(".agent-card-header");
+  const body = el.querySelector(".agent-card-body");
+  if (header && body) {
+    const toggle = () => {
+      const expanded = body.hidden === false;
+      body.hidden = !body.hidden;
+      header.setAttribute("aria-expanded", String(!expanded));
+      el.classList.toggle("agent-card--expanded", !expanded);
+      // Lazy render: build body content on first expand
+      if (!expanded && !bodyRendered) {
+        bodyRendered = true;
+        const inner = body.querySelector(".msg-body");
+        if (inner) inner.innerHTML = renderAgentCardBody(agentMessages);
+      }
+    };
+    header.addEventListener("click", toggle);
+    header.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        toggle();
+      }
+    });
+  }
+
+  return el;
+}
+
+/** Build the inner HTML for an agent card's body. */
+function renderAgentCardBody(agentMessages) {
+  let html = "";
+  for (const msg of agentMessages) {
+    const innerRole = msg.info?.role || "assistant";
+    for (const part of orderedMessageParts(msg)) {
+      html += renderPart(part, innerRole);
+    }
+  }
+  return html;
 }
 
 function renderPart(part, role) {
@@ -8938,7 +9168,7 @@ function renderExecutorProcessPart(part) {
   const detail = String(process.detail || "").trim();
   const progress = String(process.progress || processStatusLabel(status) || "").trim();
   const note = String(process.note || "").trim();
-  const output = String(process.output || "").trim();
+  const output = stripAnsi(String(process.output || "")).trim();
   return `
     <section class="executor-process-card" data-kind="${escapeHtml(kind)}" data-status="${escapeHtml(status)}" data-live="${live ? "true" : "false"}">
       <div class="executor-process-head">
@@ -8978,8 +9208,8 @@ function renderToolPart(part) {
     <span class="tool-status" data-status="${status}" title="${escapeHtml(statusText)}">${escapeHtml(statusText)}</span>
   </div>`;
 
-  const output = st.output || "";
-  const error = st.error || output || "";
+  const output = stripAnsi(st.output || "");
+  const error = stripAnsi(st.error || "") || output;
   if (output && status === "completed") {
     html += `<div class="msg-tool-output">${escapeHtml(output)}</div>`;
   }
@@ -9239,6 +9469,8 @@ dom.taskListPanel?.addEventListener("click", async (event) => {
   }
   const button = eventClosest(event, "[data-task-id]");
   if (!button) return;
+  // Clicking a task → switch to task tab if on coding
+  if (coding.active) switchTab("control");
   await selectTask(button.dataset.taskId || "");
 });
 
@@ -10106,6 +10338,14 @@ function escapeHtml(str) {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
+}
+
+/** Strip ANSI escape sequences (colors, cursor, etc.) from terminal output. */
+function stripAnsi(str) {
+  if (!str) return "";
+  // Based on the strip-ansi npm package regex — covers CSI, OSC, and other escape sequences
+  // eslint-disable-next-line no-control-regex
+  return str.replace(/[\u001B\u009B][[\]()#;?]*(?:(?:(?:(?:;[-a-zA-Z\d\/#&.:=?%@~_]+)*|[a-zA-Z\d]+(?:;[-a-zA-Z\d\/#&.:=?%@~_]*)*)?\u0007)|(?:(?:\d{1,4}(?:;\d{0,4})*)?[\dA-PR-TZcf-nq-uy=><~]))/g, "");
 }
 
 function stamp(ts) {
@@ -11270,12 +11510,15 @@ function switchTab(tab) {
   if (dom.chatGoalsStrip) dom.chatGoalsStrip.hidden = coding.active;
   // Hide task-specific header elements in coding mode
   if (dom.taskStatus) dom.taskStatus.hidden = coding.active || !state.selectedTaskID;
-  if (dom.chatTitle) dom.chatTitle.textContent = coding.active ? "Coding" : t("chat.title");
+  // Update toggle button text
+  const toggle = document.getElementById("modeToggle");
+  if (toggle) toggle.textContent = coding.active ? "Build" : t("chat.title");
   if (coding.active) renderCodingMessages();
 }
 
-dom.tabControl?.addEventListener("click", () => switchTab("control"));
-dom.tabCoding?.addEventListener("click", () => switchTab("coding"));
+document.getElementById("modeToggle")?.addEventListener("click", () => {
+  switchTab(coding.active ? "control" : "coding");
+});
 
 function codingMessageHTML(msg) {
   if (msg.role === "user") {
@@ -11290,7 +11533,7 @@ function codingMessageHTML(msg) {
       const status = p.state?.status || "running";
       const icon = status === "completed" ? "done" : status === "error" ? "err" : "run";
       const title = escapeHtml(p.state?.title || p.tool || "tool");
-      const output = p.state?.output ? `<pre class="tool-output">${escapeHtml(String(p.state.output).slice(0, 2000))}</pre>` : "";
+      const output = p.state?.output ? `<pre class="tool-output">${escapeHtml(stripAnsi(String(p.state.output)).slice(0, 2000))}</pre>` : "";
       parts.push(`<details class="tool-block tool-${status}"><summary>[${icon}] ${title}</summary>${output}</details>`);
     }
   }

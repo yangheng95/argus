@@ -11,7 +11,7 @@
  * 5. Structured output — PRD, goals, milestones, subtasks, risks, assumptions
  * 6. Replan — receives structured failure analysis and produces alternative strategies
  */
-import { streamText, stepCountIs, tool } from "ai"
+import { streamText, stepCountIs } from "ai"
 import type { LanguageModelV2 } from "@ai-sdk/provider"
 import z from "zod"
 import { Provider } from "@/provider/provider"
@@ -19,6 +19,7 @@ import { createPlannerTools, prefetchContext } from "./tools"
 import { Filesystem } from "@/util/filesystem"
 import { Instance } from "@/project/instance"
 import { Log } from "@/util/log"
+import { parsePlanText } from "./parse-plan-text"
 import path from "path"
 
 const log = Log.create({ service: "planner-agent" })
@@ -153,28 +154,7 @@ export namespace HeadlessPlannerAgent {
     // Create tools with the correct working directory for the task.
     // Without this, the codebase tools use Instance.directory (project root)
     // instead of the task's working directory (e.g., eval workspace).
-    const explorationTools = createPlannerTools(taskWorkDir)
-
-    // -----------------------------------------------------------------------
-    // submit_plan tool — the model calls this to deliver structured plan data.
-    // Tool-call arguments are parsed by the provider API, guaranteeing valid
-    // JSON without any manual sanitize/repair.
-    // -----------------------------------------------------------------------
-    let submittedPlan: PlannerOutputType | undefined
-    const allTools = {
-      ...explorationTools,
-      submit_plan: tool({
-        description:
-          "Submit the final plan after codebase exploration. " +
-          "Call this tool ONCE when you have finished exploring and are ready to deliver the plan. " +
-          "All fields are required except where noted optional.",
-        inputSchema: PlannerOutput,
-        execute: async (args) => {
-          submittedPlan = args as PlannerOutputType
-          return "Plan submitted successfully."
-        },
-      }),
-    }
+    const allTools = createPlannerTools(taskWorkDir)
 
     const fileRefs = await resolveFileReferences(input.request, taskWorkDir)
     if (input.signal?.aborted) throw new Error("planner aborted before context prefetch")
@@ -189,7 +169,6 @@ export namespace HeadlessPlannerAgent {
 
     for (let attempt = 0; attempt < MAX_PLAN_ATTEMPTS; attempt++) {
       if (input.signal?.aborted) throw new Error("planner aborted before attempt " + (attempt + 1))
-      submittedPlan = undefined
 
       const retryContext = attempt > 0 && lastQuality
         ? { previousScore: lastQuality.score, reasons: lastQuality.reasons, attempt }
@@ -220,43 +199,11 @@ export namespace HeadlessPlannerAgent {
         ...(input.stream?.onError ? { onError: input.stream.onError } : {}),
       })
 
-      // Guard against providers that hang after tool call (see spec/agent.ts for details)
-      const SUBMIT_GRACE_MS = 30_000
-      let resultText = ""
-      let resultSteps: any[] = []
-      let resultFinishReason = "unknown"
-      try {
-        const streamDone = Promise.all([stream.text, stream.steps, stream.finishReason])
-        const submitGuard = new Promise<null>((resolve) => {
-          const check = () => {
-            if (submittedPlan) resolve(null)
-            else setTimeout(check, 2000)
-          }
-          setTimeout(check, 5000)
-        }).then(() =>
-          Promise.race([
-            streamDone,
-            new Promise<null>((resolve) => setTimeout(() => resolve(null), SUBMIT_GRACE_MS)),
-          ]),
-        )
-        const raced = await Promise.race([streamDone, submitGuard])
-        if (Array.isArray(raced)) {
-          ;[resultText, resultSteps, resultFinishReason] = raced as [string, any[], string]
-        } else if (submittedPlan) {
-          log.info("planner agent: stream did not finish but submit_plan captured — using captured result", {
-            attempt: attempt + 1,
-          })
-        }
-      } catch (err) {
-        if (submittedPlan) {
-          log.info("planner agent: stream errored but submit_plan captured — using captured result", {
-            attempt: attempt + 1,
-            error: String(err),
-          })
-        } else {
-          throw err
-        }
-      }
+      const [resultText, resultSteps, resultFinishReason] = await Promise.all([
+        stream.text,
+        stream.steps,
+        stream.finishReason,
+      ])
 
       // Count actual tool calls
       const toolCallCount = resultSteps.reduce(
@@ -264,48 +211,22 @@ export namespace HeadlessPlannerAgent {
         0,
       )
 
-      // -----------------------------------------------------------------------
-      // Priority 1: extract from submit_plan tool call (guaranteed valid JSON)
-      // Priority 2: fallback to text JSON parsing (legacy / models that ignore tool)
-      // -----------------------------------------------------------------------
-      let parsed: PlannerOutputType
-
-      if (submittedPlan) {
-        const submitted = submittedPlan as PlannerOutputType
-        log.info("planner agent finished via submit_plan tool call", {
-          steps: resultSteps.length,
-          goals: submitted.goals?.length ?? 0,
-          subtasks: submitted.subtasks?.length ?? 0,
-          prdLength: submitted.prd?.length ?? 0,
-          attempt: attempt + 1,
-        })
-        // Normalize arrays — tool call args may not have Zod defaults applied
-        parsed = {
-          ...submitted,
-          summary: submitted.summary ?? "",
-          prd: submitted.prd ?? "",
-          goals: Array.isArray(submitted.goals) ? submitted.goals : [],
-          subtasks: Array.isArray(submitted.subtasks) ? submitted.subtasks : [],
-          risks: Array.isArray(submitted.risks) ? submitted.risks : [],
-          assumptions: Array.isArray(submitted.assumptions) ? submitted.assumptions : [],
-        }
-      } else {
-        // Fallback: parse from text output
-        let allText = resultText?.trim() || ""
-        if (!allText || !allText.includes("{")) {
-          allText = resultSteps.map((s) => s.text).filter(Boolean).join("\n")
-        }
-
-        log.info("planner agent finished via text output (no submit_plan call)", {
-          steps: resultSteps.length,
-          finishReason: resultFinishReason,
-          textLength: allText.length,
-          textPreview: allText.slice(0, 200),
-          attempt: attempt + 1,
-        })
-
-        parsed = extractJSON(allText)
+      // Collect all text output across steps
+      let allText = resultText?.trim() || ""
+      if (!allText) {
+        allText = resultSteps.map((s) => s.text).filter(Boolean).join("\n")
       }
+
+      log.info("planner agent finished", {
+        steps: resultSteps.length,
+        finishReason: resultFinishReason,
+        textLength: allText.length,
+        toolCalls: toolCallCount,
+        attempt: attempt + 1,
+      })
+
+      // Parse structured sections from text output
+      let parsed: PlannerOutputType = parsePlanText(allText)
 
       // If plan was truncated, synthesize from exploration + request
       if (parsed.prd.length < 100 || parsed.subtasks.length < 2) {
@@ -359,7 +280,7 @@ export namespace HeadlessPlannerAgent {
 }
 
 export { HeadlessPlannerAgent as PlannerAgent }
-export const parsePlannerOutput = extractJSON
+export { parsePlanText as parsePlannerOutput }
 
 // ---------------------------------------------------------------------------
 // Internals
@@ -378,307 +299,6 @@ function ensureMeaningfulSummary(summary: string, fallbackTitle: string): string
   // Reject summaries that are just a file path or directory
   if (/^[./\\]/.test(trimmed) && !trimmed.includes(" ")) return fallbackTitle
   return trimmed
-}
-
-function extractJSON(text: string): PlannerOutputType {
-  let raw = text.trim()
-
-  // Try fenced JSON block (complete or truncated)
-  const fencedComplete = raw.match(/```(?:json)?\s*([\s\S]*?)```/)
-  if (fencedComplete) {
-    raw = fencedComplete[1].trim()
-  } else {
-    // Truncated fenced block: opening ``` but no closing ```
-    const fencedOpen = raw.match(/```(?:json)?\s*([\s\S]*)/)
-    if (fencedOpen && fencedOpen[1].includes("{")) {
-      raw = fencedOpen[1].trim()
-    }
-  }
-
-  // Try to find a JSON object in the text
-  if (!raw.startsWith("{")) {
-    // First try complete JSON object
-    const match = raw.match(/(\{[\s\S]*\})/)
-    if (match) {
-      raw = match[1]
-    } else {
-      // Truncated: find the first { and take everything after
-      const idx = raw.indexOf("{")
-      if (idx >= 0) raw = raw.slice(idx)
-    }
-  }
-
-  // Sanitize LLM JSON issues: unescaped backslashes, raw newlines in strings, etc.
-  // Must run BEFORE truncation repair since raw control chars confuse the repairer.
-  raw = sanitizeJSON(raw)
-
-  // If no closing brace, the JSON is truncated -- try to repair it
-  if (raw.startsWith("{") && !raw.endsWith("}")) {
-    log.warn("planner: JSON appears truncated, attempting repair", { length: raw.length, tail: raw.slice(-100) })
-    raw = repairTruncatedJSON(raw)
-  }
-
-  let obj: any
-  // Try multiple parse strategies
-  const parseErr = tryParse(raw)
-  if (parseErr.ok) {
-    obj = parseErr.value
-  } else {
-    // Try more aggressive repair: trim back to last complete JSON value
-    const trimmed = trimToLastComplete(raw)
-    const retryErr = tryParse(trimmed)
-    if (retryErr.ok) {
-      log.warn("planner: repaired truncated JSON by trimming", {
-        originalLength: raw.length,
-        trimmedLength: trimmed.length,
-      })
-      obj = retryErr.value
-    } else {
-      // Last resort: return a minimal plan instead of throwing.
-      // The caller will synthesize from exploration data.
-      log.error("planner: JSON parse failed after all repair attempts, returning minimal plan", {
-        error: String(parseErr.error),
-        rawLength: raw.length,
-        rawHead: raw.slice(0, 500),
-        rawTail: raw.slice(-300),
-      })
-      obj = { prd: "", summary: "", goals: [], subtasks: [], risks: [] }
-    }
-  }
-
-  // Normalize LLM output quirks before strict validation
-  if (Array.isArray(obj.goals)) {
-    // Filter out incomplete goals from truncated JSON
-    obj.goals = obj.goals.filter((g: any) => g && typeof g === "object" && g.description && g.criteria)
-    for (const g of obj.goals) {
-      if (g.priority && g.priority !== "blocking" && g.priority !== "advisory") {
-        g.priority = "advisory"
-      }
-      // Ensure check_selector is array or undefined
-      if (g.check_selector && !Array.isArray(g.check_selector)) {
-        g.check_selector = [String(g.check_selector)]
-      }
-    }
-  }
-  if (Array.isArray(obj.subtasks)) {
-    // Filter out incomplete subtasks from truncated JSON
-    obj.subtasks = obj.subtasks.filter((s: any) => s && typeof s === "object" && s.title)
-    for (let i = 0; i < obj.subtasks.length; i++) {
-      if (obj.subtasks[i].order == null) obj.subtasks[i].order = i + 1
-      if (!obj.subtasks[i].description) obj.subtasks[i].description = obj.subtasks[i].title
-    }
-  }
-  if (Array.isArray(obj.milestones)) {
-    // Filter out incomplete milestones
-    obj.milestones = obj.milestones.filter((m: any) => m && typeof m === "object" && m.title)
-    for (const m of obj.milestones) {
-      if (!Array.isArray(m.goal_indices)) m.goal_indices = []
-    }
-  }
-  if (Array.isArray(obj.assumptions)) {
-    obj.assumptions = obj.assumptions.filter((a: any) => a && typeof a === "object" && a.question && a.assumption)
-  }
-
-  // Fill in missing required fields when the JSON was truncated
-  if (!obj.prd) obj.prd = ""
-  if (!obj.summary) obj.summary = ""
-  if (!Array.isArray(obj.goals)) obj.goals = []
-  if (!Array.isArray(obj.subtasks)) obj.subtasks = []
-  if (!Array.isArray(obj.risks)) obj.risks = []
-
-  try {
-    return PlannerOutput.parse(obj)
-  } catch (zodErr) {
-    log.error("planner: Zod validation failed, returning with defaults", {
-      error: String(zodErr),
-      goalsCount: obj.goals?.length,
-      subtasksCount: obj.subtasks?.length,
-    })
-    // Return a minimal valid plan rather than crashing.
-    // Coerce risks to string[] to avoid secondary Zod failure.
-    const safeRisks = Array.isArray(obj.risks)
-      ? obj.risks.filter((r: unknown) => typeof r === "string")
-      : []
-    return PlannerOutput.parse({
-      prd: typeof obj.prd === "string" ? obj.prd : "",
-      summary: typeof obj.summary === "string" ? obj.summary : "",
-      goals: [],
-      subtasks: [],
-      risks: safeRisks,
-    })
-  }
-}
-
-/**
- * Sanitize common LLM JSON output issues:
- * - Unescaped backslashes (e.g., Windows paths: C:\Users)
- * - Real newlines inside JSON string values
- * - Markdown code blocks inside string values
- */
-function sanitizeJSON(raw: string): string {
-  let result = ""
-  let inString = false
-  let i = 0
-  while (i < raw.length) {
-    const ch = raw[i]
-    if (!inString) {
-      if (ch === '"') inString = true
-      result += ch
-      i++
-      continue
-    }
-    // Inside a string
-    if (ch === "\\") {
-      const next = raw[i + 1]
-      // Valid JSON escapes: " \ / b f n r t u
-      if (next && '"\\\/bfnrtu'.includes(next)) {
-        result += ch + next
-        i += 2
-        continue
-      }
-      // Invalid escape: double the backslash to make it valid
-      result += "\\\\"
-      i++
-      continue
-    }
-    if (ch === '"') {
-      inString = false
-      result += ch
-      i++
-      continue
-    }
-    if (ch === "\n") {
-      result += "\\n"
-      i++
-      continue
-    }
-    if (ch === "\r") {
-      result += "\\r"
-      i++
-      continue
-    }
-    if (ch === "\t") {
-      result += "\\t"
-      i++
-      continue
-    }
-    result += ch
-    i++
-  }
-  return result
-}
-
-function tryParse(text: string): { ok: true; value: any } | { ok: false; error: Error } {
-  try {
-    return { ok: true, value: JSON.parse(text) }
-  } catch (err) {
-    return { ok: false, error: err as Error }
-  }
-}
-
-/**
- * Attempt to repair truncated JSON from LLM output.
- * When the LLM hits the output token limit, JSON is cut off mid-value.
- * Strategy: close all open strings, arrays, and objects.
- */
-function repairTruncatedJSON(raw: string): string {
-  let repaired = raw
-
-  // If truncated inside a string, find and close it
-  let inString = false
-  let escaped = false
-  for (let i = 0; i < repaired.length; i++) {
-    const ch = repaired[i]
-    if (escaped) { escaped = false; continue }
-    if (ch === "\\") { escaped = true; continue }
-    if (ch === '"') inString = !inString
-  }
-  if (inString) {
-    // Truncated mid-string: find last valid string boundary and trim there
-    // Or just close the string
-    repaired += '"'
-  }
-
-  // Remove trailing partial key-value (e.g., `"key": "partial...` or `"key":`)
-  repaired = repaired.replace(/,\s*"[^"]*"?\s*:?\s*"?[^"]*$/, "")
-  repaired = repaired.replace(/,\s*$/, "")
-
-  // Count and close unclosed brackets
-  const stack: string[] = []
-  inString = false
-  escaped = false
-  for (let i = 0; i < repaired.length; i++) {
-    const ch = repaired[i]
-    if (escaped) { escaped = false; continue }
-    if (ch === "\\") { escaped = true; continue }
-    if (ch === '"') { inString = !inString; continue }
-    if (inString) continue
-    if (ch === "{") stack.push("}")
-    else if (ch === "[") stack.push("]")
-    else if (ch === "}" || ch === "]") stack.pop()
-  }
-
-  // Remove any trailing comma that's now at the end
-  repaired = repaired.replace(/,\s*$/, "")
-
-  // Close remaining brackets/braces in reverse order
-  while (stack.length > 0) repaired += stack.pop()
-
-  return repaired
-}
-
-/**
- * Trim JSON back to the last complete value, then close all brackets.
- * More aggressive than repairTruncatedJSON — removes partial values entirely.
- */
-function trimToLastComplete(raw: string): string {
-  // Find positions of all complete value endings (}, ], ", true, false, null, number)
-  let lastComplete = -1
-  let inString = false
-  let escaped = false
-  let depth = 0
-
-  for (let i = 0; i < raw.length; i++) {
-    const ch = raw[i]
-    if (escaped) { escaped = false; continue }
-    if (ch === "\\") { escaped = true; continue }
-    if (ch === '"') {
-      inString = !inString
-      if (!inString) lastComplete = i // end of string
-      continue
-    }
-    if (inString) continue
-    if (ch === "{" || ch === "[") depth++
-    else if (ch === "}" || ch === "]") {
-      depth--
-      lastComplete = i
-    }
-  }
-
-  // Trim to last complete value
-  if (lastComplete > 0 && lastComplete < raw.length - 1) {
-    let trimmed = raw.slice(0, lastComplete + 1)
-    // Remove trailing comma
-    trimmed = trimmed.replace(/,\s*$/, "")
-    // Close remaining brackets
-    const stack: string[] = []
-    inString = false
-    escaped = false
-    for (let i = 0; i < trimmed.length; i++) {
-      const ch = trimmed[i]
-      if (escaped) { escaped = false; continue }
-      if (ch === "\\") { escaped = true; continue }
-      if (ch === '"') { inString = !inString; continue }
-      if (inString) continue
-      if (ch === "{") stack.push("}")
-      else if (ch === "[") stack.push("]")
-      else if (ch === "}" || ch === "]") stack.pop()
-    }
-    while (stack.length > 0) trimmed += stack.pop()
-    return trimmed
-  }
-
-  return repairTruncatedJSON(raw)
 }
 
 /**
@@ -1130,11 +750,12 @@ function buildUserPrompt(
     sections.push(
       "Pre-read files are provided above — analyze them before making tool calls. " +
         "Then use tools to explore related files, dependencies, test patterns, and build/test commands. " +
-        "Produce your plan by calling the submit_plan tool.",
+        "Output your plan using section tags as described in your instructions.",
     )
   } else {
     sections.push(
-      "Now recall memory, check preferences, explore the codebase thoroughly, then produce your plan by calling the submit_plan tool.",
+      "Now recall memory, check preferences, explore the codebase thoroughly, " +
+        "then output your plan using section tags as described in your instructions.",
     )
   }
   return sections.join("\n\n")
@@ -1158,7 +779,6 @@ CRITICAL: You MUST use tools to explore the codebase BEFORE producing any plan. 
 - **search_code**: Search file contents with regex (ripgrep)
 - **list_directory**: List files and directories at a path
 - **web_search**: Search the web for documentation, best practices, framework comparisons, and latest API references. USE THIS PROACTIVELY — always research before choosing frameworks, libraries, or architectural patterns.
-- **submit_plan**: Submit the final plan (call ONCE after exploration is complete)
 
 ## Your Process
 
@@ -1213,8 +833,8 @@ Think: "Could an executor implement this plan without asking me any questions?" 
 - A clear description explaining the specific outcome (not just "tests pass" -- say WHICH functionality must work and HOW)
 - Machine-verifiable criteria with exact commands AND expected outcomes
 - Relevant check_selectors
-- Example GOOD goal: {"description": "Router middleware chain executes in onion model: each middleware calls next(), handler runs innermost, middleware can execute logic before/after next(), or short-circuit by returning Response directly", "criteria": "bun test src/middleware.test.ts passes, verifying before->handler->after execution order", "priority": "blocking", "check_selector": ["test"]}
-- Example BAD goal: {"description": "Tests pass", "criteria": "bun test exits 0"} -- too vague!
+- Example GOOD goal: "description: Router middleware chain executes in onion model; criteria: bun test src/middleware.test.ts passes; check_selector: test; priority: blocking"
+- Example BAD goal: "description: Tests pass; criteria: bun test exits 0" -- too vague!
 
 **Subtasks** -- Ordered implementation steps. Each subtask must specify:
 - WHAT to change (specific code change)
@@ -1224,20 +844,53 @@ Think: "Could an executor implement this plan without asking me any questions?" 
 
 **PRD** -- Bullet-point spec: files to modify, changes, patterns to follow, verification commands.
 
-### Phase 3: OUTPUT — Call submit_plan tool
+### Phase 3: OUTPUT — Output Structured Text with Section Tags
 
-When you have finished exploring and are ready to deliver the plan, call the **submit_plan** tool with all the required fields. Do NOT output raw JSON text — use the tool call instead.
+After exploration, output your plan using section tags. Each section is wrapped in <tag>...</tag>.
 
-Keep PRD concise (bullet points, ≤ 2000 chars). Goals and subtasks should be DETAILED — do not sacrifice clarity for brevity.
+**Required sections:**
+- <summary> — One-line summary of the plan
+- <prd> — Technical spec with bullet points: files to modify, exact changes, patterns, verification commands. Keep under 2000 chars.
+- <goals> — Each goal with description, criteria, check_selector, priority
+- <subtasks> — Ordered implementation steps with title, description, order
+- <risks> — Specific risks with mitigation
 
-The submit_plan tool accepts these fields:
-- **summary**: One-line summary of the plan
-- **goals**: Array of {description, criteria (exact command + expected outcome), priority, check_selector}
-- **subtasks**: Array of {title, description (file paths + changes + patterns), order}
-- **risks**: Array of specific risks with mitigation
-- **milestones** (optional): Array of {title, goal_indices}
-- **assumptions** (optional): Array of {question, assumption}
-- **prd**: Technical spec with bullet points: files to modify, exact changes, patterns, verification commands. ≤ 2000 chars.
+**Optional sections:**
+- <milestones> — Groups of goals with title and goal indices
+- <assumptions> — Pairs of question and assumption
+- <clarifications> — Items needing user clarification
+
+**List format** (for goals, subtasks, etc.):
+\`\`\`
+<goals>
+- description: Router middleware chain executes in onion model
+  criteria: bun test src/middleware.test.ts passes, verifying before->handler->after execution order
+  check_selector: test
+  priority: blocking
+
+- description: JWT authentication works end-to-end
+  criteria: bun test src/auth/auth.spec.ts passes
+  check_selector: build, test
+  priority: blocking
+</goals>
+
+<subtasks>
+- title: Create auth module
+  description: Create src/modules/auth/ with controller, service, dto following existing patterns in src/modules/users/
+  order: 1
+
+- title: Add JWT middleware
+  description: Create src/middleware/jwt.ts implementing the guard pattern from src/middleware/roles.ts
+  order: 2
+</subtasks>
+
+<assumptions>
+- Q: Which test framework?
+  A: Jest, matching existing project patterns
+</assumptions>
+\`\`\`
+
+Output text directly. Do NOT output JSON. Do NOT wrap in code blocks.
 
 ## Rules
 
@@ -1249,14 +902,12 @@ The submit_plan tool accepts these fields:
 - subtask descriptions must reference specific files, functions, and patterns discovered during exploration.
 - Write in the same language as the request (Chinese request -> Chinese plan).
 - If replanning: your new plan MUST differ from the previous failed approach.
-- The prd field must be detailed enough that an executor agent can implement everything without further exploration.
-- After finishing exploration, call submit_plan with your plan. Do NOT output raw JSON text.
-- If submit_plan is unavailable, output JSON as a fallback.
+- The prd must be detailed enough that an executor agent can implement everything without further exploration.
 - Do NOT produce generic advice like "follow best practices" or "handle edge cases" -- be specific about WHICH practices and WHICH edge cases.
 
 ## Quality Self-Check (MANDATORY)
 
-Before outputting JSON, verify each of these. If ANY answer is NO, use more tools to fill the gap:
+Before outputting, verify each of these. If ANY answer is NO, use more tools to fill the gap:
 
 1. Did I make at least ${MIN_TOOL_CALLS} tool calls to explore the codebase?
 2. Does EVERY goal have a detailed description explaining the specific outcome? (not just "tests pass")
@@ -1268,8 +919,7 @@ Before outputting JSON, verify each of these. If ANY answer is NO, use more tool
 
 ## Output Format
 
-- PRD: Use bullet points, keep under 2000 chars.
-- Goals: Be DETAILED in description and criteria. Goals are the most important output.
-- Subtasks: Include file paths and verification steps.
-- Call submit_plan exactly once after exploration is complete.
-- Do NOT output raw JSON. Use the submit_plan tool call.`
+- PRD: Use bullet points inside <prd> tag, keep under 2000 chars.
+- Goals: Be DETAILED in description and criteria inside <goals> tag. Goals are the most important output.
+- Subtasks: Include file paths and verification steps inside <subtasks> tag.
+- Output all sections using <tag>...</tag> format. Do NOT output JSON.`

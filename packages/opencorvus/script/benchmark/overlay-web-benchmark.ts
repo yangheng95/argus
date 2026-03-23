@@ -455,13 +455,11 @@ try {
       },
       routing: benchmarkRoutingForExecutor(executor),
       checks: {
-        build: false,
-        lint: false,
+        // build, lint: undefined → auto-discovery from package.json scripts
+        // spec_check: undefined → auto-enabled when spec exists
+        // test: disabled by default for benchmark (greenfield projects have no tests initially)
         test: false,
         verify_cmd: false,
-        spec_check: {
-          enabled: false,
-        },
       },
       goals: TASK_GOALS,
       ...(DELIVERY_VERIFY_CMD ? { metadata: { delivery_verify_cmd: DELIVERY_VERIFY_CMD } } : {}),

@@ -879,7 +879,7 @@ async function completeRun(run: RunRow, hooks: RuntimeHooks) {
     directory: Instance.directory,
   })
   registerGoalRunSession(judgeSession.id, task.id)
-  const judgeContentHooks = sessionStreamHooks({ sessionID: judgeSession.id, taskID: task.id })
+  const judgeContentHooks = sessionStreamHooks({ sessionID: judgeSession.id, taskID: task.id, stage: "judge" })
   const judgeStream = mergeTextHooks(judgeContentHooks, judgeLive.hooks)
   let analysis: EvaluatorAnalysisType
   let analysisError: string | undefined
@@ -1048,7 +1048,7 @@ async function runEvaluation(task: TaskRow, run: RunRow, existingDelivery: Deliv
     directory: Instance.directory,
   })
   registerGoalRunSession(judgeSession.id, task.id)
-  const judgeContentHooks = sessionStreamHooks({ sessionID: judgeSession.id, taskID: task.id })
+  const judgeContentHooks = sessionStreamHooks({ sessionID: judgeSession.id, taskID: task.id, stage: "judge" })
   const judgeStream = mergeTextHooks(judgeContentHooks, judgeLive.hooks)
   let analysis: EvaluatorAnalysisType
   let analysisError: string | undefined
@@ -1200,7 +1200,7 @@ async function publishAcceptedDelivery(task: TaskRow, run: RunRow, delivery: Del
       directory: Instance.directory,
     })
     registerGoalRunSession(deliverySession.id, task.id)
-    const deliveryContentHooks = sessionStreamHooks({ sessionID: deliverySession.id, taskID: task.id })
+    const deliveryContentHooks = sessionStreamHooks({ sessionID: deliverySession.id, taskID: task.id, stage: "delivery" })
     const deliveryStream = mergeTextHooks(deliveryContentHooks, deliveryLive.hooks)
     await deliveryLive.start("Delivery verification started")
     let deliveryVerdict: DeliveryVerdictType | undefined

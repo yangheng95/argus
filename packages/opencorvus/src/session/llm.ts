@@ -64,14 +64,14 @@ export namespace LLM {
       Provider.getProvider(input.model.providerID),
       Auth.get(input.model.providerID),
     ])
-    const isCodex = provider.id === "openai" && auth?.type === "oauth"
+    const isOpenaiOauth = provider.id === "openai" && auth?.type === "oauth"
 
     const system: string[] = []
+    const providerPrompt = input.agent.prompt ? [input.agent.prompt] : await SystemPrompt.provider(input.model)
     system.push(
       [
         // use agent prompt otherwise provider prompt
-        // For Codex sessions, skip SystemPrompt.provider() since it's sent via options.instructions
-        ...(input.agent.prompt ? [input.agent.prompt] : isCodex ? [] : SystemPrompt.provider(input.model)),
+        ...providerPrompt,
         // any custom prompt passed into this call
         ...input.system,
         // any custom prompt from last user message
@@ -109,8 +109,8 @@ export namespace LLM {
       mergeDeep(input.agent.options),
       mergeDeep(variant),
     )
-    if (isCodex) {
-      options.instructions = SystemPrompt.instructions()
+    if (isOpenaiOauth) {
+      options.instructions = system.join("\n")
     }
 
     const params = await Plugin.trigger(
@@ -147,7 +147,7 @@ export namespace LLM {
     )
 
     const maxOutputTokens =
-      isCodex || provider.id.includes("github-copilot") ? undefined : ProviderTransform.maxOutputTokens(input.model)
+      isOpenaiOauth || provider.id.includes("github-copilot") ? undefined : ProviderTransform.maxOutputTokens(input.model)
 
     const tools = await resolveTools(input)
     const providerOptions = ProviderTransform.providerOptions(input.model, params.options)

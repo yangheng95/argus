@@ -637,29 +637,55 @@ export namespace Provider {
 
       const customFetch = options["fetch"]
 
-      // Default fetch timeout: 5 minutes if not configured by model/provider
-      const DEFAULT_FETCH_TIMEOUT_MS = 300_000
+      // Default inactivity timeout: abort if no data flows for this duration.
+      // Unlike a fixed timeout from request start, this only fires when the
+      // stream goes silent — active streaming (even slow) keeps it alive.
+      const DEFAULT_INACTIVITY_TIMEOUT_MS = 300_000
       options["fetch"] = async (input: any, init?: BunFetchRequestInit) => {
         // Preserve custom fetch if it exists, wrap it with timeout logic
         const fetchFn = customFetch ?? fetch
         const opts = init ?? {}
 
-        // Always apply a timeout: use configured value, or fall back to default
-        const timeoutValue = (options["timeout"] !== undefined && options["timeout"] !== null)
+        const configuredTimeout = (options["timeout"] !== undefined && options["timeout"] !== null)
           ? options["timeout"]
-          : DEFAULT_FETCH_TIMEOUT_MS
-        if (timeoutValue !== false && typeof timeoutValue === "number" && timeoutValue < 60_000) {
-          log.warn("short fetch timeout detected", { timeoutValue, providerID: model.providerID, optionsTimeout: options["timeout"] })
-        }
-        if (timeoutValue !== false && typeof timeoutValue === "number" && timeoutValue > 0) {
+          : DEFAULT_INACTIVITY_TIMEOUT_MS
+        // Enforce a minimum inactivity timeout: upstream SDKs (e.g., copilot) may
+        // set very short timeouts (30s) which abort during model thinking.
+        // 5 minutes minimum covers extended thinking models (sonnet, opus).
+        const MIN_INACTIVITY_TIMEOUT_MS = 300_000
+        const inactivityMs = configuredTimeout !== false && typeof configuredTimeout === "number" && configuredTimeout > 0
+          ? Math.max(configuredTimeout, MIN_INACTIVITY_TIMEOUT_MS)
+          : 0
+
+        // Inactivity-based abort: fires if no activity for the configured period.
+        // The timer starts NOW (covers the initial connection phase) and resets
+        // on every streaming chunk. This handles both:
+        // - Server hangs before sending any response (initial connect timeout)
+        // - Server stops sending data mid-stream (stream stall timeout)
+        const inactivityController = inactivityMs > 0 ? new AbortController() : undefined
+        let inactivityTimer: ReturnType<typeof setTimeout> | undefined
+        const resetInactivityTimer = inactivityController
+          ? () => {
+              if (inactivityTimer) clearTimeout(inactivityTimer)
+              inactivityTimer = setTimeout(() => {
+                log.warn("fetch inactivity timeout — no data for configured period, aborting", {
+                  providerID: model.providerID,
+                  inactivityMs,
+                })
+                inactivityController!.abort()
+              }, inactivityMs)
+            }
+          : undefined
+
+        if (inactivityController) {
           const signals: AbortSignal[] = []
           if (opts.signal) signals.push(opts.signal)
-          signals.push(AbortSignal.timeout(timeoutValue))
-
-          const combined = signals.length > 1 ? AbortSignal.any(signals) : signals[0]
-
-          opts.signal = combined
+          signals.push(inactivityController.signal)
+          opts.signal = signals.length > 1 ? AbortSignal.any(signals) : signals[0]
         }
+
+        // Start the inactivity timer BEFORE fetch — covers initial connection hang
+        resetInactivityTimer?.()
 
         // Strip openai itemId metadata following what codex does
         // Codex uses #[serde(skip_serializing)] on id fields for all item types:
@@ -679,11 +705,41 @@ export namespace Provider {
           }
         }
 
-        return fetchFn(input, {
+        const response = await fetchFn(input, {
           ...opts,
           // @ts-ignore see here: https://github.com/oven-sh/bun/issues/16682
           timeout: false,
         })
+
+        // Response received — reset timer (server is alive)
+        resetInactivityTimer?.()
+
+        // For streaming responses, wrap the body so each chunk resets the timer.
+        if (inactivityController && response.body) {
+          const original = response.body
+          const wrapped = original.pipeThrough(
+            new TransformStream({
+              transform(chunk, controller) {
+                resetInactivityTimer!()
+                controller.enqueue(chunk)
+              },
+              flush() {
+                if (inactivityTimer) clearTimeout(inactivityTimer)
+              },
+            }),
+          )
+
+          // Return a new Response with the wrapped body, preserving headers/status
+          return new Response(wrapped, {
+            status: response.status,
+            statusText: response.statusText,
+            headers: response.headers,
+          })
+        }
+
+        // Non-streaming response — clear the inactivity timer
+        if (inactivityTimer) clearTimeout(inactivityTimer)
+        return response
       }
 
       const bundledFn = BUNDLED_PROVIDERS[model.api.npm]

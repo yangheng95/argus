@@ -976,6 +976,35 @@ export namespace ProviderTransform {
       schema = sanitizeGemini(schema)
     }
 
+    // OpenAI Responses API requires tool parameters to be { type: "object" }.
+    // Flatten top-level anyOf (from z.discriminatedUnion) into a single object schema.
+    const s = schema as any
+    if (!s.type && Array.isArray(s.anyOf) && s.anyOf.length > 0) {
+      const variants = s.anyOf.filter((v: any) => v?.type === "object" && v.properties)
+      if (variants.length > 0) {
+        const merged: Record<string, any> = {}
+        const allRequired = new Set<string>()
+        let first = true
+        for (const variant of variants) {
+          for (const [k, v] of Object.entries(variant.properties as Record<string, any>)) {
+            if (!merged[k]) {
+              merged[k] = v
+            } else if (v?.const !== undefined && (merged[k]?.const !== undefined || merged[k]?.enum)) {
+              const existing: any[] = merged[k].enum ?? (merged[k].const !== undefined ? [merged[k].const] : [])
+              merged[k] = { type: "string", enum: [...new Set([...existing, v.const].map(String))] }
+            } else if (v?.enum && (merged[k]?.enum || merged[k]?.const !== undefined)) {
+              const existing: any[] = merged[k].enum ?? (merged[k].const !== undefined ? [merged[k].const] : [])
+              merged[k] = { type: merged[k].type ?? v.type ?? "string", enum: [...new Set([...existing, ...v.enum].map(String))] }
+            }
+          }
+          const req = new Set<string>(variant.required ?? [])
+          if (first) { for (const r of req) allRequired.add(r); first = false }
+          else { for (const r of allRequired) { if (!req.has(r)) allRequired.delete(r) } }
+        }
+        return { type: "object", properties: merged, required: [...allRequired] } as JSONSchema7
+      }
+    }
+
     return schema as JSONSchema7
   }
 }

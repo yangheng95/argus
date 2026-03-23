@@ -358,12 +358,14 @@ export async function CodexAuthPlugin(input: PluginInput): Promise<Hooks> {
 
         // Filter models to only allowed Codex models for OAuth
         const allowedModels = new Set([
+          "gpt-5.1-codex",
           "gpt-5.1-codex-max",
           "gpt-5.1-codex-mini",
           "gpt-5.2",
           "gpt-5.2-codex",
           "gpt-5.3-codex",
-          "gpt-5.1-codex",
+          "gpt-5.4",
+          "gpt-5.4-mini",
         ])
         for (const modelId of Object.keys(provider.models)) {
           if (modelId.includes("codex")) continue
@@ -482,15 +484,61 @@ export async function CodexAuthPlugin(input: PluginInput): Promise<Hooks> {
               requestInput instanceof URL
                 ? requestInput
                 : new URL(typeof requestInput === "string" ? requestInput : requestInput.url)
-            const url =
+            const isResponsesOrChat =
               parsed.pathname.includes("/v1/responses") || parsed.pathname.includes("/chat/completions")
-                ? new URL(CODEX_API_ENDPOINT)
-                : parsed
+            const url = isResponsesOrChat ? new URL(CODEX_API_ENDPOINT) : parsed
 
-            return fetch(url, {
+            // Codex endpoint requirements:
+            // - `instructions` must be non-null
+            // - `store` must be false
+            // - `max_output_tokens` is unsupported
+            // - all function tool parameters must have `type: "object"`
+            let body = init?.body
+            if (isResponsesOrChat && typeof body === "string") {
+              const json = JSON.parse(body)
+              if (!json.instructions) {
+                json.instructions =
+                  "You are OpenCorvus, an autonomous coding agent. " +
+                  "Act without asking. Write minimal, correct code. " +
+                  "Verify changes after making them. Be concise and action-oriented."
+              }
+              json.store = false
+              delete json.max_output_tokens
+              // Fix tool schemas: Codex requires type:"object" for function parameters
+              if (Array.isArray(json.tools)) {
+                for (const tool of json.tools) {
+                  if (tool.type === "function" && tool.function?.parameters) {
+                    const params = tool.function.parameters
+                    if (!params.type || params.type === "None") {
+                      params.type = "object"
+                      if (!params.properties) params.properties = {}
+                    }
+                  }
+                }
+              }
+              body = JSON.stringify(json)
+            }
+
+            const resp = await fetch(url, {
               ...init,
+              body,
               headers,
             })
+
+            if (!resp.ok) {
+              const clone = resp.clone()
+              const errBody = await clone.text().catch(() => "")
+              log.error("codex fetch failed", {
+                status: resp.status,
+                statusText: resp.statusText,
+                url: url.toString(),
+                responseBody: errBody,
+                hasInstructions: typeof body === "string" && body.includes('"instructions"'),
+                hasStore: typeof body === "string" && body.includes('"store"'),
+              })
+            }
+
+            return resp
           },
         }
       },

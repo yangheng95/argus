@@ -104,29 +104,6 @@ async function call<T>(run: (attemptSignal: AbortSignal | undefined) => Promise<
   throw new Error("unreachable")
 }
 
-export async function generateText(
-  input: Parameters<typeof generateTextBase>[0] & {
-    timeoutMs?: number | false
-    retries?: number
-    retryDelayMs?: number
-  },
-) {
-  const { timeoutMs: timeout, retries: count, retryDelayMs: delay, abortSignal, ...rest } = input
-  return call(
-    (attemptSignal) => generateTextBase({
-      ...(rest as Parameters<typeof generateTextBase>[0]),
-      abortSignal: attemptSignal,
-      maxRetries: 0,
-    }),
-    {
-      retries: count,
-      retryDelayMs: delay,
-      abortSignal,
-      timeoutMs: timeout,
-    },
-  )
-}
-
 export type TextHooks<TOOLS extends ToolSet = ToolSet> = {
   onAbort?: StreamTextOnAbortCallback<TOOLS>
   onChunk?: StreamTextOnChunkCallback<TOOLS>
@@ -143,9 +120,6 @@ export async function completeText<TOOLS extends ToolSet>(
   } & TextHooks<TOOLS>,
 ) {
   const { onAbort, onChunk, onError, onFinish, onStepFinish, ...rest } = input
-  if (!onAbort && !onChunk && !onError && !onFinish && !onStepFinish) {
-    return generateText(rest)
-  }
   const result = streamText<TOOLS>({
     ...(rest as Parameters<typeof streamTextBase<TOOLS>>[0]),
     onAbort,

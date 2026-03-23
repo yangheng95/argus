@@ -294,6 +294,23 @@ export namespace Agent {
     return result
   })
 
+  /** Map of native agent name → built-in default prompt (before config overrides). */
+  const NATIVE_DEFAULTS: Record<string, string | undefined> = {
+    build: undefined,
+    spec: undefined,
+    plan: undefined,
+    general: undefined,
+    explore: PROMPT_EXPLORE,
+    compaction: PROMPT_COMPACTION,
+    title: PROMPT_TITLE,
+    summary: PROMPT_SUMMARY,
+  }
+
+  /** Returns the built-in default prompt for a native agent (before config overrides). */
+  export function nativeDefaultPrompt(name: string): string | undefined {
+    return NATIVE_DEFAULTS[name]
+  }
+
   export async function get(agent: string) {
     return state().then((x) => x[agent])
   }
@@ -330,7 +347,7 @@ export namespace Agent {
     const model = await Provider.getModel(defaultModel.providerID, defaultModel.modelID)
     const language = await Provider.getLanguage(model)
 
-    const system = [PROMPT_GENERATE]
+    const system = [cfg.prompt?.["agent_generate"] ?? PROMPT_GENERATE]
     await Plugin.trigger("experimental.chat.system.transform", { model }, { system })
     const existing = await list()
 
@@ -366,7 +383,6 @@ export namespace Agent {
       const result = streamObject({
         ...params,
         providerOptions: ProviderTransform.providerOptions(model, {
-          instructions: SystemPrompt.instructions(),
           store: false,
         }),
         onError: () => {},
