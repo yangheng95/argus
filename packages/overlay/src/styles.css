@@ -3501,6 +3501,31 @@ body[data-theme="light"] .section-badge {
   word-break: break-word;
   overflow-x: auto;
 }
+/* Streaming tool input — shows partial JSON as LLM generates it */
+.msg-tool-input {
+  margin: calc(3px * var(--ui-scale)) 0 var(--ui-gap-md) calc(26px * var(--ui-scale));
+  padding: calc(6px * var(--ui-scale)) var(--ui-input-padding-x);
+  border-radius: calc(14px * var(--ui-scale));
+  background: var(--subtle-2);
+  border: 1px solid var(--subtle-4);
+  font-family: var(--mono);
+  font-size: var(--ui-font-meta);
+  line-height: 1.6;
+  color: var(--text-muted);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: calc(200px * var(--ui-scale));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.agent-card-body .msg-tool-input {
+  background: var(--subtle-1, rgba(0,0,0,0.12));
+  border-color: transparent;
+  margin-left: calc(22px * var(--ui-scale));
+  font-size: var(--ui-font-small);
+  max-height: calc(120px * var(--ui-scale));
+}
+
 .msg-tool-error {
   margin: calc(3px * var(--ui-scale)) 0 var(--ui-gap-md) calc(26px * var(--ui-scale));
   padding: calc(6px * var(--ui-scale)) var(--ui-input-padding-x);

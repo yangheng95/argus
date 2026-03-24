@@ -101,6 +101,22 @@ export function sessionStreamHooks(input: {
           return
         }
 
+        if (chunk.type === "tool-input-delta") {
+          if (!chunk.delta) return
+          const existing = toolParts.get(chunk.id)
+          if (existing && existing.state.status === "pending") {
+            ;(existing.state as any).raw += chunk.delta
+            await Session.updatePartDelta({
+              sessionID: input.sessionID,
+              messageID: existing.messageID,
+              partID: existing.id,
+              field: "raw",
+              delta: chunk.delta,
+            })
+          }
+          return
+        }
+
         if (chunk.type === "tool-call") {
           const msgID = await ensureMessage()
           const existing = toolParts.get(chunk.toolCallId)
