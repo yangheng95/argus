@@ -823,6 +823,34 @@ export namespace Provider {
     }
   }
 
+  /**
+   * Returns the provider's built-in web search tool if available.
+   * OpenAI, Anthropic, Azure, and GitHub Copilot all support server-side web search.
+   * For other providers, returns undefined (caller should fall back to Exa or skip).
+   */
+  export async function getWebSearchTool(model: Model): Promise<any | undefined> {
+    const npm = model.api.npm
+    try {
+      const sdk = await getSDK(model)
+      if (npm === "@ai-sdk/openai") {
+        return (sdk as any).webSearch?.()
+      }
+      if (npm === "@ai-sdk/anthropic" || npm === "@ai-sdk/google-vertex/anthropic") {
+        return (sdk as any).webSearch_20250305?.()
+      }
+      if (npm === "@ai-sdk/azure") {
+        return (sdk as any).webSearchPreview?.()
+      }
+      if (npm === "@ai-sdk/github-copilot") {
+        const { webSearch } = await import("./sdk/copilot/responses/tool/web-search")
+        return webSearch()
+      }
+    } catch (e) {
+      log.warn("getWebSearchTool failed, will fall back to Exa", { npm, err: e })
+    }
+    return undefined
+  }
+
   export async function closest(providerID: string, query: string[]) {
     const s = await state()
     const provider = s.providers[providerID]

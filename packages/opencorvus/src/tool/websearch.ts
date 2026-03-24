@@ -95,10 +95,12 @@ export const WebSearchTool = Tool.define("websearch", async () => {
       const { signal, clearTimeout } = abortAfterAny(25000, ctx.abort)
 
       try {
+        const exaKey = process.env.EXA_API_KEY
         const headers: Record<string, string> = {
           accept: "application/json, text/event-stream",
           "content-type": "application/json",
         }
+        if (exaKey) headers["x-api-key"] = exaKey
 
         const response = await fetch(`${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.SEARCH}`, {
           method: "POST",
