@@ -166,13 +166,7 @@ export namespace CodexExecutor {
         }
 
         if (type.startsWith("response.")) {
-          return [
-            {
-              type: "status",
-              status: type.slice("response.".length),
-              meta: item,
-            },
-          ]
+          return []
         }
 
         return []

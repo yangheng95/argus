@@ -149,8 +149,9 @@ const Meta = z.record(z.string(), z.unknown())
 
 export const CodingEvent = z.discriminatedUnion("type", [
   z.object({
-    type: z.literal("status"),
-    status: z.string(),
+    type: z.literal("progress"),
+    phase: z.string(),
+    summary: z.string().optional(),
     meta: Meta.optional(),
   }),
   z.object({
@@ -161,7 +162,7 @@ export const CodingEvent = z.discriminatedUnion("type", [
     type: z.literal("tool_call"),
     id: z.string(),
     name: z.string(),
-    input: z.string(),
+    input: z.union([z.string(), z.record(z.string(), z.unknown())]),
     meta: Meta.optional(),
   }),
   z.object({
@@ -207,11 +208,6 @@ export const CodingEvent = z.discriminatedUnion("type", [
     meta: Meta.optional(),
   }),
   z.object({
-    type: z.literal("raw"),
-    name: z.string(),
-    meta: Meta.optional(),
-  }),
-  z.object({
     type: z.literal("done"),
     sessionID: z.string().optional(),
     output: z.string().optional(),
@@ -253,6 +249,18 @@ export function text(input: unknown) {
 export function record(input: unknown): Record<string, unknown> | undefined {
   if (!input || typeof input !== "object" || Array.isArray(input)) return
   return input as Record<string, unknown>
+}
+
+export function structuredInput(raw: unknown): Record<string, unknown> {
+  if (raw && typeof raw === "object" && !Array.isArray(raw)) return raw as Record<string, unknown>
+  if (typeof raw === "string") {
+    try {
+      const parsed = JSON.parse(raw)
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) return parsed
+    } catch {}
+    return { value: raw }
+  }
+  return {}
 }
 
 export async function* decode<T>(raw: AsyncIterable<T>, push: (item: T) => CodingEventInfo[]) {

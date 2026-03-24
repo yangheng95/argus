@@ -73,7 +73,6 @@ describe("executor compatibility", () => {
       interrupt: true,
     })
     expect(out).toEqual([
-      { type: "status", status: "created", meta: { type: "response.created", response: { id: "resp_1" } } },
       { type: "text_delta", text: "Hel" },
       { type: "tool_call", id: "call_1", name: "read_file", input: "{\"path\":\"README.md\"}" },
       { type: "done", sessionID: "resp_1", output: "Hello", meta: { id: "resp_1", output_text: "Hello" } },
@@ -200,8 +199,9 @@ describe("executor compatibility", () => {
     })
     expect(out).toEqual([
       {
-        type: "status",
-        status: "init",
+        type: "progress",
+        phase: "init",
+        summary: "init",
         meta: { type: "system", subtype: "init", session_id: "sess_a", tools: ["Bash"] },
       },
       { type: "text_delta", text: "Hel" },

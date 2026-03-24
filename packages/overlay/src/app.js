@@ -5286,6 +5286,18 @@ async function loadConversationSource(path) {
   }
 }
 
+function conversationChanged(prev, next) {
+  if (!Array.isArray(prev) || !Array.isArray(next)) return true;
+  if (prev.length !== next.length) return true;
+  for (let i = 0; i < prev.length; i++) {
+    if (prev[i]?.info?.id !== next[i]?.info?.id) return true;
+    const pp = prev[i]?.parts || [];
+    const np = next[i]?.parts || [];
+    if (pp.length !== np.length) return true;
+  }
+  return false;
+}
+
 async function loadConversation() {
   const target = conversationTarget();
   const targetKey = conversationTargetKey(target);
@@ -5302,17 +5314,21 @@ async function loadConversation() {
         ]);
         if (targetKey !== conversationTargetKey(conversationTarget())) return;
         const next = sortMessages(mergeMessages(timeline, transcript));
+        let merged;
         if (next.length > 0) {
           state.pendingTaskMessages = null;
-          state.messages = mergeConversationSnapshot(next);
+          merged = mergeConversationSnapshot(next);
         } else if (Array.isArray(state.pendingTaskMessages) && state.pendingTaskMessages.length > 0) {
-          state.messages = cloneMessages(state.pendingTaskMessages);
+          merged = cloneMessages(state.pendingTaskMessages);
         } else {
-          state.messages = mergeConversationSnapshot([]);
+          merged = mergeConversationSnapshot([]);
         }
         state.conversationBootstrapPending = false;
         state.conversationUpdatedAt = Date.now();
-        renderConversation();
+        if (conversationChanged(state.messages, merged)) {
+          state.messages = merged;
+          renderConversation();
+        }
         return;
       }
       if (targetKey !== conversationTargetKey(conversationTarget())) return;
@@ -6078,12 +6094,7 @@ function handleEventStreamEvent(event) {
       message.parts.push(hydrateLivePart(null, part));
     }
     state.conversationUpdatedAt = Date.now();
-    // Render immediately for main messages, debounce for agent channel messages
-    if (classifyMessage(message) === "main") {
-      renderConversation();
-    } else {
-      debouncedRenderConversation();
-    }
+    renderConversation();
     return;
   }
   if (type === "message.part.delta") {
@@ -6107,11 +6118,8 @@ function handleEventStreamEvent(event) {
     const target = `${typeof part._targetText === "string" ? part._targetText : part.text || ""}${properties.delta}`;
     streamMessagePart(part, target, "text", part.text || "");
     state.conversationUpdatedAt = Date.now();
-    // Skip full re-render for agent-channel deltas — they're in collapsed cards.
-    // Only render immediately for main conversation deltas.
-    if (classifyMessage(message) === "main") {
-      renderConversation();
-    }
+    // Render all deltas immediately — agent cards need real-time streaming too
+    renderConversation();
     return;
   }
   if (type === "run.progress") {
@@ -6119,14 +6127,8 @@ function handleEventStreamEvent(event) {
     // (role, tokens, timestamps) already handled by message.updated/part.updated/part.delta
     const progressType = properties.type || "";
     if (progressType === "message.updated" || progressType === "message.part.updated" || progressType === "message.part.delta") return;
-    // Drop low-level protocol noise (raw stream events like content_block_delta)
-    if (progressType === "protocol.raw") return;
-    // Drop executor status events that are protocol bookkeeping, not user-visible progress
-    if (progressType === "executor.status") {
-      const statusSummary = String(event.summary || properties.summary || "").trim().toLowerCase();
-      if (["message_start", "message_delta", "message_stop", "content_block_stop",
-           "rate_limit_event", "task_progress"].includes(statusSummary)) return;
-    }
+    // Drop protocol noise and lifecycle events (no user-visible content)
+    if (progressType === "protocol.raw" || progressType === "executor.status" || progressType === "executor.progress") return;
     appendExecutorEvent({
       id: event.event_id,
       runID: event.run_id || properties.runID,
@@ -6200,7 +6202,8 @@ function startPolling() {
       loadConversation();
       return;
     }
-    if (!state.sseConnected && Date.now() - state.conversationUpdatedAt > SSE_BACKSTOP) {
+    // Only poll when SSE is disconnected
+    if (!state.sseConnected) {
       loadConversation();
     }
   }, CONVERSATION_POLL);
@@ -7750,6 +7753,9 @@ function signText(value) {
 function signPart(part) {
   if (!record(part)) return signText(part);
   if (part.type === "text" || part.kind === "trace") {
+    if (typeof part._targetText === "string") {
+      return ["text", part.id || "", "streaming"].join("\u001f");
+    }
     return ["text", part.kind || "", part.source || "", part.audience?.ui === false ? "0" : "1", part.text || ""].join("\u001f");
   }
   if (part.type === "tool") {
@@ -7757,6 +7763,9 @@ function signPart(part) {
     return ["tool", part.tool || "", st.status || "", signText(st.input || {}), signText(st.output || ""), st.title || ""].join("\u001f");
   }
   if (part.type === "reasoning") {
+    if (typeof part._targetText === "string") {
+      return ["reasoning", part.id || "", "streaming"].join("\u001f");
+    }
     return ["reasoning", reasoningPartHidden(part) ? "0" : "1", part.text || ""].join("\u001f");
   }
   if (part.type === "patch") {
@@ -9168,7 +9177,7 @@ function renderConversation() {
   const sessionChanged = state._renderedGroupKey !== targetKey;
   const nextNodes = groups.map((group, index) => renderTurn(group, sigs[index]));
 
-  if (sessionChanged || nextNodes.some((node) => !node)) {
+  if (sessionChanged) {
     const frag = document.createDocumentFragment();
     for (const node of nextNodes) {
       if (node) frag.appendChild(node);

@@ -27,10 +27,10 @@ describe("external cli executors", () => {
     }
 
     expect(out).toEqual([
-      { type: "status", status: "thread.started", meta: { type: "thread.started", thread_id: "thread_1" } },
-      { type: "status", status: "turn.started", meta: { type: "turn.started" } },
+      { type: "progress", phase: "init", summary: "thread.started", meta: { type: "thread.started", thread_id: "thread_1" } },
+      { type: "progress", phase: "responding", summary: "turn.started", meta: { type: "turn.started" } },
       { type: "text_delta", text: "hi" },
-      { type: "status", status: "turn.completed", meta: { type: "turn.completed", usage: { output_tokens: 1 } } },
+      { type: "progress", phase: "turn_completed", summary: "turn.completed", meta: { type: "turn.completed", usage: { output_tokens: 1 } } },
       { type: "done", sessionID: "thread_1", output: "hi" },
     ])
   })
@@ -55,7 +55,7 @@ describe("external cli executors", () => {
     }
 
     expect(out).toEqual([
-      { type: "status", status: "init", meta: { type: "system", subtype: "init", session_id: "sess_1" } },
+      { type: "progress", phase: "init", summary: "init", meta: { type: "system", subtype: "init", session_id: "sess_1" } },
       { type: "text_delta", text: "Hi" },
       {
         type: "done",

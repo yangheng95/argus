@@ -33,11 +33,10 @@ const LOGGED_TYPES = new Set([
 
 /** run.progress type values that are pure noise */
 const DROP_PROGRESS_TYPES = new Set([
-  "protocol.raw",
   "reasoning.delta",
 ])
 
-/** executor.status summaries that are protocol bookkeeping */
+/** executor.progress summaries that are protocol bookkeeping */
 const DROP_EXEC_SUMMARIES = new Set([
   "message_start",
   "message_delta",
@@ -190,7 +189,7 @@ export namespace OrchestratorEventLog {
 
     if (DROP_PROGRESS_TYPES.has(pt)) return
 
-    if (pt === "executor.status") {
+    if (pt === "executor.progress") {
       if (DROP_EXEC_SUMMARIES.has(summary)) return
       if (summary === "message_stop") { flushTurn(ctx); return }
       // meaningful: queued, running, init, done

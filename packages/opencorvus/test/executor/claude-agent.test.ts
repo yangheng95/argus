@@ -109,7 +109,7 @@ describe("claude agent executor", () => {
         break
       }
     }
-    expect(firstType).toBe("executor.status")
+    expect(firstType).toBe("executor.progress")
     expect(approval?.type).toBe("approval.request")
     const resolved = await adapter.resolve?.({
       queueTaskID: submit.queueTaskID,

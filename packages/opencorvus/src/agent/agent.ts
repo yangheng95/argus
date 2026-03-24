@@ -9,9 +9,11 @@ import { Auth } from "../auth"
 import { ProviderTransform } from "../provider/transform"
 
 import PROMPT_GENERATE from "./generate.txt"
-import PROMPT_BUILD from "./prompt/build.txt"
-import PROMPT_SPEC from "./prompt/spec.txt"
-import PROMPT_PLAN from "./prompt/plan.txt"
+import PROMPT_SYSTEM from "@/session/prompt/system.txt"
+import SPEC_CORE from "@/prompt/core/spec-core.txt"
+import PLAN_CORE from "@/prompt/core/plan-core.txt"
+import SPEC_INTERACTIVE from "./prompt/spec-interactive.txt"
+import PLAN_INTERACTIVE from "./prompt/plan-interactive.txt"
 import PROMPT_COMPACTION from "./prompt/compaction.txt"
 import PROMPT_EXPLORE from "./prompt/explore.txt"
 import PROMPT_GENERAL from "./prompt/general.txt"
@@ -303,9 +305,9 @@ export namespace Agent {
 
   /** Map of native agent name → built-in default prompt (before config overrides). */
   const NATIVE_DEFAULTS: Record<string, string | undefined> = {
-    build: PROMPT_BUILD,
-    spec: PROMPT_SPEC,
-    plan: PROMPT_PLAN,
+    build: PROMPT_SYSTEM,
+    spec: SPEC_CORE + "\n\n" + SPEC_INTERACTIVE,
+    plan: PLAN_CORE + "\n\n" + PLAN_INTERACTIVE,
     general: PROMPT_GENERAL,
     explore: PROMPT_EXPLORE,
     compaction: PROMPT_COMPACTION,

@@ -69,7 +69,6 @@ export const ProtocolSettings = z.object({
 export type ProtocolSettingsInfo = z.infer<typeof ProtocolSettings>
 
 export const ProtocolEventKind = z.enum([
-  "status",
   "message_delta",
   "reasoning_delta",
   "plan_delta",
@@ -81,10 +80,7 @@ export const ProtocolEventKind = z.enum([
   "input_request",
   "input_response",
   "usage",
-  "mcp",
-  "command",
   "lifecycle",
-  "raw",
   "error",
   "done",
 ])

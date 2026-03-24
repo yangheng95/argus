@@ -88,8 +88,9 @@ export namespace CodexAppServerExecutor {
         sessions.set(logicalID, current)
         sessions.set(sessionID(thread.thread.id, turn.turn.id), current)
         yield {
-          type: "status",
-          status: "thread.started",
+          type: "progress",
+          phase: "init",
+          summary: "thread.started",
           meta: {
             thread_id: thread.thread.id,
             turn_id: turn.turn.id,
@@ -116,8 +117,9 @@ export namespace CodexAppServerExecutor {
         sessions.set(input.sessionID, current)
         sessions.set(sessionID(thread.thread.id, turn.turn.id), current)
         yield {
-          type: "status",
-          status: "thread.resumed",
+          type: "progress",
+          phase: "init",
+          summary: "thread.resumed",
           meta: {
             thread_id: thread.thread.id,
             turn_id: turn.turn.id,
@@ -272,8 +274,9 @@ function* notification(threadID: string, turnID: string, method: string, params?
 
   if (method === "item/mcpToolCall/progress") {
     yield {
-      type: "raw",
-      name: "mcp.progress",
+      type: "progress",
+      phase: "mcp_executing",
+      summary: "mcp.progress",
       meta: {
         thread_id: currentThread,
         turn_id: currentTurn,
@@ -309,16 +312,20 @@ function* notification(threadID: string, turnID: string, method: string, params?
     return
   }
 
-  if (method === "thread/started" || method === "turn/started" || method === "thread/status/changed" || method === "thread/name/updated" || method === "model/rerouted" || method === "thread/compacted") {
+  if (method === "thread/started" || method === "turn/started") {
     yield {
-      type: "status",
-      status: method,
+      type: "progress",
+      phase: method === "thread/started" ? "init" : "responding",
+      summary: method,
       meta: {
         thread_id: currentThread,
         turn_id: currentTurn,
         ...data,
       },
     }
+    return
+  }
+  if (method === "thread/status/changed" || method === "thread/name/updated" || method === "model/rerouted" || method === "thread/compacted") {
     return
   }
 
@@ -341,15 +348,29 @@ function* notification(threadID: string, turnID: string, method: string, params?
       return
     }
     if (type === "commandExecution" || type === "fileChange" || type === "mcpToolCall") {
-      yield {
-        type: "raw",
-        name: `item.${type}`,
-        meta: {
-          thread_id: currentThread,
-          turn_id: currentTurn,
-          item_id: typeof item.id === "string" ? item.id : undefined,
-          ...item,
-        },
+      const itemId = typeof item.id === "string" ? item.id : currentTurn
+      const toolName = type === "commandExecution" ? "Bash"
+        : type === "fileChange" ? "FileEdit"
+        : String(item.tool || "MCP")
+      const cmd = type === "commandExecution" ? text(item.command ?? item.args?.[0] ?? "") : ""
+      const output = text(item.output ?? item.contentItems ?? item.content ?? "")
+      const status = typeof item.status === "string" ? item.status : ""
+      const isDone = status === "completed" || status === "done" || !!output
+      if (isDone) {
+        yield {
+          type: "tool_result" as const,
+          id: itemId,
+          output: output || cmd || `${toolName} completed`,
+          meta: { thread_id: currentThread, turn_id: currentTurn, item_id: itemId, item_type: type },
+        }
+      } else {
+        yield {
+          type: "tool_call" as const,
+          id: itemId,
+          name: toolName,
+          input: cmd || JSON.stringify(item),
+          meta: { thread_id: currentThread, turn_id: currentTurn, item_id: itemId, item_type: type },
+        }
       }
       return
     }
@@ -379,15 +400,7 @@ function* notification(threadID: string, turnID: string, method: string, params?
     return
   }
 
-  yield {
-    type: "raw",
-    name: method,
-    meta: {
-      thread_id: currentThread,
-      turn_id: currentTurn,
-      ...data,
-    },
-  }
+  // Unknown methods — protocol noise, do not yield
 }
 
 function* request(item: Extract<CodexInbound, { type: "request" }>): Generator<CodingEventInfo> {
@@ -452,14 +465,7 @@ function* request(item: Extract<CodexInbound, { type: "request" }>): Generator<C
     }
     return
   }
-  yield {
-    type: "raw",
-    name: item.method,
-    meta: {
-      request_id: item.id,
-      ...data,
-    },
-  }
+  // Unknown request methods — do not yield
 }
 
 function threadStart(input: z.input<typeof CodingRunInput>) {

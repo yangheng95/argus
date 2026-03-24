@@ -84,8 +84,9 @@ export namespace ClaudeCodeExecutor {
           const subtype = typeof item.subtype === "string" ? item.subtype : "system"
           return [
             {
-              type: "status",
-              status: subtype,
+              type: "progress",
+              phase: subtype,
+              summary: subtype,
               meta: item,
             },
           ]
@@ -231,13 +232,7 @@ function fromStreamEvent(item: Record<string, unknown> | undefined, tools: Map<n
   }
 
   if (type === "message_start" || type === "message_stop" || type === "message_delta") {
-    return [
-      {
-        type: "status",
-        status: type,
-        meta: item,
-      },
-    ]
+    return []
   }
 
   return []

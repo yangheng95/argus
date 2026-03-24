@@ -78,20 +78,8 @@ const EXECUTOR_STATUS_TIMEOUT_MS = 30_000 // 30s for executor.status()
 const EXECUTOR_SUBMIT_TIMEOUT_MS = 60_000 // 60s for executor.submit()
 const evaluatingRuns = new Map<string, number>() // runID → start timestamp, guards against concurrent re-evaluation
 const eventBridgeAborts = new Map<string, AbortController>() // runID → AbortController for consumeExecutorEvents
-/** Whitelist: only these executor event types are broadcast to the UI.
- *  Everything else is silently dropped — no DB write, no SSE push. */
-const BROADCAST_EVENT_TYPES = new Set([
-  "tool.call",
-  "tool.result",
-  "reasoning.delta",
-  "plan.delta",
-  "diff.delta",
-  "approval.request",
-  "input.request",
-  "usage.updated",
-  "session.idle",
-  "session.error",
-])
+// No BROADCAST_EVENT_TYPES whitelist needed — garbage types are no longer
+// emitted at the executor level, so every event that arrives is meaningful.
 const EVALUATING_STALE_MS = EVALUATION_HARD_TIMEOUT_MS + 60_000 // consider stale after hard timeout + 1 min buffer
 
 // Unattended-mode safeguards
@@ -125,7 +113,7 @@ async function projectExecutorEventToSession(taskID: string, run: RunRow, event:
   const payload = event.payload ?? {}
   const sessionID = typeof payload.sessionID === "string" ? payload.sessionID : run.session_id
   if (!sessionID) return
-  if (event.type === "executor.status") return
+  if (event.type === "executor.progress") return
 
   const state = await ensureTranscriptState(taskID, run, sessionID)
   if (!state) return
@@ -1522,8 +1510,10 @@ function consumeExecutorEvents(
             payload: event.payload,
           },
         })
-        // Whitelist: only broadcast event types with semantic value for the UI.
-        // Everything else (protocol.raw, unknown types, noise) is silently dropped.
+        // Route by event type:
+        // - text_delta → ephemeral (no persistence)
+        // - executor.progress → ephemeral (lifecycle, no persistence)
+        // - everything else → persist via OrchestratorProtocol.emit
         if (event.type === "text_delta") {
           ProtocolStore.dispatchEphemeral({
             type: Event.RunOutput.type,
@@ -1533,7 +1523,16 @@ function consumeExecutorEvents(
             source: "executor",
             payload: { taskID, runID, type: "text_delta", text: event.summary ?? "" },
           })
-        } else if (BROADCAST_EVENT_TYPES.has(event.type)) {
+        } else if (event.type === "executor.progress") {
+          ProtocolStore.dispatchEphemeral({
+            type: Event.RunProgress.type,
+            aggregate: "task",
+            taskID,
+            runID,
+            source: "executor",
+            payload: { taskID, runID, type: event.type, summary: event.summary ?? "", payload: event.payload },
+          })
+        } else {
           void OrchestratorProtocol.emit(Event.RunProgress, {
             taskID,
             runID,
@@ -1542,7 +1541,6 @@ function consumeExecutorEvents(
             payload: event.payload,
           }, { taskID, runID, source: "executor" })
         }
-        // All unlisted event types are dropped — no persist, no broadcast.
       }
     } catch (err) {
       if (!ctrl.signal.aborted) {
@@ -1576,19 +1574,22 @@ type RuntimeHooks = {
   ) => Promise<RunRow>
 }
 
+const PROTOCOL_EVENT_KIND_MAP: Record<string, string> = {
+  "tool.call": "tool_call",
+  "tool.result": "tool_result",
+  "reasoning.delta": "reasoning_delta",
+  "plan.delta": "plan_delta",
+  "diff.delta": "diff_delta",
+  "approval.request": "approval_request",
+  "input.request": "input_request",
+  "usage.updated": "usage",
+  "session.idle": "done",
+  "session.error": "error",
+  "executor.progress": "lifecycle",
+}
+
 function protocolEventKind(type: string) {
-  if (type.includes("tool")) return type.includes("result") ? "tool_result" : "tool_call"
-  if (type.includes("reason")) return "reasoning_delta"
-  if (type.includes("plan")) return "plan_delta"
-  if (type.includes("diff")) return "diff_delta"
-  if (type.includes("approval")) return "approval_request"
-  if (type.includes("input")) return "input_request"
-  if (type.includes("mcp")) return "mcp"
-  if (type.includes("command")) return "command"
-  if (type.includes("error")) return "error"
-  if (type.includes("done") || type.includes("completed")) return "done"
-  if (type.includes("delta") || type.includes("message")) return "message_delta"
-  return "status"
+  return PROTOCOL_EVENT_KIND_MAP[type] ?? "lifecycle"
 }
 
 function upsertExecutorInteraction(
