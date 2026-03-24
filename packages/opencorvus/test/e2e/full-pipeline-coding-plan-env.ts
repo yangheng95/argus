@@ -1,4 +1,4 @@
-process.env["CODING_DASHSCOPE_API_KEY"] ??= "sk-sp-40eeacbb1d2848a4829dca771f2ed51a"
+if (!process.env["CODING_DASHSCOPE_API_KEY"]) throw new Error("CODING_DASHSCOPE_API_KEY env var is required")
 process.env["CODING_DASHSCOPE_API_URL"] ??= "https://coding.dashscope.aliyuncs.com/v1"
 process.env["CODING_MODEL"] ??= "qwen3.5-plus"
 

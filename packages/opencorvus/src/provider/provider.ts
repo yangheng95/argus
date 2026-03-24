@@ -440,17 +440,24 @@ export namespace Provider {
 
     // load env
     const env = Env.all()
+    // DashScope providers share keys via fallback: try provider-specific env vars first,
+    // then common CODING_DASHSCOPE_API_KEY / DASHSCOPE_API_KEY.
+    const dashscopeCommonKeys = ["CODING_DASHSCOPE_API_KEY", "DASHSCOPE_API_KEY"]
     for (const [providerID, provider] of entries(database)) {
       if (disabled.has(providerID)) continue
+      const isDashScope = provider.api?.includes("dashscope")
+      // alibaba-cn has special embedded-key logic below
       if (providerID === "alibaba-cn" || providerID === "alibaba") continue
-      const apiKey = provider.env.map((item) => env[item]).find(Boolean)
+      const candidates = isDashScope ? [...provider.env, ...dashscopeCommonKeys] : provider.env
+      const apiKey = candidates.map((item) => env[item]?.trim()).find(Boolean)
       if (!apiKey) continue
       mergeProvider(providerID, {
         source: "env",
-        key: provider.env.length === 1 ? apiKey : undefined,
+        key: apiKey,
       })
     }
 
+    // alibaba-cn: resolve key from DASHSCOPE_API_KEY or embedded key
     if (!disabled.has("alibaba-cn")) {
       const key = await dashscopeKey(env)
       if (key) {
@@ -821,34 +828,6 @@ export namespace Provider {
         )
       throw e
     }
-  }
-
-  /**
-   * Returns the provider's built-in web search tool if available.
-   * OpenAI, Anthropic, Azure, and GitHub Copilot all support server-side web search.
-   * For other providers, returns undefined (caller should fall back to Exa or skip).
-   */
-  export async function getWebSearchTool(model: Model): Promise<any | undefined> {
-    const npm = model.api.npm
-    try {
-      const sdk = await getSDK(model)
-      if (npm === "@ai-sdk/openai") {
-        return (sdk as any).webSearch?.()
-      }
-      if (npm === "@ai-sdk/anthropic" || npm === "@ai-sdk/google-vertex/anthropic") {
-        return (sdk as any).webSearch_20250305?.()
-      }
-      if (npm === "@ai-sdk/azure") {
-        return (sdk as any).webSearchPreview?.()
-      }
-      if (npm === "@ai-sdk/github-copilot") {
-        const { webSearch } = await import("./sdk/copilot/responses/tool/web-search")
-        return webSearch()
-      }
-    } catch (e) {
-      log.warn("getWebSearchTool failed, will fall back to Exa", { npm, err: e })
-    }
-    return undefined
   }
 
   export async function closest(providerID: string, query: string[]) {

@@ -957,7 +957,6 @@ function roleLabel(role) {
   if (role === "spec") return t("chat.role.spec");
   if (role === "system") return t("chat.role.system");
   if (role === "goal_gate") return t("chat.role.goal");
-  if (role === "task_tool") return t("chat.role.task");
   return t("chat.role.message");
 }
 
@@ -5596,6 +5595,7 @@ function agentStageRole(stage) {
   if (text === "spec") return "spec";
   if (text === "judge" || text === "evaluation" || text === "scheduler") return "scheduler";
   if (text === "delivery" || text === "files") return "delivery";
+  if (text === "executor" || text === "execute" || text === "coding") return "assistant";
   return "system";
 }
 
@@ -5792,7 +5792,7 @@ function agentMessage(event) {
       _synthetic: true,
       info: {
         id: `agent:${event.stage}:${event.id}`,
-        role: "task_tool",
+        role: agentStageRole(event.stage),
         agent: event.stage,
         time: { created },
       },
@@ -8128,7 +8128,7 @@ function executorMessage(event, events = [], index = -1) {
     _synthetic: true,
     info: {
       id: event.id,
-      role: event.kind === "message_delta" || event.kind === "reasoning_delta" ? "assistant" : "task_tool",
+      role: "assistant",
       time: { created: event.time?.created || Date.now() },
     },
     parts: [part],
@@ -8285,7 +8285,7 @@ function executorProcessMessage(processes) {
     _synthetic: true,
     info: {
       id: `executor:processes:${state.executorRunID || state.selectedTaskID || "active"}`,
-      role: "task_tool",
+      role: "assistant",
       time: { created: processes[0]?.time?.created || Date.now() },
     },
     parts: processes.map((process) => ({
@@ -11169,7 +11169,11 @@ function stringifyLogValue(value, space = 0) {
 }
 
 function displayString(value, space = 0) {
-  if (typeof value === "string") return value.trim() === "[object Object]" ? "" : value;
+  if (typeof value === "string") {
+    const t = value.trim();
+    if (t === "[object Object]" || t === "[]" || t === "null" || t === "{}") return "";
+    return value;
+  }
   if (value === undefined || value === null) return "";
   if (typeof value === "number" || typeof value === "boolean") return String(value);
   return "";

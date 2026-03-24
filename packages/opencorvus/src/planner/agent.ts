@@ -157,8 +157,7 @@ export namespace HeadlessPlannerAgent {
     // Create tools with the correct working directory for the task.
     // Without this, the codebase tools use Instance.directory (project root)
     // instead of the task's working directory (e.g., eval workspace).
-    const providerWebSearch = await Provider.getWebSearchTool(model).catch(() => undefined)
-    const allTools = createPlannerTools(taskWorkDir, { providerWebSearch })
+    const allTools = createPlannerTools(taskWorkDir)
 
     const fileRefs = await resolveFileReferences(input.request, taskWorkDir)
     if (input.signal?.aborted) throw new Error("planner aborted before context prefetch")
