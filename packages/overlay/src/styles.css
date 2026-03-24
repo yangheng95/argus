@@ -3138,16 +3138,16 @@ body[data-theme="light"] .section-badge {
 .agent-card-header {
   display: flex;
   align-items: center;
-  gap: calc(6px * var(--ui-scale));
-  padding: calc(6px * var(--ui-scale)) calc(10px * var(--ui-scale));
+  gap: calc(8px * var(--ui-scale));
+  padding: calc(10px * var(--ui-scale)) calc(12px * var(--ui-scale));
   background: var(--agent-card-bg, rgba(140, 150, 168, 0.08));
   border: 1px solid var(--agent-card-border, rgba(140, 150, 168, 0.22));
   border-radius: calc(6px * var(--ui-scale));
   cursor: pointer;
   user-select: none;
   transition: background 0.15s ease, border-color 0.15s ease;
-  font-size: var(--ui-font-small);
-  line-height: 1.4;
+  font-size: var(--ui-font-control);
+  line-height: 1.5;
 }
 .agent-card-header:hover {
   background: color-mix(in srgb, var(--agent-card-bg, rgba(140, 150, 168, 0.08)) 70%, white 6%);
@@ -3218,11 +3218,11 @@ body[data-theme="light"] .section-badge {
 
 .agent-card-body {
   margin-top: calc(4px * var(--ui-scale));
-  padding: calc(8px * var(--ui-scale)) calc(10px * var(--ui-scale));
+  padding: calc(10px * var(--ui-scale)) calc(12px * var(--ui-scale));
   background: var(--agent-card-bg, rgba(140, 150, 168, 0.04));
   border: 1px solid var(--agent-card-border, rgba(140, 150, 168, 0.16));
   border-radius: calc(6px * var(--ui-scale));
-  max-height: calc(600px * var(--ui-scale));
+  max-height: min(70vh, calc(1200px * var(--ui-scale)));
   overflow-y: auto;
 }
 .agent-card-body::-webkit-scrollbar {
@@ -3233,6 +3233,19 @@ body[data-theme="light"] .section-badge {
   border-radius: 2px;
 }
 .agent-card-body .msg-body {
+  font-size: var(--ui-font-small);
+}
+/* Flatten nested tool cards inside agent cards — remove double-border/bg noise */
+.agent-card-body .msg-tool {
+  background: transparent;
+  border-color: var(--subtle-3);
+  padding: calc(4px * var(--ui-scale)) calc(8px * var(--ui-scale));
+  border-radius: calc(8px * var(--ui-scale));
+}
+.agent-card-body .msg-tool-output {
+  background: var(--subtle-1, rgba(0,0,0,0.12));
+  border-color: transparent;
+  margin-left: calc(22px * var(--ui-scale));
   font-size: var(--ui-font-small);
 }
 
@@ -3377,6 +3390,26 @@ body[data-theme="light"] .section-badge {
   line-height: 1.78;
   color: var(--text);
   word-break: break-word;
+}
+/* Live thinking status — replaces static "思考中" placeholder */
+.msg-thinking-live {
+  color: var(--text-soft);
+  font-size: var(--ui-font-control);
+  display: flex;
+  align-items: center;
+  gap: calc(6px * var(--ui-scale));
+}
+.msg-thinking-dot {
+  width: calc(6px * var(--ui-scale));
+  height: calc(6px * var(--ui-scale));
+  border-radius: 50%;
+  background: var(--accent);
+  animation: thinking-pulse 1.2s ease-in-out infinite;
+  flex-shrink: 0;
+}
+@keyframes thinking-pulse {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 1; }
 }
 
 .msg[data-role="user"] .msg-text,

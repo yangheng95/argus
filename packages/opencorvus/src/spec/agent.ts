@@ -57,6 +57,8 @@ export const ArchitecturalLayerSchema = z.object({
   name: z.string(),
   description: z.string(),
   depends_on: z.array(z.string()).default([]),
+  kind: z.enum(["bootstrap", "feature", "verification", "integration", "system"]).optional(),
+  is_verification: z.boolean().optional(),
 })
 export type ArchitecturalLayer = z.infer<typeof ArchitecturalLayerSchema>
 
@@ -723,6 +725,15 @@ Output text directly. Do NOT output JSON. Do NOT wrap in code blocks.
 - spec_items must be verifiable — each should have clear success/failure criteria.
 - spec_items.check_selector maps to: build, test, lint, verify_cmd, startup, ui_review, code_quality, code_review, dead_code_review, spec_check
 - Every blocking spec item MUST have at least one check_selector.
+- When outputting architectural_layers, include \`kind\` and \`is_verification\` for each layer:
+  - kind: one of "bootstrap", "feature", "verification", "integration", "system"
+    - bootstrap: setup, scaffolding, config, build tooling, package management
+    - feature: business logic, domain features, UI components
+    - verification: automated tests, acceptance checks, test suites
+    - integration: app wiring, routing, entry points, middleware, composition
+    - system: linting, type checking, static analysis, code quality tooling
+  - is_verification: true if this layer represents test/verification work, false otherwise
+  - These fields let the downstream goal compiler skip regex heuristics when classifying layers.
 - Write in the same language as the request (Chinese request → Chinese spec).
 - If rewriting after failure: revise the spec to address the root cause.
 

@@ -114,8 +114,11 @@ export const ServeCommand = cmd({
     })
 
     const server = Server.listen(opts)
-    console.log(`opencorvus server listening on http://${server.hostname}:${server.port}`)
-    console.log(`overlay UI available at http://${server.hostname}:${server.port}/ui/`)
+    const serverUrl = `http://${server.hostname}:${server.port}`
+    // Publish actual server URL so ChannelSupervisor can connect channel runtime to it
+    process.env.OPENCORVUS_SERVER_URL = serverUrl
+    console.log(`opencorvus server listening on ${serverUrl}`)
+    console.log(`overlay UI available at ${serverUrl}/ui/`)
 
     let workspaceSync: Array<ReturnType<typeof Workspace.startSyncing>> = []
     // Only available in development right now

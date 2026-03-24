@@ -81,12 +81,35 @@ export namespace OrchestratorMemoryBridge {
       }
 
       const markdown = sections.join("\n")
+      const atomics: Array<{ kind: "profile" | "lesson" | "fact"; text: string; section: string; importance?: number }> = []
+
+      // Outcome section contains facts about what was delivered
+      if (delivery.summary) {
+        atomics.push({ kind: "fact", text: delivery.summary.slice(0, 240), section: "Outcome" })
+      }
+
+      // Plan summary is a fact about the approach taken
+      if (plan) {
+        atomics.push({ kind: "fact", text: plan.summary.slice(0, 240), section: `Approach (Plan v${plan.version})` })
+      }
+
+      // Retry count is a lesson worth remembering
+      if (run.retry_count > 0) {
+        atomics.push({
+          kind: "lesson",
+          text: `Required ${run.retry_count} retries before passing.`,
+          section: "Notes",
+          importance: 90,
+        })
+      }
+
       const result = Memory.captureEpisode({
         title: `Task: ${task.title.slice(0, 80)}`,
         content: markdown,
         source: "compaction",
         projectId: task.project_id,
         scope: "global",
+        atomics: atomics.length > 0 ? atomics : undefined,
       })
       log.info("flushed task learnings to memory", {
         taskID: task.id,
@@ -138,12 +161,53 @@ export namespace OrchestratorMemoryBridge {
       sections.push("", "## Lessons", `This task exhausted ${run.retry_count + 1} attempts. Future tasks with similar scope should account for the root cause above.`)
 
       const markdown = sections.join("\n")
+      const failAtomics: Array<{ kind: "profile" | "lesson" | "fact"; text: string; section: string; importance?: number }> = []
+
+      // Failure summary is a lesson
+      failAtomics.push({
+        kind: "lesson",
+        text: summary.slice(0, 240),
+        section: "Failure Summary",
+        importance: 92,
+      })
+
+      // Root cause is a high-importance lesson
+      if (retryContext?.rootCause) {
+        failAtomics.push({
+          kind: "lesson",
+          text: retryContext.rootCause.slice(0, 240),
+          section: "Root Cause",
+          importance: 94,
+        })
+      }
+
+      // Failed approaches are lessons to avoid
+      if (retryContext?.avoidApproaches) {
+        for (const approach of retryContext.avoidApproaches.slice(0, 3)) {
+          failAtomics.push({
+            kind: "lesson",
+            text: approach.slice(0, 240),
+            section: "Approaches That Failed",
+            importance: 90,
+          })
+        }
+      }
+
+      // Exhausted retries is a lesson
+      failAtomics.push({
+        kind: "lesson",
+        text: `This task exhausted ${run.retry_count + 1} attempts. Future tasks with similar scope should account for the root cause above.`,
+        section: "Lessons",
+        importance: 90,
+      })
+
       const result = Memory.captureEpisode({
         title: `Failed: ${task.title.slice(0, 80)}`,
         content: markdown,
         source: "compaction",
         projectId: task.project_id,
         scope: "global",
+        atomics: failAtomics,
       })
       log.info("flushed failure learnings to memory", {
         taskID: task.id,

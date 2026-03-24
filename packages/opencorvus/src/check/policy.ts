@@ -17,29 +17,19 @@ export type CheckSelector = z.infer<typeof CheckSelector>
 export const CheckFamily = z.enum(["build", "test", "lint", "verify_cmd"])
 export type CheckFamily = z.infer<typeof CheckFamily>
 
-export function inferSelectors(text: string): CheckSelector[] {
-  const lower = text.toLowerCase()
-  const selectors = new Set<CheckSelector>()
-  if (lower.includes("build")) selectors.add("build")
-  if (lower.includes("test") || lower.includes("regression") || lower.includes("coverage")) selectors.add("test")
-  if (lower.includes("lint")) selectors.add("lint")
-  if (lower.includes("verify")) selectors.add("verify_cmd")
-  if (/(ui|ux|design|layout|页面|界面|交互|体验|accessibility)/.test(lower)) selectors.add("ui_review")
-  if (/(code quality|maintain|readab|review|refactor|代码质量|可维护|可读)/.test(lower)) selectors.add("code_quality")
-  if (/\bcr\b|code review|审查|代码评审|review finding|review comment/.test(lower)) selectors.add("code_review")
-  if (/(dead code|unused code|unused export|obsolete|stale branch|死代码|无用代码|废弃分支|清理旧代码)/.test(lower))
-    selectors.add("dead_code_review")
-  if (/(startup|start normally|starts normally|boot|launch|serve|server|启动|运行起来|正常启动)/.test(lower))
-    selectors.add("startup")
-  return [...selectors]
+/**
+ * Check selectors must come from spec requirements' `check_selectors` field
+ * or from the planner's structured output. Never inferred from keywords.
+ */
+export function inferSelectors(_text: string): CheckSelector[] {
+  return []
 }
 
-export function inferFamily(key: string): CheckFamily {
-  const lower = key.toLowerCase()
-  if (lower.includes("test") || lower.includes("pytest")) return "test"
-  if (lower.includes("lint") || lower.includes("type") || lower.includes("ruff") || lower.includes("mypy"))
-    return "lint"
-  if (lower.includes("verify")) return "verify_cmd"
+/**
+ * Check family must be explicitly declared in NamedCheckConfig.
+ * If not provided, defaults to "build".
+ */
+export function inferFamily(_key: string): CheckFamily {
   return "build"
 }
 

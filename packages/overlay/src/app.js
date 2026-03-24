@@ -6119,6 +6119,14 @@ function handleEventStreamEvent(event) {
     // (role, tokens, timestamps) already handled by message.updated/part.updated/part.delta
     const progressType = properties.type || "";
     if (progressType === "message.updated" || progressType === "message.part.updated" || progressType === "message.part.delta") return;
+    // Drop low-level protocol noise (raw stream events like content_block_delta)
+    if (progressType === "protocol.raw") return;
+    // Drop executor status events that are protocol bookkeeping, not user-visible progress
+    if (progressType === "executor.status") {
+      const statusSummary = String(event.summary || properties.summary || "").trim().toLowerCase();
+      if (["message_start", "message_delta", "message_stop", "content_block_stop",
+           "rate_limit_event", "task_progress"].includes(statusSummary)) return;
+    }
     appendExecutorEvent({
       id: event.event_id,
       runID: event.run_id || properties.runID,
@@ -6148,6 +6156,8 @@ function handleEventStreamEvent(event) {
     if (stage && summary) {
       state.agentStatus = { stage, kind, summary, timestamp: Date.now() };
       renderBoard();
+      // Re-render conversation so the "thinking" placeholder updates with live agent status
+      if (chatPlaceholder()) debouncedRenderConversation();
     }
     return;
   }
@@ -8056,21 +8066,18 @@ function executorText(event, events = [], index = -1) {
   return executorTargetText(event, events, index);
 }
 
+// Whitelist: only these event kinds are user-visible. Everything else is protocol noise.
+const VISIBLE_EXECUTOR_KINDS = new Set([
+  "message_delta", "reasoning_delta",
+  "tool_call", "tool_result", "command",
+  "approval_request", "input_request",
+  "error", "mcp",
+]);
+
 function visibleExecutorEvent(event) {
   if (!event) return false;
-  if (event.kind === "message_delta") return !!executorText(event);
-  if (event.kind === "reasoning_delta") return !!executorText(event);
-  if (event.kind === "tool_call") return !!executorText(event);
-  if (event.kind === "tool_result") return !!executorText(event);
-  if (event.kind === "command") return !!executorText(event);
-  if (event.kind === "approval_request") return !!executorText(event);
-  if (event.kind === "input_request") return !!executorText(event);
-  if (event.kind === "error") return !!executorText(event);
-  if (event.kind === "mcp") return !!executorText(event);
-  if (event.kind === "status") {
-    return !["queued", "running", "retrying", "session idle", "completed"].includes(String(event.summary || "").trim().toLowerCase());
-  }
-  return false;
+  if (!VISIBLE_EXECUTOR_KINDS.has(event.kind)) return false;
+  return !!executorText(event);
 }
 
 function executorMessage(event, events = [], index = -1) {
@@ -8799,6 +8806,14 @@ function renderTextPart(part, role) {
   let text = displayString(part.text);
   if (!text.trim()) return "";
 
+  // Replace static "thinking" placeholder with live agent status
+  const thinkingTexts = ["……", "...", t("chat.thinking")];
+  if (role === "assistant" && thinkingTexts.includes(text.trim()) && state.agentStatus?.summary) {
+    const stage = agentStageLabel(state.agentStatus.stage) || state.agentStatus.stage;
+    const detail = state.agentStatus.summary;
+    return `<div class="msg-text msg-thinking-live"><span class="msg-thinking-dot"></span>${escapeHtml(stage)}${detail ? " — " + escapeHtml(detail) : ""}</div>`;
+  }
+
   // Skip system/scheduler messages that are not for UI
   if (part.audience && part.audience.ui === false) return "";
   if (part.kind === "trace" && !part.audience?.ui) return "";
@@ -9406,14 +9421,16 @@ function renderToolPart(part) {
   const hiddenTools = ["planner", "structuredoutput", "todowrite", "todoupdate", "task_report"];
   if (!state.showTranscriptDetails && hiddenTools.includes(toolName.toLowerCase())) return "";
 
-  const detail = displayToolDetail(toolName, input, st);
+  const rawDetail = displayToolDetail(toolName, input, st);
+  // Suppress detail when it duplicates the tool name (e.g. "memory_search memory_search")
+  const detail = rawDetail && rawDetail.toLowerCase() !== toolName.toLowerCase() ? rawDetail : "";
   const icon = displayToolIcon(toolName);
   const statusText = toolStatusLabel(status);
 
   let html = `<div class="msg-tool">
     <span class="tool-icon">${icon}</span>
     <span class="tool-name">${escapeHtml(toolName)}</span>
-    <span class="tool-detail">${escapeHtml(detail)}</span>
+    ${detail ? `<span class="tool-detail">${escapeHtml(detail)}</span>` : ""}
     <span class="tool-status" data-status="${status}" title="${escapeHtml(statusText)}">${escapeHtml(statusText)}</span>
   </div>`;
 
