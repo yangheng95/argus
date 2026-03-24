@@ -106,7 +106,7 @@ export namespace Agent {
         name: "build",
         description: "The default agent. Executes tools based on configured permissions.",
         options: {},
-        prompt: PROMPT_BUILD,
+        prompt: PROMPT_GENERAL,
         permission: PermissionNext.merge(
           defaults,
           PermissionNext.fromConfig({
@@ -123,7 +123,7 @@ export namespace Agent {
         name: "spec",
         description: "Read-only specification agent. Explores codebase, asks questions, and writes the specification file before planning.",
         options: {},
-        prompt: PROMPT_SPEC,
+        prompt: `${SPEC_CORE}\n\n${SPEC_INTERACTIVE}`,
         permission: PermissionNext.merge(
           defaults,
           PermissionNext.fromConfig({
@@ -146,7 +146,7 @@ export namespace Agent {
         name: "plan",
         description: "Read-only planning agent. Explores, asks questions, and writes the implementation plan file.",
         options: {},
-        prompt: PROMPT_PLAN,
+        prompt: `${PLAN_CORE}\n\n${PLAN_INTERACTIVE}`,
         permission: PermissionNext.merge(
           defaults,
           PermissionNext.fromConfig({
