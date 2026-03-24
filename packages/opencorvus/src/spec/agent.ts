@@ -225,7 +225,8 @@ async function run(input: {
     input.request.match(/(?:工作目录|working dir(?:ectory)?)[^\n]*?([A-Z]:[/\\][^\s)）]+|\/[^\s)）]+)/i)
   const taskWorkDir = cwdMatch ? cwdMatch[1].replace(/[/\\]+$/, "") : undefined
 
-  const allTools = createPlannerTools(taskWorkDir)
+  const providerWebSearch = await Provider.getWebSearchTool(model).catch(() => undefined)
+  const allTools = createPlannerTools(taskWorkDir, { providerWebSearch })
 
   const fileRefs = await resolveFileReferences(input.request, taskWorkDir)
   if (input.signal?.aborted) throw new Error("spec agent aborted before context prefetch")

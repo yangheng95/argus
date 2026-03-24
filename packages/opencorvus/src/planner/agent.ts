@@ -143,8 +143,9 @@ export namespace HeadlessPlannerAgent {
     const orchCfg = await OrchestratorConfig.get()
     const { max_steps: MAX_STEPS, timeout_ms: TIMEOUT_MS, min_tool_calls: MIN_TOOL_CALLS, quality_threshold: QUALITY_RETRY_THRESHOLD, max_attempts: MAX_PLAN_ATTEMPTS } = orchCfg.planner
 
-    const language = await agentLanguageModel()
-    if (!language) throw new Error("no LLM model available for planner agent")
+    const resolved = await agentLanguageModel()
+    if (!resolved) throw new Error("no LLM model available for planner agent")
+    const { language, model } = resolved
     if (input.signal?.aborted) throw new Error("planner aborted after model resolution")
 
     // Extract working directory from request (eval tasks specify it explicitly)
@@ -156,7 +157,8 @@ export namespace HeadlessPlannerAgent {
     // Create tools with the correct working directory for the task.
     // Without this, the codebase tools use Instance.directory (project root)
     // instead of the task's working directory (e.g., eval workspace).
-    const allTools = createPlannerTools(taskWorkDir)
+    const providerWebSearch = await Provider.getWebSearchTool(model).catch(() => undefined)
+    const allTools = createPlannerTools(taskWorkDir, { providerWebSearch })
 
     const fileRefs = await resolveFileReferences(input.request, taskWorkDir)
     if (input.signal?.aborted) throw new Error("planner aborted before context prefetch")
@@ -383,7 +385,7 @@ function validatePlanQuality(
  * 2. Load that exact model and language surface
  * 3. If that fails, surface the planner failure directly
  */
-async function agentLanguageModel(): Promise<LanguageModelV2 | undefined> {
+async function agentLanguageModel(): Promise<{ language: LanguageModelV2; model: Awaited<ReturnType<typeof Provider.getModel>> } | undefined> {
   const def = await Provider.defaultModel().catch((err) => {
     log.error("planner: Provider.defaultModel() failed", { error: String(err) })
     return undefined
@@ -393,7 +395,7 @@ async function agentLanguageModel(): Promise<LanguageModelV2 | undefined> {
   const model = await Provider.getModel(def.providerID, def.modelID)
   const language = await Provider.getLanguage(model)
   log.info("planner: model ready via Provider", { modelId: language.modelId })
-  return language
+  return { language, model }
 }
 
 /**
