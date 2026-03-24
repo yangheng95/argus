@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "zh-CN",
-    "panel_revision": "4081b3ee98d431db"
+    "panel_revision": "9241ac71bc5c90b8"
   },
   "brand.guide_kicker": "快速说明",
   "brand.guide_positioning_body": "这不是一个装饰性浮层，而是任务驾驶舱：左边选择任务，中间推进执行，右边盯 spec、plan、评估和文件变更，防止 agent 一路跑偏。",
@@ -68,7 +68,6 @@
   "chat.role.scheduler": "评估",
   "chat.role.spec": "规格",
   "chat.role.system": "系统",
-  "chat.role.task": "任务",
   "chat.role.user": "用户",
   "chat.send_label": "发送",
   "chat.send_title": "发送消息。Enter 发送，Shift+Enter 换行。",

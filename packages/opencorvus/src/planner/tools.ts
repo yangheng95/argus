@@ -34,7 +34,7 @@ const EXA_BASE_URL = "https://mcp.exa.ai"
  * - 1 preference tool: preference_list
  * - 1 web search tool: web_search
  */
-export function createPlannerTools(taskWorkDir?: string, opts?: { providerWebSearch?: any }) {
+export function createPlannerTools(taskWorkDir?: string) {
   const codebase = createCodebaseTools(taskWorkDir)
   let projectId: string
   try {
@@ -124,69 +124,62 @@ export function createPlannerTools(taskWorkDir?: string, opts?: { providerWebSea
       },
     }),
 
-    // --- Web search ---
-    // When provider has built-in server-side web search (OpenAI, Anthropic, Copilot),
-    // use it directly — no rate limits, no Exa dependency.
-    // Otherwise fall back to Exa MCP endpoint.
-    ...(opts?.providerWebSearch
-      ? { web_search: opts.providerWebSearch }
-      : {
-          web_search: tool({
-            description:
-              "Search the web for current documentation, API references, changelogs, best practices, " +
-              "framework comparisons, and recommended tooling. USE PROACTIVELY for any greenfield project " +
-              "or when choosing frameworks/libraries. Do NOT assume — verify what is current and recommended.",
-            inputSchema: z.object({
-              query: z.string().describe("Web search query"),
-              num_results: z.number().optional().describe("Number of results (default: 5)"),
+    // --- Web search (Exa) ---
+    web_search: tool({
+      description:
+        "Search the web for current documentation, API references, changelogs, best practices, " +
+        "framework comparisons, and recommended tooling. USE PROACTIVELY for any greenfield project " +
+        "or when choosing frameworks/libraries. Do NOT assume — verify what is current and recommended.",
+      inputSchema: z.object({
+        query: z.string().describe("Web search query"),
+        num_results: z.number().optional().describe("Number of results (default: 5)"),
+      }),
+      execute: async ({ query, num_results }) => {
+        try {
+          const exaKey = process.env.EXA_API_KEY
+          const headers: Record<string, string> = {
+            accept: "application/json, text/event-stream",
+            "content-type": "application/json",
+          }
+          if (exaKey) headers["x-api-key"] = exaKey
+          const response = await fetch(`${EXA_BASE_URL}/mcp`, {
+            method: "POST",
+            headers,
+            body: JSON.stringify({
+              jsonrpc: "2.0",
+              id: 1,
+              method: "tools/call",
+              params: {
+                name: "web_search_exa",
+                arguments: {
+                  query,
+                  type: "auto",
+                  numResults: num_results ?? 5,
+                  livecrawl: "fallback",
+                },
+              },
             }),
-            execute: async ({ query, num_results }) => {
-              try {
-                const exaKey = process.env.EXA_API_KEY
-                const headers: Record<string, string> = {
-                  accept: "application/json, text/event-stream",
-                  "content-type": "application/json",
-                }
-                if (exaKey) headers["x-api-key"] = exaKey
-                const response = await fetch(`${EXA_BASE_URL}/mcp`, {
-                  method: "POST",
-                  headers,
-                  body: JSON.stringify({
-                    jsonrpc: "2.0",
-                    id: 1,
-                    method: "tools/call",
-                    params: {
-                      name: "web_search_exa",
-                      arguments: {
-                        query,
-                        type: "auto",
-                        numResults: num_results ?? 5,
-                        livecrawl: "fallback",
-                      },
-                    },
-                  }),
-                  signal: AbortSignal.timeout(20_000),
-                })
-                if (!response.ok) return `Web search failed (HTTP ${response.status}).`
+            signal: AbortSignal.timeout(20_000),
+          })
+          if (!response.ok) return `Web search failed (HTTP ${response.status}).`
 
-                const text = await response.text()
-                for (const line of text.split("\n")) {
-                  if (line.startsWith("data: ")) {
-                    const data = JSON.parse(line.substring(6))
-                    if (data.result?.content?.[0]?.text) {
-                      const content = data.result.content[0].text
-                      return content.length > 4000 ? content.slice(0, 4000) + "\n... (truncated)" : content
-                    }
-                  }
-                }
-                return "No search results found."
-              } catch (err) {
-                log.warn("web search failed in planner", { query, err })
-                return "Web search unavailable or timed out."
+          const text = await response.text()
+          for (const line of text.split("\n")) {
+            if (line.startsWith("data: ")) {
+              const data = JSON.parse(line.substring(6))
+              if (data.result?.content?.[0]?.text) {
+                const content = data.result.content[0].text
+                return content.length > 4000 ? content.slice(0, 4000) + "\n... (truncated)" : content
               }
-            },
-          }),
-        }),
+            }
+          }
+          return "No search results found."
+        } catch (err) {
+          log.warn("web search failed in planner", { query, err })
+          return "Web search unavailable or timed out."
+        }
+      },
+    }),
   }
 }
 
