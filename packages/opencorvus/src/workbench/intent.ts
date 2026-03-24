@@ -21,6 +21,7 @@ const WorkbenchIntent = z.object({
       z.object({
         key: z.string(),
         value: z.string(),
+        scope: z.enum(["session", "global"]).default("global"),
       }),
     )
     .default([]),
@@ -120,8 +121,8 @@ export async function ingestTaskMessage(raw: z.input<typeof MessageInput>) {
   const resolved = interpreted.intent
 
   if (resolved.kind === "preference" && Array.isArray(resolved.preferences) && resolved.preferences.length > 0) {
-    const scope = inferPreferenceScope(text)
     for (const pref of resolved.preferences) {
+      const scope = pref.scope ?? "global"
       setPreference({
         taskID: input.taskID,
         userID: input.userID,
@@ -130,9 +131,10 @@ export async function ingestTaskMessage(raw: z.input<typeof MessageInput>) {
         scope,
       })
     }
+    const displayScope = resolved.preferences[0]?.scope ?? "global"
     return {
       kind: "preference" as const,
-      message: `Preference saved (${scope}): ${resolved.preferences.map((item) => `\`${item.key}=${item.value}\``).join(", ")}`,
+      message: `Preference saved (${displayScope}): ${resolved.preferences.map((item) => `\`${item.key}=${item.value}\``).join(", ")}`,
       should_resume: false,
     }
   }
@@ -213,6 +215,7 @@ async function interpretWithLLM(input: z.infer<typeof MessageInput>) {
 Rules:
 - Use "preference" when the user expresses durable preferences or style constraints.
 - Default preferences to global unless the user clearly says they only apply to this session.
+- For each preference, set scope to "session" when the user's language indicates temporary or session-only intent (e.g., "for this session", "temporarily", "just for now", "only for now", "暂时", "本次", "这次会话", "仅本次"). Otherwise set scope to "global".
 - Use "goal" when the user adds or changes acceptance goals.
 - Use "plan" when the user suggests how the task should be executed.
 - Use "note" for everything else.
@@ -243,11 +246,11 @@ async function workbenchModel() {
   return Provider.getModel(def.providerID, def.modelID).catch(() => undefined)
 }
 
-function inferPreferenceScope(text: string): Exclude<Preference.Scope, "cwd"> {
-  const lower = text.toLowerCase()
-  if (/(this session|for this session|only for now|temporarily|temporary|暂时|这次会话|本次会话|仅本次)/.test(lower)) {
-    return "session"
-  }
+/**
+ * Preference scope must come from the LLM's structured output.
+ * If not available, defaults to "global".
+ */
+function inferPreferenceScope(_text: string): Exclude<Preference.Scope, "cwd"> {
   return "global"
 }
 

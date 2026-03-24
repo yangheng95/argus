@@ -1,7 +1,5 @@
-import path from "path"
 import { Instance } from "@/project/instance"
 import { Installation } from "@/installation"
-import { Process } from "@/util/process"
 import { Log } from "@/util/log"
 import { ChannelCatalog, channelEnv } from "./catalog"
 
@@ -9,8 +7,10 @@ const log = Log.create({ service: "channel.supervisor" })
 
 type RuntimeStatus = "disabled" | "unavailable" | "starting" | "running" | "stopped" | "error"
 
+type InProcessRuntime = { stop(): Promise<void> }
+
 type State = {
-  child?: Process.Child
+  runtime?: InProcessRuntime
   status: RuntimeStatus
   detail: string
   signature: string
@@ -43,17 +43,17 @@ export namespace ChannelSupervisor {
       current.channels = []
       return snapshot(current)
     }
-    if (current.signature === next.signature && current.child && current.status === "running") {
+    if (current.signature === next.signature && current.runtime && current.status === "running") {
       return snapshot(current)
     }
-    await syncProcess(current, next)
+    await syncRuntime(current, next)
     return snapshot(current)
   }
 
   export async function restart(config?: Record<string, unknown>) {
     const current = await state()
     const next = desired(config)
-    await syncProcess(current, next, true)
+    await syncRuntime(current, next, true)
     return snapshot(current)
   }
 
@@ -125,7 +125,7 @@ function desired(config?: Record<string, unknown>) {
   }
 }
 
-async function syncProcess(current: State, next: ReturnType<typeof desired>, force = false) {
+async function syncRuntime(current: State, next: ReturnType<typeof desired>, force = false) {
   await stop(current)
   if (!next.env) {
     current.status = next.status
@@ -134,63 +134,125 @@ async function syncProcess(current: State, next: ReturnType<typeof desired>, for
     current.channels = []
     return
   }
-  const child = spawnChannelRuntime(next.env)
-  current.child = child
   current.status = "starting"
   current.detail = force ? `Restarting managed runtime for ${next.channels.join(", ")}.` : next.detail
   current.signature = next.signature
   current.channels = next.channels
-  watch(child, current)
-  current.status = "running"
-  current.detail = `Managed runtime active for ${next.channels.join(", ")}.`
-}
 
-async function stop(current: State) {
-  const child = current.child
-  current.child = undefined
-  if (child && child.exitCode === null && child.signalCode === null) {
-    child.kill("SIGTERM")
-    await child.exited.catch(() => undefined)
+  try {
+    current.runtime = await startInProcess(next.env, current)
+    current.status = "running"
+    current.detail = `Managed runtime active for ${next.channels.join(", ")}.`
+  } catch (error) {
+    current.status = "error"
+    current.detail = `Channel runtime failed: ${String(error)}`
+    log.error("channel runtime failed", { error: String(error) })
   }
 }
 
-function spawnChannelRuntime(env: Record<string, string>) {
-  const runtimeMain = path.resolve(import.meta.dirname, "../../channel-runtime/src/main.ts")
-  const runtimeCwd = path.dirname(runtimeMain)
-  return Process.spawn([process.execPath, runtimeMain], {
-    cwd: runtimeCwd,
-    env,
-    stdout: "pipe",
-    stderr: "pipe",
-    timeout: 2_000,
-  })
+async function stop(current: State) {
+  const runtime = current.runtime
+  current.runtime = undefined
+  if (runtime) {
+    await runtime.stop().catch(() => undefined)
+  }
 }
 
-function watch(child: Process.Child, current: State) {
-  consume(child.stdout, current)
-  consume(child.stderr, current)
-  void child.exited
-    .then((code) => {
-      current.child = undefined
-      current.status = code === 0 ? "stopped" : "error"
-      current.detail = code === 0 ? "Managed channel runtime stopped." : `Managed channel runtime exited with code ${code}.`
+async function startInProcess(env: Record<string, string>, current: State): Promise<InProcessRuntime> {
+  // Apply channel env vars to current process (don't overwrite existing)
+  for (const [key, value] of Object.entries(env)) {
+    if (!process.env[key]) process.env[key] = value
+  }
+
+  // Dynamic import to avoid loading channel-runtime when not needed
+  const { ChannelRuntime } = await import("../../../channel-runtime/src/core")
+  const { registerAdapters, ADAPTER_HINT } = await import("../../../channel-runtime/src/registry")
+  const { SlackAdapter } = await import("../../../channel-runtime/src/adapters/slack")
+  const { TelegramAdapter } = await import("../../../channel-runtime/src/adapters/telegram")
+  const { DiscordAdapter } = await import("../../../channel-runtime/src/adapters/discord")
+  const { FeishuAdapter } = await import("../../../channel-runtime/src/adapters/feishu")
+  const { WhatsappAdapter } = await import("../../../channel-runtime/src/adapters/whatsapp")
+  const { GoogleChatAdapter } = await import("../../../channel-runtime/src/adapters/googlechat")
+  const { MSTeamsAdapter } = await import("../../../channel-runtime/src/adapters/msteams")
+  const { LineAdapter } = await import("../../../channel-runtime/src/adapters/line")
+  const { MatrixAdapter } = await import("../../../channel-runtime/src/adapters/matrix")
+  const { MattermostAdapter } = await import("../../../channel-runtime/src/adapters/mattermost")
+  const { SignalAdapter } = await import("../../../channel-runtime/src/adapters/signal")
+  const { WeComAdapter } = await import("../../../channel-runtime/src/adapters/wecom")
+  const { DingTalkAdapter } = await import("../../../channel-runtime/src/adapters/dingtalk")
+  const { QQAdapter } = await import("../../../channel-runtime/src/adapters/qq")
+  const { applyDashscopeRuntime } = await import("../../../channel-runtime/src/dashscope")
+  const { STTPipeline } = await import("../../../channel-runtime/src/stt/pipeline")
+  const { VisionPipeline } = await import("../../../channel-runtime/src/vision")
+
+  const dashscope = await applyDashscopeRuntime()
+  const serverUrl = env.OPENCORVUS_CHANNEL_SERVER_URL
+
+  const runtime = new ChannelRuntime({
+    baseUrl: serverUrl,
+    sharedMode: process.env.OPENCORVUS_SHARED_SESSION_MODE === "1",
+    sharedFile: process.env.OPENCORVUS_SHARED_SESSION_FILE,
+  })
+
+  // STT pipeline (best-effort, no hard failure)
+  try {
+    const sttPipeline = new STTPipeline({
+      providers: (process.env.STT_PROVIDERS ?? "groq,openai-whisper,deepgram,google-gemini,local-cli").split(","),
+      language: process.env.STT_LANGUAGE,
     })
-    .catch((error) => {
-      current.child = undefined
-      current.status = "error"
-      current.detail = `Managed channel runtime failed: ${String(error)}`
-    })
+    await sttPipeline.init().catch(() => undefined)
+    runtime.setSTT(sttPipeline)
+  } catch { /* STT optional */ }
+
+  // Vision pipeline (optional)
+  if (dashscope.key && process.env.OPENCORVUS_VISION_MODEL) {
+    try {
+      runtime.setVision(new VisionPipeline({
+        apiKey: dashscope.key,
+        baseURL: dashscope.baseURL,
+        model: process.env.OPENCORVUS_VISION_MODEL,
+      }))
+    } catch { /* Vision optional */ }
+  }
+
+  // Register adapters
+  const adapters = registerAdapters(runtime, process.env, {
+    slack: (opts: any) => new SlackAdapter(opts),
+    telegram: (opts: any) => new TelegramAdapter(opts),
+    discord: (opts: any) => new DiscordAdapter(opts),
+    feishu: (opts: any) => new FeishuAdapter(opts),
+    whatsapp: (opts: any) => new WhatsappAdapter(opts),
+    googlechat: (opts: any) => new GoogleChatAdapter(opts),
+    msteams: (opts: any) => new MSTeamsAdapter(opts),
+    line: (opts: any) => new LineAdapter(opts),
+    matrix: (opts: any) => new MatrixAdapter(opts),
+    mattermost: (opts: any) => new MattermostAdapter(opts),
+    signal: (opts: any) => new SignalAdapter(opts),
+    wecom: (opts: any) => new WeComAdapter(opts),
+    dingtalk: (opts: any) => new DingTalkAdapter(opts),
+    qq: (opts: any) => new QQAdapter(opts),
+  })
+  for (const warn of adapters.warns) {
+    log.warn("channel adapter skip", { message: warn })
+  }
+  if (adapters.names.length === 0) {
+    throw new Error(`No chat channel configured. ${ADAPTER_HINT}`)
+  }
+  log.info("channel runtime starting", { channels: adapters.names })
+  for (const name of adapters.names) {
+    appendLog(current, `Registered: ${name}`)
+  }
+
+  await runtime.start()
+  log.info("channel runtime started", { channels: adapters.names })
+  appendLog(current, `Channel runtime active: ${adapters.names.join(", ")}`)
+
+  return { stop: () => runtime.stop() }
 }
 
-function consume(stream: NodeJS.ReadableStream | null | undefined, current: State) {
-  if (!stream) return
-  stream.on("data", (chunk) => {
-    const text = chunk.toString().trim()
-    if (!text) return
-    current.logs.push(text)
-    if (current.logs.length > 20) current.logs.shift()
-    log.info("channel.runtime", { text })
-  })
+function appendLog(current: State, text: string) {
+  current.logs.push(text)
+  if (current.logs.length > 20) current.logs.shift()
 }
 
 function snapshot(current: State) {
@@ -199,6 +261,6 @@ function snapshot(current: State) {
     detail: current.detail,
     channels: [...current.channels],
     logs: [...current.logs],
-    running: !!current.child && current.status === "running",
+    running: !!current.runtime && current.status === "running",
   }
 }

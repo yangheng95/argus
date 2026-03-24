@@ -43,6 +43,10 @@ const PLACEHOLDER_MARKER_RE = /\b(TODO|FIXME)\b/
 // Case-insensitive: implementation quality signals that indicate incomplete code
 const PLACEHOLDER_IMPL_RE = /\b(stub|placeholder|mock-only|not implemented)\b/i
 const VERIFY_RE = /\b(verify|verification|check|test|assert|readme|structure|scaffold|ls\s|find\s)\b/i
+function isInternalPath(file: string) {
+  const normalized = file.replace(/\\/g, "/")
+  return normalized.startsWith(".opencorvus/") || normalized.includes("/.opencorvus/")
+}
 
 export async function auditWorkspace(input: {
   rootDir: string
@@ -51,6 +55,7 @@ export async function auditWorkspace(input: {
   moduleBlocks?: ModuleBlock[]
 }): Promise<ArtifactAuditType> {
   const files = dedupeFiles(input.changedFiles && input.changedFiles.length > 0 ? input.changedFiles : await listFiles(input.rootDir))
+    .filter((f) => !isInternalPath(f))
   const requestText = String(input.request || "")
   const docFiles = files.filter((file) => DOC_EXTENSIONS.has(path.extname(file).toLowerCase()))
   const sourceFiles = files.filter((file) => SOURCE_EXTENSIONS.has(path.extname(file).toLowerCase()))
@@ -73,7 +78,9 @@ export async function auditWorkspace(input: {
 
   const nonSourceCount = Math.max(0, files.length - sourceFiles.length)
   const allowedDocs = /\b(add|create|write|update|document)\b[\s\S]{0,40}\b(readme|documentation|docs?)\b/i.test(requestText)
-  const scopeRelevantFiles = input.changedFiles && input.changedFiles.length > 0 ? dedupeFiles(input.changedFiles) : []
+  const scopeRelevantFiles = input.changedFiles && input.changedFiles.length > 0
+    ? dedupeFiles(input.changedFiles).filter((f) => !isInternalPath(f))
+    : []
   const nonConfigScopeFiles = scopeRelevantFiles.filter((f) => !CONFIG_BASENAMES.has(path.basename(f.replace(/\\/g, "/"))))
   const unmappedFiles = input.moduleBlocks && input.moduleBlocks.length > 0 && nonConfigScopeFiles.length > 0
     ? nonConfigScopeFiles.filter((file) => !belongsToAnyBlock(file, input.moduleBlocks!))
@@ -116,7 +123,8 @@ export async function deriveRunMetrics(input: {
   moduleBlocks?: ModuleBlock[]
 }): Promise<RunMetricsType> {
   const files = dedupeFiles(input.changedFiles && input.changedFiles.length > 0 ? input.changedFiles : await listFiles(input.rootDir))
-  const changedFiles = dedupeFiles(input.changedFiles ?? [])
+    .filter((f) => !isInternalPath(f))
+  const changedFiles = dedupeFiles(input.changedFiles ?? []).filter((f) => !isInternalPath(f))
   const latestChangeAt = await latestMtime(input.rootDir, files)
   const commandSummaries = input.events
     .map((event) => String(event.summary || event.text || event.toolName || ""))

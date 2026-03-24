@@ -1,13 +1,6 @@
-import { inferSelectors } from "@/check/policy"
 import { Identifier } from "@/id/id"
 import { OrchestratorGoalTable, OrchestratorProgressSnapshotTable, OrchestratorTaskTable } from "@/orchestrator/orchestrator.sql"
 import { Database, desc, eq } from "@/storage/db"
-
-function inferGoalMetadata(text: string, criteria?: string) {
-  const selectors = inferSelectors(`${text} ${criteria ?? ""}`)
-  if (selectors.length === 0) return undefined
-  return { check_selector: selectors }
-}
 
 export namespace GoalService {
   export function addOperatorGoal(input: { taskID: string; description: string }) {
@@ -36,7 +29,6 @@ export namespace GoalService {
           criteria: "This operator-provided goal is satisfied and acceptance checks still pass.",
           metadata: {
             origin: "operator",
-            ...(inferGoalMetadata(input.description) ?? {}),
           },
           priority: "blocking",
           status: "pending",
@@ -77,7 +69,7 @@ export namespace GoalService {
         .set({
           description: input.description,
           criteria: input.criteria,
-          metadata: inferGoalMetadata(input.description, input.criteria),
+          metadata: undefined,
           time_updated: Date.now(),
         })
         .where(eq(OrchestratorGoalTable.id, input.goalID))

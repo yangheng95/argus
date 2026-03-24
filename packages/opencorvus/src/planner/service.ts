@@ -481,7 +481,7 @@ function agentOutputToDraft(
         criteria: g.criteria,
         priority: g.priority ?? ("blocking" as const),
         metadata: {
-          check_selector: g.metadata?.check_selector ?? inferSelectors(`${g.description} ${g.criteria}`),
+          check_selector: g.metadata?.check_selector ?? [],
         },
       }))
     : output.goals.length > 0
@@ -490,7 +490,7 @@ function agentOutputToDraft(
           criteria: g.criteria,
           priority: g.priority,
           metadata: {
-            check_selector: g.check_selector ?? inferSelectors(`${g.description} ${g.criteria}`),
+            check_selector: g.check_selector ?? [],
           },
         }))
       : normalizeGoals(request, undefined, spec)
@@ -603,7 +603,7 @@ function clarificationDraft(input: {
     criteria: goal.criteria,
     priority: goal.priority ?? ("blocking" as const),
     metadata: {
-      check_selector: goal.metadata?.check_selector ?? inferSelectors(`${goal.description} ${goal.criteria}`),
+      check_selector: goal.metadata?.check_selector ?? [],
     },
   }))
   const assumptions = mergeAssumptions(input.spec?.assumptions)
@@ -982,7 +982,7 @@ ${truncatedPrevious}
 
 function normalizeGoals(request: string, goals?: z.infer<typeof GoalInput>[], spec?: SpecDraft) {
   if (goals && goals.length > 0) return goals
-  const selectors = inferSelectors(request)
+  const selectors: string[] = []
   // Per design doc: when spec exists, always include spec_check; also merge
   // check_selectors declared on spec items so that goal-level selectors align
   // with the spec-driven evaluation gate.
@@ -1075,19 +1075,6 @@ function heuristicClarification(request: string): ClarificationResult | undefine
           },
         ],
       }
-}
-
-function inferSelectors(request: string) {
-  const lower = request.toLowerCase()
-  const selectors = new Set(["build", "test", "lint", "verify_cmd"])
-  if (/(ui|ux|design|layout|页面|界面|交互|体验|accessibility)/.test(lower)) selectors.add("ui_review")
-  if (/(code quality|maintain|readab|review|refactor|代码质量|可维护|可读)/.test(lower)) selectors.add("code_quality")
-  if (/\bcr\b|code review|审查|代码评审|review finding|review comment/.test(lower)) selectors.add("code_review")
-  if (/(dead code|unused code|unused export|obsolete|stale branch|死代码|无用代码|废弃分支|清理旧代码)/.test(lower))
-    selectors.add("dead_code_review")
-  if (/(startup|start normally|starts normally|boot|launch|serve|server|启动|运行起来|正常启动)/.test(lower))
-    selectors.add("startup")
-  return [...selectors]
 }
 
 function summarize(input: string) {

@@ -43,7 +43,7 @@ function parseGoals(
       priority: (item.priority === "advisory" ? "advisory" : "blocking") as "blocking" | "advisory",
       check_selector: item.check_selector
         ? item.check_selector.split(/[,，]\s*/).map((s) => s.trim()).filter(Boolean)
-        : undefined,
+        : ["build", "test"],
     }))
 }
 

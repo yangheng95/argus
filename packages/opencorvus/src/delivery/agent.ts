@@ -271,10 +271,14 @@ function normalizeVerdict(input: unknown): DeliveryVerdictType {
   const obj = input && typeof input === "object" ? { ...(input as Record<string, unknown>) } : {}
 
   const rawVerdict = typeof obj.verdict === "string" ? obj.verdict.trim().toLowerCase() : ""
-  obj.verdict = rawVerdict.includes("accepted") ? "accepted"
+  const resolvedVerdict = rawVerdict.includes("accepted") ? "accepted"
     : rawVerdict.includes("fixed") ? "fixed"
     : rawVerdict.includes("rejected") ? "rejected"
-    : "accepted"
+    : null
+  if (!resolvedVerdict) {
+    log.warn("unrecognizable verdict, defaulting to rejected", { rawVerdict })
+  }
+  obj.verdict = resolvedVerdict ?? "rejected"
 
   if (!obj.summary) obj.summary = "Delivery verification completed"
 

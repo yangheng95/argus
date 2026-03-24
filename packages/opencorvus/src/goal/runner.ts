@@ -10,7 +10,7 @@ import { Instance } from "@/project/instance"
 import { Project } from "@/project/project"
 import { Session } from "@/session"
 import { Snapshot } from "@/snapshot"
-import { checkBase, type CheckDelivery, type CheckReport } from "@/evaluator/shared"
+import { type CheckDelivery, type CheckReport } from "@/evaluator/shared"
 import { type GoalJudgmentType } from "@/evaluator/agent"
 import { Worktree } from "@/worktree"
 import { Identifier } from "@/id/id"
@@ -843,19 +843,13 @@ export async function evaluateTask(input: {
   return { result: finalResult, ...analyzed }
 }
 
-const REVIEW_CHECKS = new Set(["ui_review", "code_quality", "code_review", "dead_code_review"])
-
-function reviewInfraFailure(check: { name: string; status: string; evidence?: string }) {
+/**
+ * Detect infra failure using only the structured `infra_failure` field.
+ * If the field does not exist on the check result, returns false.
+ */
+function reviewInfraFailure(check: { name: string; status: string; infra_failure?: boolean }) {
   if (check.status !== "failed") return false
-  if (!REVIEW_CHECKS.has(checkBase(check.name))) return false
-  const text = (check.evidence ?? "").toLowerCase()
-  return (
-    text.includes("review model call failed after retries") ||
-    text.includes("review model could not be loaded") ||
-    text.includes("no review model available") ||
-    text.includes("no review model is configured") ||
-    text.includes("failed to execute after retries")
-  )
+  return check.infra_failure === true
 }
 
 export function blockingEvaluationFailure(result: CheckReport) {

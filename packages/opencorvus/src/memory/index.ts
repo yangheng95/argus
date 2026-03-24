@@ -264,40 +264,17 @@ export namespace Memory {
     return sections
   }
 
-  function atomicKind(section: string, text: string): Exclude<Kind, "episode" | "note"> | null {
-    const label = section.toLowerCase()
-    const lower = text.toLowerCase()
-    if (/request|changed files?/.test(label)) return null
-    if (/preference|workflow|style|convention/.test(label) || /always |never |prefer /.test(lower)) return "profile"
-    if (/lesson|root cause|gotcha|avoid|failure|retry|trap/.test(label)) return "lesson"
-    if (/failed|root cause|avoid|must not|do not|retry/.test(lower)) return "lesson"
-    if (/outcome|approach|environment|config|decision|setup|summary|result/.test(label)) return "fact"
-    if (/socket mode|token|config|path|port|hostname|command|executor/.test(lower)) return "fact"
-    return null
-  }
-
-  function atomicImportance(kind: Exclude<Kind, "episode" | "note">, text: string) {
-    if (kind === "profile") return 95
-    if (kind === "lesson") return /root cause|avoid|must not|failure/.test(text.toLowerCase()) ? 92 : 88
-    return /config|path|command|executor|token/.test(text.toLowerCase()) ? 80 : 74
-  }
-
   function atomicConfidence(kind: Exclude<Kind, "episode" | "note">) {
     if (kind === "profile") return 92
     if (kind === "lesson") return 86
     return 80
   }
 
-  function shouldKeepAtomic(section: string, raw: string) {
+  function shouldKeepAtomic(_section: string, raw: string) {
     const text = compactText(raw)
     if (text.length < 24) return false
     if (text.length > 260) return false
-    if (/^[-*]?\s*[A-Za-z0-9_./-]+\.(ts|tsx|js|jsx|json|md)$/i.test(text)) return false
-    if (/^(passed|failed|skipped)$/i.test(text)) return false
-    if (/^required \d+ retries/i.test(text)) return true
-    if (/^source episode:/i.test(text)) return false
-    if (/^section:/i.test(text)) return false
-    return !/^(request|changed files?):/i.test(section)
+    return true
   }
 
   function deriveAtomicMemories(input: {
@@ -308,6 +285,8 @@ export namespace Memory {
   }) {
     const seen = new Set<string>()
     const sections = parseSections(input.content)
+    const kind: Exclude<Kind, "episode" | "note"> = "fact"
+    const importance = 80
     const items: Array<{
       title: string
       content: string
@@ -326,8 +305,6 @@ export namespace Memory {
         .filter(Boolean)
       for (const entry of entries) {
         if (!shouldKeepAtomic(section.title, entry)) continue
-        const kind = atomicKind(section.title, entry)
-        if (!kind) continue
         const key = normalizeKey(`${kind}-${entry}`)
         if (!key || seen.has(key)) continue
         seen.add(key)
@@ -341,9 +318,9 @@ export namespace Memory {
           }),
           kind,
           key,
-          scope: kind === "profile" ? "global" : input.promoteScope,
-          sessionID: kind === "profile" ? undefined : input.promoteScope === "session" ? input.sessionID : undefined,
-          importance: atomicImportance(kind, entry),
+          scope: input.promoteScope,
+          sessionID: input.promoteScope === "session" ? input.sessionID : undefined,
+          importance,
           confidence: atomicConfidence(kind),
         })
       }
@@ -543,6 +520,12 @@ export namespace Memory {
     promoteScope?: Scope
     importance?: number
     confidence?: number
+    atomics?: Array<{
+      kind: "profile" | "lesson" | "fact"
+      text: string
+      section: string
+      importance?: number
+    }>
   }) {
     const scope = input.scope ?? "global"
     const promoteScope = input.promoteScope ?? scope
@@ -557,32 +540,72 @@ export namespace Memory {
       importance: input.importance ?? DEFAULT_IMPORTANCE.episode,
       confidence: input.confidence ?? DEFAULT_CONFIDENCE.episode,
     })
-    const derived = deriveAtomicMemories({
-      title: input.title,
-      content: input.content,
-      promoteScope,
-      sessionID: input.sessionID,
-    }).map((item) =>
-      writeFile({
-        title: item.title,
-        content: item.content,
-        source: "reflection",
-        projectId: input.projectId,
-        scope: item.scope,
-        sessionID: item.scope === "session" ? item.sessionID : undefined,
-        kind: item.kind,
-        key: item.key,
-        importance: item.importance,
-        confidence: item.confidence,
-      }),
-    )
-    log.info("captured episode memory", {
-      fileId: episode.id,
-      derived: derived.length,
-      scope,
-      promoteScope,
-      source: input.source,
-    })
+
+    let derived: MemoryFile[]
+    if (input.atomics && input.atomics.length > 0) {
+      // Structured path: caller already knows the kind/importance of each atomic
+      const seen = new Set<string>()
+      derived = input.atomics.slice(0, 8).flatMap((atom) => {
+        const text = compactText(atom.text)
+        if (text.length < 24 || text.length > 260) return []
+        const key = normalizeKey(`${atom.kind}-${text}`)
+        if (!key || seen.has(key)) return []
+        seen.add(key)
+        const atomScope = atom.kind === "profile" ? "global" as Scope : promoteScope
+        return [writeFile({
+          title: buildAtomicTitle(atom.kind, text),
+          content: buildAtomicContent({
+            kind: atom.kind,
+            text,
+            episodeTitle: input.title,
+            section: atom.section,
+          }),
+          source: "reflection",
+          projectId: input.projectId,
+          scope: atomScope,
+          sessionID: atomScope === "session" ? input.sessionID : undefined,
+          kind: atom.kind,
+          key,
+          importance: atom.importance ?? DEFAULT_IMPORTANCE[atom.kind],
+          confidence: DEFAULT_CONFIDENCE[atom.kind],
+        })]
+      })
+      log.info("captured episode memory (structured atomics)", {
+        fileId: episode.id,
+        derived: derived.length,
+        scope,
+        promoteScope,
+        source: input.source,
+      })
+    } else {
+      // Legacy path: derive atomics as facts with flat importance
+      derived = deriveAtomicMemories({
+        title: input.title,
+        content: input.content,
+        promoteScope,
+        sessionID: input.sessionID,
+      }).map((item) =>
+        writeFile({
+          title: item.title,
+          content: item.content,
+          source: "reflection",
+          projectId: input.projectId,
+          scope: item.scope,
+          sessionID: item.scope === "session" ? item.sessionID : undefined,
+          kind: item.kind,
+          key: item.key,
+          importance: item.importance,
+          confidence: item.confidence,
+        }),
+      )
+      log.info("captured episode memory", {
+        fileId: episode.id,
+        derived: derived.length,
+        scope,
+        promoteScope,
+        source: input.source,
+      })
+    }
     return { episode, derived }
   }
 

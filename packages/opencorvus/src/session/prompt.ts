@@ -293,7 +293,10 @@ export namespace SessionPrompt {
           const url = new URL(part.url)
           switch (url.protocol) {
             case "data:":
-              if (part.mime === "text/plain") {
+              if (part.mime === "text/plain" || Filesystem.isTextLikeMime(part.mime)) {
+                const commaIndex = part.url.indexOf(",")
+                const base64Data = commaIndex >= 0 ? part.url.slice(commaIndex + 1) : ""
+                const textContent = Buffer.from(base64Data, "base64").toString("utf-8")
                 return [
                   {
                     messageID: info.id,
@@ -307,10 +310,11 @@ export namespace SessionPrompt {
                     sessionID: input.sessionID,
                     type: "text",
                     synthetic: true,
-                    text: Buffer.from(part.url, "base64url").toString(),
+                    text: textContent,
                   },
                   {
                     ...part,
+                    mime: "text/plain",
                     messageID: info.id,
                     sessionID: input.sessionID,
                   },
@@ -324,6 +328,13 @@ export namespace SessionPrompt {
 
               if (s?.isDirectory()) {
                 part.mime = "application/x-directory"
+              }
+
+              // Normalize text-like MIMEs (text/typescript, application/json, etc.)
+              // to text/plain so they go through the ReadTool path with line numbers,
+              // offset support, and truncation.
+              if (Filesystem.isTextLikeMime(part.mime)) {
+                part.mime = "text/plain"
               }
 
               if (part.mime === "text/plain") {

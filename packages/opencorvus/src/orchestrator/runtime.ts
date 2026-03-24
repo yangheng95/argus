@@ -78,6 +78,20 @@ const EXECUTOR_STATUS_TIMEOUT_MS = 30_000 // 30s for executor.status()
 const EXECUTOR_SUBMIT_TIMEOUT_MS = 60_000 // 60s for executor.submit()
 const evaluatingRuns = new Map<string, number>() // runID → start timestamp, guards against concurrent re-evaluation
 const eventBridgeAborts = new Map<string, AbortController>() // runID → AbortController for consumeExecutorEvents
+/** Whitelist: only these executor event types are broadcast to the UI.
+ *  Everything else is silently dropped — no DB write, no SSE push. */
+const BROADCAST_EVENT_TYPES = new Set([
+  "tool.call",
+  "tool.result",
+  "reasoning.delta",
+  "plan.delta",
+  "diff.delta",
+  "approval.request",
+  "input.request",
+  "usage.updated",
+  "session.idle",
+  "session.error",
+])
 const EVALUATING_STALE_MS = EVALUATION_HARD_TIMEOUT_MS + 60_000 // consider stale after hard timeout + 1 min buffer
 
 // Unattended-mode safeguards
@@ -1508,8 +1522,9 @@ function consumeExecutorEvents(
             payload: event.payload,
           },
         })
+        // Whitelist: only broadcast event types with semantic value for the UI.
+        // Everything else (protocol.raw, unknown types, noise) is silently dropped.
         if (event.type === "text_delta") {
-          // text_delta is high-frequency — dispatch ephemeral (no DB write)
           ProtocolStore.dispatchEphemeral({
             type: Event.RunOutput.type,
             aggregate: "task",
@@ -1518,8 +1533,7 @@ function consumeExecutorEvents(
             source: "executor",
             payload: { taskID, runID, type: "text_delta", text: event.summary ?? "" },
           })
-        } else {
-          // Non-delta executor events are low-frequency — persist to protocol_event
+        } else if (BROADCAST_EVENT_TYPES.has(event.type)) {
           void OrchestratorProtocol.emit(Event.RunProgress, {
             taskID,
             runID,
@@ -1528,6 +1542,7 @@ function consumeExecutorEvents(
             payload: event.payload,
           }, { taskID, runID, source: "executor" })
         }
+        // All unlisted event types are dropped — no persist, no broadcast.
       }
     } catch (err) {
       if (!ctrl.signal.aborted) {

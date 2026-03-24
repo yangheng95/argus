@@ -37,7 +37,7 @@ export const PlannerOutput = z.object({
       description: z.string(),
       criteria: z.string(),
       priority: z.enum(["blocking", "advisory"]),
-      check_selector: z.array(z.string()).optional(),
+      check_selector: z.array(z.string()).default(["build", "test"]),
     }),
   ),
   milestones: z

@@ -105,6 +105,25 @@ export namespace Filesystem {
   }
 
   /**
+   * Returns true if the MIME type represents text/code content that should be
+   * sent as inline text rather than a binary file part to LLM providers.
+   *
+   * text/plain and application/x-directory are excluded because they are
+   * already handled by dedicated code paths upstream.
+   */
+  export function isTextLikeMime(mime: string): boolean {
+    if (mime === "text/plain" || mime === "application/x-directory") return false
+    if (mime.startsWith("text/")) return true
+    if (mime === "application/json") return true
+    if (mime === "application/toml") return true
+    if (mime === "application/xml") return true
+    if (mime === "application/x-sh") return true
+    if (mime === "application/x-yaml") return true
+    if (mime.endsWith("+json") || mime.endsWith("+xml")) return true
+    return false
+  }
+
+  /**
    * On Windows, normalize a path to its canonical casing using the filesystem.
    * This is needed because Windows paths are case-insensitive but LSP servers
    * may return paths with different casing than what we send them.

@@ -145,18 +145,8 @@ export function validateGoalGraph(goalDraft: GoalDraft, spec: SpecDraft, scope: 
     throw new GoalFailureError(`Blocking requirements are not covered by blocking goals: ${missingBlocking.join(", ")}`)
   }
 
-  const blockingRequirementCount = blockingRequirements.size
-  for (const goal of goals) {
-    const text = `${goal.title} ${goal.objective} ${goal.done_definition}`.toLowerCase()
-    const umbrella =
-      /\b(everything|entire\s+(app|system|project|workflow|surface)|full\s+app|whole\s+(app|system|project)|all\s+(features|requirements|modules|routes|components|pages|workflows|checks|tests)|project setup|bootstrap|infrastructure|foundation|base project)\b|全量|全部|整体|基础设施|项目初始化|脚手架/.test(text)
-    if (umbrella && goal.requirement_ids.length > 1) {
-      throw new GoalFailureError(`Goal ${goal.id} is too broad and reads like an umbrella stage`)
-    }
-    if (blockingRequirementCount > 2 && goal.priority === "blocking" && goal.requirement_ids.length === blockingRequirementCount) {
-      throw new GoalFailureError(`Goal ${goal.id} collapses the entire blocking workload into one stage`)
-    }
-  }
+  // Quality judgments (goal too broad, umbrella stages, etc.) are delegated to the
+  // LLM-based GoalFidelityReview — no hardcoded heuristics here.
 
   const adjacency = new Map(goals.map((goal) => [goal.id, goal.depends_on_goal_ids]))
   const visiting = new Set<string>()
@@ -231,34 +221,33 @@ function topoRankLayers(layers: ArchitecturalLayer[]): Map<string, number> {
   return rankMap
 }
 
-function kindFromLayerId(id: string, description: string): z.infer<typeof GoalKind> {
-  const text = `${id} ${description}`.toLowerCase()
-  if (/test|verif|spec|check|acceptance/.test(text)) return "verification"
-  if (/setup|bootstrap|scaffold|init|config|package|build|tooling/.test(text)) return "bootstrap"
-  if (/middleware|interceptor|guard|cors|rate.?limit|pipeline/.test(text)) return "integration"
-  if (/wiring|routing|entry|compose|main|app\.ts|index\.ts/.test(text)) return "integration"
-  if (/quality|lint|typecheck|type.?check|static.?analysis/.test(text)) return "system"
-  return "feature"
+/** Read layer kind from structured spec metadata. Defaults to "feature". */
+function layerKind(layer: ArchitecturalLayer): z.infer<typeof GoalKind> {
+  const valid = new Set<string>(["bootstrap", "feature", "verification", "integration", "system"])
+  return layer.kind && valid.has(layer.kind) ? layer.kind as z.infer<typeof GoalKind> : "feature"
 }
 
-function isVerificationLayer(id: string, description: string): boolean {
-  return /test|verif|spec|check|acceptance/.test(`${id} ${description}`.toLowerCase())
+/** Read is_verification from structured spec metadata. Defaults to false. */
+function layerIsVerification(layer: ArchitecturalLayer): boolean {
+  return layer.is_verification === true
 }
 
 /** Build LayerDef[] from a spec blueprint. Dependencies reflect actual architecture. */
 function layersFromBlueprint(blueprint: ArchitecturalLayer[]): LayerDef[] {
   const rankMap = topoRankLayers(blueprint)
-  const verificationIds = new Set(blueprint.filter((l) => isVerificationLayer(l.id, l.description)).map((l) => l.id))
-  return blueprint.map((layer) => ({
-    id: layer.id,
-    name: layer.name,
-    rank: rankMap.get(layer.id) ?? 100,
-    depends_on: layer.depends_on,
-    kind: kindFromLayerId(layer.id, layer.description),
-    isVerification: verificationIds.has(layer.id),
-    defaultRuleSelectors: (hasVerificationLayer: boolean) =>
-      verificationIds.has(layer.id) ? ["test", "lint"] : hasVerificationLayer ? ["build"] : ["build", "test"],
-  }))
+  return blueprint.map((layer) => {
+    const isVerification = layerIsVerification(layer)
+    return {
+      id: layer.id,
+      name: layer.name,
+      rank: rankMap.get(layer.id) ?? 100,
+      depends_on: layer.depends_on,
+      kind: layerKind(layer),
+      isVerification,
+      defaultRuleSelectors: (hasVerificationLayer: boolean) =>
+        isVerification ? ["test", "lint"] : hasVerificationLayer ? ["build"] : ["build", "test"],
+    }
+  })
 }
 
 /** Build LayerDef[] from the generic GoalCategory taxonomy. Used when spec has no blueprint. */
@@ -372,7 +361,7 @@ async function parseLLMLayerArray(
     if (words.length > 0) {
       parsed = words
     } else {
-      log.warn("goal classifier returned unparseable output, using fallback for all", { context, text: text.slice(0, 300) })
+      log.error("goal classifier returned unparseable output, using fallback for all — all parsing strategies exhausted", { context, text: text.slice(0, 300), fallbackId, expectedCount })
       return Array(expectedCount).fill(fallbackId)
     }
   }
@@ -386,6 +375,42 @@ async function parseLLMLayerArray(
   // Pad if truncated, trim if over
   while (arr.length < expectedCount) arr.push(fallbackId)
   return arr.slice(0, expectedCount)
+}
+
+/**
+ * Declarative mapping from check_selector names to GoalCategory.
+ * When a requirement's selectors map to mixed categories, the fast path
+ * returns null and falls through to the LLM.
+ */
+const SELECTOR_CATEGORY: Record<string, GoalCategory> = {
+  test: "verification",
+  lint: "quality",
+  build: "quality",
+  typecheck: "quality",
+  verify_cmd: "quality",
+  ui_review: "feature",
+  code_quality: "quality",
+  code_review: "quality",
+  dead_code_review: "quality",
+  startup: "feature",
+}
+
+/**
+ * Map a list of check_selector strings to a single GoalCategory using the
+ * SELECTOR_CATEGORY lookup table. Returns null when selectors map to mixed
+ * categories (falls through to LLM classification).
+ */
+function categoryFromSelectors(selectors: string[]): GoalCategory | null {
+  if (selectors.length === 0) return null
+  const categories = new Set<GoalCategory>()
+  for (const s of selectors) {
+    const cat = SELECTOR_CATEGORY[s]
+    if (cat) categories.add(cat)
+  }
+  if (categories.size === 0) return null
+  if (categories.size === 1) return [...categories][0]!
+  // Mixed categories — fall through to LLM
+  return null
 }
 
 /**
@@ -405,13 +430,29 @@ async function classifyRequirementsWithLayers(
   // When a requirement already carries explicit selectors, the LLM classification
   // only affects clustering/ordering (default rule_selectors are overridden anyway).
   // Assigning a reasonable default avoids an unnecessary LLM round-trip.
-  const verificationLayerId = blueprint.find((l) => isVerificationLayer(l.id, l.description))?.id
-  const defaultLayerId = blueprint.find((l) => !isVerificationLayer(l.id, l.description))?.id ?? blueprint[0]?.id
+  //
+  // Build a reverse index from GoalCategory to the first matching layer ID
+  // so the fast path can assign requirements to the right blueprint layer.
+  const layerByCategory = new Map<GoalCategory, string>()
+  for (const l of blueprint) {
+    const kind = layerKind(l)
+    const catFromKind: GoalCategory | undefined =
+      kind === "verification" ? "verification"
+        : kind === "bootstrap" ? "bootstrap"
+          : kind === "system" ? "quality"
+            : kind === "integration" ? "integration"
+              : kind === "feature" ? "feature"
+                : undefined
+    if (catFromKind && !layerByCategory.has(catFromKind)) layerByCategory.set(catFromKind, l.id)
+  }
+  const defaultLayerId = blueprint.find((l) => !layerIsVerification(l))?.id ?? blueprint[0]?.id
   const fastPaths = requirements.map((req): string | null => {
     const selectors = requirementSelectorMetadata(req).map(normalizeText)
     if (selectors.length === 0) return null
-    if (selectors.every((s) => s.includes("test")) && verificationLayerId) return verificationLayerId
-    return defaultLayerId ?? null
+    const cat = categoryFromSelectors(selectors)
+    if (cat === null) return null // mixed categories — fall through to LLM
+    const layerId = layerByCategory.get(cat)
+    return layerId ?? defaultLayerId ?? null
   })
 
   const needsLLM = requirements.map((req, i) => ({ req, i })).filter((_, i) => fastPaths[i] === null)
@@ -450,7 +491,7 @@ Output ONLY the JSON array, no other text.`
       timeoutMs: 120000,
     })
 
-    const values = await parseLLMLayerArray(text, validLayerIds, chunk.length, `layer chunk ${offset / CLASSIFY_CHUNK_SIZE + 1}`)
+    const values = parseLLMLayerArray(text, validLayerIds, chunk.length, `layer chunk ${offset / CLASSIFY_CHUNK_SIZE + 1}`)
     for (let j = 0; j < chunk.length; j++) {
       result[chunk[j]!.i] = values[j]!
     }
@@ -472,12 +513,13 @@ async function classifyRequirementsWithLLM(
   // When a requirement already carries explicit selectors, the LLM classification
   // only affects clustering/ordering (default rule_selectors are overridden anyway).
   // Assigning a reasonable default avoids an unnecessary LLM round-trip.
+  //
+  // Uses SELECTOR_CATEGORY lookup table instead of regex. When selectors map
+  // to mixed categories, returns null to fall through to LLM classification.
   const fastPaths = requirements.map((req): GoalCategory | null => {
     const selectors = requirementSelectorMetadata(req).map(normalizeText)
     if (selectors.length === 0) return null
-    if (selectors.every((s) => s.includes("test"))) return "verification"
-    if (selectors.every((s) => s.includes("build") || s.includes("lint") || s.includes("typecheck"))) return "quality"
-    return "feature"
+    return categoryFromSelectors(selectors)
   })
 
   const needsLLM = requirements.map((req, i) => ({ req, i })).filter((_, i) => fastPaths[i] === null)
@@ -524,7 +566,7 @@ Output ONLY the JSON array, no other text.`
       timeoutMs: 120000,
     })
 
-    const values = await parseLLMLayerArray(text, VALID_GOAL_CATEGORIES, chunk.length, `category chunk ${offset / CLASSIFY_CHUNK_SIZE + 1}`)
+    const values = parseLLMLayerArray(text, VALID_GOAL_CATEGORIES, chunk.length, `category chunk ${offset / CLASSIFY_CHUNK_SIZE + 1}`)
     for (let j = 0; j < chunk.length; j++) {
       result[chunk[j]!.i] = values[j]! as GoalCategory
     }
