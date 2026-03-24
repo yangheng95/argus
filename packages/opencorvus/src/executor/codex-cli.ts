@@ -81,8 +81,9 @@ function decoder() {
         sessionID = typeof raw.thread_id === "string" ? raw.thread_id : sessionID
         return [
           {
-            type: "status",
-            status: type,
+            type: "progress",
+            phase: "init",
+            summary: type,
             meta: raw,
           },
         ]
@@ -90,8 +91,9 @@ function decoder() {
       if (type === "turn.started" || type === "turn.completed") {
         return [
           {
-            type: "status",
-            status: type,
+            type: "progress",
+            phase: type === "turn.started" ? "responding" : "turn_completed",
+            summary: type,
             meta: raw,
           },
         ]

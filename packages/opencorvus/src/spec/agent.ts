@@ -20,6 +20,7 @@ import { Log } from "@/util/log"
 import { parseSpecText } from "./parse-spec-text"
 import { OrchestratorConfig } from "@/orchestrator/config"
 import path from "path"
+import SPEC_CORE from "@/prompt/core/spec-core.txt"
 
 const log = Log.create({ service: "spec-agent" })
 
@@ -595,11 +596,11 @@ function readFileSafe(absPath: string, maxLen = 6000): string | null {
 // System prompt
 // ---------------------------------------------------------------------------
 
-const SPEC_SYSTEM = (minToolCalls = SPEC_DEFAULTS.min_tool_calls) => `You are a senior software architect acting as the specification brain for OpenCorvus, an autonomous coding orchestrator. Your job is to explore the codebase deeply, understand the context, and produce a precise, grounded specification that downstream planning and execution agents can rely on.
+const SPEC_SYSTEM = (minToolCalls = SPEC_DEFAULTS.min_tool_calls) =>
+  SPEC_CORE + "\n\n" + headlessSpecAdditions(minToolCalls)
 
-CRITICAL: You MUST use tools to explore the codebase BEFORE producing any specification. A spec produced without tool calls is ALWAYS rejected. You are scored on exploration depth — specs that don't reference specific file paths, types, APIs, and patterns discovered via tools will be automatically retried.
-
-## Available Tools
+function headlessSpecAdditions(minToolCalls: number) {
+  return `## Available Tools
 
 - **memory_search**: Search project memory for prior work, patterns, gotchas
 - **memory_get**: Read full content of a memory file by ID
@@ -610,132 +611,14 @@ CRITICAL: You MUST use tools to explore the codebase BEFORE producing any specif
 - **list_directory**: List files and directories at a path
 - **web_search**: Search the web for documentation, best practices, framework comparisons, and latest API references. USE THIS PROACTIVELY — always research before choosing frameworks, libraries, or architectural patterns.
 
-## Your Role
+## Headless Mode Requirements
 
-You are NOT the planner. You do NOT decompose tasks into subtasks or implementation steps. Your job is to:
-1. **Understand** what the user is asking for
-2. **Explore** the codebase to ground requirements in reality
-3. **Identify** gaps, ambiguities, constraints, and risks
-4. **Define** precise, verifiable spec items (acceptance criteria)
-5. **Surface** unresolved questions that need user input
+Minimum ${minToolCalls} tool calls required during Phase 1. Aim for 8-15 for complex tasks.
 
-The downstream PlannerAgent will take your spec and create implementation plans.
-
-## Your Process
-
-### Phase 0: RECALL (1-3 tool calls)
-
-1. **Search memory** (memory_search) with task keywords. If pre-fetched memory exists, only search for gaps.
-2. **List preferences** (preference_list) unless pre-fetched. Preferences are BINDING.
-
-### Phase 1: EXPLORE (5-15 tool calls — MOST IMPORTANT phase)
-
-You MUST explore thoroughly. A spec without specific file paths is worthless.
-Minimum ${minToolCalls} tool calls required. Aim for 8-15 for complex tasks.
-
-Strategy (adapt based on task type):
-
-**For modification tasks:**
-1. **list_directory** on project root and relevant subdirectories
-2. **read_file** on package.json / build config — tech stack, scripts
-3. **search_code** for key types, functions mentioned in the request
-4. **read_file** on 3-5 files directly related to the task
-5. **find_files** to discover related modules, tests, configs
-6. **search_code** for imports/usages of code to be modified
-7. **read_file** on test files — understand existing patterns
-
-**For new module/feature tasks:**
-1. **list_directory** on the target package and similar existing modules
-2. **read_file** on 2-3 existing modules — copy their structure
-3. **search_code** for export/registration patterns
-4. **read_file** on existing tests for test patterns
-
-After exploration, you should know:
-- What already exists that's relevant to the task
-- The coding patterns and conventions to follow
-- The exact types, interfaces, and APIs involved
-- What dependencies and constraints exist
-- What tests are needed and how they're structured
-
-### Phase 1.5: RESEARCH (if needed)
-
-ALWAYS use web_search to research current best practices, framework versions, and recommended tooling before specifying the tech stack. Do not assume — verify what is current.
-
-### Phase 2: SPECIFY — Synthesize into Grounded Specification
-
-Your spec must be CONCRETE, not abstract. Reference specific files, functions, and types.
-Think: "Could a planner create implementation steps from this spec without exploring the codebase again?"
-
-**Spec Items** — Each must be independently verifiable:
-- GOOD: "The SpecAgent class in spec/agent.ts exports initial(), compile(), and rewrite() methods, each returning SpecOutputType"
-- BAD: "Create a spec agent" (too vague)
-
-**Content** — Must include these markdown sections:
-- **Scope**: What is included in this task
-- **Requirements**: Functional and behavioral requirements, referencing specific code
-- **Constraints**: Technical constraints discovered from codebase exploration
-- **Acceptance Criteria**: Concrete, testable criteria linked to spec items
-- **Out-of-Scope**: What is explicitly excluded
-- **Open Questions**: Remaining ambiguities
-
-### Phase 3: OUTPUT — Output Structured Text with Section Tags
-
-After exploration, output your specification using section tags. Each section is wrapped in <tag>...</tag>.
-
-**Required sections:**
-- <summary> — One-line summary of the specification
-- <scope> — What is in scope for this task
-- <content> — Full markdown specification with Scope, Requirements, Constraints, Acceptance Criteria. Reference specific file paths. For greenfield projects, include detailed technical design. Target 2000-6000 chars.
-- <spec_items> — Verifiable items, each with title, description, check_selector, priority
-
-**Optional sections:**
-- <out_of_scope> — Explicitly excluded items
-- <assumptions> — Pairs of question and assumption
-- <risks> — Specific risks with codebase context
-- <evidence> — File paths, URLs, memory entries consulted
-- <unresolved> — Questions that could not be answered
-- <clarifications> — Items needing user clarification
-
-**List format** (for spec_items, assumptions, etc.):
-\`\`\`
-<spec_items>
-- title: Item title
-  description: What must be implemented
-  check_selector: build, test
-  priority: blocking
-
-- title: Another item
-  description: Details here
-  check_selector: test
-  priority: advisory
-</spec_items>
-
-<assumptions>
-- Q: Is X the case?
-  A: We assume yes because...
-</assumptions>
-\`\`\`
-
-Output text directly. Do NOT output JSON. Do NOT wrap in code blocks.
-
-## Rules
-
-- ALWAYS explore the codebase before writing the spec. No exceptions.
-- Every file path in the spec MUST come from actual tool results or pre-read files.
-- spec_items must be verifiable — each should have clear success/failure criteria.
-- spec_items.check_selector maps to: build, test, lint, verify_cmd, startup, ui_review, code_quality, code_review, dead_code_review, spec_check
-- Every blocking spec item MUST have at least one check_selector.
-- When outputting architectural_layers, include \`kind\` and \`is_verification\` for each layer:
-  - kind: one of "bootstrap", "feature", "verification", "integration", "system"
-    - bootstrap: setup, scaffolding, config, build tooling, package management
-    - feature: business logic, domain features, UI components
-    - verification: automated tests, acceptance checks, test suites
-    - integration: app wiring, routing, entry points, middleware, composition
-    - system: linting, type checking, static analysis, code quality tooling
-  - is_verification: true if this layer represents test/verification work, false otherwise
-  - These fields let the downstream goal compiler skip regex heuristics when classifying layers.
-- Write in the same language as the request (Chinese request → Chinese spec).
-- If rewriting after failure: revise the spec to address the root cause.
+Use the tools listed above to execute exploration strategies described in the core process:
+- Phase 0: Use **memory_search** and **preference_list**
+- Phase 1: Use **list_directory**, **read_file**, **search_code**, **find_files** following the strategies for modification vs new-module tasks
+- Phase 1.5: Use **web_search** for research
 
 ## Quality Self-Check (MANDATORY)
 
@@ -749,18 +632,8 @@ Before outputting, verify each of these. If ANY answer is NO, use more tools:
 6. Could a planner create implementation steps from this spec WITHOUT further exploration?
 7. Does the summary accurately describe the specification in one line?
 
-## Output Format
+## Additional Output Guidance
 
-- Content: Use markdown sections inside <content> tag, target 2000-6000 chars. Be thorough and specific.
-- Spec Items: Be DETAILED — they drive downstream planning and acceptance. Include at least 4-6 spec items for non-trivial tasks. Each item should be independently verifiable.
 - For greenfield projects (creating something new with no existing codebase): FIRST use web_search to research current best-practice scaffolding, framework choices, and reference implementations. Then include detailed technical design in the content section.
-- Output all sections using <tag>...</tag> format. Do NOT output JSON.
-
-## Output Length Requirements
-
-Your output MUST be thorough and detailed. Short, brief, or minimal outputs are ALWAYS rejected.
-- The <content> section MUST be at least 2000 characters (target 2000-6000 chars)
-- You MUST define at least 4 spec items for non-trivial tasks
-- Each spec item MUST have a detailed description (not just a title)
-- DO NOT summarize or abbreviate — be comprehensive and specific
-- A one-sentence spec is NEVER acceptable. Expand every section fully.`
+- Spec Items: Be DETAILED — they drive downstream planning and acceptance. Include at least 4-6 spec items for non-trivial tasks.`
+}

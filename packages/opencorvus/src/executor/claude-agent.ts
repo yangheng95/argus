@@ -342,9 +342,11 @@ function mapMessage(current: SessionState, message: Record<string, unknown>): Co
     }]
   }
   if (type === "system") {
+    const subtype = typeof message.subtype === "string" ? message.subtype : "system"
     return [{
-      type: "status",
-      status: typeof message.subtype === "string" ? message.subtype : "system",
+      type: "progress",
+      phase: subtype,
+      summary: subtype,
       meta: {
         session_id: sessionID,
         ...message,
@@ -353,8 +355,9 @@ function mapMessage(current: SessionState, message: Record<string, unknown>): Co
   }
   if (type === "tool_progress") {
     return [{
-      type: "status",
-      status: "tool_progress",
+      type: "progress",
+      phase: "tool_executing",
+      summary: "tool_progress",
       meta: {
         session_id: sessionID,
         ...message,
@@ -362,14 +365,7 @@ function mapMessage(current: SessionState, message: Record<string, unknown>): Co
     }]
   }
   if (type === "tool_use_summary" || type === "prompt_suggestion" || type === "rate_limit_event" || type === "auth_status") {
-    return [{
-      type: "raw",
-      name: type,
-      meta: {
-        session_id: sessionID,
-        ...message,
-      },
-    }]
+    return []
   }
   return []
 }
@@ -405,11 +401,8 @@ function fromAssistant(sessionID: string, message?: Record<string, unknown>): Co
   }
   if (out.length === 0) {
     out.push({
-      type: "raw",
-      name: "assistant",
-      meta: {
-        session_id: sessionID,
-      },
+      type: "progress",
+      phase: "responding",
     })
   }
   return out
@@ -417,15 +410,9 @@ function fromAssistant(sessionID: string, message?: Record<string, unknown>): Co
 
 function fromUser(sessionID: string, message?: Record<string, unknown>, toolUseResult?: unknown): CodingEventInfo[] {
   const out: CodingEventInfo[] = []
+  // tool_use_result noise — tool results come through tool_result type
   if (toolUseResult !== undefined) {
-    out.push({
-      type: "raw",
-      name: "user.tool_result",
-      meta: {
-        session_id: sessionID,
-        tool_use_result: toolUseResult,
-      },
-    })
+    // do not emit — results flow through individual tool_result events
   }
   if (!message || !Array.isArray(message.content)) return out
   for (const part of message.content) {
@@ -487,23 +474,10 @@ function fromStreamEvent(sessionID: string, event?: Record<string, unknown>): Co
     }
   }
   if (type === "message_start" || type === "message_stop" || type === "message_delta" || type === "content_block_stop") {
-    return [{
-      type: "status",
-      status: type,
-      meta: {
-        session_id: sessionID,
-        ...event,
-      },
-    }]
+    return []
   }
-  return [{
-    type: "raw",
-    name: `stream_event:${type || "unknown"}`,
-    meta: {
-      session_id: sessionID,
-      ...event,
-    },
-  }]
+  // Unknown stream events — protocol noise, do not yield
+  return []
 }
 
 function updateSession(current: SessionState, message: Record<string, unknown>) {

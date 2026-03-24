@@ -57,7 +57,7 @@ export const ManagedCodingExecutor = {
 
       state.status = "running"
       push(state, {
-        type: "executor.status",
+        type: "executor.progress",
         summary: "running",
         payload: {
           sessionID: state.sessionID,
@@ -96,7 +96,7 @@ export const ManagedCodingExecutor = {
         tasks.set(id, state)
         latest.set(input.sessionID, id)
         push(state, {
-          type: "executor.status",
+          type: "executor.progress",
           summary: "queued",
           payload: {
             sessionID: input.sessionID,
@@ -165,7 +165,7 @@ export const ManagedCodingExecutor = {
         tasks.set(id, state)
         latest.set(input.sessionID, id)
         push(state, {
-          type: "executor.status",
+          type: "executor.progress",
           summary: "retrying",
           payload: {
             sessionID: input.sessionID,
@@ -312,7 +312,7 @@ function sync(state: State, event: CodingEventInfo) {
     state.externalSessionID = event.sessionID
     return
   }
-  if (event.type !== "status" || !event.meta) return
+  if (event.type !== "progress" || !event.meta) return
   if (typeof event.meta.session_id === "string" && event.meta.session_id) {
     state.externalSessionID = event.meta.session_id
     return
@@ -329,13 +329,14 @@ function push(state: State, event: Notify) {
 }
 
 function map(state: State, event: CodingEventInfo): Notify {
-  if (event.type === "status") {
+  if (event.type === "progress") {
     return {
-      type: "executor.status",
-      summary: event.status,
+      type: "executor.progress",
+      summary: event.summary ?? event.phase,
       payload: {
         sessionID: state.sessionID,
         queueTaskID: state.id,
+        phase: event.phase,
         ...event.meta,
       },
     }
@@ -449,17 +450,6 @@ function map(state: State, event: CodingEventInfo): Notify {
         outputTokens: event.outputTokens,
         totalTokens: event.totalTokens,
         costUSD: event.costUSD,
-        ...(event.meta ?? {}),
-      },
-    }
-  }
-  if (event.type === "raw") {
-    return {
-      type: "protocol.raw",
-      summary: event.name,
-      payload: {
-        sessionID: state.sessionID,
-        queueTaskID: state.id,
         ...(event.meta ?? {}),
       },
     }
