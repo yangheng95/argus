@@ -23,6 +23,7 @@ use tauri::{
     tray::TrayIconBuilder,
     AppHandle, Manager, Runtime, UserAttentionType,
 };
+use base64::{engine::general_purpose::STANDARD, Engine as _};
 use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_opener::OpenerExt;
 
@@ -232,6 +233,95 @@ fn overlay_pick_dir<R: Runtime>(app: AppHandle<R>, start: Option<String>) -> Res
         .blocking_pick_folder()
         .and_then(|item| item.into_path().ok())
         .map(|item| item.to_string_lossy().to_string()))
+}
+
+fn mime_from_ext(filename: &str) -> &'static str {
+    let ext = filename.rsplit('.').next().unwrap_or("").to_ascii_lowercase();
+    match ext.as_str() {
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "gif" => "image/gif",
+        "webp" => "image/webp",
+        "bmp" => "image/bmp",
+        "svg" => "image/svg+xml",
+        "ico" => "image/x-icon",
+        "pdf" => "application/pdf",
+        "json" => "application/json",
+        "xml" => "application/xml",
+        "csv" => "text/csv",
+        "txt" | "log" => "text/plain",
+        "md" => "text/markdown",
+        "html" | "htm" => "text/html",
+        "css" => "text/css",
+        "js" | "mjs" | "cjs" => "text/javascript",
+        "ts" | "tsx" => "text/typescript",
+        "py" => "text/x-python",
+        "go" => "text/x-go",
+        "rs" => "text/x-rust",
+        "c" | "h" => "text/x-c",
+        "cpp" | "cc" | "cxx" => "text/x-c++",
+        "java" => "text/x-java",
+        "rb" => "text/x-ruby",
+        "sh" | "bash" => "text/x-shellscript",
+        "bat" | "cmd" => "text/x-bat",
+        "ps1" => "text/x-powershell",
+        "sql" => "text/x-sql",
+        "toml" => "text/x-toml",
+        "yaml" | "yml" => "text/x-yaml",
+        _ => "application/octet-stream",
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PickedFile {
+    filename: String,
+    mime: String,
+    url: String,
+}
+
+#[tauri::command]
+fn overlay_pick_files<R: Runtime>(app: AppHandle<R>, start: Option<String>) -> Result<Vec<PickedFile>, String> {
+    let mut builder = app.dialog().file().add_filter(
+        "Supported Files",
+        &[
+            "png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "ico",
+            "pdf", "txt", "md", "json", "csv", "xml", "yaml", "yml",
+            "log", "ts", "tsx", "js", "py", "go", "rs", "c", "cpp", "h",
+            "java", "rb", "sh", "bat", "ps1", "html", "css", "sql", "toml",
+        ],
+    );
+
+    if let Some(start) = start.map(|s| s.trim().to_string()).filter(|s| !s.is_empty()) {
+        builder = builder.set_directory(start);
+    }
+
+    let paths = match builder.blocking_pick_files() {
+        Some(paths) => paths,
+        None => return Ok(Vec::new()),
+    };
+
+    let max_size: u64 = 10 * 1024 * 1024;
+    let mut results = Vec::new();
+    for entry in paths {
+        if let Ok(path) = entry.into_path() {
+            let filename = path
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_default();
+            let meta = fs::metadata(&path).map_err(|e| e.to_string())?;
+            if meta.len() > max_size {
+                continue;
+            }
+            let data = fs::read(&path).map_err(|e| e.to_string())?;
+            let mime = mime_from_ext(&filename);
+            let b64 = STANDARD.encode(&data);
+            let url = format!("data:{};base64,{}", mime, b64);
+            results.push(PickedFile { filename, mime: mime.to_string(), url });
+        }
+    }
+
+    Ok(results)
 }
 
 fn candidate_server_paths<R: Runtime>(app: &AppHandle<R>) -> Vec<PathBuf> {
@@ -657,6 +747,20 @@ fn overlay_attention_set<R: Runtime>(app: AppHandle<R>, active: bool) -> Result<
     Ok(true)
 }
 
+#[tauri::command]
+fn overlay_toggle_devtools<R: Runtime>(app: AppHandle<R>) -> Result<bool, String> {
+    if let Some(window) = app.get_webview_window("main") {
+        if window.is_devtools_open() {
+            window.close_devtools();
+        } else {
+            window.open_devtools();
+        }
+        Ok(true)
+    } else {
+        Ok(false)
+    }
+}
+
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
@@ -672,7 +776,9 @@ fn main() {
             overlay_create_temp_dir,
             overlay_write_file,
             overlay_pick_dir,
-            overlay_attention_set
+            overlay_pick_files,
+            overlay_attention_set,
+            overlay_toggle_devtools
         ])
         .setup(|app| {
             app.manage(Server(Mutex::new(ServerState::default())));

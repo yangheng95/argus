@@ -1,4 +1,4 @@
-process.env["CODING_DASHSCOPE_API_KEY"] ??= "sk-sp-80785e87eb044f9e99f9167e7d11090a"
+process.env["CODING_DASHSCOPE_API_KEY"] ??= "sk-sp-40eeacbb1d2848a4829dca771f2ed51a"
 process.env["CODING_DASHSCOPE_API_URL"] ??= "https://coding.dashscope.aliyuncs.com/v1"
 process.env["CODING_MODEL"] ??= "qwen3.5-plus"
 
