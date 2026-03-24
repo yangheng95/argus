@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "en-US",
-    "panel_revision": "f84e356e0f3c045b"
+    "panel_revision": "4081b3ee98d431db"
   },
   "brand.guide_kicker": "Quick Guide",
   "brand.guide_positioning_body": "This is the task cockpit, not decorative chrome: left selects tasks, center drives execution, right verifies spec, plan, evaluation, and file changes so the agent does not drift.",
