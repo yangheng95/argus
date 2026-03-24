@@ -6668,8 +6668,11 @@ body[data-theme="light"] .config-close-btn:hover {
 .log-source[data-source="server"] {
   color: var(--good, #3fb950);
 }
-.log-source[data-source="client"] {
+.log-source[data-source="overlay"] {
   color: var(--accent, #58a6ff);
+}
+.log-source[data-source="pipeline"] {
+  color: #7B54C9;
 }
 .log-level {
   font-weight: 700;
@@ -7781,6 +7784,32 @@ body[data-theme="light"] {
   overscroll-behavior: contain;
 }
 
+/* Agent card tool outputs: collapsed by default, expandable on click */
+.agent-card-body .msg-tool-output {
+  max-height: calc(80px * var(--ui-scale));
+  overflow: hidden;
+  cursor: pointer;
+  position: relative;
+}
+.agent-card-body .msg-tool-output::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: calc(24px * var(--ui-scale));
+  background: linear-gradient(transparent, var(--subtle-2));
+  pointer-events: none;
+}
+.agent-card-body .msg-tool-output.msg-tool-output--expanded {
+  max-height: none;
+  overflow: visible;
+  cursor: auto;
+}
+.agent-card-body .msg-tool-output.msg-tool-output--expanded::after {
+  display: none;
+}
+/* Main conversation tool outputs: no height limit */
 .msg-tool-output {
   max-height: none;
   overflow-y: visible;
@@ -8613,30 +8642,3 @@ body[data-theme="light"] .section-badge[data-tone="accent"] {
 .ndjson-badge.status-badge { background: #F1F5F9; color: #475569; }
 .log-divider { font-size: 11px; color: #9CA3AF; padding: 8px 4px 4px; border-top: 1px solid var(--border, #e5e7eb); margin-top: 8px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; }
 
-/* ── Exec Graph Dialog ── */
-.dialog-execgraph {
-  width: 95vw;
-  max-width: 95vw;
-  height: 90vh;
-  max-height: 90vh;
-  border-radius: 12px;
-  border: 1px solid var(--border, #e5e7eb);
-  padding: 0;
-  overflow: hidden;
-  background: var(--bg-1, #fff);
-}
-.execgraph-form {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-}
-.execgraph-frame-wrap {
-  flex: 1;
-  overflow: hidden;
-}
-.execgraph-iframe {
-  width: 100%;
-  height: 100%;
-  border: none;
-  background: #1a1b1e;
-}

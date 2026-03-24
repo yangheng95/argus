@@ -9,6 +9,9 @@ import { Auth } from "../auth"
 import { ProviderTransform } from "../provider/transform"
 
 import PROMPT_GENERATE from "./generate.txt"
+import PROMPT_BUILD from "./prompt/build.txt"
+import PROMPT_SPEC from "./prompt/spec.txt"
+import PROMPT_PLAN from "./prompt/plan.txt"
 import PROMPT_COMPACTION from "./prompt/compaction.txt"
 import PROMPT_EXPLORE from "./prompt/explore.txt"
 import PROMPT_GENERAL from "./prompt/general.txt"
@@ -101,6 +104,7 @@ export namespace Agent {
         name: "build",
         description: "The default agent. Executes tools based on configured permissions.",
         options: {},
+        prompt: PROMPT_BUILD,
         permission: PermissionNext.merge(
           defaults,
           PermissionNext.fromConfig({
@@ -117,6 +121,7 @@ export namespace Agent {
         name: "spec",
         description: "Read-only specification agent. Explores codebase, asks questions, and writes the specification file before planning.",
         options: {},
+        prompt: PROMPT_SPEC,
         permission: PermissionNext.merge(
           defaults,
           PermissionNext.fromConfig({
@@ -139,6 +144,7 @@ export namespace Agent {
         name: "plan",
         description: "Read-only planning agent. Explores, asks questions, and writes the implementation plan file.",
         options: {},
+        prompt: PROMPT_PLAN,
         permission: PermissionNext.merge(
           defaults,
           PermissionNext.fromConfig({
@@ -297,9 +303,9 @@ export namespace Agent {
 
   /** Map of native agent name → built-in default prompt (before config overrides). */
   const NATIVE_DEFAULTS: Record<string, string | undefined> = {
-    build: undefined,
-    spec: undefined,
-    plan: undefined,
+    build: PROMPT_BUILD,
+    spec: PROMPT_SPEC,
+    plan: PROMPT_PLAN,
     general: PROMPT_GENERAL,
     explore: PROMPT_EXPLORE,
     compaction: PROMPT_COMPACTION,

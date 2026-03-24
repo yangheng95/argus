@@ -16,6 +16,7 @@ const routes = [
   { method: "GET", path: "provider/auth", description: "List provider auth methods." },
   { method: "GET", path: "channel", description: "List channel integrations." },
   { method: "GET", path: "executor", description: "List executors." },
+  { method: "PATCH", path: "executor/:executorID/model", description: "Set executor model." },
   { method: "GET", path: "skill/installed", description: "List installed skills." },
   { method: "GET", path: "skill/market", description: "List curated market skills." },
   { method: "POST", path: "skill/install", description: "Install a skill." },

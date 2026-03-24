@@ -3,3 +3,22 @@ dist
 gen
 app.log
 src/provider/models-snapshot.ts
+
+# Auto-added by OpenCorvus
+node_modules/
+dist/
+build/
+.output/
+.next/
+.nuxt/
+.svelte-kit/
+.env
+.env.*
+*.db-shm
+*.db-wal
+*.tsbuildinfo
+coverage/
+.cache/
+.turbo/
+.DS_Store
+Thumbs.db

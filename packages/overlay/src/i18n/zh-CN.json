@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "zh-CN",
-    "panel_revision": "a8b1d0df55ee663a"
+    "panel_revision": "eab6b39a21958644"
   },
   "brand.guide_kicker": "快速说明",
   "brand.guide_positioning_body": "这不是一个装饰性浮层，而是任务驾驶舱：左边选择任务，中间推进执行，右边盯 spec、plan、评估和文件变更，防止 agent 一路跑偏。",
@@ -412,15 +412,9 @@
   "log.level.error": "错误",
   "log.level.info": "信息",
   "log.level.warn": "警告",
-  "log.path": "日志文件：{{value}}",
   "log.raw": "原始日志",
-  "log.source.client": "客户端",
-  "log.source.server": "服务端",
   "log.title": "日志",
   "log.server_logs": "服务器日志",
-  "log.hide_server": "隐藏日志",
-  "log.exec_graph": "执行图",
-  "log.exec_graph_title": "执行图",
   "plan.context.clarification": {
     "one": "**需要澄清**：{{count}} 个未解决问题",
     "other": "**需要澄清**：{{count}} 个未解决问题"

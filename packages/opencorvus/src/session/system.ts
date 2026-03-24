@@ -3,16 +3,8 @@ import { Instance } from "../project/instance"
 import { Shell } from "@/shell/shell"
 import { Config } from "@/config/config"
 
-import PROMPT_CODEX from "./prompt/codex_header.txt"
-import PROMPT_ANTHROPIC from "./prompt/anthropic.txt"
-import PROMPT_BEAST from "./prompt/beast.txt"
-import PROMPT_CODEX_GPT from "./prompt/codex.txt"
-import PROMPT_GEMINI from "./prompt/gemini.txt"
-import PROMPT_DEFAULT from "./prompt/default.txt"
+import PROMPT_SYSTEM from "./prompt/system.txt"
 import type { Provider } from "@/provider/provider"
-
-// Note: instructions() removed per upstream PR #18337 — system prompt is now
-// unified and placed in options.instructions for OpenAI OAuth sessions in llm.ts
 
 const TUI_WORKFLOW = [
   "<tui-workflow>",
@@ -57,19 +49,11 @@ function utcOffset(now: Date): string {
 }
 
 export namespace SystemPrompt {
-  function selectProviderPrompt(modelId: string): string {
-    if (modelId.includes("claude")) return PROMPT_ANTHROPIC
-    if (modelId.includes("gpt-4") || modelId.includes("o1") || modelId.includes("o3")) return PROMPT_BEAST
-    if (modelId.includes("gpt")) return PROMPT_CODEX_GPT
-    if (modelId.includes("gemini-")) return PROMPT_GEMINI
-    return PROMPT_DEFAULT
-  }
-
   export async function provider(model: Provider.Model) {
     const cfg = await Config.get()
     const override = cfg.prompt?.["core_header"]
     if (override) return [override]
-    return [selectProviderPrompt(model.api.id)]
+    return [PROMPT_SYSTEM]
   }
 
   export async function environment(model: Provider.Model) {

@@ -1,12 +1,7 @@
 import { Config } from "./config"
 import { Agent } from "@/agent/agent"
 
-import PROMPT_CODEX from "@/session/prompt/codex_header.txt"
-import PROMPT_ANTHROPIC from "@/session/prompt/anthropic.txt"
-import PROMPT_BEAST from "@/session/prompt/beast.txt"
-import PROMPT_CODEX_GPT from "@/session/prompt/codex.txt"
-import PROMPT_GEMINI from "@/session/prompt/gemini.txt"
-import PROMPT_DEFAULT from "@/session/prompt/default.txt"
+import PROMPT_SYSTEM from "@/session/prompt/system.txt"
 import PROMPT_GENERATE from "@/agent/generate.txt"
 
 export namespace PromptCatalog {
@@ -32,45 +27,10 @@ export namespace PromptCatalog {
   }> = [
     {
       key: "core_header",
-      label: "Core Header (Legacy Fallback)",
+      label: "System Prompt",
       group: "core",
-      defaultPrompt: PROMPT_CODEX,
-      description: "Legacy shared header; provider-specific prompts are preferred",
-    },
-    {
-      key: "provider_anthropic",
-      label: "Claude (Anthropic)",
-      group: "provider",
-      defaultPrompt: PROMPT_ANTHROPIC,
-      description: "System prompt for Claude models — emphasis on professional objectivity and task management",
-    },
-    {
-      key: "provider_beast",
-      label: "GPT-4 / o1 / o3",
-      group: "provider",
-      defaultPrompt: PROMPT_BEAST,
-      description: "System prompt for GPT-4/o1/o3 — aggressive autonomous style with thorough verification",
-    },
-    {
-      key: "provider_codex",
-      label: "GPT-5 / Codex",
-      group: "provider",
-      defaultPrompt: PROMPT_CODEX_GPT,
-      description: "System prompt for GPT-5/Codex — includes frontend design guidelines and presentation rules",
-    },
-    {
-      key: "provider_gemini",
-      label: "Gemini",
-      group: "provider",
-      defaultPrompt: PROMPT_GEMINI,
-      description: "System prompt for Gemini models — structured workflows with safety focus",
-    },
-    {
-      key: "provider_default",
-      label: "Default (Other)",
-      group: "provider",
-      defaultPrompt: PROMPT_DEFAULT,
-      description: "System prompt for other/unknown models — concise and minimal",
+      defaultPrompt: PROMPT_SYSTEM,
+      description: "Unified system prompt applied to all models",
     },
     {
       key: "agent_generate",

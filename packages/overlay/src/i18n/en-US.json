@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "en-US",
-    "panel_revision": "a8b1d0df55ee663a"
+    "panel_revision": "eab6b39a21958644"
   },
   "brand.guide_kicker": "Quick Guide",
   "brand.guide_positioning_body": "This is the task cockpit, not decorative chrome: left selects tasks, center drives execution, right verifies spec, plan, evaluation, and file changes so the agent does not drift.",
@@ -412,15 +412,9 @@
   "log.level.error": "ERROR",
   "log.level.info": "INFO",
   "log.level.warn": "WARN",
-  "log.path": "Log file: {{value}}",
   "log.raw": "Raw line",
-  "log.source.client": "CLIENT",
-  "log.source.server": "SERVER",
   "log.title": "Logs",
   "log.server_logs": "Server Logs",
-  "log.hide_server": "Hide Server",
-  "log.exec_graph": "Exec Graph",
-  "log.exec_graph_title": "Execution Graph",
   "plan.context.clarification": {
     "one": "**Clarification Needed**: {{count}} open question",
     "other": "**Clarification Needed**: {{count}} open questions"
