@@ -5,7 +5,18 @@ import { ExecutorBootstrap } from "@/executor/bootstrap"
 import { ToolAdapterRegistry, protocolInfo } from "@/executor/protocol"
 import { ExecutorDiscovery } from "@/executor/discovery"
 import { ExecutorRegistry } from "@/executor/registry"
+import { NotFoundError } from "../../storage/db"
 import { lazy } from "../../util/lazy"
+
+const EXECUTOR_MODEL_ENV: Record<string, string> = {
+  codex: "OPENCORVUS_EXECUTOR_CODEX_MODEL",
+  "claude-code": "OPENCORVUS_EXECUTOR_CLAUDE_MODEL",
+}
+
+function executorModel(id: string) {
+  const key = EXECUTOR_MODEL_ENV[id]
+  return key ? process.env[key] : undefined
+}
 
 const ExecutorToolInfo = z.object({
   name: z.string(),
@@ -27,10 +38,13 @@ const ExecutorInfo = z.object({
   tools: ExecutorToolInfo.array(),
   detail: z.string(),
   version: z.string().optional(),
+  model: z.string().optional(),
 })
 
-export const ExecutorRoutes = lazy(() =>
-  new Hono().get(
+export const ExecutorRoutes = lazy(() => {
+  const app = new Hono()
+
+  app.get(
     "/",
     describeRoute({
       summary: "List executors",
@@ -86,6 +100,7 @@ export const ExecutorRoutes = lazy(() =>
           tools: tools.codex,
           detail: found.codex.detail,
           version: found.codex.version,
+          model: executorModel("codex"),
         },
         {
           id: "claude-code",
@@ -100,8 +115,69 @@ export const ExecutorRoutes = lazy(() =>
           tools: tools.claude,
           detail: found["claude-code"].detail,
           version: found["claude-code"].version,
+          model: executorModel("claude-code"),
         },
       ])
     },
-  ),
-)
+  )
+
+  app.get(
+    "/:executorID/model",
+    describeRoute({
+      summary: "Get executor model",
+      description: "Get the active LLM model for a coding executor.",
+      operationId: "executor.getModel",
+      responses: {
+        200: {
+          description: "Current model",
+          content: {
+            "application/json": {
+              schema: resolver(z.object({ model: z.string().optional() })),
+            },
+          },
+        },
+      },
+    }),
+    async (c) => {
+      const executorID = c.req.param("executorID")
+      return c.json({ model: executorModel(executorID) })
+    },
+  )
+
+  app.patch(
+    "/:executorID/model",
+    describeRoute({
+      summary: "Set executor model",
+      description: "Set the active LLM model for a coding executor.",
+      operationId: "executor.setModel",
+      responses: {
+        200: {
+          description: "Model updated",
+          content: {
+            "application/json": {
+              schema: resolver(z.object({ ok: z.boolean() })),
+            },
+          },
+        },
+        404: {
+          description: "Executor not found or does not support model switching",
+        },
+      },
+    }),
+    async (c) => {
+      const executorID = c.req.param("executorID")
+      const envKey = EXECUTOR_MODEL_ENV[executorID]
+      if (!envKey) throw new NotFoundError({ message: `executor does not support model switching: ${executorID}` })
+      const body = await c.req.json<{ model?: string }>()
+      const model = typeof body?.model === "string" ? body.model.trim() : ""
+      if (model) {
+        process.env[envKey] = model
+      } else {
+        delete process.env[envKey]
+      }
+      return c.json({ ok: true })
+    },
+  )
+
+  return app
+})

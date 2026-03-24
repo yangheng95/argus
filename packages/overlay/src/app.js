@@ -42,6 +42,7 @@ const DEFAULT_OVERLAY_SETTINGS = {
   unattended: true,
   autoPermission: false,
   autoQuestion: false,
+  showTranscriptDetails: false,
   sidebarCollapsed: false,
   sidebarWidth: null,
   sectionsWidth: null,
@@ -87,6 +88,7 @@ const state = {
   unattended: DEFAULT_OVERLAY_SETTINGS.unattended,
   autoPermission: DEFAULT_OVERLAY_SETTINGS.autoPermission,
   autoQuestion: DEFAULT_OVERLAY_SETTINGS.autoQuestion,
+  showTranscriptDetails: DEFAULT_OVERLAY_SETTINGS.showTranscriptDetails,
   sidebarCollapsed: DEFAULT_OVERLAY_SETTINGS.sidebarCollapsed,
   sidebarWidth: DEFAULT_OVERLAY_SETTINGS.sidebarWidth,
   sectionsWidth: DEFAULT_OVERLAY_SETTINGS.sectionsWidth,
@@ -421,6 +423,7 @@ const dom = {
   chkUnattended: $("#chkUnattended"),
   chkAutoPermission: $("#chkAutoPermission"),
   chkAutoQuestion: $("#chkAutoQuestion"),
+  chkShowTranscriptDetails: $("#chkShowTranscriptDetails"),
   opacityRange: $("#opacityRange"),
   opacityValue: $("#opacityValue"),
   btnMinimize: $("#btnMinimize"),
@@ -616,10 +619,6 @@ const dom = {
   btnLogClear: $("#btnLogClear"),
   btnCloseLog: $("#btnCloseLog"),
   btnLogServerLogs: $("#btnLogServerLogs"),
-  btnExecGraph: $("#btnExecGraph"),
-  execGraphDialog: $("#execGraphDialog"),
-  execGraphIframe: $("#execGraphIframe"),
-  btnCloseExecGraph: $("#btnCloseExecGraph"),
   prefEditDialog: $("#prefEditDialog"),
   prefEditForm: $("#prefEditForm"),
   prefEditTitle: $("#prefEditTitle"),
@@ -1476,6 +1475,7 @@ function browserOverlaySettings() {
     unattended: localStorage.getItem("oc_unattended") !== "false",
     autoPermission: localStorage.getItem("oc_auto_permission") === "true",
     autoQuestion: localStorage.getItem("oc_auto_question") === "true",
+    showTranscriptDetails: localStorage.getItem("oc_show_transcript_details") === "true",
     sidebarCollapsed: localStorage.getItem("oc_sidebar_collapsed") === "true",
     sidebarWidth: sanitizePaneWidth(localStorage.getItem("oc_sidebar_width")),
     sectionsWidth: sanitizePaneWidth(localStorage.getItem("oc_sections_width")),
@@ -1541,6 +1541,7 @@ function bootstrapOverlaySettings(input = state) {
     unattended: input.unattended,
     autoPermission: input.autoPermission,
     autoQuestion: input.autoQuestion,
+    showTranscriptDetails: input.showTranscriptDetails,
     sidebarCollapsed: input.sidebarCollapsed,
     sidebarWidth: input.sidebarWidth || undefined,
     sectionsWidth: input.sectionsWidth || undefined,
@@ -1657,6 +1658,7 @@ async function persistOverlaySettings() {
   localStorage.setItem("oc_unattended", String(settings.unattended ?? DEFAULT_OVERLAY_SETTINGS.unattended));
   localStorage.setItem("oc_auto_permission", String(settings.autoPermission ?? DEFAULT_OVERLAY_SETTINGS.autoPermission));
   localStorage.setItem("oc_auto_question", String(settings.autoQuestion ?? DEFAULT_OVERLAY_SETTINGS.autoQuestion));
+  localStorage.setItem("oc_show_transcript_details", String(settings.showTranscriptDetails ?? DEFAULT_OVERLAY_SETTINGS.showTranscriptDetails));
   localStorage.setItem("oc_sidebar_collapsed", String(settings.sidebarCollapsed ?? DEFAULT_OVERLAY_SETTINGS.sidebarCollapsed));
   if (settings.sidebarWidth) localStorage.setItem("oc_sidebar_width", String(settings.sidebarWidth));
   else localStorage.removeItem("oc_sidebar_width");
@@ -1818,6 +1820,9 @@ function renderTitlebarMenu() {
   }
   if (dom.chkAutoQuestion) {
     dom.chkAutoQuestion.checked = state.autoQuestion;
+  }
+  if (dom.chkShowTranscriptDetails) {
+    dom.chkShowTranscriptDetails.checked = state.showTranscriptDetails;
   }
   if (dom.opacityRange) {
     dom.opacityRange.value = String(Math.round(sanitizeOpacity(state.opacity) * 100));
@@ -4686,7 +4691,6 @@ async function resetDirectory() {
 }
 
 function renderMeta() {
-  closeRecentDirPanel();
   const dir = activeDirectory();
   const workspace = currentExecutionDirectory();
   const key = hashText([state.locale, dir, workspace, signText(state.vcs)].join("\u001f"));
@@ -4694,6 +4698,7 @@ function renderMeta() {
     renderExecutor();
     return;
   }
+  closeRecentDirPanel();
   dom.taskDir.innerHTML = pathBreadcrumb(dir);
   dom.taskDir.title = dir || t("cwd.unavailable");
   dom.taskDir.dataset.empty = dir ? "false" : "true";
@@ -5990,7 +5995,7 @@ function displayToolDetail(name, input, state) {
 }
 
 function handleEventStreamEvent(event) {
-  // Buffer event in NDJSON format for log panel and exec-graph generation
+  // Buffer event in NDJSON format for log panel
   if (event && event.type && !event.type.includes("message.") && event.type !== "task.heartbeat") {
     const props = record(event.properties) ? event.properties : record(event.payload) ? event.payload : {};
     if (!state.ndjsonStartMs) state.ndjsonStartMs = Date.now();
@@ -8738,7 +8743,7 @@ function conversationMessages() {
 
   // Filter orchestrator boilerplate from main messages when board context is available
   let filteredMain = mainMessages;
-  if (boardMsgs.length > 0 && filteredMain.length > 0) {
+  if (!state.showTranscriptDetails && boardMsgs.length > 0 && filteredMain.length > 0) {
     filteredMain = filteredMain.filter((message) => {
       const text = (message.parts || []).map((part) => part.text || "").join("");
       return !text.includes("<assistant-brief>") && !text.includes("You are executing a headless coding task");
@@ -8752,9 +8757,11 @@ function conversationMessages() {
     // Determine status from agent events
     const stageEvents = (Array.isArray(state.agentEvents) ? state.agentEvents : [])
       .filter((e) => String(e?.stage || "").toLowerCase() === stage);
-    const lastEvent = stageEvents[stageEvents.length - 1];
-    const isFinished = lastEvent?.kind === "status" && /finished|completed|done/i.test(lastEvent?.summary || "");
-    const isError = lastEvent?.kind === "error";
+    // Check ANY event in the stage for finish/error — fire-and-forget tool status
+    // events can land in the protocol store after the finish event (higher sequence),
+    // so the chronologically-last event is not necessarily the finish event.
+    const isFinished = stageEvents.some((e) => e.kind === "status" && /finished|completed|done/i.test(e?.summary || ""));
+    const isError = stageEvents.some((e) => e.kind === "error") && !isFinished;
     const cardStatus = isError ? "error" : isFinished ? "completed" : "running";
     agentCardMsgs.push({
       _synthetic: true,
@@ -9338,7 +9345,8 @@ function renderPart(part, role) {
       return renderPatchPart(part);
     case "step-start":
     case "step-finish":
-      return "";
+      if (!state.showTranscriptDetails) return "";
+      return `<div class="msg-step">${escapeHtml(part.type)} ${escapeHtml(part.name || "")}</div>`;
     case "file":
       return renderFilePart(part);
     case "subtask":
@@ -9396,7 +9404,7 @@ function renderToolPart(part) {
   const status = st.status || "pending";
   const input = st.input || {};
   const hiddenTools = ["planner", "structuredoutput", "todowrite", "todoupdate", "task_report"];
-  if (hiddenTools.includes(toolName.toLowerCase())) return "";
+  if (!state.showTranscriptDetails && hiddenTools.includes(toolName.toLowerCase())) return "";
 
   const detail = displayToolDetail(toolName, input, st);
   const icon = displayToolIcon(toolName);
@@ -9412,7 +9420,9 @@ function renderToolPart(part) {
   const output = stripAnsi(st.output || "");
   const error = stripAnsi(st.error || "") || output;
   if (output && status === "completed") {
-    html += `<div class="msg-tool-output">${escapeHtml(output)}</div>`;
+    const lineCount = output.split("\n").length;
+    const summary = lineCount > 6 ? ` title="${lineCount} lines — click to expand"` : "";
+    html += `<div class="msg-tool-output"${summary} onclick="this.classList.toggle('msg-tool-output--expanded')">${escapeHtml(output)}</div>`;
   }
   if (status === "error" && error) {
     html += `<div class="msg-tool-error">${escapeHtml(error)}</div>`;
@@ -10286,6 +10296,14 @@ dom.chkAutoQuestion?.addEventListener("change", async () => {
   if (state.autoQuestion) void loadBoard({ sync: true });
 });
 
+dom.chkShowTranscriptDetails?.addEventListener("change", async () => {
+  state.showTranscriptDetails = dom.chkShowTranscriptDetails.checked;
+  renderTitlebarMenu();
+  await persistOverlaySettings();
+  closeTitlebarMenu();
+  renderConversation();
+});
+
 dom.opacityRange?.addEventListener("input", () => {
   state.opacity = sanitizeOpacity(Number(dom.opacityRange.value) / 100);
   void applyWindowOpacity();
@@ -11079,269 +11097,8 @@ if (dom.btnCancelPrefEdit) {
   dom.btnCancelPrefEdit.addEventListener("click", () => dom.prefEditDialog?.close());
 }
 
-// ── Exec Graph Generator ──
-
-function buildExecGraphHtml(events) {
-  if (!events || events.length === 0) return "<p>No events to visualize.</p>";
-
-  const totalMs = events[events.length - 1]?.elapsed_ms ?? 1;
-  const taskID = events.find(e => e.taskID)?.taskID ?? "unknown";
-  const startAt = events[0]?.at ?? "";
-
-  // Build lanes
-  const lanesMap = new Map();
-  const goalNames = new Map();
-  const runFinalStatus = new Map();
-  const runLaneId = new Map();
-  const goalAttemptCount = new Map();
-  const pendingTools = new Map();
-  let finalTaskStatus = "running";
-  let planSummary = "";
-  let specSummary = "";
-
-  function getLane(id, label, type, ms, extra) {
-    if (!lanesMap.has(id)) {
-      lanesMap.set(id, { id, label, type, startMs: ms, endMs: ms, toolCalls: [], toolCounts: {}, textSnippet: "", ...(extra || {}) });
-    }
-    return lanesMap.get(id);
-  }
-
-  for (const ev of events) {
-    const ms = ev.elapsed_ms;
-    if (ev.type === "orchestrator.task.updated" && ev.status) finalTaskStatus = ev.status;
-    if (ev.type === "orchestrator.spec.created") specSummary = ev.summary;
-    if (ev.type === "orchestrator.plan.created") planSummary = ev.summary;
-
-    if (ev.type === "orchestrator.agent.updated") {
-      const stage = ev.stage;
-      if (!["spec", "planner", "judge", "delivery"].includes(stage)) continue;
-      const laneId = (stage === "judge" && ev.runID) ? `judge:${ev.runID}` : (stage === "delivery" && ev.runID) ? `delivery:${ev.runID}` : stage;
-      const label = stage === "spec" ? "Spec Agent" : stage === "planner" ? "Planner Agent" : stage === "delivery" ? `Delivery (${(ev.runID || "").slice(-6)})` : `Judge (${(ev.runID || "").slice(-6)})`;
-      const lane = getLane(laneId, label, stage, ms, { runID: ev.runID || undefined });
-      lane.endMs = Math.max(lane.endMs, ms);
-      const pendingKey = `${laneId}::${ev.toolName}`;
-      if (ev.kind === "tool_call") {
-        const old = pendingTools.get(pendingKey);
-        if (old) {
-          lane.toolCalls.push({ name: old.name, startMs: old.startMs, endMs: ms, args: old.argsBuffer });
-          lane.toolCounts[old.name] = (lane.toolCounts[old.name] || 0) + 1;
-        }
-        pendingTools.set(pendingKey, { name: ev.toolName, startMs: ms, endMs: ms, args: "", argsBuffer: "", laneId });
-      } else if (ev.kind === "tool_delta") {
-        const p = pendingTools.get(pendingKey);
-        if (p) p.argsBuffer += ev.text || ev.summary || "";
-      } else if (ev.kind === "tool_result") {
-        const p = pendingTools.get(pendingKey);
-        if (p) {
-          pendingTools.delete(pendingKey);
-          lane.toolCalls.push({ name: p.name, startMs: p.startMs, endMs: ms, args: p.argsBuffer });
-          lane.toolCounts[p.name] = (lane.toolCounts[p.name] || 0) + 1;
-        }
-      } else if (ev.kind === "message_delta") {
-        const txt = ev.summary || ev.text || "";
-        if (txt && lane.textSnippet.length < 400) lane.textSnippet += txt;
-      }
-    }
-
-    if (ev.type === "orchestrator.run.updated" && ev.runID) {
-      const m = (ev.summary || "").match(/Goal (?:queued|accepted|running): (.+)/i);
-      if (m) goalNames.set(ev.runID, m[1].trim());
-      if (!runLaneId.has(ev.runID)) {
-        const goalName = goalNames.get(ev.runID) || ev.runID.slice(-8);
-        const attempt = goalAttemptCount.get(goalName) || 0;
-        goalAttemptCount.set(goalName, attempt + 1);
-        const laneId = `goal:${ev.runID}`;
-        runLaneId.set(ev.runID, laneId);
-        const label = attempt === 0 ? `Goal: ${goalName}` : `Goal: ${goalName} (retry ${attempt})`;
-        getLane(laneId, label, "goal", ms, { goalName, runID: ev.runID, retryIndex: attempt });
-      }
-      const laneId = runLaneId.get(ev.runID);
-      if (laneId) {
-        const lane = lanesMap.get(laneId);
-        if (lane) {
-          lane.endMs = Math.max(lane.endMs, ms);
-          if (ev.status === "failed" || ev.status === "accepted") {
-            lane.status = ev.status;
-            runFinalStatus.set(ev.runID, ev.status);
-          } else if (ev.status === "running" && !lane.status) {
-            lane.status = "running";
-          }
-        }
-      }
-    }
-
-    if (ev.type === "orchestrator.run.output" && ev.runID) {
-      const laneId = runLaneId.get(ev.runID);
-      if (laneId) {
-        const lane = lanesMap.get(laneId);
-        if (lane) {
-          lane.endMs = Math.max(lane.endMs, ms);
-          if (ev.goalRunID && !lane.goalRunID) lane.goalRunID = ev.goalRunID;
-          if (ev.progressType === "text_delta" && ev.text && lane.textSnippet.length < 400) {
-            const txt = ev.text.trim();
-            if (txt && !txt.startsWith("{") && !txt.startsWith("[")) lane.textSnippet += txt;
-          }
-        }
-      }
-    }
-  }
-
-  // Flush pending tools
-  for (const [, p] of pendingTools) {
-    const lane = lanesMap.get(p.laneId);
-    if (lane) {
-      lane.toolCalls.push({ name: p.name, startMs: p.startMs, endMs: totalMs, args: p.argsBuffer });
-      lane.toolCounts[p.name] = (lane.toolCounts[p.name] || 0) + 1;
-    }
-  }
-
-  // Sort lanes
-  const typeOrder = { spec: 0, planner: 1, goal: 2, judge: 3, delivery: 4 };
-  const sortedLanes = [...lanesMap.values()].sort((a, b) => {
-    if ((a.type === "goal" || a.type === "judge" || a.type === "delivery") && (b.type === "goal" || b.type === "judge" || b.type === "delivery")) return a.startMs - b.startMs;
-    return (typeOrder[a.type] || 99) - (typeOrder[b.type] || 99);
-  });
-
-  const allGoalLanes = sortedLanes.filter(l => l.type === "goal");
-  const acceptedGoals = allGoalLanes.filter(l => l.status === "accepted").length;
-  const failedGoals = allGoalLanes.filter(l => l.status === "failed").length;
-  const allToolCounts = {};
-  for (const lane of sortedLanes) {
-    for (const [tool, count] of Object.entries(lane.toolCounts)) {
-      allToolCounts[tool] = (allToolCounts[tool] || 0) + count;
-    }
-  }
-  const totalToolCalls = Object.values(allToolCounts).reduce((a, b) => a + b, 0);
-  const durationSec = Math.round(totalMs / 1000);
-
-  const LANE_COLORS = {
-    spec:     { bg: "rgba(84,138,247,0.13)",  bar: "#548af7", text: "#7eaaf9" },
-    planner:  { bg: "rgba(130,100,240,0.13)", bar: "#8264f0", text: "#a68cf5" },
-    goal:     { bg: "rgba(95,173,86,0.13)",   bar: "#5fad56", text: "#7fcf72" },
-    judge:    { bg: "rgba(212,167,44,0.13)",  bar: "#d4a72c", text: "#e8c04a" },
-    delivery: { bg: "rgba(40,180,160,0.13)",  bar: "#28b4a0", text: "#4ed4c0" },
-  };
-  const STATUS_COLORS = { accepted: "#5fad56", failed: "#f75464", running: "#d4a72c" };
-  const TOOL_COLORS = {
-    read_file: "#4eaaef", list_directory: "#62c4f0", find_files: "#80d8f8",
-    search_code: "#e8c04a", memory_search: "#b07cf0", preference_list: "#9b6de8",
-    web_search: "#e8914a", write_file: "#5fad56", edit_file: "#41c985", run_command: "#e8644a", bash: "#f77080",
-  };
-  function toolColor(name) { return TOOL_COLORS[name] || "#95A5A6"; }
-  function esc(s) { return String(s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
-  function fmtMs(ms) { const s = ms/1000; if(s<60) return s.toFixed(1)+"s"; const m=Math.floor(s/60); return m+"m"+(s-m*60).toFixed(0)+"s"; }
-  function trunc(s, n) { return s.length > n ? s.slice(0,n)+"…" : s; }
-
-  const CHART_W = 1180, LANE_H = 38, LANE_GAP = 6, LABEL_W = 260;
-  const CHART_CONTENT_W = CHART_W - LABEL_W - 20;
-  const CHART_H = sortedLanes.length * (LANE_H + LANE_GAP) + 40;
-  function msToX(ms) { return Math.round((ms / totalMs) * CHART_CONTENT_W); }
-
-  const tickInterval = totalMs > 600000 ? 120000 : totalMs > 300000 ? 60000 : 30000;
-  const ticks = [];
-  for (let t = 0; t <= totalMs; t += tickInterval) ticks.push(t);
-
-  const svgLines = [`<svg xmlns="http://www.w3.org/2000/svg" width="${CHART_W}" height="${CHART_H}" font-family="monospace,sans-serif">`];
-  for (const t of ticks) {
-    const x = LABEL_W + msToX(t);
-    svgLines.push(`<line x1="${x}" y1="0" x2="${x}" y2="${CHART_H-20}" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>`);
-    svgLines.push(`<text x="${x}" y="${CHART_H-5}" fill="#6e7278" font-size="10" text-anchor="middle">${fmtMs(t)}</text>`);
-  }
-  sortedLanes.forEach((lane, i) => {
-    const y = i * (LANE_H + LANE_GAP) + 4;
-    const colors = LANE_COLORS[lane.type] || LANE_COLORS.spec;
-    const statusColor = lane.status ? (STATUS_COLORS[lane.status] || colors.bar) : colors.bar;
-    svgLines.push(`<rect x="0" y="${y}" width="${LABEL_W-4}" height="${LANE_H}" rx="4" fill="${colors.bg}" stroke="${colors.bar}" stroke-width="1" stroke-opacity="0.5"/>`);
-    svgLines.push(`<circle cx="14" cy="${y+LANE_H/2}" r="5" fill="${statusColor}"/>`);
-    svgLines.push(`<text x="26" y="${y+LANE_H/2+4}" fill="${colors.text}" font-size="11" font-weight="600">${esc(trunc(lane.label, 32))}</text>`);
-    svgLines.push(`<text x="${LABEL_W-8}" y="${y+LANE_H/2+4}" fill="#6e7278" font-size="10" text-anchor="end">${fmtMs(lane.endMs-lane.startMs)}</text>`);
-    const bx = LABEL_W + msToX(lane.startMs);
-    const bw = Math.max(2, msToX(lane.endMs) - msToX(lane.startMs));
-    svgLines.push(`<rect x="${bx}" y="${y+8}" width="${bw}" height="${LANE_H-16}" rx="3" fill="${colors.bg}" stroke="${colors.bar}" stroke-width="1" stroke-opacity="0.5" opacity="0.75"/>`);
-    for (const tc of lane.toolCalls) {
-      const tx = LABEL_W + msToX(tc.startMs);
-      const tw = Math.max(3, msToX(tc.endMs) - msToX(tc.startMs));
-      svgLines.push(`<rect x="${tx}" y="${y+10}" width="${tw}" height="${LANE_H-20}" rx="2" fill="${toolColor(tc.name)}" opacity="0.85"><title>${esc(tc.name)} (${fmtMs(tc.endMs-tc.startMs)})</title></rect>`);
-    }
-  });
-  svgLines.push("</svg>");
-
-  const dur = durationSec >= 60 ? Math.floor(durationSec/60)+"m"+(durationSec%60)+"s" : durationSec+"s";
-
-  const toolUsage = Object.entries(allToolCounts).sort((a,b)=>b[1]-a[1])
-    .map(([t,c]) => `<div style="display:flex;align-items:center;gap:8px;margin:4px 0"><span style="color:${toolColor(t)};font-family:monospace;min-width:180px;font-size:12px">${esc(t)}</span><span style="background:${toolColor(t)};height:10px;border-radius:3px;width:${Math.round(c/Math.max(...Object.values(allToolCounts))*200)}px;opacity:0.8"></span><span style="color:#6e7278;font-size:12px">×${c}</span></div>`).join("");
-
-  const phaseCards = sortedLanes.map(lane => {
-    const colors = LANE_COLORS[lane.type] || LANE_COLORS.spec;
-    const statusColor = lane.status ? (STATUS_COLORS[lane.status] || colors.bar) : colors.bar;
-    const tools = Object.entries(lane.toolCounts).sort((a,b)=>b[1]-a[1])
-      .map(([t,c]) => `<span style="font-size:11px;padding:2px 7px;border-radius:10px;border:1px solid ${toolColor(t)};color:${toolColor(t)};font-family:monospace;opacity:0.9">${esc(t)} ×${c}</span>`).join(" ");
-    const snippet = lane.textSnippet.trim();
-    return `<div style="border:1px solid rgba(255,255,255,0.07);border-left:3px solid ${colors.bar};border-radius:8px;padding:12px 14px;margin-bottom:8px">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap">
-        <span style="font-weight:700;font-size:13px;color:#dfe1e5">${esc(lane.label)}</span>
-        ${lane.status ? `<span style="background:${statusColor};color:#fff;border-radius:10px;padding:1px 8px;font-size:11px;font-weight:600">${esc(lane.status)}</span>` : ""}
-        <span style="color:#6e7278;font-size:11px;margin-left:auto">${fmtMs(lane.startMs)} → ${fmtMs(lane.endMs)} (${fmtMs(lane.endMs-lane.startMs)})</span>
-      </div>
-      ${tools ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin:4px 0">${tools}</div>` : ""}
-      ${snippet ? `<pre style="font-size:11px;color:#a8adb3;background:rgba(0,0,0,0.25);border-radius:4px;padding:6px 8px;white-space:pre-wrap;word-break:break-word;max-height:80px;overflow-y:auto;margin-top:6px">${esc(trunc(snippet,300))}</pre>` : ""}
-    </div>`;
-  }).join("");
-
-  return `<!DOCTYPE html><html><head><meta charset="UTF-8">
-<title>Exec Graph – ${esc(taskID.slice(-12))}</title>
-<style>
-*{box-sizing:border-box;margin:0;padding:0}
-body{font-family:"Aptos","Segoe UI Variable Text",system-ui,sans-serif;background:#1a1b1e;color:#c0c4cc;line-height:1.5;scrollbar-color:rgba(255,255,255,0.16) transparent;scrollbar-width:thin}
-header{background:#242628;border-bottom:1px solid rgba(255,255,255,0.09);padding:13px 20px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
-header h1{font-size:14px;font-weight:700;color:#dfe1e5;letter-spacing:-.01em}
-.chip{padding:3px 9px;border-radius:12px;font-size:11px;font-weight:500;background:rgba(255,255,255,0.07);color:#a8adb3;border:1px solid rgba(255,255,255,0.09)}
-.chip.ok{background:rgba(95,173,86,0.18);color:#7fcf72;border-color:rgba(95,173,86,0.32)}
-.chip.fail{background:rgba(247,84,100,0.16);color:#f77080;border-color:rgba(247,84,100,0.32)}
-.chip.warn{background:rgba(212,167,44,0.16);color:#e8c04a;border-color:rgba(212,167,44,0.32)}
-main{max-width:1240px;margin:0 auto;padding:20px 16px}
-.section{background:#242628;border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:18px;margin-bottom:14px}
-.section h2{font-size:10px;font-weight:700;color:#6e7278;margin-bottom:12px;text-transform:uppercase;letter-spacing:.07em}
-.gantt-wrap{overflow-x:auto}
-::-webkit-scrollbar{width:6px;height:6px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.16);border-radius:3px}
-</style></head><body>
-<header>
-  <div><div style="font-size:10px;color:#6e7278;margin-bottom:2px;text-transform:uppercase;letter-spacing:.05em">Task</div><h1>${esc(taskID)}</h1></div>
-  <div style="display:flex;gap:6px;flex-wrap:wrap;margin-left:auto">
-    <span class="chip">Started: ${esc(startAt.replace("T"," ").replace(/\.\d+Z$/," UTC"))}</span>
-    <span class="chip">Duration: ${dur}</span>
-    <span class="chip">Goals: ${allGoalLanes.length} (${acceptedGoals}✓ ${failedGoals}✗)</span>
-    <span class="chip">Tools: ${totalToolCalls}</span>
-    <span class="chip ${finalTaskStatus==="accepted"?"ok":finalTaskStatus==="failed"?"fail":"warn"}">Status: ${finalTaskStatus}</span>
-  </div>
-</header>
-<main>
-  ${specSummary ? `<div class="section"><h2>Task Summary</h2><div style="background:rgba(130,100,240,0.10);border-left:3px solid #8264f0;padding:10px;border-radius:4px;font-size:13px;white-space:pre-wrap;color:#c0c4cc">${esc(trunc(specSummary,600))}</div></div>` : ""}
-  <div class="section"><h2>Execution Timeline</h2>
-    <div style="display:flex;gap:16px;margin-bottom:10px;font-size:12px;color:#6e7278">
-      ${[["Spec","#548af7"],["Planner","#8264f0"],["Goal","#5fad56"],["Judge","#d4a72c"]].map(([l,c])=>`<span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;border-radius:50%;background:${c}"></span>${l}</span>`).join("")}
-    </div>
-    <div class="gantt-wrap">${svgLines.join("")}</div>
-  </div>
-  <div class="section"><h2>Tool Usage</h2>${toolUsage}</div>
-  <div class="section"><h2>Phase Details</h2>${phaseCards}</div>
-</main></body></html>`;
-}
-
-function openExecGraphPanel() {
-  if (!dom.execGraphDialog) return;
-  const html = buildExecGraphHtml(state.ndjsonEvents || []);
-  if (dom.execGraphIframe) {
-    dom.execGraphIframe.srcdoc = html;
-  }
-  dom.execGraphDialog.showModal();
-}
-
-// ── Log Viewer (NDJSON Events) ──
-
 let _serverLogLines = [];
 let _serverLogPath = "";
-let _showServerLogs = false;
 
 async function loadServerLogs() {
   try {
@@ -11464,7 +11221,9 @@ function logDetailFields(fields) {
 function logPreviewValue(value) { return clipText(stringifyLogValue(value), 80); }
 
 function logSourceLabel(source) {
-  return source === "server" ? t("log.source.server") : t("log.source.client");
+  if (source === "server") return "Server";
+  if (source === "pipeline") return "Pipeline";
+  return "Overlay";
 }
 
 function renderLogEntryDetail(entry) {
@@ -11489,16 +11248,45 @@ function renderLogEntryDetail(entry) {
 function logViewerEntries() {
   const minLevel = { debug: 0, info: 1, warn: 2, error: 3 };
   const threshold = minLevel[AppLog.filterLevel] || 0;
+  // Overlay client logs
   const clientLines = AppLog.filtered().map((e) => ({
     level: e.level, ts: e.ts, service: e.service, delta: "", message: e.message,
     fields: record(e.extra) ? e.extra : e.extra == null ? {} : { extra: e.extra },
-    raw: "", source: "client",
+    raw: "", source: "overlay",
   }));
+  // Server logs
   const serverLines = _serverLogLines
     .map(parseServerLogLine)
     .filter((e) => (minLevel[e.level] || 0) >= threshold)
     .map((e) => ({ ...e, source: "server" }));
-  return [...serverLines, ...clientLines];
+  // Pipeline execution events → unified log entries
+  const ndjsonLines = (state.ndjsonEvents || [])
+    .filter((ev) => ev.kind !== "tool_delta")
+    .map((ev) => {
+      const level = ev.kind === "error" ? "error" : "info";
+      if ((minLevel[level] || 0) < threshold) return null;
+      const stage = ev.stage || "";
+      const kind = ev.kind || "";
+      const toolName = ev.toolName || "";
+      const summary = ev.summary || ev.text || "";
+      const parts = [];
+      if (kind === "tool_call" && toolName) parts.push(`→ ${toolName}`);
+      else if (kind === "tool_result" && toolName) parts.push(`← ${toolName}`);
+      else if (kind === "status") parts.push(summary);
+      else if (kind === "message_delta") parts.push("[text delta]");
+      if (kind !== "status" && summary) parts.push(summary.length > 150 ? summary.slice(0, 150) + "…" : summary);
+      const elapsed = typeof ev.elapsed_ms === "number" ? fmtElapsed(ev.elapsed_ms) : "";
+      return {
+        level, ts: ev.at || "", service: stage, delta: elapsed,
+        message: parts.join(" "),
+        fields: { kind, ...(toolName ? { tool: toolName } : {}), ...(ev.status ? { status: ev.status } : {}) },
+        raw: "", source: "pipeline",
+      };
+    })
+    .filter(Boolean);
+  // Merge all sources, sort by timestamp (server logs first if no ts comparison possible)
+  return [...serverLines, ...ndjsonLines, ...clientLines]
+    .sort((a, b) => (a.ts || "").localeCompare(b.ts || ""));
 }
 
 function formatLogViewerText(entries) {
@@ -11594,42 +11382,26 @@ function renderNdjsonEvent(ev) {
 
 function renderNdjsonLogPanel() {
   if (!dom.logViewerBody) return;
-  const events = state.ndjsonEvents || [];
+  const entries = logViewerEntries();
 
-  if (events.length === 0 && !_showServerLogs) {
+  if (entries.length === 0) {
     dom.logViewerBody.innerHTML = `<div class="empty-hint">${escapeHtml(t("log.empty"))}</div>`;
     return;
   }
 
-  let html = "";
-
-  // Show NDJSON events
-  if (events.length > 0) {
-    // Filter out tool_delta events (too noisy)
-    const filtered = events.filter(ev => ev.kind !== "tool_delta");
-    const rows = filtered.map(renderNdjsonEvent).filter(Boolean).join("");
-    html += `<div class="ndjson-panel">${rows}</div>`;
-  }
-
-  // Optionally show server logs
-  if (_showServerLogs) {
-    const entries = logViewerEntries();
-    const path = _serverLogPath ? `<div class="log-path">${escapeHtml(t("log.path", { value: _serverLogPath }))}</div>` : "";
-    const serverHtml = entries.map((e) =>
-      `<div class="log-line">` +
-      `<div class="log-line-head">` +
-      `<span class="log-source" data-source="${escapeHtml(e.source || "client")}">${escapeHtml(logSourceLabel(e.source))}</span>` +
-      `<span class="log-level log-level-${e.level}">${e.level.toUpperCase().padEnd(5)}</span>` +
-      `<span class="log-ts">${escapeHtml(e.ts)}</span>` +
-      (e.delta ? `<span class="log-delta">${escapeHtml(e.delta)}</span>` : "") +
-      (e.service ? `<span class="log-service">${escapeHtml(e.service)}</span>` : "") +
-      `</div>` +
-      `<div class="log-msg">${escapeHtml(e.message || e.raw || "")}</div>` +
-      renderLogEntryDetail(e) +
-      `</div>`
-    ).join("");
-    html += `<div class="log-divider">Server Logs</div>` + path + serverHtml;
-  }
+  const html = entries.map((e) =>
+    `<div class="log-line" data-source="${escapeHtml(e.source)}">` +
+    `<div class="log-line-head">` +
+    `<span class="log-source" data-source="${escapeHtml(e.source)}">${escapeHtml(logSourceLabel(e.source))}</span>` +
+    `<span class="log-level log-level-${e.level}">[${escapeHtml(e.level.toUpperCase())}]</span>` +
+    (e.delta ? `<span class="log-delta">${escapeHtml(e.delta)}</span>` : "") +
+    (e.service ? `<span class="log-service">${escapeHtml(e.service)}</span>` : "") +
+    `<span class="log-ts">${escapeHtml(e.ts)}</span>` +
+    `</div>` +
+    `<div class="log-msg">${escapeHtml(e.message || e.raw || "")}</div>` +
+    renderLogEntryDetail(e) +
+    `</div>`
+  ).join("");
 
   dom.logViewerBody.innerHTML = html;
   dom.logViewerBody.scrollTop = dom.logViewerBody.scrollHeight;
@@ -11641,7 +11413,7 @@ function renderLogViewer() {
 
 async function openLogViewer() {
   await loadServerLogs();
-  renderNdjsonLogPanel();
+  renderLogViewer();
   dom.logDialog?.showModal();
 }
 
@@ -11678,16 +11450,8 @@ dom.logLevelFilter?.addEventListener("change", () => {
   renderLogViewer();
 });
 dom.btnLogServerLogs?.addEventListener("click", async () => {
-  _showServerLogs = !_showServerLogs;
-  if (_showServerLogs) await loadServerLogs();
-  renderNdjsonLogPanel();
-  if (dom.btnLogServerLogs) dom.btnLogServerLogs.textContent = _showServerLogs ? t("log.hide_server") : t("log.server_logs");
-});
-dom.btnExecGraph?.addEventListener("click", () => {
-  openExecGraphPanel();
-});
-dom.btnCloseExecGraph?.addEventListener("click", () => {
-  dom.execGraphDialog?.close();
+  await loadServerLogs();
+  renderLogViewer();
 });
 
 // ── Init ──

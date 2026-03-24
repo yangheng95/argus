@@ -537,63 +537,6 @@ function ensureMeaningfulSummary(summary: string, fallbackTitle: string): string
 }
 
 // ---------------------------------------------------------------------------
-// Synthesis fallback
-// ---------------------------------------------------------------------------
-
-function synthesizeFromExploration(
-  partial: SpecOutputType,
-  input: { title: string; request: string },
-  steps: any[],
-): SpecOutputType {
-  const result = { ...partial }
-
-  const discoveredFiles = new Set<string>()
-  const explorationNotes: string[] = []
-
-  for (const step of steps) {
-    if (!step.toolCalls) continue
-    for (let i = 0; i < step.toolCalls.length; i++) {
-      const call = step.toolCalls[i]
-      if (call.toolName === "read_file" && call.args?.path) {
-        discoveredFiles.add(call.args.path)
-      }
-      const toolResult = step.toolResults?.[i]
-      if (toolResult?.result && typeof toolResult.result === "string") {
-        const preview = toolResult.result.slice(0, 200)
-        if (call.toolName === "read_file") {
-          explorationNotes.push(`Read ${call.args.path}: ${preview}`)
-        } else if (call.toolName === "search_code") {
-          explorationNotes.push(`Search "${call.args.pattern}": ${preview}`)
-        }
-      }
-    }
-  }
-
-  if (result.content.length < 200) {
-    const parts: string[] = []
-    parts.push(`## Scope\n\n${input.request.split("\n")[0]}`)
-    if (discoveredFiles.size > 0) {
-      parts.push(`## Relevant Files\n\n${Array.from(discoveredFiles).slice(0, 10).map(f => `- ${f}`).join("\n")}`)
-    }
-    if (explorationNotes.length > 0) {
-      parts.push(`## Exploration Notes\n\n${explorationNotes.slice(0, 5).map(n => `- ${n}`).join("\n")}`)
-    }
-    const existing = result.content.trim()
-    result.content = existing ? existing + "\n\n" + parts.join("\n\n") : parts.join("\n\n")
-  }
-
-  if (!result.scope) {
-    result.scope = input.request.split("\n").find(l => l.trim())?.trim() || input.title
-  }
-
-  if (result.evidence_sources.length === 0 && discoveredFiles.size > 0) {
-    result.evidence_sources = Array.from(discoveredFiles).slice(0, 15)
-  }
-
-  return result
-}
-
-// ---------------------------------------------------------------------------
 // File reference resolution (mirrors planner/agent.ts)
 // ---------------------------------------------------------------------------
 

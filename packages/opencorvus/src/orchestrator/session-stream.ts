@@ -145,7 +145,7 @@ export function sessionStreamHooks(input: {
             state: {
               status: "completed",
               input: chunk.input ?? existing.state?.input ?? {},
-              output: outputStr.length > 8000 ? outputStr.slice(0, 8000) + "…" : outputStr,
+              output: outputStr,
               title,
               metadata,
               time: {

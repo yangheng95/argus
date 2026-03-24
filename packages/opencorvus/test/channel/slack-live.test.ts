@@ -63,18 +63,24 @@ live("authenticates against real Slack APIs", async () => {
 
 live("starts and stops Slack gateway with real credentials", async () => {
   await using tmp = await tmpdir({ git: true })
-  const gateway = new SlackGateway({
+  await Instance.provide({
     directory: tmp.path,
-    token: process.env.SLACK_BOT_TOKEN!,
-    appToken: process.env.SLACK_APP_TOKEN!,
-    signingSecret: process.env.SLACK_SIGNING_SECRET,
+    init: InstanceBootstrap,
+    fn: async () => {
+      const gateway = new SlackGateway({
+        directory: tmp.path,
+        token: process.env.SLACK_BOT_TOKEN!,
+        appToken: process.env.SLACK_APP_TOKEN!,
+        signingSecret: process.env.SLACK_SIGNING_SECRET,
+      })
+
+      await gateway.start()
+      await Bun.sleep(1000)
+      await gateway.stop()
+
+      expect(true).toBe(true)
+    },
   })
-
-  await gateway.start()
-  await Bun.sleep(1000)
-  await gateway.stop()
-
-  expect(true).toBe(true)
 })
 
 live("delivers orchestrator event to a real Slack thread", async () => {
@@ -100,11 +106,11 @@ live("delivers orchestrator event to a real Slack thread", async () => {
   const runID = Identifier.ascending("run")
 
   try {
-    await gateway.start()
     await Instance.provide({
       directory: tmp.path,
       init: InstanceBootstrap,
       fn: async () => {
+        await gateway.start()
         const now = Date.now()
         Database.use((db) => {
           db.insert(OrchestratorTaskTable)
@@ -215,40 +221,34 @@ inbound("answers a real Slack permission interaction from the thread", async () 
   let resolved = false
 
   try {
-    await gateway.start()
-    await Bun.sleep(2000)
-
-    const root = await slackJsonWith(user, "chat.postMessage", {
-      channel,
-      text: marker,
-    })
-    expect(root.ok).toBe(true)
-    expect(typeof root.ts).toBe("string")
-    rootTs = root.ts!
-
-    const taskDeadline = Date.now() + 20_000
-    while (Date.now() < taskDeadline) {
-      await Bun.sleep(1000)
-      const found = await Instance.provide({
-        directory: tmp.path,
-        init: InstanceBootstrap,
-        fn: async () => {
-          const tasks = Database.use((db) => db.select().from(OrchestratorTaskTable).all())
-          return tasks.find((item) => item.source === "slack" && item.request.includes(marker))
-        },
-      })
-      if (!found?.session_id) continue
-      task = found
-      break
-    }
-
-    expect(task?.session_id).toBeDefined()
-
-    const pending = Instance.provide({
+    await Instance.provide({
       directory: tmp.path,
       init: InstanceBootstrap,
-      fn: async () =>
-        PermissionNext.ask({
+      fn: async () => {
+        await gateway.start()
+        await Bun.sleep(2000)
+
+        const root = await slackJsonWith(user, "chat.postMessage", {
+          channel,
+          text: marker,
+        })
+        expect(root.ok).toBe(true)
+        expect(typeof root.ts).toBe("string")
+        rootTs = root.ts!
+
+        const taskDeadline = Date.now() + 20_000
+        while (Date.now() < taskDeadline) {
+          await Bun.sleep(1000)
+          const tasks = Database.use((db) => db.select().from(OrchestratorTaskTable).all())
+          const found = tasks.find((item) => item.source === "slack" && item.request.includes(marker))
+          if (!found?.session_id) continue
+          task = found
+          break
+        }
+
+        expect(task?.session_id).toBeDefined()
+
+        const pending = PermissionNext.ask({
           sessionID: task!.session_id!,
           permission: "bash",
           patterns: ["echo *"],
@@ -263,18 +263,13 @@ inbound("answers a real Slack permission interaction from the thread", async () 
           ],
         }).then(() => {
           resolved = true
-        }),
-    })
+        })
 
-    const interactionDeadline = Date.now() + 20_000
-    let interaction: typeof OrchestratorInteractionRequestTable.$inferSelect | undefined
-    while (Date.now() < interactionDeadline) {
-      await Bun.sleep(1000)
-      const found = await Instance.provide({
-        directory: tmp.path,
-        init: InstanceBootstrap,
-        fn: async () =>
-          Database.use((db) =>
+        const interactionDeadline = Date.now() + 20_000
+        let interaction: typeof OrchestratorInteractionRequestTable.$inferSelect | undefined
+        while (Date.now() < interactionDeadline) {
+          await Bun.sleep(1000)
+          const found = Database.use((db) =>
             db
               .select()
               .from(OrchestratorInteractionRequestTable)
@@ -286,33 +281,28 @@ inbound("answers a real Slack permission interaction from the thread", async () 
                 ),
               )
               .get(),
-          ),
-      })
-      if (!found) continue
-      interaction = found
-      break
-    }
+          )
+          if (!found) continue
+          interaction = found
+          break
+        }
 
-    expect(interaction?.status).toBe("pending")
+        expect(interaction?.status).toBe("pending")
 
-    const reply = await slackJsonWith(user, "chat.postMessage", {
-      channel,
-      thread_ts: rootTs,
-      text: "allow",
-    })
-    expect(reply.ok).toBe(true)
+        const reply = await slackJsonWith(user, "chat.postMessage", {
+          channel,
+          thread_ts: rootTs,
+          text: "allow",
+        })
+        expect(reply.ok).toBe(true)
 
-    const resolvedDeadline = Date.now() + 15_000
-    while (Date.now() < resolvedDeadline && !resolved) {
-      await Bun.sleep(500)
-    }
-    await pending
+        const resolvedDeadline = Date.now() + 15_000
+        while (Date.now() < resolvedDeadline && !resolved) {
+          await Bun.sleep(500)
+        }
+        await pending
 
-    const final = await Instance.provide({
-      directory: tmp.path,
-      init: InstanceBootstrap,
-      fn: async () =>
-        Database.use((db) =>
+        const final = Database.use((db) =>
           db
             .select()
             .from(OrchestratorInteractionRequestTable)
@@ -323,19 +313,20 @@ inbound("answers a real Slack permission interaction from the thread", async () 
               ),
             )
             .get(),
-        ),
-    })
-    expect(final?.status).toBe("answered")
+        )
+        expect(final?.status).toBe("answered")
 
-    const replies = await slackForm("conversations.replies", {
-      channel,
-      ts: rootTs,
+        const replies = await slackForm("conversations.replies", {
+          channel,
+          ts: rootTs,
+        })
+        expect(replies.ok).toBe(true)
+        const texts = (replies.messages ?? [])
+          .map((item) => item.text)
+          .filter((item): item is string => typeof item === "string" && item.length > 0)
+        expect(texts.some((item) => item.includes("Input requested: Permission: bash"))).toBe(true)
+      },
     })
-    expect(replies.ok).toBe(true)
-    const texts = (replies.messages ?? [])
-      .map((item) => item.text)
-      .filter((item): item is string => typeof item === "string" && item.length > 0)
-    expect(texts.some((item) => item.includes("Input requested: Permission: bash"))).toBe(true)
   } finally {
     await gateway.stop().catch(() => undefined)
     if (rootTs) {
@@ -366,7 +357,13 @@ inboundExtended("stores free-form preference from a real Slack thread message", 
   let taskID = ""
 
   try {
-    await gateway.start()
+    await Instance.provide({
+      directory: tmp.path,
+      init: InstanceBootstrap,
+      fn: async () => {
+        await gateway.start()
+      },
+    })
     await Bun.sleep(2000)
 
     const root = await slackJsonWith(user, "chat.postMessage", {
