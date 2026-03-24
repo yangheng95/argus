@@ -11,6 +11,7 @@ import { ProviderTransform } from "../provider/transform"
 import PROMPT_GENERATE from "./generate.txt"
 import PROMPT_COMPACTION from "./prompt/compaction.txt"
 import PROMPT_EXPLORE from "./prompt/explore.txt"
+import PROMPT_GENERAL from "./prompt/general.txt"
 import PROMPT_SUMMARY from "./prompt/summary.txt"
 import PROMPT_TITLE from "./prompt/title.txt"
 import { PermissionNext } from "@/permission/next"
@@ -299,7 +300,7 @@ export namespace Agent {
     build: undefined,
     spec: undefined,
     plan: undefined,
-    general: undefined,
+    general: PROMPT_GENERAL,
     explore: PROMPT_EXPLORE,
     compaction: PROMPT_COMPACTION,
     title: PROMPT_TITLE,

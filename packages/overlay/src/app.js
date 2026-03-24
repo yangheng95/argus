@@ -453,7 +453,7 @@ const dom = {
   promptSection: $("#promptSection"),
   promptBody: $("#promptBody"),
   promptBadge: $("#promptBadge"),
-  overviewSection: $("#overviewSection"),
+  taskActionsBar: $("#taskActionsBar"),
   specSection: $("#specSection"),
   planSection: $("#planSection"),
   goalsSection: $("#goalsSection"),
@@ -481,8 +481,6 @@ const dom = {
   statusLabel: $("#statusLabel"),
   elapsed: $("#elapsed"),
   btnTerminateRun: $("#btnTerminateRun"),
-  overviewBadge: $("#overviewBadge"),
-  overviewBody: $("#overviewBody"),
   specBadge: $("#specBadge"),
   specBody: $("#specBody"),
   planBadge: $("#planBadge"),
@@ -1006,7 +1004,7 @@ function refreshLocalizedState() {
     renderBoard();
   } else {
     clearSectionPhases();
-    renderOverview(null, null);
+    renderTaskActions(null);
     renderSpec(null);
     renderPlan(null);
     renderChanges();
@@ -3997,6 +3995,11 @@ async function pickDirectory(start) {
   return typeof selected === "string" ? selected : "";
 }
 
+async function pickFiles(start) {
+  const result = await withUnpinned(() => tauriInvoke("overlay_pick_files", { start: start || undefined }));
+  return Array.isArray(result) ? result : [];
+}
+
 // ── Connection ──
 
 async function checkConnection() {
@@ -4056,6 +4059,7 @@ function renderVersions(coreVersion) {
     dom.chatVersion.textContent = version;
     dom.chatVersion.title = version;
   }
+  renderAboutVersion();
 
   if (dom.chatAuthor) {
     const author = t("version.author");
@@ -5044,7 +5048,11 @@ async function loadTasks() {
 
 async function selectTask(taskID, options = {}) {
   const nextTaskID = taskID || "";
-  if (nextTaskID === state.selectedTaskID && state.board) return;
+  console.log("[selectTask]", { nextTaskID, currentTaskID: state.selectedTaskID, hasBoard: !!state.board });
+  if (nextTaskID === state.selectedTaskID && state.board) {
+    console.log("[selectTask] skipped (same task with board)");
+    return;
+  }
   state.board = null;
   state.boardEtag = "";
   state.snapshotVersion = "";
@@ -5081,8 +5089,16 @@ async function selectTask(taskID, options = {}) {
       renderConversation();
     }
 
-  await Promise.all([loadBoard({ sync: true }), loadMeta(), loadMemory()]);
-  await loadConversation();
+  try {
+    await Promise.all([loadBoard({ sync: true }), loadMeta(), loadMemory()]);
+  } catch (e) {
+    console.error("[selectTask] loadBoard/loadMeta/loadMemory failed:", e);
+  }
+  try {
+    await loadConversation();
+  } catch (e) {
+    console.error("[selectTask] loadConversation failed:", e);
+  }
   rememberWorkspace({
     taskID: nextTaskID,
   });
@@ -6201,8 +6217,8 @@ function renderBoard() {
   setTaskStatus(task.status);
   startElapsedTimer(task.time.started || task.time.created);
 
-  // Overview
-  renderOverview(overview, task);
+  // Task actions (retry / replan / cancel) + failure alert
+  renderTaskActions(overview);
 
   // Spec
   renderSpec(spec);
@@ -6332,7 +6348,6 @@ function formatDuration(ms) {
 
 function phaseSections() {
   return {
-    overview: dom.overviewSection,
     spec: dom.specSection,
     plan: dom.planSection,
     goals: dom.goalsSection,
@@ -6444,10 +6459,6 @@ function relatePhase(kind, related, board, goals) {
     if (goals.length > 0) related.push("goals");
     return;
   }
-  if (kind === "overview") {
-    if (board?.plan) related.push("plan");
-    if (goals.length > 0) related.push("goals");
-  }
 }
 
 function syncSectionPhases(board = state.board) {
@@ -6468,15 +6479,14 @@ function syncSectionPhases(board = state.board) {
 
   if (board?.task && (pending || board.task.status === "blocked")) {
     active.length = 0;
-    active.push("overview");
-    if (board.plan) related.push("plan");
-    if (goals.length > 0) related.push("goals");
+    if (board.plan) active.push("plan");
+    else if (goals.length > 0) active.push("goals");
+    else if (board.spec) active.push("spec");
   }
 
   if (board?.task && active.length === 0 && board.task.status === "queued") {
-    active.push("overview");
-    if (board.spec) related.push("spec");
-    if (board.plan) related.push("plan");
+    if (board.spec) active.push("spec");
+    else if (board.plan) active.push("plan");
   }
 
   if (board?.task && active.length === 0 && planning) {
@@ -6486,7 +6496,7 @@ function syncSectionPhases(board = state.board) {
   }
 
   if (board?.task && active.length === 0 && board.task.status === "running") {
-    active.push(goals.length > 0 ? "goals" : board.plan ? "plan" : "overview");
+    active.push(goals.length > 0 ? "goals" : board.plan ? "plan" : "spec");
     if (board.plan) related.push("plan");
     if (state.changes.length > 0) related.push("files");
   }
@@ -6505,22 +6515,21 @@ function syncSectionPhases(board = state.board) {
   }
 
   if (board?.task && active.length === 0 && board.task.status === "completed") {
-    active.push(board.delivery ? "delivery" : state.changes.length > 0 ? "files" : "overview");
+    active.push(board.delivery ? "delivery" : state.changes.length > 0 ? "files" : "evaluation");
     if (board.delivery && state.changes.length > 0) related.push("files");
     if (board.evaluation) related.push("evaluation");
     if (goals.length > 0) related.push("goals");
   }
 
   if (board?.task && active.length === 0 && board.task.status === "failed") {
-    active.push("overview");
+    active.push(board.evaluation ? "evaluation" : board.plan ? "plan" : "spec");
     if (board.plan) related.push("plan");
-    if (board.evaluation) related.push("evaluation");
     if (goals.length > 0) related.push("goals");
   }
 
   if (board?.task && active.length === 0 && board.task.status === "cancelled") {
-    active.push("overview");
-    if (board.plan) related.push("plan");
+    if (board.plan) active.push("plan");
+    else if (board.spec) active.push("spec");
   }
 
   const current = [...new Set(active.filter(Boolean))];
@@ -6530,53 +6539,40 @@ function syncSectionPhases(board = state.board) {
   contextual.forEach((kind) => markSectionPhase(kind, "related"));
 }
 
-// ── Overview Rendering ──
+// ── Task Actions Bar (retry / replan / cancel + failure alert) ──
 
-function overviewActionsHtml(controls) {
-  if (!controls?.canRetry && !controls?.canReplan && !controls?.canCancel) return "";
-  let html = '<div class="section-actions">';
-  if (controls.canRetry) html += `<button type="button" class="btn btn-primary" data-task-action="retry" title="${escapeHtml(t("task.action.retry_title"))}" aria-label="${escapeHtml(t("task.action.retry_title"))}">${escapeHtml(t("task.action.retry"))}</button>`;
-  if (controls.canReplan) html += `<button type="button" class="btn btn-ghost" data-task-action="replan" title="${escapeHtml(t("task.action.replan_title"))}" aria-label="${escapeHtml(t("task.action.replan_title"))}">${escapeHtml(t("task.action.replan"))}</button>`;
-  if (controls.canCancel) html += `<button type="button" class="btn btn-ghost" data-task-action="cancel" title="${escapeHtml(t("task.action.cancel_title"))}" aria-label="${escapeHtml(t("task.action.cancel_title"))}">${escapeHtml(t("common.cancel"))}</button>`;
-  html += "</div>";
-  return html;
-}
-
-function overviewFailureHtml(failure) {
-  if (!failure) return "";
-  return `<div class="interaction-alert overview-failure">
-    <div class="interaction-title">${escapeHtml(failure.title)}</div>
-    <div class="interaction-body md-content">${renderMarkdown(failure.summary)}</div>
-  </div>`;
-}
-
-function renderOverview(overview, task) {
-  const badge = dom.overviewBadge;
-  const body = dom.overviewBody;
-  if (!badge || !body) return;
+function renderTaskActions(overview) {
+  const bar = dom.taskActionsBar;
+  if (!bar) return;
   if (!overview) {
-    badge.textContent = "";
-    body.innerHTML = `<p class="empty-hint">${escapeHtml(t("empty.overview"))}</p>`;
+    bar.hidden = true;
+    bar.innerHTML = "";
     return;
   }
-
-  badge.textContent = statusLabel(task.status);
-  badge.dataset.tone =
-    task.status === "completed" ? "good" :
-    task.status === "failed" ? "bad" :
-    ["running", "planning", "evaluating", "delivering"].includes(task.status) ? "accent" :
-    task.status === "blocked" ? "warn" : "";
-
-  body.innerHTML = `
-    <div class="plan-summary md-content">${renderMarkdown(overview.headline)}</div>
-    <div class="overview-summary md-content">${renderMarkdown(overview.summary)}</div>
-    ${overview.nextStep ? `<div class="overview-next-step">
-      <strong class="overview-next-step-title">${escapeHtml(overview.nextStep.title)}</strong>
-      ${overview.nextStep.detail ? `<div class="overview-next-step-detail md-content">${renderMarkdown(overview.nextStep.detail)}</div>` : ""}
-    </div>` : ""}
-    ${overviewFailureHtml(overview.currentFailure)}
-    ${overviewActionsHtml(overview.controls || {})}
-  `;
+  const controls = overview.controls || {};
+  const hasButtons = controls.canRetry || controls.canReplan || controls.canCancel;
+  const failure = overview.currentFailure;
+  if (!hasButtons && !failure) {
+    bar.hidden = true;
+    bar.innerHTML = "";
+    return;
+  }
+  let html = "";
+  if (failure) {
+    html += `<div class="interaction-alert task-failure-alert">
+      <div class="interaction-title">${escapeHtml(failure.title)}</div>
+      <div class="interaction-body md-content">${renderMarkdown(failure.summary)}</div>
+    </div>`;
+  }
+  if (hasButtons) {
+    html += '<div class="task-actions-buttons">';
+    if (controls.canRetry) html += `<button type="button" class="btn btn-primary" data-task-action="retry" title="${escapeHtml(t("task.action.retry_title"))}" aria-label="${escapeHtml(t("task.action.retry_title"))}">${escapeHtml(t("task.action.retry"))}</button>`;
+    if (controls.canReplan) html += `<button type="button" class="btn btn-ghost" data-task-action="replan" title="${escapeHtml(t("task.action.replan_title"))}" aria-label="${escapeHtml(t("task.action.replan_title"))}">${escapeHtml(t("task.action.replan"))}</button>`;
+    if (controls.canCancel) html += `<button type="button" class="btn btn-ghost" data-task-action="cancel" title="${escapeHtml(t("task.action.cancel_title"))}" aria-label="${escapeHtml(t("task.action.cancel_title"))}">${escapeHtml(t("common.cancel"))}</button>`;
+    html += "</div>";
+  }
+  bar.innerHTML = html;
+  bar.hidden = false;
 }
 
 function goalItemsHtml(cards) {
@@ -9432,8 +9428,7 @@ function renderClear() {
   state.conversationUpdatedAt = 0;
   state.budgetDirty = false;
   state.budgetSaving = false;
-  dom.overviewBadge.textContent = "";
-  dom.overviewBody.innerHTML = `<p class="empty-hint">${escapeHtml(t("empty.overview"))}</p>`;
+  if (dom.taskActionsBar) { dom.taskActionsBar.hidden = true; dom.taskActionsBar.innerHTML = ""; }
   state.changes = [];
   state.changeKey = "";
   renderChanges();
@@ -9583,8 +9578,21 @@ dom.chatForm.addEventListener("submit", async (e) => {
 
 // ── File Attachments ──
 
-dom.btnChatAttach?.addEventListener("click", () => {
-  dom.chatFileInput?.click();
+dom.btnChatAttach?.addEventListener("click", async () => {
+  if (hasTauriRuntime()) {
+    try {
+      const files = await pickFiles(activeDirectory());
+      for (const f of files) {
+        state.chatAttachments.push({ mime: f.mime, url: f.url, filename: f.filename });
+      }
+      if (files.length) renderChatAttachments();
+    } catch (e) {
+      console.error("[attach] pickFiles failed:", e);
+      dom.chatFileInput?.click();
+    }
+  } else {
+    dom.chatFileInput?.click();
+  }
 });
 
 dom.chatFileInput?.addEventListener("change", async () => {
@@ -9725,9 +9733,17 @@ dom.taskListPanel?.addEventListener("click", async (event) => {
   }
   const button = eventClosest(event, "[data-task-id]");
   if (!button) return;
+  const taskId = button.dataset.taskId || "";
+  console.log("[task-click] selecting task:", taskId);
   // Clicking a task → switch to task tab if on coding
   if (coding.active) switchTab("control");
-  await selectTask(button.dataset.taskId || "");
+  try {
+    await selectTask(taskId);
+    console.log("[task-click] selectTask done, selectedTaskID=", state.selectedTaskID);
+  } catch (e) {
+    console.error("[task-click] selectTask failed:", e);
+    AppLog.error("ui", "Failed to select task", { taskId, error: String(e) });
+  }
 });
 
 dom.taskDir?.addEventListener("click", async (event) => {
@@ -10032,8 +10048,8 @@ if (dom.btnCreateGoal) {
   });
 }
 
-if (dom.overviewBody) {
-  dom.overviewBody.addEventListener("click", async (e) => {
+if (dom.taskActionsBar) {
+  dom.taskActionsBar.addEventListener("click", async (e) => {
     const button = eventClosest(e, "[data-task-action]");
     if (!(button instanceof HTMLElement)) return;
     await performTaskAction(button.dataset.taskAction || "");
@@ -10195,6 +10211,7 @@ function openConfigDialog(section) {
   if (!dom.configDialog.open) {
     dom.configDialog.showModal();
   }
+  renderAboutVersion();
   if (section) {
     focusConfigSection(section);
   }
@@ -10288,6 +10305,65 @@ dom.btnConfigToggle?.addEventListener("click", () => {
 dom.btnCloseConfigDialog?.addEventListener("click", () => {
   dom.configDialog?.close();
 });
+
+// ── Config sidebar resizer ──
+{
+  const configResizer = document.getElementById("configResizer");
+  const configSidebar = document.getElementById("configSidebar");
+  let configDrag = null;
+
+  function resizeConfigSidebar(clientX) {
+    if (!configSidebar) return;
+    const layout = configSidebar.parentElement;
+    if (!layout) return;
+    const rect = layout.getBoundingClientRect();
+    const scale = currentUIScale();
+    const min = 140 * scale;
+    const max = 320 * scale;
+    const next = Math.round(clampNumber(clientX - rect.left, min, max));
+    configSidebar.style.width = next + "px";
+    configSidebar.style.minWidth = next + "px";
+  }
+
+  configResizer?.addEventListener("pointerdown", (e) => {
+    if (e.button !== 0) return;
+    configDrag = true;
+    configResizer.dataset.active = "true";
+    document.body.dataset.resizing = "true";
+    e.preventDefault();
+
+    function onMove(ev) { resizeConfigSidebar(ev.clientX); }
+    function onUp() {
+      configDrag = null;
+      delete configResizer.dataset.active;
+      delete document.body.dataset.resizing;
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+    }
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+  });
+}
+
+// ── About panel runtime info ──
+function renderAboutVersion() {
+  const grid = document.getElementById("aboutRuntimeGrid");
+  if (!grid) return;
+  const rows = [
+    [t("about.rt_overlay"), "v" + OVERLAY_VERSION],
+    [t("about.rt_core"), state.coreVersion || t("about.rt_unavailable")],
+    [t("about.rt_server"), state.serverUrl || "-"],
+    [t("about.rt_connection"), state.connected ? t("about.rt_connected") : t("about.rt_disconnected")],
+    [t("about.rt_directory"), activeDirectory() || "-"],
+    [t("about.rt_executor"), state.executor || "-"],
+    [t("about.rt_tasks"), String(state.tasks?.length || 0)],
+  ];
+  grid.innerHTML = rows.map(([label, value]) =>
+    `<span class="about-info-label">${escapeHtml(label)}</span><span class="about-info-value">${escapeHtml(value)}</span>`
+  ).join("");
+}
 
 // Delegate to promptSection (parent) because renderPrompts() replaces promptBody via cloneNode.
 dom.promptSection?.addEventListener("input", (event) => {
@@ -11743,6 +11819,14 @@ init().catch((err) => {
 window.addEventListener("resize", renderScale);
 window.visualViewport?.addEventListener("resize", renderScale);
 window.addEventListener("keydown", handleZoomHotkey);
+
+// F12 → toggle devtools
+window.addEventListener("keydown", (e) => {
+  if (e.key === "F12" && hasTauriRuntime()) {
+    e.preventDefault();
+    tauriInvoke("overlay_toggle_devtools").catch(() => {});
+  }
+});
 window.addEventListener("focus", () => {
   void refreshInteractionAttention?.();
 });

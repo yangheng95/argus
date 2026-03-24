@@ -2254,6 +2254,7 @@ dependencies = [
 name = "opencorvus-overlay"
 version = "0.0.1-alpha"
 dependencies = [
+ "base64 0.22.1",
  "image",
  "serde",
  "serde_json",
