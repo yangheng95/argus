@@ -5,6 +5,7 @@ import { HTTPException } from "hono/http-exception"
 import z from "zod"
 import {
   Artifact,
+  Budget,
   CreateTaskInput,
   Delivery,
   ExecutorEvent,
@@ -833,6 +834,38 @@ export const OrchestratorRoutes = lazy(() =>
       validator("param", z.object({ goalID: z.string() })),
       async (c) => {
         return c.json(await OrchestratorService.deleteGoal(c.req.valid("param").goalID))
+      },
+    )
+    .delete(
+      "/task/:taskID",
+      describeRoute({
+        summary: "Delete task",
+        operationId: "task.delete",
+        responses: {
+          200: { description: "Task deleted" },
+          ...errors(404),
+        },
+      }),
+      validator("param", z.object({ taskID: Task.shape.id })),
+      async (c) => {
+        return c.json(await OrchestratorService.deleteTask(c.req.valid("param").taskID))
+      },
+    )
+    .patch(
+      "/task/:taskID/budget",
+      describeRoute({
+        summary: "Update task budget",
+        operationId: "task.updateBudget",
+        responses: {
+          200: { description: "Budget updated" },
+          ...errors(404),
+        },
+      }),
+      validator("param", z.object({ taskID: Task.shape.id })),
+      validator("json", z.object({ budget: Budget.nullable() })),
+      async (c) => {
+        const { budget } = c.req.valid("json")
+        return c.json(await OrchestratorService.updateTaskBudget(c.req.valid("param").taskID, budget))
       },
     )
 )
