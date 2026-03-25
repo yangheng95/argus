@@ -73,7 +73,13 @@ async function cargoPath() {
 }
 
 function tauriArgs() {
-  return ["--config", JSON.stringify({ bundle: { resources: [] } })]
+  return [
+    "--config",
+    JSON.stringify({
+      build: { frontendDist: "../dist-vite" },
+      bundle: { resources: [] },
+    }),
+  ]
 }
 
 async function removeDirIfEmpty(dir: string) {
@@ -109,6 +115,8 @@ await $`bun run build`.cwd(opencorvus)
 if (!(await exists(distServer))) {
   throw new Error(`Bundled opencorvus binary not found at ${distServer}`)
 }
+
+await $`bun run build:vite`.cwd(dir)
 
 await fs.rm(distRoot, { recursive: true, force: true }).catch(() => undefined)
 await cleanBuildResidue()
