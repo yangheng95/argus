@@ -104,16 +104,10 @@ async function cleanBuildResidue() {
   )
 }
 
-const skipOpencorvusBuild = process.argv.includes("--skip-opencorvus-build")
-if (!skipOpencorvusBuild) {
-  await $`bun run build`.cwd(opencorvus)
-}
+await $`bun run build`.cwd(opencorvus)
 
 if (!(await exists(distServer))) {
-  throw new Error(
-    `Bundled opencorvus binary not found at ${distServer}` +
-      (skipOpencorvusBuild ? "\nRun: cd packages/opencorvus && bun run build --all" : ""),
-  )
+  throw new Error(`Bundled opencorvus binary not found at ${distServer}`)
 }
 
 await fs.rm(distRoot, { recursive: true, force: true }).catch(() => undefined)

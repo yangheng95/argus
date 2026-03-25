@@ -6056,8 +6056,16 @@ function handleEventStreamEvent(event) {
     if (!matchesCurrentSession(info?.sessionID)) return;
     const existing = state.messages.find((item) => item.info?.id === info.id);
     if (existing) {
-      // Metadata-only update (tokens, timestamps) — update silently, no re-render
+      // Check if classification-relevant fields changed (e.g. agent field set on placeholder)
+      const prevAgent = String(existing.info?.agent || "");
       existing.info = info;
+      const nextAgent = String(info?.agent || "");
+      if (prevAgent !== nextAgent) {
+        // Agent field changed — message will reclassify from main to agent channel.
+        // Must re-render so agent card appears immediately.
+        state.conversationUpdatedAt = Date.now();
+        renderConversation();
+      }
       return;
     }
     if (state.chatRequest) {
@@ -9296,9 +9304,11 @@ function renderAgentCard(cardMsg, sig = "") {
   const timeStr = cardMsg.info?.time?.created ? stamp(cardMsg.info.time.created) : "";
   const msgCount = agentMessages.length;
 
-  // Preserve expanded state from previous render
+  // Preserve expanded state from previous render; default to expanded while running
   const prevCard = dom.chatScroll?.querySelector(`.agent-card[data-stage="${stage}"]`);
-  const wasExpanded = prevCard?.classList.contains("agent-card--expanded") || false;
+  const wasExpanded = prevCard
+    ? prevCard.classList.contains("agent-card--expanded")
+    : status === "running";
 
   // Status badge
   const statusBadge = status === "completed"

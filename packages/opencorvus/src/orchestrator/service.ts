@@ -39,6 +39,7 @@ import {
   type OrchestratorMetadata,
 } from "./orchestrator.sql"
 import {
+  Budget,
   CreateTaskInput,
   Event,
   GoalInput,
@@ -595,6 +596,41 @@ export namespace OrchestratorService {
     )
     if (!row) throw new NotFoundError({ message: `Goal not found: ${goalID}` })
     GoalService.deleteGoal(goalID)
+    return true
+  }
+
+  export async function deleteTask(taskID: string) {
+    const task = requireTask(taskID)
+    // Cancel if still active
+    if (!["completed", "failed", "cancelled"].includes(task.status)) {
+      await cancelTask(taskID)
+    }
+    // Delete session tree (CASCADE handles plans, goals, runs, etc.)
+    if (task.session_id) {
+      await Session.remove(task.session_id)
+    }
+    // Delete the task row itself (CASCADE handles plans, goals, runs, artifacts, etc.)
+    Database.use((db) =>
+      db.delete(OrchestratorTaskTable).where(eq(OrchestratorTaskTable.id, taskID)).run(),
+    )
+    return true
+  }
+
+  export async function updateTaskBudget(taskID: string, budget: z.input<typeof Budget> | null) {
+    const task = requireTask(taskID)
+    const parsed = budget ? budgetRow(budget) : null
+    Database.use((db) =>
+      db
+        .update(OrchestratorTaskTable)
+        .set({ budget: parsed })
+        .where(eq(OrchestratorTaskTable.id, taskID))
+        .run(),
+    )
+    await Bus.publish(Event.TaskUpdated, {
+      taskID,
+      status: task.status,
+      summary: "Task budget updated",
+    })
     return true
   }
 }
