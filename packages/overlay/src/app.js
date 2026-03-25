@@ -8447,6 +8447,24 @@ function renderMarkdown(text) {
   return html;
 }
 
+// ── Expose helpers for Solid components ──
+// Solid components (loaded via ES module main.tsx) delegate to these legacy
+// functions so they produce identical output to the vanilla-JS renderers.
+window.renderMarkdown = renderMarkdown;
+window.orderedMessageParts = orderedMessageParts;
+window.roleLabel = roleLabel;
+window.effectiveRole = effectiveRole;
+window.stamp = stamp;
+window.shortRelativePath = shortRelativePath;
+window.escapeHtml = escapeHtml;
+window.stripAnsi = stripAnsi;
+window.displayToolIcon = displayToolIcon;
+window.displayToolDetail = displayToolDetail;
+window.toolStatusLabel = toolStatusLabel;
+window.agentStageLabel = agentStageLabel;
+window.renderFilePart = renderFilePart;
+window.rootTaskSessionID = rootTaskSessionID;
+
 function renderMarkdownBlock(text) {
   const lines = text.split("\n");
   let html = "";
@@ -8731,6 +8749,25 @@ function debouncedRenderConversation() {
 }
 
 function renderConversation() {
+  // ── Phase 1: delegate to Solid conversation bridge ──
+  if (window.__solidConversation) {
+    const sorted = conversationMessages();
+    dom.chatCount.textContent = sorted.length > 0
+      ? tc("chat.count", sorted.length, { count: sorted.length })
+      : "";
+    syncSectionPhases();
+    window.__solidConversation.update(
+      state.messages || [],
+      state.agentEvents || [],
+      {
+        showTranscriptDetails: state.showTranscriptDetails,
+        agentStatus: state.agentStatus,
+      },
+    );
+    return;
+  }
+
+  // ── Legacy fallback (kept until Phase 3 cleanup) ──
   const sorted = conversationMessages();
   if (sorted.length === 0) {
     dom.chatScroll.innerHTML = `<div class="chat-empty">${escapeHtml(t("chat.empty"))}</div>`;
