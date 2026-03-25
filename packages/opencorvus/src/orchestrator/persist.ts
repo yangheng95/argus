@@ -434,6 +434,7 @@ export async function compileTransition(input: CompileTransitionInput): Promise<
     }
     await specLive.start(input.mode === "replan" ? "Spec rewrite started" : "Spec generation started")
     return compileSpec(input, combineHooks(specContentHooks, specLive.hooks), timeouts.specMs, specLive.statusHook.bind(specLive)).then(async (result) => {
+      await specContentHooks?.flush()
       await specLive.finish(input.mode === "replan" ? "Spec rewrite finished" : "Spec generation finished")
       return [result, input.mode === "replan" ? "rewritten" : "generated"] as const
     }).catch(async (error) => {
@@ -512,9 +513,11 @@ export async function compileTransition(input: CompileTransitionInput): Promise<
             onStatus: goalLive.statusHook.bind(goalLive),
           })
     ).then(async (result) => {
+      await goalContentHooks?.flush()
       await goalLive.finish(input.mode === "replan" ? "Goal decomposition recompile finished" : "Goal decomposition finished")
       return result
     }).catch(async (error) => {
+      await goalContentHooks?.flush().catch(() => undefined)
       await goalLive.error(error)
       throw error
     })
@@ -561,9 +564,11 @@ export async function compileTransition(input: CompileTransitionInput): Promise<
             stream: planStream,
           })
     ).then(async (result) => {
+      await planContentHooks.flush()
       await planLive.finish(input.mode === "replan" ? "Planner replan finished" : "Planner finished")
       return result
     }).catch(async (error) => {
+      await planContentHooks.flush().catch(() => undefined)
       await planLive.error(error)
       throw error
     })

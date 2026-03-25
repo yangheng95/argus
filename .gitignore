@@ -41,3 +41,19 @@ tmp_slack_msg.json
 overlay.json
 *.traineddata
 *.exe
+
+# Auto-added by OpenCorvus
+node_modules/
+build/
+.output/
+.next/
+.nuxt/
+.svelte-kit/
+.env.*
+*.db-shm
+*.db-wal
+*.tsbuildinfo
+coverage/
+.cache/
+.turbo/
+Thumbs.db

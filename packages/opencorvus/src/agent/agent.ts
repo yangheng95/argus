@@ -70,7 +70,7 @@ export namespace Agent {
       edit: "allow",
       task: "allow",
       webfetch: "allow",
-      websearch: "allow",
+      websearch: "deny",
       codesearch: "allow",
       lsp: "allow",
       memory: "allow",
@@ -191,7 +191,7 @@ export namespace Agent {
             list: "allow",
             bash: "allow",
             webfetch: "allow",
-            websearch: "allow",
+            websearch: "deny",
             codesearch: "allow",
             read: "allow",
             external_directory: {
