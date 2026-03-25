@@ -1,0 +1,412 @@
+// ── Pane Resizer Service ──
+// Exact port of the sidebar / sections pane-resize logic from app.js.
+//
+// app.js references covered:
+//   - sanitizePaneWidth        (util — also in store/settings.ts)
+//   - clampNumber              (util)
+//   - paneHandleWidth          (DOM helper)
+//   - defaultRailWidth         (layout helper)
+//   - resolvedPaneWidths       (layout helper)
+//   - renderPaneLayout         (applies CSS custom properties)
+//   - resizePane               (drag handler)
+//   - onPaneResizeMove         (pointermove listener)
+//   - stopPaneResize           (pointerup / pointercancel listener)
+//   - startPaneResize          (pointerdown handler)
+//   - initPaneResizers         (attaches listeners to DOM handles)
+//   - applyPaneWidths          (imperatively set widths without dragging)
+//
+// The service reads and writes two persistent values:
+//   sidebarWidth  and  sectionsWidth
+// via the callbacks supplied to initPaneResizers(), so the caller controls
+// where those values are stored (Solid store, plain state object, etc.).
+
+// ── Types ──
+
+export interface PaneState {
+  sidebarWidth: number | null;
+  sectionsWidth: number | null;
+  sidebarCollapsed: boolean;
+}
+
+export interface PaneCallbacks {
+  /** Read the current pane state. */
+  getState: () => PaneState;
+  /**
+   * Called whenever the user finishes a drag or widths are applied
+   * programmatically.  Persist the new widths here (e.g. save to store /
+   * localStorage).
+   */
+  onWidthsChanged: (
+    sidebarWidth: number | null,
+    sectionsWidth: number | null,
+  ) => void | Promise<void>;
+}
+
+// ── Module-level drag state ──
+
+interface PaneDrag {
+  side: "left" | "right";
+}
+
+let paneDrag: PaneDrag | null = null;
+
+// ── Helpers ──
+
+/** Clamp a number to [min, max]. */
+function clampNumber(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max);
+}
+
+/**
+ * Return the rendered width of a pane resize handle element.
+ * Falls back to the --ui-resizer-width CSS custom property.
+ * Mirrors app.js paneHandleWidth().
+ */
+export function paneHandleWidth(node: Element | null | undefined): number {
+  if (!node) return 0;
+  const style = getComputedStyle(node as HTMLElement);
+  if (style.display === "none" || style.visibility === "hidden") return 0;
+  const width = node.getBoundingClientRect().width;
+  if (width > 0) return width;
+  return (
+    Number.parseFloat(
+      getComputedStyle(document.documentElement).getPropertyValue(
+        "--ui-resizer-width",
+      ),
+    ) || 0
+  );
+}
+
+/**
+ * Compute the default rail width based on the current panel width.
+ * Mirrors app.js defaultRailWidth().
+ */
+export function defaultRailWidth(): number {
+  const scale = currentUIScale();
+  const panelWidth =
+    (document.getElementById("panelBody") as HTMLElement | null)?.clientWidth ??
+    window.visualViewport?.width ??
+    window.innerWidth ??
+    900;
+  return clampNumber(panelWidth * 0.24, 240 * scale, 420 * scale);
+}
+
+/**
+ * Read the --ui-scale CSS custom property (mirrors app.js currentUIScale).
+ */
+export function currentUIScale(): number {
+  if (typeof document === "undefined") return 1;
+  return (
+    Number.parseFloat(
+      getComputedStyle(document.documentElement).getPropertyValue("--ui-scale"),
+    ) || 1
+  );
+}
+
+/**
+ * Compute the final sidebar and sections widths after overflow clamping.
+ * Exact port of app.js resolvedPaneWidths().
+ */
+export function resolvedPaneWidths(state: PaneState): {
+  sidebar: number;
+  sections: number;
+} {
+  const scale = currentUIScale();
+  const panelWidth =
+    (document.getElementById("panelBody") as HTMLElement | null)?.clientWidth ??
+    window.visualViewport?.width ??
+    window.innerWidth ??
+    900;
+  const railMin = 180 * scale;
+  const railMax = 520 * scale;
+  const chatPreferred = 520 * scale;
+  const chatMin = 420 * scale;
+  const collapsedSidebar = 62 * scale;
+
+  const leftHandle = state.sidebarCollapsed
+    ? 0
+    : paneHandleWidth(document.getElementById("leftPaneResizer"));
+  const rightHandle = paneHandleWidth(
+    document.getElementById("rightPaneResizer"),
+  );
+
+  let sidebar = clampNumber(
+    state.sidebarWidth ?? defaultRailWidth(),
+    railMin,
+    railMax,
+  );
+  let sections = clampNumber(
+    state.sectionsWidth ?? defaultRailWidth(),
+    railMin,
+    railMax,
+  );
+  const total = panelWidth - leftHandle - rightHandle;
+  let actualSidebar = state.sidebarCollapsed ? collapsedSidebar : sidebar;
+  const sidebarFloor = state.sidebarCollapsed ? collapsedSidebar : railMin;
+
+  // First overflow pass — prefer-chat reduction
+  if (actualSidebar + sections + chatPreferred > total) {
+    let overflow = actualSidebar + sections + chatPreferred - total;
+    const sidebarCap = Math.max(0, actualSidebar - sidebarFloor);
+    const sectionsCap = Math.max(0, sections - railMin);
+    const totalCap = sidebarCap + sectionsCap;
+    if (totalCap > 0) {
+      const sidebarShrink = Math.min(
+        sidebarCap,
+        overflow * (sidebarCap / totalCap),
+      );
+      actualSidebar -= sidebarShrink;
+      overflow -= sidebarShrink;
+      const sectionsShrink = Math.min(sectionsCap, overflow);
+      sections -= sectionsShrink;
+      overflow -= sectionsShrink;
+      if (overflow > 0 && !state.sidebarCollapsed) {
+        const extraSidebar = Math.min(
+          Math.max(0, actualSidebar - railMin),
+          overflow,
+        );
+        actualSidebar -= extraSidebar;
+      }
+    }
+  }
+
+  // Second overflow pass — hard chatMin reduction
+  if (actualSidebar + sections + chatMin > total) {
+    const overflow = actualSidebar + sections + chatMin - total;
+    const sectionsShrink = Math.min(
+      Math.max(0, sections - railMin),
+      overflow,
+    );
+    sections -= sectionsShrink;
+    const remaining = overflow - sectionsShrink;
+    if (remaining > 0 && !state.sidebarCollapsed) {
+      actualSidebar -= Math.min(
+        Math.max(0, actualSidebar - railMin),
+        remaining,
+      );
+    }
+  }
+
+  sidebar = clampNumber(actualSidebar, sidebarFloor, railMax);
+  sections = clampNumber(sections, railMin, railMax);
+  return { sidebar: Math.round(sidebar), sections: Math.round(sections) };
+}
+
+/**
+ * Apply the resolved pane widths as CSS custom properties on
+ * document.documentElement.
+ * Mirrors app.js renderPaneLayout().
+ */
+export function renderPaneLayout(state: PaneState): void {
+  if (typeof document === "undefined") return;
+  const widths = resolvedPaneWidths(state);
+  document.documentElement.style.setProperty(
+    "--ui-sidebar-width",
+    `${widths.sidebar}px`,
+  );
+  document.documentElement.style.setProperty(
+    "--ui-sections-width",
+    `${widths.sections}px`,
+  );
+}
+
+/**
+ * Imperatively set sidebar and/or sections widths, re-render layout, and
+ * call onWidthsChanged.
+ * Equivalent to calling state.sidebarWidth = x; renderPaneLayout() in app.js.
+ */
+export function applyPaneWidths(
+  sidebarWidth: number | null,
+  sectionsWidth: number | null,
+  callbacks: PaneCallbacks,
+): void {
+  const state = callbacks.getState();
+  const next: PaneState = {
+    ...state,
+    sidebarWidth: sidebarWidth ?? state.sidebarWidth,
+    sectionsWidth: sectionsWidth ?? state.sectionsWidth,
+  };
+  renderPaneLayout(next);
+  void callbacks.onWidthsChanged(next.sidebarWidth, next.sectionsWidth);
+}
+
+// ── Drag logic ──
+
+/**
+ * Compute new sidebarWidth or sectionsWidth from a pointer X position.
+ * Mutates the PaneState values returned by callbacks.getState() by calling
+ * renderPaneLayout with a derived state — state is NOT mutated; the caller is
+ * responsible for updating their store in onWidthsChanged.
+ * Mirrors app.js resizePane().
+ */
+function resizePane(
+  side: "left" | "right",
+  clientX: number,
+  callbacks: PaneCallbacks,
+): void {
+  const scale = currentUIScale();
+  const railMin = 180 * scale;
+  const railMax = 520 * scale;
+  const chatMin = 420 * scale;
+  const state = callbacks.getState();
+
+  if (side === "left") {
+    const panelBody = document.getElementById("panelBody");
+    const rect = panelBody?.getBoundingClientRect();
+    if (!rect) return;
+    const { sections } = resolvedPaneWidths(state);
+    const leftHandle = paneHandleWidth(
+      document.getElementById("leftPaneResizer"),
+    );
+    const rightHandle = paneHandleWidth(
+      document.getElementById("rightPaneResizer"),
+    );
+    const max = Math.max(
+      railMin,
+      rect.width - sections - leftHandle - rightHandle - chatMin,
+    );
+    const newSidebarWidth = Math.round(
+      clampNumber(clientX - rect.left, railMin, Math.min(railMax, max)),
+    );
+    renderPaneLayout({ ...state, sidebarWidth: newSidebarWidth });
+    return;
+  }
+
+  // side === "right"
+  const workspaceMain = document.getElementById("workspaceMain");
+  const rect = workspaceMain?.getBoundingClientRect();
+  if (!rect) return;
+  const rightHandle = paneHandleWidth(
+    document.getElementById("rightPaneResizer"),
+  );
+  const max = Math.max(railMin, rect.width - rightHandle - chatMin);
+  const newSectionsWidth = Math.round(
+    clampNumber(rect.right - clientX, railMin, Math.min(railMax, max)),
+  );
+  renderPaneLayout({ ...state, sectionsWidth: newSectionsWidth });
+}
+
+function onPaneResizeMove(
+  event: PointerEvent,
+  callbacks: PaneCallbacks,
+): void {
+  if (!paneDrag) return;
+  resizePane(paneDrag.side, event.clientX, callbacks);
+}
+
+async function stopPaneResize(callbacks: PaneCallbacks): Promise<void> {
+  if (!paneDrag) return;
+  const handleId =
+    paneDrag.side === "left" ? "leftPaneResizer" : "rightPaneResizer";
+  const handle = document.getElementById(handleId);
+  if (handle) delete (handle as HTMLElement).dataset.active;
+  const finalSide = paneDrag.side;
+  paneDrag = null;
+  delete document.body.dataset.resizing;
+
+  // Compute the final persisted values from the current CSS
+  const sidebarPx = Number.parseFloat(
+    getComputedStyle(document.documentElement).getPropertyValue(
+      "--ui-sidebar-width",
+    ),
+  );
+  const sectionsPx = Number.parseFloat(
+    getComputedStyle(document.documentElement).getPropertyValue(
+      "--ui-sections-width",
+    ),
+  );
+
+  await callbacks.onWidthsChanged(
+    Number.isFinite(sidebarPx) ? Math.round(sidebarPx) : null,
+    Number.isFinite(sectionsPx) ? Math.round(sectionsPx) : null,
+  );
+
+  // Clean up listeners (closures below)
+  void finalSide; // used by surrounding closure
+}
+
+function startPaneResize(
+  side: "left" | "right",
+  event: PointerEvent,
+  callbacks: PaneCallbacks,
+): void {
+  if (event.button != null && event.button !== 0) return;
+  const state = callbacks.getState();
+  if (
+    side === "left" &&
+    (state.sidebarCollapsed ||
+      paneHandleWidth(document.getElementById("leftPaneResizer")) === 0)
+  ) {
+    return;
+  }
+  if (
+    side === "right" &&
+    paneHandleWidth(document.getElementById("rightPaneResizer")) === 0
+  ) {
+    return;
+  }
+  paneDrag = { side };
+  const handleId = side === "left" ? "leftPaneResizer" : "rightPaneResizer";
+  const handle = document.getElementById(handleId);
+  if (handle) (handle as HTMLElement).dataset.active = "true";
+  document.body.dataset.resizing = "true";
+
+  // Capture listeners with callbacks in closure
+  function onMove(ev: PointerEvent) {
+    onPaneResizeMove(ev, callbacks);
+  }
+  async function onUp() {
+    window.removeEventListener("pointermove", onMove);
+    window.removeEventListener("pointerup", onUp);
+    window.removeEventListener("pointercancel", onUp);
+    await stopPaneResize(callbacks);
+  }
+  window.addEventListener("pointermove", onMove);
+  window.addEventListener("pointerup", onUp);
+  window.addEventListener("pointercancel", onUp);
+
+  resizePane(side, event.clientX, callbacks);
+  event.preventDefault();
+}
+
+// ── Public API ──
+
+/**
+ * Attach pointerdown listeners to #leftPaneResizer and #rightPaneResizer.
+ * Call once from onMount (or equivalent) after the DOM has been rendered.
+ * Returns a cleanup function that removes the listeners.
+ * Mirrors app.js dom.leftPaneResizer?.addEventListener / dom.rightPaneResizer?.addEventListener.
+ */
+export function initPaneResizers(callbacks: PaneCallbacks): () => void {
+  const leftHandle = document.getElementById("leftPaneResizer");
+  const rightHandle = document.getElementById("rightPaneResizer");
+
+  function onLeftDown(ev: Event) {
+    startPaneResize("left", ev as PointerEvent, callbacks);
+  }
+  function onRightDown(ev: Event) {
+    startPaneResize("right", ev as PointerEvent, callbacks);
+  }
+
+  leftHandle?.addEventListener("pointerdown", onLeftDown);
+  rightHandle?.addEventListener("pointerdown", onRightDown);
+
+  // Render layout immediately so the initial widths are applied
+  renderPaneLayout(callbacks.getState());
+
+  return () => {
+    leftHandle?.removeEventListener("pointerdown", onLeftDown);
+    rightHandle?.removeEventListener("pointerdown", onRightDown);
+  };
+}
+
+/**
+ * Stop any in-progress pane resize.
+ * Call on window blur (mirrors app.js window "blur" handler).
+ */
+export async function cancelPaneResize(
+  callbacks: PaneCallbacks,
+): Promise<void> {
+  if (!paneDrag) return;
+  await stopPaneResize(callbacks);
+}

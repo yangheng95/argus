@@ -1,0 +1,154 @@
+// ── Extensions Service ──
+// TypeScript port of skill/extension and MCP functions from app.js:
+//   loadExtensions, loadSkillMarket, installSkill,
+//   removeSkillSource, deleteSkill, deleteAllSkills.
+//
+// DOM-rendering functions (renderExtensions, renderSkillMarket,
+// renderConfigToggleMeta) are intentionally NOT ported here — they are dead
+// code in the Solid.js world and are superseded by declarative components.
+
+import { appStore, setSkills, setMcp, setSkillMarket } from "../store/app";
+import { AppLog } from "../utils/log";
+import { apiJson } from "./api";
+
+// ── Types ──
+
+export interface SkillDescriptor {
+  name: string;
+  description?: string;
+  location?: string;
+  source?: string;
+  source_type?: string;
+  builtin?: boolean;
+  [key: string]: any;
+}
+
+// ── Helpers ──
+
+/**
+ * Returns the removal kind for a skill, used when calling removeSkillSource.
+ * Mirrors skillRemoveKind in app.js.
+ */
+export function skillRemoveKind(item: SkillDescriptor): string {
+  if (item?.source_type === "managed_git") return "git";
+  if (item?.source_type === "config_url") return "url";
+  if (item?.source_type === "config_path") return "path";
+  return "";
+}
+
+/**
+ * Returns true when a skill can be removed (non-builtin, has a source and a
+ * known removal kind).
+ * Mirrors skillRemovable in app.js.
+ */
+export function skillRemovable(item: SkillDescriptor): boolean {
+  return !item?.builtin && !!item?.source && !!skillRemoveKind(item);
+}
+
+// ── Loaders ──
+
+/**
+ * Fetches both installed skills and MCP config from the server and updates
+ * the app store.
+ *
+ * NOTE: The legacy renderExtensions() DOM call is omitted — callers should
+ * react to store updates via Solid reactivity.
+ */
+export async function loadExtensions(): Promise<void> {
+  try {
+    const [skills, mcp] = await Promise.all([
+      apiJson("skill/installed").catch(() => apiJson("skill")),
+      apiJson("mcp"),
+    ]);
+    setSkills(Array.isArray(skills) ? skills : []);
+    setMcp(mcp && typeof mcp === "object" ? mcp : {});
+  } catch (e) {
+    AppLog.debug("extensions", "loadExtensions failed, resetting to empty", {
+      error: String(e),
+    });
+    setSkills([]);
+    setMcp({});
+  }
+}
+
+/**
+ * Fetches the skill marketplace catalogue from the server and updates the app
+ * store.
+ *
+ * NOTE: The legacy DOM manipulation (showModal, renderSkillMarket) is omitted
+ * — callers should open the marketplace dialog and react to store updates.
+ */
+export async function loadSkillMarket(): Promise<void> {
+  try {
+    const items = await apiJson("skill/market");
+    setSkillMarket(Array.isArray(items) ? items : []);
+  } catch (e) {
+    AppLog.error("ui", "Failed to load skill market", { error: String(e) });
+    setSkillMarket([]);
+  }
+}
+
+// ── Mutations ──
+
+/**
+ * Removes a skill source via the API.
+ * Mirrors removeSkillSource in app.js.
+ */
+export async function removeSkillSource(
+  source: string,
+  kind: string,
+): Promise<void> {
+  await apiJson("skill/remove", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ source, kind }),
+  });
+}
+
+/**
+ * Installs a skill via the API.
+ * Mirrors installSkill in app.js.
+ */
+export async function installSkill(
+  kind: string,
+  value: string,
+  policy?: string,
+): Promise<void> {
+  await apiJson("skill/install", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ kind, value, policy: policy || undefined }),
+  });
+}
+
+/**
+ * Removes a single skill after optional UI confirmation.
+ * NOTE: The native confirm dialog call from app.js is omitted — callers are
+ * responsible for confirming before calling this function.
+ * Mirrors the API call portion of deleteSkill in app.js.
+ */
+export async function deleteSkill(
+  source: string,
+  kind: string,
+): Promise<void> {
+  if (!source || !kind) return;
+  await removeSkillSource(source, kind);
+}
+
+/**
+ * Removes all removable (non-builtin) skills sequentially.
+ * NOTE: The native confirm dialog call from app.js is omitted — callers are
+ * responsible for confirming before calling this function.
+ * Mirrors the API call portion of deleteAllSkills in app.js.
+ */
+export async function deleteAllSkills(): Promise<void> {
+  const skills: SkillDescriptor[] = appStore.skills;
+  const custom = skills.filter((item) => !item.builtin);
+  const list = custom.filter(skillRemovable);
+  if (list.length === 0) return;
+  await list.reduce(
+    (promise, item) =>
+      promise.then(() => removeSkillSource(item.source!, skillRemoveKind(item))),
+    Promise.resolve(),
+  );
+}

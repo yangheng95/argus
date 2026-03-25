@@ -1,17 +1,9 @@
 import { createSignal, For, Show } from "solid-js";
 import { MessageView } from "./MessageView";
+import { agentStageLabel } from "../utils/message";
 
-/** Use legacy agentStageLabel/i18n if available. */
 function stageLabel(stage: string): string {
-  if (typeof (window as any).agentStageLabel === "function") {
-    return (window as any).agentStageLabel(stage);
-  }
-  if (stage === "spec") return "Spec Agent";
-  if (stage === "planner") return "Planner";
-  if (stage === "goal") return "Goal Agent";
-  if (stage === "judge" || stage === "scheduler") return "Evaluator";
-  if (stage === "delivery") return "Delivery";
-  return "Agent";
+  return agentStageLabel(stage);
 }
 
 interface AgentCardProps {

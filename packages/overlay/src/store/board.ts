@@ -1,0 +1,253 @@
+// ── Board Store ──
+// Solid reactive store for board + task list data.
+// Replaces direct reads of app.js state.board / state.tasks.
+
+import { createStore } from "solid-js/store";
+import { apiJson } from "../services/api";
+
+// ── Store ──
+
+export const [boardStore, setBoardStore] = createStore({
+  board: null as any,
+  tasks: [] as any[],
+  selectedTaskID: "" as string,
+  loading: false,
+  // ── Task list internals (mirrors state.pendingTasks / state.tasksSeq) ──
+  /** Tasks that have been created locally but not yet confirmed by the server */
+  pendingTasks: [] as any[],
+  /** Monotonic counter incremented on each tasks-list refresh */
+  tasksSeq: 0,
+  // ── Board sync internals (mirrors state.boardEtag / state.boardQueued / etc.) ──
+  /** ETag of the last board response, used for conditional fetches */
+  boardEtag: "" as string,
+  /** Whether a board reload is currently queued (debounce guard) */
+  boardQueued: false,
+  /** Retry attempt counter for board fetch failures */
+  boardRetryCount: 0,
+  /** Whether an in-flight board sync is pending */
+  boardSyncPending: false,
+  /** Unix-ms timestamp of the last successful board update */
+  boardUpdatedAt: 0,
+  /** Snapshot version string returned by the server with the board payload */
+  snapshotVersion: "" as string,
+  // ── VCS state (mirrors state.path / state.vcs) ──
+  /** Git path info object for the active working directory */
+  path: null as any,
+  /** Git / VCS status object for the active task */
+  vcs: null as any,
+  // ── File changes (mirrors state.changes) ──
+  /** File change entries for the current task's working tree */
+  changes: [] as any[],
+});
+
+// ── Loaders ──
+
+export async function loadBoard(): Promise<void> {
+  setBoardStore("loading", true);
+  try {
+    const data = await apiJson("board");
+    setBoardStore("board", data ?? null);
+  } catch (e) {
+    console.error("loadBoard failed", e);
+  } finally {
+    setBoardStore("loading", false);
+  }
+}
+
+export async function loadTasks(): Promise<void> {
+  try {
+    const data = await apiJson("task");
+    setBoardStore("tasks", Array.isArray(data) ? data : []);
+  } catch (e) {
+    console.error("loadTasks failed", e);
+  }
+}
+
+// ── Direct setters (used by legacy bridge / SSE handlers) ──
+
+export function setBoardData(data: any): void {
+  setBoardStore("board", data ?? null);
+}
+
+export function setTasksData(tasks: any[]): void {
+  setBoardStore("tasks", Array.isArray(tasks) ? tasks : []);
+}
+
+// ── Scheduled board reload ──
+
+let boardLoadTimer: any = null;
+
+/**
+ * Schedule a board reload after an optional delay.
+ * Cancels any previously pending reload before scheduling a new one.
+ * Mirrors app.js scheduleBoard.
+ *
+ * @param delay  Delay in milliseconds before calling loadBoard.  Defaults to 0.
+ */
+export function scheduleBoard(delay = 0): void {
+  if (boardLoadTimer) clearTimeout(boardLoadTimer);
+  boardLoadTimer = setTimeout(() => {
+    boardLoadTimer = null;
+    loadBoard().catch(console.error);
+  }, delay);
+}
+
+// ── Derived accessors ──
+
+/** Returns the root task sessionID (mirrors app.js rootTaskSessionID). */
+export function rootTaskSessionID(): string {
+  const sessionID = boardStore.board?.task?.sessionID;
+  return typeof sessionID === "string" ? sessionID : "";
+}
+
+/** Returns the active working directory from the current board task. */
+export function activeDirectory(): string {
+  return boardStore.board?.task?.directory ?? "";
+}
+
+// ── VCS setters ──
+
+export function setPath(path: any): void {
+  setBoardStore("path", path ?? null);
+}
+
+export function setVcs(vcs: any): void {
+  setBoardStore("vcs", vcs ?? null);
+}
+
+// ── Changes setter ──
+
+export function setChanges(changes: any[]): void {
+  setBoardStore("changes", Array.isArray(changes) ? changes : []);
+}
+
+// ── Board sync state setters ──
+
+export function setBoardEtag(etag: string): void {
+  setBoardStore("boardEtag", typeof etag === "string" ? etag : "");
+}
+
+export function setBoardQueued(queued: boolean): void {
+  setBoardStore("boardQueued", queued);
+}
+
+export function setBoardRetryCount(count: number): void {
+  setBoardStore("boardRetryCount", typeof count === "number" ? count : 0);
+}
+
+export function setBoardSyncPending(pending: boolean): void {
+  setBoardStore("boardSyncPending", pending);
+}
+
+export function setBoardUpdatedAt(ms: number): void {
+  setBoardStore("boardUpdatedAt", typeof ms === "number" ? ms : 0);
+}
+
+export function setSnapshotVersion(version: string): void {
+  setBoardStore("snapshotVersion", typeof version === "string" ? version : "");
+}
+
+// ── Pending tasks setters ──
+
+export function setPendingTasks(tasks: any[]): void {
+  setBoardStore("pendingTasks", Array.isArray(tasks) ? tasks : []);
+}
+
+export function bumpTasksSeq(): void {
+  setBoardStore("tasksSeq", (n) => n + 1);
+}
+
+// ── Criteria DOM helpers ──
+// Exact port of isCriteriaEnabled and setCriteriaResult from app.js
+// (lines 7070–7089).  These operate on DOM elements rendered by the legacy
+// criteria list; they are placed here because they relate to board/task
+// evaluation state.
+
+/**
+ * Read the enabled/checked state of a criteria list item element.
+ * Returns true when the inner checkbox is checked.
+ *
+ * Mirrors app.js isCriteriaEnabled (line 7086).
+ */
+export function isCriteriaEnabled(item: Element | null): boolean {
+  const input = item?.querySelector<HTMLInputElement>('input[type="checkbox"][data-check]');
+  return !!input?.checked;
+}
+
+/**
+ * Update the visual status indicator and result text inside a criteria list
+ * item element.
+ *
+ * Mirrors app.js setCriteriaResult (line 7070).
+ */
+export function setCriteriaResult(item: Element | null, status: string): void {
+  const statusDot = item?.querySelector<HTMLElement>(".criteria-status");
+  const text = item?.querySelector<HTMLElement>(".criteria-result");
+  if (!statusDot || !text) return;
+  statusDot.dataset.result = status;
+  // Delegate the label lookup to the legacy bridge (i18n keys still in app.js).
+  const legacyLabel = (window as any).__legacyCriteriaResultText;
+  text.textContent = typeof legacyLabel === "function" ? legacyLabel(status) : status;
+}
+
+// ── Task list derived utilities ──
+
+/**
+ * Sort a raw tasks payload by updated_at / task.time.updated descending.
+ * Mirrors app.js sortedTasks.
+ */
+export function sortedTasks(data: { tasks?: any[] } | null | undefined): any[] {
+  return [...(Array.isArray(data?.tasks) ? data!.tasks : [])].sort(
+    (a, b) =>
+      (b.updated_at || b.task?.time?.updated || 0) -
+      (a.updated_at || a.task?.time?.updated || 0),
+  );
+}
+
+/**
+ * Returns the last-updated timestamp for a task list item.
+ * Mirrors app.js taskUpdated.
+ */
+export function taskUpdated(item: any): number {
+  return item?.updated_at || item?.task?.time?.updated || item?.task?.time?.created || 0;
+}
+
+/**
+ * Find a task item in boardStore.tasks by task ID.
+ * Mirrors app.js taskByID / taskItem.
+ */
+export function taskByID(taskID: string | null | undefined): any | null {
+  if (!taskID) return null;
+  return boardStore.tasks.find((item: any) => item?.task?.id === taskID) ?? null;
+}
+
+/**
+ * Find a task item by its requestID within a given list (defaults to boardStore.tasks).
+ * Mirrors app.js taskByRequestID.
+ */
+export function taskByRequestID(
+  requestID: string | null | undefined,
+  list: any[] = boardStore.tasks,
+): any | null {
+  if (!requestID || !Array.isArray(list)) return null;
+  return list.find((item: any) => item?.task?.requestID === requestID) ?? null;
+}
+
+/**
+ * Returns the merged visible task list: pending (not yet confirmed) tasks
+ * prepended to the confirmed task list, sorted by last-updated descending.
+ * Mirrors app.js visibleTasks.
+ */
+export function visibleTasks(): any[] {
+  const seen = new Set(
+    boardStore.tasks
+      .map((item: any) => item?.task?.requestID || item?.task?.id)
+      .filter(Boolean),
+  );
+  return [
+    ...boardStore.pendingTasks.filter(
+      (item: any) => !seen.has(item?.requestID || item?.task?.id),
+    ),
+    ...boardStore.tasks,
+  ].sort((a, b) => taskUpdated(b) - taskUpdated(a));
+}

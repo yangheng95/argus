@@ -1414,6 +1414,14 @@ function applyOverlaySettings(settings, options = {}) {
   if (options.resetTemp === true) state.tempDirectory = "";
   if (options.preserveDirectory !== true || !state.directory) state.directory = directory;
   state.directoryMode = directory ? "custom" : "temp";
+  // Sync API configuration to Solid overlay module
+  if (window.__solidOverlay) {
+    window.__solidOverlay.configureApi({
+      serverUrl: state.serverUrl,
+      username: state.username,
+      password: state.password,
+    });
+  }
 }
 
 function bootstrapOverlaySettings(input = state) {
@@ -4822,7 +4830,12 @@ async function selectTask(taskID, options = {}) {
     console.log("[selectTask] skipped (same task with board)");
     return;
   }
-  stopSSE();
+  // Stop SSE — delegate to Solid overlay if available, otherwise legacy
+  if (window.__solidOverlay) {
+    window.__solidOverlay.stopSSE();
+  } else {
+    stopSSE();
+  }
   state.board = null;
   state.boardEtag = "";
   state.snapshotVersion = "";
@@ -4841,6 +4854,9 @@ async function selectTask(taskID, options = {}) {
     setTaskStatus("idle", { visible: false });
     state.messages = [];
     messageIndex.clear();
+    if (window.__solidOverlay) {
+      window.__solidOverlay.clearMessages();
+    }
     renderConversation();
     renderTaskList();
     clearWorkspaceMemory();
@@ -4856,17 +4872,27 @@ async function selectTask(taskID, options = {}) {
   } catch (e) {
     console.error("[selectTask] loadBoard/loadMeta/loadMemory failed:", e);
   }
-  try {
-    await syncTask(nextTaskID);
-  } catch (e) {
-    console.error("[selectTask] syncTask failed:", e);
+
+  // Delegate SSE + transcript sync to Solid overlay; fall back to legacy path
+  if (window.__solidOverlay) {
+    try {
+      await window.__solidOverlay.selectTask(nextTaskID);
+    } catch (e) {
+      console.error("[selectTask] __solidOverlay.selectTask failed:", e);
+    }
+  } else {
+    try {
+      await syncTask(nextTaskID);
+    } catch (e) {
+      console.error("[selectTask] syncTask failed:", e);
+    }
+    startSSE(nextTaskID);
   }
+
   rememberWorkspace({
     taskID: nextTaskID,
   });
   await persistOverlaySettings();
-  // Always start SSE — events drive all subsequent updates
-  startSSE(nextTaskID);
 }
 
 async function deleteTask(taskID) {
@@ -5431,6 +5457,10 @@ function mergeAgentEventList(events = [], raw) {
 function appendAgentEvent(raw) {
   state.agentEvents = mergeAgentEventList(state.agentEvents, raw);
   state.conversationUpdatedAt = Date.now();
+  // Push updated agent events into Solid store
+  if (window.__solidOverlay) {
+    window.__solidOverlay.setAgentEvents(state.agentEvents);
+  }
   renderConversation();
 }
 
@@ -5698,7 +5728,13 @@ function handleSSEEvent(event) {
   // task.replay_expired → full reload
   if (type === "task.replay_expired") {
     AppLog.warn("sse", "replay buffer expired, performing full reload");
-    if (state.selectedTaskID) syncTask(state.selectedTaskID);
+    if (state.selectedTaskID) {
+      syncTask(state.selectedTaskID);
+      // Also reload the Solid store when overlay manages its own messages
+      if (window.__solidOverlay) {
+        window.__solidOverlay.selectTask(state.selectedTaskID);
+      }
+    }
     scheduleTasks(0);
     scheduleBoard(0);
     return;
@@ -5768,7 +5804,11 @@ function stopTimers() {
   if (state.tasksKick) { clearTimeout(state.tasksKick); state.tasksKick = null; }
   state.boardRetryCount = 0;
   state.boardSyncPending = false;
-  stopSSE();
+  if (window.__solidOverlay) {
+    window.__solidOverlay.stopSSE();
+  } else {
+    stopSSE();
+  }
 }
 
 // ── Rendering: Board ──
@@ -8465,6 +8505,12 @@ window.agentStageLabel = agentStageLabel;
 window.renderFilePart = renderFilePart;
 window.rootTaskSessionID = rootTaskSessionID;
 
+// Expose legacy SSE event handler so the Solid SSE service can forward
+// non-message events (board updates, agent events, etc.) back to app.js.
+window.__legacyHandleNonMessageEvent = function (event) {
+  handleSSEEvent(event);
+};
+
 function renderMarkdownBlock(text) {
   const lines = text.split("\n");
   let html = "";
@@ -8749,21 +8795,16 @@ function debouncedRenderConversation() {
 }
 
 function renderConversation() {
-  // ── Phase 1: delegate to Solid conversation bridge ──
-  if (window.__solidConversation) {
+  // ── Phase 2: push data into Solid store via __solidOverlay ──
+  if (window.__solidOverlay) {
     const sorted = conversationMessages();
     dom.chatCount.textContent = sorted.length > 0
       ? tc("chat.count", sorted.length, { count: sorted.length })
       : "";
     syncSectionPhases();
-    window.__solidConversation.update(
-      state.messages || [],
-      state.agentEvents || [],
-      {
-        showTranscriptDetails: state.showTranscriptDetails,
-        agentStatus: state.agentStatus,
-      },
-    );
+    window.__solidOverlay.setAgentEvents(state.agentEvents || []);
+    window.__solidOverlay.setAgentStatus(state.agentStatus);
+    window.__solidOverlay.setShowTranscriptDetails(state.showTranscriptDetails);
     return;
   }
 
