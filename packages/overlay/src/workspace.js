@@ -55,20 +55,16 @@
 
     function clearWorkspaceRuntime(options = {}) {
       state.workspaceEpoch = (state.workspaceEpoch || 0) + 1;
-      deps.stopPolling();
+      deps.stopTimers();
       if (options.preserveChatRequest !== true && typeof deps.stopChatRequest === "function") {
         void deps.stopChatRequest();
       }
       if (state.boardKick) clearTimeout(state.boardKick);
       if (state.tasksKick) clearTimeout(state.tasksKick);
-      if (state.conversationKick) clearTimeout(state.conversationKick);
       state.boardKick = null;
       state.tasksKick = null;
-      state.conversationKick = null;
       state.boardLoading = null;
       state.boardQueued = false;
-      state.conversationLoading = null;
-      state.conversationQueued = false;
       state.tasksSeq = (state.tasksSeq || 0) + 1;
       state.board = null;
       state.boardEtag = "";
@@ -78,7 +74,6 @@
       state.executorEventsFetchedAt = 0;
       state.conversationUpdatedAt = 0;
       state.messages = [];
-      if (options.preserveChatRequest !== true) state.pendingTaskMessages = null;
       renderWorkspaceState();
     }
 

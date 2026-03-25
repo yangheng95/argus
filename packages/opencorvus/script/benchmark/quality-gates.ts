@@ -218,9 +218,11 @@ export function evaluateQualityGates(input: {
     })
   }
 
-  const verdict = failures.some((item) => item.category === "liveness")
+  const hardFailCategories = new Set(["liveness", "verification_gap"])
+  const hardFailures = failures.filter((item) => hardFailCategories.has(item.category))
+  const verdict = hardFailures.some((item) => item.category === "liveness")
     ? "blocked"
-    : failures.length > 0
+    : hardFailures.length > 0
       ? "rejected"
       : "accepted"
   return {

@@ -7,11 +7,8 @@ const DEFAULT_SERVER = (() => {
   }
   return "http://127.0.0.1:7878";
 })();
-const POLL_INTERVAL = 4000;
-const CONVERSATION_POLL = 6000;
-const SSE_BACKSTOP = 15000;
 const BOARD_EVENT_DEBOUNCE = 150;
-const CONVERSATION_EVENT_DEBOUNCE = 150;
+const FLUSH_INTERVAL = 16; // ~60fps event batching (OpenCode pattern)
 const ZOOM_STEP = 0.1;
 const MIN_UI_ZOOM = 0.8;
 const MAX_UI_ZOOM = 1.6;
@@ -134,22 +131,16 @@ const state = {
   boardSyncPending: false,
   boardUpdatedAt: 0,
   snapshotVersion: "",
-  taskSequence: 0,
   reconnectTimer: null,
   tasksSeq: 0,
   tasksKick: null,
   messages: [],
-  pendingTaskMessages: null,
   agentEvents: [],
   executorEvents: [],
   ndjsonEvents: [],
   ndjsonStartMs: 0,
   executorRunID: "",
   executorEventsFetchedAt: 0,
-  conversationLoading: null,
-  conversationQueued: false,
-  conversationKick: null,
-  conversationBootstrapPending: false,
   conversationUpdatedAt: 0,
   changes: [],
   chatRequest: null,
@@ -157,8 +148,6 @@ const state = {
   sse: null,
   sseRetryTimer: null,
   sseConnected: false,
-  pollTimer: null,
-  conversationTimer: null,
   elapsedTimer: null,
   changeKey: "",
   _renderedGroupKey: "",
@@ -174,33 +163,59 @@ const state = {
   budgetSaving: false,
 };
 
-const liveTextStreams = new Map();
-const reasoningVisibility = new Map();
-const reasoningHideTimers = new Map();
-let chatScrollPaused = false;
-const TECH_FX_ENABLED = false;
-const LIVE_TEXT_INTERVAL = 0;
-const LIVE_TEXT_MIN_CHUNK = 9999;
-const LIVE_TEXT_MAX_CHUNK = 9999;
-const DEFAULT_REASONING_AUTO_CLOSE_MS = 5000;
+// ── Message Index (O(1) lookup by message ID) ──
+const messageIndex = new Map(); // messageID → message object reference
 
-function stopLiveText(key) {
-  const entry = liveTextStreams.get(key);
-  if (!entry) return;
-  if (entry.timer) clearTimeout(entry.timer);
-  liveTextStreams.delete(key);
-}
-
-function clearLiveTextStreams() {
-  for (const key of [...liveTextStreams.keys()]) {
-    stopLiveText(key);
+function rebuildMessageIndex() {
+  messageIndex.clear();
+  for (const msg of state.messages) {
+    if (msg?.info?.id) messageIndex.set(msg.info.id, msg);
   }
 }
 
-function messageLiveTextKey(part, field = "text") {
-  if (!record(part)) return "";
-  return `message:${part.sessionID || ""}:${part.messageID || ""}:${part.id}:${field}`;
+function messageById(id) {
+  return messageIndex.get(id) || null;
 }
+
+// ── 16ms Event Batching (OpenCode pattern) ──
+let eventQueue = [];
+let flushTimer = null;
+let lastFlushTime = 0;
+
+function flushEvents() {
+  if (eventQueue.length === 0) return;
+  const batch = eventQueue;
+  eventQueue = [];
+  flushTimer = null;
+  lastFlushTime = Date.now();
+  let needsRender = false;
+  for (const event of batch) {
+    const applied = applyMessageEvent(event);
+    if (!applied) console.warn("[flush:dropped]", event.type, JSON.stringify(event).slice(0, 200));
+    if (applied) needsRender = true;
+  }
+  if (needsRender) {
+    console.log("[flush:render]", batch.length, "events, messages:", state.messages.length);
+    state.conversationUpdatedAt = Date.now();
+    renderConversation();
+  }
+}
+
+function enqueueEvent(event) {
+  eventQueue.push(event);
+  if (flushTimer) return;
+  if (Date.now() - lastFlushTime < FLUSH_INTERVAL) {
+    flushTimer = setTimeout(flushEvents, FLUSH_INTERVAL);
+    return;
+  }
+  flushEvents();
+}
+
+// ── Reasoning Visibility (kept — UI-only concern, not part of message data layer) ──
+const reasoningVisibility = new Map();
+const reasoningHideTimers = new Map();
+let chatScrollPaused = false;
+const DEFAULT_REASONING_AUTO_CLOSE_MS = 5000;
 
 function stopReasoningHideTimer(key) {
   const timer = reasoningHideTimers.get(key);
@@ -254,131 +269,6 @@ function touchReasoningPart(part) {
     state.conversationUpdatedAt = Date.now();
     renderConversation();
   }
-}
-
-function liveTextChunk(target, current = "") {
-  const remaining = Math.max(0, target.length - current.length);
-  if (!remaining) return 0;
-  return Math.min(
-    remaining,
-    Math.max(LIVE_TEXT_MIN_CHUNK, Math.min(LIVE_TEXT_MAX_CHUNK, Math.ceil(target.length / 12))),
-  );
-}
-
-function advanceLiveText(key) {
-  const entry = liveTextStreams.get(key);
-  if (!entry) return;
-  entry.timer = null;
-  if (!entry.target) {
-    entry.apply("");
-    liveTextStreams.delete(key);
-    return;
-  }
-  if (!entry.target.startsWith(entry.current)) {
-    entry.current = "";
-  }
-  const next = entry.target.slice(0, entry.current.length + liveTextChunk(entry.target, entry.current));
-  entry.current = next;
-  entry.apply(next);
-  state.conversationUpdatedAt = Date.now();
-  renderConversation();
-  if (entry.current.length >= entry.target.length) {
-    liveTextStreams.delete(key);
-    return;
-  }
-  entry.timer = setTimeout(() => advanceLiveText(key), LIVE_TEXT_INTERVAL);
-}
-
-function startLiveText(key, target, current, apply) {
-  const nextTarget = typeof target === "string" ? target : "";
-  const nextCurrent =
-    typeof current === "string" && nextTarget.startsWith(current)
-      ? current
-      : "";
-  if (!nextTarget) {
-    stopLiveText(key);
-    apply("");
-    return;
-  }
-  const entry = liveTextStreams.get(key);
-  if (!entry) {
-    const created = {
-      current: nextCurrent,
-      target: nextTarget,
-      apply,
-      timer: null,
-    };
-    liveTextStreams.set(key, created);
-    if (!created.current) {
-      created.current = nextTarget.slice(0, liveTextChunk(nextTarget));
-      created.apply(created.current);
-    }
-    if (created.current.length < created.target.length) {
-      created.timer = setTimeout(() => advanceLiveText(key), LIVE_TEXT_INTERVAL);
-    } else {
-      liveTextStreams.delete(key);
-    }
-    return;
-  }
-  if (entry.timer) clearTimeout(entry.timer);
-  entry.target = nextTarget;
-  entry.apply = apply;
-  entry.current = nextTarget.startsWith(entry.current) ? entry.current : nextCurrent;
-  if (!entry.current) {
-    entry.current = nextTarget.slice(0, liveTextChunk(nextTarget));
-    entry.apply(entry.current);
-  }
-  if (entry.current.length < entry.target.length) {
-    entry.timer = setTimeout(() => advanceLiveText(key), LIVE_TEXT_INTERVAL);
-    return;
-  }
-  entry.apply(entry.target);
-  liveTextStreams.delete(key);
-}
-
-function streamMessagePart(part, target, field = "text", current = "") {
-  if (!record(part)) return;
-  const nextTarget = typeof target === "string" ? target : "";
-  if (field === "text") part._targetText = nextTarget;
-  if (field === "output") part._targetOutput = nextTarget;
-  const key = messageLiveTextKey(part, field);
-  startLiveText(key, nextTarget, current, (value) => {
-    if (field === "text") part.text = value;
-    if (field === "output" && record(part.state)) part.state.output = value;
-  });
-}
-
-function hydrateLivePart(existing, part) {
-  if (!record(part)) return part;
-  if ((part.type === "text" || part.type === "reasoning") && typeof part.text === "string") {
-    const current = existing?.type === part.type && typeof existing.text === "string" ? existing.text : "";
-    const next = {
-      ...part,
-      text: part.text.startsWith(current) ? current : "",
-    };
-    streamMessagePart(next, part.text, "text", next.text);
-    if (part.type === "reasoning" && part.text.trim()) touchReasoningPart(next);
-    return next;
-  }
-  if (part.type === "tool" && record(part.state) && typeof part.state.output === "string" && part.state.output) {
-    const previous =
-      existing?.type === "tool" &&
-      record(existing.state) &&
-      typeof existing.state.output === "string"
-        ? existing.state.output
-        : "";
-    const stateCopy = {
-      ...part.state,
-      output: part.state.output.startsWith(previous) ? previous : "",
-    };
-    const next = {
-      ...part,
-      state: stateCopy,
-    };
-    streamMessagePart(next, part.state.output, "output", stateCopy.output);
-    return next;
-  }
-  return part;
 }
 
 function ensureMessageReasoningPart(message, id) {
@@ -632,7 +522,7 @@ const workspace = window.createOverlayWorkspace?.({
   state,
   dom,
   document,
-  stopPolling,
+  stopTimers,
   stopChatRequest,
   renderChatComposer,
   renderMeta,
@@ -1232,7 +1122,7 @@ function techFxStep(ts) {
 
 function syncTechFx(force = false) {
   if (!(dom.techAtlasCanvas instanceof HTMLCanvasElement)) return;
-  if (!TECH_FX_ENABLED) {
+  if (true) { // tech FX permanently disabled
     clearTechFxCanvas();
     return;
   }
@@ -2205,158 +2095,26 @@ function panelResultNavigates(result) {
   return false;
 }
 
-function cloneMessages(list) {
-  if (!Array.isArray(list) || list.length === 0) return [];
-  if (typeof structuredClone === "function") return structuredClone(list);
-  return JSON.parse(JSON.stringify(list));
-}
-
-function mergeSnapshotFieldTarget(existing, field, snapshotValue) {
-  const snapshotText = displayString(snapshotValue);
-  const currentText =
-    field === "output"
-      ? displayString(existing?._targetOutput || existing?.state?.output)
-      : displayString(existing?._targetText || existing?.text);
-  if (!snapshotText) return currentText;
-  if (!currentText) return snapshotText;
-  if (snapshotText === currentText) return snapshotText;
-  if (snapshotText.startsWith(currentText)) return snapshotText;
-  if (currentText.startsWith(snapshotText)) return currentText;
-  const key = messageLiveTextKey(existing, field);
-  return key && liveTextStreams.has(key) ? currentText : snapshotText;
-}
-
-function shouldPreserveSnapshotLiveText(existing, field) {
-  if (!record(existing)) return false;
-  const key = messageLiveTextKey(existing, field);
-  if (key && liveTextStreams.has(key)) return true;
-  if (field === "output") {
-    return typeof existing?._targetOutput === "string" && !!existing._targetOutput;
+// ── syncTask: one-time full load (OpenCode pattern) ──
+async function syncTask(taskID) {
+  console.log("[syncTask]", taskID, "caller:", new Error().stack?.split("\n")[2]?.trim());
+  if (!taskID) {
+    state.messages = [];
+    messageIndex.clear();
+    renderConversation();
+    return;
   }
-  return typeof existing?._targetText === "string" && !!existing._targetText;
-}
-
-function mergeSnapshotPart(existing, part) {
-  if (!record(part)) return part;
-  if ((part.type === "text" || part.type === "reasoning") && typeof part.text === "string") {
-    const nextPart = {
-      ...part,
-      text: mergeSnapshotFieldTarget(existing, "text", part.text),
-    };
-    if (!shouldPreserveSnapshotLiveText(existing, "text")) {
-      const merged = {
-        ...(record(existing) ? existing : {}),
-        ...nextPart,
-      };
-      delete merged._targetText;
-      return merged;
-    }
-    return hydrateLivePart(existing, nextPart);
+  try {
+    const data = await apiJson(`task/${encodeURIComponent(taskID)}/transcript`);
+    const messages = Array.isArray(data) ? data : [];
+    console.log("[syncTask] loaded", messages.length, "messages from transcript");
+    state.messages = sortMessages(messages);
+    rebuildMessageIndex();
+    state.conversationUpdatedAt = Date.now();
+    renderConversation();
+  } catch (e) {
+    AppLog.error("ui", "syncTask failed", { error: String(e), taskID });
   }
-  if (part.type === "tool" && record(part.state) && typeof part.state.output === "string") {
-    const nextPart = {
-      ...part,
-      state: {
-        ...part.state,
-        output: mergeSnapshotFieldTarget(existing, "output", part.state.output),
-      },
-    };
-    if (!shouldPreserveSnapshotLiveText(existing, "output")) {
-      const merged = {
-        ...(record(existing) ? existing : {}),
-        ...nextPart,
-      };
-      delete merged._targetOutput;
-      return merged;
-    }
-    return hydrateLivePart(existing, nextPart);
-  }
-  return {
-    ...(record(existing) ? existing : {}),
-    ...part,
-  };
-}
-
-function mergeSnapshotParts(existingParts, snapshotParts) {
-  const current = Array.isArray(existingParts) ? existingParts : [];
-  const next = Array.isArray(snapshotParts) ? snapshotParts : [];
-  const currentByID = new Map(
-    current
-      .filter((part) => typeof part?.id === "string" && part.id)
-      .map((part) => [part.id, part]),
-  );
-  const snapshotIDs = new Set(
-    next
-      .map((part) => (typeof part?.id === "string" ? part.id : ""))
-      .filter(Boolean),
-  );
-  const merged = next.map((part) => mergeSnapshotPart(currentByID.get(part?.id), part));
-  for (const part of current) {
-    const id = typeof part?.id === "string" ? part.id : "";
-    if (id && snapshotIDs.has(id)) continue;
-    if (next.length > 0 && isPendingPlaceholderPart(part)) continue;
-    merged.push(part);
-  }
-  return merged;
-}
-
-function mergeSnapshotMessage(existing, message) {
-  const merged = {
-    ...(record(existing) ? existing : {}),
-    ...message,
-    info: {
-      ...(record(existing?.info) ? existing.info : {}),
-      ...(record(message?.info) ? message.info : {}),
-    },
-  };
-  merged.parts = mergeSnapshotParts(existing?.parts, message?.parts);
-  return merged;
-}
-
-function pruneConversationLiveText(messages = []) {
-  const keep = new Set();
-  for (const message of Array.isArray(messages) ? messages : []) {
-    for (const part of Array.isArray(message?.parts) ? message.parts : []) {
-      const textKey = messageLiveTextKey(part, "text");
-      const outputKey = messageLiveTextKey(part, "output");
-      if (textKey && typeof part?._targetText === "string" && part._targetText) keep.add(textKey);
-      if (outputKey && typeof part?._targetOutput === "string" && part._targetOutput) keep.add(outputKey);
-    }
-  }
-  for (const key of [...liveTextStreams.keys()]) {
-    if (!key.startsWith("message:")) continue;
-    if (keep.has(key)) continue;
-    stopLiveText(key);
-  }
-}
-
-function mergeConversationSnapshot(snapshotMessages = []) {
-  const current = Array.isArray(state.messages) ? state.messages : [];
-  const snapshot = Array.isArray(snapshotMessages) ? snapshotMessages : [];
-  const currentByID = new Map(
-    current
-      .filter((message) => typeof message?.info?.id === "string" && message.info.id)
-      .map((message) => [message.info.id, message]),
-  );
-  const snapshotIDs = new Set(
-    snapshot
-      .map((message) => (typeof message?.info?.id === "string" ? message.info.id : ""))
-      .filter(Boolean),
-  );
-  const merged = snapshot.map((message) => mergeSnapshotMessage(currentByID.get(message?.info?.id), message));
-  for (const message of current) {
-    const id = typeof message?.info?.id === "string" ? message.info.id : "";
-    if (id && snapshotIDs.has(id)) continue;
-    merged.push(message);
-  }
-  const next = sortMessages(mergeMessages(merged));
-  pruneConversationLiveText(next);
-  return next;
-}
-
-function stashPendingTaskMessages() {
-  const next = cloneMessages(state.messages);
-  state.pendingTaskMessages = next.length ? next : null;
 }
 
 function optimisticTask(taskID, result) {
@@ -2423,7 +2181,6 @@ function startTaskRecovery(request) {
         state.tasks = tasks;
         renderTaskList();
         if (state.selectedTaskID !== taskID) {
-          stashPendingTaskMessages();
           scheduleTasks(300);
           await selectTask(taskID, { preserveChatRequest: true });
         }
@@ -2460,7 +2217,6 @@ async function applyPanelResult(result) {
     return;
   }
   if (result?.task_id && state.selectedTaskID !== result.task_id) {
-    stashPendingTaskMessages();
     await loadTasks();
     ensureTaskVisible(result.task_id, result);
     scheduleTasks(300);
@@ -2469,7 +2225,7 @@ async function applyPanelResult(result) {
   }
   if (state.selectedTaskID) {
     await loadBoard({ sync: true });
-    await loadConversation();
+    await syncTask(state.selectedTaskID);
     void loadMemory();
   } else {
     await loadTasks();
@@ -2504,7 +2260,7 @@ async function panelMessageStream(text, metadata, signal, workspaceEpoch = state
   // Replace "……" thinking placeholder with a live indicator
   const placeholder = state.messages.find((m) => m.info?.role === "assistant" && m.parts?.[0]?.text === "……");
   if (state.workspaceEpoch === workspaceEpoch) {
-    if (placeholder) streamMessagePart(placeholder.parts[0], "...", "text", placeholder.parts[0].text || "");
+    if (placeholder) placeholder.parts[0].text = "...";
     renderConversation();
   }
 
@@ -2534,31 +2290,31 @@ async function panelMessageStream(text, metadata, signal, workspaceEpoch = state
         const ev = JSON.parse(data);
         if (state.workspaceEpoch !== workspaceEpoch) continue;
         if (ev.type === "tool" && placeholder && !streamed) {
-          streamMessagePart(placeholder.parts[0], t("chat.thinking"), "text", placeholder.parts[0].text || "");
+          placeholder.parts[0].text = t("chat.thinking");
           renderConversation();
         } else if (ev.type === "reasoning_delta" && placeholder && typeof ev.delta === "string") {
           reasoning += ev.delta;
           const part = ensureMessageReasoningPart(placeholder, `panel-reasoning:${requestID}`);
           if (!part) continue;
-          streamMessagePart(part, reasoning, "text", part.text || "");
+          part.text = reasoning;
           if (reasoning.trim()) touchReasoningPart(part);
           renderConversation();
         } else if (ev.type === "reasoning_replace" && placeholder && typeof ev.text === "string") {
           reasoning = ev.text;
           const part = ensureMessageReasoningPart(placeholder, `panel-reasoning:${requestID}`);
           if (!part) continue;
-          streamMessagePart(part, reasoning, "text", part.text || "");
+          part.text = reasoning;
           if (reasoning.trim()) touchReasoningPart(part);
           renderConversation();
         } else if (ev.type === "message_delta" && placeholder && typeof ev.delta === "string") {
           streamed = true;
           live += ev.delta;
-          streamMessagePart(placeholder.parts[0], live, "text", placeholder.parts[0].text || "");
+          placeholder.parts[0].text = live;
           renderConversation();
         } else if (ev.type === "message_replace" && placeholder && typeof ev.text === "string") {
           streamed = true;
           live = ev.text;
-          streamMessagePart(placeholder.parts[0], live, "text", placeholder.parts[0].text || "");
+          placeholder.parts[0].text = live;
           renderConversation();
         } else if (ev.type === "done") {
           result = ev.result;
@@ -2593,10 +2349,10 @@ async function panelMessageStream(text, metadata, signal, workspaceEpoch = state
   if (panelResultNavigates(result)) {
     const finalText1 = result.message || live;
     if (placeholder && finalText1) {
-      streamMessagePart(placeholder.parts[0], finalText1, "text", placeholder.parts[0].text || "");
+      placeholder.parts[0].text = finalText1;
       renderConversation();
     } else if (placeholder && ["……", "...", t("chat.thinking")].includes(placeholder.parts[0]?.text)) {
-      streamMessagePart(placeholder.parts[0], t("chat.task_navigated"), "text", placeholder.parts[0].text || "");
+      placeholder.parts[0].text = t("chat.task_navigated");
       renderConversation();
     }
     if (result && typeof result === "object") result._request = text;
@@ -2607,7 +2363,7 @@ async function panelMessageStream(text, metadata, signal, workspaceEpoch = state
   // Finalize the streamed placeholder, then apply side-effects
   const finalText = result.message || live;
   if (placeholder && finalText) {
-    streamMessagePart(placeholder.parts[0], finalText, "text", placeholder.parts[0].text || "");
+    placeholder.parts[0].text = finalText;
     renderConversation();
   } else if (placeholder && ["……", "...", t("chat.thinking")].includes(placeholder.parts[0]?.text)) {
     placeholder.parts[0].text = "";
@@ -3736,7 +3492,7 @@ function queueLlmSync(delay = 220) {
   }, delay);
 }
 
-function populateProviderSelect(config, catalog, syncSaved = true) {
+function populateProviderSelect(config, catalog, syncSaved = false) {
   const providers = Array.isArray(catalog?.all) ? [...catalog.all] : [];
   providers.sort((a, b) => {
     const aConnected = catalog?.connected?.includes(a.id) ? 0 : 1;
@@ -3756,7 +3512,7 @@ function populateProviderSelect(config, catalog, syncSaved = true) {
   populateModelSelect(config, catalog, syncSaved);
 }
 
-function populateModelSelect(config, catalog, syncSaved = true) {
+function populateModelSelect(config, catalog, syncSaved = false) {
   const providerID = dom.llmProvider.value;
   const providers = Array.isArray(catalog?.all) ? catalog.all : [];
   const provider = providers.find((item) => item.id === providerID);
@@ -5057,14 +4813,13 @@ async function selectTask(taskID, options = {}) {
     console.log("[selectTask] skipped (same task with board)");
     return;
   }
+  stopSSE();
   state.board = null;
   state.boardEtag = "";
   state.snapshotVersion = "";
-  state.taskSequence = 0;
   state.agentEvents = [];
   state.ndjsonEvents = [];
   state.ndjsonStartMs = Date.now();
-  state.conversationBootstrapPending = !!nextTaskID;
   state._knownChildSessions = new Set();
   if (nextTaskID) {
     enterTaskWorkspace(nextTaskID, options);
@@ -5076,8 +4831,7 @@ async function selectTask(taskID, options = {}) {
   if (!nextTaskID) {
     setTaskStatus("idle", { visible: false });
     state.messages = [];
-    state.pendingTaskMessages = null;
-    pruneConversationLiveText([]);
+    messageIndex.clear();
     renderConversation();
     renderTaskList();
     clearWorkspaceMemory();
@@ -5088,32 +4842,22 @@ async function selectTask(taskID, options = {}) {
     return;
   }
 
-    if (Array.isArray(state.pendingTaskMessages) && state.pendingTaskMessages.length > 0) {
-      state.messages = cloneMessages(state.pendingTaskMessages);
-      renderConversation();
-    }
-
   try {
     await Promise.all([loadBoard({ sync: true }), loadMeta(), loadMemory()]);
   } catch (e) {
     console.error("[selectTask] loadBoard/loadMeta/loadMemory failed:", e);
   }
   try {
-    await loadConversation();
+    await syncTask(nextTaskID);
   } catch (e) {
-    console.error("[selectTask] loadConversation failed:", e);
+    console.error("[selectTask] syncTask failed:", e);
   }
   rememberWorkspace({
     taskID: nextTaskID,
   });
   await persistOverlaySettings();
-  startPolling();
-
-  // Start SSE for running tasks
-  const status = state.board?.task?.status;
-  if (["running", "planning", "evaluating", "delivering", "blocked", "queued"].includes(status)) {
-    startSSE(nextTaskID);
-  }
+  // Always start SSE — events drive all subsequent updates
+  startSSE(nextTaskID);
 }
 
 async function deleteTask(taskID) {
@@ -5210,18 +4954,8 @@ async function loadBoard(options = {}) {
       const etag = res.headers.get("etag");
       if (etag) state.boardEtag = etag;
       const next = await res.json();
-      const nextSequence = boardSequence(next);
-      if (nextSequence > 0 && nextSequence < state.taskSequence) {
-        AppLog.warn("board", "discarding stale board snapshot", {
-          taskID,
-          sequence: nextSequence,
-          expected: state.taskSequence,
-        });
-        return;
-      }
       state.board = next;
       state.snapshotVersion = boardSnapshot(next);
-      state.taskSequence = Math.max(state.taskSequence, nextSequence);
       clearBoardRetry();
       state.boardUpdatedAt = Date.now();
       renderMeta();
@@ -5248,14 +4982,6 @@ async function loadBoard(options = {}) {
 
 // ── Control Conversation ──
 
-function scheduleConversation(delay = 0) {
-  if (state.conversationKick) clearTimeout(state.conversationKick);
-  state.conversationKick = setTimeout(() => {
-    state.conversationKick = null;
-    loadConversation();
-  }, delay);
-}
-
 function scheduleTasks(delay = 0) {
   if (state.tasksKick) clearTimeout(state.tasksKick);
   state.tasksKick = setTimeout(() => {
@@ -5275,86 +5001,81 @@ function sortMessages(list) {
     .map((item) => item.item);
 }
 
-async function loadConversationSource(path) {
-  try {
-    const data = await apiJson(path);
-    return Array.isArray(data) ? data : [];
-  } catch (e) {
-    AppLog.debug("conversation", "load source failed", { error: String(e), path });
-    return [];
-  }
-}
+// ── applyMessageEvent: incremental SSE event → direct store mutation (OpenCode pattern) ──
+function applyMessageEvent(event) {
+  const type = event.type || "";
+  const properties = record(event?.properties) ? event.properties : record(event?.payload) ? event.payload : {};
 
-function conversationChanged(prev, next) {
-  if (!Array.isArray(prev) || !Array.isArray(next)) return true;
-  if (prev.length !== next.length) return true;
-  for (let i = 0; i < prev.length; i++) {
-    if (prev[i]?.info?.id !== next[i]?.info?.id) return true;
-    const pp = prev[i]?.parts || [];
-    const np = next[i]?.parts || [];
-    if (pp.length !== np.length) return true;
-  }
-  return false;
-}
-
-async function loadConversation() {
-  const target = conversationTarget();
-  const targetKey = conversationTargetKey(target);
-  if (state.conversationLoading) {
-    state.conversationQueued = true;
-    return state.conversationLoading;
-  }
-  state.conversationLoading = (async () => {
-    try {
-      if (target.taskID) {
-        const [transcript, timeline] = await Promise.all([
-          loadConversationSource(`task/${encodeURIComponent(target.taskID)}/transcript`),
-          loadConversationSource(`control/timeline?taskID=${encodeURIComponent(target.taskID)}`),
-        ]);
-        if (targetKey !== conversationTargetKey(conversationTarget())) return;
-        const next = sortMessages(mergeMessages(timeline, transcript));
-        let merged;
-        if (next.length > 0) {
-          state.pendingTaskMessages = null;
-          merged = mergeConversationSnapshot(next);
-        } else if (Array.isArray(state.pendingTaskMessages) && state.pendingTaskMessages.length > 0) {
-          merged = cloneMessages(state.pendingTaskMessages);
-        } else {
-          merged = mergeConversationSnapshot([]);
-        }
-        state.conversationBootstrapPending = false;
-        state.conversationUpdatedAt = Date.now();
-        if (conversationChanged(state.messages, merged)) {
-          state.messages = merged;
-          renderConversation();
-        }
-        return;
-      }
-      if (targetKey !== conversationTargetKey(conversationTarget())) return;
-      state.messages = [];
-      pruneConversationLiveText([]);
-      state.conversationBootstrapPending = false;
-      state.conversationUpdatedAt = Date.now();
-      renderConversation();
-    } catch (e) {
-      AppLog.error("ui", "Failed to load conversation", { error: String(e) });
-      if (targetKey !== conversationTargetKey(conversationTarget())) return;
-      if (!target.taskID) {
-        state.messages = [];
-        pruneConversationLiveText([]);
-        state.conversationUpdatedAt = Date.now();
-        renderConversation();
-      }
-      return;
-    } finally {
-      state.conversationLoading = null;
-      if (state.conversationQueued) {
-        state.conversationQueued = false;
-        queueMicrotask(() => loadConversation());
-      }
+  if (type === "message.updated") {
+    const info = record(properties.info) ? properties.info : null;
+    if (!info || !matchesCurrentSession(info.sessionID)) return false;
+    const existing = messageById(info.id);
+    if (existing) {
+      existing.info = info;
+      return true;
     }
-  })();
-  return state.conversationLoading;
+    // New message — insert into store
+    const msg = { info, parts: [] };
+    state.messages.push(msg);
+    messageIndex.set(info.id, msg);
+    return true;
+  }
+
+  if (type === "message.part.updated") {
+    const part = record(properties.part) ? properties.part : null;
+    if (!part || !matchesCurrentSession(part.sessionID)) return false;
+    let message = messageById(part.messageID);
+    if (!message) {
+      message = { info: { id: part.messageID, sessionID: part.sessionID, role: "assistant" }, parts: [] };
+      state.messages.push(message);
+      messageIndex.set(part.messageID, message);
+    }
+    const index = message.parts.findIndex((p) => p.id === part.id);
+    if (index >= 0) {
+      message.parts[index] = part;
+    } else if (message.parts.length === 1 && isPendingPlaceholderPart(message.parts[0])) {
+      message.parts = [part];
+    } else {
+      message.parts.push(part);
+    }
+    if (part.type === "reasoning" && part.text?.trim()) touchReasoningPart(part);
+    return true;
+  }
+
+  if (type === "message.part.delta") {
+    if (!matchesCurrentSession(properties.sessionID) || typeof properties.delta !== "string") return false;
+    if (properties.field !== "text" && properties.field !== "raw") return false;
+
+    const message = messageById(properties.messageID);
+
+    if (properties.field === "raw") {
+      if (!message) return false;
+      const part = message.parts.find((p) => p.id === properties.partID && p.type === "tool");
+      if (!part || !record(part.state)) return false;
+      part.state.raw = (typeof part.state.raw === "string" ? part.state.raw : "") + properties.delta;
+      return true;
+    }
+
+    // text delta
+    if (!message) {
+      const msg = { info: { id: properties.messageID, sessionID: properties.sessionID, role: "assistant" }, parts: [] };
+      state.messages.push(msg);
+      messageIndex.set(properties.messageID, msg);
+    }
+    const msg = messageById(properties.messageID);
+    let part = msg.parts.find((p) =>
+      p.id === properties.partID && (p.type === "text" || p.type === "reasoning"),
+    );
+    if (!part) {
+      part = { id: properties.partID, type: "text", text: "", sessionID: properties.sessionID, messageID: properties.messageID };
+      msg.parts.push(part);
+    }
+    if (part.type === "reasoning") touchReasoningPart(part);
+    part.text = (part.text || "") + properties.delta;
+    return true;
+  }
+
+  return false;
 }
 
 function currentSessionID() {
@@ -5368,30 +5089,16 @@ function rootTaskSessionID() {
 
 function matchesCurrentSession(sessionID) {
   if (!sessionID) return false;
+  // SSE stream is task-scoped (backend filters by taskID). Any sessionID that arrives
+  // belongs to this task — accept and remember it. No need to gate on board sessionID.
+  if (!state.selectedTaskID) return false;
   const current = currentSessionID();
-  if (!current) {
-    const initialHydration =
-      state.conversationBootstrapPending ||
-      (!state.board && (!Array.isArray(state.messages) || state.messages.length === 0));
-    if (state.selectedTaskID && initialHydration) scheduleConversation(0);
-    return false;
-  }
-  if (current === sessionID) return true;
-  // Check previously-discovered child sessions first (fast O(1) lookup)
+  if (current && current === sessionID) return true;
   if (state._knownChildSessions && state._knownChildSessions.has(sessionID)) return true;
-  // Also accept sessions that appear in already-loaded messages (e.g., goal run child sessions).
-  // The task SSE is already task-scoped, so any session in state.messages is task-related.
-  if (state.messages.some((msg) => msg.info?.sessionID === sessionID)) return true;
-  // The SSE stream is task-scoped (backend matchesTaskEvent filters by taskID + goalRunSessionRegistry).
-  // Any sessionID that arrives via SSE belongs to this task — accept it immediately and
-  // remember it so subsequent events match without a transcript reload.
-  if (state.selectedTaskID) {
-    // Track this child session so future lookups don't need to re-discover it
-    if (!state._knownChildSessions) state._knownChildSessions = new Set();
-    state._knownChildSessions.add(sessionID);
-    return true;
-  }
-  return false;
+  // Remember this session for fast O(1) lookups on subsequent events
+  if (!state._knownChildSessions) state._knownChildSessions = new Set();
+  state._knownChildSessions.add(sessionID);
+  return true;
 }
 
 function conversationTarget() {
@@ -5454,24 +5161,19 @@ function diffStatus(item) {
 
 // ── SSE Events ──
 
-function startSSE(taskID, retryCount = 0) {
+function startSSE(taskID) {
   stopSSE();
   const controller = new AbortController();
   state.sse = controller;
   state.sseConnected = false;
-  const MAX_SSE_RETRIES = 60;
-  const after = Math.max(0, Number(state.taskSequence) || 0);
 
   (async () => {
     try {
-      const path = after > 0
-        ? `task/${taskID}/events?after=${after}`
-        : `task/${taskID}/events`;
-      const res = await fetch(apiUrl(path), {
+      const res = await fetch(apiUrl(`task/${taskID}/events`), {
         headers: apiHeaders(),
         signal: controller.signal,
       });
-      if (!res.ok || !res.body) return;
+      if (!res.ok || !res.body) throw new Error(`SSE ${res.status}`);
       state.sseConnected = true;
       AppLog.info("sse", "connected", { taskID });
       const reader = res.body.getReader();
@@ -5485,37 +5187,30 @@ function startSSE(taskID, retryCount = 0) {
         const lines = buffer.split("\n");
         buffer = lines.pop() || "";
         for (const line of lines) {
-          if (line.startsWith("data:")) {
-            try {
-              const event = JSON.parse(line.slice(5).trim());
-              handleSSEEvent(event);
-            } catch (e) { AppLog.debug("sse", "malformed event: " + line, { error: String(e) }); }
-          }
+          if (!line.startsWith("data:")) continue;
+          try {
+            const event = JSON.parse(line.slice(5).trim());
+            if (event.type === "task.heartbeat" || event.type === "task.connected") continue;
+            console.log("[SSE:raw]", event.type, event.type.startsWith("message.") ? JSON.stringify(event).slice(0, 200) : "");
+            handleSSEEvent(event);
+          } catch (e) { AppLog.debug("sse", "malformed event: " + line, { error: String(e) }); }
         }
       }
-      // Stream ended normally — reconnect with reset backoff
-      state.sseConnected = false;
-      const delay = 3000;
-      AppLog.info("sse", `stream ended, reconnecting in ${delay}ms`, { taskID });
-      if (state.sseRetryTimer) clearTimeout(state.sseRetryTimer);
-      state.sseRetryTimer = setTimeout(() => {
-        state.sseRetryTimer = null;
-        if (state.selectedTaskID === taskID) startSSE(taskID, 0);
-      }, delay);
     } catch (e) {
-      state.sseConnected = false;
       if (e.name === "AbortError") return;
-      if (retryCount >= MAX_SSE_RETRIES) {
-        AppLog.error("sse", "max retries reached, giving up", { taskID, retryCount });
-        return;
-      }
-      const delay = Math.min(5000 * Math.pow(1.5, retryCount), 60000);
-      AppLog.warn("sse", `disconnected, retrying in ${Math.round(delay)}ms (attempt ${retryCount + 1})`, { taskID, error: String(e) });
+      AppLog.warn("sse", "disconnected", { taskID, error: String(e) });
+    }
+    // Disconnected — full reload + reconnect after 3s
+    state.sseConnected = false;
+    if (state.selectedTaskID === taskID) {
       if (state.sseRetryTimer) clearTimeout(state.sseRetryTimer);
-      state.sseRetryTimer = setTimeout(() => {
+      state.sseRetryTimer = setTimeout(async () => {
         state.sseRetryTimer = null;
-        if (state.selectedTaskID === taskID) startSSE(taskID, retryCount + 1);
-      }, delay);
+        if (state.selectedTaskID !== taskID) return;
+        await syncTask(taskID);
+        await loadBoard();
+        startSSE(taskID);
+      }, 3000);
     }
   })();
 }
@@ -5530,63 +5225,16 @@ function stopSSE() {
     state.sse = null;
   }
   state.sseConnected = false;
-}
-
-function boardSequence(board) {
-  const value = Number(board?.lastSequence);
-  return Number.isFinite(value) && value > 0 ? value : 0;
+  // Flush any pending batched events
+  if (flushTimer) {
+    clearTimeout(flushTimer);
+    flushTimer = null;
+  }
+  eventQueue = [];
 }
 
 function boardSnapshot(board) {
   return typeof board?.snapshotVersion === "string" ? board.snapshotVersion : "";
-}
-
-function eventSequence(event) {
-  const value = Number(event?.sequence);
-  return Number.isFinite(value) && value > 0 ? value : 0;
-}
-
-function acceptEventSequence(event) {
-  const sequence = eventSequence(event);
-  if (!sequence) return "ok";
-  if (sequence <= state.taskSequence) return "duplicate";
-  const gap = state.taskSequence > 0 && sequence > state.taskSequence + 1;
-  if (gap) {
-    AppLog.warn("sse", "task event sequence gap detected", {
-      taskID: state.selectedTaskID,
-      expected: state.taskSequence + 1,
-      actual: sequence,
-    });
-    return "gap";
-  }
-  state.taskSequence = sequence;
-  return "ok";
-}
-
-function repairEventGap(gap) {
-  if (!gap) return;
-  scheduleTasks(0);
-  scheduleBoard(0);
-  if (state.selectedTaskID) queueMicrotask(() => startSSE(state.selectedTaskID));
-}
-
-function eventData(event) {
-  if (record(event?.properties)) return event.properties;
-  if (record(event?.payload)) return event.payload;
-  return {};
-}
-
-function mergeMessages(...lists) {
-  const ids = new Set();
-  return lists.flatMap((list) =>
-    (Array.isArray(list) ? list : []).filter((item) => {
-      const id = item?.info?.id;
-      if (!id) return true;
-      if (ids.has(id)) return false;
-      ids.add(id);
-      return true;
-    }),
-  );
 }
 
 function agentStageRole(stage) {
@@ -5693,18 +5341,14 @@ function agentEventTargetText(event) {
 
 function syncAgentText(event) {
   if (!event) return;
-  const key = `agent:${event.stage}:${event.id || "unknown"}`;
   const target = agentEventTargetText(event);
   if (!target) {
     delete event._targetText;
     delete event._liveText;
-    stopLiveText(key);
     return;
   }
   event._targetText = target;
-  startLiveText(key, target, typeof event._liveText === "string" ? event._liveText : "", (value) => {
-    event._liveText = value;
-  });
+  event._liveText = target;
 }
 
 function mergeAgentEvent(existing, next) {
@@ -6010,15 +5654,17 @@ function displayToolDetail(name, input, state) {
   return "";
 }
 
-function handleEventStreamEvent(event) {
-  // Buffer event in NDJSON format for log panel
-  if (event && event.type && !event.type.includes("message.") && event.type !== "task.heartbeat") {
+function handleSSEEvent(event) {
+  const type = event.type || "";
+
+  // Buffer non-message events in NDJSON format for log panel
+  if (type && !type.includes("message.")) {
     const props = record(event.properties) ? event.properties : record(event.payload) ? event.payload : {};
     if (!state.ndjsonStartMs) state.ndjsonStartMs = Date.now();
-    const ndjsonEntry = {
+    state.ndjsonEvents.push({
       at: new Date().toISOString(),
       elapsed_ms: Date.now() - state.ndjsonStartMs,
-      type: event.type.startsWith("orchestrator.") ? event.type : "orchestrator." + event.type,
+      type: type.startsWith("orchestrator.") ? type : "orchestrator." + type,
       taskID: state.selectedTaskID || "",
       runID: String(props.runID ?? event.run_id ?? ""),
       stage: String(props.stage ?? ""),
@@ -6029,129 +5675,29 @@ function handleEventStreamEvent(event) {
       text: String(props.text ?? ""),
       progressType: String(props.progressType ?? props.type ?? ""),
       goalRunID: String(props.goalRunID ?? ""),
-    };
-    state.ndjsonEvents.push(ndjsonEntry);
+    });
   }
-  const sync = acceptEventSequence(event);
-  if (sync === "duplicate") return;
-  if (sync === "gap") {
-    repairEventGap(true);
+
+  // Message events → 16ms batched queue
+  if (type === "message.updated" || type === "message.part.updated" || type === "message.part.delta") {
+    enqueueEvent(event);
     return;
   }
-  const type = event.type || "";
-  if (type === "task.heartbeat") return;
-  if (type === "task.connected") return;
+
+  // task.replay_expired → full reload
   if (type === "task.replay_expired") {
-    // Server's replay buffer is too old — do a full transcript reload
     AppLog.warn("sse", "replay buffer expired, performing full reload");
-    state.conversationBootstrapPending = true;
-    loadConversation();
+    if (state.selectedTaskID) syncTask(state.selectedTaskID);
     scheduleTasks(0);
     scheduleBoard(0);
     return;
   }
-  const properties = eventData(event);
-  if (type === "message.updated") {
-    const info = record(properties.info) ? properties.info : null;
-    if (!matchesCurrentSession(info?.sessionID)) return;
-    const existing = state.messages.find((item) => item.info?.id === info.id);
-    if (existing) {
-      // Check if classification-relevant fields changed (e.g. agent field set on placeholder)
-      const prevAgent = String(existing.info?.agent || "");
-      existing.info = info;
-      const nextAgent = String(info?.agent || "");
-      if (prevAgent !== nextAgent) {
-        // Agent field changed — message will reclassify from main to agent channel.
-        // Must re-render so agent card appears immediately.
-        state.conversationUpdatedAt = Date.now();
-        renderConversation();
-      }
-      return;
-    }
-    if (state.chatRequest) {
-      const placeholder = chatPlaceholder();
-      if (placeholder) {
-        placeholder.info = { ...placeholder.info, ...info };
-        state.conversationUpdatedAt = Date.now();
-        renderConversation();
-      } else {
-        // Push message placeholder silently — don't render until parts arrive
-        state.messages.push({ info, parts: [] });
-      }
-    } else {
-      // Push message placeholder silently — parts will trigger render via message.part.updated
-      state.messages.push({ info, parts: [] });
-    }
-    return;
-  }
-  if (type === "message.part.updated") {
-    const part = record(properties.part) ? properties.part : null;
-    if (!matchesCurrentSession(part?.sessionID)) return;
-    let message = state.messages.find((item) => item.info?.id === part.messageID);
-    if (!message) {
-      // Event arrived before message.updated — create a placeholder message
-      message = { info: { id: part.messageID, sessionID: part.sessionID, role: "assistant" }, parts: [] };
-      state.messages.push(message);
-    }
-    const index = message.parts.findIndex((item) => item.id === part.id);
-    if (index >= 0) {
-      message.parts[index] = hydrateLivePart(message.parts[index], part);
-    } else if (message.parts.length === 1 && isPendingPlaceholderPart(message.parts[0])) {
-      message.parts = [hydrateLivePart(message.parts[0], part)];
-    } else {
-      message.parts.push(hydrateLivePart(null, part));
-    }
-    state.conversationUpdatedAt = Date.now();
-    renderConversation();
-    return;
-  }
-  if (type === "message.part.delta") {
-    if (!matchesCurrentSession(properties.sessionID) || typeof properties.delta !== "string") return;
-    if (properties.field !== "text" && properties.field !== "raw") return;
 
-    if (properties.field === "raw") {
-      let message = state.messages.find((item) => item.info?.id === properties.messageID);
-      if (!message) return;
-      let part = message.parts.find((item) => item.id === properties.partID && item.type === "tool");
-      if (!part || !record(part.state)) return;
-      const currentRaw = typeof part.state.raw === "string" ? part.state.raw : "";
-      const targetRaw = `${typeof part._targetRaw === "string" ? part._targetRaw : currentRaw}${properties.delta}`;
-      part._targetRaw = targetRaw;
-      part.state.raw = targetRaw;  // Apply instantly (no animation for tool input)
-      state.conversationUpdatedAt = Date.now();
-      renderConversation();
-      return;
-    }
+  const properties = record(event?.properties) ? event.properties : record(event?.payload) ? event.payload : {};
 
-    let message = state.messages.find((item) => item.info?.id === properties.messageID);
-    if (!message) {
-      // Delta arrived before message.updated — create a placeholder message
-      message = { info: { id: properties.messageID, sessionID: properties.sessionID, role: "assistant" }, parts: [] };
-      state.messages.push(message);
-    }
-    let part = message.parts.find((item) =>
-      item.id === properties.partID &&
-      (item.type === "text" || item.type === "reasoning"),
-    );
-    if (!part) {
-      // Delta arrived before part.updated — create a placeholder part
-      part = { id: properties.partID, type: "text", text: "", sessionID: properties.sessionID, messageID: properties.messageID };
-      message.parts.push(part);
-    }
-    if (part.type === "reasoning") touchReasoningPart(part);
-    const target = `${typeof part._targetText === "string" ? part._targetText : part.text || ""}${properties.delta}`;
-    streamMessagePart(part, target, "text", part.text || "");
-    state.conversationUpdatedAt = Date.now();
-    // Render all deltas immediately — agent cards need real-time streaming too
-    renderConversation();
-    return;
-  }
   if (type === "run.progress") {
-    // Skip internal message lifecycle events — these are metadata updates
-    // (role, tokens, timestamps) already handled by message.updated/part.updated/part.delta
     const progressType = properties.type || "";
     if (progressType === "message.updated" || progressType === "message.part.updated" || progressType === "message.part.delta") return;
-    // Drop protocol noise and lifecycle events (no user-visible content)
     if (progressType === "protocol.raw" || progressType === "executor.status" || progressType === "executor.progress") return;
     appendExecutorEvent({
       id: event.event_id,
@@ -6176,13 +5722,11 @@ function handleEventStreamEvent(event) {
   }
   if (type === "agent.updated") {
     const stage = properties.stage || "";
-    const kind = properties.kind || "";
     const summary = typeof event.summary === "string" ? event.summary : typeof properties.summary === "string" ? properties.summary : "";
     appendAgentEvent(event);
     if (stage && summary) {
-      state.agentStatus = { stage, kind, summary, timestamp: Date.now() };
+      state.agentStatus = { stage, kind: properties.kind || "", summary, timestamp: Date.now() };
       renderBoard();
-      // Re-render conversation so the "thinking" placeholder updates with live agent status
       if (chatPlaceholder()) debouncedRenderConversation();
     }
     return;
@@ -6206,41 +5750,11 @@ function handleEventStreamEvent(event) {
   }
 }
 
-function handleSSEEvent(event) {
-  handleEventStreamEvent(event);
-}
-
-// ── Polling ──
-
-function startPolling() {
-  stopPolling();
-  state.pollTimer = setInterval(() => {
-    if (!state.sseConnected || Date.now() - state.boardUpdatedAt > SSE_BACKSTOP) {
-      loadBoard();
-    }
-    loadMeta();
-  }, POLL_INTERVAL);
-  state.conversationTimer = setInterval(() => {
-    if (!state.selectedTaskID) return;
-    if (state.conversationBootstrapPending) {
-      loadConversation();
-      return;
-    }
-    // Only poll when SSE is disconnected
-    if (!state.sseConnected) {
-      loadConversation();
-    }
-  }, CONVERSATION_POLL);
-}
-
-function stopPolling() {
-  if (state.pollTimer) { clearInterval(state.pollTimer); state.pollTimer = null; }
-  if (state.conversationTimer) { clearInterval(state.conversationTimer); state.conversationTimer = null; }
+function stopTimers() {
   if (state.elapsedTimer) { clearInterval(state.elapsedTimer); state.elapsedTimer = null; }
   if (state.boardKick) { clearTimeout(state.boardKick); state.boardKick = null; }
   if (state.boardRetryTimer) { clearTimeout(state.boardRetryTimer); state.boardRetryTimer = null; }
   if (state.tasksKick) { clearTimeout(state.tasksKick); state.tasksKick = null; }
-  if (state.conversationKick) { clearTimeout(state.conversationKick); state.conversationKick = null; }
   state.boardRetryCount = 0;
   state.boardSyncPending = false;
   stopSSE();
@@ -7812,7 +7326,7 @@ function signGroup(group) {
     const lastMsg = innerMsgs[innerMsgs.length - 1];
     const lastParts = Array.isArray(lastMsg?.parts) ? lastMsg.parts : [];
     return hashText(
-      ["agent-card", card?._agentStage || "", card?._agentStatus || "",
+      ["agent-card", card?._agentCardKey || card?._agentStage || "", card?._agentStatus || "",
        String(innerMsgs.length), ...lastParts.map(signPart)].join("\u001d"),
     );
   }
@@ -8322,15 +7836,14 @@ function buildExecutorMessages() {
 
 function syncExecutorText(event, index = -1) {
   if (!event) return;
-  const key = `executor:${event.id || "unknown"}`;
   const target = executorTargetText(event, state.executorEvents, index);
   if (!target) {
     delete event._targetText;
     delete event._liveText;
-    stopLiveText(key);
     return;
   }
   event._targetText = target;
+  event._liveText = target;
   if (event.kind === "reasoning_delta" && target.trim()) {
     touchReasoningPart({
       id: `reasoning:${event.id || index}`,
@@ -8340,9 +7853,6 @@ function syncExecutorText(event, index = -1) {
       sessionID: "",
     });
   }
-  startLiveText(key, target, typeof event._liveText === "string" ? event._liveText : "", (value) => {
-    event._liveText = value;
-  });
 }
 
 function executorDeltaKind(kind) {
@@ -8759,23 +8269,26 @@ function hasConversationRequest(messages, request) {
 function conversationMessages() {
   const allMessages = state.messages || [];
 
-  // Classify messages into main conversation vs agent channels — single pass
+  // Classify messages into main conversation vs agent channels.
+  // Key by stage:sessionID so different rounds of the same agent get separate cards.
   const mainMessages = [];
-  const agentChannels = {}; // { [stage]: { messages: [], startTime, endTime } }
+  const agentChannels = {}; // { ["stage:sessionID"]: { stage, messages: [], startTime, endTime } }
 
   for (const msg of allMessages) {
     const channel = classifyMessage(msg);
     if (channel === "main") {
       mainMessages.push(msg);
     } else {
-      if (!agentChannels[channel]) {
-        agentChannels[channel] = { messages: [], startTime: Infinity, endTime: 0 };
+      const sessionID = msg.info?.sessionID || "";
+      const key = `${channel}:${sessionID}`;
+      if (!agentChannels[key]) {
+        agentChannels[key] = { stage: channel, messages: [], startTime: Infinity, endTime: 0 };
       }
-      agentChannels[channel].messages.push(msg);
+      agentChannels[key].messages.push(msg);
       const created = msg.info?.time?.created || 0;
-      if (created < agentChannels[channel].startTime) agentChannels[channel].startTime = created;
+      if (created < agentChannels[key].startTime) agentChannels[key].startTime = created;
       const completed = msg.info?.time?.completed || created;
-      if (completed > agentChannels[channel].endTime) agentChannels[channel].endTime = completed;
+      if (completed > agentChannels[key].endTime) agentChannels[key].endTime = completed;
     }
   }
 
@@ -8793,32 +8306,55 @@ function conversationMessages() {
     });
   }
 
-  // Create synthetic agent-card placeholder messages for each active channel
-  const agentCardMsgs = [];
-  for (const [stage, channel] of Object.entries(agentChannels)) {
+  // Group rounds per stage, sorted by time, to assign round numbers and status
+  const stageRounds = {}; // { [stage]: [{ key, channel }] sorted by startTime }
+  for (const [key, channel] of Object.entries(agentChannels)) {
     if (channel.messages.length === 0) continue;
-    // Determine status from agent events
-    const stageEvents = (Array.isArray(state.agentEvents) ? state.agentEvents : [])
-      .filter((e) => String(e?.stage || "").toLowerCase() === stage);
-    // Check ANY event in the stage for finish/error — fire-and-forget tool status
-    // events can land in the protocol store after the finish event (higher sequence),
-    // so the chronologically-last event is not necessarily the finish event.
-    const isFinished = stageEvents.some((e) => e.kind === "status" && /finished|completed|done/i.test(e?.summary || ""));
-    const isError = stageEvents.some((e) => e.kind === "error") && !isFinished;
-    const cardStatus = isError ? "error" : isFinished ? "completed" : "running";
-    agentCardMsgs.push({
-      _synthetic: true,
-      _agentCard: true,
-      _agentStage: stage,
-      _agentStatus: cardStatus,
-      _agentMessages: channel.messages,
-      info: {
-        role: "agent-card",
-        agent: stage,
-        time: { created: channel.startTime === Infinity ? Date.now() : channel.startTime },
-      },
-      parts: [],
-    });
+    if (!stageRounds[channel.stage]) stageRounds[channel.stage] = [];
+    stageRounds[channel.stage].push({ key, channel });
+  }
+  for (const rounds of Object.values(stageRounds)) {
+    rounds.sort((a, b) => a.channel.startTime - b.channel.startTime);
+  }
+
+  // Create synthetic agent-card messages — one card per round per stage
+  const agentCardMsgs = [];
+  const allAgentEvents = Array.isArray(state.agentEvents) ? state.agentEvents : [];
+  for (const [stage, rounds] of Object.entries(stageRounds)) {
+    for (let i = 0; i < rounds.length; i++) {
+      const { key, channel } = rounds[i];
+      const isLastRound = i === rounds.length - 1;
+      let cardStatus;
+      if (!isLastRound) {
+        // Earlier rounds must be done — otherwise a new round wouldn't have started
+        cardStatus = "completed";
+      } else {
+        // Last round: check agent events within this round's time window only
+        const stageEvents = allAgentEvents.filter((e) =>
+          String(e?.stage || "").toLowerCase() === stage &&
+          (e.timestamp || 0) >= channel.startTime,
+        );
+        const isFinished = stageEvents.some((e) => e.kind === "status" && /finished|completed|done/i.test(e?.summary || ""));
+        const isError = stageEvents.some((e) => e.kind === "error") && !isFinished;
+        cardStatus = isError ? "error" : isFinished ? "completed" : "running";
+      }
+      const roundLabel = rounds.length > 1 ? i + 1 : 0; // 0 = single round, don't show number
+      agentCardMsgs.push({
+        _synthetic: true,
+        _agentCard: true,
+        _agentStage: stage,
+        _agentStatus: cardStatus,
+        _agentRound: roundLabel,
+        _agentCardKey: key,
+        _agentMessages: channel.messages,
+        info: {
+          role: "agent-card",
+          agent: stage,
+          time: { created: channel.startTime === Infinity ? Date.now() : channel.startTime },
+        },
+        parts: [],
+      });
+    }
   }
 
   return [...filteredMain, ...executorMsgs, ...boardMsgs, ...agentCardMsgs]
@@ -9180,7 +8716,7 @@ function debouncedRenderConversation() {
   _debouncedRenderTimer = setTimeout(() => {
     _debouncedRenderTimer = null;
     renderConversation();
-  }, CONVERSATION_EVENT_DEBOUNCE);
+  }, BOARD_EVENT_DEBOUNCE);
 }
 
 function renderConversation() {
@@ -9299,13 +8835,16 @@ function renderTurn(group, sig = "") {
 function renderAgentCard(cardMsg, sig = "") {
   const stage = cardMsg._agentStage || "agent";
   const status = cardMsg._agentStatus || "running";
+  const round = cardMsg._agentRound || 0;
+  const cardKey = cardMsg._agentCardKey || stage;
   const agentMessages = cardMsg._agentMessages || [];
-  const label = agentStageLabel(stage);
+  const baseLabel = agentStageLabel(stage);
+  const label = round > 0 ? `${baseLabel} #${round}` : baseLabel;
   const timeStr = cardMsg.info?.time?.created ? stamp(cardMsg.info.time.created) : "";
   const msgCount = agentMessages.length;
 
   // Preserve expanded state from previous render; default to expanded while running
-  const prevCard = dom.chatScroll?.querySelector(`.agent-card[data-stage="${stage}"]`);
+  const prevCard = dom.chatScroll?.querySelector(`.agent-card[data-card-key="${CSS.escape(cardKey)}"]`);
   const wasExpanded = prevCard
     ? prevCard.classList.contains("agent-card--expanded")
     : status === "running";
@@ -9321,6 +8860,7 @@ function renderAgentCard(cardMsg, sig = "") {
   el.className = `turn msg agent-card${wasExpanded ? " agent-card--expanded" : ""}`;
   el.dataset.role = "agent-card";
   el.dataset.stage = stage;
+  el.dataset.cardKey = cardKey;
   el.dataset.groupSig = sig;
 
   // Lazy rendering: only build body HTML when expanded.
@@ -9968,7 +9508,7 @@ dom.btnRefreshTasks.addEventListener("click", async () => {
     loadMeta(),
     loadPreferences(),
     state.selectedTaskID ? loadBoard({ sync: true }) : Promise.resolve(),
-    state.selectedTaskID ? loadConversation() : Promise.resolve(),
+    state.selectedTaskID ? syncTask(state.selectedTaskID) : Promise.resolve(),
     state.selectedTaskID ? loadMemory() : Promise.resolve(),
   ]);
   if (!state.selectedTaskID) {
@@ -11548,8 +11088,8 @@ async function loadConfigInfo() {
     state.channels = Array.isArray(channels) ? channels : [];
     applyPromptEntries(prompts);
 
-    populateProviderSelect(config, catalog);
-      if (dom.cfgAvailableProviders) {
+    populateProviderSelect(config, catalog, !llmSaveTimer && llmSelectionKey() === llmSavedValue);
+    if (dom.cfgAvailableProviders) {
       const total = Array.isArray(catalog?.all) ? catalog.all.length : 0;
       const connected = Array.isArray(catalog?.connected) ? catalog.connected.length : 0;
       const text = t("llm.available_count", { total, connected });
@@ -11672,7 +11212,7 @@ window.addEventListener("beforeunload", () => {
     clearTimeout(state.sseRetryTimer);
     state.sseRetryTimer = null;
   }
-  stopPolling();
+  stopTimers();
 });
 document.addEventListener("visibilitychange", () => {
   syncTechFx();

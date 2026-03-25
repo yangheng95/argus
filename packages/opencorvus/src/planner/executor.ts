@@ -5,8 +5,6 @@ import { Log } from "@/util/log"
 import { PlannerOutput, parsePlannerOutput, type PlannerOutputType, type ReplanContext } from "./agent"
 import { SpecDraftSchema, type SpecDraft } from "@/spec/agent"
 import { parseSpecText } from "@/spec/parse-spec-text"
-import SPEC_CORE from "@/prompt/core/spec-core.txt"
-import PLAN_CORE from "@/prompt/core/plan-core.txt"
 
 const log = Log.create({ service: "planner.executor" })
 
@@ -138,15 +136,24 @@ function planPrompt(input: {
   ].filter(Boolean).join("\n\n")
 }
 
-const EXECUTOR_READ_ONLY_CONSTRAINT = `## Executor-Native Mode
+const SPEC_SYSTEM = [
+  "You are the executor-native spec stage for OpenCorvus.",
+  "WARNING: This is a planning-only read-only session.",
+  "You may inspect the codebase and documentation, but you must not modify files, apply patches, or run commands with side effects.",
+  "Expand the task into a precise markdown specification.",
+  "Output using section tags: <summary>, <scope>, <content>, <spec_items>, <assumptions>, <risks>, <evidence>, <unresolved>.",
+  "Each section wrapped in <tag>content</tag>. List items use: - key: value format.",
+].join("\n")
 
-WARNING: This is a planning-only read-only session.
-You may inspect the codebase and documentation, but you must NOT modify files, apply patches, or run commands with side effects.
-If a tool could write, patch, or mutate state, do not use it in this stage.`
-
-const SPEC_SYSTEM = SPEC_CORE + "\n\n" + EXECUTOR_READ_ONLY_CONSTRAINT
-
-const PLAN_SYSTEM = PLAN_CORE + "\n\n" + EXECUTOR_READ_ONLY_CONSTRAINT
+const PLAN_SYSTEM = [
+  "You are the executor-native planning stage for OpenCorvus.",
+  "WARNING: This is a planning-only read-only session.",
+  "You may inspect the codebase and documentation, but you must not modify files, apply patches, or run commands with side effects.",
+  "Produce a detailed implementation plan.",
+  "Output using section tags: <summary>, <prd>, <goals>, <subtasks>, <risks>, <milestones>, <assumptions>.",
+  "Each section wrapped in <tag>content</tag>. List items use: - key: value format.",
+  "Every blocking goal must have concrete criteria and at least one relevant check_selector.",
+].join("\n")
 
 const PLANNING_WARNING_PROMPT = [
   "Planning safety rules:",

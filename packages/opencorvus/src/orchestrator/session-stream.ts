@@ -21,13 +21,19 @@ const log = Log.create({ service: "session-stream" })
  * Events are persisted to DB and published via Bus → SSE automatically
  * through Session.updatePart / Session.updatePartDelta.
  */
+export type SessionStreamHooks = TextHooks & {
+  /** Flush accumulated text to DB. Must be called after stream ends. */
+  flush(): Promise<void>
+}
+
 export function sessionStreamHooks(input: {
   sessionID: string
   taskID: string
   stage?: string
-}): TextHooks {
+}): SessionStreamHooks {
   let messageID: string | undefined
   let textPartID: string | undefined
+  let textAccumulated = ""
   const toolParts = new Map<string, MessageV2.ToolPart>()
 
   async function ensureMessage() {
@@ -69,6 +75,7 @@ export function sessionStreamHooks(input: {
             } as MessageV2.TextPart)
             textPartID = id
           }
+          textAccumulated += chunk.text
           await Session.updatePartDelta({
             sessionID: input.sessionID,
             messageID: msgID,
@@ -81,6 +88,17 @@ export function sessionStreamHooks(input: {
 
         if (chunk.type === "tool-input-start") {
           const msgID = await ensureMessage()
+          // Persist accumulated text before switching to tool
+          if (textPartID && textAccumulated) {
+            await Session.updatePart({
+              id: textPartID,
+              messageID: msgID,
+              sessionID: input.sessionID,
+              type: "text",
+              text: textAccumulated,
+            } as MessageV2.TextPart)
+            textAccumulated = ""
+          }
           // Pause text accumulation — next text-delta after tools should create a new part
           textPartID = undefined
           const partID = Identifier.ascending("part")
@@ -186,6 +204,28 @@ export function sessionStreamHooks(input: {
         sessionID: input.sessionID,
         error: String(error),
       })
+    },
+    async flush() {
+      if (!messageID || !textPartID || !textAccumulated) return
+      try {
+        await Session.updatePart({
+          id: textPartID,
+          messageID,
+          sessionID: input.sessionID,
+          type: "text",
+          text: textAccumulated,
+        } as MessageV2.TextPart)
+        log.info("session-stream flushed", {
+          sessionID: input.sessionID,
+          partID: textPartID,
+          chars: textAccumulated.length,
+        })
+      } catch (err) {
+        log.warn("session-stream flush failed", {
+          sessionID: input.sessionID,
+          error: String(err),
+        })
+      }
     },
   }
 }

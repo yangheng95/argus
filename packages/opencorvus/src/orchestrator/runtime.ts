@@ -527,6 +527,8 @@ export namespace OrchestratorRuntime {
       },
       started: now,
     })
+    // Register executor session so bridge can resolve sessionID → taskID for SSE
+    if (sessionID) registerGoalRunSession(sessionID, task.id)
     appendExecutorEvent(session.id, task.id, run.id, run.executor, undefined, {
       provider: run.executor,
       kind: "lifecycle",
@@ -911,10 +913,12 @@ async function completeRun(run: RunRow, hooks: RuntimeHooks) {
       }),
       hardTimeoutPromise<typeof analysis>(),
     ])
+    await judgeContentHooks.flush()
     await judgeLive.finish(`Evaluator analysis: ${analysis.verdict}`)
   } catch (err) {
     analysisError = err instanceof Error ? err.message : String(err)
     log.error("evaluator agent analysis failed or timed out", { error: analysisError })
+    await judgeContentHooks.flush().catch(() => undefined)
     await judgeLive.error(err).catch(() => undefined)
     analysis = fallbackAnalysis(result, goals.length, analysisError)
   }
@@ -1093,10 +1097,12 @@ async function runEvaluation(task: TaskRow, run: RunRow, existingDelivery: Deliv
       }),
       reEvalHardTimeout<typeof analysis>(),
     ])
+    await judgeContentHooks.flush()
     await judgeLive.finish(`Evaluator analysis: ${analysis.verdict}`)
   } catch (err) {
     analysisError = err instanceof Error ? err.message : String(err)
     log.error("re-evaluation agent analysis failed or timed out", { error: analysisError })
+    await judgeContentHooks.flush().catch(() => undefined)
     await judgeLive.error(err).catch(() => undefined)
     analysis = fallbackAnalysis(result, goals.length, analysisError)
   }
@@ -1263,10 +1269,12 @@ async function publishAcceptedDelivery(task: TaskRow, run: RunRow, delivery: Del
           setTimeout(() => reject(new Error("delivery verification timeout")), DELIVERY_VERIFY_TIMEOUT_MS),
         ),
       ])
+      await deliveryContentHooks.flush()
       await deliveryLive.finish(`Delivery verification: ${deliveryVerdict.verdict}`)
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       log.error("delivery verification failed, proceeding with publication", { runID: run.id, error: msg })
+      await deliveryContentHooks.flush().catch(() => undefined)
       await deliveryLive.error(err).catch(() => undefined)
     }
     // Persist verdict as artifact

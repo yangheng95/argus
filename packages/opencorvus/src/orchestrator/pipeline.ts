@@ -259,6 +259,7 @@ async function runSpecStage(
       }),
       { signal: ctrl.signal },
     )
+    await specContentHooks.flush()
     await specLive.finish("Spec generation finished")
 
     const specDraft = ensureRequirements(unattended ? suppressClarifications(rawSpecDraft) : rawSpecDraft)
@@ -374,6 +375,7 @@ async function runGoalStage(
       }),
       { signal: ctrl.signal },
     )
+    await goalContentHooks.flush()
     await goalLive.finish("Goal decomposition finished")
 
     if (!goalDraft) throw new GoalFailureError("Goal decomposition produced no result")
@@ -521,6 +523,7 @@ async function runPlanStage(
       }),
       { signal: ctrl.signal },
     )
+    await planContentHooks.flush()
     await planLive.finish("Planner finished")
 
     // Suppress clarifications in unattended mode
