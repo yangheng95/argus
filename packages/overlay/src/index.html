@@ -61,7 +61,7 @@
             </div>
           </div>
         </div>
-        <span class="conn-badge" id="connBadge" data-no-drag="true" data-status="offline" data-i18n="titlebar.connection.offline">Offline</span>
+        <span id="solidConnBadge"></span>
       </div>
     </div>
     <div class="titlebar-nav">
@@ -93,120 +93,8 @@
         </button>
       </span>
       <div class="titlebar-actions" data-no-drag="true">
-        <div class="titlebar-menu-wrap" data-no-drag="true">
-          <button class="titlebar-btn" id="btnTitlebarMenu" title="More" aria-label="More" aria-expanded="false" aria-controls="titlebarMenu" aria-haspopup="true" data-i18n-title="titlebar.more" data-i18n-aria-label="titlebar.more">
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <circle cx="3.5" cy="8" r="1.2" fill="currentColor"/>
-              <circle cx="8" cy="8" r="1.2" fill="currentColor"/>
-              <circle cx="12.5" cy="8" r="1.2" fill="currentColor"/>
-            </svg>
-          </button>
-          <div class="titlebar-menu-panel" id="titlebarMenu" data-no-drag="true" hidden>
-            <button class="titlebar-menu-item" id="btnLocale" title="Switch language">
-              <span class="titlebar-menu-icon" aria-hidden="true">A</span>
-              <span class="titlebar-menu-copy">
-                <span class="titlebar-menu-title" data-i18n="settings.language">Language</span>
-                <span class="titlebar-menu-meta" id="btnLocaleLabel">English</span>
-              </span>
-            </button>
-            <button class="titlebar-menu-item" id="btnTheme" title="Switch to light mode" data-theme="dark">
-              <span class="titlebar-menu-icon" aria-hidden="true">
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-                  <circle cx="8" cy="8" r="3" stroke="currentColor" stroke-width="1.2"/>
-                  <path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.1 3.1l1.4 1.4M11.5 11.5l1.4 1.4M3.1 12.9l1.4-1.4M11.5 4.5l1.4-1.4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
-                </svg>
-              </span>
-              <span class="titlebar-menu-copy">
-                <span class="titlebar-menu-title" data-i18n="settings.theme">Theme</span>
-                <span class="titlebar-menu-meta" id="btnThemeValue">Dark</span>
-              </span>
-            </button>
-            <button class="titlebar-menu-item" id="btnSettings" title="Server Config" data-i18n-title="titlebar.server_config">
-              <span class="titlebar-menu-icon" aria-hidden="true">
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-                  <path d="M3 4h10M3 8h10M3 12h10" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
-                  <circle cx="6" cy="4" r="1.6" fill="currentColor"/>
-                  <circle cx="10" cy="8" r="1.6" fill="currentColor"/>
-                  <circle cx="7.5" cy="12" r="1.6" fill="currentColor"/>
-                </svg>
-              </span>
-              <span class="titlebar-menu-copy">
-                <span class="titlebar-menu-title" data-i18n="titlebar.server_config">Server Config</span>
-                <span class="titlebar-menu-meta" data-i18n="common.open">Open</span>
-              </span>
-            </button>
-            <button class="titlebar-menu-item" id="btnLog" title="Logs" data-i18n-title="titlebar.logs">
-              <span class="titlebar-menu-icon" aria-hidden="true">
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 3h10M3 6.5h8M3 10h6M3 13.5h9" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
-              </span>
-              <span class="titlebar-menu-copy">
-                <span class="titlebar-menu-title" data-i18n="titlebar.logs">Logs</span>
-                <span class="titlebar-menu-meta" data-i18n="common.open">Open</span>
-              </span>
-            </button>
-            <button class="titlebar-menu-item" id="btnPin" title="Always on top" data-pinned="false" data-i18n-title="titlebar.pin">
-              <span class="titlebar-menu-icon" aria-hidden="true">
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 1v6M5.5 7h5l-.5 4H6l-.5-4z" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 11v4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
-              </span>
-              <span class="titlebar-menu-copy">
-                <span class="titlebar-menu-title" data-i18n="titlebar.pin">Always on top</span>
-                <span class="titlebar-menu-meta" id="btnPinValue">No</span>
-              </span>
-            </button>
-            <div class="titlebar-menu-divider" aria-hidden="true"></div>
-            <label class="titlebar-menu-toggle" for="chkUnattended">
-              <span class="titlebar-menu-copy">
-                <span class="titlebar-menu-title" data-i18n="titlebar.unattended">Unattended mode</span>
-                <span class="titlebar-menu-meta" data-i18n="titlebar.unattended_hint">Use default assumptions to keep tasks moving without manual confirmation.</span>
-              </span>
-              <input class="titlebar-menu-check" id="chkUnattended" type="checkbox">
-            </label>
-            <label class="titlebar-menu-toggle" for="chkAutoPermission">
-              <span class="titlebar-menu-copy">
-                <span class="titlebar-menu-title" data-i18n="titlebar.auto_permission">Auto-approve permissions</span>
-                <span class="titlebar-menu-meta" data-i18n="titlebar.auto_permission_hint">Automatically allow permission prompts with the persistent option.</span>
-              </span>
-              <input class="titlebar-menu-check" id="chkAutoPermission" type="checkbox">
-            </label>
-            <label class="titlebar-menu-toggle" for="chkAutoQuestion">
-              <span class="titlebar-menu-copy">
-                <span class="titlebar-menu-title" data-i18n="titlebar.auto_question">Auto-confirm questions</span>
-                <span class="titlebar-menu-meta" data-i18n="titlebar.auto_question_hint">Choose the first recommended answer and skip the popup.</span>
-              </span>
-              <input class="titlebar-menu-check" id="chkAutoQuestion" type="checkbox">
-            </label>
-            <label class="titlebar-menu-toggle" for="chkShowTranscriptDetails">
-              <span class="titlebar-menu-copy">
-                <span class="titlebar-menu-title" data-i18n="titlebar.full_transcript">Show full transcript</span>
-                <span class="titlebar-menu-meta" data-i18n="titlebar.full_transcript_hint">Reveal hidden control text, internal tool steps, and raw assistant details.</span>
-              </span>
-              <input class="titlebar-menu-check" id="chkShowTranscriptDetails" type="checkbox">
-            </label>
-            <label class="titlebar-menu-range" for="opacityRange">
-              <span class="titlebar-menu-copy">
-                <span class="titlebar-menu-title" data-i18n="titlebar.opacity">Window opacity</span>
-                <span class="titlebar-menu-meta" data-i18n="titlebar.opacity_hint">Lower values make the whole overlay more transparent.</span>
-              </span>
-              <span class="titlebar-menu-range-control">
-                <input class="titlebar-menu-slider" id="opacityRange" type="range" min="70" max="100" step="5" value="80">
-                <span class="titlebar-menu-value" id="opacityValue">50%</span>
-              </span>
-            </label>
-          </div>
-        </div>
-        <div class="titlebar-window-controls">
-          <button class="titlebar-btn" id="btnMinimize" title="Minimize" data-i18n-title="titlebar.minimize">
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 8h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
-          </button>
-          <button class="titlebar-btn" id="btnMaximize" title="Maximize" data-i18n-title="titlebar.maximize">
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <rect x="3.5" y="3.5" width="9" height="9" rx="1.2" stroke="currentColor" stroke-width="1.2"/>
-            </svg>
-          </button>
-          <button class="titlebar-btn titlebar-close" id="btnClose" title="Hide to tray" data-i18n-title="titlebar.background">
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
-          </button>
-        </div>
+        <div id="solidTitlebarMenu"></div>
+        <div id="solidWindowControls"></div>
       </div>
     </div>
   </header>
@@ -286,9 +174,7 @@
         </div>
 
         <div class="sidebar-body">
-          <div class="sidebar-list session-list-panel sidebar-session-list" id="taskListPanel">
-            <div class="empty-hint" data-i18n="task.none">No tasks yet</div>
-          </div>
+          <div class="sidebar-list session-list-panel sidebar-session-list" id="taskListPanel"></div>
         </div>
 
       </aside>
@@ -342,55 +228,7 @@
         <div class="chat-scroll session-content" id="codingScroll" hidden>
           <div class="chat-empty" id="codingEmpty">Build agent — ask anything about the codebase</div>
         </div>
-        <form class="chat-input" id="chatForm">
-          <div class="chat-attachments" id="chatAttachments" hidden></div>
-          <input type="file" id="chatFileInput" multiple accept="image/*,.pdf,.txt,.md,.json,.csv,.xml,.yaml,.yml,.log,.ts,.js,.py,.go,.rs,.c,.cpp,.h,.java,.rb,.sh,.bat,.ps1,.html,.css,.sql,.toml" hidden>
-          <div class="chat-compose-row">
-            <textarea class="chat-textarea" id="chatTextarea" placeholder="Send a message..." rows="2" data-i18n-placeholder="chat.placeholder"></textarea>
-            <div class="chat-compose-actions">
-              <button type="button" class="chat-attach-btn" id="btnChatAttach" title="Add files or images" aria-label="Add files or images" data-i18n-title="chat.attach_title" data-i18n-aria-label="chat.attach_title">
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M13.5 7.5l-5.8 5.8a3.2 3.2 0 01-4.5-4.5L9 3a2 2 0 012.8 2.8L6 11.6a.8.8 0 01-1.1-1.1L10.5 5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              </button>
-              <button
-                class="chat-send chat-interrupt"
-                type="button"
-                id="btnTaskInterrupt"
-                title="Interrupt the current task."
-                aria-label="Interrupt the current task"
-                data-i18n="chat.interrupt_label"
-                data-i18n-title="chat.interrupt_title"
-                data-i18n-aria-label="chat.interrupt_title"
-                hidden
-              >
-                <span class="chat-send-icon" aria-hidden="true">
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="4.25" y="4.25" width="7.5" height="7.5" rx="1.2" fill="currentColor"/></svg>
-                </span>
-                <span class="chat-send-label" data-i18n="chat.interrupt_label">Interrupt</span>
-              </button>
-              <button
-                class="chat-send"
-                type="submit"
-                id="chatSend"
-                title="Send message. Enter to send, Shift+Enter for newline."
-                aria-label="Send message"
-                data-i18n-title="chat.send_title"
-                data-i18n-aria-label="chat.send_label"
-              >
-                <span class="chat-send-icon" aria-hidden="true">
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 8l10-5-3 5 3 5z" fill="currentColor"/></svg>
-                </span>
-                <span class="chat-send-label" data-i18n="chat.send_label">Send</span>
-              </button>
-            </div>
-          </div>
-          <div class="chat-compose-meta">
-            <div class="chat-build">
-              <span class="chat-version" id="chatVersion"></span>
-              <a class="chat-author" id="chatAuthor" href="https://github.com/yangheng95" target="_blank" rel="noreferrer noopener" data-i18n="version.author">Author: Yang, Heng @GitHub</a>
-            </div>
-            <div class="chat-compose-tip" data-i18n="chat.tip">Enter to send / Shift+Enter for newline</div>
-          </div>
-        </form>
+        <div id="solidChatComposer"></div>
       </section>
       <div class="pane-resizer pane-resizer-right" id="rightPaneResizer" role="separator" aria-orientation="vertical" aria-label="Resize control panel"></div>
 
@@ -401,79 +239,8 @@
         </header>
         <div class="sections-stack">
 
-        <!-- Spec -->
-        <details class="section" id="specSection">
-          <summary class="section-head">
-            <span class="section-icon">
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M4 2h6l3 3v9H4z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/><path d="M10 2v3h3" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/><path d="M6.5 7h4M6.5 9.5h4M6.5 12h2" stroke="currentColor" stroke-width="1" stroke-linecap="round"/></svg>
-            </span>
-            <span class="section-title" data-i18n="section.spec">Spec</span>
-            <span class="section-badge" id="specBadge"></span>
-          </summary>
-          <div class="section-body" id="specBody">
-            <p class="empty-hint" data-i18n="empty.spec">No spec yet</p>
-          </div>
-        </details>
-
-        <!-- Plan -->
-        <details class="section" id="planSection">
-          <summary class="section-head">
-            <span class="section-icon">
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 3h10M3 6.5h7M3 10h5M3 13h8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
-            </span>
-            <span class="section-title" data-i18n="section.plan">Plan</span>
-            <span class="section-badge" id="planBadge"></span>
-          </summary>
-          <div class="section-body" id="planBody">
-            <p class="empty-hint" data-i18n="empty.plan">No plan yet</p>
-          </div>
-        </details>
-
-        <!-- Goals -->
-        <details class="section" id="goalsSection">
-          <summary class="section-head">
-            <span class="section-icon">
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.2"/><circle cx="8" cy="8" r="3" stroke="currentColor" stroke-width="1.2"/><circle cx="8" cy="8" r="0.8" fill="currentColor"/></svg>
-            </span>
-            <span class="section-title" data-i18n="section.goals">Goals</span>
-            <span class="section-badge" id="goalsBadge"></span>
-            <button type="button" class="btn btn-primary mini section-head-action" id="btnCreateGoal" data-i18n="goal.new">New Goal</button>
-          </summary>
-          <div class="section-body" id="goalsBody">
-            <p class="empty-hint" data-i18n="empty.goals">No goals defined</p>
-          </div>
-        </details>
-
-        <!-- Evaluation -->
-        <details class="section" id="criteriaSection">
-          <summary class="section-head">
-            <span class="section-icon">
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 4h10v9H3z" stroke="currentColor" stroke-width="1.2"/><path d="M5.5 7.5l2 2 3.5-3.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            </span>
-            <span class="section-title" data-i18n="section.evaluation">Evaluation</span>
-            <span class="section-badge" id="criteriaBadge"></span>
-          </summary>
-          <div class="section-body" id="criteriaBody">
-            <div class="criteria-list" id="criteriaList">
-              <div class="empty-hint" data-i18n="empty.checks">No checks configured</div>
-            </div>
-            <div id="evalBody"></div>
-          </div>
-        </details>
-
-        <!-- Delivery -->
-        <details class="section" id="deliverySection">
-          <summary class="section-head">
-            <span class="section-icon">
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M2 5l6-3 6 3v6l-6 3-6-3z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/><path d="M2 5l6 3 6-3M8 8v5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
-            </span>
-            <span class="section-title" data-i18n="section.delivery">Delivery</span>
-            <span class="section-badge" id="deliveryBadge"></span>
-          </summary>
-          <div class="section-body" id="deliveryBody">
-            <p class="empty-hint" data-i18n="empty.delivery">No delivery yet</p>
-          </div>
-        </details>
+        <!-- Board: Spec / Plan / Goals / Criteria / Delivery / Interactions / Task Actions -->
+        <div id="solidBoardMount"></div>
 
         <!-- Files -->
         <details class="section" id="changesSection">
@@ -485,12 +252,9 @@
             <span class="section-badge" id="changesBadge"></span>
           </summary>
           <div class="section-body" id="changesBody">
-            <p class="empty-hint" data-i18n="empty.files">No file changes yet</p>
+            <div id="solidChangesPanel"></div>
           </div>
         </details>
-
-        <!-- Task Actions (retry / replan / cancel) — rendered dynamically -->
-        <div class="task-actions-bar" id="taskActionsBar" hidden></div>
 
         <!-- Config (bottom of right column, grows upward) -->
         <div class="config-area" id="configArea">
@@ -995,30 +759,8 @@
     </div>
   </dialog>
 
-  <!-- Log Viewer Dialog -->
-  <dialog class="dialog dialog-wide" id="logDialog">
-    <div class="dialog-form">
-      <div class="dialog-head">
-        <h3 class="dialog-title" data-i18n="log.title">Logs</h3>
-        <div class="dialog-actions compact">
-          <select class="log-level-select" id="logLevelFilter">
-            <option value="debug" data-i18n="log.level.debug">DEBUG</option>
-            <option value="info" data-i18n="log.level.info">INFO</option>
-            <option value="warn" data-i18n="log.level.warn">WARN</option>
-            <option value="error" data-i18n="log.level.error">ERROR</option>
-          </select>
-          <button type="button" class="btn btn-ghost mini" id="btnLogRefresh" data-i18n="common.refresh">Refresh</button>
-          <button type="button" class="btn btn-ghost mini" id="btnLogCopy" data-i18n="log.copy">Copy</button>
-          <button type="button" class="btn btn-ghost mini" id="btnLogClear" data-i18n="log.clear">Clear</button>
-          <button type="button" class="btn btn-ghost mini" id="btnLogServerLogs" data-i18n="log.server_logs">Server Logs</button>
-          <button type="button" class="btn btn-ghost" id="btnCloseLog" data-i18n="common.close">Close</button>
-        </div>
-      </div>
-      <div class="log-viewer" id="logViewerBody">
-        <div class="empty-hint" data-i18n="log.empty">No logs</div>
-      </div>
-    </div>
-  </dialog>
+  <!-- Log Viewer Dialog (managed by Solid LogViewer component) -->
+  <div id="solidLogViewer"></div>
 
 
   <!-- Preference Edit Dialog -->
@@ -1041,9 +783,6 @@
     </form>
   </dialog>
 
-  <script src="workspace.js"></script>
-  <script src="interactions.js"></script>
-  <script src="app.js"></script>
   <script type="module" src="/main.tsx"></script>
 </body>
 </html>

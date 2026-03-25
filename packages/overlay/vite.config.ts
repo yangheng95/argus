@@ -44,9 +44,6 @@ export default defineConfig({
   plugins: [
     solidPlugin(),
     copyLegacyAssets([
-      "workspace.js",
-      "interactions.js",
-      "app.js",
       "opencorvus-logo-light.svg",
       "i18n",
     ]),
