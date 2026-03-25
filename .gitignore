@@ -23,6 +23,7 @@ Session.vim
 a.out
 bin/
 dist/
+dist-vite/
 target/
 .scripts
 .direnv/

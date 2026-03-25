@@ -182,69 +182,19 @@ let eventQueue = [];
 let flushTimer = null;
 let lastFlushTime = 0;
 
-// Patch a single part's DOM in-place without rebuilding the entire conversation.
-// Returns true if patched successfully, false to fall through to full renderConversation.
-function patchPartDOM(partID, field, fullText) {
-  if (!partID) return false;
-  if (field === "raw") {
-    const el = dom.chatScroll?.querySelector(`[data-part-id="${CSS.escape(partID)}"][data-part-field="raw"]`);
-    if (!el) return false;
-    el.textContent = fullText;
-    return true;
-  }
-  const el = dom.chatScroll?.querySelector(`[data-part-id="${CSS.escape(partID)}"]`);
-  if (!el) return false;
-  if (el.classList.contains("msg-reasoning")) {
-    const textEl = el.querySelector(".reasoning-text");
-    if (textEl) { textEl.textContent = fullText; return true; }
-    return false;
-  }
-  // msg-text: re-render markdown into the existing element
-  el.innerHTML = renderMarkdown(fullText);
-  return true;
-}
-
 function flushEvents() {
   if (eventQueue.length === 0) return;
   const batch = eventQueue;
   eventQueue = [];
   flushTimer = null;
   lastFlushTime = Date.now();
-  let needsFullRender = false;
-  let deltaPatched = false;
+  let needsRender = false;
   for (const event of batch) {
-    const result = applyMessageEvent(event);
-    if (result === "structure") {
-      needsFullRender = true;
-    } else if (result === "delta") {
-      const p = event.payload || event.properties || {};
-      // Get the full accumulated text from the store (applyMessageEvent already appended)
-      const msg = messageById(p.messageID);
-      const part = p.field === "raw"
-        ? msg?.parts?.find((x) => x.id === p.partID && x.type === "tool")
-        : msg?.parts?.find((x) => x.id === p.partID);
-      const fullText = p.field === "raw"
-        ? (part?.state?.raw || "")
-        : (part?.text || "");
-      if (patchPartDOM(p.partID, p.field, fullText)) {
-        deltaPatched = true;
-      } else {
-        needsFullRender = true;
-      }
-    }
-    // result === false means dropped, ignore
+    if (applyMessageEvent(event)) needsRender = true;
   }
-  if (deltaPatched || needsFullRender) {
+  if (needsRender) {
     state.conversationUpdatedAt = Date.now();
-  }
-  if (needsFullRender) {
     renderConversation();
-  } else if (deltaPatched) {
-    // Auto-scroll if at bottom
-    const el = dom.chatScroll;
-    if (el && el.scrollHeight - el.scrollTop - el.clientHeight < 80 && !chatScrollPaused) {
-      el.scrollTop = el.scrollHeight;
-    }
   }
 }
 
@@ -5065,9 +5015,7 @@ function applyMessageEvent(event) {
   const type = event.type || "";
   const properties = record(event?.properties) ? event.properties : record(event?.payload) ? event.payload : {};
 
-  // Returns "structure" for new messages/parts (need full render),
-  // "delta" for text appends (can patch DOM directly),
-  // false for dropped events.
+  // Returns true if the event was applied, false if dropped.
 
   if (type === "message.updated") {
     const info = record(properties.info) ? properties.info : null;
@@ -5075,12 +5023,12 @@ function applyMessageEvent(event) {
     const existing = messageById(info.id);
     if (existing) {
       existing.info = info;
-      return "structure";
+      return true;
     }
     const msg = { info, parts: [] };
     state.messages.push(msg);
     messageIndex.set(info.id, msg);
-    return "structure";
+    return true;
   }
 
   if (type === "message.part.updated") {
@@ -5101,7 +5049,7 @@ function applyMessageEvent(event) {
       message.parts.push(part);
     }
     if (part.type === "reasoning" && part.text?.trim()) touchReasoningPart(part);
-    return "structure";
+    return true;
   }
 
   if (type === "message.part.delta") {
@@ -5115,7 +5063,7 @@ function applyMessageEvent(event) {
       const part = message.parts.find((p) => p.id === properties.partID && p.type === "tool");
       if (!part || !record(part.state)) return false;
       part.state.raw = (typeof part.state.raw === "string" ? part.state.raw : "") + properties.delta;
-      return "delta";
+      return true;
     }
 
     // text delta — if message/part doesn't exist yet, create and need full render
@@ -5124,18 +5072,18 @@ function applyMessageEvent(event) {
       state.messages.push(msg);
       messageIndex.set(properties.messageID, msg);
       msg.parts.push({ id: properties.partID, type: "text", text: properties.delta, sessionID: properties.sessionID, messageID: properties.messageID });
-      return "structure";
+      return true;
     }
     let part = message.parts.find((p) =>
       p.id === properties.partID && (p.type === "text" || p.type === "reasoning"),
     );
     if (!part) {
       message.parts.push({ id: properties.partID, type: "text", text: properties.delta, sessionID: properties.sessionID, messageID: properties.messageID });
-      return "structure";
+      return true;
     }
     if (part.type === "reasoning") touchReasoningPart(part);
     part.text = (part.text || "") + properties.delta;
-    return "delta";
+    return true;
   }
 
   return false;
@@ -8446,8 +8394,7 @@ function renderTextPart(part, role) {
   if (role === "assistant" && thinkingTexts.includes(text.trim()) && state.agentStatus?.summary) {
     const stage = agentStageLabel(state.agentStatus.stage) || state.agentStatus.stage;
     const detail = state.agentStatus.summary;
-    const partId = part.id ? ` data-part-id="${escapeHtml(part.id)}"` : "";
-    return `<div class="msg-text msg-thinking-live"${partId}><span class="msg-thinking-dot"></span>${escapeHtml(stage)}${detail ? " — " + escapeHtml(detail) : ""}</div>`;
+    return `<div class="msg-text msg-thinking-live"><span class="msg-thinking-dot"></span>${escapeHtml(stage)}${detail ? " — " + escapeHtml(detail) : ""}</div>`;
   }
 
   // Skip system/scheduler messages that are not for UI
@@ -8461,8 +8408,7 @@ function renderTextPart(part, role) {
     if (!text.trim()) return "";
   }
 
-  const partId = part.id ? ` data-part-id="${escapeHtml(part.id)}"` : "";
-  return `<div class="msg-text"${partId}>${renderMarkdown(text)}</div>`;
+  return `<div class="msg-text">${renderMarkdown(text)}</div>`;
 }
 
 /** Strip orchestrator-injected <assistant-brief> block and boilerplate from user messages.
@@ -8647,8 +8593,7 @@ function renderReasoningPart(part) {
   const text = displayString(part.text);
   if (!text.trim()) return "";
   if (reasoningPartHidden(part)) return "";
-  const partId = part.id ? ` data-part-id="${escapeHtml(part.id)}"` : "";
-  return `<div class="msg-reasoning"${partId}>
+  return `<div class="msg-reasoning">
     <div class="reasoning-label">${escapeHtml(t("transcript.reasoning"))}</div>
     <div class="reasoning-text">${escapeHtml(text)}</div>
   </div>`;
@@ -9081,8 +9026,7 @@ function renderToolPart(part) {
   // Show streaming tool input (partial JSON being generated by the LLM)
   const raw = typeof st.raw === "string" ? (typeof part._targetRaw === "string" ? part._targetRaw : st.raw) : "";
   if (status === "pending" && raw) {
-    const partId = part.id ? ` data-part-id="${escapeHtml(part.id)}" data-part-field="raw"` : "";
-    html += `<div class="msg-tool-input"${partId}>${escapeHtml(raw)}</div>`;
+    html += `<div class="msg-tool-input">${escapeHtml(raw)}</div>`;
   }
 
   const output = stripAnsi(st.output || "");
