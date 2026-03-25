@@ -1,16 +1,39 @@
 #!/usr/bin/env bun
 
 import { createHash } from "node:crypto"
-import { readdirSync } from "node:fs"
+import { readdirSync, statSync } from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import ts from "typescript"
 
 const dir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
+
+// ── Panel files for revision hash ──
+// Only top-level .html and .js files in src/ are hashed. This keeps the
+// revision stable: it changes only when the HTML panel structure changes,
+// not when every TypeScript component is edited.
 const panel = readdirSync(path.join(dir, "src"))
   .filter((file) => /\.(?:html|js)$/.test(file))
   .map((file) => path.join(dir, "src", file))
   .sort()
+
+// ── Source files for key-usage scanning ──
+// Scan all .html, .js, .ts, .tsx files in src/ recursively so that
+// i18n keys used by Solid components are recognised as "used".
+function collectSourceFiles(base: string): string[] {
+  const result: string[] = []
+  for (const entry of readdirSync(base)) {
+    const full = path.join(base, entry)
+    if (statSync(full).isDirectory()) {
+      result.push(...collectSourceFiles(full))
+    } else if (/\.(?:html|[jt]sx?)$/.test(entry)) {
+      result.push(full)
+    }
+  }
+  return result
+}
+const sourceFiles = collectSourceFiles(path.join(dir, "src")).sort()
+
 const locale = ["en-US", "zh-CN"].map((lang) => path.join(dir, "src", "i18n", `${lang}.json`))
 
 function record(input: unknown): input is Record<string, unknown> {
@@ -100,8 +123,14 @@ function wrapperNames(source: ts.SourceFile) {
   return names
 }
 
+function scriptKind(file: string): ts.ScriptKind {
+  if (file.endsWith(".tsx")) return ts.ScriptKind.TSX
+  if (file.endsWith(".ts")) return ts.ScriptKind.TS
+  return ts.ScriptKind.JS
+}
+
 function scriptKeys(file: string, text: string) {
-  const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS)
+  const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true, scriptKind(file))
   const names = wrapperNames(source)
   const keys = new Set<string>()
   const visit = (node: ts.Node) => {
@@ -118,18 +147,29 @@ function scriptKeys(file: string, text: string) {
 }
 
 function referenced(keys: string[], input: string) {
-  return keys.includes(input) || keys.some((key) => input.startsWith(`${key}.`))
+  return (
+    keys.includes(input) ||
+    // input is a descendant of a used key (e.g. key="a", input="a.b")
+    keys.some((key) => input.startsWith(`${key}.`)) ||
+    // input is an ancestor of a used key (e.g. key="a.b.c", input="a.b")
+    keys.some((key) => key.startsWith(`${input}.`))
+  )
 }
 
+// Revision hash: only panel files (index.html)
 const panelText = await Promise.all(panel.map((file) => Bun.file(file).text()))
-const panelKeys = [...new Set(panel.flatMap((file, index) => {
-  const text = panelText[index]
-  return file.endsWith(".js") ? scriptKeys(file, text) : extract(text)
-}))].sort()
 const revision = createHash("sha256")
   .update(panel.map((file, index) => `${path.relative(dir, file)}\n${panelText[index]}`).join("\n\n"))
   .digest("hex")
   .slice(0, 16)
+
+// Key-usage scan: all source files
+const sourceText = await Promise.all(sourceFiles.map((file) => Bun.file(file).text()))
+const panelKeys = [...new Set(sourceFiles.flatMap((file, index) => {
+  const text = sourceText[index]
+  if (file.endsWith(".html")) return extract(text)
+  return scriptKeys(file, text)
+}))].sort()
 
 const docs = await Promise.all(
   locale.map(async (file) => {

@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "zh-CN",
-    "panel_revision": "97872f1f1614cc09"
+    "panel_revision": "07d8c1b2377ce61b"
   },
   "brand.guide_kicker": "快速说明",
   "brand.guide_positioning_body": "这不是一个装饰性浮层，而是任务驾驶舱：左边选择任务，中间推进执行，右边盯 spec、plan、评估和文件变更，防止 agent 一路跑偏。",
@@ -20,7 +20,6 @@
   "channel.configured": "已配置：{{names}}",
   "channel.configured_none": "暂无已配置通道",
   "channel.disabled": "已禁用：{{names}}",
-  "channel.fields_none": "没有可配置字段",
   "channel.needs_setup": "待配置：{{names}}",
   "channel.none": "没有可用通道",
   "channel.open_settings": "打开通道设置",
@@ -28,24 +27,16 @@
   "channel.public_url_hint": "Google Chat、Microsoft Teams、LINE 和 DingTalk 发送截图时需要这个公开地址。",
   "channel.public_url_placeholder": "https://opencorvus.example.com",
   "channel.public_url_save_title": "保存通道 webhook 和外部可访问资源要使用的公开访问 URL。",
-  "channel.public_url_save_failed": "保存公开访问 URL 失败",
   "channel.save": "保存通道",
-  "channel.save_failed": "保存通道设置失败",
   "channel.setup_needed": "需要配置",
   "channel.status.configured": "已配置",
   "channel.status.disabled": "已禁用",
-  "channel.status.missing": "可用",
-  "channel.status.partial": "待配置",
   "channel.summary_plus": "{{name}} +{{count}}",
   "channel.tutorial": "教程",
   "channel.tutorial_credit": "来源：{{source}}",
   "channel.tutorial_hint": "打开这个通道对应的 OpenClaw 官方配置教程。",
   "channel.edit_title": "打开这个通道的配置字段。",
   "channel.title": "通道",
-  "chat.count": {
-    "one": "{{count}} 条消息",
-    "other": "{{count}} 条消息"
-  },
   "chat.copy_all": "复制全部",
   "chat.copy_failed": "复制对话失败",
   "chat.copy_title": "复制对话",
@@ -73,12 +64,9 @@
   "chat.send_title": "发送消息。Enter 发送，Shift+Enter 换行。",
   "chat.stop_label": "停止",
   "chat.stop_title": "停止当前生成并终止任务执行。",
-  "chat.interrupted_notice": "已中断",
   "chat.thinking": "思考中",
-  "chat.task_navigated": "好的",
   "chat.tip": "Enter 发送 · Shift+Enter 换行",
   "chat.attach_title": "添加文件或图片",
-  "chat.file_too_large": "文件过大（最大 10MB）",
   "chat.title": "任务",
   "about.title": "关于",
   "about.author": "作者",
@@ -104,7 +92,6 @@
   "about.rt_directory": "工作目录",
   "about.rt_executor": "执行器",
   "about.rt_tasks": "任务数",
-  "budget.empty": "选择一个任务后再编辑运行 budget。",
   "budget.hint": "留空表示沿用 orchestrator 默认值。",
   "budget.max_evaluations": "最大评估次数",
   "budget.max_replans": "最大重规划次数",
@@ -112,7 +99,6 @@
   "budget.max_wall_time": "最长运行时间（分钟）",
   "budget.placeholder": "默认",
   "budget.reset": "重置",
-  "budget.save_failed": "更新任务 budget 失败",
   "checks.artifact": "产物检查",
   "checks.build": "构建",
   "checks.code_quality": "代码质量",
@@ -201,8 +187,6 @@
   "prompt.preview": "Markdown 预览",
   "prompt.preview_empty": "当前 prompt 为空。",
   "prompt.reset": "重置",
-  "prompt.save_failed": "保存 prompt 失败",
-  "prompt.reset_failed": "重置 prompt 失败",
   "prompt.active_task_notice": "修改将在下次 run 时生效，当前活跃任务继续使用原有 prompt。",
   "prompt.show_default": "对比默认值",
   "prompt.default_label": "默认",
@@ -237,10 +221,8 @@
   "detail.delivery": "交付",
   "detail.disabled": "已禁用",
   "detail.enabled": "已启用",
-  "detail.no_evaluation": "暂无评估结果",
   "detail.observed": "观测到",
   "detail.pending_interactions": "待处理交互",
-  "dialog.confirm": "确认",
   "dialog.input": "输入",
   "dialog.notice": "提示",
   "dialog.value": "值",
@@ -253,7 +235,6 @@
   },
   "empty.delivery": "暂无交付记录",
   "empty.checks": "没有配置检查项",
-  "empty.files": "还没有文件变更",
   "empty.goals": "尚未定义目标",
   "empty.plan": "还没有计划",
   "empty.spec": "还没有规格",
@@ -276,7 +257,6 @@
   "executor.manual_install_auth_required": "需手动安装并完成 auth 后才可使用",
   "executor.not_detected": "未检测到",
   "executor.version": "版本 {{version}}",
-  "extensions.badge": "{{skills}} 个技能 · {{mcp}} 个 MCP",
   "extensions.title": "扩展",
   "files.changed": {
     "one": "{{count}} 个文件",
@@ -294,9 +274,6 @@
   "git.clean_title": "干净：{{value}}",
   "git.conflicts": "冲突：{{count}}",
   "git.init": "初始化 Git",
-  "git.init_done": "已在 {{dir}} 初始化 Git",
-  "git.init_exists": "{{dir}} 已经初始化 Git",
-  "git.init_failed": "初始化 Git 失败",
   "git.init_title": "为当前目录初始化 Git",
   "git.modified": "修改：{{count}}",
   "git.staged": "已暂存：{{count}}",
@@ -308,14 +285,9 @@
   "goal.context.results": "**目标结果**（通过 {{passed}}/{{total}}，失败 {{failed}}，待定 {{pending}}）",
   "goal.criteria": "验收标准",
   "goal.criteria_placeholder": "这个目标的验收标准",
-  "goal.delete_confirm": "确定删除这个目标吗？",
-  "goal.delete_failed": "删除目标失败",
-  "goal.delete_title": "删除目标",
   "goal.description": "描述",
   "goal.description_placeholder": "描述这个目标……",
-  "goal.new": "新建目标",
   "goal.save": "保存目标",
-  "goal.save_failed": "保存目标失败",
   "goal.edit_button_title": "编辑这个目标的标题和详细内容。",
   "goal.delete_button_title": "从当前任务中删除这个目标。",
   "goal.title": "目标",
@@ -339,7 +311,6 @@
   "llm.api_key_hide": "隐藏 API 密钥",
   "llm.api_key_show": "显示 API 密钥",
   "llm.available": "可用",
-  "llm.available_count": "共 {{total}} 个提供方，已连接 {{connected}} 个",
   "llm.available_count_zero": "0 个提供方",
   "llm.detail.auth_methods": "认证方式：{{value}}",
   "llm.detail.available": "可用",
@@ -347,8 +318,6 @@
   "llm.detail.connected": "已连接",
   "llm.detail.needs_api_key": "需要 API Key",
   "llm.model": "模型",
-  "llm.notice.api_key_copied": "API 密钥已复制",
-  "llm.notice.api_key_copy_failed": "复制 API 密钥失败",
   "llm.notice.saving": "正在保存模型设置……",
   "llm.notice.test_failed": "连接测试失败",
   "llm.notice.update_failed": "更新模型设置失败",
@@ -359,7 +328,6 @@
   "llm.status.connected": "已连接",
   "llm.status.error": "错误",
   "llm.status.needs_api_key": "需要 API Key",
-  "llm.status.saving": "保存中……",
   "llm.status.unknown": "未知",
   "llm.summary_empty": "未配置",
   "llm.summary_value": "{{provider}} / {{model}}",
@@ -368,13 +336,9 @@
   "mcp.add": "添加 MCP 服务",
   "mcp.add_action": "添加 MCP",
   "mcp.add_action_title": "新增一条 MCP 服务配置。",
-  "mcp.add_failed": "添加 MCP 服务失败",
   "mcp.arguments": "参数",
   "mcp.command": "命令 <em>*</em>",
-  "mcp.delete_all_confirm": "确定删除 {{count}} 个 MCP 服务吗？",
-  "mcp.delete_all_failed": "删除全部 MCP 服务失败",
   "mcp.delete_all_button_title": "删除当前配置中的全部 MCP 服务。",
-  "mcp.delete_all_title": "删除 MCP 服务",
   "mcp.name": "名称 <em>*</em>",
   "mcp.none": "没有配置 MCP 服务",
   "mcp.remote_url": "远程 URL <em>*</em>",
@@ -401,19 +365,11 @@
   "memory.source": "来源：{{value}}",
   "memory.title": "任务上下文",
   "memory.updated": "更新时间：{{value}}",
-  "log.copy": "复制",
-  "log.copy_failed": "复制日志失败",
-  "log.clear": "清空",
   "log.details": "详情",
   "log.empty": "暂无日志",
   "log.fields": "结构化字段",
-  "log.level.debug": "调试",
-  "log.level.error": "错误",
-  "log.level.info": "信息",
-  "log.level.warn": "警告",
   "log.raw": "原始日志",
   "log.title": "日志",
-  "log.server_logs": "服务器日志",
   "plan.context.clarification": {
     "one": "**需要澄清**：{{count}} 个未解决问题",
     "other": "**需要澄清**：{{count}} 个未解决问题"
@@ -468,23 +424,13 @@
   "settings.username": "用户名",
   "skill.add": "添加技能",
   "skill.add_button_title": "从目录路径或远程来源新增一个技能。",
-  "skill.add_failed": "添加技能失败",
   "skill.browse_folder": "选择目录",
-  "skill.delete_all_confirm_all": "确定删除全部 {{count}} 个自定义技能吗？",
-  "skill.delete_all_confirm_partial": "确定删除 {{removable}} 个可删除技能吗？剩余 {{blocked}} 个技能会保留。",
   "skill.delete_all_button_title": "删除全部可移除的自定义技能。",
-  "skill.delete_all_failed": "删除全部技能失败",
-  "skill.delete_all_title": "删除技能",
-  "skill.delete_confirm": "确定删除技能 {{name}} 吗？",
   "skill.delete_button_title": "删除这个可移除的自定义技能。",
-  "skill.delete_failed": "删除技能失败",
-  "skill.delete_title": "删除技能",
   "skill.install": "安装技能",
   "skill.market.button": "市场",
   "skill.market.button_title": "打开精选技能市场。",
   "skill.market.install_button_title": "把这个精选技能安装到当前工作区。",
-  "skill.market.install_failed": "安装市场技能失败",
-  "skill.market.load_failed": "加载技能市场失败",
   "skill.market.loading": "正在加载技能市场……",
   "skill.market.none": "没有可用的精选技能",
   "skill.market.open_site": "打开站点",
@@ -494,10 +440,8 @@
   "skill.none_custom_with_builtin": "没有自定义技能（已加载 {{count}} 个内置技能）",
   "skill.open_dir": "打开目录",
   "skill.open_dir_title": "打开本地自定义技能目录。",
-  "skill.open_failed": "打开技能目录失败",
   "skill.open_button_title": "打开这个技能的目录或来源位置。",
   "skill.reload_title": "从磁盘重新加载内置技能和自定义技能。",
-  "skill.open_unavailable": "无法打开技能目录",
   "skill.policy": "策略",
   "skill.policy.allow": "允许",
   "skill.policy.ask": "使用时询问",
@@ -518,17 +462,10 @@
   "task.action.replan_title": "先生成一版新的计划，再继续当前任务。",
   "task.action.retry": "重试",
   "task.action.retry_title": "沿用当前计划重新执行一次任务。",
-  "task.action.retry_note_title": "重试并附加引导（可选）",
-  "task.action.retry_note_placeholder": "为本次重试补充执行引导，例如\"只关注登录模块\"或\"不要修改公共工具函数\"",
-  "task.action.retry_note_label": "运维备注",
   "task.action.cancel_title": "停止当前任务，并保留目前已有的状态和结果。",
   "task.terminate": "终止",
   "task.terminate_title": "终止运行",
-  "task.terminate_confirm": "确定终止当前运行吗？这会取消正在执行的任务，防止后台孤儿进程。",
   "task.delete_button_title": "删除这个任务及其历史记录。",
-  "task.delete_confirm": "确定删除任务“{{title}}”吗？这会移除它的历史记录。",
-  "task.delete_failed": "删除任务失败",
-  "task.delete_title": "删除任务",
   "task.group.active": "进行中",
   "task.group.recent": "最近",
   "task.status.blocked": "阻塞",
@@ -547,9 +484,7 @@
   "titlebar.connection.connecting": "连接中",
   "titlebar.connection.offline": "离线",
   "titlebar.connection.online": "在线",
-  "titlebar.connection.restarting": "重启中",
   "titlebar.logs": "日志",
-  "titlebar.background": "收到托盘",
   "titlebar.background_notice": "OpenCorvus 会继续在后台运行。可点击系统托盘图标重新打开，或在托盘菜单中选择退出彻底关闭。",
   "titlebar.background_notice_title": "仍在后台运行",
   "titlebar.maximize": "最大化",
@@ -569,20 +504,16 @@
   "titlebar.theme.dark": "切换到深色模式",
   "titlebar.theme.light": "切换到浅色模式",
   "transcript.compaction": "[上下文压缩]",
-  "transcript.compaction_short": "上下文已压缩",
   "transcript.file": "[文件] {{value}}",
   "transcript.patch": "[补丁] {{value}}",
   "transcript.patch_empty": "[补丁]",
   "transcript.reasoning": "[思考]",
   "transcript.subtask": "[子任务] {{value}}",
-  "transcript.subtask_label": "子任务",
   "transcript.tool": "[工具:{{status}}] {{tool}}",
   "version.author": "作者：杨恒 @GitHub",
   "version.core": "核心 {{version}}",
   "version.core_unknown": "核心不可用",
   "version.overlay": "Overlay v{{version}}",
-  "chat.interrupt_label": "中断",
-  "chat.interrupt_title": "中断当前任务。",
   "llm.auth_choose_method": "选择认证方式",
   "llm.auth_connect": "连接",
   "llm.auth_connect_title": "为这个提供方选择并启动认证流程。",
@@ -591,5 +522,100 @@
   "llm.auth_type_oauth": "继续浏览器登录流程",
   "sections.title": "检查面板",
   "titlebar.full_transcript": "显示完整转录",
-  "titlebar.full_transcript_hint": "显示隐藏的控件文案、内部工具步骤和助手原始细节。"
+  "titlebar.full_transcript_hint": "显示隐藏的控件文案、内部工具步骤和助手原始细节。",
+  "common": {
+    "clear": "清除",
+    "copy": "复制",
+    "saved": "已保存",
+    "saving": "保存中..."
+  },
+  "channel": {
+    "public_url_label": "公开 URL",
+    "status": {
+      "connected": "已连接",
+      "error": "错误"
+    }
+  },
+  "executor": {
+    "empty": "暂无执行器日志",
+    "kind": {
+      "approval": "审批请求",
+      "command": "命令",
+      "error": "错误",
+      "input": "输入请求",
+      "mcp": "MCP",
+      "message": "消息",
+      "reasoning": "推理",
+      "tool_call": "工具调用",
+      "tool_result": "工具结果"
+    },
+    "run_id": "运行 ID",
+    "scope": {
+      "goal": "目标"
+    }
+  },
+  "llm": {
+    "api_key_copy_done": "API 密钥已复制",
+    "api_key_label": "API 密钥",
+    "api_key_placeholder": "输入 API 密钥...",
+    "model_label": "模型",
+    "provider_label": "提供商"
+  },
+  "log": {
+    "filter_level": "过滤级别",
+    "load_server": "加载服务器日志"
+  },
+  "mcp": {
+    "confirm_delete_all": "确定删除全部 MCP 连接？此操作无法撤销。",
+    "delete_all": "全部删除",
+    "status": {
+      "connecting": "连接中"
+    }
+  },
+  "preference": {
+    "save_failed": "保存首选项失败"
+  },
+  "prompt": {
+    "reset_done": "已重置"
+  },
+  "section": {
+    "criteria": "评估条件"
+  },
+  "settings": {
+    "always_on_top": "总在最前",
+    "auto_permission": "自动批准权限",
+    "auto_question": "自动确认问题",
+    "locale": {
+      "label": "语言"
+    },
+    "nav_label": "设置导航",
+    "opacity": {
+      "label": "窗口透明度"
+    },
+    "section": {
+      "appearance": "外观",
+      "behaviour": "行为",
+      "connection": "连接"
+    },
+    "show_transcript_details": "显示完整记录",
+    "tab": {
+      "general": "通用"
+    },
+    "theme": {
+      "label": "主题"
+    },
+    "unattended": "无人值守模式"
+  },
+  "skill": {
+    "confirm_delete": "确定删除此技能？此操作无法撤销。",
+    "confirm_delete_all": "确定删除全部技能？此操作无法撤销。",
+    "delete_all": "全部删除"
+  },
+  "titlebar": {
+    "close": "关闭",
+    "pin": {
+      "pin": "固定到顶层",
+      "unpin": "取消固定"
+    }
+  }
 }

@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "en-US",
-    "panel_revision": "97872f1f1614cc09"
+    "panel_revision": "07d8c1b2377ce61b"
   },
   "brand.guide_kicker": "Quick Guide",
   "brand.guide_positioning_body": "This is the task cockpit, not decorative chrome: left selects tasks, center drives execution, right verifies spec, plan, evaluation, and file changes so the agent does not drift.",
@@ -20,7 +20,6 @@
   "channel.configured": "Configured: {{names}}",
   "channel.configured_none": "No channels configured",
   "channel.disabled": "Disabled: {{names}}",
-  "channel.fields_none": "No channel fields available",
   "channel.needs_setup": "Needs setup: {{names}}",
   "channel.none": "No channels available",
   "channel.open_settings": "Open channel settings",
@@ -28,24 +27,16 @@
   "channel.public_url_hint": "Needed for screenshot delivery on Google Chat, Microsoft Teams, LINE, and DingTalk.",
   "channel.public_url_placeholder": "https://opencorvus.example.com",
   "channel.public_url_save_title": "Save the public base URL used by channel webhooks and externally reachable assets.",
-  "channel.public_url_save_failed": "Failed to save public channel URL",
   "channel.save": "Save Channel",
-  "channel.save_failed": "Failed to save channel settings",
   "channel.setup_needed": "Setup needed",
   "channel.status.configured": "Configured",
   "channel.status.disabled": "Disabled",
-  "channel.status.missing": "Available",
-  "channel.status.partial": "Needs setup",
   "channel.summary_plus": "{{name}} +{{count}}",
   "channel.tutorial": "Tutorial",
   "channel.tutorial_credit": "Credit: {{source}}",
   "channel.tutorial_hint": "Open the official OpenClaw setup tutorial for this channel.",
   "channel.edit_title": "Open this channel's configuration fields.",
   "channel.title": "Channel",
-  "chat.count": {
-    "one": "{{count}} msg",
-    "other": "{{count}} msgs"
-  },
   "chat.copy_all": "Copy All",
   "chat.copy_failed": "Failed to copy conversation",
   "chat.copy_title": "Copy Conversation",
@@ -73,12 +64,9 @@
   "chat.send_title": "Send message. Enter to send, Shift+Enter for newline.",
   "chat.stop_label": "Stop",
   "chat.stop_title": "Stop the current generation and halt task execution.",
-  "chat.interrupted_notice": "Interrupted",
   "chat.thinking": "Thinking...",
-  "chat.task_navigated": "OK",
   "chat.tip": "Enter to send · Shift+Enter for newline",
   "chat.attach_title": "Add files or images",
-  "chat.file_too_large": "File too large (max 10MB)",
   "chat.title": "Task",
   "about.title": "About",
   "about.author": "Author",
@@ -104,7 +92,6 @@
   "about.rt_directory": "Directory",
   "about.rt_executor": "Executor",
   "about.rt_tasks": "Tasks",
-  "budget.empty": "Select a task to edit run budget.",
   "budget.hint": "Leave fields blank to use the orchestrator defaults.",
   "budget.max_evaluations": "Max Evaluations",
   "budget.max_replans": "Max Replans",
@@ -112,7 +99,6 @@
   "budget.max_wall_time": "Wall Time (Minutes)",
   "budget.placeholder": "Default",
   "budget.reset": "Reset",
-  "budget.save_failed": "Failed to update task budget",
   "checks.artifact": "Artifacts",
   "checks.build": "Build",
   "checks.code_quality": "Code Quality",
@@ -201,8 +187,6 @@
   "prompt.preview": "Markdown Preview",
   "prompt.preview_empty": "This prompt is empty.",
   "prompt.reset": "Reset",
-  "prompt.save_failed": "Failed to save prompt",
-  "prompt.reset_failed": "Failed to reset prompt",
   "prompt.active_task_notice": "Changes take effect on the next run. The active task continues with its current prompts.",
   "prompt.show_default": "Compare with default",
   "prompt.default_label": "Default",
@@ -237,10 +221,8 @@
   "detail.delivery": "Delivery",
   "detail.disabled": "disabled",
   "detail.enabled": "enabled",
-  "detail.no_evaluation": "No evaluation results",
   "detail.observed": "observed",
   "detail.pending_interactions": "Pending Interactions",
-  "dialog.confirm": "Confirm",
   "dialog.input": "Input",
   "dialog.notice": "Notice",
   "dialog.value": "Value",
@@ -253,7 +235,6 @@
   },
   "empty.delivery": "No delivery yet",
   "empty.checks": "No checks configured",
-  "empty.files": "No file changes yet",
   "empty.goals": "No goals defined",
   "empty.plan": "No plan yet",
   "empty.spec": "No spec yet",
@@ -276,7 +257,6 @@
   "executor.manual_install_auth_required": "Requires manual install and auth before use",
   "executor.not_detected": "Not detected",
   "executor.version": "Version {{version}}",
-  "extensions.badge": "{{skills}} skills · {{mcp}} MCP",
   "extensions.title": "Extensions",
   "files.changed": {
     "one": "{{count}} file",
@@ -294,9 +274,6 @@
   "git.clean_title": "Clean: {{value}}",
   "git.conflicts": "Conflicts: {{count}}",
   "git.init": "Init Git",
-  "git.init_done": "Initialized Git in {{dir}}",
-  "git.init_exists": "Git is already initialized in {{dir}}",
-  "git.init_failed": "Failed to initialize Git",
   "git.init_title": "Initialize Git for this directory",
   "git.modified": "Modified: {{count}}",
   "git.staged": "Staged: {{count}}",
@@ -308,14 +285,9 @@
   "goal.context.results": "**Goal Results** ({{passed}}/{{total}} passed, {{failed}} failed, {{pending}} pending)",
   "goal.criteria": "Criteria",
   "goal.criteria_placeholder": "Acceptance criteria for this goal",
-  "goal.delete_confirm": "Delete this goal?",
-  "goal.delete_failed": "Failed to delete goal",
-  "goal.delete_title": "Delete Goal",
   "goal.description": "Description",
   "goal.description_placeholder": "Describe the goal...",
-  "goal.new": "New Goal",
   "goal.save": "Save Goal",
-  "goal.save_failed": "Failed to save goal",
   "goal.edit_button_title": "Edit this goal's title and details.",
   "goal.delete_button_title": "Delete this goal from the current task.",
   "goal.title": "Goal",
@@ -339,7 +311,6 @@
   "llm.api_key_hide": "Hide API key",
   "llm.api_key_show": "Show API key",
   "llm.available": "Available",
-  "llm.available_count": "{{total}} providers · {{connected}} connected",
   "llm.available_count_zero": "0 providers",
   "llm.detail.auth_methods": "Auth methods: {{value}}",
   "llm.detail.available": "Available",
@@ -347,8 +318,6 @@
   "llm.detail.connected": "Connected",
   "llm.detail.needs_api_key": "API key required",
   "llm.model": "Model",
-  "llm.notice.api_key_copied": "API key copied",
-  "llm.notice.api_key_copy_failed": "Failed to copy API key",
   "llm.notice.saving": "Saving model settings...",
   "llm.notice.test_failed": "Connection test failed",
   "llm.notice.update_failed": "Failed to update model settings",
@@ -359,7 +328,6 @@
   "llm.status.connected": "Connected",
   "llm.status.error": "Error",
   "llm.status.needs_api_key": "API key required",
-  "llm.status.saving": "Saving...",
   "llm.status.unknown": "Unknown",
   "llm.summary_empty": "Not configured",
   "llm.summary_value": "{{provider}} / {{model}}",
@@ -368,13 +336,9 @@
   "mcp.add": "Add MCP Server",
   "mcp.add_action": "Add MCP",
   "mcp.add_action_title": "Add a new MCP server configuration.",
-  "mcp.add_failed": "Failed to add MCP server",
   "mcp.arguments": "Arguments",
   "mcp.command": "Command <em>*</em>",
-  "mcp.delete_all_confirm": "Delete {{count}} MCP servers?",
-  "mcp.delete_all_failed": "Failed to delete all MCP servers",
   "mcp.delete_all_button_title": "Delete all configured MCP servers.",
-  "mcp.delete_all_title": "Delete MCP Servers",
   "mcp.name": "Name <em>*</em>",
   "mcp.none": "No MCP servers configured",
   "mcp.remote_url": "Remote URL <em>*</em>",
@@ -401,19 +365,11 @@
   "memory.source": "Source: {{value}}",
   "memory.title": "Task Context",
   "memory.updated": "Updated: {{value}}",
-  "log.copy": "Copy",
-  "log.copy_failed": "Failed to copy logs",
-  "log.clear": "Clear",
   "log.details": "Details",
   "log.empty": "No logs",
   "log.fields": "Structured fields",
-  "log.level.debug": "DEBUG",
-  "log.level.error": "ERROR",
-  "log.level.info": "INFO",
-  "log.level.warn": "WARN",
   "log.raw": "Raw line",
   "log.title": "Logs",
-  "log.server_logs": "Server Logs",
   "plan.context.clarification": {
     "one": "**Clarification Needed**: {{count}} open question",
     "other": "**Clarification Needed**: {{count}} open questions"
@@ -468,23 +424,13 @@
   "settings.username": "Username",
   "skill.add": "Add Skill",
   "skill.add_button_title": "Add a skill from a folder path or remote source.",
-  "skill.add_failed": "Failed to add skill",
   "skill.browse_folder": "Browse Folder",
-  "skill.delete_all_confirm_all": "Delete all {{count}} custom skills?",
-  "skill.delete_all_confirm_partial": "Delete {{removable}} removable skills? {{blocked}} skills will be kept.",
   "skill.delete_all_button_title": "Delete all removable custom skills.",
-  "skill.delete_all_failed": "Failed to delete all skills",
-  "skill.delete_all_title": "Delete Skills",
-  "skill.delete_confirm": "Delete skill {{name}}?",
   "skill.delete_button_title": "Delete this removable custom skill.",
-  "skill.delete_failed": "Failed to delete skill",
-  "skill.delete_title": "Delete Skill",
   "skill.install": "Install Skill",
   "skill.market.button": "Market",
   "skill.market.button_title": "Open the curated skill market.",
   "skill.market.install_button_title": "Install this curated skill into the workspace.",
-  "skill.market.install_failed": "Failed to install market skill",
-  "skill.market.load_failed": "Failed to load curated skill markets",
   "skill.market.loading": "Loading curated skill markets...",
   "skill.market.none": "No curated skills available",
   "skill.market.open_site": "Open Site",
@@ -494,10 +440,8 @@
   "skill.none_custom_with_builtin": "No custom skills configured ({{count}} built-in loaded)",
   "skill.open_dir": "Open Dir",
   "skill.open_dir_title": "Open the local custom-skill directory.",
-  "skill.open_failed": "Failed to open skill directory",
   "skill.open_button_title": "Open this skill's folder or source location.",
   "skill.reload_title": "Reload built-in and custom skills from disk.",
-  "skill.open_unavailable": "Unable to open skill directory",
   "skill.policy": "Policy",
   "skill.policy.allow": "Allow",
   "skill.policy.ask": "Ask on use",
@@ -518,17 +462,10 @@
   "task.action.replan_title": "Generate a fresh plan before continuing the task.",
   "task.action.retry": "Retry",
   "task.action.retry_title": "Run the current task again with the existing plan.",
-  "task.action.retry_note_title": "Retry with guidance (optional)",
-  "task.action.retry_note_placeholder": "Add guidance for this retry run, e.g. 'Focus on the login module only' or 'Avoid modifying shared utilities'",
-  "task.action.retry_note_label": "Operator note",
   "task.action.cancel_title": "Stop the current task and keep the current state so far.",
   "task.terminate": "Terminate",
   "task.terminate_title": "Terminate Run",
-  "task.terminate_confirm": "Terminate the current run? This cancels the executing task and prevents orphan processes.",
   "task.delete_button_title": "Delete this task and its history.",
-  "task.delete_confirm": "Delete task \"{{title}}\"? This removes its history.",
-  "task.delete_failed": "Failed to delete task",
-  "task.delete_title": "Delete Task",
   "task.group.active": "Active",
   "task.group.recent": "Recent",
   "task.status.blocked": "Blocked",
@@ -547,9 +484,7 @@
   "titlebar.connection.connecting": "Connecting",
   "titlebar.connection.offline": "Offline",
   "titlebar.connection.online": "Online",
-  "titlebar.connection.restarting": "Restarting",
   "titlebar.logs": "Logs",
-  "titlebar.background": "Hide to tray",
   "titlebar.background_notice": "OpenCorvus will keep running in the background. Use the tray icon to reopen it, or choose Quit from the tray menu to fully exit.",
   "titlebar.background_notice_title": "Still running in background",
   "titlebar.maximize": "Maximize",
@@ -569,20 +504,16 @@
   "titlebar.theme.dark": "Switch to dark mode",
   "titlebar.theme.light": "Switch to light mode",
   "transcript.compaction": "[Compaction]",
-  "transcript.compaction_short": "Context compacted",
   "transcript.file": "[File] {{value}}",
   "transcript.patch": "[Patch] {{value}}",
   "transcript.patch_empty": "[Patch]",
   "transcript.reasoning": "[Reasoning]",
   "transcript.subtask": "[Subtask] {{value}}",
-  "transcript.subtask_label": "Subtask",
   "transcript.tool": "[Tool:{{status}}] {{tool}}",
   "version.author": "Author: Yang, Heng @GitHub",
   "version.core": "Core {{version}}",
   "version.core_unknown": "Core unavailable",
   "version.overlay": "Overlay v{{version}}",
-  "chat.interrupt_label": "Interrupt",
-  "chat.interrupt_title": "Interrupt the current task.",
   "llm.auth_choose_method": "Choose authentication method",
   "llm.auth_connect": "Connect",
   "llm.auth_connect_title": "Choose and start an authentication flow for this provider.",
@@ -591,5 +522,100 @@
   "llm.auth_type_oauth": "Continue in the browser sign-in flow",
   "sections.title": "Inspector",
   "titlebar.full_transcript": "Show full transcript",
-  "titlebar.full_transcript_hint": "Reveal hidden control text, internal tool steps, and raw assistant details."
+  "titlebar.full_transcript_hint": "Reveal hidden control text, internal tool steps, and raw assistant details.",
+  "common": {
+    "clear": "Clear",
+    "copy": "Copy",
+    "saved": "Saved",
+    "saving": "Saving..."
+  },
+  "channel": {
+    "public_url_label": "Public URL",
+    "status": {
+      "connected": "Connected",
+      "error": "Error"
+    }
+  },
+  "executor": {
+    "empty": "No executor logs",
+    "kind": {
+      "approval": "Approval request",
+      "command": "Command",
+      "error": "Error",
+      "input": "Input request",
+      "mcp": "MCP",
+      "message": "Message",
+      "reasoning": "Reasoning",
+      "tool_call": "Tool call",
+      "tool_result": "Tool result"
+    },
+    "run_id": "Run ID",
+    "scope": {
+      "goal": "Goal"
+    }
+  },
+  "llm": {
+    "api_key_copy_done": "API key copied",
+    "api_key_label": "API Key",
+    "api_key_placeholder": "Enter API key...",
+    "model_label": "Model",
+    "provider_label": "Provider"
+  },
+  "log": {
+    "filter_level": "Filter level",
+    "load_server": "Load server logs"
+  },
+  "mcp": {
+    "confirm_delete_all": "Delete all MCP connections? This cannot be undone.",
+    "delete_all": "Delete All",
+    "status": {
+      "connecting": "Connecting"
+    }
+  },
+  "preference": {
+    "save_failed": "Failed to save preference"
+  },
+  "prompt": {
+    "reset_done": "Reset"
+  },
+  "section": {
+    "criteria": "Criteria"
+  },
+  "settings": {
+    "always_on_top": "Always on top",
+    "auto_permission": "Auto-approve permissions",
+    "auto_question": "Auto-confirm questions",
+    "locale": {
+      "label": "Language"
+    },
+    "nav_label": "Settings navigation",
+    "opacity": {
+      "label": "Window opacity"
+    },
+    "section": {
+      "appearance": "Appearance",
+      "behaviour": "Behaviour",
+      "connection": "Connection"
+    },
+    "show_transcript_details": "Show full transcript",
+    "tab": {
+      "general": "General"
+    },
+    "theme": {
+      "label": "Theme"
+    },
+    "unattended": "Unattended mode"
+  },
+  "skill": {
+    "confirm_delete": "Delete this skill? This cannot be undone.",
+    "confirm_delete_all": "Delete all skills? This cannot be undone.",
+    "delete_all": "Delete All"
+  },
+  "titlebar": {
+    "close": "Close",
+    "pin": {
+      "pin": "Pin to top",
+      "unpin": "Unpin"
+    }
+  }
 }
