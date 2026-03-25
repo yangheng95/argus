@@ -182,22 +182,69 @@ let eventQueue = [];
 let flushTimer = null;
 let lastFlushTime = 0;
 
+// Patch a single part's DOM in-place without rebuilding the entire conversation.
+// Returns true if patched successfully, false to fall through to full renderConversation.
+function patchPartDOM(partID, field, fullText) {
+  if (!partID) return false;
+  if (field === "raw") {
+    const el = dom.chatScroll?.querySelector(`[data-part-id="${CSS.escape(partID)}"][data-part-field="raw"]`);
+    if (!el) return false;
+    el.textContent = fullText;
+    return true;
+  }
+  const el = dom.chatScroll?.querySelector(`[data-part-id="${CSS.escape(partID)}"]`);
+  if (!el) return false;
+  if (el.classList.contains("msg-reasoning")) {
+    const textEl = el.querySelector(".reasoning-text");
+    if (textEl) { textEl.textContent = fullText; return true; }
+    return false;
+  }
+  // msg-text: re-render markdown into the existing element
+  el.innerHTML = renderMarkdown(fullText);
+  return true;
+}
+
 function flushEvents() {
   if (eventQueue.length === 0) return;
   const batch = eventQueue;
   eventQueue = [];
   flushTimer = null;
   lastFlushTime = Date.now();
-  let needsRender = false;
+  let needsFullRender = false;
+  let deltaPatched = false;
   for (const event of batch) {
-    const applied = applyMessageEvent(event);
-    if (!applied) console.warn("[flush:dropped]", event.type, JSON.stringify(event).slice(0, 200));
-    if (applied) needsRender = true;
+    const result = applyMessageEvent(event);
+    if (result === "structure") {
+      needsFullRender = true;
+    } else if (result === "delta") {
+      const p = event.payload || event.properties || {};
+      // Get the full accumulated text from the store (applyMessageEvent already appended)
+      const msg = messageById(p.messageID);
+      const part = p.field === "raw"
+        ? msg?.parts?.find((x) => x.id === p.partID && x.type === "tool")
+        : msg?.parts?.find((x) => x.id === p.partID);
+      const fullText = p.field === "raw"
+        ? (part?.state?.raw || "")
+        : (part?.text || "");
+      if (patchPartDOM(p.partID, p.field, fullText)) {
+        deltaPatched = true;
+      } else {
+        needsFullRender = true;
+      }
+    }
+    // result === false means dropped, ignore
   }
-  if (needsRender) {
-    console.log("[flush:render]", batch.length, "events, messages:", state.messages.length);
+  if (deltaPatched || needsFullRender) {
     state.conversationUpdatedAt = Date.now();
+  }
+  if (needsFullRender) {
     renderConversation();
+  } else if (deltaPatched) {
+    // Auto-scroll if at bottom
+    const el = dom.chatScroll;
+    if (el && el.scrollHeight - el.scrollTop - el.clientHeight < 80 && !chatScrollPaused) {
+      el.scrollTop = el.scrollHeight;
+    }
   }
 }
 
@@ -566,6 +613,7 @@ let llmSaveTimer;
 let llmNoticeTimer;
 let llmSyncSerial = 0;
 let llmSavedValue = "";
+let llmFormDirty = false;
 let bootstrapSettings = { ...DEFAULT_OVERLAY_SETTINGS };
 let settingsSeq = 0;
 
@@ -3431,6 +3479,7 @@ async function syncLlmSettings() {
 
     state.config = saved;
     llmSavedValue = nextValue;
+    llmFormDirty = false;
     await loadConfigInfo();
 
     const configuredKey = state.config?.provider?.[current.providerID]?.options?.apiKey || providerEntry(current.providerID)?.key;
@@ -3500,6 +3549,7 @@ function populateProviderSelect(config, catalog, syncSaved = false) {
     if (aConnected !== bConnected) return aConnected - bConnected;
     return (a.name || a.id).localeCompare(b.name || b.id);
   });
+  const previousProvider = dom.llmProvider.value;
   const current = typeof config?.model === "string" && config.model.includes("/") ? config.model.split("/")[0] : "";
   dom.llmProvider.innerHTML = providers
     .map((item) => {
@@ -3507,23 +3557,32 @@ function populateProviderSelect(config, catalog, syncSaved = false) {
       return `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name || item.id)} · ${escapeHtml(state)}</option>`;
     })
     .join("");
-  const fallback = current || providers[0]?.id || "";
-  dom.llmProvider.value = providers.some((item) => item.id === fallback) ? fallback : providers[0]?.id || "";
+  if (llmFormDirty) {
+    dom.llmProvider.value = providers.some((item) => item.id === previousProvider)
+      ? previousProvider : providers[0]?.id || "";
+  } else {
+    const fallback = current || providers[0]?.id || "";
+    dom.llmProvider.value = providers.some((item) => item.id === fallback) ? fallback : providers[0]?.id || "";
+  }
   populateModelSelect(config, catalog, syncSaved);
 }
 
-function populateModelSelect(config, catalog, syncSaved = false) {
+function populateModelSelect(config, catalog, syncSaved = false, providerChanged = false) {
   const providerID = dom.llmProvider.value;
   const providers = Array.isArray(catalog?.all) ? catalog.all : [];
   const provider = providers.find((item) => item.id === providerID);
   const models = Object.keys(provider?.models || {}).sort((a, b) => a.localeCompare(b));
-  const current = typeof config?.model === "string" && config.model.startsWith(`${providerID}/`)
-    ? config.model.slice(providerID.length + 1)
-    : catalog?.default?.[providerID] || models[0] || "";
+  const previousModel = dom.llmModel.value;
   dom.llmModel.innerHTML = models.map((item) => `<option value="${escapeHtml(item)}">${escapeHtml(item)}</option>`).join("");
-  dom.llmModel.value = models.includes(current) ? current : models[0] || "";
-  const key = config?.provider?.[providerID]?.options?.apiKey || "";
-  dom.llmApiKey.value = key;
+  if (llmFormDirty && !providerChanged) {
+    dom.llmModel.value = models.includes(previousModel) ? previousModel : models[0] || "";
+  } else {
+    const current = typeof config?.model === "string" && config.model.startsWith(`${providerID}/`)
+      ? config.model.slice(providerID.length + 1)
+      : catalog?.default?.[providerID] || models[0] || "";
+    dom.llmModel.value = models.includes(current) ? current : models[0] || "";
+    dom.llmApiKey.value = config?.provider?.[providerID]?.options?.apiKey || "";
+  }
   if (syncSaved) llmSavedValue = llmSelectionKey();
   renderProviderStatus(providerID, config);
   renderLlmApiKeyTools();
@@ -5006,19 +5065,22 @@ function applyMessageEvent(event) {
   const type = event.type || "";
   const properties = record(event?.properties) ? event.properties : record(event?.payload) ? event.payload : {};
 
+  // Returns "structure" for new messages/parts (need full render),
+  // "delta" for text appends (can patch DOM directly),
+  // false for dropped events.
+
   if (type === "message.updated") {
     const info = record(properties.info) ? properties.info : null;
     if (!info || !matchesCurrentSession(info.sessionID)) return false;
     const existing = messageById(info.id);
     if (existing) {
       existing.info = info;
-      return true;
+      return "structure";
     }
-    // New message — insert into store
     const msg = { info, parts: [] };
     state.messages.push(msg);
     messageIndex.set(info.id, msg);
-    return true;
+    return "structure";
   }
 
   if (type === "message.part.updated") {
@@ -5039,7 +5101,7 @@ function applyMessageEvent(event) {
       message.parts.push(part);
     }
     if (part.type === "reasoning" && part.text?.trim()) touchReasoningPart(part);
-    return true;
+    return "structure";
   }
 
   if (type === "message.part.delta") {
@@ -5053,26 +5115,27 @@ function applyMessageEvent(event) {
       const part = message.parts.find((p) => p.id === properties.partID && p.type === "tool");
       if (!part || !record(part.state)) return false;
       part.state.raw = (typeof part.state.raw === "string" ? part.state.raw : "") + properties.delta;
-      return true;
+      return "delta";
     }
 
-    // text delta
+    // text delta — if message/part doesn't exist yet, create and need full render
     if (!message) {
       const msg = { info: { id: properties.messageID, sessionID: properties.sessionID, role: "assistant" }, parts: [] };
       state.messages.push(msg);
       messageIndex.set(properties.messageID, msg);
+      msg.parts.push({ id: properties.partID, type: "text", text: properties.delta, sessionID: properties.sessionID, messageID: properties.messageID });
+      return "structure";
     }
-    const msg = messageById(properties.messageID);
-    let part = msg.parts.find((p) =>
+    let part = message.parts.find((p) =>
       p.id === properties.partID && (p.type === "text" || p.type === "reasoning"),
     );
     if (!part) {
-      part = { id: properties.partID, type: "text", text: "", sessionID: properties.sessionID, messageID: properties.messageID };
-      msg.parts.push(part);
+      message.parts.push({ id: properties.partID, type: "text", text: properties.delta, sessionID: properties.sessionID, messageID: properties.messageID });
+      return "structure";
     }
     if (part.type === "reasoning") touchReasoningPart(part);
     part.text = (part.text || "") + properties.delta;
-    return true;
+    return "delta";
   }
 
   return false;
@@ -8383,7 +8446,8 @@ function renderTextPart(part, role) {
   if (role === "assistant" && thinkingTexts.includes(text.trim()) && state.agentStatus?.summary) {
     const stage = agentStageLabel(state.agentStatus.stage) || state.agentStatus.stage;
     const detail = state.agentStatus.summary;
-    return `<div class="msg-text msg-thinking-live"><span class="msg-thinking-dot"></span>${escapeHtml(stage)}${detail ? " — " + escapeHtml(detail) : ""}</div>`;
+    const partId = part.id ? ` data-part-id="${escapeHtml(part.id)}"` : "";
+    return `<div class="msg-text msg-thinking-live"${partId}><span class="msg-thinking-dot"></span>${escapeHtml(stage)}${detail ? " — " + escapeHtml(detail) : ""}</div>`;
   }
 
   // Skip system/scheduler messages that are not for UI
@@ -8397,7 +8461,8 @@ function renderTextPart(part, role) {
     if (!text.trim()) return "";
   }
 
-  return `<div class="msg-text">${renderMarkdown(text)}</div>`;
+  const partId = part.id ? ` data-part-id="${escapeHtml(part.id)}"` : "";
+  return `<div class="msg-text"${partId}>${renderMarkdown(text)}</div>`;
 }
 
 /** Strip orchestrator-injected <assistant-brief> block and boilerplate from user messages.
@@ -8582,7 +8647,8 @@ function renderReasoningPart(part) {
   const text = displayString(part.text);
   if (!text.trim()) return "";
   if (reasoningPartHidden(part)) return "";
-  return `<div class="msg-reasoning">
+  const partId = part.id ? ` data-part-id="${escapeHtml(part.id)}"` : "";
+  return `<div class="msg-reasoning"${partId}>
     <div class="reasoning-label">${escapeHtml(t("transcript.reasoning"))}</div>
     <div class="reasoning-text">${escapeHtml(text)}</div>
   </div>`;
@@ -9015,7 +9081,8 @@ function renderToolPart(part) {
   // Show streaming tool input (partial JSON being generated by the LLM)
   const raw = typeof st.raw === "string" ? (typeof part._targetRaw === "string" ? part._targetRaw : st.raw) : "";
   if (status === "pending" && raw) {
-    html += `<div class="msg-tool-input">${escapeHtml(raw)}</div>`;
+    const partId = part.id ? ` data-part-id="${escapeHtml(part.id)}" data-part-field="raw"` : "";
+    html += `<div class="msg-tool-input"${partId}>${escapeHtml(raw)}</div>`;
   }
 
   const output = stripAnsi(st.output || "");
@@ -10061,13 +10128,15 @@ dom.llmForm?.addEventListener("submit", (e) => {
 });
 
 dom.llmProvider?.addEventListener("change", () => {
+  llmFormDirty = true;
   delete state.providerAuthDismissed[dom.llmProvider.value];
-  populateModelSelect(state.config, state.providerCatalog, false);
+  populateModelSelect(state.config, state.providerCatalog, false, true);
   renderLlmSummary();
   queueLlmSync(180);
 });
 
 dom.llmModel?.addEventListener("change", () => {
+  llmFormDirty = true;
   renderLlmSummary();
   queueLlmSync(180);
 });
@@ -10115,11 +10184,13 @@ document.addEventListener("keydown", (e) => {
 });
 
 dom.llmApiKey?.addEventListener("input", () => {
+  llmFormDirty = true;
   renderLlmApiKeyTools();
   queueLlmSync(320);
 });
 
 dom.llmApiKey?.addEventListener("change", () => {
+  llmFormDirty = true;
   renderLlmApiKeyTools();
   queueLlmSync(0);
 });
@@ -10145,6 +10216,7 @@ dom.btnLlmAuthAction?.addEventListener("click", async (event) => {
     const authenticated = await authenticateSelectedProvider();
     if (authenticated !== true) return;
     await loadConfigInfo();
+    llmFormDirty = false;
     llmSavedValue = "";
     queueLlmSync(0);
   } catch (e) {
@@ -11088,7 +11160,7 @@ async function loadConfigInfo() {
     state.channels = Array.isArray(channels) ? channels : [];
     applyPromptEntries(prompts);
 
-    populateProviderSelect(config, catalog, !llmSaveTimer && llmSelectionKey() === llmSavedValue);
+    populateProviderSelect(config, catalog, !llmFormDirty);
     if (dom.cfgAvailableProviders) {
       const total = Array.isArray(catalog?.all) ? catalog.all.length : 0;
       const connected = Array.isArray(catalog?.connected) ? catalog.connected.length : 0;
