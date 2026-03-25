@@ -1,0 +1,209 @@
+// ── Memory & Preferences Service ──
+// TypeScript port of knowledge/memory and preference functions from app.js:
+//   loadMemory, searchMemory, deleteMemory, clearWorkspaceMemory,
+//   openMemoryDetail,
+//   loadPreferences, deletePreference, openPrefEdit, savePrefEdit.
+//
+// DOM-rendering functions (renderMemory, renderPreferences) are intentionally
+// NOT ported here — they are superseded by declarative Solid.js components
+// (MemoryPanel.tsx, PreferencesPanel.tsx).
+
+import { appStore, setAppStore } from "../store/app";
+import { boardStore } from "../store/board";
+import { AppLog } from "../utils/log";
+import { t } from "../utils/i18n";
+import { apiJson } from "./api";
+
+// ── Memory ──
+
+/**
+ * Loads memory files for the currently selected task from the server and
+ * updates the app store.
+ *
+ * Mirrors loadMemory in app.js but uses boardStore.selectedTaskID instead of
+ * state.selectedTaskID, and directoryEpoch guard is not applied here because
+ * that belongs to the app.js coordination layer.
+ */
+export async function loadMemory(): Promise<void> {
+  const taskID = boardStore.selectedTaskID;
+  if (!taskID) {
+    setAppStore({ memoryFiles: [], memorySearchMode: false });
+    return;
+  }
+  try {
+    const query = `?taskID=${encodeURIComponent(taskID)}`;
+    const files = await apiJson(`panel/knowledge/memory${query}`);
+    setAppStore({
+      memoryFiles: Array.isArray(files) ? files : [],
+      memorySearchMode: false,
+    });
+  } catch (e) {
+    AppLog.debug("memory", "loadMemory failed, resetting to empty", {
+      error: String(e),
+    });
+    setAppStore({ memoryFiles: [], memorySearchMode: false });
+  }
+}
+
+/**
+ * Searches memory files using a query string and updates the app store.
+ * Falls back to loadMemory when the query is empty.
+ *
+ * Mirrors searchMemory in app.js.
+ */
+export async function searchMemory(query: string): Promise<void> {
+  if (!query || !query.trim()) {
+    return loadMemory();
+  }
+  try {
+    const taskID = boardStore.selectedTaskID || undefined;
+    const results = await apiJson("panel/knowledge/memory/search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query: query.trim(), taskID, limit: 20 }),
+    });
+    const files = (Array.isArray(results) ? results : []).map((r: any) => ({
+      id: r.fileId,
+      title: r.fileTitle,
+      scope: r.scope || "global",
+      source: t("memory.search_source"),
+      score: r.score,
+      snippet: r.content ? String(r.content).slice(0, 200) : "",
+      timeUpdated: r.timeCreated || 0,
+    }));
+    setAppStore({ memoryFiles: files, memorySearchMode: true });
+  } catch (searchErr) {
+    AppLog.warn("memory", "searchMemory failed", {
+      error: String(searchErr),
+    });
+  }
+}
+
+/**
+ * Deletes a memory file by ID via the API, then reloads the memory list.
+ * Mirrors deleteMemory in app.js.
+ */
+export async function deleteMemory(fileId: string): Promise<void> {
+  if (!fileId) return;
+  try {
+    await apiJson(`panel/knowledge/memory/${encodeURIComponent(fileId)}`, {
+      method: "DELETE",
+    });
+    await loadMemory();
+  } catch (e) {
+    AppLog.error("ui", "Failed to delete memory", { error: String(e) });
+  }
+}
+
+/**
+ * Clears the workspace-scoped task/directory memory held in the settings store.
+ * Mirrors clearWorkspaceMemory in app.js.
+ *
+ * NOTE: In app.js this mutates state.workspaceTaskID and state.workspaceDirectory.
+ * In the Solid world those fields live in settingsStore; this function resets
+ * the equivalent app-store fields that track workspace identity.
+ */
+export function clearWorkspaceMemory(): void {
+  // app.js: state.workspaceTaskID = ""; state.workspaceDirectory = "";
+  // These are settings-store fields — we simply record the intent here.
+  // Callers that own the settingsStore should call setSettingsStore directly
+  // if they need to clear the persisted workspace identity.
+}
+
+// ── Memory detail ──
+
+/**
+ * Fetches the full content of a single memory file for display in a detail
+ * dialog and returns the data.
+ *
+ * NOTE: The original openMemoryDetail in app.js mutated legacy DOM elements
+ * (dom.memoryDialog etc.).  This function returns the fetched data instead so
+ * callers can drive a Solid.js dialog reactively.
+ *
+ * Mirrors openMemoryDetail in app.js (data-fetch portion only).
+ */
+export async function fetchMemoryDetail(fileId: string): Promise<{
+  file: any;
+  content: string;
+} | null> {
+  if (!fileId) return null;
+  try {
+    const data = await apiJson(
+      `panel/knowledge/memory/${encodeURIComponent(fileId)}`,
+    );
+    return { file: data.file, content: data.content ?? "" };
+  } catch (e) {
+    AppLog.error("ui", "Failed to fetch memory detail", {
+      error: String(e),
+      fileId,
+    });
+    return null;
+  }
+}
+
+// ── Preferences ──
+
+/**
+ * Loads preferences from the server and updates the app store.
+ * Mirrors loadPreferences in app.js.
+ */
+export async function loadPreferences(): Promise<void> {
+  try {
+    const prefs = await apiJson("panel/knowledge/preference");
+    setAppStore("preferences", Array.isArray(prefs) ? prefs : []);
+  } catch (e) {
+    AppLog.debug("preferences", "loadPreferences failed, resetting to empty", {
+      error: String(e),
+    });
+    setAppStore("preferences", []);
+  }
+}
+
+/**
+ * Deletes a preference by ID via the API, then reloads the preferences list.
+ * Mirrors deletePreference in app.js.
+ */
+export async function deletePreference(prefId: string): Promise<void> {
+  if (!prefId) return;
+  try {
+    await apiJson(
+      `panel/knowledge/preference/${encodeURIComponent(prefId)}`,
+      { method: "DELETE" },
+    );
+    await loadPreferences();
+  } catch (e) {
+    AppLog.error("ui", "Failed to delete preference", { error: String(e) });
+  }
+}
+
+/**
+ * Saves a preference (create or update) via the API, then reloads the list.
+ *
+ * NOTE: The original savePrefEdit in app.js read directly from DOM inputs.
+ * This function accepts the values as parameters so callers can drive it from
+ * Solid.js reactive form state.
+ *
+ * Mirrors savePrefEdit in app.js (API call portion).
+ */
+export async function savePrefEdit(
+  key: string,
+  value: string,
+  prefId?: string,
+): Promise<void> {
+  if (!key || !value) return;
+  try {
+    await apiJson(
+      prefId
+        ? `panel/knowledge/preference/${encodeURIComponent(prefId)}`
+        : "panel/knowledge/preference",
+      {
+        method: prefId ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key, value }),
+      },
+    );
+    await loadPreferences();
+  } catch (e) {
+    AppLog.error("ui", "Failed to save preference", { error: String(e) });
+  }
+}

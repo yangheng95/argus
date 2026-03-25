@@ -1,0 +1,263 @@
+// ── App Store ──
+// Application-level state: connection status, theme, locale, zoom, opacity,
+// and log entries. Complements the settings store with runtime/volatile state.
+
+import { createStore } from "solid-js/store";
+
+// ── Types ──
+
+export type LogLevel = "debug" | "info" | "warn" | "error";
+export type LogSource = "overlay" | "server" | "pipeline";
+
+export interface LogEntry {
+  /** ISO timestamp string, e.g. "2026-03-25T10:00:00" */
+  ts: string;
+  level: LogLevel;
+  /** Sub-system / service tag, e.g. "conn", "ui", "pipeline" */
+  service: string;
+  /** Elapsed time string shown in the log line, e.g. "+123ms" */
+  delta: string;
+  message: string;
+  fields: Record<string, unknown>;
+  /** Raw unparsed line (for server log lines) */
+  raw: string;
+  source: LogSource;
+}
+
+export type ConnectionStatus = "online" | "offline" | "connecting";
+
+export interface NdjsonEvent {
+  [key: string]: any;
+}
+
+export interface AppState {
+  connectionStatus: ConnectionStatus;
+  connected: boolean;
+  /** Resolved effective theme: "dark" | "light" */
+  theme: "dark" | "light";
+  locale: string;
+  /** User-configured zoom multiplier (0.8–1.6) */
+  zoom: number;
+  /** Window opacity (0.1–1.0) */
+  opacity: number;
+  /** All log entries accumulated for the current session */
+  logEntries: LogEntry[];
+  /** Current filter level for log display */
+  logFilterLevel: LogLevel;
+  // ── i18n (mirrors state.i18n / state.i18nReady / state.localeSeq) ──
+  /** Loaded translation dictionary for the active locale */
+  i18n: Record<string, string>;
+  /** Whether i18n translations have been loaded and are ready for use */
+  i18nReady: boolean;
+  /** Monotonic counter incremented on each locale reload; used to sequence async loads */
+  localeSeq: number;
+  // ── App info ──
+  /** Version string reported by the opencorvus core server */
+  coreVersion: string;
+  // ── Server-side config (mirrors state.config) ──
+  /** Full server-side config object as returned by the /config API */
+  config: any;
+  // ── Providers (mirrors state.executors / state.providerCatalog / state.providerAuth) ──
+  /** Available executor descriptors returned by the server */
+  executors: any[];
+  /** LLM provider catalog from models.dev / server */
+  providerCatalog: any;
+  /** Current provider authentication status */
+  providerAuth: any;
+  /** Map of provider IDs whose auth prompt has been dismissed this session */
+  providerAuthDismissed: Record<string, boolean>;
+  /** In-progress provider connectivity test state */
+  providerTest: any;
+  // ── Extensions (mirrors state.channels / state.skills / state.skillMarket / state.mcp) ──
+  /** Configured channel list */
+  channels: any[];
+  /** Installed skills list */
+  skills: any[];
+  /** Skill marketplace catalogue */
+  skillMarket: any[];
+  /** MCP (Model Control Protocol) config/status map keyed by name */
+  mcp: Record<string, any>;
+  // ── NdjsonLog (mirrors state.ndjsonEvents / state.ndjsonStartMs) ──
+  /** Raw ndjson log events accumulated for the current session */
+  ndjsonEvents: NdjsonEvent[];
+  /** Unix-ms timestamp at which the current ndjson log stream started */
+  ndjsonStartMs: number;
+  // ── Memory / Knowledge (mirrors state.memoryFiles / state.memorySearchMode) ──
+  /** Memory file entries loaded from the server */
+  memoryFiles: any[];
+  /** Whether the memory panel is in search mode */
+  memorySearchMode: boolean;
+  // ── Preferences (mirrors state.preferences) ──
+  preferences: any[];
+  // ── Prompts (mirrors state.promptEntries / state.promptDrafts) ──
+  promptEntries: any[];
+  /** Map of prompt ID → draft text */
+  promptDrafts: Record<string, string>;
+  // ── Criteria / Budget (mirrors state.criteriaSpecs / state.budgetDirty / state.budgetSaving) ──
+  criteriaSpecs: any[];
+  /** Whether the budget config form has unsaved changes */
+  budgetDirty: boolean;
+  /** Whether a budget-save request is in flight */
+  budgetSaving: boolean;
+}
+
+// ── Defaults ──
+
+const DEFAULT_APP_STATE: AppState = {
+  connectionStatus: "offline",
+  connected: false,
+  theme: "dark",
+  locale: "en-US",
+  zoom: 1,
+  opacity: 0.8,
+  logEntries: [],
+  logFilterLevel: "debug",
+  i18n: {},
+  i18nReady: false,
+  localeSeq: 0,
+  coreVersion: "",
+  config: null,
+  executors: [],
+  providerCatalog: null,
+  providerAuth: null,
+  providerAuthDismissed: {},
+  providerTest: null,
+  channels: [],
+  skills: [],
+  skillMarket: [],
+  mcp: {},
+  ndjsonEvents: [],
+  ndjsonStartMs: 0,
+  memoryFiles: [],
+  memorySearchMode: false,
+  preferences: [],
+  promptEntries: [],
+  promptDrafts: {},
+  criteriaSpecs: [],
+  budgetDirty: false,
+  budgetSaving: false,
+};
+
+// ── Store ──
+
+export const [appStore, setAppStore] = createStore<AppState>({ ...DEFAULT_APP_STATE });
+
+// ── Log helpers ──
+
+const LOG_LEVEL_ORDER: Record<LogLevel, number> = {
+  debug: 0,
+  info: 1,
+  warn: 2,
+  error: 3,
+};
+
+const MAX_LOG_ENTRIES = 2000;
+
+/** Append a single log entry, capping the buffer at MAX_LOG_ENTRIES. */
+export function appendLog(entry: LogEntry): void {
+  setAppStore("logEntries", (prev) => {
+    const next = [...prev, entry];
+    return next.length > MAX_LOG_ENTRIES
+      ? next.slice(next.length - MAX_LOG_ENTRIES)
+      : next;
+  });
+}
+
+/** Clear all accumulated log entries. */
+export function clearLog(): void {
+  setAppStore("logEntries", []);
+}
+
+/** Return log entries filtered to at least the current filterLevel. */
+export function filteredLogEntries(): LogEntry[] {
+  const min = LOG_LEVEL_ORDER[appStore.logFilterLevel] ?? 0;
+  return appStore.logEntries.filter(
+    (e) => (LOG_LEVEL_ORDER[e.level] ?? 0) >= min,
+  );
+}
+
+// ── Connection helpers ──
+
+export function setConnectionStatus(status: ConnectionStatus): void {
+  setAppStore({
+    connectionStatus: status,
+    connected: status === "online",
+  });
+}
+
+// ── i18n helpers ──
+
+export function setI18n(dict: Record<string, string>, seq: number): void {
+  setAppStore({ i18n: dict, i18nReady: true, localeSeq: seq });
+}
+
+export function setI18nReady(ready: boolean): void {
+  setAppStore("i18nReady", ready);
+}
+
+// ── NdjsonLog helpers ──
+
+const MAX_NDJSON_EVENTS = 5000;
+
+export function appendNdjsonEvent(event: NdjsonEvent): void {
+  setAppStore("ndjsonEvents", (prev) => {
+    const next = [...prev, event];
+    return next.length > MAX_NDJSON_EVENTS
+      ? next.slice(next.length - MAX_NDJSON_EVENTS)
+      : next;
+  });
+}
+
+export function clearNdjsonEvents(): void {
+  setAppStore({ ndjsonEvents: [], ndjsonStartMs: 0 });
+}
+
+export function setNdjsonStartMs(ms: number): void {
+  setAppStore("ndjsonStartMs", ms);
+}
+
+// ── Provider helpers ──
+
+export function setProviderCatalog(catalog: any): void {
+  setAppStore("providerCatalog", catalog ?? null);
+}
+
+export function setProviderAuth(auth: any): void {
+  setAppStore("providerAuth", auth ?? null);
+}
+
+export function dismissProviderAuth(providerID: string): void {
+  setAppStore("providerAuthDismissed", (prev) => ({
+    ...prev,
+    [providerID]: true,
+  }));
+}
+
+export function setProviderTest(test: any): void {
+  setAppStore("providerTest", test ?? null);
+}
+
+export function setExecutors(list: any[]): void {
+  setAppStore("executors", Array.isArray(list) ? list : []);
+}
+
+// ── Extensions helpers ──
+
+export function setChannels(list: any[]): void {
+  setAppStore("channels", Array.isArray(list) ? list : []);
+}
+
+export function setSkills(list: any[]): void {
+  setAppStore("skills", Array.isArray(list) ? list : []);
+}
+
+export function setSkillMarket(list: any[]): void {
+  setAppStore("skillMarket", Array.isArray(list) ? list : []);
+}
+
+export function setMcp(map: Record<string, any>): void {
+  setAppStore(
+    "mcp",
+    map && typeof map === "object" && !Array.isArray(map) ? map : {},
+  );
+}

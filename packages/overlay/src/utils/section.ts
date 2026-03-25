@@ -1,0 +1,211 @@
+// ── Section phase utilities ──
+// Exact port of syncSectionPhases, clearSectionPhases, markSectionPhase,
+// phaseSections, liveConversationPhase, relatePhase from app.js.
+//
+// These functions directly manipulate DOM data-attributes (data-phaseState)
+// on the PRD section elements to drive CSS active/related highlighting.
+//
+// The functions that previously read from the legacy global `state` now
+// receive their data as parameters so Solid callers can supply Solid store
+// values.
+
+import { getDomRefs } from "../dom";
+import { messageStore } from "../store/messages";
+import { phaseFromMessage } from "./message";
+
+// ── Internal: phaseSections ──
+// Returns a map of phase-kind → DOM section node.
+// Mirrors app.js phaseSections.
+
+function phaseSections(): Record<string, HTMLElement | null> {
+  const dom = getDomRefs();
+  return {
+    spec: dom.specSection,
+    plan: dom.planSection,
+    goals: dom.goalsSection,
+    evaluation: dom.criteriaSection,
+    delivery: dom.deliverySection,
+    files: dom.changesSection,
+  };
+}
+
+// ── Internal: markSectionPhase ──
+// Sets or removes the data-phaseState attribute on a section element.
+
+function markSectionPhase(kind: string, value: string): void {
+  const node = phaseSections()[kind];
+  if (!node) return;
+  if (!value) {
+    delete node.dataset.phaseState;
+    return;
+  }
+  node.dataset.phaseState = value;
+}
+
+// ── Internal: liveConversationPhase ──
+// Exact port of app.js liveConversationPhase.
+// Scans messages in reverse to find the currently active agent phase.
+
+function liveConversationPhase(messages: any[]): string {
+  const list = Array.isArray(messages) ? messages : [];
+  for (let index = list.length - 1; index >= 0; index -= 1) {
+    const message = list[index];
+    const parts = Array.isArray(message?.parts) ? message.parts : [];
+    const running = parts.some(
+      (part: any) =>
+        part?.type === "tool" && ["running", "pending"].includes(part?.state?.status || ""),
+    );
+    const incomplete =
+      message?.info?.role === "assistant" && !message?.info?.time?.completed;
+    if (!running && !incomplete) continue;
+    // Prefer explicit agent tag over keyword matching
+    const agent = String(message?.info?.agent || "").trim().toLowerCase();
+    if (agent === "spec") return "spec";
+    if (agent === "planner") return "plan";
+    if (agent === "goal") return "goals";
+    if (agent === "judge") return "evaluation";
+    if (agent === "delivery") return "files";
+    return phaseFromMessage(message);
+  }
+  return "";
+}
+
+// ── Internal: relatePhase ──
+// Exact port of app.js relatePhase.
+// changesCount: number of file-change entries (app.js state.changes.length equivalent).
+
+function relatePhase(
+  kind: string,
+  related: string[],
+  board: any,
+  goals: any[],
+  changesCount: number,
+): void {
+  if (!kind) return;
+  if (kind === "plan") {
+    if (board?.spec) related.push("spec");
+    return;
+  }
+  if (kind === "goals") {
+    if (board?.plan) related.push("plan");
+    if (changesCount > 0) related.push("files");
+    return;
+  }
+  if (kind === "evaluation") {
+    if (goals.length > 0) related.push("goals");
+    if (changesCount > 0) related.push("files");
+    return;
+  }
+  if (kind === "files") {
+    if (board?.evaluation) related.push("evaluation");
+    if (goals.length > 0) related.push("goals");
+    return;
+  }
+}
+
+// ── Public: clearSectionPhases ──
+// Exact port of app.js clearSectionPhases.
+// Removes data-phaseState from all PRD section nodes.
+
+export function clearSectionPhases(): void {
+  Object.values(phaseSections()).forEach((node) => {
+    if (!node) return;
+    delete node.dataset.phaseState;
+  });
+}
+
+// ── Public: syncSectionPhases ──
+// Exact port of app.js syncSectionPhases.
+// board: board data object (boardStore.board equivalent).
+// changesCount: number of current file diffs (app.js state.changes.length equivalent).
+//
+// Callers should pass:
+//   board       — boardStore.board
+//   changesCount — changes array length from app store or local state
+
+export function syncSectionPhases(board: any, changesCount = 0): void {
+  clearSectionPhases();
+  const messages = Array.isArray(messageStore.messages) ? (messageStore.messages as any[]) : [];
+  const live = liveConversationPhase(messages);
+  if (!board?.task && !live) return;
+
+  const goals = (board?.lanes || []).find((lane: any) => lane.id === "goals")?.cards || [];
+  const pending = (board?.interactions || []).some((item: any) => item.status === "pending");
+  const planning = board?.task
+    ? board.task.status === "planning" ||
+      board.run?.phase === "plan" ||
+      board.run?.phase === "replan"
+    : false;
+  const active: string[] = [];
+  const related: string[] = [];
+
+  if (live) {
+    active.push(live);
+    relatePhase(live, related, board, goals, changesCount);
+  }
+
+  if (board?.task && (pending || board.task.status === "blocked")) {
+    active.length = 0;
+    if (board.plan) active.push("plan");
+    else if (goals.length > 0) active.push("goals");
+    else if (board.spec) active.push("spec");
+  }
+
+  if (board?.task && active.length === 0 && board.task.status === "queued") {
+    if (board.spec) active.push("spec");
+    else if (board.plan) active.push("plan");
+  }
+
+  if (board?.task && active.length === 0 && planning) {
+    active.push(board.spec ? "plan" : "spec");
+    if (board.spec) related.push("spec");
+    if (board.plan) related.push("plan");
+  }
+
+  if (board?.task && active.length === 0 && board.task.status === "running") {
+    active.push(goals.length > 0 ? "goals" : board.plan ? "plan" : "spec");
+    if (board.plan) related.push("plan");
+    if (changesCount > 0) related.push("files");
+  }
+
+  if (board?.task && active.length === 0 && board.task.status === "evaluating") {
+    active.push("evaluation");
+    if (goals.length > 0) related.push("goals");
+    if (changesCount > 0) related.push("files");
+  }
+
+  if (board?.task && active.length === 0 && board.task.status === "delivering") {
+    active.push("delivery");
+    if (changesCount > 0) related.push("files");
+    if (board.evaluation) related.push("evaluation");
+    if (goals.length > 0) related.push("goals");
+  }
+
+  if (board?.task && active.length === 0 && board.task.status === "completed") {
+    active.push(
+      board.delivery ? "delivery" : changesCount > 0 ? "files" : "evaluation",
+    );
+    if (board.delivery && changesCount > 0) related.push("files");
+    if (board.evaluation) related.push("evaluation");
+    if (goals.length > 0) related.push("goals");
+  }
+
+  if (board?.task && active.length === 0 && board.task.status === "failed") {
+    active.push(board.evaluation ? "evaluation" : board.plan ? "plan" : "spec");
+    if (board.plan) related.push("plan");
+    if (goals.length > 0) related.push("goals");
+  }
+
+  if (board?.task && active.length === 0 && board.task.status === "cancelled") {
+    if (board.plan) active.push("plan");
+    else if (board.spec) active.push("spec");
+  }
+
+  const current = [...new Set(active.filter(Boolean))];
+  const contextual = [
+    ...new Set(related.filter((kind) => kind && !current.includes(kind))),
+  ];
+
+  current.forEach((kind) => markSectionPhase(kind, "active"));
+  contextual.forEach((kind) => markSectionPhase(kind, "related"));
+}

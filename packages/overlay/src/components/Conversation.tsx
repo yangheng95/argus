@@ -1,7 +1,9 @@
-import { createSignal, createMemo, createEffect, For, Show, batch, onMount, onCleanup } from "solid-js";
-import { createStore, reconcile } from "solid-js/store";
+import { createSignal, createMemo, createEffect, For, Show, onMount, onCleanup } from "solid-js";
 import { MessageView } from "./MessageView";
 import { AgentCard } from "./AgentCard";
+import { messageStore } from "../store/messages";
+import { rootTaskSessionID } from "../store/board";
+import { t } from "../utils/i18n";
 
 // Agent stages that get their own cards
 const AGENT_STAGES = new Set(["spec", "planner", "goal", "judge", "delivery"]);
@@ -11,10 +13,7 @@ function classifyMessage(msg: any): string {
   if (AGENT_STAGES.has(agent)) return agent;
   // Legacy: messages with agent="agent" from child sessions
   if (agent === "agent") {
-    const rootSession =
-      typeof (window as any).rootTaskSessionID === "function"
-        ? (window as any).rootTaskSessionID()
-        : "";
+    const rootSession = rootTaskSessionID();
     const sessionID = typeof msg?.info?.sessionID === "string" ? msg.info.sessionID : "";
     if (rootSession && sessionID && sessionID !== rootSession) {
       return "agent";
@@ -22,15 +21,6 @@ function classifyMessage(msg: any): string {
   }
   return "main";
 }
-
-// ── Store ──
-// Legacy app.js will push data into this store via the bridge API.
-const [store, setStore] = createStore({
-  messages: [] as any[],
-  agentEvents: [] as any[],
-  showTranscriptDetails: false,
-  agentStatus: null as any,
-});
 
 // ── Conversation Component ──
 // Renders directly into the host container (e.g. #chatScroll).
@@ -49,7 +39,7 @@ export function Conversation(props: { container: HTMLElement }) {
       { stage: string; messages: any[]; startTime: number; endTime: number }
     > = {};
 
-    for (const msg of store.messages) {
+    for (const msg of messageStore.messages) {
       const channel = classifyMessage(msg);
       if (channel === "main") {
         mainMessages.push(msg);
@@ -80,7 +70,7 @@ export function Conversation(props: { container: HTMLElement }) {
 
     // Build agent cards with status detection
     const agentCards: any[] = [];
-    const allAgentEvents = Array.isArray(store.agentEvents) ? store.agentEvents : [];
+    const allAgentEvents = Array.isArray(messageStore.agentEvents) ? messageStore.agentEvents : [];
     for (const [stage, rounds] of Object.entries(stageRounds)) {
       for (let i = 0; i < rounds.length; i++) {
         const { key, channel } = rounds[i];
@@ -157,12 +147,7 @@ export function Conversation(props: { container: HTMLElement }) {
     scrollToBottom();
   });
 
-  const emptyText = () => {
-    if (typeof (window as any).t === "function") {
-      return (window as any).t("chat.empty");
-    }
-    return "No messages yet";
-  };
+  const emptyText = () => t("chat.empty");
 
   return (
     <>
@@ -181,31 +166,4 @@ export function Conversation(props: { container: HTMLElement }) {
       </For>
     </>
   );
-}
-
-// ── Bridge API ──
-// Legacy app.js calls this to push data into the Solid store.
-
-export function createConversationBridge() {
-  return {
-    update(
-      messages: any[],
-      agentEvents: any[],
-      options?: { showTranscriptDetails?: boolean; agentStatus?: any },
-    ) {
-      batch(() => {
-        setStore("messages", reconcile(messages));
-        setStore("agentEvents", reconcile(agentEvents));
-        if (options?.showTranscriptDetails !== undefined)
-          setStore("showTranscriptDetails", options.showTranscriptDetails);
-        if (options?.agentStatus !== undefined) setStore("agentStatus", options.agentStatus);
-      });
-    },
-    clear() {
-      batch(() => {
-        setStore("messages", []);
-        setStore("agentEvents", []);
-      });
-    },
-  };
 }
