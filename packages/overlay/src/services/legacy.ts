@@ -575,13 +575,7 @@ function scheduleConversationCompat(): void {
   renderConversation();
 }
 
-function requireLegacyGlobal<T extends (...args: any[]) => any>(name: string): T {
-  const fn = (window as any)[name];
-  if (typeof fn !== "function") {
-    throw new Error(`Legacy global ${name} is not installed`);
-  }
-  return fn as T;
-}
+// requireLegacyGlobal removed — all callers now use direct function calls.
 
 function stopPolling(): void {
   if (runtimeState.pollTimer) {
@@ -647,8 +641,8 @@ export function handleEventStreamEvent(event: any): void {
   }
   if (type === "task.replay_expired") {
     if (boardStore.selectedTaskID) void syncTask(boardStore.selectedTaskID);
-    requireLegacyGlobal<(delay?: number) => void>("scheduleTasks")(0);
-    requireLegacyGlobal<(delay?: number) => void>("scheduleBoard")(0);
+    scheduleTasksCompat(0);
+    scheduleBoardCompat(0);
     return;
   }
   const taskID = eventTaskID(event);
@@ -657,17 +651,17 @@ export function handleEventStreamEvent(event: any): void {
     const current = boardStore.taskSequence;
     if (current > 0 && sequence <= current) return;
     if (current > 0 && sequence > current + 1) {
-      requireLegacyGlobal<(delay?: number) => void>("scheduleBoard")(BOARD_EVENT_DEBOUNCE);
-      requireLegacyGlobal<(delay?: number) => void>("scheduleTasks")(BOARD_EVENT_DEBOUNCE);
-      requireLegacyGlobal<(taskID: string) => void>("startSSE")(taskID);
+      scheduleBoardCompat(BOARD_EVENT_DEBOUNCE);
+      scheduleTasksCompat(BOARD_EVENT_DEBOUNCE);
+      startSSE(taskID);
       return;
     }
     setTaskSequence(sequence);
   }
   if (boardInvalidatingEvent(type)) {
-    requireLegacyGlobal<(delay?: number) => void>("scheduleTasks")(BOARD_EVENT_DEBOUNCE);
+    scheduleTasksCompat(BOARD_EVENT_DEBOUNCE);
     if (taskID && taskID === boardStore.selectedTaskID) {
-      requireLegacyGlobal<(delay?: number) => void>("scheduleBoard")(BOARD_EVENT_DEBOUNCE);
+      scheduleBoardCompat(BOARD_EVENT_DEBOUNCE);
     }
   }
 }
@@ -1112,8 +1106,10 @@ function installState(): void {
 }
 
 export function installLegacyGlobals(): void {
-  installState();
+  // installState() removed — state proxy had no readers after bridge elimination.
+  // runtimeState is still accessed directly within this module.
   installBudgetBindings();
+  // __legacyConv: used by conversation.ts for transcript conversion helpers.
   (window as any).__legacyConv = {
     t,
     syntheticTextMessage,
@@ -1123,22 +1119,5 @@ export function installLegacyGlobals(): void {
     evaluationContextText,
     deliveryStatusLabel: (status: string) => status,
   };
-  // Load-bearing globals — actually called via window from other modules.
-  // Access patterns: direct `(window as any).xxx()` AND indirect
-  // `requireLegacyGlobal("xxx")` (string-based lookup in handleEventStreamEvent).
-  Object.assign(window as any, {
-    state: (window as any).state,
-    t,
-    checkConnection,
-    loadBoard,
-    loadConversation,
-    loadMeta,
-    renderMeta,
-    renderWorkspaceState,
-    // Required by handleEventStreamEvent via requireLegacyGlobal():
-    scheduleBoard: scheduleBoardCompat,
-    scheduleTasks: scheduleTasksCompat,
-    startSSE,
-    __legacyHandleNonMessageEvent: handleEventStreamEvent,
-  });
+  // All other window globals eliminated — callers use direct imports.
 }

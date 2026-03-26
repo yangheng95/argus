@@ -48,37 +48,32 @@ export interface LoadBoardOptions {
   sync?: boolean;
 }
 
-function legacyState(): Record<string, any> | null {
-  if (typeof window === "undefined") return null;
-  const state = (window as any).state;
-  return state && typeof state === "object" ? state : null;
-}
+// Module-level runtime state (replaces legacy window.state proxy fields).
+let _boardRetryTimer: ReturnType<typeof setTimeout> | null = null;
+let _boardLoading: Promise<void> | null = null;
+let _boardQueued = false;
 
 function boardSnapshot(board: any): string {
   return typeof board?.snapshotVersion === "string" ? board.snapshotVersion : "";
 }
 
 function clearBoardRetry(): void {
-  const state = legacyState();
-  if (state?.boardRetryTimer) {
-    clearTimeout(state.boardRetryTimer);
-    state.boardRetryTimer = null;
+  if (_boardRetryTimer) {
+    clearTimeout(_boardRetryTimer);
+    _boardRetryTimer = null;
   }
   setBoardRetryCount(0);
 }
 
 function retryBoard(sync: boolean): void {
-  const state = legacyState();
-  if (!boardStore.selectedTaskID || state?.boardRetryTimer) return;
+  if (!boardStore.selectedTaskID || _boardRetryTimer) return;
   if (sync) setBoardSyncPending(true);
   const delay = Math.min(1000 * Math.pow(2, Math.min(boardStore.boardRetryCount, 4)), 15000);
   setBoardRetryCount(boardStore.boardRetryCount + 1);
-  const timer = setTimeout(() => {
-    const latest = legacyState();
-    if (latest) latest.boardRetryTimer = null;
+  _boardRetryTimer = setTimeout(() => {
+    _boardRetryTimer = null;
     void loadBoard({ sync: boardStore.boardSyncPending });
   }, delay);
-  if (state) state.boardRetryTimer = timer;
 }
 
 export async function loadBoard(options: LoadBoardOptions = {}): Promise<void> {
@@ -89,11 +84,10 @@ export async function loadBoard(options: LoadBoardOptions = {}): Promise<void> {
     return;
   }
   if (options.sync) setBoardSyncPending(true);
-  const state = legacyState();
-  if (state?.boardLoading) {
-    setBoardQueued(true);
+  if (_boardLoading) {
+    _boardQueued = true;
     if (options.sync) setBoardSyncPending(true);
-    return state.boardLoading;
+    return _boardLoading;
   }
   const sync = options.sync === true || boardStore.boardSyncPending;
   if (sync) setBoardSyncPending(true);
@@ -130,12 +124,12 @@ export async function loadBoard(options: LoadBoardOptions = {}): Promise<void> {
       console.error("loadBoard failed", e);
       if (taskID === boardStore.selectedTaskID) retryBoard(sync);
     } finally {
-      const latest = legacyState();
-      if (latest) latest.boardLoading = null;
+      _boardLoading = null;
       setBoardStore("loading", false);
-      if (boardStore.boardQueued) {
+      if (_boardQueued || boardStore.boardQueued) {
+        _boardQueued = false;
         setBoardQueued(false);
-        if (!failed && !(latest?.boardRetryTimer)) {
+        if (!failed && !_boardRetryTimer) {
           queueMicrotask(() => {
             void loadBoard({ sync: boardStore.boardSyncPending });
           });
@@ -143,7 +137,7 @@ export async function loadBoard(options: LoadBoardOptions = {}): Promise<void> {
       }
     }
   })();
-  if (state) state.boardLoading = loading;
+  _boardLoading = loading;
   setBoardStore("loading", true);
   return loading;
 }
