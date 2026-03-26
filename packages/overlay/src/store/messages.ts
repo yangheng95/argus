@@ -5,6 +5,7 @@ import { createStore, produce, reconcile } from "solid-js/store";
 import { batch } from "solid-js";
 import { apiJson, apiUrl } from "../services/api";
 import { boardStore } from "../store/board";
+import { clearConversationUiState } from "./conversation-ui";
 import {
   appendExecutorEvent as appendExecutorStoreEvent,
   clearExecutorEvents,
@@ -41,11 +42,25 @@ export interface Message {
   _synthetic?: boolean;
 }
 
+export interface AgentCardMessage {
+  _synthetic: true;
+  _agentCard: true;
+  _agentStage: string;
+  _agentStatus: string;
+  _agentRound: number;
+  _agentCardKey: string;
+  _agentMessages: any[];
+  info: MessageInfo;
+  parts: Part[];
+}
+
 // ── Store ──
 
 const [store, setStore] = createStore({
   messages: [] as Message[],
   agentEvents: [] as any[],
+  agentCards: {} as Record<string, AgentCardMessage>,
+  agentCardOrder: [] as string[],
   selectedTaskID: "" as string,
   showTranscriptDetails: false,
   agentStatus: null as any,
@@ -243,12 +258,344 @@ export function mergeLoadedConversationMessages(
   return normalizeLoadedMessages(result);
 }
 
+const AGENT_STAGES = new Set(["spec", "planner", "goal", "judge", "delivery"]);
+const MAX_LIVE_AGENT_MESSAGES = 12;
+
+type AgentRound = {
+  channelID: string;
+  stage: string;
+  sessionID: string;
+  messages: any[];
+  startTime: number;
+  endTime: number;
+};
+
+function rootTaskSessionID(): string {
+  const sessionID = boardStore.board?.task?.sessionID;
+  return typeof sessionID === "string" ? sessionID : "";
+}
+
+function classifyAgentStage(message: any): string {
+  const agent = String(message?.info?.agent || "").trim().toLowerCase();
+  if (AGENT_STAGES.has(agent)) {
+    if (String(message?.info?.role || "").trim().toLowerCase() === "user") return "main";
+    return agent;
+  }
+  if (agent === "agent") {
+    const rootSession = rootTaskSessionID();
+    const sessionID =
+      typeof message?.info?.sessionID === "string" ? message.info.sessionID : "";
+    if (rootSession && sessionID && sessionID !== rootSession) {
+      return "agent";
+    }
+  }
+  return "main";
+}
+
+function activeAgentStages(): Set<string> {
+  const status = String(boardStore.board?.task?.status || "").trim().toLowerCase();
+  if (status === "planning") return new Set(["spec", "planner"]);
+  if (status === "evaluating") return new Set(["judge"]);
+  if (status === "delivering") return new Set(["delivery"]);
+  if (!status && Array.isArray(store.agentEvents) && store.agentEvents.length > 0) {
+    return new Set(
+      store.agentEvents
+        .map((item: any) => String(item?.stage || "").trim().toLowerCase())
+        .filter(Boolean),
+    );
+  }
+  return new Set();
+}
+
+function messageEndTime(message: any): number {
+  return Number(
+    message?.info?.time?.completed || message?.info?.time?.updated || messageTime(message),
+  );
+}
+
+function agentEventTime(event: any): number {
+  return Number(event?.time?.created || event?.timestamp || 0);
+}
+
+function agentEventDisplayText(event: any): string {
+  const live = typeof event?._liveText === "string" ? event._liveText : "";
+  if (live) return live;
+  const target = typeof event?._targetText === "string" ? event._targetText : "";
+  if (target) return target;
+  if (typeof event?.text === "string" && event.text) return event.text;
+  if (typeof event?.summary === "string" && event.summary) return event.summary;
+  return "";
+}
+
+function agentEventToolName(event: any): string {
+  if (typeof event?.toolName === "string" && event.toolName.trim()) return event.toolName.trim();
+  const summary = String(event?.summary || "");
+  const split = summary.split("→");
+  return split.length > 1 ? String(split[split.length - 1] || "").trim() : "";
+}
+
+function agentEventToolPart(event: any): any | null {
+  const tool = agentEventToolName(event);
+  if (!tool) return null;
+  const created = agentEventTime(event) || Date.now();
+  const id = typeof event?.id === "string" && event.id ? event.id : `tool:${tool}:${created}`;
+  const kind = String(event?.kind || "").trim().toLowerCase();
+  const status =
+    kind === "tool_result"
+      ? "completed"
+      : kind === "error"
+        ? "error"
+        : "running";
+  const summary = agentEventDisplayText(event).trim() || tool;
+  return {
+    id: `agent-tool:${id}`,
+    type: "tool",
+    callID: id,
+    tool,
+    state: {
+      status,
+      input: {},
+      ...(status === "completed" ? { output: summary, title: tool } : {}),
+      ...(status === "error" ? { error: summary } : {}),
+      ...(status === "running"
+        ? {
+            title: summary,
+            metadata: { synthetic: true },
+            time: { start: created },
+          }
+        : {}),
+    },
+  };
+}
+
+function agentMessage(event: any): any | null {
+  if (!event || typeof event !== "object") return null;
+  const stage = String(event?.stage || "").trim().toLowerCase();
+  if (!stage) return null;
+  const created = agentEventTime(event) || Date.now();
+  const eventID =
+    typeof event?.id === "string" && event.id
+      ? event.id
+      : `${stage}:${String(event?.kind || "status")}:${created}`;
+  const kind = String(event?.kind || "status").trim().toLowerCase();
+  const text = agentEventDisplayText(event).trim();
+  const base = {
+    _synthetic: true,
+    info: {
+      id: `agent-event:${stage}:${eventID}`,
+      role: "assistant",
+      agent: stage,
+      time: { created },
+    },
+    parts: [] as any[],
+  };
+
+  if (kind === "reasoning_delta" && text) {
+    return {
+      ...base,
+      parts: [
+        {
+          id: `reasoning:${eventID}`,
+          type: "reasoning",
+          text,
+          _targetText: typeof event?._targetText === "string" ? event._targetText : text,
+        },
+      ],
+    };
+  }
+
+  if (kind === "tool_call" || kind === "tool_delta" || kind === "tool_result") {
+    const part = agentEventToolPart(event);
+    return part ? { ...base, parts: [part] } : null;
+  }
+
+  if (!text) return null;
+  return {
+    ...base,
+    parts: [
+      {
+        id: `text:${eventID}`,
+        type: "text",
+        text,
+        _targetText: typeof event?._targetText === "string" ? event._targetText : text,
+      },
+    ],
+  };
+}
+
+function agentRoundStatus(
+  stage: string,
+  round: AgentRound,
+  roundIndex: number,
+  rounds: AgentRound[],
+  latestStageEvent: any,
+): string {
+  if (roundIndex < rounds.length - 1) return "completed";
+  const hasOpenTranscript = round.messages.some(
+    (message: any) => !message?._synthetic && !message?.info?.time?.completed,
+  );
+  const active = activeAgentStages().has(stage);
+  const latestKind = String(latestStageEvent?.kind || "").trim().toLowerCase();
+  const latestSummary = String(latestStageEvent?.summary || "");
+  if (latestKind === "error") return "error";
+  if (latestKind === "status" && /finished|completed|done/i.test(latestSummary)) {
+    return "completed";
+  }
+  if (active || hasOpenTranscript) return "running";
+  return "completed";
+}
+
+function rebuildAgentCards(): void {
+  const roundsByStage: Record<string, AgentRound[]> = {};
+  const latestEventByStage = new Map<string, any>();
+
+  for (const message of store.messages) {
+    const stage = classifyAgentStage(message);
+    if (stage === "main") continue;
+    const sessionID =
+      typeof message?.info?.sessionID === "string" ? message.info.sessionID.trim() : "";
+    const fallbackID =
+      typeof message?.info?.id === "string" && message.info.id ? message.info.id : hashText(messageSignature(message));
+    const channelID = sessionID
+      ? `${stage}:session:${sessionID}`
+      : `${stage}:message:${fallbackID}`;
+    const round = roundsByStage[stage] || [];
+    let entry = round.find((item) => item.channelID === channelID);
+    if (!entry) {
+      entry = {
+        channelID,
+        stage,
+        sessionID,
+        messages: [],
+        startTime: Infinity,
+        endTime: 0,
+      };
+      round.push(entry);
+      roundsByStage[stage] = round;
+    }
+    entry.messages.push(message);
+    const created = messageTime(message);
+    if (created < entry.startTime) entry.startTime = created;
+    const completed = messageEndTime(message);
+    if (completed > entry.endTime) entry.endTime = completed;
+  }
+
+  const liveEventsByStage = new Map<string, any[]>();
+  for (const event of Array.isArray(store.agentEvents) ? store.agentEvents : []) {
+    const stage = String(event?.stage || "").trim().toLowerCase();
+    if (!AGENT_STAGES.has(stage)) continue;
+    const items = liveEventsByStage.get(stage) || [];
+    items.push(event);
+    liveEventsByStage.set(stage, items);
+    latestEventByStage.set(stage, event);
+  }
+
+  for (const [stage, events] of liveEventsByStage.entries()) {
+    const liveMessages = events
+      .slice()
+      .sort((left, right) => agentEventTime(left) - agentEventTime(right))
+      .map((event) => agentMessage(event))
+      .filter(Boolean)
+      .slice(-MAX_LIVE_AGENT_MESSAGES);
+    if (liveMessages.length === 0) continue;
+    const existing = roundsByStage[stage] || [];
+    if (existing.length > 0) continue;
+    existing.push({
+      channelID: `${stage}:live`,
+      stage,
+      sessionID: "",
+      messages: liveMessages,
+      startTime: messageTime(liveMessages[0]),
+      endTime: Math.max(...liveMessages.map((message: any) => messageEndTime(message))),
+    });
+    roundsByStage[stage] = existing;
+  }
+
+  const nextCards: Record<string, AgentCardMessage> = {};
+  const nextOrder: string[] = [];
+  for (const [stage, rounds] of Object.entries(roundsByStage)) {
+    rounds.sort((left, right) => left.startTime - right.startTime);
+    for (let index = 0; index < rounds.length; index += 1) {
+      const round = rounds[index];
+      const roundLabel = rounds.length > 1 ? index + 1 : 0;
+      const status = agentRoundStatus(
+        stage,
+        round,
+        index,
+        rounds,
+        latestEventByStage.get(stage),
+      );
+      const created =
+        Number.isFinite(round.startTime) && round.startTime > 0 ? round.startTime : Date.now();
+      const cardID = round.channelID;
+      nextCards[cardID] = {
+        _synthetic: true,
+        _agentCard: true,
+        _agentStage: stage,
+        _agentStatus: status,
+        _agentRound: roundLabel,
+        _agentCardKey: cardID,
+        _agentMessages: round.messages
+          .slice()
+          .sort((left, right) => messageTime(left) - messageTime(right)),
+        info: {
+          id: `agent-card:${cardID}`,
+          role: "agent-card",
+          agent: stage,
+          sessionID: round.sessionID,
+          time: { created },
+        },
+        parts: [],
+      };
+      nextOrder.push(cardID);
+    }
+  }
+
+  nextOrder.sort(
+    (left, right) =>
+      messageTime(nextCards[left]) - messageTime(nextCards[right]) || left.localeCompare(right),
+  );
+
+  // Apply targeted per-card updates instead of reconcile.
+  // reconcile can't properly diff arrays whose elements are store proxies
+  // from store.messages — it sees the proxy identity, not the value change,
+  // so _agentMessages.length never triggers in downstream reactive contexts.
+  batch(() => {
+    // Remove cards that no longer exist
+    const prevKeys = Object.keys(store.agentCards);
+    for (const key of prevKeys) {
+      if (!(key in nextCards)) {
+        setStore("agentCards", key, undefined!);
+      }
+    }
+    // Add or update cards
+    for (const [cardID, card] of Object.entries(nextCards)) {
+      if (cardID in store.agentCards) {
+        // Update mutable fields — each setStore call fires its own notification
+        setStore("agentCards", cardID, "_agentStatus", card._agentStatus);
+        setStore("agentCards", cardID, "_agentRound", card._agentRound);
+        // Replace the whole array so .length subscribers fire
+        setStore("agentCards", cardID, "_agentMessages", [...card._agentMessages]);
+      } else {
+        setStore("agentCards", cardID, { ...card, _agentMessages: [...card._agentMessages] });
+      }
+    }
+    // Update order only when it actually changed
+    const prevOrder = store.agentCardOrder;
+    if (
+      prevOrder.length !== nextOrder.length ||
+      prevOrder.some((id: string, i: number) => id !== nextOrder[i])
+    ) {
+      setStore("agentCardOrder", nextOrder);
+    }
+  });
+}
+
 // ── Full load from transcript ──
 
 export async function syncTask(taskID: string) {
   if (!taskID) {
-    setStore("messages", []);
-    messageIndex.clear();
+    clearMessages();
     clearAgentEvents();
     return;
   }
@@ -263,9 +610,7 @@ export async function syncTask(taskID: string) {
       Array.isArray(timeline) ? timeline : [],
       Array.isArray(transcript) ? transcript : [],
     );
-    setStore("messages", sortMessages(messages));
-    rebuildMessageIndex();
-    setStore("conversationUpdatedAt", Date.now());
+    setMessages(messages);
   } catch (e) {
     console.error("syncTask failed", e);
   }
@@ -559,6 +904,7 @@ function flushEvents() {
     }
   });
   if (needsUpdate) {
+    rebuildAgentCards();
     setStore("conversationUpdatedAt", Date.now());
   }
 }
@@ -861,6 +1207,7 @@ function mergeAgentEventList(events: AgentEvent[], raw: any): AgentEvent[] {
 export function appendAgentEvent(raw: any): void {
   const next = mergeAgentEventList([...store.agentEvents], raw);
   setStore("agentEvents", reconcile(next));
+  rebuildAgentCards();
   setStore("conversationUpdatedAt", Date.now());
   const payload = agentEventRecord(raw?.payload)
     ? raw.payload
@@ -890,6 +1237,7 @@ export function setAgentEvents(events: any[]) {
   }
   const normalized = pruneAgentEvents(Array.isArray(events) ? events as AgentEvent[] : []);
   setStore("agentEvents", reconcile(normalized));
+  rebuildAgentCards();
   setStore("conversationUpdatedAt", Date.now());
 }
 
@@ -898,6 +1246,7 @@ export function clearAgentEvents(): void {
     stopAgentLiveTimer(key);
   }
   setStore("agentEvents", []);
+  rebuildAgentCards();
   setStore("conversationUpdatedAt", Date.now());
 }
 
@@ -905,10 +1254,14 @@ export function setMessages(messages: any[]) {
   const next = sortMessages(Array.isArray(messages) ? messages : []);
   setStore("messages", reconcile(next));
   rebuildMessageIndex();
+  rebuildAgentCards();
   setStore("conversationUpdatedAt", Date.now());
 }
 
 export function setSelectedTaskID(taskID: string) {
+  if (store.selectedTaskID !== taskID) {
+    clearConversationUiState();
+  }
   setStore("selectedTaskID", taskID);
 }
 
@@ -926,6 +1279,8 @@ export function setSseConnected(connected: boolean) {
 
 export function clearMessages() {
   setStore("messages", []);
+  setStore("agentCards", reconcile({}, { merge: false }));
+  setStore("agentCardOrder", []);
   messageIndex.clear();
 }
 

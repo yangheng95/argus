@@ -1,6 +1,10 @@
-import { createSignal, For, Show } from "solid-js";
+import { For, Show } from "solid-js";
 import { MessageView } from "./MessageView";
 import { agentStageLabel } from "../utils/message";
+import {
+  agentCardExpanded,
+  toggleAgentCardExpanded,
+} from "../store/conversation-ui";
 
 function stageLabel(stage: string): string {
   return agentStageLabel(stage);
@@ -11,19 +15,11 @@ interface AgentCardProps {
   status: string;
   messages: any[];
   round: number;
-  key: string;
+  cardID: string;
 }
 
-// Persist user's explicit expand/collapse choice per card key so that
-// component re-creation (caused by Solid's <For> reference tracking when
-// conversationMessages() returns a new array) doesn't reset the toggle.
-const expandedOverrides = new Map<string, boolean>();
-
 export function AgentCard(props: AgentCardProps) {
-  const initial = expandedOverrides.has(props.key)
-    ? expandedOverrides.get(props.key)!
-    : props.status === "running";
-  const [expanded, setExpanded] = createSignal(initial);
+  const expanded = () => agentCardExpanded(props.cardID, props.status === "running");
 
   const label = () => {
     const base = stageLabel(props.stage);
@@ -31,9 +27,7 @@ export function AgentCard(props: AgentCardProps) {
   };
 
   const toggle = () => {
-    const next = !expanded();
-    setExpanded(next);
-    expandedOverrides.set(props.key, next);
+    toggleAgentCardExpanded(props.cardID, props.status === "running");
   };
 
   return (
@@ -42,7 +36,7 @@ export function AgentCard(props: AgentCardProps) {
       classList={{ "agent-card--expanded": expanded() }}
       data-role="agent-card"
       data-stage={props.stage}
-      data-card-key={props.key}
+      data-card-key={props.cardID}
     >
       <div
         class="agent-card-header"
@@ -84,11 +78,9 @@ export function AgentCard(props: AgentCardProps) {
         </span>
         <span class="agent-card-chevron" aria-hidden="true">{"\u25BC"}</span>
       </div>
-      <Show when={expanded()}>
-        <div class="agent-card-body">
-          <For each={props.messages}>{(msg) => <MessageView message={msg} />}</For>
-        </div>
-      </Show>
+      <div class="agent-card-body">
+        <For each={props.messages}>{(msg) => <MessageView message={msg} />}</For>
+      </div>
     </article>
   );
 }

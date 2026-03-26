@@ -57,12 +57,11 @@ export function Conversation(props: { container: HTMLElement }) {
             when={!item?._agentCard}
             fallback={
               <AgentCard
-                key={item._agentCardKey}
+                cardID={item._agentCardKey}
                 stage={item._agentStage}
                 status={item._agentStatus}
                 round={item._agentRound}
                 messages={item._agentMessages}
-                startTime={item.info?.time?.created || 0}
               />
             }
           >
