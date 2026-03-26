@@ -51,10 +51,15 @@ function sanitizeTheme(value: any): string {
   return text === "light" || text === "dark" ? text : "dark";
 }
 
-function sanitizeOpacity(value: any): number {
+export const MIN_WINDOW_OPACITY = 0.5;
+
+export function sanitizeOpacity(value: any): number {
   const n = parseFloat(String(value ?? ""));
   if (!Number.isFinite(n)) return 0.8;
-  return Math.min(1, Math.max(0.1, n));
+  return Math.max(
+    MIN_WINDOW_OPACITY,
+    Math.min(1, Math.round(n * 100) / 100),
+  );
 }
 
 function sanitizeZoom(value: any): number {
@@ -235,6 +240,15 @@ export function saveSettings(): void {
   } else {
     localStorage.removeItem("oc_directory");
     localStorage.removeItem("oc_directory_mode");
+  }
+
+  const invoke = (window as any).__TAURI__?.core?.invoke as
+    | ((command: string, args?: Record<string, unknown>) => Promise<unknown>)
+    | undefined;
+  if (typeof invoke === "function") {
+    void invoke("overlay_settings_save", {
+      settings: bootstrapOverlaySettings(s),
+    }).catch(() => undefined);
   }
 }
 

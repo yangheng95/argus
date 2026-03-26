@@ -3,7 +3,8 @@
 // Replaces direct reads of app.js state.board / state.tasks.
 
 import { createStore } from "solid-js/store";
-import { apiJson } from "../services/api";
+import { apiHeaders, apiJson, apiUrl } from "../services/api";
+import { t } from "../utils/i18n";
 
 // ── Store ──
 
@@ -11,6 +12,7 @@ export const [boardStore, setBoardStore] = createStore({
   board: null as any,
   tasks: [] as any[],
   selectedTaskID: "" as string,
+  taskSequence: 0 as number,
   loading: false,
   // ── Task list internals (mirrors state.pendingTasks / state.tasksSeq) ──
   /** Tasks that have been created locally but not yet confirmed by the server */
@@ -42,22 +44,125 @@ export const [boardStore, setBoardStore] = createStore({
 
 // ── Loaders ──
 
-export async function loadBoard(): Promise<void> {
-  setBoardStore("loading", true);
-  try {
-    const data = await apiJson("board");
-    setBoardStore("board", data ?? null);
-  } catch (e) {
-    console.error("loadBoard failed", e);
-  } finally {
-    setBoardStore("loading", false);
+export interface LoadBoardOptions {
+  sync?: boolean;
+}
+
+function legacyState(): Record<string, any> | null {
+  if (typeof window === "undefined") return null;
+  const state = (window as any).state;
+  return state && typeof state === "object" ? state : null;
+}
+
+function boardSnapshot(board: any): string {
+  return typeof board?.snapshotVersion === "string" ? board.snapshotVersion : "";
+}
+
+function clearBoardRetry(): void {
+  const state = legacyState();
+  if (state?.boardRetryTimer) {
+    clearTimeout(state.boardRetryTimer);
+    state.boardRetryTimer = null;
   }
+  setBoardRetryCount(0);
+}
+
+function retryBoard(sync: boolean): void {
+  const state = legacyState();
+  if (!boardStore.selectedTaskID || state?.boardRetryTimer) return;
+  if (sync) setBoardSyncPending(true);
+  const delay = Math.min(1000 * Math.pow(2, Math.min(boardStore.boardRetryCount, 4)), 15000);
+  setBoardRetryCount(boardStore.boardRetryCount + 1);
+  const timer = setTimeout(() => {
+    const latest = legacyState();
+    if (latest) latest.boardRetryTimer = null;
+    void loadBoard({ sync: boardStore.boardSyncPending });
+  }, delay);
+  if (state) state.boardRetryTimer = timer;
+}
+
+export async function loadBoard(options: LoadBoardOptions = {}): Promise<void> {
+  const taskID = boardStore.selectedTaskID;
+  if (!taskID) {
+    setBoardStore("board", null);
+    setSnapshotVersion("");
+    return;
+  }
+  if (options.sync) setBoardSyncPending(true);
+  const state = legacyState();
+  if (state?.boardLoading) {
+    setBoardQueued(true);
+    if (options.sync) setBoardSyncPending(true);
+    return state.boardLoading;
+  }
+  const sync = options.sync === true || boardStore.boardSyncPending;
+  if (sync) setBoardSyncPending(true);
+  const loading = (async () => {
+    let failed = false;
+    try {
+      const headers = apiHeaders();
+      if (boardStore.boardEtag) headers["If-None-Match"] = boardStore.boardEtag;
+      const res = await fetch(apiUrl(`task/${encodeURIComponent(taskID)}/board?sync=${sync ? "1" : "0"}`), {
+        headers,
+        signal: AbortSignal.timeout(10000),
+      });
+      if (taskID !== boardStore.selectedTaskID) return;
+      setBoardSyncPending(false);
+      if (res.status === 304) {
+        clearBoardRetry();
+        setBoardUpdatedAt(Date.now());
+        return;
+      }
+      if (!res.ok) throw new Error(`API ${res.status}: ${res.statusText}`);
+      const etag = res.headers.get("etag");
+      if (etag) setBoardEtag(etag);
+      const data = await res.json();
+      setBoardStore("board", data ?? null);
+      setSnapshotVersion(boardSnapshot(data));
+      const lastSequence = Number(data?.lastSequence || 0);
+      if (Number.isFinite(lastSequence) && lastSequence > 0) {
+        setTaskSequence(lastSequence);
+      }
+      clearBoardRetry();
+      setBoardUpdatedAt(Date.now());
+    } catch (e) {
+      failed = true;
+      console.error("loadBoard failed", e);
+      if (taskID === boardStore.selectedTaskID) retryBoard(sync);
+    } finally {
+      const latest = legacyState();
+      if (latest) latest.boardLoading = null;
+      setBoardStore("loading", false);
+      if (boardStore.boardQueued) {
+        setBoardQueued(false);
+        if (!failed && !(latest?.boardRetryTimer)) {
+          queueMicrotask(() => {
+            void loadBoard({ sync: boardStore.boardSyncPending });
+          });
+        }
+      }
+    }
+  })();
+  if (state) state.boardLoading = loading;
+  setBoardStore("loading", true);
+  return loading;
 }
 
 export async function loadTasks(): Promise<void> {
   try {
-    const data = await apiJson("task");
-    setBoardStore("tasks", Array.isArray(data) ? data : []);
+    const data = await apiJson("tasks");
+    const tasks = sortedTasks(data);
+    const seen = new Set(
+      tasks
+        .map((item: any) => item?.task?.requestID)
+        .filter(Boolean),
+    );
+    setBoardStore({
+      tasks,
+      pendingTasks: boardStore.pendingTasks.filter(
+        (item: any) => !seen.has(item?.requestID),
+      ),
+    });
   } catch (e) {
     console.error("loadTasks failed", e);
   }
@@ -85,11 +190,20 @@ let boardLoadTimer: any = null;
  * @param delay  Delay in milliseconds before calling loadBoard.  Defaults to 0.
  */
 export function scheduleBoard(delay = 0): void {
-  if (boardLoadTimer) clearTimeout(boardLoadTimer);
+  setBoardSyncPending(true);
+  const state = legacyState();
+  if (state?.boardRetryTimer) {
+    clearTimeout(state.boardRetryTimer);
+    state.boardRetryTimer = null;
+  }
+  if (state?.boardKick) clearTimeout(state.boardKick);
   boardLoadTimer = setTimeout(() => {
     boardLoadTimer = null;
-    loadBoard().catch(console.error);
+    const latest = legacyState();
+    if (latest) latest.boardKick = null;
+    void loadBoard({ sync: true });
   }, delay);
+  if (state) state.boardKick = boardLoadTimer;
 }
 
 // ── Derived accessors ──
@@ -147,6 +261,10 @@ export function setSnapshotVersion(version: string): void {
   setBoardStore("snapshotVersion", typeof version === "string" ? version : "");
 }
 
+export function setTaskSequence(sequence: number): void {
+  setBoardStore("taskSequence", typeof sequence === "number" ? sequence : 0);
+}
+
 // ── Pending tasks setters ──
 
 export function setPendingTasks(tasks: any[]): void {
@@ -185,9 +303,10 @@ export function setCriteriaResult(item: Element | null, status: string): void {
   const text = item?.querySelector<HTMLElement>(".criteria-result");
   if (!statusDot || !text) return;
   statusDot.dataset.result = status;
-  // Delegate the label lookup to the legacy bridge (i18n keys still in app.js).
-  const legacyLabel = (window as any).__legacyCriteriaResultText;
-  text.textContent = typeof legacyLabel === "function" ? legacyLabel(status) : status;
+  // Direct i18n lookup — replaces legacy __legacyCriteriaResultText bridge.
+  const key = `criteria.result.${status}`;
+  const label = t(key);
+  text.textContent = label !== key ? label : status;
 }
 
 // ── Task list derived utilities ──

@@ -21,6 +21,7 @@ import {
 import { boardStore } from "../store/board";
 import { appStore } from "../store/app";
 import { executorStore } from "../store/executor";
+import { workspaceMode } from "./workspace";
 
 // ── Types ──
 
@@ -118,12 +119,8 @@ export function canComposeChat(): boolean {
   // Both allow composing. All other modes (e.g. a pure session workspace
   // with no associated task) are not represented in the Solid stores yet,
   // so we fall back to checking the legacy window helper if available.
-  const legacyMode = (window as any).workspaceMode?.();
-  if (typeof legacyMode === "string") {
-    return legacyMode === "empty" || legacyMode === "task";
-  }
-  // Without legacy helper: allow compose whenever connected.
-  return true;
+  const mode = workspaceMode();
+  return mode === "empty" || mode === "task";
 }
 
 // ── Public: chatAbortTargets ──

@@ -606,14 +606,14 @@ export function TitlebarMenu(props: TitlebarMenuProps) {
             </span>
           </span>
           <span class="titlebar-menu-range-control">
-            <input
-              class="titlebar-menu-slider"
-              id="opacityRange"
-              type="range"
-              min="70"
-              max="100"
-              step="5"
-              value={String(opacityPct())}
+              <input
+                class="titlebar-menu-slider"
+                id="opacityRange"
+                type="range"
+                min="50"
+                max="100"
+                step="5"
+                value={String(opacityPct())}
               onInput={(e) =>
                 handleOpacityInput((e.target as HTMLInputElement).value)
               }

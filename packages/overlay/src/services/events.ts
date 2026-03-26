@@ -9,25 +9,13 @@
 //                                  window.__legacyHandleNonMessageEvent for
 //                                  backward-compatible processing.
 
-import { enqueueEvent } from "../store/messages";
+import { enqueueEvent, shouldReloadConversationForMessageEvent } from "../store/messages";
 import { appendAgentEvent } from "../store/messages";
 import { appendExecutorEvent } from "../store/executor";
-import { loadBoard, loadTasks } from "../store/board";
 import { syncTask } from "../store/messages";
-
-// ── Debounced board reload ──
-// Mirrors app.js BOARD_EVENT_DEBOUNCE = 150 ms.
-
-const BOARD_EVENT_DEBOUNCE = 150;
-let reloadTimer: any = null;
-
-function scheduleReload(): void {
-  if (reloadTimer) return;
-  reloadTimer = setTimeout(async () => {
-    reloadTimer = null;
-    await Promise.all([loadBoard(), loadTasks()]);
-  }, BOARD_EVENT_DEBOUNCE);
-}
+import { executorEventEntry } from "../utils/executor-events";
+import { boardStore } from "../store/board";
+import { loadConversation } from "./legacy";
 
 // ── Helpers (mirror app.js record()) ──
 
@@ -52,6 +40,10 @@ export function routeSSEEvent(event: any): boolean {
     type === "message.part.updated" ||
     type === "message.part.delta"
   ) {
+    if (shouldReloadConversationForMessageEvent(event)) {
+      void loadConversation();
+      return true;
+    }
     enqueueEvent(event);
     return true;
   }
@@ -60,9 +52,8 @@ export function routeSSEEvent(event: any): boolean {
   if (type === "task.replay_expired") {
     // Re-sync the active task's transcript then reload board state.
     const taskID: string =
-      (window as any).__solidOverlay?.selectedTaskID?.() ?? "";
+      boardStore.selectedTaskID || "";
     if (taskID) void syncTask(taskID);
-    scheduleReload();
     return true;
   }
 
@@ -87,7 +78,7 @@ export function routeSSEEvent(event: any): boolean {
     ) {
       return true; // consume silently
     }
-    appendExecutorEvent({
+    const executorEvent = executorEventEntry({
       id: event.event_id,
       runID: event.run_id || properties.runID,
       kind: executorEventKind(properties.type),
@@ -101,11 +92,12 @@ export function routeSSEEvent(event: any): boolean {
       executorSessionID: properties.executorSessionID || "",
       time: { created: Number(event.timestamp || Date.now()) },
     });
+    if (executorEvent) appendExecutorEvent(executorEvent);
     return true;
   }
 
   if (type === "run.output") {
-    appendExecutorEvent({
+    const executorEvent = executorEventEntry({
       id: event.event_id,
       runID: event.run_id || properties.runID,
       kind: "message_delta",
@@ -122,6 +114,7 @@ export function routeSSEEvent(event: any): boolean {
       executorSessionID: properties.executorSessionID || "",
       time: { created: Number(event.timestamp || Date.now()) },
     });
+    if (executorEvent) appendExecutorEvent(executorEvent);
     return true;
   }
 
@@ -131,7 +124,8 @@ export function routeSSEEvent(event: any): boolean {
     return true;
   }
 
-  // ── Board-invalidating events → debounced reload ──
+  // ── Board-invalidating events are handled by the legacy contract because
+  // they also carry board sequence / replay semantics.
   if (
     type === "task.updated" ||
     type === "task.completed" ||
@@ -145,8 +139,7 @@ export function routeSSEEvent(event: any): boolean {
     type.startsWith("evaluation.") ||
     type.startsWith("interaction.")
   ) {
-    scheduleReload();
-    return true;
+    return false;
   }
 
   // Unknown event — let legacy handler process it.

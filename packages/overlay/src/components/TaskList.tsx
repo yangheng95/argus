@@ -3,7 +3,7 @@
 // Displays active and recently-completed tasks from boardStore.
 
 import { createMemo, For, Show } from "solid-js";
-import { boardStore } from "../store/board";
+import { boardStore, visibleTasks } from "../store/board";
 import { t } from "../utils/i18n";
 import { stamp } from "../utils/time";
 
@@ -71,6 +71,7 @@ function DeleteButton(props: { id: string; onDelete: (id: string) => void }) {
     <button
       type="button"
       class="task-row-delete"
+      data-task-delete={props.id}
       title={t("task.delete_button_title")}
       aria-label={t("task.delete_button_title")}
       onClick={(e) => {
@@ -184,15 +185,7 @@ export interface TaskListProps {
 }
 
 export function TaskList(props: TaskListProps) {
-  // Derive sorted items from boardStore.tasks.
-  // app.js visibleTasks() also merges state.pendingTasks, but those are managed
-  // by the legacy app.js layer. The Solid component only reads boardStore.tasks
-  // which is kept in sync by the SSE bridge. Pending tasks injected by the
-  // legacy bridge will appear once they are written into boardStore.tasks.
-  const sortedItems = createMemo<any[]>(() => {
-    const tasks = Array.isArray(boardStore.tasks) ? boardStore.tasks : [];
-    return [...tasks].sort((a, b) => taskUpdated(b) - taskUpdated(a));
-  });
+  const sortedItems = createMemo<any[]>(() => visibleTasks());
 
   const activeTasks = createMemo(() =>
     sortedItems().filter((item) => !COMPLETED_STATUSES.has(item?.task?.status || "")),

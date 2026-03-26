@@ -649,7 +649,9 @@ export function buildExecutorProcesses(events: ExecutorEvent[] = []): any[] {
     const note = executorProcessNote(event, events, index);
     if (note) current.note = note;
     current.status = executorProcessStatus(event) || current.status;
-    const output = event.kind === "message_delta" ? executorText(event, events, index) : executorOutput(event);
+    const output = event.kind === "message_delta"
+      ? executorTargetText(event, events, index)
+      : executorOutput(event);
     if (output) current.output = mergeExecutorProcessOutput(current.output, output, event.kind === "message_delta");
     current.time.updated = event.time?.created || current.time.updated;
     items.set(id, current);

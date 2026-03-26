@@ -1,14 +1,12 @@
 // ── SkillMarketPanel ──
-// Solid.js component that mirrors renderSkillMarket, renderExtensions, and
-// related helpers from app.js.
+// Solid.js component for managing skills, MCP servers, and marketplace.
 //
 // Displays:
-//   • Installed custom skills (non-builtin) with remove/open actions
-//   • Installed MCP servers with status
+//   • Installed custom skills with add/remove/open actions
+//   • Installed MCP servers with add/remove actions
 //   • Skill market catalog with install / open-site actions
 //
-// Data is fetched from the API; the parent should call loadSkills() and
-// loadSkillMarket() before mounting, or they are loaded on mount.
+// All CRUD operations are self-contained — no dependency on static HTML dialogs.
 
 import {
   createSignal,
@@ -17,6 +15,7 @@ import {
   Show,
   onMount,
 } from "solid-js";
+import { createStore } from "solid-js/store";
 import { t, tc } from "../../utils/i18n";
 import { apiJson } from "../../services/api";
 
@@ -199,8 +198,101 @@ export default function SkillMarketPanel() {
     }
   }
 
+  // ── Add Skill inline form ──
+
+  const [showAddSkill, setShowAddSkill] = createSignal(false);
+  const [skillForm, setSkillForm] = createStore({
+    type: "path" as "path" | "url" | "git",
+    value: "",
+    policy: "ask" as "ask" | "allow" | "deny",
+  });
+
+  async function handleAddSkill() {
+    const value = skillForm.value.trim();
+    if (!value) return;
+    try {
+      await apiJson("skill/install", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          kind: skillForm.type,
+          value,
+          policy: skillForm.policy,
+        }),
+      });
+      setSkillForm({ type: "path", value: "", policy: "ask" });
+      setShowAddSkill(false);
+      await loadAll();
+    } catch (e) {
+      setNotice(e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  async function handleBrowseFolder() {
+    try {
+      const tauri = (window as any).__TAURI__;
+      if (!tauri) return;
+      const { open } = await import("@tauri-apps/plugin-dialog");
+      const selected = await open({ directory: true, multiple: false });
+      if (typeof selected === "string") {
+        setSkillForm("value", selected);
+      }
+    } catch {
+      // Tauri dialog not available in browser mode
+    }
+  }
+
+  async function handleReloadSkills() {
+    await loadAll();
+  }
+
+  async function handleOpenSkillDir() {
+    try {
+      await apiJson("skill/open-root", { method: "POST" });
+    } catch {
+      // ignore
+    }
+  }
+
+  // ── Add MCP inline form ──
+
+  const [showAddMcp, setShowAddMcp] = createSignal(false);
+  const [mcpForm, setMcpForm] = createStore({
+    name: "",
+    type: "remote" as "remote" | "local",
+    url: "",
+    command: "",
+    args: "",
+  });
+
+  async function handleAddMcp() {
+    const name = mcpForm.name.trim();
+    if (!name) return;
+    const payload: Record<string, any> = { name, type: mcpForm.type };
+    if (mcpForm.type === "remote") {
+      payload.url = mcpForm.url.trim();
+      if (!payload.url) return;
+    } else {
+      payload.command = mcpForm.command.trim();
+      if (!payload.command) return;
+      if (mcpForm.args.trim()) payload.args = mcpForm.args.trim();
+    }
+    try {
+      await apiJson("mcp/add", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      setMcpForm({ name: "", type: "remote", url: "", command: "", args: "" });
+      setShowAddMcp(false);
+      await loadAll();
+    } catch (e) {
+      setNotice(e instanceof Error ? e.message : String(e));
+    }
+  }
+
   return (
-    <div class="config-tab-panel active" data-config-panel="skills">
+    <>
       <Show when={loading()}>
         <div class="loading-hint">{t("common.loading")}</div>
       </Show>
@@ -208,6 +300,13 @@ export default function SkillMarketPanel() {
       <Show when={notice()}>
         <div class="config-status-box" data-status="error">
           {notice()}
+          <button
+            type="button"
+            class="btn btn-ghost mini"
+            onClick={() => setNotice("")}
+          >
+            {t("common.dismiss")}
+          </button>
         </div>
       </Show>
 
@@ -216,6 +315,15 @@ export default function SkillMarketPanel() {
         <div class="config-section-head">
           <h3 class="config-section-title">{t("skill.title")}</h3>
           <div class="config-section-actions">
+            <button type="button" class="btn btn-ghost mini" onClick={handleReloadSkills}>
+              {t("common.reload")}
+            </button>
+            <button type="button" class="btn btn-ghost mini" onClick={handleOpenSkillDir}>
+              {t("skill.open_dir")}
+            </button>
+            <button type="button" class="btn btn-ghost mini" onClick={() => setShowAddSkill(!showAddSkill())}>
+              {t("skill.add")}
+            </button>
             <button
               type="button"
               class="btn btn-ghost mini danger"
@@ -226,6 +334,66 @@ export default function SkillMarketPanel() {
             </button>
           </div>
         </div>
+
+        {/* Add Skill inline form */}
+        <Show when={showAddSkill()}>
+          <div class="inline-form">
+            <label class="field">
+              <span class="field-label">{t("skill.source_type")}</span>
+              <select
+                class="field-input"
+                value={skillForm.type}
+                onChange={(e) => setSkillForm("type", e.currentTarget.value as any)}
+              >
+                <option value="path">{t("skill.source.path")}</option>
+                <option value="url">{t("skill.source.url")}</option>
+                <option value="git">{t("skill.source.git")}</option>
+              </select>
+            </label>
+            <label class="field">
+              <span class="field-label">{t("skill.value")}</span>
+              <div class="field-input-group">
+                <input
+                  class="field-input"
+                  type="text"
+                  value={skillForm.value}
+                  placeholder={t("skill.value_placeholder")}
+                  onInput={(e) => setSkillForm("value", e.currentTarget.value)}
+                />
+                <Show when={skillForm.type === "path"}>
+                  <button type="button" class="btn btn-ghost mini" onClick={handleBrowseFolder}>
+                    {t("skill.browse_folder")}
+                  </button>
+                </Show>
+              </div>
+            </label>
+            <label class="field">
+              <span class="field-label">{t("skill.policy")}</span>
+              <select
+                class="field-input"
+                value={skillForm.policy}
+                onChange={(e) => setSkillForm("policy", e.currentTarget.value as any)}
+              >
+                <option value="ask">{t("skill.policy.ask")}</option>
+                <option value="allow">{t("skill.policy.allow")}</option>
+                <option value="deny">{t("skill.policy.deny")}</option>
+              </select>
+            </label>
+            <div class="dialog-actions compact">
+              <button type="button" class="btn btn-ghost" onClick={() => setShowAddSkill(false)}>
+                {t("common.cancel")}
+              </button>
+              <button
+                type="button"
+                class="btn btn-primary"
+                disabled={!skillForm.value.trim()}
+                onClick={handleAddSkill}
+              >
+                {t("skill.install")}
+              </button>
+            </div>
+          </div>
+        </Show>
         <div class="skill-list" id="skillList">
           <Show
             when={customSkills().length > 0}
@@ -290,6 +458,9 @@ export default function SkillMarketPanel() {
         <div class="config-section-head">
           <h3 class="config-section-title">{t("mcp.title")}</h3>
           <div class="config-section-actions">
+            <button type="button" class="btn btn-ghost mini" onClick={() => setShowAddMcp(!showAddMcp())}>
+              {t("mcp.add_action")}
+            </button>
             <button
               type="button"
               class="btn btn-ghost mini danger"
@@ -300,6 +471,80 @@ export default function SkillMarketPanel() {
             </button>
           </div>
         </div>
+
+        {/* Add MCP inline form */}
+        <Show when={showAddMcp()}>
+          <div class="inline-form">
+            <label class="field">
+              <span class="field-label">{t("mcp.name")}</span>
+              <input
+                class="field-input"
+                type="text"
+                value={mcpForm.name}
+                placeholder="exa"
+                onInput={(e) => setMcpForm("name", e.currentTarget.value)}
+              />
+            </label>
+            <label class="field">
+              <span class="field-label">{t("mcp.type")}</span>
+              <select
+                class="field-input"
+                value={mcpForm.type}
+                onChange={(e) => setMcpForm("type", e.currentTarget.value as any)}
+              >
+                <option value="remote">{t("mcp.type.remote")}</option>
+                <option value="local">{t("mcp.type.local")}</option>
+              </select>
+            </label>
+            <Show when={mcpForm.type === "remote"}>
+              <label class="field">
+                <span class="field-label">{t("mcp.remote_url")}</span>
+                <input
+                  class="field-input"
+                  type="url"
+                  value={mcpForm.url}
+                  placeholder="https://example.com/mcp"
+                  onInput={(e) => setMcpForm("url", e.currentTarget.value)}
+                />
+              </label>
+            </Show>
+            <Show when={mcpForm.type === "local"}>
+              <label class="field">
+                <span class="field-label">{t("mcp.command")}</span>
+                <input
+                  class="field-input"
+                  type="text"
+                  value={mcpForm.command}
+                  placeholder="npx"
+                  onInput={(e) => setMcpForm("command", e.currentTarget.value)}
+                />
+              </label>
+              <label class="field">
+                <span class="field-label">{t("mcp.arguments")}</span>
+                <input
+                  class="field-input"
+                  type="text"
+                  value={mcpForm.args}
+                  placeholder="-y @modelcontextprotocol/server-filesystem C:\repo"
+                  onInput={(e) => setMcpForm("args", e.currentTarget.value)}
+                />
+              </label>
+            </Show>
+            <div class="dialog-actions compact">
+              <button type="button" class="btn btn-ghost" onClick={() => setShowAddMcp(false)}>
+                {t("common.cancel")}
+              </button>
+              <button
+                type="button"
+                class="btn btn-primary"
+                disabled={!mcpForm.name.trim() || (mcpForm.type === "remote" ? !mcpForm.url.trim() : !mcpForm.command.trim())}
+                onClick={handleAddMcp}
+              >
+                {t("mcp.add_action")}
+              </button>
+            </div>
+          </div>
+        </Show>
         <div class="mcp-list" id="mcpList">
           <Show
             when={mcpEntries().length > 0}
@@ -390,6 +635,6 @@ export default function SkillMarketPanel() {
           </Show>
         </div>
       </section>
-    </div>
+    </>
   );
 }

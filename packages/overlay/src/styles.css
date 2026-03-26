@@ -2257,8 +2257,8 @@ body[data-theme="light"] .section-badge {
 
 .section-body {
   padding: 0 var(--section-body-padding-x) var(--section-body-padding-y);
-  max-height: calc(360px * var(--ui-scale));
-  overflow-y: auto;
+  max-height: none;
+  overflow-y: visible;
   background: transparent;
   border: 1px solid transparent;
   border-radius: var(--section-corner);
@@ -5402,6 +5402,8 @@ select.field-input option {
 
 /* ── Config Area (bottom of right column) ── */
 .config-area {
+  --config-toggle-padding-y: calc(4px * var(--ui-scale) + 1px);
+  --config-toggle-min-height: calc(var(--section-control-height) + 4px);
   margin-top: auto;
   display: flex;
   flex-direction: column;
@@ -5418,8 +5420,9 @@ select.field-input option {
   align-items: center;
   justify-content: center;
   gap: calc(1px * var(--ui-scale));
-  min-height: 0;
-  padding: calc(4.75px * var(--ui-scale)) var(--section-head-padding-x);
+  height: var(--config-toggle-min-height);
+  min-height: var(--config-toggle-min-height);
+  padding: var(--config-toggle-padding-y) var(--section-head-padding-x);
   border: 1px solid var(--border);
   border-radius: var(--section-corner);
   background:
@@ -5431,16 +5434,31 @@ select.field-input option {
   line-height: 1.2;
   box-sizing: border-box;
   cursor: pointer;
-  transition: all 100ms;
+  transition:
+    border-color 100ms,
+    background 100ms,
+    color 100ms,
+    box-shadow 100ms,
+    transform 100ms;
   position: relative;
   padding-left: 32px;
   padding-right: 32px;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
+@media (max-width: 1024px), (max-height: 808px) {
+  .config-area {
+    --config-toggle-padding-y: calc(4px * var(--ui-scale));
+  }
+}
+
 .config-area > .config-section + .config-toggle {
   margin-top: 0;
-  border-top: none;
+}
+
+.config-area > .config-section:not([open]) {
+  height: var(--config-toggle-min-height);
+  min-height: var(--config-toggle-min-height);
 }
 
 .config-toggle:hover {
@@ -7393,7 +7411,11 @@ body[data-resizing="true"] * {
 .sections .change-path,
 .sections .change-subline,
 .sections .change-meta,
+.sections .overview-summary,
+.sections .overview-next-step,
 .sections .plan-summary,
+.sections .overview-summary,
+.sections .overview-next-step,
 .sections .goal-desc,
 .sections .goal-criteria,
 .sections .goal-priority,
@@ -7819,6 +7841,8 @@ body[data-theme="light"] {
 }
 
 .sections .plan-summary,
+.sections .overview-summary,
+.sections .overview-next-step,
 .sections .goal-desc,
 .sections .goal-criteria,
 .sections .change-path,
@@ -8699,4 +8723,3 @@ body[data-theme="light"] .section-badge[data-tone="accent"] {
 .ndjson-badge.msg-delta { background: #F3E8FF; color: #6B21A8; }
 .ndjson-badge.status-badge { background: #F1F5F9; color: #475569; }
 .log-divider { font-size: 11px; color: #9CA3AF; padding: 8px 4px 4px; border-top: 1px solid var(--border, #e5e7eb); margin-top: 8px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; }
-

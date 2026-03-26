@@ -1,24 +1,25 @@
-import { createSignal, Show } from "solid-js";
+import { createMemo, createSignal, Show } from "solid-js";
+import { reasoningPartHidden, reasoningRevision } from "../store/reasoning";
+import { t } from "../utils/i18n";
 
-export function ReasoningPart(props: { text: string }) {
-  const [visible, setVisible] = createSignal(true);
+export function ReasoningPart(props: { part: any }) {
+  const [expanded, setExpanded] = createSignal(true);
+  const text = () => String(props.part?.text || "");
+  const hidden = createMemo(() => {
+    reasoningRevision();
+    return reasoningPartHidden(props.part);
+  });
 
-  // Use legacy i18n label if available
-  const label = () => {
-    if (typeof (window as any).t === "function") {
-      return (window as any).t("transcript.reasoning");
-    }
-    return "Reasoning";
-  };
+  const label = () => t("transcript.reasoning");
 
   return (
-    <Show when={props.text.trim()}>
+    <Show when={text().trim() && !hidden()}>
       <div class="msg-reasoning">
-        <div class="reasoning-label" onClick={() => setVisible(!visible())}>
-          {label()} {visible() ? "\u25BC" : "\u25B6"}
+        <div class="reasoning-label" onClick={() => setExpanded(!expanded())}>
+          {label()} {expanded() ? "\u25BC" : "\u25B6"}
         </div>
-        <Show when={visible()}>
-          <div class="reasoning-text">{props.text}</div>
+        <Show when={expanded()}>
+          <div class="reasoning-text">{text()}</div>
         </Show>
       </div>
     </Show>

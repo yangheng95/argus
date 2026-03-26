@@ -14,8 +14,18 @@
 
 import { messageStore } from "../store/messages";
 import { boardStore } from "../store/board";
+import { executorStore } from "../store/executor";
 import { phaseFromAgent, phaseFromMessage, agentStageRole } from "./message";
 import { stripAssistantBrief } from "./string";
+import {
+  buildExecutorProcesses,
+  executorCall,
+  executorCommand,
+  executorOutput,
+  executorTargetText,
+  executorProcessID,
+  executorProcessKind,
+} from "./executor-events";
 
 // ── Constants ──
 
@@ -34,7 +44,10 @@ function rootTaskSessionID(): string {
 
 function classifyMessage(msg: any): string {
   const agent = String(msg?.info?.agent || "").trim().toLowerCase();
-  if (AGENT_STAGES.has(agent)) return agent;
+  if (AGENT_STAGES.has(agent)) {
+    if (String(msg?.info?.role || "").trim().toLowerCase() === "user") return "main";
+    return agent;
+  }
   // Legacy: messages with agent="agent" from child sessions — separate from main
   if (agent === "agent") {
     const rootSession = rootTaskSessionID();
@@ -255,8 +268,127 @@ function deliveryStatusLabel(status: string): string {
 }
 
 function buildExecutorMessages(board: any, selectedTaskID: string, executorEvents: any[]): any[] {
-  const fn = legacyConv().buildExecutorMessages;
-  return typeof fn === "function" ? fn() : [];
+  const currentRunID = String(board?.task?.activeRunID || executorStore.runID || "");
+  const events = (Array.isArray(executorStore.events) ? executorStore.events : [])
+    .filter((event: any) =>
+      event?.runID === currentRunID &&
+      event?.visible !== false &&
+      event?.kind !== "status",
+    );
+  const processes = buildExecutorProcesses(events as any[]);
+  const processIDs = new Set(processes.map((process: any) => process.id));
+  const processMsg = processes.length > 0
+    ? {
+      _synthetic: true,
+      info: {
+        id: `executor:processes:${selectedTaskID || currentRunID || "active"}`,
+        role: "assistant",
+        time: { created: processes[0]?.time?.created || Date.now() },
+      },
+      parts: processes.map((process: any) => ({
+        type: "executor_process",
+        process,
+      })),
+    }
+    : null;
+  const messages = events
+    .filter((event: any) => {
+      const processID = executorProcessID(event as any);
+      const processKind = executorProcessKind(event as any);
+      if (event?.kind === "tool_call" || event?.kind === "tool_result") return true;
+      return !(processID && processIDs.has(processID) && processKind && processKind !== "assistant" && processKind !== "status");
+    })
+    .map((event: any, index: number) => {
+      const created = event.time?.created || Date.now();
+      const payload =
+        event?.payload && typeof event.payload === "object" && !Array.isArray(event.payload)
+          ? event.payload
+          : {};
+      if (event.kind === "tool_call" || event.kind === "tool_result") {
+        const call = event.kind === "tool_result" ? executorCall(events as any[], index, event as any) : null;
+        const callPayload =
+          call?.payload && typeof call.payload === "object" && !Array.isArray(call.payload)
+            ? call.payload
+            : {};
+        const rawInput =
+          typeof payload.input === "string"
+            ? payload.input
+            : typeof callPayload.input === "string"
+              ? callPayload.input
+            : typeof payload.text === "string"
+              ? payload.text
+              : typeof callPayload.text === "string"
+                ? callPayload.text
+              : "";
+        let input =
+          payload.input && typeof payload.input === "object" && !Array.isArray(payload.input)
+            ? payload.input
+            : callPayload.input && typeof callPayload.input === "object" && !Array.isArray(callPayload.input)
+              ? callPayload.input
+            : {};
+        if ((!input || Object.keys(input).length === 0) && rawInput.trim()) {
+          try {
+            const parsed = JSON.parse(rawInput);
+            if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+              input = parsed;
+            }
+          } catch {
+            input = { raw: rawInput };
+          }
+        }
+        return {
+          _synthetic: true,
+          info: {
+            id: String(event?.id || ""),
+            role: "task_tool",
+            time: { created },
+          },
+          parts: [{
+            id: `executor-tool:${String(event?.id || created)}`,
+            type: "tool",
+            tool: String(
+              payload.name ||
+              payload.toolName ||
+              payload.tool ||
+              callPayload.name ||
+              callPayload.toolName ||
+              callPayload.tool ||
+              (payload.tool_kind === "shell" || callPayload.tool_kind === "shell"
+                ? "shell_command"
+                : event.toolName) ||
+              "tool",
+            ),
+            state: {
+              status: event.kind === "tool_result" ? "completed" : "running",
+              input,
+              raw: rawInput,
+              title: String(event?.summary || executorCommand(event as any) || executorCommand(call as any) || "").trim(),
+              output:
+                event.kind === "tool_result"
+                  ? String(
+                    executorOutput(event as any) ||
+                    executorTargetText(event as any, events as any[], index) ||
+                    "",
+                  )
+                  : "",
+            },
+          }],
+        };
+      }
+      const text = String(executorTargetText(event as any, events as any[], index) || "").trim();
+      if (!text) return null;
+      return {
+        _synthetic: true,
+        info: {
+          id: String(event?.id || ""),
+          role: event.kind === "reasoning" || event.kind === "reasoning_delta" ? "planner" : "assistant",
+          time: { created },
+        },
+        parts: [{ type: "text", text }],
+      };
+    })
+    .filter(Boolean);
+  return processMsg ? [processMsg, ...messages] : messages;
 }
 
 function t(key: string): string {
@@ -438,6 +570,11 @@ export function conversationMessages(): any[] {
     if (!stageRounds[channel.stage]) stageRounds[channel.stage] = [];
     stageRounds[channel.stage].push({ key, channel });
   }
+  const transcriptStages = new Set(
+    Object.values(agentChannels)
+      .filter((channel) => channel.messages.length > 0)
+      .map((channel) => channel.stage),
+  );
   for (const rounds of Object.values(stageRounds)) {
     rounds.sort((a, b) => a.channel.startTime - b.channel.startTime);
   }
@@ -485,7 +622,9 @@ export function conversationMessages(): any[] {
     }
   }
 
-  return [...filteredMain, ...executorMsgs, ...boardMsgs, ...agentCardMsgs].sort(
+  const liveAgentMsgs = buildAgentMessages(transcriptStages);
+
+  return [...filteredMain, ...liveAgentMsgs, ...executorMsgs, ...boardMsgs, ...agentCardMsgs].sort(
     (a: any, b: any) => (a.info?.time?.created || 0) - (b.info?.time?.created || 0),
   );
 }
@@ -617,15 +756,48 @@ function agentEventTargetText(event: any): string {
 function eventToolPart(event: any, options: { status?: string; output?: string } = {}): any | null {
   const fn = legacyAgentMsg().eventToolPart;
   if (typeof fn === "function") return fn(event, options);
-  // Minimal structural fallback
+  const payload =
+    event?.payload && typeof event.payload === "object" && !Array.isArray(event.payload)
+      ? event.payload
+      : {};
+  const rawText =
+    typeof payload.text === "string"
+      ? payload.text
+      : typeof event?.text === "string"
+        ? event.text
+        : "";
+  let input = event?.input;
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    input = payload.input;
+  }
+  if ((!input || typeof input !== "object" || Array.isArray(input)) && rawText.trim()) {
+    try {
+      const parsed = JSON.parse(rawText);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        input = parsed;
+      }
+    } catch {
+      input = { raw: rawText };
+    }
+  }
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    input = {};
+  }
   if (!event) return null;
   return {
     id: `agent-tool:${event.stage}:${event.id}`,
     type: "tool",
-    tool: event.tool || event.name || "",
+    tool:
+      event.toolName ||
+      event.tool ||
+      event.name ||
+      payload.toolName ||
+      payload.name ||
+      "",
     state: {
       status: options.status || "pending",
-      input: event.payload?.input || event.input || {},
+      input,
+      raw: rawText,
       output: options.output || "",
     },
   };
@@ -655,7 +827,7 @@ export function agentMessage(event: any): any | null {
       _synthetic: true,
       info: {
         id: `agent:${event.stage}:${event.id}`,
-        role: agentStageRole(event.stage),
+        role: "task_tool",
         agent: event.stage,
         time: { created },
       },
@@ -693,6 +865,15 @@ export function agentMessage(event: any): any | null {
  *
  * Mirrors app.js buildAgentMessages (line 5508).
  */
-export function buildAgentMessages(): any[] {
-  return [];
+export function buildAgentMessages(transcriptStages: Set<string> = new Set()): any[] {
+  const activeStages = activeAgentStages();
+  return (Array.isArray(messageStore.agentEvents) ? messageStore.agentEvents : [])
+    .filter((event: any) => {
+      const stage = String(event?.stage || "").trim().toLowerCase();
+      if (!stage || !activeStages.has(stage) || transcriptStages.has(stage)) return false;
+      return event?.kind !== "status";
+    })
+    .map((event: any) => agentMessage(event))
+    .filter(Boolean)
+    .sort((a: any, b: any) => (a.info?.time?.created || 0) - (b.info?.time?.created || 0));
 }

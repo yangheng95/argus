@@ -15,6 +15,11 @@
 // the Solid layer can call initApp() and receive a fully-populated store.
 
 import { configure as configureApi, apiJson } from "./api";
+import {
+  checkConnection as checkServerConnection,
+  startConnectionMonitor,
+  stopConnectionMonitor,
+} from "./connection";
 import { loadAllLocales, setLocale } from "../utils/i18n";
 import {
   loadSettings,
@@ -23,9 +28,20 @@ import {
   saveSettings,
   bumpDirectoryEpoch,
   bumpWorkspaceEpoch,
+  applySettings,
+  setSavedDirectory,
+  savedDirectoryValue,
 } from "../store/settings";
 import { setAppStore } from "../store/app";
-import { boardStore, setBoardStore, loadBoard, loadTasks } from "../store/board";
+import { boardStore, setBoardStore, loadTasks } from "../store/board";
+import { loadMeta } from "./meta";
+import { loadExtensions } from "./extensions";
+import { loadExecutors } from "./executor";
+import { loadPreferences } from "./memory";
+import { ensureWorkspaceDirectory } from "./workspace";
+import { ensureDefaultDirectory } from "./workspace";
+import { workspaceRestoreDirectory } from "./workspace";
+import { selectTask } from "./task";
 
 // ── Types ──
 
@@ -45,39 +61,6 @@ export interface InitOptions {
   reconnectInterval?: number;
 }
 
-// ── Module-level state ──
-
-let reconnectTimer: ReturnType<typeof setInterval> | null = null;
-
-// ── Helpers ──
-
-/**
- * Probe the server with a lightweight HEAD request to /health (or fallback
- * GET /task).  Returns true when the server responds successfully.
- * Mirrors app.js checkConnection().
- */
-async function checkConnection(serverUrl: string): Promise<boolean> {
-  try {
-    const base = serverUrl.replace(/\/+$/, "");
-    const res = await fetch(`${base}/health`, {
-      method: "HEAD",
-      signal: AbortSignal.timeout(5000),
-    });
-    return res.ok;
-  } catch {
-    // Fallback: attempt a GET on the task list endpoint
-    try {
-      const base = serverUrl.replace(/\/+$/, "");
-      const res = await fetch(`${base}/task`, {
-        signal: AbortSignal.timeout(5000),
-      });
-      return res.ok;
-    } catch {
-      return false;
-    }
-  }
-}
-
 /**
  * Push current settings into the API client so subsequent fetch calls use
  * the correct server URL and credentials.
@@ -88,6 +71,7 @@ function syncApiConfig(): void {
     serverUrl: settingsStore.serverUrl,
     username: settingsStore.username,
     password: settingsStore.password,
+    directory: settingsStore.directory,
   });
 }
 
@@ -96,10 +80,17 @@ function syncApiConfig(): void {
  * Mirrors the Promise.all block inside app.js init().
  */
 async function loadInitialData(): Promise<void> {
-  // Board and tasks are the core data dependencies for the Solid layer.
-  // Additional loaders (meta, extensions, config, executors, preferences)
-  // remain owned by app.js; only what the Solid store needs is loaded here.
-  await Promise.all([loadBoard(), loadTasks()]);
+  await ensureDefaultDirectory().catch(() => false);
+  await ensureWorkspaceDirectory().catch(() => settingsStore.directory || "");
+  syncApiConfig();
+  await Promise.all([
+    loadTasks(),
+    loadMeta(),
+    loadExtensions(),
+    loadConfigInfo(),
+    loadExecutors(),
+    loadPreferences(),
+  ]);
 }
 
 // ── Public API ──
@@ -126,6 +117,22 @@ export async function initApp(options: InitOptions = {}): Promise<void> {
   // 1. Load settings from localStorage into the Solid store
   loadSettings();
 
+  const invoke = (window as any).__TAURI__?.core?.invoke as
+    | ((command: string, args?: Record<string, unknown>) => Promise<unknown>)
+    | undefined;
+  if (typeof invoke === "function") {
+    const nativeSettings = await invoke("overlay_settings_load").catch(() => null);
+    if (nativeSettings && typeof nativeSettings === "object" && !Array.isArray(nativeSettings)) {
+      applySettings(nativeSettings as any);
+      setSavedDirectory(
+        savedDirectoryValue(
+          (nativeSettings as any).directory,
+          (nativeSettings as any).directoryMode,
+        ),
+      );
+    }
+  }
+
   // 2. Push settings into the API client (server URL + auth)
   syncApiConfig();
 
@@ -136,31 +143,22 @@ export async function initApp(options: InitOptions = {}): Promise<void> {
   await setLocale(settingsStore.locale);
 
   // 5. Check connection
-  const connected = await checkConnection(settingsStore.serverUrl);
+  const connected = await checkServerConnection();
 
   if (connected) {
     // 6. Load initial data
     await loadInitialData();
+    await restoreInitialWorkspace();
     await onConnected?.();
   }
 
   // 7. Start reconnect loop (mirrors app.js state.reconnectTimer)
-  if (reconnectTimer !== null) {
-    clearInterval(reconnectTimer);
-  }
-  reconnectTimer = setInterval(async () => {
-    if (connected) return; // already connected — nothing to do
-    try {
-      // Re-read settings in case they were updated while offline
-      syncApiConfig();
-      const ok = await checkConnection(settingsStore.serverUrl);
-      if (ok) {
-        await loadInitialData();
-        await onReconnect?.();
-      }
-    } catch (err) {
-      console.warn("[init] connection retry failed", err);
-    }
+  stopConnectionMonitor();
+  startConnectionMonitor(async () => {
+    syncApiConfig();
+    await loadInitialData();
+    await restoreInitialWorkspace();
+    await onReconnect?.();
   }, reconnectInterval);
 }
 
@@ -169,10 +167,7 @@ export async function initApp(options: InitOptions = {}): Promise<void> {
  * Call on `beforeunload` or component cleanup.
  */
 export function teardownApp(): void {
-  if (reconnectTimer !== null) {
-    clearInterval(reconnectTimer);
-    reconnectTimer = null;
-  }
+  stopConnectionMonitor();
 }
 
 /**
@@ -252,7 +247,7 @@ export async function restoreInitialWorkspace(): Promise<boolean> {
 
   const base = activeDir || "";
   const taskID = workspaceTaskID || "";
-  const directory = (workspaceDirectory || "").trim();
+  const directory = workspaceRestoreDirectory(workspaceDirectory || "");
   const moved = !!directory && !!base && directory !== base;
 
   if (moved) {
@@ -264,8 +259,11 @@ export async function restoreInitialWorkspace(): Promise<boolean> {
   }
 
   if (taskID && tasks.some((item: any) => item?.task?.id === taskID)) {
-    // Mark the task as selected in the board store.
-    setBoardStore("selectedTaskID", taskID);
+    if (boardStore.selectedTaskID !== taskID || !boardStore.board) {
+      await selectTask(taskID);
+    }
+    const { renderWorkspaceState } = await import("./legacy");
+    renderWorkspaceState();
     bumpWorkspaceEpoch();
     return true;
   }

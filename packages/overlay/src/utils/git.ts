@@ -157,27 +157,28 @@ export async function initGitCurrent(options: { notify?: boolean } = {}): Promis
   if (!dir || !canInitGit()) return false;
   try {
     const result = await apiJson("project/current/init-git", { method: "POST" });
-    // Delegate project-scope reset/reload to legacy bridge (still in app.js during migration)
-    const legacy = (window as any).__legacyGit;
-    if (legacy?.resetProjectScope) legacy.resetProjectScope();
-    if (legacy?.reloadProjectScope) await legacy.reloadProjectScope();
+    // Reload project scope after git init (config, extensions, meta).
+    const { clearProjectScopeData } = await import("../services/workspace");
+    const { reloadProjectScope } = await import("../services/config");
+    clearProjectScopeData();
+    await reloadProjectScope({ restoreWorkspace: false });
     if (options.notify !== false) {
-      const legacyNotify = (window as any).__legacyNotify;
-      if (legacyNotify?.nativeMessage) {
-        const legacyT = (window as any).__legacyT ?? ((k: string) => k);
+      const showAppDialog = (window as any).showAppDialog;
+      if (typeof showAppDialog === "function") {
         const msg = result?.created
-          ? legacyT("git.init_done", { dir })
-          : legacyT("git.init_exists", { dir });
-        await legacyNotify.nativeMessage(msg, { title: legacyT("git.init"), kind: "info" });
+          ? t("git.init_done", { dir })
+          : t("git.init_exists", { dir });
+        await showAppDialog({ title: t("git.init"), message: msg, kind: "info" });
       }
     }
     return true;
   } catch (e) {
     console.error("[git] Failed to initialize Git", e);
-    const legacyNotify = (window as any).__legacyNotify;
-    if (legacyNotify?.nativeMessage && options.notify !== false) {
-      const legacyT = (window as any).__legacyT ?? ((k: string) => k);
-      await legacyNotify.nativeMessage(String(e), { title: legacyT("git.init"), kind: "error" });
+    if (options.notify !== false) {
+      const showAppDialog = (window as any).showAppDialog;
+      if (typeof showAppDialog === "function") {
+        await showAppDialog({ title: t("git.init"), message: String(e), kind: "error" });
+      }
     }
     return false;
   }

@@ -15,15 +15,18 @@ export const DEFAULT_SERVER = (() => {
 
 let serverUrl = DEFAULT_SERVER;
 let authCredentials = { username: "opencorvus", password: "" };
+let directoryContext = "";
 
 export function configure(opts: {
   serverUrl?: string;
   username?: string;
   password?: string;
+  directory?: string;
 }) {
   if (opts.serverUrl) serverUrl = opts.serverUrl;
   if (opts.username) authCredentials.username = opts.username;
   if (opts.password !== undefined) authCredentials.password = opts.password;
+  if (opts.directory !== undefined) directoryContext = String(opts.directory || "").trim();
 }
 
 export function getServerUrl(): string {
@@ -33,7 +36,11 @@ export function getServerUrl(): string {
 export function apiUrl(path: string): string {
   const base = serverUrl.replace(/\/+$/, "");
   const next = path.replace(/^\/+/, "");
-  return `${base}/${next}`;
+  const url = new URL(`${base}/${next}`);
+  if (directoryContext && !url.searchParams.has("directory")) {
+    url.searchParams.set("directory", directoryContext);
+  }
+  return url.toString();
 }
 
 export function apiHeaders(): Record<string, string> {

@@ -3,18 +3,23 @@
 //
 // Exported surface:
 //   sanitizeTheme(value)   — "light" | "system" | "dark"  (mirrors app.js)
-//   sanitizeOpacity(value) — number clamped to [0.7, 1.0]
+//   sanitizeOpacity(value) — number clamped to [0.5, 1.0]
 //   sanitizeZoom(value)    — number clamped to [0.8, 1.6]
 //   resolvedTheme()        — effective "light" | "dark" after system detection
 //   applyTheme(theme)      — writes document.body.dataset.theme
 //   applyZoom(zoom)        — writes --ui-scale CSS custom property via renderScale
 //   applyOpacity(opacity)  — writes --ui-window-opacity or calls Tauri setOpacity
 
-import { settingsStore } from "../store/settings";
+import {
+  MIN_WINDOW_OPACITY,
+  sanitizeOpacity,
+  settingsStore,
+} from "../store/settings";
+
+export { MIN_WINDOW_OPACITY, sanitizeOpacity } from "../store/settings";
 
 // ── Constants (mirror app.js) ──
 
-const MIN_WINDOW_OPACITY = 0.7;
 const MIN_UI_ZOOM = 0.8;
 const MAX_UI_ZOOM = 1.6;
 
@@ -36,24 +41,6 @@ const systemThemeMedia: MediaQueryList | null =
 export function sanitizeTheme(value: any): string {
   if (value === "light" || value === "system") return value as string;
   return "dark";
-}
-
-// ── sanitizeOpacity ──
-// Mirrors app.js sanitizeOpacity:
-//   - parse to float
-//   - NaN → DEFAULT_OPACITY (0.8)
-//   - clamp to [MIN_WINDOW_OPACITY (0.7), 1.0], round to 2 decimal places
-
-export function sanitizeOpacity(value: any): number {
-  const next =
-    typeof value === "number"
-      ? value
-      : Number.parseFloat(String(value ?? ""));
-  if (!Number.isFinite(next)) return DEFAULT_OPACITY;
-  return Math.max(
-    MIN_WINDOW_OPACITY,
-    Math.min(1, Math.round(next * 100) / 100),
-  );
 }
 
 // ── sanitizeZoom ──

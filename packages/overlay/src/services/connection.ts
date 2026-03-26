@@ -134,9 +134,9 @@ export async function restartLocalServer(): Promise<LocalServerInfo | null> {
  * Mirrors app.js checkConnection — attempts up to 8 times for managed local
  * server, 1 time otherwise.  Updates appStore.connectionStatus.
  *
- * Returns "online" | "offline".
+ * Returns true when the server is reachable, false otherwise.
  */
-export async function checkConnection(): Promise<"online" | "offline"> {
+export async function checkConnection(): Promise<boolean> {
   const managed = usesManagedLocalServer();
   if (managed) {
     await syncLocalServerUrl();
@@ -150,7 +150,7 @@ export async function checkConnection(): Promise<"online" | "offline"> {
     try {
       await apiJson("global/health", { signal: AbortSignal.timeout(5000) });
       setConnectionStatus("online");
-      return "online";
+      return true;
     } catch (e) {
       lastError = e;
       if (i >= attempts - 1) break;
@@ -161,7 +161,7 @@ export async function checkConnection(): Promise<"online" | "offline"> {
 
   setConnectionStatus("offline");
   console.warn("[connection] connection failed", String(lastError));
-  return "offline";
+  return false;
 }
 
 // ── Connection monitor ──
@@ -186,8 +186,8 @@ export function startConnectionMonitor(
   _monitorTimer = setInterval(async () => {
     try {
       if (!appStore.connected) {
-        const status = await checkConnection();
-        if (status === "online") {
+        const ok = await checkConnection();
+        if (ok) {
           await onReconnect?.();
         }
       }

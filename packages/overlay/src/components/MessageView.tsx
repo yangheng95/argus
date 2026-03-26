@@ -37,6 +37,7 @@ export function MessageView(props: { message: any }) {
       if (part.type === "text") return !!(part.text || "").trim();
       if (part.type === "tool") return true;
       if (part.type === "reasoning") return !!(part.text || "").trim();
+      if (part.type === "executor_process") return !!part.process;
       if (part.type === "patch") return (part.files || []).length > 0;
       if (part.type === "file") return true;
       if (part.type === "subtask") return true;
@@ -63,7 +64,7 @@ export function MessageView(props: { message: any }) {
                     <ToolPart part={part} />
                   </Match>
                   <Match when={part.type === "reasoning" && (part.text || "").trim()}>
-                    <ReasoningPart text={part.text || ""} />
+                    <ReasoningPart part={part} />
                   </Match>
                   <Match when={part.type === "patch" && (part.files || []).length > 0}>
                     <div class="msg-patch">
@@ -81,6 +82,47 @@ export function MessageView(props: { message: any }) {
                       <span class="tool-icon">{"\u2192"}</span>
                       <span class="tool-name">Subtask</span>
                       <span class="tool-detail">{part.description || part.prompt || ""}</span>
+                    </div>
+                  </Match>
+                  <Match when={part.type === "executor_process" && part.process}>
+                    <div
+                      class="executor-process-card"
+                      data-status={part.process.status || "running"}
+                      data-live={part.process.status === "running" ? "true" : "false"}
+                    >
+                      <div class="executor-process-head">
+                        <span class="executor-process-kind">
+                          {String(part.process.kind || "task")}
+                        </span>
+                        <div class="executor-process-meta">
+                          <div class="executor-process-row">
+                            <div class="executor-process-title">
+                              {part.process.title || part.process.id || ""}
+                            </div>
+                            <div
+                              class="executor-process-status"
+                              data-status={part.process.status || "running"}
+                            >
+                              {part.process.status || "running"}
+                            </div>
+                          </div>
+                          <Show when={part.process.detail}>
+                            <div class="executor-process-detail">{part.process.detail}</div>
+                          </Show>
+                          <Show when={part.process.progress}>
+                            <div class="executor-process-progress">
+                              <span class="executor-process-activity" />
+                              <span>{part.process.progress}</span>
+                            </div>
+                          </Show>
+                          <Show when={part.process.note}>
+                            <div class="executor-process-note">{part.process.note}</div>
+                          </Show>
+                          <Show when={part.process.output}>
+                            <pre class="executor-process-output">{part.process.output}</pre>
+                          </Show>
+                        </div>
+                      </div>
                     </div>
                   </Match>
                 </Switch>

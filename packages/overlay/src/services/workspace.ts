@@ -96,13 +96,10 @@ export function setWorkspaceDirectory(
   if (source === "manual") {
     setSettingsStore({
       directory: next,
-      workspaceDirectory: settingsStore.workspaceDirectory, // unchanged
+      savedDirectory: next,
+      tempDirectory: next ? "" : settingsStore.tempDirectory,
       directoryMode: next ? "custom" : "temp",
     });
-    // Store the saved directory by writing to workspaceDirectory (mirrors
-    // state.savedDirectory in app.js).  The "temp" directory equivalent is
-    // tracked in settingsStore.workspaceDirectory when source !== "manual".
-    setSettingsStore("workspaceDirectory", next || "");
   } else {
     setSettingsStore("directory", next);
   }
@@ -121,13 +118,22 @@ export function setWorkspaceDirectory(
  */
 export function restoreWorkspaceDirectory(): string {
   const saved =
-    typeof settingsStore.workspaceDirectory === "string" &&
-    settingsStore.workspaceDirectory.trim()
-      ? settingsStore.workspaceDirectory.trim()
+    typeof settingsStore.savedDirectory === "string" &&
+    settingsStore.savedDirectory.trim()
+      ? settingsStore.savedDirectory.trim()
+      : "";
+  const temp =
+    typeof settingsStore.tempDirectory === "string" &&
+    settingsStore.tempDirectory.trim()
+      ? settingsStore.tempDirectory.trim()
       : "";
 
-  // Resolve: prefer saved, then fall back to current directory
-  const next = saved || (settingsStore.directory ? settingsStore.directory.trim() : "");
+  // Resolve: prefer the persisted baseline directory, then the temp directory,
+  // then fall back to the current active directory.
+  const next =
+    saved ||
+    temp ||
+    (settingsStore.directory ? settingsStore.directory.trim() : "");
   if (!next) return settingsStore.directory;
 
   setSettingsStore({
@@ -768,7 +774,7 @@ export async function applyDirectory(
   if (options.save === true && next) addRecentDirectory(next);
 
   // Connection check + reload via legacy bridge.
-  const checkConnection = (window as any).checkConnection;
+  const { checkConnection } = await import("./connection");
   if (typeof checkConnection === "function") {
     console.log("[applyDir] checking connection");
     const ok = await checkConnection();
@@ -778,12 +784,10 @@ export async function applyDirectory(
     }
   }
 
-  const reloadProjectScope = (window as any).reloadProjectScope;
-  if (typeof reloadProjectScope === "function") {
-    console.log("[applyDir] reloading project scope");
-    await reloadProjectScope(options);
-    console.log("[applyDir] done, tasks=", boardStore.tasks.length);
-  }
+  const { reloadProjectScope } = await import("./config");
+  console.log("[applyDir] reloading project scope");
+  await reloadProjectScope(options);
+  console.log("[applyDir] done, tasks=", boardStore.tasks.length);
 }
 
 // ── setActiveDirectory ──
@@ -846,10 +850,8 @@ export async function createDirectory(): Promise<void> {
     if (!created) throw new Error(t("cwd.create_unavailable"));
     await setDirectory(target);
     if (settingsStore.initGit) {
-      const initGitCurrent = (window as any).initGitCurrent;
-      if (typeof initGitCurrent === "function") {
-        await initGitCurrent({ notify: false });
-      }
+      const { initGitCurrent } = await import("../utils/git");
+      await initGitCurrent({ notify: false });
     }
   } catch (e) {
     AppLog.error("ui", "Failed to create working directory", { error: String(e) });
@@ -938,11 +940,8 @@ export async function setTempDirectory(
   }
   const next = await createTempDirectory();
   if (!next) throw new Error(t("cwd.create_unavailable"));
-  // Scaffold project config via legacy bridge.
-  const scaffoldProjectConfig = (window as any).scaffoldProjectConfig;
-  if (typeof scaffoldProjectConfig === "function") {
-    await scaffoldProjectConfig(next);
-  }
+  const { scaffoldProjectConfig } = await import("./config");
+  await scaffoldProjectConfig(next);
   await applyDirectory(next, { ...options, save: false, temp: true });
 }
 
@@ -990,7 +989,7 @@ export async function ensureDefaultDirectory(): Promise<boolean> {
 export async function ensureWorkspaceDirectory(): Promise<string> {
   if (activeDirectory()) return activeDirectory();
   // Load meta via legacy bridge (sets boardStore.path).
-  const loadMeta = (window as any).loadMeta;
+  const { loadMeta } = await import("./meta");
   if (typeof loadMeta === "function") await loadMeta();
   if (!settingsStore.directory && (boardStore.path as any)?.directory) {
     setSettingsStore("directory", (boardStore.path as any).directory);

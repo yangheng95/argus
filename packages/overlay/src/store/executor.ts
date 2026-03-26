@@ -33,6 +33,9 @@ const [store, setStore] = createStore({
 
 export { store as executorStore };
 
+const EXECUTOR_LIVE_INTERVAL = 32;
+const executorLiveTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
 // ── Append / merge helpers ──
 
 function executorDeltaKind(kind: string): boolean {
@@ -69,9 +72,77 @@ function executorTargetText(event: ExecutorEvent): string {
   return "";
 }
 
+function executorEventKey(event: ExecutorEvent | null | undefined): string {
+  return String(event?.id || "").trim();
+}
+
+function stopExecutorLiveTimer(key: string): void {
+  const timer = executorLiveTimers.get(key);
+  if (!timer) return;
+  clearTimeout(timer);
+  executorLiveTimers.delete(key);
+}
+
+function nextLiveLength(live: string, target: string): number {
+  if (!target) return 0;
+  if (!live) return Math.min(target.length, 1);
+  const remaining = target.length - live.length;
+  if (remaining <= 0) return target.length;
+  // Avoid a long one-character tail when timers are slightly delayed.
+  if (remaining <= 6) return target.length;
+  return Math.min(target.length, live.length + Math.max(1, Math.ceil(remaining / 2)));
+}
+
+function advanceExecutorLiveText(key: string): void {
+  const index = store.events.findIndex((item) => executorEventKey(item) === key);
+  if (index < 0) {
+    stopExecutorLiveTimer(key);
+    return;
+  }
+  const event = store.events[index];
+  const target = executorTargetText(event);
+  const live = typeof event?._liveText === "string" ? event._liveText : "";
+  if (!target) {
+    stopExecutorLiveTimer(key);
+    return;
+  }
+  if (live.length >= target.length) {
+    if (live !== target) {
+      setStore("events", index, "_liveText", target);
+      setStore("fetchedAt", Date.now());
+    }
+    stopExecutorLiveTimer(key);
+    return;
+  }
+  setStore("events", index, "_liveText", target.slice(0, nextLiveLength(live, target)));
+  setStore("fetchedAt", Date.now());
+  executorLiveTimers.set(
+    key,
+    setTimeout(() => advanceExecutorLiveText(key), EXECUTOR_LIVE_INTERVAL),
+  );
+}
+
+function scheduleExecutorLiveText(event: ExecutorEvent): void {
+  const key = executorEventKey(event);
+  if (!key) return;
+  const target = executorTargetText(event);
+  const live = typeof event?._liveText === "string" ? event._liveText : "";
+  if (!target || live.length >= target.length) {
+    stopExecutorLiveTimer(key);
+    return;
+  }
+  if (executorLiveTimers.has(key)) return;
+  executorLiveTimers.set(
+    key,
+    setTimeout(() => advanceExecutorLiveText(key), EXECUTOR_LIVE_INTERVAL),
+  );
+}
+
 function mergeExecutorDelta(current: ExecutorEvent, event: ExecutorEvent): ExecutorEvent {
   const delta = typeof event.payload?.text === "string" ? event.payload.text : event.summary || "";
-  const previous = executorTargetText(current);
+  const previous = typeof current.payload?.text === "string"
+    ? current.payload.text
+    : executorTargetText(current);
   return {
     ...current,
     summary: previous + delta,
@@ -81,7 +152,7 @@ function mergeExecutorDelta(current: ExecutorEvent, event: ExecutorEvent): Execu
       text: previous + delta,
     },
     _targetText: previous + delta,
-    _liveText: typeof current._liveText === "string" ? current._liveText : "",
+    _liveText: typeof current._liveText === "string" ? current._liveText : previous,
   };
 }
 
@@ -109,15 +180,25 @@ function mergeEventList(events: ExecutorEvent[], event: ExecutorEvent): Executor
     ];
   }
 
-  const sourceIndex =
-    executorDeltaKind(event.kind) && event.sourceID
-      ? events.findIndex(
-          (item) =>
-            item.kind === event.kind &&
-            item.sourceID === event.sourceID &&
-            sameExecutorEventStream(item, event),
-        )
-      : -1;
+  let sourceIndex = -1;
+  if (executorDeltaKind(event.kind)) {
+    for (let i = events.length - 1; i >= 0; i -= 1) {
+      const item = events[i];
+      if (item.kind !== event.kind) continue;
+      if (!sameExecutorEventStream(item, event)) continue;
+      if (event.sourceID) {
+        if (item.sourceID === event.sourceID) {
+          sourceIndex = i;
+          break;
+        }
+        continue;
+      }
+      if (event.kind === "reasoning_delta") {
+        sourceIndex = i;
+        break;
+      }
+    }
+  }
 
   if (sourceIndex >= 0) {
     const merged = mergeExecutorDelta(events[sourceIndex], event);
@@ -148,15 +229,26 @@ export function appendExecutorEvent(event: ExecutorEvent): void {
   const merged = mergeEventList([...store.events], event);
   setStore("events", reconcile(merged));
   setStore("fetchedAt", Date.now());
+  const key = executorEventKey(event);
+  const target = key
+    ? merged.find((item) => executorEventKey(item) === key) || null
+    : null;
+  if (target) scheduleExecutorLiveText(target);
 }
 
 export function clearExecutorEvents(): void {
+  for (const key of executorLiveTimers.keys()) {
+    stopExecutorLiveTimer(key);
+  }
   setStore("events", reconcile([]));
   setStore("runID", "");
   setStore("fetchedAt", 0);
 }
 
 export function setExecutorEvents(events: ExecutorEvent[]): void {
+  for (const key of executorLiveTimers.keys()) {
+    stopExecutorLiveTimer(key);
+  }
   setStore("events", reconcile(Array.isArray(events) ? events : []));
   setStore("fetchedAt", Date.now());
 }

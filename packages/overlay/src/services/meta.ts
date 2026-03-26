@@ -8,9 +8,11 @@
 // ChangesPanel.tsx).
 
 import { appStore, setAppStore } from "../store/app";
-import { boardStore } from "../store/board";
+import { boardStore, setPath, setVcs } from "../store/board";
+import { settingsStore } from "../store/settings";
 import { AppLog } from "../utils/log";
 import { apiJson } from "./api";
+import { setWorkspaceDirectory } from "./workspace";
 
 // ── Types ──
 
@@ -36,15 +38,22 @@ export interface DiffItem {
  * that need that coordination should implement it at the call site.
  */
 export async function loadMeta(): Promise<void> {
+  const epoch = settingsStore.directoryEpoch;
   try {
     const [path, vcs] = await Promise.all([
       apiJson("path"),
       apiJson("vcs"),
     ]);
+    if (epoch !== settingsStore.directoryEpoch) return;
     const directory =
       path && typeof path.directory === "string"
         ? path.directory.trim()
         : "";
+    setPath(directory ? { directory } : null);
+    if (!settingsStore.directory && directory) {
+      setWorkspaceDirectory(directory, "auto");
+    }
+    setVcs(vcs ?? null);
     setAppStore("config", (prev: any) => ({
       ...(prev ?? {}),
       _metaPath: directory ? { directory } : null,
@@ -54,11 +63,17 @@ export async function loadMeta(): Promise<void> {
     AppLog.debug("meta", "loadMeta failed, resetting path/vcs", {
       error: String(e),
     });
+    if (epoch !== settingsStore.directoryEpoch) return;
+    setPath(null);
+    setVcs(null);
     setAppStore("config", (prev: any) => ({
       ...(prev ?? {}),
       _metaPath: null,
       _metaVcs: null,
     }));
+  } finally {
+    const { renderMeta } = await import("./legacy");
+    renderMeta();
   }
 }
 

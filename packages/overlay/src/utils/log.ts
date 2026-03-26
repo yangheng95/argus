@@ -87,6 +87,14 @@ function persist(entry: AppLogEntry): void {
   }
 }
 
+export async function waitForLogDrain(timeoutMs = 2_000): Promise<void> {
+  const started = Date.now();
+  while (_flushTimer || _flushQueue.length > 0) {
+    if (Date.now() - started >= timeoutMs) return;
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+}
+
 function log(level: LogLevel, service: string, message: string, extra?: unknown): AppLogEntry {
   const entry = add(level, service, message, extra);
   persist(entry);

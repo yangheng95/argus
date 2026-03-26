@@ -28,10 +28,9 @@ async function currentTauriWindow(): Promise<any | null> {
 
 /** Show a native dialog via Tauri's dialog plugin (if available). */
 async function nativeMessage(message: string, options?: { title?: string }): Promise<void> {
-  const dialog = (window as any).__TAURI__?.dialog;
-  if (typeof dialog?.message === "function") {
-    await dialog.message(message, options).catch(() => undefined);
-  }
+  const notify = (window as any).nativeMessage;
+  if (typeof notify !== "function") return;
+  await notify(message, options).catch(() => undefined);
 }
 
 // ── Label helpers (mirrors app.js maximizeLabel / maximizeIcon) ──
@@ -143,7 +142,25 @@ export function WindowControls() {
       }).catch(() => undefined);
       if (typeof unlisten === "function") cleanupResized = unlisten;
     }
+
+    const titlebar = document.getElementById("titlebar");
+    const handleTitlebarPointerDown = (event: PointerEvent) => {
+      if (event.button !== 0) return;
+      if (!(event.target instanceof Element)) return;
+      if (
+        event.target.closest(
+          '[data-no-drag="true"], button, input, textarea, select, a, label, summary, [contenteditable="true"]',
+        )
+      ) {
+        return;
+      }
+      event.preventDefault();
+      win.startDragging?.().catch(() => undefined);
+    };
+    titlebar?.addEventListener("pointerdown", handleTitlebarPointerDown);
+
     onCleanup(() => cleanupResized?.());
+    onCleanup(() => titlebar?.removeEventListener("pointerdown", handleTitlebarPointerDown));
   });
 
   const pinLabel = () =>

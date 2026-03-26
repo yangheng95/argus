@@ -103,9 +103,8 @@ export function sizeChat(textarea?: HTMLTextAreaElement): void {
  * Mirrors app.js ensureTaskSelection (lines 9156–9162).
  */
 export async function ensureTaskSelection(): Promise<boolean> {
-  // Delegate to the legacy workspace guard still living in app.js / workspace.js
-  const hasWorkspaceSelection = (window as any).hasWorkspaceSelection;
-  if (typeof hasWorkspaceSelection === "function" && hasWorkspaceSelection()) {
+  const { hasWorkspaceSelection } = await import("../services/workspace");
+  if (hasWorkspaceSelection()) {
     return false;
   }
 

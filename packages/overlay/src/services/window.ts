@@ -62,7 +62,7 @@ export function setConnStatus(status: "online" | "offline" | "connecting"): void
     typeof legacyT === "function" ? legacyT(key) : key;
 
   document.body.dataset.connection = status;
-  const badge = document.getElementById("connBadge") as HTMLElement | null;
+  const badge = document.getElementById("solidConnBadge") as HTMLElement | null;
   if (!badge) return;
   badge.dataset.status = status;
   badge.textContent =
