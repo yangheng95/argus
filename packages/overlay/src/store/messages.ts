@@ -249,6 +249,7 @@ export async function syncTask(taskID: string) {
   if (!taskID) {
     setStore("messages", []);
     messageIndex.clear();
+    clearAgentEvents();
     return;
   }
   try {
@@ -308,6 +309,7 @@ async function loadExecutorEvents(runID: string): Promise<void> {
 export async function loadConversation(): Promise<void> {
   if (!boardStore.selectedTaskID) {
     setMessages([]);
+    clearAgentEvents();
     return;
   }
   if (_convLoading) {
@@ -591,6 +593,7 @@ function agentEventRecord(value: any): boolean {
 interface AgentEvent {
   id: string;
   eventID: string;
+  taskID: string;
   stage: string;
   kind: string;
   toolName: string;
@@ -604,6 +607,7 @@ interface AgentEvent {
 }
 
 const AGENT_LIVE_INTERVAL = 32;
+const MAX_AGENT_EVENTS_PER_STAGE = 12;
 const agentLiveTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
 function agentEventKey(event: Pick<AgentEvent, "stage" | "id"> | null | undefined): string {
@@ -716,6 +720,8 @@ function agentEventEntry(raw: any): AgentEvent | null {
   const stage = String(payload.stage || "")
     .trim()
     .toLowerCase();
+  const taskID = String(payload.taskID || raw?.taskID || "")
+    .trim();
   const kind = String(payload.kind || "status")
     .trim()
     .toLowerCase();
@@ -743,6 +749,7 @@ function agentEventEntry(raw: any): AgentEvent | null {
   return {
     id,
     eventID: typeof raw?.event_id === "string" ? raw.event_id : "",
+    taskID,
     stage,
     kind,
     toolName,
@@ -751,6 +758,23 @@ function agentEventEntry(raw: any): AgentEvent | null {
     payload,
     time: { created: Number.isFinite(created) ? created : Date.now() },
   };
+}
+
+function pruneAgentEvents(events: AgentEvent[]): AgentEvent[] {
+  const byStage = new Map<string, AgentEvent[]>();
+  for (const event of events) {
+    const stageEvents = byStage.get(event.stage) || [];
+    stageEvents.push(event);
+    byStage.set(event.stage, stageEvents);
+  }
+  const kept = Array.from(byStage.values())
+    .flatMap((stageEvents) => stageEvents.slice(-MAX_AGENT_EVENTS_PER_STAGE))
+    .sort((a, b) => (a.time?.created || 0) - (b.time?.created || 0));
+  const keys = new Set(kept.map((event) => agentEventKey(event)));
+  for (const key of [...agentLiveTimers.keys()]) {
+    if (!keys.has(key)) stopAgentLiveTimer(key);
+  }
+  return kept;
 }
 
 function mergeAgentEvent(existing: AgentEvent, next: AgentEvent): AgentEvent {
@@ -810,6 +834,9 @@ function mergeAgentEvent(existing: AgentEvent, next: AgentEvent): AgentEvent {
 function mergeAgentEventList(events: AgentEvent[], raw: any): AgentEvent[] {
   const event = agentEventEntry(raw);
   if (!event) return events;
+  if (event.taskID && boardStore.selectedTaskID && event.taskID !== boardStore.selectedTaskID) {
+    return events;
+  }
   const index = events.findIndex(
     (item) => item.id === event.id && item.stage === event.stage,
   );
@@ -823,8 +850,10 @@ function mergeAgentEventList(events: AgentEvent[], raw: any): AgentEvent[] {
       : [...events, event];
   const target = index >= 0 ? next[index] : next[next.length - 1];
   syncAgentText(target);
-  return next.sort(
-    (a, b) => (a.time?.created || 0) - (b.time?.created || 0),
+  return pruneAgentEvents(
+    next.sort(
+      (a, b) => (a.time?.created || 0) - (b.time?.created || 0),
+    ),
   );
 }
 
@@ -859,7 +888,17 @@ export function setAgentEvents(events: any[]) {
   for (const key of agentLiveTimers.keys()) {
     stopAgentLiveTimer(key);
   }
-  setStore("agentEvents", reconcile(events));
+  const normalized = pruneAgentEvents(Array.isArray(events) ? events as AgentEvent[] : []);
+  setStore("agentEvents", reconcile(normalized));
+  setStore("conversationUpdatedAt", Date.now());
+}
+
+export function clearAgentEvents(): void {
+  for (const key of [...agentLiveTimers.keys()]) {
+    stopAgentLiveTimer(key);
+  }
+  setStore("agentEvents", []);
+  setStore("conversationUpdatedAt", Date.now());
 }
 
 export function setMessages(messages: any[]) {

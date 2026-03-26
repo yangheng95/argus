@@ -14,6 +14,7 @@ import { startSSE, stopSSE } from "./sse";
 import {
   syncTask,
   clearMessages,
+  clearAgentEvents,
   setSelectedTaskID,
 } from "../store/messages";
 import {
@@ -198,6 +199,7 @@ export async function selectTask(
   if (!options.preserveMessages) {
     clearMessages();
   }
+  clearAgentEvents();
   // Reset budget dirty flag so the new task's budget values populate correctly.
   // Without this, stale budgetDirty=true from a previous task edit would
   // prevent setBudgetInputs from running inside renderBudget.

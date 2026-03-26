@@ -8,6 +8,21 @@ import { which } from "@/util/which"
 const SIGKILL_TIMEOUT_MS = 200
 
 export namespace Shell {
+  export interface RunOptions {
+    cwd?: string
+    env?: NodeJS.ProcessEnv
+    timeoutMs?: number
+    abort?: AbortSignal
+  }
+
+  export interface RunResult {
+    exitCode: number
+    stdout: string
+    stderr: string
+    timedOut: boolean
+    aborted: boolean
+  }
+
   function firstExisting(paths: Array<string | null | undefined>) {
     for (const item of paths) {
       if (!item) continue
@@ -78,6 +93,80 @@ export namespace Shell {
       }
     }
   }
+
+  export async function run(command: string, opts: RunOptions = {}): Promise<RunResult> {
+    const proc = spawn(command, {
+      shell: acceptable(),
+      cwd: opts.cwd,
+      env: opts.env,
+      stdio: ["ignore", "pipe", "pipe"],
+      detached: process.platform !== "win32",
+    })
+
+    let stdout = ""
+    let stderr = ""
+    let timedOut = false
+    let aborted = false
+    let exited = false
+
+    proc.stdout?.on("data", (chunk) => {
+      stdout += chunk.toString()
+    })
+    proc.stderr?.on("data", (chunk) => {
+      stderr += chunk.toString()
+    })
+
+    const kill = () => killTree(proc, { exited: () => exited })
+
+    if (opts.abort?.aborted) {
+      aborted = true
+      await kill()
+    }
+
+    const abortHandler = () => {
+      aborted = true
+      void kill()
+    }
+
+    opts.abort?.addEventListener("abort", abortHandler, { once: true })
+
+    const timeoutMs = typeof opts.timeoutMs === "number" && Number.isFinite(opts.timeoutMs) ? opts.timeoutMs : undefined
+    const timer = timeoutMs && timeoutMs > 0
+      ? setTimeout(() => {
+          timedOut = true
+          void kill()
+        }, timeoutMs)
+      : undefined
+    timer?.unref?.()
+
+    const exitCode = await new Promise<number>((resolve, reject) => {
+      const cleanup = () => {
+        if (timer) clearTimeout(timer)
+        opts.abort?.removeEventListener("abort", abortHandler)
+      }
+
+      proc.once("error", (error) => {
+        exited = true
+        cleanup()
+        reject(error)
+      })
+
+      proc.once("exit", (code, signal) => {
+        exited = true
+        cleanup()
+        resolve(code ?? (signal ? 1 : 0))
+      })
+    })
+
+    return {
+      exitCode,
+      stdout,
+      stderr,
+      timedOut,
+      aborted,
+    }
+  }
+
   const BLACKLIST = new Set(["fish", "nu"])
 
   function fallback() {

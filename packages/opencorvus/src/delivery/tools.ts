@@ -14,6 +14,7 @@ import { createCodebaseTools } from "@/orchestrator/codebase-tools"
 import { Memory } from "@/memory"
 import { Preference } from "@/preference"
 import { Instance } from "@/project/instance"
+import { Shell } from "@/shell/shell"
 import { Filesystem } from "@/util/filesystem"
 import { Log } from "@/util/log"
 
@@ -108,26 +109,16 @@ export function createDeliveryTools(input?: { sessionID?: string }) {
       execute: async ({ command, timeout_ms }) => {
         const timeout = timeout_ms ?? 120_000
         try {
-          const isWin = process.platform === "win32"
-          const shell = isWin ? ["cmd", "/c", command] : ["bash", "-c", command]
-          const proc = Bun.spawn(shell, {
+          const result = await Shell.run(command, {
             cwd: projectDir,
-            stdout: "pipe",
-            stderr: "pipe",
+            env: process.env,
+            timeoutMs: timeout,
           })
-          const timer = setTimeout(() => {
-            try { proc.kill() } catch { /* ignore */ }
-          }, timeout)
-          const [stdout, stderr, exitCode] = await Promise.all([
-            new Response(proc.stdout).text(),
-            new Response(proc.stderr).text(),
-            proc.exited,
-          ])
-          clearTimeout(timer)
-          const parts = [`exit_code: ${exitCode}`]
-          if (stdout.trim()) parts.push(`stdout:\n${stdout.slice(0, 8000)}`)
-          if (stderr.trim()) parts.push(`stderr:\n${stderr.slice(0, 5000)}`)
-          return parts.join("\n") || `exit_code: ${exitCode} (no output)`
+          const parts = [`exit_code: ${result.exitCode}`]
+          if (result.timedOut) parts.push(`timeout_ms: ${timeout}`)
+          if (result.stdout.trim()) parts.push(`stdout:\n${result.stdout.slice(0, 8000)}`)
+          if (result.stderr.trim()) parts.push(`stderr:\n${result.stderr.slice(0, 5000)}`)
+          return parts.join("\n") || `exit_code: ${result.exitCode} (no output)`
         } catch (e) {
           log.warn("run_command failed in delivery agent", { command, err: e })
           return `Error running command: ${e instanceof Error ? e.message : String(e)}`

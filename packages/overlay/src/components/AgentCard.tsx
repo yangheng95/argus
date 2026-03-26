@@ -14,16 +14,27 @@ interface AgentCardProps {
   key: string;
 }
 
+// Persist user's explicit expand/collapse choice per card key so that
+// component re-creation (caused by Solid's <For> reference tracking when
+// conversationMessages() returns a new array) doesn't reset the toggle.
+const expandedOverrides = new Map<string, boolean>();
+
 export function AgentCard(props: AgentCardProps) {
- // Default to expanded when running, collapsed otherwise
-  const [expanded, setExpanded] = createSignal(props.status === "running");
+  const initial = expandedOverrides.has(props.key)
+    ? expandedOverrides.get(props.key)!
+    : props.status === "running";
+  const [expanded, setExpanded] = createSignal(initial);
 
   const label = () => {
     const base = stageLabel(props.stage);
     return props.round > 0 ? `${base} #${props.round}` : base;
   };
 
-  const toggle = () => setExpanded(!expanded());
+  const toggle = () => {
+    const next = !expanded();
+    setExpanded(next);
+    expandedOverrides.set(props.key, next);
+  };
 
   return (
     <article

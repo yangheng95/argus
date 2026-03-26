@@ -116,6 +116,10 @@ function hasConversationRequest(messages: any[], request: string): boolean {
   );
 }
 
+function messageTime(message: any): number {
+  return Number(message?.info?.time?.created || message?.info?.time?.updated || 0);
+}
+
 // ── Internal: hashText ──
 
 function hashText(value: string): string {
@@ -190,6 +194,177 @@ function signPart(part: any): string {
 
 function deliveryStatusLabel(status: string): string {
   return status || "";
+}
+
+type AgentRound = {
+  key: string;
+  stage: string;
+  messages: any[];
+  startTime: number;
+  endTime: number;
+};
+
+const MAX_LIVE_AGENT_MESSAGES = 12;
+
+function messageEndTime(message: any): number {
+  return Number(message?.info?.time?.completed || message?.info?.time?.updated || messageTime(message));
+}
+
+function agentEventTime(event: any): number {
+  return Number(event?.time?.created || event?.timestamp || 0);
+}
+
+function agentEventDisplayText(event: any): string {
+  const live = typeof event?._liveText === "string" ? event._liveText : "";
+  if (live) return live;
+  const target = typeof event?._targetText === "string" ? event._targetText : "";
+  if (target) return target;
+  if (typeof event?.text === "string" && event.text) return event.text;
+  if (typeof event?.summary === "string" && event.summary) return event.summary;
+  return "";
+}
+
+function agentEventToolName(event: any): string {
+  if (typeof event?.toolName === "string" && event.toolName.trim()) return event.toolName.trim();
+  const summary = String(event?.summary || "");
+  const split = summary.split("→");
+  return split.length > 1 ? String(split[split.length - 1] || "").trim() : "";
+}
+
+function agentEventToolPart(event: any): any | null {
+  const tool = agentEventToolName(event);
+  if (!tool) return null;
+  const created = agentEventTime(event) || Date.now();
+  const id = typeof event?.id === "string" && event.id ? event.id : `tool:${tool}:${created}`;
+  const kind = String(event?.kind || "").trim().toLowerCase();
+  const status =
+    kind === "tool_result"
+      ? "completed"
+      : kind === "error"
+        ? "error"
+        : kind === "tool_delta"
+          ? "running"
+          : "running";
+  const summary = agentEventDisplayText(event).trim() || tool;
+  return {
+    id: `agent-tool:${id}`,
+    type: "tool",
+    callID: id,
+    tool,
+    state: {
+      status,
+      input: {},
+      ...(status === "completed" ? { output: summary, title: tool } : {}),
+      ...(status === "error" ? { error: summary } : {}),
+      ...(status === "running"
+        ? {
+            title: summary,
+            metadata: { synthetic: true },
+            time: { start: created },
+          }
+        : {}),
+    },
+  };
+}
+
+function agentRoundStatus(stage: string, round: AgentRound, roundIndex: number, rounds: AgentRound[], latestStageEvent: any): string {
+  if (roundIndex < rounds.length - 1) return "completed";
+  const hasOpenTranscript = round.messages.some(
+    (message: any) => !message?._synthetic && !message?.info?.time?.completed,
+  );
+  const active = activeAgentStages().has(stage);
+  const latestKind = String(latestStageEvent?.kind || "").trim().toLowerCase();
+  const latestSummary = String(latestStageEvent?.summary || "");
+  if (latestKind === "error") return "error";
+  if (latestKind === "status" && /finished|completed|done/i.test(latestSummary)) return "completed";
+  if (active || hasOpenTranscript) return "running";
+  return "completed";
+}
+
+function buildAgentCards(
+  agentChannels: Record<string, { stage: string; messages: any[]; startTime: number; endTime: number }>,
+  agentEvents: any[],
+): any[] {
+  const roundsByStage: Record<string, AgentRound[]> = {};
+  const latestEventByStage = new Map<string, any>();
+
+  for (const [key, channel] of Object.entries(agentChannels)) {
+    if (channel.messages.length === 0) continue;
+    if (!roundsByStage[channel.stage]) roundsByStage[channel.stage] = [];
+    roundsByStage[channel.stage].push({
+      key,
+      stage: channel.stage,
+      messages: [...channel.messages].sort((left, right) => messageTime(left) - messageTime(right)),
+      startTime: channel.startTime,
+      endTime: channel.endTime,
+    });
+  }
+
+  for (const rounds of Object.values(roundsByStage)) {
+    rounds.sort((left, right) => left.startTime - right.startTime);
+  }
+
+  const liveEventsByStage = new Map<string, any[]>();
+  for (const event of Array.isArray(agentEvents) ? agentEvents : []) {
+    const stage = String(event?.stage || "").trim().toLowerCase();
+    if (!AGENT_STAGES.has(stage)) continue;
+    const next = liveEventsByStage.get(stage) || [];
+    next.push(event);
+    liveEventsByStage.set(stage, next);
+    latestEventByStage.set(stage, event);
+  }
+
+  for (const [stage, events] of liveEventsByStage.entries()) {
+    const liveMessages = events
+      .slice()
+      .sort((left, right) => agentEventTime(left) - agentEventTime(right))
+      .map((event) => agentMessage(event))
+      .filter(Boolean)
+      .slice(-MAX_LIVE_AGENT_MESSAGES);
+    if (liveMessages.length === 0) continue;
+
+    const rounds = roundsByStage[stage] || [];
+    if (rounds.length === 0) {
+      const startTime = messageTime(liveMessages[0]);
+      const endTime = Math.max(...liveMessages.map((message: any) => messageEndTime(message)));
+      rounds.push({
+        key: `live:${stage}`,
+        stage,
+        messages: liveMessages,
+        startTime,
+        endTime,
+      });
+      roundsByStage[stage] = rounds;
+    }
+  }
+
+  const cards: any[] = [];
+  for (const [stage, rounds] of Object.entries(roundsByStage)) {
+    rounds.sort((left, right) => left.startTime - right.startTime);
+    for (let index = 0; index < rounds.length; index += 1) {
+      const round = rounds[index];
+      const roundLabel = rounds.length > 1 ? index + 1 : 0;
+      const cardKey = `${stage}:round:${Number.isFinite(round.startTime) ? round.startTime : "na"}:${index}`;
+      cards.push({
+        _synthetic: true,
+        _agentCard: true,
+        _agentStage: stage,
+        _agentStatus: agentRoundStatus(stage, round, index, rounds, latestEventByStage.get(stage)),
+        _agentRound: roundLabel,
+        _agentCardKey: cardKey,
+        _agentMessages: round.messages,
+        info: {
+          id: `agent-card:${cardKey}`,
+          role: "agent-card",
+          agent: stage,
+          time: { created: Number.isFinite(round.startTime) ? round.startTime : Date.now() },
+        },
+        parts: [],
+      });
+    }
+  }
+
+  return cards.sort((left, right) => messageTime(left) - messageTime(right));
 }
 
 // ── Public: buildBoardContextMessages ──
@@ -314,7 +489,6 @@ export function conversationMessages(): any[] {
   const allMessages = messageStore.messages || [];
   const agentEvents = Array.isArray(messageStore.agentEvents) ? messageStore.agentEvents : [];
   const board = boardStore.board;
-  const selectedTaskID = boardStore.selectedTaskID;
   const showTranscriptDetails = messageStore.showTranscriptDetails;
 
  // Classify messages into main conversation vs agent channels.
@@ -357,68 +531,9 @@ export function conversationMessages(): any[] {
     });
   }
 
- // Group rounds per stage, sorted by time, to assign round numbers and status
-  const stageRounds: Record<string, Array<{ key: string; channel: typeof agentChannels[string] }>> = {};
-  for (const [key, channel] of Object.entries(agentChannels)) {
-    if (channel.messages.length === 0) continue;
-    if (!stageRounds[channel.stage]) stageRounds[channel.stage] = [];
-    stageRounds[channel.stage].push({ key, channel });
-  }
-  const transcriptStages = new Set(
-    Object.values(agentChannels)
-      .filter((channel) => channel.messages.length > 0)
-      .map((channel) => channel.stage),
-  );
-  for (const rounds of Object.values(stageRounds)) {
-    rounds.sort((a, b) => a.channel.startTime - b.channel.startTime);
-  }
+  const agentCardMsgs = buildAgentCards(agentChannels, agentEvents);
 
- // Create synthetic agent-card messages — one card per round per stage
-  const agentCardMsgs: any[] = [];
-  const allAgentEvents = Array.isArray(messageStore.agentEvents) ? messageStore.agentEvents : [];
-  for (const [stage, rounds] of Object.entries(stageRounds)) {
-    for (let i = 0; i < rounds.length; i++) {
-      const { key, channel } = rounds[i];
-      const isLastRound = i === rounds.length - 1;
-      let cardStatus: string;
-      if (!isLastRound) {
- // Earlier rounds must be done — otherwise a new round wouldn't have started
-        cardStatus = "completed";
-      } else {
- // Last round: check agent events within this round's time window only
-        const stageEvents = allAgentEvents.filter(
-          (e: any) =>
-            String(e?.stage || "").toLowerCase() === stage &&
-            (e.timestamp || 0) >= channel.startTime,
-        );
-        const isFinished = stageEvents.some(
-          (e: any) => e.kind === "status" && /finished|completed|done/i.test(e?.summary || ""),
-        );
-        const isError = stageEvents.some((e: any) => e.kind === "error") && !isFinished;
-        cardStatus = isError ? "error" : isFinished ? "completed" : "running";
-      }
-      const roundLabel = rounds.length > 1 ? i + 1 : 0; // 0 = single round, don't show number
-      agentCardMsgs.push({
-        _synthetic: true,
-        _agentCard: true,
-        _agentStage: stage,
-        _agentStatus: cardStatus,
-        _agentRound: roundLabel,
-        _agentCardKey: key,
-        _agentMessages: channel.messages,
-        info: {
-          role: "agent-card",
-          agent: stage,
-          time: { created: channel.startTime === Infinity ? Date.now() : channel.startTime },
-        },
-        parts: [],
-      });
-    }
-  }
-
-  const liveAgentMsgs = buildAgentMessages(transcriptStages);
-
-  return [...filteredMain, ...liveAgentMsgs, ...executorMsgs, ...boardMsgs, ...agentCardMsgs].sort(
+  return [...filteredMain, ...executorMsgs, ...boardMsgs, ...agentCardMsgs].sort(
     (a: any, b: any) => (a.info?.time?.created || 0) - (b.info?.time?.created || 0),
   );
 }
@@ -524,17 +639,61 @@ export function chatPlaceholder(messages: any[]): any | undefined {
 }
 
 // ── Agent Messages ──
-// Agent output goes through the session/message system and is rendered via
-// agent cards (classifyMessage → agentChannels → AgentCard component).
-// buildAgentMessages intentionally returns [] to avoid duplicating that content
-// as standalone conversation messages. This matches the original
-// decision (line 5530) after discovering that building synthetic messages from
-// agentEvents produced garbled noise alongside real session-persisted messages.
+// Live agent events and persisted session messages are normalized into the
+// same agent-card model so every stage renders through one conversation path.
 
-export function agentMessage(_event: any): any | null {
-  return null;
-}
+export function agentMessage(event: any): any | null {
+  if (!event || typeof event !== "object") return null;
+  const stage = String(event?.stage || "").trim().toLowerCase();
+  if (!stage) return null;
+  const created = agentEventTime(event) || Date.now();
+  const eventID =
+    typeof event?.id === "string" && event.id
+      ? event.id
+      : `${stage}:${String(event?.kind || "status")}:${created}`;
+  const kind = String(event?.kind || "status").trim().toLowerCase();
+  const text = agentEventDisplayText(event).trim();
+  const role = "assistant";
+  const base = {
+    _synthetic: true,
+    info: {
+      id: `agent-event:${stage}:${eventID}`,
+      role,
+      agent: stage,
+      time: { created },
+    },
+    parts: [] as any[],
+  };
 
-export function buildAgentMessages(_transcriptStages?: Set<string>): any[] {
-  return [];
+  if (kind === "reasoning_delta" && text) {
+    return {
+      ...base,
+      parts: [
+        {
+          id: `reasoning:${eventID}`,
+          type: "reasoning",
+          text,
+          _targetText: typeof event?._targetText === "string" ? event._targetText : text,
+        },
+      ],
+    };
+  }
+
+  if (kind === "tool_call" || kind === "tool_delta" || kind === "tool_result") {
+    const part = agentEventToolPart(event);
+    return part ? { ...base, parts: [part] } : null;
+  }
+
+  if (!text) return null;
+  return {
+    ...base,
+    parts: [
+      {
+        id: `text:${eventID}`,
+        type: "text",
+        text,
+        _targetText: typeof event?._targetText === "string" ? event._targetText : text,
+      },
+    ],
+  };
 }
