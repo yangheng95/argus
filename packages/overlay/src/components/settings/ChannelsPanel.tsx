@@ -43,22 +43,27 @@ interface Config {
   server?: { publicUrl?: string };
 }
 
-// ── OPENCLAW_DOCS stub ──
-// The actual URLs come from the legacy app.js global OPENCLAW_DOCS.
-// Here we read them from window if present, otherwise fall back to an empty string.
+// ── Channel documentation URLs ──
+// Ported from the legacy OPENCLAW_DOCS app.js global.
+
+const CHANNEL_DOCS: Record<string, string> = {
+  slack: "https://github.com/yangheng95/argus/wiki/channels#slack",
+  telegram: "https://github.com/yangheng95/argus/wiki/channels#telegram",
+  discord: "https://github.com/yangheng95/argus/wiki/channels#discord",
+  "google-chat": "https://github.com/yangheng95/argus/wiki/channels#google-chat",
+  "microsoft-teams": "https://github.com/yangheng95/argus/wiki/channels#microsoft-teams",
+  line: "https://github.com/yangheng95/argus/wiki/channels#line",
+  dingtalk: "https://github.com/yangheng95/argus/wiki/channels#dingtalk",
+  lark: "https://github.com/yangheng95/argus/wiki/channels#lark",
+  overview: "https://github.com/yangheng95/argus/wiki/channels",
+};
 
 function getDocsUrl(channelID: string): string {
-  const docs = (window as any).OPENCLAW_DOCS;
-  if (docs && typeof docs[channelID] === "string") return docs[channelID];
-  if (docs && typeof docs.overview === "string") return docs.overview;
-  return "";
+  return CHANNEL_DOCS[channelID] || CHANNEL_DOCS.overview || "";
 }
 
 function docsCredit(): string {
-  const docs = (window as any).OPENCLAW_DOCS;
-  return t("channel.tutorial_credit", {
-    source: docs?.credit || "docs",
-  });
+  return t("channel.tutorial_credit", { source: "GitHub Wiki" });
 }
 
 // ── Status helpers ──
@@ -201,7 +206,7 @@ export default function ChannelsPanel() {
   }
 
   return (
-    <div class="config-tab-panel active" data-config-panel="channel">
+    <>
       <Show when={loading()}>
         <div class="loading-hint">{t("common.loading")}</div>
       </Show>
@@ -398,6 +403,6 @@ export default function ChannelsPanel() {
           );
         }}
       </Show>
-    </div>
+    </>
   );
 }

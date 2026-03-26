@@ -1,10 +1,34 @@
-import { mkdtempSync } from "node:fs"
+import { mkdtempSync, mkdirSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
 export const { default: puppeteer } = await import(
   new URL("../../opencorvus/node_modules/puppeteer-core/lib/esm/puppeteer/puppeteer-core.js", import.meta.url).href,
 )
+
+let browserQueue: Promise<void> = Promise.resolve()
+const browserLockDir = join(tmpdir(), "pptr-overlay-browser-lock")
+
+async function acquireBrowserLock() {
+  while (true) {
+    try {
+      mkdirSync(browserLockDir)
+      return
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException | undefined)?.code
+      if (code !== "EEXIST") throw error
+      await new Promise((resolve) => setTimeout(resolve, 50))
+    }
+  }
+}
+
+function releaseBrowserLock() {
+  try {
+    rmSync(browserLockDir, { recursive: true, force: true })
+  } catch {
+    // ignore release races between close/disconnect handlers
+  }
+}
 
 async function findBrowser() {
   // Chrome is preferred: Edge x86 singleton handoff exits with code 0 in headless mode
@@ -21,11 +45,46 @@ async function findBrowser() {
 }
 
 export async function launchBrowser(extraArgs?: string[]) {
-  const exe = await findBrowser()
-  return puppeteer.launch({
-    executablePath: exe,
-    headless: "new",
-    userDataDir: mkdtempSync(join(tmpdir(), "pptr-overlay-")),
-    args: ["--no-sandbox", "--no-first-run", "--no-default-browser-check", ...(extraArgs ?? [])],
+  const waitForTurn = browserQueue
+  let releaseTurn!: () => void
+  browserQueue = new Promise<void>((resolve) => {
+    releaseTurn = resolve
   })
+
+  await waitForTurn
+  await acquireBrowserLock()
+  const exe = await findBrowser()
+  try {
+    const browser = await puppeteer.launch({
+      executablePath: exe,
+      headless: "new",
+      userDataDir: mkdtempSync(join(tmpdir(), "pptr-overlay-")),
+      args: ["--no-sandbox", "--no-first-run", "--no-default-browser-check", ...(extraArgs ?? [])],
+    })
+
+    let released = false
+    const releaseOnce = () => {
+      if (released) return
+      released = true
+      releaseTurn()
+      releaseBrowserLock()
+    }
+
+    browser.once("disconnected", releaseOnce)
+
+    const originalClose = browser.close.bind(browser)
+    browser.close = async () => {
+      try {
+        return await originalClose()
+      } finally {
+        releaseOnce()
+      }
+    }
+
+    return browser
+  } catch (error) {
+    releaseTurn()
+    releaseBrowserLock()
+    throw error
+  }
 }

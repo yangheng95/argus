@@ -652,6 +652,59 @@ export function DeliveryPanel(props: DeliveryPanelProps) {
   );
 }
 
+// ── OverviewPanel ──
+
+interface OverviewPanelProps {
+  overview: any;
+}
+
+export function OverviewPanel(props: OverviewPanelProps) {
+  const nextStep = createMemo(() => props.overview?.nextStep || null);
+  const failure = createMemo(() => props.overview?.currentFailure || null);
+
+  return (
+    <Show
+      when={props.overview}
+      fallback={<p class="empty-hint">{t("empty.overview")}</p>}
+    >
+      <Show when={props.overview?.headline}>
+        <div
+          class="overview-headline md-content"
+          innerHTML={renderMarkdown(props.overview.headline)}
+        />
+      </Show>
+      <Show when={props.overview?.summary}>
+        <div
+          class="overview-summary md-content"
+          innerHTML={renderMarkdown(props.overview.summary)}
+        />
+      </Show>
+      <Show when={nextStep()}>
+        <div class="overview-next-step">
+          <div class="overview-next-step-title">
+            {nextStep()?.title || t("overview.next_step")}
+          </div>
+          <Show when={nextStep()?.detail}>
+            <div
+              class="overview-next-step-detail md-content"
+              innerHTML={renderMarkdown(nextStep().detail)}
+            />
+          </Show>
+        </div>
+      </Show>
+      <Show when={failure()}>
+        <div class="interaction-alert task-failure-alert">
+          <div class="interaction-title">{failure()?.title}</div>
+          <div
+            class="interaction-body md-content"
+            innerHTML={renderMarkdown(failure()?.summary || "")}
+          />
+        </div>
+      </Show>
+    </Show>
+  );
+}
+
 // ── TaskActionsPanel ──
 
 interface TaskActionsPanelProps {
@@ -881,9 +934,39 @@ interface BoardProps {
   onRejectInteraction?: (id: string) => void;
 }
 
+interface SectionFrameProps {
+  id: string;
+  title: string;
+  bodyId: string;
+  badgeId?: string;
+  badgeText?: string;
+  badgeTone?: string;
+  children: any;
+}
+
+function SectionFrame(props: SectionFrameProps) {
+  return (
+    <details class="section" id={props.id}>
+      <summary class="section-head">
+        <span class="section-icon" aria-hidden="true" />
+        <span class="section-title">{props.title}</span>
+        <span
+          class="section-badge"
+          id={props.badgeId}
+          data-tone={props.badgeTone}
+        >
+          {props.badgeText || ""}
+        </span>
+      </summary>
+      <div class="section-body" id={props.bodyId}>
+        {props.children}
+      </div>
+    </details>
+  );
+}
+
 export function Board(props: BoardProps) {
   const board = () => boardStore.board;
-  const hasBoard = () => !!board();
 
   const task = () => board()?.task;
   const plan = () => board()?.plan;
@@ -925,134 +1008,108 @@ export function Board(props: BoardProps) {
   });
 
   return (
-    <Show when={hasBoard()} fallback={<div class="board-empty" />}>
-      {/* Task Actions + Failure Alert */}
-      <TaskActionsPanel
-        overview={overview()}
-        onRetry={props.onRetry}
-        onReplan={props.onReplan}
-        onCancel={props.onCancel}
-      />
+    <>
+      <div id="taskActionsBar">
+        <TaskActionsPanel
+          overview={overview()}
+          onRetry={props.onRetry}
+          onReplan={props.onReplan}
+          onCancel={props.onCancel}
+        />
+      </div>
 
-      {/* Spec Section */}
-      <section class="board-section" data-section="spec">
-        <div class="section-header">
-          <span class="section-title">{t("section.spec")}</span>
-          <Show when={spec()}>
-            <span class="section-badge" data-tone="accent">
-              {t("common.active")}
-            </span>
-          </Show>
-        </div>
-        <div class="section-body">
-          <SpecPanel spec={spec()} />
-        </div>
-      </section>
+      <SectionFrame
+        id="overviewSection"
+        title={t("section.overview")}
+        bodyId="overviewBody"
+      >
+        <OverviewPanel overview={overview()} />
+      </SectionFrame>
 
-      {/* Plan Section */}
-      <section class="board-section" data-section="plan">
-        <div class="section-header">
-          <span class="section-title">{t("section.plan")}</span>
-          <Show when={plan()}>
-            <span class="section-badge" data-tone="accent">
-              {`v${plan()?.version}`}
-            </span>
-          </Show>
-        </div>
-        <div class="section-body">
-          <PlanPanel plan={plan()} />
-        </div>
-      </section>
+      <SectionFrame
+        id="specSection"
+        title={t("section.spec")}
+        bodyId="specBody"
+        badgeId="specBadge"
+        badgeText={spec() ? t("common.active") : ""}
+        badgeTone={spec() ? "accent" : ""}
+      >
+        <SpecPanel spec={spec()} />
+      </SectionFrame>
 
-      {/* Goals Section */}
-      <section class="board-section" data-section="goals">
-        <div class="section-header">
-          <span class="section-title">{t("section.goals")}</span>
-          <Show when={goalsBadgeText()}>
-            <span class="section-badge" data-tone={goalsBadgeTone()}>
-              {goalsBadgeText()}
-            </span>
-          </Show>
-        </div>
-        <div class="section-body" id="goalsBody">
-          <GoalsPanel
-            cards={goalsCards()}
-            runningGoalIDs={runningGoalIDs()}
-            onEditGoal={props.onEditGoal}
-            onDeleteGoal={props.onDeleteGoal}
-          />
-          {/* Pending interactions are appended here by the legacy bridge */}
-          <InteractionsList
-            interactions={interactions()}
-            onResolve={props.onResolveInteraction}
-            onReject={props.onRejectInteraction}
-          />
-        </div>
-      </section>
+      <SectionFrame
+        id="planSection"
+        title={t("section.plan")}
+        bodyId="planBody"
+        badgeId="planBadge"
+        badgeText={plan() ? `v${plan()?.version}` : ""}
+        badgeTone={plan() ? "accent" : ""}
+      >
+        <PlanPanel plan={plan()} />
+      </SectionFrame>
 
-      {/* Criteria Section */}
-      <section class="board-section" data-section="criteria">
-        <div class="section-header">
-          <span class="section-title">{t("section.criteria")}</span>
-          <CriteriaBadge task={task()} evaluation={evaluation()} />
-        </div>
-        <div class="section-body">
-          <CriteriaPanel
-            task={task()}
-            evaluation={evaluation()}
-            onToggle={props.onToggleCriteria}
-          />
-        </div>
-      </section>
+      <SectionFrame
+        id="goalsSection"
+        title={t("section.goals")}
+        bodyId="goalsBody"
+        badgeId="goalsBadge"
+        badgeText={goalsBadgeText()}
+        badgeTone={goalsBadgeTone()}
+      >
+        <GoalsPanel
+          cards={goalsCards()}
+          runningGoalIDs={runningGoalIDs()}
+          onEditGoal={props.onEditGoal}
+          onDeleteGoal={props.onDeleteGoal}
+        />
+        <InteractionsList
+          interactions={interactions()}
+          onResolve={props.onResolveInteraction}
+          onReject={props.onRejectInteraction}
+        />
+      </SectionFrame>
 
-      {/* Evaluation Section */}
-      <section class="board-section" data-section="evaluation">
-        <div class="section-header">
-          <span class="section-title">{t("section.evaluation")}</span>
-          <Show when={evaluation()}>
-            <span
-              class="section-badge"
-              data-tone={
-                evaluation()?.verdict === "accepted"
-                  ? "good"
-                  : evaluation()?.verdict === "rejected"
-                    ? "bad"
-                    : "warn"
-              }
-            >
-              {evaluationVerdictLabel(evaluation()?.verdict)}
-            </span>
-          </Show>
-        </div>
-        <div class="section-body">
-          <EvaluationPanel evaluation={evaluation()} />
-        </div>
-      </section>
+      <SectionFrame
+        id="criteriaSection"
+        title={t("section.criteria")}
+        bodyId="criteriaBody"
+        badgeId="criteriaBadge"
+        badgeText={(() => {
+          const specs = criteriaSpecs(task(), evaluation());
+          if (specs.length === 0) return "";
+          const enabled = specs.filter((item) => item.enabled).length;
+          if (enabled === 0) return t("checks.zero_enabled");
+          const passed = specs.filter((item) => item.enabled && aggregateCheckStatus(evaluation()?.checks, item.name) === "passed").length;
+          return `${passed}/${enabled}`;
+        })()}
+      >
+        <CriteriaPanel
+          task={task()}
+          evaluation={evaluation()}
+          onToggle={props.onToggleCriteria}
+        />
+        <EvaluationPanel evaluation={evaluation()} />
+      </SectionFrame>
 
-      {/* Delivery Section */}
-      <section class="board-section" data-section="delivery">
-        <div class="section-header">
-          <span class="section-title">{t("section.delivery")}</span>
-          <Show when={delivery()}>
-            <span
-              class="section-badge"
-              data-tone={
-                delivery()?.status === "delivered"
-                  ? "good"
-                  : delivery()?.status === "failed"
-                    ? "bad"
-                    : "accent"
-              }
-            >
-              {deliveryStatusLabel(delivery()?.status)}
-            </span>
-          </Show>
-        </div>
-        <div class="section-body">
-          <DeliveryPanel delivery={delivery()} />
-        </div>
-      </section>
-    </Show>
+      <SectionFrame
+        id="deliverySection"
+        title={t("section.delivery")}
+        bodyId="evalBody"
+        badgeId="deliveryBadge"
+        badgeText={delivery() ? deliveryStatusLabel(delivery()?.status) : ""}
+        badgeTone={
+          delivery()?.status === "delivered"
+            ? "good"
+            : delivery()?.status === "failed"
+              ? "bad"
+              : delivery()
+                ? "accent"
+                : ""
+        }
+      >
+        <DeliveryPanel delivery={delivery()} />
+      </SectionFrame>
+    </>
   );
 }
 

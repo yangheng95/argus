@@ -84,6 +84,159 @@ function sortMessages(list: Message[]): Message[] {
     .map((x) => x.item);
 }
 
+function record(value: unknown): value is Record<string, any> {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+
+function stableStringify(value: unknown): string {
+  if (value == null) return "null";
+  if (typeof value === "string") return JSON.stringify(value);
+  if (typeof value === "number" || typeof value === "boolean") {
+    return JSON.stringify(value);
+  }
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => stableStringify(item)).join(",")}]`;
+  }
+  if (!record(value)) return JSON.stringify(String(value));
+  return `{${Object.keys(value)
+    .sort()
+    .map((key) => `${JSON.stringify(key)}:${stableStringify(value[key])}`)
+    .join(",")}}`;
+}
+
+function hashText(value: string): string {
+  const text = String(value || "");
+  let hash = 2166136261;
+  for (let i = 0; i < text.length; i += 1) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(36);
+}
+
+function partSignature(part: any): string {
+  return stableStringify({
+    type: part?.type || "",
+    text: part?.text || "",
+    tool: part?.tool || "",
+    kind: part?.kind || "",
+    source: part?.source || "",
+    filename: part?.filename || "",
+    url: part?.url || "",
+    mime: part?.mime || part?.mediaType || "",
+    callID: part?.callID || "",
+    description: part?.description || "",
+    prompt: part?.prompt || "",
+    audience: record(part?.audience) ? part.audience : null,
+    state: record(part?.state) ? part.state : part?.state ?? null,
+    files: Array.isArray(part?.files) ? part.files : [],
+    process: record(part?.process) ? part.process : null,
+  });
+}
+
+function messageSignature(message: any): string {
+  const info = record(message?.info) ? message.info : {};
+  return stableStringify({
+    role: info.role || "",
+    agent: info.agent || "",
+    sessionID: info.sessionID || "",
+    taskID: info.taskID || "",
+    time: {
+      created: info.time?.created || 0,
+      updated: info.time?.updated || 0,
+      completed: info.time?.completed || 0,
+    },
+    parts: Array.isArray(message?.parts)
+      ? message.parts.map((part: any) => partSignature(part))
+      : [],
+  });
+}
+
+function normalizeLoadedPart(
+  input: any,
+  messageID: string,
+  sessionID: string,
+  index: number,
+): Part {
+  const part = record(input) ? { ...input } : { type: "text", text: String(input || "") };
+  const id =
+    typeof part.id === "string" && part.id.trim()
+      ? part.id.trim()
+      : `loaded-part:${messageID}:${index}:${hashText(partSignature(part))}`;
+  return {
+    ...part,
+    id,
+    messageID:
+      typeof part.messageID === "string" && part.messageID.trim()
+        ? part.messageID.trim()
+        : messageID,
+    sessionID:
+      typeof part.sessionID === "string" && part.sessionID.trim()
+        ? part.sessionID.trim()
+        : sessionID,
+  };
+}
+
+function normalizeLoadedMessage(input: any): Message {
+  const message = record(input) ? input : {};
+  const info = record(message.info) ? message.info : {};
+  const signature = messageSignature(message);
+  const id =
+    typeof info.id === "string" && info.id.trim()
+      ? info.id.trim()
+      : `loaded-msg:${hashText(signature)}`;
+  const sessionID =
+    typeof info.sessionID === "string" && info.sessionID.trim()
+      ? info.sessionID.trim()
+      : "";
+  const parts = Array.isArray(message.parts)
+    ? message.parts.map((part: any, index: number) =>
+        normalizeLoadedPart(part, id, sessionID, index),
+      )
+    : [];
+  return {
+    ...message,
+    info: {
+      ...info,
+      id,
+      sessionID,
+      role:
+        typeof info.role === "string" && info.role.trim()
+          ? info.role.trim()
+          : "assistant",
+    },
+    parts,
+  };
+}
+
+export function normalizeLoadedMessages(messages: any[]): Message[] {
+  return (Array.isArray(messages) ? messages : []).map((message) =>
+    normalizeLoadedMessage(message),
+  );
+}
+
+export function mergeLoadedConversationMessages(
+  left: any[],
+  right: any[],
+): Message[] {
+  const seen = new Set<string>();
+  const result: any[] = [];
+  for (const item of [
+    ...(Array.isArray(left) ? left : []),
+    ...(Array.isArray(right) ? right : []),
+  ]) {
+    const info = record(item?.info) ? item.info : {};
+    const key =
+      typeof info.id === "string" && info.id.trim()
+        ? `id:${info.id.trim()}`
+        : `sig:${messageSignature(item)}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(item);
+  }
+  return normalizeLoadedMessages(result);
+}
+
 // ── Full load from transcript ──
 
 export async function syncTask(taskID: string) {
@@ -93,10 +246,16 @@ export async function syncTask(taskID: string) {
     return;
   }
   try {
-    const data = await apiJson(
-      `task/${encodeURIComponent(taskID)}/transcript`,
+    const [transcript, timeline] = await Promise.all([
+      apiJson(`task/${encodeURIComponent(taskID)}/transcript`).catch(() => []),
+      apiJson(`control/timeline?taskID=${encodeURIComponent(taskID)}`).catch(
+        () => [],
+      ),
+    ]);
+    const messages = mergeLoadedConversationMessages(
+      Array.isArray(timeline) ? timeline : [],
+      Array.isArray(transcript) ? transcript : [],
     );
-    const messages: Message[] = Array.isArray(data) ? data : [];
     setStore("messages", sortMessages(messages));
     rebuildMessageIndex();
     setStore("conversationUpdatedAt", Date.now());
@@ -311,6 +470,14 @@ function displayString(value: any): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function deltaString(value: any): string {
+  return typeof value === "string" ? value : "";
+}
+
+function streamingAgentKind(kind: string): boolean {
+  return kind === "message_delta" || kind === "reasoning_delta" || kind === "tool_delta";
+}
+
 function agentEventRecord(value: any): boolean {
   return !!value && typeof value === "object" && !Array.isArray(value);
 }
@@ -330,14 +497,87 @@ interface AgentEvent {
   [key: string]: any;
 }
 
+const AGENT_LIVE_INTERVAL = 32;
+const agentLiveTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+function agentEventKey(event: Pick<AgentEvent, "stage" | "id"> | null | undefined): string {
+  const stage = String(event?.stage || "").trim().toLowerCase();
+  const id = String(event?.id || "").trim();
+  return stage && id ? `${stage}:${id}` : "";
+}
+
+function stopAgentLiveTimer(key: string): void {
+  const timer = agentLiveTimers.get(key);
+  if (!timer) return;
+  clearTimeout(timer);
+  agentLiveTimers.delete(key);
+}
+
+function nextLiveLength(live: string, target: string): number {
+  if (!target) return 0;
+  if (!live) return Math.min(target.length, 1);
+  const remaining = target.length - live.length;
+  if (remaining <= 0) return target.length;
+  // Avoid a long one-character tail when timers are slightly delayed.
+  if (remaining <= 4) return target.length;
+  return Math.min(target.length, live.length + Math.max(1, Math.ceil(remaining / 2)));
+}
+
+function advanceAgentLiveText(key: string): void {
+  const index = store.agentEvents.findIndex(
+    (item: any) => agentEventKey(item as AgentEvent) === key,
+  );
+  if (index < 0) {
+    stopAgentLiveTimer(key);
+    return;
+  }
+  const event = store.agentEvents[index] as AgentEvent;
+  const target = typeof event?._targetText === "string" ? event._targetText : "";
+  const live = typeof event?._liveText === "string" ? event._liveText : "";
+  if (!target) {
+    stopAgentLiveTimer(key);
+    return;
+  }
+  if (live.length >= target.length) {
+    if (live !== target) {
+      setStore("agentEvents", index, "_liveText", target);
+      setStore("conversationUpdatedAt", Date.now());
+    }
+    stopAgentLiveTimer(key);
+    return;
+  }
+  setStore("agentEvents", index, "_liveText", target.slice(0, nextLiveLength(live, target)));
+  setStore("conversationUpdatedAt", Date.now());
+  agentLiveTimers.set(
+    key,
+    setTimeout(() => advanceAgentLiveText(key), AGENT_LIVE_INTERVAL),
+  );
+}
+
+function scheduleAgentLiveText(event: AgentEvent): void {
+  const key = agentEventKey(event);
+  if (!key) return;
+  const target = typeof event?._targetText === "string" ? event._targetText : "";
+  const live = typeof event?._liveText === "string" ? event._liveText : "";
+  if (!target || live.length >= target.length) {
+    stopAgentLiveTimer(key);
+    return;
+  }
+  if (agentLiveTimers.has(key)) return;
+  agentLiveTimers.set(
+    key,
+    setTimeout(() => advanceAgentLiveText(key), AGENT_LIVE_INTERVAL),
+  );
+}
+
 function agentEventTargetText(event: AgentEvent): string {
   if (!event) return "";
   const k = event.kind;
   if (k === "message_delta" || k === "reasoning_delta" || k === "status") {
-    return displayString(event.text || event.summary);
+    return deltaString(event.text ?? event.summary);
   }
   if (k === "tool_call" || k === "tool_delta") {
-    return displayString(event.text || event.payload?.text || event.summary);
+    return deltaString(event.text ?? event.payload?.text ?? event.summary);
   }
   if (k === "tool_result") {
     return displayString(
@@ -350,13 +590,15 @@ function agentEventTargetText(event: AgentEvent): string {
 function syncAgentText(event: AgentEvent): void {
   if (!event) return;
   const target = agentEventTargetText(event);
+  const live = typeof event._liveText === "string" ? event._liveText : "";
   if (!target) {
+    stopAgentLiveTimer(agentEventKey(event));
     delete event._targetText;
     delete event._liveText;
     return;
   }
   event._targetText = target;
-  event._liveText = target;
+  event._liveText = live || target;
 }
 
 function agentEventEntry(raw: any): AgentEvent | null {
@@ -378,8 +620,12 @@ function agentEventEntry(raw: any): AgentEvent | null {
       : typeof payload.name === "string" && payload.name.trim()
         ? payload.name.trim()
         : "";
-  const text = displayString(payload.text);
-  const summary = displayString(raw?.summary || payload.summary || text);
+  const text = streamingAgentKind(kind)
+    ? deltaString(payload.text)
+    : displayString(payload.text);
+  const summary = streamingAgentKind(kind)
+    ? deltaString(raw?.summary ?? payload.summary ?? text)
+    : displayString(raw?.summary || payload.summary || text);
   const id =
     typeof payload.id === "string" && payload.id
       ? payload.id
@@ -404,7 +650,7 @@ function agentEventEntry(raw: any): AgentEvent | null {
 function mergeAgentEvent(existing: AgentEvent, next: AgentEvent): AgentEvent {
   if (!existing) return next;
   if (next.kind === "message_delta" || next.kind === "reasoning_delta") {
-    const merged = `${displayString(existing._targetText || existing.text || existing.summary)}${displayString(next.text || next.summary)}`;
+    const merged = `${deltaString(existing._targetText ?? existing.text ?? existing.summary)}${deltaString(next.text ?? next.summary)}`;
     return {
       ...existing,
       ...next,
@@ -417,7 +663,7 @@ function mergeAgentEvent(existing: AgentEvent, next: AgentEvent): AgentEvent {
     };
   }
   if (next.kind === "tool_delta") {
-    const mergedText = `${displayString(existing.text || existing.payload?.text || "")}${displayString(next.text || next.payload?.text || next.summary)}`;
+    const mergedText = `${deltaString(existing.text ?? existing.payload?.text ?? "")}${deltaString(next.text ?? next.payload?.text ?? next.summary)}`;
     return {
       ...existing,
       ...next,
@@ -481,12 +727,40 @@ export function appendAgentEvent(raw: any): void {
   const next = mergeAgentEventList([...store.agentEvents], raw);
   setStore("agentEvents", reconcile(next));
   setStore("conversationUpdatedAt", Date.now());
+  const payload = agentEventRecord(raw?.payload)
+    ? raw.payload
+    : agentEventRecord(raw?.properties)
+      ? raw.properties
+      : {};
+  const key = agentEventKey({
+    stage: String(payload.stage || "").trim().toLowerCase(),
+    id:
+      typeof payload.id === "string" && payload.id
+        ? payload.id
+        : typeof raw?.event_id === "string"
+          ? raw.event_id
+          : "",
+  } as Pick<AgentEvent, "stage" | "id">);
+  const target = key
+    ? next.find((item) => agentEventKey(item as AgentEvent) === key) || null
+    : null;
+  if (target) scheduleAgentLiveText(target as AgentEvent);
 }
 
 // ── Setters for legacy bridge ──
 
 export function setAgentEvents(events: any[]) {
+  for (const key of agentLiveTimers.keys()) {
+    stopAgentLiveTimer(key);
+  }
   setStore("agentEvents", reconcile(events));
+}
+
+export function setMessages(messages: any[]) {
+  const next = sortMessages(Array.isArray(messages) ? messages : []);
+  setStore("messages", reconcile(next));
+  rebuildMessageIndex();
+  setStore("conversationUpdatedAt", Date.now());
 }
 
 export function setSelectedTaskID(taskID: string) {
@@ -567,6 +841,45 @@ export function currentTaskSessionID(): string {
  */
 export function currentSessionID(): string {
   return currentTaskSessionID();
+}
+
+function messageEventSessionID(event: any): string {
+  const properties =
+    typeof event?.properties === "object" &&
+    event.properties &&
+    !Array.isArray(event.properties)
+      ? event.properties
+      : typeof event?.payload === "object" &&
+          event.payload &&
+          !Array.isArray(event.payload)
+        ? event.payload
+        : {};
+  if (typeof properties?.info?.sessionID === "string") {
+    return properties.info.sessionID;
+  }
+  if (typeof properties?.part?.sessionID === "string") {
+    return properties.part.sessionID;
+  }
+  return typeof properties?.sessionID === "string" ? properties.sessionID : "";
+}
+
+/**
+ * Message deltas are only safe to apply incrementally once the selected task's
+ * root session is known. Before that, the authoritative transcript + timeline
+ * load must establish the conversation shape first.
+ */
+export function shouldReloadConversationForMessageEvent(event: any): boolean {
+  const type = String(event?.type || "").trim();
+  if (
+    type !== "message.updated" &&
+    type !== "message.part.updated" &&
+    type !== "message.part.delta"
+  ) {
+    return false;
+  }
+  if (!store.selectedTaskID) return false;
+  if (currentTaskSessionID()) return false;
+  return !!messageEventSessionID(event);
 }
 
 // Module-private set to cache known child session IDs for O(1) lookup.

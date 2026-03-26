@@ -25,9 +25,7 @@
 
 import { settingsStore } from "../store/settings";
 import { apiJson } from "./api";
-import { loadBoard } from "../store/board";
 import { AppLog } from "../utils/log";
-import { t } from "../utils/i18n";
 
 // ── Types ──
 
@@ -59,6 +57,8 @@ export interface ResolveInput {
 }
 
 export interface InteractionsDeps {
+  /** Optional state snapshot used by tests / legacy callers. */
+  state?: Record<string, unknown>;
   /** Escape HTML for safe insertion. */
   escapeHtml: (s: string) => string;
   /** Translation function. */
@@ -80,6 +80,8 @@ export interface InteractionsDeps {
   setTrayAttention?: (active: boolean) => Promise<void>;
   /** Trigger a board reload after a resolve / reject. */
   loadBoard: () => Promise<void>;
+  /** Optional API override used by tests / legacy callers. */
+  apiJson?: typeof apiJson;
   /** Show a native prompt dialog and return the user's input or null. */
   nativePrompt: (
     message: string,
@@ -90,6 +92,8 @@ export interface InteractionsDeps {
       inputLabel?: string;
     },
   ) => Promise<string | null>;
+  /** Optional logger override used by tests / legacy callers. */
+  AppLog?: typeof AppLog;
 }
 
 // ── Factory ──
@@ -110,6 +114,19 @@ export function createOverlayInteractions(deps: InteractionsDeps) {
   let pendingInteraction: Interaction | null = null;
   /** interactionID → timestamp of last auto-resolve failure */
   const autoResolveFailed = new Map<string, number>();
+  const api = deps.apiJson ?? apiJson;
+  const logger = deps.AppLog ?? AppLog;
+
+  function stateFlag(name: string, fallback: boolean): boolean {
+    const value = deps.state?.[name];
+    return typeof value === "boolean" ? value : fallback;
+  }
+
+  function autoPermissionReplyAction(): "always" | "once" {
+    const value = deps.state?.autoPermissionReply;
+    if (value === "always") return "always";
+    return "once";
+  }
 
   // ── HTML builders ──
 
@@ -160,9 +177,14 @@ export function createOverlayInteractions(deps: InteractionsDeps) {
 
   function shouldAutoResolveInteraction(interaction: Interaction): boolean {
     if (!interaction || interaction.status !== "pending") return false;
-    if (interaction.type === "permission") return settingsStore.autoPermission;
+    if (interaction.type === "permission") {
+      return stateFlag("autoPermission", settingsStore.autoPermission);
+    }
     if (interaction.type === "question")
-      return settingsStore.autoQuestion || settingsStore.unattended;
+      return (
+        stateFlag("autoQuestion", settingsStore.autoQuestion) ||
+        stateFlag("unattended", settingsStore.unattended)
+      );
     return false;
   }
 
@@ -284,7 +306,7 @@ export function createOverlayInteractions(deps: InteractionsDeps) {
     disableInteractionButtons(id);
     try {
       if (action === "once" || action === "always") {
-        await apiJson(`interaction/${id}/reply`, {
+        await api(`interaction/${id}/reply`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ reply: action }),
@@ -310,7 +332,7 @@ export function createOverlayInteractions(deps: InteractionsDeps) {
           },
         );
         if (answer == null) return;
-        await apiJson(`interaction/${id}/reply`, {
+        await api(`interaction/${id}/reply`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ message: answer }),
@@ -319,7 +341,7 @@ export function createOverlayInteractions(deps: InteractionsDeps) {
         return;
       }
 
-      await apiJson(`interaction/${id}/reply`, {
+      await api(`interaction/${id}/reply`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -329,7 +351,7 @@ export function createOverlayInteractions(deps: InteractionsDeps) {
         signal: AbortSignal.timeout(30000),
       });
     } catch (error: any) {
-      AppLog.error("ui", "Failed to resolve interaction", {
+      logger.error("ui", "Failed to resolve interaction", {
         error: String(error),
       });
       showInteractionError(id, error?.message || String(error));
@@ -337,7 +359,7 @@ export function createOverlayInteractions(deps: InteractionsDeps) {
     } finally {
       dismissInteractionModal();
       busy = false;
-      await loadBoard();
+      await deps.loadBoard();
     }
   }
 
@@ -346,21 +368,21 @@ export function createOverlayInteractions(deps: InteractionsDeps) {
     busy = true;
     disableInteractionButtons(id);
     try {
-      await apiJson(`interaction/${id}/reject`, {
+      await api(`interaction/${id}/reject`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({}),
         signal: AbortSignal.timeout(30000),
       });
     } catch (error: any) {
-      AppLog.error("ui", "Failed to reject interaction", {
+      logger.error("ui", "Failed to reject interaction", {
         error: String(error),
       });
       showInteractionError(id, error?.message || String(error));
     } finally {
       dismissInteractionModal();
       busy = false;
-      await loadBoard();
+      await deps.loadBoard();
     }
   }
 
@@ -415,7 +437,7 @@ export function createOverlayInteractions(deps: InteractionsDeps) {
       if (pending[0].type === "permission") {
         void resolveInteraction(
           pending[0].id,
-          settingsStore.autoPermission ? "always" : "once",
+          autoPermissionReplyAction(),
         );
         return;
       }
@@ -424,7 +446,7 @@ export function createOverlayInteractions(deps: InteractionsDeps) {
         !answers ||
         answers.some((item) => !Array.isArray(item) || item.length === 0)
       ) {
-        AppLog.warn(
+        logger.warn(
           "ui",
           "Skipping automatic question reply due to missing structured options",
           { interactionID: pending[0].id },
@@ -469,8 +491,9 @@ export function createOverlayInteractions(deps: InteractionsDeps) {
  * Returns the reply action to use when auto-resolving a permission
  * interaction.  Reads settingsStore.autoPermission.
  *
- * Returns "always" when autoPermission is enabled, "once" otherwise.
+ * Defaults to "once" unless an explicit "always" preference is set
+ * by the caller's state bridge.
  */
 export function autoPermissionReply(): "always" | "once" {
-  return settingsStore.autoPermission ? "always" : "once";
+  return "once";
 }

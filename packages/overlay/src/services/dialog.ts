@@ -1,65 +1,25 @@
 // ── Dialog Service ──
-// Exact port of app.js dialog management functions to TypeScript.
-//
-// Responsibilities:
-//   - Open the channel settings dialog (optionally for a specific channel)
-//   - Open the server settings dialog
-//   - Switch the active config sidebar tab
-//   - Focus a specific config section
-//   - Open the config dialog (optionally jumping to a section)
-//   - Set up backdrop-click-to-close on all `dialog.dialog` elements
-//
-// This module is intentionally DOM-oriented: it manipulates dialog elements
-// directly via document.getElementById / querySelector so that it can serve
-// as a drop-in replacement for the legacy app.js globals while the Solid
-// migration is in progress.
-//
-// External functions referenced here (loadConfigInfo, renderChannelFields,
-// renderAboutVersion) remain in app.js during the transition and are accessed
-// via the `window` global so that no circular import is introduced.
-//
-// Integration:
-//   - Uses settingsStore for server connection values.
-//   - Reads boardStore.channels for the default channel ID.
+// Manages dialog open/close, config tab switching, and backdrop close handlers.
+// All legacy window-bridge calls (legacyFn) have been replaced with direct
+// imports as of Phase 4 cleanup.
 
-import { settingsStore } from "../store/settings";
+import { settingsStore, setSettingsStore, saveSettings } from "../store/settings";
 import { boardStore } from "../store/board";
-
-// ── Helpers: window-scoped legacy functions ──
-
-/**
- * Call a function that is still defined on `window` in app.js.
- * This avoids circular imports during the migration period.
- */
-function legacyFn(name: string, ...args: unknown[]): unknown {
-  const fn = (window as any)[name];
-  if (typeof fn === "function") return fn(...args);
-  console.warn(`[dialog] legacy function not found on window: ${name}`);
-  return undefined;
-}
+import { appStore } from "../store/app";
+import { loadConfigInfo } from "./init";
+import { apiJson, configure as configureApi } from "./api";
+import { t } from "../utils/i18n";
 
 // ── Public API ──
 
 /**
  * Open the channel configuration dialog.
  *
- * If channelID is provided, the dialog opens with that channel selected;
- * otherwise the first channel in boardStore.channels is used.
- *
- * Mirrors app.js openChannelSettings (lines 9876–9882).
+ * ChannelsPanel.tsx handles its own inline editing, so this function
+ * simply opens the config dialog and switches to the channel tab.
  */
-export async function openChannelSettings(channelID?: string): Promise<void> {
-  await legacyFn("loadConfigInfo");
-
-  const target = channelID || (boardStore.board as any)?.channels?.[0]?.id;
-  if (!target) return;
-
-  legacyFn("renderChannelFields", target);
-
-  const channelDialog = document.getElementById(
-    "channelDialog",
-  ) as HTMLDialogElement | null;
-  channelDialog?.showModal();
+export async function openChannelSettings(_channelID?: string): Promise<void> {
+  openConfigDialog("channel");
 }
 
 /**
@@ -67,8 +27,6 @@ export async function openChannelSettings(channelID?: string): Promise<void> {
  *
  * Pre-populates the URL, password, and username inputs from settingsStore,
  * then shows the dialog.
- *
- * Mirrors app.js openServerSettings (lines 9884–9889).
  */
 export function openServerSettings(): void {
   const serverUrl = document.getElementById(
@@ -93,11 +51,6 @@ export function openServerSettings(): void {
 
 /**
  * Switch the active tab in the config sidebar.
- *
- * Updates `.config-nav-item` buttons and `.config-tab-panel` panels so that
- * only the items matching `tabName` receive the "active" class.
- *
- * Mirrors app.js switchConfigTab (lines 9891–9901).
  */
 export function switchConfigTab(tabName: string): void {
   const sidebar = document.getElementById("configSidebar");
@@ -117,11 +70,6 @@ export function switchConfigTab(tabName: string): void {
 
 /**
  * Focus a named config section inside the config dialog.
- *
- * Calls switchConfigTab with the given name, and additionally scrolls the
- * channel list to the top when name is "channel".
- *
- * Mirrors app.js focusConfigSection (lines 9903–9907).
  */
 export function focusConfigSection(name: string): void {
   if (!name) return;
@@ -133,13 +81,45 @@ export function focusConfigSection(name: string): void {
 }
 
 /**
+ * Populate the About panel runtime grid with server/platform info.
+ */
+function renderAboutVersion(): void {
+  const grid = document.getElementById("aboutRuntimeGrid");
+  if (!grid) return;
+
+  const config = appStore.config;
+  const rows: Array<[string, string]> = [];
+
+  if (config) {
+    if ((config as any).version) rows.push([t("about.server_version"), (config as any).version]);
+    if ((config as any).platform) rows.push([t("about.platform"), (config as any).platform]);
+    if ((config as any).goVersion) rows.push([t("about.go_version"), (config as any).goVersion]);
+  }
+
+  // Tauri runtime info
+  const tauri = (window as any).__TAURI__;
+  if (tauri) {
+    rows.push([t("about.runtime_type"), "Tauri Desktop"]);
+  } else {
+    rows.push([t("about.runtime_type"), "Browser"]);
+  }
+
+  if (rows.length === 0) {
+    grid.textContent = t("about.no_info");
+    return;
+  }
+
+  grid.innerHTML = rows
+    .map(
+      ([label, value]) =>
+        `<div class="about-info-label">${label}</div><div class="about-info-value">${value}</div>`,
+    )
+    .join("");
+}
+
+/**
  * Open the config dialog, optionally scrolling to a specific section.
- *
- * If the dialog is already open it is not re-opened.  After opening (or if
- * already open) the about-version panel is refreshed, and if a section name
- * is supplied focusConfigSection is called.
- *
- * Mirrors app.js openConfigDialog (lines 9909–9918).
+ * Pre-loads config info and refreshes the about panel.
  */
 export function openConfigDialog(section?: string): void {
   const configDialog = document.getElementById(
@@ -151,7 +131,8 @@ export function openConfigDialog(section?: string): void {
     configDialog.showModal();
   }
 
-  legacyFn("renderAboutVersion");
+  // Load config info (populates appStore) then refresh about panel.
+  void loadConfigInfo().then(() => renderAboutVersion());
 
   if (section) {
     focusConfigSection(section);
@@ -159,14 +140,36 @@ export function openConfigDialog(section?: string): void {
 }
 
 /**
- * Attach a click-to-close handler to every `dialog.dialog` element that has
- * not yet received the handler.
- *
- * Guards against double-binding using the `data-backdrop-close` dataset flag.
- * A click directly on the `<dialog>` element (i.e. on the backdrop area
- * outside the modal content) closes the dialog.
- *
- * Mirrors app.js setupDialogBackdropClose (lines 10474–10483).
+ * Bind submit/cancel handlers to the server settings form (#settingsForm).
+ * On submit: updates settingsStore, reconfigures API, saves, closes dialog.
+ */
+export function installSettingsFormHandlers(): void {
+  const form = document.getElementById("settingsForm") as HTMLFormElement | null;
+  const dialog = document.getElementById("settingsDialog") as HTMLDialogElement | null;
+  const cancelBtn = document.getElementById("btnCancelSettings") as HTMLButtonElement | null;
+  if (!form || !dialog) return;
+  if ((form as any).__handlersBound) return;
+  (form as any).__handlersBound = true;
+
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const url = (document.getElementById("serverUrl") as HTMLInputElement | null)?.value || "";
+    const password = (document.getElementById("serverPassword") as HTMLInputElement | null)?.value || "";
+    const username = (document.getElementById("serverUsername") as HTMLInputElement | null)?.value || "opencorvus";
+
+    setSettingsStore({ serverUrl: url, password, username });
+    configureApi({ serverUrl: url, password, username });
+    saveSettings();
+    dialog.close();
+  });
+
+  cancelBtn?.addEventListener("click", () => {
+    dialog.close();
+  });
+}
+
+/**
+ * Attach a click-to-close handler to every `dialog.dialog` element.
  */
 export function setupDialogBackdropClose(): void {
   document.querySelectorAll("dialog.dialog").forEach((dialog) => {

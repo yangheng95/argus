@@ -7,6 +7,7 @@
 
 import { createSignal, createMemo, For, Show } from "solid-js";
 import { boardStore } from "../store/board";
+import { deriveChanges } from "../services/meta";
 import { t, tc } from "../utils/i18n";
 
 // ── Types ──
@@ -358,6 +359,11 @@ export function ChangesPanel(props: ChangesPanelProps) {
   // Use provided changes or fall back to boardStore
   const files = createMemo<FileChange[]>(() => {
     if (props.changes !== undefined) return props.changes;
+    const derived = deriveChanges();
+    if (derived.length > 0) return derived;
+    if (Array.isArray(boardStore.changes) && boardStore.changes.length > 0) {
+      return boardStore.changes as FileChange[];
+    }
     const raw = (boardStore.board as any)?.changes;
     return Array.isArray(raw) ? raw : [];
   });

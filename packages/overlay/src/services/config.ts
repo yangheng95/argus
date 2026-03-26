@@ -20,6 +20,7 @@
 
 import { apiJson } from "./api";
 import { appStore, setAppStore } from "../store/app";
+import { settingsStore } from "../store/settings";
 import { AppLog } from "../utils/log";
 import { t } from "../utils/i18n";
 
@@ -173,7 +174,7 @@ export function configUnattended(config: any): boolean | null {
  */
 export async function syncUnattendedConfig(force = false): Promise<boolean> {
   if (!appStore.connected) return false;
-  const unattended = (window as any).__legacyState?.unattended ?? true;
+  const unattended = settingsStore.unattended ?? true;
   const remote = configUnattended(appStore.config);
   if (!force && remote === unattended) return false;
   try {
@@ -218,8 +219,8 @@ export async function scaffoldProjectConfig(dir: string): Promise<void> {
   if (!dir) return;
   const base = dir.replace(/[\\/]+$/, "");
   const configFile = base + "/.opencorvus/opencorvus.jsonc";
-  const username = (window as any).__legacyState?.username || "";
-  const unattended = (window as any).__legacyState?.unattended !== false;
+  const username = settingsStore.username || "";
+  const unattended = settingsStore.unattended !== false;
   const config = {
     $schema: "https://opencorvus.ai/config.json",
     experimental: {
@@ -266,14 +267,23 @@ export async function scaffoldProjectConfig(dir: string): Promise<void> {
  * Mirrors app.js reloadProjectScope (line 4278).
  */
 export async function reloadProjectScope(options: { restoreWorkspace?: boolean } = {}): Promise<void> {
-  const legacy = (window as any).__legacyProjectScope;
-  if (typeof legacy?.reloadProjectScope === "function") {
-    return legacy.reloadProjectScope(options);
+  // Direct implementation — replaces the legacy window bridge.
+  // Mirrors the parallel reload in app.js reloadProjectScope (line 4278):
+  // reload config, extensions, meta, and optionally restore workspace.
+  const { loadConfigInfo } = await import("./init");
+  const { loadExtensions } = await import("./extensions");
+  const { loadMeta } = await import("./meta");
+  await Promise.all([
+    loadConfigInfo().catch((e: unknown) => console.error("[reloadProjectScope] loadConfigInfo", e)),
+    loadExtensions().catch((e: unknown) => console.error("[reloadProjectScope] loadExtensions", e)),
+    loadMeta().catch((e: unknown) => console.error("[reloadProjectScope] loadMeta", e)),
+  ]);
+  if (options.restoreWorkspace) {
+    const { restoreWorkspaceDirectory } = await import("./workspace");
+    await restoreWorkspaceDirectory().catch((e: unknown) =>
+      console.error("[reloadProjectScope] restoreWorkspaceDirectory", e),
+    );
   }
-  // Direct port (used when legacy bridge is unavailable):
-  // The following calls mirror the parallel job list in app.js reloadProjectScope.
-  // Individual loaders are imported lazily to avoid circular deps during migration.
-  console.warn("[config] reloadProjectScope: legacy bridge not installed; scope not reloaded");
 }
 
 // ── Prompt Catalog ──

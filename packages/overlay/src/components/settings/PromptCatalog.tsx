@@ -214,7 +214,7 @@ export default function PromptCatalog() {
   );
 
   return (
-    <div class="config-tab-panel active" data-config-panel="prompts">
+    <>
       <Show when={loading()}>
         <div class="loading-hint">{t("common.loading")}</div>
       </Show>
@@ -355,6 +355,6 @@ export default function PromptCatalog() {
           </For>
         </div>
       </Show>
-    </div>
+    </>
   );
 }

@@ -3,6 +3,8 @@
 // sanitizeLocale, record, localeValue, fillTemplate, t, tc, localeTag.
 // Extends with loadLocale / setLocale / getLocale for module-level usage.
 
+import { appStore, setLocaleState, setI18nReady } from "../store/app";
+
 const SUPPORTED_LOCALES = ["zh-CN", "en-US"];
 
 // Module-level state (mirrors app.js state.i18n / state.locale)
@@ -27,6 +29,7 @@ export function sanitizeLocale(value: string): string {
 }
 
 function localeValue(key: string, locale: string = currentLocale): any {
+  appStore.localeSeq;
   const source = messages[locale];
   if (record(source) && Object.hasOwn(source, key)) return (source as Record<string, any>)[key];
   return key
@@ -87,6 +90,12 @@ export async function setLocale(locale: string): Promise<void> {
   const normalized = sanitizeLocale(locale);
   await loadLocale(normalized);
   currentLocale = normalized;
+  setI18nReady(true);
+  if (typeof document !== "undefined") {
+    document.documentElement.lang = normalized;
+    applyI18n(document);
+  }
+  setLocaleState(normalized);
 }
 
 /** Pre-load all supported locales (mirrors app.js loadI18n). */
@@ -102,6 +111,7 @@ export async function loadAllLocales(): Promise<void> {
   for (const [locale, data] of entries) {
     messages[locale] = data;
   }
+  setI18nReady(true);
 }
 
 /** Inject pre-loaded locale data (used when app.js already loaded i18n). */

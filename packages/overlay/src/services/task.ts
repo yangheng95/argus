@@ -27,6 +27,8 @@ import {
   setPendingTasks,
 } from "../store/board";
 import { clipText } from "../utils/string";
+import { settingsStore } from "../store/settings";
+import { getWorkspaceEpoch } from "./workspace";
 
 // ── Types ──
 
@@ -45,6 +47,10 @@ export interface SubmitMessageOptions {
   signal?: AbortSignal;
   /** Workspace epoch guard — if supplied, response is ignored on mismatch. */
   workspaceEpoch?: number;
+  /** Called once the panel stream response is accepted and ready to read. */
+  onOpen?: () => void | Promise<void>;
+  /** Called for each parsed panel stream event before the final result resolves. */
+  onEvent?: (event: any) => void | Promise<void>;
 }
 
 export interface CreateTaskOptions {
@@ -54,6 +60,10 @@ export interface CreateTaskOptions {
   signal?: AbortSignal;
 }
 
+export interface SelectTaskOptions {
+  preserveMessages?: boolean;
+}
+
 // ── Helpers ──
 
 /**
@@ -61,7 +71,14 @@ export interface CreateTaskOptions {
  * Mirrors app.js chatRequestTimeoutMs.
  */
 function chatRequestTimeoutMs(): number {
-  const override = (window as any).__ocOverlayTiming?.chatTimeoutMs;
+  const overlayTiming = (window as any).__ocOverlayTiming;
+  const testTiming = (window as any).__overlayTest;
+  const override =
+    typeof overlayTiming?.chatTimeoutMs === "number"
+      ? overlayTiming.chatTimeoutMs
+      : typeof testTiming?.chatTimeoutMs === "number"
+        ? testTiming.chatTimeoutMs
+        : undefined;
   const value = typeof override === "number" ? override : 10 * 60 * 1000;
   return Math.max(value, 1000);
 }
@@ -70,12 +87,65 @@ function activeDirectory(): string {
   return boardStore.board?.task?.directory ?? "";
 }
 
+function inactivityTimeoutError(timeoutMs: number): DOMException {
+  return new DOMException(
+    `Panel stream inactive for ${timeoutMs}ms`,
+    "TimeoutError",
+  );
+}
+
+function relayAbort(
+  source: AbortSignal | undefined,
+  controller: AbortController,
+): () => void {
+  if (!source) return () => undefined;
+  const abort = () => {
+    controller.abort(
+      source.reason instanceof Error ? source.reason : source.reason ?? undefined,
+    );
+  };
+  if (source.aborted) {
+    abort();
+    return () => undefined;
+  }
+  source.addEventListener("abort", abort, { once: true });
+  return () => source.removeEventListener("abort", abort);
+}
+
+async function readWithAbort(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  signal: AbortSignal,
+): Promise<ReadableStreamReadResult<Uint8Array>> {
+  if (signal.aborted) {
+    await reader.cancel(signal.reason).catch(() => undefined);
+    throw signal.reason ?? new DOMException("Aborted", "AbortError");
+  }
+  return new Promise((resolve, reject) => {
+    const abort = () => {
+      signal.removeEventListener("abort", abort);
+      void reader.cancel(signal.reason).catch(() => undefined);
+      reject(signal.reason ?? new DOMException("Aborted", "AbortError"));
+    };
+    signal.addEventListener("abort", abort, { once: true });
+    reader.read().then(
+      (value) => {
+        signal.removeEventListener("abort", abort);
+        resolve(value);
+      },
+      (error) => {
+        signal.removeEventListener("abort", abort);
+        reject(error);
+      },
+    );
+  });
+}
+
 // ── Panel message request body builder ──
 
-function panelRequestBody(
+export function panelRequestBody(
   text: string,
   metadata: Record<string, unknown> = {},
-  requestID: string,
+  requestID: string = "",
   attachments: Attachment[] = [],
   executor: string = "opencode",
 ): Record<string, unknown> {
@@ -115,7 +185,10 @@ function panelRequestBody(
  *
  * Mirrors app.js selectTask, delegating SSE/transcript to Solid services.
  */
-export async function selectTask(taskID: string): Promise<void> {
+export async function selectTask(
+  taskID: string,
+  options: SelectTaskOptions = {},
+): Promise<void> {
   const nextTaskID = taskID || "";
 
   // Guard: skip if already on this task and board is loaded
@@ -128,7 +201,9 @@ export async function selectTask(taskID: string): Promise<void> {
 
   // Clear board and message state immediately
   setBoardStore("board", null);
-  clearMessages();
+  if (!options.preserveMessages) {
+    clearMessages();
+  }
   setSelectedTaskID(nextTaskID);
   setBoardStore("selectedTaskID", nextTaskID);
 
@@ -139,7 +214,7 @@ export async function selectTask(taskID: string): Promise<void> {
 
   // Load board + transcript in parallel (best-effort; failures are logged)
   await Promise.all([
-    loadBoard().catch((e) =>
+    loadBoard({ sync: true }).catch((e) =>
       console.error("[selectTask] loadBoard failed:", e),
     ),
     syncTask(nextTaskID).catch((e) =>
@@ -195,10 +270,19 @@ export async function submitMessage(
   options: SubmitMessageOptions = {},
 ): Promise<unknown> {
   const requestID = options.requestID ?? crypto.randomUUID();
-  const signal =
-    options.signal ?? AbortSignal.timeout(chatRequestTimeoutMs());
+  const timeoutMs = chatRequestTimeoutMs();
+  const controller = new AbortController();
+  const cleanupRelay = relayAbort(options.signal, controller);
   const executor =
-    (window as any).__ocCurrentExecutor ?? "opencode";
+    settingsStore.executor ?? "opencode";
+  let inactivityTimer: ReturnType<typeof setTimeout> | null = null;
+
+  const markActivity = () => {
+    if (inactivityTimer) clearTimeout(inactivityTimer);
+    inactivityTimer = setTimeout(() => {
+      controller.abort(inactivityTimeoutError(timeoutMs));
+    }, timeoutMs);
+  };
 
   const body = JSON.stringify(
     panelRequestBody(
@@ -210,62 +294,75 @@ export async function submitMessage(
     ),
   );
 
-  const res = await fetch(apiUrl("panel/message/stream"), {
-    method: "POST",
-    headers: { ...apiHeaders(), "Content-Type": "application/json" },
-    body,
-    signal,
-  });
+  markActivity();
 
-  if (!res.ok || !res.body) {
-    throw new Error(`Panel stream failed: ${res.status} ${res.statusText}`);
-  }
+  try {
+    const res = await fetch(apiUrl("panel/message/stream"), {
+      method: "POST",
+      headers: { ...apiHeaders(), "Content-Type": "application/json" },
+      body,
+      signal: controller.signal,
+    });
 
-  const reader = res.body.getReader();
-  const decoder = new TextDecoder();
-  let buf = "";
-  let result: unknown = null;
+    markActivity();
 
-  const consume = (chunk: string, flush = false) => {
-    buf += chunk;
-    const blocks = buf.split(/\r?\n\r?\n/);
-    if (!flush) {
-      buf = blocks.pop() || "";
-    } else {
-      buf = "";
+    if (!res.ok || !res.body) {
+      throw new Error(`Panel stream failed: ${res.status} ${res.statusText}`);
     }
-    for (const block of blocks) {
-      const data = block
-        .split(/\r?\n/)
-        .filter((line) => line.startsWith("data:"))
-        .map((line) => line.slice(5).trim())
-        .join("\n");
-      if (!data) continue;
-      try {
-        const ev = JSON.parse(data);
-        if (ev.type === "done") {
-          result = ev.result;
-        }
-      } catch {
-        // malformed SSE event — skip
+    await options.onOpen?.();
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = "";
+    let result: unknown = null;
+
+    const consume = async (chunk: string, flush = false) => {
+      buf += chunk;
+      const blocks = buf.split(/\r?\n\r?\n/);
+      if (!flush) {
+        buf = blocks.pop() || "";
+      } else {
+        buf = "";
       }
+      for (const block of blocks) {
+        const data = block
+          .split(/\r?\n/)
+          .filter((line) => line.startsWith("data:"))
+          .map((line) => line.slice(5).trim())
+          .join("\n");
+        if (!data) continue;
+        try {
+          const ev = JSON.parse(data);
+          markActivity();
+          await options.onEvent?.(ev);
+          if (ev.type === "done") {
+            result = ev.result;
+          }
+        } catch {
+          // malformed SSE event — skip
+        }
+      }
+    };
+
+    while (true) {
+      const { done, value } = await readWithAbort(reader, controller.signal);
+      if (done) {
+        await consume(decoder.decode(), true);
+        break;
+      }
+      markActivity();
+      await consume(decoder.decode(value, { stream: true }));
     }
-  };
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) {
-      consume(decoder.decode(), true);
-      break;
+    if (!result) {
+      throw new Error("Panel stream ended without a final result");
     }
-    consume(decoder.decode(value, { stream: true }));
-  }
 
-  if (!result) {
-    throw new Error("Panel stream ended without a final result");
+    return result;
+  } finally {
+    if (inactivityTimer) clearTimeout(inactivityTimer);
+    cleanupRelay();
   }
-
-  return result;
 }
 
 // ── Public: createTask ──
@@ -457,7 +554,7 @@ export function startTaskRecovery(
       if (
         epochAtStart !== undefined &&
         // workspaceEpoch comparison: use window fallback for legacy state
-        (window as any).__overlayState?.workspaceEpoch !== epochAtStart &&
+        getWorkspaceEpoch() !== epochAtStart &&
         !request.recoveredTaskID
       ) {
         break;
@@ -478,7 +575,7 @@ export function startTaskRecovery(
         }
 
         // Select the newly confirmed task
-        await selectTask(taskID);
+        await selectTask(taskID, { preserveMessages: true });
 
         recovery.stop();
         return taskID;

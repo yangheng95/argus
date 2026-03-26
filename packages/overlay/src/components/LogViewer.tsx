@@ -6,6 +6,7 @@
 // 10795–10926).
 
 import {
+  createEffect,
   createSignal,
   createMemo,
   For,
@@ -414,20 +415,23 @@ export function LogViewer(props: LogViewerProps) {
   let bodyRef: HTMLDivElement | undefined;
 
   const [loading, setLoading] = createSignal(false);
+  const [serverLogsSeq, setServerLogsSeq] = createSignal(0);
 
   // Merged & filtered log entries
-  const entries = createMemo(() =>
-    buildLogEntries(
+  const entries = createMemo(() => {
+    serverLogsSeq();
+    return buildLogEntries(
       filteredLogEntries(),
       props.ndjsonEvents ?? [],
       appStore.logFilterLevel,
-    ),
-  );
+    );
+  });
 
   const refresh = async () => {
     setLoading(true);
     try {
       await loadServerLogs();
+      setServerLogsSeq((value) => value + 1);
     } finally {
       setLoading(false);
     }
@@ -448,6 +452,7 @@ export function LogViewer(props: LogViewerProps) {
     // Clear overlay client log entries via the store
     setAppStore("logEntries", []);
     _serverLogLines = [];
+    setServerLogsSeq((value) => value + 1);
   };
 
   const handleLevelChange = (e: Event) => {
@@ -460,6 +465,18 @@ export function LogViewer(props: LogViewerProps) {
       await refresh();
       dialogRef?.showModal();
     }
+  });
+
+  createEffect(() => {
+    const dialog = dialogRef;
+    if (!dialog) return;
+    if (props.open) {
+      void refresh().finally(() => {
+        if (!dialog.open) dialog.showModal();
+      });
+      return;
+    }
+    if (dialog.open) dialog.close();
   });
 
   // Scroll to bottom whenever entries change
@@ -512,6 +529,7 @@ export function LogViewer(props: LogViewerProps) {
             id="btnLogCopy"
             class="btn btn-ghost mini"
             onClick={() => void handleCopy()}
+            disabled={loading() || entries().length === 0}
           >
             {t("common.copy")}
           </button>

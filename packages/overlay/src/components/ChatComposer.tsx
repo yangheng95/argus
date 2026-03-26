@@ -212,6 +212,7 @@ export function ChatComposer(props: ChatComposerProps) {
   return (
     <form
       ref={formRef}
+      id="chatForm"
       class="chat-input"
       data-dragover={dragover() ? "true" : undefined}
       onSubmit={handleSubmit}
@@ -221,7 +222,7 @@ export function ChatComposer(props: ChatComposerProps) {
     >
       {/* Attachments strip */}
       <Show when={attachments().length > 0}>
-        <div class="chat-attachments">
+        <div class="chat-attachments" id="chatAttachments">
           <For each={attachments()}>
             {(att, index) => (
               <div class="chat-attachment-item" title={att.filename}>
@@ -257,6 +258,7 @@ export function ChatComposer(props: ChatComposerProps) {
       {/* Hidden file input */}
       <input
         ref={fileInputRef}
+        id="chatFileInput"
         type="file"
         multiple
         accept={FILE_ACCEPT}
@@ -268,6 +270,7 @@ export function ChatComposer(props: ChatComposerProps) {
       <div class="chat-compose-row">
         <textarea
           ref={textareaRef}
+          id="chatTextarea"
           class="chat-textarea"
           rows={2}
           disabled={!props.enabled}
@@ -284,6 +287,7 @@ export function ChatComposer(props: ChatComposerProps) {
           {/* Attach button */}
           <button
             type="button"
+            id="btnChatAttach"
             class="chat-attach-btn"
             title={t("chat.attach_title")}
             aria-label={t("chat.attach_title")}
@@ -308,6 +312,7 @@ export function ChatComposer(props: ChatComposerProps) {
 
           {/* Send / Stop button */}
           <button
+            id={props.busy ? "btnTaskInterrupt" : "chatSend"}
             class={`chat-send${props.busy ? " chat-interrupt" : ""}`}
             type={props.busy ? "button" : "submit"}
             data-mode={props.busy ? "stop" : "send"}

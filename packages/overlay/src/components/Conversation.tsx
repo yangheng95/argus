@@ -2,25 +2,8 @@ import { createSignal, createMemo, createEffect, For, Show, onMount, onCleanup }
 import { MessageView } from "./MessageView";
 import { AgentCard } from "./AgentCard";
 import { messageStore } from "../store/messages";
-import { rootTaskSessionID } from "../store/board";
 import { t } from "../utils/i18n";
-
-// Agent stages that get their own cards
-const AGENT_STAGES = new Set(["spec", "planner", "goal", "judge", "delivery"]);
-
-function classifyMessage(msg: any): string {
-  const agent = String(msg?.info?.agent || "").trim().toLowerCase();
-  if (AGENT_STAGES.has(agent)) return agent;
-  // Legacy: messages with agent="agent" from child sessions
-  if (agent === "agent") {
-    const rootSession = rootTaskSessionID();
-    const sessionID = typeof msg?.info?.sessionID === "string" ? msg.info.sessionID : "";
-    if (rootSession && sessionID && sessionID !== rootSession) {
-      return "agent";
-    }
-  }
-  return "main";
-}
+import { conversationMessages } from "../utils/conversation";
 
 // ── Conversation Component ──
 // Renders directly into the host container (e.g. #chatScroll).
@@ -31,93 +14,7 @@ export function Conversation(props: { container: HTMLElement }) {
   const [autoScroll, setAutoScroll] = createSignal(true);
   const el = props.container;
 
-  // Derive classified items: main messages interleaved with agent cards, sorted by time
-  const classified = createMemo(() => {
-    const mainMessages: any[] = [];
-    const agentChannels: Record<
-      string,
-      { stage: string; messages: any[]; startTime: number; endTime: number }
-    > = {};
-
-    for (const msg of messageStore.messages) {
-      const channel = classifyMessage(msg);
-      if (channel === "main") {
-        mainMessages.push(msg);
-      } else {
-        const sessionID = msg.info?.sessionID || "";
-        const key = `${channel}:${sessionID}`;
-        if (!agentChannels[key]) {
-          agentChannels[key] = { stage: channel, messages: [], startTime: Infinity, endTime: 0 };
-        }
-        agentChannels[key].messages.push(msg);
-        const created = msg.info?.time?.created || 0;
-        if (created < agentChannels[key].startTime) agentChannels[key].startTime = created;
-        const completed = msg.info?.time?.completed || created;
-        if (completed > agentChannels[key].endTime) agentChannels[key].endTime = completed;
-      }
-    }
-
-    // Group rounds per stage, sorted by time, to assign round numbers and status
-    const stageRounds: Record<string, { key: string; channel: any }[]> = {};
-    for (const [key, channel] of Object.entries(agentChannels)) {
-      if (channel.messages.length === 0) continue;
-      if (!stageRounds[channel.stage]) stageRounds[channel.stage] = [];
-      stageRounds[channel.stage].push({ key, channel });
-    }
-    for (const rounds of Object.values(stageRounds)) {
-      rounds.sort((a, b) => a.channel.startTime - b.channel.startTime);
-    }
-
-    // Build agent cards with status detection
-    const agentCards: any[] = [];
-    const allAgentEvents = Array.isArray(messageStore.agentEvents) ? messageStore.agentEvents : [];
-    for (const [stage, rounds] of Object.entries(stageRounds)) {
-      for (let i = 0; i < rounds.length; i++) {
-        const { key, channel } = rounds[i];
-        const isLastRound = i === rounds.length - 1;
-        let status: string;
-        if (!isLastRound) {
-          status = "completed";
-        } else {
-          const stageEvents = allAgentEvents.filter(
-            (e: any) =>
-              String(e?.stage || "").toLowerCase() === stage &&
-              (e.timestamp || 0) >= channel.startTime,
-          );
-          const isFinished = stageEvents.some(
-            (e: any) =>
-              e.kind === "status" && /finished|completed|done/i.test(e?.summary || ""),
-          );
-          const isError = stageEvents.some((e: any) => e.kind === "error") && !isFinished;
-          status = isError ? "error" : isFinished ? "completed" : "running";
-        }
-        agentCards.push({
-          key,
-          stage,
-          status,
-          round: rounds.length > 1 ? i + 1 : 0,
-          messages: channel.messages,
-          startTime: channel.startTime === Infinity ? Date.now() : channel.startTime,
-        });
-      }
-    }
-
-    // Merge and sort by time
-    const all = [
-      ...mainMessages.map((m) => ({
-        type: "message" as const,
-        data: m,
-        time: m.info?.time?.created || 0,
-      })),
-      ...agentCards.map((c) => ({
-        type: "card" as const,
-        data: c,
-        time: c.startTime,
-      })),
-    ].sort((a, b) => a.time - b.time);
-
-    return all;
-  });
+  const items = createMemo(() => conversationMessages());
 
   // Auto-scroll logic — attach to the host container
   function onScroll() {
@@ -143,7 +40,7 @@ export function Conversation(props: { container: HTMLElement }) {
 
   // Scroll when content changes
   createEffect(() => {
-    classified().length;
+    items().length;
     scrollToBottom();
   });
 
@@ -151,16 +48,25 @@ export function Conversation(props: { container: HTMLElement }) {
 
   return (
     <>
-      <Show when={classified().length === 0}>
+      <Show when={items().length === 0}>
         <div class="chat-empty">{emptyText()}</div>
       </Show>
-      <For each={classified()}>
+      <For each={items()}>
         {(item) => (
           <Show
-            when={item.type === "message"}
-            fallback={<AgentCard {...item.data} />}
+            when={!item?._agentCard}
+            fallback={
+              <AgentCard
+                key={item._agentCardKey}
+                stage={item._agentStage}
+                status={item._agentStatus}
+                round={item._agentRound}
+                messages={item._agentMessages}
+                startTime={item.info?.time?.created || 0}
+              />
+            }
           >
-            <MessageView message={item.data} />
+            <MessageView message={item} />
           </Show>
         )}
       </For>

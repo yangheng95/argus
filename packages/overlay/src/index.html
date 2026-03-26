@@ -8,7 +8,7 @@
 </head>
 <body data-page="overlay" data-theme="dark" data-workspace="offline">
   <div class="tech-atlas" aria-hidden="true">
-    <canvas class="tech-atlas-canvas" id="techAtlasCanvas"></canvas>
+    <canvas class="tech-atlas-canvas" id="techAtlasCanvas" width="0" height="0"></canvas>
     <div class="tech-grid"></div>
     <div class="tech-sweep"></div>
     <div class="tech-orbit tech-orbit-a"></div>
@@ -106,7 +106,10 @@
     <section class="task-bar">
       <div class="task-meta">
         <div class="task-cwd">
-          <span class="task-dir" id="taskDir" title="" data-i18n="cwd.unavailable">Working directory unavailable</span>
+          <div class="task-dir-shell">
+            <span class="task-dir" id="taskDir" title="" data-i18n="cwd.unavailable">Working directory unavailable</span>
+            <div class="task-dir-actions"></div>
+          </div>
           <div class="recent-dir-panel" id="recentDirPanel" hidden></div>
           <span class="task-workspace" id="taskWorkspaceDir" hidden></span>
         </div>
@@ -194,20 +197,11 @@
             <div class="task-status chat-task-status" id="taskStatus" hidden>
               <span class="status-icon" id="statusIcon" data-status="idle" aria-hidden="true"></span>
               <span class="status-label" id="statusLabel" data-i18n="task.status.idle">No task</span>
-              <span class="elapsed" id="elapsed"></span>
-              <button
-                type="button"
-                class="btn btn-ghost mini btn-terminate"
-                id="btnTerminateRun"
-                hidden
-                data-i18n="task.terminate"
-                data-i18n-title="task.terminate_title"
-                title="Terminate running task"
-                aria-label="Terminate running task"
-              >Terminate</button>
+              <!-- elapsed + terminate removed — orphaned, never wired -->
             </div>
           </div>
           <div class="chat-header-meta">
+            <span class="chat-version" id="chatVersion"></span>
             <span class="chat-count" id="chatCount"></span>
             <button
               type="button"
@@ -222,12 +216,8 @@
           </div>
         </header>
         <div class="chat-goals-strip" id="chatGoalsStrip"></div>
-        <div class="chat-scroll session-content" id="chatScroll">
-          <div class="chat-empty" id="chatEmpty" data-i18n="chat.empty">Task messages appear here</div>
-        </div>
-        <div class="chat-scroll session-content" id="codingScroll" hidden>
-          <div class="chat-empty" id="codingEmpty">Build agent — ask anything about the codebase</div>
-        </div>
+        <div class="chat-scroll session-content" id="chatScroll"></div>
+        <div class="chat-scroll session-content" id="codingScroll" hidden></div>
         <div id="solidChatComposer"></div>
       </section>
       <div class="pane-resizer pane-resizer-right" id="rightPaneResizer" role="separator" aria-orientation="vertical" aria-label="Resize control panel"></div>
@@ -239,8 +229,10 @@
         </header>
         <div class="sections-stack">
 
-        <!-- Board: Spec / Plan / Goals / Criteria / Delivery / Interactions / Task Actions -->
+        <!-- Board: rendered entirely by Solid Board component -->
         <div id="solidBoardMount"></div>
+        <!-- InteractionPanel: auto-resolve layer, independent of Board internals -->
+        <div id="solidInteractionMount"></div>
 
         <!-- Files -->
         <details class="section" id="changesSection">
@@ -316,10 +308,10 @@
               <div class="config-inline-popup" id="llmNotice" role="status" aria-live="polite"></div>
             </div>
           </details>
-          <button class="config-toggle" id="btnConfigToggle" title="Open Config &amp; Settings" data-i18n-title="config.open">
+          <div class="config-toggle" id="btnConfigToggle" role="button" tabindex="0" title="Open Config &amp; Settings" data-i18n-title="config.open">
             <span class="config-toggle-label" data-i18n="config.title">Config &amp; Settings</span>
             <span class="config-toggle-meta" id="configToggleMeta"></span>
-          </button>
+          </div>
         </div>
 
       </div>
@@ -369,120 +361,11 @@
     </div>
   </dialog>
 
-  <!-- Skill Dialog -->
-  <dialog class="dialog" id="skillDialog">
-    <form class="dialog-form" id="skillForm">
-      <h3 class="dialog-title" data-i18n="skill.add">Add Skill</h3>
-      <label class="field">
-        <span class="field-label" data-i18n="skill.source_type">Source Type</span>
-        <select class="field-input" id="skillType" name="type">
-          <option value="path" data-i18n="skill.source.path">Folder Path</option>
-          <option value="url" data-i18n="skill.source.url">Remote URL</option>
-          <option value="git" data-i18n="skill.source.git">Git Repository</option>
-        </select>
-      </label>
-      <label class="field">
-        <span class="field-label" data-i18n-html="skill.value">Value <em>*</em></span>
-        <input class="field-input" id="skillValue" name="value" required placeholder="C:\skills or https://example.com/.well-known/skills/" data-i18n-placeholder="skill.value_placeholder">
-      </label>
-      <div class="dialog-actions compact">
-        <button type="button" class="btn btn-ghost mini" id="btnPickSkillPath" data-i18n="skill.browse_folder">Browse Folder</button>
-      </div>
-      <label class="field">
-        <span class="field-label" data-i18n="skill.policy">Policy</span>
-        <select class="field-input" id="skillPolicy" name="policy">
-          <option value="ask" data-i18n="skill.policy.ask">Ask on use</option>
-          <option value="allow" data-i18n="skill.policy.allow">Allow</option>
-          <option value="deny" data-i18n="skill.policy.deny">Deny</option>
-        </select>
-      </label>
-      <p class="empty-hint" data-i18n-html="skill.policy_hint">Default recommendation for imported market skills is <strong>Ask on use</strong>.</p>
-      <div class="dialog-actions">
-        <button type="button" class="btn btn-ghost" id="btnCancelSkill" data-i18n="common.cancel">Cancel</button>
-        <button type="submit" class="btn btn-primary" data-i18n="skill.install">Install Skill</button>
-      </div>
-    </form>
-  </dialog>
-
-  <dialog class="dialog dialog-wide" id="skillMarketDialog">
-    <div class="dialog-form">
-      <div class="dialog-head">
-        <h3 class="dialog-title" data-i18n="skill.market.title">Skill Market</h3>
-        <div class="dialog-actions compact">
-          <button type="button" class="btn btn-ghost" id="btnCloseSkillMarket" data-i18n="common.close">Close</button>
-        </div>
-      </div>
-      <div class="session-list-panel" id="skillMarketList">
-        <div class="empty-hint" data-i18n="skill.market.loading">Loading curated skill markets...</div>
-      </div>
-    </div>
-  </dialog>
-
-  <!-- MCP Dialog -->
-  <dialog class="dialog" id="mcpDialog">
-    <form class="dialog-form" id="mcpForm">
-      <h3 class="dialog-title" data-i18n="mcp.add">Add MCP Server</h3>
-      <label class="field">
-        <span class="field-label" data-i18n-html="mcp.name">Name <em>*</em></span>
-        <input class="field-input" id="mcpName" name="name" required placeholder="exa">
-      </label>
-      <label class="field">
-        <span class="field-label" data-i18n="mcp.type">Type</span>
-        <select class="field-input" id="mcpType" name="type">
-          <option value="remote" data-i18n="mcp.type.remote">Remote</option>
-          <option value="local" data-i18n="mcp.type.local">Local</option>
-        </select>
-      </label>
-      <label class="field" id="mcpRemoteField">
-        <span class="field-label" data-i18n-html="mcp.remote_url">Remote URL <em>*</em></span>
-        <input class="field-input" id="mcpUrl" name="url" placeholder="https://example.com/mcp">
-      </label>
-      <label class="field hidden" id="mcpCommandField">
-        <span class="field-label" data-i18n-html="mcp.command">Command <em>*</em></span>
-        <input class="field-input" id="mcpCommand" name="command" placeholder="npx">
-      </label>
-      <label class="field hidden" id="mcpArgsField">
-        <span class="field-label" data-i18n="mcp.arguments">Arguments</span>
-        <input class="field-input" id="mcpArgs" name="args" placeholder="-y @modelcontextprotocol/server-filesystem C:\repo">
-      </label>
-      <div class="dialog-actions">
-        <button type="button" class="btn btn-ghost" id="btnCancelMcp" data-i18n="common.cancel">Cancel</button>
-        <button type="submit" class="btn btn-primary" data-i18n="mcp.add_action">Add MCP</button>
-      </div>
-    </form>
-  </dialog>
-
-  <!-- Goal Dialog -->
-  <dialog class="dialog" id="goalDialog" aria-label="Goal" data-i18n-aria-label="goal.title">
-    <form class="dialog-form" id="goalForm">
-      <input type="hidden" name="goalId" id="goalId">
-      <label class="field">
-        <span class="field-label" data-i18n-html="goal.description">Description <em>*</em></span>
-        <textarea class="field-input" id="goalDescription" name="description" required rows="3" placeholder="Describe the goal..." data-i18n-placeholder="goal.description_placeholder"></textarea>
-      </label>
-      <label class="field">
-        <span class="field-label" data-i18n="goal.criteria">Criteria</span>
-        <textarea class="field-input" id="goalCriteria" name="criteria" rows="3" placeholder="Acceptance criteria for this goal" data-i18n-placeholder="goal.criteria_placeholder"></textarea>
-      </label>
-      <div class="dialog-actions">
-        <button type="button" class="btn btn-ghost" id="btnCancelGoal" data-i18n="common.cancel">Cancel</button>
-        <button type="submit" class="btn btn-primary" id="btnSaveGoal" data-i18n="goal.save">Save Goal</button>
-      </div>
-    </form>
-  </dialog>
-
-  <!-- Channel Dialog -->
-  <dialog class="dialog" id="channelDialog">
-    <form class="dialog-form" id="channelForm">
-      <h3 class="dialog-title" id="channelDialogTitle" data-i18n="channel.configuration">Channel Configuration</h3>
-      <input type="hidden" id="channelId" name="channelId">
-      <div id="channelFields"></div>
-      <div class="dialog-actions">
-        <button type="button" class="btn btn-ghost" id="btnCancelChannel" data-i18n="common.cancel">Cancel</button>
-        <button type="submit" class="btn btn-primary" data-i18n="channel.save">Save Channel</button>
-      </div>
-    </form>
-  </dialog>
+  <!-- Skill/MCP/Goal/Channel dialogs removed — Phase 4.
+       All functionality moved to Solid components:
+       - SkillMarketPanel.tsx (inline Add Skill / Add MCP forms)
+       - ChannelsPanel.tsx (inline channel editing)
+       - Board.tsx (goal management) -->
 
   <!-- Server Dialog -->
   <dialog class="dialog" id="settingsDialog">
@@ -742,47 +625,12 @@
     </div>
   </dialog>
 
-  <!-- Memory Detail Dialog -->
-  <dialog class="dialog dialog-wide" id="memoryDialog">
-    <div class="dialog-form">
-      <div class="dialog-head">
-        <h3 class="dialog-title" id="memoryDialogTitle" data-i18n="memory.dialog.title">Memory</h3>
-        <div class="dialog-actions compact">
-          <button type="button" class="btn btn-ghost danger mini" id="btnDeleteMemory" data-i18n="common.delete">Delete</button>
-          <button type="button" class="btn btn-ghost" id="btnCloseMemory" data-i18n="common.close">Close</button>
-        </div>
-      </div>
-      <div class="memory-detail-meta" id="memoryDialogMeta"></div>
-      <div class="memory-detail-content" id="memoryDialogContent">
-        <p class="empty-hint" data-i18n="common.loading">Loading...</p>
-      </div>
-    </div>
-  </dialog>
+  <!-- Memory/Preference dialogs removed — Phase 4.
+       MemoryPanel.tsx and PreferencesPanel.tsx handle detail/edit dialogs inline. -->
 
   <!-- Log Viewer Dialog (managed by Solid LogViewer component) -->
   <div id="solidLogViewer"></div>
 
-
-  <!-- Preference Edit Dialog -->
-  <dialog class="dialog" id="prefEditDialog">
-    <form class="dialog-form" id="prefEditForm">
-      <h3 class="dialog-title" id="prefEditTitle" data-i18n="preference.dialog.title">Preference</h3>
-      <input type="hidden" id="prefEditId">
-      <label class="field">
-        <span class="field-label" data-i18n-html="preference.key">Key <em>*</em></span>
-        <input class="field-input" id="prefEditKey" name="key" required placeholder="e.g. code_style" data-i18n-placeholder="preference.key_placeholder">
-      </label>
-      <label class="field">
-        <span class="field-label" data-i18n-html="preference.value">Value <em>*</em></span>
-        <textarea class="field-input" id="prefEditValue" name="value" required rows="4" placeholder="Preference value..." data-i18n-placeholder="preference.value_placeholder"></textarea>
-      </label>
-      <div class="dialog-actions">
-        <button type="button" class="btn btn-ghost" id="btnCancelPrefEdit" data-i18n="common.cancel">Cancel</button>
-        <button type="submit" class="btn btn-primary" data-i18n="common.save">Save</button>
-      </div>
-    </form>
-  </dialog>
-
-  <script type="module" src="/main.tsx"></script>
+  <script type="module" src="main.js"></script>
 </body>
 </html>

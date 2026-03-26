@@ -195,6 +195,13 @@ export function setI18nReady(ready: boolean): void {
   setAppStore("i18nReady", ready);
 }
 
+export function setLocaleState(locale: string): void {
+  setAppStore({
+    locale,
+    localeSeq: appStore.localeSeq + 1,
+  });
+}
+
 // ── NdjsonLog helpers ──
 
 const MAX_NDJSON_EVENTS = 5000;

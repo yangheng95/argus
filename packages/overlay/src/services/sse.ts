@@ -10,7 +10,9 @@
 
 import { apiUrl, apiHeaders } from "./api";
 import { clearEventQueue, syncTask, setSseConnected } from "../store/messages";
+import { boardStore, loadBoard } from "../store/board";
 import { routeSSEEvent } from "./events";
+import { handleEventStreamEvent } from "./legacy";
 
 let sseController: AbortController | null = null;
 let sseRetryTimer: any = null;
@@ -23,7 +25,11 @@ export function startSSE(taskID: string) {
 
   (async () => {
     try {
-      const res = await fetch(apiUrl(`task/${taskID}/events`), {
+      const after = Number(boardStore.taskSequence || 0);
+      const path = after > 0
+        ? `task/${encodeURIComponent(taskID)}/events?after=${after}`
+        : `task/${encodeURIComponent(taskID)}/events`;
+      const res = await fetch(apiUrl(path), {
         headers: apiHeaders(),
         signal: controller.signal,
       });
@@ -53,7 +59,7 @@ export function startSSE(taskID: string) {
             if (!handled) {
               // Forward unknown events to legacy handler for backward
               // compatibility during the incremental app.js migration.
-              (window as any).__legacyHandleNonMessageEvent?.(event);
+              handleEventStreamEvent(event);
             }
           } catch {
             // malformed JSON — skip
@@ -69,7 +75,9 @@ export function startSSE(taskID: string) {
     if (sseRetryTimer) clearTimeout(sseRetryTimer);
     sseRetryTimer = setTimeout(async () => {
       sseRetryTimer = null;
+      if (boardStore.selectedTaskID !== taskID) return;
       await syncTask(taskID);
+      await loadBoard();
       startSSE(taskID);
     }, 3000);
   })();
@@ -82,8 +90,8 @@ export function stopSSE() {
   }
   if (sseController) {
     sseController.abort();
-    sseController = null;
   }
+  sseController = null;
   setSseConnected(false);
   clearEventQueue();
 }
