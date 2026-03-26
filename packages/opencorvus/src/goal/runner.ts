@@ -8,6 +8,7 @@ import { selectorList } from "@/check/policy"
 import { CheckRunner } from "@/evaluator/service"
 import { Instance } from "@/project/instance"
 import { Project } from "@/project/project"
+import { Shell } from "@/shell/shell"
 import { Session } from "@/session"
 import { Snapshot } from "@/snapshot"
 import { type CheckDelivery, type CheckReport } from "@/evaluator/shared"
@@ -800,35 +801,30 @@ export async function evaluateTask(input: {
   const DELIVERY_VERIFY_TIMEOUT_MS = 120_000 // 2 minutes max for delivery_verify_cmd
   if (deliveryVerifyCmd && finalResult.status === "passed") {
     const projectDir = Filesystem.resolve(Instance.directory)
-    const isWin = process.platform === "win32"
-    const shellArgs = isWin ? ["cmd", "/c", deliveryVerifyCmd] : ["bash", "-c", deliveryVerifyCmd]
     try {
-      const proc = Bun.spawn(shellArgs, { cwd: projectDir, stdout: "pipe", stderr: "pipe" })
-      const verifyTimeout = setTimeout(() => {
-        try { proc.kill() } catch {}
+      const result = await Shell.run(deliveryVerifyCmd, {
+        cwd: projectDir,
+        env: process.env,
+        timeoutMs: DELIVERY_VERIFY_TIMEOUT_MS,
+      })
+      if (result.timedOut) {
         log.warn("delivery_verify_cmd timed out, killed", { cmd: deliveryVerifyCmd, timeoutMs: DELIVERY_VERIFY_TIMEOUT_MS })
-      }, DELIVERY_VERIFY_TIMEOUT_MS)
-      const [stdout, stderr, exitCode] = await Promise.all([
-        new Response(proc.stdout).text(),
-        new Response(proc.stderr).text(),
-        proc.exited,
-      ])
-      clearTimeout(verifyTimeout)
-      if (exitCode !== 0) {
-        const output = (stderr || stdout).slice(0, 800)
+      }
+      if (result.exitCode !== 0) {
+        const output = (result.stderr || result.stdout).slice(0, 800)
         finalResult = {
           ...finalResult,
           status: "failed" as const,
           verdict: "rejected" as const,
-          summary: `Delivery acceptance command failed (exit ${exitCode}): ${output}`,
+          summary: `Delivery acceptance command failed (exit ${result.exitCode}): ${output}`,
         }
         analyzed.analysis = {
           ...analyzed.analysis,
           verdict: "rejected" as const,
           classification: "evaluation" as const,
-          summary: `Delivery acceptance command failed (exit ${exitCode}). Output: ${output}`,
+          summary: `Delivery acceptance command failed (exit ${result.exitCode}). Output: ${output}`,
           replan_guidance: {
-            root_cause: `Delivery command '${deliveryVerifyCmd}' exited with code ${exitCode}`,
+            root_cause: `Delivery command '${deliveryVerifyCmd}' exited with code ${result.exitCode}`,
             what_failed: output,
             suggested_strategy: "Fix the errors reported above before the next attempt. Check project dependencies, TypeScript configuration, and test setup.",
             avoid_approaches: [],

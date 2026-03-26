@@ -2330,13 +2330,19 @@ var _tmpl$$f = /* @__PURE__ */ template(`<span class="agent-card-badge agent-car
 function stageLabel(stage) {
   return agentStageLabel(stage);
 }
+const expandedOverrides = /* @__PURE__ */ new Map();
 function AgentCard(props) {
-  const [expanded, setExpanded] = createSignal(props.status === "running");
+  const initial = expandedOverrides.has(props.key) ? expandedOverrides.get(props.key) : props.status === "running";
+  const [expanded, setExpanded] = createSignal(initial);
   const label = () => {
     const base = stageLabel(props.stage);
     return props.round > 0 ? `${base} #${props.round}` : base;
   };
-  const toggle = () => setExpanded(!expanded());
+  const toggle = () => {
+    const next = !expanded();
+    setExpanded(next);
+    expandedOverrides.set(props.key, next);
+  };
   return (() => {
     var _el$ = _tmpl$3$d(), _el$2 = _el$.firstChild, _el$4 = _el$2.firstChild, _el$5 = _el$4.nextSibling;
     _el$2.$$keydown = (e) => {
@@ -3657,12 +3663,12 @@ function rebuildMessageIndex() {
 function messageById(id) {
   return messageIndex.get(id);
 }
-function messageTime(item) {
+function messageTime$1(item) {
   return Number(item?.info?.time?.created || item?.info?.time?.updated || 0);
 }
 function sortMessages(list) {
   return [...list].map((item, index) => ({ item, index })).sort(
-    (a, b) => messageTime(a.item) - messageTime(b.item) || a.index - b.index
+    (a, b) => messageTime$1(a.item) - messageTime$1(b.item) || a.index - b.index
   ).map((x) => x.item);
 }
 function record$5(value) {
@@ -3777,6 +3783,7 @@ async function syncTask(taskID) {
   if (!taskID) {
     setStore("messages", []);
     messageIndex.clear();
+    clearAgentEvents();
     return;
   }
   try {
@@ -3826,6 +3833,7 @@ async function loadExecutorEvents(runID) {
 async function loadConversation() {
   if (!boardStore.selectedTaskID) {
     setMessages([]);
+    clearAgentEvents();
     return;
   }
   if (_convLoading) {
@@ -4161,6 +4169,7 @@ function syncAgentText(event) {
 function agentEventEntry(raw) {
   const payload = agentEventRecord(raw?.payload) ? raw.payload : agentEventRecord(raw?.properties) ? raw.properties : {};
   const stage = String(payload.stage || "").trim().toLowerCase();
+  const taskID = String(payload.taskID || raw?.taskID || "").trim();
   const kind = String(payload.kind || "status").trim().toLowerCase();
   const created = Number(raw?.timestamp || payload.timestamp || Date.now());
   const toolName = typeof payload.toolName === "string" && payload.toolName.trim() ? payload.toolName.trim() : typeof payload.name === "string" && payload.name.trim() ? payload.name.trim() : "";
@@ -4172,6 +4181,7 @@ function agentEventEntry(raw) {
   return {
     id,
     eventID: typeof raw?.event_id === "string" ? raw.event_id : "",
+    taskID,
     stage,
     kind,
     toolName,
@@ -4180,6 +4190,20 @@ function agentEventEntry(raw) {
     payload,
     time: { created: Number.isFinite(created) ? created : Date.now() }
   };
+}
+function pruneAgentEvents(events) {
+  const byStage = /* @__PURE__ */ new Map();
+  for (const event of events) {
+    const stageEvents = byStage.get(event.stage) || [];
+    stageEvents.push(event);
+    byStage.set(event.stage, stageEvents);
+  }
+  const kept = Array.from(byStage.values()).flatMap((stageEvents) => stageEvents.slice(-12)).sort((a, b) => (a.time?.created || 0) - (b.time?.created || 0));
+  const keys = new Set(kept.map((event) => agentEventKey(event)));
+  for (const key of [...agentLiveTimers.keys()]) {
+    if (!keys.has(key)) stopAgentLiveTimer(key);
+  }
+  return kept;
 }
 function mergeAgentEvent(existing, next) {
   if (!existing) return next;
@@ -4236,6 +4260,9 @@ function mergeAgentEvent(existing, next) {
 function mergeAgentEventList(events, raw) {
   const event = agentEventEntry(raw);
   if (!event) return events;
+  if (event.taskID && boardStore.selectedTaskID && event.taskID !== boardStore.selectedTaskID) {
+    return events;
+  }
   const index = events.findIndex(
     (item) => item.id === event.id && item.stage === event.stage
   );
@@ -4246,8 +4273,10 @@ function mergeAgentEventList(events, raw) {
   ] : [...events, event];
   const target = index >= 0 ? next[index] : next[next.length - 1];
   syncAgentText(target);
-  return next.sort(
-    (a, b) => (a.time?.created || 0) - (b.time?.created || 0)
+  return pruneAgentEvents(
+    next.sort(
+      (a, b) => (a.time?.created || 0) - (b.time?.created || 0)
+    )
   );
 }
 function appendAgentEvent(raw) {
@@ -4261,6 +4290,13 @@ function appendAgentEvent(raw) {
   });
   const target = key ? next.find((item) => agentEventKey(item) === key) || null : null;
   if (target) scheduleAgentLiveText(target);
+}
+function clearAgentEvents() {
+  for (const key of [...agentLiveTimers.keys()]) {
+    stopAgentLiveTimer(key);
+  }
+  setStore("agentEvents", []);
+  setStore("conversationUpdatedAt", Date.now());
 }
 function setMessages(messages) {
   const next = sortMessages(Array.isArray(messages) ? messages : []);
@@ -4916,8 +4952,141 @@ function hasConversationRequest(messages, request) {
     (message) => effectiveRole(message) === "user" && messageConversationText(message) === target
   );
 }
+function messageTime(message) {
+  return Number(message?.info?.time?.created || message?.info?.time?.updated || 0);
+}
 function deliveryStatusLabel$1(status) {
   return status || "";
+}
+function messageEndTime(message) {
+  return Number(message?.info?.time?.completed || message?.info?.time?.updated || messageTime(message));
+}
+function agentEventTime(event) {
+  return Number(event?.time?.created || event?.timestamp || 0);
+}
+function agentEventDisplayText(event) {
+  const live = typeof event?._liveText === "string" ? event._liveText : "";
+  if (live) return live;
+  const target = typeof event?._targetText === "string" ? event._targetText : "";
+  if (target) return target;
+  if (typeof event?.text === "string" && event.text) return event.text;
+  if (typeof event?.summary === "string" && event.summary) return event.summary;
+  return "";
+}
+function agentEventToolName(event) {
+  if (typeof event?.toolName === "string" && event.toolName.trim()) return event.toolName.trim();
+  const summary = String(event?.summary || "");
+  const split = summary.split("→");
+  return split.length > 1 ? String(split[split.length - 1] || "").trim() : "";
+}
+function agentEventToolPart(event) {
+  const tool = agentEventToolName(event);
+  if (!tool) return null;
+  const created = agentEventTime(event) || Date.now();
+  const id = typeof event?.id === "string" && event.id ? event.id : `tool:${tool}:${created}`;
+  const kind = String(event?.kind || "").trim().toLowerCase();
+  const status = kind === "tool_result" ? "completed" : kind === "error" ? "error" : kind === "tool_delta" ? "running" : "running";
+  const summary = agentEventDisplayText(event).trim() || tool;
+  return {
+    id: `agent-tool:${id}`,
+    type: "tool",
+    callID: id,
+    tool,
+    state: {
+      status,
+      input: {},
+      ...status === "completed" ? { output: summary, title: tool } : {},
+      ...status === "error" ? { error: summary } : {},
+      ...status === "running" ? {
+        title: summary,
+        metadata: { synthetic: true },
+        time: { start: created }
+      } : {}
+    }
+  };
+}
+function agentRoundStatus(stage, round, roundIndex, rounds, latestStageEvent) {
+  if (roundIndex < rounds.length - 1) return "completed";
+  const hasOpenTranscript = round.messages.some(
+    (message) => !message?._synthetic && !message?.info?.time?.completed
+  );
+  const active = activeAgentStages().has(stage);
+  const latestKind = String(latestStageEvent?.kind || "").trim().toLowerCase();
+  const latestSummary = String(latestStageEvent?.summary || "");
+  if (latestKind === "error") return "error";
+  if (latestKind === "status" && /finished|completed|done/i.test(latestSummary)) return "completed";
+  if (active || hasOpenTranscript) return "running";
+  return "completed";
+}
+function buildAgentCards(agentChannels, agentEvents) {
+  const roundsByStage = {};
+  const latestEventByStage = /* @__PURE__ */ new Map();
+  for (const [key, channel] of Object.entries(agentChannels)) {
+    if (channel.messages.length === 0) continue;
+    if (!roundsByStage[channel.stage]) roundsByStage[channel.stage] = [];
+    roundsByStage[channel.stage].push({
+      key,
+      stage: channel.stage,
+      messages: [...channel.messages].sort((left, right) => messageTime(left) - messageTime(right)),
+      startTime: channel.startTime,
+      endTime: channel.endTime
+    });
+  }
+  for (const rounds of Object.values(roundsByStage)) {
+    rounds.sort((left, right) => left.startTime - right.startTime);
+  }
+  const liveEventsByStage = /* @__PURE__ */ new Map();
+  for (const event of Array.isArray(agentEvents) ? agentEvents : []) {
+    const stage = String(event?.stage || "").trim().toLowerCase();
+    if (!AGENT_STAGES.has(stage)) continue;
+    const next = liveEventsByStage.get(stage) || [];
+    next.push(event);
+    liveEventsByStage.set(stage, next);
+    latestEventByStage.set(stage, event);
+  }
+  for (const [stage, events] of liveEventsByStage.entries()) {
+    const liveMessages = events.slice().sort((left, right) => agentEventTime(left) - agentEventTime(right)).map((event) => agentMessage(event)).filter(Boolean).slice(-12);
+    if (liveMessages.length === 0) continue;
+    const rounds = roundsByStage[stage] || [];
+    if (rounds.length === 0) {
+      const startTime = messageTime(liveMessages[0]);
+      const endTime = Math.max(...liveMessages.map((message) => messageEndTime(message)));
+      rounds.push({
+        key: `live:${stage}`,
+        stage,
+        messages: liveMessages,
+        startTime,
+        endTime
+      });
+      roundsByStage[stage] = rounds;
+    }
+  }
+  const cards = [];
+  for (const [stage, rounds] of Object.entries(roundsByStage)) {
+    rounds.sort((left, right) => left.startTime - right.startTime);
+    for (let index = 0; index < rounds.length; index += 1) {
+      const round = rounds[index];
+      const roundLabel = rounds.length > 1 ? index + 1 : 0;
+      const cardKey = `${stage}:round:${Number.isFinite(round.startTime) ? round.startTime : "na"}:${index}`;
+      cards.push({
+        _synthetic: true,
+        _agentCard: true,
+        _agentStage: stage,
+        _agentStatus: agentRoundStatus(stage, round, index, rounds, latestEventByStage.get(stage)),
+        _agentRound: roundLabel,
+        _agentCardKey: cardKey,
+        _agentMessages: round.messages,
+        info: {
+          id: `agent-card:${cardKey}`,
+          role: "agent-card",
+          agent: stage,
+          time: { created: Number.isFinite(round.startTime) ? round.startTime : Date.now() }
+        },
+        parts: []
+      });
+    }
+  }
+  return cards.sort((left, right) => messageTime(left) - messageTime(right));
 }
 function buildBoardContextMessages(preClassifiedMainMessages, board, agentEvents, messages) {
   if (!board) return [];
@@ -5007,7 +5176,6 @@ function conversationMessages() {
   const allMessages = store.messages || [];
   const agentEvents = Array.isArray(store.agentEvents) ? store.agentEvents : [];
   const board = boardStore.board;
-  boardStore.selectedTaskID;
   const showTranscriptDetails = store.showTranscriptDetails;
   const mainMessages = [];
   const agentChannels = {};
@@ -5037,62 +5205,59 @@ function conversationMessages() {
       return !text.includes("<assistant-brief>") && !text.includes("You are executing a headless coding task");
     });
   }
-  const stageRounds = {};
-  for (const [key, channel] of Object.entries(agentChannels)) {
-    if (channel.messages.length === 0) continue;
-    if (!stageRounds[channel.stage]) stageRounds[channel.stage] = [];
-    stageRounds[channel.stage].push({ key, channel });
-  }
-  new Set(
-    Object.values(agentChannels).filter((channel) => channel.messages.length > 0).map((channel) => channel.stage)
-  );
-  for (const rounds of Object.values(stageRounds)) {
-    rounds.sort((a, b) => a.channel.startTime - b.channel.startTime);
-  }
-  const agentCardMsgs = [];
-  const allAgentEvents = Array.isArray(store.agentEvents) ? store.agentEvents : [];
-  for (const [stage, rounds] of Object.entries(stageRounds)) {
-    for (let i = 0; i < rounds.length; i++) {
-      const { key, channel } = rounds[i];
-      const isLastRound = i === rounds.length - 1;
-      let cardStatus;
-      if (!isLastRound) {
-        cardStatus = "completed";
-      } else {
-        const stageEvents = allAgentEvents.filter(
-          (e) => String(e?.stage || "").toLowerCase() === stage && (e.timestamp || 0) >= channel.startTime
-        );
-        const isFinished = stageEvents.some(
-          (e) => e.kind === "status" && /finished|completed|done/i.test(e?.summary || "")
-        );
-        const isError = stageEvents.some((e) => e.kind === "error") && !isFinished;
-        cardStatus = isError ? "error" : isFinished ? "completed" : "running";
-      }
-      const roundLabel = rounds.length > 1 ? i + 1 : 0;
-      agentCardMsgs.push({
-        _synthetic: true,
-        _agentCard: true,
-        _agentStage: stage,
-        _agentStatus: cardStatus,
-        _agentRound: roundLabel,
-        _agentCardKey: key,
-        _agentMessages: channel.messages,
-        info: {
-          role: "agent-card",
-          agent: stage,
-          time: { created: channel.startTime === Infinity ? Date.now() : channel.startTime }
-        },
-        parts: []
-      });
-    }
-  }
-  const liveAgentMsgs = buildAgentMessages();
-  return [...filteredMain, ...liveAgentMsgs, ...executorMsgs, ...boardMsgs, ...agentCardMsgs].sort(
+  const agentCardMsgs = buildAgentCards(agentChannels, agentEvents);
+  return [...filteredMain, ...executorMsgs, ...boardMsgs, ...agentCardMsgs].sort(
     (a, b) => (a.info?.time?.created || 0) - (b.info?.time?.created || 0)
   );
 }
-function buildAgentMessages(_transcriptStages) {
-  return [];
+function agentMessage(event) {
+  if (!event || typeof event !== "object") return null;
+  const stage = String(event?.stage || "").trim().toLowerCase();
+  if (!stage) return null;
+  const created = agentEventTime(event) || Date.now();
+  const eventID = typeof event?.id === "string" && event.id ? event.id : `${stage}:${String(event?.kind || "status")}:${created}`;
+  const kind = String(event?.kind || "status").trim().toLowerCase();
+  const text = agentEventDisplayText(event).trim();
+  const role = "assistant";
+  const base = {
+    _synthetic: true,
+    info: {
+      id: `agent-event:${stage}:${eventID}`,
+      role,
+      agent: stage,
+      time: { created }
+    },
+    parts: []
+  };
+  if (kind === "reasoning_delta" && text) {
+    return {
+      ...base,
+      parts: [
+        {
+          id: `reasoning:${eventID}`,
+          type: "reasoning",
+          text,
+          _targetText: typeof event?._targetText === "string" ? event._targetText : text
+        }
+      ]
+    };
+  }
+  if (kind === "tool_call" || kind === "tool_delta" || kind === "tool_result") {
+    const part = agentEventToolPart(event);
+    return part ? { ...base, parts: [part] } : null;
+  }
+  if (!text) return null;
+  return {
+    ...base,
+    parts: [
+      {
+        id: `text:${eventID}`,
+        type: "text",
+        text,
+        _targetText: typeof event?._targetText === "string" ? event._targetText : text
+      }
+    ]
+  };
 }
 
 var _tmpl$$e = /* @__PURE__ */ template(`<div class=chat-empty>`);
@@ -8410,6 +8575,7 @@ async function selectTask(taskID, options = {}) {
   if (!options.preserveMessages) {
     clearMessages();
   }
+  clearAgentEvents();
   if (appStore.budgetDirty) {
     setAppStore("budgetDirty", false);
   }
