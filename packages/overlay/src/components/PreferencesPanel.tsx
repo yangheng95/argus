@@ -1,7 +1,7 @@
 // ── PreferencesPanel Component ──
 // Knowledge/preferences panel that lists key-value preference entries, supports
 // add/edit via a dialog, and allows deletion. Ports renderPreferences
-// (app.js 10638–10666), preferenceScopeLabel (10668–10673), openPrefEdit
+// ( 10638–10666), preferenceScopeLabel (10668–10673), openPrefEdit
 // (10675–10691), savePrefEdit (10693–10709), deletePreference (10711–10719),
 // and loadPreferences (10623–10636).
 
@@ -13,6 +13,8 @@ import {
 } from "solid-js";
 import { t } from "../utils/i18n";
 import { apiJson } from "../services/api";
+import { appStore } from "../store/app";
+import { loadPreferences as svcLoadPreferences, deletePreference as svcDeletePreference } from "../services/memory";
 
 // ── Types ──
 
@@ -83,60 +85,49 @@ function PrefEditDialog(props: PrefEditDialogProps) {
 
   return (
     <dialog
-      class="dialog pref-edit-dialog"
-      id="prefEditDialog"
+      class="dialog"
       ref={(el) => {
         dialogRef = el;
-        el?.showModal();
+        if (el) queueMicrotask(() => el.showModal());
       }}
       onClose={props.onClose}
     >
-      <div class="dialog-header">
-        <span class="dialog-title" id="prefEditTitle">
-          {title()}
-        </span>
-      </div>
+      <form class="dialog-form" onSubmit={(e) => void handleSubmit(e)}>
+        <div class="dialog-head">
+          <span class="dialog-title">
+            {title()}
+          </span>
+        </div>
 
-      <form id="prefEditForm" onSubmit={(e) => void handleSubmit(e)}>
-        {/* Hidden pref ID */}
-        <input type="hidden" id="prefEditId" value={props.pref?.id ?? ""} />
-
-        <div class="form-row">
-          <label for="prefEditKey" class="form-label">
-            {t("preference.key")}
-          </label>
+        <label class="field">
+          <span class="field-label">{t("preference.key")}</span>
           <input
-            id="prefEditKey"
             type="text"
-            class="input"
+            class="field-input"
             required
             value={key()}
             onInput={(e) => setKey((e.target as HTMLInputElement).value)}
           />
-        </div>
+        </label>
 
-        <div class="form-row">
-          <label for="prefEditValue" class="form-label">
-            {t("preference.value")}
-          </label>
+        <label class="field">
+          <span class="field-label">{t("preference.value")}</span>
           <textarea
-            id="prefEditValue"
-            class="input textarea"
+            class="field-input"
             required
             rows={4}
             value={value()}
             onInput={(e) => setValue((e.target as HTMLTextAreaElement).value)}
           />
-        </div>
+        </label>
 
         <Show when={!!error()}>
-          <p class="form-error">{error()}</p>
+          <div class="config-status-box" data-status="error">{error()}</div>
         </Show>
 
-        <div class="dialog-footer">
+        <div class="dialog-actions">
           <button
             type="button"
-            id="btnCancelPrefEdit"
             class="btn btn-ghost"
             onClick={() => {
               dialogRef?.close();
@@ -166,22 +157,22 @@ export interface PreferencesPanelProps {
 }
 
 export function PreferencesPanel(_props: PreferencesPanelProps) {
-  const [prefs, setPrefs] = createSignal<Preference[]>([]);
   const [loading, setLoading] = createSignal(false);
   const [editPref, setEditPref] = createSignal<Preference | null | "new">(
     undefined as any,
   );
   const [dialogOpen, setDialogOpen] = createSignal(false);
 
-  // ── Data loading ──
+  // Reactive data from appStore (populated by loadPreferences after connect)
+  const prefs = createMemo((): Preference[] => {
+    const raw = appStore.preferences;
+    return Array.isArray(raw) ? raw as Preference[] : [];
+  });
 
-  const loadPreferences = async () => {
+  const reloadPreferences = async () => {
     setLoading(true);
     try {
-      const data = await apiJson("panel/knowledge/preference");
-      setPrefs(Array.isArray(data) ? data : []);
-    } catch {
-      setPrefs([]);
+      await svcLoadPreferences();
     } finally {
       setLoading(false);
     }
@@ -190,13 +181,9 @@ export function PreferencesPanel(_props: PreferencesPanelProps) {
   const handleDelete = async (prefId: string) => {
     if (!prefId) return;
     try {
-      await apiJson(
-        `panel/knowledge/preference/${encodeURIComponent(prefId)}`,
-        { method: "DELETE" },
-      );
-      await loadPreferences();
+      await svcDeletePreference(prefId);
     } catch {
-      // Silently ignore; the list is the source of truth
+      // ignore
     }
   };
 
@@ -212,15 +199,12 @@ export function PreferencesPanel(_props: PreferencesPanelProps) {
 
   const handleSaved = () => {
     setDialogOpen(false);
-    void loadPreferences();
+    void reloadPreferences();
   };
 
   const handleDialogClose = () => {
     setDialogOpen(false);
   };
-
-  // Load on mount
-  loadPreferences();
 
   const badge = createMemo(() => {
     const n = prefs().length;
@@ -228,40 +212,28 @@ export function PreferencesPanel(_props: PreferencesPanelProps) {
   });
 
   return (
-    <div class="preferences-panel">
-      {/* Header */}
-      <div class="panel-header">
-        <span class="panel-title">
-          {t("preference.title")}
-          <Show when={badge()}>
-            <span id="preferenceBadge" class="panel-badge">
-              {badge()}
-            </span>
-          </Show>
-        </span>
-        <div class="panel-header-actions">
-          <button
-            type="button"
-            id="btnPreferenceRefresh"
-            class="btn btn-ghost mini"
-            onClick={() => void loadPreferences()}
-            disabled={loading()}
-          >
-            {t("common.refresh")}
-          </button>
-          <button
-            type="button"
-            id="btnPreferenceAdd"
-            class="btn btn-ghost mini"
-            onClick={openAdd}
-          >
-            {t("preference.add")}
-          </button>
-        </div>
+    <>
+      {/* Toolbar */}
+      <div class="knowledge-toolbar">
+        <button
+          type="button"
+          class="btn btn-ghost mini"
+          onClick={() => void reloadPreferences()}
+          disabled={loading()}
+        >
+          {t("common.refresh")}
+        </button>
+        <button
+          type="button"
+          class="btn btn-ghost mini"
+          onClick={openAdd}
+        >
+          {t("preference.add")}
+        </button>
       </div>
 
       {/* List */}
-      <div id="preferenceList" class="pref-list">
+      <div id="preferenceList" class="knowledge-list">
         <Show
           when={prefs().length > 0}
           fallback={<div class="empty-hint">{t("preference.none")}</div>}
@@ -319,6 +291,6 @@ export function PreferencesPanel(_props: PreferencesPanelProps) {
           onSaved={handleSaved}
         />
       </Show>
-    </div>
+    </>
   );
 }

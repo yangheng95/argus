@@ -1,6 +1,6 @@
 // ── Executor Store ──
 // Solid reactive store for executor events.
-// Replaces direct reads of app.js state.executorEvents / state.executorRunID.
+// Replaces direct reads of state.executorEvents / state.executorRunID.
 
 import { createStore, produce, reconcile } from "solid-js/store";
 
@@ -88,7 +88,7 @@ function nextLiveLength(live: string, target: string): number {
   if (!live) return Math.min(target.length, 1);
   const remaining = target.length - live.length;
   if (remaining <= 0) return target.length;
-  // Avoid a long one-character tail when timers are slightly delayed.
+ // Avoid a long one-character tail when timers are slightly delayed.
   if (remaining <= 6) return target.length;
   return Math.min(target.length, live.length + Math.max(1, Math.ceil(remaining / 2)));
 }
@@ -218,7 +218,7 @@ export function appendExecutorEvent(event: ExecutorEvent): void {
   if (!event) return;
 
   if (event.runID && store.runID && store.runID !== event.runID) {
-    // New run — discard stale events and adopt the new runID
+ // New run — discard stale events and adopt the new runID
     setStore("events", reconcile([]));
     setStore("runID", event.runID);
   }

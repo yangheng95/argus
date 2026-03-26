@@ -11,7 +11,7 @@ export function ToolPart(props: { part: any }) {
   const statusLabel = () => toolStatusLabel(status());
   const detail = () => {
     const raw = displayToolDetail(toolName(), input(), state(), activeDirectory());
-    // Suppress detail when it duplicates the tool name
+ // Suppress detail when it duplicates the tool name
     return raw && raw.toLowerCase() !== toolName().toLowerCase() ? raw : "";
   };
   const raw = () => {

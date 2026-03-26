@@ -1,5 +1,4 @@
 // ── Lightweight Markdown Renderer ──
-// Exact port of renderMarkdown / renderMarkdownBlock / inlineMarkdown from app.js.
 
 export function escapeHtml(str: string): string {
   if (!str) return "";
@@ -38,23 +37,23 @@ export function inlineMarkdown(text: string): string {
       return value;
     return null;
   }
-  // Images: ![alt](url)
+ // Images: ![alt](url)
   s = s.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_, alt, url) => {
     const value = safeUrl(url, true);
     return value ? `<img class="md-img" src="${value}" alt="${alt}" loading="lazy">` : alt;
   });
-  // Links: [text](url)
+ // Links: [text](url)
   s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, label, url) => {
     const value = safeUrl(url);
     return value
       ? `<a class="md-link" href="${value}" target="_blank" rel="noopener">${label}</a>`
       : label;
   });
-  // Bold: **text**
+ // Bold: **text**
   s = s.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
-  // Italic: *text*
+ // Italic: *text*
   s = s.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, "<em>$1</em>");
-  // Inline code: `code`
+ // Inline code: `code`
   s = s.replace(/`([^`]+)`/g, '<code class="md-inline-code">$1</code>');
   return s;
 }
@@ -68,7 +67,7 @@ export function renderMarkdownBlock(text: string): string {
   for (const line of lines) {
     const trimmed = line.trim();
 
-    // Headers
+ // Headers
     const hMatch = trimmed.match(/^(#{1,6})\s+(.+)$/);
     if (hMatch) {
       if (inList) {
@@ -80,7 +79,7 @@ export function renderMarkdownBlock(text: string): string {
       continue;
     }
 
-    // Unordered list
+ // Unordered list
     if (/^[-*]\s/.test(trimmed)) {
       if (!inList || listTag !== "ul") {
         if (inList) html += `</${listTag}>`;
@@ -92,7 +91,7 @@ export function renderMarkdownBlock(text: string): string {
       continue;
     }
 
-    // Ordered list
+ // Ordered list
     const olMatch = trimmed.match(/^(\d+)\.\s(.+)$/);
     if (olMatch) {
       if (!inList || listTag !== "ol") {
@@ -105,19 +104,19 @@ export function renderMarkdownBlock(text: string): string {
       continue;
     }
 
-    // End list on blank line or non-list content
+ // End list on blank line or non-list content
     if (inList) {
       html += `</${listTag}>`;
       inList = false;
     }
 
-    // Blank line
+ // Blank line
     if (!trimmed) {
       html += '<div class="md-break"></div>';
       continue;
     }
 
-    // Regular paragraph
+ // Regular paragraph
     html += `<div class="md-p">${inlineMarkdown(trimmed)}</div>`;
   }
 
@@ -126,7 +125,7 @@ export function renderMarkdownBlock(text: string): string {
 }
 
 export function renderMarkdown(text: string): string {
-  // Split by fenced code blocks
+ // Split by fenced code blocks
   const segments = text.split(/(```[\s\S]*?```)/g);
   let html = "";
   for (const seg of segments) {

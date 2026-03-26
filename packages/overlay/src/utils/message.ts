@@ -1,6 +1,5 @@
 // ── Message utilities ──
-// Exact port of orderedMessageParts, roleLabel, effectiveRole, escapeHtml,
-// agentStageRole, phaseFromAgent, phaseFromMessage, detectSource from app.js.
+// agentStageRole, phaseFromAgent, phaseFromMessage, detectSource
 
 import { t } from "./i18n";
 
@@ -9,7 +8,6 @@ import { t } from "./i18n";
 /**
  * Returns true if the given message part is a transient "thinking" placeholder
  * inserted while the assistant response is still streaming.
- * Mirrors app.js isPendingPlaceholderPart.
  */
 export function isPendingPlaceholderPart(part: any): boolean {
   return (
@@ -149,8 +147,7 @@ function detectSource(msg: any): string | undefined {
 
 // ── Agent stage label ──
 
-/** Get the display label for an agent stage used in card headers.
- *  Exact port of agentStageLabel from app.js. */
+/** Get the display label for an agent stage used in card headers. */
 export function agentStageLabel(stage: string): string {
   if (stage === "spec") return t("chat.role.spec");
   if (stage === "planner") return t("chat.role.planner");

@@ -1,9 +1,7 @@
 // ── Tasks service ──
-// Exact port of app.js scheduleTasks (debounced task-list reload).
-//
 // NOTE: task.ts (singular) owns per-task operations (select, delete, submit,
-// retry, replan, cancel).  This module (tasks.ts, plural) owns the task
-// *list* scheduling logic that was previously spread across the legacy
+// retry, replan, cancel). This module (tasks.ts, plural) owns the task
+// *list* scheduling logic that was previously spread across
 // global `state.tasksKick` timer.
 
 import { loadTasks } from "../store/board";
@@ -13,9 +11,7 @@ import { loadTasks } from "../store/board";
 let tasksKick: ReturnType<typeof setTimeout> | null = null;
 
 // ── Public: scheduleTasks ──
-// Exact port of app.js scheduleTasks.
 // Cancels any pending reload and schedules a fresh one after `delay` ms.
-// Mirrors app.js pattern: state.tasksKick / clearTimeout / setTimeout / loadTasks().
 
 export function scheduleTasks(delay = 0): void {
   if (tasksKick !== null) {

@@ -1,11 +1,11 @@
 // ── ChangesPanel Component ──
 // Solid.js port of renderChanges / renderDiffPreview / changeRowsHtml /
 // changeStatusLabel / buildDiffOps / collapseDiffOps / splitDiffLines /
-// diffMiddle from app.js.
+// diffMiddle
 // Shows the list of file changes for the selected task and supports opening
 // an inline diff preview dialog.
 
-import { createSignal, createMemo, For, Show } from "solid-js";
+import { createSignal, createMemo, createEffect, For, Show } from "solid-js";
 import { boardStore } from "../store/board";
 import { deriveChanges } from "../services/meta";
 import { t, tc } from "../utils/i18n";
@@ -29,7 +29,7 @@ interface DiffOp {
   count?: number;
 }
 
-// ── Diff helpers (ports of app.js) ──
+// ── Diff helpers (ports of ) ──
 
 function splitDiffLines(text: string | undefined): string[] {
   const value = String(text || "")
@@ -64,7 +64,7 @@ function diffMiddle(
       text,
     }));
   }
-  // Guard against huge diffs — fall back to bulk del/add
+ // Guard against huge diffs — fall back to bulk del/add
   if (left.length * right.length > 120000) {
     return [
       ...left.map((text, index) => ({
@@ -82,7 +82,7 @@ function diffMiddle(
     ];
   }
 
-  // LCS via dynamic programming
+ // LCS via dynamic programming
   const grid: Uint32Array[] = Array.from(
     { length: left.length + 1 },
     () => new Uint32Array(right.length + 1),
@@ -289,8 +289,16 @@ interface DiffDialogProps {
 function DiffDialog(props: DiffDialogProps) {
   let dialogRef: HTMLDialogElement | undefined;
 
-  // Open/close the native <dialog> imperatively when item changes
   const item = () => props.item;
+
+  // Open/close the native <dialog> imperatively when item changes
+  createEffect(() => {
+    if (item() && dialogRef && !dialogRef.open) {
+      dialogRef.showModal();
+    } else if (!item() && dialogRef?.open) {
+      dialogRef.close();
+    }
+  });
 
   function close() {
     dialogRef?.close();
@@ -303,7 +311,7 @@ function DiffDialog(props: DiffDialogProps) {
       class="diff-dialog"
       onClose={props.onClose}
       onClick={(e) => {
-        // Close on backdrop click
+ // Close on backdrop click
         if (e.target === dialogRef) close();
       }}
     >
@@ -345,9 +353,9 @@ function DiffDialog(props: DiffDialogProps) {
 
 export interface ChangesPanelProps {
   /**
-   * File changes to display. If not provided, falls back to reading
-   * boardStore.board?.changes (the legacy bridge sets this field).
-   */
+ * File changes to display. If not provided, falls back to reading
+ * boardStore.board?.changes (the sets this field).
+ */
   changes?: FileChange[];
   /** Whether a task is currently selected (affects empty-state messaging). */
   hasSelectedTask?: boolean;
@@ -356,7 +364,7 @@ export interface ChangesPanelProps {
 export function ChangesPanel(props: ChangesPanelProps) {
   const [selectedIndex, setSelectedIndex] = createSignal<number | null>(null);
 
-  // Use provided changes or fall back to boardStore
+ // Use provided changes or fall back to boardStore
   const files = createMemo<FileChange[]>(() => {
     if (props.changes !== undefined) return props.changes;
     const derived = deriveChanges();

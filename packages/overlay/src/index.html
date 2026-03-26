@@ -197,11 +197,19 @@
             <div class="task-status chat-task-status" id="taskStatus" hidden>
               <span class="status-icon" id="statusIcon" data-status="idle" aria-hidden="true"></span>
               <span class="status-label" id="statusLabel" data-i18n="task.status.idle">No task</span>
-              <!-- elapsed + terminate removed — orphaned, never wired -->
+              <button
+                type="button"
+                class="btn btn-ghost mini btn-terminate"
+                id="btnTerminateRun"
+                hidden
+                data-i18n="task.terminate"
+                data-i18n-title="task.terminate_title"
+                title="Terminate running task"
+                aria-label="Terminate running task"
+              >Terminate</button>
             </div>
           </div>
           <div class="chat-header-meta">
-            <span class="chat-version" id="chatVersion"></span>
             <span class="chat-count" id="chatCount"></span>
             <button
               type="button"
@@ -321,6 +329,25 @@
 
   </main>
 
+  <!-- Goal Dialog -->
+  <dialog class="dialog" id="goalDialog" aria-label="Goal" data-i18n-aria-label="goal.title">
+    <form class="dialog-form" id="goalForm">
+      <input type="hidden" name="goalId" id="goalId">
+      <label class="field">
+        <span class="field-label" data-i18n-html="goal.description">Description <em>*</em></span>
+        <textarea class="field-input" id="goalDescription" name="description" required rows="3" placeholder="Describe the goal..." data-i18n-placeholder="goal.description_placeholder"></textarea>
+      </label>
+      <label class="field">
+        <span class="field-label" data-i18n="goal.criteria">Criteria</span>
+        <textarea class="field-input" id="goalCriteria" name="criteria" rows="3" placeholder="Acceptance criteria for this goal" data-i18n-placeholder="goal.criteria_placeholder"></textarea>
+      </label>
+      <div class="dialog-actions">
+        <button type="button" class="btn btn-ghost" id="btnCancelGoal" data-i18n="common.cancel">Cancel</button>
+        <button type="submit" class="btn btn-primary" id="btnSaveGoal" data-i18n="goal.save">Save Goal</button>
+      </div>
+    </form>
+  </dialog>
+
   <!-- Diff Dialog -->
   <dialog class="dialog dialog-wide" id="diffDialog">
     <div class="dialog-form diff-dialog-form">
@@ -426,7 +453,7 @@
           </button>
           <button class="config-nav-item" data-config-tab="budget">
             <svg class="config-nav-icon" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M3 9h18M9 3v18" stroke="currentColor" stroke-width="1.5"/><path d="M14 14l2 2 3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            <span data-i18n="section.budget">Budget</span>
+            <span data-i18n="section.budget">Task Budget</span>
           </button>
           <div class="config-nav-spacer"></div>
           <button class="config-nav-item" data-config-tab="about">
@@ -538,7 +565,7 @@
 
           <div class="config-tab-panel" data-config-panel="budget">
             <div class="config-section-body" id="budgetConfigBody">
-              <div class="budget-note" id="budgetHint" data-i18n="budget.hint">Leave fields blank to use the orchestrator defaults.</div>
+              <div class="budget-note" id="budgetHint" data-i18n="budget.hint">Configure the selected task budget here. Leave fields blank to use the orchestrator defaults.</div>
               <div class="field-row budget-grid">
                 <label class="field">
                   <span class="field-label" data-i18n="budget.max_runs">Max Runs</span>
@@ -560,6 +587,7 @@
                 </label>
               </div>
               <div class="section-actions budget-actions">
+                <button type="button" class="btn btn-ghost mini" id="btnBudgetReload" data-i18n="common.refresh">Refresh</button>
                 <button type="button" class="btn btn-ghost mini" id="btnBudgetReset" data-i18n="budget.reset">Reset</button>
                 <button type="button" class="btn btn-primary mini" id="btnBudgetSave" data-i18n="common.save">Save</button>
               </div>

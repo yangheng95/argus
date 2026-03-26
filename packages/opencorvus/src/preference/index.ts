@@ -133,6 +133,18 @@ export namespace Preference {
     return readCwd(projectID)
   }
 
+  function overlayManagedRows(projectID: string) {
+    return Database.use((db) =>
+      db
+        .select()
+        .from(WorkbenchPreferenceTable)
+        .where(eq(WorkbenchPreferenceTable.project_id, projectID))
+        .all(),
+    )
+      .filter((row) => normalizeScope(row.scope) === "global" && !row.session_id && row.source === "overlay")
+      .sort((a, b) => a.time_updated - b.time_updated || a.time_created - b.time_created)
+  }
+
   /**
    * Sync a key-value pair into the cwd preferences file so it survives DB loss.
    * Merges into existing entries without removing other keys.
@@ -146,6 +158,34 @@ export namespace Preference {
       .map((item) => ({ key: item.key, value: item.value }))
     items.push({ key, value })
     writeCwd(projectID, items)
+  }
+
+  export function setCwd(input: { projectID: string; key: string; value: string }) {
+    const next = writeCwd(input.projectID, [
+      ...readCwd(input.projectID)
+        .filter((item) => item.key !== input.key)
+        .map((item) => ({ key: item.key, value: item.value })),
+      { key: input.key, value: input.value },
+    ])
+    const created = next.find((item) => item.key === input.key)
+    if (!created) throw new Error(`Preference not found after cwd write: ${input.key}`)
+    return created
+  }
+
+  export function repairOverlayManaged(input: { projectID: string }) {
+    const legacy = overlayManagedRows(input.projectID)
+    if (legacy.length === 0) return 0
+    const merged = new Map(
+      readCwd(input.projectID).map((item) => [item.key, { key: item.key, value: item.value }] as const),
+    )
+    for (const row of legacy) merged.set(row.key, { key: row.key, value: row.value })
+    writeCwd(input.projectID, [...merged.values()])
+    Database.use((db) => {
+      for (const row of legacy) {
+        db.delete(WorkbenchPreferenceTable).where(eq(WorkbenchPreferenceTable.id, row.id)).run()
+      }
+    })
+    return legacy.length
   }
 
   /**

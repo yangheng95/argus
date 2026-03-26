@@ -1,14 +1,12 @@
 // ── Window / UI Service ──
-// Exact port of app.js window-management and UI helper functions that operate
 // on the Tauri window handle or on global DOM state.
-//
 // Exported functions:
-//   setTrayAttention   — toggle the tray icon attention state via Tauri
-//   setConnStatus      — update the DOM connection badge
-//   startElapsedTimer  — start the task elapsed-time interval
-//   stopTimers         — clear all active timers and stop SSE
-//   fitBrandVersion    — shrink the brand-version element to fit its container
-//   syncExecutorWidth  — equalise executor chip button widths
+// setTrayAttention — toggle the tray icon attention state via Tauri
+// setConnStatus — update the DOM connection badge
+// startElapsedTimer — start the task elapsed-time interval
+// stopTimers — clear all active timers and stop SSE
+// fitBrandVersion — shrink the brand-version element to fit its container
+// syncExecutorWidth — equalise executor chip button widths
 
 // ── Helpers ──
 
@@ -31,7 +29,6 @@ async function tauriInvoke<T>(
 }
 
 // ── setTrayAttention ──
-// Mirrors app.js setTrayAttention() (line 1162).
 // Activate or deactivate the tray-icon attention animation.
 // Returns true on success, false when Tauri is unavailable.
 
@@ -48,9 +45,8 @@ export async function setTrayAttention(active: boolean): Promise<boolean> {
 }
 
 // ── setConnStatus ──
-// Mirrors app.js setConnStatus() (line 3817).
 // Update the DOM connection badge to reflect the current connection state.
-// The badge element's text is set via the legacy t() i18n global to avoid
+// The badge element's text is set t() i18n global to avoid
 // importing the full i18n module during migration.
 
 export function setConnStatus(status: "online" | "offline" | "connecting"): void {
@@ -74,12 +70,10 @@ export function setConnStatus(status: "online" | "offline" | "connecting"): void
 }
 
 // ── startElapsedTimer ──
-// Mirrors app.js startElapsedTimer() (line 5929).
 // Start a 1-second interval that updates the elapsed-time DOM element.
 // Returns a cleanup function that clears the interval.
-//
 // The caller is responsible for storing and cancelling the returned handle.
-// In the legacy app.js path the handle is stored in state.elapsedTimer.
+// In the the handle is stored in state.elapsedTimer.
 
 export function startElapsedTimer(
   startTime: number,
@@ -104,7 +98,6 @@ export function startElapsedTimer(
 }
 
 // ── fitBrandVersion ──
-// Mirrors app.js fitBrandVersion() (line 3890).
 // Scale the brand-version element down when its content overflows the container.
 
 export function fitBrandVersion(): void {
@@ -121,21 +114,20 @@ export function fitBrandVersion(): void {
 }
 
 // ── syncExecutorWidth ──
-// Mirrors app.js syncExecutorWidth() (line 3985).
 // Measure all executor chip buttons and set --engine-chip-width to the widest.
 
 export function syncExecutorWidth(): void {
   const bar = document.getElementById("engineBar") as HTMLElement | null;
   if (!bar) return;
   bar.style.removeProperty("--engine-chip-width");
-  const buttons = [
-    ...bar.querySelectorAll<HTMLElement>("[data-executor]"),
-  ];
-  const width = buttons.reduce(
-    (max, btn) => Math.max(max, Math.ceil(btn.getBoundingClientRect().width)),
-    0,
-  );
-  if (width > 0) {
-    bar.style.setProperty("--engine-chip-width", `${width}px`);
-  }
+  requestAnimationFrame(() => {
+    const buttons = [...bar.querySelectorAll<HTMLElement>("[data-executor]")];
+    const width = buttons.reduce(
+      (max, btn) => Math.max(max, Math.ceil(btn.getBoundingClientRect().width)),
+      0,
+    );
+    if (width > 0) {
+      bar.style.setProperty("--engine-chip-width", `${width}px`);
+    }
+  });
 }

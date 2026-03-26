@@ -517,6 +517,88 @@ describe("orchestrator routes", () => {
     expect(submit).toHaveBeenCalledTimes(1)
   })
 
+  test("PATCH /task/:id/budget invalidates board etag and returns updated budget", async () => {
+    await using tmp = await tmpdir({ git: true })
+    spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
+      sessionID,
+      queueTaskID: Identifier.ascending("task"),
+    }))
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const created = await app.request("/task", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": tmp.path,
+          },
+          body: JSON.stringify({
+            project: Instance.project.id,
+            request: "implement feature x",
+          }),
+        })
+        const { task_id } = (await created.json()) as { task_id: string }
+        const first = await app.request(`/task/${task_id}/board?sync=0`, {
+          method: "GET",
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+        const etag = first.headers.get("etag")
+
+        expect(first.status).toBe(200)
+        expect(etag).toBeTruthy()
+
+        const updated = await app.request(`/task/${task_id}/budget`, {
+          method: "PATCH",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": tmp.path,
+          },
+          body: JSON.stringify({
+            budget: {
+              maxRuns: 4,
+              maxReplans: 2,
+              maxEvaluations: 5,
+              maxWallTimeMs: 180000,
+            },
+          }),
+        })
+        expect(updated.status).toBe(200)
+
+        const second = await app.request(`/task/${task_id}/board?sync=0`, {
+          method: "GET",
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+            "if-none-match": etag!,
+          },
+        })
+
+        expect(second.status).toBe(200)
+        expect(second.headers.get("etag")).toBeTruthy()
+        expect(second.headers.get("etag")).not.toBe(etag)
+        const body = (await second.json()) as {
+          task: {
+            budget?: {
+              maxRuns?: number
+              maxReplans?: number
+              maxEvaluations?: number
+              maxWallTimeMs?: number
+            }
+          }
+        }
+        expect(body.task.budget).toEqual({
+          maxRuns: 4,
+          maxReplans: 2,
+          maxEvaluations: 5,
+          maxWallTimeMs: 180000,
+        })
+      },
+    })
+  })
+
   test("GET /task/:id/board includes api user-scoped preferences after message", async () => {
     await using tmp = await tmpdir({ git: true })
     const submit = spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({

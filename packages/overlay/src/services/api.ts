@@ -1,5 +1,5 @@
 // ── API Client ──
-// Extracted from legacy app.js — provides server URL detection, auth headers,
+// Provides server URL detection, auth headers,
 // and typed fetch helpers for the OpenCorvus overlay.
 
 export const DEFAULT_SERVER = (() => {

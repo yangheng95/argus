@@ -14,6 +14,8 @@ use std::{
 
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
+#[cfg(windows)]
+use std::os::windows::io::AsRawHandle;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 
@@ -37,10 +39,131 @@ const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 include!(concat!(env!("OUT_DIR"), "/embedded_sidecar.rs"));
 
+// ── Windows: Job Object with KILL_ON_JOB_CLOSE ──────────────────────────────
+//
+// When the overlay exits (even on crash), closing the last handle to the job
+// object causes Windows to terminate every process in the job — including all
+// grandchildren spawned by the Bun server (LSP servers, PTY shells, etc.).
+#[cfg(windows)]
+mod job_object {
+    use std::ffi::c_void;
+
+    pub type HANDLE = *mut c_void;
+    const INVALID_HANDLE_VALUE: HANDLE = -1isize as HANDLE;
+
+    // JOBOBJECTINFOCLASS::JobObjectExtendedLimitInformation = 9
+    const EXTENDED_LIMIT_INFO_CLASS: u32 = 9;
+    // JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+    const KILL_ON_CLOSE: u32 = 0x00002000;
+
+    #[repr(C)]
+    struct IoCounters {
+        read_op: u64, write_op: u64, other_op: u64,
+        read_xfer: u64, write_xfer: u64, other_xfer: u64,
+    }
+
+    #[repr(C)]
+    struct BasicLimitInfo {
+        per_process_time: i64,
+        per_job_time: i64,
+        limit_flags: u32,
+        min_ws: usize,
+        max_ws: usize,
+        active_process_limit: u32,
+        affinity: usize,
+        priority_class: u32,
+        scheduling_class: u32,
+    }
+
+    #[repr(C)]
+    struct ExtendedLimitInfo {
+        basic: BasicLimitInfo,
+        io: IoCounters,
+        process_mem_limit: usize,
+        job_mem_limit: usize,
+        peak_process_mem: usize,
+        peak_job_mem: usize,
+    }
+
+    extern "system" {
+        fn CreateJobObjectW(attrs: *const c_void, name: *const u16) -> HANDLE;
+        fn SetInformationJobObject(
+            job: HANDLE, class: u32, info: *const c_void, len: u32,
+        ) -> i32;
+        fn AssignProcessToJobObject(job: HANDLE, process: HANDLE) -> i32;
+        fn CloseHandle(handle: HANDLE) -> i32;
+    }
+
+    /// Owns a Windows Job Object handle. Dropping closes the handle, which
+    /// triggers KILL_ON_JOB_CLOSE and terminates the entire process tree.
+    pub struct JobObject(HANDLE);
+
+    impl Drop for JobObject {
+        fn drop(&mut self) {
+            if !self.0.is_null() && self.0 != INVALID_HANDLE_VALUE {
+                unsafe { CloseHandle(self.0); }
+            }
+        }
+    }
+
+    // HANDLE is just a pointer but we only ever use it from within a Mutex.
+    unsafe impl Send for JobObject {}
+    unsafe impl Sync for JobObject {}
+
+    /// Creates a kill-on-close job object and assigns `child_handle` to it.
+    /// Returns `None` on failure (logged by caller); the child still runs,
+    /// just without the automatic tree-kill guarantee.
+    pub fn create_and_assign(child_handle: HANDLE) -> Option<JobObject> {
+        let job = unsafe { CreateJobObjectW(std::ptr::null(), std::ptr::null()) };
+        if job.is_null() || job == INVALID_HANDLE_VALUE {
+            return None;
+        }
+        let info = ExtendedLimitInfo {
+            basic: BasicLimitInfo {
+                limit_flags: KILL_ON_CLOSE,
+                // SAFETY: all other fields are zero/null, which is valid.
+                ..unsafe { std::mem::zeroed() }
+            },
+            // SAFETY: zero-initialised remaining fields are valid.
+            ..unsafe { std::mem::zeroed() }
+        };
+        let ok = unsafe {
+            SetInformationJobObject(
+                job,
+                EXTENDED_LIMIT_INFO_CLASS,
+                &info as *const _ as *const c_void,
+                std::mem::size_of::<ExtendedLimitInfo>() as u32,
+            )
+        };
+        if ok == 0 {
+            unsafe { CloseHandle(job); }
+            return None;
+        }
+        unsafe { AssignProcessToJobObject(job, child_handle); }
+        Some(JobObject(job))
+    }
+}
+
+// ── Unix: process-group kill ─────────────────────────────────────────────────
+//
+// The child is spawned with process_group(0), making it a process group leader.
+// All grandchildren inherit the group. On shutdown we send SIGKILL to the
+// entire group via kill(-pgid, SIGKILL).
+#[cfg(unix)]
+extern "C" {
+    fn kill(pid: i32, sig: i32) -> i32;
+}
+
 #[derive(Default)]
 struct ServerState {
     child: Option<Child>,
     port: Option<u16>,
+    /// Windows: Job Object that auto-kills all job members on drop.
+    #[cfg(windows)]
+    job: Option<job_object::JobObject>,
+    /// Unix: process group ID of the server (== child PID after process_group(0)).
+    #[cfg(unix)]
+    pgid: Option<u32>,
 }
 
 struct Server(Mutex<ServerState>);
@@ -438,14 +561,30 @@ fn stop_server<R: Runtime>(app: &AppHandle<R>) {
             poisoned.into_inner()
         }
     };
-    if let Some(mut child) = lock.child.take() {
-        if let Err(err) = child.kill() {
-            eprintln!("overlay: failed to kill server process: {err}");
+
+    // Windows: drop the Job Object handle → KILL_ON_JOB_CLOSE terminates every
+    // process in the job (direct child + all grandchildren).
+    #[cfg(windows)]
+    { lock.job = None; }
+
+    // Unix: SIGKILL the entire process group — reaches direct child and all
+    // grandchildren that inherited the group (LSP servers, PTY shells, etc.).
+    #[cfg(unix)]
+    if let Some(pgid) = lock.pgid.take() {
+        if pgid > 1 {
+            // SAFETY: kill(2) is always safe to call; SIGKILL = 9.
+            unsafe { kill(-(pgid as i32), 9); }
         }
+    }
+
+    // Reap the direct child (may already be dead from the above).
+    if let Some(mut child) = lock.child.take() {
+        let _ = child.kill(); // Ignore error — process may already be gone.
         if let Err(err) = child.wait() {
             eprintln!("overlay: failed to wait on server process: {err}");
         }
     }
+
     lock.port = None;
 }
 
@@ -470,8 +609,32 @@ fn start_server<R: Runtime>(app: &AppHandle<R>) -> Result<OverlayServerInfo, Str
         .stderr(Stdio::null());
     #[cfg(windows)]
     cmd.creation_flags(CREATE_NO_WINDOW);
+    // Unix: move child into its own process group so kill(-pgid) reaches all
+    // grandchildren (LSP servers, PTY shells, JSON-RPC processes, etc.).
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        cmd.process_group(0);
+    }
 
     let child = cmd.spawn().map_err(|err| err.to_string())?;
+
+    // Windows: assign the child to a kill-on-close Job Object so the entire
+    // process tree is terminated automatically when the overlay exits.
+    #[cfg(windows)]
+    let job = {
+        let raw = child.as_raw_handle() as job_object::HANDLE;
+        let j = job_object::create_and_assign(raw);
+        if j.is_none() {
+            eprintln!("overlay: job object unavailable; grandchild processes may linger");
+        }
+        j
+    };
+
+    // Unix: PGID == child PID because we used process_group(0).
+    #[cfg(unix)]
+    let pgid = child.id();
+
     let info = server_info(port);
     let state = app.state::<Server>();
     let mut lock = match state.0.lock() {
@@ -483,6 +646,10 @@ fn start_server<R: Runtime>(app: &AppHandle<R>) -> Result<OverlayServerInfo, Str
     };
     lock.child = Some(child);
     lock.port = Some(port);
+    #[cfg(windows)]
+    { lock.job = job; }
+    #[cfg(unix)]
+    { lock.pgid = Some(pgid); }
     Ok(info)
 }
 

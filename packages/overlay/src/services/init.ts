@@ -1,18 +1,12 @@
 // ── Init Service ──
-// Exact port of app.js init() and the surrounding startup sequence.
-//
-// Responsibilities:
-//   - Load overlay settings from localStorage (+ Tauri native store)
-//   - Load i18n locale data
-//   - Configure the API client
-//   - Check server connection
-//   - Load initial board / tasks / meta / config / executors / preferences
-//   - Restore last workspace
-//   - Set up a periodic reconnect loop
-//
-// NOTE: Render-side side-effects (renderTheme, renderLocale, etc.) remain in
-// app.js for now.  This module focuses on the data-loading contract so that
-// the Solid layer can call initApp() and receive a fully-populated store.
+// Application startup sequence:
+// - Load overlay settings from localStorage (+ Tauri native store)
+// - Load i18n locale data
+// - Configure the API client
+// - Check server connection
+// - Load initial board / tasks / meta / config / executors / preferences
+// - Restore last workspace
+// - Set up a periodic reconnect loop
 
 import { configure as configureApi, apiJson } from "./api";
 import {
@@ -47,24 +41,24 @@ import { selectTask } from "./task";
 
 export interface InitOptions {
   /**
-   * Called once the initial connection check succeeds so the caller can
-   * trigger any render-side updates that depend on live data.
-   */
+ * Called once the initial connection check succeeds so the caller can
+ * trigger any render-side updates that depend on live data.
+ */
   onConnected?: () => void | Promise<void>;
   /**
-   * Called on every successful reconnect (after an offline period).
-   */
+ * Called on every successful reconnect (after an offline period).
+ */
   onReconnect?: () => void | Promise<void>;
   /**
-   * Reconnect poll interval in ms.  Defaults to 10 000 (10 s).
-   */
+ * Reconnect poll interval in ms. Defaults to 10 000 (10 s).
+ */
   reconnectInterval?: number;
 }
 
 /**
  * Push current settings into the API client so subsequent fetch calls use
  * the correct server URL and credentials.
- * Mirrors app.js applyOverlaySettings → window.__solidOverlay.configureApi.
+ * Push current settings into the API client.
  */
 function syncApiConfig(): void {
   configureApi({
@@ -77,7 +71,7 @@ function syncApiConfig(): void {
 
 /**
  * Load all initial data that requires a live server connection.
- * Mirrors the Promise.all block inside app.js init().
+ * Load all initial data in parallel after connection is established.
  */
 async function loadInitialData(): Promise<void> {
   await ensureDefaultDirectory().catch(() => false);
@@ -97,15 +91,14 @@ async function loadInitialData(): Promise<void> {
 
 /**
  * Initialise the Solid overlay layer.
- *
  * Call order:
- *   1. Load settings from localStorage
- *   2. Apply settings to API client
- *   3. Load i18n (all supported locales)
- *   4. Apply locale from settings
- *   5. Check server connection
- *   6. If connected: load board + tasks, call onConnected
- *   7. Start periodic reconnect loop
+ * 1. Load settings from localStorage
+ * 2. Apply settings to API client
+ * 3. Load i18n (all supported locales)
+ * 4. Apply locale from settings
+ * 5. Check server connection
+ * 6. If connected: load board + tasks, call onConnected
+ * 7. Start periodic reconnect loop
  */
 export async function initApp(options: InitOptions = {}): Promise<void> {
   const {
@@ -114,7 +107,7 @@ export async function initApp(options: InitOptions = {}): Promise<void> {
     reconnectInterval = 10_000,
   } = options;
 
-  // 1. Load settings from localStorage into the Solid store
+ // 1. Load settings from localStorage into the Solid store
   loadSettings();
 
   const invoke = (window as any).__TAURI__?.core?.invoke as
@@ -133,26 +126,26 @@ export async function initApp(options: InitOptions = {}): Promise<void> {
     }
   }
 
-  // 2. Push settings into the API client (server URL + auth)
+ // 2. Push settings into the API client (server URL + auth)
   syncApiConfig();
 
-  // 3. Load i18n locale bundles
+ // 3. Load i18n locale bundles
   await loadAllLocales();
 
-  // 4. Apply locale from settings
+ // 4. Apply locale from settings
   await setLocale(settingsStore.locale);
 
-  // 5. Check connection
+ // 5. Check connection
   const connected = await checkServerConnection();
 
   if (connected) {
-    // 6. Load initial data
+ // 6. Load initial data
     await loadInitialData();
     await restoreInitialWorkspace();
     await onConnected?.();
   }
 
-  // 7. Start reconnect loop (mirrors app.js state.reconnectTimer)
+ // 7. Start reconnect loop
   stopConnectionMonitor();
   startConnectionMonitor(async () => {
     syncApiConfig();
@@ -184,10 +177,7 @@ export function persistAndSyncSettings(): void {
 /**
  * Load server-side config, provider catalog, provider auth, channel list and
  * prompt entries from the API, then push everything into the Solid stores.
- *
- * Exact port of app.js loadConfigInfo() (lines 11163-11201).
- * DOM-side render calls (populateProviderSelect, renderChannels, etc.) remain
- * owned by app.js; this function only handles the data-layer work.
+ * Pushes config, provider, channel, and prompt data into the Solid stores.
  */
 export async function loadConfigInfo(): Promise<void> {
   try {
@@ -199,7 +189,7 @@ export async function loadConfigInfo(): Promise<void> {
       apiJson("config/prompt").catch(() => []),
     ]);
 
-    // Push into appStore
+ // Push into appStore
     setAppStore({
       config: config ?? null,
       providerCatalog: catalog ?? null,
@@ -208,9 +198,9 @@ export async function loadConfigInfo(): Promise<void> {
       promptEntries: Array.isArray(prompts) ? prompts : [],
     });
 
-    // Unattended: if the server config carries a boolean value, honour it and
-    // persist it to localStorage so it survives a page reload.
-    // Mirrors app.js configUnattended() + syncUnattendedConfig() logic.
+ // Unattended: if the server config carries a boolean value, honour it and
+ // persist it to localStorage so it survives a page reload.
+ // Sync unattended flag from server config to local settings.
     const remoteUnattended = (config as any)?.unattended;
     if (typeof remoteUnattended === "boolean") {
       setSettingsStore("unattended", remoteUnattended);
@@ -226,23 +216,14 @@ export async function loadConfigInfo(): Promise<void> {
 /**
  * Restore the last workspace state (task selection + directory) that was
  * persisted to settings before the overlay was last closed.
- *
  * Returns true when a task was successfully re-selected, false otherwise.
- * Mirrors app.js restoreInitialWorkspace() (lines 11203-11226).
- *
- * NOTE: The full restoration flow (setActiveDirectory, selectTask) still
- * dispatches through app.js.  This wrapper reads from Solid stores so that
- * the Solid layer can make the same decision without reading legacy `state`.
  */
 export async function restoreInitialWorkspace(): Promise<boolean> {
   const { workspaceTaskID, workspaceDirectory, directory: activeDir } =
     settingsStore;
   const tasks = boardStore.tasks;
 
-  // If a workspace selection is already in progress (epoch guard in app.js
-  // hasWorkspaceSelection), skip restoration.  We surface that as a check on
-  // workspaceEpoch > 0 — if the epoch was already bumped the caller is
-  // mid-selection.
+ // Skip if a workspace selection is already in progress (epoch > 0).
   if (settingsStore.workspaceEpoch > 0) return false;
 
   const base = activeDir || "";
@@ -251,9 +232,7 @@ export async function restoreInitialWorkspace(): Promise<boolean> {
   const moved = !!directory && !!base && directory !== base;
 
   if (moved) {
-    // Push directory change into settings store (persist: false equivalent).
-    // The full setActiveDirectory side-effects remain in app.js; we only
-    // reflect the intent here so reactive components see the updated value.
+ // Reflect directory change so reactive components see the updated value.
     setSettingsStore("directory", directory);
     bumpDirectoryEpoch();
   }
@@ -262,14 +241,13 @@ export async function restoreInitialWorkspace(): Promise<boolean> {
     if (boardStore.selectedTaskID !== taskID || !boardStore.board) {
       await selectTask(taskID);
     }
-    const { renderWorkspaceState } = await import("./legacy");
-    renderWorkspaceState();
+ // body.dataset.workspace/connection is updated reactively by main.tsx createEffect.
     bumpWorkspaceEpoch();
     return true;
   }
 
   if (moved) {
-    // Could not find the task — roll back the directory change.
+ // Could not find the task — roll back the directory change.
     setSettingsStore("directory", base);
     bumpDirectoryEpoch();
   }

@@ -30,7 +30,6 @@ const singleFlag = process.argv.includes("--single")
 const allFlag = process.argv.includes("--all")
 const baselineFlag = process.argv.includes("--baseline")
 const binaryOnly = process.argv.includes("--binary-only")
-const onefileFlag = process.argv.includes("--onefile") || process.env.OPENCORVUS_ONEFILE === "1"
 
 const embeddedEnv = (() => {
   const keys = (process.env.OPENCORVUS_EMBED_ENV_KEYS ?? "")
@@ -72,9 +71,6 @@ if (Object.keys(embeddedEnv).length > 0) {
   console.log(`embedding env keys: ${Object.keys(embeddedEnv).join(", ")}`)
 }
 const embeddedEnvDefine = Object.keys(embeddedEnv).length > 0 ? JSON.stringify(embeddedEnv) : "undefined"
-if (onefileFlag) {
-  console.warn("onefile mode: overlay UI will be bundled as sidecar files in dist/*/bin/ui/")
-}
 
 const allTargets: {
   os: string
@@ -147,20 +143,6 @@ const runtimeName = (item: (typeof allTargets)[number]) =>
     .join("-")
 type Target = (typeof allTargets)[number]
 
-async function installOverlay(_item: Target, name: string) {
-  const overlayDir = path.resolve(dir, "../overlay/src")
-  const destDir = path.join(dir, "dist", name, "bin", "ui")
-  const ASSET_EXTS = new Set([".html", ".js", ".css", ".png", ".svg", ".ico", ".json", ".woff", ".woff2"])
-  if (!fs.existsSync(path.join(overlayDir, "index.html"))) {
-    console.log(`  overlay: skipping (no frontend assets in ${overlayDir})`)
-    return
-  }
-  const allFiles = fs.readdirSync(overlayDir).filter((f) => ASSET_EXTS.has(path.extname(f)))
-  await fs.promises.mkdir(destDir, { recursive: true })
-  await Promise.all(allFiles.map((f) => fs.promises.copyFile(path.join(overlayDir, f), path.join(destDir, f))))
-  console.log(`  overlay: installed ${allFiles.length} UI files`)
-}
-
 // Dev and CI builds only need a native binary; full matrix is for release packaging.
 const single = singleFlag || (!allFlag && !Script.release)
 const targets = single
@@ -199,7 +181,7 @@ for (const item of targets) {
     .filter(Boolean)
     .join("-")
   console.log(`building ${name}`)
-  await $`mkdir -p dist/${name}/bin`
+  await $`mkdir -p dist/${name}`
 
   const parserWorker = fs.realpathSync(path.resolve(dir, "./node_modules/@opentui/core/parser.worker.js"))
   const workerPath = "./src/cli/cmd/tui/worker.ts"
@@ -220,7 +202,7 @@ for (const item of targets) {
     autoloadTsconfig: true,
     autoloadPackageJson: true,
     target: name.replace(pkg.name, "bun"),
-    outfile: `dist/${name}/bin/opencorvus`,
+    outfile: `dist/${name}/opencorvus`,
     execArgv: [`--user-agent=opencorvus/${Script.version}`, "--use-system-ca", "--"],
     windows: {},
   }
@@ -243,14 +225,13 @@ for (const item of targets) {
     },
   })
 
-  await $`rm -rf ./dist/${name}/bin/tui`
-  await installOverlay(item, name)
+  await $`rm -rf ./dist/${name}/tui`
   if (binaryOnly) {
-    const files = await fs.promises.readdir(path.join(dir, "dist", name, "bin"))
+    const files = await fs.promises.readdir(path.join(dir, "dist", name))
     await Promise.all(
       files
         .filter((x) => x.endsWith(".map"))
-        .map((x) => fs.promises.rm(path.join(dir, "dist", name, "bin", x), { force: true })),
+        .map((x) => fs.promises.rm(path.join(dir, "dist", name, x), { force: true })),
     )
   }
   await Bun.file(`dist/${name}/package.json`).write(
@@ -266,24 +247,6 @@ for (const item of targets) {
     ),
   )
   binaries[name] = Script.version
-}
-
-if (Script.release) {
-  for (const key of Object.keys(binaries)) {
-    if (key.includes("linux")) {
-      await $`tar -czf ../../${key}.tar.gz *`.cwd(`dist/${key}/bin`)
-    } else {
-      await $`zip -r ../../${key}.zip *`.cwd(`dist/${key}/bin`)
-    }
-  }
-  const files = [
-    ...new Bun.Glob("dist/*.zip").scanSync("."),
-    ...new Bun.Glob("dist/*.tar.gz").scanSync("."),
-  ]
-  if (files.length === 0) {
-    throw new Error("No release archives found in dist/")
-  }
-  await $`gh release upload v${Script.version} ${files} --clobber --repo ${process.env.GH_REPO}`
 }
 
 export { binaries }

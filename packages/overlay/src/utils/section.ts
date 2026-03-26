@@ -1,11 +1,8 @@
 // ── Section phase utilities ──
-// Exact port of syncSectionPhases, clearSectionPhases, markSectionPhase,
-// phaseSections, liveConversationPhase, relatePhase from app.js.
-//
+// phaseSections, liveConversationPhase, relatePhase
 // These functions directly manipulate DOM data-attributes (data-phaseState)
 // on the PRD section elements to drive CSS active/related highlighting.
-//
-// The functions that previously read from the legacy global `state` now
+// The functions that previously read from the `state` now
 // receive their data as parameters so Solid callers can supply Solid store
 // values.
 
@@ -15,7 +12,6 @@ import { phaseFromMessage } from "./message";
 
 // ── Internal: phaseSections ──
 // Returns a map of phase-kind → DOM section node.
-// Mirrors app.js phaseSections.
 
 function phaseSections(): Record<string, HTMLElement | null> {
   const dom = getDomRefs();
@@ -43,7 +39,6 @@ function markSectionPhase(kind: string, value: string): void {
 }
 
 // ── Internal: liveConversationPhase ──
-// Exact port of app.js liveConversationPhase.
 // Scans messages in reverse to find the currently active agent phase.
 
 function liveConversationPhase(messages: any[]): string {
@@ -58,7 +53,7 @@ function liveConversationPhase(messages: any[]): string {
     const incomplete =
       message?.info?.role === "assistant" && !message?.info?.time?.completed;
     if (!running && !incomplete) continue;
-    // Prefer explicit agent tag over keyword matching
+ // Prefer explicit agent tag over keyword matching
     const agent = String(message?.info?.agent || "").trim().toLowerCase();
     if (agent === "spec") return "spec";
     if (agent === "planner") return "plan";
@@ -71,8 +66,7 @@ function liveConversationPhase(messages: any[]): string {
 }
 
 // ── Internal: relatePhase ──
-// Exact port of app.js relatePhase.
-// changesCount: number of file-change entries (app.js state.changes.length equivalent).
+// changesCount: number of file-change entries ( state.changes.length equivalent).
 
 function relatePhase(
   kind: string,
@@ -104,7 +98,6 @@ function relatePhase(
 }
 
 // ── Public: clearSectionPhases ──
-// Exact port of app.js clearSectionPhases.
 // Removes data-phaseState from all PRD section nodes.
 
 export function clearSectionPhases(): void {
@@ -115,13 +108,11 @@ export function clearSectionPhases(): void {
 }
 
 // ── Public: syncSectionPhases ──
-// Exact port of app.js syncSectionPhases.
 // board: board data object (boardStore.board equivalent).
-// changesCount: number of current file diffs (app.js state.changes.length equivalent).
-//
+// changesCount: number of current file diffs ( state.changes.length equivalent).
 // Callers should pass:
-//   board       — boardStore.board
-//   changesCount — changes array length from app store or local state
+// board — boardStore.board
+// changesCount — changes array length from app store or local state
 
 export function syncSectionPhases(board: any, changesCount = 0): void {
   clearSectionPhases();

@@ -1,7 +1,5 @@
 // ── Tool utilities ──
-// Exact port of displayToolIcon, displayToolDetail, toolStatusLabel, stripAnsi,
 // toolNameKey, toolInputCommand, shortRelativePath, relativePathFrom, shortPath
-// from app.js.
 
 import { t } from "./i18n";
 
@@ -10,8 +8,8 @@ import { t } from "./i18n";
 /** Strip ANSI escape sequences (colors, cursor, etc.) from terminal output. */
 export function stripAnsi(str: string): string {
   if (!str) return "";
-  // Based on the strip-ansi npm package regex — covers CSI, OSC, and other escape sequences
-  // eslint-disable-next-line no-control-regex
+ // Based on the strip-ansi npm package regex — covers CSI, OSC, and other escape sequences
+ // eslint-disable-next-line no-control-regex
   return str.replace(
     /[\u001B\u009B][[\]()#;?]*(?:(?:(?:(?:;[-a-zA-Z\d\/#&.:=?%@~_]+)*|[a-zA-Z\d]+(?:;[-a-zA-Z\d\/#&.:=?%@~_]*)*)?\u0007)|(?:(?:\d{1,4}(?:;\d{0,4})*)?[\dA-PR-TZcf-nq-uy=><~]))/g,
     "",
@@ -73,14 +71,14 @@ export function relativePathFrom(base: string, target: string): string {
 }
 
 export function shortPath(p: string): string {
-  // Show only last 2-3 path segments for readability
+ // Show only last 2-3 path segments for readability
   if (!p) return "";
   const parts = p.replace(/\\/g, "/").split("/");
   return parts.length > 3 ? ".../" + parts.slice(-3).join("/") : p;
 }
 
 /** Shorten a path relative to a base directory.
- *  Pass activeDirectory (e.g. boardStore.board?.task?.directory) as `base`. */
+ * Pass activeDirectory (e.g. boardStore.board?.task?.directory) as `base`. */
 export function shortRelativePath(p: string, base = ""): string {
   if (!p) return "";
   const rel = relativePathFrom(base, p);
@@ -105,10 +103,10 @@ export function displayToolIcon(name: string): string {
 // ── Tool detail ──
 
 /** Returns a human-readable detail string for a tool invocation.
- *  @param name       Tool name
- *  @param input      Tool input object (from part.state.input)
- *  @param state      Tool state object (from part.state)
- *  @param base       Active working directory (for path shortening)
+ * @param name Tool name
+ * @param input Tool input object (from part.state.input)
+ * @param state Tool state object (from part.state)
+ * @param base Active working directory (for path shortening)
  */
 export function displayToolDetail(
   name: string,

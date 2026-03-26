@@ -1,9 +1,8 @@
 // ── Board Panel Components ──
-// Solid.js components that mirror the board rendering logic from app.js:
+// Solid.js components that mirror the board rendering logic
 // renderBoard, renderSpec, renderPlan, renderGoals, renderCriteria,
 // renderEvaluation, renderBudget, renderDeliverySection, renderTaskActions,
 // renderInteractions, statusIcon, statusLabel.
-//
 // Data is read from boardStore (store/board.ts); no direct DOM manipulation.
 
 import { createMemo, For, Show, createSignal, onMount, onCleanup } from "solid-js";
@@ -11,6 +10,7 @@ import { boardStore } from "../store/board";
 import { t, tc } from "../utils/i18n";
 import { renderMarkdown } from "../utils/markdown";
 import { stamp } from "../utils/time";
+import { TextPart } from "./TextPart";
 
 // ── Types ──
 
@@ -94,16 +94,24 @@ export function StatusBadge(props: StatusBadgeProps) {
 
 interface SpecPanelProps {
   spec: any;
+  preview?: string;
 }
 
 export function SpecPanel(props: SpecPanelProps) {
+  const content = () => props.spec?.content || props.preview || "";
+  const isPreview = () => !props.spec?.content && !!props.preview;
   return (
     <Show
-      when={props.spec}
+      when={content()}
       fallback={<p class="empty-hint">{t("empty.spec")}</p>}
     >
-      <div class="plan-summary md-content" innerHTML={renderMarkdown(props.spec?.content || "")} />
-      <div class="plan-version">{stamp(props.spec?.time?.created)}</div>
+      <TextPart text={content()} />
+      <Show when={!isPreview()}>
+        <div class="plan-version">{stamp(props.spec?.time?.created)}</div>
+      </Show>
+      <Show when={isPreview()}>
+        <div class="plan-version streaming-indicator">{t("common.generating") || "Generating..."}</div>
+      </Show>
     </Show>
   );
 }
@@ -112,23 +120,28 @@ export function SpecPanel(props: SpecPanelProps) {
 
 interface PlanPanelProps {
   plan: any;
+  preview?: string;
 }
 
 export function PlanPanel(props: PlanPanelProps) {
+  const content = () => props.plan?.summary || props.preview || "";
+  const isPreview = () => !props.plan?.summary && !!props.preview;
   return (
     <Show
-      when={props.plan}
+      when={content()}
       fallback={<p class="empty-hint">{t("empty.plan")}</p>}
     >
-      <div
-        class="plan-summary md-content"
-        innerHTML={renderMarkdown(props.plan?.summary || "")}
-      />
-      <div class="plan-version">
-        {t("plan.version", { version: props.plan?.version })}
-        {" \u00B7 "}
-        {stamp(props.plan?.time?.created)}
-      </div>
+      <TextPart text={content()} />
+      <Show when={!isPreview()}>
+        <div class="plan-version">
+          {t("plan.version", { version: props.plan?.version })}
+          {" \u00B7 "}
+          {stamp(props.plan?.time?.created)}
+        </div>
+      </Show>
+      <Show when={isPreview()}>
+        <div class="plan-version streaming-indicator">{t("common.generating") || "Generating..."}</div>
+      </Show>
     </Show>
   );
 }
@@ -893,7 +906,7 @@ export function InteractionsList(props: InteractionsListProps) {
 
 // ── ExecutorPanel ──
 // Mirrors renderExecutor() — shows the engine bar state (read-only view).
-// Actual executor selection buttons live in legacy DOM; this component
+// Actual executor selection buttons live in ; this component
 // provides a Solid-friendly read-only view of the active executor.
 
 interface ExecutorPanelProps {
@@ -921,7 +934,7 @@ export function ExecutorPanel(props: ExecutorPanelProps) {
 // ── Board (top-level) ──
 // Main board panel that orchestrates all sub-panels.
 // Reads from boardStore; action callbacks are passed via props so that
-// the parent (or legacy bridge) can wire up the actual API calls.
+// the parent (or ) can wire up the actual API calls.
 
 interface BoardProps {
   onRetry?: () => void;
@@ -992,7 +1005,7 @@ export function Board(props: BoardProps) {
     );
   });
 
-  // Badge helpers
+ // Badge helpers
   const goalsBadgeText = createMemo(() => {
     const cards = goalsCards();
     if (cards.length === 0) return "";
@@ -1034,7 +1047,7 @@ export function Board(props: BoardProps) {
         badgeText={spec() ? t("common.active") : ""}
         badgeTone={spec() ? "accent" : ""}
       >
-        <SpecPanel spec={spec()} />
+        <SpecPanel spec={spec()} preview={boardStore.specPreview} />
       </SectionFrame>
 
       <SectionFrame
@@ -1045,7 +1058,7 @@ export function Board(props: BoardProps) {
         badgeText={plan() ? `v${plan()?.version}` : ""}
         badgeTone={plan() ? "accent" : ""}
       >
-        <PlanPanel plan={plan()} />
+        <PlanPanel plan={plan()} preview={boardStore.planPreview} />
       </SectionFrame>
 
       <SectionFrame

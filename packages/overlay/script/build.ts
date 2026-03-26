@@ -25,7 +25,7 @@ const packageName = [
   process.arch,
 ].join("-")
 
-const distServer = path.join(opencorvus, "dist", serverDistName, "bin", serverFile)
+const distServer = path.join(opencorvus, "dist", serverDistName, serverFile)
 const distRoot = path.join(dir, "dist", packageName)
 const packagedOverlay = path.join(distRoot, overlayFile)
 const stagedResources = path.join(tauri, "resources")

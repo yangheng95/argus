@@ -1,17 +1,14 @@
 // ── DOM Utilities ──
-// Exact port of app.js DOM helper functions to TypeScript.
-//
 // Responsibilities:
-//   - jsonAttr: safely serialize a value to a JSON string for use in an
-//     HTML attribute (mirrors app.js jsonAttr, line 10462–10464).
-//   - eventClosest: walk from an event's target to the nearest ancestor
-//     matching a CSS selector (mirrors app.js eventClosest, lines 10466–10472).
-//   - sizeChat: auto-resize the chat textarea to its content, clamped between
-//     CSS-variable-defined min and max heights (mirrors app.js sizeChat,
-//     lines 9164–9171).
-//   - ensureTaskSelection: select the first available task when no task is
-//     currently selected (mirrors app.js ensureTaskSelection, lines 9156–9162).
-//
+// - jsonAttr: safely serialize a value to a JSON string for use in an
+// HTML attribute (
+// - eventClosest: walk from an event's target to the nearest ancestor
+// matching a CSS selector (
+// - sizeChat: auto-resize the chat textarea to its content, clamped between
+// CSS-variable-defined min and max heights (
+// lines 9164–9171).
+// - ensureTaskSelection: select the first available task when no task is
+// currently selected (
 // The functions that operate on the DOM (#chatTextarea, task state) do so via
 // document.getElementById / window globals so that no circular imports are
 // introduced during the Solid migration.
@@ -27,12 +24,9 @@ export { sanitizeDirectoryMode } from "../store/settings";
 
 /**
  * Serialize `value` to a JSON string suitable for embedding in an HTML
- * attribute.  The value is first coerced to a string via String() so that
+ * attribute. The value is first coerced to a string via String() so that
  * primitives (numbers, booleans) and null/undefined all produce predictable
  * output.
- *
- * Mirrors app.js jsonAttr (lines 10462–10464).
- *
  * @example
  * // In a template literal:
  * `<div data-id=${jsonAttr(task.id)}>`
@@ -44,11 +38,8 @@ export function jsonAttr(value: unknown): string {
 /**
  * Return the nearest ancestor of `event.target` that matches `selector`, or
  * `null` if none is found.
- *
  * Handles the case where the event target is not an Element (e.g. a Text node)
  * by falling back to the target's parentElement.
- *
- * Mirrors app.js eventClosest (lines 10466–10472).
  */
 export function eventClosest(
   event: Event,
@@ -63,16 +54,12 @@ export function eventClosest(
 
 /**
  * Resize the chat textarea to fit its current content.
- *
  * The height is set to "auto" first so that scrollHeight reflects the natural
  * content height, then clamped between `--ui-chat-min-height` (default 72 px)
  * and `--ui-chat-max-height` (default 180 px) from the document root's
  * computed style.
- *
  * When a `textarea` argument is provided it is resized directly; otherwise
  * the function queries `#chatTextarea` from the live DOM.
- *
- * Mirrors app.js sizeChat (lines 9164–9171).
  */
 export function sizeChat(textarea?: HTMLTextAreaElement): void {
   const el =
@@ -94,13 +81,10 @@ export function sizeChat(textarea?: HTMLTextAreaElement): void {
 
 /**
  * Ensure that at least one task is selected.
- *
- * If a workspace selection already exists (checked via the legacy
+ * If a workspace selection already exists (checked
  * `hasWorkspaceSelection` window global) this is a no-op and returns `false`.
  * Otherwise the first task in boardStore.tasks is selected and `true` is
- * returned.  Returns `false` if there are no tasks available.
- *
- * Mirrors app.js ensureTaskSelection (lines 9156–9162).
+ * returned. Returns `false` if there are no tasks available.
  */
 export async function ensureTaskSelection(): Promise<boolean> {
   const { hasWorkspaceSelection } = await import("../services/workspace");
@@ -117,15 +101,12 @@ export async function ensureTaskSelection(): Promise<boolean> {
 }
 
 // ── Path Utilities ──
-// Exact port of pathIcon, pathItems, and pathBreadcrumb from app.js
 // (lines 4125–4218).
 
 /**
  * Decompose a file-system path string into an array of label/path objects,
- * one per component.  Handles Windows absolute paths (e.g. `C:\`), Unix
+ * one per component. Handles Windows absolute paths (e.g. `C:\`), Unix
  * absolute paths, and relative paths.
- *
- * Mirrors app.js pathItems (line 4125).
  */
 export function pathItems(value: string): Array<{ label: string; path: string }> {
   const text = String(value || "").trim();
@@ -172,8 +153,6 @@ export function pathItems(value: string): Array<{ label: string; path: string }>
 /**
  * Return an inline SVG string for the given path-action button kind.
  * Supported kinds: "browse" | "new" | "history" | any (returns × close icon).
- *
- * Mirrors app.js pathIcon (line 4156).
  */
 export function pathIcon(kind: string): string {
   if (kind === "browse") {
@@ -200,9 +179,7 @@ export function pathIcon(kind: string): string {
 
 /**
  * Build the HTML string for the directory breadcrumb bar shown in the task
- * header.  Reads the current directory from `settingsStore.directory`.
- *
- * Mirrors app.js pathBreadcrumb (line 4179).
+ * header. Reads the current directory from `settingsStore.directory`.
  */
 export function pathBreadcrumb(value: string): string {
   const browse = escapeHtml(t("cwd.browse"));

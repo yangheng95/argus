@@ -1,5 +1,5 @@
 // ── CodingTab Component ──
-// Solid.js port of the Coding tab from app.js.
+// Solid.js port of the Coding tab
 // Covers: coding state, renderCodingMessages, codingMessageHTML,
 // renderMarkdown, sendCodingMessage, handleCodingEvent, and the
 // mode-toggle / form-submit intercept logic.
@@ -61,11 +61,11 @@ function escapeHtml(text: string): string {
 }
 
 function stripAnsi(text: string): string {
-  // eslint-disable-next-line no-control-regex
+ // eslint-disable-next-line no-control-regex
   return text.replace(/\x1b\[[0-9;]*m/g, "");
 }
 
-// ── renderMarkdown (exact port from app.js) ──
+// ── renderMarkdown (
 // Minimal markdown: fenced code blocks, inline code, bold, newlines.
 function renderMarkdown(text: string): string {
   return escapeHtml(text)
@@ -82,28 +82,43 @@ function renderMarkdown(text: string): string {
 
 export interface CodingTabProps {
   /**
-   * Whether this tab is currently active (visible).
-   * When false the scroll container is hidden.
-   */
+ * Whether this tab is currently active (visible).
+ * When false the scroll container is hidden.
+ */
   active: boolean;
+  /**
+   * Called once on mount with the coding tab's API so the parent can wire
+   * ChatComposer to route messages into this tab when in coding mode.
+   */
+  onReady?: (api: CodingTabAPI) => void;
+}
+
+export interface CodingTabAPI {
+  send: (text: string) => void;
+  stop: () => void;
+  busy: () => boolean;
 }
 
 export function CodingTab(props: CodingTabProps) {
-  // ── State ──
+ // ── State ──
 
   const [sessionID, setSessionID] = createSignal<string | null>(null);
   const [messages, setMessages] = createSignal<CodingMessage[]>([]);
   const [busy, setBusy] = createSignal(false);
-  const [inputText, setInputText] = createSignal("");
 
-  // partID → accumulated text (mirrors coding.textBuffer)
+ // partID → accumulated text (mirrors coding.textBuffer)
   let textBuffer = new Map<string, string>();
   let abortController: AbortController | null = null;
   let scrollRef!: HTMLDivElement;
-  let textareaRef!: HTMLTextAreaElement;
-  let formRef!: HTMLFormElement;
 
-  // ── Scroll helper ──
+  // Expose API to parent so ChatComposer can route messages here
+  props.onReady?.({
+    send: (text: string) => void sendCodingMessage(text),
+    stop: () => abortController?.abort(),
+    busy,
+  });
+
+ // ── Scroll helper ──
 
   function scrollToBottomIfNeeded() {
     if (!scrollRef) return;
@@ -117,14 +132,14 @@ export function CodingTab(props: CodingTabProps) {
     }
   }
 
-  // Scroll when messages change and tab is active
+ // Scroll when messages change and tab is active
   createEffect(() => {
     if (!props.active) return;
     messages(); // track
     scrollToBottomIfNeeded();
   });
 
-  // ── handleCodingEvent (exact port from app.js) ──
+ // ── handleCodingEvent (
 
   function handleCodingEvent(
     msgIndex: number,
@@ -220,14 +235,14 @@ export function CodingTab(props: CodingTabProps) {
     }
   }
 
-  // ── sendCodingMessage (exact port from app.js) ──
+ // ── sendCodingMessage (
 
   async function sendCodingMessage(text: string) {
     if (busy() || !text.trim()) return;
     setBusy(true);
     textBuffer.clear();
 
-    // Add user message + assistant placeholder
+ // Add user message + assistant placeholder
     setMessages((prev) => [
       ...prev,
       { role: "user", text } as CodingUserMessage,
@@ -269,17 +284,17 @@ export function CodingTab(props: CodingTabProps) {
             const event = JSON.parse(line.slice(5).trim());
             handleCodingEvent(assistantIndex, event);
           } catch {
-            // malformed JSON — skip
+ // malformed JSON — skip
           }
         }
       }
-      // Process remaining buffer
+ // Process remaining buffer
       if (buffer.startsWith("data:")) {
         try {
           const event = JSON.parse(buffer.slice(5).trim());
           handleCodingEvent(assistantIndex, event);
         } catch {
-          // malformed JSON — skip
+ // malformed JSON — skip
         }
       }
     } catch (err: any) {
@@ -299,7 +314,7 @@ export function CodingTab(props: CodingTabProps) {
         );
       }
     } finally {
-      // Mark streaming complete
+ // Mark streaming complete
       setMessages((prev) =>
         prev.map((m, i) => {
           if (i !== assistantIndex || m.role !== "assistant") return m;
@@ -315,29 +330,7 @@ export function CodingTab(props: CodingTabProps) {
     abortController?.abort();
   });
 
-  // ── Submit ──
-
-  function handleSubmit(e: SubmitEvent) {
-    e.preventDefault();
-    const text = inputText().trim();
-    if (!text || busy()) return;
-    setInputText("");
-    if (textareaRef) {
-      textareaRef.value = "";
-      textareaRef.style.height = "auto";
-    }
-    void sendCodingMessage(text);
-  }
-
-  function handleKeyDown(e: KeyboardEvent) {
-    if (e.isComposing) return;
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      formRef?.requestSubmit();
-    }
-  }
-
-  // ── Tool-part rendering ──
+ // ── Tool-part rendering ──
 
   function ToolPartView(pProps: { part: CodingToolPart }) {
     const status = () => pProps.part.state?.status ?? "running";
@@ -361,7 +354,7 @@ export function CodingTab(props: CodingTabProps) {
     );
   }
 
-  // ── Message rendering ──
+ // ── Message rendering ──
 
   function UserMessageView(mProps: { msg: CodingUserMessage }) {
     return (
@@ -412,7 +405,7 @@ export function CodingTab(props: CodingTabProps) {
     );
   }
 
-  // ── Render ──
+ // ── Render ──
 
   const isEmpty = createMemo(() => messages().length === 0);
 
@@ -452,67 +445,6 @@ export function CodingTab(props: CodingTabProps) {
         </Show>
       </div>
 
-      {/* Composer */}
-      <form
-        ref={formRef}
-        class="chat-input"
-        onSubmit={handleSubmit}
-        style={{ "flex-shrink": "0" }}
-      >
-        <div class="chat-compose-row">
-          <textarea
-            ref={textareaRef}
-            class="chat-textarea"
-            rows={2}
-            placeholder="Ask the build agent…"
-            disabled={busy()}
-            value={inputText()}
-            onInput={(e) => {
-              setInputText(e.currentTarget.value);
-              e.currentTarget.style.height = "auto";
-              e.currentTarget.style.height = `${Math.min(e.currentTarget.scrollHeight, 180)}px`;
-            }}
-            onKeyDown={handleKeyDown}
-          />
-          <div class="chat-compose-actions">
-            <button
-              class={`chat-send${busy() ? " chat-interrupt" : ""}`}
-              type={busy() ? "button" : "submit"}
-              data-mode={busy() ? "stop" : "send"}
-              disabled={!busy() && !inputText().trim()}
-              onClick={(e) => {
-                if (busy()) {
-                  e.preventDefault();
-                  abortController?.abort();
-                }
-              }}
-            >
-              <span class="chat-send-icon" aria-hidden="true">
-                <Show
-                  when={busy()}
-                  fallback={
-                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                      <path d="M2 8l10-5-3 5 3 5z" fill="currentColor" />
-                    </svg>
-                  }
-                >
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                    <rect
-                      x="4.25"
-                      y="4.25"
-                      width="7.5"
-                      height="7.5"
-                      rx="1.2"
-                      fill="currentColor"
-                    />
-                  </svg>
-                </Show>
-              </span>
-              <span class="chat-send-label">{busy() ? "Stop" : "Send"}</span>
-            </button>
-          </div>
-        </div>
-      </form>
     </div>
   );
 }

@@ -1,15 +1,12 @@
 // ── Task Service ──
-// Exact port of app.js task management logic.
-//
 // Responsibilities:
-//   - Select a task (stop SSE, clear messages, load board + transcript, start SSE)
-//   - Delete a task
-//   - Create a task (via panelMessage)
-//   - Submit a message to the current task (panelMessage stream)
-//   - Retry / replan / cancel a task (via panelMessage)
-//   - Task recovery polling (startTaskRecovery)
-//
-// This module owns no render-side effects.  Callers are responsible for
+// - Select a task (stop SSE, clear messages, load board + transcript, start SSE)
+// - Delete a task
+// - Create a task (via panelMessage)
+// - Submit a message to the current task (panelMessage stream)
+// - Retry / replan / cancel a task (via panelMessage)
+// - Task recovery polling (startTaskRecovery)
+// This module owns no render-side effects. Callers are responsible for
 // driving UI updates through reactive Solid stores.
 
 import { apiJson, apiUrl, apiHeaders } from "./api";
@@ -28,6 +25,7 @@ import {
 } from "../store/board";
 import { clipText } from "../utils/string";
 import { settingsStore } from "../store/settings";
+import { appStore, setAppStore } from "../store/app";
 import { getWorkspaceEpoch } from "./workspace";
 
 // ── Types ──
@@ -68,7 +66,6 @@ export interface SelectTaskOptions {
 
 /**
  * Default chat request timeout: 10 minutes.
- * Mirrors app.js chatRequestTimeoutMs.
  */
 function chatRequestTimeoutMs(): number {
   const overlayTiming = (window as any).__ocOverlayTiming;
@@ -180,10 +177,7 @@ export function panelRequestBody(
 /**
  * Switch to a task: stop SSE, reset message state, load board + transcript,
  * start SSE for the new task.
- *
  * Pass an empty string to deselect all tasks.
- *
- * Mirrors app.js selectTask, delegating SSE/transcript to Solid services.
  */
 export async function selectTask(
   taskID: string,
@@ -191,28 +185,34 @@ export async function selectTask(
 ): Promise<void> {
   const nextTaskID = taskID || "";
 
-  // Guard: skip if already on this task and board is loaded
+ // Guard: skip if already on this task and board is loaded
   if (nextTaskID === boardStore.selectedTaskID && boardStore.board) {
     return;
   }
 
-  // Stop any running SSE stream
+ // Stop any running SSE stream
   stopSSE();
 
-  // Clear board and message state immediately
+ // Clear board and message state immediately
   setBoardStore("board", null);
   if (!options.preserveMessages) {
     clearMessages();
+  }
+  // Reset budget dirty flag so the new task's budget values populate correctly.
+  // Without this, stale budgetDirty=true from a previous task edit would
+  // prevent setBudgetInputs from running inside renderBudget.
+  if (appStore.budgetDirty) {
+    setAppStore("budgetDirty", false);
   }
   setSelectedTaskID(nextTaskID);
   setBoardStore("selectedTaskID", nextTaskID);
 
   if (!nextTaskID) {
-    // Deselecting — nothing further to load
+ // Deselecting — nothing further to load
     return;
   }
 
-  // Load board + transcript in parallel (best-effort; failures are logged)
+ // Load board + transcript in parallel (best-effort; failures are logged)
   await Promise.all([
     loadBoard({ sync: true }).catch((e) =>
       console.error("[selectTask] loadBoard failed:", e),
@@ -222,7 +222,7 @@ export async function selectTask(
     ),
   ]);
 
-  // Start SSE for the newly selected task
+ // Start SSE for the newly selected task
   startSSE(nextTaskID);
 }
 
@@ -231,9 +231,7 @@ export async function selectTask(
 /**
  * Delete a task by ID.
  * Does NOT show a confirmation dialog — callers must confirm before calling.
- *
  * Returns true on success, false on failure.
- * Mirrors app.js deleteTask (without UI dialogs).
  */
 export async function deleteTask(taskID: string): Promise<boolean> {
   if (!taskID) return false;
@@ -256,13 +254,10 @@ export async function deleteTask(taskID: string): Promise<boolean> {
 
 /**
  * Send a message to the current task (or create a new task if none is
- * selected).  Uses the panel/message/stream endpoint.
- *
- * This is a lean version of app.js panelMessage that omits legacy DOM
- * placeholder mutations.  The caller is responsible for pre-inserting
+ * selected). Uses the panel/message/stream endpoint.
+ * This is a lean version of panelMessage that omits
+ * placeholder mutations. The caller is responsible for pre-inserting
  * optimistic messages into the Solid message store if desired.
- *
- * Mirrors app.js panelMessage + panelMessageStream (data layer only).
  */
 export async function submitMessage(
   text: string,
@@ -339,7 +334,7 @@ export async function submitMessage(
             result = ev.result;
           }
         } catch {
-          // malformed SSE event — skip
+ // malformed SSE event — skip
         }
       }
     };
@@ -370,8 +365,6 @@ export async function submitMessage(
 /**
  * Create a new task by submitting the initial message to the panel endpoint.
  * Returns the resolved task_id string, or empty string if not resolved.
- *
- * Mirrors app.js chat form submit handler (data layer only — no DOM side-effects).
  */
 export async function createTask(options: CreateTaskOptions): Promise<string> {
   const { text, attachments = [], metadata = {}, signal } = options;
@@ -389,7 +382,6 @@ export async function createTask(options: CreateTaskOptions): Promise<string> {
 
 /**
  * Retry a failed task, optionally with operator guidance.
- * Mirrors app.js performTaskAction("retry").
  */
 export async function retryTask(
   taskID: string,
@@ -417,7 +409,6 @@ export async function retryTask(
 
 /**
  * Trigger a replan for the given task.
- * Mirrors app.js performTaskAction("replan").
  */
 export async function replanTask(taskID: string): Promise<void> {
   if (!taskID) return;
@@ -438,7 +429,6 @@ export async function replanTask(taskID: string): Promise<void> {
 
 /**
  * Cancel the given task.
- * Mirrors app.js performTaskAction("cancel").
  */
 export async function cancelTask(taskID: string): Promise<void> {
   if (!taskID) return;
@@ -466,7 +456,6 @@ function overlayTiming(name: string, fallback: number, min = 50): number {
 
 /**
  * Maximum time to spend polling for a task to appear after submission.
- * Mirrors app.js taskRecoveryTimeoutMs.
  */
 export function taskRecoveryTimeoutMs(): number {
   return overlayTiming("taskRecoveryTimeoutMs", 10 * 60 * 1000, 1000);
@@ -474,7 +463,6 @@ export function taskRecoveryTimeoutMs(): number {
 
 /**
  * Interval between task-list polls during recovery.
- * Mirrors app.js taskRecoveryPollMs.
  */
 export function taskRecoveryPollMs(): number {
   return overlayTiming("taskRecoveryPollMs", 2000, 50);
@@ -522,11 +510,8 @@ function taskByRequestID(requestID: string, list: any[]): any {
 /**
  * Poll the task list until the pending request appears as a confirmed task,
  * then select it and stop the recovery loop.
- *
- * Mirrors app.js startTaskRecovery (data layer only).
- *
- * @param request  The pending chat request descriptor.
- * @returns  A recovery handle with `stop()` and `promise` (resolves to taskID or "").
+ * @param request The pending chat request descriptor.
+ * @returns A recovery handle with `stop()` and `promise` (resolves to taskID or "").
  */
 export function startTaskRecovery(
   request: TaskRecoveryRequest,
@@ -550,10 +535,10 @@ export function startTaskRecovery(
       Date.now() - started < taskRecoveryTimeoutMs()
     ) {
       if (request.manualAbort) break;
-      // Stop if workspace changed and task hasn't been recovered yet
+ // Stop if workspace changed and task hasn't been recovered yet
       if (
         epochAtStart !== undefined &&
-        // workspaceEpoch comparison: use window fallback for legacy state
+ // workspaceEpoch comparison: use window fallback for
         getWorkspaceEpoch() !== epochAtStart &&
         !request.recoveredTaskID
       ) {
@@ -566,7 +551,7 @@ export function startTaskRecovery(
       const taskID: string = match?.task?.id || "";
 
       if (taskID) {
-        // Mark as recovered before selecting
+ // Mark as recovered before selecting
         request.recoveredTaskID = taskID;
 
         if (!request.timedOut && !request.aborted) {
@@ -574,7 +559,7 @@ export function startTaskRecovery(
           request.controller?.abort();
         }
 
-        // Select the newly confirmed task
+ // Select the newly confirmed task
         await selectTask(taskID, { preserveMessages: true });
 
         recovery.stop();
@@ -592,13 +577,11 @@ export function startTaskRecovery(
 }
 
 // ── Pending task management ──
-// Mirrors app.js pendingTaskKey / rememberPendingTask / forgetPendingTask / syncPendingTasks.
 // These functions manage the client-side list of tasks that have been submitted
 // locally but not yet confirmed by the server.
 
 /**
  * Build the localStorage / state key for a pending task request.
- * Mirrors app.js pendingTaskKey.
  */
 export function pendingTaskKey(requestID: string): string {
   const value = typeof requestID === "string" ? requestID.trim() : "";
@@ -609,7 +592,6 @@ export function pendingTaskKey(requestID: string): string {
  * Add (or refresh) a pending-task placeholder in boardStore.pendingTasks.
  * The placeholder is removed automatically by syncPendingTasks once the server
  * confirms the task.
- * Mirrors app.js rememberPendingTask.
  */
 export function rememberPendingTask(requestID: string, title?: string): void {
   const value = typeof requestID === "string" ? requestID.trim() : "";
@@ -646,7 +628,6 @@ export function rememberPendingTask(requestID: string, title?: string): void {
 /**
  * Remove a pending-task placeholder from boardStore.pendingTasks.
  * Returns true if the placeholder was present and removed, false otherwise.
- * Mirrors app.js forgetPendingTask.
  */
 export function forgetPendingTask(requestID: string): boolean {
   const value = typeof requestID === "string" ? requestID.trim() : "";
@@ -666,7 +647,6 @@ export function forgetPendingTask(requestID: string): boolean {
  * Prune confirmed tasks from boardStore.pendingTasks.
  * Removes any pending placeholder whose requestID now appears in the given
  * confirmed task list (defaults to boardStore.tasks).
- * Mirrors app.js syncPendingTasks.
  */
 export function syncPendingTasks(items: any[] = boardStore.tasks): void {
   if (boardStore.pendingTasks.length === 0) return;

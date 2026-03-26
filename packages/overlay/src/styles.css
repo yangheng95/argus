@@ -916,6 +916,10 @@ a { color: inherit; text-decoration: none; }
   transition: background 100ms, color 100ms, border-color 100ms;
   box-shadow: none;
 }
+.titlebar-btn svg {
+  width: calc(14px * var(--ui-scale));
+  height: calc(14px * var(--ui-scale));
+}
 .titlebar-btn:hover {
   background: rgba(255, 255, 255, 0.12);
   border-color: rgba(255, 255, 255, 0.16);
@@ -4078,6 +4082,20 @@ body[data-theme="light"] .section-badge {
   flex-wrap: wrap;
   min-width: 0;
 }
+.chat-compose-meta-left {
+  display: flex;
+  align-items: center;
+  gap: calc(8px * var(--ui-scale));
+  font-size: var(--ui-font-tiny);
+  color: var(--text-muted);
+}
+.chat-compose-meta-left a {
+  color: var(--accent);
+  text-decoration: none;
+}
+.chat-compose-meta-left a:hover {
+  text-decoration: underline;
+}
 
 .chat-build {
   display: flex;
@@ -6323,6 +6341,222 @@ body[data-theme="light"] .config-close-btn:hover {
 .config-value[data-status="warn"] { color: var(--warn); }
 .config-value[data-status="error"] { color: var(--bad); }
 
+/* ── Config Panel Groups (General, LLM dialog panels) ── */
+
+.general-panel,
+.llm-panel {
+  display: flex;
+  flex-direction: column;
+  gap: calc(20px * var(--ui-scale));
+}
+
+.llm-panel {
+  position: relative;
+}
+
+.config-panel-group {
+  display: flex;
+  flex-direction: column;
+  gap: calc(10px * var(--ui-scale));
+}
+
+.config-panel-group-title {
+  font-size: var(--ui-font-small);
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: 0;
+  padding: 0 calc(2px * var(--ui-scale));
+}
+
+.config-panel-card {
+  display: flex;
+  flex-direction: column;
+  gap: calc(10px * var(--ui-scale));
+  padding: calc(14px * var(--ui-scale)) calc(16px * var(--ui-scale));
+  border: 1px solid var(--border);
+  border-radius: calc(10px * var(--ui-scale));
+  background: var(--subtle-1);
+  transition: border-color 120ms, background 120ms;
+}
+
+.config-panel-card:hover {
+  border-color: var(--border-hover);
+}
+
+.config-panel-card .field-label {
+  text-transform: none;
+  font-size: var(--ui-font-body);
+  font-weight: 500;
+  color: var(--text-soft);
+  letter-spacing: normal;
+}
+
+.config-panel-card .dialog-actions {
+  padding-top: calc(4px * var(--ui-scale));
+}
+
+/* Toggle list (behaviour switches) */
+.config-toggle-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.config-toggle-list-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(12px * var(--ui-scale));
+  padding: calc(8px * var(--ui-scale)) calc(4px * var(--ui-scale));
+  border-bottom: 1px solid var(--divider-soft);
+  transition: background 80ms;
+}
+.config-toggle-list-item:hover {
+  background: var(--subtle-2);
+}
+.config-toggle-list-item:last-child {
+  border-bottom: none;
+  padding-bottom: calc(2px * var(--ui-scale));
+}
+.config-toggle-list-item:first-child {
+  padding-top: calc(2px * var(--ui-scale));
+}
+
+.config-toggle-list-item .toggle-label {
+  flex: 1;
+  font-size: var(--ui-font-body);
+  font-weight: 500;
+  color: var(--text);
+  line-height: 1.3;
+  cursor: default;
+}
+
+.config-toggle-list-item input[type="checkbox"] {
+  width: calc(16px * var(--ui-scale));
+  height: calc(16px * var(--ui-scale));
+  accent-color: var(--accent);
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+/* Opacity slider */
+.opacity-field {
+  gap: calc(6px * var(--ui-scale));
+}
+
+.opacity-field .opacity-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(8px * var(--ui-scale));
+}
+
+.opacity-field .opacity-value {
+  font-size: var(--ui-font-small);
+  font-weight: 600;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+  min-width: calc(32px * var(--ui-scale));
+  text-align: right;
+}
+
+.opacity-field input[type="range"] {
+  width: 100%;
+  height: calc(4px * var(--ui-scale));
+  accent-color: var(--accent);
+  cursor: pointer;
+  margin: calc(4px * var(--ui-scale)) 0;
+}
+
+/* ── LLM Panel (config dialog) ── */
+
+.llm-summary-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(10px * var(--ui-scale));
+  padding: calc(10px * var(--ui-scale)) calc(14px * var(--ui-scale));
+  border: 1px solid var(--border);
+  border-radius: calc(10px * var(--ui-scale));
+  background: var(--subtle-1);
+  min-height: calc(40px * var(--ui-scale));
+  transition: border-color 120ms;
+}
+.llm-summary-row:hover {
+  border-color: var(--border-hover);
+}
+
+.llm-summary {
+  font-size: var(--ui-font-body);
+  font-weight: 500;
+  color: var(--text-strong);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.llm-status {
+  flex-shrink: 0;
+  font-size: var(--ui-font-small);
+  font-weight: 600;
+  padding: calc(3px * var(--ui-scale)) calc(10px * var(--ui-scale));
+  border-radius: calc(9px * var(--ui-scale));
+  line-height: 1.3;
+  background: var(--subtle-3);
+  color: var(--text-soft);
+}
+.llm-status[data-status="active"] { background: rgba(95, 173, 86, 0.15); color: var(--good); }
+.llm-status[data-status="error"] { background: rgba(247, 84, 100, 0.15); color: var(--bad); }
+.llm-status[data-status="warn"] { background: rgba(212, 167, 44, 0.15); color: var(--warn); }
+.llm-status[data-status="ready"] { background: rgba(84, 138, 247, 0.15); color: var(--accent); }
+
+.llm-notice {
+  font-size: var(--ui-font-small);
+  padding: calc(8px * var(--ui-scale)) calc(12px * var(--ui-scale));
+  border-radius: calc(8px * var(--ui-scale));
+  border: 1px solid var(--border);
+  background: var(--subtle-1);
+  color: var(--text-soft);
+  line-height: 1.45;
+  transition: opacity 160ms ease;
+}
+.llm-notice[data-open="false"] { display: none; }
+.llm-notice[data-status="active"] {
+  border-color: rgba(95, 173, 86, 0.3);
+  background: rgba(95, 173, 86, 0.08);
+  color: var(--good);
+}
+.llm-notice[data-status="error"] {
+  border-color: rgba(247, 84, 100, 0.3);
+  background: rgba(247, 84, 100, 0.08);
+  color: var(--bad);
+}
+.llm-notice[data-status="warn"] {
+  border-color: rgba(212, 167, 44, 0.3);
+  background: rgba(212, 167, 44, 0.08);
+  color: var(--warn);
+}
+
+.llm-api-key-summary {
+  font-size: var(--ui-font-small);
+  font-weight: 500;
+  color: var(--good);
+  padding: calc(2px * var(--ui-scale)) 0;
+}
+
+.llm-auth-row {
+  padding-top: calc(4px * var(--ui-scale));
+}
+
+.loading-hint {
+  font-size: var(--ui-font-small);
+  color: var(--text-muted);
+  text-align: center;
+  padding: calc(24px * var(--ui-scale));
+}
+
 /* ── Knowledge: Memory & Preferences ── */
 
 .knowledge-toolbar {
@@ -7215,7 +7449,7 @@ body[data-resizing="true"] * {
   cursor: pointer;
   opacity: 0;
   pointer-events: none;
-  transition: background 80ms, color 80ms, opacity 80ms;
+  transition: background 80ms, color 80ms;
   box-shadow: none;
   overflow: hidden;
   white-space: nowrap;
@@ -7223,9 +7457,17 @@ body[data-resizing="true"] * {
 
 .task-row-mini:hover .task-row-delete,
 .task-row-mini:focus-within .task-row-delete,
+.task-row-mini[data-active="true"] .task-row-delete,
 .task-row-delete[data-confirm="true"] {
   opacity: 1;
   pointer-events: auto;
+}
+
+@media (hover: none), (pointer: coarse) {
+  .task-row-delete {
+    opacity: 1;
+    pointer-events: auto;
+  }
 }
 
 .task-row-delete-icon {

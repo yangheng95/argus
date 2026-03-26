@@ -1,11 +1,17 @@
 // ── Message Store ──
-// Solid reactive store for conversation messages, extracted from legacy app.js.
-// Replaces the window.__solidConversation bridge pattern.
+// Solid reactive store for conversation messages, agent events, and SSE state.
 
 import { createStore, produce, reconcile } from "solid-js/store";
 import { batch } from "solid-js";
-import { apiJson } from "../services/api";
+import { apiJson, apiUrl } from "../services/api";
 import { boardStore } from "../store/board";
+import {
+  appendExecutorEvent as appendExecutorStoreEvent,
+  clearExecutorEvents,
+} from "./executor";
+import { touchReasoningPart as trackReasoningPart } from "./reasoning";
+import { executorEventEntry } from "../utils/executor-events";
+import { syncSectionPhases } from "../utils/section";
 
 // ── Types ──
 
@@ -45,7 +51,7 @@ const [store, setStore] = createStore({
   agentStatus: null as any,
   sseConnected: false,
   conversationUpdatedAt: 0,
-  // ── Chat request / attachments (mirrors state.chatRequest / state.chatAttachments) ──
+ // ── Chat request / attachments (mirrors state.chatRequest / state.chatAttachments) ──
   /** AbortController for the active chat HTTP request; null when idle */
   chatRequest: null as AbortController | null,
   /** File attachments staged for the next chat message */
@@ -264,6 +270,108 @@ export async function syncTask(taskID: string) {
   }
 }
 
+// ── Conversation loading (.ts) ──
+
+let _convLoading: Promise<void> | null = null;
+let _convQueued = false;
+let _execRunID = "";
+let _execFetchedAt = 0;
+
+function touchReasoningPart(part: any): any {
+  if (!part || part.type !== "reasoning") return part;
+  if (typeof part.text !== "string") part.text = "";
+  trackReasoningPart(part);
+  return part;
+}
+
+async function loadExecutorEvents(runID: string): Promise<void> {
+  const now = Date.now();
+  if (_execRunID === runID && now - _execFetchedAt < 3000) {
+    return;
+  }
+  _execRunID = runID;
+  _execFetchedAt = now;
+  const data = await fetch(apiUrl(`run/${encodeURIComponent(runID)}/executor-events`), {
+    headers: { Accept: "application/json" },
+  })
+    .then((res) => (res.ok ? res.json() : []))
+    .catch(() => []);
+  const items = (Array.isArray(data) ? data : [])
+    .map((item) => executorEventEntry(item))
+    .filter(Boolean);
+  clearExecutorEvents();
+  for (const item of items) {
+    appendExecutorStoreEvent(item as any);
+  }
+}
+
+export async function loadConversation(): Promise<void> {
+  if (!boardStore.selectedTaskID) {
+    setMessages([]);
+    return;
+  }
+  if (_convLoading) {
+    _convQueued = true;
+    await _convLoading;
+    return;
+  }
+  const requestTaskID = String(boardStore.selectedTaskID || "");
+  const loading = (async () => {
+    do {
+      _convQueued = false;
+      const taskID = String(boardStore.selectedTaskID || "");
+      if (!taskID) {
+        setMessages([]);
+        return;
+      }
+      const transcript = await fetch(
+        apiUrl(`task/${encodeURIComponent(taskID)}/transcript`),
+        {
+          headers: { Accept: "application/json" },
+        },
+      )
+        .then((res) => (res.ok ? res.json() : []))
+        .catch(() => []);
+      const timeline = await fetch(
+        apiUrl(`control/timeline?taskID=${encodeURIComponent(taskID)}`),
+        {
+          headers: { Accept: "application/json" },
+        },
+      )
+        .then((res) => (res.ok ? res.json() : []))
+        .catch(() => []);
+      if (taskID !== boardStore.selectedTaskID) continue;
+      const merged = mergeLoadedConversationMessages(
+        Array.isArray(timeline) ? timeline : [],
+        Array.isArray(transcript) ? transcript : [],
+      ).map((message: any) => ({
+        ...message,
+        parts: Array.isArray(message?.parts)
+          ? message.parts.map((part: any) => touchReasoningPart(part))
+          : [],
+      }));
+      setMessages(merged);
+      const activeRunID = String(boardStore.board?.task?.activeRunID || "");
+      if (activeRunID) {
+        await loadExecutorEvents(activeRunID);
+      } else {
+        _execRunID = "";
+        _execFetchedAt = 0;
+        clearExecutorEvents();
+      }
+      syncSectionPhases(boardStore.board, boardStore.changes.length);
+    } while (_convQueued && requestTaskID === boardStore.selectedTaskID);
+  })();
+  _convLoading = loading;
+  try {
+    await loading;
+  } finally {
+    if (_convLoading === loading) {
+      _convLoading = null;
+    }
+  }
+}
+
 // ── Apply SSE events ──
 
 export function applyMessageEvent(event: any): boolean {
@@ -385,9 +493,9 @@ export function applyMessageEvent(event: any): boolean {
       return true;
     }
 
-    // text delta
+ // text delta
     if (partIdx < 0) {
-      // Create placeholder part
+ // Create placeholder part
       setStore(
         "messages",
         msgIdx,
@@ -462,9 +570,7 @@ export function clearEventQueue() {
 }
 
 // ── Agent event helpers ──
-// These mirror the mergeAgentEvent / mergeAgentEventList / agentEventEntry
-// logic from legacy app.js so that the Solid path no longer needs to
-// round-trip through window.__solidOverlay.setAgentEvents.
+// Merge and animate agent SSE events for agent card status tracking.
 
 function displayString(value: any): string {
   return typeof value === "string" ? value.trim() : "";
@@ -518,7 +624,7 @@ function nextLiveLength(live: string, target: string): number {
   if (!live) return Math.min(target.length, 1);
   const remaining = target.length - live.length;
   if (remaining <= 0) return target.length;
-  // Avoid a long one-character tail when timers are slightly delayed.
+ // Avoid a long one-character tail when timers are slightly delayed.
   if (remaining <= 4) return target.length;
   return Math.min(target.length, live.length + Math.max(1, Math.ceil(remaining / 2)));
 }
@@ -747,7 +853,7 @@ export function appendAgentEvent(raw: any): void {
   if (target) scheduleAgentLiveText(target as AgentEvent);
 }
 
-// ── Setters for legacy bridge ──
+// ── Setters for ──
 
 export function setAgentEvents(events: any[]) {
   for (const key of agentLiveTimers.keys()) {
@@ -798,7 +904,7 @@ export function abortChatRequest(): void {
     try {
       req.abort();
     } catch (_) {
-      // ignore abort errors
+ // ignore abort errors
     }
   }
   setStore("chatRequest", null);
@@ -815,12 +921,12 @@ export function clearChatAttachments(): void {
 }
 
 // ── Session utilities ──
-// Mirrors app.js currentTaskSessionID / currentSessionID / matchesCurrentSession.
+// ── Session helpers ──
 
 /**
  * Returns the sessionID of the currently selected task, preferring the board
  * task's sessionID and falling back to the task list entry for selectedTaskID.
- * Mirrors app.js currentTaskSessionID.
+ * Returns the sessionID of the currently active task.
  */
 export function currentTaskSessionID(): string {
   const boardSession = boardStore.board?.task?.sessionID;
@@ -837,7 +943,7 @@ export function currentTaskSessionID(): string {
 
 /**
  * Alias for currentTaskSessionID.
- * Mirrors app.js currentSessionID.
+ * Alias for currentTaskSessionID.
  */
 export function currentSessionID(): string {
   return currentTaskSessionID();
@@ -893,17 +999,17 @@ export function clearKnownChildSessions(): void {
 /**
  * Returns true if the given sessionID belongs to the currently selected task
  * (including child/sub-agent sessions).
- * Mirrors app.js matchesCurrentSession.
+ * Check if a sessionID belongs to the current task's session tree.
  */
 export function matchesCurrentSession(sessionID: string): boolean {
   if (!sessionID) return false;
-  // SSE stream is task-scoped (backend filters by taskID). Any sessionID that
-  // arrives belongs to this task — accept and remember it.
+ // SSE stream is task-scoped (backend filters by taskID). Any sessionID that
+ // arrives belongs to this task — accept and remember it.
   if (!store.selectedTaskID) return false;
   const current = currentSessionID();
   if (current && current === sessionID) return true;
   if (_knownChildSessions && _knownChildSessions.has(sessionID)) return true;
-  // Remember this session for fast O(1) lookups on subsequent events.
+ // Remember this session for fast O(1) lookups on subsequent events.
   if (!_knownChildSessions) _knownChildSessions = new Set();
   _knownChildSessions.add(sessionID);
   return true;

@@ -1,20 +1,17 @@
 // ── Tech FX Service ──
-// Exact port of the background "tech atlas" canvas animation from app.js.
-//
 // Exported surface:
-//   startTechFx(canvas)   — attach a canvas and start the animation loop
-//   stopTechFx()          — cancel the animation frame loop
-//   syncTechFx(force?)    — main entry used on resize / visibility change
-//                           (permanently disabled in current build per app.js)
-//
+// startTechFx(canvas) — attach a canvas and start the animation loop
+// stopTechFx() — cancel the animation frame loop
+// syncTechFx(force?) — main entry used on resize / visibility change
+// (permanently disabled in current build per )
 // Internal helpers (also exported for testing / direct use):
-//   createTechPoint(w, h)
-//   rebuildTechFxPoints()
-//   drawTechFx(ts?, staticMode?)
-//   techFxStep(ts)
-//   syncTechFxSize(force?)
-//   refreshTechFxPalette()
-//   clearTechFxCanvas()
+// createTechPoint(w, h)
+// rebuildTechFxPoints()
+// drawTechFx(ts?, staticMode?)
+// techFxStep(ts)
+// syncTechFxSize(force?)
+// refreshTechFxPalette()
+// clearTechFxCanvas()
 
 // ── Types ──
 
@@ -45,7 +42,7 @@ interface TechFxColors {
   warm: string;
 }
 
-// ── Module state (mirrors app.js techFx object) ──
+// ── Module state (
 
 const techFx = {
   colors: {
@@ -96,7 +93,6 @@ function techColor(name: string, fallback: string): string {
 
 /**
  * Refresh the palette from CSS custom properties.
- * Mirrors app.js refreshTechFxPalette().
  */
 export function refreshTechFxPalette(): void {
   techFx.colors = {
@@ -109,7 +105,6 @@ export function refreshTechFxPalette(): void {
 
 /**
  * Create a single random tech point for the given canvas dimensions.
- * Exact port of app.js createTechPoint().
  */
 export function createTechPoint(width: number, height: number): TechPoint {
   return {
@@ -131,7 +126,6 @@ export function createTechPoint(width: number, height: number): TechPoint {
 /**
  * Rebuild the points array based on current canvas dimensions.
  * Respects reduced-motion: uses ~50% of points when enabled.
- * Exact port of app.js rebuildTechFxPoints().
  */
 export function rebuildTechFxPoints(): void {
   const total = clampNumber(
@@ -147,7 +141,6 @@ export function rebuildTechFxPoints(): void {
 
 /**
  * Wrap a 1-D coordinate inside the canvas (with margin).
- * Exact port of app.js wrapTechCoord().
  */
 function wrapTechCoord(value: number, size: number, margin: number): number {
   const span = size + margin * 2;
@@ -158,7 +151,6 @@ function wrapTechCoord(value: number, size: number, margin: number): number {
 /**
  * Synchronise the canvas size with the viewport.
  * Returns true when the canvas was resized (and points were rebuilt).
- * Exact port of app.js syncTechFxSize().
  */
 export function syncTechFxSize(force = false): boolean {
   if (!(canvas instanceof HTMLCanvasElement)) return false;
@@ -201,7 +193,6 @@ export function syncTechFxSize(force = false): boolean {
 /**
  * Draw one frame onto the canvas.
  * When staticMode is true the clock is frozen at 0 (no animation drift).
- * Exact port of app.js drawTechFx().
  */
 export function drawTechFx(ts = performance.now(), staticMode = false): void {
   if (!techFx.ctx || !techFx.width || !techFx.height) return;
@@ -242,7 +233,7 @@ export function drawTechFx(ts = performance.now(), staticMode = false): void {
     const r = point.r * pulse;
     const color = point.warm ? techFx.colors.warm : techFx.colors.glow;
 
-    // Outer diffuse halo
+ // Outer diffuse halo
     ctx.save();
     ctx.beginPath();
     ctx.fillStyle = color;
@@ -253,7 +244,7 @@ export function drawTechFx(ts = performance.now(), staticMode = false): void {
     ctx.fill();
     ctx.restore();
 
-    // Soft inner core
+ // Soft inner core
     ctx.save();
     ctx.beginPath();
     ctx.fillStyle = techFx.colors.soft;
@@ -268,7 +259,6 @@ export function drawTechFx(ts = performance.now(), staticMode = false): void {
 
 /**
  * Single rAF step — calls drawTechFx then schedules the next frame.
- * Exact port of app.js techFxStep().
  */
 export function techFxStep(ts: number): void {
   if (!techFx.running) return;
@@ -278,7 +268,6 @@ export function techFxStep(ts: number): void {
 
 /**
  * Clear the canvas and reset all tech-fx state.
- * Exact port of app.js clearTechFxCanvas().
  */
 export function clearTechFxCanvas(): void {
   if (!(canvas instanceof HTMLCanvasElement)) return;
@@ -299,7 +288,6 @@ export function clearTechFxCanvas(): void {
 /**
  * Stop the animation loop (cancel pending rAF).
  * Does NOT clear the canvas — use clearTechFxCanvas() for that.
- * Exact port of app.js stopTechFx().
  */
 export function stopTechFx(): void {
   if (techFx.frame) cancelAnimationFrame(techFx.frame);
@@ -319,24 +307,21 @@ export function startTechFx(canvasEl: HTMLCanvasElement): void {
 
 /**
  * Main synchronisation entry-point.
- *
  * NOTE: In the current build the effect is **permanently disabled** (matches
- * app.js `if (true) { clearTechFxCanvas(); return; }` guard).  The full
+ * `if (true) { clearTechFxCanvas(); return; }` guard). The full
  * animation path is implemented and can be re-enabled by removing that guard.
- *
- * Exact port of app.js syncTechFx().
  */
 export function syncTechFx(force = false): void {
   if (!(canvas instanceof HTMLCanvasElement)) return;
-  // Tech FX permanently disabled (matches app.js decision)
+ // Tech FX permanently disabled (matches decision)
   clearTechFxCanvas();
   return;
 
-  // The code below is unreachable for now but is preserved verbatim from
-  // app.js so it can be re-enabled by removing the early return above.
-  // @ts-ignore — unreachable
+ // The code below is unreachable for now but is preserved verbatim from
+ // so it can be re-enabled by removing the early return above.
+ // @ts-ignore — unreachable
   syncTechFxSize(force);
-  // @ts-ignore — unreachable
+ // @ts-ignore — unreachable
   refreshTechFxPalette();
   if (document.visibilityState === "hidden" || reduceMotion()) {
     stopTechFx();

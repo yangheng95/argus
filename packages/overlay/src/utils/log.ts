@@ -1,5 +1,4 @@
 // ── AppLog ──
-// Exact port of the AppLog IIFE from app.js (lines 572–648).
 // Integrates with store/app.ts appendLog for reactive log display,
 // and flushes entries to the server via services/api.ts.
 
@@ -99,8 +98,8 @@ function log(level: LogLevel, service: string, message: string, extra?: unknown)
   const entry = add(level, service, message, extra);
   persist(entry);
 
-  // Mirror entry into the Solid reactive store (store/app.ts) so the log
-  // viewer component can display overlay log entries reactively.
+ // Mirror entry into the Solid reactive store (store/app.ts) so the log
+ // viewer component can display overlay log entries reactively.
   const storeEntry: LogEntry = {
     ts: entry.ts,
     level: entry.level,
@@ -153,14 +152,11 @@ export const AppLog = {
 };
 
 // ── Log viewer helpers ──
-// Exact port of server-log parsing, log-detail utilities, and log-viewer
-// aggregation functions from app.js (lines 10809–11042).
-//
-// These functions are used by both the legacy app.js render path and by any
+// aggregation functions .
+// These functions are used by both the path and by any
 // future Solid log-viewer component.
 
 // ── stringifyLogValue ──
-// Mirrors app.js stringifyLogValue() (line 10810).
 
 export function stringifyLogValue(value: unknown, space = 0): string {
   if (typeof value === "string") return value;
@@ -172,7 +168,6 @@ export function stringifyLogValue(value: unknown, space = 0): string {
 }
 
 // ── fmtElapsed ──
-// Mirrors app.js fmtElapsed() (line 11033).
 // Format a millisecond duration as a short human-readable string.
 
 export function fmtElapsed(ms: number): string {
@@ -183,7 +178,6 @@ export function fmtElapsed(ms: number): string {
 }
 
 // ── parseServerLogLine ──
-// Mirrors app.js parseServerLogLine() (line 10905) and its helpers.
 // Parse a single raw server-log line into a structured log entry object.
 
 interface ServerLogEntry {
@@ -308,7 +302,6 @@ export function parseServerLogLine(raw: string): ServerLogEntry {
 }
 
 // ── logDetailFields ──
-// Mirrors app.js logDetailFields() (line 10915).
 // Strip the "service" key from a fields object (it is displayed separately).
 
 export function logDetailFields(
@@ -323,7 +316,6 @@ export function logDetailFields(
 }
 
 // ── ndjsonEventTypeLabel ──
-// Mirrors app.js ndjsonEventTypeLabel() (line 11040).
 // Format a dotted event-type string for display.
 
 export function ndjsonEventTypeLabel(type: string): string {
@@ -333,14 +325,12 @@ export function ndjsonEventTypeLabel(type: string): string {
 }
 
 // ── logViewerEntries ──
-// Mirrors app.js logViewerEntries() (line 10947).
 // Aggregate overlay client logs, server log lines, and pipeline ndjson events
 // into a unified sorted array for the log viewer.
-//
 // Parameters are accepted explicitly so that this function can be unit-tested
-// without depending on app.js module-level state:
-//   serverLogLines — raw server-log text lines (from _serverLogLines in app.js)
-//   ndjsonEvents   — ndjson event objects (from state.ndjsonEvents in app.js)
+// without depending on module-level state:
+// serverLogLines — raw server-log text lines (from _serverLogLines
+// ndjsonEvents — ndjson event objects (from state.ndjsonEvents
 
 export interface LogViewerEntry {
   level: string;
@@ -364,7 +354,7 @@ export function logViewerEntries(
   const minLevel: Record<string, number> = { debug: 0, info: 1, warn: 2, error: 3 };
   const threshold = minLevel[AppLog.filterLevel] || 0;
 
-  // Overlay client logs
+ // Overlay client logs
   const clientLines: LogViewerEntry[] = AppLog.filtered().map((e) => ({
     level: e.level,
     ts: e.ts,
@@ -380,13 +370,13 @@ export function logViewerEntries(
     source: "overlay",
   }));
 
-  // Server logs
+ // Server logs
   const serverLines: LogViewerEntry[] = serverLogLines
     .map(parseServerLogLine)
     .filter((e) => (minLevel[e.level] || 0) >= threshold)
     .map((e) => ({ ...e, source: "server" }));
 
-  // Pipeline execution events → unified log entries
+ // Pipeline execution events → unified log entries
   const ndjsonLines: LogViewerEntry[] = (ndjsonEvents || [])
     .filter((ev: any) => ev.kind !== "tool_delta")
     .map((ev: any): LogViewerEntry | null => {
@@ -429,7 +419,6 @@ export function logViewerEntries(
 }
 
 // ── formatLogViewerText ──
-// Mirrors app.js formatLogViewerText() (line 10991).
 // Serialise a list of log viewer entries to a plain-text string for copying.
 
 export function formatLogViewerText(entries: LogViewerEntry[]): string {

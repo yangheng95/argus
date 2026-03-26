@@ -1,8 +1,5 @@
 // ── Reasoning Visibility Store ──
-// Exact port of the Reasoning Visibility section from app.js (lines 211–286).
 // Manages per-part auto-hide timers and visibility state.
-//
-// In app.js the visibility changes propagate by mutating
 // state.conversationUpdatedAt and calling renderConversation(). In the Solid
 // world we expose a reactive `reasoningRevision` signal instead: Solid
 // components that render reasoning parts should read this signal so they
@@ -19,7 +16,7 @@ interface ReasoningEntry {
 // ── Internal state ──
 
 // Visibility map: key → { hidden }
-// Using plain Maps (not reactive) mirrors app.js; reactivity is provided
+// Using plain Maps (not reactive)
 // by the reasoningRevision signal below.
 const reasoningVisibility = new Map<string, ReasoningEntry>();
 const reasoningHideTimers = new Map<string, ReturnType<typeof setTimeout>>();

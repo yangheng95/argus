@@ -1,13 +1,14 @@
 // ── MemoryPanel Component ──
 // Knowledge/memory panel that lists memory files for the current task, supports
 // search, shows detail dialogs, and allows deletion.
-// Ports renderMemory (app.js 10549–10582), loadMemory (10487–10509),
+// Ports renderMemory ( 10549–10582), loadMemory (10487–10509),
 // searchMemory (10511–10540), openMemoryDetail (10586–10610), deleteMemory
 // (10612–10621), and knowledgeScopeLabel (10542–10547).
 
 import {
   createSignal,
   createMemo,
+  createEffect,
   For,
   Show,
 } from "solid-js";
@@ -103,92 +104,92 @@ function MemoryDetailDialog(props: MemoryDetailDialogProps) {
       dialogRef?.close();
       props.onDeleted();
     } catch {
-      // Silently ignore; the list will refresh on close.
+ // Silently ignore; the list will refresh on close.
     }
   };
 
-  // Load on mount
+ // Load on mount
   load();
 
   return (
     <dialog
-      class="dialog memory-detail-dialog"
+      class="dialog"
       ref={(el) => {
         dialogRef = el;
-        el?.showModal();
+        if (el) queueMicrotask(() => el.showModal());
       }}
       onClose={props.onClose}
     >
-      <div class="dialog-header">
-        <span class="dialog-title" id="memoryDialogTitle">
-          {loading()
-            ? t("common.loading")
-            : errorMsg()
-              ? t("common.error")
-              : (detail()?.title ?? "")}
-        </span>
-        <button
-          type="button"
-          class="btn btn-ghost mini"
-          id="btnCloseMemory"
-          onClick={() => {
-            dialogRef?.close();
-            props.onClose();
+      <div class="dialog-form">
+        <div class="dialog-head">
+          <span class="dialog-title">
+            {loading()
+              ? t("common.loading")
+              : errorMsg()
+                ? t("common.error")
+                : (detail()?.title ?? "")}
+          </span>
+        </div>
+
+        <Show when={!loading() && !errorMsg() && detail() !== null}>
+          {(_) => {
+            const d = detail()!;
+            return (
+              <>
+                <div class="memory-detail-meta">
+                  <span
+                    class="knowledge-scope"
+                    data-scope={d.scope}
+                  >
+                    {knowledgeScopeLabel(d.scope)}
+                  </span>
+                  <span>{t("memory.source", { value: d.source })}</span>
+                  <span>
+                    {t("memory.created", {
+                      value: formatDateTime(d.timeCreated),
+                    })}
+                  </span>
+                  <span>
+                    {t("memory.updated", {
+                      value: formatDateTime(d.timeUpdated),
+                    })}
+                  </span>
+                </div>
+                <pre class="memory-detail-content">
+                  {d.content || t("memory.empty_value")}
+                </pre>
+              </>
+            );
           }}
-        >
-          {t("common.close")}
-        </button>
-      </div>
+        </Show>
 
-      <Show when={!loading() && !errorMsg() && detail() !== null}>
-        {(_) => {
-          const d = detail()!;
-          return (
-            <>
-              <div class="memory-dialog-meta" id="memoryDialogMeta">
-                <span
-                  class="knowledge-scope"
-                  data-scope={d.scope}
-                >
-                  {knowledgeScopeLabel(d.scope)}
-                </span>
-                <span>{t("memory.source", { value: d.source })}</span>
-                <span>
-                  {t("memory.created", {
-                    value: formatDateTime(d.timeCreated),
-                  })}
-                </span>
-                <span>
-                  {t("memory.updated", {
-                    value: formatDateTime(d.timeUpdated),
-                  })}
-                </span>
-              </div>
-              <pre class="memory-dialog-content" id="memoryDialogContent">
-                {d.content || t("memory.empty_value")}
-              </pre>
-            </>
-          );
-        }}
-      </Show>
+        <Show when={!loading() && !!errorMsg()}>
+          <div class="config-status-box" data-status="error">{errorMsg()}</div>
+        </Show>
 
-      <Show when={!loading() && !!errorMsg()}>
-        <p class="memory-dialog-content">{errorMsg()}</p>
-      </Show>
+        <Show when={loading()}>
+          <div class="loading-hint">{t("common.loading")}</div>
+        </Show>
 
-      <Show when={loading()}>
-        <p class="memory-dialog-content">{t("common.loading")}</p>
-      </Show>
-
-      <div class="dialog-footer">
-        <button
-          type="button"
-          id="btnDeleteMemory"
-          class="btn btn-ghost mini danger"
-          onClick={() => void handleDelete()}
-        >
-          {t("common.delete")}
-        </button>
+        <div class="dialog-actions">
+          <button
+            type="button"
+            class="btn btn-ghost mini danger"
+            onClick={() => void handleDelete()}
+          >
+            {t("common.delete")}
+          </button>
+          <button
+            type="button"
+            class="btn btn-ghost"
+            onClick={() => {
+              dialogRef?.close();
+              props.onClose();
+            }}
+          >
+            {t("common.close")}
+          </button>
+        </div>
       </div>
     </dialog>
   );
@@ -208,7 +209,7 @@ export function MemoryPanel(props: MemoryPanelProps) {
   const [loading, setLoading] = createSignal(false);
   const [detailFileId, setDetailFileId] = createSignal<string | null>(null);
 
-  // ── Data loading ──
+ // ── Data loading ──
 
   const loadMemory = async () => {
     if (!props.taskID) {
@@ -259,7 +260,7 @@ export function MemoryPanel(props: MemoryPanelProps) {
       setFiles(mapped);
       setSearchMode(true);
     } catch {
-      // Leave current results in place on search error
+ // Leave current results in place on search error
     } finally {
       setLoading(false);
     }
@@ -283,12 +284,15 @@ export function MemoryPanel(props: MemoryPanelProps) {
       );
       await loadMemory();
     } catch {
-      // Silently ignore
+ // Silently ignore
     }
   };
 
-  // Load on mount and whenever taskID changes
-  loadMemory();
+  // Reload when taskID changes (reactive)
+  createEffect(() => {
+    const _ = props.taskID;
+    void loadMemory();
+  });
 
   const badge = createMemo(() => {
     const n = files().length;
@@ -302,36 +306,13 @@ export function MemoryPanel(props: MemoryPanelProps) {
   });
 
   return (
-    <div class="memory-panel">
-      {/* Header with badge and actions */}
-      <div class="panel-header">
-        <span class="panel-title">
-          {t("memory.title")}
-          <Show when={badge()}>
-            <span id="memoryBadge" class="panel-badge">
-              {badge()}
-            </span>
-          </Show>
-        </span>
-        <div class="panel-header-actions">
-          <button
-            type="button"
-            id="btnMemoryRefresh"
-            class="btn btn-ghost mini"
-            onClick={handleRefresh}
-            disabled={loading()}
-          >
-            {t("common.refresh")}
-          </button>
-        </div>
-      </div>
-
-      {/* Search bar */}
-      <form class="memory-search-row" onSubmit={handleSearchSubmit}>
+    <>
+      {/* Search toolbar */}
+      <div class="knowledge-toolbar">
         <input
           id="memorySearch"
-          type="search"
-          class="input input-sm"
+          type="text"
+          class="knowledge-search"
           placeholder={t("memory.search_placeholder")}
           value={searchQuery()}
           onInput={(e) => setSearchQuery((e.target as HTMLInputElement).value)}
@@ -343,14 +324,24 @@ export function MemoryPanel(props: MemoryPanelProps) {
           }}
         />
         <button
-          type="submit"
+          type="button"
           id="btnMemorySearch"
           class="btn btn-ghost mini"
           disabled={loading()}
+          onClick={handleSearchSubmit}
         >
           {t("common.search")}
         </button>
-      </form>
+        <button
+          type="button"
+          id="btnMemoryRefresh"
+          class="btn btn-ghost mini"
+          onClick={handleRefresh}
+          disabled={loading()}
+        >
+          {t("common.refresh")}
+        </button>
+      </div>
 
       {/* List */}
       <div id="memoryList" class="knowledge-list">
@@ -425,6 +416,6 @@ export function MemoryPanel(props: MemoryPanelProps) {
           }}
         />
       </Show>
-    </div>
+    </>
   );
 }

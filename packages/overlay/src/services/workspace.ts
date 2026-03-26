@@ -1,16 +1,13 @@
 // ── Workspace Service ──
-// Exact port of workspace.js createOverlayWorkspace factory to TypeScript.
-//
 // Responsibilities:
-//   - Manage the active workspace directory (custom vs. temp vs. task-scoped)
-//   - Compute the current workspace mode ("offline" | "task" | "empty")
-//   - Enter / clear workspace contexts (empty workspace, task workspace)
-//   - Clear board/executor runtime state when switching workspaces
-//   - Clear project-scope data (tasks, path, vcs, memory files, preferences)
-//   - Directory pick / browse / create (Tauri-backed)
-//   - Recent directories persistence (localStorage)
-//   - Workspace memory (rememberWorkspace / workspaceRestoreDirectory)
-//
+// - Manage the active workspace directory (custom vs. temp vs. task-scoped)
+// - Compute the current workspace mode ("offline" | "task" | "empty")
+// - Enter / clear workspace contexts (empty workspace, task workspace)
+// - Clear board/executor runtime state when switching workspaces
+// - Clear project-scope data (tasks, path, vcs, memory files, preferences)
+// - Directory pick / browse / create (Tauri-backed)
+// - Recent directories persistence (localStorage)
+// - Workspace memory (rememberWorkspace / workspaceRestoreDirectory)
 // This module operates on Solid stores (settingsStore, boardStore) and
 // delegates timers / loading to callers via callbacks.
 
@@ -43,12 +40,12 @@ export interface EnterTaskWorkspaceOptions extends ClearWorkspaceRuntimeOptions 
   directory?: string;
 }
 
-// ── Module-level counters (mirror app.js state.workspaceEpoch / state.tasksSeq) ──
+// ── Module-level counters (mirror state.workspaceEpoch / state.tasksSeq) ──
 
 let workspaceEpoch = 0;
 let tasksSeq = 0;
 
-// ── Internal: schedule-board timer (mirrors app.js state.boardKick / state.tasksKick) ──
+// ── Internal: schedule-board timer (
 // These timers are held here so clearWorkspaceRuntime can cancel them.
 
 let boardKickTimer: ReturnType<typeof setTimeout> | null = null;
@@ -74,17 +71,14 @@ export function getTasksKickTimer(): ReturnType<typeof setTimeout> | null {
 
 /**
  * Set the active workspace directory.
- *
- * @param value   The new directory path (trimmed).
- * @param source  How the directory was set: "manual" (user-driven) or
- *                "task" (task-scoped) or "auto" (restored). Defaults to
- *                "manual".
- *
+ * @param value The new directory path (trimmed).
+ * @param source How the directory was set: "manual" (user-driven) or
+ * "task" (task-scoped) or "auto" (restored). Defaults to
+ * "manual".
  * When source is "manual":
- *   - Persists the directory as the saved directory.
- *   - Clears the temp directory when a non-empty value is provided.
- *   - Updates directoryMode to "custom" or "temp".
- *
+ * - Persists the directory as the saved directory.
+ * - Clears the temp directory when a non-empty value is provided.
+ * - Updates directoryMode to "custom" or "temp".
  * Mirrors workspace.js setWorkspaceDirectory.
  */
 export function setWorkspaceDirectory(
@@ -111,9 +105,8 @@ export function setWorkspaceDirectory(
 
 /**
  * Restore the workspace directory from the persisted "saved" or "temp"
- * directory.  Returns the restored path (or the current directory if neither
+ * directory. Returns the restored path (or the current directory if neither
  * is available).
- *
  * Mirrors workspace.js restoreWorkspaceDirectory.
  */
 export function restoreWorkspaceDirectory(): string {
@@ -128,8 +121,8 @@ export function restoreWorkspaceDirectory(): string {
       ? settingsStore.tempDirectory.trim()
       : "";
 
-  // Resolve: prefer the persisted baseline directory, then the temp directory,
-  // then fall back to the current active directory.
+ // Resolve: prefer the persisted baseline directory, then the temp directory,
+ // then fall back to the current active directory.
   const next =
     saved ||
     temp ||
@@ -148,22 +141,20 @@ export function restoreWorkspaceDirectory(): string {
 
 /**
  * Compute the current workspace mode based on reactive store state.
- *
- * - "offline"  — not connected to the server
- * - "task"     — a task is selected
- * - "empty"    — connected but no task selected
- *
+ * - "offline" — not connected to the server
+ * - "task" — a task is selected
+ * - "empty" — connected but no task selected
  * Mirrors workspace.js workspaceMode.
  */
 export function workspaceMode(): WorkspaceMode {
   if (!boardStore.selectedTaskID && !boardStore.board) {
-    // Check app connection state — treat no-board as offline proxy
-    // Real connected flag lives in appStore, but workspace.js keyed off
-    // state.connected.  We approximate using boardStore + presence of data.
-    // Callers that need a precise offline check should read appStore.connected
-    // directly.
+ // Check app connection state — treat no-board as offline proxy
+ // Real connected flag lives in appStore, but workspace.js keyed off
+ // state.connected. We approximate using boardStore + presence of data.
+ // Callers that need a precise offline check should read appStore.connected
+ // directly.
   }
-  // Use the boardStore selectedTaskID as the primary signal
+ // Use the boardStore selectedTaskID as the primary signal
   if (boardStore.selectedTaskID) return "task";
   return "empty";
 }
@@ -204,12 +195,9 @@ export function enterSessionWorkspace(): never {
 /**
  * Clear all volatile runtime state associated with the current workspace
  * (board, messages, executor events, pending timers).
- *
  * Increments workspaceEpoch so any in-flight requests can detect staleness.
- *
- * @param options.preserveChatRequest  When true, skips cancelling any
- *                                     in-flight chat/stream request.
- *
+ * @param options.preserveChatRequest When true, skips cancelling any
+ * in-flight chat/stream request.
  * Mirrors workspace.js clearWorkspaceRuntime.
  */
 export function clearWorkspaceRuntime(
@@ -217,7 +205,7 @@ export function clearWorkspaceRuntime(
 ): void {
   workspaceEpoch += 1;
 
-  // Cancel pending board/task schedule timers
+ // Cancel pending board/task schedule timers
   if (boardKickTimer !== null) {
     clearTimeout(boardKickTimer);
     boardKickTimer = null;
@@ -229,16 +217,16 @@ export function clearWorkspaceRuntime(
 
   tasksSeq += 1;
 
-  // Clear Solid board store
+ // Clear Solid board store
   setBoardStore({
     board: null,
     loading: false,
   });
 
-  // Clear messages store
+ // Clear messages store
   clearMessages();
 
-  // Clear executor events store
+ // Clear executor events store
   clearExecutorEvents();
 }
 
@@ -247,29 +235,25 @@ export function clearWorkspaceRuntime(
 /**
  * Clear project-scoped state that is tied to a directory/connection rather
  * than a single task.
- *
  * Mirrors workspace.js clearProjectScopeData.
- *
  * NOTE: tasks, globalTasks, path, vcs, memoryFiles, memorySearchMode, and
- * preferences live in app.js state and/or the boardStore.  Only the
+ * preferences live. Only the
  * boardStore tasks field is managed here; the remaining fields are owned by
- * app.js for now.
+ * for now.
  */
 export function clearProjectScopeData(): void {
   setBoardStore("tasks", []);
-  // path, vcs, memoryFiles, memorySearchMode, preferences remain in app.js
-  // state and are not yet migrated to a Solid store.
+ // path, vcs, memoryFiles, memorySearchMode, preferences remain
+ // state and are not yet migrated to a Solid store.
 }
 
 // ── enterEmptyWorkspace ──
 
 /**
  * Switch to the "empty" workspace (no task selected).
- *
  * - Clears the selectedTaskID.
  * - Optionally restores the saved/temp directory.
  * - Clears all runtime state.
- *
  * Mirrors workspace.js enterEmptyWorkspace.
  */
 export function enterEmptyWorkspace(
@@ -288,11 +272,9 @@ export function enterEmptyWorkspace(
 
 /**
  * Switch to a specific task workspace.
- *
  * - Optionally sets the workspace directory with source "task".
  * - Sets the selectedTaskID.
  * - Clears all runtime state.
- *
  * Mirrors workspace.js enterTaskWorkspace.
  */
 export function enterTaskWorkspace(
@@ -345,7 +327,7 @@ async function currentTauriWindow(): Promise<any | null> {
     try {
       return getCurrent() as any;
     } catch {
-      // Not running inside Tauri
+ // Not running inside Tauri
     }
   }
   return null;
@@ -353,7 +335,7 @@ async function currentTauriWindow(): Promise<any | null> {
 
 /**
  * Temporarily un-pin the always-on-top window, run `run()`, then restore the
- * pin state.  Mirrors app.js withUnpinned().
+ * pin state.
  */
 async function withUnpinned<T>(run: () => Promise<T>): Promise<T> {
   const win = await currentTauriWindow();
@@ -415,8 +397,8 @@ interface NativePromptOptions {
 
 /**
  * Show an application-level notification dialog.
- * Delegates to the legacy app.js `showAppDialog` via the `window` global to
- * avoid a circular import during the migration period.
+ * Delegates to `showAppDialog` via the `window` global to
+ * avoid a circular import during the.
  */
 async function nativeMessage(message: string, options?: NativeMessageOptions): Promise<void> {
   const showAppDialog = (window as any).showAppDialog;
@@ -433,7 +415,7 @@ async function nativeMessage(message: string, options?: NativeMessageOptions): P
 /**
  * Show an input prompt dialog.
  * Returns the trimmed string entered by the user, or null if cancelled.
- * Delegates to legacy app.js `showAppDialog`.
+ * Uses showAppDialog window global.
  */
 async function nativePrompt(
   message: string,
@@ -458,7 +440,6 @@ async function nativePrompt(
 
 /**
  * Open a local path or URL using native OS facilities.
- * Mirrors app.js nativeOpen().
  */
 async function nativeOpen(target: string): Promise<boolean> {
   if (!target) return false;
@@ -491,7 +472,6 @@ async function nativeOpen(target: string): Promise<boolean> {
 /**
  * Ask the Tauri backend to create a new temporary directory.
  * Returns the path, or an empty string on failure.
- * Mirrors app.js createTempDirectory().
  */
 export async function createTempDirectory(): Promise<string> {
   const created = await tauriInvoke("overlay_create_temp_dir").catch(() => undefined);
@@ -503,7 +483,6 @@ export async function createTempDirectory(): Promise<string> {
 /**
  * Open a native directory picker, temporarily un-pinning the window.
  * Returns the selected path, or an empty string when cancelled.
- * Mirrors app.js pickDirectory().
  */
 export async function pickDirectory(start?: string): Promise<string> {
   const selected = await withUnpinned(() =>
@@ -515,7 +494,6 @@ export async function pickDirectory(start?: string): Promise<string> {
 /**
  * Open a native multi-file picker, temporarily un-pinning the window.
  * Returns the array of selected paths.
- * Mirrors app.js pickFiles().
  */
 export async function pickFiles(start?: string): Promise<string[]> {
   const result = await withUnpinned(() =>
@@ -528,7 +506,6 @@ export async function pickFiles(start?: string): Promise<string[]> {
 
 /**
  * Returns the currently active working directory from the settings store.
- * Mirrors app.js activeDirectory().
  */
 export function activeDirectory(): string {
   return settingsStore.directory;
@@ -537,7 +514,6 @@ export function activeDirectory(): string {
 /**
  * Returns "custom" when `directory` is non-empty, otherwise returns the
  * default directoryMode ("temp").
- * Mirrors app.js sanitizeDirectoryMode().
  */
 export function sanitizeDirectoryMode(
   value: unknown,
@@ -551,7 +527,6 @@ export function sanitizeDirectoryMode(
 /**
  * Returns the "saved directory" value: non-empty only when the mode resolves
  * to "custom".
- * Mirrors app.js savedDirectoryValue().
  */
 export function savedDirectoryValue(directory: string, mode: unknown): string {
   const next = typeof directory === "string" ? directory.trim() : "";
@@ -561,7 +536,6 @@ export function savedDirectoryValue(directory: string, mode: unknown): string {
 
 /**
  * Extract and trim the `directory` field from a settings object.
- * Mirrors app.js settingsDirectory().
  */
 export function settingsDirectory(settings: Record<string, unknown> | null | undefined): string {
   return typeof settings?.directory === "string" ? settings.directory.trim() : "";
@@ -572,7 +546,6 @@ export function settingsDirectory(settings: Record<string, unknown> | null | und
 /**
  * Returns true when the path looks like a goal-workspace execution directory
  * (contains a "goal-workspace" path segment).
- * Mirrors app.js looksLikeExecutionWorkspace().
  */
 export function looksLikeExecutionWorkspace(value: unknown): boolean {
   const text = String(value || "").trim();
@@ -583,7 +556,6 @@ export function looksLikeExecutionWorkspace(value: unknown): boolean {
 /**
  * Returns `value` unless it looks like a goal-workspace execution directory,
  * in which case returns an empty string.
- * Mirrors app.js workspaceRestoreDirectory().
  */
 export function workspaceRestoreDirectory(value: unknown): string {
   const text = typeof value === "string" ? value.trim() : "";
@@ -600,7 +572,6 @@ export interface RememberWorkspaceInput {
 /**
  * Persist the current task + directory as the "workspace memory" so it can be
  * restored after an overlay restart.
- * Mirrors app.js rememberWorkspace().
  */
 export function rememberWorkspace(input: RememberWorkspaceInput = {}): void {
   const taskID =
@@ -630,7 +601,6 @@ const MAX_RECENT_DIRS = 10;
 /**
  * Load the recent-directories list from localStorage.
  * Returns a plain array of trimmed path strings.
- * Mirrors app.js loadRecentDirectories().
  */
 export function loadRecentDirectories(): string[] {
   try {
@@ -647,7 +617,6 @@ export function loadRecentDirectories(): string[] {
 
 /**
  * Persist the given array of directory paths to localStorage.
- * Mirrors app.js saveRecentDirectories().
  */
 export function saveRecentDirectories(dirs: string[]): void {
   try {
@@ -658,7 +627,6 @@ export function saveRecentDirectories(dirs: string[]): void {
 /**
  * Prepend `dir` to the recent-directories list (deduplicating by case-
  * insensitive comparison) and persist.
- * Mirrors app.js addRecentDirectory().
  */
 export function addRecentDirectory(dir: string): void {
   if (!dir || typeof dir !== "string") return;
@@ -674,7 +642,6 @@ export function addRecentDirectory(dir: string): void {
 /**
  * Remove all entries matching `dir` (case-insensitive) from the recent-
  * directories list and persist.
- * Mirrors app.js removeRecentDirectory().
  */
 export function removeRecentDirectory(dir: string): void {
   if (!dir) return;
@@ -688,34 +655,32 @@ export function removeRecentDirectory(dir: string): void {
 
 export interface ApplyDirectoryOptions {
   /**
-   * When true, `next` is written as the saved directory.
-   * When false, the saved directory is cleared.
-   * When omitted (null/undefined), the saved directory is unchanged.
-   */
+ * When true, `next` is written as the saved directory.
+ * When false, the saved directory is cleared.
+ * When omitted (null/undefined), the saved directory is unchanged.
+ */
   save?: boolean;
   /**
-   * When true, `next` is written as the temp directory.
-   * When false, the temp directory is cleared.
-   * When omitted (null/undefined), the temp directory is unchanged.
-   */
+ * When true, `next` is written as the temp directory.
+ * When false, the temp directory is cleared.
+ * When omitted (null/undefined), the temp directory is unchanged.
+ */
   temp?: boolean;
   /**
-   * When false, skip persisting overlay settings after the switch.
-   * Defaults to true.
-   */
+ * When false, skip persisting overlay settings after the switch.
+ * Defaults to true.
+ */
   persist?: boolean;
   /**
-   * When false, skip restoring the initial workspace after the reload.
-   * Defaults to true.
-   */
+ * When false, skip restoring the initial workspace after the reload.
+ * Defaults to true.
+ */
   restoreWorkspace?: boolean;
 }
 
 /**
  * Switch the active working directory, update related store fields, and
- * trigger a project-scope reload via the legacy app.js bridge.
- *
- * Mirrors app.js applyDirectory().
+ * trigger a project-scope reload via the .
  */
 export async function applyDirectory(
   next: string,
@@ -758,22 +723,22 @@ export async function applyDirectory(
   );
   setBoardStore("pendingTasks", []);
 
-  // Clear stale workspace memory so restoreInitialWorkspace() won't revert the switch.
+ // Clear stale workspace memory so restoreInitialWorkspace() won't revert the switch.
   setSettingsStore("workspaceTaskID", "");
   setSettingsStore("workspaceDirectory", "");
 
-  // Clear project-scope data (tasks list, messages, executor events).
+ // Clear project-scope data (tasks list, messages, executor events).
   clearProjectScopeData();
 
   if (options.persist !== false) {
-    // Persist via legacy bridge to keep localStorage + Tauri store in sync.
+ // Persist via to keep localStorage + Tauri store in sync.
     const persistFn = (window as any).persistOverlaySettings;
     if (typeof persistFn === "function") await persistFn();
   }
 
   if (options.save === true && next) addRecentDirectory(next);
 
-  // Connection check + reload via legacy bridge.
+ // Connection check + reload via .
   const { checkConnection } = await import("./connection");
   if (typeof checkConnection === "function") {
     console.log("[applyDir] checking connection");
@@ -795,7 +760,6 @@ export async function applyDirectory(
 /**
  * Set the active directory without persisting.
  * No-ops when `value` is empty or already equals the current directory.
- * Mirrors app.js setActiveDirectory().
  */
 export async function setActiveDirectory(
   value: string,
@@ -810,7 +774,6 @@ export async function setActiveDirectory(
 
 /**
  * Open a native directory picker and apply the selected directory.
- * Mirrors app.js browseDirectory().
  */
 export async function browseDirectory(): Promise<void> {
   try {
@@ -829,7 +792,6 @@ export async function browseDirectory(): Promise<void> {
 /**
  * Pick a parent directory and prompt for a new folder name, then create it
  * and switch to it (optionally initialising Git).
- * Mirrors app.js createDirectory().
  */
 export async function createDirectory(): Promise<void> {
   try {
@@ -867,7 +829,6 @@ export async function createDirectory(): Promise<void> {
 /**
  * Open the given directory (or the current active directory) with the
  * native OS file explorer.
- * Mirrors app.js openDirectory().
  */
 export async function openDirectory(target?: string): Promise<void> {
   const dir = target ?? activeDirectory();
@@ -890,7 +851,6 @@ export async function openDirectory(target?: string): Promise<void> {
 
 /**
  * Reset the working directory to a fresh temp directory.
- * Mirrors app.js resetDirectory().
  */
 export async function resetDirectory(): Promise<void> {
   try {
@@ -907,9 +867,8 @@ export async function resetDirectory(): Promise<void> {
 // ── setDirectory / setTempDirectory ──
 
 /**
- * Set the working directory to `value`.  When `value` is empty, falls back to
+ * Set the working directory to `value`. When `value` is empty, falls back to
  * the existing temp directory or creates a new one.
- * Mirrors app.js setDirectory().
  */
 export async function setDirectory(
   value: string,
@@ -929,7 +888,6 @@ export async function setDirectory(
 
 /**
  * Create a new temporary directory (via Tauri) and switch to it.
- * Mirrors app.js setTempDirectory().
  */
 export async function setTempDirectory(
   options: ApplyDirectoryOptions = {},
@@ -951,7 +909,6 @@ export async function setTempDirectory(
  * Ensure a default working directory is set, creating a temp directory if
  * neither a saved nor temp directory is available.
  * Returns true when a new temp directory was created.
- * Mirrors app.js ensureDefaultDirectory().
  */
 export async function ensureDefaultDirectory(): Promise<boolean> {
   if (settingsStore.savedDirectory) {
@@ -981,14 +938,13 @@ export async function ensureDefaultDirectory(): Promise<boolean> {
 }
 
 /**
- * Ensure the workspace directory is resolved.  If the active directory is
+ * Ensure the workspace directory is resolved. If the active directory is
  * already set, returns it immediately; otherwise loads meta from the server
  * and falls back to the `path.directory` value returned by the server.
- * Mirrors app.js ensureWorkspaceDirectory().
  */
 export async function ensureWorkspaceDirectory(): Promise<string> {
   if (activeDirectory()) return activeDirectory();
-  // Load meta via legacy bridge (sets boardStore.path).
+ // Load meta via (sets boardStore.path).
   const { loadMeta } = await import("./meta");
   if (typeof loadMeta === "function") await loadMeta();
   if (!settingsStore.directory && (boardStore.path as any)?.directory) {
@@ -1001,7 +957,6 @@ export async function ensureWorkspaceDirectory(): Promise<string> {
 
 /**
  * Sort priority for goal-run status values used by currentExecutionDirectory.
- * Mirrors app.js goalRunPriority().
  */
 function goalRunPriority(status: unknown): number {
   if (status === "running") return 0;
@@ -1016,7 +971,6 @@ function goalRunPriority(status: unknown): number {
 
 /**
  * Return the workspace directory of the highest-priority active goal run.
- * Mirrors app.js currentExecutionDirectory().
  */
 export function currentExecutionDirectory(): string {
   const goalRuns: unknown[] = Array.isArray(boardStore.board?.goalRuns)

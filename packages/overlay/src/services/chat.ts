@@ -1,13 +1,10 @@
 // ── Chat Service ──
-// Exact port of app.js chat composition, attachment, and abort logic.
-//
 // Responsibilities:
-//   - Manage staged chat attachments (add / remove / take metadata)
-//   - Manage the active chat AbortController (stop / abort targets)
-//   - Expose pure predicates: canComposeChat, chatAbortTargets, chatAbortTarget
-//   - Provide conversationTarget / conversationTargetKey helpers
-//   - Expose panelResultNavigates predicate
-//
+// - Manage staged chat attachments (add / remove / take metadata)
+// - Manage the active chat AbortController (stop / abort targets)
+// - Expose pure predicates: canComposeChat, chatAbortTargets, chatAbortTarget
+// - Provide conversationTarget / conversationTargetKey helpers
+// - Expose panelResultNavigates predicate
 // This module owns no render-side effects. Callers drive UI updates through
 // reactive Solid stores.
 
@@ -17,11 +14,21 @@ import {
   setChatRequest,
   abortChatRequest,
   setChatAttachments,
+  setMessages,
+  mergeLoadedConversationMessages,
 } from "../store/messages";
-import { boardStore } from "../store/board";
-import { appStore } from "../store/app";
+import { boardStore, setTasksData } from "../store/board";
+import { appStore, setConnectionStatus } from "../store/app";
 import { executorStore } from "../store/executor";
 import { workspaceMode } from "./workspace";
+import {
+  selectTask,
+  submitMessage,
+  startTaskRecovery,
+  forgetPendingTask,
+  rememberPendingTask,
+} from "./task";
+import { syntheticTextMessage } from "../utils/transcript";
 
 // ── Types ──
 
@@ -66,7 +73,6 @@ function currentTaskSessionID(): string {
 
 /**
  * Returns the current conversation target (task or empty).
- * Mirrors app.js conversationTarget.
  */
 export function conversationTarget(): ConversationTarget {
   if (boardStore.selectedTaskID) {
@@ -82,7 +88,6 @@ export function conversationTarget(): ConversationTarget {
 
 /**
  * Stable string key for the current conversation target.
- * Mirrors app.js conversationTargetKey.
  */
 export function conversationTargetKey(
   target: ConversationTarget = conversationTarget(),
@@ -95,7 +100,6 @@ export function conversationTargetKey(
 
 /**
  * Returns true if the panel result should trigger task navigation.
- * Mirrors app.js panelResultNavigates.
  */
 export function panelResultNavigates(result: any): boolean {
   if (!result || typeof result !== "object") return false;
@@ -109,16 +113,15 @@ export function panelResultNavigates(result: any): boolean {
 
 /**
  * Returns true when the chat composer should be enabled.
- * Mirrors app.js canComposeChat: connected, and in "empty" or "task" mode.
  */
 export function canComposeChat(): boolean {
   if (!appStore.connected) return false;
-  // Derive workspace mode from store state.
-  // "task" mode: a task is selected.
-  // "empty" mode: no task selected, no session-only workspace.
-  // Both allow composing. All other modes (e.g. a pure session workspace
-  // with no associated task) are not represented in the Solid stores yet,
-  // so we fall back to checking the legacy window helper if available.
+ // Derive workspace mode from store state.
+ // "task" mode: a task is selected.
+ // "empty" mode: no task selected, no session-only workspace.
+ // Both allow composing. All other modes (e.g. a pure session workspace
+ // with no associated task) are not represented in the Solid stores yet,
+ // so we fall back to checking the helper if available.
   const mode = workspaceMode();
   return mode === "empty" || mode === "task";
 }
@@ -127,9 +130,7 @@ export function canComposeChat(): boolean {
 
 /**
  * Returns ordered list of abort targets for the active chat request.
- * Mirrors app.js chatAbortTargets.
- *
- * @param seed  Optional initial target to prepend (from the request object).
+ * @param seed Optional initial target to prepend (from the request object).
  */
 export function chatAbortTargets(seed?: ChatAbortTarget): ChatAbortTarget[] {
   const items: ChatAbortTarget[] = [];
@@ -171,7 +172,6 @@ export function chatAbortTargets(seed?: ChatAbortTarget): ChatAbortTarget[] {
 
 /**
  * Returns the first (highest-priority) abort target, or null if none.
- * Mirrors app.js chatAbortTarget.
  */
 export function chatAbortTarget(seed?: ChatAbortTarget): ChatAbortTarget | null {
   return chatAbortTargets(seed)[0] || null;
@@ -181,7 +181,6 @@ export function chatAbortTarget(seed?: ChatAbortTarget): ChatAbortTarget | null 
 
 /**
  * Send a remote abort/cancel request for a single target.
- * Mirrors app.js abortChatTarget.
  */
 async function abortChatTargetRemote(target: ChatAbortTarget): Promise<boolean> {
   if (!target) return false;
@@ -217,8 +216,6 @@ export interface StopChatRequestOptions {
 
 /**
  * Abort the active chat request and optionally cancel the remote run/task.
- * Mirrors app.js stopChatRequest (data layer only — no DOM effects).
- *
  * Returns true if the abort was dispatched, false if no active request.
  */
 export async function stopChatRequest(
@@ -227,16 +224,16 @@ export async function stopChatRequest(
   const request = messageStore.chatRequest as any;
   if (!request || request.stopping) return false;
 
-  // Mark as stopping to prevent re-entrant calls
+ // Mark as stopping to prevent re-entrant calls
   request.aborted = true;
   request.manualAbort = options.manual !== false;
   request.stopping = true;
   request.recovery?.stop();
 
-  // Abort the local fetch
+ // Abort the local fetch
   request.controller?.abort?.();
 
-  // Clear the store reference
+ // Clear the store reference
   abortChatRequest();
 
   if (options.remote === false) return true;
@@ -267,7 +264,6 @@ export async function stopChatRequest(
 /**
  * Add a file attachment to the staged chat attachments list.
  * Returns an error string if validation fails, or null on success.
- * Mirrors app.js addChatAttachment (data layer only — no toast).
  */
 export async function addChatAttachment(file: File): Promise<string | null> {
   if (!file) return "No file provided";
@@ -291,7 +287,6 @@ export async function addChatAttachment(file: File): Promise<string | null> {
 
 /**
  * Remove a staged attachment by index.
- * Mirrors app.js removeChatAttachment.
  */
 export function removeChatAttachment(index: number): void {
   const next = messageStore.chatAttachments.filter(
@@ -304,7 +299,6 @@ export function removeChatAttachment(index: number): void {
 
 /**
  * Consume and return any pending metadata set via window.__ocNextChatMetadata.
- * Mirrors app.js takeChatMetadata.
  */
 export function takeChatMetadata(): Record<string, unknown> | undefined {
   const win = window as any;
@@ -316,6 +310,233 @@ export function takeChatMetadata(): Record<string, unknown> | undefined {
       : undefined;
   delete win.__ocNextChatMetadata;
   return meta;
+}
+
+// ── Panel message helpers ──
+
+export function mergeMessages(left: any[], right: any[]): any[] {
+  return mergeLoadedConversationMessages(left, right);
+}
+
+function appendPendingAssistantPart(
+  requestID: string,
+  type: "text" | "reasoning",
+  delta: string,
+): void {
+  const chunk = typeof delta === "string" ? delta : "";
+  if (!requestID || !chunk) return;
+  const messageID = `pending-assistant:${requestID}`;
+  const partID = `${messageID}:${type}`;
+  let found = false;
+  const next = messageStore.messages.map((message: any) => {
+    if (message?.info?.id !== messageID) return message;
+    found = true;
+    const parts = Array.isArray(message?.parts) ? [...message.parts] : [];
+    const index = parts.findIndex((part: any) => part?.id === partID);
+    if (index >= 0) {
+      const current = parts[index];
+      parts[index] = {
+        ...current,
+        type,
+        text: `${String(current?.text || "")}${chunk}`,
+      };
+    } else {
+      parts.push({
+        id: partID,
+        type,
+        text: chunk,
+        messageID,
+        sessionID: "",
+      });
+    }
+    return {
+      ...message,
+      parts,
+    };
+  });
+  if (!found) {
+    next.push({
+      _synthetic: true,
+      info: {
+        id: messageID,
+        role: "assistant",
+        time: { created: Date.now() },
+      },
+      parts: [
+        {
+          id: partID,
+          type,
+          text: chunk,
+          messageID,
+          sessionID: "",
+        },
+      ],
+    });
+  }
+  setMessages(next);
+}
+
+function insertPendingUserMessage(requestID: string, text: string): void {
+  setMessages([
+    ...messageStore.messages,
+    {
+      info: { id: `pending-user:${requestID}`, role: "user", time: { created: Date.now() } },
+      parts: [{ type: "text", text }],
+    },
+  ]);
+}
+
+function isRecoveryAwaitableError(error: unknown): boolean {
+  if (error instanceof DOMException) {
+    return error.name === "AbortError" || error.name === "TimeoutError";
+  }
+  return false;
+}
+
+function ensureTaskListEntry(
+  taskID: string,
+  requestID: string,
+  requestText: string,
+  resultMessage: string,
+): void {
+  if (!taskID) return;
+  const task = boardStore.board?.task && boardStore.board.task.id === taskID
+    ? boardStore.board.task
+    : null;
+  const now = Date.now();
+  const created = Number(task?.time?.created || now);
+  const updated = Number(task?.time?.updated || created);
+  const title = String(
+    task?.title ||
+    boardStore.board?.overview?.headline ||
+    requestText ||
+    resultMessage ||
+    taskID,
+  ).trim();
+  const entry = {
+    task: {
+      id: taskID,
+      requestID: requestID || task?.requestID || "",
+      title,
+      status: task?.status || "planning",
+      directory: task?.directory || "",
+      time: {
+        created,
+        updated,
+      },
+    },
+    updated_at: updated,
+    pending_interactions: 0,
+  };
+  const rest = boardStore.tasks.filter((item: any) => item?.task?.id !== taskID);
+  setTasksData([entry, ...rest]);
+}
+
+async function applyPanelResult(result: any): Promise<void> {
+  const taskID = String(result?.task_id || result?.taskID || "");
+  const requestText = typeof result?._request === "string" ? result._request : "";
+  const requestID = String(result?._requestID || "");
+  if (taskID) {
+    const previousMessages = [...messageStore.messages];
+    ensureTaskListEntry(taskID, requestID, requestText, String(result?.message || ""));
+    if (requestID) {
+      forgetPendingTask(requestID);
+    }
+    await selectTask(taskID, { preserveMessages: true });
+    ensureTaskListEntry(taskID, requestID, requestText, String(result?.message || ""));
+    if (messageStore.messages.length === 0 && previousMessages.length > 0) {
+      setMessages(previousMessages);
+    }
+    if (result?.message) {
+      const text = String(result.message);
+      const alreadyVisible = messageStore.messages.some((item: any) =>
+        (Array.isArray(item?.parts) ? item.parts : []).some(
+          (part: any) => part?.type === "text" && String(part?.text || "") === text,
+        ),
+      );
+      if (alreadyVisible) return;
+      setMessages(
+        mergeMessages(messageStore.messages, [
+          syntheticTextMessage("assistant", Date.now(), text),
+        ]),
+      );
+    }
+    return;
+  }
+  if (result?.message) {
+    setMessages(
+      mergeMessages(messageStore.messages, [
+        syntheticTextMessage("assistant", Date.now(), String(result.message)),
+      ]),
+    );
+  }
+}
+
+export async function panelMessage(text: string, attachments: any[] = [], metadata: any = {}): Promise<any> {
+  const requestID = crypto.randomUUID();
+  rememberPendingTask(requestID, text);
+  const controller = new AbortController();
+  const target = chatAbortTarget() || undefined;
+  const request: any = {
+    requestID,
+    controller,
+    target,
+    stopping: false,
+    aborted: false,
+    manualAbort: false,
+  };
+  const ensureRecovery = () => {
+    if (!request.recovery) {
+      request.recovery = startTaskRecovery(request);
+    }
+  };
+  insertPendingUserMessage(requestID, text);
+  setConnectionStatus("online");
+  setChatRequest(request as any);
+  try {
+    const result = await submitMessage(text, attachments, {
+      requestID,
+      metadata,
+      signal: controller.signal,
+      onOpen: () => {
+        ensureRecovery();
+      },
+      onEvent: async (event) => {
+        ensureRecovery();
+        const type = String(event?.type || "");
+        if (type === "reasoning_delta") {
+          appendPendingAssistantPart(requestID, "reasoning", String(event?.delta || ""));
+          return;
+        }
+        if (type === "message_delta") {
+          appendPendingAssistantPart(requestID, "text", String(event?.delta || ""));
+        }
+      },
+    });
+    request.recovery?.stop?.();
+    await applyPanelResult({ ...(result as any), _request: text, _requestID: requestID });
+    return result;
+  } catch (error) {
+    const recoveredTaskID = typeof request.recoveredTaskID === "string" && request.recoveredTaskID
+      ? request.recoveredTaskID
+      : !request.manualAbort &&
+          isRecoveryAwaitableError(error) &&
+          typeof request.recovery?.promise?.then === "function"
+        ? await request.recovery.promise.catch(() => "")
+        : "";
+    if (!request.manualAbort && recoveredTaskID) {
+      const result = { task_id: recoveredTaskID, _request: text, _requestID: requestID };
+      await applyPanelResult(result);
+      return result;
+    }
+    request.recovery?.stop?.();
+    throw error;
+  } finally {
+    request.recovery?.stop?.();
+    if ((messageStore.chatRequest as any)?.requestID === request.requestID) {
+      setChatRequest(null as any);
+    }
+  }
 }
 
 // ── Re-export store accessors used by consumers ──

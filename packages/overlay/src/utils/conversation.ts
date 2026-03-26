@@ -1,30 +1,25 @@
 // ── Conversation utilities ──
-// Exact port of buildBoardContextMessages, conversationMessages,
-// groupMessagesByRole, signGroup, chatPlaceholder from app.js.
-//
-// All functions accept their data as parameters rather than reading the
-// legacy global `state` object, allowing Solid reactive callers to pass
-// data from the Solid stores.
-//
-// Internal helpers that are not yet ported to TypeScript (syntheticTextMessage,
-// specContextText, planContextText, goalContextText, evaluationContextText,
-// interactionRequestText, interactionResponseText, boardGitCheckpoints,
-// buildExecutorMessages) are bridged via (window as any).__legacyConv.
-// app.js installs these at startup.
+// Assembles the full conversation view from Solid stores: real messages,
+// board context (spec/plan/evaluation/delivery), executor events, and
+// agent cards. All data is read from reactive stores.
 
 import { messageStore } from "../store/messages";
 import { boardStore } from "../store/board";
-import { executorStore } from "../store/executor";
-import { phaseFromAgent, phaseFromMessage, agentStageRole } from "./message";
+import { phaseFromAgent, phaseFromMessage } from "./message";
 import { stripAssistantBrief } from "./string";
+import { t } from "./i18n";
 import {
-  buildExecutorProcesses,
-  executorCall,
-  executorCommand,
-  executorOutput,
-  executorTargetText,
-  executorProcessID,
-  executorProcessKind,
+  syntheticTextMessage,
+  specContextText,
+  planContextText,
+  goalContextText,
+  evaluationContextText,
+  interactionRequestText,
+  interactionResponseText,
+} from "./transcript";
+import { gitCheckpointText, boardGitCheckpoints } from "./git";
+import {
+  buildExecutorMessages,
 } from "./executor-events";
 
 // ── Constants ──
@@ -32,7 +27,6 @@ import {
 const AGENT_STAGES = new Set(["spec", "planner", "goal", "judge", "delivery"]);
 
 // ── Internal: rootTaskSessionID ──
-// Mirrors app.js rootTaskSessionID — reads from boardStore.
 
 function rootTaskSessionID(): string {
   const sessionID = boardStore.board?.task?.sessionID;
@@ -40,7 +34,6 @@ function rootTaskSessionID(): string {
 }
 
 // ── Internal: classifyMessage ──
-// Mirrors app.js classifyMessage exactly.
 
 function classifyMessage(msg: any): string {
   const agent = String(msg?.info?.agent || "").trim().toLowerCase();
@@ -60,7 +53,6 @@ function classifyMessage(msg: any): string {
 }
 
 // ── Internal: activeAgentStages ──
-// Mirrors app.js activeAgentStages.
 // Reads from messageStore (agentEvents) and boardStore (board.task.status).
 
 function activeAgentStages(): Set<string> {
@@ -125,7 +117,6 @@ function hasConversationRequest(messages: any[], request: string): boolean {
 }
 
 // ── Internal: hashText ──
-// Mirrors app.js hashText (FNV-1a 32-bit).
 
 function hashText(value: string): string {
   const text = String(value || "");
@@ -138,7 +129,6 @@ function hashText(value: string): string {
 }
 
 // ── Internal: signPart ──
-// Mirrors app.js signPart exactly.
 
 function signText(value: any): string {
   if (typeof value === "string") return value;
@@ -198,206 +188,11 @@ function signPart(part: any): string {
   return signText(part);
 }
 
-// ── Legacy bridge helpers ──
-// These helpers (syntheticTextMessage, specContextText, planContextText, etc.)
-// are not yet ported to TypeScript.  app.js exposes them on window.__legacyConv
-// so the Solid layer can call them during the migration period.
-
-function legacyConv(): Record<string, any> {
-  return (window as any).__legacyConv || {};
-}
-
-function syntheticTextMessage(role: string, time: number, text: string): any | null {
-  const fn = legacyConv().syntheticTextMessage;
-  if (typeof fn === "function") return fn(role, time, text);
-  if (typeof text !== "string" || !text.trim()) return null;
-  return {
-    _synthetic: true,
-    info: {
-      id: `synthetic:${role}:${Number.isFinite(time) ? time : Date.now()}:${hashText(text)}`,
-      role,
-      time: { created: Number.isFinite(time) ? time : Date.now() },
-    },
-    parts: [{ type: "text", text }],
-  };
-}
-
-function specContextText(spec: any): string {
-  const fn = legacyConv().specContextText;
-  return typeof fn === "function" ? fn(spec) : "";
-}
-
-function planContextText(plan: any, goals: any[]): string {
-  const fn = legacyConv().planContextText;
-  return typeof fn === "function" ? fn(plan, goals) : "";
-}
-
-function interactionRequestText(interaction: any): string {
-  const fn = legacyConv().interactionRequestText;
-  return typeof fn === "function" ? fn(interaction) : "";
-}
-
-function interactionResponseText(interaction: any): string {
-  const fn = legacyConv().interactionResponseText;
-  return typeof fn === "function" ? fn(interaction) : "";
-}
-
-function boardGitCheckpoints(board: any): any[] {
-  const fn = legacyConv().boardGitCheckpoints;
-  return typeof fn === "function" ? fn(board) : [];
-}
-
-function gitCheckpointText(item: any): string {
-  const fn = legacyConv().gitCheckpointText;
-  return typeof fn === "function" ? fn(item) : "";
-}
-
-function goalContextText(goals: any[]): string {
-  const fn = legacyConv().goalContextText;
-  return typeof fn === "function" ? fn(goals) : "";
-}
-
-function evaluationContextText(board: any, goals: any[]): string {
-  const fn = legacyConv().evaluationContextText;
-  return typeof fn === "function" ? fn(board, goals) : "";
-}
-
 function deliveryStatusLabel(status: string): string {
-  const fn = legacyConv().deliveryStatusLabel;
-  return typeof fn === "function" ? fn(status) : status || "";
-}
-
-function buildExecutorMessages(board: any, selectedTaskID: string, executorEvents: any[]): any[] {
-  const currentRunID = String(board?.task?.activeRunID || executorStore.runID || "");
-  const events = (Array.isArray(executorStore.events) ? executorStore.events : [])
-    .filter((event: any) =>
-      event?.runID === currentRunID &&
-      event?.visible !== false &&
-      event?.kind !== "status",
-    );
-  const processes = buildExecutorProcesses(events as any[]);
-  const processIDs = new Set(processes.map((process: any) => process.id));
-  const processMsg = processes.length > 0
-    ? {
-      _synthetic: true,
-      info: {
-        id: `executor:processes:${selectedTaskID || currentRunID || "active"}`,
-        role: "assistant",
-        time: { created: processes[0]?.time?.created || Date.now() },
-      },
-      parts: processes.map((process: any) => ({
-        type: "executor_process",
-        process,
-      })),
-    }
-    : null;
-  const messages = events
-    .filter((event: any) => {
-      const processID = executorProcessID(event as any);
-      const processKind = executorProcessKind(event as any);
-      if (event?.kind === "tool_call" || event?.kind === "tool_result") return true;
-      return !(processID && processIDs.has(processID) && processKind && processKind !== "assistant" && processKind !== "status");
-    })
-    .map((event: any, index: number) => {
-      const created = event.time?.created || Date.now();
-      const payload =
-        event?.payload && typeof event.payload === "object" && !Array.isArray(event.payload)
-          ? event.payload
-          : {};
-      if (event.kind === "tool_call" || event.kind === "tool_result") {
-        const call = event.kind === "tool_result" ? executorCall(events as any[], index, event as any) : null;
-        const callPayload =
-          call?.payload && typeof call.payload === "object" && !Array.isArray(call.payload)
-            ? call.payload
-            : {};
-        const rawInput =
-          typeof payload.input === "string"
-            ? payload.input
-            : typeof callPayload.input === "string"
-              ? callPayload.input
-            : typeof payload.text === "string"
-              ? payload.text
-              : typeof callPayload.text === "string"
-                ? callPayload.text
-              : "";
-        let input =
-          payload.input && typeof payload.input === "object" && !Array.isArray(payload.input)
-            ? payload.input
-            : callPayload.input && typeof callPayload.input === "object" && !Array.isArray(callPayload.input)
-              ? callPayload.input
-            : {};
-        if ((!input || Object.keys(input).length === 0) && rawInput.trim()) {
-          try {
-            const parsed = JSON.parse(rawInput);
-            if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-              input = parsed;
-            }
-          } catch {
-            input = { raw: rawInput };
-          }
-        }
-        return {
-          _synthetic: true,
-          info: {
-            id: String(event?.id || ""),
-            role: "task_tool",
-            time: { created },
-          },
-          parts: [{
-            id: `executor-tool:${String(event?.id || created)}`,
-            type: "tool",
-            tool: String(
-              payload.name ||
-              payload.toolName ||
-              payload.tool ||
-              callPayload.name ||
-              callPayload.toolName ||
-              callPayload.tool ||
-              (payload.tool_kind === "shell" || callPayload.tool_kind === "shell"
-                ? "shell_command"
-                : event.toolName) ||
-              "tool",
-            ),
-            state: {
-              status: event.kind === "tool_result" ? "completed" : "running",
-              input,
-              raw: rawInput,
-              title: String(event?.summary || executorCommand(event as any) || executorCommand(call as any) || "").trim(),
-              output:
-                event.kind === "tool_result"
-                  ? String(
-                    executorOutput(event as any) ||
-                    executorTargetText(event as any, events as any[], index) ||
-                    "",
-                  )
-                  : "",
-            },
-          }],
-        };
-      }
-      const text = String(executorTargetText(event as any, events as any[], index) || "").trim();
-      if (!text) return null;
-      return {
-        _synthetic: true,
-        info: {
-          id: String(event?.id || ""),
-          role: event.kind === "reasoning" || event.kind === "reasoning_delta" ? "planner" : "assistant",
-          time: { created },
-        },
-        parts: [{ type: "text", text }],
-      };
-    })
-    .filter(Boolean);
-  return processMsg ? [processMsg, ...messages] : messages;
-}
-
-function t(key: string): string {
-  const fn = legacyConv().t;
-  return typeof fn === "function" ? fn(key) : key;
+  return status || "";
 }
 
 // ── Public: buildBoardContextMessages ──
-// Exact port of app.js buildBoardContextMessages.
 // preClassifiedMainMessages: already-classified main-channel messages.
 // board: board data object (state.board equivalent).
 // agentEvents: agent events array (state.agentEvents equivalent).
@@ -429,7 +224,7 @@ export function buildBoardContextMessages(
           phaseFromMessage(message) === phaseFromAgent(stage)),
     );
 
-  // 1. User request — show the original task request as a "user" turn
+ // 1. User request — show the original task request as a "user" turn
   if (task?.request && !hasConversationRequest(messages || [], task.request)) {
     syntheticMsgs.push({
       _synthetic: true,
@@ -473,7 +268,7 @@ export function buildBoardContextMessages(
     }
   }
 
-  // 3. Goals — show goal status as a "goal_gate" turn
+ // 3. Goals — show goal status as a "goal_gate" turn
   for (const item of boardGitCheckpoints(board)) {
     const message = syntheticTextMessage("system", item.time, gitCheckpointText(item));
     if (message) syntheticMsgs.push(message);
@@ -487,7 +282,7 @@ export function buildBoardContextMessages(
     if (message) syntheticMsgs.push(message);
   }
 
-  // 4. Evaluation verdict — show as "scheduler" turn
+ // 4. Evaluation verdict — show as "scheduler" turn
   if (evaluation?.verdict) {
     const message = syntheticTextMessage(
       "scheduler",
@@ -497,7 +292,7 @@ export function buildBoardContextMessages(
     if (message) syntheticMsgs.push(message);
   }
 
-  // 5. Delivery summary — show as "assistant" turn if delivery was accepted
+ // 5. Delivery summary — show as "assistant" turn if delivery was accepted
   const finalDelivery = board.acceptedDelivery || delivery;
   if (finalDelivery?.summary && finalDelivery.status !== "candidate") {
     const message = syntheticTextMessage(
@@ -512,7 +307,6 @@ export function buildBoardContextMessages(
 }
 
 // ── Public: conversationMessages ──
-// Exact port of app.js conversationMessages.
 // All data is read from Solid stores (messageStore / boardStore) to match
 // the reactive pull model.
 
@@ -523,8 +317,8 @@ export function conversationMessages(): any[] {
   const selectedTaskID = boardStore.selectedTaskID;
   const showTranscriptDetails = messageStore.showTranscriptDetails;
 
-  // Classify messages into main conversation vs agent channels.
-  // Key by stage:sessionID so different rounds of the same agent get separate cards.
+ // Classify messages into main conversation vs agent channels.
+ // Key by stage:sessionID so different rounds of the same agent get separate cards.
   const mainMessages: any[] = [];
   const agentChannels: Record<string, { stage: string; messages: any[]; startTime: number; endTime: number }> = {};
 
@@ -546,12 +340,12 @@ export function conversationMessages(): any[] {
     }
   }
 
-  // Build board context and executor messages AFTER classification
-  // so we can pass pre-classified main messages (avoids double classification).
+ // Build board context and executor messages AFTER classification
+ // so we can pass pre-classified main messages (avoids double classification).
   const boardMsgs = buildBoardContextMessages(mainMessages, board, agentEvents, allMessages as any[]);
-  const executorMsgs = buildExecutorMessages(board, selectedTaskID, []);
+  const executorMsgs = buildExecutorMessages();
 
-  // Filter orchestrator boilerplate from main messages when board context is available
+ // Filter orchestrator boilerplate from main messages when board context is available
   let filteredMain = mainMessages;
   if (!showTranscriptDetails && boardMsgs.length > 0 && filteredMain.length > 0) {
     filteredMain = filteredMain.filter((message: any) => {
@@ -563,7 +357,7 @@ export function conversationMessages(): any[] {
     });
   }
 
-  // Group rounds per stage, sorted by time, to assign round numbers and status
+ // Group rounds per stage, sorted by time, to assign round numbers and status
   const stageRounds: Record<string, Array<{ key: string; channel: typeof agentChannels[string] }>> = {};
   for (const [key, channel] of Object.entries(agentChannels)) {
     if (channel.messages.length === 0) continue;
@@ -579,7 +373,7 @@ export function conversationMessages(): any[] {
     rounds.sort((a, b) => a.channel.startTime - b.channel.startTime);
   }
 
-  // Create synthetic agent-card messages — one card per round per stage
+ // Create synthetic agent-card messages — one card per round per stage
   const agentCardMsgs: any[] = [];
   const allAgentEvents = Array.isArray(messageStore.agentEvents) ? messageStore.agentEvents : [];
   for (const [stage, rounds] of Object.entries(stageRounds)) {
@@ -588,10 +382,10 @@ export function conversationMessages(): any[] {
       const isLastRound = i === rounds.length - 1;
       let cardStatus: string;
       if (!isLastRound) {
-        // Earlier rounds must be done — otherwise a new round wouldn't have started
+ // Earlier rounds must be done — otherwise a new round wouldn't have started
         cardStatus = "completed";
       } else {
-        // Last round: check agent events within this round's time window only
+ // Last round: check agent events within this round's time window only
         const stageEvents = allAgentEvents.filter(
           (e: any) =>
             String(e?.stage || "").toLowerCase() === stage &&
@@ -630,12 +424,11 @@ export function conversationMessages(): any[] {
 }
 
 // ── Public: groupMessagesByRole ──
-// Exact port of app.js groupMessagesByRole.
 
 export function groupMessagesByRole(sorted: any[]): Array<{ role: string; messages: any[] }> {
   const groups: Array<{ role: string; messages: any[] }> = [];
   for (const msg of sorted) {
-    // Agent card placeholders are always isolated groups
+ // Agent card placeholders are always isolated groups
     if (msg._agentCard) {
       groups.push({ role: "agent-card", messages: [msg] });
       continue;
@@ -643,18 +436,18 @@ export function groupMessagesByRole(sorted: any[]): Array<{ role: string; messag
 
     const role = effectiveRole(msg);
     const parts = msg.parts || [];
-    // Skip completely empty messages
+ // Skip completely empty messages
     if (parts.length === 0) continue;
 
-    // Synthetic board turns should remain isolated so spec, git checkpoints,
-    // and interaction prompts show up as distinct lifecycle events.
+ // Synthetic board turns should remain isolated so spec, git checkpoints,
+ // and interaction prompts show up as distinct lifecycle events.
     if (msg._synthetic) {
       groups.push({ role, messages: [msg] });
       continue;
     }
 
-    // For assistant messages, each message is a separate step — don't merge them.
-    // This preserves the step-by-step flow of agent execution.
+ // For assistant messages, each message is a separate step — don't merge them.
+ // This preserves the step-by-step flow of agent execution.
     if (role === "assistant") {
       groups.push({ role, messages: [msg] });
       continue;
@@ -671,10 +464,9 @@ export function groupMessagesByRole(sorted: any[]): Array<{ role: string; messag
 }
 
 // ── Public: signGroup ──
-// Exact port of app.js signGroup.
 
 export function signGroup(group: { role: string; messages: any[] }): string {
-  // Agent cards: sign based on stage, status, and inner message count + latest part signatures
+ // Agent cards: sign based on stage, status, and inner message count + latest part signatures
   if (group.role === "agent-card") {
     const card = group.messages[0];
     const innerMsgs = card?._agentMessages || [];
@@ -705,7 +497,6 @@ export function signGroup(group: { role: string; messages: any[] }): string {
 }
 
 // ── Public: chatPlaceholder ──
-// Exact port of app.js chatPlaceholder.
 // Returns the first placeholder assistant message, or undefined if none.
 // The boolean-like presence test is: !!chatPlaceholder(messages).
 
@@ -733,147 +524,17 @@ export function chatPlaceholder(messages: any[]): any | undefined {
 }
 
 // ── Agent Messages ──
-// Exact port of agentMessage and buildAgentMessages from app.js (lines 5467–5513).
-//
-// agentMessage depends on eventToolPart and agentEventTargetText which are not
-// yet ported to TypeScript.  They are bridged via window.__legacyAgentMsg
-// during the migration period.
+// Agent output goes through the session/message system and is rendered via
+// agent cards (classifyMessage → agentChannels → AgentCard component).
+// buildAgentMessages intentionally returns [] to avoid duplicating that content
+// as standalone conversation messages. This matches the original
+// decision (line 5530) after discovering that building synthetic messages from
+// agentEvents produced garbled noise alongside real session-persisted messages.
 
-function legacyAgentMsg(): Record<string, any> {
-  return (window as any).__legacyAgentMsg || {};
+export function agentMessage(_event: any): any | null {
+  return null;
 }
 
-function agentEventTargetText(event: any): string {
-  const fn = legacyAgentMsg().agentEventTargetText;
-  if (typeof fn === "function") return fn(event);
-  if (!event) return "";
-  // Minimal fallback to avoid a blank result when legacy bridge is absent
-  return String(
-    event.text || event.summary || event.payload?.output || event.payload?.result || "",
-  );
-}
-
-function eventToolPart(event: any, options: { status?: string; output?: string } = {}): any | null {
-  const fn = legacyAgentMsg().eventToolPart;
-  if (typeof fn === "function") return fn(event, options);
-  const payload =
-    event?.payload && typeof event.payload === "object" && !Array.isArray(event.payload)
-      ? event.payload
-      : {};
-  const rawText =
-    typeof payload.text === "string"
-      ? payload.text
-      : typeof event?.text === "string"
-        ? event.text
-        : "";
-  let input = event?.input;
-  if (!input || typeof input !== "object" || Array.isArray(input)) {
-    input = payload.input;
-  }
-  if ((!input || typeof input !== "object" || Array.isArray(input)) && rawText.trim()) {
-    try {
-      const parsed = JSON.parse(rawText);
-      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-        input = parsed;
-      }
-    } catch {
-      input = { raw: rawText };
-    }
-  }
-  if (!input || typeof input !== "object" || Array.isArray(input)) {
-    input = {};
-  }
-  if (!event) return null;
-  return {
-    id: `agent-tool:${event.stage}:${event.id}`,
-    type: "tool",
-    tool:
-      event.toolName ||
-      event.tool ||
-      event.name ||
-      payload.toolName ||
-      payload.name ||
-      "",
-    state: {
-      status: options.status || "pending",
-      input,
-      raw: rawText,
-      output: options.output || "",
-    },
-  };
-}
-
-/**
- * Convert a single agent SSE event into a synthetic message object suitable
- * for rendering in the agent card transcript.  Returns null when the event
- * produces no visible content.
- *
- * Mirrors app.js agentMessage (line 5467).
- */
-export function agentMessage(event: any): any | null {
-  if (!event) return null;
-  const created = event.time?.created || Date.now();
-  if (
-    event.kind === "tool_call" ||
-    event.kind === "tool_delta" ||
-    event.kind === "tool_result"
-  ) {
-    const part = eventToolPart(event, {
-      status: event.kind === "tool_result" ? "completed" : "running",
-      output: event.kind === "tool_result" ? agentEventTargetText(event) : "",
-    });
-    if (!part) return null;
-    return {
-      _synthetic: true,
-      info: {
-        id: `agent:${event.stage}:${event.id}`,
-        role: "task_tool",
-        agent: event.stage,
-        time: { created },
-      },
-      parts: [part],
-    };
-  }
-  const text =
-    typeof event._liveText === "string" ? event._liveText : agentEventTargetText(event);
-  if (!text.trim()) return null;
-  const type = event.kind === "reasoning_delta" ? "reasoning" : "text";
-  return {
-    _synthetic: true,
-    info: {
-      id: `agent:${event.stage}:${event.id}`,
-      role: agentStageRole(event.stage),
-      agent: event.stage,
-      time: { created },
-    },
-    parts: [
-      {
-        id: `agent-part:${event.stage}:${event.id}`,
-        type,
-        text,
-        messageID: `agent:${event.stage}:${event.id}`,
-        sessionID: "",
-      },
-    ],
-  };
-}
-
-/**
- * Agent messages are now rendered in dedicated agent cards via classifyMessage.
- * This stub exists for compatibility; callers should use the agent card
- * rendering path instead.
- *
- * Mirrors app.js buildAgentMessages (line 5508).
- */
-export function buildAgentMessages(transcriptStages: Set<string> = new Set()): any[] {
-  const activeStages = activeAgentStages();
-  return (Array.isArray(messageStore.agentEvents) ? messageStore.agentEvents : [])
-    .filter((event: any) => {
-      const stage = String(event?.stage || "").trim().toLowerCase();
-      if (!stage || !activeStages.has(stage) || transcriptStages.has(stage)) return false;
-      return event?.kind !== "status";
-    })
-    .map((event: any) => agentMessage(event))
-    .filter(Boolean)
-    .sort((a: any, b: any) => (a.info?.time?.created || 0) - (b.info?.time?.created || 0));
+export function buildAgentMessages(_transcriptStages?: Set<string>): any[] {
+  return [];
 }

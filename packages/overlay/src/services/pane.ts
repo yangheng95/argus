@@ -1,22 +1,19 @@
 // ── Pane Resizer Service ──
-// Exact port of the sidebar / sections pane-resize logic from app.js.
-//
-// app.js references covered:
-//   - sanitizePaneWidth        (util — also in store/settings.ts)
-//   - clampNumber              (util)
-//   - paneHandleWidth          (DOM helper)
-//   - defaultRailWidth         (layout helper)
-//   - resolvedPaneWidths       (layout helper)
-//   - renderPaneLayout         (applies CSS custom properties)
-//   - resizePane               (drag handler)
-//   - onPaneResizeMove         (pointermove listener)
-//   - stopPaneResize           (pointerup / pointercancel listener)
-//   - startPaneResize          (pointerdown handler)
-//   - initPaneResizers         (attaches listeners to DOM handles)
-//   - applyPaneWidths          (imperatively set widths without dragging)
-//
+// references covered:
+// - sanitizePaneWidth (util — also in store/settings.ts)
+// - clampNumber (util)
+// - paneHandleWidth (DOM helper)
+// - defaultRailWidth (layout helper)
+// - resolvedPaneWidths (layout helper)
+// - renderPaneLayout (applies CSS custom properties)
+// - resizePane (drag handler)
+// - onPaneResizeMove (pointermove listener)
+// - stopPaneResize (pointerup / pointercancel listener)
+// - startPaneResize (pointerdown handler)
+// - initPaneResizers (attaches listeners to DOM handles)
+// - applyPaneWidths (imperatively set widths without dragging)
 // The service reads and writes two persistent values:
-//   sidebarWidth  and  sectionsWidth
+// sidebarWidth and sectionsWidth
 // via the callbacks supplied to initPaneResizers(), so the caller controls
 // where those values are stored (Solid store, plain state object, etc.).
 
@@ -32,10 +29,10 @@ export interface PaneCallbacks {
   /** Read the current pane state. */
   getState: () => PaneState;
   /**
-   * Called whenever the user finishes a drag or widths are applied
-   * programmatically.  Persist the new widths here (e.g. save to store /
-   * localStorage).
-   */
+ * Called whenever the user finishes a drag or widths are applied
+ * programmatically. Persist the new widths here (e.g. save to store /
+ * localStorage).
+ */
   onWidthsChanged: (
     sidebarWidth: number | null,
     sectionsWidth: number | null,
@@ -60,7 +57,6 @@ function clampNumber(value: number, min: number, max: number): number {
 /**
  * Return the rendered width of a pane resize handle element.
  * Falls back to the --ui-resizer-width CSS custom property.
- * Mirrors app.js paneHandleWidth().
  */
 export function paneHandleWidth(node: Element | null | undefined): number {
   if (!node) return 0;
@@ -79,7 +75,6 @@ export function paneHandleWidth(node: Element | null | undefined): number {
 
 /**
  * Compute the default rail width based on the current panel width.
- * Mirrors app.js defaultRailWidth().
  */
 export function defaultRailWidth(): number {
   const scale = currentUIScale();
@@ -92,7 +87,7 @@ export function defaultRailWidth(): number {
 }
 
 /**
- * Read the --ui-scale CSS custom property (mirrors app.js currentUIScale).
+ * Read the --ui-scale CSS custom property (
  */
 export function currentUIScale(): number {
   if (typeof document === "undefined") return 1;
@@ -105,7 +100,6 @@ export function currentUIScale(): number {
 
 /**
  * Compute the final sidebar and sections widths after overflow clamping.
- * Exact port of app.js resolvedPaneWidths().
  */
 export function resolvedPaneWidths(state: PaneState): {
   sidebar: number;
@@ -144,7 +138,7 @@ export function resolvedPaneWidths(state: PaneState): {
   let actualSidebar = state.sidebarCollapsed ? collapsedSidebar : sidebar;
   const sidebarFloor = state.sidebarCollapsed ? collapsedSidebar : railMin;
 
-  // First overflow pass — prefer-chat reduction
+ // First overflow pass — prefer-chat reduction
   if (actualSidebar + sections + chatPreferred > total) {
     let overflow = actualSidebar + sections + chatPreferred - total;
     const sidebarCap = Math.max(0, actualSidebar - sidebarFloor);
@@ -170,7 +164,7 @@ export function resolvedPaneWidths(state: PaneState): {
     }
   }
 
-  // Second overflow pass — hard chatMin reduction
+ // Second overflow pass — hard chatMin reduction
   if (actualSidebar + sections + chatMin > total) {
     const overflow = actualSidebar + sections + chatMin - total;
     const sectionsShrink = Math.min(
@@ -195,7 +189,6 @@ export function resolvedPaneWidths(state: PaneState): {
 /**
  * Apply the resolved pane widths as CSS custom properties on
  * document.documentElement.
- * Mirrors app.js renderPaneLayout().
  */
 export function renderPaneLayout(state: PaneState): void {
   if (typeof document === "undefined") return;
@@ -213,7 +206,7 @@ export function renderPaneLayout(state: PaneState): void {
 /**
  * Imperatively set sidebar and/or sections widths, re-render layout, and
  * call onWidthsChanged.
- * Equivalent to calling state.sidebarWidth = x; renderPaneLayout() in app.js.
+ * Equivalent to calling state.sidebarWidth = x; renderPaneLayout().
  */
 export function applyPaneWidths(
   sidebarWidth: number | null,
@@ -237,7 +230,6 @@ export function applyPaneWidths(
  * Mutates the PaneState values returned by callbacks.getState() by calling
  * renderPaneLayout with a derived state — state is NOT mutated; the caller is
  * responsible for updating their store in onWidthsChanged.
- * Mirrors app.js resizePane().
  */
 function resizePane(
   side: "left" | "right",
@@ -272,7 +264,7 @@ function resizePane(
     return;
   }
 
-  // side === "right"
+ // side === "right"
   const workspaceMain = document.getElementById("workspaceMain");
   const rect = workspaceMain?.getBoundingClientRect();
   if (!rect) return;
@@ -304,7 +296,7 @@ async function stopPaneResize(callbacks: PaneCallbacks): Promise<void> {
   paneDrag = null;
   delete document.body.dataset.resizing;
 
-  // Compute the final persisted values from the current CSS
+ // Compute the final persisted values from the current CSS
   const sidebarPx = Number.parseFloat(
     getComputedStyle(document.documentElement).getPropertyValue(
       "--ui-sidebar-width",
@@ -321,7 +313,7 @@ async function stopPaneResize(callbacks: PaneCallbacks): Promise<void> {
     Number.isFinite(sectionsPx) ? Math.round(sectionsPx) : null,
   );
 
-  // Clean up listeners (closures below)
+ // Clean up listeners (closures below)
   void finalSide; // used by surrounding closure
 }
 
@@ -351,7 +343,7 @@ function startPaneResize(
   if (handle) (handle as HTMLElement).dataset.active = "true";
   document.body.dataset.resizing = "true";
 
-  // Capture listeners with callbacks in closure
+ // Capture listeners with callbacks in closure
   function onMove(ev: PointerEvent) {
     onPaneResizeMove(ev, callbacks);
   }
@@ -375,7 +367,6 @@ function startPaneResize(
  * Attach pointerdown listeners to #leftPaneResizer and #rightPaneResizer.
  * Call once from onMount (or equivalent) after the DOM has been rendered.
  * Returns a cleanup function that removes the listeners.
- * Mirrors app.js dom.leftPaneResizer?.addEventListener / dom.rightPaneResizer?.addEventListener.
  */
 export function initPaneResizers(callbacks: PaneCallbacks): () => void {
   const leftHandle = document.getElementById("leftPaneResizer");
@@ -391,7 +382,7 @@ export function initPaneResizers(callbacks: PaneCallbacks): () => void {
   leftHandle?.addEventListener("pointerdown", onLeftDown);
   rightHandle?.addEventListener("pointerdown", onRightDown);
 
-  // Render layout immediately so the initial widths are applied
+ // Render layout immediately so the initial widths are applied
   renderPaneLayout(callbacks.getState());
 
   return () => {
@@ -402,7 +393,7 @@ export function initPaneResizers(callbacks: PaneCallbacks): () => void {
 
 /**
  * Stop any in-progress pane resize.
- * Call on window blur (mirrors app.js window "blur" handler).
+ * Call on window blur (
  */
 export async function cancelPaneResize(
   callbacks: PaneCallbacks,

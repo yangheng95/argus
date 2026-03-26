@@ -1,7 +1,6 @@
 // ── MCP Service ──
-// TypeScript port of MCP-related functions from app.js:
-//   disconnectMcp, removeMcpAuth, deleteAllMcp, toggleMcpFields.
-//
+// TypeScript port of MCP-related functions
+// disconnectMcp, removeMcpAuth, deleteAllMcp, toggleMcpFields.
 // DOM-rendering functions (renderExtensions, renderMcpList) are intentionally
 // NOT ported here — they are superseded by declarative Solid.js components.
 
@@ -13,7 +12,7 @@ import { apiJson } from "./api";
 
 /**
  * Disconnects an active MCP connection by name.
- * Mirrors disconnectMcp in app.js.
+ * Mirrors disconnectMcp.
  */
 export async function disconnectMcp(name: string): Promise<void> {
   await apiJson(`mcp/${encodeURIComponent(name)}/disconnect`, {
@@ -23,7 +22,7 @@ export async function disconnectMcp(name: string): Promise<void> {
 
 /**
  * Removes stored OAuth/auth credentials for an MCP server by name.
- * Mirrors removeMcpAuth in app.js.
+ * Mirrors removeMcpAuth.
  */
 export async function removeMcpAuth(name: string): Promise<void> {
   await apiJson(`mcp/${encodeURIComponent(name)}/auth`, {
@@ -33,10 +32,10 @@ export async function removeMcpAuth(name: string): Promise<void> {
 
 /**
  * Disconnects all MCP servers and removes their auth credentials.
- * NOTE: The native confirm dialog call and updateConfig call from app.js are
+ * NOTE: The native confirm dialog call and updateConfig call
  * omitted — callers are responsible for confirming and persisting config
  * changes before calling this function.
- * Mirrors the API call portion of deleteAllMcp in app.js.
+ * Mirrors the API call portion of deleteAllMcp.
  */
 export async function deleteAllMcp(): Promise<void> {
   const names = Object.keys(appStore.mcp ?? {});
@@ -50,14 +49,12 @@ export async function deleteAllMcp(): Promise<void> {
 /**
  * Toggles the visibility of MCP dialog fields based on the selected type
  * ("local" vs remote).
- *
- * NOTE: This function manipulates legacy DOM elements from app.js's
- * non-Solid UI (dom.mcpType, dom.mcpRemoteField, etc.).  It is provided
- * here for completeness during the migration period.  Once the MCP dialog
+ * NOTE: This function manipulates elements
+ * non-Solid UI (dom.mcpType, dom.mcpRemoteField, etc.). It is provided
+ * here for completeness during the. Once the MCP dialog
  * is ported to Solid.js this function should be removed.
- *
- * @deprecated Use Solid.js reactive state to drive MCP dialog field
- *   visibility instead of calling this function directly.
+ * @deprecated Prefer Solid.js reactive state for MCP dialog field
+ * visibility instead of calling this function directly.
  */
 export function toggleMcpFields(
   mcpTypeEl: HTMLSelectElement | null,

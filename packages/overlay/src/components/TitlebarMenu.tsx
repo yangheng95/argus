@@ -1,32 +1,29 @@
 // ── TitlebarMenu Component ──
-// Exact port of the titlebar "more" dropdown menu from app.js.
-//
 // Covers:
-//   - renderTitlebarMenu()       (lines 1697-1728)
-//   - setTitlebarMenu()          (lines 1686-1691)
-//   - closeTitlebarMenu()        (lines 1693-1695)
-//   - event handlers:
-//       btnTitlebarMenu click    (line 9943-9947)
-//       pointerdown outside      (lines 9949-9957)
-//       Escape key               (lines 9959-9962)
-//       btnLocale click          (lines 9933-9936)
-//       btnTheme click           (lines 9926-9931)
-//       btnSettings click        (lines 9938-9941)
-//       btnLog click             (lines 11119-11122)
-//       btnPin click             (lines 10392-10410)
-//       chkUnattended change     (lines 9972-9979)
-//       chkAutoPermission change (lines 9964-9970)
-//       chkAutoQuestion change   (lines 9981-9987)
-//       chkShowTranscript change (lines 9989-9995)
-//       opacityRange input/change (lines 9997-10007)
-//
+// - renderTitlebarMenu() (lines 1697-1728)
+// - setTitlebarMenu() (lines 1686-1691)
+// - closeTitlebarMenu() (lines 1693-1695)
+// - event handlers:
+// btnTitlebarMenu click (line 9943-9947)
+// pointerdown outside (lines 9949-9957)
+// Escape key (lines 9959-9962)
+// btnLocale click (lines 9933-9936)
+// btnTheme click (lines 9926-9931)
+// btnSettings click (lines 9938-9941)
+// btnLog click (lines 11119-11122)
+// btnPin click (lines 10392-10410)
+// chkUnattended change (lines 9972-9979)
+// chkAutoPermission change (lines 9964-9970)
+// chkAutoQuestion change (lines 9981-9987)
+// chkShowTranscript change (lines 9989-9995)
+// opacityRange input/change (lines 9997-10007)
 // Import contract:
-//   settingsStore  — reactive settings (theme, alwaysOnTop, unattended, …)
-//   applySettings  — validate + write partial settings into store
-//   saveSettings   — persist store to localStorage
-//   appStore       — runtime UI state (used by callers; exposed via props)
-//   setAppStore    — update runtime state
-//   t              — i18n translation helper
+// settingsStore — reactive settings (theme, alwaysOnTop, unattended, …)
+// applySettings — validate + write partial settings into store
+// saveSettings — persist store to localStorage
+// appStore — runtime UI state (used by callers; exposed via props)
+// setAppStore — update runtime state
+// t — i18n translation helper
 
 import {
   createSignal,
@@ -41,7 +38,7 @@ import {
   saveSettings,
 } from "../store/settings";
 // appStore / setAppStore are imported per the Phase 3 import contract so that
-// callers can bridge appStore-sourced data (e.g. connection status, log
+// callers can pass appStore-sourced data (e.g. connection status, log
 // entries) into the menu without a separate import line at the call site.
 import { appStore, setAppStore } from "../store/app";
 import { t } from "../utils/i18n";
@@ -57,22 +54,19 @@ import {
 
 export interface TitlebarMenuProps {
   /**
-   * Called when the user clicks "Server Config".
-   * Mirrors app.js openServerSettings().
-   */
+ * Called when the user clicks "Server Config".
+ */
   onOpenSettings?: () => void;
 
   /**
-   * Called when the user clicks "Logs".
-   * Mirrors app.js openLogViewer().
-   */
+ * Called when the user clicks "Logs".
+ */
   onOpenLog?: () => void;
 
   /**
-   * Called when the user changes locale (toggle zh-CN ↔ en-US).
-   * Receives the new locale string.
-   * Mirrors app.js setLocale().
-   */
+ * Called when the user changes locale (toggle zh-CN ↔ en-US).
+ * Receives the new locale string.
+ */
   onLocaleChange?: (locale: string) => void;
 }
 
@@ -84,7 +78,7 @@ async function currentTauriWindow(): Promise<any | null> {
     try {
       return getCurrent() as any;
     } catch {
-      // Not running inside Tauri
+ // Not running inside Tauri
     }
   }
   return null;
@@ -93,12 +87,12 @@ async function currentTauriWindow(): Promise<any | null> {
 // ── Component ──
 
 export function TitlebarMenu(props: TitlebarMenuProps) {
-  // ── Local state ──
+ // ── Local state ──
   const [menuOpen, setMenuOpen] = createSignal(false);
 
-  // ── Derived ──
+ // ── Derived ──
 
-  // Theme label shown in the menu item (mirrors renderTitlebarMenu btnThemeValue)
+ // Theme label shown in the menu item (mirrors renderTitlebarMenu btnThemeValue)
   const themeLabel = createMemo(() => {
     const theme = sanitizeTheme(settingsStore.theme);
     if (theme === "light") return t("settings.theme.light");
@@ -106,19 +100,19 @@ export function TitlebarMenu(props: TitlebarMenuProps) {
     return t("settings.theme.dark");
   });
 
-  // Pin label (mirrors renderTitlebarMenu btnPinValue)
+ // Pin label (mirrors renderTitlebarMenu btnPinValue)
   const pinLabel = createMemo(() =>
     settingsStore.alwaysOnTop ? t("common.yes") : t("common.no"),
   );
 
-  // Locale label shown in the menu item (mirrors renderLocale btnLocaleLabel)
+ // Locale label shown in the menu item (mirrors renderLocale btnLocaleLabel)
   const localeLabel = createMemo(() =>
     settingsStore.locale === "zh-CN"
       ? t("settings.language.zh_cn")
       : t("settings.language.en_us"),
   );
 
-  // Locale toggle title / aria-label (mirrors renderLocale btnLocale.title)
+ // Locale toggle title / aria-label (mirrors renderLocale btnLocale.title)
   const localeToggleTitle = createMemo(() => {
     const next = settingsStore.locale === "zh-CN" ? "en-US" : "zh-CN";
     return next === "zh-CN"
@@ -126,12 +120,12 @@ export function TitlebarMenu(props: TitlebarMenuProps) {
       : t("settings.switch_to_en");
   });
 
-  // Opacity as integer percent (mirrors renderTitlebarMenu opacityRange / opacityValue)
+ // Opacity as integer percent (mirrors renderTitlebarMenu opacityRange / opacityValue)
   const opacityPct = createMemo(() =>
     Math.round(sanitizeOpacity(settingsStore.opacity) * 100),
   );
 
-  // ── Menu open / close helpers ──
+ // ── Menu open / close helpers ──
 
   function openMenu() {
     setMenuOpen(true);
@@ -145,9 +139,9 @@ export function TitlebarMenu(props: TitlebarMenuProps) {
     setMenuOpen((v) => !v);
   }
 
-  // ── Action handlers ──
+ // ── Action handlers ──
 
-  // Locale toggle — mirrors app.js dom.btnLocale click handler
+ // Locale toggle —
   async function handleLocaleToggle() {
     const next =
       settingsStore.locale === "zh-CN" ? "en-US" : "zh-CN";
@@ -155,8 +149,8 @@ export function TitlebarMenu(props: TitlebarMenuProps) {
     closeMenu();
   }
 
-  // Theme cycle — mirrors app.js dom.btnTheme click handler
-  // resolvedTheme() === "light" → switch to "dark"; otherwise → "light"
+ // Theme cycle —
+ // resolvedTheme() === "light" → switch to "dark"; otherwise → "light"
   async function handleThemeToggle() {
     const next = resolvedTheme() === "light" ? "dark" : "light";
     setSettingsStore("theme", next);
@@ -166,25 +160,25 @@ export function TitlebarMenu(props: TitlebarMenuProps) {
     closeMenu();
   }
 
-  // Settings button — mirrors app.js dom.btnSettings click handler
+ // Settings button —
   function handleOpenSettings() {
     props.onOpenSettings?.();
     closeMenu();
   }
 
-  // Log button — mirrors app.js dom.btnLog click handler
+ // Log button —
   function handleOpenLog() {
     props.onOpenLog?.();
     closeMenu();
   }
 
-  // Pin (always on top) toggle — mirrors app.js dom.btnPin click handler
+ // Pin (always on top) toggle —
   async function handlePinToggle() {
     const next = !settingsStore.alwaysOnTop;
     const win = await currentTauriWindow();
     if (win && typeof win.setAlwaysOnTop === "function") {
       await win.setAlwaysOnTop(next).catch(() => undefined);
-      // Sync back the actual state from the window (mirrors app.js syncPin)
+ // Sync back the actual state from the window (
       const actual = await win
         .isAlwaysOnTop?.()
         .catch(() => next);
@@ -196,7 +190,7 @@ export function TitlebarMenu(props: TitlebarMenuProps) {
     closeMenu();
   }
 
-  // Unattended toggle — mirrors app.js dom.chkUnattended change handler
+ // Unattended toggle —
   async function handleUnattendedChange(checked: boolean) {
     setSettingsStore("unattended", checked);
     applySettings({ ...settingsStore, unattended: checked });
@@ -204,7 +198,7 @@ export function TitlebarMenu(props: TitlebarMenuProps) {
     closeMenu();
   }
 
-  // Auto-permission toggle — mirrors app.js dom.chkAutoPermission change handler
+ // Auto-permission toggle —
   async function handleAutoPermissionChange(checked: boolean) {
     setSettingsStore("autoPermission", checked);
     applySettings({ ...settingsStore, autoPermission: checked });
@@ -212,7 +206,7 @@ export function TitlebarMenu(props: TitlebarMenuProps) {
     closeMenu();
   }
 
-  // Auto-question toggle — mirrors app.js dom.chkAutoQuestion change handler
+ // Auto-question toggle —
   async function handleAutoQuestionChange(checked: boolean) {
     setSettingsStore("autoQuestion", checked);
     applySettings({ ...settingsStore, autoQuestion: checked });
@@ -220,7 +214,7 @@ export function TitlebarMenu(props: TitlebarMenuProps) {
     closeMenu();
   }
 
-  // Show transcript details toggle — mirrors app.js dom.chkShowTranscriptDetails change handler
+ // Show transcript details toggle —
   async function handleShowTranscriptDetailsChange(checked: boolean) {
     setSettingsStore("showTranscriptDetails", checked);
     applySettings({ ...settingsStore, showTranscriptDetails: checked });
@@ -228,14 +222,14 @@ export function TitlebarMenu(props: TitlebarMenuProps) {
     closeMenu();
   }
 
-  // Opacity range — mirrors app.js opacityRange input handler (live update)
+ // Opacity range —
   function handleOpacityInput(rawValue: string) {
     const next = sanitizeOpacity(Number(rawValue) / 100);
     setSettingsStore("opacity", next);
     void applyOpacity(next);
   }
 
-  // Opacity range — mirrors app.js opacityRange change handler (commit + persist)
+ // Opacity range —
   async function handleOpacityChange(rawValue: string) {
     const next = sanitizeOpacity(Number(rawValue) / 100);
     setSettingsStore("opacity", next);
@@ -245,10 +239,10 @@ export function TitlebarMenu(props: TitlebarMenuProps) {
     closeMenu();
   }
 
-  // ── Lifecycle ──
+ // ── Lifecycle ──
 
   onMount(() => {
-    // Close menu on click outside — mirrors app.js pointerdown handler
+ // Close menu on click outside —
     function onPointerDown(event: PointerEvent) {
       if (!menuOpen()) return;
       const target = event.target;
@@ -260,7 +254,7 @@ export function TitlebarMenu(props: TitlebarMenuProps) {
       closeMenu();
     }
 
-    // Close menu on Escape — mirrors app.js keydown handler
+ // Close menu on Escape —
     function onKeyDown(event: KeyboardEvent) {
       if (event.key !== "Escape") return;
       closeMenu();
@@ -275,7 +269,7 @@ export function TitlebarMenu(props: TitlebarMenuProps) {
     });
   });
 
-  // ── Render ──
+ // ── Render ──
 
   return (
     <div class="titlebar-menu-wrap" data-no-drag="true">

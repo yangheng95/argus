@@ -2,6 +2,7 @@ import { Hono } from "hono"
 import { describeRoute, validator, resolver } from "hono-openapi"
 import z from "zod"
 import { Config } from "../../config/config"
+import { OrchestratorConfig } from "../../orchestrator/config"
 import { ChannelSupervisor } from "@/channel/supervisor"
 import { Provider } from "../../provider/provider"
 import { PromptCatalog } from "../../config/prompt-catalog"
@@ -32,7 +33,21 @@ export const ConfigRoutes = lazy(() =>
         },
       }),
       async (c) => {
-        return c.json(await Config.get())
+        const [raw, orch] = await Promise.all([Config.get(), OrchestratorConfig.get()])
+        // Merge effective scalar orchestrator values (max_runs / max_replans / etc.) into the
+        // response so the frontend can display correct placeholder values.
+        // Only scalar fields are merged — nested agent configs (spec/planner/evaluator/delivery)
+        // are intentionally omitted to avoid writing verbose defaults into the user's config file.
+        // User-supplied values always win.
+        const userOrch = raw.orchestrator || {}
+        const orchestrator = {
+          max_runs: userOrch.max_runs ?? orch.max_runs,
+          max_replans: userOrch.max_replans ?? orch.max_replans,
+          same_plan_retry_limit: userOrch.same_plan_retry_limit ?? orch.same_plan_retry_limit,
+          stage_max_retries: userOrch.stage_max_retries ?? orch.stage_max_retries,
+          ...userOrch,
+        }
+        return c.json({ ...raw, orchestrator })
       },
     )
     .patch(

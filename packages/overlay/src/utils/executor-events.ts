@@ -1,5 +1,4 @@
 // ── Executor Event Utilities ──
-// Exact port of executor event helper functions from app.js (lines 7411–8056).
 // Covers parsing, normalisation, merging, and message-building for executor
 // events fed to the overlay conversation view.
 
@@ -57,7 +56,7 @@ function processStatusLabel(status: string): string {
 }
 
 // ── Tool part builder (local copy to avoid circular imports) ──
-// Matches app.js eventToolPart / eventToolName / eventToolStatus.
+// Matches eventToolPart / eventToolName / eventToolStatus.
 
 function eventToolName(event: any): string {
   return (
@@ -200,11 +199,23 @@ export function executorEventSourceKind(kind: string, payload: any = {}): string
   return "status";
 }
 
+// Protocol-noise event types that should never become visible executor events.
+// The SSE router (events.ts) filters these for the real-time path; this set
+// guards the API-loaded history path (loadExecutorEvents) identically.
+const EXECUTOR_NOISE_TYPES = new Set([
+  "message.updated", "message.part.updated", "message.part.delta",
+  "protocol.raw", "executor.status", "executor.progress",
+  "session.diff", "session.idle", "session.status", "session.error",
+  "task.report",
+]);
+
 /**
  * Normalise a raw server event object into a canonical ExecutorEvent shape.
- * Returns null when the event carries no useful payload.
+ * Returns null when the event carries no useful payload or is protocol noise.
  */
 export function executorEventEntry(raw: any): ExecutorEvent | null {
+  const rawType = String(raw?.type || raw?.payload?.type || "").trim().toLowerCase();
+  if (rawType && EXECUTOR_NOISE_TYPES.has(rawType)) return null;
   const kind = typeof raw?.kind === "string" && raw.kind ? raw.kind : executorEventKind(raw?.type);
   const payload =
     record(raw?.payload) && record((raw.payload as any).payload)
@@ -704,7 +715,6 @@ export function buildExecutorMessages(): any[] {
 /**
  * Sync the `_targetText` / `_liveText` cache fields on a single executor event
  * object in place. Also schedules reasoning-part auto-hide when relevant.
- *
  * Note: this mutates the event object. Callers must ensure the object is not
  * a Solid store proxy when calling this function.
  */
@@ -831,12 +841,11 @@ export function mergeExecutorEventList(events: ExecutorEvent[] = [], event: Exec
 /**
  * Fetch executor events for the given runID from the server, normalise them,
  * and write the result into the executor store.
- *
  * Skips the fetch when:
  * - no task is selected,
  * - runID is empty,
  * - or the store already has fresh data for this runID and the task is not
- *   actively running.
+ * actively running.
  */
 export async function loadExecutorEvents(
   runID = (boardStore.board?.task?.activeRunID as string | undefined) ?? "",
@@ -860,20 +869,20 @@ export async function loadExecutorEvents(
 
   try {
     const events = await apiJson(`run/${encodeURIComponent(next)}/executor-events`);
-    // Guard: bail out if the selected task or active run changed during fetch.
+ // Guard: bail out if the selected task or active run changed during fetch.
     if (boardStore.selectedTaskID !== boardStore.board?.task?.id) return executorStore.events as ExecutorEvent[];
     if ((boardStore.board?.task?.activeRunID ?? "") !== next) return executorStore.events as ExecutorEvent[];
     const normalised = (Array.isArray(events) ? events : [])
       .map(executorEventEntry)
       .filter((item): item is ExecutorEvent => !!item)
       .reduce((items, item) => mergeExecutorEventList(items, item), [] as ExecutorEvent[]);
-    // Use clearExecutorEvents + setExecutorEvents to reset runID then populate.
-    // appendExecutorEvent handles runID on first call; for a bulk load we clear
-    // and seed via setExecutorEvents, then manually seed runID by appending the
-    // first event that carries one (if any) — but since setExecutorEvents does
-    // not update runID we instead use clearExecutorEvents followed by a single
-    // appendExecutorEvent for each item, which is the pattern that correctly
-    // propagates runID through the store.
+ // Use clearExecutorEvents + setExecutorEvents to reset runID then populate.
+ // appendExecutorEvent handles runID on first call; for a bulk load we clear
+ // and seed via setExecutorEvents, then manually seed runID by appending the
+ // first event that carries one (if any) — but since setExecutorEvents does
+ // not update runID we instead use clearExecutorEvents followed by a single
+ // appendExecutorEvent for each item, which is the pattern that correctly
+ // propagates runID through the store.
     clearExecutorEvents();
     normalised.forEach((item) => appendExecutorEvent(item));
     return executorStore.events as ExecutorEvent[];

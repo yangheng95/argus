@@ -1,5 +1,4 @@
 // ── Time utilities ──
-// Exact port of stamp / formatDuration / timeLocaleOptions from app.js,
 // plus localeTag dependency from i18n module.
 
 import { localeTag, t } from "./i18n";
