@@ -1064,15 +1064,6 @@ export function Board(props: BoardProps) {
       </div>
 
       <SectionFrame
-        id="overviewSection"
-        title={t("section.overview")}
-        icon={SECTION_ICONS.overview}
-        bodyId="overviewBody"
-      >
-        <OverviewPanel overview={overview()} />
-      </SectionFrame>
-
-      <SectionFrame
         id="specSection"
         title={t("section.spec")}
         icon={SECTION_ICONS.spec}
@@ -1082,18 +1073,6 @@ export function Board(props: BoardProps) {
         badgeTone={spec() ? "accent" : ""}
       >
         <SpecPanel spec={spec()} preview={boardStore.specPreview} />
-      </SectionFrame>
-
-      <SectionFrame
-        id="planSection"
-        title={t("section.plan")}
-        icon={SECTION_ICONS.plan}
-        bodyId="planBody"
-        badgeId="planBadge"
-        badgeText={plan() ? `v${plan()?.version}` : ""}
-        badgeTone={plan() ? "accent" : ""}
-      >
-        <PlanPanel plan={plan()} preview={boardStore.planPreview} />
       </SectionFrame>
 
       <SectionFrame
@@ -1116,6 +1095,18 @@ export function Board(props: BoardProps) {
           onResolve={props.onResolveInteraction}
           onReject={props.onRejectInteraction}
         />
+      </SectionFrame>
+
+      <SectionFrame
+        id="planSection"
+        title={t("section.plan")}
+        icon={SECTION_ICONS.plan}
+        bodyId="planBody"
+        badgeId="planBadge"
+        badgeText={plan() ? `v${plan()?.version}` : ""}
+        badgeTone={plan() ? "accent" : ""}
+      >
+        <PlanPanel plan={plan()} preview={boardStore.planPreview} />
       </SectionFrame>
 
       <SectionFrame
@@ -1159,6 +1150,15 @@ export function Board(props: BoardProps) {
         }
       >
         <DeliveryPanel delivery={delivery()} />
+      </SectionFrame>
+
+      <SectionFrame
+        id="overviewSection"
+        title={t("section.overview")}
+        icon={SECTION_ICONS.overview}
+        bodyId="overviewBody"
+      >
+        <OverviewPanel overview={overview()} />
       </SectionFrame>
     </>
   );

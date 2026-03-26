@@ -28,6 +28,14 @@ export function MessageView(props: { message: any }) {
   const parts = () => orderedMessageParts(props.message);
   const time = () => stamp(props.message.info?.time?.created);
 
+  const executorType = createMemo(() => {
+    if (role() !== "executor") return undefined;
+    const p = parts();
+    return p.length > 0 && p.every((part: any) => part.type === "executor_process")
+      ? "process"
+      : "events";
+  });
+
  // Check if this message is empty (would produce no visible output)
   const hasContent = createMemo(() => {
     const p = parts();
@@ -47,7 +55,7 @@ export function MessageView(props: { message: any }) {
 
   return (
     <Show when={hasContent()}>
-      <article class="turn msg" data-role={role()}>
+      <article class="turn msg" data-role={role()} data-executor-type={executorType()}>
         <div class="msg-head">
           <span class="msg-role">{roleLabel(role())}</span>
           <span class="msg-time">{time()}</span>

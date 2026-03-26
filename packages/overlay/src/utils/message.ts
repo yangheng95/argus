@@ -53,6 +53,7 @@ export function roleLabel(role: string): string {
   if (role === "spec") return t("chat.role.spec");
   if (role === "system") return t("chat.role.system");
   if (role === "goal_gate") return t("chat.role.goal");
+  if (role === "executor") return t("chat.role.executor");
   return t("chat.role.message");
 }
 
@@ -169,6 +170,11 @@ export function effectiveRole(msg: any, rootSessionID: string): string {
     typeof msg.info?.sessionID === "string" ? msg.info.sessionID : "";
   if (rootSessionID && sessionID && sessionID !== rootSessionID) {
     return agentStageRole(phaseFromMessage(msg) || msg.info?.agent || "system");
+  }
+  // Synthetic user messages from the board context (not typed by the real user)
+  // are operator actions — avoid impersonating the user role.
+  if (msg._synthetic && msg.info?.agent) {
+    return agentStageRole(msg.info.agent);
   }
   return role;
 }

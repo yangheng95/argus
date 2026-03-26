@@ -321,7 +321,7 @@ export function buildBoardContextMessages(
     if (request) syntheticMsgs.push(request);
     if (interaction.status === "answered" || interaction.status === "rejected") {
       const response = syntheticTextMessage(
-        "user",
+        "system",
         interaction.time?.resolved || interaction.time?.updated || Date.now(),
         interactionResponseText(interaction),
       );
