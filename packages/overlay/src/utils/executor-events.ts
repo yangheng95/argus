@@ -504,7 +504,7 @@ export function executorMessage(event: ExecutorEvent, events: ExecutorEvent[] = 
     _synthetic: true,
     info: {
       id: event.id,
-      role: "assistant",
+      role: "executor",
       time: { created: event.time?.created || Date.now() },
     },
     parts: [part],
@@ -680,7 +680,7 @@ export function executorProcessMessage(processes: any[]): any {
     _synthetic: true,
     info: {
       id: `executor:processes:${boardStore.selectedTaskID || "active"}`,
-      role: "assistant",
+      role: "executor",
       time: { created: processes[0]?.time?.created || Date.now() },
     },
     parts: processes.map((process) => ({

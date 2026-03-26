@@ -1966,11 +1966,11 @@ body[data-theme="light"] .msg[data-role="user"] {
   --msg-role-tone: #f7fffc;
 }
 body[data-theme="light"] .msg[data-role="assistant"] {
-  --msg-surface: #fafbfc;
-  --msg-border: #dfe3e8;
-  --msg-role-bg: #f2f4f7;
-  --msg-role-border: #dfe3e8;
-  --msg-role-tone: #5f6772;
+  --msg-surface: rgba(30, 110, 200, 0.07);
+  --msg-border: rgba(30, 110, 200, 0.20);
+  --msg-role-bg: rgba(30, 110, 200, 0.10);
+  --msg-role-border: rgba(30, 110, 200, 0.24);
+  --msg-role-tone: #1878c8;
 }
 body[data-theme="light"] .msg[data-role="planner"] {
   --msg-surface: rgba(44, 112, 179, 0.10);
@@ -2021,6 +2021,14 @@ body[data-theme="light"] .msg[data-role="task_tool"] {
   --msg-role-border: rgba(22, 163, 148, 0.32);
   --msg-role-tone: #0e7868;
 }
+body[data-theme="light"] .msg[data-role="executor"] {
+  --msg-surface: rgba(230, 140, 50, 0.08);
+  --msg-border: rgba(230, 140, 50, 0.22);
+  --msg-role-bg: rgba(230, 140, 50, 0.12);
+  --msg-role-border: rgba(230, 140, 50, 0.28);
+  --msg-role-tone: rgba(160, 85, 10, 0.95);
+}
+
 
 /* Light theme: agent cards */
 body[data-theme="light"] .agent-card-header {
@@ -2063,8 +2071,8 @@ body[data-theme="light"] .section-badge {
   border-radius: var(--panel-radius);
   display: flex;
   flex-direction: column;
-  gap: 0;
-  padding: 0;
+  gap: calc(10px * var(--ui-scale));
+  padding: calc(10px * var(--ui-scale));
   background: var(--panel-fill);
   box-shadow: var(--shadow);
   transition: border-color 120ms, background 140ms ease, box-shadow 120ms;
@@ -3052,11 +3060,11 @@ body[data-theme="light"] .section-badge {
 .msg[data-role="assistant"] {
   align-items: flex-start;
   --msg-max-width: min(86%, calc(800px * var(--ui-scale)));
-  --msg-surface: var(--card-fill);
-  --msg-border: var(--border);
-  --msg-role-bg: rgba(255, 255, 255, 0.04);
-  --msg-role-border: var(--border);
-  --msg-role-tone: var(--text-strong);
+  --msg-surface: rgba(60, 140, 220, 0.10);
+  --msg-border: rgba(60, 140, 220, 0.22);
+  --msg-role-bg: rgba(60, 140, 220, 0.14);
+  --msg-role-border: rgba(60, 140, 220, 0.28);
+  --msg-role-tone: rgba(90, 165, 245, 0.92);
 }
 
 .msg[data-role="planner"] {
@@ -3120,6 +3128,27 @@ body[data-theme="light"] .section-badge {
   --msg-role-bg: rgba(52, 190, 170, 0.18);
   --msg-role-border: rgba(52, 190, 170, 0.38);
   --msg-role-tone: color-mix(in srgb, var(--accent) 68%, var(--good) 32%);
+}
+
+.msg[data-role="executor"] {
+  align-items: flex-start;
+  --msg-surface: rgba(230, 140, 50, 0.10);
+  --msg-border: rgba(230, 140, 50, 0.24);
+  --msg-shadow: none;
+  --msg-role-bg: rgba(230, 140, 50, 0.14);
+  --msg-role-border: rgba(230, 140, 50, 0.30);
+  --msg-role-tone: rgba(230, 140, 50, 0.95);
+}
+.msg[data-role="executor"][data-executor-type="process"] {
+  --msg-max-width: 100%;
+}
+.msg[data-role="executor"][data-executor-type="process"] .msg-bubble {
+  width: 100%;
+  max-width: 100%;
+  padding: 0;
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
 }
 
 /* ── Agent Cards (collapsible per-stage containers) ── */
@@ -3331,7 +3360,8 @@ body[data-theme="light"] .section-badge {
 .msg[data-role="delivery"] .msg-time,
 .msg[data-role="spec"] .msg-time,
 .msg[data-role="system"] .msg-time,
-.msg[data-role="goal_gate"] .msg-time {
+.msg[data-role="goal_gate"] .msg-time,
+.msg[data-role="executor"] .msg-time {
   font-size: calc(10px * var(--ui-scale));
 }
 

@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "en-US",
-    "panel_revision": "d2d7a592e79c99d2"
+    "panel_revision": "eff961de7c84fc81"
   },
   "brand.guide_kicker": "Quick Guide",
   "brand.guide_positioning_body": "This is the task cockpit, not decorative chrome: left selects tasks, center drives execution, right verifies spec, plan, evaluation, and file changes so the agent does not drift.",
@@ -50,6 +50,7 @@
   "chat.placeholder_disabled": "Connect to OpenCorvus to start a task.",
   "chat.role.assistant": "Assistant",
   "chat.role.delivery": "Delivery",
+  "chat.role.executor": "Executor",
   "chat.role.goal": "Goal",
   "chat.role.message": "Message",
   "chat.role.planner": "Plan",
