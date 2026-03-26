@@ -1818,7 +1818,7 @@ function scheduleBoard(delay = 0) {
     void loadBoard({ sync: true });
   }, delay);
 }
-function rootTaskSessionID$1() {
+function rootTaskSessionID$2() {
   const sessionID = boardStore.board?.task?.sessionID;
   return typeof sessionID === "string" ? sessionID : "";
 }
@@ -1875,6 +1875,33 @@ function visibleTasks() {
   ].sort((a, b) => taskUpdated$1(b) - taskUpdated$1(a));
 }
 
+const [store$2, setStore$2] = createStore({
+  expandedAgentCards: {},
+  expandedToolOutputs: {}
+});
+function clearConversationUiState() {
+  setStore$2("expandedAgentCards", reconcile({}, { merge: false }));
+  setStore$2("expandedToolOutputs", reconcile({}, { merge: false }));
+}
+function agentCardExpanded(cardID, running) {
+  if (!cardID) return running;
+  const explicit = store$2.expandedAgentCards[cardID];
+  return typeof explicit === "boolean" ? explicit : running;
+}
+function toggleAgentCardExpanded(cardID, running) {
+  if (!cardID) return;
+  const next = !agentCardExpanded(cardID, running);
+  setStore$2("expandedAgentCards", cardID, next);
+}
+function toolOutputExpanded(partID) {
+  if (!partID) return false;
+  return store$2.expandedToolOutputs[partID] === true;
+}
+function toggleToolOutputExpanded(partID) {
+  if (!partID) return;
+  setStore$2("expandedToolOutputs", partID, (value) => value !== true);
+}
+
 var _tmpl$$i = /* @__PURE__ */ template(`<span class=tool-detail>`), _tmpl$2$g = /* @__PURE__ */ template(`<div class=msg-tool><span class=tool-icon></span><span class=tool-name></span><span class=tool-status>`), _tmpl$3$f = /* @__PURE__ */ template(`<div class=msg-tool-input>`), _tmpl$4$f = /* @__PURE__ */ template(`<div class=msg-tool-output>`), _tmpl$5$f = /* @__PURE__ */ template(`<div class=msg-tool-error>`);
 function ToolPart(props) {
   const state = () => props.part.state || {};
@@ -1894,6 +1921,7 @@ function ToolPart(props) {
   };
   const output = () => stripAnsi$1(state().output || "");
   const error = () => stripAnsi$1(state().error || "") || output();
+  const expanded = () => toolOutputExpanded(props.part?.id || "");
   return [(() => {
     var _el$ = _tmpl$2$g(), _el$2 = _el$.firstChild, _el$3 = _el$2.nextSibling, _el$5 = _el$3.nextSibling;
     insert(_el$2, icon);
@@ -1934,8 +1962,9 @@ function ToolPart(props) {
     },
     get children() {
       var _el$7 = _tmpl$4$f();
-      _el$7.$$click = (e) => e.currentTarget.classList.toggle("msg-tool-output--expanded");
+      _el$7.$$click = () => toggleToolOutputExpanded(props.part?.id || "");
       insert(_el$7, output);
+      createRenderEffect(() => _el$7.classList.toggle("msg-tool-output--expanded", !!expanded()));
       return _el$7;
     }
   }), createComponent(Show, {
@@ -2166,7 +2195,7 @@ function renderFilePart(part) {
   return `<div class="msg-text" style="font-family:var(--mono);font-size:var(--ui-font-small);color:var(--text-soft)">${escapeHtml$2(name)}</div>`;
 }
 function MessageView(props) {
-  const role = () => effectiveRole$1(props.message, rootTaskSessionID$1());
+  const role = () => effectiveRole$1(props.message, rootTaskSessionID$2());
   const parts = () => orderedMessageParts(props.message);
   const time = () => stamp(props.message.info?.time?.created);
   const hasContent = createMemo(() => {
@@ -2330,18 +2359,14 @@ var _tmpl$$f = /* @__PURE__ */ template(`<span class="agent-card-badge agent-car
 function stageLabel(stage) {
   return agentStageLabel(stage);
 }
-const expandedOverrides = /* @__PURE__ */ new Map();
 function AgentCard(props) {
-  const initial = expandedOverrides.has(props.key) ? expandedOverrides.get(props.key) : props.status === "running";
-  const [expanded, setExpanded] = createSignal(initial);
+  const expanded = () => agentCardExpanded(props.cardID, props.status === "running");
   const label = () => {
     const base = stageLabel(props.stage);
     return props.round > 0 ? `${base} #${props.round}` : base;
   };
   const toggle = () => {
-    const next = !expanded();
-    setExpanded(next);
-    expandedOverrides.set(props.key, next);
+    toggleAgentCardExpanded(props.cardID, props.status === "running");
   };
   return (() => {
     var _el$ = _tmpl$3$d(), _el$2 = _el$.firstChild, _el$4 = _el$2.firstChild, _el$5 = _el$4.nextSibling;
@@ -2400,7 +2425,7 @@ function AgentCard(props) {
       }
     }), null);
     createRenderEffect((_p$) => {
-      var _v$ = !!expanded(), _v$2 = props.stage, _v$3 = props.key, _v$4 = expanded();
+      var _v$ = !!expanded(), _v$2 = props.stage, _v$3 = props.cardID, _v$4 = expanded();
       _v$ !== _p$.e && _el$.classList.toggle("agent-card--expanded", _p$.e = _v$);
       _v$2 !== _p$.t && setAttribute(_el$, "data-stage", _p$.t = _v$2);
       _v$3 !== _p$.a && setAttribute(_el$, "data-card-key", _p$.a = _v$3);
@@ -3642,6 +3667,8 @@ function syncSectionPhases(board, changesCount = 0) {
 const [store, setStore] = createStore({
   messages: [],
   agentEvents: [],
+  agentCards: {},
+  agentCardOrder: [],
   selectedTaskID: "",
   showTranscriptDetails: false,
   agentStatus: null,
@@ -3663,12 +3690,12 @@ function rebuildMessageIndex() {
 function messageById(id) {
   return messageIndex.get(id);
 }
-function messageTime$1(item) {
+function messageTime(item) {
   return Number(item?.info?.time?.created || item?.info?.time?.updated || 0);
 }
 function sortMessages(list) {
   return [...list].map((item, index) => ({ item, index })).sort(
-    (a, b) => messageTime$1(a.item) - messageTime$1(b.item) || a.index - b.index
+    (a, b) => messageTime(a.item) - messageTime(b.item) || a.index - b.index
   ).map((x) => x.item);
 }
 function record$5(value) {
@@ -3779,10 +3806,267 @@ function mergeLoadedConversationMessages(left, right) {
   }
   return normalizeLoadedMessages(result);
 }
+const AGENT_STAGES$1 = /* @__PURE__ */ new Set(["spec", "planner", "goal", "judge", "delivery"]);
+function rootTaskSessionID$1() {
+  const sessionID = boardStore.board?.task?.sessionID;
+  return typeof sessionID === "string" ? sessionID : "";
+}
+function classifyAgentStage(message) {
+  const agent = String(message?.info?.agent || "").trim().toLowerCase();
+  if (AGENT_STAGES$1.has(agent)) {
+    if (String(message?.info?.role || "").trim().toLowerCase() === "user") return "main";
+    return agent;
+  }
+  if (agent === "agent") {
+    const rootSession = rootTaskSessionID$1();
+    const sessionID = typeof message?.info?.sessionID === "string" ? message.info.sessionID : "";
+    if (rootSession && sessionID && sessionID !== rootSession) {
+      return "agent";
+    }
+  }
+  return "main";
+}
+function activeAgentStages$1() {
+  const status = String(boardStore.board?.task?.status || "").trim().toLowerCase();
+  if (status === "planning") return /* @__PURE__ */ new Set(["spec", "planner"]);
+  if (status === "evaluating") return /* @__PURE__ */ new Set(["judge"]);
+  if (status === "delivering") return /* @__PURE__ */ new Set(["delivery"]);
+  if (!status && Array.isArray(store.agentEvents) && store.agentEvents.length > 0) {
+    return new Set(
+      store.agentEvents.map((item) => String(item?.stage || "").trim().toLowerCase()).filter(Boolean)
+    );
+  }
+  return /* @__PURE__ */ new Set();
+}
+function messageEndTime(message) {
+  return Number(
+    message?.info?.time?.completed || message?.info?.time?.updated || messageTime(message)
+  );
+}
+function agentEventTime(event) {
+  return Number(event?.time?.created || event?.timestamp || 0);
+}
+function agentEventDisplayText(event) {
+  const live = typeof event?._liveText === "string" ? event._liveText : "";
+  if (live) return live;
+  const target = typeof event?._targetText === "string" ? event._targetText : "";
+  if (target) return target;
+  if (typeof event?.text === "string" && event.text) return event.text;
+  if (typeof event?.summary === "string" && event.summary) return event.summary;
+  return "";
+}
+function agentEventToolName(event) {
+  if (typeof event?.toolName === "string" && event.toolName.trim()) return event.toolName.trim();
+  const summary = String(event?.summary || "");
+  const split = summary.split("→");
+  return split.length > 1 ? String(split[split.length - 1] || "").trim() : "";
+}
+function agentEventToolPart(event) {
+  const tool = agentEventToolName(event);
+  if (!tool) return null;
+  const created = agentEventTime(event) || Date.now();
+  const id = typeof event?.id === "string" && event.id ? event.id : `tool:${tool}:${created}`;
+  const kind = String(event?.kind || "").trim().toLowerCase();
+  const status = kind === "tool_result" ? "completed" : kind === "error" ? "error" : "running";
+  const summary = agentEventDisplayText(event).trim() || tool;
+  return {
+    id: `agent-tool:${id}`,
+    type: "tool",
+    callID: id,
+    tool,
+    state: {
+      status,
+      input: {},
+      ...status === "completed" ? { output: summary, title: tool } : {},
+      ...status === "error" ? { error: summary } : {},
+      ...status === "running" ? {
+        title: summary,
+        metadata: { synthetic: true },
+        time: { start: created }
+      } : {}
+    }
+  };
+}
+function agentMessage(event) {
+  if (!event || typeof event !== "object") return null;
+  const stage = String(event?.stage || "").trim().toLowerCase();
+  if (!stage) return null;
+  const created = agentEventTime(event) || Date.now();
+  const eventID = typeof event?.id === "string" && event.id ? event.id : `${stage}:${String(event?.kind || "status")}:${created}`;
+  const kind = String(event?.kind || "status").trim().toLowerCase();
+  const text = agentEventDisplayText(event).trim();
+  const base = {
+    _synthetic: true,
+    info: {
+      id: `agent-event:${stage}:${eventID}`,
+      role: "assistant",
+      agent: stage,
+      time: { created }
+    },
+    parts: []
+  };
+  if (kind === "reasoning_delta" && text) {
+    return {
+      ...base,
+      parts: [
+        {
+          id: `reasoning:${eventID}`,
+          type: "reasoning",
+          text,
+          _targetText: typeof event?._targetText === "string" ? event._targetText : text
+        }
+      ]
+    };
+  }
+  if (kind === "tool_call" || kind === "tool_delta" || kind === "tool_result") {
+    const part = agentEventToolPart(event);
+    return part ? { ...base, parts: [part] } : null;
+  }
+  if (!text) return null;
+  return {
+    ...base,
+    parts: [
+      {
+        id: `text:${eventID}`,
+        type: "text",
+        text,
+        _targetText: typeof event?._targetText === "string" ? event._targetText : text
+      }
+    ]
+  };
+}
+function agentRoundStatus(stage, round, roundIndex, rounds, latestStageEvent) {
+  if (roundIndex < rounds.length - 1) return "completed";
+  const hasOpenTranscript = round.messages.some(
+    (message) => !message?._synthetic && !message?.info?.time?.completed
+  );
+  const active = activeAgentStages$1().has(stage);
+  const latestKind = String(latestStageEvent?.kind || "").trim().toLowerCase();
+  const latestSummary = String(latestStageEvent?.summary || "");
+  if (latestKind === "error") return "error";
+  if (latestKind === "status" && /finished|completed|done/i.test(latestSummary)) {
+    return "completed";
+  }
+  if (active || hasOpenTranscript) return "running";
+  return "completed";
+}
+function rebuildAgentCards() {
+  const roundsByStage = {};
+  const latestEventByStage = /* @__PURE__ */ new Map();
+  for (const message of store.messages) {
+    const stage = classifyAgentStage(message);
+    if (stage === "main") continue;
+    const sessionID = typeof message?.info?.sessionID === "string" ? message.info.sessionID.trim() : "";
+    const fallbackID = typeof message?.info?.id === "string" && message.info.id ? message.info.id : hashText$1(messageSignature(message));
+    const channelID = sessionID ? `${stage}:session:${sessionID}` : `${stage}:message:${fallbackID}`;
+    const round = roundsByStage[stage] || [];
+    let entry = round.find((item) => item.channelID === channelID);
+    if (!entry) {
+      entry = {
+        channelID,
+        stage,
+        sessionID,
+        messages: [],
+        startTime: Infinity,
+        endTime: 0
+      };
+      round.push(entry);
+      roundsByStage[stage] = round;
+    }
+    entry.messages.push(message);
+    const created = messageTime(message);
+    if (created < entry.startTime) entry.startTime = created;
+    const completed = messageEndTime(message);
+    if (completed > entry.endTime) entry.endTime = completed;
+  }
+  const liveEventsByStage = /* @__PURE__ */ new Map();
+  for (const event of Array.isArray(store.agentEvents) ? store.agentEvents : []) {
+    const stage = String(event?.stage || "").trim().toLowerCase();
+    if (!AGENT_STAGES$1.has(stage)) continue;
+    const items = liveEventsByStage.get(stage) || [];
+    items.push(event);
+    liveEventsByStage.set(stage, items);
+    latestEventByStage.set(stage, event);
+  }
+  for (const [stage, events] of liveEventsByStage.entries()) {
+    const liveMessages = events.slice().sort((left, right) => agentEventTime(left) - agentEventTime(right)).map((event) => agentMessage(event)).filter(Boolean).slice(-12);
+    if (liveMessages.length === 0) continue;
+    const existing = roundsByStage[stage] || [];
+    if (existing.length > 0) continue;
+    existing.push({
+      channelID: `${stage}:live`,
+      stage,
+      sessionID: "",
+      messages: liveMessages,
+      startTime: messageTime(liveMessages[0]),
+      endTime: Math.max(...liveMessages.map((message) => messageEndTime(message)))
+    });
+    roundsByStage[stage] = existing;
+  }
+  const nextCards = {};
+  const nextOrder = [];
+  for (const [stage, rounds] of Object.entries(roundsByStage)) {
+    rounds.sort((left, right) => left.startTime - right.startTime);
+    for (let index = 0; index < rounds.length; index += 1) {
+      const round = rounds[index];
+      const roundLabel = rounds.length > 1 ? index + 1 : 0;
+      const status = agentRoundStatus(
+        stage,
+        round,
+        index,
+        rounds,
+        latestEventByStage.get(stage)
+      );
+      const created = Number.isFinite(round.startTime) && round.startTime > 0 ? round.startTime : Date.now();
+      const cardID = round.channelID;
+      nextCards[cardID] = {
+        _synthetic: true,
+        _agentCard: true,
+        _agentStage: stage,
+        _agentStatus: status,
+        _agentRound: roundLabel,
+        _agentCardKey: cardID,
+        _agentMessages: round.messages.slice().sort((left, right) => messageTime(left) - messageTime(right)),
+        info: {
+          id: `agent-card:${cardID}`,
+          role: "agent-card",
+          agent: stage,
+          sessionID: round.sessionID,
+          time: { created }
+        },
+        parts: []
+      };
+      nextOrder.push(cardID);
+    }
+  }
+  nextOrder.sort(
+    (left, right) => messageTime(nextCards[left]) - messageTime(nextCards[right]) || left.localeCompare(right)
+  );
+  batch(() => {
+    const prevKeys = Object.keys(store.agentCards);
+    for (const key of prevKeys) {
+      if (!(key in nextCards)) {
+        setStore("agentCards", key, void 0);
+      }
+    }
+    for (const [cardID, card] of Object.entries(nextCards)) {
+      if (cardID in store.agentCards) {
+        setStore("agentCards", cardID, "_agentStatus", card._agentStatus);
+        setStore("agentCards", cardID, "_agentRound", card._agentRound);
+        setStore("agentCards", cardID, "_agentMessages", [...card._agentMessages]);
+      } else {
+        setStore("agentCards", cardID, { ...card, _agentMessages: [...card._agentMessages] });
+      }
+    }
+    const prevOrder = store.agentCardOrder;
+    if (prevOrder.length !== nextOrder.length || prevOrder.some((id, i) => id !== nextOrder[i])) {
+      setStore("agentCardOrder", nextOrder);
+    }
+  });
+}
 async function syncTask(taskID) {
   if (!taskID) {
-    setStore("messages", []);
-    messageIndex.clear();
+    clearMessages();
     clearAgentEvents();
     return;
   }
@@ -3797,9 +4081,7 @@ async function syncTask(taskID) {
       Array.isArray(timeline) ? timeline : [],
       Array.isArray(transcript) ? transcript : []
     );
-    setStore("messages", sortMessages(messages));
-    rebuildMessageIndex();
-    setStore("conversationUpdatedAt", Date.now());
+    setMessages(messages);
   } catch (e) {
     console.error("syncTask failed", e);
   }
@@ -4049,6 +4331,7 @@ function flushEvents() {
     }
   });
   if (needsUpdate) {
+    rebuildAgentCards();
     setStore("conversationUpdatedAt", Date.now());
   }
 }
@@ -4282,6 +4565,7 @@ function mergeAgentEventList(events, raw) {
 function appendAgentEvent(raw) {
   const next = mergeAgentEventList([...store.agentEvents], raw);
   setStore("agentEvents", reconcile(next));
+  rebuildAgentCards();
   setStore("conversationUpdatedAt", Date.now());
   const payload = agentEventRecord(raw?.payload) ? raw.payload : agentEventRecord(raw?.properties) ? raw.properties : {};
   const key = agentEventKey({
@@ -4291,20 +4575,34 @@ function appendAgentEvent(raw) {
   const target = key ? next.find((item) => agentEventKey(item) === key) || null : null;
   if (target) scheduleAgentLiveText(target);
 }
+function setAgentEvents(events) {
+  for (const key of agentLiveTimers.keys()) {
+    stopAgentLiveTimer(key);
+  }
+  const normalized = pruneAgentEvents(Array.isArray(events) ? events : []);
+  setStore("agentEvents", reconcile(normalized));
+  rebuildAgentCards();
+  setStore("conversationUpdatedAt", Date.now());
+}
 function clearAgentEvents() {
   for (const key of [...agentLiveTimers.keys()]) {
     stopAgentLiveTimer(key);
   }
   setStore("agentEvents", []);
+  rebuildAgentCards();
   setStore("conversationUpdatedAt", Date.now());
 }
 function setMessages(messages) {
   const next = sortMessages(Array.isArray(messages) ? messages : []);
   setStore("messages", reconcile(next));
   rebuildMessageIndex();
+  rebuildAgentCards();
   setStore("conversationUpdatedAt", Date.now());
 }
 function setSelectedTaskID(taskID) {
+  if (store.selectedTaskID !== taskID) {
+    clearConversationUiState();
+  }
   setStore("selectedTaskID", taskID);
 }
 function setSseConnected(connected) {
@@ -4312,6 +4610,8 @@ function setSseConnected(connected) {
 }
 function clearMessages() {
   setStore("messages", []);
+  setStore("agentCards", reconcile({}, { merge: false }));
+  setStore("agentCardOrder", []);
   messageIndex.clear();
 }
 function setChatRequest(req) {
@@ -4952,141 +5252,8 @@ function hasConversationRequest(messages, request) {
     (message) => effectiveRole(message) === "user" && messageConversationText(message) === target
   );
 }
-function messageTime(message) {
-  return Number(message?.info?.time?.created || message?.info?.time?.updated || 0);
-}
 function deliveryStatusLabel$1(status) {
   return status || "";
-}
-function messageEndTime(message) {
-  return Number(message?.info?.time?.completed || message?.info?.time?.updated || messageTime(message));
-}
-function agentEventTime(event) {
-  return Number(event?.time?.created || event?.timestamp || 0);
-}
-function agentEventDisplayText(event) {
-  const live = typeof event?._liveText === "string" ? event._liveText : "";
-  if (live) return live;
-  const target = typeof event?._targetText === "string" ? event._targetText : "";
-  if (target) return target;
-  if (typeof event?.text === "string" && event.text) return event.text;
-  if (typeof event?.summary === "string" && event.summary) return event.summary;
-  return "";
-}
-function agentEventToolName(event) {
-  if (typeof event?.toolName === "string" && event.toolName.trim()) return event.toolName.trim();
-  const summary = String(event?.summary || "");
-  const split = summary.split("→");
-  return split.length > 1 ? String(split[split.length - 1] || "").trim() : "";
-}
-function agentEventToolPart(event) {
-  const tool = agentEventToolName(event);
-  if (!tool) return null;
-  const created = agentEventTime(event) || Date.now();
-  const id = typeof event?.id === "string" && event.id ? event.id : `tool:${tool}:${created}`;
-  const kind = String(event?.kind || "").trim().toLowerCase();
-  const status = kind === "tool_result" ? "completed" : kind === "error" ? "error" : kind === "tool_delta" ? "running" : "running";
-  const summary = agentEventDisplayText(event).trim() || tool;
-  return {
-    id: `agent-tool:${id}`,
-    type: "tool",
-    callID: id,
-    tool,
-    state: {
-      status,
-      input: {},
-      ...status === "completed" ? { output: summary, title: tool } : {},
-      ...status === "error" ? { error: summary } : {},
-      ...status === "running" ? {
-        title: summary,
-        metadata: { synthetic: true },
-        time: { start: created }
-      } : {}
-    }
-  };
-}
-function agentRoundStatus(stage, round, roundIndex, rounds, latestStageEvent) {
-  if (roundIndex < rounds.length - 1) return "completed";
-  const hasOpenTranscript = round.messages.some(
-    (message) => !message?._synthetic && !message?.info?.time?.completed
-  );
-  const active = activeAgentStages().has(stage);
-  const latestKind = String(latestStageEvent?.kind || "").trim().toLowerCase();
-  const latestSummary = String(latestStageEvent?.summary || "");
-  if (latestKind === "error") return "error";
-  if (latestKind === "status" && /finished|completed|done/i.test(latestSummary)) return "completed";
-  if (active || hasOpenTranscript) return "running";
-  return "completed";
-}
-function buildAgentCards(agentChannels, agentEvents) {
-  const roundsByStage = {};
-  const latestEventByStage = /* @__PURE__ */ new Map();
-  for (const [key, channel] of Object.entries(agentChannels)) {
-    if (channel.messages.length === 0) continue;
-    if (!roundsByStage[channel.stage]) roundsByStage[channel.stage] = [];
-    roundsByStage[channel.stage].push({
-      key,
-      stage: channel.stage,
-      messages: [...channel.messages].sort((left, right) => messageTime(left) - messageTime(right)),
-      startTime: channel.startTime,
-      endTime: channel.endTime
-    });
-  }
-  for (const rounds of Object.values(roundsByStage)) {
-    rounds.sort((left, right) => left.startTime - right.startTime);
-  }
-  const liveEventsByStage = /* @__PURE__ */ new Map();
-  for (const event of Array.isArray(agentEvents) ? agentEvents : []) {
-    const stage = String(event?.stage || "").trim().toLowerCase();
-    if (!AGENT_STAGES.has(stage)) continue;
-    const next = liveEventsByStage.get(stage) || [];
-    next.push(event);
-    liveEventsByStage.set(stage, next);
-    latestEventByStage.set(stage, event);
-  }
-  for (const [stage, events] of liveEventsByStage.entries()) {
-    const liveMessages = events.slice().sort((left, right) => agentEventTime(left) - agentEventTime(right)).map((event) => agentMessage(event)).filter(Boolean).slice(-12);
-    if (liveMessages.length === 0) continue;
-    const rounds = roundsByStage[stage] || [];
-    if (rounds.length === 0) {
-      const startTime = messageTime(liveMessages[0]);
-      const endTime = Math.max(...liveMessages.map((message) => messageEndTime(message)));
-      rounds.push({
-        key: `live:${stage}`,
-        stage,
-        messages: liveMessages,
-        startTime,
-        endTime
-      });
-      roundsByStage[stage] = rounds;
-    }
-  }
-  const cards = [];
-  for (const [stage, rounds] of Object.entries(roundsByStage)) {
-    rounds.sort((left, right) => left.startTime - right.startTime);
-    for (let index = 0; index < rounds.length; index += 1) {
-      const round = rounds[index];
-      const roundLabel = rounds.length > 1 ? index + 1 : 0;
-      const cardKey = `${stage}:round:${Number.isFinite(round.startTime) ? round.startTime : "na"}:${index}`;
-      cards.push({
-        _synthetic: true,
-        _agentCard: true,
-        _agentStage: stage,
-        _agentStatus: agentRoundStatus(stage, round, index, rounds, latestEventByStage.get(stage)),
-        _agentRound: roundLabel,
-        _agentCardKey: cardKey,
-        _agentMessages: round.messages,
-        info: {
-          id: `agent-card:${cardKey}`,
-          role: "agent-card",
-          agent: stage,
-          time: { created: Number.isFinite(round.startTime) ? round.startTime : Date.now() }
-        },
-        parts: []
-      });
-    }
-  }
-  return cards.sort((left, right) => messageTime(left) - messageTime(right));
 }
 function buildBoardContextMessages(preClassifiedMainMessages, board, agentEvents, messages) {
   if (!board) return [];
@@ -5178,22 +5345,10 @@ function conversationMessages() {
   const board = boardStore.board;
   const showTranscriptDetails = store.showTranscriptDetails;
   const mainMessages = [];
-  const agentChannels = {};
   for (const msg of allMessages) {
     const channel = classifyMessage(msg);
     if (channel === "main") {
       mainMessages.push(msg);
-    } else {
-      const sessionID = msg.info?.sessionID || "";
-      const key = `${channel}:${sessionID}`;
-      if (!agentChannels[key]) {
-        agentChannels[key] = { stage: channel, messages: [], startTime: Infinity, endTime: 0 };
-      }
-      agentChannels[key].messages.push(msg);
-      const created = msg.info?.time?.created || 0;
-      if (created < agentChannels[key].startTime) agentChannels[key].startTime = created;
-      const completed = msg.info?.time?.completed || created;
-      if (completed > agentChannels[key].endTime) agentChannels[key].endTime = completed;
     }
   }
   const boardMsgs = buildBoardContextMessages(mainMessages, board, agentEvents, allMessages);
@@ -5205,59 +5360,10 @@ function conversationMessages() {
       return !text.includes("<assistant-brief>") && !text.includes("You are executing a headless coding task");
     });
   }
-  const agentCardMsgs = buildAgentCards(agentChannels, agentEvents);
+  const agentCardMsgs = Array.isArray(store.agentCardOrder) ? store.agentCardOrder.map((id) => store.agentCards[id]).filter(Boolean) : [];
   return [...filteredMain, ...executorMsgs, ...boardMsgs, ...agentCardMsgs].sort(
     (a, b) => (a.info?.time?.created || 0) - (b.info?.time?.created || 0)
   );
-}
-function agentMessage(event) {
-  if (!event || typeof event !== "object") return null;
-  const stage = String(event?.stage || "").trim().toLowerCase();
-  if (!stage) return null;
-  const created = agentEventTime(event) || Date.now();
-  const eventID = typeof event?.id === "string" && event.id ? event.id : `${stage}:${String(event?.kind || "status")}:${created}`;
-  const kind = String(event?.kind || "status").trim().toLowerCase();
-  const text = agentEventDisplayText(event).trim();
-  const role = "assistant";
-  const base = {
-    _synthetic: true,
-    info: {
-      id: `agent-event:${stage}:${eventID}`,
-      role,
-      agent: stage,
-      time: { created }
-    },
-    parts: []
-  };
-  if (kind === "reasoning_delta" && text) {
-    return {
-      ...base,
-      parts: [
-        {
-          id: `reasoning:${eventID}`,
-          type: "reasoning",
-          text,
-          _targetText: typeof event?._targetText === "string" ? event._targetText : text
-        }
-      ]
-    };
-  }
-  if (kind === "tool_call" || kind === "tool_delta" || kind === "tool_result") {
-    const part = agentEventToolPart(event);
-    return part ? { ...base, parts: [part] } : null;
-  }
-  if (!text) return null;
-  return {
-    ...base,
-    parts: [
-      {
-        id: `text:${eventID}`,
-        type: "text",
-        text,
-        _targetText: typeof event?._targetText === "string" ? event._targetText : text
-      }
-    ]
-  };
 }
 
 var _tmpl$$e = /* @__PURE__ */ template(`<div class=chat-empty>`);
@@ -5306,7 +5412,7 @@ function Conversation(props) {
       },
       get fallback() {
         return createComponent(AgentCard, {
-          get key() {
+          get cardID() {
             return item._agentCardKey;
           },
           get stage() {
@@ -5320,9 +5426,6 @@ function Conversation(props) {
           },
           get messages() {
             return item._agentMessages;
-          },
-          get startTime() {
-            return item.info?.time?.created || 0;
           }
         });
       },
@@ -5540,7 +5643,7 @@ function TaskList(props) {
 }
 delegateEvents(["click"]);
 
-var _tmpl$2$b = /* @__PURE__ */ template(`<div class=plan-version>`), _tmpl$3$b = /* @__PURE__ */ template(`<div class="plan-version streaming-indicator">`), _tmpl$4$b = /* @__PURE__ */ template(`<p class=empty-hint>`), _tmpl$5$b = /* @__PURE__ */ template(`<div class=plan-version> · `), _tmpl$6$a = /* @__PURE__ */ template(`<div class=goals-list>`), _tmpl$7$8 = /* @__PURE__ */ template(`<div class="goal-criteria md-content">`), _tmpl$8$4 = /* @__PURE__ */ template(`<span class=extension-status data-state=active>`), _tmpl$9$4 = /* @__PURE__ */ template(`<span class=goal-priority>`), _tmpl$0$3 = /* @__PURE__ */ template(`<div class=goal-item><span class=goal-status-icon></span><div class=goal-content><div class="goal-desc md-content"></div></div><div class=goal-actions><button type=button class="btn btn-ghost mini"data-goal-action=edit></button><button type=button class="btn btn-ghost mini danger"data-goal-action=delete>`), _tmpl$1$2 = /* @__PURE__ */ template(`<div class=empty-hint>`), _tmpl$10$2 = /* @__PURE__ */ template(`<section class=criteria-group><div class=criteria-group-head><div class=criteria-group-title></div><div class=criteria-group-count></div></div><div class=criteria-group-list>`), _tmpl$11$1 = /* @__PURE__ */ template(`<label class=criteria-item><input type=checkbox><span class=check-mark></span><span class=criteria-copy><span class=criteria-name></span><span class=criteria-desc></span></span><span class=criteria-status></span><span class=criteria-result>`), _tmpl$12$1 = /* @__PURE__ */ template(`<div class="eval-summary md-content">`), _tmpl$13$1 = /* @__PURE__ */ template(`<div class=eval-error-meta>`), _tmpl$14$1 = /* @__PURE__ */ template(`<div class=eval-error><div class=eval-error-name>✗ </div><div class="eval-error-detail md-content">`), _tmpl$15$1 = /* @__PURE__ */ template(`<div class=delivery-files>`), _tmpl$16$1 = /* @__PURE__ */ template(`<div class=delivery-card><div class=delivery-title></div><div class="delivery-summary md-content">`), _tmpl$17 = /* @__PURE__ */ template(`<div class="overview-headline md-content">`), _tmpl$18 = /* @__PURE__ */ template(`<div class="overview-summary md-content">`), _tmpl$19 = /* @__PURE__ */ template(`<div class="overview-next-step-detail md-content">`), _tmpl$20 = /* @__PURE__ */ template(`<div class=overview-next-step><div class=overview-next-step-title>`), _tmpl$21 = /* @__PURE__ */ template(`<div class="interaction-alert task-failure-alert"><div class=interaction-title></div><div class="interaction-body md-content">`), _tmpl$22 = /* @__PURE__ */ template(`<button type=button class="btn btn-primary"data-task-action=retry>`), _tmpl$23 = /* @__PURE__ */ template(`<button type=button class="btn btn-ghost"data-task-action=replan>`), _tmpl$24 = /* @__PURE__ */ template(`<button type=button class="btn btn-ghost"data-task-action=cancel>`), _tmpl$25 = /* @__PURE__ */ template(`<div class=task-actions-buttons>`), _tmpl$26 = /* @__PURE__ */ template(`<div class=task-actions-bar>`), _tmpl$27 = /* @__PURE__ */ template(`<button class="btn btn-primary"data-action=always>`), _tmpl$28 = /* @__PURE__ */ template(`<button class="btn btn-ghost"data-action=once>`), _tmpl$29 = /* @__PURE__ */ template(`<button class="btn btn-ghost"data-action=reject>`), _tmpl$30 = /* @__PURE__ */ template(`<div class=interaction-alert><div class=interaction-title> </div><div class="interaction-body md-content"></div><div class=interaction-actions>`), _tmpl$31 = /* @__PURE__ */ template(`<button class="btn btn-primary"data-action=answer>`), _tmpl$32 = /* @__PURE__ */ template(`<div class=interactions-list>`), _tmpl$35 = /* @__PURE__ */ template(`<details class=section><summary class=section-head><span class=section-icon aria-hidden=true></span><span class=section-title></span><span class=section-badge></span></summary><div class=section-body>`), _tmpl$36 = /* @__PURE__ */ template(`<div id=taskActionsBar>`);
+var _tmpl$2$b = /* @__PURE__ */ template(`<div class=plan-version>`), _tmpl$3$b = /* @__PURE__ */ template(`<div class="plan-version streaming-indicator">`), _tmpl$4$b = /* @__PURE__ */ template(`<p class=empty-hint>`), _tmpl$5$b = /* @__PURE__ */ template(`<div class=plan-version> · `), _tmpl$6$a = /* @__PURE__ */ template(`<div class=goals-list>`), _tmpl$7$8 = /* @__PURE__ */ template(`<div class="goal-criteria md-content">`), _tmpl$8$4 = /* @__PURE__ */ template(`<span class=extension-status data-state=active>`), _tmpl$9$4 = /* @__PURE__ */ template(`<span class=goal-priority>`), _tmpl$0$3 = /* @__PURE__ */ template(`<div class=goal-item><span class=goal-status-icon></span><div class=goal-content><div class="goal-desc md-content"></div></div><div class=goal-actions><button type=button class="btn btn-ghost mini"data-goal-action=edit></button><button type=button class="btn btn-ghost mini danger"data-goal-action=delete>`), _tmpl$1$2 = /* @__PURE__ */ template(`<div class=empty-hint>`), _tmpl$10$2 = /* @__PURE__ */ template(`<section class=criteria-group><div class=criteria-group-head><span class=criteria-group-icon aria-hidden=true></span><div class=criteria-group-title></div><div class=criteria-group-count></div></div><div class=criteria-group-list>`), _tmpl$11$1 = /* @__PURE__ */ template(`<label class=criteria-item><input type=checkbox><span class=check-mark></span><span class=criteria-copy><span class=criteria-name></span><span class=criteria-desc></span></span><span class=criteria-status></span><span class=criteria-result>`), _tmpl$12$1 = /* @__PURE__ */ template(`<div class="eval-summary md-content">`), _tmpl$13$1 = /* @__PURE__ */ template(`<div class=eval-error-meta>`), _tmpl$14$1 = /* @__PURE__ */ template(`<div class=eval-error><div class=eval-error-name>✗ </div><div class="eval-error-detail md-content">`), _tmpl$15$1 = /* @__PURE__ */ template(`<div class=delivery-files>`), _tmpl$16$1 = /* @__PURE__ */ template(`<div class=delivery-card><div class=delivery-title></div><div class="delivery-summary md-content">`), _tmpl$17 = /* @__PURE__ */ template(`<div class="overview-headline md-content">`), _tmpl$18 = /* @__PURE__ */ template(`<div class="overview-summary md-content">`), _tmpl$19 = /* @__PURE__ */ template(`<div class="overview-next-step-detail md-content">`), _tmpl$20 = /* @__PURE__ */ template(`<div class=overview-next-step><div class=overview-next-step-title>`), _tmpl$21 = /* @__PURE__ */ template(`<div class="interaction-alert task-failure-alert"><div class=interaction-title></div><div class="interaction-body md-content">`), _tmpl$22 = /* @__PURE__ */ template(`<button type=button class="btn btn-primary"data-task-action=retry>`), _tmpl$23 = /* @__PURE__ */ template(`<button type=button class="btn btn-ghost"data-task-action=replan>`), _tmpl$24 = /* @__PURE__ */ template(`<button type=button class="btn btn-ghost"data-task-action=cancel>`), _tmpl$25 = /* @__PURE__ */ template(`<div class=task-actions-buttons>`), _tmpl$26 = /* @__PURE__ */ template(`<div class=task-actions-bar>`), _tmpl$27 = /* @__PURE__ */ template(`<button class="btn btn-primary"data-action=always>`), _tmpl$28 = /* @__PURE__ */ template(`<button class="btn btn-ghost"data-action=once>`), _tmpl$29 = /* @__PURE__ */ template(`<button class="btn btn-ghost"data-action=reject>`), _tmpl$30 = /* @__PURE__ */ template(`<div class=interaction-alert><div class=interaction-title> </div><div class="interaction-body md-content"></div><div class=interaction-actions>`), _tmpl$31 = /* @__PURE__ */ template(`<button class="btn btn-primary"data-action=answer>`), _tmpl$32 = /* @__PURE__ */ template(`<div class=interactions-list>`), _tmpl$35 = /* @__PURE__ */ template(`<details class=section><summary class=section-head><span class=section-icon aria-hidden=true></span><span class=section-title></span><span class=section-badge></span></summary><div class=section-body>`), _tmpl$36 = /* @__PURE__ */ template(`<div id=taskActionsBar>`);
 function statusIcon(status) {
   const map = {
     idle: `<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle data-stroke="true" cx="8" cy="8" r="4.5"/><circle data-fill="true" cx="8" cy="8" r="1.25"/></svg>`,
@@ -6018,7 +6121,8 @@ function CriteriaPanel(props) {
           return groups();
         },
         children: (group) => (() => {
-          var _el$22 = _tmpl$10$2(), _el$23 = _el$22.firstChild, _el$24 = _el$23.firstChild, _el$25 = _el$24.nextSibling, _el$26 = _el$23.nextSibling;
+          var _el$22 = _tmpl$10$2(), _el$23 = _el$22.firstChild, _iconEl = _el$23.firstChild, _el$24 = _iconEl.nextSibling, _el$25 = _el$24.nextSibling, _el$26 = _el$23.nextSibling;
+          _iconEl.innerHTML = CHECK_FAMILY_ICONS[group.key] || "";
           insert(_el$24, () => group.label);
           insert(_el$25, () => tc("checks.group_count", group.items.length, {
             count: group.items.length
@@ -6445,9 +6549,27 @@ function InteractionsList(props) {
     }
   });
 }
+var SECTION_ICONS = {
+  overview: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="2.5" width="4.5" height="4.5" rx="1"/><rect x="9" y="2.5" width="4.5" height="4.5" rx="1"/><rect x="2.5" y="9" width="4.5" height="4.5" rx="1"/><rect x="9" y="9" width="4.5" height="4.5" rx="1"/></svg>',
+  spec: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 2H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.5L9.5 2Z"/><polyline points="9.5,2 9.5,4.5 12,4.5"/><line x1="6" y1="7" x2="10" y2="7"/><line x1="6" y1="9.5" x2="10" y2="9.5"/></svg>',
+  plan: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="4" x2="13" y2="4"/><line x1="6" y1="8" x2="13" y2="8"/><line x1="6" y1="12" x2="13" y2="12"/><circle cx="3.5" cy="4" r="0.8" fill="currentColor" stroke="none"/><circle cx="3.5" cy="8" r="0.8" fill="currentColor" stroke="none"/><circle cx="3.5" cy="12" r="0.8" fill="currentColor" stroke="none"/></svg>',
+  goals: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="5.5"/><circle cx="8" cy="8" r="3"/><circle cx="8" cy="8" r="0.8" fill="currentColor" stroke="none"/></svg>',
+  criteria: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="2" width="10" height="12" rx="1.2"/><path d="M6 6l1.2 1.2L9.5 5"/><line x1="6" y1="9.5" x2="10" y2="9.5"/><line x1="6" y1="11.5" x2="9" y2="11.5"/></svg>',
+  delivery: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 5.5L8 2.5l5.5 3v5L8 13.5l-5.5-3Z"/><polyline points="2.5,5.5 8,8.5 13.5,5.5"/><line x1="8" y1="8.5" x2="8" y2="13.5"/></svg>',
+  files: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V5L9 2Z"/><polyline points="9,2 9,5 12,5"/></svg>'
+};
+var CHECK_FAMILY_ICONS = {
+  command: '<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2.5" width="10" height="9" rx="1.2"/><polyline points="4.5,6 6,7.5 4.5,9"/><line x1="7.5" y1="9" x2="9.5" y2="9"/></svg>',
+  runtime: '<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 3.5L9.5 7 4.5 10.5Z"/></svg>',
+  artifact: '<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 4.5L7 2l4.5 2.5v5L7 12l-4.5-2.5Z"/><polyline points="2.5,4.5 7,7 11.5,4.5"/><line x1="7" y1="7" x2="7" y2="12"/></svg>',
+  review: '<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.2" cy="6.2" r="3.5"/><line x1="9" y1="9" x2="11.5" y2="11.5"/></svg>',
+  acceptance: '<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="1.5" width="9" height="11" rx="1.2"/><polyline points="5,6.5 6.5,8 9,5.5"/><line x1="5" y1="10" x2="9" y2="10"/></svg>',
+  custom: '<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="7" r="1"/><path d="M6.1 2.5l-.2 1.2a3.4 3.4 0 0 0-.9.5L3.8 3.8l-.9.9.4 1.2a3.4 3.4 0 0 0-.5.9l-1.2.2v1.2l1.2.2c.1.3.3.6.5.9l-.4 1.2.9.9 1.2-.4c.3.2.6.4.9.5l.2 1.2h1.2l.2-1.2c.3-.1.6-.3.9-.5l1.2.4.9-.9-.4-1.2c.2-.3.4-.6.5-.9l1.2-.2V6.8l-1.2-.2a3.4 3.4 0 0 0-.5-.9l.4-1.2-.9-.9-1.2.4a3.4 3.4 0 0 0-.9-.5L7.9 2.5Z"/></svg>'
+};
 function SectionFrame(props) {
   return (() => {
     var _el$78 = _tmpl$35(), _el$79 = _el$78.firstChild, _el$80 = _el$79.firstChild, _el$81 = _el$80.nextSibling, _el$82 = _el$81.nextSibling, _el$83 = _el$79.nextSibling;
+    _el$80.innerHTML = props.icon || "";
     insert(_el$81, () => props.title);
     insert(_el$82, () => props.badgeText || "");
     insert(_el$83, () => props.children);
@@ -6519,6 +6641,7 @@ function Board(props) {
     get title() {
       return t("section.overview");
     },
+    icon: SECTION_ICONS.overview,
     bodyId: "overviewBody",
     get children() {
       return createComponent(OverviewPanel, {
@@ -6532,6 +6655,7 @@ function Board(props) {
     get title() {
       return t("section.spec");
     },
+    icon: SECTION_ICONS.spec,
     bodyId: "specBody",
     badgeId: "specBadge",
     get badgeText() {
@@ -6555,6 +6679,7 @@ function Board(props) {
     get title() {
       return t("section.plan");
     },
+    icon: SECTION_ICONS.plan,
     bodyId: "planBody",
     badgeId: "planBadge",
     get badgeText() {
@@ -6578,6 +6703,7 @@ function Board(props) {
     get title() {
       return t("section.goals");
     },
+    icon: SECTION_ICONS.goals,
     bodyId: "goalsBody",
     badgeId: "goalsBadge",
     get badgeText() {
@@ -6617,6 +6743,7 @@ function Board(props) {
     get title() {
       return t("section.criteria");
     },
+    icon: SECTION_ICONS.criteria,
     bodyId: "criteriaBody",
     badgeId: "criteriaBadge",
     get badgeText() {
@@ -6649,6 +6776,7 @@ function Board(props) {
     get title() {
       return t("section.delivery");
     },
+    icon: SECTION_ICONS.delivery,
     bodyId: "evalBody",
     badgeId: "deliveryBadge",
     get badgeText() {
@@ -14864,18 +14992,103 @@ function installGlobalBridges() {
     applyZoom(next);
     saveSettings();
   };
-  window.state = new Proxy({}, {
+  const testStateTarget = {};
+  const readState = (prop) => {
+    if (typeof prop !== "string") return Reflect.get(testStateTarget, prop);
+    if (prop === "directory") return activeDirectory$1();
+    if (prop === "board") return boardStore.board;
+    if (prop === "tasks") return boardStore.tasks;
+    if (prop === "pendingTasks") return boardStore.pendingTasks;
+    if (prop === "selectedTaskID") return boardStore.selectedTaskID;
+    if (prop === "path") return boardStore.path;
+    if (prop === "vcs") return boardStore.vcs;
+    if (prop === "changes") return boardStore.changes;
+    if (prop === "messages") return store.messages;
+    if (prop === "agentEvents") return store.agentEvents;
+    if (prop === "sseConnected") return store.sseConnected;
+    if (prop in appStore) return appStore[prop];
+    if (prop === "settings") return settingsStore;
+    if (prop in settingsStore) return settingsStore[prop];
+    return Reflect.get(testStateTarget, prop);
+  };
+  const writeState = (prop, value) => {
+    if (typeof prop !== "string") return Reflect.set(testStateTarget, prop, value);
+    if (prop === "directory") {
+      setSettingsStore("directory", typeof value === "string" ? value : "");
+      return true;
+    }
+    if (prop === "board") {
+      setBoardStore("board", value);
+      return true;
+    }
+    if (prop === "tasks") {
+      setBoardStore("tasks", Array.isArray(value) ? value : []);
+      return true;
+    }
+    if (prop === "pendingTasks") {
+      setBoardStore("pendingTasks", Array.isArray(value) ? value : []);
+      return true;
+    }
+    if (prop === "selectedTaskID") {
+      const next = typeof value === "string" ? value : "";
+      setBoardStore("selectedTaskID", next);
+      setSelectedTaskID(next);
+      return true;
+    }
+    if (prop === "path") {
+      setBoardStore("path", value);
+      return true;
+    }
+    if (prop === "vcs") {
+      setBoardStore("vcs", value);
+      return true;
+    }
+    if (prop === "changes") {
+      setBoardStore("changes", Array.isArray(value) ? value : []);
+      return true;
+    }
+    if (prop === "messages") {
+      setMessages(Array.isArray(value) ? value : []);
+      return true;
+    }
+    if (prop === "agentEvents") {
+      setAgentEvents(Array.isArray(value) ? value : []);
+      return true;
+    }
+    if (prop === "sseConnected") {
+      setSseConnected(value === true);
+      return true;
+    }
+    if (prop in appStore) {
+      setAppStore(prop, value);
+      return true;
+    }
+    if (prop in settingsStore) {
+      setSettingsStore(prop, value);
+      return true;
+    }
+    return Reflect.set(testStateTarget, prop, value);
+  };
+  window.state = new Proxy(testStateTarget, {
     get(_target, prop) {
-      if (prop === "directory") return activeDirectory$1();
-      if (prop === "board") return boardStore.board;
-      if (prop === "tasks") return boardStore.tasks;
-      if (prop === "selectedTaskID") return boardStore.selectedTaskID;
-      if (prop === "messages") return store.messages;
-      if (prop === "sseConnected") return store.sseConnected;
-      if (prop === "settings") return settingsStore;
-      return void 0;
+      return readState(prop);
+    },
+    set(_target, prop, value) {
+      return writeState(prop, value);
+    },
+    ownKeys() {
+      return Array.from(/* @__PURE__ */ new Set([...Reflect.ownKeys(testStateTarget), ...Object.keys(boardStore), ...Object.keys(store), ...Object.keys(appStore), ...Object.keys(settingsStore), "directory", "settings"]));
+    },
+    getOwnPropertyDescriptor(_target, prop) {
+      return {
+        configurable: true,
+        enumerable: true,
+        writable: true,
+        value: readState(prop)
+      };
     }
   });
+  window.renderConversation = () => conversationMessages();
   window.applyDirectory = applyDirectory;
   window.loadTasks = loadTasks;
   window.selectTask = selectTask;

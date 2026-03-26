@@ -1,6 +1,7 @@
 import { Show } from "solid-js";
 import { displayToolIcon, displayToolDetail, toolStatusLabel, stripAnsi } from "../utils/tool";
 import { activeDirectory } from "../store/board";
+import { toggleToolOutputExpanded, toolOutputExpanded } from "../store/conversation-ui";
 
 export function ToolPart(props: { part: any }) {
   const state = () => props.part.state || {};
@@ -26,6 +27,7 @@ export function ToolPart(props: { part: any }) {
   };
   const output = () => stripAnsi(state().output || "");
   const error = () => stripAnsi(state().error || "") || output();
+  const expanded = () => toolOutputExpanded(props.part?.id || "");
 
   return (
     <>
@@ -45,7 +47,8 @@ export function ToolPart(props: { part: any }) {
       <Show when={status() === "completed" && output()}>
         <div
           class="msg-tool-output"
-          onClick={(e) => (e.currentTarget as HTMLElement).classList.toggle("msg-tool-output--expanded")}
+          classList={{ "msg-tool-output--expanded": expanded() }}
+          onClick={() => toggleToolOutputExpanded(props.part?.id || "")}
         >
           {output()}
         </div>

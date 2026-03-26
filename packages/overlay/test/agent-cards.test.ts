@@ -1,11 +1,20 @@
 import { beforeEach, expect, test } from "bun:test"
+import { createRoot, createEffect } from "solid-js"
 import { conversationMessages } from "../src/utils/conversation"
 import { appendAgentEvent, clearAgentEvents, messageStore, setMessages, setAgentEvents, setSelectedTaskID } from "../src/store/messages"
+import {
+  agentCardExpanded,
+  clearConversationUiState,
+  toggleAgentCardExpanded,
+  toggleToolOutputExpanded,
+  toolOutputExpanded,
+} from "../src/store/conversation-ui"
 import { setBoardStore } from "../src/store/board"
 
 function resetStores() {
   setMessages([])
   clearAgentEvents()
+  clearConversationUiState()
   setSelectedTaskID("")
   setBoardStore("board", null)
   setBoardStore("selectedTaskID", "")
@@ -123,4 +132,233 @@ test("prunes live agent events per stage and ignores other tasks", () => {
   expect(cards).toHaveLength(1)
   expect(cards[0]?._agentMessages).toHaveLength(12)
   expect(cards[0]?._agentMessages?.[0]?.parts?.[0]?.text).toBe("Goal event 8")
+})
+
+test("live agent cards keep a stable identity and explicit collapse across pruning", () => {
+  setSelectedTaskID("task-stable")
+  setBoardStore("selectedTaskID", "task-stable")
+  setBoardStore("board", {
+    task: {
+      status: "planning",
+    },
+  })
+
+  for (let i = 0; i < 12; i += 1) {
+    appendAgentEvent({
+      type: "agent.updated",
+      timestamp: 1_000 + i,
+      payload: {
+        taskID: "task-stable",
+        stage: "planner",
+        kind: "status",
+        id: `planner-${i}`,
+        summary: `Planner event ${i}`,
+      },
+    })
+  }
+
+  const firstCard = conversationMessages().find((item: any) => item?._agentCard)
+  expect(firstCard?._agentCardKey).toBe("planner:live")
+  expect(agentCardExpanded(firstCard?._agentCardKey, true)).toBe(true)
+
+  toggleAgentCardExpanded(firstCard?._agentCardKey, true)
+  expect(agentCardExpanded(firstCard?._agentCardKey, true)).toBe(false)
+
+  for (let i = 12; i < 20; i += 1) {
+    appendAgentEvent({
+      type: "agent.updated",
+      timestamp: 1_000 + i,
+      payload: {
+        taskID: "task-stable",
+        stage: "planner",
+        kind: "status",
+        id: `planner-${i}`,
+        summary: `Planner event ${i}`,
+      },
+    })
+  }
+
+  const secondCard = conversationMessages().find((item: any) => item?._agentCard)
+  expect(secondCard?._agentCardKey).toBe("planner:live")
+  expect(secondCard?._agentMessages).toHaveLength(12)
+  expect(secondCard?._agentMessages?.[0]?.parts?.[0]?.text).toBe("Planner event 8")
+  expect(agentCardExpanded(secondCard?._agentCardKey, true)).toBe(false)
+})
+
+test("transcript-backed card count grows as new messages arrive", () => {
+  setBoardStore("board", {
+    task: {
+      status: "planning",
+      sessionID: "root-session",
+    },
+  })
+
+  // First message arrives
+  setMessages([
+    {
+      info: {
+        id: "spec-msg-1",
+        role: "assistant",
+        agent: "spec",
+        sessionID: "spec-session-1",
+        time: { created: 1000 },
+      },
+      parts: [{ id: "p1", type: "text", text: "Analysing requirements" }],
+    },
+  ])
+
+  let cards = conversationMessages().filter((item: any) => item?._agentCard)
+  expect(cards).toHaveLength(1)
+  expect(cards[0]?._agentMessages).toHaveLength(1)
+
+  // Second message arrives for the same session
+  setMessages([
+    {
+      info: {
+        id: "spec-msg-1",
+        role: "assistant",
+        agent: "spec",
+        sessionID: "spec-session-1",
+        time: { created: 1000 },
+      },
+      parts: [{ id: "p1", type: "text", text: "Analysing requirements" }],
+    },
+    {
+      info: {
+        id: "spec-msg-2",
+        role: "assistant",
+        agent: "spec",
+        sessionID: "spec-session-1",
+        time: { created: 2000 },
+      },
+      parts: [{ id: "p2", type: "text", text: "Generated spec" }],
+    },
+  ])
+
+  cards = conversationMessages().filter((item: any) => item?._agentCard)
+  expect(cards).toHaveLength(1)
+  expect(cards[0]?._agentMessages).toHaveLength(2)
+  expect(cards[0]?._agentCardKey).toBe("spec:session:spec-session-1")
+
+  // Third message arrives
+  setMessages([
+    {
+      info: {
+        id: "spec-msg-1",
+        role: "assistant",
+        agent: "spec",
+        sessionID: "spec-session-1",
+        time: { created: 1000 },
+      },
+      parts: [{ id: "p1", type: "text", text: "Analysing requirements" }],
+    },
+    {
+      info: {
+        id: "spec-msg-2",
+        role: "assistant",
+        agent: "spec",
+        sessionID: "spec-session-1",
+        time: { created: 2000 },
+      },
+      parts: [{ id: "p2", type: "text", text: "Generated spec" }],
+    },
+    {
+      info: {
+        id: "spec-msg-3",
+        role: "assistant",
+        agent: "spec",
+        sessionID: "spec-session-1",
+        time: { created: 3000 },
+      },
+      parts: [{ id: "p3", type: "text", text: "Refining spec" }],
+    },
+  ])
+
+  cards = conversationMessages().filter((item: any) => item?._agentCard)
+  expect(cards).toHaveLength(1)
+  expect(cards[0]?._agentMessages).toHaveLength(3)
+})
+
+test("agent card status updates from running to completed", () => {
+  setBoardStore("board", {
+    task: {
+      status: "evaluating",
+    },
+  })
+
+  setAgentEvents([
+    {
+      id: "judge:start",
+      stage: "judge",
+      kind: "status",
+      summary: "Starting evaluation",
+      time: { created: 1000 },
+      _targetText: "Starting evaluation",
+      _liveText: "Starting evaluation",
+    },
+  ])
+
+  let cards = conversationMessages().filter((item: any) => item?._agentCard)
+  expect(cards[0]?._agentStatus).toBe("running")
+
+  // Board changes to completed state
+  setBoardStore("board", {
+    task: {
+      status: "completed",
+    },
+  })
+
+  setAgentEvents([
+    {
+      id: "judge:start",
+      stage: "judge",
+      kind: "status",
+      summary: "Evaluation finished",
+      time: { created: 1000 },
+      _targetText: "Evaluation finished",
+      _liveText: "Evaluation finished",
+    },
+  ])
+
+  cards = conversationMessages().filter((item: any) => item?._agentCard)
+  expect(cards[0]?._agentStatus).toBe("completed")
+})
+
+test("store agentCards._agentMessages grows when messages are added incrementally", () => {
+  setBoardStore("board", { task: { status: "planning" } })
+
+  const specMsg = (id: string, time: number, text: string) => ({
+    info: { id, role: "assistant", agent: "spec", sessionID: "s1", time: { created: time } },
+    parts: [{ id: `p-${id}`, type: "text", text }],
+  })
+
+  // 1 message
+  setMessages([specMsg("m1", 100, "a")])
+  const cardID = messageStore.agentCardOrder[0]
+  expect(cardID).toBe("spec:session:s1")
+  expect(messageStore.agentCards[cardID]._agentMessages).toHaveLength(1)
+
+  // 2 messages — count must grow via the same store path
+  setMessages([specMsg("m1", 100, "a"), specMsg("m2", 200, "b")])
+  expect(messageStore.agentCards[cardID]._agentMessages).toHaveLength(2)
+
+  // 3 messages
+  setMessages([specMsg("m1", 100, "a"), specMsg("m2", 200, "b"), specMsg("m3", 300, "c")])
+  expect(messageStore.agentCards[cardID]._agentMessages).toHaveLength(3)
+
+  // Card key stays stable across all updates
+  expect(messageStore.agentCardOrder).toEqual(["spec:session:s1"])
+})
+
+test("conversation ui state resets on task switch and tracks tool output expansion externally", () => {
+  toggleToolOutputExpanded("tool-part-1")
+  expect(toolOutputExpanded("tool-part-1")).toBe(true)
+
+  setSelectedTaskID("task-a")
+  expect(toolOutputExpanded("tool-part-1")).toBe(false)
+
+  toggleToolOutputExpanded("tool-part-1")
+  expect(toolOutputExpanded("tool-part-1")).toBe(true)
+  setSelectedTaskID("task-b")
+  expect(toolOutputExpanded("tool-part-1")).toBe(false)
 })

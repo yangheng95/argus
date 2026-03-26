@@ -340,6 +340,16 @@ function checkFamilyText(key: string): string {
   return t("checks.family.custom");
 }
 
+// 14x14 SVG icons for criteria family group headers
+const CHECK_FAMILY_ICONS: Record<string, string> = {
+  command: `<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2.5" width="10" height="9" rx="1.2"/><polyline points="4.5,6 6,7.5 4.5,9"/><line x1="7.5" y1="9" x2="9.5" y2="9"/></svg>`,
+  runtime: `<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 3.5L9.5 7 4.5 10.5Z"/></svg>`,
+  artifact: `<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 4.5L7 2l4.5 2.5v5L7 12l-4.5-2.5Z"/><polyline points="2.5,4.5 7,7 11.5,4.5"/><line x1="7" y1="7" x2="7" y2="12"/></svg>`,
+  review: `<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.2" cy="6.2" r="3.5"/><line x1="9" y1="9" x2="11.5" y2="11.5"/></svg>`,
+  acceptance: `<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="1.5" width="9" height="11" rx="1.2"/><polyline points="5,6.5 6.5,8 9,5.5"/><line x1="5" y1="10" x2="9" y2="10"/></svg>`,
+  custom: `<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="7" r="1"/><path d="M6.1 2.5l-.2 1.2a3.4 3.4 0 0 0-.9.5L3.8 3.8l-.9.9.4 1.2a3.4 3.4 0 0 0-.5.9l-1.2.2v1.2l1.2.2c.1.3.3.6.5.9l-.4 1.2.9.9 1.2-.4c.3.2.6.4.9.5l.2 1.2h1.2l.2-1.2c.3-.1.6-.3.9-.5l1.2.4.9-.9-.4-1.2c.2-.3.4-.6.5-.9l1.2-.2V6.8l-1.2-.2a3.4 3.4 0 0 0-.5-.9l.4-1.2-.9-.9-1.2.4a3.4 3.4 0 0 0-.9-.5L7.9 2.5Z"/></svg>`,
+};
+
 function record(value: any): boolean {
   return !!value && typeof value === "object" && !Array.isArray(value);
 }
@@ -517,6 +527,11 @@ export function CriteriaPanel(props: CriteriaPanelProps) {
         {(group) => (
           <section class="criteria-group" data-family={group.key}>
             <div class="criteria-group-head">
+              <span
+                class="criteria-group-icon"
+                aria-hidden="true"
+                innerHTML={CHECK_FAMILY_ICONS[group.key] || ""}
+              />
               <div class="criteria-group-title">{group.label}</div>
               <div class="criteria-group-count">
                 {tc("checks.group_count", group.items.length, { count: group.items.length })}
@@ -951,17 +966,34 @@ interface SectionFrameProps {
   id: string;
   title: string;
   bodyId: string;
+  icon?: string;
   badgeId?: string;
   badgeText?: string;
   badgeTone?: string;
   children: any;
 }
 
+// 16x16 SVG icons for section headers — all use currentColor so they
+// inherit the section-icon color (soft text / accent when open).
+const SECTION_ICONS: Record<string, string> = {
+  overview: `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="2.5" width="4.5" height="4.5" rx="1"/><rect x="9" y="2.5" width="4.5" height="4.5" rx="1"/><rect x="2.5" y="9" width="4.5" height="4.5" rx="1"/><rect x="9" y="9" width="4.5" height="4.5" rx="1"/></svg>`,
+  spec: `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 2H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.5L9.5 2Z"/><polyline points="9.5,2 9.5,4.5 12,4.5"/><line x1="6" y1="7" x2="10" y2="7"/><line x1="6" y1="9.5" x2="10" y2="9.5"/></svg>`,
+  plan: `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="4" x2="13" y2="4"/><line x1="6" y1="8" x2="13" y2="8"/><line x1="6" y1="12" x2="13" y2="12"/><circle cx="3.5" cy="4" r="0.8" fill="currentColor" stroke="none"/><circle cx="3.5" cy="8" r="0.8" fill="currentColor" stroke="none"/><circle cx="3.5" cy="12" r="0.8" fill="currentColor" stroke="none"/></svg>`,
+  goals: `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="5.5"/><circle cx="8" cy="8" r="3"/><circle cx="8" cy="8" r="0.8" fill="currentColor" stroke="none"/></svg>`,
+  criteria: `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="2" width="10" height="12" rx="1.2"/><path d="M6 6l1.2 1.2L9.5 5"/><line x1="6" y1="9.5" x2="10" y2="9.5"/><line x1="6" y1="11.5" x2="9" y2="11.5"/></svg>`,
+  delivery: `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 5.5L8 2.5l5.5 3v5L8 13.5l-5.5-3Z"/><polyline points="2.5,5.5 8,8.5 13.5,5.5"/><line x1="8" y1="8.5" x2="8" y2="13.5"/></svg>`,
+  files: `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V5L9 2Z"/><polyline points="9,2 9,5 12,5"/></svg>`,
+};
+
 function SectionFrame(props: SectionFrameProps) {
   return (
     <details class="section" id={props.id}>
       <summary class="section-head">
-        <span class="section-icon" aria-hidden="true" />
+        <span
+          class="section-icon"
+          aria-hidden="true"
+          innerHTML={props.icon || ""}
+        />
         <span class="section-title">{props.title}</span>
         <span
           class="section-badge"
@@ -1034,6 +1066,7 @@ export function Board(props: BoardProps) {
       <SectionFrame
         id="overviewSection"
         title={t("section.overview")}
+        icon={SECTION_ICONS.overview}
         bodyId="overviewBody"
       >
         <OverviewPanel overview={overview()} />
@@ -1042,6 +1075,7 @@ export function Board(props: BoardProps) {
       <SectionFrame
         id="specSection"
         title={t("section.spec")}
+        icon={SECTION_ICONS.spec}
         bodyId="specBody"
         badgeId="specBadge"
         badgeText={spec() ? t("common.active") : ""}
@@ -1053,6 +1087,7 @@ export function Board(props: BoardProps) {
       <SectionFrame
         id="planSection"
         title={t("section.plan")}
+        icon={SECTION_ICONS.plan}
         bodyId="planBody"
         badgeId="planBadge"
         badgeText={plan() ? `v${plan()?.version}` : ""}
@@ -1064,6 +1099,7 @@ export function Board(props: BoardProps) {
       <SectionFrame
         id="goalsSection"
         title={t("section.goals")}
+        icon={SECTION_ICONS.goals}
         bodyId="goalsBody"
         badgeId="goalsBadge"
         badgeText={goalsBadgeText()}
@@ -1085,6 +1121,7 @@ export function Board(props: BoardProps) {
       <SectionFrame
         id="criteriaSection"
         title={t("section.criteria")}
+        icon={SECTION_ICONS.criteria}
         bodyId="criteriaBody"
         badgeId="criteriaBadge"
         badgeText={(() => {
@@ -1107,6 +1144,7 @@ export function Board(props: BoardProps) {
       <SectionFrame
         id="deliverySection"
         title={t("section.delivery")}
+        icon={SECTION_ICONS.delivery}
         bodyId="evalBody"
         badgeId="deliveryBadge"
         badgeText={delivery() ? deliveryStatusLabel(delivery()?.status) : ""}

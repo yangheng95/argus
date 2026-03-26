@@ -196,20 +196,6 @@ function deliveryStatusLabel(status: string): string {
   return status || "";
 }
 
-type AgentRound = {
-  key: string;
-  stage: string;
-  messages: any[];
-  startTime: number;
-  endTime: number;
-};
-
-const MAX_LIVE_AGENT_MESSAGES = 12;
-
-function messageEndTime(message: any): number {
-  return Number(message?.info?.time?.completed || message?.info?.time?.updated || messageTime(message));
-}
-
 function agentEventTime(event: any): number {
   return Number(event?.time?.created || event?.timestamp || 0);
 }
@@ -265,106 +251,6 @@ function agentEventToolPart(event: any): any | null {
         : {}),
     },
   };
-}
-
-function agentRoundStatus(stage: string, round: AgentRound, roundIndex: number, rounds: AgentRound[], latestStageEvent: any): string {
-  if (roundIndex < rounds.length - 1) return "completed";
-  const hasOpenTranscript = round.messages.some(
-    (message: any) => !message?._synthetic && !message?.info?.time?.completed,
-  );
-  const active = activeAgentStages().has(stage);
-  const latestKind = String(latestStageEvent?.kind || "").trim().toLowerCase();
-  const latestSummary = String(latestStageEvent?.summary || "");
-  if (latestKind === "error") return "error";
-  if (latestKind === "status" && /finished|completed|done/i.test(latestSummary)) return "completed";
-  if (active || hasOpenTranscript) return "running";
-  return "completed";
-}
-
-function buildAgentCards(
-  agentChannels: Record<string, { stage: string; messages: any[]; startTime: number; endTime: number }>,
-  agentEvents: any[],
-): any[] {
-  const roundsByStage: Record<string, AgentRound[]> = {};
-  const latestEventByStage = new Map<string, any>();
-
-  for (const [key, channel] of Object.entries(agentChannels)) {
-    if (channel.messages.length === 0) continue;
-    if (!roundsByStage[channel.stage]) roundsByStage[channel.stage] = [];
-    roundsByStage[channel.stage].push({
-      key,
-      stage: channel.stage,
-      messages: [...channel.messages].sort((left, right) => messageTime(left) - messageTime(right)),
-      startTime: channel.startTime,
-      endTime: channel.endTime,
-    });
-  }
-
-  for (const rounds of Object.values(roundsByStage)) {
-    rounds.sort((left, right) => left.startTime - right.startTime);
-  }
-
-  const liveEventsByStage = new Map<string, any[]>();
-  for (const event of Array.isArray(agentEvents) ? agentEvents : []) {
-    const stage = String(event?.stage || "").trim().toLowerCase();
-    if (!AGENT_STAGES.has(stage)) continue;
-    const next = liveEventsByStage.get(stage) || [];
-    next.push(event);
-    liveEventsByStage.set(stage, next);
-    latestEventByStage.set(stage, event);
-  }
-
-  for (const [stage, events] of liveEventsByStage.entries()) {
-    const liveMessages = events
-      .slice()
-      .sort((left, right) => agentEventTime(left) - agentEventTime(right))
-      .map((event) => agentMessage(event))
-      .filter(Boolean)
-      .slice(-MAX_LIVE_AGENT_MESSAGES);
-    if (liveMessages.length === 0) continue;
-
-    const rounds = roundsByStage[stage] || [];
-    if (rounds.length === 0) {
-      const startTime = messageTime(liveMessages[0]);
-      const endTime = Math.max(...liveMessages.map((message: any) => messageEndTime(message)));
-      rounds.push({
-        key: `live:${stage}`,
-        stage,
-        messages: liveMessages,
-        startTime,
-        endTime,
-      });
-      roundsByStage[stage] = rounds;
-    }
-  }
-
-  const cards: any[] = [];
-  for (const [stage, rounds] of Object.entries(roundsByStage)) {
-    rounds.sort((left, right) => left.startTime - right.startTime);
-    for (let index = 0; index < rounds.length; index += 1) {
-      const round = rounds[index];
-      const roundLabel = rounds.length > 1 ? index + 1 : 0;
-      const cardKey = `${stage}:round:${Number.isFinite(round.startTime) ? round.startTime : "na"}:${index}`;
-      cards.push({
-        _synthetic: true,
-        _agentCard: true,
-        _agentStage: stage,
-        _agentStatus: agentRoundStatus(stage, round, index, rounds, latestEventByStage.get(stage)),
-        _agentRound: roundLabel,
-        _agentCardKey: cardKey,
-        _agentMessages: round.messages,
-        info: {
-          id: `agent-card:${cardKey}`,
-          role: "agent-card",
-          agent: stage,
-          time: { created: Number.isFinite(round.startTime) ? round.startTime : Date.now() },
-        },
-        parts: [],
-      });
-    }
-  }
-
-  return cards.sort((left, right) => messageTime(left) - messageTime(right));
 }
 
 // ── Public: buildBoardContextMessages ──
@@ -491,26 +377,14 @@ export function conversationMessages(): any[] {
   const board = boardStore.board;
   const showTranscriptDetails = messageStore.showTranscriptDetails;
 
- // Classify messages into main conversation vs agent channels.
- // Key by stage:sessionID so different rounds of the same agent get separate cards.
+ // Classify messages into main conversation only.
+ // Agent cards are maintained as stable store entities in messageStore.
   const mainMessages: any[] = [];
-  const agentChannels: Record<string, { stage: string; messages: any[]; startTime: number; endTime: number }> = {};
 
   for (const msg of allMessages) {
     const channel = classifyMessage(msg);
     if (channel === "main") {
       mainMessages.push(msg);
-    } else {
-      const sessionID = msg.info?.sessionID || "";
-      const key = `${channel}:${sessionID}`;
-      if (!agentChannels[key]) {
-        agentChannels[key] = { stage: channel, messages: [], startTime: Infinity, endTime: 0 };
-      }
-      agentChannels[key].messages.push(msg);
-      const created = msg.info?.time?.created || 0;
-      if (created < agentChannels[key].startTime) agentChannels[key].startTime = created;
-      const completed = msg.info?.time?.completed || created;
-      if (completed > agentChannels[key].endTime) agentChannels[key].endTime = completed;
     }
   }
 
@@ -531,7 +405,11 @@ export function conversationMessages(): any[] {
     });
   }
 
-  const agentCardMsgs = buildAgentCards(agentChannels, agentEvents);
+  const agentCardMsgs = (Array.isArray(messageStore.agentCardOrder)
+    ? messageStore.agentCardOrder
+        .map((id: string) => messageStore.agentCards[id])
+        .filter(Boolean)
+    : []) as any[];
 
   return [...filteredMain, ...executorMsgs, ...boardMsgs, ...agentCardMsgs].sort(
     (a: any, b: any) => (a.info?.time?.created || 0) - (b.info?.time?.created || 0),
