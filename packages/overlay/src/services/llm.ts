@@ -1,18 +1,15 @@
 // ── LLM Service ──
-// Pure logic extracted from app.js for LLM selection, provider utilities,
+// Pure logic extracted
 // and provider authentication flows.
-//
-// Replaces app.js functions:
-//   providerEntry, providerLabel, providerConnected, providerAuthMethods,
-//   providerState, providerPreferredOauthMethod, providerAuthPrompt,
-//   providerAuthInputs, authorizeProvider, executeProviderAuth,
-//   runProviderAuthMethod, authenticateSelectedProvider, testProviderConnection,
-//   llmSelection, llmSelectionKey, llmCurrent.
-//
+// Replaces functions:
+// providerEntry, providerLabel, providerConnected, providerAuthMethods,
+// providerState, providerPreferredOauthMethod, providerAuthPrompt,
+// providerAuthInputs, authorizeProvider, executeProviderAuth,
+// runProviderAuthMethod, authenticateSelectedProvider, testProviderConnection,
+// llmSelection, llmSelectionKey, llmCurrent.
 // DOM-dependent functions (llmSelection, llmCurrent, etc.) have their DOM
 // reads replaced with explicit parameters; the original DOM-coupled call sites
 // are marked with // TODO: DOM side.
-//
 // This module reads provider state from appStore; it does NOT write to appStore
 // directly — callers are responsible for store mutations after API calls.
 
@@ -115,9 +112,9 @@ export interface AuthDialogCallbacks {
   nativeOpen: (url: string) => Promise<void>;
 
   /**
-   * Show the LLM notice banner.
-   * TODO: DOM side — remove once notice is fully reactive in Solid.
-   */
+ * Show the LLM notice banner.
+ * TODO: DOM side — remove once notice is fully reactive in Solid.
+ */
   showLlmNotice: (message: string, tone?: string, duration?: number) => void;
 }
 
@@ -146,7 +143,6 @@ export function providerConnected(providerID: string): boolean {
 /**
  * Return the available auth methods for a provider.
  * Each item has { type, label, index }.
- * Mirrors app.js providerAuthMethods.
  */
 export function providerAuthMethods(providerID: string): AuthMethodItem[] {
   const items: any[] = Array.isArray(appStore.providerAuth?.[providerID])
@@ -194,7 +190,7 @@ export function providerPreferredOauthMethod(
 
 /**
  * Compute the current status info for a provider.
- * Accepts an optional config override (mirrors app.js providerState signature).
+ * Accepts an optional config override (
  * Accepts an optional modelID to match against providerTest.
  */
 export function providerState(
@@ -210,7 +206,7 @@ export function providerState(
   const key = configKey || item?.key;
   const tested = appStore.providerTest;
 
-  // If a test result is available for this exact (provider, model) pair, use it.
+ // If a test result is available for this exact (provider, model) pair, use it.
   if (
     tested?.providerID === providerID &&
     (currentModelID === undefined || tested?.modelID === currentModelID)
@@ -259,7 +255,7 @@ export function providerState(
 
 // ── LLM selection helpers ──
 // These helpers work with explicit values rather than DOM reads,
-// so they are usable from both the Solid component and from app.js.
+// so they are usable from both the Solid component and
 
 /**
  * Build a stable string key for a (providerID, modelID, apiKey) triple.
@@ -278,7 +274,6 @@ export function llmSelectionKey(
  * are no explicit form values selected.
  * Pass empty strings for formProviderID / formModelID when the form has not
  * been touched.
- *
  * TODO: DOM side — callers that previously read from dom.llmProvider /
  * dom.llmModel should pass those values as formProviderID / formModelID.
  */
@@ -311,8 +306,7 @@ export interface SortedProvider extends ProviderEntry {
 /**
  * Return the sorted provider list (connected first, then alphabetical).
  * Each entry includes a `stateLabel` derived from providerState.
- * Mirrors the data portion of app.js populateProviderSelect.
- *
+ * Mirrors the data portion of populateProviderSelect.
  * TODO: DOM side — callers must render the returned list into the
  * <select> element themselves.
  */
@@ -338,8 +332,7 @@ export function sortedProviders(config?: any): SortedProvider[] {
 
 /**
  * Return the sorted model list for a given provider.
- * Mirrors the data portion of app.js populateModelSelect.
- *
+ * Mirrors the data portion of populateModelSelect.
  * TODO: DOM side — callers must render the returned list into the
  * <select> element themselves.
  */
@@ -395,7 +388,6 @@ export async function testProviderConnection(
 /**
  * Validate and normalise a raw prompt descriptor from the server.
  * Returns null for invalid descriptors.
- * Mirrors app.js providerAuthPrompt.
  */
 export function providerAuthPrompt(prompt: any): AuthPrompt | null {
   if (
@@ -451,7 +443,6 @@ export function providerAuthPrompt(prompt: any): AuthPrompt | null {
  * Iteratively collect auth inputs for a provider method by fetching prompt
  * descriptors from the server and presenting native dialogs.
  * Returns the collected inputs map, or null if the user cancelled.
- * Mirrors app.js providerAuthInputs.
  */
 export async function providerAuthInputs(
   providerID: string,
@@ -508,7 +499,6 @@ export async function providerAuthInputs(
 /**
  * Send collected auth inputs to the server for a given provider/method.
  * Returns true on success.
- * Mirrors app.js executeProviderAuth.
  */
 export async function executeProviderAuth(
   providerID: string,
@@ -529,8 +519,6 @@ export async function executeProviderAuth(
 /**
  * Run the full OAuth authorization flow for a provider.
  * Returns true on success, false if the user cancelled.
- * Mirrors app.js authorizeProvider.
- *
  * Note: the caller is responsible for updating appStore.providerAuthDismissed
  * based on the returned value.
  */
@@ -558,14 +546,14 @@ export async function authorizeProvider(
       },
     );
     if (!confirmed) {
-      // TODO: DOM side — caller should set appStore.providerAuthDismissed[providerID] = true
+ // TODO: DOM side — caller should set appStore.providerAuthDismissed[providerID] = true
       return false;
     }
   }
 
   const collected = await providerAuthInputs(providerID, match.index, callbacks);
   if (collected == null) {
-    // TODO: DOM side — caller should set appStore.providerAuthDismissed[providerID] = true
+ // TODO: DOM side — caller should set appStore.providerAuthDismissed[providerID] = true
     return false;
   }
 
@@ -602,7 +590,7 @@ export async function authorizeProvider(
       },
     );
     if (code == null) {
-      // TODO: DOM side — caller should set appStore.providerAuthDismissed[providerID] = true
+ // TODO: DOM side — caller should set appStore.providerAuthDismissed[providerID] = true
       return false;
     }
     await apiJson(`provider/${providerID}/oauth/callback`, {
@@ -614,7 +602,7 @@ export async function authorizeProvider(
     return true;
   }
 
-  // Implicit / device-code flow: show instructions and wait for server callback
+ // Implicit / device-code flow: show instructions and wait for server callback
   callbacks.showLlmNotice(
     authorization.instructions || authorization.url,
     "warn",
@@ -635,8 +623,6 @@ export async function authorizeProvider(
  * Dispatch to the correct auth flow (OAuth vs API-key prompt) for one method.
  * Returns true on success, false if cancelled, or "input" if the user should
  * focus the API key field instead.
- * Mirrors app.js runProviderAuthMethod.
- *
  * TODO: DOM side — the "input" return case means the caller should call
  * dom.llmApiKey?.focus(). In Solid, set focus via a ref instead.
  */
@@ -651,7 +637,7 @@ export async function runProviderAuthMethod(
   const inputs = await providerAuthInputs(providerID, method.index, callbacks);
   if (inputs == null) return false;
   if (Object.keys(inputs).length === 0) {
-    // No server-side prompts — the caller should focus the API key field.
+ // No server-side prompts — the caller should focus the API key field.
     return "input";
   }
   await executeProviderAuth(providerID, method.index, inputs);
@@ -663,8 +649,6 @@ export async function runProviderAuthMethod(
 /**
  * Authenticate a provider by prompting the user to choose an auth method and
  * running the appropriate flow.
- * Mirrors app.js authenticateSelectedProvider.
- *
  * The providerID must be passed explicitly instead of being read from the DOM.
  * TODO: DOM side — callers should pass dom.llmProvider?.value?.trim() as providerID.
  */

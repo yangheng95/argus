@@ -1,9 +1,8 @@
 // ── Memory & Preferences Service ──
-// TypeScript port of knowledge/memory and preference functions from app.js:
-//   loadMemory, searchMemory, deleteMemory, clearWorkspaceMemory,
-//   openMemoryDetail,
-//   loadPreferences, deletePreference, openPrefEdit, savePrefEdit.
-//
+// TypeScript port of knowledge/memory and preference functions
+// loadMemory, searchMemory, deleteMemory, clearWorkspaceMemory,
+// openMemoryDetail,
+// loadPreferences, deletePreference, openPrefEdit, savePrefEdit.
 // DOM-rendering functions (renderMemory, renderPreferences) are intentionally
 // NOT ported here — they are superseded by declarative Solid.js components
 // (MemoryPanel.tsx, PreferencesPanel.tsx).
@@ -19,20 +18,17 @@ import { apiJson } from "./api";
 /**
  * Loads memory files for the currently selected task from the server and
  * updates the app store.
- *
- * Mirrors loadMemory in app.js but uses boardStore.selectedTaskID instead of
+ * Mirrors loadMemory.selectedTaskID instead of
  * state.selectedTaskID, and directoryEpoch guard is not applied here because
- * that belongs to the app.js coordination layer.
+ * that belongs to the coordination layer.
  */
 export async function loadMemory(): Promise<void> {
-  const taskID = boardStore.selectedTaskID;
-  if (!taskID) {
-    setAppStore({ memoryFiles: [], memorySearchMode: false });
-    return;
-  }
   try {
-    const query = `?taskID=${encodeURIComponent(taskID)}`;
-    const files = await apiJson(`panel/knowledge/memory${query}`);
+    const sessionID = boardStore.board?.task?.sessionID;
+    const params = sessionID
+      ? `?sessionID=${encodeURIComponent(sessionID)}`
+      : "";
+    const files = await apiJson(`panel/knowledge/memory${params}`);
     setAppStore({
       memoryFiles: Array.isArray(files) ? files : [],
       memorySearchMode: false,
@@ -48,19 +44,18 @@ export async function loadMemory(): Promise<void> {
 /**
  * Searches memory files using a query string and updates the app store.
  * Falls back to loadMemory when the query is empty.
- *
- * Mirrors searchMemory in app.js.
+ * Mirrors searchMemory.
  */
 export async function searchMemory(query: string): Promise<void> {
   if (!query || !query.trim()) {
     return loadMemory();
   }
   try {
-    const taskID = boardStore.selectedTaskID || undefined;
+    const sessionID = boardStore.board?.task?.sessionID || undefined;
     const results = await apiJson("panel/knowledge/memory/search", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ query: query.trim(), taskID, limit: 20 }),
+      body: JSON.stringify({ query: query.trim(), sessionID, limit: 20 }),
     });
     const files = (Array.isArray(results) ? results : []).map((r: any) => ({
       id: r.fileId,
@@ -81,7 +76,7 @@ export async function searchMemory(query: string): Promise<void> {
 
 /**
  * Deletes a memory file by ID via the API, then reloads the memory list.
- * Mirrors deleteMemory in app.js.
+ * Mirrors deleteMemory.
  */
 export async function deleteMemory(fileId: string): Promise<void> {
   if (!fileId) return;
@@ -97,17 +92,16 @@ export async function deleteMemory(fileId: string): Promise<void> {
 
 /**
  * Clears the workspace-scoped task/directory memory held in the settings store.
- * Mirrors clearWorkspaceMemory in app.js.
- *
- * NOTE: In app.js this mutates state.workspaceTaskID and state.workspaceDirectory.
+ * Mirrors clearWorkspaceMemory.
+ * NOTE:.workspaceTaskID and state.workspaceDirectory.
  * In the Solid world those fields live in settingsStore; this function resets
  * the equivalent app-store fields that track workspace identity.
  */
 export function clearWorkspaceMemory(): void {
-  // app.js: state.workspaceTaskID = ""; state.workspaceDirectory = "";
-  // These are settings-store fields — we simply record the intent here.
-  // Callers that own the settingsStore should call setSettingsStore directly
-  // if they need to clear the persisted workspace identity.
+ // : state.workspaceTaskID = ""; state.workspaceDirectory = "";
+ // These are settings-store fields — we simply record the intent here.
+ // Callers that own the settingsStore should call setSettingsStore directly
+ // if they need to clear the persisted workspace identity.
 }
 
 // ── Memory detail ──
@@ -115,12 +109,10 @@ export function clearWorkspaceMemory(): void {
 /**
  * Fetches the full content of a single memory file for display in a detail
  * dialog and returns the data.
- *
- * NOTE: The original openMemoryDetail in app.js mutated legacy DOM elements
- * (dom.memoryDialog etc.).  This function returns the fetched data instead so
+ * NOTE: The original openMemoryDetail
+ * (dom.memoryDialog etc.). This function returns the fetched data instead so
  * callers can drive a Solid.js dialog reactively.
- *
- * Mirrors openMemoryDetail in app.js (data-fetch portion only).
+ * Mirrors openMemoryDetail.
  */
 export async function fetchMemoryDetail(fileId: string): Promise<{
   file: any;
@@ -145,7 +137,7 @@ export async function fetchMemoryDetail(fileId: string): Promise<{
 
 /**
  * Loads preferences from the server and updates the app store.
- * Mirrors loadPreferences in app.js.
+ * Mirrors loadPreferences.
  */
 export async function loadPreferences(): Promise<void> {
   try {
@@ -161,7 +153,7 @@ export async function loadPreferences(): Promise<void> {
 
 /**
  * Deletes a preference by ID via the API, then reloads the preferences list.
- * Mirrors deletePreference in app.js.
+ * Mirrors deletePreference.
  */
 export async function deletePreference(prefId: string): Promise<void> {
   if (!prefId) return;
@@ -178,12 +170,10 @@ export async function deletePreference(prefId: string): Promise<void> {
 
 /**
  * Saves a preference (create or update) via the API, then reloads the list.
- *
- * NOTE: The original savePrefEdit in app.js read directly from DOM inputs.
+ * NOTE: The original savePrefEdit.
  * This function accepts the values as parameters so callers can drive it from
  * Solid.js reactive form state.
- *
- * Mirrors savePrefEdit in app.js (API call portion).
+ * Mirrors savePrefEdit.
  */
 export async function savePrefEdit(
   key: string,

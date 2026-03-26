@@ -1,6 +1,6 @@
 // ── Settings Store ──
 // Solid reactive store for overlay settings.
-// Extracted from app.js DEFAULT_OVERLAY_SETTINGS, applyOverlaySettings,
+// Extracted
 // browserOverlaySettings, and persistOverlaySettings.
 
 import { createStore } from "solid-js/store";
@@ -32,19 +32,19 @@ export interface OverlaySettings {
   directory: string;
   workspaceTaskID: string;
   workspaceDirectory: string;
-  // ── Runtime directory state (mirrors state.savedDirectory / state.tempDirectory) ──
+ // ── Runtime directory state (mirrors state.savedDirectory / state.tempDirectory) ──
   /** Last persisted directory value; used to detect uncommitted changes and revert */
   savedDirectory: string;
   /** Temporary directory path assigned by the server for the current session */
   tempDirectory: string;
-  // ── Epoch counters (mirrors state.workspaceEpoch / state.directoryEpoch) ──
+ // ── Epoch counters (mirrors state.workspaceEpoch / state.directoryEpoch) ──
   /** Incremented each time the workspace is invalidated/reset */
   workspaceEpoch: number;
   /** Incremented each time the working directory changes */
   directoryEpoch: number;
 }
 
-// ── Sanitisers (mirror app.js helpers) ──
+// ── Sanitisers (mirror helpers) ──
 
 function sanitizeTheme(value: any): string {
   const text = String(value || "").trim();
@@ -75,8 +75,8 @@ function sanitizePaneWidth(value: any): number | null {
 }
 
 function defaultAutoServer(url: string): boolean {
-  // Mirror app.js: autoServer defaults to true only when URL equals the
-  // browser origin or the default loopback server.
+ // Mirror : autoServer defaults to true only when URL equals the
+ // browser origin or the default loopback server.
   return !url || url === DEFAULT_SERVER;
 }
 
@@ -133,7 +133,6 @@ export const [settingsStore, setSettingsStore] =
 
 // ── applySettings ──
 // Validates and writes a partial settings object into the store.
-// Mirrors app.js applyOverlaySettings validation logic exactly.
 
 export function applySettings(input: Partial<OverlaySettings>): void {
   const serverUrl =
@@ -191,8 +190,7 @@ export function applySettings(input: Partial<OverlaySettings>): void {
 
 // ── saveSettings ──
 // Persists current store values to localStorage.
-// Mirrors app.js persistOverlaySettings (localStorage keys only; Tauri
-// invoke is handled by app.js for now).
+// invoke is handled by for now).
 
 export function saveSettings(): void {
   const s = settingsStore;
@@ -254,7 +252,6 @@ export function saveSettings(): void {
 
 // ── loadSettings ──
 // Reads localStorage and populates the store.
-// Mirrors app.js browserOverlaySettings.
 
 export function loadSettings(): void {
   const serverUrl =
@@ -307,7 +304,7 @@ export function loadSettings(): void {
     workspaceDirectory:
       localStorage.getItem("oc_workspace_directory") ||
       DEFAULT_SETTINGS.workspaceDirectory,
-    // Runtime-only fields — not persisted in localStorage; reset to defaults on load.
+ // Runtime-only fields — not persisted in localStorage; reset to defaults on load.
     savedDirectory: directory,
     tempDirectory: DEFAULT_SETTINGS.tempDirectory,
     workspaceEpoch: DEFAULT_SETTINGS.workspaceEpoch,
@@ -316,7 +313,7 @@ export function loadSettings(): void {
 }
 
 // ── Runtime directory setters ──
-// These fields are not persisted to localStorage; they are managed by app.js
+// These fields are not persisted to localStorage; they are managed by
 // at runtime and exposed here so Solid components can read them reactively.
 
 export function setTempDirectory(path: string): void {
@@ -340,8 +337,6 @@ export function bumpDirectoryEpoch(): void {
 /**
  * Resolve whether a directory + mode combination should be stored as a
  * "custom" persisted path or discarded (returning "").
- *
- * Mirrors app.js sanitizeDirectoryMode (line 1251) and savedDirectoryValue
  * (line 1257).
  */
 export function sanitizeDirectoryMode(value: any, directory: string): "custom" | "temp" {
@@ -360,17 +355,14 @@ export function savedDirectoryValue(directory: any, mode: any): string {
 
 /**
  * Extract the `directory` field from a settings-like object.
- * Mirrors app.js settingsDirectory (line 1263).
  */
 export function settingsDirectory(settings: Partial<OverlaySettings> | null | undefined): string {
   return typeof settings?.directory === "string" ? settings.directory.trim() : "";
 }
 
 // ── bootstrapOverlaySettings ──
-//
 // Serialize the current store (or a provided snapshot) back into a plain
 // settings object suitable for persistence or for passing to Tauri.
-// Mirrors app.js bootstrapOverlaySettings (lines 1427–1452).
 
 export function bootstrapOverlaySettings(
   input: Partial<OverlaySettings> = settingsStore,
@@ -408,18 +400,14 @@ export function bootstrapOverlaySettings(
 }
 
 // ── Workspace memory helpers ──
-//
 // These helpers manage the workspaceTaskID / workspaceDirectory fields that
 // survive a page reload (persisted to localStorage by saveSettings).
-// Mirrors app.js workspaceRestoreDirectory, looksLikeExecutionWorkspace,
 // rememberWorkspace, and clearWorkspaceMemory (lines 1454–1483).
 
 /**
  * Returns true when `value` looks like a goal execution workspace path
  * (i.e. contains "goal-workspace" as a path component).
  * These paths should never be restored across sessions.
- *
- * Mirrors app.js looksLikeExecutionWorkspace (line 1467).
  */
 export function looksLikeExecutionWorkspace(value: any): boolean {
   const text = String(value || "").trim();
@@ -431,8 +419,6 @@ export function looksLikeExecutionWorkspace(value: any): boolean {
  * Normalise a workspace directory value for restore:
  * returns an empty string when the path is blank or looks like an
  * execution workspace.
- *
- * Mirrors app.js workspaceRestoreDirectory (line 1473).
  */
 export function workspaceRestoreDirectory(value: any): string {
   const text = typeof value === "string" ? value.trim() : "";
@@ -444,11 +430,8 @@ export function workspaceRestoreDirectory(value: any): string {
 /**
  * Persist the current task selection + directory into the store so they can
  * be restored after a page reload.
- *
  * `input.taskID` and `input.directory` override the store values when
  * provided; otherwise the current `settingsStore` values are used.
- *
- * Mirrors app.js rememberWorkspace (line 1454).
  */
 export function rememberWorkspace(
   input: { taskID?: string; directory?: string; selectedTaskID?: string } = {},
@@ -471,7 +454,6 @@ export function rememberWorkspace(
 
 /**
  * Clear persisted workspace task/directory from the store.
- * Mirrors app.js clearWorkspaceMemory (line 1480).
  */
 export function clearWorkspaceMemory(): void {
   setSettingsStore("workspaceTaskID", "");
@@ -479,17 +461,12 @@ export function clearWorkspaceMemory(): void {
 }
 
 // ── Test / timing helpers ──
-//
 // These helpers read an optional `window.__overlayTest` config object injected
-// by test runners to override timing constants.  Production code receives the
+// by test runners to override timing constants. Production code receives the
 // production fallback value transparently.
-//
-// Mirrors app.js overlayTestConfig (line 1985) and overlayTiming (line 1990).
 
 /**
  * Return the `window.__overlayTest` config object, or `null` when not set.
- *
- * Mirrors app.js overlayTestConfig (line 1985).
  */
 export function overlayTestConfig(): Record<string, unknown> | null {
   if (typeof window === "undefined") return null;
@@ -501,8 +478,6 @@ export function overlayTestConfig(): Record<string, unknown> | null {
  * Read a timing value from the test config by `name`.
  * When the config does not provide a finite number the `fallback` is returned.
  * The result is always at least `min` milliseconds (default 50 ms).
- *
- * Mirrors app.js overlayTiming (line 1990).
  */
 export function overlayTiming(name: string, fallback: number, min = 50): number {
   const value = Number(overlayTestConfig()?.[name]);

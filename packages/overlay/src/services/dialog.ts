@@ -1,12 +1,14 @@
 // ── Dialog Service ──
 // Manages dialog open/close, config tab switching, and backdrop close handlers.
-// All legacy window-bridge calls (legacyFn) have been replaced with direct
+// Uses direct imports.
 // imports as of Phase 4 cleanup.
 
 import { settingsStore, setSettingsStore, saveSettings } from "../store/settings";
-import { boardStore } from "../store/board";
+import { boardStore, loadTasks } from "../store/board";
 import { appStore } from "../store/app";
 import { loadConfigInfo } from "./init";
+import { checkConnection } from "./connection";
+import { reloadProjectScope } from "./config";
 import { apiJson, configure as configureApi } from "./api";
 import { t } from "../utils/i18n";
 
@@ -14,7 +16,6 @@ import { t } from "../utils/i18n";
 
 /**
  * Open the channel configuration dialog.
- *
  * ChannelsPanel.tsx handles its own inline editing, so this function
  * simply opens the config dialog and switches to the channel tab.
  */
@@ -24,7 +25,6 @@ export async function openChannelSettings(_channelID?: string): Promise<void> {
 
 /**
  * Open the server / connection settings dialog.
- *
  * Pre-populates the URL, password, and username inputs from settingsStore,
  * then shows the dialog.
  */
@@ -83,38 +83,105 @@ export function focusConfigSection(name: string): void {
 /**
  * Populate the About panel runtime grid with server/platform info.
  */
-function renderAboutVersion(): void {
+const OVERLAY_VERSION = "0.0.1-alpha";
+
+function escapeAboutHtml(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+export function renderAboutVersion(): void {
   const grid = document.getElementById("aboutRuntimeGrid");
   if (!grid) return;
 
   const config = appStore.config;
-  const rows: Array<[string, string]> = [];
+  const connected = appStore.config !== null;
+  const rows: Array<[string, string]> = [
+    [t("about.rt_overlay"), "v" + OVERLAY_VERSION],
+    [t("about.rt_core"), (config as any)?.version || t("about.rt_unavailable")],
+    [t("about.rt_server"), settingsStore.serverUrl || "-"],
+    [t("about.rt_connection"), connected ? t("about.rt_connected") : t("about.rt_disconnected")],
+    [t("about.rt_directory"), settingsStore.directory || "-"],
+    [t("about.rt_executor"), settingsStore.executor || "-"],
+    [t("about.rt_tasks"), String(boardStore.tasks?.length || 0)],
+  ];
 
-  if (config) {
-    if ((config as any).version) rows.push([t("about.server_version"), (config as any).version]);
-    if ((config as any).platform) rows.push([t("about.platform"), (config as any).platform]);
-    if ((config as any).goVersion) rows.push([t("about.go_version"), (config as any).goVersion]);
-  }
+  // Additional server info
+  if ((config as any)?.platform) rows.push([t("about.platform"), (config as any).platform]);
+  if ((config as any)?.goVersion) rows.push([t("about.go_version"), (config as any).goVersion]);
 
-  // Tauri runtime info
   const tauri = (window as any).__TAURI__;
-  if (tauri) {
-    rows.push([t("about.runtime_type"), "Tauri Desktop"]);
-  } else {
-    rows.push([t("about.runtime_type"), "Browser"]);
-  }
-
-  if (rows.length === 0) {
-    grid.textContent = t("about.no_info");
-    return;
-  }
+  rows.push([t("about.runtime_type"), tauri ? "Tauri Desktop" : "Browser"]);
 
   grid.innerHTML = rows
     .map(
       ([label, value]) =>
-        `<div class="about-info-label">${label}</div><div class="about-info-value">${value}</div>`,
+        `<div class="about-info-label">${escapeAboutHtml(label)}</div><div class="about-info-value">${escapeAboutHtml(value)}</div>`,
     )
     .join("");
+
+  // Version badge in chat footer
+  const chatVersion = document.getElementById("chatVersion");
+  if (chatVersion) {
+    const connected = config !== null;
+    const text = connected
+      ? t("version.overlay", { version: OVERLAY_VERSION })
+      : `${t("version.overlay", { version: OVERLAY_VERSION })} / ${t("version.core_unknown")}`;
+    chatVersion.textContent = text;
+    chatVersion.title = text;
+  }
+
+  // Channel summary in titlebar
+  renderChannelSummary();
+}
+
+/**
+ * Render channel status summary into #brandVersion and #configToggleMeta.
+ */
+function renderChannelSummary(): void {
+  const channels: any[] = Array.isArray(appStore.channels) ? appStore.channels : [];
+  const configured = channels.filter((ch: any) => ch.status === "configured");
+  const partial = channels.filter((ch: any) => ch.status === "partial");
+  const missing = channels.filter((ch: any) => ch.status === "missing");
+  const disabled = channels.filter((ch: any) => ch.status === "disabled");
+
+  const summary =
+    configured.length === 0
+      ? t("channel.setup_needed")
+      : configured.length === 1
+        ? configured[0].name
+        : t("channel.summary_plus", { name: configured[0].name, count: configured.length - 1 });
+
+  const details = [
+    { tone: "configured", text: configured.length > 0 ? t("channel.configured", { names: configured.map((c: any) => c.name).join(", ") }) : t("channel.configured_none") },
+    { tone: "partial", text: partial.length > 0 ? t("channel.needs_setup", { names: partial.map((c: any) => c.name).join(", ") }) : "" },
+    { tone: "missing", text: missing.length > 0 ? t("channel.available", { names: missing.map((c: any) => c.name).join(", ") }) : "" },
+    { tone: "disabled", text: disabled.length > 0 ? t("channel.disabled", { names: disabled.map((c: any) => c.name).join(", ") }) : "" },
+  ].filter((d) => d.text);
+
+  const hint = [...details.map((d) => d.text), t("channel.open_settings")].join(" | ");
+
+  const brandVersion = document.getElementById("brandVersion");
+  if (brandVersion) {
+    const card = details
+      .map((d) => `<span class="brand-channel-tip-row" data-tone="${escapeAboutHtml(d.tone)}">${escapeAboutHtml(d.text)}</span>`)
+      .join("");
+    const tone = configured.length > 0
+      ? "brand-channel brand-channel-summary"
+      : "brand-channel brand-channel-summary brand-channel-empty";
+    brandVersion.innerHTML = [
+      `<button type="button" class="brand-channel-group" data-no-drag="true" data-open-channels="true" title="${escapeAboutHtml(hint)}" aria-label="${escapeAboutHtml(hint)}">`,
+      `<span class="brand-channel-label">${escapeAboutHtml(t("channel.channels"))}</span>`,
+      `<span class="${tone}">${escapeAboutHtml(summary)}</span>`,
+      `<span class="brand-channel-tip" aria-hidden="true">`,
+      `<span class="brand-channel-tip-title">${escapeAboutHtml(t("channel.channels"))}</span>`,
+      card,
+      `<span class="brand-channel-tip-footer">${escapeAboutHtml(t("channel.open_settings"))}</span>`,
+      `</span></button>`,
+    ].join("");
+  }
+
+  const configMeta = document.getElementById("configToggleMeta");
+  if (configMeta) configMeta.textContent = summary;
 }
 
 /**
@@ -131,7 +198,7 @@ export function openConfigDialog(section?: string): void {
     configDialog.showModal();
   }
 
-  // Load config info (populates appStore) then refresh about panel.
+ // Load config info (populates appStore) then refresh about panel.
   void loadConfigInfo().then(() => renderAboutVersion());
 
   if (section) {
@@ -151,7 +218,7 @@ export function installSettingsFormHandlers(): void {
   if ((form as any).__handlersBound) return;
   (form as any).__handlersBound = true;
 
-  form.addEventListener("submit", (event) => {
+  form.addEventListener("submit", async (event) => {
     event.preventDefault();
     const url = (document.getElementById("serverUrl") as HTMLInputElement | null)?.value || "";
     const password = (document.getElementById("serverPassword") as HTMLInputElement | null)?.value || "";
@@ -161,6 +228,7 @@ export function installSettingsFormHandlers(): void {
     configureApi({ serverUrl: url, password, username });
     saveSettings();
     dialog.close();
+    try { await checkConnection(); await reloadProjectScope(); } catch { /* reconnect monitor will retry */ }
   });
 
   cancelBtn?.addEventListener("click", () => {

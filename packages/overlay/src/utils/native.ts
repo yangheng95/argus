@@ -1,21 +1,18 @@
 // ── Native / Platform Utilities ──
-// Exact port of app.js native dialog and OS-open helpers to TypeScript.
-//
 // Exported functions:
-//   nativeConfirm  — show a confirm dialog (ok/cancel)
-//   nativePrompt   — show a text-input dialog
-//   nativeSelect   — show a select-option dialog
-//   nativeOpen     — open a URL in the browser or a path with the OS
-//
-// All dialog functions delegate to the app.js `showAppDialog` global via
-// the window bridge so that no circular import is introduced while the Solid
-// migration is in progress.  Once the dialog component is fully ported to
+// nativeConfirm — show a confirm dialog (ok/cancel)
+// nativePrompt — show a text-input dialog
+// nativeSelect — show a select-option dialog
+// nativeOpen — open a URL in the browser or a path with the OS
+// All dialog functions delegate to the `showAppDialog` global via
+// the so that no circular import is introduced while the Solid
+// migration is in progress. Once the dialog component is fully ported to
 // Solid these can be wired directly.
 
 import { AppLog } from "./log";
 import { apiJson } from "../services/api";
 
-// ── Internal: bridge to app.js globals ──
+// ── Internal: window global accessors ──
 
 function legacyFn(name: string, ...args: unknown[]): unknown {
   const fn = (window as any)[name];
@@ -24,7 +21,6 @@ function legacyFn(name: string, ...args: unknown[]): unknown {
 }
 
 // ── nativeConfirm ──
-// Mirrors app.js nativeConfirm() (line 3567).
 // Shows a confirm dialog and returns true when the user clicked OK.
 
 export async function nativeConfirm(
@@ -48,7 +44,6 @@ export async function nativeConfirm(
 }
 
 // ── nativePrompt ──
-// Mirrors app.js nativePrompt() (line 3588).
 // Shows a text-input dialog and returns the entered value, or null if cancelled.
 
 export async function nativePrompt(
@@ -79,7 +74,6 @@ export async function nativePrompt(
 }
 
 // ── nativeSelect ──
-// Mirrors app.js nativeSelect() (line 3604).
 // Shows a select-option dialog and returns the chosen value, or null if cancelled.
 
 export interface SelectOption {
@@ -117,7 +111,6 @@ export async function nativeSelect(
 }
 
 // ── nativeOpen ──
-// Mirrors app.js nativeOpen() (line 3728).
 // Open a URL with the native browser, or a file-system path with the OS shell.
 // Falls back to the server path/open API for filesystem paths when Tauri is not
 // available.
@@ -135,7 +128,7 @@ export async function nativeOpen(target: string): Promise<boolean> {
         : await invoke("overlay_open_path", { path: target });
       if (opened) return true;
     } catch {
-      // Tauri invoke failed, fall through to browser / API fallbacks
+ // Tauri invoke failed, fall through to browser / API fallbacks
     }
   }
   if (isUrl) {

@@ -1,23 +1,24 @@
 // ── PromptCatalog ──
-// Solid.js component that mirrors renderPromptCatalog, renderPromptPreview,
-// and all supporting helpers from app.js:
-//   promptEntryID, promptEntry, promptEntryValue, syncPromptDrafts,
-//   promptGroupLabel, promptDescription, promptStatus, promptHelper,
-//   promptDirty, savePromptEntry, resetPromptEntry.
-//
-// Data is fetched from `config/prompt` on mount.
+// Solid.js component that renders the prompt override editor.
+// Data source: appStore.promptEntries (populated by loadConfigInfo on connect).
+// Save/reset: delegates to config.ts savePromptEntry / resetPromptEntry
+// which use the correct PATCH /config mechanism.
 
 import {
   createSignal,
   createMemo,
   For,
   Show,
-  onMount,
 } from "solid-js";
 import { createStore } from "solid-js/store";
 import { t } from "../../utils/i18n";
 import { renderMarkdown } from "../../utils/markdown";
-import { apiJson } from "../../services/api";
+import { appStore } from "../../store/app";
+import {
+  savePromptEntry as serviceSave,
+  resetPromptEntry as serviceReset,
+  loadPromptCatalog,
+} from "../../services/config";
 
 // ── Types ──
 
@@ -103,99 +104,64 @@ function promptPreviewHtml(value: string): string {
 // ── Component ──
 
 export default function PromptCatalog() {
-  const [entries, setEntries] = createSignal<PromptEntry[]>([]);
   const [drafts, setDrafts] = createStore<Record<string, string>>({});
-  const [loading, setLoading] = createSignal(false);
   const [notice, setNotice] = createSignal("");
   const [noticeTone, setNoticeTone] = createSignal("");
+  const [saving, setSaving] = createSignal(false);
 
-  const taskActive = createMemo(() => false); // parent may pass board task status; defaulting to false here
+  // Data source: reactive from appStore (populated by loadConfigInfo after connect)
+  const entries = createMemo((): PromptEntry[] => {
+    const raw = appStore.promptEntries;
+    return Array.isArray(raw) ? raw as PromptEntry[] : [];
+  });
 
   function draftValue(entry: PromptEntry): string {
     const id = promptEntryID(entry);
-    return Object.prototype.hasOwnProperty.call(drafts, id)
-      ? (drafts as Record<string, string>)[id]
-      : entry.prompt || "";
+    // Access via proxy to track reactivity; undefined means no draft
+    const val = (drafts as Record<string, string>)[id];
+    return val !== undefined ? val : entry.prompt || "";
   }
 
   function isDirty(entry: PromptEntry): boolean {
     return draftValue(entry) !== (entry.prompt || "");
   }
 
-  function syncDrafts(items: PromptEntry[]) {
-    const next: Record<string, string> = {};
-    for (const entry of items) {
-      const id = promptEntryID(entry);
-      next[id] = Object.prototype.hasOwnProperty.call(drafts, id)
-        ? (drafts as Record<string, string>)[id]
-        : entry.prompt || "";
-    }
-    // Batch update using setStore with a replace-all approach
-    for (const [k, v] of Object.entries(next)) {
-      setDrafts(k, v);
-    }
-  }
-
-  async function load() {
-    setLoading(true);
-    try {
-      const data = await apiJson("config/prompt");
-      const items: PromptEntry[] = Array.isArray(data) ? data : [];
-      setEntries(items);
-      syncDrafts(items);
-    } catch (e) {
-      console.error("PromptCatalog: load failed", e);
-      setEntries([]);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  onMount(load);
-
   function handleDraftChange(entryID: string, value: string) {
     setDrafts(entryID, value);
   }
 
   async function handleSave(entry: PromptEntry) {
-    const entryID = promptEntryID(entry);
     const value = draftValue(entry);
+    setSaving(true);
     try {
-      // POST the updated value to the config/prompt endpoint
-      await apiJson("config/prompt", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          scope: entry.scope,
-          key: entry.key,
-          value: value.trim() || null,
-        }),
-      });
+      await serviceSave(entry, value);
+      // Clear draft after successful save (catalog reloads from store)
+      const id = promptEntryID(entry);
+      setDrafts(id, undefined as any);
       showNotice(t("common.saved"), "active");
-      await load();
     } catch (e) {
       showNotice(e instanceof Error ? e.message : String(e), "error");
+    } finally {
+      setSaving(false);
     }
   }
 
   async function handleReset(entry: PromptEntry) {
     const entryID = promptEntryID(entry);
-    setDrafts(entryID, entry.prompt || "");
-    if (entry.configured_prompt === null) return;
+    if (entry.configured_prompt === null) {
+      // No server override — just reset local draft
+      setDrafts(entryID, entry.prompt || "");
+      return;
+    }
+    setSaving(true);
     try {
-      await apiJson("config/prompt", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          scope: entry.scope,
-          key: entry.key,
-          value: null,
-        }),
-      });
+      await serviceReset(entry);
+      setDrafts(entryID, undefined as any);
       showNotice(t("prompt.reset_done"), "active");
-      await load();
     } catch (e) {
       showNotice(e instanceof Error ? e.message : String(e), "error");
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -215,23 +181,9 @@ export default function PromptCatalog() {
 
   return (
     <>
-      <Show when={loading()}>
-        <div class="loading-hint">{t("common.loading")}</div>
-      </Show>
-
       <Show when={notice()}>
         <div class="config-status-box" data-status={noticeTone()}>
           {notice()}
-        </div>
-      </Show>
-
-      <Show when={taskActive()}>
-        <div
-          class="config-status-box"
-          data-status="warn"
-          style="margin-bottom:var(--sp-2)"
-        >
-          {t("prompt.active_task_notice")}
         </div>
       </Show>
 
@@ -278,6 +230,7 @@ export default function PromptCatalog() {
                       class="field-input prompt-textarea"
                       rows={8}
                       value={currentDraft()}
+                      disabled={saving()}
                       onInput={(e) =>
                         handleDraftChange(entryID, e.currentTarget.value)
                       }
@@ -295,7 +248,7 @@ export default function PromptCatalog() {
                       <button
                         type="button"
                         class="btn btn-ghost mini"
-                        disabled={entry.configured_prompt === null && !dirty()}
+                        disabled={saving() || (entry.configured_prompt === null && !dirty())}
                         onClick={() => handleReset(entry)}
                       >
                         {t("prompt.reset")}
@@ -303,7 +256,7 @@ export default function PromptCatalog() {
                       <button
                         type="button"
                         class="btn btn-primary mini"
-                        disabled={!dirty()}
+                        disabled={saving() || !dirty()}
                         onClick={() => handleSave(entry)}
                       >
                         {t("common.save")}

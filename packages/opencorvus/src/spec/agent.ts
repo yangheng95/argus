@@ -21,6 +21,7 @@ import { parseSpecText } from "./parse-spec-text"
 import { OrchestratorConfig } from "@/orchestrator/config"
 import path from "path"
 import SPEC_CORE from "@/prompt/core/spec-core.txt"
+import { Config } from "@/config/config"
 
 const log = Log.create({ service: "spec-agent" })
 
@@ -265,7 +266,7 @@ async function run(input: {
       tools: allTools,
       maxOutputTokens: 32768,
       abortSignal: input.signal ?? AbortSignal.timeout(TIMEOUT_MS),
-      system: SPEC_SYSTEM(MIN_TOOL_CALLS),
+      system: await specSystem(MIN_TOOL_CALLS),
       prompt: userPrompt,
       ...(input.stream?.onChunk ? { onChunk: input.stream.onChunk as any } : {}),
       ...(input.stream?.onError ? { onError: input.stream.onError } : {}),
@@ -596,9 +597,6 @@ function readFileSafe(absPath: string, maxLen = 6000): string | null {
 // System prompt
 // ---------------------------------------------------------------------------
 
-const SPEC_SYSTEM = (minToolCalls = SPEC_DEFAULTS.min_tool_calls) =>
-  SPEC_CORE + "\n\n" + headlessSpecAdditions(minToolCalls)
-
 function headlessSpecAdditions(minToolCalls: number) {
   return `## Available Tools
 
@@ -636,4 +634,15 @@ Before outputting, verify each of these. If ANY answer is NO, use more tools:
 
 - For greenfield projects (creating something new with no existing codebase): FIRST use web_search to research current best-practice scaffolding, framework choices, and reference implementations. Then include detailed technical design in the content section.
 - Spec Items: Be DETAILED — they drive downstream planning and acceptance. Include at least 4-6 spec items for non-trivial tasks.`
+}
+
+/** Full default system prompt (core + headless additions). Exported for tests and catalog. */
+export const SPEC_SYSTEM = SPEC_CORE + "\n\n" + headlessSpecAdditions(SPEC_DEFAULTS.min_tool_calls)
+
+/** Config-aware resolver: returns config.prompt.spec_system if set, otherwise builds the default. */
+export async function specSystem(minToolCalls = SPEC_DEFAULTS.min_tool_calls): Promise<string> {
+  const config = await Config.get()
+  const override = (config as Record<string, unknown>).prompt as Record<string, unknown> | undefined
+  if (typeof override?.spec_system === "string") return override.spec_system
+  return SPEC_CORE + "\n\n" + headlessSpecAdditions(minToolCalls)
 }

@@ -136,7 +136,7 @@ async function run(input: z.infer<typeof ControlMessageInput>, onEvent?: StreamC
     }
 
     const text = textFromMessage(result)
-    const output = finalizeResult(parseTextAsResult(text), control)
+    const output = finalizeResult(parseTextAsResult(text, result), control)
     if (control?.keep) {
       await appendSummary(control.info.id, result, output.message)
     }
@@ -299,19 +299,31 @@ function textFromMessage(message: MessageV2.WithParts) {
     .join("\n")
 }
 
-function parseTextAsResult(text: string): z.infer<typeof ControlMessageResult> {
+function assistantErrorText(message: MessageV2.WithParts) {
+  if (message.info.role !== "assistant" || !message.info.error) return
+  const source = `${message.info.providerID}/${message.info.modelID}`
+  const error = message.info.error
+  const status =
+    "statusCode" in error.data && typeof error.data.statusCode === "number" ? `, status ${error.data.statusCode}` : ""
+  const detail = "message" in error.data && typeof error.data.message === "string" ? error.data.message : undefined
+  if (detail) return `Provider error (${source}${status}): ${detail}`
+  return `Provider error (${source}): ${error.name}`
+}
+
+function parseTextAsResult(rawText: string, message?: MessageV2.WithParts): z.infer<typeof ControlMessageResult> {
   // Try to parse as JSON directly
   try {
-    return ControlMessageResult.parse(JSON.parse(text))
+    return ControlMessageResult.parse(JSON.parse(rawText))
   } catch {}
   // Try to extract JSON from markdown code blocks
-  const jsonMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/)
+  const jsonMatch = rawText.match(/```(?:json)?\s*([\s\S]*?)```/)
   if (jsonMatch) {
     try {
       return ControlMessageResult.parse(JSON.parse(jsonMatch[1].trim()))
     } catch {}
   }
-  // Fallback: treat entire text as the message
+  const rawError = message ? assistantErrorText(message) : undefined
+  const text = rawText.trim() || rawError || "Model returned no structured output and no text parts."
   return ControlMessageResult.parse({
     kind: "panel_response",
     message: text || "（模型未返回有效响应）",

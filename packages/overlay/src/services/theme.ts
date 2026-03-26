@@ -1,14 +1,12 @@
 // ── Theme Service ──
-// Exact port of theme / zoom / opacity helpers from app.js.
-//
 // Exported surface:
-//   sanitizeTheme(value)   — "light" | "system" | "dark"  (mirrors app.js)
-//   sanitizeOpacity(value) — number clamped to [0.5, 1.0]
-//   sanitizeZoom(value)    — number clamped to [0.8, 1.6]
-//   resolvedTheme()        — effective "light" | "dark" after system detection
-//   applyTheme(theme)      — writes document.body.dataset.theme
-//   applyZoom(zoom)        — writes --ui-scale CSS custom property via renderScale
-//   applyOpacity(opacity)  — writes --ui-window-opacity or calls Tauri setOpacity
+// sanitizeTheme(value) — "light" | "system" | "dark" (
+// sanitizeOpacity(value) — number clamped to [0.5, 1.0]
+// sanitizeZoom(value) — number clamped to [0.8, 1.6]
+// resolvedTheme() — effective "light" | "dark" after system detection
+// applyTheme(theme) — writes document.body.dataset.theme
+// applyZoom(zoom) — writes --ui-scale CSS custom property via renderScale
+// applyOpacity(opacity) — writes --ui-window-opacity or calls Tauri setOpacity
 
 import {
   MIN_WINDOW_OPACITY,
@@ -18,16 +16,16 @@ import {
 
 export { MIN_WINDOW_OPACITY, sanitizeOpacity } from "../store/settings";
 
-// ── Constants (mirror app.js) ──
+// ── Constants (mirror ) ──
 
 const MIN_UI_ZOOM = 0.8;
 const MAX_UI_ZOOM = 1.6;
 
-// app.js DEFAULT_OVERLAY_SETTINGS.opacity
+// DEFAULT_OVERLAY_SETTINGS.opacity
 const DEFAULT_OPACITY = 0.8;
 
 // ── System theme media query ──
-// Shared singleton, mirrors app.js systemThemeMedia.
+// Shared singleton,
 
 const systemThemeMedia: MediaQueryList | null =
   typeof window !== "undefined" && typeof window.matchMedia === "function"
@@ -35,8 +33,7 @@ const systemThemeMedia: MediaQueryList | null =
     : null;
 
 // ── sanitizeTheme ──
-// Mirrors app.js sanitizeTheme exactly:
-//   "light" | "system" → returned as-is; everything else → "dark"
+// "light" | "system" → returned as-is; everything else → "dark"
 
 export function sanitizeTheme(value: any): string {
   if (value === "light" || value === "system") return value as string;
@@ -44,10 +41,9 @@ export function sanitizeTheme(value: any): string {
 }
 
 // ── sanitizeZoom ──
-// Mirrors app.js sanitizeZoom + clampNumber:
-//   - parse to float
-//   - NaN → 1
-//   - clamp to [MIN_UI_ZOOM (0.8), MAX_UI_ZOOM (1.6)]
+// - parse to float
+// - NaN → 1
+// - clamp to [MIN_UI_ZOOM (0.8), MAX_UI_ZOOM (1.6)]
 
 export function sanitizeZoom(value: any): number {
   const next = Number.parseFloat(String(value ?? ""));
@@ -58,7 +54,6 @@ export function sanitizeZoom(value: any): number {
 
 // ── resolvedTheme ──
 // Reads settingsStore.theme (sanitised), resolves "system" via matchMedia.
-// Mirrors app.js resolvedTheme().
 
 export function resolvedTheme(): string {
   const theme = sanitizeTheme(settingsStore.theme);
@@ -70,7 +65,6 @@ export function resolvedTheme(): string {
 
 // ── applyTheme ──
 // Writes the effective (resolved) theme to document.body.dataset.theme.
-// Mirrors app.js renderTheme() — DOM write portion only.
 // Does NOT update brand logos or call renderTitlebarMenu (those belong to the
 // respective Solid components).
 
@@ -91,18 +85,17 @@ async function currentTauriWindow(): Promise<any | null> {
     try {
       return getCurrent() as any;
     } catch {
-      // Not running inside Tauri
+ // Not running inside Tauri
     }
   }
   return null;
 }
 
 // ── applyOpacity ──
-// Mirrors app.js applyWindowOpacity():
-//   1. Sanitise the value.
-//   2. Try Tauri win.setOpacity(). If that succeeds set --ui-window-opacity to "1"
-//      (native compositing handles it), otherwise set it to the numeric value.
-//   3. In non-Tauri environments fall back to the CSS custom property.
+// 1. Sanitise the value.
+// 2. Try Tauri win.setOpacity(). If that succeeds set --ui-window-opacity to "1"
+// (native compositing handles it), otherwise set it to the numeric value.
+// 3. In non-Tauri environments fall back to the CSS custom property.
 // Returns true if the native Tauri API was used successfully.
 
 export async function applyOpacity(opacity: number): Promise<boolean> {
@@ -131,19 +124,17 @@ export async function applyOpacity(opacity: number): Promise<boolean> {
 }
 
 // ── applyZoom ──
-// Mirrors app.js setZoom() / renderScale() — CSS custom property write only.
 // The full renderScale() also triggers pane layout, fitBrandVersion, sizeChat, etc.
-// Those are side-effects owned by the legacy app.js. This service function covers
+// Those are side-effects. This service function covers
 // only the CSS write portion that is safe to call from Solid components:
-//   document.documentElement.style.setProperty("--ui-scale", ...)
-// Callers that need the full layout recalc should trigger it via app.js bridge.
+// document.documentElement.style.setProperty("--ui-scale", ...)
+// Callers that need the full layout recalc should trigger it .
 
 export function applyZoom(zoom: number): void {
   if (typeof document === "undefined") return;
   const sanitized = sanitizeZoom(zoom);
-  // Mirrors app.js renderScale() calculation:
-  //   width / height from visualViewport, scale = min(w/1040, h/820),
-  //   base = clamp(scale, 0.82, 1.04), next = base * state.zoom
+ // width / height from visualViewport, scale = min(w/1040, h/820),
+ // base = clamp(scale, 0.82, 1.04), next = base * state.zoom
   const width =
     window.visualViewport?.width ?? window.innerWidth ?? 900;
   const height =
@@ -154,14 +145,13 @@ export function applyZoom(zoom: number): void {
   document.documentElement.style.setProperty("--ui-scale", next.toFixed(3));
 }
 
-// ── Zoom step constant (mirrors app.js ZOOM_STEP) ──
+// ── Zoom step constant (
 
 const ZOOM_STEP = 0.1;
 
 // ── setZoom ──
 // Set zoom to an absolute value, sanitise, then call applyZoom.
-// Mirrors app.js setZoom() — without the state / persistOverlaySettings side
-// effects, which remain in app.js during the migration.
+// effects, which remain.
 
 export function setZoom(value: number): void {
   applyZoom(sanitizeZoom(value));
@@ -169,16 +159,15 @@ export function setZoom(value: number): void {
 
 // ── stepZoom ──
 // Increment or decrement the current CSS-derived zoom by delta.
-// Mirrors app.js stepZoom(delta).
 
 export function stepZoom(delta: number): void {
-  // Read the current zoom from the CSS custom property written by applyZoom.
-  // We cannot read app.js state.zoom directly without creating a circular
-  // dependency, so we use the value stored in the CSS variable instead.
+ // Read the current zoom from the CSS custom property written by applyZoom.
+ // We cannot read state.zoom directly without creating a circular
+ // dependency, so we use the value stored in the CSS variable instead.
   const current = Number.parseFloat(
     document.documentElement.style.getPropertyValue("--ui-scale") || "1",
   ) || 1;
-  // current = base * zoom; we only want to nudge zoom so we normalise first.
+ // current = base * zoom; we only want to nudge zoom so we normalise first.
   const width =
     window.visualViewport?.width ?? window.innerWidth ?? 900;
   const height =
@@ -192,7 +181,6 @@ export function stepZoom(delta: number): void {
 
 // ── handleZoomHotkey ──
 // Handle Ctrl/Cmd +/−/0 keyboard shortcuts.
-// Mirrors app.js handleZoomHotkey(event).
 
 export function handleZoomHotkey(event: KeyboardEvent): void {
   if (typeof window === "undefined") return;
@@ -234,7 +222,6 @@ export function handleZoomHotkey(event: KeyboardEvent): void {
 // ── shouldMigrateOpacity ──
 // Returns true when the persisted opacity value is a legacy sub-0.3 value that
 // should be migrated upward to the minimum supported value.
-// Mirrors app.js shouldMigrateOpacity() (line 927).
 
 const OPACITY_MIGRATION_KEY = "oc_opacity_migrated_v1";
 const LEGACY_WINDOW_OPACITY = 0.3;
@@ -251,8 +238,7 @@ export function shouldMigrateOpacity(value: unknown): boolean {
 
 // ── applyWindowPin ──
 // Apply the alwaysOnTop state to the native Tauri window.
-// Mirrors app.js applyWindowPin() — without the state / renderTitlebarMenu
-// side effects, which remain in app.js during the migration.
+// side effects, which remain.
 // Returns true when the Tauri API was called successfully.
 
 export async function applyWindowPin(alwaysOnTop: boolean): Promise<boolean> {
@@ -264,7 +250,6 @@ export async function applyWindowPin(alwaysOnTop: boolean): Promise<boolean> {
 
 // ── withUnpinned ──
 // Temporarily unpin the window, run an async callback, then restore pin state.
-// Mirrors app.js withUnpinned(run).
 
 export async function withUnpinned<T>(run: () => Promise<T> | T): Promise<T> {
   const win = await currentTauriWindow();
@@ -288,8 +273,25 @@ export async function withUnpinned<T>(run: () => Promise<T> | T): Promise<T> {
 
 // ── applyWindowOpacity ──
 // Apply window opacity via Tauri native API (preferred) or CSS variable fallback.
-// Mirrors app.js applyWindowOpacity (line 1730).
-// Render side-effects (renderTitlebarMenu) remain in app.js during migration.
+// Render side-effects (renderTitlebarMenu) remain.
+
+/**
+ * Register a listener for OS-level prefers-color-scheme changes.
+ * Returns a cleanup function that removes the listener.
+ */
+export function installSystemThemeListener(onchange: () => void): () => void {
+  if (!systemThemeMedia) return () => {};
+  systemThemeMedia.addEventListener("change", onchange);
+  return () => systemThemeMedia!.removeEventListener("change", onchange);
+}
+
+/** Toggle Tauri devtools (F12 handler). No-op outside Tauri. */
+export async function toggleDevtools(): Promise<void> {
+  const invoke = (window as any).__TAURI__?.core?.invoke;
+  if (typeof invoke === "function") {
+    await invoke("overlay_toggle_devtools").catch(() => {});
+  }
+}
 
 export async function applyWindowOpacity(opacity: number): Promise<boolean> {
   const value = String(sanitizeOpacity(opacity));

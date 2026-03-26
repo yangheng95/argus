@@ -1,6 +1,6 @@
 // ── WindowControls Component ──
 // Tauri window management buttons: minimize, maximize/restore, close (hide),
-// and always-on-top pin toggle. Ports setupTauri() from app.js lines 10325–10411
+// and always-on-top pin toggle. Ports setupTauri()
 // plus maximizeLabel / maximizeIcon helpers and the CLOSE_HINT_KEY logic.
 
 import { createSignal, onCleanup, onMount, Show } from "solid-js";
@@ -20,7 +20,7 @@ async function currentTauriWindow(): Promise<any | null> {
     try {
       return getCurrent() as any;
     } catch {
-      // Not running inside Tauri
+ // Not running inside Tauri
     }
   }
   return null;
@@ -33,22 +33,22 @@ async function nativeMessage(message: string, options?: { title?: string }): Pro
   await notify(message, options).catch(() => undefined);
 }
 
-// ── Label helpers (mirrors app.js maximizeLabel / maximizeIcon) ──
+// ── Label helpers (
 
 function maximizeLabel(isMaximized: boolean): string {
   return isMaximized ? t("titlebar.restore") : t("titlebar.maximize");
 }
 
 function maximizeIcon(isMaximized: boolean): string {
-  // SVG icons matching the existing app.js inline SVGs
+ // SVG icons matching the existing inline SVGs
   if (isMaximized) {
-    // Restore icon
+ // Restore icon
     return `<svg width="11" height="11" viewBox="0 0 11 11" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
       <rect x="3" y="0.5" width="7" height="7" rx="0.5" stroke="currentColor"/>
       <path d="M1 3.5V10H7.5" stroke="currentColor" stroke-linecap="round"/>
     </svg>`;
   }
-  // Maximize icon
+ // Maximize icon
   return `<svg width="11" height="11" viewBox="0 0 11 11" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
     <rect x="0.5" y="0.5" width="10" height="10" rx="0.5" stroke="currentColor"/>
   </svg>`;
@@ -60,7 +60,7 @@ export function WindowControls() {
   const [isMaximized, setIsMaximized] = createSignal(false);
   const [tauriWin, setTauriWin] = createSignal<any | null>(null);
 
-  // ── Sync maximize state ──
+ // ── Sync maximize state ──
   const syncMaximize = async (win: any): Promise<boolean> => {
     if (!win) return false;
     const maximized = await win.isMaximized?.().catch(() => false);
@@ -68,7 +68,7 @@ export function WindowControls() {
     return !!maximized;
   };
 
-  // ── Sync pin (always-on-top) state ──
+ // ── Sync pin (always-on-top) state ──
   const syncPin = async (win: any): Promise<void> => {
     if (!win) return;
     const pinned = await win.isAlwaysOnTop?.().catch(() => false);
@@ -76,16 +76,16 @@ export function WindowControls() {
     saveSettings();
   };
 
-  // ── Handle minimize ──
+ // ── Handle minimize ──
   const handleMinimize = () => {
     tauriWin()?.minimize?.().catch(() => undefined);
   };
 
-  // ── Handle maximize / restore ──
+ // ── Handle maximize / restore ──
   const handleMaximize = async () => {
     const win = tauriWin();
     if (!win) return;
-    // Read current state first, then toggle
+ // Read current state first, then toggle
     const current = await syncMaximize(win);
     if (typeof win.toggleMaximize === "function") {
       await win.toggleMaximize().catch(() => undefined);
@@ -97,7 +97,7 @@ export function WindowControls() {
     await syncMaximize(win);
   };
 
-  // ── Handle close (hide window; first time shows background-notice) ──
+ // ── Handle close (hide window; first time shows background-notice) ──
   const handleClose = async () => {
     const win = tauriWin();
     if (!win) return;
@@ -114,7 +114,7 @@ export function WindowControls() {
     }
   };
 
-  // ── Handle pin toggle ──
+ // ── Handle pin toggle ──
   const handlePin = async () => {
     const win = tauriWin();
     if (!win) return;
@@ -123,18 +123,18 @@ export function WindowControls() {
     await syncPin(win);
   };
 
-  // ── Lifecycle: init Tauri and attach resize listener ──
+ // ── Lifecycle: init Tauri and attach resize listener ──
   onMount(async () => {
     const win = await currentTauriWindow();
     if (!win) return;
     setTauriWin(win);
 
-    // Apply persisted always-on-top value and sync actual state
+ // Apply persisted always-on-top value and sync actual state
     await win.setAlwaysOnTop?.(settingsStore.alwaysOnTop).catch(() => undefined);
     await syncPin(win);
     await syncMaximize(win);
 
-    // Re-sync on window resize events (Tauri fires onResized when restored)
+ // Re-sync on window resize events (Tauri fires onResized when restored)
     let cleanupResized: (() => void) | undefined;
     if (typeof win.onResized === "function") {
       const unlisten = await win.onResized(() => {
@@ -235,8 +235,8 @@ export function WindowControls() {
           title={maxLabel()}
           aria-label={maxLabel()}
           onClick={() => void handleMaximize()}
-          // innerHTML is safest here because the SVG path differs for maximize vs
-          // restore and we want a single reactive expression.
+ // innerHTML is safest here because the SVG path differs for maximize vs
+ // restore and we want a single reactive expression.
           innerHTML={maximizeIcon(isMaximized())}
         />
       </Show>

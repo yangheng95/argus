@@ -1,10 +1,9 @@
 // ── InteractionPanel ──
 // Renders the list of pending interactions (permission requests and questions)
 // from board.interactions, and exposes resolve/reject callbacks.
-//
 // Ported from interactions.js (renderInteractions, interactionAlertHtml,
 // interactionActions, interactionIcon, resolveInteraction, rejectInteraction)
-// and app.js (interactionAnswerLines, interactionRequestText, etc.).
+// and (interactionAnswerLines, interactionRequestText, etc.).
 
 import {
   createSignal,
@@ -160,7 +159,7 @@ interface InteractionPanelProps {
 export function InteractionPanel(props: InteractionPanelProps) {
   const [busy, setBusy] = createSignal(false);
   const [errorMap, setErrorMap] = createSignal<Record<string, string>>({});
-  // Track auto-resolve failures per interaction ID → timestamp
+ // Track auto-resolve failures per interaction ID → timestamp
   const autoResolveFailed = new Map<string, number>();
   const COOLDOWN_MS = 10_000;
 
@@ -249,8 +248,8 @@ export function InteractionPanel(props: InteractionPanelProps) {
     }
   }
 
-  // Auto-resolve the first pending interaction when conditions are met.
-  // Mirrors the auto-resolve logic in interactions.js renderInteractions.
+ // Auto-resolve the first pending interaction when conditions are met.
+ // Mirrors the auto-resolve logic in interactions.js renderInteractions.
   function tryAutoResolve(interaction: Interaction) {
     if (busy()) return;
     if (!shouldAutoResolve(interaction)) return;
@@ -263,7 +262,7 @@ export function InteractionPanel(props: InteractionPanelProps) {
       return;
     }
 
-    // question auto-resolve: requires structured options
+ // question auto-resolve: requires structured options
     const answers = autoInteractionAnswers(interaction);
     if (
       !answers ||
@@ -278,18 +277,18 @@ export function InteractionPanel(props: InteractionPanelProps) {
     void resolveInteraction(interaction.id, "answer", { answers: answers as string[][] });
   }
 
-  // Attempt auto-resolve whenever the pending list changes
+ // Attempt auto-resolve whenever the pending list changes
   const firstPending = createMemo(() => pendingInteractions()[0] ?? null);
 
-  // Use a reactive effect via createMemo side-effect — call tryAutoResolve
-  // imperatively when firstPending changes (after render).
+ // Use a reactive effect via createMemo side-effect — call tryAutoResolve
+ // imperatively when firstPending changes (after render).
   let lastAutoId = "";
   createMemo(() => {
     const interaction = firstPending();
     if (!interaction) { lastAutoId = ""; return; }
     if (interaction.id === lastAutoId) return;
     lastAutoId = interaction.id;
-    // Defer to next microtask so the DOM is settled
+ // Defer to next microtask so the DOM is settled
     queueMicrotask(() => tryAutoResolve(interaction));
   });
 

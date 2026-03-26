@@ -16,7 +16,7 @@ export function Conversation(props: { container: HTMLElement }) {
 
   const items = createMemo(() => conversationMessages());
 
-  // Auto-scroll logic — attach to the host container
+ // Auto-scroll logic — attach to the host container
   function onScroll() {
     const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
     setAutoScroll(atBottom);
@@ -38,7 +38,7 @@ export function Conversation(props: { container: HTMLElement }) {
     el.removeEventListener("scroll", onScroll);
   });
 
-  // Scroll when content changes
+ // Scroll when content changes
   createEffect(() => {
     items().length;
     scrollToBottom();

@@ -1,5 +1,5 @@
 // ── TaskList Component ──
-// Solid.js port of renderTaskList / taskSection / taskRow / visibleTasks from app.js.
+// Solid.js port of renderTaskList / taskSection / taskRow / visibleTasks
 // Displays active and recently-completed tasks from boardStore.
 
 import { createMemo, For, Show } from "solid-js";
@@ -11,7 +11,7 @@ import { stamp } from "../utils/time";
 
 const COMPLETED_STATUSES = new Set(["completed", "failed", "cancelled"]);
 
-// ── Inline helpers (ports of app.js functions) ──
+// ── Inline helpers (ports of functions) ──
 
 function clipText(value: string, limit = 80): string {
   const text = String(value || "").replace(/\s+/g, " ").trim();

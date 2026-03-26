@@ -28,11 +28,11 @@ export function MessageView(props: { message: any }) {
   const parts = () => orderedMessageParts(props.message);
   const time = () => stamp(props.message.info?.time?.created);
 
-  // Check if this message is empty (would produce no visible output)
+ // Check if this message is empty (would produce no visible output)
   const hasContent = createMemo(() => {
     const p = parts();
     if (p.length === 0) return false;
-    // At least one part should produce output
+ // At least one part should produce output
     return p.some((part: any) => {
       if (part.type === "text") return !!(part.text || "").trim();
       if (part.type === "tool") return true;

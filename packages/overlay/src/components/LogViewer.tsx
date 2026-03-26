@@ -1,7 +1,7 @@
 // ── LogViewer Component ──
 // Full-featured log viewer dialog that merges overlay client logs, server logs,
 // and pipeline NDJSON events. Ports renderLogViewer / renderNdjsonLogPanel /
-// renderLogEntryDetail / logViewerEntries (app.js lines 10947–11155) and all
+// renderLogEntryDetail / logViewerEntries ( lines 10947–11155) and all
 // supporting helpers (parseServerLogLine, stringifyLogValue, etc., lines
 // 10795–10926).
 
@@ -50,7 +50,7 @@ function ndjsonToolColor(name: string): string {
 }
 
 // ── Internal server-log state ──
-// Stored as module-level variables (same pattern as app.js) so they survive
+// Stored as module-level variables (same pattern as ) so they survive
 // across component remounts but are not reactive (refresh is triggered
 // explicitly by the user or on open).
 
@@ -104,7 +104,7 @@ function logSourceLabel(source: LogSource): string {
   return "Overlay";
 }
 
-// ── Server log line parser (mirrors app.js parseServerLogLine) ──
+// ── Server log line parser (
 
 function parseLogValue(raw: string): unknown {
   const text = String(raw || "").trim();
@@ -234,7 +234,7 @@ function fmtElapsed(ms: number): string {
   return m + "m" + (s - m * 60).toFixed(0) + "s";
 }
 
-// ── Merge all log sources (mirrors app.js logViewerEntries) ──
+// ── Merge all log sources (
 
 function buildLogEntries(
   overlayEntries: LogEntry[],
@@ -249,12 +249,12 @@ function buildLogEntries(
   };
   const threshold = levelOrder[filterLevel] ?? 0;
 
-  // Server log lines (parsed from raw strings)
+ // Server log lines (parsed from raw strings)
   const serverLines: LogEntry[] = _serverLogLines
     .map(parseServerLogLine)
     .filter((e) => (levelOrder[e.level] ?? 0) >= threshold);
 
-  // Pipeline NDJSON events
+ // Pipeline NDJSON events
   const pipelineLines: LogEntry[] = (Array.isArray(ndjsonEvents) ? ndjsonEvents : [])
     .filter((ev) => ev.kind !== "tool_delta")
     .flatMap((ev) => {
@@ -324,7 +324,7 @@ async function copyText(text: string): Promise<boolean> {
 }
 
 // ── LogEntryDetail subcomponent ──
-// Ports renderLogEntryDetail (app.js 10928–10944)
+// Ports renderLogEntryDetail ( 10928–10944)
 
 function LogEntryDetail(props: { entry: LogEntry }) {
   const fields = createMemo(() => logDetailFields(props.entry.fields));
@@ -399,9 +399,9 @@ function LogLine(props: { entry: LogEntry }) {
 
 export interface LogViewerProps {
   /**
-   * NDJSON pipeline events array. Pass the live ndjsonEvents array from the
-   * legacy app.js state or an empty array.
-   */
+ * NDJSON pipeline events array. Pass the live ndjsonEvents array from the
+ * or an empty array.
+ */
   ndjsonEvents?: any[];
   /** Whether the dialog is open. */
   open?: boolean;
@@ -417,7 +417,7 @@ export function LogViewer(props: LogViewerProps) {
   const [loading, setLoading] = createSignal(false);
   const [serverLogsSeq, setServerLogsSeq] = createSignal(0);
 
-  // Merged & filtered log entries
+ // Merged & filtered log entries
   const entries = createMemo(() => {
     serverLogsSeq();
     return buildLogEntries(
@@ -449,7 +449,7 @@ export function LogViewer(props: LogViewerProps) {
   };
 
   const handleClear = () => {
-    // Clear overlay client log entries via the store
+ // Clear overlay client log entries via the store
     setAppStore("logEntries", []);
     _serverLogLines = [];
     setServerLogsSeq((value) => value + 1);
@@ -479,9 +479,9 @@ export function LogViewer(props: LogViewerProps) {
     if (dialog.open) dialog.close();
   });
 
-  // Scroll to bottom whenever entries change
+ // Scroll to bottom whenever entries change
   const doScroll = () => {
-    // Use a microtask to ensure the DOM has updated
+ // Use a microtask to ensure the DOM has updated
     Promise.resolve().then(() => scrollToBottom());
   };
 

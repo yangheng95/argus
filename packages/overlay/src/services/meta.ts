@@ -1,15 +1,12 @@
 // ── Meta Service ──
-// TypeScript port of meta/changes functions from app.js:
-//   loadMeta, loadChanges, normalizeDiffs, diffStatus, openDiffDialog.
-//
-// DOM-rendering functions (renderMeta, renderChanges, renderDiffPreview,
-// openDiffDialog with DOM mutations) are intentionally NOT ported here —
-// they are superseded by declarative Solid.js components (MetaPanel.tsx,
-// ChangesPanel.tsx).
+// TypeScript port of meta/changes functions
+// loadMeta, loadChanges, normalizeDiffs, diffStatus, openDiffDialog.
 
 import { appStore, setAppStore } from "../store/app";
 import { boardStore, setPath, setVcs } from "../store/board";
 import { settingsStore } from "../store/settings";
+import { pathBreadcrumb } from "../utils/dom-utils";
+import { t } from "../utils/i18n";
 import { AppLog } from "../utils/log";
 import { apiJson } from "./api";
 import { setWorkspaceDirectory } from "./workspace";
@@ -32,10 +29,8 @@ export interface DiffItem {
 /**
  * Fetches the current working path and VCS info from the server and updates
  * the app store.
- *
- * Mirrors loadMeta in app.js.  The directoryEpoch guard and the
- * setWorkspaceDirectory / renderMeta calls from app.js are omitted — callers
- * that need that coordination should implement it at the call site.
+ * Mirrors loadMeta. Calls renderMeta() in the finally-block to
+ * keep the DOM in sync regardless of success or failure.
  */
 export async function loadMeta(): Promise<void> {
   const epoch = settingsStore.directoryEpoch;
@@ -72,8 +67,112 @@ export async function loadMeta(): Promise<void> {
       _metaVcs: null,
     }));
   } finally {
-    const { renderMeta } = await import("./legacy");
     renderMeta();
+  }
+}
+
+// ── renderMeta (DOM) ──
+
+/**
+ * Imperatively updates the meta DOM nodes (directory breadcrumb, workspace dir,
+ * git branch) from the current store state.
+ * .ts — still needed by loadMeta's finally-block and the
+ * 's directory setter.
+ */
+/**
+ * Build a concise git status label: branch · +ahead -behind · staged/modified/untracked · clean
+ */
+function gitLabel(vcs: any, dir: string): string {
+  if (!dir) return t("git.unavailable");
+  if (!vcs?.branch) return t("git.init");
+  const parts: string[] = [vcs.branch];
+  if (vcs.ahead) parts.push(`+${vcs.ahead}`);
+  if (vcs.behind) parts.push(`-${vcs.behind}`);
+  if (vcs.conflicts) parts.push(t("git.conflicts", { count: vcs.conflicts }));
+  if (vcs.dirty) {
+    const changes: string[] = [];
+    if (vcs.staged) changes.push(t("git.staged", { count: vcs.staged }));
+    if (vcs.modified) changes.push(t("git.modified", { count: vcs.modified }));
+    if (vcs.untracked) changes.push(t("git.untracked", { count: vcs.untracked }));
+    parts.push(changes.join(" "));
+  } else {
+    parts.push(t("git.clean"));
+  }
+  return parts.filter(Boolean).join(" · ");
+}
+
+/**
+ * Build a multi-line git tooltip with all status details.
+ */
+function gitTitle(vcs: any, dir: string): string {
+  if (!dir) return "";
+  if (!vcs?.branch) return t("git.init_title");
+  return [
+    t("git.branch", { value: vcs.branch }),
+    t("git.clean_title", { value: vcs.clean ? t("common.yes") : t("common.no") }),
+    t("git.staged", { count: vcs.staged ?? 0 }),
+    t("git.modified", { count: vcs.modified ?? 0 }),
+    t("git.untracked", { count: vcs.untracked ?? 0 }),
+    t("git.conflicts", { count: vcs.conflicts ?? 0 }),
+    t("git.ahead", { count: vcs.ahead ?? 0 }),
+    t("git.behind", { count: vcs.behind ?? 0 }),
+  ].join("\n");
+}
+
+function canInitGit(): boolean {
+  return !!settingsStore.directory && !boardStore.vcs?.branch;
+}
+
+function relativePathFrom(base: string, target: string): string {
+  if (!base || !target) return "";
+  const norm = (s: string) => s.replace(/[\\/]+/g, "/").replace(/\/+$/, "").toLowerCase();
+  const nb = norm(base);
+  const nt = norm(target);
+  if (nt.startsWith(nb + "/")) return target.slice(base.replace(/[\\/]+$/, "").length + 1);
+  return "";
+}
+
+function shortPath(p: string): string {
+  const parts = p.replace(/[\\/]+/g, "/").replace(/\/+$/, "").split("/");
+  return parts.length <= 2 ? p : `…/${parts.slice(-2).join("/")}`;
+}
+
+export function renderMeta(): void {
+  const dirNode = document.getElementById("taskDir");
+  const workspaceNode = document.getElementById("taskWorkspaceDir");
+  const gitNode = document.getElementById("taskGit");
+  const dir = settingsStore.directory || "";
+  const vcs = boardStore.vcs;
+
+  if (dirNode) {
+    dirNode.innerHTML = pathBreadcrumb(dir);
+    dirNode.setAttribute("title", dir || t("cwd.unavailable"));
+    (dirNode as HTMLElement).dataset.empty = dir ? "false" : "true";
+    const path = dirNode.querySelector(".task-dir-path");
+    if (path instanceof HTMLElement) path.scrollLeft = path.scrollWidth;
+  }
+
+  if (workspaceNode) {
+    const executionDir =
+      Array.isArray((boardStore.board as any)?.goalRuns) &&
+      (boardStore.board as any).goalRuns.find((item: any) => item?.workspaceDir)?.workspaceDir;
+    const workspaceText = typeof executionDir === "string" ? executionDir.trim() : "";
+    const dirText = dir.replace(/[\\/]+$/, "");
+    const same = !!dirText && !!workspaceText && dirText.toLowerCase() === workspaceText.toLowerCase();
+    const show = !!workspaceText && !same;
+    const label = relativePathFrom(dirText, workspaceText) || shortPath(workspaceText);
+    workspaceNode.textContent = show ? t("cwd.execution_workspace", { value: label }) : "";
+    workspaceNode.setAttribute("title", show ? workspaceText : "");
+    (workspaceNode as HTMLElement).hidden = !show;
+  }
+
+  if (gitNode) {
+    const actionable = canInitGit();
+    gitNode.textContent = gitLabel(vcs, dir);
+    gitNode.setAttribute("title", gitTitle(vcs, dir));
+    (gitNode as HTMLElement).dataset.state = actionable ? "action" : vcs?.dirty ? "dirty" : vcs?.clean ? "clean" : "idle";
+    (gitNode as HTMLElement).dataset.actionable = String(actionable);
+    gitNode.toggleAttribute("disabled", !actionable && !vcs?.branch);
   }
 }
 
@@ -82,8 +181,7 @@ export async function loadMeta(): Promise<void> {
 /**
  * Normalises a raw diff list from the server into a consistent DiffItem array,
  * sorted by filename.
- *
- * Mirrors normalizeDiffs in app.js.
+ * Mirrors normalizeDiffs.
  */
 export function normalizeDiffs(list: any[]): DiffItem[] {
   return (Array.isArray(list) ? list : [])
@@ -105,8 +203,7 @@ export function normalizeDiffs(list: any[]): DiffItem[] {
 
 /**
  * Derives the diff status for a single raw diff item.
- *
- * Mirrors diffStatus in app.js.
+ * Mirrors diffStatus.
  */
 export function diffStatus(item: any): DiffStatus {
   if (
@@ -126,12 +223,10 @@ export function diffStatus(item: any): DiffStatus {
 /**
  * Derives the current changes from the board store's delivery result diffs and
  * returns the normalised DiffItem list.
- *
- * NOTE: The original loadChanges in app.js wrote to state.changes and called
- * renderChanges().  This function returns the data instead, so callers can
+ * NOTE: The original loadChanges.changes and called
+ * renderChanges(). This function returns the data instead, so callers can
  * update their own Solid signals/stores.
- *
- * Mirrors loadChanges in app.js (data derivation portion).
+ * Mirrors loadChanges.
  */
 export function deriveChanges(): DiffItem[] {
   if (!boardStore.selectedTaskID) return [];

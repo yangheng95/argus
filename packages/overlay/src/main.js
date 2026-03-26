@@ -1,70 +1,15432 @@
-(function(){const t=document.createElement("link").relList;if(t&&t.supports&&t.supports("modulepreload"))return;for(const i of document.querySelectorAll('link[rel="modulepreload"]'))r(i);new MutationObserver(i=>{for(const a of i)if(a.type==="childList")for(const o of a.addedNodes)o.tagName==="LINK"&&o.rel==="modulepreload"&&r(o)}).observe(document,{childList:!0,subtree:!0});function n(i){const a={};return i.integrity&&(a.integrity=i.integrity),i.referrerPolicy&&(a.referrerPolicy=i.referrerPolicy),i.crossOrigin==="use-credentials"?a.credentials="include":i.crossOrigin==="anonymous"?a.credentials="omit":a.credentials="same-origin",a}function r(i){if(i.ep)return;i.ep=!0;const a=n(i);fetch(i.href,a)}})();const Sl=!1,xl=(e,t)=>e===t,wt=Symbol("solid-proxy"),Jr=Symbol("solid-track"),qn={equals:xl};let _o=To;const dt=1,zn=2,wo={owned:null,cleanups:null,context:null,owner:null};var xe=null;let $r=null,Tl=null,$e=null,Ee=null,Xe=null,gr=0;function tn(e,t){const n=$e,r=xe,i=e.length===0,a=t===void 0?r:t,o=i?wo:{owned:null,cleanups:null,context:a?a.context:null,owner:a},s=i?e:()=>e(()=>Ve(()=>dn(o)));xe=o,$e=null;try{return zt(s,!0)}finally{$e=n,xe=r}}function G(e,t){t=t?Object.assign({},qn,t):qn;const n={value:e,observers:null,observerSlots:null,comparator:t.equals||void 0},r=i=>(typeof i=="function"&&(i=i(n.value)),xo(n,i));return[So.bind(n),r]}function B(e,t,n){const r=hi(e,t,!1,dt);vn(r)}function Ne(e,t,n){_o=Al;const r=hi(e,t,!1,dt);r.user=!0,Xe?Xe.push(r):vn(r)}function W(e,t,n){n=n?Object.assign({},qn,n):qn;const r=hi(e,t,!0,0);return r.observers=null,r.observerSlots=null,r.comparator=n.equals||void 0,vn(r),So.bind(r)}function $o(e){return zt(e,!1)}function Ve(e){if($e===null)return e();const t=$e;$e=null;try{return e()}finally{$e=t}}function St(e){Ne(()=>Ve(e))}function Nt(e){return xe===null||(xe.cleanups===null?xe.cleanups=[e]:xe.cleanups.push(e)),e}function Gr(){return $e}function Cl(e){const t=W(e),n=W(()=>Qr(t()));return n.toArray=()=>{const r=n();return Array.isArray(r)?r:r!=null?[r]:[]},n}function So(){if(this.sources&&this.state)if(this.state===dt)vn(this);else{const e=Ee;Ee=null,zt(()=>Kn(this),!1),Ee=e}if($e){const e=this.observers?this.observers.length:0;$e.sources?($e.sources.push(this),$e.sourceSlots.push(e)):($e.sources=[this],$e.sourceSlots=[e]),this.observers?(this.observers.push($e),this.observerSlots.push($e.sources.length-1)):(this.observers=[$e],this.observerSlots=[$e.sources.length-1])}return this.value}function xo(e,t,n){let r=e.value;return(!e.comparator||!e.comparator(r,t))&&(e.value=t,e.observers&&e.observers.length&&zt(()=>{for(let i=0;i<e.observers.length;i+=1){const a=e.observers[i],o=$r&&$r.running;o&&$r.disposed.has(a),(o?!a.tState:!a.state)&&(a.pure?Ee.push(a):Xe.push(a),a.observers&&Co(a)),o||(a.state=dt)}if(Ee.length>1e6)throw Ee=[],new Error},!1)),t}function vn(e){if(!e.fn)return;dn(e);const t=gr;Dl(e,e.value,t)}function Dl(e,t,n){let r;const i=xe,a=$e;$e=xe=e;try{r=e.fn(t)}catch(o){return e.pure&&(e.state=dt,e.owned&&e.owned.forEach(dn),e.owned=null),e.updatedAt=n+1,Do(o)}finally{$e=a,xe=i}(!e.updatedAt||e.updatedAt<=n)&&(e.updatedAt!=null&&"observers"in e?xo(e,r):e.value=r,e.updatedAt=n)}function hi(e,t,n,r=dt,i){const a={fn:e,state:r,updatedAt:null,owned:null,sources:null,sourceSlots:null,cleanups:null,value:t,owner:xe,context:xe?xe.context:null,pure:n};return xe===null||xe!==wo&&(xe.owned?xe.owned.push(a):xe.owned=[a]),a}function Wn(e){if(e.state===0)return;if(e.state===zn)return Kn(e);if(e.suspense&&Ve(e.suspense.inFallback))return e.suspense.effects.push(e);const t=[e];for(;(e=e.owner)&&(!e.updatedAt||e.updatedAt<gr);)e.state&&t.push(e);for(let n=t.length-1;n>=0;n--)if(e=t[n],e.state===dt)vn(e);else if(e.state===zn){const r=Ee;Ee=null,zt(()=>Kn(e,t[0]),!1),Ee=r}}function zt(e,t){if(Ee)return e();let n=!1;t||(Ee=[]),Xe?n=!0:Xe=[],gr++;try{const r=e();return Il(n),r}catch(r){n||(Xe=null),Ee=null,Do(r)}}function Il(e){if(Ee&&(To(Ee),Ee=null),e)return;const t=Xe;Xe=null,t.length&&zt(()=>_o(t),!1)}function To(e){for(let t=0;t<e.length;t++)Wn(e[t])}function Al(e){let t,n=0;for(t=0;t<e.length;t++){const r=e[t];r.user?e[n++]=r:Wn(r)}for(t=0;t<n;t++)Wn(e[t])}function Kn(e,t){e.state=0;for(let n=0;n<e.sources.length;n+=1){const r=e.sources[n];if(r.sources){const i=r.state;i===dt?r!==t&&(!r.updatedAt||r.updatedAt<gr)&&Wn(r):i===zn&&Kn(r,t)}}}function Co(e){for(let t=0;t<e.observers.length;t+=1){const n=e.observers[t];n.state||(n.state=zn,n.pure?Ee.push(n):Xe.push(n),n.observers&&Co(n))}}function dn(e){let t;if(e.sources)for(;e.sources.length;){const n=e.sources.pop(),r=e.sourceSlots.pop(),i=n.observers;if(i&&i.length){const a=i.pop(),o=n.observerSlots.pop();r<i.length&&(a.sourceSlots[o]=r,i[r]=a,n.observerSlots[r]=o)}}if(e.tOwned){for(t=e.tOwned.length-1;t>=0;t--)dn(e.tOwned[t]);delete e.tOwned}if(e.owned){for(t=e.owned.length-1;t>=0;t--)dn(e.owned[t]);e.owned=null}if(e.cleanups){for(t=e.cleanups.length-1;t>=0;t--)e.cleanups[t]();e.cleanups=null}e.state=0}function El(e){return e instanceof Error?e:new Error(typeof e=="string"?e:"Unknown error",{cause:e})}function Do(e,t=xe){throw El(e)}function Qr(e){if(typeof e=="function"&&!e.length)return Qr(e());if(Array.isArray(e)){const t=[];for(let n=0;n<e.length;n++){const r=Qr(e[n]);Array.isArray(r)?t.push.apply(t,r):t.push(r)}return t}return e}const Ll=Symbol("fallback");function ra(e){for(let t=0;t<e.length;t++)e[t]()}function Ml(e,t,n={}){let r=[],i=[],a=[],o=0,s=t.length>1?[]:null;return Nt(()=>ra(a)),()=>{let u=e()||[],c=u.length,g,f;return u[Jr],Ve(()=>{let h,k,m,y,w,T,P,C,b;if(c===0)o!==0&&(ra(a),a=[],r=[],i=[],o=0,s&&(s=[])),n.fallback&&(r=[Ll],i[0]=tn(A=>(a[0]=A,n.fallback())),o=1);else if(o===0){for(i=new Array(c),f=0;f<c;f++)r[f]=u[f],i[f]=tn(p);o=c}else{for(m=new Array(c),y=new Array(c),s&&(w=new Array(c)),T=0,P=Math.min(o,c);T<P&&r[T]===u[T];T++);for(P=o-1,C=c-1;P>=T&&C>=T&&r[P]===u[C];P--,C--)m[C]=i[P],y[C]=a[P],s&&(w[C]=s[P]);for(h=new Map,k=new Array(C+1),f=C;f>=T;f--)b=u[f],g=h.get(b),k[f]=g===void 0?-1:g,h.set(b,f);for(g=T;g<=P;g++)b=r[g],f=h.get(b),f!==void 0&&f!==-1?(m[f]=i[g],y[f]=a[g],s&&(w[f]=s[g]),f=k[f],h.set(b,f)):a[g]();for(f=T;f<c;f++)f in m?(i[f]=m[f],a[f]=y[f],s&&(s[f]=w[f],s[f](f))):i[f]=tn(p);i=i.slice(0,o=c),r=u.slice(0)}return i});function p(h){if(a[f]=h,s){const[k,m]=G(f);return s[f]=m,t(u[f],k)}return t(u[f])}}}function v(e,t){return Ve(()=>e(t||{}))}const Io=e=>`Stale read from <${e}>.`;function ke(e){const t="fallback"in e&&{fallback:()=>e.fallback};return W(Ml(()=>e.each,e.children,t||void 0))}function R(e){const t=e.keyed,n=W(()=>e.when,void 0,void 0),r=t?n:W(n,void 0,{equals:(i,a)=>!i==!a});return W(()=>{const i=r();if(i){const a=e.children;return typeof a=="function"&&a.length>0?Ve(()=>a(t?i:()=>{if(!Ve(r))throw Io("Show");return n()})):a}return e.fallback},void 0,void 0)}function Pl(e){const t=Cl(()=>e.children),n=W(()=>{const r=t(),i=Array.isArray(r)?r:[r];let a=()=>{};for(let o=0;o<i.length;o++){const s=o,u=i[o],c=a,g=W(()=>c()?void 0:u.when,void 0,void 0),f=u.keyed?g:W(g,void 0,{equals:(p,h)=>!p==!h});a=()=>c()||(f()?[s,g,u]:void 0)}return a});return W(()=>{const r=n()();if(!r)return e.fallback;const[i,a,o]=r,s=o.children;return typeof s=="function"&&s.length>0?Ve(()=>s(o.keyed?a():()=>{if(Ve(n)()?.[0]!==i)throw Io("Match");return a()})):s},void 0,void 0)}function ft(e){return e}const ye=e=>W(()=>e());function Bl(e,t,n){let r=n.length,i=t.length,a=r,o=0,s=0,u=t[i-1].nextSibling,c=null;for(;o<i||s<a;){if(t[o]===n[s]){o++,s++;continue}for(;t[i-1]===n[a-1];)i--,a--;if(i===o){const g=a<r?s?n[s-1].nextSibling:n[a-s]:u;for(;s<a;)e.insertBefore(n[s++],g)}else if(a===s)for(;o<i;)(!c||!c.has(t[o]))&&t[o].remove(),o++;else if(t[o]===n[a-1]&&n[s]===t[i-1]){const g=t[--i].nextSibling;e.insertBefore(n[s++],t[o++].nextSibling),e.insertBefore(n[--a],g),t[i]=n[a]}else{if(!c){c=new Map;let f=s;for(;f<a;)c.set(n[f],f++)}const g=c.get(t[o]);if(g!=null)if(s<g&&g<a){let f=o,p=1,h;for(;++f<i&&f<a&&!((h=c.get(t[f]))==null||h!==g+p);)p++;if(p>g-s){const k=t[o];for(;s<g;)e.insertBefore(n[s++],k)}else e.replaceChild(n[s++],t[o++])}else o++;else t[o++].remove()}}}const ia="_$DX_DELEGATE";function Le(e,t,n,r={}){let i;return tn(a=>{i=a,t===document?e():d(t,e(),t.firstChild?null:void 0,n)},r.owner),()=>{i(),t.textContent=""}}function _(e,t,n,r){let i;const a=()=>{const s=document.createElement("template");return s.innerHTML=e,s.content.firstChild},o=()=>(i||(i=a())).cloneNode(!0);return o.cloneNode=o,o}function Ce(e,t=window.document){const n=t[ia]||(t[ia]=new Set);for(let r=0,i=e.length;r<i;r++){const a=e[r];n.has(a)||(n.add(a),t.addEventListener(a,Ol))}}function $(e,t,n){n==null?e.removeAttribute(t):e.setAttribute(t,n)}function Hn(e,t){t==null?e.removeAttribute("class"):e.className=t}function yi(e,t,n,r){if(Array.isArray(n)){const i=n[0];e.addEventListener(t,n[0]=a=>i.call(e,n[1],a))}else e.addEventListener(t,n,typeof n!="function"&&n)}function Rl(e,t,n){n!=null?e.style.setProperty(t,n):e.style.removeProperty(t)}function qe(e,t,n){return Ve(()=>e(t,n))}function d(e,t,n,r){if(n!==void 0&&!r&&(r=[]),typeof t!="function")return Vn(e,t,r,n);B(i=>Vn(e,t(),i,n),r)}function Ol(e){let t=e.target;const n=`$$${e.type}`,r=e.target,i=e.currentTarget,a=u=>Object.defineProperty(e,"target",{configurable:!0,value:u}),o=()=>{const u=t[n];if(u&&!t.disabled){const c=t[`${n}Data`];if(c!==void 0?u.call(t,c,e):u.call(t,e),e.cancelBubble)return}return t.host&&typeof t.host!="string"&&!t.host._$host&&t.contains(e.target)&&a(t.host),!0},s=()=>{for(;o()&&(t=t._$host||t.parentNode||t.host););};if(Object.defineProperty(e,"currentTarget",{configurable:!0,get(){return t||document}}),e.composedPath){const u=e.composedPath();a(u[0]);for(let c=0;c<u.length-2&&(t=u[c],!!o());c++){if(t._$host){t=t._$host,s();break}if(t.parentNode===i)break}}else s();a(r)}function Vn(e,t,n,r,i){for(;typeof n=="function";)n=n();if(t===n)return n;const a=typeof t,o=r!==void 0;if(e=o&&n[0]&&n[0].parentNode||e,a==="string"||a==="number"){if(a==="number"&&(t=t.toString(),t===n))return n;if(o){let s=n[0];s&&s.nodeType===3?s.data!==t&&(s.data=t):s=document.createTextNode(t),n=Et(e,n,r,s)}else n!==""&&typeof n=="string"?n=e.firstChild.data=t:n=e.textContent=t}else if(t==null||a==="boolean")n=Et(e,n,r);else{if(a==="function")return B(()=>{let s=t();for(;typeof s=="function";)s=s();n=Vn(e,s,n,r)}),()=>n;if(Array.isArray(t)){const s=[],u=n&&Array.isArray(n);if(Zr(s,t,n,i))return B(()=>n=Vn(e,s,n,r,!0)),()=>n;if(s.length===0){if(n=Et(e,n,r),o)return n}else u?n.length===0?aa(e,s,r):Bl(e,n,s):(n&&Et(e),aa(e,s));n=s}else if(t.nodeType){if(Array.isArray(n)){if(o)return n=Et(e,n,r,t);Et(e,n,null,t)}else n==null||n===""||!e.firstChild?e.appendChild(t):e.replaceChild(t,e.firstChild);n=t}}return n}function Zr(e,t,n,r){let i=!1;for(let a=0,o=t.length;a<o;a++){let s=t[a],u=n&&n[e.length],c;if(!(s==null||s===!0||s===!1))if((c=typeof s)=="object"&&s.nodeType)e.push(s);else if(Array.isArray(s))i=Zr(e,s,u)||i;else if(c==="function")if(r){for(;typeof s=="function";)s=s();i=Zr(e,Array.isArray(s)?s:[s],Array.isArray(u)?u:[u])||i}else e.push(s),i=!0;else{const g=String(s);u&&u.nodeType===3&&u.data===g?e.push(u):e.push(document.createTextNode(g))}}return i}function aa(e,t,n=null){for(let r=0,i=t.length;r<i;r++)e.insertBefore(t[r],n)}function Et(e,t,n,r){if(n===void 0)return e.textContent="";const i=r||document.createTextNode("");if(t.length){let a=!1;for(let o=t.length-1;o>=0;o--){const s=t[o];if(i!==s){const u=s.parentNode===e;!a&&!o?u?e.replaceChild(i,s):e.insertBefore(i,n):u&&s.remove()}else a=!0}}else e.insertBefore(i,n);return[i]}function Rt(e){return e?e.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"):""}function In(e){let t=Rt(e);function n(i){return i.replace(/&amp;/g,"&").replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/&quot;/g,'"')}function r(i,a=!1){const o=n(i).trim();if(!o)return null;const s=o.toLowerCase();return s.startsWith("javascript:")||s.startsWith("vbscript:")?null:s.startsWith("data:")?a&&s.startsWith("data:image/")?o:null:s.startsWith("https://")||s.startsWith("http://")||s.startsWith("mailto:")||o.startsWith("/")||o.startsWith("./")||o.startsWith("../")||o.startsWith("#")?o:null}return t=t.replace(/!\[([^\]]*)\]\(([^)]+)\)/g,(i,a,o)=>{const s=r(o,!0);return s?`<img class="md-img" src="${s}" alt="${a}" loading="lazy">`:a}),t=t.replace(/\[([^\]]+)\]\(([^)]+)\)/g,(i,a,o)=>{const s=r(o);return s?`<a class="md-link" href="${s}" target="_blank" rel="noopener">${a}</a>`:a}),t=t.replace(/\*\*(.+?)\*\*/g,"<strong>$1</strong>"),t=t.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g,"<em>$1</em>"),t=t.replace(/`([^`]+)`/g,'<code class="md-inline-code">$1</code>'),t}function jl(e){const t=e.split(`
-`);let n="",r=!1,i="ul";for(const a of t){const o=a.trim(),s=o.match(/^(#{1,6})\s+(.+)$/);if(s){r&&(n+=`</${i}>`,r=!1);const c=s[1].length;n+=`<div class="md-h${c}">${In(s[2])}</div>`;continue}if(/^[-*]\s/.test(o)){(!r||i!=="ul")&&(r&&(n+=`</${i}>`),n+='<ul class="md-list">',r=!0,i="ul"),n+=`<li>${In(o.slice(2))}</li>`;continue}const u=o.match(/^(\d+)\.\s(.+)$/);if(u){(!r||i!=="ol")&&(r&&(n+=`</${i}>`),n+='<ol class="md-list">',r=!0,i="ol"),n+=`<li>${In(u[2])}</li>`;continue}if(r&&(n+=`</${i}>`,r=!1),!o){n+='<div class="md-break"></div>';continue}n+=`<div class="md-p">${In(o)}</div>`}return r&&(n+=`</${i}>`),n}function Ie(e){const t=e.split(/(```[\s\S]*?```)/g);let n="";for(const r of t)if(r.startsWith("```")){const i=r.match(/^```(\w*)\n?([\s\S]*?)```$/),a=i?i[2]:r.slice(3,-3);n+=`<pre class="md-code-block"><code>${Rt(a.replace(/\n$/,""))}</code></pre>`}else n+=jl(r);return n}var Nl=_("<div class=msg-text>");function Ul(e){const t=W(()=>Ie(e.text));return(()=>{var n=Nl();return B(()=>n.innerHTML=t()),n})()}const Jn=Symbol("store-raw"),Ot=Symbol("store-node"),Qe=Symbol("store-has"),Ao=Symbol("store-self");function Eo(e){let t=e[wt];if(!t&&(Object.defineProperty(e,wt,{value:t=new Proxy(e,zl)}),!Array.isArray(e))){const n=Object.keys(e),r=Object.getOwnPropertyDescriptors(e);for(let i=0,a=n.length;i<a;i++){const o=n[i];r[o].get&&Object.defineProperty(e,o,{enumerable:r[o].enumerable,get:r[o].get.bind(t)})}}return t}function Je(e){let t;return e!=null&&typeof e=="object"&&(e[wt]||!(t=Object.getPrototypeOf(e))||t===Object.prototype||Array.isArray(e))}function $t(e,t=new Set){let n,r,i,a;if(n=e!=null&&e[Jn])return n;if(!Je(e)||t.has(e))return e;if(Array.isArray(e)){Object.isFrozen(e)?e=e.slice(0):t.add(e);for(let o=0,s=e.length;o<s;o++)i=e[o],(r=$t(i,t))!==i&&(e[o]=r)}else{Object.isFrozen(e)?e=Object.assign({},e):t.add(e);const o=Object.keys(e),s=Object.getOwnPropertyDescriptors(e);for(let u=0,c=o.length;u<c;u++)a=o[u],!s[a].get&&(i=e[a],(r=$t(i,t))!==i&&(e[a]=r))}return e}function Gn(e,t){let n=e[t];return n||Object.defineProperty(e,t,{value:n=Object.create(null)}),n}function fn(e,t,n){if(e[t])return e[t];const[r,i]=G(n,{equals:!1,internal:!0});return r.$=i,e[t]=r}function Fl(e,t){const n=Reflect.getOwnPropertyDescriptor(e,t);return!n||n.get||!n.configurable||t===wt||t===Ot||(delete n.value,delete n.writable,n.get=()=>e[wt][t]),n}function Lo(e){Gr()&&fn(Gn(e,Ot),Ao)()}function ql(e){return Lo(e),Reflect.ownKeys(e)}const zl={get(e,t,n){if(t===Jn)return e;if(t===wt)return n;if(t===Jr)return Lo(e),n;const r=Gn(e,Ot),i=r[t];let a=i?i():e[t];if(t===Ot||t===Qe||t==="__proto__")return a;if(!i){const o=Object.getOwnPropertyDescriptor(e,t);Gr()&&(typeof a!="function"||e.hasOwnProperty(t))&&!(o&&o.get)&&(a=fn(r,t,a)())}return Je(a)?Eo(a):a},has(e,t){return t===Jn||t===wt||t===Jr||t===Ot||t===Qe||t==="__proto__"?!0:(Gr()&&fn(Gn(e,Qe),t)(),t in e)},set(){return!0},deleteProperty(){return!0},ownKeys:ql,getOwnPropertyDescriptor:Fl};function Pe(e,t,n,r=!1){if(!r&&e[t]===n)return;const i=e[t],a=e.length;n===void 0?(delete e[t],e[Qe]&&e[Qe][t]&&i!==void 0&&e[Qe][t].$()):(e[t]=n,e[Qe]&&e[Qe][t]&&i===void 0&&e[Qe][t].$());let o=Gn(e,Ot),s;if((s=fn(o,t,i))&&s.$(()=>n),Array.isArray(e)&&e.length!==a){for(let u=e.length;u<a;u++)(s=o[u])&&s.$();(s=fn(o,"length",a))&&s.$(e.length)}(s=o[Ao])&&s.$()}function Mo(e,t){const n=Object.keys(t);for(let r=0;r<n.length;r+=1){const i=n[r];Pe(e,i,t[i])}}function Wl(e,t){if(typeof t=="function"&&(t=t(e)),t=$t(t),Array.isArray(t)){if(e===t)return;let n=0,r=t.length;for(;n<r;n++){const i=t[n];e[n]!==i&&Pe(e,n,i)}Pe(e,"length",r)}else Mo(e,t)}function Zt(e,t,n=[]){let r,i=e;if(t.length>1){r=t.shift();const o=typeof r,s=Array.isArray(e);if(Array.isArray(r)){for(let u=0;u<r.length;u++)Zt(e,[r[u]].concat(t),n);return}else if(s&&o==="function"){for(let u=0;u<e.length;u++)r(e[u],u)&&Zt(e,[u].concat(t),n);return}else if(s&&o==="object"){const{from:u=0,to:c=e.length-1,by:g=1}=r;for(let f=u;f<=c;f+=g)Zt(e,[f].concat(t),n);return}else if(t.length>1){Zt(e[r],t,[r].concat(n));return}i=e[r],n=[r].concat(n)}let a=t[0];typeof a=="function"&&(a=a(i,n),a===i)||r===void 0&&a==null||(a=$t(a),r===void 0||Je(i)&&Je(a)&&!Array.isArray(a)?Mo(i,a):Pe(e,r,a))}function ct(...[e,t]){const n=$t(e||{}),r=Array.isArray(n),i=Eo(n);function a(...o){$o(()=>{r&&o.length===1?Wl(n,o[0]):Zt(n,o)})}return[i,a]}const Xr=Symbol("store-root");function Pt(e,t,n,r,i){const a=t[n];if(e===a)return;const o=Array.isArray(e);if(n!==Xr&&(!Je(e)||!Je(a)||o!==Array.isArray(a)||i&&e[i]!==a[i])){Pe(t,n,e);return}if(o){if(e.length&&a.length&&(!r||i&&e[0]&&e[0][i]!=null)){let c,g,f,p,h,k,m,y;for(f=0,p=Math.min(a.length,e.length);f<p&&(a[f]===e[f]||i&&a[f]&&e[f]&&a[f][i]&&a[f][i]===e[f][i]);f++)Pt(e[f],a,f,r,i);const w=new Array(e.length),T=new Map;for(p=a.length-1,h=e.length-1;p>=f&&h>=f&&(a[p]===e[h]||i&&a[p]&&e[h]&&a[p][i]&&a[p][i]===e[h][i]);p--,h--)w[h]=a[p];if(f>h||f>p){for(g=f;g<=h;g++)Pe(a,g,e[g]);for(;g<e.length;g++)Pe(a,g,w[g]),Pt(e[g],a,g,r,i);a.length>e.length&&Pe(a,"length",e.length);return}for(m=new Array(h+1),g=h;g>=f;g--)k=e[g],y=i&&k?k[i]:k,c=T.get(y),m[g]=c===void 0?-1:c,T.set(y,g);for(c=f;c<=p;c++)k=a[c],y=i&&k?k[i]:k,g=T.get(y),g!==void 0&&g!==-1&&(w[g]=a[c],g=m[g],T.set(y,g));for(g=f;g<e.length;g++)g in w?(Pe(a,g,w[g]),Pt(e[g],a,g,r,i)):Pe(a,g,e[g])}else for(let c=0,g=e.length;c<g;c++)Pt(e[c],a,c,r,i);a.length>e.length&&Pe(a,"length",e.length);return}const s=Object.keys(e);for(let c=0,g=s.length;c<g;c++)Pt(e[s[c]],a,s[c],r,i);const u=Object.keys(a);for(let c=0,g=u.length;c<g;c++)e[u[c]]===void 0&&Pe(a,u[c],void 0)}function gn(e,t={}){const{merge:n,key:r="id"}=t,i=$t(e);return a=>{if(!Je(a)||!Je(i))return i;const o=Pt(i,{[Xr]:a},Xr,n,r);return o===void 0?a:o}}const Qn=new WeakMap,Po={get(e,t){if(t===Jn)return e;const n=e[t];let r;return Je(n)?Qn.get(n)||(Qn.set(n,r=new Proxy(n,Po)),r):n},set(e,t,n){return Pe(e,t,$t(n)),!0},deleteProperty(e,t){return Pe(e,t,void 0,!0),!0}};function Gt(e){return t=>{if(Je(t)){let n;(n=Qn.get(t))||Qn.set(t,n=new Proxy(t,Po)),e(n)}return t}}const Kl={connectionStatus:"offline",connected:!1,theme:"dark",locale:"en-US",zoom:1,opacity:.8,logEntries:[],logFilterLevel:"debug",i18n:{},i18nReady:!1,localeSeq:0,coreVersion:"",config:null,executors:[],providerCatalog:null,providerAuth:null,providerAuthDismissed:{},providerTest:null,channels:[],skills:[],skillMarket:[],mcp:{},ndjsonEvents:[],ndjsonStartMs:0,memoryFiles:[],memorySearchMode:!1,preferences:[],promptEntries:[],promptDrafts:{},criteriaSpecs:[],budgetDirty:!1,budgetSaving:!1},[V,_e]=ct({...Kl}),oa={debug:0,info:1,warn:2,error:3},sa=2e3;function Hl(e){_e("logEntries",t=>{const n=[...t,e];return n.length>sa?n.slice(n.length-sa):n})}function Vl(){const e=oa[V.logFilterLevel]??0;return V.logEntries.filter(t=>(oa[t.level]??0)>=e)}function nn(e){_e({connectionStatus:e,connected:e==="online"})}function Bo(e){_e("i18nReady",e)}function Jl(e){_e({locale:e,localeSeq:V.localeSeq+1})}function Ro(e){_e("providerAuthDismissed",t=>({...t,[e]:!0}))}function rn(e){_e("providerTest",e??null)}function la(e){_e("executors",Array.isArray(e)?e:[])}function ca(e){_e("skills",Array.isArray(e)?e:[])}function ua(e){_e("mcp",e&&typeof e=="object"&&!Array.isArray(e)?e:{})}const Oo=["zh-CN","en-US"];let Zn={},vi=xt((typeof document<"u"?document.documentElement.lang:"")||(typeof navigator<"u"?navigator.language:"")||"en-US");function Ut(e){return!!e&&typeof e=="object"&&!Array.isArray(e)}function xt(e){const t=String(e||"").trim();return Oo.includes(t)?t:/^zh\b/i.test(t)?"zh-CN":"en-US"}function Xn(e,t=vi){V.localeSeq;const n=Zn[t];return Ut(n)&&Object.hasOwn(n,e)?n[e]:e.split(".").reduce((r,i)=>Ut(r)?r[i]:void 0,n)}function jo(e,t={}){return String(e).replace(/\{\{\s*([\w.]+)\s*\}\}/g,(n,r)=>{const i=r.split(".").reduce((a,o)=>Ut(a)?a[o]:void 0,t);return i==null?"":String(i)})}function l(e,t){const n=Xn(e)??Xn(e,"en-US");return typeof n!="string"?e:jo(n,t)}function Wt(e,t,n){const r=Xn(e)??Xn(e,"en-US");if(Ut(r)){const i=r[t===1?"one":"other"]??r.other??r.one;if(typeof i=="string")return jo(i,{count:t,...n})}return l(e,{count:t,...n})}function No(){return xt(vi)}async function Gl(e){const t=xt(e);if(Zn[t])return;const n=await fetch(`i18n/${t}.json`).then(r=>r.ok?r.json():{}).catch(()=>({}));Zn[t]=Ut(n)?n:{}}async function Uo(e){const t=xt(e);await Gl(t),vi=t,Bo(!0),typeof document<"u"&&(document.documentElement.lang=t,Zl(document)),Jl(t)}async function Ql(){const e=await Promise.all(Oo.map(async t=>{const n=await fetch(`i18n/${t}.json`).then(r=>r.ok?r.json():{}).catch(()=>({}));return[t,Ut(n)?n:{}]}));for(const[t,n]of e)Zn[t]=n;Bo(!0)}function Lt(e,t){const n=[];return e instanceof Element&&e.matches(t)&&n.push(e),e.querySelectorAll?.(t)?.forEach(r=>n.push(r)),n}function Zl(e=document){Lt(e,"[data-i18n]").forEach(t=>{t.textContent=l(t.dataset.i18n)}),Lt(e,"[data-i18n-html]").forEach(t=>{t.innerHTML=l(t.dataset.i18nHtml)}),Lt(e,"[data-i18n-placeholder]").forEach(t=>{t.setAttribute("placeholder",l(t.dataset.i18nPlaceholder))}),Lt(e,"[data-i18n-title]").forEach(t=>{t.setAttribute("title",l(t.dataset.i18nTitle))}),Lt(e,"[data-i18n-aria-label]").forEach(t=>{t.setAttribute("aria-label",l(t.dataset.i18nAriaLabel))}),Lt(e,"[data-i18n-alt]").forEach(t=>{t.setAttribute("alt",l(t.dataset.i18nAlt))})}function da(e){return e?e.replace(/[\u001B\u009B][[\]()#;?]*(?:(?:(?:(?:;[-a-zA-Z\d\/#&.:=?%@~_]+)*|[a-zA-Z\d]+(?:;[-a-zA-Z\d\/#&.:=?%@~_]*)*)?\u0007)|(?:(?:\d{1,4}(?:;\d{0,4})*)?[\dA-PR-TZcf-nq-uy=><~]))/g,""):""}function Yr(e){return!!e&&typeof e=="object"&&!Array.isArray(e)}function Fo(e){return String(e||"").toLowerCase().replace(/[\s_-]+/g,"")}function Xl(e){if(!Yr(e))return"";const t=e.command??e.argv??e.cmd;return typeof t=="string"?t.trim():Array.isArray(t)?t.flatMap(n=>typeof n=="string"&&n.trim()?[n.trim()]:[]).join(" ").trim():""}function Sr(e,t=80){const n=String(e||"").replace(/\s+/g," ").trim();return n?n.length<=t?n:`${n.slice(0,Math.max(0,t-3)).trim()}...`:""}function Yl(e,t){const n=typeof e=="string"?e.replace(/[\\/]+$/,""):"",r=typeof t=="string"?t.replace(/[\\/]+$/,""):"";if(!n||!r)return"";const i=n.toLowerCase(),a=r.toLowerCase();return a.startsWith(i+"/")||a.startsWith(i+"\\")?r.slice(n.length+1):""}function ec(e){if(!e)return"";const t=e.replace(/\\/g,"/").split("/");return t.length>3?".../"+t.slice(-3).join("/"):e}function qo(e,t=""){return e?Yl(t,e)||ec(e):""}function tc(e){const t=Fo(e);return t==="read"||t==="readfile"?"📄":t==="edit"||t==="editfile"||t==="applypatch"?"✏️":t==="write"||t==="writefile"?"📝":t==="bash"||t==="shellcommand"?"💻":t==="grep"||t==="searchcode"?"🔍":t==="glob"||t==="findfiles"?"📂":t==="agent"||t==="spawnagent"?"🤖":t==="todowrite"||t==="todoupdate"||t==="updateplan"?"☑️":"⚡"}function zo(e,t,n,r=""){const i=Yr(t)?t:{},a=Yr(n)?n:{},o=Fo(e),s=i.file_path||i.filePath||i.path||i.filename||"";return s?qo(s,r):o==="bash"||o==="shellcommand"?Sr(Xl(i),80):o==="grep"||o==="searchcode"?i.pattern||i.query||i.q||"":o==="glob"||o==="findfiles"?i.pattern||i.glob||"":o==="agent"||o==="spawnagent"?Sr(i.description||i.prompt||"",80):typeof i.raw=="string"&&i.raw.trim()?Sr(i.raw,80):(a.status==="completed"||a.status==="running")&&typeof a.title=="string"?a.title:""}function Wo(e){return l(e==="completed"?"task.status.completed":e==="running"?"task.status.running":e==="error"?"common.error":"checks.pending")}const mr=typeof window<"u"&&window.location.protocol.startsWith("http")&&window.location.pathname.startsWith("/ui")?window.location.origin:"http://127.0.0.1:7878";let Ko=mr,an={username:"opencorvus",password:""},ei="";function bn(e){e.serverUrl&&(Ko=e.serverUrl),e.username&&(an.username=e.username),e.password!==void 0&&(an.password=e.password),e.directory!==void 0&&(ei=String(e.directory||"").trim())}function Ge(e){const t=Ko.replace(/\/+$/,""),n=e.replace(/^\/+/,""),r=new URL(`${t}/${n}`);return ei&&!r.searchParams.has("directory")&&r.searchParams.set("directory",ei),r.toString()}function Tt(){const e={Accept:"application/json"};return an.password&&(e.Authorization=`Basic ${btoa(`${an.username}:${an.password}`)}`),e}async function K(e,t){const n=await fetch(Ge(e),{...t,headers:{...Tt(),...t?.headers}});if(!n.ok)throw new Error(`API ${n.status}: ${e}`);return n.json()}const nc=Object.freeze(Object.defineProperty({__proto__:null,DEFAULT_SERVER:mr,apiHeaders:Tt,apiJson:K,apiUrl:Ge,configure:bn},Symbol.toStringTag,{value:"Module"})),[O,Te]=ct({board:null,tasks:[],selectedTaskID:"",taskSequence:0,loading:!1,pendingTasks:[],tasksSeq:0,boardEtag:"",boardQueued:!1,boardRetryCount:0,boardSyncPending:!1,boardUpdatedAt:0,snapshotVersion:"",path:null,vcs:null,changes:[]});let kt=null,An=null,xr=!1;function rc(e){return typeof e?.snapshotVersion=="string"?e.snapshotVersion:""}function fa(){kt&&(clearTimeout(kt),kt=null),Vo(0)}function ic(e){if(!O.selectedTaskID||kt)return;e&&Bt(!0);const t=Math.min(1e3*Math.pow(2,Math.min(O.boardRetryCount,4)),15e3);Vo(O.boardRetryCount+1),kt=setTimeout(()=>{kt=null,Re({sync:O.boardSyncPending})},t)}async function Re(e={}){const t=O.selectedTaskID;if(!t){Te("board",null),ha("");return}if(e.sync&&Bt(!0),An)return xr=!0,e.sync&&Bt(!0),An;const n=e.sync===!0||O.boardSyncPending;n&&Bt(!0);const r=(async()=>{let i=!1;try{const a=Tt();O.boardEtag&&(a["If-None-Match"]=O.boardEtag);const o=await fetch(Ge(`task/${encodeURIComponent(t)}/board?sync=${n?"1":"0"}`),{headers:a,signal:AbortSignal.timeout(1e4)});if(t!==O.selectedTaskID)return;if(Bt(!1),o.status===304){fa(),pa(Date.now());return}if(!o.ok)throw new Error(`API ${o.status}: ${o.statusText}`);const s=o.headers.get("etag");s&&lc(s);const u=await o.json();Te("board",u??null),ha(rc(u));const c=Number(u?.lastSequence||0);Number.isFinite(c)&&c>0&&Jo(c),fa(),pa(Date.now())}catch(a){i=!0,console.error("loadBoard failed",a),t===O.selectedTaskID&&ic(n)}finally{An=null,Te("loading",!1),(xr||O.boardQueued)&&(xr=!1,cc(!1),!i&&!kt&&queueMicrotask(()=>{Re({sync:O.boardSyncPending})}))}})();return An=r,Te("loading",!0),r}async function pr(){try{const e=await K("tasks"),t=uc(e),n=new Set(t.map(r=>r?.task?.requestID).filter(Boolean));Te({tasks:t,pendingTasks:O.pendingTasks.filter(r=>!n.has(r?.requestID))})}catch(e){console.error("loadTasks failed",e)}}function ac(e){Te("tasks",Array.isArray(e)?e:[])}let Tr=null;function oc(e=0){Bt(!0);const t=legacyState();t?.boardRetryTimer&&(clearTimeout(t.boardRetryTimer),t.boardRetryTimer=null),t?.boardKick&&clearTimeout(t.boardKick),Tr=setTimeout(()=>{Tr=null;const n=legacyState();n&&(n.boardKick=null),Re({sync:!0})},e),t&&(t.boardKick=Tr)}function sc(){const e=O.board?.task?.sessionID;return typeof e=="string"?e:""}function Ho(){return O.board?.task?.directory??""}function ga(e){Te("path",e??null)}function ma(e){Te("vcs",e??null)}function lc(e){Te("boardEtag",typeof e=="string"?e:"")}function cc(e){Te("boardQueued",e)}function Vo(e){Te("boardRetryCount",typeof e=="number"?e:0)}function Bt(e){Te("boardSyncPending",e)}function pa(e){Te("boardUpdatedAt",typeof e=="number"?e:0)}function ha(e){Te("snapshotVersion",typeof e=="string"?e:"")}function Jo(e){Te("taskSequence",typeof e=="number"?e:0)}function Go(e){Te("pendingTasks",Array.isArray(e)?e:[])}function uc(e){return[...Array.isArray(e?.tasks)?e.tasks:[]].sort((t,n)=>(n.updated_at||n.task?.time?.updated||0)-(t.updated_at||t.task?.time?.updated||0))}function ya(e){return e?.updated_at||e?.task?.time?.updated||e?.task?.time?.created||0}function dc(){const e=new Set(O.tasks.map(t=>t?.task?.requestID||t?.task?.id).filter(Boolean));return[...O.pendingTasks.filter(t=>!e.has(t?.requestID||t?.task?.id)),...O.tasks].sort((t,n)=>ya(n)-ya(t))}var fc=_("<span class=tool-detail>"),gc=_("<div class=msg-tool><span class=tool-icon></span><span class=tool-name></span><span class=tool-status>"),mc=_("<div class=msg-tool-input>"),pc=_("<div class=msg-tool-output>"),hc=_("<div class=msg-tool-error>");function yc(e){const t=()=>e.part.state||{},n=()=>t().status||"pending",r=()=>e.part.tool||"unknown",i=()=>t().input||{},a=()=>tc(r()),o=()=>Wo(n()),s=()=>{const f=zo(r(),i(),t(),Ho());return f&&f.toLowerCase()!==r().toLowerCase()?f:""},u=()=>{const f=t();return typeof f.raw=="string"?typeof e.part._targetRaw=="string"?e.part._targetRaw:f.raw:""},c=()=>da(t().output||""),g=()=>da(t().error||"")||c();return[(()=>{var f=gc(),p=f.firstChild,h=p.nextSibling,k=h.nextSibling;return d(p,a),d(h,r),d(f,v(R,{get when(){return s()},get children(){var m=fc();return d(m,s),m}}),k),d(k,o),B(m=>{var y=n(),w=o();return y!==m.e&&$(k,"data-status",m.e=y),w!==m.t&&$(k,"title",m.t=w),m},{e:void 0,t:void 0}),f})(),v(R,{get when(){return ye(()=>n()==="pending")()&&u()},get children(){var f=mc();return d(f,u),f}}),v(R,{get when(){return ye(()=>n()==="completed")()&&c()},get children(){var f=pc();return f.$$click=p=>p.currentTarget.classList.toggle("msg-tool-output--expanded"),d(f,c),f}}),v(R,{get when(){return ye(()=>n()==="error")()&&g()},get children(){var f=hc();return d(f,g),f}})]}Ce(["click"]);const mn=new Map,Yn=new Map,vc=5e3,[bc,Qo]=G(0);function kc(e){return!!e&&typeof e=="object"&&!Array.isArray(e)}function Zo(e){if(!kc(e))return"";const t=typeof e.id=="string"?e.id:"",n=typeof e.messageID=="string"?e.messageID:"",r=typeof e.sessionID=="string"?e.sessionID:"";return!t&&!n&&!r?"":`reasoning:${r}:${n}:${t}`}function _c(e){const t=Zo(e);return t?mn.get(t)?.hidden===!0:!1}function wc(){const e=window.__overlayTest,t=e&&typeof e=="object"?Number(e.reasoningAutoCloseMs):NaN;return Number.isFinite(t)?Math.max(0,Math.floor(t)):vc}function Xo(e){const t=Yn.get(e);t&&(clearTimeout(t),Yn.delete(e))}function $c(e){if(!e)return;Xo(e);const t=setTimeout(()=>{Yn.delete(e);const n=mn.get(e)||{hidden:!1};n.hidden||(mn.set(e,{...n,hidden:!0}),Qo(r=>r+1))},wc());Yn.set(e,t)}function Sc(e){const t=Zo(e);if(!t)return;const n=mn.get(t);mn.set(t,{...n||{},hidden:!1}),Xo(t),$c(t),n?.hidden&&Qo(r=>r+1)}var xc=_("<div class=reasoning-text>"),Tc=_("<div class=msg-reasoning><div class=reasoning-label> ");function Cc(e){const[t,n]=G(!0),r=()=>String(e.part?.text||""),i=W(()=>(bc(),_c(e.part))),a=()=>l("transcript.reasoning");return v(R,{get when(){return ye(()=>!!r().trim())()&&!i()},get children(){var o=Tc(),s=o.firstChild,u=s.firstChild;return s.$$click=()=>n(!t()),d(s,a,u),d(s,()=>t()?"▼":"▶",null),d(o,v(R,{get when(){return t()},get children(){var c=xc();return d(c,r),c}}),null),o}})}Ce(["click"]);function We(e){return e?e.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"):""}function Dc(e){const t=Array.isArray(e?.parts)?e.parts:[];if(t.length<2)return t;const n=[],r=[];for(const i of t)i?.type==="reasoning"?n.push(i):r.push(i);return[...n,...r]}function Yo(e){return l(e==="user"?"chat.role.user":e==="assistant"?"chat.role.assistant":e==="planner"?"chat.role.planner":e==="scheduler"?"chat.role.scheduler":e==="delivery"?"chat.role.delivery":e==="spec"?"chat.role.spec":e==="system"?"chat.role.system":e==="goal_gate"?"chat.role.goal":"chat.role.message")}function es(e){const t=String(e||"").trim().toLowerCase();return t==="planner"||t==="plan"?"planner":t==="spec"?"spec":t==="judge"||t==="evaluation"||t==="scheduler"?"scheduler":t==="delivery"||t==="files"?"delivery":t==="executor"||t==="execute"||t==="coding"?"assistant":"system"}function je(e){const t=String(e||"").trim().toLowerCase();return t?t.includes("goal_gate")||t.includes("goal")?"goals":t.includes("scheduler")||t.includes("evaluator")||t.includes("evaluation")||t.includes("evaluate")||t.includes("review")?"evaluation":t.includes("planner")||t.includes("planning")||t.includes("replan")||t==="plan"?"plan":t.includes("spec")?"spec":t.includes("deliver")||t.includes("delivery")||t.includes("publish")?"files":"":""}function bi(e){if(!e||typeof e!="object")return"";const t=e.info&&typeof e.info=="object"?e.info:{},n=je(t.agent)||je(t.role);if(n)return n;const r=Array.isArray(e.parts)?e.parts:[];for(let i=r.length-1;i>=0;i-=1){const a=r[i];if(!a||typeof a!="object")continue;if(a.type==="subtask"){const c=je(a.agent)||je(a.description)||je(a.prompt);if(c)return c;continue}if(a.type==="agent"){const c=je(a.name);if(c)return c;continue}if(a.type!=="tool")continue;const o=a.state&&typeof a.state=="object"?a.state:{},s=o.input&&typeof o.input=="object"?o.input:{},u=je(s.agent)||je(s.name)||je(s.description)||je(o.title)||je(a.tool);if(u)return u}return""}function Ic(e){const t=e.parts||[];for(const n of t)if(n.type==="text"&&!(n.audience&&n.audience.ui===!1)&&!(n.kind==="trace"&&!n.audience?.ui)&&n.source)return n.source}function Ac(e){return l(e==="spec"?"chat.role.spec":e==="planner"?"chat.role.planner":e==="goal"?"chat.role.goal":e==="judge"||e==="scheduler"?"chat.role.scheduler":e==="delivery"?"chat.role.delivery":"chat.role.message")}function Ec(e,t){const n=e.info?.role||"assistant";if(n!=="user")return n;const r=Ic(e);if(r)return r;const i=typeof e.info?.sessionID=="string"?e.info.sessionID:"";return t&&i&&i!==t?es(bi(e)||e.info?.agent||"system"):n}function Lc(e=!0){return e?{hour:"2-digit",minute:"2-digit",second:"2-digit"}:{hour:"2-digit",minute:"2-digit"}}function hr(e){return e?new Date(e).toLocaleTimeString(No(),Lc()):""}var Mc=_('<article class="turn msg"><div class=msg-head><span class=msg-role></span><span class=msg-time></span></div><div class=msg-bubble><div class=msg-body>'),Pc=_("<div class=msg-patch>"),Bc=_("<div>"),Rc=_("<div class=msg-tool><span class=tool-icon>→</span><span class=tool-name>Subtask</span><span class=tool-detail>"),Oc=_("<div class=executor-process-detail>"),jc=_("<div class=executor-process-progress><span class=executor-process-activity></span><span>"),Nc=_("<div class=executor-process-note>"),Uc=_("<pre class=executor-process-output>"),Fc=_("<div class=executor-process-card><div class=executor-process-head><span class=executor-process-kind></span><div class=executor-process-meta><div class=executor-process-row><div class=executor-process-title></div><div class=executor-process-status>");function qc(e){const t=e.url||e.filename||"",n=e.filename||t||"file",r=e.mime||e.mediaType||"";return(r&&r.startsWith("image/")||/^data:image\//i.test(t)||/\.(png|jpe?g|gif|webp|svg|bmp|ico)(\?|$)/i.test(t))&&t?`<div class="msg-img-wrap"><img class="md-img" src="${Rt(t)}" alt="${Rt(n)}" loading="lazy"></div>`:`<div class="msg-text" style="font-family:var(--mono);font-size:var(--ui-font-small);color:var(--text-soft)">${Rt(n)}</div>`}function ts(e){const t=()=>Ec(e.message,sc()),n=()=>Dc(e.message),r=()=>hr(e.message.info?.time?.created),i=W(()=>{const a=n();return a.length===0?!1:a.some(o=>o.type==="text"?!!(o.text||"").trim():o.type==="tool"?!0:o.type==="reasoning"?!!(o.text||"").trim():o.type==="executor_process"?!!o.process:o.type==="patch"?(o.files||[]).length>0:o.type==="file"||o.type==="subtask")});return v(R,{get when(){return i()},get children(){var a=Mc(),o=a.firstChild,s=o.firstChild,u=s.nextSibling,c=o.nextSibling,g=c.firstChild;return d(s,()=>Yo(t())),d(u,r),d(g,v(ke,{get each(){return n()},children:f=>v(Pl,{fallback:null,get children(){return[v(ft,{get when(){return ye(()=>f.type==="text")()&&(f.text||"").trim()},get children(){return v(Ul,{get text(){return f.text||""}})}}),v(ft,{get when(){return f.type==="tool"},get children(){return v(yc,{part:f})}}),v(ft,{get when(){return ye(()=>f.type==="reasoning")()&&(f.text||"").trim()},get children(){return v(Cc,{part:f})}}),v(ft,{get when(){return ye(()=>f.type==="patch")()&&(f.files||[]).length>0},get children(){var p=Pc();return d(p,()=>"⚙ "+(f.files||[]).map(h=>qo(h,Ho())).join(", ")),p}}),v(ft,{get when(){return f.type==="file"},get children(){var p=Bc();return B(()=>p.innerHTML=qc(f)),p}}),v(ft,{get when(){return f.type==="subtask"},get children(){var p=Rc(),h=p.firstChild,k=h.nextSibling,m=k.nextSibling;return d(m,()=>f.description||f.prompt||""),p}}),v(ft,{get when(){return ye(()=>f.type==="executor_process")()&&f.process},get children(){var p=Fc(),h=p.firstChild,k=h.firstChild,m=k.nextSibling,y=m.firstChild,w=y.firstChild,T=w.nextSibling;return d(k,()=>String(f.process.kind||"task")),d(w,()=>f.process.title||f.process.id||""),d(T,()=>f.process.status||"running"),d(m,v(R,{get when(){return f.process.detail},get children(){var P=Oc();return d(P,()=>f.process.detail),P}}),null),d(m,v(R,{get when(){return f.process.progress},get children(){var P=jc(),C=P.firstChild,b=C.nextSibling;return d(b,()=>f.process.progress),P}}),null),d(m,v(R,{get when(){return f.process.note},get children(){var P=Nc();return d(P,()=>f.process.note),P}}),null),d(m,v(R,{get when(){return f.process.output},get children(){var P=Uc();return d(P,()=>f.process.output),P}}),null),B(P=>{var C=f.process.status||"running",b=f.process.status==="running"?"true":"false",A=f.process.status||"running";return C!==P.e&&$(p,"data-status",P.e=C),b!==P.t&&$(p,"data-live",P.t=b),A!==P.a&&$(T,"data-status",P.a=A),P},{e:void 0,t:void 0,a:void 0}),p}})]}})})),B(()=>$(a,"data-role",t())),a}})}var zc=_('<span class="agent-card-badge agent-card-badge--done"title=Completed>✓'),Wc=_("<div class=agent-card-body>"),Kc=_('<article class="turn msg agent-card"data-role=agent-card><div class=agent-card-header role=button tabindex=0><span class=agent-card-label></span><span class=agent-card-count></span><span class=agent-card-chevron aria-hidden=true>▼'),Hc=_('<span class="agent-card-badge agent-card-badge--running"title=Running><span class=agent-card-spinner>'),Vc=_('<span class="agent-card-badge agent-card-badge--error"title=Error>✗');function Jc(e){return Ac(e)}function Gc(e){const[t,n]=G(e.status==="running"),r=()=>{const a=Jc(e.stage);return e.round>0?`${a} #${e.round}`:a},i=()=>n(!t());return(()=>{var a=Kc(),o=a.firstChild,s=o.firstChild,u=s.nextSibling;return o.$$keydown=c=>{(c.key==="Enter"||c.key===" ")&&(c.preventDefault(),i())},o.$$click=i,d(o,v(R,{get when(){return e.status!=="running"},get fallback(){return Hc()},get children(){return v(R,{get when(){return e.status==="completed"},get fallback(){return Vc()},get children(){return zc()}})}}),s),d(s,r),d(u,v(R,{get when(){return e.messages.length>0},get children(){return["(",ye(()=>e.messages.length),")"]}})),d(a,v(R,{get when(){return t()},get children(){var c=Wc();return d(c,v(ke,{get each(){return e.messages},children:g=>v(ts,{message:g})})),c}}),null),B(c=>{var g=!!t(),f=e.stage,p=e.key,h=t();return g!==c.e&&a.classList.toggle("agent-card--expanded",c.e=g),f!==c.t&&$(a,"data-stage",c.t=f),p!==c.a&&$(a,"data-card-key",c.a=p),h!==c.o&&$(o,"aria-expanded",c.o=h),c},{e:void 0,t:void 0,a:void 0,o:void 0}),a})()}Ce(["click","keydown"]);const[oe,be]=ct({messages:[],agentEvents:[],selectedTaskID:"",showTranscriptDetails:!1,agentStatus:null,sseConnected:!1,conversationUpdatedAt:0,chatRequest:null,chatAttachments:[]}),it=new Map;function ns(){it.clear();for(const e of oe.messages)e?.info?.id&&it.set(e.info.id,e)}function Cr(e){return it.get(e)}function va(e){return Number(e?.info?.time?.created||e?.info?.time?.updated||0)}function rs(e){return[...e].map((t,n)=>({item:t,index:n})).sort((t,n)=>va(t.item)-va(n.item)||t.index-n.index).map(t=>t.item)}function Ye(e){return!!e&&typeof e=="object"&&!Array.isArray(e)}function er(e){return e==null?"null":typeof e=="string"||typeof e=="number"||typeof e=="boolean"?JSON.stringify(e):Array.isArray(e)?`[${e.map(t=>er(t)).join(",")}]`:Ye(e)?`{${Object.keys(e).sort().map(t=>`${JSON.stringify(t)}:${er(e[t])}`).join(",")}}`:JSON.stringify(String(e))}function is(e){const t=String(e||"");let n=2166136261;for(let r=0;r<t.length;r+=1)n^=t.charCodeAt(r),n=Math.imul(n,16777619);return(n>>>0).toString(36)}function as(e){return er({type:e?.type||"",text:e?.text||"",tool:e?.tool||"",kind:e?.kind||"",source:e?.source||"",filename:e?.filename||"",url:e?.url||"",mime:e?.mime||e?.mediaType||"",callID:e?.callID||"",description:e?.description||"",prompt:e?.prompt||"",audience:Ye(e?.audience)?e.audience:null,state:Ye(e?.state)?e.state:e?.state??null,files:Array.isArray(e?.files)?e.files:[],process:Ye(e?.process)?e.process:null})}function os(e){const t=Ye(e?.info)?e.info:{};return er({role:t.role||"",agent:t.agent||"",sessionID:t.sessionID||"",taskID:t.taskID||"",time:{created:t.time?.created||0,updated:t.time?.updated||0,completed:t.time?.completed||0},parts:Array.isArray(e?.parts)?e.parts.map(n=>as(n)):[]})}function Qc(e,t,n,r){const i=Ye(e)?{...e}:{type:"text",text:String(e||"")},a=typeof i.id=="string"&&i.id.trim()?i.id.trim():`loaded-part:${t}:${r}:${is(as(i))}`;return{...i,id:a,messageID:typeof i.messageID=="string"&&i.messageID.trim()?i.messageID.trim():t,sessionID:typeof i.sessionID=="string"&&i.sessionID.trim()?i.sessionID.trim():n}}function Zc(e){const t=Ye(e)?e:{},n=Ye(t.info)?t.info:{},r=os(t),i=typeof n.id=="string"&&n.id.trim()?n.id.trim():`loaded-msg:${is(r)}`,a=typeof n.sessionID=="string"&&n.sessionID.trim()?n.sessionID.trim():"",o=Array.isArray(t.parts)?t.parts.map((s,u)=>Qc(s,i,a,u)):[];return{...t,info:{...n,id:i,sessionID:a,role:typeof n.role=="string"&&n.role.trim()?n.role.trim():"assistant"},parts:o}}function Xc(e){return(Array.isArray(e)?e:[]).map(t=>Zc(t))}function ss(e,t){const n=new Set,r=[];for(const i of[...Array.isArray(e)?e:[],...Array.isArray(t)?t:[]]){const a=Ye(i?.info)?i.info:{},o=typeof a.id=="string"&&a.id.trim()?`id:${a.id.trim()}`:`sig:${os(i)}`;n.has(o)||(n.add(o),r.push(i))}return Xc(r)}async function yr(e){if(!e){be("messages",[]),it.clear();return}try{const[t,n]=await Promise.all([K(`task/${encodeURIComponent(e)}/transcript`).catch(()=>[]),K(`control/timeline?taskID=${encodeURIComponent(e)}`).catch(()=>[])]),r=ss(Array.isArray(n)?n:[],Array.isArray(t)?t:[]);be("messages",rs(r)),ns(),be("conversationUpdatedAt",Date.now())}catch(t){console.error("syncTask failed",t)}}function Yc(e){const t=e.type||"",n=typeof e?.properties=="object"&&e.properties&&!Array.isArray(e.properties)?e.properties:typeof e?.payload=="object"&&e.payload&&!Array.isArray(e.payload)?e.payload:{};if(t==="message.updated"){const r=n.info;if(!r?.id)return!1;const i=Cr(r.id);if(i){const o=oe.messages.indexOf(i);return o>=0&&be("messages",o,"info",r),!0}const a={info:r,parts:[]};return be("messages",Gt(o=>{o.push(a)})),it.set(r.id,oe.messages[oe.messages.length-1]),!0}if(t==="message.part.updated"){const r=n.part;if(!r?.id||!r?.messageID)return!1;let i=Cr(r.messageID);if(!i){const s={info:{id:r.messageID,sessionID:r.sessionID,role:"assistant"},parts:[]};be("messages",Gt(u=>{u.push(s)})),i=oe.messages[oe.messages.length-1],it.set(r.messageID,i)}const a=oe.messages.indexOf(i),o=i.parts.findIndex(s=>s.id===r.id);return o>=0?be("messages",a,"parts",o,r):be("messages",a,"parts",Gt(s=>{s.push(r)})),!0}if(t==="message.part.delta"){if(typeof n.delta!="string"||n.field!=="text"&&n.field!=="raw")return!1;let r=Cr(n.messageID);if(!r){const o={info:{id:n.messageID,sessionID:n.sessionID,role:"assistant"},parts:[]};be("messages",Gt(s=>{s.push(o)})),r=oe.messages[oe.messages.length-1],it.set(n.messageID,r)}const i=oe.messages.indexOf(r),a=r.parts.findIndex(o=>o.id===n.partID);if(n.field==="raw"){if(a<0)return!1;const o=r.parts[a];return o.type!=="tool"||!o.state?!1:(be("messages",i,"parts",a,"state","raw",s=>(s||"")+n.delta),!0)}return a<0?(be("messages",i,"parts",Gt(o=>{o.push({id:n.partID,type:"text",text:n.delta,sessionID:n.sessionID,messageID:n.messageID})})),!0):(be("messages",i,"parts",a,"text",o=>(o||"")+n.delta),!0)}return!1}const ba=16;let on=[],jt=null,ls=0;function cs(e){if(on.push(e),!jt){if(Date.now()-ls<ba){jt=setTimeout(ka,ba);return}ka()}}function ka(){if(on.length===0)return;const e=on;on=[],jt=null,ls=Date.now();let t=!1;$o(()=>{for(const n of e)Yc(n)&&(t=!0)}),t&&be("conversationUpdatedAt",Date.now())}function eu(){jt&&(clearTimeout(jt),jt=null),on=[]}function Ft(e){return typeof e=="string"?e.trim():""}function rt(e){return typeof e=="string"?e:""}function _a(e){return e==="message_delta"||e==="reasoning_delta"||e==="tool_delta"}function Ue(e){return!!e&&typeof e=="object"&&!Array.isArray(e)}const us=32,pn=new Map;function hn(e){const t=String(e?.stage||"").trim().toLowerCase(),n=String(e?.id||"").trim();return t&&n?`${t}:${n}`:""}function sn(e){const t=pn.get(e);t&&(clearTimeout(t),pn.delete(e))}function tu(e,t){if(!t)return 0;if(!e)return Math.min(t.length,1);const n=t.length-e.length;return n<=0||n<=4?t.length:Math.min(t.length,e.length+Math.max(1,Math.ceil(n/2)))}function ds(e){const t=oe.agentEvents.findIndex(a=>hn(a)===e);if(t<0){sn(e);return}const n=oe.agentEvents[t],r=typeof n?._targetText=="string"?n._targetText:"",i=typeof n?._liveText=="string"?n._liveText:"";if(!r){sn(e);return}if(i.length>=r.length){i!==r&&(be("agentEvents",t,"_liveText",r),be("conversationUpdatedAt",Date.now())),sn(e);return}be("agentEvents",t,"_liveText",r.slice(0,tu(i,r))),be("conversationUpdatedAt",Date.now()),pn.set(e,setTimeout(()=>ds(e),us))}function nu(e){const t=hn(e);if(!t)return;const n=typeof e?._targetText=="string"?e._targetText:"",r=typeof e?._liveText=="string"?e._liveText:"";if(!n||r.length>=n.length){sn(t);return}pn.has(t)||pn.set(t,setTimeout(()=>ds(t),us))}function ru(e){if(!e)return"";const t=e.kind;return t==="message_delta"||t==="reasoning_delta"||t==="status"?rt(e.text??e.summary):t==="tool_call"||t==="tool_delta"?rt(e.text??e.payload?.text??e.summary):Ft(t==="tool_result"&&(e.payload?.output||e.payload?.result)||e.summary)}function iu(e){if(!e)return;const t=ru(e),n=typeof e._liveText=="string"?e._liveText:"";if(!t){sn(hn(e)),delete e._targetText,delete e._liveText;return}e._targetText=t,e._liveText=n||t}function au(e){const t=Ue(e?.payload)?e.payload:Ue(e?.properties)?e.properties:{},n=String(t.stage||"").trim().toLowerCase(),r=String(t.kind||"status").trim().toLowerCase(),i=Number(e?.timestamp||t.timestamp||Date.now()),a=typeof t.toolName=="string"&&t.toolName.trim()?t.toolName.trim():typeof t.name=="string"&&t.name.trim()?t.name.trim():"",o=_a(r)?rt(t.text):Ft(t.text),s=_a(r)?rt(e?.summary??t.summary??o):Ft(e?.summary||t.summary||o),u=typeof t.id=="string"&&t.id?t.id:typeof e?.event_id=="string"&&e.event_id?e.event_id:`${n}:${r}:${a||"event"}:${i}`;return!n||!s&&!o&&!a?null:{id:u,eventID:typeof e?.event_id=="string"?e.event_id:"",stage:n,kind:r,toolName:a,text:o,summary:s,payload:t,time:{created:Number.isFinite(i)?i:Date.now()}}}function ou(e,t){if(!e)return t;if(t.kind==="message_delta"||t.kind==="reasoning_delta"){const n=`${rt(e._targetText??e.text??e.summary)}${rt(t.text??t.summary)}`;return{...e,...t,text:n,summary:n,payload:{...Ue(e.payload)?e.payload:{},...Ue(t.payload)?t.payload:{}}}}if(t.kind==="tool_delta"){const n=`${rt(e.text??e.payload?.text??"")}${rt(t.text??t.payload?.text??t.summary)}`;return{...e,...t,kind:e.kind==="tool_result"?"tool_result":"tool_call",text:n,summary:Ft(e.summary||t.summary),payload:{...Ue(e.payload)?e.payload:{},...Ue(t.payload)?t.payload:{},text:n}}}return t.kind==="tool_result"?{...e,...t,payload:{...Ue(e.payload)?e.payload:{},...Ue(t.payload)?t.payload:{},text:Ft(e.payload?.text||e.text||t.payload?.text||"")}}:{...e,...t,payload:{...Ue(e.payload)?e.payload:{},...Ue(t.payload)?t.payload:{}}}}function su(e,t){const n=au(t);if(!n)return e;const r=e.findIndex(o=>o.id===n.id&&o.stage===n.stage),i=r>=0?[...e.slice(0,r),ou(e[r],n),...e.slice(r+1)]:[...e,n],a=r>=0?i[r]:i[i.length-1];return iu(a),i.sort((o,s)=>(o.time?.created||0)-(s.time?.created||0))}function lu(e){const t=su([...oe.agentEvents],e);be("agentEvents",gn(t)),be("conversationUpdatedAt",Date.now());const n=Ue(e?.payload)?e.payload:Ue(e?.properties)?e.properties:{},r=hn({stage:String(n.stage||"").trim().toLowerCase(),id:typeof n.id=="string"&&n.id?n.id:typeof e?.event_id=="string"?e.event_id:""}),i=r&&t.find(a=>hn(a)===r)||null;i&&nu(i)}function at(e){const t=rs(Array.isArray(e)?e:[]);be("messages",gn(t)),ns(),be("conversationUpdatedAt",Date.now())}function cu(e){be("selectedTaskID",e)}function On(e){be("sseConnected",e)}function uu(){be("messages",[]),it.clear()}function wa(e){be("chatRequest",e??null)}function du(){const e=oe.chatRequest;if(e)try{e.abort()}catch{}be("chatRequest",null)}function fu(){const e=O.board?.task?.sessionID;if(typeof e=="string"&&e)return e;const t=oe.selectedTaskID;if(!t)return"";const n=O.tasks.find(r=>r?.task?.id===t);return typeof n?.task?.sessionID=="string"?n.task.sessionID:""}function gu(e){const t=typeof e?.properties=="object"&&e.properties&&!Array.isArray(e.properties)?e.properties:typeof e?.payload=="object"&&e.payload&&!Array.isArray(e.payload)?e.payload:{};return typeof t?.info?.sessionID=="string"?t.info.sessionID:typeof t?.part?.sessionID=="string"?t.part.sessionID:typeof t?.sessionID=="string"?t.sessionID:""}function fs(e){const t=String(e?.type||"").trim();return t!=="message.updated"&&t!=="message.part.updated"&&t!=="message.part.delta"||!oe.selectedTaskID||fu()?!1:!!gu(e)}const[He,Fe]=ct({events:[],runID:"",fetchedAt:0}),gs=32,qt=new Map;function $a(e){return e==="message_delta"||e==="reasoning_delta"}function Sa(e){return e?e.goalRunID?`goal:${e.goalRunID}`:e.executorSessionID?`session:${e.executorSessionID}`:e.runID?`run:${e.runID}`:"":""}function mu(e,t){const n=Sa(e),r=Sa(t);return!n||!r?!0:n===r}function pu(e,t){return(!e?.runID||!t?.runID||e.runID===t.runID)&&mu(e,t)}function tr(e){return!!e&&typeof e=="object"&&!Array.isArray(e)}function ki(e){return typeof e._targetText=="string"?e._targetText:typeof e.summary=="string"?e.summary:""}function nr(e){return String(e?.id||"").trim()}function ln(e){const t=qt.get(e);t&&(clearTimeout(t),qt.delete(e))}function hu(e,t){if(!t)return 0;if(!e)return Math.min(t.length,1);const n=t.length-e.length;return n<=0||n<=6?t.length:Math.min(t.length,e.length+Math.max(1,Math.ceil(n/2)))}function ms(e){const t=He.events.findIndex(a=>nr(a)===e);if(t<0){ln(e);return}const n=He.events[t],r=ki(n),i=typeof n?._liveText=="string"?n._liveText:"";if(!r){ln(e);return}if(i.length>=r.length){i!==r&&(Fe("events",t,"_liveText",r),Fe("fetchedAt",Date.now())),ln(e);return}Fe("events",t,"_liveText",r.slice(0,hu(i,r))),Fe("fetchedAt",Date.now()),qt.set(e,setTimeout(()=>ms(e),gs))}function yu(e){const t=nr(e);if(!t)return;const n=ki(e),r=typeof e?._liveText=="string"?e._liveText:"";if(!n||r.length>=n.length){ln(t);return}qt.has(t)||qt.set(t,setTimeout(()=>ms(t),gs))}function xa(e,t){const n=typeof t.payload?.text=="string"?t.payload.text:t.summary||"",r=typeof e.payload?.text=="string"?e.payload.text:ki(e);return{...e,summary:r+n,payload:{...tr(e.payload)?e.payload:{},...tr(t.payload)?t.payload:{},text:r+n},_targetText:r+n,_liveText:typeof e._liveText=="string"?e._liveText:r}}function vu(e,t){const n=t.id?e.findIndex(i=>i.id===t.id):-1;if(n>=0){if($a(t.kind)){const i=xa(e[n],t);return[...e.slice(0,n),i,...e.slice(n+1)]}return[...e.slice(0,n),{...e[n],...t,payload:{...tr(e[n]?.payload)?e[n].payload:{},...tr(t?.payload)?t.payload:{}}},...e.slice(n+1)]}let r=-1;if($a(t.kind))for(let i=e.length-1;i>=0;i-=1){const a=e[i];if(a.kind===t.kind&&pu(a,t)){if(t.sourceID){if(a.sourceID===t.sourceID){r=i;break}continue}if(t.kind==="reasoning_delta"){r=i;break}}}if(r>=0){const i=xa(e[r],t);return[...e.slice(0,r),{...i,id:e[r].id},...e.slice(r+1)]}return[...e,t]}function ti(e){if(!e)return;e.runID&&He.runID&&He.runID!==e.runID&&(Fe("events",gn([])),Fe("runID",e.runID)),e.runID&&!He.runID&&Fe("runID",e.runID);const t=vu([...He.events],e);Fe("events",gn(t)),Fe("fetchedAt",Date.now());const n=nr(e),r=n&&t.find(i=>nr(i)===n)||null;r&&yu(r)}function ps(){for(const e of qt.keys())ln(e);Fe("events",gn([])),Fe("runID",""),Fe("fetchedAt",0)}function Be(e,t=0){if(typeof e=="string"){const n=e.trim();return n==="[object Object]"||n==="[]"||n==="null"||n==="{}"?"":e}return e==null?"":typeof e=="number"||typeof e=="boolean"?String(e):""}function ni(e,t=80){const n=String(e||"").replace(/\s+/g," ").trim();return n?n.length<=t?n:`${n.slice(0,Math.max(0,t-3)).trim()}...`:""}function hs(e){const t=/<assistant-brief>[\s\S]*?<\/assistant-brief>/;let n=e.replace(t,"");return n=n.replace(/Use the brief above to align your work before executing the task\.\s*/g,"").replace(/You are executing a headless coding task[^\n]*\n?/g,"").replace(/^Task:\s*[^\n]*\n?/gm,"").replace(/^Goals:\n(?:- [^\n]*\n?)*/gm,"").replace(/^Request:\s*\n?/gm,""),n.trim()}function bu(e){return e.filter(Boolean).join(" / ")}const Ta=2e3,ku=5,Ca={debug:0,info:1,warn:2,error:3},pt=[];let Dr="debug",rr=[],ir=null,Ir=0;function _u(){return new Date().toISOString().split(".")[0]}function wu(e,t,n,r){const i={ts:_u(),level:e,service:t,message:n,extra:r};return pt.push(i),pt.length>Ta&&pt.splice(0,pt.length-Ta),i}function $u(){ir=null;const e=rr.splice(0);if(e.length!==0)for(const t of e){const n=t.extra&&typeof t.extra=="object"?t.extra:void 0,r=t.extra&&!n?`${t.message} ${t.extra}`:t.message;fetch(Ge("log"),{method:"POST",headers:{...Tt(),"Content-Type":"application/json"},body:JSON.stringify({service:"overlay:"+t.service,level:t.level,message:r,extra:n})}).then(()=>{Ir=0}).catch(()=>{Ir++,Ir<=ku&&rr.push(t)})}}function Su(e){rr.push(e),ir||(ir=setTimeout($u,500))}async function xu(e=2e3){const t=Date.now();for(;ir||rr.length>0;){if(Date.now()-t>=e)return;await new Promise(n=>setTimeout(n,25))}}function En(e,t,n,r){const i=wu(e,t,n,r);Su(i);const a={ts:i.ts,level:i.level,service:i.service,delta:"",message:i.message,fields:i.extra&&typeof i.extra=="object"?i.extra:{},raw:"",source:"overlay"};return Hl(a),i}const Ct={debug:(e,t,n)=>En("debug",e,t,n),info:(e,t,n)=>En("info",e,t,n),warn:(e,t,n)=>En("warn",e,t,n),error:(e,t,n)=>En("error",e,t,n),entries:pt,get filterLevel(){return Dr},set filterLevel(e){Dr=e},filtered(){const e=Ca[Dr]??0;return pt.filter(t=>(Ca[t.level]??0)>=e)},clear(){pt.length=0}};function ot(e){return!!e&&typeof e=="object"&&!Array.isArray(e)}function Tu(e){const t=String(e??"").trim();return t?/^[\w./:=@-]+$/.test(t)?t:JSON.stringify(t):""}function Cu(e){return Array.isArray(e)?e.map(Tu).filter(Boolean).join(" ").trim():typeof e=="string"?e.trim():""}function Ar(e,t=280){const n=String(e||"").replace(/\r\n?/g,`
-`).trim();return n?n.length<=t?n:`${n.slice(0,Math.max(0,t-3)).trimEnd()}...`:""}function Da(e){return l(e==="completed"?"task.status.completed":e==="failed"?"task.status.failed":e==="blocked"?"task.status.blocked":e==="queued"?"task.status.queued":"task.status.running")}function Du(e){const t=String(e||"").trim().toLowerCase();return t?t.includes("tool")?t.includes("result")?"tool_result":"tool_call":t.includes("reason")?"reasoning_delta":t.includes("plan")?"plan_delta":t.includes("diff")?"diff_delta":t.includes("approval")?"approval_request":t.includes("input")?"input_request":t.includes("mcp")?"mcp":t.includes("command")?"command":t.includes("error")?"error":t.includes("done")||t.includes("completed")?"done":t.includes("delta")||t.includes("message")?"message_delta":"status":"status"}function ys(e,t={}){return typeof t.sourceKind=="string"&&t.sourceKind.trim()?t.sourceKind.trim():e==="tool_call"||e==="tool_result"?"tool":e==="command"?"command":e==="approval_request"?"approval":e==="input_request"?"input":e==="mcp"?"mcp":e==="reasoning_delta"||e==="message_delta"?"assistant":e==="error"?"error":"status"}function ri(e){const t=typeof e?.kind=="string"&&e.kind?e.kind:Du(e?.type),n=ot(e?.payload)&&ot(e.payload.payload)?{...e.payload,...e.payload.payload}:ot(e?.payload)?e.payload:{},r=typeof e?.summary=="string"?e.summary.trim():typeof e?.text=="string"?e.text.trim():typeof n.summary=="string"?n.summary.trim():typeof n.text=="string"?n.text.trim():"",i=Number(e?.time?.created||e?.timestamp||Date.now());if(!r&&Object.keys(n).length===0)return null;const a=typeof n.id=="string"&&n.id?n.id:typeof n.name=="string"&&n.name?n.name:typeof e?.type=="string"&&e.type?e.type:"event",o=typeof n.sourceID=="string"&&n.sourceID?n.sourceID:typeof n.id=="string"&&n.id?n.id:"",s=typeof e?.goalRunID=="string"&&e.goalRunID?e.goalRunID:typeof e?.goal_run_id=="string"&&e.goal_run_id?e.goal_run_id:typeof n.goalRunID=="string"&&n.goalRunID?n.goalRunID:typeof n.goal_run_id=="string"&&n.goal_run_id?n.goal_run_id:"",u=typeof e?.executorSessionID=="string"&&e.executorSessionID?e.executorSessionID:typeof e?.executor_session_id=="string"&&e.executor_session_id?e.executor_session_id:typeof n.executorSessionID=="string"&&n.executorSessionID?n.executorSessionID:typeof n.executor_session_id=="string"&&n.executor_session_id?n.executor_session_id:"",c=ys(t,n),g=typeof n.sourceLabel=="string"&&n.sourceLabel.trim()?n.sourceLabel.trim():"",f=typeof n.status=="string"&&n.status.trim()?n.status.trim():"",p=s?`goal:${s}`:u?`session:${u}`:"";return{id:typeof e?.id=="string"&&e.id?e.id:t==="message_delta"&&o?`executor:${p||"global"}:${o}`:`executor:${t}:${i}:${r||a}`,runID:typeof e?.runID=="string"?e.runID:typeof e?.run_id=="string"?e.run_id:typeof e?.payload?.runID=="string"?e.payload.runID:"",kind:t,summary:r,payload:n,sourceID:o,sourceKind:c,sourceLabel:g,sourceStatus:f,goalRunID:s,executorSessionID:u,time:{created:Number.isFinite(i)?i:Date.now()}}}function ii(e){return e?typeof e.goalRunID=="string"&&e.goalRunID?`goal:${e.goalRunID}`:typeof e.executorSessionID=="string"&&e.executorSessionID?`session:${e.executorSessionID}`:typeof e.runID=="string"&&e.runID?`run:${e.runID}`:"":""}function Iu(e,t){const n=ii(e),r=ii(t);return!n||!r?!0:n===r}function cn(e){const t=String(e?.summary||"").trim().toLowerCase();return t?e.kind==="tool_call"?/^(tool call|shell command):\s*\S+$/.test(t):e.kind==="tool_result"?t.startsWith("tool result:")||["shell command completed","structured output returned","approval resolved","user input received"].includes(t):e.kind==="command"?["command","running command","command started","command completed"].includes(t):!1:!0}function ut(e){if(!ot(e?.payload))return"";const t=ot(e.payload.input)?e.payload.input:{};return Cu(e.payload.command??e.payload.argv??e.payload.cmd??t.command??t.argv??t.cmd??"")}function vr(e){if(!ot(e?.payload))return"";const t=e.payload.output;if(typeof t=="string")return Ar(t);if(ot(t)){const n=[t.output,t.stdout,t.stderr,t.result,t.message,t.content].filter(r=>typeof r=="string"&&r.trim()).join(`
-`);return n?Ar(n):""}return typeof e.payload.text=="string"?Ar(e.payload.text):""}function br(e,t,n){const r=typeof n?.payload?.id=="string"?n.payload.id:"";return!r||!Array.isArray(e)||t<=0?null:[...e.slice(0,t)].reverse().find(i=>i?.kind==="tool_call"&&i?.payload?.id===r&&(!i.runID||!n.runID||i.runID===n.runID)&&Iu(i,n))||null}function ai(e,t=[],n=-1){if(typeof e?._targetText=="string")return e._targetText;const r=Be(e?.summary).trim(),i=ut(e),a=vr(e);if(e?.kind==="message_delta"){const o=Be(e?.payload?.text);return o.trim()?o:r}if(e?.kind==="reasoning_delta"){const o=Be(e?.payload?.text);return o.trim()?o:r}if(e?.kind==="tool_call")return i?cn(e)?i:r.includes(i)?r:[r,i].filter(Boolean).join(`
-`):r;if(e?.kind==="command"){const o=[];return r&&(!cn(e)||!i)&&o.push(r),i&&!o.some(s=>s.includes(i))&&o.push(i),a&&o.push(a),o.length>0?o.join(`
-`):r}if(e?.kind==="tool_result"){const o=br(t,n,e),s=i||ut(o),u=[];return r&&(!cn(e)||!s&&!a)&&u.push(r),s&&!u.some(c=>c.includes(s))&&u.push(s),a&&u.push(a),u.length>0?u.join(`
-`):r}return r}function Au(e){if(!e)return"";if(typeof e.sourceID=="string"&&e.sourceID)return e.sourceID;if(typeof e?.payload?.sourceID=="string"&&e.payload.sourceID)return e.payload.sourceID;if(typeof e?.payload?.id=="string"&&e.payload.id)return e.payload.id;if(e.kind==="command"){const t=ut(e);if(t)return`command:${t}`}return""}function vs(e){const t=Au(e);if(!t)return"";const n=ii(e);return n?`${n}:${t}`:t}function _i(e){return e?typeof e.sourceKind=="string"&&e.sourceKind?e.sourceKind:ys(e.kind,ot(e?.payload)?e.payload:{}):""}function oi(e){const t=String(e?.sourceStatus||e?.payload?.status||"").trim().toLowerCase();if(t.includes("fail")||t.includes("error"))return"failed";if(t.includes("complete")||t.includes("done"))return"completed";if(t.includes("block"))return"blocked";if(t.includes("queue")||t.includes("pending"))return"queued";if(e?.kind==="tool_result")return"completed";if(e?.kind==="error")return"failed";if(e?.kind==="approval_request"||e?.kind==="input_request")return"blocked";const n=String(e?.summary||"").trim().toLowerCase();return n.includes("fail")||n.includes("error")?"failed":n.includes("complete")||n.includes("done")?"completed":n.includes("block")?"blocked":n.includes("queue")||n.includes("pending")?"queued":"running"}function yn(e,t=[],n=-1){const r=e?.kind==="tool_result"?br(t,n,e):null,i=Be(e?.sourceLabel).trim();if(i)return i;const a=ut(e);if(a)return a;const o=Be(e?.payload?.name).trim();if(o)return o;const s=Be(r?.payload?.name).trim();return s||Be(e?.summary).trim()||Be(e?.id).trim()}function wi(e,t=[],n=-1){const r=_i(e),i=e?.kind==="tool_result"?br(t,n,e):null,a=ut(e)||ut(i);if(r==="tool"){if(a&&a!==yn(e,t,n))return a;const u=Be(e?.payload?.input);if(u.trim())return ni(u.replace(/\s+/g," "),120);const c=Be(i?.payload?.input);if(c.trim())return ni(c.replace(/\s+/g," "),120)}const o=Be(e?.payload?.message).trim();if(r==="approval"&&o)return o;const s=Be(e?.summary).trim();return r==="input"&&s?s:""}function Eu(e,t=[],n=-1){const r=Be(e?.summary).trim();if(!r||cn(e))return"";const i=yn(e,t,n),a=wi(e,t,n);return r===i||r===a?"":r}function Ia(e,t=[],n=-1){const r=oi(e);if(e?.kind==="message_delta")return Da(r);const i=Be(e?.summary).trim(),a=yn(e,t,n),o=wi(e,t,n),s=e?.kind==="message_delta"?"":vr(e);return i&&i!==a&&i!==o&&i!==s&&(!cn(e)||e?.kind==="command"||e?.kind==="mcp")?i:Da(r)}function Lu(e,t,n=!1){return t?!e||n&&t.startsWith(e)?t:e.includes(t)?e:`${e}
-${t}`.trim():e}function Mu(e=[]){const t=new Map;return e.forEach((n,r)=>{const i=vs(n),a=_i(n);if(!i||!a||a==="assistant"||a==="status")return;const o=t.get(i)||{id:i,kind:a,title:yn(n,e,r),detail:"",progress:Ia(n,e,r),note:"",output:"",status:oi(n),time:{created:n.time?.created||Date.now(),updated:n.time?.created||Date.now()}};o.kind=a,o.title=yn(n,e,r)||o.title;const s=wi(n,e,r);s&&(o.detail=s);const u=Ia(n,e,r);u&&(o.progress=u);const c=Eu(n,e,r);c&&(o.note=c),o.status=oi(n)||o.status;const g=n.kind==="message_delta"?ai(n,e,r):vr(n);g&&(o.output=Lu(o.output,g,n.kind==="message_delta")),o.time.updated=n.time?.created||o.time.updated,t.set(i,o)}),[...t.values()].sort((n,r)=>(n.time?.created||0)-(r.time?.created||0))}const Pu=new Set(["spec","planner","goal","judge","delivery"]);function Bu(){const e=O.board?.task?.sessionID;return typeof e=="string"?e:""}function Ru(e){const t=String(e?.info?.agent||"").trim().toLowerCase();if(Pu.has(t))return String(e?.info?.role||"").trim().toLowerCase()==="user"?"main":t;if(t==="agent"){const n=Bu(),r=typeof e?.info?.sessionID=="string"?e.info.sessionID:"";if(n&&r&&r!==n)return"agent"}return"main"}function bs(){const e=String(O.board?.task?.status||"").trim().toLowerCase();if(e==="planning")return new Set(["spec","planner"]);if(e==="evaluating")return new Set(["judge"]);if(e==="delivering")return new Set(["delivery"]);const t=Array.isArray(oe.agentEvents)?oe.agentEvents:[];return!e&&t.length>0?new Set(t.map(n=>String(n?.stage||"").trim().toLowerCase()).filter(Boolean)):new Set}function $i(e){return e?.info?.role||"assistant"}function ks(e){return String(e||"").replace(/\s+/g," ").trim()}function Ou(e){const t=$i(e);return ks((e.parts||[]).flatMap(n=>{if(n?.type!=="text")return[];if(n.audience&&n.audience.ui===!1)return[];if(n.kind==="trace"&&!n.audience?.ui)return[];const r=typeof n.text=="string"?n.text:"";if(!r.trim())return[];if(["user","planner","scheduler","system"].includes(t)&&r.includes("<assistant-brief>")){const i=hs(r);return i?[i]:[]}return[r]}).join(`
-`))}function ju(e,t){const n=ks(t);return n?e.some(r=>$i(r)==="user"&&Ou(r)===n):!1}function Nu(e){const t=String(e||"");let n=2166136261;for(let r=0;r<t.length;r+=1)n^=t.charCodeAt(r),n=Math.imul(n,16777619);return(n>>>0).toString(36)}function ze(){return window.__legacyConv||{}}function et(e,t,n){const r=ze().syntheticTextMessage;return typeof r=="function"?r(e,t,n):typeof n!="string"||!n.trim()?null:{_synthetic:!0,info:{id:`synthetic:${e}:${Number.isFinite(t)?t:Date.now()}:${Nu(n)}`,role:e,time:{created:Number.isFinite(t)?t:Date.now()}},parts:[{type:"text",text:n}]}}function Uu(e){const t=ze().specContextText;return typeof t=="function"?t(e):""}function Fu(e,t){const n=ze().planContextText;return typeof n=="function"?n(e,t):""}function qu(e){const t=ze().interactionRequestText;return typeof t=="function"?t(e):""}function zu(e){const t=ze().interactionResponseText;return typeof t=="function"?t(e):""}function Wu(e){const t=ze().boardGitCheckpoints;return typeof t=="function"?t(e):[]}function Ku(e){const t=ze().gitCheckpointText;return typeof t=="function"?t(e):""}function Hu(e){const t=ze().goalContextText;return typeof t=="function"?t(e):""}function Vu(e,t){const n=ze().evaluationContextText;return typeof n=="function"?n(e,t):""}function Ju(e){const t=ze().deliveryStatusLabel;return typeof t=="function"?t(e):e||""}function Gu(e,t,n){const r=String(e?.task?.activeRunID||He.runID||""),i=(Array.isArray(He.events)?He.events:[]).filter(c=>c?.runID===r&&c?.visible!==!1&&c?.kind!=="status"),a=Mu(i),o=new Set(a.map(c=>c.id)),s=a.length>0?{_synthetic:!0,info:{id:`executor:processes:${t||r||"active"}`,role:"assistant",time:{created:a[0]?.time?.created||Date.now()}},parts:a.map(c=>({type:"executor_process",process:c}))}:null,u=i.filter(c=>{const g=vs(c),f=_i(c);return c?.kind==="tool_call"||c?.kind==="tool_result"?!0:!(g&&o.has(g)&&f&&f!=="assistant"&&f!=="status")}).map((c,g)=>{const f=c.time?.created||Date.now(),p=c?.payload&&typeof c.payload=="object"&&!Array.isArray(c.payload)?c.payload:{};if(c.kind==="tool_call"||c.kind==="tool_result"){const k=c.kind==="tool_result"?br(i,g,c):null,m=k?.payload&&typeof k.payload=="object"&&!Array.isArray(k.payload)?k.payload:{},y=typeof p.input=="string"?p.input:typeof m.input=="string"?m.input:typeof p.text=="string"?p.text:typeof m.text=="string"?m.text:"";let w=p.input&&typeof p.input=="object"&&!Array.isArray(p.input)?p.input:m.input&&typeof m.input=="object"&&!Array.isArray(m.input)?m.input:{};if((!w||Object.keys(w).length===0)&&y.trim())try{const T=JSON.parse(y);T&&typeof T=="object"&&!Array.isArray(T)&&(w=T)}catch{w={raw:y}}return{_synthetic:!0,info:{id:String(c?.id||""),role:"task_tool",time:{created:f}},parts:[{id:`executor-tool:${String(c?.id||f)}`,type:"tool",tool:String(p.name||p.toolName||p.tool||m.name||m.toolName||m.tool||(p.tool_kind==="shell"||m.tool_kind==="shell"?"shell_command":c.toolName)||"tool"),state:{status:c.kind==="tool_result"?"completed":"running",input:w,raw:y,title:String(c?.summary||ut(c)||ut(k)||"").trim(),output:c.kind==="tool_result"?String(vr(c)||ai(c,i,g)||""):""}}]}}const h=String(ai(c,i,g)||"").trim();return h?{_synthetic:!0,info:{id:String(c?.id||""),role:c.kind==="reasoning"||c.kind==="reasoning_delta"?"planner":"assistant",time:{created:f}},parts:[{type:"text",text:h}]}:null}).filter(Boolean);return s?[s,...u]:u}function Qu(e){const t=ze().t;return typeof t=="function"?t(e):e}function Zu(e,t,n,r){if(!t)return[];const i=[],{task:a,plan:o,evaluation:s,delivery:u,lanes:c}=t,g=bs(),f=new Set((Array.isArray(n)?n:[]).map(w=>String(w?.stage||"").trim().toLowerCase()).filter(w=>g.has(w))),p=e.length>0?e:Array.isArray(r)?r:[],h=w=>p.some(T=>T?.info?.role!=="user"&&($i(T)===w||bi(T)===je(w)));if(a?.request&&!ju(r||[],a.request)&&i.push({_synthetic:!0,info:{role:"user",time:{created:(a.time?.created||0)-2}},parts:[{type:"text",text:a.request}]}),t.spec&&!f.has("spec")&&!h("spec")){const w=et("spec",t.spec.time?.created||a?.time?.updated||Date.now(),Uu(t.spec));w&&i.push(w)}if(o&&!f.has("planner")&&!h("planner")){const w=(c||[]).find(P=>P.id==="goals")?.cards||[],T=et("planner",o.time?.created||a?.time?.updated||Date.now(),Fu(o,w));T&&i.push(T)}for(const w of Array.isArray(t.interactions)?t.interactions:[]){const T=et("system",w.time?.created||Date.now(),qu(w));if(T&&i.push(T),w.status==="answered"||w.status==="rejected"){const P=et("user",w.time?.resolved||w.time?.updated||Date.now(),zu(w));P&&i.push(P)}}for(const w of Wu(t)){const T=et("system",w.time,Ku(w));T&&i.push(T)}const m=(c||[]).find(w=>w.id==="goals")?.cards||[];if(m.length>0){const w=s?.time?.created||a?.time?.updated||Date.now(),T=et("goal_gate",w-1,Hu(m));T&&i.push(T)}if(s?.verdict){const w=et("scheduler",s.time?.created||Date.now(),Vu(t,m));w&&i.push(w)}const y=t.acceptedDelivery||u;if(y?.summary&&y.status!=="candidate"){const w=et("assistant",(y.time?.created||Date.now())+1,`**${Qu("detail.delivery")} (${Ju(y.status)})**
+true              &&(function polyfill() {
+  const relList = document.createElement("link").relList;
+  if (relList && relList.supports && relList.supports("modulepreload"))
+    return;
+  for (const link of document.querySelectorAll('link[rel="modulepreload"]'))
+    processPreload(link);
+  new MutationObserver((mutations) => {
+    for (const mutation of mutations) {
+      if (mutation.type !== "childList")
+        continue;
+      for (const node of mutation.addedNodes)
+        if (node.tagName === "LINK" && node.rel === "modulepreload")
+          processPreload(node);
+    }
+  }).observe(document, { childList: true, subtree: true });
+  function getFetchOpts(link) {
+    const fetchOpts = {};
+    if (link.integrity)
+      fetchOpts.integrity = link.integrity;
+    if (link.referrerPolicy)
+      fetchOpts.referrerPolicy = link.referrerPolicy;
+    if (link.crossOrigin === "use-credentials")
+      fetchOpts.credentials = "include";
+    else if (link.crossOrigin === "anonymous")
+      fetchOpts.credentials = "omit";
+    else
+      fetchOpts.credentials = "same-origin";
+    return fetchOpts;
+  }
+  function processPreload(link) {
+    if (link.ep)
+      return;
+    link.ep = true;
+    const fetchOpts = getFetchOpts(link);
+    fetch(link.href, fetchOpts);
+  }
+}());
 
-${y.summary}`);w&&i.push(w)}return i}function _s(){const e=oe.messages||[],t=Array.isArray(oe.agentEvents)?oe.agentEvents:[],n=O.board,r=O.selectedTaskID,i=oe.showTranscriptDetails,a=[],o={};for(const m of e){const y=Ru(m);if(y==="main")a.push(m);else{const w=m.info?.sessionID||"",T=`${y}:${w}`;o[T]||(o[T]={stage:y,messages:[],startTime:1/0,endTime:0}),o[T].messages.push(m);const P=m.info?.time?.created||0;P<o[T].startTime&&(o[T].startTime=P);const C=m.info?.time?.completed||P;C>o[T].endTime&&(o[T].endTime=C)}}const s=Zu(a,n,t,e),u=Gu(n,r);let c=a;!i&&s.length>0&&c.length>0&&(c=c.filter(m=>{const y=(m.parts||[]).map(w=>w.text||"").join("");return!y.includes("<assistant-brief>")&&!y.includes("You are executing a headless coding task")}));const g={};for(const[m,y]of Object.entries(o))y.messages.length!==0&&(g[y.stage]||(g[y.stage]=[]),g[y.stage].push({key:m,channel:y}));const f=new Set(Object.values(o).filter(m=>m.messages.length>0).map(m=>m.stage));for(const m of Object.values(g))m.sort((y,w)=>y.channel.startTime-w.channel.startTime);const p=[],h=Array.isArray(oe.agentEvents)?oe.agentEvents:[];for(const[m,y]of Object.entries(g))for(let w=0;w<y.length;w++){const{key:T,channel:P}=y[w],C=w===y.length-1;let b;if(!C)b="completed";else{const L=h.filter(I=>String(I?.stage||"").toLowerCase()===m&&(I.timestamp||0)>=P.startTime),x=L.some(I=>I.kind==="status"&&/finished|completed|done/i.test(I?.summary||""));b=L.some(I=>I.kind==="error")&&!x?"error":x?"completed":"running"}const A=y.length>1?w+1:0;p.push({_synthetic:!0,_agentCard:!0,_agentStage:m,_agentStatus:b,_agentRound:A,_agentCardKey:T,_agentMessages:P.messages,info:{role:"agent-card",agent:m,time:{created:P.startTime===1/0?Date.now():P.startTime}},parts:[]})}const k=ed(f);return[...c,...k,...u,...s,...p].sort((m,y)=>(m.info?.time?.created||0)-(y.info?.time?.created||0))}function ws(){return window.__legacyAgentMsg||{}}function Aa(e){const t=ws().agentEventTargetText;return typeof t=="function"?t(e):e?String(e.text||e.summary||e.payload?.output||e.payload?.result||""):""}function Xu(e,t={}){const n=ws().eventToolPart;if(typeof n=="function")return n(e,t);const r=e?.payload&&typeof e.payload=="object"&&!Array.isArray(e.payload)?e.payload:{},i=typeof r.text=="string"?r.text:typeof e?.text=="string"?e.text:"";let a=e?.input;if((!a||typeof a!="object"||Array.isArray(a))&&(a=r.input),(!a||typeof a!="object"||Array.isArray(a))&&i.trim())try{const o=JSON.parse(i);o&&typeof o=="object"&&!Array.isArray(o)&&(a=o)}catch{a={raw:i}}return(!a||typeof a!="object"||Array.isArray(a))&&(a={}),e?{id:`agent-tool:${e.stage}:${e.id}`,type:"tool",tool:e.toolName||e.tool||e.name||r.toolName||r.name||"",state:{status:t.status||"pending",input:a,raw:i,output:t.output||""}}:null}function Yu(e){if(!e)return null;const t=e.time?.created||Date.now();if(e.kind==="tool_call"||e.kind==="tool_delta"||e.kind==="tool_result"){const i=Xu(e,{status:e.kind==="tool_result"?"completed":"running",output:e.kind==="tool_result"?Aa(e):""});return i?{_synthetic:!0,info:{id:`agent:${e.stage}:${e.id}`,role:"task_tool",agent:e.stage,time:{created:t}},parts:[i]}:null}const n=typeof e._liveText=="string"?e._liveText:Aa(e);if(!n.trim())return null;const r=e.kind==="reasoning_delta"?"reasoning":"text";return{_synthetic:!0,info:{id:`agent:${e.stage}:${e.id}`,role:es(e.stage),agent:e.stage,time:{created:t}},parts:[{id:`agent-part:${e.stage}:${e.id}`,type:r,text:n,messageID:`agent:${e.stage}:${e.id}`,sessionID:""}]}}function ed(e=new Set){const t=bs();return(Array.isArray(oe.agentEvents)?oe.agentEvents:[]).filter(n=>{const r=String(n?.stage||"").trim().toLowerCase();return!r||!t.has(r)||e.has(r)?!1:n?.kind!=="status"}).map(n=>Yu(n)).filter(Boolean).sort((n,r)=>(n.info?.time?.created||0)-(r.info?.time?.created||0))}var td=_("<div class=chat-empty>");function nd(e){const[t,n]=G(!0),r=e.container,i=W(()=>_s());function a(){const u=r.scrollHeight-r.scrollTop-r.clientHeight<80;n(u)}function o(){t()&&requestAnimationFrame(()=>{r.scrollTop=r.scrollHeight})}St(()=>{r.addEventListener("scroll",a)}),Nt(()=>{r.removeEventListener("scroll",a)}),Ne(()=>{i().length,o()});const s=()=>l("chat.empty");return[v(R,{get when(){return i().length===0},get children(){var u=td();return d(u,s),u}}),v(ke,{get each(){return i()},children:u=>v(R,{get when(){return!u?._agentCard},get fallback(){return v(Gc,{get key(){return u._agentCardKey},get stage(){return u._agentStage},get status(){return u._agentStatus},get round(){return u._agentRound},get messages(){return u._agentMessages},get startTime(){return u.info?.time?.created||0}})},get children(){return v(ts,{message:u})}})})]}var rd=_('<button type=button class=task-row-delete><span class=task-row-delete-icon data-icon=delete aria-hidden=true><svg width=12 height=12 viewBox="0 0 16 16"fill=none><path d="M3.5 4.5h9"stroke=currentColor stroke-width=1.2 stroke-linecap=round></path><path d="M6 4.5V3.6c0-.5.4-.9.9-.9h2.2c.5 0 .9.4.9.9v.9"stroke=currentColor stroke-width=1.2 stroke-linecap=round></path><path d="M5.2 6.2l.4 5.4c0 .5.4.9.9.9h2.9c.5 0 .9-.4.9-.9l.4-5.4"stroke=currentColor stroke-width=1.2 stroke-linecap=round>'),id=_('<div class="task-row-mini global-task-row"><button type=button class=task-row-main><div class=task-row-head><span class=status-dot aria-hidden=true></span><strong></strong></div><span></span><small>'),ad=_("<section class=sidebar-list-group><div class=sidebar-list-heading></div><div class=sidebar-list-cluster>"),od=_("<div class=task-list-panel>"),sd=_("<div class=empty-hint>");const Ea=new Set(["completed","failed","cancelled"]);function ld(e,t=80){const n=String(e||"").replace(/\s+/g," ").trim();return n?n.length<=t?n:`${n.slice(0,Math.max(0,t-3)).trim()}...`:""}function cd(e){if(!e)return"";const t=e.replace(/\\/g,"/").split("/");return t.length>3?".../"+t.slice(-3).join("/"):e}function ud(e){return e.filter(Boolean).join(" / ")}function dd(e){return e?.updated_at||e?.task?.time?.updated||e?.task?.time?.created||0}function fd(e){return ld(e?.task?.title||e?.overview?.headline||e?.task?.id||"",72)}function La(e){return{idle:l("task.status.idle"),queued:l("task.status.queued"),planning:l("task.status.planning"),running:l("task.status.running"),blocked:l("task.status.blocked"),evaluating:l("task.status.evaluating"),delivering:l("task.status.delivering"),completed:l("task.status.completed"),failed:l("task.status.failed"),cancelled:l("task.status.cancelled")}[e]||e}function gd(e){return e?._pending?La("planning"):Number(e?.pending_interactions||0)>0?l("detail.pending_interactions"):La(e?.task?.status||"idle")}function md(e){return ud([hr(dd(e)),cd(e?.task?.directory||"")])}function pd(e){return(()=>{var t=rd();return t.$$click=n=>{n.stopPropagation(),e.onDelete(e.id)},B(n=>{var r=e.id,i=l("task.delete_button_title"),a=l("task.delete_button_title");return r!==n.e&&$(t,"data-task-delete",n.e=r),i!==n.t&&$(t,"title",n.t=i),a!==n.a&&$(t,"aria-label",n.a=a),n},{e:void 0,t:void 0,a:void 0}),t})()}function hd(e){const t=()=>e.item?.task?.id||"",n=()=>e.item?._pending===!0,r=()=>n()?"planning":e.item?.task?.status||"idle",i=()=>fd(e.item)||t(),a=()=>!n()&&e.selectedTaskID===t();return(()=>{var o=id(),s=o.firstChild,u=s.firstChild,c=u.firstChild,g=c.nextSibling,f=u.nextSibling,p=f.nextSibling;return s.$$click=()=>{!n()&&t()&&e.onSelectTask(t())},d(g,i),d(f,()=>gd(e.item)),d(p,()=>md(e.item)),d(o,v(R,{get when(){return ye(()=>!!(!n()&&t()))()&&!!e.onDeleteTask},get children(){return v(pd,{get id(){return t()},get onDelete(){return e.onDeleteTask}})}}),null),B(h=>{var k=a()?"true":void 0,m=i(),y=n()?void 0:t(),w=n(),T=n()?"true":void 0,P=i(),C=r();return k!==h.e&&$(o,"data-active",h.e=k),m!==h.t&&$(o,"title",h.t=m),y!==h.a&&$(s,"data-task-id",h.a=y),w!==h.o&&(s.disabled=h.o=w),T!==h.i&&$(s,"aria-disabled",h.i=T),P!==h.n&&$(s,"title",h.n=P),C!==h.s&&$(c,"data-status",h.s=C),h},{e:void 0,t:void 0,a:void 0,o:void 0,i:void 0,n:void 0,s:void 0}),o})()}function Ma(e){return v(R,{get when(){return e.items.length>0},get children(){var t=ad(),n=t.firstChild,r=n.nextSibling;return d(n,()=>e.label),d(r,v(ke,{get each(){return e.items},children:i=>v(hd,{item:i,get selectedTaskID(){return e.selectedTaskID},get onSelectTask(){return e.onSelectTask},get onDeleteTask(){return e.onDeleteTask}})})),t}})}function yd(e){const t=W(()=>dc()),n=W(()=>t().filter(a=>!Ea.has(a?.task?.status||""))),r=W(()=>t().filter(a=>Ea.has(a?.task?.status||""))),i=()=>O.selectedTaskID;return(()=>{var a=od();return d(a,v(R,{get when(){return t().length>0},get fallback(){return(()=>{var o=sd();return d(o,()=>l("task.none")),o})()},get children(){return[v(Ma,{get label(){return l("task.group.active")},get items(){return n()},get selectedTaskID(){return i()},get onSelectTask(){return e.onSelectTask},get onDeleteTask(){return e.onDeleteTask}}),v(Ma,{get label(){return l("task.group.recent")},get items(){return r()},get selectedTaskID(){return i()},get onSelectTask(){return e.onSelectTask},get onDeleteTask(){return e.onDeleteTask}})]}})),a})()}Ce(["click"]);var $s=_('<div class="plan-summary md-content">'),vd=_("<div class=plan-version>"),kn=_("<p class=empty-hint>"),bd=_("<div class=plan-version> · "),kd=_("<div class=goals-list>"),_d=_('<div class="goal-criteria md-content">'),wd=_("<span class=extension-status data-state=active>"),$d=_("<span class=goal-priority>"),Sd=_('<div class=goal-item><span class=goal-status-icon></span><div class=goal-content><div class="goal-desc md-content"></div></div><div class=goal-actions><button type=button class="btn btn-ghost mini"data-goal-action=edit></button><button type=button class="btn btn-ghost mini danger"data-goal-action=delete>'),xd=_("<div class=empty-hint>"),Td=_("<section class=criteria-group><div class=criteria-group-head><div class=criteria-group-title></div><div class=criteria-group-count></div></div><div class=criteria-group-list>"),Cd=_("<label class=criteria-item><input type=checkbox><span class=check-mark></span><span class=criteria-copy><span class=criteria-name></span><span class=criteria-desc></span></span><span class=criteria-status></span><span class=criteria-result>"),Dd=_('<div class="eval-summary md-content">'),Id=_("<div class=eval-error-meta>"),Ad=_('<div class=eval-error><div class=eval-error-name>✗ </div><div class="eval-error-detail md-content">'),Ed=_("<div class=delivery-files>"),Ld=_('<div class=delivery-card><div class=delivery-title></div><div class="delivery-summary md-content">'),Md=_('<div class="overview-headline md-content">'),Pd=_('<div class="overview-summary md-content">'),Bd=_('<div class="overview-next-step-detail md-content">'),Rd=_("<div class=overview-next-step><div class=overview-next-step-title>"),Ss=_('<div class="interaction-alert task-failure-alert"><div class=interaction-title></div><div class="interaction-body md-content">'),Od=_('<button type=button class="btn btn-primary"data-task-action=retry>'),jd=_('<button type=button class="btn btn-ghost"data-task-action=replan>'),Nd=_('<button type=button class="btn btn-ghost"data-task-action=cancel>'),Ud=_("<div class=task-actions-buttons>"),Fd=_("<div class=task-actions-bar>"),qd=_('<button class="btn btn-primary"data-action=always>'),zd=_('<button class="btn btn-ghost"data-action=once>'),Pa=_('<button class="btn btn-ghost"data-action=reject>'),Wd=_('<div class=interaction-alert><div class=interaction-title> </div><div class="interaction-body md-content"></div><div class=interaction-actions>'),Kd=_('<button class="btn btn-primary"data-action=answer>'),Hd=_("<div class=interactions-list>"),Vd=_("<details class=section><summary class=section-head><span class=section-icon aria-hidden=true></span><span class=section-title></span><span class=section-badge></span></summary><div class=section-body>"),Jd=_("<div id=taskActionsBar>");function Gd(e){return v(R,{get when(){return e.spec},get fallback(){return(()=>{var t=kn();return d(t,()=>l("empty.spec")),t})()},get children(){return[(()=>{var t=$s();return B(()=>t.innerHTML=Ie(e.spec?.content||"")),t})(),(()=>{var t=vd();return d(t,()=>hr(e.spec?.time?.created)),t})()]}})}function Qd(e){return v(R,{get when(){return e.plan},get fallback(){return(()=>{var t=kn();return d(t,()=>l("empty.plan")),t})()},get children(){return[(()=>{var t=$s();return B(()=>t.innerHTML=Ie(e.plan?.summary||"")),t})(),(()=>{var t=bd(),n=t.firstChild;return d(t,()=>l("plan.version",{version:e.plan?.version}),n),d(t,()=>hr(e.plan?.time?.created),null),t})()]}})}function Zd(e){return e==="passed"?"✓":e==="failed"?"✗":"•"}function Xd(e){W(()=>(e.cards||[]).filter(n=>n.status==="passed").length);const t=W(()=>(e.cards||[]).length);return v(R,{get when(){return t()>0},get fallback(){return(()=>{var n=kn();return d(n,()=>l("empty.goals")),n})()},get children(){var n=kd();return d(n,v(ke,{get each(){return e.cards},children:r=>(()=>{var i=Sd(),a=i.firstChild,o=a.nextSibling,s=o.firstChild,u=o.nextSibling,c=u.firstChild,g=c.nextSibling;return d(a,()=>Zd(r.status)),d(o,v(R,{get when(){return r.detail},get children(){var f=_d();return B(()=>f.innerHTML=Ie(r.detail)),f}}),null),d(i,v(R,{get when(){return e.runningGoalIDs.has(r.id)},get children(){var f=wd();return d(f,()=>l("goal.running")),f}}),u),d(i,v(R,{get when(){return r.metadata?.priority},get children(){var f=$d();return d(f,()=>r.metadata.priority),B(()=>$(f,"data-priority",r.metadata.priority)),f}}),u),c.$$click=()=>e.onEditGoal?.(r.id,r.title,r.detail||""),d(c,()=>l("common.edit")),g.$$click=()=>e.onDeleteGoal?.(r.id),d(g,()=>l("common.delete")),B(f=>{var p=r.status||"pending",h=Ie(r.title||""),k=r.id,m=r.title,y=r.detail||"",w=l("goal.edit_button_title"),T=l("goal.edit_button_title"),P=r.id,C=l("goal.delete_button_title"),b=l("goal.delete_button_title");return p!==f.e&&$(a,"data-status",f.e=p),h!==f.t&&(s.innerHTML=f.t=h),k!==f.a&&$(c,"data-goal-id",f.a=k),m!==f.o&&$(c,"data-goal-title",f.o=m),y!==f.i&&$(c,"data-goal-detail",f.i=y),w!==f.n&&$(c,"title",f.n=w),T!==f.s&&$(c,"aria-label",f.s=T),P!==f.h&&$(g,"data-goal-id",f.h=P),C!==f.r&&$(g,"title",f.r=C),b!==f.d&&$(g,"aria-label",f.d=b),f},{e:void 0,t:void 0,a:void 0,o:void 0,i:void 0,n:void 0,s:void 0,h:void 0,r:void 0,d:void 0}),i})()})),n}})}const Yd=[{key:"build",label:"Build",kind:"command",family:"build"},{key:"test",label:"Unit Tests",kind:"command",family:"test"},{key:"lint",label:"Lint",kind:"command",family:"lint"},{key:"verify_cmd",label:"Verify Command",kind:"command",family:"verify_cmd"}],ef=[{key:"startup",label:"Startup",kind:"toggle",family:"runtime"},{key:"artifact",label:"Artifacts",kind:"toggle",family:"artifact"},{key:"visual",label:"Visual Check",kind:"toggle",family:"runtime"},{key:"puppeteer",label:"Puppeteer",kind:"toggle",family:"runtime"},{key:"ui_review",label:"UI Review",kind:"toggle",family:"review"},{key:"code_quality",label:"Code Quality",kind:"toggle",family:"review"},{key:"code_review",label:"Code Review",kind:"toggle",family:"review"},{key:"dead_code_review",label:"Dead Code Review",kind:"toggle",family:"review"},{key:"spec_check",label:"Spec Check",kind:"toggle",family:"acceptance"}],tf=[{key:"command",order:0},{key:"runtime",order:1},{key:"artifact",order:2},{key:"review",order:3},{key:"acceptance",order:4},{key:"custom",order:5}];function nf(e){return String(e||"").toLowerCase().replace(/[^a-z0-9_#:-]/g,"_")}function kr(e){return nf(e).replace(/#\d+$/,"")}function Xt(e){const t={build:l("checks.build"),test:l("checks.test"),lint:l("checks.lint"),verify_cmd:l("checks.verify_cmd"),py_compile:l("checks.py_compile"),pytest:l("checks.pytest"),typecheck:l("checks.typecheck"),ruff:l("checks.ruff"),mypy:l("checks.mypy"),startup:l("checks.startup"),artifact:l("checks.artifact"),visual:l("checks.visual"),puppeteer:l("checks.puppeteer"),ui_review:l("checks.ui_review"),code_quality:l("checks.code_quality"),code_review:l("checks.code_review"),dead_code_review:l("checks.dead_code_review"),spec_check:l("checks.spec_check")};return t[e]?t[e]:e.split(/[_-]+/).filter(Boolean).map(n=>(n[0]?.toUpperCase()??"")+n.slice(1)).join(" ")}function Yt(e,t){const n=kr(t);return["build","test","lint","verify_cmd"].includes(e)||["build","test","lint","verify_cmd"].includes(n)?"command":["runtime","artifact","review","acceptance","custom"].includes(e)?e:["startup","visual","puppeteer"].includes(n)?"runtime":n==="artifact"?"artifact":["ui_review","code_quality","code_review","dead_code_review"].includes(n)?"review":n==="spec_check"?"acceptance":"custom"}function xs(e){return l(e==="command"?"checks.family.command":e==="runtime"?"checks.family.runtime":e==="artifact"?"checks.family.artifact":e==="review"?"checks.family.review":e==="acceptance"?"checks.family.acceptance":"checks.family.custom")}function jn(e){return!!e&&typeof e=="object"&&!Array.isArray(e)}function ar(e,t){const n=(Array.isArray(e)?e:[]).filter(r=>kr(r.name||r.label)===t);return n.length===0?"pending":n.some(r=>r.status==="failed")?"failed":n.some(r=>r.status==="passed")?"passed":n.every(r=>r.status==="skipped")?"skipped":"pending"}function Ba(e,t,n){return["build","test","lint","verify_cmd"].includes(e)?t!==!1&&(t!==void 0||n):e==="spec_check"&&t===void 0||t===!0?!0:!t||!jn(t)?!1:t.enabled!==!1}function Ts(e,t){const n=e?.metadata?.checks,r=n&&jn(n)?{...n}:{},i=r.named&&jn(r.named)?r.named:{},a=new Set,o=[],s=Object.keys(r).length===0&&(!t?.checks||t.checks.length===0),u=c=>{a.has(c.key)||(a.add(c.key),o.push(c))};for(const c of Yd){const g=r[c.key];(g!==void 0||ar(t?.checks,c.key)!=="pending"||s&&["build","test","lint"].includes(c.key))&&u({key:c.key,name:c.key,label:Xt(c.key),kind:c.kind,family:c.family,group:Yt(c.family,c.key),enabled:Ba(c.key,g,s),readOnly:!1})}for(const c of ef){const g=r[c.key],f=["artifact","ui_review","code_quality","code_review","dead_code_review","spec_check"].includes(c.key);(g!==void 0||ar(t?.checks,c.key)!=="pending"||f)&&u({key:c.key,name:c.key,label:Xt(c.key),kind:c.kind,family:c.family,group:Yt(c.family,c.key),enabled:Ba(c.key,g,!1),readOnly:!1})}for(const[c,g]of Object.entries(i))!g||!jn(g)||u({key:`named:${c}`,name:c,label:g.label||Xt(c),kind:"named",family:g.family||void 0,group:Yt(g.family||"",c),enabled:g.enabled!==!1,readOnly:!1});for(const c of t?.checks||[]){const g=kr(c.name||c.label);g&&(a.has(g)||a.has(`named:${g}`)||u({key:g,name:g,label:c.label||Xt(g),kind:"named",family:c.family||void 0,group:Yt(c.family||"",g),enabled:!0,readOnly:!0}))}return o}function rf(e){const t=new Map,n=new Map(tf.map(r=>[r.key,r.order]));for(const r of e){const i=r.group||"custom";t.has(i)||t.set(i,{key:i,label:xs(i),items:[]}),t.get(i).items.push(r)}return[...t.values()].sort((r,i)=>(n.get(r.key)??99)-(n.get(i.key)??99))}function af(e){return l(e==="off"?"checks.off":e==="passed"?"checks.pass":e==="failed"?"checks.fail":e==="skipped"?"checks.skip":"checks.pending")}function of(e){const t=W(()=>Ts(e.task,e.evaluation)),n=W(()=>rf(t())),r=W(()=>{const i={};for(const a of t()){const o=a.enabled?ar(e.evaluation?.checks,a.name):"off";i[a.key]=o}return i});return v(R,{get when(){return t().length>0},get fallback(){return(()=>{var i=xd();return d(i,()=>l("empty.checks")),i})()},get children(){return v(ke,{get each(){return n()},children:i=>(()=>{var a=Td(),o=a.firstChild,s=o.firstChild,u=s.nextSibling,c=o.nextSibling;return d(s,()=>i.label),d(u,()=>Wt("checks.group_count",i.items.length,{count:i.items.length})),d(c,v(ke,{get each(){return i.items},children:g=>{const f=()=>r()[g.key]||"pending";return(()=>{var p=Cd(),h=p.firstChild,k=h.nextSibling,m=k.nextSibling,y=m.firstChild,w=y.nextSibling,T=m.nextSibling,P=T.nextSibling;return h.addEventListener("change",C=>e.onToggle?.(g.key,C.currentTarget.checked)),d(y,()=>g.label),d(w,(()=>{var C=ye(()=>!!g.readOnly);return()=>C()?l("detail.observed"):ye(()=>!!g.enabled)()?l("detail.enabled"):l("detail.disabled")})()),d(P,()=>af(f())),B(C=>{var b=g.readOnly?"true":void 0,A=g.key,L=g.readOnly,x=f();return b!==C.e&&$(p,"data-readonly",C.e=b),A!==C.t&&$(h,"data-check",C.t=A),L!==C.a&&(h.disabled=C.a=L),x!==C.o&&$(T,"data-result",C.o=x),C},{e:void 0,t:void 0,a:void 0,o:void 0}),B(()=>h.checked=g.enabled),p})()}})),B(()=>$(a,"data-family",i.key)),a})()})}})}function sf(e,t){return xs(Yt(e,t))}function lf(e){const t=W(()=>{const n=[];for(const r of e.evaluation?.checks||[])r.status==="failed"&&r.evidence&&n.push({name:r.label||Xt(kr(r.name||r.label)),family:sf(r.family||"",r.name||r.label||""),evidence:r.evidence});return n});return v(R,{get when(){return e.evaluation},get children(){return[v(ke,{get each(){return t()},children:n=>(()=>{var r=Ad(),i=r.firstChild;i.firstChild;var a=i.nextSibling;return d(i,()=>n.name,null),d(r,v(R,{get when(){return n.family},get children(){var o=Id();return d(o,()=>n.family),o}}),a),B(()=>a.innerHTML=Ie(n.evidence.slice(0,400))),r})()}),v(R,{get when(){return e.evaluation?.summary},get children(){var n=Dd();return B(()=>n.innerHTML=Ie(e.evaluation.summary)),n}})]}})}function Cs(e){return l(e==="delivered"?"delivery.status.delivered":e==="publishing"?"delivery.status.publishing":e==="failed"?"delivery.status.failed":"delivery.status.candidate")}function cf(e){return v(R,{get when(){return e.delivery},get fallback(){return(()=>{var t=kn();return d(t,()=>l("empty.delivery")),t})()},get children(){var t=Ld(),n=t.firstChild,r=n.nextSibling;return d(n,()=>Cs(e.delivery?.status)),d(t,v(R,{get when(){return e.delivery?.result?.changedFiles?.length>0},get children(){var i=Ed();return d(i,()=>Wt("delivery.files_changed",e.delivery.result.changedFiles.length,{count:e.delivery.result.changedFiles.length})),i}}),null),B(()=>r.innerHTML=Ie(e.delivery?.summary||e.delivery?.result?.summary||"")),t}})}function uf(e){const t=W(()=>e.overview?.nextStep||null),n=W(()=>e.overview?.currentFailure||null);return v(R,{get when(){return e.overview},get fallback(){return(()=>{var r=kn();return d(r,()=>l("empty.overview")),r})()},get children(){return[v(R,{get when(){return e.overview?.headline},get children(){var r=Md();return B(()=>r.innerHTML=Ie(e.overview.headline)),r}}),v(R,{get when(){return e.overview?.summary},get children(){var r=Pd();return B(()=>r.innerHTML=Ie(e.overview.summary)),r}}),v(R,{get when(){return t()},get children(){var r=Rd(),i=r.firstChild;return d(i,()=>t()?.title||l("overview.next_step")),d(r,v(R,{get when(){return t()?.detail},get children(){var a=Bd();return B(()=>a.innerHTML=Ie(t().detail)),a}}),null),r}}),v(R,{get when(){return n()},get children(){var r=Ss(),i=r.firstChild,a=i.nextSibling;return d(i,()=>n()?.title),B(()=>a.innerHTML=Ie(n()?.summary||"")),r}})]}})}function df(e){const t=W(()=>e.overview?.controls||{}),n=W(()=>e.overview?.currentFailure),r=W(()=>t().canRetry||t().canReplan||t().canCancel),i=W(()=>!!(r()||n()));return v(R,{get when(){return i()},get children(){var a=Fd();return d(a,v(R,{get when(){return n()},get children(){var o=Ss(),s=o.firstChild,u=s.nextSibling;return d(s,()=>n().title),B(()=>u.innerHTML=Ie(n().summary||"")),o}}),null),d(a,v(R,{get when(){return r()},get children(){var o=Ud();return d(o,v(R,{get when(){return t().canRetry},get children(){var s=Od();return s.$$click=()=>e.onRetry?.(),d(s,()=>l("task.action.retry")),B(u=>{var c=l("task.action.retry_title"),g=l("task.action.retry_title");return c!==u.e&&$(s,"title",u.e=c),g!==u.t&&$(s,"aria-label",u.t=g),u},{e:void 0,t:void 0}),s}}),null),d(o,v(R,{get when(){return t().canReplan},get children(){var s=jd();return s.$$click=()=>e.onReplan?.(),d(s,()=>l("task.action.replan")),B(u=>{var c=l("task.action.replan_title"),g=l("task.action.replan_title");return c!==u.e&&$(s,"title",u.e=c),g!==u.t&&$(s,"aria-label",u.t=g),u},{e:void 0,t:void 0}),s}}),null),d(o,v(R,{get when(){return t().canCancel},get children(){var s=Nd();return s.$$click=()=>e.onCancel?.(),d(s,()=>l("common.cancel")),B(u=>{var c=l("task.action.cancel_title"),g=l("task.action.cancel_title");return c!==u.e&&$(s,"title",u.e=c),g!==u.t&&$(s,"aria-label",u.t=g),u},{e:void 0,t:void 0}),s}}),null),o}}),null),a}})}function ff(e){return e.type==="permission"?"🔒":"❓"}function gf(e){const t=()=>ff(e.interaction);return(()=>{var n=Wd(),r=n.firstChild,i=r.firstChild,a=r.nextSibling,o=a.nextSibling;return d(r,t,i),d(r,()=>e.interaction.title,null),d(o,v(R,{get when(){return e.interaction.type==="permission"},get fallback(){return[(()=>{var s=Kd();return s.$$click=()=>e.onResolve?.(e.interaction.id,"answer"),d(s,()=>l("interaction.answer")),B(u=>{var c=l("interaction.answer_title"),g=l("interaction.answer_title");return c!==u.e&&$(s,"title",u.e=c),g!==u.t&&$(s,"aria-label",u.t=g),u},{e:void 0,t:void 0}),s})(),(()=>{var s=Pa();return s.$$click=()=>e.onReject?.(e.interaction.id),d(s,()=>l("interaction.skip")),B(u=>{var c=l("interaction.skip_title"),g=l("interaction.skip_title");return c!==u.e&&$(s,"title",u.e=c),g!==u.t&&$(s,"aria-label",u.t=g),u},{e:void 0,t:void 0}),s})()]},get children(){return[(()=>{var s=qd();return s.$$click=()=>e.onResolve?.(e.interaction.id,"always"),d(s,()=>l("interaction.always_allow")),B(u=>{var c=l("interaction.always_allow_title"),g=l("interaction.always_allow_title");return c!==u.e&&$(s,"title",u.e=c),g!==u.t&&$(s,"aria-label",u.t=g),u},{e:void 0,t:void 0}),s})(),(()=>{var s=zd();return s.$$click=()=>e.onResolve?.(e.interaction.id,"once"),d(s,()=>l("interaction.allow_once")),B(u=>{var c=l("interaction.allow_once_title"),g=l("interaction.allow_once_title");return c!==u.e&&$(s,"title",u.e=c),g!==u.t&&$(s,"aria-label",u.t=g),u},{e:void 0,t:void 0}),s})(),(()=>{var s=Pa();return s.$$click=()=>e.onReject?.(e.interaction.id),d(s,()=>l("interaction.reject")),B(u=>{var c=l("interaction.reject_title"),g=l("interaction.reject_title");return c!==u.e&&$(s,"title",u.e=c),g!==u.t&&$(s,"aria-label",u.t=g),u},{e:void 0,t:void 0}),s})()]}})),B(s=>{var u=e.interaction.id,c=Ie(e.interaction.body||"");return u!==s.e&&$(n,"data-id",s.e=u),c!==s.t&&(a.innerHTML=s.t=c),s},{e:void 0,t:void 0}),n})()}function mf(e){const t=W(()=>(e.interactions||[]).filter(n=>n.status==="pending"));return v(R,{get when(){return t().length>0},get children(){var n=Hd();return d(n,v(ke,{get each(){return t()},children:r=>v(gf,{interaction:r,get onResolve(){return e.onResolve},get onReject(){return e.onReject}})})),n}})}function Mt(e){return(()=>{var t=Vd(),n=t.firstChild,r=n.firstChild,i=r.nextSibling,a=i.nextSibling,o=n.nextSibling;return d(i,()=>e.title),d(a,()=>e.badgeText||""),d(o,()=>e.children),B(s=>{var u=e.id,c=e.badgeId,g=e.badgeTone,f=e.bodyId;return u!==s.e&&$(t,"id",s.e=u),c!==s.t&&$(a,"id",s.t=c),g!==s.a&&$(a,"data-tone",s.a=g),f!==s.o&&$(o,"id",s.o=f),s},{e:void 0,t:void 0,a:void 0,o:void 0}),t})()}function pf(e){const t=()=>O.board,n=()=>t()?.task,r=()=>t()?.plan,i=()=>t()?.spec,a=()=>t()?.evaluation,o=()=>t()?.delivery,s=()=>t()?.interactions||[],u=()=>t()?.overview,c=W(()=>(t()?.lanes||[]).find(m=>m.id==="goals")?.cards||[]),g=W(()=>{const h=t()?.goalRuns||[];return new Set(h.filter(k=>k.status==="running"||k.status==="accepted").map(k=>k.goalID).filter(Boolean))}),f=W(()=>{const h=c();return h.length===0?"":`${h.filter(m=>m.status==="passed").length}/${h.length}`}),p=W(()=>{const h=c();if(h.length===0)return"";const k=h.filter(m=>m.status==="passed").length;return k===h.length?"good":k>0?"warn":""});return[(()=>{var h=Jd();return d(h,v(df,{get overview(){return u()},get onRetry(){return e.onRetry},get onReplan(){return e.onReplan},get onCancel(){return e.onCancel}})),h})(),v(Mt,{id:"overviewSection",get title(){return l("section.overview")},bodyId:"overviewBody",get children(){return v(uf,{get overview(){return u()}})}}),v(Mt,{id:"specSection",get title(){return l("section.spec")},bodyId:"specBody",badgeId:"specBadge",get badgeText(){return ye(()=>!!i())()?l("common.active"):""},get badgeTone(){return i()?"accent":""},get children(){return v(Gd,{get spec(){return i()}})}}),v(Mt,{id:"planSection",get title(){return l("section.plan")},bodyId:"planBody",badgeId:"planBadge",get badgeText(){return ye(()=>!!r())()?`v${r()?.version}`:""},get badgeTone(){return r()?"accent":""},get children(){return v(Qd,{get plan(){return r()}})}}),v(Mt,{id:"goalsSection",get title(){return l("section.goals")},bodyId:"goalsBody",badgeId:"goalsBadge",get badgeText(){return f()},get badgeTone(){return p()},get children(){return[v(Xd,{get cards(){return c()},get runningGoalIDs(){return g()},get onEditGoal(){return e.onEditGoal},get onDeleteGoal(){return e.onDeleteGoal}}),v(mf,{get interactions(){return s()},get onResolve(){return e.onResolveInteraction},get onReject(){return e.onRejectInteraction}})]}}),v(Mt,{id:"criteriaSection",get title(){return l("section.criteria")},bodyId:"criteriaBody",badgeId:"criteriaBadge",get badgeText(){const h=Ts(n(),a());if(h.length===0)return"";const k=h.filter(y=>y.enabled).length;return k===0?l("checks.zero_enabled"):`${h.filter(y=>y.enabled&&ar(a()?.checks,y.name)==="passed").length}/${k}`},get children(){return[v(of,{get task(){return n()},get evaluation(){return a()},get onToggle(){return e.onToggleCriteria}}),v(lf,{get evaluation(){return a()}})]}}),v(Mt,{id:"deliverySection",get title(){return l("section.delivery")},bodyId:"evalBody",badgeId:"deliveryBadge",get badgeText(){return ye(()=>!!o())()?Cs(o()?.status):""},get badgeTone(){return ye(()=>o()?.status==="delivered")()?"good":ye(()=>o()?.status==="failed")()?"bad":o()?"accent":""},get children(){return v(cf,{get delivery(){return o()}})}})]}Ce(["click"]);var hf=_("<div class=chat-attachments id=chatAttachments>"),yf=_('<svg width=16 height=16 viewBox="0 0 16 16"fill=none><rect x=4.25 y=4.25 width=7.5 height=7.5 rx=1.2 fill=currentColor>'),vf=_('<form id=chatForm class=chat-input><input id=chatFileInput type=file multiple hidden><div class=chat-compose-row><textarea id=chatTextarea class=chat-textarea rows=2></textarea><div class=chat-compose-actions><button type=button id=btnChatAttach class=chat-attach-btn><svg width=16 height=16 viewBox="0 0 16 16"fill=none aria-hidden=true><path d="M13.5 7.5l-5.8 5.8a3.2 3.2 0 01-4.5-4.5L9 3a2 2 0 012.8 2.8L6 11.6a.8.8 0 01-1.1-1.1L10.5 5"stroke=currentColor stroke-width=1.2 stroke-linecap=round stroke-linejoin=round></path></svg></button><button><span class=chat-send-icon aria-hidden=true></span><span class=chat-send-label></span></button></div></div><div class=chat-compose-meta><div class=chat-compose-tip>'),bf=_("<img class=chat-attachment-thumb>"),kf=_("<div class=chat-attachment-item><span class=chat-attachment-name></span><button type=button class=chat-attachment-remove aria-label=Remove>&times;"),_f=_("<span class=chat-attachment-icon>"),wf=_('<svg width=16 height=16 viewBox="0 0 16 16"fill=none><path d="M2 8l10-5-3 5 3 5z"fill=currentColor>');const $f=10*1024*1024,Sf=["image/*",".pdf",".txt",".md",".json",".csv",".xml",".yaml",".yml",".log",".ts",".js",".py",".go",".rs",".c",".cpp",".h",".java",".rb",".sh",".bat",".ps1",".html",".css",".sql",".toml"].join(",");function xf(e){return new Promise((t,n)=>{const r=new FileReader;r.onload=()=>t(r.result),r.onerror=n,r.readAsDataURL(e)})}function Tf(e){let t,n,r;const[i,a]=G(""),[o,s]=G([]),[u,c]=G(!1),g=W(()=>i().trim().length>0),f=()=>e.stopping===!0;function p(){if(!t)return;t.style.height="auto";const I=getComputedStyle(document.documentElement),S=Number.parseFloat(I.getPropertyValue("--ui-chat-min-height"))||72,F=Number.parseFloat(I.getPropertyValue("--ui-chat-max-height"))||180,D=Math.min(t.scrollHeight,F);t.style.height=`${Math.max(D,S)}px`}async function h(I){if(!I)return;if(I.size>$f){console.warn("[ChatComposer] file too large:",I.name,I.size);return}const S=await xf(I);s(F=>[...F,{mime:I.type||"application/octet-stream",url:S,filename:I.name}])}function k(I){s(S=>S.filter((F,D)=>D!==I))}function m(I){if(I.preventDefault(),e.busy||!e.enabled)return;const S=i().trim();if(!S)return;const F=[...o()];a(""),s([]),t&&(t.value="",p()),e.onSubmit(S,F)}function y(I){if(!I.isComposing&&!e.busy&&I.key==="Enter"&&!I.shiftKey){if(I.preventDefault(),!e.enabled)return;r?.requestSubmit()}}async function w(){const I=n?.files;if(I){for(const S of I)await h(S);n&&(n.value="")}}function T(I){I.preventDefault(),c(!0)}function P(I){r.contains(I.relatedTarget)||c(!1)}async function C(I){I.preventDefault(),c(!1);const S=I.dataTransfer?.files;if(S)for(const F of S)await h(F)}async function b(I){const S=I.clipboardData?.files;if(!(!S||!S.length)){I.preventDefault();for(const F of S)await h(F)}}const A=W(()=>e.busy?f():!e.enabled||!g()),L=()=>e.busy?l("chat.stop_title"):l("chat.send_title"),x=()=>e.busy?l("chat.stop_label"):l("chat.send_label"),E=()=>e.busy?l("chat.stop_label"):l("chat.send_label");return(()=>{var I=vf(),S=I.firstChild,F=S.nextSibling,D=F.firstChild,q=D.nextSibling,j=q.firstChild,X=j.nextSibling,re=X.firstChild,N=re.nextSibling,U=F.nextSibling,ce=U.firstChild;I.addEventListener("drop",C),I.addEventListener("dragleave",P),I.addEventListener("dragover",T),I.addEventListener("submit",m);var ge=r;typeof ge=="function"?qe(ge,I):r=I,d(I,v(R,{get when(){return o().length>0},get children(){var H=hf();return d(H,v(ke,{get each(){return o()},children:(Z,he)=>(()=>{var te=kf(),ie=te.firstChild,Y=ie.nextSibling;return d(te,v(R,{get when(){return Z.mime.startsWith("image/")},get fallback(){return(()=>{var J=_f();return d(J,()=>Z.filename?.split(".").pop()?.toUpperCase()||"FILE"),J})()},get children(){var J=bf();return B(de=>{var pe=Z.url,ae=Z.filename;return pe!==de.e&&$(J,"src",de.e=pe),ae!==de.t&&$(J,"alt",de.t=ae),de},{e:void 0,t:void 0}),J}}),ie),d(ie,()=>Z.filename||"file"),Y.$$click=()=>k(he()),B(()=>$(te,"title",Z.filename)),te})()})),H}}),S),S.addEventListener("change",w);var ne=n;typeof ne=="function"?qe(ne,S):n=S,$(S,"accept",Sf),D.addEventListener("paste",b),D.$$keydown=y,D.$$input=H=>{a(H.currentTarget.value),p()};var Q=t;return typeof Q=="function"?qe(Q,D):t=D,j.$$click=()=>n?.click(),X.$$click=H=>{e.busy&&(H.preventDefault(),e.onStop?.())},d(re,v(R,{get when(){return e.busy},get fallback(){return wf()},get children(){return yf()}})),d(N,E),d(ce,()=>l("chat.tip")),B(H=>{var Z=u()?"true":void 0,he=!e.enabled,te=e.enabled?l("chat.placeholder"):l("chat.placeholder_disabled"),ie=l("chat.attach_title"),Y=l("chat.attach_title"),J=e.busy?"btnTaskInterrupt":"chatSend",de=`chat-send${e.busy?" chat-interrupt":""}`,pe=e.busy?"button":"submit",ae=e.busy?"stop":"send",se=A(),ue=L(),le=x();return Z!==H.e&&$(I,"data-dragover",H.e=Z),he!==H.t&&(D.disabled=H.t=he),te!==H.a&&$(D,"placeholder",H.a=te),ie!==H.o&&$(j,"title",H.o=ie),Y!==H.i&&$(j,"aria-label",H.i=Y),J!==H.n&&$(X,"id",H.n=J),de!==H.s&&Hn(X,H.s=de),pe!==H.h&&$(X,"type",H.h=pe),ae!==H.r&&$(X,"data-mode",H.r=ae),se!==H.d&&(X.disabled=H.d=se),ue!==H.l&&$(X,"title",H.l=ue),le!==H.u&&$(X,"aria-label",H.u=le),H},{e:void 0,t:void 0,a:void 0,o:void 0,i:void 0,n:void 0,s:void 0,h:void 0,r:void 0,d:void 0,l:void 0,u:void 0}),B(()=>D.value=i()),I})()}Ce(["input","keydown","click"]);function Ds(e){const t=String(e||"").trim();return t==="light"||t==="dark"?t:"dark"}const Cf=.5;function st(e){const t=parseFloat(String(e??""));return Number.isFinite(t)?Math.max(Cf,Math.min(1,Math.round(t*100)/100)):.8}function Is(e){const t=parseFloat(String(e??""));return Number.isFinite(t)?Math.min(1.6,Math.max(.8,t)):1}function or(e){const t=parseInt(String(e??""),10);return!Number.isFinite(t)||t<=0?null:t}function As(e){return!e||e===mr}function Df(e,t){return e===!0||e===!1?e:As(t)}const If=xt(typeof document<"u"?document.documentElement.lang:typeof navigator<"u"?navigator.language:"en-US"),fe={serverUrl:mr,autoServer:!0,password:"",username:"opencorvus",executor:"opencode",initGit:!0,alwaysOnTop:!1,unattended:!0,autoPermission:!1,autoQuestion:!1,showTranscriptDetails:!1,sidebarCollapsed:!1,sidebarWidth:null,sectionsWidth:null,opacity:.8,zoom:1,theme:"dark",locale:If,directoryMode:"temp",directory:"",workspaceTaskID:"",workspaceDirectory:"",savedDirectory:"",tempDirectory:"",workspaceEpoch:0,directoryEpoch:0},[z,me]=ct({...fe});function nt(e){const t=typeof e?.serverUrl=="string"&&e.serverUrl.trim()?e.serverUrl.trim():fe.serverUrl;me({serverUrl:t,autoServer:Df(e?.autoServer,t),password:typeof e?.password=="string"?e.password:fe.password,username:typeof e?.username=="string"&&e.username.trim()?e.username.trim():fe.username,executor:typeof e?.executor=="string"&&e.executor.trim()?e.executor.trim():fe.executor,initGit:!0,alwaysOnTop:e?.alwaysOnTop===!0,unattended:e?.unattended!==!1,autoPermission:e?.autoPermission===!0,autoQuestion:e?.autoQuestion===!0,showTranscriptDetails:e?.showTranscriptDetails===!0,sidebarCollapsed:e?.sidebarCollapsed===!0,sidebarWidth:or(e?.sidebarWidth),sectionsWidth:or(e?.sectionsWidth),opacity:st(e?.opacity),zoom:Is(e?.zoom),theme:Ds(e?.theme),locale:xt((typeof e?.locale=="string"?e.locale:"")||fe.locale),directoryMode:typeof e?.directory=="string"&&e.directory.trim()?"custom":"temp",directory:typeof e?.directory=="string"?e.directory.trim():"",workspaceTaskID:typeof e?.workspaceTaskID=="string"?e.workspaceTaskID.trim():fe.workspaceTaskID,workspaceDirectory:typeof e?.workspaceDirectory=="string"?e.workspaceDirectory.trim():fe.workspaceDirectory})}function Ae(){const e=z;localStorage.setItem("oc_server_url",e.serverUrl),localStorage.setItem("oc_auto_server",String(e.autoServer)),localStorage.setItem("oc_password",e.password),localStorage.setItem("oc_username",e.username),localStorage.setItem("oc_executor",e.executor||fe.executor),localStorage.setItem("oc_always_on_top",String(e.alwaysOnTop)),localStorage.setItem("oc_unattended",String(e.unattended)),localStorage.setItem("oc_auto_permission",String(e.autoPermission)),localStorage.setItem("oc_auto_question",String(e.autoQuestion)),localStorage.setItem("oc_show_transcript_details",String(e.showTranscriptDetails)),localStorage.setItem("oc_sidebar_collapsed",String(e.sidebarCollapsed)),e.sidebarWidth!=null?localStorage.setItem("oc_sidebar_width",String(e.sidebarWidth)):localStorage.removeItem("oc_sidebar_width"),e.sectionsWidth!=null?localStorage.setItem("oc_sections_width",String(e.sectionsWidth)):localStorage.removeItem("oc_sections_width"),localStorage.setItem("oc_opacity",String(e.opacity)),localStorage.setItem("oc_zoom",String(e.zoom)),localStorage.setItem("oc_theme",e.theme||fe.theme),localStorage.setItem("oc_locale",e.locale||fe.locale),e.workspaceTaskID?localStorage.setItem("oc_workspace_task",e.workspaceTaskID):localStorage.removeItem("oc_workspace_task"),e.workspaceDirectory?localStorage.setItem("oc_workspace_directory",e.workspaceDirectory):localStorage.removeItem("oc_workspace_directory"),e.directory?(localStorage.setItem("oc_directory",e.directory),localStorage.setItem("oc_directory_mode",e.directoryMode)):(localStorage.removeItem("oc_directory"),localStorage.removeItem("oc_directory_mode"));const t=window.__TAURI__?.core?.invoke;typeof t=="function"&&t("overlay_settings_save",{settings:Bf(e)}).catch(()=>{})}function Af(){const e=localStorage.getItem("oc_server_url")||fe.serverUrl,t=localStorage.getItem("oc_auto_server"),n=t===null?As(e):t!=="false",r=(localStorage.getItem("oc_directory")||"").trim();me({serverUrl:e,autoServer:n,password:localStorage.getItem("oc_password")||fe.password,username:localStorage.getItem("oc_username")||fe.username,executor:localStorage.getItem("oc_executor")||fe.executor,initGit:!0,alwaysOnTop:localStorage.getItem("oc_always_on_top")==="true",unattended:localStorage.getItem("oc_unattended")!=="false",autoPermission:localStorage.getItem("oc_auto_permission")==="true",autoQuestion:localStorage.getItem("oc_auto_question")==="true",showTranscriptDetails:localStorage.getItem("oc_show_transcript_details")==="true",sidebarCollapsed:localStorage.getItem("oc_sidebar_collapsed")==="true",sidebarWidth:or(localStorage.getItem("oc_sidebar_width")),sectionsWidth:or(localStorage.getItem("oc_sections_width")),opacity:st(localStorage.getItem("oc_opacity")),zoom:Is(localStorage.getItem("oc_zoom")),theme:Ds(localStorage.getItem("oc_theme")),locale:xt(localStorage.getItem("oc_locale")||fe.locale),directoryMode:r?"custom":"temp",directory:r,workspaceTaskID:localStorage.getItem("oc_workspace_task")||fe.workspaceTaskID,workspaceDirectory:localStorage.getItem("oc_workspace_directory")||fe.workspaceDirectory,savedDirectory:r,tempDirectory:fe.tempDirectory,workspaceEpoch:fe.workspaceEpoch,directoryEpoch:fe.directoryEpoch})}function Ef(e){me("savedDirectory",typeof e=="string"?e:"")}function Lf(){me("workspaceEpoch",e=>e+1)}function Ra(){me("directoryEpoch",e=>e+1)}function Mf(e,t){return e==="custom"?"custom":typeof e=="string"&&e.trim()==="temp"?"temp":typeof t=="string"&&t.trim()?"custom":fe.directoryMode}function Pf(e,t){const n=typeof e=="string"?e.trim():"";return n&&Mf(t,n)==="custom"?n:""}function Bf(e=z){return{serverUrl:e.serverUrl??fe.serverUrl,autoServer:e.autoServer??fe.autoServer,password:e.password??fe.password,username:e.username??fe.username,executor:e.executor??fe.executor,initGit:!0,alwaysOnTop:e.alwaysOnTop??fe.alwaysOnTop,unattended:e.unattended??fe.unattended,autoPermission:e.autoPermission??fe.autoPermission,autoQuestion:e.autoQuestion??fe.autoQuestion,showTranscriptDetails:e.showTranscriptDetails??fe.showTranscriptDetails,sidebarCollapsed:e.sidebarCollapsed??fe.sidebarCollapsed,sidebarWidth:e.sidebarWidth||void 0,sectionsWidth:e.sectionsWidth||void 0,opacity:e.opacity??fe.opacity,zoom:e.zoom??fe.zoom,theme:e.theme??fe.theme,locale:e.locale??fe.locale,directoryMode:e.savedDirectory?"custom":"temp",directory:e.savedDirectory||void 0,workspaceTaskID:e.workspaceTaskID||void 0,workspaceDirectory:e.workspaceDirectory||void 0}}var Rf=_('<button type=button id=btnPin class="btn btn-ghost icon-btn titlebar-btn"><svg width=12 height=12 viewBox="0 0 16 16"fill=none aria-hidden=true><path d="M9.5 2L14 6.5l-4 1.5-4 4-1.5-1.5 4-4L7 2.5 9.5 2z"stroke=currentColor stroke-width=1.3 stroke-linejoin=round></path><line x1=2 y1=14 x2=6 y2=10 stroke=currentColor stroke-width=1.3 stroke-linecap=round>'),Of=_('<button type=button id=btnMinimize class="btn btn-ghost icon-btn titlebar-btn"><svg width=11 height=11 viewBox="0 0 11 11"fill=none aria-hidden=true><line x1=1 y1=5.5 x2=10 y2=5.5 stroke=currentColor stroke-width=1.3 stroke-linecap=round>'),jf=_('<button type=button id=btnMaximize class="btn btn-ghost icon-btn titlebar-btn">'),Nf=_('<button type=button id=btnClose class="btn btn-ghost icon-btn titlebar-btn titlebar-btn-close"><svg width=11 height=11 viewBox="0 0 11 11"fill=none aria-hidden=true><line x1=1 y1=1 x2=10 y2=10 stroke=currentColor stroke-width=1.3 stroke-linecap=round></line><line x1=10 y1=1 x2=1 y2=10 stroke=currentColor stroke-width=1.3 stroke-linecap=round>'),Uf=_("<div class=window-controls data-no-drag=true>");const Oa="oc_close_hint_seen";async function Ff(){const e=window.__TAURI__?.window?.getCurrentWindow;if(typeof e=="function")try{return e()}catch{}return null}async function qf(e,t){const n=window.nativeMessage;typeof n=="function"&&await n(e,t).catch(()=>{})}function zf(e){return l(e?"titlebar.restore":"titlebar.maximize")}function Wf(e){return e?`<svg width="11" height="11" viewBox="0 0 11 11" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+const IS_DEV = false;
+const equalFn = (a, b) => a === b;
+const $PROXY = Symbol("solid-proxy");
+const $TRACK = Symbol("solid-track");
+const signalOptions = {
+  equals: equalFn
+};
+let runEffects = runQueue;
+const STALE = 1;
+const PENDING = 2;
+const UNOWNED = {
+  owned: null,
+  cleanups: null,
+  context: null,
+  owner: null
+};
+var Owner = null;
+let Transition = null;
+let ExternalSourceConfig = null;
+let Listener = null;
+let Updates = null;
+let Effects = null;
+let ExecCount = 0;
+function createRoot(fn, detachedOwner) {
+  const listener = Listener,
+    owner = Owner,
+    unowned = fn.length === 0,
+    current = detachedOwner === undefined ? owner : detachedOwner,
+    root = unowned ? UNOWNED : {
+      owned: null,
+      cleanups: null,
+      context: current ? current.context : null,
+      owner: current
+    },
+    updateFn = unowned ? fn : () => fn(() => untrack(() => cleanNode(root)));
+  Owner = root;
+  Listener = null;
+  try {
+    return runUpdates(updateFn, true);
+  } finally {
+    Listener = listener;
+    Owner = owner;
+  }
+}
+function createSignal(value, options) {
+  options = options ? Object.assign({}, signalOptions, options) : signalOptions;
+  const s = {
+    value,
+    observers: null,
+    observerSlots: null,
+    comparator: options.equals || undefined
+  };
+  const setter = value => {
+    if (typeof value === "function") {
+      value = value(s.value);
+    }
+    return writeSignal(s, value);
+  };
+  return [readSignal.bind(s), setter];
+}
+function createRenderEffect(fn, value, options) {
+  const c = createComputation(fn, value, false, STALE);
+  updateComputation(c);
+}
+function createEffect(fn, value, options) {
+  runEffects = runUserEffects;
+  const c = createComputation(fn, value, false, STALE);
+  c.user = true;
+  Effects ? Effects.push(c) : updateComputation(c);
+}
+function createMemo(fn, value, options) {
+  options = options ? Object.assign({}, signalOptions, options) : signalOptions;
+  const c = createComputation(fn, value, true, 0);
+  c.observers = null;
+  c.observerSlots = null;
+  c.comparator = options.equals || undefined;
+  updateComputation(c);
+  return readSignal.bind(c);
+}
+function batch(fn) {
+  return runUpdates(fn, false);
+}
+function untrack(fn) {
+  if (Listener === null) return fn();
+  const listener = Listener;
+  Listener = null;
+  try {
+    if (ExternalSourceConfig) ;
+    return fn();
+  } finally {
+    Listener = listener;
+  }
+}
+function onMount(fn) {
+  createEffect(() => untrack(fn));
+}
+function onCleanup(fn) {
+  if (Owner === null) ;else if (Owner.cleanups === null) Owner.cleanups = [fn];else Owner.cleanups.push(fn);
+  return fn;
+}
+function getListener() {
+  return Listener;
+}
+function children(fn) {
+  const children = createMemo(fn);
+  const memo = createMemo(() => resolveChildren(children()));
+  memo.toArray = () => {
+    const c = memo();
+    return Array.isArray(c) ? c : c != null ? [c] : [];
+  };
+  return memo;
+}
+function readSignal() {
+  if (this.sources && (this.state)) {
+    if ((this.state) === STALE) updateComputation(this);else {
+      const updates = Updates;
+      Updates = null;
+      runUpdates(() => lookUpstream(this), false);
+      Updates = updates;
+    }
+  }
+  if (Listener) {
+    const sSlot = this.observers ? this.observers.length : 0;
+    if (!Listener.sources) {
+      Listener.sources = [this];
+      Listener.sourceSlots = [sSlot];
+    } else {
+      Listener.sources.push(this);
+      Listener.sourceSlots.push(sSlot);
+    }
+    if (!this.observers) {
+      this.observers = [Listener];
+      this.observerSlots = [Listener.sources.length - 1];
+    } else {
+      this.observers.push(Listener);
+      this.observerSlots.push(Listener.sources.length - 1);
+    }
+  }
+  return this.value;
+}
+function writeSignal(node, value, isComp) {
+  let current = node.value;
+  if (!node.comparator || !node.comparator(current, value)) {
+    node.value = value;
+    if (node.observers && node.observers.length) {
+      runUpdates(() => {
+        for (let i = 0; i < node.observers.length; i += 1) {
+          const o = node.observers[i];
+          const TransitionRunning = Transition && Transition.running;
+          if (TransitionRunning && Transition.disposed.has(o)) ;
+          if (TransitionRunning ? !o.tState : !o.state) {
+            if (o.pure) Updates.push(o);else Effects.push(o);
+            if (o.observers) markDownstream(o);
+          }
+          if (!TransitionRunning) o.state = STALE;
+        }
+        if (Updates.length > 10e5) {
+          Updates = [];
+          if (IS_DEV) ;
+          throw new Error();
+        }
+      }, false);
+    }
+  }
+  return value;
+}
+function updateComputation(node) {
+  if (!node.fn) return;
+  cleanNode(node);
+  const time = ExecCount;
+  runComputation(node, node.value, time);
+}
+function runComputation(node, value, time) {
+  let nextValue;
+  const owner = Owner,
+    listener = Listener;
+  Listener = Owner = node;
+  try {
+    nextValue = node.fn(value);
+  } catch (err) {
+    if (node.pure) {
+      {
+        node.state = STALE;
+        node.owned && node.owned.forEach(cleanNode);
+        node.owned = null;
+      }
+    }
+    node.updatedAt = time + 1;
+    return handleError(err);
+  } finally {
+    Listener = listener;
+    Owner = owner;
+  }
+  if (!node.updatedAt || node.updatedAt <= time) {
+    if (node.updatedAt != null && "observers" in node) {
+      writeSignal(node, nextValue);
+    } else node.value = nextValue;
+    node.updatedAt = time;
+  }
+}
+function createComputation(fn, init, pure, state = STALE, options) {
+  const c = {
+    fn,
+    state: state,
+    updatedAt: null,
+    owned: null,
+    sources: null,
+    sourceSlots: null,
+    cleanups: null,
+    value: init,
+    owner: Owner,
+    context: Owner ? Owner.context : null,
+    pure
+  };
+  if (Owner === null) ;else if (Owner !== UNOWNED) {
+    {
+      if (!Owner.owned) Owner.owned = [c];else Owner.owned.push(c);
+    }
+  }
+  return c;
+}
+function runTop(node) {
+  if ((node.state) === 0) return;
+  if ((node.state) === PENDING) return lookUpstream(node);
+  if (node.suspense && untrack(node.suspense.inFallback)) return node.suspense.effects.push(node);
+  const ancestors = [node];
+  while ((node = node.owner) && (!node.updatedAt || node.updatedAt < ExecCount)) {
+    if (node.state) ancestors.push(node);
+  }
+  for (let i = ancestors.length - 1; i >= 0; i--) {
+    node = ancestors[i];
+    if ((node.state) === STALE) {
+      updateComputation(node);
+    } else if ((node.state) === PENDING) {
+      const updates = Updates;
+      Updates = null;
+      runUpdates(() => lookUpstream(node, ancestors[0]), false);
+      Updates = updates;
+    }
+  }
+}
+function runUpdates(fn, init) {
+  if (Updates) return fn();
+  let wait = false;
+  if (!init) Updates = [];
+  if (Effects) wait = true;else Effects = [];
+  ExecCount++;
+  try {
+    const res = fn();
+    completeUpdates(wait);
+    return res;
+  } catch (err) {
+    if (!wait) Effects = null;
+    Updates = null;
+    handleError(err);
+  }
+}
+function completeUpdates(wait) {
+  if (Updates) {
+    runQueue(Updates);
+    Updates = null;
+  }
+  if (wait) return;
+  const e = Effects;
+  Effects = null;
+  if (e.length) runUpdates(() => runEffects(e), false);
+}
+function runQueue(queue) {
+  for (let i = 0; i < queue.length; i++) runTop(queue[i]);
+}
+function runUserEffects(queue) {
+  let i,
+    userLength = 0;
+  for (i = 0; i < queue.length; i++) {
+    const e = queue[i];
+    if (!e.user) runTop(e);else queue[userLength++] = e;
+  }
+  for (i = 0; i < userLength; i++) runTop(queue[i]);
+}
+function lookUpstream(node, ignore) {
+  node.state = 0;
+  for (let i = 0; i < node.sources.length; i += 1) {
+    const source = node.sources[i];
+    if (source.sources) {
+      const state = source.state;
+      if (state === STALE) {
+        if (source !== ignore && (!source.updatedAt || source.updatedAt < ExecCount)) runTop(source);
+      } else if (state === PENDING) lookUpstream(source, ignore);
+    }
+  }
+}
+function markDownstream(node) {
+  for (let i = 0; i < node.observers.length; i += 1) {
+    const o = node.observers[i];
+    if (!o.state) {
+      o.state = PENDING;
+      if (o.pure) Updates.push(o);else Effects.push(o);
+      o.observers && markDownstream(o);
+    }
+  }
+}
+function cleanNode(node) {
+  let i;
+  if (node.sources) {
+    while (node.sources.length) {
+      const source = node.sources.pop(),
+        index = node.sourceSlots.pop(),
+        obs = source.observers;
+      if (obs && obs.length) {
+        const n = obs.pop(),
+          s = source.observerSlots.pop();
+        if (index < obs.length) {
+          n.sourceSlots[s] = index;
+          obs[index] = n;
+          source.observerSlots[index] = s;
+        }
+      }
+    }
+  }
+  if (node.tOwned) {
+    for (i = node.tOwned.length - 1; i >= 0; i--) cleanNode(node.tOwned[i]);
+    delete node.tOwned;
+  }
+  if (node.owned) {
+    for (i = node.owned.length - 1; i >= 0; i--) cleanNode(node.owned[i]);
+    node.owned = null;
+  }
+  if (node.cleanups) {
+    for (i = node.cleanups.length - 1; i >= 0; i--) node.cleanups[i]();
+    node.cleanups = null;
+  }
+  node.state = 0;
+}
+function castError(err) {
+  if (err instanceof Error) return err;
+  return new Error(typeof err === "string" ? err : "Unknown error", {
+    cause: err
+  });
+}
+function handleError(err, owner = Owner) {
+  const error = castError(err);
+  throw error;
+}
+function resolveChildren(children) {
+  if (typeof children === "function" && !children.length) return resolveChildren(children());
+  if (Array.isArray(children)) {
+    const results = [];
+    for (let i = 0; i < children.length; i++) {
+      const result = resolveChildren(children[i]);
+      Array.isArray(result) ? results.push.apply(results, result) : results.push(result);
+    }
+    return results;
+  }
+  return children;
+}
+
+const FALLBACK = Symbol("fallback");
+function dispose(d) {
+  for (let i = 0; i < d.length; i++) d[i]();
+}
+function mapArray(list, mapFn, options = {}) {
+  let items = [],
+    mapped = [],
+    disposers = [],
+    len = 0,
+    indexes = mapFn.length > 1 ? [] : null;
+  onCleanup(() => dispose(disposers));
+  return () => {
+    let newItems = list() || [],
+      newLen = newItems.length,
+      i,
+      j;
+    newItems[$TRACK];
+    return untrack(() => {
+      let newIndices, newIndicesNext, temp, tempdisposers, tempIndexes, start, end, newEnd, item;
+      if (newLen === 0) {
+        if (len !== 0) {
+          dispose(disposers);
+          disposers = [];
+          items = [];
+          mapped = [];
+          len = 0;
+          indexes && (indexes = []);
+        }
+        if (options.fallback) {
+          items = [FALLBACK];
+          mapped[0] = createRoot(disposer => {
+            disposers[0] = disposer;
+            return options.fallback();
+          });
+          len = 1;
+        }
+      }
+      else if (len === 0) {
+        mapped = new Array(newLen);
+        for (j = 0; j < newLen; j++) {
+          items[j] = newItems[j];
+          mapped[j] = createRoot(mapper);
+        }
+        len = newLen;
+      } else {
+        temp = new Array(newLen);
+        tempdisposers = new Array(newLen);
+        indexes && (tempIndexes = new Array(newLen));
+        for (start = 0, end = Math.min(len, newLen); start < end && items[start] === newItems[start]; start++);
+        for (end = len - 1, newEnd = newLen - 1; end >= start && newEnd >= start && items[end] === newItems[newEnd]; end--, newEnd--) {
+          temp[newEnd] = mapped[end];
+          tempdisposers[newEnd] = disposers[end];
+          indexes && (tempIndexes[newEnd] = indexes[end]);
+        }
+        newIndices = new Map();
+        newIndicesNext = new Array(newEnd + 1);
+        for (j = newEnd; j >= start; j--) {
+          item = newItems[j];
+          i = newIndices.get(item);
+          newIndicesNext[j] = i === undefined ? -1 : i;
+          newIndices.set(item, j);
+        }
+        for (i = start; i <= end; i++) {
+          item = items[i];
+          j = newIndices.get(item);
+          if (j !== undefined && j !== -1) {
+            temp[j] = mapped[i];
+            tempdisposers[j] = disposers[i];
+            indexes && (tempIndexes[j] = indexes[i]);
+            j = newIndicesNext[j];
+            newIndices.set(item, j);
+          } else disposers[i]();
+        }
+        for (j = start; j < newLen; j++) {
+          if (j in temp) {
+            mapped[j] = temp[j];
+            disposers[j] = tempdisposers[j];
+            if (indexes) {
+              indexes[j] = tempIndexes[j];
+              indexes[j](j);
+            }
+          } else mapped[j] = createRoot(mapper);
+        }
+        mapped = mapped.slice(0, len = newLen);
+        items = newItems.slice(0);
+      }
+      return mapped;
+    });
+    function mapper(disposer) {
+      disposers[j] = disposer;
+      if (indexes) {
+        const [s, set] = createSignal(j);
+        indexes[j] = set;
+        return mapFn(newItems[j], s);
+      }
+      return mapFn(newItems[j]);
+    }
+  };
+}
+function createComponent(Comp, props) {
+  return untrack(() => Comp(props || {}));
+}
+
+const narrowedError = name => `Stale read from <${name}>.`;
+function For(props) {
+  const fallback = "fallback" in props && {
+    fallback: () => props.fallback
+  };
+  return createMemo(mapArray(() => props.each, props.children, fallback || undefined));
+}
+function Show(props) {
+  const keyed = props.keyed;
+  const conditionValue = createMemo(() => props.when, undefined, undefined);
+  const condition = keyed ? conditionValue : createMemo(conditionValue, undefined, {
+    equals: (a, b) => !a === !b
+  });
+  return createMemo(() => {
+    const c = condition();
+    if (c) {
+      const child = props.children;
+      const fn = typeof child === "function" && child.length > 0;
+      return fn ? untrack(() => child(keyed ? c : () => {
+        if (!untrack(condition)) throw narrowedError("Show");
+        return conditionValue();
+      })) : child;
+    }
+    return props.fallback;
+  }, undefined, undefined);
+}
+function Switch(props) {
+  const chs = children(() => props.children);
+  const switchFunc = createMemo(() => {
+    const ch = chs();
+    const mps = Array.isArray(ch) ? ch : [ch];
+    let func = () => undefined;
+    for (let i = 0; i < mps.length; i++) {
+      const index = i;
+      const mp = mps[i];
+      const prevFunc = func;
+      const conditionValue = createMemo(() => prevFunc() ? undefined : mp.when, undefined, undefined);
+      const condition = mp.keyed ? conditionValue : createMemo(conditionValue, undefined, {
+        equals: (a, b) => !a === !b
+      });
+      func = () => prevFunc() || (condition() ? [index, conditionValue, mp] : undefined);
+    }
+    return func;
+  });
+  return createMemo(() => {
+    const sel = switchFunc()();
+    if (!sel) return props.fallback;
+    const [index, conditionValue, mp] = sel;
+    const child = mp.children;
+    const fn = typeof child === "function" && child.length > 0;
+    return fn ? untrack(() => child(mp.keyed ? conditionValue() : () => {
+      if (untrack(switchFunc)()?.[0] !== index) throw narrowedError("Match");
+      return conditionValue();
+    })) : child;
+  }, undefined, undefined);
+}
+function Match(props) {
+  return props;
+}
+
+const memo = fn => createMemo(() => fn());
+
+function reconcileArrays(parentNode, a, b) {
+  let bLength = b.length,
+    aEnd = a.length,
+    bEnd = bLength,
+    aStart = 0,
+    bStart = 0,
+    after = a[aEnd - 1].nextSibling,
+    map = null;
+  while (aStart < aEnd || bStart < bEnd) {
+    if (a[aStart] === b[bStart]) {
+      aStart++;
+      bStart++;
+      continue;
+    }
+    while (a[aEnd - 1] === b[bEnd - 1]) {
+      aEnd--;
+      bEnd--;
+    }
+    if (aEnd === aStart) {
+      const node = bEnd < bLength ? bStart ? b[bStart - 1].nextSibling : b[bEnd - bStart] : after;
+      while (bStart < bEnd) parentNode.insertBefore(b[bStart++], node);
+    } else if (bEnd === bStart) {
+      while (aStart < aEnd) {
+        if (!map || !map.has(a[aStart])) a[aStart].remove();
+        aStart++;
+      }
+    } else if (a[aStart] === b[bEnd - 1] && b[bStart] === a[aEnd - 1]) {
+      const node = a[--aEnd].nextSibling;
+      parentNode.insertBefore(b[bStart++], a[aStart++].nextSibling);
+      parentNode.insertBefore(b[--bEnd], node);
+      a[aEnd] = b[bEnd];
+    } else {
+      if (!map) {
+        map = new Map();
+        let i = bStart;
+        while (i < bEnd) map.set(b[i], i++);
+      }
+      const index = map.get(a[aStart]);
+      if (index != null) {
+        if (bStart < index && index < bEnd) {
+          let i = aStart,
+            sequence = 1,
+            t;
+          while (++i < aEnd && i < bEnd) {
+            if ((t = map.get(a[i])) == null || t !== index + sequence) break;
+            sequence++;
+          }
+          if (sequence > index - bStart) {
+            const node = a[aStart];
+            while (bStart < index) parentNode.insertBefore(b[bStart++], node);
+          } else parentNode.replaceChild(b[bStart++], a[aStart++]);
+        } else aStart++;
+      } else a[aStart++].remove();
+    }
+  }
+}
+
+const $$EVENTS = "_$DX_DELEGATE";
+function render(code, element, init, options = {}) {
+  let disposer;
+  createRoot(dispose => {
+    disposer = dispose;
+    element === document ? code() : insert(element, code(), element.firstChild ? null : undefined, init);
+  }, options.owner);
+  return () => {
+    disposer();
+    element.textContent = "";
+  };
+}
+function template(html, isImportNode, isSVG, isMathML) {
+  let node;
+  const create = () => {
+    const t = document.createElement("template");
+    t.innerHTML = html;
+    return t.content.firstChild;
+  };
+  const fn = () => (node || (node = create())).cloneNode(true);
+  fn.cloneNode = fn;
+  return fn;
+}
+function delegateEvents(eventNames, document = window.document) {
+  const e = document[$$EVENTS] || (document[$$EVENTS] = new Set());
+  for (let i = 0, l = eventNames.length; i < l; i++) {
+    const name = eventNames[i];
+    if (!e.has(name)) {
+      e.add(name);
+      document.addEventListener(name, eventHandler);
+    }
+  }
+}
+function setAttribute(node, name, value) {
+  if (value == null) node.removeAttribute(name);else node.setAttribute(name, value);
+}
+function className(node, value) {
+  if (value == null) node.removeAttribute("class");else node.className = value;
+}
+function addEventListener(node, name, handler, delegate) {
+  if (Array.isArray(handler)) {
+    const handlerFn = handler[0];
+    node.addEventListener(name, handler[0] = e => handlerFn.call(node, handler[1], e));
+  } else node.addEventListener(name, handler, typeof handler !== "function" && handler);
+}
+function setStyleProperty(node, name, value) {
+  value != null ? node.style.setProperty(name, value) : node.style.removeProperty(name);
+}
+function use(fn, element, arg) {
+  return untrack(() => fn(element, arg));
+}
+function insert(parent, accessor, marker, initial) {
+  if (marker !== undefined && !initial) initial = [];
+  if (typeof accessor !== "function") return insertExpression(parent, accessor, initial, marker);
+  createRenderEffect(current => insertExpression(parent, accessor(), current, marker), initial);
+}
+function eventHandler(e) {
+  let node = e.target;
+  const key = `$$${e.type}`;
+  const oriTarget = e.target;
+  const oriCurrentTarget = e.currentTarget;
+  const retarget = value => Object.defineProperty(e, "target", {
+    configurable: true,
+    value
+  });
+  const handleNode = () => {
+    const handler = node[key];
+    if (handler && !node.disabled) {
+      const data = node[`${key}Data`];
+      data !== undefined ? handler.call(node, data, e) : handler.call(node, e);
+      if (e.cancelBubble) return;
+    }
+    node.host && typeof node.host !== "string" && !node.host._$host && node.contains(e.target) && retarget(node.host);
+    return true;
+  };
+  const walkUpTree = () => {
+    while (handleNode() && (node = node._$host || node.parentNode || node.host));
+  };
+  Object.defineProperty(e, "currentTarget", {
+    configurable: true,
+    get() {
+      return node || document;
+    }
+  });
+  if (e.composedPath) {
+    const path = e.composedPath();
+    retarget(path[0]);
+    for (let i = 0; i < path.length - 2; i++) {
+      node = path[i];
+      if (!handleNode()) break;
+      if (node._$host) {
+        node = node._$host;
+        walkUpTree();
+        break;
+      }
+      if (node.parentNode === oriCurrentTarget) {
+        break;
+      }
+    }
+  }
+  else walkUpTree();
+  retarget(oriTarget);
+}
+function insertExpression(parent, value, current, marker, unwrapArray) {
+  while (typeof current === "function") current = current();
+  if (value === current) return current;
+  const t = typeof value,
+    multi = marker !== undefined;
+  parent = multi && current[0] && current[0].parentNode || parent;
+  if (t === "string" || t === "number") {
+    if (t === "number") {
+      value = value.toString();
+      if (value === current) return current;
+    }
+    if (multi) {
+      let node = current[0];
+      if (node && node.nodeType === 3) {
+        node.data !== value && (node.data = value);
+      } else node = document.createTextNode(value);
+      current = cleanChildren(parent, current, marker, node);
+    } else {
+      if (current !== "" && typeof current === "string") {
+        current = parent.firstChild.data = value;
+      } else current = parent.textContent = value;
+    }
+  } else if (value == null || t === "boolean") {
+    current = cleanChildren(parent, current, marker);
+  } else if (t === "function") {
+    createRenderEffect(() => {
+      let v = value();
+      while (typeof v === "function") v = v();
+      current = insertExpression(parent, v, current, marker);
+    });
+    return () => current;
+  } else if (Array.isArray(value)) {
+    const array = [];
+    const currentArray = current && Array.isArray(current);
+    if (normalizeIncomingArray(array, value, current, unwrapArray)) {
+      createRenderEffect(() => current = insertExpression(parent, array, current, marker, true));
+      return () => current;
+    }
+    if (array.length === 0) {
+      current = cleanChildren(parent, current, marker);
+      if (multi) return current;
+    } else if (currentArray) {
+      if (current.length === 0) {
+        appendNodes(parent, array, marker);
+      } else reconcileArrays(parent, current, array);
+    } else {
+      current && cleanChildren(parent);
+      appendNodes(parent, array);
+    }
+    current = array;
+  } else if (value.nodeType) {
+    if (Array.isArray(current)) {
+      if (multi) return current = cleanChildren(parent, current, marker, value);
+      cleanChildren(parent, current, null, value);
+    } else if (current == null || current === "" || !parent.firstChild) {
+      parent.appendChild(value);
+    } else parent.replaceChild(value, parent.firstChild);
+    current = value;
+  } else ;
+  return current;
+}
+function normalizeIncomingArray(normalized, array, current, unwrap) {
+  let dynamic = false;
+  for (let i = 0, len = array.length; i < len; i++) {
+    let item = array[i],
+      prev = current && current[normalized.length],
+      t;
+    if (item == null || item === true || item === false) ; else if ((t = typeof item) === "object" && item.nodeType) {
+      normalized.push(item);
+    } else if (Array.isArray(item)) {
+      dynamic = normalizeIncomingArray(normalized, item, prev) || dynamic;
+    } else if (t === "function") {
+      if (unwrap) {
+        while (typeof item === "function") item = item();
+        dynamic = normalizeIncomingArray(normalized, Array.isArray(item) ? item : [item], Array.isArray(prev) ? prev : [prev]) || dynamic;
+      } else {
+        normalized.push(item);
+        dynamic = true;
+      }
+    } else {
+      const value = String(item);
+      if (prev && prev.nodeType === 3 && prev.data === value) normalized.push(prev);else normalized.push(document.createTextNode(value));
+    }
+  }
+  return dynamic;
+}
+function appendNodes(parent, array, marker = null) {
+  for (let i = 0, len = array.length; i < len; i++) parent.insertBefore(array[i], marker);
+}
+function cleanChildren(parent, current, marker, replacement) {
+  if (marker === undefined) return parent.textContent = "";
+  const node = replacement || document.createTextNode("");
+  if (current.length) {
+    let inserted = false;
+    for (let i = current.length - 1; i >= 0; i--) {
+      const el = current[i];
+      if (node !== el) {
+        const isParent = el.parentNode === parent;
+        if (!inserted && !i) isParent ? parent.replaceChild(node, el) : parent.insertBefore(node, marker);else isParent && el.remove();
+      } else inserted = true;
+    }
+  } else parent.insertBefore(node, marker);
+  return [node];
+}
+
+function escapeHtml$2(str) {
+  if (!str) return "";
+  return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+function inlineMarkdown(text) {
+  let s = escapeHtml$2(text);
+  function unescapeUrl(url) {
+    return url.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"');
+  }
+  function safeUrl(url, image = false) {
+    const value = unescapeUrl(url).trim();
+    if (!value) return null;
+    const lower = value.toLowerCase();
+    if (lower.startsWith("javascript:") || lower.startsWith("vbscript:")) return null;
+    if (lower.startsWith("data:"))
+      return image && lower.startsWith("data:image/") ? value : null;
+    if (lower.startsWith("https://") || lower.startsWith("http://") || lower.startsWith("mailto:") || value.startsWith("/") || value.startsWith("./") || value.startsWith("../") || value.startsWith("#"))
+      return value;
+    return null;
+  }
+  s = s.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_, alt, url) => {
+    const value = safeUrl(url, true);
+    return value ? `<img class="md-img" src="${value}" alt="${alt}" loading="lazy">` : alt;
+  });
+  s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, label, url) => {
+    const value = safeUrl(url);
+    return value ? `<a class="md-link" href="${value}" target="_blank" rel="noopener">${label}</a>` : label;
+  });
+  s = s.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+  s = s.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, "<em>$1</em>");
+  s = s.replace(/`([^`]+)`/g, '<code class="md-inline-code">$1</code>');
+  return s;
+}
+function renderMarkdownBlock(text) {
+  const lines = text.split("\n");
+  let html = "";
+  let inList = false;
+  let listTag = "ul";
+  for (const line of lines) {
+    const trimmed = line.trim();
+    const hMatch = trimmed.match(/^(#{1,6})\s+(.+)$/);
+    if (hMatch) {
+      if (inList) {
+        html += `</${listTag}>`;
+        inList = false;
+      }
+      const level = hMatch[1].length;
+      html += `<div class="md-h${level}">${inlineMarkdown(hMatch[2])}</div>`;
+      continue;
+    }
+    if (/^[-*]\s/.test(trimmed)) {
+      if (!inList || listTag !== "ul") {
+        if (inList) html += `</${listTag}>`;
+        html += '<ul class="md-list">';
+        inList = true;
+        listTag = "ul";
+      }
+      html += `<li>${inlineMarkdown(trimmed.slice(2))}</li>`;
+      continue;
+    }
+    const olMatch = trimmed.match(/^(\d+)\.\s(.+)$/);
+    if (olMatch) {
+      if (!inList || listTag !== "ol") {
+        if (inList) html += `</${listTag}>`;
+        html += '<ol class="md-list">';
+        inList = true;
+        listTag = "ol";
+      }
+      html += `<li>${inlineMarkdown(olMatch[2])}</li>`;
+      continue;
+    }
+    if (inList) {
+      html += `</${listTag}>`;
+      inList = false;
+    }
+    if (!trimmed) {
+      html += '<div class="md-break"></div>';
+      continue;
+    }
+    html += `<div class="md-p">${inlineMarkdown(trimmed)}</div>`;
+  }
+  if (inList) html += `</${listTag}>`;
+  return html;
+}
+function renderMarkdown$1(text) {
+  const segments = text.split(/(```[\s\S]*?```)/g);
+  let html = "";
+  for (const seg of segments) {
+    if (seg.startsWith("```")) {
+      const match = seg.match(/^```(\w*)\n?([\s\S]*?)```$/);
+      const code = match ? match[2] : seg.slice(3, -3);
+      html += `<pre class="md-code-block"><code>${escapeHtml$2(code.replace(/\n$/, ""))}</code></pre>`;
+    } else {
+      html += renderMarkdownBlock(seg);
+    }
+  }
+  return html;
+}
+
+var _tmpl$$j = /* @__PURE__ */ template(`<div class=msg-text>`);
+function splitBlocks(text) {
+  if (!text) return [];
+  const blocks = [];
+  let current = "";
+  let inFence = false;
+  for (const line of text.split("\n")) {
+    if (line.trimStart().startsWith("```")) {
+      inFence = !inFence;
+      current += (current ? "\n" : "") + line;
+      continue;
+    }
+    if (inFence) {
+      current += (current ? "\n" : "") + line;
+      continue;
+    }
+    if (line.trim() === "") {
+      if (current.trim()) {
+        blocks.push(current);
+      }
+      current = "";
+      continue;
+    }
+    current += (current ? "\n" : "") + line;
+  }
+  if (current) blocks.push(current);
+  return blocks;
+}
+function TextPart(props) {
+  let containerRef;
+  const frozen = /* @__PURE__ */ new Map();
+  const frozenNodes = /* @__PURE__ */ new Map();
+  let prevBlockCount = 0;
+  let activeEl = null;
+  createEffect(() => {
+    const text = props.text || "";
+    const container = containerRef;
+    if (!container) return;
+    const blocks = splitBlocks(text);
+    const total = blocks.length;
+    const frozenCount = Math.max(0, total - 1);
+    for (let i = prevBlockCount; i < frozenCount; i++) {
+      if (!frozen.has(i)) {
+        const html = renderMarkdown$1(blocks[i]);
+        frozen.set(i, html);
+        const node = document.createElement("div");
+        node.className = "md-frozen-block";
+        node.innerHTML = html;
+        frozenNodes.set(i, node);
+        if (activeEl && activeEl.parentNode === container) {
+          container.insertBefore(node, activeEl);
+        } else {
+          container.appendChild(node);
+        }
+      }
+    }
+    if (total > 0) {
+      const activeText = blocks[total - 1];
+      if (!activeEl) {
+        activeEl = document.createElement("div");
+        activeEl.className = "md-active-block";
+        container.appendChild(activeEl);
+      }
+      activeEl.innerHTML = renderMarkdown$1(activeText);
+    } else if (activeEl) {
+      activeEl.innerHTML = "";
+    }
+    prevBlockCount = frozenCount;
+  });
+  onCleanup(() => {
+    frozen.clear();
+    frozenNodes.clear();
+    activeEl = null;
+    prevBlockCount = 0;
+  });
+  return (() => {
+    var _el$ = _tmpl$$j();
+    var _ref$ = containerRef;
+    typeof _ref$ === "function" ? use(_ref$, _el$) : containerRef = _el$;
+    return _el$;
+  })();
+}
+
+const $RAW = Symbol("store-raw"),
+  $NODE = Symbol("store-node"),
+  $HAS = Symbol("store-has"),
+  $SELF = Symbol("store-self");
+function wrap$1(value) {
+  let p = value[$PROXY];
+  if (!p) {
+    Object.defineProperty(value, $PROXY, {
+      value: p = new Proxy(value, proxyTraps$1)
+    });
+    if (!Array.isArray(value)) {
+      const keys = Object.keys(value),
+        desc = Object.getOwnPropertyDescriptors(value);
+      for (let i = 0, l = keys.length; i < l; i++) {
+        const prop = keys[i];
+        if (desc[prop].get) {
+          Object.defineProperty(value, prop, {
+            enumerable: desc[prop].enumerable,
+            get: desc[prop].get.bind(p)
+          });
+        }
+      }
+    }
+  }
+  return p;
+}
+function isWrappable(obj) {
+  let proto;
+  return obj != null && typeof obj === "object" && (obj[$PROXY] || !(proto = Object.getPrototypeOf(obj)) || proto === Object.prototype || Array.isArray(obj));
+}
+function unwrap(item, set = new Set()) {
+  let result, unwrapped, v, prop;
+  if (result = item != null && item[$RAW]) return result;
+  if (!isWrappable(item) || set.has(item)) return item;
+  if (Array.isArray(item)) {
+    if (Object.isFrozen(item)) item = item.slice(0);else set.add(item);
+    for (let i = 0, l = item.length; i < l; i++) {
+      v = item[i];
+      if ((unwrapped = unwrap(v, set)) !== v) item[i] = unwrapped;
+    }
+  } else {
+    if (Object.isFrozen(item)) item = Object.assign({}, item);else set.add(item);
+    const keys = Object.keys(item),
+      desc = Object.getOwnPropertyDescriptors(item);
+    for (let i = 0, l = keys.length; i < l; i++) {
+      prop = keys[i];
+      if (desc[prop].get) continue;
+      v = item[prop];
+      if ((unwrapped = unwrap(v, set)) !== v) item[prop] = unwrapped;
+    }
+  }
+  return item;
+}
+function getNodes(target, symbol) {
+  let nodes = target[symbol];
+  if (!nodes) Object.defineProperty(target, symbol, {
+    value: nodes = Object.create(null)
+  });
+  return nodes;
+}
+function getNode(nodes, property, value) {
+  if (nodes[property]) return nodes[property];
+  const [s, set] = createSignal(value, {
+    equals: false,
+    internal: true
+  });
+  s.$ = set;
+  return nodes[property] = s;
+}
+function proxyDescriptor$1(target, property) {
+  const desc = Reflect.getOwnPropertyDescriptor(target, property);
+  if (!desc || desc.get || !desc.configurable || property === $PROXY || property === $NODE) return desc;
+  delete desc.value;
+  delete desc.writable;
+  desc.get = () => target[$PROXY][property];
+  return desc;
+}
+function trackSelf(target) {
+  getListener() && getNode(getNodes(target, $NODE), $SELF)();
+}
+function ownKeys(target) {
+  trackSelf(target);
+  return Reflect.ownKeys(target);
+}
+const proxyTraps$1 = {
+  get(target, property, receiver) {
+    if (property === $RAW) return target;
+    if (property === $PROXY) return receiver;
+    if (property === $TRACK) {
+      trackSelf(target);
+      return receiver;
+    }
+    const nodes = getNodes(target, $NODE);
+    const tracked = nodes[property];
+    let value = tracked ? tracked() : target[property];
+    if (property === $NODE || property === $HAS || property === "__proto__") return value;
+    if (!tracked) {
+      const desc = Object.getOwnPropertyDescriptor(target, property);
+      if (getListener() && (typeof value !== "function" || target.hasOwnProperty(property)) && !(desc && desc.get)) value = getNode(nodes, property, value)();
+    }
+    return isWrappable(value) ? wrap$1(value) : value;
+  },
+  has(target, property) {
+    if (property === $RAW || property === $PROXY || property === $TRACK || property === $NODE || property === $HAS || property === "__proto__") return true;
+    getListener() && getNode(getNodes(target, $HAS), property)();
+    return property in target;
+  },
+  set() {
+    return true;
+  },
+  deleteProperty() {
+    return true;
+  },
+  ownKeys: ownKeys,
+  getOwnPropertyDescriptor: proxyDescriptor$1
+};
+function setProperty(state, property, value, deleting = false) {
+  if (!deleting && state[property] === value) return;
+  const prev = state[property],
+    len = state.length;
+  if (value === undefined) {
+    delete state[property];
+    if (state[$HAS] && state[$HAS][property] && prev !== undefined) state[$HAS][property].$();
+  } else {
+    state[property] = value;
+    if (state[$HAS] && state[$HAS][property] && prev === undefined) state[$HAS][property].$();
+  }
+  let nodes = getNodes(state, $NODE),
+    node;
+  if (node = getNode(nodes, property, prev)) node.$(() => value);
+  if (Array.isArray(state) && state.length !== len) {
+    for (let i = state.length; i < len; i++) (node = nodes[i]) && node.$();
+    (node = getNode(nodes, "length", len)) && node.$(state.length);
+  }
+  (node = nodes[$SELF]) && node.$();
+}
+function mergeStoreNode(state, value) {
+  const keys = Object.keys(value);
+  for (let i = 0; i < keys.length; i += 1) {
+    const key = keys[i];
+    setProperty(state, key, value[key]);
+  }
+}
+function updateArray(current, next) {
+  if (typeof next === "function") next = next(current);
+  next = unwrap(next);
+  if (Array.isArray(next)) {
+    if (current === next) return;
+    let i = 0,
+      len = next.length;
+    for (; i < len; i++) {
+      const value = next[i];
+      if (current[i] !== value) setProperty(current, i, value);
+    }
+    setProperty(current, "length", len);
+  } else mergeStoreNode(current, next);
+}
+function updatePath(current, path, traversed = []) {
+  let part,
+    prev = current;
+  if (path.length > 1) {
+    part = path.shift();
+    const partType = typeof part,
+      isArray = Array.isArray(current);
+    if (Array.isArray(part)) {
+      for (let i = 0; i < part.length; i++) {
+        updatePath(current, [part[i]].concat(path), traversed);
+      }
+      return;
+    } else if (isArray && partType === "function") {
+      for (let i = 0; i < current.length; i++) {
+        if (part(current[i], i)) updatePath(current, [i].concat(path), traversed);
+      }
+      return;
+    } else if (isArray && partType === "object") {
+      const {
+        from = 0,
+        to = current.length - 1,
+        by = 1
+      } = part;
+      for (let i = from; i <= to; i += by) {
+        updatePath(current, [i].concat(path), traversed);
+      }
+      return;
+    } else if (path.length > 1) {
+      updatePath(current[part], path, [part].concat(traversed));
+      return;
+    }
+    prev = current[part];
+    traversed = [part].concat(traversed);
+  }
+  let value = path[0];
+  if (typeof value === "function") {
+    value = value(prev, traversed);
+    if (value === prev) return;
+  }
+  if (part === undefined && value == undefined) return;
+  value = unwrap(value);
+  if (part === undefined || isWrappable(prev) && isWrappable(value) && !Array.isArray(value)) {
+    mergeStoreNode(prev, value);
+  } else setProperty(current, part, value);
+}
+function createStore(...[store, options]) {
+  const unwrappedStore = unwrap(store || {});
+  const isArray = Array.isArray(unwrappedStore);
+  const wrappedStore = wrap$1(unwrappedStore);
+  function setStore(...args) {
+    batch(() => {
+      isArray && args.length === 1 ? updateArray(unwrappedStore, args[0]) : updatePath(unwrappedStore, args);
+    });
+  }
+  return [wrappedStore, setStore];
+}
+
+const $ROOT = Symbol("store-root");
+function applyState(target, parent, property, merge, key) {
+  const previous = parent[property];
+  if (target === previous) return;
+  const isArray = Array.isArray(target);
+  if (property !== $ROOT && (!isWrappable(target) || !isWrappable(previous) || isArray !== Array.isArray(previous) || key && target[key] !== previous[key])) {
+    setProperty(parent, property, target);
+    return;
+  }
+  if (isArray) {
+    if (target.length && previous.length && (!merge || key && target[0] && target[0][key] != null)) {
+      let i, j, start, end, newEnd, item, newIndicesNext, keyVal;
+      for (start = 0, end = Math.min(previous.length, target.length); start < end && (previous[start] === target[start] || key && previous[start] && target[start] && previous[start][key] && previous[start][key] === target[start][key]); start++) {
+        applyState(target[start], previous, start, merge, key);
+      }
+      const temp = new Array(target.length),
+        newIndices = new Map();
+      for (end = previous.length - 1, newEnd = target.length - 1; end >= start && newEnd >= start && (previous[end] === target[newEnd] || key && previous[end] && target[newEnd] && previous[end][key] && previous[end][key] === target[newEnd][key]); end--, newEnd--) {
+        temp[newEnd] = previous[end];
+      }
+      if (start > newEnd || start > end) {
+        for (j = start; j <= newEnd; j++) setProperty(previous, j, target[j]);
+        for (; j < target.length; j++) {
+          setProperty(previous, j, temp[j]);
+          applyState(target[j], previous, j, merge, key);
+        }
+        if (previous.length > target.length) setProperty(previous, "length", target.length);
+        return;
+      }
+      newIndicesNext = new Array(newEnd + 1);
+      for (j = newEnd; j >= start; j--) {
+        item = target[j];
+        keyVal = key && item ? item[key] : item;
+        i = newIndices.get(keyVal);
+        newIndicesNext[j] = i === undefined ? -1 : i;
+        newIndices.set(keyVal, j);
+      }
+      for (i = start; i <= end; i++) {
+        item = previous[i];
+        keyVal = key && item ? item[key] : item;
+        j = newIndices.get(keyVal);
+        if (j !== undefined && j !== -1) {
+          temp[j] = previous[i];
+          j = newIndicesNext[j];
+          newIndices.set(keyVal, j);
+        }
+      }
+      for (j = start; j < target.length; j++) {
+        if (j in temp) {
+          setProperty(previous, j, temp[j]);
+          applyState(target[j], previous, j, merge, key);
+        } else setProperty(previous, j, target[j]);
+      }
+    } else {
+      for (let i = 0, len = target.length; i < len; i++) {
+        applyState(target[i], previous, i, merge, key);
+      }
+    }
+    if (previous.length > target.length) setProperty(previous, "length", target.length);
+    return;
+  }
+  const targetKeys = Object.keys(target);
+  for (let i = 0, len = targetKeys.length; i < len; i++) {
+    applyState(target[targetKeys[i]], previous, targetKeys[i], merge, key);
+  }
+  const previousKeys = Object.keys(previous);
+  for (let i = 0, len = previousKeys.length; i < len; i++) {
+    if (target[previousKeys[i]] === undefined) setProperty(previous, previousKeys[i], undefined);
+  }
+}
+function reconcile(value, options = {}) {
+  const {
+      merge,
+      key = "id"
+    } = options,
+    v = unwrap(value);
+  return state => {
+    if (!isWrappable(state) || !isWrappable(v)) return v;
+    const res = applyState(v, {
+      [$ROOT]: state
+    }, $ROOT, merge, key);
+    return res === undefined ? state : res;
+  };
+}
+const producers = new WeakMap();
+const setterTraps = {
+  get(target, property) {
+    if (property === $RAW) return target;
+    const value = target[property];
+    let proxy;
+    return isWrappable(value) ? producers.get(value) || (producers.set(value, proxy = new Proxy(value, setterTraps)), proxy) : value;
+  },
+  set(target, property, value) {
+    setProperty(target, property, unwrap(value));
+    return true;
+  },
+  deleteProperty(target, property) {
+    setProperty(target, property, undefined, true);
+    return true;
+  }
+};
+function produce(fn) {
+  return state => {
+    if (isWrappable(state)) {
+      let proxy;
+      if (!(proxy = producers.get(state))) {
+        producers.set(state, proxy = new Proxy(state, setterTraps));
+      }
+      fn(proxy);
+    }
+    return state;
+  };
+}
+
+const DEFAULT_APP_STATE = {
+  connectionStatus: "offline",
+  connected: false,
+  theme: "dark",
+  locale: "en-US",
+  zoom: 1,
+  opacity: 0.8,
+  logEntries: [],
+  logFilterLevel: "debug",
+  i18n: {},
+  i18nReady: false,
+  localeSeq: 0,
+  coreVersion: "",
+  config: null,
+  executors: [],
+  providerCatalog: null,
+  providerAuth: null,
+  providerAuthDismissed: {},
+  providerTest: null,
+  channels: [],
+  skills: [],
+  skillMarket: [],
+  mcp: {},
+  ndjsonEvents: [],
+  ndjsonStartMs: 0,
+  memoryFiles: [],
+  memorySearchMode: false,
+  preferences: [],
+  promptEntries: [],
+  promptDrafts: {},
+  criteriaSpecs: [],
+  budgetDirty: false,
+  budgetSaving: false
+};
+const [appStore, setAppStore] = createStore({ ...DEFAULT_APP_STATE });
+const LOG_LEVEL_ORDER$1 = {
+  debug: 0,
+  info: 1,
+  warn: 2,
+  error: 3
+};
+const MAX_LOG_ENTRIES = 2e3;
+function appendLog(entry) {
+  setAppStore("logEntries", (prev) => {
+    const next = [...prev, entry];
+    return next.length > MAX_LOG_ENTRIES ? next.slice(next.length - MAX_LOG_ENTRIES) : next;
+  });
+}
+function filteredLogEntries() {
+  const min = LOG_LEVEL_ORDER$1[appStore.logFilterLevel] ?? 0;
+  return appStore.logEntries.filter(
+    (e) => (LOG_LEVEL_ORDER$1[e.level] ?? 0) >= min
+  );
+}
+function setConnectionStatus(status) {
+  setAppStore({
+    connectionStatus: status,
+    connected: status === "online"
+  });
+}
+function setI18nReady(ready) {
+  setAppStore("i18nReady", ready);
+}
+function setLocaleState(locale) {
+  setAppStore({
+    locale,
+    localeSeq: appStore.localeSeq + 1
+  });
+}
+function dismissProviderAuth(providerID) {
+  setAppStore("providerAuthDismissed", (prev) => ({
+    ...prev,
+    [providerID]: true
+  }));
+}
+function setProviderTest(test) {
+  setAppStore("providerTest", test ?? null);
+}
+function setExecutors(list) {
+  setAppStore("executors", Array.isArray(list) ? list : []);
+}
+function setSkills(list) {
+  setAppStore("skills", Array.isArray(list) ? list : []);
+}
+function setSkillMarket(list) {
+  setAppStore("skillMarket", Array.isArray(list) ? list : []);
+}
+function setMcp(map) {
+  setAppStore(
+    "mcp",
+    map && typeof map === "object" && !Array.isArray(map) ? map : {}
+  );
+}
+
+const SUPPORTED_LOCALES = ["zh-CN", "en-US"];
+let messages = {};
+let currentLocale = sanitizeLocale(
+  (typeof document !== "undefined" ? document.documentElement.lang : "") || (typeof navigator !== "undefined" ? navigator.language : "") || "en-US"
+);
+function record$a(value) {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+function sanitizeLocale(value) {
+  const text = String(value || "").trim();
+  if (SUPPORTED_LOCALES.includes(text)) return text;
+  if (/^zh\b/i.test(text)) return "zh-CN";
+  return "en-US";
+}
+function localeValue(key, locale = currentLocale) {
+  appStore.localeSeq;
+  const source = messages[locale];
+  if (record$a(source) && Object.hasOwn(source, key)) return source[key];
+  return key.split(".").reduce((acc, part) => record$a(acc) ? acc[part] : void 0, source);
+}
+function fillTemplate(text, vars = {}) {
+  return String(text).replace(/\{\{\s*([\w.]+)\s*\}\}/g, (_, key) => {
+    const value = key.split(".").reduce(
+      (acc, part) => record$a(acc) ? acc[part] : void 0,
+      vars
+    );
+    return value == null ? "" : String(value);
+  });
+}
+function t(key, vars) {
+  const value = localeValue(key) ?? localeValue(key, "en-US");
+  if (typeof value !== "string") return key;
+  return fillTemplate(value, vars);
+}
+function tc(key, count, vars) {
+  const value = localeValue(key) ?? localeValue(key, "en-US");
+  if (record$a(value)) {
+    const text = value[count === 1 ? "one" : "other"] ?? value.other ?? value.one;
+    if (typeof text === "string") return fillTemplate(text, { count, ...vars });
+  }
+  return t(key, { count, ...vars });
+}
+function localeTag() {
+  return sanitizeLocale(currentLocale);
+}
+async function loadLocale(locale) {
+  const normalized = sanitizeLocale(locale);
+  if (messages[normalized]) return;
+  const data = await fetch(`i18n/${normalized}.json`).then((res) => res.ok ? res.json() : {}).catch(() => ({}));
+  messages[normalized] = record$a(data) ? data : {};
+}
+async function setLocale(locale) {
+  const normalized = sanitizeLocale(locale);
+  await loadLocale(normalized);
+  currentLocale = normalized;
+  setI18nReady(true);
+  if (typeof document !== "undefined") {
+    document.documentElement.lang = normalized;
+    applyI18n(document);
+  }
+  setLocaleState(normalized);
+}
+async function loadAllLocales() {
+  const entries = await Promise.all(
+    SUPPORTED_LOCALES.map(async (locale) => {
+      const data = await fetch(`i18n/${locale}.json`).then((res) => res.ok ? res.json() : {}).catch(() => ({}));
+      return [locale, record$a(data) ? data : {}];
+    })
+  );
+  for (const [locale, data] of entries) {
+    messages[locale] = data;
+  }
+  setI18nReady(true);
+}
+function i18nTargets(root, selector) {
+  const items = [];
+  if (root instanceof Element && root.matches(selector)) items.push(root);
+  root.querySelectorAll?.(selector)?.forEach((node) => items.push(node));
+  return items;
+}
+function applyI18n(root = document) {
+  i18nTargets(root, "[data-i18n]").forEach((node) => {
+    node.textContent = t(node.dataset.i18n);
+  });
+  i18nTargets(root, "[data-i18n-html]").forEach((node) => {
+    node.innerHTML = t(node.dataset.i18nHtml);
+  });
+  i18nTargets(root, "[data-i18n-placeholder]").forEach((node) => {
+    node.setAttribute("placeholder", t(node.dataset.i18nPlaceholder));
+  });
+  i18nTargets(root, "[data-i18n-title]").forEach((node) => {
+    node.setAttribute("title", t(node.dataset.i18nTitle));
+  });
+  i18nTargets(root, "[data-i18n-aria-label]").forEach((node) => {
+    node.setAttribute("aria-label", t(node.dataset.i18nAriaLabel));
+  });
+  i18nTargets(root, "[data-i18n-alt]").forEach((node) => {
+    node.setAttribute("alt", t(node.dataset.i18nAlt));
+  });
+}
+
+function stripAnsi$1(str) {
+  if (!str) return "";
+  return str.replace(
+    /[\u001B\u009B][[\]()#;?]*(?:(?:(?:(?:;[-a-zA-Z\d\/#&.:=?%@~_]+)*|[a-zA-Z\d]+(?:;[-a-zA-Z\d\/#&.:=?%@~_]*)*)?\u0007)|(?:(?:\d{1,4}(?:;\d{0,4})*)?[\dA-PR-TZcf-nq-uy=><~]))/g,
+    ""
+  );
+}
+function record$9(value) {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+function toolNameKey(name) {
+  return String(name || "").toLowerCase().replace(/[\s_-]+/g, "");
+}
+function toolInputCommand(input) {
+  if (!record$9(input)) return "";
+  const value = input.command ?? input.argv ?? input.cmd;
+  if (typeof value === "string") return value.trim();
+  if (!Array.isArray(value)) return "";
+  return value.flatMap(
+    (item) => typeof item === "string" && item.trim() ? [item.trim()] : []
+  ).join(" ").trim();
+}
+function clipText$3(value, limit = 80) {
+  const text = String(value || "").replace(/\s+/g, " ").trim();
+  if (!text) return "";
+  if (text.length <= limit) return text;
+  return `${text.slice(0, Math.max(0, limit - 3)).trim()}...`;
+}
+function relativePathFrom$1(base, target) {
+  const baseText = typeof base === "string" ? base.replace(/[\\/]+$/, "") : "";
+  const targetText = typeof target === "string" ? target.replace(/[\\/]+$/, "") : "";
+  if (!baseText || !targetText) return "";
+  const lBase = baseText.toLowerCase();
+  const lTarget = targetText.toLowerCase();
+  if (lTarget.startsWith(lBase + "/") || lTarget.startsWith(lBase + "\\")) {
+    return targetText.slice(baseText.length + 1);
+  }
+  return "";
+}
+function shortPath$2(p) {
+  if (!p) return "";
+  const parts = p.replace(/\\/g, "/").split("/");
+  return parts.length > 3 ? ".../" + parts.slice(-3).join("/") : p;
+}
+function shortRelativePath(p, base = "") {
+  if (!p) return "";
+  const rel = relativePathFrom$1(base, p);
+  return rel || shortPath$2(p);
+}
+function displayToolIcon(name) {
+  const n = toolNameKey(name);
+  if (n === "read" || n === "readfile") return "📄";
+  if (n === "edit" || n === "editfile" || n === "applypatch") return "✏️";
+  if (n === "write" || n === "writefile") return "📝";
+  if (n === "bash" || n === "shellcommand") return "💻";
+  if (n === "grep" || n === "searchcode") return "🔍";
+  if (n === "glob" || n === "findfiles") return "📂";
+  if (n === "agent" || n === "spawnagent") return "🤖";
+  if (n === "todowrite" || n === "todoupdate" || n === "updateplan") return "☑️";
+  return "⚡";
+}
+function displayToolDetail(name, input, state, base = "") {
+  const safeInput = record$9(input) ? input : {};
+  const safeState = record$9(state) ? state : {};
+  const n = toolNameKey(name);
+  const path = safeInput.file_path || safeInput.filePath || safeInput.path || safeInput.filename || "";
+  if (path) return shortRelativePath(path, base);
+  if (n === "bash" || n === "shellcommand")
+    return clipText$3(toolInputCommand(safeInput), 80);
+  if (n === "grep" || n === "searchcode")
+    return safeInput.pattern || safeInput.query || safeInput.q || "";
+  if (n === "glob" || n === "findfiles")
+    return safeInput.pattern || safeInput.glob || "";
+  if (n === "agent" || n === "spawnagent")
+    return clipText$3(safeInput.description || safeInput.prompt || "", 80);
+  if (typeof safeInput.raw === "string" && safeInput.raw.trim())
+    return clipText$3(safeInput.raw, 80);
+  if ((safeState.status === "completed" || safeState.status === "running") && typeof safeState.title === "string")
+    return safeState.title;
+  return "";
+}
+function toolStatusLabel(status) {
+  if (status === "completed") return t("task.status.completed");
+  if (status === "running") return t("task.status.running");
+  if (status === "error") return t("common.error");
+  return t("checks.pending");
+}
+
+const DEFAULT_SERVER = (() => {
+  if (typeof window !== "undefined" && window.location.protocol.startsWith("http") && window.location.pathname.startsWith("/ui")) {
+    return window.location.origin;
+  }
+  return "http://127.0.0.1:7878";
+})();
+let serverUrl = DEFAULT_SERVER;
+let authCredentials = { username: "opencorvus", password: "" };
+let directoryContext = "";
+function configure(opts) {
+  if (opts.serverUrl) serverUrl = opts.serverUrl;
+  if (opts.username) authCredentials.username = opts.username;
+  if (opts.password !== void 0) authCredentials.password = opts.password;
+  if (opts.directory !== void 0) directoryContext = String(opts.directory || "").trim();
+}
+function apiUrl(path) {
+  const base = serverUrl.replace(/\/+$/, "");
+  const next = path.replace(/^\/+/, "");
+  const url = new URL(`${base}/${next}`);
+  if (directoryContext && !url.searchParams.has("directory")) {
+    url.searchParams.set("directory", directoryContext);
+  }
+  return url.toString();
+}
+function apiHeaders() {
+  const h = { Accept: "application/json" };
+  if (authCredentials.password) {
+    h.Authorization = `Basic ${btoa(`${authCredentials.username}:${authCredentials.password}`)}`;
+  }
+  return h;
+}
+async function apiJson(path, init) {
+  const res = await fetch(apiUrl(path), {
+    ...init,
+    headers: { ...apiHeaders(), ...init?.headers }
+  });
+  if (!res.ok) throw new Error(`API ${res.status}: ${path}`);
+  return res.json();
+}
+
+const api = /*#__PURE__*/Object.freeze(/*#__PURE__*/Object.defineProperty({
+  __proto__: null,
+  DEFAULT_SERVER,
+  apiHeaders,
+  apiJson,
+  apiUrl,
+  configure
+}, Symbol.toStringTag, { value: 'Module' }));
+
+const [boardStore, setBoardStore] = createStore({
+  board: null,
+  tasks: [],
+  selectedTaskID: "",
+  taskSequence: 0,
+  loading: false,
+  // ── Task list internals (mirrors state.pendingTasks / state.tasksSeq) ──
+  /** Tasks that have been created locally but not yet confirmed by the server */
+  pendingTasks: [],
+  /** Monotonic counter incremented on each tasks-list refresh */
+  tasksSeq: 0,
+  // ── Board sync internals (mirrors state.boardEtag / state.boardQueued / etc.) ──
+  /** ETag of the last board response, used for conditional fetches */
+  boardEtag: "",
+  /** Whether a board reload is currently queued (debounce guard) */
+  boardQueued: false,
+  /** Retry attempt counter for board fetch failures */
+  boardRetryCount: 0,
+  /** Whether an in-flight board sync is pending */
+  boardSyncPending: false,
+  /** Unix-ms timestamp of the last successful board update */
+  boardUpdatedAt: 0,
+  /** Snapshot version string returned by the server with the board payload */
+  snapshotVersion: "",
+  // ── VCS state (mirrors state.path / state.vcs) ──
+  /** Git path info object for the active working directory */
+  path: null,
+  /** Git / VCS status object for the active task */
+  vcs: null,
+  // ── File changes (mirrors state.changes) ──
+  /** File change entries for the current task's working tree */
+  changes: []
+});
+let _boardRetryTimer = null;
+let _boardLoading = null;
+let _boardQueued = false;
+function boardSnapshot(board) {
+  return typeof board?.snapshotVersion === "string" ? board.snapshotVersion : "";
+}
+function clearBoardRetry$1() {
+  if (_boardRetryTimer) {
+    clearTimeout(_boardRetryTimer);
+    _boardRetryTimer = null;
+  }
+  setBoardRetryCount(0);
+}
+function retryBoard(sync) {
+  if (!boardStore.selectedTaskID || _boardRetryTimer) return;
+  if (sync) setBoardSyncPending(true);
+  const delay = Math.min(1e3 * Math.pow(2, Math.min(boardStore.boardRetryCount, 4)), 15e3);
+  setBoardRetryCount(boardStore.boardRetryCount + 1);
+  _boardRetryTimer = setTimeout(() => {
+    _boardRetryTimer = null;
+    void loadBoard({ sync: boardStore.boardSyncPending });
+  }, delay);
+}
+async function loadBoard(options = {}) {
+  const taskID = boardStore.selectedTaskID;
+  if (!taskID) {
+    setBoardStore("board", null);
+    setSnapshotVersion("");
+    return;
+  }
+  if (options.sync) setBoardSyncPending(true);
+  if (_boardLoading) {
+    _boardQueued = true;
+    if (options.sync) setBoardSyncPending(true);
+    return _boardLoading;
+  }
+  const sync = options.sync === true || boardStore.boardSyncPending;
+  if (sync) setBoardSyncPending(true);
+  const loading = (async () => {
+    let failed = false;
+    try {
+      const headers = apiHeaders();
+      if (boardStore.boardEtag) headers["If-None-Match"] = boardStore.boardEtag;
+      const res = await fetch(apiUrl(`task/${encodeURIComponent(taskID)}/board?sync=${sync ? "1" : "0"}`), {
+        headers,
+        signal: AbortSignal.timeout(1e4)
+      });
+      if (taskID !== boardStore.selectedTaskID) return;
+      setBoardSyncPending(false);
+      if (res.status === 304) {
+        clearBoardRetry$1();
+        setBoardUpdatedAt(Date.now());
+        return;
+      }
+      if (!res.ok) throw new Error(`API ${res.status}: ${res.statusText}`);
+      const etag = res.headers.get("etag");
+      if (etag) setBoardEtag(etag);
+      const data = await res.json();
+      setBoardStore("board", data ?? null);
+      setSnapshotVersion(boardSnapshot(data));
+      const lastSequence = Number(data?.lastSequence || 0);
+      if (Number.isFinite(lastSequence) && lastSequence > 0) {
+        setTaskSequence(lastSequence);
+      }
+      clearBoardRetry$1();
+      setBoardUpdatedAt(Date.now());
+    } catch (e) {
+      failed = true;
+      console.error("loadBoard failed", e);
+      if (taskID === boardStore.selectedTaskID) retryBoard(sync);
+    } finally {
+      _boardLoading = null;
+      setBoardStore("loading", false);
+      if (_boardQueued || boardStore.boardQueued) {
+        _boardQueued = false;
+        setBoardQueued(false);
+        if (!failed && !_boardRetryTimer) {
+          queueMicrotask(() => {
+            void loadBoard({ sync: boardStore.boardSyncPending });
+          });
+        }
+      }
+    }
+  })();
+  _boardLoading = loading;
+  setBoardStore("loading", true);
+  return loading;
+}
+async function loadTasks() {
+  try {
+    const data = await apiJson("tasks");
+    const tasks = sortedTasks$1(data);
+    const seen = new Set(
+      tasks.map((item) => item?.task?.requestID).filter(Boolean)
+    );
+    setBoardStore({
+      tasks,
+      pendingTasks: boardStore.pendingTasks.filter(
+        (item) => !seen.has(item?.requestID)
+      )
+    });
+  } catch (e) {
+    console.error("loadTasks failed", e);
+  }
+}
+function setTasksData(tasks) {
+  setBoardStore("tasks", Array.isArray(tasks) ? tasks : []);
+}
+let boardLoadTimer = null;
+function scheduleBoard(delay = 0) {
+  setBoardSyncPending(true);
+  clearBoardRetry$1();
+  if (boardLoadTimer) {
+    clearTimeout(boardLoadTimer);
+    boardLoadTimer = null;
+  }
+  boardLoadTimer = setTimeout(() => {
+    boardLoadTimer = null;
+    void loadBoard({ sync: true });
+  }, delay);
+}
+function rootTaskSessionID$1() {
+  const sessionID = boardStore.board?.task?.sessionID;
+  return typeof sessionID === "string" ? sessionID : "";
+}
+function activeDirectory$2() {
+  return boardStore.board?.task?.directory ?? "";
+}
+function setPath(path) {
+  setBoardStore("path", path ?? null);
+}
+function setVcs(vcs) {
+  setBoardStore("vcs", vcs ?? null);
+}
+function setBoardEtag(etag) {
+  setBoardStore("boardEtag", typeof etag === "string" ? etag : "");
+}
+function setBoardQueued(queued) {
+  setBoardStore("boardQueued", queued);
+}
+function setBoardRetryCount(count) {
+  setBoardStore("boardRetryCount", typeof count === "number" ? count : 0);
+}
+function setBoardSyncPending(pending) {
+  setBoardStore("boardSyncPending", pending);
+}
+function setBoardUpdatedAt(ms) {
+  setBoardStore("boardUpdatedAt", typeof ms === "number" ? ms : 0);
+}
+function setSnapshotVersion(version) {
+  setBoardStore("snapshotVersion", typeof version === "string" ? version : "");
+}
+function setTaskSequence(sequence) {
+  setBoardStore("taskSequence", typeof sequence === "number" ? sequence : 0);
+}
+function setPendingTasks(tasks) {
+  setBoardStore("pendingTasks", Array.isArray(tasks) ? tasks : []);
+}
+function sortedTasks$1(data) {
+  return [...Array.isArray(data?.tasks) ? data.tasks : []].sort(
+    (a, b) => (b.updated_at || b.task?.time?.updated || 0) - (a.updated_at || a.task?.time?.updated || 0)
+  );
+}
+function taskUpdated$1(item) {
+  return item?.updated_at || item?.task?.time?.updated || item?.task?.time?.created || 0;
+}
+function visibleTasks() {
+  const seen = new Set(
+    boardStore.tasks.map((item) => item?.task?.requestID || item?.task?.id).filter(Boolean)
+  );
+  return [
+    ...boardStore.pendingTasks.filter(
+      (item) => !seen.has(item?.requestID || item?.task?.id)
+    ),
+    ...boardStore.tasks
+  ].sort((a, b) => taskUpdated$1(b) - taskUpdated$1(a));
+}
+
+var _tmpl$$i = /* @__PURE__ */ template(`<span class=tool-detail>`), _tmpl$2$g = /* @__PURE__ */ template(`<div class=msg-tool><span class=tool-icon></span><span class=tool-name></span><span class=tool-status>`), _tmpl$3$f = /* @__PURE__ */ template(`<div class=msg-tool-input>`), _tmpl$4$f = /* @__PURE__ */ template(`<div class=msg-tool-output>`), _tmpl$5$f = /* @__PURE__ */ template(`<div class=msg-tool-error>`);
+function ToolPart(props) {
+  const state = () => props.part.state || {};
+  const status = () => state().status || "pending";
+  const toolName = () => props.part.tool || "unknown";
+  const input = () => state().input || {};
+  const icon = () => displayToolIcon(toolName());
+  const statusLabel = () => toolStatusLabel(status());
+  const detail = () => {
+    const raw2 = displayToolDetail(toolName(), input(), state(), activeDirectory$2());
+    return raw2 && raw2.toLowerCase() !== toolName().toLowerCase() ? raw2 : "";
+  };
+  const raw = () => {
+    const st = state();
+    const r = typeof st.raw === "string" ? typeof props.part._targetRaw === "string" ? props.part._targetRaw : st.raw : "";
+    return r;
+  };
+  const output = () => stripAnsi$1(state().output || "");
+  const error = () => stripAnsi$1(state().error || "") || output();
+  return [(() => {
+    var _el$ = _tmpl$2$g(), _el$2 = _el$.firstChild, _el$3 = _el$2.nextSibling, _el$5 = _el$3.nextSibling;
+    insert(_el$2, icon);
+    insert(_el$3, toolName);
+    insert(_el$, createComponent(Show, {
+      get when() {
+        return detail();
+      },
+      get children() {
+        var _el$4 = _tmpl$$i();
+        insert(_el$4, detail);
+        return _el$4;
+      }
+    }), _el$5);
+    insert(_el$5, statusLabel);
+    createRenderEffect((_p$) => {
+      var _v$ = status(), _v$2 = statusLabel();
+      _v$ !== _p$.e && setAttribute(_el$5, "data-status", _p$.e = _v$);
+      _v$2 !== _p$.t && setAttribute(_el$5, "title", _p$.t = _v$2);
+      return _p$;
+    }, {
+      e: void 0,
+      t: void 0
+    });
+    return _el$;
+  })(), createComponent(Show, {
+    get when() {
+      return memo(() => status() === "pending")() && raw();
+    },
+    get children() {
+      var _el$6 = _tmpl$3$f();
+      insert(_el$6, raw);
+      return _el$6;
+    }
+  }), createComponent(Show, {
+    get when() {
+      return memo(() => status() === "completed")() && output();
+    },
+    get children() {
+      var _el$7 = _tmpl$4$f();
+      _el$7.$$click = (e) => e.currentTarget.classList.toggle("msg-tool-output--expanded");
+      insert(_el$7, output);
+      return _el$7;
+    }
+  }), createComponent(Show, {
+    get when() {
+      return memo(() => status() === "error")() && error();
+    },
+    get children() {
+      var _el$8 = _tmpl$5$f();
+      insert(_el$8, error);
+      return _el$8;
+    }
+  })];
+}
+delegateEvents(["click"]);
+
+const reasoningVisibility = /* @__PURE__ */ new Map();
+const reasoningHideTimers = /* @__PURE__ */ new Map();
+const DEFAULT_REASONING_AUTO_CLOSE_MS = 5e3;
+const [reasoningRevision, setReasoningRevision] = createSignal(0);
+function record$8(value) {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+function reasoningPartKey(part) {
+  if (!record$8(part)) return "";
+  const id = typeof part.id === "string" ? part.id : "";
+  const messageID = typeof part.messageID === "string" ? part.messageID : "";
+  const sessionID = typeof part.sessionID === "string" ? part.sessionID : "";
+  if (!id && !messageID && !sessionID) return "";
+  return `reasoning:${sessionID}:${messageID}:${id}`;
+}
+function reasoningPartHidden(part) {
+  const key = reasoningPartKey(part);
+  return key ? reasoningVisibility.get(key)?.hidden === true : false;
+}
+function reasoningAutoCloseMs() {
+  const testConfig = window.__overlayTest;
+  const value = testConfig && typeof testConfig === "object" ? Number(testConfig.reasoningAutoCloseMs) : NaN;
+  if (Number.isFinite(value)) return Math.max(0, Math.floor(value));
+  return DEFAULT_REASONING_AUTO_CLOSE_MS;
+}
+function stopReasoningHideTimer(key) {
+  const timer = reasoningHideTimers.get(key);
+  if (!timer) return;
+  clearTimeout(timer);
+  reasoningHideTimers.delete(key);
+}
+function scheduleReasoningAutoHide(key) {
+  if (!key) return;
+  stopReasoningHideTimer(key);
+  const timer = setTimeout(() => {
+    reasoningHideTimers.delete(key);
+    const current = reasoningVisibility.get(key) || { hidden: false };
+    if (current.hidden) return;
+    reasoningVisibility.set(key, { ...current, hidden: true });
+    setReasoningRevision((r) => r + 1);
+  }, reasoningAutoCloseMs());
+  reasoningHideTimers.set(key, timer);
+}
+function touchReasoningPart$1(part) {
+  const key = reasoningPartKey(part);
+  if (!key) return;
+  const current = reasoningVisibility.get(key);
+  reasoningVisibility.set(key, { ...current || {}, hidden: false });
+  stopReasoningHideTimer(key);
+  scheduleReasoningAutoHide(key);
+  if (current?.hidden) {
+    setReasoningRevision((r) => r + 1);
+  }
+}
+
+var _tmpl$$h = /* @__PURE__ */ template(`<div class=reasoning-text>`), _tmpl$2$f = /* @__PURE__ */ template(`<div class=msg-reasoning><div class=reasoning-label> `);
+function ReasoningPart(props) {
+  const [expanded, setExpanded] = createSignal(true);
+  const text = () => String(props.part?.text || "");
+  const hidden = createMemo(() => {
+    reasoningRevision();
+    return reasoningPartHidden(props.part);
+  });
+  const label = () => t("transcript.reasoning");
+  return createComponent(Show, {
+    get when() {
+      return memo(() => !!text().trim())() && !hidden();
+    },
+    get children() {
+      var _el$ = _tmpl$2$f(), _el$2 = _el$.firstChild, _el$3 = _el$2.firstChild;
+      _el$2.$$click = () => setExpanded(!expanded());
+      insert(_el$2, label, _el$3);
+      insert(_el$2, () => expanded() ? "▼" : "▶", null);
+      insert(_el$, createComponent(Show, {
+        get when() {
+          return expanded();
+        },
+        get children() {
+          var _el$4 = _tmpl$$h();
+          insert(_el$4, text);
+          return _el$4;
+        }
+      }), null);
+      return _el$;
+    }
+  });
+}
+delegateEvents(["click"]);
+
+function escapeHtml$1(str) {
+  if (!str) return "";
+  return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+function orderedMessageParts(message) {
+  const parts = Array.isArray(message?.parts) ? message.parts : [];
+  if (parts.length < 2) return parts;
+  const reasoning = [];
+  const rest = [];
+  for (const part of parts) {
+    if (part?.type === "reasoning") reasoning.push(part);
+    else rest.push(part);
+  }
+  return [...reasoning, ...rest];
+}
+function roleLabel(role) {
+  if (role === "user") return t("chat.role.user");
+  if (role === "assistant") return t("chat.role.assistant");
+  if (role === "planner") return t("chat.role.planner");
+  if (role === "scheduler") return t("chat.role.scheduler");
+  if (role === "delivery") return t("chat.role.delivery");
+  if (role === "spec") return t("chat.role.spec");
+  if (role === "system") return t("chat.role.system");
+  if (role === "goal_gate") return t("chat.role.goal");
+  return t("chat.role.message");
+}
+function agentStageRole(stage) {
+  const text = String(stage).trim().toLowerCase();
+  if (text === "planner" || text === "plan") return "planner";
+  if (text === "spec") return "spec";
+  if (text === "judge" || text === "evaluation" || text === "scheduler") return "scheduler";
+  if (text === "delivery" || text === "files") return "delivery";
+  if (text === "executor" || text === "execute" || text === "coding") return "assistant";
+  return "system";
+}
+function phaseFromAgent(value) {
+  const text = String(value || "").trim().toLowerCase();
+  if (!text) return "";
+  if (text.includes("goal_gate") || text.includes("goal")) return "goals";
+  if (text.includes("scheduler") || text.includes("evaluator") || text.includes("evaluation") || text.includes("evaluate") || text.includes("review"))
+    return "evaluation";
+  if (text.includes("planner") || text.includes("planning") || text.includes("replan") || text === "plan")
+    return "plan";
+  if (text.includes("spec")) return "spec";
+  if (text.includes("deliver") || text.includes("delivery") || text.includes("publish"))
+    return "files";
+  return "";
+}
+function phaseFromMessage(message) {
+  if (!message || typeof message !== "object") return "";
+  const info = message.info && typeof message.info === "object" ? message.info : {};
+  const direct = phaseFromAgent(info.agent) || phaseFromAgent(info.role);
+  if (direct) return direct;
+  const parts = Array.isArray(message.parts) ? message.parts : [];
+  for (let index = parts.length - 1; index >= 0; index -= 1) {
+    const part = parts[index];
+    if (!part || typeof part !== "object") continue;
+    if (part.type === "subtask") {
+      const mapped2 = phaseFromAgent(part.agent) || phaseFromAgent(part.description) || phaseFromAgent(part.prompt);
+      if (mapped2) return mapped2;
+      continue;
+    }
+    if (part.type === "agent") {
+      const mapped2 = phaseFromAgent(part.name);
+      if (mapped2) return mapped2;
+      continue;
+    }
+    if (part.type !== "tool") continue;
+    const state = part.state && typeof part.state === "object" ? part.state : {};
+    const input = state.input && typeof state.input === "object" ? state.input : {};
+    const mapped = phaseFromAgent(input.agent) || phaseFromAgent(input.name) || phaseFromAgent(input.description) || phaseFromAgent(state.title) || phaseFromAgent(part.tool);
+    if (mapped) return mapped;
+  }
+  return "";
+}
+function detectSource(msg) {
+  const parts = msg.parts || [];
+  for (const part of parts) {
+    if (part.type !== "text") continue;
+    if (part.audience && part.audience.ui === false) continue;
+    if (part.kind === "trace" && !part.audience?.ui) continue;
+    if (part.source) return part.source;
+  }
+  return void 0;
+}
+function agentStageLabel(stage) {
+  if (stage === "spec") return t("chat.role.spec");
+  if (stage === "planner") return t("chat.role.planner");
+  if (stage === "goal") return t("chat.role.goal");
+  if (stage === "judge" || stage === "scheduler") return t("chat.role.scheduler");
+  if (stage === "delivery") return t("chat.role.delivery");
+  return t("chat.role.message");
+}
+function effectiveRole$1(msg, rootSessionID) {
+  const role = msg.info?.role || "assistant";
+  if (role !== "user") return role;
+  const source = detectSource(msg);
+  if (source) return source;
+  const sessionID = typeof msg.info?.sessionID === "string" ? msg.info.sessionID : "";
+  if (rootSessionID && sessionID && sessionID !== rootSessionID) {
+    return agentStageRole(phaseFromMessage(msg) || msg.info?.agent || "system");
+  }
+  return role;
+}
+
+function timeLocaleOptions(includeSeconds = true) {
+  return includeSeconds ? { hour: "2-digit", minute: "2-digit", second: "2-digit" } : { hour: "2-digit", minute: "2-digit" };
+}
+function stamp(ts) {
+  if (!ts) return "";
+  const d = new Date(ts);
+  return d.toLocaleTimeString(localeTag(), timeLocaleOptions());
+}
+
+var _tmpl$$g = /* @__PURE__ */ template(`<article class="turn msg"><div class=msg-head><span class=msg-role></span><span class=msg-time></span></div><div class=msg-bubble><div class=msg-body>`), _tmpl$2$e = /* @__PURE__ */ template(`<div class=msg-patch>`), _tmpl$3$e = /* @__PURE__ */ template(`<div>`), _tmpl$4$e = /* @__PURE__ */ template(`<div class=msg-tool><span class=tool-icon>→</span><span class=tool-name>Subtask</span><span class=tool-detail>`), _tmpl$5$e = /* @__PURE__ */ template(`<div class=executor-process-detail>`), _tmpl$6$b = /* @__PURE__ */ template(`<div class=executor-process-progress><span class=executor-process-activity></span><span>`), _tmpl$7$9 = /* @__PURE__ */ template(`<div class=executor-process-note>`), _tmpl$8$5 = /* @__PURE__ */ template(`<pre class=executor-process-output>`), _tmpl$9$5 = /* @__PURE__ */ template(`<div class=executor-process-card><div class=executor-process-head><span class=executor-process-kind></span><div class=executor-process-meta><div class=executor-process-row><div class=executor-process-title></div><div class=executor-process-status>`);
+function renderFilePart(part) {
+  const url = part.url || part.filename || "";
+  const name = part.filename || url || "file";
+  const mime = part.mime || part.mediaType || "";
+  const isImg = mime && mime.startsWith("image/") || /^data:image\//i.test(url) || /\.(png|jpe?g|gif|webp|svg|bmp|ico)(\?|$)/i.test(url);
+  if (isImg && url) {
+    return `<div class="msg-img-wrap"><img class="md-img" src="${escapeHtml$2(url)}" alt="${escapeHtml$2(name)}" loading="lazy"></div>`;
+  }
+  return `<div class="msg-text" style="font-family:var(--mono);font-size:var(--ui-font-small);color:var(--text-soft)">${escapeHtml$2(name)}</div>`;
+}
+function MessageView(props) {
+  const role = () => effectiveRole$1(props.message, rootTaskSessionID$1());
+  const parts = () => orderedMessageParts(props.message);
+  const time = () => stamp(props.message.info?.time?.created);
+  const hasContent = createMemo(() => {
+    const p = parts();
+    if (p.length === 0) return false;
+    return p.some((part) => {
+      if (part.type === "text") return !!(part.text || "").trim();
+      if (part.type === "tool") return true;
+      if (part.type === "reasoning") return !!(part.text || "").trim();
+      if (part.type === "executor_process") return !!part.process;
+      if (part.type === "patch") return (part.files || []).length > 0;
+      if (part.type === "file") return true;
+      if (part.type === "subtask") return true;
+      return false;
+    });
+  });
+  return createComponent(Show, {
+    get when() {
+      return hasContent();
+    },
+    get children() {
+      var _el$ = _tmpl$$g(), _el$2 = _el$.firstChild, _el$3 = _el$2.firstChild, _el$4 = _el$3.nextSibling, _el$5 = _el$2.nextSibling, _el$6 = _el$5.firstChild;
+      insert(_el$3, () => roleLabel(role()));
+      insert(_el$4, time);
+      insert(_el$6, createComponent(For, {
+        get each() {
+          return parts();
+        },
+        children: (part) => createComponent(Switch, {
+          fallback: null,
+          get children() {
+            return [createComponent(Match, {
+              get when() {
+                return memo(() => part.type === "text")() && (part.text || "").trim();
+              },
+              get children() {
+                return createComponent(TextPart, {
+                  get text() {
+                    return part.text || "";
+                  }
+                });
+              }
+            }), createComponent(Match, {
+              get when() {
+                return part.type === "tool";
+              },
+              get children() {
+                return createComponent(ToolPart, {
+                  part
+                });
+              }
+            }), createComponent(Match, {
+              get when() {
+                return memo(() => part.type === "reasoning")() && (part.text || "").trim();
+              },
+              get children() {
+                return createComponent(ReasoningPart, {
+                  part
+                });
+              }
+            }), createComponent(Match, {
+              get when() {
+                return memo(() => part.type === "patch")() && (part.files || []).length > 0;
+              },
+              get children() {
+                var _el$7 = _tmpl$2$e();
+                insert(_el$7, () => "⚙ " + (part.files || []).map((f) => shortRelativePath(f, activeDirectory$2())).join(", "));
+                return _el$7;
+              }
+            }), createComponent(Match, {
+              get when() {
+                return part.type === "file";
+              },
+              get children() {
+                var _el$8 = _tmpl$3$e();
+                createRenderEffect(() => _el$8.innerHTML = renderFilePart(part));
+                return _el$8;
+              }
+            }), createComponent(Match, {
+              get when() {
+                return part.type === "subtask";
+              },
+              get children() {
+                var _el$9 = _tmpl$4$e(), _el$0 = _el$9.firstChild, _el$1 = _el$0.nextSibling, _el$10 = _el$1.nextSibling;
+                insert(_el$10, () => part.description || part.prompt || "");
+                return _el$9;
+              }
+            }), createComponent(Match, {
+              get when() {
+                return memo(() => part.type === "executor_process")() && part.process;
+              },
+              get children() {
+                var _el$11 = _tmpl$9$5(), _el$12 = _el$11.firstChild, _el$13 = _el$12.firstChild, _el$14 = _el$13.nextSibling, _el$15 = _el$14.firstChild, _el$16 = _el$15.firstChild, _el$17 = _el$16.nextSibling;
+                insert(_el$13, () => String(part.process.kind || "task"));
+                insert(_el$16, () => part.process.title || part.process.id || "");
+                insert(_el$17, () => part.process.status || "running");
+                insert(_el$14, createComponent(Show, {
+                  get when() {
+                    return part.process.detail;
+                  },
+                  get children() {
+                    var _el$18 = _tmpl$5$e();
+                    insert(_el$18, () => part.process.detail);
+                    return _el$18;
+                  }
+                }), null);
+                insert(_el$14, createComponent(Show, {
+                  get when() {
+                    return part.process.progress;
+                  },
+                  get children() {
+                    var _el$19 = _tmpl$6$b(), _el$20 = _el$19.firstChild, _el$21 = _el$20.nextSibling;
+                    insert(_el$21, () => part.process.progress);
+                    return _el$19;
+                  }
+                }), null);
+                insert(_el$14, createComponent(Show, {
+                  get when() {
+                    return part.process.note;
+                  },
+                  get children() {
+                    var _el$22 = _tmpl$7$9();
+                    insert(_el$22, () => part.process.note);
+                    return _el$22;
+                  }
+                }), null);
+                insert(_el$14, createComponent(Show, {
+                  get when() {
+                    return part.process.output;
+                  },
+                  get children() {
+                    var _el$23 = _tmpl$8$5();
+                    insert(_el$23, () => part.process.output);
+                    return _el$23;
+                  }
+                }), null);
+                createRenderEffect((_p$) => {
+                  var _v$ = part.process.status || "running", _v$2 = part.process.status === "running" ? "true" : "false", _v$3 = part.process.status || "running";
+                  _v$ !== _p$.e && setAttribute(_el$11, "data-status", _p$.e = _v$);
+                  _v$2 !== _p$.t && setAttribute(_el$11, "data-live", _p$.t = _v$2);
+                  _v$3 !== _p$.a && setAttribute(_el$17, "data-status", _p$.a = _v$3);
+                  return _p$;
+                }, {
+                  e: void 0,
+                  t: void 0,
+                  a: void 0
+                });
+                return _el$11;
+              }
+            })];
+          }
+        })
+      }));
+      createRenderEffect(() => setAttribute(_el$, "data-role", role()));
+      return _el$;
+    }
+  });
+}
+
+var _tmpl$$f = /* @__PURE__ */ template(`<span class="agent-card-badge agent-card-badge--done"title=Completed>✓`), _tmpl$2$d = /* @__PURE__ */ template(`<div class=agent-card-body>`), _tmpl$3$d = /* @__PURE__ */ template(`<article class="turn msg agent-card"data-role=agent-card><div class=agent-card-header role=button tabindex=0><span class=agent-card-label></span><span class=agent-card-count></span><span class=agent-card-chevron aria-hidden=true>▼`), _tmpl$4$d = /* @__PURE__ */ template(`<span class="agent-card-badge agent-card-badge--running"title=Running><span class=agent-card-spinner>`), _tmpl$5$d = /* @__PURE__ */ template(`<span class="agent-card-badge agent-card-badge--error"title=Error>✗`);
+function stageLabel(stage) {
+  return agentStageLabel(stage);
+}
+function AgentCard(props) {
+  const [expanded, setExpanded] = createSignal(props.status === "running");
+  const label = () => {
+    const base = stageLabel(props.stage);
+    return props.round > 0 ? `${base} #${props.round}` : base;
+  };
+  const toggle = () => setExpanded(!expanded());
+  return (() => {
+    var _el$ = _tmpl$3$d(), _el$2 = _el$.firstChild, _el$4 = _el$2.firstChild, _el$5 = _el$4.nextSibling;
+    _el$2.$$keydown = (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        toggle();
+      }
+    };
+    _el$2.$$click = toggle;
+    insert(_el$2, createComponent(Show, {
+      get when() {
+        return props.status !== "running";
+      },
+      get fallback() {
+        return _tmpl$4$d();
+      },
+      get children() {
+        return createComponent(Show, {
+          get when() {
+            return props.status === "completed";
+          },
+          get fallback() {
+            return _tmpl$5$d();
+          },
+          get children() {
+            return _tmpl$$f();
+          }
+        });
+      }
+    }), _el$4);
+    insert(_el$4, label);
+    insert(_el$5, createComponent(Show, {
+      get when() {
+        return props.messages.length > 0;
+      },
+      get children() {
+        return ["(", memo(() => props.messages.length), ")"];
+      }
+    }));
+    insert(_el$, createComponent(Show, {
+      get when() {
+        return expanded();
+      },
+      get children() {
+        var _el$6 = _tmpl$2$d();
+        insert(_el$6, createComponent(For, {
+          get each() {
+            return props.messages;
+          },
+          children: (msg) => createComponent(MessageView, {
+            message: msg
+          })
+        }));
+        return _el$6;
+      }
+    }), null);
+    createRenderEffect((_p$) => {
+      var _v$ = !!expanded(), _v$2 = props.stage, _v$3 = props.key, _v$4 = expanded();
+      _v$ !== _p$.e && _el$.classList.toggle("agent-card--expanded", _p$.e = _v$);
+      _v$2 !== _p$.t && setAttribute(_el$, "data-stage", _p$.t = _v$2);
+      _v$3 !== _p$.a && setAttribute(_el$, "data-card-key", _p$.a = _v$3);
+      _v$4 !== _p$.o && setAttribute(_el$2, "aria-expanded", _p$.o = _v$4);
+      return _p$;
+    }, {
+      e: void 0,
+      t: void 0,
+      a: void 0,
+      o: void 0
+    });
+    return _el$;
+  })();
+}
+delegateEvents(["click", "keydown"]);
+
+const [store$1, setStore$1] = createStore({
+  events: [],
+  runID: "",
+  fetchedAt: 0
+});
+const EXECUTOR_LIVE_INTERVAL = 32;
+const executorLiveTimers = /* @__PURE__ */ new Map();
+function executorDeltaKind(kind) {
+  return kind === "message_delta" || kind === "reasoning_delta";
+}
+function executorEventScopeID$1(event) {
+  if (!event) return "";
+  if (event.goalRunID) return `goal:${event.goalRunID}`;
+  if (event.executorSessionID) return `session:${event.executorSessionID}`;
+  if (event.runID) return `run:${event.runID}`;
+  return "";
+}
+function sameExecutorEventScope$1(left, right) {
+  const a = executorEventScopeID$1(left);
+  const b = executorEventScopeID$1(right);
+  if (!a || !b) return true;
+  return a === b;
+}
+function sameExecutorEventStream(left, right) {
+  return (!left?.runID || !right?.runID || left.runID === right.runID) && sameExecutorEventScope$1(left, right);
+}
+function record$7(value) {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+function executorTargetText$1(event) {
+  if (typeof event._targetText === "string") return event._targetText;
+  if (typeof event.summary === "string") return event.summary;
+  return "";
+}
+function executorEventKey(event) {
+  return String(event?.id || "").trim();
+}
+function stopExecutorLiveTimer(key) {
+  const timer = executorLiveTimers.get(key);
+  if (!timer) return;
+  clearTimeout(timer);
+  executorLiveTimers.delete(key);
+}
+function nextLiveLength$1(live, target) {
+  if (!target) return 0;
+  if (!live) return Math.min(target.length, 1);
+  const remaining = target.length - live.length;
+  if (remaining <= 0) return target.length;
+  if (remaining <= 6) return target.length;
+  return Math.min(target.length, live.length + Math.max(1, Math.ceil(remaining / 2)));
+}
+function advanceExecutorLiveText(key) {
+  const index = store$1.events.findIndex((item) => executorEventKey(item) === key);
+  if (index < 0) {
+    stopExecutorLiveTimer(key);
+    return;
+  }
+  const event = store$1.events[index];
+  const target = executorTargetText$1(event);
+  const live = typeof event?._liveText === "string" ? event._liveText : "";
+  if (!target) {
+    stopExecutorLiveTimer(key);
+    return;
+  }
+  if (live.length >= target.length) {
+    if (live !== target) {
+      setStore$1("events", index, "_liveText", target);
+      setStore$1("fetchedAt", Date.now());
+    }
+    stopExecutorLiveTimer(key);
+    return;
+  }
+  setStore$1("events", index, "_liveText", target.slice(0, nextLiveLength$1(live, target)));
+  setStore$1("fetchedAt", Date.now());
+  executorLiveTimers.set(
+    key,
+    setTimeout(() => advanceExecutorLiveText(key), EXECUTOR_LIVE_INTERVAL)
+  );
+}
+function scheduleExecutorLiveText(event) {
+  const key = executorEventKey(event);
+  if (!key) return;
+  const target = executorTargetText$1(event);
+  const live = typeof event?._liveText === "string" ? event._liveText : "";
+  if (!target || live.length >= target.length) {
+    stopExecutorLiveTimer(key);
+    return;
+  }
+  if (executorLiveTimers.has(key)) return;
+  executorLiveTimers.set(
+    key,
+    setTimeout(() => advanceExecutorLiveText(key), EXECUTOR_LIVE_INTERVAL)
+  );
+}
+function mergeExecutorDelta(current, event) {
+  const delta = typeof event.payload?.text === "string" ? event.payload.text : event.summary || "";
+  const previous = typeof current.payload?.text === "string" ? current.payload.text : executorTargetText$1(current);
+  return {
+    ...current,
+    summary: previous + delta,
+    payload: {
+      ...record$7(current.payload) ? current.payload : {},
+      ...record$7(event.payload) ? event.payload : {},
+      text: previous + delta
+    },
+    _targetText: previous + delta,
+    _liveText: typeof current._liveText === "string" ? current._liveText : previous
+  };
+}
+function mergeEventList(events, event) {
+  const index = event.id ? events.findIndex((item) => item.id === event.id) : -1;
+  if (index >= 0) {
+    if (executorDeltaKind(event.kind)) {
+      const next = mergeExecutorDelta(events[index], event);
+      return [...events.slice(0, index), next, ...events.slice(index + 1)];
+    }
+    return [
+      ...events.slice(0, index),
+      {
+        ...events[index],
+        ...event,
+        payload: {
+          ...record$7(events[index]?.payload) ? events[index].payload : {},
+          ...record$7(event?.payload) ? event.payload : {}
+        }
+      },
+      ...events.slice(index + 1)
+    ];
+  }
+  let sourceIndex = -1;
+  if (executorDeltaKind(event.kind)) {
+    for (let i = events.length - 1; i >= 0; i -= 1) {
+      const item = events[i];
+      if (item.kind !== event.kind) continue;
+      if (!sameExecutorEventStream(item, event)) continue;
+      if (event.sourceID) {
+        if (item.sourceID === event.sourceID) {
+          sourceIndex = i;
+          break;
+        }
+        continue;
+      }
+      if (event.kind === "reasoning_delta") {
+        sourceIndex = i;
+        break;
+      }
+    }
+  }
+  if (sourceIndex >= 0) {
+    const merged = mergeExecutorDelta(events[sourceIndex], event);
+    return [
+      ...events.slice(0, sourceIndex),
+      { ...merged, id: events[sourceIndex].id },
+      ...events.slice(sourceIndex + 1)
+    ];
+  }
+  return [...events, event];
+}
+function appendExecutorEvent(event) {
+  if (!event) return;
+  if (event.runID && store$1.runID && store$1.runID !== event.runID) {
+    setStore$1("events", reconcile([]));
+    setStore$1("runID", event.runID);
+  }
+  if (event.runID && !store$1.runID) {
+    setStore$1("runID", event.runID);
+  }
+  const merged = mergeEventList([...store$1.events], event);
+  setStore$1("events", reconcile(merged));
+  setStore$1("fetchedAt", Date.now());
+  const key = executorEventKey(event);
+  const target = key ? merged.find((item) => executorEventKey(item) === key) || null : null;
+  if (target) scheduleExecutorLiveText(target);
+}
+function clearExecutorEvents() {
+  for (const key of executorLiveTimers.keys()) {
+    stopExecutorLiveTimer(key);
+  }
+  setStore$1("events", reconcile([]));
+  setStore$1("runID", "");
+  setStore$1("fetchedAt", 0);
+}
+
+function displayString$1(value, _space = 0) {
+  if (typeof value === "string") {
+    const t = value.trim();
+    if (t === "[object Object]" || t === "[]" || t === "null" || t === "{}") {
+      return "";
+    }
+    return value;
+  }
+  if (value === void 0 || value === null) return "";
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+  return "";
+}
+function clipText$2(value, limit = 80) {
+  const text = String(value || "").replace(/\s+/g, " ").trim();
+  if (!text) return "";
+  if (text.length <= limit) return text;
+  return `${text.slice(0, Math.max(0, limit - 3)).trim()}...`;
+}
+function stripAssistantBrief(text) {
+  const briefRe = /<assistant-brief>[\s\S]*?<\/assistant-brief>/;
+  let cleaned = text.replace(briefRe, "");
+  cleaned = cleaned.replace(/Use the brief above to align your work before executing the task\.\s*/g, "").replace(/You are executing a headless coding task[^\n]*\n?/g, "").replace(/^Task:\s*[^\n]*\n?/gm, "").replace(/^Goals:\n(?:- [^\n]*\n?)*/gm, "").replace(/^Request:\s*\n?/gm, "");
+  return cleaned.trim();
+}
+function joinBullet$1(values) {
+  return values.filter(Boolean).join(" / ");
+}
+
+const MAX_ENTRIES = 2e3;
+const MAX_FLUSH_FAILURES = 5;
+const LOG_LEVEL_ORDER = {
+  debug: 0,
+  info: 1,
+  warn: 2,
+  error: 3
+};
+const entries = [];
+let filterLevel = "debug";
+let _flushQueue = [];
+let _flushTimer = null;
+let _flushFailCount = 0;
+function now() {
+  return (/* @__PURE__ */ new Date()).toISOString().split(".")[0];
+}
+function add(level, service, message, extra) {
+  const entry = { ts: now(), level, service, message, extra };
+  entries.push(entry);
+  if (entries.length > MAX_ENTRIES) {
+    entries.splice(0, entries.length - MAX_ENTRIES);
+  }
+  return entry;
+}
+function flush() {
+  _flushTimer = null;
+  const batch = _flushQueue.splice(0);
+  if (batch.length === 0) return;
+  for (const entry of batch) {
+    const extraObj = entry.extra && typeof entry.extra === "object" ? entry.extra : void 0;
+    const msg = entry.extra && !extraObj ? `${entry.message} ${entry.extra}` : entry.message;
+    fetch(apiUrl("log"), {
+      method: "POST",
+      headers: { ...apiHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({
+        service: "overlay:" + entry.service,
+        level: entry.level,
+        message: msg,
+        extra: extraObj
+      })
+    }).then(() => {
+      _flushFailCount = 0;
+    }).catch(() => {
+      _flushFailCount++;
+      if (_flushFailCount <= MAX_FLUSH_FAILURES) {
+        _flushQueue.push(entry);
+      }
+    });
+  }
+}
+function persist(entry) {
+  _flushQueue.push(entry);
+  if (!_flushTimer) {
+    _flushTimer = setTimeout(flush, 500);
+  }
+}
+async function waitForLogDrain(timeoutMs = 2e3) {
+  const started = Date.now();
+  while (_flushTimer || _flushQueue.length > 0) {
+    if (Date.now() - started >= timeoutMs) return;
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+}
+function log(level, service, message, extra) {
+  const entry = add(level, service, message, extra);
+  persist(entry);
+  const storeEntry = {
+    ts: entry.ts,
+    level: entry.level,
+    service: entry.service,
+    delta: "",
+    message: entry.message,
+    fields: entry.extra && typeof entry.extra === "object" ? entry.extra : {},
+    raw: "",
+    source: "overlay"
+  };
+  appendLog(storeEntry);
+  return entry;
+}
+const AppLog = {
+  debug: (service, msg, extra) => log("debug", service, msg, extra),
+  info: (service, msg, extra) => log("info", service, msg, extra),
+  warn: (service, msg, extra) => log("warn", service, msg, extra),
+  error: (service, msg, extra) => log("error", service, msg, extra),
+  /** All accumulated entries (mutable reference, mirrors app.js behaviour). */
+  entries,
+  get filterLevel() {
+    return filterLevel;
+  },
+  set filterLevel(v) {
+    filterLevel = v;
+  },
+  /** Return entries filtered to at least the current filterLevel. */
+  filtered() {
+    const min = LOG_LEVEL_ORDER[filterLevel] ?? 0;
+    return entries.filter((e) => (LOG_LEVEL_ORDER[e.level] ?? 0) >= min);
+  },
+  /** Clear the in-memory entry buffer. */
+  clear() {
+    entries.length = 0;
+  }
+};
+
+function record$6(value) {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+function shellQuote(value) {
+  const text = String(value ?? "").trim();
+  if (!text) return "";
+  if (/^[\w./:=@-]+$/.test(text)) return text;
+  return JSON.stringify(text);
+}
+function commandLine(value) {
+  if (Array.isArray(value)) return value.map(shellQuote).filter(Boolean).join(" ").trim();
+  if (typeof value === "string") return value.trim();
+  return "";
+}
+function clipBlock(value, limit = 280) {
+  const text = String(value || "").replace(/\r\n?/g, "\n").trim();
+  if (!text) return "";
+  if (text.length <= limit) return text;
+  return `${text.slice(0, Math.max(0, limit - 3)).trimEnd()}...`;
+}
+function processStatusLabel$1(status) {
+  if (status === "completed") return t("task.status.completed");
+  if (status === "failed") return t("task.status.failed");
+  if (status === "blocked") return t("task.status.blocked");
+  if (status === "queued") return t("task.status.queued");
+  return t("task.status.running");
+}
+function eventToolName(event) {
+  return event?.payload?.name ?? event?.payload?.tool ?? event?.payload?.function?.name ?? event?.summary?.split(":")?.[0]?.trim() ?? "tool";
+}
+function eventToolStatus(event, override) {
+  if (override) return override;
+  const status = String(event?.payload?.status || event?.sourceStatus || "").trim().toLowerCase();
+  if (status.includes("fail") || status.includes("error")) return "error";
+  if (status.includes("complete") || status.includes("done")) return "completed";
+  if (status.includes("pending") || status.includes("queue")) return "pending";
+  if (event?.kind === "tool_result") return "completed";
+  if (event?.kind === "error") return "error";
+  return "running";
+}
+function toolStateInput(raw, fallback = "") {
+  if (record$6(raw)) return raw;
+  if (typeof raw === "string" && raw.trim()) {
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return { raw };
+    }
+  }
+  if (fallback) return { raw: fallback };
+  return {};
+}
+function eventToolPart(event, options = {}) {
+  if (!event) return null;
+  const created = Number(event?.time?.created || Date.now());
+  const summary = displayString$1(event?.summary).trim();
+  const inputText = displayString$1(event?.text || event?.payload?.text).trim();
+  const input = toolStateInput(
+    event?.payload?.input ?? event?.payload?.arguments ?? event?.payload?.args ?? "",
+    inputText
+  );
+  const id = typeof event?.id === "string" && event.id ? event.id : `tool:${created}:${eventToolName(event)}`;
+  const callID = typeof event?.sourceID === "string" && event.sourceID ? event.sourceID : typeof event?.payload?.id === "string" && event.payload.id ? event.payload.id : id;
+  const tool = eventToolName(event);
+  const status = eventToolStatus(event, typeof options.status === "string" ? options.status : "");
+  const output = clipBlock(displayString$1(options.output || event?.payload?.output || event?.payload?.result || summary));
+  if (status === "completed") {
+    return {
+      id,
+      type: "tool",
+      callID,
+      tool,
+      state: {
+        status: "completed",
+        input,
+        output: output || summary || tool,
+        title: summary || tool,
+        metadata: { synthetic: true },
+        time: { start: created, end: created }
+      }
+    };
+  }
+  if (status === "error") {
+    return {
+      id,
+      type: "tool",
+      callID,
+      tool,
+      state: {
+        status: "error",
+        input,
+        error: output || summary || tool,
+        metadata: { synthetic: true },
+        time: { start: created, end: created }
+      }
+    };
+  }
+  if (status === "pending") {
+    return {
+      id,
+      type: "tool",
+      callID,
+      tool,
+      state: {
+        status: "pending",
+        input,
+        raw: inputText || summary || tool
+      }
+    };
+  }
+  return {
+    id,
+    type: "tool",
+    callID,
+    tool,
+    state: {
+      status: "running",
+      input,
+      title: summary || tool,
+      metadata: { synthetic: true },
+      time: { start: created }
+    }
+  };
+}
+function executorEventKind$1(type) {
+  const text = String(type || "").trim().toLowerCase();
+  if (!text) return "status";
+  if (text.includes("tool")) return text.includes("result") ? "tool_result" : "tool_call";
+  if (text.includes("reason")) return "reasoning_delta";
+  if (text.includes("plan")) return "plan_delta";
+  if (text.includes("diff")) return "diff_delta";
+  if (text.includes("approval")) return "approval_request";
+  if (text.includes("input")) return "input_request";
+  if (text.includes("mcp")) return "mcp";
+  if (text.includes("command")) return "command";
+  if (text.includes("error")) return "error";
+  if (text.includes("done") || text.includes("completed")) return "done";
+  if (text.includes("delta") || text.includes("message")) return "message_delta";
+  return "status";
+}
+function executorEventSourceKind(kind, payload = {}) {
+  if (typeof payload.sourceKind === "string" && payload.sourceKind.trim()) return payload.sourceKind.trim();
+  if (kind === "tool_call" || kind === "tool_result") return "tool";
+  if (kind === "command") return "command";
+  if (kind === "approval_request") return "approval";
+  if (kind === "input_request") return "input";
+  if (kind === "mcp") return "mcp";
+  if (kind === "reasoning_delta") return "assistant";
+  if (kind === "message_delta") return "assistant";
+  if (kind === "error") return "error";
+  return "status";
+}
+const EXECUTOR_NOISE_TYPES = /* @__PURE__ */ new Set([
+  "message.updated",
+  "message.part.updated",
+  "message.part.delta",
+  "protocol.raw",
+  "executor.status",
+  "executor.progress",
+  "session.diff",
+  "session.idle",
+  "session.status",
+  "session.error",
+  "task.report"
+]);
+function executorEventEntry(raw) {
+  const rawType = String(raw?.type || raw?.payload?.type || "").trim().toLowerCase();
+  if (rawType && EXECUTOR_NOISE_TYPES.has(rawType)) return null;
+  const kind = typeof raw?.kind === "string" && raw.kind ? raw.kind : executorEventKind$1(raw?.type);
+  const payload = record$6(raw?.payload) && record$6(raw.payload.payload) ? { ...raw.payload, ...raw.payload.payload } : record$6(raw?.payload) ? raw.payload : {};
+  const summary = typeof raw?.summary === "string" ? raw.summary.trim() : typeof raw?.text === "string" ? raw.text.trim() : typeof payload.summary === "string" ? payload.summary.trim() : typeof payload.text === "string" ? payload.text.trim() : "";
+  const created = Number(raw?.time?.created || raw?.timestamp || Date.now());
+  if (!summary && Object.keys(payload).length === 0) return null;
+  const marker = typeof payload.id === "string" && payload.id ? payload.id : typeof payload.name === "string" && payload.name ? payload.name : typeof raw?.type === "string" && raw.type ? raw.type : "event";
+  const sourceID = typeof payload.sourceID === "string" && payload.sourceID ? payload.sourceID : typeof payload.id === "string" && payload.id ? payload.id : "";
+  const goalRunID = typeof raw?.goalRunID === "string" && raw.goalRunID ? raw.goalRunID : typeof raw?.goal_run_id === "string" && raw.goal_run_id ? raw.goal_run_id : typeof payload.goalRunID === "string" && payload.goalRunID ? payload.goalRunID : typeof payload.goal_run_id === "string" && payload.goal_run_id ? payload.goal_run_id : "";
+  const executorSessionID = typeof raw?.executorSessionID === "string" && raw.executorSessionID ? raw.executorSessionID : typeof raw?.executor_session_id === "string" && raw.executor_session_id ? raw.executor_session_id : typeof payload.executorSessionID === "string" && payload.executorSessionID ? payload.executorSessionID : typeof payload.executor_session_id === "string" && payload.executor_session_id ? payload.executor_session_id : "";
+  const sourceKind = executorEventSourceKind(kind, payload);
+  const sourceLabel = typeof payload.sourceLabel === "string" && payload.sourceLabel.trim() ? payload.sourceLabel.trim() : "";
+  const sourceStatus = typeof payload.status === "string" && payload.status.trim() ? payload.status.trim() : "";
+  const scope = goalRunID ? `goal:${goalRunID}` : executorSessionID ? `session:${executorSessionID}` : "";
+  return {
+    id: typeof raw?.id === "string" && raw.id ? raw.id : kind === "message_delta" && sourceID ? `executor:${scope || "global"}:${sourceID}` : `executor:${kind}:${created}:${summary || marker}`,
+    runID: typeof raw?.runID === "string" ? raw.runID : typeof raw?.run_id === "string" ? raw.run_id : typeof raw?.payload?.runID === "string" ? raw.payload.runID : "",
+    kind,
+    summary,
+    payload,
+    sourceID,
+    sourceKind,
+    sourceLabel,
+    sourceStatus,
+    goalRunID,
+    executorSessionID,
+    time: { created: Number.isFinite(created) ? created : Date.now() }
+  };
+}
+function executorEventScopeID(event) {
+  if (!event) return "";
+  if (typeof event.goalRunID === "string" && event.goalRunID) return `goal:${event.goalRunID}`;
+  if (typeof event.executorSessionID === "string" && event.executorSessionID) return `session:${event.executorSessionID}`;
+  if (typeof event.runID === "string" && event.runID) return `run:${event.runID}`;
+  return "";
+}
+function sameExecutorEventScope(left, right) {
+  const a = executorEventScopeID(left);
+  const b = executorEventScopeID(right);
+  if (!a || !b) return true;
+  return a === b;
+}
+function genericExecutorSummary(event) {
+  const summary = String(event?.summary || "").trim().toLowerCase();
+  if (!summary) return true;
+  if (event.kind === "tool_call") return /^(tool call|shell command):\s*\S+$/.test(summary);
+  if (event.kind === "tool_result") {
+    return summary.startsWith("tool result:") || [
+      "shell command completed",
+      "structured output returned",
+      "approval resolved",
+      "user input received"
+    ].includes(summary);
+  }
+  if (event.kind === "command") {
+    return [
+      "command",
+      "running command",
+      "command started",
+      "command completed"
+    ].includes(summary);
+  }
+  return false;
+}
+function executorCommand(event) {
+  if (!record$6(event?.payload)) return "";
+  const input = record$6(event.payload.input) ? event.payload.input : {};
+  return commandLine(
+    event.payload.command ?? event.payload.argv ?? event.payload.cmd ?? input.command ?? input.argv ?? input.cmd ?? ""
+  );
+}
+function executorOutput(event) {
+  if (!record$6(event?.payload)) return "";
+  const output = event.payload.output;
+  if (typeof output === "string") return clipBlock(output);
+  if (record$6(output)) {
+    const text = [
+      output.output,
+      output.stdout,
+      output.stderr,
+      output.result,
+      output.message,
+      output.content
+    ].filter((item) => typeof item === "string" && item.trim()).join("\n");
+    if (text) return clipBlock(text);
+    return "";
+  }
+  if (typeof event.payload.text === "string") return clipBlock(event.payload.text);
+  return "";
+}
+function executorCall(events, index, event) {
+  const id = typeof event?.payload?.id === "string" ? event.payload.id : "";
+  if (!id || !Array.isArray(events) || index <= 0) return null;
+  return [...events.slice(0, index)].reverse().find(
+    (item) => item?.kind === "tool_call" && item?.payload?.id === id && (!item.runID || !event.runID || item.runID === event.runID) && sameExecutorEventScope(item, event)
+  ) || null;
+}
+function executorTargetText(event, events = [], index = -1) {
+  if (typeof event?._targetText === "string") return event._targetText;
+  const summary = displayString$1(event?.summary).trim();
+  const command = executorCommand(event);
+  const output = executorOutput(event);
+  if (event?.kind === "message_delta") {
+    const text = displayString$1(event?.payload?.text);
+    if (text.trim()) return text;
+    return summary;
+  }
+  if (event?.kind === "reasoning_delta") {
+    const text = displayString$1(event?.payload?.text);
+    if (text.trim()) return text;
+    return summary;
+  }
+  if (event?.kind === "tool_call") {
+    if (!command) return summary;
+    if (genericExecutorSummary(event)) return command;
+    if (summary.includes(command)) return summary;
+    return [summary, command].filter(Boolean).join("\n");
+  }
+  if (event?.kind === "command") {
+    const lines = [];
+    if (summary && (!genericExecutorSummary(event) || !command)) lines.push(summary);
+    if (command && !lines.some((item) => item.includes(command))) lines.push(command);
+    if (output) lines.push(output);
+    if (lines.length > 0) return lines.join("\n");
+    return summary;
+  }
+  if (event?.kind === "tool_result") {
+    const call = executorCall(events, index, event);
+    const linked = command || executorCommand(call);
+    const lines = [];
+    if (summary && (!genericExecutorSummary(event) || !linked && !output)) lines.push(summary);
+    if (linked && !lines.some((item) => item.includes(linked))) lines.push(linked);
+    if (output) lines.push(output);
+    if (lines.length > 0) return lines.join("\n");
+    return summary;
+  }
+  return summary;
+}
+function executorText(event, events = [], index = -1) {
+  if (typeof event?._liveText === "string") return event._liveText;
+  return executorTargetText(event, events, index);
+}
+const VISIBLE_EXECUTOR_KINDS = /* @__PURE__ */ new Set([
+  "message_delta",
+  "reasoning_delta",
+  "tool_call",
+  "tool_result",
+  "command",
+  "approval_request",
+  "input_request",
+  "error",
+  "mcp"
+]);
+function visibleExecutorEvent(event) {
+  if (!event) return false;
+  if (!VISIBLE_EXECUTOR_KINDS.has(event.kind)) return false;
+  return !!executorText(event);
+}
+function executorMessage(event, events = [], index = -1) {
+  const text = executorText(event, events, index);
+  if (!text || !visibleExecutorEvent(event)) return null;
+  const part = event.kind === "tool_call" || event.kind === "tool_result" ? eventToolPart(event, {
+    status: event.kind === "tool_result" ? "completed" : "",
+    output: event.kind === "tool_result" ? executorOutput(event) || text : ""
+  }) : {
+    id: `${event.kind === "reasoning_delta" ? "reasoning" : "text"}:${event.id || index}`,
+    type: event.kind === "reasoning_delta" ? "reasoning" : "text",
+    text,
+    messageID: event.id,
+    sessionID: ""
+  };
+  if (part.type === "reasoning" && reasoningPartHidden(part)) return null;
+  return {
+    _synthetic: true,
+    info: {
+      id: event.id,
+      role: "assistant",
+      time: { created: event.time?.created || Date.now() }
+    },
+    parts: [part]
+  };
+}
+function executorProcessBaseID(event) {
+  if (!event) return "";
+  if (typeof event.sourceID === "string" && event.sourceID) return event.sourceID;
+  if (typeof event?.payload?.sourceID === "string" && event.payload.sourceID) return event.payload.sourceID;
+  if (typeof event?.payload?.id === "string" && event.payload.id) return event.payload.id;
+  if (event.kind === "command") {
+    const command = executorCommand(event);
+    if (command) return `command:${command}`;
+  }
+  return "";
+}
+function executorProcessID(event) {
+  const base = executorProcessBaseID(event);
+  if (!base) return "";
+  const scope = executorEventScopeID(event);
+  return scope ? `${scope}:${base}` : base;
+}
+function executorProcessKind(event) {
+  if (!event) return "";
+  if (typeof event.sourceKind === "string" && event.sourceKind) return event.sourceKind;
+  return executorEventSourceKind(event.kind, record$6(event?.payload) ? event.payload : {});
+}
+function executorProcessStatus(event) {
+  const status = String(event?.sourceStatus || event?.payload?.status || "").trim().toLowerCase();
+  if (status.includes("fail") || status.includes("error")) return "failed";
+  if (status.includes("complete") || status.includes("done")) return "completed";
+  if (status.includes("block")) return "blocked";
+  if (status.includes("queue") || status.includes("pending")) return "queued";
+  if (event?.kind === "tool_result") return "completed";
+  if (event?.kind === "error") return "failed";
+  if (event?.kind === "approval_request" || event?.kind === "input_request") return "blocked";
+  const summary = String(event?.summary || "").trim().toLowerCase();
+  if (summary.includes("fail") || summary.includes("error")) return "failed";
+  if (summary.includes("complete") || summary.includes("done")) return "completed";
+  if (summary.includes("block")) return "blocked";
+  if (summary.includes("queue") || summary.includes("pending")) return "queued";
+  return "running";
+}
+function executorProcessTitle(event, events = [], index = -1) {
+  const call = event?.kind === "tool_result" ? executorCall(events, index, event) : null;
+  const sourceLabel = displayString$1(event?.sourceLabel).trim();
+  if (sourceLabel) return sourceLabel;
+  const command = executorCommand(event);
+  if (command) return command;
+  const payloadName = displayString$1(event?.payload?.name).trim();
+  if (payloadName) return payloadName;
+  const callName = displayString$1(call?.payload?.name).trim();
+  if (callName) return callName;
+  return displayString$1(event?.summary).trim() || displayString$1(event?.id).trim();
+}
+function executorProcessDetail(event, events = [], index = -1) {
+  const kind = executorProcessKind(event);
+  const call = event?.kind === "tool_result" ? executorCall(events, index, event) : null;
+  const command = executorCommand(event) || executorCommand(call);
+  if (kind === "tool") {
+    if (command && command !== executorProcessTitle(event, events, index)) return command;
+    const input = displayString$1(event?.payload?.input);
+    if (input.trim()) return clipText$2(input.replace(/\s+/g, " "), 120);
+    const callInput = displayString$1(call?.payload?.input);
+    if (callInput.trim()) return clipText$2(callInput.replace(/\s+/g, " "), 120);
+  }
+  const approvalMessage = displayString$1(event?.payload?.message).trim();
+  if (kind === "approval" && approvalMessage) return approvalMessage;
+  const summary = displayString$1(event?.summary).trim();
+  if (kind === "input" && summary) return summary;
+  return "";
+}
+function executorProcessNote(event, events = [], index = -1) {
+  const summary = displayString$1(event?.summary).trim();
+  if (!summary || genericExecutorSummary(event)) return "";
+  const title = executorProcessTitle(event, events, index);
+  const detail = executorProcessDetail(event, events, index);
+  if (summary === title || summary === detail) return "";
+  return summary;
+}
+function executorProcessProgress(event, events = [], index = -1) {
+  const status = executorProcessStatus(event);
+  if (event?.kind === "message_delta") return processStatusLabel$1(status);
+  const summary = displayString$1(event?.summary).trim();
+  const title = executorProcessTitle(event, events, index);
+  const detail = executorProcessDetail(event, events, index);
+  const output = event?.kind === "message_delta" ? "" : executorOutput(event);
+  if (summary && summary !== title && summary !== detail && summary !== output && (!genericExecutorSummary(event) || event?.kind === "command" || event?.kind === "mcp")) return summary;
+  return processStatusLabel$1(status);
+}
+function mergeExecutorProcessOutput(current, next, replace = false) {
+  if (!next) return current;
+  if (!current) return next;
+  if (replace && next.startsWith(current)) return next;
+  if (current.includes(next)) return current;
+  return `${current}
+${next}`.trim();
+}
+function buildExecutorProcesses(events = []) {
+  const items = /* @__PURE__ */ new Map();
+  events.forEach((event, index) => {
+    const id = executorProcessID(event);
+    const kind = executorProcessKind(event);
+    if (!id || !kind || kind === "assistant" || kind === "status") return;
+    const current = items.get(id) || {
+      id,
+      kind,
+      title: executorProcessTitle(event, events, index),
+      detail: "",
+      progress: executorProcessProgress(event, events, index),
+      note: "",
+      output: "",
+      status: executorProcessStatus(event),
+      time: {
+        created: event.time?.created || Date.now(),
+        updated: event.time?.created || Date.now()
+      }
+    };
+    current.kind = kind;
+    current.title = executorProcessTitle(event, events, index) || current.title;
+    const detail = executorProcessDetail(event, events, index);
+    if (detail) current.detail = detail;
+    const progress = executorProcessProgress(event, events, index);
+    if (progress) current.progress = progress;
+    const note = executorProcessNote(event, events, index);
+    if (note) current.note = note;
+    current.status = executorProcessStatus(event) || current.status;
+    const output = event.kind === "message_delta" ? executorTargetText(event, events, index) : executorOutput(event);
+    if (output) current.output = mergeExecutorProcessOutput(current.output, output, event.kind === "message_delta");
+    current.time.updated = event.time?.created || current.time.updated;
+    items.set(id, current);
+  });
+  return [...items.values()].sort((a, b) => (a.time?.created || 0) - (b.time?.created || 0));
+}
+function executorProcessMessage(processes) {
+  if (!Array.isArray(processes) || processes.length === 0) return null;
+  return {
+    _synthetic: true,
+    info: {
+      id: `executor:processes:${boardStore.selectedTaskID || "active"}`,
+      role: "assistant",
+      time: { created: processes[0]?.time?.created || Date.now() }
+    },
+    parts: processes.map((process) => ({
+      type: "executor_process",
+      process
+    }))
+  };
+}
+function buildExecutorMessages() {
+  if (!boardStore.selectedTaskID) return [];
+  const events = Array.isArray(store$1.events) ? store$1.events : [];
+  const processes = buildExecutorProcesses(events);
+  const processIDs = new Set(processes.map((item) => item.id));
+  const messages = events.filter((event) => {
+    const id = executorProcessID(event);
+    const kind = executorProcessKind(event);
+    return !(id && processIDs.has(id) && kind && kind !== "assistant" && kind !== "status");
+  }).map((event, index) => executorMessage(event, events, index)).filter(Boolean);
+  const processMsg = executorProcessMessage(processes);
+  return processMsg ? [processMsg, ...messages] : messages;
+}
+
+function getDomRefs() {
+  const $ = (sel) => document.querySelector(sel);
+  return {
+    // Canvas / branding
+    techAtlasCanvas: $("#techAtlasCanvas"),
+    titlebar: $("#titlebar"),
+    connBadge: $("#connBadge"),
+    brandLogo: $(".brand-logo"),
+    brandVersion: $("#brandVersion"),
+    chatVersion: $("#chatVersion"),
+    chatAuthor: $("#chatAuthor"),
+    // Titlebar controls
+    btnTitlebarMenu: $("#btnTitlebarMenu"),
+    titlebarMenu: $("#titlebarMenu"),
+    btnLocale: $("#btnLocale"),
+    btnLocaleLabel: $("#btnLocaleLabel"),
+    btnTheme: $("#btnTheme"),
+    btnThemeValue: $("#btnThemeValue"),
+    btnSettings: $("#btnSettings"),
+    btnPin: $("#btnPin"),
+    btnPinValue: $("#btnPinValue"),
+    // Settings checkboxes / controls
+    chkUnattended: $("#chkUnattended"),
+    chkAutoPermission: $("#chkAutoPermission"),
+    chkAutoQuestion: $("#chkAutoQuestion"),
+    chkShowTranscriptDetails: $("#chkShowTranscriptDetails"),
+    opacityRange: $("#opacityRange"),
+    opacityValue: $("#opacityValue"),
+    // Window controls
+    btnMinimize: $("#btnMinimize"),
+    btnMaximize: $("#btnMaximize"),
+    btnClose: $("#btnClose"),
+    // Layout panels
+    panelBody: $("#panelBody"),
+    sidebar: $("#sidebar"),
+    btnSidebarToggle: $("#btnSidebarToggle"),
+    leftPaneResizer: $("#leftPaneResizer"),
+    workspaceMain: $("#workspaceMain"),
+    rightPaneResizer: $("#rightPaneResizer"),
+    sections: $("#sections"),
+    // Task / workspace
+    taskDir: $("#taskDir"),
+    recentDirPanel: $("#recentDirPanel"),
+    taskWorkspaceDir: $("#taskWorkspaceDir"),
+    taskGit: $("#taskGit"),
+    btnBrowseCwd: $("#btnBrowseCwd"),
+    btnCreateCwd: $("#btnCreateCwd"),
+    btnOpenCwd: $("#btnOpenCwd"),
+    btnResetCwd: $("#btnResetCwd"),
+    // Engine / model panels
+    engineBar: $("#engineBar"),
+    codexModelPanel: $("#codexModelPanel"),
+    claudeCodeModelPanel: $("#claudeCodeModelPanel"),
+    // Task meta
+    taskStatus: $("#taskStatus"),
+    extensionsBadge: $("#extensionsBadge"),
+    // Config dialog
+    btnConfigToggle: $("#btnConfigToggle"),
+    configToggleMeta: $("#configToggleMeta"),
+    configDialog: $("#configDialog"),
+    btnCloseConfigDialog: $("#btnCloseConfigDialog"),
+    // Prompt section
+    promptSection: $("#promptSection"),
+    promptBody: $("#promptBody"),
+    promptBadge: $("#promptBadge"),
+    taskActionsBar: $("#taskActionsBar"),
+    // PRD sections
+    specSection: $("#specSection"),
+    planSection: $("#planSection"),
+    goalsSection: $("#goalsSection"),
+    criteriaSection: $("#criteriaSection"),
+    deliverySection: $("#deliverySection"),
+    deliveryBadge: $("#deliveryBadge"),
+    deliveryBody: $("#deliveryBody"),
+    changesSection: $("#changesSection"),
+    // Channel section
+    channelSection: $("#channelSection"),
+    channelConfigBody: $("#channelConfigBody"),
+    channelPublicUrl: $("#channelPublicUrl"),
+    btnSaveChannelPublicUrl: $("#btnSaveChannelPublicUrl"),
+    cfgAvailableProviders: $("#cfgAvailableProviders"),
+    // Lists
+    channelList: $("#channelList"),
+    skillList: $("#skillList"),
+    btnSkillMarket: $("#btnSkillMarket"),
+    btnOpenSkillRoot: $("#btnOpenSkillRoot"),
+    btnReloadSkills: $("#btnReloadSkills"),
+    btnDeleteAllSkills: $("#btnDeleteAllSkills"),
+    mcpList: $("#mcpList"),
+    btnAddSkill: $("#btnAddSkill"),
+    btnAddMcp: $("#btnAddMcp"),
+    btnDeleteAllMcp: $("#btnDeleteAllMcp"),
+    // Status bar
+    statusDot: $("#statusIcon"),
+    statusLabel: $("#statusLabel"),
+    elapsed: $("#elapsed"),
+    btnTerminateRun: $("#btnTerminateRun"),
+    // Spec / plan badges and bodies
+    specBadge: $("#specBadge"),
+    specBody: $("#specBody"),
+    planBadge: $("#planBadge"),
+    planBody: $("#planBody"),
+    // Goals
+    goalsBadge: $("#goalsBadge"),
+    btnCreateGoal: $("#btnCreateGoal"),
+    goalsBody: $("#goalsBody"),
+    // Criteria / eval
+    criteriaBadge: $("#criteriaBadge"),
+    criteriaList: $("#criteriaList"),
+    evalBody: $("#evalBody"),
+    // Budget
+    budgetConfigBody: $("#budgetConfigBody"),
+    budgetHint: $("#budgetHint"),
+    budgetMaxRuns: $("#budgetMaxRuns"),
+    budgetMaxReplans: $("#budgetMaxReplans"),
+    budgetMaxEvaluations: $("#budgetMaxEvaluations"),
+    budgetMaxWallTime: $("#budgetMaxWallTime"),
+    btnBudgetReset: $("#btnBudgetReset"),
+    btnBudgetSave: $("#btnBudgetSave"),
+    // Changes
+    changesBadge: $("#changesBadge"),
+    changesBody: $("#changesBody"),
+    // Chat
+    chatGoalsStrip: $("#chatGoalsStrip"),
+    chatScroll: $("#chatScroll"),
+    chatEmpty: $("#chatEmpty"),
+    chatCount: $("#chatCount"),
+    btnChatCopyAll: $("#btnChatCopyAll"),
+    chatTabs: $("#chatTabs"),
+    tabControl: $("#tabControl"),
+    tabCoding: $("#tabCoding"),
+    codingScroll: $("#codingScroll"),
+    codingEmpty: $("#codingEmpty"),
+    // Chat form
+    chatForm: $("#chatForm"),
+    chatTextarea: $("#chatTextarea"),
+    chatAttachments: $("#chatAttachments"),
+    chatFileInput: $("#chatFileInput"),
+    btnChatAttach: $("#btnChatAttach"),
+    btnTaskInterrupt: $("#btnTaskInterrupt"),
+    chatSend: $("#chatSend"),
+    // Task list panel
+    taskListPanel: $("#taskListPanel"),
+    btnRefreshTasks: $("#btnRefreshTasks"),
+    btnCreateTask: $("#btnCreateTask"),
+    // Skill dialog
+    skillDialog: $("#skillDialog"),
+    skillForm: $("#skillForm"),
+    skillType: $("#skillType"),
+    skillValue: $("#skillValue"),
+    skillPolicy: $("#skillPolicy"),
+    btnPickSkillPath: $("#btnPickSkillPath"),
+    btnCancelSkill: $("#btnCancelSkill"),
+    // Skill market dialog
+    skillMarketDialog: $("#skillMarketDialog"),
+    skillMarketList: $("#skillMarketList"),
+    btnCloseSkillMarket: $("#btnCloseSkillMarket"),
+    // MCP dialog
+    mcpDialog: $("#mcpDialog"),
+    mcpForm: $("#mcpForm"),
+    mcpName: $("#mcpName"),
+    mcpType: $("#mcpType"),
+    mcpUrl: $("#mcpUrl"),
+    mcpCommand: $("#mcpCommand"),
+    mcpArgs: $("#mcpArgs"),
+    mcpRemoteField: $("#mcpRemoteField"),
+    mcpCommandField: $("#mcpCommandField"),
+    mcpArgsField: $("#mcpArgsField"),
+    btnCancelMcp: $("#btnCancelMcp"),
+    // Goal dialog
+    goalDialog: $("#goalDialog"),
+    goalForm: $("#goalForm"),
+    goalDialogTitle: $("#goalDialogTitle"),
+    goalId: $("#goalId"),
+    goalDescription: $("#goalDescription"),
+    goalCriteria: $("#goalCriteria"),
+    btnCancelGoal: $("#btnCancelGoal"),
+    // Diff dialog
+    diffDialog: $("#diffDialog"),
+    diffDialogTitle: $("#diffDialogTitle"),
+    diffDialogMeta: $("#diffDialogMeta"),
+    diffDialogBody: $("#diffDialogBody"),
+    btnCloseDiff: $("#btnCloseDiff"),
+    // Generic app dialog
+    appDialog: $("#appDialog"),
+    appDialogTitle: $("#appDialogTitle"),
+    appDialogBody: $("#appDialogBody"),
+    appDialogInputField: $("#appDialogInputField"),
+    appDialogInputLabel: $("#appDialogInputLabel"),
+    appDialogInput: $("#appDialogInput"),
+    appDialogSelectField: $("#appDialogSelectField"),
+    appDialogSelectLabel: $("#appDialogSelectLabel"),
+    appDialogSelect: $("#appDialogSelect"),
+    btnAppDialogCancel: $("#btnAppDialogCancel"),
+    btnAppDialogOk: $("#btnAppDialogOk"),
+    // LLM form
+    llmForm: $("#llmForm"),
+    llmSection: $("#llmSection"),
+    llmAdvanced: $("#llmAdvanced"),
+    llmSummary: $("#llmSummary"),
+    llmProvider: $("#llmProvider"),
+    llmModel: $("#llmModel"),
+    llmApiKey: $("#llmApiKey"),
+    llmApiKeySummary: $("#llmApiKeySummary"),
+    btnLlmApiKeyToggle: $("#btnLlmApiKeyToggle"),
+    btnLlmApiKeyCopy: $("#btnLlmApiKeyCopy"),
+    btnLlmAuthAction: $("#btnLlmAuthAction"),
+    llmStatus: $("#llmStatus"),
+    llmNotice: $("#llmNotice"),
+    // Channel dialog
+    channelDialog: $("#channelDialog"),
+    channelForm: $("#channelForm"),
+    channelDialogTitle: $("#channelDialogTitle"),
+    channelId: $("#channelId"),
+    channelFields: $("#channelFields"),
+    btnCancelChannel: $("#btnCancelChannel"),
+    // Settings dialog
+    settingsDialog: $("#settingsDialog"),
+    settingsForm: $("#settingsForm"),
+    serverUrl: $("#serverUrl"),
+    serverPassword: $("#serverPassword"),
+    serverUsername: $("#serverUsername"),
+    localeMode: $("#localeMode"),
+    themeMode: $("#themeMode"),
+    // Knowledge: Memory & Preferences
+    memoryBadge: $("#memoryBadge"),
+    memoryList: $("#memoryList"),
+    memorySearch: $("#memorySearch"),
+    btnMemorySearch: $("#btnMemorySearch"),
+    btnMemoryRefresh: $("#btnMemoryRefresh"),
+    preferenceBadge: $("#preferenceBadge"),
+    preferenceList: $("#preferenceList"),
+    btnPreferenceRefresh: $("#btnPreferenceRefresh"),
+    btnPreferenceAdd: $("#btnPreferenceAdd"),
+    memoryDialog: $("#memoryDialog"),
+    memoryDialogTitle: $("#memoryDialogTitle"),
+    memoryDialogMeta: $("#memoryDialogMeta"),
+    memoryDialogContent: $("#memoryDialogContent"),
+    btnDeleteMemory: $("#btnDeleteMemory"),
+    btnCloseMemory: $("#btnCloseMemory"),
+    // Log viewer
+    logDialog: $("#logDialog"),
+    logViewerBody: $("#logViewerBody"),
+    logLevelFilter: $("#logLevelFilter"),
+    btnLog: $("#btnLog"),
+    btnLogRefresh: $("#btnLogRefresh"),
+    btnLogCopy: $("#btnLogCopy"),
+    btnLogClear: $("#btnLogClear"),
+    btnCloseLog: $("#btnCloseLog"),
+    btnLogServerLogs: $("#btnLogServerLogs"),
+    // Preference edit dialog
+    prefEditDialog: $("#prefEditDialog"),
+    prefEditForm: $("#prefEditForm"),
+    prefEditTitle: $("#prefEditTitle"),
+    prefEditId: $("#prefEditId"),
+    prefEditKey: $("#prefEditKey"),
+    prefEditValue: $("#prefEditValue"),
+    btnCancelPrefEdit: $("#btnCancelPrefEdit")
+  };
+}
+
+function phaseSections() {
+  const dom = getDomRefs();
+  return {
+    spec: dom.specSection,
+    plan: dom.planSection,
+    goals: dom.goalsSection,
+    evaluation: dom.criteriaSection,
+    delivery: dom.deliverySection,
+    files: dom.changesSection
+  };
+}
+function markSectionPhase(kind, value) {
+  const node = phaseSections()[kind];
+  if (!node) return;
+  if (!value) {
+    delete node.dataset.phaseState;
+    return;
+  }
+  node.dataset.phaseState = value;
+}
+function liveConversationPhase(messages) {
+  const list = Array.isArray(messages) ? messages : [];
+  for (let index = list.length - 1; index >= 0; index -= 1) {
+    const message = list[index];
+    const parts = Array.isArray(message?.parts) ? message.parts : [];
+    const running = parts.some(
+      (part) => part?.type === "tool" && ["running", "pending"].includes(part?.state?.status || "")
+    );
+    const incomplete = message?.info?.role === "assistant" && !message?.info?.time?.completed;
+    if (!running && !incomplete) continue;
+    const agent = String(message?.info?.agent || "").trim().toLowerCase();
+    if (agent === "spec") return "spec";
+    if (agent === "planner") return "plan";
+    if (agent === "goal") return "goals";
+    if (agent === "judge") return "evaluation";
+    if (agent === "delivery") return "files";
+    return phaseFromMessage(message);
+  }
+  return "";
+}
+function relatePhase(kind, related, board, goals, changesCount) {
+  if (!kind) return;
+  if (kind === "plan") {
+    if (board?.spec) related.push("spec");
+    return;
+  }
+  if (kind === "goals") {
+    if (board?.plan) related.push("plan");
+    if (changesCount > 0) related.push("files");
+    return;
+  }
+  if (kind === "evaluation") {
+    if (goals.length > 0) related.push("goals");
+    if (changesCount > 0) related.push("files");
+    return;
+  }
+  if (kind === "files") {
+    if (board?.evaluation) related.push("evaluation");
+    if (goals.length > 0) related.push("goals");
+    return;
+  }
+}
+function clearSectionPhases() {
+  Object.values(phaseSections()).forEach((node) => {
+    if (!node) return;
+    delete node.dataset.phaseState;
+  });
+}
+function syncSectionPhases(board, changesCount = 0) {
+  clearSectionPhases();
+  const messages = Array.isArray(store.messages) ? store.messages : [];
+  const live = liveConversationPhase(messages);
+  if (!board?.task && !live) return;
+  const goals = (board?.lanes || []).find((lane) => lane.id === "goals")?.cards || [];
+  const pending = (board?.interactions || []).some((item) => item.status === "pending");
+  const planning = board?.task ? board.task.status === "planning" || board.run?.phase === "plan" || board.run?.phase === "replan" : false;
+  const active = [];
+  const related = [];
+  if (live) {
+    active.push(live);
+    relatePhase(live, related, board, goals, changesCount);
+  }
+  if (board?.task && (pending || board.task.status === "blocked")) {
+    active.length = 0;
+    if (board.plan) active.push("plan");
+    else if (goals.length > 0) active.push("goals");
+    else if (board.spec) active.push("spec");
+  }
+  if (board?.task && active.length === 0 && board.task.status === "queued") {
+    if (board.spec) active.push("spec");
+    else if (board.plan) active.push("plan");
+  }
+  if (board?.task && active.length === 0 && planning) {
+    active.push(board.spec ? "plan" : "spec");
+    if (board.spec) related.push("spec");
+    if (board.plan) related.push("plan");
+  }
+  if (board?.task && active.length === 0 && board.task.status === "running") {
+    active.push(goals.length > 0 ? "goals" : board.plan ? "plan" : "spec");
+    if (board.plan) related.push("plan");
+    if (changesCount > 0) related.push("files");
+  }
+  if (board?.task && active.length === 0 && board.task.status === "evaluating") {
+    active.push("evaluation");
+    if (goals.length > 0) related.push("goals");
+    if (changesCount > 0) related.push("files");
+  }
+  if (board?.task && active.length === 0 && board.task.status === "delivering") {
+    active.push("delivery");
+    if (changesCount > 0) related.push("files");
+    if (board.evaluation) related.push("evaluation");
+    if (goals.length > 0) related.push("goals");
+  }
+  if (board?.task && active.length === 0 && board.task.status === "completed") {
+    active.push(
+      board.delivery ? "delivery" : changesCount > 0 ? "files" : "evaluation"
+    );
+    if (board.delivery && changesCount > 0) related.push("files");
+    if (board.evaluation) related.push("evaluation");
+    if (goals.length > 0) related.push("goals");
+  }
+  if (board?.task && active.length === 0 && board.task.status === "failed") {
+    active.push(board.evaluation ? "evaluation" : board.plan ? "plan" : "spec");
+    if (board.plan) related.push("plan");
+    if (goals.length > 0) related.push("goals");
+  }
+  if (board?.task && active.length === 0 && board.task.status === "cancelled") {
+    if (board.plan) active.push("plan");
+    else if (board.spec) active.push("spec");
+  }
+  const current = [...new Set(active.filter(Boolean))];
+  const contextual = [
+    ...new Set(related.filter((kind) => kind && !current.includes(kind)))
+  ];
+  current.forEach((kind) => markSectionPhase(kind, "active"));
+  contextual.forEach((kind) => markSectionPhase(kind, "related"));
+}
+
+const [store, setStore] = createStore({
+  messages: [],
+  agentEvents: [],
+  selectedTaskID: "",
+  showTranscriptDetails: false,
+  agentStatus: null,
+  sseConnected: false,
+  conversationUpdatedAt: 0,
+  // ── Chat request / attachments (mirrors state.chatRequest / state.chatAttachments) ──
+  /** AbortController for the active chat HTTP request; null when idle */
+  chatRequest: null,
+  /** File attachments staged for the next chat message */
+  chatAttachments: []
+});
+const messageIndex = /* @__PURE__ */ new Map();
+function rebuildMessageIndex() {
+  messageIndex.clear();
+  for (const msg of store.messages) {
+    if (msg?.info?.id) messageIndex.set(msg.info.id, msg);
+  }
+}
+function messageById(id) {
+  return messageIndex.get(id);
+}
+function messageTime(item) {
+  return Number(item?.info?.time?.created || item?.info?.time?.updated || 0);
+}
+function sortMessages(list) {
+  return [...list].map((item, index) => ({ item, index })).sort(
+    (a, b) => messageTime(a.item) - messageTime(b.item) || a.index - b.index
+  ).map((x) => x.item);
+}
+function record$5(value) {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+function stableStringify(value) {
+  if (value == null) return "null";
+  if (typeof value === "string") return JSON.stringify(value);
+  if (typeof value === "number" || typeof value === "boolean") {
+    return JSON.stringify(value);
+  }
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => stableStringify(item)).join(",")}]`;
+  }
+  if (!record$5(value)) return JSON.stringify(String(value));
+  return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableStringify(value[key])}`).join(",")}}`;
+}
+function hashText$1(value) {
+  const text = String(value || "");
+  let hash = 2166136261;
+  for (let i = 0; i < text.length; i += 1) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(36);
+}
+function partSignature(part) {
+  return stableStringify({
+    type: part?.type || "",
+    text: part?.text || "",
+    tool: part?.tool || "",
+    kind: part?.kind || "",
+    source: part?.source || "",
+    filename: part?.filename || "",
+    url: part?.url || "",
+    mime: part?.mime || part?.mediaType || "",
+    callID: part?.callID || "",
+    description: part?.description || "",
+    prompt: part?.prompt || "",
+    audience: record$5(part?.audience) ? part.audience : null,
+    state: record$5(part?.state) ? part.state : part?.state ?? null,
+    files: Array.isArray(part?.files) ? part.files : [],
+    process: record$5(part?.process) ? part.process : null
+  });
+}
+function messageSignature(message) {
+  const info = record$5(message?.info) ? message.info : {};
+  return stableStringify({
+    role: info.role || "",
+    agent: info.agent || "",
+    sessionID: info.sessionID || "",
+    taskID: info.taskID || "",
+    time: {
+      created: info.time?.created || 0,
+      updated: info.time?.updated || 0,
+      completed: info.time?.completed || 0
+    },
+    parts: Array.isArray(message?.parts) ? message.parts.map((part) => partSignature(part)) : []
+  });
+}
+function normalizeLoadedPart(input, messageID, sessionID, index) {
+  const part = record$5(input) ? { ...input } : { type: "text", text: String(input || "") };
+  const id = typeof part.id === "string" && part.id.trim() ? part.id.trim() : `loaded-part:${messageID}:${index}:${hashText$1(partSignature(part))}`;
+  return {
+    ...part,
+    id,
+    messageID: typeof part.messageID === "string" && part.messageID.trim() ? part.messageID.trim() : messageID,
+    sessionID: typeof part.sessionID === "string" && part.sessionID.trim() ? part.sessionID.trim() : sessionID
+  };
+}
+function normalizeLoadedMessage(input) {
+  const message = record$5(input) ? input : {};
+  const info = record$5(message.info) ? message.info : {};
+  const signature = messageSignature(message);
+  const id = typeof info.id === "string" && info.id.trim() ? info.id.trim() : `loaded-msg:${hashText$1(signature)}`;
+  const sessionID = typeof info.sessionID === "string" && info.sessionID.trim() ? info.sessionID.trim() : "";
+  const parts = Array.isArray(message.parts) ? message.parts.map(
+    (part, index) => normalizeLoadedPart(part, id, sessionID, index)
+  ) : [];
+  return {
+    ...message,
+    info: {
+      ...info,
+      id,
+      sessionID,
+      role: typeof info.role === "string" && info.role.trim() ? info.role.trim() : "assistant"
+    },
+    parts
+  };
+}
+function normalizeLoadedMessages(messages) {
+  return (Array.isArray(messages) ? messages : []).map(
+    (message) => normalizeLoadedMessage(message)
+  );
+}
+function mergeLoadedConversationMessages(left, right) {
+  const seen = /* @__PURE__ */ new Set();
+  const result = [];
+  for (const item of [
+    ...Array.isArray(left) ? left : [],
+    ...Array.isArray(right) ? right : []
+  ]) {
+    const info = record$5(item?.info) ? item.info : {};
+    const key = typeof info.id === "string" && info.id.trim() ? `id:${info.id.trim()}` : `sig:${messageSignature(item)}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(item);
+  }
+  return normalizeLoadedMessages(result);
+}
+async function syncTask(taskID) {
+  if (!taskID) {
+    setStore("messages", []);
+    messageIndex.clear();
+    return;
+  }
+  try {
+    const [transcript, timeline] = await Promise.all([
+      apiJson(`task/${encodeURIComponent(taskID)}/transcript`).catch(() => []),
+      apiJson(`control/timeline?taskID=${encodeURIComponent(taskID)}`).catch(
+        () => []
+      )
+    ]);
+    const messages = mergeLoadedConversationMessages(
+      Array.isArray(timeline) ? timeline : [],
+      Array.isArray(transcript) ? transcript : []
+    );
+    setStore("messages", sortMessages(messages));
+    rebuildMessageIndex();
+    setStore("conversationUpdatedAt", Date.now());
+  } catch (e) {
+    console.error("syncTask failed", e);
+  }
+}
+let _convLoading = null;
+let _convQueued = false;
+let _execRunID = "";
+let _execFetchedAt = 0;
+function touchReasoningPart(part) {
+  if (!part || part.type !== "reasoning") return part;
+  if (typeof part.text !== "string") part.text = "";
+  touchReasoningPart$1(part);
+  return part;
+}
+async function loadExecutorEvents(runID) {
+  const now = Date.now();
+  if (_execRunID === runID && now - _execFetchedAt < 3e3) {
+    return;
+  }
+  _execRunID = runID;
+  _execFetchedAt = now;
+  const data = await fetch(apiUrl(`run/${encodeURIComponent(runID)}/executor-events`), {
+    headers: { Accept: "application/json" }
+  }).then((res) => res.ok ? res.json() : []).catch(() => []);
+  const items = (Array.isArray(data) ? data : []).map((item) => executorEventEntry(item)).filter(Boolean);
+  clearExecutorEvents();
+  for (const item of items) {
+    appendExecutorEvent(item);
+  }
+}
+async function loadConversation() {
+  if (!boardStore.selectedTaskID) {
+    setMessages([]);
+    return;
+  }
+  if (_convLoading) {
+    _convQueued = true;
+    await _convLoading;
+    return;
+  }
+  const requestTaskID = String(boardStore.selectedTaskID || "");
+  const loading = (async () => {
+    do {
+      _convQueued = false;
+      const taskID = String(boardStore.selectedTaskID || "");
+      if (!taskID) {
+        setMessages([]);
+        return;
+      }
+      const transcript = await fetch(
+        apiUrl(`task/${encodeURIComponent(taskID)}/transcript`),
+        {
+          headers: { Accept: "application/json" }
+        }
+      ).then((res) => res.ok ? res.json() : []).catch(() => []);
+      const timeline = await fetch(
+        apiUrl(`control/timeline?taskID=${encodeURIComponent(taskID)}`),
+        {
+          headers: { Accept: "application/json" }
+        }
+      ).then((res) => res.ok ? res.json() : []).catch(() => []);
+      if (taskID !== boardStore.selectedTaskID) continue;
+      const merged = mergeLoadedConversationMessages(
+        Array.isArray(timeline) ? timeline : [],
+        Array.isArray(transcript) ? transcript : []
+      ).map((message) => ({
+        ...message,
+        parts: Array.isArray(message?.parts) ? message.parts.map((part) => touchReasoningPart(part)) : []
+      }));
+      setMessages(merged);
+      const activeRunID = String(boardStore.board?.task?.activeRunID || "");
+      if (activeRunID) {
+        await loadExecutorEvents(activeRunID);
+      } else {
+        _execRunID = "";
+        _execFetchedAt = 0;
+        clearExecutorEvents();
+      }
+      syncSectionPhases(boardStore.board, boardStore.changes.length);
+    } while (_convQueued && requestTaskID === boardStore.selectedTaskID);
+  })();
+  _convLoading = loading;
+  try {
+    await loading;
+  } finally {
+    if (_convLoading === loading) {
+      _convLoading = null;
+    }
+  }
+}
+function applyMessageEvent(event) {
+  const type = event.type || "";
+  const properties = typeof event?.properties === "object" && event.properties && !Array.isArray(event.properties) ? event.properties : typeof event?.payload === "object" && event.payload && !Array.isArray(event.payload) ? event.payload : {};
+  if (type === "message.updated") {
+    const info = properties.info;
+    if (!info?.id) return false;
+    const existing = messageById(info.id);
+    if (existing) {
+      const idx = store.messages.indexOf(existing);
+      if (idx >= 0) {
+        setStore("messages", idx, "info", info);
+      }
+      return true;
+    }
+    const msg = { info, parts: [] };
+    setStore(
+      "messages",
+      produce((msgs) => {
+        msgs.push(msg);
+      })
+    );
+    messageIndex.set(info.id, store.messages[store.messages.length - 1]);
+    return true;
+  }
+  if (type === "message.part.updated") {
+    const part = properties.part;
+    if (!part?.id || !part?.messageID) return false;
+    let message = messageById(part.messageID);
+    if (!message) {
+      const msg = {
+        info: {
+          id: part.messageID,
+          sessionID: part.sessionID,
+          role: "assistant"
+        },
+        parts: []
+      };
+      setStore(
+        "messages",
+        produce((msgs) => {
+          msgs.push(msg);
+        })
+      );
+      message = store.messages[store.messages.length - 1];
+      messageIndex.set(part.messageID, message);
+    }
+    const idx = store.messages.indexOf(message);
+    const partIdx = message.parts.findIndex((p) => p.id === part.id);
+    if (partIdx >= 0) {
+      setStore("messages", idx, "parts", partIdx, part);
+    } else {
+      setStore(
+        "messages",
+        idx,
+        "parts",
+        produce((parts) => {
+          parts.push(part);
+        })
+      );
+    }
+    return true;
+  }
+  if (type === "message.part.delta") {
+    if (typeof properties.delta !== "string") return false;
+    if (properties.field !== "text" && properties.field !== "raw") return false;
+    let message = messageById(properties.messageID);
+    if (!message) {
+      const msg = {
+        info: {
+          id: properties.messageID,
+          sessionID: properties.sessionID,
+          role: "assistant"
+        },
+        parts: []
+      };
+      setStore(
+        "messages",
+        produce((msgs) => {
+          msgs.push(msg);
+        })
+      );
+      message = store.messages[store.messages.length - 1];
+      messageIndex.set(properties.messageID, message);
+    }
+    const msgIdx = store.messages.indexOf(message);
+    const partIdx = message.parts.findIndex(
+      (p) => p.id === properties.partID
+    );
+    if (properties.field === "raw") {
+      if (partIdx < 0) return false;
+      const part = message.parts[partIdx];
+      if (part.type !== "tool" || !part.state) return false;
+      setStore(
+        "messages",
+        msgIdx,
+        "parts",
+        partIdx,
+        "state",
+        "raw",
+        (prev) => (prev || "") + properties.delta
+      );
+      return true;
+    }
+    if (partIdx < 0) {
+      setStore(
+        "messages",
+        msgIdx,
+        "parts",
+        produce((parts) => {
+          parts.push({
+            id: properties.partID,
+            type: "text",
+            text: properties.delta,
+            sessionID: properties.sessionID,
+            messageID: properties.messageID
+          });
+        })
+      );
+      return true;
+    }
+    setStore(
+      "messages",
+      msgIdx,
+      "parts",
+      partIdx,
+      "text",
+      (prev) => (prev || "") + properties.delta
+    );
+    return true;
+  }
+  return false;
+}
+const FLUSH_INTERVAL = 16;
+let eventQueue = [];
+let flushTimer = null;
+let lastFlushTime = 0;
+function enqueueEvent(event) {
+  eventQueue.push(event);
+  if (flushTimer) return;
+  if (Date.now() - lastFlushTime < FLUSH_INTERVAL) {
+    flushTimer = setTimeout(flushEvents, FLUSH_INTERVAL);
+    return;
+  }
+  flushEvents();
+}
+function flushEvents() {
+  if (eventQueue.length === 0) return;
+  const events = eventQueue;
+  eventQueue = [];
+  flushTimer = null;
+  lastFlushTime = Date.now();
+  let needsUpdate = false;
+  batch(() => {
+    for (const event of events) {
+      if (applyMessageEvent(event)) needsUpdate = true;
+    }
+  });
+  if (needsUpdate) {
+    setStore("conversationUpdatedAt", Date.now());
+  }
+}
+function clearEventQueue() {
+  if (flushTimer) {
+    clearTimeout(flushTimer);
+    flushTimer = null;
+  }
+  eventQueue = [];
+}
+function displayString(value) {
+  return typeof value === "string" ? value.trim() : "";
+}
+function deltaString(value) {
+  return typeof value === "string" ? value : "";
+}
+function streamingAgentKind(kind) {
+  return kind === "message_delta" || kind === "reasoning_delta" || kind === "tool_delta";
+}
+function agentEventRecord(value) {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+const AGENT_LIVE_INTERVAL = 32;
+const agentLiveTimers = /* @__PURE__ */ new Map();
+function agentEventKey(event) {
+  const stage = String(event?.stage || "").trim().toLowerCase();
+  const id = String(event?.id || "").trim();
+  return stage && id ? `${stage}:${id}` : "";
+}
+function stopAgentLiveTimer(key) {
+  const timer = agentLiveTimers.get(key);
+  if (!timer) return;
+  clearTimeout(timer);
+  agentLiveTimers.delete(key);
+}
+function nextLiveLength(live, target) {
+  if (!target) return 0;
+  if (!live) return Math.min(target.length, 1);
+  const remaining = target.length - live.length;
+  if (remaining <= 0) return target.length;
+  if (remaining <= 4) return target.length;
+  return Math.min(target.length, live.length + Math.max(1, Math.ceil(remaining / 2)));
+}
+function advanceAgentLiveText(key) {
+  const index = store.agentEvents.findIndex(
+    (item) => agentEventKey(item) === key
+  );
+  if (index < 0) {
+    stopAgentLiveTimer(key);
+    return;
+  }
+  const event = store.agentEvents[index];
+  const target = typeof event?._targetText === "string" ? event._targetText : "";
+  const live = typeof event?._liveText === "string" ? event._liveText : "";
+  if (!target) {
+    stopAgentLiveTimer(key);
+    return;
+  }
+  if (live.length >= target.length) {
+    if (live !== target) {
+      setStore("agentEvents", index, "_liveText", target);
+      setStore("conversationUpdatedAt", Date.now());
+    }
+    stopAgentLiveTimer(key);
+    return;
+  }
+  setStore("agentEvents", index, "_liveText", target.slice(0, nextLiveLength(live, target)));
+  setStore("conversationUpdatedAt", Date.now());
+  agentLiveTimers.set(
+    key,
+    setTimeout(() => advanceAgentLiveText(key), AGENT_LIVE_INTERVAL)
+  );
+}
+function scheduleAgentLiveText(event) {
+  const key = agentEventKey(event);
+  if (!key) return;
+  const target = typeof event?._targetText === "string" ? event._targetText : "";
+  const live = typeof event?._liveText === "string" ? event._liveText : "";
+  if (!target || live.length >= target.length) {
+    stopAgentLiveTimer(key);
+    return;
+  }
+  if (agentLiveTimers.has(key)) return;
+  agentLiveTimers.set(
+    key,
+    setTimeout(() => advanceAgentLiveText(key), AGENT_LIVE_INTERVAL)
+  );
+}
+function agentEventTargetText(event) {
+  if (!event) return "";
+  const k = event.kind;
+  if (k === "message_delta" || k === "reasoning_delta" || k === "status") {
+    return deltaString(event.text ?? event.summary);
+  }
+  if (k === "tool_call" || k === "tool_delta") {
+    return deltaString(event.text ?? event.payload?.text ?? event.summary);
+  }
+  if (k === "tool_result") {
+    return displayString(
+      event.payload?.output || event.payload?.result || event.summary
+    );
+  }
+  return displayString(event.summary);
+}
+function syncAgentText(event) {
+  if (!event) return;
+  const target = agentEventTargetText(event);
+  const live = typeof event._liveText === "string" ? event._liveText : "";
+  if (!target) {
+    stopAgentLiveTimer(agentEventKey(event));
+    delete event._targetText;
+    delete event._liveText;
+    return;
+  }
+  event._targetText = target;
+  event._liveText = live || target;
+}
+function agentEventEntry(raw) {
+  const payload = agentEventRecord(raw?.payload) ? raw.payload : agentEventRecord(raw?.properties) ? raw.properties : {};
+  const stage = String(payload.stage || "").trim().toLowerCase();
+  const kind = String(payload.kind || "status").trim().toLowerCase();
+  const created = Number(raw?.timestamp || payload.timestamp || Date.now());
+  const toolName = typeof payload.toolName === "string" && payload.toolName.trim() ? payload.toolName.trim() : typeof payload.name === "string" && payload.name.trim() ? payload.name.trim() : "";
+  const text = streamingAgentKind(kind) ? deltaString(payload.text) : displayString(payload.text);
+  const summary = streamingAgentKind(kind) ? deltaString(raw?.summary ?? payload.summary ?? text) : displayString(raw?.summary || payload.summary || text);
+  const id = typeof payload.id === "string" && payload.id ? payload.id : typeof raw?.event_id === "string" && raw.event_id ? raw.event_id : `${stage}:${kind}:${toolName || "event"}:${created}`;
+  if (!stage) return null;
+  if (!summary && !text && !toolName) return null;
+  return {
+    id,
+    eventID: typeof raw?.event_id === "string" ? raw.event_id : "",
+    stage,
+    kind,
+    toolName,
+    text,
+    summary,
+    payload,
+    time: { created: Number.isFinite(created) ? created : Date.now() }
+  };
+}
+function mergeAgentEvent(existing, next) {
+  if (!existing) return next;
+  if (next.kind === "message_delta" || next.kind === "reasoning_delta") {
+    const merged = `${deltaString(existing._targetText ?? existing.text ?? existing.summary)}${deltaString(next.text ?? next.summary)}`;
+    return {
+      ...existing,
+      ...next,
+      text: merged,
+      summary: merged,
+      payload: {
+        ...agentEventRecord(existing.payload) ? existing.payload : {},
+        ...agentEventRecord(next.payload) ? next.payload : {}
+      }
+    };
+  }
+  if (next.kind === "tool_delta") {
+    const mergedText = `${deltaString(existing.text ?? existing.payload?.text ?? "")}${deltaString(next.text ?? next.payload?.text ?? next.summary)}`;
+    return {
+      ...existing,
+      ...next,
+      kind: existing.kind === "tool_result" ? "tool_result" : "tool_call",
+      text: mergedText,
+      summary: displayString(existing.summary || next.summary),
+      payload: {
+        ...agentEventRecord(existing.payload) ? existing.payload : {},
+        ...agentEventRecord(next.payload) ? next.payload : {},
+        text: mergedText
+      }
+    };
+  }
+  if (next.kind === "tool_result") {
+    return {
+      ...existing,
+      ...next,
+      payload: {
+        ...agentEventRecord(existing.payload) ? existing.payload : {},
+        ...agentEventRecord(next.payload) ? next.payload : {},
+        text: displayString(
+          existing.payload?.text || existing.text || next.payload?.text || ""
+        )
+      }
+    };
+  }
+  return {
+    ...existing,
+    ...next,
+    payload: {
+      ...agentEventRecord(existing.payload) ? existing.payload : {},
+      ...agentEventRecord(next.payload) ? next.payload : {}
+    }
+  };
+}
+function mergeAgentEventList(events, raw) {
+  const event = agentEventEntry(raw);
+  if (!event) return events;
+  const index = events.findIndex(
+    (item) => item.id === event.id && item.stage === event.stage
+  );
+  const next = index >= 0 ? [
+    ...events.slice(0, index),
+    mergeAgentEvent(events[index], event),
+    ...events.slice(index + 1)
+  ] : [...events, event];
+  const target = index >= 0 ? next[index] : next[next.length - 1];
+  syncAgentText(target);
+  return next.sort(
+    (a, b) => (a.time?.created || 0) - (b.time?.created || 0)
+  );
+}
+function appendAgentEvent(raw) {
+  const next = mergeAgentEventList([...store.agentEvents], raw);
+  setStore("agentEvents", reconcile(next));
+  setStore("conversationUpdatedAt", Date.now());
+  const payload = agentEventRecord(raw?.payload) ? raw.payload : agentEventRecord(raw?.properties) ? raw.properties : {};
+  const key = agentEventKey({
+    stage: String(payload.stage || "").trim().toLowerCase(),
+    id: typeof payload.id === "string" && payload.id ? payload.id : typeof raw?.event_id === "string" ? raw.event_id : ""
+  });
+  const target = key ? next.find((item) => agentEventKey(item) === key) || null : null;
+  if (target) scheduleAgentLiveText(target);
+}
+function setMessages(messages) {
+  const next = sortMessages(Array.isArray(messages) ? messages : []);
+  setStore("messages", reconcile(next));
+  rebuildMessageIndex();
+  setStore("conversationUpdatedAt", Date.now());
+}
+function setSelectedTaskID(taskID) {
+  setStore("selectedTaskID", taskID);
+}
+function setSseConnected(connected) {
+  setStore("sseConnected", connected);
+}
+function clearMessages() {
+  setStore("messages", []);
+  messageIndex.clear();
+}
+function setChatRequest(req) {
+  setStore("chatRequest", req ?? null);
+}
+function abortChatRequest() {
+  const req = store.chatRequest;
+  if (req) {
+    try {
+      req.abort();
+    } catch (_) {
+    }
+  }
+  setStore("chatRequest", null);
+}
+function currentTaskSessionID$1() {
+  const boardSession = boardStore.board?.task?.sessionID;
+  if (typeof boardSession === "string" && boardSession) return boardSession;
+  const taskID = store.selectedTaskID;
+  if (!taskID) return "";
+  const entry = boardStore.tasks.find(
+    (item) => item?.task?.id === taskID
+  );
+  return typeof entry?.task?.sessionID === "string" ? entry.task.sessionID : "";
+}
+function messageEventSessionID(event) {
+  const properties = typeof event?.properties === "object" && event.properties && !Array.isArray(event.properties) ? event.properties : typeof event?.payload === "object" && event.payload && !Array.isArray(event.payload) ? event.payload : {};
+  if (typeof properties?.info?.sessionID === "string") {
+    return properties.info.sessionID;
+  }
+  if (typeof properties?.part?.sessionID === "string") {
+    return properties.part.sessionID;
+  }
+  return typeof properties?.sessionID === "string" ? properties.sessionID : "";
+}
+function shouldReloadConversationForMessageEvent(event) {
+  const type = String(event?.type || "").trim();
+  if (type !== "message.updated" && type !== "message.part.updated" && type !== "message.part.delta") {
+    return false;
+  }
+  if (!store.selectedTaskID) return false;
+  if (currentTaskSessionID$1()) return false;
+  return !!messageEventSessionID(event);
+}
+
+function record$4(value) {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+function hashText(value) {
+  const text = String(value || "");
+  let hash = 2166136261;
+  for (let i = 0; i < text.length; i += 1) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(36);
+}
+function processStatusLabel(status) {
+  if (status === "completed") return t("task.status.completed");
+  if (status === "failed") return t("task.status.failed");
+  if (status === "blocked") return t("task.status.blocked");
+  if (status === "queued") return t("task.status.queued");
+  return t("task.status.running");
+}
+function evaluationVerdictLabel(status) {
+  if (status === "accepted") return t("evaluation.verdict.accepted");
+  if (status === "rejected") return t("evaluation.verdict.rejected");
+  return t("evaluation.verdict.pending");
+}
+function transcriptRole(role) {
+  return roleLabel(role);
+}
+function transcriptTime(value) {
+  if (!value) return "";
+  return new Date(value).toLocaleString(localeTag(), {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false
+  });
+}
+function formatTranscriptText(part, role) {
+  let text = part?.text || "";
+  if (!text.trim()) return "";
+  if (part.audience && part.audience.ui === false) return "";
+  if (part.kind === "trace" && !part.audience?.ui) return "";
+  const orchestratorRoles = ["user", "planner", "scheduler", "system"];
+  if (orchestratorRoles.includes(role) && text.includes("<assistant-brief>")) {
+    text = stripAssistantBrief(text);
+  }
+  return text.trim();
+}
+function formatTranscriptTool(part) {
+  const toolName = part?.tool || "unknown";
+  const hiddenTools = ["planner", "todowrite", "todoupdate", "task_report"];
+  if (hiddenTools.includes(toolName.toLowerCase())) return "";
+  const st = part?.state || {};
+  const detail = displayToolDetail(toolName, st.input || {}, st);
+  const status = st.status || "pending";
+  return [t("transcript.tool", { status: toolStatusLabel(status), tool: toolName }), detail].filter(Boolean).join(" ");
+}
+function formatTranscriptExecutorProcess(part) {
+  const process = record$4(part?.process) ? part.process : {};
+  const title = String(process.title || process.id || "").trim();
+  const detail = String(process.detail || "").trim();
+  const note = String(process.note || "").trim();
+  const output = String(process.output || "").trim();
+  const header = [processStatusLabel(String(process.status || "running")), title].filter(Boolean).join(" ");
+  return [header, detail, note, output].filter(Boolean).join("\n");
+}
+function formatTranscriptPart(part, role) {
+  if (!part || typeof part !== "object") return "";
+  if (part.type === "text") return formatTranscriptText(part, role);
+  if (part.type === "reasoning") {
+    return part.text?.trim() ? `${t("transcript.reasoning")}
+${part.text.trim()}` : "";
+  }
+  if (part.type === "tool") return formatTranscriptTool(part);
+  if (part.type === "executor_process") return formatTranscriptExecutorProcess(part);
+  if (part.type === "file") {
+    return part.filename || part.url ? t("transcript.file", { value: part.filename || part.url }) : "";
+  }
+  if (part.type === "subtask") {
+    const text = part.description || part.prompt || "";
+    return text ? t("transcript.subtask", { value: text }) : "";
+  }
+  if (part.type === "patch") {
+    const files = Array.isArray(part.files) ? part.files.filter(Boolean) : [];
+    return files.length ? t("transcript.patch", { value: files.join(", ") }) : t("transcript.patch_empty");
+  }
+  if (part.type === "compaction") return t("transcript.compaction");
+  return "";
+}
+async function copyText$1(text) {
+  if (!text) return false;
+  if (navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+    }
+  }
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.setAttribute("readonly", "true");
+  textarea.style.position = "fixed";
+  textarea.style.opacity = "0";
+  textarea.style.pointerEvents = "none";
+  document.body.appendChild(textarea);
+  textarea.select();
+  textarea.setSelectionRange(0, text.length);
+  const ok = document.execCommand("copy");
+  textarea.remove();
+  return ok;
+}
+async function nativeMessage$2(message, options) {
+  const fn = window.nativeMessage;
+  if (typeof fn === "function") {
+    await fn(message, options);
+  }
+}
+function errorText$1(key, error) {
+  const detail = error instanceof Error ? error.message : String(error || "");
+  return `${t(key)}: ${detail}`;
+}
+function boardArtifact(board, label) {
+  const list = board?.artifacts || [];
+  return list.find((item) => item.label === label);
+}
+function syntheticTextMessage(role, time, text) {
+  if (typeof text !== "string" || !text.trim()) return null;
+  return {
+    _synthetic: true,
+    info: {
+      id: `synthetic:${role}:${Number.isFinite(time) ? time : Date.now()}:${hashText(text)}`,
+      role,
+      time: { created: Number.isFinite(time) ? time : Date.now() }
+    },
+    parts: [{ type: "text", text }]
+  };
+}
+function formatConversationTranscript(messages) {
+  return (Array.isArray(messages) ? messages : []).map((item) => {
+    const role = item?.info?.role || "assistant";
+    const header = joinBullet$1([
+      transcriptRole(role),
+      transcriptTime(item?.info?.time?.created)
+    ]);
+    const body = (Array.isArray(item?.parts) ? item.parts : []).map((part) => formatTranscriptPart(part, role)).filter(Boolean).join("\n\n").trim();
+    if (!body) return "";
+    return `${header}
+${body}`;
+  }).filter(Boolean).join("\n\n---\n\n");
+}
+function specContextText(spec) {
+  const text = typeof spec?.content === "string" ? spec.content.trim() : "";
+  return text;
+}
+function planContextText(plan, goals) {
+  const planner = plan.metadata?.planner || {};
+  const steps = Array.isArray(plan.metadata?.steps) ? plan.metadata.steps : [];
+  const milestones = Array.isArray(plan.metadata?.milestones) ? plan.metadata.milestones : [];
+  const risks = Array.isArray(plan.metadata?.risks) ? plan.metadata.risks : [];
+  const warnings = Object.values(
+    plan.metadata?.stage_sources || {}
+  ).flatMap(
+    (stage) => stage && typeof stage === "object" && typeof stage.warning === "string" && stage.warning.trim() ? [stage.warning.trim()] : []
+  ).filter(
+    (value, index, list) => list.indexOf(value) === index
+  );
+  const clarification = plan.metadata?.clarification;
+  const spec = plan.metadata?.spec_analysis;
+  const assumptions = Array.isArray(spec?.assumptions) ? spec.assumptions : [];
+  const lines = [t("plan.context.title", { version: plan.version })];
+  if (plan.summary)
+    lines.push("", t("plan.context.summary", { value: plan.summary }));
+  if (planner.role || planner.quality || planner.source) {
+    lines.push(
+      "",
+      t("plan.context.planner", {
+        value: [planner.role, planner.quality, planner.source].filter(Boolean).join(" / ")
+      })
+    );
+  }
+  if (warnings.length > 0) {
+    lines.push("", t("plan.context.warnings"));
+    lines.push(...warnings.map((warning) => `- ${warning}`));
+  }
+  if (steps.length > 0) {
+    lines.push("", t("plan.context.execution"));
+    lines.push(
+      ...steps.slice(0, 8).map((step, index) => `${index + 1}. ${step}`)
+    );
+  }
+  if (milestones.length > 0) {
+    lines.push("", t("plan.context.milestones"));
+    lines.push(
+      ...milestones.map((item, index) => `- ${index + 1}. ${item.title}`)
+    );
+  }
+  if (goals.length > 0)
+    lines.push(
+      "",
+      t("plan.context.goal_count", { count: goals.length })
+    );
+  if (risks.length > 0) {
+    lines.push("", t("plan.context.risks"));
+    lines.push(...risks.slice(0, 5).map((risk) => `- ${risk}`));
+  }
+  if (assumptions.length > 0) {
+    lines.push("", t("plan.context.assumptions"));
+    lines.push(
+      ...assumptions.slice(0, 5).map((item) => {
+        const question = typeof item?.question === "string" ? item.question.trim() : "";
+        const assumption = typeof item?.assumption === "string" ? item.assumption.trim() : "";
+        if (question && assumption) return `- ${question}: ${assumption}`;
+        return `- ${question || assumption}`;
+      })
+    );
+  }
+  if (clarification?.questions?.length) {
+    lines.push(
+      "",
+      tc("plan.context.clarification", clarification.questions.length, {
+        count: clarification.questions.length
+      })
+    );
+  }
+  return lines.join("\n");
+}
+function goalContextText(goals) {
+  const passed = goals.filter((goal) => goal.status === "passed").length;
+  const failed = goals.filter((goal) => goal.status === "failed").length;
+  const pending = goals.filter(
+    (goal) => goal.status !== "passed" && goal.status !== "failed"
+  ).length;
+  const header = passed + failed > 0 ? t("goal.context.results", {
+    passed,
+    total: goals.length,
+    failed,
+    pending
+  }) : t("goal.context.list", { total: goals.length });
+  const lines = [header, ""];
+  for (const goal of goals) {
+    const icon = goal.status === "passed" ? "✅" : goal.status === "failed" ? "❌" : "⏳";
+    lines.push(`${icon} **${goal.title}**`);
+    if (goal.detail)
+      lines.push(t("goal.context.criteria", { value: goal.detail }));
+    if (goal.metadata?.origin)
+      lines.push(t("goal.context.origin", { value: goal.metadata.origin }));
+  }
+  return lines.join("\n");
+}
+function evaluationContextText(board, goals) {
+  const evaluation = board.evaluation;
+  const analysis = boardArtifact(board, "evaluator-agent-analysis")?.payload || {};
+  const error = boardArtifact(board, "evaluator-agent-error")?.payload || {};
+  const verdictIcon = evaluation.verdict === "accepted" ? "✅" : evaluation.verdict === "rejected" ? "❌" : "⚠";
+  const lines = [
+    `${verdictIcon} ${t("evaluation.context.title", { verdict: evaluationVerdictLabel(evaluation.verdict) })}`
+  ];
+  if (analysis.classification)
+    lines.push(
+      "",
+      t("evaluation.context.classification", {
+        value: analysis.classification
+      })
+    );
+  if (evaluation.summary) lines.push("", evaluation.summary);
+  if (error.error)
+    lines.push(
+      "",
+      t("evaluation.context.error", { value: error.error })
+    );
+  const checks = evaluation.checks || [];
+  if (checks.length > 0) {
+    lines.push("", t("evaluation.context.checks"));
+    for (const check of checks) {
+      const icon = check.status === "passed" ? "✓" : check.status === "failed" ? "✗" : "—";
+      lines.push(`- ${icon} ${check.name}: ${check.evidence || check.status}`);
+    }
+  }
+  const goalStatuses = Array.isArray(analysis.goal_statuses) ? analysis.goal_statuses : [];
+  if (goalStatuses.length > 0) {
+    lines.push("", t("evaluation.context.goal_assessments"));
+    for (const item of goalStatuses) {
+      const goal = goals[item.goal_index];
+      const icon = item.status === "passed" ? "✅" : item.status === "failed" ? "❌" : "⏳";
+      const label = goal?.title || t("evaluation.context.goal_fallback", { index: item.goal_index + 1 });
+      lines.push(`- ${icon} ${label}: ${item.evidence || item.status}`);
+    }
+  }
+  if (analysis.replan_guidance?.root_cause || analysis.replan_guidance?.suggested_strategy) {
+    lines.push("", t("evaluation.context.replan"));
+    if (analysis.replan_guidance.root_cause)
+      lines.push(
+        t("evaluation.context.root_cause", {
+          value: analysis.replan_guidance.root_cause
+        })
+      );
+    if (analysis.replan_guidance.suggested_strategy)
+      lines.push(
+        t("evaluation.context.strategy", {
+          value: analysis.replan_guidance.suggested_strategy
+        })
+      );
+  }
+  return lines.join("\n");
+}
+function interactionRequestText(interaction) {
+  const title = typeof interaction?.title === "string" && interaction.title.trim() ? interaction.title.trim() : t("detail.pending_interactions");
+  const body = typeof interaction?.body === "string" ? interaction.body.trim() : "";
+  return [title, body].filter(Boolean).join("\n\n");
+}
+function interactionReplyLabel(reply) {
+  if (reply === "always") return t("interaction.always_allow");
+  if (reply === "reject") return t("interaction.reject");
+  return t("interaction.allow_once");
+}
+function interactionAnswerLines(interaction) {
+  const response = record$4(interaction?.response) ? interaction.response : null;
+  const payload = record$4(interaction?.payload) ? interaction.payload : null;
+  const questions = Array.isArray(payload?.questions) ? payload.questions : [];
+  if (Array.isArray(response?.answers)) {
+    return response.answers.flatMap((answer, index) => {
+      const value = Array.isArray(answer) ? answer.filter(
+        (item) => typeof item === "string" && item.trim()
+      ).join(", ") : "";
+      if (!value) return [];
+      const question = record$4(questions[index]) ? questions[index] : null;
+      const label = typeof question?.header === "string" && question.header.trim() ? question.header.trim() : typeof question?.question === "string" && question.question.trim() ? question.question.trim() : "";
+      return [label ? `- **${label}**: ${value}` : `- ${value}`];
+    });
+  }
+  if (record$4(response?.answers)) {
+    return Object.entries(response.answers).flatMap(
+      ([key, item], index) => {
+        const answer = record$4(item) ? item : null;
+        const value = Array.isArray(answer?.answers) ? answer.answers.filter(
+          (entry) => typeof entry === "string" && entry.trim()
+        ).join(", ") : "";
+        if (!value) return [];
+        const question = record$4(questions[index]) ? questions[index] : null;
+        const label = typeof question?.header === "string" && question.header.trim() ? question.header.trim() : typeof question?.question === "string" && question.question.trim() ? question.question.trim() : key;
+        return [label ? `- **${label}**: ${value}` : `- ${value}`];
+      }
+    );
+  }
+  const message = typeof response?.message === "string" ? response.message.trim() : "";
+  return message ? [message] : [];
+}
+function interactionResponseText(interaction) {
+  if (interaction?.type === "permission") {
+    if (interaction.status === "rejected") return t("interaction.reject");
+    const response = record$4(interaction?.response) ? interaction.response : null;
+    return interactionReplyLabel(
+      typeof response?.reply === "string" ? response.reply : "once"
+    );
+  }
+  if (interaction?.status === "rejected") return t("interaction.skip");
+  const answers = interactionAnswerLines(interaction);
+  if (answers.length > 0) return answers.join("\n");
+  return t("interaction.answer");
+}
+async function copyChatConversation() {
+  try {
+    const transcript = formatConversationTranscript(conversationMessages());
+    if (!transcript) return;
+    const ok = await copyText$1(transcript);
+    if (!ok) throw new Error(t("chat.copy_failed"));
+  } catch (e) {
+    AppLog.error("ui", "Failed to copy chat conversation", {
+      error: String(e)
+    });
+    await nativeMessage$2(errorText$1("chat.copy_failed", e), {
+      title: t("chat.copy_title"),
+      kind: "error"
+    });
+  }
+}
+
+const scriptRel = 'modulepreload';const assetsURL = function(dep) { return "/"+dep };const seen = {};const __vitePreload = function preload(baseModule, deps, importerUrl) {
+  let promise = Promise.resolve();
+  if (true               && deps && deps.length > 0) {
+    let allSettled2 = function(promises) {
+      return Promise.all(promises.map((p) => Promise.resolve(p).then((value) => ({ status: "fulfilled", value }), (reason) => ({ status: "rejected", reason }))));
+    };
+    document.getElementsByTagName("link"); const cspNonceMeta = document.querySelector("meta[property=csp-nonce]"), cspNonce = cspNonceMeta?.nonce || cspNonceMeta?.getAttribute("nonce");
+    promise = allSettled2(deps.map((dep) => {
+      dep = assetsURL(dep);
+      if (dep in seen)
+        return;
+      seen[dep] = true;
+      const isCss = dep.endsWith(".css"), cssSelector = isCss ? '[rel="stylesheet"]' : "";
+      if (document.querySelector(`link[href="${dep}"]${cssSelector}`))
+        return;
+      const link = document.createElement("link");
+      link.rel = isCss ? "stylesheet" : scriptRel;
+      if (!isCss)
+        link.as = "script";
+      link.crossOrigin = "";
+      link.href = dep;
+      if (cspNonce)
+        link.setAttribute("nonce", cspNonce);
+      document.head.appendChild(link);
+      if (isCss)
+        return new Promise((res, rej) => {
+          link.addEventListener("load", res);
+          link.addEventListener("error", () => rej(Error(`Unable to preload CSS for ${dep}`)));
+        });
+    }));
+  }
+  function handlePreloadError(err) {
+    const e = new Event("vite:preloadError", {
+      cancelable: true
+    });
+    e.payload = err;
+    window.dispatchEvent(e);
+    if (!e.defaultPrevented)
+      throw err;
+  }
+  return promise.then((res) => {
+    for (const item of res || []) {
+      if (item.status !== "rejected")
+        continue;
+      handlePreloadError(item.reason);
+    }
+    return baseModule().catch(handlePreloadError);
+  });
+};
+
+function record$3(value) {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+function gitCheckpointTitle(stage, mode) {
+  if (stage === "baseline") {
+    return mode === "created_commit" ? t("chat.git.baseline_created") : t("chat.git.baseline_recorded");
+  }
+  return mode === "created_commit" ? t("chat.git.result_created") : t("chat.git.result_recorded");
+}
+function gitCheckpointLine(key, value, options = {}) {
+  if (!value) return "";
+  const text = options.code ? `\`${value}\`` : String(value);
+  return `- ${t(key)}: ${text}`;
+}
+function gitCheckpointText(item) {
+  return [
+    `**${gitCheckpointTitle(item.stage, item.mode)}**`,
+    "",
+    gitCheckpointLine("chat.git.message", item.message),
+    gitCheckpointLine("chat.git.branch", item.branch, { code: true }),
+    gitCheckpointLine("chat.git.commit", item.commit ? String(item.commit).slice(0, 8) : "", { code: true }),
+    item.stage === "baseline" ? gitCheckpointLine("chat.git.snapshot", item.snapshot ? String(item.snapshot).slice(0, 8) : "", { code: true }) : ""
+  ].filter(Boolean).join("\n");
+}
+function boardGitCheckpoints(board) {
+  const out = [];
+  const seen = /* @__PURE__ */ new Set();
+  const meta = record$3(board?.task?.metadata) ? board.task.metadata : null;
+  const git = record$3(meta?.git) ? meta.git : null;
+  for (const stage of ["baseline", "result"]) {
+    const item = record$3(git?.[stage]) ? git[stage] : null;
+    if (!item) continue;
+    const time = Number(item.time);
+    if (!Number.isFinite(time)) continue;
+    out.push({
+      stage,
+      mode: typeof item.mode === "string" ? item.mode : "recorded_head",
+      branch: typeof item.branch === "string" ? item.branch : "",
+      commit: typeof item.commit === "string" ? item.commit : "",
+      message: typeof item.message === "string" ? item.message : "",
+      snapshot: typeof item.snapshot === "string" ? item.snapshot : "",
+      time
+    });
+    seen.add(stage);
+  }
+  for (const snap of Array.isArray(board?.snapshots) ? board.snapshots : []) {
+    const payload = record$3(snap?.payload) ? snap.payload : null;
+    const stage = typeof payload?.stage === "string" ? payload.stage : "";
+    if (payload?.kind !== "git" || !stage || seen.has(stage)) continue;
+    const time = Number(snap?.time?.created);
+    if (!Number.isFinite(time)) continue;
+    out.push({
+      stage,
+      mode: typeof payload.mode === "string" ? payload.mode : "recorded_head",
+      branch: typeof payload.branch === "string" ? payload.branch : "",
+      commit: typeof payload.commit === "string" ? payload.commit : "",
+      message: typeof payload.message === "string" ? payload.message : "",
+      snapshot: typeof payload.snapshot === "string" ? payload.snapshot : "",
+      time
+    });
+  }
+  return out.sort((a, b) => a.time - b.time);
+}
+function canInitGit$1() {
+  return !!activeDirectory$2() && appStore.connected && !boardStore.vcs?.branch;
+}
+async function initGitCurrent(options = {}) {
+  const dir = activeDirectory$2();
+  if (!dir || !canInitGit$1()) return false;
+  try {
+    const result = await apiJson("project/current/init-git", { method: "POST" });
+    const { clearProjectScopeData } = await __vitePreload(async () => { const { clearProjectScopeData } = await Promise.resolve().then(() => workspace);return { clearProjectScopeData }},true              ?void 0:void 0);
+    const { reloadProjectScope } = await __vitePreload(async () => { const { reloadProjectScope } = await Promise.resolve().then(() => config);return { reloadProjectScope }},true              ?void 0:void 0);
+    clearProjectScopeData();
+    await reloadProjectScope({ restoreWorkspace: false });
+    if (options.notify !== false) {
+      const showAppDialog = window.showAppDialog;
+      if (typeof showAppDialog === "function") {
+        const msg = result?.created ? t("git.init_done", { dir }) : t("git.init_exists", { dir });
+        await showAppDialog({ title: t("git.init"), message: msg, kind: "info" });
+      }
+    }
+    return true;
+  } catch (e) {
+    console.error("[git] Failed to initialize Git", e);
+    if (options.notify !== false) {
+      const showAppDialog = window.showAppDialog;
+      if (typeof showAppDialog === "function") {
+        await showAppDialog({ title: t("git.init"), message: String(e), kind: "error" });
+      }
+    }
+    return false;
+  }
+}
+
+const git = /*#__PURE__*/Object.freeze(/*#__PURE__*/Object.defineProperty({
+  __proto__: null,
+  boardGitCheckpoints,
+  canInitGit: canInitGit$1,
+  gitCheckpointLine,
+  gitCheckpointText,
+  gitCheckpointTitle,
+  initGitCurrent
+}, Symbol.toStringTag, { value: 'Module' }));
+
+const AGENT_STAGES = /* @__PURE__ */ new Set(["spec", "planner", "goal", "judge", "delivery"]);
+function rootTaskSessionID() {
+  const sessionID = boardStore.board?.task?.sessionID;
+  return typeof sessionID === "string" ? sessionID : "";
+}
+function classifyMessage(msg) {
+  const agent = String(msg?.info?.agent || "").trim().toLowerCase();
+  if (AGENT_STAGES.has(agent)) {
+    if (String(msg?.info?.role || "").trim().toLowerCase() === "user") return "main";
+    return agent;
+  }
+  if (agent === "agent") {
+    const rootSession = rootTaskSessionID();
+    const sessionID = typeof msg?.info?.sessionID === "string" ? msg.info.sessionID : "";
+    if (rootSession && sessionID && sessionID !== rootSession) {
+      return "agent";
+    }
+  }
+  return "main";
+}
+function activeAgentStages() {
+  const status = String(boardStore.board?.task?.status || "").trim().toLowerCase();
+  if (status === "planning") return /* @__PURE__ */ new Set(["spec", "planner"]);
+  if (status === "evaluating") return /* @__PURE__ */ new Set(["judge"]);
+  if (status === "delivering") return /* @__PURE__ */ new Set(["delivery"]);
+  const agentEvents = Array.isArray(store.agentEvents) ? store.agentEvents : [];
+  if (!status && agentEvents.length > 0) {
+    return new Set(agentEvents.map((item) => String(item?.stage || "").trim().toLowerCase()).filter(Boolean));
+  }
+  return /* @__PURE__ */ new Set();
+}
+function effectiveRole(message) {
+  return message?.info?.role || "assistant";
+}
+function normalizeConversationText(text) {
+  return String(text || "").replace(/\s+/g, " ").trim();
+}
+function messageConversationText(message) {
+  const role = effectiveRole(message);
+  return normalizeConversationText(
+    (message.parts || []).flatMap((part) => {
+      if (part?.type !== "text") return [];
+      if (part.audience && part.audience.ui === false) return [];
+      if (part.kind === "trace" && !part.audience?.ui) return [];
+      const text = typeof part.text === "string" ? part.text : "";
+      if (!text.trim()) return [];
+      if (["user", "planner", "scheduler", "system"].includes(role) && text.includes("<assistant-brief>")) {
+        const cleaned = stripAssistantBrief(text);
+        return cleaned ? [cleaned] : [];
+      }
+      return [text];
+    }).join("\n")
+  );
+}
+function hasConversationRequest(messages, request) {
+  const target = normalizeConversationText(request);
+  if (!target) return false;
+  return messages.some(
+    (message) => effectiveRole(message) === "user" && messageConversationText(message) === target
+  );
+}
+function deliveryStatusLabel$1(status) {
+  return status || "";
+}
+function buildBoardContextMessages(preClassifiedMainMessages, board, agentEvents, messages) {
+  if (!board) return [];
+  const syntheticMsgs = [];
+  const { task, plan, evaluation, delivery, lanes } = board;
+  const activeStages = activeAgentStages();
+  const liveStages = new Set(
+    (Array.isArray(agentEvents) ? agentEvents : []).map((event) => String(event?.stage || "").trim().toLowerCase()).filter((stage) => activeStages.has(stage))
+  );
+  const transcriptMessages = preClassifiedMainMessages.length > 0 ? preClassifiedMainMessages : Array.isArray(messages) ? messages : [];
+  const hasStageMessage = (stage) => transcriptMessages.some(
+    (message) => message?.info?.role !== "user" && (effectiveRole(message) === stage || phaseFromMessage(message) === phaseFromAgent(stage))
+  );
+  if (task?.request && !hasConversationRequest(messages || [], task.request)) {
+    syntheticMsgs.push({
+      _synthetic: true,
+      info: { role: "user", time: { created: (task.time?.created || 0) - 2 } },
+      parts: [{ type: "text", text: task.request }]
+    });
+  }
+  if (board.spec && !liveStages.has("spec") && !hasStageMessage("spec")) {
+    const message = syntheticTextMessage(
+      "spec",
+      board.spec.time?.created || task?.time?.updated || Date.now(),
+      specContextText(board.spec)
+    );
+    if (message) syntheticMsgs.push(message);
+  }
+  if (plan && !liveStages.has("planner") && !hasStageMessage("planner")) {
+    const goals2 = (lanes || []).find((lane) => lane.id === "goals")?.cards || [];
+    const message = syntheticTextMessage(
+      "planner",
+      plan.time?.created || task?.time?.updated || Date.now(),
+      planContextText(plan, goals2)
+    );
+    if (message) syntheticMsgs.push(message);
+  }
+  for (const interaction of Array.isArray(board.interactions) ? board.interactions : []) {
+    const request = syntheticTextMessage(
+      "system",
+      interaction.time?.created || Date.now(),
+      interactionRequestText(interaction)
+    );
+    if (request) syntheticMsgs.push(request);
+    if (interaction.status === "answered" || interaction.status === "rejected") {
+      const response = syntheticTextMessage(
+        "user",
+        interaction.time?.resolved || interaction.time?.updated || Date.now(),
+        interactionResponseText(interaction)
+      );
+      if (response) syntheticMsgs.push(response);
+    }
+  }
+  for (const item of boardGitCheckpoints(board)) {
+    const message = syntheticTextMessage("system", item.time, gitCheckpointText(item));
+    if (message) syntheticMsgs.push(message);
+  }
+  const goalsLane = (lanes || []).find((lane) => lane.id === "goals");
+  const goals = goalsLane?.cards || [];
+  if (goals.length > 0) {
+    const goalTime = evaluation?.time?.created || task?.time?.updated || Date.now();
+    const message = syntheticTextMessage("goal_gate", goalTime - 1, goalContextText(goals));
+    if (message) syntheticMsgs.push(message);
+  }
+  if (evaluation?.verdict) {
+    const message = syntheticTextMessage(
+      "scheduler",
+      evaluation.time?.created || Date.now(),
+      evaluationContextText(board, goals)
+    );
+    if (message) syntheticMsgs.push(message);
+  }
+  const finalDelivery = board.acceptedDelivery || delivery;
+  if (finalDelivery?.summary && finalDelivery.status !== "candidate") {
+    const message = syntheticTextMessage(
+      "assistant",
+      (finalDelivery.time?.created || Date.now()) + 1,
+      `**${t("detail.delivery")} (${deliveryStatusLabel$1(finalDelivery.status)})**
+
+${finalDelivery.summary}`
+    );
+    if (message) syntheticMsgs.push(message);
+  }
+  return syntheticMsgs;
+}
+function conversationMessages() {
+  const allMessages = store.messages || [];
+  const agentEvents = Array.isArray(store.agentEvents) ? store.agentEvents : [];
+  const board = boardStore.board;
+  boardStore.selectedTaskID;
+  const showTranscriptDetails = store.showTranscriptDetails;
+  const mainMessages = [];
+  const agentChannels = {};
+  for (const msg of allMessages) {
+    const channel = classifyMessage(msg);
+    if (channel === "main") {
+      mainMessages.push(msg);
+    } else {
+      const sessionID = msg.info?.sessionID || "";
+      const key = `${channel}:${sessionID}`;
+      if (!agentChannels[key]) {
+        agentChannels[key] = { stage: channel, messages: [], startTime: Infinity, endTime: 0 };
+      }
+      agentChannels[key].messages.push(msg);
+      const created = msg.info?.time?.created || 0;
+      if (created < agentChannels[key].startTime) agentChannels[key].startTime = created;
+      const completed = msg.info?.time?.completed || created;
+      if (completed > agentChannels[key].endTime) agentChannels[key].endTime = completed;
+    }
+  }
+  const boardMsgs = buildBoardContextMessages(mainMessages, board, agentEvents, allMessages);
+  const executorMsgs = buildExecutorMessages();
+  let filteredMain = mainMessages;
+  if (!showTranscriptDetails && boardMsgs.length > 0 && filteredMain.length > 0) {
+    filteredMain = filteredMain.filter((message) => {
+      const text = (message.parts || []).map((part) => part.text || "").join("");
+      return !text.includes("<assistant-brief>") && !text.includes("You are executing a headless coding task");
+    });
+  }
+  const stageRounds = {};
+  for (const [key, channel] of Object.entries(agentChannels)) {
+    if (channel.messages.length === 0) continue;
+    if (!stageRounds[channel.stage]) stageRounds[channel.stage] = [];
+    stageRounds[channel.stage].push({ key, channel });
+  }
+  new Set(
+    Object.values(agentChannels).filter((channel) => channel.messages.length > 0).map((channel) => channel.stage)
+  );
+  for (const rounds of Object.values(stageRounds)) {
+    rounds.sort((a, b) => a.channel.startTime - b.channel.startTime);
+  }
+  const agentCardMsgs = [];
+  const allAgentEvents = Array.isArray(store.agentEvents) ? store.agentEvents : [];
+  for (const [stage, rounds] of Object.entries(stageRounds)) {
+    for (let i = 0; i < rounds.length; i++) {
+      const { key, channel } = rounds[i];
+      const isLastRound = i === rounds.length - 1;
+      let cardStatus;
+      if (!isLastRound) {
+        cardStatus = "completed";
+      } else {
+        const stageEvents = allAgentEvents.filter(
+          (e) => String(e?.stage || "").toLowerCase() === stage && (e.timestamp || 0) >= channel.startTime
+        );
+        const isFinished = stageEvents.some(
+          (e) => e.kind === "status" && /finished|completed|done/i.test(e?.summary || "")
+        );
+        const isError = stageEvents.some((e) => e.kind === "error") && !isFinished;
+        cardStatus = isError ? "error" : isFinished ? "completed" : "running";
+      }
+      const roundLabel = rounds.length > 1 ? i + 1 : 0;
+      agentCardMsgs.push({
+        _synthetic: true,
+        _agentCard: true,
+        _agentStage: stage,
+        _agentStatus: cardStatus,
+        _agentRound: roundLabel,
+        _agentCardKey: key,
+        _agentMessages: channel.messages,
+        info: {
+          role: "agent-card",
+          agent: stage,
+          time: { created: channel.startTime === Infinity ? Date.now() : channel.startTime }
+        },
+        parts: []
+      });
+    }
+  }
+  const liveAgentMsgs = buildAgentMessages();
+  return [...filteredMain, ...liveAgentMsgs, ...executorMsgs, ...boardMsgs, ...agentCardMsgs].sort(
+    (a, b) => (a.info?.time?.created || 0) - (b.info?.time?.created || 0)
+  );
+}
+function buildAgentMessages(_transcriptStages) {
+  return [];
+}
+
+var _tmpl$$e = /* @__PURE__ */ template(`<div class=chat-empty>`);
+function Conversation(props) {
+  const [autoScroll, setAutoScroll] = createSignal(true);
+  const el = props.container;
+  const items = createMemo(() => conversationMessages());
+  function onScroll() {
+    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+    setAutoScroll(atBottom);
+  }
+  function scrollToBottom() {
+    if (autoScroll()) {
+      requestAnimationFrame(() => {
+        el.scrollTop = el.scrollHeight;
+      });
+    }
+  }
+  onMount(() => {
+    el.addEventListener("scroll", onScroll);
+  });
+  onCleanup(() => {
+    el.removeEventListener("scroll", onScroll);
+  });
+  createEffect(() => {
+    items().length;
+    scrollToBottom();
+  });
+  const emptyText = () => t("chat.empty");
+  return [createComponent(Show, {
+    get when() {
+      return items().length === 0;
+    },
+    get children() {
+      var _el$ = _tmpl$$e();
+      insert(_el$, emptyText);
+      return _el$;
+    }
+  }), createComponent(For, {
+    get each() {
+      return items();
+    },
+    children: (item) => createComponent(Show, {
+      get when() {
+        return !item?._agentCard;
+      },
+      get fallback() {
+        return createComponent(AgentCard, {
+          get key() {
+            return item._agentCardKey;
+          },
+          get stage() {
+            return item._agentStage;
+          },
+          get status() {
+            return item._agentStatus;
+          },
+          get round() {
+            return item._agentRound;
+          },
+          get messages() {
+            return item._agentMessages;
+          },
+          get startTime() {
+            return item.info?.time?.created || 0;
+          }
+        });
+      },
+      get children() {
+        return createComponent(MessageView, {
+          message: item
+        });
+      }
+    })
+  })];
+}
+
+var _tmpl$$d = /* @__PURE__ */ template(`<button type=button class=task-row-delete><span class=task-row-delete-icon data-icon=delete aria-hidden=true><svg width=12 height=12 viewBox="0 0 16 16"fill=none><path d="M3.5 4.5h9"stroke=currentColor stroke-width=1.2 stroke-linecap=round></path><path d="M6 4.5V3.6c0-.5.4-.9.9-.9h2.2c.5 0 .9.4.9.9v.9"stroke=currentColor stroke-width=1.2 stroke-linecap=round></path><path d="M5.2 6.2l.4 5.4c0 .5.4.9.9.9h2.9c.5 0 .9-.4.9-.9l.4-5.4"stroke=currentColor stroke-width=1.2 stroke-linecap=round>`), _tmpl$2$c = /* @__PURE__ */ template(`<div class="task-row-mini global-task-row"><button type=button class=task-row-main><div class=task-row-head><span class=status-dot aria-hidden=true></span><strong></strong></div><span></span><small>`), _tmpl$3$c = /* @__PURE__ */ template(`<section class=sidebar-list-group><div class=sidebar-list-heading></div><div class=sidebar-list-cluster>`), _tmpl$4$c = /* @__PURE__ */ template(`<div class=task-list-panel>`), _tmpl$5$c = /* @__PURE__ */ template(`<div class=empty-hint>`);
+const COMPLETED_STATUSES = /* @__PURE__ */ new Set(["completed", "failed", "cancelled"]);
+function clipText$1(value, limit = 80) {
+  const text = String(value || "").replace(/\s+/g, " ").trim();
+  if (!text) return "";
+  if (text.length <= limit) return text;
+  return `${text.slice(0, Math.max(0, limit - 3)).trim()}...`;
+}
+function shortPath$1(p) {
+  if (!p) return "";
+  const parts = p.replace(/\\/g, "/").split("/");
+  return parts.length > 3 ? ".../" + parts.slice(-3).join("/") : p;
+}
+function joinBullet(values) {
+  return values.filter(Boolean).join(" / ");
+}
+function taskUpdated(item) {
+  return item?.updated_at || item?.task?.time?.updated || item?.task?.time?.created || 0;
+}
+function taskListTitle(item) {
+  return clipText$1(item?.task?.title || item?.overview?.headline || item?.task?.id || "", 72);
+}
+function statusLabel$1(status) {
+  const map = {
+    idle: t("task.status.idle"),
+    queued: t("task.status.queued"),
+    planning: t("task.status.planning"),
+    running: t("task.status.running"),
+    blocked: t("task.status.blocked"),
+    evaluating: t("task.status.evaluating"),
+    delivering: t("task.status.delivering"),
+    completed: t("task.status.completed"),
+    failed: t("task.status.failed"),
+    cancelled: t("task.status.cancelled")
+  };
+  return map[status] || status;
+}
+function taskListBadge(item) {
+  if (item?._pending) return statusLabel$1("planning");
+  const pending = Number(item?.pending_interactions || 0) > 0;
+  return pending ? t("detail.pending_interactions") : statusLabel$1(item?.task?.status || "idle");
+}
+function taskListMeta(item) {
+  return joinBullet([stamp(taskUpdated(item)), shortPath$1(item?.task?.directory || "")]);
+}
+function DeleteButton(props) {
+  return (() => {
+    var _el$ = _tmpl$$d();
+    _el$.$$click = (e) => {
+      e.stopPropagation();
+      props.onDelete(props.id);
+    };
+    createRenderEffect((_p$) => {
+      var _v$ = props.id, _v$2 = t("task.delete_button_title"), _v$3 = t("task.delete_button_title");
+      _v$ !== _p$.e && setAttribute(_el$, "data-task-delete", _p$.e = _v$);
+      _v$2 !== _p$.t && setAttribute(_el$, "title", _p$.t = _v$2);
+      _v$3 !== _p$.a && setAttribute(_el$, "aria-label", _p$.a = _v$3);
+      return _p$;
+    }, {
+      e: void 0,
+      t: void 0,
+      a: void 0
+    });
+    return _el$;
+  })();
+}
+function TaskRow(props) {
+  const id = () => props.item?.task?.id || "";
+  const pending = () => props.item?._pending === true;
+  const status = () => pending() ? "planning" : props.item?.task?.status || "idle";
+  const title = () => taskListTitle(props.item) || id();
+  const isActive = () => !pending() && props.selectedTaskID === id();
+  return (() => {
+    var _el$2 = _tmpl$2$c(), _el$3 = _el$2.firstChild, _el$4 = _el$3.firstChild, _el$5 = _el$4.firstChild, _el$6 = _el$5.nextSibling, _el$7 = _el$4.nextSibling, _el$8 = _el$7.nextSibling;
+    _el$3.$$click = () => {
+      if (!pending() && id()) props.onSelectTask(id());
+    };
+    insert(_el$6, title);
+    insert(_el$7, () => taskListBadge(props.item));
+    insert(_el$8, () => taskListMeta(props.item));
+    insert(_el$2, createComponent(Show, {
+      get when() {
+        return memo(() => !!(!pending() && !!id()))() && !!props.onDeleteTask;
+      },
+      get children() {
+        return createComponent(DeleteButton, {
+          get id() {
+            return id();
+          },
+          get onDelete() {
+            return props.onDeleteTask;
+          }
+        });
+      }
+    }), null);
+    createRenderEffect((_p$) => {
+      var _v$4 = isActive() ? "true" : void 0, _v$5 = title(), _v$6 = pending() ? void 0 : id(), _v$7 = pending(), _v$8 = pending() ? "true" : void 0, _v$9 = title(), _v$0 = status();
+      _v$4 !== _p$.e && setAttribute(_el$2, "data-active", _p$.e = _v$4);
+      _v$5 !== _p$.t && setAttribute(_el$2, "title", _p$.t = _v$5);
+      _v$6 !== _p$.a && setAttribute(_el$3, "data-task-id", _p$.a = _v$6);
+      _v$7 !== _p$.o && (_el$3.disabled = _p$.o = _v$7);
+      _v$8 !== _p$.i && setAttribute(_el$3, "aria-disabled", _p$.i = _v$8);
+      _v$9 !== _p$.n && setAttribute(_el$3, "title", _p$.n = _v$9);
+      _v$0 !== _p$.s && setAttribute(_el$5, "data-status", _p$.s = _v$0);
+      return _p$;
+    }, {
+      e: void 0,
+      t: void 0,
+      a: void 0,
+      o: void 0,
+      i: void 0,
+      n: void 0,
+      s: void 0
+    });
+    return _el$2;
+  })();
+}
+function TaskSection(props) {
+  return createComponent(Show, {
+    get when() {
+      return props.items.length > 0;
+    },
+    get children() {
+      var _el$9 = _tmpl$3$c(), _el$0 = _el$9.firstChild, _el$1 = _el$0.nextSibling;
+      insert(_el$0, () => props.label);
+      insert(_el$1, createComponent(For, {
+        get each() {
+          return props.items;
+        },
+        children: (item) => createComponent(TaskRow, {
+          item,
+          get selectedTaskID() {
+            return props.selectedTaskID;
+          },
+          get onSelectTask() {
+            return props.onSelectTask;
+          },
+          get onDeleteTask() {
+            return props.onDeleteTask;
+          }
+        })
+      }));
+      return _el$9;
+    }
+  });
+}
+function TaskList(props) {
+  const sortedItems = createMemo(() => visibleTasks());
+  const activeTasks = createMemo(() => sortedItems().filter((item) => !COMPLETED_STATUSES.has(item?.task?.status || "")));
+  const recentTasks = createMemo(() => sortedItems().filter((item) => COMPLETED_STATUSES.has(item?.task?.status || "")));
+  const selectedID = () => boardStore.selectedTaskID;
+  return (() => {
+    var _el$10 = _tmpl$4$c();
+    insert(_el$10, createComponent(Show, {
+      get when() {
+        return sortedItems().length > 0;
+      },
+      get fallback() {
+        return (() => {
+          var _el$11 = _tmpl$5$c();
+          insert(_el$11, () => t("task.none"));
+          return _el$11;
+        })();
+      },
+      get children() {
+        return [createComponent(TaskSection, {
+          get label() {
+            return t("task.group.active");
+          },
+          get items() {
+            return activeTasks();
+          },
+          get selectedTaskID() {
+            return selectedID();
+          },
+          get onSelectTask() {
+            return props.onSelectTask;
+          },
+          get onDeleteTask() {
+            return props.onDeleteTask;
+          }
+        }), createComponent(TaskSection, {
+          get label() {
+            return t("task.group.recent");
+          },
+          get items() {
+            return recentTasks();
+          },
+          get selectedTaskID() {
+            return selectedID();
+          },
+          get onSelectTask() {
+            return props.onSelectTask;
+          },
+          get onDeleteTask() {
+            return props.onDeleteTask;
+          }
+        })];
+      }
+    }));
+    return _el$10;
+  })();
+}
+delegateEvents(["click"]);
+
+var _tmpl$2$b = /* @__PURE__ */ template(`<div class=plan-version>`), _tmpl$3$b = /* @__PURE__ */ template(`<div class="plan-version streaming-indicator">`), _tmpl$4$b = /* @__PURE__ */ template(`<p class=empty-hint>`), _tmpl$5$b = /* @__PURE__ */ template(`<div class=plan-version> · `), _tmpl$6$a = /* @__PURE__ */ template(`<div class=goals-list>`), _tmpl$7$8 = /* @__PURE__ */ template(`<div class="goal-criteria md-content">`), _tmpl$8$4 = /* @__PURE__ */ template(`<span class=extension-status data-state=active>`), _tmpl$9$4 = /* @__PURE__ */ template(`<span class=goal-priority>`), _tmpl$0$3 = /* @__PURE__ */ template(`<div class=goal-item><span class=goal-status-icon></span><div class=goal-content><div class="goal-desc md-content"></div></div><div class=goal-actions><button type=button class="btn btn-ghost mini"data-goal-action=edit></button><button type=button class="btn btn-ghost mini danger"data-goal-action=delete>`), _tmpl$1$2 = /* @__PURE__ */ template(`<div class=empty-hint>`), _tmpl$10$2 = /* @__PURE__ */ template(`<section class=criteria-group><div class=criteria-group-head><div class=criteria-group-title></div><div class=criteria-group-count></div></div><div class=criteria-group-list>`), _tmpl$11$1 = /* @__PURE__ */ template(`<label class=criteria-item><input type=checkbox><span class=check-mark></span><span class=criteria-copy><span class=criteria-name></span><span class=criteria-desc></span></span><span class=criteria-status></span><span class=criteria-result>`), _tmpl$12$1 = /* @__PURE__ */ template(`<div class="eval-summary md-content">`), _tmpl$13$1 = /* @__PURE__ */ template(`<div class=eval-error-meta>`), _tmpl$14$1 = /* @__PURE__ */ template(`<div class=eval-error><div class=eval-error-name>✗ </div><div class="eval-error-detail md-content">`), _tmpl$15$1 = /* @__PURE__ */ template(`<div class=delivery-files>`), _tmpl$16$1 = /* @__PURE__ */ template(`<div class=delivery-card><div class=delivery-title></div><div class="delivery-summary md-content">`), _tmpl$17 = /* @__PURE__ */ template(`<div class="overview-headline md-content">`), _tmpl$18 = /* @__PURE__ */ template(`<div class="overview-summary md-content">`), _tmpl$19 = /* @__PURE__ */ template(`<div class="overview-next-step-detail md-content">`), _tmpl$20 = /* @__PURE__ */ template(`<div class=overview-next-step><div class=overview-next-step-title>`), _tmpl$21 = /* @__PURE__ */ template(`<div class="interaction-alert task-failure-alert"><div class=interaction-title></div><div class="interaction-body md-content">`), _tmpl$22 = /* @__PURE__ */ template(`<button type=button class="btn btn-primary"data-task-action=retry>`), _tmpl$23 = /* @__PURE__ */ template(`<button type=button class="btn btn-ghost"data-task-action=replan>`), _tmpl$24 = /* @__PURE__ */ template(`<button type=button class="btn btn-ghost"data-task-action=cancel>`), _tmpl$25 = /* @__PURE__ */ template(`<div class=task-actions-buttons>`), _tmpl$26 = /* @__PURE__ */ template(`<div class=task-actions-bar>`), _tmpl$27 = /* @__PURE__ */ template(`<button class="btn btn-primary"data-action=always>`), _tmpl$28 = /* @__PURE__ */ template(`<button class="btn btn-ghost"data-action=once>`), _tmpl$29 = /* @__PURE__ */ template(`<button class="btn btn-ghost"data-action=reject>`), _tmpl$30 = /* @__PURE__ */ template(`<div class=interaction-alert><div class=interaction-title> </div><div class="interaction-body md-content"></div><div class=interaction-actions>`), _tmpl$31 = /* @__PURE__ */ template(`<button class="btn btn-primary"data-action=answer>`), _tmpl$32 = /* @__PURE__ */ template(`<div class=interactions-list>`), _tmpl$35 = /* @__PURE__ */ template(`<details class=section><summary class=section-head><span class=section-icon aria-hidden=true></span><span class=section-title></span><span class=section-badge></span></summary><div class=section-body>`), _tmpl$36 = /* @__PURE__ */ template(`<div id=taskActionsBar>`);
+function statusIcon(status) {
+  const map = {
+    idle: `<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle data-stroke="true" cx="8" cy="8" r="4.5"/><circle data-fill="true" cx="8" cy="8" r="1.25"/></svg>`,
+    queued: `<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle data-stroke="true" cx="8" cy="8" r="4.5"/><path data-stroke="true" d="M8 5.4v2.8l2.1 1.3"/></svg>`,
+    planning: `<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path data-stroke="true" d="M5 3.5v9"/><path data-stroke="true" d="M5 5.5h6"/><path data-stroke="true" d="M5 10.5h4"/><circle data-fill="true" cx="5" cy="3.5" r="1.15"/><circle data-fill="true" cx="11" cy="5.5" r="1.15"/><circle data-fill="true" cx="9" cy="10.5" r="1.15"/></svg>`,
+    running: `<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path data-fill="true" d="M6 4.6L11.3 8 6 11.4Z"/></svg>`,
+    blocked: `<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path data-fill="true" d="M8 3.1L13 12H3Z"/><path data-stroke="true" d="M8 5.8v2.8"/><circle data-fill="true" cx="8" cy="10.8" r="0.9" style="fill: var(--surface-strong);"/></svg>`,
+    evaluating: `<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle data-stroke="true" cx="6.7" cy="6.7" r="3.5"/><path data-stroke="true" d="M9.5 9.5l2.9 2.9"/><circle data-fill="true" cx="6.7" cy="6.7" r="1.2"/></svg>`,
+    delivering: `<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path data-stroke="true" d="M3.5 8h9"/><path data-stroke="true" d="M9 4.5L12.5 8 9 11.5"/><circle data-fill="true" cx="3.5" cy="8" r="1"/></svg>`,
+    completed: `<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle data-stroke="true" cx="8" cy="8" r="4.5"/><path data-stroke="true" d="M5.1 8.2l2 2 3.8-3.8"/></svg>`,
+    failed: `<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle data-stroke="true" cx="8" cy="8" r="4.5"/><path data-stroke="true" d="M5.4 5.4l5.2 5.2"/><path data-stroke="true" d="M10.6 5.4l-5.2 5.2"/></svg>`,
+    cancelled: `<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle data-stroke="true" cx="8" cy="8" r="4.5"/><path data-stroke="true" d="M5.2 10.8l5.6-5.6"/></svg>`
+  };
+  return map[status] || map.idle;
+}
+function SpecPanel(props) {
+  const content = () => props.spec?.content || props.preview || "";
+  const isPreview = () => !props.spec?.content && !!props.preview;
+  return createComponent(Show, {
+    get when() {
+      return content();
+    },
+    get fallback() {
+      return (() => {
+        var _el$6 = _tmpl$4$b();
+        insert(_el$6, () => t("empty.spec"));
+        return _el$6;
+      })();
+    },
+    get children() {
+      return [createComponent(TextPart, {
+        get text() {
+          return content();
+        }
+      }), createComponent(Show, {
+        get when() {
+          return !isPreview();
+        },
+        get children() {
+          var _el$4 = _tmpl$2$b();
+          insert(_el$4, () => stamp(props.spec?.time?.created));
+          return _el$4;
+        }
+      }), createComponent(Show, {
+        get when() {
+          return isPreview();
+        },
+        get children() {
+          var _el$5 = _tmpl$3$b();
+          insert(_el$5, () => t("common.generating") || "Generating...");
+          return _el$5;
+        }
+      })];
+    }
+  });
+}
+function PlanPanel(props) {
+  const content = () => props.plan?.summary || props.preview || "";
+  const isPreview = () => !props.plan?.summary && !!props.preview;
+  return createComponent(Show, {
+    get when() {
+      return content();
+    },
+    get fallback() {
+      return (() => {
+        var _el$0 = _tmpl$4$b();
+        insert(_el$0, () => t("empty.plan"));
+        return _el$0;
+      })();
+    },
+    get children() {
+      return [createComponent(TextPart, {
+        get text() {
+          return content();
+        }
+      }), createComponent(Show, {
+        get when() {
+          return !isPreview();
+        },
+        get children() {
+          var _el$7 = _tmpl$5$b(), _el$8 = _el$7.firstChild;
+          insert(_el$7, () => t("plan.version", {
+            version: props.plan?.version
+          }), _el$8);
+          insert(_el$7, () => stamp(props.plan?.time?.created), null);
+          return _el$7;
+        }
+      }), createComponent(Show, {
+        get when() {
+          return isPreview();
+        },
+        get children() {
+          var _el$9 = _tmpl$3$b();
+          insert(_el$9, () => t("common.generating") || "Generating...");
+          return _el$9;
+        }
+      })];
+    }
+  });
+}
+function goalIcon(status) {
+  if (status === "passed") return "✓";
+  if (status === "failed") return "✗";
+  return "•";
+}
+function GoalsPanel(props) {
+  createMemo(() => (props.cards || []).filter((c) => c.status === "passed").length);
+  const total = createMemo(() => (props.cards || []).length);
+  return createComponent(Show, {
+    get when() {
+      return total() > 0;
+    },
+    get fallback() {
+      return (() => {
+        var _el$10 = _tmpl$4$b();
+        insert(_el$10, () => t("empty.goals"));
+        return _el$10;
+      })();
+    },
+    get children() {
+      var _el$1 = _tmpl$6$a();
+      insert(_el$1, createComponent(For, {
+        get each() {
+          return props.cards;
+        },
+        children: (card) => (() => {
+          var _el$11 = _tmpl$0$3(), _el$12 = _el$11.firstChild, _el$13 = _el$12.nextSibling, _el$14 = _el$13.firstChild, _el$18 = _el$13.nextSibling, _el$19 = _el$18.firstChild, _el$20 = _el$19.nextSibling;
+          insert(_el$12, () => goalIcon(card.status));
+          insert(_el$13, createComponent(Show, {
+            get when() {
+              return card.detail;
+            },
+            get children() {
+              var _el$15 = _tmpl$7$8();
+              createRenderEffect(() => _el$15.innerHTML = renderMarkdown$1(card.detail));
+              return _el$15;
+            }
+          }), null);
+          insert(_el$11, createComponent(Show, {
+            get when() {
+              return props.runningGoalIDs.has(card.id);
+            },
+            get children() {
+              var _el$16 = _tmpl$8$4();
+              insert(_el$16, () => t("goal.running"));
+              return _el$16;
+            }
+          }), _el$18);
+          insert(_el$11, createComponent(Show, {
+            get when() {
+              return card.metadata?.priority;
+            },
+            get children() {
+              var _el$17 = _tmpl$9$4();
+              insert(_el$17, () => card.metadata.priority);
+              createRenderEffect(() => setAttribute(_el$17, "data-priority", card.metadata.priority));
+              return _el$17;
+            }
+          }), _el$18);
+          _el$19.$$click = () => props.onEditGoal?.(card.id, card.title, card.detail || "");
+          insert(_el$19, () => t("common.edit"));
+          _el$20.$$click = () => props.onDeleteGoal?.(card.id);
+          insert(_el$20, () => t("common.delete"));
+          createRenderEffect((_p$) => {
+            var _v$4 = card.status || "pending", _v$5 = renderMarkdown$1(card.title || ""), _v$6 = card.id, _v$7 = card.title, _v$8 = card.detail || "", _v$9 = t("goal.edit_button_title"), _v$0 = t("goal.edit_button_title"), _v$1 = card.id, _v$10 = t("goal.delete_button_title"), _v$11 = t("goal.delete_button_title");
+            _v$4 !== _p$.e && setAttribute(_el$12, "data-status", _p$.e = _v$4);
+            _v$5 !== _p$.t && (_el$14.innerHTML = _p$.t = _v$5);
+            _v$6 !== _p$.a && setAttribute(_el$19, "data-goal-id", _p$.a = _v$6);
+            _v$7 !== _p$.o && setAttribute(_el$19, "data-goal-title", _p$.o = _v$7);
+            _v$8 !== _p$.i && setAttribute(_el$19, "data-goal-detail", _p$.i = _v$8);
+            _v$9 !== _p$.n && setAttribute(_el$19, "title", _p$.n = _v$9);
+            _v$0 !== _p$.s && setAttribute(_el$19, "aria-label", _p$.s = _v$0);
+            _v$1 !== _p$.h && setAttribute(_el$20, "data-goal-id", _p$.h = _v$1);
+            _v$10 !== _p$.r && setAttribute(_el$20, "title", _p$.r = _v$10);
+            _v$11 !== _p$.d && setAttribute(_el$20, "aria-label", _p$.d = _v$11);
+            return _p$;
+          }, {
+            e: void 0,
+            t: void 0,
+            a: void 0,
+            o: void 0,
+            i: void 0,
+            n: void 0,
+            s: void 0,
+            h: void 0,
+            r: void 0,
+            d: void 0
+          });
+          return _el$11;
+        })()
+      }));
+      return _el$1;
+    }
+  });
+}
+const COMMAND_CHECKS = [{
+  key: "build",
+  label: "Build",
+  kind: "command",
+  family: "build"
+}, {
+  key: "test",
+  label: "Unit Tests",
+  kind: "command",
+  family: "test"
+}, {
+  key: "lint",
+  label: "Lint",
+  kind: "command",
+  family: "lint"
+}, {
+  key: "verify_cmd",
+  label: "Verify Command",
+  kind: "command",
+  family: "verify_cmd"
+}];
+const TOGGLE_CHECKS = [{
+  key: "startup",
+  label: "Startup",
+  kind: "toggle",
+  family: "runtime"
+}, {
+  key: "artifact",
+  label: "Artifacts",
+  kind: "toggle",
+  family: "artifact"
+}, {
+  key: "visual",
+  label: "Visual Check",
+  kind: "toggle",
+  family: "runtime"
+}, {
+  key: "puppeteer",
+  label: "Puppeteer",
+  kind: "toggle",
+  family: "runtime"
+}, {
+  key: "ui_review",
+  label: "UI Review",
+  kind: "toggle",
+  family: "review"
+}, {
+  key: "code_quality",
+  label: "Code Quality",
+  kind: "toggle",
+  family: "review"
+}, {
+  key: "code_review",
+  label: "Code Review",
+  kind: "toggle",
+  family: "review"
+}, {
+  key: "dead_code_review",
+  label: "Dead Code Review",
+  kind: "toggle",
+  family: "review"
+}, {
+  key: "spec_check",
+  label: "Spec Check",
+  kind: "toggle",
+  family: "acceptance"
+}];
+const CHECK_FAMILIES = [{
+  key: "command",
+  order: 0
+}, {
+  key: "runtime",
+  order: 1
+}, {
+  key: "artifact",
+  order: 2
+}, {
+  key: "review",
+  order: 3
+}, {
+  key: "acceptance",
+  order: 4
+}, {
+  key: "custom",
+  order: 5
+}];
+function normalizeCheckName(value) {
+  return String(value || "").toLowerCase().replace(/[^a-z0-9_#:-]/g, "_");
+}
+function baseCheckName(value) {
+  return normalizeCheckName(value).replace(/#\d+$/, "");
+}
+function checkLabel(key) {
+  const known = {
+    build: t("checks.build"),
+    test: t("checks.test"),
+    lint: t("checks.lint"),
+    verify_cmd: t("checks.verify_cmd"),
+    py_compile: t("checks.py_compile"),
+    pytest: t("checks.pytest"),
+    typecheck: t("checks.typecheck"),
+    ruff: t("checks.ruff"),
+    mypy: t("checks.mypy"),
+    startup: t("checks.startup"),
+    artifact: t("checks.artifact"),
+    visual: t("checks.visual"),
+    puppeteer: t("checks.puppeteer"),
+    ui_review: t("checks.ui_review"),
+    code_quality: t("checks.code_quality"),
+    code_review: t("checks.code_review"),
+    dead_code_review: t("checks.dead_code_review"),
+    spec_check: t("checks.spec_check")
+  };
+  if (known[key]) return known[key];
+  return key.split(/[_-]+/).filter(Boolean).map((item) => (item[0]?.toUpperCase() ?? "") + item.slice(1)).join(" ");
+}
+function checkFamilyKey(family, name) {
+  const base = baseCheckName(name);
+  if (["build", "test", "lint", "verify_cmd"].includes(family) || ["build", "test", "lint", "verify_cmd"].includes(base)) {
+    return "command";
+  }
+  if (["runtime", "artifact", "review", "acceptance", "custom"].includes(family)) return family;
+  if (["startup", "visual", "puppeteer"].includes(base)) return "runtime";
+  if (base === "artifact") return "artifact";
+  if (["ui_review", "code_quality", "code_review", "dead_code_review"].includes(base)) return "review";
+  if (base === "spec_check") return "acceptance";
+  return "custom";
+}
+function checkFamilyText(key) {
+  if (key === "command") return t("checks.family.command");
+  if (key === "runtime") return t("checks.family.runtime");
+  if (key === "artifact") return t("checks.family.artifact");
+  if (key === "review") return t("checks.family.review");
+  if (key === "acceptance") return t("checks.family.acceptance");
+  return t("checks.family.custom");
+}
+function record$2(value) {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+function aggregateCheckStatus(checks, key) {
+  const matches = (Array.isArray(checks) ? checks : []).filter((item) => baseCheckName(item.name || item.label) === key);
+  if (matches.length === 0) return "pending";
+  if (matches.some((item) => item.status === "failed")) return "failed";
+  if (matches.some((item) => item.status === "passed")) return "passed";
+  if (matches.every((item) => item.status === "skipped")) return "skipped";
+  return "pending";
+}
+function criteriaEnabledValue(key, value, fallback) {
+  if (["build", "test", "lint", "verify_cmd"].includes(key)) {
+    return value !== false && (value !== void 0 || fallback);
+  }
+  if (key === "spec_check" && value === void 0) return true;
+  if (value === true) return true;
+  if (!value || !record$2(value)) return false;
+  return value.enabled !== false;
+}
+function criteriaSpecs(task, evaluation) {
+  const checksConfig = task?.metadata?.checks;
+  const config = checksConfig && record$2(checksConfig) ? {
+    ...checksConfig
+  } : {};
+  const named = config.named && record$2(config.named) ? config.named : {};
+  const seen = /* @__PURE__ */ new Set();
+  const specs = [];
+  const showDefault = Object.keys(config).length === 0 && (!evaluation?.checks || evaluation.checks.length === 0);
+  const push = (spec) => {
+    if (seen.has(spec.key)) return;
+    seen.add(spec.key);
+    specs.push(spec);
+  };
+  for (const item of COMMAND_CHECKS) {
+    const value = config[item.key];
+    const visible = value !== void 0 || aggregateCheckStatus(evaluation?.checks, item.key) !== "pending" || showDefault && ["build", "test", "lint"].includes(item.key);
+    if (!visible) continue;
+    push({
+      key: item.key,
+      name: item.key,
+      label: checkLabel(item.key),
+      kind: item.kind,
+      family: item.family,
+      group: checkFamilyKey(item.family, item.key),
+      enabled: criteriaEnabledValue(item.key, value, showDefault),
+      readOnly: false
+    });
+  }
+  for (const item of TOGGLE_CHECKS) {
+    const value = config[item.key];
+    const canToggle = ["artifact", "ui_review", "code_quality", "code_review", "dead_code_review", "spec_check"].includes(item.key);
+    const visible = value !== void 0 || aggregateCheckStatus(evaluation?.checks, item.key) !== "pending" || canToggle;
+    if (!visible) continue;
+    push({
+      key: item.key,
+      name: item.key,
+      label: checkLabel(item.key),
+      kind: item.kind,
+      family: item.family,
+      group: checkFamilyKey(item.family, item.key),
+      enabled: criteriaEnabledValue(item.key, value, false),
+      readOnly: false
+    });
+  }
+  for (const [key, value] of Object.entries(named)) {
+    if (!value || !record$2(value)) continue;
+    push({
+      key: `named:${key}`,
+      name: key,
+      label: value.label || checkLabel(key),
+      kind: "named",
+      family: value.family || void 0,
+      group: checkFamilyKey(value.family || "", key),
+      enabled: value.enabled !== false,
+      readOnly: false
+    });
+  }
+  for (const check of evaluation?.checks || []) {
+    const key = baseCheckName(check.name || check.label);
+    if (!key) continue;
+    if (seen.has(key) || seen.has(`named:${key}`)) continue;
+    push({
+      key,
+      name: key,
+      label: check.label || checkLabel(key),
+      kind: "named",
+      family: check.family || void 0,
+      group: checkFamilyKey(check.family || "", key),
+      enabled: true,
+      readOnly: true
+    });
+  }
+  return specs;
+}
+function groupChecks(items) {
+  const groups = /* @__PURE__ */ new Map();
+  const order = new Map(CHECK_FAMILIES.map((item) => [item.key, item.order]));
+  for (const item of items) {
+    const key = item.group || "custom";
+    if (!groups.has(key)) {
+      groups.set(key, {
+        key,
+        label: checkFamilyText(key),
+        items: []
+      });
+    }
+    groups.get(key).items.push(item);
+  }
+  return [...groups.values()].sort((a, b) => (order.get(a.key) ?? 99) - (order.get(b.key) ?? 99));
+}
+function criteriaResultText(status) {
+  if (status === "off") return t("checks.off");
+  if (status === "passed") return t("checks.pass");
+  if (status === "failed") return t("checks.fail");
+  if (status === "skipped") return t("checks.skip");
+  return t("checks.pending");
+}
+function CriteriaPanel(props) {
+  const specs = createMemo(() => criteriaSpecs(props.task, props.evaluation));
+  const groups = createMemo(() => groupChecks(specs()));
+  const checkStatuses = createMemo(() => {
+    const result = {};
+    for (const spec of specs()) {
+      const status = spec.enabled ? aggregateCheckStatus(props.evaluation?.checks, spec.name) : "off";
+      result[spec.key] = status;
+    }
+    return result;
+  });
+  return createComponent(Show, {
+    get when() {
+      return specs().length > 0;
+    },
+    get fallback() {
+      return (() => {
+        var _el$21 = _tmpl$1$2();
+        insert(_el$21, () => t("empty.checks"));
+        return _el$21;
+      })();
+    },
+    get children() {
+      return createComponent(For, {
+        get each() {
+          return groups();
+        },
+        children: (group) => (() => {
+          var _el$22 = _tmpl$10$2(), _el$23 = _el$22.firstChild, _el$24 = _el$23.firstChild, _el$25 = _el$24.nextSibling, _el$26 = _el$23.nextSibling;
+          insert(_el$24, () => group.label);
+          insert(_el$25, () => tc("checks.group_count", group.items.length, {
+            count: group.items.length
+          }));
+          insert(_el$26, createComponent(For, {
+            get each() {
+              return group.items;
+            },
+            children: (spec) => {
+              const status = () => checkStatuses()[spec.key] || "pending";
+              return (() => {
+                var _el$27 = _tmpl$11$1(), _el$28 = _el$27.firstChild, _el$29 = _el$28.nextSibling, _el$30 = _el$29.nextSibling, _el$31 = _el$30.firstChild, _el$32 = _el$31.nextSibling, _el$33 = _el$30.nextSibling, _el$34 = _el$33.nextSibling;
+                _el$28.addEventListener("change", (e) => props.onToggle?.(spec.key, e.currentTarget.checked));
+                insert(_el$31, () => spec.label);
+                insert(_el$32, (() => {
+                  var _c$ = memo(() => !!spec.readOnly);
+                  return () => _c$() ? t("detail.observed") : memo(() => !!spec.enabled)() ? t("detail.enabled") : t("detail.disabled");
+                })());
+                insert(_el$34, () => criteriaResultText(status()));
+                createRenderEffect((_p$) => {
+                  var _v$12 = spec.readOnly ? "true" : void 0, _v$13 = spec.key, _v$14 = spec.readOnly, _v$15 = status();
+                  _v$12 !== _p$.e && setAttribute(_el$27, "data-readonly", _p$.e = _v$12);
+                  _v$13 !== _p$.t && setAttribute(_el$28, "data-check", _p$.t = _v$13);
+                  _v$14 !== _p$.a && (_el$28.disabled = _p$.a = _v$14);
+                  _v$15 !== _p$.o && setAttribute(_el$33, "data-result", _p$.o = _v$15);
+                  return _p$;
+                }, {
+                  e: void 0,
+                  t: void 0,
+                  a: void 0,
+                  o: void 0
+                });
+                createRenderEffect(() => _el$28.checked = spec.enabled);
+                return _el$27;
+              })();
+            }
+          }));
+          createRenderEffect(() => setAttribute(_el$22, "data-family", group.key));
+          return _el$22;
+        })()
+      });
+    }
+  });
+}
+function checkFamilyLabel(family, name) {
+  return checkFamilyText(checkFamilyKey(family, name));
+}
+function EvaluationPanel(props) {
+  const errors = createMemo(() => {
+    const result = [];
+    for (const check of props.evaluation?.checks || []) {
+      if (check.status === "failed" && check.evidence) {
+        result.push({
+          name: check.label || checkLabel(baseCheckName(check.name || check.label)),
+          family: checkFamilyLabel(check.family || "", check.name || check.label || ""),
+          evidence: check.evidence
+        });
+      }
+    }
+    return result;
+  });
+  return createComponent(Show, {
+    get when() {
+      return props.evaluation;
+    },
+    get children() {
+      return [createComponent(For, {
+        get each() {
+          return errors();
+        },
+        children: (err) => (() => {
+          var _el$36 = _tmpl$14$1(), _el$37 = _el$36.firstChild; _el$37.firstChild; var _el$41 = _el$37.nextSibling;
+          insert(_el$37, () => err.name, null);
+          insert(_el$36, createComponent(Show, {
+            get when() {
+              return err.family;
+            },
+            get children() {
+              var _el$40 = _tmpl$13$1();
+              insert(_el$40, () => err.family);
+              return _el$40;
+            }
+          }), _el$41);
+          createRenderEffect(() => _el$41.innerHTML = renderMarkdown$1(err.evidence.slice(0, 400)));
+          return _el$36;
+        })()
+      }), createComponent(Show, {
+        get when() {
+          return props.evaluation?.summary;
+        },
+        get children() {
+          var _el$35 = _tmpl$12$1();
+          createRenderEffect(() => _el$35.innerHTML = renderMarkdown$1(props.evaluation.summary));
+          return _el$35;
+        }
+      })];
+    }
+  });
+}
+function deliveryStatusLabel(status) {
+  if (status === "delivered") return t("delivery.status.delivered");
+  if (status === "publishing") return t("delivery.status.publishing");
+  if (status === "failed") return t("delivery.status.failed");
+  return t("delivery.status.candidate");
+}
+function DeliveryPanel(props) {
+  return createComponent(Show, {
+    get when() {
+      return props.delivery;
+    },
+    get fallback() {
+      return (() => {
+        var _el$46 = _tmpl$4$b();
+        insert(_el$46, () => t("empty.delivery"));
+        return _el$46;
+      })();
+    },
+    get children() {
+      var _el$42 = _tmpl$16$1(), _el$43 = _el$42.firstChild, _el$44 = _el$43.nextSibling;
+      insert(_el$43, () => deliveryStatusLabel(props.delivery?.status));
+      insert(_el$42, createComponent(Show, {
+        get when() {
+          return props.delivery?.result?.changedFiles?.length > 0;
+        },
+        get children() {
+          var _el$45 = _tmpl$15$1();
+          insert(_el$45, () => tc("delivery.files_changed", props.delivery.result.changedFiles.length, {
+            count: props.delivery.result.changedFiles.length
+          }));
+          return _el$45;
+        }
+      }), null);
+      createRenderEffect(() => _el$44.innerHTML = renderMarkdown$1(props.delivery?.summary || props.delivery?.result?.summary || ""));
+      return _el$42;
+    }
+  });
+}
+function OverviewPanel(props) {
+  const nextStep = createMemo(() => props.overview?.nextStep || null);
+  const failure = createMemo(() => props.overview?.currentFailure || null);
+  return createComponent(Show, {
+    get when() {
+      return props.overview;
+    },
+    get fallback() {
+      return (() => {
+        var _el$55 = _tmpl$4$b();
+        insert(_el$55, () => t("empty.overview"));
+        return _el$55;
+      })();
+    },
+    get children() {
+      return [createComponent(Show, {
+        get when() {
+          return props.overview?.headline;
+        },
+        get children() {
+          var _el$47 = _tmpl$17();
+          createRenderEffect(() => _el$47.innerHTML = renderMarkdown$1(props.overview.headline));
+          return _el$47;
+        }
+      }), createComponent(Show, {
+        get when() {
+          return props.overview?.summary;
+        },
+        get children() {
+          var _el$48 = _tmpl$18();
+          createRenderEffect(() => _el$48.innerHTML = renderMarkdown$1(props.overview.summary));
+          return _el$48;
+        }
+      }), createComponent(Show, {
+        get when() {
+          return nextStep();
+        },
+        get children() {
+          var _el$49 = _tmpl$20(), _el$50 = _el$49.firstChild;
+          insert(_el$50, () => nextStep()?.title || t("overview.next_step"));
+          insert(_el$49, createComponent(Show, {
+            get when() {
+              return nextStep()?.detail;
+            },
+            get children() {
+              var _el$51 = _tmpl$19();
+              createRenderEffect(() => _el$51.innerHTML = renderMarkdown$1(nextStep().detail));
+              return _el$51;
+            }
+          }), null);
+          return _el$49;
+        }
+      }), createComponent(Show, {
+        get when() {
+          return failure();
+        },
+        get children() {
+          var _el$52 = _tmpl$21(), _el$53 = _el$52.firstChild, _el$54 = _el$53.nextSibling;
+          insert(_el$53, () => failure()?.title);
+          createRenderEffect(() => _el$54.innerHTML = renderMarkdown$1(failure()?.summary || ""));
+          return _el$52;
+        }
+      })];
+    }
+  });
+}
+function TaskActionsPanel(props) {
+  const controls = createMemo(() => props.overview?.controls || {});
+  const failure = createMemo(() => props.overview?.currentFailure);
+  const hasButtons = createMemo(() => controls().canRetry || controls().canReplan || controls().canCancel);
+  const visible = createMemo(() => !!(hasButtons() || failure()));
+  return createComponent(Show, {
+    get when() {
+      return visible();
+    },
+    get children() {
+      var _el$56 = _tmpl$26();
+      insert(_el$56, createComponent(Show, {
+        get when() {
+          return failure();
+        },
+        get children() {
+          var _el$57 = _tmpl$21(), _el$58 = _el$57.firstChild, _el$59 = _el$58.nextSibling;
+          insert(_el$58, () => failure().title);
+          createRenderEffect(() => _el$59.innerHTML = renderMarkdown$1(failure().summary || ""));
+          return _el$57;
+        }
+      }), null);
+      insert(_el$56, createComponent(Show, {
+        get when() {
+          return hasButtons();
+        },
+        get children() {
+          var _el$60 = _tmpl$25();
+          insert(_el$60, createComponent(Show, {
+            get when() {
+              return controls().canRetry;
+            },
+            get children() {
+              var _el$61 = _tmpl$22();
+              _el$61.$$click = () => props.onRetry?.();
+              insert(_el$61, () => t("task.action.retry"));
+              createRenderEffect((_p$) => {
+                var _v$16 = t("task.action.retry_title"), _v$17 = t("task.action.retry_title");
+                _v$16 !== _p$.e && setAttribute(_el$61, "title", _p$.e = _v$16);
+                _v$17 !== _p$.t && setAttribute(_el$61, "aria-label", _p$.t = _v$17);
+                return _p$;
+              }, {
+                e: void 0,
+                t: void 0
+              });
+              return _el$61;
+            }
+          }), null);
+          insert(_el$60, createComponent(Show, {
+            get when() {
+              return controls().canReplan;
+            },
+            get children() {
+              var _el$62 = _tmpl$23();
+              _el$62.$$click = () => props.onReplan?.();
+              insert(_el$62, () => t("task.action.replan"));
+              createRenderEffect((_p$) => {
+                var _v$18 = t("task.action.replan_title"), _v$19 = t("task.action.replan_title");
+                _v$18 !== _p$.e && setAttribute(_el$62, "title", _p$.e = _v$18);
+                _v$19 !== _p$.t && setAttribute(_el$62, "aria-label", _p$.t = _v$19);
+                return _p$;
+              }, {
+                e: void 0,
+                t: void 0
+              });
+              return _el$62;
+            }
+          }), null);
+          insert(_el$60, createComponent(Show, {
+            get when() {
+              return controls().canCancel;
+            },
+            get children() {
+              var _el$63 = _tmpl$24();
+              _el$63.$$click = () => props.onCancel?.();
+              insert(_el$63, () => t("common.cancel"));
+              createRenderEffect((_p$) => {
+                var _v$20 = t("task.action.cancel_title"), _v$21 = t("task.action.cancel_title");
+                _v$20 !== _p$.e && setAttribute(_el$63, "title", _p$.e = _v$20);
+                _v$21 !== _p$.t && setAttribute(_el$63, "aria-label", _p$.t = _v$21);
+                return _p$;
+              }, {
+                e: void 0,
+                t: void 0
+              });
+              return _el$63;
+            }
+          }), null);
+          return _el$60;
+        }
+      }), null);
+      return _el$56;
+    }
+  });
+}
+function interactionIcon$1(interaction) {
+  return interaction.type === "permission" ? "🔒" : "❓";
+}
+function InteractionAlert(props) {
+  const icon = () => interactionIcon$1(props.interaction);
+  return (() => {
+    var _el$64 = _tmpl$30(), _el$65 = _el$64.firstChild, _el$66 = _el$65.firstChild, _el$67 = _el$65.nextSibling, _el$68 = _el$67.nextSibling;
+    insert(_el$65, icon, _el$66);
+    insert(_el$65, () => props.interaction.title, null);
+    insert(_el$68, createComponent(Show, {
+      get when() {
+        return props.interaction.type === "permission";
+      },
+      get fallback() {
+        return [(() => {
+          var _el$72 = _tmpl$31();
+          _el$72.$$click = () => props.onResolve?.(props.interaction.id, "answer");
+          insert(_el$72, () => t("interaction.answer"));
+          createRenderEffect((_p$) => {
+            var _v$30 = t("interaction.answer_title"), _v$31 = t("interaction.answer_title");
+            _v$30 !== _p$.e && setAttribute(_el$72, "title", _p$.e = _v$30);
+            _v$31 !== _p$.t && setAttribute(_el$72, "aria-label", _p$.t = _v$31);
+            return _p$;
+          }, {
+            e: void 0,
+            t: void 0
+          });
+          return _el$72;
+        })(), (() => {
+          var _el$73 = _tmpl$29();
+          _el$73.$$click = () => props.onReject?.(props.interaction.id);
+          insert(_el$73, () => t("interaction.skip"));
+          createRenderEffect((_p$) => {
+            var _v$32 = t("interaction.skip_title"), _v$33 = t("interaction.skip_title");
+            _v$32 !== _p$.e && setAttribute(_el$73, "title", _p$.e = _v$32);
+            _v$33 !== _p$.t && setAttribute(_el$73, "aria-label", _p$.t = _v$33);
+            return _p$;
+          }, {
+            e: void 0,
+            t: void 0
+          });
+          return _el$73;
+        })()];
+      },
+      get children() {
+        return [(() => {
+          var _el$69 = _tmpl$27();
+          _el$69.$$click = () => props.onResolve?.(props.interaction.id, "always");
+          insert(_el$69, () => t("interaction.always_allow"));
+          createRenderEffect((_p$) => {
+            var _v$22 = t("interaction.always_allow_title"), _v$23 = t("interaction.always_allow_title");
+            _v$22 !== _p$.e && setAttribute(_el$69, "title", _p$.e = _v$22);
+            _v$23 !== _p$.t && setAttribute(_el$69, "aria-label", _p$.t = _v$23);
+            return _p$;
+          }, {
+            e: void 0,
+            t: void 0
+          });
+          return _el$69;
+        })(), (() => {
+          var _el$70 = _tmpl$28();
+          _el$70.$$click = () => props.onResolve?.(props.interaction.id, "once");
+          insert(_el$70, () => t("interaction.allow_once"));
+          createRenderEffect((_p$) => {
+            var _v$24 = t("interaction.allow_once_title"), _v$25 = t("interaction.allow_once_title");
+            _v$24 !== _p$.e && setAttribute(_el$70, "title", _p$.e = _v$24);
+            _v$25 !== _p$.t && setAttribute(_el$70, "aria-label", _p$.t = _v$25);
+            return _p$;
+          }, {
+            e: void 0,
+            t: void 0
+          });
+          return _el$70;
+        })(), (() => {
+          var _el$71 = _tmpl$29();
+          _el$71.$$click = () => props.onReject?.(props.interaction.id);
+          insert(_el$71, () => t("interaction.reject"));
+          createRenderEffect((_p$) => {
+            var _v$26 = t("interaction.reject_title"), _v$27 = t("interaction.reject_title");
+            _v$26 !== _p$.e && setAttribute(_el$71, "title", _p$.e = _v$26);
+            _v$27 !== _p$.t && setAttribute(_el$71, "aria-label", _p$.t = _v$27);
+            return _p$;
+          }, {
+            e: void 0,
+            t: void 0
+          });
+          return _el$71;
+        })()];
+      }
+    }));
+    createRenderEffect((_p$) => {
+      var _v$28 = props.interaction.id, _v$29 = renderMarkdown$1(props.interaction.body || "");
+      _v$28 !== _p$.e && setAttribute(_el$64, "data-id", _p$.e = _v$28);
+      _v$29 !== _p$.t && (_el$67.innerHTML = _p$.t = _v$29);
+      return _p$;
+    }, {
+      e: void 0,
+      t: void 0
+    });
+    return _el$64;
+  })();
+}
+function InteractionsList(props) {
+  const pending = createMemo(() => (props.interactions || []).filter((item) => item.status === "pending"));
+  return createComponent(Show, {
+    get when() {
+      return pending().length > 0;
+    },
+    get children() {
+      var _el$74 = _tmpl$32();
+      insert(_el$74, createComponent(For, {
+        get each() {
+          return pending();
+        },
+        children: (interaction) => createComponent(InteractionAlert, {
+          interaction,
+          get onResolve() {
+            return props.onResolve;
+          },
+          get onReject() {
+            return props.onReject;
+          }
+        })
+      }));
+      return _el$74;
+    }
+  });
+}
+function SectionFrame(props) {
+  return (() => {
+    var _el$78 = _tmpl$35(), _el$79 = _el$78.firstChild, _el$80 = _el$79.firstChild, _el$81 = _el$80.nextSibling, _el$82 = _el$81.nextSibling, _el$83 = _el$79.nextSibling;
+    insert(_el$81, () => props.title);
+    insert(_el$82, () => props.badgeText || "");
+    insert(_el$83, () => props.children);
+    createRenderEffect((_p$) => {
+      var _v$34 = props.id, _v$35 = props.badgeId, _v$36 = props.badgeTone, _v$37 = props.bodyId;
+      _v$34 !== _p$.e && setAttribute(_el$78, "id", _p$.e = _v$34);
+      _v$35 !== _p$.t && setAttribute(_el$82, "id", _p$.t = _v$35);
+      _v$36 !== _p$.a && setAttribute(_el$82, "data-tone", _p$.a = _v$36);
+      _v$37 !== _p$.o && setAttribute(_el$83, "id", _p$.o = _v$37);
+      return _p$;
+    }, {
+      e: void 0,
+      t: void 0,
+      a: void 0,
+      o: void 0
+    });
+    return _el$78;
+  })();
+}
+function Board(props) {
+  const board = () => boardStore.board;
+  const task = () => board()?.task;
+  const plan = () => board()?.plan;
+  const spec = () => board()?.spec;
+  const evaluation = () => board()?.evaluation;
+  const delivery = () => board()?.delivery;
+  const interactions = () => board()?.interactions || [];
+  const overview = () => board()?.overview;
+  const goalsCards = createMemo(() => {
+    const lanes = board()?.lanes || [];
+    const goalsLane = lanes.find((l) => l.id === "goals");
+    return goalsLane?.cards || [];
+  });
+  const runningGoalIDs = createMemo(() => {
+    const goalRuns = board()?.goalRuns || [];
+    return new Set(goalRuns.filter((gr) => gr.status === "running" || gr.status === "accepted").map((gr) => gr.goalID).filter(Boolean));
+  });
+  const goalsBadgeText = createMemo(() => {
+    const cards = goalsCards();
+    if (cards.length === 0) return "";
+    const passed = cards.filter((c) => c.status === "passed").length;
+    return `${passed}/${cards.length}`;
+  });
+  const goalsBadgeTone = createMemo(() => {
+    const cards = goalsCards();
+    if (cards.length === 0) return "";
+    const passed = cards.filter((c) => c.status === "passed").length;
+    return passed === cards.length ? "good" : passed > 0 ? "warn" : "";
+  });
+  return [(() => {
+    var _el$84 = _tmpl$36();
+    insert(_el$84, createComponent(TaskActionsPanel, {
+      get overview() {
+        return overview();
+      },
+      get onRetry() {
+        return props.onRetry;
+      },
+      get onReplan() {
+        return props.onReplan;
+      },
+      get onCancel() {
+        return props.onCancel;
+      }
+    }));
+    return _el$84;
+  })(), createComponent(SectionFrame, {
+    id: "overviewSection",
+    get title() {
+      return t("section.overview");
+    },
+    bodyId: "overviewBody",
+    get children() {
+      return createComponent(OverviewPanel, {
+        get overview() {
+          return overview();
+        }
+      });
+    }
+  }), createComponent(SectionFrame, {
+    id: "specSection",
+    get title() {
+      return t("section.spec");
+    },
+    bodyId: "specBody",
+    badgeId: "specBadge",
+    get badgeText() {
+      return memo(() => !!spec())() ? t("common.active") : "";
+    },
+    get badgeTone() {
+      return spec() ? "accent" : "";
+    },
+    get children() {
+      return createComponent(SpecPanel, {
+        get spec() {
+          return spec();
+        },
+        get preview() {
+          return boardStore.specPreview;
+        }
+      });
+    }
+  }), createComponent(SectionFrame, {
+    id: "planSection",
+    get title() {
+      return t("section.plan");
+    },
+    bodyId: "planBody",
+    badgeId: "planBadge",
+    get badgeText() {
+      return memo(() => !!plan())() ? `v${plan()?.version}` : "";
+    },
+    get badgeTone() {
+      return plan() ? "accent" : "";
+    },
+    get children() {
+      return createComponent(PlanPanel, {
+        get plan() {
+          return plan();
+        },
+        get preview() {
+          return boardStore.planPreview;
+        }
+      });
+    }
+  }), createComponent(SectionFrame, {
+    id: "goalsSection",
+    get title() {
+      return t("section.goals");
+    },
+    bodyId: "goalsBody",
+    badgeId: "goalsBadge",
+    get badgeText() {
+      return goalsBadgeText();
+    },
+    get badgeTone() {
+      return goalsBadgeTone();
+    },
+    get children() {
+      return [createComponent(GoalsPanel, {
+        get cards() {
+          return goalsCards();
+        },
+        get runningGoalIDs() {
+          return runningGoalIDs();
+        },
+        get onEditGoal() {
+          return props.onEditGoal;
+        },
+        get onDeleteGoal() {
+          return props.onDeleteGoal;
+        }
+      }), createComponent(InteractionsList, {
+        get interactions() {
+          return interactions();
+        },
+        get onResolve() {
+          return props.onResolveInteraction;
+        },
+        get onReject() {
+          return props.onRejectInteraction;
+        }
+      })];
+    }
+  }), createComponent(SectionFrame, {
+    id: "criteriaSection",
+    get title() {
+      return t("section.criteria");
+    },
+    bodyId: "criteriaBody",
+    badgeId: "criteriaBadge",
+    get badgeText() {
+      const specs = criteriaSpecs(task(), evaluation());
+      if (specs.length === 0) return "";
+      const enabled = specs.filter((item) => item.enabled).length;
+      if (enabled === 0) return t("checks.zero_enabled");
+      const passed = specs.filter((item) => item.enabled && aggregateCheckStatus(evaluation()?.checks, item.name) === "passed").length;
+      return `${passed}/${enabled}`;
+    },
+    get children() {
+      return [createComponent(CriteriaPanel, {
+        get task() {
+          return task();
+        },
+        get evaluation() {
+          return evaluation();
+        },
+        get onToggle() {
+          return props.onToggleCriteria;
+        }
+      }), createComponent(EvaluationPanel, {
+        get evaluation() {
+          return evaluation();
+        }
+      })];
+    }
+  }), createComponent(SectionFrame, {
+    id: "deliverySection",
+    get title() {
+      return t("section.delivery");
+    },
+    bodyId: "evalBody",
+    badgeId: "deliveryBadge",
+    get badgeText() {
+      return memo(() => !!delivery())() ? deliveryStatusLabel(delivery()?.status) : "";
+    },
+    get badgeTone() {
+      return memo(() => delivery()?.status === "delivered")() ? "good" : memo(() => delivery()?.status === "failed")() ? "bad" : delivery() ? "accent" : "";
+    },
+    get children() {
+      return createComponent(DeliveryPanel, {
+        get delivery() {
+          return delivery();
+        }
+      });
+    }
+  })];
+}
+delegateEvents(["click"]);
+
+var _tmpl$$c = /* @__PURE__ */ template(`<div class=chat-attachments id=chatAttachments>`), _tmpl$2$a = /* @__PURE__ */ template(`<svg width=16 height=16 viewBox="0 0 16 16"fill=none><rect x=4.25 y=4.25 width=7.5 height=7.5 rx=1.2 fill=currentColor>`), _tmpl$3$a = /* @__PURE__ */ template(`<form id=chatForm class=chat-input><input id=chatFileInput type=file multiple hidden><div class=chat-compose-row><textarea id=chatTextarea class=chat-textarea rows=2></textarea><div class=chat-compose-actions><button type=button id=btnChatAttach class=chat-attach-btn><svg width=16 height=16 viewBox="0 0 16 16"fill=none aria-hidden=true><path d="M13.5 7.5l-5.8 5.8a3.2 3.2 0 01-4.5-4.5L9 3a2 2 0 012.8 2.8L6 11.6a.8.8 0 01-1.1-1.1L10.5 5"stroke=currentColor stroke-width=1.2 stroke-linecap=round stroke-linejoin=round></path></svg></button><button><span class=chat-send-icon aria-hidden=true></span><span class=chat-send-label></span></button></div></div><div class=chat-compose-meta><div class=chat-compose-meta-left><span class=chat-version id=chatVersion></span><span class=chat-author><a href=https://github.com/yangheng95/argus target=_blank rel=noopener>@yangheng95</a></span></div><div class=chat-compose-tip>`), _tmpl$4$a = /* @__PURE__ */ template(`<img class=chat-attachment-thumb>`), _tmpl$5$a = /* @__PURE__ */ template(`<div class=chat-attachment-item><span class=chat-attachment-name></span><button type=button class=chat-attachment-remove aria-label=Remove>&times;`), _tmpl$6$9 = /* @__PURE__ */ template(`<span class=chat-attachment-icon>`), _tmpl$7$7 = /* @__PURE__ */ template(`<svg width=16 height=16 viewBox="0 0 16 16"fill=none><path d="M2 8l10-5-3 5 3 5z"fill=currentColor>`);
+const MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024;
+const FILE_ACCEPT = ["image/*", ".pdf", ".txt", ".md", ".json", ".csv", ".xml", ".yaml", ".yml", ".log", ".ts", ".js", ".py", ".go", ".rs", ".c", ".cpp", ".h", ".java", ".rb", ".sh", ".bat", ".ps1", ".html", ".css", ".sql", ".toml"].join(",");
+function fileToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+function ChatComposer(props) {
+  let textareaRef;
+  let fileInputRef;
+  let formRef;
+  const [text, setText] = createSignal("");
+  const [attachments, setAttachments] = createSignal([]);
+  const [dragover, setDragover] = createSignal(false);
+  const hasText = createMemo(() => text().trim().length > 0);
+  const stopping = () => props.stopping === true;
+  function sizeTextarea() {
+    if (!textareaRef) return;
+    textareaRef.style.height = "auto";
+    const style = getComputedStyle(document.documentElement);
+    const min = Number.parseFloat(style.getPropertyValue("--ui-chat-min-height")) || 72;
+    const max = Number.parseFloat(style.getPropertyValue("--ui-chat-max-height")) || 180;
+    const h = Math.min(textareaRef.scrollHeight, max);
+    textareaRef.style.height = `${Math.max(h, min)}px`;
+  }
+  async function addAttachment(file) {
+    if (!file) return;
+    if (file.size > MAX_ATTACHMENT_SIZE) {
+      console.warn("[ChatComposer] file too large:", file.name, file.size);
+      return;
+    }
+    const url = await fileToDataUrl(file);
+    setAttachments((prev) => [...prev, {
+      mime: file.type || "application/octet-stream",
+      url,
+      filename: file.name
+    }]);
+  }
+  function removeAttachment(index) {
+    setAttachments((prev) => prev.filter((_, i) => i !== index));
+  }
+  function handleSubmit(e) {
+    e.preventDefault();
+    if (props.busy) return;
+    if (!props.enabled) return;
+    const trimmed = text().trim();
+    if (!trimmed) return;
+    const sentAttachments = [...attachments()];
+    setText("");
+    setAttachments([]);
+    if (textareaRef) {
+      textareaRef.value = "";
+      sizeTextarea();
+    }
+    props.onSubmit(trimmed, sentAttachments);
+  }
+  function handleKeyDown(e) {
+    if (e.isComposing) return;
+    if (props.busy) return;
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      if (!props.enabled) return;
+      formRef?.requestSubmit();
+    }
+  }
+  async function handleFileChange() {
+    const files = fileInputRef?.files;
+    if (!files) return;
+    for (const file of files) await addAttachment(file);
+    if (fileInputRef) fileInputRef.value = "";
+  }
+  function handleDragOver(e) {
+    e.preventDefault();
+    setDragover(true);
+  }
+  function handleDragLeave(e) {
+    if (!formRef.contains(e.relatedTarget)) {
+      setDragover(false);
+    }
+  }
+  async function handleDrop(e) {
+    e.preventDefault();
+    setDragover(false);
+    const files = e.dataTransfer?.files;
+    if (!files) return;
+    for (const file of files) await addAttachment(file);
+  }
+  async function handlePaste(e) {
+    const files = e.clipboardData?.files;
+    if (!files || !files.length) return;
+    e.preventDefault();
+    for (const file of files) await addAttachment(file);
+  }
+  const sendDisabled = createMemo(() => {
+    if (props.busy) return stopping();
+    return !props.enabled || !hasText();
+  });
+  const sendTitle = () => props.busy ? t("chat.stop_title") : t("chat.send_title");
+  const sendAriaLabel = () => props.busy ? t("chat.stop_label") : t("chat.send_label");
+  const sendLabel = () => props.busy ? t("chat.stop_label") : t("chat.send_label");
+  return (() => {
+    var _el$ = _tmpl$3$a(), _el$3 = _el$.firstChild, _el$4 = _el$3.nextSibling, _el$5 = _el$4.firstChild, _el$6 = _el$5.nextSibling, _el$7 = _el$6.firstChild, _el$8 = _el$7.nextSibling, _el$9 = _el$8.firstChild, _el$1 = _el$9.nextSibling, _el$10 = _el$4.nextSibling, _el$11 = _el$10.firstChild, _el$12 = _el$11.nextSibling;
+    _el$.addEventListener("drop", handleDrop);
+    _el$.addEventListener("dragleave", handleDragLeave);
+    _el$.addEventListener("dragover", handleDragOver);
+    _el$.addEventListener("submit", handleSubmit);
+    var _ref$ = formRef;
+    typeof _ref$ === "function" ? use(_ref$, _el$) : formRef = _el$;
+    insert(_el$, createComponent(Show, {
+      get when() {
+        return attachments().length > 0;
+      },
+      get children() {
+        var _el$2 = _tmpl$$c();
+        insert(_el$2, createComponent(For, {
+          get each() {
+            return attachments();
+          },
+          children: (att, index) => (() => {
+            var _el$13 = _tmpl$5$a(), _el$15 = _el$13.firstChild, _el$16 = _el$15.nextSibling;
+            insert(_el$13, createComponent(Show, {
+              get when() {
+                return att.mime.startsWith("image/");
+              },
+              get fallback() {
+                return (() => {
+                  var _el$17 = _tmpl$6$9();
+                  insert(_el$17, () => att.filename?.split(".").pop()?.toUpperCase() || "FILE");
+                  return _el$17;
+                })();
+              },
+              get children() {
+                var _el$14 = _tmpl$4$a();
+                createRenderEffect((_p$) => {
+                  var _v$11 = att.url, _v$12 = att.filename;
+                  _v$11 !== _p$.e && setAttribute(_el$14, "src", _p$.e = _v$11);
+                  _v$12 !== _p$.t && setAttribute(_el$14, "alt", _p$.t = _v$12);
+                  return _p$;
+                }, {
+                  e: void 0,
+                  t: void 0
+                });
+                return _el$14;
+              }
+            }), _el$15);
+            insert(_el$15, () => att.filename || "file");
+            _el$16.$$click = () => removeAttachment(index());
+            createRenderEffect(() => setAttribute(_el$13, "title", att.filename));
+            return _el$13;
+          })()
+        }));
+        return _el$2;
+      }
+    }), _el$3);
+    _el$3.addEventListener("change", handleFileChange);
+    var _ref$2 = fileInputRef;
+    typeof _ref$2 === "function" ? use(_ref$2, _el$3) : fileInputRef = _el$3;
+    setAttribute(_el$3, "accept", FILE_ACCEPT);
+    _el$5.addEventListener("paste", handlePaste);
+    _el$5.$$keydown = handleKeyDown;
+    _el$5.$$input = (e) => {
+      setText(e.currentTarget.value);
+      sizeTextarea();
+    };
+    var _ref$3 = textareaRef;
+    typeof _ref$3 === "function" ? use(_ref$3, _el$5) : textareaRef = _el$5;
+    _el$7.$$click = () => fileInputRef?.click();
+    _el$8.$$click = (e) => {
+      if (props.busy) {
+        e.preventDefault();
+        props.onStop?.();
+      }
+    };
+    insert(_el$9, createComponent(Show, {
+      get when() {
+        return props.busy;
+      },
+      get fallback() {
+        return _tmpl$7$7();
+      },
+      get children() {
+        return _tmpl$2$a();
+      }
+    }));
+    insert(_el$1, sendLabel);
+    insert(_el$12, () => t("chat.tip"));
+    createRenderEffect((_p$) => {
+      var _v$ = dragover() ? "true" : void 0, _v$2 = !props.enabled, _v$3 = props.enabled ? t("chat.placeholder") : t("chat.placeholder_disabled"), _v$4 = t("chat.attach_title"), _v$5 = t("chat.attach_title"), _v$6 = props.busy ? "btnTaskInterrupt" : "chatSend", _v$7 = `chat-send${props.busy ? " chat-interrupt" : ""}`, _v$8 = props.busy ? "button" : "submit", _v$9 = props.busy ? "stop" : "send", _v$0 = sendDisabled(), _v$1 = sendTitle(), _v$10 = sendAriaLabel();
+      _v$ !== _p$.e && setAttribute(_el$, "data-dragover", _p$.e = _v$);
+      _v$2 !== _p$.t && (_el$5.disabled = _p$.t = _v$2);
+      _v$3 !== _p$.a && setAttribute(_el$5, "placeholder", _p$.a = _v$3);
+      _v$4 !== _p$.o && setAttribute(_el$7, "title", _p$.o = _v$4);
+      _v$5 !== _p$.i && setAttribute(_el$7, "aria-label", _p$.i = _v$5);
+      _v$6 !== _p$.n && setAttribute(_el$8, "id", _p$.n = _v$6);
+      _v$7 !== _p$.s && className(_el$8, _p$.s = _v$7);
+      _v$8 !== _p$.h && setAttribute(_el$8, "type", _p$.h = _v$8);
+      _v$9 !== _p$.r && setAttribute(_el$8, "data-mode", _p$.r = _v$9);
+      _v$0 !== _p$.d && (_el$8.disabled = _p$.d = _v$0);
+      _v$1 !== _p$.l && setAttribute(_el$8, "title", _p$.l = _v$1);
+      _v$10 !== _p$.u && setAttribute(_el$8, "aria-label", _p$.u = _v$10);
+      return _p$;
+    }, {
+      e: void 0,
+      t: void 0,
+      a: void 0,
+      o: void 0,
+      i: void 0,
+      n: void 0,
+      s: void 0,
+      h: void 0,
+      r: void 0,
+      d: void 0,
+      l: void 0,
+      u: void 0
+    });
+    createRenderEffect(() => _el$5.value = text());
+    return _el$;
+  })();
+}
+delegateEvents(["input", "keydown", "click"]);
+
+function sanitizeTheme$1(value) {
+  const text = String(value || "").trim();
+  return text === "light" || text === "dark" ? text : "dark";
+}
+const MIN_WINDOW_OPACITY = 0.5;
+function sanitizeOpacity(value) {
+  const n = parseFloat(String(value ?? ""));
+  if (!Number.isFinite(n)) return 0.8;
+  return Math.max(
+    MIN_WINDOW_OPACITY,
+    Math.min(1, Math.round(n * 100) / 100)
+  );
+}
+function sanitizeZoom$1(value) {
+  const n = parseFloat(String(value ?? ""));
+  if (!Number.isFinite(n)) return 1;
+  return Math.min(1.6, Math.max(0.8, n));
+}
+function sanitizePaneWidth(value) {
+  const n = parseInt(String(value ?? ""), 10);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return n;
+}
+function defaultAutoServer(url) {
+  return !url || url === DEFAULT_SERVER;
+}
+function sanitizeAutoServer(value, serverUrl) {
+  if (value === true || value === false) return value;
+  return defaultAutoServer(serverUrl);
+}
+const DEFAULT_LOCALE = sanitizeLocale(
+  typeof document !== "undefined" ? document.documentElement.lang : typeof navigator !== "undefined" ? navigator.language : "en-US"
+);
+const DEFAULT_SETTINGS = {
+  serverUrl: DEFAULT_SERVER,
+  autoServer: true,
+  password: "",
+  username: "opencorvus",
+  executor: "opencode",
+  initGit: true,
+  alwaysOnTop: false,
+  unattended: true,
+  autoPermission: false,
+  autoQuestion: false,
+  showTranscriptDetails: false,
+  sidebarCollapsed: false,
+  sidebarWidth: null,
+  sectionsWidth: null,
+  opacity: 0.8,
+  zoom: 1,
+  theme: "dark",
+  locale: DEFAULT_LOCALE,
+  directoryMode: "temp",
+  directory: "",
+  workspaceTaskID: "",
+  workspaceDirectory: "",
+  savedDirectory: "",
+  tempDirectory: "",
+  workspaceEpoch: 0,
+  directoryEpoch: 0
+};
+const [settingsStore, setSettingsStore] = createStore({ ...DEFAULT_SETTINGS });
+function applySettings(input) {
+  const serverUrl = typeof input?.serverUrl === "string" && input.serverUrl.trim() ? input.serverUrl.trim() : DEFAULT_SETTINGS.serverUrl;
+  setSettingsStore({
+    serverUrl,
+    autoServer: sanitizeAutoServer(input?.autoServer, serverUrl),
+    password: typeof input?.password === "string" ? input.password : DEFAULT_SETTINGS.password,
+    username: typeof input?.username === "string" && input.username.trim() ? input.username.trim() : DEFAULT_SETTINGS.username,
+    executor: typeof input?.executor === "string" && input.executor.trim() ? input.executor.trim() : DEFAULT_SETTINGS.executor,
+    initGit: true,
+    alwaysOnTop: input?.alwaysOnTop === true,
+    unattended: input?.unattended !== false,
+    autoPermission: input?.autoPermission === true,
+    autoQuestion: input?.autoQuestion === true,
+    showTranscriptDetails: input?.showTranscriptDetails === true,
+    sidebarCollapsed: input?.sidebarCollapsed === true,
+    sidebarWidth: sanitizePaneWidth(input?.sidebarWidth),
+    sectionsWidth: sanitizePaneWidth(input?.sectionsWidth),
+    opacity: sanitizeOpacity(input?.opacity),
+    zoom: sanitizeZoom$1(input?.zoom),
+    theme: sanitizeTheme$1(input?.theme),
+    locale: sanitizeLocale(
+      (typeof input?.locale === "string" ? input.locale : "") || DEFAULT_SETTINGS.locale
+    ),
+    directoryMode: typeof input?.directory === "string" && input.directory.trim() ? "custom" : "temp",
+    directory: typeof input?.directory === "string" ? input.directory.trim() : "",
+    workspaceTaskID: typeof input?.workspaceTaskID === "string" ? input.workspaceTaskID.trim() : DEFAULT_SETTINGS.workspaceTaskID,
+    workspaceDirectory: typeof input?.workspaceDirectory === "string" ? input.workspaceDirectory.trim() : DEFAULT_SETTINGS.workspaceDirectory
+  });
+}
+function saveSettings() {
+  const s = settingsStore;
+  localStorage.setItem("oc_server_url", s.serverUrl);
+  localStorage.setItem("oc_auto_server", String(s.autoServer));
+  localStorage.setItem("oc_password", s.password);
+  localStorage.setItem("oc_username", s.username);
+  localStorage.setItem("oc_executor", s.executor || DEFAULT_SETTINGS.executor);
+  localStorage.setItem("oc_always_on_top", String(s.alwaysOnTop));
+  localStorage.setItem("oc_unattended", String(s.unattended));
+  localStorage.setItem("oc_auto_permission", String(s.autoPermission));
+  localStorage.setItem("oc_auto_question", String(s.autoQuestion));
+  localStorage.setItem(
+    "oc_show_transcript_details",
+    String(s.showTranscriptDetails)
+  );
+  localStorage.setItem("oc_sidebar_collapsed", String(s.sidebarCollapsed));
+  if (s.sidebarWidth != null) {
+    localStorage.setItem("oc_sidebar_width", String(s.sidebarWidth));
+  } else {
+    localStorage.removeItem("oc_sidebar_width");
+  }
+  if (s.sectionsWidth != null) {
+    localStorage.setItem("oc_sections_width", String(s.sectionsWidth));
+  } else {
+    localStorage.removeItem("oc_sections_width");
+  }
+  localStorage.setItem("oc_opacity", String(s.opacity));
+  localStorage.setItem("oc_zoom", String(s.zoom));
+  localStorage.setItem("oc_theme", s.theme || DEFAULT_SETTINGS.theme);
+  localStorage.setItem("oc_locale", s.locale || DEFAULT_SETTINGS.locale);
+  if (s.workspaceTaskID) {
+    localStorage.setItem("oc_workspace_task", s.workspaceTaskID);
+  } else {
+    localStorage.removeItem("oc_workspace_task");
+  }
+  if (s.workspaceDirectory) {
+    localStorage.setItem("oc_workspace_directory", s.workspaceDirectory);
+  } else {
+    localStorage.removeItem("oc_workspace_directory");
+  }
+  if (s.directory) {
+    localStorage.setItem("oc_directory", s.directory);
+    localStorage.setItem("oc_directory_mode", s.directoryMode);
+  } else {
+    localStorage.removeItem("oc_directory");
+    localStorage.removeItem("oc_directory_mode");
+  }
+  const invoke = window.__TAURI__?.core?.invoke;
+  if (typeof invoke === "function") {
+    void invoke("overlay_settings_save", {
+      settings: bootstrapOverlaySettings(s)
+    }).catch(() => void 0);
+  }
+}
+function loadSettings() {
+  const serverUrl = localStorage.getItem("oc_server_url") || DEFAULT_SETTINGS.serverUrl;
+  const autoServerRaw = localStorage.getItem("oc_auto_server");
+  const autoServer = autoServerRaw === null ? defaultAutoServer(serverUrl) : autoServerRaw !== "false";
+  const directory = (() => {
+    const raw = localStorage.getItem("oc_directory") || "";
+    return raw.trim();
+  })();
+  setSettingsStore({
+    serverUrl,
+    autoServer,
+    password: localStorage.getItem("oc_password") || DEFAULT_SETTINGS.password,
+    username: localStorage.getItem("oc_username") || DEFAULT_SETTINGS.username,
+    executor: localStorage.getItem("oc_executor") || DEFAULT_SETTINGS.executor,
+    initGit: true,
+    alwaysOnTop: localStorage.getItem("oc_always_on_top") === "true",
+    unattended: localStorage.getItem("oc_unattended") !== "false",
+    autoPermission: localStorage.getItem("oc_auto_permission") === "true",
+    autoQuestion: localStorage.getItem("oc_auto_question") === "true",
+    showTranscriptDetails: localStorage.getItem("oc_show_transcript_details") === "true",
+    sidebarCollapsed: localStorage.getItem("oc_sidebar_collapsed") === "true",
+    sidebarWidth: sanitizePaneWidth(
+      localStorage.getItem("oc_sidebar_width")
+    ),
+    sectionsWidth: sanitizePaneWidth(
+      localStorage.getItem("oc_sections_width")
+    ),
+    opacity: sanitizeOpacity(localStorage.getItem("oc_opacity")),
+    zoom: sanitizeZoom$1(localStorage.getItem("oc_zoom")),
+    theme: sanitizeTheme$1(localStorage.getItem("oc_theme")),
+    locale: sanitizeLocale(
+      localStorage.getItem("oc_locale") || DEFAULT_SETTINGS.locale
+    ),
+    directoryMode: directory ? "custom" : "temp",
+    directory,
+    workspaceTaskID: localStorage.getItem("oc_workspace_task") || DEFAULT_SETTINGS.workspaceTaskID,
+    workspaceDirectory: localStorage.getItem("oc_workspace_directory") || DEFAULT_SETTINGS.workspaceDirectory,
+    // Runtime-only fields — not persisted in localStorage; reset to defaults on load.
+    savedDirectory: directory,
+    tempDirectory: DEFAULT_SETTINGS.tempDirectory,
+    workspaceEpoch: DEFAULT_SETTINGS.workspaceEpoch,
+    directoryEpoch: DEFAULT_SETTINGS.directoryEpoch
+  });
+}
+function setSavedDirectory(path) {
+  setSettingsStore("savedDirectory", typeof path === "string" ? path : "");
+}
+function bumpWorkspaceEpoch() {
+  setSettingsStore("workspaceEpoch", (n) => n + 1);
+}
+function bumpDirectoryEpoch() {
+  setSettingsStore("directoryEpoch", (n) => n + 1);
+}
+function sanitizeDirectoryMode$1(value, directory) {
+  if (value === "custom") return "custom";
+  if (typeof value === "string" && value.trim() === "temp") return "temp";
+  return typeof directory === "string" && directory.trim() ? "custom" : DEFAULT_SETTINGS.directoryMode;
+}
+function savedDirectoryValue$1(directory, mode) {
+  const next = typeof directory === "string" ? directory.trim() : "";
+  if (!next) return "";
+  return sanitizeDirectoryMode$1(mode, next) === "custom" ? next : "";
+}
+function bootstrapOverlaySettings(input = settingsStore) {
+  return {
+    serverUrl: input.serverUrl ?? DEFAULT_SETTINGS.serverUrl,
+    autoServer: input.autoServer ?? DEFAULT_SETTINGS.autoServer,
+    password: input.password ?? DEFAULT_SETTINGS.password,
+    username: input.username ?? DEFAULT_SETTINGS.username,
+    executor: input.executor ?? DEFAULT_SETTINGS.executor,
+    initGit: true,
+    alwaysOnTop: input.alwaysOnTop ?? DEFAULT_SETTINGS.alwaysOnTop,
+    unattended: input.unattended ?? DEFAULT_SETTINGS.unattended,
+    autoPermission: input.autoPermission ?? DEFAULT_SETTINGS.autoPermission,
+    autoQuestion: input.autoQuestion ?? DEFAULT_SETTINGS.autoQuestion,
+    showTranscriptDetails: input.showTranscriptDetails ?? DEFAULT_SETTINGS.showTranscriptDetails,
+    sidebarCollapsed: input.sidebarCollapsed ?? DEFAULT_SETTINGS.sidebarCollapsed,
+    sidebarWidth: input.sidebarWidth || void 0,
+    sectionsWidth: input.sectionsWidth || void 0,
+    opacity: input.opacity ?? DEFAULT_SETTINGS.opacity,
+    zoom: input.zoom ?? DEFAULT_SETTINGS.zoom,
+    theme: input.theme ?? DEFAULT_SETTINGS.theme,
+    locale: input.locale ?? DEFAULT_SETTINGS.locale,
+    directoryMode: input.savedDirectory ? "custom" : "temp",
+    directory: input.savedDirectory || void 0,
+    workspaceTaskID: input.workspaceTaskID || void 0,
+    workspaceDirectory: input.workspaceDirectory || void 0
+  };
+}
+
+var _tmpl$$b = /* @__PURE__ */ template(`<button type=button id=btnPin class="btn btn-ghost icon-btn titlebar-btn"><svg width=12 height=12 viewBox="0 0 16 16"fill=none aria-hidden=true><path d="M9.5 2L14 6.5l-4 1.5-4 4-1.5-1.5 4-4L7 2.5 9.5 2z"stroke=currentColor stroke-width=1.3 stroke-linejoin=round></path><line x1=2 y1=14 x2=6 y2=10 stroke=currentColor stroke-width=1.3 stroke-linecap=round>`), _tmpl$2$9 = /* @__PURE__ */ template(`<button type=button id=btnMinimize class="btn btn-ghost icon-btn titlebar-btn"><svg width=11 height=11 viewBox="0 0 11 11"fill=none aria-hidden=true><line x1=1 y1=5.5 x2=10 y2=5.5 stroke=currentColor stroke-width=1.3 stroke-linecap=round>`), _tmpl$3$9 = /* @__PURE__ */ template(`<button type=button id=btnMaximize class="btn btn-ghost icon-btn titlebar-btn">`), _tmpl$4$9 = /* @__PURE__ */ template(`<button type=button id=btnClose class="btn btn-ghost icon-btn titlebar-btn titlebar-btn-close"><svg width=11 height=11 viewBox="0 0 11 11"fill=none aria-hidden=true><line x1=1 y1=1 x2=10 y2=10 stroke=currentColor stroke-width=1.3 stroke-linecap=round></line><line x1=10 y1=1 x2=1 y2=10 stroke=currentColor stroke-width=1.3 stroke-linecap=round>`), _tmpl$5$9 = /* @__PURE__ */ template(`<div class=window-controls data-no-drag=true>`);
+const CLOSE_HINT_KEY = "oc_close_hint_seen";
+async function currentTauriWindow$3() {
+  const getCurrent = window.__TAURI__?.window?.getCurrentWindow;
+  if (typeof getCurrent === "function") {
+    try {
+      return getCurrent();
+    } catch {
+    }
+  }
+  return null;
+}
+async function nativeMessage$1(message, options) {
+  const notify = window.nativeMessage;
+  if (typeof notify !== "function") return;
+  await notify(message, options).catch(() => void 0);
+}
+function maximizeLabel(isMaximized) {
+  return isMaximized ? t("titlebar.restore") : t("titlebar.maximize");
+}
+function maximizeIcon(isMaximized) {
+  if (isMaximized) {
+    return `<svg width="11" height="11" viewBox="0 0 11 11" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
       <rect x="3" y="0.5" width="7" height="7" rx="0.5" stroke="currentColor"/>
       <path d="M1 3.5V10H7.5" stroke="currentColor" stroke-linecap="round"/>
-    </svg>`:`<svg width="11" height="11" viewBox="0 0 11 11" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    </svg>`;
+  }
+  return `<svg width="11" height="11" viewBox="0 0 11 11" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
     <rect x="0.5" y="0.5" width="10" height="10" rx="0.5" stroke="currentColor"/>
-  </svg>`}function Kf(){const[e,t]=G(!1),[n,r]=G(null),i=async p=>{if(!p)return!1;const h=await p.isMaximized?.().catch(()=>!1);return t(!!h),!!h},a=async p=>{if(!p)return;const h=await p.isAlwaysOnTop?.().catch(()=>!1);me("alwaysOnTop",!!h),Ae()},o=()=>{n()?.minimize?.().catch(()=>{})},s=async()=>{const p=n();if(!p)return;const h=await i(p);typeof p.toggleMaximize=="function"?await p.toggleMaximize().catch(()=>{}):h?await p.unmaximize?.().catch(()=>{}):await p.maximize?.().catch(()=>{}),await i(p)},u=async()=>{const p=n();p&&(localStorage.getItem(Oa)!=="true"&&(localStorage.setItem(Oa,"true"),await qf(l("titlebar.background_notice"),{title:l("titlebar.background_notice_title")}).catch(()=>{})),typeof p.hide=="function"?await p.hide().catch(()=>{}):await p.minimize?.().catch(()=>{}))},c=async()=>{const p=n();if(!p)return;const h=!z.alwaysOnTop;await p.setAlwaysOnTop?.(h).catch(()=>{}),await a(p)};St(async()=>{const p=await Ff();if(!p)return;r(p),await p.setAlwaysOnTop?.(z.alwaysOnTop).catch(()=>{}),await a(p),await i(p);let h;if(typeof p.onResized=="function"){const y=await p.onResized(()=>{i(p)}).catch(()=>{});typeof y=="function"&&(h=y)}const k=document.getElementById("titlebar"),m=y=>{y.button===0&&y.target instanceof Element&&(y.target.closest('[data-no-drag="true"], button, input, textarea, select, a, label, summary, [contenteditable="true"]')||(y.preventDefault(),p.startDragging?.().catch(()=>{})))};k?.addEventListener("pointerdown",m),Nt(()=>h?.()),Nt(()=>k?.removeEventListener("pointerdown",m))});const g=()=>z.alwaysOnTop?l("titlebar.pin.unpin"):l("titlebar.pin.pin"),f=()=>zf(e());return(()=>{var p=Uf();return d(p,v(R,{get when(){return n()!==null},get children(){var h=Rf();return h.$$click=()=>void c(),B(k=>{var m=z.alwaysOnTop?"true":"false",y=g(),w=g();return m!==k.e&&$(h,"data-pinned",k.e=m),y!==k.t&&$(h,"title",k.t=y),w!==k.a&&$(h,"aria-label",k.a=w),k},{e:void 0,t:void 0,a:void 0}),h}}),null),d(p,v(R,{get when(){return n()!==null},get children(){var h=Of();return h.$$click=o,B(k=>{var m=l("titlebar.minimize"),y=l("titlebar.minimize");return m!==k.e&&$(h,"title",k.e=m),y!==k.t&&$(h,"aria-label",k.t=y),k},{e:void 0,t:void 0}),h}}),null),d(p,v(R,{get when(){return n()!==null},get children(){var h=jf();return h.$$click=()=>void s(),B(k=>{var m=e()?"true":"false",y=f(),w=f(),T=Wf(e());return m!==k.e&&$(h,"data-maximized",k.e=m),y!==k.t&&$(h,"title",k.t=y),w!==k.a&&$(h,"aria-label",k.a=w),T!==k.o&&(h.innerHTML=k.o=T),k},{e:void 0,t:void 0,a:void 0,o:void 0}),h}}),null),d(p,v(R,{get when(){return n()!==null},get children(){var h=Nf();return h.$$click=()=>void u(),B(k=>{var m=l("titlebar.close"),y=l("titlebar.close");return m!==k.e&&$(h,"title",k.e=m),y!==k.t&&$(h,"aria-label",k.t=y),k},{e:void 0,t:void 0}),h}}),null),p})()}Ce(["click"]);const Hf=.8,Vf=1.6,Es=typeof window<"u"&&typeof window.matchMedia=="function"?window.matchMedia("(prefers-color-scheme: light)"):null;function sr(e){return e==="light"||e==="system"?e:"dark"}function Ls(e){const t=Number.parseFloat(String(e??""));return Number.isFinite(t)?Math.min(Math.max(t,Hf),Vf):1}function Ln(){const e=sr(z.theme);return e==="system"?Es?.matches?"light":"dark":e}function Ms(e){if(typeof document>"u")return;const t=sr(e),n=t==="system"?Es?.matches?"light":"dark":t;document.body.dataset.theme=n}async function Ps(){const e=window.__TAURI__?.window?.getCurrentWindow;if(typeof e=="function")try{return e()}catch{}return null}async function ja(e){if(typeof document>"u")return!1;const t=st(e),n=String(t),r=await Ps();if(!r||typeof r.setOpacity!="function")return document.documentElement.style.setProperty("--ui-window-opacity",n),!1;const i=await r.setOpacity(t).then(()=>!0,()=>!1);return document.documentElement.style.setProperty("--ui-window-opacity",i?"1":n),i}function Bs(e){if(typeof document>"u")return;const t=Ls(e),n=window.visualViewport?.width??window.innerWidth??900,r=window.visualViewport?.height??window.innerHeight??760,i=Math.min(n/1040,r/820),o=Math.max(.82,Math.min(1.04,i))*t;document.documentElement.style.setProperty("--ui-scale",o.toFixed(3))}async function Jf(e){const t=String(st(e)),n=await Ps();if(!n||typeof n.setOpacity!="function")return document.documentElement.style.setProperty("--ui-window-opacity",t),!1;const r=await n.setOpacity(st(e)).then(()=>!0,()=>!1);return document.documentElement.style.setProperty("--ui-window-opacity",r?"1":t),r}var Gf=_('<div class=titlebar-menu-wrap data-no-drag=true><button type=button id=btnTitlebarMenu class=titlebar-btn aria-controls=titlebarMenu aria-haspopup=true><svg width=14 height=14 viewBox="0 0 16 16"fill=none aria-hidden=true><circle cx=3.5 cy=8 r=1.2 fill=currentColor></circle><circle cx=8 cy=8 r=1.2 fill=currentColor></circle><circle cx=12.5 cy=8 r=1.2 fill=currentColor></circle></svg></button><div id=titlebarMenu class=titlebar-menu-panel data-no-drag=true><button type=button id=btnLocale class=titlebar-menu-item><span class=titlebar-menu-icon aria-hidden=true>A</span><span class=titlebar-menu-copy><span class=titlebar-menu-title></span><span class=titlebar-menu-meta id=btnLocaleLabel></span></span></button><button type=button id=btnTheme class=titlebar-menu-item><span class=titlebar-menu-icon aria-hidden=true><svg width=14 height=14 viewBox="0 0 16 16"fill=none><circle cx=8 cy=8 r=3 stroke=currentColor stroke-width=1.2></circle><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.1 3.1l1.4 1.4M11.5 11.5l1.4 1.4M3.1 12.9l1.4-1.4M11.5 4.5l1.4-1.4"stroke=currentColor stroke-width=1.2 stroke-linecap=round></path></svg></span><span class=titlebar-menu-copy><span class=titlebar-menu-title></span><span class=titlebar-menu-meta id=btnThemeValue></span></span></button><button type=button id=btnSettings class=titlebar-menu-item><span class=titlebar-menu-icon aria-hidden=true><svg width=14 height=14 viewBox="0 0 16 16"fill=none><path d="M3 4h10M3 8h10M3 12h10"stroke=currentColor stroke-width=1.2 stroke-linecap=round></path><circle cx=6 cy=4 r=1.6 fill=currentColor></circle><circle cx=10 cy=8 r=1.6 fill=currentColor></circle><circle cx=7.5 cy=12 r=1.6 fill=currentColor></circle></svg></span><span class=titlebar-menu-copy><span class=titlebar-menu-title></span><span class=titlebar-menu-meta></span></span></button><button type=button id=btnLog class=titlebar-menu-item><span class=titlebar-menu-icon aria-hidden=true><svg width=14 height=14 viewBox="0 0 16 16"fill=none><path d="M3 3h10M3 6.5h8M3 10h6M3 13.5h9"stroke=currentColor stroke-width=1.2 stroke-linecap=round></path></svg></span><span class=titlebar-menu-copy><span class=titlebar-menu-title></span><span class=titlebar-menu-meta></span></span></button><button type=button id=btnPin class=titlebar-menu-item><span class=titlebar-menu-icon aria-hidden=true><svg width=14 height=14 viewBox="0 0 16 16"fill=none><path d="M8 1v6M5.5 7h5l-.5 4H6l-.5-4z"stroke=currentColor stroke-width=1.2 stroke-linecap=round stroke-linejoin=round></path><path d="M8 11v4"stroke=currentColor stroke-width=1.2 stroke-linecap=round></path></svg></span><span class=titlebar-menu-copy><span class=titlebar-menu-title></span><span class=titlebar-menu-meta id=btnPinValue></span></span></button><div class=titlebar-menu-divider aria-hidden=true></div><label class=titlebar-menu-toggle for=chkUnattended><span class=titlebar-menu-copy><span class=titlebar-menu-title></span><span class=titlebar-menu-meta></span></span><input class=titlebar-menu-check id=chkUnattended type=checkbox></label><label class=titlebar-menu-toggle for=chkAutoPermission><span class=titlebar-menu-copy><span class=titlebar-menu-title></span><span class=titlebar-menu-meta></span></span><input class=titlebar-menu-check id=chkAutoPermission type=checkbox></label><label class=titlebar-menu-toggle for=chkAutoQuestion><span class=titlebar-menu-copy><span class=titlebar-menu-title></span><span class=titlebar-menu-meta></span></span><input class=titlebar-menu-check id=chkAutoQuestion type=checkbox></label><label class=titlebar-menu-toggle for=chkShowTranscriptDetails><span class=titlebar-menu-copy><span class=titlebar-menu-title></span><span class=titlebar-menu-meta></span></span><input class=titlebar-menu-check id=chkShowTranscriptDetails type=checkbox></label><label class=titlebar-menu-range for=opacityRange><span class=titlebar-menu-copy><span class=titlebar-menu-title></span><span class=titlebar-menu-meta></span></span><span class=titlebar-menu-range-control><input class=titlebar-menu-slider id=opacityRange type=range min=50 max=100 step=5><span class=titlebar-menu-value id=opacityValue>%');async function Qf(){const e=window.__TAURI__?.window?.getCurrentWindow;if(typeof e=="function")try{return e()}catch{}return null}function Zf(e){const[t,n]=G(!1),r=W(()=>{const b=sr(z.theme);return l(b==="light"?"settings.theme.light":b==="system"?"settings.theme.system":"settings.theme.dark")}),i=W(()=>z.alwaysOnTop?l("common.yes"):l("common.no")),a=W(()=>z.locale==="zh-CN"?l("settings.language.zh_cn"):l("settings.language.en_us")),o=W(()=>{const b=z.locale==="zh-CN"?"en-US":"zh-CN";return l(b==="zh-CN"?"settings.switch_to_zh":"settings.switch_to_en")}),s=W(()=>Math.round(st(z.opacity)*100));function u(){n(!1)}function c(){n(b=>!b)}async function g(){const b=z.locale==="zh-CN"?"en-US":"zh-CN";e.onLocaleChange?.(b),u()}async function f(){const b=Ln()==="light"?"dark":"light";me("theme",b),Ms(b),nt({...z,theme:b}),Ae(),u()}function p(){e.onOpenSettings?.(),u()}function h(){e.onOpenLog?.(),u()}async function k(){const b=!z.alwaysOnTop,A=await Qf();if(A&&typeof A.setAlwaysOnTop=="function"){await A.setAlwaysOnTop(b).catch(()=>{});const L=await A.isAlwaysOnTop?.().catch(()=>b);me("alwaysOnTop",!!L)}else me("alwaysOnTop",b);Ae(),u()}async function m(b){me("unattended",b),nt({...z,unattended:b}),Ae(),u()}async function y(b){me("autoPermission",b),nt({...z,autoPermission:b}),Ae(),u()}async function w(b){me("autoQuestion",b),nt({...z,autoQuestion:b}),Ae(),u()}async function T(b){me("showTranscriptDetails",b),nt({...z,showTranscriptDetails:b}),Ae(),u()}function P(b){const A=st(Number(b)/100);me("opacity",A),ja(A)}async function C(b){const A=st(Number(b)/100);me("opacity",A),await ja(A),nt({...z,opacity:A}),Ae(),u()}return St(()=>{function b(L){if(!t())return;const x=L.target;if(!(x instanceof Element)){u();return}x.closest("#titlebarMenu, #btnTitlebarMenu")||u()}function A(L){L.key==="Escape"&&u()}document.addEventListener("pointerdown",b),document.addEventListener("keydown",A),Nt(()=>{document.removeEventListener("pointerdown",b),document.removeEventListener("keydown",A)})}),(()=>{var b=Gf(),A=b.firstChild,L=A.nextSibling,x=L.firstChild,E=x.firstChild,I=E.nextSibling,S=I.firstChild,F=S.nextSibling,D=x.nextSibling,q=D.firstChild,j=q.nextSibling,X=j.firstChild,re=X.nextSibling,N=D.nextSibling,U=N.firstChild,ce=U.nextSibling,ge=ce.firstChild,ne=ge.nextSibling,Q=N.nextSibling,H=Q.firstChild,Z=H.nextSibling,he=Z.firstChild,te=he.nextSibling,ie=Q.nextSibling,Y=ie.firstChild,J=Y.nextSibling,de=J.firstChild,pe=de.nextSibling,ae=ie.nextSibling,se=ae.nextSibling,ue=se.firstChild,le=ue.firstChild,ve=le.nextSibling,Se=ue.nextSibling,Me=se.nextSibling,Oe=Me.firstChild,Ht=Oe.firstChild,xn=Ht.nextSibling,Tn=Oe.nextSibling,Cn=Me.nextSibling,It=Cn.firstChild,At=It.firstChild,De=At.nextSibling,Vt=It.nextSibling,Jt=Cn.nextSibling,Pi=Jt.firstChild,Bi=Pi.firstChild,bl=Bi.nextSibling,Ri=Pi.nextSibling,kl=Jt.nextSibling,Oi=kl.firstChild,ji=Oi.firstChild,_l=ji.nextSibling,wl=Oi.nextSibling,Dn=wl.firstChild,Ni=Dn.nextSibling,$l=Ni.firstChild;return A.$$click=ee=>{ee.preventDefault(),ee.stopPropagation(),c()},x.$$click=()=>void g(),d(S,()=>l("settings.language")),d(F,a),D.$$click=()=>void f(),d(X,()=>l("settings.theme")),d(re,r),N.$$click=p,d(ge,()=>l("titlebar.server_config")),d(ne,()=>l("common.open")),Q.$$click=h,d(he,()=>l("titlebar.logs")),d(te,()=>l("common.open")),ie.$$click=()=>void k(),d(de,()=>l("titlebar.pin")),d(pe,i),d(le,()=>l("titlebar.unattended")),d(ve,()=>l("titlebar.unattended_hint")),Se.addEventListener("change",ee=>void m(ee.target.checked)),d(Ht,()=>l("titlebar.auto_permission")),d(xn,()=>l("titlebar.auto_permission_hint")),Tn.addEventListener("change",ee=>void y(ee.target.checked)),d(At,()=>l("titlebar.auto_question")),d(De,()=>l("titlebar.auto_question_hint")),Vt.addEventListener("change",ee=>void w(ee.target.checked)),d(Bi,()=>l("titlebar.full_transcript")),d(bl,()=>l("titlebar.full_transcript_hint")),Ri.addEventListener("change",ee=>void T(ee.target.checked)),d(ji,()=>l("titlebar.opacity")),d(_l,()=>l("titlebar.opacity_hint")),Dn.addEventListener("change",ee=>void C(ee.target.value)),Dn.$$input=ee=>P(ee.target.value),d(Ni,s,$l),B(ee=>{var Ui=l("titlebar.more"),Fi=l("titlebar.more"),qi=t()?"true":"false",zi=!t(),Wi=o(),Ki=o(),Hi=Ln()==="light"?l("titlebar.theme.dark"):l("titlebar.theme.light"),Vi=Ln()==="light"?l("titlebar.theme.dark"):l("titlebar.theme.light"),Ji=Ln(),Gi=sr(z.theme),Qi=l("titlebar.server_config"),Zi=l("titlebar.server_config"),Xi=l("titlebar.logs"),Yi=l("titlebar.logs"),ea=l("titlebar.pin"),ta=l("titlebar.pin"),na=z.alwaysOnTop?"true":"false";return Ui!==ee.e&&$(A,"title",ee.e=Ui),Fi!==ee.t&&$(A,"aria-label",ee.t=Fi),qi!==ee.a&&$(A,"aria-expanded",ee.a=qi),zi!==ee.o&&(L.hidden=ee.o=zi),Wi!==ee.i&&$(x,"title",ee.i=Wi),Ki!==ee.n&&$(x,"aria-label",ee.n=Ki),Hi!==ee.s&&$(D,"title",ee.s=Hi),Vi!==ee.h&&$(D,"aria-label",ee.h=Vi),Ji!==ee.r&&$(D,"data-theme",ee.r=Ji),Gi!==ee.d&&$(D,"data-mode",ee.d=Gi),Qi!==ee.l&&$(N,"title",ee.l=Qi),Zi!==ee.u&&$(N,"aria-label",ee.u=Zi),Xi!==ee.c&&$(Q,"title",ee.c=Xi),Yi!==ee.w&&$(Q,"aria-label",ee.w=Yi),ea!==ee.m&&$(ie,"title",ee.m=ea),ta!==ee.f&&$(ie,"aria-label",ee.f=ta),na!==ee.y&&$(ie,"data-pinned",ee.y=na),ee},{e:void 0,t:void 0,a:void 0,o:void 0,i:void 0,n:void 0,s:void 0,h:void 0,r:void 0,d:void 0,l:void 0,u:void 0,c:void 0,w:void 0,m:void 0,f:void 0,y:void 0}),B(()=>Se.checked=z.unattended),B(()=>Tn.checked=z.autoPermission),B(()=>Vt.checked=z.autoQuestion),B(()=>Ri.checked=z.showTranscriptDetails),B(()=>Dn.value=String(s())),b})()}Ce(["click","input"]);const Xf="modulepreload",Yf=function(e){return"/"+e},Na={},_n=function(t,n,r){let i=Promise.resolve();if(n&&n.length>0){let o=function(c){return Promise.all(c.map(g=>Promise.resolve(g).then(f=>({status:"fulfilled",value:f}),f=>({status:"rejected",reason:f}))))};document.getElementsByTagName("link");const s=document.querySelector("meta[property=csp-nonce]"),u=s?.nonce||s?.getAttribute("nonce");i=o(n.map(c=>{if(c=Yf(c),c in Na)return;Na[c]=!0;const g=c.endsWith(".css"),f=g?'[rel="stylesheet"]':"";if(document.querySelector(`link[href="${c}"]${f}`))return;const p=document.createElement("link");if(p.rel=g?"stylesheet":Xf,g||(p.as="script"),p.crossOrigin="",p.href=c,u&&p.setAttribute("nonce",u),document.head.appendChild(p),g)return new Promise((h,k)=>{p.addEventListener("load",h),p.addEventListener("error",()=>k(Error(`Unable to preload CSS for ${c}`)))})}))}function a(o){const s=new Event("vite:preloadError",{cancelable:!0});if(s.payload=o,window.dispatchEvent(s),!s.defaultPrevented)throw o}return i.then(o=>{for(const s of o||[])s.status==="rejected"&&a(s.reason);return t().catch(a)})};var eg=_("<span id=connBadge class=conn-badge aria-live=polite>");function tg(e){return l(e==="online"?"titlebar.connection.online":e==="connecting"?"titlebar.connection.connecting":"titlebar.connection.offline")}async function ng(){nn("connecting");const{apiJson:e}=await _n(async()=>{const{apiJson:t}=await Promise.resolve().then(()=>nc);return{apiJson:t}},void 0);try{await e("restart",{method:"POST",signal:AbortSignal.timeout(3e3)})}catch{}setTimeout(()=>{typeof location<"u"&&location.reload()},2e3)}function rg(e){const t=W(()=>e.status?e.status:oe.sseConnected?"online":V.connectionStatus),n=W(()=>tg(t()));return(()=>{var r=eg();return r.$$dblclick=()=>{ng()},d(r,n),B(i=>{var a=t(),o=n(),s=n();return a!==i.e&&$(r,"data-status",i.e=a),o!==i.t&&$(r,"title",i.t=o),s!==i.a&&$(r,"aria-label",i.a=s),i},{e:void 0,t:void 0,a:void 0}),r})()}Ce(["dblclick"]);let ig=0;function ag(e,t="manual"){const n=typeof e=="string"?e.trim():"";return t==="manual"?me({directory:n,savedDirectory:n,tempDirectory:n?"":z.tempDirectory,directoryMode:n?"custom":"temp"}):me("directory",n),n}function og(){return!O.selectedTaskID&&O.board,O.selectedTaskID?"task":"empty"}function sg(){return ig}async function lg(e,t){const n=window.__TAURI__?.core?.invoke;if(typeof n=="function")return n(e,t);throw new Error(`Tauri runtime unavailable for ${e}`)}function cg(){return typeof window<"u"&&typeof window.__TAURI__?.core?.invoke=="function"}async function ug(){const e=await lg("overlay_create_temp_dir").catch(()=>{});return typeof e=="string"?e.trim():""}function Er(){return z.directory}function dg(e){const t=String(e||"").trim();return t?/(^|[\\/])goal-workspace([\\/]|$)/i.test(t):!1}function fg(e){const t=typeof e=="string"?e.trim():"";return!t||dg(t)?"":t}async function gg(){if(z.savedDirectory)return me("directory",z.savedDirectory),me("directoryMode","custom"),!1;if(z.tempDirectory)return me("directory",z.tempDirectory),me("directoryMode","temp"),!1;if(!cg())return!1;const e=await ug();if(!e)return!1;const t=window.scaffoldProjectConfig;typeof t=="function"&&await t(e),me("tempDirectory",e),me("directory",e),me("savedDirectory",""),me("directoryMode","temp");const n=window.persistOverlaySettings;return typeof n=="function"&&await n(),!0}async function mg(){if(Er())return Er();const{loadMeta:e}=await _n(async()=>{const{loadMeta:t}=await Promise.resolve().then(()=>pg);return{loadMeta:t}},void 0);return typeof e=="function"&&await e(),!z.directory&&O.path?.directory&&me("directory",O.path.directory),Er()}async function Rs(){const e=z.directoryEpoch;try{const[t,n]=await Promise.all([K("path"),K("vcs")]);if(e!==z.directoryEpoch)return;const r=t&&typeof t.directory=="string"?t.directory.trim():"";ga(r?{directory:r}:null),!z.directory&&r&&ag(r,"auto"),ma(n??null),_e("config",i=>({...i??{},_metaPath:r?{directory:r}:null,_metaVcs:n??null}))}catch(t){if(Ct.debug("meta","loadMeta failed, resetting path/vcs",{error:String(t)}),e!==z.directoryEpoch)return;ga(null),ma(null),_e("config",n=>({...n??{},_metaPath:null,_metaVcs:null}))}finally{const{renderMeta:t}=await _n(async()=>{const{renderMeta:n}=await Promise.resolve().then(()=>Ys);return{renderMeta:n}},void 0);t()}}function Os(e){return(Array.isArray(e)?e:[]).filter(t=>t&&typeof t.file=="string").map(t=>({file:String(t.file||"").replace(/^[ab]\//,""),before:typeof t.before=="string"?t.before:"",after:typeof t.after=="string"?t.after:"",additions:Number.isFinite(Number(t.additions))?Number(t.additions):0,deletions:Number.isFinite(Number(t.deletions))?Number(t.deletions):0,status:js(t)})).sort((t,n)=>t.file.localeCompare(n.file))}function js(e){return e.status==="added"||e.status==="deleted"||e.status==="modified"?e.status:!e.before&&e.after?"added":e.before&&!e.after?"deleted":"modified"}function Ns(){if(!O.selectedTaskID)return[];const e=O.board,t=e?.acceptedDelivery?.result?.diffs||e?.delivery?.result?.diffs||e?.candidateDelivery?.result?.diffs||[];return Os(t)}const pg=Object.freeze(Object.defineProperty({__proto__:null,deriveChanges:Ns,diffStatus:js,loadMeta:Rs,normalizeDiffs:Os},Symbol.toStringTag,{value:"Module"}));var hg=_("<div class=diff-lines>"),yg=_("<div class=diff-empty><p class=empty-hint>"),vg=_("<div class=diff-row><div class=diff-gutter></div><div class=diff-num></div><div class=diff-num></div><div class=diff-code>"),bg=_("<div class=diff-row data-kind=skip><div class=diff-gutter>...</div><div class=diff-num></div><div class=diff-num></div><div class=diff-code>"),kg=_("<div class=diff-dialog-header><span class=diff-dialog-title></span><span class=diff-dialog-meta><span class=change-status></span><span class=diff-dialog-stat data-tone=add>+</span><span class=diff-dialog-stat data-tone=del>-</span></span><button type=button class=diff-dialog-close>×"),_g=_("<div class=diff-dialog-body>"),wg=_("<dialog class=diff-dialog>"),$g=_("<div class=changes-summary><span></span><span class=changes-total><span data-tone=add>+</span><span data-tone=del>-"),Sg=_("<div class=changes-list>"),xg=_("<div class=changes-panel>"),Tg=_("<p class=empty-hint>"),Cg=_("<button type=button class=change-row><span class=change-main><span class=change-path></span><span class=change-subline></span></span><span class=change-meta><span class=change-status></span><span class=diff-dialog-stat data-tone=add>+</span><span class=diff-dialog-stat data-tone=del>-");function Ua(e){const t=String(e||"").replace(/\r\n/g,`
-`).replace(/\r/g,`
-`);if(!t)return[];const n=t.split(`
-`);return n[n.length-1]===""&&n.pop(),n}function Dg(e,t,n,r){if(!e.length&&!t.length)return[];if(!e.length)return t.map((u,c)=>({kind:"add",left:"",right:r+c,text:u}));if(!t.length)return e.map((u,c)=>({kind:"del",left:n+c,right:"",text:u}));if(e.length*t.length>12e4)return[...e.map((u,c)=>({kind:"del",left:n+c,right:"",text:u})),...t.map((u,c)=>({kind:"add",left:"",right:r+c,text:u}))];const i=Array.from({length:e.length+1},()=>new Uint32Array(t.length+1));for(let u=e.length-1;u>=0;u-=1)for(let c=t.length-1;c>=0;c-=1)i[u][c]=e[u]===t[c]?i[u+1][c+1]+1:Math.max(i[u+1][c],i[u][c+1]);const a=[];let o=0,s=0;for(;o<e.length&&s<t.length;){if(e[o]===t[s]){a.push({kind:"context",left:n+o,right:r+s,text:e[o]}),o+=1,s+=1;continue}if(i[o+1][s]>=i[o][s+1]){a.push({kind:"del",left:n+o,right:"",text:e[o]}),o+=1;continue}a.push({kind:"add",left:"",right:r+s,text:t[s]}),s+=1}for(;o<e.length;)a.push({kind:"del",left:n+o,right:"",text:e[o]}),o+=1;for(;s<t.length;)a.push({kind:"add",left:"",right:r+s,text:t[s]}),s+=1;return a}function Ig(e,t){const n=Ua(e),r=Ua(t),i=[];let a=0;for(;a<n.length&&a<r.length&&n[a]===r[a];)i.push({kind:"context",left:a+1,right:a+1,text:n[a]}),a+=1;let o=n.length-1,s=r.length-1;const u=[];for(;o>=a&&s>=a&&n[o]===r[s];)u.push({kind:"context",left:o+1,right:s+1,text:n[o]}),o-=1,s-=1;return i.push(...Dg(n.slice(a,o+1),r.slice(a,s+1),a+1,a+1)),i.push(...u.reverse()),i}function Ag(e){const t=[];let n=0;for(;n<e.length;){if(e[n].kind!=="context"){t.push(e[n]),n+=1;continue}let r=n;for(;r<e.length&&e[r].kind==="context";)r+=1;const i=e.slice(n,r);i.length<=8?t.push(...i):(t.push(...i.slice(0,3)),t.push({kind:"skip",count:i.length-6}),t.push(...i.slice(-3))),n=r}return t}function si(e){return l(e==="added"?"files.status.added":e==="deleted"?"files.status.deleted":"files.status.modified")}function Eg(e){const t=W(()=>Ag(Ig(e.item.before,e.item.after))),n=W(()=>!e.item.before&&!e.item.after?!1:t().some(r=>r.kind==="add"||r.kind==="del"));return v(R,{get when(){return n()},get fallback(){return(()=>{var r=yg(),i=r.firstChild;return d(i,()=>l("diff.no_preview")),r})()},get children(){var r=hg();return d(r,v(ke,{get each(){return t()},children:i=>v(R,{get when(){return i.kind!=="skip"},get fallback(){return(()=>{var a=bg(),o=a.firstChild,s=o.nextSibling,u=s.nextSibling,c=u.nextSibling;return d(c,()=>Wt("diff.unchanged_hidden",i.count??0)),a})()},get children(){var a=vg(),o=a.firstChild,s=o.nextSibling,u=s.nextSibling,c=u.nextSibling;return d(o,(()=>{var g=ye(()=>i.kind==="add");return()=>g()?"+":i.kind==="del"?"-":" "})()),d(s,()=>i.left??""),d(u,()=>i.right??""),d(c,()=>i.text??" "),B(()=>$(a,"data-kind",i.kind)),a}})})),r}})}function Lg(e){let t;const n=()=>e.item;function r(){t?.close(),e.onClose()}return(()=>{var i=wg();i.$$click=o=>{o.target===t&&r()},yi(i,"close",e.onClose);var a=t;return typeof a=="function"?qe(a,i):t=i,d(i,v(R,{get when(){return!!n()},get children(){return[(()=>{var o=kg(),s=o.firstChild,u=s.nextSibling,c=u.firstChild,g=c.nextSibling;g.firstChild;var f=g.nextSibling;f.firstChild;var p=u.nextSibling;return d(s,()=>n().file),d(c,()=>si(n().status)),d(g,()=>n().additions,null),d(f,()=>n().deletions,null),p.$$click=r,B(h=>{var k=n().status,m=l("common.close");return k!==h.e&&$(c,"data-status",h.e=k),m!==h.t&&$(p,"aria-label",h.t=m),h},{e:void 0,t:void 0}),o})(),(()=>{var o=_g();return d(o,v(Eg,{get item(){return n()}})),o})()]}})),i})()}function Mg(e){const[t,n]=G(null),r=W(()=>{if(e.changes!==void 0)return e.changes;const c=Ns();if(c.length>0)return c;if(Array.isArray(O.changes)&&O.changes.length>0)return O.changes;const g=O.board?.changes;return Array.isArray(g)?g:[]}),i=W(()=>r().reduce((c,g)=>c+(g.additions??0),0)),a=W(()=>r().reduce((c,g)=>c+(g.deletions??0),0)),o=W(()=>{const c=t();return c===null?null:r()[c]??null});function s(c){n(c)}function u(){n(null)}return(()=>{var c=xg();return d(c,v(R,{get when(){return r().length>0},get fallback(){return(()=>{var g=Tg();return d(g,(()=>{var f=ye(()=>!!e.hasSelectedTask);return()=>f()?l("files.unavailable"):l("files.select_target")})()),g})()},get children(){return[(()=>{var g=$g(),f=g.firstChild,p=f.nextSibling,h=p.firstChild;h.firstChild;var k=h.nextSibling;return k.firstChild,d(f,()=>Wt("files.changed",r().length)),d(h,i,null),d(k,a,null),g})(),(()=>{var g=Sg();return d(g,v(ke,{get each(){return r()},children:(f,p)=>(()=>{var h=Cg(),k=h.firstChild,m=k.firstChild,y=m.nextSibling,w=k.nextSibling,T=w.firstChild,P=T.nextSibling;P.firstChild;var C=P.nextSibling;return C.firstChild,h.$$click=()=>s(p()),d(m,()=>f.file),d(y,()=>si(f.status)),d(T,()=>si(f.status)),d(P,()=>f.additions,null),d(C,()=>f.deletions,null),B(b=>{var A=p(),L=f.file,x=f.status;return A!==b.e&&$(h,"data-change-index",b.e=A),L!==b.t&&$(h,"title",b.t=L),x!==b.a&&$(T,"data-status",b.a=x),b},{e:void 0,t:void 0,a:void 0}),h})()})),g})()]}}),null),d(c,v(Lg,{get item(){return o()},onClose:u}),null),c})()}Ce(["click"]);var Pg=_("<div class=log-fields>"),Bg=_("<div class=log-detail-block><div class=log-detail-title></div><pre class=log-detail-pre>"),Fa=_("<details class=log-detail><summary></summary><div class=log-detail-block><div class=log-detail-title></div><pre class=log-detail-pre>"),Rg=_("<span class=log-chip>="),Og=_("<span class=log-delta>"),jg=_("<span class=log-service>"),Ng=_("<div class=log-line><div class=log-line-head><span class=log-source></span><span>[<!>]</span><span class=log-ts></span></div><div class=log-msg>"),Ug=_('<dialog id=logDialog class="dialog log-dialog"><div class=dialog-header><span class=dialog-title></span><div class=dialog-header-actions><select id=logLevelFilter class="select select-sm"><option value=debug>DEBUG</option><option value=info>INFO</option><option value=warn>WARN</option><option value=error>ERROR</option></select><button type=button id=btnLogServerLogs class="btn btn-ghost mini"></button><button type=button id=btnLogRefresh class="btn btn-ghost mini"></button><button type=button id=btnLogCopy class="btn btn-ghost mini"></button><button type=button id=btnLogClear class="btn btn-ghost mini danger"></button><button type=button id=btnCloseLog class="btn btn-ghost mini"></button></div></div><div id=logViewerBody class=log-viewer-body>'),Fg=_("<div class=empty-hint>");let lr=[];async function qg(){try{const e=await K("log/tail?n=500");lr=Array.isArray(e?.lines)?e.lines:[]}catch{lr=[]}}function Si(e,t=0){if(typeof e=="string")return e;try{return JSON.stringify(e,null,t)}catch{return String(e??"")}}function zg(e,t=80){const n=String(e||"").replace(/\s+/g," ").trim();return n?n.length<=t?n:`${n.slice(0,Math.max(0,t-3)).trim()}...`:""}function Wg(e){return zg(Si(e),80)}function Kg(e){return!!e&&typeof e=="object"&&!Array.isArray(e)}function Us(e){return Kg(e)?Object.fromEntries(Object.entries(e).filter(([t])=>t!=="service")):{}}function Hg(e){return e==="server"?"Server":e==="pipeline"?"Pipeline":"Overlay"}function Vg(e){const t=String(e||"").trim();if(!t)return"";if(t==="true")return!0;if(t==="false")return!1;if(t==="null")return null;if(/^-?\d+(?:\.\d+)?$/.test(t))return Number(t);if(/^[\[{"]/.test(t))try{return JSON.parse(t)}catch{}return t}function Jg(e,t){if(e[t]==='"'){let o=!1;for(let s=t+1;s<e.length;s++){const u=e[s];if(o){o=!1;continue}if(u==="\\"){o=!0;continue}if(u==='"')return s+1}return e.length}const n={"{":"}","[":"]"},r=[e[t]];let i=!1,a=!1;for(let o=t+1;o<e.length;o++){const s=e[o];if(i){if(a){a=!1;continue}if(s==="\\"){a=!0;continue}s==='"'&&(i=!1);continue}if(s==='"'){i=!0;continue}if(s==="{"||s==="["){r.push(s);continue}if(s==="}"||s==="]"){const u=r[r.length-1];if(n[u]===s&&(r.pop(),r.length===0))return o+1}}return e.length}function Gg(e,t){if(!e[t])return t;const n=e[t];if(n==='"'||n==="{"||n==="[")return Jg(e,t);let r=t;for(;r<e.length;){const i=e.indexOf(" ",r);if(i<0)return e.length;let a=i;for(;a<e.length&&e[a]===" ";)a++;if(/^[A-Za-z0-9_.-]+=/.test(e.slice(a)))return i;r=a}return e.length}function Qg(e){const t={};let n=0;for(;n<e.length;){for(;e[n]===" ";)n++;const r=/^([A-Za-z0-9_.-]+)=/.exec(e.slice(n));if(!r)break;const i=r[1];n+=r[0].length;const a=Gg(e,n);t[i]=Vg(e.slice(n,a)),n=a}return{fields:t,end:n}}function Zg(e){const t=e.match(/^(DEBUG|INFO|WARN|ERROR)\s+(\S+)\s+(\+\d+ms)\s+(.*)$/);if(!t)return{level:"info",ts:"",delta:"",service:"",message:e,fields:{},raw:e,source:"server"};const[,n,r,i,a]=t,o=Qg(a),s=typeof o.fields.service=="string"?o.fields.service:"",u=a.slice(o.end).trim()||a.trim();return{level:n.toLowerCase(),ts:r,delta:i,service:s,message:u,fields:o.fields,raw:e,source:"server"}}function Xg(e){const t=e/1e3;if(t<60)return t.toFixed(1)+"s";const n=Math.floor(t/60);return n+"m"+(t-n*60).toFixed(0)+"s"}function Yg(e,t,n){const r={debug:0,info:1,warn:2,error:3},i=r[n]??0,a=lr.map(Zg).filter(s=>(r[s.level]??0)>=i),o=(Array.isArray(t)?t:[]).filter(s=>s.kind!=="tool_delta").flatMap(s=>{const u=s.kind==="error"?"error":"info";if((r[u]??0)<i)return[];const c=s.stage||"",g=s.kind||"",f=s.toolName||"",p=s.summary||s.text||"",h=[];g==="tool_call"&&f?h.push(`→ ${f}`):g==="tool_result"&&f?h.push(`← ${f}`):g==="status"?h.push(p):g==="message_delta"&&h.push("[text delta]"),g!=="status"&&p&&h.push(p.length>150?p.slice(0,150)+"…":p);const k=typeof s.elapsed_ms=="number"?Xg(s.elapsed_ms):"";return[{level:u,ts:s.at||"",service:c,delta:k,message:h.join(" "),fields:{kind:g,...f?{tool:f}:{},...s.status?{status:s.status}:{}},raw:"",source:"pipeline"}]});return[...a,...o,...e].sort((s,u)=>(s.ts||"").localeCompare(u.ts||""))}function em(e){return e.map(t=>{const n=[`[${String(t.source||"client").toUpperCase()}]`,`[${String(t.level||"info").toUpperCase()}]`];t.ts&&n.push(t.ts),t.service&&n.push(t.service),n.push(t.message||"");const r=Us(t.fields);return Object.keys(r).length&&n.push(Si(r)),n.join(" ")}).join(`
-`)}async function tm(e){try{return await navigator.clipboard.writeText(e),!0}catch{return!1}}function nm(e){const t=W(()=>Us(e.entry.fields)),n=W(()=>Object.entries(t()));return[v(R,{get when(){return n().length>0},get children(){return[(()=>{var r=Pg();return d(r,v(ke,{get each(){return n().slice(0,6)},children:([i,a])=>(()=>{var o=Rg(),s=o.firstChild;return d(o,i,s),d(o,()=>Wg(a),null),o})()})),r})(),(()=>{var r=Fa(),i=r.firstChild,a=i.nextSibling,o=a.firstChild,s=o.nextSibling;return d(i,()=>l("log.details")),d(o,()=>l("log.fields")),d(s,()=>Si(t(),2)),d(r,v(R,{get when(){return!!e.entry.raw},get children(){var u=Bg(),c=u.firstChild,g=c.nextSibling;return d(c,()=>l("log.raw")),d(g,()=>e.entry.raw),u}}),null),r})()]}}),v(R,{get when(){return ye(()=>n().length===0)()&&!!e.entry.raw},get children(){var r=Fa(),i=r.firstChild,a=i.nextSibling,o=a.firstChild,s=o.nextSibling;return d(i,()=>l("log.details")),d(o,()=>l("log.raw")),d(s,()=>e.entry.raw),r}})]}function rm(e){return(()=>{var t=Ng(),n=t.firstChild,r=n.firstChild,i=r.nextSibling,a=i.firstChild,o=a.nextSibling;o.nextSibling;var s=i.nextSibling,u=n.nextSibling;return d(r,()=>Hg(e.entry.source)),d(i,()=>e.entry.level.toUpperCase(),o),d(n,v(R,{get when(){return!!e.entry.delta},get children(){var c=Og();return d(c,()=>e.entry.delta),c}}),s),d(n,v(R,{get when(){return!!e.entry.service},get children(){var c=jg();return d(c,()=>e.entry.service),c}}),s),d(s,()=>e.entry.ts),d(u,()=>e.entry.message||e.entry.raw||""),d(t,v(nm,{get entry(){return e.entry}}),null),B(c=>{var g=e.entry.source,f=e.entry.source,p=`log-level log-level-${e.entry.level}`;return g!==c.e&&$(t,"data-source",c.e=g),f!==c.t&&$(r,"data-source",c.t=f),p!==c.a&&Hn(i,c.a=p),c},{e:void 0,t:void 0,a:void 0}),t})()}function im(e){let t,n;const[r,i]=G(!1),[a,o]=G(0),s=W(()=>(a(),Yg(Vl(),e.ndjsonEvents??[],V.logFilterLevel))),u=async()=>{i(!0);try{await qg(),o(k=>k+1)}finally{i(!1)}c()},c=()=>{n&&(n.scrollTop=n.scrollHeight)},g=async()=>{const k=em(s());k&&await tm(k)},f=()=>{_e("logEntries",[]),lr=[],o(k=>k+1)},p=k=>{const m=k.target;_e("logFilterLevel",m.value)};St(async()=>{e.open&&(await u(),t?.showModal())}),Ne(()=>{const k=t;if(k){if(e.open){u().finally(()=>{k.open||k.showModal()});return}k.open&&k.close()}});const h=()=>{Promise.resolve().then(()=>c())};return(()=>{var k=Ug(),m=k.firstChild,y=m.firstChild,w=y.nextSibling,T=w.firstChild,P=T.nextSibling,C=P.nextSibling,b=C.nextSibling,A=b.nextSibling,L=A.nextSibling,x=m.nextSibling;return qe(E=>t=E,k),d(y,()=>l("log.title")),T.addEventListener("change",p),P.$$click=()=>void u(),d(P,()=>l("log.load_server")),C.$$click=()=>void u(),d(C,()=>l("common.refresh")),b.$$click=()=>void g(),d(b,()=>l("common.copy")),A.$$click=f,d(A,()=>l("common.clear")),L.$$click=()=>{t?.close(),e.onClose?.()},d(L,()=>l("common.close")),qe(E=>n=E,x),d(x,v(R,{get when(){return s().length>0},get fallback(){return(()=>{var E=Fg();return d(E,()=>l("log.empty")),E})()},get children(){return v(ke,{get each(){return s()},fallback:null,children:E=>(h(),v(rm,{entry:E}))})}})),B(E=>{var I=l("log.filter_level"),S=r(),F=r(),D=r()||s().length===0;return I!==E.e&&$(T,"aria-label",E.e=I),S!==E.t&&(P.disabled=E.t=S),F!==E.a&&(C.disabled=E.a=F),D!==E.o&&(b.disabled=E.o=D),E},{e:void 0,t:void 0,a:void 0,o:void 0}),B(()=>T.value=V.logFilterLevel),k})()}Ce(["click"]);var am=_("<details>"),om=_('<div class="message message-user"><div class=message-body><p>'),sm=_('<div class="message message-assistant"><div class=message-body>'),lm=_("<div class=message-text><span class=typing>……"),cm=_("<div class=message-text>"),um=_('<svg width=16 height=16 viewBox="0 0 16 16"fill=none><rect x=4.25 y=4.25 width=7.5 height=7.5 rx=1.2 fill=currentColor>'),dm=_('<div class=coding-tab-root style=flex-direction:column;height:100%><div class="chat-scroll coding-scroll"style="flex:1 1 auto;overflow:auto"></div><form class=chat-input style=flex-shrink:0><div class=chat-compose-row><textarea class=chat-textarea rows=2 placeholder="Ask the build agent…"></textarea><div class=chat-compose-actions><button><span class=chat-send-icon aria-hidden=true></span><span class=chat-send-label>'),fm=_("<div class=chat-empty>Build agent — ask anything about the codebase"),gm=_('<svg width=16 height=16 viewBox="0 0 16 16"fill=none><path d="M2 8l10-5-3 5 3 5z"fill=currentColor>');function li(e){return e.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;")}function mm(e){return e.replace(/\x1b\[[0-9;]*m/g,"")}function pm(e){return li(e).replace(/```(\w*)\n([\s\S]*?)```/g,'<pre class="code-block"><code>$2</code></pre>').replace(/`([^`]+)`/g,"<code>$1</code>").replace(/\*\*(.+?)\*\*/g,"<strong>$1</strong>").replace(/\n/g,"<br>")}function hm(e){const[t,n]=G(null),[r,i]=G([]),[a,o]=G(!1),[s,u]=G("");let c=new Map,g=null,f,p,h;function k(){if(!f)return;f.scrollHeight-f.scrollTop-f.clientHeight<80&&requestAnimationFrame(()=>{f.scrollTop=f.scrollHeight})}Ne(()=>{e.active&&(r(),k())});function m(L,x){if(x.type==="session"){n(x.sessionID??null);return}if(x.type==="delta"){const I=(c.get(x.partID)??"")+(x.delta??"");c.set(x.partID,I),i(S=>S.map((D,q)=>{if(q!==L||D.role!=="assistant")return D;const j=D.parts.map(re=>re.type==="text"&&re._partID===x.partID?{...re,text:I}:re);return j.some(re=>re.type==="text"&&re._partID===x.partID)||j.push({type:"text",text:I,_partID:x.partID}),{...D,parts:j}}));return}if(x.type==="part"){const E=x.part;E?.type==="tool"&&i(I=>I.map((S,F)=>F!==L||S.role!=="assistant"?S:S.parts.find(q=>q.type==="tool"&&q._partID===E.id)?{...S,parts:S.parts.map(q=>q.type==="tool"&&q._partID===E.id?{...q,state:E.state,tool:E.tool}:q)}:{...S,parts:[...S.parts,{type:"tool",tool:E.tool,state:E.state,_partID:E.id}]}));return}if(x.type==="error"){const E=x.error?.message??JSON.stringify(x.error);i(I=>I.map((S,F)=>F!==L||S.role!=="assistant"?S:{...S,parts:[...S.parts,{type:"text",text:`Error: ${E}`}]}));return}x.type==="done"&&c.clear()}async function y(L){if(a()||!L.trim())return;o(!0),c.clear(),i(I=>[...I,{role:"user",text:L},{role:"assistant",parts:[],streaming:!0}]);const x=r().length-1,E=new AbortController;g=E;try{const I=JSON.stringify({text:L,sessionID:t()??void 0}),S=await fetch(Ge("coding/message/stream"),{method:"POST",headers:{...Tt(),"Content-Type":"application/json"},body:I,signal:E.signal});if(!S.ok||!S.body)throw new Error(`Coding stream failed: ${S.status}`);const F=S.body.getReader(),D=new TextDecoder;let q="";for(;;){const{done:j,value:X}=await F.read();if(j)break;q+=D.decode(X,{stream:!0});const re=q.split(`
-`);q=re.pop()??"";for(const N of re)if(N.startsWith("data:"))try{const U=JSON.parse(N.slice(5).trim());m(x,U)}catch{}}if(q.startsWith("data:"))try{const j=JSON.parse(q.slice(5).trim());m(x,j)}catch{}}catch(I){if(I?.name!=="AbortError"){const S=I?.message??String(I);i(F=>F.map((D,q)=>q!==x||D.role!=="assistant"?D:{...D,parts:[...D.parts,{type:"text",text:`Error: ${S}`}]}))}}finally{i(I=>I.map((S,F)=>F!==x||S.role!=="assistant"?S:{...S,streaming:!1})),o(!1),g=null}}Nt(()=>{g?.abort()});function w(L){L.preventDefault();const x=s().trim();!x||a()||(u(""),p&&(p.value="",p.style.height="auto"),y(x))}function T(L){L.isComposing||L.key==="Enter"&&!L.shiftKey&&(L.preventDefault(),h?.requestSubmit())}function P(L){const x=()=>L.part.state?.status??"running",E=()=>{const F=x();return F==="completed"?"done":F==="error"?"err":"run"},I=()=>li(L.part.state?.title??L.part.tool??"tool"),S=()=>{const F=L.part.state?.output;return F?li(mm(String(F)).slice(0,2e3)):""};return(()=>{var F=am();return B(D=>{var q=`tool-block tool-${x()}`,j=`<summary>[${E()}] ${I()}</summary>${S()?`<pre class="tool-output">${S()}</pre>`:""}`;return q!==D.e&&Hn(F,D.e=q),j!==D.t&&(F.innerHTML=D.t=j),D},{e:void 0,t:void 0}),F})()}function C(L){return(()=>{var x=om(),E=x.firstChild,I=E.firstChild;return d(I,()=>L.msg.text),x})()}function b(L){const x=W(()=>L.msg.parts.length>0);return(()=>{var E=sm(),I=E.firstChild;return d(I,v(R,{get when(){return x()},get fallback(){return v(R,{get when(){return L.msg.streaming},get children(){return lm()}})},get children(){return v(ke,{get each(){return L.msg.parts},children:S=>v(R,{get when(){return S.type==="text"},get fallback(){return v(P,{part:S})},get children(){var F=cm();return B(()=>F.innerHTML=pm(S.text)),F}})})}})),E})()}const A=W(()=>r().length===0);return(()=>{var L=dm(),x=L.firstChild,E=x.nextSibling,I=E.firstChild,S=I.firstChild,F=S.nextSibling,D=F.firstChild,q=D.firstChild,j=q.nextSibling,X=f;typeof X=="function"?qe(X,x):f=x,d(x,v(R,{get when(){return!A()},get fallback(){return fm()},get children(){return v(ke,{get each(){return r()},children:U=>v(R,{get when(){return U.role==="user"},get fallback(){return v(b,{msg:U})},get children(){return v(C,{msg:U})}})})}})),E.addEventListener("submit",w);var re=h;typeof re=="function"?qe(re,E):h=E,S.$$keydown=T,S.$$input=U=>{u(U.currentTarget.value),U.currentTarget.style.height="auto",U.currentTarget.style.height=`${Math.min(U.currentTarget.scrollHeight,180)}px`};var N=p;return typeof N=="function"?qe(N,S):p=S,D.$$click=U=>{a()&&(U.preventDefault(),g?.abort())},d(q,v(R,{get when(){return a()},get fallback(){return gm()},get children(){return um()}})),d(j,()=>a()?"Stop":"Send"),B(U=>{var ce=e.active?"flex":"none",ge=a(),ne=`chat-send${a()?" chat-interrupt":""}`,Q=a()?"button":"submit",H=a()?"stop":"send",Z=!a()&&!s().trim();return ce!==U.e&&Rl(L,"display",U.e=ce),ge!==U.t&&(S.disabled=U.t=ge),ne!==U.a&&Hn(D,U.a=ne),Q!==U.o&&$(D,"type",U.o=Q),H!==U.i&&$(D,"data-mode",U.i=H),Z!==U.n&&(D.disabled=U.n=Z),U},{e:void 0,t:void 0,a:void 0,o:void 0,i:void 0,n:void 0}),B(()=>S.value=s()),L})()}Ce(["input","keydown","click"]);function ym(e){return new Promise(t=>setTimeout(t,e))}function Fs(){return typeof window<"u"&&typeof window.__TAURI__?.core?.invoke=="function"}async function vm(e,t){const n=window.__TAURI__?.core?.invoke;if(typeof n=="function")return n(e,t);throw new Error(`Tauri runtime unavailable for ${e}`)}function qa(e,t){return(typeof e=="string"&&e.trim()?e.trim():t).replace(/\/+$/,"")}function bm(e){const t=typeof e=="string"&&e.trim()?e.trim():z.serverUrl;try{const n=new URL(t);return n.protocol.startsWith("http")&&["127.0.0.1","localhost"].includes(n.hostname)}catch{return!1}}function qs(){return z.autoServer&&bm(z.serverUrl)}async function km(){if(!Fs())return null;const e=await vm("overlay_server_info").catch(()=>{});return e&&typeof e.url=="string"?e:null}async function za(e={}){if(!Fs()||!e.force&&!qs())return null;const t=await km();if(!t)return null;const n=qa(t.url,z.serverUrl);return qa(z.serverUrl,z.serverUrl)===n||(nt({...z,serverUrl:n}),Ae(),bn({serverUrl:n})),t}async function zs(){const e=qs();e&&await za(),nn("connecting");const t=e?8:1;let n;for(let r=0;r<t;r++)try{return await K("global/health",{signal:AbortSignal.timeout(5e3)}),nn("online"),!0}catch(i){if(n=i,r>=t-1)break;await ym(350),await za()}return nn("offline"),console.warn("[connection] connection failed",String(n)),!1}let Nn=null;function _m(e,t=1e4){Ws(),Nn=setInterval(async()=>{try{V.connected||await zs()&&await e?.()}catch(n){console.warn("[connection] monitor retry failed",n)}},t)}function Ws(){Nn!==null&&(clearInterval(Nn),Nn=null)}async function wm(){try{const[e,t]=await Promise.all([K("skill/installed").catch(()=>K("skill")),K("mcp")]);ca(Array.isArray(e)?e:[]),ua(t&&typeof t=="object"?t:{})}catch(e){Ct.debug("extensions","loadExtensions failed, resetting to empty",{error:String(e)}),ca([]),ua({})}}async function $m(){try{const e=await K("executor");la(Array.isArray(e)?e:[])}catch(e){Ct.debug("executor","loadExecutors failed, resetting to empty",{error:String(e)}),la([])}}async function Sm(){try{const e=await K("panel/knowledge/preference");_e("preferences",Array.isArray(e)?e:[])}catch(e){Ct.debug("preferences","loadPreferences failed, resetting to empty",{error:String(e)}),_e("preferences",[])}}function xm(e,t){return JSON.stringify(e??null)===JSON.stringify(t??null)}function Tm(e){if(!Number.isFinite(e)||e<=0)return"";const t=Math.round(e/6e4*10)/10;return Number.isInteger(t)?String(t):t.toFixed(1)}function Mn(e,t={}){const n=e?.value?.trim()||"";if(!n)return;const r=Number(n);if(Number.isFinite(r)&&!(t.allowZero?r<0:r<=0))return Math.round(r*(t.scale||1))}function Ks(){const e={maxRuns:Mn(document.getElementById("budgetMaxRuns")),maxReplans:Mn(document.getElementById("budgetMaxReplans"),{allowZero:!0}),maxEvaluations:Mn(document.getElementById("budgetMaxEvaluations")),maxWallTimeMs:Mn(document.getElementById("budgetMaxWallTime"),{scale:6e4})};if(!Object.values(e).every(t=>t===void 0))return e}function Cm(){return O.board?.task?.sessionID||O.tasks.find(e=>e?.task?.id===O.selectedTaskID)?.task?.sessionID||""}function Dm(){if(!V.connected)return!1;const e=og();return e==="empty"||e==="task"}function Hs(e){const t=[],n=new Set,r=o=>{if(!o)return;const s=o.kind==="run"?`run:${o.runID}`:o.kind==="session"?`session:${o.sessionID}`:o.kind==="task"?`task:${o.taskID}`:"";!s||n.has(s)||(n.add(s),t.push(o))};if(r(e),!O.selectedTaskID)return t;const i=O.board?.task?.activeRunID||He.runID||"";i&&r({kind:"run",runID:i});const a=Cm();return a&&r({kind:"session",sessionID:a}),r({kind:"task",taskID:O.selectedTaskID}),t}function Im(e){return Hs(e)[0]||null}async function Am(e){return e?e.kind==="run"&&e.runID?(await K(`run/${encodeURIComponent(e.runID)}/abort`,{method:"POST"}),!0):e.kind==="task"&&e.taskID?(await K(`task/${encodeURIComponent(e.taskID)}/cancel`,{method:"POST"}),!0):e.kind==="session"&&e.sessionID?(await K(`session/${encodeURIComponent(e.sessionID)}/abort`,{method:"POST"}),!0):!1:!1}async function Em(e={}){const t=oe.chatRequest;if(!t||t.stopping)return!1;if(t.aborted=!0,t.manualAbort=e.manual!==!1,t.stopping=!0,t.recovery?.stop(),t.controller?.abort?.(),du(),e.remote===!1)return!0;const n=Hs(t.target);if(n.length===0)return!0;try{for(const r of n)try{return await Am(r),!0}catch(i){console.warn("[stopChatRequest] Failed to abort target",{error:String(i),target:r})}return!1}finally{t.stopping=!1}}function Lm(){const e=t=>document.querySelector(t);return{techAtlasCanvas:e("#techAtlasCanvas"),titlebar:e("#titlebar"),connBadge:e("#connBadge"),brandLogo:e(".brand-logo"),brandVersion:e("#brandVersion"),chatVersion:e("#chatVersion"),chatAuthor:e("#chatAuthor"),btnTitlebarMenu:e("#btnTitlebarMenu"),titlebarMenu:e("#titlebarMenu"),btnLocale:e("#btnLocale"),btnLocaleLabel:e("#btnLocaleLabel"),btnTheme:e("#btnTheme"),btnThemeValue:e("#btnThemeValue"),btnSettings:e("#btnSettings"),btnPin:e("#btnPin"),btnPinValue:e("#btnPinValue"),chkUnattended:e("#chkUnattended"),chkAutoPermission:e("#chkAutoPermission"),chkAutoQuestion:e("#chkAutoQuestion"),chkShowTranscriptDetails:e("#chkShowTranscriptDetails"),opacityRange:e("#opacityRange"),opacityValue:e("#opacityValue"),btnMinimize:e("#btnMinimize"),btnMaximize:e("#btnMaximize"),btnClose:e("#btnClose"),panelBody:e("#panelBody"),sidebar:e("#sidebar"),btnSidebarToggle:e("#btnSidebarToggle"),leftPaneResizer:e("#leftPaneResizer"),workspaceMain:e("#workspaceMain"),rightPaneResizer:e("#rightPaneResizer"),sections:e("#sections"),taskDir:e("#taskDir"),recentDirPanel:e("#recentDirPanel"),taskWorkspaceDir:e("#taskWorkspaceDir"),taskGit:e("#taskGit"),btnBrowseCwd:e("#btnBrowseCwd"),btnCreateCwd:e("#btnCreateCwd"),btnOpenCwd:e("#btnOpenCwd"),btnResetCwd:e("#btnResetCwd"),engineBar:e("#engineBar"),codexModelPanel:e("#codexModelPanel"),claudeCodeModelPanel:e("#claudeCodeModelPanel"),taskStatus:e("#taskStatus"),extensionsBadge:e("#extensionsBadge"),btnConfigToggle:e("#btnConfigToggle"),configToggleMeta:e("#configToggleMeta"),configDialog:e("#configDialog"),btnCloseConfigDialog:e("#btnCloseConfigDialog"),promptSection:e("#promptSection"),promptBody:e("#promptBody"),promptBadge:e("#promptBadge"),taskActionsBar:e("#taskActionsBar"),specSection:e("#specSection"),planSection:e("#planSection"),goalsSection:e("#goalsSection"),criteriaSection:e("#criteriaSection"),deliverySection:e("#deliverySection"),deliveryBadge:e("#deliveryBadge"),deliveryBody:e("#deliveryBody"),changesSection:e("#changesSection"),channelSection:e("#channelSection"),channelConfigBody:e("#channelConfigBody"),channelPublicUrl:e("#channelPublicUrl"),btnSaveChannelPublicUrl:e("#btnSaveChannelPublicUrl"),cfgAvailableProviders:e("#cfgAvailableProviders"),channelList:e("#channelList"),skillList:e("#skillList"),btnSkillMarket:e("#btnSkillMarket"),btnOpenSkillRoot:e("#btnOpenSkillRoot"),btnReloadSkills:e("#btnReloadSkills"),btnDeleteAllSkills:e("#btnDeleteAllSkills"),mcpList:e("#mcpList"),btnAddSkill:e("#btnAddSkill"),btnAddMcp:e("#btnAddMcp"),btnDeleteAllMcp:e("#btnDeleteAllMcp"),statusDot:e("#statusIcon"),statusLabel:e("#statusLabel"),elapsed:e("#elapsed"),btnTerminateRun:e("#btnTerminateRun"),specBadge:e("#specBadge"),specBody:e("#specBody"),planBadge:e("#planBadge"),planBody:e("#planBody"),goalsBadge:e("#goalsBadge"),btnCreateGoal:e("#btnCreateGoal"),goalsBody:e("#goalsBody"),criteriaBadge:e("#criteriaBadge"),criteriaList:e("#criteriaList"),evalBody:e("#evalBody"),budgetConfigBody:e("#budgetConfigBody"),budgetHint:e("#budgetHint"),budgetMaxRuns:e("#budgetMaxRuns"),budgetMaxReplans:e("#budgetMaxReplans"),budgetMaxEvaluations:e("#budgetMaxEvaluations"),budgetMaxWallTime:e("#budgetMaxWallTime"),btnBudgetReset:e("#btnBudgetReset"),btnBudgetSave:e("#btnBudgetSave"),changesBadge:e("#changesBadge"),changesBody:e("#changesBody"),chatGoalsStrip:e("#chatGoalsStrip"),chatScroll:e("#chatScroll"),chatEmpty:e("#chatEmpty"),chatCount:e("#chatCount"),btnChatCopyAll:e("#btnChatCopyAll"),chatTabs:e("#chatTabs"),tabControl:e("#tabControl"),tabCoding:e("#tabCoding"),codingScroll:e("#codingScroll"),codingEmpty:e("#codingEmpty"),chatForm:e("#chatForm"),chatTextarea:e("#chatTextarea"),chatAttachments:e("#chatAttachments"),chatFileInput:e("#chatFileInput"),btnChatAttach:e("#btnChatAttach"),btnTaskInterrupt:e("#btnTaskInterrupt"),chatSend:e("#chatSend"),taskListPanel:e("#taskListPanel"),btnRefreshTasks:e("#btnRefreshTasks"),btnCreateTask:e("#btnCreateTask"),skillDialog:e("#skillDialog"),skillForm:e("#skillForm"),skillType:e("#skillType"),skillValue:e("#skillValue"),skillPolicy:e("#skillPolicy"),btnPickSkillPath:e("#btnPickSkillPath"),btnCancelSkill:e("#btnCancelSkill"),skillMarketDialog:e("#skillMarketDialog"),skillMarketList:e("#skillMarketList"),btnCloseSkillMarket:e("#btnCloseSkillMarket"),mcpDialog:e("#mcpDialog"),mcpForm:e("#mcpForm"),mcpName:e("#mcpName"),mcpType:e("#mcpType"),mcpUrl:e("#mcpUrl"),mcpCommand:e("#mcpCommand"),mcpArgs:e("#mcpArgs"),mcpRemoteField:e("#mcpRemoteField"),mcpCommandField:e("#mcpCommandField"),mcpArgsField:e("#mcpArgsField"),btnCancelMcp:e("#btnCancelMcp"),goalDialog:e("#goalDialog"),goalForm:e("#goalForm"),goalDialogTitle:e("#goalDialogTitle"),goalId:e("#goalId"),goalDescription:e("#goalDescription"),goalCriteria:e("#goalCriteria"),btnCancelGoal:e("#btnCancelGoal"),diffDialog:e("#diffDialog"),diffDialogTitle:e("#diffDialogTitle"),diffDialogMeta:e("#diffDialogMeta"),diffDialogBody:e("#diffDialogBody"),btnCloseDiff:e("#btnCloseDiff"),appDialog:e("#appDialog"),appDialogTitle:e("#appDialogTitle"),appDialogBody:e("#appDialogBody"),appDialogInputField:e("#appDialogInputField"),appDialogInputLabel:e("#appDialogInputLabel"),appDialogInput:e("#appDialogInput"),appDialogSelectField:e("#appDialogSelectField"),appDialogSelectLabel:e("#appDialogSelectLabel"),appDialogSelect:e("#appDialogSelect"),btnAppDialogCancel:e("#btnAppDialogCancel"),btnAppDialogOk:e("#btnAppDialogOk"),llmForm:e("#llmForm"),llmSection:e("#llmSection"),llmAdvanced:e("#llmAdvanced"),llmSummary:e("#llmSummary"),llmProvider:e("#llmProvider"),llmModel:e("#llmModel"),llmApiKey:e("#llmApiKey"),llmApiKeySummary:e("#llmApiKeySummary"),btnLlmApiKeyToggle:e("#btnLlmApiKeyToggle"),btnLlmApiKeyCopy:e("#btnLlmApiKeyCopy"),btnLlmAuthAction:e("#btnLlmAuthAction"),llmStatus:e("#llmStatus"),llmNotice:e("#llmNotice"),channelDialog:e("#channelDialog"),channelForm:e("#channelForm"),channelDialogTitle:e("#channelDialogTitle"),channelId:e("#channelId"),channelFields:e("#channelFields"),btnCancelChannel:e("#btnCancelChannel"),settingsDialog:e("#settingsDialog"),settingsForm:e("#settingsForm"),serverUrl:e("#serverUrl"),serverPassword:e("#serverPassword"),serverUsername:e("#serverUsername"),localeMode:e("#localeMode"),themeMode:e("#themeMode"),memoryBadge:e("#memoryBadge"),memoryList:e("#memoryList"),memorySearch:e("#memorySearch"),btnMemorySearch:e("#btnMemorySearch"),btnMemoryRefresh:e("#btnMemoryRefresh"),preferenceBadge:e("#preferenceBadge"),preferenceList:e("#preferenceList"),btnPreferenceRefresh:e("#btnPreferenceRefresh"),btnPreferenceAdd:e("#btnPreferenceAdd"),memoryDialog:e("#memoryDialog"),memoryDialogTitle:e("#memoryDialogTitle"),memoryDialogMeta:e("#memoryDialogMeta"),memoryDialogContent:e("#memoryDialogContent"),btnDeleteMemory:e("#btnDeleteMemory"),btnCloseMemory:e("#btnCloseMemory"),logDialog:e("#logDialog"),logViewerBody:e("#logViewerBody"),logLevelFilter:e("#logLevelFilter"),btnLog:e("#btnLog"),btnLogRefresh:e("#btnLogRefresh"),btnLogCopy:e("#btnLogCopy"),btnLogClear:e("#btnLogClear"),btnCloseLog:e("#btnCloseLog"),btnLogServerLogs:e("#btnLogServerLogs"),prefEditDialog:e("#prefEditDialog"),prefEditForm:e("#prefEditForm"),prefEditTitle:e("#prefEditTitle"),prefEditId:e("#prefEditId"),prefEditKey:e("#prefEditKey"),prefEditValue:e("#prefEditValue"),btnCancelPrefEdit:e("#btnCancelPrefEdit")}}function Vs(){const e=Lm();return{spec:e.specSection,plan:e.planSection,goals:e.goalsSection,evaluation:e.criteriaSection,delivery:e.deliverySection,files:e.changesSection}}function Wa(e,t){const n=Vs()[e];if(n){if(!t){delete n.dataset.phaseState;return}n.dataset.phaseState=t}}function Mm(e){const t=Array.isArray(e)?e:[];for(let n=t.length-1;n>=0;n-=1){const r=t[n],a=(Array.isArray(r?.parts)?r.parts:[]).some(u=>u?.type==="tool"&&["running","pending"].includes(u?.state?.status||"")),o=r?.info?.role==="assistant"&&!r?.info?.time?.completed;if(!a&&!o)continue;const s=String(r?.info?.agent||"").trim().toLowerCase();return s==="spec"?"spec":s==="planner"?"plan":s==="goal"?"goals":s==="judge"?"evaluation":s==="delivery"?"files":bi(r)}return""}function Pm(e,t,n,r,i){if(e){if(e==="plan"){n?.spec&&t.push("spec");return}if(e==="goals"){n?.plan&&t.push("plan"),i>0&&t.push("files");return}if(e==="evaluation"){r.length>0&&t.push("goals"),i>0&&t.push("files");return}if(e==="files"){n?.evaluation&&t.push("evaluation"),r.length>0&&t.push("goals");return}}}function Bm(){Object.values(Vs()).forEach(e=>{e&&delete e.dataset.phaseState})}function Rm(e,t=0){Bm();const n=Array.isArray(oe.messages)?oe.messages:[],r=Mm(n);if(!e?.task&&!r)return;const i=(e?.lanes||[]).find(f=>f.id==="goals")?.cards||[],a=(e?.interactions||[]).some(f=>f.status==="pending"),o=e?.task?e.task.status==="planning"||e.run?.phase==="plan"||e.run?.phase==="replan":!1,s=[],u=[];r&&(s.push(r),Pm(r,u,e,i,t)),e?.task&&(a||e.task.status==="blocked")&&(s.length=0,e.plan?s.push("plan"):i.length>0?s.push("goals"):e.spec&&s.push("spec")),e?.task&&s.length===0&&e.task.status==="queued"&&(e.spec?s.push("spec"):e.plan&&s.push("plan")),e?.task&&s.length===0&&o&&(s.push(e.spec?"plan":"spec"),e.spec&&u.push("spec"),e.plan&&u.push("plan")),e?.task&&s.length===0&&e.task.status==="running"&&(s.push(i.length>0?"goals":e.plan?"plan":"spec"),e.plan&&u.push("plan"),t>0&&u.push("files")),e?.task&&s.length===0&&e.task.status==="evaluating"&&(s.push("evaluation"),i.length>0&&u.push("goals"),t>0&&u.push("files")),e?.task&&s.length===0&&e.task.status==="delivering"&&(s.push("delivery"),t>0&&u.push("files"),e.evaluation&&u.push("evaluation"),i.length>0&&u.push("goals")),e?.task&&s.length===0&&e.task.status==="completed"&&(s.push(e.delivery?"delivery":t>0?"files":"evaluation"),e.delivery&&t>0&&u.push("files"),e.evaluation&&u.push("evaluation"),i.length>0&&u.push("goals")),e?.task&&s.length===0&&e.task.status==="failed"&&(s.push(e.evaluation?"evaluation":e.plan?"plan":"spec"),e.plan&&u.push("plan"),i.length>0&&u.push("goals")),e?.task&&s.length===0&&e.task.status==="cancelled"&&(e.plan?s.push("plan"):e.spec&&s.push("spec"));const c=[...new Set(s.filter(Boolean))],g=[...new Set(u.filter(f=>f&&!c.includes(f)))];c.forEach(f=>Wa(f,"active")),g.forEach(f=>Wa(f,"related"))}function Ka(e){return JSON.stringify(String(e??""))}function Om(e){const t=String(e||"").trim();if(!t)return[];const n=/^[A-Za-z]:[\\/]/.test(t),r=t.startsWith("/"),i=t.split(/[\\/]+/).filter(Boolean);if(!i.length)return[];function a(u,c){return u.replace(/[\\/]+$/,"")+"/"+c}if(n){let u=`${i[0]}\\`;return[{label:i[0],path:u}].concat(i.slice(1).map(g=>(u=a(u,g),{label:g,path:u})))}if(r){let u="/";return[{label:"/",path:u}].concat(i.map(g=>(u=u==="/"?`/${g}`:`${u}/${g}`,{label:g,path:u})))}let o=i[0];return[{label:i[0],path:o}].concat(i.slice(1).map(u=>(o=o.replace(/[\\/]+$/,"")+"/"+u,{label:u,path:o})))}function Pn(e){return e==="browse"?`<svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+  </svg>`;
+}
+function WindowControls() {
+  const [isMaximized, setIsMaximized] = createSignal(false);
+  const [tauriWin, setTauriWin] = createSignal(null);
+  const syncMaximize = async (win) => {
+    if (!win) return false;
+    const maximized = await win.isMaximized?.().catch(() => false);
+    setIsMaximized(!!maximized);
+    return !!maximized;
+  };
+  const syncPin = async (win) => {
+    if (!win) return;
+    const pinned = await win.isAlwaysOnTop?.().catch(() => false);
+    setSettingsStore("alwaysOnTop", !!pinned);
+    saveSettings();
+  };
+  const handleMinimize = () => {
+    tauriWin()?.minimize?.().catch(() => void 0);
+  };
+  const handleMaximize = async () => {
+    const win = tauriWin();
+    if (!win) return;
+    const current = await syncMaximize(win);
+    if (typeof win.toggleMaximize === "function") {
+      await win.toggleMaximize().catch(() => void 0);
+    } else if (current) {
+      await win.unmaximize?.().catch(() => void 0);
+    } else {
+      await win.maximize?.().catch(() => void 0);
+    }
+    await syncMaximize(win);
+  };
+  const handleClose = async () => {
+    const win = tauriWin();
+    if (!win) return;
+    if (localStorage.getItem(CLOSE_HINT_KEY) !== "true") {
+      localStorage.setItem(CLOSE_HINT_KEY, "true");
+      await nativeMessage$1(t("titlebar.background_notice"), {
+        title: t("titlebar.background_notice_title")
+      }).catch(() => void 0);
+    }
+    if (typeof win.hide === "function") {
+      await win.hide().catch(() => void 0);
+    } else {
+      await win.minimize?.().catch(() => void 0);
+    }
+  };
+  const handlePin = async () => {
+    const win = tauriWin();
+    if (!win) return;
+    const next = !settingsStore.alwaysOnTop;
+    await win.setAlwaysOnTop?.(next).catch(() => void 0);
+    await syncPin(win);
+  };
+  onMount(async () => {
+    const win = await currentTauriWindow$3();
+    if (!win) return;
+    setTauriWin(win);
+    await win.setAlwaysOnTop?.(settingsStore.alwaysOnTop).catch(() => void 0);
+    await syncPin(win);
+    await syncMaximize(win);
+    let cleanupResized;
+    if (typeof win.onResized === "function") {
+      const unlisten = await win.onResized(() => {
+        void syncMaximize(win);
+      }).catch(() => void 0);
+      if (typeof unlisten === "function") cleanupResized = unlisten;
+    }
+    const titlebar = document.getElementById("titlebar");
+    const handleTitlebarPointerDown = (event) => {
+      if (event.button !== 0) return;
+      if (!(event.target instanceof Element)) return;
+      if (event.target.closest('[data-no-drag="true"], button, input, textarea, select, a, label, summary, [contenteditable="true"]')) {
+        return;
+      }
+      event.preventDefault();
+      win.startDragging?.().catch(() => void 0);
+    };
+    titlebar?.addEventListener("pointerdown", handleTitlebarPointerDown);
+    onCleanup(() => cleanupResized?.());
+    onCleanup(() => titlebar?.removeEventListener("pointerdown", handleTitlebarPointerDown));
+  });
+  const pinLabel = () => settingsStore.alwaysOnTop ? t("titlebar.pin.unpin") : t("titlebar.pin.pin");
+  const maxLabel = () => maximizeLabel(isMaximized());
+  return (() => {
+    var _el$ = _tmpl$5$9();
+    insert(_el$, createComponent(Show, {
+      get when() {
+        return tauriWin() !== null;
+      },
+      get children() {
+        var _el$2 = _tmpl$$b();
+        _el$2.$$click = () => void handlePin();
+        createRenderEffect((_p$) => {
+          var _v$ = settingsStore.alwaysOnTop ? "true" : "false", _v$2 = pinLabel(), _v$3 = pinLabel();
+          _v$ !== _p$.e && setAttribute(_el$2, "data-pinned", _p$.e = _v$);
+          _v$2 !== _p$.t && setAttribute(_el$2, "title", _p$.t = _v$2);
+          _v$3 !== _p$.a && setAttribute(_el$2, "aria-label", _p$.a = _v$3);
+          return _p$;
+        }, {
+          e: void 0,
+          t: void 0,
+          a: void 0
+        });
+        return _el$2;
+      }
+    }), null);
+    insert(_el$, createComponent(Show, {
+      get when() {
+        return tauriWin() !== null;
+      },
+      get children() {
+        var _el$3 = _tmpl$2$9();
+        _el$3.$$click = handleMinimize;
+        createRenderEffect((_p$) => {
+          var _v$4 = t("titlebar.minimize"), _v$5 = t("titlebar.minimize");
+          _v$4 !== _p$.e && setAttribute(_el$3, "title", _p$.e = _v$4);
+          _v$5 !== _p$.t && setAttribute(_el$3, "aria-label", _p$.t = _v$5);
+          return _p$;
+        }, {
+          e: void 0,
+          t: void 0
+        });
+        return _el$3;
+      }
+    }), null);
+    insert(_el$, createComponent(Show, {
+      get when() {
+        return tauriWin() !== null;
+      },
+      get children() {
+        var _el$4 = _tmpl$3$9();
+        _el$4.$$click = () => void handleMaximize();
+        createRenderEffect((_p$) => {
+          var _v$6 = isMaximized() ? "true" : "false", _v$7 = maxLabel(), _v$8 = maxLabel(), _v$9 = maximizeIcon(isMaximized());
+          _v$6 !== _p$.e && setAttribute(_el$4, "data-maximized", _p$.e = _v$6);
+          _v$7 !== _p$.t && setAttribute(_el$4, "title", _p$.t = _v$7);
+          _v$8 !== _p$.a && setAttribute(_el$4, "aria-label", _p$.a = _v$8);
+          _v$9 !== _p$.o && (_el$4.innerHTML = _p$.o = _v$9);
+          return _p$;
+        }, {
+          e: void 0,
+          t: void 0,
+          a: void 0,
+          o: void 0
+        });
+        return _el$4;
+      }
+    }), null);
+    insert(_el$, createComponent(Show, {
+      get when() {
+        return tauriWin() !== null;
+      },
+      get children() {
+        var _el$5 = _tmpl$4$9();
+        _el$5.$$click = () => void handleClose();
+        createRenderEffect((_p$) => {
+          var _v$0 = t("titlebar.close"), _v$1 = t("titlebar.close");
+          _v$0 !== _p$.e && setAttribute(_el$5, "title", _p$.e = _v$0);
+          _v$1 !== _p$.t && setAttribute(_el$5, "aria-label", _p$.t = _v$1);
+          return _p$;
+        }, {
+          e: void 0,
+          t: void 0
+        });
+        return _el$5;
+      }
+    }), null);
+    return _el$;
+  })();
+}
+delegateEvents(["click"]);
+
+const MIN_UI_ZOOM = 0.8;
+const MAX_UI_ZOOM = 1.6;
+const systemThemeMedia = typeof window !== "undefined" && typeof window.matchMedia === "function" ? window.matchMedia("(prefers-color-scheme: light)") : null;
+function sanitizeTheme(value) {
+  if (value === "light" || value === "system") return value;
+  return "dark";
+}
+function sanitizeZoom(value) {
+  const next = Number.parseFloat(String(value ?? ""));
+  return Number.isFinite(next) ? Math.min(Math.max(next, MIN_UI_ZOOM), MAX_UI_ZOOM) : 1;
+}
+function resolvedTheme() {
+  const theme = sanitizeTheme(settingsStore.theme);
+  if (theme === "system") {
+    return systemThemeMedia?.matches ? "light" : "dark";
+  }
+  return theme;
+}
+function applyTheme(theme) {
+  if (typeof document === "undefined") return;
+  const sanitized = sanitizeTheme(theme);
+  const effective = sanitized === "system" ? systemThemeMedia?.matches ? "light" : "dark" : sanitized;
+  document.body.dataset.theme = effective;
+}
+async function currentTauriWindow$2() {
+  const getCurrent = window.__TAURI__?.window?.getCurrentWindow;
+  if (typeof getCurrent === "function") {
+    try {
+      return getCurrent();
+    } catch {
+    }
+  }
+  return null;
+}
+async function applyOpacity(opacity) {
+  if (typeof document === "undefined") return false;
+  const value = sanitizeOpacity(opacity);
+  const valueStr = String(value);
+  const win = await currentTauriWindow$2();
+  if (!win || typeof win.setOpacity !== "function") {
+    document.documentElement.style.setProperty(
+      "--ui-window-opacity",
+      valueStr
+    );
+    return false;
+  }
+  const ok = await win.setOpacity(value).then(
+    () => true,
+    () => false
+  );
+  document.documentElement.style.setProperty(
+    "--ui-window-opacity",
+    ok ? "1" : valueStr
+  );
+  return ok;
+}
+function applyZoom(zoom) {
+  if (typeof document === "undefined") return;
+  const sanitized = sanitizeZoom(zoom);
+  const width = window.visualViewport?.width ?? window.innerWidth ?? 900;
+  const height = window.visualViewport?.height ?? window.innerHeight ?? 760;
+  const scale = Math.min(width / 1040, height / 820);
+  const base = Math.max(0.82, Math.min(1.04, scale));
+  const next = base * sanitized;
+  document.documentElement.style.setProperty("--ui-scale", next.toFixed(3));
+}
+const ZOOM_STEP = 0.1;
+function setZoom(value) {
+  applyZoom(sanitizeZoom(value));
+}
+function stepZoom(delta) {
+  const current = Number.parseFloat(
+    document.documentElement.style.getPropertyValue("--ui-scale") || "1"
+  ) || 1;
+  const width = window.visualViewport?.width ?? window.innerWidth ?? 900;
+  const height = window.visualViewport?.height ?? window.innerHeight ?? 760;
+  const scale = Math.min(width / 1040, height / 820);
+  const base = Math.max(0.82, Math.min(1.04, scale));
+  const currentZoom = base > 0 ? current / base : 1;
+  const next = Math.round((currentZoom + delta) * 100) / 100;
+  setZoom(next);
+}
+function handleZoomHotkey(event) {
+  if (typeof window === "undefined") return;
+  const hasTauri = typeof window.__TAURI__?.core?.invoke === "function";
+  if (!hasTauri || event.isComposing || !(event.ctrlKey || event.metaKey) || event.altKey) return;
+  const plus = event.code === "Equal" || event.code === "NumpadAdd" || event.key === "+" || event.key === "=";
+  if (plus) {
+    event.preventDefault();
+    stepZoom(ZOOM_STEP);
+    return;
+  }
+  const minus = event.code === "Minus" || event.code === "NumpadSubtract" || event.key === "-" || event.key === "_";
+  if (minus) {
+    event.preventDefault();
+    stepZoom(-ZOOM_STEP);
+    return;
+  }
+  const reset = event.code === "Digit0" || event.code === "Numpad0" || event.key === "0";
+  if (!reset) return;
+  event.preventDefault();
+  setZoom(1);
+}
+function installSystemThemeListener(onchange) {
+  if (!systemThemeMedia) return () => {
+  };
+  systemThemeMedia.addEventListener("change", onchange);
+  return () => systemThemeMedia.removeEventListener("change", onchange);
+}
+async function toggleDevtools() {
+  const invoke = window.__TAURI__?.core?.invoke;
+  if (typeof invoke === "function") {
+    await invoke("overlay_toggle_devtools").catch(() => {
+    });
+  }
+}
+async function applyWindowOpacity(opacity) {
+  const value = String(sanitizeOpacity(opacity));
+  const win = await currentTauriWindow$2();
+  if (!win || typeof win.setOpacity !== "function") {
+    document.documentElement.style.setProperty("--ui-window-opacity", value);
+    return false;
+  }
+  const ok = await win.setOpacity(sanitizeOpacity(opacity)).then(
+    () => true,
+    () => false
+  );
+  document.documentElement.style.setProperty("--ui-window-opacity", ok ? "1" : value);
+  return ok;
+}
+
+var _tmpl$$a = /* @__PURE__ */ template(`<div class=titlebar-menu-wrap data-no-drag=true><button type=button id=btnTitlebarMenu class=titlebar-btn aria-controls=titlebarMenu aria-haspopup=true><svg width=14 height=14 viewBox="0 0 16 16"fill=none aria-hidden=true><circle cx=3.5 cy=8 r=1.2 fill=currentColor></circle><circle cx=8 cy=8 r=1.2 fill=currentColor></circle><circle cx=12.5 cy=8 r=1.2 fill=currentColor></circle></svg></button><div id=titlebarMenu class=titlebar-menu-panel data-no-drag=true><button type=button id=btnLocale class=titlebar-menu-item><span class=titlebar-menu-icon aria-hidden=true>A</span><span class=titlebar-menu-copy><span class=titlebar-menu-title></span><span class=titlebar-menu-meta id=btnLocaleLabel></span></span></button><button type=button id=btnTheme class=titlebar-menu-item><span class=titlebar-menu-icon aria-hidden=true><svg width=14 height=14 viewBox="0 0 16 16"fill=none><circle cx=8 cy=8 r=3 stroke=currentColor stroke-width=1.2></circle><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.1 3.1l1.4 1.4M11.5 11.5l1.4 1.4M3.1 12.9l1.4-1.4M11.5 4.5l1.4-1.4"stroke=currentColor stroke-width=1.2 stroke-linecap=round></path></svg></span><span class=titlebar-menu-copy><span class=titlebar-menu-title></span><span class=titlebar-menu-meta id=btnThemeValue></span></span></button><button type=button id=btnSettings class=titlebar-menu-item><span class=titlebar-menu-icon aria-hidden=true><svg width=14 height=14 viewBox="0 0 16 16"fill=none><path d="M3 4h10M3 8h10M3 12h10"stroke=currentColor stroke-width=1.2 stroke-linecap=round></path><circle cx=6 cy=4 r=1.6 fill=currentColor></circle><circle cx=10 cy=8 r=1.6 fill=currentColor></circle><circle cx=7.5 cy=12 r=1.6 fill=currentColor></circle></svg></span><span class=titlebar-menu-copy><span class=titlebar-menu-title></span><span class=titlebar-menu-meta></span></span></button><button type=button id=btnLog class=titlebar-menu-item><span class=titlebar-menu-icon aria-hidden=true><svg width=14 height=14 viewBox="0 0 16 16"fill=none><path d="M3 3h10M3 6.5h8M3 10h6M3 13.5h9"stroke=currentColor stroke-width=1.2 stroke-linecap=round></path></svg></span><span class=titlebar-menu-copy><span class=titlebar-menu-title></span><span class=titlebar-menu-meta></span></span></button><button type=button id=btnPin class=titlebar-menu-item><span class=titlebar-menu-icon aria-hidden=true><svg width=14 height=14 viewBox="0 0 16 16"fill=none><path d="M8 1v6M5.5 7h5l-.5 4H6l-.5-4z"stroke=currentColor stroke-width=1.2 stroke-linecap=round stroke-linejoin=round></path><path d="M8 11v4"stroke=currentColor stroke-width=1.2 stroke-linecap=round></path></svg></span><span class=titlebar-menu-copy><span class=titlebar-menu-title></span><span class=titlebar-menu-meta id=btnPinValue></span></span></button><div class=titlebar-menu-divider aria-hidden=true></div><label class=titlebar-menu-toggle for=chkUnattended><span class=titlebar-menu-copy><span class=titlebar-menu-title></span><span class=titlebar-menu-meta></span></span><input class=titlebar-menu-check id=chkUnattended type=checkbox></label><label class=titlebar-menu-toggle for=chkAutoPermission><span class=titlebar-menu-copy><span class=titlebar-menu-title></span><span class=titlebar-menu-meta></span></span><input class=titlebar-menu-check id=chkAutoPermission type=checkbox></label><label class=titlebar-menu-toggle for=chkAutoQuestion><span class=titlebar-menu-copy><span class=titlebar-menu-title></span><span class=titlebar-menu-meta></span></span><input class=titlebar-menu-check id=chkAutoQuestion type=checkbox></label><label class=titlebar-menu-toggle for=chkShowTranscriptDetails><span class=titlebar-menu-copy><span class=titlebar-menu-title></span><span class=titlebar-menu-meta></span></span><input class=titlebar-menu-check id=chkShowTranscriptDetails type=checkbox></label><label class=titlebar-menu-range for=opacityRange><span class=titlebar-menu-copy><span class=titlebar-menu-title></span><span class=titlebar-menu-meta></span></span><span class=titlebar-menu-range-control><input class=titlebar-menu-slider id=opacityRange type=range min=50 max=100 step=5><span class=titlebar-menu-value id=opacityValue>%`);
+async function currentTauriWindow$1() {
+  const getCurrent = window.__TAURI__?.window?.getCurrentWindow;
+  if (typeof getCurrent === "function") {
+    try {
+      return getCurrent();
+    } catch {
+    }
+  }
+  return null;
+}
+function TitlebarMenu(props) {
+  const [menuOpen, setMenuOpen] = createSignal(false);
+  const themeLabel = createMemo(() => {
+    const theme = sanitizeTheme(settingsStore.theme);
+    if (theme === "light") return t("settings.theme.light");
+    if (theme === "system") return t("settings.theme.system");
+    return t("settings.theme.dark");
+  });
+  const pinLabel = createMemo(() => settingsStore.alwaysOnTop ? t("common.yes") : t("common.no"));
+  const localeLabel = createMemo(() => settingsStore.locale === "zh-CN" ? t("settings.language.zh_cn") : t("settings.language.en_us"));
+  const localeToggleTitle = createMemo(() => {
+    const next = settingsStore.locale === "zh-CN" ? "en-US" : "zh-CN";
+    return next === "zh-CN" ? t("settings.switch_to_zh") : t("settings.switch_to_en");
+  });
+  const opacityPct = createMemo(() => Math.round(sanitizeOpacity(settingsStore.opacity) * 100));
+  function closeMenu() {
+    setMenuOpen(false);
+  }
+  function toggleMenu() {
+    setMenuOpen((v) => !v);
+  }
+  async function handleLocaleToggle() {
+    const next = settingsStore.locale === "zh-CN" ? "en-US" : "zh-CN";
+    props.onLocaleChange?.(next);
+    closeMenu();
+  }
+  async function handleThemeToggle() {
+    const next = resolvedTheme() === "light" ? "dark" : "light";
+    setSettingsStore("theme", next);
+    applyTheme(next);
+    applySettings({
+      ...settingsStore,
+      theme: next
+    });
+    saveSettings();
+    closeMenu();
+  }
+  function handleOpenSettings() {
+    props.onOpenSettings?.();
+    closeMenu();
+  }
+  function handleOpenLog() {
+    props.onOpenLog?.();
+    closeMenu();
+  }
+  async function handlePinToggle() {
+    const next = !settingsStore.alwaysOnTop;
+    const win = await currentTauriWindow$1();
+    if (win && typeof win.setAlwaysOnTop === "function") {
+      await win.setAlwaysOnTop(next).catch(() => void 0);
+      const actual = await win.isAlwaysOnTop?.().catch(() => next);
+      setSettingsStore("alwaysOnTop", !!actual);
+    } else {
+      setSettingsStore("alwaysOnTop", next);
+    }
+    saveSettings();
+    closeMenu();
+  }
+  async function handleUnattendedChange(checked) {
+    setSettingsStore("unattended", checked);
+    applySettings({
+      ...settingsStore,
+      unattended: checked
+    });
+    saveSettings();
+    closeMenu();
+  }
+  async function handleAutoPermissionChange(checked) {
+    setSettingsStore("autoPermission", checked);
+    applySettings({
+      ...settingsStore,
+      autoPermission: checked
+    });
+    saveSettings();
+    closeMenu();
+  }
+  async function handleAutoQuestionChange(checked) {
+    setSettingsStore("autoQuestion", checked);
+    applySettings({
+      ...settingsStore,
+      autoQuestion: checked
+    });
+    saveSettings();
+    closeMenu();
+  }
+  async function handleShowTranscriptDetailsChange(checked) {
+    setSettingsStore("showTranscriptDetails", checked);
+    applySettings({
+      ...settingsStore,
+      showTranscriptDetails: checked
+    });
+    saveSettings();
+    closeMenu();
+  }
+  function handleOpacityInput(rawValue) {
+    const next = sanitizeOpacity(Number(rawValue) / 100);
+    setSettingsStore("opacity", next);
+    void applyOpacity(next);
+  }
+  async function handleOpacityChange(rawValue) {
+    const next = sanitizeOpacity(Number(rawValue) / 100);
+    setSettingsStore("opacity", next);
+    await applyOpacity(next);
+    applySettings({
+      ...settingsStore,
+      opacity: next
+    });
+    saveSettings();
+    closeMenu();
+  }
+  onMount(() => {
+    function onPointerDown(event) {
+      if (!menuOpen()) return;
+      const target = event.target;
+      if (!(target instanceof Element)) {
+        closeMenu();
+        return;
+      }
+      if (target.closest("#titlebarMenu, #btnTitlebarMenu")) return;
+      closeMenu();
+    }
+    function onKeyDown(event) {
+      if (event.key !== "Escape") return;
+      closeMenu();
+    }
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    onCleanup(() => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    });
+  });
+  return (() => {
+    var _el$ = _tmpl$$a(), _el$2 = _el$.firstChild, _el$3 = _el$2.nextSibling, _el$4 = _el$3.firstChild, _el$5 = _el$4.firstChild, _el$6 = _el$5.nextSibling, _el$7 = _el$6.firstChild, _el$8 = _el$7.nextSibling, _el$9 = _el$4.nextSibling, _el$0 = _el$9.firstChild, _el$1 = _el$0.nextSibling, _el$10 = _el$1.firstChild, _el$11 = _el$10.nextSibling, _el$12 = _el$9.nextSibling, _el$13 = _el$12.firstChild, _el$14 = _el$13.nextSibling, _el$15 = _el$14.firstChild, _el$16 = _el$15.nextSibling, _el$17 = _el$12.nextSibling, _el$18 = _el$17.firstChild, _el$19 = _el$18.nextSibling, _el$20 = _el$19.firstChild, _el$21 = _el$20.nextSibling, _el$22 = _el$17.nextSibling, _el$23 = _el$22.firstChild, _el$24 = _el$23.nextSibling, _el$25 = _el$24.firstChild, _el$26 = _el$25.nextSibling, _el$27 = _el$22.nextSibling, _el$28 = _el$27.nextSibling, _el$29 = _el$28.firstChild, _el$30 = _el$29.firstChild, _el$31 = _el$30.nextSibling, _el$32 = _el$29.nextSibling, _el$33 = _el$28.nextSibling, _el$34 = _el$33.firstChild, _el$35 = _el$34.firstChild, _el$36 = _el$35.nextSibling, _el$37 = _el$34.nextSibling, _el$38 = _el$33.nextSibling, _el$39 = _el$38.firstChild, _el$40 = _el$39.firstChild, _el$41 = _el$40.nextSibling, _el$42 = _el$39.nextSibling, _el$43 = _el$38.nextSibling, _el$44 = _el$43.firstChild, _el$45 = _el$44.firstChild, _el$46 = _el$45.nextSibling, _el$47 = _el$44.nextSibling, _el$48 = _el$43.nextSibling, _el$49 = _el$48.firstChild, _el$50 = _el$49.firstChild, _el$51 = _el$50.nextSibling, _el$52 = _el$49.nextSibling, _el$53 = _el$52.firstChild, _el$54 = _el$53.nextSibling, _el$55 = _el$54.firstChild;
+    _el$2.$$click = (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      toggleMenu();
+    };
+    _el$4.$$click = () => void handleLocaleToggle();
+    insert(_el$7, () => t("settings.language"));
+    insert(_el$8, localeLabel);
+    _el$9.$$click = () => void handleThemeToggle();
+    insert(_el$10, () => t("settings.theme"));
+    insert(_el$11, themeLabel);
+    _el$12.$$click = handleOpenSettings;
+    insert(_el$15, () => t("titlebar.server_config"));
+    insert(_el$16, () => t("common.open"));
+    _el$17.$$click = handleOpenLog;
+    insert(_el$20, () => t("titlebar.logs"));
+    insert(_el$21, () => t("common.open"));
+    _el$22.$$click = () => void handlePinToggle();
+    insert(_el$25, () => t("titlebar.pin"));
+    insert(_el$26, pinLabel);
+    insert(_el$30, () => t("titlebar.unattended"));
+    insert(_el$31, () => t("titlebar.unattended_hint"));
+    _el$32.addEventListener("change", (e) => void handleUnattendedChange(e.target.checked));
+    insert(_el$35, () => t("titlebar.auto_permission"));
+    insert(_el$36, () => t("titlebar.auto_permission_hint"));
+    _el$37.addEventListener("change", (e) => void handleAutoPermissionChange(e.target.checked));
+    insert(_el$40, () => t("titlebar.auto_question"));
+    insert(_el$41, () => t("titlebar.auto_question_hint"));
+    _el$42.addEventListener("change", (e) => void handleAutoQuestionChange(e.target.checked));
+    insert(_el$45, () => t("titlebar.full_transcript"));
+    insert(_el$46, () => t("titlebar.full_transcript_hint"));
+    _el$47.addEventListener("change", (e) => void handleShowTranscriptDetailsChange(e.target.checked));
+    insert(_el$50, () => t("titlebar.opacity"));
+    insert(_el$51, () => t("titlebar.opacity_hint"));
+    _el$53.addEventListener("change", (e) => void handleOpacityChange(e.target.value));
+    _el$53.$$input = (e) => handleOpacityInput(e.target.value);
+    insert(_el$54, opacityPct, _el$55);
+    createRenderEffect((_p$) => {
+      var _v$ = t("titlebar.more"), _v$2 = t("titlebar.more"), _v$3 = menuOpen() ? "true" : "false", _v$4 = !menuOpen(), _v$5 = localeToggleTitle(), _v$6 = localeToggleTitle(), _v$7 = resolvedTheme() === "light" ? t("titlebar.theme.dark") : t("titlebar.theme.light"), _v$8 = resolvedTheme() === "light" ? t("titlebar.theme.dark") : t("titlebar.theme.light"), _v$9 = resolvedTheme(), _v$0 = sanitizeTheme(settingsStore.theme), _v$1 = t("titlebar.server_config"), _v$10 = t("titlebar.server_config"), _v$11 = t("titlebar.logs"), _v$12 = t("titlebar.logs"), _v$13 = t("titlebar.pin"), _v$14 = t("titlebar.pin"), _v$15 = settingsStore.alwaysOnTop ? "true" : "false";
+      _v$ !== _p$.e && setAttribute(_el$2, "title", _p$.e = _v$);
+      _v$2 !== _p$.t && setAttribute(_el$2, "aria-label", _p$.t = _v$2);
+      _v$3 !== _p$.a && setAttribute(_el$2, "aria-expanded", _p$.a = _v$3);
+      _v$4 !== _p$.o && (_el$3.hidden = _p$.o = _v$4);
+      _v$5 !== _p$.i && setAttribute(_el$4, "title", _p$.i = _v$5);
+      _v$6 !== _p$.n && setAttribute(_el$4, "aria-label", _p$.n = _v$6);
+      _v$7 !== _p$.s && setAttribute(_el$9, "title", _p$.s = _v$7);
+      _v$8 !== _p$.h && setAttribute(_el$9, "aria-label", _p$.h = _v$8);
+      _v$9 !== _p$.r && setAttribute(_el$9, "data-theme", _p$.r = _v$9);
+      _v$0 !== _p$.d && setAttribute(_el$9, "data-mode", _p$.d = _v$0);
+      _v$1 !== _p$.l && setAttribute(_el$12, "title", _p$.l = _v$1);
+      _v$10 !== _p$.u && setAttribute(_el$12, "aria-label", _p$.u = _v$10);
+      _v$11 !== _p$.c && setAttribute(_el$17, "title", _p$.c = _v$11);
+      _v$12 !== _p$.w && setAttribute(_el$17, "aria-label", _p$.w = _v$12);
+      _v$13 !== _p$.m && setAttribute(_el$22, "title", _p$.m = _v$13);
+      _v$14 !== _p$.f && setAttribute(_el$22, "aria-label", _p$.f = _v$14);
+      _v$15 !== _p$.y && setAttribute(_el$22, "data-pinned", _p$.y = _v$15);
+      return _p$;
+    }, {
+      e: void 0,
+      t: void 0,
+      a: void 0,
+      o: void 0,
+      i: void 0,
+      n: void 0,
+      s: void 0,
+      h: void 0,
+      r: void 0,
+      d: void 0,
+      l: void 0,
+      u: void 0,
+      c: void 0,
+      w: void 0,
+      m: void 0,
+      f: void 0,
+      y: void 0
+    });
+    createRenderEffect(() => _el$32.checked = settingsStore.unattended);
+    createRenderEffect(() => _el$37.checked = settingsStore.autoPermission);
+    createRenderEffect(() => _el$42.checked = settingsStore.autoQuestion);
+    createRenderEffect(() => _el$47.checked = settingsStore.showTranscriptDetails);
+    createRenderEffect(() => _el$53.value = String(opacityPct()));
+    return _el$;
+  })();
+}
+delegateEvents(["click", "input"]);
+
+var _tmpl$$9 = /* @__PURE__ */ template(`<span id=connBadge class=conn-badge aria-live=polite>`);
+function statusLabel(status) {
+  if (status === "online") return t("titlebar.connection.online");
+  if (status === "connecting") return t("titlebar.connection.connecting");
+  return t("titlebar.connection.offline");
+}
+async function handleRestart() {
+  setConnectionStatus("connecting");
+  const {
+    apiJson
+  } = await __vitePreload(async () => { const {
+    apiJson
+  } = await Promise.resolve().then(() => api);return {
+    apiJson
+  }},true              ?void 0:void 0);
+  try {
+    await apiJson("restart", {
+      method: "POST",
+      signal: AbortSignal.timeout(3e3)
+    });
+  } catch {
+  }
+  setTimeout(() => {
+    if (typeof location !== "undefined") location.reload();
+  }, 2e3);
+}
+function ConnectionBadge(props) {
+  const status = createMemo(() => {
+    if (props.status) return props.status;
+    if (store.sseConnected) return "online";
+    return appStore.connectionStatus;
+  });
+  const label = createMemo(() => statusLabel(status()));
+  return (() => {
+    var _el$ = _tmpl$$9();
+    _el$.$$dblclick = () => {
+      void handleRestart();
+    };
+    insert(_el$, label);
+    createRenderEffect((_p$) => {
+      var _v$ = status(), _v$2 = label(), _v$3 = label();
+      _v$ !== _p$.e && setAttribute(_el$, "data-status", _p$.e = _v$);
+      _v$2 !== _p$.t && setAttribute(_el$, "title", _p$.t = _v$2);
+      _v$3 !== _p$.a && setAttribute(_el$, "aria-label", _p$.a = _v$3);
+      return _p$;
+    }, {
+      e: void 0,
+      t: void 0,
+      a: void 0
+    });
+    return _el$;
+  })();
+}
+delegateEvents(["dblclick"]);
+
+function record$1(value) {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+function routeSSEEvent(event) {
+  const type = event.type || "";
+  if (type === "message.updated" || type === "message.part.updated" || type === "message.part.delta") {
+    if (shouldReloadConversationForMessageEvent(event)) {
+      void loadConversation();
+      return true;
+    }
+    enqueueEvent(event);
+    return true;
+  }
+  if (type === "task.replay_expired") {
+    const taskID = boardStore.selectedTaskID || "";
+    if (taskID) void syncTask(taskID);
+    return true;
+  }
+  const properties = record$1(event?.properties) ? event.properties : record$1(event?.payload) ? event.payload : {};
+  if (type === "run.progress") {
+    const progressType = properties.type || "";
+    if (progressType === "message.updated" || progressType === "message.part.updated" || progressType === "message.part.delta" || progressType === "protocol.raw" || progressType === "executor.status" || progressType === "executor.progress") {
+      return true;
+    }
+    const executorEvent = executorEventEntry({
+      id: event.event_id,
+      runID: event.run_id || properties.runID,
+      kind: executorEventKind(properties.type),
+      summary: event.summary || properties.summary || "",
+      payload: properties,
+      sourceID: properties.sourceID || "",
+      goalRunID: properties.goalRunID || "",
+      executorSessionID: properties.executorSessionID || "",
+      time: { created: Number(event.timestamp || Date.now()) }
+    });
+    if (executorEvent) appendExecutorEvent(executorEvent);
+    return true;
+  }
+  if (type === "run.output") {
+    const executorEvent = executorEventEntry({
+      id: event.event_id,
+      runID: event.run_id || properties.runID,
+      kind: "message_delta",
+      summary: typeof properties.text === "string" ? properties.text : event.summary || "",
+      payload: properties,
+      sourceID: properties.sourceID || "",
+      goalRunID: properties.goalRunID || "",
+      executorSessionID: properties.executorSessionID || "",
+      time: { created: Number(event.timestamp || Date.now()) }
+    });
+    if (executorEvent) appendExecutorEvent(executorEvent);
+    return true;
+  }
+  if (type === "agent.updated") {
+    appendAgentEvent(event);
+    return true;
+  }
+  if (type === "task.updated" || type === "task.completed" || type === "task.failed" || type === "task.cancelled" || type === "task.blocked" || type.startsWith("run.") || type.startsWith("plan.") || type.startsWith("goal.") || type.startsWith("delivery.") || type.startsWith("evaluation.") || type.startsWith("interaction.")) {
+    return false;
+  }
+  return false;
+}
+function executorEventKind(progressType) {
+  const t = String(progressType || "").trim().toLowerCase();
+  if (t === "message_delta" || t === "reasoning_delta") return t;
+  if (t === "tool_call" || t === "tool_delta" || t === "tool_result") return t;
+  if (t === "status") return "status";
+  if (t === "git_checkpoint") return "git_checkpoint";
+  return t || "event";
+}
+const BOARD_EVENT_DEBOUNCE = 150;
+let tasksKickTimer$1 = null;
+function normalizedEventType(event) {
+  const raw = String(event?.type || "").trim();
+  return raw.startsWith("orchestrator.") ? raw.slice("orchestrator.".length) : raw;
+}
+function eventTaskID(event) {
+  return String(event?.properties?.taskID || event?.payload?.taskID || "");
+}
+function eventSequence(event) {
+  const value = Number(event?.sequence);
+  return Number.isFinite(value) ? value : 0;
+}
+function boardInvalidatingEvent(type) {
+  return type === "task.updated" || type === "task.completed" || type === "task.failed" || type === "task.cancelled" || type === "task.blocked" || type.startsWith("run.") || type.startsWith("plan.") || type.startsWith("goal.") || type.startsWith("delivery.") || type.startsWith("evaluation.") || type.startsWith("interaction.");
+}
+function scheduleBoardCompat(delay = 0) {
+  scheduleBoard(delay);
+}
+function scheduleTasksCompat(delay = 0) {
+  if (tasksKickTimer$1) clearTimeout(tasksKickTimer$1);
+  tasksKickTimer$1 = setTimeout(() => {
+    tasksKickTimer$1 = null;
+    void loadTasks();
+  }, delay);
+}
+function handleEventStreamEvent(event) {
+  const type = normalizedEventType(event);
+  if (type.startsWith("message.")) {
+    if (shouldReloadConversationForMessageEvent({ ...event, type })) {
+      void loadConversation();
+      return;
+    }
+    enqueueEvent({
+      ...event,
+      type
+    });
+    return;
+  }
+  if (type === "task.replay_expired") {
+    if (boardStore.selectedTaskID) void syncTask(boardStore.selectedTaskID);
+    scheduleTasksCompat(0);
+    scheduleBoardCompat(0);
+    return;
+  }
+  const taskID = eventTaskID(event);
+  const sequence = eventSequence(event);
+  if (taskID && taskID === boardStore.selectedTaskID && sequence > 0) {
+    const current = boardStore.taskSequence;
+    if (current > 0 && sequence <= current) return;
+    if (current > 0 && sequence > current + 1) {
+      scheduleBoardCompat(BOARD_EVENT_DEBOUNCE);
+      scheduleTasksCompat(BOARD_EVENT_DEBOUNCE);
+      startSSE(taskID);
+      return;
+    }
+    setTaskSequence(sequence);
+  }
+  if (boardInvalidatingEvent(type)) {
+    scheduleTasksCompat(BOARD_EVENT_DEBOUNCE);
+    if (taskID && taskID === boardStore.selectedTaskID) {
+      scheduleBoardCompat(BOARD_EVENT_DEBOUNCE);
+    }
+  }
+}
+
+let sseController = null;
+let sseRetryTimer = null;
+function startSSE(taskID) {
+  stopSSE();
+  const controller = new AbortController();
+  sseController = controller;
+  setSseConnected(false);
+  (async () => {
+    try {
+      const after = Number(boardStore.taskSequence || 0);
+      const path = after > 0 ? `task/${encodeURIComponent(taskID)}/events?after=${after}` : `task/${encodeURIComponent(taskID)}/events`;
+      const res = await fetch(apiUrl(path), {
+        headers: apiHeaders(),
+        signal: controller.signal
+      });
+      if (!res.ok || !res.body) throw new Error(`SSE ${res.status}`);
+      setSseConnected(true);
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+        for (const line of lines) {
+          if (!line.startsWith("data:")) continue;
+          try {
+            const event = JSON.parse(line.slice(5).trim());
+            if (event.type === "task.heartbeat" || event.type === "task.connected")
+              continue;
+            const handled = routeSSEEvent(event);
+            if (!handled) {
+              handleEventStreamEvent(event);
+            }
+          } catch {
+          }
+        }
+      }
+    } catch (e) {
+      if (e.name === "AbortError") return;
+      console.warn("SSE disconnected", e.message);
+    }
+    setSseConnected(false);
+    if (sseRetryTimer) clearTimeout(sseRetryTimer);
+    sseRetryTimer = setTimeout(async () => {
+      sseRetryTimer = null;
+      if (boardStore.selectedTaskID !== taskID) return;
+      await syncTask(taskID);
+      await loadBoard();
+      startSSE(taskID);
+    }, 3e3);
+  })();
+}
+function stopSSE() {
+  if (sseRetryTimer) {
+    clearTimeout(sseRetryTimer);
+    sseRetryTimer = null;
+  }
+  if (sseController) {
+    sseController.abort();
+  }
+  sseController = null;
+  setSseConnected(false);
+  clearEventQueue();
+}
+
+let workspaceEpoch = 0;
+let tasksSeq = 0;
+let boardKickTimer = null;
+let tasksKickTimer = null;
+function setBoardKickTimer(timer) {
+  boardKickTimer = timer;
+}
+function setTasksKickTimer(timer) {
+  tasksKickTimer = timer;
+}
+function getBoardKickTimer() {
+  return boardKickTimer;
+}
+function getTasksKickTimer() {
+  return tasksKickTimer;
+}
+function setWorkspaceDirectory(value, source = "manual") {
+  const next = typeof value === "string" ? value.trim() : "";
+  if (source === "manual") {
+    setSettingsStore({
+      directory: next,
+      savedDirectory: next,
+      tempDirectory: next ? "" : settingsStore.tempDirectory,
+      directoryMode: next ? "custom" : "temp"
+    });
+  } else {
+    setSettingsStore("directory", next);
+  }
+  return next;
+}
+function restoreWorkspaceDirectory() {
+  const saved = typeof settingsStore.savedDirectory === "string" && settingsStore.savedDirectory.trim() ? settingsStore.savedDirectory.trim() : "";
+  const temp = typeof settingsStore.tempDirectory === "string" && settingsStore.tempDirectory.trim() ? settingsStore.tempDirectory.trim() : "";
+  const next = saved || temp || (settingsStore.directory ? settingsStore.directory.trim() : "");
+  if (!next) return settingsStore.directory;
+  setSettingsStore({
+    directory: next,
+    directoryMode: saved ? "custom" : "temp"
+  });
+  return next;
+}
+function workspaceMode() {
+  if (!boardStore.selectedTaskID && !boardStore.board) ;
+  if (boardStore.selectedTaskID) return "task";
+  return "empty";
+}
+function workspaceModeWithConnection(connected) {
+  if (!connected) return "offline";
+  if (boardStore.selectedTaskID) return "task";
+  return "empty";
+}
+function hasWorkspaceSelection() {
+  return !!boardStore.selectedTaskID;
+}
+function enterSessionWorkspace() {
+  throw new Error("Overlay no longer supports session workspaces");
+}
+function clearWorkspaceRuntime(options = {}) {
+  workspaceEpoch += 1;
+  if (boardKickTimer !== null) {
+    clearTimeout(boardKickTimer);
+    boardKickTimer = null;
+  }
+  if (tasksKickTimer !== null) {
+    clearTimeout(tasksKickTimer);
+    tasksKickTimer = null;
+  }
+  tasksSeq += 1;
+  setBoardStore({
+    board: null,
+    loading: false
+  });
+  clearMessages();
+  clearExecutorEvents();
+}
+function clearProjectScopeData() {
+  setBoardStore("tasks", []);
+}
+function enterEmptyWorkspace(options = {}) {
+  setBoardStore("selectedTaskID", "");
+  if (options.restoreDirectory !== false) {
+    restoreWorkspaceDirectory();
+  }
+  clearWorkspaceRuntime(options);
+}
+function enterTaskWorkspace(taskID, options = {}) {
+  if (typeof options.directory === "string" && options.directory.trim()) {
+    setWorkspaceDirectory(options.directory, "task");
+  }
+  setBoardStore("selectedTaskID", taskID || "");
+  clearWorkspaceRuntime(options);
+}
+function getWorkspaceEpoch() {
+  return workspaceEpoch;
+}
+function getTasksSeq() {
+  return tasksSeq;
+}
+async function tauriInvoke$2(command, args) {
+  const globalInvoke = window.__TAURI__?.core?.invoke;
+  if (typeof globalInvoke === "function") {
+    return globalInvoke(command, args);
+  }
+  throw new Error(`Tauri runtime unavailable for ${command}`);
+}
+function hasTauriRuntime$1() {
+  return typeof window !== "undefined" && typeof window.__TAURI__?.core?.invoke === "function";
+}
+async function currentTauriWindow() {
+  const getCurrent = window.__TAURI__?.window?.getCurrentWindow;
+  if (typeof getCurrent === "function") {
+    try {
+      return getCurrent();
+    } catch {
+    }
+  }
+  return null;
+}
+async function withUnpinned(run) {
+  const win = await currentTauriWindow();
+  if (!win || typeof win.isAlwaysOnTop !== "function" || typeof win.setAlwaysOnTop !== "function") {
+    return run();
+  }
+  const pinned = await win.isAlwaysOnTop().catch(() => false);
+  if (!pinned) return run();
+  await win.setAlwaysOnTop(false).catch(() => void 0);
+  try {
+    return await run();
+  } finally {
+    await win.setAlwaysOnTop(true).catch(() => void 0);
+    await win.setFocus?.().catch(() => void 0);
+  }
+}
+function errorText(key, error) {
+  const detail = error instanceof Error ? error.message : String(error ?? "");
+  return `${t(key)}: ${detail}`;
+}
+function absolutePath(value) {
+  return /^([a-zA-Z]:[\\/]|\\\\|\/)/.test(value);
+}
+function joinPath(base, value) {
+  if (!base) return value;
+  if (absolutePath(value)) return value;
+  if (/[\\/]$/.test(base)) return `${base}${value}`;
+  const sep = base.includes("\\") ? "\\" : "/";
+  return `${base}${sep}${value}`;
+}
+async function nativeMessage(message, options) {
+  const showAppDialog = window.showAppDialog;
+  if (typeof showAppDialog === "function") {
+    await showAppDialog({
+      title: options?.title || t("dialog.notice"),
+      message,
+      kind: options?.kind || "info",
+      okLabel: options?.okLabel || t("common.ok")
+    });
+  }
+}
+async function nativePrompt$1(message, options) {
+  const showAppDialog = window.showAppDialog;
+  if (typeof showAppDialog !== "function") return null;
+  const result = await showAppDialog({
+    title: options?.title || t("dialog.input"),
+    message,
+    kind: options?.kind || "info",
+    okLabel: options?.okLabel || t("common.submit"),
+    cancelLabel: options?.cancelLabel || t("common.cancel"),
+    cancel: true,
+    input: true,
+    inputLabel: options?.inputLabel || t("dialog.value"),
+    inputPlaceholder: options?.inputPlaceholder || "",
+    inputValue: options?.inputValue || ""
+  });
+  return result?.confirmed ? result.value : null;
+}
+async function nativeOpen$1(target) {
+  if (!target) return false;
+  const url = /^https?:\/\//i.test(target);
+  try {
+    const opened = url ? await tauriInvoke$2("overlay_open_url", { url: target }) : await tauriInvoke$2("overlay_open_path", { path: target });
+    if (opened) return true;
+  } catch {
+  }
+  if (url) {
+    window.open(target, "_blank", "noopener");
+    return true;
+  }
+  try {
+    const result = await apiJson("path/open", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path: target })
+    });
+    return result?.opened === true;
+  } catch (openErr) {
+    AppLog.debug("ui", "path/open fallback failed", { target, error: String(openErr) });
+    return false;
+  }
+}
+async function createTempDirectory() {
+  const created = await tauriInvoke$2("overlay_create_temp_dir").catch(() => void 0);
+  return typeof created === "string" ? created.trim() : "";
+}
+async function pickDirectory(start) {
+  const selected = await withUnpinned(
+    () => tauriInvoke$2("overlay_pick_dir", { start: start || void 0 })
+  );
+  return typeof selected === "string" ? selected : "";
+}
+async function pickFiles(start) {
+  const result = await withUnpinned(
+    () => tauriInvoke$2("overlay_pick_files", { start: start || void 0 })
+  );
+  return Array.isArray(result) ? result : [];
+}
+function activeDirectory$1() {
+  return settingsStore.directory;
+}
+function sanitizeDirectoryMode(value, directory) {
+  if (value === "custom") return "custom";
+  if (typeof value === "string" && value.trim() === "temp") return "temp";
+  return typeof directory === "string" && directory.trim() ? "custom" : "temp";
+}
+function savedDirectoryValue(directory, mode) {
+  const next = typeof directory === "string" ? directory.trim() : "";
+  if (!next) return "";
+  return sanitizeDirectoryMode(mode, next) === "custom" ? next : "";
+}
+function settingsDirectory(settings) {
+  return typeof settings?.directory === "string" ? settings.directory.trim() : "";
+}
+function looksLikeExecutionWorkspace(value) {
+  const text = String(value || "").trim();
+  if (!text) return false;
+  return /(^|[\\/])goal-workspace([\\/]|$)/i.test(text);
+}
+function workspaceRestoreDirectory(value) {
+  const text = typeof value === "string" ? value.trim() : "";
+  if (!text) return "";
+  if (looksLikeExecutionWorkspace(text)) return "";
+  return text;
+}
+function rememberWorkspace(input = {}) {
+  const taskID = typeof input.taskID === "string" ? input.taskID.trim() : boardStore.selectedTaskID || settingsStore.workspaceTaskID || "";
+  const rawDir = typeof input.directory === "string" ? input.directory.trim() : settingsStore.savedDirectory || activeDirectory$1() || settingsStore.directory || "";
+  const directory = workspaceRestoreDirectory(rawDir) || workspaceRestoreDirectory(settingsStore.savedDirectory || "") || "";
+  setSettingsStore("workspaceTaskID", taskID);
+  setSettingsStore("workspaceDirectory", taskID ? directory : "");
+}
+const RECENT_DIRS_KEY = "oc_recent_directories";
+const MAX_RECENT_DIRS = 10;
+function loadRecentDirectories() {
+  try {
+    const raw = localStorage.getItem(RECENT_DIRS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((d) => typeof d === "string" && d.trim()) : [];
+  } catch {
+    return [];
+  }
+}
+function saveRecentDirectories(dirs) {
+  try {
+    localStorage.setItem(RECENT_DIRS_KEY, JSON.stringify(dirs));
+  } catch {
+  }
+}
+function addRecentDirectory(dir) {
+  if (!dir || typeof dir !== "string") return;
+  const normalized = dir.trim();
+  if (!normalized) return;
+  const dirs = loadRecentDirectories().filter(
+    (d) => d.toLowerCase() !== normalized.toLowerCase()
+  );
+  dirs.unshift(normalized);
+  saveRecentDirectories(dirs.slice(0, MAX_RECENT_DIRS));
+}
+function removeRecentDirectory(dir) {
+  if (!dir) return;
+  const normalized = dir.trim().toLowerCase();
+  saveRecentDirectories(
+    loadRecentDirectories().filter((d) => d.toLowerCase() !== normalized)
+  );
+}
+async function applyDirectory(next, options = {}) {
+  const save = options.save === true ? next : options.save === false ? "" : null;
+  const temp = options.temp === true ? next : options.temp === false ? "" : null;
+  const curDir = settingsStore.directory;
+  const curSaved = settingsStore.savedDirectory;
+  const curTemp = settingsStore.tempDirectory;
+  if (next === curDir && (save === null || save === curSaved) && (temp === null || temp === curTemp)) {
+    console.log("[applyDir] skipped (same)", {
+      next,
+      save,
+      temp,
+      dir: curDir,
+      saved: curSaved,
+      tempDir: curTemp
+    });
+    return;
+  }
+  console.log("[applyDir] switching", { from: curDir, to: next, save, temp });
+  setSettingsStore("directoryEpoch", (n) => n + 1);
+  setSettingsStore("directory", next);
+  if (save !== null) setSettingsStore("savedDirectory", save);
+  if (temp !== null) setSettingsStore("tempDirectory", temp);
+  setSettingsStore(
+    "directoryMode",
+    settingsStore.savedDirectory ? "custom" : "temp"
+  );
+  setBoardStore("pendingTasks", []);
+  setSettingsStore("workspaceTaskID", "");
+  setSettingsStore("workspaceDirectory", "");
+  clearProjectScopeData();
+  if (options.persist !== false) {
+    const persistFn = window.persistOverlaySettings;
+    if (typeof persistFn === "function") await persistFn();
+  }
+  if (options.save === true && next) addRecentDirectory(next);
+  const { checkConnection } = await __vitePreload(async () => { const { checkConnection } = await Promise.resolve().then(() => connection);return { checkConnection }},true              ?void 0:void 0);
+  if (typeof checkConnection === "function") {
+    console.log("[applyDir] checking connection");
+    const ok = await checkConnection();
+    if (!ok) {
+      console.warn("[applyDir] connection failed, aborting");
+      return;
+    }
+  }
+  const { reloadProjectScope } = await __vitePreload(async () => { const { reloadProjectScope } = await Promise.resolve().then(() => config);return { reloadProjectScope }},true              ?void 0:void 0);
+  console.log("[applyDir] reloading project scope");
+  await reloadProjectScope(options);
+  console.log("[applyDir] done, tasks=", boardStore.tasks.length);
+}
+async function setActiveDirectory(value, options = {}) {
+  const next = typeof value === "string" ? value.trim() : "";
+  if (!next || next === settingsStore.directory) return;
+  await applyDirectory(next, { ...options, persist: false });
+}
+async function browseDirectory() {
+  try {
+    const selected = await pickDirectory(activeDirectory$1());
+    if (!selected) return;
+    await setDirectory(selected);
+  } catch (e) {
+    AppLog.error("ui", "Failed to set working directory", { error: String(e) });
+    await nativeMessage(errorText("cwd.set_failed", e), {
+      title: t("cwd.title"),
+      kind: "error"
+    });
+  }
+}
+async function createDirectory() {
+  try {
+    const parent = await pickDirectory(activeDirectory$1());
+    if (!parent) return;
+    const name = await nativePrompt$1(t("cwd.create_prompt"), {
+      title: t("cwd.create_title"),
+      okLabel: t("common.create"),
+      inputLabel: t("cwd.folder"),
+      inputPlaceholder: t("cwd.folder_placeholder")
+    });
+    const value = name?.trim();
+    if (!value) return;
+    const target = joinPath(parent, value);
+    const created = await tauriInvoke$2("overlay_create_dir", { path: target }).catch(
+      () => void 0
+    );
+    if (!created) throw new Error(t("cwd.create_unavailable"));
+    await setDirectory(target);
+    if (settingsStore.initGit) {
+      const { initGitCurrent } = await __vitePreload(async () => { const { initGitCurrent } = await Promise.resolve().then(() => git);return { initGitCurrent }},true              ?void 0:void 0);
+      await initGitCurrent({ notify: false });
+    }
+  } catch (e) {
+    AppLog.error("ui", "Failed to create working directory", { error: String(e) });
+    await nativeMessage(errorText("cwd.create_failed", e), {
+      title: t("cwd.title"),
+      kind: "error"
+    });
+  }
+}
+async function openDirectory(target) {
+  const dir = target ?? activeDirectory$1();
+  try {
+    if (!dir) return;
+    const opened = await nativeOpen$1(dir);
+    if (opened) return;
+    await nativeMessage(dir, {
+      title: t("cwd.title"),
+      kind: "info"
+    });
+  } catch (e) {
+    AppLog.error("ui", "Failed to open working directory", { error: String(e) });
+    await nativeMessage(errorText("cwd.open_failed", e), {
+      title: t("cwd.title"),
+      kind: "error"
+    });
+  }
+}
+async function resetDirectory() {
+  try {
+    await setTempDirectory();
+  } catch (e) {
+    AppLog.error("ui", "Failed to reset working directory", { error: String(e) });
+    await nativeMessage(errorText("cwd.reset_failed", e), {
+      title: t("cwd.title"),
+      kind: "error"
+    });
+  }
+}
+async function setDirectory(value, options = {}) {
+  const next = typeof value === "string" ? value.trim() : "";
+  if (!next) {
+    if (settingsStore.tempDirectory) {
+      await applyDirectory(settingsStore.tempDirectory, { ...options, save: false });
+      return;
+    }
+    await setTempDirectory(options);
+    return;
+  }
+  await applyDirectory(next, { ...options, save: true, temp: false });
+}
+async function setTempDirectory(options = {}) {
+  if (!hasTauriRuntime$1()) {
+    await applyDirectory("", { ...options, save: false, temp: false });
+    return;
+  }
+  const next = await createTempDirectory();
+  if (!next) throw new Error(t("cwd.create_unavailable"));
+  const { scaffoldProjectConfig } = await __vitePreload(async () => { const { scaffoldProjectConfig } = await Promise.resolve().then(() => config);return { scaffoldProjectConfig }},true              ?void 0:void 0);
+  await scaffoldProjectConfig(next);
+  await applyDirectory(next, { ...options, save: false, temp: true });
+}
+async function ensureDefaultDirectory() {
+  if (settingsStore.savedDirectory) {
+    setSettingsStore("directory", settingsStore.savedDirectory);
+    setSettingsStore("directoryMode", "custom");
+    return false;
+  }
+  if (settingsStore.tempDirectory) {
+    setSettingsStore("directory", settingsStore.tempDirectory);
+    setSettingsStore("directoryMode", "temp");
+    return false;
+  }
+  if (!hasTauriRuntime$1()) return false;
+  const next = await createTempDirectory();
+  if (!next) return false;
+  const scaffoldProjectConfig = window.scaffoldProjectConfig;
+  if (typeof scaffoldProjectConfig === "function") {
+    await scaffoldProjectConfig(next);
+  }
+  setSettingsStore("tempDirectory", next);
+  setSettingsStore("directory", next);
+  setSettingsStore("savedDirectory", "");
+  setSettingsStore("directoryMode", "temp");
+  const persistFn = window.persistOverlaySettings;
+  if (typeof persistFn === "function") await persistFn();
+  return true;
+}
+async function ensureWorkspaceDirectory() {
+  if (activeDirectory$1()) return activeDirectory$1();
+  const { loadMeta } = await __vitePreload(async () => { const { loadMeta } = await Promise.resolve().then(() => meta);return { loadMeta }},true              ?void 0:void 0);
+  if (typeof loadMeta === "function") await loadMeta();
+  if (!settingsStore.directory && boardStore.path?.directory) {
+    setSettingsStore("directory", boardStore.path.directory);
+  }
+  return activeDirectory$1();
+}
+function goalRunPriority(status) {
+  if (status === "running") return 0;
+  if (status === "blocked") return 1;
+  if (status === "accepted") return 2;
+  if (status === "queued") return 3;
+  if (status === "completed") return 4;
+  if (status === "failed") return 5;
+  if (status === "aborted") return 6;
+  return 7;
+}
+function currentExecutionDirectory() {
+  const goalRuns = Array.isArray(boardStore.board?.goalRuns) ? boardStore.board.goalRuns : [];
+  const rows = goalRuns.filter(
+    (item) => typeof item?.workspaceDir === "string" && item.workspaceDir.trim()
+  ).toSorted(
+    (a, b) => goalRunPriority(a?.status) - goalRunPriority(b?.status) || (b?.time?.updated || 0) - (a?.time?.updated || 0)
+  );
+  return rows[0]?.workspaceDir?.trim() || "";
+}
+
+const workspace = /*#__PURE__*/Object.freeze(/*#__PURE__*/Object.defineProperty({
+  __proto__: null,
+  activeDirectory: activeDirectory$1,
+  addRecentDirectory,
+  applyDirectory,
+  browseDirectory,
+  clearProjectScopeData,
+  clearWorkspaceRuntime,
+  createDirectory,
+  createTempDirectory,
+  currentExecutionDirectory,
+  ensureDefaultDirectory,
+  ensureWorkspaceDirectory,
+  enterEmptyWorkspace,
+  enterSessionWorkspace,
+  enterTaskWorkspace,
+  getBoardKickTimer,
+  getTasksKickTimer,
+  getTasksSeq,
+  getWorkspaceEpoch,
+  hasWorkspaceSelection,
+  loadRecentDirectories,
+  looksLikeExecutionWorkspace,
+  openDirectory,
+  pickDirectory,
+  pickFiles,
+  rememberWorkspace,
+  removeRecentDirectory,
+  resetDirectory,
+  restoreWorkspaceDirectory,
+  sanitizeDirectoryMode,
+  saveRecentDirectories,
+  savedDirectoryValue,
+  setActiveDirectory,
+  setBoardKickTimer,
+  setDirectory,
+  setTasksKickTimer,
+  setTempDirectory,
+  setWorkspaceDirectory,
+  settingsDirectory,
+  workspaceMode,
+  workspaceModeWithConnection,
+  workspaceRestoreDirectory
+}, Symbol.toStringTag, { value: 'Module' }));
+
+function chatRequestTimeoutMs() {
+  const overlayTiming2 = window.__ocOverlayTiming;
+  const testTiming = window.__overlayTest;
+  const override = typeof overlayTiming2?.chatTimeoutMs === "number" ? overlayTiming2.chatTimeoutMs : typeof testTiming?.chatTimeoutMs === "number" ? testTiming.chatTimeoutMs : void 0;
+  const value = typeof override === "number" ? override : 10 * 60 * 1e3;
+  return Math.max(value, 1e3);
+}
+function activeDirectory() {
+  return boardStore.board?.task?.directory ?? "";
+}
+function inactivityTimeoutError(timeoutMs) {
+  return new DOMException(
+    `Panel stream inactive for ${timeoutMs}ms`,
+    "TimeoutError"
+  );
+}
+function relayAbort(source, controller) {
+  if (!source) return () => void 0;
+  const abort = () => {
+    controller.abort(
+      source.reason instanceof Error ? source.reason : source.reason ?? void 0
+    );
+  };
+  if (source.aborted) {
+    abort();
+    return () => void 0;
+  }
+  source.addEventListener("abort", abort, { once: true });
+  return () => source.removeEventListener("abort", abort);
+}
+async function readWithAbort(reader, signal) {
+  if (signal.aborted) {
+    await reader.cancel(signal.reason).catch(() => void 0);
+    throw signal.reason ?? new DOMException("Aborted", "AbortError");
+  }
+  return new Promise((resolve, reject) => {
+    const abort = () => {
+      signal.removeEventListener("abort", abort);
+      void reader.cancel(signal.reason).catch(() => void 0);
+      reject(signal.reason ?? new DOMException("Aborted", "AbortError"));
+    };
+    signal.addEventListener("abort", abort, { once: true });
+    reader.read().then(
+      (value) => {
+        signal.removeEventListener("abort", abort);
+        resolve(value);
+      },
+      (error) => {
+        signal.removeEventListener("abort", abort);
+        reject(error);
+      }
+    );
+  });
+}
+function panelRequestBody(text, metadata = {}, requestID = "", attachments = [], executor = "opencode") {
+  const taskID = boardStore.selectedTaskID || void 0;
+  const body = {
+    surface: "panel",
+    text,
+    time_created: Date.now(),
+    taskID,
+    executor,
+    request_id: requestID || void 0,
+    allow_create: true,
+    allow_session_mutation: false,
+    directory: activeDirectory() || void 0,
+    metadata: {
+      selectedTaskID: taskID,
+      ...metadata
+    }
+  };
+  if (attachments.length > 0) {
+    body.attachments = attachments.map((att) => ({
+      mime: att.mime,
+      url: att.url,
+      ...att.filename ? { filename: att.filename } : {}
+    }));
+  }
+  return body;
+}
+async function selectTask(taskID, options = {}) {
+  const nextTaskID = taskID || "";
+  if (nextTaskID === boardStore.selectedTaskID && boardStore.board) {
+    return;
+  }
+  stopSSE();
+  setBoardStore("board", null);
+  if (!options.preserveMessages) {
+    clearMessages();
+  }
+  if (appStore.budgetDirty) {
+    setAppStore("budgetDirty", false);
+  }
+  setSelectedTaskID(nextTaskID);
+  setBoardStore("selectedTaskID", nextTaskID);
+  if (!nextTaskID) {
+    return;
+  }
+  await Promise.all([
+    loadBoard({ sync: true }).catch(
+      (e) => console.error("[selectTask] loadBoard failed:", e)
+    ),
+    syncTask(nextTaskID).catch(
+      (e) => console.error("[selectTask] syncTask failed:", e)
+    )
+  ]);
+  startSSE(nextTaskID);
+}
+async function deleteTask(taskID) {
+  if (!taskID) return false;
+  try {
+    await apiJson(`task/${encodeURIComponent(taskID)}`, {
+      method: "DELETE"
+    });
+    if (boardStore.selectedTaskID === taskID) {
+      await selectTask("");
+    }
+    await loadTasks();
+    return true;
+  } catch (e) {
+    console.error("[deleteTask] failed", { error: String(e), taskID });
+    return false;
+  }
+}
+async function submitMessage(text, attachments = [], options = {}) {
+  const requestID = options.requestID ?? crypto.randomUUID();
+  const timeoutMs = chatRequestTimeoutMs();
+  const controller = new AbortController();
+  const cleanupRelay = relayAbort(options.signal, controller);
+  const executor = settingsStore.executor ?? "opencode";
+  let inactivityTimer = null;
+  const markActivity = () => {
+    if (inactivityTimer) clearTimeout(inactivityTimer);
+    inactivityTimer = setTimeout(() => {
+      controller.abort(inactivityTimeoutError(timeoutMs));
+    }, timeoutMs);
+  };
+  const body = JSON.stringify(
+    panelRequestBody(
+      text,
+      options.metadata ?? {},
+      requestID,
+      attachments,
+      executor
+    )
+  );
+  markActivity();
+  try {
+    const res = await fetch(apiUrl("panel/message/stream"), {
+      method: "POST",
+      headers: { ...apiHeaders(), "Content-Type": "application/json" },
+      body,
+      signal: controller.signal
+    });
+    markActivity();
+    if (!res.ok || !res.body) {
+      throw new Error(`Panel stream failed: ${res.status} ${res.statusText}`);
+    }
+    await options.onOpen?.();
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = "";
+    let result = null;
+    const consume = async (chunk, flush = false) => {
+      buf += chunk;
+      const blocks = buf.split(/\r?\n\r?\n/);
+      if (!flush) {
+        buf = blocks.pop() || "";
+      } else {
+        buf = "";
+      }
+      for (const block of blocks) {
+        const data = block.split(/\r?\n/).filter((line) => line.startsWith("data:")).map((line) => line.slice(5).trim()).join("\n");
+        if (!data) continue;
+        try {
+          const ev = JSON.parse(data);
+          markActivity();
+          await options.onEvent?.(ev);
+          if (ev.type === "done") {
+            result = ev.result;
+          }
+        } catch {
+        }
+      }
+    };
+    while (true) {
+      const { done, value } = await readWithAbort(reader, controller.signal);
+      if (done) {
+        await consume(decoder.decode(), true);
+        break;
+      }
+      markActivity();
+      await consume(decoder.decode(value, { stream: true }));
+    }
+    if (!result) {
+      throw new Error("Panel stream ended without a final result");
+    }
+    return result;
+  } finally {
+    if (inactivityTimer) clearTimeout(inactivityTimer);
+    cleanupRelay();
+  }
+}
+async function retryTask(taskID, note) {
+  if (!taskID) return;
+  const message = note?.trim() ? `Retry task ${taskID} with this operator guidance: ${note}` : `Perform retry on task ${taskID}.`;
+  await submitMessage(
+    message,
+    [],
+    {
+      metadata: {
+        taskID,
+        ui_context: "task_controls",
+        ...note?.trim() ? { operator_note: note.trim() } : {}
+      }
+    }
+  );
+  await loadBoard();
+}
+async function replanTask(taskID) {
+  if (!taskID) return;
+  await submitMessage(
+    `Perform replan on task ${taskID}.`,
+    [],
+    {
+      metadata: {
+        taskID,
+        ui_context: "task_controls"
+      }
+    }
+  );
+  await loadBoard();
+}
+async function cancelTask(taskID) {
+  if (!taskID) return;
+  await submitMessage(
+    `Perform cancel on task ${taskID}.`,
+    [],
+    {
+      metadata: {
+        taskID,
+        ui_context: "task_controls"
+      }
+    }
+  );
+  await loadBoard();
+}
+function overlayTiming(name, fallback, min = 50) {
+  const cfg = window.__overlayTest;
+  const value = Number(cfg?.[name]);
+  if (!Number.isFinite(value)) return fallback;
+  return Math.max(min, Math.floor(value));
+}
+function taskRecoveryTimeoutMs() {
+  return overlayTiming("taskRecoveryTimeoutMs", 10 * 60 * 1e3, 1e3);
+}
+function taskRecoveryPollMs() {
+  return overlayTiming("taskRecoveryPollMs", 2e3, 50);
+}
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+function sortedTasks(data) {
+  return [...Array.isArray(data?.tasks) ? data.tasks : []].sort(
+    (a, b) => (b.updated_at || b.task?.time?.updated || 0) - (a.updated_at || a.task?.time?.updated || 0)
+  );
+}
+function taskByRequestID(requestID, list) {
+  if (!requestID || !Array.isArray(list)) return null;
+  return list.find((item) => item?.task?.requestID === requestID) || null;
+}
+function startTaskRecovery(request) {
+  if (!request?.requestID) return null;
+  const recovery = {
+    active: true,
+    stop() {
+      recovery.active = false;
+    },
+    promise: Promise.resolve("")
+  };
+  recovery.promise = (async () => {
+    const started = Date.now();
+    const epochAtStart = request.workspaceEpoch;
+    while (recovery.active && Date.now() - started < taskRecoveryTimeoutMs()) {
+      if (request.manualAbort) break;
+      if (epochAtStart !== void 0 && // workspaceEpoch comparison: use window fallback for
+      getWorkspaceEpoch() !== epochAtStart && !request.recoveredTaskID) {
+        break;
+      }
+      const data = await apiJson("tasks").catch(() => null);
+      const tasks = Array.isArray(data?.tasks) ? sortedTasks(data) : [];
+      const match = taskByRequestID(request.requestID, tasks);
+      const taskID = match?.task?.id || "";
+      if (taskID) {
+        request.recoveredTaskID = taskID;
+        if (!request.timedOut && !request.aborted) {
+          request.aborted = true;
+          request.controller?.abort();
+        }
+        await selectTask(taskID, { preserveMessages: true });
+        recovery.stop();
+        return taskID;
+      }
+      await delay(taskRecoveryPollMs());
+    }
+    recovery.stop();
+    return "";
+  })();
+  return recovery;
+}
+function pendingTaskKey(requestID) {
+  const value = typeof requestID === "string" ? requestID.trim() : "";
+  return value ? `pending:${value}` : "";
+}
+function rememberPendingTask(requestID, title) {
+  const value = typeof requestID === "string" ? requestID.trim() : "";
+  if (!value) return;
+  const headline = clipText$2(title || value, 72) || value;
+  const now = Date.now();
+  const next = [
+    {
+      _pending: true,
+      requestID: value,
+      task: {
+        id: pendingTaskKey(value),
+        requestID: value,
+        source: "panel",
+        title: headline,
+        status: "planning",
+        directory: boardStore.board?.task?.directory ?? "",
+        time: {
+          created: now,
+          updated: now
+        }
+      },
+      overview: {
+        headline
+      },
+      updated_at: now,
+      pending_interactions: 0
+    },
+    ...boardStore.pendingTasks.filter((item) => item?.requestID !== value)
+  ];
+  setPendingTasks(next);
+}
+function forgetPendingTask(requestID) {
+  const value = typeof requestID === "string" ? requestID.trim() : "";
+  if (!value || !boardStore.pendingTasks.some((item) => item?.requestID === value)) {
+    return false;
+  }
+  setPendingTasks(
+    boardStore.pendingTasks.filter((item) => item?.requestID !== value)
+  );
+  return true;
+}
+
+function jsonAttr(value) {
+  return JSON.stringify(String(value ?? ""));
+}
+function eventClosest(event, selector) {
+  const target = event?.target;
+  if (target instanceof Element) return target.closest(selector);
+  const parent = target?.parentElement;
+  if (parent instanceof Element) return parent.closest(selector);
+  return null;
+}
+function pathItems(value) {
+  const text = String(value || "").trim();
+  if (!text) return [];
+  const windows = /^[A-Za-z]:[\\/]/.test(text);
+  const unix = text.startsWith("/");
+  const parts = text.split(/[\\/]+/).filter(Boolean);
+  if (!parts.length) return [];
+  function joinPath(a, b) {
+    return a.replace(/[\\/]+$/, "") + "/" + b;
+  }
+  if (windows) {
+    let path2 = `${parts[0]}\\`;
+    const items2 = [{ label: parts[0], path: path2 }];
+    return items2.concat(
+      parts.slice(1).map((part) => {
+        path2 = joinPath(path2, part);
+        return { label: part, path: path2 };
+      })
+    );
+  }
+  if (unix) {
+    let path2 = "/";
+    const items2 = [{ label: "/", path: path2 }];
+    return items2.concat(
+      parts.map((part) => {
+        path2 = path2 === "/" ? `/${part}` : `${path2}/${part}`;
+        return { label: part, path: path2 };
+      })
+    );
+  }
+  let path = parts[0];
+  const items = [{ label: parts[0], path }];
+  return items.concat(
+    parts.slice(1).map((part) => {
+      path = path.replace(/[\\/]+$/, "") + "/" + part;
+      return { label: part, path };
+    })
+  );
+}
+function pathIcon(kind) {
+  if (kind === "browse") {
+    return `<svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
       <path d="M2.5 4.5h4l1.2 1.5h5.8v5.2a1.3 1.3 0 01-1.3 1.3H3.8a1.3 1.3 0 01-1.3-1.3V5.8a1.3 1.3 0 011.3-1.3z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>
-    </svg>`:e==="new"?`<svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+    </svg>`;
+  }
+  if (kind === "new") {
+    return `<svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
       <path d="M8 3.2v9.6M3.2 8h9.6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
-    </svg>`:e==="history"?`<svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+    </svg>`;
+  }
+  if (kind === "history") {
+    return `<svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
       <path d="M8 4v4l2.5 1.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
       <path d="M3.05 8a5 5 0 1 1 .5 2.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
       <path d="M3 10.5L3.05 8 1 9" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
-    </svg>`:`<svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+    </svg>`;
+  }
+  return `<svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
     <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
-  </svg>`}function jm(e){const t=We(l("cwd.browse")),n=We(l("cwd.new")),r=We(l("cwd.reset")),i=We(l("cwd.recent")),a=z.directory,o=[`<button type="button" class="task-dir-tool" data-path-action="recent" title="${i}" aria-label="${i}">${Pn("history")}</button>`,`<button type="button" class="task-dir-tool" data-path-action="browse" title="${t}" aria-label="${t}">${Pn("browse")}</button>`,`<button type="button" class="task-dir-tool" data-path-action="create" title="${n}" aria-label="${n}">${Pn("new")}</button>`,a?`<button type="button" class="task-dir-tool danger" data-path-action="reset" title="${r}" aria-label="${r}">${Pn("reset")}</button>`:""].filter(Boolean).join("");if(!e)return`
+  </svg>`;
+}
+function pathBreadcrumb(value) {
+  const browse = escapeHtml$1(t("cwd.browse"));
+  const create = escapeHtml$1(t("cwd.new"));
+  const reset = escapeHtml$1(t("cwd.reset"));
+  const recent = escapeHtml$1(t("cwd.recent"));
+  const directory = settingsStore.directory;
+  const actions = [
+    `<button type="button" class="task-dir-tool" data-path-action="recent" title="${recent}" aria-label="${recent}">${pathIcon("history")}</button>`,
+    `<button type="button" class="task-dir-tool" data-path-action="browse" title="${browse}" aria-label="${browse}">${pathIcon("browse")}</button>`,
+    `<button type="button" class="task-dir-tool" data-path-action="create" title="${create}" aria-label="${create}">${pathIcon("new")}</button>`,
+    directory ? `<button type="button" class="task-dir-tool danger" data-path-action="reset" title="${reset}" aria-label="${reset}">${pathIcon("reset")}</button>` : ""
+  ].filter(Boolean).join("");
+  if (!value) {
+    return `
       <span class="task-dir-shell" data-empty="true">
-        <span class="task-dir-empty">${We(l("cwd.unavailable"))}</span>
-        <span class="task-dir-actions">${o}</span>
+        <span class="task-dir-empty">${escapeHtml$1(t("cwd.unavailable"))}</span>
+        <span class="task-dir-actions">${actions}</span>
       </span>
-    `;const s=Om(e),u=l("cwd.open"),c=l("cwd.choose_level");return`
+    `;
+  }
+  const items = pathItems(value);
+  const open = t("cwd.open");
+  const choose = t("cwd.choose_level");
+  const nodes = items.map((item, index) => {
+    const current = index === items.length - 1 ? ' data-current="true"' : "";
+    const step = index ? `<button type="button" class="task-dir-step" data-path-set=${jsonAttr(items[index - 1].path)} title="${escapeHtml$1(`${choose}: ${items[index - 1].path}`)}" aria-label="${escapeHtml$1(`${choose}: ${items[index - 1].path}`)}">/</button>` : "";
+    return `${step}<button type="button" class="task-dir-node" data-path-open=${jsonAttr(item.path)} title="${escapeHtml$1(`${open}: ${item.path}`)}" aria-label="${escapeHtml$1(`${open}: ${item.path}`)}"${current}>${escapeHtml$1(item.label)}</button>`;
+  }).join("");
+  return `
     <span class="task-dir-shell">
-      <span class="task-dir-path">${s.map((f,p)=>{const h=p===s.length-1?' data-current="true"':"";return`${p?`<button type="button" class="task-dir-step" data-path-set=${Ka(s[p-1].path)} title="${We(`${c}: ${s[p-1].path}`)}" aria-label="${We(`${c}: ${s[p-1].path}`)}">/</button>`:""}<button type="button" class="task-dir-node" data-path-open=${Ka(f.path)} title="${We(`${u}: ${f.path}`)}" aria-label="${We(`${u}: ${f.path}`)}"${h}>${We(f.label)}</button>`}).join("")}</span>
-      <span class="task-dir-actions">${o}</span>
+      <span class="task-dir-path">${nodes}</span>
+      <span class="task-dir-actions">${actions}</span>
     </span>
-  `}function Nm(e){return!!e&&typeof e=="object"&&!Array.isArray(e)}function Um(e){const t=String(e||"");let n=2166136261;for(let r=0;r<t.length;r+=1)n^=t.charCodeAt(r),n=Math.imul(n,16777619);return(n>>>0).toString(36)}function Fm(e){return l(e==="completed"?"task.status.completed":e==="failed"?"task.status.failed":e==="blocked"?"task.status.blocked":e==="queued"?"task.status.queued":"task.status.running")}function qm(e){return l(e==="accepted"?"evaluation.verdict.accepted":e==="rejected"?"evaluation.verdict.rejected":"evaluation.verdict.pending")}function zm(e){return Yo(e)}function Wm(e){return e?new Date(e).toLocaleString(No(),{year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",second:"2-digit",hour12:!1}):""}function Km(e,t){let n=e?.text||"";return!n.trim()||e.audience&&e.audience.ui===!1||e.kind==="trace"&&!e.audience?.ui?"":(["user","planner","scheduler","system"].includes(t)&&n.includes("<assistant-brief>")&&(n=hs(n)),n.trim())}function Hm(e){const t=e?.tool||"unknown";if(["planner","todowrite","todoupdate","task_report"].includes(t.toLowerCase()))return"";const r=e?.state||{},i=zo(t,r.input||{},r),a=r.status||"pending";return[l("transcript.tool",{status:Wo(a),tool:t}),i].filter(Boolean).join(" ")}function Vm(e){const t=Nm(e?.process)?e.process:{},n=String(t.title||t.id||"").trim(),r=String(t.detail||"").trim(),i=String(t.note||"").trim(),a=String(t.output||"").trim();return[[Fm(String(t.status||"running")),n].filter(Boolean).join(" "),r,i,a].filter(Boolean).join(`
-`)}function Jm(e,t){if(!e||typeof e!="object")return"";if(e.type==="text")return Km(e,t);if(e.type==="reasoning")return e.text?.trim()?`${l("transcript.reasoning")}
-${e.text.trim()}`:"";if(e.type==="tool")return Hm(e);if(e.type==="executor_process")return Vm(e);if(e.type==="file")return e.filename||e.url?l("transcript.file",{value:e.filename||e.url}):"";if(e.type==="subtask"){const n=e.description||e.prompt||"";return n?l("transcript.subtask",{value:n}):""}if(e.type==="patch"){const n=Array.isArray(e.files)?e.files.filter(Boolean):[];return n.length?l("transcript.patch",{value:n.join(", ")}):l("transcript.patch_empty")}return e.type==="compaction"?l("transcript.compaction"):""}async function Gm(e){if(!e)return!1;if(navigator.clipboard?.writeText)try{return await navigator.clipboard.writeText(e),!0}catch{}const t=document.createElement("textarea");t.value=e,t.setAttribute("readonly","true"),t.style.position="fixed",t.style.opacity="0",t.style.pointerEvents="none",document.body.appendChild(t),t.select(),t.setSelectionRange(0,e.length);const n=document.execCommand("copy");return t.remove(),n}async function Qm(e,t){const n=window.nativeMessage;typeof n=="function"&&await n(e,t)}function Zm(e,t){const n=t instanceof Error?t.message:String(t||"");return`${l(e)}: ${n}`}function Ha(e,t){return(e?.artifacts||[]).find(r=>r.label===t)}function ci(e,t,n){return typeof n!="string"||!n.trim()?null:{_synthetic:!0,info:{id:`synthetic:${e}:${Number.isFinite(t)?t:Date.now()}:${Um(n)}`,role:e,time:{created:Number.isFinite(t)?t:Date.now()}},parts:[{type:"text",text:n}]}}function Xm(e){return(Array.isArray(e)?e:[]).map(t=>{const n=t?.info?.role||"assistant",r=bu([zm(n),Wm(t?.info?.time?.created)]),i=(Array.isArray(t?.parts)?t.parts:[]).map(a=>Jm(a,n)).filter(Boolean).join(`
+  `;
+}
 
-`).trim();return i?`${r}
-${i}`:""}).filter(Boolean).join(`
+async function loadMeta() {
+  const epoch = settingsStore.directoryEpoch;
+  try {
+    const [path, vcs] = await Promise.all([
+      apiJson("path"),
+      apiJson("vcs")
+    ]);
+    if (epoch !== settingsStore.directoryEpoch) return;
+    const directory = path && typeof path.directory === "string" ? path.directory.trim() : "";
+    setPath(directory ? { directory } : null);
+    if (!settingsStore.directory && directory) {
+      setWorkspaceDirectory(directory, "auto");
+    }
+    setVcs(vcs ?? null);
+    setAppStore("config", (prev) => ({
+      ...prev ?? {},
+      _metaPath: directory ? { directory } : null,
+      _metaVcs: vcs ?? null
+    }));
+  } catch (e) {
+    AppLog.debug("meta", "loadMeta failed, resetting path/vcs", {
+      error: String(e)
+    });
+    if (epoch !== settingsStore.directoryEpoch) return;
+    setPath(null);
+    setVcs(null);
+    setAppStore("config", (prev) => ({
+      ...prev ?? {},
+      _metaPath: null,
+      _metaVcs: null
+    }));
+  } finally {
+    renderMeta();
+  }
+}
+function gitLabel(vcs, dir) {
+  if (!dir) return t("git.unavailable");
+  if (!vcs?.branch) return t("git.init");
+  const parts = [vcs.branch];
+  if (vcs.ahead) parts.push(`+${vcs.ahead}`);
+  if (vcs.behind) parts.push(`-${vcs.behind}`);
+  if (vcs.conflicts) parts.push(t("git.conflicts", { count: vcs.conflicts }));
+  if (vcs.dirty) {
+    const changes = [];
+    if (vcs.staged) changes.push(t("git.staged", { count: vcs.staged }));
+    if (vcs.modified) changes.push(t("git.modified", { count: vcs.modified }));
+    if (vcs.untracked) changes.push(t("git.untracked", { count: vcs.untracked }));
+    parts.push(changes.join(" "));
+  } else {
+    parts.push(t("git.clean"));
+  }
+  return parts.filter(Boolean).join(" · ");
+}
+function gitTitle(vcs, dir) {
+  if (!dir) return "";
+  if (!vcs?.branch) return t("git.init_title");
+  return [
+    t("git.branch", { value: vcs.branch }),
+    t("git.clean_title", { value: vcs.clean ? t("common.yes") : t("common.no") }),
+    t("git.staged", { count: vcs.staged ?? 0 }),
+    t("git.modified", { count: vcs.modified ?? 0 }),
+    t("git.untracked", { count: vcs.untracked ?? 0 }),
+    t("git.conflicts", { count: vcs.conflicts ?? 0 }),
+    t("git.ahead", { count: vcs.ahead ?? 0 }),
+    t("git.behind", { count: vcs.behind ?? 0 })
+  ].join("\n");
+}
+function canInitGit() {
+  return !!settingsStore.directory && !boardStore.vcs?.branch;
+}
+function relativePathFrom(base, target) {
+  if (!base || !target) return "";
+  const norm = (s) => s.replace(/[\\/]+/g, "/").replace(/\/+$/, "").toLowerCase();
+  const nb = norm(base);
+  const nt = norm(target);
+  if (nt.startsWith(nb + "/")) return target.slice(base.replace(/[\\/]+$/, "").length + 1);
+  return "";
+}
+function shortPath(p) {
+  const parts = p.replace(/[\\/]+/g, "/").replace(/\/+$/, "").split("/");
+  return parts.length <= 2 ? p : `…/${parts.slice(-2).join("/")}`;
+}
+function renderMeta() {
+  const dirNode = document.getElementById("taskDir");
+  const workspaceNode = document.getElementById("taskWorkspaceDir");
+  const gitNode = document.getElementById("taskGit");
+  const dir = settingsStore.directory || "";
+  const vcs = boardStore.vcs;
+  if (dirNode) {
+    dirNode.innerHTML = pathBreadcrumb(dir);
+    dirNode.setAttribute("title", dir || t("cwd.unavailable"));
+    dirNode.dataset.empty = dir ? "false" : "true";
+    const path = dirNode.querySelector(".task-dir-path");
+    if (path instanceof HTMLElement) path.scrollLeft = path.scrollWidth;
+  }
+  if (workspaceNode) {
+    const executionDir = Array.isArray(boardStore.board?.goalRuns) && boardStore.board.goalRuns.find((item) => item?.workspaceDir)?.workspaceDir;
+    const workspaceText = typeof executionDir === "string" ? executionDir.trim() : "";
+    const dirText = dir.replace(/[\\/]+$/, "");
+    const same = !!dirText && !!workspaceText && dirText.toLowerCase() === workspaceText.toLowerCase();
+    const show = !!workspaceText && !same;
+    const label = relativePathFrom(dirText, workspaceText) || shortPath(workspaceText);
+    workspaceNode.textContent = show ? t("cwd.execution_workspace", { value: label }) : "";
+    workspaceNode.setAttribute("title", show ? workspaceText : "");
+    workspaceNode.hidden = !show;
+  }
+  if (gitNode) {
+    const actionable = canInitGit();
+    gitNode.textContent = gitLabel(vcs, dir);
+    gitNode.setAttribute("title", gitTitle(vcs, dir));
+    gitNode.dataset.state = actionable ? "action" : vcs?.dirty ? "dirty" : vcs?.clean ? "clean" : "idle";
+    gitNode.dataset.actionable = String(actionable);
+    gitNode.toggleAttribute("disabled", !actionable && !vcs?.branch);
+  }
+}
+function normalizeDiffs(list) {
+  return (Array.isArray(list) ? list : []).filter((item) => item && typeof item.file === "string").map((item) => ({
+    file: String(item.file || "").replace(/^[ab]\//, ""),
+    before: typeof item.before === "string" ? item.before : "",
+    after: typeof item.after === "string" ? item.after : "",
+    additions: Number.isFinite(Number(item.additions)) ? Number(item.additions) : 0,
+    deletions: Number.isFinite(Number(item.deletions)) ? Number(item.deletions) : 0,
+    status: diffStatus(item)
+  })).sort((a, b) => a.file.localeCompare(b.file));
+}
+function diffStatus(item) {
+  if (item.status === "added" || item.status === "deleted" || item.status === "modified") {
+    return item.status;
+  }
+  if (!item.before && item.after) return "added";
+  if (item.before && !item.after) return "deleted";
+  return "modified";
+}
+function deriveChanges() {
+  if (!boardStore.selectedTaskID) return [];
+  const board = boardStore.board;
+  const delivery = board?.acceptedDelivery?.result?.diffs || board?.delivery?.result?.diffs || board?.candidateDelivery?.result?.diffs || [];
+  return normalizeDiffs(delivery);
+}
 
----
+const meta = /*#__PURE__*/Object.freeze(/*#__PURE__*/Object.defineProperty({
+  __proto__: null,
+  deriveChanges,
+  diffStatus,
+  loadMeta,
+  normalizeDiffs,
+  renderMeta
+}, Symbol.toStringTag, { value: 'Module' }));
 
-`)}function Ym(e){return typeof e?.content=="string"?e.content.trim():""}function ep(e,t){const n=e.metadata?.planner||{},r=Array.isArray(e.metadata?.steps)?e.metadata.steps:[],i=Array.isArray(e.metadata?.milestones)?e.metadata.milestones:[],a=Array.isArray(e.metadata?.risks)?e.metadata.risks:[],o=Object.values(e.metadata?.stage_sources||{}).flatMap(f=>f&&typeof f=="object"&&typeof f.warning=="string"&&f.warning.trim()?[f.warning.trim()]:[]).filter((f,p,h)=>h.indexOf(f)===p),s=e.metadata?.clarification,u=e.metadata?.spec_analysis,c=Array.isArray(u?.assumptions)?u.assumptions:[],g=[l("plan.context.title",{version:e.version})];return e.summary&&g.push("",l("plan.context.summary",{value:e.summary})),(n.role||n.quality||n.source)&&g.push("",l("plan.context.planner",{value:[n.role,n.quality,n.source].filter(Boolean).join(" / ")})),o.length>0&&(g.push("",l("plan.context.warnings")),g.push(...o.map(f=>`- ${f}`))),r.length>0&&(g.push("",l("plan.context.execution")),g.push(...r.slice(0,8).map((f,p)=>`${p+1}. ${f}`))),i.length>0&&(g.push("",l("plan.context.milestones")),g.push(...i.map((f,p)=>`- ${p+1}. ${f.title}`))),t.length>0&&g.push("",l("plan.context.goal_count",{count:t.length})),a.length>0&&(g.push("",l("plan.context.risks")),g.push(...a.slice(0,5).map(f=>`- ${f}`))),c.length>0&&(g.push("",l("plan.context.assumptions")),g.push(...c.slice(0,5).map(f=>{const p=typeof f?.question=="string"?f.question.trim():"",h=typeof f?.assumption=="string"?f.assumption.trim():"";return p&&h?`- ${p}: ${h}`:`- ${p||h}`}))),s?.questions?.length&&g.push("",Wt("plan.context.clarification",s.questions.length,{count:s.questions.length})),g.join(`
-`)}function tp(e){const t=e.filter(o=>o.status==="passed").length,n=e.filter(o=>o.status==="failed").length,r=e.filter(o=>o.status!=="passed"&&o.status!=="failed").length,a=[t+n>0?l("goal.context.results",{passed:t,total:e.length,failed:n,pending:r}):l("goal.context.list",{total:e.length}),""];for(const o of e){const s=o.status==="passed"?"✅":o.status==="failed"?"❌":"⏳";a.push(`${s} **${o.title}**`),o.detail&&a.push(l("goal.context.criteria",{value:o.detail})),o.metadata?.origin&&a.push(l("goal.context.origin",{value:o.metadata.origin}))}return a.join(`
-`)}function np(e,t){const n=e.evaluation,r=Ha(e,"evaluator-agent-analysis")?.payload||{},i=Ha(e,"evaluator-agent-error")?.payload||{},o=[`${n.verdict==="accepted"?"✅":n.verdict==="rejected"?"❌":"⚠"} ${l("evaluation.context.title",{verdict:qm(n.verdict)})}`];r.classification&&o.push("",l("evaluation.context.classification",{value:r.classification})),n.summary&&o.push("",n.summary),i.error&&o.push("",l("evaluation.context.error",{value:i.error}));const s=n.checks||[];if(s.length>0){o.push("",l("evaluation.context.checks"));for(const c of s){const g=c.status==="passed"?"✓":c.status==="failed"?"✗":"—";o.push(`- ${g} ${c.name}: ${c.evidence||c.status}`)}}const u=Array.isArray(r.goal_statuses)?r.goal_statuses:[];if(u.length>0){o.push("",l("evaluation.context.goal_assessments"));for(const c of u){const g=t[c.goal_index],f=c.status==="passed"?"✅":c.status==="failed"?"❌":"⏳",p=g?.title||l("evaluation.context.goal_fallback",{index:c.goal_index+1});o.push(`- ${f} ${p}: ${c.evidence||c.status}`)}}return(r.replan_guidance?.root_cause||r.replan_guidance?.suggested_strategy)&&(o.push("",l("evaluation.context.replan")),r.replan_guidance.root_cause&&o.push(l("evaluation.context.root_cause",{value:r.replan_guidance.root_cause})),r.replan_guidance.suggested_strategy&&o.push(l("evaluation.context.strategy",{value:r.replan_guidance.suggested_strategy}))),o.join(`
-`)}async function rp(){try{const e=Xm(_s());if(!e)return;if(!await Gm(e))throw new Error(l("chat.copy_failed"))}catch(e){Ct.error("ui","Failed to copy chat conversation",{error:String(e)}),await Qm(Zm("chat.copy_failed",e),{title:l("chat.copy_title"),kind:"error"})}}const we={executorEvents:[],executorEventsFetchedAt:0,executorRunID:"",conversationQueued:!1,conversationLoading:!1};function ip(){const e=document.getElementById("taskDir"),t=document.getElementById("taskWorkspaceDir"),n=document.getElementById("taskGit");if(e){const r=z.directory||"";e.innerHTML=jm(r),e.setAttribute("title",r||l("cwd.unavailable")),e.dataset.empty=r?"false":"true";const i=e.querySelector(".task-dir-path");i instanceof HTMLElement&&(i.scrollLeft=i.scrollWidth)}if(t){const r=Array.isArray(O.board?.goalRuns)&&O.board.goalRuns.find(a=>a?.workspaceDir)?.workspaceDir,i=typeof r=="string"?r:"";t.textContent=i,t.setAttribute("title",i),t.hidden=!i}if(n){const r=O.vcs?.branch||"";n.textContent=r?`Git: ${r}`:l("git.unavailable"),n.toggleAttribute("disabled",!r),n.setAttribute("data-actionable",r?"true":"false")}}function ap(){document.body.dataset.workspace=V.connected?O.selectedTaskID?"task":"empty":"offline",document.body.dataset.connection=V.connectionStatus}function xi(e=O.board?.task){const t=e?.budget;if(!(!t||typeof t!="object"))return{maxRuns:Number.isFinite(t.maxRuns)?t.maxRuns:void 0,maxReplans:Number.isFinite(t.maxReplans)?t.maxReplans:void 0,maxEvaluations:Number.isFinite(t.maxEvaluations)?t.maxEvaluations:void 0,maxWallTimeMs:Number.isFinite(t.maxWallTimeMs)?t.maxWallTimeMs:void 0}}function Js(e){const t=(n,r)=>{const i=document.getElementById(n);i&&(i.value=r)};t("budgetMaxRuns",e?.maxRuns===void 0?"":String(e.maxRuns)),t("budgetMaxReplans",e?.maxReplans===void 0?"":String(e.maxReplans)),t("budgetMaxEvaluations",e?.maxEvaluations===void 0?"":String(e.maxEvaluations)),t("budgetMaxWallTime",e?.maxWallTimeMs===void 0?"":Tm(e.maxWallTimeMs))}function en(e=O.board?.task){const t=xi(e),n=!xm(Ks(),t),r=!!e?.id&&!V.budgetSaving,i=document.getElementById("btnBudgetSave"),a=document.getElementById("btnBudgetReset"),o=document.getElementById("budgetHint");i&&(i.disabled=!r||!n),a&&(a.disabled=!r||!n&&!V.budgetDirty),o&&(o.textContent=e?.id?l("budget.hint"):l("budget.empty"));for(const s of[document.getElementById("budgetMaxRuns"),document.getElementById("budgetMaxReplans"),document.getElementById("budgetMaxEvaluations"),document.getElementById("budgetMaxWallTime")])s instanceof HTMLInputElement&&(s.disabled=!r)}function Gs(e){const t=xi(e);V.budgetDirty||Js(t),en(e)}function op(e){const t=e instanceof Error?e.message:String(e||"").trim();return t?`${l("budget.save_failed")}: ${t}`:l("budget.save_failed")}function sp(){const e=document.getElementById("budgetConfigBody");!(e instanceof HTMLElement)||e.dataset.boundBudget==="true"||(e.dataset.boundBudget="true",e.addEventListener("input",()=>{_e("budgetDirty",!0),en(O.board?.task)}),document.getElementById("btnBudgetReset")?.addEventListener("click",()=>{_e("budgetDirty",!1),Js(xi()),en(O.board?.task)}),document.getElementById("btnBudgetSave")?.addEventListener("click",async()=>{if(!(!O.selectedTaskID||V.budgetSaving)){_e("budgetSaving",!0),en(O.board?.task);try{await K(`task/${encodeURIComponent(O.selectedTaskID)}/budget`,{method:"PATCH",headers:{"content-type":"application/json"},body:JSON.stringify({budget:Ks()||null})}),_e("budgetDirty",!1);const t=Re;typeof t=="function"&&await t({sync:!0})}catch(t){console.error("Failed to update task budget",t);const n=window.nativeMessage;typeof n=="function"&&await n(op(t),{title:l("section.budget"),kind:"error"})}finally{_e("budgetSaving",!1),en(O.board?.task)}}}))}function ui(e,t){return ss(e,t)}function lp(e){return!e||e.type!=="reasoning"||(typeof e.text!="string"&&(e.text=""),Sc(e)),e}async function Ti(){if(!O.selectedTaskID){at([]);return}if(we.conversationLoading){we.conversationQueued=!0,await we.conversationLoading;return}const e=String(O.selectedTaskID||""),t=(async()=>{do{we.conversationQueued=!1;const n=String(O.selectedTaskID||"");if(!n){at([]);return}const r=await fetch(Ge(`task/${encodeURIComponent(n)}/transcript`),{headers:{Accept:"application/json"}}).then(s=>s.ok?s.json():[]).catch(()=>[]),i=await fetch(Ge(`control/timeline?taskID=${encodeURIComponent(n)}`),{headers:{Accept:"application/json"}}).then(s=>s.ok?s.json():[]).catch(()=>[]);if(n!==O.selectedTaskID)continue;const a=ui(Array.isArray(i)?i:[],Array.isArray(r)?r:[]).map(s=>({...s,parts:Array.isArray(s?.parts)?s.parts.map(u=>lp(u)):[]}));at(a);const o=String(O.board?.task?.activeRunID||"");o?await cp(o):(we.executorRunID="",we.executorEvents=[],we.executorEventsFetchedAt=0,ps()),Rm(O.board,O.changes.length)}while(we.conversationQueued&&e===O.selectedTaskID)})();we.conversationLoading=t;try{await t}finally{we.conversationLoading===t&&(we.conversationLoading=null)}}async function cp(e){const t=Date.now();if(we.executorRunID===e&&t-Number(we.executorEventsFetchedAt||0)<3e3)return;we.executorRunID=e,we.executorEventsFetchedAt=t;const n=await fetch(Ge(`run/${encodeURIComponent(e)}/executor-events`),{headers:{Accept:"application/json"}}).then(r=>r.ok?r.json():[]).catch(()=>[]);we.executorEvents=(Array.isArray(n)?n:[]).map(r=>ri(r)).filter(Boolean),ps();for(const r of we.executorEvents)ti(r)}function Lr(e=0){oc(e)}function Mr(e=0){we.tasksKick&&clearTimeout(we.tasksKick),we.tasksKick=setTimeout(()=>{we.tasksKick=null,pr()},e)}const Bn=150;function up(e){const t=String(e?.type||"").trim();return t.startsWith("orchestrator.")?t.slice(13):t}function dp(e){return String(e?.properties?.taskID||e?.payload?.taskID||"")}function fp(e){const t=Number(e?.sequence);return Number.isFinite(t)?t:0}function gp(e){return e==="task.updated"||e==="task.completed"||e==="task.failed"||e==="task.cancelled"||e==="task.blocked"||e.startsWith("run.")||e.startsWith("plan.")||e.startsWith("goal.")||e.startsWith("delivery.")||e.startsWith("evaluation.")||e.startsWith("interaction.")}function Qs(e){const t=up(e);if(t.startsWith("message.")){if(fs({...e,type:t})){Ti();return}cs({...e,type:t});return}if(t==="task.replay_expired"){O.selectedTaskID&&yr(O.selectedTaskID),Mr(0),Lr(0);return}const n=dp(e),r=fp(e);if(n&&n===O.selectedTaskID&&r>0){const i=O.taskSequence;if(i>0&&r<=i)return;if(i>0&&r>i+1){Lr(Bn),Mr(Bn),Ci(n);return}Jo(r)}gp(t)&&(Mr(Bn),n&&n===O.selectedTaskID&&Lr(Bn))}function Va(e,t,n){const r=typeof n=="string"?n:"";if(!e||!r)return;const i=`pending-assistant:${e}`,a=`${i}:${t}`;let o=!1;const s=oe.messages.map(u=>{if(u?.info?.id!==i)return u;o=!0;const c=Array.isArray(u?.parts)?[...u.parts]:[],g=c.findIndex(f=>f?.id===a);if(g>=0){const f=c[g];c[g]={...f,type:t,text:`${String(f?.text||"")}${r}`}}else c.push({id:a,type:t,text:r,messageID:i,sessionID:""});return{...u,parts:c}});o||s.push({_synthetic:!0,info:{id:i,role:"assistant",time:{created:Date.now()}},parts:[{id:a,type:t,text:r,messageID:i,sessionID:""}]}),at(s)}function mp(e){return e instanceof DOMException?e.name==="AbortError"||e.name==="TimeoutError":!1}async function Zs(e,t=[],n={}){const r=crypto.randomUUID();Bp(r,e);const i=new AbortController,a=Im()||void 0,o={requestID:r,controller:i,target:a,stopping:!1,aborted:!1,manualAbort:!1},s=()=>{o.recovery||(o.recovery=Mp(o))};at([...oe.messages,{info:{id:`pending-user:${r}`,role:"user",time:{created:Date.now()}},parts:[{type:"text",text:e}]}]),nn("online"),wa(o);try{const u=await wn(e,t,{requestID:r,metadata:n,signal:i.signal,onOpen:()=>{s()},onEvent:async c=>{s();const g=String(c?.type||"");if(g==="reasoning_delta"){Va(r,"reasoning",String(c?.delta||""));return}g==="message_delta"&&Va(r,"text",String(c?.delta||""))}});return o.recovery?.stop?.(),await Ga({...u,_request:e,_requestID:r}),u}catch(u){const c=typeof o.recoveredTaskID=="string"&&o.recoveredTaskID?o.recoveredTaskID:!o.manualAbort&&mp(u)&&typeof o.recovery?.promise?.then=="function"?await o.recovery.promise.catch(()=>""):"";if(!o.manualAbort&&c){const g={task_id:c,_request:e,_requestID:r};return await Ga(g),g}throw o.recovery?.stop?.(),u}finally{o.recovery?.stop?.(),oe.chatRequest?.requestID===o.requestID&&wa(null)}}function Ja(e,t,n,r){if(!e)return;const i=O.board?.task&&O.board.task.id===e?O.board.task:null,a=Date.now(),o=Number(i?.time?.created||a),s=Number(i?.time?.updated||o),u=String(i?.title||O.board?.overview?.headline||n||r||e).trim(),c={task:{id:e,requestID:t||i?.requestID||"",title:u,status:i?.status||"planning",directory:i?.directory||"",time:{created:o,updated:s}},updated_at:s,pending_interactions:0},g=O.tasks.filter(f=>f?.task?.id!==e);ac([c,...g])}async function Ga(e){const t=String(e?.task_id||e?.taskID||""),n=typeof e?._request=="string"?e._request:"",r=String(e?._requestID||"");if(t){const i=[...oe.messages];if(Ja(t,r,n,String(e?.message||"")),r&&Rp(r),await Kt(t,{preserveMessages:!0}),Ja(t,r,n,String(e?.message||"")),oe.messages.length===0&&i.length>0&&at(i),e?.message){const a=String(e.message);if(oe.messages.some(s=>(Array.isArray(s?.parts)?s.parts:[]).some(u=>u?.type==="text"&&String(u?.text||"")===a)))return;at(ui(oe.messages,[ci("assistant",Date.now(),a)]))}return}e?.message&&at(ui(oe.messages,[ci("assistant",Date.now(),String(e.message))]))}function Xs(){sp(),window.__legacyConv={t:l,syntheticTextMessage:ci,specContextText:Ym,planContextText:ep,goalContextText:tp,evaluationContextText:np,deliveryStatusLabel:e=>e}}const Ys=Object.freeze(Object.defineProperty({__proto__:null,handleEventStreamEvent:Qs,installLegacyGlobals:Xs,loadConversation:Ti,panelMessage:Zs,renderBudget:Gs,renderMeta:ip,renderWorkspaceState:ap},Symbol.toStringTag,{value:"Module"}));function Qa(e){return!!e&&typeof e=="object"&&!Array.isArray(e)}function pp(e){const t=e.type||"";if(t==="message.updated"||t==="message.part.updated"||t==="message.part.delta")return fs(e)?(Ti(),!0):(cs(e),!0);if(t==="task.replay_expired"){const r=O.selectedTaskID||"";return r&&yr(r),!0}const n=Qa(e?.properties)?e.properties:Qa(e?.payload)?e.payload:{};if(t==="run.progress"){const r=n.type||"";if(r==="message.updated"||r==="message.part.updated"||r==="message.part.delta"||r==="protocol.raw"||r==="executor.status"||r==="executor.progress")return!0;const i=ri({id:e.event_id,runID:e.run_id||n.runID,kind:hp(n.type),summary:e.summary||n.summary||"",payload:n,sourceID:n.sourceID||"",goalRunID:n.goalRunID||"",executorSessionID:n.executorSessionID||"",time:{created:Number(e.timestamp||Date.now())}});return i&&ti(i),!0}if(t==="run.output"){const r=ri({id:e.event_id,runID:e.run_id||n.runID,kind:"message_delta",summary:typeof n.text=="string"?n.text:e.summary||"",payload:n,sourceID:n.sourceID||"",goalRunID:n.goalRunID||"",executorSessionID:n.executorSessionID||"",time:{created:Number(e.timestamp||Date.now())}});return r&&ti(r),!0}return t==="agent.updated"?(lu(e),!0):(t==="task.updated"||t==="task.completed"||t==="task.failed"||t==="task.cancelled"||t==="task.blocked"||t.startsWith("run.")||t.startsWith("plan.")||t.startsWith("goal.")||t.startsWith("delivery.")||t.startsWith("evaluation.")||t.startsWith("interaction."),!1)}function hp(e){const t=String(e||"").trim().toLowerCase();return t==="message_delta"||t==="reasoning_delta"||t==="tool_call"||t==="tool_delta"||t==="tool_result"?t:t==="status"?"status":t==="git_checkpoint"?"git_checkpoint":t||"event"}let Un=null,ht=null;function Ci(e){el();const t=new AbortController;Un=t,On(!1),(async()=>{try{const n=Number(O.taskSequence||0),r=n>0?`task/${encodeURIComponent(e)}/events?after=${n}`:`task/${encodeURIComponent(e)}/events`,i=await fetch(Ge(r),{headers:Tt(),signal:t.signal});if(!i.ok||!i.body)throw new Error(`SSE ${i.status}`);On(!0);const a=i.body.getReader(),o=new TextDecoder;let s="";for(;;){const{done:u,value:c}=await a.read();if(u)break;s+=o.decode(c,{stream:!0});const g=s.split(`
-`);s=g.pop()||"";for(const f of g)if(f.startsWith("data:"))try{const p=JSON.parse(f.slice(5).trim());if(p.type==="task.heartbeat"||p.type==="task.connected")continue;pp(p)||Qs(p)}catch{}}}catch(n){if(n.name==="AbortError")return;console.warn("SSE disconnected",n.message)}On(!1),ht&&clearTimeout(ht),ht=setTimeout(async()=>{ht=null,O.selectedTaskID===e&&(await yr(e),await Re(),Ci(e))},3e3)})()}function el(){ht&&(clearTimeout(ht),ht=null),Un&&Un.abort(),Un=null,On(!1),eu()}function yp(){const e=window.__ocOverlayTiming,t=window.__overlayTest,n=typeof e?.chatTimeoutMs=="number"?e.chatTimeoutMs:typeof t?.chatTimeoutMs=="number"?t.chatTimeoutMs:void 0,r=typeof n=="number"?n:600*1e3;return Math.max(r,1e3)}function vp(){return O.board?.task?.directory??""}function bp(e){return new DOMException(`Panel stream inactive for ${e}ms`,"TimeoutError")}function kp(e,t){if(!e)return()=>{};const n=()=>{t.abort(e.reason instanceof Error?e.reason:e.reason??void 0)};return e.aborted?(n(),()=>{}):(e.addEventListener("abort",n,{once:!0}),()=>e.removeEventListener("abort",n))}async function _p(e,t){if(t.aborted)throw await e.cancel(t.reason).catch(()=>{}),t.reason??new DOMException("Aborted","AbortError");return new Promise((n,r)=>{const i=()=>{t.removeEventListener("abort",i),e.cancel(t.reason).catch(()=>{}),r(t.reason??new DOMException("Aborted","AbortError"))};t.addEventListener("abort",i,{once:!0}),e.read().then(a=>{t.removeEventListener("abort",i),n(a)},a=>{t.removeEventListener("abort",i),r(a)})})}function wp(e,t={},n="",r=[],i="opencode"){const a=O.selectedTaskID||void 0,o={surface:"panel",text:e,time_created:Date.now(),taskID:a,executor:i,request_id:n||void 0,allow_create:!0,allow_session_mutation:!1,directory:vp()||void 0,metadata:{selectedTaskID:a,...t}};return r.length>0&&(o.attachments=r.map(s=>({mime:s.mime,url:s.url,...s.filename?{filename:s.filename}:{}}))),o}async function Kt(e,t={}){const n=e||"";n===O.selectedTaskID&&O.board||(el(),Te("board",null),t.preserveMessages||uu(),cu(n),Te("selectedTaskID",n),n&&(await Promise.all([Re({sync:!0}).catch(r=>console.error("[selectTask] loadBoard failed:",r)),yr(n).catch(r=>console.error("[selectTask] syncTask failed:",r))]),Ci(n)))}async function $p(e){if(!e)return!1;try{return await K(`task/${encodeURIComponent(e)}`,{method:"DELETE"}),O.selectedTaskID===e&&await Kt(""),await pr(),!0}catch(t){return console.error("[deleteTask] failed",{error:String(t),taskID:e}),!1}}async function wn(e,t=[],n={}){const r=n.requestID??crypto.randomUUID(),i=yp(),a=new AbortController,o=kp(n.signal,a),s=z.executor??"opencode";let u=null;const c=()=>{u&&clearTimeout(u),u=setTimeout(()=>{a.abort(bp(i))},i)},g=JSON.stringify(wp(e,n.metadata??{},r,t,s));c();try{const f=await fetch(Ge("panel/message/stream"),{method:"POST",headers:{...Tt(),"Content-Type":"application/json"},body:g,signal:a.signal});if(c(),!f.ok||!f.body)throw new Error(`Panel stream failed: ${f.status} ${f.statusText}`);await n.onOpen?.();const p=f.body.getReader(),h=new TextDecoder;let k="",m=null;const y=async(w,T=!1)=>{k+=w;const P=k.split(/\r?\n\r?\n/);T?k="":k=P.pop()||"";for(const C of P){const b=C.split(/\r?\n/).filter(A=>A.startsWith("data:")).map(A=>A.slice(5).trim()).join(`
-`);if(b)try{const A=JSON.parse(b);c(),await n.onEvent?.(A),A.type==="done"&&(m=A.result)}catch{}}};for(;;){const{done:w,value:T}=await _p(p,a.signal);if(w){await y(h.decode(),!0);break}c(),await y(h.decode(T,{stream:!0}))}if(!m)throw new Error("Panel stream ended without a final result");return m}finally{u&&clearTimeout(u),o()}}async function Sp(e){const{text:t,attachments:n=[],metadata:r={},signal:i}=e;if(!t)throw new Error("createTask: text is required");const a=crypto.randomUUID(),o=await wn(t,n,{requestID:a,metadata:r,signal:i});return typeof o?.task_id=="string"?o.task_id:""}async function xp(e,t){if(!e)return;const n=`Perform retry on task ${e}.`;await wn(n,[],{metadata:{taskID:e,ui_context:"task_controls"}}),await Re()}async function Tp(e){e&&(await wn(`Perform replan on task ${e}.`,[],{metadata:{taskID:e,ui_context:"task_controls"}}),await Re())}async function Cp(e){e&&(await wn(`Perform cancel on task ${e}.`,[],{metadata:{taskID:e,ui_context:"task_controls"}}),await Re())}function tl(e,t,n=50){const r=window.__overlayTest,i=Number(r?.[e]);return Number.isFinite(i)?Math.max(n,Math.floor(i)):t}function Dp(){return tl("taskRecoveryTimeoutMs",600*1e3,1e3)}function Ip(){return tl("taskRecoveryPollMs",2e3,50)}function Ap(e){return new Promise(t=>setTimeout(t,e))}function Ep(e){return[...Array.isArray(e?.tasks)?e.tasks:[]].sort((t,n)=>(n.updated_at||n.task?.time?.updated||0)-(t.updated_at||t.task?.time?.updated||0))}function Lp(e,t){return!e||!Array.isArray(t)?null:t.find(n=>n?.task?.requestID===e)||null}function Mp(e){if(!e?.requestID)return null;const t={active:!0,stop(){t.active=!1},promise:Promise.resolve("")};return t.promise=(async()=>{const n=Date.now(),r=e.workspaceEpoch;for(;t.active&&Date.now()-n<Dp()&&!(e.manualAbort||r!==void 0&&sg()!==r&&!e.recoveredTaskID);){const i=await K("tasks").catch(()=>null),a=Array.isArray(i?.tasks)?Ep(i):[],s=Lp(e.requestID,a)?.task?.id||"";if(s)return e.recoveredTaskID=s,!e.timedOut&&!e.aborted&&(e.aborted=!0,e.controller?.abort()),await Kt(s,{preserveMessages:!0}),t.stop(),s;await Ap(Ip())}return t.stop(),""})(),t}function Pp(e){const t=typeof e=="string"?e.trim():"";return t?`pending:${t}`:""}function Bp(e,t){const n=typeof e=="string"?e.trim():"";if(!n)return;const r=ni(t||n,72)||n,i=Date.now(),a=[{_pending:!0,requestID:n,task:{id:Pp(n),requestID:n,source:"panel",title:r,status:"planning",directory:O.board?.task?.directory??"",time:{created:i,updated:i}},overview:{headline:r},updated_at:i,pending_interactions:0},...O.pendingTasks.filter(o=>o?.requestID!==n)];Go(a)}function Rp(e){const t=typeof e=="string"?e.trim():"";return!t||!O.pendingTasks.some(n=>n?.requestID===t)?!1:(Go(O.pendingTasks.filter(n=>n?.requestID!==t)),!0)}function di(){bn({serverUrl:z.serverUrl,username:z.username,password:z.password,directory:z.directory})}async function Za(){await gg().catch(()=>!1),await mg().catch(()=>z.directory||""),di(),await Promise.all([pr(),Rs(),wm(),_r(),$m(),Sm()])}async function Op(e={}){const{onConnected:t,onReconnect:n,reconnectInterval:r=1e4}=e;Af();const i=window.__TAURI__?.core?.invoke;if(typeof i=="function"){const o=await i("overlay_settings_load").catch(()=>null);o&&typeof o=="object"&&!Array.isArray(o)&&(nt(o),Ef(Pf(o.directory,o.directoryMode)))}di(),await Ql(),await Uo(z.locale),await zs()&&(await Za(),await Xa(),await t?.()),Ws(),_m(async()=>{di(),await Za(),await Xa(),await n?.()},r)}async function _r(){try{const[e,t,n,r,i]=await Promise.all([K("config"),K("provider"),K("provider/auth"),K("channel"),K("config/prompt").catch(()=>[])]);_e({config:e??null,providerCatalog:t??null,providerAuth:n??null,channels:Array.isArray(r)?r:[],promptEntries:Array.isArray(i)?i:[]});const a=e?.unattended;typeof a=="boolean"&&(me("unattended",a),Ae())}catch(e){console.warn("[init] loadConfigInfo failed",e)}}async function Xa(){const{workspaceTaskID:e,workspaceDirectory:t,directory:n}=z,r=O.tasks;if(z.workspaceEpoch>0)return!1;const i=n||"",a=e||"",o=fg(t||""),s=!!o&&!!i&&o!==i;if(s&&(me("directory",o),Ra()),a&&r.some(u=>u?.task?.id===a)){(O.selectedTaskID!==a||!O.board)&&await Kt(a);const{renderWorkspaceState:u}=await _n(async()=>{const{renderWorkspaceState:c}=await Promise.resolve().then(()=>Ys);return{renderWorkspaceState:c}},void 0);return u(),Lf(),!0}return s&&(me("directory",i),Ra()),!1}function nl(e){let t=!1,n=null;const r=new Map,i=e.apiJson??K,a=e.AppLog??Ct;function o(x,E){const I=e.state?.[x];return typeof I=="boolean"?I:E}function s(){return e.state?.autoPermissionReply==="always"?"always":"once"}function u(x){return x.type==="permission"?`<button class="btn btn-primary" data-action="always" title="${e.escapeHtml(e.t("interaction.always_allow_title"))}" aria-label="${e.escapeHtml(e.t("interaction.always_allow_title"))}">${e.escapeHtml(e.t("interaction.always_allow"))}</button>
-         <button class="btn btn-ghost" data-action="once" title="${e.escapeHtml(e.t("interaction.allow_once_title"))}" aria-label="${e.escapeHtml(e.t("interaction.allow_once_title"))}">${e.escapeHtml(e.t("interaction.allow_once"))}</button>
-         <button class="btn btn-ghost" data-action="reject" title="${e.escapeHtml(e.t("interaction.reject_title"))}" aria-label="${e.escapeHtml(e.t("interaction.reject_title"))}">${e.escapeHtml(e.t("interaction.reject"))}</button>`:`<button class="btn btn-primary" data-action="answer" title="${e.escapeHtml(e.t("interaction.answer_title"))}" aria-label="${e.escapeHtml(e.t("interaction.answer_title"))}">${e.escapeHtml(e.t("interaction.answer"))}</button>
-         <button class="btn btn-ghost" data-action="reject" title="${e.escapeHtml(e.t("interaction.skip_title"))}" aria-label="${e.escapeHtml(e.t("interaction.skip_title"))}">${e.escapeHtml(e.t("interaction.skip"))}</button>`}function c(x){return x.type==="permission"?"🔒":"❓"}function g(x){return`<div class="interaction-alert" data-id="${e.escapeHtml(x.id)}">
-    <div class="interaction-title">${c(x)} ${e.escapeHtml(x.title)}</div>
-    <div class="interaction-body md-content">${e.renderMarkdown(x.body)}</div>
-    <div class="interaction-actions">${u(x)}</div>
-  </div>`}function f(x){const E=e.record(x?.payload)?x.payload:null,I=Array.isArray(E?.questions)?E.questions:[];return I.length===0?null:I.map(S=>{const F=e.record(S)?S:null,q=(Array.isArray(F?.options)?F.options:[]).find(j=>e.record(j)&&typeof j.label=="string"&&j.label.trim());return q&&typeof q.label=="string"?[q.label.trim()]:null})}function p(x){return!x||x.status!=="pending"?!1:x.type==="permission"?o("autoPermission",z.autoPermission):x.type==="question"?o("autoQuestion",z.autoQuestion)||o("unattended",z.unattended):!1}function h(x){x?.querySelectorAll?.(".interaction-alert [data-action]")?.forEach(E=>{const I=E;I.dataset.bound!=="true"&&(I.dataset.bound="true",I.addEventListener("click",()=>{const F=I.closest(".interaction-alert")?.dataset.id;if(!F)return;const D=I.dataset.action;D==="reject"?b(F):C(F,D??"")}))})}function k(){const x=e.document?.getElementById("interaction-modal");x&&x.remove(),n=null,w()}function m(x){let E=e.document?.getElementById("interaction-modal");if(E&&E.dataset.interactionId===x.id)return;k(),n=x;const I=`<div id="interaction-modal" class="interaction-modal-overlay" data-interaction-id="${e.escapeHtml(x.id)}">
+var _tmpl$$8 = /* @__PURE__ */ template(`<div class=diff-lines>`), _tmpl$2$8 = /* @__PURE__ */ template(`<div class=diff-empty><p class=empty-hint>`), _tmpl$3$8 = /* @__PURE__ */ template(`<div class=diff-row><div class=diff-gutter></div><div class=diff-num></div><div class=diff-num></div><div class=diff-code>`), _tmpl$4$8 = /* @__PURE__ */ template(`<div class=diff-row data-kind=skip><div class=diff-gutter>...</div><div class=diff-num></div><div class=diff-num></div><div class=diff-code>`), _tmpl$5$8 = /* @__PURE__ */ template(`<div class=diff-dialog-header><span class=diff-dialog-title></span><span class=diff-dialog-meta><span class=change-status></span><span class=diff-dialog-stat data-tone=add>+</span><span class=diff-dialog-stat data-tone=del>-</span></span><button type=button class=diff-dialog-close>×`), _tmpl$6$8 = /* @__PURE__ */ template(`<div class=diff-dialog-body>`), _tmpl$7$6 = /* @__PURE__ */ template(`<dialog class=diff-dialog>`), _tmpl$8$3 = /* @__PURE__ */ template(`<div class=changes-summary><span></span><span class=changes-total><span data-tone=add>+</span><span data-tone=del>-`), _tmpl$9$3 = /* @__PURE__ */ template(`<div class=changes-list>`), _tmpl$0$2 = /* @__PURE__ */ template(`<div class=changes-panel>`), _tmpl$1$1 = /* @__PURE__ */ template(`<p class=empty-hint>`), _tmpl$10$1 = /* @__PURE__ */ template(`<button type=button class=change-row><span class=change-main><span class=change-path></span><span class=change-subline></span></span><span class=change-meta><span class=change-status></span><span class=diff-dialog-stat data-tone=add>+</span><span class=diff-dialog-stat data-tone=del>-`);
+function splitDiffLines(text) {
+  const value = String(text || "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  if (!value) return [];
+  const lines = value.split("\n");
+  if (lines[lines.length - 1] === "") lines.pop();
+  return lines;
+}
+function diffMiddle(left, right, leftStart, rightStart) {
+  if (!left.length && !right.length) return [];
+  if (!left.length) {
+    return right.map((text, index) => ({
+      kind: "add",
+      left: "",
+      right: rightStart + index,
+      text
+    }));
+  }
+  if (!right.length) {
+    return left.map((text, index) => ({
+      kind: "del",
+      left: leftStart + index,
+      right: "",
+      text
+    }));
+  }
+  if (left.length * right.length > 12e4) {
+    return [...left.map((text, index) => ({
+      kind: "del",
+      left: leftStart + index,
+      right: "",
+      text
+    })), ...right.map((text, index) => ({
+      kind: "add",
+      left: "",
+      right: rightStart + index,
+      text
+    }))];
+  }
+  const grid = Array.from({
+    length: left.length + 1
+  }, () => new Uint32Array(right.length + 1));
+  for (let i2 = left.length - 1; i2 >= 0; i2 -= 1) {
+    for (let j2 = right.length - 1; j2 >= 0; j2 -= 1) {
+      grid[i2][j2] = left[i2] === right[j2] ? grid[i2 + 1][j2 + 1] + 1 : Math.max(grid[i2 + 1][j2], grid[i2][j2 + 1]);
+    }
+  }
+  const ops = [];
+  let i = 0;
+  let j = 0;
+  while (i < left.length && j < right.length) {
+    if (left[i] === right[j]) {
+      ops.push({
+        kind: "context",
+        left: leftStart + i,
+        right: rightStart + j,
+        text: left[i]
+      });
+      i += 1;
+      j += 1;
+      continue;
+    }
+    if (grid[i + 1][j] >= grid[i][j + 1]) {
+      ops.push({
+        kind: "del",
+        left: leftStart + i,
+        right: "",
+        text: left[i]
+      });
+      i += 1;
+      continue;
+    }
+    ops.push({
+      kind: "add",
+      left: "",
+      right: rightStart + j,
+      text: right[j]
+    });
+    j += 1;
+  }
+  while (i < left.length) {
+    ops.push({
+      kind: "del",
+      left: leftStart + i,
+      right: "",
+      text: left[i]
+    });
+    i += 1;
+  }
+  while (j < right.length) {
+    ops.push({
+      kind: "add",
+      left: "",
+      right: rightStart + j,
+      text: right[j]
+    });
+    j += 1;
+  }
+  return ops;
+}
+function buildDiffOps(before, after) {
+  const left = splitDiffLines(before);
+  const right = splitDiffLines(after);
+  const ops = [];
+  let start = 0;
+  while (start < left.length && start < right.length && left[start] === right[start]) {
+    ops.push({
+      kind: "context",
+      left: start + 1,
+      right: start + 1,
+      text: left[start]
+    });
+    start += 1;
+  }
+  let leftEnd = left.length - 1;
+  let rightEnd = right.length - 1;
+  const suffix = [];
+  while (leftEnd >= start && rightEnd >= start && left[leftEnd] === right[rightEnd]) {
+    suffix.push({
+      kind: "context",
+      left: leftEnd + 1,
+      right: rightEnd + 1,
+      text: left[leftEnd]
+    });
+    leftEnd -= 1;
+    rightEnd -= 1;
+  }
+  ops.push(...diffMiddle(left.slice(start, leftEnd + 1), right.slice(start, rightEnd + 1), start + 1, start + 1));
+  ops.push(...suffix.reverse());
+  return ops;
+}
+function collapseDiffOps(ops) {
+  const next = [];
+  let index = 0;
+  while (index < ops.length) {
+    if (ops[index].kind !== "context") {
+      next.push(ops[index]);
+      index += 1;
+      continue;
+    }
+    let end = index;
+    while (end < ops.length && ops[end].kind === "context") {
+      end += 1;
+    }
+    const chunk = ops.slice(index, end);
+    if (chunk.length <= 8) {
+      next.push(...chunk);
+    } else {
+      next.push(...chunk.slice(0, 3));
+      next.push({
+        kind: "skip",
+        count: chunk.length - 6
+      });
+      next.push(...chunk.slice(-3));
+    }
+    index = end;
+  }
+  return next;
+}
+function changeStatusLabel(status) {
+  if (status === "added") return t("files.status.added");
+  if (status === "deleted") return t("files.status.deleted");
+  return t("files.status.modified");
+}
+function DiffPreview(props) {
+  const ops = createMemo(() => collapseDiffOps(buildDiffOps(props.item.before, props.item.after)));
+  const hasChanges = createMemo(() => {
+    if (!props.item.before && !props.item.after) return false;
+    return ops().some((op) => op.kind === "add" || op.kind === "del");
+  });
+  return createComponent(Show, {
+    get when() {
+      return hasChanges();
+    },
+    get fallback() {
+      return (() => {
+        var _el$2 = _tmpl$2$8(), _el$3 = _el$2.firstChild;
+        insert(_el$3, () => t("diff.no_preview"));
+        return _el$2;
+      })();
+    },
+    get children() {
+      var _el$ = _tmpl$$8();
+      insert(_el$, createComponent(For, {
+        get each() {
+          return ops();
+        },
+        children: (line) => createComponent(Show, {
+          get when() {
+            return line.kind !== "skip";
+          },
+          get fallback() {
+            return (() => {
+              var _el$9 = _tmpl$4$8(), _el$0 = _el$9.firstChild, _el$1 = _el$0.nextSibling, _el$10 = _el$1.nextSibling, _el$11 = _el$10.nextSibling;
+              insert(_el$11, () => tc("diff.unchanged_hidden", line.count ?? 0));
+              return _el$9;
+            })();
+          },
+          get children() {
+            var _el$4 = _tmpl$3$8(), _el$5 = _el$4.firstChild, _el$6 = _el$5.nextSibling, _el$7 = _el$6.nextSibling, _el$8 = _el$7.nextSibling;
+            insert(_el$5, (() => {
+              var _c$ = memo(() => line.kind === "add");
+              return () => _c$() ? "+" : line.kind === "del" ? "-" : " ";
+            })());
+            insert(_el$6, () => line.left ?? "");
+            insert(_el$7, () => line.right ?? "");
+            insert(_el$8, () => line.text ?? " ");
+            createRenderEffect(() => setAttribute(_el$4, "data-kind", line.kind));
+            return _el$4;
+          }
+        })
+      }));
+      return _el$;
+    }
+  });
+}
+function DiffDialog(props) {
+  let dialogRef;
+  const item = () => props.item;
+  createEffect(() => {
+    if (item() && dialogRef && !dialogRef.open) {
+      dialogRef.showModal();
+    } else if (!item() && dialogRef?.open) {
+      dialogRef.close();
+    }
+  });
+  function close() {
+    dialogRef?.close();
+    props.onClose();
+  }
+  return (() => {
+    var _el$12 = _tmpl$7$6();
+    _el$12.$$click = (e) => {
+      if (e.target === dialogRef) close();
+    };
+    addEventListener(_el$12, "close", props.onClose);
+    var _ref$ = dialogRef;
+    typeof _ref$ === "function" ? use(_ref$, _el$12) : dialogRef = _el$12;
+    insert(_el$12, createComponent(Show, {
+      get when() {
+        return !!item();
+      },
+      get children() {
+        return [(() => {
+          var _el$13 = _tmpl$5$8(), _el$14 = _el$13.firstChild, _el$15 = _el$14.nextSibling, _el$16 = _el$15.firstChild, _el$17 = _el$16.nextSibling; _el$17.firstChild; var _el$19 = _el$17.nextSibling; _el$19.firstChild; var _el$21 = _el$15.nextSibling;
+          insert(_el$14, () => item().file);
+          insert(_el$16, () => changeStatusLabel(item().status));
+          insert(_el$17, () => item().additions, null);
+          insert(_el$19, () => item().deletions, null);
+          _el$21.$$click = close;
+          createRenderEffect((_p$) => {
+            var _v$ = item().status, _v$2 = t("common.close");
+            _v$ !== _p$.e && setAttribute(_el$16, "data-status", _p$.e = _v$);
+            _v$2 !== _p$.t && setAttribute(_el$21, "aria-label", _p$.t = _v$2);
+            return _p$;
+          }, {
+            e: void 0,
+            t: void 0
+          });
+          return _el$13;
+        })(), (() => {
+          var _el$22 = _tmpl$6$8();
+          insert(_el$22, createComponent(DiffPreview, {
+            get item() {
+              return item();
+            }
+          }));
+          return _el$22;
+        })()];
+      }
+    }));
+    return _el$12;
+  })();
+}
+function ChangesPanel(props) {
+  const [selectedIndex, setSelectedIndex] = createSignal(null);
+  const files = createMemo(() => {
+    if (props.changes !== void 0) return props.changes;
+    const derived = deriveChanges();
+    if (derived.length > 0) return derived;
+    if (Array.isArray(boardStore.changes) && boardStore.changes.length > 0) {
+      return boardStore.changes;
+    }
+    const raw = boardStore.board?.changes;
+    return Array.isArray(raw) ? raw : [];
+  });
+  const totalAdditions = createMemo(() => files().reduce((sum, item) => sum + (item.additions ?? 0), 0));
+  const totalDeletions = createMemo(() => files().reduce((sum, item) => sum + (item.deletions ?? 0), 0));
+  const selectedItem = createMemo(() => {
+    const idx = selectedIndex();
+    if (idx === null) return null;
+    return files()[idx] ?? null;
+  });
+  function openDiff(index) {
+    setSelectedIndex(index);
+  }
+  function closeDiff() {
+    setSelectedIndex(null);
+  }
+  return (() => {
+    var _el$23 = _tmpl$0$2();
+    insert(_el$23, createComponent(Show, {
+      get when() {
+        return files().length > 0;
+      },
+      get fallback() {
+        return (() => {
+          var _el$32 = _tmpl$1$1();
+          insert(_el$32, (() => {
+            var _c$2 = memo(() => !!props.hasSelectedTask);
+            return () => _c$2() ? t("files.unavailable") : t("files.select_target");
+          })());
+          return _el$32;
+        })();
+      },
+      get children() {
+        return [(() => {
+          var _el$24 = _tmpl$8$3(), _el$25 = _el$24.firstChild, _el$26 = _el$25.nextSibling, _el$27 = _el$26.firstChild; _el$27.firstChild; var _el$29 = _el$27.nextSibling; _el$29.firstChild;
+          insert(_el$25, () => tc("files.changed", files().length));
+          insert(_el$27, totalAdditions, null);
+          insert(_el$29, totalDeletions, null);
+          return _el$24;
+        })(), (() => {
+          var _el$31 = _tmpl$9$3();
+          insert(_el$31, createComponent(For, {
+            get each() {
+              return files();
+            },
+            children: (item, index) => (() => {
+              var _el$33 = _tmpl$10$1(), _el$34 = _el$33.firstChild, _el$35 = _el$34.firstChild, _el$36 = _el$35.nextSibling, _el$37 = _el$34.nextSibling, _el$38 = _el$37.firstChild, _el$39 = _el$38.nextSibling; _el$39.firstChild; var _el$41 = _el$39.nextSibling; _el$41.firstChild;
+              _el$33.$$click = () => openDiff(index());
+              insert(_el$35, () => item.file);
+              insert(_el$36, () => changeStatusLabel(item.status));
+              insert(_el$38, () => changeStatusLabel(item.status));
+              insert(_el$39, () => item.additions, null);
+              insert(_el$41, () => item.deletions, null);
+              createRenderEffect((_p$) => {
+                var _v$3 = index(), _v$4 = item.file, _v$5 = item.status;
+                _v$3 !== _p$.e && setAttribute(_el$33, "data-change-index", _p$.e = _v$3);
+                _v$4 !== _p$.t && setAttribute(_el$33, "title", _p$.t = _v$4);
+                _v$5 !== _p$.a && setAttribute(_el$38, "data-status", _p$.a = _v$5);
+                return _p$;
+              }, {
+                e: void 0,
+                t: void 0,
+                a: void 0
+              });
+              return _el$33;
+            })()
+          }));
+          return _el$31;
+        })()];
+      }
+    }), null);
+    insert(_el$23, createComponent(DiffDialog, {
+      get item() {
+        return selectedItem();
+      },
+      onClose: closeDiff
+    }), null);
+    return _el$23;
+  })();
+}
+delegateEvents(["click"]);
+
+var _tmpl$$7 = /* @__PURE__ */ template(`<div class=log-fields>`), _tmpl$2$7 = /* @__PURE__ */ template(`<div class=log-detail-block><div class=log-detail-title></div><pre class=log-detail-pre>`), _tmpl$3$7 = /* @__PURE__ */ template(`<details class=log-detail><summary></summary><div class=log-detail-block><div class=log-detail-title></div><pre class=log-detail-pre>`), _tmpl$4$7 = /* @__PURE__ */ template(`<span class=log-chip>=`), _tmpl$5$7 = /* @__PURE__ */ template(`<span class=log-delta>`), _tmpl$6$7 = /* @__PURE__ */ template(`<span class=log-service>`), _tmpl$7$5 = /* @__PURE__ */ template(`<div class=log-line><div class=log-line-head><span class=log-source></span><span>[<!>]</span><span class=log-ts></span></div><div class=log-msg>`), _tmpl$8$2 = /* @__PURE__ */ template(`<dialog id=logDialog class="dialog log-dialog"><div class=dialog-header><span class=dialog-title></span><div class=dialog-header-actions><select id=logLevelFilter class="select select-sm"><option value=debug>DEBUG</option><option value=info>INFO</option><option value=warn>WARN</option><option value=error>ERROR</option></select><button type=button id=btnLogServerLogs class="btn btn-ghost mini"></button><button type=button id=btnLogRefresh class="btn btn-ghost mini"></button><button type=button id=btnLogCopy class="btn btn-ghost mini"></button><button type=button id=btnLogClear class="btn btn-ghost mini danger"></button><button type=button id=btnCloseLog class="btn btn-ghost mini"></button></div></div><div id=logViewerBody class=log-viewer-body>`), _tmpl$9$2 = /* @__PURE__ */ template(`<div class=empty-hint>`);
+let _serverLogLines = [];
+async function loadServerLogs() {
+  try {
+    const data = await apiJson("log/tail?n=500");
+    _serverLogLines = Array.isArray(data?.lines) ? data.lines : [];
+  } catch {
+    _serverLogLines = [];
+  }
+}
+function stringifyLogValue(value, space = 0) {
+  if (typeof value === "string") return value;
+  try {
+    return JSON.stringify(value, null, space);
+  } catch {
+    return String(value ?? "");
+  }
+}
+function clipText(value, limit = 80) {
+  const text = String(value || "").replace(/\s+/g, " ").trim();
+  if (!text) return "";
+  if (text.length <= limit) return text;
+  return `${text.slice(0, Math.max(0, limit - 3)).trim()}...`;
+}
+function logPreviewValue(value) {
+  return clipText(stringifyLogValue(value), 80);
+}
+function isRecord$2(v) {
+  return !!v && typeof v === "object" && !Array.isArray(v);
+}
+function logDetailFields(fields) {
+  if (!isRecord$2(fields)) return {};
+  return Object.fromEntries(Object.entries(fields).filter(([key]) => key !== "service"));
+}
+function logSourceLabel(source) {
+  if (source === "server") return "Server";
+  if (source === "pipeline") return "Pipeline";
+  return "Overlay";
+}
+function parseLogValue(raw) {
+  const text = String(raw || "").trim();
+  if (!text) return "";
+  if (text === "true") return true;
+  if (text === "false") return false;
+  if (text === "null") return null;
+  if (/^-?\d+(?:\.\d+)?$/.test(text)) return Number(text);
+  if (/^[\[{"]/.test(text)) {
+    try {
+      return JSON.parse(text);
+    } catch {
+    }
+  }
+  return text;
+}
+function scanBalancedLogValue(text, start) {
+  if (text[start] === '"') {
+    let escaped2 = false;
+    for (let i = start + 1; i < text.length; i++) {
+      const ch = text[i];
+      if (escaped2) {
+        escaped2 = false;
+        continue;
+      }
+      if (ch === "\\") {
+        escaped2 = true;
+        continue;
+      }
+      if (ch === '"') return i + 1;
+    }
+    return text.length;
+  }
+  const pairs = {
+    "{": "}",
+    "[": "]"
+  };
+  const stack = [text[start]];
+  let quoted = false;
+  let escaped = false;
+  for (let i = start + 1; i < text.length; i++) {
+    const ch = text[i];
+    if (quoted) {
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+      if (ch === "\\") {
+        escaped = true;
+        continue;
+      }
+      if (ch === '"') quoted = false;
+      continue;
+    }
+    if (ch === '"') {
+      quoted = true;
+      continue;
+    }
+    if (ch === "{" || ch === "[") {
+      stack.push(ch);
+      continue;
+    }
+    if (ch === "}" || ch === "]") {
+      const open = stack[stack.length - 1];
+      if (pairs[open] === ch) {
+        stack.pop();
+        if (stack.length === 0) return i + 1;
+      }
+    }
+  }
+  return text.length;
+}
+function scanLogValueEnd(text, start) {
+  if (!text[start]) return start;
+  const first = text[start];
+  if (first === '"' || first === "{" || first === "[") {
+    return scanBalancedLogValue(text, start);
+  }
+  let cursor = start;
+  while (cursor < text.length) {
+    const nextSpace = text.indexOf(" ", cursor);
+    if (nextSpace < 0) return text.length;
+    let probe = nextSpace;
+    while (probe < text.length && text[probe] === " ") probe++;
+    if (/^[A-Za-z0-9_.-]+=/.test(text.slice(probe))) return nextSpace;
+    cursor = probe;
+  }
+  return text.length;
+}
+function parseLeadingLogFields(text) {
+  const fields = {};
+  let index = 0;
+  while (index < text.length) {
+    while (text[index] === " ") index++;
+    const match = /^([A-Za-z0-9_.-]+)=/.exec(text.slice(index));
+    if (!match) break;
+    const key = match[1];
+    index += match[0].length;
+    const end = scanLogValueEnd(text, index);
+    fields[key] = parseLogValue(text.slice(index, end));
+    index = end;
+  }
+  return {
+    fields,
+    end: index
+  };
+}
+function parseServerLogLine(raw) {
+  const match = raw.match(/^(DEBUG|INFO|WARN|ERROR)\s+(\S+)\s+(\+\d+ms)\s+(.*)$/);
+  if (!match) {
+    return {
+      level: "info",
+      ts: "",
+      delta: "",
+      service: "",
+      message: raw,
+      fields: {},
+      raw,
+      source: "server"
+    };
+  }
+  const [, levelRaw, ts, delta, rest] = match;
+  const parsed = parseLeadingLogFields(rest);
+  const service = typeof parsed.fields.service === "string" ? parsed.fields.service : "";
+  const message = rest.slice(parsed.end).trim() || rest.trim();
+  return {
+    level: levelRaw.toLowerCase(),
+    ts,
+    delta,
+    service,
+    message,
+    fields: parsed.fields,
+    raw,
+    source: "server"
+  };
+}
+function fmtElapsed(ms) {
+  const s = ms / 1e3;
+  if (s < 60) return s.toFixed(1) + "s";
+  const m = Math.floor(s / 60);
+  return m + "m" + (s - m * 60).toFixed(0) + "s";
+}
+function buildLogEntries(overlayEntries, ndjsonEvents, filterLevel) {
+  const levelOrder = {
+    debug: 0,
+    info: 1,
+    warn: 2,
+    error: 3
+  };
+  const threshold = levelOrder[filterLevel] ?? 0;
+  const serverLines = _serverLogLines.map(parseServerLogLine).filter((e) => (levelOrder[e.level] ?? 0) >= threshold);
+  const pipelineLines = (Array.isArray(ndjsonEvents) ? ndjsonEvents : []).filter((ev) => ev.kind !== "tool_delta").flatMap((ev) => {
+    const level = ev.kind === "error" ? "error" : "info";
+    if ((levelOrder[level] ?? 0) < threshold) return [];
+    const stage = ev.stage || "";
+    const kind = ev.kind || "";
+    const toolName = ev.toolName || "";
+    const summary = ev.summary || ev.text || "";
+    const parts = [];
+    if (kind === "tool_call" && toolName) parts.push(`→ ${toolName}`);
+    else if (kind === "tool_result" && toolName) parts.push(`← ${toolName}`);
+    else if (kind === "status") parts.push(summary);
+    else if (kind === "message_delta") parts.push("[text delta]");
+    if (kind !== "status" && summary) {
+      parts.push(summary.length > 150 ? summary.slice(0, 150) + "…" : summary);
+    }
+    const elapsed = typeof ev.elapsed_ms === "number" ? fmtElapsed(ev.elapsed_ms) : "";
+    return [{
+      level,
+      ts: ev.at || "",
+      service: stage,
+      delta: elapsed,
+      message: parts.join(" "),
+      fields: {
+        kind,
+        ...toolName ? {
+          tool: toolName
+        } : {},
+        ...ev.status ? {
+          status: ev.status
+        } : {}
+      },
+      raw: "",
+      source: "pipeline"
+    }];
+  });
+  return [...serverLines, ...pipelineLines, ...overlayEntries].sort((a, b) => (a.ts || "").localeCompare(b.ts || ""));
+}
+function formatLogText(entries) {
+  return entries.map((e) => {
+    const parts = [`[${String(e.source || "client").toUpperCase()}]`, `[${String(e.level || "info").toUpperCase()}]`];
+    if (e.ts) parts.push(e.ts);
+    if (e.service) parts.push(e.service);
+    parts.push(e.message || "");
+    const fields = logDetailFields(e.fields);
+    if (Object.keys(fields).length) parts.push(stringifyLogValue(fields));
+    return parts.join(" ");
+  }).join("\n");
+}
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    return false;
+  }
+}
+function LogEntryDetail(props) {
+  const fields = createMemo(() => logDetailFields(props.entry.fields));
+  const items = createMemo(() => Object.entries(fields()));
+  return [createComponent(Show, {
+    get when() {
+      return items().length > 0;
+    },
+    get children() {
+      return [(() => {
+        var _el$ = _tmpl$$7();
+        insert(_el$, createComponent(For, {
+          get each() {
+            return items().slice(0, 6);
+          },
+          children: ([key, value]) => (() => {
+            var _el$13 = _tmpl$4$7(), _el$14 = _el$13.firstChild;
+            insert(_el$13, key, _el$14);
+            insert(_el$13, () => logPreviewValue(value), null);
+            return _el$13;
+          })()
+        }));
+        return _el$;
+      })(), (() => {
+        var _el$2 = _tmpl$3$7(), _el$3 = _el$2.firstChild, _el$4 = _el$3.nextSibling, _el$5 = _el$4.firstChild, _el$6 = _el$5.nextSibling;
+        insert(_el$3, () => t("log.details"));
+        insert(_el$5, () => t("log.fields"));
+        insert(_el$6, () => stringifyLogValue(fields(), 2));
+        insert(_el$2, createComponent(Show, {
+          get when() {
+            return !!props.entry.raw;
+          },
+          get children() {
+            var _el$7 = _tmpl$2$7(), _el$8 = _el$7.firstChild, _el$9 = _el$8.nextSibling;
+            insert(_el$8, () => t("log.raw"));
+            insert(_el$9, () => props.entry.raw);
+            return _el$7;
+          }
+        }), null);
+        return _el$2;
+      })()];
+    }
+  }), createComponent(Show, {
+    get when() {
+      return memo(() => items().length === 0)() && !!props.entry.raw;
+    },
+    get children() {
+      var _el$0 = _tmpl$3$7(), _el$1 = _el$0.firstChild, _el$10 = _el$1.nextSibling, _el$11 = _el$10.firstChild, _el$12 = _el$11.nextSibling;
+      insert(_el$1, () => t("log.details"));
+      insert(_el$11, () => t("log.raw"));
+      insert(_el$12, () => props.entry.raw);
+      return _el$0;
+    }
+  })];
+}
+function LogLine(props) {
+  return (() => {
+    var _el$15 = _tmpl$7$5(), _el$16 = _el$15.firstChild, _el$17 = _el$16.firstChild, _el$18 = _el$17.nextSibling, _el$19 = _el$18.firstChild, _el$21 = _el$19.nextSibling; _el$21.nextSibling; var _el$24 = _el$18.nextSibling, _el$25 = _el$16.nextSibling;
+    insert(_el$17, () => logSourceLabel(props.entry.source));
+    insert(_el$18, () => props.entry.level.toUpperCase(), _el$21);
+    insert(_el$16, createComponent(Show, {
+      get when() {
+        return !!props.entry.delta;
+      },
+      get children() {
+        var _el$22 = _tmpl$5$7();
+        insert(_el$22, () => props.entry.delta);
+        return _el$22;
+      }
+    }), _el$24);
+    insert(_el$16, createComponent(Show, {
+      get when() {
+        return !!props.entry.service;
+      },
+      get children() {
+        var _el$23 = _tmpl$6$7();
+        insert(_el$23, () => props.entry.service);
+        return _el$23;
+      }
+    }), _el$24);
+    insert(_el$24, () => props.entry.ts);
+    insert(_el$25, () => props.entry.message || props.entry.raw || "");
+    insert(_el$15, createComponent(LogEntryDetail, {
+      get entry() {
+        return props.entry;
+      }
+    }), null);
+    createRenderEffect((_p$) => {
+      var _v$ = props.entry.source, _v$2 = props.entry.source, _v$3 = `log-level log-level-${props.entry.level}`;
+      _v$ !== _p$.e && setAttribute(_el$15, "data-source", _p$.e = _v$);
+      _v$2 !== _p$.t && setAttribute(_el$17, "data-source", _p$.t = _v$2);
+      _v$3 !== _p$.a && className(_el$18, _p$.a = _v$3);
+      return _p$;
+    }, {
+      e: void 0,
+      t: void 0,
+      a: void 0
+    });
+    return _el$15;
+  })();
+}
+function LogViewer(props) {
+  let dialogRef;
+  let bodyRef;
+  const [loading, setLoading] = createSignal(false);
+  const [serverLogsSeq, setServerLogsSeq] = createSignal(0);
+  const entries = createMemo(() => {
+    serverLogsSeq();
+    return buildLogEntries(filteredLogEntries(), props.ndjsonEvents ?? [], appStore.logFilterLevel);
+  });
+  const refresh = async () => {
+    setLoading(true);
+    try {
+      await loadServerLogs();
+      setServerLogsSeq((value) => value + 1);
+    } finally {
+      setLoading(false);
+    }
+    scrollToBottom();
+  };
+  const scrollToBottom = () => {
+    if (bodyRef) bodyRef.scrollTop = bodyRef.scrollHeight;
+  };
+  const handleCopy = async () => {
+    const text = formatLogText(entries());
+    if (!text) return;
+    await copyText(text);
+  };
+  const handleClear = () => {
+    setAppStore("logEntries", []);
+    _serverLogLines = [];
+    setServerLogsSeq((value) => value + 1);
+  };
+  const handleLevelChange = (e) => {
+    const select = e.target;
+    setAppStore("logFilterLevel", select.value);
+  };
+  onMount(async () => {
+    if (props.open) {
+      await refresh();
+      dialogRef?.showModal();
+    }
+  });
+  createEffect(() => {
+    const dialog = dialogRef;
+    if (!dialog) return;
+    if (props.open) {
+      void refresh().finally(() => {
+        if (!dialog.open) dialog.showModal();
+      });
+      return;
+    }
+    if (dialog.open) dialog.close();
+  });
+  const doScroll = () => {
+    Promise.resolve().then(() => scrollToBottom());
+  };
+  return (() => {
+    var _el$26 = _tmpl$8$2(), _el$27 = _el$26.firstChild, _el$28 = _el$27.firstChild, _el$29 = _el$28.nextSibling, _el$30 = _el$29.firstChild, _el$31 = _el$30.nextSibling, _el$32 = _el$31.nextSibling, _el$33 = _el$32.nextSibling, _el$34 = _el$33.nextSibling, _el$35 = _el$34.nextSibling, _el$36 = _el$27.nextSibling;
+    use((el) => dialogRef = el, _el$26);
+    insert(_el$28, () => t("log.title"));
+    _el$30.addEventListener("change", handleLevelChange);
+    _el$31.$$click = () => void refresh();
+    insert(_el$31, () => t("log.load_server"));
+    _el$32.$$click = () => void refresh();
+    insert(_el$32, () => t("common.refresh"));
+    _el$33.$$click = () => void handleCopy();
+    insert(_el$33, () => t("common.copy"));
+    _el$34.$$click = handleClear;
+    insert(_el$34, () => t("common.clear"));
+    _el$35.$$click = () => {
+      dialogRef?.close();
+      props.onClose?.();
+    };
+    insert(_el$35, () => t("common.close"));
+    use((el) => bodyRef = el, _el$36);
+    insert(_el$36, createComponent(Show, {
+      get when() {
+        return entries().length > 0;
+      },
+      get fallback() {
+        return (() => {
+          var _el$37 = _tmpl$9$2();
+          insert(_el$37, () => t("log.empty"));
+          return _el$37;
+        })();
+      },
+      get children() {
+        return createComponent(For, {
+          get each() {
+            return entries();
+          },
+          fallback: null,
+          children: (entry) => {
+            doScroll();
+            return createComponent(LogLine, {
+              entry
+            });
+          }
+        });
+      }
+    }));
+    createRenderEffect((_p$) => {
+      var _v$4 = t("log.filter_level"), _v$5 = loading(), _v$6 = loading(), _v$7 = loading() || entries().length === 0;
+      _v$4 !== _p$.e && setAttribute(_el$30, "aria-label", _p$.e = _v$4);
+      _v$5 !== _p$.t && (_el$31.disabled = _p$.t = _v$5);
+      _v$6 !== _p$.a && (_el$32.disabled = _p$.a = _v$6);
+      _v$7 !== _p$.o && (_el$33.disabled = _p$.o = _v$7);
+      return _p$;
+    }, {
+      e: void 0,
+      t: void 0,
+      a: void 0,
+      o: void 0
+    });
+    createRenderEffect(() => _el$30.value = appStore.logFilterLevel);
+    return _el$26;
+  })();
+}
+delegateEvents(["click"]);
+
+var _tmpl$$6 = /* @__PURE__ */ template(`<details>`), _tmpl$2$6 = /* @__PURE__ */ template(`<div class="message message-user"><div class=message-body><p>`), _tmpl$3$6 = /* @__PURE__ */ template(`<div class="message message-assistant"><div class=message-body>`), _tmpl$4$6 = /* @__PURE__ */ template(`<div class=message-text><span class=typing>……`), _tmpl$5$6 = /* @__PURE__ */ template(`<div class=message-text>`), _tmpl$6$6 = /* @__PURE__ */ template(`<div class=coding-tab-root style=flex-direction:column;height:100%><div class="chat-scroll coding-scroll"style="flex:1 1 auto;overflow:auto">`), _tmpl$7$4 = /* @__PURE__ */ template(`<div class=chat-empty>Build agent — ask anything about the codebase`);
+function escapeHtml(text) {
+  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+function stripAnsi(text) {
+  return text.replace(/\x1b\[[0-9;]*m/g, "");
+}
+function renderMarkdown(text) {
+  return escapeHtml(text).replace(/```(\w*)\n([\s\S]*?)```/g, '<pre class="code-block"><code>$2</code></pre>').replace(/`([^`]+)`/g, "<code>$1</code>").replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>").replace(/\n/g, "<br>");
+}
+function CodingTab(props) {
+  const [sessionID, setSessionID] = createSignal(null);
+  const [messages, setMessages] = createSignal([]);
+  const [busy, setBusy] = createSignal(false);
+  let textBuffer = /* @__PURE__ */ new Map();
+  let abortController = null;
+  let scrollRef;
+  props.onReady?.({
+    send: (text) => void sendCodingMessage(text),
+    stop: () => abortController?.abort(),
+    busy
+  });
+  function scrollToBottomIfNeeded() {
+    if (!scrollRef) return;
+    const atBottom = scrollRef.scrollHeight - scrollRef.scrollTop - scrollRef.clientHeight < 80;
+    if (atBottom) {
+      requestAnimationFrame(() => {
+        scrollRef.scrollTop = scrollRef.scrollHeight;
+      });
+    }
+  }
+  createEffect(() => {
+    if (!props.active) return;
+    messages();
+    scrollToBottomIfNeeded();
+  });
+  function handleCodingEvent(msgIndex, event) {
+    if (event.type === "session") {
+      setSessionID(event.sessionID ?? null);
+      return;
+    }
+    if (event.type === "delta") {
+      const current = textBuffer.get(event.partID) ?? "";
+      const next = current + (event.delta ?? "");
+      textBuffer.set(event.partID, next);
+      setMessages((prev) => {
+        const updated = prev.map((m, i) => {
+          if (i !== msgIndex || m.role !== "assistant") return m;
+          const parts = m.parts.map((p) => {
+            if (p.type === "text" && p._partID === event.partID) {
+              return {
+                ...p,
+                text: next
+              };
+            }
+            return p;
+          });
+          const hasPart = parts.some((p) => p.type === "text" && p._partID === event.partID);
+          if (!hasPart) {
+            parts.push({
+              type: "text",
+              text: next,
+              _partID: event.partID
+            });
+          }
+          return {
+            ...m,
+            parts
+          };
+        });
+        return updated;
+      });
+      return;
+    }
+    if (event.type === "part") {
+      const p = event.part;
+      if (p?.type === "tool") {
+        setMessages((prev) => prev.map((m, i) => {
+          if (i !== msgIndex || m.role !== "assistant") return m;
+          const existing = m.parts.find((x) => x.type === "tool" && x._partID === p.id);
+          if (!existing) {
+            return {
+              ...m,
+              parts: [...m.parts, {
+                type: "tool",
+                tool: p.tool,
+                state: p.state,
+                _partID: p.id
+              }]
+            };
+          }
+          return {
+            ...m,
+            parts: m.parts.map((x) => x.type === "tool" && x._partID === p.id ? {
+              ...x,
+              state: p.state,
+              tool: p.tool
+            } : x)
+          };
+        }));
+      }
+      return;
+    }
+    if (event.type === "error") {
+      const errorText = event.error?.message ?? JSON.stringify(event.error);
+      setMessages((prev) => prev.map((m, i) => {
+        if (i !== msgIndex || m.role !== "assistant") return m;
+        return {
+          ...m,
+          parts: [...m.parts, {
+            type: "text",
+            text: `Error: ${errorText}`
+          }]
+        };
+      }));
+      return;
+    }
+    if (event.type === "done") {
+      textBuffer.clear();
+    }
+  }
+  async function sendCodingMessage(text) {
+    if (busy() || !text.trim()) return;
+    setBusy(true);
+    textBuffer.clear();
+    setMessages((prev) => [...prev, {
+      role: "user",
+      text
+    }, {
+      role: "assistant",
+      parts: [],
+      streaming: true
+    }]);
+    const assistantIndex = messages().length - 1;
+    const controller = new AbortController();
+    abortController = controller;
+    try {
+      const body = JSON.stringify({
+        text,
+        sessionID: sessionID() ?? void 0
+      });
+      const res = await fetch(apiUrl("coding/message/stream"), {
+        method: "POST",
+        headers: {
+          ...apiHeaders(),
+          "Content-Type": "application/json"
+        },
+        body,
+        signal: controller.signal
+      });
+      if (!res.ok || !res.body) {
+        throw new Error(`Coding stream failed: ${res.status}`);
+      }
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      while (true) {
+        const {
+          done,
+          value
+        } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, {
+          stream: true
+        });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+        for (const line of lines) {
+          if (!line.startsWith("data:")) continue;
+          try {
+            const event = JSON.parse(line.slice(5).trim());
+            handleCodingEvent(assistantIndex, event);
+          } catch {
+          }
+        }
+      }
+      if (buffer.startsWith("data:")) {
+        try {
+          const event = JSON.parse(buffer.slice(5).trim());
+          handleCodingEvent(assistantIndex, event);
+        } catch {
+        }
+      }
+    } catch (err) {
+      if (err?.name !== "AbortError") {
+        const errText = err?.message ?? String(err);
+        setMessages((prev) => prev.map((m, i) => {
+          if (i !== assistantIndex || m.role !== "assistant") return m;
+          return {
+            ...m,
+            parts: [...m.parts, {
+              type: "text",
+              text: `Error: ${errText}`
+            }]
+          };
+        }));
+      }
+    } finally {
+      setMessages((prev) => prev.map((m, i) => {
+        if (i !== assistantIndex || m.role !== "assistant") return m;
+        return {
+          ...m,
+          streaming: false
+        };
+      }));
+      setBusy(false);
+      abortController = null;
+    }
+  }
+  onCleanup(() => {
+    abortController?.abort();
+  });
+  function ToolPartView(pProps) {
+    const status = () => pProps.part.state?.status ?? "running";
+    const icon = () => {
+      const s = status();
+      return s === "completed" ? "done" : s === "error" ? "err" : "run";
+    };
+    const title = () => escapeHtml(pProps.part.state?.title ?? pProps.part.tool ?? "tool");
+    const output = () => {
+      const raw = pProps.part.state?.output;
+      if (!raw) return "";
+      return escapeHtml(stripAnsi(String(raw)).slice(0, 2e3));
+    };
+    return (() => {
+      var _el$ = _tmpl$$6();
+      createRenderEffect((_p$) => {
+        var _v$ = `tool-block tool-${status()}`, _v$2 = `<summary>[${icon()}] ${title()}</summary>${output() ? `<pre class="tool-output">${output()}</pre>` : ""}`;
+        _v$ !== _p$.e && className(_el$, _p$.e = _v$);
+        _v$2 !== _p$.t && (_el$.innerHTML = _p$.t = _v$2);
+        return _p$;
+      }, {
+        e: void 0,
+        t: void 0
+      });
+      return _el$;
+    })();
+  }
+  function UserMessageView(mProps) {
+    return (() => {
+      var _el$2 = _tmpl$2$6(), _el$3 = _el$2.firstChild, _el$4 = _el$3.firstChild;
+      insert(_el$4, () => mProps.msg.text);
+      return _el$2;
+    })();
+  }
+  function AssistantMessageView(mProps) {
+    const hasParts = createMemo(() => mProps.msg.parts.length > 0);
+    return (() => {
+      var _el$5 = _tmpl$3$6(), _el$6 = _el$5.firstChild;
+      insert(_el$6, createComponent(Show, {
+        get when() {
+          return hasParts();
+        },
+        get fallback() {
+          return createComponent(Show, {
+            get when() {
+              return mProps.msg.streaming;
+            },
+            get children() {
+              return _tmpl$4$6();
+            }
+          });
+        },
+        get children() {
+          return createComponent(For, {
+            get each() {
+              return mProps.msg.parts;
+            },
+            children: (part) => createComponent(Show, {
+              get when() {
+                return part.type === "text";
+              },
+              get fallback() {
+                return createComponent(ToolPartView, {
+                  part
+                });
+              },
+              get children() {
+                var _el$8 = _tmpl$5$6();
+                createRenderEffect(() => _el$8.innerHTML = renderMarkdown(part.text));
+                return _el$8;
+              }
+            })
+          });
+        }
+      }));
+      return _el$5;
+    })();
+  }
+  const isEmpty = createMemo(() => messages().length === 0);
+  return (() => {
+    var _el$9 = _tmpl$6$6(), _el$0 = _el$9.firstChild;
+    var _ref$ = scrollRef;
+    typeof _ref$ === "function" ? use(_ref$, _el$0) : scrollRef = _el$0;
+    insert(_el$0, createComponent(Show, {
+      get when() {
+        return !isEmpty();
+      },
+      get fallback() {
+        return _tmpl$7$4();
+      },
+      get children() {
+        return createComponent(For, {
+          get each() {
+            return messages();
+          },
+          children: (msg) => createComponent(Show, {
+            get when() {
+              return msg.role === "user";
+            },
+            get fallback() {
+              return createComponent(AssistantMessageView, {
+                msg
+              });
+            },
+            get children() {
+              return createComponent(UserMessageView, {
+                msg
+              });
+            }
+          })
+        });
+      }
+    }));
+    createRenderEffect((_$p) => setStyleProperty(_el$9, "display", props.active ? "flex" : "none"));
+    return _el$9;
+  })();
+}
+
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+function hasTauriRuntime() {
+  return typeof window !== "undefined" && typeof window.__TAURI__?.core?.invoke === "function";
+}
+async function tauriInvoke$1(command, args) {
+  const globalInvoke = window.__TAURI__?.core?.invoke;
+  if (typeof globalInvoke === "function") {
+    return globalInvoke(command, args);
+  }
+  throw new Error(`Tauri runtime unavailable for ${command}`);
+}
+function normalizeUrl(value, fallback) {
+  const input = typeof value === "string" && value.trim() ? value.trim() : fallback;
+  return input.replace(/\/+$/, "");
+}
+function isManagedLocalServerUrl(value) {
+  const input = typeof value === "string" && value.trim() ? value.trim() : settingsStore.serverUrl;
+  try {
+    const url = new URL(input);
+    return url.protocol.startsWith("http") && ["127.0.0.1", "localhost"].includes(url.hostname);
+  } catch {
+    return false;
+  }
+}
+function usesManagedLocalServer() {
+  return settingsStore.autoServer && isManagedLocalServerUrl(settingsStore.serverUrl);
+}
+async function localServerInfo() {
+  if (!hasTauriRuntime()) return null;
+  const info = await tauriInvoke$1("overlay_server_info").catch(
+    () => void 0
+  );
+  return info && typeof info.url === "string" ? info : null;
+}
+async function syncLocalServerUrl(options = {}) {
+  if (!hasTauriRuntime()) return null;
+  if (!options.force && !usesManagedLocalServer()) return null;
+  const info = await localServerInfo();
+  if (!info) return null;
+  const next = normalizeUrl(info.url, settingsStore.serverUrl);
+  if (normalizeUrl(settingsStore.serverUrl, settingsStore.serverUrl) === next) {
+    return info;
+  }
+  applySettings({ ...settingsStore, serverUrl: next });
+  saveSettings();
+  configure({ serverUrl: next });
+  return info;
+}
+async function checkConnection() {
+  const managed = usesManagedLocalServer();
+  if (managed) {
+    await syncLocalServerUrl();
+  }
+  setConnectionStatus("connecting");
+  const attempts = managed ? 8 : 1;
+  let lastError;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      await apiJson("global/health", { signal: AbortSignal.timeout(5e3) });
+      setConnectionStatus("online");
+      return true;
+    } catch (e) {
+      lastError = e;
+      if (i >= attempts - 1) break;
+      await wait(350);
+      await syncLocalServerUrl();
+    }
+  }
+  setConnectionStatus("offline");
+  console.warn("[connection] connection failed", String(lastError));
+  return false;
+}
+let _monitorTimer = null;
+function startConnectionMonitor(onReconnect, intervalMs = 1e4) {
+  stopConnectionMonitor();
+  _monitorTimer = setInterval(async () => {
+    try {
+      if (!appStore.connected) {
+        const ok = await checkConnection();
+        if (ok) {
+          await onReconnect?.();
+        }
+      }
+    } catch (err) {
+      console.warn("[connection] monitor retry failed", err);
+    }
+  }, intervalMs);
+}
+function stopConnectionMonitor() {
+  if (_monitorTimer !== null) {
+    clearInterval(_monitorTimer);
+    _monitorTimer = null;
+  }
+}
+
+const connection = /*#__PURE__*/Object.freeze(/*#__PURE__*/Object.defineProperty({
+  __proto__: null,
+  checkConnection,
+  localServerInfo,
+  startConnectionMonitor,
+  stopConnectionMonitor,
+  syncLocalServerUrl
+}, Symbol.toStringTag, { value: 'Module' }));
+
+async function loadExtensions() {
+  try {
+    const [skills, mcp] = await Promise.all([
+      apiJson("skill/installed").catch(() => apiJson("skill")),
+      apiJson("mcp")
+    ]);
+    setSkills(Array.isArray(skills) ? skills : []);
+    setMcp(mcp && typeof mcp === "object" ? mcp : {});
+  } catch (e) {
+    AppLog.debug("extensions", "loadExtensions failed, resetting to empty", {
+      error: String(e)
+    });
+    setSkills([]);
+    setMcp({});
+  }
+}
+async function loadSkillMarket() {
+  try {
+    const items = await apiJson("skill/market");
+    setSkillMarket(Array.isArray(items) ? items : []);
+  } catch (e) {
+    AppLog.error("ui", "Failed to load skill market", { error: String(e) });
+    setSkillMarket([]);
+  }
+}
+
+const extensions = /*#__PURE__*/Object.freeze(/*#__PURE__*/Object.defineProperty({
+  __proto__: null,
+  loadExtensions,
+  loadSkillMarket
+}, Symbol.toStringTag, { value: 'Module' }));
+
+function executorInfo(value) {
+  return appStore.executors.find((item) => item.id === value);
+}
+function executorSelectable(value) {
+  const item = executorInfo(value);
+  if (item) return !!item.selectable;
+  return value === "opencode";
+}
+function executorCurrentModel(executorID) {
+  const info = executorInfo(executorID);
+  return info?.model ?? "";
+}
+async function loadExecutors() {
+  try {
+    const data = await apiJson("executor");
+    setExecutors(Array.isArray(data) ? data : []);
+  } catch (e) {
+    AppLog.debug("executor", "loadExecutors failed, resetting to empty", {
+      error: String(e)
+    });
+    setExecutors([]);
+  }
+}
+async function setExecutorModel(executorID, model) {
+  try {
+    await apiJson(`executor/${encodeURIComponent(executorID)}/model`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ model })
+    });
+    await loadExecutors();
+  } catch (e) {
+    AppLog.error("ui", "Failed to set executor model", {
+      error: String(e),
+      executorID,
+      model
+    });
+  }
+}
+
+async function loadPreferences() {
+  try {
+    const prefs = await apiJson("panel/knowledge/preference");
+    setAppStore("preferences", Array.isArray(prefs) ? prefs : []);
+  } catch (e) {
+    AppLog.debug("preferences", "loadPreferences failed, resetting to empty", {
+      error: String(e)
+    });
+    setAppStore("preferences", []);
+  }
+}
+async function deletePreference(prefId) {
+  if (!prefId) return;
+  try {
+    await apiJson(
+      `panel/knowledge/preference/${encodeURIComponent(prefId)}`,
+      { method: "DELETE" }
+    );
+    await loadPreferences();
+  } catch (e) {
+    AppLog.error("ui", "Failed to delete preference", { error: String(e) });
+  }
+}
+
+const memory = /*#__PURE__*/Object.freeze(/*#__PURE__*/Object.defineProperty({
+  __proto__: null,
+  deletePreference,
+  loadPreferences
+}, Symbol.toStringTag, { value: 'Module' }));
+
+function syncApiConfig() {
+  configure({
+    serverUrl: settingsStore.serverUrl,
+    username: settingsStore.username,
+    password: settingsStore.password,
+    directory: settingsStore.directory
+  });
+}
+async function loadInitialData() {
+  await ensureDefaultDirectory().catch(() => false);
+  await ensureWorkspaceDirectory().catch(() => settingsStore.directory || "");
+  syncApiConfig();
+  await Promise.all([
+    loadTasks(),
+    loadMeta(),
+    loadExtensions(),
+    loadConfigInfo(),
+    loadExecutors(),
+    loadPreferences()
+  ]);
+}
+async function initApp(options = {}) {
+  const {
+    onConnected,
+    onReconnect,
+    reconnectInterval = 1e4
+  } = options;
+  loadSettings();
+  const invoke = window.__TAURI__?.core?.invoke;
+  if (typeof invoke === "function") {
+    const nativeSettings = await invoke("overlay_settings_load").catch(() => null);
+    if (nativeSettings && typeof nativeSettings === "object" && !Array.isArray(nativeSettings)) {
+      applySettings(nativeSettings);
+      setSavedDirectory(
+        savedDirectoryValue$1(
+          nativeSettings.directory,
+          nativeSettings.directoryMode
+        )
+      );
+    }
+  }
+  syncApiConfig();
+  await loadAllLocales();
+  await setLocale(settingsStore.locale);
+  const connected = await checkConnection();
+  if (connected) {
+    await loadInitialData();
+    await restoreInitialWorkspace();
+    await onConnected?.();
+  }
+  stopConnectionMonitor();
+  startConnectionMonitor(async () => {
+    syncApiConfig();
+    await loadInitialData();
+    await restoreInitialWorkspace();
+    await onReconnect?.();
+  }, reconnectInterval);
+}
+function teardownApp() {
+  stopConnectionMonitor();
+}
+async function loadConfigInfo() {
+  try {
+    const [config, catalog, auth, channels, prompts] = await Promise.all([
+      apiJson("config"),
+      apiJson("provider"),
+      apiJson("provider/auth"),
+      apiJson("channel"),
+      apiJson("config/prompt").catch(() => [])
+    ]);
+    setAppStore({
+      config: config ?? null,
+      providerCatalog: catalog ?? null,
+      providerAuth: auth ?? null,
+      channels: Array.isArray(channels) ? channels : [],
+      promptEntries: Array.isArray(prompts) ? prompts : []
+    });
+    const remoteUnattended = config?.unattended;
+    if (typeof remoteUnattended === "boolean") {
+      setSettingsStore("unattended", remoteUnattended);
+      saveSettings();
+    }
+  } catch (e) {
+    console.warn("[init] loadConfigInfo failed", e);
+  }
+}
+async function restoreInitialWorkspace() {
+  const { workspaceTaskID, workspaceDirectory, directory: activeDir } = settingsStore;
+  const tasks = boardStore.tasks;
+  if (settingsStore.workspaceEpoch > 0) return false;
+  const base = activeDir || "";
+  const taskID = workspaceTaskID || "";
+  const directory = workspaceRestoreDirectory(workspaceDirectory || "");
+  const moved = !!directory && !!base && directory !== base;
+  if (moved) {
+    setSettingsStore("directory", directory);
+    bumpDirectoryEpoch();
+  }
+  if (taskID && tasks.some((item) => item?.task?.id === taskID)) {
+    if (boardStore.selectedTaskID !== taskID || !boardStore.board) {
+      await selectTask(taskID);
+    }
+    bumpWorkspaceEpoch();
+    return true;
+  }
+  if (moved) {
+    setSettingsStore("directory", base);
+    bumpDirectoryEpoch();
+  }
+  return false;
+}
+
+const init = /*#__PURE__*/Object.freeze(/*#__PURE__*/Object.defineProperty({
+  __proto__: null,
+  initApp,
+  loadConfigInfo,
+  restoreInitialWorkspace,
+  teardownApp
+}, Symbol.toStringTag, { value: 'Module' }));
+
+function currentTaskSessionID() {
+  return boardStore.board?.task?.sessionID || boardStore.tasks.find(
+    (item) => item?.task?.id === boardStore.selectedTaskID
+  )?.task?.sessionID || "";
+}
+function canComposeChat() {
+  if (!appStore.connected) return false;
+  const mode = workspaceMode();
+  return mode === "empty" || mode === "task";
+}
+function chatAbortTargets(seed) {
+  const items = [];
+  const seen = /* @__PURE__ */ new Set();
+  const push = (target) => {
+    if (!target) return;
+    const key = target.kind === "run" ? `run:${target.runID}` : target.kind === "session" ? `session:${target.sessionID}` : target.kind === "task" ? `task:${target.taskID}` : "";
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    items.push(target);
+  };
+  push(seed);
+  if (!boardStore.selectedTaskID) return items;
+  const runID = boardStore.board?.task?.activeRunID || store$1.runID || "";
+  if (runID) {
+    push({ kind: "run", runID });
+  }
+  const sessionID = currentTaskSessionID();
+  if (sessionID) {
+    push({ kind: "session", sessionID });
+  }
+  push({ kind: "task", taskID: boardStore.selectedTaskID });
+  return items;
+}
+function chatAbortTarget(seed) {
+  return chatAbortTargets(seed)[0] || null;
+}
+async function abortChatTargetRemote(target) {
+  if (!target) return false;
+  if (target.kind === "run" && target.runID) {
+    await apiJson(`run/${encodeURIComponent(target.runID)}/abort`, {
+      method: "POST"
+    });
+    return true;
+  }
+  if (target.kind === "task" && target.taskID) {
+    await apiJson(`task/${encodeURIComponent(target.taskID)}/cancel`, {
+      method: "POST"
+    });
+    return true;
+  }
+  if (target.kind === "session" && target.sessionID) {
+    await apiJson(`session/${encodeURIComponent(target.sessionID)}/abort`, {
+      method: "POST"
+    });
+    return true;
+  }
+  return false;
+}
+async function stopChatRequest(options = {}) {
+  const request = store.chatRequest;
+  if (!request || request.stopping) return false;
+  request.aborted = true;
+  request.manualAbort = options.manual !== false;
+  request.stopping = true;
+  request.recovery?.stop();
+  request.controller?.abort?.();
+  abortChatRequest();
+  if (options.remote === false) return true;
+  const targets = chatAbortTargets(request.target);
+  if (targets.length === 0) return true;
+  try {
+    for (const target of targets) {
+      try {
+        await abortChatTargetRemote(target);
+        return true;
+      } catch (e) {
+        console.warn("[stopChatRequest] Failed to abort target", {
+          error: String(e),
+          target
+        });
+      }
+    }
+    return false;
+  } finally {
+    request.stopping = false;
+  }
+}
+function mergeMessages(left, right) {
+  return mergeLoadedConversationMessages(left, right);
+}
+function appendPendingAssistantPart(requestID, type, delta) {
+  const chunk = typeof delta === "string" ? delta : "";
+  if (!requestID || !chunk) return;
+  const messageID = `pending-assistant:${requestID}`;
+  const partID = `${messageID}:${type}`;
+  let found = false;
+  const next = store.messages.map((message) => {
+    if (message?.info?.id !== messageID) return message;
+    found = true;
+    const parts = Array.isArray(message?.parts) ? [...message.parts] : [];
+    const index = parts.findIndex((part) => part?.id === partID);
+    if (index >= 0) {
+      const current = parts[index];
+      parts[index] = {
+        ...current,
+        type,
+        text: `${String(current?.text || "")}${chunk}`
+      };
+    } else {
+      parts.push({
+        id: partID,
+        type,
+        text: chunk,
+        messageID,
+        sessionID: ""
+      });
+    }
+    return {
+      ...message,
+      parts
+    };
+  });
+  if (!found) {
+    next.push({
+      _synthetic: true,
+      info: {
+        id: messageID,
+        role: "assistant",
+        time: { created: Date.now() }
+      },
+      parts: [
+        {
+          id: partID,
+          type,
+          text: chunk,
+          messageID,
+          sessionID: ""
+        }
+      ]
+    });
+  }
+  setMessages(next);
+}
+function insertPendingUserMessage(requestID, text) {
+  setMessages([
+    ...store.messages,
+    {
+      info: { id: `pending-user:${requestID}`, role: "user", time: { created: Date.now() } },
+      parts: [{ type: "text", text }]
+    }
+  ]);
+}
+function isRecoveryAwaitableError(error) {
+  if (error instanceof DOMException) {
+    return error.name === "AbortError" || error.name === "TimeoutError";
+  }
+  return false;
+}
+function ensureTaskListEntry(taskID, requestID, requestText, resultMessage) {
+  if (!taskID) return;
+  const task = boardStore.board?.task && boardStore.board.task.id === taskID ? boardStore.board.task : null;
+  const now = Date.now();
+  const created = Number(task?.time?.created || now);
+  const updated = Number(task?.time?.updated || created);
+  const title = String(
+    task?.title || boardStore.board?.overview?.headline || requestText || resultMessage || taskID
+  ).trim();
+  const entry = {
+    task: {
+      id: taskID,
+      requestID: requestID || task?.requestID || "",
+      title,
+      status: task?.status || "planning",
+      directory: task?.directory || "",
+      time: {
+        created,
+        updated
+      }
+    },
+    updated_at: updated,
+    pending_interactions: 0
+  };
+  const rest = boardStore.tasks.filter((item) => item?.task?.id !== taskID);
+  setTasksData([entry, ...rest]);
+}
+async function applyPanelResult(result) {
+  const taskID = String(result?.task_id || result?.taskID || "");
+  const requestText = typeof result?._request === "string" ? result._request : "";
+  const requestID = String(result?._requestID || "");
+  if (taskID) {
+    const previousMessages = [...store.messages];
+    ensureTaskListEntry(taskID, requestID, requestText, String(result?.message || ""));
+    if (requestID) {
+      forgetPendingTask(requestID);
+    }
+    await selectTask(taskID, { preserveMessages: true });
+    ensureTaskListEntry(taskID, requestID, requestText, String(result?.message || ""));
+    if (store.messages.length === 0 && previousMessages.length > 0) {
+      setMessages(previousMessages);
+    }
+    if (result?.message) {
+      const text = String(result.message);
+      const alreadyVisible = store.messages.some(
+        (item) => (Array.isArray(item?.parts) ? item.parts : []).some(
+          (part) => part?.type === "text" && String(part?.text || "") === text
+        )
+      );
+      if (alreadyVisible) return;
+      setMessages(
+        mergeMessages(store.messages, [
+          syntheticTextMessage("assistant", Date.now(), text)
+        ])
+      );
+    }
+    return;
+  }
+  if (result?.message) {
+    setMessages(
+      mergeMessages(store.messages, [
+        syntheticTextMessage("assistant", Date.now(), String(result.message))
+      ])
+    );
+  }
+}
+async function panelMessage(text, attachments = [], metadata = {}) {
+  const requestID = crypto.randomUUID();
+  rememberPendingTask(requestID, text);
+  const controller = new AbortController();
+  const target = chatAbortTarget() || void 0;
+  const request = {
+    requestID,
+    controller,
+    target,
+    stopping: false,
+    aborted: false,
+    manualAbort: false
+  };
+  const ensureRecovery = () => {
+    if (!request.recovery) {
+      request.recovery = startTaskRecovery(request);
+    }
+  };
+  insertPendingUserMessage(requestID, text);
+  setConnectionStatus("online");
+  setChatRequest(request);
+  try {
+    const result = await submitMessage(text, attachments, {
+      requestID,
+      metadata,
+      signal: controller.signal,
+      onOpen: () => {
+        ensureRecovery();
+      },
+      onEvent: async (event) => {
+        ensureRecovery();
+        const type = String(event?.type || "");
+        if (type === "reasoning_delta") {
+          appendPendingAssistantPart(requestID, "reasoning", String(event?.delta || ""));
+          return;
+        }
+        if (type === "message_delta") {
+          appendPendingAssistantPart(requestID, "text", String(event?.delta || ""));
+        }
+      }
+    });
+    request.recovery?.stop?.();
+    await applyPanelResult({ ...result, _request: text, _requestID: requestID });
+    return result;
+  } catch (error) {
+    const recoveredTaskID = typeof request.recoveredTaskID === "string" && request.recoveredTaskID ? request.recoveredTaskID : !request.manualAbort && isRecoveryAwaitableError(error) && typeof request.recovery?.promise?.then === "function" ? await request.recovery.promise.catch(() => "") : "";
+    if (!request.manualAbort && recoveredTaskID) {
+      const result = { task_id: recoveredTaskID, _request: text, _requestID: requestID };
+      await applyPanelResult(result);
+      return result;
+    }
+    request.recovery?.stop?.();
+    throw error;
+  } finally {
+    request.recovery?.stop?.();
+    if (store.chatRequest?.requestID === request.requestID) {
+      setChatRequest(null);
+    }
+  }
+}
+
+function createOverlayInteractions(deps) {
+  let busy = false;
+  let pendingInteraction = null;
+  const autoResolveFailed = /* @__PURE__ */ new Map();
+  const api = deps.apiJson ?? apiJson;
+  const logger = deps.AppLog ?? AppLog;
+  function stateFlag(name, fallback) {
+    const value = deps.state?.[name];
+    return typeof value === "boolean" ? value : fallback;
+  }
+  function autoPermissionReplyAction() {
+    const value = deps.state?.autoPermissionReply;
+    if (value === "always") return "always";
+    return "once";
+  }
+  function interactionActions(interaction) {
+    if (interaction.type === "permission") {
+      return `<button class="btn btn-primary" data-action="always" title="${deps.escapeHtml(deps.t("interaction.always_allow_title"))}" aria-label="${deps.escapeHtml(deps.t("interaction.always_allow_title"))}">${deps.escapeHtml(deps.t("interaction.always_allow"))}</button>
+         <button class="btn btn-ghost" data-action="once" title="${deps.escapeHtml(deps.t("interaction.allow_once_title"))}" aria-label="${deps.escapeHtml(deps.t("interaction.allow_once_title"))}">${deps.escapeHtml(deps.t("interaction.allow_once"))}</button>
+         <button class="btn btn-ghost" data-action="reject" title="${deps.escapeHtml(deps.t("interaction.reject_title"))}" aria-label="${deps.escapeHtml(deps.t("interaction.reject_title"))}">${deps.escapeHtml(deps.t("interaction.reject"))}</button>`;
+    }
+    return `<button class="btn btn-primary" data-action="answer" title="${deps.escapeHtml(deps.t("interaction.answer_title"))}" aria-label="${deps.escapeHtml(deps.t("interaction.answer_title"))}">${deps.escapeHtml(deps.t("interaction.answer"))}</button>
+         <button class="btn btn-ghost" data-action="reject" title="${deps.escapeHtml(deps.t("interaction.skip_title"))}" aria-label="${deps.escapeHtml(deps.t("interaction.skip_title"))}">${deps.escapeHtml(deps.t("interaction.skip"))}</button>`;
+  }
+  function interactionIcon(interaction) {
+    return interaction.type === "permission" ? "🔒" : "❓";
+  }
+  function interactionAlertHtml(interaction) {
+    return `<div class="interaction-alert" data-id="${deps.escapeHtml(interaction.id)}">
+    <div class="interaction-title">${interactionIcon(interaction)} ${deps.escapeHtml(interaction.title)}</div>
+    <div class="interaction-body md-content">${deps.renderMarkdown(interaction.body)}</div>
+    <div class="interaction-actions">${interactionActions(interaction)}</div>
+  </div>`;
+  }
+  function autoInteractionAnswers(interaction) {
+    const payload = deps.record(interaction?.payload) ? interaction.payload : null;
+    const questions = Array.isArray(payload?.questions) ? payload.questions : [];
+    if (questions.length === 0) return null;
+    return questions.map((item) => {
+      const question = deps.record(item) ? item : null;
+      const options = Array.isArray(question?.options) ? question.options : [];
+      const selected = options.find(
+        (option) => deps.record(option) && typeof option.label === "string" && option.label.trim()
+      );
+      if (selected && typeof selected.label === "string")
+        return [selected.label.trim()];
+      return null;
+    });
+  }
+  function shouldAutoResolveInteraction(interaction) {
+    if (!interaction || interaction.status !== "pending") return false;
+    if (interaction.type === "permission") {
+      return stateFlag("autoPermission", settingsStore.autoPermission);
+    }
+    if (interaction.type === "question")
+      return stateFlag("autoQuestion", settingsStore.autoQuestion) || stateFlag("unattended", settingsStore.unattended);
+    return false;
+  }
+  function bindInteractionActions(root) {
+    root?.querySelectorAll?.(".interaction-alert [data-action]")?.forEach((btn) => {
+      const el = btn;
+      if (el.dataset.bound === "true") return;
+      el.dataset.bound = "true";
+      el.addEventListener("click", () => {
+        const alert = el.closest(".interaction-alert");
+        const id = alert?.dataset.id;
+        if (!id) return;
+        const action = el.dataset.action;
+        if (action === "reject") void rejectInteraction(id);
+        else void resolveInteraction(id, action ?? "");
+      });
+    });
+  }
+  function dismissInteractionModal() {
+    const modal = deps.document?.getElementById("interaction-modal");
+    if (modal) modal.remove();
+    pendingInteraction = null;
+    void refreshInteractionAttention();
+  }
+  function showInteractionModal(interaction) {
+    let modal = deps.document?.getElementById("interaction-modal");
+    if (modal && modal.dataset.interactionId === interaction.id) return;
+    dismissInteractionModal();
+    pendingInteraction = interaction;
+    const html = `<div id="interaction-modal" class="interaction-modal-overlay" data-interaction-id="${deps.escapeHtml(interaction.id)}">
     <div class="interaction-modal">
-      <div class="interaction-modal-title">${c(x)} ${e.escapeHtml(x.title)}</div>
-      <div class="interaction-modal-body md-content">${e.renderMarkdown(x.body)}</div>
-      <div class="interaction-modal-actions">${u(x)}</div>
+      <div class="interaction-modal-title">${interactionIcon(interaction)} ${deps.escapeHtml(interaction.title)}</div>
+      <div class="interaction-modal-body md-content">${deps.renderMarkdown(interaction.body)}</div>
+      <div class="interaction-modal-actions">${interactionActions(interaction)}</div>
     </div>
-  </div>`;e.document?.body?.insertAdjacentHTML("beforeend",I),E=e.document?.getElementById("interaction-modal"),E?.querySelectorAll("[data-action]")?.forEach(S=>{const F=S;F.addEventListener("click",()=>{const D=F.dataset.action;D==="reject"?b(x.id):C(x.id,D??"")})}),w()}function y(){return n?e.document?e.document.visibilityState==="hidden"||!e.document.hasFocus():!0:!1}async function w(){await e.setTrayAttention?.(y())}function T(x){const E=e.document?.querySelector(`.interaction-alert[data-id="${x}"]`);E?.querySelectorAll("button")?.forEach(F=>{const D=F;D.disabled=!0,D.style.opacity="0.5"}),e.document?.querySelector(`#interaction-modal[data-interaction-id="${x}"]`)?.querySelectorAll("[data-action]")?.forEach(F=>{const D=F;D.disabled=!0,D.style.opacity="0.5"});const S=E?.querySelector(".interaction-title");S&&(S.textContent+=e.t("interaction.processing_suffix"))}function P(x,E){const I=e.document?.querySelector(`.interaction-alert[data-id="${x}"]`),S=I?.querySelector(".interaction-title");S&&(S.textContent=e.t("interaction.error",{message:E})),I?.querySelectorAll("button")?.forEach(F=>{const D=F;D.disabled=!1,D.style.opacity=""})}async function C(x,E,I={}){if(!t){t=!0,r.delete(x),T(x);try{if(E==="once"||E==="always"){await i(`interaction/${x}/reply`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({reply:E}),signal:AbortSignal.timeout(3e4)});return}const S=Array.isArray(I.answers)?I.answers:null,F=typeof I.message=="string"&&I.message.trim()?I.message.trim():"";if(!S&&!F){const D=await e.nativePrompt(e.t("interaction.reply_prompt"),{title:e.t("interaction.reply_title"),okLabel:e.t("common.submit"),cancelLabel:e.t("common.cancel"),inputLabel:e.t("interaction.answer_label")});if(D==null)return;await i(`interaction/${x}/reply`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message:D}),signal:AbortSignal.timeout(3e4)});return}await i(`interaction/${x}/reply`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({answers:S||void 0,message:F||void 0}),signal:AbortSignal.timeout(3e4)})}catch(S){a.error("ui","Failed to resolve interaction",{error:String(S)}),P(x,S?.message||String(S)),r.set(x,Date.now())}finally{k(),t=!1,await e.loadBoard()}}}async function b(x){if(!t){t=!0,T(x);try{await i(`interaction/${x}/reject`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({}),signal:AbortSignal.timeout(3e4)})}catch(E){a.error("ui","Failed to reject interaction",{error:String(E)}),P(x,E?.message||String(E))}finally{k(),t=!1,await e.loadBoard()}}}function A(){return t}function L(x){const E=Array.isArray(x)?x.filter(S=>S.status==="pending"):[],I=e.dom?.goalsBody;if(I?.querySelectorAll(".interaction-alert")?.forEach(S=>S.remove()),E.length===0){k();return}if(I&&(I.insertAdjacentHTML("beforeend",E.map(g).join("")),h(I)),!t&&p(E[0])){const F=r.get(E[0].id);if(F&&Date.now()-F<1e4){n=E[0],m(E[0]);return}if(k(),E[0].type==="permission"){C(E[0].id,s());return}const D=f(E[0]);if(!D||D.some(q=>!Array.isArray(q)||q.length===0)){a.warn("ui","Skipping automatic question reply due to missing structured options",{interactionID:E[0].id}),n=E[0],m(E[0]);return}C(E[0].id,"answer",{answers:D});return}if(!t){n=E[0],m(E[0]);return}n=null,w()}return{interactionAlertHtml:g,renderInteractions:L,showInteractionModal:m,dismissInteractionModal:k,resolveInteraction:C,rejectInteraction:b,isInteractionBusy:A,refreshInteractionAttention:w}}let tt=!1;function jp(e){tt=e==="coding";const t=document.getElementById("tabControl"),n=document.getElementById("tabCoding"),r=document.getElementById("chatScroll"),i=document.getElementById("codingScroll"),a=document.getElementById("chatGoalsStrip"),o=document.getElementById("taskStatus"),s=document.getElementById("modeToggle");t&&t.classList.toggle("active",!tt),n&&n.classList.toggle("active",tt),r&&(r.hidden=tt),i&&(i.hidden=!tt),a&&(a.hidden=tt),o&&(o.hidden=tt||!oe.selectedTaskID),s&&(s.textContent=tt?"Build":l("chat.title"))}let yt=null;function vt(e,t,n){return Math.min(Math.max(e,t),n)}function _t(e){if(!e)return 0;const t=getComputedStyle(e);if(t.display==="none"||t.visibility==="hidden")return 0;const n=e.getBoundingClientRect().width;return n>0?n:Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--ui-resizer-width"))||0}function Ya(){const e=Di(),t=document.getElementById("panelBody")?.clientWidth??window.visualViewport?.width??window.innerWidth??900;return vt(t*.24,240*e,420*e)}function Di(){return typeof document>"u"?1:Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--ui-scale"))||1}function rl(e){const t=Di(),n=document.getElementById("panelBody")?.clientWidth??window.visualViewport?.width??window.innerWidth??900,r=180*t,i=520*t,a=520*t,o=420*t,s=62*t,u=e.sidebarCollapsed?0:_t(document.getElementById("leftPaneResizer")),c=_t(document.getElementById("rightPaneResizer"));let g=vt(e.sidebarWidth??Ya(),r,i),f=vt(e.sectionsWidth??Ya(),r,i);const p=n-u-c;let h=e.sidebarCollapsed?s:g;const k=e.sidebarCollapsed?s:r;if(h+f+a>p){let m=h+f+a-p;const y=Math.max(0,h-k),w=Math.max(0,f-r),T=y+w;if(T>0){const P=Math.min(y,m*(y/T));h-=P,m-=P;const C=Math.min(w,m);if(f-=C,m-=C,m>0&&!e.sidebarCollapsed){const b=Math.min(Math.max(0,h-r),m);h-=b}}}if(h+f+o>p){const m=h+f+o-p,y=Math.min(Math.max(0,f-r),m);f-=y;const w=m-y;w>0&&!e.sidebarCollapsed&&(h-=Math.min(Math.max(0,h-r),w))}return g=vt(h,k,i),f=vt(f,r,i),{sidebar:Math.round(g),sections:Math.round(f)}}function fi(e){if(typeof document>"u")return;const t=rl(e);document.documentElement.style.setProperty("--ui-sidebar-width",`${t.sidebar}px`),document.documentElement.style.setProperty("--ui-sections-width",`${t.sections}px`)}function il(e,t,n){const r=Di(),i=180*r,a=520*r,o=420*r,s=n.getState();if(e==="left"){const k=document.getElementById("panelBody")?.getBoundingClientRect();if(!k)return;const{sections:m}=rl(s),y=_t(document.getElementById("leftPaneResizer")),w=_t(document.getElementById("rightPaneResizer")),T=Math.max(i,k.width-m-y-w-o),P=Math.round(vt(t-k.left,i,Math.min(a,T)));fi({...s,sidebarWidth:P});return}const c=document.getElementById("workspaceMain")?.getBoundingClientRect();if(!c)return;const g=_t(document.getElementById("rightPaneResizer")),f=Math.max(i,c.width-g-o),p=Math.round(vt(c.right-t,i,Math.min(a,f)));fi({...s,sectionsWidth:p})}function Np(e,t){yt&&il(yt.side,e.clientX,t)}async function Up(e){if(!yt)return;const t=yt.side==="left"?"leftPaneResizer":"rightPaneResizer",n=document.getElementById(t);n&&delete n.dataset.active,yt.side,yt=null,delete document.body.dataset.resizing;const r=Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--ui-sidebar-width")),i=Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--ui-sections-width"));await e.onWidthsChanged(Number.isFinite(r)?Math.round(r):null,Number.isFinite(i)?Math.round(i):null)}function eo(e,t,n){if(t.button!=null&&t.button!==0)return;const r=n.getState();if(e==="left"&&(r.sidebarCollapsed||_t(document.getElementById("leftPaneResizer"))===0)||e==="right"&&_t(document.getElementById("rightPaneResizer"))===0)return;yt={side:e};const i=e==="left"?"leftPaneResizer":"rightPaneResizer",a=document.getElementById(i);a&&(a.dataset.active="true"),document.body.dataset.resizing="true";function o(u){Np(u,n)}async function s(){window.removeEventListener("pointermove",o),window.removeEventListener("pointerup",s),window.removeEventListener("pointercancel",s),await Up(n)}window.addEventListener("pointermove",o),window.addEventListener("pointerup",s),window.addEventListener("pointercancel",s),il(e,t.clientX,n),t.preventDefault()}function Fp(e){const t=document.getElementById("leftPaneResizer"),n=document.getElementById("rightPaneResizer");function r(a){eo("left",a,e)}function i(a){eo("right",a,e)}return t?.addEventListener("pointerdown",r),n?.addEventListener("pointerdown",i),fi(e.getState()),()=>{t?.removeEventListener("pointerdown",r),n?.removeEventListener("pointerdown",i)}}var qp=_("<div class=loading-hint>"),zp=_("<div class=config-status-box>"),Wp=_("<div class=config-status-box data-status=warn style=margin-bottom:var(--sp-2)>"),Kp=_("<div class=prompt-grid>"),Hp=_("<div class=empty-hint>"),Vp=_("<small>"),Jp=_('<details class=prompt-diff-details><summary class=prompt-diff-summary></summary><div class=prompt-preview-card style=margin-top:0;border-top:none;opacity:0.7><div class=prompt-preview-head></div><div class="md-content prompt-preview-body">'),Gp=_('<div class=prompt-card><div class=prompt-card-head><div class=prompt-card-copy><strong></strong><span></span></div><span class=extension-status></span></div><label class=field><span class=field-label></span><textarea class="field-input prompt-textarea"rows=8></textarea></label><div class=prompt-toolbar><span class=config-status-box></span><div class="dialog-actions compact"><button type=button class="btn btn-ghost mini"></button><button type=button class="btn btn-primary mini"></button></div></div><details class=prompt-diff-details><summary class=prompt-diff-summary></summary><div class=prompt-preview-card style="border-top:none;border-radius:0 0 var(--radius) var(--radius)"><div class="md-content prompt-preview-body">');function Qt(e){return`${e.scope}:${e.key}`}function Qp(e){return l(e==="core"?"prompt.group.core":e==="generator"?"prompt.group.generator":e==="orchestrator"?"prompt.group.orchestrator":e==="subagent"?"prompt.group.subagent":e==="hidden_agent"?"prompt.group.hidden_agent":e==="custom_agent"?"prompt.group.custom_agent":"prompt.group.primary_agent")}function Zp(e){return e.key==="core_header"?l("prompt.desc.core_header"):e.key==="agent_generate"?l("prompt.desc.agent_generate"):e.key==="planner_system"?l("prompt.desc.planner_system"):e.key==="spec_system"?l("prompt.desc.spec_system"):e.key==="evaluator_system"?l("prompt.desc.evaluator_system"):e.key==="delivery_system"?l("prompt.desc.delivery_system"):e.description||""}function Xp(e){return e.configured_prompt!==null?{label:l("prompt.status.custom"),tone:"active"}:e.scope==="system"?{label:l("prompt.status.default"),tone:"ready"}:e.inherits_core?{label:l("prompt.status.inherits_core"),tone:"warn"}:e.prompt?{label:l("prompt.status.default"),tone:"ready"}:{label:l("prompt.status.empty"),tone:""}}function Yp(e){return e.scope==="system"?e.configured_prompt!==null?l("prompt.help.custom_system"):l("prompt.help.default_system"):e.inherits_core?l("prompt.help.inherits_core"):e.configured_prompt!==null?l("prompt.help.custom_agent"):e.prompt?l("prompt.help.default_agent"):l("prompt.help.optional_agent")}function to(e){return e.trim()?Ie(e):`<p class="empty-hint">${l("prompt.preview_empty")}</p>`}function eh(){const[e,t]=G([]),[n,r]=ct({}),[i,a]=G(!1),[o,s]=G(""),[u,c]=G(""),g=W(()=>!1);function f(C){const b=Qt(C);return Object.prototype.hasOwnProperty.call(n,b)?n[b]:C.prompt||""}function p(C){return f(C)!==(C.prompt||"")}function h(C){const b={};for(const A of C){const L=Qt(A);b[L]=Object.prototype.hasOwnProperty.call(n,L)?n[L]:A.prompt||""}for(const[A,L]of Object.entries(b))r(A,L)}async function k(){a(!0);try{const C=await K("config/prompt"),b=Array.isArray(C)?C:[];t(b),h(b)}catch(C){console.error("PromptCatalog: load failed",C),t([])}finally{a(!1)}}St(k);function m(C,b){r(C,b)}async function y(C){Qt(C);const b=f(C);try{await K("config/prompt",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({scope:C.scope,key:C.key,value:b.trim()||null})}),P(l("common.saved"),"active"),await k()}catch(A){P(A instanceof Error?A.message:String(A),"error")}}async function w(C){const b=Qt(C);if(r(b,C.prompt||""),C.configured_prompt!==null)try{await K("config/prompt",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({scope:C.scope,key:C.key,value:null})}),P(l("prompt.reset_done"),"active"),await k()}catch(A){P(A instanceof Error?A.message:String(A),"error")}}let T;function P(C,b=""){T&&clearTimeout(T),s(C),c(b),C&&(T=setTimeout(()=>s(""),2600))}return W(()=>e().filter(C=>C.configured_prompt!==null).length),[v(R,{get when(){return i()},get children(){var C=qp();return d(C,()=>l("common.loading")),C}}),v(R,{get when(){return o()},get children(){var C=zp();return d(C,o),B(()=>$(C,"data-status",u())),C}}),v(R,{get when(){return g()},get children(){var C=Wp();return d(C,()=>l("prompt.active_task_notice")),C}}),v(R,{get when(){return e().length>0},get fallback(){return(()=>{var C=Hp();return d(C,()=>l("prompt.none")),C})()},get children(){var C=Kp();return d(C,v(ke,{get each(){return e()},children:b=>{const A=Qt(b),L=W(()=>Xp(b)),x=Zp(b),E=W(()=>p(b)),I=W(()=>f(b));return(()=>{var S=Gp(),F=S.firstChild,D=F.firstChild,q=D.firstChild,j=q.nextSibling,X=D.nextSibling,re=F.nextSibling,N=re.firstChild,U=N.nextSibling,ce=re.nextSibling,ge=ce.firstChild,ne=ge.nextSibling,Q=ne.firstChild,H=Q.nextSibling,Z=ce.nextSibling,he=Z.firstChild,te=he.nextSibling,ie=te.firstChild;return $(S,"data-prompt-entry",A),d(q,()=>b.label||b.key),d(j,()=>Qp(b.group),null),d(j,(()=>{var Y=ye(()=>!!b.mode);return()=>Y()?` · ${b.mode}`:""})(),null),d(j,()=>b.inherits_core?" · ← core_header":"",null),d(D,v(R,{when:x,get children(){var Y=Vp();return d(Y,x),Y}}),null),d(X,()=>L().label),d(N,()=>l("prompt.editor_label")),U.$$input=Y=>m(A,Y.currentTarget.value),d(ge,()=>Yp(b)),Q.$$click=()=>w(b),d(Q,()=>l("prompt.reset")),H.$$click=()=>y(b),d(H,()=>l("common.save")),d(S,v(R,{get when(){return ye(()=>b.configured_prompt!==null)()&&b.default_prompt},get children(){var Y=Jp(),J=Y.firstChild,de=J.nextSibling,pe=de.firstChild,ae=pe.nextSibling;return d(J,()=>l("prompt.show_default")),d(pe,()=>l("prompt.default_label")),B(()=>ae.innerHTML=to(b.default_prompt)),Y}}),Z),d(he,()=>l("prompt.preview")),B(Y=>{var J=L().tone,de=L().tone,pe=b.configured_prompt===null&&!E(),ae=!E(),se=to(I());return J!==Y.e&&$(X,"data-state",Y.e=J),de!==Y.t&&$(ge,"data-status",Y.t=de),pe!==Y.a&&(Q.disabled=Y.a=pe),ae!==Y.o&&(H.disabled=Y.o=ae),se!==Y.i&&(ie.innerHTML=Y.i=se),Y},{e:void 0,t:void 0,a:void 0,o:void 0,i:void 0}),B(()=>U.value=I()),S})()}})),C}})]}Ce(["input","click"]);var th=_("<div class=loading-hint>"),nh=_("<div class=config-status-box>"),rh=_('<section class=config-section><label class=field><span class=field-label></span><div class=field-row><input class=field-input type=text id=channelPublicUrl><button type=button class="btn btn-primary mini">'),ih=_("<section class=config-section><div class=channel-list id=channelList>"),ah=_("<div class=empty-hint>"),oh=_('<div class=extension-row><div class=extension-row-main><strong></strong><span></span><small class=channel-doc-credit></small></div><div class=channel-row-actions><span class=extension-status></span><button type=button class="btn btn-ghost mini"></button><button type=button class="btn btn-primary mini">'),sh=_('<div class=dialog-overlay role=dialog aria-modal=true><div class="dialog-panel channel-dialog-panel"><div class=dialog-head><h2 class=dialog-title></h2><button type=button class="btn btn-ghost mini">✕</button></div><div class=channel-doc-card><div class=channel-doc-copy><span class=channel-doc-title></span><small class=channel-doc-credit></small></div><button type=button class="btn btn-ghost"></button></div><input type=hidden><div class=channel-fields id=channelFields></div><div class=dialog-actions><button type=button class="btn btn-ghost"></button><button type=button class="btn btn-primary">'),lh=_('<label class="field field-inline"><span class=field-label></span><input type=checkbox>'),ch=_("<label class=field><span class=field-label></span><input class=field-input>");const no={slack:"https://github.com/yangheng95/argus/wiki/channels#slack",telegram:"https://github.com/yangheng95/argus/wiki/channels#telegram",discord:"https://github.com/yangheng95/argus/wiki/channels#discord","google-chat":"https://github.com/yangheng95/argus/wiki/channels#google-chat","microsoft-teams":"https://github.com/yangheng95/argus/wiki/channels#microsoft-teams",line:"https://github.com/yangheng95/argus/wiki/channels#line",dingtalk:"https://github.com/yangheng95/argus/wiki/channels#dingtalk",lark:"https://github.com/yangheng95/argus/wiki/channels#lark",overview:"https://github.com/yangheng95/argus/wiki/channels"};function ro(e){return no[e]||no.overview}function io(){return l("channel.tutorial_credit",{source:"GitHub Wiki"})}function uh(e){return{connected:l("channel.status.connected"),configured:l("channel.status.configured"),disabled:l("channel.status.disabled"),error:l("channel.status.error")}[e]||e}function dh(){const[e,t]=G([]),[n,r]=G({}),[i,a]=G(""),[o,s]=G(null),[u,c]=G({}),[g,f]=G(!1),[p,h]=G(!1),[k,m]=G(""),[y,w]=G(""),T=W(()=>e().find(D=>D.id===o())??null);function P(D,q){return n()?.channel?.[D]?.[q]}async function C(){f(!0);try{const[D,q]=await Promise.all([K("channel").catch(()=>[]),K("config").catch(()=>({}))]);t(Array.isArray(D)?D:[]);const j=q&&typeof q=="object"?q:{};r(j),a(j?.server?.publicUrl||"")}finally{f(!1)}}St(C);function b(D){const q=e().find(X=>X.id===D);if(!q)return;const j={};for(const X of q.fields){const re=P(q.id,X.key);X.type==="boolean"?j[X.key]=re!==!1:j[X.key]=re!=null?String(re):""}c(j),s(D)}function A(){s(null),c({})}async function L(){const D=T();if(D){h(!0);try{const q={};for(const j of D.fields)q[j.key]=u()[j.key];await K(`channel/${D.id}/config`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(q)}),I(l("common.saved"),"active"),A(),await C()}catch(q){I(q instanceof Error?q.message:String(q),"error")}finally{h(!1)}}}async function x(){try{await K("config/server",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({publicUrl:i()})}),I(l("common.saved"),"active"),await C()}catch(D){I(D instanceof Error?D.message:String(D),"error")}}let E;function I(D,q=""){E&&clearTimeout(E),m(D),w(q),D&&(E=setTimeout(()=>m(""),2600))}function S(D,q){c(j=>({...j,[D]:q}))}function F(D){if(D)try{K("open",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({url:D})}).catch(()=>window.open(D,"_blank","noopener"))}catch{window.open(D,"_blank","noopener")}}return[v(R,{get when(){return g()},get children(){var D=th();return d(D,()=>l("common.loading")),D}}),v(R,{get when(){return k()},get children(){var D=nh();return d(D,k),B(()=>$(D,"data-status",y())),D}}),(()=>{var D=rh(),q=D.firstChild,j=q.firstChild,X=j.nextSibling,re=X.firstChild,N=re.nextSibling;return d(j,()=>l("channel.public_url_label")),re.$$input=U=>a(U.currentTarget.value),N.$$click=x,d(N,()=>l("common.save")),B(()=>$(re,"placeholder",l("channel.public_url_placeholder"))),B(()=>re.value=i()),D})(),(()=>{var D=ih(),q=D.firstChild;return d(q,v(R,{get when(){return e().length>0},get fallback(){return(()=>{var j=ah();return d(j,()=>l("channel.none")),j})()},get children(){return v(ke,{get each(){return e()},children:j=>(()=>{var X=oh(),re=X.firstChild,N=re.firstChild,U=N.nextSibling,ce=U.nextSibling,ge=re.nextSibling,ne=ge.firstChild,Q=ne.nextSibling,H=Q.nextSibling;return d(N,()=>j.name),d(U,()=>j.summary),d(ce,io),d(ne,()=>uh(j.status)),Q.$$click=()=>F(ro(j.id)),d(Q,()=>l("channel.tutorial")),H.$$click=()=>b(j.id),d(H,()=>l("common.edit")),B(Z=>{var he=j.status,te=l("channel.tutorial_hint"),ie=l("channel.tutorial_hint"),Y=l("channel.edit_title"),J=l("channel.edit_title");return he!==Z.e&&$(ne,"data-state",Z.e=he),te!==Z.t&&$(Q,"title",Z.t=te),ie!==Z.a&&$(Q,"aria-label",Z.a=ie),Y!==Z.o&&$(H,"title",Z.o=Y),J!==Z.i&&$(H,"aria-label",Z.i=J),Z},{e:void 0,t:void 0,a:void 0,o:void 0,i:void 0}),X})()})}})),D})(),v(R,{get when(){return T()!==null},children:D=>{const q=T();return(()=>{var j=sh(),X=j.firstChild,re=X.firstChild,N=re.firstChild,U=N.nextSibling,ce=re.nextSibling,ge=ce.firstChild,ne=ge.firstChild,Q=ne.nextSibling,H=ge.nextSibling,Z=ce.nextSibling,he=Z.nextSibling,te=he.nextSibling,ie=te.firstChild,Y=ie.nextSibling;return d(N,()=>l("channel.configuration_title",{name:q.name})),U.$$click=A,d(ne,()=>l("channel.tutorial_hint")),d(Q,io),H.$$click=()=>F(ro(q.id)),d(H,()=>l("channel.tutorial")),d(he,v(ke,{get each(){return q.fields},children:J=>{const de=`channel_${q.id}_${J.key}`,pe=()=>u()[J.key];if(J.type==="boolean")return(()=>{var se=lh(),ue=se.firstChild,le=ue.nextSibling;return d(ue,()=>J.label),le.addEventListener("change",ve=>S(J.key,ve.currentTarget.checked)),$(le,"name",de),B(()=>le.checked=pe()!==!1),se})();const ae=J.type==="secret"?"password":"text";return(()=>{var se=ch(),ue=se.firstChild,le=ue.nextSibling;return d(ue,()=>J.label),le.$$input=ve=>S(J.key,ve.currentTarget.value),$(le,"type",ae),$(le,"name",de),B(()=>$(le,"placeholder",J.placeholder||"")),B(()=>le.value=String(pe()??"")),se})()}})),ie.$$click=A,d(ie,()=>l("common.cancel")),Y.$$click=L,d(Y,(()=>{var J=ye(()=>!!p());return()=>J()?l("common.saving"):l("common.save")})()),B(J=>{var de=l("common.close"),pe=l("channel.tutorial_hint"),ae=l("channel.tutorial_hint"),se=p(),ue=p();return de!==J.e&&$(U,"aria-label",J.e=de),pe!==J.t&&$(H,"title",J.t=pe),ae!==J.a&&$(H,"aria-label",J.a=ae),se!==J.o&&(ie.disabled=J.o=se),ue!==J.i&&(Y.disabled=J.i=ue),J},{e:void 0,t:void 0,a:void 0,o:void 0,i:void 0}),B(()=>Z.value=q.id),j})()}})]}Ce(["input","click"]);var fh=_("<div class=loading-hint>"),gh=_('<div class=config-status-box data-status=error><button type=button class="btn btn-ghost mini">'),Pr=_('<button type=button class="btn btn-ghost mini">'),mh=_('<div class=inline-form><label class=field><span class=field-label></span><select class=field-input><option value=path></option><option value=url></option><option value=git></option></select></label><label class=field><span class=field-label></span><div class=field-input-group><input class=field-input type=text></div></label><label class=field><span class=field-label></span><select class=field-input><option value=ask></option><option value=allow></option><option value=deny></option></select></label><div class="dialog-actions compact"><button type=button class="btn btn-ghost"></button><button type=button class="btn btn-primary">'),ph=_('<section class=config-section><div class=config-section-head><h3 class=config-section-title></h3><div class=config-section-actions><button type=button class="btn btn-ghost mini"></button><button type=button class="btn btn-ghost mini"></button><button type=button class="btn btn-ghost mini"></button><button type=button class="btn btn-ghost mini danger"></button></div></div><div class=skill-list id=skillList>'),hh=_("<label class=field><span class=field-label></span><input class=field-input type=url placeholder=https://example.com/mcp>"),yh=_("<label class=field><span class=field-label></span><input class=field-input type=text placeholder=npx>"),vh=_('<label class=field><span class=field-label></span><input class=field-input type=text placeholder="-y @modelcontextprotocol/server-filesystem C:\\repo">'),bh=_('<div class=inline-form><label class=field><span class=field-label></span><input class=field-input type=text placeholder=exa></label><label class=field><span class=field-label></span><select class=field-input><option value=remote></option><option value=local></option></select></label><div class="dialog-actions compact"><button type=button class="btn btn-ghost"></button><button type=button class="btn btn-primary">'),kh=_('<section class=config-section><div class=config-section-head><h3 class=config-section-title></h3><div class=config-section-actions><button type=button class="btn btn-ghost mini"></button><button type=button class="btn btn-ghost mini danger"></button></div></div><div class=mcp-list id=mcpList>'),_h=_("<section class=config-section><div class=config-section-head><h3 class=config-section-title></h3></div><div class=skill-market-list id=skillMarketList>"),Br=_("<div class=empty-hint>"),wh=_('<button type=button class="btn btn-ghost mini danger">'),$h=_("<div class=extension-row><div class=extension-row-main><strong></strong><span></span><small></small></div><div class=extension-row-actions><span class=extension-status data-state=connected>"),Sh=_("<div class=extension-row><div class=extension-row-main><strong></strong><span></span></div><span class=extension-status>"),xh=_("<small>"),Th=_('<button type=button class="btn btn-primary mini">'),Ch=_("<div class=market-card><div class=market-card-main><strong></strong><span> · <!> · </span><small></small></div><div class=market-card-actions><span class=extension-status>");function gi(e){return e.source_type==="managed_git"?"git":e.source_type==="config_url"?"url":e.source_type==="config_path"?"path":""}function ao(e){return!e.builtin&&!!e.source&&!!gi(e)}function oo(e){return{connected:l("mcp.status.connected"),disabled:l("mcp.status.disabled"),error:l("mcp.status.error"),connecting:l("mcp.status.connecting")}[e]||e}function Dh(e){return e==="ask"?l("skill.policy.ask"):e==="allow"?l("skill.policy.allow"):e==="deny"?l("skill.policy.deny"):e}function Ih(){const[e,t]=G([]),[n,r]=G({}),[i,a]=G([]),[o,s]=G(!1),[u,c]=G(""),g=W(()=>e().filter(N=>!N.builtin)),f=W(()=>g().filter(ao)),p=W(()=>e().length-g().length),h=W(()=>Object.entries(n()));async function k(){s(!0);try{const[N,U,ce]=await Promise.all([K("skill").catch(()=>[]),K("mcp").catch(()=>({})),K("skill/market").catch(()=>[])]);t(Array.isArray(N)?N:[]),r(U&&typeof U=="object"&&!Array.isArray(U)?U:{}),a(Array.isArray(ce)?ce:[])}finally{s(!1)}}St(k);async function m(N,U,ce){if(confirm(l("skill.confirm_delete",{name:ce})))try{await K("skill/remove",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({kind:U,value:N})}),await k()}catch(ge){c(ge instanceof Error?ge.message:String(ge))}}async function y(N){try{await K("open",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({path:N})})}catch{}}async function w(){if(confirm(l("skill.confirm_delete_all")))try{await Promise.all(f().map(N=>K("skill/remove",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({kind:gi(N),value:N.source})}))),await k()}catch(N){c(N instanceof Error?N.message:String(N))}}async function T(){if(confirm(l("mcp.confirm_delete_all")))try{await Promise.all(h().map(([N])=>K("mcp/remove",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:N})}))),await k()}catch(N){c(N instanceof Error?N.message:String(N))}}async function P(N){try{await K("skill/install",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({kind:"id",value:N})}),await k()}catch(U){c(U instanceof Error?U.message:String(U))}}async function C(N){if(N)try{await K("open",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({url:N})})}catch{window.open(N,"_blank","noopener")}}const[b,A]=G(!1),[L,x]=ct({type:"path",value:"",policy:"ask"});async function E(){const N=L.value.trim();if(N)try{await K("skill/install",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({kind:L.type,value:N,policy:L.policy})}),x({type:"path",value:"",policy:"ask"}),A(!1),await k()}catch(U){c(U instanceof Error?U.message:String(U))}}async function I(){try{if(!window.__TAURI__)return;const{open:U}=await _n(async()=>{const{open:ge}=await Promise.resolve().then(()=>Ny);return{open:ge}},void 0),ce=await U({directory:!0,multiple:!1});typeof ce=="string"&&x("value",ce)}catch{}}async function S(){await k()}async function F(){try{await K("skill/open-root",{method:"POST"})}catch{}}const[D,q]=G(!1),[j,X]=ct({name:"",type:"remote",url:"",command:"",args:""});async function re(){const N=j.name.trim();if(!N)return;const U={name:N,type:j.type};if(j.type==="remote"){if(U.url=j.url.trim(),!U.url)return}else{if(U.command=j.command.trim(),!U.command)return;j.args.trim()&&(U.args=j.args.trim())}try{await K("mcp/add",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(U)}),X({name:"",type:"remote",url:"",command:"",args:""}),q(!1),await k()}catch(ce){c(ce instanceof Error?ce.message:String(ce))}}return[v(R,{get when(){return o()},get children(){var N=fh();return d(N,()=>l("common.loading")),N}}),v(R,{get when(){return u()},get children(){var N=gh(),U=N.firstChild;return d(N,u,U),U.$$click=()=>c(""),d(U,()=>l("common.dismiss")),N}}),(()=>{var N=ph(),U=N.firstChild,ce=U.firstChild,ge=ce.nextSibling,ne=ge.firstChild,Q=ne.nextSibling,H=Q.nextSibling,Z=H.nextSibling,he=U.nextSibling;return d(ce,()=>l("skill.title")),ne.$$click=S,d(ne,()=>l("common.reload")),Q.$$click=F,d(Q,()=>l("skill.open_dir")),H.$$click=()=>A(!b()),d(H,()=>l("skill.add")),Z.$$click=w,d(Z,()=>l("skill.delete_all")),d(N,v(R,{get when(){return b()},get children(){var te=mh(),ie=te.firstChild,Y=ie.firstChild,J=Y.nextSibling,de=J.firstChild,pe=de.nextSibling,ae=pe.nextSibling,se=ie.nextSibling,ue=se.firstChild,le=ue.nextSibling,ve=le.firstChild,Se=se.nextSibling,Me=Se.firstChild,Oe=Me.nextSibling,Ht=Oe.firstChild,xn=Ht.nextSibling,Tn=xn.nextSibling,Cn=Se.nextSibling,It=Cn.firstChild,At=It.nextSibling;return d(Y,()=>l("skill.source_type")),J.addEventListener("change",De=>x("type",De.currentTarget.value)),d(de,()=>l("skill.source.path")),d(pe,()=>l("skill.source.url")),d(ae,()=>l("skill.source.git")),d(ue,()=>l("skill.value")),ve.$$input=De=>x("value",De.currentTarget.value),d(le,v(R,{get when(){return L.type==="path"},get children(){var De=Pr();return De.$$click=I,d(De,()=>l("skill.browse_folder")),De}}),null),d(Me,()=>l("skill.policy")),Oe.addEventListener("change",De=>x("policy",De.currentTarget.value)),d(Ht,()=>l("skill.policy.ask")),d(xn,()=>l("skill.policy.allow")),d(Tn,()=>l("skill.policy.deny")),It.$$click=()=>A(!1),d(It,()=>l("common.cancel")),At.$$click=E,d(At,()=>l("skill.install")),B(De=>{var Vt=l("skill.value_placeholder"),Jt=!L.value.trim();return Vt!==De.e&&$(ve,"placeholder",De.e=Vt),Jt!==De.t&&(At.disabled=De.t=Jt),De},{e:void 0,t:void 0}),B(()=>J.value=L.type),B(()=>ve.value=L.value),B(()=>Oe.value=L.policy),te}}),he),d(he,v(R,{get when(){return g().length>0},get fallback(){return(()=>{var te=Br();return d(te,(()=>{var ie=ye(()=>p()>0);return()=>ie()?l("skill.none_custom_with_builtin",{count:p()}):l("skill.none_custom")})()),te})()},get children(){return v(ke,{get each(){return g()},children:te=>(()=>{var ie=$h(),Y=ie.firstChild,J=Y.firstChild,de=J.nextSibling,pe=de.nextSibling,ae=Y.nextSibling,se=ae.firstChild;return d(J,()=>te.name),d(de,()=>te.description||""),d(pe,()=>te.location||""),d(ae,v(R,{get when(){return ao(te)},get children(){var ue=wh();return ue.$$click=()=>m(te.source||"",gi(te),te.name),d(ue,()=>l("common.delete")),B(le=>{var ve=l("skill.delete_button_title"),Se=l("skill.delete_button_title");return ve!==le.e&&$(ue,"title",le.e=ve),Se!==le.t&&$(ue,"aria-label",le.t=Se),le},{e:void 0,t:void 0}),ue}}),se),d(ae,v(R,{get when(){return ye(()=>!!te.location)()&&te.location!=="builtin"},get children(){var ue=Pr();return ue.$$click=()=>y(te.location),d(ue,()=>l("common.open")),B(le=>{var ve=l("skill.open_button_title"),Se=l("skill.open_button_title");return ve!==le.e&&$(ue,"title",le.e=ve),Se!==le.t&&$(ue,"aria-label",le.t=Se),le},{e:void 0,t:void 0}),ue}}),se),d(se,()=>l("common.loaded")),ie})()})}})),B(()=>Z.disabled=f().length===0),N})(),(()=>{var N=kh(),U=N.firstChild,ce=U.firstChild,ge=ce.nextSibling,ne=ge.firstChild,Q=ne.nextSibling,H=U.nextSibling;return d(ce,()=>l("mcp.title")),ne.$$click=()=>q(!D()),d(ne,()=>l("mcp.add_action")),Q.$$click=T,d(Q,()=>l("mcp.delete_all")),d(N,v(R,{get when(){return D()},get children(){var Z=bh(),he=Z.firstChild,te=he.firstChild,ie=te.nextSibling,Y=he.nextSibling,J=Y.firstChild,de=J.nextSibling,pe=de.firstChild,ae=pe.nextSibling,se=Y.nextSibling,ue=se.firstChild,le=ue.nextSibling;return d(te,()=>l("mcp.name")),ie.$$input=ve=>X("name",ve.currentTarget.value),d(J,()=>l("mcp.type")),de.addEventListener("change",ve=>X("type",ve.currentTarget.value)),d(pe,()=>l("mcp.type.remote")),d(ae,()=>l("mcp.type.local")),d(Z,v(R,{get when(){return j.type==="remote"},get children(){var ve=hh(),Se=ve.firstChild,Me=Se.nextSibling;return d(Se,()=>l("mcp.remote_url")),Me.$$input=Oe=>X("url",Oe.currentTarget.value),B(()=>Me.value=j.url),ve}}),se),d(Z,v(R,{get when(){return j.type==="local"},get children(){return[(()=>{var ve=yh(),Se=ve.firstChild,Me=Se.nextSibling;return d(Se,()=>l("mcp.command")),Me.$$input=Oe=>X("command",Oe.currentTarget.value),B(()=>Me.value=j.command),ve})(),(()=>{var ve=vh(),Se=ve.firstChild,Me=Se.nextSibling;return d(Se,()=>l("mcp.arguments")),Me.$$input=Oe=>X("args",Oe.currentTarget.value),B(()=>Me.value=j.args),ve})()]}}),se),ue.$$click=()=>q(!1),d(ue,()=>l("common.cancel")),le.$$click=re,d(le,()=>l("mcp.add_action")),B(()=>le.disabled=!j.name.trim()||(j.type==="remote"?!j.url.trim():!j.command.trim())),B(()=>ie.value=j.name),B(()=>de.value=j.type),Z}}),H),d(H,v(R,{get when(){return h().length>0},get fallback(){return(()=>{var Z=Br();return d(Z,()=>l("mcp.none")),Z})()},get children(){return v(ke,{get each(){return h()},children:([Z,he])=>{const te=he?.status||"disabled",ie=he?.error||"";return(()=>{var Y=Sh(),J=Y.firstChild,de=J.firstChild,pe=de.nextSibling,ae=J.nextSibling;return d(de,Z),d(pe,()=>ie||oo(te)),$(ae,"data-state",te),d(ae,()=>oo(te)),Y})()}})}})),B(()=>Q.disabled=h().length===0),N})(),(()=>{var N=_h(),U=N.firstChild,ce=U.firstChild,ge=U.nextSibling;return d(ce,()=>l("skill.market.title")),d(ge,v(R,{get when(){return i().length>0},get fallback(){return(()=>{var ne=Br();return d(ne,()=>l("skill.market.none")),ne})()},get children(){return v(ke,{get each(){return i()},children:ne=>{const Q=!!ne.source&&ne.install_kind!=="manual";return(()=>{var H=Ch(),Z=H.firstChild,he=Z.firstChild,te=he.nextSibling,ie=te.firstChild,Y=ie.nextSibling;Y.nextSibling;var J=te.nextSibling,de=Z.nextSibling,pe=de.firstChild;return d(he,()=>ne.name),d(te,()=>ne.provider,ie),d(te,()=>ne.trust,Y),d(te,()=>ne.install_kind,null),d(J,()=>ne.description||""),d(Z,v(R,{get when(){return ne.notes},get children(){var ae=xh();return d(ae,()=>ne.notes),ae}}),null),d(pe,()=>Dh(ne.recommended_policy||"")),d(de,v(R,{when:Q,get fallback(){return(()=>{var ae=Pr();return ae.$$click=()=>C(ne.homepage),d(ae,()=>l("skill.market.open_site")),B(se=>{var ue=l("skill.market.open_site_title"),le=l("skill.market.open_site_title");return ue!==se.e&&$(ae,"title",se.e=ue),le!==se.t&&$(ae,"aria-label",se.t=le),se},{e:void 0,t:void 0}),ae})()},get children(){var ae=Th();return ae.$$click=()=>P(ne.id),d(ae,()=>l("skill.install")),B(se=>{var ue=l("skill.market.install_button_title"),le=l("skill.market.install_button_title");return ue!==se.e&&$(ae,"title",se.e=ue),le!==se.t&&$(ae,"aria-label",se.t=le),se},{e:void 0,t:void 0}),ae}}),null),B(()=>$(pe,"data-state",ne.recommended_policy||"")),H})()}})}})),N})()]}Ce(["click","input"]);var so=_("<p class=memory-dialog-content>"),Ah=_('<dialog class="dialog memory-detail-dialog"><div class=dialog-header><span class=dialog-title id=memoryDialogTitle></span><button type=button class="btn btn-ghost mini"id=btnCloseMemory></button></div><div class=dialog-footer><button type=button id=btnDeleteMemory class="btn btn-ghost mini danger">'),Eh=_("<div class=memory-dialog-meta id=memoryDialogMeta><span class=knowledge-scope></span><span></span><span></span><span>"),Lh=_("<pre class=memory-dialog-content id=memoryDialogContent>"),Mh=_("<span id=memoryBadge class=panel-badge>"),Ph=_('<div class=memory-panel><div class=panel-header><span class=panel-title></span><div class=panel-header-actions><button type=button id=btnMemoryRefresh class="btn btn-ghost mini"></button></div></div><form class=memory-search-row><input id=memorySearch type=search class="input input-sm"><button type=submit id=btnMemorySearch class="btn btn-ghost mini"></button></form><div id=memoryList class=knowledge-list>'),Bh=_("<div class=empty-hint>"),Rh=_("<div class=knowledge-item-meta>"),Oh=_('<div class=knowledge-item role=button tabindex=0><div class=knowledge-item-main><div class=knowledge-item-title></div><div class=knowledge-item-meta></div></div><div class=knowledge-item-actions><span class=knowledge-scope></span><button type=button class="btn btn-ghost mini danger knowledge-delete"data-action=delete-memory>');function al(e){return e==="session"?l("preference.scope.session"):e==="cwd"?l("preference.scope.cwd"):e==="global"?l("preference.scope.global"):e||""}function jh(e){return e?new Date(e).toLocaleDateString():""}function lo(e){return e?new Date(e).toLocaleString():""}function Nh(e){let t;const[n,r]=G(null),[i,a]=G(""),[o,s]=G(!0),u=async()=>{s(!0),a("");try{const g=await K(`panel/knowledge/memory/${encodeURIComponent(e.fileId)}`),f=g.file;r({title:f.title,scope:f.scope,source:f.source,timeCreated:f.timeCreated,timeUpdated:f.timeUpdated,content:g.content||""})}catch(g){a(g?.message||l("memory.load_failed")),r(null)}finally{s(!1)}},c=async()=>{try{await K(`panel/knowledge/memory/${encodeURIComponent(e.fileId)}`,{method:"DELETE"}),t?.close(),e.onDeleted()}catch{}};return u(),(()=>{var g=Ah(),f=g.firstChild,p=f.firstChild,h=p.nextSibling,k=f.nextSibling,m=k.firstChild;return yi(g,"close",e.onClose),qe(y=>{t=y,y?.showModal()},g),d(p,(()=>{var y=ye(()=>!!o());return()=>y()?l("common.loading"):ye(()=>!!i())()?l("common.error"):n()?.title??""})()),h.$$click=()=>{t?.close(),e.onClose()},d(h,()=>l("common.close")),d(g,v(R,{get when(){return ye(()=>!o()&&!i())()&&n()!==null},children:y=>{const w=n();return[(()=>{var T=Eh(),P=T.firstChild,C=P.nextSibling,b=C.nextSibling,A=b.nextSibling;return d(P,()=>al(w.scope)),d(C,()=>l("memory.source",{value:w.source})),d(b,()=>l("memory.created",{value:lo(w.timeCreated)})),d(A,()=>l("memory.updated",{value:lo(w.timeUpdated)})),B(()=>$(P,"data-scope",w.scope)),T})(),(()=>{var T=Lh();return d(T,()=>w.content||l("memory.empty_value")),T})()]}}),k),d(g,v(R,{get when(){return ye(()=>!o())()&&!!i()},get children(){var y=so();return d(y,i),y}}),k),d(g,v(R,{get when(){return o()},get children(){var y=so();return d(y,()=>l("common.loading")),y}}),k),m.$$click=()=>void c(),d(m,()=>l("common.delete")),g})()}function Uh(e){const[t,n]=G([]),[r,i]=G(!1),[a,o]=G(""),[s,u]=G(!1),[c,g]=G(null),f=async()=>{if(!e.taskID){n([]),i(!1);return}u(!0);try{const T=`?taskID=${encodeURIComponent(e.taskID)}`,P=await K(`panel/knowledge/memory${T}`);n(Array.isArray(P)?P:[]),i(!1)}catch{n([]),i(!1)}finally{u(!1)}},p=async T=>{if(!T||!T.trim())return f();u(!0);try{const P=await K("panel/knowledge/memory/search",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({query:T.trim(),taskID:e.taskID||void 0,limit:20})}),C=(Array.isArray(P)?P:[]).map(b=>({id:b.fileId,title:b.fileTitle,scope:b.scope||"global",source:l("memory.search_source"),score:b.score,snippet:b.content?b.content.slice(0,200):"",timeUpdated:b.timeCreated||0}));n(C),i(!0)}catch{}finally{u(!1)}},h=T=>{T.preventDefault(),p(a())},k=()=>{o(""),f()},m=async T=>{try{await K(`panel/knowledge/memory/${encodeURIComponent(T)}`,{method:"DELETE"}),await f()}catch{}};f();const y=W(()=>{const T=t().length;return T>0?String(T):""}),w=W(()=>r()?l("memory.no_results"):e.taskID?l("memory.none"):l("memory.none_unselected"));return(()=>{var T=Ph(),P=T.firstChild,C=P.firstChild,b=C.nextSibling,A=b.firstChild,L=P.nextSibling,x=L.firstChild,E=x.nextSibling,I=L.nextSibling;return d(C,()=>l("memory.title"),null),d(C,v(R,{get when(){return y()},get children(){var S=Mh();return d(S,y),S}}),null),A.$$click=k,d(A,()=>l("common.refresh")),L.addEventListener("submit",h),x.$$keydown=S=>{S.key==="Enter"&&(S.preventDefault(),p(a()))},x.$$input=S=>o(S.target.value),d(E,()=>l("common.search")),d(I,v(R,{get when(){return t().length>0},get fallback(){return(()=>{var S=Bh();return d(S,w),S})()},get children(){return v(ke,{get each(){return t()},children:S=>{const F=jh(S.timeUpdated),D=r()?"search":"list",q=S.score!=null?` · ${l("memory.score",{value:S.score.toFixed(2)})}`:"",j=`${S.source}${q}${F?` · ${F}`:""}`;return(()=>{var X=Oh(),re=X.firstChild,N=re.firstChild,U=N.nextSibling,ce=re.nextSibling,ge=ce.firstChild,ne=ge.nextSibling;return X.$$keydown=Q=>{(Q.key==="Enter"||Q.key===" ")&&g(S.id)},X.$$click=()=>g(S.id),$(X,"data-mode",D),d(N,()=>S.title),d(U,j),d(re,v(R,{get when(){return!!S.snippet},get children(){var Q=Rh();return d(Q,()=>S.snippet),Q}}),null),d(ge,()=>al(S.scope)),ne.$$click=Q=>{Q.stopPropagation(),m(S.id)},d(ne,()=>l("common.delete")),B(Q=>{var H=S.id,Z=S.scope,he=S.id,te=l("memory.delete_button_title"),ie=l("memory.delete_button_title");return H!==Q.e&&$(X,"data-id",Q.e=H),Z!==Q.t&&$(ge,"data-scope",Q.t=Z),he!==Q.a&&$(ne,"data-id",Q.a=he),te!==Q.o&&$(ne,"title",Q.o=te),ie!==Q.i&&$(ne,"aria-label",Q.i=ie),Q},{e:void 0,t:void 0,a:void 0,o:void 0,i:void 0}),X})()}})}})),d(T,v(R,{get when(){return c()!==null},get children(){return v(Nh,{get fileId(){return c()},get taskID(){return e.taskID},onClose:()=>g(null),onDeleted:()=>{g(null),f()}})}}),null),B(S=>{var F=s(),D=l("memory.search_placeholder"),q=s();return F!==S.e&&(A.disabled=S.e=F),D!==S.t&&$(x,"placeholder",S.t=D),q!==S.a&&(E.disabled=S.a=q),S},{e:void 0,t:void 0,a:void 0}),B(()=>x.value=a()),T})()}Ce(["click","input","keydown"]);var Fh=_("<p class=form-error>"),qh=_('<dialog class="dialog pref-edit-dialog"id=prefEditDialog><div class=dialog-header><span class=dialog-title id=prefEditTitle></span></div><form id=prefEditForm><input type=hidden id=prefEditId><div class=form-row><label for=prefEditKey class=form-label></label><input id=prefEditKey type=text class=input required></div><div class=form-row><label for=prefEditValue class=form-label></label><textarea id=prefEditValue class="input textarea"required rows=4></textarea></div><div class=dialog-footer><button type=button id=btnCancelPrefEdit class="btn btn-ghost"></button><button type=submit class="btn btn-primary">'),zh=_("<span id=preferenceBadge class=panel-badge>"),Wh=_('<div class=preferences-panel><div class=panel-header><span class=panel-title></span><div class=panel-header-actions><button type=button id=btnPreferenceRefresh class="btn btn-ghost mini"></button><button type=button id=btnPreferenceAdd class="btn btn-ghost mini"></button></div></div><div id=preferenceList class=pref-list>'),Kh=_("<div class=empty-hint>"),Hh=_('<div class=pref-item role=button tabindex=0><div class=pref-item-head><span class=pref-item-key></span><span class=knowledge-scope></span><div class=pref-item-actions><button type=button class="btn btn-ghost mini danger"data-pref-action=delete></button></div></div><div class=pref-item-value>');function Vh(e){return e?.scope==="cwd"?l("preference.scope.cwd"):e?.scope==="session"?l("preference.scope.session"):e?.scope==="global"?l("preference.scope.global"):e?.scope||""}function Jh(e){let t;const[n,r]=G(e.pref?.key??""),[i,a]=G(e.pref?.value??""),[o,s]=G(!1),[u,c]=G(""),g=()=>!!e.pref,f=()=>g()?l("preference.edit"):l("preference.add"),p=async h=>{h.preventDefault();const k=n().trim(),m=i().trim();if(!(!k||!m)){s(!0),c("");try{const y=e.pref?.id??"";await K(y?`panel/knowledge/preference/${encodeURIComponent(y)}`:"panel/knowledge/preference",{method:y?"PATCH":"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({key:k,value:m})}),t?.close(),e.onSaved()}catch(y){c(y?.message||l("preference.save_failed"))}finally{s(!1)}}};return(()=>{var h=qh(),k=h.firstChild,m=k.firstChild,y=k.nextSibling,w=y.firstChild,T=w.nextSibling,P=T.firstChild,C=P.nextSibling,b=T.nextSibling,A=b.firstChild,L=A.nextSibling,x=b.nextSibling,E=x.firstChild,I=E.nextSibling;return yi(h,"close",e.onClose),qe(S=>{t=S,S?.showModal()},h),d(m,f),y.addEventListener("submit",S=>void p(S)),d(P,()=>l("preference.key")),C.$$input=S=>r(S.target.value),d(A,()=>l("preference.value")),L.$$input=S=>a(S.target.value),d(y,v(R,{get when(){return!!u()},get children(){var S=Fh();return d(S,u),S}}),x),E.$$click=()=>{t?.close(),e.onClose()},d(E,()=>l("common.cancel")),d(I,(()=>{var S=ye(()=>!!o());return()=>S()?l("common.saving"):l("common.save")})()),B(()=>I.disabled=o()),B(()=>w.value=e.pref?.id??""),B(()=>C.value=n()),B(()=>L.value=i()),h})()}function Gh(e){const[t,n]=G([]),[r,i]=G(!1),[a,o]=G(void 0),[s,u]=G(!1),c=async()=>{i(!0);try{const y=await K("panel/knowledge/preference");n(Array.isArray(y)?y:[])}catch{n([])}finally{i(!1)}},g=async y=>{if(y)try{await K(`panel/knowledge/preference/${encodeURIComponent(y)}`,{method:"DELETE"}),await c()}catch{}},f=()=>{o(null),u(!0)},p=y=>{o(y),u(!0)},h=()=>{u(!1),c()},k=()=>{u(!1)};c();const m=W(()=>{const y=t().length;return y>0?String(y):""});return(()=>{var y=Wh(),w=y.firstChild,T=w.firstChild,P=T.nextSibling,C=P.firstChild,b=C.nextSibling,A=w.nextSibling;return d(T,()=>l("preference.title"),null),d(T,v(R,{get when(){return m()},get children(){var L=zh();return d(L,m),L}}),null),C.$$click=()=>void c(),d(C,()=>l("common.refresh")),b.$$click=f,d(b,()=>l("preference.add")),d(A,v(R,{get when(){return t().length>0},get fallback(){return(()=>{var L=Kh();return d(L,()=>l("preference.none")),L})()},get children(){return v(ke,{get each(){return t()},children:L=>(()=>{var x=Hh(),E=x.firstChild,I=E.firstChild,S=I.nextSibling,F=S.nextSibling,D=F.firstChild,q=E.nextSibling;return x.$$keydown=j=>{(j.key==="Enter"||j.key===" ")&&p(L)},x.$$click=()=>p(L),d(I,()=>L.key),d(S,()=>Vh(L)),D.$$click=j=>{j.stopPropagation(),g(L.id)},d(D,()=>l("common.delete")),d(q,()=>L.value),B(j=>{var X=L.id,re=L.scope,N=L.source,U=L.id,ce=l("preference.delete_button_title"),ge=l("preference.delete_button_title");return X!==j.e&&$(x,"data-pref-id",j.e=X),re!==j.t&&$(S,"data-scope",j.t=re),N!==j.a&&$(S,"data-source",j.a=N),U!==j.o&&$(D,"data-pref-id",j.o=U),ce!==j.i&&$(D,"title",j.i=ce),ge!==j.n&&$(D,"aria-label",j.n=ge),j},{e:void 0,t:void 0,a:void 0,o:void 0,i:void 0,n:void 0}),x})()})}})),d(y,v(R,{get when(){return s()},get children(){return v(Jh,{get pref(){return ye(()=>a()===null)()?null:a()},onClose:k,onSaved:h})}}),null),B(()=>C.disabled=r()),y})()}Ce(["input","click","keydown"]);var Qh=_("<div class=interaction-panel-empty>"),Zh=_("<div class=interaction-panel>"),Xh=_('<div class="interaction-body md-content">'),Yh=_("<div class=interaction-error>"),co=_('<button class="btn btn-primary">'),Rr=_('<button class="btn btn-ghost">'),ey=_("<div class=interaction-alert><div class=interaction-title> </div><div class=interaction-actions>");function Or(e){return!!e&&typeof e=="object"&&!Array.isArray(e)}function ty(e){return e.type==="permission"?"🔒":"❓"}function ny(e){const t=Or(e?.payload)?e.payload:null,n=Array.isArray(t?.questions)?t.questions:[];return n.length===0?null:n.map(r=>{const i=Or(r)?r:null,o=(Array.isArray(i?.options)?i.options:[]).find(s=>Or(s)&&typeof s.label=="string"&&s.label.trim());return o&&typeof o.label=="string"?[o.label.trim()]:null})}function ry(e){return!e||e.status!=="pending"?!1:e.type==="permission"?z.autoPermission:e.type==="question"?z.autoQuestion||z.unattended:!1}function iy(e){const[t,n]=G(!1),[r,i]=G({}),a=new Map,o=1e4,s=W(()=>{const m=O.board?.interactions;return Array.isArray(m)?m.filter(y=>y?.status==="pending"):[]});function u(m,y){i(w=>({...w,[m]:y}))}function c(m){i(y=>{const w={...y};return delete w[m],w})}async function g(m,y,w={}){if(!t()){n(!0),c(m),a.delete(m);try{if(y==="once"||y==="always"){await K(`interaction/${m}/reply`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({reply:y}),signal:AbortSignal.timeout(3e4)}),e.onRespond?.(m,{reply:y});return}const T=Array.isArray(w.answers)?w.answers:null,P=typeof w.message=="string"&&w.message.trim()?w.message.trim():"";await K(`interaction/${m}/reply`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({...T?{answers:T}:{},...P?{message:P}:{}}),signal:AbortSignal.timeout(3e4)}),e.onRespond?.(m,{answers:T,message:P})}catch(T){console.error("[InteractionPanel] resolveInteraction failed",T);const P=T?.message||String(T);u(m,P),a.set(m,Date.now())}finally{n(!1)}}}async function f(m){if(!t()){n(!0),c(m);try{await K(`interaction/${m}/reject`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({}),signal:AbortSignal.timeout(3e4)}),e.onRespond?.(m,{rejected:!0})}catch(y){console.error("[InteractionPanel] rejectInteraction failed",y),u(m,y?.message||String(y))}finally{n(!1)}}}function p(m){if(t()||!ry(m))return;const y=a.get(m.id);if(y&&Date.now()-y<o)return;if(m.type==="permission"){const T=z.autoPermission?"always":"once";g(m.id,T);return}const w=ny(m);if(!w||w.some(T=>!Array.isArray(T)||T.length===0)){console.warn("[InteractionPanel] Skipping auto question reply — missing structured options",{interactionID:m.id});return}g(m.id,"answer",{answers:w})}const h=W(()=>s()[0]??null);let k="";return W(()=>{const m=h();if(!m){k="";return}m.id!==k&&(k=m.id,queueMicrotask(()=>p(m)))}),(()=>{var m=Zh();return d(m,v(ke,{get each(){return s()},children:y=>(()=>{var w=ey(),T=w.firstChild,P=T.firstChild,C=T.nextSibling;return d(T,()=>ty(y),P),d(T,()=>y.title,null),d(w,v(R,{get when(){return y.body},get children(){var b=Xh();return d(b,()=>y.body),b}}),C),d(w,v(R,{get when(){return r()[y.id]},get children(){var b=Yh();return d(b,()=>l("interaction.error",{message:r()[y.id]})),b}}),C),d(C,v(R,{get when(){return y.type==="permission"},get fallback(){return[(()=>{var b=co();return b.$$click=()=>g(y.id,"answer"),d(b,()=>l("interaction.answer")),B(A=>{var L=t(),x=l("interaction.answer_title"),E=l("interaction.answer_title");return L!==A.e&&(b.disabled=A.e=L),x!==A.t&&$(b,"title",A.t=x),E!==A.a&&$(b,"aria-label",A.a=E),A},{e:void 0,t:void 0,a:void 0}),b})(),(()=>{var b=Rr();return b.$$click=()=>f(y.id),d(b,()=>l("interaction.skip")),B(A=>{var L=t(),x=l("interaction.skip_title"),E=l("interaction.skip_title");return L!==A.e&&(b.disabled=A.e=L),x!==A.t&&$(b,"title",A.t=x),E!==A.a&&$(b,"aria-label",A.a=E),A},{e:void 0,t:void 0,a:void 0}),b})()]},get children(){return[(()=>{var b=co();return b.$$click=()=>g(y.id,"always"),d(b,()=>l("interaction.always_allow")),B(A=>{var L=t(),x=l("interaction.always_allow_title"),E=l("interaction.always_allow_title");return L!==A.e&&(b.disabled=A.e=L),x!==A.t&&$(b,"title",A.t=x),E!==A.a&&$(b,"aria-label",A.a=E),A},{e:void 0,t:void 0,a:void 0}),b})(),(()=>{var b=Rr();return b.$$click=()=>g(y.id,"once"),d(b,()=>l("interaction.allow_once")),B(A=>{var L=t(),x=l("interaction.allow_once_title"),E=l("interaction.allow_once_title");return L!==A.e&&(b.disabled=A.e=L),x!==A.t&&$(b,"title",A.t=x),E!==A.a&&$(b,"aria-label",A.a=E),A},{e:void 0,t:void 0,a:void 0}),b})(),(()=>{var b=Rr();return b.$$click=()=>f(y.id),d(b,()=>l("interaction.reject")),B(A=>{var L=t(),x=l("interaction.reject_title"),E=l("interaction.reject_title");return L!==A.e&&(b.disabled=A.e=L),x!==A.t&&$(b,"title",A.t=x),E!==A.a&&$(b,"aria-label",A.a=E),A},{e:void 0,t:void 0,a:void 0}),b})()]}})),B(()=>$(w,"data-id",y.id)),w})()}),null),d(m,v(R,{get when(){return s().length===0},get children(){return Qh()}}),null),m})()}Ce(["click"]);function ay(){const e=document.getElementById("aboutRuntimeGrid");if(!e)return;const t=V.config,n=[];if(t&&(t.version&&n.push([l("about.server_version"),t.version]),t.platform&&n.push([l("about.platform"),t.platform]),t.goVersion&&n.push([l("about.go_version"),t.goVersion])),window.__TAURI__?n.push([l("about.runtime_type"),"Tauri Desktop"]):n.push([l("about.runtime_type"),"Browser"]),n.length===0){e.textContent=l("about.no_info");return}e.innerHTML=n.map(([i,a])=>`<div class="about-info-label">${i}</div><div class="about-info-value">${a}</div>`).join("")}function Ii(e){const t=document.getElementById("configDialog");t&&(t.open||t.showModal(),_r().then(()=>ay()))}function oy(){const e=document.getElementById("settingsForm"),t=document.getElementById("settingsDialog"),n=document.getElementById("btnCancelSettings");!e||!t||e.__handlersBound||(e.__handlersBound=!0,e.addEventListener("submit",r=>{r.preventDefault();const i=document.getElementById("serverUrl")?.value||"",a=document.getElementById("serverPassword")?.value||"",o=document.getElementById("serverUsername")?.value||"opencorvus";me({serverUrl:i,password:a,username:o}),bn({serverUrl:i,password:a,username:o}),Ae(),t.close()}),n?.addEventListener("click",()=>{t.close()}))}function sy(){document.querySelectorAll("dialog.dialog").forEach(e=>{const t=e;t.dataset.backdropClose!=="true"&&(t.dataset.backdropClose="true",t.addEventListener("click",n=>{n.target===t&&t.close()}))})}function cr(e){return!!e&&typeof e=="object"&&!Array.isArray(e)}function ol(e){return(V.providerCatalog?.all??[]).find(t=>t.id===e)}function $n(e){return ol(e)?.name||e}function ly(e){return Array.isArray(V.providerCatalog?.connected)&&V.providerCatalog.connected.includes(e)}function Dt(e){const t=Array.isArray(V.providerAuth?.[e])?V.providerAuth[e]:[],n=[];let r=0;for(const i of t){if(cr(i)){const a=i.type==="oauth"?"oauth":"api",o=typeof i.label=="string"&&i.label.trim()?i.label.trim():a==="oauth"?"OAuth":"API key";n.push({type:a,label:o,index:r})}else if(typeof i=="string"){const a=i.trim();if(a){const o=/oauth/i.test(a)?"oauth":"api",s=a==="api_key"?"API key":a;n.push({type:o,label:s,index:r})}}r++}return n}function Ai(e){const t=Dt(e).filter(n=>n.type==="oauth");return t.length===0?null:t.find(n=>/browser/i.test(n.label))??t[0]}function sl(e,t,n){const r=t??V.config??{},i=ol(e),a=ly(e),o=Dt(e),u=r?.provider?.[e]?.options?.apiKey||i?.key,c=V.providerTest;return c?.providerID===e&&(n===void 0||c?.modelID===n)?{tone:c.ok?"active":"error",label:c.ok?l("llm.status.connected"):l("llm.status.error"),detail:c.message??""}:a?{tone:"active",label:l("llm.status.connected"),detail:l("llm.detail.connected")}:u?{tone:"ready",label:l("llm.status.configured"),detail:l("llm.detail.configured")}:o.length>0?{tone:"warn",label:l("llm.status.auth_required"),detail:Wt("llm.detail.auth_methods",o.length)}:(i?.env?.length??0)>0?{tone:"warn",label:l("llm.status.needs_api_key"),detail:l("llm.detail.needs_api_key",{names:i.env.join(", ")})}:{tone:"",label:l("llm.status.available"),detail:l("llm.detail.available")}}function ll(e,t,n){return JSON.stringify([e,t,n])}function cy(e){const t=V.providerCatalog,n=Array.isArray(t?.all)?[...t.all]:[],r=t?.connected??[];return n.sort((i,a)=>{const o=r.includes(i.id)?0:1,s=r.includes(a.id)?0:1;return o!==s?o-s:(i.name??i.id).localeCompare(a.name??a.id)}),n.map(i=>({...i,stateLabel:sl(i.id,e).label}))}function cl(e){const n=(V.providerCatalog?.all??[]).find(r=>r.id===e);return Object.keys(n?.models??{}).sort((r,i)=>r.localeCompare(i))}function uy(e,t){const n=cl(e),r=V.providerCatalog;if(typeof t?.model=="string"&&t.model.startsWith(`${e}/`)){const a=t.model.slice(e.length+1);if(n.includes(a))return a}const i=r?.default?.[e];return i&&n.includes(i)?i:n[0]??""}async function dy(e,t){return K(`provider/${e}/test`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({modelID:t})})}function ul(e){if(!cr(e)||typeof e.key!="string"||typeof e.message!="string")return null;if(e.type==="text")return{type:"text",key:e.key,message:e.message,placeholder:typeof e.placeholder=="string"?e.placeholder:""};if(e.type!=="select"||!Array.isArray(e.options))return null;const t=e.options.flatMap(n=>!cr(n)||typeof n.label!="string"||typeof n.value!="string"?[]:[{label:n.label,value:n.value,...typeof n.hint=="string"?{hint:n.hint}:{}}]);return t.length?{type:"select",key:e.key,message:e.message,options:t}:null}async function dl(e,t,n){const r={},i=$n(e);for(;;){const a=await K(`provider/${e}/auth/prompts`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({method:t,inputs:r}),signal:AbortSignal.timeout(3e5)}),s=(Array.isArray(a)?a.map(ul).filter(Boolean):[]).find(c=>!Object.hasOwn(r,c.key));if(!s)return r;let u;if(s.type==="select"?u=await n.nativeSelect(s.message,{title:i,selectLabel:s.message,options:s.options,okLabel:l("common.ok"),cancelLabel:l("common.cancel")}):u=await n.nativePrompt(s.message,{title:i,inputLabel:s.message,inputPlaceholder:s.placeholder,okLabel:l("common.submit"),cancelLabel:l("common.cancel")}),u==null)return null;r[s.key]=String(u).trim()}}async function fy(e,t,n){return await K(`provider/${e}/auth/execute`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({method:t,inputs:n}),signal:AbortSignal.timeout(3e5)}),!0}async function fl(e,t,n){const r=Dt(e),i=typeof t=="number",a=i?r.find(u=>u.index===t):Ai(e);if(!a||!i&&!await n.nativeConfirm(`${$n(e)} ${l("llm.status.auth_required")}: ${a.label}`,{title:l("llm.title"),okLabel:l("common.open"),cancelLabel:l("common.cancel"),kind:"info"}))return!1;const o=await dl(e,a.index,n);if(o==null)return!1;const s=await K(`provider/${e}/oauth/authorize`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({method:a.index,inputs:o}),signal:AbortSignal.timeout(3e5)});if(!cr(s)||typeof s.url!="string"||typeof s.method!="string")throw new Error("OAuth authorization unavailable");if(await n.nativeOpen(s.url),s.method==="code"){const u=await n.nativePrompt([s.instructions,s.url].filter(Boolean).join(`
+  </div>`;
+    deps.document?.body?.insertAdjacentHTML("beforeend", html);
+    modal = deps.document?.getElementById("interaction-modal");
+    modal?.querySelectorAll("[data-action]")?.forEach((btn) => {
+      const el = btn;
+      el.addEventListener("click", () => {
+        const action = el.dataset.action;
+        if (action === "reject") void rejectInteraction(interaction.id);
+        else void resolveInteraction(interaction.id, action ?? "");
+      });
+    });
+    void refreshInteractionAttention();
+  }
+  function attentionActive() {
+    if (!pendingInteraction) return false;
+    if (!deps.document) return true;
+    return deps.document.visibilityState === "hidden" || !deps.document.hasFocus();
+  }
+  async function refreshInteractionAttention() {
+    await deps.setTrayAttention?.(attentionActive());
+  }
+  function disableInteractionButtons(id) {
+    const alert = deps.document?.querySelector(
+      `.interaction-alert[data-id="${id}"]`
+    );
+    alert?.querySelectorAll("button")?.forEach((btn) => {
+      const el = btn;
+      el.disabled = true;
+      el.style.opacity = "0.5";
+    });
+    const modal = deps.document?.querySelector(
+      `#interaction-modal[data-interaction-id="${id}"]`
+    );
+    modal?.querySelectorAll("[data-action]")?.forEach((btn) => {
+      const el = btn;
+      el.disabled = true;
+      el.style.opacity = "0.5";
+    });
+    const title = alert?.querySelector(".interaction-title");
+    if (title) title.textContent += deps.t("interaction.processing_suffix");
+  }
+  function showInteractionError(id, msg) {
+    const alert = deps.document?.querySelector(
+      `.interaction-alert[data-id="${id}"]`
+    );
+    const title = alert?.querySelector(".interaction-title");
+    if (title) title.textContent = deps.t("interaction.error", { message: msg });
+    alert?.querySelectorAll("button")?.forEach((btn) => {
+      const el = btn;
+      el.disabled = false;
+      el.style.opacity = "";
+    });
+  }
+  async function resolveInteraction(id, action, input = {}) {
+    if (busy) return;
+    busy = true;
+    autoResolveFailed.delete(id);
+    disableInteractionButtons(id);
+    try {
+      if (action === "once" || action === "always") {
+        await api(`interaction/${id}/reply`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ reply: action }),
+          signal: AbortSignal.timeout(3e4)
+        });
+        return;
+      }
+      const answers = Array.isArray(input.answers) ? input.answers : null;
+      const message = typeof input.message === "string" && input.message.trim() ? input.message.trim() : "";
+      if (!answers && !message) {
+        const answer = await deps.nativePrompt(
+          deps.t("interaction.reply_prompt"),
+          {
+            title: deps.t("interaction.reply_title"),
+            okLabel: deps.t("common.submit"),
+            cancelLabel: deps.t("common.cancel"),
+            inputLabel: deps.t("interaction.answer_label")
+          }
+        );
+        if (answer == null) return;
+        await api(`interaction/${id}/reply`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: answer }),
+          signal: AbortSignal.timeout(3e4)
+        });
+        return;
+      }
+      await api(`interaction/${id}/reply`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          answers: answers || void 0,
+          message: message || void 0
+        }),
+        signal: AbortSignal.timeout(3e4)
+      });
+    } catch (error) {
+      logger.error("ui", "Failed to resolve interaction", {
+        error: String(error)
+      });
+      showInteractionError(id, error?.message || String(error));
+      autoResolveFailed.set(id, Date.now());
+    } finally {
+      dismissInteractionModal();
+      busy = false;
+      await deps.loadBoard();
+    }
+  }
+  async function rejectInteraction(id) {
+    if (busy) return;
+    busy = true;
+    disableInteractionButtons(id);
+    try {
+      await api(`interaction/${id}/reject`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+        signal: AbortSignal.timeout(3e4)
+      });
+    } catch (error) {
+      logger.error("ui", "Failed to reject interaction", {
+        error: String(error)
+      });
+      showInteractionError(id, error?.message || String(error));
+    } finally {
+      dismissInteractionModal();
+      busy = false;
+      await deps.loadBoard();
+    }
+  }
+  function isInteractionBusy() {
+    return busy;
+  }
+  function renderInteractions(interactions) {
+    const pending = Array.isArray(interactions) ? interactions.filter((item) => item.status === "pending") : [];
+    const body = deps.dom?.goalsBody;
+    body?.querySelectorAll(".interaction-alert")?.forEach((item) => item.remove());
+    if (pending.length === 0) {
+      dismissInteractionModal();
+      return;
+    }
+    if (body) {
+      body.insertAdjacentHTML(
+        "beforeend",
+        pending.map(interactionAlertHtml).join("")
+      );
+      bindInteractionActions(body);
+    }
+    if (!busy && shouldAutoResolveInteraction(pending[0])) {
+      const cooldownMs = 1e4;
+      const lastFail = autoResolveFailed.get(pending[0].id);
+      if (lastFail && Date.now() - lastFail < cooldownMs) {
+        pendingInteraction = pending[0];
+        showInteractionModal(pending[0]);
+        return;
+      }
+      dismissInteractionModal();
+      if (pending[0].type === "permission") {
+        void resolveInteraction(
+          pending[0].id,
+          autoPermissionReplyAction()
+        );
+        return;
+      }
+      const answers = autoInteractionAnswers(pending[0]);
+      if (!answers || answers.some((item) => !Array.isArray(item) || item.length === 0)) {
+        logger.warn(
+          "ui",
+          "Skipping automatic question reply due to missing structured options",
+          { interactionID: pending[0].id }
+        );
+        pendingInteraction = pending[0];
+        showInteractionModal(pending[0]);
+        return;
+      }
+      void resolveInteraction(pending[0].id, "answer", {
+        answers
+      });
+      return;
+    }
+    if (!busy) {
+      pendingInteraction = pending[0];
+      showInteractionModal(pending[0]);
+      return;
+    }
+    pendingInteraction = null;
+    void refreshInteractionAttention();
+  }
+  return {
+    interactionAlertHtml,
+    renderInteractions,
+    showInteractionModal,
+    dismissInteractionModal,
+    resolveInteraction,
+    rejectInteraction,
+    isInteractionBusy,
+    refreshInteractionAttention
+  };
+}
 
-`),{title:l("llm.title"),inputLabel:a.label,inputPlaceholder:"Redirect URL or authorization code (leave blank if it auto-completes)",okLabel:l("common.submit"),cancelLabel:l("common.cancel")});return u==null?!1:(await K(`provider/${e}/oauth/callback`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({method:a.index,code:u}),signal:AbortSignal.timeout(3e5)}),!0)}return n.showLlmNotice(s.instructions||s.url,"warn",0),await K(`provider/${e}/oauth/callback`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({method:a.index}),signal:AbortSignal.timeout(3e5)}),!0}async function uo(e,t,n){if(t.type==="oauth")return fl(e,t.index,n);const r=await dl(e,t.index,n);return r==null?!1:Object.keys(r).length===0?"input":(await fy(e,t.index,r),!0)}async function gy(e,t){const n=Dt(e);if(!e||n.length===0)return!1;if(n.length===1&&n[0])return await uo(e,n[0],t)===!0;const r=await t.nativeSelect(l("llm.auth_choose_method"),{title:$n(e),selectLabel:l("llm.auth_method"),options:n.map(o=>({label:o.label,value:String(o.index),hint:o.type==="oauth"?l("llm.auth_type_oauth"):l("llm.auth_type_api")}))});if(r==null)return!1;const i=n.find(o=>String(o.index)===r);return i?await uo(e,i,t)===!0:!1}async function my(e){const t=await K("config"),n=structuredClone(t||{});return e(n),K("config",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(n)})}function Ei(e,...t){const n=window[e];if(typeof n=="function")return n(...t)}async function py(e,t){return!!(await Ei("showAppDialog",{title:t?.title,message:e,kind:t?.kind||"warning",okLabel:t?.okLabel,cancelLabel:t?.cancelLabel,cancel:!0}))?.confirmed}async function hy(e,t){const n=await Ei("showAppDialog",{title:t?.title,message:e,kind:t?.kind||"info",okLabel:t?.okLabel,cancelLabel:t?.cancelLabel,cancel:!0,input:!0,inputLabel:t?.inputLabel,inputPlaceholder:t?.inputPlaceholder||"",inputValue:t?.inputValue||""});return n?.confirmed?n.value??null:null}async function yy(e,t){const n=Array.isArray(t?.options)?t.options:[];if(!n.length)return null;const r=await Ei("showAppDialog",{title:t?.title,message:e,kind:t?.kind||"info",okLabel:t?.okLabel,cancelLabel:t?.cancelLabel,cancel:!0,select:!0,selectLabel:t?.selectLabel,selectOptions:n,selectValue:t?.selectValue||n[0]?.value||""});return r?.confirmed?r.value??null:null}async function vy(e){if(!e)return!1;const t=/^https?:\/\//i.test(e),n=window.__TAURI__?.core?.invoke;if(typeof n=="function")try{if(t?await n("overlay_open_url",{url:e}):await n("overlay_open_path",{path:e}))return!0}catch{}if(t)return window.open(e,"_blank","noopener"),!0;try{return(await K("path/open",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({path:e})}))?.opened===!0}catch(r){return Ct.debug("ui","path/open fallback failed",{target:e,error:String(r)}),!1}}const by='<svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M2.1 2.1l11.8 11.8" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><path d="M6 6.3A2.8 2.8 0 019.7 10" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><path d="M1.7 8c1.6-2.8 3.8-4.2 6.3-4.2 2.4 0 4.6 1.4 6.3 4.2-.5.9-1 1.6-1.6 2.2" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>',ky='<svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M1.7 8c1.6-2.8 3.8-4.2 6.3-4.2s4.7 1.4 6.3 4.2c-1.6 2.8-3.8 4.2-6.3 4.2S3.3 10.8 1.7 8z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/><circle cx="8" cy="8" r="2.2" stroke="currentColor" stroke-width="1.2"/></svg>',_y='<svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true"><rect x="5.2" y="4.2" width="7.1" height="8.1" rx="1.4" stroke="currentColor" stroke-width="1.2"/><path d="M4.2 10.6H3.7A1.5 1.5 0 012.2 9.1V3.7a1.5 1.5 0 011.5-1.5h5.4a1.5 1.5 0 011.5 1.5v.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>',M={form:null,provider:null,model:null,apiKey:null,apiKeySummary:null,apiKeyToggle:null,apiKeyCopy:null,authAction:null,status:null,summary:null,notice:null,available:null};let fo=!1,un=!1,lt=!1,ur="",bt,gt=0,jr;async function Nr(){await new Promise(e=>setTimeout(e,0))}function gl(){return{nativePrompt:async(...e)=>(await Nr(),hy(...e)),nativeSelect:async(...e)=>(await Nr(),yy(...e)),nativeConfirm:async(...e)=>(await Nr(),py(...e)),nativeOpen:vy,showLlmNotice:Ke}}async function ml(e,t){const n=await K(`provider/${e}/auth/prompts`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({method:t,inputs:{}}),signal:AbortSignal.timeout(3e5)});return(Array.isArray(n)?n.map(ul).filter(Boolean):[]).length>0}function pl(){M.form=document.getElementById("llmForm"),M.provider=document.getElementById("llmProvider"),M.model=document.getElementById("llmModel"),M.apiKey=document.getElementById("llmApiKey"),M.apiKeySummary=document.getElementById("llmApiKeySummary"),M.apiKeyToggle=document.getElementById("btnLlmApiKeyToggle"),M.apiKeyCopy=document.getElementById("btnLlmApiKeyCopy"),M.authAction=document.getElementById("btnLlmAuthAction"),M.status=document.getElementById("llmStatus"),M.summary=document.getElementById("llmSummary"),M.notice=document.getElementById("llmNotice"),M.available=document.getElementById("cfgAvailableProviders")}function Li(){return{providerID:M.provider?.value?.trim()||"",modelID:M.model?.value?.trim()||"",apiKey:M.apiKey?.value??""}}function mi(e){const t={...V.providerAuthDismissed||{}};delete t[e],_e("providerAuthDismissed",t)}function dr(){if(!M.summary)return;const{providerID:e,modelID:t}=Li();if(!e||!t){const r=l("llm.summary_empty");M.summary.textContent=r,M.summary.title=r;return}const n=l("llm.summary_value",{provider:$n(e),model:t});M.summary.textContent=n,M.summary.title=n}function wy(){if(!M.available)return;const e=Array.isArray(V.providerCatalog?.all)?V.providerCatalog.all.length:0,t=Array.isArray(V.providerCatalog?.connected)?V.providerCatalog.connected.length:0,n=e===0?l("llm.available_count_zero"):`${t}/${e}`;M.available.textContent=n,M.available.title=n,M.available.dataset.status=t>0?"active":e>0?"ready":""}function fr(){if(M.apiKey&&(M.apiKey.type=un?"text":"password"),M.apiKeyToggle){M.apiKeyToggle.innerHTML=un?by:ky;const e=l(un?"llm.api_key_hide":"llm.api_key_show");M.apiKeyToggle.title=e,M.apiKeyToggle.setAttribute("aria-label",e)}if(M.apiKeyCopy){M.apiKeyCopy.innerHTML=_y;const e=l("llm.api_key_copy");M.apiKeyCopy.title=e,M.apiKeyCopy.setAttribute("aria-label",e),M.apiKeyCopy.disabled=!!M.apiKey?.disabled||!M.apiKey?.value?.trim()}if(M.apiKeySummary){const e=M.apiKey?.value?.trim()||"";M.apiKeySummary.textContent=e?l("llm.status.configured"):"",M.apiKeySummary.dataset.tone=e?"good":""}}function pi(e){if(!M.authAction)return;const t=Dt(e).length>0;M.authAction.classList.toggle("hidden",!t),M.authAction.disabled=!t||!!M.provider?.disabled,t&&(M.authAction.textContent=l("llm.auth_connect"),M.authAction.title=l("llm.auth_connect_title"),M.authAction.setAttribute("aria-label",l("llm.auth_connect_title")))}function Ze(e,t){if(!M.status)return;const n=e||M.provider?.value?.trim()||"",r=M.model?.value?.trim()||"";if(!n){M.status.textContent=l("llm.status.unknown"),M.status.dataset.status="",M.status.title="",pi(""),dr();return}const i=sl(n,t??V.config,r);M.status.textContent=i.label,M.status.dataset.status=i.tone,M.status.title=i.detail||i.label,pi(n),dr()}function go(e){const t=!!e;M.provider&&(M.provider.disabled=t),M.model&&(M.model.disabled=t),M.apiKey&&(M.apiKey.disabled=t),M.apiKeyToggle&&(M.apiKeyToggle.disabled=t),M.apiKeyCopy&&(M.apiKeyCopy.disabled=t||!M.apiKey?.value?.trim()),pi(M.provider?.value||""),fr()}function Ke(e,t="",n=2600){M.notice&&(jr&&clearTimeout(jr),M.notice.textContent=e||"",M.notice.dataset.status=t,M.notice.dataset.open=e?"true":"false",!(!e||n<=0)&&(jr=setTimeout(()=>{M.notice&&(M.notice.dataset.open="false")},n)))}function hl(e=!1,t=!1){if(!M.provider||!M.model)return;const n=M.provider.value.trim(),r=cl(n),i=M.model.value;if(M.model.innerHTML=r.map(a=>`<option value="${a}">${a}</option>`).join(""),lt&&!t)M.model.value=r.includes(i)?i:r[0]||"";else{const a=uy(n,V.config);M.model.value=r.includes(a)?a:r[0]||""}if((!lt||t)&&M.apiKey&&(M.apiKey.value=V.config?.provider?.[n]?.options?.apiKey||""),e){const a=Li();ur=ll(a.providerID,a.modelID,a.apiKey)}Ze(n,V.config),fr()}function $y(e=!1){if(!M.provider)return;const t=cy(V.config),n=M.provider.value,r=typeof V.config?.model=="string"?V.config.model:"",i=r&&r.includes("/")?r.split("/")[0]:"";if(M.provider.innerHTML=t.map(a=>`<option value="${a.id}">${$n(a.id)} · ${a.stateLabel}</option>`).join(""),lt)M.provider.value=t.some(a=>a.id===n)?n:t[0]?.id||"";else{const a=i||t[0]?.id||"";M.provider.value=t.some(o=>o.id===a)?a:t[0]?.id||""}hl(e,!1)}async function Sy(){const e=Li(),t=ll(e.providerID,e.modelID,e.apiKey);if(t===ur||!e.providerID||!e.modelID)return;const n=++gt;rn(null),go(!0),M.status&&(M.status.textContent=l("llm.status.saving"),M.status.dataset.status="warn",M.status.title=`${e.providerID}/${e.modelID}`),Ke(l("llm.notice.saving",{provider:e.providerID,model:e.modelID}),"warn",0);try{const r=await my(s=>{s.model=`${e.providerID}/${e.modelID}`,s.provider=s.provider||{};const u=s.provider[e.providerID]||{};u.options=u.options||{},e.apiKey.trim()&&(u.options.apiKey=e.apiKey.trim()),e.apiKey.trim()||delete u.options.apiKey,Object.keys(u.options).length===0&&delete u.options,Object.keys(u).length>0&&(s.provider[e.providerID]=u),Object.keys(u).length===0&&delete s.provider[e.providerID],Object.keys(s.provider).length===0&&delete s.provider});if(n!==gt)return;if(_e("config",r??null),ur=t,!(Array.isArray(V.providerCatalog?.connected)&&V.providerCatalog.connected.includes(e.providerID))&&Dt(e.providerID).length>0){const s=Ai(e.providerID);if(!s){Ze(e.providerID,V.config),Ke(l("llm.status.auth_required"),"warn",2600);return}if(await ml(e.providerID,s.index)){Ze(e.providerID,V.config),Ke(l("llm.status.auth_required"),"warn",2600);return}const u=await fl(e.providerID,void 0,gl());if(n!==gt||(await _r(),n!==gt))return;if(!u){Ro(e.providerID),Ze(e.providerID,V.config),Ke(l("llm.status.auth_required"),"warn",2600);return}mi(e.providerID)}const o=await dy(e.providerID,e.modelID);if(n!==gt)return;rn({providerID:e.providerID,modelID:e.modelID,ok:!!o?.ok,message:o?.message||(o?.ok?l("llm.status.connected"):l("llm.notice.test_failed"))}),lt=!1,Ze(e.providerID,V.config),Ke(V.providerTest?.message||"",V.providerTest?.ok?"active":"error")}catch(r){if(n!==gt)return;const i=r instanceof Error?r.message:String(r||"");rn({providerID:e.providerID,modelID:e.modelID,ok:!1,message:i||l("llm.notice.update_failed")}),Ze(e.providerID,V.config),Ke(V.providerTest?.message||"","error",3200)}finally{n===gt&&go(!1)}}function Fn(e=220){rn(null),Ze(M.provider?.value||"",V.config),bt&&clearTimeout(bt),bt=setTimeout(()=>{bt=void 0,Sy()},e)}async function xy(){const e=M.provider?.value?.trim()||"";if(rn(null),Ze(e,V.config),!e)return;const t=Array.isArray(V.providerCatalog?.connected)&&V.providerCatalog.connected.includes(e),n=Dt(e);if(!t&&n.length>0){const r=Ai(e);if(!r)return;const i=e;if(await ml(e,r.index))return(M.provider?.value?.trim()||"")!==i,void 0;if((M.provider?.value?.trim()||"")!==i)return}Fn(180)}async function Ty(){const e=M.apiKey?.value?.trim()||"";if(e)try{await navigator.clipboard.writeText(e),Ke(l("llm.api_key_copy_done"),"active",1800)}catch(t){const n=t instanceof Error?t.message:"";Ke(n||l("common.error"),"error",3200)}}function yl(e=!lt){pl(),!(!M.provider||!M.model||!M.apiKey)&&($y(e),wy(),Ze(M.provider.value,V.config))}function Cy(){fo||(pl(),!(!M.provider||!M.model||!M.apiKey)&&(fo=!0,M.form?.addEventListener("submit",e=>{e.preventDefault()}),M.provider.addEventListener("change",()=>{lt=!0,mi(M.provider?.value||""),hl(!1,!0),dr(),xy()}),M.model.addEventListener("change",()=>{lt=!0,dr(),Fn(180)}),M.apiKey.addEventListener("input",()=>{lt=!0,fr(),Fn(220)}),M.apiKeyToggle?.addEventListener("click",e=>{e.preventDefault(),un=!un,fr()}),M.apiKeyCopy?.addEventListener("click",e=>{e.preventDefault(),Ty()}),M.authAction?.addEventListener("click",async e=>{e.preventDefault(),e.stopPropagation(),bt&&(clearTimeout(bt),bt=void 0);try{const t=M.provider?.value?.trim()||"";if(await gy(t,gl())!==!0){t&&Ro(t);return}t&&mi(t),await _r(),ur="",Fn(0)}catch(t){const n=t instanceof Error?t.message:String(t||"");Ke(n,"error",3200);const r=window.nativeMessage;typeof r=="function"&&await r(n,{title:l("llm.title"),kind:"error"})}}),yl(!0)))}const[Dy,vl]=G(!1),[Mi,Iy]=G(!1);function Ay(e){return!!e&&typeof e=="object"&&!Array.isArray(e)}function wr(e){Iy(e==="coding"),jp(e)}function Ey(){const e=document.getElementById("appDialog"),t=document.getElementById("appDialogTitle"),n=document.getElementById("appDialogBody"),r=document.getElementById("appDialogInputField"),i=document.getElementById("appDialogInputLabel"),a=document.getElementById("appDialogInput"),o=document.getElementById("appDialogSelectField"),s=document.getElementById("appDialogSelectLabel"),u=document.getElementById("appDialogSelect"),c=document.getElementById("btnAppDialogOk"),g=document.getElementById("btnAppDialogCancel");if(!e||!t||!n||!c||!g||e.dataset.bridgeBound==="true")return;e.dataset.bridgeBound="true";let f=null,p=!1;const h=m=>{const y=f;f=null;const w=r?.classList.contains("hidden")?o?.classList.contains("hidden")?null:u?.value??null:a?.value??null;e.close(),y?.({confirmed:m,value:w})};g.addEventListener("click",()=>h(!1)),c.addEventListener("click",()=>h(!0)),e.addEventListener("close",()=>{const m=p;if(p=!1,f){const y=f;f=null,y({confirmed:!1,value:null})}m&&queueMicrotask(()=>Ii())});const k=(m={})=>{if(f){const w=f;f=null,w({confirmed:!1,value:null})}const y=document.getElementById("configDialog");if(p=y?.open===!0,p&&y?.close(),t.textContent=m.title||l("dialog.notice"),n.textContent=m.message||"",c.textContent=m.okLabel||l("common.ok"),g.textContent=m.cancelLabel||l("common.cancel"),g.hidden=m.cancel!==!0,r&&a&&i&&(r.classList.toggle("hidden",m.input!==!0),i.textContent=m.inputLabel||l("dialog.input"),a.placeholder=m.inputPlaceholder||"",a.value=m.inputValue||""),o&&u&&s){o.classList.toggle("hidden",m.select!==!0),s.textContent=m.selectLabel||l("dialog.input"),u.innerHTML="";for(const w of m.selectOptions||[]){if(!w?.value)continue;const T=document.createElement("option");T.value=w.value,T.textContent=w.label||w.value,T.selected=w.value===(m.selectValue||""),u.appendChild(T)}!u.value&&u.options.length>0&&(u.value=m.selectValue||u.options[0].value)}return e.showModal(),m.input&&a?queueMicrotask(()=>a.focus()):queueMicrotask(()=>c.focus()),new Promise(w=>{f=w})};window.showAppDialog=k,window.nativeMessage=async(m,y={})=>k({title:y.title,message:m,kind:y.kind,okLabel:y.okLabel})}function Ly(){Ey(),window.createOverlayInteractions=nl,window.renderMarkdown=Ie,window.persistOverlaySettings=async()=>{Ae()},window.stepZoom=e=>{const t=Ls((z.zoom||1)+e);me("zoom",t),Bs(t),Ae()}}Ly();Xs();Cy();sy();oy();const Rn=document.getElementById("chatScroll");Rn&&(Rn.innerHTML="",Le(()=>v(nd,{container:Rn}),Rn));const Ur=document.getElementById("codingScroll");Ur&&(Ur.innerHTML="",Le(()=>v(hm,{get active(){return Mi()}}),Ur));const Fr=document.getElementById("taskListPanel");Fr&&(Fr.innerHTML="",Le(()=>v(yd,{onSelectTask:e=>void Kt(e),onDeleteTask:e=>void $p(e)}),Fr));const qr=document.getElementById("solidBoardMount");qr&&(qr.innerHTML="",Le(()=>v(pf,{onRetry:()=>{const e=O.selectedTaskID;e&&xp(e)},onReplan:()=>{const e=O.selectedTaskID;e&&Tp(e)},onCancel:()=>{const e=O.selectedTaskID;e&&Cp(e)},onResolveInteraction:async(e,t)=>{try{await K(`interaction/${e}/reply`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({reply:t}),signal:AbortSignal.timeout(3e4)})}catch(n){console.error("[main] resolveInteraction failed",n)}finally{await Re()}},onRejectInteraction:async e=>{try{await K(`interaction/${e}/reject`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({}),signal:AbortSignal.timeout(3e4)})}catch(t){console.error("[main] rejectInteraction failed",t)}finally{await Re()}}}),qr));const mo=document.getElementById("solidChatComposer");mo&&Le(()=>v(Tf,{get enabled(){return Dm()},get busy(){return!!oe.chatRequest},get stopping(){return!!oe.chatRequest?.stopping},onSubmit:(e,t)=>void Zs(e,t),onStop:()=>void Em()}),mo);const po=document.getElementById("solidWindowControls");po&&Le(()=>v(Kf,{}),po);const ho=document.getElementById("solidTitlebarMenu");ho&&Le(()=>v(Zf,{onLocaleChange:e=>{me("locale",e),Ae()},onOpenLog:()=>vl(!0),onOpenSettings:()=>{Ii()}}),ho);const yo=document.getElementById("solidConnBadge");yo&&Le(()=>v(rg,{}),yo);const vo=document.getElementById("solidChangesPanel");vo&&Le(()=>v(Mg,{get hasSelectedTask(){return!!O.selectedTaskID}}),vo);const bo=document.getElementById("solidLogViewer");bo&&Le(()=>v(im,{get open(){return Dy()},onClose:()=>vl(!1)}),bo);const zr=document.getElementById("promptBody");zr&&(zr.innerHTML="",Le(()=>v(eh,{}),zr));const Wr=document.getElementById("channelConfigBody");Wr&&(Wr.innerHTML="",Le(()=>v(dh,{}),Wr));const Kr=document.getElementById("extensionsBody");Kr&&(Kr.innerHTML="",Le(()=>v(Ih,{}),Kr));const Hr=document.getElementById("memoryBody");Hr&&(Hr.innerHTML="",Le(()=>v(Uh,{get taskID(){return O.selectedTaskID||void 0}}),Hr));const Vr=document.getElementById("preferenceBody");Vr&&(Vr.innerHTML="",Le(()=>v(Gh,{}),Vr));const ko=document.getElementById("solidInteractionMount");ko&&Le(()=>v(iy,{onRespond:async()=>{await Re()}}),ko);document.addEventListener("DOMContentLoaded",()=>{const e=()=>Ii();document.getElementById("btnConfigToggle")?.addEventListener("click",e),document.getElementById("btnConfigToggle")?.addEventListener("keydown",t=>{t instanceof KeyboardEvent&&(t.key!=="Enter"&&t.key!==" "||(t.preventDefault(),e()))}),document.getElementById("btnCloseConfigDialog")?.addEventListener("click",()=>{document.getElementById("configDialog")?.close()}),document.getElementById("btnRefreshTasks")?.addEventListener("click",()=>{pr()}),document.getElementById("btnSidebarToggle")?.addEventListener("click",()=>{const t=!z.sidebarCollapsed;me("sidebarCollapsed",t);const n=document.getElementById("sidebar");n&&(n.dataset.collapsed=String(t)),Ae()}),document.getElementById("btnCreateTask")?.addEventListener("click",()=>{const t=window.showAppDialog;typeof t=="function"&&(async()=>{const n=await t({title:l("task.new"),message:l("task.new_prompt"),cancel:!0,input:!0,inputLabel:l("task.new_label"),inputPlaceholder:l("task.new_placeholder")});if(!n?.confirmed||!n.value?.trim())return;const r=await Sp({text:n.value.trim()});r&&Kt(r)})()})});document.getElementById("tabControl")?.addEventListener("click",()=>{wr("control")});document.getElementById("tabCoding")?.addEventListener("click",()=>{wr("coding")});document.getElementById("modeToggle")?.addEventListener("click",()=>{wr(Mi()?"control":"coding")});document.getElementById("btnChatCopyAll")?.addEventListener("click",()=>{rp()});const mt=nl({document,dom:{goalsBody:null},escapeHtml:Rt,renderMarkdown:Ie,t:l,record:Ay,loadBoard:Re,nativePrompt:async(e,t={})=>{const n=window.showAppDialog;if(typeof n!="function")return null;const r=await n({title:t.title,message:e,cancel:!0,input:!0,okLabel:t.okLabel,cancelLabel:t.cancelLabel,inputLabel:t.inputLabel});return r?.confirmed?r.value:null}});Object.assign(window,{renderInteractions:mt.renderInteractions,showInteractionModal:mt.showInteractionModal,dismissInteractionModal:mt.dismissInteractionModal,resolveInteraction:mt.resolveInteraction,rejectInteraction:mt.rejectInteraction,isInteractionBusy:mt.isInteractionBusy,refreshInteractionAttention:mt.refreshInteractionAttention});tn(()=>{Ne(()=>{document.body.dataset.workspace=V.connected?O.selectedTaskID?"task":"empty":"offline",document.body.dataset.connection=V.connectionStatus}),Ne(()=>{Ms(z.theme),Bs(z.zoom),Jf(z.opacity)}),Ne(()=>{bn({serverUrl:z.serverUrl,username:z.username,password:z.password,directory:z.directory})}),Ne(()=>{Uo(z.locale)}),Ne(()=>{z.locale,V.config,V.providerCatalog,V.providerAuth,V.providerTest,yl()}),Ne(()=>{const e=oe.messages.length,t=document.getElementById("chatCount"),n=document.getElementById("btnChatCopyAll");t&&(t.textContent=e>0?String(e):""),n&&(n.disabled=e===0)}),Ne(()=>{const e=O.board?.task,t=document.getElementById("taskStatus"),n=document.getElementById("statusIcon"),r=document.getElementById("statusLabel");t&&(t.hidden=!O.selectedTaskID||Mi()),n&&(n.dataset.status=e?.status||"idle"),r&&(r.textContent=O.selectedTaskID?l(`task.status.${e?.status||"idle"}`):l("task.status.idle"))}),Ne(()=>{z.locale,V.budgetDirty,V.budgetSaving,Gs(O.board?.task)})});Fp({getState:()=>({sidebarCollapsed:z.sidebarCollapsed,sidebarWidth:z.sidebarWidth,sectionsWidth:z.sectionsWidth}),onWidthsChanged:(e,t)=>{me({sidebarWidth:e,sectionsWidth:t}),Ae()}});wr("control");window.__overlayInitSettled=!1;(async()=>{try{await Op()}catch(e){console.error(e)}finally{await xu(),window.__overlayInitSettled=!0}})();async function Sn(e,t={},n){return window.__TAURI_INTERNALS__.invoke(e,t,n)}function My(e){if(e!==void 0){if(typeof e=="string")return e;if("ok"in e&&"cancel"in e)return{OkCancelCustom:[e.ok,e.cancel]};if("yes"in e&&"no"in e&&"cancel"in e)return{YesNoCancelCustom:[e.yes,e.no,e.cancel]};if("ok"in e)return{OkCustom:e.ok}}}async function Py(e={}){return typeof e=="object"&&Object.freeze(e),await Sn("plugin:dialog|open",{options:e})}async function By(e={}){return typeof e=="object"&&Object.freeze(e),await Sn("plugin:dialog|save",{options:e})}async function Ry(e,t){const n=typeof t=="string"?{title:t}:t;return Sn("plugin:dialog|message",{message:e.toString(),title:n?.title?.toString(),kind:n?.kind,okButtonLabel:n?.okLabel?.toString(),buttons:My(n?.buttons)})}async function Oy(e,t){const n=typeof t=="string"?{title:t}:t;return await Sn("plugin:dialog|ask",{message:e.toString(),title:n?.title?.toString(),kind:n?.kind,yesButtonLabel:n?.okLabel?.toString(),noButtonLabel:n?.cancelLabel?.toString()})}async function jy(e,t){const n=typeof t=="string"?{title:t}:t;return await Sn("plugin:dialog|confirm",{message:e.toString(),title:n?.title?.toString(),kind:n?.kind,okButtonLabel:n?.okLabel?.toString(),cancelButtonLabel:n?.cancelLabel?.toString()})}const Ny=Object.freeze(Object.defineProperty({__proto__:null,ask:Oy,confirm:jy,message:Ry,open:Py,save:By},Symbol.toStringTag,{value:"Module"}));
+let codingActive$1 = false;
+function switchTab(tab) {
+  codingActive$1 = tab === "coding";
+  const tabControl = document.getElementById("tabControl");
+  const tabCoding = document.getElementById("tabCoding");
+  const chatScroll = document.getElementById("chatScroll");
+  const codingScroll = document.getElementById("codingScroll");
+  const chatGoalsStrip = document.getElementById("chatGoalsStrip");
+  const taskStatus = document.getElementById("taskStatus");
+  const toggle = document.getElementById("modeToggle");
+  if (tabControl) tabControl.classList.toggle("active", !codingActive$1);
+  if (tabCoding) tabCoding.classList.toggle("active", codingActive$1);
+  if (chatScroll) chatScroll.hidden = codingActive$1;
+  if (codingScroll) codingScroll.hidden = !codingActive$1;
+  if (chatGoalsStrip) chatGoalsStrip.hidden = codingActive$1;
+  if (taskStatus) {
+    taskStatus.hidden = codingActive$1 || !store.selectedTaskID;
+  }
+  if (toggle) {
+    toggle.textContent = codingActive$1 ? "Build" : t("chat.title");
+  }
+}
+
+let paneDrag = null;
+function clampNumber(value, min, max) {
+  return Math.min(Math.max(value, min), max);
+}
+function paneHandleWidth(node) {
+  if (!node) return 0;
+  const style = getComputedStyle(node);
+  if (style.display === "none" || style.visibility === "hidden") return 0;
+  const width = node.getBoundingClientRect().width;
+  if (width > 0) return width;
+  return Number.parseFloat(
+    getComputedStyle(document.documentElement).getPropertyValue(
+      "--ui-resizer-width"
+    )
+  ) || 0;
+}
+function defaultRailWidth() {
+  const scale = currentUIScale();
+  const panelWidth = document.getElementById("panelBody")?.clientWidth ?? window.visualViewport?.width ?? window.innerWidth ?? 900;
+  return clampNumber(panelWidth * 0.24, 240 * scale, 420 * scale);
+}
+function currentUIScale() {
+  if (typeof document === "undefined") return 1;
+  return Number.parseFloat(
+    getComputedStyle(document.documentElement).getPropertyValue("--ui-scale")
+  ) || 1;
+}
+function resolvedPaneWidths(state) {
+  const scale = currentUIScale();
+  const panelWidth = document.getElementById("panelBody")?.clientWidth ?? window.visualViewport?.width ?? window.innerWidth ?? 900;
+  const railMin = 180 * scale;
+  const railMax = 520 * scale;
+  const chatPreferred = 520 * scale;
+  const chatMin = 420 * scale;
+  const collapsedSidebar = 62 * scale;
+  const leftHandle = state.sidebarCollapsed ? 0 : paneHandleWidth(document.getElementById("leftPaneResizer"));
+  const rightHandle = paneHandleWidth(
+    document.getElementById("rightPaneResizer")
+  );
+  let sidebar = clampNumber(
+    state.sidebarWidth ?? defaultRailWidth(),
+    railMin,
+    railMax
+  );
+  let sections = clampNumber(
+    state.sectionsWidth ?? defaultRailWidth(),
+    railMin,
+    railMax
+  );
+  const total = panelWidth - leftHandle - rightHandle;
+  let actualSidebar = state.sidebarCollapsed ? collapsedSidebar : sidebar;
+  const sidebarFloor = state.sidebarCollapsed ? collapsedSidebar : railMin;
+  if (actualSidebar + sections + chatPreferred > total) {
+    let overflow = actualSidebar + sections + chatPreferred - total;
+    const sidebarCap = Math.max(0, actualSidebar - sidebarFloor);
+    const sectionsCap = Math.max(0, sections - railMin);
+    const totalCap = sidebarCap + sectionsCap;
+    if (totalCap > 0) {
+      const sidebarShrink = Math.min(
+        sidebarCap,
+        overflow * (sidebarCap / totalCap)
+      );
+      actualSidebar -= sidebarShrink;
+      overflow -= sidebarShrink;
+      const sectionsShrink = Math.min(sectionsCap, overflow);
+      sections -= sectionsShrink;
+      overflow -= sectionsShrink;
+      if (overflow > 0 && !state.sidebarCollapsed) {
+        const extraSidebar = Math.min(
+          Math.max(0, actualSidebar - railMin),
+          overflow
+        );
+        actualSidebar -= extraSidebar;
+      }
+    }
+  }
+  if (actualSidebar + sections + chatMin > total) {
+    const overflow = actualSidebar + sections + chatMin - total;
+    const sectionsShrink = Math.min(
+      Math.max(0, sections - railMin),
+      overflow
+    );
+    sections -= sectionsShrink;
+    const remaining = overflow - sectionsShrink;
+    if (remaining > 0 && !state.sidebarCollapsed) {
+      actualSidebar -= Math.min(
+        Math.max(0, actualSidebar - railMin),
+        remaining
+      );
+    }
+  }
+  sidebar = clampNumber(actualSidebar, sidebarFloor, railMax);
+  sections = clampNumber(sections, railMin, railMax);
+  return { sidebar: Math.round(sidebar), sections: Math.round(sections) };
+}
+function renderPaneLayout(state) {
+  if (typeof document === "undefined") return;
+  const widths = resolvedPaneWidths(state);
+  document.documentElement.style.setProperty(
+    "--ui-sidebar-width",
+    `${widths.sidebar}px`
+  );
+  document.documentElement.style.setProperty(
+    "--ui-sections-width",
+    `${widths.sections}px`
+  );
+}
+function resizePane(side, clientX, callbacks) {
+  const scale = currentUIScale();
+  const railMin = 180 * scale;
+  const railMax = 520 * scale;
+  const chatMin = 420 * scale;
+  const state = callbacks.getState();
+  if (side === "left") {
+    const panelBody = document.getElementById("panelBody");
+    const rect2 = panelBody?.getBoundingClientRect();
+    if (!rect2) return;
+    const { sections } = resolvedPaneWidths(state);
+    const leftHandle = paneHandleWidth(
+      document.getElementById("leftPaneResizer")
+    );
+    const rightHandle2 = paneHandleWidth(
+      document.getElementById("rightPaneResizer")
+    );
+    const max2 = Math.max(
+      railMin,
+      rect2.width - sections - leftHandle - rightHandle2 - chatMin
+    );
+    const newSidebarWidth = Math.round(
+      clampNumber(clientX - rect2.left, railMin, Math.min(railMax, max2))
+    );
+    renderPaneLayout({ ...state, sidebarWidth: newSidebarWidth });
+    return;
+  }
+  const workspaceMain = document.getElementById("workspaceMain");
+  const rect = workspaceMain?.getBoundingClientRect();
+  if (!rect) return;
+  const rightHandle = paneHandleWidth(
+    document.getElementById("rightPaneResizer")
+  );
+  const max = Math.max(railMin, rect.width - rightHandle - chatMin);
+  const newSectionsWidth = Math.round(
+    clampNumber(rect.right - clientX, railMin, Math.min(railMax, max))
+  );
+  renderPaneLayout({ ...state, sectionsWidth: newSectionsWidth });
+}
+function onPaneResizeMove(event, callbacks) {
+  if (!paneDrag) return;
+  resizePane(paneDrag.side, event.clientX, callbacks);
+}
+async function stopPaneResize(callbacks) {
+  if (!paneDrag) return;
+  const handleId = paneDrag.side === "left" ? "leftPaneResizer" : "rightPaneResizer";
+  const handle = document.getElementById(handleId);
+  if (handle) delete handle.dataset.active;
+  paneDrag.side;
+  paneDrag = null;
+  delete document.body.dataset.resizing;
+  const sidebarPx = Number.parseFloat(
+    getComputedStyle(document.documentElement).getPropertyValue(
+      "--ui-sidebar-width"
+    )
+  );
+  const sectionsPx = Number.parseFloat(
+    getComputedStyle(document.documentElement).getPropertyValue(
+      "--ui-sections-width"
+    )
+  );
+  await callbacks.onWidthsChanged(
+    Number.isFinite(sidebarPx) ? Math.round(sidebarPx) : null,
+    Number.isFinite(sectionsPx) ? Math.round(sectionsPx) : null
+  );
+}
+function startPaneResize(side, event, callbacks) {
+  if (event.button != null && event.button !== 0) return;
+  const state = callbacks.getState();
+  if (side === "left" && (state.sidebarCollapsed || paneHandleWidth(document.getElementById("leftPaneResizer")) === 0)) {
+    return;
+  }
+  if (side === "right" && paneHandleWidth(document.getElementById("rightPaneResizer")) === 0) {
+    return;
+  }
+  paneDrag = { side };
+  const handleId = side === "left" ? "leftPaneResizer" : "rightPaneResizer";
+  const handle = document.getElementById(handleId);
+  if (handle) handle.dataset.active = "true";
+  document.body.dataset.resizing = "true";
+  function onMove(ev) {
+    onPaneResizeMove(ev, callbacks);
+  }
+  async function onUp() {
+    window.removeEventListener("pointermove", onMove);
+    window.removeEventListener("pointerup", onUp);
+    window.removeEventListener("pointercancel", onUp);
+    await stopPaneResize(callbacks);
+  }
+  window.addEventListener("pointermove", onMove);
+  window.addEventListener("pointerup", onUp);
+  window.addEventListener("pointercancel", onUp);
+  resizePane(side, event.clientX, callbacks);
+  event.preventDefault();
+}
+function initPaneResizers(callbacks) {
+  const leftHandle = document.getElementById("leftPaneResizer");
+  const rightHandle = document.getElementById("rightPaneResizer");
+  function onLeftDown(ev) {
+    startPaneResize("left", ev, callbacks);
+  }
+  function onRightDown(ev) {
+    startPaneResize("right", ev, callbacks);
+  }
+  leftHandle?.addEventListener("pointerdown", onLeftDown);
+  rightHandle?.addEventListener("pointerdown", onRightDown);
+  renderPaneLayout(callbacks.getState());
+  return () => {
+    leftHandle?.removeEventListener("pointerdown", onLeftDown);
+    rightHandle?.removeEventListener("pointerdown", onRightDown);
+  };
+}
+async function cancelPaneResize(callbacks) {
+  if (!paneDrag) return;
+  await stopPaneResize(callbacks);
+}
+
+function sameBudget(a, b) {
+  return JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+}
+function budgetMinutes(value) {
+  if (!Number.isFinite(value) || value <= 0) return "";
+  const next = Math.round(value / 6e4 * 10) / 10;
+  return Number.isInteger(next) ? String(next) : next.toFixed(1);
+}
+function budgetNumber(input, options = {}) {
+  const text = input?.value?.trim() || "";
+  if (!text) return void 0;
+  const value = Number(text);
+  if (!Number.isFinite(value)) return void 0;
+  if (options.allowZero ? value < 0 : value <= 0) return void 0;
+  return Math.round(value * (options.scale || 1));
+}
+function draftBudget() {
+  const budget = {
+    maxRuns: budgetNumber(
+      document.getElementById("budgetMaxRuns")
+    ),
+    maxReplans: budgetNumber(
+      document.getElementById("budgetMaxReplans"),
+      { allowZero: true }
+    ),
+    maxEvaluations: budgetNumber(
+      document.getElementById("budgetMaxEvaluations")
+    ),
+    maxWallTimeMs: budgetNumber(
+      document.getElementById("budgetMaxWallTime"),
+      { scale: 6e4 }
+    )
+  };
+  if (Object.values(budget).every((v) => v === void 0)) return void 0;
+  return budget;
+}
+
+function taskBudget(task = boardStore.board?.task) {
+  const budget = task?.budget;
+  if (!budget || typeof budget !== "object") return void 0;
+  return {
+    maxRuns: Number.isFinite(budget.maxRuns) ? budget.maxRuns : void 0,
+    maxReplans: Number.isFinite(budget.maxReplans) ? budget.maxReplans : void 0,
+    maxEvaluations: Number.isFinite(budget.maxEvaluations) ? budget.maxEvaluations : void 0,
+    maxWallTimeMs: Number.isFinite(budget.maxWallTimeMs) ? budget.maxWallTimeMs : void 0
+  };
+}
+function setBudgetInputs(budget) {
+  const setValue = (id, value) => {
+    const node = document.getElementById(id);
+    if (node) node.value = value;
+  };
+  setValue("budgetMaxRuns", budget?.maxRuns === void 0 ? "" : String(budget.maxRuns));
+  setValue("budgetMaxReplans", budget?.maxReplans === void 0 ? "" : String(budget.maxReplans));
+  setValue(
+    "budgetMaxEvaluations",
+    budget?.maxEvaluations === void 0 ? "" : String(budget.maxEvaluations)
+  );
+  setValue(
+    "budgetMaxWallTime",
+    budget?.maxWallTimeMs === void 0 ? "" : budgetMinutes(budget.maxWallTimeMs)
+  );
+}
+function orchestratorDefaults() {
+  const orch = appStore.config?.orchestrator;
+  if (!orch || typeof orch !== "object") return {};
+  return {
+    maxRuns: Number.isFinite(orch.max_runs) ? orch.max_runs : void 0,
+    maxReplans: Number.isFinite(orch.max_replans) ? orch.max_replans : void 0,
+    maxEvaluations: Number.isFinite(orch.max_evaluations) ? orch.max_evaluations : void 0,
+    maxWallTimeMs: Number.isFinite(orch.max_wall_time_ms) ? orch.max_wall_time_ms : void 0
+  };
+}
+function setPlaceholders() {
+  const defaults = orchestratorDefaults();
+  const setPlaceholder = (id, value) => {
+    const node = document.getElementById(id);
+    if (node) node.placeholder = value || t("budget.placeholder");
+  };
+  setPlaceholder("budgetMaxRuns", defaults.maxRuns != null ? String(defaults.maxRuns) : "");
+  setPlaceholder("budgetMaxReplans", defaults.maxReplans != null ? String(defaults.maxReplans) : "");
+  setPlaceholder("budgetMaxEvaluations", defaults.maxEvaluations != null ? String(defaults.maxEvaluations) : "");
+  setPlaceholder("budgetMaxWallTime", defaults.maxWallTimeMs != null ? budgetMinutes(defaults.maxWallTimeMs) : "");
+}
+function renderBudgetState(task = boardStore.board?.task) {
+  const budget = taskBudget(task);
+  const changed = !sameBudget(draftBudget(), budget);
+  const taskID = task?.id || boardStore.selectedTaskID;
+  const enabled = !!taskID && !appStore.budgetSaving;
+  const saveButton = document.getElementById("btnBudgetSave");
+  const resetButton = document.getElementById("btnBudgetReset");
+  const reloadButton = document.getElementById("btnBudgetReload");
+  const hint = document.getElementById("budgetHint");
+  if (saveButton) saveButton.disabled = !enabled || !changed;
+  if (resetButton) resetButton.disabled = !enabled || !changed && !appStore.budgetDirty;
+  if (reloadButton) reloadButton.disabled = !enabled || appStore.budgetSaving;
+  if (hint) {
+    hint.textContent = taskID ? t("budget.hint") : t("budget.empty");
+  }
+  setPlaceholders();
+  for (const input of [
+    document.getElementById("budgetMaxRuns"),
+    document.getElementById("budgetMaxReplans"),
+    document.getElementById("budgetMaxEvaluations"),
+    document.getElementById("budgetMaxWallTime")
+  ]) {
+    if (input instanceof HTMLInputElement) input.disabled = !enabled;
+  }
+}
+function renderBudget(task) {
+  const budget = taskBudget(task);
+  if (!appStore.budgetDirty) setBudgetInputs(budget);
+  renderBudgetState(task);
+}
+function budgetSaveError(error) {
+  const detail = error instanceof Error ? error.message : String(error || "").trim();
+  return detail ? `${t("budget.save_failed")}: ${detail}` : t("budget.save_failed");
+}
+function installBudgetBindings() {
+  const body = document.getElementById("budgetConfigBody");
+  if (!(body instanceof HTMLElement) || body.dataset.boundBudget === "true") return;
+  body.dataset.boundBudget = "true";
+  body.addEventListener("input", () => {
+    setAppStore("budgetDirty", true);
+    renderBudgetState(boardStore.board?.task);
+  });
+  document.getElementById("btnBudgetReset")?.addEventListener("click", () => {
+    setAppStore("budgetDirty", false);
+    setBudgetInputs(taskBudget());
+    renderBudgetState(boardStore.board?.task);
+  });
+  document.getElementById("btnBudgetReload")?.addEventListener("click", async () => {
+    if (!boardStore.selectedTaskID || appStore.budgetSaving) return;
+    setAppStore("budgetDirty", false);
+    setAppStore("budgetSaving", true);
+    renderBudgetState(boardStore.board?.task);
+    try {
+      await loadBoard({ sync: true });
+    } finally {
+      setAppStore("budgetSaving", false);
+      renderBudget(boardStore.board?.task);
+    }
+  });
+  document.getElementById("btnBudgetSave")?.addEventListener("click", async () => {
+    if (!boardStore.selectedTaskID || appStore.budgetSaving) return;
+    setAppStore("budgetSaving", true);
+    renderBudgetState(boardStore.board?.task);
+    try {
+      await apiJson(`task/${encodeURIComponent(boardStore.selectedTaskID)}/budget`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ budget: draftBudget() || null })
+      });
+      setAppStore("budgetDirty", false);
+      await loadBoard({ sync: true });
+    } catch (error) {
+      console.error("Failed to update task budget", error);
+      const nativeMessage = window.nativeMessage;
+      if (typeof nativeMessage === "function") {
+        await nativeMessage(budgetSaveError(error), {
+          title: t("section.budget"),
+          kind: "error"
+        });
+      }
+    } finally {
+      setAppStore("budgetSaving", false);
+      renderBudgetState(boardStore.board?.task);
+    }
+  });
+}
+
+async function tauriInvoke(command, args) {
+  const globalInvoke = window.__TAURI__?.core?.invoke;
+  if (typeof globalInvoke === "function") {
+    return globalInvoke(command, args);
+  }
+  throw new Error(`Tauri runtime unavailable for ${command}`);
+}
+function checkConfig(task) {
+  const checks = task?.metadata?.checks;
+  if (!checks || typeof checks !== "object" || Array.isArray(checks)) return {};
+  return structuredClone(checks);
+}
+function hasExplicitChecks(config) {
+  return Object.keys(config).length > 0;
+}
+function checkCanToggle(key) {
+  return ["artifact", "ui_review", "code_quality", "code_review", "dead_code_review", "spec_check"].includes(key);
+}
+function checkSelectionConfig(key, current) {
+  const base = current && typeof current === "object" && !Array.isArray(current) ? structuredClone(current) : void 0;
+  if (key === "artifact") return base || {};
+  if (key === "ui_review") return { ...base || {}, target: "web" };
+  if (["code_quality", "code_review", "dead_code_review", "spec_check"].includes(key)) {
+    return { ...base || {}, enabled: true };
+  }
+  if (["startup", "visual", "puppeteer"].includes(key)) return base;
+  return { ...base || {}, enabled: true };
+}
+function buildCheckConfigFromSpecs(task, selection) {
+  const current = checkConfig(task);
+  const next = structuredClone(current);
+  const named = next.named && typeof next.named === "object" && !Array.isArray(next.named) ? structuredClone(next.named) : {};
+  for (const spec of appStore.criteriaSpecs) {
+    if (spec.readOnly) continue;
+    const enabled = selection[spec.key];
+    if (enabled === void 0) continue;
+    if (spec.kind === "named") {
+      const currentNamed = named[spec.name];
+      if (!currentNamed || typeof currentNamed !== "object" || Array.isArray(currentNamed)) continue;
+      named[spec.name] = { ...currentNamed, enabled };
+      continue;
+    }
+    if (spec.kind === "command") {
+      if (enabled) {
+        if (next[spec.name] === false) delete next[spec.name];
+        continue;
+      }
+      next[spec.name] = false;
+      continue;
+    }
+    if (enabled) {
+      const currentValue = next[spec.name];
+      const value = checkSelectionConfig(spec.name, currentValue);
+      if (value) next[spec.name] = value;
+      continue;
+    }
+    delete next[spec.name];
+  }
+  if (Object.keys(named).length > 0) next.named = named;
+  else delete next.named;
+  return next;
+}
+function configUnattended(config) {
+  const value = config?.experimental?.unattended;
+  return typeof value === "boolean" ? value : null;
+}
+async function syncUnattendedConfig(force = false) {
+  if (!appStore.connected) return false;
+  const unattended = settingsStore.unattended ?? true;
+  const remote = configUnattended(appStore.config);
+  if (!force && remote === unattended) return false;
+  try {
+    const saved = await updateConfig((current) => {
+      current.experimental = current.experimental || {};
+      current.experimental.unattended = unattended;
+    });
+    setAppStore("config", saved);
+    return true;
+  } catch (e) {
+    console.error("[config] Failed to sync unattended mode", e);
+    return false;
+  }
+}
+async function updateConfig(mutator) {
+  const current = await apiJson("config");
+  const next = structuredClone(current || {});
+  mutator(next);
+  return apiJson("config", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(next)
+  });
+}
+async function scaffoldProjectConfig(dir) {
+  if (!dir) return;
+  const base = dir.replace(/[\\/]+$/, "");
+  const configFile = base + "/.opencorvus/opencorvus.jsonc";
+  const username = settingsStore.username || "";
+  const unattended = settingsStore.unattended !== false;
+  const config = {
+    $schema: "https://opencorvus.ai/config.json",
+    experimental: {
+      unattended
+    },
+    lsp: {
+      biome: { disabled: true },
+      eslint: { disabled: true }
+    },
+    orchestrator: {
+      spec: { max_steps: 30, timeout_ms: 3e5, min_tool_calls: 3, quality_threshold: 0.6, max_attempts: 3 },
+      planner: { max_steps: 30, timeout_ms: 3e5, min_tool_calls: 3, quality_threshold: 0.5, max_attempts: 3 },
+      evaluator: { max_steps: 25, timeout_ms: 24e4, min_tool_calls: 3 },
+      delivery: { max_steps: 40, timeout_ms: 6e5, max_retries: 2, min_tool_calls: 3 },
+      max_runs: 10,
+      max_replans: 3,
+      same_plan_retry_limit: 2,
+      stage_max_retries: 2
+    },
+    compaction: {
+      auto: true,
+      prune: true
+    },
+    agent: {},
+    mode: {},
+    plugin: [],
+    command: {},
+    username
+  };
+  try {
+    await tauriInvoke("overlay_write_file", { path: configFile, content: JSON.stringify(config, null, 2) });
+  } catch (e) {
+    console.warn("[scaffold] Failed to scaffold project config", e);
+  }
+}
+async function reloadProjectScope(options = {}) {
+  const { loadConfigInfo } = await __vitePreload(async () => { const { loadConfigInfo } = await Promise.resolve().then(() => init);return { loadConfigInfo }},true              ?void 0:void 0);
+  const { loadExtensions } = await __vitePreload(async () => { const { loadExtensions } = await Promise.resolve().then(() => extensions);return { loadExtensions }},true              ?void 0:void 0);
+  const { loadMeta } = await __vitePreload(async () => { const { loadMeta } = await Promise.resolve().then(() => meta);return { loadMeta }},true              ?void 0:void 0);
+  const { loadPreferences } = await __vitePreload(async () => { const { loadPreferences } = await Promise.resolve().then(() => memory);return { loadPreferences }},true              ?void 0:void 0);
+  await Promise.all([
+    loadConfigInfo().catch((e) => console.error("[reloadProjectScope] loadConfigInfo", e)),
+    loadExtensions().catch((e) => console.error("[reloadProjectScope] loadExtensions", e)),
+    loadMeta().catch((e) => console.error("[reloadProjectScope] loadMeta", e)),
+    loadPreferences().catch((e) => console.error("[reloadProjectScope] loadPreferences", e))
+  ]);
+  if (options.restoreWorkspace) {
+    const { restoreWorkspaceDirectory } = await __vitePreload(async () => { const { restoreWorkspaceDirectory } = await Promise.resolve().then(() => workspace);return { restoreWorkspaceDirectory }},true              ?void 0:void 0);
+    await restoreWorkspaceDirectory().catch(
+      (e) => console.error("[reloadProjectScope] restoreWorkspaceDirectory", e)
+    );
+  }
+}
+function applyPromptEntries(items) {
+  const entries = Array.isArray(items) ? items : [];
+  setAppStore("promptEntries", entries);
+}
+async function loadPromptCatalog() {
+  try {
+    const items = await apiJson("config/prompt");
+    applyPromptEntries(items);
+  } catch (e) {
+    AppLog.debug("prompt", "loadPromptCatalog failed, resetting to empty", { error: String(e) });
+    applyPromptEntries([]);
+  }
+}
+async function savePromptEntry(entry, value) {
+  if (!entry) return;
+  try {
+    await updateConfig((current) => {
+      if (entry.scope === "system") {
+        current.prompt = current.prompt || {};
+        if (value.trim()) current.prompt[entry.key] = value;
+        else delete current.prompt[entry.key];
+        if (Object.keys(current.prompt).length === 0) delete current.prompt;
+        return;
+      }
+      current.agent = current.agent || {};
+      const item = current.agent?.[entry.key] && typeof current.agent[entry.key] === "object" ? { ...current.agent[entry.key] } : {};
+      if (value.trim()) item.prompt = value;
+      else delete item.prompt;
+      if (Object.keys(item).length === 0) delete current.agent[entry.key];
+      else current.agent[entry.key] = item;
+      if (Object.keys(current.agent).length === 0) delete current.agent;
+    });
+    await loadPromptCatalog();
+  } catch (e) {
+    AppLog.error("ui", "Failed to save prompt override", { error: String(e) });
+    throw e;
+  }
+}
+async function resetPromptEntry(entry) {
+  if (!entry) return;
+  if (entry.configured_prompt === null) return;
+  `${entry.scope}:${entry.key}`;
+  try {
+    await updateConfig((current) => {
+      if (entry.scope === "system") {
+        if (current.prompt && typeof current.prompt === "object") {
+          delete current.prompt[entry.key];
+          if (Object.keys(current.prompt).length === 0) delete current.prompt;
+        }
+        return;
+      }
+      if (current.agent && typeof current.agent === "object" && current.agent[entry.key]) {
+        const item = current.agent[entry.key] && typeof current.agent[entry.key] === "object" ? { ...current.agent[entry.key] } : {};
+        delete item.prompt;
+        if (Object.keys(item).length === 0) delete current.agent[entry.key];
+        else current.agent[entry.key] = item;
+        if (Object.keys(current.agent).length === 0) delete current.agent;
+      }
+    });
+    await loadPromptCatalog();
+  } catch (e) {
+    AppLog.error("ui", "Failed to reset prompt override", { error: String(e) });
+    throw e;
+  }
+}
+
+const config = /*#__PURE__*/Object.freeze(/*#__PURE__*/Object.defineProperty({
+  __proto__: null,
+  applyPromptEntries,
+  buildCheckConfigFromSpecs,
+  checkCanToggle,
+  checkConfig,
+  checkSelectionConfig,
+  configUnattended,
+  hasExplicitChecks,
+  loadPromptCatalog,
+  reloadProjectScope,
+  resetPromptEntry,
+  savePromptEntry,
+  scaffoldProjectConfig,
+  syncUnattendedConfig,
+  updateConfig
+}, Symbol.toStringTag, { value: 'Module' }));
+
+var _tmpl$$5 = /* @__PURE__ */ template(`<div class=config-status-box>`), _tmpl$2$5 = /* @__PURE__ */ template(`<div class=prompt-grid>`), _tmpl$3$5 = /* @__PURE__ */ template(`<div class=empty-hint>`), _tmpl$4$5 = /* @__PURE__ */ template(`<small>`), _tmpl$5$5 = /* @__PURE__ */ template(`<details class=prompt-diff-details><summary class=prompt-diff-summary></summary><div class=prompt-preview-card style=margin-top:0;border-top:none;opacity:0.7><div class=prompt-preview-head></div><div class="md-content prompt-preview-body">`), _tmpl$6$5 = /* @__PURE__ */ template(`<div class=prompt-card><div class=prompt-card-head><div class=prompt-card-copy><strong></strong><span></span></div><span class=extension-status></span></div><label class=field><span class=field-label></span><textarea class="field-input prompt-textarea"rows=8></textarea></label><div class=prompt-toolbar><span class=config-status-box></span><div class="dialog-actions compact"><button type=button class="btn btn-ghost mini"></button><button type=button class="btn btn-primary mini"></button></div></div><details class=prompt-diff-details><summary class=prompt-diff-summary></summary><div class=prompt-preview-card style="border-top:none;border-radius:0 0 var(--radius) var(--radius)"><div class="md-content prompt-preview-body">`);
+function promptEntryID(entry) {
+  return `${entry.scope}:${entry.key}`;
+}
+function promptGroupLabel(group) {
+  if (group === "core") return t("prompt.group.core");
+  if (group === "generator") return t("prompt.group.generator");
+  if (group === "orchestrator") return t("prompt.group.orchestrator");
+  if (group === "subagent") return t("prompt.group.subagent");
+  if (group === "hidden_agent") return t("prompt.group.hidden_agent");
+  if (group === "custom_agent") return t("prompt.group.custom_agent");
+  return t("prompt.group.primary_agent");
+}
+function promptDescription(entry) {
+  if (entry.key === "core_header") return t("prompt.desc.core_header");
+  if (entry.key === "agent_generate") return t("prompt.desc.agent_generate");
+  if (entry.key === "planner_system") return t("prompt.desc.planner_system");
+  if (entry.key === "spec_system") return t("prompt.desc.spec_system");
+  if (entry.key === "evaluator_system") return t("prompt.desc.evaluator_system");
+  if (entry.key === "delivery_system") return t("prompt.desc.delivery_system");
+  return entry.description || "";
+}
+function promptStatus(entry) {
+  if (entry.configured_prompt !== null) {
+    return {
+      label: t("prompt.status.custom"),
+      tone: "active"
+    };
+  }
+  if (entry.scope === "system") {
+    return {
+      label: t("prompt.status.default"),
+      tone: "ready"
+    };
+  }
+  if (entry.inherits_core) {
+    return {
+      label: t("prompt.status.inherits_core"),
+      tone: "warn"
+    };
+  }
+  if (entry.prompt) {
+    return {
+      label: t("prompt.status.default"),
+      tone: "ready"
+    };
+  }
+  return {
+    label: t("prompt.status.empty"),
+    tone: ""
+  };
+}
+function promptHelper(entry) {
+  if (entry.scope === "system") {
+    return entry.configured_prompt !== null ? t("prompt.help.custom_system") : t("prompt.help.default_system");
+  }
+  if (entry.inherits_core) return t("prompt.help.inherits_core");
+  if (entry.configured_prompt !== null) return t("prompt.help.custom_agent");
+  if (entry.prompt) return t("prompt.help.default_agent");
+  return t("prompt.help.optional_agent");
+}
+function promptPreviewHtml(value) {
+  if (!value.trim()) {
+    return `<p class="empty-hint">${t("prompt.preview_empty")}</p>`;
+  }
+  return renderMarkdown$1(value);
+}
+function PromptCatalog() {
+  const [drafts, setDrafts] = createStore({});
+  const [notice, setNotice] = createSignal("");
+  const [noticeTone, setNoticeTone] = createSignal("");
+  const [saving, setSaving] = createSignal(false);
+  const entries = createMemo(() => {
+    const raw = appStore.promptEntries;
+    return Array.isArray(raw) ? raw : [];
+  });
+  function draftValue(entry) {
+    const id = promptEntryID(entry);
+    const val = drafts[id];
+    return val !== void 0 ? val : entry.prompt || "";
+  }
+  function isDirty(entry) {
+    return draftValue(entry) !== (entry.prompt || "");
+  }
+  function handleDraftChange(entryID, value) {
+    setDrafts(entryID, value);
+  }
+  async function handleSave(entry) {
+    const value = draftValue(entry);
+    setSaving(true);
+    try {
+      await savePromptEntry(entry, value);
+      const id = promptEntryID(entry);
+      setDrafts(id, void 0);
+      showNotice(t("common.saved"), "active");
+    } catch (e) {
+      showNotice(e instanceof Error ? e.message : String(e), "error");
+    } finally {
+      setSaving(false);
+    }
+  }
+  async function handleReset(entry) {
+    const entryID = promptEntryID(entry);
+    if (entry.configured_prompt === null) {
+      setDrafts(entryID, entry.prompt || "");
+      return;
+    }
+    setSaving(true);
+    try {
+      await resetPromptEntry(entry);
+      setDrafts(entryID, void 0);
+      showNotice(t("prompt.reset_done"), "active");
+    } catch (e) {
+      showNotice(e instanceof Error ? e.message : String(e), "error");
+    } finally {
+      setSaving(false);
+    }
+  }
+  let noticeTimer;
+  function showNotice(msg, tone = "") {
+    if (noticeTimer) clearTimeout(noticeTimer);
+    setNotice(msg);
+    setNoticeTone(tone);
+    if (msg) {
+      noticeTimer = setTimeout(() => setNotice(""), 2600);
+    }
+  }
+  createMemo(() => entries().filter((e) => e.configured_prompt !== null).length);
+  return [createComponent(Show, {
+    get when() {
+      return notice();
+    },
+    get children() {
+      var _el$ = _tmpl$$5();
+      insert(_el$, notice);
+      createRenderEffect(() => setAttribute(_el$, "data-status", noticeTone()));
+      return _el$;
+    }
+  }), createComponent(Show, {
+    get when() {
+      return entries().length > 0;
+    },
+    get fallback() {
+      return (() => {
+        var _el$3 = _tmpl$3$5();
+        insert(_el$3, () => t("prompt.none"));
+        return _el$3;
+      })();
+    },
+    get children() {
+      var _el$2 = _tmpl$2$5();
+      insert(_el$2, createComponent(For, {
+        get each() {
+          return entries();
+        },
+        children: (entry) => {
+          const entryID = promptEntryID(entry);
+          const status = createMemo(() => promptStatus(entry));
+          const description = promptDescription(entry);
+          const dirty = createMemo(() => isDirty(entry));
+          const currentDraft = createMemo(() => draftValue(entry));
+          return (() => {
+            var _el$4 = _tmpl$6$5(), _el$5 = _el$4.firstChild, _el$6 = _el$5.firstChild, _el$7 = _el$6.firstChild, _el$8 = _el$7.nextSibling, _el$0 = _el$6.nextSibling, _el$1 = _el$5.nextSibling, _el$10 = _el$1.firstChild, _el$11 = _el$10.nextSibling, _el$12 = _el$1.nextSibling, _el$13 = _el$12.firstChild, _el$14 = _el$13.nextSibling, _el$15 = _el$14.firstChild, _el$16 = _el$15.nextSibling, _el$22 = _el$12.nextSibling, _el$23 = _el$22.firstChild, _el$24 = _el$23.nextSibling, _el$25 = _el$24.firstChild;
+            setAttribute(_el$4, "data-prompt-entry", entryID);
+            insert(_el$7, () => entry.label || entry.key);
+            insert(_el$8, () => promptGroupLabel(entry.group), null);
+            insert(_el$8, (() => {
+              var _c$ = memo(() => !!entry.mode);
+              return () => _c$() ? ` · ${entry.mode}` : "";
+            })(), null);
+            insert(_el$8, () => entry.inherits_core ? " · ← core_header" : "", null);
+            insert(_el$6, createComponent(Show, {
+              when: description,
+              get children() {
+                var _el$9 = _tmpl$4$5();
+                insert(_el$9, description);
+                return _el$9;
+              }
+            }), null);
+            insert(_el$0, () => status().label);
+            insert(_el$10, () => t("prompt.editor_label"));
+            _el$11.$$input = (e) => handleDraftChange(entryID, e.currentTarget.value);
+            insert(_el$13, () => promptHelper(entry));
+            _el$15.$$click = () => handleReset(entry);
+            insert(_el$15, () => t("prompt.reset"));
+            _el$16.$$click = () => handleSave(entry);
+            insert(_el$16, () => t("common.save"));
+            insert(_el$4, createComponent(Show, {
+              get when() {
+                return memo(() => entry.configured_prompt !== null)() && entry.default_prompt;
+              },
+              get children() {
+                var _el$17 = _tmpl$5$5(), _el$18 = _el$17.firstChild, _el$19 = _el$18.nextSibling, _el$20 = _el$19.firstChild, _el$21 = _el$20.nextSibling;
+                insert(_el$18, () => t("prompt.show_default"));
+                insert(_el$20, () => t("prompt.default_label"));
+                createRenderEffect(() => _el$21.innerHTML = promptPreviewHtml(entry.default_prompt));
+                return _el$17;
+              }
+            }), _el$22);
+            insert(_el$23, () => t("prompt.preview"));
+            createRenderEffect((_p$) => {
+              var _v$ = status().tone, _v$2 = saving(), _v$3 = status().tone, _v$4 = saving() || entry.configured_prompt === null && !dirty(), _v$5 = saving() || !dirty(), _v$6 = promptPreviewHtml(currentDraft());
+              _v$ !== _p$.e && setAttribute(_el$0, "data-state", _p$.e = _v$);
+              _v$2 !== _p$.t && (_el$11.disabled = _p$.t = _v$2);
+              _v$3 !== _p$.a && setAttribute(_el$13, "data-status", _p$.a = _v$3);
+              _v$4 !== _p$.o && (_el$15.disabled = _p$.o = _v$4);
+              _v$5 !== _p$.i && (_el$16.disabled = _p$.i = _v$5);
+              _v$6 !== _p$.n && (_el$25.innerHTML = _p$.n = _v$6);
+              return _p$;
+            }, {
+              e: void 0,
+              t: void 0,
+              a: void 0,
+              o: void 0,
+              i: void 0,
+              n: void 0
+            });
+            createRenderEffect(() => _el$11.value = currentDraft());
+            return _el$4;
+          })();
+        }
+      }));
+      return _el$2;
+    }
+  })];
+}
+delegateEvents(["input", "click"]);
+
+function legacyFn(name, ...args) {
+  const fn = window[name];
+  if (typeof fn === "function") return fn(...args);
+  return void 0;
+}
+async function nativeConfirm(message, options) {
+  const result = await legacyFn("showAppDialog", {
+    title: options?.title,
+    message,
+    kind: options?.kind || "warning",
+    okLabel: options?.okLabel,
+    cancelLabel: options?.cancelLabel,
+    cancel: true
+  });
+  return !!result?.confirmed;
+}
+async function nativePrompt(message, options) {
+  const result = await legacyFn("showAppDialog", {
+    title: options?.title,
+    message,
+    kind: options?.kind || "info",
+    okLabel: options?.okLabel,
+    cancelLabel: options?.cancelLabel,
+    cancel: true,
+    input: true,
+    inputLabel: options?.inputLabel,
+    inputPlaceholder: options?.inputPlaceholder || "",
+    inputValue: options?.inputValue || ""
+  });
+  return result?.confirmed ? result.value ?? null : null;
+}
+async function nativeSelect(message, options) {
+  const list = Array.isArray(options?.options) ? options.options : [];
+  if (!list.length) return null;
+  const result = await legacyFn("showAppDialog", {
+    title: options?.title,
+    message,
+    kind: options?.kind || "info",
+    okLabel: options?.okLabel,
+    cancelLabel: options?.cancelLabel,
+    cancel: true,
+    select: true,
+    selectLabel: options?.selectLabel,
+    selectOptions: list,
+    selectValue: options?.selectValue || list[0]?.value || ""
+  });
+  return result?.confirmed ? result.value ?? null : null;
+}
+async function nativeOpen(target) {
+  if (!target) return false;
+  const isUrl = /^https?:\/\//i.test(target);
+  const invoke = window.__TAURI__?.core?.invoke;
+  if (typeof invoke === "function") {
+    try {
+      const opened = isUrl ? await invoke("overlay_open_url", { url: target }) : await invoke("overlay_open_path", { path: target });
+      if (opened) return true;
+    } catch {
+    }
+  }
+  if (isUrl) {
+    window.open(target, "_blank", "noopener");
+    return true;
+  }
+  try {
+    const result = await apiJson("path/open", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path: target })
+    });
+    return result?.opened === true;
+  } catch (openErr) {
+    AppLog.debug("ui", "path/open fallback failed", {
+      target,
+      error: String(openErr)
+    });
+    return false;
+  }
+}
+
+var _tmpl$$4 = /* @__PURE__ */ template(`<div class=config-status-box>`), _tmpl$2$4 = /* @__PURE__ */ template(`<div class=extension-head><label class=field><span class=field-label></span><input class=field-input type=url placeholder=https://opencorvus.example.com></label><div class="dialog-actions compact"><button type=button class="btn btn-ghost mini">`), _tmpl$3$4 = /* @__PURE__ */ template(`<div class=empty-hint>`), _tmpl$4$4 = /* @__PURE__ */ template(`<div class=extension-row><div class=extension-row-main><strong></strong><span></span><small class=channel-doc-credit></small></div><div class=channel-row-actions><span class=extension-status></span><button type=button class="btn btn-ghost mini"></button><button type=button class="btn btn-primary mini">`), _tmpl$5$4 = /* @__PURE__ */ template(`<dialog class=dialog><div class=dialog-form><div class=dialog-head><h2 class=dialog-title></h2></div><div class=channel-doc-card><div class=channel-doc-copy><span class=channel-doc-title></span><small class=channel-doc-credit></small></div><button type=button class="btn btn-ghost"></button></div><div class=dialog-actions><button type=button class="btn btn-ghost"></button><button type=button class="btn btn-primary">`), _tmpl$6$4 = /* @__PURE__ */ template(`<label class="field field-inline"><span class=field-label></span><input type=checkbox>`), _tmpl$7$3 = /* @__PURE__ */ template(`<label class=field><span class=field-label></span><input class=field-input>`);
+const OPENCLAW_DOCS = Object.freeze({
+  overview: "https://docs.openclaw.ai/channels",
+  credit: "OpenClaw Docs",
+  slack: "https://docs.openclaw.ai/channels/slack",
+  telegram: "https://docs.openclaw.ai/channels/telegram",
+  discord: "https://docs.openclaw.ai/channels/discord",
+  feishu: "https://docs.openclaw.ai/channels/feishu",
+  whatsapp: "https://docs.openclaw.ai/channels/whatsapp",
+  googlechat: "https://docs.openclaw.ai/channels/googlechat",
+  msteams: "https://docs.openclaw.ai/channels/msteams",
+  line: "https://docs.openclaw.ai/channels/line",
+  matrix: "https://docs.openclaw.ai/channels/matrix",
+  mattermost: "https://docs.openclaw.ai/channels/mattermost",
+  signal: "https://docs.openclaw.ai/channels/signal",
+  wecom: "https://docs.openclaw.ai/channels",
+  dingtalk: "https://docs.openclaw.ai/channels"
+});
+function channelTutorialUrl(channelID) {
+  return OPENCLAW_DOCS[channelID] || OPENCLAW_DOCS.overview;
+}
+function channelStatusLabel(status) {
+  const map = {
+    configured: t("channel.status.configured"),
+    partial: t("channel.status.partial"),
+    missing: t("channel.status.missing"),
+    disabled: t("channel.status.disabled")
+  };
+  return map[status] || status;
+}
+function ChannelsPanel() {
+  const [editingID, setEditingID] = createSignal(null);
+  const [fieldValues, setFieldValues] = createSignal({});
+  const [saving, setSaving] = createSignal(false);
+  const [notice, setNotice] = createSignal("");
+  const [noticeTone, setNoticeTone] = createSignal("");
+  const channels = createMemo(() => {
+    const raw = appStore.channels;
+    return Array.isArray(raw) ? raw : [];
+  });
+  const publicUrl = createMemo(() => {
+    return appStore.config?.server?.publicUrl || "";
+  });
+  const [localPublicUrl, setLocalPublicUrl] = createSignal("");
+  createEffect(() => {
+    const storeUrl = publicUrl();
+    if (!saving()) setLocalPublicUrl(storeUrl);
+  });
+  const editingEntry = createMemo(() => channels().find((c) => c.id === editingID()) ?? null);
+  function configValueForChannel(channelID, key) {
+    return appStore.config?.channel?.[channelID]?.[key];
+  }
+  function openEdit(channelID) {
+    const entry = channels().find((c) => c.id === channelID);
+    if (!entry) return;
+    const initial = {};
+    for (const field of entry.fields) {
+      const existing = configValueForChannel(entry.id, field.key);
+      if (field.type === "boolean") {
+        initial[field.key] = existing !== false;
+      } else {
+        initial[field.key] = existing != null ? String(existing) : "";
+      }
+    }
+    setFieldValues(initial);
+    setEditingID(channelID);
+  }
+  function closeEdit() {
+    setEditingID(null);
+    setFieldValues({});
+  }
+  async function handleSaveChannel() {
+    const entry = editingEntry();
+    if (!entry) return;
+    setSaving(true);
+    try {
+      const config = await apiJson("config");
+      config.channel = config.channel || {};
+      const next = {};
+      for (const field of entry.fields) {
+        if (field.type === "boolean") {
+          next[field.key] = fieldValues()[field.key] !== false;
+        } else {
+          const value = String(fieldValues()[field.key] ?? "").trim();
+          if (value) next[field.key] = value;
+        }
+      }
+      config.channel[entry.id] = next;
+      await apiJson("config", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(config)
+      });
+      showNotice(t("common.saved"), "active");
+      closeEdit();
+      await loadConfigInfo();
+    } catch (e) {
+      showNotice(e instanceof Error ? e.message : String(e), "error");
+    } finally {
+      setSaving(false);
+    }
+  }
+  async function handleSavePublicUrl() {
+    setSaving(true);
+    try {
+      await updateConfig((current) => {
+        current.server = current.server || {};
+        current.server.publicUrl = localPublicUrl().trim() || void 0;
+        if (current.server.publicUrl === void 0) delete current.server.publicUrl;
+        if (Object.keys(current.server).length === 0) delete current.server;
+      });
+      showNotice(t("common.saved"), "active");
+      await loadConfigInfo();
+    } catch (e) {
+      showNotice(e instanceof Error ? e.message : String(e), "error");
+    } finally {
+      setSaving(false);
+    }
+  }
+  let noticeTimer;
+  function showNotice(msg, tone = "") {
+    if (noticeTimer) clearTimeout(noticeTimer);
+    setNotice(msg);
+    setNoticeTone(tone);
+    if (msg) {
+      noticeTimer = setTimeout(() => setNotice(""), 2600);
+    }
+  }
+  function handleFieldChange(key, value) {
+    setFieldValues((prev) => ({
+      ...prev,
+      [key]: value
+    }));
+  }
+  return [createComponent(Show, {
+    get when() {
+      return notice();
+    },
+    get children() {
+      var _el$ = _tmpl$$4();
+      insert(_el$, notice);
+      createRenderEffect(() => setAttribute(_el$, "data-status", noticeTone()));
+      return _el$;
+    }
+  }), (() => {
+    var _el$2 = _tmpl$2$4(), _el$3 = _el$2.firstChild, _el$4 = _el$3.firstChild, _el$5 = _el$4.nextSibling, _el$6 = _el$3.nextSibling, _el$7 = _el$6.firstChild;
+    insert(_el$4, () => t("channel.public_url"));
+    _el$5.$$input = (e) => setLocalPublicUrl(e.currentTarget.value);
+    _el$7.$$click = handleSavePublicUrl;
+    insert(_el$7, () => t("common.save"));
+    createRenderEffect(() => _el$7.disabled = saving());
+    createRenderEffect(() => _el$5.value = localPublicUrl());
+    return _el$2;
+  })(), (() => {
+    var _el$8 = _tmpl$3$4();
+    insert(_el$8, () => t("channel.public_url_hint"));
+    return _el$8;
+  })(), createComponent(Show, {
+    get when() {
+      return channels().length > 0;
+    },
+    get fallback() {
+      return (() => {
+        var _el$9 = _tmpl$3$4();
+        insert(_el$9, () => t("channel.none"));
+        return _el$9;
+      })();
+    },
+    get children() {
+      return createComponent(For, {
+        get each() {
+          return channels();
+        },
+        children: (item) => (() => {
+          var _el$0 = _tmpl$4$4(), _el$1 = _el$0.firstChild, _el$10 = _el$1.firstChild, _el$11 = _el$10.nextSibling, _el$12 = _el$11.nextSibling, _el$13 = _el$1.nextSibling, _el$14 = _el$13.firstChild, _el$15 = _el$14.nextSibling, _el$16 = _el$15.nextSibling;
+          insert(_el$10, () => item.name);
+          insert(_el$11, () => item.summary);
+          insert(_el$12, () => t("channel.tutorial_credit", {
+            source: OPENCLAW_DOCS.credit
+          }));
+          insert(_el$14, () => channelStatusLabel(item.status));
+          _el$15.$$click = () => nativeOpen(channelTutorialUrl(item.id));
+          insert(_el$15, () => t("channel.tutorial"));
+          _el$16.$$click = () => openEdit(item.id);
+          insert(_el$16, () => t("common.edit"));
+          createRenderEffect((_p$) => {
+            var _v$ = item.status, _v$2 = t("channel.tutorial_hint"), _v$3 = t("channel.tutorial_hint"), _v$4 = t("channel.edit_title"), _v$5 = t("channel.edit_title");
+            _v$ !== _p$.e && setAttribute(_el$14, "data-state", _p$.e = _v$);
+            _v$2 !== _p$.t && setAttribute(_el$15, "title", _p$.t = _v$2);
+            _v$3 !== _p$.a && setAttribute(_el$15, "aria-label", _p$.a = _v$3);
+            _v$4 !== _p$.o && setAttribute(_el$16, "title", _p$.o = _v$4);
+            _v$5 !== _p$.i && setAttribute(_el$16, "aria-label", _p$.i = _v$5);
+            return _p$;
+          }, {
+            e: void 0,
+            t: void 0,
+            a: void 0,
+            o: void 0,
+            i: void 0
+          });
+          return _el$0;
+        })()
+      });
+    }
+  }), createComponent(Show, {
+    get when() {
+      return editingEntry() !== null;
+    },
+    children: (_) => {
+      const entry = editingEntry();
+      return (() => {
+        var _el$17 = _tmpl$5$4(), _el$18 = _el$17.firstChild, _el$19 = _el$18.firstChild, _el$20 = _el$19.firstChild, _el$21 = _el$19.nextSibling, _el$22 = _el$21.firstChild, _el$23 = _el$22.firstChild, _el$24 = _el$23.nextSibling, _el$25 = _el$22.nextSibling, _el$26 = _el$21.nextSibling, _el$27 = _el$26.firstChild, _el$28 = _el$27.nextSibling;
+        _el$17.addEventListener("close", closeEdit);
+        use((el) => {
+          if (el) queueMicrotask(() => el.showModal());
+        }, _el$17);
+        insert(_el$20, () => t("channel.configuration_title", {
+          name: entry.name
+        }));
+        insert(_el$23, () => t("channel.tutorial_hint"));
+        insert(_el$24, () => t("channel.tutorial_credit", {
+          source: OPENCLAW_DOCS.credit
+        }));
+        _el$25.$$click = () => nativeOpen(channelTutorialUrl(entry.id));
+        insert(_el$25, () => t("channel.tutorial"));
+        insert(_el$18, createComponent(For, {
+          get each() {
+            return entry.fields;
+          },
+          children: (field) => {
+            const name = `channel_${entry.id}_${field.key}`;
+            const currentVal = () => fieldValues()[field.key];
+            if (field.type === "boolean") {
+              return (() => {
+                var _el$29 = _tmpl$6$4(), _el$30 = _el$29.firstChild, _el$31 = _el$30.nextSibling;
+                insert(_el$30, () => field.label);
+                _el$31.addEventListener("change", (e) => handleFieldChange(field.key, e.currentTarget.checked));
+                setAttribute(_el$31, "name", name);
+                createRenderEffect(() => _el$31.checked = currentVal() !== false);
+                return _el$29;
+              })();
+            }
+            const inputType = field.type === "secret" ? "password" : "text";
+            return (() => {
+              var _el$32 = _tmpl$7$3(), _el$33 = _el$32.firstChild, _el$34 = _el$33.nextSibling;
+              insert(_el$33, () => field.label);
+              _el$34.$$input = (e) => handleFieldChange(field.key, e.currentTarget.value);
+              setAttribute(_el$34, "type", inputType);
+              setAttribute(_el$34, "name", name);
+              createRenderEffect(() => setAttribute(_el$34, "placeholder", field.placeholder || ""));
+              createRenderEffect(() => _el$34.value = String(currentVal() ?? ""));
+              return _el$32;
+            })();
+          }
+        }), _el$26);
+        _el$27.$$click = closeEdit;
+        insert(_el$27, () => t("common.cancel"));
+        _el$28.$$click = handleSaveChannel;
+        insert(_el$28, (() => {
+          var _c$ = memo(() => !!saving());
+          return () => _c$() ? t("common.saving") : t("common.save");
+        })());
+        createRenderEffect((_p$) => {
+          var _v$6 = t("channel.tutorial_hint"), _v$7 = t("channel.tutorial_hint"), _v$8 = saving(), _v$9 = saving();
+          _v$6 !== _p$.e && setAttribute(_el$25, "title", _p$.e = _v$6);
+          _v$7 !== _p$.t && setAttribute(_el$25, "aria-label", _p$.t = _v$7);
+          _v$8 !== _p$.a && (_el$27.disabled = _p$.a = _v$8);
+          _v$9 !== _p$.o && (_el$28.disabled = _p$.o = _v$9);
+          return _p$;
+        }, {
+          e: void 0,
+          t: void 0,
+          a: void 0,
+          o: void 0
+        });
+        return _el$17;
+      })();
+    }
+  })];
+}
+delegateEvents(["input", "click"]);
+
+var _tmpl$$3 = /* @__PURE__ */ template(`<div class=loading-hint>`), _tmpl$2$3 = /* @__PURE__ */ template(`<div class=config-status-box data-status=error><button type=button class="btn btn-ghost mini">`), _tmpl$3$3 = /* @__PURE__ */ template(`<button type=button class="btn btn-ghost mini">`), _tmpl$4$3 = /* @__PURE__ */ template(`<div class=config-inline-form><label class=field><span class=field-label></span><select class=field-input><option value=path></option><option value=url></option><option value=git></option></select></label><label class=field><span class=field-label></span><div class=field-input-group><input class=field-input type=text></div></label><label class=field><span class=field-label></span><select class=field-input><option value=ask></option><option value=allow></option><option value=deny></option></select></label><div class="dialog-actions compact"><button type=button class="btn btn-ghost"></button><button type=button class="btn btn-primary">`), _tmpl$5$3 = /* @__PURE__ */ template(`<details class=config-subsection open><summary class=config-subsection-head></summary><div class=config-subsection-body><div class=extension-head><div class="dialog-actions compact"><button type=button class="btn btn-ghost mini"></button><button type=button class="btn btn-ghost mini"></button><button type=button class="btn btn-ghost mini"></button><button type=button class="btn btn-ghost mini danger"></button></div></div><div class=extension-list id=skillList>`), _tmpl$6$3 = /* @__PURE__ */ template(`<label class=field><span class=field-label></span><input class=field-input type=url placeholder=https://example.com/mcp>`), _tmpl$7$2 = /* @__PURE__ */ template(`<label class=field><span class=field-label></span><input class=field-input type=text placeholder=npx>`), _tmpl$8$1 = /* @__PURE__ */ template(`<label class=field><span class=field-label></span><input class=field-input type=text placeholder="-y @modelcontextprotocol/server-filesystem C:\\repo">`), _tmpl$9$1 = /* @__PURE__ */ template(`<div class=config-inline-form><label class=field><span class=field-label></span><input class=field-input type=text placeholder=exa></label><label class=field><span class=field-label></span><select class=field-input><option value=remote></option><option value=local></option></select></label><div class="dialog-actions compact"><button type=button class="btn btn-ghost"></button><button type=button class="btn btn-primary">`), _tmpl$0$1 = /* @__PURE__ */ template(`<details class=config-subsection open><summary class=config-subsection-head></summary><div class=config-subsection-body><div class=extension-head><div class="dialog-actions compact"><button type=button class="btn btn-ghost mini"></button><button type=button class="btn btn-ghost mini danger"></button></div></div><div class=extension-list id=mcpList>`), _tmpl$1 = /* @__PURE__ */ template(`<details class=config-subsection><summary class=config-subsection-head></summary><div class=config-subsection-body><div class=extension-list id=skillMarketList>`), _tmpl$10 = /* @__PURE__ */ template(`<div class=empty-hint>`), _tmpl$11 = /* @__PURE__ */ template(`<button type=button class="btn btn-ghost mini danger">`), _tmpl$12 = /* @__PURE__ */ template(`<div class=extension-row><div class=extension-row-main><strong></strong><span></span><small></small></div><div class=extension-row-actions><span class=extension-status data-state=connected>`), _tmpl$13 = /* @__PURE__ */ template(`<div class=extension-row><div class=extension-row-main><strong></strong><span></span></div><span class=extension-status>`), _tmpl$14 = /* @__PURE__ */ template(`<small>`), _tmpl$15 = /* @__PURE__ */ template(`<button type=button class="btn btn-primary mini">`), _tmpl$16 = /* @__PURE__ */ template(`<div class=market-card><div class=market-card-main><strong></strong><span> · <!> · </span><small></small></div><div class=market-card-actions><span class=extension-status>`);
+function skillRemoveKind(item) {
+  if (item.source_type === "managed_git") return "git";
+  if (item.source_type === "config_url") return "url";
+  if (item.source_type === "config_path") return "path";
+  return "";
+}
+function skillRemovable(item) {
+  return !item.builtin && !!item.source && !!skillRemoveKind(item);
+}
+function mcpStatusLabel(status) {
+  const map = {
+    connected: t("mcp.status.connected"),
+    disabled: t("mcp.status.disabled"),
+    error: t("mcp.status.error"),
+    connecting: t("mcp.status.connecting")
+  };
+  return map[status] || status;
+}
+function policyLabel(policy) {
+  if (policy === "ask") return t("skill.policy.ask");
+  if (policy === "allow") return t("skill.policy.allow");
+  if (policy === "deny") return t("skill.policy.deny");
+  return policy;
+}
+function SkillMarketPanel() {
+  const [notice, setNotice] = createSignal("");
+  const [loading, setLoading] = createSignal(false);
+  const skills = createMemo(() => {
+    const raw = appStore.skills;
+    return Array.isArray(raw) ? raw : [];
+  });
+  const mcp = createMemo(() => {
+    const raw = appStore.mcp;
+    return raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
+  });
+  const market = createMemo(() => {
+    const raw = appStore.skillMarket;
+    return Array.isArray(raw) ? raw : [];
+  });
+  const customSkills = createMemo(() => skills().filter((item) => !item.builtin));
+  const removableSkills = createMemo(() => customSkills().filter(skillRemovable));
+  createMemo(() => skills().length - customSkills().length);
+  const mcpEntries = createMemo(() => Object.entries(mcp()));
+  async function reloadAll() {
+    setLoading(true);
+    try {
+      await Promise.all([loadExtensions(), loadSkillMarket()]);
+    } finally {
+      setLoading(false);
+    }
+  }
+  async function handleRemoveSkill(source, kind, name) {
+    if (!confirm(t("skill.delete_confirm", {
+      name
+    }))) return;
+    try {
+      await apiJson("skill/remove", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          source,
+          kind
+        })
+      });
+      await reloadAll();
+    } catch (e) {
+      setNotice(e instanceof Error ? e.message : String(e));
+    }
+  }
+  async function handleOpenSkill(location) {
+    try {
+      await nativeOpen(location);
+    } catch {
+    }
+  }
+  async function handleDeleteAllSkills() {
+    const list = removableSkills();
+    if (list.length === 0) return;
+    const message = list.length === customSkills().length ? t("skill.delete_all_confirm_all", {
+      count: list.length
+    }) : t("skill.delete_all_confirm_partial", {
+      removable: list.length,
+      blocked: customSkills().length - list.length
+    });
+    if (!confirm(message)) return;
+    try {
+      for (const item of list) {
+        await apiJson("skill/remove", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            source: item.source,
+            kind: skillRemoveKind(item)
+          })
+        });
+      }
+      await reloadAll();
+    } catch (e) {
+      setNotice(e instanceof Error ? e.message : String(e));
+    }
+  }
+  async function handleDeleteAllMcp() {
+    const names = mcpEntries().map(([name]) => name);
+    if (names.length === 0) return;
+    if (!confirm(t("mcp.delete_all_confirm", {
+      count: names.length
+    }))) return;
+    try {
+      await Promise.all(names.map((name) => apiJson(`mcp/${encodeURIComponent(name)}/disconnect`, {
+        method: "POST"
+      }).catch(() => void 0)));
+      await Promise.all(names.map((name) => apiJson(`mcp/${encodeURIComponent(name)}/auth`, {
+        method: "DELETE"
+      }).catch(() => void 0)));
+      await updateConfig((current) => {
+        delete current.mcp;
+      });
+      await reloadAll();
+    } catch (e) {
+      setNotice(e instanceof Error ? e.message : String(e));
+    }
+  }
+  async function handleInstall(item) {
+    if (!item.source || item.install_kind === "manual") return;
+    try {
+      await apiJson("skill/install", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          kind: item.install_kind,
+          value: item.source,
+          policy: item.recommended_policy || void 0
+        })
+      });
+      await reloadAll();
+    } catch (e) {
+      setNotice(e instanceof Error ? e.message : String(e));
+    }
+  }
+  async function handleOpenHomepage(url) {
+    if (!url) return;
+    await nativeOpen(url);
+  }
+  const [showAddSkill, setShowAddSkill] = createSignal(false);
+  const [skillForm, setSkillForm] = createStore({
+    type: "path",
+    value: "",
+    policy: "ask"
+  });
+  async function handleAddSkill() {
+    const value = skillForm.value.trim();
+    if (!value) return;
+    try {
+      await apiJson("skill/install", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          kind: skillForm.type,
+          value,
+          policy: skillForm.policy
+        })
+      });
+      setSkillForm({
+        type: "path",
+        value: "",
+        policy: "ask"
+      });
+      setShowAddSkill(false);
+      await reloadAll();
+    } catch (e) {
+      setNotice(e instanceof Error ? e.message : String(e));
+    }
+  }
+  async function handleBrowseFolder() {
+    try {
+      const tauri = window.__TAURI__;
+      if (!tauri) return;
+      const {
+        open
+      } = await __vitePreload(async () => { const {
+        open
+      } = await import('@tauri-apps/plugin-dialog');return {
+        open
+      }},true              ?[]:void 0);
+      const selected = await open({
+        directory: true,
+        multiple: false
+      });
+      if (typeof selected === "string") {
+        setSkillForm("value", selected);
+      }
+    } catch {
+    }
+  }
+  async function handleReloadSkills() {
+    await reloadAll();
+  }
+  createEffect(() => {
+    if (market().length === 0 && skills().length > 0) {
+      loadSkillMarket().catch(() => {
+      });
+    }
+  });
+  async function handleOpenSkillDir() {
+    try {
+      const dirs = await apiJson("skill/directories");
+      const target = dirs?.global_config || dirs?.managed_skills;
+      if (!target) return;
+      await nativeOpen(target);
+    } catch {
+    }
+  }
+  const [showAddMcp, setShowAddMcp] = createSignal(false);
+  const [mcpForm, setMcpForm] = createStore({
+    name: "",
+    type: "remote",
+    url: "",
+    command: "",
+    args: ""
+  });
+  async function handleAddMcp() {
+    const name = mcpForm.name.trim();
+    if (!name) return;
+    const payload = {
+      name,
+      type: mcpForm.type
+    };
+    if (mcpForm.type === "remote") {
+      payload.url = mcpForm.url.trim();
+      if (!payload.url) return;
+    } else {
+      payload.command = mcpForm.command.trim();
+      if (!payload.command) return;
+      if (mcpForm.args.trim()) payload.args = mcpForm.args.trim();
+    }
+    try {
+      await apiJson("mcp/add", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(payload)
+      });
+      setMcpForm({
+        name: "",
+        type: "remote",
+        url: "",
+        command: "",
+        args: ""
+      });
+      setShowAddMcp(false);
+      await reloadAll();
+    } catch (e) {
+      setNotice(e instanceof Error ? e.message : String(e));
+    }
+  }
+  return [createComponent(Show, {
+    get when() {
+      return loading();
+    },
+    get children() {
+      var _el$ = _tmpl$$3();
+      insert(_el$, () => t("common.loading"));
+      return _el$;
+    }
+  }), createComponent(Show, {
+    get when() {
+      return notice();
+    },
+    get children() {
+      var _el$2 = _tmpl$2$3(), _el$3 = _el$2.firstChild;
+      insert(_el$2, notice, _el$3);
+      _el$3.$$click = () => setNotice("");
+      insert(_el$3, () => t("common.dismiss"));
+      return _el$2;
+    }
+  }), (() => {
+    var _el$4 = _tmpl$5$3(), _el$5 = _el$4.firstChild, _el$6 = _el$5.nextSibling, _el$7 = _el$6.firstChild, _el$8 = _el$7.firstChild, _el$9 = _el$8.firstChild, _el$0 = _el$9.nextSibling, _el$1 = _el$0.nextSibling, _el$10 = _el$1.nextSibling, _el$32 = _el$7.nextSibling;
+    insert(_el$5, () => t("skill.title"));
+    _el$9.$$click = handleReloadSkills;
+    insert(_el$9, () => t("common.reload"));
+    _el$0.$$click = handleOpenSkillDir;
+    insert(_el$0, () => t("skill.open_dir"));
+    _el$1.$$click = () => setShowAddSkill(!showAddSkill());
+    insert(_el$1, () => t("skill.add"));
+    _el$10.$$click = handleDeleteAllSkills;
+    insert(_el$10, () => t("skill.delete_all"));
+    insert(_el$6, createComponent(Show, {
+      get when() {
+        return showAddSkill();
+      },
+      get children() {
+        var _el$11 = _tmpl$4$3(), _el$12 = _el$11.firstChild, _el$13 = _el$12.firstChild, _el$14 = _el$13.nextSibling, _el$15 = _el$14.firstChild, _el$16 = _el$15.nextSibling, _el$17 = _el$16.nextSibling, _el$18 = _el$12.nextSibling, _el$19 = _el$18.firstChild, _el$20 = _el$19.nextSibling, _el$21 = _el$20.firstChild, _el$23 = _el$18.nextSibling, _el$24 = _el$23.firstChild, _el$25 = _el$24.nextSibling, _el$26 = _el$25.firstChild, _el$27 = _el$26.nextSibling, _el$28 = _el$27.nextSibling, _el$29 = _el$23.nextSibling, _el$30 = _el$29.firstChild, _el$31 = _el$30.nextSibling;
+        insert(_el$13, () => t("skill.source_type"));
+        _el$14.addEventListener("change", (e) => setSkillForm("type", e.currentTarget.value));
+        insert(_el$15, () => t("skill.source.path"));
+        insert(_el$16, () => t("skill.source.url"));
+        insert(_el$17, () => t("skill.source.git"));
+        insert(_el$19, () => t("skill.value"));
+        _el$21.$$input = (e) => setSkillForm("value", e.currentTarget.value);
+        insert(_el$20, createComponent(Show, {
+          get when() {
+            return skillForm.type === "path";
+          },
+          get children() {
+            var _el$22 = _tmpl$3$3();
+            _el$22.$$click = handleBrowseFolder;
+            insert(_el$22, () => t("skill.browse_folder"));
+            return _el$22;
+          }
+        }), null);
+        insert(_el$24, () => t("skill.policy"));
+        _el$25.addEventListener("change", (e) => setSkillForm("policy", e.currentTarget.value));
+        insert(_el$26, () => t("skill.policy.ask"));
+        insert(_el$27, () => t("skill.policy.allow"));
+        insert(_el$28, () => t("skill.policy.deny"));
+        _el$30.$$click = () => setShowAddSkill(false);
+        insert(_el$30, () => t("common.cancel"));
+        _el$31.$$click = handleAddSkill;
+        insert(_el$31, () => t("skill.install"));
+        createRenderEffect((_p$) => {
+          var _v$ = t("skill.value_placeholder"), _v$2 = !skillForm.value.trim();
+          _v$ !== _p$.e && setAttribute(_el$21, "placeholder", _p$.e = _v$);
+          _v$2 !== _p$.t && (_el$31.disabled = _p$.t = _v$2);
+          return _p$;
+        }, {
+          e: void 0,
+          t: void 0
+        });
+        createRenderEffect(() => _el$14.value = skillForm.type);
+        createRenderEffect(() => _el$21.value = skillForm.value);
+        createRenderEffect(() => _el$25.value = skillForm.policy);
+        return _el$11;
+      }
+    }), _el$32);
+    insert(_el$32, createComponent(Show, {
+      get when() {
+        return skills().length > 0;
+      },
+      get fallback() {
+        return (() => {
+          var _el$66 = _tmpl$10();
+          insert(_el$66, () => t("skill.none_custom"));
+          return _el$66;
+        })();
+      },
+      get children() {
+        return createComponent(For, {
+          get each() {
+            return skills();
+          },
+          children: (item) => (() => {
+            var _el$67 = _tmpl$12(), _el$68 = _el$67.firstChild, _el$69 = _el$68.firstChild, _el$70 = _el$69.nextSibling, _el$71 = _el$70.nextSibling, _el$72 = _el$68.nextSibling, _el$75 = _el$72.firstChild;
+            insert(_el$69, () => item.name);
+            insert(_el$70, () => item.description || "");
+            insert(_el$71, () => item.location || "");
+            insert(_el$72, createComponent(Show, {
+              get when() {
+                return skillRemovable(item);
+              },
+              get children() {
+                var _el$73 = _tmpl$11();
+                _el$73.$$click = () => handleRemoveSkill(item.source || "", skillRemoveKind(item), item.name);
+                insert(_el$73, () => t("common.delete"));
+                createRenderEffect((_p$) => {
+                  var _v$3 = t("skill.delete_button_title"), _v$4 = t("skill.delete_button_title");
+                  _v$3 !== _p$.e && setAttribute(_el$73, "title", _p$.e = _v$3);
+                  _v$4 !== _p$.t && setAttribute(_el$73, "aria-label", _p$.t = _v$4);
+                  return _p$;
+                }, {
+                  e: void 0,
+                  t: void 0
+                });
+                return _el$73;
+              }
+            }), _el$75);
+            insert(_el$72, createComponent(Show, {
+              get when() {
+                return memo(() => !!item.location)() && item.location !== "builtin";
+              },
+              get children() {
+                var _el$74 = _tmpl$3$3();
+                _el$74.$$click = () => handleOpenSkill(item.location);
+                insert(_el$74, () => t("common.open"));
+                createRenderEffect((_p$) => {
+                  var _v$5 = t("skill.open_button_title"), _v$6 = t("skill.open_button_title");
+                  _v$5 !== _p$.e && setAttribute(_el$74, "title", _p$.e = _v$5);
+                  _v$6 !== _p$.t && setAttribute(_el$74, "aria-label", _p$.t = _v$6);
+                  return _p$;
+                }, {
+                  e: void 0,
+                  t: void 0
+                });
+                return _el$74;
+              }
+            }), _el$75);
+            insert(_el$75, (() => {
+              var _c$ = memo(() => !!item.builtin);
+              return () => _c$() ? t("skill.builtin") : t("common.loaded");
+            })());
+            return _el$67;
+          })()
+        });
+      }
+    }));
+    createRenderEffect(() => _el$10.disabled = removableSkills().length === 0);
+    return _el$4;
+  })(), (() => {
+    var _el$33 = _tmpl$0$1(), _el$34 = _el$33.firstChild, _el$35 = _el$34.nextSibling, _el$36 = _el$35.firstChild, _el$37 = _el$36.firstChild, _el$38 = _el$37.firstChild, _el$39 = _el$38.nextSibling, _el$61 = _el$36.nextSibling;
+    insert(_el$34, () => t("mcp.title"));
+    _el$38.$$click = () => setShowAddMcp(!showAddMcp());
+    insert(_el$38, () => t("mcp.add_action"));
+    _el$39.$$click = handleDeleteAllMcp;
+    insert(_el$39, () => t("mcp.delete_all"));
+    insert(_el$35, createComponent(Show, {
+      get when() {
+        return showAddMcp();
+      },
+      get children() {
+        var _el$40 = _tmpl$9$1(), _el$41 = _el$40.firstChild, _el$42 = _el$41.firstChild, _el$43 = _el$42.nextSibling, _el$44 = _el$41.nextSibling, _el$45 = _el$44.firstChild, _el$46 = _el$45.nextSibling, _el$47 = _el$46.firstChild, _el$48 = _el$47.nextSibling, _el$58 = _el$44.nextSibling, _el$59 = _el$58.firstChild, _el$60 = _el$59.nextSibling;
+        insert(_el$42, () => t("mcp.name"));
+        _el$43.$$input = (e) => setMcpForm("name", e.currentTarget.value);
+        insert(_el$45, () => t("mcp.type"));
+        _el$46.addEventListener("change", (e) => setMcpForm("type", e.currentTarget.value));
+        insert(_el$47, () => t("mcp.type.remote"));
+        insert(_el$48, () => t("mcp.type.local"));
+        insert(_el$40, createComponent(Show, {
+          get when() {
+            return mcpForm.type === "remote";
+          },
+          get children() {
+            var _el$49 = _tmpl$6$3(), _el$50 = _el$49.firstChild, _el$51 = _el$50.nextSibling;
+            insert(_el$50, () => t("mcp.remote_url"));
+            _el$51.$$input = (e) => setMcpForm("url", e.currentTarget.value);
+            createRenderEffect(() => _el$51.value = mcpForm.url);
+            return _el$49;
+          }
+        }), _el$58);
+        insert(_el$40, createComponent(Show, {
+          get when() {
+            return mcpForm.type === "local";
+          },
+          get children() {
+            return [(() => {
+              var _el$52 = _tmpl$7$2(), _el$53 = _el$52.firstChild, _el$54 = _el$53.nextSibling;
+              insert(_el$53, () => t("mcp.command"));
+              _el$54.$$input = (e) => setMcpForm("command", e.currentTarget.value);
+              createRenderEffect(() => _el$54.value = mcpForm.command);
+              return _el$52;
+            })(), (() => {
+              var _el$55 = _tmpl$8$1(), _el$56 = _el$55.firstChild, _el$57 = _el$56.nextSibling;
+              insert(_el$56, () => t("mcp.arguments"));
+              _el$57.$$input = (e) => setMcpForm("args", e.currentTarget.value);
+              createRenderEffect(() => _el$57.value = mcpForm.args);
+              return _el$55;
+            })()];
+          }
+        }), _el$58);
+        _el$59.$$click = () => setShowAddMcp(false);
+        insert(_el$59, () => t("common.cancel"));
+        _el$60.$$click = handleAddMcp;
+        insert(_el$60, () => t("mcp.add_action"));
+        createRenderEffect(() => _el$60.disabled = !mcpForm.name.trim() || (mcpForm.type === "remote" ? !mcpForm.url.trim() : !mcpForm.command.trim()));
+        createRenderEffect(() => _el$43.value = mcpForm.name);
+        createRenderEffect(() => _el$46.value = mcpForm.type);
+        return _el$40;
+      }
+    }), _el$61);
+    insert(_el$61, createComponent(Show, {
+      get when() {
+        return mcpEntries().length > 0;
+      },
+      get fallback() {
+        return (() => {
+          var _el$76 = _tmpl$10();
+          insert(_el$76, () => t("mcp.none"));
+          return _el$76;
+        })();
+      },
+      get children() {
+        return createComponent(For, {
+          get each() {
+            return mcpEntries();
+          },
+          children: ([name, item]) => {
+            const status = item?.status || "disabled";
+            const detail = item?.error || "";
+            return (() => {
+              var _el$77 = _tmpl$13(), _el$78 = _el$77.firstChild, _el$79 = _el$78.firstChild, _el$80 = _el$79.nextSibling, _el$81 = _el$78.nextSibling;
+              insert(_el$79, name);
+              insert(_el$80, () => detail ? detail : mcpStatusLabel(status));
+              setAttribute(_el$81, "data-state", status);
+              insert(_el$81, () => mcpStatusLabel(status));
+              return _el$77;
+            })();
+          }
+        });
+      }
+    }));
+    createRenderEffect(() => _el$39.disabled = mcpEntries().length === 0);
+    return _el$33;
+  })(), (() => {
+    var _el$62 = _tmpl$1(), _el$63 = _el$62.firstChild, _el$64 = _el$63.nextSibling, _el$65 = _el$64.firstChild;
+    insert(_el$63, () => t("skill.market.title"));
+    insert(_el$65, createComponent(Show, {
+      get when() {
+        return market().length > 0;
+      },
+      get fallback() {
+        return (() => {
+          var _el$82 = _tmpl$10();
+          insert(_el$82, () => t("skill.market.none"));
+          return _el$82;
+        })();
+      },
+      get children() {
+        return createComponent(For, {
+          get each() {
+            return market();
+          },
+          children: (item) => {
+            const installable = !!item.source && item.install_kind !== "manual";
+            return (() => {
+              var _el$83 = _tmpl$16(), _el$84 = _el$83.firstChild, _el$85 = _el$84.firstChild, _el$86 = _el$85.nextSibling, _el$87 = _el$86.firstChild, _el$89 = _el$87.nextSibling; _el$89.nextSibling; var _el$90 = _el$86.nextSibling, _el$92 = _el$84.nextSibling, _el$93 = _el$92.firstChild;
+              insert(_el$85, () => item.name);
+              insert(_el$86, () => item.provider, _el$87);
+              insert(_el$86, () => item.trust, _el$89);
+              insert(_el$86, () => item.install_kind, null);
+              insert(_el$90, () => item.description || "");
+              insert(_el$84, createComponent(Show, {
+                get when() {
+                  return item.notes;
+                },
+                get children() {
+                  var _el$91 = _tmpl$14();
+                  insert(_el$91, () => item.notes);
+                  return _el$91;
+                }
+              }), null);
+              insert(_el$93, () => policyLabel(item.recommended_policy || ""));
+              insert(_el$92, createComponent(Show, {
+                when: installable,
+                get fallback() {
+                  return (() => {
+                    var _el$95 = _tmpl$3$3();
+                    _el$95.$$click = () => handleOpenHomepage(item.homepage);
+                    insert(_el$95, () => t("skill.market.open_site"));
+                    createRenderEffect((_p$) => {
+                      var _v$9 = t("skill.market.open_site_title"), _v$0 = t("skill.market.open_site_title");
+                      _v$9 !== _p$.e && setAttribute(_el$95, "title", _p$.e = _v$9);
+                      _v$0 !== _p$.t && setAttribute(_el$95, "aria-label", _p$.t = _v$0);
+                      return _p$;
+                    }, {
+                      e: void 0,
+                      t: void 0
+                    });
+                    return _el$95;
+                  })();
+                },
+                get children() {
+                  var _el$94 = _tmpl$15();
+                  _el$94.$$click = () => handleInstall(item);
+                  insert(_el$94, () => t("skill.install"));
+                  createRenderEffect((_p$) => {
+                    var _v$7 = t("skill.market.install_button_title"), _v$8 = t("skill.market.install_button_title");
+                    _v$7 !== _p$.e && setAttribute(_el$94, "title", _p$.e = _v$7);
+                    _v$8 !== _p$.t && setAttribute(_el$94, "aria-label", _p$.t = _v$8);
+                    return _p$;
+                  }, {
+                    e: void 0,
+                    t: void 0
+                  });
+                  return _el$94;
+                }
+              }), null);
+              createRenderEffect(() => setAttribute(_el$93, "data-state", item.recommended_policy || ""));
+              return _el$83;
+            })();
+          }
+        });
+      }
+    }));
+    return _el$62;
+  })()];
+}
+delegateEvents(["click", "input"]);
+
+var _tmpl$$2 = /* @__PURE__ */ template(`<div class=config-status-box data-status=error>`), _tmpl$2$2 = /* @__PURE__ */ template(`<div class=loading-hint>`), _tmpl$3$2 = /* @__PURE__ */ template(`<dialog class=dialog><div class=dialog-form><div class=dialog-head><span class=dialog-title></span></div><div class=dialog-actions><button type=button class="btn btn-ghost mini danger"></button><button type=button class="btn btn-ghost">`), _tmpl$4$2 = /* @__PURE__ */ template(`<div class=memory-detail-meta><span class=knowledge-scope></span><span></span><span></span><span>`), _tmpl$5$2 = /* @__PURE__ */ template(`<pre class=memory-detail-content>`), _tmpl$6$2 = /* @__PURE__ */ template(`<div class=knowledge-toolbar><input id=memorySearch type=text class=knowledge-search><button type=button id=btnMemorySearch class="btn btn-ghost mini"></button><button type=button id=btnMemoryRefresh class="btn btn-ghost mini">`), _tmpl$7$1 = /* @__PURE__ */ template(`<div id=memoryList class=knowledge-list>`), _tmpl$8 = /* @__PURE__ */ template(`<div class=empty-hint>`), _tmpl$9 = /* @__PURE__ */ template(`<div class=knowledge-item-meta>`), _tmpl$0 = /* @__PURE__ */ template(`<div class=knowledge-item role=button tabindex=0><div class=knowledge-item-main><div class=knowledge-item-title></div><div class=knowledge-item-meta></div></div><div class=knowledge-item-actions><span class=knowledge-scope></span><button type=button class="btn btn-ghost mini danger knowledge-delete"data-action=delete-memory>`);
+function knowledgeScopeLabel(scope) {
+  if (scope === "session") return t("preference.scope.session");
+  if (scope === "cwd") return t("preference.scope.cwd");
+  if (scope === "global") return t("preference.scope.global");
+  return scope || "";
+}
+function formatDate(ts) {
+  if (!ts) return "";
+  return new Date(ts).toLocaleDateString();
+}
+function formatDateTime(ts) {
+  if (!ts) return "";
+  return new Date(ts).toLocaleString();
+}
+function MemoryDetailDialog(props) {
+  let dialogRef;
+  const [detail, setDetail] = createSignal(null);
+  const [errorMsg, setErrorMsg] = createSignal("");
+  const [loading, setLoading] = createSignal(true);
+  const load = async () => {
+    setLoading(true);
+    setErrorMsg("");
+    try {
+      const data = await apiJson(`panel/knowledge/memory/${encodeURIComponent(props.fileId)}`);
+      const f = data.file;
+      setDetail({
+        title: f.title,
+        scope: f.scope,
+        source: f.source,
+        timeCreated: f.timeCreated,
+        timeUpdated: f.timeUpdated,
+        content: data.content || ""
+      });
+    } catch (e) {
+      setErrorMsg(e?.message || t("memory.load_failed"));
+      setDetail(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+  const handleDelete = async () => {
+    try {
+      await apiJson(`panel/knowledge/memory/${encodeURIComponent(props.fileId)}`, {
+        method: "DELETE"
+      });
+      dialogRef?.close();
+      props.onDeleted();
+    } catch {
+    }
+  };
+  load();
+  return (() => {
+    var _el$ = _tmpl$3$2(), _el$2 = _el$.firstChild, _el$3 = _el$2.firstChild, _el$4 = _el$3.firstChild, _el$7 = _el$3.nextSibling, _el$8 = _el$7.firstChild, _el$9 = _el$8.nextSibling;
+    addEventListener(_el$, "close", props.onClose);
+    use((el) => {
+      dialogRef = el;
+      if (el) queueMicrotask(() => el.showModal());
+    }, _el$);
+    insert(_el$4, (() => {
+      var _c$ = memo(() => !!loading());
+      return () => _c$() ? t("common.loading") : memo(() => !!errorMsg())() ? t("common.error") : detail()?.title ?? "";
+    })());
+    insert(_el$2, createComponent(Show, {
+      get when() {
+        return memo(() => !!(!loading() && !errorMsg()))() && detail() !== null;
+      },
+      children: (_) => {
+        const d = detail();
+        return [(() => {
+          var _el$0 = _tmpl$4$2(), _el$1 = _el$0.firstChild, _el$10 = _el$1.nextSibling, _el$11 = _el$10.nextSibling, _el$12 = _el$11.nextSibling;
+          insert(_el$1, () => knowledgeScopeLabel(d.scope));
+          insert(_el$10, () => t("memory.source", {
+            value: d.source
+          }));
+          insert(_el$11, () => t("memory.created", {
+            value: formatDateTime(d.timeCreated)
+          }));
+          insert(_el$12, () => t("memory.updated", {
+            value: formatDateTime(d.timeUpdated)
+          }));
+          createRenderEffect(() => setAttribute(_el$1, "data-scope", d.scope));
+          return _el$0;
+        })(), (() => {
+          var _el$13 = _tmpl$5$2();
+          insert(_el$13, () => d.content || t("memory.empty_value"));
+          return _el$13;
+        })()];
+      }
+    }), _el$7);
+    insert(_el$2, createComponent(Show, {
+      get when() {
+        return memo(() => !!!loading())() && !!errorMsg();
+      },
+      get children() {
+        var _el$5 = _tmpl$$2();
+        insert(_el$5, errorMsg);
+        return _el$5;
+      }
+    }), _el$7);
+    insert(_el$2, createComponent(Show, {
+      get when() {
+        return loading();
+      },
+      get children() {
+        var _el$6 = _tmpl$2$2();
+        insert(_el$6, () => t("common.loading"));
+        return _el$6;
+      }
+    }), _el$7);
+    _el$8.$$click = () => void handleDelete();
+    insert(_el$8, () => t("common.delete"));
+    _el$9.$$click = () => {
+      dialogRef?.close();
+      props.onClose();
+    };
+    insert(_el$9, () => t("common.close"));
+    return _el$;
+  })();
+}
+function MemoryPanel(props) {
+  const [files, setFiles] = createSignal([]);
+  const [searchMode, setSearchMode] = createSignal(false);
+  const [searchQuery, setSearchQuery] = createSignal("");
+  const [loading, setLoading] = createSignal(false);
+  const [detailFileId, setDetailFileId] = createSignal(null);
+  const loadMemory = async () => {
+    if (!props.taskID) {
+      setFiles([]);
+      setSearchMode(false);
+      return;
+    }
+    setLoading(true);
+    try {
+      const query = `?taskID=${encodeURIComponent(props.taskID)}`;
+      const data = await apiJson(`panel/knowledge/memory${query}`);
+      setFiles(Array.isArray(data) ? data : []);
+      setSearchMode(false);
+    } catch {
+      setFiles([]);
+      setSearchMode(false);
+    } finally {
+      setLoading(false);
+    }
+  };
+  const doSearch = async (q) => {
+    if (!q || !q.trim()) {
+      return loadMemory();
+    }
+    setLoading(true);
+    try {
+      const results = await apiJson("panel/knowledge/memory/search", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          query: q.trim(),
+          taskID: props.taskID || void 0,
+          limit: 20
+        })
+      });
+      const mapped = (Array.isArray(results) ? results : []).map((r) => ({
+        id: r.fileId,
+        title: r.fileTitle,
+        scope: r.scope || "global",
+        source: t("memory.search_source"),
+        score: r.score,
+        snippet: r.content ? r.content.slice(0, 200) : "",
+        timeUpdated: r.timeCreated || 0
+      }));
+      setFiles(mapped);
+      setSearchMode(true);
+    } catch {
+    } finally {
+      setLoading(false);
+    }
+  };
+  const handleSearchSubmit = (e) => {
+    e.preventDefault();
+    void doSearch(searchQuery());
+  };
+  const handleRefresh = () => {
+    setSearchQuery("");
+    void loadMemory();
+  };
+  const handleDeleteInline = async (fileId) => {
+    try {
+      await apiJson(`panel/knowledge/memory/${encodeURIComponent(fileId)}`, {
+        method: "DELETE"
+      });
+      await loadMemory();
+    } catch {
+    }
+  };
+  createEffect(() => {
+    props.taskID;
+    void loadMemory();
+  });
+  createMemo(() => {
+    const n = files().length;
+    return n > 0 ? String(n) : "";
+  });
+  const emptyHint = createMemo(() => {
+    if (searchMode()) return t("memory.no_results");
+    if (props.taskID) return t("memory.none");
+    return t("memory.none_unselected");
+  });
+  return [(() => {
+    var _el$14 = _tmpl$6$2(), _el$15 = _el$14.firstChild, _el$16 = _el$15.nextSibling, _el$17 = _el$16.nextSibling;
+    _el$15.$$keydown = (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        void doSearch(searchQuery());
+      }
+    };
+    _el$15.$$input = (e) => setSearchQuery(e.target.value);
+    _el$16.$$click = handleSearchSubmit;
+    insert(_el$16, () => t("common.search"));
+    _el$17.$$click = handleRefresh;
+    insert(_el$17, () => t("common.refresh"));
+    createRenderEffect((_p$) => {
+      var _v$ = t("memory.search_placeholder"), _v$2 = loading(), _v$3 = loading();
+      _v$ !== _p$.e && setAttribute(_el$15, "placeholder", _p$.e = _v$);
+      _v$2 !== _p$.t && (_el$16.disabled = _p$.t = _v$2);
+      _v$3 !== _p$.a && (_el$17.disabled = _p$.a = _v$3);
+      return _p$;
+    }, {
+      e: void 0,
+      t: void 0,
+      a: void 0
+    });
+    createRenderEffect(() => _el$15.value = searchQuery());
+    return _el$14;
+  })(), (() => {
+    var _el$18 = _tmpl$7$1();
+    insert(_el$18, createComponent(Show, {
+      get when() {
+        return files().length > 0;
+      },
+      get fallback() {
+        return (() => {
+          var _el$19 = _tmpl$8();
+          insert(_el$19, emptyHint);
+          return _el$19;
+        })();
+      },
+      get children() {
+        return createComponent(For, {
+          get each() {
+            return files();
+          },
+          children: (f) => {
+            const time = formatDate(f.timeUpdated);
+            const mode = searchMode() ? "search" : "list";
+            const scoreHint = f.score != null ? ` · ${t("memory.score", {
+              value: f.score.toFixed(2)
+            })}` : "";
+            const meta = `${f.source}${scoreHint}${time ? ` · ${time}` : ""}`;
+            return (() => {
+              var _el$20 = _tmpl$0(), _el$21 = _el$20.firstChild, _el$22 = _el$21.firstChild, _el$23 = _el$22.nextSibling, _el$25 = _el$21.nextSibling, _el$26 = _el$25.firstChild, _el$27 = _el$26.nextSibling;
+              _el$20.$$keydown = (e) => {
+                if (e.key === "Enter" || e.key === " ") setDetailFileId(f.id);
+              };
+              _el$20.$$click = () => setDetailFileId(f.id);
+              setAttribute(_el$20, "data-mode", mode);
+              insert(_el$22, () => f.title);
+              insert(_el$23, meta);
+              insert(_el$21, createComponent(Show, {
+                get when() {
+                  return !!f.snippet;
+                },
+                get children() {
+                  var _el$24 = _tmpl$9();
+                  insert(_el$24, () => f.snippet);
+                  return _el$24;
+                }
+              }), null);
+              insert(_el$26, () => knowledgeScopeLabel(f.scope));
+              _el$27.$$click = (e) => {
+                e.stopPropagation();
+                void handleDeleteInline(f.id);
+              };
+              insert(_el$27, () => t("common.delete"));
+              createRenderEffect((_p$) => {
+                var _v$4 = f.id, _v$5 = f.scope, _v$6 = f.id, _v$7 = t("memory.delete_button_title"), _v$8 = t("memory.delete_button_title");
+                _v$4 !== _p$.e && setAttribute(_el$20, "data-id", _p$.e = _v$4);
+                _v$5 !== _p$.t && setAttribute(_el$26, "data-scope", _p$.t = _v$5);
+                _v$6 !== _p$.a && setAttribute(_el$27, "data-id", _p$.a = _v$6);
+                _v$7 !== _p$.o && setAttribute(_el$27, "title", _p$.o = _v$7);
+                _v$8 !== _p$.i && setAttribute(_el$27, "aria-label", _p$.i = _v$8);
+                return _p$;
+              }, {
+                e: void 0,
+                t: void 0,
+                a: void 0,
+                o: void 0,
+                i: void 0
+              });
+              return _el$20;
+            })();
+          }
+        });
+      }
+    }));
+    return _el$18;
+  })(), createComponent(Show, {
+    get when() {
+      return detailFileId() !== null;
+    },
+    get children() {
+      return createComponent(MemoryDetailDialog, {
+        get fileId() {
+          return detailFileId();
+        },
+        get taskID() {
+          return props.taskID;
+        },
+        onClose: () => setDetailFileId(null),
+        onDeleted: () => {
+          setDetailFileId(null);
+          void loadMemory();
+        }
+      });
+    }
+  })];
+}
+delegateEvents(["click", "input", "keydown"]);
+
+var _tmpl$$1 = /* @__PURE__ */ template(`<div class=config-status-box data-status=error>`), _tmpl$2$1 = /* @__PURE__ */ template(`<dialog class=dialog><form class=dialog-form><div class=dialog-head><span class=dialog-title></span></div><label class=field><span class=field-label></span><input type=text class=field-input required></label><label class=field><span class=field-label></span><textarea class=field-input required rows=4></textarea></label><div class=dialog-actions><button type=button class="btn btn-ghost"></button><button type=submit class="btn btn-primary">`), _tmpl$3$1 = /* @__PURE__ */ template(`<div class=knowledge-toolbar><button type=button class="btn btn-ghost mini"></button><button type=button class="btn btn-ghost mini">`), _tmpl$4$1 = /* @__PURE__ */ template(`<div id=preferenceList class=knowledge-list>`), _tmpl$5$1 = /* @__PURE__ */ template(`<div class=empty-hint>`), _tmpl$6$1 = /* @__PURE__ */ template(`<div class=pref-item role=button tabindex=0><div class=pref-item-head><span class=pref-item-key></span><span class=knowledge-scope></span><div class=pref-item-actions><button type=button class="btn btn-ghost mini danger"data-pref-action=delete></button></div></div><div class=pref-item-value>`);
+function preferenceScopeLabel(pref) {
+  if (pref?.scope === "cwd") return t("preference.scope.cwd");
+  if (pref?.scope === "session") return t("preference.scope.session");
+  if (pref?.scope === "global") return t("preference.scope.global");
+  return pref?.scope || "";
+}
+function PrefEditDialog(props) {
+  let dialogRef;
+  const [key, setKey] = createSignal(props.pref?.key ?? "");
+  const [value, setValue] = createSignal(props.pref?.value ?? "");
+  const [saving, setSaving] = createSignal(false);
+  const [error, setError] = createSignal("");
+  const isEdit = () => !!props.pref;
+  const title = () => isEdit() ? t("preference.edit") : t("preference.add");
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    const k = key().trim();
+    const v = value().trim();
+    if (!k || !v) return;
+    setSaving(true);
+    setError("");
+    try {
+      const prefId = props.pref?.id ?? "";
+      await apiJson(prefId ? `panel/knowledge/preference/${encodeURIComponent(prefId)}` : "panel/knowledge/preference", {
+        method: prefId ? "PATCH" : "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          key: k,
+          value: v
+        })
+      });
+      dialogRef?.close();
+      props.onSaved();
+    } catch (e2) {
+      setError(e2?.message || t("preference.save_failed"));
+    } finally {
+      setSaving(false);
+    }
+  };
+  return (() => {
+    var _el$ = _tmpl$2$1(), _el$2 = _el$.firstChild, _el$3 = _el$2.firstChild, _el$4 = _el$3.firstChild, _el$5 = _el$3.nextSibling, _el$6 = _el$5.firstChild, _el$7 = _el$6.nextSibling, _el$8 = _el$5.nextSibling, _el$9 = _el$8.firstChild, _el$0 = _el$9.nextSibling, _el$10 = _el$8.nextSibling, _el$11 = _el$10.firstChild, _el$12 = _el$11.nextSibling;
+    addEventListener(_el$, "close", props.onClose);
+    use((el) => {
+      dialogRef = el;
+      if (el) queueMicrotask(() => el.showModal());
+    }, _el$);
+    _el$2.addEventListener("submit", (e) => void handleSubmit(e));
+    insert(_el$4, title);
+    insert(_el$6, () => t("preference.key"));
+    _el$7.$$input = (e) => setKey(e.target.value);
+    insert(_el$9, () => t("preference.value"));
+    _el$0.$$input = (e) => setValue(e.target.value);
+    insert(_el$2, createComponent(Show, {
+      get when() {
+        return !!error();
+      },
+      get children() {
+        var _el$1 = _tmpl$$1();
+        insert(_el$1, error);
+        return _el$1;
+      }
+    }), _el$10);
+    _el$11.$$click = () => {
+      dialogRef?.close();
+      props.onClose();
+    };
+    insert(_el$11, () => t("common.cancel"));
+    insert(_el$12, (() => {
+      var _c$ = memo(() => !!saving());
+      return () => _c$() ? t("common.saving") : t("common.save");
+    })());
+    createRenderEffect(() => _el$12.disabled = saving());
+    createRenderEffect(() => _el$7.value = key());
+    createRenderEffect(() => _el$0.value = value());
+    return _el$;
+  })();
+}
+function PreferencesPanel(_props) {
+  const [loading, setLoading] = createSignal(false);
+  const [editPref, setEditPref] = createSignal(void 0);
+  const [dialogOpen, setDialogOpen] = createSignal(false);
+  const prefs = createMemo(() => {
+    const raw = appStore.preferences;
+    return Array.isArray(raw) ? raw : [];
+  });
+  const reloadPreferences = async () => {
+    setLoading(true);
+    try {
+      await loadPreferences();
+    } finally {
+      setLoading(false);
+    }
+  };
+  const handleDelete = async (prefId) => {
+    if (!prefId) return;
+    try {
+      await deletePreference(prefId);
+    } catch {
+    }
+  };
+  const openAdd = () => {
+    setEditPref(null);
+    setDialogOpen(true);
+  };
+  const openEdit = (pref) => {
+    setEditPref(pref);
+    setDialogOpen(true);
+  };
+  const handleSaved = () => {
+    setDialogOpen(false);
+    void reloadPreferences();
+  };
+  const handleDialogClose = () => {
+    setDialogOpen(false);
+  };
+  createMemo(() => {
+    const n = prefs().length;
+    return n > 0 ? String(n) : "";
+  });
+  return [(() => {
+    var _el$13 = _tmpl$3$1(), _el$14 = _el$13.firstChild, _el$15 = _el$14.nextSibling;
+    _el$14.$$click = () => void reloadPreferences();
+    insert(_el$14, () => t("common.refresh"));
+    _el$15.$$click = openAdd;
+    insert(_el$15, () => t("preference.add"));
+    createRenderEffect(() => _el$14.disabled = loading());
+    return _el$13;
+  })(), (() => {
+    var _el$16 = _tmpl$4$1();
+    insert(_el$16, createComponent(Show, {
+      get when() {
+        return prefs().length > 0;
+      },
+      get fallback() {
+        return (() => {
+          var _el$17 = _tmpl$5$1();
+          insert(_el$17, () => t("preference.none"));
+          return _el$17;
+        })();
+      },
+      get children() {
+        return createComponent(For, {
+          get each() {
+            return prefs();
+          },
+          children: (p) => (() => {
+            var _el$18 = _tmpl$6$1(), _el$19 = _el$18.firstChild, _el$20 = _el$19.firstChild, _el$21 = _el$20.nextSibling, _el$22 = _el$21.nextSibling, _el$23 = _el$22.firstChild, _el$24 = _el$19.nextSibling;
+            _el$18.$$keydown = (e) => {
+              if (e.key === "Enter" || e.key === " ") openEdit(p);
+            };
+            _el$18.$$click = () => openEdit(p);
+            insert(_el$20, () => p.key);
+            insert(_el$21, () => preferenceScopeLabel(p));
+            _el$23.$$click = (e) => {
+              e.stopPropagation();
+              void handleDelete(p.id);
+            };
+            insert(_el$23, () => t("common.delete"));
+            insert(_el$24, () => p.value);
+            createRenderEffect((_p$) => {
+              var _v$ = p.id, _v$2 = p.scope, _v$3 = p.source, _v$4 = p.id, _v$5 = t("preference.delete_button_title"), _v$6 = t("preference.delete_button_title");
+              _v$ !== _p$.e && setAttribute(_el$18, "data-pref-id", _p$.e = _v$);
+              _v$2 !== _p$.t && setAttribute(_el$21, "data-scope", _p$.t = _v$2);
+              _v$3 !== _p$.a && setAttribute(_el$21, "data-source", _p$.a = _v$3);
+              _v$4 !== _p$.o && setAttribute(_el$23, "data-pref-id", _p$.o = _v$4);
+              _v$5 !== _p$.i && setAttribute(_el$23, "title", _p$.i = _v$5);
+              _v$6 !== _p$.n && setAttribute(_el$23, "aria-label", _p$.n = _v$6);
+              return _p$;
+            }, {
+              e: void 0,
+              t: void 0,
+              a: void 0,
+              o: void 0,
+              i: void 0,
+              n: void 0
+            });
+            return _el$18;
+          })()
+        });
+      }
+    }));
+    return _el$16;
+  })(), createComponent(Show, {
+    get when() {
+      return dialogOpen();
+    },
+    get children() {
+      return createComponent(PrefEditDialog, {
+        get pref() {
+          return memo(() => editPref() === null)() ? null : editPref();
+        },
+        onClose: handleDialogClose,
+        onSaved: handleSaved
+      });
+    }
+  })];
+}
+delegateEvents(["input", "click", "keydown"]);
+
+var _tmpl$ = /* @__PURE__ */ template(`<div class=interaction-panel-empty>`), _tmpl$2 = /* @__PURE__ */ template(`<div class=interaction-panel>`), _tmpl$3 = /* @__PURE__ */ template(`<div class="interaction-body md-content">`), _tmpl$4 = /* @__PURE__ */ template(`<div class=interaction-error>`), _tmpl$5 = /* @__PURE__ */ template(`<button class="btn btn-primary">`), _tmpl$6 = /* @__PURE__ */ template(`<button class="btn btn-ghost">`), _tmpl$7 = /* @__PURE__ */ template(`<div class=interaction-alert><div class=interaction-title> </div><div class=interaction-actions>`);
+function isRecord$1(value) {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+function interactionIcon(interaction) {
+  return interaction.type === "permission" ? "🔒" : "❓";
+}
+function autoInteractionAnswers(interaction) {
+  const payload = isRecord$1(interaction?.payload) ? interaction.payload : null;
+  const questions = Array.isArray(payload?.questions) ? payload.questions : [];
+  if (questions.length === 0) return null;
+  return questions.map((item) => {
+    const question = isRecord$1(item) ? item : null;
+    const options = Array.isArray(question?.options) ? question.options : [];
+    const selected = options.find((option) => isRecord$1(option) && typeof option.label === "string" && option.label.trim());
+    if (selected && typeof selected.label === "string") return [selected.label.trim()];
+    return null;
+  });
+}
+function shouldAutoResolve(interaction) {
+  if (!interaction || interaction.status !== "pending") return false;
+  if (interaction.type === "permission") return settingsStore.autoPermission;
+  if (interaction.type === "question") return settingsStore.autoQuestion || settingsStore.unattended;
+  return false;
+}
+function InteractionPanel(props) {
+  const [busy, setBusy] = createSignal(false);
+  const [errorMap, setErrorMap] = createSignal({});
+  const autoResolveFailed = /* @__PURE__ */ new Map();
+  const COOLDOWN_MS = 1e4;
+  const pendingInteractions = createMemo(() => {
+    const raw = boardStore.board?.interactions;
+    if (!Array.isArray(raw)) return [];
+    return raw.filter((item) => item?.status === "pending");
+  });
+  function setError(id, msg) {
+    setErrorMap((prev) => ({
+      ...prev,
+      [id]: msg
+    }));
+  }
+  function clearError(id) {
+    setErrorMap((prev) => {
+      const next = {
+        ...prev
+      };
+      delete next[id];
+      return next;
+    });
+  }
+  async function resolveInteraction(id, action, input = {}) {
+    if (busy()) return;
+    setBusy(true);
+    clearError(id);
+    autoResolveFailed.delete(id);
+    try {
+      if (action === "once" || action === "always") {
+        await apiJson(`interaction/${id}/reply`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            reply: action
+          }),
+          signal: AbortSignal.timeout(3e4)
+        });
+        props.onRespond?.(id, {
+          reply: action
+        });
+        return;
+      }
+      const answers = Array.isArray(input.answers) ? input.answers : null;
+      const message = typeof input.message === "string" && input.message.trim() ? input.message.trim() : "";
+      await apiJson(`interaction/${id}/reply`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          ...answers ? {
+            answers
+          } : {},
+          ...message ? {
+            message
+          } : {}
+        }),
+        signal: AbortSignal.timeout(3e4)
+      });
+      props.onRespond?.(id, {
+        answers,
+        message
+      });
+    } catch (error) {
+      console.error("[InteractionPanel] resolveInteraction failed", error);
+      const msg = error?.message || String(error);
+      setError(id, msg);
+      autoResolveFailed.set(id, Date.now());
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function rejectInteraction(id) {
+    if (busy()) return;
+    setBusy(true);
+    clearError(id);
+    try {
+      await apiJson(`interaction/${id}/reject`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({}),
+        signal: AbortSignal.timeout(3e4)
+      });
+      props.onRespond?.(id, {
+        rejected: true
+      });
+    } catch (error) {
+      console.error("[InteractionPanel] rejectInteraction failed", error);
+      setError(id, error?.message || String(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+  function tryAutoResolve(interaction) {
+    if (busy()) return;
+    if (!shouldAutoResolve(interaction)) return;
+    const lastFail = autoResolveFailed.get(interaction.id);
+    if (lastFail && Date.now() - lastFail < COOLDOWN_MS) return;
+    if (interaction.type === "permission") {
+      const reply = settingsStore.autoPermission ? "always" : "once";
+      void resolveInteraction(interaction.id, reply);
+      return;
+    }
+    const answers = autoInteractionAnswers(interaction);
+    if (!answers || answers.some((item) => !Array.isArray(item) || item.length === 0)) {
+      console.warn("[InteractionPanel] Skipping auto question reply — missing structured options", {
+        interactionID: interaction.id
+      });
+      return;
+    }
+    void resolveInteraction(interaction.id, "answer", {
+      answers
+    });
+  }
+  const firstPending = createMemo(() => pendingInteractions()[0] ?? null);
+  let lastAutoId = "";
+  createMemo(() => {
+    const interaction = firstPending();
+    if (!interaction) {
+      lastAutoId = "";
+      return;
+    }
+    if (interaction.id === lastAutoId) return;
+    lastAutoId = interaction.id;
+    queueMicrotask(() => tryAutoResolve(interaction));
+  });
+  return (() => {
+    var _el$ = _tmpl$2();
+    insert(_el$, createComponent(For, {
+      get each() {
+        return pendingInteractions();
+      },
+      children: (interaction) => (() => {
+        var _el$3 = _tmpl$7(), _el$4 = _el$3.firstChild, _el$5 = _el$4.firstChild, _el$8 = _el$4.nextSibling;
+        insert(_el$4, () => interactionIcon(interaction), _el$5);
+        insert(_el$4, () => interaction.title, null);
+        insert(_el$3, createComponent(Show, {
+          get when() {
+            return interaction.body;
+          },
+          get children() {
+            var _el$6 = _tmpl$3();
+            insert(_el$6, () => interaction.body);
+            return _el$6;
+          }
+        }), _el$8);
+        insert(_el$3, createComponent(Show, {
+          get when() {
+            return errorMap()[interaction.id];
+          },
+          get children() {
+            var _el$7 = _tmpl$4();
+            insert(_el$7, () => t("interaction.error", {
+              message: errorMap()[interaction.id]
+            }));
+            return _el$7;
+          }
+        }), _el$8);
+        insert(_el$8, createComponent(Show, {
+          get when() {
+            return interaction.type === "permission";
+          },
+          get fallback() {
+            return [(() => {
+              var _el$10 = _tmpl$5();
+              _el$10.$$click = () => resolveInteraction(interaction.id, "answer");
+              insert(_el$10, () => t("interaction.answer"));
+              createRenderEffect((_p$) => {
+                var _v$0 = busy(), _v$1 = t("interaction.answer_title"), _v$10 = t("interaction.answer_title");
+                _v$0 !== _p$.e && (_el$10.disabled = _p$.e = _v$0);
+                _v$1 !== _p$.t && setAttribute(_el$10, "title", _p$.t = _v$1);
+                _v$10 !== _p$.a && setAttribute(_el$10, "aria-label", _p$.a = _v$10);
+                return _p$;
+              }, {
+                e: void 0,
+                t: void 0,
+                a: void 0
+              });
+              return _el$10;
+            })(), (() => {
+              var _el$11 = _tmpl$6();
+              _el$11.$$click = () => rejectInteraction(interaction.id);
+              insert(_el$11, () => t("interaction.skip"));
+              createRenderEffect((_p$) => {
+                var _v$11 = busy(), _v$12 = t("interaction.skip_title"), _v$13 = t("interaction.skip_title");
+                _v$11 !== _p$.e && (_el$11.disabled = _p$.e = _v$11);
+                _v$12 !== _p$.t && setAttribute(_el$11, "title", _p$.t = _v$12);
+                _v$13 !== _p$.a && setAttribute(_el$11, "aria-label", _p$.a = _v$13);
+                return _p$;
+              }, {
+                e: void 0,
+                t: void 0,
+                a: void 0
+              });
+              return _el$11;
+            })()];
+          },
+          get children() {
+            return [(() => {
+              var _el$9 = _tmpl$5();
+              _el$9.$$click = () => resolveInteraction(interaction.id, "always");
+              insert(_el$9, () => t("interaction.always_allow"));
+              createRenderEffect((_p$) => {
+                var _v$ = busy(), _v$2 = t("interaction.always_allow_title"), _v$3 = t("interaction.always_allow_title");
+                _v$ !== _p$.e && (_el$9.disabled = _p$.e = _v$);
+                _v$2 !== _p$.t && setAttribute(_el$9, "title", _p$.t = _v$2);
+                _v$3 !== _p$.a && setAttribute(_el$9, "aria-label", _p$.a = _v$3);
+                return _p$;
+              }, {
+                e: void 0,
+                t: void 0,
+                a: void 0
+              });
+              return _el$9;
+            })(), (() => {
+              var _el$0 = _tmpl$6();
+              _el$0.$$click = () => resolveInteraction(interaction.id, "once");
+              insert(_el$0, () => t("interaction.allow_once"));
+              createRenderEffect((_p$) => {
+                var _v$4 = busy(), _v$5 = t("interaction.allow_once_title"), _v$6 = t("interaction.allow_once_title");
+                _v$4 !== _p$.e && (_el$0.disabled = _p$.e = _v$4);
+                _v$5 !== _p$.t && setAttribute(_el$0, "title", _p$.t = _v$5);
+                _v$6 !== _p$.a && setAttribute(_el$0, "aria-label", _p$.a = _v$6);
+                return _p$;
+              }, {
+                e: void 0,
+                t: void 0,
+                a: void 0
+              });
+              return _el$0;
+            })(), (() => {
+              var _el$1 = _tmpl$6();
+              _el$1.$$click = () => rejectInteraction(interaction.id);
+              insert(_el$1, () => t("interaction.reject"));
+              createRenderEffect((_p$) => {
+                var _v$7 = busy(), _v$8 = t("interaction.reject_title"), _v$9 = t("interaction.reject_title");
+                _v$7 !== _p$.e && (_el$1.disabled = _p$.e = _v$7);
+                _v$8 !== _p$.t && setAttribute(_el$1, "title", _p$.t = _v$8);
+                _v$9 !== _p$.a && setAttribute(_el$1, "aria-label", _p$.a = _v$9);
+                return _p$;
+              }, {
+                e: void 0,
+                t: void 0,
+                a: void 0
+              });
+              return _el$1;
+            })()];
+          }
+        }));
+        createRenderEffect(() => setAttribute(_el$3, "data-id", interaction.id));
+        return _el$3;
+      })()
+    }), null);
+    insert(_el$, createComponent(Show, {
+      get when() {
+        return pendingInteractions().length === 0;
+      },
+      get children() {
+        return _tmpl$();
+      }
+    }), null);
+    return _el$;
+  })();
+}
+delegateEvents(["click"]);
+
+function clearBoardRetry() {
+  setBoardRetryCount(0);
+}
+function stopTimers() {
+  clearBoardRetry();
+  stopSSE();
+}
+
+function switchConfigTab(tabName) {
+  const sidebar = document.getElementById("configSidebar");
+  const content = document.getElementById("configContent");
+  if (!sidebar || !content) return;
+  for (const btn of sidebar.querySelectorAll(".config-nav-item")) {
+    const el = btn;
+    el.classList.toggle("active", el.dataset.configTab === tabName);
+  }
+  for (const panel of content.querySelectorAll(".config-tab-panel")) {
+    const el = panel;
+    el.classList.toggle("active", el.dataset.configPanel === tabName);
+  }
+}
+function focusConfigSection(name) {
+  if (!name) return;
+  switchConfigTab(name);
+  if (name === "channel") {
+    const channelList = document.getElementById("channelList");
+    channelList?.scrollTo?.({ top: 0 });
+  }
+}
+const OVERLAY_VERSION = "0.0.1-alpha";
+function escapeAboutHtml(s) {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+function renderAboutVersion() {
+  const grid = document.getElementById("aboutRuntimeGrid");
+  if (!grid) return;
+  const config = appStore.config;
+  const connected = appStore.config !== null;
+  const rows = [
+    [t("about.rt_overlay"), "v" + OVERLAY_VERSION],
+    [t("about.rt_core"), config?.version || t("about.rt_unavailable")],
+    [t("about.rt_server"), settingsStore.serverUrl || "-"],
+    [t("about.rt_connection"), connected ? t("about.rt_connected") : t("about.rt_disconnected")],
+    [t("about.rt_directory"), settingsStore.directory || "-"],
+    [t("about.rt_executor"), settingsStore.executor || "-"],
+    [t("about.rt_tasks"), String(boardStore.tasks?.length || 0)]
+  ];
+  if (config?.platform) rows.push([t("about.platform"), config.platform]);
+  if (config?.goVersion) rows.push([t("about.go_version"), config.goVersion]);
+  const tauri = window.__TAURI__;
+  rows.push([t("about.runtime_type"), tauri ? "Tauri Desktop" : "Browser"]);
+  grid.innerHTML = rows.map(
+    ([label, value]) => `<div class="about-info-label">${escapeAboutHtml(label)}</div><div class="about-info-value">${escapeAboutHtml(value)}</div>`
+  ).join("");
+  const chatVersion = document.getElementById("chatVersion");
+  if (chatVersion) {
+    const connected2 = config !== null;
+    const text = connected2 ? t("version.overlay", { version: OVERLAY_VERSION }) : `${t("version.overlay", { version: OVERLAY_VERSION })} / ${t("version.core_unknown")}`;
+    chatVersion.textContent = text;
+    chatVersion.title = text;
+  }
+  renderChannelSummary();
+}
+function renderChannelSummary() {
+  const channels = Array.isArray(appStore.channels) ? appStore.channels : [];
+  const configured = channels.filter((ch) => ch.status === "configured");
+  const partial = channels.filter((ch) => ch.status === "partial");
+  const missing = channels.filter((ch) => ch.status === "missing");
+  const disabled = channels.filter((ch) => ch.status === "disabled");
+  const summary = configured.length === 0 ? t("channel.setup_needed") : configured.length === 1 ? configured[0].name : t("channel.summary_plus", { name: configured[0].name, count: configured.length - 1 });
+  const details = [
+    { tone: "configured", text: configured.length > 0 ? t("channel.configured", { names: configured.map((c) => c.name).join(", ") }) : t("channel.configured_none") },
+    { tone: "partial", text: partial.length > 0 ? t("channel.needs_setup", { names: partial.map((c) => c.name).join(", ") }) : "" },
+    { tone: "missing", text: missing.length > 0 ? t("channel.available", { names: missing.map((c) => c.name).join(", ") }) : "" },
+    { tone: "disabled", text: disabled.length > 0 ? t("channel.disabled", { names: disabled.map((c) => c.name).join(", ") }) : "" }
+  ].filter((d) => d.text);
+  const hint = [...details.map((d) => d.text), t("channel.open_settings")].join(" | ");
+  const brandVersion = document.getElementById("brandVersion");
+  if (brandVersion) {
+    const card = details.map((d) => `<span class="brand-channel-tip-row" data-tone="${escapeAboutHtml(d.tone)}">${escapeAboutHtml(d.text)}</span>`).join("");
+    const tone = configured.length > 0 ? "brand-channel brand-channel-summary" : "brand-channel brand-channel-summary brand-channel-empty";
+    brandVersion.innerHTML = [
+      `<button type="button" class="brand-channel-group" data-no-drag="true" data-open-channels="true" title="${escapeAboutHtml(hint)}" aria-label="${escapeAboutHtml(hint)}">`,
+      `<span class="brand-channel-label">${escapeAboutHtml(t("channel.channels"))}</span>`,
+      `<span class="${tone}">${escapeAboutHtml(summary)}</span>`,
+      `<span class="brand-channel-tip" aria-hidden="true">`,
+      `<span class="brand-channel-tip-title">${escapeAboutHtml(t("channel.channels"))}</span>`,
+      card,
+      `<span class="brand-channel-tip-footer">${escapeAboutHtml(t("channel.open_settings"))}</span>`,
+      `</span></button>`
+    ].join("");
+  }
+  const configMeta = document.getElementById("configToggleMeta");
+  if (configMeta) configMeta.textContent = summary;
+}
+function openConfigDialog(section) {
+  const configDialog = document.getElementById(
+    "configDialog"
+  );
+  if (!configDialog) return;
+  if (!configDialog.open) {
+    configDialog.showModal();
+  }
+  void loadConfigInfo().then(() => renderAboutVersion());
+  if (section) {
+    focusConfigSection(section);
+  }
+}
+function installSettingsFormHandlers() {
+  const form = document.getElementById("settingsForm");
+  const dialog = document.getElementById("settingsDialog");
+  const cancelBtn = document.getElementById("btnCancelSettings");
+  if (!form || !dialog) return;
+  if (form.__handlersBound) return;
+  form.__handlersBound = true;
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const url = document.getElementById("serverUrl")?.value || "";
+    const password = document.getElementById("serverPassword")?.value || "";
+    const username = document.getElementById("serverUsername")?.value || "opencorvus";
+    setSettingsStore({ serverUrl: url, password, username });
+    configure({ serverUrl: url, password, username });
+    saveSettings();
+    dialog.close();
+    try {
+      await checkConnection();
+      await reloadProjectScope();
+    } catch {
+    }
+  });
+  cancelBtn?.addEventListener("click", () => {
+    dialog.close();
+  });
+}
+function setupDialogBackdropClose() {
+  document.querySelectorAll("dialog.dialog").forEach((dialog) => {
+    const el = dialog;
+    if (el.dataset.backdropClose === "true") return;
+    el.dataset.backdropClose = "true";
+    el.addEventListener("click", (event) => {
+      if (event.target !== el) return;
+      el.close();
+    });
+  });
+}
+
+function record(value) {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+function providerEntry(providerID) {
+  return (appStore.providerCatalog?.all ?? []).find(
+    (item) => item.id === providerID
+  );
+}
+function providerLabel(providerID) {
+  return providerEntry(providerID)?.name || providerID;
+}
+function providerConnected(providerID) {
+  return Array.isArray(appStore.providerCatalog?.connected) && appStore.providerCatalog.connected.includes(providerID);
+}
+function providerAuthMethods(providerID) {
+  const items = Array.isArray(appStore.providerAuth?.[providerID]) ? appStore.providerAuth[providerID] : [];
+  const result = [];
+  let index = 0;
+  for (const item of items) {
+    if (record(item)) {
+      const type = item.type === "oauth" ? "oauth" : "api";
+      const label = typeof item.label === "string" && item.label.trim() ? item.label.trim() : type === "oauth" ? "OAuth" : "API key";
+      result.push({ type, label, index });
+    } else if (typeof item === "string") {
+      const value = item.trim();
+      if (value) {
+        const type = /oauth/i.test(value) ? "oauth" : "api";
+        const label = value === "api_key" ? "API key" : value;
+        result.push({ type, label, index });
+      }
+    }
+    index++;
+  }
+  return result;
+}
+function providerPreferredOauthMethod(providerID) {
+  const methods = providerAuthMethods(providerID).filter(
+    (m) => m.type === "oauth"
+  );
+  if (methods.length === 0) return null;
+  return methods.find((m) => /browser/i.test(m.label)) ?? methods[0];
+}
+function providerState(providerID, configOverride, currentModelID) {
+  const config = configOverride ?? appStore.config ?? {};
+  const item = providerEntry(providerID);
+  const connected = providerConnected(providerID);
+  const authMethods = providerAuthMethods(providerID);
+  const configKey = config?.provider?.[providerID]?.options?.apiKey;
+  const key = configKey || item?.key;
+  const tested = appStore.providerTest;
+  if (tested?.providerID === providerID && (currentModelID === void 0 || tested?.modelID === currentModelID)) {
+    return {
+      tone: tested.ok ? "active" : "error",
+      label: tested.ok ? t("llm.status.connected") : t("llm.status.error"),
+      detail: tested.message ?? ""
+    };
+  }
+  if (connected) {
+    return {
+      tone: "active",
+      label: t("llm.status.connected"),
+      detail: t("llm.detail.connected")
+    };
+  }
+  if (key) {
+    return {
+      tone: "ready",
+      label: t("llm.status.configured"),
+      detail: t("llm.detail.configured")
+    };
+  }
+  if (authMethods.length > 0) {
+    return {
+      tone: "warn",
+      label: t("llm.status.auth_required"),
+      detail: tc("llm.detail.auth_methods", authMethods.length)
+    };
+  }
+  if ((item?.env?.length ?? 0) > 0) {
+    return {
+      tone: "warn",
+      label: t("llm.status.needs_api_key"),
+      detail: t("llm.detail.needs_api_key", { names: item.env.join(", ") })
+    };
+  }
+  return {
+    tone: "",
+    label: t("llm.status.available"),
+    detail: t("llm.detail.available")
+  };
+}
+function llmSelectionKey(providerID, modelID, apiKey) {
+  return JSON.stringify([providerID, modelID, apiKey]);
+}
+function sortedProviders(config) {
+  const catalog = appStore.providerCatalog;
+  const all = Array.isArray(catalog?.all) ? [...catalog.all] : [];
+  const connected = catalog?.connected ?? [];
+  all.sort((a, b) => {
+    const ac = connected.includes(a.id) ? 0 : 1;
+    const bc = connected.includes(b.id) ? 0 : 1;
+    if (ac !== bc) return ac - bc;
+    return (a.name ?? a.id).localeCompare(b.name ?? b.id);
+  });
+  return all.map((item) => ({
+    ...item,
+    stateLabel: providerState(item.id, config).label
+  }));
+}
+function modelsForProvider(providerID) {
+  const catalog = appStore.providerCatalog;
+  const provider = (catalog?.all ?? []).find((p) => p.id === providerID);
+  return Object.keys(provider?.models ?? {}).sort(
+    (a, b) => a.localeCompare(b)
+  );
+}
+function defaultModelForProvider(providerID, config) {
+  const models = modelsForProvider(providerID);
+  const catalog = appStore.providerCatalog;
+  if (typeof config?.model === "string" && config.model.startsWith(`${providerID}/`)) {
+    const candidate = config.model.slice(providerID.length + 1);
+    if (models.includes(candidate)) return candidate;
+  }
+  const catalogDefault = catalog?.default?.[providerID];
+  if (catalogDefault && models.includes(catalogDefault)) return catalogDefault;
+  return models[0] ?? "";
+}
+async function testProviderConnection(providerID, modelID) {
+  return apiJson(`provider/${providerID}/test`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ modelID })
+  });
+}
+function providerAuthPrompt(prompt) {
+  if (!record(prompt) || typeof prompt.key !== "string" || typeof prompt.message !== "string") {
+    return null;
+  }
+  if (prompt.type === "text") {
+    return {
+      type: "text",
+      key: prompt.key,
+      message: prompt.message,
+      placeholder: typeof prompt.placeholder === "string" ? prompt.placeholder : ""
+    };
+  }
+  if (prompt.type !== "select" || !Array.isArray(prompt.options)) return null;
+  const options = prompt.options.flatMap((item) => {
+    if (!record(item) || typeof item.label !== "string" || typeof item.value !== "string") {
+      return [];
+    }
+    return [
+      {
+        label: item.label,
+        value: item.value,
+        ...typeof item.hint === "string" ? { hint: item.hint } : {}
+      }
+    ];
+  });
+  if (!options.length) return null;
+  return {
+    type: "select",
+    key: prompt.key,
+    message: prompt.message,
+    options
+  };
+}
+async function providerAuthInputs(providerID, methodIndex, callbacks) {
+  const inputs = {};
+  const label = providerLabel(providerID);
+  while (true) {
+    const prompts = await apiJson(`provider/${providerID}/auth/prompts`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ method: methodIndex, inputs }),
+      signal: AbortSignal.timeout(3e5)
+    });
+    const list = Array.isArray(prompts) ? prompts.map(providerAuthPrompt).filter(Boolean) : [];
+    const prompt = list.find((item) => !Object.hasOwn(inputs, item.key));
+    if (!prompt) return inputs;
+    let value;
+    if (prompt.type === "select") {
+      value = await callbacks.nativeSelect(prompt.message, {
+        title: label,
+        selectLabel: prompt.message,
+        options: prompt.options,
+        okLabel: t("common.ok"),
+        cancelLabel: t("common.cancel")
+      });
+    } else {
+      value = await callbacks.nativePrompt(prompt.message, {
+        title: label,
+        inputLabel: prompt.message,
+        inputPlaceholder: prompt.placeholder,
+        okLabel: t("common.submit"),
+        cancelLabel: t("common.cancel")
+      });
+    }
+    if (value == null) return null;
+    inputs[prompt.key] = String(value).trim();
+  }
+}
+async function executeProviderAuth(providerID, methodIndex, inputs) {
+  await apiJson(`provider/${providerID}/auth/execute`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ method: methodIndex, inputs }),
+    signal: AbortSignal.timeout(3e5)
+  });
+  return true;
+}
+async function authorizeProvider(providerID, methodIndex, callbacks) {
+  const methods = providerAuthMethods(providerID);
+  const explicitChoice = typeof methodIndex === "number";
+  const match = explicitChoice ? methods.find((m) => m.index === methodIndex) : providerPreferredOauthMethod(providerID);
+  if (!match) return false;
+  if (!explicitChoice) {
+    const confirmed = await callbacks.nativeConfirm(
+      `${providerLabel(providerID)} ${t("llm.status.auth_required")}: ${match.label}`,
+      {
+        title: t("llm.title"),
+        okLabel: t("common.open"),
+        cancelLabel: t("common.cancel"),
+        kind: "info"
+      }
+    );
+    if (!confirmed) {
+      return false;
+    }
+  }
+  const collected = await providerAuthInputs(providerID, match.index, callbacks);
+  if (collected == null) {
+    return false;
+  }
+  const authorization = await apiJson(
+    `provider/${providerID}/oauth/authorize`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ method: match.index, inputs: collected }),
+      signal: AbortSignal.timeout(3e5)
+    }
+  );
+  if (!record(authorization) || typeof authorization.url !== "string" || typeof authorization.method !== "string") {
+    throw new Error("OAuth authorization unavailable");
+  }
+  await callbacks.nativeOpen(authorization.url);
+  if (authorization.method === "code") {
+    const code = await callbacks.nativePrompt(
+      [authorization.instructions, authorization.url].filter(Boolean).join("\n\n"),
+      {
+        title: t("llm.title"),
+        inputLabel: match.label,
+        inputPlaceholder: "Redirect URL or authorization code (leave blank if it auto-completes)",
+        okLabel: t("common.submit"),
+        cancelLabel: t("common.cancel")
+      }
+    );
+    if (code == null) {
+      return false;
+    }
+    await apiJson(`provider/${providerID}/oauth/callback`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ method: match.index, code }),
+      signal: AbortSignal.timeout(3e5)
+    });
+    return true;
+  }
+  callbacks.showLlmNotice(
+    authorization.instructions || authorization.url,
+    "warn",
+    0
+  );
+  await apiJson(`provider/${providerID}/oauth/callback`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ method: match.index }),
+    signal: AbortSignal.timeout(3e5)
+  });
+  return true;
+}
+async function runProviderAuthMethod(providerID, method, callbacks) {
+  if (method.type === "oauth") {
+    return authorizeProvider(providerID, method.index, callbacks);
+  }
+  const inputs = await providerAuthInputs(providerID, method.index, callbacks);
+  if (inputs == null) return false;
+  if (Object.keys(inputs).length === 0) {
+    return "input";
+  }
+  await executeProviderAuth(providerID, method.index, inputs);
+  return true;
+}
+async function authenticateSelectedProvider(providerID, callbacks) {
+  const methods = providerAuthMethods(providerID);
+  if (!providerID || methods.length === 0) return false;
+  if (methods.length === 1 && methods[0]) {
+    const result2 = await runProviderAuthMethod(
+      providerID,
+      methods[0],
+      callbacks
+    );
+    return result2 === true;
+  }
+  const value = await callbacks.nativeSelect(t("llm.auth_choose_method"), {
+    title: providerLabel(providerID),
+    selectLabel: t("llm.auth_method"),
+    options: methods.map((m) => ({
+      label: m.label,
+      value: String(m.index),
+      hint: m.type === "oauth" ? t("llm.auth_type_oauth") : t("llm.auth_type_api")
+    }))
+  });
+  if (value == null) return false;
+  const method = methods.find((m) => String(m.index) === value);
+  if (!method) return false;
+  const result = await runProviderAuthMethod(providerID, method, callbacks);
+  return result === true;
+}
+
+const HIDE_EYE_SVG = '<svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M2.1 2.1l11.8 11.8" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><path d="M6 6.3A2.8 2.8 0 019.7 10" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><path d="M1.7 8c1.6-2.8 3.8-4.2 6.3-4.2 2.4 0 4.6 1.4 6.3 4.2-.5.9-1 1.6-1.6 2.2" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const SHOW_EYE_SVG = '<svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M1.7 8c1.6-2.8 3.8-4.2 6.3-4.2s4.7 1.4 6.3 4.2c-1.6 2.8-3.8 4.2-6.3 4.2S3.3 10.8 1.7 8z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/><circle cx="8" cy="8" r="2.2" stroke="currentColor" stroke-width="1.2"/></svg>';
+const COPY_SVG = '<svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true"><rect x="5.2" y="4.2" width="7.1" height="8.1" rx="1.4" stroke="currentColor" stroke-width="1.2"/><path d="M4.2 10.6H3.7A1.5 1.5 0 012.2 9.1V3.7a1.5 1.5 0 011.5-1.5h5.4a1.5 1.5 0 011.5 1.5v.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>';
+const elements = {
+  form: null,
+  provider: null,
+  model: null,
+  apiKey: null,
+  apiKeySummary: null,
+  apiKeyToggle: null,
+  apiKeyCopy: null,
+  authAction: null,
+  status: null,
+  summary: null,
+  notice: null,
+  available: null
+};
+let installed = false;
+let apiKeyVisible = false;
+let llmFormDirty = false;
+let llmSavedValue = "";
+let llmSaveTimer;
+let llmSyncSerial = 0;
+let llmNoticeTimer;
+async function waitForDialogTurn() {
+  await new Promise((resolve) => setTimeout(resolve, 0));
+}
+function authCallbacks() {
+  return {
+    nativePrompt: async (...args) => {
+      await waitForDialogTurn();
+      return nativePrompt(...args);
+    },
+    nativeSelect: async (...args) => {
+      await waitForDialogTurn();
+      return nativeSelect(...args);
+    },
+    nativeConfirm: async (...args) => {
+      await waitForDialogTurn();
+      return nativeConfirm(...args);
+    },
+    nativeOpen,
+    showLlmNotice
+  };
+}
+async function hasInitialOauthPrompts(providerID, methodIndex) {
+  const prompts = await apiJson(`provider/${providerID}/auth/prompts`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ method: methodIndex, inputs: {} }),
+    signal: AbortSignal.timeout(3e5)
+  });
+  const parsed = Array.isArray(prompts) ? prompts.map(providerAuthPrompt).filter(Boolean) : [];
+  return parsed.length > 0;
+}
+function bindElements() {
+  elements.form = document.getElementById("llmForm");
+  elements.provider = document.getElementById("llmProvider");
+  elements.model = document.getElementById("llmModel");
+  elements.apiKey = document.getElementById("llmApiKey");
+  elements.apiKeySummary = document.getElementById("llmApiKeySummary");
+  elements.apiKeyToggle = document.getElementById("btnLlmApiKeyToggle");
+  elements.apiKeyCopy = document.getElementById("btnLlmApiKeyCopy");
+  elements.authAction = document.getElementById("btnLlmAuthAction");
+  elements.status = document.getElementById("llmStatus");
+  elements.summary = document.getElementById("llmSummary");
+  elements.notice = document.getElementById("llmNotice");
+  elements.available = document.getElementById("cfgAvailableProviders");
+}
+function currentSelection() {
+  return {
+    providerID: elements.provider?.value?.trim() || "",
+    modelID: elements.model?.value?.trim() || "",
+    apiKey: elements.apiKey?.value ?? ""
+  };
+}
+function clearProviderAuthDismissed(providerID) {
+  const next = { ...appStore.providerAuthDismissed || {} };
+  delete next[providerID];
+  setAppStore("providerAuthDismissed", next);
+}
+function renderLlmSummary() {
+  if (!elements.summary) return;
+  const { providerID, modelID } = currentSelection();
+  if (!providerID || !modelID) {
+    const text2 = t("llm.summary_empty");
+    elements.summary.textContent = text2;
+    elements.summary.title = text2;
+    return;
+  }
+  const text = t("llm.summary_value", {
+    provider: providerLabel(providerID),
+    model: modelID
+  });
+  elements.summary.textContent = text;
+  elements.summary.title = text;
+}
+function renderAvailableProviders() {
+  if (!elements.available) return;
+  const total = Array.isArray(appStore.providerCatalog?.all) ? appStore.providerCatalog.all.length : 0;
+  const connected = Array.isArray(appStore.providerCatalog?.connected) ? appStore.providerCatalog.connected.length : 0;
+  const text = total === 0 ? t("llm.available_count_zero") : `${connected}/${total}`;
+  elements.available.textContent = text;
+  elements.available.title = text;
+  elements.available.dataset.status = connected > 0 ? "active" : total > 0 ? "ready" : "";
+}
+function renderLlmApiKeyTools() {
+  if (elements.apiKey) {
+    elements.apiKey.type = apiKeyVisible ? "text" : "password";
+  }
+  if (elements.apiKeyToggle) {
+    elements.apiKeyToggle.innerHTML = apiKeyVisible ? HIDE_EYE_SVG : SHOW_EYE_SVG;
+    const title = t(apiKeyVisible ? "llm.api_key_hide" : "llm.api_key_show");
+    elements.apiKeyToggle.title = title;
+    elements.apiKeyToggle.setAttribute("aria-label", title);
+  }
+  if (elements.apiKeyCopy) {
+    elements.apiKeyCopy.innerHTML = COPY_SVG;
+    const title = t("llm.api_key_copy");
+    elements.apiKeyCopy.title = title;
+    elements.apiKeyCopy.setAttribute("aria-label", title);
+    elements.apiKeyCopy.disabled = !!elements.apiKey?.disabled || !elements.apiKey?.value?.trim();
+  }
+  if (elements.apiKeySummary) {
+    const value = elements.apiKey?.value?.trim() || "";
+    elements.apiKeySummary.textContent = value ? t("llm.status.configured") : "";
+    elements.apiKeySummary.dataset.tone = value ? "good" : "";
+  }
+}
+function renderLlmAuthAction(providerID) {
+  if (!elements.authAction) return;
+  const visible = providerAuthMethods(providerID).length > 0;
+  elements.authAction.classList.toggle("hidden", !visible);
+  elements.authAction.disabled = !visible || !!elements.provider?.disabled;
+  if (!visible) return;
+  elements.authAction.textContent = t("llm.auth_connect");
+  elements.authAction.title = t("llm.auth_connect_title");
+  elements.authAction.setAttribute("aria-label", t("llm.auth_connect_title"));
+}
+function renderInlineProviderStatus(providerID, configOverride) {
+  if (!elements.status) return;
+  const resolvedProviderID = providerID || elements.provider?.value?.trim() || "";
+  const modelID = elements.model?.value?.trim() || "";
+  if (!resolvedProviderID) {
+    elements.status.textContent = t("llm.status.unknown");
+    elements.status.dataset.status = "";
+    elements.status.title = "";
+    renderLlmAuthAction("");
+    renderLlmSummary();
+    return;
+  }
+  const info = providerState(resolvedProviderID, configOverride ?? appStore.config, modelID);
+  elements.status.textContent = info.label;
+  elements.status.dataset.status = info.tone;
+  elements.status.title = info.detail || info.label;
+  renderLlmAuthAction(resolvedProviderID);
+  renderLlmSummary();
+}
+function setLlmBusy(value) {
+  const busy = !!value;
+  if (elements.provider) elements.provider.disabled = busy;
+  if (elements.model) elements.model.disabled = busy;
+  if (elements.apiKey) elements.apiKey.disabled = busy;
+  if (elements.apiKeyToggle) elements.apiKeyToggle.disabled = busy;
+  if (elements.apiKeyCopy) elements.apiKeyCopy.disabled = busy || !elements.apiKey?.value?.trim();
+  renderLlmAuthAction(elements.provider?.value || "");
+  renderLlmApiKeyTools();
+}
+function showLlmNotice(message, tone = "", duration = 2600) {
+  if (!elements.notice) return;
+  if (llmNoticeTimer) clearTimeout(llmNoticeTimer);
+  elements.notice.textContent = message || "";
+  elements.notice.dataset.status = tone;
+  elements.notice.dataset.open = message ? "true" : "false";
+  if (!message || duration <= 0) return;
+  llmNoticeTimer = setTimeout(() => {
+    if (!elements.notice) return;
+    elements.notice.dataset.open = "false";
+  }, duration);
+}
+function populateModelSelect(syncSaved = false, providerChanged = false) {
+  if (!elements.provider || !elements.model) return;
+  const providerID = elements.provider.value.trim();
+  const models = modelsForProvider(providerID);
+  const previousModel = elements.model.value;
+  elements.model.innerHTML = models.map((item) => `<option value="${item}">${item}</option>`).join("");
+  if (llmFormDirty && !providerChanged) {
+    elements.model.value = models.includes(previousModel) ? previousModel : models[0] || "";
+  } else {
+    const current = defaultModelForProvider(providerID, appStore.config);
+    elements.model.value = models.includes(current) ? current : models[0] || "";
+  }
+  if (!llmFormDirty || providerChanged) {
+    if (elements.apiKey) {
+      elements.apiKey.value = appStore.config?.provider?.[providerID]?.options?.apiKey || "";
+    }
+  }
+  if (syncSaved) {
+    const current = currentSelection();
+    llmSavedValue = llmSelectionKey(current.providerID, current.modelID, current.apiKey);
+  }
+  renderInlineProviderStatus(providerID, appStore.config);
+  renderLlmApiKeyTools();
+}
+function populateProviderSelect(syncSaved = false) {
+  if (!elements.provider) return;
+  const providers = sortedProviders(appStore.config);
+  const previousProvider = elements.provider.value;
+  const currentModel = typeof appStore.config?.model === "string" ? appStore.config.model : "";
+  const currentProvider = currentModel && currentModel.includes("/") ? currentModel.split("/")[0] : "";
+  elements.provider.innerHTML = providers.map((item) => `<option value="${item.id}">${providerLabel(item.id)} · ${item.stateLabel}</option>`).join("");
+  if (llmFormDirty) {
+    elements.provider.value = providers.some((item) => item.id === previousProvider) ? previousProvider : providers[0]?.id || "";
+  } else {
+    const fallback = currentProvider || providers[0]?.id || "";
+    elements.provider.value = providers.some((item) => item.id === fallback) ? fallback : providers[0]?.id || "";
+  }
+  populateModelSelect(syncSaved, false);
+}
+async function syncLlmSettings() {
+  const current = currentSelection();
+  const nextValue = llmSelectionKey(current.providerID, current.modelID, current.apiKey);
+  if (nextValue === llmSavedValue) return;
+  if (!current.providerID || !current.modelID) return;
+  const serial = ++llmSyncSerial;
+  setProviderTest(null);
+  setLlmBusy(true);
+  if (elements.status) {
+    elements.status.textContent = t("llm.status.saving");
+    elements.status.dataset.status = "warn";
+    elements.status.title = `${current.providerID}/${current.modelID}`;
+  }
+  showLlmNotice(
+    t("llm.notice.saving", {
+      provider: current.providerID,
+      model: current.modelID
+    }),
+    "warn",
+    0
+  );
+  try {
+    const saved = await updateConfig((config) => {
+      config.model = `${current.providerID}/${current.modelID}`;
+      config.provider = config.provider || {};
+      const entry = config.provider[current.providerID] || {};
+      entry.options = entry.options || {};
+      if (current.apiKey.trim()) entry.options.apiKey = current.apiKey.trim();
+      if (!current.apiKey.trim()) delete entry.options.apiKey;
+      if (Object.keys(entry.options).length === 0) delete entry.options;
+      if (Object.keys(entry).length > 0) config.provider[current.providerID] = entry;
+      if (Object.keys(entry).length === 0) delete config.provider[current.providerID];
+      if (Object.keys(config.provider).length === 0) delete config.provider;
+    });
+    if (serial !== llmSyncSerial) return;
+    setAppStore("config", saved ?? null);
+    llmSavedValue = nextValue;
+    const connected = Array.isArray(appStore.providerCatalog?.connected) && appStore.providerCatalog.connected.includes(current.providerID);
+    const needsAuth = !connected && providerAuthMethods(current.providerID).length > 0;
+    if (needsAuth) {
+      const oauthMethod = providerPreferredOauthMethod(current.providerID);
+      if (!oauthMethod) {
+        renderInlineProviderStatus(current.providerID, appStore.config);
+        showLlmNotice(t("llm.status.auth_required"), "warn", 2600);
+        return;
+      }
+      if (await hasInitialOauthPrompts(current.providerID, oauthMethod.index)) {
+        renderInlineProviderStatus(current.providerID, appStore.config);
+        showLlmNotice(t("llm.status.auth_required"), "warn", 2600);
+        return;
+      }
+      const ready = await authorizeProvider(current.providerID, void 0, authCallbacks());
+      if (serial !== llmSyncSerial) return;
+      await loadConfigInfo();
+      if (serial !== llmSyncSerial) return;
+      if (!ready) {
+        dismissProviderAuth(current.providerID);
+        renderInlineProviderStatus(current.providerID, appStore.config);
+        showLlmNotice(t("llm.status.auth_required"), "warn", 2600);
+        return;
+      }
+      clearProviderAuthDismissed(current.providerID);
+    }
+    const result = await testProviderConnection(current.providerID, current.modelID);
+    if (serial !== llmSyncSerial) return;
+    setProviderTest({
+      providerID: current.providerID,
+      modelID: current.modelID,
+      ok: !!result?.ok,
+      message: result?.message || (result?.ok ? t("llm.status.connected") : t("llm.notice.test_failed"))
+    });
+    llmFormDirty = false;
+    renderInlineProviderStatus(current.providerID, appStore.config);
+    showLlmNotice(
+      appStore.providerTest?.message || "",
+      appStore.providerTest?.ok ? "active" : "error"
+    );
+  } catch (error) {
+    if (serial !== llmSyncSerial) return;
+    const message = error instanceof Error ? error.message : String(error || "");
+    setProviderTest({
+      providerID: current.providerID,
+      modelID: current.modelID,
+      ok: false,
+      message: message || t("llm.notice.update_failed")
+    });
+    renderInlineProviderStatus(current.providerID, appStore.config);
+    showLlmNotice(appStore.providerTest?.message || "", "error", 3200);
+  } finally {
+    if (serial === llmSyncSerial) setLlmBusy(false);
+  }
+}
+function queueLlmSync(delay = 220) {
+  setProviderTest(null);
+  renderInlineProviderStatus(elements.provider?.value || "", appStore.config);
+  if (llmSaveTimer) clearTimeout(llmSaveTimer);
+  llmSaveTimer = setTimeout(() => {
+    llmSaveTimer = void 0;
+    void syncLlmSettings();
+  }, delay);
+}
+async function scheduleProviderSelectionSync() {
+  const providerID = elements.provider?.value?.trim() || "";
+  setProviderTest(null);
+  renderInlineProviderStatus(providerID, appStore.config);
+  if (!providerID) return;
+  const connected = Array.isArray(appStore.providerCatalog?.connected) && appStore.providerCatalog.connected.includes(providerID);
+  const methods = providerAuthMethods(providerID);
+  if (!connected && methods.length > 0) {
+    const oauthMethod = providerPreferredOauthMethod(providerID);
+    if (!oauthMethod) return;
+    const currentProviderID = providerID;
+    if (await hasInitialOauthPrompts(providerID, oauthMethod.index)) {
+      if ((elements.provider?.value?.trim() || "") !== currentProviderID) return;
+      return;
+    }
+    if ((elements.provider?.value?.trim() || "") !== currentProviderID) return;
+  }
+  queueLlmSync(180);
+}
+async function copyApiKey() {
+  const value = elements.apiKey?.value?.trim() || "";
+  if (!value) return;
+  try {
+    await navigator.clipboard.writeText(value);
+    showLlmNotice(t("llm.api_key_copy_done"), "active", 1800);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    showLlmNotice(message || t("common.error"), "error", 3200);
+  }
+}
+function refreshInlineLlmConfig(syncSaved = !llmFormDirty) {
+  bindElements();
+  if (!elements.provider || !elements.model || !elements.apiKey) return;
+  populateProviderSelect(syncSaved);
+  renderAvailableProviders();
+  renderInlineProviderStatus(elements.provider.value, appStore.config);
+}
+function installInlineLlmConfig() {
+  if (installed) return;
+  bindElements();
+  if (!elements.provider || !elements.model || !elements.apiKey) return;
+  installed = true;
+  elements.form?.addEventListener("submit", (event) => {
+    event.preventDefault();
+  });
+  elements.provider.addEventListener("change", () => {
+    llmFormDirty = true;
+    clearProviderAuthDismissed(elements.provider?.value || "");
+    populateModelSelect(false, true);
+    renderLlmSummary();
+    void scheduleProviderSelectionSync();
+  });
+  elements.model.addEventListener("change", () => {
+    llmFormDirty = true;
+    renderLlmSummary();
+    queueLlmSync(180);
+  });
+  elements.apiKey.addEventListener("input", () => {
+    llmFormDirty = true;
+    renderLlmApiKeyTools();
+    queueLlmSync(220);
+  });
+  elements.apiKeyToggle?.addEventListener("click", (event) => {
+    event.preventDefault();
+    apiKeyVisible = !apiKeyVisible;
+    renderLlmApiKeyTools();
+  });
+  elements.apiKeyCopy?.addEventListener("click", (event) => {
+    event.preventDefault();
+    void copyApiKey();
+  });
+  elements.authAction?.addEventListener("click", async (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (llmSaveTimer) {
+      clearTimeout(llmSaveTimer);
+      llmSaveTimer = void 0;
+    }
+    try {
+      const providerID = elements.provider?.value?.trim() || "";
+      const authenticated = await authenticateSelectedProvider(providerID, authCallbacks());
+      if (authenticated !== true) {
+        if (providerID) dismissProviderAuth(providerID);
+        return;
+      }
+      if (providerID) clearProviderAuthDismissed(providerID);
+      await loadConfigInfo();
+      llmSavedValue = "";
+      queueLlmSync(0);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error || "");
+      showLlmNotice(message, "error", 3200);
+      const nativeMessage = window.nativeMessage;
+      if (typeof nativeMessage === "function") {
+        await nativeMessage(message, {
+          title: t("llm.title"),
+          kind: "error"
+        });
+      }
+    }
+  });
+  refreshInlineLlmConfig(true);
+}
+
+function syncExecutorWidth() {
+  const bar = document.getElementById("engineBar");
+  if (!bar) return;
+  bar.style.removeProperty("--engine-chip-width");
+  requestAnimationFrame(() => {
+    const buttons = [...bar.querySelectorAll("[data-executor]")];
+    const width = buttons.reduce(
+      (max, btn) => Math.max(max, Math.ceil(btn.getBoundingClientRect().width)),
+      0
+    );
+    if (width > 0) {
+      bar.style.setProperty("--engine-chip-width", `${width}px`);
+    }
+  });
+}
+
+const [logOpen, setLogOpen] = createSignal(false);
+const [codingActive, setCodingActive] = createSignal(false);
+function isRecord(value) {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+function setActiveTab(tab) {
+  setCodingActive(tab === "coding");
+  switchTab(tab);
+}
+function installAppDialogBridge() {
+  const dialog = document.getElementById("appDialog");
+  const titleEl = document.getElementById("appDialogTitle");
+  const bodyEl = document.getElementById("appDialogBody");
+  const inputField = document.getElementById("appDialogInputField");
+  const inputLabel = document.getElementById("appDialogInputLabel");
+  const inputEl = document.getElementById("appDialogInput");
+  const selectField = document.getElementById("appDialogSelectField");
+  const selectLabel = document.getElementById("appDialogSelectLabel");
+  const selectEl = document.getElementById("appDialogSelect");
+  const okBtn = document.getElementById("btnAppDialogOk");
+  const cancelBtn = document.getElementById("btnAppDialogCancel");
+  if (!dialog || !titleEl || !bodyEl || !okBtn || !cancelBtn) return;
+  if (dialog.dataset.bridgeBound === "true") return;
+  dialog.dataset.bridgeBound = "true";
+  let resolver = null;
+  let restoreConfigDialog = false;
+  const settle = (confirmed) => {
+    const resolve = resolver;
+    resolver = null;
+    const value = inputField?.classList.contains("hidden") ? selectField?.classList.contains("hidden") ? null : selectEl?.value ?? null : inputEl?.value ?? null;
+    dialog.close();
+    resolve?.({
+      confirmed,
+      value
+    });
+  };
+  cancelBtn.addEventListener("click", () => settle(false));
+  okBtn.addEventListener("click", () => settle(true));
+  dialog.addEventListener("close", () => {
+    const shouldRestoreConfigDialog = restoreConfigDialog;
+    restoreConfigDialog = false;
+    if (resolver) {
+      const resolve = resolver;
+      resolver = null;
+      resolve({
+        confirmed: false,
+        value: null
+      });
+    }
+    if (shouldRestoreConfigDialog) {
+      queueMicrotask(() => openConfigDialog());
+    }
+  });
+  const showAppDialog = (options = {}) => {
+    if (resolver) {
+      const resolve = resolver;
+      resolver = null;
+      resolve({
+        confirmed: false,
+        value: null
+      });
+    }
+    const configDialog = document.getElementById("configDialog");
+    restoreConfigDialog = configDialog?.open === true;
+    if (restoreConfigDialog) {
+      configDialog?.close();
+    }
+    titleEl.textContent = options.title || t("dialog.notice");
+    bodyEl.textContent = options.message || "";
+    okBtn.textContent = options.okLabel || t("common.ok");
+    cancelBtn.textContent = options.cancelLabel || t("common.cancel");
+    cancelBtn.hidden = options.cancel !== true;
+    if (inputField && inputEl && inputLabel) {
+      inputField.classList.toggle("hidden", options.input !== true);
+      inputLabel.textContent = options.inputLabel || t("dialog.input");
+      inputEl.placeholder = options.inputPlaceholder || "";
+      inputEl.value = options.inputValue || "";
+    }
+    if (selectField && selectEl && selectLabel) {
+      selectField.classList.toggle("hidden", options.select !== true);
+      selectLabel.textContent = options.selectLabel || t("dialog.input");
+      selectEl.innerHTML = "";
+      for (const item of options.selectOptions || []) {
+        if (!item?.value) continue;
+        const option = document.createElement("option");
+        option.value = item.value;
+        option.textContent = item.label || item.value;
+        option.selected = item.value === (options.selectValue || "");
+        selectEl.appendChild(option);
+      }
+      if (!selectEl.value && selectEl.options.length > 0) {
+        selectEl.value = options.selectValue || selectEl.options[0].value;
+      }
+    }
+    dialog.showModal();
+    if (options.input && inputEl) {
+      queueMicrotask(() => inputEl.focus());
+    } else {
+      queueMicrotask(() => okBtn.focus());
+    }
+    return new Promise((resolve) => {
+      resolver = resolve;
+    });
+  };
+  window.showAppDialog = showAppDialog;
+  window.nativeMessage = async (message, options = {}) => showAppDialog({
+    title: options.title,
+    message,
+    kind: options.kind,
+    okLabel: options.okLabel
+  });
+}
+function installGlobalBridges() {
+  installAppDialogBridge();
+  window.createOverlayInteractions = createOverlayInteractions;
+  window.renderMarkdown = renderMarkdown$1;
+  window.persistOverlaySettings = async () => {
+    saveSettings();
+  };
+  window.stepZoom = (delta) => {
+    const next = sanitizeZoom((settingsStore.zoom || 1) + delta);
+    setSettingsStore("zoom", next);
+    applyZoom(next);
+    saveSettings();
+  };
+  window.state = new Proxy({}, {
+    get(_target, prop) {
+      if (prop === "directory") return activeDirectory$1();
+      if (prop === "board") return boardStore.board;
+      if (prop === "tasks") return boardStore.tasks;
+      if (prop === "selectedTaskID") return boardStore.selectedTaskID;
+      if (prop === "messages") return store.messages;
+      if (prop === "sseConnected") return store.sseConnected;
+      if (prop === "settings") return settingsStore;
+      return void 0;
+    }
+  });
+  window.applyDirectory = applyDirectory;
+  window.loadTasks = loadTasks;
+  window.selectTask = selectTask;
+  window.loadBoard = loadBoard;
+  window.loadConversation = loadConversation;
+}
+function installGoalFormHandlers() {
+  const form = document.getElementById("goalForm");
+  const dialog = document.getElementById("goalDialog");
+  const cancelBtn = document.getElementById("btnCancelGoal");
+  if (!form || !dialog) return;
+  if (form.__goalBound) return;
+  form.__goalBound = true;
+  cancelBtn?.addEventListener("click", () => dialog.close());
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (!boardStore.selectedTaskID) return;
+    const goalID = document.getElementById("goalId")?.value.trim() || "";
+    const description = document.getElementById("goalDescription")?.value.trim() || "";
+    const criteria = document.getElementById("goalCriteria")?.value.trim() || "";
+    if (!description) return;
+    try {
+      if (goalID) {
+        await panelMessage(`Update goal ${goalID}.`, {
+          goalID,
+          description,
+          criteria: criteria || "The requested change is implemented and acceptance checks pass.",
+          taskID: boardStore.selectedTaskID || void 0
+        });
+      } else {
+        const payload = criteria ? `/goal ${description}
+Criteria: ${criteria}` : `/goal ${description}`;
+        await panelMessage(payload, {
+          taskID: boardStore.selectedTaskID || void 0
+        });
+      }
+      dialog.close();
+      await loadBoard({
+        sync: true
+      });
+    } catch (err) {
+      console.error("Failed to save goal", err);
+    }
+  });
+}
+installGlobalBridges();
+installBudgetBindings();
+installInlineLlmConfig();
+setupDialogBackdropClose();
+installSettingsFormHandlers();
+installGoalFormHandlers();
+const chatScroll = document.getElementById("chatScroll");
+if (chatScroll) {
+  chatScroll.innerHTML = "";
+  render(() => createComponent(Conversation, {
+    container: chatScroll
+  }), chatScroll);
+}
+let codingAPI = null;
+const codingScrollEl = document.getElementById("codingScroll");
+if (codingScrollEl) {
+  codingScrollEl.innerHTML = "";
+  render(() => createComponent(CodingTab, {
+    get active() {
+      return codingActive();
+    },
+    onReady: (api) => {
+      codingAPI = api;
+    }
+  }), codingScrollEl);
+}
+const taskListEl = document.getElementById("taskListPanel");
+if (taskListEl) {
+  taskListEl.innerHTML = "";
+  render(() => createComponent(TaskList, {
+    onSelectTask: (taskID) => void selectTask(taskID),
+    onDeleteTask: (taskID) => void deleteTask(taskID)
+  }), taskListEl);
+}
+const boardEl = document.getElementById("solidBoardMount");
+if (boardEl) {
+  boardEl.innerHTML = "";
+  render(() => createComponent(Board, {
+    onRetry: async () => {
+      const id = boardStore.selectedTaskID;
+      if (!id) return;
+      const note = await nativePrompt(t("task.action.retry_title"), {
+        title: t("task.action.retry")
+      });
+      if (note === null) return;
+      void retryTask(id, note || void 0);
+    },
+    onReplan: () => {
+      const id = boardStore.selectedTaskID;
+      if (id) void replanTask(id);
+    },
+    onCancel: () => {
+      const id = boardStore.selectedTaskID;
+      if (id) void cancelTask(id);
+    },
+    onEditGoal: (goalId, title, detail) => {
+      const goalDialog = document.getElementById("goalDialog");
+      const goalIdInput = document.getElementById("goalId");
+      const goalDesc = document.getElementById("goalDescription");
+      const goalCrit = document.getElementById("goalCriteria");
+      if (!goalDialog || !goalIdInput || !goalDesc || !goalCrit) return;
+      goalIdInput.value = goalId || "";
+      goalDesc.value = title || "";
+      goalCrit.value = detail || "";
+      goalDialog.showModal();
+    },
+    onDeleteGoal: async (goalId) => {
+      if (!goalId || !boardStore.selectedTaskID) return;
+      const nativeConfirm = window.nativeConfirm;
+      if (typeof nativeConfirm === "function") {
+        const ok = await nativeConfirm(t("goal.delete_button_title"), {
+          title: t("goal.title"),
+          okLabel: t("common.delete"),
+          kind: "warning"
+        });
+        if (!ok) return;
+      }
+      try {
+        await panelMessage(`Delete goal ${goalId}.`, {
+          goalID: goalId,
+          taskID: boardStore.selectedTaskID || void 0
+        });
+        await loadBoard({
+          sync: true
+        });
+      } catch (e) {
+        console.error("Failed to delete goal", e);
+      }
+    },
+    onResolveInteraction: async (id, action) => {
+      try {
+        await apiJson(`interaction/${id}/reply`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            reply: action
+          }),
+          signal: AbortSignal.timeout(3e4)
+        });
+      } catch (err) {
+        console.error("[main] resolveInteraction failed", err);
+      } finally {
+        await loadBoard();
+      }
+    },
+    onRejectInteraction: async (id) => {
+      try {
+        await apiJson(`interaction/${id}/reject`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({}),
+          signal: AbortSignal.timeout(3e4)
+        });
+      } catch (err) {
+        console.error("[main] rejectInteraction failed", err);
+      } finally {
+        await loadBoard();
+      }
+    }
+  }), boardEl);
+}
+const composerEl = document.getElementById("solidChatComposer");
+if (composerEl) {
+  render(() => createComponent(ChatComposer, {
+    get enabled() {
+      return memo(() => !!codingActive())() ? true : canComposeChat();
+    },
+    get busy() {
+      return memo(() => !!codingActive())() ? codingAPI?.busy() ?? false : !!store.chatRequest;
+    },
+    get stopping() {
+      return memo(() => !!codingActive())() ? false : !!store.chatRequest?.stopping;
+    },
+    onSubmit: (text, attachments) => {
+      if (codingActive() && codingAPI) {
+        codingAPI.send(text);
+      } else {
+        void panelMessage(text, attachments);
+      }
+    },
+    onStop: () => {
+      if (codingActive() && codingAPI) {
+        codingAPI.stop();
+      } else {
+        void stopChatRequest();
+      }
+    }
+  }), composerEl);
+}
+const btnTerminateRun = document.getElementById("btnTerminateRun");
+if (btnTerminateRun) {
+  btnTerminateRun.addEventListener("click", () => {
+    if (store.chatRequest) {
+      void stopChatRequest();
+      return;
+    }
+    const taskID = boardStore.selectedTaskID;
+    if (taskID) void cancelTask(taskID);
+  });
+}
+const windowControlsEl = document.getElementById("solidWindowControls");
+if (windowControlsEl) {
+  render(() => createComponent(WindowControls, {}), windowControlsEl);
+}
+const titlebarMenuEl = document.getElementById("solidTitlebarMenu");
+if (titlebarMenuEl) {
+  render(() => createComponent(TitlebarMenu, {
+    onLocaleChange: (locale) => {
+      setSettingsStore("locale", locale);
+      saveSettings();
+    },
+    onOpenLog: () => setLogOpen(true),
+    onOpenSettings: () => {
+      openConfigDialog();
+    }
+  }), titlebarMenuEl);
+}
+const connBadgeEl = document.getElementById("solidConnBadge");
+if (connBadgeEl) {
+  render(() => createComponent(ConnectionBadge, {}), connBadgeEl);
+}
+const changesPanelEl = document.getElementById("solidChangesPanel");
+if (changesPanelEl) {
+  render(() => createComponent(ChangesPanel, {
+    get hasSelectedTask() {
+      return !!boardStore.selectedTaskID;
+    }
+  }), changesPanelEl);
+}
+const logViewerEl = document.getElementById("solidLogViewer");
+if (logViewerEl) {
+  render(() => createComponent(LogViewer, {
+    get open() {
+      return logOpen();
+    },
+    onClose: () => setLogOpen(false)
+  }), logViewerEl);
+}
+const promptBody = document.getElementById("promptBody");
+if (promptBody) {
+  promptBody.innerHTML = "";
+  render(() => createComponent(PromptCatalog, {}), promptBody);
+}
+const channelConfigBody = document.getElementById("channelConfigBody");
+if (channelConfigBody) {
+  channelConfigBody.innerHTML = "";
+  render(() => createComponent(ChannelsPanel, {}), channelConfigBody);
+}
+const extensionsBody = document.getElementById("extensionsBody");
+if (extensionsBody) {
+  extensionsBody.innerHTML = "";
+  render(() => createComponent(SkillMarketPanel, {}), extensionsBody);
+}
+const memoryBody = document.getElementById("memoryBody");
+if (memoryBody) {
+  memoryBody.innerHTML = "";
+  render(() => createComponent(MemoryPanel, {
+    get taskID() {
+      return boardStore.selectedTaskID || void 0;
+    }
+  }), memoryBody);
+}
+const preferenceBody = document.getElementById("preferenceBody");
+if (preferenceBody) {
+  preferenceBody.innerHTML = "";
+  render(() => createComponent(PreferencesPanel, {}), preferenceBody);
+}
+const interactionMountEl = document.getElementById("solidInteractionMount");
+if (interactionMountEl) {
+  render(() => createComponent(InteractionPanel, {
+    onRespond: async () => {
+      await loadBoard();
+    }
+  }), interactionMountEl);
+}
+document.addEventListener("DOMContentLoaded", () => {
+  const openSettings = () => openConfigDialog();
+  document.getElementById("btnConfigToggle")?.addEventListener("click", openSettings);
+  document.getElementById("btnConfigToggle")?.addEventListener("keydown", (event) => {
+    if (!(event instanceof KeyboardEvent)) return;
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    openSettings();
+  });
+  document.getElementById("btnCloseConfigDialog")?.addEventListener("click", () => {
+    document.getElementById("configDialog")?.close();
+  });
+  document.getElementById("configSidebar")?.addEventListener("click", (event) => {
+    const btn = event.target.closest(".config-nav-item");
+    const tab = btn?.dataset.configTab;
+    if (tab) switchConfigTab(tab);
+  });
+  document.getElementById("brandVersion")?.addEventListener("click", () => {
+    openConfigDialog("channel");
+  });
+  {
+    const configResizer = document.getElementById("configResizer");
+    const configSidebar = document.getElementById("configSidebar");
+    configResizer?.addEventListener("pointerdown", (e) => {
+      if (e.button !== 0 || !configSidebar) return;
+      configResizer.dataset.active = "true";
+      document.body.dataset.resizing = "true";
+      e.preventDefault();
+      const layout = configSidebar.parentElement;
+      function onMove(ev) {
+        if (!layout) return;
+        const rect = layout.getBoundingClientRect();
+        const scale = currentUIScale();
+        const min = 140 * scale;
+        const max = 320 * scale;
+        const next = Math.round(Math.min(max, Math.max(min, ev.clientX - rect.left)));
+        configSidebar.style.width = next + "px";
+        configSidebar.style.minWidth = next + "px";
+      }
+      function onUp() {
+        delete configResizer.dataset.active;
+        delete document.body.dataset.resizing;
+        window.removeEventListener("pointermove", onMove);
+        window.removeEventListener("pointerup", onUp);
+        window.removeEventListener("pointercancel", onUp);
+      }
+      window.addEventListener("pointermove", onMove);
+      window.addEventListener("pointerup", onUp);
+      window.addEventListener("pointercancel", onUp);
+    });
+  }
+  document.getElementById("btnRefreshTasks")?.addEventListener("click", () => {
+    void loadTasks();
+  });
+  document.getElementById("btnSidebarToggle")?.addEventListener("click", () => {
+    const next = !settingsStore.sidebarCollapsed;
+    setSettingsStore("sidebarCollapsed", next);
+    const sidebar = document.getElementById("sidebar");
+    if (sidebar) sidebar.dataset.collapsed = String(next);
+    const toggleBtn = document.getElementById("btnSidebarToggle");
+    if (toggleBtn) toggleBtn.title = next ? t("sidebar.open") : t("sidebar.close");
+    saveSettings();
+  });
+  document.getElementById("btnCreateTask")?.addEventListener("click", () => {
+    void selectTask("");
+    if (codingActive()) setActiveTab("control");
+    const textarea = document.querySelector("#solidChatComposer textarea");
+    textarea?.focus();
+  });
+  const EXECUTOR_PROVIDER_MAP = {
+    codex: ["openai-codex", "openai"],
+    "claude-code": ["anthropic"]
+  };
+  function executorModels(executorID) {
+    const catalog = appStore.providerCatalog;
+    if (!catalog?.all) return [];
+    const providerIDs = EXECUTOR_PROVIDER_MAP[executorID];
+    if (!providerIDs) return [];
+    const models = [];
+    for (const provider of catalog.all) {
+      if (!providerIDs.includes(provider.id)) continue;
+      if (!provider.models || typeof provider.models !== "object") continue;
+      for (const model of Object.values(provider.models)) {
+        if (model?.id) models.push(model.id);
+      }
+    }
+    return models;
+  }
+  function syncExecutorUI() {
+    const active = settingsStore.executor || "opencode";
+    document.querySelectorAll("[data-executor]").forEach((btn) => {
+      btn.dataset.active = String(btn.dataset.executor === active);
+    });
+  }
+  syncExecutorUI();
+  syncExecutorWidth();
+  function executorModelPanel(id) {
+    if (id === "codex") return document.getElementById("codexModelPanel");
+    if (id === "claude-code") return document.getElementById("claudeCodeModelPanel");
+    return null;
+  }
+  function closeAllModelPanels() {
+    document.getElementById("codexModelPanel")?.setAttribute("hidden", "");
+    document.getElementById("claudeCodeModelPanel")?.setAttribute("hidden", "");
+  }
+  function renderModelPanel(executorID) {
+    const panel = executorModelPanel(executorID);
+    if (!panel) return;
+    const current = executorCurrentModel(executorID);
+    const models = executorModels(executorID);
+    const currentLabel = current ? `<div class="engine-model-current">${escapeHtml$2(t("executor.current_model") || "Current")}: <strong>${escapeHtml$2(current)}</strong></div>` : "";
+    const items = models.map((mid) => `<button type="button" class="engine-model-item" data-executor-model="${escapeHtml$2(mid)}" data-active="${mid === current}">${escapeHtml$2(mid)}</button>`).join("");
+    panel.innerHTML = currentLabel + (items || `<div class="engine-model-current">${escapeHtml$2(t("empty.overview") || "No models available")}</div>`);
+  }
+  function openModelPanel(executorID) {
+    closeAllModelPanels();
+    const panel = executorModelPanel(executorID);
+    if (!panel) return;
+    renderModelPanel(executorID);
+    const caret = document.querySelector(`[data-executor-caret="${executorID}"]`);
+    if (caret) {
+      const rect = caret.getBoundingClientRect();
+      panel.style.top = `${Math.round(rect.bottom + 6)}px`;
+      panel.style.left = `${Math.round(rect.left + rect.width / 2)}px`;
+      panel.style.transform = "translateX(-50%)";
+    }
+    panel.removeAttribute("hidden");
+  }
+  const engineBar = document.getElementById("engineBar");
+  engineBar?.addEventListener("click", async (event) => {
+    const caret = event.target.closest("[data-executor-caret]");
+    if (caret) {
+      event.stopPropagation();
+      const id2 = caret.dataset.executorCaret;
+      if (!id2) return;
+      const panel = executorModelPanel(id2);
+      if (!panel) return;
+      if (panel.hasAttribute("hidden")) {
+        openModelPanel(id2);
+      } else {
+        closeAllModelPanels();
+      }
+      return;
+    }
+    const modelItem = event.target.closest("[data-executor-model]");
+    if (modelItem) {
+      event.stopPropagation();
+      const model = modelItem.dataset.executorModel;
+      const wrap = modelItem.closest("[data-executor-wrap]");
+      const executorID = wrap?.dataset.executorWrap;
+      if (executorID && model) {
+        closeAllModelPanels();
+        await setExecutorModel(executorID, model);
+      }
+      return;
+    }
+    const chip = event.target.closest("[data-executor]");
+    if (!chip || chip.classList.contains("engine-chip-caret")) return;
+    const id = chip.dataset.executor;
+    if (!id) return;
+    if (!executorSelectable(id)) return;
+    setSettingsStore("executor", id);
+    saveSettings();
+    syncExecutorUI();
+  });
+  document.addEventListener("click", (e) => {
+    if (e.target?.closest?.("[data-executor-caret]") || e.target?.closest?.(".engine-model-panel")) return;
+    closeAllModelPanels();
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") closeAllModelPanels();
+  });
+});
+document.getElementById("tabControl")?.addEventListener("click", () => {
+  setActiveTab("control");
+});
+document.getElementById("tabCoding")?.addEventListener("click", () => {
+  setActiveTab("coding");
+});
+document.getElementById("modeToggle")?.addEventListener("click", () => {
+  setActiveTab(codingActive() ? "control" : "coding");
+});
+document.getElementById("btnChatCopyAll")?.addEventListener("click", () => {
+  void copyChatConversation();
+});
+const interactionBridge = createOverlayInteractions({
+  document,
+  dom: {
+    goalsBody: null
+  },
+  escapeHtml: escapeHtml$2,
+  renderMarkdown: renderMarkdown$1,
+  t,
+  record: isRecord,
+  loadBoard,
+  nativePrompt: async (message, options = {}) => {
+    const showAppDialog = window.showAppDialog;
+    if (typeof showAppDialog !== "function") return null;
+    const result = await showAppDialog({
+      title: options.title,
+      message,
+      cancel: true,
+      input: true,
+      okLabel: options.okLabel,
+      cancelLabel: options.cancelLabel,
+      inputLabel: options.inputLabel
+    });
+    return result?.confirmed ? result.value : null;
+  }
+});
+Object.assign(window, {
+  renderInteractions: interactionBridge.renderInteractions,
+  showInteractionModal: interactionBridge.showInteractionModal,
+  dismissInteractionModal: interactionBridge.dismissInteractionModal,
+  resolveInteraction: interactionBridge.resolveInteraction,
+  rejectInteraction: interactionBridge.rejectInteraction,
+  isInteractionBusy: interactionBridge.isInteractionBusy,
+  refreshInteractionAttention: interactionBridge.refreshInteractionAttention
+});
+createRoot(() => {
+  createEffect(() => {
+    document.body.dataset.workspace = !appStore.connected ? "offline" : boardStore.selectedTaskID ? "task" : "empty";
+    document.body.dataset.connection = appStore.connectionStatus;
+  });
+  createEffect(() => {
+    applyTheme(settingsStore.theme);
+    applyZoom(settingsStore.zoom);
+    void applyWindowOpacity(settingsStore.opacity);
+  });
+  createEffect(() => {
+    configure({
+      serverUrl: settingsStore.serverUrl,
+      username: settingsStore.username,
+      password: settingsStore.password,
+      directory: settingsStore.directory
+    });
+  });
+  createEffect(() => {
+    void setLocale(settingsStore.locale);
+  });
+  createEffect(() => {
+    settingsStore.locale;
+    appStore.config;
+    appStore.providerCatalog;
+    appStore.providerAuth;
+    appStore.providerTest;
+    refreshInlineLlmConfig();
+  });
+  createEffect(() => {
+    const count = store.messages.length;
+    const chatCount = document.getElementById("chatCount");
+    const copyBtn = document.getElementById("btnChatCopyAll");
+    if (chatCount) chatCount.textContent = count > 0 ? String(count) : "";
+    if (copyBtn) copyBtn.disabled = count === 0;
+  });
+  createEffect(() => {
+    const task = boardStore.board?.task;
+    const taskStatus = document.getElementById("taskStatus");
+    const statusIconEl = document.getElementById("statusIcon");
+    const statusLabel = document.getElementById("statusLabel");
+    const btnTerminate = document.getElementById("btnTerminateRun");
+    const status = task?.status || "idle";
+    const isActive = ["running", "planning", "evaluating", "delivering", "queued"].includes(status);
+    if (taskStatus) {
+      taskStatus.hidden = !boardStore.selectedTaskID || codingActive();
+    }
+    if (statusIconEl) {
+      statusIconEl.dataset.status = status;
+      statusIconEl.innerHTML = statusIcon(status);
+    }
+    if (statusLabel) {
+      statusLabel.textContent = boardStore.selectedTaskID ? t(`task.status.${status}`) : t("task.status.idle");
+    }
+    if (btnTerminate) {
+      btnTerminate.hidden = !boardStore.selectedTaskID || !isActive;
+    }
+  });
+  createEffect(() => {
+    settingsStore.locale;
+    appStore.budgetDirty;
+    appStore.budgetSaving;
+    renderBudget(boardStore.board?.task);
+  });
+});
+const paneCallbacks = {
+  getState: () => ({
+    sidebarCollapsed: settingsStore.sidebarCollapsed,
+    sidebarWidth: settingsStore.sidebarWidth,
+    sectionsWidth: settingsStore.sectionsWidth
+  }),
+  onWidthsChanged: (sidebarWidth, sectionsWidth) => {
+    setSettingsStore({
+      ...sidebarWidth != null ? {
+        sidebarWidth
+      } : {},
+      ...sectionsWidth != null ? {
+        sectionsWidth
+      } : {}
+    });
+    saveSettings();
+  }
+};
+initPaneResizers(paneCallbacks);
+setActiveTab("control");
+window.addEventListener("keydown", handleZoomHotkey);
+window.addEventListener("keydown", (e) => {
+  if (e.key === "F12") {
+    e.preventDefault();
+    void toggleDevtools();
+  }
+});
+const onResize = () => applyZoom(settingsStore.zoom);
+window.addEventListener("resize", onResize);
+if (window.visualViewport) window.visualViewport.addEventListener("resize", onResize);
+window.addEventListener("focus", () => {
+  void window.refreshInteractionAttention?.();
+});
+window.addEventListener("blur", () => {
+  void cancelPaneResize(paneCallbacks);
+  void window.refreshInteractionAttention?.();
+});
+window.addEventListener("beforeunload", () => {
+  teardownApp();
+  stopTimers();
+});
+document.addEventListener("visibilitychange", () => {
+  void window.refreshInteractionAttention?.();
+});
+installSystemThemeListener(() => applyTheme(settingsStore.theme));
+function renderRecentDirPanel() {
+  const panel = document.getElementById("recentDirPanel");
+  if (!panel) return;
+  const dirs = loadRecentDirectories();
+  const current = activeDirectory$1();
+  if (!dirs.length) {
+    panel.innerHTML = `<div class="recent-dir-empty">${escapeHtml$2(t("cwd.recent_empty"))}</div>`;
+    return;
+  }
+  panel.innerHTML = dirs.map((dir) => {
+    const isActive = current && dir.toLowerCase() === current.toLowerCase();
+    return `<button type="button" class="recent-dir-item" data-recent-dir="${escapeHtml$2(dir)}" data-active="${isActive}" title="${escapeHtml$2(dir)}">${escapeHtml$2(shortPath$2(dir))}</button>`;
+  }).join("");
+}
+function openRecentDirPanel() {
+  const panel = document.getElementById("recentDirPanel");
+  if (!panel) return;
+  if (!panel.hidden) {
+    panel.hidden = true;
+    return;
+  }
+  renderRecentDirPanel();
+  const trigger = document.getElementById("taskDir")?.querySelector('[data-path-action="recent"]');
+  if (trigger) {
+    const rect = trigger.getBoundingClientRect();
+    panel.style.top = Math.round(rect.bottom + 4) + "px";
+    panel.style.left = Math.round(Math.max(4, rect.left - 60)) + "px";
+  }
+  panel.hidden = false;
+}
+function closeRecentDirPanel() {
+  const panel = document.getElementById("recentDirPanel");
+  if (panel) panel.hidden = true;
+}
+document.getElementById("taskDir")?.addEventListener("click", async (event) => {
+  const button = eventClosest(event, "[data-path-action],[data-path-open],[data-path-set]");
+  if (!button || button.disabled) return;
+  const el = button;
+  const action = el.dataset.pathAction || "";
+  if (action === "recent") {
+    event.stopPropagation();
+    openRecentDirPanel();
+    return;
+  }
+  if (action === "browse") {
+    await browseDirectory();
+    return;
+  }
+  if (action === "create") {
+    await createDirectory();
+    return;
+  }
+  if (action === "reset") {
+    await resetDirectory();
+    return;
+  }
+  if (el.dataset.pathOpen) {
+    await openDirectory(el.dataset.pathOpen);
+    return;
+  }
+  const target = el.dataset.pathSet || "";
+  if (!target) return;
+  try {
+    await setDirectory(target);
+  } catch (e) {
+    AppLog.error("ui", "Failed to set working directory", {
+      error: String(e)
+    });
+  }
+});
+document.getElementById("recentDirPanel")?.addEventListener("click", async (event) => {
+  const item = eventClosest(event, "[data-recent-dir]");
+  if (!item) return;
+  const dir = item.dataset.recentDir;
+  if (!dir) return;
+  closeRecentDirPanel();
+  try {
+    await setDirectory(dir);
+  } catch (e) {
+    removeRecentDirectory(dir);
+    AppLog.error("ui", "Failed to switch to recent directory", {
+      error: String(e)
+    });
+  }
+});
+document.addEventListener("click", (e) => {
+  const target = e.target;
+  if (target?.closest?.('[data-path-action="recent"]') || target?.closest?.(".recent-dir-panel")) return;
+  closeRecentDirPanel();
+});
+document.getElementById("taskGit")?.addEventListener("click", () => {
+  void initGitCurrent({
+    notify: true
+  });
+});
+window.__overlayInitSettled = false;
+void (async () => {
+  try {
+    await initApp();
+    renderAboutVersion();
+  } catch (error) {
+    console.error(error);
+  } finally {
+    await waitForLogDrain();
+    window.__overlayInitSettled = true;
+  }
+})();

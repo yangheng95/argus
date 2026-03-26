@@ -185,6 +185,7 @@ export function PanelKnowledgeRoutes() {
         },
       }),
       async (c) => {
+        Preference.repairOverlayManaged({ projectID: projectId() })
         const prefs = Preference.manageable({ projectID: projectId() })
         return c.json(prefs)
       },
@@ -220,9 +221,8 @@ export function PanelKnowledgeRoutes() {
       ),
       async (c) => {
         const { key, value } = c.req.valid("json")
-        const entry = Preference.set({ projectID: projectId(), key, value, source: "overlay" })
-        // Also persist to cwd file so it survives DB loss
-        Preference.syncToCwd(key, value)
+        Preference.repairOverlayManaged({ projectID: projectId() })
+        const entry = Preference.setCwd({ projectID: projectId(), key, value })
         return c.json(entry)
       },
     )
@@ -248,9 +248,19 @@ export function PanelKnowledgeRoutes() {
       async (c) => {
         const id = c.req.param("id")
         const { key, value } = c.req.valid("json")
+        const entry = Preference.get(id)
+        if (!entry) return c.json({ error: "not found" }, 404)
+        if (entry.scope === "cwd") {
+          Preference.update({ preferenceID: id, key, value })
+          return c.json({ ok: true })
+        }
+        if (entry.scope === "global" && entry.source === "overlay") {
+          Preference.remove(id)
+          if (entry.key !== key) Preference.removeFromCwd(entry.key)
+          Preference.setCwd({ projectID: projectId(), key, value })
+          return c.json({ ok: true })
+        }
         Preference.update({ preferenceID: id, key, value })
-        // Also persist to cwd file so it survives DB loss
-        Preference.syncToCwd(key, value)
         return c.json({ ok: true })
       },
     )
@@ -268,10 +278,12 @@ export function PanelKnowledgeRoutes() {
       }),
       async (c) => {
         const id = c.req.param("id")
-        // Get the preference key before deletion so we can remove from cwd file
         const entry = Preference.get(id)
+        if (!entry) return c.json({ error: "not found" }, 404)
         Preference.remove(id)
-        if (entry) Preference.removeFromCwd(entry.key)
+        if (entry.scope === "cwd" || (entry.scope === "global" && entry.source === "overlay")) {
+          Preference.removeFromCwd(entry.key)
+        }
         return c.json({ ok: true })
       },
     )

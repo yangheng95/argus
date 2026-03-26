@@ -1,4 +1,6 @@
+import fs from "fs"
 import { afterEach, describe, expect, mock, test } from "bun:test"
+import { Preference } from "../../src/preference"
 import { Instance } from "../../src/project/instance"
 import { Server } from "../../src/server/server"
 import { Session } from "../../src/session"
@@ -207,6 +209,94 @@ describe("panel routes", () => {
         expect(search.status).toBe(200)
         const searchBody = await search.json() as Array<{ fileTitle: string; kind: string; scope: string }>
         expect(searchBody.some((item) => item.fileTitle === "Session episode" && item.scope === "session")).toBe(true)
+      },
+    })
+  })
+
+  test("panel preference routes manage cwd state and repair legacy overlay rows", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        Preference.set({
+          projectID: Instance.project.id,
+          key: "style",
+          value: "concise",
+          source: "overlay",
+        })
+        Preference.syncToCwd("style", "concise")
+
+        const app = Server.App()
+        const baseHeaders = {
+          "x-opencorvus-directory": tmp.path,
+        }
+        const prefFile = `${tmp.path}/.opencorvus/preferences.json`
+
+        const repaired = await app.request("/panel/knowledge/preference", {
+          headers: baseHeaders,
+        })
+        expect(repaired.status).toBe(200)
+        const repairedBody = (await repaired.json()) as Array<{ id: string; key: string; scope: string }>
+        expect(repairedBody.filter((item) => item.key === "style")).toEqual([
+          expect.objectContaining({ key: "style", scope: "cwd" }),
+        ])
+        expect(
+          Preference.list({
+            projectID: Instance.project.id,
+            scope: "global",
+          }).some((item) => item.key === "style"),
+        ).toBe(false)
+
+        const created = await app.request("/panel/knowledge/preference", {
+          method: "POST",
+          headers: {
+            ...baseHeaders,
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({
+            key: "tone",
+            value: "concise",
+          }),
+        })
+        expect(created.status).toBe(200)
+        const createdBody = (await created.json()) as { id: string }
+        expect(createdBody.id.startsWith("cwd:")).toBe(true)
+        expect(
+          Preference.list({
+            projectID: Instance.project.id,
+            scope: "global",
+          }).some((item) => item.key === "tone"),
+        ).toBe(false)
+
+        const written = JSON.parse(fs.readFileSync(prefFile, "utf8")) as Array<{ key: string; value: string }>
+        expect(written.some((item) => item.key === "tone" && item.value === "concise")).toBe(true)
+
+        const updated = await app.request(`/panel/knowledge/preference/${encodeURIComponent(createdBody.id)}`, {
+          method: "PATCH",
+          headers: {
+            ...baseHeaders,
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({
+            key: "tone_policy",
+            value: "succinct",
+          }),
+        })
+        expect(updated.status).toBe(200)
+
+        const afterUpdate = JSON.parse(fs.readFileSync(prefFile, "utf8")) as Array<{ key: string; value: string }>
+        expect(afterUpdate.some((item) => item.key === "tone_policy" && item.value === "succinct")).toBe(true)
+        expect(afterUpdate.some((item) => item.key === "tone")).toBe(false)
+
+        const removed = await app.request(`/panel/knowledge/preference/${encodeURIComponent("cwd:tone_policy")}`, {
+          method: "DELETE",
+          headers: baseHeaders,
+        })
+        expect(removed.status).toBe(200)
+
+        const afterDelete = JSON.parse(fs.readFileSync(prefFile, "utf8")) as Array<{ key: string }>
+        expect(afterDelete.some((item) => item.key === "tone_policy")).toBe(false)
       },
     })
   })

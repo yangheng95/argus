@@ -1,18 +1,13 @@
 // ── SSE Connection Manager ──
-// Extracted from legacy app.js — manages Server-Sent Events connection
-// for real-time task updates.
-//
-// All incoming events are dispatched through routeSSEEvent() first.
-// If routeSSEEvent() returns false (unknown event type), the event is
-// forwarded to window.__legacyHandleNonMessageEvent for backward-compatible
-// processing by app.js.  This keeps the Solid path self-contained while
-// preserving full compatibility during the incremental migration.
+// Manages the Server-Sent Events connection for real-time task updates.
+// Events are dispatched through routeSSEEvent() first (message/agent/executor).
+// Unhandled events are forwarded to handleEventStreamEvent for board/task
+// lifecycle processing.
 
 import { apiUrl, apiHeaders } from "./api";
 import { clearEventQueue, syncTask, setSseConnected } from "../store/messages";
 import { boardStore, loadBoard } from "../store/board";
-import { routeSSEEvent } from "./events";
-import { handleEventStreamEvent } from "./legacy";
+import { routeSSEEvent, handleEventStreamEvent } from "./events";
 
 let sseController: AbortController | null = null;
 let sseRetryTimer: any = null;
@@ -57,12 +52,11 @@ export function startSSE(taskID: string) {
               continue;
             const handled = routeSSEEvent(event);
             if (!handled) {
-              // Forward unknown events to legacy handler for backward
-              // compatibility during the incremental app.js migration.
+ // Forward unhandled events (board/task lifecycle) to handleEventStreamEvent.
               handleEventStreamEvent(event);
             }
           } catch {
-            // malformed JSON — skip
+ // malformed JSON — skip
           }
         }
       }
@@ -71,7 +65,7 @@ export function startSSE(taskID: string) {
       console.warn("SSE disconnected", e.message);
     }
     setSseConnected(false);
-    // Reconnect after 3s with a full transcript reload
+ // Reconnect after 3s with a full transcript reload
     if (sseRetryTimer) clearTimeout(sseRetryTimer);
     sseRetryTimer = setTimeout(async () => {
       sseRetryTimer = null;

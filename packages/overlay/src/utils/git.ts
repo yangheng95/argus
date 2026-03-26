@@ -1,6 +1,5 @@
 // ── Git Checkpoint Utilities ──
-// Exact port of gitCheckpointTitle, gitCheckpointLine, gitCheckpointText,
-// boardGitCheckpoints from app.js (lines 8058–8128).
+// boardGitCheckpoints .
 // Also includes canInitGit and initGitCurrent (lines 4258–4391).
 
 import { t } from "./i18n";
@@ -82,11 +81,9 @@ export interface GitCheckpoint {
 
 /**
  * Extract and normalise all git checkpoint entries from a board object.
- *
  * Sources checked (in order):
  * 1. `board.task.metadata.git.baseline` / `board.task.metadata.git.result`
  * 2. `board.snapshots[]` entries where `payload.kind === "git"`
- *
  * Returns checkpoints sorted by creation time (ascending).
  */
 export function boardGitCheckpoints(board: any): GitCheckpoint[] {
@@ -133,13 +130,10 @@ export function boardGitCheckpoints(board: any): GitCheckpoint[] {
 }
 
 // ── Git Init Utilities ──
-// Exact port of canInitGit and initGitCurrent from app.js (lines 4258–4391).
 
 /**
  * Returns true when the current directory is set, the overlay is connected,
  * and the directory has no git VCS branch yet (i.e. git is not initialised).
- *
- * Mirrors app.js canInitGit (line 4258).
  */
 export function canInitGit(): boolean {
   return !!activeDirectory() && appStore.connected && !boardStore.vcs?.branch;
@@ -147,17 +141,15 @@ export function canInitGit(): boolean {
 
 /**
  * POST project/current/init-git to initialise a git repository in the active
- * directory.  Calls resetProjectScope + reloadProjectScope on success and
- * shows a native notification.  Returns true on success, false on error.
- *
- * Mirrors app.js initGitCurrent (line 4367).
+ * directory. Calls resetProjectScope + reloadProjectScope on success and
+ * shows a native notification. Returns true on success, false on error.
  */
 export async function initGitCurrent(options: { notify?: boolean } = {}): Promise<boolean> {
   const dir = activeDirectory();
   if (!dir || !canInitGit()) return false;
   try {
     const result = await apiJson("project/current/init-git", { method: "POST" });
-    // Reload project scope after git init (config, extensions, meta).
+ // Reload project scope after git init (config, extensions, meta).
     const { clearProjectScopeData } = await import("../services/workspace");
     const { reloadProjectScope } = await import("../services/config");
     clearProjectScopeData();

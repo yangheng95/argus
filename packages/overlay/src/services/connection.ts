@@ -1,14 +1,11 @@
 // ── Connection Service ──
-// Exact port of app.js connection management logic.
-//
 // Responsibilities:
-//   - Sync local server URL from Tauri native invoke
-//   - Restart local managed server via Tauri
-//   - Check server connection via global/health endpoint
-//   - Maintain a periodic connection monitor loop
-//
+// - Sync local server URL from Tauri native invoke
+// - Restart local managed server via Tauri
+// - Check server connection via global/health endpoint
+// - Maintain a periodic connection monitor loop
 // This module owns connection status and exposes typed helpers.
-// Render-side effects (DOM badge updates) remain in app.js during migration;
+// Render-side effects (DOM badge updates) remain
 // this module updates the Solid appStore.connectionStatus.
 
 import { apiJson, apiUrl, apiHeaders, configure as configureApi, DEFAULT_SERVER } from "./api";
@@ -72,7 +69,6 @@ export interface LocalServerInfo {
 /**
  * Queries Tauri for the current managed local server URL and, if it differs
  * from the stored value, persists the new URL.
- * Mirrors app.js localServerInfo + syncLocalServerUrl.
  */
 export async function localServerInfo(): Promise<LocalServerInfo | null> {
   if (!hasTauriRuntime()) return null;
@@ -89,7 +85,6 @@ export interface SyncLocalServerUrlOptions {
 /**
  * Sync the managed local server URL from Tauri.
  * Returns the server info on success, null if not applicable.
- * Mirrors app.js syncLocalServerUrl.
  */
 export async function syncLocalServerUrl(
   options: SyncLocalServerUrlOptions = {},
@@ -102,7 +97,7 @@ export async function syncLocalServerUrl(
   if (normalizeUrl(settingsStore.serverUrl, settingsStore.serverUrl) === next) {
     return info;
   }
-  // Update the settings store + persist + push to API client
+ // Update the settings store + persist + push to API client
   applySettings({ ...settingsStore, serverUrl: next });
   saveSettings();
   configureApi({ serverUrl: next });
@@ -112,7 +107,6 @@ export async function syncLocalServerUrl(
 /**
  * Restart the managed local server via Tauri.
  * Returns the new server info on success, null if not applicable.
- * Mirrors app.js restartLocalServer.
  */
 export async function restartLocalServer(): Promise<LocalServerInfo | null> {
   if (!hasTauriRuntime() || !usesManagedLocalServer()) return null;
@@ -131,9 +125,7 @@ export async function restartLocalServer(): Promise<LocalServerInfo | null> {
 
 /**
  * Probe the server health endpoint.
- * Mirrors app.js checkConnection — attempts up to 8 times for managed local
- * server, 1 time otherwise.  Updates appStore.connectionStatus.
- *
+ * server, 1 time otherwise. Updates appStore.connectionStatus.
  * Returns true when the server is reachable, false otherwise.
  */
 export async function checkConnection(): Promise<boolean> {
@@ -170,12 +162,11 @@ let _monitorTimer: ReturnType<typeof setInterval> | null = null;
 
 /**
  * Start a periodic connection monitor that attempts reconnection every 10 s
- * when the overlay is offline.  Safe to call multiple times — stops any
+ * when the overlay is offline. Safe to call multiple times — stops any
  * previously running monitor first.
- *
  * On successful reconnect the caller is responsible for reloading data; this
- * function only updates the connection status store.  In the current
- * migration phase the legacy app.js init() owns the reconnect data-loading
+ * function only updates the connection status store. In the current
+ * migration phase the () owns the reconnect data-loading
  * side-effects; this function drives the Solid store status signal.
  */
 export function startConnectionMonitor(
@@ -209,7 +200,6 @@ export function stopConnectionMonitor(): void {
 }
 
 // ── resolveAutoServer ──
-// Exact port of app.js resolveAutoServer (line 1185).
 
 function defaultAutoServer(url: string): boolean {
   return !url || url === DEFAULT_SERVER;
@@ -217,12 +207,9 @@ function defaultAutoServer(url: string): boolean {
 
 /**
  * Determine whether `autoServer` should be enabled for the given URL.
- *
  * When `previous.autoServer` is true and `value` normalises to the same URL
- * that was previously saved, the previous preference is preserved.  Otherwise
+ * that was previously saved, the previous preference is preserved. Otherwise
  * `autoServer` defaults to true only for the loopback / default server address.
- *
- * Mirrors app.js resolveAutoServer (line 1185).
  */
 export function resolveAutoServer(
   value: string,

@@ -405,4 +405,10 @@ export namespace Agent {
     const result = await generateObject(params)
     return result.object
   }
+
+  /** Resolve the agent generation prompt, respecting config.prompt.agent_generate override. */
+  export async function generatePrompt(): Promise<string> {
+    const cfg = await Config.get()
+    return cfg.prompt?.["agent_generate"] ?? PROMPT_GENERATE
+  }
 }

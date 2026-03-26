@@ -1,5 +1,4 @@
 // ── i18n module ──
-// Exact port of the i18n logic from app.js:
 // sanitizeLocale, record, localeValue, fillTemplate, t, tc, localeTag.
 // Extends with loadLocale / setLocale / getLocale for module-level usage.
 
@@ -7,7 +6,7 @@ import { appStore, setLocaleState, setI18nReady } from "../store/app";
 
 const SUPPORTED_LOCALES = ["zh-CN", "en-US"];
 
-// Module-level state (mirrors app.js state.i18n / state.locale)
+// Module-level state (
 let messages: Record<string, any> = {};
 let currentLocale: string = sanitizeLocale(
   (typeof document !== "undefined" ? document.documentElement.lang : "") ||
@@ -130,9 +129,7 @@ export function syncLocaleFromLegacy(locale: string, allMessages: Record<string,
 /**
  * Collect all elements within `root` that match `selector`.
  * When `root` itself is an Element and matches the selector it is included.
- *
  * TODO: DOM side — callers that need server-side rendering should avoid this.
- * Mirrors app.js i18nTargets (lines 734–739).
  */
 export function i18nTargets(root: Document | Element, selector: string): Element[] {
   const items: Element[] = [];
@@ -144,17 +141,14 @@ export function i18nTargets(root: Document | Element, selector: string): Element
 /**
  * Walk `root` and replace text / attributes driven by data-i18n-* attributes
  * with the current locale's translated strings.
- *
  * Supported attributes:
- *   data-i18n            → textContent
- *   data-i18n-html       → innerHTML
- *   data-i18n-placeholder → placeholder attribute
- *   data-i18n-title      → title attribute
- *   data-i18n-aria-label → aria-label attribute
- *   data-i18n-alt        → alt attribute
- *
+ * data-i18n → textContent
+ * data-i18n-html → innerHTML
+ * data-i18n-placeholder → placeholder attribute
+ * data-i18n-title → title attribute
+ * data-i18n-aria-label → aria-label attribute
+ * data-i18n-alt → alt attribute
  * TODO: DOM side — this function mutates the live DOM.
- * Mirrors app.js applyI18n (lines 741–760).
  */
 export function applyI18n(root: Document | Element = document): void {
   i18nTargets(root, "[data-i18n]").forEach((node) => {

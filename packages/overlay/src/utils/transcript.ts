@@ -1,21 +1,18 @@
 // ── Transcript & context utilities ──
-// Exact port of formatConversationTranscript and all Board context text helpers
-// from app.js. Functions already ported in message.ts / conversation.ts are
 // imported from there; nothing is duplicated.
-//
 // Exported surface:
-//   formatConversationTranscript  – plain-text conversation export
-//   boardArtifact                 – find a named artifact in board.artifacts
-//   syntheticTextMessage          – build a synthetic message object
-//   specContextText               – spec → plain text
-//   planContextText               – plan + goals → plain text
-//   goalContextText               – goals[] → plain text
-//   evaluationContextText         – board evaluation → plain text
-//   interactionRequestText        – interaction request → plain text
-//   interactionReplyLabel         – permission reply enum → label
-//   interactionAnswerLines        – interaction answers → string[]
-//   interactionResponseText       – full interaction response → plain text
-//   copyChatConversation          – copy current conversation to clipboard
+// formatConversationTranscript – plain-text conversation export
+// boardArtifact – find a named artifact in board.artifacts
+// syntheticTextMessage – build a synthetic message object
+// specContextText – spec → plain text
+// planContextText – plan + goals → plain text
+// goalContextText – goals[] → plain text
+// evaluationContextText – board evaluation → plain text
+// interactionRequestText – interaction request → plain text
+// interactionReplyLabel – permission reply enum → label
+// interactionAnswerLines – interaction answers → string[]
+// interactionResponseText – full interaction response → plain text
+// copyChatConversation – copy current conversation to clipboard
 
 import { t, tc, localeTag } from "./i18n";
 import { joinBullet, stripAssistantBrief } from "./string";
@@ -139,7 +136,7 @@ function formatTranscriptPart(part: any, role: string): string {
   return "";
 }
 
-// ── Clipboard helpers (mirrors app.js copyText / nativeMessage) ──
+// ── Clipboard helpers (
 
 async function copyText(text: string): Promise<boolean> {
   if (!text) return false;
@@ -187,7 +184,7 @@ export function boardArtifact(board: any, label: string): any {
 }
 
 /**
- * Build a synthetic message object (mirrors app.js syntheticTextMessage).
+ * Build a synthetic message object (
  * Returns null if text is empty.
  */
 export function syntheticTextMessage(
@@ -209,7 +206,7 @@ export function syntheticTextMessage(
 
 /**
  * Format an array of conversation messages as a plain-text transcript
- * (mirrors app.js formatConversationTranscript).
+ * (
  */
 export function formatConversationTranscript(messages: any[]): string {
   return (Array.isArray(messages) ? messages : [])
@@ -239,8 +236,8 @@ export function specContextText(spec: any): string {
 }
 
 /**
- * Build plain-text plan context (mirrors app.js planContextText).
- * @param plan  Board plan object
+ * Build plain-text plan context (
+ * @param plan Board plan object
  * @param goals Goals cards array from the board lanes
  */
 export function planContextText(plan: any, goals: any[]): string {
@@ -340,7 +337,7 @@ export function planContextText(plan: any, goals: any[]): string {
 }
 
 /**
- * Build plain-text goal list context (mirrors app.js goalContextText).
+ * Build plain-text goal list context (
  * @param goals Goals cards array from the board lanes
  */
 export function goalContextText(goals: any[]): string {
@@ -376,7 +373,7 @@ export function goalContextText(goals: any[]): string {
 }
 
 /**
- * Build plain-text evaluation context (mirrors app.js evaluationContextText).
+ * Build plain-text evaluation context (
  * @param board Board object (must have board.evaluation)
  * @param goals Goals cards array from the board lanes
  */
@@ -560,7 +557,6 @@ export function interactionResponseText(interaction: any): string {
 /**
  * Copy the current chat conversation transcript to the clipboard.
  * Shows a native error dialog on failure.
- * Mirrors app.js copyChatConversation.
  */
 export async function copyChatConversation(): Promise<void> {
   try {

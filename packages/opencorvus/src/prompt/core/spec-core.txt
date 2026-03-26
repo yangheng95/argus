@@ -130,3 +130,23 @@ Your output MUST be thorough and detailed. Short, brief, or minimal outputs are 
 - Each spec item MUST have a detailed description (not just a title)
 - DO NOT summarize or abbreviate — be comprehensive and specific
 - A one-sentence spec is NEVER acceptable. Expand every section fully.
+
+## Goal Sizing
+
+Your spec items should naturally map to execution-sized goals — units of work that can be completed and verified independently in a single coding session.
+
+**What is execution-sized?**
+- Has clear, testable completion criteria
+- Can be implemented and verified without depending on other incomplete work
+- Covers a coherent, self-contained slice of the task
+
+**Examples of goals that are NOT execution-sized (too big):**
+- "Build the complete app architecture" — this is a project, not a goal
+- "Rewrite the entire authentication system" — too broad, needs decomposition
+
+**Examples of execution-sized goals:**
+- "Add GET /users endpoint with pagination and zod validation"
+- "Create SpecAgent class with initial(), compile(), and rewrite() methods"
+- "Add unit tests for parseConfig edge cases (empty input, missing fields)"
+
+For non-trivial tasks, usually produce 3-8 execution-sized goals through your spec items. Each spec item should roughly correspond to one execution goal that downstream agents can implement independently.

@@ -1,27 +1,23 @@
 // ── Interactions Service ──
-// Exact port of interactions.js createOverlayInteractions factory to TypeScript.
-//
 // Responsibilities:
-//   - Render interaction alert HTML (permission / question cards)
-//   - Auto-resolve interactions based on settings (autoPermission, autoQuestion,
-//     unattended mode)
-//   - Manage a modal overlay for the frontmost pending interaction
-//   - Resolve or reject interactions via the API
-//   - Manage tray-attention signalling when a modal is visible but unfocused
-//
+// - Render interaction alert HTML (permission / question cards)
+// - Auto-resolve interactions based on settings (autoPermission, autoQuestion,
+// unattended mode)
+// - Manage a modal overlay for the frontmost pending interaction
+// - Resolve or reject interactions via the API
+// - Manage tray-attention signalling when a modal is visible but unfocused
 // This module is intentionally DOM-oriented (it manipulates document nodes
-// directly) so that it can serve as a drop-in replacement for the legacy
-// window-scoped IIFE while the Solid migration proceeds.  The newer
+// directly) so that it can serve as a
+// window-scoped IIFE while the Solid migration proceeds. The newer
 // InteractionPanel component (src/components/InteractionPanel.tsx) is the
 // preferred way to render interactions within the Solid tree; this module is
 // provided for completeness and for parts of the app that are not yet inside
 // the Solid component tree.
-//
 // Integration:
-//   - Reads settingsStore for autoPermission / autoQuestion / unattended /
-//     autoPermissionReply flags.
-//   - Calls apiJson() for interaction reply / reject requests.
-//   - Calls loadBoard() after every resolve / reject to refresh state.
+// - Reads settingsStore for autoPermission / autoQuestion / unattended /
+// autoPermissionReply flags.
+// - Calls apiJson() for interaction reply / reject requests.
+// - Calls loadBoard() after every resolve / reject to refresh state.
 
 import { settingsStore } from "../store/settings";
 import { apiJson } from "./api";
@@ -66,9 +62,9 @@ export interface InteractionsDeps {
   /** Render markdown to HTML string. */
   renderMarkdown: (text: string) => string;
   /**
-   * Guard for plain-object values.
-   * Returns true when value is a non-null, non-array object.
-   */
+ * Guard for plain-object values.
+ * Returns true when value is a non-null, non-array object.
+ */
   record: (value: any) => boolean;
   /** DOM document reference (may be undefined in SSR / tests). */
   document?: Document;
@@ -100,15 +96,13 @@ export interface InteractionsDeps {
 
 /**
  * Create an interactions controller.
- *
  * Mirrors interactions.js createOverlayInteractions(deps).
- *
- * @param deps  External dependencies injected by the caller.
- *              Most callers will pass the live document and the app's DOM
- *              element references.
+ * @param deps External dependencies injected by the caller.
+ * Most callers will pass the live document and the app's DOM
+ * element references.
  */
 export function createOverlayInteractions(deps: InteractionsDeps) {
-  // ── Module-level state ──
+ // ── Module-level state ──
 
   let busy = false;
   let pendingInteraction: Interaction | null = null;
@@ -128,7 +122,7 @@ export function createOverlayInteractions(deps: InteractionsDeps) {
     return "once";
   }
 
-  // ── HTML builders ──
+ // ── HTML builders ──
 
   function interactionActions(interaction: Interaction): string {
     if (interaction.type === "permission") {
@@ -152,7 +146,7 @@ export function createOverlayInteractions(deps: InteractionsDeps) {
   </div>`;
   }
 
-  // ── Auto-resolve helpers ──
+ // ── Auto-resolve helpers ──
 
   function autoInteractionAnswers(
     interaction: Interaction,
@@ -188,7 +182,7 @@ export function createOverlayInteractions(deps: InteractionsDeps) {
     return false;
   }
 
-  // ── DOM binding ──
+ // ── DOM binding ──
 
   function bindInteractionActions(root: Element | null | undefined): void {
     root
@@ -208,7 +202,7 @@ export function createOverlayInteractions(deps: InteractionsDeps) {
       });
   }
 
-  // ── Modal management ──
+ // ── Modal management ──
 
   function dismissInteractionModal(): void {
     const modal = deps.document?.getElementById("interaction-modal");
@@ -242,7 +236,7 @@ export function createOverlayInteractions(deps: InteractionsDeps) {
     void refreshInteractionAttention();
   }
 
-  // ── Tray attention ──
+ // ── Tray attention ──
 
   function attentionActive(): boolean {
     if (!pendingInteraction) return false;
@@ -257,7 +251,7 @@ export function createOverlayInteractions(deps: InteractionsDeps) {
     await deps.setTrayAttention?.(attentionActive());
   }
 
-  // ── Button state helpers ──
+ // ── Button state helpers ──
 
   function disableInteractionButtons(id: string): void {
     const alert = deps.document?.querySelector(
@@ -293,7 +287,7 @@ export function createOverlayInteractions(deps: InteractionsDeps) {
     });
   }
 
-  // ── Core actions ──
+ // ── Core actions ──
 
   async function resolveInteraction(
     id: string,
@@ -390,19 +384,17 @@ export function createOverlayInteractions(deps: InteractionsDeps) {
     return busy;
   }
 
-  // ── renderInteractions ──
+ // ── renderInteractions ──
 
   /**
-   * Render or update the interaction alert list in the DOM.
-   *
-   * Called whenever the board is refreshed.  Handles:
-   *   - Removing stale alert elements.
-   *   - Inserting fresh alert elements for all pending interactions.
-   *   - Auto-resolving the first pending interaction when configured.
-   *   - Showing the modal for the first interaction when not auto-resolving.
-   *
-   * Mirrors interactions.js renderInteractions.
-   */
+ * Render or update the interaction alert list in the DOM.
+ * Called whenever the board is refreshed. Handles:
+ * - Removing stale alert elements.
+ * - Inserting fresh alert elements for all pending interactions.
+ * - Auto-resolving the first pending interaction when configured.
+ * - Showing the modal for the first interaction when not auto-resolving.
+ * Mirrors interactions.js renderInteractions.
+ */
   function renderInteractions(interactions: Interaction[]): void {
     const pending = Array.isArray(interactions)
       ? interactions.filter((item) => item.status === "pending")
@@ -471,7 +463,7 @@ export function createOverlayInteractions(deps: InteractionsDeps) {
     void refreshInteractionAttention();
   }
 
-  // ── Public API (mirrors interactions.js return value) ──
+ // ── Public API (mirrors interactions.js return value) ──
 
   return {
     interactionAlertHtml,
@@ -489,10 +481,9 @@ export function createOverlayInteractions(deps: InteractionsDeps) {
 
 /**
  * Returns the reply action to use when auto-resolving a permission
- * interaction.  Reads settingsStore.autoPermission.
- *
+ * interaction. Reads settingsStore.autoPermission.
  * Defaults to "once" unless an explicit "always" preference is set
- * by the caller's state bridge.
+ * by the caller.
  */
 export function autoPermissionReply(): "always" | "once" {
   return "once";

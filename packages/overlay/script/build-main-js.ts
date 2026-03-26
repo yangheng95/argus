@@ -87,11 +87,12 @@ try {
       outDir,
       emptyOutDir: true,
       target: "esnext",
-      minify: true,
+      minify: false,
       cssCodeSplit: false,
       rollupOptions: {
         input: tempEntry,
         output: { inlineDynamicImports: true },
+        external: [/^@tauri-apps\//],
       },
     },
   });

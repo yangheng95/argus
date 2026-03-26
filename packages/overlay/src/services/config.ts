@@ -1,18 +1,15 @@
 // ── Config Service ──
-// Exact port of config/criteria/project-scope helpers from app.js.
-//
 // Functions ported (with original line numbers):
-//   checkConfig            (line 6679)
-//   hasExplicitChecks      (line 6685)
-//   checkCanToggle         (line 6700)
-//   checkSelectionConfig   (line 6704)
-//   buildCheckConfig       (line 6874) — DOM-dependent; see note below
-//   configUnattended       (line 2394)
-//   syncUnattendedConfig   (line 2399)
-//   updateConfig           (line 2383)
-//   scaffoldProjectConfig  (line 1597)
-//   reloadProjectScope     (line 4278) — bridged to legacy during migration
-//
+// checkConfig (line 6679)
+// hasExplicitChecks (line 6685)
+// checkCanToggle (line 6700)
+// checkSelectionConfig (line 6704)
+// buildCheckConfig (line 6874) — DOM-dependent; see note below
+// configUnattended (line 2394)
+// syncUnattendedConfig (line 2399)
+// updateConfig (line 2383)
+// scaffoldProjectConfig (line 1597)
+// reloadProjectScope (line 4278) 
 // NOTE: buildCheckConfig reads DOM checkboxes directly. In the Solid migration
 // the criteria spec list lives in appStore.criteriaSpecs; callers that need to
 // build a config diff from the current UI should call buildCheckConfigFromSpecs
@@ -46,8 +43,6 @@ async function tauriInvoke<T>(command: string, args?: Record<string, unknown>): 
 /**
  * Extract the `checks` config object from a task's metadata.
  * Returns a clone so callers can mutate the result safely.
- *
- * Mirrors app.js checkConfig (line 6679).
  */
 export function checkConfig(task: any): Record<string, any> {
   const checks = task?.metadata?.checks;
@@ -58,8 +53,6 @@ export function checkConfig(task: any): Record<string, any> {
 /**
  * Returns true when the config object has at least one key (i.e. the user has
  * explicitly configured one or more checks).
- *
- * Mirrors app.js hasExplicitChecks (line 6685).
  */
 export function hasExplicitChecks(config: Record<string, any>): boolean {
   return Object.keys(config).length > 0;
@@ -68,8 +61,6 @@ export function hasExplicitChecks(config: Record<string, any>): boolean {
 /**
  * Returns true when `key` names a check that can be freely toggled on/off by
  * the user (as opposed to command-type checks whose enabled state is implicit).
- *
- * Mirrors app.js checkCanToggle (line 6700).
  */
 export function checkCanToggle(key: string): boolean {
   return ["artifact", "ui_review", "code_quality", "code_review", "dead_code_review", "spec_check"].includes(key);
@@ -79,8 +70,6 @@ export function checkCanToggle(key: string): boolean {
  * Build the config value to store when `key` is toggled on.
  * Returns `undefined` for keys that have no structured representation (i.e.
  * they are handled elsewhere or do not need an object value).
- *
- * Mirrors app.js checkSelectionConfig (line 6704).
  */
 export function checkSelectionConfig(
   key: string,
@@ -102,11 +91,8 @@ export function checkSelectionConfig(
 /**
  * Build an updated checks config from the current criteriaSpecs in appStore
  * and a map of `{ [specKey]: enabled }` selection values.
- *
  * This is the Solid-store equivalent of the DOM-reading buildCheckConfig
- * (app.js line 6874).  Pass `selection` as a plain object keyed by spec key.
- *
- * Mirrors app.js buildCheckConfig (line 6874) but without DOM reads.
+ * ( line 6874). Pass `selection` as a plain object keyed by spec key.
  */
 export function buildCheckConfigFromSpecs(
   task: any,
@@ -157,8 +143,6 @@ export function buildCheckConfigFromSpecs(
 /**
  * Extract the `experimental.unattended` boolean from a server config object.
  * Returns null when the field is absent or not a boolean.
- *
- * Mirrors app.js configUnattended (line 2394).
  */
 export function configUnattended(config: any): boolean | null {
   const value = config?.experimental?.unattended;
@@ -167,10 +151,8 @@ export function configUnattended(config: any): boolean | null {
 
 /**
  * PATCH /config to set `experimental.unattended` to the current
- * `settingsStore.unattended` value.  Skips the request when not connected,
+ * `settingsStore.unattended` value. Skips the request when not connected,
  * or when the remote value already matches (unless `force` is true).
- *
- * Mirrors app.js syncUnattendedConfig (line 2399).
  */
 export async function syncUnattendedConfig(force = false): Promise<boolean> {
   if (!appStore.connected) return false;
@@ -192,9 +174,7 @@ export async function syncUnattendedConfig(force = false): Promise<boolean> {
 
 /**
  * Fetch the current server config, apply `mutator` to a clone, then PATCH the
- * result back.  Returns the saved config.
- *
- * Mirrors app.js updateConfig (line 2383).
+ * result back. Returns the saved config.
  */
 export async function updateConfig(mutator: (config: Record<string, any>) => void): Promise<any> {
   const current = await apiJson("config");
@@ -211,9 +191,7 @@ export async function updateConfig(mutator: (config: Record<string, any>) => voi
 
 /**
  * Write a default `opencorvus.jsonc` file into `dir/.opencorvus/` via the
- * Tauri `overlay_write_file` command.  Silently no-ops when `dir` is empty.
- *
- * Mirrors app.js scaffoldProjectConfig (line 1597).
+ * Tauri `overlay_write_file` command. Silently no-ops when `dir` is empty.
  */
 export async function scaffoldProjectConfig(dir: string): Promise<void> {
   if (!dir) return;
@@ -261,22 +239,22 @@ export async function scaffoldProjectConfig(dir: string): Promise<void> {
 
 /**
  * Reset and then reload project-scope data (tasks, meta, extensions, config,
- * executors, preferences).  Delegates to the legacy bridge during the Solid
+ * executors, preferences). Delegates to the during the Solid
  * migration; direct port available for post-migration use.
- *
- * Mirrors app.js reloadProjectScope (line 4278).
  */
 export async function reloadProjectScope(options: { restoreWorkspace?: boolean } = {}): Promise<void> {
-  // Direct implementation — replaces the legacy window bridge.
-  // Mirrors the parallel reload in app.js reloadProjectScope (line 4278):
-  // reload config, extensions, meta, and optionally restore workspace.
+ // 
+ // Mirrors the parallel reload
+ // reload config, extensions, meta, and optionally restore workspace.
   const { loadConfigInfo } = await import("./init");
   const { loadExtensions } = await import("./extensions");
   const { loadMeta } = await import("./meta");
+  const { loadPreferences } = await import("./memory");
   await Promise.all([
     loadConfigInfo().catch((e: unknown) => console.error("[reloadProjectScope] loadConfigInfo", e)),
     loadExtensions().catch((e: unknown) => console.error("[reloadProjectScope] loadExtensions", e)),
     loadMeta().catch((e: unknown) => console.error("[reloadProjectScope] loadMeta", e)),
+    loadPreferences().catch((e: unknown) => console.error("[reloadProjectScope] loadPreferences", e)),
   ]);
   if (options.restoreWorkspace) {
     const { restoreWorkspaceDirectory } = await import("./workspace");
@@ -287,13 +265,11 @@ export async function reloadProjectScope(options: { restoreWorkspace?: boolean }
 }
 
 // ── Prompt Catalog ──
-// Mirrors app.js applyPromptEntries / loadPromptCatalog / savePromptEntry
 // (lines 2677, 2683, 2694).
 
 /**
  * Apply a raw prompt-entry list into the app store.
- * Mirrors app.js applyPromptEntries (line 2677).
- * DOM side-effect (renderPromptCatalog) remains in app.js during migration.
+ * DOM side-effect (renderPromptCatalog) remains.
  */
 export function applyPromptEntries(items: any[]): void {
   const entries = Array.isArray(items) ? items : [];
@@ -302,7 +278,6 @@ export function applyPromptEntries(items: any[]): void {
 
 /**
  * Load prompt entries from the server and push them into the store.
- * Mirrors app.js loadPromptCatalog (line 2683).
  */
 export async function loadPromptCatalog(): Promise<void> {
   try {
@@ -317,10 +292,8 @@ export async function loadPromptCatalog(): Promise<void> {
 /**
  * Persist a single prompt entry override to the server config,
  * then reload the catalog.
- * Mirrors app.js savePromptEntry (line 2694).
- *
- * @param entry  The prompt entry to save
- * @param value  The new prompt text (empty string to clear the override)
+ * @param entry The prompt entry to save
+ * @param value The new prompt text (empty string to clear the override)
  */
 export async function savePromptEntry(entry: any, value: string): Promise<void> {
   if (!entry) return;
@@ -347,6 +320,41 @@ export async function savePromptEntry(entry: any, value: string): Promise<void> 
     await loadPromptCatalog();
   } catch (e) {
     AppLog.error("ui", "Failed to save prompt override", { error: String(e) });
+    throw e;
+  }
+}
+
+/**
+ * Reset a prompt entry override back to its default value.
+ * Removes the override from the server config, then reloads the catalog.
+ */
+export async function resetPromptEntry(entry: any): Promise<void> {
+  if (!entry) return;
+  if (entry.configured_prompt === null) return;
+  const entryID = `${entry.scope}:${entry.key}`;
+  try {
+    await updateConfig((current: any) => {
+      if (entry.scope === "system") {
+        if (current.prompt && typeof current.prompt === "object") {
+          delete current.prompt[entry.key];
+          if (Object.keys(current.prompt).length === 0) delete current.prompt;
+        }
+        return;
+      }
+      if (current.agent && typeof current.agent === "object" && current.agent[entry.key]) {
+        const item =
+          current.agent[entry.key] && typeof current.agent[entry.key] === "object"
+            ? { ...current.agent[entry.key] }
+            : {};
+        delete (item as any).prompt;
+        if (Object.keys(item).length === 0) delete current.agent[entry.key];
+        else current.agent[entry.key] = item;
+        if (Object.keys(current.agent).length === 0) delete current.agent;
+      }
+    });
+    await loadPromptCatalog();
+  } catch (e) {
+    AppLog.error("ui", "Failed to reset prompt override", { error: String(e) });
     throw e;
   }
 }

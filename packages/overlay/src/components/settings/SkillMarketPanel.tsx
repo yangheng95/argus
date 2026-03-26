@@ -1,23 +1,28 @@
 // ── SkillMarketPanel ──
 // Solid.js component for managing skills, MCP servers, and marketplace.
-//
 // Displays:
-//   • Installed custom skills with add/remove/open actions
-//   • Installed MCP servers with add/remove actions
-//   • Skill market catalog with install / open-site actions
-//
+// • Installed custom skills with add/remove/open actions
+// • Installed MCP servers with add/remove actions
+// • Skill market catalog with install / open-site actions
 // All CRUD operations are self-contained — no dependency on static HTML dialogs.
 
 import {
   createSignal,
   createMemo,
+  createEffect,
   For,
   Show,
-  onMount,
 } from "solid-js";
 import { createStore } from "solid-js/store";
-import { t, tc } from "../../utils/i18n";
+import { t } from "../../utils/i18n";
 import { apiJson } from "../../services/api";
+import { appStore } from "../../store/app";
+import { updateConfig } from "../../services/config";
+import { nativeOpen } from "../../utils/native";
+import {
+  loadExtensions,
+  loadSkillMarket,
+} from "../../services/extensions";
 
 // ── Types ──
 
@@ -81,44 +86,46 @@ function policyLabel(policy: string): string {
 // ── SkillMarketPanel ──
 
 export default function SkillMarketPanel() {
-  const [skills, setSkills] = createSignal<SkillItem[]>([]);
-  const [mcp, setMcp] = createSignal<Record<string, McpItem>>({});
-  const [market, setMarket] = createSignal<MarketItem[]>([]);
-  const [loading, setLoading] = createSignal(false);
   const [notice, setNotice] = createSignal("");
+  const [loading, setLoading] = createSignal(false);
+
+  // Reactive data from appStore (populated by loadExtensions/loadSkillMarket after connect)
+  const skills = createMemo((): SkillItem[] => {
+    const raw = appStore.skills;
+    return Array.isArray(raw) ? raw as SkillItem[] : [];
+  });
+  const mcp = createMemo((): Record<string, McpItem> => {
+    const raw = appStore.mcp;
+    return raw && typeof raw === "object" && !Array.isArray(raw) ? raw as Record<string, McpItem> : {};
+  });
+  const market = createMemo((): MarketItem[] => {
+    const raw = appStore.skillMarket;
+    return Array.isArray(raw) ? raw as MarketItem[] : [];
+  });
 
   const customSkills = createMemo(() => skills().filter((item) => !item.builtin));
   const removableSkills = createMemo(() => customSkills().filter(skillRemovable));
   const builtinCount = createMemo(() => skills().length - customSkills().length);
   const mcpEntries = createMemo(() => Object.entries(mcp()));
 
-  async function loadAll() {
+  async function reloadAll() {
     setLoading(true);
     try {
-      const [skillData, mcpData, marketData] = await Promise.all([
-        apiJson("skill").catch(() => []),
-        apiJson("mcp").catch(() => ({})),
-        apiJson("skill/market").catch(() => []),
-      ]);
-      setSkills(Array.isArray(skillData) ? skillData : []);
-      setMcp(mcpData && typeof mcpData === "object" && !Array.isArray(mcpData) ? mcpData : {});
-      setMarket(Array.isArray(marketData) ? marketData : []);
+      await Promise.all([loadExtensions(), loadSkillMarket()]);
     } finally {
       setLoading(false);
     }
   }
 
-  onMount(loadAll);
-
   async function handleRemoveSkill(source: string, kind: string, name: string) {
-    if (!confirm(t("skill.confirm_delete", { name }))) return;
+    if (!confirm(t("skill.delete_confirm", { name }))) return;
     try {
       await apiJson("skill/remove", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ kind, value: source }),
+        body: JSON.stringify({ source, kind }),
       });
-      await loadAll();
+      await reloadAll();
     } catch (e) {
       setNotice(e instanceof Error ? e.message : String(e));
     }
@@ -126,60 +133,66 @@ export default function SkillMarketPanel() {
 
   async function handleOpenSkill(location: string) {
     try {
-      await apiJson("open", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ path: location }),
-      });
+      await nativeOpen(location);
     } catch {
-      // ignore
+ // ignore
     }
   }
 
   async function handleDeleteAllSkills() {
-    if (!confirm(t("skill.confirm_delete_all"))) return;
+    const list = removableSkills();
+    if (list.length === 0) return;
+    const message = list.length === customSkills().length
+      ? t("skill.delete_all_confirm_all", { count: list.length })
+      : t("skill.delete_all_confirm_partial", { removable: list.length, blocked: customSkills().length - list.length });
+    if (!confirm(message)) return;
     try {
-      await Promise.all(
-        removableSkills().map((item) =>
-          apiJson("skill/remove", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ kind: skillRemoveKind(item), value: item.source }),
-          }),
-        ),
-      );
-      await loadAll();
+      for (const item of list) {
+        await apiJson("skill/remove", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ source: item.source, kind: skillRemoveKind(item) }),
+        });
+      }
+      await reloadAll();
     } catch (e) {
       setNotice(e instanceof Error ? e.message : String(e));
     }
   }
 
   async function handleDeleteAllMcp() {
-    if (!confirm(t("mcp.confirm_delete_all"))) return;
+    const names = mcpEntries().map(([name]) => name);
+    if (names.length === 0) return;
+    if (!confirm(t("mcp.delete_all_confirm", { count: names.length }))) return;
     try {
-      await Promise.all(
-        mcpEntries().map(([name]) =>
-          apiJson("mcp/remove", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ name }),
-          }),
-        ),
-      );
-      await loadAll();
+      await Promise.all(names.map((name) =>
+        apiJson(`mcp/${encodeURIComponent(name)}/disconnect`, { method: "POST" }).catch(() => void 0),
+      ));
+      await Promise.all(names.map((name) =>
+        apiJson(`mcp/${encodeURIComponent(name)}/auth`, { method: "DELETE" }).catch(() => void 0),
+      ));
+      await updateConfig((current: any) => {
+        delete current.mcp;
+      });
+      await reloadAll();
     } catch (e) {
       setNotice(e instanceof Error ? e.message : String(e));
     }
   }
 
-  async function handleInstall(id: string) {
+  async function handleInstall(item: MarketItem) {
+    if (!item.source || item.install_kind === "manual") return;
     try {
       await apiJson("skill/install", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ kind: "id", value: id }),
+        body: JSON.stringify({
+          kind: item.install_kind,
+          value: item.source,
+          policy: item.recommended_policy || undefined,
+        }),
       });
-      await loadAll();
+      await reloadAll();
     } catch (e) {
       setNotice(e instanceof Error ? e.message : String(e));
     }
@@ -187,18 +200,10 @@ export default function SkillMarketPanel() {
 
   async function handleOpenHomepage(url: string | undefined) {
     if (!url) return;
-    try {
-      await apiJson("open", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url }),
-      });
-    } catch {
-      window.open(url, "_blank", "noopener");
-    }
+    await nativeOpen(url);
   }
 
-  // ── Add Skill inline form ──
+ // ── Add Skill inline form ──
 
   const [showAddSkill, setShowAddSkill] = createSignal(false);
   const [skillForm, setSkillForm] = createStore({
@@ -222,7 +227,7 @@ export default function SkillMarketPanel() {
       });
       setSkillForm({ type: "path", value: "", policy: "ask" });
       setShowAddSkill(false);
-      await loadAll();
+      await reloadAll();
     } catch (e) {
       setNotice(e instanceof Error ? e.message : String(e));
     }
@@ -238,23 +243,33 @@ export default function SkillMarketPanel() {
         setSkillForm("value", selected);
       }
     } catch {
-      // Tauri dialog not available in browser mode
+ // Tauri dialog not available in browser mode
     }
   }
 
   async function handleReloadSkills() {
-    await loadAll();
+    await reloadAll();
   }
+
+  // Ensure market data is loaded once skills are available
+  createEffect(() => {
+    if (market().length === 0 && skills().length > 0) {
+      loadSkillMarket().catch(() => {});
+    }
+  });
 
   async function handleOpenSkillDir() {
     try {
-      await apiJson("skill/open-root", { method: "POST" });
+      const dirs = await apiJson("skill/directories");
+      const target = (dirs as any)?.global_config || (dirs as any)?.managed_skills;
+      if (!target) return;
+      await nativeOpen(target);
     } catch {
-      // ignore
+ // ignore
     }
   }
 
-  // ── Add MCP inline form ──
+ // ── Add MCP inline form ──
 
   const [showAddMcp, setShowAddMcp] = createSignal(false);
   const [mcpForm, setMcpForm] = createStore({
@@ -285,7 +300,7 @@ export default function SkillMarketPanel() {
       });
       setMcpForm({ name: "", type: "remote", url: "", command: "", args: "" });
       setShowAddMcp(false);
-      await loadAll();
+      await reloadAll();
     } catch (e) {
       setNotice(e instanceof Error ? e.message : String(e));
     }
@@ -311,33 +326,34 @@ export default function SkillMarketPanel() {
       </Show>
 
       {/* ── Installed Skills ── */}
-      <section class="config-section">
-        <div class="config-section-head">
-          <h3 class="config-section-title">{t("skill.title")}</h3>
-          <div class="config-section-actions">
-            <button type="button" class="btn btn-ghost mini" onClick={handleReloadSkills}>
-              {t("common.reload")}
-            </button>
-            <button type="button" class="btn btn-ghost mini" onClick={handleOpenSkillDir}>
-              {t("skill.open_dir")}
-            </button>
-            <button type="button" class="btn btn-ghost mini" onClick={() => setShowAddSkill(!showAddSkill())}>
-              {t("skill.add")}
-            </button>
-            <button
-              type="button"
-              class="btn btn-ghost mini danger"
-              disabled={removableSkills().length === 0}
-              onClick={handleDeleteAllSkills}
-            >
-              {t("skill.delete_all")}
-            </button>
+      <details class="config-subsection" open>
+        <summary class="config-subsection-head">{t("skill.title")}</summary>
+        <div class="config-subsection-body">
+          <div class="extension-head">
+            <div class="dialog-actions compact">
+              <button type="button" class="btn btn-ghost mini" onClick={handleReloadSkills}>
+                {t("common.reload")}
+              </button>
+              <button type="button" class="btn btn-ghost mini" onClick={handleOpenSkillDir}>
+                {t("skill.open_dir")}
+              </button>
+              <button type="button" class="btn btn-ghost mini" onClick={() => setShowAddSkill(!showAddSkill())}>
+                {t("skill.add")}
+              </button>
+              <button
+                type="button"
+                class="btn btn-ghost mini danger"
+                disabled={removableSkills().length === 0}
+                onClick={handleDeleteAllSkills}
+              >
+                {t("skill.delete_all")}
+              </button>
+            </div>
           </div>
-        </div>
 
         {/* Add Skill inline form */}
         <Show when={showAddSkill()}>
-          <div class="inline-form">
+          <div class="config-inline-form">
             <label class="field">
               <span class="field-label">{t("skill.source_type")}</span>
               <select
@@ -394,78 +410,74 @@ export default function SkillMarketPanel() {
             </div>
           </div>
         </Show>
-        <div class="skill-list" id="skillList">
-          <Show
-            when={customSkills().length > 0}
-            fallback={
-              <div class="empty-hint">
-                {builtinCount() > 0
-                  ? t("skill.none_custom_with_builtin", { count: builtinCount() })
-                  : t("skill.none_custom")}
-              </div>
-            }
-          >
-            <For each={customSkills()}>
-              {(item) => (
-                <div class="extension-row">
-                  <div class="extension-row-main">
-                    <strong>{item.name}</strong>
-                    <span>{item.description || ""}</span>
-                    <small>{item.location || ""}</small>
+          <div class="extension-list" id="skillList">
+            <Show
+              when={skills().length > 0}
+              fallback={<div class="empty-hint">{t("skill.none_custom")}</div>}
+            >
+              <For each={skills()}>
+                {(item) => (
+                  <div class="extension-row">
+                    <div class="extension-row-main">
+                      <strong>{item.name}</strong>
+                      <span>{item.description || ""}</span>
+                      <small>{item.location || ""}</small>
+                    </div>
+                    <div class="extension-row-actions">
+                      <Show when={skillRemovable(item)}>
+                        <button
+                          type="button"
+                          class="btn btn-ghost mini danger"
+                          title={t("skill.delete_button_title")}
+                          aria-label={t("skill.delete_button_title")}
+                          onClick={() =>
+                            handleRemoveSkill(
+                              item.source || "",
+                              skillRemoveKind(item),
+                              item.name,
+                            )
+                          }
+                        >
+                          {t("common.delete")}
+                        </button>
+                      </Show>
+                      <Show when={item.location && item.location !== "builtin"}>
+                        <button
+                          type="button"
+                          class="btn btn-ghost mini"
+                          title={t("skill.open_button_title")}
+                          aria-label={t("skill.open_button_title")}
+                          onClick={() => handleOpenSkill(item.location!)}
+                        >
+                          {t("common.open")}
+                        </button>
+                      </Show>
+                      <span class="extension-status" data-state="connected">
+                        {item.builtin ? t("skill.builtin") : t("common.loaded")}
+                      </span>
+                    </div>
                   </div>
-                  <div class="extension-row-actions">
-                    <Show when={skillRemovable(item)}>
-                      <button
-                        type="button"
-                        class="btn btn-ghost mini danger"
-                        title={t("skill.delete_button_title")}
-                        aria-label={t("skill.delete_button_title")}
-                        onClick={() =>
-                          handleRemoveSkill(
-                            item.source || "",
-                            skillRemoveKind(item),
-                            item.name,
-                          )
-                        }
-                      >
-                        {t("common.delete")}
-                      </button>
-                    </Show>
-                    <Show when={item.location && item.location !== "builtin"}>
-                      <button
-                        type="button"
-                        class="btn btn-ghost mini"
-                        title={t("skill.open_button_title")}
-                        aria-label={t("skill.open_button_title")}
-                        onClick={() => handleOpenSkill(item.location!)}
-                      >
-                        {t("common.open")}
-                      </button>
-                    </Show>
-                    <span class="extension-status" data-state="connected">
-                      {t("common.loaded")}
-                    </span>
-                  </div>
-                </div>
-              )}
-            </For>
-          </Show>
+                )}
+              </For>
+            </Show>
+          </div>
         </div>
-      </section>
+      </details>
 
       {/* ── MCP Servers ── */}
-      <section class="config-section">
-        <div class="config-section-head">
-          <h3 class="config-section-title">{t("mcp.title")}</h3>
-          <div class="config-section-actions">
-            <button type="button" class="btn btn-ghost mini" onClick={() => setShowAddMcp(!showAddMcp())}>
-              {t("mcp.add_action")}
-            </button>
-            <button
-              type="button"
-              class="btn btn-ghost mini danger"
-              disabled={mcpEntries().length === 0}
-              onClick={handleDeleteAllMcp}
+      <details class="config-subsection" open>
+        <summary class="config-subsection-head">{t("mcp.title")}</summary>
+        <div class="config-subsection-body">
+          <div class="extension-head">
+            <div class="dialog-actions compact">
+              <button type="button" class="btn btn-ghost mini" onClick={() => setShowAddMcp(!showAddMcp())}>
+                {t("mcp.add_action")}
+              </button>
+              <button
+                type="button"
+                class="btn btn-ghost mini danger"
+                disabled={mcpEntries().length === 0}
+                onClick={handleDeleteAllMcp}
             >
               {t("mcp.delete_all")}
             </button>
@@ -474,7 +486,7 @@ export default function SkillMarketPanel() {
 
         {/* Add MCP inline form */}
         <Show when={showAddMcp()}>
-          <div class="inline-form">
+          <div class="config-inline-form">
             <label class="field">
               <span class="field-label">{t("mcp.name")}</span>
               <input
@@ -545,96 +557,97 @@ export default function SkillMarketPanel() {
             </div>
           </div>
         </Show>
-        <div class="mcp-list" id="mcpList">
-          <Show
-            when={mcpEntries().length > 0}
-            fallback={<div class="empty-hint">{t("mcp.none")}</div>}
-          >
-            <For each={mcpEntries()}>
-              {([name, item]) => {
-                const status = item?.status || "disabled";
-                const detail = item?.error || "";
-                return (
-                  <div class="extension-row">
-                    <div class="extension-row-main">
-                      <strong>{name}</strong>
-                      <span>{detail ? detail : mcpStatusLabel(status)}</span>
+          <div class="extension-list" id="mcpList">
+            <Show
+              when={mcpEntries().length > 0}
+              fallback={<div class="empty-hint">{t("mcp.none")}</div>}
+            >
+              <For each={mcpEntries()}>
+                {([name, item]) => {
+                  const status = item?.status || "disabled";
+                  const detail = item?.error || "";
+                  return (
+                    <div class="extension-row">
+                      <div class="extension-row-main">
+                        <strong>{name}</strong>
+                        <span>{detail ? detail : mcpStatusLabel(status)}</span>
+                      </div>
+                      <span class="extension-status" data-state={status}>
+                        {mcpStatusLabel(status)}
+                      </span>
                     </div>
-                    <span class="extension-status" data-state={status}>
-                      {mcpStatusLabel(status)}
-                    </span>
-                  </div>
-                );
-              }}
-            </For>
-          </Show>
+                  );
+                }}
+              </For>
+            </Show>
+          </div>
         </div>
-      </section>
+      </details>
 
       {/* ── Skill Market ── */}
-      <section class="config-section">
-        <div class="config-section-head">
-          <h3 class="config-section-title">{t("skill.market.title")}</h3>
-        </div>
-        <div class="skill-market-list" id="skillMarketList">
-          <Show
-            when={market().length > 0}
-            fallback={<div class="empty-hint">{t("skill.market.none")}</div>}
-          >
-            <For each={market()}>
-              {(item) => {
-                const installable = !!item.source && item.install_kind !== "manual";
-                return (
-                  <div class="market-card">
-                    <div class="market-card-main">
-                      <strong>{item.name}</strong>
-                      <span>
-                        {item.provider} · {item.trust} · {item.install_kind}
-                      </span>
-                      <small>{item.description || ""}</small>
-                      <Show when={item.notes}>
-                        <small>{item.notes}</small>
-                      </Show>
-                    </div>
-                    <div class="market-card-actions">
-                      <span
-                        class="extension-status"
-                        data-state={item.recommended_policy || ""}
-                      >
-                        {policyLabel(item.recommended_policy || "")}
-                      </span>
-                      <Show
-                        when={installable}
-                        fallback={
+      <details class="config-subsection">
+        <summary class="config-subsection-head">{t("skill.market.title")}</summary>
+        <div class="config-subsection-body">
+          <div class="extension-list" id="skillMarketList">
+            <Show
+              when={market().length > 0}
+              fallback={<div class="empty-hint">{t("skill.market.none")}</div>}
+            >
+              <For each={market()}>
+                {(item) => {
+                  const installable = !!item.source && item.install_kind !== "manual";
+                  return (
+                    <div class="market-card">
+                      <div class="market-card-main">
+                        <strong>{item.name}</strong>
+                        <span>
+                          {item.provider} · {item.trust} · {item.install_kind}
+                        </span>
+                        <small>{item.description || ""}</small>
+                        <Show when={item.notes}>
+                          <small>{item.notes}</small>
+                        </Show>
+                      </div>
+                      <div class="market-card-actions">
+                        <span
+                          class="extension-status"
+                          data-state={item.recommended_policy || ""}
+                        >
+                          {policyLabel(item.recommended_policy || "")}
+                        </span>
+                        <Show
+                          when={installable}
+                          fallback={
+                            <button
+                              type="button"
+                              class="btn btn-ghost mini"
+                              title={t("skill.market.open_site_title")}
+                              aria-label={t("skill.market.open_site_title")}
+                              onClick={() => handleOpenHomepage(item.homepage)}
+                            >
+                              {t("skill.market.open_site")}
+                            </button>
+                          }
+                        >
                           <button
                             type="button"
-                            class="btn btn-ghost mini"
-                            title={t("skill.market.open_site_title")}
-                            aria-label={t("skill.market.open_site_title")}
-                            onClick={() => handleOpenHomepage(item.homepage)}
+                            class="btn btn-primary mini"
+                            title={t("skill.market.install_button_title")}
+                            aria-label={t("skill.market.install_button_title")}
+                            onClick={() => handleInstall(item)}
                           >
-                            {t("skill.market.open_site")}
+                            {t("skill.install")}
                           </button>
-                        }
-                      >
-                        <button
-                          type="button"
-                          class="btn btn-primary mini"
-                          title={t("skill.market.install_button_title")}
-                          aria-label={t("skill.market.install_button_title")}
-                          onClick={() => handleInstall(item.id)}
-                        >
-                          {t("skill.install")}
-                        </button>
-                      </Show>
+                        </Show>
+                      </div>
                     </div>
-                  </div>
-                );
-              }}
-            </For>
-          </Show>
+                  );
+                }}
+              </For>
+            </Show>
+          </div>
         </div>
-      </section>
+      </details>
     </>
   );
 }

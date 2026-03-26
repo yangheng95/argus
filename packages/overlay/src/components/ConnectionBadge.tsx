@@ -1,7 +1,7 @@
 // ── ConnectionBadge Component ──
 // Displays the current connection status (online / connecting / offline) as a
 // clickable badge. Double-clicking triggers a server restart then reloads the
-// page, exactly mirroring app.js lines 9394–9408 and setConnStatus (3817–3826).
+// page, exactly mirroring lines 9394–9408 and setConnStatus (3817–3826).
 
 import { createMemo } from "solid-js";
 import { messageStore } from "../store/messages";
@@ -22,12 +22,11 @@ function statusLabel(status: ConnectionStatus): string {
 }
 
 /** Attempt to restart the backend via the REST API and reload the page.
- *  Mirrors app.js connBadge dblclick handler (lines 9396–9408).
  */
 async function handleRestart(): Promise<void> {
   setConnectionStatus("connecting");
 
-  // Import apiJson lazily to avoid a circular dependency at module init time.
+ // Import apiJson lazily to avoid a circular dependency at module init time.
   const { apiJson } = await import("../services/api");
 
   try {
@@ -36,10 +35,10 @@ async function handleRestart(): Promise<void> {
       signal: AbortSignal.timeout(3000),
     });
   } catch {
-    // Restart request may fail if the server is down; that is expected.
+ // Restart request may fail if the server is down; that is expected.
   }
 
-  // Give the server a moment to come back up, then reload the overlay UI.
+ // Give the server a moment to come back up, then reload the overlay UI.
   setTimeout(() => {
     if (typeof location !== "undefined") location.reload();
   }, 2000);
@@ -53,11 +52,11 @@ export interface ConnectionBadgeProps {
 }
 
 export function ConnectionBadge(props: ConnectionBadgeProps) {
-  // Derive status: prefer explicit prop, otherwise use the app store which is
-  // kept in sync by the legacy bridge (setConnStatus mirrors setConnectionStatus).
+ // Derive status: prefer explicit prop, otherwise use the app store which is
+ // kept in sync by the ( setConnectionStatus).
   const status = createMemo<ConnectionStatus>(() => {
     if (props.status) return props.status;
-    // Also reflect sseConnected from messageStore: if SSE is live, we are online.
+ // Also reflect sseConnected from messageStore: if SSE is live, we are online.
     if (messageStore.sseConnected) return "online";
     return appStore.connectionStatus as ConnectionStatus;
   });

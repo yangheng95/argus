@@ -22,6 +22,7 @@ import { Preference } from "@/preference"
 import { Instance } from "@/project/instance"
 import { Log } from "@/util/log"
 import { OrchestratorConfig } from "@/orchestrator/config"
+import { Config } from "@/config/config"
 
 const log = Log.create({ service: "evaluator-agent" })
 
@@ -132,7 +133,7 @@ export namespace EvaluatorAgent {
       tools,
       maxOutputTokens: 4096,
       abortSignal: AbortSignal.timeout(evalCfg.timeout_ms),
-      system: INVESTIGATOR_SYSTEM,
+      system: await goalJudgeSystem(),
       prompt: buildInvestigationPrompt(input, context),
       ...(input.stream as TextHooks<typeof tools> | undefined),
     })
@@ -530,3 +531,14 @@ Every goal_status must have evidence that cites specific file paths, test names,
 - goal_statuses MUST include ALL goals from the input, in order.
 - replan_guidance is REQUIRED when classification is "evaluation" or "strategy".
 - Write in the same language as the task request.`
+
+/** Default evaluator system prompt (investigation phase). Exported for catalog. */
+export const EVALUATOR_DEFAULT_SYSTEM = INVESTIGATOR_SYSTEM
+
+/** Config-aware resolver: returns config.prompt.evaluator_system if set, otherwise the default investigation prompt. */
+export async function goalJudgeSystem(): Promise<string> {
+  const config = await Config.get()
+  const override = (config as Record<string, unknown>).prompt as Record<string, unknown> | undefined
+  if (typeof override?.evaluator_system === "string") return override.evaluator_system
+  return INVESTIGATOR_SYSTEM
+}

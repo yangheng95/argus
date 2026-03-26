@@ -1,6 +1,6 @@
 // ── ChatComposer Component ──
 // Solid.js port of renderChatComposer / renderChatAttachments / chatForm submit
-// and related attachment/keyboard logic from app.js.
+// and related attachment/keyboard logic
 
 import { createSignal, createMemo, For, Show, onMount, onCleanup } from "solid-js";
 import { t } from "../utils/i18n";
@@ -15,19 +15,18 @@ export interface ChatAttachment {
 
 export interface ChatComposerProps {
   /**
-   * Whether the composer should be interactive.
-   * Mirrors app.js canComposeChat() — caller should pass the current value.
-   */
+ * Whether the composer should be interactive.
+ */
   enabled: boolean;
   /**
-   * Whether a chat request is currently in-flight.
-   * When true the send button becomes a stop button.
-   */
+ * Whether a chat request is currently in-flight.
+ * When true the send button becomes a stop button.
+ */
   busy: boolean;
   /**
-   * Whether the busy request is being stopped (transitional state).
-   * Mirrors request.stopping in app.js.
-   */
+ * Whether the busy request is being stopped (transitional state).
+ * Mirrors request.stopping.
+ */
   stopping?: boolean;
   /** Called when the user submits a message. */
   onSubmit: (text: string, attachments: ChatAttachment[]) => void;
@@ -94,7 +93,7 @@ export function ChatComposer(props: ChatComposerProps) {
   const hasText = createMemo(() => text().trim().length > 0);
   const stopping = () => props.stopping === true;
 
-  // ── Auto-resize textarea (mirrors app.js sizeChat) ──
+ // ── Auto-resize textarea (
 
   function sizeTextarea() {
     if (!textareaRef) return;
@@ -106,13 +105,13 @@ export function ChatComposer(props: ChatComposerProps) {
     textareaRef.style.height = `${Math.max(h, min)}px`;
   }
 
-  // ── Attachment handling ──
+ // ── Attachment handling ──
 
   async function addAttachment(file: File) {
     if (!file) return;
     if (file.size > MAX_ATTACHMENT_SIZE) {
-      // Surface a notice; callers may hook into a global notification system.
-      // For now we log and bail — the legacy app.js calls showLlmNotice here.
+ // Surface a notice; callers may hook into a global notification system.
+ // For now we log and bail — the showLlmNotice here.
       console.warn("[ChatComposer] file too large:", file.name, file.size);
       return;
     }
@@ -127,7 +126,7 @@ export function ChatComposer(props: ChatComposerProps) {
     setAttachments((prev) => prev.filter((_, i) => i !== index));
   }
 
-  // ── Submit ──
+ // ── Submit ──
 
   function handleSubmit(e: SubmitEvent) {
     e.preventDefault();
@@ -136,10 +135,10 @@ export function ChatComposer(props: ChatComposerProps) {
     const trimmed = text().trim();
     if (!trimmed) return;
     const sentAttachments = [...attachments()];
-    // Clear state immediately (mirrors app.js behaviour)
+ // Clear state immediately (
     setText("");
     setAttachments([]);
-    // Resize back to minimum
+ // Resize back to minimum
     if (textareaRef) {
       textareaRef.value = "";
       sizeTextarea();
@@ -147,7 +146,7 @@ export function ChatComposer(props: ChatComposerProps) {
     props.onSubmit(trimmed, sentAttachments);
   }
 
-  // ── Keyboard: Enter to send, Shift+Enter for newline ──
+ // ── Keyboard: Enter to send, Shift+Enter for newline ──
 
   function handleKeyDown(e: KeyboardEvent) {
     if (e.isComposing) return;
@@ -159,7 +158,7 @@ export function ChatComposer(props: ChatComposerProps) {
     }
   }
 
-  // ── File input change ──
+ // ── File input change ──
 
   async function handleFileChange() {
     const files = fileInputRef?.files;
@@ -168,7 +167,7 @@ export function ChatComposer(props: ChatComposerProps) {
     if (fileInputRef) fileInputRef.value = "";
   }
 
-  // ── Drag-and-drop ──
+ // ── Drag-and-drop ──
 
   function handleDragOver(e: DragEvent) {
     e.preventDefault();
@@ -189,7 +188,7 @@ export function ChatComposer(props: ChatComposerProps) {
     for (const file of files) await addAttachment(file);
   }
 
-  // ── Paste images ──
+ // ── Paste images ──
 
   async function handlePaste(e: ClipboardEvent) {
     const files = e.clipboardData?.files;
@@ -198,7 +197,7 @@ export function ChatComposer(props: ChatComposerProps) {
     for (const file of files) await addAttachment(file);
   }
 
-  // ── Send/Stop button rendering (mirrors renderChatComposer SVG logic) ──
+ // ── Send/Stop button rendering (mirrors renderChatComposer SVG logic) ──
 
   const sendDisabled = createMemo(() => {
     if (props.busy) return stopping();
@@ -352,8 +351,14 @@ export function ChatComposer(props: ChatComposerProps) {
         </div>
       </div>
 
-      {/* Compose meta (tip + version info) */}
+      {/* Compose meta (version/author + tip) */}
       <div class="chat-compose-meta">
+        <div class="chat-compose-meta-left">
+          <span class="chat-version" id="chatVersion"></span>
+          <span class="chat-author">
+            <a href="https://github.com/yangheng95/argus" target="_blank" rel="noopener">@yangheng95</a>
+          </span>
+        </div>
         <div class="chat-compose-tip">{t("chat.tip")}</div>
       </div>
     </form>

@@ -1,6 +1,6 @@
 // ── Board Store ──
 // Solid reactive store for board + task list data.
-// Replaces direct reads of app.js state.board / state.tasks.
+// Replaces direct reads of state.board / state.tasks.
 
 import { createStore } from "solid-js/store";
 import { apiHeaders, apiJson, apiUrl } from "../services/api";
@@ -14,12 +14,12 @@ export const [boardStore, setBoardStore] = createStore({
   selectedTaskID: "" as string,
   taskSequence: 0 as number,
   loading: false,
-  // ── Task list internals (mirrors state.pendingTasks / state.tasksSeq) ──
+ // ── Task list internals (mirrors state.pendingTasks / state.tasksSeq) ──
   /** Tasks that have been created locally but not yet confirmed by the server */
   pendingTasks: [] as any[],
   /** Monotonic counter incremented on each tasks-list refresh */
   tasksSeq: 0,
-  // ── Board sync internals (mirrors state.boardEtag / state.boardQueued / etc.) ──
+ // ── Board sync internals (mirrors state.boardEtag / state.boardQueued / etc.) ──
   /** ETag of the last board response, used for conditional fetches */
   boardEtag: "" as string,
   /** Whether a board reload is currently queued (debounce guard) */
@@ -32,12 +32,12 @@ export const [boardStore, setBoardStore] = createStore({
   boardUpdatedAt: 0,
   /** Snapshot version string returned by the server with the board payload */
   snapshotVersion: "" as string,
-  // ── VCS state (mirrors state.path / state.vcs) ──
+ // ── VCS state (mirrors state.path / state.vcs) ──
   /** Git path info object for the active working directory */
   path: null as any,
   /** Git / VCS status object for the active task */
   vcs: null as any,
-  // ── File changes (mirrors state.changes) ──
+ // ── File changes (mirrors state.changes) ──
   /** File change entries for the current task's working tree */
   changes: [] as any[],
 });
@@ -48,7 +48,7 @@ export interface LoadBoardOptions {
   sync?: boolean;
 }
 
-// Module-level runtime state (replaces legacy window.state proxy fields).
+// Module-level runtime state (replaces .state proxy fields).
 let _boardRetryTimer: ReturnType<typeof setTimeout> | null = null;
 let _boardLoading: Promise<void> | null = null;
 let _boardQueued = false;
@@ -162,7 +162,7 @@ export async function loadTasks(): Promise<void> {
   }
 }
 
-// ── Direct setters (used by legacy bridge / SSE handlers) ──
+// ── Direct setters (used by / SSE handlers) ──
 
 export function setBoardData(data: any): void {
   setBoardStore("board", data ?? null);
@@ -179,25 +179,19 @@ let boardLoadTimer: any = null;
 /**
  * Schedule a board reload after an optional delay.
  * Cancels any previously pending reload before scheduling a new one.
- * Mirrors app.js scheduleBoard.
- *
- * @param delay  Delay in milliseconds before calling loadBoard.  Defaults to 0.
+ * @param delay Delay in milliseconds before calling loadBoard. Defaults to 0.
  */
 export function scheduleBoard(delay = 0): void {
   setBoardSyncPending(true);
-  const state = legacyState();
-  if (state?.boardRetryTimer) {
-    clearTimeout(state.boardRetryTimer);
-    state.boardRetryTimer = null;
+  clearBoardRetry();
+  if (boardLoadTimer) {
+    clearTimeout(boardLoadTimer);
+    boardLoadTimer = null;
   }
-  if (state?.boardKick) clearTimeout(state.boardKick);
   boardLoadTimer = setTimeout(() => {
     boardLoadTimer = null;
-    const latest = legacyState();
-    if (latest) latest.boardKick = null;
     void loadBoard({ sync: true });
   }, delay);
-  if (state) state.boardKick = boardLoadTimer;
 }
 
 // ── Derived accessors ──
@@ -270,16 +264,13 @@ export function bumpTasksSeq(): void {
 }
 
 // ── Criteria DOM helpers ──
-// Exact port of isCriteriaEnabled and setCriteriaResult from app.js
-// (lines 7070–7089).  These operate on DOM elements rendered by the legacy
+// (lines 7070–7089). These operate on DOM elements rendered by
 // criteria list; they are placed here because they relate to board/task
 // evaluation state.
 
 /**
  * Read the enabled/checked state of a criteria list item element.
  * Returns true when the inner checkbox is checked.
- *
- * Mirrors app.js isCriteriaEnabled (line 7086).
  */
 export function isCriteriaEnabled(item: Element | null): boolean {
   const input = item?.querySelector<HTMLInputElement>('input[type="checkbox"][data-check]');
@@ -289,15 +280,13 @@ export function isCriteriaEnabled(item: Element | null): boolean {
 /**
  * Update the visual status indicator and result text inside a criteria list
  * item element.
- *
- * Mirrors app.js setCriteriaResult (line 7070).
  */
 export function setCriteriaResult(item: Element | null, status: string): void {
   const statusDot = item?.querySelector<HTMLElement>(".criteria-status");
   const text = item?.querySelector<HTMLElement>(".criteria-result");
   if (!statusDot || !text) return;
   statusDot.dataset.result = status;
-  // Direct i18n lookup — replaces legacy __legacyCriteriaResultText bridge.
+ // Direct i18n lookup — replaces .
   const key = `criteria.result.${status}`;
   const label = t(key);
   text.textContent = label !== key ? label : status;
@@ -307,7 +296,6 @@ export function setCriteriaResult(item: Element | null, status: string): void {
 
 /**
  * Sort a raw tasks payload by updated_at / task.time.updated descending.
- * Mirrors app.js sortedTasks.
  */
 export function sortedTasks(data: { tasks?: any[] } | null | undefined): any[] {
   return [...(Array.isArray(data?.tasks) ? data!.tasks : [])].sort(
@@ -319,7 +307,6 @@ export function sortedTasks(data: { tasks?: any[] } | null | undefined): any[] {
 
 /**
  * Returns the last-updated timestamp for a task list item.
- * Mirrors app.js taskUpdated.
  */
 export function taskUpdated(item: any): number {
   return item?.updated_at || item?.task?.time?.updated || item?.task?.time?.created || 0;
@@ -327,7 +314,6 @@ export function taskUpdated(item: any): number {
 
 /**
  * Find a task item in boardStore.tasks by task ID.
- * Mirrors app.js taskByID / taskItem.
  */
 export function taskByID(taskID: string | null | undefined): any | null {
   if (!taskID) return null;
@@ -336,7 +322,6 @@ export function taskByID(taskID: string | null | undefined): any | null {
 
 /**
  * Find a task item by its requestID within a given list (defaults to boardStore.tasks).
- * Mirrors app.js taskByRequestID.
  */
 export function taskByRequestID(
   requestID: string | null | undefined,
@@ -349,7 +334,6 @@ export function taskByRequestID(
 /**
  * Returns the merged visible task list: pending (not yet confirmed) tasks
  * prepended to the confirmed task list, sorted by last-updated descending.
- * Mirrors app.js visibleTasks.
  */
 export function visibleTasks(): any[] {
   const seen = new Set(

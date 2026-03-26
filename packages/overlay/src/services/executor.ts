@@ -1,9 +1,8 @@
 // ── Executor Service ──
-// TypeScript port of executor-related functions from app.js:
-//   executorLabel, executorInfo, executorSelectable, executorSetupHint,
-//   executorTitle, executorCurrentModel, executorProcessKindTag,
-//   loadExecutors, setExecutorModel.
-//
+// TypeScript port of executor-related functions
+// executorLabel, executorInfo, executorSelectable, executorSetupHint,
+// executorTitle, executorCurrentModel, executorProcessKindTag,
+// loadExecutors, setExecutorModel.
 // DOM-rendering functions (renderExecutorModelPanel, openExecutorModelPanel,
 // closeAllExecutorModelPanels, renderExecutor, syncExecutorWidth) are
 // intentionally NOT ported here — they are dead code in the Solid.js world
@@ -93,7 +92,7 @@ export function executorCurrentModel(executorID: string): string {
 
 /**
  * Maps a process kind string to its short tag label shown in the executor log.
- * Mirrors executorProcessKindTag in app.js.
+ * Mirrors executorProcessKindTag.
  */
 export function executorProcessKindTag(kind: string): string {
   if (kind === "command") return "CMD";
@@ -110,9 +109,8 @@ export function executorProcessKindTag(kind: string): string {
  * Fetches the executor list from the server and updates the app store.
  * If the currently active executor is no longer selectable, falls back to
  * the first selectable executor or "opencode".
- *
- * NOTE: The legacy `renderExecutor()` / `persistOverlaySettings()` calls are
- * omitted here because they belong to app.js's DOM world.  Callers that need
+ * NOTE: `renderExecutor()` / `persistOverlaySettings()` calls are
+ * omitted here because they belong to 's DOM world. Callers that need
  * to persist settings after loading should do so explicitly.
  */
 export async function loadExecutors(): Promise<void> {

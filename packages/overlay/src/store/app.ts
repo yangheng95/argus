@@ -44,20 +44,20 @@ export interface AppState {
   logEntries: LogEntry[];
   /** Current filter level for log display */
   logFilterLevel: LogLevel;
-  // ── i18n (mirrors state.i18n / state.i18nReady / state.localeSeq) ──
+ // ── i18n (mirrors state.i18n / state.i18nReady / state.localeSeq) ──
   /** Loaded translation dictionary for the active locale */
   i18n: Record<string, string>;
   /** Whether i18n translations have been loaded and are ready for use */
   i18nReady: boolean;
   /** Monotonic counter incremented on each locale reload; used to sequence async loads */
   localeSeq: number;
-  // ── App info ──
+ // ── App info ──
   /** Version string reported by the opencorvus core server */
   coreVersion: string;
-  // ── Server-side config (mirrors state.config) ──
+ // ── Server-side config (mirrors state.config) ──
   /** Full server-side config object as returned by the /config API */
   config: any;
-  // ── Providers (mirrors state.executors / state.providerCatalog / state.providerAuth) ──
+ // ── Providers (mirrors state.executors / state.providerCatalog / state.providerAuth) ──
   /** Available executor descriptors returned by the server */
   executors: any[];
   /** LLM provider catalog from models.dev / server */
@@ -68,7 +68,7 @@ export interface AppState {
   providerAuthDismissed: Record<string, boolean>;
   /** In-progress provider connectivity test state */
   providerTest: any;
-  // ── Extensions (mirrors state.channels / state.skills / state.skillMarket / state.mcp) ──
+ // ── Extensions (mirrors state.channels / state.skills / state.skillMarket / state.mcp) ──
   /** Configured channel list */
   channels: any[];
   /** Installed skills list */
@@ -77,23 +77,23 @@ export interface AppState {
   skillMarket: any[];
   /** MCP (Model Control Protocol) config/status map keyed by name */
   mcp: Record<string, any>;
-  // ── NdjsonLog (mirrors state.ndjsonEvents / state.ndjsonStartMs) ──
+ // ── NdjsonLog (mirrors state.ndjsonEvents / state.ndjsonStartMs) ──
   /** Raw ndjson log events accumulated for the current session */
   ndjsonEvents: NdjsonEvent[];
   /** Unix-ms timestamp at which the current ndjson log stream started */
   ndjsonStartMs: number;
-  // ── Memory / Knowledge (mirrors state.memoryFiles / state.memorySearchMode) ──
+ // ── Memory / Knowledge (mirrors state.memoryFiles / state.memorySearchMode) ──
   /** Memory file entries loaded from the server */
   memoryFiles: any[];
   /** Whether the memory panel is in search mode */
   memorySearchMode: boolean;
-  // ── Preferences (mirrors state.preferences) ──
+ // ── Preferences (mirrors state.preferences) ──
   preferences: any[];
-  // ── Prompts (mirrors state.promptEntries / state.promptDrafts) ──
+ // ── Prompts (mirrors state.promptEntries / state.promptDrafts) ──
   promptEntries: any[];
   /** Map of prompt ID → draft text */
   promptDrafts: Record<string, string>;
-  // ── Criteria / Budget (mirrors state.criteriaSpecs / state.budgetDirty / state.budgetSaving) ──
+ // ── Criteria / Budget (mirrors state.criteriaSpecs / state.budgetDirty / state.budgetSaving) ──
   criteriaSpecs: any[];
   /** Whether the budget config form has unsaved changes */
   budgetDirty: boolean;

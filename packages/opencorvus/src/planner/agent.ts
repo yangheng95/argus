@@ -23,6 +23,7 @@ import { parsePlanText } from "./parse-plan-text"
 import { OrchestratorConfig } from "@/orchestrator/config"
 import path from "path"
 import PLAN_CORE from "@/prompt/core/plan-core.txt"
+import { Config } from "@/config/config"
 
 const log = Log.create({ service: "planner-agent" })
 
@@ -197,7 +198,7 @@ export namespace HeadlessPlannerAgent {
         tools: allTools,
         maxOutputTokens: 32768,
         abortSignal: input.signal ?? AbortSignal.timeout(TIMEOUT_MS),
-        system: PLANNER_SYSTEM(MIN_TOOL_CALLS),
+        system: await plannerSystem(MIN_TOOL_CALLS),
         prompt: userPrompt,
         ...(input.stream?.onChunk ? { onChunk: input.stream.onChunk as any } : {}),
         ...(input.stream?.onError ? { onError: input.stream.onError } : {}),
@@ -612,9 +613,6 @@ function buildUserPrompt(
 // System prompt
 // ---------------------------------------------------------------------------
 
-const PLANNER_SYSTEM = (minToolCalls = PLANNER_DEFAULTS.min_tool_calls) =>
-  PLAN_CORE + "\n\n" + headlessPlanAdditions(minToolCalls)
-
 function headlessPlanAdditions(minToolCalls: number) {
   return `## Available Tools
 
@@ -647,4 +645,15 @@ Before outputting, verify each of these. If ANY answer is NO, use more tools to 
 5. Is the PRD concise but complete (bullet points, not paragraphs)?
 6. Could an executor implement this plan WITHOUT asking follow-up questions?
 7. Does the summary accurately describe the plan in one line? (not a file path or heading)`
+}
+
+/** Full default system prompt (core + headless additions). Exported for catalog. */
+export const PLANNER_SYSTEM_DEFAULT = PLAN_CORE + "\n\n" + headlessPlanAdditions(PLANNER_DEFAULTS.min_tool_calls)
+
+/** Config-aware resolver: returns config.prompt.planner_system if set, otherwise builds the default. */
+export async function plannerSystem(minToolCalls = PLANNER_DEFAULTS.min_tool_calls): Promise<string> {
+  const config = await Config.get()
+  const override = (config as Record<string, unknown>).prompt as Record<string, unknown> | undefined
+  if (typeof override?.planner_system === "string") return override.planner_system
+  return PLAN_CORE + "\n\n" + headlessPlanAdditions(minToolCalls)
 }

@@ -15,7 +15,7 @@ interface AgentCardProps {
 }
 
 export function AgentCard(props: AgentCardProps) {
-  // Default to expanded when running, collapsed otherwise
+ // Default to expanded when running, collapsed otherwise
   const [expanded, setExpanded] = createSignal(props.status === "running");
 
   const label = () => {

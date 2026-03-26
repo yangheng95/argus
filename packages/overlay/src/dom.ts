@@ -1,15 +1,11 @@
 // ── DOM Refs ──
-// Type-safe declarations for all DOM elements managed by legacy app.js.
-// Exact port of `const dom = { ... }` from app.js lines 293–516.
-//
-// These refs are still owned by app.js during the migration period.
-// Once a section is fully migrated to Solid components the corresponding
-// field(s) will be removed from here.
+// Type-safe declarations for DOM elements accessed by imperative code
+// (section phase highlights, budget bindings, meta rendering, etc.).
 
 // ── Interface ──
 
 export interface DomRefs {
-  // Canvas / branding
+ // Canvas / branding
   techAtlasCanvas: HTMLCanvasElement | null;
   titlebar: HTMLElement | null;
   connBadge: HTMLElement | null;
@@ -18,7 +14,7 @@ export interface DomRefs {
   chatVersion: HTMLElement | null;
   chatAuthor: HTMLElement | null;
 
-  // Titlebar controls
+ // Titlebar controls
   btnTitlebarMenu: HTMLButtonElement | null;
   titlebarMenu: HTMLElement | null;
   btnLocale: HTMLButtonElement | null;
@@ -29,7 +25,7 @@ export interface DomRefs {
   btnPin: HTMLButtonElement | null;
   btnPinValue: HTMLElement | null;
 
-  // Settings checkboxes / controls
+ // Settings checkboxes / controls
   chkUnattended: HTMLInputElement | null;
   chkAutoPermission: HTMLInputElement | null;
   chkAutoQuestion: HTMLInputElement | null;
@@ -37,12 +33,12 @@ export interface DomRefs {
   opacityRange: HTMLInputElement | null;
   opacityValue: HTMLElement | null;
 
-  // Window controls
+ // Window controls
   btnMinimize: HTMLButtonElement | null;
   btnMaximize: HTMLButtonElement | null;
   btnClose: HTMLButtonElement | null;
 
-  // Layout panels
+ // Layout panels
   panelBody: HTMLElement | null;
   sidebar: HTMLElement | null;
   btnSidebarToggle: HTMLButtonElement | null;
@@ -51,7 +47,7 @@ export interface DomRefs {
   rightPaneResizer: HTMLElement | null;
   sections: HTMLElement | null;
 
-  // Task / workspace
+ // Task / workspace
   taskDir: HTMLElement | null;
   recentDirPanel: HTMLElement | null;
   taskWorkspaceDir: HTMLElement | null;
@@ -61,28 +57,28 @@ export interface DomRefs {
   btnOpenCwd: HTMLButtonElement | null;
   btnResetCwd: HTMLButtonElement | null;
 
-  // Engine / model panels
+ // Engine / model panels
   engineBar: HTMLElement | null;
   codexModelPanel: HTMLElement | null;
   claudeCodeModelPanel: HTMLElement | null;
 
-  // Task meta
+ // Task meta
   taskStatus: HTMLElement | null;
   extensionsBadge: HTMLElement | null;
 
-  // Config dialog
+ // Config dialog
   btnConfigToggle: HTMLButtonElement | null;
   configToggleMeta: HTMLElement | null;
   configDialog: HTMLDialogElement | null;
   btnCloseConfigDialog: HTMLButtonElement | null;
 
-  // Prompt section
+ // Prompt section
   promptSection: HTMLElement | null;
   promptBody: HTMLElement | null;
   promptBadge: HTMLElement | null;
   taskActionsBar: HTMLElement | null;
 
-  // PRD sections
+ // PRD sections
   specSection: HTMLElement | null;
   planSection: HTMLElement | null;
   goalsSection: HTMLElement | null;
@@ -92,14 +88,14 @@ export interface DomRefs {
   deliveryBody: HTMLElement | null;
   changesSection: HTMLElement | null;
 
-  // Channel section
+ // Channel section
   channelSection: HTMLElement | null;
   channelConfigBody: HTMLElement | null;
   channelPublicUrl: HTMLInputElement | null;
   btnSaveChannelPublicUrl: HTMLButtonElement | null;
   cfgAvailableProviders: HTMLElement | null;
 
-  // Lists
+ // Lists
   channelList: HTMLElement | null;
   skillList: HTMLElement | null;
   btnSkillMarket: HTMLButtonElement | null;
@@ -111,29 +107,29 @@ export interface DomRefs {
   btnAddMcp: HTMLButtonElement | null;
   btnDeleteAllMcp: HTMLButtonElement | null;
 
-  // Status bar
+ // Status bar
   statusDot: HTMLElement | null;
   statusLabel: HTMLElement | null;
   elapsed: HTMLElement | null;
   btnTerminateRun: HTMLButtonElement | null;
 
-  // Spec / plan badges and bodies
+ // Spec / plan badges and bodies
   specBadge: HTMLElement | null;
   specBody: HTMLElement | null;
   planBadge: HTMLElement | null;
   planBody: HTMLElement | null;
 
-  // Goals
+ // Goals
   goalsBadge: HTMLElement | null;
   btnCreateGoal: HTMLButtonElement | null;
   goalsBody: HTMLElement | null;
 
-  // Criteria / eval
+ // Criteria / eval
   criteriaBadge: HTMLElement | null;
   criteriaList: HTMLElement | null;
   evalBody: HTMLElement | null;
 
-  // Budget
+ // Budget
   budgetConfigBody: HTMLElement | null;
   budgetHint: HTMLElement | null;
   budgetMaxRuns: HTMLInputElement | null;
@@ -143,11 +139,11 @@ export interface DomRefs {
   btnBudgetReset: HTMLButtonElement | null;
   btnBudgetSave: HTMLButtonElement | null;
 
-  // Changes
+ // Changes
   changesBadge: HTMLElement | null;
   changesBody: HTMLElement | null;
 
-  // Chat
+ // Chat
   chatGoalsStrip: HTMLElement | null;
   chatScroll: HTMLElement | null;
   chatEmpty: HTMLElement | null;
@@ -159,7 +155,7 @@ export interface DomRefs {
   codingScroll: HTMLElement | null;
   codingEmpty: HTMLElement | null;
 
-  // Chat form
+ // Chat form
   chatForm: HTMLFormElement | null;
   chatTextarea: HTMLTextAreaElement | null;
   chatAttachments: HTMLElement | null;
@@ -168,12 +164,12 @@ export interface DomRefs {
   btnTaskInterrupt: HTMLButtonElement | null;
   chatSend: HTMLButtonElement | null;
 
-  // Task list panel
+ // Task list panel
   taskListPanel: HTMLElement | null;
   btnRefreshTasks: HTMLButtonElement | null;
   btnCreateTask: HTMLButtonElement | null;
 
-  // Skill dialog
+ // Skill dialog
   skillDialog: HTMLDialogElement | null;
   skillForm: HTMLFormElement | null;
   skillType: HTMLSelectElement | null;
@@ -182,12 +178,12 @@ export interface DomRefs {
   btnPickSkillPath: HTMLButtonElement | null;
   btnCancelSkill: HTMLButtonElement | null;
 
-  // Skill market dialog
+ // Skill market dialog
   skillMarketDialog: HTMLDialogElement | null;
   skillMarketList: HTMLElement | null;
   btnCloseSkillMarket: HTMLButtonElement | null;
 
-  // MCP dialog
+ // MCP dialog
   mcpDialog: HTMLDialogElement | null;
   mcpForm: HTMLFormElement | null;
   mcpName: HTMLInputElement | null;
@@ -200,7 +196,7 @@ export interface DomRefs {
   mcpArgsField: HTMLElement | null;
   btnCancelMcp: HTMLButtonElement | null;
 
-  // Goal dialog
+ // Goal dialog
   goalDialog: HTMLDialogElement | null;
   goalForm: HTMLFormElement | null;
   goalDialogTitle: HTMLElement | null;
@@ -209,14 +205,14 @@ export interface DomRefs {
   goalCriteria: HTMLTextAreaElement | null;
   btnCancelGoal: HTMLButtonElement | null;
 
-  // Diff dialog
+ // Diff dialog
   diffDialog: HTMLDialogElement | null;
   diffDialogTitle: HTMLElement | null;
   diffDialogMeta: HTMLElement | null;
   diffDialogBody: HTMLElement | null;
   btnCloseDiff: HTMLButtonElement | null;
 
-  // Generic app dialog
+ // Generic app dialog
   appDialog: HTMLDialogElement | null;
   appDialogTitle: HTMLElement | null;
   appDialogBody: HTMLElement | null;
@@ -229,7 +225,7 @@ export interface DomRefs {
   btnAppDialogCancel: HTMLButtonElement | null;
   btnAppDialogOk: HTMLButtonElement | null;
 
-  // LLM form
+ // LLM form
   llmForm: HTMLFormElement | null;
   llmSection: HTMLElement | null;
   llmAdvanced: HTMLElement | null;
@@ -244,7 +240,7 @@ export interface DomRefs {
   llmStatus: HTMLElement | null;
   llmNotice: HTMLElement | null;
 
-  // Channel dialog
+ // Channel dialog
   channelDialog: HTMLDialogElement | null;
   channelForm: HTMLFormElement | null;
   channelDialogTitle: HTMLElement | null;
@@ -252,7 +248,7 @@ export interface DomRefs {
   channelFields: HTMLElement | null;
   btnCancelChannel: HTMLButtonElement | null;
 
-  // Settings dialog
+ // Settings dialog
   settingsDialog: HTMLDialogElement | null;
   settingsForm: HTMLFormElement | null;
   serverUrl: HTMLInputElement | null;
@@ -261,7 +257,7 @@ export interface DomRefs {
   localeMode: HTMLSelectElement | null;
   themeMode: HTMLSelectElement | null;
 
-  // Knowledge: Memory & Preferences
+ // Knowledge: Memory & Preferences
   memoryBadge: HTMLElement | null;
   memoryList: HTMLElement | null;
   memorySearch: HTMLInputElement | null;
@@ -278,7 +274,7 @@ export interface DomRefs {
   btnDeleteMemory: HTMLButtonElement | null;
   btnCloseMemory: HTMLButtonElement | null;
 
-  // Log viewer
+ // Log viewer
   logDialog: HTMLDialogElement | null;
   logViewerBody: HTMLElement | null;
   logLevelFilter: HTMLSelectElement | null;
@@ -289,7 +285,7 @@ export interface DomRefs {
   btnCloseLog: HTMLButtonElement | null;
   btnLogServerLogs: HTMLButtonElement | null;
 
-  // Preference edit dialog
+ // Preference edit dialog
   prefEditDialog: HTMLDialogElement | null;
   prefEditForm: HTMLFormElement | null;
   prefEditTitle: HTMLElement | null;
@@ -303,12 +299,10 @@ export interface DomRefs {
 
 /**
  * Query the live DOM and return a DomRefs snapshot.
- * Mirrors app.js `const dom = { ... }` exactly — all fields use
  * `document.querySelector` / `document.querySelectorAll` and may be null
  * when the corresponding element is absent from the current HTML.
- *
  * Call this once after the HTML shell has been rendered, then pass the
- * result to code that still operates on raw DOM elements (legacy app.js,
+ * result to code that still operates on raw DOM elements (
  * workspace helpers, interaction helpers, etc.).
  */
 export function getDomRefs(): DomRefs {
@@ -316,7 +310,7 @@ export function getDomRefs(): DomRefs {
     document.querySelector<T>(sel);
 
   return {
-    // Canvas / branding
+ // Canvas / branding
     techAtlasCanvas: $<HTMLCanvasElement>("#techAtlasCanvas"),
     titlebar: $<HTMLElement>("#titlebar"),
     connBadge: $<HTMLElement>("#connBadge"),
@@ -325,7 +319,7 @@ export function getDomRefs(): DomRefs {
     chatVersion: $<HTMLElement>("#chatVersion"),
     chatAuthor: $<HTMLElement>("#chatAuthor"),
 
-    // Titlebar controls
+ // Titlebar controls
     btnTitlebarMenu: $<HTMLButtonElement>("#btnTitlebarMenu"),
     titlebarMenu: $<HTMLElement>("#titlebarMenu"),
     btnLocale: $<HTMLButtonElement>("#btnLocale"),
@@ -336,7 +330,7 @@ export function getDomRefs(): DomRefs {
     btnPin: $<HTMLButtonElement>("#btnPin"),
     btnPinValue: $<HTMLElement>("#btnPinValue"),
 
-    // Settings checkboxes / controls
+ // Settings checkboxes / controls
     chkUnattended: $<HTMLInputElement>("#chkUnattended"),
     chkAutoPermission: $<HTMLInputElement>("#chkAutoPermission"),
     chkAutoQuestion: $<HTMLInputElement>("#chkAutoQuestion"),
@@ -344,12 +338,12 @@ export function getDomRefs(): DomRefs {
     opacityRange: $<HTMLInputElement>("#opacityRange"),
     opacityValue: $<HTMLElement>("#opacityValue"),
 
-    // Window controls
+ // Window controls
     btnMinimize: $<HTMLButtonElement>("#btnMinimize"),
     btnMaximize: $<HTMLButtonElement>("#btnMaximize"),
     btnClose: $<HTMLButtonElement>("#btnClose"),
 
-    // Layout panels
+ // Layout panels
     panelBody: $<HTMLElement>("#panelBody"),
     sidebar: $<HTMLElement>("#sidebar"),
     btnSidebarToggle: $<HTMLButtonElement>("#btnSidebarToggle"),
@@ -358,7 +352,7 @@ export function getDomRefs(): DomRefs {
     rightPaneResizer: $<HTMLElement>("#rightPaneResizer"),
     sections: $<HTMLElement>("#sections"),
 
-    // Task / workspace
+ // Task / workspace
     taskDir: $<HTMLElement>("#taskDir"),
     recentDirPanel: $<HTMLElement>("#recentDirPanel"),
     taskWorkspaceDir: $<HTMLElement>("#taskWorkspaceDir"),
@@ -368,28 +362,28 @@ export function getDomRefs(): DomRefs {
     btnOpenCwd: $<HTMLButtonElement>("#btnOpenCwd"),
     btnResetCwd: $<HTMLButtonElement>("#btnResetCwd"),
 
-    // Engine / model panels
+ // Engine / model panels
     engineBar: $<HTMLElement>("#engineBar"),
     codexModelPanel: $<HTMLElement>("#codexModelPanel"),
     claudeCodeModelPanel: $<HTMLElement>("#claudeCodeModelPanel"),
 
-    // Task meta
+ // Task meta
     taskStatus: $<HTMLElement>("#taskStatus"),
     extensionsBadge: $<HTMLElement>("#extensionsBadge"),
 
-    // Config dialog
+ // Config dialog
     btnConfigToggle: $<HTMLButtonElement>("#btnConfigToggle"),
     configToggleMeta: $<HTMLElement>("#configToggleMeta"),
     configDialog: $<HTMLDialogElement>("#configDialog"),
     btnCloseConfigDialog: $<HTMLButtonElement>("#btnCloseConfigDialog"),
 
-    // Prompt section
+ // Prompt section
     promptSection: $<HTMLElement>("#promptSection"),
     promptBody: $<HTMLElement>("#promptBody"),
     promptBadge: $<HTMLElement>("#promptBadge"),
     taskActionsBar: $<HTMLElement>("#taskActionsBar"),
 
-    // PRD sections
+ // PRD sections
     specSection: $<HTMLElement>("#specSection"),
     planSection: $<HTMLElement>("#planSection"),
     goalsSection: $<HTMLElement>("#goalsSection"),
@@ -399,14 +393,14 @@ export function getDomRefs(): DomRefs {
     deliveryBody: $<HTMLElement>("#deliveryBody"),
     changesSection: $<HTMLElement>("#changesSection"),
 
-    // Channel section
+ // Channel section
     channelSection: $<HTMLElement>("#channelSection"),
     channelConfigBody: $<HTMLElement>("#channelConfigBody"),
     channelPublicUrl: $<HTMLInputElement>("#channelPublicUrl"),
     btnSaveChannelPublicUrl: $<HTMLButtonElement>("#btnSaveChannelPublicUrl"),
     cfgAvailableProviders: $<HTMLElement>("#cfgAvailableProviders"),
 
-    // Lists
+ // Lists
     channelList: $<HTMLElement>("#channelList"),
     skillList: $<HTMLElement>("#skillList"),
     btnSkillMarket: $<HTMLButtonElement>("#btnSkillMarket"),
@@ -418,29 +412,29 @@ export function getDomRefs(): DomRefs {
     btnAddMcp: $<HTMLButtonElement>("#btnAddMcp"),
     btnDeleteAllMcp: $<HTMLButtonElement>("#btnDeleteAllMcp"),
 
-    // Status bar
+ // Status bar
     statusDot: $<HTMLElement>("#statusIcon"),
     statusLabel: $<HTMLElement>("#statusLabel"),
     elapsed: $<HTMLElement>("#elapsed"),
     btnTerminateRun: $<HTMLButtonElement>("#btnTerminateRun"),
 
-    // Spec / plan badges and bodies
+ // Spec / plan badges and bodies
     specBadge: $<HTMLElement>("#specBadge"),
     specBody: $<HTMLElement>("#specBody"),
     planBadge: $<HTMLElement>("#planBadge"),
     planBody: $<HTMLElement>("#planBody"),
 
-    // Goals
+ // Goals
     goalsBadge: $<HTMLElement>("#goalsBadge"),
     btnCreateGoal: $<HTMLButtonElement>("#btnCreateGoal"),
     goalsBody: $<HTMLElement>("#goalsBody"),
 
-    // Criteria / eval
+ // Criteria / eval
     criteriaBadge: $<HTMLElement>("#criteriaBadge"),
     criteriaList: $<HTMLElement>("#criteriaList"),
     evalBody: $<HTMLElement>("#evalBody"),
 
-    // Budget
+ // Budget
     budgetConfigBody: $<HTMLElement>("#budgetConfigBody"),
     budgetHint: $<HTMLElement>("#budgetHint"),
     budgetMaxRuns: $<HTMLInputElement>("#budgetMaxRuns"),
@@ -450,11 +444,11 @@ export function getDomRefs(): DomRefs {
     btnBudgetReset: $<HTMLButtonElement>("#btnBudgetReset"),
     btnBudgetSave: $<HTMLButtonElement>("#btnBudgetSave"),
 
-    // Changes
+ // Changes
     changesBadge: $<HTMLElement>("#changesBadge"),
     changesBody: $<HTMLElement>("#changesBody"),
 
-    // Chat
+ // Chat
     chatGoalsStrip: $<HTMLElement>("#chatGoalsStrip"),
     chatScroll: $<HTMLElement>("#chatScroll"),
     chatEmpty: $<HTMLElement>("#chatEmpty"),
@@ -466,7 +460,7 @@ export function getDomRefs(): DomRefs {
     codingScroll: $<HTMLElement>("#codingScroll"),
     codingEmpty: $<HTMLElement>("#codingEmpty"),
 
-    // Chat form
+ // Chat form
     chatForm: $<HTMLFormElement>("#chatForm"),
     chatTextarea: $<HTMLTextAreaElement>("#chatTextarea"),
     chatAttachments: $<HTMLElement>("#chatAttachments"),
@@ -475,12 +469,12 @@ export function getDomRefs(): DomRefs {
     btnTaskInterrupt: $<HTMLButtonElement>("#btnTaskInterrupt"),
     chatSend: $<HTMLButtonElement>("#chatSend"),
 
-    // Task list panel
+ // Task list panel
     taskListPanel: $<HTMLElement>("#taskListPanel"),
     btnRefreshTasks: $<HTMLButtonElement>("#btnRefreshTasks"),
     btnCreateTask: $<HTMLButtonElement>("#btnCreateTask"),
 
-    // Skill dialog
+ // Skill dialog
     skillDialog: $<HTMLDialogElement>("#skillDialog"),
     skillForm: $<HTMLFormElement>("#skillForm"),
     skillType: $<HTMLSelectElement>("#skillType"),
@@ -489,12 +483,12 @@ export function getDomRefs(): DomRefs {
     btnPickSkillPath: $<HTMLButtonElement>("#btnPickSkillPath"),
     btnCancelSkill: $<HTMLButtonElement>("#btnCancelSkill"),
 
-    // Skill market dialog
+ // Skill market dialog
     skillMarketDialog: $<HTMLDialogElement>("#skillMarketDialog"),
     skillMarketList: $<HTMLElement>("#skillMarketList"),
     btnCloseSkillMarket: $<HTMLButtonElement>("#btnCloseSkillMarket"),
 
-    // MCP dialog
+ // MCP dialog
     mcpDialog: $<HTMLDialogElement>("#mcpDialog"),
     mcpForm: $<HTMLFormElement>("#mcpForm"),
     mcpName: $<HTMLInputElement>("#mcpName"),
@@ -507,7 +501,7 @@ export function getDomRefs(): DomRefs {
     mcpArgsField: $<HTMLElement>("#mcpArgsField"),
     btnCancelMcp: $<HTMLButtonElement>("#btnCancelMcp"),
 
-    // Goal dialog
+ // Goal dialog
     goalDialog: $<HTMLDialogElement>("#goalDialog"),
     goalForm: $<HTMLFormElement>("#goalForm"),
     goalDialogTitle: $<HTMLElement>("#goalDialogTitle"),
@@ -516,14 +510,14 @@ export function getDomRefs(): DomRefs {
     goalCriteria: $<HTMLTextAreaElement>("#goalCriteria"),
     btnCancelGoal: $<HTMLButtonElement>("#btnCancelGoal"),
 
-    // Diff dialog
+ // Diff dialog
     diffDialog: $<HTMLDialogElement>("#diffDialog"),
     diffDialogTitle: $<HTMLElement>("#diffDialogTitle"),
     diffDialogMeta: $<HTMLElement>("#diffDialogMeta"),
     diffDialogBody: $<HTMLElement>("#diffDialogBody"),
     btnCloseDiff: $<HTMLButtonElement>("#btnCloseDiff"),
 
-    // Generic app dialog
+ // Generic app dialog
     appDialog: $<HTMLDialogElement>("#appDialog"),
     appDialogTitle: $<HTMLElement>("#appDialogTitle"),
     appDialogBody: $<HTMLElement>("#appDialogBody"),
@@ -536,7 +530,7 @@ export function getDomRefs(): DomRefs {
     btnAppDialogCancel: $<HTMLButtonElement>("#btnAppDialogCancel"),
     btnAppDialogOk: $<HTMLButtonElement>("#btnAppDialogOk"),
 
-    // LLM form
+ // LLM form
     llmForm: $<HTMLFormElement>("#llmForm"),
     llmSection: $<HTMLElement>("#llmSection"),
     llmAdvanced: $<HTMLElement>("#llmAdvanced"),
@@ -551,7 +545,7 @@ export function getDomRefs(): DomRefs {
     llmStatus: $<HTMLElement>("#llmStatus"),
     llmNotice: $<HTMLElement>("#llmNotice"),
 
-    // Channel dialog
+ // Channel dialog
     channelDialog: $<HTMLDialogElement>("#channelDialog"),
     channelForm: $<HTMLFormElement>("#channelForm"),
     channelDialogTitle: $<HTMLElement>("#channelDialogTitle"),
@@ -559,7 +553,7 @@ export function getDomRefs(): DomRefs {
     channelFields: $<HTMLElement>("#channelFields"),
     btnCancelChannel: $<HTMLButtonElement>("#btnCancelChannel"),
 
-    // Settings dialog
+ // Settings dialog
     settingsDialog: $<HTMLDialogElement>("#settingsDialog"),
     settingsForm: $<HTMLFormElement>("#settingsForm"),
     serverUrl: $<HTMLInputElement>("#serverUrl"),
@@ -568,7 +562,7 @@ export function getDomRefs(): DomRefs {
     localeMode: $<HTMLSelectElement>("#localeMode"),
     themeMode: $<HTMLSelectElement>("#themeMode"),
 
-    // Knowledge: Memory & Preferences
+ // Knowledge: Memory & Preferences
     memoryBadge: $<HTMLElement>("#memoryBadge"),
     memoryList: $<HTMLElement>("#memoryList"),
     memorySearch: $<HTMLInputElement>("#memorySearch"),
@@ -585,7 +579,7 @@ export function getDomRefs(): DomRefs {
     btnDeleteMemory: $<HTMLButtonElement>("#btnDeleteMemory"),
     btnCloseMemory: $<HTMLButtonElement>("#btnCloseMemory"),
 
-    // Log viewer
+ // Log viewer
     logDialog: $<HTMLDialogElement>("#logDialog"),
     logViewerBody: $<HTMLElement>("#logViewerBody"),
     logLevelFilter: $<HTMLSelectElement>("#logLevelFilter"),
@@ -596,7 +590,7 @@ export function getDomRefs(): DomRefs {
     btnCloseLog: $<HTMLButtonElement>("#btnCloseLog"),
     btnLogServerLogs: $<HTMLButtonElement>("#btnLogServerLogs"),
 
-    // Preference edit dialog
+ // Preference edit dialog
     prefEditDialog: $<HTMLDialogElement>("#prefEditDialog"),
     prefEditForm: $<HTMLFormElement>("#prefEditForm"),
     prefEditTitle: $<HTMLElement>("#prefEditTitle"),
