@@ -20,34 +20,43 @@ import { Config } from "@/config/config"
 export interface SpecConfig {
   max_steps: number
   timeout_ms: number
-  min_tool_calls: number
   quality_threshold: number
   max_attempts: number
+  skills: string[]
 }
 
 export interface PlannerConfig {
   max_steps: number
   timeout_ms: number
-  min_tool_calls: number
   quality_threshold: number
   max_attempts: number
+  skills: string[]
 }
 
 export interface EvaluatorConfig {
   max_steps: number
   timeout_ms: number
-  min_tool_calls: number
+  skills: string[]
 }
 
 export interface DeliveryConfig {
   max_steps: number
   timeout_ms: number
   max_retries: number
-  min_tool_calls: number
+  skills: string[]
+}
+
+export interface GoalAgentConfig {
+  max_steps: number
+  timeout_ms: number
+  quality_threshold: number
+  max_attempts: number
+  skills: string[]
 }
 
 export interface OrchestratorConfigType {
   spec: SpecConfig
+  goal: GoalAgentConfig
   planner: PlannerConfig
   evaluator: EvaluatorConfig
   delivery: DeliveryConfig
@@ -65,27 +74,34 @@ const DEFAULTS: OrchestratorConfigType = {
   spec: {
     max_steps: 30,
     timeout_ms: 300_000,
-    min_tool_calls: 3,
     quality_threshold: 0.6,
     max_attempts: 3,
+    skills: [],
+  },
+  goal: {
+    max_steps: 30,
+    timeout_ms: 300_000,
+    quality_threshold: 0.5,
+    max_attempts: 3,
+    skills: [],
   },
   planner: {
     max_steps: 30,
     timeout_ms: 300_000,
-    min_tool_calls: 3,
     quality_threshold: 0.5,
     max_attempts: 3,
+    skills: [],
   },
   evaluator: {
     max_steps: 25,
     timeout_ms: 240_000,
-    min_tool_calls: 3,
+    skills: [],
   },
   delivery: {
     max_steps: 40,
     timeout_ms: 600_000,
     max_retries: 2,
-    min_tool_calls: 3,
+    skills: [],
   },
   max_runs: 10,
   max_replans: 3,
@@ -142,27 +158,34 @@ function merge(user?: Config.Info["orchestrator"]): OrchestratorConfigType {
     spec: {
       max_steps: user?.spec?.max_steps ?? DEFAULTS.spec.max_steps,
       timeout_ms: user?.spec?.timeout_ms ?? DEFAULTS.spec.timeout_ms,
-      min_tool_calls: user?.spec?.min_tool_calls ?? DEFAULTS.spec.min_tool_calls,
       quality_threshold: user?.spec?.quality_threshold ?? DEFAULTS.spec.quality_threshold,
       max_attempts: user?.spec?.max_attempts ?? DEFAULTS.spec.max_attempts,
+      skills: (user?.spec as any)?.skills ?? DEFAULTS.spec.skills,
+    },
+    goal: {
+      max_steps: (user as any)?.goal?.max_steps ?? DEFAULTS.goal.max_steps,
+      timeout_ms: (user as any)?.goal?.timeout_ms ?? DEFAULTS.goal.timeout_ms,
+      quality_threshold: (user as any)?.goal?.quality_threshold ?? DEFAULTS.goal.quality_threshold,
+      max_attempts: (user as any)?.goal?.max_attempts ?? DEFAULTS.goal.max_attempts,
+      skills: (user as any)?.goal?.skills ?? DEFAULTS.goal.skills,
     },
     planner: {
       max_steps: user?.planner?.max_steps ?? DEFAULTS.planner.max_steps,
       timeout_ms: user?.planner?.timeout_ms ?? DEFAULTS.planner.timeout_ms,
-      min_tool_calls: user?.planner?.min_tool_calls ?? DEFAULTS.planner.min_tool_calls,
       quality_threshold: user?.planner?.quality_threshold ?? DEFAULTS.planner.quality_threshold,
       max_attempts: user?.planner?.max_attempts ?? DEFAULTS.planner.max_attempts,
+      skills: (user?.planner as any)?.skills ?? DEFAULTS.planner.skills,
     },
     evaluator: {
       max_steps: user?.evaluator?.max_steps ?? DEFAULTS.evaluator.max_steps,
       timeout_ms: user?.evaluator?.timeout_ms ?? DEFAULTS.evaluator.timeout_ms,
-      min_tool_calls: user?.evaluator?.min_tool_calls ?? DEFAULTS.evaluator.min_tool_calls,
+      skills: (user?.evaluator as any)?.skills ?? DEFAULTS.evaluator.skills,
     },
     delivery: {
       max_steps: user?.delivery?.max_steps ?? DEFAULTS.delivery.max_steps,
       timeout_ms: envInt("OPENCORVUS_DELIVERY_AGENT_TIMEOUT_MS") ?? user?.delivery?.timeout_ms ?? DEFAULTS.delivery.timeout_ms,
       max_retries: user?.delivery?.max_retries ?? DEFAULTS.delivery.max_retries,
-      min_tool_calls: user?.delivery?.min_tool_calls ?? DEFAULTS.delivery.min_tool_calls,
+      skills: (user?.delivery as any)?.skills ?? DEFAULTS.delivery.skills,
     },
     max_runs: envInt("OPENCORVUS_MAX_RUNS") ?? user?.max_runs ?? DEFAULTS.max_runs,
     max_replans: envInt("OPENCORVUS_MAX_REPLANS") ?? user?.max_replans ?? DEFAULTS.max_replans,

@@ -145,6 +145,7 @@ export namespace HeadlessPlannerService {
     allowClarification?: boolean
     executor?: ExecutorNameInfo
     routing?: z.infer<typeof StageRouting>
+    sessionID?: string
     signal?: AbortSignal
     stream?: import("@/llm/api").TextHooks
   }): Promise<PlanDraft> {
@@ -211,6 +212,7 @@ export namespace HeadlessPlannerService {
             }))
           : undefined,
         spec: spec ? { summary: spec.summary, content: spec.content } : undefined,
+        sessionID: input.sessionID,
         signal: controller.signal,
         stream: input.stream,
       }).catch((error) => {
@@ -278,6 +280,7 @@ export namespace HeadlessPlannerService {
     allowClarification?: boolean
     executor?: ExecutorNameInfo
     routing?: z.infer<typeof StageRouting>
+    sessionID?: string
     signal?: AbortSignal
     stream?: import("@/llm/api").TextHooks
   }): Promise<PlanDraft> {
@@ -357,6 +360,7 @@ export namespace HeadlessPlannerService {
         request: input.request,
         replanContext: replanCtx,
         spec: spec ? { summary: spec.summary, content: spec.content } : undefined,
+        sessionID: input.sessionID,
         signal: controller.signal,
         stream: input.stream,
       }).catch((error) => {

@@ -22,6 +22,7 @@ import { Preference } from "@/preference"
 import { Instance } from "@/project/instance"
 import { Log } from "@/util/log"
 import { OrchestratorConfig } from "@/orchestrator/config"
+import { loadStageSkills } from "@/orchestrator/skill-inject"
 import { Config } from "@/config/config"
 
 const log = Log.create({ service: "evaluator-agent" })
@@ -491,10 +492,10 @@ You receive a detailed investigation report and must produce a structured verdic
 
 ## Verdict Rules
 
-- **Accept** when core functionality is implemented and verifiable criteria pass, even if some criteria are inconclusive.
-- **Reject** only when there are CONCRETE, CODE-LEVEL failures the executor CAN fix (missing files, broken logic, failing tests).
-- **Do NOT reject** for runtime metrics ("sync rate ≥ 99%"), UX criteria ("path < 3 steps"), performance targets ("load < 2s"), or device-specific features — mark these "inconclusive".
-- **Do NOT cause infinite retry loops**: if a criterion failed previously and the code hasn't changed for it, use "inconclusive" not "failed".
+- **Accept** when core functionality is implemented and all verifiable criteria pass with evidence.
+- **Reject** when there are CONCRETE, CODE-LEVEL failures the executor CAN fix (missing files, broken logic, failing tests). Rejection MUST include specific replan_guidance so the executor knows exactly what to fix.
+- **Inconclusive** ONLY for criteria that are genuinely unmeasurable in the current environment (runtime metrics like "sync rate ≥ 99%", device-specific features, UX criteria requiring human evaluation). Do NOT use inconclusive as a substitute for repeated failures — a test that fails 3 times is a real failure, not an inconclusive result.
+- If the same failure has occurred in prior runs, the rejection replan_guidance MUST explain why previous attempts failed and suggest a DIFFERENT approach. The orchestrator uses replan_guidance to decide between retry and replan — vague guidance causes blind retries.
 
 ## Classification
 
@@ -535,10 +536,14 @@ Every goal_status must have evidence that cites specific file paths, test names,
 /** Default evaluator system prompt (investigation phase). Exported for catalog. */
 export const EVALUATOR_DEFAULT_SYSTEM = INVESTIGATOR_SYSTEM
 
-/** Config-aware resolver: returns config.prompt.evaluator_system if set, otherwise the default investigation prompt. */
+/** Config-aware resolver: checks config.prompt.evaluator_system first, then config.agent.evaluator.prompt, otherwise the default + skills. */
 export async function goalJudgeSystem(): Promise<string> {
   const config = await Config.get()
-  const override = (config as Record<string, unknown>).prompt as Record<string, unknown> | undefined
-  if (typeof override?.evaluator_system === "string") return override.evaluator_system
-  return INVESTIGATOR_SYSTEM
+  const systemOverride = (config as Record<string, unknown>).prompt as Record<string, unknown> | undefined
+  if (typeof systemOverride?.evaluator_system === "string") return systemOverride.evaluator_system
+  const agentPrompt = (config.agent as Record<string, any> | undefined)?.evaluator?.prompt
+  const core = typeof agentPrompt === "string" ? agentPrompt : INVESTIGATOR_SYSTEM
+  const orchCfg = await OrchestratorConfig.get()
+  const skills = await loadStageSkills(orchCfg.evaluator.skills)
+  return core + skills
 }

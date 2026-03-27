@@ -5,7 +5,8 @@
  * The poll loop drives advancement; crash recovery re-enters from the last completed stage.
  */
 import z from "zod"
-import { GoalFailureError, HeadlessGoalService, goalInputsFromDraft, validateGoalGraph, type GoalDraft } from "@/goal/service"
+import { GoalFailureError, goalInputsFromDraft, validateGoalGraph, type GoalDraft } from "@/goal/service"
+import { HeadlessGoalAgent } from "@/goal/agent"
 import { GoalFidelityReview, applyGoalCorrections } from "@/goal/fidelity-review"
 import { Identifier } from "@/id/id"
 import { PlannerFailureError, PlannerService, type PlanDraft } from "@/planner/service"
@@ -245,6 +246,7 @@ async function runSpecStage(
         title: task.title,
         request: task.request,
         goals: pipeline.goals as any,
+        sessionID: specSession.id,
         signal: ctrl.signal,
         stream: {
           onChunk: async (arg: any) => {
@@ -352,14 +354,12 @@ async function runGoalStage(
     await goalLive.start("Goal decomposition started")
 
     const goalDraft = await withStageRetry("goal", () =>
-      HeadlessGoalService.initial({
+      HeadlessGoalAgent.initial({
         title: task.title,
         request: task.request,
         spec: specDraft,
-        sessionID: pipeline.sessionID,
-        metadata: task.metadata ?? undefined,
         goalHints: pipeline.goals as any,
-        timeoutMs: stageTimeout("goal"),
+        sessionID: goalSession.id,
         signal: ctrl.signal,
         stream: {
           onChunk: async (arg: any) => {
@@ -509,6 +509,7 @@ async function runPlanStage(
         allowClarification: !unattended,
         executor: pipeline.executor as any,
         routing: pipeline.routing,
+        sessionID: planSession.id,
         signal: ctrl.signal,
         stream: {
           onChunk: async (arg: any) => {

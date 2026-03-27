@@ -2396,10 +2396,9 @@ function AgentCard(props) {
   const toggle = () => {
     toggleAgentCardExpanded(props.cardID, props.status === "running");
   };
-  const board = () => boardStore.board;
   const specContent = createMemo(() => {
     if (props.stage !== "spec") return "";
-    const content = board()?.spec?.content || "";
+    const content = boardStore.board?.spec?.content || "";
     if (!content) return "";
     const lines = content.split("\n").filter((l) => l.trim());
     const preview = lines.slice(0, 4).join("\n");
@@ -2407,7 +2406,7 @@ function AgentCard(props) {
   });
   const planData = createMemo(() => {
     if (props.stage !== "planner") return null;
-    const plan = board()?.plan;
+    const plan = boardStore.board?.plan;
     if (!plan?.summary) return null;
     return {
       summary: plan.summary,
@@ -2416,13 +2415,13 @@ function AgentCard(props) {
   });
   const goalsData = createMemo(() => {
     if (props.stage !== "goal") return [];
-    const lanes = board()?.lanes || [];
+    const lanes = boardStore.board?.lanes || [];
     const goalsLane = lanes.find((lane) => lane.id === "goals");
     return goalsLane?.cards || [];
   });
   const evaluationData = createMemo(() => {
     if (props.stage !== "judge") return null;
-    const evaluation = board()?.evaluation;
+    const evaluation = boardStore.board?.evaluation;
     if (!evaluation) return null;
     return {
       verdict: evaluation.verdict || "",
@@ -2431,8 +2430,7 @@ function AgentCard(props) {
   });
   const deliveryData = createMemo(() => {
     if (props.stage !== "delivery") return null;
-    const b = board();
-    const delivery = b?.acceptedDelivery || b?.delivery;
+    const delivery = boardStore.board?.acceptedDelivery || boardStore.board?.delivery;
     if (!delivery) return null;
     return {
       status: delivery.status || ""
@@ -2774,21 +2772,18 @@ function mergeEventList(events, event) {
   const index = event.id ? events.findIndex((item) => item.id === event.id) : -1;
   if (index >= 0) {
     if (executorDeltaKind(event.kind)) {
-      const next = mergeExecutorDelta(events[index], event);
-      return [...events.slice(0, index), next, ...events.slice(index + 1)];
-    }
-    return [
-      ...events.slice(0, index),
-      {
+      events[index] = mergeExecutorDelta(events[index], event);
+    } else {
+      events[index] = {
         ...events[index],
         ...event,
         payload: {
           ...record$7(events[index]?.payload) ? events[index].payload : {},
           ...record$7(event?.payload) ? event.payload : {}
         }
-      },
-      ...events.slice(index + 1)
-    ];
+      };
+    }
+    return events;
   }
   let sourceIndex = -1;
   if (executorDeltaKind(event.kind)) {
@@ -2811,13 +2806,11 @@ function mergeEventList(events, event) {
   }
   if (sourceIndex >= 0) {
     const merged = mergeExecutorDelta(events[sourceIndex], event);
-    return [
-      ...events.slice(0, sourceIndex),
-      { ...merged, id: events[sourceIndex].id },
-      ...events.slice(sourceIndex + 1)
-    ];
+    events[sourceIndex] = { ...merged, id: events[sourceIndex].id };
+    return events;
   }
-  return [...events, event];
+  events.push(event);
+  return events;
 }
 function appendExecutorEvent(event) {
   if (!event) return;
@@ -2828,9 +2821,8 @@ function appendExecutorEvent(event) {
   if (event.runID && !store$1.runID) {
     setStore$1("runID", event.runID);
   }
-  const merged = mergeEventList([...store$1.events], event);
+  const merged = mergeEventList(store$1.events.slice(), event);
   setStore$1("events", reconcile(merged));
-  setStore$1("fetchedAt", Date.now());
   const key = executorEventKey(event);
   const target = key ? merged.find((item) => executorEventKey(item) === key) || null : null;
   if (target) scheduleExecutorLiveText(target);
@@ -3892,6 +3884,7 @@ const [store, setStore] = createStore({
   showTranscriptDetails: false,
   agentStatus: null,
   sseConnected: false,
+  /** @deprecated No longer used — kept only for store shape compatibility. */
   conversationUpdatedAt: 0,
   // ── Chat request / attachments (mirrors state.chatRequest / state.chatAttachments) ──
   /** AbortController for the active chat HTTP request; null when idle */
@@ -3913,9 +3906,9 @@ function messageTime(item) {
   return Number(item?.info?.time?.created || item?.info?.time?.updated || 0);
 }
 function sortMessages(list) {
-  return [...list].map((item, index) => ({ item, index })).sort(
-    (a, b) => messageTime(a.item) - messageTime(b.item) || a.index - b.index
-  ).map((x) => x.item);
+  const result = list.slice();
+  result.sort((a, b) => messageTime(a) - messageTime(b));
+  return result;
 }
 function record$5(value) {
   return !!value && typeof value === "object" && !Array.isArray(value);
@@ -4168,6 +4161,15 @@ function agentRoundStatus(stage, round, roundIndex, rounds, latestStageEvent) {
   }
   if (active || hasOpenTranscript) return "running";
   return "completed";
+}
+let _rebuildScheduled = false;
+function scheduleRebuildAgentCards() {
+  if (_rebuildScheduled) return;
+  _rebuildScheduled = true;
+  queueMicrotask(() => {
+    _rebuildScheduled = false;
+    rebuildAgentCards();
+  });
 }
 function rebuildAgentCards() {
   const roundsByStage = {};
@@ -4550,8 +4552,7 @@ function flushEvents() {
     }
   });
   if (needsUpdate) {
-    rebuildAgentCards();
-    setStore("conversationUpdatedAt", Date.now());
+    scheduleRebuildAgentCards();
   }
 }
 function clearEventQueue() {
@@ -4612,13 +4613,11 @@ function advanceAgentLiveText(key) {
   if (live.length >= target.length) {
     if (live !== target) {
       setStore("agentEvents", index, "_liveText", target);
-      setStore("conversationUpdatedAt", Date.now());
     }
     stopAgentLiveTimer(key);
     return;
   }
   setStore("agentEvents", index, "_liveText", target.slice(0, nextLiveLength(live, target)));
-  setStore("conversationUpdatedAt", Date.now());
   agentLiveTimers.set(
     key,
     setTimeout(() => advanceAgentLiveText(key), AGENT_LIVE_INTERVAL)
@@ -4781,18 +4780,40 @@ function mergeAgentEventList(events, raw) {
     )
   );
 }
+let agentEventQueue = [];
+let agentFlushTimer = null;
+let agentLastFlush = 0;
+const AGENT_FLUSH_INTERVAL = 16;
+function flushAgentEvents() {
+  if (agentEventQueue.length === 0) return;
+  const queued = agentEventQueue;
+  agentEventQueue = [];
+  agentFlushTimer = null;
+  agentLastFlush = Date.now();
+  let merged = [...store.agentEvents];
+  for (const raw of queued) {
+    merged = mergeAgentEventList(merged, raw);
+  }
+  setStore("agentEvents", reconcile(merged));
+  scheduleRebuildAgentCards();
+  for (const raw of queued) {
+    const payload = agentEventRecord(raw?.payload) ? raw.payload : agentEventRecord(raw?.properties) ? raw.properties : {};
+    const key = agentEventKey({
+      stage: String(payload.stage || "").trim().toLowerCase(),
+      id: typeof payload.id === "string" && payload.id ? payload.id : typeof raw?.event_id === "string" ? raw.event_id : ""
+    });
+    const target = key ? merged.find((item) => agentEventKey(item) === key) || null : null;
+    if (target) scheduleAgentLiveText(target);
+  }
+}
 function appendAgentEvent(raw) {
-  const next = mergeAgentEventList([...store.agentEvents], raw);
-  setStore("agentEvents", reconcile(next));
-  rebuildAgentCards();
-  setStore("conversationUpdatedAt", Date.now());
-  const payload = agentEventRecord(raw?.payload) ? raw.payload : agentEventRecord(raw?.properties) ? raw.properties : {};
-  const key = agentEventKey({
-    stage: String(payload.stage || "").trim().toLowerCase(),
-    id: typeof payload.id === "string" && payload.id ? payload.id : typeof raw?.event_id === "string" ? raw.event_id : ""
-  });
-  const target = key ? next.find((item) => agentEventKey(item) === key) || null : null;
-  if (target) scheduleAgentLiveText(target);
+  agentEventQueue.push(raw);
+  if (agentFlushTimer) return;
+  if (Date.now() - agentLastFlush < AGENT_FLUSH_INTERVAL) {
+    agentFlushTimer = setTimeout(flushAgentEvents, AGENT_FLUSH_INTERVAL);
+    return;
+  }
+  flushAgentEvents();
 }
 function setAgentEvents(events) {
   for (const key of agentLiveTimers.keys()) {
@@ -4800,23 +4821,20 @@ function setAgentEvents(events) {
   }
   const normalized = pruneAgentEvents(Array.isArray(events) ? events : []);
   setStore("agentEvents", reconcile(normalized));
-  rebuildAgentCards();
-  setStore("conversationUpdatedAt", Date.now());
+  scheduleRebuildAgentCards();
 }
 function clearAgentEvents() {
   for (const key of [...agentLiveTimers.keys()]) {
     stopAgentLiveTimer(key);
   }
   setStore("agentEvents", []);
-  rebuildAgentCards();
-  setStore("conversationUpdatedAt", Date.now());
+  scheduleRebuildAgentCards();
 }
 function setMessages(messages) {
   const next = sortMessages(Array.isArray(messages) ? messages : []);
   setStore("messages", reconcile(next));
   rebuildMessageIndex();
-  rebuildAgentCards();
-  setStore("conversationUpdatedAt", Date.now());
+  scheduleRebuildAgentCards();
 }
 function setSelectedTaskID(taskID) {
   if (store.selectedTaskID !== taskID) {

@@ -163,21 +163,18 @@ function mergeEventList(events: ExecutorEvent[], event: ExecutorEvent): Executor
 
   if (index >= 0) {
     if (executorDeltaKind(event.kind)) {
-      const next = mergeExecutorDelta(events[index], event);
-      return [...events.slice(0, index), next, ...events.slice(index + 1)];
-    }
-    return [
-      ...events.slice(0, index),
-      {
+      events[index] = mergeExecutorDelta(events[index], event);
+    } else {
+      events[index] = {
         ...events[index],
         ...event,
         payload: {
           ...(record(events[index]?.payload) ? events[index].payload : {}),
           ...(record(event?.payload) ? event.payload : {}),
         },
-      },
-      ...events.slice(index + 1),
-    ];
+      };
+    }
+    return events;
   }
 
   let sourceIndex = -1;
@@ -202,14 +199,12 @@ function mergeEventList(events: ExecutorEvent[], event: ExecutorEvent): Executor
 
   if (sourceIndex >= 0) {
     const merged = mergeExecutorDelta(events[sourceIndex], event);
-    return [
-      ...events.slice(0, sourceIndex),
-      { ...merged, id: events[sourceIndex].id },
-      ...events.slice(sourceIndex + 1),
-    ];
+    events[sourceIndex] = { ...merged, id: events[sourceIndex].id };
+    return events;
   }
 
-  return [...events, event];
+  events.push(event);
+  return events;
 }
 
 // ── Public API ──
@@ -226,9 +221,8 @@ export function appendExecutorEvent(event: ExecutorEvent): void {
     setStore("runID", event.runID);
   }
 
-  const merged = mergeEventList([...store.events], event);
+  const merged = mergeEventList(store.events.slice(), event);
   setStore("events", reconcile(merged));
-  setStore("fetchedAt", Date.now());
   const key = executorEventKey(event);
   const target = key
     ? merged.find((item) => executorEventKey(item) === key) || null

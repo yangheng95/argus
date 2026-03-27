@@ -14,7 +14,7 @@ graph TB
     subgraph API["API Gateway — Hono HTTP :7878"]
         direction LR
         MW["Auth Middleware<br/>CORS / Error Handler"]
-        ROUTES["REST Routes<br/>/config /session /task /goal /plan<br/>/provider /executor /channel /control<br/>/auth /mcp /skill /permission"]
+        ROUTES["REST Routes<br/>/config /session /task /goal /plan<br/>/provider /executor /channel /control<br/>/auth /mcp /skill /permission"]5555555555555555555555555555555555555555555555555555555555555
         SSE["SSE Event Stream<br/>GET /task/{id}/events<br/>message.part.delta<br/>reasoning.delta"]
         WS["WebSocket<br/>PTY terminal"]
     end

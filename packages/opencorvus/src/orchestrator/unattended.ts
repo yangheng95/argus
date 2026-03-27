@@ -44,7 +44,7 @@ function assumptionText(item: ClarificationQuestion) {
   return `${UNATTENDED_AUTO_REPLY} Document the assumption you used.`
 }
 
-export function clarificationAssumptions(questions: ClarificationQuestion[]) {
+function clarificationAssumptions(questions: ClarificationQuestion[]) {
   const seen = new Set<string>()
   return questions.flatMap((item) => {
     const question = item.question?.trim()

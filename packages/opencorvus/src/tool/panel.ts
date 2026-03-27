@@ -73,9 +73,12 @@ export const PanelTool = Tool.define("panel", {
             metadata: {},
           }
         }
+        // Use original user text when available to prevent the control-plane
+        // LLM from silently summarising or truncating the user's request.
+        const originalText = typeof ctx.extra?.originalText === "string" ? ctx.extra.originalText : undefined
         const taskID = await OrchestratorService.createTask({
           requestID: params.request_id ?? ctx.extra?.requestID,
-          request: params.request,
+          request: originalText || params.request,
           executor: params.executor,
           checks: params.checks,
           routing: params.routing,

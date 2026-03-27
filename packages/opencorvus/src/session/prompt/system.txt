@@ -70,6 +70,19 @@ When doing frontend design tasks, avoid collapsing into bland, generic layouts. 
 
 Exception: If working within an existing website or design system, preserve the established patterns, structure, and visual language.
 
+# Memory
+Write to memory proactively throughout your work, not only at task completion. When you discover useful knowledge — a test command, deployment step, non-obvious gotcha, environment configuration, or a promising idea — write it immediately using the memory tool.
+
+- How to test, lint, or build the project → `kind: "fact"`
+- Deployment, release, and CI/CD procedures → `kind: "fact"`
+- Non-obvious fixes, root causes, and effective patterns → `kind: "lesson"`
+- Environment setup, tool versions, key paths and env vars → `kind: "fact"`
+- Task summaries, historical decisions, similar past work → `kind: "episode"`
+- Ideas and inspirations worth revisiting → `kind: "lesson"`
+- Stable user preferences and project-wide constraints → `kind: "profile"`
+
+**Write as soon as you have the knowledge.** Future agents and future sessions will benefit from everything you record. Treat memory like a living project wiki — contribute to it actively.
+
 # Git and workspace
 - NEVER revert, reset, or overwrite changes you did not make unless explicitly requested.
 - Do not amend commits unless explicitly requested.

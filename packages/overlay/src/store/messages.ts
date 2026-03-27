@@ -65,7 +65,8 @@ const [store, setStore] = createStore({
   showTranscriptDetails: false,
   agentStatus: null as any,
   sseConnected: false,
-  conversationUpdatedAt: 0,
+  /** @deprecated No longer used — kept only for store shape compatibility. */
+  conversationUpdatedAt: 0 as number,
  // ── Chat request / attachments (mirrors state.chatRequest / state.chatAttachments) ──
   /** AbortController for the active chat HTTP request; null when idle */
   chatRequest: null as AbortController | null,
@@ -97,12 +98,11 @@ function messageTime(item: Message): number {
 }
 
 function sortMessages(list: Message[]): Message[] {
-  return [...list]
-    .map((item, index) => ({ item, index }))
-    .sort(
-      (a, b) => messageTime(a.item) - messageTime(b.item) || a.index - b.index,
-    )
-    .map((x) => x.item);
+  // V8 Array.sort is stable since ES2019 — no need for index-based tie-breaking.
+  // Single slice instead of slice + 2× map.
+  const result = list.slice();
+  result.sort((a, b) => messageTime(a) - messageTime(b));
+  return result;
 }
 
 function record(value: unknown): value is Record<string, any> {
@@ -443,6 +443,17 @@ function agentRoundStatus(
   }
   if (active || hasOpenTranscript) return "running";
   return "completed";
+}
+
+// ── Debounced rebuild: coalesce multiple calls within the same microtask ──
+let _rebuildScheduled = false;
+function scheduleRebuildAgentCards(): void {
+  if (_rebuildScheduled) return;
+  _rebuildScheduled = true;
+  queueMicrotask(() => {
+    _rebuildScheduled = false;
+    rebuildAgentCards();
+  });
 }
 
 function rebuildAgentCards(): void {
@@ -904,8 +915,7 @@ function flushEvents() {
     }
   });
   if (needsUpdate) {
-    rebuildAgentCards();
-    setStore("conversationUpdatedAt", Date.now());
+    scheduleRebuildAgentCards();
   }
 }
 
@@ -997,13 +1007,12 @@ function advanceAgentLiveText(key: string): void {
   if (live.length >= target.length) {
     if (live !== target) {
       setStore("agentEvents", index, "_liveText", target);
-      setStore("conversationUpdatedAt", Date.now());
+  
     }
     stopAgentLiveTimer(key);
     return;
   }
   setStore("agentEvents", index, "_liveText", target.slice(0, nextLiveLength(live, target)));
-  setStore("conversationUpdatedAt", Date.now());
   agentLiveTimers.set(
     key,
     setTimeout(() => advanceAgentLiveText(key), AGENT_LIVE_INTERVAL),
@@ -1203,30 +1212,58 @@ function mergeAgentEventList(events: AgentEvent[], raw: any): AgentEvent[] {
   );
 }
 
+// ── 16ms agent event batching (mirrors message event batching) ──
+let agentEventQueue: any[] = [];
+let agentFlushTimer: any = null;
+let agentLastFlush = 0;
+const AGENT_FLUSH_INTERVAL = 16;
+
+function flushAgentEvents(): void {
+  if (agentEventQueue.length === 0) return;
+  const queued = agentEventQueue;
+  agentEventQueue = [];
+  agentFlushTimer = null;
+  agentLastFlush = Date.now();
+
+  let merged = [...store.agentEvents] as AgentEvent[];
+  for (const raw of queued) {
+    merged = mergeAgentEventList(merged, raw);
+  }
+  setStore("agentEvents", reconcile(merged));
+  scheduleRebuildAgentCards();
+
+  // Schedule live text animation for each queued event
+  for (const raw of queued) {
+    const payload = agentEventRecord(raw?.payload)
+      ? raw.payload
+      : agentEventRecord(raw?.properties)
+        ? raw.properties
+        : {};
+    const key = agentEventKey({
+      stage: String(payload.stage || "").trim().toLowerCase(),
+      id:
+        typeof payload.id === "string" && payload.id
+          ? payload.id
+          : typeof raw?.event_id === "string"
+            ? raw.event_id
+            : "",
+    } as Pick<AgentEvent, "stage" | "id">);
+    const target = key
+      ? merged.find((item) => agentEventKey(item as AgentEvent) === key) || null
+      : null;
+    if (target) scheduleAgentLiveText(target as AgentEvent);
+  }
+}
+
 /** Incrementally merge a raw agent.updated SSE event into the agentEvents list. */
 export function appendAgentEvent(raw: any): void {
-  const next = mergeAgentEventList([...store.agentEvents], raw);
-  setStore("agentEvents", reconcile(next));
-  rebuildAgentCards();
-  setStore("conversationUpdatedAt", Date.now());
-  const payload = agentEventRecord(raw?.payload)
-    ? raw.payload
-    : agentEventRecord(raw?.properties)
-      ? raw.properties
-      : {};
-  const key = agentEventKey({
-    stage: String(payload.stage || "").trim().toLowerCase(),
-    id:
-      typeof payload.id === "string" && payload.id
-        ? payload.id
-        : typeof raw?.event_id === "string"
-          ? raw.event_id
-          : "",
-  } as Pick<AgentEvent, "stage" | "id">);
-  const target = key
-    ? next.find((item) => agentEventKey(item as AgentEvent) === key) || null
-    : null;
-  if (target) scheduleAgentLiveText(target as AgentEvent);
+  agentEventQueue.push(raw);
+  if (agentFlushTimer) return;
+  if (Date.now() - agentLastFlush < AGENT_FLUSH_INTERVAL) {
+    agentFlushTimer = setTimeout(flushAgentEvents, AGENT_FLUSH_INTERVAL);
+    return;
+  }
+  flushAgentEvents();
 }
 
 // ── Setters for ──
@@ -1237,8 +1274,7 @@ export function setAgentEvents(events: any[]) {
   }
   const normalized = pruneAgentEvents(Array.isArray(events) ? events as AgentEvent[] : []);
   setStore("agentEvents", reconcile(normalized));
-  rebuildAgentCards();
-  setStore("conversationUpdatedAt", Date.now());
+  scheduleRebuildAgentCards();
 }
 
 export function clearAgentEvents(): void {
@@ -1246,16 +1282,14 @@ export function clearAgentEvents(): void {
     stopAgentLiveTimer(key);
   }
   setStore("agentEvents", []);
-  rebuildAgentCards();
-  setStore("conversationUpdatedAt", Date.now());
+  scheduleRebuildAgentCards();
 }
 
 export function setMessages(messages: any[]) {
   const next = sortMessages(Array.isArray(messages) ? messages : []);
   setStore("messages", reconcile(next));
   rebuildMessageIndex();
-  rebuildAgentCards();
-  setStore("conversationUpdatedAt", Date.now());
+  scheduleRebuildAgentCards();
 }
 
 export function setSelectedTaskID(taskID: string) {

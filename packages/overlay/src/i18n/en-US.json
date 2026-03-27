@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "en-US",
-    "panel_revision": "484d31fd4dd90368"
+    "panel_revision": "94ed784fbc2bfa07"
   },
   "brand.guide_kicker": "Quick Guide",
   "brand.guide_positioning_body": "This is the task cockpit, not decorative chrome: left selects tasks, center drives execution, right verifies spec, plan, evaluation, and file changes so the agent does not drift.",
@@ -267,6 +267,7 @@
   "goal.context.results": "**Goal Results** ({{passed}}/{{total}} passed, {{failed}} failed, {{pending}} pending)",
   "goal.edit_button_title": "Edit this goal's title and details.",
   "goal.delete_button_title": "Delete this goal from the current task.",
+  "interaction.auto_reply": "Auto Reply",
   "interaction.allow_once": "Allow Once",
   "interaction.allow_once_title": "Allow this action only this time.",
   "interaction.always_allow": "Always Allow",

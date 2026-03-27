@@ -51,6 +51,7 @@ export namespace HeadlessSpecService {
     title: string
     request: string
     goals?: Array<{ description: string; criteria: string; priority?: "blocking" | "advisory" }>
+    sessionID?: string
     signal?: AbortSignal
     stream?: import("@/llm/api").TextHooks
   }): Promise<SpecDraft & { spec_items: SpecOutputType["spec_items"]; evidence_sources: string[]; unresolved_questions: string[] }> {
@@ -74,6 +75,7 @@ export namespace HeadlessSpecService {
             criteria: g.criteria,
             priority: g.priority,
           })),
+          sessionID: input.sessionID,
           signal,
           stream: input.stream,
         }),
@@ -113,6 +115,7 @@ export namespace HeadlessSpecService {
     request: string
     previousSpec?: string
     goals?: Array<{ description: string; criteria: string; priority?: "blocking" | "advisory" }>
+    sessionID?: string
     signal?: AbortSignal
   }): Promise<SpecDraft & { spec_items: SpecOutputType["spec_items"]; evidence_sources: string[]; unresolved_questions: string[] }> {
     const timeoutMs = specTimeoutMs()
@@ -133,6 +136,7 @@ export namespace HeadlessSpecService {
             criteria: g.criteria,
             priority: g.priority,
           })),
+          sessionID: input.sessionID,
           signal,
         }),
         new Promise<never>((_, reject) =>
@@ -168,6 +172,7 @@ export namespace HeadlessSpecService {
     request: string
     rewriteContext: SpecRewriteContext
     goals?: Array<{ description: string; criteria: string; priority?: "blocking" | "advisory" }>
+    sessionID?: string
     signal?: AbortSignal
   }): Promise<SpecDraft & { spec_items: SpecOutputType["spec_items"]; evidence_sources: string[]; unresolved_questions: string[] }> {
     const timeoutMs = specTimeoutMs()
@@ -191,6 +196,7 @@ export namespace HeadlessSpecService {
             criteria: g.criteria,
             priority: g.priority,
           })),
+          sessionID: input.sessionID,
           signal,
         }),
         new Promise<never>((_, reject) =>
