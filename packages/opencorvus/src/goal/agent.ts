@@ -17,6 +17,7 @@ import { Provider } from "@/provider/provider"
 import { createPlannerTools, prefetchContext } from "@/planner/tools"
 import { Instance } from "@/project/instance"
 import { Log } from "@/util/log"
+import { toolGuard } from "@/util/tool-guard"
 import { parseGoalText, type ParsedGoalDraft } from "./parse-goal-text"
 import { OrchestratorConfig } from "@/orchestrator/config"
 import { loadStageSkills } from "@/orchestrator/skill-inject"
@@ -131,7 +132,7 @@ async function run(input: {
     input.request.match(/(?:工作目录|working dir(?:ectory)?)[^\n]*?([A-Z]:[/\\][^\s)）]+|\/[^\s)）]+)/i)
   const taskWorkDir = cwdMatch ? cwdMatch[1].replace(/[/\\]+$/, "") : undefined
 
-  const allTools = createPlannerTools(taskWorkDir, input.sessionID)
+  const guard = toolGuard(createPlannerTools(taskWorkDir, input.sessionID))
 
   if (input.signal?.aborted) throw new Error("goal agent aborted before context prefetch")
 
@@ -164,16 +165,18 @@ async function run(input: {
       retryReason: retryContext ? `score ${retryContext.previousScore} < ${QUALITY_RETRY_THRESHOLD}` : undefined,
     })
 
+    const baseSignal = input.signal ?? AbortSignal.timeout(TIMEOUT_MS)
     const stream = streamText({
       model: language,
       stopWhen: stepCountIs(MAX_STEPS),
-      tools: allTools,
+      tools: guard.tools,
       maxOutputTokens: 32768,
-      abortSignal: input.signal ?? AbortSignal.timeout(TIMEOUT_MS),
+      abortSignal: AbortSignal.any([baseSignal, guard.signal]),
       system: await goalSystem(),
       prompt: userPrompt,
       ...(input.stream?.onChunk ? { onChunk: input.stream.onChunk as any } : {}),
       ...(input.stream?.onError ? { onError: input.stream.onError } : {}),
+      onStepFinish: guard.onStepFinish as any,
     })
 
     const [resultText, resultSteps, resultFinishReason] = await Promise.all([

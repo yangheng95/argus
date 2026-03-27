@@ -21,6 +21,7 @@ import { Memory } from "@/memory"
 import { Preference } from "@/preference"
 import { Instance } from "@/project/instance"
 import { Log } from "@/util/log"
+import { toolGuard } from "@/util/tool-guard"
 import { OrchestratorConfig } from "@/orchestrator/config"
 import { loadStageSkills } from "@/orchestrator/skill-inject"
 import { Config } from "@/config/config"
@@ -110,7 +111,7 @@ export namespace EvaluatorAgent {
     const evalCfg = (await OrchestratorConfig.get()).evaluator
 
     // Full evaluator tool set: codebase exploration + memory + preferences
-    const tools = createEvaluatorTools({ sessionID: input.task.sessionID })
+    const guard = toolGuard(createEvaluatorTools({ sessionID: input.task.sessionID }))
 
     // Pre-fetch context: historical failures + preferences (like planner's prefetchContext)
     const context = prefetchEvaluatorContext(input)
@@ -131,12 +132,13 @@ export namespace EvaluatorAgent {
     const investigationStream = streamText({
       model: language,
       stopWhen: stepCountIs(evalCfg.max_steps),
-      tools,
+      tools: guard.tools,
       maxOutputTokens: 4096,
-      abortSignal: AbortSignal.timeout(evalCfg.timeout_ms),
+      abortSignal: AbortSignal.any([AbortSignal.timeout(evalCfg.timeout_ms), guard.signal]),
       system: await goalJudgeSystem(),
       prompt: buildInvestigationPrompt(input, context),
-      ...(input.stream as TextHooks<typeof tools> | undefined),
+      ...(input.stream as TextHooks<typeof guard.tools> | undefined),
+      onStepFinish: guard.onStepFinish as any,
     })
     const [investigationText, investigationSteps, investigationFinishReason] = await Promise.all([
       investigationStream.text,

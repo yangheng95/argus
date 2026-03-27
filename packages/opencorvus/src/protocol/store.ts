@@ -330,7 +330,7 @@ export namespace ProtocolStore {
       replyTo: undefined,
       sequence: 0,
       deadlineMs: undefined,
-      summary: input.type,
+      summary: payloadText(input.payload ?? null, "summary") ?? input.type,
       payload: input.payload ?? undefined,
       time: { emitted: now, created: now, updated: now },
     })

@@ -19,6 +19,7 @@ import { createPlannerTools, prefetchContext } from "./tools"
 import { Filesystem } from "@/util/filesystem"
 import { Instance } from "@/project/instance"
 import { Log } from "@/util/log"
+import { toolGuard } from "@/util/tool-guard"
 import { parsePlanText } from "./parse-plan-text"
 import { OrchestratorConfig } from "@/orchestrator/config"
 import { loadStageSkills } from "@/orchestrator/skill-inject"
@@ -161,7 +162,7 @@ export namespace HeadlessPlannerAgent {
     // Create tools with the correct working directory for the task.
     // Without this, the codebase tools use Instance.directory (project root)
     // instead of the task's working directory (e.g., eval workspace).
-    const allTools = createPlannerTools(taskWorkDir, input.sessionID)
+    const guard = toolGuard(createPlannerTools(taskWorkDir, input.sessionID))
 
     const fileRefs = await resolveFileReferences(input.request, taskWorkDir)
     if (input.signal?.aborted) throw new Error("planner aborted before context prefetch")
@@ -189,22 +190,24 @@ export namespace HeadlessPlannerAgent {
         prefetchedContext: context.length > 0,
         fileRefsFound: fileRefs.length,
         taskWorkDir,
-        toolCount: Object.keys(allTools).length,
+        toolCount: Object.keys(guard.tools).length,
         attempt: attempt + 1,
         config: orchCfg.planner,
         retryReason: retryContext ? `score ${retryContext.previousScore} < ${QUALITY_RETRY_THRESHOLD}` : undefined,
       })
 
+      const baseSignal = input.signal ?? AbortSignal.timeout(TIMEOUT_MS)
       const stream = streamText({
         model: language,
         stopWhen: stepCountIs(MAX_STEPS),
-        tools: allTools,
+        tools: guard.tools,
         maxOutputTokens: 32768,
-        abortSignal: input.signal ?? AbortSignal.timeout(TIMEOUT_MS),
+        abortSignal: AbortSignal.any([baseSignal, guard.signal]),
         system: await plannerSystem(),
         prompt: userPrompt,
         ...(input.stream?.onChunk ? { onChunk: input.stream.onChunk as any } : {}),
         ...(input.stream?.onError ? { onError: input.stream.onError } : {}),
+        onStepFinish: guard.onStepFinish as any,
       })
 
       const [resultText, resultSteps, resultFinishReason] = await Promise.all([

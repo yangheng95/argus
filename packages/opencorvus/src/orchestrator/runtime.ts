@@ -921,7 +921,7 @@ async function completeRun(run: RunRow, hooks: RuntimeHooks) {
     analysisError = err instanceof Error ? err.message : String(err)
     log.error("evaluator agent analysis failed or timed out", { error: analysisError })
     await judgeContentHooks.flush().catch(() => undefined)
-    await judgeLive.error(err).catch(() => undefined)
+    judgeLive.error(err)
     analysis = fallbackAnalysis(result, goals.length, analysisError)
   }
 
@@ -1105,7 +1105,7 @@ async function runEvaluation(task: TaskRow, run: RunRow, existingDelivery: Deliv
     analysisError = err instanceof Error ? err.message : String(err)
     log.error("re-evaluation agent analysis failed or timed out", { error: analysisError })
     await judgeContentHooks.flush().catch(() => undefined)
-    await judgeLive.error(err).catch(() => undefined)
+    judgeLive.error(err)
     analysis = fallbackAnalysis(result, goals.length, analysisError)
   }
 
@@ -1277,7 +1277,7 @@ async function publishAcceptedDelivery(task: TaskRow, run: RunRow, delivery: Del
       const msg = err instanceof Error ? err.message : String(err)
       log.error("delivery verification failed", { runID: run.id, error: msg })
       await deliveryContentHooks.flush().catch(() => undefined)
-      await deliveryLive.error(err).catch(() => undefined)
+      deliveryLive.error(err)
       await handleEvaluationFailure(requireTask(task.id), run, `Delivery verification failed: ${msg}`, hooks, {
         verdict: "rejected",
         classification: "evaluation",
