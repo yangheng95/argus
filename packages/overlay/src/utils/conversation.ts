@@ -5,7 +5,6 @@
 
 import { messageStore } from "../store/messages";
 import { boardStore } from "../store/board";
-import { phaseFromAgent, phaseFromMessage } from "./message";
 import { stripAssistantBrief } from "./string";
 import { t } from "./i18n";
 import {
@@ -120,137 +119,8 @@ function messageTime(message: any): number {
   return Number(message?.info?.time?.created || message?.info?.time?.updated || 0);
 }
 
-// ── Internal: hashText ──
-
-function hashText(value: string): string {
-  const text = String(value || "");
-  let hash = 2166136261;
-  for (let i = 0; i < text.length; i += 1) {
-    hash ^= text.charCodeAt(i);
-    hash = Math.imul(hash, 16777619);
-  }
-  return (hash >>> 0).toString(36);
-}
-
-// ── Internal: signPart ──
-
-function signText(value: any): string {
-  if (typeof value === "string") return value;
-  try {
-    return JSON.stringify(value) || "";
-  } catch {
-    return String(value ?? "");
-  }
-}
-
-function signPart(part: any): string {
-  if (!part || typeof part !== "object") return signText(part);
-  if (part.type === "text" || part.kind === "trace") {
-    if (typeof part._targetText === "string") {
-      return ["text", part.id || "", "streaming"].join("\u001f");
-    }
-    return [
-      "text",
-      part.kind || "",
-      part.source || "",
-      part.audience?.ui === false ? "0" : "1",
-      part.text || "",
-    ].join("\u001f");
-  }
-  if (part.type === "tool") {
-    const st = part.state && typeof part.state === "object" ? part.state : {};
-    if (st.status === "pending" && typeof part._targetRaw === "string") {
-      return ["tool", part.tool || "", "streaming", part.id || ""].join("\u001f");
-    }
-    return [
-      "tool",
-      part.tool || "",
-      st.status || "",
-      signText(st.input || {}),
-      signText(st.output || ""),
-      st.title || "",
-    ].join("\u001f");
-  }
-  if (part.type === "reasoning") {
-    if (typeof part._targetText === "string") {
-      return ["reasoning", part.id || "", "streaming"].join("\u001f");
-    }
-    const hidden =
-      part.collapsed === true ||
-      (part.collapsed == null && !part.text?.trim()) ||
-      part.audience?.ui === false;
-    return ["reasoning", hidden ? "0" : "1", part.text || ""].join("\u001f");
-  }
-  if (part.type === "patch") {
-    return ["patch", ...(Array.isArray(part.files) ? part.files : [])].join("\u001f");
-  }
-  if (part.type === "file") {
-    return ["file", part.filename || "", part.url || "", part.mime || part.mediaType || ""].join(
-      "\u001f",
-    );
-  }
-  return signText(part);
-}
-
 function deliveryStatusLabel(status: string): string {
   return status || "";
-}
-
-function agentEventTime(event: any): number {
-  return Number(event?.time?.created || event?.timestamp || 0);
-}
-
-function agentEventDisplayText(event: any): string {
-  const live = typeof event?._liveText === "string" ? event._liveText : "";
-  if (live) return live;
-  const target = typeof event?._targetText === "string" ? event._targetText : "";
-  if (target) return target;
-  if (typeof event?.text === "string" && event.text) return event.text;
-  if (typeof event?.summary === "string" && event.summary) return event.summary;
-  return "";
-}
-
-function agentEventToolName(event: any): string {
-  if (typeof event?.toolName === "string" && event.toolName.trim()) return event.toolName.trim();
-  const summary = String(event?.summary || "");
-  const split = summary.split("→");
-  return split.length > 1 ? String(split[split.length - 1] || "").trim() : "";
-}
-
-function agentEventToolPart(event: any): any | null {
-  const tool = agentEventToolName(event);
-  if (!tool) return null;
-  const created = agentEventTime(event) || Date.now();
-  const id = typeof event?.id === "string" && event.id ? event.id : `tool:${tool}:${created}`;
-  const kind = String(event?.kind || "").trim().toLowerCase();
-  const status =
-    kind === "tool_result"
-      ? "completed"
-      : kind === "error"
-        ? "error"
-        : kind === "tool_delta"
-          ? "running"
-          : "running";
-  const summary = agentEventDisplayText(event).trim() || tool;
-  return {
-    id: `agent-tool:${id}`,
-    type: "tool",
-    callID: id,
-    tool,
-    state: {
-      status,
-      input: {},
-      ...(status === "completed" ? { output: summary, title: tool } : {}),
-      ...(status === "error" ? { error: summary } : {}),
-      ...(status === "running"
-        ? {
-            title: summary,
-            metadata: { synthetic: true },
-            time: { start: created },
-          }
-        : {}),
-    },
-  };
 }
 
 // ── Public: buildBoardContextMessages ──
@@ -274,17 +144,6 @@ export function buildBoardContextMessages(
       .map((event: any) => String(event?.stage || "").trim().toLowerCase())
       .filter((stage: string) => activeStages.has(stage)),
   );
-  const transcriptMessages = preClassifiedMainMessages.length > 0
-    ? preClassifiedMainMessages
-    : Array.isArray(messages) ? messages : [];
-  const hasStageMessage = (stage: string) =>
-    transcriptMessages.some(
-      (message: any) =>
-        message?.info?.role !== "user" &&
-        (effectiveRole(message) === stage ||
-          phaseFromMessage(message) === phaseFromAgent(stage)),
-    );
-
  // 1. User request — show the original task request as a "user" turn
   if (task?.request && !hasConversationRequest(messages || [], task.request)) {
     syntheticMsgs.push({
@@ -294,7 +153,7 @@ export function buildBoardContextMessages(
     });
   }
 
-  if (board.spec && !liveStages.has("spec") && !hasStageMessage("spec")) {
+  if (board.spec && !liveStages.has("spec")) {
     const message = syntheticTextMessage(
       "spec",
       board.spec.time?.created || task?.time?.updated || Date.now(),
@@ -302,7 +161,7 @@ export function buildBoardContextMessages(
     );
     if (message) syntheticMsgs.push(message);
   }
-  if (plan && !liveStages.has("planner") && !hasStageMessage("planner")) {
+  if (plan && !liveStages.has("planner")) {
     const goals = (lanes || []).find((lane: any) => lane.id === "goals")?.cards || [];
     const message = syntheticTextMessage(
       "planner",
@@ -414,164 +273,4 @@ export function conversationMessages(): any[] {
   return [...filteredMain, ...executorMsgs, ...boardMsgs, ...agentCardMsgs].sort(
     (a: any, b: any) => (a.info?.time?.created || 0) - (b.info?.time?.created || 0),
   );
-}
-
-// ── Public: groupMessagesByRole ──
-
-export function groupMessagesByRole(sorted: any[]): Array<{ role: string; messages: any[] }> {
-  const groups: Array<{ role: string; messages: any[] }> = [];
-  for (const msg of sorted) {
- // Agent card placeholders are always isolated groups
-    if (msg._agentCard) {
-      groups.push({ role: "agent-card", messages: [msg] });
-      continue;
-    }
-
-    const role = effectiveRole(msg);
-    const parts = msg.parts || [];
- // Skip completely empty messages
-    if (parts.length === 0) continue;
-
- // Synthetic board turns should remain isolated so spec, git checkpoints,
- // and interaction prompts show up as distinct lifecycle events.
-    if (msg._synthetic) {
-      groups.push({ role, messages: [msg] });
-      continue;
-    }
-
- // For assistant messages, each message is a separate step — don't merge them.
- // This preserves the step-by-step flow of agent execution.
-    if (role === "assistant") {
-      groups.push({ role, messages: [msg] });
-      continue;
-    }
-
-    const last = groups[groups.length - 1];
-    if (last && last.role === role) {
-      last.messages.push(msg);
-    } else {
-      groups.push({ role, messages: [msg] });
-    }
-  }
-  return groups;
-}
-
-// ── Public: signGroup ──
-
-export function signGroup(group: { role: string; messages: any[] }): string {
- // Agent cards: sign based on stage, status, and inner message count + latest part signatures
-  if (group.role === "agent-card") {
-    const card = group.messages[0];
-    const innerMsgs = card?._agentMessages || [];
-    const lastMsg = innerMsgs[innerMsgs.length - 1];
-    const lastParts = Array.isArray(lastMsg?.parts) ? lastMsg.parts : [];
-    return hashText(
-      [
-        "agent-card",
-        card?._agentCardKey || card?._agentStage || "",
-        card?._agentStatus || "",
-        String(innerMsgs.length),
-        ...lastParts.map(signPart),
-      ].join("\u001d"),
-    );
-  }
-  return hashText(
-    [
-      group.role,
-      ...group.messages.map((message: any) =>
-        [
-          message._synthetic ? "1" : "0",
-          message.info?.time?.created || 0,
-          ...(Array.isArray(message.parts) ? message.parts : []).map(signPart),
-        ].join("\u001e"),
-      ),
-    ].join("\u001d"),
-  );
-}
-
-// ── Public: chatPlaceholder ──
-// Returns the first placeholder assistant message, or undefined if none.
-// The boolean-like presence test is: !!chatPlaceholder(messages).
-
-export function chatPlaceholder(messages: any[]): any | undefined {
-  return (
-    messages.find(
-      (item: any) =>
-        item.info?.role === "assistant" &&
-        !item.info?.id &&
-        Array.isArray(item.parts) &&
-        item.parts.length === 1 &&
-        item.parts[0]?.type === "text",
-    ) ||
-    messages.find(
-      (item: any) => item.info?.role === "assistant" && item.parts?.[0]?.text === "……",
-    ) ||
-    messages.find(
-      (item: any) => item.info?.role === "assistant" && item.parts?.[0]?.text === "...",
-    ) ||
-    messages.find(
-      (item: any) =>
-        item.info?.role === "assistant" && item.parts?.[0]?.text === t("chat.thinking"),
-    )
-  );
-}
-
-// ── Agent Messages ──
-// Live agent events and persisted session messages are normalized into the
-// same agent-card model so every stage renders through one conversation path.
-
-export function agentMessage(event: any): any | null {
-  if (!event || typeof event !== "object") return null;
-  const stage = String(event?.stage || "").trim().toLowerCase();
-  if (!stage) return null;
-  const created = agentEventTime(event) || Date.now();
-  const eventID =
-    typeof event?.id === "string" && event.id
-      ? event.id
-      : `${stage}:${String(event?.kind || "status")}:${created}`;
-  const kind = String(event?.kind || "status").trim().toLowerCase();
-  const text = agentEventDisplayText(event).trim();
-  const role = "assistant";
-  const base = {
-    _synthetic: true,
-    info: {
-      id: `agent-event:${stage}:${eventID}`,
-      role,
-      agent: stage,
-      time: { created },
-    },
-    parts: [] as any[],
-  };
-
-  if (kind === "reasoning_delta" && text) {
-    return {
-      ...base,
-      parts: [
-        {
-          id: `reasoning:${eventID}`,
-          type: "reasoning",
-          text,
-          _targetText: typeof event?._targetText === "string" ? event._targetText : text,
-        },
-      ],
-    };
-  }
-
-  if (kind === "tool_call" || kind === "tool_delta" || kind === "tool_result") {
-    const part = agentEventToolPart(event);
-    return part ? { ...base, parts: [part] } : null;
-  }
-
-  if (!text) return null;
-  return {
-    ...base,
-    parts: [
-      {
-        id: `text:${eventID}`,
-        type: "text",
-        text,
-        _targetText: typeof event?._targetText === "string" ? event._targetText : text,
-      },
-    ],
-  };
 }

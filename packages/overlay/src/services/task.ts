@@ -60,7 +60,6 @@ export interface CreateTaskOptions {
 }
 
 export interface SelectTaskOptions {
-  preserveMessages?: boolean;
 }
 
 // ── Helpers ──
@@ -196,9 +195,7 @@ export async function selectTask(
 
  // Clear board and message state immediately
   setBoardStore("board", null);
-  if (!options.preserveMessages) {
-    clearMessages();
-  }
+  clearMessages();
   clearAgentEvents();
   // Reset budget dirty flag so the new task's budget values populate correctly.
   // Without this, stale budgetDirty=true from a previous task edit would
@@ -562,7 +559,7 @@ export function startTaskRecovery(
         }
 
  // Select the newly confirmed task
-        await selectTask(taskID, { preserveMessages: true });
+        await selectTask(taskID);
 
         recovery.stop();
         return taskID;

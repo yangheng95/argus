@@ -184,24 +184,30 @@ export function boardArtifact(board: any, label: string): any {
 }
 
 /**
- * Build a synthetic message object (
+ * Build a synthetic message object.
  * Returns null if text is empty.
+ * Results are cached by ID to maintain referential stability for Solid's
+ * `<For>`, which tracks items by reference.
  */
+const _syntheticCache = new Map<string, any>();
+
 export function syntheticTextMessage(
   role: string,
   time: number,
   text: string,
 ): any | null {
   if (typeof text !== "string" || !text.trim()) return null;
-  return {
+  const created = Number.isFinite(time) ? time : Date.now();
+  const id = `synthetic:${role}:${created}:${hashText(text)}`;
+  const cached = _syntheticCache.get(id);
+  if (cached) return cached;
+  const msg = {
     _synthetic: true,
-    info: {
-      id: `synthetic:${role}:${Number.isFinite(time) ? time : Date.now()}:${hashText(text)}`,
-      role,
-      time: { created: Number.isFinite(time) ? time : Date.now() },
-    },
+    info: { id, role, time: { created } },
     parts: [{ type: "text", text }],
   };
+  _syntheticCache.set(id, msg);
+  return msg;
 }
 
 /**

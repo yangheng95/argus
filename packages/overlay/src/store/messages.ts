@@ -368,6 +368,10 @@ function agentEventToolPart(event: any): any | null {
   };
 }
 
+// Cache live agent messages by content-key to maintain referential stability
+// for Solid's `<For>`, which tracks items by reference.
+const _agentMsgCache = new Map<string, any>();
+
 function agentMessage(event: any): any | null {
   if (!event || typeof event !== "object") return null;
   const stage = String(event?.stage || "").trim().toLowerCase();
@@ -379,10 +383,14 @@ function agentMessage(event: any): any | null {
       : `${stage}:${String(event?.kind || "status")}:${created}`;
   const kind = String(event?.kind || "status").trim().toLowerCase();
   const text = agentEventDisplayText(event).trim();
+  const msgID = `agent-event:${stage}:${eventID}`;
+  const cacheKey = `${msgID}:${kind}:${text}`;
+  const cached = _agentMsgCache.get(cacheKey);
+  if (cached) return cached;
   const base = {
     _synthetic: true,
     info: {
-      id: `agent-event:${stage}:${eventID}`,
+      id: msgID,
       role: "assistant",
       agent: stage,
       time: { created },
@@ -390,8 +398,10 @@ function agentMessage(event: any): any | null {
     parts: [] as any[],
   };
 
+  let msg: any = null;
+
   if (kind === "reasoning_delta" && text) {
-    return {
+    msg = {
       ...base,
       parts: [
         {
@@ -402,25 +412,25 @@ function agentMessage(event: any): any | null {
         },
       ],
     };
-  }
-
-  if (kind === "tool_call" || kind === "tool_delta" || kind === "tool_result") {
+  } else if (kind === "tool_call" || kind === "tool_delta" || kind === "tool_result") {
     const part = agentEventToolPart(event);
-    return part ? { ...base, parts: [part] } : null;
+    msg = part ? { ...base, parts: [part] } : null;
+  } else if (text) {
+    msg = {
+      ...base,
+      parts: [
+        {
+          id: `text:${eventID}`,
+          type: "text",
+          text,
+          _targetText: typeof event?._targetText === "string" ? event._targetText : text,
+        },
+      ],
+    };
   }
 
-  if (!text) return null;
-  return {
-    ...base,
-    parts: [
-      {
-        id: `text:${eventID}`,
-        type: "text",
-        text,
-        _targetText: typeof event?._targetText === "string" ? event._targetText : text,
-      },
-    ],
-  };
+  if (msg) _agentMsgCache.set(cacheKey, msg);
+  return msg;
 }
 
 function agentRoundStatus(
@@ -582,11 +592,24 @@ function rebuildAgentCards(): void {
     // Add or update cards
     for (const [cardID, card] of Object.entries(nextCards)) {
       if (cardID in store.agentCards) {
-        // Update mutable fields — each setStore call fires its own notification
-        setStore("agentCards", cardID, "_agentStatus", card._agentStatus);
-        setStore("agentCards", cardID, "_agentRound", card._agentRound);
-        // Replace the whole array so .length subscribers fire
-        setStore("agentCards", cardID, "_agentMessages", [...card._agentMessages]);
+        const prev = store.agentCards[cardID];
+        // Only update fields that actually changed to avoid unnecessary reactivity
+        if (prev._agentStatus !== card._agentStatus) {
+          setStore("agentCards", cardID, "_agentStatus", card._agentStatus);
+        }
+        if (prev._agentRound !== card._agentRound) {
+          setStore("agentCards", cardID, "_agentRound", card._agentRound);
+        }
+        // Only replace _agentMessages when the list actually changed
+        // (by reference or length) to avoid triggering <For> re-diff
+        const prevMsgs = prev._agentMessages;
+        const nextMsgs = card._agentMessages;
+        if (
+          prevMsgs.length !== nextMsgs.length ||
+          prevMsgs.some((m: any, i: number) => m !== nextMsgs[i])
+        ) {
+          setStore("agentCards", cardID, "_agentMessages", [...nextMsgs]);
+        }
       } else {
         setStore("agentCards", cardID, { ...card, _agentMessages: [...card._agentMessages] });
       }
