@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "zh-CN",
-    "panel_revision": "0214f14a20464e48"
+    "panel_revision": "484d31fd4dd90368"
   },
   "brand.guide_kicker": "快速说明",
   "brand.guide_positioning_body": "这不是一个装饰性浮层，而是任务驾驶舱：左边选择任务，中间推进执行，右边盯 spec、plan、评估和文件变更，防止 agent 一路跑偏。",
@@ -446,10 +446,13 @@
   "task.status.delivering": "交付验证中",
   "task.status.evaluating": "评估中",
   "task.status.failed": "失败",
+  "task.status.goal_decomposing": "拆解目标中",
   "task.status.idle": "无任务",
+  "task.status.planned": "已规划",
   "task.status.planning": "规划中",
   "task.status.queued": "排队中",
   "task.status.running": "运行中",
+  "task.status.spec_generating": "生成规格中",
   "time.duration.hour_minute": "{{hours}}小时 {{minutes}}分",
   "time.duration.minute_second": "{{minutes}}分 {{seconds}}秒",
   "time.duration.second": "{{seconds}}秒",
