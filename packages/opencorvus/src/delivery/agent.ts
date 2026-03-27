@@ -19,6 +19,7 @@ import { Memory } from "@/memory"
 import { Preference } from "@/preference"
 import { Instance } from "@/project/instance"
 import { Log } from "@/util/log"
+import { toolGuard } from "@/util/tool-guard"
 import { Env } from "@/env"
 import { type TextHooks } from "@/llm/api"
 import { Config } from "@/config/config"
@@ -90,7 +91,7 @@ export namespace DeliveryAgent {
     const { language, model } = resolved
     const deliveryCfg = (await OrchestratorConfig.get()).delivery
 
-    const tools = createDeliveryTools({ sessionID: input.task.sessionID })
+    const guard = toolGuard(createDeliveryTools({ sessionID: input.task.sessionID }))
     const context = prefetchDeliveryContext(input)
     const userPrompt = buildUserPrompt(input, context)
 
@@ -122,8 +123,8 @@ export namespace DeliveryAgent {
         steps: Array<{ text?: string; toolCalls?: unknown[]; toolResults?: unknown[] }>
       }
       const attemptSignal = externalSignal
-        ? AbortSignal.any([externalSignal, AbortSignal.timeout(deliveryCfg.timeout_ms)])
-        : AbortSignal.timeout(deliveryCfg.timeout_ms)
+        ? AbortSignal.any([externalSignal, AbortSignal.timeout(deliveryCfg.timeout_ms), guard.signal])
+        : AbortSignal.any([AbortSignal.timeout(deliveryCfg.timeout_ms), guard.signal])
       try {
         result = await completeHeadlessText({
           label: "delivery",
@@ -131,13 +132,14 @@ export namespace DeliveryAgent {
           language,
           sessionID: input.task.sessionID,
           stopWhen: [stepCountIs(deliveryCfg.max_steps)],
-          tools,
+          tools: guard.tools,
           maxOutputTokens: 16384,
           timeoutMs: false,
           abortSignal: attemptSignal,
           system: await deliveryAgentSystem(),
           prompt: userPrompt,
-          ...(input.stream as TextHooks<typeof tools> | undefined),
+          ...(input.stream as TextHooks<typeof guard.tools> | undefined),
+          onStepFinish: guard.onStepFinish as any,
         })
       } catch (err) {
         lastError = err instanceof Error ? err : new Error(String(err))
