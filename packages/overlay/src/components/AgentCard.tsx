@@ -45,13 +45,11 @@ export function AgentCard(props: AgentCardProps) {
     toggleAgentCardExpanded(props.cardID, props.status === "running");
   };
 
-  // ── Summary data (only subscribes to relevant store paths per stage) ──
-
-  const board = () => boardStore.board;
+  // ── Summary data — each memo reads only the board path it needs ──
 
   const specContent = createMemo(() => {
     if (props.stage !== "spec") return "";
-    const content = board()?.spec?.content || "";
+    const content = boardStore.board?.spec?.content || "";
     if (!content) return "";
     const lines = content.split("\n").filter((l: string) => l.trim());
     const preview = lines.slice(0, 4).join("\n");
@@ -60,21 +58,21 @@ export function AgentCard(props: AgentCardProps) {
 
   const planData = createMemo(() => {
     if (props.stage !== "planner") return null;
-    const plan = board()?.plan;
+    const plan = boardStore.board?.plan;
     if (!plan?.summary) return null;
     return { summary: plan.summary as string, version: plan.version as number | undefined };
   });
 
   const goalsData = createMemo(() => {
     if (props.stage !== "goal") return [];
-    const lanes = (board()?.lanes || []) as any[];
+    const lanes = (boardStore.board?.lanes || []) as any[];
     const goalsLane = lanes.find((lane: any) => lane.id === "goals");
     return (goalsLane?.cards || []) as any[];
   });
 
   const evaluationData = createMemo(() => {
     if (props.stage !== "judge") return null;
-    const evaluation = board()?.evaluation as any;
+    const evaluation = boardStore.board?.evaluation as any;
     if (!evaluation) return null;
     return {
       verdict: (evaluation.verdict || "") as string,
@@ -84,11 +82,10 @@ export function AgentCard(props: AgentCardProps) {
 
   const deliveryData = createMemo(() => {
     if (props.stage !== "delivery") return null;
-    const b = board() as any;
-    const delivery = b?.acceptedDelivery || b?.delivery;
+    const delivery = boardStore.board?.acceptedDelivery || boardStore.board?.delivery;
     if (!delivery) return null;
     return {
-      status: (delivery.status || "") as string,
+      status: ((delivery as any).status || "") as string,
     };
   });
 

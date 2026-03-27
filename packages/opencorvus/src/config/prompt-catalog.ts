@@ -44,6 +44,12 @@ export namespace PromptCatalog {
       description: "System prompt used by the spec agent when it extracts requirements and constraints",
     },
     {
+      key: "goal_system",
+      label: "Goal Agent",
+      group: "orchestrator",
+      description: "System prompt used by the goal agent when it decomposes spec requirements into executable implementation goals",
+    },
+    {
       key: "planner_system",
       label: "Planner Agent",
       group: "orchestrator",
@@ -78,6 +84,10 @@ export namespace PromptCatalog {
         const { SPEC_SYSTEM } = await import("@/spec/agent")
         return SPEC_SYSTEM
       }
+      case "goal_system": {
+        const { GOAL_SYSTEM } = await import("@/goal/agent")
+        return GOAL_SYSTEM
+      }
       case "planner_system": {
         const { PLANNER_SYSTEM_DEFAULT } = await import("@/planner/agent")
         return PLANNER_SYSTEM_DEFAULT
@@ -93,6 +103,19 @@ export namespace PromptCatalog {
       default:
         return ""
     }
+  }
+
+  /**
+   * Map from system-scope key to the agent name it covers.
+   * Agents with a system-scope entry are excluded from the agent-scope list
+   * so the catalog shows exactly one entry per logical agent.
+   */
+  const SYSTEM_COVERS_AGENT: Record<string, string> = {
+    spec_system: "spec",
+    goal_system: "goal",
+    planner_system: "plan",
+    evaluator_system: "evaluator",
+    delivery_system: "delivery",
   }
 
   function agentGroup(agent: Agent.Info): string {
@@ -128,8 +151,12 @@ export namespace PromptCatalog {
       })
     }
 
-    // Agent-scope prompts
+    // Agent names already covered by a system-scope entry — skip to avoid duplicates
+    const coveredAgents = new Set(Object.values(SYSTEM_COVERS_AGENT))
+
+    // Agent-scope prompts (skip agents with a system-scope counterpart)
     for (const agent of agents) {
+      if (coveredAgents.has(agent.name)) continue
       const agentCfg = (cfg.agent ?? {})[agent.name]
       const configuredPrompt = agentCfg?.prompt ?? null
       // Use native default (before config override) for built-in agents

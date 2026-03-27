@@ -12,8 +12,6 @@ import PROMPT_GENERATE from "./generate.txt"
 import PROMPT_SYSTEM from "@/session/prompt/system.txt"
 import SPEC_CORE from "@/prompt/core/spec-core.txt"
 import PLAN_CORE from "@/prompt/core/plan-core.txt"
-import SPEC_INTERACTIVE from "./prompt/spec-interactive.txt"
-import PLAN_INTERACTIVE from "./prompt/plan-interactive.txt"
 import PROMPT_COMPACTION from "./prompt/compaction.txt"
 import PROMPT_EXPLORE from "./prompt/explore.txt"
 import PROMPT_GENERAL from "./prompt/general.txt"
@@ -56,6 +54,11 @@ export namespace Agent {
 
   const state = Instance.state(async () => {
     const cfg = await Config.get()
+    // Lazy-load orchestrator-only agent prompts to avoid pulling in large modules at startup
+    const [{ EVALUATOR_DEFAULT_SYSTEM }, { DELIVERY_AGENT_SYSTEM }] = await Promise.all([
+      import("@/evaluator/agent"),
+      import("@/delivery/agent"),
+    ])
 
     const skillDirs = await Skill.dirs()
     const whitelistedDirs = [Truncate.GLOB, ...skillDirs.map((dir) => path.join(dir, "*"))]
@@ -123,7 +126,7 @@ export namespace Agent {
         name: "spec",
         description: "Read-only specification agent. Explores codebase, asks questions, and writes the specification file before planning.",
         options: {},
-        prompt: `${SPEC_CORE}\n\n${SPEC_INTERACTIVE}`,
+        prompt: SPEC_CORE,
         permission: PermissionNext.merge(
           defaults,
           PermissionNext.fromConfig({
@@ -146,7 +149,7 @@ export namespace Agent {
         name: "plan",
         description: "Read-only planning agent. Explores, asks questions, and writes the implementation plan file.",
         options: {},
-        prompt: `${PLAN_CORE}\n\n${PLAN_INTERACTIVE}`,
+        prompt: PLAN_CORE,
         permission: PermissionNext.merge(
           defaults,
           PermissionNext.fromConfig({
@@ -253,6 +256,38 @@ export namespace Agent {
         ),
         prompt: PROMPT_SUMMARY,
       },
+      evaluator: {
+        name: "evaluator",
+        description: "Evaluator agent. Investigates goal completion and makes acceptance or replan decisions.",
+        options: {},
+        prompt: EVALUATOR_DEFAULT_SYSTEM,
+        permission: PermissionNext.merge(
+          defaults,
+          PermissionNext.fromConfig({
+            question: "allow",
+          }),
+          user,
+        ),
+        mode: "primary",
+        native: true,
+        hidden: true,
+      },
+      delivery: {
+        name: "delivery",
+        description: "Delivery verification agent. Verifies runtime behavior, fixes bugs, and makes final acceptance decisions.",
+        options: {},
+        prompt: DELIVERY_AGENT_SYSTEM,
+        permission: PermissionNext.merge(
+          defaults,
+          PermissionNext.fromConfig({
+            question: "allow",
+          }),
+          user,
+        ),
+        mode: "primary",
+        native: true,
+        hidden: true,
+      },
     }
 
     for (const [key, value] of entries((cfg.agent ?? {}) as NonNullable<Config.Info["agent"]>)) {
@@ -306,8 +341,8 @@ export namespace Agent {
   /** Map of native agent name → built-in default prompt (before config overrides). */
   const NATIVE_DEFAULTS: Record<string, string | undefined> = {
     build: PROMPT_SYSTEM,
-    spec: SPEC_CORE + "\n\n" + SPEC_INTERACTIVE,
-    plan: PLAN_CORE + "\n\n" + PLAN_INTERACTIVE,
+    spec: SPEC_CORE,
+    plan: PLAN_CORE,
     general: PROMPT_GENERAL,
     explore: PROMPT_EXPLORE,
     compaction: PROMPT_COMPACTION,
@@ -315,9 +350,13 @@ export namespace Agent {
     summary: PROMPT_SUMMARY,
   }
 
-  /** Returns the built-in default prompt for a native agent (before config overrides). */
+  /** Returns the built-in default prompt for a native agent (before config overrides).
+   *  For dynamically loaded agents (evaluator, delivery), falls back to the agent's prompt field. */
   export function nativeDefaultPrompt(name: string): string | undefined {
-    return NATIVE_DEFAULTS[name]
+    const static_ = NATIVE_DEFAULTS[name]
+    if (static_ !== undefined) return static_
+    // For agents loaded dynamically (evaluator, delivery), the prompt is populated in state()
+    return undefined
   }
 
   export async function get(agent: string) {

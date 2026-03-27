@@ -1,6 +1,4 @@
 import { ExecutorRegistry } from "@/executor/registry"
-import { PermissionNext } from "@/permission/next"
-import { Question } from "@/question"
 import { ReplyInteractionInput } from "./model"
 import { Database, eq } from "@/storage/db"
 import { Event } from "./model"
@@ -15,7 +13,6 @@ import {
 import {
   findExecutorSession,
   findGoalRun,
-  findInteraction,
   goalRunQueueTaskID,
   listActiveGoalRunsByCoordinator,
   requireRun,
@@ -273,39 +270,3 @@ export async function rejectReplanConfirmation(row: InteractionRow, message?: st
   await updateTask(task, { status: "failed", error: reason, blocking_reason: null, time_completed: now }, reason)
 }
 
-export async function autoRejectInteraction(row: InteractionRow, message?: string) {
-  if (row.payload?.protocol_request === true) {
-    await rejectProtocolInteraction(row, message)
-    return
-  }
-  if (row.payload?.replan_confirm === true) {
-    await rejectReplanConfirmation(row, message)
-    return
-  }
-  if (isPlannerClarification(row)) {
-    await rejectPlannerClarification(row, message)
-    return
-  }
-  if (row.request_type === "permission") {
-    await PermissionNext.reply({
-      requestID: row.external_id,
-      reply: "reject",
-      message,
-    })
-    if (findInteraction(row.id)?.status !== "pending") return
-  }
-  if (row.request_type === "question") {
-    await Question.reject(row.external_id)
-    if (findInteraction(row.id)?.status !== "pending") return
-  }
-  markInteraction(
-    row,
-    "rejected",
-    {
-      ...(message?.trim() ? { message: message.trim() } : {}),
-      timed_out: true,
-    },
-    Date.now(),
-    "Interaction rejected after timeout",
-  )
-}

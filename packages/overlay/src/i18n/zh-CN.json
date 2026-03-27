@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "zh-CN",
-    "panel_revision": "484d31fd4dd90368"
+    "panel_revision": "94ed784fbc2bfa07"
   },
   "brand.guide_kicker": "快速说明",
   "brand.guide_positioning_body": "这不是一个装饰性浮层，而是任务驾驶舱：左边选择任务，中间推进执行，右边盯 spec、plan、评估和文件变更，防止 agent 一路跑偏。",
@@ -267,6 +267,7 @@
   "goal.context.results": "**目标结果**（通过 {{passed}}/{{total}}，失败 {{failed}}，待定 {{pending}}）",
   "goal.edit_button_title": "编辑这个目标的标题和详细内容。",
   "goal.delete_button_title": "从当前任务中删除这个目标。",
+  "interaction.auto_reply": "自动回复",
   "interaction.allow_once": "允许一次",
   "interaction.allow_once_title": "只在这一次允许这个操作。",
   "interaction.always_allow": "始终允许",

@@ -23,6 +23,7 @@ import { Env } from "@/env"
 import { type TextHooks } from "@/llm/api"
 import { Config } from "@/config/config"
 import { OrchestratorConfig } from "@/orchestrator/config"
+import { loadStageSkills } from "@/orchestrator/skill-inject"
 import { collectText, countToolCalls, firstContentLine, sectionBody, splitBlocks } from "@/util/agent-text"
 import type { GoalJudgmentType, GoalInfo, DeliveryInfo } from "@/evaluator/agent"
 
@@ -173,28 +174,11 @@ export namespace DeliveryAgent {
         continue
       }
 
-      const MIN_TOOL_CALLS = deliveryCfg.min_tool_calls
-      if (toolCallCount < MIN_TOOL_CALLS) {
-        lastError = new Error(`Delivery verification was too shallow: only ${toolCallCount}/${MIN_TOOL_CALLS} required tool calls`)
-        log.warn("delivery: agent made too few tool calls, will retry", { attempt, verdict: parsed.verdict, toolCalls: toolCallCount })
-        parsed = undefined
-        continue
-      }
-
       break
     }
 
     if (!parsed) {
-      const errMsg = lastError?.message ?? "Delivery agent failed after retries"
-      log.error("delivery agent failed to produce valid output after all retries, returning accepted", { error: errMsg })
-      return {
-        verdict: "accepted" as const,
-        summary: `Delivery agent could not produce output: ${errMsg}. Proceeding with acceptance since GoalJudge already passed.`,
-        startup_verification: { attempted: false, success: false },
-        frontend_check: { attempted: false },
-        fixes_applied: [],
-        issues_found: [errMsg],
-      }
+      throw new Error(lastError?.message ?? "Delivery agent failed after retries")
     }
 
     log.info("delivery agent output", {
@@ -544,24 +528,10 @@ The evaluator has already verified goal completion and code quality. Your role i
 
 1. Install dependencies if needed (\`bun install\`, \`npm install\`)
 2. Run build/compile (\`bun run build\`, \`bunx tsc --noEmit\`, \`npm run build\`)
-3. Record any build errors
+3. Run existing test suite (\`bun test\`, \`npm test\`) — record results
+4. Record any build or test errors
 
-### Phase 3: TEST COVERAGE AUDIT
-
-1. Read the spec requirements / goals passed in the task context
-2. Find all test files (\`find_files\` for \`**/*.test.ts\`, \`**/*.test.tsx\`, \`**/*.spec.ts\`)
-3. Read each test file and map test cases to spec requirements:
-   - For each requirement/goal, check if there is at least one test that verifies it
-   - A test "covers" a requirement if it exercises the described behavior (not just mentions it)
-4. If requirements are UNCOVERED by tests:
-   - Write new test files or add test cases to existing files using \`write_file\` / \`edit_file\`
-   - Tests must be runnable with the project's test runner (usually \`bun test\`)
-   - Follow the existing test patterns and conventions in the project
-   - Each new test must have a clear name describing what requirement it covers
-5. Run the full test suite with \`run_command\` to verify all tests pass (old + new)
-6. If new tests FAIL, the delivery has a real gap — fix the application code, not the test
-
-### Phase 4: START & VERIFY
+### Phase 3: START & VERIFY
 
 1. Start the application with a short timeout:
    - For servers: \`timeout 10 bun run src/app.ts\` or equivalent
@@ -576,24 +546,23 @@ The evaluator has already verified goal completion and code quality. Your role i
    - No obvious import or module resolution errors
    - Entry HTML references correct script paths
 
-### Phase 5: FIX (if needed)
+### Phase 4: FIX (if needed)
 
-If you discover bugs during Phase 2, 3 or 4:
+If you discover bugs during Phase 2 or 3:
 1. Analyze the root cause from error output
 2. Read the relevant source files to understand the issue
 3. Apply a targeted fix using \`edit_file\` or \`write_file\`
-4. **Re-verify** — go back to Phase 2/3/4 to confirm the fix works
+4. **Re-verify** — go back to Phase 2/3 to confirm the fix works
 5. Record all fixes in your output
 
-Do NOT apply cosmetic changes, refactoring, or "improvements" — only fix what prevents the application from building, starting, or running correctly.
+Do NOT apply cosmetic changes, refactoring, or "improvements" — only fix what prevents the application from building, starting, or running correctly. Do NOT write new test files — test coverage is the executor's responsibility, not yours.
 
-### Phase 6: VERDICT
+### Phase 5: VERDICT
 
 Output your final decision as plain markdown. Use these exact top-level sections in order:
 
 - \`# Verdict\` — exactly one of: accepted, rejected, fixed
 - \`# Summary\` — 1-3 sentence overview
-- \`# Test Coverage\` — requirements covered / total, tests added (if any), test suite result (pass/fail count)
 - \`# Startup Verification\` — attempted, command, success, output
 - \`# Frontend Check\` — attempted, renders_correctly, issues
 - \`# Fixes Applied\` — numbered list of fixes (empty if none)
@@ -632,19 +601,23 @@ Under \`# Issues Found\`, bullet list of remaining issues.
 
 - ALWAYS start the application to verify it works — reading code alone is NOT sufficient
 - Every claim must be backed by actual tool results (run_command output, file contents)
-- Fix real bugs only — no cosmetic changes, no refactoring, no adding features
+- Fix real bugs only — no cosmetic changes, no refactoring, no adding features, no writing new tests
 - If you cannot start the application (missing runtime, unavailable port, etc.), classify it clearly
-- Section headings must use the English names above. Write body text in the same language as the task request.
-- If the project is a library (not an executable app), verify it compiles/builds correctly instead of trying to start it
+- Write body text in the same language as the task request
+- If the project is a library (not an executable app), verify it compiles/builds and tests pass instead of trying to start it
 
-## Step Budget Warning
+## Step Budget
 
-You have a limited number of steps. After 35 tool calls, you MUST stop and emit your final verdict — even if you haven't finished all checks. A verdict based on partial evidence is better than no verdict. Budget hint: ~5 calls for discover, ~3 for build, ~10 for test coverage audit, ~8 for startup verify, ~5 for fixes, ~4 for verdict.`
+You have a limited number of tool calls. Allocate them based on what this specific project needs — simple projects need fewer calls, complex ones need more. If you are running low on steps, emit your verdict with partial evidence rather than producing no verdict at all.`
 
+/** Config-aware resolver: checks config.prompt.delivery_system first, then config.agent.delivery.prompt, otherwise the default + skills. */
 export async function deliveryAgentSystem() {
   const config = await Config.get()
-  const configAny = config as Record<string, unknown>
-  return typeof (configAny.prompt as Record<string, unknown> | undefined)?.delivery_system === "string"
-    ? (configAny.prompt as Record<string, unknown>).delivery_system as string
-    : DELIVERY_AGENT_SYSTEM
+  const systemOverride = (config as Record<string, unknown>).prompt as Record<string, unknown> | undefined
+  if (typeof systemOverride?.delivery_system === "string") return systemOverride.delivery_system
+  const agentPrompt = (config.agent as Record<string, any> | undefined)?.delivery?.prompt
+  const core = typeof agentPrompt === "string" ? agentPrompt : DELIVERY_AGENT_SYSTEM
+  const orchCfg = await OrchestratorConfig.get()
+  const skills = await loadStageSkills(orchCfg.delivery.skills)
+  return core + skills
 }

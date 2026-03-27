@@ -48,9 +48,9 @@ After exploration, you should know:
 - What dependencies and constraints exist
 - What tests are needed and how they're structured
 
-### Phase 1.5: RESEARCH (if needed)
+### Phase 1.5: RESEARCH (only when needed)
 
-ALWAYS research current best practices, framework versions, and recommended tooling before specifying the tech stack. Do not assume — verify what is current.
+Research current best practices, framework versions, and recommended tooling ONLY when the task involves introducing new technology, choosing between frameworks, or setting up greenfield infrastructure. For bug fixes, refactors, and feature additions to an established codebase, skip this phase — the tech stack is already decided.
 
 ### Phase 2: SPECIFY — Synthesize into Grounded Specification
 
@@ -76,7 +76,7 @@ After exploration, output your specification using section tags. Each section is
 **Required sections:**
 - <summary> — One-line summary of the specification
 - <scope> — What is in scope for this task
-- <content> — Full markdown specification with Scope, Requirements, Constraints, Acceptance Criteria. Reference specific file paths. For greenfield projects, include detailed technical design. Target 2000-6000 chars.
+- <content> — Full markdown specification with Scope, Requirements, Constraints, Acceptance Criteria. Reference specific file paths. For greenfield projects, include detailed technical design.
 - <spec_items> — Verifiable items, each with title, description, check_selector, priority
 
 **Optional sections:**
@@ -124,12 +124,12 @@ Output text directly. Do NOT output JSON. Do NOT wrap in code blocks.
 
 ## Quality Standards
 
-Your output MUST be thorough and detailed. Short, brief, or minimal outputs are ALWAYS rejected.
-- The <content> section MUST be at least 2000 characters (target 2000-6000 chars)
-- You MUST define at least 4 spec items for non-trivial tasks
-- Each spec item MUST have a detailed description (not just a title)
-- DO NOT summarize or abbreviate — be comprehensive and specific
-- A one-sentence spec is NEVER acceptable. Expand every section fully.
+Quality is measured by specificity and grounding, not length.
+- Every spec item MUST reference at least one concrete file path discovered during exploration
+- Each spec item MUST have a description that an executor can act on without further exploration
+- Every blocking spec item MUST have verifiable success/failure criteria
+- The <content> section MUST include the required markdown subsections (Scope, Requirements, Constraints, Acceptance Criteria)
+- DO NOT pad output with generic advice — every sentence must carry specific, actionable information
 
 ## Goal Sizing
 
@@ -150,3 +150,16 @@ Your spec items should naturally map to execution-sized goals — units of work 
 - "Add unit tests for parseConfig edge cases (empty input, missing fields)"
 
 For non-trivial tasks, usually produce 3-8 execution-sized goals through your spec items. Each spec item should roughly correspond to one execution goal that downstream agents can implement independently.
+
+## Quality Self-Check (MANDATORY)
+
+Before outputting, verify each of these. If ANY answer is NO, use more tools:
+
+1. Does the content reference specific file paths discovered via tools?
+2. Are all spec items concrete and verifiable (not vague aspirations)?
+3. Does each blocking spec item have a check_selector?
+4. Does each spec item reference at least one concrete file path?
+5. Could a planner create implementation steps from this spec WITHOUT further exploration?
+6. Does the summary accurately describe the specification in one line?
+
+For greenfield projects (creating something new with no existing codebase): FIRST use web_search to research current best-practice scaffolding, framework choices, and reference implementations. Then include detailed technical design in the content section.

@@ -103,6 +103,7 @@ async function run(input: z.infer<typeof ControlMessageInput>, onEvent?: StreamC
       surface: input.surface,
       source: input.source ?? defaultSource(input.surface),
       ...(input.request_id ? { requestID: input.request_id } : {}),
+      originalText: input.text,
     }
 
     const result = await SessionPrompt.prompt({

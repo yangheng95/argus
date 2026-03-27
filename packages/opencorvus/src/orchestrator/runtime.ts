@@ -557,7 +557,9 @@ export namespace OrchestratorRuntime {
     const delivery = findDeliveryByRun(run.id)
     const pending = findPendingInteractions(run.id)
     if (pending.length > 0) {
-      // Auto-reject stale interactions for unattended operation
+      // Safety net: reject interactions stuck beyond INTERACTION_STALE_MS.
+      // In unattended mode, auto-reply.ts handles most interactions within ~7s.
+      // This only fires if auto-reply and the Question auto-reject both fail.
       const now = Date.now()
       const stale = pending.filter((p) => (now - (p.time_created ?? 0)) > INTERACTION_STALE_MS)
       if (stale.length > 0) {
@@ -1273,9 +1275,27 @@ async function publishAcceptedDelivery(task: TaskRow, run: RunRow, delivery: Del
       await deliveryLive.finish(`Delivery verification: ${deliveryVerdict.verdict}`)
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
-      log.error("delivery verification failed, proceeding with publication", { runID: run.id, error: msg })
+      log.error("delivery verification failed", { runID: run.id, error: msg })
       await deliveryContentHooks.flush().catch(() => undefined)
       await deliveryLive.error(err).catch(() => undefined)
+      await handleEvaluationFailure(requireTask(task.id), run, `Delivery verification failed: ${msg}`, hooks, {
+        verdict: "rejected",
+        classification: "evaluation",
+        summary: `Delivery verification failed: ${msg}`,
+        goal_statuses: verifyGoals.map((_, i) => ({
+          goal_index: i,
+          status: "failed" as const,
+          evidence: msg,
+          reasoning: `Delivery agent error: ${msg}`,
+        })),
+        replan_guidance: {
+          root_cause: msg,
+          what_failed: "Delivery agent",
+          suggested_strategy: `Fix the delivery agent error: ${msg}`,
+          avoid_approaches: [],
+        },
+      })
+      return
     }
     // Persist verdict as artifact
     if (deliveryVerdict) {

@@ -66,6 +66,7 @@ import {
 import { mergeTaskChecks, writeTaskChecks } from "./checks"
 import { GoalService } from "./goal-service"
 import { OrchestratorInteraction } from "./interaction"
+import { AutoReply } from "./auto-reply"
 import { OrchestratorRuntime } from "./runtime"
 import { hooks, updateRun, updateTask } from "./state"
 import {
@@ -328,6 +329,7 @@ export namespace OrchestratorService {
     const current = orchestratorState()
     if (!current.booted) {
       OrchestratorInteraction.subscribe(hooks())
+      AutoReply.subscribe()
       current.booted = true
     }
     Scheduler.register({

@@ -19,6 +19,7 @@ import { Instance } from "@/project/instance"
 import { Log } from "@/util/log"
 import { parseSpecText } from "./parse-spec-text"
 import { OrchestratorConfig } from "@/orchestrator/config"
+import { loadStageSkills } from "@/orchestrator/skill-inject"
 import path from "path"
 import SPEC_CORE from "@/prompt/core/spec-core.txt"
 import { Config } from "@/config/config"
@@ -158,6 +159,7 @@ export namespace HeadlessSpecAgent {
     title: string
     request: string
     goals?: Array<{ description: string; criteria: string; priority?: string }>
+    sessionID?: string
     signal?: AbortSignal
     stream?: TextHooks
   }): Promise<SpecOutputType> {
@@ -173,6 +175,7 @@ export namespace HeadlessSpecAgent {
     request: string
     previousSpec?: string
     goals?: Array<{ description: string; criteria: string; priority?: string }>
+    sessionID?: string
     signal?: AbortSignal
   }): Promise<SpecOutputType> {
     return run({ ...input, mode: "compile" })
@@ -186,6 +189,7 @@ export namespace HeadlessSpecAgent {
     request: string
     rewriteContext: SpecRewriteContext
     goals?: Array<{ description: string; criteria: string; priority?: string }>
+    sessionID?: string
     signal?: AbortSignal
   }): Promise<SpecOutputType> {
     return run({ ...input, mode: "rewrite" })
@@ -205,13 +209,14 @@ async function run(input: {
   goals?: Array<{ description: string; criteria: string; priority?: string }>
   previousSpec?: string
   rewriteContext?: SpecRewriteContext
+  sessionID?: string
   signal?: AbortSignal
   stream?: TextHooks
 }): Promise<SpecOutputType> {
   if (input.signal?.aborted) throw new Error("spec agent aborted before model resolution")
 
   const orchCfg = await OrchestratorConfig.get()
-  const { max_steps: MAX_STEPS, timeout_ms: TIMEOUT_MS, min_tool_calls: MIN_TOOL_CALLS, quality_threshold: QUALITY_RETRY_THRESHOLD, max_attempts: MAX_SPEC_ATTEMPTS } = orchCfg.spec
+  const { max_steps: MAX_STEPS, timeout_ms: TIMEOUT_MS, quality_threshold: QUALITY_RETRY_THRESHOLD, max_attempts: MAX_SPEC_ATTEMPTS } = orchCfg.spec
 
   const def = await Provider.defaultModel().catch(() => undefined)
   if (!def) throw new Error("no LLM model available for spec agent")
@@ -226,7 +231,7 @@ async function run(input: {
     input.request.match(/(?:工作目录|working dir(?:ectory)?)[^\n]*?([A-Z]:[/\\][^\s)）]+|\/[^\s)）]+)/i)
   const taskWorkDir = cwdMatch ? cwdMatch[1].replace(/[/\\]+$/, "") : undefined
 
-  const allTools = createPlannerTools(taskWorkDir)
+  const allTools = createPlannerTools(taskWorkDir, input.sessionID)
 
   const fileRefs = await resolveFileReferences(input.request, taskWorkDir)
   if (input.signal?.aborted) throw new Error("spec agent aborted before context prefetch")
@@ -242,7 +247,7 @@ async function run(input: {
     const retryContext = attempt > 0 && lastQuality
       ? { previousScore: lastQuality.score, reasons: lastQuality.reasons, attempt }
       : undefined
-    const userPrompt = buildUserPrompt(input, fileRefs, context, retryContext, MIN_TOOL_CALLS, QUALITY_RETRY_THRESHOLD)
+    const userPrompt = buildUserPrompt(input, fileRefs, context, retryContext, QUALITY_RETRY_THRESHOLD)
 
     log.info("spec agent starting", {
       title: input.title,
@@ -266,7 +271,7 @@ async function run(input: {
       tools: allTools,
       maxOutputTokens: 32768,
       abortSignal: input.signal ?? AbortSignal.timeout(TIMEOUT_MS),
-      system: await specSystem(MIN_TOOL_CALLS),
+      system: await specSystem(),
       prompt: userPrompt,
       ...(input.stream?.onChunk ? { onChunk: input.stream.onChunk as any } : {}),
       ...(input.stream?.onError ? { onError: input.stream.onError } : {}),
@@ -310,7 +315,7 @@ async function run(input: {
 
     parsed.summary = ensureMeaningfulSummary(parsed.summary, input.title)
 
-    const specQuality = validateSpecQuality(parsed, input.request, toolCallCount, MIN_TOOL_CALLS)
+    const specQuality = validateSpecQuality(parsed, input.request, toolCallCount)
     log.info("spec agent output", {
       specItems: parsed.spec_items.length,
       contentLength: parsed.content.length,
@@ -336,7 +341,6 @@ async function run(input: {
       threshold: QUALITY_RETRY_THRESHOLD,
       reasons: specQuality.reasons,
       toolCalls: toolCallCount,
-      minToolCalls: MIN_TOOL_CALLS,
     })
   }
 
@@ -359,7 +363,6 @@ function buildUserPrompt(
   fileRefs: Array<{ ref: string; content: string }>,
   context: string,
   retryContext?: { previousScore: number; reasons: string[]; attempt: number },
-  minToolCalls = SPEC_DEFAULTS.min_tool_calls,
   qualityThreshold = SPEC_DEFAULTS.quality_threshold,
 ): string {
   const sections = [`# Task\n\nTitle: ${input.title}\n\nRequest:\n${input.request}`]
@@ -374,15 +377,11 @@ function buildUserPrompt(
         "**Issues found:**",
         ...retryContext.reasons.map((r) => `- ${r}`),
         "",
-        "**MANDATORY requirements for this attempt:**",
-        `- Make at least ${minToolCalls} tool calls to explore the codebase before writing any spec`,
-        "- Write a DETAILED specification — the <content> section MUST be at least 2000 characters",
-        "- Define at least 4 concrete spec items with verifiable acceptance criteria",
-        "- Include specific file paths and evidence sources discovered from your exploration",
+        "**Requirements for this attempt:**",
+        "- Use tools to explore the codebase until you have enough context to write specific, grounded output",
+        "- Every spec item MUST reference concrete file paths discovered from exploration",
         "- Each spec item MUST have a clear title, detailed description, and check_selector",
-        "",
-        "**DO NOT be brief or concise.** Your output must be thorough and comprehensive.",
-        "A short spec is ALWAYS rejected. Produce detailed, specific, grounded output.",
+        "- Every blocking spec item MUST have verifiable success/failure criteria",
       ]
         .filter(Boolean)
         .join("\n"),
@@ -469,7 +468,6 @@ function validateSpecQuality(
   spec: SpecOutputType,
   request: string,
   toolCallCount: number,
-  minToolCalls = SPEC_DEFAULTS.min_tool_calls,
 ): { score: number; reasons: string[] } {
   let score = 0
   const reasons: string[] = []
@@ -479,19 +477,25 @@ function validateSpecQuality(
     score += 0.2
   } else if (toolCallCount >= 2) {
     score += 0.1
+  } else if (toolCallCount === 0) {
+    reasons.push("No tool calls — spec is not grounded in codebase exploration")
   } else {
-    reasons.push(`Only ${toolCallCount} tool calls — explore the codebase more thoroughly (min ${minToolCalls})`)
+    score += 0.05
+    reasons.push(`Only ${toolCallCount} tool call — exploration may be insufficient`)
   }
 
-  // Content depth (0.25 max — spec should be thorough)
-  if (spec.content.length >= 2000) {
+  // Content has required sections (0.25 max — structural completeness)
+  const hasScope = /scope/i.test(spec.content)
+  const hasRequirements = /requirements?/i.test(spec.content)
+  const hasConstraints = /constraints?/i.test(spec.content)
+  const hasCriteria = /acceptance|criteria/i.test(spec.content)
+  const sectionCount = [hasScope, hasRequirements, hasConstraints, hasCriteria].filter(Boolean).length
+  if (sectionCount >= 3) {
     score += 0.25
-  } else if (spec.content.length >= 1000) {
+  } else if (sectionCount >= 2) {
     score += 0.15
-  } else if (spec.content.length >= 500) {
-    score += 0.08
   } else {
-    reasons.push("Spec content too short — must include detailed sections for Scope, Requirements, Constraints, Acceptance Criteria. Target 2000+ chars")
+    reasons.push(`Spec content missing required sections (found ${sectionCount}/4: Scope, Requirements, Constraints, Acceptance Criteria)`)
   }
 
   // Spec items quality (0.3 max — most important dimension)
@@ -597,52 +601,17 @@ function readFileSafe(absPath: string, maxLen = 6000): string | null {
 // System prompt
 // ---------------------------------------------------------------------------
 
-function headlessSpecAdditions(minToolCalls: number) {
-  return `## Available Tools
+/** Full default system prompt. Exported for tests and catalog. */
+export const SPEC_SYSTEM = SPEC_CORE
 
-- **memory_search**: Search project memory for prior work, patterns, gotchas
-- **memory_get**: Read full content of a memory file by ID
-- **preference_list**: List active project conventions and constraints (BINDING)
-- **read_file**: Read file contents with line numbers
-- **find_files**: Find files matching a glob pattern
-- **search_code**: Search file contents with regex (ripgrep)
-- **list_directory**: List files and directories at a path
-- **web_search**: Search the web for documentation, best practices, framework comparisons, and latest API references. USE THIS PROACTIVELY — always research before choosing frameworks, libraries, or architectural patterns.
-
-## Headless Mode Requirements
-
-Minimum ${minToolCalls} tool calls required during Phase 1. Aim for 8-15 for complex tasks.
-
-Use the tools listed above to execute exploration strategies described in the core process:
-- Phase 0: Use **memory_search** and **preference_list**
-- Phase 1: Use **list_directory**, **read_file**, **search_code**, **find_files** following the strategies for modification vs new-module tasks
-- Phase 1.5: Use **web_search** for research
-
-## Quality Self-Check (MANDATORY)
-
-Before outputting, verify each of these. If ANY answer is NO, use more tools:
-
-1. Did I make at least ${minToolCalls} tool calls to explore the codebase?
-2. Does the content reference specific file paths discovered via tools?
-3. Are all spec items concrete and verifiable (not vague aspirations)?
-4. Does each blocking spec item have a check_selector?
-5. Are evidence sources populated with actual files I consulted?
-6. Could a planner create implementation steps from this spec WITHOUT further exploration?
-7. Does the summary accurately describe the specification in one line?
-
-## Additional Output Guidance
-
-- For greenfield projects (creating something new with no existing codebase): FIRST use web_search to research current best-practice scaffolding, framework choices, and reference implementations. Then include detailed technical design in the content section.
-- Spec Items: Be DETAILED — they drive downstream planning and acceptance. Include at least 4-6 spec items for non-trivial tasks.`
-}
-
-/** Full default system prompt (core + headless additions). Exported for tests and catalog. */
-export const SPEC_SYSTEM = SPEC_CORE + "\n\n" + headlessSpecAdditions(SPEC_DEFAULTS.min_tool_calls)
-
-/** Config-aware resolver: returns config.prompt.spec_system if set, otherwise builds the default. */
-export async function specSystem(minToolCalls = SPEC_DEFAULTS.min_tool_calls): Promise<string> {
+/** Config-aware resolver: checks config.prompt.spec_system first, then config.agent.spec.prompt, otherwise the core prompt + skills. */
+export async function specSystem(): Promise<string> {
   const config = await Config.get()
-  const override = (config as Record<string, unknown>).prompt as Record<string, unknown> | undefined
-  if (typeof override?.spec_system === "string") return override.spec_system
-  return SPEC_CORE + "\n\n" + headlessSpecAdditions(minToolCalls)
+  const systemOverride = (config as Record<string, unknown>).prompt as Record<string, unknown> | undefined
+  if (typeof systemOverride?.spec_system === "string") return systemOverride.spec_system
+  const agentPrompt = (config.agent as Record<string, any> | undefined)?.spec?.prompt
+  const core = typeof agentPrompt === "string" ? agentPrompt : SPEC_CORE
+  const orchCfg = await OrchestratorConfig.get()
+  const skills = await loadStageSkills(orchCfg.spec.skills)
+  return core + skills
 }

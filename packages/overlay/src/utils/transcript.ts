@@ -537,21 +537,29 @@ export function interactionAnswerLines(interaction: any): string[] {
   return message ? [message] : [];
 }
 
+/** Check if an interaction was auto-replied by the orchestrator. */
+export function isAutoReplied(interaction: any): boolean {
+  const response = record(interaction?.response) ? interaction.response : null;
+  return response?.auto_reply === true;
+}
+
 /** Build full interaction response text (mirrors app.js interactionResponseText). */
 export function interactionResponseText(interaction: any): string {
+  const auto = isAutoReplied(interaction);
+  const prefix = auto ? `[${t("interaction.auto_reply")}] ` : "";
   if (interaction?.type === "permission") {
-    if (interaction.status === "rejected") return t("interaction.reject");
+    if (interaction.status === "rejected") return prefix + t("interaction.reject");
     const response = record(interaction?.response)
       ? interaction.response
       : null;
-    return interactionReplyLabel(
+    return prefix + interactionReplyLabel(
       typeof response?.reply === "string" ? response.reply : "once",
     );
   }
-  if (interaction?.status === "rejected") return t("interaction.skip");
+  if (interaction?.status === "rejected") return prefix + t("interaction.skip");
   const answers = interactionAnswerLines(interaction);
-  if (answers.length > 0) return answers.join("\n");
-  return t("interaction.answer");
+  if (answers.length > 0) return prefix + answers.join("\n");
+  return prefix + t("interaction.answer");
 }
 
 /**

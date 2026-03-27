@@ -9,10 +9,12 @@ const DESCRIPTION = `Scoped memory store for project knowledge.
 
 **Mandatory recall**: Before answering about prior work, decisions, dates, preferences, or project history, ALWAYS recall memory and preferences first.
 
+**Proactive writing**: Write memory whenever you discover useful knowledge — do not wait until task end. Write test commands, build steps, deployment procedures, environment configs, non-obvious gotchas, root causes, effective patterns, task summaries, historical decisions, inspirations, and ideas.
+
 Actions:
 - **search**: Search session memory, global memory, or both. Use BEFORE answering from memory.
 - **get**: Retrieve full content of a memory file by ID. Use after search to read detailed content.
-- **write**: Save important knowledge. Prefer typed memory: lesson, fact, episode, or profile.
+- **write**: Save important knowledge. Prefer typed memory: lesson (gotchas, patterns, inspirations), fact (setup, config, env, test/deploy commands), episode (task summaries, history), profile (stable constraints).
 - **list**: Browse saved memory files by scope.
 - **delete**: Remove outdated or incorrect memory by file ID.`
 

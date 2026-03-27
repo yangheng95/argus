@@ -1,6 +1,7 @@
 import z from "zod"
 import { selectorList, selectorsSatisfied } from "@/check/policy"
-import { GoalFailureError, HeadlessGoalService, goalInputsFromDraft, type GoalDraft } from "@/goal/service"
+import { GoalFailureError, goalInputsFromDraft, type GoalDraft } from "@/goal/service"
+import { HeadlessGoalAgent } from "@/goal/agent"
 import { Identifier } from "@/id/id"
 import { executorLeaseAvailable, executorLeaseHeldByOther, executorLeaseOwner, executorLeaseUntil } from "./lease"
 import { type GoalJudgmentType } from "@/evaluator/agent"
@@ -433,7 +434,7 @@ export async function compileTransition(input: CompileTransitionInput): Promise<
       return [result, "reused"] as const
     }
     await specLive.start(input.mode === "replan" ? "Spec rewrite started" : "Spec generation started")
-    return compileSpec(input, combineHooks(specContentHooks, specLive.hooks), timeouts.specMs, specLive.statusHook.bind(specLive)).then(async (result) => {
+    return compileSpec(input, combineHooks(specContentHooks, specLive.hooks), timeouts.specMs, specLive.statusHook.bind(specLive), specSession?.id).then(async (result) => {
       await specContentHooks?.flush()
       await specLive.finish(input.mode === "replan" ? "Spec rewrite finished" : "Spec generation finished")
       return [result, input.mode === "replan" ? "rewritten" : "generated"] as const
@@ -489,26 +490,21 @@ export async function compileTransition(input: CompileTransitionInput): Promise<
     await goalLive.start(input.mode === "replan" ? "Goal decomposition recompile started" : "Goal decomposition started")
     goalDraft = await (
       input.mode === "initial"
-        ? HeadlessGoalService.initial({
+        ? HeadlessGoalAgent.initial({
             title: input.title,
             request: input.request,
             spec: specDraft,
-            sessionID: input.sessionID,
-            metadata: input.metadata,
             goalHints: input.goals,
-            timeoutMs: timeouts.goalMs,
+            sessionID: goalSession?.id,
             stream: combineHooks(goalContentHooks, goalLive.hooks),
             onStatus: goalLive.statusHook.bind(goalLive),
           })
-        : HeadlessGoalService.recompile({
+        : HeadlessGoalAgent.recompile({
             title: input.title,
             request: input.request,
             spec: specDraft,
-            sessionID: input.task.session_id ?? undefined,
-            metadata: input.task.metadata ?? undefined,
             goalHints: input.goals,
-            replanContext: input.replanContext,
-            timeoutMs: timeouts.goalMs,
+            sessionID: goalSession?.id,
             stream: combineHooks(goalContentHooks, goalLive.hooks),
             onStatus: goalLive.statusHook.bind(goalLive),
           })
@@ -547,6 +543,7 @@ export async function compileTransition(input: CompileTransitionInput): Promise<
             allowClarification: !unattended,
             executor: input.executor,
             routing: input.routing,
+            sessionID: planSession.id,
             stream: planStream,
           })
         : PlannerService.replan({
@@ -561,6 +558,7 @@ export async function compileTransition(input: CompileTransitionInput): Promise<
             allowClarification: !unattended,
             executor: input.executor,
             routing: input.routing,
+            sessionID: planSession.id,
             stream: planStream,
           })
     ).then(async (result) => {
@@ -1914,6 +1912,7 @@ async function compileSpec(
   stream?: TextHooks,
   timeoutMs?: number,
   onStatus?: (summary: string) => void | Promise<void>,
+  sessionID?: string,
 ) {
   const specRoute = input.routing?.spec ?? "opencorvus"
   if (specRoute === "executor" && input.executor !== "opencode" && ExecutorPlanner.supports(input.executor, "spec")) {
@@ -1943,6 +1942,7 @@ async function compileSpec(
       title: input.title,
       request: input.request,
       goals: input.goals,
+      sessionID,
       rewriteContext: {
         previousSpec: input.replanContext?.previousSummary ?? input.previousPlan.summary,
         failureAnalysis: input.replanContext?.failureAnalysis ?? {
@@ -1964,6 +1964,7 @@ async function compileSpec(
     title: input.title,
     request: input.request,
     goals: input.goals,
+    sessionID,
     stream,
   })
 }

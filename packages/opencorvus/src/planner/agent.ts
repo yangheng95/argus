@@ -21,6 +21,7 @@ import { Instance } from "@/project/instance"
 import { Log } from "@/util/log"
 import { parsePlanText } from "./parse-plan-text"
 import { OrchestratorConfig } from "@/orchestrator/config"
+import { loadStageSkills } from "@/orchestrator/skill-inject"
 import path from "path"
 import PLAN_CORE from "@/prompt/core/plan-core.txt"
 import { Config } from "@/config/config"
@@ -133,6 +134,8 @@ export namespace HeadlessPlannerAgent {
     userGoals?: Array<{ description: string; criteria: string; priority?: string }>
     spec?: { summary?: string; content: string }
     replanContext?: ReplanContext
+    /** Session ID for question tool support */
+    sessionID?: string
     /** External abort signal (overrides internal timeout when provided) */
     signal?: AbortSignal
     /** Stream hooks for onChunk/onError — routes AI SDK events to the caller */
@@ -142,7 +145,7 @@ export namespace HeadlessPlannerAgent {
     if (input.signal?.aborted) throw new Error("planner aborted before model resolution")
 
     const orchCfg = await OrchestratorConfig.get()
-    const { max_steps: MAX_STEPS, timeout_ms: TIMEOUT_MS, min_tool_calls: MIN_TOOL_CALLS, quality_threshold: QUALITY_RETRY_THRESHOLD, max_attempts: MAX_PLAN_ATTEMPTS } = orchCfg.planner
+    const { max_steps: MAX_STEPS, timeout_ms: TIMEOUT_MS, quality_threshold: QUALITY_RETRY_THRESHOLD, max_attempts: MAX_PLAN_ATTEMPTS } = orchCfg.planner
 
     const resolved = await agentLanguageModel()
     if (!resolved) throw new Error("no LLM model available for planner agent")
@@ -158,7 +161,7 @@ export namespace HeadlessPlannerAgent {
     // Create tools with the correct working directory for the task.
     // Without this, the codebase tools use Instance.directory (project root)
     // instead of the task's working directory (e.g., eval workspace).
-    const allTools = createPlannerTools(taskWorkDir)
+    const allTools = createPlannerTools(taskWorkDir, input.sessionID)
 
     const fileRefs = await resolveFileReferences(input.request, taskWorkDir)
     if (input.signal?.aborted) throw new Error("planner aborted before context prefetch")
@@ -177,7 +180,7 @@ export namespace HeadlessPlannerAgent {
       const retryContext = attempt > 0 && lastQuality
         ? { previousScore: lastQuality.score, reasons: lastQuality.reasons, attempt }
         : undefined
-      const userPrompt = buildUserPrompt(input, fileRefs, context, retryContext, MIN_TOOL_CALLS, QUALITY_RETRY_THRESHOLD)
+      const userPrompt = buildUserPrompt(input, fileRefs, context, retryContext, QUALITY_RETRY_THRESHOLD)
 
       log.info("planner agent starting", {
         title: input.title,
@@ -198,7 +201,7 @@ export namespace HeadlessPlannerAgent {
         tools: allTools,
         maxOutputTokens: 32768,
         abortSignal: input.signal ?? AbortSignal.timeout(TIMEOUT_MS),
-        system: await plannerSystem(MIN_TOOL_CALLS),
+        system: await plannerSystem(),
         prompt: userPrompt,
         ...(input.stream?.onChunk ? { onChunk: input.stream.onChunk as any } : {}),
         ...(input.stream?.onError ? { onError: input.stream.onError } : {}),
@@ -245,7 +248,7 @@ export namespace HeadlessPlannerAgent {
       parsed.summary = ensureMeaningfulSummary(parsed.summary, input.title)
 
       // Validate plan quality
-      const planQuality = validatePlanQuality(parsed, input.request, toolCallCount, MIN_TOOL_CALLS)
+      const planQuality = validatePlanQuality(parsed, input.request, toolCallCount)
       log.info("planner agent output", {
         goals: parsed.goals.length,
         subtasks: parsed.subtasks.length,
@@ -274,7 +277,6 @@ export namespace HeadlessPlannerAgent {
         threshold: QUALITY_RETRY_THRESHOLD,
         reasons: planQuality.reasons,
         toolCalls: toolCallCount,
-        minToolCalls: MIN_TOOL_CALLS,
       })
     }
 
@@ -320,7 +322,6 @@ function validatePlanQuality(
   plan: PlannerOutputType,
   request: string,
   toolCallCount: number,
-  minToolCalls = PLANNER_DEFAULTS.min_tool_calls,
 ): { score: number; reasons: string[] } {
   let score = 0
   const reasons: string[] = []
@@ -330,9 +331,12 @@ function validatePlanQuality(
     score += 0.3
   } else if (toolCallCount >= 2) {
     score += 0.15
-    reasons.push(`only ${toolCallCount} tool calls (need ≥5 for deep exploration)`)
+    reasons.push(`only ${toolCallCount} tool calls — exploration may be shallow`)
+  } else if (toolCallCount === 0) {
+    reasons.push("no tool calls — plan is not grounded in codebase exploration")
   } else {
-    reasons.push(`${toolCallCount} tool calls — no codebase exploration (min ${minToolCalls})`)
+    score += 0.05
+    reasons.push(`only ${toolCallCount} tool call — exploration may be insufficient`)
   }
 
   // 2. PRD contains file paths not present in the request
@@ -490,7 +494,6 @@ function buildUserPrompt(
   fileRefs?: Array<{ ref: string; path: string; content: string }>,
   context?: string,
   retryContext?: { previousScore: number; reasons: string[]; attempt: number },
-  minToolCalls = PLANNER_DEFAULTS.min_tool_calls,
   qualityThreshold = PLANNER_DEFAULTS.quality_threshold,
 ): string {
   const sections = [`# Task\n\nTitle: ${input.title}\n\nRequest:\n${input.request}`]
@@ -506,15 +509,11 @@ function buildUserPrompt(
         "**Issues found:**",
         ...retryContext.reasons.map((r) => `- ${r}`),
         "",
-        "**MANDATORY requirements for this attempt:**",
-        `- Make at least ${minToolCalls} tool calls to explore the codebase (list_directory, read_file, search_code)`,
-        "- Write a DETAILED PRD with bullet points — at least 500 characters, covering files, changes, patterns, and verification commands",
+        "**Requirements for this attempt:**",
+        "- Use tools to explore the codebase until you have enough context to write specific, grounded output",
         "- Each goal MUST have a detailed description AND concrete, executable criteria (e.g., 'bun test src/x.test.ts passes')",
         "- Subtasks MUST reference specific file paths discovered from your exploration",
-        "- Include at least 3 goals with specific check_selectors",
-        "",
-        "**DO NOT be brief or concise.** Your output must be thorough and comprehensive.",
-        "A short plan is ALWAYS rejected. Produce detailed, specific, actionable output.",
+        "- Every goal MUST trace back to a spec item",
       ]
         .filter(Boolean)
         .join("\n"),
@@ -613,47 +612,17 @@ function buildUserPrompt(
 // System prompt
 // ---------------------------------------------------------------------------
 
-function headlessPlanAdditions(minToolCalls: number) {
-  return `## Available Tools
+/** Full default system prompt. Exported for catalog. */
+export const PLANNER_SYSTEM_DEFAULT = PLAN_CORE
 
-- **memory_search**: Search project memory for prior work, patterns, gotchas
-- **memory_get**: Read full content of a memory file by ID
-- **preference_list**: List active project conventions and constraints (BINDING)
-- **read_file**: Read file contents with line numbers
-- **find_files**: Find files matching a glob pattern
-- **search_code**: Search file contents with regex (ripgrep)
-- **list_directory**: List files and directories at a path
-- **web_search**: Search the web for documentation, best practices, framework comparisons, and latest API references. USE THIS PROACTIVELY — always research before choosing frameworks, libraries, or architectural patterns.
-
-## Headless Mode Requirements
-
-Minimum ${minToolCalls} tool calls required during Phase 1. Aim for 8-15 for complex tasks.
-
-Use the tools listed above to execute exploration strategies described in the core process:
-- Phase 0: Use **memory_search** and **preference_list**
-- Phase 1: Use **list_directory**, **read_file**, **search_code**, **find_files** following the strategies for modification vs new-module tasks
-- Phase 1.5: Use **web_search** for research
-
-## Quality Self-Check (MANDATORY)
-
-Before outputting, verify each of these. If ANY answer is NO, use more tools to fill the gap:
-
-1. Did I make at least ${minToolCalls} tool calls to explore the codebase?
-2. Does EVERY goal have a detailed description explaining the specific outcome? (not just "tests pass")
-3. Does every goal criteria include an exact command AND expected outcome?
-4. Do subtasks reference specific file paths (not "relevant files" — actual paths)?
-5. Is the PRD concise but complete (bullet points, not paragraphs)?
-6. Could an executor implement this plan WITHOUT asking follow-up questions?
-7. Does the summary accurately describe the plan in one line? (not a file path or heading)`
-}
-
-/** Full default system prompt (core + headless additions). Exported for catalog. */
-export const PLANNER_SYSTEM_DEFAULT = PLAN_CORE + "\n\n" + headlessPlanAdditions(PLANNER_DEFAULTS.min_tool_calls)
-
-/** Config-aware resolver: returns config.prompt.planner_system if set, otherwise builds the default. */
-export async function plannerSystem(minToolCalls = PLANNER_DEFAULTS.min_tool_calls): Promise<string> {
+/** Config-aware resolver: checks config.prompt.planner_system first, then config.agent.plan.prompt, otherwise the core prompt + skills. */
+export async function plannerSystem(): Promise<string> {
   const config = await Config.get()
-  const override = (config as Record<string, unknown>).prompt as Record<string, unknown> | undefined
-  if (typeof override?.planner_system === "string") return override.planner_system
-  return PLAN_CORE + "\n\n" + headlessPlanAdditions(minToolCalls)
+  const systemOverride = (config as Record<string, unknown>).prompt as Record<string, unknown> | undefined
+  if (typeof systemOverride?.planner_system === "string") return systemOverride.planner_system
+  const agentPrompt = (config.agent as Record<string, any> | undefined)?.plan?.prompt
+  const core = typeof agentPrompt === "string" ? agentPrompt : PLAN_CORE
+  const orchCfg = await OrchestratorConfig.get()
+  const skills = await loadStageSkills(orchCfg.planner.skills)
+  return core + skills
 }

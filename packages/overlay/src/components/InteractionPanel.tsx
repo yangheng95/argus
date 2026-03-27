@@ -149,6 +149,17 @@ function shouldAutoResolve(interaction: Interaction): boolean {
   return false;
 }
 
+/** Summarize an auto-replied interaction's response for display. */
+function interactionResponseSummary(interaction: Interaction): string {
+  if (interaction.type === "permission") {
+    const reply = interaction.response?.reply;
+    return typeof reply === "string" ? interactionReplyLabel(reply) : t("interaction.allow_once");
+  }
+  const lines = interactionAnswerLines(interaction);
+  if (lines.length > 0) return lines.join("\n");
+  return t("interaction.answer");
+}
+
 // ── Component ──
 
 interface InteractionPanelProps {
@@ -167,6 +178,23 @@ export function InteractionPanel(props: InteractionPanelProps) {
     const raw = boardStore.board?.interactions;
     if (!Array.isArray(raw)) return [];
     return raw.filter((item: any) => item?.status === "pending");
+  });
+
+  /** Recently auto-replied interactions (last 60s, most recent first). */
+  const recentAutoReplies = createMemo<Interaction[]>(() => {
+    const raw = boardStore.board?.interactions;
+    if (!Array.isArray(raw)) return [];
+    const now = Date.now();
+    const WINDOW_MS = 60_000;
+    return raw
+      .filter((item: any) =>
+        item?.status === "answered" &&
+        item?.response?.auto_reply === true &&
+        item?.time?.resolved &&
+        (now - item.time.resolved) < WINDOW_MS,
+      )
+      .sort((a: any, b: any) => (b.time?.resolved ?? 0) - (a.time?.resolved ?? 0))
+      .slice(0, 5);
   });
 
   function setError(id: string, msg: string) {
@@ -374,7 +402,27 @@ export function InteractionPanel(props: InteractionPanelProps) {
           </div>
         )}
       </For>
-      <Show when={pendingInteractions().length === 0}>
+      <Show when={recentAutoReplies().length > 0}>
+        <For each={recentAutoReplies()}>
+          {(interaction) => (
+            <div class="interaction-alert interaction-auto-replied" data-id={interaction.id}>
+              <div class="interaction-title">
+                <span class="interaction-auto-badge">{t("interaction.auto_reply")}</span>
+                {" "}{interaction.title}
+              </div>
+              <Show when={interaction.body}>
+                <div class="interaction-body md-content">{interaction.body}</div>
+              </Show>
+              <Show when={interaction.response}>
+                <div class="interaction-auto-answer">
+                  {interactionResponseSummary(interaction)}
+                </div>
+              </Show>
+            </div>
+          )}
+        </For>
+      </Show>
+      <Show when={pendingInteractions().length === 0 && recentAutoReplies().length === 0}>
         <div class="interaction-panel-empty" />
       </Show>
     </div>

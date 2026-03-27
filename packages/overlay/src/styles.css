@@ -5298,6 +5298,36 @@ select.field-input option {
   font-size: calc(12px * var(--ui-scale));
 }
 
+/* -- Auto-replied interaction (dimmed) -- */
+.interaction-auto-replied {
+  opacity: 0.65;
+  background: var(--subtle-2);
+  border-color: var(--border);
+}
+
+.interaction-auto-replied .interaction-title {
+  color: var(--text-muted);
+}
+
+.interaction-auto-badge {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: calc(10px * var(--ui-scale));
+  font-weight: 600;
+  background: var(--accent-dim);
+  color: var(--accent);
+  vertical-align: middle;
+}
+
+.interaction-auto-answer {
+  font-size: calc(11px * var(--ui-scale));
+  color: var(--text-muted);
+  margin-top: 4px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 /* -- Interaction modal popup -- */
 .interaction-modal-overlay {
   position: fixed;
