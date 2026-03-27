@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "zh-CN",
-    "panel_revision": "eff961de7c84fc81"
+    "panel_revision": "0214f14a20464e48"
   },
   "brand.guide_kicker": "快速说明",
   "brand.guide_positioning_body": "这不是一个装饰性浮层，而是任务驾驶舱：左边选择任务，中间推进执行，右边盯 spec、plan、评估和文件变更，防止 agent 一路跑偏。",
@@ -31,9 +31,6 @@
   "channel.tutorial": "文档",
   "channel.tutorial_hint": "查看配置教程",
   "channel.tutorial_credit": "由 {{source}} 提供",
-  "channel.fields_none": "没有可配置字段",
-  "channel.save_failed": "保存通道配置失败",
-  "channel.public_url_save_failed": "保存公开 URL 失败",
   "chat.copy_all": "复制全部",
   "chat.copy_failed": "复制对话失败",
   "chat.copy_title": "复制对话",
@@ -182,7 +179,6 @@
   "prompt.preview": "Markdown 预览",
   "prompt.preview_empty": "当前 prompt 为空。",
   "prompt.reset": "重置",
-  "prompt.active_task_notice": "修改将在下次 run 时生效，当前活跃任务继续使用原有 prompt。",
   "prompt.show_default": "对比默认值",
   "prompt.default_label": "默认",
   "overview.next_step": "下一步",
@@ -384,9 +380,6 @@
   "section.plan": "计划",
   "section.spec": "规格",
   "task.new": "新建任务",
-  "task.new_label": "任务名称",
-  "task.new_placeholder": "描述你想完成的事……",
-  "task.new_prompt": "你想做什么？",
   "task.none": "还没有任务",
   "settings.language": "语言",
   "settings.language.en_us": "English",
@@ -420,7 +413,6 @@
   "skill.delete_confirm": "删除技能「{{name}}」？",
   "skill.delete_all_confirm_all": "删除全部 {{count}} 个可移除的技能？",
   "skill.delete_all_confirm_partial": "删除 {{removable}} 个可移除的技能？（{{blocked}} 个无法移除）",
-  "skill.none_custom_with_builtin": "没有自定义技能（已加载 {{count}} 个内置技能）",
   "skill.open_dir": "打开目录",
   "skill.open_dir_title": "打开本地自定义技能目录。",
   "skill.open_button_title": "打开这个技能的目录或来源位置。",
@@ -505,13 +497,6 @@
     "saved": "已保存",
     "saving": "保存中..."
   },
-  "channel": {
-    "public_url_label": "公开 URL",
-    "status": {
-      "connected": "已连接",
-      "error": "错误"
-    }
-  },
   "llm": {
     "api_key_copy_done": "API 密钥已复制"
   },
@@ -520,7 +505,6 @@
     "load_server": "加载服务器日志"
   },
   "mcp": {
-    "confirm_delete_all": "确定删除全部 MCP 连接？此操作无法撤销。",
     "delete_all": "全部删除",
     "status": {
       "connecting": "连接中"
@@ -541,8 +525,6 @@
     }
   },
   "skill": {
-    "confirm_delete": "确定删除此技能？此操作无法撤销。",
-    "confirm_delete_all": "确定删除全部技能？此操作无法撤销。",
     "delete_all": "全部删除"
   },
   "titlebar": {
@@ -585,7 +567,6 @@
   "llm.provider_label": "提供商",
   "sidebar.close": "收起侧边栏",
   "sidebar.open": "展开侧边栏",
-  "version.core": "核心 {{version}}",
   "version.core_unknown": "核心不可用",
   "version.overlay": "Overlay v{{version}}",
   "channel.available": "可用：{{names}}",
@@ -610,8 +591,5 @@
     "appearance": "外观",
     "behaviour": "行为",
     "connection": "连接"
-  },
-  "settings.tab": {
-    "general": "通用"
   }
 }

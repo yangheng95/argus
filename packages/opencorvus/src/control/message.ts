@@ -108,6 +108,7 @@ async function run(input: z.infer<typeof ControlMessageInput>, onEvent?: StreamC
     const result = await SessionPrompt.prompt({
       sessionID: control.info.id,
       agent,
+      model,
       system,
       parts,
       tools,
