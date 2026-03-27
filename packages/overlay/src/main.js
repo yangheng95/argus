@@ -2165,7 +2165,18 @@ function agentStageLabel(stage) {
 }
 function effectiveRole$1(msg, rootSessionID) {
   const role = msg.info?.role || "assistant";
-  if (role !== "user") return role;
+  if (role !== "user") {
+    if (role === "assistant" && rootSessionID && !msg._synthetic) {
+      const sessionID2 = typeof msg.info?.sessionID === "string" ? msg.info.sessionID : "";
+      if (sessionID2 && sessionID2 !== rootSessionID) {
+        const agent = String(msg.info?.agent || "").trim().toLowerCase();
+        if (!agent || agent === "executor" || agent === "coding") {
+          return "executor";
+        }
+      }
+    }
+    return role;
+  }
   const source = detectSource(msg);
   if (source) return source;
   const sessionID = typeof msg.info?.sessionID === "string" ? msg.info.sessionID : "";
@@ -2187,7 +2198,7 @@ function stamp(ts) {
   return d.toLocaleTimeString(localeTag(), timeLocaleOptions());
 }
 
-var _tmpl$$g = /* @__PURE__ */ template(`<article class="turn msg"><div class=msg-head><span class=msg-role></span><span class=msg-time></span></div><div class=msg-bubble><div class=msg-body>`), _tmpl$2$e = /* @__PURE__ */ template(`<div class=msg-patch>`), _tmpl$3$e = /* @__PURE__ */ template(`<div>`), _tmpl$4$e = /* @__PURE__ */ template(`<div class=msg-tool><span class=tool-icon>→</span><span class=tool-name>Subtask</span><span class=tool-detail>`), _tmpl$5$e = /* @__PURE__ */ template(`<div class=executor-process-detail>`), _tmpl$6$c = /* @__PURE__ */ template(`<div class=executor-process-progress><span class=executor-process-activity></span><span>`), _tmpl$7$a = /* @__PURE__ */ template(`<div class=executor-process-note>`), _tmpl$8$6 = /* @__PURE__ */ template(`<pre class=executor-process-output>`), _tmpl$9$6 = /* @__PURE__ */ template(`<div class=executor-process-card><div class=executor-process-head><span class=executor-process-kind></span><div class=executor-process-meta><div class=executor-process-row><div class=executor-process-title></div><div class=executor-process-status>`);
+var _tmpl$$g = /* @__PURE__ */ template(`<article class="turn msg"><div class=msg-head><span class=msg-role></span><span class=msg-time></span></div><div class=msg-bubble><div class=msg-body>`), _tmpl$2$e = /* @__PURE__ */ template(`<div class=msg-patch>`), _tmpl$3$e = /* @__PURE__ */ template(`<div>`), _tmpl$4$e = /* @__PURE__ */ template(`<div class=msg-tool><span class=tool-icon>→</span><span class=tool-name>Subtask</span><span class=tool-detail>`), _tmpl$5$e = /* @__PURE__ */ template(`<div class=executor-process-detail>`), _tmpl$6$c = /* @__PURE__ */ template(`<div class=executor-process-progress><span class=executor-process-activity></span><span>`), _tmpl$7$a = /* @__PURE__ */ template(`<div class=executor-process-note>`), _tmpl$8$7 = /* @__PURE__ */ template(`<pre class=executor-process-output>`), _tmpl$9$7 = /* @__PURE__ */ template(`<div class=executor-process-card><div class=executor-process-head><span class=executor-process-kind></span><div class=executor-process-meta><div class=executor-process-row><div class=executor-process-title></div><div class=executor-process-status>`);
 function renderFilePart(part) {
   const url = part.url || part.filename || "";
   const name = part.filename || url || "file";
@@ -2297,7 +2308,7 @@ function MessageView(props) {
                 return memo(() => part.type === "executor_process")() && part.process;
               },
               get children() {
-                var _el$11 = _tmpl$9$6(), _el$12 = _el$11.firstChild, _el$13 = _el$12.firstChild, _el$14 = _el$13.nextSibling, _el$15 = _el$14.firstChild, _el$16 = _el$15.firstChild, _el$17 = _el$16.nextSibling;
+                var _el$11 = _tmpl$9$7(), _el$12 = _el$11.firstChild, _el$13 = _el$12.firstChild, _el$14 = _el$13.nextSibling, _el$15 = _el$14.firstChild, _el$16 = _el$15.firstChild, _el$17 = _el$16.nextSibling;
                 insert(_el$13, () => String(part.process.kind || "task"));
                 insert(_el$16, () => part.process.title || part.process.id || "");
                 insert(_el$17, () => part.process.status || "running");
@@ -2336,7 +2347,7 @@ function MessageView(props) {
                     return part.process.output;
                   },
                   get children() {
-                    var _el$23 = _tmpl$8$6();
+                    var _el$23 = _tmpl$8$7();
                     insert(_el$23, () => part.process.output);
                     return _el$23;
                   }
@@ -2372,7 +2383,7 @@ function MessageView(props) {
   });
 }
 
-var _tmpl$$f = /* @__PURE__ */ template(`<span class="agent-card-badge agent-card-badge--done"title=Completed>✓`), _tmpl$2$d = /* @__PURE__ */ template(`<div class="agent-card-summary-content md-content">`), _tmpl$3$d = /* @__PURE__ */ template(`<span class=plan-version>v`), _tmpl$4$d = /* @__PURE__ */ template(`<div class=agent-card-summary-plan><div class="agent-card-summary-content md-content">`), _tmpl$5$d = /* @__PURE__ */ template(`<div class=goals-list>`), _tmpl$6$b = /* @__PURE__ */ template(`<span class=section-badge>`), _tmpl$7$9 = /* @__PURE__ */ template(`<div class=agent-card-summary-checks>`), _tmpl$8$5 = /* @__PURE__ */ template(`<div class=agent-card-summary-eval>`), _tmpl$9$5 = /* @__PURE__ */ template(`<div class=agent-card-summary>`), _tmpl$0$4 = /* @__PURE__ */ template(`<hr class=agent-card-summary-divider>`), _tmpl$1$3 = /* @__PURE__ */ template(`<article class="turn msg agent-card"data-role=agent-card><div class=agent-card-header role=button tabindex=0><span class=agent-card-label></span><span class=agent-card-count></span><span class=agent-card-chevron aria-hidden=true>▼</span></div><div class=agent-card-body>`), _tmpl$10$3 = /* @__PURE__ */ template(`<span class="agent-card-badge agent-card-badge--running"title=Running><span class=agent-card-spinner>`), _tmpl$11$2 = /* @__PURE__ */ template(`<span class="agent-card-badge agent-card-badge--error"title=Error>✗`), _tmpl$12$2 = /* @__PURE__ */ template(`<div class="goal-criteria md-content">`), _tmpl$13$2 = /* @__PURE__ */ template(`<span class=goal-priority>`), _tmpl$14$2 = /* @__PURE__ */ template(`<div class="goal-item agent-card-summary-goal"><span class=goal-status-icon></span><div class=goal-content><div class="goal-desc md-content">`), _tmpl$15$2 = /* @__PURE__ */ template(`<span class=agent-card-summary-check><span class=agent-card-summary-check-icon>`);
+var _tmpl$$f = /* @__PURE__ */ template(`<span class="agent-card-badge agent-card-badge--done"title=Completed>✓`), _tmpl$2$d = /* @__PURE__ */ template(`<div class="agent-card-summary-content md-content">`), _tmpl$3$d = /* @__PURE__ */ template(`<span class=plan-version>v`), _tmpl$4$d = /* @__PURE__ */ template(`<div class=agent-card-summary-plan><div class="agent-card-summary-content md-content">`), _tmpl$5$d = /* @__PURE__ */ template(`<div class=goals-list>`), _tmpl$6$b = /* @__PURE__ */ template(`<span class=section-badge>`), _tmpl$7$9 = /* @__PURE__ */ template(`<div class=agent-card-summary-checks>`), _tmpl$8$6 = /* @__PURE__ */ template(`<div class=agent-card-summary-eval>`), _tmpl$9$6 = /* @__PURE__ */ template(`<div class=agent-card-summary>`), _tmpl$0$4 = /* @__PURE__ */ template(`<hr class=agent-card-summary-divider>`), _tmpl$1$3 = /* @__PURE__ */ template(`<article class="turn msg agent-card"data-role=agent-card><div class=agent-card-header role=button tabindex=0><span class=agent-card-label></span><span class=agent-card-count></span><span class=agent-card-chevron aria-hidden=true>▼</span></div><div class=agent-card-body>`), _tmpl$10$3 = /* @__PURE__ */ template(`<span class="agent-card-badge agent-card-badge--running"title=Running><span class=agent-card-spinner>`), _tmpl$11$2 = /* @__PURE__ */ template(`<span class="agent-card-badge agent-card-badge--error"title=Error>✗`), _tmpl$12$2 = /* @__PURE__ */ template(`<div class="goal-criteria md-content">`), _tmpl$13$2 = /* @__PURE__ */ template(`<span class=goal-priority>`), _tmpl$14$2 = /* @__PURE__ */ template(`<div class="goal-item agent-card-summary-goal"><span class=goal-status-icon></span><div class=goal-content><div class="goal-desc md-content">`), _tmpl$15$2 = /* @__PURE__ */ template(`<span class=agent-card-summary-check><span class=agent-card-summary-check-icon>`);
 function stageLabel(stage) {
   return agentStageLabel(stage);
 }
@@ -2497,7 +2508,7 @@ function AgentCard(props) {
       },
       get children() {
         return [(() => {
-          var _el$7 = _tmpl$9$5();
+          var _el$7 = _tmpl$9$6();
           insert(_el$7, createComponent(Show, {
             get when() {
               return memo(() => props.stage === "spec")() && specContent();
@@ -2582,7 +2593,7 @@ function AgentCard(props) {
               return memo(() => props.stage === "judge")() && evaluationData();
             },
             get children() {
-              var _el$12 = _tmpl$8$5();
+              var _el$12 = _tmpl$8$6();
               insert(_el$12, createComponent(Show, {
                 get when() {
                   return evaluationData().verdict;
@@ -4099,6 +4110,7 @@ function agentEventToolPart(event) {
     }
   };
 }
+const _agentMsgCache = /* @__PURE__ */ new Map();
 function agentMessage(event) {
   if (!event || typeof event !== "object") return null;
   const stage = String(event?.stage || "").trim().toLowerCase();
@@ -4107,18 +4119,23 @@ function agentMessage(event) {
   const eventID = typeof event?.id === "string" && event.id ? event.id : `${stage}:${String(event?.kind || "status")}:${created}`;
   const kind = String(event?.kind || "status").trim().toLowerCase();
   const text = agentEventDisplayText(event).trim();
+  const msgID = `agent-event:${stage}:${eventID}`;
+  const cacheKey = `${msgID}:${kind}:${text}`;
+  const cached = _agentMsgCache.get(cacheKey);
+  if (cached) return cached;
   const base = {
     _synthetic: true,
     info: {
-      id: `agent-event:${stage}:${eventID}`,
+      id: msgID,
       role: "assistant",
       agent: stage,
       time: { created }
     },
     parts: []
   };
+  let msg = null;
   if (kind === "reasoning_delta" && text) {
-    return {
+    msg = {
       ...base,
       parts: [
         {
@@ -4129,23 +4146,24 @@ function agentMessage(event) {
         }
       ]
     };
-  }
-  if (kind === "tool_call" || kind === "tool_delta" || kind === "tool_result") {
+  } else if (kind === "tool_call" || kind === "tool_delta" || kind === "tool_result") {
     const part = agentEventToolPart(event);
-    return part ? { ...base, parts: [part] } : null;
+    msg = part ? { ...base, parts: [part] } : null;
+  } else if (text) {
+    msg = {
+      ...base,
+      parts: [
+        {
+          id: `text:${eventID}`,
+          type: "text",
+          text,
+          _targetText: typeof event?._targetText === "string" ? event._targetText : text
+        }
+      ]
+    };
   }
-  if (!text) return null;
-  return {
-    ...base,
-    parts: [
-      {
-        id: `text:${eventID}`,
-        type: "text",
-        text,
-        _targetText: typeof event?._targetText === "string" ? event._targetText : text
-      }
-    ]
-  };
+  if (msg) _agentMsgCache.set(cacheKey, msg);
+  return msg;
 }
 function agentRoundStatus(stage, round, roundIndex, rounds, latestStageEvent) {
   if (roundIndex < rounds.length - 1) return "completed";
@@ -4272,9 +4290,18 @@ function rebuildAgentCards() {
     }
     for (const [cardID, card] of Object.entries(nextCards)) {
       if (cardID in store.agentCards) {
-        setStore("agentCards", cardID, "_agentStatus", card._agentStatus);
-        setStore("agentCards", cardID, "_agentRound", card._agentRound);
-        setStore("agentCards", cardID, "_agentMessages", [...card._agentMessages]);
+        const prev = store.agentCards[cardID];
+        if (prev._agentStatus !== card._agentStatus) {
+          setStore("agentCards", cardID, "_agentStatus", card._agentStatus);
+        }
+        if (prev._agentRound !== card._agentRound) {
+          setStore("agentCards", cardID, "_agentRound", card._agentRound);
+        }
+        const prevMsgs = prev._agentMessages;
+        const nextMsgs = card._agentMessages;
+        if (prevMsgs.length !== nextMsgs.length || prevMsgs.some((m, i) => m !== nextMsgs[i])) {
+          setStore("agentCards", cardID, "_agentMessages", [...nextMsgs]);
+        }
       } else {
         setStore("agentCards", cardID, { ...card, _agentMessages: [...card._agentMessages] });
       }
@@ -5021,17 +5048,20 @@ function boardArtifact(board, label) {
   const list = board?.artifacts || [];
   return list.find((item) => item.label === label);
 }
+const _syntheticCache = /* @__PURE__ */ new Map();
 function syntheticTextMessage(role, time, text) {
   if (typeof text !== "string" || !text.trim()) return null;
-  return {
+  const created = Number.isFinite(time) ? time : Date.now();
+  const id = `synthetic:${role}:${created}:${hashText(text)}`;
+  const cached = _syntheticCache.get(id);
+  if (cached) return cached;
+  const msg = {
     _synthetic: true,
-    info: {
-      id: `synthetic:${role}:${Number.isFinite(time) ? time : Date.now()}:${hashText(text)}`,
-      role,
-      time: { created: Number.isFinite(time) ? time : Date.now() }
-    },
+    info: { id, role, time: { created } },
     parts: [{ type: "text", text }]
   };
+  _syntheticCache.set(id, msg);
+  return msg;
 }
 function formatConversationTranscript(messages) {
   return (Array.isArray(messages) ? messages : []).map((item) => {
@@ -5206,12 +5236,12 @@ function interactionRequestText(interaction) {
   const body = typeof interaction?.body === "string" ? interaction.body.trim() : "";
   return [title, body].filter(Boolean).join("\n\n");
 }
-function interactionReplyLabel(reply) {
+function interactionReplyLabel$1(reply) {
   if (reply === "always") return t("interaction.always_allow");
   if (reply === "reject") return t("interaction.reject");
   return t("interaction.allow_once");
 }
-function interactionAnswerLines(interaction) {
+function interactionAnswerLines$1(interaction) {
   const response = record$4(interaction?.response) ? interaction.response : null;
   const payload = record$4(interaction?.payload) ? interaction.payload : null;
   const questions = Array.isArray(payload?.questions) ? payload.questions : [];
@@ -5243,18 +5273,24 @@ function interactionAnswerLines(interaction) {
   const message = typeof response?.message === "string" ? response.message.trim() : "";
   return message ? [message] : [];
 }
+function isAutoReplied(interaction) {
+  const response = record$4(interaction?.response) ? interaction.response : null;
+  return response?.auto_reply === true;
+}
 function interactionResponseText(interaction) {
+  const auto = isAutoReplied(interaction);
+  const prefix = auto ? `[${t("interaction.auto_reply")}] ` : "";
   if (interaction?.type === "permission") {
-    if (interaction.status === "rejected") return t("interaction.reject");
+    if (interaction.status === "rejected") return prefix + t("interaction.reject");
     const response = record$4(interaction?.response) ? interaction.response : null;
-    return interactionReplyLabel(
+    return prefix + interactionReplyLabel$1(
       typeof response?.reply === "string" ? response.reply : "once"
     );
   }
-  if (interaction?.status === "rejected") return t("interaction.skip");
-  const answers = interactionAnswerLines(interaction);
-  if (answers.length > 0) return answers.join("\n");
-  return t("interaction.answer");
+  if (interaction?.status === "rejected") return prefix + t("interaction.skip");
+  const answers = interactionAnswerLines$1(interaction);
+  if (answers.length > 0) return prefix + answers.join("\n");
+  return prefix + t("interaction.answer");
 }
 async function copyChatConversation() {
   try {
@@ -5500,10 +5536,6 @@ function buildBoardContextMessages(preClassifiedMainMessages, board, agentEvents
   const liveStages = new Set(
     (Array.isArray(agentEvents) ? agentEvents : []).map((event) => String(event?.stage || "").trim().toLowerCase()).filter((stage) => activeStages.has(stage))
   );
-  const transcriptMessages = preClassifiedMainMessages.length > 0 ? preClassifiedMainMessages : Array.isArray(messages) ? messages : [];
-  const hasStageMessage = (stage) => transcriptMessages.some(
-    (message) => message?.info?.role !== "user" && (effectiveRole(message) === stage || phaseFromMessage(message) === phaseFromAgent(stage))
-  );
   if (task?.request && !hasConversationRequest(messages || [], task.request)) {
     syntheticMsgs.push({
       _synthetic: true,
@@ -5511,7 +5543,7 @@ function buildBoardContextMessages(preClassifiedMainMessages, board, agentEvents
       parts: [{ type: "text", text: task.request }]
     });
   }
-  if (board.spec && !liveStages.has("spec") && !hasStageMessage("spec")) {
+  if (board.spec && !liveStages.has("spec")) {
     const message = syntheticTextMessage(
       "spec",
       board.spec.time?.created || task?.time?.updated || Date.now(),
@@ -5519,7 +5551,7 @@ function buildBoardContextMessages(preClassifiedMainMessages, board, agentEvents
     );
     if (message) syntheticMsgs.push(message);
   }
-  if (plan && !liveStages.has("planner") && !hasStageMessage("planner")) {
+  if (plan && !liveStages.has("planner")) {
     const goals2 = (lanes || []).find((lane) => lane.id === "goals")?.cards || [];
     const message = syntheticTextMessage(
       "planner",
@@ -5880,7 +5912,7 @@ function TaskList(props) {
 }
 delegateEvents(["click"]);
 
-var _tmpl$2$b = /* @__PURE__ */ template(`<div class=plan-version>`), _tmpl$3$b = /* @__PURE__ */ template(`<div class="plan-version streaming-indicator">`), _tmpl$4$b = /* @__PURE__ */ template(`<p class=empty-hint>`), _tmpl$5$b = /* @__PURE__ */ template(`<div class=plan-version> · `), _tmpl$6$a = /* @__PURE__ */ template(`<div class=goals-list>`), _tmpl$7$8 = /* @__PURE__ */ template(`<div class="goal-criteria md-content">`), _tmpl$8$4 = /* @__PURE__ */ template(`<span class=extension-status data-state=active>`), _tmpl$9$4 = /* @__PURE__ */ template(`<span class=goal-priority>`), _tmpl$0$3 = /* @__PURE__ */ template(`<div class=goal-item><span class=goal-status-icon></span><div class=goal-content><div class="goal-desc md-content"></div></div><div class=goal-actions><button type=button class="btn btn-ghost mini"data-goal-action=edit></button><button type=button class="btn btn-ghost mini danger"data-goal-action=delete>`), _tmpl$1$2 = /* @__PURE__ */ template(`<div class=empty-hint>`), _tmpl$10$2 = /* @__PURE__ */ template(`<section class=criteria-group><div class=criteria-group-head><span class=criteria-group-icon aria-hidden=true></span><div class=criteria-group-title></div><div class=criteria-group-count></div></div><div class=criteria-group-list>`), _tmpl$11$1 = /* @__PURE__ */ template(`<label class=criteria-item><input type=checkbox><span class=check-mark></span><span class=criteria-copy><span class=criteria-name></span><span class=criteria-desc></span></span><span class=criteria-status></span><span class=criteria-result>`), _tmpl$12$1 = /* @__PURE__ */ template(`<div class="eval-summary md-content">`), _tmpl$13$1 = /* @__PURE__ */ template(`<div class=eval-error-meta>`), _tmpl$14$1 = /* @__PURE__ */ template(`<div class=eval-error><div class=eval-error-name>✗ </div><div class="eval-error-detail md-content">`), _tmpl$15$1 = /* @__PURE__ */ template(`<div class=delivery-files>`), _tmpl$16$1 = /* @__PURE__ */ template(`<div class=delivery-card><div class=delivery-title></div><div class="delivery-summary md-content">`), _tmpl$17 = /* @__PURE__ */ template(`<div class="overview-headline md-content">`), _tmpl$18 = /* @__PURE__ */ template(`<div class="overview-summary md-content">`), _tmpl$19 = /* @__PURE__ */ template(`<div class="overview-next-step-detail md-content">`), _tmpl$20 = /* @__PURE__ */ template(`<div class=overview-next-step><div class=overview-next-step-title>`), _tmpl$21 = /* @__PURE__ */ template(`<div class="interaction-alert task-failure-alert"><div class=interaction-title></div><div class="interaction-body md-content">`), _tmpl$22 = /* @__PURE__ */ template(`<button type=button class="btn btn-primary"data-task-action=retry>`), _tmpl$23 = /* @__PURE__ */ template(`<button type=button class="btn btn-ghost"data-task-action=replan>`), _tmpl$24 = /* @__PURE__ */ template(`<button type=button class="btn btn-ghost"data-task-action=cancel>`), _tmpl$25 = /* @__PURE__ */ template(`<div class=task-actions-buttons>`), _tmpl$26 = /* @__PURE__ */ template(`<div class=task-actions-bar>`), _tmpl$27 = /* @__PURE__ */ template(`<button class="btn btn-primary"data-action=always>`), _tmpl$28 = /* @__PURE__ */ template(`<button class="btn btn-ghost"data-action=once>`), _tmpl$29 = /* @__PURE__ */ template(`<button class="btn btn-ghost"data-action=reject>`), _tmpl$30 = /* @__PURE__ */ template(`<div class=interaction-alert><div class=interaction-title> </div><div class="interaction-body md-content"></div><div class=interaction-actions>`), _tmpl$31 = /* @__PURE__ */ template(`<button class="btn btn-primary"data-action=answer>`), _tmpl$32 = /* @__PURE__ */ template(`<div class=interactions-list>`), _tmpl$35 = /* @__PURE__ */ template(`<details class=section><summary class=section-head><span class=section-icon aria-hidden=true></span><span class=section-title></span><span class=section-badge></span></summary><div class=section-body>`), _tmpl$36 = /* @__PURE__ */ template(`<div id=taskActionsBar>`);
+var _tmpl$2$b = /* @__PURE__ */ template(`<div class=plan-version>`), _tmpl$3$b = /* @__PURE__ */ template(`<div class="plan-version streaming-indicator">`), _tmpl$4$b = /* @__PURE__ */ template(`<p class=empty-hint>`), _tmpl$5$b = /* @__PURE__ */ template(`<div class=plan-version> · `), _tmpl$6$a = /* @__PURE__ */ template(`<div class=goals-list>`), _tmpl$7$8 = /* @__PURE__ */ template(`<div class="goal-criteria md-content">`), _tmpl$8$5 = /* @__PURE__ */ template(`<span class=extension-status data-state=active>`), _tmpl$9$5 = /* @__PURE__ */ template(`<span class=goal-priority>`), _tmpl$0$3 = /* @__PURE__ */ template(`<div class=goal-item><span class=goal-status-icon></span><div class=goal-content><div class="goal-desc md-content"></div></div><div class=goal-actions><button type=button class="btn btn-ghost mini"data-goal-action=edit></button><button type=button class="btn btn-ghost mini danger"data-goal-action=delete>`), _tmpl$1$2 = /* @__PURE__ */ template(`<div class=empty-hint>`), _tmpl$10$2 = /* @__PURE__ */ template(`<section class=criteria-group><div class=criteria-group-head><span class=criteria-group-icon aria-hidden=true></span><div class=criteria-group-title></div><div class=criteria-group-count></div></div><div class=criteria-group-list>`), _tmpl$11$1 = /* @__PURE__ */ template(`<label class=criteria-item><input type=checkbox><span class=check-mark></span><span class=criteria-copy><span class=criteria-name></span><span class=criteria-desc></span></span><span class=criteria-status></span><span class=criteria-result>`), _tmpl$12$1 = /* @__PURE__ */ template(`<div class="eval-summary md-content">`), _tmpl$13$1 = /* @__PURE__ */ template(`<div class=eval-error-meta>`), _tmpl$14$1 = /* @__PURE__ */ template(`<div class=eval-error><div class=eval-error-name>✗ </div><div class="eval-error-detail md-content">`), _tmpl$15$1 = /* @__PURE__ */ template(`<div class=delivery-files>`), _tmpl$16$1 = /* @__PURE__ */ template(`<div class=delivery-card><div class=delivery-title></div><div class="delivery-summary md-content">`), _tmpl$17 = /* @__PURE__ */ template(`<div class="overview-headline md-content">`), _tmpl$18 = /* @__PURE__ */ template(`<div class="overview-summary md-content">`), _tmpl$19 = /* @__PURE__ */ template(`<div class="overview-next-step-detail md-content">`), _tmpl$20 = /* @__PURE__ */ template(`<div class=overview-next-step><div class=overview-next-step-title>`), _tmpl$21 = /* @__PURE__ */ template(`<div class="interaction-alert task-failure-alert"><div class=interaction-title></div><div class="interaction-body md-content">`), _tmpl$22 = /* @__PURE__ */ template(`<button type=button class="btn btn-primary"data-task-action=retry>`), _tmpl$23 = /* @__PURE__ */ template(`<button type=button class="btn btn-ghost"data-task-action=replan>`), _tmpl$24 = /* @__PURE__ */ template(`<button type=button class="btn btn-ghost"data-task-action=cancel>`), _tmpl$25 = /* @__PURE__ */ template(`<div class=task-actions-buttons>`), _tmpl$26 = /* @__PURE__ */ template(`<div class=task-actions-bar>`), _tmpl$27 = /* @__PURE__ */ template(`<button class="btn btn-primary"data-action=always>`), _tmpl$28 = /* @__PURE__ */ template(`<button class="btn btn-ghost"data-action=once>`), _tmpl$29 = /* @__PURE__ */ template(`<button class="btn btn-ghost"data-action=reject>`), _tmpl$30 = /* @__PURE__ */ template(`<div class=interaction-alert><div class=interaction-title> </div><div class="interaction-body md-content"></div><div class=interaction-actions>`), _tmpl$31 = /* @__PURE__ */ template(`<button class="btn btn-primary"data-action=answer>`), _tmpl$32 = /* @__PURE__ */ template(`<div class=interactions-list>`), _tmpl$35 = /* @__PURE__ */ template(`<details class=section><summary class=section-head><span class=section-icon aria-hidden=true></span><span class=section-title></span><span class=section-badge></span></summary><div class=section-body>`), _tmpl$36 = /* @__PURE__ */ template(`<div id=taskActionsBar>`);
 function statusIcon(status) {
   const map = {
     idle: `<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle data-stroke="true" cx="8" cy="8" r="4.5"/><circle data-fill="true" cx="8" cy="8" r="1.25"/></svg>`,
@@ -6024,7 +6056,7 @@ function GoalsPanel(props) {
               return props.runningGoalIDs.has(card.id);
             },
             get children() {
-              var _el$16 = _tmpl$8$4();
+              var _el$16 = _tmpl$8$5();
               insert(_el$16, () => t("goal.running"));
               return _el$16;
             }
@@ -6034,7 +6066,7 @@ function GoalsPanel(props) {
               return card.metadata?.priority;
             },
             get children() {
-              var _el$17 = _tmpl$9$4();
+              var _el$17 = _tmpl$9$5();
               insert(_el$17, () => card.metadata.priority);
               createRenderEffect(() => setAttribute(_el$17, "data-priority", card.metadata.priority));
               return _el$17;
@@ -8955,9 +8987,7 @@ async function selectTask(taskID, options = {}) {
   }
   stopSSE();
   setBoardStore("board", null);
-  if (!options.preserveMessages) {
-    clearMessages();
-  }
+  clearMessages();
   clearAgentEvents();
   if (appStore.budgetDirty) {
     setAppStore("budgetDirty", false);
@@ -9168,7 +9198,7 @@ function startTaskRecovery(request) {
           request.aborted = true;
           request.controller?.abort();
         }
-        await selectTask(taskID, { preserveMessages: true });
+        await selectTask(taskID);
         recovery.stop();
         return taskID;
       }
@@ -9481,7 +9511,7 @@ const meta = /*#__PURE__*/Object.freeze(/*#__PURE__*/Object.defineProperty({
   renderMeta
 }, Symbol.toStringTag, { value: 'Module' }));
 
-var _tmpl$$8 = /* @__PURE__ */ template(`<div class=diff-lines>`), _tmpl$2$8 = /* @__PURE__ */ template(`<div class=diff-empty><p class=empty-hint>`), _tmpl$3$8 = /* @__PURE__ */ template(`<div class=diff-row><div class=diff-gutter></div><div class=diff-num></div><div class=diff-num></div><div class=diff-code>`), _tmpl$4$8 = /* @__PURE__ */ template(`<div class=diff-row data-kind=skip><div class=diff-gutter>...</div><div class=diff-num></div><div class=diff-num></div><div class=diff-code>`), _tmpl$5$8 = /* @__PURE__ */ template(`<div class=diff-dialog-header><span class=diff-dialog-title></span><span class=diff-dialog-meta><span class=change-status></span><span class=diff-dialog-stat data-tone=add>+</span><span class=diff-dialog-stat data-tone=del>-</span></span><button type=button class=diff-dialog-close>×`), _tmpl$6$8 = /* @__PURE__ */ template(`<div class=diff-dialog-body>`), _tmpl$7$6 = /* @__PURE__ */ template(`<dialog class=diff-dialog>`), _tmpl$8$3 = /* @__PURE__ */ template(`<div class=changes-summary><span></span><span class=changes-total><span data-tone=add>+</span><span data-tone=del>-`), _tmpl$9$3 = /* @__PURE__ */ template(`<div class=changes-list>`), _tmpl$0$2 = /* @__PURE__ */ template(`<div class=changes-panel>`), _tmpl$1$1 = /* @__PURE__ */ template(`<p class=empty-hint>`), _tmpl$10$1 = /* @__PURE__ */ template(`<button type=button class=change-row><span class=change-main><span class=change-path></span><span class=change-subline></span></span><span class=change-meta><span class=change-status></span><span class=diff-dialog-stat data-tone=add>+</span><span class=diff-dialog-stat data-tone=del>-`);
+var _tmpl$$8 = /* @__PURE__ */ template(`<div class=diff-lines>`), _tmpl$2$8 = /* @__PURE__ */ template(`<div class=diff-empty><p class=empty-hint>`), _tmpl$3$8 = /* @__PURE__ */ template(`<div class=diff-row><div class=diff-gutter></div><div class=diff-num></div><div class=diff-num></div><div class=diff-code>`), _tmpl$4$8 = /* @__PURE__ */ template(`<div class=diff-row data-kind=skip><div class=diff-gutter>...</div><div class=diff-num></div><div class=diff-num></div><div class=diff-code>`), _tmpl$5$8 = /* @__PURE__ */ template(`<div class=diff-dialog-header><span class=diff-dialog-title></span><span class=diff-dialog-meta><span class=change-status></span><span class=diff-dialog-stat data-tone=add>+</span><span class=diff-dialog-stat data-tone=del>-</span></span><button type=button class=diff-dialog-close>×`), _tmpl$6$8 = /* @__PURE__ */ template(`<div class=diff-dialog-body>`), _tmpl$7$6 = /* @__PURE__ */ template(`<dialog class=diff-dialog>`), _tmpl$8$4 = /* @__PURE__ */ template(`<div class=changes-summary><span></span><span class=changes-total><span data-tone=add>+</span><span data-tone=del>-`), _tmpl$9$4 = /* @__PURE__ */ template(`<div class=changes-list>`), _tmpl$0$2 = /* @__PURE__ */ template(`<div class=changes-panel>`), _tmpl$1$1 = /* @__PURE__ */ template(`<p class=empty-hint>`), _tmpl$10$1 = /* @__PURE__ */ template(`<button type=button class=change-row><span class=change-main><span class=change-path></span><span class=change-subline></span></span><span class=change-meta><span class=change-status></span><span class=diff-dialog-stat data-tone=add>+</span><span class=diff-dialog-stat data-tone=del>-`);
 function splitDiffLines(text) {
   const value = String(text || "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
   if (!value) return [];
@@ -9798,13 +9828,13 @@ function ChangesPanel(props) {
       },
       get children() {
         return [(() => {
-          var _el$24 = _tmpl$8$3(), _el$25 = _el$24.firstChild, _el$26 = _el$25.nextSibling, _el$27 = _el$26.firstChild; _el$27.firstChild; var _el$29 = _el$27.nextSibling; _el$29.firstChild;
+          var _el$24 = _tmpl$8$4(), _el$25 = _el$24.firstChild, _el$26 = _el$25.nextSibling, _el$27 = _el$26.firstChild; _el$27.firstChild; var _el$29 = _el$27.nextSibling; _el$29.firstChild;
           insert(_el$25, () => tc("files.changed", files().length));
           insert(_el$27, totalAdditions, null);
           insert(_el$29, totalDeletions, null);
           return _el$24;
         })(), (() => {
-          var _el$31 = _tmpl$9$3();
+          var _el$31 = _tmpl$9$4();
           insert(_el$31, createComponent(For, {
             get each() {
               return files();
@@ -9846,7 +9876,7 @@ function ChangesPanel(props) {
 }
 delegateEvents(["click"]);
 
-var _tmpl$$7 = /* @__PURE__ */ template(`<div class=log-fields>`), _tmpl$2$7 = /* @__PURE__ */ template(`<div class=log-detail-block><div class=log-detail-title></div><pre class=log-detail-pre>`), _tmpl$3$7 = /* @__PURE__ */ template(`<details class=log-detail><summary></summary><div class=log-detail-block><div class=log-detail-title></div><pre class=log-detail-pre>`), _tmpl$4$7 = /* @__PURE__ */ template(`<span class=log-chip>=`), _tmpl$5$7 = /* @__PURE__ */ template(`<span class=log-delta>`), _tmpl$6$7 = /* @__PURE__ */ template(`<span class=log-service>`), _tmpl$7$5 = /* @__PURE__ */ template(`<div class=log-line><div class=log-line-head><span class=log-source></span><span>[<!>]</span><span class=log-ts></span></div><div class=log-msg>`), _tmpl$8$2 = /* @__PURE__ */ template(`<dialog id=logDialog class="dialog log-dialog"><div class=dialog-header><span class=dialog-title></span><div class=dialog-header-actions><select id=logLevelFilter class="select select-sm"><option value=debug>DEBUG</option><option value=info>INFO</option><option value=warn>WARN</option><option value=error>ERROR</option></select><button type=button id=btnLogServerLogs class="btn btn-ghost mini"></button><button type=button id=btnLogRefresh class="btn btn-ghost mini"></button><button type=button id=btnLogCopy class="btn btn-ghost mini"></button><button type=button id=btnLogClear class="btn btn-ghost mini danger"></button><button type=button id=btnCloseLog class="btn btn-ghost mini"></button></div></div><div id=logViewerBody class=log-viewer-body>`), _tmpl$9$2 = /* @__PURE__ */ template(`<div class=empty-hint>`);
+var _tmpl$$7 = /* @__PURE__ */ template(`<div class=log-fields>`), _tmpl$2$7 = /* @__PURE__ */ template(`<div class=log-detail-block><div class=log-detail-title></div><pre class=log-detail-pre>`), _tmpl$3$7 = /* @__PURE__ */ template(`<details class=log-detail><summary></summary><div class=log-detail-block><div class=log-detail-title></div><pre class=log-detail-pre>`), _tmpl$4$7 = /* @__PURE__ */ template(`<span class=log-chip>=`), _tmpl$5$7 = /* @__PURE__ */ template(`<span class=log-delta>`), _tmpl$6$7 = /* @__PURE__ */ template(`<span class=log-service>`), _tmpl$7$5 = /* @__PURE__ */ template(`<div class=log-line><div class=log-line-head><span class=log-source></span><span>[<!>]</span><span class=log-ts></span></div><div class=log-msg>`), _tmpl$8$3 = /* @__PURE__ */ template(`<dialog id=logDialog class="dialog log-dialog"><div class=dialog-header><span class=dialog-title></span><div class=dialog-header-actions><select id=logLevelFilter class="select select-sm"><option value=debug>DEBUG</option><option value=info>INFO</option><option value=warn>WARN</option><option value=error>ERROR</option></select><button type=button id=btnLogServerLogs class="btn btn-ghost mini"></button><button type=button id=btnLogRefresh class="btn btn-ghost mini"></button><button type=button id=btnLogCopy class="btn btn-ghost mini"></button><button type=button id=btnLogClear class="btn btn-ghost mini danger"></button><button type=button id=btnCloseLog class="btn btn-ghost mini"></button></div></div><div id=logViewerBody class=log-viewer-body>`), _tmpl$9$3 = /* @__PURE__ */ template(`<div class=empty-hint>`);
 let _serverLogLines = [];
 async function loadServerLogs() {
   try {
@@ -10248,7 +10278,7 @@ function LogViewer(props) {
     Promise.resolve().then(() => scrollToBottom());
   };
   return (() => {
-    var _el$26 = _tmpl$8$2(), _el$27 = _el$26.firstChild, _el$28 = _el$27.firstChild, _el$29 = _el$28.nextSibling, _el$30 = _el$29.firstChild, _el$31 = _el$30.nextSibling, _el$32 = _el$31.nextSibling, _el$33 = _el$32.nextSibling, _el$34 = _el$33.nextSibling, _el$35 = _el$34.nextSibling, _el$36 = _el$27.nextSibling;
+    var _el$26 = _tmpl$8$3(), _el$27 = _el$26.firstChild, _el$28 = _el$27.firstChild, _el$29 = _el$28.nextSibling, _el$30 = _el$29.firstChild, _el$31 = _el$30.nextSibling, _el$32 = _el$31.nextSibling, _el$33 = _el$32.nextSibling, _el$34 = _el$33.nextSibling, _el$35 = _el$34.nextSibling, _el$36 = _el$27.nextSibling;
     use((el) => dialogRef = el, _el$26);
     insert(_el$28, () => t("log.title"));
     _el$30.addEventListener("change", handleLevelChange);
@@ -10272,7 +10302,7 @@ function LogViewer(props) {
       },
       get fallback() {
         return (() => {
-          var _el$37 = _tmpl$9$2();
+          var _el$37 = _tmpl$9$3();
           insert(_el$37, () => t("log.empty"));
           return _el$37;
         })();
@@ -11158,16 +11188,12 @@ async function applyPanelResult(result) {
   const requestText = typeof result?._request === "string" ? result._request : "";
   const requestID = String(result?._requestID || "");
   if (taskID) {
-    const previousMessages = [...store.messages];
     ensureTaskListEntry(taskID, requestID, requestText, String(result?.message || ""));
     if (requestID) {
       forgetPendingTask(requestID);
     }
-    await selectTask(taskID, { preserveMessages: true });
+    await selectTask(taskID);
     ensureTaskListEntry(taskID, requestID, requestText, String(result?.message || ""));
-    if (store.messages.length === 0 && previousMessages.length > 0) {
-      setMessages(previousMessages);
-    }
     if (result?.message) {
       const text = String(result.message);
       const alreadyVisible = store.messages.some(
@@ -12790,7 +12816,7 @@ function ChannelsPanel() {
 }
 delegateEvents(["input", "click"]);
 
-var _tmpl$$3 = /* @__PURE__ */ template(`<div class=loading-hint>`), _tmpl$2$3 = /* @__PURE__ */ template(`<div class=config-status-box data-status=error><button type=button class="btn btn-ghost mini">`), _tmpl$3$3 = /* @__PURE__ */ template(`<button type=button class="btn btn-ghost mini">`), _tmpl$4$3 = /* @__PURE__ */ template(`<div class=config-inline-form><label class=field><span class=field-label></span><select class=field-input><option value=path></option><option value=url></option><option value=git></option></select></label><label class=field><span class=field-label></span><div class=field-input-group><input class=field-input type=text></div></label><label class=field><span class=field-label></span><select class=field-input><option value=ask></option><option value=allow></option><option value=deny></option></select></label><div class="dialog-actions compact"><button type=button class="btn btn-ghost"></button><button type=button class="btn btn-primary">`), _tmpl$5$3 = /* @__PURE__ */ template(`<details class=config-subsection open><summary class=config-subsection-head></summary><div class=config-subsection-body><div class=extension-head><div class="dialog-actions compact"><button type=button class="btn btn-ghost mini"></button><button type=button class="btn btn-ghost mini"></button><button type=button class="btn btn-ghost mini"></button><button type=button class="btn btn-ghost mini danger"></button></div></div><div class=extension-list id=skillList>`), _tmpl$6$3 = /* @__PURE__ */ template(`<label class=field><span class=field-label></span><input class=field-input type=url placeholder=https://example.com/mcp>`), _tmpl$7$2 = /* @__PURE__ */ template(`<label class=field><span class=field-label></span><input class=field-input type=text placeholder=npx>`), _tmpl$8$1 = /* @__PURE__ */ template(`<label class=field><span class=field-label></span><input class=field-input type=text placeholder="-y @modelcontextprotocol/server-filesystem C:\\repo">`), _tmpl$9$1 = /* @__PURE__ */ template(`<div class=config-inline-form><label class=field><span class=field-label></span><input class=field-input type=text placeholder=exa></label><label class=field><span class=field-label></span><select class=field-input><option value=remote></option><option value=local></option></select></label><div class="dialog-actions compact"><button type=button class="btn btn-ghost"></button><button type=button class="btn btn-primary">`), _tmpl$0$1 = /* @__PURE__ */ template(`<details class=config-subsection open><summary class=config-subsection-head></summary><div class=config-subsection-body><div class=extension-head><div class="dialog-actions compact"><button type=button class="btn btn-ghost mini"></button><button type=button class="btn btn-ghost mini danger"></button></div></div><div class=extension-list id=mcpList>`), _tmpl$1 = /* @__PURE__ */ template(`<details class=config-subsection><summary class=config-subsection-head></summary><div class=config-subsection-body><div class=extension-list id=skillMarketList>`), _tmpl$10 = /* @__PURE__ */ template(`<div class=empty-hint>`), _tmpl$11 = /* @__PURE__ */ template(`<button type=button class="btn btn-ghost mini danger">`), _tmpl$12 = /* @__PURE__ */ template(`<div class=extension-row><div class=extension-row-main><strong></strong><span></span><small></small></div><div class=extension-row-actions><span class=extension-status data-state=connected>`), _tmpl$13 = /* @__PURE__ */ template(`<div class=extension-row><div class=extension-row-main><strong></strong><span></span></div><span class=extension-status>`), _tmpl$14 = /* @__PURE__ */ template(`<small>`), _tmpl$15 = /* @__PURE__ */ template(`<button type=button class="btn btn-primary mini">`), _tmpl$16 = /* @__PURE__ */ template(`<div class=market-card><div class=market-card-main><strong></strong><span> · <!> · </span><small></small></div><div class=market-card-actions><span class=extension-status>`);
+var _tmpl$$3 = /* @__PURE__ */ template(`<div class=loading-hint>`), _tmpl$2$3 = /* @__PURE__ */ template(`<div class=config-status-box data-status=error><button type=button class="btn btn-ghost mini">`), _tmpl$3$3 = /* @__PURE__ */ template(`<button type=button class="btn btn-ghost mini">`), _tmpl$4$3 = /* @__PURE__ */ template(`<div class=config-inline-form><label class=field><span class=field-label></span><select class=field-input><option value=path></option><option value=url></option><option value=git></option></select></label><label class=field><span class=field-label></span><div class=field-input-group><input class=field-input type=text></div></label><label class=field><span class=field-label></span><select class=field-input><option value=ask></option><option value=allow></option><option value=deny></option></select></label><div class="dialog-actions compact"><button type=button class="btn btn-ghost"></button><button type=button class="btn btn-primary">`), _tmpl$5$3 = /* @__PURE__ */ template(`<details class=config-subsection open><summary class=config-subsection-head></summary><div class=config-subsection-body><div class=extension-head><div class="dialog-actions compact"><button type=button class="btn btn-ghost mini"></button><button type=button class="btn btn-ghost mini"></button><button type=button class="btn btn-ghost mini"></button><button type=button class="btn btn-ghost mini danger"></button></div></div><div class=extension-list id=skillList>`), _tmpl$6$3 = /* @__PURE__ */ template(`<label class=field><span class=field-label></span><input class=field-input type=url placeholder=https://example.com/mcp>`), _tmpl$7$2 = /* @__PURE__ */ template(`<label class=field><span class=field-label></span><input class=field-input type=text placeholder=npx>`), _tmpl$8$2 = /* @__PURE__ */ template(`<label class=field><span class=field-label></span><input class=field-input type=text placeholder="-y @modelcontextprotocol/server-filesystem C:\\repo">`), _tmpl$9$2 = /* @__PURE__ */ template(`<div class=config-inline-form><label class=field><span class=field-label></span><input class=field-input type=text placeholder=exa></label><label class=field><span class=field-label></span><select class=field-input><option value=remote></option><option value=local></option></select></label><div class="dialog-actions compact"><button type=button class="btn btn-ghost"></button><button type=button class="btn btn-primary">`), _tmpl$0$1 = /* @__PURE__ */ template(`<details class=config-subsection open><summary class=config-subsection-head></summary><div class=config-subsection-body><div class=extension-head><div class="dialog-actions compact"><button type=button class="btn btn-ghost mini"></button><button type=button class="btn btn-ghost mini danger"></button></div></div><div class=extension-list id=mcpList>`), _tmpl$1 = /* @__PURE__ */ template(`<details class=config-subsection><summary class=config-subsection-head></summary><div class=config-subsection-body><div class=extension-list id=skillMarketList>`), _tmpl$10 = /* @__PURE__ */ template(`<div class=empty-hint>`), _tmpl$11 = /* @__PURE__ */ template(`<button type=button class="btn btn-ghost mini danger">`), _tmpl$12 = /* @__PURE__ */ template(`<div class=extension-row><div class=extension-row-main><strong></strong><span></span><small></small></div><div class=extension-row-actions><span class=extension-status data-state=connected>`), _tmpl$13 = /* @__PURE__ */ template(`<div class=extension-row><div class=extension-row-main><strong></strong><span></span></div><span class=extension-status>`), _tmpl$14 = /* @__PURE__ */ template(`<small>`), _tmpl$15 = /* @__PURE__ */ template(`<button type=button class="btn btn-primary mini">`), _tmpl$16 = /* @__PURE__ */ template(`<div class=market-card><div class=market-card-main><strong></strong><span> · <!> · </span><small></small></div><div class=market-card-actions><span class=extension-status>`);
 function skillRemoveKind(item) {
   if (item.source_type === "managed_git") return "git";
   if (item.source_type === "config_url") return "url";
@@ -13218,7 +13244,7 @@ function SkillMarketPanel() {
         return showAddMcp();
       },
       get children() {
-        var _el$40 = _tmpl$9$1(), _el$41 = _el$40.firstChild, _el$42 = _el$41.firstChild, _el$43 = _el$42.nextSibling, _el$44 = _el$41.nextSibling, _el$45 = _el$44.firstChild, _el$46 = _el$45.nextSibling, _el$47 = _el$46.firstChild, _el$48 = _el$47.nextSibling, _el$58 = _el$44.nextSibling, _el$59 = _el$58.firstChild, _el$60 = _el$59.nextSibling;
+        var _el$40 = _tmpl$9$2(), _el$41 = _el$40.firstChild, _el$42 = _el$41.firstChild, _el$43 = _el$42.nextSibling, _el$44 = _el$41.nextSibling, _el$45 = _el$44.firstChild, _el$46 = _el$45.nextSibling, _el$47 = _el$46.firstChild, _el$48 = _el$47.nextSibling, _el$58 = _el$44.nextSibling, _el$59 = _el$58.firstChild, _el$60 = _el$59.nextSibling;
         insert(_el$42, () => t("mcp.name"));
         _el$43.$$input = (e) => setMcpForm("name", e.currentTarget.value);
         insert(_el$45, () => t("mcp.type"));
@@ -13249,7 +13275,7 @@ function SkillMarketPanel() {
               createRenderEffect(() => _el$54.value = mcpForm.command);
               return _el$52;
             })(), (() => {
-              var _el$55 = _tmpl$8$1(), _el$56 = _el$55.firstChild, _el$57 = _el$56.nextSibling;
+              var _el$55 = _tmpl$8$2(), _el$56 = _el$55.firstChild, _el$57 = _el$56.nextSibling;
               insert(_el$56, () => t("mcp.arguments"));
               _el$57.$$input = (e) => setMcpForm("args", e.currentTarget.value);
               createRenderEffect(() => _el$57.value = mcpForm.args);
@@ -13386,7 +13412,7 @@ function SkillMarketPanel() {
 }
 delegateEvents(["click", "input"]);
 
-var _tmpl$$2 = /* @__PURE__ */ template(`<div class=config-status-box data-status=error>`), _tmpl$2$2 = /* @__PURE__ */ template(`<div class=loading-hint>`), _tmpl$3$2 = /* @__PURE__ */ template(`<dialog class=dialog><div class=dialog-form><div class=dialog-head><span class=dialog-title></span></div><div class=dialog-actions><button type=button class="btn btn-ghost mini danger"></button><button type=button class="btn btn-ghost">`), _tmpl$4$2 = /* @__PURE__ */ template(`<div class=memory-detail-meta><span class=knowledge-scope></span><span></span><span></span><span>`), _tmpl$5$2 = /* @__PURE__ */ template(`<pre class=memory-detail-content>`), _tmpl$6$2 = /* @__PURE__ */ template(`<div class=knowledge-toolbar><input id=memorySearch type=text class=knowledge-search><button type=button id=btnMemorySearch class="btn btn-ghost mini"></button><button type=button id=btnMemoryRefresh class="btn btn-ghost mini">`), _tmpl$7$1 = /* @__PURE__ */ template(`<div id=memoryList class=knowledge-list>`), _tmpl$8 = /* @__PURE__ */ template(`<div class=empty-hint>`), _tmpl$9 = /* @__PURE__ */ template(`<div class=knowledge-item-meta>`), _tmpl$0 = /* @__PURE__ */ template(`<div class=knowledge-item role=button tabindex=0><div class=knowledge-item-main><div class=knowledge-item-title></div><div class=knowledge-item-meta></div></div><div class=knowledge-item-actions><span class=knowledge-scope></span><button type=button class="btn btn-ghost mini danger knowledge-delete"data-action=delete-memory>`);
+var _tmpl$$2 = /* @__PURE__ */ template(`<div class=config-status-box data-status=error>`), _tmpl$2$2 = /* @__PURE__ */ template(`<div class=loading-hint>`), _tmpl$3$2 = /* @__PURE__ */ template(`<dialog class=dialog><div class=dialog-form><div class=dialog-head><span class=dialog-title></span></div><div class=dialog-actions><button type=button class="btn btn-ghost mini danger"></button><button type=button class="btn btn-ghost">`), _tmpl$4$2 = /* @__PURE__ */ template(`<div class=memory-detail-meta><span class=knowledge-scope></span><span></span><span></span><span>`), _tmpl$5$2 = /* @__PURE__ */ template(`<pre class=memory-detail-content>`), _tmpl$6$2 = /* @__PURE__ */ template(`<div class=knowledge-toolbar><input id=memorySearch type=text class=knowledge-search><button type=button id=btnMemorySearch class="btn btn-ghost mini"></button><button type=button id=btnMemoryRefresh class="btn btn-ghost mini">`), _tmpl$7$1 = /* @__PURE__ */ template(`<div id=memoryList class=knowledge-list>`), _tmpl$8$1 = /* @__PURE__ */ template(`<div class=empty-hint>`), _tmpl$9$1 = /* @__PURE__ */ template(`<div class=knowledge-item-meta>`), _tmpl$0 = /* @__PURE__ */ template(`<div class=knowledge-item role=button tabindex=0><div class=knowledge-item-main><div class=knowledge-item-title></div><div class=knowledge-item-meta></div></div><div class=knowledge-item-actions><span class=knowledge-scope></span><button type=button class="btn btn-ghost mini danger knowledge-delete"data-action=delete-memory>`);
 function knowledgeScopeLabel(scope) {
   if (scope === "session") return t("preference.scope.session");
   if (scope === "cwd") return t("preference.scope.cwd");
@@ -13628,7 +13654,7 @@ function MemoryPanel(props) {
       },
       get fallback() {
         return (() => {
-          var _el$19 = _tmpl$8();
+          var _el$19 = _tmpl$8$1();
           insert(_el$19, emptyHint);
           return _el$19;
         })();
@@ -13659,7 +13685,7 @@ function MemoryPanel(props) {
                   return !!f.snippet;
                 },
                 get children() {
-                  var _el$24 = _tmpl$9();
+                  var _el$24 = _tmpl$9$1();
                   insert(_el$24, () => f.snippet);
                   return _el$24;
                 }
@@ -13917,12 +13943,43 @@ function PreferencesPanel(_props) {
 }
 delegateEvents(["input", "click", "keydown"]);
 
-var _tmpl$ = /* @__PURE__ */ template(`<div class=interaction-panel-empty>`), _tmpl$2 = /* @__PURE__ */ template(`<div class=interaction-panel>`), _tmpl$3 = /* @__PURE__ */ template(`<div class="interaction-body md-content">`), _tmpl$4 = /* @__PURE__ */ template(`<div class=interaction-error>`), _tmpl$5 = /* @__PURE__ */ template(`<button class="btn btn-primary">`), _tmpl$6 = /* @__PURE__ */ template(`<button class="btn btn-ghost">`), _tmpl$7 = /* @__PURE__ */ template(`<div class=interaction-alert><div class=interaction-title> </div><div class=interaction-actions>`);
+var _tmpl$ = /* @__PURE__ */ template(`<div class=interaction-panel-empty>`), _tmpl$2 = /* @__PURE__ */ template(`<div class=interaction-panel>`), _tmpl$3 = /* @__PURE__ */ template(`<div class="interaction-body md-content">`), _tmpl$4 = /* @__PURE__ */ template(`<div class=interaction-error>`), _tmpl$5 = /* @__PURE__ */ template(`<button class="btn btn-primary">`), _tmpl$6 = /* @__PURE__ */ template(`<button class="btn btn-ghost">`), _tmpl$7 = /* @__PURE__ */ template(`<div class=interaction-alert><div class=interaction-title> </div><div class=interaction-actions>`), _tmpl$8 = /* @__PURE__ */ template(`<div class=interaction-auto-answer>`), _tmpl$9 = /* @__PURE__ */ template(`<div class="interaction-alert interaction-auto-replied"><div class=interaction-title><span class=interaction-auto-badge></span> `);
 function isRecord$1(value) {
   return !!value && typeof value === "object" && !Array.isArray(value);
 }
 function interactionIcon(interaction) {
   return interaction.type === "permission" ? "🔒" : "❓";
+}
+function interactionAnswerLines(interaction) {
+  const response = isRecord$1(interaction?.response) ? interaction.response : null;
+  const payload = isRecord$1(interaction?.payload) ? interaction.payload : null;
+  const questions = Array.isArray(payload?.questions) ? payload.questions : [];
+  if (Array.isArray(response?.answers)) {
+    return response.answers.flatMap((answer, index) => {
+      const value = Array.isArray(answer) ? answer.filter((item) => typeof item === "string" && item.trim()).join(", ") : "";
+      if (!value) return [];
+      const question = isRecord$1(questions[index]) ? questions[index] : null;
+      const label = typeof question?.header === "string" && question.header.trim() ? question.header.trim() : typeof question?.question === "string" && question.question.trim() ? question.question.trim() : "";
+      return [label ? `- **${label}**: ${value}` : `- ${value}`];
+    });
+  }
+  if (isRecord$1(response?.answers)) {
+    return Object.entries(response.answers).flatMap(([key, item], index) => {
+      const answer = isRecord$1(item) ? item : null;
+      const value = Array.isArray(answer?.answers) ? answer.answers.filter((entry) => typeof entry === "string" && entry.trim()).join(", ") : "";
+      if (!value) return [];
+      const question = isRecord$1(questions[index]) ? questions[index] : null;
+      const label = typeof question?.header === "string" && question.header.trim() ? question.header.trim() : typeof question?.question === "string" && question.question.trim() ? question.question.trim() : key;
+      return [label ? `- **${label}**: ${value}` : `- ${value}`];
+    });
+  }
+  const message = typeof response?.message === "string" ? response.message.trim() : "";
+  return message ? [message] : [];
+}
+function interactionReplyLabel(reply) {
+  if (reply === "always") return t("interaction.always_allow");
+  if (reply === "reject") return t("interaction.reject");
+  return t("interaction.allow_once");
 }
 function autoInteractionAnswers(interaction) {
   const payload = isRecord$1(interaction?.payload) ? interaction.payload : null;
@@ -13942,6 +13999,15 @@ function shouldAutoResolve(interaction) {
   if (interaction.type === "question") return settingsStore.autoQuestion || settingsStore.unattended;
   return false;
 }
+function interactionResponseSummary(interaction) {
+  if (interaction.type === "permission") {
+    const reply = interaction.response?.reply;
+    return typeof reply === "string" ? interactionReplyLabel(reply) : t("interaction.allow_once");
+  }
+  const lines = interactionAnswerLines(interaction);
+  if (lines.length > 0) return lines.join("\n");
+  return t("interaction.answer");
+}
 function InteractionPanel(props) {
   const [busy, setBusy] = createSignal(false);
   const [errorMap, setErrorMap] = createSignal({});
@@ -13951,6 +14017,13 @@ function InteractionPanel(props) {
     const raw = boardStore.board?.interactions;
     if (!Array.isArray(raw)) return [];
     return raw.filter((item) => item?.status === "pending");
+  });
+  const recentAutoReplies = createMemo(() => {
+    const raw = boardStore.board?.interactions;
+    if (!Array.isArray(raw)) return [];
+    const now = Date.now();
+    const WINDOW_MS = 6e4;
+    return raw.filter((item) => item?.status === "answered" && item?.response?.auto_reply === true && item?.time?.resolved && now - item.time.resolved < WINDOW_MS).sort((a, b) => (b.time?.resolved ?? 0) - (a.time?.resolved ?? 0)).slice(0, 5);
   });
   function setError(id, msg) {
     setErrorMap((prev) => ({
@@ -14204,7 +14277,46 @@ function InteractionPanel(props) {
     }), null);
     insert(_el$, createComponent(Show, {
       get when() {
-        return pendingInteractions().length === 0;
+        return recentAutoReplies().length > 0;
+      },
+      get children() {
+        return createComponent(For, {
+          get each() {
+            return recentAutoReplies();
+          },
+          children: (interaction) => (() => {
+            var _el$12 = _tmpl$9(), _el$13 = _el$12.firstChild, _el$14 = _el$13.firstChild; _el$14.nextSibling;
+            insert(_el$14, () => t("interaction.auto_reply"));
+            insert(_el$13, () => interaction.title, null);
+            insert(_el$12, createComponent(Show, {
+              get when() {
+                return interaction.body;
+              },
+              get children() {
+                var _el$16 = _tmpl$3();
+                insert(_el$16, () => interaction.body);
+                return _el$16;
+              }
+            }), null);
+            insert(_el$12, createComponent(Show, {
+              get when() {
+                return interaction.response;
+              },
+              get children() {
+                var _el$17 = _tmpl$8();
+                insert(_el$17, () => interactionResponseSummary(interaction));
+                return _el$17;
+              }
+            }), null);
+            createRenderEffect(() => setAttribute(_el$12, "data-id", interaction.id));
+            return _el$12;
+          })()
+        });
+      }
+    }), null);
+    insert(_el$, createComponent(Show, {
+      get when() {
+        return memo(() => pendingInteractions().length === 0)() && recentAutoReplies().length === 0;
       },
       get children() {
         return _tmpl$();

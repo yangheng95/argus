@@ -109,7 +109,7 @@ export namespace Agent {
         name: "build",
         description: "The default agent. Executes tools based on configured permissions.",
         options: {},
-        prompt: PROMPT_GENERAL,
+        prompt: PROMPT_SYSTEM,
         permission: PermissionNext.merge(
           defaults,
           PermissionNext.fromConfig({

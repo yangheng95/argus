@@ -163,7 +163,25 @@ export function agentStageLabel(stage: string): string {
 
 export function effectiveRole(msg: any, rootSessionID: string): string {
   const role = msg.info?.role || "assistant";
-  if (role !== "user") return role;
+  if (role !== "user") {
+    // Detect assistant messages from executor child sessions.
+    // Agent-stage messages (spec/planner/goal/judge/delivery) also run in child
+    // sessions with role "assistant", but carry an `agent` field identifying
+    // their stage. Those are rendered inside AgentCard via MessageView, so we
+    // must NOT relabel them. Only messages without a known agent stage are
+    // executor messages.
+    if (role === "assistant" && rootSessionID && !msg._synthetic) {
+      const sessionID =
+        typeof msg.info?.sessionID === "string" ? msg.info.sessionID : "";
+      if (sessionID && sessionID !== rootSessionID) {
+        const agent = String(msg.info?.agent || "").trim().toLowerCase();
+        if (!agent || agent === "executor" || agent === "coding") {
+          return "executor";
+        }
+      }
+    }
+    return role;
+  }
   const source = detectSource(msg);
   if (source) return source;
   const sessionID =

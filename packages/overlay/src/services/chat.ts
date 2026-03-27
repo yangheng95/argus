@@ -437,16 +437,12 @@ async function applyPanelResult(result: any): Promise<void> {
   const requestText = typeof result?._request === "string" ? result._request : "";
   const requestID = String(result?._requestID || "");
   if (taskID) {
-    const previousMessages = [...messageStore.messages];
     ensureTaskListEntry(taskID, requestID, requestText, String(result?.message || ""));
     if (requestID) {
       forgetPendingTask(requestID);
     }
-    await selectTask(taskID, { preserveMessages: true });
+    await selectTask(taskID);
     ensureTaskListEntry(taskID, requestID, requestText, String(result?.message || ""));
-    if (messageStore.messages.length === 0 && previousMessages.length > 0) {
-      setMessages(previousMessages);
-    }
     if (result?.message) {
       const text = String(result.message);
       const alreadyVisible = messageStore.messages.some((item: any) =>

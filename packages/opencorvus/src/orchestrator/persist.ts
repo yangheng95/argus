@@ -2070,13 +2070,15 @@ export function persistGoalSnapshot(
 
   const goals = input.goalDraft.goals.map((goal, index) => {
     const goalInput = goalInputs[index]
-    const persistedRequirementIDs = goal.requirement_ids.map((requirementID) => {
-      const next = requirementIDBySource.get(requirementID)
-      if (!next) {
-        throw new PlannerFailureError(`Goal ${goal.id} references unmapped requirement id: ${requirementID}`)
-      }
-      return next
-    })
+    const persistedRequirementIDs = goal.requirement_ids
+      .filter((requirementID) => !requirementID.startsWith("_implicit:"))
+      .map((requirementID) => {
+        const next = requirementIDBySource.get(requirementID)
+        if (!next) {
+          throw new PlannerFailureError(`Goal ${goal.id} references unmapped requirement id: ${requirementID}`)
+        }
+        return next
+      })
     const persistedDependencyIDs = goal.depends_on_goal_ids.map((dependencyID) => {
       const next = goalIDBySource.get(dependencyID)
       if (!next) {
