@@ -2066,13 +2066,13 @@ body[data-theme="light"] .section-badge {
   min-width: min(100%, var(--ui-rail-min-width));
   max-width: var(--ui-sections-width);
   flex: 0 1 var(--ui-sections-width);
-  overflow-y: auto;
+  overflow: hidden;
   border: 1px solid var(--border);
   border-radius: var(--panel-radius);
   display: flex;
   flex-direction: column;
-  gap: calc(10px * var(--ui-scale));
-  padding: calc(10px * var(--ui-scale));
+  gap: 0;
+  padding: 0;
   background: var(--panel-fill);
   box-shadow: var(--shadow);
   transition: border-color 120ms, background 140ms ease, box-shadow 120ms;
@@ -2132,7 +2132,7 @@ body[data-theme="light"] .section-badge {
   flex: 1 1 0;
   min-height: 0;
   flex-direction: column;
-  gap: calc(6px * var(--ui-scale));
+  gap: calc(10px * var(--ui-scale));
   padding: calc(8px * var(--ui-scale)) calc(10px * var(--ui-scale)) calc(10px * var(--ui-scale));
   overflow-y: auto;
 }

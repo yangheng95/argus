@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "en-US",
-    "panel_revision": "eff961de7c84fc81"
+    "panel_revision": "0214f14a20464e48"
   },
   "brand.guide_kicker": "Quick Guide",
   "brand.guide_positioning_body": "This is the task cockpit, not decorative chrome: left selects tasks, center drives execution, right verifies spec, plan, evaluation, and file changes so the agent does not drift.",
@@ -31,9 +31,6 @@
   "channel.tutorial": "Docs",
   "channel.tutorial_hint": "View setup tutorial",
   "channel.tutorial_credit": "Powered by {{source}}",
-  "channel.fields_none": "No fields to configure",
-  "channel.save_failed": "Failed to save channel settings",
-  "channel.public_url_save_failed": "Failed to save public URL",
   "chat.copy_all": "Copy All",
   "chat.copy_failed": "Failed to copy conversation",
   "chat.copy_title": "Copy Conversation",
@@ -182,7 +179,6 @@
   "prompt.preview": "Markdown Preview",
   "prompt.preview_empty": "This prompt is empty.",
   "prompt.reset": "Reset",
-  "prompt.active_task_notice": "Changes take effect on the next run. The active task continues with its current prompts.",
   "prompt.show_default": "Compare with default",
   "prompt.default_label": "Default",
   "overview.next_step": "Next Step",
@@ -384,9 +380,6 @@
   "section.plan": "Plan",
   "section.spec": "Spec",
   "task.new": "New Task",
-  "task.new_label": "Task name",
-  "task.new_placeholder": "Describe what you want to accomplish...",
-  "task.new_prompt": "What would you like to work on?",
   "task.none": "No tasks yet",
   "settings.language": "Language",
   "settings.language.en_us": "English",
@@ -420,7 +413,6 @@
   "skill.delete_confirm": "Delete skill \"{{name}}\"?",
   "skill.delete_all_confirm_all": "Delete all {{count}} removable skills?",
   "skill.delete_all_confirm_partial": "Delete {{removable}} removable skills? ({{blocked}} cannot be removed)",
-  "skill.none_custom_with_builtin": "No custom skills configured ({{count}} built-in loaded)",
   "skill.open_dir": "Open Dir",
   "skill.open_dir_title": "Open the local custom-skill directory.",
   "skill.open_button_title": "Open this skill's folder or source location.",
@@ -505,13 +497,6 @@
     "saved": "Saved",
     "saving": "Saving..."
   },
-  "channel": {
-    "public_url_label": "Public URL",
-    "status": {
-      "connected": "Connected",
-      "error": "Error"
-    }
-  },
   "llm": {
     "api_key_copy_done": "API key copied"
   },
@@ -520,7 +505,6 @@
     "load_server": "Load server logs"
   },
   "mcp": {
-    "confirm_delete_all": "Delete all MCP connections? This cannot be undone.",
     "delete_all": "Delete All",
     "status": {
       "connecting": "Connecting"
@@ -541,8 +525,6 @@
     }
   },
   "skill": {
-    "confirm_delete": "Delete this skill? This cannot be undone.",
-    "confirm_delete_all": "Delete all skills? This cannot be undone.",
     "delete_all": "Delete All"
   },
   "titlebar": {
@@ -585,7 +567,6 @@
   "llm.provider_label": "Provider",
   "sidebar.close": "Collapse sidebar",
   "sidebar.open": "Open sidebar",
-  "version.core": "Core {{version}}",
   "version.core_unknown": "Core unavailable",
   "version.overlay": "Overlay v{{version}}",
   "channel.available": "Available: {{names}}",
@@ -610,8 +591,5 @@
     "appearance": "Appearance",
     "behaviour": "Behaviour",
     "connection": "Connection"
-  },
-  "settings.tab": {
-    "general": "General"
   }
 }
