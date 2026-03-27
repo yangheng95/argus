@@ -3271,11 +3271,17 @@ body[data-theme="light"] .section-badge {
   background: var(--agent-card-bg, rgba(140, 150, 168, 0.04));
   border: 1px solid var(--agent-card-border, rgba(140, 150, 168, 0.16));
   border-radius: calc(6px * var(--ui-scale));
-  max-height: calc(300px * var(--ui-scale));
-  overflow-y: auto;
+  /* collapsed: ~3 lines of body text (line-height 1.78 × ~12.6px × 3 ≈ 67px + padding) */
+  max-height: calc(84px * var(--ui-scale));
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to bottom, black 55%, transparent 100%);
+  mask-image: linear-gradient(to bottom, black 55%, transparent 100%);
 }
 .agent-card--expanded .agent-card-body {
   max-height: min(70vh, calc(1200px * var(--ui-scale)));
+  overflow-y: auto;
+  -webkit-mask-image: none;
+  mask-image: none;
 }
 .agent-card-body::-webkit-scrollbar {
   width: 4px;
@@ -3299,6 +3305,78 @@ body[data-theme="light"] .section-badge {
   border-color: transparent;
   margin-left: calc(22px * var(--ui-scale));
   font-size: var(--ui-font-small);
+}
+
+/* ── Agent card summary (structured stage data) ── */
+.agent-card-summary {
+  font-size: var(--ui-font-small);
+  padding-bottom: calc(2px * var(--ui-scale));
+}
+.agent-card-summary .goals-list {
+  display: flex;
+  flex-direction: column;
+  gap: calc(2px * var(--ui-scale));
+}
+.agent-card-summary .goal-item {
+  padding: calc(3px * var(--ui-scale)) calc(6px * var(--ui-scale));
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+.agent-card-summary .goal-criteria {
+  font-size: var(--ui-font-meta);
+  opacity: 0.7;
+}
+.agent-card-summary-content {
+  font-size: var(--ui-font-small);
+  color: var(--text-soft);
+  line-height: 1.5;
+}
+.agent-card-summary-plan {
+  display: flex;
+  flex-direction: column;
+  gap: calc(4px * var(--ui-scale));
+}
+.agent-card-summary-plan .plan-version {
+  align-self: flex-start;
+}
+.agent-card-summary-eval {
+  display: flex;
+  flex-direction: column;
+  gap: calc(6px * var(--ui-scale));
+}
+.agent-card-summary-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(4px * var(--ui-scale));
+}
+.agent-card-summary-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: var(--ui-font-small);
+  color: var(--text-soft);
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: var(--subtle-2);
+}
+.agent-card-summary-check[data-status="passed"] {
+  color: var(--good);
+}
+.agent-card-summary-check[data-status="failed"] {
+  color: var(--bad);
+}
+.agent-card-summary-check[data-status="skipped"] {
+  color: var(--text-muted);
+  opacity: 0.6;
+}
+.agent-card-summary-check-icon {
+  font-size: calc(10px * var(--ui-scale));
+}
+.agent-card-summary-divider {
+  border: none;
+  border-top: 1px solid var(--agent-card-border, rgba(140, 150, 168, 0.16));
+  margin: calc(6px * var(--ui-scale)) 0;
 }
 
 .msg-head {
@@ -4139,10 +4217,11 @@ body[data-theme="light"] .section-badge {
   color: var(--text-muted);
 }
 .chat-compose-meta-left a {
-  color: var(--accent);
+  color: var(--text-muted);
   text-decoration: none;
 }
 .chat-compose-meta-left a:hover {
+  color: var(--text-soft);
   text-decoration: underline;
 }
 

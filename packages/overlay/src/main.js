@@ -2093,10 +2093,11 @@ function roleLabel(role) {
   if (role === "spec") return t("chat.role.spec");
   if (role === "system") return t("chat.role.system");
   if (role === "goal_gate") return t("chat.role.goal");
+  if (role === "executor") return t("chat.role.executor");
   return t("chat.role.message");
 }
 function agentStageRole(stage) {
-  const text = String(stage).trim().toLowerCase();
+  const text = String(stage || "").trim().toLowerCase();
   if (text === "planner" || text === "plan") return "planner";
   if (text === "spec") return "spec";
   if (text === "judge" || text === "evaluation" || text === "scheduler") return "scheduler";
@@ -2171,6 +2172,9 @@ function effectiveRole$1(msg, rootSessionID) {
   if (rootSessionID && sessionID && sessionID !== rootSessionID) {
     return agentStageRole(phaseFromMessage(msg) || msg.info?.agent || "system");
   }
+  if (msg._synthetic && msg.info?.agent) {
+    return agentStageRole(msg.info.agent);
+  }
   return role;
 }
 
@@ -2183,7 +2187,7 @@ function stamp(ts) {
   return d.toLocaleTimeString(localeTag(), timeLocaleOptions());
 }
 
-var _tmpl$$g = /* @__PURE__ */ template(`<article class="turn msg"><div class=msg-head><span class=msg-role></span><span class=msg-time></span></div><div class=msg-bubble><div class=msg-body>`), _tmpl$2$e = /* @__PURE__ */ template(`<div class=msg-patch>`), _tmpl$3$e = /* @__PURE__ */ template(`<div>`), _tmpl$4$e = /* @__PURE__ */ template(`<div class=msg-tool><span class=tool-icon>→</span><span class=tool-name>Subtask</span><span class=tool-detail>`), _tmpl$5$e = /* @__PURE__ */ template(`<div class=executor-process-detail>`), _tmpl$6$b = /* @__PURE__ */ template(`<div class=executor-process-progress><span class=executor-process-activity></span><span>`), _tmpl$7$9 = /* @__PURE__ */ template(`<div class=executor-process-note>`), _tmpl$8$5 = /* @__PURE__ */ template(`<pre class=executor-process-output>`), _tmpl$9$5 = /* @__PURE__ */ template(`<div class=executor-process-card><div class=executor-process-head><span class=executor-process-kind></span><div class=executor-process-meta><div class=executor-process-row><div class=executor-process-title></div><div class=executor-process-status>`);
+var _tmpl$$g = /* @__PURE__ */ template(`<article class="turn msg"><div class=msg-head><span class=msg-role></span><span class=msg-time></span></div><div class=msg-bubble><div class=msg-body>`), _tmpl$2$e = /* @__PURE__ */ template(`<div class=msg-patch>`), _tmpl$3$e = /* @__PURE__ */ template(`<div>`), _tmpl$4$e = /* @__PURE__ */ template(`<div class=msg-tool><span class=tool-icon>→</span><span class=tool-name>Subtask</span><span class=tool-detail>`), _tmpl$5$e = /* @__PURE__ */ template(`<div class=executor-process-detail>`), _tmpl$6$c = /* @__PURE__ */ template(`<div class=executor-process-progress><span class=executor-process-activity></span><span>`), _tmpl$7$a = /* @__PURE__ */ template(`<div class=executor-process-note>`), _tmpl$8$6 = /* @__PURE__ */ template(`<pre class=executor-process-output>`), _tmpl$9$6 = /* @__PURE__ */ template(`<div class=executor-process-card><div class=executor-process-head><span class=executor-process-kind></span><div class=executor-process-meta><div class=executor-process-row><div class=executor-process-title></div><div class=executor-process-status>`);
 function renderFilePart(part) {
   const url = part.url || part.filename || "";
   const name = part.filename || url || "file";
@@ -2198,6 +2202,11 @@ function MessageView(props) {
   const role = () => effectiveRole$1(props.message, rootTaskSessionID$2());
   const parts = () => orderedMessageParts(props.message);
   const time = () => stamp(props.message.info?.time?.created);
+  const executorType = createMemo(() => {
+    if (role() !== "executor") return void 0;
+    const p = parts();
+    return p.length > 0 && p.every((part) => part.type === "executor_process") ? "process" : "events";
+  });
   const hasContent = createMemo(() => {
     const p = parts();
     if (p.length === 0) return false;
@@ -2288,7 +2297,7 @@ function MessageView(props) {
                 return memo(() => part.type === "executor_process")() && part.process;
               },
               get children() {
-                var _el$11 = _tmpl$9$5(), _el$12 = _el$11.firstChild, _el$13 = _el$12.firstChild, _el$14 = _el$13.nextSibling, _el$15 = _el$14.firstChild, _el$16 = _el$15.firstChild, _el$17 = _el$16.nextSibling;
+                var _el$11 = _tmpl$9$6(), _el$12 = _el$11.firstChild, _el$13 = _el$12.firstChild, _el$14 = _el$13.nextSibling, _el$15 = _el$14.firstChild, _el$16 = _el$15.firstChild, _el$17 = _el$16.nextSibling;
                 insert(_el$13, () => String(part.process.kind || "task"));
                 insert(_el$16, () => part.process.title || part.process.id || "");
                 insert(_el$17, () => part.process.status || "running");
@@ -2307,7 +2316,7 @@ function MessageView(props) {
                     return part.process.progress;
                   },
                   get children() {
-                    var _el$19 = _tmpl$6$b(), _el$20 = _el$19.firstChild, _el$21 = _el$20.nextSibling;
+                    var _el$19 = _tmpl$6$c(), _el$20 = _el$19.firstChild, _el$21 = _el$20.nextSibling;
                     insert(_el$21, () => part.process.progress);
                     return _el$19;
                   }
@@ -2317,7 +2326,7 @@ function MessageView(props) {
                     return part.process.note;
                   },
                   get children() {
-                    var _el$22 = _tmpl$7$9();
+                    var _el$22 = _tmpl$7$a();
                     insert(_el$22, () => part.process.note);
                     return _el$22;
                   }
@@ -2327,16 +2336,16 @@ function MessageView(props) {
                     return part.process.output;
                   },
                   get children() {
-                    var _el$23 = _tmpl$8$5();
+                    var _el$23 = _tmpl$8$6();
                     insert(_el$23, () => part.process.output);
                     return _el$23;
                   }
                 }), null);
                 createRenderEffect((_p$) => {
-                  var _v$ = part.process.status || "running", _v$2 = part.process.status === "running" ? "true" : "false", _v$3 = part.process.status || "running";
-                  _v$ !== _p$.e && setAttribute(_el$11, "data-status", _p$.e = _v$);
-                  _v$2 !== _p$.t && setAttribute(_el$11, "data-live", _p$.t = _v$2);
-                  _v$3 !== _p$.a && setAttribute(_el$17, "data-status", _p$.a = _v$3);
+                  var _v$3 = part.process.status || "running", _v$4 = part.process.status === "running" ? "true" : "false", _v$5 = part.process.status || "running";
+                  _v$3 !== _p$.e && setAttribute(_el$11, "data-status", _p$.e = _v$3);
+                  _v$4 !== _p$.t && setAttribute(_el$11, "data-live", _p$.t = _v$4);
+                  _v$5 !== _p$.a && setAttribute(_el$17, "data-status", _p$.a = _v$5);
                   return _p$;
                 }, {
                   e: void 0,
@@ -2349,15 +2358,34 @@ function MessageView(props) {
           }
         })
       }));
-      createRenderEffect(() => setAttribute(_el$, "data-role", role()));
+      createRenderEffect((_p$) => {
+        var _v$ = role(), _v$2 = executorType();
+        _v$ !== _p$.e && setAttribute(_el$, "data-role", _p$.e = _v$);
+        _v$2 !== _p$.t && setAttribute(_el$, "data-executor-type", _p$.t = _v$2);
+        return _p$;
+      }, {
+        e: void 0,
+        t: void 0
+      });
       return _el$;
     }
   });
 }
 
-var _tmpl$$f = /* @__PURE__ */ template(`<span class="agent-card-badge agent-card-badge--done"title=Completed>✓`), _tmpl$2$d = /* @__PURE__ */ template(`<div class=agent-card-body>`), _tmpl$3$d = /* @__PURE__ */ template(`<article class="turn msg agent-card"data-role=agent-card><div class=agent-card-header role=button tabindex=0><span class=agent-card-label></span><span class=agent-card-count></span><span class=agent-card-chevron aria-hidden=true>▼`), _tmpl$4$d = /* @__PURE__ */ template(`<span class="agent-card-badge agent-card-badge--running"title=Running><span class=agent-card-spinner>`), _tmpl$5$d = /* @__PURE__ */ template(`<span class="agent-card-badge agent-card-badge--error"title=Error>✗`);
+var _tmpl$$f = /* @__PURE__ */ template(`<span class="agent-card-badge agent-card-badge--done"title=Completed>✓`), _tmpl$2$d = /* @__PURE__ */ template(`<div class="agent-card-summary-content md-content">`), _tmpl$3$d = /* @__PURE__ */ template(`<span class=plan-version>v`), _tmpl$4$d = /* @__PURE__ */ template(`<div class=agent-card-summary-plan><div class="agent-card-summary-content md-content">`), _tmpl$5$d = /* @__PURE__ */ template(`<div class=goals-list>`), _tmpl$6$b = /* @__PURE__ */ template(`<span class=section-badge>`), _tmpl$7$9 = /* @__PURE__ */ template(`<div class=agent-card-summary-checks>`), _tmpl$8$5 = /* @__PURE__ */ template(`<div class=agent-card-summary-eval>`), _tmpl$9$5 = /* @__PURE__ */ template(`<div class=agent-card-summary>`), _tmpl$0$4 = /* @__PURE__ */ template(`<hr class=agent-card-summary-divider>`), _tmpl$1$3 = /* @__PURE__ */ template(`<article class="turn msg agent-card"data-role=agent-card><div class=agent-card-header role=button tabindex=0><span class=agent-card-label></span><span class=agent-card-count></span><span class=agent-card-chevron aria-hidden=true>▼</span></div><div class=agent-card-body>`), _tmpl$10$3 = /* @__PURE__ */ template(`<span class="agent-card-badge agent-card-badge--running"title=Running><span class=agent-card-spinner>`), _tmpl$11$2 = /* @__PURE__ */ template(`<span class="agent-card-badge agent-card-badge--error"title=Error>✗`), _tmpl$12$2 = /* @__PURE__ */ template(`<div class="goal-criteria md-content">`), _tmpl$13$2 = /* @__PURE__ */ template(`<span class=goal-priority>`), _tmpl$14$2 = /* @__PURE__ */ template(`<div class="goal-item agent-card-summary-goal"><span class=goal-status-icon></span><div class=goal-content><div class="goal-desc md-content">`), _tmpl$15$2 = /* @__PURE__ */ template(`<span class=agent-card-summary-check><span class=agent-card-summary-check-icon>`);
 function stageLabel(stage) {
   return agentStageLabel(stage);
+}
+function goalIcon$1(status) {
+  if (status === "passed") return "✓";
+  if (status === "failed") return "✗";
+  return "•";
+}
+function checkIcon(status) {
+  if (status === "passed") return "✓";
+  if (status === "failed") return "✗";
+  if (status === "skipped") return "–";
+  return "•";
 }
 function AgentCard(props) {
   const expanded = () => agentCardExpanded(props.cardID, props.status === "running");
@@ -2368,8 +2396,66 @@ function AgentCard(props) {
   const toggle = () => {
     toggleAgentCardExpanded(props.cardID, props.status === "running");
   };
+  const board = () => boardStore.board;
+  const specContent = createMemo(() => {
+    if (props.stage !== "spec") return "";
+    const content = board()?.spec?.content || "";
+    if (!content) return "";
+    const lines = content.split("\n").filter((l) => l.trim());
+    const preview = lines.slice(0, 4).join("\n");
+    return lines.length > 4 ? preview + "\n…" : preview;
+  });
+  const planData = createMemo(() => {
+    if (props.stage !== "planner") return null;
+    const plan = board()?.plan;
+    if (!plan?.summary) return null;
+    return {
+      summary: plan.summary,
+      version: plan.version
+    };
+  });
+  const goalsData = createMemo(() => {
+    if (props.stage !== "goal") return [];
+    const lanes = board()?.lanes || [];
+    const goalsLane = lanes.find((lane) => lane.id === "goals");
+    return goalsLane?.cards || [];
+  });
+  const evaluationData = createMemo(() => {
+    if (props.stage !== "judge") return null;
+    const evaluation = board()?.evaluation;
+    if (!evaluation) return null;
+    return {
+      verdict: evaluation.verdict || "",
+      checks: Array.isArray(evaluation.checks) ? evaluation.checks : []
+    };
+  });
+  const deliveryData = createMemo(() => {
+    if (props.stage !== "delivery") return null;
+    const b = board();
+    const delivery = b?.acceptedDelivery || b?.delivery;
+    if (!delivery) return null;
+    return {
+      status: delivery.status || ""
+    };
+  });
+  const hasSummary = createMemo(() => {
+    switch (props.stage) {
+      case "spec":
+        return !!specContent();
+      case "planner":
+        return !!planData();
+      case "goal":
+        return goalsData().length > 0;
+      case "judge":
+        return !!evaluationData();
+      case "delivery":
+        return !!deliveryData();
+      default:
+        return false;
+    }
+  });
   return (() => {
-    var _el$ = _tmpl$3$d(), _el$2 = _el$.firstChild, _el$4 = _el$2.firstChild, _el$5 = _el$4.nextSibling;
+    var _el$ = _tmpl$1$3(), _el$2 = _el$.firstChild, _el$4 = _el$2.firstChild, _el$5 = _el$4.nextSibling, _el$6 = _el$2.nextSibling;
     _el$2.$$keydown = (e) => {
       if (e.key === "Enter" || e.key === " ") {
         e.preventDefault();
@@ -2382,7 +2468,7 @@ function AgentCard(props) {
         return props.status !== "running";
       },
       get fallback() {
-        return _tmpl$4$d();
+        return _tmpl$10$3();
       },
       get children() {
         return createComponent(Show, {
@@ -2390,7 +2476,7 @@ function AgentCard(props) {
             return props.status === "completed";
           },
           get fallback() {
-            return _tmpl$5$d();
+            return _tmpl$11$2();
           },
           get children() {
             return _tmpl$$f();
@@ -2407,22 +2493,155 @@ function AgentCard(props) {
         return ["(", memo(() => props.messages.length), ")"];
       }
     }));
-    insert(_el$, createComponent(Show, {
+    insert(_el$6, createComponent(Show, {
       get when() {
-        return expanded();
+        return hasSummary();
       },
       get children() {
-        var _el$6 = _tmpl$2$d();
-        insert(_el$6, createComponent(For, {
-          get each() {
-            return props.messages;
-          },
-          children: (msg) => createComponent(MessageView, {
-            message: msg
-          })
-        }));
-        return _el$6;
+        return [(() => {
+          var _el$7 = _tmpl$9$5();
+          insert(_el$7, createComponent(Show, {
+            get when() {
+              return memo(() => props.stage === "spec")() && specContent();
+            },
+            get children() {
+              var _el$8 = _tmpl$2$d();
+              createRenderEffect(() => _el$8.innerHTML = renderMarkdown$1(specContent()));
+              return _el$8;
+            }
+          }), null);
+          insert(_el$7, createComponent(Show, {
+            get when() {
+              return memo(() => props.stage === "planner")() && planData();
+            },
+            get children() {
+              var _el$9 = _tmpl$4$d(), _el$10 = _el$9.firstChild;
+              insert(_el$9, createComponent(Show, {
+                get when() {
+                  return planData().version;
+                },
+                get children() {
+                  var _el$0 = _tmpl$3$d(); _el$0.firstChild;
+                  insert(_el$0, () => planData().version, null);
+                  return _el$0;
+                }
+              }), _el$10);
+              createRenderEffect(() => _el$10.innerHTML = renderMarkdown$1(planData().summary));
+              return _el$9;
+            }
+          }), null);
+          insert(_el$7, createComponent(Show, {
+            get when() {
+              return memo(() => props.stage === "goal")() && goalsData().length > 0;
+            },
+            get children() {
+              var _el$11 = _tmpl$5$d();
+              insert(_el$11, createComponent(For, {
+                get each() {
+                  return goalsData();
+                },
+                children: (card) => (() => {
+                  var _el$19 = _tmpl$14$2(), _el$20 = _el$19.firstChild, _el$21 = _el$20.nextSibling, _el$22 = _el$21.firstChild;
+                  insert(_el$20, () => goalIcon$1(card.status));
+                  insert(_el$21, createComponent(Show, {
+                    get when() {
+                      return card.detail;
+                    },
+                    get children() {
+                      var _el$23 = _tmpl$12$2();
+                      createRenderEffect(() => _el$23.innerHTML = renderMarkdown$1(card.detail));
+                      return _el$23;
+                    }
+                  }), null);
+                  insert(_el$19, createComponent(Show, {
+                    get when() {
+                      return card.metadata?.priority;
+                    },
+                    get children() {
+                      var _el$24 = _tmpl$13$2();
+                      insert(_el$24, () => card.metadata.priority);
+                      createRenderEffect(() => setAttribute(_el$24, "data-priority", card.metadata.priority));
+                      return _el$24;
+                    }
+                  }), null);
+                  createRenderEffect((_p$) => {
+                    var _v$5 = card.status || "pending", _v$6 = renderMarkdown$1(card.title || "");
+                    _v$5 !== _p$.e && setAttribute(_el$20, "data-status", _p$.e = _v$5);
+                    _v$6 !== _p$.t && (_el$22.innerHTML = _p$.t = _v$6);
+                    return _p$;
+                  }, {
+                    e: void 0,
+                    t: void 0
+                  });
+                  return _el$19;
+                })()
+              }));
+              return _el$11;
+            }
+          }), null);
+          insert(_el$7, createComponent(Show, {
+            get when() {
+              return memo(() => props.stage === "judge")() && evaluationData();
+            },
+            get children() {
+              var _el$12 = _tmpl$8$5();
+              insert(_el$12, createComponent(Show, {
+                get when() {
+                  return evaluationData().verdict;
+                },
+                get children() {
+                  var _el$13 = _tmpl$6$b();
+                  insert(_el$13, () => evaluationData().verdict);
+                  createRenderEffect(() => setAttribute(_el$13, "data-tone", evaluationData().verdict === "accepted" ? "good" : evaluationData().verdict === "rejected" ? "bad" : "warn"));
+                  return _el$13;
+                }
+              }), null);
+              insert(_el$12, createComponent(Show, {
+                get when() {
+                  return evaluationData().checks.length > 0;
+                },
+                get children() {
+                  var _el$14 = _tmpl$7$9();
+                  insert(_el$14, createComponent(For, {
+                    get each() {
+                      return evaluationData().checks;
+                    },
+                    children: (check) => (() => {
+                      var _el$25 = _tmpl$15$2(), _el$26 = _el$25.firstChild;
+                      insert(_el$26, () => checkIcon(check.status));
+                      insert(_el$25, () => check.label || check.name, null);
+                      createRenderEffect(() => setAttribute(_el$25, "data-status", check.status));
+                      return _el$25;
+                    })()
+                  }));
+                  return _el$14;
+                }
+              }), null);
+              return _el$12;
+            }
+          }), null);
+          insert(_el$7, createComponent(Show, {
+            get when() {
+              return memo(() => props.stage === "delivery")() && deliveryData();
+            },
+            get children() {
+              var _el$15 = _tmpl$6$b();
+              insert(_el$15, () => deliveryData().status);
+              createRenderEffect(() => setAttribute(_el$15, "data-tone", deliveryData().status === "delivered" ? "good" : deliveryData().status === "failed" ? "bad" : "accent"));
+              return _el$15;
+            }
+          }), null);
+          return _el$7;
+        })(), _tmpl$0$4()];
       }
+    }), null);
+    insert(_el$6, createComponent(For, {
+      get each() {
+        return props.messages;
+      },
+      children: (msg) => createComponent(MessageView, {
+        message: msg
+      })
     }), null);
     createRenderEffect((_p$) => {
       var _v$ = !!expanded(), _v$2 = props.stage, _v$3 = props.cardID, _v$4 = expanded();
@@ -3101,7 +3320,7 @@ function executorMessage(event, events = [], index = -1) {
     _synthetic: true,
     info: {
       id: event.id,
-      role: "assistant",
+      role: "executor",
       time: { created: event.time?.created || Date.now() }
     },
     parts: [part]
@@ -3242,7 +3461,7 @@ function executorProcessMessage(processes) {
     _synthetic: true,
     info: {
       id: `executor:processes:${boardStore.selectedTaskID || "active"}`,
-      role: "assistant",
+      role: "executor",
       time: { created: processes[0]?.time?.created || Date.now() }
     },
     parts: processes.map((process) => ({
@@ -5300,7 +5519,7 @@ function buildBoardContextMessages(preClassifiedMainMessages, board, agentEvents
     if (request) syntheticMsgs.push(request);
     if (interaction.status === "answered" || interaction.status === "rejected") {
       const response = syntheticTextMessage(
-        "user",
+        "system",
         interaction.time?.resolved || interaction.time?.updated || Date.now(),
         interactionResponseText(interaction)
       );
@@ -5975,6 +6194,14 @@ function checkFamilyText(key) {
   if (key === "acceptance") return t("checks.family.acceptance");
   return t("checks.family.custom");
 }
+const CHECK_FAMILY_ICONS = {
+  command: `<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2.5" width="10" height="9" rx="1.2"/><polyline points="4.5,6 6,7.5 4.5,9"/><line x1="7.5" y1="9" x2="9.5" y2="9"/></svg>`,
+  runtime: `<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 3.5L9.5 7 4.5 10.5Z"/></svg>`,
+  artifact: `<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 4.5L7 2l4.5 2.5v5L7 12l-4.5-2.5Z"/><polyline points="2.5,4.5 7,7 11.5,4.5"/><line x1="7" y1="7" x2="7" y2="12"/></svg>`,
+  review: `<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.2" cy="6.2" r="3.5"/><line x1="9" y1="9" x2="11.5" y2="11.5"/></svg>`,
+  acceptance: `<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="1.5" width="9" height="11" rx="1.2"/><polyline points="5,6.5 6.5,8 9,5.5"/><line x1="5" y1="10" x2="9" y2="10"/></svg>`,
+  custom: `<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="7" r="1"/><path d="M6.1 2.5l-.2 1.2a3.4 3.4 0 0 0-.9.5L3.8 3.8l-.9.9.4 1.2a3.4 3.4 0 0 0-.5.9l-1.2.2v1.2l1.2.2c.1.3.3.6.5.9l-.4 1.2.9.9 1.2-.4c.3.2.6.4.9.5l.2 1.2h1.2l.2-1.2c.3-.1.6-.3.9-.5l1.2.4.9-.9-.4-1.2c.2-.3.4-.6.5-.9l1.2-.2V6.8l-1.2-.2a3.4 3.4 0 0 0-.5-.9l.4-1.2-.9-.9-1.2.4a3.4 3.4 0 0 0-.9-.5L7.9 2.5Z"/></svg>`
+};
 function record$2(value) {
   return !!value && typeof value === "object" && !Array.isArray(value);
 }
@@ -6121,33 +6348,32 @@ function CriteriaPanel(props) {
           return groups();
         },
         children: (group) => (() => {
-          var _el$22 = _tmpl$10$2(), _el$23 = _el$22.firstChild, _iconEl = _el$23.firstChild, _el$24 = _iconEl.nextSibling, _el$25 = _el$24.nextSibling, _el$26 = _el$23.nextSibling;
-          _iconEl.innerHTML = CHECK_FAMILY_ICONS[group.key] || "";
-          insert(_el$24, () => group.label);
-          insert(_el$25, () => tc("checks.group_count", group.items.length, {
+          var _el$22 = _tmpl$10$2(), _el$23 = _el$22.firstChild, _el$24 = _el$23.firstChild, _el$25 = _el$24.nextSibling, _el$26 = _el$25.nextSibling, _el$27 = _el$23.nextSibling;
+          insert(_el$25, () => group.label);
+          insert(_el$26, () => tc("checks.group_count", group.items.length, {
             count: group.items.length
           }));
-          insert(_el$26, createComponent(For, {
+          insert(_el$27, createComponent(For, {
             get each() {
               return group.items;
             },
             children: (spec) => {
               const status = () => checkStatuses()[spec.key] || "pending";
               return (() => {
-                var _el$27 = _tmpl$11$1(), _el$28 = _el$27.firstChild, _el$29 = _el$28.nextSibling, _el$30 = _el$29.nextSibling, _el$31 = _el$30.firstChild, _el$32 = _el$31.nextSibling, _el$33 = _el$30.nextSibling, _el$34 = _el$33.nextSibling;
-                _el$28.addEventListener("change", (e) => props.onToggle?.(spec.key, e.currentTarget.checked));
-                insert(_el$31, () => spec.label);
-                insert(_el$32, (() => {
+                var _el$28 = _tmpl$11$1(), _el$29 = _el$28.firstChild, _el$30 = _el$29.nextSibling, _el$31 = _el$30.nextSibling, _el$32 = _el$31.firstChild, _el$33 = _el$32.nextSibling, _el$34 = _el$31.nextSibling, _el$35 = _el$34.nextSibling;
+                _el$29.addEventListener("change", (e) => props.onToggle?.(spec.key, e.currentTarget.checked));
+                insert(_el$32, () => spec.label);
+                insert(_el$33, (() => {
                   var _c$ = memo(() => !!spec.readOnly);
                   return () => _c$() ? t("detail.observed") : memo(() => !!spec.enabled)() ? t("detail.enabled") : t("detail.disabled");
                 })());
-                insert(_el$34, () => criteriaResultText(status()));
+                insert(_el$35, () => criteriaResultText(status()));
                 createRenderEffect((_p$) => {
-                  var _v$12 = spec.readOnly ? "true" : void 0, _v$13 = spec.key, _v$14 = spec.readOnly, _v$15 = status();
-                  _v$12 !== _p$.e && setAttribute(_el$27, "data-readonly", _p$.e = _v$12);
-                  _v$13 !== _p$.t && setAttribute(_el$28, "data-check", _p$.t = _v$13);
-                  _v$14 !== _p$.a && (_el$28.disabled = _p$.a = _v$14);
-                  _v$15 !== _p$.o && setAttribute(_el$33, "data-result", _p$.o = _v$15);
+                  var _v$14 = spec.readOnly ? "true" : void 0, _v$15 = spec.key, _v$16 = spec.readOnly, _v$17 = status();
+                  _v$14 !== _p$.e && setAttribute(_el$28, "data-readonly", _p$.e = _v$14);
+                  _v$15 !== _p$.t && setAttribute(_el$29, "data-check", _p$.t = _v$15);
+                  _v$16 !== _p$.a && (_el$29.disabled = _p$.a = _v$16);
+                  _v$17 !== _p$.o && setAttribute(_el$34, "data-result", _p$.o = _v$17);
                   return _p$;
                 }, {
                   e: void 0,
@@ -6155,12 +6381,20 @@ function CriteriaPanel(props) {
                   a: void 0,
                   o: void 0
                 });
-                createRenderEffect(() => _el$28.checked = spec.enabled);
-                return _el$27;
+                createRenderEffect(() => _el$29.checked = spec.enabled);
+                return _el$28;
               })();
             }
           }));
-          createRenderEffect(() => setAttribute(_el$22, "data-family", group.key));
+          createRenderEffect((_p$) => {
+            var _v$12 = group.key, _v$13 = CHECK_FAMILY_ICONS[group.key] || "";
+            _v$12 !== _p$.e && setAttribute(_el$22, "data-family", _p$.e = _v$12);
+            _v$13 !== _p$.t && (_el$24.innerHTML = _p$.t = _v$13);
+            return _p$;
+          }, {
+            e: void 0,
+            t: void 0
+          });
           return _el$22;
         })()
       });
@@ -6194,29 +6428,29 @@ function EvaluationPanel(props) {
           return errors();
         },
         children: (err) => (() => {
-          var _el$36 = _tmpl$14$1(), _el$37 = _el$36.firstChild; _el$37.firstChild; var _el$41 = _el$37.nextSibling;
-          insert(_el$37, () => err.name, null);
-          insert(_el$36, createComponent(Show, {
+          var _el$37 = _tmpl$14$1(), _el$38 = _el$37.firstChild; _el$38.firstChild; var _el$42 = _el$38.nextSibling;
+          insert(_el$38, () => err.name, null);
+          insert(_el$37, createComponent(Show, {
             get when() {
               return err.family;
             },
             get children() {
-              var _el$40 = _tmpl$13$1();
-              insert(_el$40, () => err.family);
-              return _el$40;
+              var _el$41 = _tmpl$13$1();
+              insert(_el$41, () => err.family);
+              return _el$41;
             }
-          }), _el$41);
-          createRenderEffect(() => _el$41.innerHTML = renderMarkdown$1(err.evidence.slice(0, 400)));
-          return _el$36;
+          }), _el$42);
+          createRenderEffect(() => _el$42.innerHTML = renderMarkdown$1(err.evidence.slice(0, 400)));
+          return _el$37;
         })()
       }), createComponent(Show, {
         get when() {
           return props.evaluation?.summary;
         },
         get children() {
-          var _el$35 = _tmpl$12$1();
-          createRenderEffect(() => _el$35.innerHTML = renderMarkdown$1(props.evaluation.summary));
-          return _el$35;
+          var _el$36 = _tmpl$12$1();
+          createRenderEffect(() => _el$36.innerHTML = renderMarkdown$1(props.evaluation.summary));
+          return _el$36;
         }
       })];
     }
@@ -6235,28 +6469,28 @@ function DeliveryPanel(props) {
     },
     get fallback() {
       return (() => {
-        var _el$46 = _tmpl$4$b();
-        insert(_el$46, () => t("empty.delivery"));
-        return _el$46;
+        var _el$47 = _tmpl$4$b();
+        insert(_el$47, () => t("empty.delivery"));
+        return _el$47;
       })();
     },
     get children() {
-      var _el$42 = _tmpl$16$1(), _el$43 = _el$42.firstChild, _el$44 = _el$43.nextSibling;
-      insert(_el$43, () => deliveryStatusLabel(props.delivery?.status));
-      insert(_el$42, createComponent(Show, {
+      var _el$43 = _tmpl$16$1(), _el$44 = _el$43.firstChild, _el$45 = _el$44.nextSibling;
+      insert(_el$44, () => deliveryStatusLabel(props.delivery?.status));
+      insert(_el$43, createComponent(Show, {
         get when() {
           return props.delivery?.result?.changedFiles?.length > 0;
         },
         get children() {
-          var _el$45 = _tmpl$15$1();
-          insert(_el$45, () => tc("delivery.files_changed", props.delivery.result.changedFiles.length, {
+          var _el$46 = _tmpl$15$1();
+          insert(_el$46, () => tc("delivery.files_changed", props.delivery.result.changedFiles.length, {
             count: props.delivery.result.changedFiles.length
           }));
-          return _el$45;
+          return _el$46;
         }
       }), null);
-      createRenderEffect(() => _el$44.innerHTML = renderMarkdown$1(props.delivery?.summary || props.delivery?.result?.summary || ""));
-      return _el$42;
+      createRenderEffect(() => _el$45.innerHTML = renderMarkdown$1(props.delivery?.summary || props.delivery?.result?.summary || ""));
+      return _el$43;
     }
   });
 }
@@ -6269,9 +6503,9 @@ function OverviewPanel(props) {
     },
     get fallback() {
       return (() => {
-        var _el$55 = _tmpl$4$b();
-        insert(_el$55, () => t("empty.overview"));
-        return _el$55;
+        var _el$56 = _tmpl$4$b();
+        insert(_el$56, () => t("empty.overview"));
+        return _el$56;
       })();
     },
     get children() {
@@ -6280,47 +6514,47 @@ function OverviewPanel(props) {
           return props.overview?.headline;
         },
         get children() {
-          var _el$47 = _tmpl$17();
-          createRenderEffect(() => _el$47.innerHTML = renderMarkdown$1(props.overview.headline));
-          return _el$47;
+          var _el$48 = _tmpl$17();
+          createRenderEffect(() => _el$48.innerHTML = renderMarkdown$1(props.overview.headline));
+          return _el$48;
         }
       }), createComponent(Show, {
         get when() {
           return props.overview?.summary;
         },
         get children() {
-          var _el$48 = _tmpl$18();
-          createRenderEffect(() => _el$48.innerHTML = renderMarkdown$1(props.overview.summary));
-          return _el$48;
+          var _el$49 = _tmpl$18();
+          createRenderEffect(() => _el$49.innerHTML = renderMarkdown$1(props.overview.summary));
+          return _el$49;
         }
       }), createComponent(Show, {
         get when() {
           return nextStep();
         },
         get children() {
-          var _el$49 = _tmpl$20(), _el$50 = _el$49.firstChild;
-          insert(_el$50, () => nextStep()?.title || t("overview.next_step"));
-          insert(_el$49, createComponent(Show, {
+          var _el$50 = _tmpl$20(), _el$51 = _el$50.firstChild;
+          insert(_el$51, () => nextStep()?.title || t("overview.next_step"));
+          insert(_el$50, createComponent(Show, {
             get when() {
               return nextStep()?.detail;
             },
             get children() {
-              var _el$51 = _tmpl$19();
-              createRenderEffect(() => _el$51.innerHTML = renderMarkdown$1(nextStep().detail));
-              return _el$51;
+              var _el$52 = _tmpl$19();
+              createRenderEffect(() => _el$52.innerHTML = renderMarkdown$1(nextStep().detail));
+              return _el$52;
             }
           }), null);
-          return _el$49;
+          return _el$50;
         }
       }), createComponent(Show, {
         get when() {
           return failure();
         },
         get children() {
-          var _el$52 = _tmpl$21(), _el$53 = _el$52.firstChild, _el$54 = _el$53.nextSibling;
-          insert(_el$53, () => failure()?.title);
-          createRenderEffect(() => _el$54.innerHTML = renderMarkdown$1(failure()?.summary || ""));
-          return _el$52;
+          var _el$53 = _tmpl$21(), _el$54 = _el$53.firstChild, _el$55 = _el$54.nextSibling;
+          insert(_el$54, () => failure()?.title);
+          createRenderEffect(() => _el$55.innerHTML = renderMarkdown$1(failure()?.summary || ""));
+          return _el$53;
         }
       })];
     }
@@ -6336,54 +6570,34 @@ function TaskActionsPanel(props) {
       return visible();
     },
     get children() {
-      var _el$56 = _tmpl$26();
-      insert(_el$56, createComponent(Show, {
+      var _el$57 = _tmpl$26();
+      insert(_el$57, createComponent(Show, {
         get when() {
           return failure();
         },
         get children() {
-          var _el$57 = _tmpl$21(), _el$58 = _el$57.firstChild, _el$59 = _el$58.nextSibling;
-          insert(_el$58, () => failure().title);
-          createRenderEffect(() => _el$59.innerHTML = renderMarkdown$1(failure().summary || ""));
-          return _el$57;
+          var _el$58 = _tmpl$21(), _el$59 = _el$58.firstChild, _el$60 = _el$59.nextSibling;
+          insert(_el$59, () => failure().title);
+          createRenderEffect(() => _el$60.innerHTML = renderMarkdown$1(failure().summary || ""));
+          return _el$58;
         }
       }), null);
-      insert(_el$56, createComponent(Show, {
+      insert(_el$57, createComponent(Show, {
         get when() {
           return hasButtons();
         },
         get children() {
-          var _el$60 = _tmpl$25();
-          insert(_el$60, createComponent(Show, {
+          var _el$61 = _tmpl$25();
+          insert(_el$61, createComponent(Show, {
             get when() {
               return controls().canRetry;
             },
             get children() {
-              var _el$61 = _tmpl$22();
-              _el$61.$$click = () => props.onRetry?.();
-              insert(_el$61, () => t("task.action.retry"));
+              var _el$62 = _tmpl$22();
+              _el$62.$$click = () => props.onRetry?.();
+              insert(_el$62, () => t("task.action.retry"));
               createRenderEffect((_p$) => {
-                var _v$16 = t("task.action.retry_title"), _v$17 = t("task.action.retry_title");
-                _v$16 !== _p$.e && setAttribute(_el$61, "title", _p$.e = _v$16);
-                _v$17 !== _p$.t && setAttribute(_el$61, "aria-label", _p$.t = _v$17);
-                return _p$;
-              }, {
-                e: void 0,
-                t: void 0
-              });
-              return _el$61;
-            }
-          }), null);
-          insert(_el$60, createComponent(Show, {
-            get when() {
-              return controls().canReplan;
-            },
-            get children() {
-              var _el$62 = _tmpl$23();
-              _el$62.$$click = () => props.onReplan?.();
-              insert(_el$62, () => t("task.action.replan"));
-              createRenderEffect((_p$) => {
-                var _v$18 = t("task.action.replan_title"), _v$19 = t("task.action.replan_title");
+                var _v$18 = t("task.action.retry_title"), _v$19 = t("task.action.retry_title");
                 _v$18 !== _p$.e && setAttribute(_el$62, "title", _p$.e = _v$18);
                 _v$19 !== _p$.t && setAttribute(_el$62, "aria-label", _p$.t = _v$19);
                 return _p$;
@@ -6394,16 +6608,16 @@ function TaskActionsPanel(props) {
               return _el$62;
             }
           }), null);
-          insert(_el$60, createComponent(Show, {
+          insert(_el$61, createComponent(Show, {
             get when() {
-              return controls().canCancel;
+              return controls().canReplan;
             },
             get children() {
-              var _el$63 = _tmpl$24();
-              _el$63.$$click = () => props.onCancel?.();
-              insert(_el$63, () => t("common.cancel"));
+              var _el$63 = _tmpl$23();
+              _el$63.$$click = () => props.onReplan?.();
+              insert(_el$63, () => t("task.action.replan"));
               createRenderEffect((_p$) => {
-                var _v$20 = t("task.action.cancel_title"), _v$21 = t("task.action.cancel_title");
+                var _v$20 = t("task.action.replan_title"), _v$21 = t("task.action.replan_title");
                 _v$20 !== _p$.e && setAttribute(_el$63, "title", _p$.e = _v$20);
                 _v$21 !== _p$.t && setAttribute(_el$63, "aria-label", _p$.t = _v$21);
                 return _p$;
@@ -6414,10 +6628,30 @@ function TaskActionsPanel(props) {
               return _el$63;
             }
           }), null);
-          return _el$60;
+          insert(_el$61, createComponent(Show, {
+            get when() {
+              return controls().canCancel;
+            },
+            get children() {
+              var _el$64 = _tmpl$24();
+              _el$64.$$click = () => props.onCancel?.();
+              insert(_el$64, () => t("common.cancel"));
+              createRenderEffect((_p$) => {
+                var _v$22 = t("task.action.cancel_title"), _v$23 = t("task.action.cancel_title");
+                _v$22 !== _p$.e && setAttribute(_el$64, "title", _p$.e = _v$22);
+                _v$23 !== _p$.t && setAttribute(_el$64, "aria-label", _p$.t = _v$23);
+                return _p$;
+              }, {
+                e: void 0,
+                t: void 0
+              });
+              return _el$64;
+            }
+          }), null);
+          return _el$61;
         }
       }), null);
-      return _el$56;
+      return _el$57;
     }
   });
 }
@@ -6427,34 +6661,20 @@ function interactionIcon$1(interaction) {
 function InteractionAlert(props) {
   const icon = () => interactionIcon$1(props.interaction);
   return (() => {
-    var _el$64 = _tmpl$30(), _el$65 = _el$64.firstChild, _el$66 = _el$65.firstChild, _el$67 = _el$65.nextSibling, _el$68 = _el$67.nextSibling;
-    insert(_el$65, icon, _el$66);
-    insert(_el$65, () => props.interaction.title, null);
-    insert(_el$68, createComponent(Show, {
+    var _el$65 = _tmpl$30(), _el$66 = _el$65.firstChild, _el$67 = _el$66.firstChild, _el$68 = _el$66.nextSibling, _el$69 = _el$68.nextSibling;
+    insert(_el$66, icon, _el$67);
+    insert(_el$66, () => props.interaction.title, null);
+    insert(_el$69, createComponent(Show, {
       get when() {
         return props.interaction.type === "permission";
       },
       get fallback() {
         return [(() => {
-          var _el$72 = _tmpl$31();
-          _el$72.$$click = () => props.onResolve?.(props.interaction.id, "answer");
-          insert(_el$72, () => t("interaction.answer"));
+          var _el$73 = _tmpl$31();
+          _el$73.$$click = () => props.onResolve?.(props.interaction.id, "answer");
+          insert(_el$73, () => t("interaction.answer"));
           createRenderEffect((_p$) => {
-            var _v$30 = t("interaction.answer_title"), _v$31 = t("interaction.answer_title");
-            _v$30 !== _p$.e && setAttribute(_el$72, "title", _p$.e = _v$30);
-            _v$31 !== _p$.t && setAttribute(_el$72, "aria-label", _p$.t = _v$31);
-            return _p$;
-          }, {
-            e: void 0,
-            t: void 0
-          });
-          return _el$72;
-        })(), (() => {
-          var _el$73 = _tmpl$29();
-          _el$73.$$click = () => props.onReject?.(props.interaction.id);
-          insert(_el$73, () => t("interaction.skip"));
-          createRenderEffect((_p$) => {
-            var _v$32 = t("interaction.skip_title"), _v$33 = t("interaction.skip_title");
+            var _v$32 = t("interaction.answer_title"), _v$33 = t("interaction.answer_title");
             _v$32 !== _p$.e && setAttribute(_el$73, "title", _p$.e = _v$32);
             _v$33 !== _p$.t && setAttribute(_el$73, "aria-label", _p$.t = _v$33);
             return _p$;
@@ -6463,29 +6683,29 @@ function InteractionAlert(props) {
             t: void 0
           });
           return _el$73;
-        })()];
-      },
-      get children() {
-        return [(() => {
-          var _el$69 = _tmpl$27();
-          _el$69.$$click = () => props.onResolve?.(props.interaction.id, "always");
-          insert(_el$69, () => t("interaction.always_allow"));
+        })(), (() => {
+          var _el$74 = _tmpl$29();
+          _el$74.$$click = () => props.onReject?.(props.interaction.id);
+          insert(_el$74, () => t("interaction.skip"));
           createRenderEffect((_p$) => {
-            var _v$22 = t("interaction.always_allow_title"), _v$23 = t("interaction.always_allow_title");
-            _v$22 !== _p$.e && setAttribute(_el$69, "title", _p$.e = _v$22);
-            _v$23 !== _p$.t && setAttribute(_el$69, "aria-label", _p$.t = _v$23);
+            var _v$34 = t("interaction.skip_title"), _v$35 = t("interaction.skip_title");
+            _v$34 !== _p$.e && setAttribute(_el$74, "title", _p$.e = _v$34);
+            _v$35 !== _p$.t && setAttribute(_el$74, "aria-label", _p$.t = _v$35);
             return _p$;
           }, {
             e: void 0,
             t: void 0
           });
-          return _el$69;
-        })(), (() => {
-          var _el$70 = _tmpl$28();
-          _el$70.$$click = () => props.onResolve?.(props.interaction.id, "once");
-          insert(_el$70, () => t("interaction.allow_once"));
+          return _el$74;
+        })()];
+      },
+      get children() {
+        return [(() => {
+          var _el$70 = _tmpl$27();
+          _el$70.$$click = () => props.onResolve?.(props.interaction.id, "always");
+          insert(_el$70, () => t("interaction.always_allow"));
           createRenderEffect((_p$) => {
-            var _v$24 = t("interaction.allow_once_title"), _v$25 = t("interaction.allow_once_title");
+            var _v$24 = t("interaction.always_allow_title"), _v$25 = t("interaction.always_allow_title");
             _v$24 !== _p$.e && setAttribute(_el$70, "title", _p$.e = _v$24);
             _v$25 !== _p$.t && setAttribute(_el$70, "aria-label", _p$.t = _v$25);
             return _p$;
@@ -6495,11 +6715,11 @@ function InteractionAlert(props) {
           });
           return _el$70;
         })(), (() => {
-          var _el$71 = _tmpl$29();
-          _el$71.$$click = () => props.onReject?.(props.interaction.id);
-          insert(_el$71, () => t("interaction.reject"));
+          var _el$71 = _tmpl$28();
+          _el$71.$$click = () => props.onResolve?.(props.interaction.id, "once");
+          insert(_el$71, () => t("interaction.allow_once"));
           createRenderEffect((_p$) => {
-            var _v$26 = t("interaction.reject_title"), _v$27 = t("interaction.reject_title");
+            var _v$26 = t("interaction.allow_once_title"), _v$27 = t("interaction.allow_once_title");
             _v$26 !== _p$.e && setAttribute(_el$71, "title", _p$.e = _v$26);
             _v$27 !== _p$.t && setAttribute(_el$71, "aria-label", _p$.t = _v$27);
             return _p$;
@@ -6508,19 +6728,33 @@ function InteractionAlert(props) {
             t: void 0
           });
           return _el$71;
+        })(), (() => {
+          var _el$72 = _tmpl$29();
+          _el$72.$$click = () => props.onReject?.(props.interaction.id);
+          insert(_el$72, () => t("interaction.reject"));
+          createRenderEffect((_p$) => {
+            var _v$28 = t("interaction.reject_title"), _v$29 = t("interaction.reject_title");
+            _v$28 !== _p$.e && setAttribute(_el$72, "title", _p$.e = _v$28);
+            _v$29 !== _p$.t && setAttribute(_el$72, "aria-label", _p$.t = _v$29);
+            return _p$;
+          }, {
+            e: void 0,
+            t: void 0
+          });
+          return _el$72;
         })()];
       }
     }));
     createRenderEffect((_p$) => {
-      var _v$28 = props.interaction.id, _v$29 = renderMarkdown$1(props.interaction.body || "");
-      _v$28 !== _p$.e && setAttribute(_el$64, "data-id", _p$.e = _v$28);
-      _v$29 !== _p$.t && (_el$67.innerHTML = _p$.t = _v$29);
+      var _v$30 = props.interaction.id, _v$31 = renderMarkdown$1(props.interaction.body || "");
+      _v$30 !== _p$.e && setAttribute(_el$65, "data-id", _p$.e = _v$30);
+      _v$31 !== _p$.t && (_el$68.innerHTML = _p$.t = _v$31);
       return _p$;
     }, {
       e: void 0,
       t: void 0
     });
-    return _el$64;
+    return _el$65;
   })();
 }
 function InteractionsList(props) {
@@ -6530,8 +6764,8 @@ function InteractionsList(props) {
       return pending().length > 0;
     },
     get children() {
-      var _el$74 = _tmpl$32();
-      insert(_el$74, createComponent(For, {
+      var _el$75 = _tmpl$32();
+      insert(_el$75, createComponent(For, {
         get each() {
           return pending();
         },
@@ -6545,48 +6779,39 @@ function InteractionsList(props) {
           }
         })
       }));
-      return _el$74;
+      return _el$75;
     }
   });
 }
-var SECTION_ICONS = {
-  overview: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="2.5" width="4.5" height="4.5" rx="1"/><rect x="9" y="2.5" width="4.5" height="4.5" rx="1"/><rect x="2.5" y="9" width="4.5" height="4.5" rx="1"/><rect x="9" y="9" width="4.5" height="4.5" rx="1"/></svg>',
-  spec: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 2H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.5L9.5 2Z"/><polyline points="9.5,2 9.5,4.5 12,4.5"/><line x1="6" y1="7" x2="10" y2="7"/><line x1="6" y1="9.5" x2="10" y2="9.5"/></svg>',
-  plan: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="4" x2="13" y2="4"/><line x1="6" y1="8" x2="13" y2="8"/><line x1="6" y1="12" x2="13" y2="12"/><circle cx="3.5" cy="4" r="0.8" fill="currentColor" stroke="none"/><circle cx="3.5" cy="8" r="0.8" fill="currentColor" stroke="none"/><circle cx="3.5" cy="12" r="0.8" fill="currentColor" stroke="none"/></svg>',
-  goals: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="5.5"/><circle cx="8" cy="8" r="3"/><circle cx="8" cy="8" r="0.8" fill="currentColor" stroke="none"/></svg>',
-  criteria: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="2" width="10" height="12" rx="1.2"/><path d="M6 6l1.2 1.2L9.5 5"/><line x1="6" y1="9.5" x2="10" y2="9.5"/><line x1="6" y1="11.5" x2="9" y2="11.5"/></svg>',
-  delivery: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 5.5L8 2.5l5.5 3v5L8 13.5l-5.5-3Z"/><polyline points="2.5,5.5 8,8.5 13.5,5.5"/><line x1="8" y1="8.5" x2="8" y2="13.5"/></svg>',
-  files: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V5L9 2Z"/><polyline points="9,2 9,5 12,5"/></svg>'
-};
-var CHECK_FAMILY_ICONS = {
-  command: '<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2.5" width="10" height="9" rx="1.2"/><polyline points="4.5,6 6,7.5 4.5,9"/><line x1="7.5" y1="9" x2="9.5" y2="9"/></svg>',
-  runtime: '<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 3.5L9.5 7 4.5 10.5Z"/></svg>',
-  artifact: '<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 4.5L7 2l4.5 2.5v5L7 12l-4.5-2.5Z"/><polyline points="2.5,4.5 7,7 11.5,4.5"/><line x1="7" y1="7" x2="7" y2="12"/></svg>',
-  review: '<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.2" cy="6.2" r="3.5"/><line x1="9" y1="9" x2="11.5" y2="11.5"/></svg>',
-  acceptance: '<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="1.5" width="9" height="11" rx="1.2"/><polyline points="5,6.5 6.5,8 9,5.5"/><line x1="5" y1="10" x2="9" y2="10"/></svg>',
-  custom: '<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="7" r="1"/><path d="M6.1 2.5l-.2 1.2a3.4 3.4 0 0 0-.9.5L3.8 3.8l-.9.9.4 1.2a3.4 3.4 0 0 0-.5.9l-1.2.2v1.2l1.2.2c.1.3.3.6.5.9l-.4 1.2.9.9 1.2-.4c.3.2.6.4.9.5l.2 1.2h1.2l.2-1.2c.3-.1.6-.3.9-.5l1.2.4.9-.9-.4-1.2c.2-.3.4-.6.5-.9l1.2-.2V6.8l-1.2-.2a3.4 3.4 0 0 0-.5-.9l.4-1.2-.9-.9-1.2.4a3.4 3.4 0 0 0-.9-.5L7.9 2.5Z"/></svg>'
-};
+const SECTION_ICONS = {
+  overview: `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="2.5" width="4.5" height="4.5" rx="1"/><rect x="9" y="2.5" width="4.5" height="4.5" rx="1"/><rect x="2.5" y="9" width="4.5" height="4.5" rx="1"/><rect x="9" y="9" width="4.5" height="4.5" rx="1"/></svg>`,
+  spec: `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 2H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.5L9.5 2Z"/><polyline points="9.5,2 9.5,4.5 12,4.5"/><line x1="6" y1="7" x2="10" y2="7"/><line x1="6" y1="9.5" x2="10" y2="9.5"/></svg>`,
+  plan: `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="4" x2="13" y2="4"/><line x1="6" y1="8" x2="13" y2="8"/><line x1="6" y1="12" x2="13" y2="12"/><circle cx="3.5" cy="4" r="0.8" fill="currentColor" stroke="none"/><circle cx="3.5" cy="8" r="0.8" fill="currentColor" stroke="none"/><circle cx="3.5" cy="12" r="0.8" fill="currentColor" stroke="none"/></svg>`,
+  goals: `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="5.5"/><circle cx="8" cy="8" r="3"/><circle cx="8" cy="8" r="0.8" fill="currentColor" stroke="none"/></svg>`,
+  criteria: `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="2" width="10" height="12" rx="1.2"/><path d="M6 6l1.2 1.2L9.5 5"/><line x1="6" y1="9.5" x2="10" y2="9.5"/><line x1="6" y1="11.5" x2="9" y2="11.5"/></svg>`,
+  delivery: `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 5.5L8 2.5l5.5 3v5L8 13.5l-5.5-3Z"/><polyline points="2.5,5.5 8,8.5 13.5,5.5"/><line x1="8" y1="8.5" x2="8" y2="13.5"/></svg>`};
 function SectionFrame(props) {
   return (() => {
-    var _el$78 = _tmpl$35(), _el$79 = _el$78.firstChild, _el$80 = _el$79.firstChild, _el$81 = _el$80.nextSibling, _el$82 = _el$81.nextSibling, _el$83 = _el$79.nextSibling;
-    _el$80.innerHTML = props.icon || "";
-    insert(_el$81, () => props.title);
-    insert(_el$82, () => props.badgeText || "");
-    insert(_el$83, () => props.children);
+    var _el$79 = _tmpl$35(), _el$80 = _el$79.firstChild, _el$81 = _el$80.firstChild, _el$82 = _el$81.nextSibling, _el$83 = _el$82.nextSibling, _el$84 = _el$80.nextSibling;
+    insert(_el$82, () => props.title);
+    insert(_el$83, () => props.badgeText || "");
+    insert(_el$84, () => props.children);
     createRenderEffect((_p$) => {
-      var _v$34 = props.id, _v$35 = props.badgeId, _v$36 = props.badgeTone, _v$37 = props.bodyId;
-      _v$34 !== _p$.e && setAttribute(_el$78, "id", _p$.e = _v$34);
-      _v$35 !== _p$.t && setAttribute(_el$82, "id", _p$.t = _v$35);
-      _v$36 !== _p$.a && setAttribute(_el$82, "data-tone", _p$.a = _v$36);
-      _v$37 !== _p$.o && setAttribute(_el$83, "id", _p$.o = _v$37);
+      var _v$36 = props.id, _v$37 = props.icon || "", _v$38 = props.badgeId, _v$39 = props.badgeTone, _v$40 = props.bodyId;
+      _v$36 !== _p$.e && setAttribute(_el$79, "id", _p$.e = _v$36);
+      _v$37 !== _p$.t && (_el$81.innerHTML = _p$.t = _v$37);
+      _v$38 !== _p$.a && setAttribute(_el$83, "id", _p$.a = _v$38);
+      _v$39 !== _p$.o && setAttribute(_el$83, "data-tone", _p$.o = _v$39);
+      _v$40 !== _p$.i && setAttribute(_el$84, "id", _p$.i = _v$40);
       return _p$;
     }, {
       e: void 0,
       t: void 0,
       a: void 0,
-      o: void 0
+      o: void 0,
+      i: void 0
     });
-    return _el$78;
+    return _el$79;
   })();
 }
 function Board(props) {
@@ -6620,8 +6845,8 @@ function Board(props) {
     return passed === cards.length ? "good" : passed > 0 ? "warn" : "";
   });
   return [(() => {
-    var _el$84 = _tmpl$36();
-    insert(_el$84, createComponent(TaskActionsPanel, {
+    var _el$85 = _tmpl$36();
+    insert(_el$85, createComponent(TaskActionsPanel, {
       get overview() {
         return overview();
       },
@@ -6635,27 +6860,15 @@ function Board(props) {
         return props.onCancel;
       }
     }));
-    return _el$84;
+    return _el$85;
   })(), createComponent(SectionFrame, {
-    id: "overviewSection",
-    get title() {
-      return t("section.overview");
-    },
-    icon: SECTION_ICONS.overview,
-    bodyId: "overviewBody",
-    get children() {
-      return createComponent(OverviewPanel, {
-        get overview() {
-          return overview();
-        }
-      });
-    }
-  }), createComponent(SectionFrame, {
     id: "specSection",
     get title() {
       return t("section.spec");
     },
-    icon: SECTION_ICONS.spec,
+    get icon() {
+      return SECTION_ICONS.spec;
+    },
     bodyId: "specBody",
     badgeId: "specBadge",
     get badgeText() {
@@ -6675,35 +6888,13 @@ function Board(props) {
       });
     }
   }), createComponent(SectionFrame, {
-    id: "planSection",
-    get title() {
-      return t("section.plan");
-    },
-    icon: SECTION_ICONS.plan,
-    bodyId: "planBody",
-    badgeId: "planBadge",
-    get badgeText() {
-      return memo(() => !!plan())() ? `v${plan()?.version}` : "";
-    },
-    get badgeTone() {
-      return plan() ? "accent" : "";
-    },
-    get children() {
-      return createComponent(PlanPanel, {
-        get plan() {
-          return plan();
-        },
-        get preview() {
-          return boardStore.planPreview;
-        }
-      });
-    }
-  }), createComponent(SectionFrame, {
     id: "goalsSection",
     get title() {
       return t("section.goals");
     },
-    icon: SECTION_ICONS.goals,
+    get icon() {
+      return SECTION_ICONS.goals;
+    },
     bodyId: "goalsBody",
     badgeId: "goalsBadge",
     get badgeText() {
@@ -6739,11 +6930,39 @@ function Board(props) {
       })];
     }
   }), createComponent(SectionFrame, {
+    id: "planSection",
+    get title() {
+      return t("section.plan");
+    },
+    get icon() {
+      return SECTION_ICONS.plan;
+    },
+    bodyId: "planBody",
+    badgeId: "planBadge",
+    get badgeText() {
+      return memo(() => !!plan())() ? `v${plan()?.version}` : "";
+    },
+    get badgeTone() {
+      return plan() ? "accent" : "";
+    },
+    get children() {
+      return createComponent(PlanPanel, {
+        get plan() {
+          return plan();
+        },
+        get preview() {
+          return boardStore.planPreview;
+        }
+      });
+    }
+  }), createComponent(SectionFrame, {
     id: "criteriaSection",
     get title() {
       return t("section.criteria");
     },
-    icon: SECTION_ICONS.criteria,
+    get icon() {
+      return SECTION_ICONS.criteria;
+    },
     bodyId: "criteriaBody",
     badgeId: "criteriaBadge",
     get badgeText() {
@@ -6776,7 +6995,9 @@ function Board(props) {
     get title() {
       return t("section.delivery");
     },
-    icon: SECTION_ICONS.delivery,
+    get icon() {
+      return SECTION_ICONS.delivery;
+    },
     bodyId: "evalBody",
     badgeId: "deliveryBadge",
     get badgeText() {
@@ -6789,6 +7010,22 @@ function Board(props) {
       return createComponent(DeliveryPanel, {
         get delivery() {
           return delivery();
+        }
+      });
+    }
+  }), createComponent(SectionFrame, {
+    id: "overviewSection",
+    get title() {
+      return t("section.overview");
+    },
+    get icon() {
+      return SECTION_ICONS.overview;
+    },
+    bodyId: "overviewBody",
+    get children() {
+      return createComponent(OverviewPanel, {
+        get overview() {
+          return overview();
         }
       });
     }
