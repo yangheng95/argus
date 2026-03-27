@@ -56,7 +56,12 @@ export const ProviderRoutes = lazy(() =>
         )
         return c.json({
           all: Object.values(providers),
-          default: mapValues(providers, (item) => Provider.sort(Object.values(item.models))[0].id),
+          default: Object.fromEntries(
+            Object.entries(providers).flatMap(([k, item]) => {
+              const first = Provider.sort(Object.values(item.models))[0]
+              return first ? [[k, first.id]] : []
+            }),
+          ),
           connected: Object.keys(connected),
         })
       },
@@ -177,7 +182,30 @@ export const ProviderRoutes = lazy(() =>
               },
             }),
           })
-          await stream.text
+
+          // Consume the full stream to detect error parts that streamText
+          // may swallow (turning them into a generic "No output generated").
+          let hasOutput = false
+          const streamErrors: string[] = []
+          for await (const part of stream.fullStream) {
+            if (part.type === "text-delta" || part.type === "reasoning-delta") {
+              hasOutput = true
+            }
+            if (part.type === "error") {
+              const err = part.error
+              streamErrors.push(err instanceof Error ? err.message : String(err))
+            }
+          }
+
+          if (streamErrors.length > 0) {
+            return c.json({
+              ok: false,
+              status: "error",
+              providerID,
+              modelID,
+              message: streamErrors.join("; "),
+            })
+          }
 
           return c.json({
             ok: true,
@@ -187,12 +215,15 @@ export const ProviderRoutes = lazy(() =>
             message: "Provider is reachable.",
           })
         } catch (error) {
+          // Surface the original cause when the SDK wraps errors
+          const cause = error instanceof Error && error.cause instanceof Error ? error.cause : undefined
+          const message = cause?.message || (error instanceof Error ? error.message : String(error))
           return c.json({
             ok: false,
             status: "error",
             providerID,
             modelID,
-            message: error instanceof Error ? error.message : String(error),
+            message,
           })
         }
       },

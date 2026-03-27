@@ -721,6 +721,25 @@ export namespace Provider {
         // Response received — reset timer (server is alive)
         resetInactivityTimer?.()
 
+        // Some SDKs (e.g. @ai-sdk/openai-compatible) do not surface HTTP
+        // errors from streaming responses — they silently consume the body
+        // and later throw a generic "No output generated" error.  Extract
+        // the upstream error here so callers get actionable messages.
+        if (!response.ok) {
+          if (inactivityTimer) clearTimeout(inactivityTimer)
+          const text = await response.text().catch(() => "")
+          let detail = ""
+          try {
+            const json = JSON.parse(text)
+            detail = json?.error?.message ?? json?.message ?? text
+          } catch {
+            detail = text
+          }
+          throw new Error(
+            `Provider ${model.providerID} returned HTTP ${response.status}: ${detail || response.statusText}`,
+          )
+        }
+
         // For streaming responses, wrap the body so each chunk resets the timer.
         if (inactivityController && response.body) {
           const original = response.body
