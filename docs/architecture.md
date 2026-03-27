@@ -1,248 +1,287 @@
 # OpenCorvus Architecture
 
-## System Architecture Overview
+## 1. System Architecture Overview
 
-```
-+========================================================================================+
-|                                    CLIENT LAYER                                         |
-|  +---------------------------+   +---------------------------+   +-------------------+  |
-|  |     Overlay UI (Current)  |   |   VSCode Extension (WIP)  |   |  Channel Bots     |  |
-|  |  Solid.js + Tauri Desktop |   |   WebView / Native Panel  |   |  Slack/Discord/   |  |
-|  |                           |   |                           |   |  Telegram/Teams/  |  |
-|  |  components/              |   |  (Future)                 |   |  Feishu/DingTalk  |  |
-|  |    Board.tsx              |   |  - Editor integration     |   |  WeChat/QQ/...    |  |
-|  |    Conversation.tsx       |   |  - Inline diff review     |   |                   |  |
-|  |    AgentCard.tsx          |   |  - Terminal panel          |   |                   |  |
-|  |    ChatComposer.tsx       |   |  - Status bar widget      |   |                   |  |
-|  |    TaskList.tsx           |   |  - Command palette        |   |                   |  |
-|  |    Settings/*             |   |                           |   |                   |  |
-|  |                           |   |                           |   |                   |  |
-|  |  stores/                  |   |  Reuses:                  |   |                   |  |
-|  |    app, board, messages   |   |  - SDK (packages/sdk)     |   |                   |  |
-|  |    executor, settings     |   |  - SSE event protocol     |   |                   |  |
-|  |                           |   |  - REST API client        |   |                   |  |
-|  |  services/                |   |  - i18n translations      |   |                   |  |
-|  |    api, sse, session      |   |                           |   |                   |  |
-|  |    task, config, llm      |   |                           |   |                   |  |
-|  +-----|---------------------+   +-----|---------------------+   +------|-----------+  |
-|        |  REST + SSE                   |  REST + SSE                    |  REST       |  |
-+========|===============================|================================|=============+
-         |                               |                                |
-+========|===============================|================================|=============+
-|        v                               v                                v              |
-|                            API GATEWAY (Hono HTTP Server :7878)                        |
-|                                                                                        |
-|  Auth Middleware (Basic Auth / Token) ── CORS ── Error Handler                         |
-|                                                                                        |
-|  +--Routes------------------------------------------------------------------+          |
-|  |  /config     /session      /task        /goal       /plan                |          |
-|  |  /provider   /executor     /channel     /control    /panel               |          |
-|  |  /auth       /mcp          /skill       /permission /coding              |          |
-|  |  /project    /question     /file        /pty        /export              |          |
-|  +-------------------------------------------------------------------------|          |
-|                                                                                        |
-|  +--SSE Event Stream-----------+    +--WebSocket (opt-in)---+                          |
-|  |  GET /task/{id}/events      |    |  Real-time bidirect.  |                          |
-|  |  task.heartbeat             |    |  PTY terminal         |                          |
-|  |  message.part.delta         |    +------------------------+                          |
-|  |  reasoning.delta            |                                                       |
-|  |  executor.progress/output   |                                                       |
-|  +-----------------------------+                                                       |
-+========================================================================================+
-         |                |                |                |
-+========|================|================|================|============================+
-|        v                v                v                v                             |
-|                              CORE ENGINE LAYER                                         |
-|                                                                                        |
-|  +-- Session Manager -------+  +-- Orchestrator (Task Engine) --------------------+    |
-|  |  session/index.ts        |  |  orchestrator/service.ts                         |    |
-|  |  - CRUD sessions         |  |                                                  |    |
-|  |  - Message V2 (parts)    |  |  Task State Machine:                             |    |
-|  |  - Prompt pipeline       |  |  queued -> spec -> goal_decompose -> plan        |    |
-|  |  - Session compaction    |  |         -> execute -> evaluate -> deliver         |    |
-|  |  - Summary generation    |  |                                                  |    |
-|  |  - Revert capability     |  |  Modules:                                        |    |
-|  +--------------------------+  |    pipeline.ts    - Task queue processing         |    |
-|                                |    runtime.ts     - Execution runtime             |    |
-|  +-- Control Plane ----------+ |    strategy.ts    - Retry/replan decisions        |    |
-|  |  control/message.ts      | |    persist.ts     - State transitions             |    |
-|  |  - Panel requests        | |    checks.ts      - Goal verification             |    |
-|  |  - Structured output     | |    interaction.ts  - User interactions            |    |
-|  |  - Timeline tracking     | |    memory-bridge.ts - Learning integration        |    |
-|  +--------------------------+ |    publisher.ts    - Delivery publishing           |    |
-|                                |    git.ts         - Git operations                |    |
-|  +-- Agent System ----------+ |    agent-stream.ts - Agent message streaming      |    |
-|  |  agent/agent.ts          | +---------------------------------------------------+    |
-|  |  - Agent configs         |                                                          |
-|  |  - Permission profiles   |  +-- Provider System ---------------------------------+  |
-|  |  - Prompt construction   |  |  provider/provider.ts                              |  |
-|  |  - Mode: primary/sub     |  |                                                    |  |
-|  +--------------------------+  |  Supported Providers:                               |  |
-|                                |  Anthropic | OpenAI | Azure | Google | Bedrock      |  |
-|  +-- Memory & Learning -----+ |  Groq | Mistral | DeepSeek | GitHub Copilot        |  |
-|  |  memory/index.ts         | |  Fireworks | Together | Cerebras | XAI              |  |
-|  |  - Facts, lessons,       | |  alibaba-cn | alibaba-coding-plan-cn | moonshotai  |  |
-|  |    episodes, profiles    | |                                                    |  |
-|  |  - FTS5 search           | |  Features:                                         |  |
-|  |  - Scratchpad            | |  - OAuth + API Key auth                            |  |
-|  |  - Task plan memory      | |  - Model catalog (models.dev)                      |  |
-|  |  - Prompt injection      | |  - Provider-specific transforms                    |  |
-|  +--------------------------+ |  - Structured output support                        |  |
-|                                |  - Streaming + tool calls                          |  |
-|                                +----------------------------------------------------+  |
-|                                                                                        |
-|  +-- Tool Registry (70+ tools) ---------------------------------------------------+   |
-|  |  bash | edit | read | write | glob | grep | ls | apply_patch                   |   |
-|  |  webfetch | websearch | codesearch | lsp                                       |   |
-|  |  memory | preference | task | plan | skill | spec | panel                      |   |
-|  |  todo | question | batch | schedule | analytics                                |   |
-|  +---------------------------------------------------------------------------------+   |
-|                                                                                        |
-|  +-- Executor Adapters -------+  +-- Evaluator --------+  +-- Delivery -----------+   |
-|  |  - opencode (default)      |  |  - Goal checking    |  |  - Git branch/PR     |   |
-|  |  - codex (Copilot WS)      |  |  - Quality scoring  |  |  - Patch generation  |   |
-|  |  - claude-code             |  |  - Retry decisions   |  |  - Report publishing |   |
-|  +----------------------------+  +---------------------+  +------------------------+   |
-+========================================================================================+
-         |                                    |
-+========|====================================|==========================================+
-|        v                                    v                                          |
-|                           INFRASTRUCTURE LAYER                                         |
-|                                                                                        |
-|  +-- Storage (SQLite + Drizzle ORM) -----------------------------------------------+  |
-|  |  Tables:                                                                         |  |
-|  |  session | message | part | todo | permission                                    |  |
-|  |  orchestrator_task | _run | _plan_version | _goal | _milestone                   |  |
-|  |  orchestrator_spec_snapshot | _spec_item | _evaluation | _delivery               |  |
-|  |  orchestrator_artifact | _execution_session | _interaction_request               |  |
-|  |  control | control_timeline | memory | scratchpad | task_plan                     |  |
-|  |  protocol | project | workbench | share | cron | event | task_queue              |  |
-|  +------------------------------------------------------------------------------+   |  |
-|                                                                                        |
-|  +-- Event Bus ---------+  +-- Config System --------+  +-- Plugin System --------+   |
-|  |  bus/index.ts         |  |  config/config.ts       |  |  plugin/index.ts        |   |
-|  |  - Typed events       |  |  Priority chain:        |  |  - Built-in auth        |   |
-|  |  - Pub/sub pattern    |  |  remote > global > proj |  |    (Copilot, Codex,     |   |
-|  |  - GlobalBus (IPC)    |  |  > .opencorvus > inline |  |     Anthropic, GitLab)  |   |
-|  +-----------------------+  |  > managed              |  |  - External npm/local   |   |
-|                              +-----------------------+   |  - Hook system          |   |
-|  +-- Skill System -------+  +-- MCP Integration -----+  +-----------------------+    |
-|  |  skill/skill.ts       |  |  mcp/index.ts          |                               |
-|  |  - SKILL.md format    |  |  - HTTP/SSE/stdio      |                               |
-|  |  - Marketplace        |  |  - Tool integration     |                               |
-|  |  - Per-platform       |  |  - Resource reading     |                               |
-|  +------------------------+  +------------------------+                                |
-|                                                                                        |
-|  +-- Auth Storage --------+  +-- Channel Runtime -----+  +-- Scheduler -----------+   |
-|  |  ~/.opencorvus/auth.json|  |  channel/supervisor.ts |  |  scheduler/            |   |
-|  |  OAuth / API Key /      |  |  channel-runtime/      |  |  - Cron jobs           |   |
-|  |  WellKnown              |  |  - Slack, Discord,     |  |  - Event scheduling    |   |
-|  |  Permissions: 0o600     |  |    Telegram, Teams...  |  |  - Task queue          |   |
-|  +-------------------------+  +------------------------+  +------------------------+   |
-+========================================================================================+
+```mermaid
+graph TB
+    subgraph CLIENT["Client Layer"]
+        direction LR
+        OV["<b>Overlay UI</b><br/>Solid.js + Tauri Desktop<br/><i>components / stores / services</i>"]
+        VS["<b>VSCode Extension</b><br/>WebView + Native Panel<br/><i>Future</i>"]
+        CB["<b>Channel Bots</b><br/>Slack / Discord / Telegram<br/>Teams / Feishu / DingTalk"]
+    end
+
+    subgraph API["API Gateway — Hono HTTP :7878"]
+        direction LR
+        MW["Auth Middleware<br/>CORS / Error Handler"]
+        ROUTES["REST Routes<br/>/config /session /task /goal /plan<br/>/provider /executor /channel /control<br/>/auth /mcp /skill /permission"]
+        SSE["SSE Event Stream<br/>GET /task/{id}/events<br/>message.part.delta<br/>reasoning.delta"]
+        WS["WebSocket<br/>PTY terminal"]
+    end
+
+    subgraph CORE["Core Engine Layer"]
+        SM["<b>Session Manager</b><br/>CRUD / Message V2<br/>Prompt Pipeline<br/>Compaction / Revert"]
+        ORC["<b>Orchestrator</b><br/>Task State Machine<br/>Pipeline / Runtime<br/>Strategy / Checks"]
+        CP["<b>Control Plane</b><br/>Panel Requests<br/>Structured Output"]
+        AG["<b>Agent System</b><br/>Configs / Permissions<br/>Prompt Construction"]
+        MEM["<b>Memory</b><br/>Facts / Lessons<br/>FTS5 Search<br/>Scratchpad"]
+        PROV["<b>Provider System</b><br/>15+ LLM Providers<br/>OAuth + API Key<br/>Streaming + Tools"]
+        TOOLS["<b>Tool Registry</b><br/>70+ Tools:<br/>bash / edit / read / write<br/>glob / grep / webfetch / ..."]
+        EXEC["<b>Executors</b><br/>opencode / codex<br/>claude-code"]
+        EVAL["<b>Evaluator</b><br/>Goal Checking<br/>Quality Scoring"]
+        DEL["<b>Delivery</b><br/>Git Branch / PR<br/>Patch / Report"]
+    end
+
+    subgraph INFRA["Infrastructure Layer"]
+        DB["<b>SQLite + Drizzle ORM</b><br/>25+ tables: session / message / part<br/>orchestrator_* / memory / protocol"]
+        BUS["<b>Event Bus</b><br/>Typed Pub/Sub<br/>GlobalBus IPC"]
+        CFG["<b>Config System</b><br/>remote → global → project<br/>→ .opencorvus → managed"]
+        PLG["<b>Plugin System</b><br/>Copilot / Codex / Anthropic<br/>External npm / local"]
+        SKL["<b>Skills</b><br/>SKILL.md format<br/>Marketplace"]
+        MCP["<b>MCP</b><br/>HTTP / SSE / stdio<br/>Tool Integration"]
+        AUTH["<b>Auth Storage</b><br/>~/.opencorvus/auth.json<br/>OAuth / API Key"]
+        SCHED["<b>Scheduler</b><br/>Cron / Event<br/>Task Queue"]
+    end
+
+    OV -->|REST + SSE| API
+    VS -->|REST + SSE| API
+    CB -->|REST| API
+
+    API --> CORE
+    CORE --> INFRA
+
+    style CLIENT fill:#1a2332,stroke:#58a6ff,color:#e6edf3
+    style API fill:#1a2332,stroke:#3fb950,color:#e6edf3
+    style CORE fill:#1a2332,stroke:#bc8cff,color:#e6edf3
+    style INFRA fill:#1a2332,stroke:#d29922,color:#e6edf3
+    style OV fill:#21262d,stroke:#58a6ff,color:#e6edf3
+    style VS fill:#21262d,stroke:#bc8cff,color:#e6edf3
+    style CB fill:#21262d,stroke:#3fb950,color:#e6edf3
 ```
 
-## Data Flow
+## 2. Data Flow
 
-```
-  User Input (Overlay / VSCode / Channel Bot)
-       |
-       v
-  API Gateway (REST / SSE)
-       |
-       +---> Control Plane (panel requests, structured output)
-       |         |
-       |         v
-       |     Session Manager (prompt pipeline)
-       |         |
-       |         v
-       |     Provider System (model resolution, LLM call)
-       |
-       +---> Orchestrator (task lifecycle)
-                 |
-                 +---> Spec Agent (PRD generation)
-                 +---> Goal Decomposer (requirement breakdown)
-                 +---> Planner Agent (execution plan)
-                 +---> Executor (code execution via session)
-                 +---> Evaluator (goal verification)
-                 +---> Delivery (PR / branch / report)
-                 |
-                 v
-            SSE Event Stream ---> Client UI (real-time updates)
-```
+```mermaid
+flowchart TD
+    INPUT["User Input<br/><i>Overlay / VSCode / Channel Bot</i>"] --> GW["API Gateway<br/><i>REST / SSE</i>"]
+    GW --> CP["Control Plane<br/><i>panel requests</i>"]
+    GW --> ORC["Orchestrator<br/><i>task lifecycle</i>"]
 
-## VSCode Extension Architecture (Future)
+    CP --> SM["Session Manager<br/><i>prompt pipeline</i>"]
+    SM --> PROV["Provider System<br/><i>model resolution → LLM call</i>"]
 
-```
-+--VSCode Extension Host-----------------------------------------------------+
-|                                                                             |
-|  +--Extension Entry (extension.ts)---+                                      |
-|  |  activate() / deactivate()        |                                      |
-|  +-----------------------------------+                                      |
-|                                                                             |
-|  +--UI Components--------------------+  +--Editor Integration-----------+   |
-|  |  WebView Panel (reuse overlay     |  |  CodeLens Provider            |   |
-|  |    components via iframe or       |  |  - Show agent actions inline  |   |
-|  |    Solid.js web build)            |  |                               |   |
-|  |                                   |  |  Diagnostic Provider          |   |
-|  |  Sidebar Panel                    |  |  - Show evaluation results    |   |
-|  |  - Task list                      |  |                               |   |
-|  |  - Agent status                   |  |  Diff Editor Integration      |   |
-|  |  - Quick actions                  |  |  - Review delivery patches    |   |
-|  |                                   |  |                               |   |
-|  |  Status Bar Item                  |  |  Inline Completion            |   |
-|  |  - Connection status              |  |  - Suggest from memory/plan   |   |
-|  |  - Current model                  |  +-------------------------------+   |
-|  |  - Task progress                  |                                      |
-|  +-----------------------------------+  +--Terminal Integration---------+   |
-|                                         |  Terminal Profile Provider    |   |
-|  +--Command Palette------------------+  |  - Embedded opencorvus CLI   |   |
-|  |  opencorvus.createTask            |  |                               |   |
-|  |  opencorvus.switchModel           |  |  PTY Integration             |   |
-|  |  opencorvus.viewBoard             |  |  - Live executor output      |   |
-|  |  opencorvus.openSettings          |  +-------------------------------+   |
-|  +-----------------------------------+                                      |
-|                                                                             |
-|  +--Service Layer (reuse SDK)--------+  +--Event Bridge-----------------+   |
-|  |  import { OpenCorvusSDK }         |  |  SSE → VSCode EventEmitter   |   |
-|  |    from '@opencorvus/sdk'         |  |  Workspace events → API      |   |
-|  |                                   |  |  File change → notification  |   |
-|  |  REST API client                  |  +-------------------------------+   |
-|  |  SSE event consumer               |                                      |
-|  |  Auth token management            |                                      |
-|  +-----------------------------------+                                      |
-+-----------------------------------------------------------------------------+
-       |
-       | REST + SSE (same protocol as Overlay)
-       v
-  OpenCorvus Core Server (:7878)
+    ORC --> SPEC["Spec Agent<br/><i>PRD generation</i>"]
+    ORC --> GOAL["Goal Decomposer<br/><i>requirement breakdown</i>"]
+    ORC --> PLAN["Planner Agent<br/><i>execution plan</i>"]
+    ORC --> EXEC["Executor<br/><i>code execution</i>"]
+    ORC --> EVAL["Evaluator<br/><i>goal verification</i>"]
+    ORC --> DEL["Delivery<br/><i>PR / branch / report</i>"]
+
+    PROV --> SSE["SSE Event Stream"]
+    DEL --> SSE
+    SSE --> UI["Client UI<br/><i>real-time updates</i>"]
+
+    style INPUT fill:#21262d,stroke:#58a6ff,color:#e6edf3
+    style GW fill:#21262d,stroke:#3fb950,color:#e6edf3
+    style CP fill:#21262d,stroke:#39d2c0,color:#e6edf3
+    style ORC fill:#21262d,stroke:#d29922,color:#e6edf3
+    style SSE fill:#21262d,stroke:#3fb950,color:#e6edf3
+    style UI fill:#21262d,stroke:#58a6ff,color:#e6edf3
 ```
 
-## Package Dependency Graph
+## 3. Orchestrator — Task State Machine
+
+```mermaid
+stateDiagram-v2
+    [*] --> queued
+    queued --> spec_generating
+    spec_generating --> goal_decomposing
+    goal_decomposing --> planning
+    planning --> planned
+    planned --> running
+    running --> blocked : needs user input
+    blocked --> running : user responds
+    running --> evaluating
+    evaluating --> delivering : goals met
+    evaluating --> planning : replan needed
+    delivering --> completed
+    running --> failed
+    delivering --> failed
+    [*] --> cancelled
+
+    note right of spec_generating : Spec Agent generates PRD
+    note right of goal_decomposing : LLM classifies + clusters requirements
+    note right of planning : Planner Agent (8 tools, quality scoring)
+    note right of running : opencode / codex / claude-code
+    note right of evaluating : Goal checking + quality threshold
+    note right of delivering : Git branch / PR / patch
+```
+
+### Orchestrator Modules
+
+| Module | File | Description |
+|--------|------|-------------|
+| Pipeline | `pipeline.ts` | Task queue processing |
+| Runtime | `runtime.ts` | Execution runtime |
+| Strategy | `strategy.ts` | Retry / replan decisions |
+| Persist | `persist.ts` | State transitions |
+| Checks | `checks.ts` | Goal verification |
+| Interaction | `interaction.ts` | User interactions |
+| Memory Bridge | `memory-bridge.ts` | Learning integration |
+| Publisher | `publisher.ts` | Delivery publishing |
+| Git | `git.ts` | Git operations |
+| Agent Stream | `agent-stream.ts` | Agent message streaming |
+
+## 4. Provider System
+
+```mermaid
+graph LR
+    subgraph Providers["Supported LLM Providers"]
+        A[Anthropic]
+        B[OpenAI]
+        C[Azure]
+        D[Google]
+        E[Bedrock]
+        F[GitHub Copilot]
+        G[Groq]
+        H[Mistral]
+        I[DeepSeek]
+        J[XAI]
+        K[alibaba-cn]
+        L[Fireworks]
+        M[Together]
+        N[Cerebras]
+    end
+
+    CFG["Config<br/>model: provider/model-id"] --> RESOLVE["Provider.defaultModel()"]
+    RESOLVE --> GET["Provider.getModel()"]
+    GET --> LANG["Provider.getLanguage()"]
+    LANG --> LLM["LLM API Call<br/><i>streaming + tool calls</i>"]
+
+    style Providers fill:#1a2332,stroke:#bc8cff,color:#e6edf3
+```
+
+### Model Resolution Priority
 
 ```
-packages/
-  opencorvus ────────> util          (shared utilities)
-       |                 ^
-       |                 |
-       +──> plugin ──────+            (plugin infrastructure)
-       |
-       +──> sdk                       (client SDK, used by extensions)
-       |
-       +──> channel-config            (channel schemas)
-       |         |
-       +──> channel-runtime ──────+   (channel handlers)
-       |                          |
-  overlay ──> (REST/SSE) ──> opencorvus
-       |
-  script ──> opencorvus              (build tooling)
+input.model → agent.model → Provider.defaultModel() → Config.get().model
 ```
 
-## Key Design Decisions
+### Config Update Flow (UI Model Switch)
 
-1. **Protocol-first**: REST + SSE as the universal interface — any UI (Overlay, VSCode, CLI) connects identically
-2. **Compiled binary**: `bun build --compile` produces single executable with embedded UI assets
-3. **SQLite + Drizzle**: Single-file database, no external dependencies, event sourcing via protocol table
-4. **Plugin architecture**: Auth providers, tools, and hooks are pluggable
-5. **Multi-executor**: Tasks can run on opencode, codex, or claude-code engines
-6. **Config cascade**: remote → global → project → .opencorvus → inline → managed (enterprise)
+```mermaid
+sequenceDiagram
+    participant UI as Overlay UI
+    participant API as PATCH /config
+    participant CFG as Config.update()
+    participant PRV as Provider.reset()
+    participant LLM as Next LLM Call
+
+    UI->>API: { model: "github-copilot/gemini-3-flash-preview" }
+    API->>CFG: Write .opencorvus/opencorvus.jsonc
+    CFG->>CFG: state.reset() + global.reset()
+    API->>PRV: Clear cached providers
+    Note over LLM: Next request picks up new model
+    LLM->>PRV: Provider.defaultModel() → reads fresh config
+```
+
+## 5. VSCode Extension Architecture (Future)
+
+```mermaid
+graph TB
+    subgraph VSCode["VSCode Extension Host"]
+        ENTRY["Extension Entry<br/><i>activate() / deactivate()</i>"]
+
+        subgraph UI["UI Components"]
+            WV["WebView Panel<br/><i>reuse overlay Solid.js</i>"]
+            SB["Sidebar Panel<br/><i>task list / agent status</i>"]
+            BAR["Status Bar<br/><i>connection / model / progress</i>"]
+        end
+
+        subgraph EDITOR["Editor Integration"]
+            CL["CodeLens<br/><i>inline agent actions</i>"]
+            DIAG["Diagnostics<br/><i>evaluation results</i>"]
+            DIFF["Diff Editor<br/><i>review delivery patches</i>"]
+            COMP["Inline Completion<br/><i>suggest from memory/plan</i>"]
+        end
+
+        subgraph CMD["Command Palette"]
+            C1["opencorvus.createTask"]
+            C2["opencorvus.switchModel"]
+            C3["opencorvus.viewBoard"]
+            C4["opencorvus.openSettings"]
+        end
+
+        subgraph TERM["Terminal"]
+            TP["Terminal Profile Provider"]
+            PTY["PTY Integration<br/><i>live executor output</i>"]
+        end
+
+        subgraph SVC["Service Layer"]
+            SDK["OpenCorvusSDK<br/><i>from @opencorvus/sdk</i>"]
+            BRIDGE["Event Bridge<br/><i>SSE → EventEmitter</i>"]
+        end
+    end
+
+    SVC -->|"REST + SSE<br/>(same protocol as Overlay)"| SERVER["OpenCorvus Core :7878"]
+
+    style VSCode fill:#1a2332,stroke:#bc8cff,color:#e6edf3
+    style SERVER fill:#21262d,stroke:#3fb950,color:#e6edf3
+```
+
+## 6. Package Dependency Graph
+
+```mermaid
+graph TD
+    OC["<b>opencorvus</b><br/><i>Core backend</i>"] --> UTIL["<b>util</b><br/><i>Shared utilities</i>"]
+    OC --> PLG["<b>plugin</b><br/><i>Plugin infra</i>"]
+    OC --> SDK2["<b>sdk</b><br/><i>Client SDK</i>"]
+    OC --> CC["<b>channel-config</b><br/><i>Channel schemas</i>"]
+    OC --> CR["<b>channel-runtime</b><br/><i>Channel handlers</i>"]
+    PLG --> UTIL
+
+    OV["<b>overlay</b><br/><i>Frontend UI</i>"] -->|"REST + SSE"| OC
+    SC["<b>script</b><br/><i>Build tooling</i>"] --> OC
+
+    style OC fill:#21262d,stroke:#58a6ff,color:#e6edf3
+    style OV fill:#21262d,stroke:#3fb950,color:#e6edf3
+    style UTIL fill:#21262d,stroke:#d29922,color:#e6edf3
+```
+
+## 7. Database Schema (25+ tables)
+
+| Group | Tables |
+|-------|--------|
+| **Session** | `session`, `message`, `part`, `todo`, `permission` |
+| **Orchestrator** | `orchestrator_task`, `_run`, `_plan_version`, `_goal`, `_milestone`, `_spec_snapshot`, `_spec_item`, `_evaluation`, `_delivery`, `_artifact`, `_execution_session`, `_interaction_request` |
+| **Control** | `control`, `control_timeline` |
+| **Memory** | `memory`, `scratchpad`, `task_plan` |
+| **System** | `protocol`, `project`, `workbench`, `share`, `cron`, `event`, `task_queue` |
+
+## 8. Key Design Decisions
+
+| # | Decision | Rationale |
+|---|----------|-----------|
+| 1 | **Protocol-first** | REST + SSE as universal interface — any UI connects identically |
+| 2 | **Compiled binary** | `bun build --compile` → single executable with embedded UI assets |
+| 3 | **SQLite + Drizzle** | Single-file DB, zero deps, event sourcing via protocol table |
+| 4 | **Plugin architecture** | Auth, tools, hooks are pluggable (built-in + external npm/local) |
+| 5 | **Multi-executor** | opencode / codex / claude-code via adapter pattern |
+| 6 | **Config cascade** | remote → global → project → .opencorvus → inline → managed |
+
+## 9. Config Priority Chain
+
+```mermaid
+graph LR
+    R["Remote<br/>.well-known"] --> G["Global<br/>~/.config/opencorvus"]
+    G --> C["Custom<br/>OPENCORVUS_CONFIG"]
+    C --> P["Project<br/>opencorvus.json{,c}"]
+    P --> D[".opencorvus/<br/>directory config"]
+    D --> I["Inline<br/>ENV content"]
+    I --> M["Managed<br/>Enterprise override"]
+
+    style R fill:#21262d,stroke:#64748b,color:#e6edf3
+    style M fill:#21262d,stroke:#f85149,color:#e6edf3
+```
+
+> **Low → High priority**: 每一层覆盖前一层。`.opencorvus/opencorvus.jsonc` 是 UI 配置的写入目标。
