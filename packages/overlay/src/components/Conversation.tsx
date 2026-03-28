@@ -1,4 +1,4 @@
-import { createSignal, createMemo, createEffect, For, Show, onMount, onCleanup } from "solid-js";
+import { createSignal, createMemo, createEffect, For, Index, Show, onMount, onCleanup } from "solid-js";
 import { MessageView } from "./MessageView";
 import { AgentCard } from "./AgentCard";
 import { messageStore } from "../store/messages";
@@ -51,24 +51,24 @@ export function Conversation(props: { container: HTMLElement }) {
       <Show when={items().length === 0}>
         <div class="chat-empty">{emptyText()}</div>
       </Show>
-      <For each={items()}>
+      <Index each={items()}>
         {(item) => (
           <Show
-            when={!item?._agentCard}
+            when={!item()?._agentCard}
             fallback={
               <AgentCard
-                cardID={item._agentCardKey}
-                stage={item._agentStage}
-                status={item._agentStatus}
-                round={item._agentRound}
-                messages={item._agentMessages}
+                cardID={item()._agentCardKey}
+                stage={item()._agentStage}
+                status={item()._agentStatus}
+                round={item()._agentRound}
+                messages={item()._agentMessages}
               />
             }
           >
-            <MessageView message={item} />
+            <MessageView message={item()} />
           </Show>
         )}
-      </For>
+      </Index>
     </>
   );
 }
