@@ -636,88 +636,111 @@ export namespace OrchestratorRuntime {
     const sessionID = task.session_id
     if (!sessionID) throw new Error(`Task ${task.id} has no session`)
 
-    // 1. Create isolated worktree with synchronous checkout
-    const worktreeInfo = await Worktree.create({
-      name: `goal-${entry.goal.id.slice(-8)}`,
-      checkout: "sync",
-    })
-    const worktreeDir = worktreeInfo.directory
+    // 0. Mark goal as "running" to prevent re-dispatch.
+    //    readyGoalNodes() only returns goals with status="pending".
+    Database.use((db) =>
+      db.update(OrchestratorGoalTable)
+        .set({ status: "running", time_updated: Date.now() })
+        .where(eq(OrchestratorGoalTable.id, entry.goal.id))
+        .run(),
+    )
 
-    // 2. Create goal session scoped to worktree
-    const goalSession = await createGoalSession(task as any, entry.goal as any, worktreeDir)
+    let worktreeDir: string | undefined
+    try {
+      // 1. Create isolated worktree with synchronous checkout
+      const worktreeInfo = await Worktree.create({
+        name: `goal-${entry.goal.id.slice(-8)}`,
+        checkout: "sync",
+      })
+      worktreeDir = worktreeInfo.directory
 
-    // 3. Create GoalRun record
-    const goalRun = createGoalRun({
-      taskID: task.id,
-      goalID: entry.goal.id,
-      planNodeID: entry.node.id,
-      coordinatorRunID: run.id,
-      sessionID: goalSession.id,
-      executor: run.executor,
-      workspaceDir: worktreeDir,
-      metadata: {
-        worktree_branch: worktreeInfo.branch,
-      },
-    })
+      // 2. Create goal session scoped to worktree
+      const goalSession = await createGoalSession(task as any, entry.goal as any, worktreeDir)
 
-    // 4. Build goal-specific prompt
-    const prompt = buildGoalPrompt({
-      plan: plan as any,
-      node: entry.node as any,
-      goal: entry.goal as any,
-      taskRequest: plan.prompt,
-    })
-
-    // 5. Submit to executor with cwd=worktree
-    const executor = ExecutorRegistry.require(run.executor)
-    const submission = await Promise.race([
-      executor.submit({
+      // 3. Create GoalRun record
+      const goalRun = createGoalRun({
+        taskID: task.id,
+        goalID: entry.goal.id,
+        planNodeID: entry.node.id,
+        coordinatorRunID: run.id,
         sessionID: goalSession.id,
-        prompt,
-        priority: task.priority,
-        source: "planner",
-        cwd: worktreeDir,
-      }),
-      new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error(`executor.submit() timeout for goal ${entry.goal.id}`)), EXECUTOR_SUBMIT_TIMEOUT_MS),
-      ),
-    ])
+        executor: run.executor,
+        workspaceDir: worktreeDir,
+        metadata: {
+          worktree_branch: worktreeInfo.branch,
+        },
+      })
 
-    // 6. Update goal run with executor refs
-    updateGoalRun(goalRun.id, {
-      status: "accepted",
-      time_started: Date.now(),
-      metadata: {
-        ...((goalRun.metadata as Record<string, unknown>) ?? {}),
-        queue_task_id: submission.queueTaskID,
-        provider_session_id: submission.sessionID,
-      },
-    })
+      // 4. Build goal-specific prompt
+      const prompt = buildGoalPrompt({
+        plan: plan as any,
+        node: entry.node as any,
+        goal: entry.goal as any,
+        taskRequest: plan.prompt,
+      })
 
-    // 7. Create executor session record
-    const executorSession = ensureExecutorSession({
-      taskID: task.id,
-      runID: run.id,
-      provider: run.executor,
-      refs: {
-        provider_session_id: submission.sessionID,
-        queue_task_id: submission.queueTaskID,
-      },
-      settings: { cwd: worktreeDir },
-      started: Date.now(),
-      goalRunID: goalRun.id,
-    })
+      // 5. Submit to executor with cwd=worktree
+      const executor = ExecutorRegistry.require(run.executor)
+      const submission = await Promise.race([
+        executor.submit({
+          sessionID: goalSession.id,
+          prompt,
+          priority: task.priority,
+          source: "planner",
+          cwd: worktreeDir,
+        }),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error(`executor.submit() timeout for goal ${entry.goal.id}`)), EXECUTOR_SUBMIT_TIMEOUT_MS),
+        ),
+      ])
 
-    // 8. Start event bridge
-    registerGoalRunSession(goalSession.id, task.id)
-    consumeExecutorEvents(task.id, run.id, run.executor, goalSession.id, executorSession.id)
+      // 6. Update goal run with executor refs
+      updateGoalRun(goalRun.id, {
+        status: "accepted",
+        time_started: Date.now(),
+        metadata: {
+          ...((goalRun.metadata as Record<string, unknown>) ?? {}),
+          queue_task_id: submission.queueTaskID,
+          provider_session_id: submission.sessionID,
+        },
+      })
 
-    log.info("dispatched goal run", {
-      runID: run.id,
-      goalID: entry.goal.id,
-      goalRunID: goalRun.id,
-      worktreeDir,
-    })
+      // 7. Create executor session record
+      const executorSession = ensureExecutorSession({
+        taskID: task.id,
+        runID: run.id,
+        provider: run.executor,
+        refs: {
+          provider_session_id: submission.sessionID,
+          queue_task_id: submission.queueTaskID,
+        },
+        settings: { cwd: worktreeDir },
+        started: Date.now(),
+        goalRunID: goalRun.id,
+      })
+
+      // 8. Start event bridge
+      registerGoalRunSession(goalSession.id, task.id)
+      consumeExecutorEvents(task.id, run.id, run.executor, goalSession.id, executorSession.id)
+
+      log.info("dispatched goal run", {
+        runID: run.id,
+        goalID: entry.goal.id,
+        goalRunID: goalRun.id,
+        worktreeDir,
+      })
+    } catch (err) {
+      // Dispatch failed — mark goal as "failed" so it doesn't block dependents forever.
+      log.error("goal dispatch failed", { goalID: entry.goal.id, error: err instanceof Error ? err.message : String(err) })
+      Database.use((db) =>
+        db.update(OrchestratorGoalTable)
+          .set({ status: "failed", time_updated: Date.now() })
+          .where(eq(OrchestratorGoalTable.id, entry.goal.id))
+          .run(),
+      )
+      if (worktreeDir) await cleanupGoalWorkspace(worktreeDir).catch(() => {})
+      throw err // Let caller handle run-level failure
+    }
   }
 
   /**
@@ -765,6 +788,13 @@ export namespace OrchestratorRuntime {
           log.error("goal run executor failed", { runID, goalRunID: goalRun.id, error: queue.error })
           updateGoalRun(goalRun.id, { status: "failed", error: queue.error ?? "Executor failed", time_completed: Date.now() })
           updateGoalRunExecutorSessionStatus(goalRun.id, "failed")
+          // Update goal status to "failed"
+          Database.use((db) =>
+            db.update(OrchestratorGoalTable)
+              .set({ status: "failed", time_updated: Date.now() })
+              .where(eq(OrchestratorGoalTable.id, goalRun.goal_id))
+              .run(),
+          )
           if (goalRun.workspace_dir) {
             await cleanupGoalWorkspace(goalRun.workspace_dir).catch(() => {})
           }
@@ -810,6 +840,7 @@ export namespace OrchestratorRuntime {
     } catch (err) {
       log.error("goal delivery extraction failed", { goalRunID: goalRun.id, error: err instanceof Error ? err.message : String(err) })
       updateGoalRun(goalRun.id, { status: "failed", error: `Delivery extraction failed: ${err instanceof Error ? err.message : String(err)}`, time_completed: Date.now() })
+      Database.use((db) => db.update(OrchestratorGoalTable).set({ status: "failed", time_updated: Date.now() }).where(eq(OrchestratorGoalTable.id, goalRun.goal_id)).run())
       if (goalRun.workspace_dir) await cleanupGoalWorkspace(goalRun.workspace_dir).catch(() => {})
       return
     }
@@ -828,6 +859,7 @@ export namespace OrchestratorRuntime {
       } catch (err) {
         log.error("goal delivery merge failed", { goalRunID: goalRun.id, error: err instanceof Error ? err.message : String(err) })
         updateGoalRun(goalRun.id, { status: "failed", error: `Merge failed: ${err instanceof Error ? err.message : String(err)}`, time_completed: Date.now() })
+        Database.use((db) => db.update(OrchestratorGoalTable).set({ status: "failed", time_updated: Date.now() }).where(eq(OrchestratorGoalTable.id, goalRun.goal_id)).run())
         await cleanupGoalWorkspace(goalRun.workspace_dir).catch(() => {})
         return
       }

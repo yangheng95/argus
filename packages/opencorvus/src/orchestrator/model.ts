@@ -255,7 +255,7 @@ export const Goal = z.object({
   description: z.string(),
   criteria: z.string(),
   priority: z.enum(["blocking", "advisory"]),
-  status: z.enum(["pending", "passed", "failed"]),
+  status: z.enum(["pending", "running", "passed", "failed"]),
   orderIndex: z.number().int(),
   metadata: z
     .object({
