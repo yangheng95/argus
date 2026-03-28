@@ -646,6 +646,8 @@ export function buildExecutorProcesses(events: ExecutorEvent[] = []): any[] {
       note: "",
       output: "",
       status: executorProcessStatus(event),
+      goalRunID: event.goalRunID || "",
+      executorSessionID: event.executorSessionID || "",
       time: {
         created: event.time?.created || Date.now(),
         updated: event.time?.created || Date.now(),
@@ -692,14 +694,46 @@ export function executorProcessMessage(processes: any[]): any {
 
 /**
  * Build the full set of synthetic conversation messages for executor events.
- * Non-process events are emitted as individual messages; processes are grouped
- * into a single leading process-summary message.
+ * Processes are grouped by goalRunID — each goal gets its own card/message.
+ * Non-goal processes (serial mode) are grouped into a default card.
  */
 export function buildExecutorMessages(): any[] {
   if (!boardStore.selectedTaskID) return [];
   const events = Array.isArray(executorStore.events) ? executorStore.events : [];
   const processes = buildExecutorProcesses(events);
   const processIDs = new Set(processes.map((item) => item.id));
+
+  // Group processes by goalRunID for per-goal cards
+  const processGroups = new Map<string, any[]>();
+  for (const process of processes) {
+    const key = process.goalRunID || "";
+    if (!processGroups.has(key)) processGroups.set(key, []);
+    processGroups.get(key)!.push(process);
+  }
+
+  // Create one synthetic message per goal (or one default for serial mode)
+  const goalMessages: any[] = [];
+  for (const [goalRunID, procs] of processGroups) {
+    if (procs.length === 0) continue;
+    // Resolve goal title from board store
+    const goalTitle = goalRunID ? resolveGoalTitle(goalRunID) : undefined;
+    goalMessages.push({
+      _synthetic: true,
+      info: {
+        id: `executor:processes:${goalRunID || boardStore.selectedTaskID || "active"}`,
+        role: "executor",
+        goalRunID: goalRunID || undefined,
+        goalTitle,
+        time: { created: procs[0]?.time?.created || Date.now() },
+      },
+      parts: procs.map((process) => ({
+        type: "executor_process",
+        process,
+      })),
+    });
+  }
+
+  // Non-process events as individual messages
   const messages = events
     .filter((event) => {
       const id = executorProcessID(event);
@@ -708,8 +742,29 @@ export function buildExecutorMessages(): any[] {
     })
     .map((event, index) => executorMessage(event, events, index))
     .filter(Boolean);
-  const processMsg = executorProcessMessage(processes);
-  return processMsg ? [processMsg, ...messages] : messages;
+
+  return [...goalMessages, ...messages];
+}
+
+/** Resolve a goal title from the board store by goalRunID. */
+function resolveGoalTitle(goalRunID: string): string | undefined {
+  const board = boardStore.board;
+  if (!board) return undefined;
+  const goalRuns = (board as any).goalRuns;
+  if (!Array.isArray(goalRuns)) return undefined;
+  const goalRun = goalRuns.find((gr: any) => gr.id === goalRunID || gr.goalRunID === goalRunID);
+  if (!goalRun) return undefined;
+  const goalID = goalRun.goalID || goalRun.goal_id;
+  if (!goalID) return undefined;
+  // Find goal card in lanes
+  const lanes = (board as any).lanes;
+  if (!Array.isArray(lanes)) return undefined;
+  for (const lane of lanes) {
+    if (!Array.isArray(lane.cards)) continue;
+    const card = lane.cards.find((c: any) => c.id === goalID);
+    if (card?.title) return card.title;
+  }
+  return undefined;
 }
 
 /**
