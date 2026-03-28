@@ -43,8 +43,9 @@ const VALID_KINDS = new Set(["bootstrap", "feature", "verification", "integratio
 
 function splitCommaSeparated(value: string | undefined): string[] {
   if (!value || !value.trim()) return []
-  // Split on commas or newlines (handles both "a, b" and YAML-like "- a\n- b" formats)
-  return value.split(/[,，\n]\s*/)
+  // Split on commas, newlines, or " - " separators
+  // Handles: "a, b", "a，b", "- a\n- b", "a - b" formats from LLM output
+  return value.split(/[,，\n]\s*|\s+-\s+/)
     .map((s) => s.trim().replace(/^-\s+/, "").trim())
     .filter(Boolean)
 }
