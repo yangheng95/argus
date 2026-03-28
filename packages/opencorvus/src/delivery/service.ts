@@ -80,7 +80,7 @@ export namespace DeliveryService {
       log.info("delivery service verify completed", {
         title: input.task.title,
         verdict: result.verdict,
-        fixesApplied: result.fixes_applied.length,
+        issuesFound: result.issues_found.length,
         startupSuccess: result.startup_verification.success,
       })
       return result

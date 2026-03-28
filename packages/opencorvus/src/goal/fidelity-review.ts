@@ -119,8 +119,11 @@ function formatGoals(goals: GoalDraft["goals"]): string {
 
 async function run(input: FidelityReviewInput): Promise<FidelityReviewResult> {
   const requirements = input.spec.requirements ?? []
-  if (requirements.length === 0 || input.goalDraft.goals.length === 0) {
-    return { verdict: "approved", coverage_issues: [], goal_corrections: [], missing_goals: [] }
+  if (requirements.length === 0) {
+    throw new Error("Fidelity review requires at least one spec requirement")
+  }
+  if (input.goalDraft.goals.length === 0) {
+    throw new Error("Fidelity review requires at least one goal")
   }
 
   const { model, language } = await resolveHeadlessLanguageModel({
@@ -172,30 +175,62 @@ Output ONLY a JSON object (no markdown fences, no other text):
   "missing_goals": [{"title": "...", "objective": "...", "requirement_ids": ["..."], "done_definition": "...", "owned_paths": ["..."], "depends_on_goal_ids": ["..."], "reason": "..."}]
 }`
 
-  const { text } = await completeHeadlessText({
-    label: "goal-fidelity-review",
-    model,
-    language,
-    prompt,
-    system:
-      "You are a precise goal coverage reviewer for a software task orchestrator. " +
-      "Output only valid JSON. Never wrap output in markdown code fences. " +
-      "Be conservative: only flag issues where coverage is genuinely wrong or missing.",
-    tools: {},
-    maxOutputTokens: 4096,
-    sessionID: input.sessionID,
-    timeoutMs: input.timeoutMs ?? 120_000,
-    abortSignal: input.signal,
-  })
+  // Application-level retry: the LLM call may return empty or truncated text
+  // (observed with Copilot Responses API). Retry up to MAX_REVIEW_ATTEMPTS times.
+  // If all attempts produce unparseable output, throw — the pipeline's stage
+  // retry will re-run the entire goal decomposition.
+  const MAX_REVIEW_ATTEMPTS = 3
+  let lastError: Error | undefined
+  let result: z.infer<typeof FidelityReviewSchema> | undefined
 
-  const jsonStart = text.indexOf("{")
-  const jsonEnd = text.lastIndexOf("}")
-  if (jsonStart < 0 || jsonEnd <= jsonStart) {
-    throw new Error(`Goal fidelity review returned unparseable output: ${text.slice(0, 300)}`)
+  for (let attempt = 1; attempt <= MAX_REVIEW_ATTEMPTS; attempt++) {
+    const { text } = await completeHeadlessText({
+      label: "goal-fidelity-review",
+      model,
+      language,
+      prompt,
+      system:
+        "You are a precise goal coverage reviewer for a software task orchestrator. " +
+        "Output only valid JSON. Never wrap output in markdown code fences. " +
+        "Be conservative: only flag issues where coverage is genuinely wrong or missing.",
+      tools: {},
+      maxOutputTokens: 8192,
+      sessionID: input.sessionID,
+      timeoutMs: input.timeoutMs ?? 120_000,
+      abortSignal: input.signal,
+    })
+
+    const jsonStart = text.indexOf("{")
+    const jsonEnd = text.lastIndexOf("}")
+    if (jsonStart < 0 || jsonEnd <= jsonStart) {
+      lastError = new Error(`Goal fidelity review returned unparseable output (attempt ${attempt}/${MAX_REVIEW_ATTEMPTS}): ${text.slice(0, 300)}`)
+      log.warn("fidelity review: unparseable output, retrying", {
+        attempt,
+        maxAttempts: MAX_REVIEW_ATTEMPTS,
+        outputLength: text.length,
+        preview: text.slice(0, 100),
+      })
+      continue
+    }
+
+    try {
+      const raw = JSON.parse(text.slice(jsonStart, jsonEnd + 1))
+      result = FidelityReviewSchema.parse(raw)
+      break
+    } catch (parseErr) {
+      lastError = new Error(`Goal fidelity review JSON parse failed (attempt ${attempt}/${MAX_REVIEW_ATTEMPTS}): ${parseErr instanceof Error ? parseErr.message : String(parseErr)}`)
+      log.warn("fidelity review: JSON parse error, retrying", {
+        attempt,
+        maxAttempts: MAX_REVIEW_ATTEMPTS,
+        error: parseErr instanceof Error ? parseErr.message : String(parseErr),
+      })
+      continue
+    }
   }
 
-  const raw = JSON.parse(text.slice(jsonStart, jsonEnd + 1))
-  const result = FidelityReviewSchema.parse(raw)
+  if (!result) {
+    throw lastError ?? new Error("Goal fidelity review failed after all attempts")
+  }
 
   // Filter out invalid references — the LLM may hallucinate IDs
   const requirementIDSet = new Set(requirementIDs)

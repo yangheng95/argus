@@ -108,6 +108,7 @@ export namespace ClaudeAgentExecutor {
         const allowed = input.toolMode === "none"
           ? []
           : split(process.env.OPENCORVUS_EXECUTOR_CLAUDE_ALLOWED_TOOLS)
+        if (input.cwd) console.log(`[claude-agent] query cwd=${input.cwd}`)
         const handle = query({
           prompt: input.prompt,
           options: {

@@ -64,6 +64,7 @@ export interface OrchestratorConfigType {
   max_replans: number
   same_plan_retry_limit: number
   stage_max_retries: number
+  max_executor_groups: number
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -107,6 +108,7 @@ const DEFAULTS: OrchestratorConfigType = {
   max_replans: 3,
   same_plan_retry_limit: 2,
   stage_max_retries: 2,
+  max_executor_groups: 1,
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -141,11 +143,16 @@ export namespace OrchestratorConfig {
   }
 
   /**
-   * 同步获取默认值（不读取配置文件）
+   * 同步获取默认值 + 环境变量覆盖（不读取配置文件）
    * 用于模块初始化阶段无法 await 的场景
    */
   export function getDefaults(): OrchestratorConfigType {
-    return { ...DEFAULTS }
+    const d = { ...DEFAULTS }
+    d.max_runs = envInt("OPENCORVUS_MAX_RUNS") ?? d.max_runs
+    d.max_replans = envInt("OPENCORVUS_MAX_REPLANS") ?? d.max_replans
+    d.same_plan_retry_limit = envInt("OPENCORVUS_SAME_PLAN_RETRY_LIMIT") ?? d.same_plan_retry_limit
+    d.max_executor_groups = envInt("OPENCORVUS_MAX_EXECUTOR_GROUPS") ?? d.max_executor_groups
+    return d
   }
 }
 
@@ -191,5 +198,6 @@ function merge(user?: Config.Info["orchestrator"]): OrchestratorConfigType {
     max_replans: envInt("OPENCORVUS_MAX_REPLANS") ?? user?.max_replans ?? DEFAULTS.max_replans,
     same_plan_retry_limit: envInt("OPENCORVUS_SAME_PLAN_RETRY_LIMIT") ?? user?.same_plan_retry_limit ?? DEFAULTS.same_plan_retry_limit,
     stage_max_retries: user?.stage_max_retries ?? DEFAULTS.stage_max_retries,
+    max_executor_groups: envInt("OPENCORVUS_MAX_EXECUTOR_GROUPS") ?? (user as any)?.max_executor_groups ?? DEFAULTS.max_executor_groups,
   }
 }

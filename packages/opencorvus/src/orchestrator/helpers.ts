@@ -3,6 +3,7 @@ import { Instance } from "@/project/instance"
 import { Budget } from "./model"
 import { OrchestratorConfig } from "./config"
 import type { OrchestratorBudget, OrchestratorTaskStatus } from "./orchestrator.sql"
+import type { TaskRow } from "./store"
 
 export const ORCHESTRATOR_POLL_INTERVAL_MS = 1500
 
@@ -11,6 +12,7 @@ const syncDefaults = OrchestratorConfig.getDefaults()
 export const SAME_PLAN_RETRY_LIMIT = syncDefaults.same_plan_retry_limit
 export const DEFAULT_MAX_RUNS = syncDefaults.max_runs
 export const DEFAULT_MAX_REPLANS = syncDefaults.max_replans
+export const MAX_EXECUTOR_GROUPS = syncDefaults.max_executor_groups
 
 export const orchestratorState = Instance.state(() => ({
   booted: false,
@@ -112,5 +114,16 @@ export function budgetRow(input?: z.infer<typeof Budget>): OrchestratorBudget | 
     max_replans: input.maxReplans,
     max_evaluations: input.maxEvaluations,
     max_wall_time_ms: input.maxWallTimeMs,
+    max_executor_groups: input.maxExecutorGroups,
   }
+}
+
+/**
+ * Resolve the effective max executor groups for a task.
+ * Priority: task budget > config (env + jsonc) > hardcoded default (1).
+ */
+export function effectiveMaxExecutorGroups(task: TaskRow): number {
+  const budgetMax = (task.budget as OrchestratorBudget | null)?.max_executor_groups
+  if (typeof budgetMax === "number" && budgetMax >= 1) return budgetMax
+  return MAX_EXECUTOR_GROUPS
 }

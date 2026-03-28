@@ -125,60 +125,63 @@ export function createPlannerTools(taskWorkDir?: string, sessionID?: string) {
       },
     }),
 
-    // --- Web search (Exa) ---
-    web_search: tool({
-      description:
-        "Search the web for current documentation, API references, changelogs, best practices, " +
-        "framework comparisons, and recommended tooling. USE PROACTIVELY for any greenfield project " +
-        "or when choosing frameworks/libraries. Do NOT assume — verify what is current and recommended.",
-      inputSchema: z.object({
-        query: z.string().describe("Web search query"),
-        num_results: z.number().optional().describe("Number of results (default: 5)"),
-      }),
-      execute: async ({ query, num_results }, options) => {
-        const exaKey = process.env.EXA_API_KEY
-        const headers: Record<string, string> = {
-          accept: "application/json, text/event-stream",
-          "content-type": "application/json",
-        }
-        if (exaKey) headers["x-api-key"] = exaKey
-        const signals = [AbortSignal.timeout(20_000)]
-        if (options?.abortSignal) signals.push(options.abortSignal)
-        const response = await fetch(`${EXA_BASE_URL}/mcp`, {
-          method: "POST",
-          headers,
-          body: JSON.stringify({
-            jsonrpc: "2.0",
-            id: 1,
-            method: "tools/call",
-            params: {
-              name: "web_search_exa",
-              arguments: {
-                query,
-                type: "auto",
-                numResults: num_results ?? 5,
-                livecrawl: "fallback",
+    // --- Web search (Exa) — disabled: rate-limited (429) ---
+    // To re-enable: restore the tool definition and remove the disabled stub.
+    ...(process.env.OPENCORVUS_DISABLE_WEB_SEARCH === "1" ? {} : {
+      web_search: tool({
+        description:
+          "Search the web for current documentation, API references, changelogs, best practices, " +
+          "framework comparisons, and recommended tooling. USE PROACTIVELY for any greenfield project " +
+          "or when choosing frameworks/libraries. Do NOT assume — verify what is current and recommended.",
+        inputSchema: z.object({
+          query: z.string().describe("Web search query"),
+          num_results: z.number().optional().describe("Number of results (default: 5)"),
+        }),
+        execute: async ({ query, num_results }, options) => {
+          const exaKey = process.env.EXA_API_KEY
+          const headers: Record<string, string> = {
+            accept: "application/json, text/event-stream",
+            "content-type": "application/json",
+          }
+          if (exaKey) headers["x-api-key"] = exaKey
+          const signals = [AbortSignal.timeout(20_000)]
+          if (options?.abortSignal) signals.push(options.abortSignal)
+          const response = await fetch(`${EXA_BASE_URL}/mcp`, {
+            method: "POST",
+            headers,
+            body: JSON.stringify({
+              jsonrpc: "2.0",
+              id: 1,
+              method: "tools/call",
+              params: {
+                name: "web_search_exa",
+                arguments: {
+                  query,
+                  type: "auto",
+                  numResults: num_results ?? 5,
+                  livecrawl: "fallback",
+                },
               },
-            },
-          }),
-          signal: AbortSignal.any(signals),
-        })
-        if (!response.ok) {
-          throw new Error(`Web search failed (HTTP ${response.status})`)
-        }
+            }),
+            signal: AbortSignal.any(signals),
+          })
+          if (!response.ok) {
+            throw new Error(`Web search failed (HTTP ${response.status})`)
+          }
 
-        const text = await response.text()
-        for (const line of text.split("\n")) {
-          if (line.startsWith("data: ")) {
-            const data = JSON.parse(line.substring(6))
-            if (data.result?.content?.[0]?.text) {
-              const content = data.result.content[0].text
-              return content.length > 4000 ? content.slice(0, 4000) + "\n... (truncated)" : content
+          const text = await response.text()
+          for (const line of text.split("\n")) {
+            if (line.startsWith("data: ")) {
+              const data = JSON.parse(line.substring(6))
+              if (data.result?.content?.[0]?.text) {
+                const content = data.result.content[0].text
+                return content.length > 4000 ? content.slice(0, 4000) + "\n... (truncated)" : content
+              }
             }
           }
-        }
-        throw new Error("Web search returned no results")
-      },
+          throw new Error("Web search returned no results")
+        },
+      }),
     }),
 
     // --- Clarification questions ---

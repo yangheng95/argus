@@ -128,7 +128,7 @@ async function pluginCheck(
   task: EvaluationTask,
   delivery: EvaluationDelivery,
 ): Promise<EvaluationOutcome> {
-  const result = await input.run({ request: task.request, delivery }).catch(() => pluginFallback(input.name))
+  const result = await input.run({ request: task.request, delivery })
   const artifacts = [
     {
       kind: "report" as const,
@@ -165,13 +165,7 @@ async function pluginCheck(
   }
 }
 
-function pluginFallback(name: string) {
-  return {
-    status: "skipped" as const,
-    evidence: `Plugin check ${name} threw an error.`,
-    artifacts: undefined as Array<{ kind: string; label: string; payload: Record<string, unknown> }> | undefined,
-  }
-}
+// pluginFallback removed — plugin check errors must propagate, not be masked as "skipped"
 
 function orderChecks(input: z.infer<typeof EvaluationCheck>[]) {
   const rank = (name: string) => BUILTIN_CHECK_INDEX.get(checkBase(name))?.order ?? BUILTIN_CHECK_INDEX.size + 100

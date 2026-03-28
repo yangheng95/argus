@@ -9,6 +9,7 @@ export type OrchestratorBudget = {
   max_replans?: number
   max_evaluations?: number
   max_wall_time_ms?: number
+  max_executor_groups?: number
 }
 
 export type OrchestratorMetadata = Record<string, unknown>
@@ -137,6 +138,9 @@ export const OrchestratorTaskTable = sqliteTable(
     metadata: text({ mode: "json" }).$type<OrchestratorMetadata>(),
     time_started: integer(),
     time_completed: integer(),
+    /** Timestamp when the task's status last changed. Used by stranded-task recovery
+     *  to measure time-in-current-status without being reset by incidental DB writes. */
+    time_status_changed: integer(),
     ...Timestamps,
   },
   (table) => [
@@ -497,7 +501,7 @@ export const OrchestratorExecutorSessionTable = sqliteTable(
   },
   (table) => [
     index("orchestrator_executor_session_task_idx").on(table.task_id),
-    uniqueIndex("orchestrator_executor_session_run_idx").on(table.run_id),
+    index("orchestrator_executor_session_run_idx").on(table.run_id),
     index("orchestrator_executor_session_goal_run_idx").on(table.goal_run_id),
     index("orchestrator_executor_session_status_idx").on(table.status),
   ],

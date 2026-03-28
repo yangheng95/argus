@@ -283,8 +283,8 @@ export namespace HeadlessPlannerAgent {
       })
     }
 
-    // Should never reach here, but satisfy TypeScript
-    return lastParsed!
+    if (!lastParsed) throw new Error("Planner agent produced no output after all attempts")
+    return lastParsed
   }
 }
 

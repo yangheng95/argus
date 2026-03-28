@@ -241,7 +241,8 @@ async function run(input: {
     })
   }
 
-  return toDraft(lastParsed!)
+  if (!lastParsed) throw new Error("Goal agent produced no output after all attempts")
+  return toDraft(lastParsed)
 }
 
 // ---------------------------------------------------------------------------
@@ -252,17 +253,11 @@ function toDraft(parsed: ParsedGoalDraft): GoalDraft {
   return {
     summary: parsed.summary || "Goal decomposition",
     goals: parsed.goals.map((g) => {
-      // Implicit goals have no requirement_ids — downstream schema requires .min(1),
-      // so we use a synthetic ID to pass validation while preserving the implicit source.
-      const requirementIds = g.requirement_ids.length > 0
-        ? g.requirement_ids
-        : [`_implicit:${g.id}`]
-
       return {
         id: g.id,
         title: g.title,
         objective: g.objective,
-        requirement_ids: requirementIds,
+        requirement_ids: g.requirement_ids,
         depends_on_goal_ids: g.depends_on_goal_ids,
         owned_paths: g.owned_paths,
         done_definition: g.done_definition,
@@ -302,7 +297,8 @@ function buildUserPrompt(
       const desc = r.description || ""
       const acceptance = Array.isArray(r.acceptance) ? r.acceptance.join("; ") : ""
       const priority = r.priority || "blocking"
-      const selectors = Array.isArray(r.metadata?.check_selector) ? r.metadata.check_selector.join(", ") : ""
+      const selectors = Array.isArray(r.check_selector) ? r.check_selector.join(", ")
+        : Array.isArray(r.metadata?.check_selector) ? r.metadata.check_selector.join(", ") : ""
       return [
         `- **${id}**: ${title} [${priority}]`,
         desc ? `  Description: ${desc}` : "",

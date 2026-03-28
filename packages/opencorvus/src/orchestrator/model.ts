@@ -18,6 +18,7 @@ export const Budget = z.object({
   maxReplans: z.number().int().positive().optional(),
   maxEvaluations: z.number().int().positive().optional(),
   maxWallTimeMs: z.number().int().positive().optional(),
+  maxExecutorGroups: z.number().int().positive().optional(),
 })
 
 export const ChannelBinding = z.object({

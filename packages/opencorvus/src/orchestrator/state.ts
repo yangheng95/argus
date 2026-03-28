@@ -26,11 +26,13 @@ export async function updateTask(
     return row
   }
   const now = Date.now()
+  const statusChanged = nextStatus !== row.status
   Database.transaction((db) => {
     db.update(OrchestratorTaskTable)
       .set({
         ...values,
         time_updated: now,
+        ...(statusChanged ? { time_status_changed: now } : {}),
       })
       .where(eq(OrchestratorTaskTable.id, row.id))
       .run()

@@ -70,7 +70,7 @@ export namespace CodexAppServerExecutor {
     })
   }
 
-  export function create(input: CodexAppServerClient | (() => CodexAppServerClient)): CodingProvider {
+  export function create(input: CodexAppServerClient | ((cwd?: string) => CodexAppServerClient)): CodingProvider {
     const factory = typeof input === "function" ? input : () => input
     const sessions = new Map<string, { client: CodexAppServerClient; threadID?: string; turnID?: string }>()
     return {
@@ -79,7 +79,7 @@ export namespace CodexAppServerExecutor {
       async *run(raw) {
         const input = CodingRunInput.parse(raw)
         const logicalID = provisionalID()
-        const client = factory()
+        const client = factory(input.cwd)
         sessions.set(logicalID, { client })
         await ensure(client)
         const thread = await client.threadStart(threadStart(input))

@@ -54,6 +54,10 @@ export namespace Worktree {
         .string()
         .optional()
         .describe("Additional startup script to run after the project's start command"),
+      checkout: z
+        .enum(["sync", "async"])
+        .optional()
+        .describe("When 'sync', await file checkout before returning. Default 'async' (fire-and-forget)."),
     })
     .meta({
       ref: "WorktreeCreateInput",
@@ -375,7 +379,7 @@ export namespace Worktree {
       throw new NotGitError({ message: "Worktrees are only supported for git projects" })
     }
 
-    const root = path.join(Global.Path.data, "worktree", Instance.project.id)
+    const root = path.join(path.dirname(Instance.directory), ".opencorvus-worktrees")
     await fs.mkdir(root, { recursive: true })
 
     const base = input?.name ? slug(input.name) : ""
@@ -393,12 +397,32 @@ export namespace Worktree {
 
     const projectID = Instance.project.id
     const extra = input?.startCommand?.trim()
-    setTimeout(() => {
-      const start = async () => {
-        const populated = await $`git reset --hard`.quiet().nothrow().cwd(info.directory)
-        if (populated.exitCode !== 0) {
-          const message = errorText(populated) || "Failed to populate worktree"
-          log.error("worktree checkout failed", { directory: info.directory, message })
+    const populate = async () => {
+      const populated = await $`git reset --hard`.quiet().nothrow().cwd(info.directory)
+      if (populated.exitCode !== 0) {
+        const message = errorText(populated) || "Failed to populate worktree"
+        log.error("worktree checkout failed", { directory: info.directory, message })
+        GlobalBus.emit("event", {
+          directory: info.directory,
+          payload: {
+            type: Event.Failed.type,
+            properties: {
+              message,
+            },
+          },
+        })
+        throw new CreateFailedError({ message })
+      }
+
+      const booted = await Instance.provide({
+        directory: info.directory,
+        init: InstanceBootstrap,
+        fn: () => undefined,
+      })
+        .then(() => true)
+        .catch((error) => {
+          const message = error instanceof Error ? error.message : String(error)
+          log.error("worktree bootstrap failed", { directory: info.directory, message })
           GlobalBus.emit("event", {
             directory: info.directory,
             payload: {
@@ -408,49 +432,33 @@ export namespace Worktree {
               },
             },
           })
-          return
-        }
-
-        const booted = await Instance.provide({
-          directory: info.directory,
-          init: InstanceBootstrap,
-          fn: () => undefined,
+          return false
         })
-          .then(() => true)
-          .catch((error) => {
-            const message = error instanceof Error ? error.message : String(error)
-            log.error("worktree bootstrap failed", { directory: info.directory, message })
-            GlobalBus.emit("event", {
-              directory: info.directory,
-              payload: {
-                type: Event.Failed.type,
-                properties: {
-                  message,
-                },
-              },
-            })
-            return false
-          })
-        if (!booted) return
+      if (!booted) return
 
-        GlobalBus.emit("event", {
-          directory: info.directory,
-          payload: {
-            type: Event.Ready.type,
-            properties: {
-              name: info.name,
-              branch: info.branch,
-            },
+      GlobalBus.emit("event", {
+        directory: info.directory,
+        payload: {
+          type: Event.Ready.type,
+          properties: {
+            name: info.name,
+            branch: info.branch,
           },
-        })
-
-        await runStartScripts(info.directory, { projectID, extra })
-      }
-
-      void start().catch((error) => {
-        log.error("worktree start task failed", { directory: info.directory, error })
+        },
       })
-    }, 0)
+
+      await runStartScripts(info.directory, { projectID, extra })
+    }
+
+    if (input?.checkout === "sync") {
+      await populate()
+    } else {
+      setTimeout(() => {
+        void populate().catch((error) => {
+          log.error("worktree start task failed", { directory: info.directory, error })
+        })
+      }, 0)
+    }
 
     return info
   })

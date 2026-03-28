@@ -360,6 +360,7 @@ CREATE TABLE IF NOT EXISTS orchestrator_task (
   metadata               text,
   time_started           integer,
   time_completed         integer,
+  time_status_changed    integer,
   time_created           integer NOT NULL,
   time_updated           integer NOT NULL,
   FOREIGN KEY (project_id) REFERENCES project(id) ON DELETE CASCADE,
@@ -560,6 +561,8 @@ CREATE TABLE IF NOT EXISTS orchestrator_goal_run (
   base_ref            text,
   merge_ref           text,
   metadata            text,
+  time_started        integer,
+  time_completed      integer,
   time_created        integer NOT NULL,
   time_updated        integer NOT NULL,
   FOREIGN KEY (task_id)            REFERENCES orchestrator_task(id) ON DELETE CASCADE,
@@ -681,7 +684,7 @@ CREATE TABLE IF NOT EXISTS orchestrator_executor_session (
   FOREIGN KEY (run_id)  REFERENCES orchestrator_run(id)  ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS orchestrator_executor_session_task_idx     ON orchestrator_executor_session (task_id);
-CREATE UNIQUE INDEX IF NOT EXISTS orchestrator_executor_session_run_idx ON orchestrator_executor_session (run_id);
+CREATE INDEX IF NOT EXISTS orchestrator_executor_session_run_idx ON orchestrator_executor_session (run_id);
 CREATE INDEX IF NOT EXISTS orchestrator_executor_session_goal_run_idx ON orchestrator_executor_session (goal_run_id);
 CREATE INDEX IF NOT EXISTS orchestrator_executor_session_status_idx   ON orchestrator_executor_session (status);
 
@@ -857,5 +860,32 @@ CREATE UNIQUE INDEX IF NOT EXISTS protocol_stream_chunk_stream_seq_idx ON protoc
 CREATE INDEX IF NOT EXISTS protocol_stream_chunk_task_idx              ON protocol_stream_chunk (task_id, chunk_seq);
 CREATE INDEX IF NOT EXISTS protocol_stream_chunk_run_idx               ON protocol_stream_chunk (run_id, chunk_seq);
 CREATE INDEX IF NOT EXISTS protocol_stream_chunk_session_idx           ON protocol_stream_chunk (session_id, chunk_seq);
+
+`
+
+// ---------------------------------------------------------------------------
+// Schema migrations — guarded ALTER TABLE statements for existing databases.
+// Each migration checks for the column/table before altering, so it's safe
+// to run on every startup (idempotent).
+// ---------------------------------------------------------------------------
+
+export const SCHEMA_MIGRATIONS = /* sql */ `
+
+-- Add time_status_changed to orchestrator_task (used by stranded-task recovery)
+ALTER TABLE orchestrator_task ADD COLUMN time_status_changed integer;
+
+-- Add time_started, time_completed, lease_until to orchestrator_goal_run
+ALTER TABLE orchestrator_goal_run ADD COLUMN time_started integer;
+ALTER TABLE orchestrator_goal_run ADD COLUMN time_completed integer;
+ALTER TABLE orchestrator_goal_run ADD COLUMN lease_until integer;
+
+-- Add time_started, time_completed, lease_until to orchestrator_delivery
+ALTER TABLE orchestrator_delivery ADD COLUMN time_started integer;
+ALTER TABLE orchestrator_delivery ADD COLUMN time_completed integer;
+ALTER TABLE orchestrator_delivery ADD COLUMN lease_until integer;
+
+-- Add time_started, lease_until to orchestrator_evaluation
+ALTER TABLE orchestrator_evaluation ADD COLUMN time_started integer;
+ALTER TABLE orchestrator_evaluation ADD COLUMN lease_until integer;
 
 `

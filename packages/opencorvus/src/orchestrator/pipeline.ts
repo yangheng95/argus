@@ -14,6 +14,7 @@ import { SpecFailureError, SpecService } from "@/spec/service"
 import { Database, eq, inArray, and } from "@/storage/db"
 import { Instance } from "@/project/instance"
 import { Log } from "@/util/log"
+import { createInactivityGuard } from "@/util/inactivity-guard"
 import { budgetRow } from "./helpers"
 import { CreateTaskInput, Event } from "./model"
 import {
@@ -136,6 +137,7 @@ export function persistQueuedTask(input: {
         metadata: { ...input.metadata, _pipeline: pipeline },
         time_created: input.now,
         time_updated: input.now,
+        time_status_changed: input.now,
       })
       .run()
     if (input.channelBinding) {
@@ -227,7 +229,9 @@ async function runSpecStage(
   task = await updateTask(task, { status: "spec_generating" }, "Spec generation started")
 
   const ctrl = new AbortController()
-  const timer = setTimeout(() => ctrl.abort("spec stage timeout"), stageTimeout("spec"))
+  const guard = createInactivityGuard(stageTimeout("spec"), () => {
+    ctrl.abort("spec stage inactivity timeout")
+  })
   try {
     const unattended = await unattendedProject()
     const specLive = agentStream({ taskID: task.id, stage: "spec" })
@@ -250,6 +254,7 @@ async function runSpecStage(
         signal: ctrl.signal,
         stream: {
           onChunk: async (arg: any) => {
+            guard.bump()
             if (specContentHooks.onChunk) await specContentHooks.onChunk(arg)
             if (specLive.hooks.onChunk) await specLive.hooks.onChunk(arg)
           },
@@ -297,7 +302,7 @@ async function runSpecStage(
     await updateTask(task, { status: "failed", error: `Spec failed: ${fullMsg}`, time_completed: Date.now() }, `Spec failed: ${fullMsg}`)
     return
   } finally {
-    clearTimeout(timer)
+    guard.clear()
   }
 }
 
@@ -341,7 +346,9 @@ async function runGoalStage(
   }
 
   const ctrl = new AbortController()
-  const timer = setTimeout(() => ctrl.abort("goal stage timeout"), stageTimeout("goal"))
+  const guard = createInactivityGuard(stageTimeout("goal"), () => {
+    ctrl.abort("goal stage inactivity timeout")
+  })
   try {
     const goalLive = agentStream({ taskID: task.id, stage: "goal" })
     const goalSession = await Session.createNext({
@@ -353,8 +360,12 @@ async function runGoalStage(
     const goalContentHooks = sessionStreamHooks({ sessionID: goalSession.id, taskID: task.id, stage: "goal" })
     await goalLive.start("Goal decomposition started")
 
-    const goalDraft = await withStageRetry("goal", () =>
-      HeadlessGoalAgent.initial({
+    // withStageRetry wraps the entire goal pipeline: LLM decomposition →
+    // fidelity review → graph validation. If any step throws (empty LLM
+    // response, invalid dependency IDs, circular deps), the whole sequence
+    // is retried up to stage_max_retries times before failing the task.
+    const reviewedGoalDraft = await withStageRetry("goal", async () => {
+      const goalDraft = await HeadlessGoalAgent.initial({
         title: task.title,
         request: task.request,
         spec: specDraft,
@@ -363,6 +374,7 @@ async function runGoalStage(
         signal: ctrl.signal,
         stream: {
           onChunk: async (arg: any) => {
+            guard.bump()
             if (goalContentHooks.onChunk) await goalContentHooks.onChunk(arg)
             if (goalLive.hooks.onChunk) await goalLive.hooks.onChunk(arg)
           },
@@ -372,37 +384,40 @@ async function runGoalStage(
           },
         },
         onStatus: goalLive.statusHook.bind(goalLive),
-      }),
-      { signal: ctrl.signal },
-    )
+      })
+
+      if (!goalDraft) throw new GoalFailureError("Goal decomposition produced no result")
+
+      // Fidelity review: LLM verifies goals cover spec requirements
+      let reviewed = goalDraft
+      if (goalDraft.goals.length > 0 && Array.isArray(specDraft.requirements) && specDraft.requirements.length > 0) {
+        log.info("running goal fidelity review", { taskID: task.id, goals: goalDraft.goals.length, requirements: specDraft.requirements.length })
+        const review = await GoalFidelityReview.run({
+          request: task.request,
+          spec: specDraft,
+          goalDraft,
+          sessionID: pipeline.sessionID,
+          metadata: task.metadata ?? undefined,
+          timeoutMs: 120_000,
+          signal: ctrl.signal,
+        })
+        if (review.verdict === "needs_correction") {
+          reviewed = applyGoalCorrections(goalDraft, review)
+          log.info("fidelity review applied corrections", {
+            taskID: task.id,
+            originalGoals: goalDraft.goals.length,
+            reviewedGoals: reviewed.goals.length,
+          })
+        }
+      }
+
+      // Validate goal graph — catches dependency ID mismatches, circular deps,
+      // missing requirement refs. Throws GoalFailureError → triggers retry.
+      validateGoalGraph(reviewed, specDraft)
+      return reviewed
+    }, { signal: ctrl.signal })
     await goalContentHooks.flush()
     await goalLive.finish("Goal decomposition finished")
-
-    if (!goalDraft) throw new GoalFailureError("Goal decomposition produced no result")
-
-    // Fidelity review: LLM verifies goals cover spec requirements
-    let reviewedGoalDraft = goalDraft
-    if (goalDraft.goals.length > 0 && Array.isArray(specDraft.requirements) && specDraft.requirements.length > 0) {
-      log.info("running goal fidelity review", { taskID: task.id, goals: goalDraft.goals.length, requirements: specDraft.requirements.length })
-      const review = await GoalFidelityReview.run({
-        request: task.request,
-        spec: specDraft,
-        goalDraft,
-        sessionID: pipeline.sessionID,
-        metadata: task.metadata ?? undefined,
-        timeoutMs: 120_000,
-        signal: ctrl.signal,
-      })
-      if (review.verdict === "needs_correction") {
-        reviewedGoalDraft = applyGoalCorrections(goalDraft, review)
-        validateGoalGraph(reviewedGoalDraft, specDraft)
-        log.info("fidelity review applied corrections", {
-          taskID: task.id,
-          originalGoals: goalDraft.goals.length,
-          reviewedGoals: reviewedGoalDraft.goals.length,
-        })
-      }
-    }
 
     // Persist goal snapshot immediately
     const specSnapshotID = task.active_spec_version_id!
@@ -438,7 +453,7 @@ async function runGoalStage(
     await updateTask(task, { status: "failed", error: `Goal failed: ${fullMsg}`, time_completed: Date.now() }, `Goal failed: ${fullMsg}`)
     return
   } finally {
-    clearTimeout(timer)
+    guard.clear()
   }
 }
 
@@ -481,13 +496,23 @@ async function runPlanStage(
   }
 
   const ctrl = new AbortController()
-  const timer = setTimeout(() => ctrl.abort("plan stage timeout"), stageTimeout("plan"))
+  const guard = createInactivityGuard(stageTimeout("plan"), () => {
+    ctrl.abort("plan stage inactivity timeout")
+  })
   try {
     const unattended = await unattendedProject()
     const plannerGoals = goalDraft ? goalInputsFromDraft(goalDraft) : (persistedGoals ?? []).map(g => ({
       description: g.description,
       criteria: g.criteria,
       priority: g.priority as "blocking" | "advisory" | undefined,
+      ...(g.metadata?.title ? { title: g.metadata.title as string } : {}),
+      ...(g.metadata?.objective ? { objective: g.metadata.objective as string } : {}),
+      ...(g.metadata?.requirement_ids ? { requirement_ids: g.metadata.requirement_ids as string[] } : {}),
+      ...(g.metadata?.depends_on_goal_ids ? { depends_on_goal_ids: g.metadata.depends_on_goal_ids as string[] } : {}),
+      ...(g.metadata?.owned_paths ? { owned_paths: g.metadata.owned_paths as string[] } : {}),
+      ...(g.metadata?.done_definition ? { done_definition: g.metadata.done_definition as string } : {}),
+      ...(g.metadata?.qa_profile ? { qa_profile: g.metadata.qa_profile as any } : {}),
+      ...(g.metadata?.kind ? { kind: g.metadata.kind as any } : {}),
     }))
     const planLive = agentStream({ taskID: task.id, stage: "planner" })
     // Create a child session so planner agent output is persisted and streamed via message events
@@ -513,6 +538,7 @@ async function runPlanStage(
         signal: ctrl.signal,
         stream: {
           onChunk: async (arg: any) => {
+            guard.bump()
             if (planContentHooks.onChunk) await planContentHooks.onChunk(arg)
             if (planLive.hooks.onChunk) await planLive.hooks.onChunk(arg)
           },
@@ -613,7 +639,7 @@ async function runPlanStage(
     await updateTask(task, { status: "failed", error: `Plan failed: ${fullMsg}`, time_completed: Date.now() }, `Plan failed: ${fullMsg}`)
     return
   } finally {
-    clearTimeout(timer)
+    guard.clear()
   }
 }
 
@@ -675,8 +701,10 @@ function parseAcceptance(raw: unknown, fallback: string): string[] {
   if (Array.isArray(raw)) return raw
   if (typeof raw === "string") {
     if (raw.trimStart().startsWith("[")) {
-      const parsed = JSON.parse(raw)
-      if (Array.isArray(parsed)) return parsed
+      try {
+        const parsed = JSON.parse(raw)
+        if (Array.isArray(parsed)) return parsed
+      } catch { /* malformed JSON, treat as plain string */ }
     }
     return [raw]
   }
@@ -705,23 +733,13 @@ function ensureRequirements(specDraft: SpecDraft): SpecDraft {
         acceptance: [description || title],
         evidence_refs: [] as string[],
         priority: (raw.priority === "advisory" ? "advisory" : "blocking") as "blocking" | "advisory",
-        ...(checkSelector && checkSelector.length > 0 ? { metadata: { check_selector: checkSelector } } : {}),
+        ...(checkSelector && checkSelector.length > 0 ? { check_selector: checkSelector } : {}),
       }]
     })
     if (requirements.length > 0) return { ...specDraft, requirements }
   }
-  if (specDraft.content && specDraft.summary) {
-    return {
-      ...specDraft,
-      requirements: [{
-        id: "req_1",
-        title: specDraft.summary,
-        description: specDraft.content.slice(0, 500),
-        acceptance: [specDraft.summary],
-        evidence_refs: [],
-        priority: "blocking" as const,
-      }],
-    }
-  }
-  return specDraft
+  throw new SpecFailureError(
+    "Spec agent produced no requirements and no spec_items. " +
+    "The spec output is structurally incomplete — cannot proceed to goal decomposition.",
+  )
 }

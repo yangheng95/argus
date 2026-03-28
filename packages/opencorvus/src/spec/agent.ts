@@ -52,6 +52,7 @@ export const RequirementSchema = z.object({
   evidence_refs: z.array(z.string()).default([]),
   non_goals: z.array(z.string()).optional(),
   priority: z.enum(["blocking", "advisory"]).optional(),
+  check_selector: z.array(z.string()).optional(),
   metadata: z.record(z.string(), z.any()).optional(),
 })
 export type Requirement = z.infer<typeof RequirementSchema>
@@ -347,7 +348,8 @@ async function run(input: {
     })
   }
 
-  return lastParsed!
+  if (!lastParsed) throw new Error("Spec agent produced no output after all attempts")
+  return lastParsed
 }
 
 // ---------------------------------------------------------------------------

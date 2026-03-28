@@ -1,15 +1,12 @@
 /**
  * Tool set for the DeliveryAgent.
  *
- * Extends codebase exploration tools with write capabilities, memory/preference
- * awareness, and command execution. Unlike the evaluator's read-only tools,
- * the delivery agent can write and edit files to fix bugs discovered during
- * end-to-end verification.
+ * Read-only verification tools with memory/preference awareness and command
+ * execution (for builds, startup checks). The delivery agent CANNOT modify
+ * files — it reports issues back to the orchestrator for retry/replan.
  */
 import { tool } from "ai"
 import z from "zod"
-import path from "path"
-import fs from "fs"
 import { createCodebaseTools } from "@/orchestrator/codebase-tools"
 import { Memory } from "@/memory"
 import { Preference } from "@/preference"
@@ -21,26 +18,20 @@ import { Log } from "@/util/log"
 const log = Log.create({ service: "delivery-tools" })
 
 /**
- * Creates the full tool set for the DeliveryAgent.
+ * Creates the tool set for the DeliveryAgent.
  *
  * Includes:
  * - 4 codebase tools: read_file, find_files, search_code, list_directory
  * - 1 memory tool: memory_search
  * - 1 preference tool: preference_list
- * - 1 execution tool: run_command (for starting servers, running builds)
- * - 1 write tool: write_file (create or overwrite files)
- * - 1 edit tool: edit_file (search-and-replace edits)
+ * - 1 execution tool: run_command (for builds, startup checks)
+ *
+ * NO write tools — delivery agent reports issues back to orchestrator.
  */
 export function createDeliveryTools(input?: { sessionID?: string }) {
   const codebase = createCodebaseTools()
   const projectId = Instance.project.id
   const projectDir = Filesystem.resolve(Instance.directory)
-
-  function safePath(input: string): string | null {
-    const value = Filesystem.windowsPath(input)
-    const abs = path.isAbsolute(value) ? Filesystem.resolve(value) : Filesystem.resolve(path.resolve(projectDir, value))
-    return Filesystem.contains(projectDir, abs) ? abs : null
-  }
 
   return {
     ...codebase,
@@ -126,62 +117,5 @@ export function createDeliveryTools(input?: { sessionID?: string }) {
       },
     }),
 
-    write_file: tool({
-      description:
-        "Create or overwrite a file in the project directory. " +
-        "Use to create missing files, fix configuration, or write new code needed for the application to run. " +
-        "The file path must be within the project boundary.",
-      inputSchema: z.object({
-        path: z.string().describe("File path relative to project root"),
-        content: z.string().describe("Full file content to write"),
-      }),
-      execute: async ({ path: filePath, content }) => {
-        const abs = safePath(filePath)
-        if (!abs) return "Error: path is outside the project boundary."
-        try {
-          const dir = path.dirname(abs)
-          if (!fs.existsSync(dir)) {
-            fs.mkdirSync(dir, { recursive: true })
-          }
-          fs.writeFileSync(abs, content, "utf-8")
-          const bytes = Buffer.byteLength(content, "utf-8")
-          log.info("delivery agent wrote file", { path: filePath, bytes })
-          return `File written: ${filePath} (${bytes} bytes)`
-        } catch (e) {
-          log.warn("write_file failed in delivery agent", { path: filePath, err: e })
-          return `Error writing file: ${e instanceof Error ? e.message : String(e)}`
-        }
-      },
-    }),
-
-    edit_file: tool({
-      description:
-        "Apply a search-and-replace edit to an existing file. " +
-        "Reads the file, finds the exact old_text, replaces it with new_text, and writes back. " +
-        "Use for targeted bug fixes — changing a line, fixing an import, correcting a typo. " +
-        "The old_text must appear exactly once in the file.",
-      inputSchema: z.object({
-        path: z.string().describe("File path relative to project root"),
-        old_text: z.string().describe("Exact text to find (must appear exactly once)"),
-        new_text: z.string().describe("Replacement text"),
-      }),
-      execute: async ({ path: filePath, old_text, new_text }) => {
-        const abs = safePath(filePath)
-        if (!abs) return "Error: path is outside the project boundary."
-        try {
-          const content = fs.readFileSync(abs, "utf-8")
-          const count = content.split(old_text).length - 1
-          if (count === 0) return `Error: old_text not found in ${filePath}. Check the exact text.`
-          if (count > 1) return `Error: old_text found ${count} times in ${filePath}. It must appear exactly once. Provide more context to make it unique.`
-          const updated = content.replace(old_text, new_text)
-          fs.writeFileSync(abs, updated, "utf-8")
-          log.info("delivery agent edited file", { path: filePath, oldLen: old_text.length, newLen: new_text.length })
-          return `File edited: ${filePath} (replaced ${old_text.length} chars with ${new_text.length} chars)`
-        } catch (e) {
-          log.warn("edit_file failed in delivery agent", { path: filePath, err: e })
-          return `Error editing file: ${e instanceof Error ? e.message : String(e)}`
-        }
-      },
-    }),
   }
 }
