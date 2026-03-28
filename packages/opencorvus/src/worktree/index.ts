@@ -272,6 +272,21 @@ export namespace Worktree {
     return insensitive ? normalized.toLowerCase() : normalized
   }
 
+  /**
+   * Resolve the primary (main) worktree directory.
+   * `git worktree list` always returns the main worktree as the first entry.
+   * This avoids creating worktrees inside child worktrees.
+   */
+  async function primaryWorktreeDir(): Promise<string> {
+    const list = await $`git worktree list --porcelain`.quiet().nothrow().cwd(Instance.worktree)
+    if (list.exitCode === 0) {
+      const first = outputText(list.stdout).split("\n").find((l) => l.startsWith("worktree "))
+      if (first) return first.slice("worktree ".length).trim()
+    }
+    // Fallback: use Instance.worktree directly
+    return Instance.worktree
+  }
+
   async function isCaseInsensitiveFilesystem(target: string) {
     if (process.platform === "win32") return true
     if (process.platform !== "darwin") return false
@@ -379,7 +394,11 @@ export namespace Worktree {
       throw new NotGitError({ message: "Worktrees are only supported for git projects" })
     }
 
-    const root = path.join(path.dirname(Instance.directory), ".opencorvus-worktrees")
+    // Resolve the PRIMARY worktree (main repo root) to avoid nested worktree paths.
+    // When Instance.directory points to a child worktree, path.dirname would create
+    // .opencorvus-worktrees inside the child — causing recursive nesting.
+    const primaryDir = await primaryWorktreeDir()
+    const root = path.join(path.dirname(primaryDir), ".opencorvus-worktrees")
     await fs.mkdir(root, { recursive: true })
 
     const base = input?.name ? slug(input.name) : ""
