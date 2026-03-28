@@ -672,7 +672,33 @@ export function buildExecutorProcesses(events: ExecutorEvent[] = []): any[] {
     current.time.updated = event.time?.created || current.time.updated;
     items.set(id, current);
   });
-  return [...items.values()].sort((a, b) => (a.time?.created || 0) - (b.time?.created || 0));
+  // Reuse cached process objects when content is unchanged to preserve
+  // referential identity for downstream <Index> rendering.
+  const activeIDs = new Set<string>();
+  const result: any[] = [];
+  for (const [id, process] of items) {
+    activeIDs.add(id);
+    const cached = _processCache.get(id);
+    if (
+      cached &&
+      cached.status === process.status &&
+      cached.title === process.title &&
+      cached.detail === process.detail &&
+      cached.progress === process.progress &&
+      cached.note === process.note &&
+      cached.output === process.output &&
+      cached.kind === process.kind
+    ) {
+      result.push(cached);
+    } else {
+      _processCache.set(id, process);
+      result.push(process);
+    }
+  }
+  for (const key of _processCache.keys()) {
+    if (!activeIDs.has(key)) _processCache.delete(key);
+  }
+  return result.sort((a, b) => (a.time?.created || 0) - (b.time?.created || 0));
 }
 
 /**
@@ -704,9 +730,11 @@ export function executorProcessMessage(processes: any[]): any {
  * reuse DOM nodes. Only the `parts` array is replaced on updates.
  */
 const _msgCache = new Map<string, any>();
+const _processCache = new Map<string, any>();
+const _partCache = new Map<string, any>();
 
 export function buildExecutorMessages(): any[] {
-  if (!boardStore.selectedTaskID) { _msgCache.clear(); _processCache.clear(); return []; }
+  if (!boardStore.selectedTaskID) { _msgCache.clear(); _processCache.clear(); _partCache.clear(); return []; }
   const events = Array.isArray(executorStore.events) ? executorStore.events : [];
   const processes = buildExecutorProcesses(events);
   const processIDs = new Set(processes.map((item) => item.id));
@@ -741,11 +769,14 @@ export function buildExecutorMessages(): any[] {
       };
       _msgCache.set(msgKey, msg);
     }
-    // Update parts in-place (new array ref so Solid detects the change)
-    msg.parts = procs.map((process) => ({
-      type: "executor_process",
-      process,
-    }));
+    // Cache part wrappers by process identity to preserve references for <Index>
+    msg.parts = procs.map((process) => {
+      const cached = _partCache.get(process.id);
+      if (cached && cached.process === process) return cached;
+      const wrapper = { type: "executor_process" as const, process };
+      _partCache.set(process.id, wrapper);
+      return wrapper;
+    });
     // Update goal title (may resolve later when board data arrives)
     if (goalRunID) msg.info.goalTitle = resolveGoalTitle(goalRunID);
     goalMessages.push(msg);
@@ -753,6 +784,10 @@ export function buildExecutorMessages(): any[] {
   // Prune stale cache entries
   for (const key of _msgCache.keys()) {
     if (!activeKeys.has(key)) _msgCache.delete(key);
+  }
+  const activeProcessIDs = new Set(processes.map((p: any) => p.id));
+  for (const key of _partCache.keys()) {
+    if (!activeProcessIDs.has(key)) _partCache.delete(key);
   }
 
   // Non-process events as individual messages

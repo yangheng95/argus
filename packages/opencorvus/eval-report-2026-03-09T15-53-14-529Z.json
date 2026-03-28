@@ -1,0 +1,66 @@
+[
+  {
+    "caseID": "E6",
+    "caseName": "Full pipeline: typed event emitter",
+    "difficulty": "medium",
+    "taskID": "tsk_cd348b095001mcq4g5zaFjf03u",
+    "status": "completed",
+    "wallTimeMs": 312215,
+    "totalRuns": 1,
+    "sessionMessageCount": 10,
+    "scores": {
+      "completion": 100,
+      "checkPassRate": 100,
+      "goalPassRate": 100,
+      "efficiency": 100,
+      "wallTimeScore": 70
+    },
+    "overall": 97,
+    "details": {
+      "planSummary": "Implement TypedEventEmitter class with type-safe event handling in src/emitter.ts, comprehensive tests in src/emitter.test.ts, and re-export from src/index.ts",
+      "evalVerdict": "accepted",
+      "evalSummary": "All 5 goals fully satisfied. TypedEventEmitter class implemented correctly in src/emitter.ts (lines 26-140) with all 5 required methods (on, off, emit, once, listenerCount) using proper TypeScript generics. Comprehensive test suite in src/emitter.test.ts (309 lines, 22 tests) covers all methods including edge cases: no listeners, duplicate removal, once auto-remove, chainability. All tests pass (22 pass, 0 fail, 34 expect() calls). TypeScript strict mode passes (tsconfig.json line 6: strict=true). Re-export correctly implemented in src/index.ts (line 2). Code follows project conventions: extensive JSDoc comments explain generic type pattern and design decisions, cohesive single-file implementation with no cross-module dependencies. No README added but inline documentation is comprehensive for this utility class.",
+      "checks": [
+        {
+          "name": "build",
+          "status": "passed"
+        },
+        {
+          "name": "test",
+          "status": "passed"
+        },
+        {
+          "name": "spec_check",
+          "status": "passed"
+        }
+      ],
+      "goals": [
+        {
+          "description": "TypedEventEmitter class implemented",
+          "status": "passed"
+        },
+        {
+          "description": "Tests comprehensive",
+          "status": "passed"
+        },
+        {
+          "description": "All tests pass",
+          "status": "passed"
+        },
+        {
+          "description": "TypeScript strict mode passes",
+          "status": "passed"
+        },
+        {
+          "description": "Re-exported from index",
+          "status": "passed"
+        }
+      ],
+      "sessionFlow": [
+        "0s: running",
+        "112s: evaluating",
+        "178s: completed"
+      ]
+    }
+  }
+]
