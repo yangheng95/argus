@@ -39,9 +39,6 @@ export const ManagedCodingExecutor = {
 
     const start = (state: State, mode: "run" | "resume", prompt: string, cwdOverride?: string) => {
       const resolvedCwd = cwdOverride ?? value(options.cwd)
-      if (cwdOverride) {
-        console.log(`[managed-executor] cwd override: ${cwdOverride} (options.cwd=${value(options.cwd)})`)
-      }
       const input = {
         model: value(options.model),
         prompt,

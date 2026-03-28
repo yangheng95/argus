@@ -489,6 +489,19 @@ If work is interrupted, resume in this order:
   - Updated planner prompt to describe isolated workspace model
   - `bunx tsc --noEmit` passes (no new errors in touched files)
 
+### Cleanup (2026-03-28)
+
+- Removed multi-group shadow pipeline (goal-grouping.ts, group-dispatch.ts, group-merge.ts)
+- Removed ~1000 lines of multi-group dispatch/sync/merge code from runtime.ts
+- Removed multi-group store functions (listGroupIDsByRun, listGoalRunsByGroup, listDeliveriesByRun)
+- Removed debug console.logs from managed.ts and claude-agent.ts
+- Kept: executor cwd propagation (compat.ts, managed.ts, codex-app-server.ts, claude-agent.ts, bootstrap.ts)
+- Kept: worktree module with sync checkout support (worktree/index.ts)
+- Kept: goal fidelity review with retry (fidelity-review.ts)
+- Kept: goal graph validation (pipeline.ts, persist.ts)
+- Kept: config keys (max_executor_groups) — will be repurposed for per-goal parallelism
+- `bunx tsc --noEmit` passes (no new errors in touched files)
+
 ### Current Phase
 
 Phase 2: Worktree Isolation Per Goal
