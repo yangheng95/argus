@@ -722,7 +722,7 @@ export namespace OrchestratorRuntime {
 
       // 8. Start event bridge
       registerGoalRunSession(goalSession.id, task.id)
-      consumeExecutorEvents(task.id, run.id, run.executor, goalSession.id, executorSession.id)
+      consumeExecutorEvents(task.id, run.id, run.executor, goalSession.id, executorSession.id, goalRun.id)
 
       log.info("dispatched goal run", {
         runID: run.id,
@@ -1896,6 +1896,7 @@ function consumeExecutorEvents(
   executorName: Parameters<typeof ExecutorRegistry.require>[0],
   sessionID: string,
   executorSessionID: string,
+  goalRunID?: string,
 ) {
   const executor = ExecutorRegistry.require(executorName)
   if (!executor.capabilities().events) return
@@ -1931,7 +1932,7 @@ function consumeExecutorEvents(
             taskID,
             runID,
             source: "executor",
-            payload: { taskID, runID, type: "text_delta", text: event.summary ?? "" },
+            payload: { taskID, runID, goalRunID, type: "text_delta", text: event.summary ?? "" },
           })
         } else if (event.type === "executor.progress") {
           ProtocolStore.dispatchEphemeral({
@@ -1940,7 +1941,7 @@ function consumeExecutorEvents(
             taskID,
             runID,
             source: "executor",
-            payload: { taskID, runID, type: event.type, summary: event.summary ?? "", payload: event.payload },
+            payload: { taskID, runID, goalRunID, type: event.type, summary: event.summary ?? "", payload: event.payload },
           })
         } else {
           void OrchestratorProtocol.emit(Event.RunProgress, {
@@ -1948,7 +1949,7 @@ function consumeExecutorEvents(
             runID,
             type: event.type,
             summary: event.summary ?? event.type,
-            payload: event.payload,
+            payload: { ...event.payload, goalRunID },
           }, { taskID, runID, source: "executor" })
         }
       }

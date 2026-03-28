@@ -53,11 +53,23 @@ export function MessageView(props: { message: any }) {
     });
   });
 
+  const goalRunID = () => props.message?.info?.goalRunID;
+  const goalTitle = () => props.message?.info?.goalTitle;
+
   return (
     <Show when={hasContent()}>
-      <article class="turn msg" data-role={role()} data-executor-type={executorType()}>
+      <article
+        class="turn msg"
+        data-role={role()}
+        data-executor-type={executorType()}
+        data-goal-run={goalRunID() || undefined}
+      >
         <div class="msg-head">
-          <span class="msg-role">{roleLabel(role())}</span>
+          <Show when={goalRunID()} fallback={<span class="msg-role">{roleLabel(role())}</span>}>
+            <span class="msg-role goal-executor-label">
+              {goalTitle() || `Goal ${goalRunID()!.slice(-8)}`}
+            </span>
+          </Show>
           <span class="msg-time">{time()}</span>
         </div>
         <div class="msg-bubble">

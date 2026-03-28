@@ -3672,6 +3672,22 @@ body[data-theme="light"] .section-badge {
   overflow-x: auto;
 }
 
+/* Per-goal executor card: distinct border color for goal-scoped messages */
+.msg[data-goal-run] {
+  --msg-role-bg: rgba(22, 163, 148, 0.14);
+  --msg-role-border: rgba(22, 163, 148, 0.32);
+  --msg-role-tone: #0e9682;
+  border-left: 3px solid var(--msg-role-tone);
+  border-radius: calc(8px * var(--ui-scale));
+}
+.goal-executor-label {
+  font-weight: 600;
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .executor-process-card {
   position: relative;
   display: flex;
