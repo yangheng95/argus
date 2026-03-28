@@ -763,6 +763,7 @@ export namespace OrchestratorRuntime {
     }
 
     const activeGoalRuns = listActiveGoalRunsByCoordinator(runID)
+    log.info("syncGoalRuns", { runID, activeGoalRuns: activeGoalRuns.length, runStatus: run.status })
     if (activeGoalRuns.length === 0) {
       // No active goal runs — check if we need to dispatch more or finalize
       await continueGoalPipeline(task, run, plan, hooks)
@@ -904,6 +905,9 @@ export namespace OrchestratorRuntime {
   async function continueGoalPipeline(task: TaskRow, run: RunRow, plan: PlanRow, hooks: RuntimeHooks) {
     const goals = listGoalsByPlan(plan.id)
     const activeRuns = listActiveGoalRunsByCoordinator(run.id)
+
+    const goalStatuses = goals.map((g) => `${g.id.slice(-8)}:${g.status}`).join(", ")
+    log.info("continueGoalPipeline", { runID: run.id, totalGoals: goals.length, activeRuns: activeRuns.length, goalStatuses })
 
     // Try to dispatch more ready goals
     const queued = await queueReadyGoalRuns(task, run, plan, hooks)
