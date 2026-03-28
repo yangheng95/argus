@@ -4,29 +4,40 @@
   </a>
 </p>
 
-<p align="center">slogan: TBD</p>
+<p align="center"><em>An open-source harness for AI coding agents</em></p>
 
-OpenCorvus sits between human requests and coding agents. You hand it a task. It promotes the request into an executable spec through a first-class `spec` agent, hands that spec to a `plan` agent, dispatches an executor, runs delivery evaluation with `spec check`, and either completes, retries, or replans.
+Coding agents are powerful, but raw model output is unreliable. OpenCorvus is the **harness** that turns one-shot coding agents into durable, evaluator-driven development workflows. You hand it a task. It promotes the request into an executable spec, decomposes it into goals, plans the execution, dispatches a coding agent, evaluates the delivery against the spec, and either completes, retries, or replans — autonomously.
 
-### Why OpenCorvus
+### Why a Harness
 
-- Delegated development instead of live pair-programming only
-- Durable orchestration state in SQLite: `task`, `plan_version`, `run`, `interaction`, `delivery`, `evaluation`, and progress snapshots
-- Scoped project knowledge: session memory plus global memory and preferences shared across sessions
-- Built-in `opencode` execution path, with optional `codex` and `claude-code` executors when those CLIs are present
-- Human-in-the-loop permission and question handling
-- Evaluator-driven loops for `build`, `test`, `lint`, `startup`, `artifact`, `visual`, `puppeteer`, LLM review checks, and a default-on `spec check` acceptance gate
-- Local TUI, headless server, overlay UI, and Slack gateway in the same repo
-- A separate channel runtime package in `packages/channel-runtime` with adapters for Slack, Telegram, Discord, Feishu, WhatsApp, Google Chat, Microsoft Teams, Line, Matrix, Mattermost, Signal, WeCom, and DingTalk
+A coding agent writes code. A harness makes sure the code is correct.
+
+Without a harness, you get a single attempt with no structured verification. With OpenCorvus, every task goes through a multi-agent pipeline where each stage has a clear contract:
+
+- **Spec agent** — researches the codebase and turns a vague request into a precise, testable specification
+- **Goal agent** — decomposes the spec into independent, verifiable implementation goals
+- **Planner agent** — expands goals into an execution plan with subtasks, risks, and assumptions
+- **Executor** — dispatches to coding CLIs (`opencode`, `codex`, `claude-code`) against the real repo
+- **Evaluator agent** — runs `build`, `test`, `lint`, `startup`, `artifact`, `visual`, `puppeteer`, LLM review checks and the default-on `spec check` acceptance gate; classifies failures and generates replan guidance
+- **Delivery agent** — performs end-to-end verification before publishing
+
+The result is **delegated development**: durable task orchestration with SQLite state persistence, scoped project memory shared across sessions, human-in-the-loop permission handling, and evaluator-driven retry loops — accessible from a local TUI, headless HTTP API, overlay UI, Slack, or any of the 14 channel adapters in `packages/channel-runtime`.
 
 ### How It Works
 
+```
+task → spec → goals → plan → execute → evaluate ─┬→ deliver → done
+                        ↑                         │
+                        └── replan (on failure) ───┘
+```
+
 1. Accept a task from API, Slack, or a local session.
-2. Use the `spec` agent to research, clarify, and write or complete the spec.
-3. Use the `plan` agent to turn the spec into goals and subtasks.
-4. Dispatch an executor against the repo.
-5. Capture delivery artifacts and run evaluator checks with `spec check` enabled by default.
-6. Accept the task only when required spec items are satisfied accurately and completely; otherwise retry the same plan or create a new plan version until the budget is exhausted.
+2. **Spec**: research, clarify, and write the specification with acceptance criteria.
+3. **Goals**: decompose the spec into independent implementation goals.
+4. **Plan**: expand goals into an execution plan with subtasks and risks.
+5. **Execute**: dispatch a coding agent against the repo.
+6. **Evaluate**: run checks with `spec check` enabled by default.
+7. Accept only when required spec items are satisfied accurately and completely; otherwise retry the same plan or create a new plan version until the budget is exhausted.
 
 ### Installation
 
@@ -144,7 +155,7 @@ bun ./packages/sdk/js/script/build.ts
 
 #### How is this different from a direct coding agent?
 
-OpenCorvus is built for delegated development workflows. It adds durable task orchestration, spec-first planning, goal tracking, evaluator-driven retries, remote channels, and operator feedback loops on top of direct coding-agent execution.
+A coding agent is a single-turn tool. OpenCorvus is the harness around it — spec-first planning, goal decomposition, evaluator-driven retries, durable state, remote channels, and operator feedback loops. It doesn't replace your coding agent; it makes it reliable.
 
 #### Is OpenCorvus only a Slack bot?
 
@@ -167,7 +178,7 @@ No. The core orchestration loop is implemented, but the product surface is still
 
 ### Acknowledgments
 
-OpenCorvus extends direct coding-agent execution toward delegated development, remote channels, and evaluator-driven automation.
+OpenCorvus is built on the idea that coding agents need structured harnesses — spec contracts, evaluation loops, and durable orchestration — to move from demo-grade to production-grade.
 
 ### License
 
