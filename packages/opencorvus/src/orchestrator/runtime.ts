@@ -763,7 +763,6 @@ export namespace OrchestratorRuntime {
     }
 
     const activeGoalRuns = listActiveGoalRunsByCoordinator(runID)
-    log.info("syncGoalRuns", { runID, activeGoalRuns: activeGoalRuns.length, runStatus: run.status })
     if (activeGoalRuns.length === 0) {
       // No active goal runs — check if we need to dispatch more or finalize
       await continueGoalPipeline(task, run, plan, hooks)
@@ -823,7 +822,7 @@ export namespace OrchestratorRuntime {
    * 5. Cleanup worktree
    */
   async function finalizeGoalRun(task: TaskRow, run: RunRow, plan: PlanRow, goalRun: GoalRunRow, hooks: RuntimeHooks) {
-    stopEventBridge(run.id) // Stop the event bridge for this goal's session
+    stopEventBridge(goalRun.id) // Stop the per-goal event bridge (keyed by goalRunID)
     updateGoalRunExecutorSessionStatus(goalRun.id, "completed")
 
     // 1. Extract delivery
@@ -905,9 +904,6 @@ export namespace OrchestratorRuntime {
   async function continueGoalPipeline(task: TaskRow, run: RunRow, plan: PlanRow, hooks: RuntimeHooks) {
     const goals = listGoalsByPlan(plan.id)
     const activeRuns = listActiveGoalRunsByCoordinator(run.id)
-
-    const goalStatuses = goals.map((g) => `${g.id.slice(-8)}:${g.status}`).join(", ")
-    log.info("continueGoalPipeline", { runID: run.id, totalGoals: goals.length, activeRuns: activeRuns.length, goalStatuses })
 
     // Try to dispatch more ready goals
     const queued = await queueReadyGoalRuns(task, run, plan, hooks)
@@ -1585,7 +1581,13 @@ function recoverStrandedTasks(hooks: RuntimeHooks) {
 }
 
 async function failRun(run: RunRow, error: string, hooks: RuntimeHooks) {
-  stopEventBridge(run.id)
+  stopEventBridge(run.id) // serial bridge
+  // Stop all per-goal event bridges for this run
+  const goalRuns = listActiveGoalRunsByCoordinator(run.id)
+  for (const gr of goalRuns) {
+    stopEventBridge(gr.id)
+    if (gr.workspace_dir) await cleanupGoalWorkspace(gr.workspace_dir).catch(() => {})
+  }
   updateExecutorSessionStatus(run.id, "failed")
   const task = requireTask(run.task_id)
   const now = Date.now()
@@ -1900,9 +1902,11 @@ function consumeExecutorEvents(
 ) {
   const executor = ExecutorRegistry.require(executorName)
   if (!executor.capabilities().events) return
-  // Create an AbortController so we can stop the event bridge when the run completes/fails
+  // Create an AbortController so we can stop the event bridge when the run/goal completes/fails.
+  // Per-goal bridges use goalRunID as key; serial bridges use runID.
+  const bridgeKey = goalRunID || runID
   const ctrl = new AbortController()
-  eventBridgeAborts.set(runID, ctrl)
+  eventBridgeAborts.set(bridgeKey, ctrl)
   // 异步消费 — 不阻塞 dispatch 返回
   ;(async () => {
     try {
@@ -1958,7 +1962,7 @@ function consumeExecutorEvents(
         log.warn("executor event bridge ended", { taskID, runID, error: String(err) })
       }
     } finally {
-      eventBridgeAborts.delete(runID)
+      eventBridgeAborts.delete(bridgeKey)
     }
   })()
 }
