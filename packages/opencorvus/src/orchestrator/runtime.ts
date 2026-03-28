@@ -20,6 +20,7 @@ import { Publisher } from "./publisher"
 import { OrchestratorGit } from "./git"
 import { OrchestratorMemoryBridge } from "./memory-bridge"
 import {
+  OrchestratorGoalTable,
   OrchestratorInteractionRequestTable,
   OrchestratorRunTable,
   OrchestratorTaskTable,
@@ -29,10 +30,12 @@ import { OrchestratorProtocol } from "./protocol"
 import { ProtocolStore } from "@/protocol/store"
 import {
   buildOperatorPrompt,
+  effectiveMaxExecutorGroups,
   orchestratorState,
 } from "./helpers"
 import {
   appendExecutorEvent,
+  createGoalRun,
   createReplanRun,
   createRetryRun,
   ensureExecutorSession,
@@ -43,6 +46,7 @@ import {
   persistEvaluation,
   persistFailedRunEvaluation,
   updateExecutorSessionStatus,
+  updateGoalRun,
   updateGoalRunExecutorSessionStatus,
 } from "./persist"
 import { advanceTaskStage } from "./pipeline"
@@ -57,14 +61,21 @@ import {
   findPlan,
   findRun,
   findTask,
+  goalRunQueueTaskID,
+  listActiveGoalRunsByCoordinator,
   listGoalsByPlan,
+  listPlanNodesByPlan,
   requireRun,
   requireTask,
   type DeliveryRow,
+  type GoalRunRow,
   type PlanRow,
   type RunRow,
   type TaskRow,
 } from "./store"
+import { Worktree } from "@/worktree"
+import { readyGoalNodes, pendingBlockingGoals, hasBlockingFailures } from "@/goal/scheduler"
+import { buildGoalPrompt, createGoalSession, applyGoalDelivery, cleanupGoalWorkspace } from "@/goal/runner"
 import { Identifier } from "@/id/id"
 import { agentStream } from "./agent-stream"
 import { OrchestratorArtifactTable } from "./orchestrator.sql"
@@ -472,6 +483,17 @@ export namespace OrchestratorRuntime {
     if (!task.session_id) throw new Error(`Task ${task.id} has no session`)
     if (!plan) throw new Error(`Task ${task.id} has no plan`)
 
+    // Per-goal parallel dispatch: when maxConcurrentGoals > 1,
+    // dispatch each goal individually with its own worktree.
+    const maxGoals = effectiveMaxExecutorGroups(task)
+    if (maxGoals > 1) {
+      const goals = listGoalsByPlan(plan.id)
+      if (goals.length > 1) {
+        return dispatchGoalRuns(runID, hooks)
+      }
+    }
+
+    // Single-executor serial dispatch (existing path, maxConcurrentGoals=1 or single goal)
     const base = typeof run.metadata?.prompt_override === "string" ? run.metadata.prompt_override : plan.prompt
     const brief = WorkbenchService.compileBrief({
       taskID: task.id,
@@ -550,6 +572,332 @@ export namespace OrchestratorRuntime {
     consumeExecutorEvents(task.id, run.id, run.executor, sessionID, session.id)
   }
 
+  // ═══════════════════════════════════════════════════════════════════
+  // Per-Goal Parallel Dispatch (spec Phase 2)
+  // ═══════════════════════════════════════════════════════════════════
+
+  /**
+   * Dispatch ready goals individually, each with its own worktree and executor session.
+   * Called from dispatch() when maxConcurrentGoals > 1 and multiple goals exist.
+   */
+  async function dispatchGoalRuns(runID: string, hooks: RuntimeHooks) {
+    const run = requireRun(runID)
+    let task = requireTask(run.task_id)
+    const plan = run.plan_version_id ? findPlan(run.plan_version_id) : undefined
+    if (!task.session_id) throw new Error(`Task ${task.id} has no session`)
+    if (!plan) throw new Error(`Task ${task.id} has no plan`)
+
+    const prepared = await prepareRun(task, run, plan, hooks)
+    if (!prepared) return
+    task = prepared
+
+    const now = Date.now()
+    await hooks.updateRun(run, { status: "accepted", time_started: now }, "Per-goal parallel dispatch")
+    await hooks.updateTask(task, { status: "running", time_started: task.time_started ?? now }, "Dispatching goals in parallel")
+
+    await queueReadyGoalRuns(task, run, plan, hooks)
+  }
+
+  /**
+   * Dispatch up to maxConcurrentGoals ready goals.
+   * Each goal gets its own worktree, session, and executor submission.
+   */
+  async function queueReadyGoalRuns(task: TaskRow, run: RunRow, plan: PlanRow, hooks: RuntimeHooks) {
+    const maxGoals = effectiveMaxExecutorGroups(task)
+    const active = listActiveGoalRunsByCoordinator(run.id)
+    const slots = maxGoals - active.length
+    if (slots <= 0) return 0
+
+    const nodes = listPlanNodesByPlan(plan.id)
+    const goals = listGoalsByPlan(plan.id)
+    const ready = readyGoalNodes(nodes, goals)
+    const batch = ready.slice(0, slots)
+    if (batch.length === 0) return 0
+
+    let queued = 0
+    for (const entry of batch) {
+      await queueGoalRun(task, run, plan, entry, hooks)
+      queued++
+    }
+    log.info("queued goal runs", { runID: run.id, queued, active: active.length, ready: ready.length })
+    return queued
+  }
+
+  /**
+   * Dispatch a single goal: worktree → session → executor submit → event bridge.
+   */
+  async function queueGoalRun(
+    task: TaskRow,
+    run: RunRow,
+    plan: PlanRow,
+    entry: { node: { id: string; goal_id: string } & Record<string, unknown>; goal: { id: string; description: string } & Record<string, unknown> },
+    hooks: RuntimeHooks,
+  ) {
+    const sessionID = task.session_id
+    if (!sessionID) throw new Error(`Task ${task.id} has no session`)
+
+    // 1. Create isolated worktree with synchronous checkout
+    const worktreeInfo = await Worktree.create({
+      name: `goal-${entry.goal.id.slice(-8)}`,
+      checkout: "sync",
+    })
+    const worktreeDir = worktreeInfo.directory
+
+    // 2. Create goal session scoped to worktree
+    const goalSession = await createGoalSession(task as any, entry.goal as any, worktreeDir)
+
+    // 3. Create GoalRun record
+    const goalRun = createGoalRun({
+      taskID: task.id,
+      goalID: entry.goal.id,
+      planNodeID: entry.node.id,
+      coordinatorRunID: run.id,
+      sessionID: goalSession.id,
+      executor: run.executor,
+      workspaceDir: worktreeDir,
+      metadata: {
+        worktree_branch: worktreeInfo.branch,
+      },
+    })
+
+    // 4. Build goal-specific prompt
+    const prompt = buildGoalPrompt({
+      plan: plan as any,
+      node: entry.node as any,
+      goal: entry.goal as any,
+      taskRequest: plan.prompt,
+    })
+
+    // 5. Submit to executor with cwd=worktree
+    const executor = ExecutorRegistry.require(run.executor)
+    const submission = await Promise.race([
+      executor.submit({
+        sessionID: goalSession.id,
+        prompt,
+        priority: task.priority,
+        source: "planner",
+        cwd: worktreeDir,
+      }),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error(`executor.submit() timeout for goal ${entry.goal.id}`)), EXECUTOR_SUBMIT_TIMEOUT_MS),
+      ),
+    ])
+
+    // 6. Update goal run with executor refs
+    updateGoalRun(goalRun.id, {
+      status: "accepted",
+      time_started: Date.now(),
+      metadata: {
+        ...((goalRun.metadata as Record<string, unknown>) ?? {}),
+        queue_task_id: submission.queueTaskID,
+        provider_session_id: submission.sessionID,
+      },
+    })
+
+    // 7. Create executor session record
+    const executorSession = ensureExecutorSession({
+      taskID: task.id,
+      runID: run.id,
+      provider: run.executor,
+      refs: {
+        provider_session_id: submission.sessionID,
+        queue_task_id: submission.queueTaskID,
+      },
+      settings: { cwd: worktreeDir },
+      started: Date.now(),
+      goalRunID: goalRun.id,
+    })
+
+    // 8. Start event bridge
+    registerGoalRunSession(goalSession.id, task.id)
+    consumeExecutorEvents(task.id, run.id, run.executor, goalSession.id, executorSession.id)
+
+    log.info("dispatched goal run", {
+      runID: run.id,
+      goalID: entry.goal.id,
+      goalRunID: goalRun.id,
+      worktreeDir,
+    })
+  }
+
+  /**
+   * Sync per-goal executor runs: check status of each active goal run,
+   * finalize completed ones, dispatch newly-ready goals.
+   */
+  async function syncGoalRuns(runID: string, hooks: RuntimeHooks) {
+    const run = requireRun(runID)
+    const task = requireTask(run.task_id)
+    const plan = run.plan_version_id ? findPlan(run.plan_version_id) : undefined
+    if (!plan) return
+
+    // Run execution timeout
+    const started = run.time_started ?? run.time_created
+    if (started && (Date.now() - started) > RUN_MAX_EXECUTION_MS) {
+      log.warn("per-goal run exceeded max execution time", { runID, maxMs: RUN_MAX_EXECUTION_MS })
+      await failRun(run, `Run exceeded maximum execution time (${Math.round(RUN_MAX_EXECUTION_MS / 60000)}min)`, hooks)
+      return
+    }
+
+    const activeGoalRuns = listActiveGoalRunsByCoordinator(runID)
+    if (activeGoalRuns.length === 0) {
+      // No active goal runs — check if we need to dispatch more or finalize
+      await continueGoalPipeline(task, run, plan, hooks)
+      return
+    }
+
+    const executor = ExecutorRegistry.require(run.executor)
+
+    for (const goalRun of activeGoalRuns) {
+      const queueTaskID = goalRunQueueTaskID(goalRun)
+      if (!queueTaskID) continue
+
+      try {
+        const queue = await Promise.race([
+          executor.status(queueTaskID),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error(`executor.status() timeout for goal run ${goalRun.id}`)), EXECUTOR_STATUS_TIMEOUT_MS),
+          ),
+        ])
+
+        if (queue.status === "completed") {
+          await finalizeGoalRun(task, run, plan, goalRun, hooks)
+        } else if (queue.status === "failed") {
+          log.error("goal run executor failed", { runID, goalRunID: goalRun.id, error: queue.error })
+          updateGoalRun(goalRun.id, { status: "failed", error: queue.error ?? "Executor failed", time_completed: Date.now() })
+          updateGoalRunExecutorSessionStatus(goalRun.id, "failed")
+          if (goalRun.workspace_dir) {
+            await cleanupGoalWorkspace(goalRun.workspace_dir).catch(() => {})
+          }
+        }
+      } catch (err) {
+        log.warn("goal run status check failed", {
+          runID,
+          goalRunID: goalRun.id,
+          error: err instanceof Error ? err.message : String(err),
+        })
+      }
+    }
+
+    // After processing, check if more goals can be dispatched
+    await continueGoalPipeline(task, run, plan, hooks)
+  }
+
+  /**
+   * Finalize a completed goal run:
+   * 1. Extract delivery from executor
+   * 2. Persist delivery linked to goal run
+   * 3. Merge worktree changes to main workspace (serialized)
+   * 4. Update goal status
+   * 5. Cleanup worktree
+   */
+  async function finalizeGoalRun(task: TaskRow, run: RunRow, plan: PlanRow, goalRun: GoalRunRow, hooks: RuntimeHooks) {
+    stopEventBridge(run.id) // Stop the event bridge for this goal's session
+    updateGoalRunExecutorSessionStatus(goalRun.id, "completed")
+
+    // 1. Extract delivery
+    const executor = ExecutorRegistry.require(run.executor)
+    let delivery: { summary: string; diffs: Array<{ file: string; [key: string]: unknown }> }
+    try {
+      delivery = await Promise.race([
+        executor.delivery({
+          sessionID: goalRun.session_id!,
+          since: goalRun.time_started ?? goalRun.time_created,
+        }),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error(`executor.delivery() timeout for goal run ${goalRun.id}`)), DELIVERY_FETCH_TIMEOUT_MS),
+        ),
+      ])
+    } catch (err) {
+      log.error("goal delivery extraction failed", { goalRunID: goalRun.id, error: err instanceof Error ? err.message : String(err) })
+      updateGoalRun(goalRun.id, { status: "failed", error: `Delivery extraction failed: ${err instanceof Error ? err.message : String(err)}`, time_completed: Date.now() })
+      if (goalRun.workspace_dir) await cleanupGoalWorkspace(goalRun.workspace_dir).catch(() => {})
+      return
+    }
+
+    // 2. Persist delivery linked to goal run
+    const deliveryID = Identifier.ascending("delivery")
+    persistDelivery({ task, run, goalRunID: goalRun.id, deliveryID, delivery, now: Date.now() })
+
+    // 3. Merge worktree to main workspace via git
+    if (goalRun.workspace_dir) {
+      try {
+        await applyGoalDelivery({
+          directory: Instance.directory,
+          delivery: { diffs: delivery.diffs as any },
+        })
+      } catch (err) {
+        log.error("goal delivery merge failed", { goalRunID: goalRun.id, error: err instanceof Error ? err.message : String(err) })
+        updateGoalRun(goalRun.id, { status: "failed", error: `Merge failed: ${err instanceof Error ? err.message : String(err)}`, time_completed: Date.now() })
+        await cleanupGoalWorkspace(goalRun.workspace_dir).catch(() => {})
+        return
+      }
+    }
+
+    // 4. Mark goal run completed and update goal status
+    updateGoalRun(goalRun.id, { status: "completed", time_completed: Date.now() })
+
+    // Update the goal's status to "passed" (individual goal success)
+    const goal = listGoalsByPlan(plan.id).find((g) => g.id === goalRun.goal_id)
+    if (goal) {
+      Database.use((db) =>
+        db.update(OrchestratorGoalTable)
+          .set({ status: "passed", time_updated: Date.now() })
+          .where(eq(OrchestratorGoalTable.id, goal.id))
+          .run(),
+      )
+    }
+
+    // 5. Cleanup worktree
+    if (goalRun.workspace_dir) {
+      await cleanupGoalWorkspace(goalRun.workspace_dir).catch((err) => {
+        log.warn("worktree cleanup failed (non-fatal)", { goalRunID: goalRun.id, error: String(err) })
+      })
+    }
+
+    log.info("goal run finalized", {
+      runID: run.id,
+      goalRunID: goalRun.id,
+      goalID: goalRun.goal_id,
+      files: delivery.diffs.length,
+    })
+  }
+
+  /**
+   * After goal runs complete/fail, check if:
+   * - More ready goals can be dispatched
+   * - All goals are done → finalize the run
+   * - Blocking goals failed → handle failure
+   */
+  async function continueGoalPipeline(task: TaskRow, run: RunRow, plan: PlanRow, hooks: RuntimeHooks) {
+    const goals = listGoalsByPlan(plan.id)
+    const activeRuns = listActiveGoalRunsByCoordinator(run.id)
+
+    // Try to dispatch more ready goals
+    const queued = await queueReadyGoalRuns(task, run, plan, hooks)
+    if (queued > 0) return
+
+    // If goals are still executing, wait
+    if (activeRuns.length > 0) return
+
+    // Check if blocking goals failed
+    if (hasBlockingFailures(goals)) {
+      await handleEvaluationFailure(task, run, "Blocking goal(s) failed during parallel execution", hooks)
+      return
+    }
+
+    // Check if there are pending blocking goals with no ready path
+    const pending = pendingBlockingGoals(goals)
+    if (pending.length > 0) {
+      // Pending goals exist but none are ready — dependency chain broken
+      await handleEvaluationFailure(task, run, `${pending.length} blocking goal(s) pending but not ready (dependency failure)`, hooks)
+      return
+    }
+
+    // All goals done — finalize the run via completeRun
+    log.info("all goals completed, finalizing run", { runID: run.id })
+    await completeRun(run, hooks)
+  }
+
   export async function syncTask(taskID: string, hooks: RuntimeHooks) {
     const task = findTask(taskID)
     if (!task) throw new Error(`Task not found: ${taskID}`)
@@ -560,6 +908,13 @@ export namespace OrchestratorRuntime {
   export async function syncRun(runID: string, hooks: RuntimeHooks) {
     const run = findRun(runID)
     if (!run) throw new Error(`Run not found: ${runID}`)
+
+    // Per-goal parallel mode: if this run has active goal runs, delegate to goal sync.
+    const activeGoals = listActiveGoalRunsByCoordinator(runID)
+    if (activeGoals.length > 0 && run.status !== "completed" && run.status !== "failed" && run.status !== "aborted") {
+      await syncGoalRuns(runID, hooks)
+      return
+    }
 
     const task = requireTask(run.task_id)
     const delivery = findDeliveryByRun(run.id)
