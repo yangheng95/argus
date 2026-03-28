@@ -75,12 +75,23 @@ Output using section tags:
 **Priority:** blocking or advisory
 **qa_rule_selectors:** build, test, lint, verify_cmd, startup, ui_review, code_quality, code_review, dead_code_review, spec_check
 
+## Parallel Execution & Isolation
+
+Goals may be executed **in parallel, each in an isolated git worktree**. This means:
+
+- **File ownership must be disjoint**: Two goals that might execute simultaneously MUST NOT write to the same file. If two goals both need to modify `src/index.ts`, one must depend on the other.
+- **Shared code goes into a bootstrap goal**: Types, interfaces, config schemas, database migrations, and any code needed by multiple goals MUST be in an early bootstrap/infrastructure goal that others depend on. This goal runs first and its output is available to all downstream goals.
+- **Dependencies encode execution order**: If Goal B reads files produced by Goal A, Goal B MUST list Goal A in `depends_on_goal_ids`. This ensures Goal A completes before Goal B starts.
+- **Minimize cross-goal coupling**: Design goals so each one produces a self-contained module. Avoid designs where many goals modify a single shared entry point file — instead, use a final integration goal that wires modules together.
+- **Owned paths = exclusive write access**: During execution, each goal can ONLY write to its `owned_paths`. If you assign `src/db.ts` to Goal A, no other concurrent goal may modify it.
+
 ## Rules
 
 - ALWAYS explore codebase before producing goals.
 - Every owned_path MUST come from actual tool exploration — never guess paths.
 - Every spec requirement MUST be covered by an explicit goal.
 - Implicit goals MUST exist for infrastructure that explicit goals depend on.
+- Owned paths of concurrent goals (no dependency between them) MUST NOT overlap.
 - Write in the same language as the request.
 
 Output text directly. Do NOT output JSON. Do NOT wrap in code blocks.

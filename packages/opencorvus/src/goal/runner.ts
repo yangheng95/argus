@@ -499,8 +499,8 @@ export function buildGoalPrompt(input: {
   const requestScope = extractScopedRequest(input.taskRequest ?? "")
   const allowedPaths = allowedRequestPaths(input.taskRequest ?? "")
   return [
-    "You are executing the next iterative coding stage for the coordinator.",
-    "Stay in the current project workspace and continue from the code that already exists.",
+    "You are executing one goal in an isolated workspace (git worktree) for the coordinator.",
+    "Other goals may be executing in parallel in separate worktrees. Only modify files owned by this goal.",
     "Treat the goal contract below as the only implementation target for this stage.",
     `Goal:
 ${input.goal.description}`,
