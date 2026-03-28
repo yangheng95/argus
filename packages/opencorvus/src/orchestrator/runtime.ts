@@ -946,7 +946,42 @@ export namespace OrchestratorRuntime {
       return
     }
 
-    // All goals done — finalize the run via completeRun
+    // All goals done — aggregate per-goal deliveries into a run-level delivery,
+    // then finalize the run. completeRun looks for findDeliveryByRun(run.id)
+    // which only finds deliveries without goalRunID.
+    if (!findDeliveryByRun(run.id)) {
+      const goalRuns = listGoalRunsByCoordinator(run.id)
+      const allDiffs: Array<{ file: string; [key: string]: unknown }> = []
+      const seenFiles = new Set<string>()
+      const summaries: string[] = []
+      for (const gr of goalRuns) {
+        const { findDeliveryByGoalRun } = await import("./store")
+        const d = findDeliveryByGoalRun(gr.id)
+        if (!d) continue
+        if (d.summary) summaries.push(d.summary)
+        const result = d.result as { diffs?: Array<{ file: string; [key: string]: unknown }> } | null
+        if (!result?.diffs) continue
+        for (const diff of result.diffs) {
+          if (!seenFiles.has(diff.file)) {
+            seenFiles.add(diff.file)
+            allDiffs.push(diff)
+          }
+        }
+      }
+      const deliveryID = Identifier.ascending("delivery")
+      persistDelivery({
+        task,
+        run,
+        deliveryID,
+        delivery: {
+          summary: summaries.length > 0 ? summaries.join("\n") : "Per-goal delivery aggregate",
+          diffs: allDiffs,
+        },
+        now: Date.now(),
+      })
+      log.info("aggregated per-goal deliveries into run delivery", { runID: run.id, goals: goalRuns.length, files: allDiffs.length })
+    }
+
     log.info("all goals completed, finalizing run", { runID: run.id })
     await completeRun(run, hooks)
   }
