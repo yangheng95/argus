@@ -1,18 +1,14 @@
-Build a minimal task tracker using Bun + TypeScript.
+Build two independent utility modules using Bun + TypeScript.
 
-Create a shared types module (src/types.ts) with Task interface and TaskFilter type.
+Module A: Create src/math-utils.ts with exported functions: add(a, b), subtract(a, b), multiply(a, b), divide(a, b) that work with numbers. divide should throw on zero divisor.
 
-Create a store module (src/store.ts) with TaskStore class backed by an in-memory Map. It should support add, toggle, remove, and list operations with filter support.
+Module B: Create src/string-utils.ts with exported functions: capitalize(s), reverse(s), truncate(s, maxLen), slugify(s) that work with strings.
 
-Create a formatting module (src/format.ts) with functions to format a single task as "[x] title" or "[ ] title", and format a list of tasks with index numbers.
-
-Create tests (src/store.test.ts) using bun:test with at least 6 test cases covering add, toggle, remove, and list with each filter.
+These two modules are completely independent — they share no imports or dependencies.
 
 Only create or modify these files:
-- src/types.ts
-- src/store.ts
-- src/store.test.ts
-- src/format.ts
+- src/math-utils.ts
+- src/string-utils.ts
 
 Do not add package.json, tsconfig.json, README files, or any other files.
-The Bun runtime and bun:test are already available.
+The Bun runtime is already available.

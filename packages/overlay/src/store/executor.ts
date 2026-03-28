@@ -109,13 +109,11 @@ function advanceExecutorLiveText(key: string): void {
   if (live.length >= target.length) {
     if (live !== target) {
       setStore("events", index, "_liveText", target);
-      setStore("fetchedAt", Date.now());
     }
     stopExecutorLiveTimer(key);
     return;
   }
   setStore("events", index, "_liveText", target.slice(0, nextLiveLength(live, target)));
-  setStore("fetchedAt", Date.now());
   executorLiveTimers.set(
     key,
     setTimeout(() => advanceExecutorLiveText(key), EXECUTOR_LIVE_INTERVAL),
@@ -221,13 +219,18 @@ export function appendExecutorEvent(event: ExecutorEvent): void {
     setStore("runID", event.runID);
   }
 
-  const merged = mergeEventList(store.events.slice(), event);
-  setStore("events", reconcile(merged));
+  // Use produce() for in-place mutation — only the affected event index
+  // triggers reactive updates, not the entire array.
+  setStore("events", produce((events) => {
+    mergeEventList(events as ExecutorEvent[], event);
+  }));
+  setStore("fetchedAt", Date.now());
+
   const key = executorEventKey(event);
-  const target = key
-    ? merged.find((item) => executorEventKey(item) === key) || null
-    : null;
-  if (target) scheduleExecutorLiveText(target);
+  if (key) {
+    const idx = store.events.findIndex((item) => executorEventKey(item) === key);
+    if (idx >= 0) scheduleExecutorLiveText(store.events[idx] as ExecutorEvent);
+  }
 }
 
 export function clearExecutorEvents(): void {

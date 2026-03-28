@@ -491,6 +491,67 @@ function mapArray(list, mapFn, options = {}) {
     }
   };
 }
+function indexArray(list, mapFn, options = {}) {
+  let items = [],
+    mapped = [],
+    disposers = [],
+    signals = [],
+    len = 0,
+    i;
+  onCleanup(() => dispose(disposers));
+  return () => {
+    const newItems = list() || [],
+      newLen = newItems.length;
+    newItems[$TRACK];
+    return untrack(() => {
+      if (newLen === 0) {
+        if (len !== 0) {
+          dispose(disposers);
+          disposers = [];
+          items = [];
+          mapped = [];
+          len = 0;
+          signals = [];
+        }
+        if (options.fallback) {
+          items = [FALLBACK];
+          mapped[0] = createRoot(disposer => {
+            disposers[0] = disposer;
+            return options.fallback();
+          });
+          len = 1;
+        }
+        return mapped;
+      }
+      if (items[0] === FALLBACK) {
+        disposers[0]();
+        disposers = [];
+        items = [];
+        mapped = [];
+        len = 0;
+      }
+      for (i = 0; i < newLen; i++) {
+        if (i < items.length && items[i] !== newItems[i]) {
+          signals[i](() => newItems[i]);
+        } else if (i >= items.length) {
+          mapped[i] = createRoot(mapper);
+        }
+      }
+      for (; i < items.length; i++) {
+        disposers[i]();
+      }
+      len = signals.length = disposers.length = newLen;
+      items = newItems.slice(0);
+      return mapped = mapped.slice(0, len);
+    });
+    function mapper(disposer) {
+      disposers[i] = disposer;
+      const [s, set] = createSignal(newItems[i]);
+      signals[i] = set;
+      return mapFn(s, i);
+    }
+  };
+}
 function createComponent(Comp, props) {
   return untrack(() => Comp(props || {}));
 }
@@ -501,6 +562,12 @@ function For(props) {
     fallback: () => props.fallback
   };
   return createMemo(mapArray(() => props.each, props.children, fallback || undefined));
+}
+function Index(props) {
+  const fallback = "fallback" in props && {
+    fallback: () => props.fallback
+  };
+  return createMemo(indexArray(() => props.each, props.children, fallback || undefined));
 }
 function Show(props) {
   const keyed = props.keyed;
@@ -2198,7 +2265,7 @@ function stamp(ts) {
   return d.toLocaleTimeString(localeTag(), timeLocaleOptions());
 }
 
-var _tmpl$$g = /* @__PURE__ */ template(`<article class="turn msg"><div class=msg-head><span class=msg-role></span><span class=msg-time></span></div><div class=msg-bubble><div class=msg-body>`), _tmpl$2$e = /* @__PURE__ */ template(`<div class=msg-patch>`), _tmpl$3$e = /* @__PURE__ */ template(`<div>`), _tmpl$4$e = /* @__PURE__ */ template(`<div class=msg-tool><span class=tool-icon>→</span><span class=tool-name>Subtask</span><span class=tool-detail>`), _tmpl$5$e = /* @__PURE__ */ template(`<div class=executor-process-detail>`), _tmpl$6$c = /* @__PURE__ */ template(`<div class=executor-process-progress><span class=executor-process-activity></span><span>`), _tmpl$7$a = /* @__PURE__ */ template(`<div class=executor-process-note>`), _tmpl$8$7 = /* @__PURE__ */ template(`<pre class=executor-process-output>`), _tmpl$9$7 = /* @__PURE__ */ template(`<div class=executor-process-card><div class=executor-process-head><span class=executor-process-kind></span><div class=executor-process-meta><div class=executor-process-row><div class=executor-process-title></div><div class=executor-process-status>`);
+var _tmpl$$g = /* @__PURE__ */ template(`<span class="msg-role goal-executor-label">`), _tmpl$2$e = /* @__PURE__ */ template(`<article class="turn msg"><div class=msg-head><span class=msg-time></span></div><div class=msg-bubble><div class=msg-body>`), _tmpl$3$e = /* @__PURE__ */ template(`<span class=msg-role>`), _tmpl$4$e = /* @__PURE__ */ template(`<div class=msg-patch>`), _tmpl$5$e = /* @__PURE__ */ template(`<div>`), _tmpl$6$c = /* @__PURE__ */ template(`<div class=msg-tool><span class=tool-icon>→</span><span class=tool-name>Subtask</span><span class=tool-detail>`), _tmpl$7$a = /* @__PURE__ */ template(`<div class=executor-process-detail>`), _tmpl$8$7 = /* @__PURE__ */ template(`<div class=executor-process-progress><span class=executor-process-activity></span><span>`), _tmpl$9$7 = /* @__PURE__ */ template(`<div class=executor-process-note>`), _tmpl$0$5 = /* @__PURE__ */ template(`<pre class=executor-process-output>`), _tmpl$1$4 = /* @__PURE__ */ template(`<div class=executor-process-card><div class=executor-process-head><span class=executor-process-kind></span><div class=executor-process-meta><div class=executor-process-row><div class=executor-process-title></div><div class=executor-process-status>`);
 function renderFilePart(part) {
   const url = part.url || part.filename || "";
   const name = part.filename || url || "file";
@@ -2232,15 +2299,33 @@ function MessageView(props) {
       return false;
     });
   });
+  const goalRunID = () => props.message?.info?.goalRunID;
+  const goalTitle = () => props.message?.info?.goalTitle;
   return createComponent(Show, {
     get when() {
       return hasContent();
     },
     get children() {
-      var _el$ = _tmpl$$g(), _el$2 = _el$.firstChild, _el$3 = _el$2.firstChild, _el$4 = _el$3.nextSibling, _el$5 = _el$2.nextSibling, _el$6 = _el$5.firstChild;
-      insert(_el$3, () => roleLabel(role()));
+      var _el$ = _tmpl$2$e(), _el$2 = _el$.firstChild, _el$4 = _el$2.firstChild, _el$5 = _el$2.nextSibling, _el$6 = _el$5.firstChild;
+      insert(_el$2, createComponent(Show, {
+        get when() {
+          return goalRunID();
+        },
+        get fallback() {
+          return (() => {
+            var _el$7 = _tmpl$3$e();
+            insert(_el$7, () => roleLabel(role()));
+            return _el$7;
+          })();
+        },
+        get children() {
+          var _el$3 = _tmpl$$g();
+          insert(_el$3, () => goalTitle() || `Goal ${goalRunID().slice(-8)}`);
+          return _el$3;
+        }
+      }), _el$4);
       insert(_el$4, time);
-      insert(_el$6, createComponent(For, {
+      insert(_el$6, createComponent(Index, {
         get each() {
           return parts();
         },
@@ -2249,134 +2334,140 @@ function MessageView(props) {
           get children() {
             return [createComponent(Match, {
               get when() {
-                return memo(() => part.type === "text")() && (part.text || "").trim();
+                return memo(() => part().type === "text")() && (part().text || "").trim();
               },
               get children() {
                 return createComponent(TextPart, {
                   get text() {
-                    return part.text || "";
+                    return part().text || "";
                   }
                 });
               }
             }), createComponent(Match, {
               get when() {
-                return part.type === "tool";
+                return part().type === "tool";
               },
               get children() {
                 return createComponent(ToolPart, {
-                  part
+                  get part() {
+                    return part();
+                  }
                 });
               }
             }), createComponent(Match, {
               get when() {
-                return memo(() => part.type === "reasoning")() && (part.text || "").trim();
+                return memo(() => part().type === "reasoning")() && (part().text || "").trim();
               },
               get children() {
                 return createComponent(ReasoningPart, {
-                  part
+                  get part() {
+                    return part();
+                  }
                 });
               }
             }), createComponent(Match, {
               get when() {
-                return memo(() => part.type === "patch")() && (part.files || []).length > 0;
+                return memo(() => part().type === "patch")() && (part().files || []).length > 0;
               },
               get children() {
-                var _el$7 = _tmpl$2$e();
-                insert(_el$7, () => "⚙ " + (part.files || []).map((f) => shortRelativePath(f, activeDirectory$2())).join(", "));
-                return _el$7;
-              }
-            }), createComponent(Match, {
-              get when() {
-                return part.type === "file";
-              },
-              get children() {
-                var _el$8 = _tmpl$3$e();
-                createRenderEffect(() => _el$8.innerHTML = renderFilePart(part));
+                var _el$8 = _tmpl$4$e();
+                insert(_el$8, () => "⚙ " + (part().files || []).map((f) => shortRelativePath(f, activeDirectory$2())).join(", "));
                 return _el$8;
               }
             }), createComponent(Match, {
               get when() {
-                return part.type === "subtask";
+                return part().type === "file";
               },
               get children() {
-                var _el$9 = _tmpl$4$e(), _el$0 = _el$9.firstChild, _el$1 = _el$0.nextSibling, _el$10 = _el$1.nextSibling;
-                insert(_el$10, () => part.description || part.prompt || "");
+                var _el$9 = _tmpl$5$e();
+                createRenderEffect(() => _el$9.innerHTML = renderFilePart(part()));
                 return _el$9;
               }
             }), createComponent(Match, {
               get when() {
-                return memo(() => part.type === "executor_process")() && part.process;
+                return part().type === "subtask";
               },
               get children() {
-                var _el$11 = _tmpl$9$7(), _el$12 = _el$11.firstChild, _el$13 = _el$12.firstChild, _el$14 = _el$13.nextSibling, _el$15 = _el$14.firstChild, _el$16 = _el$15.firstChild, _el$17 = _el$16.nextSibling;
-                insert(_el$13, () => String(part.process.kind || "task"));
-                insert(_el$16, () => part.process.title || part.process.id || "");
-                insert(_el$17, () => part.process.status || "running");
-                insert(_el$14, createComponent(Show, {
+                var _el$0 = _tmpl$6$c(), _el$1 = _el$0.firstChild, _el$10 = _el$1.nextSibling, _el$11 = _el$10.nextSibling;
+                insert(_el$11, () => part().description || part().prompt || "");
+                return _el$0;
+              }
+            }), createComponent(Match, {
+              get when() {
+                return memo(() => part().type === "executor_process")() && part().process;
+              },
+              get children() {
+                var _el$12 = _tmpl$1$4(), _el$13 = _el$12.firstChild, _el$14 = _el$13.firstChild, _el$15 = _el$14.nextSibling, _el$16 = _el$15.firstChild, _el$17 = _el$16.firstChild, _el$18 = _el$17.nextSibling;
+                insert(_el$14, () => String(part().process.kind || "task"));
+                insert(_el$17, () => part().process.title || part().process.id || "");
+                insert(_el$18, () => part().process.status || "running");
+                insert(_el$15, createComponent(Show, {
                   get when() {
-                    return part.process.detail;
+                    return part().process.detail;
                   },
                   get children() {
-                    var _el$18 = _tmpl$5$e();
-                    insert(_el$18, () => part.process.detail);
-                    return _el$18;
-                  }
-                }), null);
-                insert(_el$14, createComponent(Show, {
-                  get when() {
-                    return part.process.progress;
-                  },
-                  get children() {
-                    var _el$19 = _tmpl$6$c(), _el$20 = _el$19.firstChild, _el$21 = _el$20.nextSibling;
-                    insert(_el$21, () => part.process.progress);
+                    var _el$19 = _tmpl$7$a();
+                    insert(_el$19, () => part().process.detail);
                     return _el$19;
                   }
                 }), null);
-                insert(_el$14, createComponent(Show, {
+                insert(_el$15, createComponent(Show, {
                   get when() {
-                    return part.process.note;
+                    return part().process.progress;
                   },
                   get children() {
-                    var _el$22 = _tmpl$7$a();
-                    insert(_el$22, () => part.process.note);
-                    return _el$22;
+                    var _el$20 = _tmpl$8$7(), _el$21 = _el$20.firstChild, _el$22 = _el$21.nextSibling;
+                    insert(_el$22, () => part().process.progress);
+                    return _el$20;
                   }
                 }), null);
-                insert(_el$14, createComponent(Show, {
+                insert(_el$15, createComponent(Show, {
                   get when() {
-                    return part.process.output;
+                    return part().process.note;
                   },
                   get children() {
-                    var _el$23 = _tmpl$8$7();
-                    insert(_el$23, () => part.process.output);
+                    var _el$23 = _tmpl$9$7();
+                    insert(_el$23, () => part().process.note);
                     return _el$23;
                   }
                 }), null);
+                insert(_el$15, createComponent(Show, {
+                  get when() {
+                    return part().process.output;
+                  },
+                  get children() {
+                    var _el$24 = _tmpl$0$5();
+                    insert(_el$24, () => part().process.output);
+                    return _el$24;
+                  }
+                }), null);
                 createRenderEffect((_p$) => {
-                  var _v$3 = part.process.status || "running", _v$4 = part.process.status === "running" ? "true" : "false", _v$5 = part.process.status || "running";
-                  _v$3 !== _p$.e && setAttribute(_el$11, "data-status", _p$.e = _v$3);
-                  _v$4 !== _p$.t && setAttribute(_el$11, "data-live", _p$.t = _v$4);
-                  _v$5 !== _p$.a && setAttribute(_el$17, "data-status", _p$.a = _v$5);
+                  var _v$4 = part().process.status || "running", _v$5 = part().process.status === "running" ? "true" : "false", _v$6 = part().process.status || "running";
+                  _v$4 !== _p$.e && setAttribute(_el$12, "data-status", _p$.e = _v$4);
+                  _v$5 !== _p$.t && setAttribute(_el$12, "data-live", _p$.t = _v$5);
+                  _v$6 !== _p$.a && setAttribute(_el$18, "data-status", _p$.a = _v$6);
                   return _p$;
                 }, {
                   e: void 0,
                   t: void 0,
                   a: void 0
                 });
-                return _el$11;
+                return _el$12;
               }
             })];
           }
         })
       }));
       createRenderEffect((_p$) => {
-        var _v$ = role(), _v$2 = executorType();
+        var _v$ = role(), _v$2 = executorType(), _v$3 = goalRunID() || void 0;
         _v$ !== _p$.e && setAttribute(_el$, "data-role", _p$.e = _v$);
         _v$2 !== _p$.t && setAttribute(_el$, "data-executor-type", _p$.t = _v$2);
+        _v$3 !== _p$.a && setAttribute(_el$, "data-goal-run", _p$.a = _v$3);
         return _p$;
       }, {
         e: void 0,
-        t: void 0
+        t: void 0,
+        a: void 0
       });
       return _el$;
     }
@@ -2737,13 +2828,11 @@ function advanceExecutorLiveText(key) {
   if (live.length >= target.length) {
     if (live !== target) {
       setStore$1("events", index, "_liveText", target);
-      setStore$1("fetchedAt", Date.now());
     }
     stopExecutorLiveTimer(key);
     return;
   }
   setStore$1("events", index, "_liveText", target.slice(0, nextLiveLength$1(live, target)));
-  setStore$1("fetchedAt", Date.now());
   executorLiveTimers.set(
     key,
     setTimeout(() => advanceExecutorLiveText(key), EXECUTOR_LIVE_INTERVAL)
@@ -2832,11 +2921,15 @@ function appendExecutorEvent(event) {
   if (event.runID && !store$1.runID) {
     setStore$1("runID", event.runID);
   }
-  const merged = mergeEventList(store$1.events.slice(), event);
-  setStore$1("events", reconcile(merged));
+  setStore$1("events", produce((events) => {
+    mergeEventList(events, event);
+  }));
+  setStore$1("fetchedAt", Date.now());
   const key = executorEventKey(event);
-  const target = key ? merged.find((item) => executorEventKey(item) === key) || null : null;
-  if (target) scheduleExecutorLiveText(target);
+  if (key) {
+    const idx = store$1.events.findIndex((item) => executorEventKey(item) === key);
+    if (idx >= 0) scheduleExecutorLiveText(store$1.events[idx]);
+  }
 }
 function clearExecutorEvents() {
   for (const key of executorLiveTimers.keys()) {
@@ -3437,6 +3530,8 @@ function buildExecutorProcesses(events = []) {
       note: "",
       output: "",
       status: executorProcessStatus(event),
+      goalRunID: event.goalRunID || "",
+      executorSessionID: event.executorSessionID || "",
       time: {
         created: event.time?.created || Date.now(),
         updated: event.time?.created || Date.now()
@@ -3456,35 +3551,104 @@ function buildExecutorProcesses(events = []) {
     current.time.updated = event.time?.created || current.time.updated;
     items.set(id, current);
   });
-  return [...items.values()].sort((a, b) => (a.time?.created || 0) - (b.time?.created || 0));
+  const activeIDs = /* @__PURE__ */ new Set();
+  const result = [];
+  for (const [id, process] of items) {
+    activeIDs.add(id);
+    const cached = _processCache.get(id);
+    if (cached && cached.status === process.status && cached.title === process.title && cached.detail === process.detail && cached.progress === process.progress && cached.note === process.note && cached.output === process.output && cached.kind === process.kind) {
+      result.push(cached);
+    } else {
+      _processCache.set(id, process);
+      result.push(process);
+    }
+  }
+  for (const key of _processCache.keys()) {
+    if (!activeIDs.has(key)) _processCache.delete(key);
+  }
+  return result.sort((a, b) => (a.time?.created || 0) - (b.time?.created || 0));
 }
-function executorProcessMessage(processes) {
-  if (!Array.isArray(processes) || processes.length === 0) return null;
-  return {
-    _synthetic: true,
-    info: {
-      id: `executor:processes:${boardStore.selectedTaskID || "active"}`,
-      role: "executor",
-      time: { created: processes[0]?.time?.created || Date.now() }
-    },
-    parts: processes.map((process) => ({
-      type: "executor_process",
-      process
-    }))
-  };
-}
+const _msgCache = /* @__PURE__ */ new Map();
+const _processCache = /* @__PURE__ */ new Map();
+const _partCache = /* @__PURE__ */ new Map();
 function buildExecutorMessages() {
-  if (!boardStore.selectedTaskID) return [];
+  if (!boardStore.selectedTaskID) {
+    _msgCache.clear();
+    _processCache.clear();
+    _partCache.clear();
+    return [];
+  }
   const events = Array.isArray(store$1.events) ? store$1.events : [];
   const processes = buildExecutorProcesses(events);
   const processIDs = new Set(processes.map((item) => item.id));
+  const processGroups = /* @__PURE__ */ new Map();
+  for (const process of processes) {
+    const key = process.goalRunID || "";
+    if (!processGroups.has(key)) processGroups.set(key, []);
+    processGroups.get(key).push(process);
+  }
+  const goalMessages = [];
+  const activeKeys = /* @__PURE__ */ new Set();
+  for (const [goalRunID, procs] of processGroups) {
+    if (procs.length === 0) continue;
+    const msgKey = `executor:processes:${goalRunID || boardStore.selectedTaskID || "active"}`;
+    activeKeys.add(msgKey);
+    let msg = _msgCache.get(msgKey);
+    if (!msg) {
+      msg = {
+        _synthetic: true,
+        info: {
+          id: msgKey,
+          role: "executor",
+          goalRunID: goalRunID || void 0,
+          goalTitle: goalRunID ? resolveGoalTitle(goalRunID) : void 0,
+          time: { created: procs[0]?.time?.created || Date.now() }
+        },
+        parts: []
+      };
+      _msgCache.set(msgKey, msg);
+    }
+    msg.parts = procs.map((process) => {
+      const cached = _partCache.get(process.id);
+      if (cached && cached.process === process) return cached;
+      const wrapper = { type: "executor_process", process };
+      _partCache.set(process.id, wrapper);
+      return wrapper;
+    });
+    if (goalRunID) msg.info.goalTitle = resolveGoalTitle(goalRunID);
+    goalMessages.push(msg);
+  }
+  for (const key of _msgCache.keys()) {
+    if (!activeKeys.has(key)) _msgCache.delete(key);
+  }
+  const activeProcessIDs = new Set(processes.map((p) => p.id));
+  for (const key of _partCache.keys()) {
+    if (!activeProcessIDs.has(key)) _partCache.delete(key);
+  }
   const messages = events.filter((event) => {
     const id = executorProcessID(event);
     const kind = executorProcessKind(event);
     return !(id && processIDs.has(id) && kind && kind !== "assistant" && kind !== "status");
   }).map((event, index) => executorMessage(event, events, index)).filter(Boolean);
-  const processMsg = executorProcessMessage(processes);
-  return processMsg ? [processMsg, ...messages] : messages;
+  return [...goalMessages, ...messages];
+}
+function resolveGoalTitle(goalRunID) {
+  const board = boardStore.board;
+  if (!board) return void 0;
+  const goalRuns = board.goalRuns;
+  if (!Array.isArray(goalRuns)) return void 0;
+  const goalRun = goalRuns.find((gr) => gr.id === goalRunID || gr.goalRunID === goalRunID);
+  if (!goalRun) return void 0;
+  const goalID = goalRun.goalID || goalRun.goal_id;
+  if (!goalID) return void 0;
+  const lanes = board.lanes;
+  if (!Array.isArray(lanes)) return void 0;
+  for (const lane of lanes) {
+    if (!Array.isArray(lane.cards)) continue;
+    const card = lane.cards.find((c) => c.id === goalID);
+    if (card?.title) return card.title;
+  }
+  return void 0;
 }
 
 function getDomRefs() {
@@ -5671,36 +5835,38 @@ function Conversation(props) {
       insert(_el$, emptyText);
       return _el$;
     }
-  }), createComponent(For, {
+  }), createComponent(Index, {
     get each() {
       return items();
     },
     children: (item) => createComponent(Show, {
       get when() {
-        return !item?._agentCard;
+        return !item()?._agentCard;
       },
       get fallback() {
         return createComponent(AgentCard, {
           get cardID() {
-            return item._agentCardKey;
+            return item()._agentCardKey;
           },
           get stage() {
-            return item._agentStage;
+            return item()._agentStage;
           },
           get status() {
-            return item._agentStatus;
+            return item()._agentStatus;
           },
           get round() {
-            return item._agentRound;
+            return item()._agentRound;
           },
           get messages() {
-            return item._agentMessages;
+            return item()._agentMessages;
           }
         });
       },
       get children() {
         return createComponent(MessageView, {
-          message: item
+          get message() {
+            return item();
+          }
         });
       }
     })
