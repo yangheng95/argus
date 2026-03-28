@@ -63,6 +63,7 @@ import {
   findTask,
   goalRunQueueTaskID,
   listActiveGoalRunsByCoordinator,
+  listGoalRunsByCoordinator,
   listGoalsByPlan,
   listPlanNodesByPlan,
   requireRun,
@@ -941,11 +942,16 @@ export namespace OrchestratorRuntime {
     const run = findRun(runID)
     if (!run) throw new Error(`Run not found: ${runID}`)
 
-    // Per-goal parallel mode: if this run has active goal runs, delegate to goal sync.
-    const activeGoals = listActiveGoalRunsByCoordinator(runID)
-    if (activeGoals.length > 0 && run.status !== "completed" && run.status !== "failed" && run.status !== "aborted") {
-      await syncGoalRuns(runID, hooks)
-      return
+    // Per-goal parallel mode: if this run has ANY goal runs (active or completed),
+    // delegate to syncGoalRuns which handles both active-goal polling and pipeline continuation.
+    // Using listGoalRunsByCoordinator (ALL statuses) to detect per-goal mode even when
+    // all goals have already completed but the run hasn't been finalized yet.
+    if (run.status !== "completed" && run.status !== "failed" && run.status !== "aborted") {
+      const allGoalRuns = listGoalRunsByCoordinator(runID)
+      if (allGoalRuns.length > 0) {
+        await syncGoalRuns(runID, hooks)
+        return
+      }
     }
 
     const task = requireTask(run.task_id)
