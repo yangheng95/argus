@@ -13,8 +13,11 @@ function flag(name: string) {
   return process.argv.find((item) => item.startsWith(`${name}=`))?.slice(name.length + 1)
 }
 
-function benchmarkRoutingForExecutor(executor: "opencode" | "codex" | "claude-code") {
-  if (executor === "opencode") {
+function benchmarkRoutingForExecutor(executor: "opencode" | "codex" | "claude-code", routingOverride?: string) {
+  // --routing=opencorvus forces all stages through internal agents (useful when
+  // an external executor like codex is used only for coding, while a separate
+  // model handles orchestration via the opencorvus agent pipeline).
+  if (routingOverride === "opencorvus" || executor === "opencode") {
     return {
       spec: "opencorvus" as const,
       goal: "opencorvus" as const,
@@ -61,6 +64,9 @@ const executor = (flag("--executor") || "opencode") as
 const requestFile = flag("--request-file")
 const deliveryVerifyCmd = flag("--delivery-verify-cmd")
 const skipLocalVerify = process.argv.includes("--skip-local-verify")
+const noBrowser = process.argv.includes("--no-browser")
+const routingOverride = flag("--routing")
+const maxExecutorGroups = Number(flag("--max-executor-groups")) || 1
 
 const DEFAULT_TASK_TITLE = "Overlay Web Benchmark NoteStore"
 const DEFAULT_TASK_REQUEST = `
@@ -185,7 +191,7 @@ process.env.OPENCORVUS_SPEC_AGENT_MAX_STEPS = String(specMaxSteps)
 process.env.OPENCORVUS_PLANNER_AGENT_MAX_STEPS = String(plannerMaxSteps)
 
 console.log(
-  `[overlay-benchmark] config model=${model} stall=${stallTimeoutMs / 1000}s planning-stall=${planningStallTimeoutMs / 1000}s spec=${specTimeoutMs === 86400000 ? "∞" : specTimeoutMs / 1000 + "s"} planner=${plannerTimeoutMs === 86400000 ? "∞" : plannerTimeoutMs / 1000 + "s"} tool=${toolTimeoutMs / 1000}s standby=${standbyTimeoutMs === 86400000 ? "∞" : standbyTimeoutMs / 1000 + "s"} request=${requestTimeoutMs / 1000}s hard=${completionHardTimeoutMs > 0 ? completionHardTimeoutMs / 1000 + "s" : "none"}`,
+  `[overlay-benchmark] config model=${model} executor=${executor} routing=${routingOverride ?? "default"} groups=${maxExecutorGroups} stall=${stallTimeoutMs / 1000}s planning-stall=${planningStallTimeoutMs / 1000}s spec=${specTimeoutMs === 86400000 ? "∞" : specTimeoutMs / 1000 + "s"} planner=${plannerTimeoutMs === 86400000 ? "∞" : plannerTimeoutMs / 1000 + "s"} tool=${toolTimeoutMs / 1000}s standby=${standbyTimeoutMs === 86400000 ? "∞" : standbyTimeoutMs / 1000 + "s"} request=${requestTimeoutMs / 1000}s hard=${completionHardTimeoutMs > 0 ? completionHardTimeoutMs / 1000 + "s" : "none"}`,
 )
 
 // Detect stale SQLite WAL lock from a crashed previous run
@@ -222,9 +228,9 @@ await Instance.provide({
 })
 
 const server = Server.listen({ port: 0, hostname: "127.0.0.1" })
-const browser = await launchBrowser(headless)
-let page = await browser.newPage()
-await page.setViewport({ width: 1600, height: 1200 })
+const browser = noBrowser ? undefined : await launchBrowser(headless)
+let page = noBrowser ? undefined : await browser!.newPage()
+if (page) await page.setViewport({ width: 1600, height: 1200 })
 
 const marks = {
   startedAt: Date.now(),
@@ -423,22 +429,27 @@ let eventStream = {
 
 try {
   await Bun.write(eventLogFile, "")
-  await page.evaluateOnNewDocument((serverUrl, directory) => {
-    localStorage.setItem("oc_server_url", serverUrl)
-    localStorage.setItem("oc_auto_server", "false")
-    localStorage.setItem("oc_directory", directory)
-    localStorage.setItem("oc_directory_mode", "custom")
-    localStorage.setItem("oc_workspace_directory", directory)
-    localStorage.setItem("oc_unattended", "true")
-    localStorage.setItem("oc_auto_permission", "true")
-    localStorage.setItem("oc_auto_question", "true")
-  }, server.url.origin, temp.dir)
 
-  await page.goto(new URL("/ui/index.html", server.url).toString(), { waitUntil: "load" })
-  await page.waitForFunction(() => document.querySelector("#connBadge")?.dataset.status === "online", { timeout: 60_000 })
+  if (page) {
+    await page.evaluateOnNewDocument((serverUrl, directory) => {
+      localStorage.setItem("oc_server_url", serverUrl)
+      localStorage.setItem("oc_auto_server", "false")
+      localStorage.setItem("oc_directory", directory)
+      localStorage.setItem("oc_directory_mode", "custom")
+      localStorage.setItem("oc_workspace_directory", directory)
+      localStorage.setItem("oc_unattended", "true")
+      localStorage.setItem("oc_auto_permission", "true")
+      localStorage.setItem("oc_auto_question", "true")
+    }, server.url.origin, temp.dir)
+
+    await page.goto(new URL("/ui/index.html", server.url).toString(), { waitUntil: "load" })
+    await page.waitForFunction(() => document.querySelector("#connBadge")?.dataset.status === "online", { timeout: 60_000 })
+  }
   marks.onlineAt = Date.now()
-  const overlay = await syncDirectory(page, temp.dir)
-  logLine(`[overlay-benchmark] directory=${overlay.directory} saved=${overlay.savedDirectory}`)
+  if (page) {
+    const overlay = await syncDirectory(page, temp.dir)
+    logLine(`[overlay-benchmark] directory=${overlay.directory} saved=${overlay.savedDirectory}`)
+  }
   marks.submittedAt = Date.now()
   taskID = await api("/task", {
     method: "POST",
@@ -454,8 +465,9 @@ try {
         maxRuns,
         maxReplans,
         maxEvaluations,
+        ...(maxExecutorGroups > 1 ? { maxExecutorGroups } : {}),
       },
-      routing: benchmarkRoutingForExecutor(executor),
+      routing: benchmarkRoutingForExecutor(executor, routingOverride),
       checks: {
         // build, lint: undefined → auto-discovery from package.json scripts
         // spec_check: undefined → auto-enabled when spec exists
@@ -472,10 +484,26 @@ try {
   if (!taskID) throw new Error("Task creation did not return task_id")
   eventStream = subscribeTaskEvents(taskID)
 
-  planning = await waitForPlanningVisible(page, api, PLANNING_VISIBLE_TIMEOUT_MS)
+  if (page) {
+    planning = await waitForPlanningVisible(page, api, PLANNING_VISIBLE_TIMEOUT_MS)
+  } else {
+    // no-browser: poll API until task enters planning or later stage
+    const waitStart = Date.now()
+    while (Date.now() - waitStart < TASK_CREATE_TIMEOUT_MS) {
+      const prog = await api(`/task/${taskID}/progress`).then((r) => r.json()).catch(() => null)
+      if (prog?.task?.status && prog.task.status !== "queued") {
+        planning = { pendingCount: 0, taskList: [], reasoning: "", assistantText: "", taskIDs: [taskID], selectedTaskID: taskID }
+        break
+      }
+      await Bun.sleep(1000)
+    }
+    if (!planning) planning = { pendingCount: 0, taskList: [], reasoning: "", assistantText: "", taskIDs: [taskID], selectedTaskID: taskID }
+  }
   marks.planningAt = Date.now()
 
-  taskID = await waitForTaskCreated(page, api, TASK_CREATE_TIMEOUT_MS)
+  if (page) {
+    taskID = await waitForTaskCreated(page, api, TASK_CREATE_TIMEOUT_MS)
+  }
   marks.createdAt = Date.now()
   // Budget is already set during task creation; PATCH /budget is optional
   await api(`/task/${taskID}/budget`, {
@@ -489,35 +517,47 @@ try {
         maxRuns,
         maxReplans,
         maxEvaluations,
+        ...(maxExecutorGroups > 1 ? { maxExecutorGroups } : {}),
       },
     }),
   }).catch(() => undefined)
-  await page.evaluate(async (id) => {
-    const state = window.eval("state")
-    if (state.selectedTaskID === id) return
-    await window.eval("loadTasks")()
-    await window.eval("selectTask")(id)
-  }, taskID)
-  await page.waitForFunction((id) => {
-    try {
-      return window.eval("state").selectedTaskID === id
-    } catch {
-      return false
-    }
-  }, { timeout: 120_000 }, taskID)
+
+  if (page) {
+    await page.evaluate(async (id) => {
+      const state = window.eval("state")
+      if (state.selectedTaskID === id) return
+      await window.eval("loadTasks")()
+      await window.eval("selectTask")(id)
+    }, taskID)
+    await page.waitForFunction((id) => {
+      try {
+        return window.eval("state").selectedTaskID === id
+      } catch {
+        return false
+      }
+    }, { timeout: 120_000 }, taskID)
+  }
   marks.selectedAt = Date.now()
 
-  await page.waitForFunction(() => {
-    try {
-      return !!window.eval("state").board?.task?.id
-    } catch {
-      return false
-    }
-  }, { timeout: 120_000 })
+  if (page) {
+    await page.waitForFunction(() => {
+      try {
+        return !!window.eval("state").board?.task?.id
+      } catch {
+        return false
+      }
+    }, { timeout: 120_000 })
+  }
   marks.boardAt = Date.now()
-  streaming = await waitForStreamingVisible(page, PLANNING_VISIBLE_TIMEOUT_MS)
+  if (page) {
+    streaming = await waitForStreamingVisible(page, PLANNING_VISIBLE_TIMEOUT_MS)
+  } else {
+    streaming = { reasoning: "", assistantText: "", liveRole: "", liveText: "" }
+  }
   marks.streamingAt = Date.now()
-  page = await verifyResume(browser, page, server.url.origin, taskID, temp.dir, api)
+  if (page && browser) {
+    page = await verifyResume(browser, page, server.url.origin, taskID, temp.dir, api)
+  }
   marks.resumedAt = Date.now()
   board = await api(`/task/${taskID}/board?sync=1`).then((res) => res.json())
 
@@ -577,8 +617,8 @@ try {
       }).catch(() => undefined),
     )
   }
-  await cleanup("page.close", () => page.close().catch(() => undefined))
-  await cleanup("browser.close", () => browser.close().catch(() => undefined), () => browser.process()?.kill("SIGKILL"))
+  if (page) await cleanup("page.close", () => page!.close().catch(() => undefined))
+  if (browser) await cleanup("browser.close", () => browser!.close().catch(() => undefined), () => browser!.process()?.kill("SIGKILL"))
   await cleanup("server.stop", () => server.stop(true))
   await cleanup("instance.disposeAll", () => Instance.disposeAll().catch(() => undefined))
   if (!keep && temp.dir) await cleanup("temp.dir", () => fs.rm(temp.dir, { recursive: true, force: true }).catch(() => undefined))
@@ -790,8 +830,8 @@ async function buildBenchmarkReport(error?: unknown) {
     evaluationVerdict: progress?.evaluation?.verdict || currentFinalBoard?.evaluation?.verdict || "",
     localVerifyExitCode: localVerify.exitCode,
   }), reportError)
-  const screenshot = await takeBenchmarkScreenshot(page)
-  const currentOverlay = await overlaySnapshot(page).catch((cause) => ({ error: String(cause) }))
+  const screenshot = page ? await takeBenchmarkScreenshot(page) : null
+  const currentOverlay = page ? await overlaySnapshot(page).catch((cause) => ({ error: String(cause) })) : { error: "no-browser mode" }
 
   return {
     generated_at: new Date().toISOString(),

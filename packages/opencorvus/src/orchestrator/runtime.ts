@@ -43,11 +43,16 @@ import {
   persistEvaluation,
   persistFailedRunEvaluation,
   updateExecutorSessionStatus,
+  updateGoalRunExecutorSessionStatus,
 } from "./persist"
 import { advanceTaskStage } from "./pipeline"
 import { sessionStreamHooks } from "./session-stream"
 import { registerGoalRunSession } from "@/server/routes/task-event"
 import { buildRetryContext, decideRetryOrReplan } from "./strategy"
+import { effectiveMaxExecutorGroups } from "./helpers"
+import { computeGoalGroups, computeGroupDependencyGraph, readyGroups } from "./goal-grouping"
+import { claimGoalGroup, compileGroupBrief, type GroupExecutorState } from "./group-dispatch"
+import { listPlanNodesByPlan } from "./store"
 import {
   findDeliveryByRun,
   findEvaluationByRun,
@@ -57,6 +62,9 @@ import {
   findRun,
   findTask,
   listGoalsByPlan,
+  listGroupIDsByRun,
+  listGoalRunsByGroup,
+  listDeliveriesByRun,
   requireRun,
   requireTask,
   type DeliveryRow,
@@ -67,13 +75,16 @@ import {
 import { Identifier } from "@/id/id"
 import { agentStream } from "./agent-stream"
 import { OrchestratorArtifactTable } from "./orchestrator.sql"
+import { Worktree } from "@/worktree"
+import type { GoalGroup } from "./goal-grouping"
+import { mergeGroupDelivery } from "./group-merge"
 
 const log = Log.create({ service: "orchestrator-runtime" })
 const EVALUATION_HARD_TIMEOUT_MS = 10 * 60 * 1000 // 10 minutes total for entire evaluation phase
 const DELIVERY_FETCH_TIMEOUT_MS = parseInt(process.env.OPENCORVUS_DELIVERY_FETCH_TIMEOUT_MS || "300000", 10) // 5 min for executor.delivery() (git operations can be slow on Windows with large repos)
 const DELIVERY_SERVICE_TIMEOUT_MS = 60_000 // 60 seconds for Publisher.deliver()
 const DELIVERY_VERIFY_TIMEOUT_MS = parseInt(process.env.OPENCORVUS_DELIVERY_VERIFY_TIMEOUT_MS || "600000", 10) // 10 min for delivery agent verification
-const SYNC_RUN_TIMEOUT_MS = parseInt(process.env.OPENCORVUS_SYNC_RUN_TIMEOUT_MS || String(EVALUATION_HARD_TIMEOUT_MS + DELIVERY_VERIFY_TIMEOUT_MS + 3 * 60 * 1000), 10) // must exceed eval + delivery verify + buffer
+const SYNC_RUN_TIMEOUT_MS = parseInt(process.env.OPENCORVUS_SYNC_RUN_TIMEOUT_MS || String(DELIVERY_FETCH_TIMEOUT_MS + EVALUATION_HARD_TIMEOUT_MS + DELIVERY_VERIFY_TIMEOUT_MS + DELIVERY_SERVICE_TIMEOUT_MS + 3 * 60 * 1000), 10) // must exceed fetch + eval + verify + publish + buffer
 const EXECUTOR_STATUS_TIMEOUT_MS = 30_000 // 30s for executor.status()
 const EXECUTOR_SUBMIT_TIMEOUT_MS = 60_000 // 60s for executor.submit()
 const evaluatingRuns = new Map<string, number>() // runID → start timestamp, guards against concurrent re-evaluation
@@ -81,6 +92,18 @@ const eventBridgeAborts = new Map<string, AbortController>() // runID → AbortC
 // No BROADCAST_EVENT_TYPES whitelist needed — garbage types are no longer
 // emitted at the executor level, so every event that arrives is meaningful.
 const EVALUATING_STALE_MS = EVALUATION_HARD_TIMEOUT_MS + 60_000 // consider stale after hard timeout + 1 min buffer
+
+// Multi-group dispatch state: per-run tracking of active group executors.
+// Cleared when all groups finish or the run is aborted.
+type MultiGroupRunState = {
+  /** Currently active group executors (removed as they complete/fail) */
+  executors: GroupExecutorState[]
+  /** Original full group list from dispatch time (immutable, stable IDs) */
+  allGroups: GoalGroup[]
+  /** Group IDs that have completed successfully */
+  completedGroupIDs: Set<string>
+}
+const activeGroupRuns = new Map<string, MultiGroupRunState>()
 
 // Unattended-mode safeguards
 const INTERACTION_STALE_MS = parseInt(process.env.OPENCORVUS_INTERACTION_TIMEOUT_MS || "30000", 10) // auto-reject stale interactions (30s default)
@@ -412,9 +435,13 @@ export namespace OrchestratorRuntime {
     )
     for (const row of pipelineTasks) {
       if (runningStages.has(row.id)) continue
-      if (row.status !== "queued" && row.status !== "planned") continue
+      // "queued" and "planned" are normal advancement triggers.
+      // Intermediate states (spec_generating, goal_decomposing, planning) indicate
+      // a server restart interrupted a running stage — trigger recovery immediately
+      // instead of waiting for recoverStrandedTasks (10+ min delay).
+      const isRecovery = row.status !== "queued" && row.status !== "planned"
       const p = (async () => {
-        const result = await advanceTaskStage(row.id, hooks.updateTask)
+        const result = await advanceTaskStage(row.id, hooks.updateTask, isRecovery)
         if (result?.runID) await OrchestratorRuntime.dispatch(result.runID, hooks)
       })().catch((err) => {
         log.error("pipeline advancement failed", { taskID: row.id, error: err instanceof Error ? err.message : String(err) })
@@ -465,6 +492,31 @@ export namespace OrchestratorRuntime {
     const plan = run.plan_version_id ? findPlan(run.plan_version_id) : undefined
     if (!task.session_id) throw new Error(`Task ${task.id} has no session`)
     if (!plan) throw new Error(`Task ${task.id} has no plan`)
+
+    // Multi-group dispatch: if configured and applicable, delegate to dispatchGoalGroups.
+    const maxGroups = effectiveMaxExecutorGroups(task)
+    const goals = listGoalsByPlan(plan.id)
+    log.info("dispatch: multi-group check", {
+      runID,
+      maxGroups,
+      goalCount: goals.length,
+      goalIDs: goals.map((g) => g.id),
+    })
+    if (maxGroups > 1 && goals.length > 1) {
+      const nodes = listPlanNodesByPlan(plan.id)
+      const groups = computeGoalGroups(goals, nodes, maxGroups)
+      log.info("dispatch: computed goal groups", {
+        runID,
+        groupCount: groups.length,
+        groups: groups.map((g) => ({ id: g.id, goalIDs: g.goalIDs, ownedPaths: g.ownedPaths })),
+      })
+      if (groups.length > 1) {
+        return dispatchGoalGroups(runID, groups, hooks)
+      }
+      log.info("dispatch: all goals merged into one group, using single-executor path", { runID })
+    }
+
+    // Single-executor serial dispatch (existing path, unchanged)
     const base = typeof run.metadata?.prompt_override === "string" ? run.metadata.prompt_override : plan.prompt
     const brief = WorkbenchService.compileBrief({
       taskID: task.id,
@@ -543,6 +595,216 @@ export namespace OrchestratorRuntime {
     consumeExecutorEvents(task.id, run.id, run.executor, sessionID, session.id)
   }
 
+  /**
+   * Multi-group dispatch: create isolated worktrees, sessions, and executor instances
+   * for each ready goal group. Groups with unsatisfied upstream dependencies are deferred
+   * until their upstream groups complete (handled by syncGroupExecutors / continueGroupPipeline).
+   */
+  async function dispatchGoalGroups(runID: string, groups: GoalGroup[], hooks: RuntimeHooks) {
+    const run = requireRun(runID)
+    let task = requireTask(run.task_id)
+    const plan = run.plan_version_id ? findPlan(run.plan_version_id) : undefined
+    if (!task.session_id) throw new Error(`Task ${task.id} has no session`)
+    if (!plan) throw new Error(`Task ${task.id} has no plan`)
+
+    // Prepare the run (git checkpoint, same as serial dispatch)
+    const prepared = await prepareRun(task, run, plan, hooks)
+    if (!prepared) return
+    task = prepared
+    const sessionID = task.session_id
+    if (!sessionID) throw new Error(`Task ${task.id} has no session`)
+
+    const allGoals = listGoalsByPlan(plan.id)
+    const depGraph = computeGroupDependencyGraph(groups, allGoals)
+    const ready = readyGroups(groups, depGraph, new Set())
+
+    if (ready.length === 0) {
+      log.error("multi-group dispatch: no ready groups (circular dependency?)", { runID, groups: groups.length })
+      await failRun(run, "No ready goal groups — possible circular dependency in group graph", hooks)
+      return
+    }
+
+    const now = Date.now()
+    await hooks.updateRun(run, { status: "accepted", time_started: now }, `Multi-group dispatch: ${groups.length} groups, ${ready.length} ready`)
+    await hooks.updateTask(task, { status: "running", time_started: task.time_started ?? now }, `Dispatching ${groups.length} goal groups`)
+
+    const runState: MultiGroupRunState = {
+      executors: [],
+      allGroups: groups,
+      completedGroupIDs: new Set(),
+    }
+    activeGroupRuns.set(runID, runState)
+
+    for (const group of ready) {
+      let partialWorktreeDir: string | undefined
+      try {
+        const state = await dispatchSingleGroup({
+          taskID: task.id,
+          run,
+          plan,
+          sessionID,
+          group,
+          allGoals,
+          allGroups: groups,
+          onWorktreeCreated: (dir) => { partialWorktreeDir = dir },
+        })
+        runState.executors.push(state)
+      } catch (err) {
+        log.error("multi-group dispatch: failed to dispatch group", {
+          runID,
+          groupID: group.id,
+          error: err instanceof Error ? err.message : String(err),
+        })
+        // Clean up the partially-created worktree for the failing group (Issue 8)
+        if (partialWorktreeDir) {
+          try { await Worktree.remove({ directory: partialWorktreeDir }) } catch {}
+        }
+        // Clean up already-dispatched groups
+        for (const gs of runState.executors) {
+          try {
+            stopGroupEventBridge(runID, gs.groupID)
+            await Worktree.remove({ directory: gs.worktreeDir })
+          } catch {}
+        }
+        activeGroupRuns.delete(runID)
+        await failRun(run, `Failed to dispatch group ${group.id}: ${err instanceof Error ? err.message : String(err)}`, hooks)
+        return
+      }
+    }
+
+    log.info("multi-group dispatch complete", {
+      runID,
+      totalGroups: groups.length,
+      dispatched: runState.executors.length,
+      deferred: groups.length - ready.length,
+    })
+  }
+
+  /**
+   * Dispatch a single goal group: worktree → session → claim → brief → submit → event bridge.
+   */
+  async function dispatchSingleGroup(input: {
+    taskID: string
+    run: RunRow
+    plan: PlanRow
+    sessionID: string
+    group: GoalGroup
+    allGoals: ReturnType<typeof listGoalsByPlan>
+    allGroups: GoalGroup[]
+    onWorktreeCreated?: (dir: string) => void
+  }): Promise<GroupExecutorState> {
+    const { taskID, run, plan, sessionID, group, allGoals, allGroups } = input
+
+    // 1. Create isolated worktree with synchronous checkout.
+    //    Default Worktree.create() populates files asynchronously (setTimeout),
+    //    which means the executor sees an empty directory. Using checkout:"sync"
+    //    waits for git reset --hard + bootstrap to complete before returning.
+    const worktreeInfo = await Worktree.create({ name: `group-${group.id.slice(-8)}`, checkout: "sync" })
+    const worktreeDir = worktreeInfo.directory
+    input.onWorktreeCreated?.(worktreeDir) // Track immediately for cleanup on partial failure
+
+    // 2. Create a child session scoped to this worktree
+    const groupSession = await Session.createNext({
+      title: `Group ${group.id.slice(-8)}: ${group.goalIDs.length} goals`,
+      parentID: sessionID,
+      directory: worktreeDir,
+    })
+
+    // 3. Atomically claim all goals in this group
+    const goalRuns = claimGoalGroup({
+      taskID,
+      coordinatorRunID: run.id,
+      group,
+      executor: run.executor,
+      sessionID: groupSession.id,
+      worktreeDir,
+    })
+
+    // 4. Compile group-scoped brief
+    const brief = compileGroupBrief({
+      taskID,
+      runID: run.id,
+      planVersionID: plan.id,
+      sessionID: groupSession.id,
+      group,
+      allGoals,
+      plan,
+      allGroups,
+      worktreeDir,
+    })
+
+    // 5. Submit to executor — with cwd pointing to the isolated worktree
+    const prompt = [brief.content, plan.prompt].join("\n\n")
+    const executor = ExecutorRegistry.require(run.executor)
+    const submission = await Promise.race([
+      executor.submit({
+        sessionID: groupSession.id,
+        prompt,
+        priority: "normal",
+        source: "planner",
+        cwd: worktreeDir,
+      }),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error(`executor.submit() timeout for group ${group.id}`)), EXECUTOR_SUBMIT_TIMEOUT_MS),
+      ),
+    ])
+
+    // 6. Create executor session record (links to first goalRun of this group)
+    const executorSession = ensureExecutorSession({
+      taskID,
+      runID: run.id,
+      goalRunID: goalRuns[0]?.id,
+      provider: run.executor,
+      refs: {
+        provider_session_id: submission.sessionID,
+        queue_task_id: submission.queueTaskID,
+      },
+      settings: {
+        cwd: worktreeDir,
+      },
+      started: Date.now(),
+    })
+
+    // 7. Register session for SSE routing
+    registerGoalRunSession(groupSession.id, taskID)
+
+    // 8. Emit lifecycle event
+    appendExecutorEvent(executorSession.id, taskID, run.id, run.executor, undefined, {
+      provider: run.executor,
+      kind: "lifecycle",
+      summary: `Group ${group.id.slice(-8)} dispatched (${group.goalIDs.length} goals)`,
+      refs: executorSession.refs ?? undefined,
+      payload: {
+        queue_task_id: submission.queueTaskID,
+        provider_session_id: submission.sessionID,
+        group_id: group.id,
+        goal_count: group.goalIDs.length,
+      },
+    })
+
+    // 9. Start event bridge (keyed by runID:groupID to allow per-group abort)
+    consumeGroupExecutorEvents(taskID, run.id, run.executor, groupSession.id, executorSession.id, group.id)
+
+    log.info("group dispatched", {
+      runID: run.id,
+      groupID: group.id,
+      worktreeDir,
+      sessionID: groupSession.id,
+      goalCount: group.goalIDs.length,
+      queueTaskID: submission.queueTaskID,
+    })
+
+    return {
+      groupID: group.id,
+      goalRunIDs: goalRuns.map((gr) => gr.id),
+      sessionID: groupSession.id,
+      worktreeDir,
+      worktreeBranch: worktreeInfo.branch,
+      executorSessionID: executorSession.id,
+      queueTaskID: submission.queueTaskID,
+    }
+  }
+
   export async function syncTask(taskID: string, hooks: RuntimeHooks) {
     const task = findTask(taskID)
     if (!task) throw new Error(`Task not found: ${taskID}`)
@@ -553,6 +815,22 @@ export namespace OrchestratorRuntime {
   export async function syncRun(runID: string, hooks: RuntimeHooks) {
     const run = findRun(runID)
     if (!run) throw new Error(`Run not found: ${runID}`)
+
+    // Multi-group dispatch: if this run has active group executors, delegate to group sync.
+    if (activeGroupRuns.has(runID)) {
+      await syncGroupExecutors(runID, hooks)
+      return
+    }
+
+    // Recovery: detect multi-group runs that lost in-memory state (e.g., server restart).
+    // These runs have GoalRun rows with group_id metadata but no activeGroupRuns entry.
+    const groupIDs = listGroupIDsByRun(runID)
+    if (groupIDs.length > 1 && run.status !== "completed" && run.status !== "failed" && run.status !== "aborted") {
+      log.warn("multi-group run lost in-memory state (server restart?), failing", { runID, groupCount: groupIDs.length })
+      await failRun(run, "Multi-group run interrupted by server restart — re-dispatch via retry", hooks)
+      return
+    }
+
     const task = requireTask(run.task_id)
     const delivery = findDeliveryByRun(run.id)
     const pending = findPendingInteractions(run.id)
@@ -604,6 +882,12 @@ export namespace OrchestratorRuntime {
 
     if (run.status === "completed" && delivery) {
       await completeRun(run, hooks)
+      return
+    }
+
+    if (run.status === "completed" && !delivery) {
+      log.error("run completed but no delivery found", { runID: run.id, taskID: run.task_id })
+      await failRun(run, "Run marked completed but no delivery was persisted", hooks)
       return
     }
 
@@ -660,6 +944,9 @@ export namespace OrchestratorRuntime {
   }
 
   export async function createOperatorRun(task: TaskRow, run: RunRow, note: string) {
+    if (task.status === "completed" || task.status === "cancelled") {
+      throw new Error(`Cannot create operator run: task ${task.id} is in terminal state "${task.status}"`)
+    }
     const nextRunID = Identifier.ascending("run")
     const now = Date.now()
     Database.transaction((db) => {
@@ -728,6 +1015,369 @@ export namespace OrchestratorRuntime {
     await dispatch(next.runID, hooks)
     return next.runID
   }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // Multi-Group Sync
+  // ═══════════════════════════════════════════════════════════════════
+
+  /**
+   * Sync all active group executors for a multi-group run.
+   * Polls each group's executor status and handles completion/failure per group.
+   */
+  async function syncGroupExecutors(runID: string, hooks: RuntimeHooks) {
+    const run = findRun(runID)
+    if (!run) throw new Error(`Run not found: ${runID}`)
+    const runState = activeGroupRuns.get(runID)
+    if (!runState || runState.executors.length === 0) return
+
+    // Run execution timeout — fail the entire run if it's been running too long
+    const started = run.time_started ?? run.time_created
+    if (started && (Date.now() - started) > RUN_MAX_EXECUTION_MS) {
+      log.warn("multi-group run exceeded max execution time", { runID, maxMs: RUN_MAX_EXECUTION_MS })
+      await failAllGroups(runID, `Run exceeded maximum execution time (${Math.round(RUN_MAX_EXECUTION_MS / 60000)}min)`, hooks)
+      return
+    }
+
+    const executor = ExecutorRegistry.require(run.executor)
+    const completedGroups: GroupExecutorState[] = []
+    const failedGroups: GroupExecutorState[] = []
+
+    for (const gs of runState.executors) {
+      if (!gs.queueTaskID) continue
+      try {
+        const queue = await Promise.race([
+          executor.status(gs.queueTaskID),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error(`executor.status() timeout for group ${gs.groupID}`)), EXECUTOR_STATUS_TIMEOUT_MS),
+          ),
+        ])
+
+        if (queue.status === "completed") {
+          completedGroups.push(gs)
+        } else if (queue.status === "failed") {
+          failedGroups.push(gs)
+          log.error("group executor failed", { runID, groupID: gs.groupID, error: queue.error })
+        }
+        // queued / running / retrying → still in progress, no action
+      } catch (err) {
+        log.warn("group executor status check failed", {
+          runID,
+          groupID: gs.groupID,
+          error: err instanceof Error ? err.message : String(err),
+        })
+      }
+    }
+
+    // Handle completed groups (serialized — one at a time to avoid merge conflicts)
+    // After each completion, check if the run was killed (e.g., merge conflict → failAllGroups)
+    for (const gs of completedGroups) {
+      if (!activeGroupRuns.has(runID)) return // Run was killed during a previous iteration
+      await completeGroupExecutor(runID, gs, hooks)
+    }
+
+    // Handle failed groups — early return if run already dead
+    if (!activeGroupRuns.has(runID)) return
+    for (const gs of failedGroups) {
+      if (!activeGroupRuns.has(runID)) return
+      await failGroupExecutor(runID, gs, hooks)
+    }
+
+    // Check if new groups can be dispatched (upstream groups completed)
+    if (activeGroupRuns.has(runID) && activeGroupRuns.get(runID)!.executors.length > 0) {
+      await continueGroupPipeline(runID, hooks)
+    }
+  }
+
+  /**
+   * Handle a single group executor completing:
+   * 1. Stop event bridge
+   * 2. Update executor session status
+   * 3. Extract delivery from worktree
+   * 4. Merge to main workspace
+   * 5. Clean up worktree
+   * 6. Remove from active group executors
+   */
+  async function completeGroupExecutor(runID: string, gs: GroupExecutorState, hooks: RuntimeHooks) {
+    const run = requireRun(runID)
+    const task = requireTask(run.task_id)
+
+    // Stop event bridge for this group
+    stopGroupEventBridge(runID, gs.groupID)
+
+    // Update executor session status
+    if (gs.goalRunIDs[0]) {
+      updateGoalRunExecutorSessionStatus(gs.goalRunIDs[0], "completed")
+    }
+
+    // Extract delivery from worktree
+    const executor = ExecutorRegistry.require(run.executor)
+    let delivery: { summary: string; diffs: Array<{ file: string; [key: string]: unknown }> }
+    try {
+      delivery = await Promise.race([
+        executor.delivery({
+          sessionID: gs.sessionID,
+          since: run.time_started ?? run.time_created,
+        }),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error(`executor.delivery() timeout for group ${gs.groupID}`)), DELIVERY_FETCH_TIMEOUT_MS),
+        ),
+      ])
+    } catch (err) {
+      log.error("group delivery extraction failed", {
+        runID,
+        groupID: gs.groupID,
+        error: err instanceof Error ? err.message : String(err),
+      })
+      await failGroupExecutor(runID, gs, hooks)
+      return
+    }
+
+    // Persist delivery for this group (linked to first goal run)
+    const deliveryID = Identifier.ascending("delivery")
+    persistDelivery({
+      task,
+      run,
+      goalRunID: gs.goalRunIDs[0],
+      deliveryID,
+      delivery,
+      now: Date.now(),
+    })
+
+    // Merge worktree changes to main workspace (serialized, hard-fail on conflict)
+    const mergeResult = await mergeGroupDelivery({
+      runID,
+      groupID: gs.groupID,
+      worktreeDir: gs.worktreeDir,
+      worktreeBranch: gs.worktreeBranch,
+    })
+
+    if (!mergeResult.ok) {
+      log.error("group merge failed", { runID, groupID: gs.groupID, error: mergeResult.error })
+      // Hard-fail this group — do not auto-resolve conflicts
+      await failGroupExecutor(runID, gs, hooks)
+      return
+    }
+
+    // Clean up worktree
+    try {
+      await Worktree.remove({ directory: gs.worktreeDir })
+    } catch (err) {
+      log.warn("worktree cleanup failed (non-fatal)", {
+        runID,
+        groupID: gs.groupID,
+        error: err instanceof Error ? err.message : String(err),
+      })
+    }
+
+    // Remove from active group executors and record completion
+    const runState = activeGroupRuns.get(runID)
+    if (runState) {
+      const idx = runState.executors.findIndex((s) => s.groupID === gs.groupID)
+      if (idx >= 0) runState.executors.splice(idx, 1)
+      runState.completedGroupIDs.add(gs.groupID)
+      if (runState.executors.length === 0) {
+        // Check if all groups (including deferred) are completed
+        const allDone = runState.allGroups.every((g) => runState.completedGroupIDs.has(g.id))
+        if (allDone) {
+          activeGroupRuns.delete(runID)
+          // All groups done — trigger final run completion
+          await completeMultiGroupRun(runID, hooks)
+        }
+        // else: deferred groups remain — continueGroupPipeline will dispatch them
+      }
+    }
+
+    log.info("group executor completed", {
+      runID,
+      groupID: gs.groupID,
+      mergedFiles: mergeResult.files.length,
+    })
+  }
+
+  /**
+   * Handle a failed group executor:
+   * 1. Stop event bridge
+   * 2. Clean up worktree
+   * 3. Remove from active state
+   * 4. Fail the entire run (hard-fail, no partial recovery in Phase 5)
+   */
+  async function failGroupExecutor(runID: string, gs: GroupExecutorState, hooks: RuntimeHooks) {
+    // Guard: if the run was already killed by a prior failure, skip
+    if (!activeGroupRuns.has(runID)) return
+
+    stopGroupEventBridge(runID, gs.groupID)
+
+    if (gs.goalRunIDs[0]) {
+      updateGoalRunExecutorSessionStatus(gs.goalRunIDs[0], "failed")
+    }
+
+    try {
+      await Worktree.remove({ directory: gs.worktreeDir })
+    } catch {}
+
+    // Any group failure = entire run failure. No partial recovery.
+    await failAllGroups(runID, `Group ${gs.groupID} failed`, hooks)
+  }
+
+  /**
+   * Fail all active group executors and the run itself.
+   * Idempotent — safe to call multiple times for the same run.
+   */
+  async function failAllGroups(runID: string, error: string, hooks: RuntimeHooks) {
+    const runState = activeGroupRuns.get(runID)
+    if (!runState) return // Already cleaned up
+
+    // Snapshot and delete state first to prevent re-entry
+    const executors = [...runState.executors]
+    activeGroupRuns.delete(runID)
+
+    // Clean up all remaining group executors
+    for (const gs of executors) {
+      stopGroupEventBridge(runID, gs.groupID)
+      if (gs.goalRunIDs[0]) {
+        updateGoalRunExecutorSessionStatus(gs.goalRunIDs[0], "failed")
+      }
+      try { await Worktree.remove({ directory: gs.worktreeDir }) } catch {}
+    }
+
+    const run = requireRun(runID)
+    await failRun(run, error, hooks)
+  }
+
+  /**
+   * After a group completes, check if newly-ready groups can be dispatched
+   * (their upstream dependencies are now satisfied).
+   */
+  /**
+   * After a group completes, check if newly-ready groups can be dispatched.
+   * Uses the ORIGINAL groups from dispatch time (stable IDs) — never recomputes.
+   */
+  async function continueGroupPipeline(runID: string, hooks: RuntimeHooks) {
+    const runState = activeGroupRuns.get(runID)
+    if (!runState) return
+    const run = requireRun(runID)
+    const plan = run.plan_version_id ? findPlan(run.plan_version_id) : undefined
+    if (!plan) return
+    const task = requireTask(run.task_id)
+    if (!task.session_id) return
+
+    const allGoals = listGoalsByPlan(plan.id)
+    // Use the original groups (stable IDs) and compute dependency graph from them
+    const depGraph = computeGroupDependencyGraph(runState.allGroups, allGoals)
+    const activeGroupIDs = new Set(runState.executors.map((s) => s.groupID))
+
+    const ready = readyGroups(runState.allGroups, depGraph, runState.completedGroupIDs)
+    // Filter out groups that are already active or already completed
+    const toDispatch = ready.filter(
+      (g) => !activeGroupIDs.has(g.id) && !runState.completedGroupIDs.has(g.id),
+    )
+
+    if (toDispatch.length === 0) return
+
+    log.info("dispatching newly-ready groups", {
+      runID,
+      newGroups: toDispatch.length,
+      completedGroups: runState.completedGroupIDs.size,
+      activeGroups: activeGroupIDs.size,
+    })
+
+    for (const group of toDispatch) {
+      let partialWorktreeDir: string | undefined
+      try {
+        const state = await dispatchSingleGroup({
+          taskID: task.id,
+          run,
+          plan,
+          sessionID: task.session_id,
+          group,
+          allGoals,
+          allGroups: runState.allGroups,
+          onWorktreeCreated: (dir) => { partialWorktreeDir = dir },
+        })
+        runState.executors.push(state)
+      } catch (err) {
+        log.error("failed to dispatch ready group", {
+          runID,
+          groupID: group.id,
+          error: err instanceof Error ? err.message : String(err),
+        })
+        if (partialWorktreeDir) {
+          try { await Worktree.remove({ directory: partialWorktreeDir }) } catch {}
+        }
+        await failAllGroups(runID, `Failed to dispatch group ${group.id}: ${err instanceof Error ? err.message : String(err)}`, hooks)
+        return
+      }
+    }
+  }
+
+  /**
+   * All groups have completed — aggregate deliveries and trigger final evaluation.
+   *
+   * 1. Collect all per-group deliveries (each stored with goal_run_id)
+   * 2. Merge their diffs into a single combined delivery
+   * 3. Persist the combined delivery at the run level (no goal_run_id)
+   * 4. Delegate to completeRun which finds this delivery and runs evaluation
+   */
+  async function completeMultiGroupRun(runID: string, hooks: RuntimeHooks) {
+    const run = requireRun(runID)
+    const task = requireTask(run.task_id)
+    log.info("all groups completed, aggregating deliveries", { runID })
+
+    // Collect all per-group deliveries
+    const allDeliveries = listDeliveriesByRun(runID)
+    const groupDeliveries = allDeliveries.filter((d) => d.goal_run_id != null)
+
+    // Check if a run-level (aggregated) delivery already exists
+    const existingRunDelivery = allDeliveries.find((d) => d.goal_run_id == null)
+    if (!existingRunDelivery) {
+      // Aggregate: merge all group delivery diffs, dedup by file (last writer wins)
+      const seenFiles = new Set<string>()
+      const allDiffs: Array<{ file: string; [key: string]: unknown }> = []
+      // Process in order — later groups' diffs override earlier ones for same file
+      for (const d of groupDeliveries) {
+        const result = d.result as { diffs?: Array<{ file: string; [key: string]: unknown }> } | null
+        if (!result?.diffs) continue
+        for (const diff of result.diffs) {
+          if (seenFiles.has(diff.file)) {
+            // Replace the existing diff for this file
+            const idx = allDiffs.findIndex((dd) => dd.file === diff.file)
+            if (idx >= 0) allDiffs[idx] = diff
+          } else {
+            seenFiles.add(diff.file)
+            allDiffs.push(diff)
+          }
+        }
+      }
+
+      const summaries = groupDeliveries.map((d) => d.summary).filter(Boolean)
+      const combinedSummary = summaries.length > 0
+        ? `Multi-group delivery (${groupDeliveries.length} groups):\n${summaries.map((s, i) => `  ${i + 1}. ${s}`).join("\n")}`
+        : `Multi-group delivery (${groupDeliveries.length} groups)`
+
+      // Persist the aggregate delivery at run level
+      const deliveryID = Identifier.ascending("delivery")
+      try {
+        persistDelivery({
+          task,
+          run,
+          deliveryID,
+          delivery: {
+            summary: combinedSummary,
+            diffs: allDiffs,
+          },
+          now: Date.now(),
+        })
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        log.error("failed to persist multi-group delivery", { runID, error: msg })
+        await failRun(run, `Failed to persist multi-group delivery: ${msg}`, hooks)
+        return
+      }
+    }
+
+    // Delegate to the existing completeRun flow (will find the run-level delivery)
+    await completeRun(run, hooks)
+  }
 }
 
 async function completeRun(run: RunRow, hooks: RuntimeHooks) {
@@ -758,13 +1408,10 @@ async function completeRun(run: RunRow, hooks: RuntimeHooks) {
       // Atomic: set guard immediately in the same microtask as the check
       evaluatingRuns.set(run.id, Date.now())
       {
+        const reEvalCtrl = new AbortController()
+        const reEvalTimer = setTimeout(() => reEvalCtrl.abort("runEvaluation hard timeout"), EVALUATION_HARD_TIMEOUT_MS)
         try {
-          await Promise.race([
-            runEvaluation(task, run, existingDelivery, hooks),
-            new Promise<never>((_, reject) =>
-              setTimeout(() => reject(new Error("runEvaluation hard timeout")), EVALUATION_HARD_TIMEOUT_MS),
-            ),
-          ])
+          await runEvaluation(task, run, existingDelivery, hooks, reEvalCtrl.signal)
         } catch (timeoutErr) {
           const msg = timeoutErr instanceof Error ? timeoutErr.message : String(timeoutErr)
           log.error("runEvaluation timed out or failed", { runID: run.id, error: msg })
@@ -774,6 +1421,7 @@ async function completeRun(run: RunRow, hooks: RuntimeHooks) {
             await hooks.updateTask(task, { status: "failed", error: msg, blocking_reason: null, time_completed: now }, msg)
           }
         } finally {
+          clearTimeout(reEvalTimer)
           evaluatingRuns.delete(run.id)
         }
       }
@@ -926,26 +1574,23 @@ async function completeRun(run: RunRow, hooks: RuntimeHooks) {
   }
 
   // If Phase 1 evaluation failed (e.g. strict spec_check or build/test failures),
-  // do not let Phase 2 EvaluatorAgent override the verdict.
-  // However, if Phase 1 is only "inconclusive" (not hard "failed") and the agent
-  // accepted, treat it as accepted — inconclusive automated checks (runtime metrics,
-  // UX criteria) cannot be resolved by retrying and must not cause infinite loops.
+  // Phase 1 (automated checks) is authoritative for hard failures.
+  // Phase 2 (LLM agent) cannot override Phase 1 failures or accept when Phase 1 is inconclusive.
+  // inconclusive means no real checks ran — we cannot accept on LLM hallucination alone.
   const phase1Failed = result.status === "failed"
   const phase1Inconclusive = result.status === "inconclusive"
   const agentAccepted = analysis.verdict === "accepted"
-  const finalVerdict = phase1Failed && !agentAccepted
-    ? "rejected"
-    : phase1Inconclusive && agentAccepted
-      ? "accepted"
-      : phase1Failed && agentAccepted
-        ? "rejected"
-        : analysis.verdict
+  const finalVerdict = phase1Failed
+    ? "rejected" as const
+    : phase1Inconclusive
+      ? "rejected" as const  // No checks ran — cannot accept
+      : analysis.verdict
   const finalStatus =
     (finalVerdict === "accepted" ? "passed" : finalVerdict === "rejected" ? "failed" : "inconclusive") as typeof result.status
-  const finalSummary = phase1Failed && agentAccepted
+  const finalSummary = phase1Failed
     ? `Rejected: automated checks failed. ${result.summary}`
-    : phase1Inconclusive && agentAccepted
-      ? `Accepted: agent verified delivery; automated checks inconclusive. ${result.summary}`
+    : phase1Inconclusive
+      ? `Rejected: no automated checks ran (inconclusive). Agent verdict "${analysis.verdict}" cannot be trusted without check evidence. ${result.summary}`
       : analysis.summary
 
   persistEvaluation({
@@ -963,7 +1608,7 @@ async function completeRun(run: RunRow, hooks: RuntimeHooks) {
     goals,
   })
 
-  if (finalStatus === "passed" || finalStatus === "inconclusive") {
+  if (finalStatus === "passed") {
     const allGoals = run.plan_version_id ? listGoalsByPlan(run.plan_version_id) : []
     const pendingBlocking = allGoals.filter((g) => g.priority === "blocking" && g.status === "pending")
 
@@ -984,7 +1629,8 @@ async function completeRun(run: RunRow, hooks: RuntimeHooks) {
   await handleEvaluationFailure(requireTask(task.id), run, finalSummary, hooks, analysis)
 }
 
-async function runEvaluation(task: TaskRow, run: RunRow, existingDelivery: DeliveryRow, hooks: RuntimeHooks) {
+async function runEvaluation(task: TaskRow, run: RunRow, existingDelivery: DeliveryRow, hooks: RuntimeHooks, signal?: AbortSignal) {
+  if (signal?.aborted) throw new Error("runEvaluation aborted before start")
   if (!run.session_id) return
 
   const executor = ExecutorRegistry.require(run.executor)
@@ -1002,42 +1648,35 @@ async function runEvaluation(task: TaskRow, run: RunRow, existingDelivery: Deliv
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     log.error("re-evaluation: failed to fetch delivery from executor", { error: msg })
-    // Use minimal delivery from DB row
-    delivery = {
-      summary: existingDelivery.summary,
-      diffs: [],
-    }
+    throw new Error(`Cannot re-evaluate: executor.delivery() failed: ${msg}`)
   }
 
   const deliveryID = existingDelivery.id
   const evaluationID = Identifier.ascending("evaluation")
 
-  const reEvalHardTimeout = <T>() =>
-    new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error("re-evaluation hard timeout")), EVALUATION_HARD_TIMEOUT_MS),
-    )
+  // Use the signal from the outer caller (which has its own timer) instead of spawning
+  // independent inner timers that can outlive the outer timeout.
+  const throwIfAborted = () => { if (signal?.aborted) throw new Error("runEvaluation aborted by caller") }
 
   let result: Awaited<ReturnType<typeof EvaluatorService.evaluate>>
   try {
-    result = await Promise.race([
-      EvaluatorService.evaluate(
-        {
-          taskID: task.id,
-          activeSpecVersionID: task.active_spec_version_id ?? undefined,
-          request: task.request,
-          metadata: {
-            ...(task.metadata ?? {}),
-            delivery_changed_files: delivery.diffs.map((item) => item.file),
-          },
+    throwIfAborted()
+    result = await EvaluatorService.evaluate(
+      {
+        taskID: task.id,
+        activeSpecVersionID: task.active_spec_version_id ?? undefined,
+        request: task.request,
+        metadata: {
+          ...(task.metadata ?? {}),
+          delivery_changed_files: delivery.diffs.map((item) => item.file),
         },
-        {
-          summary: delivery.summary,
-          diffs: delivery.diffs,
-          changedFiles: delivery.diffs.map((item) => item.file),
-        },
-      ),
-      reEvalHardTimeout<typeof result>(),
-    ])
+      },
+      {
+        summary: delivery.summary,
+        diffs: delivery.diffs,
+        changedFiles: delivery.diffs.map((item) => item.file),
+      },
+    )
   } catch (evalErr) {
     const msg = evalErr instanceof Error ? evalErr.message : String(evalErr)
     log.error("re-evaluation Phase 1 failed", { error: msg })
@@ -1075,30 +1714,28 @@ async function runEvaluation(task: TaskRow, run: RunRow, existingDelivery: Deliv
   let analysisError: string | undefined
   await judgeLive.start("Evaluator analysis started")
   try {
-    analysis = await Promise.race([
-      EvaluatorService.analyzeDelivery({
-        task: { title: task.title, request: task.request, sessionID: task.session_id ?? undefined },
-        goals: goals.map((g) => ({
-          description: g.description,
-          criteria: g.criteria,
-          priority: g.priority as "blocking" | "advisory",
-          check_selector: selectorList(g.metadata) as string[],
-          requirement_ids: requirementIDsFromMetadata(g.metadata),
-        })),
-        delivery: {
-          summary: delivery.summary,
-          changedFiles: delivery.diffs.map((d) => d.file),
-          diffs: delivery.diffs,
-        },
-        checkResults: result.checks.map((c) => ({
-          name: c.name,
-          status: c.status,
-          evidence: c.evidence,
-        })),
-        stream: judgeStream,
-      }),
-      reEvalHardTimeout<typeof analysis>(),
-    ])
+    throwIfAborted()
+    analysis = await EvaluatorService.analyzeDelivery({
+      task: { title: task.title, request: task.request, sessionID: task.session_id ?? undefined },
+      goals: goals.map((g) => ({
+        description: g.description,
+        criteria: g.criteria,
+        priority: g.priority as "blocking" | "advisory",
+        check_selector: selectorList(g.metadata) as string[],
+        requirement_ids: requirementIDsFromMetadata(g.metadata),
+      })),
+      delivery: {
+        summary: delivery.summary,
+        changedFiles: delivery.diffs.map((d) => d.file),
+        diffs: delivery.diffs,
+      },
+      checkResults: result.checks.map((c) => ({
+        name: c.name,
+        status: c.status,
+        evidence: c.evidence,
+      })),
+      stream: judgeStream,
+    })
     await judgeContentHooks.flush()
     await judgeLive.finish(`Evaluator analysis: ${analysis.verdict}`)
   } catch (err) {
@@ -1109,22 +1746,22 @@ async function runEvaluation(task: TaskRow, run: RunRow, existingDelivery: Deliv
     analysis = fallbackAnalysis(result, goals.length, analysisError)
   }
 
+  // Phase 1 (automated checks) is authoritative for hard failures.
+  // Phase 2 (LLM agent) cannot override Phase 1 failures or accept when Phase 1 is inconclusive.
+  // Must match the logic in completeRun's primary evaluation path.
   const phase1Failed = result.status === "failed"
   const phase1Inconclusive = result.status === "inconclusive"
-  const agentAccepted = analysis.verdict === "accepted"
-  const finalVerdict = phase1Failed && !agentAccepted
-    ? "rejected"
-    : phase1Inconclusive && agentAccepted
-      ? "accepted"
-      : phase1Failed && agentAccepted
-        ? "rejected"
-        : analysis.verdict
+  const finalVerdict = phase1Failed
+    ? "rejected" as const
+    : phase1Inconclusive
+      ? "rejected" as const
+      : analysis.verdict
   const finalStatus =
     (finalVerdict === "accepted" ? "passed" : finalVerdict === "rejected" ? "failed" : "inconclusive") as typeof result.status
-  const finalSummary = phase1Failed && agentAccepted
+  const finalSummary = phase1Failed
     ? `Rejected: automated checks failed. ${result.summary}`
-    : phase1Inconclusive && agentAccepted
-      ? `Accepted: agent verified delivery; automated checks inconclusive. ${result.summary}`
+    : phase1Inconclusive
+      ? `Rejected: no automated checks ran (inconclusive). Agent verdict "${analysis.verdict}" cannot be trusted without check evidence. ${result.summary}`
       : analysis.summary
 
   persistEvaluation({
@@ -1132,7 +1769,7 @@ async function runEvaluation(task: TaskRow, run: RunRow, existingDelivery: Deliv
     analysis, analysisError, finalVerdict, finalStatus, finalSummary, goals,
   })
 
-  if (finalStatus === "passed" || finalStatus === "inconclusive") {
+  if (finalStatus === "passed") {
     const allGoals = run.plan_version_id ? listGoalsByPlan(run.plan_version_id) : []
     const pendingBlocking = allGoals.filter((g) => g.priority === "blocking" && g.status === "pending")
     if (pendingBlocking.length === 0) {
@@ -1164,7 +1801,7 @@ function recoverStrandedTasks(hooks: RuntimeHooks) {
   )
   const now = Date.now()
   for (const task of strandedTasks) {
-    const updated = task.time_updated ?? task.time_created ?? 0
+    const updated = task.time_status_changed ?? task.time_updated ?? task.time_created ?? 0
     const age = now - updated
     const isPipeline = (PIPELINE_STATUSES as readonly string[]).includes(task.status)
     const threshold = isPipeline ? PIPELINE_STALE_MS : EVALUATING_STALE_MS
@@ -1348,20 +1985,7 @@ async function publishAcceptedDelivery(task: TaskRow, run: RunRow, delivery: Del
     new Promise<never>((_, reject) =>
       setTimeout(() => reject(new Error("Publisher.deliver() timeout")), DELIVERY_SERVICE_TIMEOUT_MS),
     ),
-  ]).catch((error) => ({
-    status: "failed" as const,
-    summary: String(error),
-    artifacts: [] as Array<{ kind: "patch" | "report" | "html_trace" | "link" | "git_ref"; label: string; payload: Record<string, unknown> }>,
-    publish: {
-      mode: "manual" as const,
-      adapters: [{
-        id: "delivery",
-        status: "skipped" as const,
-        summary: "Delivery export failed.",
-        detail: String(error),
-      }],
-    },
-  }))
+  ])
 
   const completed = Date.now()
   finalizeDeliveryResult({
@@ -1408,16 +2032,20 @@ async function handleEvaluationFailure(task: TaskRow, run: RunRow, summary: stri
   const executed = await executeDecision(task, run, decision, hooks).catch(async (error) => {
     const message = error instanceof Error ? error.message : String(error)
     log.error("retry/replan failed", { taskID: task.id, runID: run.id, error: message })
-    await hooks.updateTask(
-      task,
-      {
-        status: "failed",
-        blocking_reason: null,
-        error: `Planner failure: ${message}`,
-        time_completed: Date.now(),
-      },
-      `Planner failure: ${message}`,
-    )
+    // Re-read task from DB to avoid clobbering state changes made during executeDecision
+    const freshTask = findTask(task.id)
+    if (freshTask && freshTask.status !== "failed" && freshTask.status !== "completed" && freshTask.status !== "cancelled") {
+      await hooks.updateTask(
+        freshTask,
+        {
+          status: "failed",
+          blocking_reason: null,
+          error: `Planner failure: ${message}`,
+          time_completed: Date.now(),
+        },
+        `Planner failure: ${message}`,
+      )
+    }
     return false
   })
   if (executed) return
@@ -1428,7 +2056,11 @@ async function handleEvaluationFailure(task: TaskRow, run: RunRow, summary: stri
     summary,
     retryContext,
   }).catch((err) => log.warn("failed to flush failure learnings", { error: String(err) }))
-  await hooks.updateTask(task, { status: "failed", blocking_reason: null, error: summary, time_completed: Date.now() }, summary)
+  // Re-read task from DB for final status update
+  const freshTask = findTask(task.id)
+  if (freshTask && freshTask.status !== "failed" && freshTask.status !== "completed" && freshTask.status !== "cancelled") {
+    await hooks.updateTask(freshTask, { status: "failed", blocking_reason: null, error: summary, time_completed: Date.now() }, summary)
+  }
 }
 
 async function executeDecision(
@@ -1448,7 +2080,7 @@ async function executeDecision(
   const currentPlan = run.plan_version_id ? findPlan(run.plan_version_id) : undefined
   if (!currentPlan) return false
   const next = await createReplanRun(task, currentPlan, run, decision.summary, decision.analysis)
-  if (!next.queued) return !!next.error
+  if (!next.queued) return false
   if (!next.runID) return false
   await OrchestratorRuntime.dispatch(next.runID, hooks)
   return true
@@ -1471,22 +2103,15 @@ function fallbackAnalysis(
   goalCount: number,
   message: string,
 ): EvaluatorAnalysisType {
-  const goalStatus =
-    result.verdict === "accepted"
-      ? "passed"
-      : result.verdict === "rejected"
-        ? "failed"
-        : "inconclusive"
-  const summary =
-    result.verdict === "accepted"
-      ? result.summary
-      : `${result.summary} Evaluator agent unavailable: ${message}`
-  const reasoning =
-    result.verdict === "accepted"
-      ? "Automated evaluator checks passed; fell back because evaluator agent analysis was unavailable."
-      : `Fell back to automated evaluator result because evaluator agent analysis failed: ${message}`
+  // When the evaluator agent (Phase 2) crashes, we cannot trust Phase 1's verdict alone.
+  // Phase 1 "accepted" only means automated checks passed — without Phase 2 LLM review,
+  // we cannot confirm goal completion. Force to "rejected" so the run gets retried.
+  const safeVerdict = result.verdict === "accepted" ? "rejected" as const : result.verdict
+  const goalStatus = safeVerdict === "rejected" ? "failed" : "inconclusive"
+  const summary = `${result.summary} — Evaluator agent unavailable: ${message}. Verdict downgraded to ${safeVerdict}.`
+  const reasoning = `Evaluator agent (Phase 2) failed: ${message}. Phase 1 automated checks returned "${result.verdict}" but without LLM goal-level review, acceptance cannot be confirmed.`
   return {
-    verdict: result.verdict,
+    verdict: safeVerdict,
     classification: "evaluation",
     summary,
     goal_statuses: Array.from({ length: goalCount }, (_, goal_index) => ({
@@ -1495,14 +2120,12 @@ function fallbackAnalysis(
       evidence: summary,
       reasoning,
     })),
-    replan_guidance: result.verdict === "rejected"
-      ? {
-          root_cause: `Evaluator agent unavailable: ${message}`,
-          what_failed: result.summary,
-          suggested_strategy: "Fix the failing automated checks and retry the current plan.",
-          avoid_approaches: [],
-        }
-      : null,
+    replan_guidance: {
+      root_cause: `Evaluator agent unavailable: ${message}`,
+      what_failed: result.summary,
+      suggested_strategy: "Retry evaluation — the evaluator agent crashed but the automated checks may have passed.",
+      avoid_approaches: [],
+    },
   }
 }
 
@@ -1586,6 +2209,87 @@ function stopEventBridge(runID: string) {
   if (ctrl) {
     ctrl.abort()
     eventBridgeAborts.delete(runID)
+  }
+}
+
+/**
+ * Event bridge for a group executor. Keyed by `runID:groupID` so each group
+ * can be independently aborted without affecting sibling groups.
+ */
+function consumeGroupExecutorEvents(
+  taskID: string,
+  runID: string,
+  executorName: Parameters<typeof ExecutorRegistry.require>[0],
+  sessionID: string,
+  executorSessionID: string,
+  groupID: string,
+) {
+  const executor = ExecutorRegistry.require(executorName)
+  if (!executor.capabilities().events) return
+  const bridgeKey = `${runID}:${groupID}`
+  const ctrl = new AbortController()
+  eventBridgeAborts.set(bridgeKey, ctrl)
+  ;(async () => {
+    try {
+      for await (const event of executor.events({ sessionID })) {
+        if (ctrl.signal.aborted) break
+        upsertExecutorInteraction(taskID, runID, sessionID, executorSessionID, executorName, event)
+        await projectExecutorEventToSession(taskID, requireRun(runID), event)
+        appendExecutorEvent(executorSessionID, taskID, runID, executorName, undefined, {
+          provider: executorName,
+          kind: protocolEventKind(event.type),
+          summary: event.summary ?? event.type,
+          payload: event.payload,
+          raw: {
+            type: event.type,
+            summary: event.summary,
+            payload: event.payload,
+          },
+        })
+        if (event.type === "text_delta") {
+          ProtocolStore.dispatchEphemeral({
+            type: Event.RunOutput.type,
+            aggregate: "task",
+            taskID,
+            runID,
+            source: "executor",
+            payload: { taskID, runID, groupID, type: "text_delta", text: event.summary ?? "" },
+          })
+        } else if (event.type === "executor.progress") {
+          ProtocolStore.dispatchEphemeral({
+            type: Event.RunProgress.type,
+            aggregate: "task",
+            taskID,
+            runID,
+            source: "executor",
+            payload: { taskID, runID, groupID, type: event.type, summary: event.summary ?? "", payload: event.payload },
+          })
+        } else {
+          void OrchestratorProtocol.emit(Event.RunProgress, {
+            taskID,
+            runID,
+            type: event.type,
+            summary: event.summary ?? event.type,
+            payload: { ...event.payload, groupID },
+          }, { taskID, runID, source: "executor" })
+        }
+      }
+    } catch (err) {
+      if (!ctrl.signal.aborted) {
+        log.warn("group executor event bridge ended", { taskID, runID, groupID, error: String(err) })
+      }
+    } finally {
+      eventBridgeAborts.delete(bridgeKey)
+    }
+  })()
+}
+
+function stopGroupEventBridge(runID: string, groupID: string) {
+  const bridgeKey = `${runID}:${groupID}`
+  const ctrl = eventBridgeAborts.get(bridgeKey)
+  if (ctrl) {
+    ctrl.abort()
+    eventBridgeAborts.delete(bridgeKey)
   }
 }
 

@@ -42,6 +42,7 @@ export namespace Identifier {
     protocol_event: "pev",
     protocol_inbox: "pib",
     protocol_stream_chunk: "psc",
+    goal_group: "glg",
   } as const
 
   export function schema(prefix: keyof typeof prefixes) {

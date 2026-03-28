@@ -220,6 +220,17 @@ export function findDeliveryByRun(runID: string) {
   )
 }
 
+export function listDeliveriesByRun(runID: string) {
+  return Database.use((db) =>
+    db
+      .select()
+      .from(OrchestratorDeliveryTable)
+      .where(eq(OrchestratorDeliveryTable.run_id, runID))
+      .orderBy(OrchestratorDeliveryTable.time_created)
+      .all(),
+  )
+}
+
 export function findDeliveryByGoalRun(goalRunID: string) {
   return Database.use((db) =>
     db
@@ -303,6 +314,36 @@ export function listActiveGoalRunsByCoordinator(coordinatorRunID: string) {
       )
       .all(),
   )
+}
+
+export function listGoalRunsByCoordinator(coordinatorRunID: string) {
+  return Database.use((db) =>
+    db
+      .select()
+      .from(OrchestratorGoalRunTable)
+      .where(eq(OrchestratorGoalRunTable.coordinator_run_id, coordinatorRunID))
+      .orderBy(OrchestratorGoalRunTable.time_created)
+      .all(),
+  )
+}
+
+export function listGroupIDsByRun(coordinatorRunID: string): string[] {
+  const goalRuns = listGoalRunsByCoordinator(coordinatorRunID)
+  const groupIDs = new Set<string>()
+  for (const gr of goalRuns) {
+    const meta = gr.metadata as Record<string, unknown> | null
+    const groupID = typeof meta?.group_id === "string" ? meta.group_id : undefined
+    if (groupID) groupIDs.add(groupID)
+  }
+  return [...groupIDs]
+}
+
+export function listGoalRunsByGroup(coordinatorRunID: string, groupID: string) {
+  const goalRuns = listGoalRunsByCoordinator(coordinatorRunID)
+  return goalRuns.filter((gr) => {
+    const meta = gr.metadata as Record<string, unknown> | null
+    return meta?.group_id === groupID
+  })
 }
 
 export function listExecutorEvents(executorSessionID: string) {

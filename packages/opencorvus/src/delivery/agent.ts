@@ -25,7 +25,7 @@ import { type TextHooks } from "@/llm/api"
 import { Config } from "@/config/config"
 import { OrchestratorConfig } from "@/orchestrator/config"
 import { loadStageSkills } from "@/orchestrator/skill-inject"
-import { collectText, countToolCalls, firstContentLine, sectionBody, splitBlocks } from "@/util/agent-text"
+import { collectText, countToolCalls, firstContentLine, sectionBody } from "@/util/agent-text"
 import type { GoalJudgmentType, GoalInfo, DeliveryInfo } from "@/evaluator/agent"
 
 const log = Log.create({ service: "delivery-agent" })
@@ -33,12 +33,6 @@ const log = Log.create({ service: "delivery-agent" })
 // ---------------------------------------------------------------------------
 // Output schema
 // ---------------------------------------------------------------------------
-
-export const DeliveryFix = z.object({
-  file: z.string().describe("File path that was modified"),
-  description: z.string().describe("What was fixed and why"),
-  type: z.enum(["edit", "create", "delete"]).describe("Type of change applied"),
-})
 
 export const StartupVerification = z.object({
   attempted: z.boolean().describe("Whether startup verification was attempted"),
@@ -54,11 +48,10 @@ export const FrontendCheck = z.object({
 })
 
 export const DeliveryVerdict = z.object({
-  verdict: z.enum(["accepted", "rejected", "fixed"]),
+  verdict: z.enum(["accepted", "rejected"]),
   summary: z.string(),
   startup_verification: StartupVerification,
   frontend_check: FrontendCheck,
-  fixes_applied: z.array(DeliveryFix),
   issues_found: z.array(z.string()),
 })
 
@@ -185,7 +178,6 @@ export namespace DeliveryAgent {
 
     log.info("delivery agent output", {
       verdict: parsed.verdict,
-      fixesApplied: parsed.fixes_applied.length,
       issuesFound: parsed.issues_found.length,
       startupSuccess: parsed.startup_verification.success,
     })
@@ -244,7 +236,6 @@ function extractVerdictText(text: string): DeliveryVerdictType {
     summary: sectionBody(raw, ["Summary", "摘要"]) || firstContentLine(raw),
     startup_verification: parseStartupVerification(sectionBody(raw, ["Startup Verification", "启动验证"])),
     frontend_check: parseFrontendCheck(sectionBody(raw, ["Frontend Check", "前端检查"])),
-    fixes_applied: parseFixesApplied(sectionBody(raw, ["Fixes Applied", "已修复"])),
     issues_found: parseIssuesFound(sectionBody(raw, ["Issues Found", "发现的问题"])),
   })
 }
@@ -254,42 +245,32 @@ function extractVerdictText(text: string): DeliveryVerdictType {
 // ---------------------------------------------------------------------------
 
 function normalizeVerdict(input: unknown): DeliveryVerdictType {
-  const obj = input && typeof input === "object" ? { ...(input as Record<string, unknown>) } : {}
+  if (!input || typeof input !== "object") {
+    throw new Error(`Delivery agent produced non-object output: ${typeof input}`)
+  }
+  const obj = { ...(input as Record<string, unknown>) }
 
   const rawVerdict = typeof obj.verdict === "string" ? obj.verdict.trim().toLowerCase() : ""
-  const resolvedVerdict = rawVerdict.includes("accepted") ? "accepted"
-    : rawVerdict.includes("fixed") ? "fixed"
-    : rawVerdict.includes("rejected") ? "rejected"
-    : null
-  if (!resolvedVerdict) {
-    log.warn("unrecognizable verdict, defaulting to rejected", { rawVerdict })
-  }
-  obj.verdict = resolvedVerdict ?? "rejected"
+  if (rawVerdict.includes("accepted")) obj.verdict = "accepted"
+  else if (rawVerdict.includes("rejected")) obj.verdict = "rejected"
+  else throw new Error(`Delivery agent produced unrecognizable verdict: "${rawVerdict}"`)
 
-  if (!obj.summary) obj.summary = "Delivery verification completed"
+  if (!obj.summary || typeof obj.summary !== "string") {
+    throw new Error("Delivery agent produced no summary")
+  }
 
   if (!obj.startup_verification || typeof obj.startup_verification !== "object") {
-    obj.startup_verification = { attempted: false, success: false }
+    throw new Error("Delivery agent produced no startup_verification section")
   }
   const sv = obj.startup_verification as Record<string, unknown>
   if (typeof sv.attempted !== "boolean") sv.attempted = false
   if (typeof sv.success !== "boolean") sv.success = false
 
   if (!obj.frontend_check || typeof obj.frontend_check !== "object") {
-    obj.frontend_check = { attempted: false }
+    throw new Error("Delivery agent produced no frontend_check section")
   }
   const fc = obj.frontend_check as Record<string, unknown>
   if (typeof fc.attempted !== "boolean") fc.attempted = false
-
-  if (!Array.isArray(obj.fixes_applied)) obj.fixes_applied = []
-  obj.fixes_applied = (obj.fixes_applied as unknown[]).flatMap((item) => {
-    if (!item || typeof item !== "object") return []
-    const row = { ...(item as Record<string, unknown>) }
-    if (!row.file) return []
-    if (!row.description) row.description = "Fix applied"
-    if (!row.type) row.type = "edit"
-    return [row]
-  })
 
   if (!Array.isArray(obj.issues_found)) obj.issues_found = []
   obj.issues_found = (obj.issues_found as unknown[]).filter(
@@ -339,20 +320,6 @@ function parseFrontendCheck(text: string) {
       : undefined,
     issues: issues.length > 0 ? issues : undefined,
   }
-}
-
-function parseFixesApplied(text: string) {
-  return splitBlocks(text).flatMap((block) => {
-    const title = block[0].replace(/^[-*\u2022]\s+/, "").replace(/^\d+[.)\u3001]\s+/, "").trim()
-    const record = parseRecordLines(block.slice(1))
-    const file = record["file"] || record["文件"] || ""
-    if (!file) return []
-    return [{
-      file,
-      description: record["description"] || record["描述"] || title,
-      type: (record["type"] || record["类型"] || "edit") as "edit" | "create" | "delete",
-    }]
-  })
 }
 
 function parseIssuesFound(text: string) {
@@ -490,11 +457,11 @@ function truncate(text: string, maxLen: number): string {
 // System prompt
 // ---------------------------------------------------------------------------
 
-export const DELIVERY_AGENT_SYSTEM = `You are a senior QA engineer and deployment specialist acting as the final delivery verifier for OpenCorvus. Your job is to verify that the delivered application actually works end-to-end, fix any bugs you discover, and make a final acceptance decision before the delivery is published.
+export const DELIVERY_AGENT_SYSTEM = `You are a senior QA engineer acting as the final delivery verifier for OpenCorvus. Your job is to verify that the delivered application actually works end-to-end and make a final acceptance decision before the delivery is published.
 
 The evaluator has already verified goal completion and code quality. Your role is different — you focus on RUNTIME VERIFICATION: does the application actually start, render, and function correctly?
 
-**CRITICAL**: Unlike the evaluator, YOU CAN WRITE CODE AND FIX BUGS. If you discover a bug during verification, fix it immediately and re-verify.
+**CRITICAL**: You are READ-ONLY. You CANNOT modify any files. If you discover issues, report them clearly — the orchestrator will route them back to the executor for fixes via retry/replan.
 
 ## Available Tools
 
@@ -506,10 +473,6 @@ The evaluator has already verified goal completion and code quality. Your role i
 
 ### Execution
 - **run_command**: Run a shell command (build, start server, run tests, curl endpoints)
-
-### Code Modification
-- **write_file**: Create or overwrite a file (for missing configs, new files)
-- **edit_file**: Search-and-replace edit on existing file (for targeted bug fixes)
 
 ### Context
 - **memory_search**: Search project memory for past issues
@@ -526,7 +489,7 @@ The evaluator has already verified goal completion and code quality. Your role i
 2. Identify the build system and dependencies
 3. Check for frontend entry (index.html, App.tsx, etc.)
 
-### Phase 2: BUILD
+### Phase 2: BUILD & TEST
 
 1. Install dependencies if needed (\`bun install\`, \`npm install\`)
 2. Run build/compile (\`bun run build\`, \`bunx tsc --noEmit\`, \`npm run build\`)
@@ -548,37 +511,24 @@ The evaluator has already verified goal completion and code quality. Your role i
    - No obvious import or module resolution errors
    - Entry HTML references correct script paths
 
-### Phase 4: FIX (if needed)
-
-If you discover bugs during Phase 2 or 3:
-1. Analyze the root cause from error output
-2. Read the relevant source files to understand the issue
-3. Apply a targeted fix using \`edit_file\` or \`write_file\`
-4. **Re-verify** — go back to Phase 2/3 to confirm the fix works
-5. Record all fixes in your output
-
-Do NOT apply cosmetic changes, refactoring, or "improvements" — only fix what prevents the application from building, starting, or running correctly. Do NOT write new test files — test coverage is the executor's responsibility, not yours.
-
-### Phase 5: VERDICT
+### Phase 4: VERDICT
 
 Output your final decision as plain markdown. Use these exact top-level sections in order:
 
-- \`# Verdict\` — exactly one of: accepted, rejected, fixed
+- \`# Verdict\` — exactly one of: accepted, rejected
 - \`# Summary\` — 1-3 sentence overview
 - \`# Startup Verification\` — attempted, command, success, output
 - \`# Frontend Check\` — attempted, renders_correctly, issues
-- \`# Fixes Applied\` — numbered list of fixes (empty if none)
 - \`# Issues Found\` — remaining issues (empty if none)
 
 ### Verdict Meanings
 
 - **accepted**: Application builds, starts, and runs correctly as-is
-- **fixed**: Application had issues but they were fixed during verification — it now works
-- **rejected**: Critical issues that could not be fixed — the delivery is not ready
+- **rejected**: Issues found that prevent the application from building, starting, or running correctly — report all issues clearly so the executor can fix them
 
 ### Formatting Rules
 
-Under \`# Verdict\`, write exactly one word: accepted, fixed, or rejected.
+Under \`# Verdict\`, write exactly one word: accepted or rejected.
 
 Under \`# Startup Verification\`:
 - attempted: true/false
@@ -591,19 +541,13 @@ Under \`# Frontend Check\`:
 - renders_correctly: true/false
 - issues: semicolon-separated list
 
-Under \`# Fixes Applied\`, each fix:
-1. Fix description
-   - file: path/to/file
-   - type: edit|create|delete
-   - description: what was fixed
-
-Under \`# Issues Found\`, bullet list of remaining issues.
+Under \`# Issues Found\`, bullet list of all issues discovered. Be specific: include file paths, error messages, and root cause analysis so the executor can fix them.
 
 ## Rules
 
 - ALWAYS start the application to verify it works — reading code alone is NOT sufficient
 - Every claim must be backed by actual tool results (run_command output, file contents)
-- Fix real bugs only — no cosmetic changes, no refactoring, no adding features, no writing new tests
+- You CANNOT modify files — report issues clearly instead
 - If you cannot start the application (missing runtime, unavailable port, etc.), classify it clearly
 - Write body text in the same language as the task request
 - If the project is a library (not an executable app), verify it compiles/builds and tests pass instead of trying to start it

@@ -37,11 +37,15 @@ export const ManagedCodingExecutor = {
     const tasks = new Map<string, State>()
     const latest = new Map<string, string>()
 
-    const start = (state: State, mode: "run" | "resume", prompt: string) => {
+    const start = (state: State, mode: "run" | "resume", prompt: string, cwdOverride?: string) => {
+      const resolvedCwd = cwdOverride ?? value(options.cwd)
+      if (cwdOverride) {
+        console.log(`[managed-executor] cwd override: ${cwdOverride} (options.cwd=${value(options.cwd)})`)
+      }
       const input = {
         model: value(options.model),
         prompt,
-        cwd: value(options.cwd),
+        cwd: resolvedCwd,
         system: value(options.system),
         maxTurns: value(options.maxTurns),
         tools: value(options.tools),
@@ -104,7 +108,7 @@ export const ManagedCodingExecutor = {
             status: "queued",
           },
         })
-        start(state, "run", input.prompt)
+        start(state, "run", input.prompt, input.cwd)
         return {
           sessionID: input.sessionID,
           queueTaskID: id,

@@ -23,7 +23,7 @@ const GoalContractDraft = z.object({
   id: z.string().min(1),
   title: z.string().min(1),
   objective: z.string().min(1),
-  requirement_ids: z.array(z.string().min(1)).min(1),
+  requirement_ids: z.array(z.string().min(1)),
   depends_on_goal_ids: z.array(z.string().min(1)),
   owned_paths: z.array(z.string().min(1)),
   done_definition: z.string().min(1),
@@ -106,9 +106,6 @@ export function validateGoalGraph(goalDraft: GoalDraft, spec: SpecDraft, scope: 
       throw new GoalFailureError(`Goal graph contains duplicate goal id: ${goal.id}`)
     }
     goalIDs.add(goal.id)
-    if (goal.requirement_ids.length < 1) {
-      throw new GoalFailureError(`Goal ${goal.id} is missing mapped requirements`)
-    }
     if (goal.kind !== "verification" && goal.owned_paths.length < 1) {
       throw new GoalFailureError(`Goal ${goal.id} must declare owned_paths`)
     }
@@ -292,6 +289,10 @@ function normalizeText(value: string) {
 }
 
 function requirementSelectorMetadata(requirement: RequirementDraft) {
+  // Prefer typed check_selector field; fall back to metadata for backward compat
+  if (Array.isArray((requirement as any).check_selector)) {
+    return uniqueStrings((requirement as any).check_selector.filter((item: unknown): item is string => typeof item === "string" && item.trim().length > 0))
+  }
   const metadata =
     requirement.metadata && typeof requirement.metadata === "object" && !Array.isArray(requirement.metadata)
       ? requirement.metadata as Record<string, unknown>

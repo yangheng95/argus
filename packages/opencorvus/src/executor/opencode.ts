@@ -9,7 +9,7 @@ import { SessionSummary } from "@/session/summary"
 import { SessionPrompt } from "@/session/prompt"
 import { SessionStatus } from "@/session/status"
 import { Snapshot } from "@/snapshot"
-import { Database, eq } from "@/storage/db"
+import { Database, eq, and, inArray } from "@/storage/db"
 import { PermissionNext } from "@/permission/next"
 import { Question } from "@/question"
 
@@ -101,7 +101,10 @@ export namespace OpencodeExecutor {
             time_completed: Date.now(),
             time_updated: Date.now(),
           })
-          .where(eq(TaskQueueTable.id, queueTaskID))
+          .where(and(
+            eq(TaskQueueTable.id, queueTaskID),
+            inArray(TaskQueueTable.status, ["queued", "running"]),
+          ))
           .run(),
       )
     }

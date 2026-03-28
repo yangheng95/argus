@@ -100,6 +100,7 @@ export type ExecutorAdapter = {
     prompt: string
     priority?: "high" | "normal" | "low"
     source?: "planner" | "scheduler" | "system"
+    cwd?: string
   }): Promise<{
     sessionID: string
     queueTaskID: string

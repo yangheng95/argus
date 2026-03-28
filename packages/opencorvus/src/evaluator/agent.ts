@@ -161,10 +161,13 @@ export namespace EvaluatorAgent {
     // ── Phase 2: Judgment ─────────────────────────────────────────────────────
     // Fresh context: investigation findings + compact task summary → structured verdict.
     // generateObject guarantees schema-complete output regardless of project size.
+    // Phase 2 gets its own timeout — reasoning models can hang indefinitely without one.
+    const phase2TimeoutMs = Math.max(evalCfg.timeout_ms, 120_000)
     const { object: verdict } = await generateObject({
       model: language,
       schema: EvaluatorAnalysis,
       maxRetries: 2,
+      abortSignal: AbortSignal.timeout(phase2TimeoutMs),
       system: JUDGMENT_SYSTEM,
       prompt: buildJudgmentPrompt(input, investigationText),
     })

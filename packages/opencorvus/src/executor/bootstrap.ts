@@ -84,9 +84,10 @@ function codexProvider(command: string[]) {
   if (process.env.OPENCORVUS_EXECUTOR_CODEX_PROTOCOL === "cli") {
     return CodexCLIExecutor.create({ command })
   }
-  return CodexAppServerExecutor.create(() =>
+  return CodexAppServerExecutor.create((cwd?: string) =>
     CodexAppServerClientProcess.create({
       command: [...command, "app-server", "--listen", "stdio://"],
+      cwd,
     }),
   )
 }

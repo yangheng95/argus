@@ -161,6 +161,21 @@ function requirementsFromSpecDraft(specDraft: Pick<SpecDraft, "requirements">): 
   return Array.isArray(specDraft.requirements) ? specDraft.requirements : []
 }
 
+function parseAcceptanceField(raw: unknown, fallback: string): string[] {
+  if (Array.isArray(raw)) return raw
+  if (typeof raw === "string") {
+    const trimmed = raw.trim()
+    if (trimmed.startsWith("[")) {
+      try {
+        const parsed = JSON.parse(trimmed)
+        if (Array.isArray(parsed)) return parsed
+      } catch { /* not JSON, treat as plain string */ }
+    }
+    return [trimmed]
+  }
+  return [fallback]
+}
+
 function reuseSpecDraft(input: CompileReplanInput): SpecDraft {
   const specSnapshotID = input.previousPlan.spec_snapshot_id ?? ""
   const snapshot = findSpecSnapshot(specSnapshotID)
@@ -191,7 +206,7 @@ function reuseSpecDraft(input: CompileReplanInput): SpecDraft {
     title: item.title,
     description: item.description,
     priority: item.priority,
-    acceptance: item.acceptance ? [item.acceptance] : [item.description],
+    acceptance: parseAcceptanceField(item.acceptance, item.description),
     evidence_refs: item.evidence_refs ?? evidence,
     non_goals: item.non_goals ?? undefined,
     metadata: item.metadata ?? undefined,
@@ -1138,7 +1153,10 @@ export function persistInitialTransitionFailure(input: PersistInitialFailureInpu
 }
 
 export function persistReplanTransition(input: PersistReplanInput): ReplanQueueResult {
-  const previousSpecSnapshotID = input.previousPlan.spec_snapshot_id ?? ""
+  const previousSpecSnapshotID = input.previousPlan.spec_snapshot_id
+  if (!previousSpecSnapshotID) {
+    throw new PlannerFailureError("Cannot replan: previous plan has no spec_snapshot_id")
+  }
   const previousSpecSnapshot = findSpecSnapshot(previousSpecSnapshotID)
   const specRewrite = input.compiled.specStrategy === "rewritten"
   const specSnapshotID: string = specRewrite ? Identifier.ascending("spec") : previousSpecSnapshotID
@@ -2071,7 +2089,6 @@ export function persistGoalSnapshot(
   const goals = input.goalDraft.goals.map((goal, index) => {
     const goalInput = goalInputs[index]
     const persistedRequirementIDs = goal.requirement_ids
-      .filter((requirementID) => !requirementID.startsWith("_implicit:"))
       .map((requirementID) => {
         const next = requirementIDBySource.get(requirementID)
         if (!next) {
@@ -2082,7 +2099,7 @@ export function persistGoalSnapshot(
     const persistedDependencyIDs = goal.depends_on_goal_ids.map((dependencyID) => {
       const next = goalIDBySource.get(dependencyID)
       if (!next) {
-        throw new PlannerFailureError(`Goal ${goal.id} references unmapped dependency id: ${dependencyID}`)
+        throw new GoalFailureError(`Goal ${goal.id} references unmapped dependency id: ${dependencyID}`)
       }
       return next
     })
@@ -2554,7 +2571,15 @@ export function persistEvaluation(input: {
     }
     if (input.goals.length > 0) {
       const now2 = Date.now()
-      const analysisGoals = Array.isArray(input.analysis?.goal_statuses) ? input.analysis.goal_statuses : []
+      const rawAnalysisGoals = Array.isArray(input.analysis?.goal_statuses) ? input.analysis.goal_statuses : []
+      // Fix 1-based index: if all indices are 1..N instead of 0..N-1, shift them
+      const allOneBased = rawAnalysisGoals.length > 0
+        && rawAnalysisGoals.every((gs) => gs.goal_index >= 1 && gs.goal_index <= input.goals.length)
+        && rawAnalysisGoals.some((gs) => gs.goal_index === input.goals.length)
+        && !rawAnalysisGoals.some((gs) => gs.goal_index === 0)
+      const analysisGoals = allOneBased
+        ? rawAnalysisGoals.map((gs) => ({ ...gs, goal_index: gs.goal_index - 1 }))
+        : rawAnalysisGoals
       const goalStatuses =
         input.goalRunID && input.goals.length === 1 && analysisGoals.length === 0
           ? [{
@@ -2563,12 +2588,21 @@ export function persistEvaluation(input: {
               evidence: input.finalSummary,
             }]
           : analysisGoals
+      const updatedGoalIndices = new Set<number>()
       for (const gs of goalStatuses) {
         const goal =
           input.goalRunID && input.goals.length === 1
             ? input.goals[0]
             : input.goals[gs.goal_index]
-        if (!goal) continue
+        if (!goal) {
+          log.warn("goal index out of bounds in analysis", {
+            goalIndex: gs.goal_index,
+            goalCount: input.goals.length,
+            taskID: input.task.id,
+          })
+          continue
+        }
+        updatedGoalIndices.add(input.goalRunID && input.goals.length === 1 ? 0 : gs.goal_index)
         let goalStatus =
           input.goalRunID && input.goals.length === 1
             ? input.finalStatus === "passed"
@@ -2606,6 +2640,18 @@ export function persistEvaluation(input: {
           Database.effect(() =>
             OrchestratorProtocol.emit(Event.GoalFailed, { taskID: input.task.id, goalID: goal.id, summary: `${goal.description}: ${gs.evidence}` }, { source: "persist.evaluation" }),
           )
+        }
+      }
+      // When verdict is rejected and LLM missed some goals, mark uncovered pending goals as failed
+      if (input.finalVerdict === "rejected" && updatedGoalIndices.size < input.goals.length) {
+        for (let i = 0; i < input.goals.length; i++) {
+          if (updatedGoalIndices.has(i)) continue
+          const uncoveredGoal = input.goals[i]
+          if (!uncoveredGoal || uncoveredGoal.status !== "pending") continue
+          db.update(OrchestratorGoalTable)
+            .set({ status: "failed", time_updated: now2 })
+            .where(eq(OrchestratorGoalTable.id, uncoveredGoal.id))
+            .run()
         }
       }
       if (input.run.plan_version_id) {
