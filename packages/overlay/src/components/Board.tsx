@@ -210,34 +210,38 @@ export function GoalsPanel(props: GoalsPanelProps) {
                   {card.metadata.priority}
                 </span>
               </Show>
-              <div class="goal-actions">
-                <button
-                  type="button"
-                  class="btn btn-ghost mini"
-                  data-goal-action="edit"
-                  data-goal-id={card.id}
-                  data-goal-title={card.title}
-                  data-goal-detail={card.detail || ""}
-                  title={t("goal.edit_button_title")}
-                  aria-label={t("goal.edit_button_title")}
-                  onClick={() =>
-                    props.onEditGoal?.(card.id, card.title, card.detail || "")
-                  }
-                >
-                  {t("common.edit")}
-                </button>
-                <button
-                  type="button"
-                  class="btn btn-ghost mini danger"
-                  data-goal-action="delete"
-                  data-goal-id={card.id}
-                  title={t("goal.delete_button_title")}
-                  aria-label={t("goal.delete_button_title")}
-                  onClick={() => props.onDeleteGoal?.(card.id)}
-                >
-                  {t("common.delete")}
-                </button>
-              </div>
+              <Show when={props.onEditGoal || props.onDeleteGoal}>
+                <div class="goal-actions">
+                  <Show when={props.onEditGoal}>
+                    <button
+                      type="button"
+                      class="btn btn-ghost mini"
+                      data-goal-action="edit"
+                      data-goal-id={card.id}
+                      title={t("goal.edit_button_title")}
+                      aria-label={t("goal.edit_button_title")}
+                      onClick={() =>
+                        props.onEditGoal?.(card.id, card.title, card.detail || "")
+                      }
+                    >
+                      {t("common.edit")}
+                    </button>
+                  </Show>
+                  <Show when={props.onDeleteGoal}>
+                    <button
+                      type="button"
+                      class="btn btn-ghost mini danger"
+                      data-goal-action="delete"
+                      data-goal-id={card.id}
+                      title={t("goal.delete_button_title")}
+                      aria-label={t("goal.delete_button_title")}
+                      onClick={() => props.onDeleteGoal?.(card.id)}
+                    >
+                      {t("common.delete")}
+                    </button>
+                  </Show>
+                </div>
+              </Show>
             </div>
           )}
         </For>
@@ -680,59 +684,6 @@ export function DeliveryPanel(props: DeliveryPanelProps) {
   );
 }
 
-// ── OverviewPanel ──
-
-interface OverviewPanelProps {
-  overview: any;
-}
-
-export function OverviewPanel(props: OverviewPanelProps) {
-  const nextStep = createMemo(() => props.overview?.nextStep || null);
-  const failure = createMemo(() => props.overview?.currentFailure || null);
-
-  return (
-    <Show
-      when={props.overview}
-      fallback={<p class="empty-hint">{t("empty.overview")}</p>}
-    >
-      <Show when={props.overview?.headline}>
-        <div
-          class="overview-headline md-content"
-          innerHTML={renderMarkdown(props.overview.headline)}
-        />
-      </Show>
-      <Show when={props.overview?.summary}>
-        <div
-          class="overview-summary md-content"
-          innerHTML={renderMarkdown(props.overview.summary)}
-        />
-      </Show>
-      <Show when={nextStep()}>
-        <div class="overview-next-step">
-          <div class="overview-next-step-title">
-            {nextStep()?.title || t("overview.next_step")}
-          </div>
-          <Show when={nextStep()?.detail}>
-            <div
-              class="overview-next-step-detail md-content"
-              innerHTML={renderMarkdown(nextStep().detail)}
-            />
-          </Show>
-        </div>
-      </Show>
-      <Show when={failure()}>
-        <div class="interaction-alert task-failure-alert">
-          <div class="interaction-title">{failure()?.title}</div>
-          <div
-            class="interaction-body md-content"
-            innerHTML={renderMarkdown(failure()?.summary || "")}
-          />
-        </div>
-      </Show>
-    </Show>
-  );
-}
-
 // ── TaskActionsPanel ──
 
 interface TaskActionsPanelProps {
@@ -744,24 +695,14 @@ interface TaskActionsPanelProps {
 
 export function TaskActionsPanel(props: TaskActionsPanelProps) {
   const controls = createMemo(() => props.overview?.controls || {});
-  const failure = createMemo(() => props.overview?.currentFailure);
   const hasButtons = createMemo(
     () => controls().canRetry || controls().canReplan || controls().canCancel,
   );
-  const visible = createMemo(() => !!(hasButtons() || failure()));
+  const visible = createMemo(() => hasButtons());
 
   return (
     <Show when={visible()}>
       <div class="task-actions-bar">
-        <Show when={failure()}>
-          <div class="interaction-alert task-failure-alert">
-            <div class="interaction-title">{failure()!.title}</div>
-            <div
-              class="interaction-body md-content"
-              innerHTML={renderMarkdown(failure()!.summary || "")}
-            />
-          </div>
-        </Show>
         <Show when={hasButtons()}>
           <div class="task-actions-buttons">
             <Show when={controls().canRetry}>
@@ -1152,14 +1093,6 @@ export function Board(props: BoardProps) {
         <DeliveryPanel delivery={delivery()} />
       </SectionFrame>
 
-      <SectionFrame
-        id="overviewSection"
-        title={t("section.overview")}
-        icon={SECTION_ICONS.overview}
-        bodyId="overviewBody"
-      >
-        <OverviewPanel overview={overview()} />
-      </SectionFrame>
     </>
   );
 }
