@@ -74,72 +74,72 @@ export function MessageView(props: { message: any }) {
         </div>
         <div class="msg-bubble">
           <div class="msg-body">
-            <For each={parts()}>
-              {(part: any) => (
+            <Index each={parts()}>
+              {(part) => (
                 <Switch fallback={null}>
-                  <Match when={part.type === "text" && (part.text || "").trim()}>
-                    <TextPart text={part.text || ""} />
+                  <Match when={part().type === "text" && (part().text || "").trim()}>
+                    <TextPart text={part().text || ""} />
                   </Match>
-                  <Match when={part.type === "tool"}>
-                    <ToolPart part={part} />
+                  <Match when={part().type === "tool"}>
+                    <ToolPart part={part()} />
                   </Match>
-                  <Match when={part.type === "reasoning" && (part.text || "").trim()}>
-                    <ReasoningPart part={part} />
+                  <Match when={part().type === "reasoning" && (part().text || "").trim()}>
+                    <ReasoningPart part={part()} />
                   </Match>
-                  <Match when={part.type === "patch" && (part.files || []).length > 0}>
+                  <Match when={part().type === "patch" && (part().files || []).length > 0}>
                     <div class="msg-patch">
                       {"\u2699 " +
-                        (part.files || [])
+                        (part().files || [])
                           .map((f: string) => shortRelativePath(f, activeDirectory()))
                           .join(", ")}
                     </div>
                   </Match>
-                  <Match when={part.type === "file"}>
-                    <div innerHTML={renderFilePart(part)} />
+                  <Match when={part().type === "file"}>
+                    <div innerHTML={renderFilePart(part())} />
                   </Match>
-                  <Match when={part.type === "subtask"}>
+                  <Match when={part().type === "subtask"}>
                     <div class="msg-tool">
                       <span class="tool-icon">{"\u2192"}</span>
                       <span class="tool-name">Subtask</span>
-                      <span class="tool-detail">{part.description || part.prompt || ""}</span>
+                      <span class="tool-detail">{part().description || part().prompt || ""}</span>
                     </div>
                   </Match>
-                  <Match when={part.type === "executor_process" && part.process}>
+                  <Match when={part().type === "executor_process" && part().process}>
                     <div
                       class="executor-process-card"
-                      data-status={part.process.status || "running"}
-                      data-live={part.process.status === "running" ? "true" : "false"}
+                      data-status={part().process.status || "running"}
+                      data-live={part().process.status === "running" ? "true" : "false"}
                     >
                       <div class="executor-process-head">
                         <span class="executor-process-kind">
-                          {String(part.process.kind || "task")}
+                          {String(part().process.kind || "task")}
                         </span>
                         <div class="executor-process-meta">
                           <div class="executor-process-row">
                             <div class="executor-process-title">
-                              {part.process.title || part.process.id || ""}
+                              {part().process.title || part().process.id || ""}
                             </div>
                             <div
                               class="executor-process-status"
-                              data-status={part.process.status || "running"}
+                              data-status={part().process.status || "running"}
                             >
-                              {part.process.status || "running"}
+                              {part().process.status || "running"}
                             </div>
                           </div>
-                          <Show when={part.process.detail}>
-                            <div class="executor-process-detail">{part.process.detail}</div>
+                          <Show when={part().process.detail}>
+                            <div class="executor-process-detail">{part().process.detail}</div>
                           </Show>
-                          <Show when={part.process.progress}>
+                          <Show when={part().process.progress}>
                             <div class="executor-process-progress">
                               <span class="executor-process-activity" />
-                              <span>{part.process.progress}</span>
+                              <span>{part().process.progress}</span>
                             </div>
                           </Show>
-                          <Show when={part.process.note}>
-                            <div class="executor-process-note">{part.process.note}</div>
+                          <Show when={part().process.note}>
+                            <div class="executor-process-note">{part().process.note}</div>
                           </Show>
-                          <Show when={part.process.output}>
-                            <pre class="executor-process-output">{part.process.output}</pre>
+                          <Show when={part().process.output}>
+                            <pre class="executor-process-output">{part().process.output}</pre>
                           </Show>
                         </div>
                       </div>
@@ -147,7 +147,7 @@ export function MessageView(props: { message: any }) {
                   </Match>
                 </Switch>
               )}
-            </For>
+            </Index>
           </div>
         </div>
       </article>
