@@ -630,6 +630,9 @@ export function mergeExecutorProcessOutput(current: string, next: string, replac
 /**
  * Fold a list of executor events into a map of active processes.
  * Returns processes sorted by creation time.
+ * Process objects are rebuilt each call (not cached) because events may
+ * update output/status cumulatively. The MESSAGE-level cache in
+ * buildExecutorMessages handles DOM stability.
  */
 export function buildExecutorProcesses(events: ExecutorEvent[] = []): any[] {
   const items = new Map<string, any>();
@@ -696,9 +699,14 @@ export function executorProcessMessage(processes: any[]): any {
  * Build the full set of synthetic conversation messages for executor events.
  * Processes are grouped by goalRunID — each goal gets its own card/message.
  * Non-goal processes (serial mode) are grouped into a default card.
+ *
+ * IMPORTANT: message objects are CACHED by stable key so Solid's <For> can
+ * reuse DOM nodes. Only the `parts` array is replaced on updates.
  */
+const _msgCache = new Map<string, any>();
+
 export function buildExecutorMessages(): any[] {
-  if (!boardStore.selectedTaskID) return [];
+  if (!boardStore.selectedTaskID) { _msgCache.clear(); _processCache.clear(); return []; }
   const events = Array.isArray(executorStore.events) ? executorStore.events : [];
   const processes = buildExecutorProcesses(events);
   const processIDs = new Set(processes.map((item) => item.id));
@@ -711,26 +719,40 @@ export function buildExecutorMessages(): any[] {
     processGroups.get(key)!.push(process);
   }
 
-  // Create one synthetic message per goal (or one default for serial mode)
+  // Create or reuse message objects per goal (stable references for Solid)
   const goalMessages: any[] = [];
+  const activeKeys = new Set<string>();
   for (const [goalRunID, procs] of processGroups) {
     if (procs.length === 0) continue;
-    // Resolve goal title from board store
-    const goalTitle = goalRunID ? resolveGoalTitle(goalRunID) : undefined;
-    goalMessages.push({
-      _synthetic: true,
-      info: {
-        id: `executor:processes:${goalRunID || boardStore.selectedTaskID || "active"}`,
-        role: "executor",
-        goalRunID: goalRunID || undefined,
-        goalTitle,
-        time: { created: procs[0]?.time?.created || Date.now() },
-      },
-      parts: procs.map((process) => ({
-        type: "executor_process",
-        process,
-      })),
-    });
+    const msgKey = `executor:processes:${goalRunID || boardStore.selectedTaskID || "active"}`;
+    activeKeys.add(msgKey);
+    let msg = _msgCache.get(msgKey);
+    if (!msg) {
+      msg = {
+        _synthetic: true,
+        info: {
+          id: msgKey,
+          role: "executor",
+          goalRunID: goalRunID || undefined,
+          goalTitle: goalRunID ? resolveGoalTitle(goalRunID) : undefined,
+          time: { created: procs[0]?.time?.created || Date.now() },
+        },
+        parts: [],
+      };
+      _msgCache.set(msgKey, msg);
+    }
+    // Update parts in-place (new array ref so Solid detects the change)
+    msg.parts = procs.map((process) => ({
+      type: "executor_process",
+      process,
+    }));
+    // Update goal title (may resolve later when board data arrives)
+    if (goalRunID) msg.info.goalTitle = resolveGoalTitle(goalRunID);
+    goalMessages.push(msg);
+  }
+  // Prune stale cache entries
+  for (const key of _msgCache.keys()) {
+    if (!activeKeys.has(key)) _msgCache.delete(key);
   }
 
   // Non-process events as individual messages

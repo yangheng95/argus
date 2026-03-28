@@ -1,4 +1,4 @@
-import { For, Switch, Match, Show, createMemo } from "solid-js";
+import { For, Index, Switch, Match, Show, createMemo } from "solid-js";
 import { TextPart } from "./TextPart";
 import { ToolPart } from "./ToolPart";
 import { ReasoningPart } from "./ReasoningPart";
