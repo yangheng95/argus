@@ -74,6 +74,7 @@ import {
   type RunRow,
   type TaskRow,
 } from "./store"
+import { Snapshot } from "@/snapshot"
 import { Worktree } from "@/worktree"
 import { readyGoalNodes, pendingBlockingGoals, hasBlockingFailures } from "@/goal/scheduler"
 import { buildGoalPrompt, createGoalSession, applyGoalDelivery, cleanupGoalWorkspace } from "@/goal/runner"
@@ -655,10 +656,16 @@ export namespace OrchestratorRuntime {
       })
       worktreeDir = worktreeInfo.directory
 
-      // 2. Create goal session scoped to worktree
+      // 2. Capture base snapshot in the worktree context for delivery diff later
+      const baseRef = await Instance.provide({
+        directory: worktreeDir,
+        fn: () => Snapshot.track(),
+      }).catch(() => undefined)
+
+      // 3. Create goal session scoped to worktree
       const goalSession = await createGoalSession(task as any, entry.goal as any, worktreeDir)
 
-      // 3. Create GoalRun record
+      // 4. Create GoalRun record
       const goalRun = createGoalRun({
         taskID: task.id,
         goalID: entry.goal.id,
@@ -667,6 +674,7 @@ export namespace OrchestratorRuntime {
         sessionID: goalSession.id,
         executor: run.executor,
         workspaceDir: worktreeDir,
+        baseRef,
         metadata: {
           worktree_branch: worktreeInfo.branch,
         },
@@ -825,19 +833,29 @@ export namespace OrchestratorRuntime {
     stopEventBridge(goalRun.id) // Stop the per-goal event bridge (keyed by goalRunID)
     updateGoalRunExecutorSessionStatus(goalRun.id, "completed")
 
-    // 1. Extract delivery
-    const executor = ExecutorRegistry.require(run.executor)
+    // 1. Extract delivery by computing snapshot diff in the worktree context.
+    //    executor.delivery() uses global Snapshot which doesn't see worktree changes.
+    //    Instead, compute diff directly in the worktree using the baseRef captured at dispatch.
     let delivery: { summary: string; diffs: Array<{ file: string; [key: string]: unknown }> }
     try {
-      delivery = await Promise.race([
-        executor.delivery({
-          sessionID: goalRun.session_id!,
-          since: goalRun.time_started ?? goalRun.time_created,
-        }),
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error(`executor.delivery() timeout for goal run ${goalRun.id}`)), DELIVERY_FETCH_TIMEOUT_MS),
-        ),
-      ])
+      if (goalRun.workspace_dir) {
+        const { deliveryFromSnapshot } = await import("@/goal/runner")
+        const result = await Instance.provide({
+          directory: goalRun.workspace_dir,
+          fn: () => deliveryFromSnapshot(goalRun.base_ref ?? undefined, `Goal ${goalRun.goal_id?.slice(-8) ?? "unknown"}`),
+        })
+        delivery = result.delivery
+        if (result.mergeRef) {
+          updateGoalRun(goalRun.id, { merge_ref: result.mergeRef })
+        }
+      } else {
+        // No worktree — fall back to executor.delivery (serial mode)
+        const executor = ExecutorRegistry.require(run.executor)
+        delivery = await Promise.race([
+          executor.delivery({ sessionID: goalRun.session_id!, since: goalRun.time_started ?? goalRun.time_created }),
+          new Promise<never>((_, reject) => setTimeout(() => reject(new Error("executor.delivery() timeout")), DELIVERY_FETCH_TIMEOUT_MS)),
+        ])
+      }
     } catch (err) {
       log.error("goal delivery extraction failed", { goalRunID: goalRun.id, error: err instanceof Error ? err.message : String(err) })
       updateGoalRun(goalRun.id, { status: "failed", error: `Delivery extraction failed: ${err instanceof Error ? err.message : String(err)}`, time_completed: Date.now() })
@@ -846,12 +864,14 @@ export namespace OrchestratorRuntime {
       return
     }
 
+    log.info("goal delivery extracted", { goalRunID: goalRun.id, files: delivery.diffs.length })
+
     // 2. Persist delivery linked to goal run
     const deliveryID = Identifier.ascending("delivery")
     persistDelivery({ task, run, goalRunID: goalRun.id, deliveryID, delivery, now: Date.now() })
 
-    // 3. Merge worktree to main workspace via git
-    if (goalRun.workspace_dir) {
+    // 3. Merge worktree changes to main workspace
+    if (goalRun.workspace_dir && delivery.diffs.length > 0) {
       try {
         await applyGoalDelivery({
           directory: Instance.directory,
