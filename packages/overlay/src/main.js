@@ -721,12 +721,7 @@ function className(node, value) {
   if (value == null) node.removeAttribute("class");else node.className = value;
 }
 function addEventListener(node, name, handler, delegate) {
-  if (delegate) {
-    if (Array.isArray(handler)) {
-      node[`$$${name}`] = handler[0];
-      node[`$$${name}Data`] = handler[1];
-    } else node[`$$${name}`] = handler;
-  } else if (Array.isArray(handler)) {
+  if (Array.isArray(handler)) {
     const handlerFn = handler[0];
     node.addEventListener(name, handler[0] = e => handlerFn.call(node, handler[1], e));
   } else node.addEventListener(name, handler, typeof handler !== "function" && handler);
@@ -1894,6 +1889,19 @@ function rootTaskSessionID$2() {
   const sessionID = boardStore.board?.task?.sessionID;
   return typeof sessionID === "string" ? sessionID : "";
 }
+function goalSessionIDs$1() {
+  const sections = boardStore.board?.sections;
+  if (!Array.isArray(sections)) return new Set();
+  const ids = new Set();
+  for (const section of sections) {
+    if (section?.id !== "goals") continue;
+    for (const card of section.cards || []) {
+      const sid = card?.metadata?.sessionID;
+      if (typeof sid === "string" && sid) ids.add(sid);
+    }
+  }
+  return ids;
+}
 function activeDirectory$2() {
   return boardStore.board?.task?.directory ?? "";
 }
@@ -1974,7 +1982,7 @@ function toggleToolOutputExpanded(partID) {
   setStore$2("expandedToolOutputs", partID, (value) => value !== true);
 }
 
-var _tmpl$$j = /* @__PURE__ */ template(`<span class=tool-detail>`), _tmpl$2$g = /* @__PURE__ */ template(`<div class=msg-tool><span class=tool-icon></span><span class=tool-name></span><span class=tool-status>`), _tmpl$3$f = /* @__PURE__ */ template(`<div class=msg-tool-input>`), _tmpl$4$f = /* @__PURE__ */ template(`<div class=msg-tool-output>`), _tmpl$5$f = /* @__PURE__ */ template(`<div class=msg-tool-error>`);
+var _tmpl$$j = /* @__PURE__ */ template(`<span class=tool-detail>`), _tmpl$2$h = /* @__PURE__ */ template(`<div class=msg-tool><span class=tool-icon></span><span class=tool-name></span><span class=tool-status>`), _tmpl$3$g = /* @__PURE__ */ template(`<div class=msg-tool-input>`), _tmpl$4$g = /* @__PURE__ */ template(`<div class=msg-tool-output>`), _tmpl$5$g = /* @__PURE__ */ template(`<div class=msg-tool-error>`);
 function ToolPart(props) {
   const state = () => props.part.state || {};
   const status = () => state().status || "pending";
@@ -1995,7 +2003,7 @@ function ToolPart(props) {
   const error = () => stripAnsi$1(state().error || "") || output();
   const expanded = () => toolOutputExpanded(props.part?.id || "");
   return [(() => {
-    var _el$ = _tmpl$2$g(), _el$2 = _el$.firstChild, _el$3 = _el$2.nextSibling, _el$5 = _el$3.nextSibling;
+    var _el$ = _tmpl$2$h(), _el$2 = _el$.firstChild, _el$3 = _el$2.nextSibling, _el$5 = _el$3.nextSibling;
     insert(_el$2, icon);
     insert(_el$3, toolName);
     insert(_el$, createComponent(Show, {
@@ -2024,7 +2032,7 @@ function ToolPart(props) {
       return memo(() => status() === "pending")() && raw();
     },
     get children() {
-      var _el$6 = _tmpl$3$f();
+      var _el$6 = _tmpl$3$g();
       insert(_el$6, raw);
       return _el$6;
     }
@@ -2033,7 +2041,7 @@ function ToolPart(props) {
       return memo(() => status() === "completed")() && output();
     },
     get children() {
-      var _el$7 = _tmpl$4$f();
+      var _el$7 = _tmpl$4$g();
       _el$7.$$click = () => toggleToolOutputExpanded(props.part?.id || "");
       insert(_el$7, output);
       createRenderEffect(() => _el$7.classList.toggle("msg-tool-output--expanded", !!expanded()));
@@ -2044,7 +2052,7 @@ function ToolPart(props) {
       return memo(() => status() === "error")() && error();
     },
     get children() {
-      var _el$8 = _tmpl$5$f();
+      var _el$8 = _tmpl$5$g();
       insert(_el$8, error);
       return _el$8;
     }
@@ -2107,7 +2115,7 @@ function touchReasoningPart$1(part) {
   }
 }
 
-var _tmpl$$i = /* @__PURE__ */ template(`<div class=reasoning-text>`), _tmpl$2$f = /* @__PURE__ */ template(`<div class=msg-reasoning><div class=reasoning-label> `);
+var _tmpl$$i = /* @__PURE__ */ template(`<div class=reasoning-text>`), _tmpl$2$g = /* @__PURE__ */ template(`<div class=msg-reasoning><div class=reasoning-label> `);
 function ReasoningPart(props) {
   const [expanded, setExpanded] = createSignal(true);
   const text = () => String(props.part?.text || "");
@@ -2121,7 +2129,7 @@ function ReasoningPart(props) {
       return memo(() => !!text().trim())() && !hidden();
     },
     get children() {
-      var _el$ = _tmpl$2$f(), _el$2 = _el$.firstChild, _el$3 = _el$2.firstChild;
+      var _el$ = _tmpl$2$g(), _el$2 = _el$.firstChild, _el$3 = _el$2.firstChild;
       _el$2.$$click = () => setExpanded(!expanded());
       insert(_el$2, label, _el$3);
       insert(_el$2, () => expanded() ? "▼" : "▶", null);
@@ -2141,79 +2149,145 @@ function ReasoningPart(props) {
 }
 delegateEvents(["click"]);
 
-var _tmpl$$h = /* @__PURE__ */ template(`<div class=executor-process-output>`);
-function splitOutput(text) {
-  const normalized = String(text || "").replace(/\r\n?/g, "\n");
-  const lines = normalized.split("\n");
-  return {
-    frozenLines: lines.slice(0, -1),
-    activeLine: lines.at(-1) ?? ""
-  };
+var _tmpl$$h = /* @__PURE__ */ template(`<span class=executor-goal-badge>`), _tmpl$2$f = /* @__PURE__ */ template(`<div class=executor-goal-body>`), _tmpl$3$f = /* @__PURE__ */ template(`<div class=executor-goal-block><div class=executor-goal-header role=button tabindex=0><span class=executor-goal-label></span><span class=executor-goal-count>/</span><span class=executor-goal-chevron aria-hidden=true>▼`), _tmpl$4$f = /* @__PURE__ */ template(`<span class="executor-goal-badge executor-goal-badge--running"><span class=agent-card-spinner>`), _tmpl$5$f = /* @__PURE__ */ template(`<span class=executor-tool-detail>`), _tmpl$6$c = /* @__PURE__ */ template(`<span class=executor-tool-progress>`), _tmpl$7$a = /* @__PURE__ */ template(`<pre class=executor-tool-output>`), _tmpl$8$7 = /* @__PURE__ */ template(`<div class=executor-tool-entry><div class=executor-tool-item><span class=executor-tool-icon></span><span class=executor-tool-name></span><span class=executor-tool-status>`);
+function tailLines(text, maxLines = 6) {
+  const lines = text.split("\n");
+  if (lines.length <= maxLines) return text;
+  return lines.slice(-maxLines).join("\n");
 }
-function lineText(text) {
-  return text.length > 0 ? text : " ";
-}
-function ExecutorProcessOutput(props) {
-  let containerRef;
-  const frozenNodes = /* @__PURE__ */ new Map();
-  let activeEl = null;
-  let prevFrozenCount = 0;
-  let prevText = "";
-  function reset(container) {
-    container.textContent = "";
-    frozenNodes.clear();
-    activeEl = null;
-    prevFrozenCount = 0;
-    prevText = "";
-  }
-  createEffect(() => {
-    const container = containerRef;
-    if (!container) return;
-    const text = String(props.text || "").replace(/\r\n?/g, "\n");
-    if (!text) {
-      reset(container);
-      return;
-    }
-    if (prevText && !text.startsWith(prevText)) {
-      reset(container);
-    }
-    const {
-      frozenLines,
-      activeLine
-    } = splitOutput(text);
-    for (let index = prevFrozenCount; index < frozenLines.length; index += 1) {
-      const node = document.createElement("div");
-      node.className = "executor-process-output-line";
-      node.textContent = lineText(frozenLines[index] || "");
-      frozenNodes.set(index, node);
-      if (activeEl && activeEl.parentNode === container) {
-        container.insertBefore(node, activeEl);
-      } else {
-        container.appendChild(node);
-      }
-    }
-    if (!activeEl) {
-      activeEl = document.createElement("div");
-      activeEl.className = "executor-process-output-line executor-process-output-line--active";
-      container.appendChild(activeEl);
-    }
-    activeEl.textContent = lineText(activeLine);
-    prevFrozenCount = frozenLines.length;
-    prevText = text;
+function ExecutorGoalBlock(props) {
+  const blockID = () => `executor:${props.goalRunID || "default"}`;
+  const overallStatus = createMemo(() => {
+    const procs = props.processes;
+    if (procs.some((p) => p.status === "running")) return "running";
+    if (procs.some((p) => p.status === "failed")) return "failed";
+    if (procs.some((p) => p.status === "blocked")) return "blocked";
+    if (procs.every((p) => p.status === "completed")) return "completed";
+    return "running";
   });
-  onCleanup(() => {
-    frozenNodes.clear();
-    activeEl = null;
-    prevFrozenCount = 0;
-    prevText = "";
-  });
+  const isRunning = () => overallStatus() === "running";
+  const expanded = () => agentCardExpanded(blockID(), isRunning());
+  const toggle = () => toggleAgentCardExpanded(blockID(), isRunning());
+  const completedCount = createMemo(() => props.processes.filter((p) => p.status === "completed").length);
+  const headerLabel = () => props.goalTitle || (props.goalRunID ? `Goal ${props.goalRunID.slice(-8)}` : t("chat.role.executor"));
   return (() => {
-    var _el$ = _tmpl$$h();
-    var _ref$ = containerRef;
-    typeof _ref$ === "function" ? use(_ref$, _el$) : containerRef = _el$;
+    var _el$ = _tmpl$3$f(), _el$2 = _el$.firstChild, _el$4 = _el$2.firstChild, _el$5 = _el$4.nextSibling, _el$6 = _el$5.firstChild;
+    _el$2.$$click = toggle;
+    insert(_el$2, createComponent(Show, {
+      get when() {
+        return !isRunning();
+      },
+      get fallback() {
+        return _tmpl$4$f();
+      },
+      get children() {
+        var _el$3 = _tmpl$$h();
+        insert(_el$3, () => overallStatus() === "completed" ? "✓" : "✗");
+        createRenderEffect((_p$) => {
+          var _v$ = !!(overallStatus() === "completed"), _v$2 = !!(overallStatus() === "failed" || overallStatus() === "blocked");
+          _v$ !== _p$.e && _el$3.classList.toggle("executor-goal-badge--done", _p$.e = _v$);
+          _v$2 !== _p$.t && _el$3.classList.toggle("executor-goal-badge--error", _p$.t = _v$2);
+          return _p$;
+        }, {
+          e: void 0,
+          t: void 0
+        });
+        return _el$3;
+      }
+    }), _el$4);
+    insert(_el$4, headerLabel);
+    insert(_el$5, completedCount, _el$6);
+    insert(_el$5, () => props.processes.length, null);
+    insert(_el$, createComponent(Show, {
+      get when() {
+        return expanded();
+      },
+      get children() {
+        var _el$7 = _tmpl$2$f();
+        insert(_el$7, createComponent(Index, {
+          get each() {
+            return props.processes;
+          },
+          children: (proc) => {
+            const output = () => {
+              const text = (proc().output || "").trim();
+              if (!text) return "";
+              return proc().status === "running" ? tailLines(text, 6) : tailLines(text, 3);
+            };
+            const progress = () => {
+              const text = (proc().progress || "").trim();
+              if (!text || text === t("task.status.running") || text === t("task.status.completed")) return "";
+              return text;
+            };
+            return (() => {
+              var _el$9 = _tmpl$8$7(), _el$0 = _el$9.firstChild, _el$1 = _el$0.firstChild, _el$10 = _el$1.nextSibling, _el$13 = _el$10.nextSibling;
+              insert(_el$1, () => displayToolIcon(proc().toolName || proc().title || ""));
+              insert(_el$10, () => proc().toolName || proc().title || "task");
+              insert(_el$0, createComponent(Show, {
+                get when() {
+                  return proc().toolDetail;
+                },
+                get children() {
+                  var _el$11 = _tmpl$5$f();
+                  insert(_el$11, () => proc().toolDetail);
+                  return _el$11;
+                }
+              }), _el$13);
+              insert(_el$0, createComponent(Show, {
+                get when() {
+                  return progress();
+                },
+                get children() {
+                  var _el$12 = _tmpl$6$c();
+                  insert(_el$12, progress);
+                  return _el$12;
+                }
+              }), _el$13);
+              insert(_el$13, (() => {
+                var _c$ = memo(() => proc().status === "completed");
+                return () => _c$() ? "✓" : memo(() => proc().status === "failed")() ? "✗" : proc().status === "running" ? "•" : "–";
+              })());
+              insert(_el$9, createComponent(Show, {
+                get when() {
+                  return output();
+                },
+                get children() {
+                  var _el$14 = _tmpl$7$a();
+                  insert(_el$14, output);
+                  return _el$14;
+                }
+              }), null);
+              createRenderEffect((_p$) => {
+                var _v$5 = proc().status || "running", _v$6 = proc().status === "running" ? "true" : "false", _v$7 = proc().status || "running";
+                _v$5 !== _p$.e && setAttribute(_el$9, "data-status", _p$.e = _v$5);
+                _v$6 !== _p$.t && setAttribute(_el$9, "data-live", _p$.t = _v$6);
+                _v$7 !== _p$.a && setAttribute(_el$13, "data-status", _p$.a = _v$7);
+                return _p$;
+              }, {
+                e: void 0,
+                t: void 0,
+                a: void 0
+              });
+              return _el$9;
+            })();
+          }
+        }));
+        return _el$7;
+      }
+    }), null);
+    createRenderEffect((_p$) => {
+      var _v$3 = !!expanded(), _v$4 = overallStatus();
+      _v$3 !== _p$.e && _el$.classList.toggle("executor-goal-block--expanded", _p$.e = _v$3);
+      _v$4 !== _p$.t && setAttribute(_el$, "data-status", _p$.t = _v$4);
+      return _p$;
+    }, {
+      e: void 0,
+      t: void 0
+    });
     return _el$;
   })();
 }
+delegateEvents(["click"]);
 
 function escapeHtml$1(str) {
   if (!str) return "";
@@ -2309,15 +2383,19 @@ function agentStageLabel(stage) {
   if (stage === "delivery") return t("chat.role.delivery");
   return t("chat.role.message");
 }
-function effectiveRole$1(msg, rootSessionID) {
+function effectiveRole$1(msg, rootSessionID, goalSessionIDs) {
   const role = msg.info?.role || "assistant";
   if (role !== "user") {
     if (role === "assistant" && rootSessionID && !msg._synthetic) {
       const sessionID2 = typeof msg.info?.sessionID === "string" ? msg.info.sessionID : "";
       if (sessionID2 && sessionID2 !== rootSessionID) {
-        const agent = String(msg.info?.agent || "").trim().toLowerCase();
-        if (!agent || agent === "executor" || agent === "coding") {
-          return "executor";
+        if (goalSessionIDs && goalSessionIDs.size > 0) {
+          if (goalSessionIDs.has(sessionID2)) return "executor";
+        } else {
+          const agent = String(msg.info?.agent || "").trim().toLowerCase();
+          if (!agent || agent === "build" || agent === "executor" || agent === "coding") {
+            return "executor";
+          }
         }
       }
     }
@@ -2343,8 +2421,16 @@ function stamp(ts) {
   const d = new Date(ts);
   return d.toLocaleTimeString(localeTag(), timeLocaleOptions());
 }
+function formatDuration(ms) {
+  const s = Math.floor(ms / 1e3);
+  const m = Math.floor(s / 60);
+  const h = Math.floor(m / 60);
+  if (h > 0) return t("time.duration.hour_minute", { hours: h, minutes: m % 60 });
+  if (m > 0) return t("time.duration.minute_second", { minutes: m, seconds: s % 60 });
+  return t("time.duration.second", { seconds: s });
+}
 
-var _tmpl$$g = /* @__PURE__ */ template(`<span class="msg-role goal-executor-label">`), _tmpl$2$e = /* @__PURE__ */ template(`<span class=msg-head-toggle aria-hidden=true>`), _tmpl$3$e = /* @__PURE__ */ template(`<div class=msg-bubble><div class=msg-body>`), _tmpl$4$e = /* @__PURE__ */ template(`<article class="turn msg"><div><span class=msg-time>`), _tmpl$5$e = /* @__PURE__ */ template(`<span class=msg-role>`), _tmpl$6$c = /* @__PURE__ */ template(`<div class=msg-patch>`), _tmpl$7$a = /* @__PURE__ */ template(`<div>`), _tmpl$8$8 = /* @__PURE__ */ template(`<div class=msg-tool><span class=tool-icon>→</span><span class=tool-name>Subtask</span><span class=tool-detail>`), _tmpl$9$7 = /* @__PURE__ */ template(`<div class=executor-process-detail>`), _tmpl$0$5 = /* @__PURE__ */ template(`<div class=executor-process-progress><span class=executor-process-activity></span><span>`), _tmpl$1$4 = /* @__PURE__ */ template(`<div class=executor-process-note>`), _tmpl$10$4 = /* @__PURE__ */ template(`<div class=executor-process-card><div class=executor-process-head><span class=executor-process-kind></span><div class=executor-process-meta><div class=executor-process-row><div class=executor-process-title></div><div class=executor-process-status>`);
+var _tmpl$$g = /* @__PURE__ */ template(`<article class="turn msg"data-executor-type=process>`), _tmpl$2$e = /* @__PURE__ */ template(`<article class="turn msg"><div class=msg-head><span class=msg-role></span><span class=msg-time></span></div><div class=msg-bubble><div class=msg-body>`), _tmpl$3$e = /* @__PURE__ */ template(`<div class=msg-patch>`), _tmpl$4$e = /* @__PURE__ */ template(`<div>`), _tmpl$5$e = /* @__PURE__ */ template(`<div class=msg-tool><span class=tool-icon>→</span><span class=tool-name>Subtask</span><span class=tool-detail>`);
 function renderFilePart(part) {
   const url = part.url || part.filename || "";
   const name = part.filename || url || "file";
@@ -2356,7 +2442,7 @@ function renderFilePart(part) {
   return `<div class="msg-text" style="font-family:var(--mono);font-size:var(--ui-font-small);color:var(--text-soft)">${escapeHtml$2(name)}</div>`;
 }
 function MessageView(props) {
-  const role = () => effectiveRole$1(props.message, rootTaskSessionID$2());
+  const role = () => effectiveRole$1(props.message, rootTaskSessionID$2(), goalSessionIDs$1());
   const parts = () => orderedMessageParts(props.message);
   const time = () => stamp(props.message.info?.time?.created);
   const executorType = createMemo(() => {
@@ -2381,208 +2467,129 @@ function MessageView(props) {
   const goalRunID = () => props.message?.info?.goalRunID;
   const goalTitle = () => props.message?.info?.goalTitle;
   const isExecutorProcess = () => executorType() === "process";
-  const [collapsed, setCollapsed] = createSignal(false);
+  const executorProcesses = createMemo(() => {
+    if (!isExecutorProcess()) return [];
+    return parts().map((p) => p.process).filter(Boolean);
+  });
   return createComponent(Show, {
     get when() {
       return hasContent();
     },
     get children() {
-      var _el$ = _tmpl$4$e(), _el$2 = _el$.firstChild, _el$5 = _el$2.firstChild;
-      addEventListener(_el$2, "click", isExecutorProcess() ? () => setCollapsed((c) => !c) : void 0, true);
-      insert(_el$2, createComponent(Show, {
-        get when() {
-          return goalRunID();
-        },
-        get fallback() {
-          return (() => {
-            var _el$8 = _tmpl$5$e();
-            insert(_el$8, () => roleLabel(role()));
-            return _el$8;
-          })();
-        },
-        get children() {
-          var _el$3 = _tmpl$$g();
-          insert(_el$3, () => goalTitle() || `Goal ${goalRunID().slice(-8)}`);
-          return _el$3;
-        }
-      }), _el$5);
-      insert(_el$2, createComponent(Show, {
+      return createComponent(Show, {
         get when() {
           return isExecutorProcess();
         },
-        get children() {
-          var _el$4 = _tmpl$2$e();
-          insert(_el$4, () => collapsed() ? "▶" : "▼");
-          return _el$4;
-        }
-      }), _el$5);
-      insert(_el$5, time);
-      insert(_el$, createComponent(Show, {
-        get when() {
-          return !collapsed();
+        get fallback() {
+          return (() => {
+            var _el$2 = _tmpl$2$e(), _el$3 = _el$2.firstChild, _el$4 = _el$3.firstChild, _el$5 = _el$4.nextSibling, _el$6 = _el$3.nextSibling, _el$7 = _el$6.firstChild;
+            insert(_el$4, () => roleLabel(role()));
+            insert(_el$5, time);
+            insert(_el$7, createComponent(Index, {
+              get each() {
+                return parts();
+              },
+              children: (part) => createComponent(Switch, {
+                fallback: null,
+                get children() {
+                  return [createComponent(Match, {
+                    get when() {
+                      return memo(() => part().type === "text")() && (part().text || "").trim();
+                    },
+                    get children() {
+                      return createComponent(TextPart, {
+                        get text() {
+                          return part().text || "";
+                        }
+                      });
+                    }
+                  }), createComponent(Match, {
+                    get when() {
+                      return part().type === "tool";
+                    },
+                    get children() {
+                      return createComponent(ToolPart, {
+                        get part() {
+                          return part();
+                        }
+                      });
+                    }
+                  }), createComponent(Match, {
+                    get when() {
+                      return memo(() => part().type === "reasoning")() && (part().text || "").trim();
+                    },
+                    get children() {
+                      return createComponent(ReasoningPart, {
+                        get part() {
+                          return part();
+                        }
+                      });
+                    }
+                  }), createComponent(Match, {
+                    get when() {
+                      return memo(() => part().type === "patch")() && (part().files || []).length > 0;
+                    },
+                    get children() {
+                      var _el$8 = _tmpl$3$e();
+                      insert(_el$8, () => "⚙ " + (part().files || []).map((f) => shortRelativePath(f, activeDirectory$2())).join(", "));
+                      return _el$8;
+                    }
+                  }), createComponent(Match, {
+                    get when() {
+                      return part().type === "file";
+                    },
+                    get children() {
+                      var _el$9 = _tmpl$4$e();
+                      createRenderEffect(() => _el$9.innerHTML = renderFilePart(part()));
+                      return _el$9;
+                    }
+                  }), createComponent(Match, {
+                    get when() {
+                      return part().type === "subtask";
+                    },
+                    get children() {
+                      var _el$0 = _tmpl$5$e(), _el$1 = _el$0.firstChild, _el$10 = _el$1.nextSibling, _el$11 = _el$10.nextSibling;
+                      insert(_el$11, () => part().description || part().prompt || "");
+                      return _el$0;
+                    }
+                  })];
+                }
+              })
+            }));
+            createRenderEffect((_p$) => {
+              var _v$ = role(), _v$2 = executorType();
+              _v$ !== _p$.e && setAttribute(_el$2, "data-role", _p$.e = _v$);
+              _v$2 !== _p$.t && setAttribute(_el$2, "data-executor-type", _p$.t = _v$2);
+              return _p$;
+            }, {
+              e: void 0,
+              t: void 0
+            });
+            return _el$2;
+          })();
         },
         get children() {
-          var _el$6 = _tmpl$3$e(), _el$7 = _el$6.firstChild;
-          insert(_el$7, createComponent(Index, {
-            get each() {
-              return parts();
+          var _el$ = _tmpl$$g();
+          insert(_el$, createComponent(ExecutorGoalBlock, {
+            get processes() {
+              return executorProcesses();
             },
-            children: (part) => createComponent(Switch, {
-              fallback: null,
-              get children() {
-                return [createComponent(Match, {
-                  get when() {
-                    return memo(() => part().type === "text")() && (part().text || "").trim();
-                  },
-                  get children() {
-                    return createComponent(TextPart, {
-                      get text() {
-                        return part().text || "";
-                      }
-                    });
-                  }
-                }), createComponent(Match, {
-                  get when() {
-                    return part().type === "tool";
-                  },
-                  get children() {
-                    return createComponent(ToolPart, {
-                      get part() {
-                        return part();
-                      }
-                    });
-                  }
-                }), createComponent(Match, {
-                  get when() {
-                    return memo(() => part().type === "reasoning")() && (part().text || "").trim();
-                  },
-                  get children() {
-                    return createComponent(ReasoningPart, {
-                      get part() {
-                        return part();
-                      }
-                    });
-                  }
-                }), createComponent(Match, {
-                  get when() {
-                    return memo(() => part().type === "patch")() && (part().files || []).length > 0;
-                  },
-                  get children() {
-                    var _el$9 = _tmpl$6$c();
-                    insert(_el$9, () => "⚙ " + (part().files || []).map((f) => shortRelativePath(f, activeDirectory$2())).join(", "));
-                    return _el$9;
-                  }
-                }), createComponent(Match, {
-                  get when() {
-                    return part().type === "file";
-                  },
-                  get children() {
-                    var _el$0 = _tmpl$7$a();
-                    createRenderEffect(() => _el$0.innerHTML = renderFilePart(part()));
-                    return _el$0;
-                  }
-                }), createComponent(Match, {
-                  get when() {
-                    return part().type === "subtask";
-                  },
-                  get children() {
-                    var _el$1 = _tmpl$8$8(), _el$10 = _el$1.firstChild, _el$11 = _el$10.nextSibling, _el$12 = _el$11.nextSibling;
-                    insert(_el$12, () => part().description || part().prompt || "");
-                    return _el$1;
-                  }
-                }), createComponent(Match, {
-                  get when() {
-                    return memo(() => part().type === "executor_process")() && part().process;
-                  },
-                  get children() {
-                    var _el$13 = _tmpl$10$4(), _el$14 = _el$13.firstChild, _el$15 = _el$14.firstChild, _el$16 = _el$15.nextSibling, _el$17 = _el$16.firstChild, _el$18 = _el$17.firstChild, _el$19 = _el$18.nextSibling;
-                    insert(_el$15, () => String(part().process.kind || "task"));
-                    insert(_el$18, () => part().process.title || part().process.id || "");
-                    insert(_el$19, () => part().process.status || "running");
-                    insert(_el$16, createComponent(Show, {
-                      get when() {
-                        return part().process.detail;
-                      },
-                      get children() {
-                        var _el$20 = _tmpl$9$7();
-                        insert(_el$20, () => part().process.detail);
-                        return _el$20;
-                      }
-                    }), null);
-                    insert(_el$16, createComponent(Show, {
-                      get when() {
-                        return part().process.progress;
-                      },
-                      get children() {
-                        var _el$21 = _tmpl$0$5(), _el$22 = _el$21.firstChild, _el$23 = _el$22.nextSibling;
-                        insert(_el$23, () => part().process.progress);
-                        return _el$21;
-                      }
-                    }), null);
-                    insert(_el$16, createComponent(Show, {
-                      get when() {
-                        return part().process.note;
-                      },
-                      get children() {
-                        var _el$24 = _tmpl$1$4();
-                        insert(_el$24, () => part().process.note);
-                        return _el$24;
-                      }
-                    }), null);
-                    insert(_el$16, createComponent(Show, {
-                      get when() {
-                        return part().process.output;
-                      },
-                      get children() {
-                        return createComponent(ExecutorProcessOutput, {
-                          get text() {
-                            return part().process.output;
-                          }
-                        });
-                      }
-                    }), null);
-                    createRenderEffect((_p$) => {
-                      var _v$6 = part().process.status || "running", _v$7 = part().process.status === "running" ? "true" : "false", _v$8 = part().process.status || "running";
-                      _v$6 !== _p$.e && setAttribute(_el$13, "data-status", _p$.e = _v$6);
-                      _v$7 !== _p$.t && setAttribute(_el$13, "data-live", _p$.t = _v$7);
-                      _v$8 !== _p$.a && setAttribute(_el$19, "data-status", _p$.a = _v$8);
-                      return _p$;
-                    }, {
-                      e: void 0,
-                      t: void 0,
-                      a: void 0
-                    });
-                    return _el$13;
-                  }
-                })];
-              }
-            })
+            get goalRunID() {
+              return goalRunID();
+            },
+            get goalTitle() {
+              return goalTitle();
+            }
           }));
-          return _el$6;
+          createRenderEffect(() => setAttribute(_el$, "data-role", role()));
+          return _el$;
         }
-      }), null);
-      createRenderEffect((_p$) => {
-        var _v$ = role(), _v$2 = executorType(), _v$3 = goalRunID() || void 0, _v$4 = collapsed() ? "true" : void 0, _v$5 = `msg-head${isExecutorProcess() ? " msg-head-collapsible" : ""}`;
-        _v$ !== _p$.e && setAttribute(_el$, "data-role", _p$.e = _v$);
-        _v$2 !== _p$.t && setAttribute(_el$, "data-executor-type", _p$.t = _v$2);
-        _v$3 !== _p$.a && setAttribute(_el$, "data-goal-run", _p$.a = _v$3);
-        _v$4 !== _p$.o && setAttribute(_el$, "data-collapsed", _p$.o = _v$4);
-        _v$5 !== _p$.i && className(_el$2, _p$.i = _v$5);
-        return _p$;
-      }, {
-        e: void 0,
-        t: void 0,
-        a: void 0,
-        o: void 0,
-        i: void 0
       });
-      return _el$;
     }
   });
 }
-delegateEvents(["click"]);
 
-var _tmpl$$f = /* @__PURE__ */ template(`<span class="agent-card-badge agent-card-badge--done"title=Completed>✓`), _tmpl$2$d = /* @__PURE__ */ template(`<div class="agent-card-summary-content md-content">`), _tmpl$3$d = /* @__PURE__ */ template(`<span class=plan-version>v`), _tmpl$4$d = /* @__PURE__ */ template(`<div class=agent-card-summary-plan><div class="agent-card-summary-content md-content">`), _tmpl$5$d = /* @__PURE__ */ template(`<div class=goals-list>`), _tmpl$6$b = /* @__PURE__ */ template(`<span class=section-badge>`), _tmpl$7$9 = /* @__PURE__ */ template(`<div class=agent-card-summary-checks>`), _tmpl$8$7 = /* @__PURE__ */ template(`<div class=agent-card-summary-eval>`), _tmpl$9$6 = /* @__PURE__ */ template(`<div class=agent-card-summary>`), _tmpl$0$4 = /* @__PURE__ */ template(`<hr class=agent-card-summary-divider>`), _tmpl$1$3 = /* @__PURE__ */ template(`<article class="turn msg agent-card"data-role=agent-card><div class=agent-card-header role=button tabindex=0><span class=agent-card-label></span><span class=agent-card-count></span><span class=agent-card-chevron aria-hidden=true>▼</span></div><div class=agent-card-body>`), _tmpl$10$3 = /* @__PURE__ */ template(`<span class="agent-card-badge agent-card-badge--running"title=Running><span class=agent-card-spinner>`), _tmpl$11$2 = /* @__PURE__ */ template(`<span class="agent-card-badge agent-card-badge--error"title=Error>✗`), _tmpl$12$2 = /* @__PURE__ */ template(`<div class="goal-criteria md-content">`), _tmpl$13$2 = /* @__PURE__ */ template(`<span class=goal-priority>`), _tmpl$14$2 = /* @__PURE__ */ template(`<div class="goal-item agent-card-summary-goal"><span class=goal-status-icon></span><div class=goal-content><div class="goal-desc md-content">`), _tmpl$15$2 = /* @__PURE__ */ template(`<span class=agent-card-summary-check><span class=agent-card-summary-check-icon>`);
+var _tmpl$$f = /* @__PURE__ */ template(`<span class="agent-card-badge agent-card-badge--done"title=Completed>✓`), _tmpl$2$d = /* @__PURE__ */ template(`<div class="agent-card-summary-content md-content">`), _tmpl$3$d = /* @__PURE__ */ template(`<span class=plan-version>v`), _tmpl$4$d = /* @__PURE__ */ template(`<div class=agent-card-summary-plan><div class="agent-card-summary-content md-content">`), _tmpl$5$d = /* @__PURE__ */ template(`<div class=goals-list>`), _tmpl$6$b = /* @__PURE__ */ template(`<span class=section-badge>`), _tmpl$7$9 = /* @__PURE__ */ template(`<div class=agent-card-summary-checks>`), _tmpl$8$6 = /* @__PURE__ */ template(`<div class=agent-card-summary-eval>`), _tmpl$9$6 = /* @__PURE__ */ template(`<div class=agent-card-summary>`), _tmpl$0$4 = /* @__PURE__ */ template(`<hr class=agent-card-summary-divider>`), _tmpl$1$3 = /* @__PURE__ */ template(`<article class="turn msg agent-card"data-role=agent-card><div class=agent-card-header role=button tabindex=0><span class=agent-card-label></span><span class=agent-card-count></span><span class=agent-card-chevron aria-hidden=true>▼</span></div><div class=agent-card-body>`), _tmpl$10$3 = /* @__PURE__ */ template(`<span class="agent-card-badge agent-card-badge--running"title=Running><span class=agent-card-spinner>`), _tmpl$11$2 = /* @__PURE__ */ template(`<span class="agent-card-badge agent-card-badge--error"title=Error>✗`), _tmpl$12$2 = /* @__PURE__ */ template(`<div class="goal-criteria md-content">`), _tmpl$13$2 = /* @__PURE__ */ template(`<span class=goal-priority>`), _tmpl$14$2 = /* @__PURE__ */ template(`<div class="goal-item agent-card-summary-goal"><span class=goal-status-icon></span><div class=goal-content><div class="goal-desc md-content">`), _tmpl$15$2 = /* @__PURE__ */ template(`<span class=agent-card-summary-check><span class=agent-card-summary-check-icon>`);
 function stageLabel(stage) {
   return agentStageLabel(stage);
 }
@@ -2792,7 +2799,7 @@ function AgentCard(props) {
               return memo(() => props.stage === "judge")() && evaluationData();
             },
             get children() {
-              var _el$12 = _tmpl$8$7();
+              var _el$12 = _tmpl$8$6();
               insert(_el$12, createComponent(Show, {
                 get when() {
                   return evaluationData().verdict;
@@ -3315,6 +3322,14 @@ function eventToolPart(event, options = {}) {
     }
   };
 }
+function executorToolDetail(event, base = "") {
+  const name = eventToolName(event);
+  const input = toolStateInput(
+    event?.payload?.input ?? event?.payload?.arguments ?? event?.payload?.args ?? "",
+    ""
+  );
+  return displayToolDetail(name, input, {}, base);
+}
 function executorEventKind$1(type) {
   const text = String(type || "").trim().toLowerCase();
   if (!text) return "status";
@@ -3344,23 +3359,36 @@ function executorEventSourceKind(kind, payload = {}) {
   return "status";
 }
 const EXECUTOR_NOISE_TYPES = /* @__PURE__ */ new Set([
-  "message.updated",
-  "message.part.updated",
-  "message.part.delta",
   "protocol.raw",
   "executor.status",
   "executor.progress",
   "session.diff",
   "session.idle",
-  "session.status",
-  "session.error",
   "task.report"
 ]);
 function executorEventEntry(raw) {
-  const rawType = String(raw?.type || raw?.payload?.type || "").trim().toLowerCase();
+  const rawType = String(raw?.type || raw?.payload?.type || raw?.raw?.type || "").trim().toLowerCase();
   if (rawType && EXECUTOR_NOISE_TYPES.has(rawType)) return null;
-  const kind = typeof raw?.kind === "string" && raw.kind ? raw.kind : executorEventKind$1(raw?.type);
+  let kind = typeof raw?.kind === "string" && raw.kind ? raw.kind : executorEventKind$1(raw?.type);
   const payload = record$6(raw?.payload) && record$6(raw.payload.payload) ? { ...raw.payload, ...raw.payload.payload } : record$6(raw?.payload) ? raw.payload : {};
+  if (kind === "lifecycle" && rawType) {
+    kind = executorEventKind$1(rawType);
+  }
+  const part = record$6(payload?.part) ? payload.part : null;
+  if (part && (kind === "message_delta" || kind === "lifecycle" || kind === "status")) {
+    const partType = String(part.type || "").trim().toLowerCase();
+    if (partType === "tool") {
+      const state = record$6(part.state) ? part.state : {};
+      const partStatus = String(state.status || "").trim().toLowerCase();
+      kind = partStatus === "completed" || partStatus === "error" ? "tool_result" : "tool_call";
+      if (!payload.name && part.tool) payload.name = part.tool;
+      if (!payload.id && part.id) payload.id = part.id;
+      if (!payload.input && state.input) payload.input = state.input;
+      if (!payload.output && state.output) payload.output = state.output;
+      if (!payload.status) payload.status = partStatus;
+    }
+  }
+  if (rawType === "session.error" && kind !== "error") kind = "error";
   const summary = typeof raw?.summary === "string" ? raw.summary.trim() : typeof raw?.text === "string" ? raw.text.trim() : typeof payload.summary === "string" ? payload.summary.trim() : typeof payload.text === "string" ? payload.text.trim() : "";
   const created = Number(raw?.time?.created || raw?.timestamp || Date.now());
   if (!summary && Object.keys(payload).length === 0) return null;
@@ -3639,9 +3667,12 @@ function buildExecutorProcesses(events = []) {
     const id = executorProcessID(event);
     const kind = executorProcessKind(event);
     if (!id || !kind || kind === "assistant" || kind === "status") return;
+    const base = activeDirectory$2();
     const current = items.get(id) || {
       id,
       kind,
+      toolName: eventToolName(event),
+      toolDetail: executorToolDetail(event, base),
       title: executorProcessTitle(event, events, index),
       detail: "",
       progress: executorProcessProgress(event, events, index),
@@ -3674,7 +3705,7 @@ function buildExecutorProcesses(events = []) {
   for (const [id, process] of items) {
     activeIDs.add(id);
     const cached = _processCache.get(id);
-    if (cached && cached.status === process.status && cached.title === process.title && cached.detail === process.detail && cached.progress === process.progress && cached.note === process.note && cached.output === process.output && cached.kind === process.kind) {
+    if (cached && cached.status === process.status && cached.title === process.title && cached.detail === process.detail && cached.progress === process.progress && cached.note === process.note && cached.output === process.output && cached.kind === process.kind && cached.toolName === process.toolName && cached.toolDetail === process.toolDetail) {
       result.push(cached);
     } else {
       _processCache.set(id, process);
@@ -3864,8 +3895,7 @@ function getDomRefs() {
     // Status bar
     statusDot: $("#statusIcon"),
     statusLabel: $("#statusLabel"),
-    elapsed: $("#elapsed"),
-    btnTerminateRun: $("#btnTerminateRun"),
+    taskElapsed: $("#taskElapsed"),
     // Spec / plan badges and bodies
     specBadge: $("#specBadge"),
     specBody: $("#specBody"),
@@ -3873,7 +3903,6 @@ function getDomRefs() {
     planBody: $("#planBody"),
     // Goals
     goalsBadge: $("#goalsBadge"),
-    btnCreateGoal: $("#btnCreateGoal"),
     goalsBody: $("#goalsBody"),
     // Criteria / eval
     criteriaBadge: $("#criteriaBadge"),
@@ -4333,7 +4362,9 @@ function classifyAgentStage(message) {
 }
 function activeAgentStages$1() {
   const status = String(boardStore.board?.task?.status || "").trim().toLowerCase();
-  if (status === "planning") return /* @__PURE__ */ new Set(["spec", "planner"]);
+  if (status === "spec_generating") return /* @__PURE__ */ new Set(["spec"]);
+  if (status === "goal_decomposing") return /* @__PURE__ */ new Set(["goal"]);
+  if (status === "planning") return /* @__PURE__ */ new Set(["planner"]);
   if (status === "evaluating") return /* @__PURE__ */ new Set(["judge"]);
   if (status === "delivering") return /* @__PURE__ */ new Set(["delivery"]);
   if (!status && Array.isArray(store.agentEvents) && store.agentEvents.length > 0) {
@@ -4449,9 +4480,6 @@ function agentMessage(event) {
 }
 function agentRoundStatus(stage, round, roundIndex, rounds, latestStageEvent) {
   if (roundIndex < rounds.length - 1) return "completed";
-  const hasOpenTranscript = round.messages.some(
-    (message) => !message?._synthetic && !message?.info?.time?.completed
-  );
   const active = activeAgentStages$1().has(stage);
   const latestKind = String(latestStageEvent?.kind || "").trim().toLowerCase();
   const latestSummary = String(latestStageEvent?.summary || "");
@@ -4459,7 +4487,7 @@ function agentRoundStatus(stage, round, roundIndex, rounds, latestStageEvent) {
   if (latestKind === "status" && /finished|completed|done/i.test(latestSummary)) {
     return "completed";
   }
-  if (active || hasOpenTranscript) return "running";
+  if (active) return "running";
   return "completed";
 }
 let _rebuildScheduled = false;
@@ -5800,7 +5828,9 @@ function classifyMessage(msg) {
 }
 function activeAgentStages() {
   const status = String(boardStore.board?.task?.status || "").trim().toLowerCase();
-  if (status === "planning") return /* @__PURE__ */ new Set(["spec", "planner"]);
+  if (status === "spec_generating") return /* @__PURE__ */ new Set(["spec"]);
+  if (status === "goal_decomposing") return /* @__PURE__ */ new Set(["goal"]);
+  if (status === "planning") return /* @__PURE__ */ new Set(["planner"]);
   if (status === "evaluating") return /* @__PURE__ */ new Set(["judge"]);
   if (status === "delivering") return /* @__PURE__ */ new Set(["delivery"]);
   const agentEvents = Array.isArray(store.agentEvents) ? store.agentEvents : [];
@@ -6114,7 +6144,7 @@ function TaskRow(props) {
     insert(_el$8, () => taskListMeta(props.item));
     insert(_el$2, createComponent(Show, {
       get when() {
-        return memo(() => !!(!pending() && !!id()))() && !!props.onDeleteTask;
+        return memo(() => !!!!id())() && !!props.onDeleteTask;
       },
       get children() {
         return createComponent(DeleteButton, {
@@ -6237,7 +6267,7 @@ function TaskList(props) {
 }
 delegateEvents(["click"]);
 
-var _tmpl$2$b = /* @__PURE__ */ template(`<div class=plan-version>`), _tmpl$3$b = /* @__PURE__ */ template(`<div class="plan-version streaming-indicator">`), _tmpl$4$b = /* @__PURE__ */ template(`<p class=empty-hint>`), _tmpl$5$b = /* @__PURE__ */ template(`<div class=plan-version> · `), _tmpl$6$a = /* @__PURE__ */ template(`<div class=goals-list>`), _tmpl$7$8 = /* @__PURE__ */ template(`<div class="goal-criteria md-content">`), _tmpl$8$6 = /* @__PURE__ */ template(`<span class=extension-status data-state=active>`), _tmpl$9$5 = /* @__PURE__ */ template(`<span class=goal-priority>`), _tmpl$0$3 = /* @__PURE__ */ template(`<button type=button class="btn btn-ghost mini"data-goal-action=view-session title="View executor session"aria-label="View executor session">View`), _tmpl$1$2 = /* @__PURE__ */ template(`<button type=button class="btn btn-ghost mini"data-goal-action=edit>`), _tmpl$10$2 = /* @__PURE__ */ template(`<button type=button class="btn btn-ghost mini danger"data-goal-action=delete>`), _tmpl$11$1 = /* @__PURE__ */ template(`<div class=goal-actions>`), _tmpl$12$1 = /* @__PURE__ */ template(`<div class=goal-item><span class=goal-status-icon></span><div class=goal-content><div class="goal-desc md-content">`), _tmpl$13$1 = /* @__PURE__ */ template(`<div class=empty-hint>`), _tmpl$14$1 = /* @__PURE__ */ template(`<section class=criteria-group><div class=criteria-group-head><span class=criteria-group-icon aria-hidden=true></span><div class=criteria-group-title></div><div class=criteria-group-count></div></div><div class=criteria-group-list>`), _tmpl$15$1 = /* @__PURE__ */ template(`<label class=criteria-item><input type=checkbox><span class=check-mark></span><span class=criteria-copy><span class=criteria-name></span><span class=criteria-desc></span></span><span class=criteria-status></span><span class=criteria-result>`), _tmpl$16$1 = /* @__PURE__ */ template(`<div class="eval-summary md-content">`), _tmpl$17 = /* @__PURE__ */ template(`<div class=eval-error-meta>`), _tmpl$18 = /* @__PURE__ */ template(`<div class=eval-error><div class=eval-error-name>✗ </div><div class="eval-error-detail md-content">`), _tmpl$19 = /* @__PURE__ */ template(`<div class=delivery-files>`), _tmpl$20 = /* @__PURE__ */ template(`<div class=delivery-card><div class=delivery-title></div><div class="delivery-summary md-content">`), _tmpl$21 = /* @__PURE__ */ template(`<button type=button class="btn btn-primary"data-task-action=retry>`), _tmpl$22 = /* @__PURE__ */ template(`<button type=button class="btn btn-ghost"data-task-action=replan>`), _tmpl$23 = /* @__PURE__ */ template(`<div class=task-actions-buttons>`), _tmpl$24 = /* @__PURE__ */ template(`<div class=task-actions-bar>`), _tmpl$25 = /* @__PURE__ */ template(`<button class="btn btn-primary"data-action=always>`), _tmpl$26 = /* @__PURE__ */ template(`<button class="btn btn-ghost"data-action=once>`), _tmpl$27 = /* @__PURE__ */ template(`<button class="btn btn-ghost"data-action=reject>`), _tmpl$28 = /* @__PURE__ */ template(`<div class=interaction-alert><div class=interaction-title> </div><div class="interaction-body md-content"></div><div class=interaction-actions>`), _tmpl$29 = /* @__PURE__ */ template(`<button class="btn btn-primary"data-action=answer>`), _tmpl$30 = /* @__PURE__ */ template(`<div class=interactions-list>`), _tmpl$33 = /* @__PURE__ */ template(`<details class=section><summary class=section-head><span class=section-icon aria-hidden=true></span><span class=section-title></span><span class=section-badge></span></summary><div class=section-body>`), _tmpl$34 = /* @__PURE__ */ template(`<div id=taskActionsBar>`);
+var _tmpl$2$b = /* @__PURE__ */ template(`<div class=plan-version>`), _tmpl$3$b = /* @__PURE__ */ template(`<div class="plan-version streaming-indicator">`), _tmpl$4$b = /* @__PURE__ */ template(`<p class=empty-hint>`), _tmpl$5$b = /* @__PURE__ */ template(`<div class=goals-list>`), _tmpl$6$a = /* @__PURE__ */ template(`<div class="goal-criteria md-content">`), _tmpl$7$8 = /* @__PURE__ */ template(`<div class=goal-item><span class=goal-status-icon data-status=running></span><div class=goal-content><div class=plan-version style=margin-bottom:4px></div><div class="goal-desc md-content">`), _tmpl$8$5 = /* @__PURE__ */ template(`<span class=extension-status data-state=active>`), _tmpl$9$5 = /* @__PURE__ */ template(`<span class=goal-priority>`), _tmpl$0$3 = /* @__PURE__ */ template(`<button type=button class="btn btn-ghost mini"data-goal-action=view-session title="View executor session"aria-label="View executor session">View`), _tmpl$1$2 = /* @__PURE__ */ template(`<button type=button class="btn btn-ghost mini"data-goal-action=edit>`), _tmpl$10$2 = /* @__PURE__ */ template(`<button type=button class="btn btn-ghost mini danger"data-goal-action=delete>`), _tmpl$11$1 = /* @__PURE__ */ template(`<div class=goal-actions>`), _tmpl$12$1 = /* @__PURE__ */ template(`<details class=goal-item><summary class=goal-item-head><span class=goal-item-chevron aria-hidden=true>▶</span><span class=goal-status-icon></span><span class=goal-desc-inline></span></summary><div class=goal-item-body><div class=goal-content><div class="goal-desc md-content">`), _tmpl$13$1 = /* @__PURE__ */ template(`<div class=empty-hint>`), _tmpl$14$1 = /* @__PURE__ */ template(`<section class=criteria-group><div class=criteria-group-head><span class=criteria-group-icon aria-hidden=true></span><div class=criteria-group-title></div><div class=criteria-group-count></div></div><div class=criteria-group-list>`), _tmpl$15$1 = /* @__PURE__ */ template(`<label class=criteria-item><input type=checkbox><span class=check-mark></span><span class=criteria-copy><span class=criteria-name></span><span class=criteria-desc></span></span><span class=criteria-status></span><span class=criteria-result>`), _tmpl$16$1 = /* @__PURE__ */ template(`<div class="eval-summary md-content">`), _tmpl$17 = /* @__PURE__ */ template(`<div class=eval-error-meta>`), _tmpl$18 = /* @__PURE__ */ template(`<div class=eval-error><div class=eval-error-name>✗ </div><div class="eval-error-detail md-content">`), _tmpl$19 = /* @__PURE__ */ template(`<div class=delivery-files>`), _tmpl$20 = /* @__PURE__ */ template(`<div class=delivery-card><div class=delivery-title></div><div class="delivery-summary md-content">`), _tmpl$21 = /* @__PURE__ */ template(`<button type=button class="btn btn-primary"data-task-action=retry>`), _tmpl$22 = /* @__PURE__ */ template(`<button type=button class="btn btn-ghost"data-task-action=replan>`), _tmpl$23 = /* @__PURE__ */ template(`<div class=task-actions-buttons>`), _tmpl$24 = /* @__PURE__ */ template(`<div class=task-actions-bar>`), _tmpl$25 = /* @__PURE__ */ template(`<button class="btn btn-primary"data-action=always>`), _tmpl$26 = /* @__PURE__ */ template(`<button class="btn btn-ghost"data-action=once>`), _tmpl$27 = /* @__PURE__ */ template(`<button class="btn btn-ghost"data-action=reject>`), _tmpl$28 = /* @__PURE__ */ template(`<div class=interaction-alert><div class=interaction-title> </div><div class="interaction-body md-content"></div><div class=interaction-actions>`), _tmpl$29 = /* @__PURE__ */ template(`<button class="btn btn-primary"data-action=answer>`), _tmpl$30 = /* @__PURE__ */ template(`<div class=interactions-list>`), _tmpl$33 = /* @__PURE__ */ template(`<details class=section><summary class=section-head><span class=section-icon aria-hidden=true></span><span class=section-title></span><span class=section-badge></span></summary><div class=section-body>`), _tmpl$34 = /* @__PURE__ */ template(`<div id=taskActionsBar>`);
 function statusIcon(status) {
   const map = {
     idle: `<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle data-stroke="true" cx="8" cy="8" r="4.5"/><circle data-fill="true" cx="8" cy="8" r="1.25"/></svg>`,
@@ -6295,48 +6325,71 @@ function SpecPanel(props) {
   });
 }
 function PlanPanel(props) {
-  const content = () => props.plan?.summary || props.preview || "";
-  const isPreview = () => !props.plan?.summary && !!props.preview;
-  return createComponent(Show, {
+  const isPreview = () => !props.plan?.prompt && !props.plan?.summary && !!props.preview;
+  const activeGoals = createMemo(() => {
+    const cards = props.goalCards || [];
+    const running = props.runningGoalIDs;
+    if (!running || running.size === 0) return [];
+    return cards.map((card, idx) => ({
+      ...card,
+      goalIndex: idx + 1
+    })).filter((card) => running.has(card.id));
+  });
+  const version = () => props.plan?.version;
+  return [createComponent(Show, {
     get when() {
-      return content();
-    },
-    get fallback() {
-      return (() => {
-        var _el$0 = _tmpl$4$b();
-        insert(_el$0, () => t("empty.plan"));
-        return _el$0;
-      })();
+      return isPreview();
     },
     get children() {
-      return [createComponent(TextPart, {
-        get text() {
-          return content();
-        }
-      }), createComponent(Show, {
-        get when() {
-          return !isPreview();
-        },
-        get children() {
-          var _el$7 = _tmpl$5$b(), _el$8 = _el$7.firstChild;
-          insert(_el$7, () => t("plan.version", {
-            version: props.plan?.version
-          }), _el$8);
-          insert(_el$7, () => stamp(props.plan?.time?.created), null);
-          return _el$7;
-        }
-      }), createComponent(Show, {
-        get when() {
-          return isPreview();
-        },
-        get children() {
-          var _el$9 = _tmpl$3$b();
-          insert(_el$9, () => t("common.generating") || "Generating...");
-          return _el$9;
-        }
-      })];
+      var _el$7 = _tmpl$3$b();
+      insert(_el$7, () => t("common.generating") || "Generating...");
+      return _el$7;
     }
-  });
+  }), createComponent(Show, {
+    get when() {
+      return !isPreview();
+    },
+    get children() {
+      return createComponent(Show, {
+        get when() {
+          return activeGoals().length > 0;
+        },
+        get fallback() {
+          return (() => {
+            var _el$9 = _tmpl$4$b();
+            insert(_el$9, () => t("empty.plan"));
+            return _el$9;
+          })();
+        },
+        get children() {
+          var _el$8 = _tmpl$5$b();
+          insert(_el$8, createComponent(For, {
+            get each() {
+              return activeGoals();
+            },
+            children: (goal) => (() => {
+              var _el$0 = _tmpl$7$8(), _el$1 = _el$0.firstChild, _el$10 = _el$1.nextSibling, _el$11 = _el$10.firstChild, _el$12 = _el$11.nextSibling;
+              insert(_el$1, () => goalIcon("running"));
+              insert(_el$11, () => `Goal#${goal.goalIndex} Plan V${version()}`);
+              insert(_el$10, createComponent(Show, {
+                get when() {
+                  return goal.detail;
+                },
+                get children() {
+                  var _el$13 = _tmpl$6$a();
+                  createRenderEffect(() => _el$13.innerHTML = renderMarkdown$1(goal.detail));
+                  return _el$13;
+                }
+              }), null);
+              createRenderEffect(() => _el$12.innerHTML = renderMarkdown$1(goal.title || ""));
+              return _el$0;
+            })()
+          }));
+          return _el$8;
+        }
+      });
+    }
+  })];
 }
 function goalIcon(status) {
   if (status === "passed") return "✓";
@@ -6352,128 +6405,129 @@ function GoalsPanel(props) {
     },
     get fallback() {
       return (() => {
-        var _el$10 = _tmpl$4$b();
-        insert(_el$10, () => t("empty.goals"));
-        return _el$10;
+        var _el$15 = _tmpl$4$b();
+        insert(_el$15, () => t("empty.goals"));
+        return _el$15;
       })();
     },
     get children() {
-      var _el$1 = _tmpl$6$a();
-      insert(_el$1, createComponent(For, {
+      var _el$14 = _tmpl$5$b();
+      insert(_el$14, createComponent(For, {
         get each() {
           return props.cards;
         },
-        children: (card) => (() => {
-          var _el$11 = _tmpl$12$1(), _el$12 = _el$11.firstChild, _el$13 = _el$12.nextSibling, _el$14 = _el$13.firstChild;
-          insert(_el$12, () => goalIcon(card.status));
-          insert(_el$13, createComponent(Show, {
-            get when() {
-              return card.detail;
-            },
-            get children() {
-              var _el$15 = _tmpl$7$8();
-              createRenderEffect(() => _el$15.innerHTML = renderMarkdown$1(card.detail));
-              return _el$15;
-            }
-          }), null);
-          insert(_el$11, createComponent(Show, {
+        children: (card, idx) => (() => {
+          var _el$16 = _tmpl$12$1(), _el$17 = _el$16.firstChild, _el$18 = _el$17.firstChild, _el$19 = _el$18.nextSibling, _el$20 = _el$19.nextSibling, _el$23 = _el$17.nextSibling, _el$24 = _el$23.firstChild, _el$25 = _el$24.firstChild;
+          insert(_el$19, () => goalIcon(card.status));
+          insert(_el$20, () => `Goal#${idx() + 1}`);
+          insert(_el$17, createComponent(Show, {
             get when() {
               return props.runningGoalIDs.has(card.id);
             },
             get children() {
-              var _el$16 = _tmpl$8$6();
-              insert(_el$16, () => t("goal.running"));
-              return _el$16;
+              var _el$21 = _tmpl$8$5();
+              insert(_el$21, () => t("goal.running"));
+              return _el$21;
             }
           }), null);
-          insert(_el$11, createComponent(Show, {
+          insert(_el$17, createComponent(Show, {
             get when() {
               return card.metadata?.priority;
             },
             get children() {
-              var _el$17 = _tmpl$9$5();
-              insert(_el$17, () => card.metadata.priority);
-              createRenderEffect(() => setAttribute(_el$17, "data-priority", card.metadata.priority));
-              return _el$17;
+              var _el$22 = _tmpl$9$5();
+              insert(_el$22, () => card.metadata.priority);
+              createRenderEffect(() => setAttribute(_el$22, "data-priority", card.metadata.priority));
+              return _el$22;
             }
           }), null);
-          insert(_el$11, createComponent(Show, {
+          insert(_el$24, createComponent(Show, {
+            get when() {
+              return card.detail;
+            },
+            get children() {
+              var _el$26 = _tmpl$6$a();
+              createRenderEffect(() => _el$26.innerHTML = renderMarkdown$1(card.detail));
+              return _el$26;
+            }
+          }), null);
+          insert(_el$23, createComponent(Show, {
             get when() {
               return memo(() => !!props.onOpenSession)() && card.metadata?.sessionID;
             },
             get children() {
-              var _el$18 = _tmpl$0$3();
-              _el$18.$$click = () => props.onOpenSession?.(card.metadata.sessionID, card.title || card.id);
-              createRenderEffect(() => setAttribute(_el$18, "data-goal-id", card.id));
-              return _el$18;
+              var _el$27 = _tmpl$0$3();
+              _el$27.$$click = () => props.onOpenSession?.(card.metadata.sessionID, card.title || card.id);
+              createRenderEffect(() => setAttribute(_el$27, "data-goal-id", card.id));
+              return _el$27;
             }
           }), null);
-          insert(_el$11, createComponent(Show, {
+          insert(_el$23, createComponent(Show, {
             get when() {
               return props.onEditGoal || props.onDeleteGoal;
             },
             get children() {
-              var _el$19 = _tmpl$11$1();
-              insert(_el$19, createComponent(Show, {
+              var _el$28 = _tmpl$11$1();
+              insert(_el$28, createComponent(Show, {
                 get when() {
                   return props.onEditGoal;
                 },
                 get children() {
-                  var _el$20 = _tmpl$1$2();
-                  _el$20.$$click = () => props.onEditGoal?.(card.id, card.title, card.detail || "");
-                  insert(_el$20, () => t("common.edit"));
+                  var _el$29 = _tmpl$1$2();
+                  _el$29.$$click = () => props.onEditGoal?.(card.id, card.title, card.detail || "");
+                  insert(_el$29, () => t("common.edit"));
                   createRenderEffect((_p$) => {
                     var _v$4 = card.id, _v$5 = t("goal.edit_button_title"), _v$6 = t("goal.edit_button_title");
-                    _v$4 !== _p$.e && setAttribute(_el$20, "data-goal-id", _p$.e = _v$4);
-                    _v$5 !== _p$.t && setAttribute(_el$20, "title", _p$.t = _v$5);
-                    _v$6 !== _p$.a && setAttribute(_el$20, "aria-label", _p$.a = _v$6);
+                    _v$4 !== _p$.e && setAttribute(_el$29, "data-goal-id", _p$.e = _v$4);
+                    _v$5 !== _p$.t && setAttribute(_el$29, "title", _p$.t = _v$5);
+                    _v$6 !== _p$.a && setAttribute(_el$29, "aria-label", _p$.a = _v$6);
                     return _p$;
                   }, {
                     e: void 0,
                     t: void 0,
                     a: void 0
                   });
-                  return _el$20;
+                  return _el$29;
                 }
               }), null);
-              insert(_el$19, createComponent(Show, {
+              insert(_el$28, createComponent(Show, {
                 get when() {
                   return props.onDeleteGoal;
                 },
                 get children() {
-                  var _el$21 = _tmpl$10$2();
-                  _el$21.$$click = () => props.onDeleteGoal?.(card.id);
-                  insert(_el$21, () => t("common.delete"));
+                  var _el$30 = _tmpl$10$2();
+                  _el$30.$$click = () => props.onDeleteGoal?.(card.id);
+                  insert(_el$30, () => t("common.delete"));
                   createRenderEffect((_p$) => {
                     var _v$7 = card.id, _v$8 = t("goal.delete_button_title"), _v$9 = t("goal.delete_button_title");
-                    _v$7 !== _p$.e && setAttribute(_el$21, "data-goal-id", _p$.e = _v$7);
-                    _v$8 !== _p$.t && setAttribute(_el$21, "title", _p$.t = _v$8);
-                    _v$9 !== _p$.a && setAttribute(_el$21, "aria-label", _p$.a = _v$9);
+                    _v$7 !== _p$.e && setAttribute(_el$30, "data-goal-id", _p$.e = _v$7);
+                    _v$8 !== _p$.t && setAttribute(_el$30, "title", _p$.t = _v$8);
+                    _v$9 !== _p$.a && setAttribute(_el$30, "aria-label", _p$.a = _v$9);
                     return _p$;
                   }, {
                     e: void 0,
                     t: void 0,
                     a: void 0
                   });
-                  return _el$21;
+                  return _el$30;
                 }
               }), null);
-              return _el$19;
+              return _el$28;
             }
           }), null);
           createRenderEffect((_p$) => {
             var _v$0 = card.status || "pending", _v$1 = renderMarkdown$1(card.title || "");
-            _v$0 !== _p$.e && setAttribute(_el$12, "data-status", _p$.e = _v$0);
-            _v$1 !== _p$.t && (_el$14.innerHTML = _p$.t = _v$1);
+            _v$0 !== _p$.e && setAttribute(_el$19, "data-status", _p$.e = _v$0);
+            _v$1 !== _p$.t && (_el$25.innerHTML = _p$.t = _v$1);
             return _p$;
           }, {
             e: void 0,
             t: void 0
           });
-          return _el$11;
+          return _el$16;
         })()
       }));
-      return _el$1;
+      return _el$14;
     }
   });
 }
@@ -6756,9 +6810,9 @@ function CriteriaPanel(props) {
     },
     get fallback() {
       return (() => {
-        var _el$22 = _tmpl$13$1();
-        insert(_el$22, () => t("empty.checks"));
-        return _el$22;
+        var _el$31 = _tmpl$13$1();
+        insert(_el$31, () => t("empty.checks"));
+        return _el$31;
       })();
     },
     get children() {
@@ -6767,32 +6821,32 @@ function CriteriaPanel(props) {
           return groups();
         },
         children: (group) => (() => {
-          var _el$23 = _tmpl$14$1(), _el$24 = _el$23.firstChild, _el$25 = _el$24.firstChild, _el$26 = _el$25.nextSibling, _el$27 = _el$26.nextSibling, _el$28 = _el$24.nextSibling;
-          insert(_el$26, () => group.label);
-          insert(_el$27, () => tc("checks.group_count", group.items.length, {
+          var _el$32 = _tmpl$14$1(), _el$33 = _el$32.firstChild, _el$34 = _el$33.firstChild, _el$35 = _el$34.nextSibling, _el$36 = _el$35.nextSibling, _el$37 = _el$33.nextSibling;
+          insert(_el$35, () => group.label);
+          insert(_el$36, () => tc("checks.group_count", group.items.length, {
             count: group.items.length
           }));
-          insert(_el$28, createComponent(For, {
+          insert(_el$37, createComponent(For, {
             get each() {
               return group.items;
             },
             children: (spec) => {
               const status = () => checkStatuses()[spec.key] || "pending";
               return (() => {
-                var _el$29 = _tmpl$15$1(), _el$30 = _el$29.firstChild, _el$31 = _el$30.nextSibling, _el$32 = _el$31.nextSibling, _el$33 = _el$32.firstChild, _el$34 = _el$33.nextSibling, _el$35 = _el$32.nextSibling, _el$36 = _el$35.nextSibling;
-                _el$30.addEventListener("change", (e) => props.onToggle?.(spec.key, e.currentTarget.checked));
-                insert(_el$33, () => spec.label);
-                insert(_el$34, (() => {
+                var _el$38 = _tmpl$15$1(), _el$39 = _el$38.firstChild, _el$40 = _el$39.nextSibling, _el$41 = _el$40.nextSibling, _el$42 = _el$41.firstChild, _el$43 = _el$42.nextSibling, _el$44 = _el$41.nextSibling, _el$45 = _el$44.nextSibling;
+                _el$39.addEventListener("change", (e) => props.onToggle?.(spec.key, e.currentTarget.checked));
+                insert(_el$42, () => spec.label);
+                insert(_el$43, (() => {
                   var _c$ = memo(() => !!spec.readOnly);
                   return () => _c$() ? t("detail.observed") : memo(() => !!spec.enabled)() ? t("detail.enabled") : t("detail.disabled");
                 })());
-                insert(_el$36, () => criteriaResultText(status()));
+                insert(_el$45, () => criteriaResultText(status()));
                 createRenderEffect((_p$) => {
                   var _v$12 = spec.readOnly ? "true" : void 0, _v$13 = spec.key, _v$14 = spec.readOnly, _v$15 = status();
-                  _v$12 !== _p$.e && setAttribute(_el$29, "data-readonly", _p$.e = _v$12);
-                  _v$13 !== _p$.t && setAttribute(_el$30, "data-check", _p$.t = _v$13);
-                  _v$14 !== _p$.a && (_el$30.disabled = _p$.a = _v$14);
-                  _v$15 !== _p$.o && setAttribute(_el$35, "data-result", _p$.o = _v$15);
+                  _v$12 !== _p$.e && setAttribute(_el$38, "data-readonly", _p$.e = _v$12);
+                  _v$13 !== _p$.t && setAttribute(_el$39, "data-check", _p$.t = _v$13);
+                  _v$14 !== _p$.a && (_el$39.disabled = _p$.a = _v$14);
+                  _v$15 !== _p$.o && setAttribute(_el$44, "data-result", _p$.o = _v$15);
                   return _p$;
                 }, {
                   e: void 0,
@@ -6800,21 +6854,21 @@ function CriteriaPanel(props) {
                   a: void 0,
                   o: void 0
                 });
-                createRenderEffect(() => _el$30.checked = spec.enabled);
-                return _el$29;
+                createRenderEffect(() => _el$39.checked = spec.enabled);
+                return _el$38;
               })();
             }
           }));
           createRenderEffect((_p$) => {
             var _v$10 = group.key, _v$11 = CHECK_FAMILY_ICONS[group.key] || "";
-            _v$10 !== _p$.e && setAttribute(_el$23, "data-family", _p$.e = _v$10);
-            _v$11 !== _p$.t && (_el$25.innerHTML = _p$.t = _v$11);
+            _v$10 !== _p$.e && setAttribute(_el$32, "data-family", _p$.e = _v$10);
+            _v$11 !== _p$.t && (_el$34.innerHTML = _p$.t = _v$11);
             return _p$;
           }, {
             e: void 0,
             t: void 0
           });
-          return _el$23;
+          return _el$32;
         })()
       });
     }
@@ -6847,29 +6901,29 @@ function EvaluationPanel(props) {
           return errors();
         },
         children: (err) => (() => {
-          var _el$38 = _tmpl$18(), _el$39 = _el$38.firstChild; _el$39.firstChild; var _el$43 = _el$39.nextSibling;
-          insert(_el$39, () => err.name, null);
-          insert(_el$38, createComponent(Show, {
+          var _el$47 = _tmpl$18(), _el$48 = _el$47.firstChild; _el$48.firstChild; var _el$52 = _el$48.nextSibling;
+          insert(_el$48, () => err.name, null);
+          insert(_el$47, createComponent(Show, {
             get when() {
               return err.family;
             },
             get children() {
-              var _el$42 = _tmpl$17();
-              insert(_el$42, () => err.family);
-              return _el$42;
+              var _el$51 = _tmpl$17();
+              insert(_el$51, () => err.family);
+              return _el$51;
             }
-          }), _el$43);
-          createRenderEffect(() => _el$43.innerHTML = renderMarkdown$1(err.evidence.slice(0, 400)));
-          return _el$38;
+          }), _el$52);
+          createRenderEffect(() => _el$52.innerHTML = renderMarkdown$1(err.evidence.slice(0, 400)));
+          return _el$47;
         })()
       }), createComponent(Show, {
         get when() {
           return props.evaluation?.summary;
         },
         get children() {
-          var _el$37 = _tmpl$16$1();
-          createRenderEffect(() => _el$37.innerHTML = renderMarkdown$1(props.evaluation.summary));
-          return _el$37;
+          var _el$46 = _tmpl$16$1();
+          createRenderEffect(() => _el$46.innerHTML = renderMarkdown$1(props.evaluation.summary));
+          return _el$46;
         }
       })];
     }
@@ -6888,28 +6942,28 @@ function DeliveryPanel(props) {
     },
     get fallback() {
       return (() => {
-        var _el$48 = _tmpl$4$b();
-        insert(_el$48, () => t("empty.delivery"));
-        return _el$48;
+        var _el$57 = _tmpl$4$b();
+        insert(_el$57, () => t("empty.delivery"));
+        return _el$57;
       })();
     },
     get children() {
-      var _el$44 = _tmpl$20(), _el$45 = _el$44.firstChild, _el$46 = _el$45.nextSibling;
-      insert(_el$45, () => deliveryStatusLabel(props.delivery?.status));
-      insert(_el$44, createComponent(Show, {
+      var _el$53 = _tmpl$20(), _el$54 = _el$53.firstChild, _el$55 = _el$54.nextSibling;
+      insert(_el$54, () => deliveryStatusLabel(props.delivery?.status));
+      insert(_el$53, createComponent(Show, {
         get when() {
           return props.delivery?.result?.changedFiles?.length > 0;
         },
         get children() {
-          var _el$47 = _tmpl$19();
-          insert(_el$47, () => tc("delivery.files_changed", props.delivery.result.changedFiles.length, {
+          var _el$56 = _tmpl$19();
+          insert(_el$56, () => tc("delivery.files_changed", props.delivery.result.changedFiles.length, {
             count: props.delivery.result.changedFiles.length
           }));
-          return _el$47;
+          return _el$56;
         }
       }), null);
-      createRenderEffect(() => _el$46.innerHTML = renderMarkdown$1(props.delivery?.summary || props.delivery?.result?.summary || ""));
-      return _el$44;
+      createRenderEffect(() => _el$55.innerHTML = renderMarkdown$1(props.delivery?.summary || props.delivery?.result?.summary || ""));
+      return _el$53;
     }
   });
 }
@@ -6922,57 +6976,57 @@ function TaskActionsPanel(props) {
       return visible();
     },
     get children() {
-      var _el$49 = _tmpl$24();
-      insert(_el$49, createComponent(Show, {
+      var _el$58 = _tmpl$24();
+      insert(_el$58, createComponent(Show, {
         get when() {
           return hasButtons();
         },
         get children() {
-          var _el$50 = _tmpl$23();
-          insert(_el$50, createComponent(Show, {
+          var _el$59 = _tmpl$23();
+          insert(_el$59, createComponent(Show, {
             get when() {
               return controls().canRetry;
             },
             get children() {
-              var _el$51 = _tmpl$21();
-              _el$51.$$click = () => props.onRetry?.();
-              insert(_el$51, () => t("task.action.retry"));
+              var _el$60 = _tmpl$21();
+              _el$60.$$click = () => props.onRetry?.();
+              insert(_el$60, () => t("task.action.retry"));
               createRenderEffect((_p$) => {
                 var _v$16 = t("task.action.retry_title"), _v$17 = t("task.action.retry_title");
-                _v$16 !== _p$.e && setAttribute(_el$51, "title", _p$.e = _v$16);
-                _v$17 !== _p$.t && setAttribute(_el$51, "aria-label", _p$.t = _v$17);
+                _v$16 !== _p$.e && setAttribute(_el$60, "title", _p$.e = _v$16);
+                _v$17 !== _p$.t && setAttribute(_el$60, "aria-label", _p$.t = _v$17);
                 return _p$;
               }, {
                 e: void 0,
                 t: void 0
               });
-              return _el$51;
+              return _el$60;
             }
           }), null);
-          insert(_el$50, createComponent(Show, {
+          insert(_el$59, createComponent(Show, {
             get when() {
               return controls().canReplan;
             },
             get children() {
-              var _el$52 = _tmpl$22();
-              _el$52.$$click = () => props.onReplan?.();
-              insert(_el$52, () => t("task.action.replan"));
+              var _el$61 = _tmpl$22();
+              _el$61.$$click = () => props.onReplan?.();
+              insert(_el$61, () => t("task.action.replan"));
               createRenderEffect((_p$) => {
                 var _v$18 = t("task.action.replan_title"), _v$19 = t("task.action.replan_title");
-                _v$18 !== _p$.e && setAttribute(_el$52, "title", _p$.e = _v$18);
-                _v$19 !== _p$.t && setAttribute(_el$52, "aria-label", _p$.t = _v$19);
+                _v$18 !== _p$.e && setAttribute(_el$61, "title", _p$.e = _v$18);
+                _v$19 !== _p$.t && setAttribute(_el$61, "aria-label", _p$.t = _v$19);
                 return _p$;
               }, {
                 e: void 0,
                 t: void 0
               });
-              return _el$52;
+              return _el$61;
             }
           }), null);
-          return _el$50;
+          return _el$59;
         }
       }));
-      return _el$49;
+      return _el$58;
     }
   });
 }
@@ -6982,100 +7036,100 @@ function interactionIcon$1(interaction) {
 function InteractionAlert(props) {
   const icon = () => interactionIcon$1(props.interaction);
   return (() => {
-    var _el$53 = _tmpl$28(), _el$54 = _el$53.firstChild, _el$55 = _el$54.firstChild, _el$56 = _el$54.nextSibling, _el$57 = _el$56.nextSibling;
-    insert(_el$54, icon, _el$55);
-    insert(_el$54, () => props.interaction.title, null);
-    insert(_el$57, createComponent(Show, {
+    var _el$62 = _tmpl$28(), _el$63 = _el$62.firstChild, _el$64 = _el$63.firstChild, _el$65 = _el$63.nextSibling, _el$66 = _el$65.nextSibling;
+    insert(_el$63, icon, _el$64);
+    insert(_el$63, () => props.interaction.title, null);
+    insert(_el$66, createComponent(Show, {
       get when() {
         return props.interaction.type === "permission";
       },
       get fallback() {
         return [(() => {
-          var _el$61 = _tmpl$29();
-          _el$61.$$click = () => props.onResolve?.(props.interaction.id, "answer");
-          insert(_el$61, () => t("interaction.answer"));
+          var _el$70 = _tmpl$29();
+          _el$70.$$click = () => props.onResolve?.(props.interaction.id, "answer");
+          insert(_el$70, () => t("interaction.answer"));
           createRenderEffect((_p$) => {
             var _v$28 = t("interaction.answer_title"), _v$29 = t("interaction.answer_title");
-            _v$28 !== _p$.e && setAttribute(_el$61, "title", _p$.e = _v$28);
-            _v$29 !== _p$.t && setAttribute(_el$61, "aria-label", _p$.t = _v$29);
+            _v$28 !== _p$.e && setAttribute(_el$70, "title", _p$.e = _v$28);
+            _v$29 !== _p$.t && setAttribute(_el$70, "aria-label", _p$.t = _v$29);
             return _p$;
           }, {
             e: void 0,
             t: void 0
           });
-          return _el$61;
+          return _el$70;
         })(), (() => {
-          var _el$62 = _tmpl$27();
-          _el$62.$$click = () => props.onReject?.(props.interaction.id);
-          insert(_el$62, () => t("interaction.skip"));
+          var _el$71 = _tmpl$27();
+          _el$71.$$click = () => props.onReject?.(props.interaction.id);
+          insert(_el$71, () => t("interaction.skip"));
           createRenderEffect((_p$) => {
             var _v$30 = t("interaction.skip_title"), _v$31 = t("interaction.skip_title");
-            _v$30 !== _p$.e && setAttribute(_el$62, "title", _p$.e = _v$30);
-            _v$31 !== _p$.t && setAttribute(_el$62, "aria-label", _p$.t = _v$31);
+            _v$30 !== _p$.e && setAttribute(_el$71, "title", _p$.e = _v$30);
+            _v$31 !== _p$.t && setAttribute(_el$71, "aria-label", _p$.t = _v$31);
             return _p$;
           }, {
             e: void 0,
             t: void 0
           });
-          return _el$62;
+          return _el$71;
         })()];
       },
       get children() {
         return [(() => {
-          var _el$58 = _tmpl$25();
-          _el$58.$$click = () => props.onResolve?.(props.interaction.id, "always");
-          insert(_el$58, () => t("interaction.always_allow"));
+          var _el$67 = _tmpl$25();
+          _el$67.$$click = () => props.onResolve?.(props.interaction.id, "always");
+          insert(_el$67, () => t("interaction.always_allow"));
           createRenderEffect((_p$) => {
             var _v$20 = t("interaction.always_allow_title"), _v$21 = t("interaction.always_allow_title");
-            _v$20 !== _p$.e && setAttribute(_el$58, "title", _p$.e = _v$20);
-            _v$21 !== _p$.t && setAttribute(_el$58, "aria-label", _p$.t = _v$21);
+            _v$20 !== _p$.e && setAttribute(_el$67, "title", _p$.e = _v$20);
+            _v$21 !== _p$.t && setAttribute(_el$67, "aria-label", _p$.t = _v$21);
             return _p$;
           }, {
             e: void 0,
             t: void 0
           });
-          return _el$58;
+          return _el$67;
         })(), (() => {
-          var _el$59 = _tmpl$26();
-          _el$59.$$click = () => props.onResolve?.(props.interaction.id, "once");
-          insert(_el$59, () => t("interaction.allow_once"));
+          var _el$68 = _tmpl$26();
+          _el$68.$$click = () => props.onResolve?.(props.interaction.id, "once");
+          insert(_el$68, () => t("interaction.allow_once"));
           createRenderEffect((_p$) => {
             var _v$22 = t("interaction.allow_once_title"), _v$23 = t("interaction.allow_once_title");
-            _v$22 !== _p$.e && setAttribute(_el$59, "title", _p$.e = _v$22);
-            _v$23 !== _p$.t && setAttribute(_el$59, "aria-label", _p$.t = _v$23);
+            _v$22 !== _p$.e && setAttribute(_el$68, "title", _p$.e = _v$22);
+            _v$23 !== _p$.t && setAttribute(_el$68, "aria-label", _p$.t = _v$23);
             return _p$;
           }, {
             e: void 0,
             t: void 0
           });
-          return _el$59;
+          return _el$68;
         })(), (() => {
-          var _el$60 = _tmpl$27();
-          _el$60.$$click = () => props.onReject?.(props.interaction.id);
-          insert(_el$60, () => t("interaction.reject"));
+          var _el$69 = _tmpl$27();
+          _el$69.$$click = () => props.onReject?.(props.interaction.id);
+          insert(_el$69, () => t("interaction.reject"));
           createRenderEffect((_p$) => {
             var _v$24 = t("interaction.reject_title"), _v$25 = t("interaction.reject_title");
-            _v$24 !== _p$.e && setAttribute(_el$60, "title", _p$.e = _v$24);
-            _v$25 !== _p$.t && setAttribute(_el$60, "aria-label", _p$.t = _v$25);
+            _v$24 !== _p$.e && setAttribute(_el$69, "title", _p$.e = _v$24);
+            _v$25 !== _p$.t && setAttribute(_el$69, "aria-label", _p$.t = _v$25);
             return _p$;
           }, {
             e: void 0,
             t: void 0
           });
-          return _el$60;
+          return _el$69;
         })()];
       }
     }));
     createRenderEffect((_p$) => {
       var _v$26 = props.interaction.id, _v$27 = renderMarkdown$1(props.interaction.body || "");
-      _v$26 !== _p$.e && setAttribute(_el$53, "data-id", _p$.e = _v$26);
-      _v$27 !== _p$.t && (_el$56.innerHTML = _p$.t = _v$27);
+      _v$26 !== _p$.e && setAttribute(_el$62, "data-id", _p$.e = _v$26);
+      _v$27 !== _p$.t && (_el$65.innerHTML = _p$.t = _v$27);
       return _p$;
     }, {
       e: void 0,
       t: void 0
     });
-    return _el$53;
+    return _el$62;
   })();
 }
 function InteractionsList(props) {
@@ -7085,8 +7139,8 @@ function InteractionsList(props) {
       return pending().length > 0;
     },
     get children() {
-      var _el$63 = _tmpl$30();
-      insert(_el$63, createComponent(For, {
+      var _el$72 = _tmpl$30();
+      insert(_el$72, createComponent(For, {
         get each() {
           return pending();
         },
@@ -7100,7 +7154,7 @@ function InteractionsList(props) {
           }
         })
       }));
-      return _el$63;
+      return _el$72;
     }
   });
 }
@@ -7112,17 +7166,17 @@ const SECTION_ICONS = {
   delivery: `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 5.5L8 2.5l5.5 3v5L8 13.5l-5.5-3Z"/><polyline points="2.5,5.5 8,8.5 13.5,5.5"/><line x1="8" y1="8.5" x2="8" y2="13.5"/></svg>`};
 function SectionFrame(props) {
   return (() => {
-    var _el$67 = _tmpl$33(), _el$68 = _el$67.firstChild, _el$69 = _el$68.firstChild, _el$70 = _el$69.nextSibling, _el$71 = _el$70.nextSibling, _el$72 = _el$68.nextSibling;
-    insert(_el$70, () => props.title);
-    insert(_el$71, () => props.badgeText || "");
-    insert(_el$72, () => props.children);
+    var _el$76 = _tmpl$33(), _el$77 = _el$76.firstChild, _el$78 = _el$77.firstChild, _el$79 = _el$78.nextSibling, _el$80 = _el$79.nextSibling, _el$81 = _el$77.nextSibling;
+    insert(_el$79, () => props.title);
+    insert(_el$80, () => props.badgeText || "");
+    insert(_el$81, () => props.children);
     createRenderEffect((_p$) => {
       var _v$32 = props.id, _v$33 = props.icon || "", _v$34 = props.badgeId, _v$35 = props.badgeTone, _v$36 = props.bodyId;
-      _v$32 !== _p$.e && setAttribute(_el$67, "id", _p$.e = _v$32);
-      _v$33 !== _p$.t && (_el$69.innerHTML = _p$.t = _v$33);
-      _v$34 !== _p$.a && setAttribute(_el$71, "id", _p$.a = _v$34);
-      _v$35 !== _p$.o && setAttribute(_el$71, "data-tone", _p$.o = _v$35);
-      _v$36 !== _p$.i && setAttribute(_el$72, "id", _p$.i = _v$36);
+      _v$32 !== _p$.e && setAttribute(_el$76, "id", _p$.e = _v$32);
+      _v$33 !== _p$.t && (_el$78.innerHTML = _p$.t = _v$33);
+      _v$34 !== _p$.a && setAttribute(_el$80, "id", _p$.a = _v$34);
+      _v$35 !== _p$.o && setAttribute(_el$80, "data-tone", _p$.o = _v$35);
+      _v$36 !== _p$.i && setAttribute(_el$81, "id", _p$.i = _v$36);
       return _p$;
     }, {
       e: void 0,
@@ -7131,7 +7185,7 @@ function SectionFrame(props) {
       o: void 0,
       i: void 0
     });
-    return _el$67;
+    return _el$76;
   })();
 }
 function Board(props) {
@@ -7165,8 +7219,8 @@ function Board(props) {
     return passed === cards.length ? "good" : passed > 0 ? "warn" : "";
   });
   return [(() => {
-    var _el$73 = _tmpl$34();
-    insert(_el$73, createComponent(TaskActionsPanel, {
+    var _el$82 = _tmpl$34();
+    insert(_el$82, createComponent(TaskActionsPanel, {
       get overview() {
         return overview();
       },
@@ -7180,7 +7234,7 @@ function Board(props) {
         return props.onCancel;
       }
     }));
-    return _el$73;
+    return _el$82;
   })(), createComponent(SectionFrame, {
     id: "specSection",
     get title() {
@@ -7252,36 +7306,49 @@ function Board(props) {
         }
       })];
     }
-  }), createComponent(SectionFrame, {
-    id: "planSection",
-    get title() {
-      return t("section.plan");
-    },
-    get icon() {
-      return SECTION_ICONS.plan;
-    },
-    bodyId: "planBody",
-    badgeId: "planBadge",
-    get badgeText() {
-      return memo(() => !!plan())() ? goalsBadgeText() || `v${plan()?.version}` : "";
-    },
-    get badgeTone() {
-      return memo(() => !!plan())() ? goalsBadgeTone() || "accent" : "";
+  }), createComponent(Show, {
+    get when() {
+      return memo(() => !!task()?.status)() && !["completed", "failed", "cancelled"].includes(task().status);
     },
     get children() {
-      return createComponent(PlanPanel, {
-        get plan() {
-          return plan();
+      return createComponent(SectionFrame, {
+        id: "planSection",
+        get title() {
+          return t("section.plan");
         },
-        get preview() {
-          return boardStore.planPreview;
+        get icon() {
+          return SECTION_ICONS.plan;
+        },
+        bodyId: "planBody",
+        badgeId: "planBadge",
+        get badgeText() {
+          return memo(() => runningGoalIDs().size > 0)() ? String(runningGoalIDs().size) : "";
+        },
+        get badgeTone() {
+          return runningGoalIDs().size > 0 ? "accent" : "";
+        },
+        get children() {
+          return createComponent(PlanPanel, {
+            get plan() {
+              return plan();
+            },
+            get preview() {
+              return boardStore.planPreview;
+            },
+            get goalCards() {
+              return goalsCards();
+            },
+            get runningGoalIDs() {
+              return runningGoalIDs();
+            }
+          });
         }
       });
     }
   }), createComponent(SectionFrame, {
     id: "criteriaSection",
     get title() {
-      return t("section.criteria");
+      return t("section.evaluation");
     },
     get icon() {
       return SECTION_ICONS.criteria;
@@ -7340,7 +7407,7 @@ function Board(props) {
 }
 delegateEvents(["click"]);
 
-var _tmpl$$c = /* @__PURE__ */ template(`<div class=chat-attachments id=chatAttachments>`), _tmpl$2$a = /* @__PURE__ */ template(`<button type=button class=chat-cancel-btn><svg width=16 height=16 viewBox="0 0 16 16"fill=none aria-hidden=true><circle cx=8 cy=8 r=6.5 stroke=currentColor stroke-width=1.2></circle><path d="M5.5 5.5l5 5M10.5 5.5l-5 5"stroke=currentColor stroke-width=1.2 stroke-linecap=round>`), _tmpl$3$a = /* @__PURE__ */ template(`<svg width=16 height=16 viewBox="0 0 16 16"fill=none><rect x=4.25 y=4.25 width=7.5 height=7.5 rx=1.2 fill=currentColor>`), _tmpl$4$a = /* @__PURE__ */ template(`<form id=chatForm class=chat-input><input id=chatFileInput type=file multiple hidden><div class=chat-compose-row><textarea id=chatTextarea class=chat-textarea rows=2></textarea><div class=chat-compose-actions><div class=chat-icon-col><button type=button id=btnChatAttach class=chat-attach-btn><svg width=16 height=16 viewBox="0 0 16 16"fill=none aria-hidden=true><path d="M13.5 7.5l-5.8 5.8a3.2 3.2 0 01-4.5-4.5L9 3a2 2 0 012.8 2.8L6 11.6a.8.8 0 01-1.1-1.1L10.5 5"stroke=currentColor stroke-width=1.2 stroke-linecap=round stroke-linejoin=round></path></svg></button></div><button><span class=chat-send-icon aria-hidden=true></span><span class=chat-send-label></span></button></div></div><div class=chat-compose-meta><div class=chat-compose-meta-left><span class=chat-version id=chatVersion></span><span class=chat-author><a href=https://github.com/yangheng95/argus target=_blank rel=noopener>@yangheng95</a></span></div><div class=chat-compose-tip>`), _tmpl$5$a = /* @__PURE__ */ template(`<img class=chat-attachment-thumb>`), _tmpl$6$9 = /* @__PURE__ */ template(`<div class=chat-attachment-item><span class=chat-attachment-name></span><button type=button class=chat-attachment-remove aria-label=Remove>&times;`), _tmpl$7$7 = /* @__PURE__ */ template(`<span class=chat-attachment-icon>`), _tmpl$8$5 = /* @__PURE__ */ template(`<svg width=16 height=16 viewBox="0 0 16 16"fill=none><path d="M2 8l10-5-3 5 3 5z"fill=currentColor>`);
+var _tmpl$$c = /* @__PURE__ */ template(`<div class=chat-attachments id=chatAttachments>`), _tmpl$2$a = /* @__PURE__ */ template(`<svg width=16 height=16 viewBox="0 0 16 16"fill=none><rect x=4.25 y=4.25 width=7.5 height=7.5 rx=1.2 fill=currentColor>`), _tmpl$3$a = /* @__PURE__ */ template(`<form id=chatForm class=chat-input><input id=chatFileInput type=file multiple hidden><div class=chat-compose-row><textarea id=chatTextarea class=chat-textarea rows=2></textarea><div class=chat-compose-actions><div class=chat-icon-col><button type=button id=btnChatAttach class=chat-attach-btn><svg width=16 height=16 viewBox="0 0 16 16"fill=none aria-hidden=true><path d="M13.5 7.5l-5.8 5.8a3.2 3.2 0 01-4.5-4.5L9 3a2 2 0 012.8 2.8L6 11.6a.8.8 0 01-1.1-1.1L10.5 5"stroke=currentColor stroke-width=1.2 stroke-linecap=round stroke-linejoin=round></path></svg></button><button type=button class=chat-cancel-btn><svg width=16 height=16 viewBox="0 0 16 16"fill=none aria-hidden=true><circle cx=8 cy=8 r=6.5 stroke=currentColor stroke-width=1.2></circle><path d="M5.5 5.5l5 5M10.5 5.5l-5 5"stroke=currentColor stroke-width=1.2 stroke-linecap=round></path></svg></button></div><button><span class=chat-send-icon aria-hidden=true></span><span class=chat-send-label></span></button></div></div><div class=chat-compose-meta><div class=chat-compose-meta-left><span class=chat-version id=chatVersion></span><span class=chat-author><a href=https://github.com/yangheng95/argus target=_blank rel=noopener>@yangheng95</a></span></div><div class=chat-compose-tip>`), _tmpl$4$a = /* @__PURE__ */ template(`<img class=chat-attachment-thumb>`), _tmpl$5$a = /* @__PURE__ */ template(`<div class=chat-attachment-item><span class=chat-attachment-name></span><button type=button class=chat-attachment-remove aria-label=Remove>&times;`), _tmpl$6$9 = /* @__PURE__ */ template(`<span class=chat-attachment-icon>`), _tmpl$7$7 = /* @__PURE__ */ template(`<svg width=16 height=16 viewBox="0 0 16 16"fill=none><path d="M2 8l10-5-3 5 3 5z"fill=currentColor>`);
 const MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024;
 const FILE_ACCEPT = ["image/*", ".pdf", ".txt", ".md", ".json", ".csv", ".xml", ".yaml", ".yml", ".log", ".ts", ".js", ".py", ".go", ".rs", ".c", ".cpp", ".h", ".java", ".rb", ".sh", ".bat", ".ps1", ".html", ".css", ".sql", ".toml"].join(",");
 function fileToDataUrl(file) {
@@ -7445,7 +7512,7 @@ function ChatComposer(props) {
   const sendAriaLabel = () => props.busy ? t("chat.stop_label") : t("chat.send_label");
   const sendLabel = () => props.busy ? t("chat.stop_label") : t("chat.send_label");
   return (() => {
-    var _el$ = _tmpl$4$a(), _el$3 = _el$.firstChild, _el$4 = _el$3.nextSibling, _el$5 = _el$4.firstChild, _el$6 = _el$5.nextSibling, _el$7 = _el$6.firstChild, _el$9 = _el$7.firstChild, _el$0 = _el$7.nextSibling, _el$1 = _el$0.firstChild, _el$11 = _el$1.nextSibling, _el$12 = _el$4.nextSibling, _el$13 = _el$12.firstChild, _el$14 = _el$13.nextSibling;
+    var _el$ = _tmpl$3$a(), _el$3 = _el$.firstChild, _el$4 = _el$3.nextSibling, _el$5 = _el$4.firstChild, _el$6 = _el$5.nextSibling, _el$7 = _el$6.firstChild, _el$8 = _el$7.firstChild, _el$9 = _el$8.nextSibling, _el$0 = _el$7.nextSibling, _el$1 = _el$0.firstChild, _el$11 = _el$1.nextSibling, _el$12 = _el$4.nextSibling, _el$13 = _el$12.firstChild, _el$14 = _el$13.nextSibling;
     _el$.addEventListener("drop", handleDrop);
     _el$.addEventListener("dragleave", handleDragLeave);
     _el$.addEventListener("dragover", handleDragOver);
@@ -7463,24 +7530,24 @@ function ChatComposer(props) {
             return attachments();
           },
           children: (att, index) => (() => {
-            var _el$15 = _tmpl$6$9(), _el$17 = _el$15.firstChild, _el$18 = _el$17.nextSibling;
+            var _el$15 = _tmpl$5$a(), _el$17 = _el$15.firstChild, _el$18 = _el$17.nextSibling;
             insert(_el$15, createComponent(Show, {
               get when() {
                 return att.mime.startsWith("image/");
               },
               get fallback() {
                 return (() => {
-                  var _el$19 = _tmpl$7$7();
+                  var _el$19 = _tmpl$6$9();
                   insert(_el$19, () => att.filename?.split(".").pop()?.toUpperCase() || "FILE");
                   return _el$19;
                 })();
               },
               get children() {
-                var _el$16 = _tmpl$5$a();
+                var _el$16 = _tmpl$4$a();
                 createRenderEffect((_p$) => {
-                  var _v$13 = att.url, _v$14 = att.filename;
-                  _v$13 !== _p$.e && setAttribute(_el$16, "src", _p$.e = _v$13);
-                  _v$14 !== _p$.t && setAttribute(_el$16, "alt", _p$.t = _v$14);
+                  var _v$14 = att.url, _v$15 = att.filename;
+                  _v$14 !== _p$.e && setAttribute(_el$16, "src", _p$.e = _v$14);
+                  _v$15 !== _p$.t && setAttribute(_el$16, "alt", _p$.t = _v$15);
                   return _p$;
                 }, {
                   e: void 0,
@@ -7510,26 +7577,8 @@ function ChatComposer(props) {
     };
     var _ref$3 = textareaRef;
     typeof _ref$3 === "function" ? use(_ref$3, _el$5) : textareaRef = _el$5;
-    insert(_el$7, createComponent(Show, {
-      get when() {
-        return props.canCancel;
-      },
-      get children() {
-        var _el$8 = _tmpl$2$a();
-        _el$8.$$click = () => props.onCancel?.();
-        createRenderEffect((_p$) => {
-          var _v$ = t("task.action.cancel_title"), _v$2 = t("task.action.cancel_title");
-          _v$ !== _p$.e && setAttribute(_el$8, "title", _p$.e = _v$);
-          _v$2 !== _p$.t && setAttribute(_el$8, "aria-label", _p$.t = _v$2);
-          return _p$;
-        }, {
-          e: void 0,
-          t: void 0
-        });
-        return _el$8;
-      }
-    }), _el$9);
-    _el$9.$$click = () => fileInputRef?.click();
+    _el$8.$$click = () => fileInputRef?.click();
+    _el$9.$$click = () => props.onCancel?.();
     _el$0.$$click = (e) => {
       if (props.busy) {
         e.preventDefault();
@@ -7541,28 +7590,31 @@ function ChatComposer(props) {
         return props.busy;
       },
       get fallback() {
-        return _tmpl$8$5();
+        return _tmpl$7$7();
       },
       get children() {
-        return _tmpl$3$a();
+        return _tmpl$2$a();
       }
     }));
     insert(_el$11, sendLabel);
     insert(_el$14, () => t("chat.tip"));
     createRenderEffect((_p$) => {
-      var _v$3 = dragover() ? "true" : void 0, _v$4 = !props.enabled, _v$5 = props.enabled ? t("chat.placeholder") : t("chat.placeholder_disabled"), _v$6 = t("chat.attach_title"), _v$7 = t("chat.attach_title"), _v$8 = props.busy ? "btnTaskInterrupt" : "chatSend", _v$9 = `chat-send${props.busy ? " chat-interrupt" : ""}`, _v$0 = props.busy ? "button" : "submit", _v$1 = props.busy ? "stop" : "send", _v$10 = sendDisabled(), _v$11 = sendTitle(), _v$12 = sendAriaLabel();
-      _v$3 !== _p$.e && setAttribute(_el$, "data-dragover", _p$.e = _v$3);
-      _v$4 !== _p$.t && (_el$5.disabled = _p$.t = _v$4);
-      _v$5 !== _p$.a && setAttribute(_el$5, "placeholder", _p$.a = _v$5);
-      _v$6 !== _p$.o && setAttribute(_el$9, "title", _p$.o = _v$6);
-      _v$7 !== _p$.i && setAttribute(_el$9, "aria-label", _p$.i = _v$7);
-      _v$8 !== _p$.n && setAttribute(_el$0, "id", _p$.n = _v$8);
-      _v$9 !== _p$.s && className(_el$0, _p$.s = _v$9);
-      _v$0 !== _p$.h && setAttribute(_el$0, "type", _p$.h = _v$0);
-      _v$1 !== _p$.r && setAttribute(_el$0, "data-mode", _p$.r = _v$1);
-      _v$10 !== _p$.d && (_el$0.disabled = _p$.d = _v$10);
-      _v$11 !== _p$.l && setAttribute(_el$0, "title", _p$.l = _v$11);
-      _v$12 !== _p$.u && setAttribute(_el$0, "aria-label", _p$.u = _v$12);
+      var _v$ = dragover() ? "true" : void 0, _v$2 = !props.enabled, _v$3 = props.enabled ? t("chat.placeholder") : t("chat.placeholder_disabled"), _v$4 = t("chat.attach_title"), _v$5 = t("chat.attach_title"), _v$6 = t("task.action.cancel_title"), _v$7 = t("task.action.cancel_title"), _v$8 = !props.canCancel, _v$9 = props.busy ? "btnTaskInterrupt" : "chatSend", _v$0 = `chat-send${props.busy ? " chat-interrupt" : ""}`, _v$1 = props.busy ? "button" : "submit", _v$10 = props.busy ? "stop" : "send", _v$11 = sendDisabled(), _v$12 = sendTitle(), _v$13 = sendAriaLabel();
+      _v$ !== _p$.e && setAttribute(_el$, "data-dragover", _p$.e = _v$);
+      _v$2 !== _p$.t && (_el$5.disabled = _p$.t = _v$2);
+      _v$3 !== _p$.a && setAttribute(_el$5, "placeholder", _p$.a = _v$3);
+      _v$4 !== _p$.o && setAttribute(_el$8, "title", _p$.o = _v$4);
+      _v$5 !== _p$.i && setAttribute(_el$8, "aria-label", _p$.i = _v$5);
+      _v$6 !== _p$.n && setAttribute(_el$9, "title", _p$.n = _v$6);
+      _v$7 !== _p$.s && setAttribute(_el$9, "aria-label", _p$.s = _v$7);
+      _v$8 !== _p$.h && (_el$9.disabled = _p$.h = _v$8);
+      _v$9 !== _p$.r && setAttribute(_el$0, "id", _p$.r = _v$9);
+      _v$0 !== _p$.d && className(_el$0, _p$.d = _v$0);
+      _v$1 !== _p$.l && setAttribute(_el$0, "type", _p$.l = _v$1);
+      _v$10 !== _p$.u && setAttribute(_el$0, "data-mode", _p$.u = _v$10);
+      _v$11 !== _p$.c && (_el$0.disabled = _p$.c = _v$11);
+      _v$12 !== _p$.w && setAttribute(_el$0, "title", _p$.w = _v$12);
+      _v$13 !== _p$.m && setAttribute(_el$0, "aria-label", _p$.m = _v$13);
       return _p$;
     }, {
       e: void 0,
@@ -7576,7 +7628,10 @@ function ChatComposer(props) {
       r: void 0,
       d: void 0,
       l: void 0,
-      u: void 0
+      u: void 0,
+      c: void 0,
+      w: void 0,
+      m: void 0
     });
     createRenderEffect(() => _el$5.value = text());
     return _el$;
@@ -8461,7 +8516,7 @@ function routeSSEEvent(event) {
   const properties = record$1(event?.properties) ? event.properties : record$1(event?.payload) ? event.payload : {};
   if (type === "run.progress") {
     const progressType = properties.type || "";
-    if (progressType === "message.updated" || progressType === "message.part.updated" || progressType === "message.part.delta" || progressType === "protocol.raw" || progressType === "executor.status" || progressType === "executor.progress") {
+    if (progressType === "protocol.raw" || progressType === "executor.status" || progressType === "executor.progress") {
       return true;
     }
     const executorEvent = executorEventEntry({
@@ -9676,7 +9731,8 @@ async function loadMeta() {
 }
 function gitLabel(vcs, dir) {
   if (!dir) return t("git.unavailable");
-  if (!vcs?.branch) return t("git.init");
+  if (vcs === null || vcs === undefined) return t("git.unavailable");
+  if (!vcs.branch) return t("git.init");
   const parts = [vcs.branch];
   if (vcs.ahead) parts.push(`+${vcs.ahead}`);
   if (vcs.behind) parts.push(`-${vcs.behind}`);
@@ -9694,7 +9750,8 @@ function gitLabel(vcs, dir) {
 }
 function gitTitle(vcs, dir) {
   if (!dir) return "";
-  if (!vcs?.branch) return t("git.init_title");
+  if (vcs === null || vcs === undefined) return "";
+  if (!vcs.branch) return t("git.init_title");
   return [
     t("git.branch", { value: vcs.branch }),
     t("git.clean_title", { value: vcs.clean ? t("common.yes") : t("common.no") }),
@@ -9707,7 +9764,9 @@ function gitTitle(vcs, dir) {
   ].join("\n");
 }
 function canInitGit() {
-  return !!settingsStore.directory && !boardStore.vcs?.branch;
+  const vcs = boardStore.vcs;
+  if (vcs === null || vcs === undefined) return false;
+  return !!settingsStore.directory && !vcs.branch;
 }
 function relativePathFrom(base, target) {
   if (!base || !target) return "";
@@ -10063,7 +10122,8 @@ function DiffDialog(props) {
   })();
 }
 function ChangesPanel(props) {
-  const [selectedIndex, setSelectedIndex] = createSignal(null);
+  const [selectedItem, setSelectedItem] = createSignal(null);
+  let fullDiffCache = null;
   const files = createMemo(() => {
     if (props.changes !== void 0) return props.changes;
     const derived = deriveChanges();
@@ -10076,16 +10136,47 @@ function ChangesPanel(props) {
   });
   const totalAdditions = createMemo(() => files().reduce((sum, item) => sum + (item.additions ?? 0), 0));
   const totalDeletions = createMemo(() => files().reduce((sum, item) => sum + (item.deletions ?? 0), 0));
-  const selectedItem = createMemo(() => {
-    const idx = selectedIndex();
-    if (idx === null) return null;
-    return files()[idx] ?? null;
-  });
-  function openDiff(index) {
-    setSelectedIndex(index);
+  function deliveryRunID() {
+    const board = boardStore.board;
+    const delivery = board?.acceptedDelivery || board?.delivery || board?.candidateDelivery;
+    return typeof delivery?.runID === "string" ? delivery.runID : "";
+  }
+  async function fetchFullDiffs(runID) {
+    if (fullDiffCache && fullDiffCache.runID === runID) return fullDiffCache.diffs;
+    const data = await apiJson(`run/${encodeURIComponent(runID)}/delivery`);
+    const rawDiffs = data?.result?.diffs;
+    const diffs = (Array.isArray(rawDiffs) ? rawDiffs : []).filter((d) => d && typeof d.file === "string").map((d) => ({
+      file: String(d.file || "").replace(/^[ab]\//, ""),
+      status: d.status || (!d.before && d.after ? "added" : d.before && !d.after ? "deleted" : "modified"),
+      additions: typeof d.additions === "number" ? d.additions : 0,
+      deletions: typeof d.deletions === "number" ? d.deletions : 0,
+      before: typeof d.before === "string" ? d.before : void 0,
+      after: typeof d.after === "string" ? d.after : void 0
+    }));
+    fullDiffCache = {
+      runID,
+      diffs
+    };
+    return diffs;
+  }
+  async function openDiff(index) {
+    const item = files()[index];
+    if (!item) return;
+    if (item.before !== void 0 || item.after !== void 0) {
+      setSelectedItem(item);
+      return;
+    }
+    const runID = deliveryRunID();
+    if (!runID) {
+      setSelectedItem(item);
+      return;
+    }
+    const fullDiffs = await fetchFullDiffs(runID);
+    const full = fullDiffs.find((d) => d.file === item.file);
+    setSelectedItem(full || item);
   }
   function closeDiff() {
-    setSelectedIndex(null);
+    setSelectedItem(null);
   }
   return (() => {
     var _el$23 = _tmpl$0$2();
@@ -10153,7 +10244,7 @@ function ChangesPanel(props) {
 }
 delegateEvents(["click"]);
 
-var _tmpl$$7 = /* @__PURE__ */ template(`<div class=log-fields>`), _tmpl$2$7 = /* @__PURE__ */ template(`<div class=log-detail-block><div class=log-detail-title></div><pre class=log-detail-pre>`), _tmpl$3$7 = /* @__PURE__ */ template(`<details class=log-detail><summary></summary><div class=log-detail-block><div class=log-detail-title></div><pre class=log-detail-pre>`), _tmpl$4$7 = /* @__PURE__ */ template(`<span class=log-chip>=`), _tmpl$5$7 = /* @__PURE__ */ template(`<span class=log-delta>`), _tmpl$6$7 = /* @__PURE__ */ template(`<span class=log-service>`), _tmpl$7$5 = /* @__PURE__ */ template(`<div class=log-line><div class=log-line-head><span class=log-source></span><span>[<!>]</span><span class=log-ts></span></div><div class=log-msg>`), _tmpl$8$3 = /* @__PURE__ */ template(`<dialog id=logDialog class="dialog log-dialog"><div class=dialog-header><span class=dialog-title></span><div class=dialog-header-actions><select id=logLevelFilter class="select select-sm"><option value=debug>DEBUG</option><option value=info>INFO</option><option value=warn>WARN</option><option value=error>ERROR</option></select><button type=button id=btnLogServerLogs class="btn btn-ghost mini"></button><button type=button id=btnLogRefresh class="btn btn-ghost mini"></button><button type=button id=btnLogCopy class="btn btn-ghost mini"></button><button type=button id=btnLogClear class="btn btn-ghost mini danger"></button><button type=button id=btnCloseLog class="btn btn-ghost mini"></button></div></div><div id=logViewerBody class=log-viewer-body>`), _tmpl$9$3 = /* @__PURE__ */ template(`<div class=empty-hint>`);
+var _tmpl$$7 = /* @__PURE__ */ template(`<div class=log-fields>`), _tmpl$2$7 = /* @__PURE__ */ template(`<div class=log-detail-block><div class=log-detail-title></div><pre class=log-detail-pre>`), _tmpl$3$7 = /* @__PURE__ */ template(`<details class=log-detail><summary></summary><div class=log-detail-block><div class=log-detail-title></div><pre class=log-detail-pre>`), _tmpl$4$7 = /* @__PURE__ */ template(`<span class=log-chip>=`), _tmpl$5$7 = /* @__PURE__ */ template(`<span class=log-delta>`), _tmpl$6$7 = /* @__PURE__ */ template(`<span class=log-service>`), _tmpl$7$5 = /* @__PURE__ */ template(`<div class=log-line><div class=log-line-head><span class=log-source></span><span>[<!>]</span><span class=log-ts></span></div><div class=log-msg>`), _tmpl$8$3 = /* @__PURE__ */ template(`<dialog id=logDialog class="dialog dialog-wide"><div class=dialog-form><div class=dialog-header><span class=dialog-title></span><div class=dialog-header-actions><select id=logLevelFilter class="select select-sm"><option value=debug>DEBUG</option><option value=info>INFO</option><option value=warn>WARN</option><option value=error>ERROR</option></select><button type=button id=btnLogServerLogs class="btn btn-ghost mini"></button><button type=button id=btnLogRefresh class="btn btn-ghost mini"></button><button type=button id=btnLogCopy class="btn btn-ghost mini"></button><button type=button id=btnLogClear class="btn btn-ghost mini danger"></button><button type=button id=btnCloseLog class="btn btn-ghost mini"></button></div></div><div id=logViewerBody class=log-viewer>`), _tmpl$9$3 = /* @__PURE__ */ template(`<div class=empty-hint>`);
 let _serverLogLines = [];
 async function loadServerLogs() {
   try {
@@ -10555,33 +10646,33 @@ function LogViewer(props) {
     Promise.resolve().then(() => scrollToBottom());
   };
   return (() => {
-    var _el$26 = _tmpl$8$3(), _el$27 = _el$26.firstChild, _el$28 = _el$27.firstChild, _el$29 = _el$28.nextSibling, _el$30 = _el$29.firstChild, _el$31 = _el$30.nextSibling, _el$32 = _el$31.nextSibling, _el$33 = _el$32.nextSibling, _el$34 = _el$33.nextSibling, _el$35 = _el$34.nextSibling, _el$36 = _el$27.nextSibling;
+    var _el$26 = _tmpl$8$3(), _el$27 = _el$26.firstChild, _el$28 = _el$27.firstChild, _el$29 = _el$28.firstChild, _el$30 = _el$29.nextSibling, _el$31 = _el$30.firstChild, _el$32 = _el$31.nextSibling, _el$33 = _el$32.nextSibling, _el$34 = _el$33.nextSibling, _el$35 = _el$34.nextSibling, _el$36 = _el$35.nextSibling, _el$37 = _el$28.nextSibling;
     use((el) => dialogRef = el, _el$26);
-    insert(_el$28, () => t("log.title"));
-    _el$30.addEventListener("change", handleLevelChange);
-    _el$31.$$click = () => void refresh();
-    insert(_el$31, () => t("log.load_server"));
+    insert(_el$29, () => t("log.title"));
+    _el$31.addEventListener("change", handleLevelChange);
     _el$32.$$click = () => void refresh();
-    insert(_el$32, () => t("common.refresh"));
-    _el$33.$$click = () => void handleCopy();
-    insert(_el$33, () => t("common.copy"));
-    _el$34.$$click = handleClear;
-    insert(_el$34, () => t("common.clear"));
-    _el$35.$$click = () => {
+    insert(_el$32, () => t("log.load_server"));
+    _el$33.$$click = () => void refresh();
+    insert(_el$33, () => t("common.refresh"));
+    _el$34.$$click = () => void handleCopy();
+    insert(_el$34, () => t("common.copy"));
+    _el$35.$$click = handleClear;
+    insert(_el$35, () => t("common.clear"));
+    _el$36.$$click = () => {
       dialogRef?.close();
       props.onClose?.();
     };
-    insert(_el$35, () => t("common.close"));
-    use((el) => bodyRef = el, _el$36);
-    insert(_el$36, createComponent(Show, {
+    insert(_el$36, () => t("common.close"));
+    use((el) => bodyRef = el, _el$37);
+    insert(_el$37, createComponent(Show, {
       get when() {
         return entries().length > 0;
       },
       get fallback() {
         return (() => {
-          var _el$37 = _tmpl$9$3();
-          insert(_el$37, () => t("log.empty"));
-          return _el$37;
+          var _el$38 = _tmpl$9$3();
+          insert(_el$38, () => t("log.empty"));
+          return _el$38;
         })();
       },
       get children() {
@@ -10601,10 +10692,10 @@ function LogViewer(props) {
     }));
     createRenderEffect((_p$) => {
       var _v$4 = t("log.filter_level"), _v$5 = loading(), _v$6 = loading(), _v$7 = loading() || entries().length === 0;
-      _v$4 !== _p$.e && setAttribute(_el$30, "aria-label", _p$.e = _v$4);
-      _v$5 !== _p$.t && (_el$31.disabled = _p$.t = _v$5);
-      _v$6 !== _p$.a && (_el$32.disabled = _p$.a = _v$6);
-      _v$7 !== _p$.o && (_el$33.disabled = _p$.o = _v$7);
+      _v$4 !== _p$.e && setAttribute(_el$31, "aria-label", _p$.e = _v$4);
+      _v$5 !== _p$.t && (_el$32.disabled = _p$.t = _v$5);
+      _v$6 !== _p$.a && (_el$33.disabled = _p$.a = _v$6);
+      _v$7 !== _p$.o && (_el$34.disabled = _p$.o = _v$7);
       return _p$;
     }, {
       e: void 0,
@@ -10612,7 +10703,7 @@ function LogViewer(props) {
       a: void 0,
       o: void 0
     });
-    createRenderEffect(() => _el$30.value = appStore.logFilterLevel);
+    createRenderEffect(() => _el$31.value = appStore.logFilterLevel);
     return _el$26;
   })();
 }
@@ -15809,7 +15900,13 @@ if (taskListEl) {
   taskListEl.innerHTML = "";
   render(() => createComponent(TaskList, {
     onSelectTask: (taskID) => void selectTask(taskID),
-    onDeleteTask: (taskID) => void deleteTask(taskID)
+    onDeleteTask: (taskID) => {
+      if (taskID.startsWith("pending:")) {
+        forgetPendingTask(taskID.slice("pending:".length));
+      } else {
+        void deleteTask(taskID);
+      }
+    }
   }), taskListEl);
 }
 const boardEl = document.getElementById("solidBoardMount");
@@ -15853,7 +15950,7 @@ if (boardEl) {
       bodyEl.innerHTML = '<p class="empty-hint">Loading…</p>';
       dialog.showModal();
       try {
-        const messages = await apiJson(`session/${sessionID}/messages`);
+        const messages = await apiJson(`session/${sessionID}/message`);
         if (!messages || messages.length === 0) {
           bodyEl.innerHTML = '<p class="empty-hint">No messages yet.</p>';
           return;
@@ -16319,10 +16416,8 @@ createRoot(() => {
     const task = boardStore.board?.task;
     const taskStatus = document.getElementById("taskStatus");
     const statusIconEl = document.getElementById("statusIcon");
-    const statusLabel = document.getElementById("statusLabel");
-    const btnTerminate = document.getElementById("btnTerminateRun");
+    const statusLabelEl = document.getElementById("statusLabel");
     const status = task?.status || "idle";
-    const isActive = ["running", "planning", "evaluating", "delivering", "queued"].includes(status);
     if (taskStatus) {
       taskStatus.hidden = !boardStore.selectedTaskID || codingActive();
     }
@@ -16330,13 +16425,26 @@ createRoot(() => {
       statusIconEl.dataset.status = status;
       statusIconEl.innerHTML = statusIcon(status);
     }
-    if (statusLabel) {
-      statusLabel.textContent = boardStore.selectedTaskID ? t(`task.status.${status}`) : t("task.status.idle");
-    }
-    if (btnTerminate) {
-      btnTerminate.hidden = !boardStore.selectedTaskID || !isActive;
+    if (statusLabelEl) {
+      statusLabelEl.textContent = boardStore.selectedTaskID ? t(`task.status.${status}`) : t("task.status.idle");
     }
   });
+  const elapsedInterval = setInterval(() => {
+    const elapsedEl = document.getElementById("taskElapsed");
+    if (!elapsedEl) return;
+    const task = boardStore.board?.task;
+    const startTime = task?.time?.created || 0;
+    if (!boardStore.selectedTaskID || !startTime) {
+      if (elapsedEl.textContent) elapsedEl.textContent = "";
+      return;
+    }
+    const completedTime = task?.time?.completed || 0;
+    const status = task?.status || "idle";
+    const isActive = ["running", "planning", "evaluating", "delivering", "queued"].includes(status);
+    const end = completedTime && !isActive ? completedTime : Date.now();
+    elapsedEl.textContent = formatDuration(end - startTime);
+  }, 1e3);
+  onCleanup(() => clearInterval(elapsedInterval));
   createEffect(() => {
     settingsStore.locale;
     appStore.budgetDirty;

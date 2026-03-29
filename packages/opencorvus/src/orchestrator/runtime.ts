@@ -612,7 +612,19 @@ export namespace OrchestratorRuntime {
 
     const nodes = listPlanNodesByPlan(plan.id)
     const goals = listGoalsByPlan(plan.id)
-    const ready = readyGoalNodes(nodes, goals)
+    // In worktree-parallel mode (maxGoals > 1), each goal runs in an isolated
+    // worktree from the same base snapshot — cross-layer dependencies don't
+    // block dispatch since goals can't see each other's changes anyway.
+    // Changes are merged back after each goal completes.
+    const ready = maxGoals > 1
+      ? nodes
+          .filter((n): n is typeof n & { goal_id: string } => n.kind === "goal" && !!n.goal_id)
+          .flatMap((node) => {
+            const goal = goals.find((g) => g.id === node.goal_id)
+            if (!goal || goal.status !== "pending") return []
+            return [{ node, goal }]
+          })
+      : readyGoalNodes(nodes, goals)
     const batch = ready.slice(0, slots)
     if (batch.length === 0) return 0
 
@@ -1455,22 +1467,35 @@ async function runEvaluation(task: TaskRow, run: RunRow, existingDelivery: Deliv
   if (signal?.aborted) throw new Error("runEvaluation aborted before start")
   if (!run.session_id) return
 
+  // In per-goal mode, the aggregated delivery already has the correct diffs
+  // from all goal worktrees. Re-fetching from executor.delivery() would query
+  // the coordinator session which has no file changes — producing empty diffs.
+  const existingResult = existingDelivery.result as { diffs?: Array<{ file: string; [key: string]: unknown }>; summary?: string } | null
+  const hasAggregatedDiffs = existingResult?.diffs && existingResult.diffs.length > 0
+
   const executor = ExecutorRegistry.require(run.executor)
   let delivery: Awaited<ReturnType<typeof executor.delivery>>
-  try {
-    delivery = await Promise.race([
-      executor.delivery({
-        sessionID: run.session_id,
-        since: run.time_started ?? run.time_created,
-      }),
-      new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error("executor.delivery() timeout")), DELIVERY_FETCH_TIMEOUT_MS),
-      ),
-    ])
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err)
-    log.error("re-evaluation: failed to fetch delivery from executor", { error: msg })
-    throw new Error(`Cannot re-evaluate: executor.delivery() failed: ${msg}`)
+  if (hasAggregatedDiffs) {
+    delivery = {
+      summary: existingResult!.summary ?? existingDelivery.summary ?? "",
+      diffs: existingResult!.diffs!,
+    }
+  } else {
+    try {
+      delivery = await Promise.race([
+        executor.delivery({
+          sessionID: run.session_id,
+          since: run.time_started ?? run.time_created,
+        }),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("executor.delivery() timeout")), DELIVERY_FETCH_TIMEOUT_MS),
+        ),
+      ])
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      log.error("re-evaluation: failed to fetch delivery from executor", { error: msg })
+      throw new Error(`Cannot re-evaluate: executor.delivery() failed: ${msg}`)
+    }
   }
 
   const deliveryID = existingDelivery.id
@@ -2067,7 +2092,19 @@ const PROTOCOL_EVENT_KIND_MAP: Record<string, string> = {
   "usage.updated": "usage",
   "session.idle": "done",
   "session.error": "error",
+  "session.status": "status",
   "executor.progress": "lifecycle",
+  // Executor message events — carry tool calls, streaming text, message state
+  "message.part.updated": "message_delta",
+  "message.part.delta": "message_delta",
+  "message.updated": "message_delta",
+  "message.removed": "message_delta",
+  "message.part.removed": "message_delta",
+  "permission.asked": "approval_request",
+  "permission.replied": "approval_request",
+  "question.asked": "input_request",
+  "question.replied": "input_request",
+  "question.rejected": "input_request",
 }
 
 function protocolEventKind(type: string) {

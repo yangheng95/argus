@@ -67,12 +67,11 @@ export function routeSSEEvent(event: any): boolean {
  // ── Executor progress / output events ──
   if (type === "run.progress") {
     const progressType: string = properties.type || "";
- // Skip event types that are already handled as message stream events or
- // are pure protocol noise.
+ // Skip pure protocol noise — NOT executor message events.
+ // message.updated / message.part.updated / message.part.delta are the
+ // executor's primary activity signals (tool calls, streaming text) and
+ // must reach the executor event store.
     if (
-      progressType === "message.updated" ||
-      progressType === "message.part.updated" ||
-      progressType === "message.part.delta" ||
       progressType === "protocol.raw" ||
       progressType === "executor.status" ||
       progressType === "executor.progress"

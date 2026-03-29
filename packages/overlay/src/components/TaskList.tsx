@@ -138,7 +138,7 @@ function TaskRow(props: {
         <span>{taskListBadge(props.item)}</span>
         <small>{taskListMeta(props.item)}</small>
       </button>
-      <Show when={!pending() && !!id() && !!props.onDeleteTask}>
+      <Show when={!!id() && !!props.onDeleteTask}>
         <DeleteButton id={id()} onDelete={props.onDeleteTask!} />
       </Show>
     </div>

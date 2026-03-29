@@ -9,7 +9,7 @@ import { Auth } from "../auth"
 import { ProviderTransform } from "../provider/transform"
 
 import PROMPT_GENERATE from "./generate.txt"
-import PROMPT_SYSTEM from "@/session/prompt/system.txt"
+import PROMPT_BUILD from "./prompt/build.txt"
 import SPEC_CORE from "@/prompt/core/spec-core.txt"
 import PLAN_CORE from "@/prompt/core/plan-core.txt"
 import PROMPT_COMPACTION from "./prompt/compaction.txt"
@@ -109,7 +109,7 @@ export namespace Agent {
         name: "build",
         description: "The default agent. Executes tools based on configured permissions.",
         options: {},
-        prompt: PROMPT_SYSTEM,
+        prompt: PROMPT_BUILD,
         permission: PermissionNext.merge(
           defaults,
           PermissionNext.fromConfig({
@@ -197,6 +197,7 @@ export namespace Agent {
             websearch: "deny",
             codesearch: "allow",
             read: "allow",
+            memory: "allow",
             external_directory: {
               "*": "ask",
               ...Object.fromEntries(whitelistedDirs.map((dir) => [dir, "allow"])),
@@ -340,7 +341,7 @@ export namespace Agent {
 
   /** Map of native agent name → built-in default prompt (before config overrides). */
   const NATIVE_DEFAULTS: Record<string, string | undefined> = {
-    build: PROMPT_SYSTEM,
+    build: PROMPT_BUILD,
     spec: SPEC_CORE,
     plan: PLAN_CORE,
     general: PROMPT_GENERAL,

@@ -4,7 +4,7 @@
 // Self-sufficient — no external script dependencies.
 
 import { render } from "solid-js/web/dist/web";
-import { createEffect, createRoot, createSignal } from "solid-js";
+import { createEffect, createRoot, createSignal, onCleanup } from "solid-js";
 import { Conversation } from "./components/Conversation";
 import { TaskList } from "./components/TaskList";
 import { Board, statusIcon as statusIconSvg } from "./components/Board";
@@ -32,11 +32,13 @@ import {
   replanTask,
   cancelTask,
   createTask,
+  forgetPendingTask,
 } from "./services/task";
 import { canComposeChat, stopChatRequest } from "./services/chat";
 import { setLocale } from "./utils/i18n";
 import { apiJson, configure as configureApi } from "./services/api";
 import { t } from "./utils/i18n";
+import { formatDuration } from "./utils/time";
 import { createOverlayInteractions } from "./services/interactions";
 import { renderMarkdown, escapeHtml } from "./utils/markdown";
 import { copyChatConversation } from "./utils/transcript";
@@ -448,7 +450,13 @@ if (taskListEl) {
     () => (
       <TaskList
         onSelectTask={(taskID) => void selectTask(taskID)}
-        onDeleteTask={(taskID) => void deleteTask(taskID)}
+        onDeleteTask={(taskID) => {
+          if (taskID.startsWith("pending:")) {
+            forgetPendingTask(taskID.slice("pending:".length));
+          } else {
+            void deleteTask(taskID);
+          }
+        }}
       />
     ),
     taskListEl,
@@ -501,7 +509,7 @@ if (boardEl) {
           dialog.showModal();
           try {
             // API returns MessageV2.WithParts[]: each element is { info: { role, ... }, parts: [...] }
-            const messages: any[] = await apiJson(`session/${sessionID}/messages`);
+            const messages: any[] = await apiJson(`session/${sessionID}/message`);
             if (!messages || messages.length === 0) {
               bodyEl.innerHTML = '<p class="empty-hint">No messages yet.</p>';
               return;
@@ -1064,14 +1072,14 @@ createRoot(() => {
     if (copyBtn) copyBtn.disabled = count === 0;
   });
 
+  // ── Task status header (reactive) ──
   createEffect(() => {
     const task = (boardStore.board as any)?.task;
     const taskStatus = document.getElementById("taskStatus");
     const statusIconEl = document.getElementById("statusIcon");
-    const statusLabel = document.getElementById("statusLabel");
-    const btnTerminate = document.getElementById("btnTerminateRun") as HTMLButtonElement | null;
+    const statusLabelEl = document.getElementById("statusLabel");
     const status = task?.status || "idle";
-    const isActive = ["running", "planning", "evaluating", "delivering", "queued"].includes(status);
+
     if (taskStatus) {
       (taskStatus as HTMLElement).hidden = !boardStore.selectedTaskID || codingActive();
     }
@@ -1079,15 +1087,30 @@ createRoot(() => {
       statusIconEl.dataset.status = status;
       statusIconEl.innerHTML = statusIconSvg(status);
     }
-    if (statusLabel) {
-      statusLabel.textContent = boardStore.selectedTaskID
+    if (statusLabelEl) {
+      statusLabelEl.textContent = boardStore.selectedTaskID
         ? t(`task.status.${status}`)
         : t("task.status.idle");
     }
-    if (btnTerminate) {
-      btnTerminate.hidden = !boardStore.selectedTaskID || !isActive;
-    }
   });
+
+  // ── Elapsed duration (standalone interval, decoupled from reactive updates) ──
+  const elapsedInterval = setInterval(() => {
+    const elapsedEl = document.getElementById("taskElapsed");
+    if (!elapsedEl) return;
+    const task = (boardStore.board as any)?.task;
+    const startTime = task?.time?.created || 0;
+    if (!boardStore.selectedTaskID || !startTime) {
+      if (elapsedEl.textContent) elapsedEl.textContent = "";
+      return;
+    }
+    const completedTime = task?.time?.completed || 0;
+    const status = task?.status || "idle";
+    const isActive = ["running", "planning", "evaluating", "delivering", "queued"].includes(status);
+    const end = completedTime && !isActive ? completedTime : Date.now();
+    elapsedEl.textContent = formatDuration(end - startTime);
+  }, 1000);
+  onCleanup(() => clearInterval(elapsedInterval));
 
  // interactionBridge.renderInteractions removed — InteractionPanel handles
  // interaction display and auto-resolve reactively. Keeping both active

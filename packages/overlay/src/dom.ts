@@ -110,8 +110,7 @@ export interface DomRefs {
  // Status bar
   statusDot: HTMLElement | null;
   statusLabel: HTMLElement | null;
-  elapsed: HTMLElement | null;
-  btnTerminateRun: HTMLButtonElement | null;
+  taskElapsed: HTMLElement | null;
 
  // Spec / plan badges and bodies
   specBadge: HTMLElement | null;
@@ -121,7 +120,6 @@ export interface DomRefs {
 
  // Goals
   goalsBadge: HTMLElement | null;
-  btnCreateGoal: HTMLButtonElement | null;
   goalsBody: HTMLElement | null;
 
  // Criteria / eval
@@ -415,8 +413,7 @@ export function getDomRefs(): DomRefs {
  // Status bar
     statusDot: $<HTMLElement>("#statusIcon"),
     statusLabel: $<HTMLElement>("#statusLabel"),
-    elapsed: $<HTMLElement>("#elapsed"),
-    btnTerminateRun: $<HTMLButtonElement>("#btnTerminateRun"),
+    taskElapsed: $<HTMLElement>("#taskElapsed"),
 
  // Spec / plan badges and bodies
     specBadge: $<HTMLElement>("#specBadge"),
@@ -426,7 +423,6 @@ export function getDomRefs(): DomRefs {
 
  // Goals
     goalsBadge: $<HTMLElement>("#goalsBadge"),
-    btnCreateGoal: $<HTMLButtonElement>("#btnCreateGoal"),
     goalsBody: $<HTMLElement>("#goalsBody"),
 
  // Criteria / eval

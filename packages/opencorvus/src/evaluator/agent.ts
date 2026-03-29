@@ -449,6 +449,7 @@ A shallow investigation is WORSE than no investigation — it causes the orchest
 - **search_code**: Search file contents with regex (ripgrep) — use to find imports, usages, patterns across the codebase
 - **list_directory**: List files and directories at a path — use to verify file existence, check project structure
 - **memory_search**: Search project memory for prior failures, known issues, historical patterns
+- **memory_write**: Write failure patterns, root causes, and evaluation insights to memory for future reference
 - **preference_list**: List project conventions and constraints (BINDING — violations are real failures)
 
 ## Investigation Process
@@ -496,6 +497,9 @@ After tool calls, write a findings report with these sections:
 2. **Per-goal findings** (one section per goal, numbered): what was found, file:line evidence, whether the criteria is satisfied
 3. **Convention compliance**: any violations found
 4. **Root cause analysis** (if any failures): the specific technical cause
+
+### Phase 3: PERSIST (1-2 tool calls)
+When you discover a non-obvious root cause, recurring failure pattern, or important architectural insight during investigation, write it to memory using **memory_write** with \`kind: "lesson"\`. This helps future evaluations avoid redundant investigation.
 
 ## Quality Self-Check
 

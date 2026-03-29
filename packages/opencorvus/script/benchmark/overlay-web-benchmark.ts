@@ -149,6 +149,11 @@ temp.home = await fs.mkdtemp(path.join(os.tmpdir(), "opencorvus-overlay-benchmar
 temp.dir = projectDir ? path.resolve(projectDir) : await fs.mkdtemp(path.join(os.tmpdir(), "opencorvus-overlay-benchmark-project-"))
 temp.config = path.join(temp.home, "config-override")
 process.env.OPENCORVUS_HOME = temp.home
+// Copy request file into the project directory so the spec agent can reference it
+if (requestFile) {
+  const dest = path.join(temp.dir, path.basename(requestFile))
+  await fs.copyFile(path.resolve(requestFile), dest).catch(() => undefined)
+}
 // Copy real auth.json into temp home so OAuth providers (e.g. github-copilot) work in isolated home
 {
   const appData = process.env.APPDATA || process.env.LOCALAPPDATA
@@ -349,6 +354,18 @@ function topLevelText(item: Record<string, unknown>, key: string) {
 }
 
 const onEvent = ({ payload }: { payload: unknown }) => {
+  // LLM delta events (message.part.delta) are ephemeral and high-frequency.
+  // They don't produce a log line, but they DO count as activity — prevents
+  // false stall detection while a reasoning model is generating tokens.
+  if (payload && typeof payload === "object" && "type" in payload) {
+    const rawType = String((payload as any).type ?? "")
+    if (rawType === "message.part.delta" || rawType.endsWith(".part.delta")) {
+      lastEventAt = Date.now()
+      lastActivityLogAt = Date.now()
+      lastLogAt = Date.now()
+      return
+    }
+  }
   const normalized = normalizeEvent(payload)
   if (!normalized) return
   lastEventAt = Date.now()
@@ -1120,7 +1137,22 @@ async function waitForFinal(
   const startedAt = Date.now()
   let lastStatus = ""
   while (true) {
-    let progress = await api(`/task/${taskID}/progress`).then((res) => res.json())
+    let progress: any
+    try {
+      progress = await api(`/task/${taskID}/progress`).then((res) => res.json())
+    } catch (e) {
+      // Bun-specific: AbortSignal fires during body read → empty body → SyntaxError instead of AbortError
+      // Also handle transient network/abort errors to avoid crashing on single failed poll
+      const isTransient = e instanceof SyntaxError
+        || (e instanceof DOMException && (e.name === "AbortError" || e.name === "TimeoutError"))
+        || (e instanceof TypeError && typeof (e as any).message === "string" && /fetch|network|abort/i.test((e as any).message))
+      if (isTransient) {
+        logLine(`[overlay-benchmark] warn: progress poll error (${(e as any)?.name ?? "Error"}: ${(e as any)?.message}), retrying in 2s`)
+        await Bun.sleep(2_000)
+        continue
+      }
+      throw e
+    }
     progress = await settle(progress, api)
     if (FINAL.has(progress.task.status)) return progress
     const signature = progressSignature(progress)

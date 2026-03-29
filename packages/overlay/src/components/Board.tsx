@@ -117,32 +117,75 @@ export function SpecPanel(props: SpecPanelProps) {
 }
 
 // ── PlanPanel ──
+// Shows only active (running) goals with their plan context.
+// Each active goal is rendered as "Goal#N Plan VX" + goal description + criteria.
 
 interface PlanPanelProps {
   plan: any;
   preview?: string;
+  /** All goal cards from the goals lane */
+  goalCards?: any[];
+  /** Set of currently running goal IDs */
+  runningGoalIDs?: Set<string>;
 }
 
 export function PlanPanel(props: PlanPanelProps) {
-  const content = () => props.plan?.summary || props.preview || "";
-  const isPreview = () => !props.plan?.summary && !!props.preview;
+  const isPreview = () => !props.plan?.prompt && !props.plan?.summary && !!props.preview;
+
+  // Active goals: running status from goalRuns
+  const activeGoals = createMemo(() => {
+    const cards: any[] = props.goalCards || [];
+    const running = props.runningGoalIDs;
+    if (!running || running.size === 0) return [];
+    return cards
+      .map((card, idx) => ({ ...card, goalIndex: idx + 1 }))
+      .filter((card) => running.has(card.id));
+  });
+
+  const version = () => props.plan?.version;
+
   return (
-    <Show
-      when={content()}
-      fallback={<p class="empty-hint">{t("empty.plan")}</p>}
-    >
-      <TextPart text={content()} />
-      <Show when={!isPreview()}>
-        <div class="plan-version">
-          {t("plan.version", { version: props.plan?.version })}
-          {" \u00B7 "}
-          {stamp(props.plan?.time?.created)}
-        </div>
-      </Show>
+    <>
       <Show when={isPreview()}>
         <div class="plan-version streaming-indicator">{t("common.generating") || "Generating..."}</div>
       </Show>
-    </Show>
+      <Show when={!isPreview()}>
+        <Show
+          when={activeGoals().length > 0}
+          fallback={<p class="empty-hint">{t("empty.plan")}</p>}
+        >
+          <div class="goals-list">
+            <For each={activeGoals()}>
+              {(goal) => (
+                <div class="goal-item">
+                  <span
+                    class="goal-status-icon"
+                    data-status="running"
+                  >
+                    {goalIcon("running")}
+                  </span>
+                  <div class="goal-content">
+                    <div class="plan-version" style="margin-bottom: 4px">
+                      {`Goal#${goal.goalIndex} Plan V${version()}`}
+                    </div>
+                    <div
+                      class="goal-desc md-content"
+                      innerHTML={renderMarkdown(goal.title || "")}
+                    />
+                    <Show when={goal.detail}>
+                      <div
+                        class="goal-criteria md-content"
+                        innerHTML={renderMarkdown(goal.detail)}
+                      />
+                    </Show>
+                  </div>
+                </div>
+              )}
+            </For>
+          </div>
+        </Show>
+      </Show>
+    </>
   );
 }
 
@@ -178,87 +221,93 @@ export function GoalsPanel(props: GoalsPanelProps) {
     >
       <div class="goals-list">
         <For each={props.cards}>
-          {(card) => (
-            <div class="goal-item">
-              <span
-                class="goal-status-icon"
-                data-status={card.status || "pending"}
-              >
-                {goalIcon(card.status)}
-              </span>
-              <div class="goal-content">
-                <div
-                  class="goal-desc md-content"
-                  innerHTML={renderMarkdown(card.title || "")}
-                />
-                <Show when={card.detail}>
-                  <div
-                    class="goal-criteria md-content"
-                    innerHTML={renderMarkdown(card.detail)}
-                  />
-                </Show>
-              </div>
-              <Show when={props.runningGoalIDs.has(card.id)}>
-                <span class="extension-status" data-state="active">
-                  {t("goal.running")}
-                </span>
-              </Show>
-              <Show when={card.metadata?.priority}>
+          {(card, idx) => (
+            <details class="goal-item">
+              <summary class="goal-item-head">
+                <span class="goal-item-chevron" aria-hidden="true">{"\u25B6"}</span>
                 <span
-                  class="goal-priority"
-                  data-priority={card.metadata.priority}
+                  class="goal-status-icon"
+                  data-status={card.status || "pending"}
                 >
-                  {card.metadata.priority}
+                  {goalIcon(card.status)}
                 </span>
-              </Show>
-              <Show when={props.onOpenSession && card.metadata?.sessionID}>
-                <button
-                  type="button"
-                  class="btn btn-ghost mini"
-                  data-goal-action="view-session"
-                  data-goal-id={card.id}
-                  title="View executor session"
-                  aria-label="View executor session"
-                  onClick={() =>
-                    props.onOpenSession?.(card.metadata.sessionID, card.title || card.id)
-                  }
-                >
-                  View
-                </button>
-              </Show>
-              <Show when={props.onEditGoal || props.onDeleteGoal}>
-                <div class="goal-actions">
-                  <Show when={props.onEditGoal}>
-                    <button
-                      type="button"
-                      class="btn btn-ghost mini"
-                      data-goal-action="edit"
-                      data-goal-id={card.id}
-                      title={t("goal.edit_button_title")}
-                      aria-label={t("goal.edit_button_title")}
-                      onClick={() =>
-                        props.onEditGoal?.(card.id, card.title, card.detail || "")
-                      }
-                    >
-                      {t("common.edit")}
-                    </button>
-                  </Show>
-                  <Show when={props.onDeleteGoal}>
-                    <button
-                      type="button"
-                      class="btn btn-ghost mini danger"
-                      data-goal-action="delete"
-                      data-goal-id={card.id}
-                      title={t("goal.delete_button_title")}
-                      aria-label={t("goal.delete_button_title")}
-                      onClick={() => props.onDeleteGoal?.(card.id)}
-                    >
-                      {t("common.delete")}
-                    </button>
+                <span class="goal-desc-inline">{`Goal#${idx() + 1}`}</span>
+                <Show when={props.runningGoalIDs.has(card.id)}>
+                  <span class="extension-status" data-state="active">
+                    {t("goal.running")}
+                  </span>
+                </Show>
+                <Show when={card.metadata?.priority}>
+                  <span
+                    class="goal-priority"
+                    data-priority={card.metadata.priority}
+                  >
+                    {card.metadata.priority}
+                  </span>
+                </Show>
+              </summary>
+              <div class="goal-item-body">
+                <div class="goal-content">
+                  <div
+                    class="goal-desc md-content"
+                    innerHTML={renderMarkdown(card.title || "")}
+                  />
+                  <Show when={card.detail}>
+                    <div
+                      class="goal-criteria md-content"
+                      innerHTML={renderMarkdown(card.detail)}
+                    />
                   </Show>
                 </div>
-              </Show>
-            </div>
+                <Show when={props.onOpenSession && card.metadata?.sessionID}>
+                  <button
+                    type="button"
+                    class="btn btn-ghost mini"
+                    data-goal-action="view-session"
+                    data-goal-id={card.id}
+                    title="View executor session"
+                    aria-label="View executor session"
+                    onClick={() =>
+                      props.onOpenSession?.(card.metadata.sessionID, card.title || card.id)
+                    }
+                  >
+                    View
+                  </button>
+                </Show>
+                <Show when={props.onEditGoal || props.onDeleteGoal}>
+                  <div class="goal-actions">
+                    <Show when={props.onEditGoal}>
+                      <button
+                        type="button"
+                        class="btn btn-ghost mini"
+                        data-goal-action="edit"
+                        data-goal-id={card.id}
+                        title={t("goal.edit_button_title")}
+                        aria-label={t("goal.edit_button_title")}
+                        onClick={() =>
+                          props.onEditGoal?.(card.id, card.title, card.detail || "")
+                        }
+                      >
+                        {t("common.edit")}
+                      </button>
+                    </Show>
+                    <Show when={props.onDeleteGoal}>
+                      <button
+                        type="button"
+                        class="btn btn-ghost mini danger"
+                        data-goal-action="delete"
+                        data-goal-id={card.id}
+                        title={t("goal.delete_button_title")}
+                        aria-label={t("goal.delete_button_title")}
+                        onClick={() => props.onDeleteGoal?.(card.id)}
+                      >
+                        {t("common.delete")}
+                      </button>
+                    </Show>
+                  </div>
+                </Show>
+              </div>
+            </details>
           )}
         </For>
       </div>
@@ -1044,21 +1093,28 @@ export function Board(props: BoardProps) {
         />
       </SectionFrame>
 
-      <SectionFrame
-        id="planSection"
-        title={t("section.plan")}
-        icon={SECTION_ICONS.plan}
-        bodyId="planBody"
-        badgeId="planBadge"
-        badgeText={plan() ? (goalsBadgeText() || `v${plan()?.version}`) : ""}
-        badgeTone={plan() ? (goalsBadgeTone() || "accent") : ""}
-      >
-        <PlanPanel plan={plan()} preview={boardStore.planPreview} />
-      </SectionFrame>
+      <Show when={task()?.status && !["completed", "failed", "cancelled"].includes(task()!.status)}>
+        <SectionFrame
+          id="planSection"
+          title={t("section.plan")}
+          icon={SECTION_ICONS.plan}
+          bodyId="planBody"
+          badgeId="planBadge"
+          badgeText={runningGoalIDs().size > 0 ? String(runningGoalIDs().size) : ""}
+          badgeTone={runningGoalIDs().size > 0 ? "accent" : ""}
+        >
+          <PlanPanel
+            plan={plan()}
+            preview={boardStore.planPreview}
+            goalCards={goalsCards()}
+            runningGoalIDs={runningGoalIDs()}
+          />
+        </SectionFrame>
+      </Show>
 
       <SectionFrame
         id="criteriaSection"
-        title={t("section.criteria")}
+        title={t("section.evaluation")}
         icon={SECTION_ICONS.criteria}
         bodyId="criteriaBody"
         badgeId="criteriaBadge"

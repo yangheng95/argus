@@ -975,11 +975,11 @@ async function compile(input: GoalCompileInput): Promise<GoalDraft> {
         }
       }
     }
-    const previousSameLayer = priorByLayerId.get(layerDef.id)
-    if (previousSameLayer && previousSameLayer !== cluster.id) {
-      dependencies.add(previousSameLayer)
-    }
-    priorByLayerId.set(layerDef.id, cluster.id)
+    // NOTE: same-layer goals are intentionally NOT chained.
+    // Previously, each goal depended on the prior goal in the same layer,
+    // forcing serial execution even when maxExecutorGroups > 1.
+    // Same-layer goals already share the same upstream layer dependencies,
+    // so they can safely execute in parallel within their layer.
 
     const ownedPaths = uniqueStrings([
       ...cluster.records.flatMap((item) => item.explicitOwnedPaths),

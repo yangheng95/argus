@@ -1,13 +1,13 @@
-import { For, Index, Switch, Match, Show, createMemo, createSignal } from "solid-js";
+import { Index, Switch, Match, Show, createMemo } from "solid-js";
 import { TextPart } from "./TextPart";
 import { ToolPart } from "./ToolPart";
 import { ReasoningPart } from "./ReasoningPart";
-import { ExecutorProcessOutput } from "./ExecutorProcessOutput";
+import { ExecutorGoalBlock } from "./ExecutorGoalBlock";
 import { orderedMessageParts, roleLabel, effectiveRole } from "../utils/message";
 import { escapeHtml } from "../utils/markdown";
 import { stamp } from "../utils/time";
 import { shortRelativePath } from "../utils/tool";
-import { activeDirectory, rootTaskSessionID } from "../store/board";
+import { activeDirectory, rootTaskSessionID, goalSessionIDs } from "../store/board";
 
 /** Render a file part — images get <img>, others get filename text. */
 function renderFilePart(part: any): string {
@@ -25,7 +25,7 @@ function renderFilePart(part: any): string {
 }
 
 export function MessageView(props: { message: any }) {
-  const role = () => effectiveRole(props.message, rootTaskSessionID());
+  const role = () => effectiveRole(props.message, rootTaskSessionID(), goalSessionIDs());
   const parts = () => orderedMessageParts(props.message);
   const time = () => stamp(props.message.info?.time?.created);
 
@@ -57,114 +57,74 @@ export function MessageView(props: { message: any }) {
   const goalRunID = () => props.message?.info?.goalRunID;
   const goalTitle = () => props.message?.info?.goalTitle;
   const isExecutorProcess = () => executorType() === "process";
-  const [collapsed, setCollapsed] = createSignal(false);
+
+  const executorProcesses = createMemo(() => {
+    if (!isExecutorProcess()) return [];
+    return parts().map((p: any) => p.process).filter(Boolean);
+  });
 
   return (
     <Show when={hasContent()}>
-      <article
-        class="turn msg"
-        data-role={role()}
-        data-executor-type={executorType()}
-        data-goal-run={goalRunID() || undefined}
-        data-collapsed={collapsed() ? "true" : undefined}
-      >
-        <div
-          class={`msg-head${isExecutorProcess() ? " msg-head-collapsible" : ""}`}
-          onClick={isExecutorProcess() ? () => setCollapsed(c => !c) : undefined}
-        >
-          <Show when={goalRunID()} fallback={<span class="msg-role">{roleLabel(role())}</span>}>
-            <span class="msg-role goal-executor-label">
-              {goalTitle() || `Goal ${goalRunID()!.slice(-8)}`}
-            </span>
-          </Show>
-          <Show when={isExecutorProcess()}>
-            <span class="msg-head-toggle" aria-hidden="true">
-              {collapsed() ? "▶" : "▼"}
-            </span>
-          </Show>
-          <span class="msg-time">{time()}</span>
-        </div>
-        <Show when={!collapsed()}>
-        <div class="msg-bubble">
-          <div class="msg-body">
-            <Index each={parts()}>
-              {(part) => (
-                <Switch fallback={null}>
-                  <Match when={part().type === "text" && (part().text || "").trim()}>
-                    <TextPart text={part().text || ""} />
-                  </Match>
-                  <Match when={part().type === "tool"}>
-                    <ToolPart part={part()} />
-                  </Match>
-                  <Match when={part().type === "reasoning" && (part().text || "").trim()}>
-                    <ReasoningPart part={part()} />
-                  </Match>
-                  <Match when={part().type === "patch" && (part().files || []).length > 0}>
-                    <div class="msg-patch">
-                      {"\u2699 " +
-                        (part().files || [])
-                          .map((f: string) => shortRelativePath(f, activeDirectory()))
-                          .join(", ")}
-                    </div>
-                  </Match>
-                  <Match when={part().type === "file"}>
-                    <div innerHTML={renderFilePart(part())} />
-                  </Match>
-                  <Match when={part().type === "subtask"}>
-                    <div class="msg-tool">
-                      <span class="tool-icon">{"\u2192"}</span>
-                      <span class="tool-name">Subtask</span>
-                      <span class="tool-detail">{part().description || part().prompt || ""}</span>
-                    </div>
-                  </Match>
-                  <Match when={part().type === "executor_process" && part().process}>
-                    <div
-                      class="executor-process-card"
-                      data-status={part().process.status || "running"}
-                      data-live={part().process.status === "running" ? "true" : "false"}
-                    >
-                      <div class="executor-process-head">
-                        <span class="executor-process-kind">
-                          {String(part().process.kind || "task")}
-                        </span>
-                        <div class="executor-process-meta">
-                          <div class="executor-process-row">
-                            <div class="executor-process-title">
-                              {part().process.title || part().process.id || ""}
-                            </div>
-                            <div
-                              class="executor-process-status"
-                              data-status={part().process.status || "running"}
-                            >
-                              {part().process.status || "running"}
-                            </div>
-                          </div>
-                          <Show when={part().process.detail}>
-                            <div class="executor-process-detail">{part().process.detail}</div>
-                          </Show>
-                          <Show when={part().process.progress}>
-                            <div class="executor-process-progress">
-                              <span class="executor-process-activity" />
-                              <span>{part().process.progress}</span>
-                            </div>
-                          </Show>
-                          <Show when={part().process.note}>
-                            <div class="executor-process-note">{part().process.note}</div>
-                          </Show>
-                          <Show when={part().process.output}>
-                            <ExecutorProcessOutput text={part().process.output} />
-                          </Show>
+      <Show
+        when={isExecutorProcess()}
+        fallback={
+          <article
+            class="turn msg"
+            data-role={role()}
+            data-executor-type={executorType()}
+          >
+            <div class="msg-head">
+              <span class="msg-role">{roleLabel(role())}</span>
+              <span class="msg-time">{time()}</span>
+            </div>
+            <div class="msg-bubble">
+              <div class="msg-body">
+                <Index each={parts()}>
+                  {(part) => (
+                    <Switch fallback={null}>
+                      <Match when={part().type === "text" && (part().text || "").trim()}>
+                        <TextPart text={part().text || ""} />
+                      </Match>
+                      <Match when={part().type === "tool"}>
+                        <ToolPart part={part()} />
+                      </Match>
+                      <Match when={part().type === "reasoning" && (part().text || "").trim()}>
+                        <ReasoningPart part={part()} />
+                      </Match>
+                      <Match when={part().type === "patch" && (part().files || []).length > 0}>
+                        <div class="msg-patch">
+                          {"\u2699 " +
+                            (part().files || [])
+                              .map((f: string) => shortRelativePath(f, activeDirectory()))
+                              .join(", ")}
                         </div>
-                      </div>
-                    </div>
-                  </Match>
-                </Switch>
-              )}
-            </Index>
-          </div>
-        </div>
-        </Show>
-      </article>
+                      </Match>
+                      <Match when={part().type === "file"}>
+                        <div innerHTML={renderFilePart(part())} />
+                      </Match>
+                      <Match when={part().type === "subtask"}>
+                        <div class="msg-tool">
+                          <span class="tool-icon">{"\u2192"}</span>
+                          <span class="tool-name">Subtask</span>
+                          <span class="tool-detail">{part().description || part().prompt || ""}</span>
+                        </div>
+                      </Match>
+                    </Switch>
+                  )}
+                </Index>
+              </div>
+            </div>
+          </article>
+        }
+      >
+        <article class="turn msg" data-role={role()} data-executor-type="process">
+          <ExecutorGoalBlock
+            processes={executorProcesses()}
+            goalRunID={goalRunID()}
+            goalTitle={goalTitle()}
+          />
+        </article>
+      </Show>
     </Show>
   );
 }
