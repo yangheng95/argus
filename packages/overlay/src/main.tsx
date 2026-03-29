@@ -491,6 +491,46 @@ if (boardEl) {
           goalCrit.value = detail || "";
           goalDialog.showModal();
         }}
+        onOpenSession={async (sessionID, goalTitle) => {
+          const dialog = document.getElementById("sessionDialog") as HTMLDialogElement | null;
+          const titleEl = document.getElementById("sessionDialogTitle");
+          const bodyEl = document.getElementById("sessionDialogBody");
+          if (!dialog || !titleEl || !bodyEl) return;
+          titleEl.textContent = goalTitle || "Executor Session";
+          bodyEl.innerHTML = '<p class="empty-hint">Loading…</p>';
+          dialog.showModal();
+          try {
+            // API returns MessageV2.WithParts[]: each element is { info: { role, ... }, parts: [...] }
+            const messages: any[] = await apiJson(`session/${sessionID}/messages`);
+            if (!messages || messages.length === 0) {
+              bodyEl.innerHTML = '<p class="empty-hint">No messages yet.</p>';
+              return;
+            }
+            const html = messages.map((msg: any) => {
+              const role: string = msg.info?.role ?? msg.role ?? "unknown";
+              const parts: any[] = Array.isArray(msg.parts) ? msg.parts : [];
+              const textParts = parts
+                .filter((p) => p.type === "text" && p.text && p.audience?.ui !== false)
+                .map((p) => `<p class="session-msg-text">${escapeHtml(p.text)}</p>`)
+                .join("");
+              const toolParts = parts
+                .filter((p) => p.type === "tool-invocation" || p.type === "tool-call")
+                .map((p) => {
+                  const name = p.toolName ?? p.tool ?? "tool";
+                  return `<p class="session-msg-tool">⚙ ${escapeHtml(name)}</p>`;
+                })
+                .join("");
+              if (!textParts && !toolParts) return "";
+              return `<div class="session-msg" data-role="${escapeHtml(role)}">
+                <span class="session-msg-role">${escapeHtml(role)}</span>
+                ${textParts}${toolParts}
+              </div>`;
+            }).filter(Boolean).join("");
+            bodyEl.innerHTML = html || '<p class="empty-hint">No displayable messages.</p>';
+          } catch (e) {
+            bodyEl.innerHTML = `<p class="empty-hint">Failed to load session: ${escapeHtml(String(e))}</p>`;
+          }
+        }}
         onDeleteGoal={async (goalId) => {
           if (!goalId || !boardStore.selectedTaskID) return;
           const nativeConfirm = (window as any).nativeConfirm;
@@ -569,6 +609,11 @@ if (composerEl) {
           } else {
             void stopChatRequest();
           }
+        }}
+        canCancel={!!(boardStore.board?.overview?.controls?.canCancel)}
+        onCancel={() => {
+          const id = boardStore.selectedTaskID;
+          if (id) void cancelTask(id);
         }}
       />
     ),
@@ -722,6 +767,11 @@ document.addEventListener("DOMContentLoaded", () => {
       (
         document.getElementById("configDialog") as HTMLDialogElement | null
       )?.close();
+    });
+  document
+    .getElementById("btnCloseSession")
+    ?.addEventListener("click", () => {
+      (document.getElementById("sessionDialog") as HTMLDialogElement | null)?.close();
     });
 
  // ── Config tab navigation ──

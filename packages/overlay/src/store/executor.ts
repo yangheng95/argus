@@ -2,6 +2,7 @@
 // Solid reactive store for executor events.
 // Replaces direct reads of state.executorEvents / state.executorRunID.
 
+import { batch } from "solid-js";
 import { createStore, produce, reconcile } from "solid-js/store";
 
 // ── Types ──
@@ -242,10 +243,13 @@ export function clearExecutorEvents(): void {
   setStore("fetchedAt", 0);
 }
 
-export function setExecutorEvents(events: ExecutorEvent[]): void {
+export function setExecutorEvents(events: ExecutorEvent[], runID?: string): void {
   for (const key of executorLiveTimers.keys()) {
     stopExecutorLiveTimer(key);
   }
-  setStore("events", reconcile(Array.isArray(events) ? events : []));
-  setStore("fetchedAt", Date.now());
+  batch(() => {
+    setStore("events", reconcile(Array.isArray(events) ? events : []));
+    if (runID !== undefined) setStore("runID", runID);
+    setStore("fetchedAt", Date.now());
+  });
 }

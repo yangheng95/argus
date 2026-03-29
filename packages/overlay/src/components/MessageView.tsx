@@ -1,7 +1,8 @@
-import { For, Index, Switch, Match, Show, createMemo } from "solid-js";
+import { For, Index, Switch, Match, Show, createMemo, createSignal } from "solid-js";
 import { TextPart } from "./TextPart";
 import { ToolPart } from "./ToolPart";
 import { ReasoningPart } from "./ReasoningPart";
+import { ExecutorProcessOutput } from "./ExecutorProcessOutput";
 import { orderedMessageParts, roleLabel, effectiveRole } from "../utils/message";
 import { escapeHtml } from "../utils/markdown";
 import { stamp } from "../utils/time";
@@ -55,6 +56,8 @@ export function MessageView(props: { message: any }) {
 
   const goalRunID = () => props.message?.info?.goalRunID;
   const goalTitle = () => props.message?.info?.goalTitle;
+  const isExecutorProcess = () => executorType() === "process";
+  const [collapsed, setCollapsed] = createSignal(false);
 
   return (
     <Show when={hasContent()}>
@@ -63,15 +66,25 @@ export function MessageView(props: { message: any }) {
         data-role={role()}
         data-executor-type={executorType()}
         data-goal-run={goalRunID() || undefined}
+        data-collapsed={collapsed() ? "true" : undefined}
       >
-        <div class="msg-head">
+        <div
+          class={`msg-head${isExecutorProcess() ? " msg-head-collapsible" : ""}`}
+          onClick={isExecutorProcess() ? () => setCollapsed(c => !c) : undefined}
+        >
           <Show when={goalRunID()} fallback={<span class="msg-role">{roleLabel(role())}</span>}>
             <span class="msg-role goal-executor-label">
               {goalTitle() || `Goal ${goalRunID()!.slice(-8)}`}
             </span>
           </Show>
+          <Show when={isExecutorProcess()}>
+            <span class="msg-head-toggle" aria-hidden="true">
+              {collapsed() ? "▶" : "▼"}
+            </span>
+          </Show>
           <span class="msg-time">{time()}</span>
         </div>
+        <Show when={!collapsed()}>
         <div class="msg-bubble">
           <div class="msg-body">
             <Index each={parts()}>
@@ -139,7 +152,7 @@ export function MessageView(props: { message: any }) {
                             <div class="executor-process-note">{part().process.note}</div>
                           </Show>
                           <Show when={part().process.output}>
-                            <pre class="executor-process-output">{part().process.output}</pre>
+                            <ExecutorProcessOutput text={part().process.output} />
                           </Show>
                         </div>
                       </div>
@@ -150,6 +163,7 @@ export function MessageView(props: { message: any }) {
             </Index>
           </div>
         </div>
+        </Show>
       </article>
     </Show>
   );

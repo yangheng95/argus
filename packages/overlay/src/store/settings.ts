@@ -48,7 +48,7 @@ export interface OverlaySettings {
 
 function sanitizeTheme(value: any): string {
   const text = String(value || "").trim();
-  return text === "light" || text === "dark" ? text : "dark";
+  return text === "light" || text === "dark" || text === "vscode-dark" ? text : "dark";
 }
 
 export const MIN_WINDOW_OPACITY = 0.5;

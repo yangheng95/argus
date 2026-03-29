@@ -32,6 +32,10 @@ export interface ChatComposerProps {
   onSubmit: (text: string, attachments: ChatAttachment[]) => void;
   /** Called when the user clicks the stop button while a request is in flight. */
   onStop?: () => void;
+  /** Whether the cancel task button should be shown. */
+  canCancel?: boolean;
+  /** Called when the user clicks the cancel task button. */
+  onCancel?: () => void;
 }
 
 // ── Constants ──
@@ -283,31 +287,47 @@ export function ChatComposer(props: ChatComposerProps) {
           onPaste={handlePaste}
         />
         <div class="chat-compose-actions">
-          {/* Attach button */}
-          <button
-            type="button"
-            id="btnChatAttach"
-            class="chat-attach-btn"
-            title={t("chat.attach_title")}
-            aria-label={t("chat.attach_title")}
-            onClick={() => fileInputRef?.click()}
-          >
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 16 16"
-              fill="none"
-              aria-hidden="true"
+          {/* Cancel + Attach stacked in a column */}
+          <div class="chat-icon-col">
+            {/* Attach button */}
+            <button
+              type="button"
+              id="btnChatAttach"
+              class="chat-attach-btn"
+              title={t("chat.attach_title")}
+              aria-label={t("chat.attach_title")}
+              onClick={() => fileInputRef?.click()}
             >
-              <path
-                d="M13.5 7.5l-5.8 5.8a3.2 3.2 0 01-4.5-4.5L9 3a2 2 0 012.8 2.8L6 11.6a.8.8 0 01-1.1-1.1L10.5 5"
-                stroke="currentColor"
-                stroke-width="1.2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              />
-            </svg>
-          </button>
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 16 16"
+                fill="none"
+                aria-hidden="true"
+              >
+                <path
+                  d="M13.5 7.5l-5.8 5.8a3.2 3.2 0 01-4.5-4.5L9 3a2 2 0 012.8 2.8L6 11.6a.8.8 0 01-1.1-1.1L10.5 5"
+                  stroke="currentColor"
+                  stroke-width="1.2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+              </svg>
+            </button>
+            <button
+              type="button"
+              class="chat-cancel-btn"
+              title={t("task.action.cancel_title")}
+              aria-label={t("task.action.cancel_title")}
+              disabled={!props.canCancel}
+              onClick={() => props.onCancel?.()}
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.2"/>
+                <path d="M5.5 5.5l5 5M10.5 5.5l-5 5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+              </svg>
+            </button>
+          </div>
 
           {/* Send / Stop button */}
           <button

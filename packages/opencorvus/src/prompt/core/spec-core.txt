@@ -162,4 +162,4 @@ Before outputting, verify each of these. If ANY answer is NO, use more tools:
 5. Could a planner create implementation steps from this spec WITHOUT further exploration?
 6. Does the summary accurately describe the specification in one line?
 
-For greenfield projects (creating something new with no existing codebase): FIRST use web_search to research current best-practice scaffolding, framework choices, and reference implementations. Then include detailed technical design in the content section.
+For greenfield projects (creating something new with no existing codebase): include detailed technical design in the content section based on your training knowledge of current best-practice scaffolding and framework choices. Do NOT use web_search.

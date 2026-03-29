@@ -1,7 +1,7 @@
 import { Instance } from "@/project/instance"
 import { ProjectTable } from "@/project/project.sql"
 import { SessionTable } from "@/session/session.sql"
-import { Database, NotFoundError, and, desc, eq, inArray, like, lt } from "@/storage/db"
+import { Database, NotFoundError, and, desc, eq, inArray, isNull, like, lt } from "@/storage/db"
 import type { SQL } from "@/storage/db"
 import { Snapshot } from "@/snapshot"
 import { EvaluationCheck } from "./model"
@@ -214,7 +214,10 @@ export function findDeliveryByRun(runID: string) {
     db
       .select()
       .from(OrchestratorDeliveryTable)
-      .where(eq(OrchestratorDeliveryTable.run_id, runID))
+      .where(and(
+        eq(OrchestratorDeliveryTable.run_id, runID),
+        isNull(OrchestratorDeliveryTable.goal_run_id),
+      ))
       .orderBy(desc(OrchestratorDeliveryTable.time_created))
       .get(),
   )

@@ -6,6 +6,7 @@ import {
   OrchestratorChannelBindingTable,
   OrchestratorDeliveryTable,
   OrchestratorEvaluationTable,
+  OrchestratorGoalRunTable,
   OrchestratorGoalTable,
   OrchestratorInteractionRequestTable,
   OrchestratorPlanVersionTable,
@@ -59,6 +60,17 @@ function buildBoard(task: typeof OrchestratorTaskTable.$inferSelect) {
           .all(),
       )
     : []
+  const goalRunSessionMap = run
+    ? new Map(
+        Database.use((db) =>
+          db
+            .select({ goalID: OrchestratorGoalRunTable.goal_id, sessionID: OrchestratorGoalRunTable.session_id })
+            .from(OrchestratorGoalRunTable)
+            .where(eq(OrchestratorGoalRunTable.coordinator_run_id, run.id))
+            .all(),
+        ).map((r) => [r.goalID, r.sessionID]),
+      )
+    : new Map<string, string | null>()
   const interactions = Database.use((db) =>
     db
       .select()
@@ -358,7 +370,10 @@ function buildBoard(task: typeof OrchestratorTaskTable.$inferSelect) {
               detail: goal.criteria,
               status: goal.status,
               time: goal.time_updated,
-              metadata: goal.metadata ?? undefined,
+              metadata: {
+                ...(goal.metadata as Record<string, unknown> | null ?? {}),
+                sessionID: goalRunSessionMap.get(goal.id) ?? undefined,
+              },
             })),
         },
         {

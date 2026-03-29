@@ -33,8 +33,8 @@ export interface NdjsonEvent {
 export interface AppState {
   connectionStatus: ConnectionStatus;
   connected: boolean;
-  /** Resolved effective theme: "dark" | "light" */
-  theme: "dark" | "light";
+  /** Resolved effective theme: "dark" | "light" | "vscode-dark" */
+  theme: "dark" | "light" | "vscode-dark";
   locale: string;
   /** User-configured zoom multiplier (0.8–1.6) */
   zoom: number;
