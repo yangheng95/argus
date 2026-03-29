@@ -119,6 +119,12 @@ Output text directly. Do NOT output JSON. Do NOT wrap in code blocks.
 - The PRD must be detailed enough that an executor agent can implement everything without further exploration.
 - Do NOT produce generic advice like "follow best practices" or "handle edge cases" — be specific about WHICH practices and WHICH edge cases.
 
+## Memory
+
+- During planning, write non-obvious implementation insights to memory (`kind: "lesson"`) — tricky integration points, ordering constraints, or patterns that downstream executors should know.
+- Write discovered build/test commands or environment requirements as `kind: "fact"`.
+- At plan completion, write a brief episode summarizing the plan scope and key decisions (`kind: "episode"`).
+
 ## Quality Standards
 
 Quality is measured by actionability and traceability, not length.

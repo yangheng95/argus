@@ -4,8 +4,10 @@
 
 import { t } from "./i18n";
 import { displayString, clipText } from "./string";
+import { displayToolDetail, displayToolIcon } from "./tool";
 import { AppLog } from "./log";
 import { reasoningPartHidden, touchReasoningPart } from "../store/reasoning";
+import { activeDirectory } from "../store/board";
 import {
   executorStore,
   clearExecutorEvents,
@@ -166,6 +168,26 @@ function eventToolPart(event: any, options: { status?: string; output?: string }
 
 // ── Exported helpers ──
 
+/** Return the canonical tool name for an executor event. */
+export function executorToolName(event: ExecutorEvent): string {
+  return eventToolName(event);
+}
+
+/** Return the display icon for an executor tool event. */
+export function executorToolIcon(event: ExecutorEvent): string {
+  return displayToolIcon(eventToolName(event));
+}
+
+/** Extract a compact detail string (file path, command, pattern) for an executor tool event. */
+export function executorToolDetail(event: ExecutorEvent, base = ""): string {
+  const name = eventToolName(event);
+  const input = toolStateInput(
+    event?.payload?.input ?? event?.payload?.arguments ?? event?.payload?.args ?? "",
+    "",
+  );
+  return displayToolDetail(name, input, {}, base);
+}
+
 /** Normalise a raw event type string to a canonical kind token. */
 export function executorEventKind(type: string): string {
   const text = String(type || "").trim().toLowerCase();
@@ -199,12 +221,11 @@ export function executorEventSourceKind(kind: string, payload: any = {}): string
 }
 
 // Protocol-noise event types that should never become visible executor events.
-// The SSE router (events.ts) filters these for the real-time path; this set
-// guards the API-loaded history path (loadExecutorEvents) identically.
+// message.updated / message.part.updated / message.part.delta are NOT noise —
+// they carry the executor's primary activity (tool calls, streaming text).
 const EXECUTOR_NOISE_TYPES = new Set([
-  "message.updated", "message.part.updated", "message.part.delta",
   "protocol.raw", "executor.status", "executor.progress",
-  "session.diff", "session.idle", "session.status", "session.error",
+  "session.diff", "session.idle",
   "task.report",
 ]);
 
@@ -213,15 +234,50 @@ const EXECUTOR_NOISE_TYPES = new Set([
  * Returns null when the event carries no useful payload or is protocol noise.
  */
 export function executorEventEntry(raw: any): ExecutorEvent | null {
-  const rawType = String(raw?.type || raw?.payload?.type || "").trim().toLowerCase();
+  // Check all possible locations for the original event type string:
+  // - raw.type: present on SSE-constructed objects
+  // - raw.payload.type: present when SSE properties carry the type
+  // - raw.raw.type: present on API-loaded events (DB raw column)
+  const rawType = String(raw?.type || raw?.payload?.type || raw?.raw?.type || "").trim().toLowerCase();
   if (rawType && EXECUTOR_NOISE_TYPES.has(rawType)) return null;
-  const kind = typeof raw?.kind === "string" && raw.kind ? raw.kind : executorEventKind(raw?.type);
+  let kind = typeof raw?.kind === "string" && raw.kind ? raw.kind : executorEventKind(raw?.type);
   const payload =
     record(raw?.payload) && record((raw.payload as any).payload)
       ? { ...raw.payload, ...(raw.payload as any).payload }
       : record(raw?.payload)
         ? raw.payload
         : {};
+
+  // "lifecycle" is a generic placeholder assigned by the orchestrator's
+  // protocolEventKind for unmapped event types. Re-derive the canonical kind
+  // from the original event type so tool calls, message deltas, etc. are
+  // properly classified.
+  if (kind === "lifecycle" && rawType) {
+    kind = executorEventKind(rawType);
+  }
+
+  // For message.part.updated events, inspect the embedded part to distinguish
+  // tool activity (tool_call/tool_result) from text (message_delta).
+  const part = record(payload?.part) ? payload.part : null;
+  if (part && (kind === "message_delta" || kind === "lifecycle" || kind === "status")) {
+    const partType = String((part as any).type || "").trim().toLowerCase();
+    if (partType === "tool") {
+      const state = record((part as any).state) ? (part as any).state : {};
+      const partStatus = String(state.status || "").trim().toLowerCase();
+      kind = (partStatus === "completed" || partStatus === "error") ? "tool_result" : "tool_call";
+      // Flatten tool part fields into payload so downstream process builders
+      // (eventToolName, executorToolDetail, etc.) can extract them.
+      if (!payload.name && (part as any).tool) payload.name = (part as any).tool;
+      if (!payload.id && (part as any).id) payload.id = (part as any).id;
+      if (!payload.input && state.input) payload.input = state.input;
+      if (!payload.output && state.output) payload.output = state.output;
+      if (!payload.status) payload.status = partStatus;
+    }
+  }
+
+  // session.error → error kind
+  if (rawType === "session.error" && kind !== "error") kind = "error";
+
   const summary = typeof raw?.summary === "string"
     ? raw.summary.trim()
     : typeof raw?.text === "string"
@@ -639,9 +695,12 @@ export function buildExecutorProcesses(events: ExecutorEvent[] = []): any[] {
     const id = executorProcessID(event);
     const kind = executorProcessKind(event);
     if (!id || !kind || kind === "assistant" || kind === "status") return;
+    const base = activeDirectory();
     const current = items.get(id) || {
       id,
       kind,
+      toolName: eventToolName(event),
+      toolDetail: executorToolDetail(event, base),
       title: executorProcessTitle(event, events, index),
       detail: "",
       progress: executorProcessProgress(event, events, index),
@@ -686,7 +745,9 @@ export function buildExecutorProcesses(events: ExecutorEvent[] = []): any[] {
       cached.progress === process.progress &&
       cached.note === process.note &&
       cached.output === process.output &&
-      cached.kind === process.kind
+      cached.kind === process.kind &&
+      cached.toolName === process.toolName &&
+      cached.toolDetail === process.toolDetail
     ) {
       result.push(cached);
     } else {

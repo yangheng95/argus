@@ -476,6 +476,7 @@ The evaluator has already verified goal completion and code quality. Your role i
 
 ### Context
 - **memory_search**: Search project memory for past issues
+- **memory_write**: Write delivery findings, runtime patterns, and verification insights to memory
 - **preference_list**: List project conventions
 
 ## Process
@@ -510,6 +511,9 @@ The evaluator has already verified goal completion and code quality. Your role i
    - HTML/JS/CSS assets exist and are non-empty
    - No obvious import or module resolution errors
    - Entry HTML references correct script paths
+
+### Phase 3.5: PERSIST
+When you discover runtime failure patterns, environment quirks, or startup requirements during verification, write them to memory using **memory_write** with kind "lesson" or "fact". This helps future deliveries avoid redundant investigation.
 
 ### Phase 4: VERDICT
 

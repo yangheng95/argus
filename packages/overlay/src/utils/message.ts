@@ -161,22 +161,26 @@ export function agentStageLabel(stage: string): string {
 // ── Effective role ──
 // rootSessionID: pass boardStore.board?.task?.sessionID (or "" if unknown)
 
-export function effectiveRole(msg: any, rootSessionID: string): string {
+export function effectiveRole(msg: any, rootSessionID: string, goalSessionIDs?: Set<string>): string {
   const role = msg.info?.role || "assistant";
   if (role !== "user") {
-    // Detect assistant messages from executor child sessions.
-    // Agent-stage messages (spec/planner/goal/judge/delivery) also run in child
-    // sessions with role "assistant", but carry an `agent` field identifying
-    // their stage. Those are rendered inside AgentCard via MessageView, so we
-    // must NOT relabel them. Only messages without a known agent stage are
-    // executor messages.
+    // Detect assistant messages from executor goal sessions.
+    // If goalSessionIDs is provided, use it as the authoritative set of
+    // executor sessions — this avoids hardcoding agent names.
+    // Fallback: any child-session assistant message whose sessionID is NOT
+    // the root is treated as executor when no goal sessions map is available.
     if (role === "assistant" && rootSessionID && !msg._synthetic) {
       const sessionID =
         typeof msg.info?.sessionID === "string" ? msg.info.sessionID : "";
       if (sessionID && sessionID !== rootSessionID) {
-        const agent = String(msg.info?.agent || "").trim().toLowerCase();
-        if (!agent || agent === "executor" || agent === "coding") {
-          return "executor";
+        if (goalSessionIDs) {
+          if (goalSessionIDs.has(sessionID)) return "executor";
+        } else {
+          // Legacy fallback: child session with non-stage agent → executor
+          const agent = String(msg.info?.agent || "").trim().toLowerCase();
+          if (!agent || agent === "build" || agent === "executor" || agent === "coding") {
+            return "executor";
+          }
         }
       }
     }

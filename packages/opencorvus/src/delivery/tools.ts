@@ -22,7 +22,7 @@ const log = Log.create({ service: "delivery-tools" })
  *
  * Includes:
  * - 4 codebase tools: read_file, find_files, search_code, list_directory
- * - 1 memory tool: memory_search
+ * - 2 memory tools: memory_search, memory_write
  * - 1 preference tool: preference_list
  * - 1 execution tool: run_command (for builds, startup checks)
  *
@@ -64,6 +64,33 @@ export function createDeliveryTools(input?: { sessionID?: string }) {
         } catch (err) {
           log.warn("memory search failed in delivery agent", { query, err })
           return "Memory search unavailable."
+        }
+      },
+    }),
+
+    memory_write: tool({
+      description:
+        "Write knowledge to project memory. Use to persist delivery findings, runtime failure patterns, " +
+        "and verification insights so future deliveries can reference them.",
+      inputSchema: z.object({
+        title: z.string().describe("Short descriptive title"),
+        content: z.string().describe("Markdown content to save"),
+        kind: z.enum(["fact", "lesson", "episode"]).optional().describe("Memory kind (default: lesson)"),
+      }),
+      execute: async ({ title, content, kind }) => {
+        try {
+          const file = Memory.writeFile({
+            title,
+            content,
+            source: "agent",
+            projectId,
+            scope: "global",
+            kind: kind ?? "lesson",
+          })
+          return `Saved: ${title} (id: ${file.id})`
+        } catch (err) {
+          log.warn("memory write failed in delivery agent", { title, err })
+          return "Memory write failed."
         }
       },
     }),

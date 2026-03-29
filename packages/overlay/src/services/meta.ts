@@ -84,7 +84,8 @@ export async function loadMeta(): Promise<void> {
  */
 function gitLabel(vcs: any, dir: string): string {
   if (!dir) return t("git.unavailable");
-  if (!vcs?.branch) return t("git.init");
+  if (vcs === null || vcs === undefined) return t("git.unavailable");
+  if (!vcs.branch) return t("git.init");
   const parts: string[] = [vcs.branch];
   if (vcs.ahead) parts.push(`+${vcs.ahead}`);
   if (vcs.behind) parts.push(`-${vcs.behind}`);
@@ -106,7 +107,8 @@ function gitLabel(vcs: any, dir: string): string {
  */
 function gitTitle(vcs: any, dir: string): string {
   if (!dir) return "";
-  if (!vcs?.branch) return t("git.init_title");
+  if (vcs === null || vcs === undefined) return "";
+  if (!vcs.branch) return t("git.init_title");
   return [
     t("git.branch", { value: vcs.branch }),
     t("git.clean_title", { value: vcs.clean ? t("common.yes") : t("common.no") }),
@@ -120,7 +122,9 @@ function gitTitle(vcs: any, dir: string): string {
 }
 
 function canInitGit(): boolean {
-  return !!settingsStore.directory && !boardStore.vcs?.branch;
+  const vcs = boardStore.vcs;
+  if (vcs === null || vcs === undefined) return false;
+  return !!settingsStore.directory && !vcs.branch;
 }
 
 function relativePathFrom(base: string, target: string): string {

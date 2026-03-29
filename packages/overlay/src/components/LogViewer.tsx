@@ -488,91 +488,93 @@ export function LogViewer(props: LogViewerProps) {
   return (
     <dialog
       id="logDialog"
-      class="dialog log-dialog"
+      class="dialog dialog-wide"
       ref={(el) => (dialogRef = el)}
     >
-      <div class="dialog-header">
-        <span class="dialog-title">{t("log.title")}</span>
-        <div class="dialog-header-actions">
-          <select
-            id="logLevelFilter"
-            class="select select-sm"
-            value={appStore.logFilterLevel}
-            onChange={handleLevelChange}
-            aria-label={t("log.filter_level")}
-          >
-            <option value="debug">DEBUG</option>
-            <option value="info">INFO</option>
-            <option value="warn">WARN</option>
-            <option value="error">ERROR</option>
-          </select>
-          <button
-            type="button"
-            id="btnLogServerLogs"
-            class="btn btn-ghost mini"
-            onClick={() => void refresh()}
-            disabled={loading()}
-          >
-            {t("log.load_server")}
-          </button>
-          <button
-            type="button"
-            id="btnLogRefresh"
-            class="btn btn-ghost mini"
-            onClick={() => void refresh()}
-            disabled={loading()}
-          >
-            {t("common.refresh")}
-          </button>
-          <button
-            type="button"
-            id="btnLogCopy"
-            class="btn btn-ghost mini"
-            onClick={() => void handleCopy()}
-            disabled={loading() || entries().length === 0}
-          >
-            {t("common.copy")}
-          </button>
-          <button
-            type="button"
-            id="btnLogClear"
-            class="btn btn-ghost mini danger"
-            onClick={handleClear}
-          >
-            {t("common.clear")}
-          </button>
-          <button
-            type="button"
-            id="btnCloseLog"
-            class="btn btn-ghost mini"
-            onClick={() => {
-              dialogRef?.close();
-              props.onClose?.();
-            }}
-          >
-            {t("common.close")}
-          </button>
+      <div class="dialog-form">
+        <div class="dialog-header">
+          <span class="dialog-title">{t("log.title")}</span>
+          <div class="dialog-header-actions">
+            <select
+              id="logLevelFilter"
+              class="select select-sm"
+              value={appStore.logFilterLevel}
+              onChange={handleLevelChange}
+              aria-label={t("log.filter_level")}
+            >
+              <option value="debug">DEBUG</option>
+              <option value="info">INFO</option>
+              <option value="warn">WARN</option>
+              <option value="error">ERROR</option>
+            </select>
+            <button
+              type="button"
+              id="btnLogServerLogs"
+              class="btn btn-ghost mini"
+              onClick={() => void refresh()}
+              disabled={loading()}
+            >
+              {t("log.load_server")}
+            </button>
+            <button
+              type="button"
+              id="btnLogRefresh"
+              class="btn btn-ghost mini"
+              onClick={() => void refresh()}
+              disabled={loading()}
+            >
+              {t("common.refresh")}
+            </button>
+            <button
+              type="button"
+              id="btnLogCopy"
+              class="btn btn-ghost mini"
+              onClick={() => void handleCopy()}
+              disabled={loading() || entries().length === 0}
+            >
+              {t("common.copy")}
+            </button>
+            <button
+              type="button"
+              id="btnLogClear"
+              class="btn btn-ghost mini danger"
+              onClick={handleClear}
+            >
+              {t("common.clear")}
+            </button>
+            <button
+              type="button"
+              id="btnCloseLog"
+              class="btn btn-ghost mini"
+              onClick={() => {
+                dialogRef?.close();
+                props.onClose?.();
+              }}
+            >
+              {t("common.close")}
+            </button>
+          </div>
         </div>
-      </div>
 
-      <div
-        id="logViewerBody"
-        class="log-viewer-body"
-        ref={(el) => (bodyRef = el)}
-      >
-        <Show
-          when={entries().length > 0}
-          fallback={
-            <div class="empty-hint">{t("log.empty")}</div>
-          }
+        <div
+          id="logViewerBody"
+          class="log-viewer"
+          ref={(el) => (bodyRef = el)}
         >
-          <For each={entries()} fallback={null}>
-            {(entry) => {
-              doScroll();
-              return <LogLine entry={entry} />;
-            }}
-          </For>
-        </Show>
+          <Show
+            when={entries().length > 0}
+            fallback={
+              <div class="empty-hint">{t("log.empty")}</div>
+            }
+          >
+            <For each={entries()} fallback={null}>
+              {(entry) => {
+                doScroll();
+                return <LogLine entry={entry} />;
+              }}
+            </For>
+          </Show>
+        </div>
       </div>
     </dialog>
   );

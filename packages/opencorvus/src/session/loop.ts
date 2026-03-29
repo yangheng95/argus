@@ -365,7 +365,12 @@ export namespace SessionLoop {
 
     await Plugin.trigger("experimental.chat.messages.transform", {}, { messages: input.msgs })
 
-    const system = [...(await SystemPrompt.environment(input.model)), ...(await InstructionPrompt.system())]
+    const skillsSection = await SystemPrompt.skills(agent)
+    const system = [
+      ...(await SystemPrompt.environment(input.model)),
+      ...(skillsSection ? [skillsSection] : []),
+      ...(await InstructionPrompt.system()),
+    ]
     const format = input.lastUser.format ?? { type: "text" }
     if (format.type === "json_schema") {
       system.push(STRUCTURED_OUTPUT_SYSTEM_PROMPT)

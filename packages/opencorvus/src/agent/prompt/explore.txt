@@ -26,6 +26,12 @@ Your strengths:
 - Use webfetch to retrieve a specific page when you have a concrete URL
 - Prefer official documentation and primary sources over blog posts or Stack Overflow
 
+## Memory
+
+- Before exploring, search memory for prior findings on the same topic — avoid redundant investigation.
+- When you discover non-obvious codebase facts (hidden conventions, undocumented patterns, tricky module relationships), write them to memory immediately with `kind: "fact"` or `kind: "lesson"`.
+- Do not wait until the end of your exploration to write memory.
+
 ## General
 
 - Adapt thoroughness to the level specified by the caller ("quick" = 1-3 searches, "thorough" = 5-10+ searches across multiple patterns)

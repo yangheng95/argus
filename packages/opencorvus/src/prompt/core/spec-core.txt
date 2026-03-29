@@ -122,6 +122,12 @@ Output text directly. Do NOT output JSON. Do NOT wrap in code blocks.
 - Write in the same language as the request (Chinese request → Chinese spec).
 - If rewriting after failure: revise the spec to address the root cause — do not repeat the same approach.
 
+## Memory
+
+- During exploration, write non-obvious codebase discoveries to memory (`kind: "fact"` or `kind: "lesson"`) so downstream agents and future sessions benefit.
+- When you encounter architectural constraints, undocumented conventions, or tricky dependencies, write them immediately — do not wait until the spec is complete.
+- At spec completion, write a brief episode summarizing what was specified and key constraints discovered (`kind: "episode"`).
+
 ## Quality Standards
 
 Quality is measured by specificity and grounding, not length.

@@ -2,9 +2,12 @@ import os from "os"
 import { Instance } from "../project/instance"
 import { Shell } from "@/shell/shell"
 import { Config } from "@/config/config"
+import { Skill } from "@/skill"
+import { PermissionNext } from "@/permission/next"
 
 import PROMPT_SYSTEM from "./prompt/system.txt"
 import type { Provider } from "@/provider/provider"
+import type { Agent } from "@/agent/agent"
 
 const TUI_WORKFLOW = [
   "<tui-workflow>",
@@ -78,6 +81,7 @@ export namespace SystemPrompt {
         `Here is some useful information about the environment you are running in:`,
         `<env>`,
         `  Working directory: ${Instance.directory}`,
+        `  Workspace root folder: ${Instance.worktree}`,
         `  Is directory a git repo: ${project.vcs === "git" ? "yes" : "no"}`,
         `  Platform: ${platform} (${arch})`,
         `  Hostname: ${hostname}`,
@@ -90,5 +94,31 @@ export namespace SystemPrompt {
       ].join("\n"),
       TUI_WORKFLOW,
     ]
+  }
+
+  export async function skills(agent: Agent.Info): Promise<string | undefined> {
+    if (PermissionNext.disabled(["skill"], agent.permission).has("skill")) return
+
+    const all = await Skill.all()
+    const accessible = all.filter((skill) => {
+      const rule = PermissionNext.evaluate("skill", skill.name, agent.permission)
+      return rule.action !== "deny"
+    })
+    if (accessible.length === 0) return
+
+    const platform = process.platform
+    const compatible = accessible.filter(
+      (s) => s.platforms.length === 0 || s.platforms.includes(platform as "win32" | "darwin" | "linux"),
+    )
+    if (compatible.length === 0) return
+
+    return [
+      "Skills provide specialized instructions and workflows for specific tasks.",
+      "Use the skill tool to load a skill when a task matches its description.",
+      "",
+      "<available_skills>",
+      ...compatible.map((s) => `- ${s.name}: ${s.description}`),
+      "</available_skills>",
+    ].join("\n")
   }
 }

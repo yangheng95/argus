@@ -8,6 +8,7 @@
 import { createSignal, createMemo, createEffect, For, Show } from "solid-js";
 import { boardStore } from "../store/board";
 import { deriveChanges } from "../services/meta";
+import { apiJson } from "../services/api";
 import { t, tc } from "../utils/i18n";
 
 // ── Types ──
@@ -362,7 +363,9 @@ export interface ChangesPanelProps {
 }
 
 export function ChangesPanel(props: ChangesPanelProps) {
-  const [selectedIndex, setSelectedIndex] = createSignal<number | null>(null);
+  const [selectedItem, setSelectedItem] = createSignal<FileChange | null>(null);
+  // Cache full diffs once fetched per delivery
+  let fullDiffCache: { runID: string; diffs: FileChange[] } | null = null;
 
  // Use provided changes or fall back to boardStore
   const files = createMemo<FileChange[]>(() => {
@@ -383,18 +386,53 @@ export function ChangesPanel(props: ChangesPanelProps) {
     files().reduce((sum, item) => sum + (item.deletions ?? 0), 0),
   );
 
-  const selectedItem = createMemo<FileChange | null>(() => {
-    const idx = selectedIndex();
-    if (idx === null) return null;
-    return files()[idx] ?? null;
-  });
+  /** Find the delivery runID from the board store. */
+  function deliveryRunID(): string {
+    const board = boardStore.board as any;
+    const delivery = board?.acceptedDelivery || board?.delivery || board?.candidateDelivery;
+    return typeof delivery?.runID === "string" ? delivery.runID : "";
+  }
 
-  function openDiff(index: number) {
-    setSelectedIndex(index);
+  /** Fetch full diff content from the delivery API. */
+  async function fetchFullDiffs(runID: string): Promise<FileChange[]> {
+    if (fullDiffCache && fullDiffCache.runID === runID) return fullDiffCache.diffs;
+    const data = await apiJson(`run/${encodeURIComponent(runID)}/delivery`);
+    const rawDiffs = (data as any)?.result?.diffs;
+    const diffs: FileChange[] = (Array.isArray(rawDiffs) ? rawDiffs : [])
+      .filter((d: any) => d && typeof d.file === "string")
+      .map((d: any) => ({
+        file: String(d.file || "").replace(/^[ab]\//, ""),
+        status: d.status || (!d.before && d.after ? "added" : d.before && !d.after ? "deleted" : "modified"),
+        additions: typeof d.additions === "number" ? d.additions : 0,
+        deletions: typeof d.deletions === "number" ? d.deletions : 0,
+        before: typeof d.before === "string" ? d.before : undefined,
+        after: typeof d.after === "string" ? d.after : undefined,
+      }));
+    fullDiffCache = { runID, diffs };
+    return diffs;
+  }
+
+  async function openDiff(index: number) {
+    const item = files()[index];
+    if (!item) return;
+    // If file already has content, show immediately
+    if (item.before !== undefined || item.after !== undefined) {
+      setSelectedItem(item);
+      return;
+    }
+    // Lazy-load full diff from delivery API
+    const runID = deliveryRunID();
+    if (!runID) {
+      setSelectedItem(item);
+      return;
+    }
+    const fullDiffs = await fetchFullDiffs(runID);
+    const full = fullDiffs.find((d) => d.file === item.file);
+    setSelectedItem(full || item);
   }
 
   function closeDiff() {
-    setSelectedIndex(null);
+    setSelectedItem(null);
   }
 
   return (
