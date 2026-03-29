@@ -97,6 +97,7 @@ export function TitlebarMenu(props: TitlebarMenuProps) {
     const theme = sanitizeTheme(settingsStore.theme);
     if (theme === "light") return t("settings.theme.light");
     if (theme === "system") return t("settings.theme.system");
+    if (theme === "vscode-dark") return t("settings.theme.vscode_dark");
     return t("settings.theme.dark");
   });
 

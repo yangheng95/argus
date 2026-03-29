@@ -1,7 +1,6 @@
-import { createSignal, createMemo, createEffect, For, Index, Show, onMount, onCleanup } from "solid-js";
+import { createSignal, createMemo, createEffect, Index, Show, onMount, onCleanup } from "solid-js";
 import { MessageView } from "./MessageView";
 import { AgentCard } from "./AgentCard";
-import { messageStore } from "../store/messages";
 import { t } from "../utils/i18n";
 import { conversationMessages } from "../utils/conversation";
 

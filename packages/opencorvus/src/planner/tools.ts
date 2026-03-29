@@ -125,9 +125,8 @@ export function createPlannerTools(taskWorkDir?: string, sessionID?: string) {
       },
     }),
 
-    // --- Web search (Exa) — disabled: rate-limited (429) ---
-    // To re-enable: restore the tool definition and remove the disabled stub.
-    ...(process.env.OPENCORVUS_DISABLE_WEB_SEARCH === "1" ? {} : {
+    // --- Web search (Exa) — disabled by default; set OPENCORVUS_ENABLE_WEB_SEARCH=1 to enable ---
+    ...(process.env.OPENCORVUS_ENABLE_WEB_SEARCH === "1" ? {
       web_search: tool({
         description:
           "Search the web for current documentation, API references, changelogs, best practices, " +
@@ -182,7 +181,7 @@ export function createPlannerTools(taskWorkDir?: string, sessionID?: string) {
           throw new Error("Web search returned no results")
         },
       }),
-    }),
+    } : {}),
 
     // --- Clarification questions ---
     ...(sessionID

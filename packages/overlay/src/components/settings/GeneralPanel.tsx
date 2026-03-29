@@ -20,7 +20,7 @@ export default function GeneralPanel() {
 
   function handleThemeChange(e: Event) {
     const value = (e.currentTarget as HTMLSelectElement).value;
-    setSettingsStore("theme", value as "light" | "dark");
+    setSettingsStore("theme", value as "light" | "dark" | "vscode-dark");
     saveSettings();
   }
 
@@ -136,6 +136,7 @@ export default function GeneralPanel() {
               onChange={handleThemeChange}
             >
               <option value="dark">{t("settings.theme.dark")}</option>
+              <option value="vscode-dark">{t("settings.theme.vscode_dark")}</option>
               <option value="light">{t("settings.theme.light")}</option>
               <option value="system">{t("settings.theme.system")}</option>
             </select>

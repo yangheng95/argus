@@ -752,6 +752,9 @@ export namespace OrchestratorRuntime {
     }
   }
 
+  /** Guard: prevent concurrent finalization of the same goal run */
+  const finalizingGoalRuns = new Set<string>()
+
   /**
    * Sync per-goal executor runs: check status of each active goal run,
    * finalize completed ones, dispatch newly-ready goals.
@@ -792,7 +795,16 @@ export namespace OrchestratorRuntime {
         ])
 
         if (queue.status === "completed") {
-          await finalizeGoalRun(task, run, plan, goalRun, hooks)
+          if (finalizingGoalRuns.has(goalRun.id)) {
+            log.warn("skipping duplicate finalization", { goalRunID: goalRun.id })
+          } else {
+            finalizingGoalRuns.add(goalRun.id)
+            try {
+              await finalizeGoalRun(task, run, plan, goalRun, hooks)
+            } finally {
+              finalizingGoalRuns.delete(goalRun.id)
+            }
+          }
         } else if (queue.status === "failed") {
           log.error("goal run executor failed", { runID, goalRunID: goalRun.id, error: queue.error })
           updateGoalRun(goalRun.id, { status: "failed", error: queue.error ?? "Executor failed", time_completed: Date.now() })

@@ -162,6 +162,7 @@ interface GoalsPanelProps {
   runningGoalIDs: Set<string>;
   onEditGoal?: (id: string, title: string, detail: string) => void;
   onDeleteGoal?: (id: string) => void;
+  onOpenSession?: (sessionID: string, goalTitle: string) => void;
 }
 
 export function GoalsPanel(props: GoalsPanelProps) {
@@ -209,6 +210,21 @@ export function GoalsPanel(props: GoalsPanelProps) {
                 >
                   {card.metadata.priority}
                 </span>
+              </Show>
+              <Show when={props.onOpenSession && card.metadata?.sessionID}>
+                <button
+                  type="button"
+                  class="btn btn-ghost mini"
+                  data-goal-action="view-session"
+                  data-goal-id={card.id}
+                  title="View executor session"
+                  aria-label="View executor session"
+                  onClick={() =>
+                    props.onOpenSession?.(card.metadata.sessionID, card.title || card.id)
+                  }
+                >
+                  View
+                </button>
               </Show>
               <Show when={props.onEditGoal || props.onDeleteGoal}>
                 <div class="goal-actions">
@@ -696,7 +712,7 @@ interface TaskActionsPanelProps {
 export function TaskActionsPanel(props: TaskActionsPanelProps) {
   const controls = createMemo(() => props.overview?.controls || {});
   const hasButtons = createMemo(
-    () => controls().canRetry || controls().canReplan || controls().canCancel,
+    () => controls().canRetry || controls().canReplan,
   );
   const visible = createMemo(() => hasButtons());
 
@@ -727,18 +743,6 @@ export function TaskActionsPanel(props: TaskActionsPanelProps) {
                 onClick={() => props.onReplan?.()}
               >
                 {t("task.action.replan")}
-              </button>
-            </Show>
-            <Show when={controls().canCancel}>
-              <button
-                type="button"
-                class="btn btn-ghost"
-                data-task-action="cancel"
-                title={t("task.action.cancel_title")}
-                aria-label={t("task.action.cancel_title")}
-                onClick={() => props.onCancel?.()}
-              >
-                {t("common.cancel")}
               </button>
             </Show>
           </div>
@@ -898,6 +902,7 @@ interface BoardProps {
   onCancel?: () => void;
   onEditGoal?: (id: string, title: string, detail: string) => void;
   onDeleteGoal?: (id: string) => void;
+  onOpenSession?: (sessionID: string, goalTitle: string) => void;
   onToggleCriteria?: (key: string, enabled: boolean) => void;
   onResolveInteraction?: (id: string, action: string) => void;
   onRejectInteraction?: (id: string) => void;
@@ -1030,6 +1035,7 @@ export function Board(props: BoardProps) {
           runningGoalIDs={runningGoalIDs()}
           onEditGoal={props.onEditGoal}
           onDeleteGoal={props.onDeleteGoal}
+          onOpenSession={props.onOpenSession}
         />
         <InteractionsList
           interactions={interactions()}
@@ -1044,8 +1050,8 @@ export function Board(props: BoardProps) {
         icon={SECTION_ICONS.plan}
         bodyId="planBody"
         badgeId="planBadge"
-        badgeText={plan() ? `v${plan()?.version}` : ""}
-        badgeTone={plan() ? "accent" : ""}
+        badgeText={plan() ? (goalsBadgeText() || `v${plan()?.version}`) : ""}
+        badgeTone={plan() ? (goalsBadgeTone() || "accent") : ""}
       >
         <PlanPanel plan={plan()} preview={boardStore.planPreview} />
       </SectionFrame>

@@ -3702,6 +3702,138 @@ test("task SSE merges repeated executor text updates for the same event id", asy
   }
 }, { timeout: 60_000 })
 
+test("parallel executor cards keep DOM identity when an earlier goal inserts ahead of an existing card", async () => {
+  const exe = await browser()
+  const server = serve()
+  const page = await launchBrowser()
+
+  try {
+    const tab = await page.newPage()
+    await tab.goto(`http://127.0.0.1:${server.port}`, { waitUntil: "load" })
+    await tab.waitForFunction(() => {
+      try {
+        return typeof window.eval("appendExecutorEvent") === "function" &&
+          typeof window.eval("renderConversation") === "function" &&
+          !!window.eval("state").i18nReady
+      } catch {
+        return false
+      }
+    })
+
+    const result = await tab.evaluate(async () => {
+      const state = window.eval("state")
+      const appendExecutorEvent = window.eval("appendExecutorEvent")
+      const renderConversation = window.eval("renderConversation")
+
+      state.selectedTaskID = "task-1"
+      state.board = {
+        task: {
+          id: "task-1",
+          title: "Parallel executor identity",
+          request: "Keep executor DOM stable during parallel inserts.",
+          status: "running",
+          sessionID: "session-1",
+          activeRunID: "run-1",
+          time: { created: 1, updated: 2, started: 2 },
+        },
+        overview: null,
+        plan: null,
+        lanes: [],
+        evaluation: null,
+        delivery: null,
+        acceptedDelivery: null,
+        interactions: [],
+        spec: null,
+      }
+      state.messages = []
+      state.executorEvents = []
+      state.executorRunID = "run-1"
+      state._renderedGroupKey = ""
+      renderConversation()
+
+      appendExecutorEvent({
+        id: "evt-late",
+        runID: "run-1",
+        kind: "tool_call",
+        summary: "Late process",
+        payload: {
+          id: "tool-late",
+          name: "Late process",
+          status: "running",
+        },
+        sourceID: "tool-late",
+        sourceKind: "tool",
+        sourceLabel: "Late process",
+        sourceStatus: "running",
+        goalRunID: "goal-run-late",
+        executorSessionID: "",
+        time: { created: 20 },
+      })
+
+      await new Promise((resolve) => setTimeout(resolve, 60))
+
+      const turnsBefore = [...document.querySelectorAll('.turn[data-role="executor"]')]
+      const lateTurnBefore = turnsBefore.find((node) =>
+        node.querySelector(".executor-process-title")?.textContent?.includes("Late process"),
+      ) as HTMLElement | undefined
+      if (!lateTurnBefore) throw new Error("Late executor turn not found before insert")
+      lateTurnBefore.dataset.marker = "keep-late"
+
+      appendExecutorEvent({
+        id: "evt-early",
+        runID: "run-1",
+        kind: "tool_call",
+        summary: "Early process",
+        payload: {
+          id: "tool-early",
+          name: "Early process",
+          status: "running",
+        },
+        sourceID: "tool-early",
+        sourceKind: "tool",
+        sourceLabel: "Early process",
+        sourceStatus: "running",
+        goalRunID: "goal-run-early",
+        executorSessionID: "",
+        time: { created: 10 },
+      })
+
+      await new Promise((resolve) => setTimeout(resolve, 60))
+
+      const turnsAfter = [...document.querySelectorAll('.turn[data-role="executor"]')] as HTMLElement[]
+      const describe = (node: HTMLElement) => ({
+        goal: node.querySelector(".msg-role")?.textContent?.trim() || "",
+        title: node.querySelector(".executor-process-title")?.textContent?.trim() || "",
+        marker: node.dataset.marker || "",
+      })
+      const lateTurnAfter = turnsAfter.find((node) =>
+        node.querySelector(".executor-process-title")?.textContent?.includes("Late process"),
+      )
+      const earlyTurnAfter = turnsAfter.find((node) =>
+        node.querySelector(".executor-process-title")?.textContent?.includes("Early process"),
+      )
+
+      return {
+        turns: turnsAfter.map(describe),
+        lateNodePreserved: lateTurnAfter === lateTurnBefore,
+        earlyNodeReusedLate: earlyTurnAfter === lateTurnBefore,
+        lateMarker: lateTurnAfter?.dataset.marker || "",
+        earlyMarker: earlyTurnAfter?.dataset.marker || "",
+      }
+    })
+
+    expect(result.turns).toHaveLength(2)
+    expect(result.turns.map((item) => item.title)).toEqual(["Early process", "Late process"])
+    expect(result.lateNodePreserved).toBe(true)
+    expect(result.earlyNodeReusedLate).toBe(false)
+    expect(result.lateMarker).toBe("keep-late")
+    expect(result.earlyMarker).toBe("")
+  } finally {
+    await page.close()
+    server.stop(true)
+  }
+}, { timeout: 60_000 })
+
 test("task SSE drops non-text executor payloads instead of rendering object garbage", async () => {
   const exe = await browser()
   const server = serve()

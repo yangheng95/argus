@@ -197,6 +197,29 @@ export namespace LLM {
       })
     }
 
+    const STREAM_INACTIVITY_MS = 2 * 60 * 1000
+
+    const inactivityAbort = new AbortController()
+    let inactivityTimer: ReturnType<typeof setTimeout> | undefined
+
+    const resetInactivityTimer = () => {
+      if (inactivityTimer !== undefined) clearTimeout(inactivityTimer)
+      inactivityTimer = setTimeout(() => {
+        l.warn("stream inactivity timeout", { inactivityMs: STREAM_INACTIVITY_MS, modelID: input.model.id, providerID: input.model.providerID })
+        inactivityAbort.abort(new Error(`LLM stream stalled: no tokens received for ${STREAM_INACTIVITY_MS / 1000}s`))
+      }, STREAM_INACTIVITY_MS)
+    }
+
+    const clearInactivityTimer = () => {
+      if (inactivityTimer !== undefined) {
+        clearTimeout(inactivityTimer)
+        inactivityTimer = undefined
+      }
+    }
+
+    resetInactivityTimer()
+    input.abort.addEventListener("abort", clearInactivityTimer, { once: true })
+
     const trace = LLMTrace.begin({
       callID: ulid(),
       sessionID: input.sessionID,
@@ -226,7 +249,11 @@ export namespace LLM {
     })
 
     return streamText({
+      onChunk() {
+        resetInactivityTimer()
+      },
       onError(event) {
+        clearInactivityTimer()
         l.error("stream error", {
           error: event.error,
         })
@@ -236,9 +263,11 @@ export namespace LLM {
         trace.step(step)
       },
       onAbort(event) {
+        clearInactivityTimer()
         trace.abort(event)
       },
       onFinish(event) {
+        clearInactivityTimer()
         trace.finish(event)
       },
       async experimental_repairToolCall(failed) {
@@ -270,7 +299,7 @@ export namespace LLM {
       tools,
       toolChoice: input.toolChoice,
       maxOutputTokens,
-      abortSignal: input.abort,
+      abortSignal: AbortSignal.any([input.abort, inactivityAbort.signal]),
       headers: requestHeaders,
       maxRetries: input.retries ?? 0,
       messages: requestMessages,

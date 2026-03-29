@@ -16,7 +16,7 @@ CRITICAL: You MUST explore the codebase BEFORE producing goals. Goals without re
    - Identify shared/boundary files (config, types, entry points)
    - Map dependency relationships between modules
    - Identify test patterns and locations
-4. Use web_search only when requirements involve unfamiliar technology.
+4. Do NOT use web_search. All information must come from codebase exploration.
 
 ### Step 1: MAP REQUIREMENTS → EXPLICIT GOALS
 

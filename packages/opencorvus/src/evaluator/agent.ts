@@ -163,14 +163,33 @@ export namespace EvaluatorAgent {
     // generateObject guarantees schema-complete output regardless of project size.
     // Phase 2 gets its own timeout — reasoning models can hang indefinitely without one.
     const phase2TimeoutMs = Math.max(evalCfg.timeout_ms, 120_000)
-    const { object: verdict } = await generateObject({
-      model: language,
-      schema: EvaluatorAnalysis,
-      maxRetries: 2,
-      abortSignal: AbortSignal.timeout(phase2TimeoutMs),
-      system: JUDGMENT_SYSTEM,
-      prompt: buildJudgmentPrompt(input, investigationText),
-    })
+    let verdict: z.infer<typeof EvaluatorAnalysis>
+    try {
+      const { object } = await generateObject({
+        model: language,
+        schema: EvaluatorAnalysis,
+        maxRetries: 2,
+        abortSignal: AbortSignal.timeout(phase2TimeoutMs),
+        system: JUDGMENT_SYSTEM,
+        prompt: buildJudgmentPrompt(input, investigationText),
+      })
+      verdict = object
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : String(err)
+      log.warn("evaluator phase 2 (judgment) generateObject failed, returning inconclusive", { error: errorMsg })
+      return {
+        verdict: "inconclusive" as const,
+        classification: "evaluation" as const,
+        summary: `Phase 2 judgment unavailable: ${errorMsg}`,
+        goal_statuses: input.goals.map((_, goal_index) => ({
+          goal_index,
+          status: "inconclusive" as const,
+          evidence: "Phase 2 evaluator failed to produce a structured verdict.",
+          reasoning: `generateObject failed: ${errorMsg}`,
+        })),
+        replan_guidance: null,
+      }
+    }
 
     log.info("evaluator phase 2 (judgment) finished", {
       verdict: verdict.verdict,

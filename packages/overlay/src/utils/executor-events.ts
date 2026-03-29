@@ -8,7 +8,6 @@ import { AppLog } from "./log";
 import { reasoningPartHidden, touchReasoningPart } from "../store/reasoning";
 import {
   executorStore,
-  appendExecutorEvent,
   clearExecutorEvents,
   setExecutorEvents,
   type ExecutorEvent,
@@ -988,15 +987,10 @@ export async function loadExecutorEvents(
       .map(executorEventEntry)
       .filter((item): item is ExecutorEvent => !!item)
       .reduce((items, item) => mergeExecutorEventList(items, item), [] as ExecutorEvent[]);
- // Use clearExecutorEvents + setExecutorEvents to reset runID then populate.
- // appendExecutorEvent handles runID on first call; for a bulk load we clear
- // and seed via setExecutorEvents, then manually seed runID by appending the
- // first event that carries one (if any) — but since setExecutorEvents does
- // not update runID we instead use clearExecutorEvents followed by a single
- // appendExecutorEvent for each item, which is the pattern that correctly
- // propagates runID through the store.
-    clearExecutorEvents();
-    normalised.forEach((item) => appendExecutorEvent(item));
+    // Batch-set all events in one store update to avoid per-event re-renders
+    // that cause tool cards to flicker through intermediate "running" states.
+    const firstRunID = normalised.find(e => e.runID)?.runID;
+    setExecutorEvents(normalised, firstRunID);
     return executorStore.events as ExecutorEvent[];
   } catch (e) {
     AppLog.debug("executor", "loadExecutorEvents failed", { runID: next, error: String(e) });

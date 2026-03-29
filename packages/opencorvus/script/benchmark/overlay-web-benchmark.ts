@@ -1167,8 +1167,8 @@ function progressSignature(progress: any) {
     phase: progress?.run?.phase || progress?.activeRun?.phase || "",
     verdict: progress?.evaluation?.verdict || "",
     delivery: progress?.delivery?.status || "",
-    goals: Array.isArray(progress?.goalRuns)
-      ? progress.goalRuns.map((item: any) => `${item.goal_id || item.goalID || item.id || "goal"}:${item.status || ""}:${item.phase || ""}`)
+    goals: Array.isArray(progress?.goals)
+      ? progress.goals.map((item: any) => `${item.id || "goal"}:${item.status || ""}`)
       : [],
     pending: Array.isArray(progress?.pendingInteractions)
       ? progress.pendingInteractions.map((item: any) => `${item.id || "interaction"}:${item.type || ""}:${item.status || ""}`)

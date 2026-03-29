@@ -111,6 +111,16 @@ export function decideRetryOrReplan(
     return { action: "replan", summary, analysis }
   }
 
+  if (classification === "evaluation") {
+    // Evaluator infrastructure failure (e.g. phase 2 schema mismatch).
+    // One retry is reasonable in case it's transient. Beyond that, retrying the executor
+    // won't fix the evaluator — fail rather than waste resources on repeated executor runs.
+    if (run.retry_count >= 1) {
+      log.info("evaluation infrastructure failure exceeded retry budget, failing", { classification, retryCount: run.retry_count, taskID: task.id })
+      return { action: "fail", summary, retryContext: ctx }
+    }
+  }
+
   if (run.retry_count < SAME_PLAN_RETRY_LIMIT) {
     log.info("retrying current plan", { classification, retryCount: run.retry_count, taskID: task.id })
     return { action: "retry", summary, retryContext: ctx }

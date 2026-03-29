@@ -7,7 +7,7 @@ import { apiJson, apiUrl } from "../services/api";
 import { boardStore } from "../store/board";
 import { clearConversationUiState } from "./conversation-ui";
 import {
-  appendExecutorEvent as appendExecutorStoreEvent,
+  setExecutorEvents,
   clearExecutorEvents,
 } from "./executor";
 import { touchReasoningPart as trackReasoningPart } from "./reasoning";
@@ -294,7 +294,9 @@ function classifyAgentStage(message: any): string {
 
 function activeAgentStages(): Set<string> {
   const status = String(boardStore.board?.task?.status || "").trim().toLowerCase();
-  if (status === "planning") return new Set(["spec", "planner"]);
+  if (status === "spec_generating") return new Set(["spec"]);
+  if (status === "goal_decomposing") return new Set(["goal"]);
+  if (status === "planning") return new Set(["planner"]);
   if (status === "evaluating") return new Set(["judge"]);
   if (status === "delivering") return new Set(["delivery"]);
   if (!status && Array.isArray(store.agentEvents) && store.agentEvents.length > 0) {
@@ -441,9 +443,6 @@ function agentRoundStatus(
   latestStageEvent: any,
 ): string {
   if (roundIndex < rounds.length - 1) return "completed";
-  const hasOpenTranscript = round.messages.some(
-    (message: any) => !message?._synthetic && !message?.info?.time?.completed,
-  );
   const active = activeAgentStages().has(stage);
   const latestKind = String(latestStageEvent?.kind || "").trim().toLowerCase();
   const latestSummary = String(latestStageEvent?.summary || "");
@@ -451,7 +450,7 @@ function agentRoundStatus(
   if (latestKind === "status" && /finished|completed|done/i.test(latestSummary)) {
     return "completed";
   }
-  if (active || hasOpenTranscript) return "running";
+  if (active) return "running";
   return "completed";
 }
 
@@ -678,11 +677,10 @@ async function loadExecutorEvents(runID: string): Promise<void> {
     .catch(() => []);
   const items = (Array.isArray(data) ? data : [])
     .map((item) => executorEventEntry(item))
-    .filter(Boolean);
-  clearExecutorEvents();
-  for (const item of items) {
-    appendExecutorStoreEvent(item as any);
-  }
+    .filter(Boolean) as ReturnType<typeof executorEventEntry>[];
+  const firstRunID = items.find(e => e?.runID)?.runID;
+  // Batch-set all events in one store update to avoid per-event re-renders
+  setExecutorEvents(items as any[], firstRunID);
 }
 
 export async function loadConversation(): Promise<void> {
@@ -1310,7 +1308,48 @@ export function clearAgentEvents(): void {
 
 export function setMessages(messages: any[]) {
   const next = sortMessages(Array.isArray(messages) ? messages : []);
-  setStore("messages", reconcile(next));
+  setStore("messages", produce((msgs: Message[]) => {
+    // Build lookup for new messages
+    const nextById = new Map<string, Message>();
+    for (const m of next) {
+      const id = m?.info?.id;
+      if (id) nextById.set(id, m);
+    }
+
+    // Remove messages no longer present
+    for (let i = msgs.length - 1; i >= 0; i--) {
+      const id = msgs[i]?.info?.id;
+      if (!id || !nextById.has(id)) msgs.splice(i, 1);
+    }
+
+    // Build existing index
+    const existingIdx = new Map<string, number>();
+    for (let i = 0; i < msgs.length; i++) {
+      const id = msgs[i]?.info?.id;
+      if (id) existingIdx.set(id, i);
+    }
+
+    // Update existing or append new
+    for (const m of next) {
+      const id = m?.info?.id;
+      if (!id) { msgs.push(m); continue; }
+      const idx = existingIdx.get(id);
+      if (idx !== undefined) {
+        // Surgical update: only write changed properties
+        const existing = msgs[idx];
+        if (existing.info) Object.assign(existing.info, m.info);
+        if (m.parts) {
+          existing.parts.length = 0;
+          existing.parts.push(...m.parts);
+        }
+      } else {
+        msgs.push(m);
+      }
+    }
+
+    // Re-sort in place
+    msgs.sort((a, b) => messageTime(a) - messageTime(b));
+  }));
   rebuildMessageIndex();
   scheduleRebuildAgentCards();
 }

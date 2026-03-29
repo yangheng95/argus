@@ -56,7 +56,9 @@ function classifyMessage(msg: any): string {
 
 function activeAgentStages(): Set<string> {
   const status = String(boardStore.board?.task?.status || "").trim().toLowerCase();
-  if (status === "planning") return new Set(["spec", "planner"]);
+  if (status === "spec_generating") return new Set(["spec"]);
+  if (status === "goal_decomposing") return new Set(["goal"]);
+  if (status === "planning") return new Set(["planner"]);
   if (status === "evaluating") return new Set(["judge"]);
   if (status === "delivering") return new Set(["delivery"]);
   const agentEvents = Array.isArray(messageStore.agentEvents) ? messageStore.agentEvents : [];
@@ -230,6 +232,9 @@ export function buildBoardContextMessages(
 // All data is read from Solid stores (messageStore / boardStore) to match
 // the reactive pull model.
 
+let _prevConversationResult: any[] = [];
+let _prevConversationKey = "";
+
 export function conversationMessages(): any[] {
   const allMessages = messageStore.messages || [];
   const agentEvents = Array.isArray(messageStore.agentEvents) ? messageStore.agentEvents : [];
@@ -270,7 +275,18 @@ export function conversationMessages(): any[] {
         .filter(Boolean)
     : []) as any[];
 
-  return [...filteredMain, ...executorMsgs, ...boardMsgs, ...agentCardMsgs].sort(
+  const result = [...filteredMain, ...executorMsgs, ...boardMsgs, ...agentCardMsgs].sort(
     (a: any, b: any) => (a.info?.time?.created || 0) - (b.info?.time?.created || 0),
   );
+
+  // Referential stability: return cached array if same items in same order
+  const key = result.map((m: any) => m.info?.id || m._agentCardKey || "").join(",");
+  if (key === _prevConversationKey && result.length === _prevConversationResult.length) {
+    // Same IDs in same order — reuse previous array reference to avoid
+    // triggering downstream <Index> signal updates
+    return _prevConversationResult;
+  }
+  _prevConversationKey = key;
+  _prevConversationResult = result;
+  return result;
 }
