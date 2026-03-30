@@ -1305,6 +1305,7 @@ async function completeRun(run: RunRow, hooks: RuntimeHooks) {
   let result: Awaited<ReturnType<typeof EvaluatorService.evaluate>>
   try {
     result = await Promise.race([
+      // Tier 2 (task-level): core + judge + spec_check — full checks deferred to delivery
       EvaluatorService.evaluate(
         {
           taskID: task.id,
@@ -1320,6 +1321,7 @@ async function completeRun(run: RunRow, hooks: RuntimeHooks) {
           diffs: delivery.diffs,
           changedFiles: delivery.diffs.map((item) => item.file),
         },
+        "standard",
       ),
       hardTimeoutPromise<typeof result>(),
     ])
@@ -1497,6 +1499,7 @@ async function runEvaluation(task: TaskRow, run: RunRow, existingDelivery: Deliv
   let result: Awaited<ReturnType<typeof EvaluatorService.evaluate>>
   try {
     throwIfAborted()
+    // Tier 2 (task-level): core + judge + spec_check
     result = await EvaluatorService.evaluate(
       {
         taskID: task.id,
@@ -1512,6 +1515,7 @@ async function runEvaluation(task: TaskRow, run: RunRow, existingDelivery: Deliv
         diffs: delivery.diffs,
         changedFiles: delivery.diffs.map((item) => item.file),
       },
+      "standard",
     )
   } catch (evalErr) {
     const msg = evalErr instanceof Error ? evalErr.message : String(evalErr)

@@ -631,6 +631,7 @@ export async function evaluateGoal(input: {
   analysisError?: string
 }> {
   const delivery = await evaluationDelivery(input.task, input.delivery)
+  // Tier 1 (goal-level): core checks only, no LLM judge — fast path (< 30s)
   const result = await CheckRunner.evaluate(
     {
       taskID: input.task.id,
@@ -643,6 +644,7 @@ export async function evaluateGoal(input: {
       },
     },
     delivery,
+    "core",
   )
   const selectors = goalSelectors(input.goal)
   const matched = selectors.flatMap((selector) =>
@@ -657,55 +659,29 @@ export async function evaluateGoal(input: {
         ...result,
         status: "passed" as const,
         verdict: "accepted" as const,
-        summary: "No goal-local automated checks ran; deferring to goal analysis.",
+        summary: "No goal-local automated checks ran; deferring to task-level evaluation.",
       }
     : result
-  const analysisInput = {
-    task: {
-      title: input.task.title,
-      request: input.task.request,
-      sessionID: input.task.session_id ?? undefined,
-      metadata: input.task.metadata ?? undefined,
-    },
-    goals: [{
-      description: input.goal.description,
-      criteria: input.goal.criteria,
-      priority: input.goal.priority as "blocking" | "advisory",
-      check_selector: selectors,
+  // Skip Phase 2 LLM analysis at goal level — deferred to task-level evaluator.
+  // Construct a minimal analysis from core check results.
+  const analysis: GoalJudgmentType = {
+    verdict: checked.verdict === "accepted" ? "accepted" : "rejected",
+    classification: checked.verdict === "accepted" ? "transient" : "evaluation",
+    summary: checked.summary,
+    goal_statuses: [{
+      goal_index: 0,
+      status: checked.verdict === "accepted" ? "passed" : "failed",
+      evidence: checked.checks.map((c) => `${c.name}: ${c.status}`).join("; "),
+      reasoning: checked.summary,
     }],
-    delivery: {
-      summary: delivery.summary,
-      changedFiles: delivery.changedFiles ?? [],
-      diffs: delivery.diffs ?? [],
+    replan_guidance: checked.verdict === "accepted" ? null : {
+      root_cause: checked.checks.filter((c) => c.status === "failed").map((c) => `${c.name}: ${c.evidence}`).join("; "),
+      what_failed: checked.checks.filter((c) => c.status === "failed").map((c) => c.name).join(", "),
+      suggested_strategy: "Fix failing core checks before proceeding.",
+      avoid_approaches: [],
     },
-    checkResults: checked.checks.map((item) => ({
-      name: item.name,
-      status: item.status,
-      evidence: item.evidence,
-    })),
   }
-  const live = agentStream({
-    taskID: input.task.id,
-    runID: typeof input.task.active_run_id === "string" ? input.task.active_run_id : undefined,
-    stage: "evaluator",
-  })
-  await live.start("Goal judge started")
-  const analyzed = await CheckRunner.analyzeDelivery({
-    ...analysisInput,
-  })
-    .then(async (analysis) => {
-      await live.finish("Goal judge finished")
-      return { analysis }
-    })
-    .catch(async (error) => {
-      await live.error(error)
-      const message = error instanceof Error ? error.message : String(error)
-      return {
-        analysis: analysisFailure(checked, [input.goal], message),
-        analysisError: message,
-      }
-    })
-  return { result: checked, ...analyzed }
+  return { result: checked, analysis }
 }
 
 export async function evaluateTask(input: {
@@ -721,6 +697,7 @@ export async function evaluateTask(input: {
   analysisError?: string
 }> {
   const delivery = await evaluationDelivery(input.task, input.delivery)
+  // Tier 2 (task-level): core + judge + spec_check, with Phase 2 LLM analysis
   const result = await CheckRunner.evaluate(
     {
       taskID: input.task.id,
@@ -732,6 +709,7 @@ export async function evaluateTask(input: {
       },
     },
     delivery,
+    "standard",
   )
   const analysisInput = {
     task: {

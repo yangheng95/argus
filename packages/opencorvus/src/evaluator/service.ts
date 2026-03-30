@@ -46,6 +46,23 @@ const OPTIONAL_CHECK_DEFS = [
 const BUILTIN_CHECK_DEFS = [...CORE_CHECK_DEFS, ...OPTIONAL_CHECK_DEFS]
 initBuiltinCheckIndex(BUILTIN_CHECK_DEFS)
 
+/**
+ * Evaluation tier controls which optional checks run.
+ * - "core": only build/test/lint/verify_cmd — fastest, used per-goal
+ * - "standard": core + judge + spec_check — medium, used task-level
+ * - "full": all checks — thorough, used by delivery agent
+ */
+export type EvaluationTier = "core" | "standard" | "full"
+
+/** Names of optional checks included at the "standard" tier. */
+const STANDARD_TIER_CHECKS = new Set(["judge", "spec_check"])
+
+function filterOptionalChecksByTier(tier: EvaluationTier): typeof OPTIONAL_CHECK_DEFS[number][] {
+  if (tier === "core") return []
+  if (tier === "standard") return OPTIONAL_CHECK_DEFS.filter((item) => STANDARD_TIER_CHECKS.has(item.name))
+  return [...OPTIONAL_CHECK_DEFS]
+}
+
 export namespace EvaluatorService {
   export async function resolveChecks(metadata?: Record<string, unknown>, changedFiles?: unknown) {
     const config = await resolveConfig(metadata)
@@ -56,6 +73,7 @@ export namespace EvaluatorService {
   export async function evaluate(
     task: EvaluationTask,
     delivery: EvaluationDelivery,
+    tier: EvaluationTier = "full",
   ) {
     const rawConfig = await resolveConfig(task.metadata)
     const config = { ...rawConfig, ...(!rawConfig.spec_check ? autoSpecCheck(task) : {}) } as typeof rawConfig
@@ -65,7 +83,10 @@ export namespace EvaluatorService {
     if (core.checks.some((item) => item.status === "failed")) {
       return publishResult(task, finalizeEvaluation(commands, core.checks, core.artifacts, []))
     }
-    const optional = await optionalChecks(config, task, delivery)
+    if (tier === "core") {
+      return publishResult(task, finalizeEvaluation(commands, core.checks, core.artifacts, []))
+    }
+    const optional = await optionalChecks(config, task, delivery, tier)
     const checks = [...core.checks, ...optional.flatMap((item) => Array.isArray(item.checks) ? item.checks : [])]
     const artifacts = [...core.artifacts, ...optional.flatMap((item) => Array.isArray(item.artifacts) ? item.artifacts : [])]
     return publishResult(task, finalizeEvaluation(commands, checks, artifacts, optional))
@@ -101,8 +122,10 @@ async function optionalChecks(
   config: z.infer<typeof CheckConfig>,
   task: EvaluationTask,
   delivery: EvaluationDelivery,
+  tier: EvaluationTier = "full",
 ) {
-  const builtin = await Promise.all(OPTIONAL_CHECK_DEFS.map((item) => item.run(config, task, delivery)))
+  const defs = filterOptionalChecksByTier(tier)
+  const builtin = await Promise.all(defs.map((item) => item.run(config, task, delivery)))
   const plugins = await pluginChecks(config, task, delivery)
   return [...builtin, ...plugins].map((item) => ({
     ...item,
