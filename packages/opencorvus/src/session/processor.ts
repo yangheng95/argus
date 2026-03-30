@@ -34,6 +34,9 @@ export namespace SessionProcessor {
     let blocked = false
     let attempt = 0
     let needsCompaction = false
+    // Reasoning delta buffer: aggregate per-token deltas into batched SSE updates
+    const reasoningDeltaBuf = new Map<string, string>()
+    let reasoningFlushTimer: ReturnType<typeof setTimeout> | null = null
 
     const result = {
       get message() {
@@ -85,18 +88,55 @@ export namespace SessionProcessor {
                     const part = reasoningMap[value.id]
                     part.text += value.text
                     if (value.providerMetadata) part.metadata = value.providerMetadata
-                    await Session.updatePartDelta({
-                      sessionID: part.sessionID,
-                      messageID: part.messageID,
-                      partID: part.id,
-                      field: "text",
-                      delta: value.text,
-                    })
+                    // Buffer reasoning deltas and flush periodically to avoid
+                    // flooding the SSE stream with per-token events.
+                    const bufKey = part.id
+                    const prev = reasoningDeltaBuf.get(bufKey) || ""
+                    reasoningDeltaBuf.set(bufKey, prev + value.text)
+                    if (!reasoningFlushTimer) {
+                      reasoningFlushTimer = setTimeout(async () => {
+                        reasoningFlushTimer = null
+                        for (const [pid, buf] of reasoningDeltaBuf) {
+                          // Skip deltas that are only brackets/whitespace
+                          if (buf.replace(/[\[\]\s]/g, "")) {
+                            const rp = Object.values(reasoningMap).find((p: any) => p.id === pid) as any
+                            if (rp) {
+                              await Session.updatePartDelta({
+                                sessionID: rp.sessionID,
+                                messageID: rp.messageID,
+                                partID: rp.id,
+                                field: "text",
+                                delta: buf,
+                              })
+                            }
+                          }
+                        }
+                        reasoningDeltaBuf.clear()
+                      }, 200)
+                    }
                   }
                   break
 
                 case "reasoning-end":
                   if (value.id in reasoningMap) {
+                    // Flush any buffered reasoning delta before closing the part
+                    if (reasoningFlushTimer) {
+                      clearTimeout(reasoningFlushTimer)
+                      reasoningFlushTimer = null
+                    }
+                    const endPart = reasoningMap[value.id]
+                    const remaining = reasoningDeltaBuf.get(endPart.id)
+                    if (remaining && remaining.replace(/[\[\]\s]/g, "")) {
+                      await Session.updatePartDelta({
+                        sessionID: endPart.sessionID,
+                        messageID: endPart.messageID,
+                        partID: endPart.id,
+                        field: "text",
+                        delta: remaining,
+                      })
+                    }
+                    reasoningDeltaBuf.delete(endPart.id)
+
                     const part = reasoningMap[value.id]
                     part.text = part.text.trimEnd()
 

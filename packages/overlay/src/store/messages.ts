@@ -950,9 +950,38 @@ export function enqueueEvent(event: any) {
   flushEvents();
 }
 
+/** Coalesce consecutive delta events for the same part before applying. */
+function coalesceDeltas(events: any[]): any[] {
+  if (events.length <= 1) return events;
+  const out: any[] = [];
+  for (const ev of events) {
+    const p = ev?.properties;
+    if (
+      ev?.type === "message.part.delta" &&
+      p?.field === "text" &&
+      typeof p?.delta === "string" &&
+      out.length > 0
+    ) {
+      const prev = out[out.length - 1];
+      const pp = prev?.properties;
+      if (
+        prev?.type === "message.part.delta" &&
+        pp?.field === "text" &&
+        pp?.partID === p.partID &&
+        pp?.messageID === p.messageID
+      ) {
+        pp.delta += p.delta;
+        continue;
+      }
+    }
+    out.push(ev);
+  }
+  return out;
+}
+
 function flushEvents() {
   if (eventQueue.length === 0) return;
-  const events = eventQueue;
+  const events = coalesceDeltas(eventQueue);
   eventQueue = [];
   flushTimer = null;
   lastFlushTime = Date.now();

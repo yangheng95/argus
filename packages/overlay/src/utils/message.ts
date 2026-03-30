@@ -173,16 +173,16 @@ export function effectiveRole(msg: any, rootSessionID: string, goalSessionIDs?: 
       const sessionID =
         typeof msg.info?.sessionID === "string" ? msg.info.sessionID : "";
       if (sessionID && sessionID !== rootSessionID) {
-        if (goalSessionIDs && goalSessionIDs.size > 0) {
-          if (goalSessionIDs.has(sessionID)) return "executor";
-        } else {
-          // No goal session IDs available (single-executor mode or empty board):
-          // detect executor by agent name on child sessions.
-          const agent = String(msg.info?.agent || "").trim().toLowerCase();
-          if (!agent || agent === "build" || agent === "executor" || agent === "coding") {
-            return "executor";
-          }
+        // Check explicit goal session mapping first
+        if (goalSessionIDs && goalSessionIDs.size > 0 && goalSessionIDs.has(sessionID)) {
+          return "executor";
         }
+        // Resolve from agent name — covers both pipeline stages and executor
+        const agent = String(msg.info?.agent || "").trim().toLowerCase();
+        if (!agent) return "executor";
+        const stageRole = agentStageRole(agent);
+        // agentStageRole maps executor/build/coding → "assistant", remap to "executor"
+        return stageRole === "assistant" ? "executor" : stageRole;
       }
     }
     return role;
