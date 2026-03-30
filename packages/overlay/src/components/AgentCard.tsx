@@ -71,7 +71,7 @@ export function AgentCard(props: AgentCardProps) {
   });
 
   const evaluationData = createMemo(() => {
-    if (props.stage !== "judge") return null;
+    if (props.stage !== "evaluator") return null;
     const evaluation = boardStore.board?.evaluation as any;
     if (!evaluation) return null;
     return {
@@ -94,7 +94,7 @@ export function AgentCard(props: AgentCardProps) {
       case "spec": return !!specContent();
       case "planner": return !!planData();
       case "goal": return goalsData().length > 0;
-      case "judge": return !!evaluationData();
+      case "evaluator": return !!evaluationData();
       case "delivery": return !!deliveryData();
       default: return false;
     }
@@ -200,8 +200,8 @@ export function AgentCard(props: AgentCardProps) {
               </div>
             </Show>
 
-            {/* Judge: verdict + checks */}
-            <Show when={props.stage === "judge" && evaluationData()}>
+            {/* Evaluator: verdict + checks */}
+            <Show when={props.stage === "evaluator" && evaluationData()}>
               <div class="agent-card-summary-eval">
                 <Show when={evaluationData()!.verdict}>
                   <span class="section-badge"

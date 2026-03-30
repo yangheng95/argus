@@ -146,6 +146,18 @@ function convertExecutorEventToMessages(event: any, properties: any): any[] {
     return [
       messageEvent,
       {
+        type: "message.part.updated",
+        properties: {
+          part: {
+            id: partID,
+            messageID: msgID,
+            sessionID,
+            type: "text",
+            text: "",
+          },
+        },
+      },
+      {
         type: "message.part.delta",
         properties: {
           partID,
@@ -162,9 +174,22 @@ function convertExecutorEventToMessages(event: any, properties: any): any[] {
     const text = typeof properties.text === "string" ? properties.text : event.summary || "";
     if (!text) return [];
     const partID = `executor:reasoning:${sessionID}`;
-    // Create or update a reasoning part — use part.updated for accumulation
+    // First event creates the part as "reasoning" type (not "text"), then delta appends.
+    // message.part.updated ensures the part exists with correct type before any delta.
     return [
       messageEvent,
+      {
+        type: "message.part.updated",
+        properties: {
+          part: {
+            id: partID,
+            messageID: msgID,
+            sessionID,
+            type: "reasoning",
+            text: "",
+          },
+        },
+      },
       {
         type: "message.part.delta",
         properties: {
