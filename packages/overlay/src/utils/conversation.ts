@@ -3,8 +3,61 @@
 // All data is read from Solid stores (messageStore / boardStore) for reactivity.
 
 import { messageStore } from "../store/messages";
-import { rootTaskSessionID } from "../store/board";
+import { boardStore, rootTaskSessionID } from "../store/board";
 import { classifyMessage } from "./message";
+import { t } from "./i18n";
+import {
+  syntheticTextMessage,
+  interactionRequestText,
+  interactionResponseText,
+  isAutoReplied,
+} from "./transcript";
+
+// ── Internal: build user request + interaction messages ──
+
+function buildUserContextMessages(): any[] {
+  const board = boardStore.board;
+  if (!board) return [];
+  const msgs: any[] = [];
+  const { task } = board;
+
+  // 1. User's original task request
+  if (task?.request) {
+    msgs.push({
+      _synthetic: true,
+      info: { id: "ctx:user-request", role: "user", time: { created: (task.time?.created || 0) - 2 } },
+      parts: [{ type: "text", text: task.request }],
+    });
+  }
+
+  // 2. Interactions (permissions, questions, clarifications)
+  for (const interaction of Array.isArray(board.interactions) ? board.interactions : []) {
+    const isAutoPermission =
+      interaction.type === "permission" &&
+      (interaction.status === "answered" || interaction.status === "rejected") &&
+      isAutoReplied(interaction);
+    if (isAutoPermission) continue;
+
+    const isPlannerClarification = interaction.payload?.planner_clarification === true;
+    const interactionRole = isPlannerClarification ? "planner" : "system";
+    const request = syntheticTextMessage(
+      interactionRole,
+      interaction.time?.created || Date.now(),
+      interactionRequestText(interaction),
+    );
+    if (request) msgs.push(request);
+    if (interaction.status === "answered" || interaction.status === "rejected") {
+      const response = syntheticTextMessage(
+        isPlannerClarification ? "user" : "system",
+        interaction.time?.resolved || interaction.time?.updated || Date.now(),
+        interactionResponseText(interaction),
+      );
+      if (response) msgs.push(response);
+    }
+  }
+
+  return msgs;
+}
 
 // ── Public: conversationMessages ──
 
@@ -36,13 +89,15 @@ export function conversationMessages(): any[] {
         text.includes("<assistant-brief>") ||
         text.includes("You are executing a headless coding task")
       ) return false;
-      // Hide orchestrator-generated user prompts on child sessions
       const role = message.info?.role || "";
       const sid = message.info?.sessionID || "";
       if (role === "user" && rootSID && sid && sid !== rootSID) return false;
       return true;
     });
   }
+
+  // User request + interaction messages from board state
+  const contextMsgs = buildUserContextMessages();
 
   // Agent cards from the store
   const agentCardMsgs = (Array.isArray(messageStore.agentCardOrder)
@@ -51,7 +106,7 @@ export function conversationMessages(): any[] {
         .filter(Boolean)
     : []) as any[];
 
-  const result = [...filteredMain, ...agentCardMsgs].sort(
+  const result = [...filteredMain, ...contextMsgs, ...agentCardMsgs].sort(
     (a: any, b: any) => (a.info?.time?.created || 0) - (b.info?.time?.created || 0),
   );
 
