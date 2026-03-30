@@ -34,7 +34,6 @@ import {
   orchestratorState,
 } from "./helpers"
 import {
-  appendExecutorEvent,
   createGoalRun,
   createReplanRun,
   createRetryRun,
@@ -560,16 +559,6 @@ export namespace OrchestratorRuntime {
     })
     // Register executor session so bridge can resolve sessionID → taskID for SSE
     if (sessionID) registerGoalRunSession(sessionID, task.id)
-    appendExecutorEvent(session.id, task.id, run.id, run.executor, undefined, {
-      provider: run.executor,
-      kind: "lifecycle",
-      summary: "Run accepted by executor",
-      refs: session.refs ?? undefined,
-      payload: {
-        queue_task_id: submission.queueTaskID,
-        provider_session_id: submission.sessionID,
-      },
-    })
     // Start executor event bridge (fire-and-forget background coroutine)
     consumeExecutorEvents(task.id, run.id, run.executor, sessionID, session.id)
   }
@@ -2005,49 +1994,11 @@ function consumeExecutorEvents(
       for await (const event of executor.events({ sessionID })) {
         if (ctrl.signal.aborted) break
         upsertExecutorInteraction(taskID, runID, sessionID, executorSessionID, executorName, event)
+        // Project executor events into the MessageV2 session system.
+        // This creates real ToolPart/TextPart/ReasoningPart objects that flow
+        // through the standard message protocol bridge → ProtocolStore → SSE.
+        // No separate RunProgress/RunOutput publishing needed.
         await projectExecutorEventToSession(taskID, requireRun(runID), event)
-        appendExecutorEvent(executorSessionID, taskID, runID, executorName, undefined, {
-          provider: executorName,
-          kind: protocolEventKind(event.type),
-          summary: event.summary ?? event.type,
-          payload: event.payload,
-          raw: {
-            type: event.type,
-            summary: event.summary,
-            payload: event.payload,
-          },
-        })
-        // Route by event type:
-        // - text_delta → ephemeral (no persistence)
-        // - executor.progress → ephemeral (lifecycle, no persistence)
-        // - everything else → persist via OrchestratorProtocol.emit
-        if (event.type === "text_delta") {
-          ProtocolStore.dispatchEphemeral({
-            type: Event.RunOutput.type,
-            aggregate: "task",
-            taskID,
-            runID,
-            source: "executor",
-            payload: { taskID, runID, goalRunID, type: "text_delta", text: event.summary ?? "" },
-          })
-        } else if (event.type === "executor.progress") {
-          ProtocolStore.dispatchEphemeral({
-            type: Event.RunProgress.type,
-            aggregate: "task",
-            taskID,
-            runID,
-            source: "executor",
-            payload: { taskID, runID, goalRunID, type: event.type, summary: event.summary ?? "", payload: event.payload },
-          })
-        } else {
-          void OrchestratorProtocol.emit(Event.RunProgress, {
-            taskID,
-            runID,
-            type: event.type,
-            summary: event.summary ?? event.type,
-            payload: { ...event.payload, goalRunID },
-          }, { taskID, runID, source: "executor" })
-        }
       }
     } catch (err) {
       if (!ctrl.signal.aborted) {
@@ -2081,35 +2032,6 @@ type RuntimeHooks = {
   ) => Promise<RunRow>
 }
 
-const PROTOCOL_EVENT_KIND_MAP: Record<string, string> = {
-  "tool.call": "tool_call",
-  "tool.result": "tool_result",
-  "reasoning.delta": "reasoning_delta",
-  "plan.delta": "plan_delta",
-  "diff.delta": "diff_delta",
-  "approval.request": "approval_request",
-  "input.request": "input_request",
-  "usage.updated": "usage",
-  "session.idle": "done",
-  "session.error": "error",
-  "session.status": "status",
-  "executor.progress": "lifecycle",
-  // Executor message events — carry tool calls, streaming text, message state
-  "message.part.updated": "message_delta",
-  "message.part.delta": "message_delta",
-  "message.updated": "message_delta",
-  "message.removed": "message_delta",
-  "message.part.removed": "message_delta",
-  "permission.asked": "approval_request",
-  "permission.replied": "approval_request",
-  "question.asked": "input_request",
-  "question.replied": "input_request",
-  "question.rejected": "input_request",
-}
-
-function protocolEventKind(type: string) {
-  return PROTOCOL_EVENT_KIND_MAP[type] ?? "lifecycle"
-}
 
 function upsertExecutorInteraction(
   taskID: string,
