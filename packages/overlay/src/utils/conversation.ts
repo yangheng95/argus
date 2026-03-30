@@ -15,6 +15,7 @@ import {
   evaluationContextText,
   interactionRequestText,
   interactionResponseText,
+  isAutoReplied,
 } from "./transcript";
 import { gitCheckpointText, boardGitCheckpoints } from "./git";
 import {
@@ -174,6 +175,13 @@ export function buildBoardContextMessages(
   }
 
   for (const interaction of Array.isArray(board.interactions) ? board.interactions : []) {
+    // Hide auto-resolved permission interactions (they flash "blocked" for 0 seconds)
+    const isAutoPermission =
+      interaction.type === "permission" &&
+      (interaction.status === "answered" || interaction.status === "rejected") &&
+      isAutoReplied(interaction);
+    if (isAutoPermission) continue;
+
     const isPlannerClarification = interaction.payload?.planner_clarification === true;
     const interactionRole = isPlannerClarification ? "planner" : "system";
     const request = syntheticTextMessage(
@@ -262,12 +270,19 @@ export function conversationMessages(): any[] {
  // Filter orchestrator boilerplate from main messages when board context is available
   let filteredMain = mainMessages;
   if (!showTranscriptDetails && boardMsgs.length > 0 && filteredMain.length > 0) {
+    const rootSID = rootTaskSessionID();
     filteredMain = filteredMain.filter((message: any) => {
       const text = (message.parts || []).map((part: any) => part.text || "").join("");
-      return (
-        !text.includes("<assistant-brief>") &&
-        !text.includes("You are executing a headless coding task")
-      );
+      if (
+        text.includes("<assistant-brief>") ||
+        text.includes("You are executing a headless coding task")
+      ) return false;
+      // Hide orchestrator-generated user prompts on child sessions
+      // (e.g. "Explore the repository structure..." sent to executor)
+      const role = message.info?.role || "";
+      const sid = message.info?.sessionID || "";
+      if (role === "user" && rootSID && sid && sid !== rootSID) return false;
+      return true;
     });
   }
 

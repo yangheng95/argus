@@ -1,5 +1,5 @@
-import { Index, Switch, Match, Show, createMemo } from "solid-js";
-import { TextPart } from "./TextPart";
+import { Index, Switch, Match, Show, createMemo, createSignal } from "solid-js";
+import { TextPart, StaticTextPart } from "./TextPart";
 import { ToolPart } from "./ToolPart";
 import { ReasoningPart, isEmptyReasoning } from "./ReasoningPart";
 import { ExecutorGoalBlock } from "./ExecutorGoalBlock";
@@ -8,6 +8,11 @@ import { escapeHtml } from "../utils/markdown";
 import { stamp } from "../utils/time";
 import { shortRelativePath } from "../utils/tool";
 import { activeDirectory, rootTaskSessionID, goalSessionIDs } from "../store/board";
+import { t } from "../utils/i18n";
+
+/** Long synthetic messages (spec, plan) are collapsed by default. */
+const COLLAPSIBLE_ROLES = new Set(["spec", "planner"]);
+const COLLAPSE_THRESHOLD = 300; // chars
 
 /** Render a file part — images get <img>, others get filename text. */
 function renderFilePart(part: any): string {
@@ -58,6 +63,22 @@ export function MessageView(props: { message: any }) {
   const goalTitle = () => props.message?.info?.goalTitle;
   const isExecutorProcess = () => executorType() === "process";
 
+  // Collapsible long messages (spec, plan)
+  const isCollapsible = () => {
+    if (!props.message?._synthetic) return false;
+    if (!COLLAPSIBLE_ROLES.has(role())) return false;
+    const totalText = parts().reduce((acc: number, p: any) => acc + (p.text || "").length, 0);
+    return totalText > COLLAPSE_THRESHOLD;
+  };
+  const [collapsed, setCollapsed] = createSignal(true);
+  const collapsedSummary = createMemo(() => {
+    if (!isCollapsible()) return "";
+    const fullText = parts().map((p: any) => p.text || "").join("\n");
+    // Take first line or first 200 chars as summary
+    const firstLine = fullText.split("\n").find((l: string) => l.trim()) || "";
+    return firstLine.length > 200 ? firstLine.slice(0, 200) + "..." : firstLine;
+  });
+
   const executorProcesses = createMemo(() => {
     if (!isExecutorProcess()) return [];
     return parts().map((p: any) => p.process).filter(Boolean);
@@ -78,7 +99,21 @@ export function MessageView(props: { message: any }) {
               <span class="msg-time">{time()}</span>
             </div>
             <div class="msg-bubble">
+              <Show when={isCollapsible() && collapsed()}>
+                <div class="msg-body msg-collapsed">
+                  <StaticTextPart text={collapsedSummary()} />
+                  <button class="btn mini" style="margin-top: 4px; font-size: 11px;" onClick={() => setCollapsed(false)}>
+                    {t("common.expand") || "Expand"} ▼
+                  </button>
+                </div>
+              </Show>
+              <Show when={!isCollapsible() || !collapsed()}>
               <div class="msg-body">
+                <Show when={isCollapsible()}>
+                  <button class="btn mini" style="margin-bottom: 4px; font-size: 11px;" onClick={() => setCollapsed(true)}>
+                    {t("common.collapse") || "Collapse"} ▲
+                  </button>
+                </Show>
                 <Index each={parts()}>
                   {(part) => (
                     <Switch fallback={null}>
@@ -113,6 +148,7 @@ export function MessageView(props: { message: any }) {
                   )}
                 </Index>
               </div>
+              </Show>
             </div>
           </article>
         }

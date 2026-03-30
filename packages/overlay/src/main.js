@@ -1070,6 +1070,14 @@ function TextPart(props) {
     return _el$;
   })();
 }
+function StaticTextPart(props) {
+  const html = createMemo(() => renderMarkdown$1(props.text));
+  return (() => {
+    var _el$2 = _tmpl$$l();
+    createRenderEffect(() => _el$2.innerHTML = html());
+    return _el$2;
+  })();
+}
 
 const $RAW = Symbol("store-raw"),
   $NODE = Symbol("store-node"),
@@ -2152,7 +2160,7 @@ function ReasoningPart(props) {
 }
 delegateEvents(["click"]);
 
-var _tmpl$$i = /* @__PURE__ */ template(`<span class=executor-goal-badge>`), _tmpl$2$g = /* @__PURE__ */ template(`<div class=executor-goal-body>`), _tmpl$3$g = /* @__PURE__ */ template(`<div class=executor-goal-block><div class=executor-goal-header role=button tabindex=0><span class=executor-goal-label></span><span class=executor-goal-count>/</span><span class=executor-goal-chevron aria-hidden=true>▼`), _tmpl$4$g = /* @__PURE__ */ template(`<span class="executor-goal-badge executor-goal-badge--running"><span class=agent-card-spinner>`), _tmpl$5$g = /* @__PURE__ */ template(`<span class=executor-tool-detail>`), _tmpl$6$d = /* @__PURE__ */ template(`<span class=executor-tool-progress>`), _tmpl$7$b = /* @__PURE__ */ template(`<pre class=executor-tool-output>`), _tmpl$8$8 = /* @__PURE__ */ template(`<div class=executor-tool-entry><div class=executor-tool-item><span class=executor-tool-icon></span><span class=executor-tool-name></span><span class=executor-tool-status>`);
+var _tmpl$$i = /* @__PURE__ */ template(`<span class=executor-goal-badge>`), _tmpl$2$g = /* @__PURE__ */ template(`<div class=executor-goal-body>`), _tmpl$3$g = /* @__PURE__ */ template(`<div class=executor-goal-block><div class=executor-goal-header role=button tabindex=0><span class=executor-goal-label></span><span class=executor-goal-count>/</span><span class=executor-goal-chevron aria-hidden=true>▼`), _tmpl$4$g = /* @__PURE__ */ template(`<span class="executor-goal-badge executor-goal-badge--running"><span class=agent-card-spinner>`), _tmpl$5$g = /* @__PURE__ */ template(`<span class=executor-tool-detail>`), _tmpl$6$e = /* @__PURE__ */ template(`<span class=executor-tool-progress>`), _tmpl$7$c = /* @__PURE__ */ template(`<pre class=executor-tool-output>`), _tmpl$8$9 = /* @__PURE__ */ template(`<div class=executor-tool-entry><div class=executor-tool-item><span class=executor-tool-icon></span><span class=executor-tool-name></span><span class=executor-tool-status>`);
 function tailLines(text, maxLines = 6) {
   const lines = text.split("\n");
   if (lines.length <= maxLines) return text;
@@ -2223,7 +2231,7 @@ function ExecutorGoalBlock(props) {
               return text;
             };
             return (() => {
-              var _el$9 = _tmpl$8$8(), _el$0 = _el$9.firstChild, _el$1 = _el$0.firstChild, _el$10 = _el$1.nextSibling, _el$13 = _el$10.nextSibling;
+              var _el$9 = _tmpl$8$9(), _el$0 = _el$9.firstChild, _el$1 = _el$0.firstChild, _el$10 = _el$1.nextSibling, _el$13 = _el$10.nextSibling;
               insert(_el$1, () => displayToolIcon(proc().toolName || proc().title || ""));
               insert(_el$10, () => proc().toolName || proc().title || "task");
               insert(_el$0, createComponent(Show, {
@@ -2241,7 +2249,7 @@ function ExecutorGoalBlock(props) {
                   return progress();
                 },
                 get children() {
-                  var _el$12 = _tmpl$6$d();
+                  var _el$12 = _tmpl$6$e();
                   insert(_el$12, progress);
                   return _el$12;
                 }
@@ -2255,7 +2263,7 @@ function ExecutorGoalBlock(props) {
                   return output();
                 },
                 get children() {
-                  var _el$14 = _tmpl$7$b();
+                  var _el$14 = _tmpl$7$c();
                   insert(_el$14, output);
                   return _el$14;
                 }
@@ -2392,14 +2400,13 @@ function effectiveRole$1(msg, rootSessionID, goalSessionIDs) {
     if (role === "assistant" && rootSessionID && !msg._synthetic) {
       const sessionID2 = typeof msg.info?.sessionID === "string" ? msg.info.sessionID : "";
       if (sessionID2 && sessionID2 !== rootSessionID) {
-        if (goalSessionIDs && goalSessionIDs.size > 0) {
-          if (goalSessionIDs.has(sessionID2)) return "executor";
-        } else {
-          const agent = String(msg.info?.agent || "").trim().toLowerCase();
-          if (!agent || agent === "build" || agent === "executor" || agent === "coding") {
-            return "executor";
-          }
+        if (goalSessionIDs && goalSessionIDs.size > 0 && goalSessionIDs.has(sessionID2)) {
+          return "executor";
         }
+        const agent = String(msg.info?.agent || "").trim().toLowerCase();
+        if (!agent) return "executor";
+        const stageRole = agentStageRole(agent);
+        return stageRole === "assistant" ? "executor" : stageRole;
       }
     }
     return role;
@@ -2433,7 +2440,9 @@ function formatDuration(ms) {
   return t("time.duration.second", { seconds: s });
 }
 
-var _tmpl$$h = /* @__PURE__ */ template(`<article class="turn msg"data-executor-type=process>`), _tmpl$2$f = /* @__PURE__ */ template(`<article class="turn msg"><div class=msg-head><span class=msg-role></span><span class=msg-time></span></div><div class=msg-bubble><div class=msg-body>`), _tmpl$3$f = /* @__PURE__ */ template(`<div class=msg-patch>`), _tmpl$4$f = /* @__PURE__ */ template(`<div>`), _tmpl$5$f = /* @__PURE__ */ template(`<div class=msg-tool><span class=tool-icon>→</span><span class=tool-name>Subtask</span><span class=tool-detail>`);
+var _tmpl$$h = /* @__PURE__ */ template(`<article class="turn msg"data-executor-type=process>`), _tmpl$2$f = /* @__PURE__ */ template(`<div class="msg-body msg-collapsed"><button class="btn mini"style=margin-top:4px;font-size:11px> ▼`), _tmpl$3$f = /* @__PURE__ */ template(`<button class="btn mini"style=margin-bottom:4px;font-size:11px> ▲`), _tmpl$4$f = /* @__PURE__ */ template(`<div class=msg-body>`), _tmpl$5$f = /* @__PURE__ */ template(`<article class="turn msg"><div class=msg-head><span class=msg-role></span><span class=msg-time></span></div><div class=msg-bubble>`), _tmpl$6$d = /* @__PURE__ */ template(`<div class=msg-patch>`), _tmpl$7$b = /* @__PURE__ */ template(`<div>`), _tmpl$8$8 = /* @__PURE__ */ template(`<div class=msg-tool><span class=tool-icon>→</span><span class=tool-name>Subtask</span><span class=tool-detail>`);
+const COLLAPSIBLE_ROLES = /* @__PURE__ */ new Set(["spec", "planner"]);
+const COLLAPSE_THRESHOLD = 300;
 function renderFilePart(part) {
   const url = part.url || part.filename || "";
   const name = part.filename || url || "file";
@@ -2470,6 +2479,19 @@ function MessageView(props) {
   const goalRunID = () => props.message?.info?.goalRunID;
   const goalTitle = () => props.message?.info?.goalTitle;
   const isExecutorProcess = () => executorType() === "process";
+  const isCollapsible = () => {
+    if (!props.message?._synthetic) return false;
+    if (!COLLAPSIBLE_ROLES.has(role())) return false;
+    const totalText = parts().reduce((acc, p) => acc + (p.text || "").length, 0);
+    return totalText > COLLAPSE_THRESHOLD;
+  };
+  const [collapsed, setCollapsed] = createSignal(true);
+  const collapsedSummary = createMemo(() => {
+    if (!isCollapsible()) return "";
+    const fullText = parts().map((p) => p.text || "").join("\n");
+    const firstLine = fullText.split("\n").find((l) => l.trim()) || "";
+    return firstLine.length > 200 ? firstLine.slice(0, 200) + "..." : firstLine;
+  });
   const executorProcesses = createMemo(() => {
     if (!isExecutorProcess()) return [];
     return parts().map((p) => p.process).filter(Boolean);
@@ -2485,80 +2507,116 @@ function MessageView(props) {
         },
         get fallback() {
           return (() => {
-            var _el$2 = _tmpl$2$f(), _el$3 = _el$2.firstChild, _el$4 = _el$3.firstChild, _el$5 = _el$4.nextSibling, _el$6 = _el$3.nextSibling, _el$7 = _el$6.firstChild;
+            var _el$2 = _tmpl$5$f(), _el$3 = _el$2.firstChild, _el$4 = _el$3.firstChild, _el$5 = _el$4.nextSibling, _el$6 = _el$3.nextSibling;
             insert(_el$4, () => roleLabel(role()));
             insert(_el$5, time);
-            insert(_el$7, createComponent(Index, {
-              get each() {
-                return parts();
+            insert(_el$6, createComponent(Show, {
+              get when() {
+                return memo(() => !!isCollapsible())() && collapsed();
               },
-              children: (part) => createComponent(Switch, {
-                fallback: null,
-                get children() {
-                  return [createComponent(Match, {
-                    get when() {
-                      return memo(() => part().type === "text")() && (part().text || "").trim();
-                    },
+              get children() {
+                var _el$7 = _tmpl$2$f(), _el$8 = _el$7.firstChild, _el$9 = _el$8.firstChild;
+                insert(_el$7, createComponent(StaticTextPart, {
+                  get text() {
+                    return collapsedSummary();
+                  }
+                }), _el$8);
+                _el$8.$$click = () => setCollapsed(false);
+                insert(_el$8, () => t("common.expand") || "Expand", _el$9);
+                return _el$7;
+              }
+            }), null);
+            insert(_el$6, createComponent(Show, {
+              get when() {
+                return !isCollapsible() || !collapsed();
+              },
+              get children() {
+                var _el$0 = _tmpl$4$f();
+                insert(_el$0, createComponent(Show, {
+                  get when() {
+                    return isCollapsible();
+                  },
+                  get children() {
+                    var _el$1 = _tmpl$3$f(), _el$10 = _el$1.firstChild;
+                    _el$1.$$click = () => setCollapsed(true);
+                    insert(_el$1, () => t("common.collapse") || "Collapse", _el$10);
+                    return _el$1;
+                  }
+                }), null);
+                insert(_el$0, createComponent(Index, {
+                  get each() {
+                    return parts();
+                  },
+                  children: (part) => createComponent(Switch, {
+                    fallback: null,
                     get children() {
-                      return createComponent(TextPart, {
-                        get text() {
-                          return part().text || "";
+                      return [createComponent(Match, {
+                        get when() {
+                          return memo(() => part().type === "text")() && (part().text || "").trim();
+                        },
+                        get children() {
+                          return createComponent(TextPart, {
+                            get text() {
+                              return part().text || "";
+                            }
+                          });
                         }
-                      });
-                    }
-                  }), createComponent(Match, {
-                    get when() {
-                      return part().type === "tool";
-                    },
-                    get children() {
-                      return createComponent(ToolPart, {
-                        get part() {
-                          return part();
+                      }), createComponent(Match, {
+                        get when() {
+                          return part().type === "tool";
+                        },
+                        get children() {
+                          return createComponent(ToolPart, {
+                            get part() {
+                              return part();
+                            }
+                          });
                         }
-                      });
-                    }
-                  }), createComponent(Match, {
-                    get when() {
-                      return memo(() => !!(part().type === "reasoning" && (part().text || "").trim()))() && !isEmptyReasoning(part().text || "");
-                    },
-                    get children() {
-                      return createComponent(ReasoningPart, {
-                        get part() {
-                          return part();
+                      }), createComponent(Match, {
+                        get when() {
+                          return memo(() => !!(part().type === "reasoning" && (part().text || "").trim()))() && !isEmptyReasoning(part().text || "");
+                        },
+                        get children() {
+                          return createComponent(ReasoningPart, {
+                            get part() {
+                              return part();
+                            }
+                          });
                         }
-                      });
+                      }), createComponent(Match, {
+                        get when() {
+                          return memo(() => part().type === "patch")() && (part().files || []).length > 0;
+                        },
+                        get children() {
+                          var _el$11 = _tmpl$6$d();
+                          insert(_el$11, () => "⚙ " + (part().files || []).map((f) => shortRelativePath(f, activeDirectory$2())).join(", "));
+                          return _el$11;
+                        }
+                      }), createComponent(Match, {
+                        get when() {
+                          return part().type === "file";
+                        },
+                        get children() {
+                          var _el$12 = _tmpl$7$b();
+                          createRenderEffect(() => _el$12.innerHTML = renderFilePart(part()));
+                          return _el$12;
+                        }
+                      }), createComponent(Match, {
+                        get when() {
+                          return part().type === "subtask";
+                        },
+                        get children() {
+                          var _el$13 = _tmpl$8$8(), _el$14 = _el$13.firstChild, _el$15 = _el$14.nextSibling, _el$16 = _el$15.nextSibling;
+                          insert(_el$16, () => part().description || part().prompt || "");
+                          return _el$13;
+                        }
+                      })];
                     }
-                  }), createComponent(Match, {
-                    get when() {
-                      return memo(() => part().type === "patch")() && (part().files || []).length > 0;
-                    },
-                    get children() {
-                      var _el$8 = _tmpl$3$f();
-                      insert(_el$8, () => "⚙ " + (part().files || []).map((f) => shortRelativePath(f, activeDirectory$2())).join(", "));
-                      return _el$8;
-                    }
-                  }), createComponent(Match, {
-                    get when() {
-                      return part().type === "file";
-                    },
-                    get children() {
-                      var _el$9 = _tmpl$4$f();
-                      createRenderEffect(() => _el$9.innerHTML = renderFilePart(part()));
-                      return _el$9;
-                    }
-                  }), createComponent(Match, {
-                    get when() {
-                      return part().type === "subtask";
-                    },
-                    get children() {
-                      var _el$0 = _tmpl$5$f(), _el$1 = _el$0.firstChild, _el$10 = _el$1.nextSibling, _el$11 = _el$10.nextSibling;
-                      insert(_el$11, () => part().description || part().prompt || "");
-                      return _el$0;
-                    }
-                  })];
-                }
-              })
-            }));
+                  })
+                }), null);
+                return _el$0;
+              }
+            }), null);
             createRenderEffect((_p$) => {
               var _v$ = role(), _v$2 = executorType();
               _v$ !== _p$.e && setAttribute(_el$2, "data-role", _p$.e = _v$);
@@ -2591,6 +2649,7 @@ function MessageView(props) {
     }
   });
 }
+delegateEvents(["click"]);
 
 var _tmpl$$g = /* @__PURE__ */ template(`<span class="agent-card-badge agent-card-badge--done"title=Completed>✓`), _tmpl$2$e = /* @__PURE__ */ template(`<div class="agent-card-summary-content md-content">`), _tmpl$3$e = /* @__PURE__ */ template(`<span class=plan-version>v`), _tmpl$4$e = /* @__PURE__ */ template(`<div class=agent-card-summary-plan><div class="agent-card-summary-content md-content">`), _tmpl$5$e = /* @__PURE__ */ template(`<div class=goals-list>`), _tmpl$6$c = /* @__PURE__ */ template(`<span class=section-badge>`), _tmpl$7$a = /* @__PURE__ */ template(`<div class=agent-card-summary-checks>`), _tmpl$8$7 = /* @__PURE__ */ template(`<div class=agent-card-summary-eval>`), _tmpl$9$6 = /* @__PURE__ */ template(`<div class=agent-card-summary>`), _tmpl$0$4 = /* @__PURE__ */ template(`<hr class=agent-card-summary-divider>`), _tmpl$1$3 = /* @__PURE__ */ template(`<article class="turn msg agent-card"data-role=agent-card><div class=agent-card-header role=button tabindex=0><span class=agent-card-label></span><span class=agent-card-count></span><span class=agent-card-chevron aria-hidden=true>▼</span></div><div class=agent-card-body>`), _tmpl$10$3 = /* @__PURE__ */ template(`<span class="agent-card-badge agent-card-badge--running"title=Running><span class=agent-card-spinner>`), _tmpl$11$2 = /* @__PURE__ */ template(`<span class="agent-card-badge agent-card-badge--error"title=Error>✗`), _tmpl$12$2 = /* @__PURE__ */ template(`<div class="goal-criteria md-content">`), _tmpl$13$2 = /* @__PURE__ */ template(`<span class=goal-priority>`), _tmpl$14$2 = /* @__PURE__ */ template(`<div class="goal-item agent-card-summary-goal"><span class=goal-status-icon></span><div class=goal-content><div class="goal-desc md-content">`), _tmpl$15$2 = /* @__PURE__ */ template(`<span class=agent-card-summary-check><span class=agent-card-summary-check-icon>`);
 function stageLabel(stage) {
@@ -4919,9 +4978,26 @@ function enqueueEvent(event) {
   }
   flushEvents();
 }
+function coalesceDeltas(events) {
+  if (events.length <= 1) return events;
+  const out = [];
+  for (const ev of events) {
+    const p = ev?.properties;
+    if (ev?.type === "message.part.delta" && p?.field === "text" && typeof p?.delta === "string" && out.length > 0) {
+      const prev = out[out.length - 1];
+      const pp = prev?.properties;
+      if (prev?.type === "message.part.delta" && pp?.field === "text" && pp?.partID === p.partID && pp?.messageID === p.messageID) {
+        pp.delta += p.delta;
+        continue;
+      }
+    }
+    out.push(ev);
+  }
+  return out;
+}
 function flushEvents() {
   if (eventQueue.length === 0) return;
-  const events = eventQueue;
+  const events = coalesceDeltas(eventQueue);
   eventQueue = [];
   flushTimer = null;
   lastFlushTime = Date.now();
@@ -5950,6 +6026,8 @@ function buildBoardContextMessages(preClassifiedMainMessages, board, agentEvents
     if (message) syntheticMsgs.push(message);
   }
   for (const interaction of Array.isArray(board.interactions) ? board.interactions : []) {
+    const isAutoPermission = interaction.type === "permission" && (interaction.status === "answered" || interaction.status === "rejected") && isAutoReplied(interaction);
+    if (isAutoPermission) continue;
     const isPlannerClarification = interaction.payload?.planner_clarification === true;
     const interactionRole = isPlannerClarification ? "planner" : "system";
     const request = syntheticTextMessage(
@@ -6017,9 +6095,14 @@ function conversationMessages() {
   const executorMsgs = buildExecutorMessages();
   let filteredMain = mainMessages;
   if (!showTranscriptDetails && boardMsgs.length > 0 && filteredMain.length > 0) {
+    const rootSID = rootTaskSessionID();
     filteredMain = filteredMain.filter((message) => {
       const text = (message.parts || []).map((part) => part.text || "").join("");
-      return !text.includes("<assistant-brief>") && !text.includes("You are executing a headless coding task");
+      if (text.includes("<assistant-brief>") || text.includes("You are executing a headless coding task")) return false;
+      const role = message.info?.role || "";
+      const sid = message.info?.sessionID || "";
+      if (role === "user" && rootSID && sid && sid !== rootSID) return false;
+      return true;
     });
   }
   const agentCardMsgs = Array.isArray(store.agentCardOrder) ? store.agentCardOrder.map((id) => store.agentCards[id]).filter(Boolean) : [];

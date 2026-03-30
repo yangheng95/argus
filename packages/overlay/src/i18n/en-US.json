@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "en-US",
-    "panel_revision": "fde6951677d29f63"
+    "panel_revision": "285bc935afa27cf5"
   },
   "brand.guide_kicker": "Quick Guide",
   "brand.guide_positioning_body": "This is the task cockpit — left picks the task, center drives execution, right verifies spec, plan, evaluation, and file changes so the agent stays on track.",
@@ -127,11 +127,13 @@
   "common.add": "Add",
   "common.cancel": "Cancel",
   "common.close": "Close",
+  "common.collapse": "Collapse",
   "common.create": "Create",
   "common.delete": "Delete",
   "common.delete_all": "Delete All",
   "common.dismiss": "Dismiss",
   "common.edit": "Edit",
+  "common.expand": "Expand",
   "common.error": "Error",
   "common.generating": "Generating…",
   "common.loaded": "Loaded",
