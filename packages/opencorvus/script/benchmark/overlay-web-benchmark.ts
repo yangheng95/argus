@@ -165,7 +165,7 @@ if (requestFile) {
   await fs.mkdir(tempDataDir, { recursive: true })
   await fs.copyFile(realAuth, path.join(tempDataDir, "auth.json")).catch(() => undefined)
 }
-const { ensureBenchmarkModel, loadBenchmarkEnv, prepareDashscopeEnv, resolveBenchmarkModel } = await import("./env")
+const { ensureBenchmarkModel, loadBenchmarkEnv, prepareDashscopeEnv, prepareLocalProviders, resolveBenchmarkModel } = await import("./env")
 const { Log } = await import("../../src/util/log")
 Log.init({ print: true })
 const { ExecutorBootstrap } = await import("../../src/executor/bootstrap")
@@ -176,11 +176,12 @@ const { resetDatabase } = await import("../../test/fixture/db")
 
 await loadBenchmarkEnv(import.meta.dir)
 prepareDashscopeEnv()
+process.env.OPENCORVUS_CONFIG_DIR = temp.config
+await prepareLocalProviders()
 const model = await resolveBenchmarkModel(import.meta.dir, {
   allowOpenAICodex: executor === "codex",
 })
 process.env.OPENCORVUS_BENCHMARK_MODEL = model
-process.env.OPENCORVUS_CONFIG_DIR = temp.config
 await ensureBenchmarkModel(import.meta.dir, model)
 
 process.env.OPENCORVUS_AUTO_DISCOVER_EXECUTORS = "1"
@@ -223,6 +224,8 @@ if (!projectDir) {
   await fs.rm(path.join(temp.dir, ".opencorvus"), { recursive: true, force: true })
   await fs.mkdir(temp.config, { recursive: true })
 }
+// Re-inject local provider configs after scaffoldProject (which overwrites config-override)
+await prepareLocalProviders()
 
 await Instance.provide({
   directory: temp.dir,

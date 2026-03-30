@@ -204,12 +204,12 @@ export function rootTaskSessionID(): string {
 
 /** Returns session IDs belonging to goal execution (not pipeline stages). */
 export function goalSessionIDs(): Set<string> {
-  const sections = boardStore.board?.sections;
-  if (!Array.isArray(sections)) return new Set();
+  const lanes = boardStore.board?.lanes;
+  if (!Array.isArray(lanes)) return new Set();
   const ids = new Set<string>();
-  for (const section of sections) {
-    if (section?.id !== "goals") continue;
-    for (const card of section.cards || []) {
+  for (const lane of lanes) {
+    if (lane?.id !== "goals") continue;
+    for (const card of lane.cards || []) {
       const sid = card?.metadata?.sessionID;
       if (typeof sid === "string" && sid) ids.add(sid);
     }

@@ -37,6 +37,7 @@ export interface EvaluatorConfig {
   max_steps: number
   timeout_ms: number
   skills: string[]
+  model?: string
 }
 
 export interface DeliveryConfig {
@@ -187,6 +188,7 @@ function merge(user?: Config.Info["orchestrator"]): OrchestratorConfigType {
       max_steps: user?.evaluator?.max_steps ?? DEFAULTS.evaluator.max_steps,
       timeout_ms: user?.evaluator?.timeout_ms ?? DEFAULTS.evaluator.timeout_ms,
       skills: (user?.evaluator as any)?.skills ?? DEFAULTS.evaluator.skills,
+      model: (user?.evaluator as any)?.model ?? undefined,
     },
     delivery: {
       max_steps: user?.delivery?.max_steps ?? DEFAULTS.delivery.max_steps,

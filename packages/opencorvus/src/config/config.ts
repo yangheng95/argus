@@ -1223,6 +1223,7 @@ export namespace Config {
             .object({
               max_steps: z.number().int().min(1).optional().describe("Maximum agentic steps for evaluator agent (default: 25)"),
               timeout_ms: z.number().int().min(1000).optional().describe("Evaluator agent timeout in milliseconds (default: 240000)"),
+              model: z.string().optional().describe("Model to use for evaluator agent (e.g. 'github-copilot/claude-haiku-4-5'). Defaults to the project default model."),
             })
             .optional()
             .describe("Evaluator agent configuration"),

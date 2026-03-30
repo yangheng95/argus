@@ -1,0 +1,247 @@
+{
+  "generated_at": "2026-03-30T05:57:16.688Z",
+  "title": "Overlay Web Benchmark NoteStore",
+  "request_file": null,
+  "executor": "codex",
+  "model": "alibaba-coding-plan-cn/kimi-k2.5",
+  "directory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-ia4H9e",
+  "server": "http://127.0.0.1:7878/",
+  "taskID": "tsk_d3d47f76c001s2g49kfWpdTbjb",
+  "stage_timeout_ms": {
+    "spec": 86400000,
+    "planner": 86400000,
+    "tool": 600000,
+    "standby": 86400000,
+    "stall": 1200000,
+    "request": 30000
+  },
+  "stage_max_steps": {
+    "spec": 80,
+    "planner": 96
+  },
+  "stall_timeout_ms": 1200000,
+  "completion_hard_timeout_ms": null,
+  "request_timeout_ms": 30000,
+  "taskStatus": "completed",
+  "evaluation": "accepted",
+  "changedFiles": [
+    "src/note-store.test.ts",
+    "src/note-store.ts",
+    ".opencorvus/evaluations/2026-03-30T05-56-50-950Z-tsk_d3d47f76c001s2g49kfWpdTbjb-coordinator-eval-evl_d3d4f56aa002EowMuHtHirM9MV-overlay-web-benchmark-notestore.md",
+    ".opencorvus/goals/2026-03-30T05-56-50-950Z-tsk_d3d47f76c001s2g49kfWpdTbjb-goal-snapshot-v1-overlay-web-benchmark-notestore.md"
+  ],
+  "transcriptCount": 5,
+  "timelineCount": 0,
+  "runCount": 1,
+  "planning": {
+    "pendingCount": 0,
+    "taskList": [],
+    "reasoning": "",
+    "assistantText": ""
+  },
+  "streaming": {
+    "reasoning": "",
+    "assistantText": "",
+    "liveRole": "",
+    "liveText": "",
+    "reasoningVisible": false,
+    "assistantVisible": false,
+    "liveVisible": false
+  },
+  "materialization": {
+    "boardTaskID": "tsk_d3d47f76c001s2g49kfWpdTbjb",
+    "boardStatus": "spec_generating",
+    "specVersion": null,
+    "goalCount": 0,
+    "goalRunCount": 0,
+    "criteriaCount": 0
+  },
+  "screenshot": null,
+  "resume": {
+    "restored": true,
+    "selectedAt": 2214
+  },
+  "timings_ms": {
+    "online": 1,
+    "submit": 1,
+    "planning_visible": 2211,
+    "streaming_visible": 2214,
+    "task_created": 2211,
+    "task_selected": 2214,
+    "board_loaded": 2214,
+    "resumed": 2214,
+    "completed": 616848,
+    "execution": 616847
+  },
+  "assertions": {
+    "planning_visible": {
+      "pass": true,
+      "sample": {
+        "pendingCount": 0,
+        "taskList": [],
+        "reasoning": "",
+        "assistantText": "",
+        "taskIDs": [
+          "tsk_d3d47f76c001s2g49kfWpdTbjb"
+        ],
+        "selectedTaskID": "tsk_d3d47f76c001s2g49kfWpdTbjb"
+      }
+    },
+    "streaming_visible": {
+      "pass": false,
+      "sample": {
+        "reasoning": "",
+        "assistantText": "",
+        "liveRole": "",
+        "liveText": ""
+      }
+    },
+    "materialized": {
+      "pass": true,
+      "sample": {
+        "taskID": "tsk_d3d47f76c001s2g49kfWpdTbjb",
+        "boardTaskID": "tsk_d3d47f76c001s2g49kfWpdTbjb",
+        "resumed": true
+      }
+    },
+    "delivery": {
+      "pass": true,
+      "sample": {
+        "taskStatus": "completed",
+        "verdict": "accepted",
+        "localExit": 0,
+        "qualityVerdict": "accepted"
+      }
+    }
+  },
+  "local_verify": {
+    "mode": "command",
+    "command": "bun test ./src/note-store.test.ts",
+    "exitCode": 0,
+    "stdout": "bun test v1.3.10 (30e609e0)",
+    "stderr": "5 pass\n 0 fail\n 12 expect() calls\nRan 5 tests across 1 file. [54.00ms]"
+  },
+  "artifact_audit": {
+    "source_files_added": 2,
+    "config_files_added": 0,
+    "doc_files_added": 0,
+    "source_file_count": 2,
+    "doc_file_count": 0,
+    "non_source_churn_ratio": 0,
+    "readme_proliferation_count": 0,
+    "out_of_scope_file_count": 0,
+    "scaffold_noise_count": 0,
+    "placeholder_count": 0,
+    "out_of_scope_files": [],
+    "unmapped_files": [],
+    "placeholder_hits": [],
+    "duplicate_docs": [],
+    "scaffold_expansion_flags": []
+  },
+  "run_metrics": {
+    "meaningful_change_gap_ms": 166161,
+    "noop_cycle_count": 0,
+    "repeat_command_ratio": 0.916162489196197,
+    "repeat_reasoning_similarity": 0.916162489196197,
+    "required_check_pass_rate": 0.5,
+    "critical_check_pass_rate": 0.5,
+    "check_relevance_score": 0.75,
+    "verification_edit_ratio": 3,
+    "feature_coverage_p0": 0,
+    "scope_drift_score": 0,
+    "plan_to_change_traceability": 1,
+    "delivery_focus_score": 0.9948141745894555
+  },
+  "failure_matrix": {
+    "verdict": "accepted",
+    "primary_failure": null,
+    "failures": []
+  },
+  "manual_review_summary": "No quality-gate failures detected.",
+  "overlay": {
+    "error": "no-browser mode"
+  },
+  "diagnostics": {
+    "event_file": "C:\\Users\\chuan\\myhexin-local\\argus-opencode\\packages\\opencorvus\\overlay-web-benchmark-report-1774849619663.events.json",
+    "event_count": 1157,
+    "stage_summary": {
+      "types": {
+        "orchestrator.task.created": 1,
+        "orchestrator.task.updated": 7,
+        "orchestrator.agent.updated": 117,
+        "orchestrator.spec.created": 1,
+        "orchestrator.plan.created": 1,
+        "orchestrator.plan.activated": 1,
+        "orchestrator.run.created": 1,
+        "orchestrator.run.updated": 5,
+        "orchestrator.run.progress": 1023
+      },
+      "stages": {
+        "spec": {
+          "event_count": 16,
+          "first_event_ms": 1404,
+          "first_message_ms": null,
+          "first_tool_call_ms": null,
+          "first_tool_result_ms": null,
+          "submit_tool_ms": null,
+          "error_ms": null,
+          "last_event_ms": 53409,
+          "kind_counts": {
+            "status": 16
+          },
+          "tool_calls": {}
+        },
+        "planner": {
+          "event_count": 2,
+          "first_event_ms": 111140,
+          "first_message_ms": null,
+          "first_tool_call_ms": null,
+          "first_tool_result_ms": null,
+          "submit_tool_ms": null,
+          "error_ms": null,
+          "last_event_ms": 256919,
+          "kind_counts": {
+            "status": 2
+          },
+          "tool_calls": {}
+        },
+        "judge": {
+          "event_count": 60,
+          "first_event_ms": 500828,
+          "first_message_ms": null,
+          "first_tool_call_ms": null,
+          "first_tool_result_ms": null,
+          "submit_tool_ms": null,
+          "error_ms": null,
+          "last_event_ms": 591314,
+          "kind_counts": {
+            "status": 60
+          },
+          "tool_calls": {}
+        },
+        "execution": {
+          "event_count": 1023,
+          "first_event_ms": 257371,
+          "first_progress_ms": 257371,
+          "first_output_ms": null,
+          "last_event_ms": 481853,
+          "types": {
+            "orchestrator.run.progress": 1023
+          },
+          "progress_types": {
+            "executor.progress": 5,
+            "reasoning.delta": 16,
+            "message.part.delta": 938,
+            "usage.updated": 16,
+            "tool.result": 22,
+            "plan.delta": 2,
+            "diff.delta": 17,
+            "tool.call": 6,
+            "session.idle": 1
+          },
+          "goal_runs": []
+        }
+      }
+    }
+  }
+}
