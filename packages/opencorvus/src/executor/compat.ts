@@ -99,7 +99,7 @@ export type ExecutorAdapter = {
     sessionID: string
     prompt: string
     priority?: "high" | "normal" | "low"
-    source?: "planner" | "scheduler" | "system"
+    source?: "planner" | "evaluator" | "system"
     cwd?: string
   }): Promise<{
     sessionID: string

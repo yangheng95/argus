@@ -1,7 +1,57 @@
 // ── Message utilities ──
-// agentStageRole, phaseFromAgent, phaseFromMessage, detectSource
+// Canonical agent role classification and message display helpers.
 
 import { t } from "./i18n";
+
+// ── Agent Role ──
+
+/** Canonical set of UI display roles. Single source of truth for all agent identity. */
+export type AgentRole =
+  | "user"
+  | "assistant"
+  | "spec"
+  | "planner"
+  | "goal"
+  | "executor"
+  | "evaluator"
+  | "delivery"
+  | "system";
+
+/** Stages that get their own collapsible AgentCard in the conversation view. */
+export const AGENT_CARD_STAGES = new Set<AgentRole>(["spec", "planner", "goal", "evaluator", "delivery"]);
+
+/**
+ * Map any backend agent name to a canonical AgentRole.
+ * This is the ONLY place where agent name → role mapping happens.
+ */
+export function normalizeAgentRole(name: string): AgentRole {
+  const text = String(name || "").trim().toLowerCase();
+  if (!text) return "assistant";
+  if (text === "user") return "user";
+  if (text === "spec") return "spec";
+  if (text === "planner" || text === "plan" || text === "planning" || text === "replan") return "planner";
+  if (text === "goal" || text === "goal_gate") return "goal";
+  if (text === "executor" || text === "build" || text === "coding" ||
+      text === "general" || text === "explore" || text === "execute") return "executor";
+  if (text === "judge" || text === "evaluator" || text === "evaluation" ||
+      text === "scheduler" || text === "review" || text === "evaluate") return "evaluator";
+  if (text === "delivery" || text === "deliver" || text === "files" || text === "publish") return "delivery";
+  if (text === "system" || text === "compaction" || text === "title" || text === "summary") return "system";
+  return "assistant";
+}
+
+/**
+ * Map an AgentRole to the inspector panel section phase name.
+ * Returns "" for roles without a corresponding section.
+ */
+export function agentRoleToSectionPhase(role: AgentRole): string {
+  if (role === "spec") return "spec";
+  if (role === "planner") return "plan";
+  if (role === "goal") return "goals";
+  if (role === "evaluator") return "evaluation";
+  if (role === "delivery") return "files";
+  return "";
+}
 
 // ── Pending placeholder detection ──
 
@@ -48,89 +98,38 @@ export function roleLabel(role: string): string {
   if (role === "user") return t("chat.role.user");
   if (role === "assistant") return t("chat.role.assistant");
   if (role === "planner") return t("chat.role.planner");
-  if (role === "scheduler") return t("chat.role.scheduler");
+  if (role === "evaluator") return t("chat.role.evaluator");
   if (role === "delivery") return t("chat.role.delivery");
   if (role === "spec") return t("chat.role.spec");
   if (role === "system") return t("chat.role.system");
-  if (role === "goal_gate") return t("chat.role.goal");
+  if (role === "goal" || role === "goal_gate") return t("chat.role.goal");
   if (role === "executor") return t("chat.role.executor");
   return t("chat.role.message");
 }
 
-// ── Agent stage helpers ──
+// ── Message classification ──
 
-export function agentStageRole(stage: string): string {
-  const text = String(stage || "").trim().toLowerCase();
-  if (text === "planner" || text === "plan") return "planner";
-  if (text === "spec") return "spec";
-  if (text === "judge" || text === "evaluation" || text === "scheduler") return "scheduler";
-  if (text === "delivery" || text === "files") return "delivery";
-  if (text === "executor" || text === "execute" || text === "coding") return "assistant";
-  return "system";
-}
-
-export function phaseFromAgent(value: any): string {
-  const text = String(value || "").trim().toLowerCase();
-  if (!text) return "";
-  if (text.includes("goal_gate") || text.includes("goal")) return "goals";
-  if (
-    text.includes("scheduler") ||
-    text.includes("evaluator") ||
-    text.includes("evaluation") ||
-    text.includes("evaluate") ||
-    text.includes("review")
-  )
-    return "evaluation";
-  if (
-    text.includes("planner") ||
-    text.includes("planning") ||
-    text.includes("replan") ||
-    text === "plan"
-  )
-    return "plan";
-  if (text.includes("spec")) return "spec";
-  if (text.includes("deliver") || text.includes("delivery") || text.includes("publish"))
-    return "files";
-  return "";
-}
-
-export function phaseFromMessage(message: any): string {
-  if (!message || typeof message !== "object") return "";
-  const info =
-    message.info && typeof message.info === "object" ? message.info : {};
-  const direct = phaseFromAgent(info.agent) || phaseFromAgent(info.role);
-  if (direct) return direct;
-  const parts = Array.isArray(message.parts) ? message.parts : [];
-  for (let index = parts.length - 1; index >= 0; index -= 1) {
-    const part = parts[index];
-    if (!part || typeof part !== "object") continue;
-    if (part.type === "subtask") {
-      const mapped =
-        phaseFromAgent(part.agent) ||
-        phaseFromAgent(part.description) ||
-        phaseFromAgent(part.prompt);
-      if (mapped) return mapped;
-      continue;
-    }
-    if (part.type === "agent") {
-      const mapped = phaseFromAgent(part.name);
-      if (mapped) return mapped;
-      continue;
-    }
-    if (part.type !== "tool") continue;
-    const state =
-      part.state && typeof part.state === "object" ? part.state : {};
-    const input =
-      state.input && typeof state.input === "object" ? state.input : {};
-    const mapped =
-      phaseFromAgent(input.agent) ||
-      phaseFromAgent(input.name) ||
-      phaseFromAgent(input.description) ||
-      phaseFromAgent(state.title) ||
-      phaseFromAgent(part.tool);
-    if (mapped) return mapped;
-  }
-  return "";
+/**
+ * Classify which channel a message belongs to.
+ * Single classification function — replaces classifyAgentStage and classifyMessage.
+ *
+ * Returns:
+ * - An AgentRole string (e.g. "spec", "planner") → message belongs to that AgentCard
+ * - "main" → message belongs to the main conversation
+ * - "filtered" → message should be hidden (child session non-card agent, handled by executor events)
+ */
+export function classifyMessage(msg: any, rootSessionID: string): string {
+  // User-role messages always go to main conversation
+  if (String(msg?.info?.role || "").trim().toLowerCase() === "user") return "main";
+  const agent = String(msg?.info?.agent || "").trim().toLowerCase();
+  const role = normalizeAgentRole(agent);
+  // Card-stage agents get their own AgentCards
+  if (AGENT_CARD_STAGES.has(role)) return role;
+  // Child session messages from non-card agents (executor etc.) are filtered out
+  // — they have their own rendering path via executor events
+  const sessionID = typeof msg?.info?.sessionID === "string" ? msg.info.sessionID : "";
+  if (rootSessionID && sessionID && sessionID !== rootSessionID) return "filtered";
+  return "main";
 }
 
 // ── Source detection (used by effectiveRole) ──
@@ -150,54 +149,52 @@ function detectSource(msg: any): string | undefined {
 
 /** Get the display label for an agent stage used in card headers. */
 export function agentStageLabel(stage: string): string {
-  if (stage === "spec") return t("chat.role.spec");
-  if (stage === "planner") return t("chat.role.planner");
-  if (stage === "goal") return t("chat.role.goal");
-  if (stage === "judge" || stage === "scheduler") return t("chat.role.scheduler");
-  if (stage === "delivery") return t("chat.role.delivery");
+  const role = normalizeAgentRole(stage);
+  if (role === "spec") return t("chat.role.spec");
+  if (role === "planner") return t("chat.role.planner");
+  if (role === "goal") return t("chat.role.goal");
+  if (role === "evaluator") return t("chat.role.evaluator");
+  if (role === "delivery") return t("chat.role.delivery");
+  if (role === "executor") return t("chat.role.executor");
   return t("chat.role.message");
 }
 
 // ── Effective role ──
-// rootSessionID: pass boardStore.board?.task?.sessionID (or "" if unknown)
 
 export function effectiveRole(msg: any, rootSessionID: string, goalSessionIDs?: Set<string>): string {
   const role = msg.info?.role || "assistant";
+
   if (role !== "user") {
-    // Detect assistant messages from executor goal sessions.
-    // If goalSessionIDs is provided, use it as the authoritative set of
-    // executor sessions — this avoids hardcoding agent names.
-    // Fallback: any child-session assistant message whose sessionID is NOT
-    // the root is treated as executor when no goal sessions map is available.
+    // Assistant messages from child sessions
     if (role === "assistant" && rootSessionID && !msg._synthetic) {
-      const sessionID =
-        typeof msg.info?.sessionID === "string" ? msg.info.sessionID : "";
+      const sessionID = typeof msg.info?.sessionID === "string" ? msg.info.sessionID : "";
       if (sessionID && sessionID !== rootSessionID) {
-        // Check explicit goal session mapping first
         if (goalSessionIDs && goalSessionIDs.size > 0 && goalSessionIDs.has(sessionID)) {
           return "executor";
         }
-        // Resolve from agent name — covers both pipeline stages and executor
         const agent = String(msg.info?.agent || "").trim().toLowerCase();
         if (!agent) return "executor";
-        const stageRole = agentStageRole(agent);
-        // agentStageRole maps executor/build/coding → "assistant", remap to "executor"
-        return stageRole === "assistant" ? "executor" : stageRole;
+        const normalized = normalizeAgentRole(agent);
+        return normalized === "assistant" ? "executor" : normalized;
       }
     }
     return role;
   }
+
+  // User messages: check source annotation
   const source = detectSource(msg);
   if (source) return source;
-  const sessionID =
-    typeof msg.info?.sessionID === "string" ? msg.info.sessionID : "";
+
+  // Child session user messages
+  const sessionID = typeof msg.info?.sessionID === "string" ? msg.info.sessionID : "";
   if (rootSessionID && sessionID && sessionID !== rootSessionID) {
-    return agentStageRole(phaseFromMessage(msg) || msg.info?.agent || "system");
+    return normalizeAgentRole(msg.info?.agent || "system");
   }
-  // Synthetic user messages from the board context (not typed by the real user)
-  // are operator actions — avoid impersonating the user role.
+
+  // Synthetic user messages from board context
   if (msg._synthetic && msg.info?.agent) {
-    return agentStageRole(msg.info.agent);
+    return normalizeAgentRole(msg.info.agent);
   }
+
   return role;
 }

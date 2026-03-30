@@ -3,10 +3,11 @@
 // board context (spec/plan/evaluation/delivery), executor events, and
 // agent cards. All data is read from reactive stores.
 
-import { messageStore } from "../store/messages";
-import { boardStore } from "../store/board";
+import { messageStore, activeAgentStages } from "../store/messages";
+import { boardStore, rootTaskSessionID } from "../store/board";
 import { stripAssistantBrief } from "./string";
 import { t } from "./i18n";
+import { normalizeAgentRole, classifyMessage } from "./message";
 import {
   syntheticTextMessage,
   specContextText,
@@ -22,57 +23,8 @@ import {
   buildExecutorMessages,
 } from "./executor-events";
 
-// ── Constants ──
-
-const AGENT_STAGES = new Set(["spec", "planner", "goal", "judge", "delivery"]);
-
-// ── Internal: rootTaskSessionID ──
-
-function rootTaskSessionID(): string {
-  const sessionID = boardStore.board?.task?.sessionID;
-  return typeof sessionID === "string" ? sessionID : "";
-}
-
-// ── Internal: classifyMessage ──
-
-function classifyMessage(msg: any): string {
-  const agent = String(msg?.info?.agent || "").trim().toLowerCase();
-  if (AGENT_STAGES.has(agent)) {
-    if (String(msg?.info?.role || "").trim().toLowerCase() === "user") return "main";
-    return agent;
-  }
-  // Legacy: messages with agent="agent" from child sessions — separate from main
-  if (agent === "agent") {
-    const rootSession = rootTaskSessionID();
-    const sessionID = typeof msg?.info?.sessionID === "string" ? msg.info.sessionID : "";
-    if (rootSession && sessionID && sessionID !== rootSession) {
-      return "agent";
-    }
-  }
-  return "main";
-}
-
-// ── Internal: activeAgentStages ──
-// Reads from messageStore (agentEvents) and boardStore (board.task.status).
-
-function activeAgentStages(): Set<string> {
-  const status = String(boardStore.board?.task?.status || "").trim().toLowerCase();
-  if (status === "spec_generating") return new Set(["spec"]);
-  if (status === "goal_decomposing") return new Set(["goal"]);
-  if (status === "planning") return new Set(["planner"]);
-  if (status === "evaluating") return new Set(["judge"]);
-  if (status === "delivering") return new Set(["delivery"]);
-  const agentEvents = Array.isArray(messageStore.agentEvents) ? messageStore.agentEvents : [];
-  if (!status && agentEvents.length > 0) {
-    return new Set(agentEvents.map((item: any) => String(item?.stage || "").trim().toLowerCase()).filter(Boolean));
-  }
-  return new Set();
-}
-
-// ── Internal: effectiveRole (local version for conversation context) ──
-// Simplified: reads role from info directly (used for board context filtering only).
-
-function effectiveRole(message: any): string {
+/** Raw role from message info — used only for board context text filtering. */
+function messageRole(message: any): string {
   return message?.info?.role || "assistant";
 }
 
@@ -85,7 +37,7 @@ function normalizeConversationText(text: any): string {
 // ── Internal: messageConversationText ──
 
 function messageConversationText(message: any): string {
-  const role = effectiveRole(message);
+  const role = messageRole(message);
   return normalizeConversationText(
     (message.parts || [])
       .flatMap((part: any) => {
@@ -95,7 +47,7 @@ function messageConversationText(message: any): string {
         const text = typeof part.text === "string" ? part.text : "";
         if (!text.trim()) return [];
         if (
-          ["user", "planner", "scheduler", "system"].includes(role) &&
+          ["user", "planner", "evaluator", "system"].includes(role) &&
           text.includes("<assistant-brief>")
         ) {
           const cleaned = stripAssistantBrief(text);
@@ -114,7 +66,7 @@ function hasConversationRequest(messages: any[], request: string): boolean {
   if (!target) return false;
   return messages.some(
     (message: any) =>
-      effectiveRole(message) === "user" && messageConversationText(message) === target,
+      messageRole(message) === "user" && messageConversationText(message) === target,
   );
 }
 
@@ -144,7 +96,7 @@ export function buildBoardContextMessages(
   const activeStages = activeAgentStages();
   const liveStages = new Set(
     (Array.isArray(agentEvents) ? agentEvents : [])
-      .map((event: any) => String(event?.stage || "").trim().toLowerCase())
+      .map((event: any) => normalizeAgentRole(String(event?.stage || "")))
       .filter((stage: string) => activeStages.has(stage)),
   );
  // 1. User request — show the original task request as a "user" turn
@@ -214,10 +166,10 @@ export function buildBoardContextMessages(
     if (message) syntheticMsgs.push(message);
   }
 
- // 4. Evaluation verdict — show as "scheduler" turn
+ // 4. Evaluation verdict — show as "evaluator" turn
   if (evaluation?.verdict) {
     const message = syntheticTextMessage(
-      "scheduler",
+      "evaluator",
       evaluation.time?.created || Date.now(),
       evaluationContextText(board, goals),
     );
@@ -254,10 +206,10 @@ export function conversationMessages(): any[] {
  // Classify messages into main conversation only.
  // Agent cards are maintained as stable store entities in messageStore.
   const mainMessages: any[] = [];
+  const rootSID = rootTaskSessionID();
 
   for (const msg of allMessages) {
-    const channel = classifyMessage(msg);
-    if (channel === "main") {
+    if (classifyMessage(msg, rootSID) === "main") {
       mainMessages.push(msg);
     }
   }
@@ -270,7 +222,6 @@ export function conversationMessages(): any[] {
  // Filter orchestrator boilerplate from main messages when board context is available
   let filteredMain = mainMessages;
   if (!showTranscriptDetails && boardMsgs.length > 0 && filteredMain.length > 0) {
-    const rootSID = rootTaskSessionID();
     filteredMain = filteredMain.filter((message: any) => {
       const text = (message.parts || []).map((part: any) => part.text || "").join("");
       if (

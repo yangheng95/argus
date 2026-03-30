@@ -8,7 +8,7 @@
 
 import { getDomRefs } from "../dom";
 import { messageStore } from "../store/messages";
-import { phaseFromMessage } from "./message";
+import { normalizeAgentRole, agentRoleToSectionPhase } from "./message";
 
 // ── Internal: phaseSections ──
 // Returns a map of phase-kind → DOM section node.
@@ -53,14 +53,9 @@ function liveConversationPhase(messages: any[]): string {
     const incomplete =
       message?.info?.role === "assistant" && !message?.info?.time?.completed;
     if (!running && !incomplete) continue;
- // Prefer explicit agent tag over keyword matching
     const agent = String(message?.info?.agent || "").trim().toLowerCase();
-    if (agent === "spec") return "spec";
-    if (agent === "planner") return "plan";
-    if (agent === "goal") return "goals";
-    if (agent === "judge") return "evaluation";
-    if (agent === "delivery") return "files";
-    return phaseFromMessage(message);
+    const phase = agentRoleToSectionPhase(normalizeAgentRole(agent));
+    if (phase) return phase;
   }
   return "";
 }

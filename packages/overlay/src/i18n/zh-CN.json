@@ -51,7 +51,7 @@
   "chat.role.goal": "目标",
   "chat.role.message": "消息",
   "chat.role.planner": "Plan",
-  "chat.role.scheduler": "评估",
+  "chat.role.evaluator": "评估",
   "chat.role.spec": "Spec",
   "chat.role.system": "系统",
   "chat.role.user": "用户",

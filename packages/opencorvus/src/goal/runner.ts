@@ -687,7 +687,7 @@ export async function evaluateGoal(input: {
   const live = agentStream({
     taskID: input.task.id,
     runID: typeof input.task.active_run_id === "string" ? input.task.active_run_id : undefined,
-    stage: "judge",
+    stage: "evaluator",
   })
   await live.start("Goal judge started")
   const analyzed = await CheckRunner.analyzeDelivery({
@@ -760,7 +760,7 @@ export async function evaluateTask(input: {
   const live = agentStream({
     taskID: input.task.id,
     runID: typeof input.task.active_run_id === "string" ? input.task.active_run_id : undefined,
-    stage: "judge",
+    stage: "evaluator",
   })
   await live.start("Goal judge started")
   const analyzed = await CheckRunner.analyzeDelivery({

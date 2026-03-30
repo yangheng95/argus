@@ -259,7 +259,9 @@ export function mergeLoadedConversationMessages(
   return normalizeLoadedMessages(result);
 }
 
-const AGENT_STAGES = new Set(["spec", "planner", "goal", "judge", "delivery"]);
+import { normalizeAgentRole, AGENT_CARD_STAGES, classifyMessage } from "../utils/message";
+import { rootTaskSessionID } from "../store/board";
+
 const MAX_LIVE_AGENT_MESSAGES = 12;
 
 type AgentRound = {
@@ -271,40 +273,22 @@ type AgentRound = {
   endTime: number;
 };
 
-function rootTaskSessionID(): string {
-  const sessionID = boardStore.board?.task?.sessionID;
-  return typeof sessionID === "string" ? sessionID : "";
-}
-
-function classifyAgentStage(message: any): string {
-  const agent = String(message?.info?.agent || "").trim().toLowerCase();
-  if (AGENT_STAGES.has(agent)) {
-    if (String(message?.info?.role || "").trim().toLowerCase() === "user") return "main";
-    return agent;
-  }
-  if (agent === "agent") {
-    const rootSession = rootTaskSessionID();
-    const sessionID =
-      typeof message?.info?.sessionID === "string" ? message.info.sessionID : "";
-    if (rootSession && sessionID && sessionID !== rootSession) {
-      return "agent";
-    }
-  }
-  return "main";
-}
-
-function activeAgentStages(): Set<string> {
+/** Active pipeline stages — exported so conversation.ts can reuse. */
+export function activeAgentStages(): Set<string> {
   const status = String(boardStore.board?.task?.status || "").trim().toLowerCase();
   if (status === "spec_generating") return new Set(["spec"]);
   if (status === "goal_decomposing") return new Set(["goal"]);
   if (status === "planning") return new Set(["planner"]);
-  if (status === "evaluating") return new Set(["judge"]);
+  if (status === "evaluating") return new Set(["evaluator"]);
   if (status === "delivering") return new Set(["delivery"]);
   if (!status && Array.isArray(store.agentEvents) && store.agentEvents.length > 0) {
     return new Set(
       store.agentEvents
-        .map((item: any) => String(item?.stage || "").trim().toLowerCase())
-        .filter(Boolean),
+        .map((item: any) => {
+          const raw = String(item?.stage || "").trim().toLowerCase();
+          return raw ? normalizeAgentRole(raw) : "";
+        })
+        .filter((r: string) => r && AGENT_CARD_STAGES.has(r as any)),
     );
   }
   return new Set();
@@ -455,6 +439,36 @@ function agentRoundStatus(
   return "completed";
 }
 
+/**
+ * Merge consecutive reasoning_delta events into a single accumulated event.
+ * Prevents fragmented rendering where each token appears as a separate message.
+ */
+function mergeAgentReasoningDeltas(events: any[]): any[] {
+  const result: any[] = [];
+  let accum: any = null;
+  for (const event of events) {
+    const kind = String(event?.kind || "").trim().toLowerCase();
+    if (kind === "reasoning_delta") {
+      if (!accum) {
+        accum = { ...event };
+      } else {
+        const prev = String(accum._targetText || accum.summary || accum.text || "");
+        const delta = String(event._targetText || event.summary || event.text || "");
+        const merged = prev + delta;
+        accum._targetText = merged;
+        accum.summary = merged;
+        if (typeof accum.text === "string") accum.text = merged;
+        if (event.time?.created > (accum.time?.created || 0)) accum.time = event.time;
+      }
+    } else {
+      if (accum) { result.push(accum); accum = null; }
+      result.push(event);
+    }
+  }
+  if (accum) result.push(accum);
+  return result;
+}
+
 // ── Debounced rebuild: coalesce multiple calls within the same microtask ──
 let _rebuildScheduled = false;
 function scheduleRebuildAgentCards(): void {
@@ -470,9 +484,10 @@ function rebuildAgentCards(): void {
   const roundsByStage: Record<string, AgentRound[]> = {};
   const latestEventByStage = new Map<string, any>();
 
+  const rootSID = rootTaskSessionID();
   for (const message of store.messages) {
-    const stage = classifyAgentStage(message);
-    if (stage === "main") continue;
+    const stage = classifyMessage(message, rootSID);
+    if (stage === "main" || stage === "filtered") continue;
     const sessionID =
       typeof message?.info?.sessionID === "string" ? message.info.sessionID.trim() : "";
     const fallbackID =
@@ -503,8 +518,9 @@ function rebuildAgentCards(): void {
 
   const liveEventsByStage = new Map<string, any[]>();
   for (const event of Array.isArray(store.agentEvents) ? store.agentEvents : []) {
-    const stage = String(event?.stage || "").trim().toLowerCase();
-    if (!AGENT_STAGES.has(stage)) continue;
+    const rawStage = String(event?.stage || "").trim().toLowerCase();
+    const stage = normalizeAgentRole(rawStage);
+    if (!AGENT_CARD_STAGES.has(stage)) continue;
     const items = liveEventsByStage.get(stage) || [];
     items.push(event);
     liveEventsByStage.set(stage, items);
@@ -512,9 +528,11 @@ function rebuildAgentCards(): void {
   }
 
   for (const [stage, events] of liveEventsByStage.entries()) {
-    const liveMessages = events
-      .slice()
-      .sort((left, right) => agentEventTime(left) - agentEventTime(right))
+    // Merge consecutive reasoning_delta events before creating messages
+    const mergedEvents = mergeAgentReasoningDeltas(
+      events.slice().sort((left, right) => agentEventTime(left) - agentEventTime(right)),
+    );
+    const liveMessages = mergedEvents
       .map((event) => agentMessage(event))
       .filter(Boolean)
       .slice(-MAX_LIVE_AGENT_MESSAGES);

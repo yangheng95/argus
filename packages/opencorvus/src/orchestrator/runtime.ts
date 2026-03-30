@@ -505,8 +505,8 @@ export namespace OrchestratorRuntime {
     })
     const prompt = [brief.content, base].join("\n\n")
     const strategy = run.metadata?.strategy as string | undefined
-    const source: "planner" | "scheduler" | "system" =
-      strategy === "operator_note" ? "system" : strategy === "retry_same_plan" ? "scheduler" : "planner"
+    const source: "planner" | "evaluator" | "system" =
+      strategy === "operator_note" ? "system" : strategy === "retry_same_plan" ? "evaluator" : "planner"
     const prepared = await prepareRun(task, run, plan, hooks)
     if (!prepared) return
     task = prepared
@@ -1360,14 +1360,14 @@ async function completeRun(run: RunRow, hooks: RuntimeHooks) {
   // Phase 2: Independent-context EvaluatorAgent analysis
   // Analyzes check results, investigates failures, assesses each goal, classifies failure type
   const goals = run.plan_version_id ? listGoalsByPlan(run.plan_version_id) : []
-  const judgeLive = agentStream({ taskID: task.id, runID: run.id, stage: "judge" })
+  const judgeLive = agentStream({ taskID: task.id, runID: run.id, stage: "evaluator" })
   const judgeSession = await Session.createNext({
     parentID: task.session_id ?? run.session_id ?? undefined,
     title: `Evaluation: ${task.title}`,
     directory: Instance.directory,
   })
   registerGoalRunSession(judgeSession.id, task.id)
-  const judgeContentHooks = sessionStreamHooks({ sessionID: judgeSession.id, taskID: task.id, stage: "judge" })
+  const judgeContentHooks = sessionStreamHooks({ sessionID: judgeSession.id, taskID: task.id, stage: "evaluator" })
   const judgeStream = mergeTextHooks(judgeContentHooks, judgeLive.hooks)
   let analysis: EvaluatorAnalysisType
   let analysisError: string | undefined
@@ -1548,14 +1548,14 @@ async function runEvaluation(task: TaskRow, run: RunRow, existingDelivery: Deliv
   }
 
   const goals = run.plan_version_id ? listGoalsByPlan(run.plan_version_id) : []
-  const judgeLive = agentStream({ taskID: task.id, runID: run.id, stage: "judge" })
+  const judgeLive = agentStream({ taskID: task.id, runID: run.id, stage: "evaluator" })
   const judgeSession = await Session.createNext({
     parentID: task.session_id ?? run.session_id ?? undefined,
     title: `Evaluation: ${task.title}`,
     directory: Instance.directory,
   })
   registerGoalRunSession(judgeSession.id, task.id)
-  const judgeContentHooks = sessionStreamHooks({ sessionID: judgeSession.id, taskID: task.id, stage: "judge" })
+  const judgeContentHooks = sessionStreamHooks({ sessionID: judgeSession.id, taskID: task.id, stage: "evaluator" })
   const judgeStream = mergeTextHooks(judgeContentHooks, judgeLive.hooks)
   let analysis: EvaluatorAnalysisType
   let analysisError: string | undefined
