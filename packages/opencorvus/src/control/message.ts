@@ -181,9 +181,7 @@ async function run(input: z.infer<typeof ControlMessageInput>, onEvent?: StreamC
 
 function appendTimeline(input: z.infer<typeof ControlMessageInput>, result: z.infer<typeof ControlMessageResult>) {
   // Only record the assistant response in the timeline.
-  // The user message already exists in the control session (via SessionPrompt.prompt)
-  // and the overlay shows the original user request via buildBoardContextMessages.
-  // Recording it here too caused triple user messages in the overlay.
+  // The user message already exists in the control session (via SessionPrompt.prompt).
   ControlTimeline.append({
     ...scope(input, result),
     surface: input.surface,
