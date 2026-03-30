@@ -19,7 +19,6 @@ import {
 } from "../store/messages";
 import { boardStore, setTasksData } from "../store/board";
 import { appStore, setConnectionStatus } from "../store/app";
-import { executorStore } from "../store/executor";
 import { workspaceMode } from "./workspace";
 import {
   selectTask,
@@ -154,8 +153,7 @@ export function chatAbortTargets(seed?: ChatAbortTarget): ChatAbortTarget[] {
   push(seed);
   if (!boardStore.selectedTaskID) return items;
 
-  const runID =
-    boardStore.board?.task?.activeRunID || executorStore.runID || "";
+  const runID = boardStore.board?.task?.activeRunID || "";
   if (runID) {
     push({ kind: "run", runID });
   }

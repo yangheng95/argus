@@ -14,7 +14,6 @@
 import { settingsStore, setSettingsStore } from "../store/settings";
 import { boardStore, setBoardStore } from "../store/board";
 import { clearMessages } from "../store/messages";
-import { clearExecutorEvents } from "../store/executor";
 import { AppLog } from "../utils/log";
 import { t } from "../utils/i18n";
 import { apiJson } from "./api";
@@ -226,8 +225,6 @@ export function clearWorkspaceRuntime(
  // Clear messages store
   clearMessages();
 
- // Clear executor events store
-  clearExecutorEvents();
 }
 
 // ── clearProjectScopeData ──

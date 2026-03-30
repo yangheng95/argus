@@ -18,7 +18,7 @@ export type AgentRole =
   | "system";
 
 /** Stages that get their own collapsible AgentCard in the conversation view. */
-export const AGENT_CARD_STAGES = new Set<AgentRole>(["spec", "planner", "goal", "evaluator", "delivery"]);
+export const AGENT_CARD_STAGES = new Set<AgentRole>(["spec", "planner", "goal", "executor", "evaluator", "delivery"]);
 
 /**
  * Map any backend agent name to a canonical AgentRole.
@@ -125,10 +125,9 @@ export function classifyMessage(msg: any, rootSessionID: string): string {
   const role = normalizeAgentRole(agent);
   // Card-stage agents get their own AgentCards
   if (AGENT_CARD_STAGES.has(role)) return role;
-  // Child session messages from non-card agents (executor etc.) are filtered out
-  // — they have their own rendering path via executor events
+  // Child session messages from unknown agents → treat as executor
   const sessionID = typeof msg?.info?.sessionID === "string" ? msg.info.sessionID : "";
-  if (rootSessionID && sessionID && sessionID !== rootSessionID) return "filtered";
+  if (rootSessionID && sessionID && sessionID !== rootSessionID) return "executor";
   return "main";
 }
 
