@@ -8,7 +8,6 @@ import {
   Budget,
   CreateTaskInput,
   Delivery,
-  ExecutorEvent,
   ExecutorSession,
   Evaluation,
   GlobalTaskBoard,
@@ -620,28 +619,6 @@ export const OrchestratorRoutes = lazy(() =>
       validator("param", z.object({ runID: Run.shape.id })),
       async (c) => {
         return c.json(await OrchestratorService.getExecutorSession(c.req.valid("param").runID))
-      },
-    )
-    .get(
-      "/run/:runID/executor-events",
-      describeRoute({
-        summary: "List run executor events",
-        operationId: "run.executorEvents",
-        responses: {
-          200: {
-            description: "Executor events",
-            content: {
-              "application/json": {
-                schema: resolver(ExecutorEvent.array()),
-              },
-            },
-          },
-          ...errors(404),
-        },
-      }),
-      validator("param", z.object({ runID: Run.shape.id })),
-      async (c) => {
-        return c.json(await OrchestratorService.listExecutorEvents(c.req.valid("param").runID))
       },
     )
     .get(

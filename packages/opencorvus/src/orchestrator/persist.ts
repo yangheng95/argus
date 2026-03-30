@@ -23,7 +23,6 @@ import {
   OrchestratorChannelBindingTable,
   OrchestratorDeliveryTable,
   OrchestratorEvaluationTable,
-  OrchestratorExecutorEventTable,
   OrchestratorExecutorSessionTable,
   OrchestratorGoalTable,
   OrchestratorGoalSnapshotTable,
@@ -3119,69 +3118,6 @@ export function updateGoalRunExecutorSessionStatus(
         time_updated: Date.now(),
       })
       .where(eq(OrchestratorExecutorSessionTable.id, row.id))
-      .run(),
-  )
-}
-
-export function appendExecutorEvent(
-  executorSessionID: string,
-  taskID: string,
-  runID: string,
-  provider: RunRow["executor"],
-  goalRunID: string | undefined,
-  event: {
-    provider: RunRow["executor"]
-    kind: string
-    summary?: string
-    refs?: ProtocolRefsInfo
-    payload?: Record<string, unknown>
-    raw?: Record<string, unknown>
-  },
-) {
-  const now = Date.now()
-  const lease = claimExecutorSessionLease({
-    executorSessionID,
-    now,
-  })
-  if (!lease) {
-    log.info("skipping executor event append because lease is owned by another runtime", {
-      executorSessionID,
-      runID,
-      taskID,
-    })
-    return
-  }
-  const last = Database.use((db) =>
-    db
-      .select()
-      .from(OrchestratorExecutorEventTable)
-      .where(eq(OrchestratorExecutorEventTable.executor_session_id, executorSessionID))
-      .orderBy(desc(OrchestratorExecutorEventTable.sequence))
-      .get(),
-  )
-  const sequence = (last?.sequence ?? 0) + 1
-  Database.use((db) =>
-    db
-      .insert(OrchestratorExecutorEventTable)
-      .values({
-        id: Identifier.ascending("executor_event"),
-        executor_session_id: executorSessionID,
-        task_id: taskID,
-        run_id: runID,
-        goal_run_id: goalRunID,
-        sequence,
-        kind: event.kind,
-        summary: event.summary ?? null,
-        refs: event.refs,
-        payload: {
-          provider,
-          ...(event.payload ?? {}),
-        },
-        raw: event.raw,
-        time_observed: now,
-        time_created: now,
-        time_updated: now,
-      })
       .run(),
   )
 }

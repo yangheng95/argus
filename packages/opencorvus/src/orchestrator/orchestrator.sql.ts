@@ -507,37 +507,6 @@ export const OrchestratorExecutorSessionTable = sqliteTable(
   ],
 )
 
-export const OrchestratorExecutorEventTable = sqliteTable(
-  "orchestrator_executor_event",
-  {
-    id: text().primaryKey(),
-    executor_session_id: text()
-      .notNull()
-      .references(() => OrchestratorExecutorSessionTable.id, { onDelete: "cascade" }),
-    task_id: text()
-      .notNull()
-      .references(() => OrchestratorTaskTable.id, { onDelete: "cascade" }),
-    run_id: text()
-      .notNull()
-      .references(() => OrchestratorRunTable.id, { onDelete: "cascade" }),
-    goal_run_id: text().references(() => OrchestratorGoalRunTable.id, { onDelete: "set null" }),
-    sequence: integer().notNull(),
-    kind: text().notNull(),
-    summary: text(),
-    refs: text({ mode: "json" }).$type<OrchestratorExecutorProtocolRef>(),
-    payload: text({ mode: "json" }).$type<OrchestratorMetadata>(),
-    raw: text({ mode: "json" }).$type<OrchestratorMetadata>(),
-    time_observed: integer().notNull(),
-    ...Timestamps,
-  },
-  (table) => [
-    index("orchestrator_executor_event_session_idx").on(table.executor_session_id, table.sequence),
-    index("orchestrator_executor_event_run_idx").on(table.run_id, table.sequence),
-    index("orchestrator_executor_event_task_idx").on(table.task_id, table.sequence),
-    index("orchestrator_executor_event_kind_idx").on(table.kind),
-  ],
-)
-
 export const OrchestratorChannelBindingTable = sqliteTable(
   "orchestrator_channel_binding",
   {

@@ -9,13 +9,11 @@ import {
   findEvaluations,
   findExecutorSessionByRun,
   findRuns,
-  listExecutorEvents as listExecutorProtocolEvents,
   requireRun,
   requireTask,
   viewArtifact,
   viewDelivery,
   viewEvaluation,
-  viewExecutorEvent,
   viewExecutorSession,
   viewRun,
 } from "./store"
@@ -56,14 +54,6 @@ export async function getExecutorSession(runID: string) {
   const row = findExecutorSessionByRun(runID)
   if (!row) throw new NotFoundError({ message: `Executor session not found for run ${runID}` })
   return viewExecutorSession(row)
-}
-
-export async function listExecutorEvents(runID: string) {
-  await OrchestratorRuntime.syncRun(runID, hooks())
-  requireRun(runID)
-  const row = findExecutorSessionByRun(runID)
-  if (!row) return []
-  return listExecutorProtocolEvents(row.id).map(viewExecutorEvent)
 }
 
 export async function abortRun(runID: string) {
