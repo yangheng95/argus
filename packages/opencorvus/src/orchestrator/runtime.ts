@@ -1348,92 +1348,48 @@ async function completeRun(run: RunRow, hooks: RuntimeHooks) {
     return
   }
 
-  // Phase 2: Independent-context EvaluatorAgent analysis
-  // Analyzes check results, investigates failures, assesses each goal, classifies failure type
+  // Phase 1 failed → reject immediately, route to retry/replan.
+  // Phase 1 passed → skip LLM judge, go straight to delivery agent.
+  // Delivery agent is the final authority (full checks + fix + verify).
   const goals = run.plan_version_id ? listGoalsByPlan(run.plan_version_id) : []
-  const judgeLive = agentStream({ taskID: task.id, runID: run.id, stage: "evaluator" })
-  const judgeSession = await Session.createNext({
-    parentID: task.session_id ?? run.session_id ?? undefined,
-    title: `Evaluation: ${task.title}`,
-    directory: Instance.directory,
-  })
-  registerGoalRunSession(judgeSession.id, task.id)
-  const judgeContentHooks = sessionStreamHooks({ sessionID: judgeSession.id, taskID: task.id, stage: "evaluator" })
-  const judgeStream = mergeTextHooks(judgeContentHooks, judgeLive.hooks)
-  let analysis: EvaluatorAnalysisType
-  let analysisError: string | undefined
-  await judgeLive.start("Evaluator analysis started")
-  try {
-    analysis = await Promise.race([
-      EvaluatorService.analyzeDelivery({
-        task: { title: task.title, request: task.request, sessionID: task.session_id ?? undefined, taskID: task.id },
-        goals: goals.map((g) => ({
-          description: g.description,
-          criteria: g.criteria,
-          priority: g.priority as "blocking" | "advisory",
-          check_selector: selectorList(g.metadata) as string[],
-          requirement_ids: requirementIDsFromMetadata(g.metadata),
-        })),
-        delivery: {
-          summary: delivery.summary,
-          changedFiles: delivery.diffs.map((d) => d.file),
-          diffs: delivery.diffs,
-        },
-        checkResults: result.checks.map((c) => ({
-          name: c.name,
-          status: c.status,
-          evidence: c.evidence,
-        })),
-        stream: judgeStream,
-      }),
-      hardTimeoutPromise<typeof analysis>(),
-    ])
-    await judgeContentHooks.flush()
-    await judgeLive.finish(`Evaluator analysis: ${analysis.verdict}`)
-  } catch (err) {
-    analysisError = err instanceof Error ? err.message : String(err)
-    log.error("evaluator agent analysis failed or timed out", { error: analysisError })
-    await judgeContentHooks.flush().catch(() => undefined)
-    judgeLive.error(err)
-    analysis = fallbackAnalysis(result, goals.length, analysisError)
-  }
-
-  // If Phase 1 evaluation failed (e.g. strict spec_check or build/test failures),
-  // Phase 1 (automated checks) is authoritative for hard failures.
-  // Phase 2 (LLM agent) cannot override Phase 1 failures or accept when Phase 1 is inconclusive.
-  // inconclusive means no real checks ran — we cannot accept on LLM hallucination alone.
   const phase1Failed = result.status === "failed"
   const phase1Inconclusive = result.status === "inconclusive"
-  const agentAccepted = analysis.verdict === "accepted"
-  const finalVerdict = phase1Failed
-    ? "rejected" as const
-    : phase1Inconclusive
-      ? "rejected" as const  // No checks ran — cannot accept
-      : analysis.verdict
-  const finalStatus =
-    (finalVerdict === "accepted" ? "passed" : finalVerdict === "rejected" ? "failed" : "inconclusive") as typeof result.status
-  const finalSummary = phase1Failed
-    ? `Rejected: automated checks failed. ${result.summary}`
-    : phase1Inconclusive
-      ? `Rejected: no automated checks ran (inconclusive). Agent verdict "${analysis.verdict}" cannot be trusted without check evidence. ${result.summary}`
-      : analysis.summary
+
+  if (phase1Failed || phase1Inconclusive) {
+    // Core checks failed — no need for LLM analysis or delivery, go straight to retry/replan
+    const failSummary = phase1Failed
+      ? `Rejected: automated checks failed. ${result.summary}`
+      : `Rejected: no automated checks ran (inconclusive). ${result.summary}`
+    const analysis = fallbackAnalysis(result, goals.length, failSummary)
+    persistEvaluation({
+      task, run, deliveryID, evaluationID, delivery, result, analysis,
+      finalVerdict: "rejected", finalStatus: "failed", finalSummary: failSummary, goals,
+    })
+    await handleEvaluationFailure(requireTask(task.id), run, failSummary, hooks, analysis)
+    return
+  }
+
+  // Phase 1 passed — persist as accepted, then hand off to delivery agent
+  const analysis: EvaluatorAnalysisType = {
+    verdict: "accepted",
+    classification: "transient",
+    summary: `Core checks passed: ${result.checks.map((c) => `${c.name}:${c.status}`).join(", ")}`,
+    goal_statuses: goals.map((g, i) => ({
+      goal_index: i,
+      status: "passed" as const,
+      evidence: "Core checks passed; deferred to delivery agent for full verification.",
+      reasoning: result.summary,
+    })),
+    replan_guidance: null,
+  }
 
   persistEvaluation({
-    task,
-    run,
-    deliveryID,
-    evaluationID,
-    delivery,
-    result,
-    analysis,
-    analysisError,
-    finalVerdict,
-    finalStatus,
-    finalSummary,
-    goals,
+    task, run, deliveryID, evaluationID, delivery, result, analysis,
+    finalVerdict: "accepted", finalStatus: "passed",
+    finalSummary: analysis.summary, goals,
   })
 
-  if (finalStatus === "passed") {
+  if (true) {
     const allGoals = run.plan_version_id ? listGoalsByPlan(run.plan_version_id) : []
     const pendingBlocking = allGoals.filter((g) => g.priority === "blocking" && g.status === "pending")
 
@@ -1540,76 +1496,43 @@ async function runEvaluation(task: TaskRow, run: RunRow, existingDelivery: Deliv
     return
   }
 
+  // Same logic as completeRun: Phase 1 failed → retry/replan, Phase 1 passed → delivery decides
   const goals = run.plan_version_id ? listGoalsByPlan(run.plan_version_id) : []
-  const judgeLive = agentStream({ taskID: task.id, runID: run.id, stage: "evaluator" })
-  const judgeSession = await Session.createNext({
-    parentID: task.session_id ?? run.session_id ?? undefined,
-    title: `Evaluation: ${task.title}`,
-    directory: Instance.directory,
-  })
-  registerGoalRunSession(judgeSession.id, task.id)
-  const judgeContentHooks = sessionStreamHooks({ sessionID: judgeSession.id, taskID: task.id, stage: "evaluator" })
-  const judgeStream = mergeTextHooks(judgeContentHooks, judgeLive.hooks)
-  let analysis: EvaluatorAnalysisType
-  let analysisError: string | undefined
-  await judgeLive.start("Evaluator analysis started")
-  try {
-    throwIfAborted()
-    analysis = await EvaluatorService.analyzeDelivery({
-      task: { title: task.title, request: task.request, sessionID: task.session_id ?? undefined, taskID: task.id },
-      goals: goals.map((g) => ({
-        description: g.description,
-        criteria: g.criteria,
-        priority: g.priority as "blocking" | "advisory",
-        check_selector: selectorList(g.metadata) as string[],
-        requirement_ids: requirementIDsFromMetadata(g.metadata),
-      })),
-      delivery: {
-        summary: delivery.summary,
-        changedFiles: delivery.diffs.map((d) => d.file),
-        diffs: delivery.diffs,
-      },
-      checkResults: result.checks.map((c) => ({
-        name: c.name,
-        status: c.status,
-        evidence: c.evidence,
-      })),
-      stream: judgeStream,
-    })
-    await judgeContentHooks.flush()
-    await judgeLive.finish(`Evaluator analysis: ${analysis.verdict}`)
-  } catch (err) {
-    analysisError = err instanceof Error ? err.message : String(err)
-    log.error("re-evaluation agent analysis failed or timed out", { error: analysisError })
-    await judgeContentHooks.flush().catch(() => undefined)
-    judgeLive.error(err)
-    analysis = fallbackAnalysis(result, goals.length, analysisError)
-  }
-
-  // Phase 1 (automated checks) is authoritative for hard failures.
-  // Phase 2 (LLM agent) cannot override Phase 1 failures or accept when Phase 1 is inconclusive.
-  // Must match the logic in completeRun's primary evaluation path.
   const phase1Failed = result.status === "failed"
   const phase1Inconclusive = result.status === "inconclusive"
-  const finalVerdict = phase1Failed
-    ? "rejected" as const
-    : phase1Inconclusive
-      ? "rejected" as const
-      : analysis.verdict
-  const finalStatus =
-    (finalVerdict === "accepted" ? "passed" : finalVerdict === "rejected" ? "failed" : "inconclusive") as typeof result.status
-  const finalSummary = phase1Failed
-    ? `Rejected: automated checks failed. ${result.summary}`
-    : phase1Inconclusive
-      ? `Rejected: no automated checks ran (inconclusive). Agent verdict "${analysis.verdict}" cannot be trusted without check evidence. ${result.summary}`
-      : analysis.summary
 
+  if (phase1Failed || phase1Inconclusive) {
+    const failSummary = phase1Failed
+      ? `Rejected: automated checks failed. ${result.summary}`
+      : `Rejected: no automated checks ran (inconclusive). ${result.summary}`
+    const analysis = fallbackAnalysis(result, goals.length, failSummary)
+    persistEvaluation({
+      task, run, deliveryID, evaluationID, delivery, result, analysis,
+      finalVerdict: "rejected", finalStatus: "failed", finalSummary: failSummary, goals,
+    })
+    await handleEvaluationFailure(requireTask(task.id), run, failSummary, hooks, analysis)
+    return
+  }
+
+  // Phase 1 passed → accept, hand off to delivery agent
+  const analysis: EvaluatorAnalysisType = {
+    verdict: "accepted",
+    classification: "transient",
+    summary: `Core checks passed: ${result.checks.map((c) => `${c.name}:${c.status}`).join(", ")}`,
+    goal_statuses: goals.map((g, i) => ({
+      goal_index: i,
+      status: "passed" as const,
+      evidence: "Core checks passed; deferred to delivery agent.",
+      reasoning: result.summary,
+    })),
+    replan_guidance: null,
+  }
   persistEvaluation({
-    task, run, deliveryID, evaluationID, delivery, result,
-    analysis, analysisError, finalVerdict, finalStatus, finalSummary, goals,
+    task, run, deliveryID, evaluationID, delivery, result, analysis,
+    finalVerdict: "accepted", finalStatus: "passed", finalSummary: analysis.summary, goals,
   })
 
-  if (finalStatus === "passed") {
+  {
     const allGoals = run.plan_version_id ? listGoalsByPlan(run.plan_version_id) : []
     const pendingBlocking = allGoals.filter((g) => g.priority === "blocking" && g.status === "pending")
     if (pendingBlocking.length === 0) {
@@ -1622,11 +1545,8 @@ async function runEvaluation(task: TaskRow, run: RunRow, existingDelivery: Deliv
       return
     }
     const remaining = pendingBlocking.map((g) => g.description).join(", ")
-    await handleEvaluationFailure(requireTask(task.id), run, `Evaluation ${finalStatus} but blocking goals still pending: ${remaining}`, hooks, analysis)
-    return
+    await handleEvaluationFailure(requireTask(task.id), run, `Core checks passed but blocking goals still pending: ${remaining}`, hooks, analysis)
   }
-
-  await handleEvaluationFailure(requireTask(task.id), run, finalSummary, hooks, analysis)
 }
 
 function recoverStrandedTasks(hooks: RuntimeHooks) {
