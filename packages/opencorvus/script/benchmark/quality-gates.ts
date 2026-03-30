@@ -135,10 +135,10 @@ export async function deriveRunMetrics(input: {
   const checkStatuses = input.evaluationChecks ?? []
   const passedChecks = checkStatuses.filter((item) => item.status === "passed").length
   const totalChecks = checkStatuses.length
-  // Only count verification events from goal-run evaluations (stage=judge).
+  // Only count verification events from goal-run evaluations (stage=evaluator).
   // Spec and planner events contain natural language that mentions "test" or "structure"
   // in plan descriptions, which matches VERIFY_RE but is not a verification loop.
-  const judgeEvents = input.events.filter((e) => String(e.stage || "") === "judge")
+  const judgeEvents = input.events.filter((e) => String(e.stage || "") === "evaluator")
   const noopCycles = longestVerificationStreakByGoal(judgeEvents)
   const repeatedReasoning = repeatedSimilarity(commandSummaries)
   // Exclude config infrastructure files from scope drift — modifying tsconfig.json,
