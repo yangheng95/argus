@@ -1366,7 +1366,7 @@ async function completeRun(run: RunRow, hooks: RuntimeHooks) {
   try {
     analysis = await Promise.race([
       EvaluatorService.analyzeDelivery({
-        task: { title: task.title, request: task.request, sessionID: task.session_id ?? undefined },
+        task: { title: task.title, request: task.request, sessionID: task.session_id ?? undefined, taskID: task.id },
         goals: goals.map((g) => ({
           description: g.description,
           criteria: g.criteria,
@@ -1556,7 +1556,7 @@ async function runEvaluation(task: TaskRow, run: RunRow, existingDelivery: Deliv
   try {
     throwIfAborted()
     analysis = await EvaluatorService.analyzeDelivery({
-      task: { title: task.title, request: task.request, sessionID: task.session_id ?? undefined },
+      task: { title: task.title, request: task.request, sessionID: task.session_id ?? undefined, taskID: task.id },
       goals: goals.map((g) => ({
         description: g.description,
         criteria: g.criteria,

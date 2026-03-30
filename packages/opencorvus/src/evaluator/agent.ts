@@ -23,6 +23,7 @@ import { Instance } from "@/project/instance"
 import { Log } from "@/util/log"
 import { toolGuard } from "@/util/tool-guard"
 import { OrchestratorConfig } from "@/orchestrator/config"
+import { operatorNotesSection } from "@/orchestrator/helpers"
 import { loadStageSkills } from "@/orchestrator/skill-inject"
 import { Config } from "@/config/config"
 
@@ -99,7 +100,7 @@ export interface DeliveryInfo {
 
 export namespace EvaluatorAgent {
   export async function analyze(input: {
-    task: { title: string; request: string; sessionID?: string }
+    task: { title: string; request: string; sessionID?: string; taskID?: string }
     goals: GoalInfo[]
     delivery: DeliveryInfo
     checkResults: CheckResult[]
@@ -318,7 +319,7 @@ function prefetchEvaluatorContext(input: {
 
 function buildInvestigationPrompt(
   input: {
-    task: { title: string; request: string }
+    task: { title: string; request: string; taskID?: string }
     goals: GoalInfo[]
     delivery: DeliveryInfo
     checkResults: CheckResult[]
@@ -329,6 +330,12 @@ function buildInvestigationPrompt(
 
   // Task context
   sections.push(`# Task\n\nTitle: ${input.task.title}\nRequest: ${input.task.request}`)
+
+  // Operator notes — user messages sent during task execution
+  if (input.task.taskID) {
+    const notes = operatorNotesSection(input.task.taskID)
+    if (notes) sections.push(notes)
+  }
 
   // Goals — with verification guidance per goal
   sections.push(

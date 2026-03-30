@@ -1,5 +1,7 @@
 import z from "zod"
 import { Instance } from "@/project/instance"
+import { Database, eq, desc } from "@/storage/db"
+import { WorkbenchTaskNoteTable } from "@/workbench/workbench.sql"
 import { Budget } from "./model"
 import { OrchestratorConfig } from "./config"
 import type { OrchestratorBudget, OrchestratorTaskStatus } from "./orchestrator.sql"
@@ -126,4 +128,26 @@ export function effectiveMaxExecutorGroups(task: TaskRow): number {
   const budgetMax = (task.budget as OrchestratorBudget | null)?.max_executor_groups
   if (typeof budgetMax === "number" && budgetMax >= 1) return budgetMax
   return MAX_EXECUTOR_GROUPS
+}
+
+/**
+ * Query operator notes for a task and format as a prompt section.
+ * Returns "" if no notes exist.
+ */
+export function operatorNotesSection(taskID: string): string {
+  const notes = Database.use((db) =>
+    db
+      .select()
+      .from(WorkbenchTaskNoteTable)
+      .where(eq(WorkbenchTaskNoteTable.task_id, taskID))
+      .orderBy(desc(WorkbenchTaskNoteTable.time_created))
+      .limit(10)
+      .all(),
+  ).filter((n) => n.kind === "operator_note" || n.kind === "constraint" || n.kind === "goal_update")
+  if (notes.length === 0) return ""
+  const items = notes
+    .reverse()
+    .map((n) => `- [${new Date(n.time_created).toISOString()}] ${n.content}`)
+    .join("\n")
+  return `\n\n## Operator Notes\n\nThe following messages were sent by the operator during task execution. Incorporate these instructions into your analysis and decisions.\n\n${items}\n`
 }
