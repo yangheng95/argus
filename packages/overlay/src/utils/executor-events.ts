@@ -12,6 +12,7 @@ import {
   executorStore,
   clearExecutorEvents,
   setExecutorEvents,
+  mergeExecutorEventsFromFetch,
   type ExecutorEvent,
 } from "../store/executor";
 import { boardStore } from "../store/board";
@@ -1048,10 +1049,11 @@ export async function loadExecutorEvents(
       .map(executorEventEntry)
       .filter((item): item is ExecutorEvent => !!item)
       .reduce((items, item) => mergeExecutorEventList(items, item), [] as ExecutorEvent[]);
-    // Batch-set all events in one store update to avoid per-event re-renders
-    // that cause tool cards to flicker through intermediate "running" states.
+    // Merge API events with existing SSE events to preserve real-time state.
+    // API events are authoritative (correct kind from DB); SSE-only events
+    // that arrived after the API query are kept.
     const firstRunID = normalised.find(e => e.runID)?.runID;
-    setExecutorEvents(normalised, firstRunID);
+    mergeExecutorEventsFromFetch(normalised, firstRunID);
     return executorStore.events as ExecutorEvent[];
   } catch (e) {
     AppLog.debug("executor", "loadExecutorEvents failed", { runID: next, error: String(e) });

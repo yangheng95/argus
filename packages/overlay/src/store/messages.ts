@@ -9,6 +9,7 @@ import { clearConversationUiState } from "./conversation-ui";
 import {
   setExecutorEvents,
   clearExecutorEvents,
+  mergeExecutorEventsFromFetch,
 } from "./executor";
 import { touchReasoningPart as trackReasoningPart } from "./reasoning";
 import { executorEventEntry } from "../utils/executor-events";
@@ -459,7 +460,7 @@ let _rebuildScheduled = false;
 function scheduleRebuildAgentCards(): void {
   if (_rebuildScheduled) return;
   _rebuildScheduled = true;
-  queueMicrotask(() => {
+  requestAnimationFrame(() => {
     _rebuildScheduled = false;
     rebuildAgentCards();
   });
@@ -679,8 +680,8 @@ async function loadExecutorEvents(runID: string): Promise<void> {
     .map((item) => executorEventEntry(item))
     .filter(Boolean) as ReturnType<typeof executorEventEntry>[];
   const firstRunID = items.find(e => e?.runID)?.runID;
-  // Batch-set all events in one store update to avoid per-event re-renders
-  setExecutorEvents(items as any[], firstRunID);
+  // Merge API events with existing SSE events to preserve real-time state
+  mergeExecutorEventsFromFetch(items as any[], firstRunID);
 }
 
 export async function loadConversation(): Promise<void> {
@@ -813,6 +814,32 @@ export function applyMessageEvent(event: any): boolean {
     const idx = store.messages.indexOf(message);
     const partIdx = message.parts.findIndex((p: Part) => p.id === part.id);
     if (partIdx >= 0) {
+      // Prevent tool status regression: once a tool part reaches "completed"
+      // or "error", a stale "pending"/"running" update must not overwrite it.
+      const existing = message.parts[partIdx];
+      if (
+        existing.type === "tool" &&
+        part.type === "tool" &&
+        existing.state?.status &&
+        part.state?.status
+      ) {
+        const rank: Record<string, number> = {
+          pending: 0,
+          running: 1,
+          completed: 2,
+          error: 2,
+        };
+        const oldRank = rank[existing.state.status] ?? 0;
+        const newRank = rank[part.state.status] ?? 0;
+        if (newRank < oldRank) {
+          // Merge non-status fields but keep the existing terminal status
+          setStore("messages", idx, "parts", partIdx, {
+            ...part,
+            state: { ...part.state, status: existing.state.status, output: existing.state.output || part.state.output, error: existing.state.error || part.state.error },
+          });
+          return true;
+        }
+      }
       setStore("messages", idx, "parts", partIdx, part);
     } else {
       setStore(
@@ -908,7 +935,7 @@ export function applyMessageEvent(event: any): boolean {
 
 // ── 16ms event batching ──
 
-const FLUSH_INTERVAL = 16;
+const FLUSH_INTERVAL = 50;
 let eventQueue: any[] = [];
 let flushTimer: any = null;
 let lastFlushTime = 0;

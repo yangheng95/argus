@@ -146,15 +146,27 @@ async function run(input: {
   let lastParsed: ParsedGoalDraft | undefined
   let lastQuality: { score: number; reasons: string[] } | undefined
 
+  // Build the initial prompt once; retry rounds append feedback messages
+  // to the existing conversation instead of starting a fresh LLM call.
+  const systemPrompt = await goalSystem()
+  const initialPrompt = buildUserPrompt(input, context)
+  let messages: any[] = [{ role: "user" as const, content: initialPrompt }]
+  let cumulativeToolCalls = 0
+
   for (let attempt = 0; attempt < MAX_GOAL_ATTEMPTS; attempt++) {
     if (input.signal?.aborted) throw new Error("goal agent aborted before attempt " + (attempt + 1))
 
     await input.onStatus?.(`Goal agent attempt ${attempt + 1}/${MAX_GOAL_ATTEMPTS}`)
 
-    const retryContext = attempt > 0 && lastQuality
-      ? { previousScore: lastQuality.score, reasons: lastQuality.reasons, attempt }
-      : undefined
-    const userPrompt = buildUserPrompt(input, context, retryContext, QUALITY_RETRY_THRESHOLD)
+    // On retry: append quality feedback as a new user turn.
+    // The previous attempt's tool calls and responses are already in messages,
+    // so the LLM retains full context of what it already explored.
+    if (attempt > 0 && lastQuality) {
+      messages.push({
+        role: "user" as const,
+        content: buildRetryMessage(lastQuality, QUALITY_RETRY_THRESHOLD, attempt),
+      })
+    }
 
     log.info("goal agent starting", {
       title: input.title,
@@ -162,7 +174,7 @@ async function run(input: {
       model: language.modelId,
       attempt: attempt + 1,
       requirementCount: specRequirementIds.size,
-      retryReason: retryContext ? `score ${retryContext.previousScore} < ${QUALITY_RETRY_THRESHOLD}` : undefined,
+      retryReason: attempt > 0 && lastQuality ? `score ${lastQuality.score} < ${QUALITY_RETRY_THRESHOLD}` : undefined,
     })
 
     const baseSignal = input.signal ?? AbortSignal.timeout(TIMEOUT_MS)
@@ -172,23 +184,25 @@ async function run(input: {
       tools: guard.tools,
       maxOutputTokens: 32768,
       abortSignal: AbortSignal.any([baseSignal, guard.signal]),
-      system: await goalSystem(),
-      prompt: userPrompt,
+      system: systemPrompt,
+      messages,
       ...(input.stream?.onChunk ? { onChunk: input.stream.onChunk as any } : {}),
       ...(input.stream?.onError ? { onError: input.stream.onError } : {}),
       onStepFinish: guard.onStepFinish as any,
     })
 
-    const [resultText, resultSteps, resultFinishReason] = await Promise.all([
+    const [resultText, resultSteps, resultFinishReason, response] = await Promise.all([
       stream.text,
       stream.steps,
       stream.finishReason,
+      stream.response,
     ])
 
     const toolCallCount = resultSteps.reduce(
       (sum, s) => sum + (Array.isArray((s as any).toolCalls) ? (s as any).toolCalls.length : 0),
       0,
     )
+    cumulativeToolCalls += toolCallCount
 
     let allText = resultText?.trim() || ""
     if (!allText) {
@@ -200,6 +214,7 @@ async function run(input: {
       finishReason: resultFinishReason,
       textLength: allText.length,
       toolCalls: toolCallCount,
+      cumulativeToolCalls,
       attempt: attempt + 1,
     })
 
@@ -214,14 +229,15 @@ async function run(input: {
     const explicitCount = parsed.goals.filter((g) => g.source === "explicit").length
     const implicitCount = parsed.goals.filter((g) => g.source === "implicit").length
 
-    const goalQuality = validateGoalQuality(parsed, specRequirementIds, toolCallCount)
+    // Use cumulative tool calls for quality scoring — previous rounds' exploration counts
+    const goalQuality = validateGoalQuality(parsed, specRequirementIds, cumulativeToolCalls)
     lastQuality = goalQuality
 
     log.info("goal agent output", {
       goals: parsed.goals.length,
       explicit: explicitCount,
       implicit: implicitCount,
-      toolCalls: toolCallCount,
+      toolCalls: cumulativeToolCalls,
       uncoveredRequirements: uncoveredIds.length > 0 ? uncoveredIds : undefined,
       quality: goalQuality,
       attempt: attempt + 1,
@@ -234,6 +250,12 @@ async function run(input: {
       return toDraft(parsed)
     }
 
+    // Append response messages (including tool calls/results) to history
+    // so the next attempt retains full exploration context.
+    if (Array.isArray(response?.messages)) {
+      messages = [...messages, ...response.messages]
+    }
+
     log.warn("goal agent: quality below threshold, retrying", {
       score: goalQuality.score,
       threshold: QUALITY_RETRY_THRESHOLD,
@@ -243,6 +265,30 @@ async function run(input: {
 
   if (!lastParsed) throw new Error("Goal agent produced no output after all attempts")
   return toDraft(lastParsed)
+}
+
+// ---------------------------------------------------------------------------
+// Retry feedback message (appended to conversation, not a new prompt)
+// ---------------------------------------------------------------------------
+
+function buildRetryMessage(
+  lastQuality: { score: number; reasons: string[] },
+  qualityThreshold: number,
+  attempt: number,
+): string {
+  return [
+    "# QUALITY RETRY — Previous Goals Were Insufficient",
+    "",
+    `Score: ${lastQuality.score.toFixed(2)} / ${qualityThreshold}. Attempt ${attempt + 1}.`,
+    "",
+    "**Issues:**",
+    ...lastQuality.reasons.map((r) => `- ${r}`),
+    "",
+    "You already explored the codebase in the previous round — use that knowledge. " +
+    "Do NOT repeat directory listings or file reads you already did. " +
+    "Fix all issues and output improved goals with all required fields " +
+    "(id, title, objective, requirement_ids, owned_paths, done_definition).",
+  ].join("\n")
 }
 
 // ---------------------------------------------------------------------------
@@ -283,8 +329,6 @@ function buildUserPrompt(
     redecomposeContext?: GoalRedecomposeContext
   },
   context: string,
-  retryContext?: { previousScore: number; reasons: string[]; attempt: number },
-  qualityThreshold = GOAL_DEFAULTS.quality_threshold,
 ): string {
   const sections = [`# Task\n\nTitle: ${input.title}\n\nRequest:\n${input.request}`]
 
@@ -323,21 +367,6 @@ function buildUserPrompt(
       `- **${l.id}**: ${l.name} — ${l.description}${l.kind ? ` [${l.kind}]` : ""}${l.depends_on?.length ? ` (depends on: ${l.depends_on.join(", ")})` : ""}`,
     )
     sections.push(`# Architectural Layers\n\nUse these as a guide for goal organization:\n\n${layerLines.join("\n")}`)
-  }
-
-  if (retryContext) {
-    sections.push(
-      [
-        "# QUALITY RETRY — Previous Goals Were Insufficient",
-        "",
-        `Score: ${retryContext.previousScore.toFixed(2)} / ${qualityThreshold}. Attempt ${retryContext.attempt + 1}.`,
-        "",
-        "**Issues:**",
-        ...retryContext.reasons.map((r) => `- ${r}`),
-        "",
-        "Fix all issues. Use tools to explore the codebase if you haven't already.",
-      ].join("\n"),
-    )
   }
 
   if (input.goalHints && input.goalHints.length > 0) {

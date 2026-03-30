@@ -788,7 +788,15 @@ export namespace ProviderTransform {
       result["enable_thinking"] = true
     }
 
-    if (input.model.api.id.includes("gpt-5") && !input.model.api.id.includes("gpt-5-chat")) {
+    // GPT-5 reasoning params: only for SDKs that natively support them.
+    // Generic @ai-sdk/openai-compatible providers (e.g. litellm proxies) pass
+    // these as raw body fields — backends that don't recognise them return 400.
+    const gpt5NativeSDKs = new Set(["@ai-sdk/openai", "@ai-sdk/azure"])
+    if (
+      input.model.api.id.includes("gpt-5") &&
+      !input.model.api.id.includes("gpt-5-chat") &&
+      (gpt5NativeSDKs.has(input.model.api.npm) || input.model.providerID.startsWith("opencorvus"))
+    ) {
       if (!input.model.api.id.includes("gpt-5-pro")) {
         result["reasoningEffort"] = "medium"
         result["reasoningSummary"] = "auto"

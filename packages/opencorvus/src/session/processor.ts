@@ -51,6 +51,8 @@ export namespace SessionProcessor {
             let currentText: MessageV2.TextPart | undefined
             let reasoningMap: Record<string, MessageV2.ReasoningPart> = {}
             const stream = await LLM.stream(streamInput)
+            const pauseInactivity = (stream as any).pauseInactivityTimer as (() => void) | undefined
+            const resumeInactivity = (stream as any).resumeInactivityTimer as (() => void) | undefined
 
             for await (const value of stream.fullStream) {
               input.abort.throwIfAborted()
@@ -145,6 +147,10 @@ export namespace SessionProcessor {
                   break
 
                 case "tool-call": {
+                  // Tool execution starts — pause stream inactivity timer
+                  // because tools (bash, bun test, etc.) can run for minutes
+                  // without producing LLM tokens.
+                  pauseInactivity?.()
                   const match = toolcalls[value.toolCallId]
                   if (match) {
                     const part = await Session.updatePart({
@@ -192,6 +198,8 @@ export namespace SessionProcessor {
                   break
                 }
                 case "tool-result": {
+                  // Tool execution completed — resume stream inactivity timer
+                  resumeInactivity?.()
                   const match = toolcalls[value.toolCallId]
                   if (match && match.state.status === "running") {
                     await Session.updatePart({
@@ -216,6 +224,7 @@ export namespace SessionProcessor {
                 }
 
                 case "tool-error": {
+                  resumeInactivity?.()
                   const match = toolcalls[value.toolCallId]
                   if (match && match.state.status === "running") {
                     await Session.updatePart({

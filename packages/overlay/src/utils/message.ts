@@ -173,10 +173,11 @@ export function effectiveRole(msg: any, rootSessionID: string, goalSessionIDs?: 
       const sessionID =
         typeof msg.info?.sessionID === "string" ? msg.info.sessionID : "";
       if (sessionID && sessionID !== rootSessionID) {
-        if (goalSessionIDs) {
+        if (goalSessionIDs && goalSessionIDs.size > 0) {
           if (goalSessionIDs.has(sessionID)) return "executor";
         } else {
-          // Legacy fallback: child session with non-stage agent → executor
+          // No goal session IDs available (single-executor mode or empty board):
+          // detect executor by agent name on child sessions.
           const agent = String(msg.info?.agent || "").trim().toLowerCase();
           if (!agent || agent === "build" || agent === "executor" || agent === "coding") {
             return "executor";

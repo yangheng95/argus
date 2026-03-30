@@ -184,21 +184,33 @@ Output ONLY a JSON object (no markdown fences, no other text):
   let result: z.infer<typeof FidelityReviewSchema> | undefined
 
   for (let attempt = 1; attempt <= MAX_REVIEW_ATTEMPTS; attempt++) {
-    const { text } = await completeHeadlessText({
-      label: "goal-fidelity-review",
-      model,
-      language,
-      prompt,
-      system:
-        "You are a precise goal coverage reviewer for a software task orchestrator. " +
-        "Output only valid JSON. Never wrap output in markdown code fences. " +
-        "Be conservative: only flag issues where coverage is genuinely wrong or missing.",
-      tools: {},
-      maxOutputTokens: 8192,
-      sessionID: input.sessionID,
-      timeoutMs: input.timeoutMs ?? 120_000,
-      abortSignal: input.signal,
-    })
+    let text: string
+    try {
+      const res = await completeHeadlessText({
+        label: "goal-fidelity-review",
+        model,
+        language,
+        prompt,
+        system:
+          "You are a precise goal coverage reviewer for a software task orchestrator. " +
+          "Output only valid JSON. Never wrap output in markdown code fences. " +
+          "Be conservative: only flag issues where coverage is genuinely wrong or missing.",
+        tools: {},
+        maxOutputTokens: 8192,
+        sessionID: input.sessionID,
+        timeoutMs: input.timeoutMs ?? 120_000,
+        abortSignal: input.signal,
+      })
+      text = res.text
+    } catch (streamErr) {
+      lastError = new Error(`Goal fidelity review LLM call failed (attempt ${attempt}/${MAX_REVIEW_ATTEMPTS}): ${streamErr instanceof Error ? streamErr.message : String(streamErr)}`)
+      log.warn("fidelity review: LLM call failed, retrying", {
+        attempt,
+        maxAttempts: MAX_REVIEW_ATTEMPTS,
+        error: streamErr instanceof Error ? streamErr.message : String(streamErr),
+      })
+      continue
+    }
 
     const jsonStart = text.indexOf("{")
     const jsonEnd = text.lastIndexOf("}")

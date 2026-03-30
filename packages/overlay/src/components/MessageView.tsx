@@ -1,7 +1,7 @@
 import { Index, Switch, Match, Show, createMemo } from "solid-js";
 import { TextPart } from "./TextPart";
 import { ToolPart } from "./ToolPart";
-import { ReasoningPart } from "./ReasoningPart";
+import { ReasoningPart, isEmptyReasoning } from "./ReasoningPart";
 import { ExecutorGoalBlock } from "./ExecutorGoalBlock";
 import { orderedMessageParts, roleLabel, effectiveRole } from "../utils/message";
 import { escapeHtml } from "../utils/markdown";
@@ -45,7 +45,7 @@ export function MessageView(props: { message: any }) {
     return p.some((part: any) => {
       if (part.type === "text") return !!(part.text || "").trim();
       if (part.type === "tool") return true;
-      if (part.type === "reasoning") return !!(part.text || "").trim();
+      if (part.type === "reasoning") return !!(part.text || "").trim() && !isEmptyReasoning(part.text || "");
       if (part.type === "executor_process") return !!part.process;
       if (part.type === "patch") return (part.files || []).length > 0;
       if (part.type === "file") return true;
@@ -88,7 +88,7 @@ export function MessageView(props: { message: any }) {
                       <Match when={part().type === "tool"}>
                         <ToolPart part={part()} />
                       </Match>
-                      <Match when={part().type === "reasoning" && (part().text || "").trim()}>
+                      <Match when={part().type === "reasoning" && (part().text || "").trim() && !isEmptyReasoning(part().text || "")}>
                         <ReasoningPart part={part()} />
                       </Match>
                       <Match when={part().type === "patch" && (part().files || []).length > 0}>

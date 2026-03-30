@@ -248,7 +248,7 @@ export namespace LLM {
       },
     })
 
-    return streamText({
+    const result = streamText({
       onChunk() {
         resetInactivityTimer()
       },
@@ -325,6 +325,11 @@ export namespace LLM {
         },
       },
     })
+    // Expose inactivity timer control so the processor can pause the timer
+    // during tool execution (tools like bash/bun test can run for minutes).
+    ;(result as any).pauseInactivityTimer = clearInactivityTimer
+    ;(result as any).resumeInactivityTimer = resetInactivityTimer
+    return result
   }
 
   async function resolveTools(input: Pick<StreamInput, "tools" | "agent" | "user">) {

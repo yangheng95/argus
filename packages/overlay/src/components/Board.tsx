@@ -131,6 +131,7 @@ interface PlanPanelProps {
 
 export function PlanPanel(props: PlanPanelProps) {
   const isPreview = () => !props.plan?.prompt && !props.plan?.summary && !!props.preview;
+  const hasPlan = () => !!props.plan?.prompt || !!props.plan?.summary;
 
   // Active goals: running status from goalRuns
   const activeGoals = createMemo(() => {
@@ -142,6 +143,14 @@ export function PlanPanel(props: PlanPanelProps) {
       .filter((card) => running.has(card.id));
   });
 
+  // All goals (for display when no goals are explicitly running, e.g. single-executor mode)
+  const allGoals = createMemo(() => {
+    const cards: any[] = props.goalCards || [];
+    return cards.map((card, idx) => ({ ...card, goalIndex: idx + 1 }));
+  });
+
+  const displayGoals = () => activeGoals().length > 0 ? activeGoals() : allGoals();
+
   const version = () => props.plan?.version;
 
   return (
@@ -150,37 +159,44 @@ export function PlanPanel(props: PlanPanelProps) {
         <div class="plan-version streaming-indicator">{t("common.generating") || "Generating..."}</div>
       </Show>
       <Show when={!isPreview()}>
+        <Show when={hasPlan() && props.plan?.summary}>
+          <div class="plan-summary md-content" style="margin-bottom: 8px; font-size: 12px; opacity: 0.8;" innerHTML={renderMarkdown(props.plan.summary)} />
+        </Show>
         <Show
-          when={activeGoals().length > 0}
-          fallback={<p class="empty-hint">{t("empty.plan")}</p>}
+          when={displayGoals().length > 0}
+          fallback={<Show when={!hasPlan()}><p class="empty-hint">{t("empty.plan")}</p></Show>}
         >
           <div class="goals-list">
-            <For each={activeGoals()}>
-              {(goal) => (
-                <div class="goal-item">
-                  <span
-                    class="goal-status-icon"
-                    data-status="running"
-                  >
-                    {goalIcon("running")}
-                  </span>
-                  <div class="goal-content">
-                    <div class="plan-version" style="margin-bottom: 4px">
-                      {`Goal#${goal.goalIndex} Plan V${version()}`}
-                    </div>
-                    <div
-                      class="goal-desc md-content"
-                      innerHTML={renderMarkdown(goal.title || "")}
-                    />
-                    <Show when={goal.detail}>
+            <For each={displayGoals()}>
+              {(goal) => {
+                const isRunning = () => props.runningGoalIDs?.has(goal.id);
+                const goalStatus = () => goal.metadata?.status || (isRunning() ? "running" : "pending");
+                return (
+                  <div class="goal-item">
+                    <span
+                      class="goal-status-icon"
+                      data-status={goalStatus()}
+                    >
+                      {goalIcon(goalStatus())}
+                    </span>
+                    <div class="goal-content">
+                      <div class="plan-version" style="margin-bottom: 4px">
+                        {`Goal#${goal.goalIndex} Plan V${version()}`}
+                      </div>
                       <div
-                        class="goal-criteria md-content"
-                        innerHTML={renderMarkdown(goal.detail)}
+                        class="goal-desc md-content"
+                        innerHTML={renderMarkdown(goal.title || "")}
                       />
-                    </Show>
+                      <Show when={goal.detail}>
+                        <div
+                          class="goal-criteria md-content"
+                          innerHTML={renderMarkdown(goal.detail)}
+                        />
+                      </Show>
+                    </div>
                   </div>
-                </div>
-              )}
+                );
+              }}
             </For>
           </div>
         </Show>
@@ -1093,24 +1109,22 @@ export function Board(props: BoardProps) {
         />
       </SectionFrame>
 
-      <Show when={task()?.status && !["completed", "failed", "cancelled"].includes(task()!.status)}>
-        <SectionFrame
-          id="planSection"
-          title={t("section.plan")}
-          icon={SECTION_ICONS.plan}
-          bodyId="planBody"
-          badgeId="planBadge"
-          badgeText={runningGoalIDs().size > 0 ? String(runningGoalIDs().size) : ""}
-          badgeTone={runningGoalIDs().size > 0 ? "accent" : ""}
-        >
-          <PlanPanel
-            plan={plan()}
-            preview={boardStore.planPreview}
-            goalCards={goalsCards()}
-            runningGoalIDs={runningGoalIDs()}
-          />
-        </SectionFrame>
-      </Show>
+      <SectionFrame
+        id="planSection"
+        title={t("section.plan")}
+        icon={SECTION_ICONS.plan}
+        bodyId="planBody"
+        badgeId="planBadge"
+        badgeText={runningGoalIDs().size > 0 ? String(runningGoalIDs().size) : ""}
+        badgeTone={runningGoalIDs().size > 0 ? "accent" : ""}
+      >
+        <PlanPanel
+          plan={plan()}
+          preview={boardStore.planPreview}
+          goalCards={goalsCards()}
+          runningGoalIDs={runningGoalIDs()}
+        />
+      </SectionFrame>
 
       <SectionFrame
         id="criteriaSection"

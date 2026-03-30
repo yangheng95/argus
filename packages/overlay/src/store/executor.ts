@@ -253,3 +253,45 @@ export function setExecutorEvents(events: ExecutorEvent[], runID?: string): void
     setStore("fetchedAt", Date.now());
   });
 }
+
+/**
+ * Merge API-fetched events into the existing store instead of replacing.
+ * API events are authoritative (correct kind from DB); SSE-only events
+ * that have no API counterpart are preserved so real-time state is not
+ * lost during the fetch window.
+ *
+ * Uses the same mergeEventList logic as appendExecutorEvent for per-ID
+ * deduplication, wrapped in a single produce() to avoid per-event
+ * reactive updates.
+ */
+export function mergeExecutorEventsFromFetch(fetched: ExecutorEvent[], runID?: string): void {
+  // Different run — full replace, no merge possible
+  if (runID && store.runID && store.runID !== runID) {
+    setExecutorEvents(fetched, runID);
+    return;
+  }
+  // Empty store — straight set
+  if (!store.events.length) {
+    setExecutorEvents(fetched, runID);
+    return;
+  }
+
+  for (const key of executorLiveTimers.keys()) {
+    stopExecutorLiveTimer(key);
+  }
+
+  batch(() => {
+    if (runID && !store.runID) {
+      setStore("runID", runID);
+    }
+    // Merge each fetched event into the existing array via mergeEventList.
+    // API events with matching IDs overwrite SSE events (authoritative);
+    // SSE events with no API match are kept (arrived after API query).
+    setStore("events", produce((events) => {
+      for (const event of fetched) {
+        mergeEventList(events as ExecutorEvent[], event);
+      }
+    }));
+    setStore("fetchedAt", Date.now());
+  });
+}

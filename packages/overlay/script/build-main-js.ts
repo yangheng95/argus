@@ -6,6 +6,12 @@ import { fileURLToPath } from "url";
 import { pathToFileURL } from "url";
 
 const dir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+
+// Guard: never let a stale hand-edited main.js survive.
+// Always overwrite — the source of truth is main.tsx, not main.js.
+const mainJsPath = path.join(dir, "src", "main.js");
+const mainJsBak = mainJsPath + ".bak";
+await fs.rm(mainJsBak, { force: true }).catch(() => undefined);
 const repo = path.resolve(dir, "../..");
 const outDir = path.join(dir, ".mainjs-build");
 const srcDir = path.join(dir, "src");
@@ -104,6 +110,7 @@ try {
     throw new Error(`No JS bundle found in ${assetsDir}`);
   }
   await fs.copyFile(path.join(assetsDir, bundle), path.join(srcDir, "main.js"));
+  console.log(`✓ main.tsx → main.js (${(await fs.stat(path.join(srcDir, "main.js"))).size} bytes)`);
 } finally {
   await fs.rm(tempEntry, { force: true }).catch(() => undefined);
   await fs.rm(outDir, { recursive: true, force: true }).catch(() => undefined);

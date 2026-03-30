@@ -59,6 +59,7 @@ import { panelMessage } from "./services/chat";
 import PromptCatalog from "./components/settings/PromptCatalog";
 import ChannelsPanel from "./components/settings/ChannelsPanel";
 import SkillMarketPanel from "./components/settings/SkillMarketPanel";
+import ProvidersPanel from "./components/settings/ProvidersPanel";
 import { MemoryPanel } from "./components/MemoryPanel";
 import { PreferencesPanel } from "./components/PreferencesPanel";
 import { InteractionPanel } from "./components/InteractionPanel";
@@ -738,6 +739,12 @@ const preferenceBody = document.getElementById("preferenceBody");
 if (preferenceBody) {
   preferenceBody.innerHTML = "";
   render(() => <PreferencesPanel />, preferenceBody);
+}
+
+const providersConfigBody = document.getElementById("providersConfigBody");
+if (providersConfigBody) {
+  providersConfigBody.innerHTML = "";
+  render(() => <ProvidersPanel />, providersConfigBody);
 }
 
 // ── Mount: InteractionPanel (auto-resolve layer) ──
