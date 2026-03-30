@@ -174,15 +174,17 @@ export function buildBoardContextMessages(
   }
 
   for (const interaction of Array.isArray(board.interactions) ? board.interactions : []) {
+    const isPlannerClarification = interaction.payload?.planner_clarification === true;
+    const interactionRole = isPlannerClarification ? "planner" : "system";
     const request = syntheticTextMessage(
-      "system",
+      interactionRole,
       interaction.time?.created || Date.now(),
       interactionRequestText(interaction),
     );
     if (request) syntheticMsgs.push(request);
     if (interaction.status === "answered" || interaction.status === "rejected") {
       const response = syntheticTextMessage(
-        "system",
+        isPlannerClarification ? "user" : "system",
         interaction.time?.resolved || interaction.time?.updated || Date.now(),
         interactionResponseText(interaction),
       );

@@ -62,6 +62,52 @@ export function prepareDashscopeEnv() {
   if (url) process.env.DASHSCOPE_API_URL ??= url
 }
 
+/**
+ * Write custom local provider configs into the benchmark's OPENCORVUS_CONFIG_DIR
+ * so they are available during Instance.provide() calls.
+ *
+ * Currently registers:
+ *   - hexin: HEXIN_API_KEY + HEXIN_OPENAI_URL
+ */
+export async function prepareLocalProviders() {
+  const configDir = process.env.OPENCORVUS_CONFIG_DIR
+  if (!configDir) return
+
+  const providers: Record<string, unknown> = {}
+
+  // Hexin OpenAI Gateway
+  const hexinKey = env("HEXIN_API_KEY")
+  if (hexinKey) {
+    const hexinUrl = env("HEXIN_OPENAI_URL")
+    providers["hexin"] = {
+      name: "Hexin OpenAI Gateway",
+      api: hexinUrl ? `${hexinUrl.replace(/\/+$/, "")}/v1` : "https://arsenal-openai.10jqka.com.cn:8443/ai-gateway/v1",
+      env: ["HEXIN_API_KEY"],
+      models: {
+        "gpt-5.4-mini": { name: "GPT-5.4 Mini", tool_call: true },
+        "gpt-5.4": { name: "GPT-5.4", tool_call: true },
+      },
+    }
+  }
+
+  if (Object.keys(providers).length === 0) return
+
+  const { mkdir } = await import("fs/promises")
+  await mkdir(configDir, { recursive: true })
+
+  // Merge with existing config override if present
+  const cfgPath = path.join(configDir, "opencorvus.json")
+  let existing: Record<string, unknown> = {}
+  try {
+    existing = JSON.parse(await Bun.file(cfgPath).text())
+  } catch {}
+  const merged = {
+    ...existing,
+    provider: { ...(existing.provider as Record<string, unknown> ?? {}), ...providers },
+  }
+  await Bun.write(cfgPath, JSON.stringify(merged, null, 2))
+}
+
 export function dashscopeCodingKey() {
   const key = env("DASHSCOPE_API_KEY", "CODING_DASHSCOPE_API_KEY", "ALIBABA_CODING_PLAN_API_KEY", "OPENCORVUS_EMBEDDED_DASHSCOPE_KEY")
   return key?.startsWith("sk-sp-") ? key : undefined
@@ -71,6 +117,7 @@ const preferredProviders = [
   "alibaba-coding-plan-cn",
   "alibaba-coding-plan",
   "alibaba-cn",
+  "hexin",
   "google",
   "deepseek",
   "gitlab",
@@ -137,6 +184,7 @@ export async function resolveBenchmarkModel(
       if (providers["alibaba-coding-plan-cn"]?.models["qwen3.5-plus"]) return "alibaba-coding-plan-cn/qwen3.5-plus"
       if (providers["alibaba-coding-plan"]?.models["qwen3.5-plus"]) return "alibaba-coding-plan/qwen3.5-plus"
       if (providers["alibaba-cn"]?.models["qwen3.5-plus"]) return "alibaba-cn/qwen3.5-plus"
+      if (providers["hexin"]?.models["gpt-5.4-mini"]) return "hexin/gpt-5.4-mini"
 
       for (const providerID of preferredProviders) {
         const provider = providers[providerID]

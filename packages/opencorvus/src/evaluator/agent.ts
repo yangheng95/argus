@@ -167,6 +167,7 @@ export namespace EvaluatorAgent {
     try {
       const { object } = await generateObject({
         model: language,
+        mode: "json",
         schema: EvaluatorAnalysis,
         maxRetries: 2,
         abortSignal: AbortSignal.timeout(phase2TimeoutMs),
@@ -175,19 +176,37 @@ export namespace EvaluatorAgent {
       })
       verdict = object
     } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : String(err)
-      log.warn("evaluator phase 2 (judgment) generateObject failed, returning inconclusive", { error: errorMsg })
-      return {
-        verdict: "inconclusive" as const,
-        classification: "evaluation" as const,
-        summary: `Phase 2 judgment unavailable: ${errorMsg}`,
-        goal_statuses: input.goals.map((_, goal_index) => ({
-          goal_index,
-          status: "inconclusive" as const,
-          evidence: "Phase 2 evaluator failed to produce a structured verdict.",
-          reasoning: `generateObject failed: ${errorMsg}`,
-        })),
-        replan_guidance: null,
+      // Many providers (DashScope, Azure via litellm) ignore response_format and return
+      // JSON wrapped in markdown code fences: ```json\n{...}\n```.  Try to recover.
+      const rawText = typeof (err as any)?.text === "string" ? (err as any).text : undefined
+      if (rawText) {
+        const stripped = rawText.replace(/^```(?:json)?\s*\n?/i, "").replace(/\n?```\s*$/, "").trim()
+        try {
+          const parsed = EvaluatorAnalysis.parse(JSON.parse(stripped))
+          log.info("evaluator phase 2: recovered JSON from markdown code fence", { verdict: parsed.verdict })
+          verdict = parsed
+        } catch {
+          // recovery failed — fall through to inconclusive
+        }
+      }
+      if (!verdict) {
+        const errorMsg = err instanceof Error ? err.message : String(err)
+        const cause = err instanceof Error && err.cause
+          ? (err.cause instanceof Error ? err.cause.message : String(err.cause))
+          : undefined
+        log.warn("evaluator phase 2 (judgment) generateObject failed, returning inconclusive", { error: errorMsg, cause, rawText: rawText?.substring(0, 500) })
+        return {
+          verdict: "inconclusive" as const,
+          classification: "evaluation" as const,
+          summary: `Phase 2 judgment unavailable: ${errorMsg}`,
+          goal_statuses: input.goals.map((_, goal_index) => ({
+            goal_index,
+            status: "inconclusive" as const,
+            evidence: "Phase 2 evaluator failed to produce a structured verdict.",
+            reasoning: `generateObject failed: ${errorMsg}`,
+          })),
+          replan_guidance: null,
+        }
       }
     }
 
@@ -218,10 +237,24 @@ export namespace EvaluatorAgent {
  */
 async function agentLanguageModel(): Promise<LanguageModelV2 | undefined> {
   try {
-    const def = await Provider.defaultModel()
-    if (!def) return undefined
-    log.info("evaluator: default model resolved", { providerID: def.providerID, modelID: def.modelID })
-    const model = await Provider.getModel(def.providerID, def.modelID)
+    const evalCfg = (await OrchestratorConfig.get()).evaluator
+    // Priority: env var > config > default model
+    const modelStr = process.env.OPENCORVUS_EVALUATOR_MODEL || evalCfg.model
+    let providerID: string
+    let modelID: string
+    if (modelStr) {
+      const parsed = Provider.parseModel(modelStr)
+      providerID = parsed.providerID
+      modelID = parsed.modelID
+      log.info("evaluator: using configured model", { providerID, modelID })
+    } else {
+      const def = await Provider.defaultModel()
+      if (!def) return undefined
+      providerID = def.providerID
+      modelID = def.modelID
+      log.info("evaluator: default model resolved", { providerID, modelID })
+    }
+    const model = await Provider.getModel(providerID, modelID)
     const language = await Provider.getLanguage(model)
     log.info("evaluator: model ready via Provider", { modelId: language.modelId })
     return language
@@ -406,7 +439,15 @@ function buildJudgmentPrompt(
 
     `# Investigation Findings\n\n${investigationFindings || "(no findings — investigation produced no output)"}`,
 
-    `# Instructions\n\nBased on the investigation findings above, produce a structured verdict for all ${input.goals.length} goal(s). ` +
+    `# JSON Output Format\n\n` +
+      `Produce a JSON object with exactly these fields:\n` +
+      `- verdict: "accepted" | "rejected" | "inconclusive"\n` +
+      `- classification: "transient" | "environment" | "input" | "permission" | "evaluation" | "strategy" | "unknown"\n` +
+      `- summary: string\n` +
+      `- goal_statuses: array of { goal_index: number, status: "passed"|"failed"|"inconclusive", evidence: string, reasoning: string }\n` +
+      `- replan_guidance: null or { root_cause: string, what_failed: string, suggested_strategy: string, avoid_approaches: string[] }`,
+
+    `# Instructions\n\nBased on the investigation findings above, produce a structured JSON verdict for all ${input.goals.length} goal(s). ` +
       `Every goal must have a status (passed/failed/inconclusive) with specific evidence from the findings. ` +
       `Write in the same language as the task request.`,
   ].join("\n\n")

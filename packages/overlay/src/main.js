@@ -1889,10 +1889,10 @@ function rootTaskSessionID$2() {
   const sessionID = boardStore.board?.task?.sessionID;
   return typeof sessionID === "string" ? sessionID : "";
 }
-function goalSessionIDs$1() {
+function goalSessionIDs() {
   const sections = boardStore.board?.sections;
-  if (!Array.isArray(sections)) return new Set();
-  const ids = new Set();
+  if (!Array.isArray(sections)) return /* @__PURE__ */ new Set();
+  const ids = /* @__PURE__ */ new Set();
   for (const section of sections) {
     if (section?.id !== "goals") continue;
     for (const card of section.cards || []) {
@@ -2389,7 +2389,7 @@ function effectiveRole$1(msg, rootSessionID, goalSessionIDs) {
     if (role === "assistant" && rootSessionID && !msg._synthetic) {
       const sessionID2 = typeof msg.info?.sessionID === "string" ? msg.info.sessionID : "";
       if (sessionID2 && sessionID2 !== rootSessionID) {
-        if (goalSessionIDs && goalSessionIDs.size > 0) {
+        if (goalSessionIDs) {
           if (goalSessionIDs.has(sessionID2)) return "executor";
         } else {
           const agent = String(msg.info?.agent || "").trim().toLowerCase();
@@ -2442,7 +2442,7 @@ function renderFilePart(part) {
   return `<div class="msg-text" style="font-family:var(--mono);font-size:var(--ui-font-small);color:var(--text-soft)">${escapeHtml$2(name)}</div>`;
 }
 function MessageView(props) {
-  const role = () => effectiveRole$1(props.message, rootTaskSessionID$2(), goalSessionIDs$1());
+  const role = () => effectiveRole$1(props.message, rootTaskSessionID$2(), goalSessionIDs());
   const parts = () => orderedMessageParts(props.message);
   const time = () => stamp(props.message.info?.time?.created);
   const executorType = createMemo(() => {
@@ -7306,12 +7306,7 @@ function Board(props) {
         }
       })];
     }
-  }), createComponent(Show, {
-    get when() {
-      return memo(() => !!task()?.status)() && !["completed", "failed", "cancelled"].includes(task().status);
-    },
-    get children() {
-      return createComponent(SectionFrame, {
+  }), createComponent(SectionFrame, {
         id: "planSection",
         get title() {
           return t("section.plan");
@@ -7343,9 +7338,7 @@ function Board(props) {
             }
           });
         }
-      });
-    }
-  }), createComponent(SectionFrame, {
+      }), createComponent(SectionFrame, {
     id: "criteriaSection",
     get title() {
       return t("section.evaluation");
@@ -9731,7 +9724,7 @@ async function loadMeta() {
 }
 function gitLabel(vcs, dir) {
   if (!dir) return t("git.unavailable");
-  if (vcs === null || vcs === undefined) return t("git.unavailable");
+  if (vcs === null || vcs === void 0) return t("git.unavailable");
   if (!vcs.branch) return t("git.init");
   const parts = [vcs.branch];
   if (vcs.ahead) parts.push(`+${vcs.ahead}`);
@@ -9750,7 +9743,7 @@ function gitLabel(vcs, dir) {
 }
 function gitTitle(vcs, dir) {
   if (!dir) return "";
-  if (vcs === null || vcs === undefined) return "";
+  if (vcs === null || vcs === void 0) return "";
   if (!vcs.branch) return t("git.init_title");
   return [
     t("git.branch", { value: vcs.branch }),
@@ -9765,7 +9758,7 @@ function gitTitle(vcs, dir) {
 }
 function canInitGit() {
   const vcs = boardStore.vcs;
-  if (vcs === null || vcs === undefined) return false;
+  if (vcs === null || vcs === void 0) return false;
   return !!settingsStore.directory && !vcs.branch;
 }
 function relativePathFrom(base, target) {
