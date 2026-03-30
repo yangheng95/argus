@@ -339,6 +339,44 @@ export namespace Provider {
       }
     }
 
+    // Built-in: Hexin OpenAI Gateway
+    if (!database["hexin"]) {
+      const hexinModel = (id: string, name: string): Model => ({
+        id,
+        api: { id, npm: "@ai-sdk/openai-compatible", url: "https://arsenal-openai.10jqka.com.cn:8443/ai-gateway/v1" },
+        status: "active",
+        name,
+        providerID: "hexin",
+        capabilities: {
+          temperature: true,
+          reasoning: false,
+          attachment: false,
+          toolcall: true,
+          input: { text: true, audio: false, image: false, video: false, pdf: false },
+          output: { text: true, audio: false, image: false, video: false, pdf: false },
+          interleaved: false,
+        },
+        cost: { input: 0, output: 0, cache: { read: 0, write: 0 } },
+        options: {},
+        limit: { context: 128000, output: 16384 },
+        headers: {},
+        family: "gpt-5",
+        release_date: "",
+        variants: {},
+      })
+      database["hexin"] = {
+        id: "hexin",
+        name: "Hexin OpenAI Gateway",
+        env: ["HEXIN_API_KEY"],
+        options: {},
+        source: "builtin",
+        models: {
+          "gpt-5.4-mini": hexinModel("gpt-5.4-mini", "GPT-5.4 Mini"),
+          "gpt-5.4": hexinModel("gpt-5.4", "GPT-5.4"),
+        },
+      }
+    }
+
     function mergeProvider(providerID: string, provider: Partial<Info>) {
       const existing = providers[providerID]
       if (existing) {

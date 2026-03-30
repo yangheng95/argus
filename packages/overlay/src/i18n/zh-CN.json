@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "zh-CN",
-    "panel_revision": "fa5ecf9a5d0a26a5"
+    "panel_revision": "fde6951677d29f63"
   },
   "brand.guide_kicker": "快速上手",
   "brand.guide_positioning_body": "这不是装饰——左栏选任务，中栏推执行，右栏盯 Spec、Plan、评估和文件变更，防止 agent 跑偏。",

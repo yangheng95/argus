@@ -175,13 +175,20 @@ export namespace HeadlessPlannerAgent {
     let lastParsed: PlannerOutputType | undefined
     let lastQuality: { score: number; reasons: string[] } | undefined
 
+    const systemPrompt = await plannerSystem()
+    const initialPrompt = buildUserPrompt(input, fileRefs, context)
+    let messages: any[] = [{ role: "user" as const, content: initialPrompt }]
+    let cumulativeToolCalls = 0
+
     for (let attempt = 0; attempt < MAX_PLAN_ATTEMPTS; attempt++) {
       if (input.signal?.aborted) throw new Error("planner aborted before attempt " + (attempt + 1))
 
-      const retryContext = attempt > 0 && lastQuality
-        ? { previousScore: lastQuality.score, reasons: lastQuality.reasons, attempt }
-        : undefined
-      const userPrompt = buildUserPrompt(input, fileRefs, context, retryContext, QUALITY_RETRY_THRESHOLD)
+      if (attempt > 0 && lastQuality) {
+        messages.push({
+          role: "user" as const,
+          content: buildPlannerRetryMessage(lastQuality, QUALITY_RETRY_THRESHOLD, attempt),
+        })
+      }
 
       log.info("planner agent starting", {
         title: input.title,
@@ -193,7 +200,7 @@ export namespace HeadlessPlannerAgent {
         toolCount: Object.keys(guard.tools).length,
         attempt: attempt + 1,
         config: orchCfg.planner,
-        retryReason: retryContext ? `score ${retryContext.previousScore} < ${QUALITY_RETRY_THRESHOLD}` : undefined,
+        retryReason: attempt > 0 && lastQuality ? `score ${lastQuality.score} < ${QUALITY_RETRY_THRESHOLD}` : undefined,
       })
 
       const baseSignal = input.signal ?? AbortSignal.timeout(TIMEOUT_MS)
@@ -203,26 +210,26 @@ export namespace HeadlessPlannerAgent {
         tools: guard.tools,
         maxOutputTokens: 32768,
         abortSignal: AbortSignal.any([baseSignal, guard.signal]),
-        system: await plannerSystem(),
-        prompt: userPrompt,
+        system: systemPrompt,
+        messages,
         ...(input.stream?.onChunk ? { onChunk: input.stream.onChunk as any } : {}),
         ...(input.stream?.onError ? { onError: input.stream.onError } : {}),
         onStepFinish: guard.onStepFinish as any,
       })
 
-      const [resultText, resultSteps, resultFinishReason] = await Promise.all([
+      const [resultText, resultSteps, resultFinishReason, response] = await Promise.all([
         stream.text,
         stream.steps,
         stream.finishReason,
+        stream.response,
       ])
 
-      // Count actual tool calls
       const toolCallCount = resultSteps.reduce(
         (sum, s) => sum + (Array.isArray((s as any).toolCalls) ? (s as any).toolCalls.length : 0),
         0,
       )
+      cumulativeToolCalls += toolCallCount
 
-      // Collect all text output across steps
       let allText = resultText?.trim() || ""
       if (!allText) {
         allText = resultSteps.map((s) => s.text).filter(Boolean).join("\n")
@@ -233,13 +240,12 @@ export namespace HeadlessPlannerAgent {
         finishReason: resultFinishReason,
         textLength: allText.length,
         toolCalls: toolCallCount,
+        cumulativeToolCalls,
         attempt: attempt + 1,
       })
 
-      // Parse structured sections from text output
       let parsed: PlannerOutputType = parsePlanText(allText)
 
-      // Log if plan seems truncated — no fallback synthesis, force retry instead
       if (parsed.prd.length < 100 || parsed.subtasks.length < 2) {
         log.warn("planner: plan seems truncated or empty, will retry via quality gate", {
           prdLength: parsed.prd.length,
@@ -247,18 +253,16 @@ export namespace HeadlessPlannerAgent {
         })
       }
 
-      // Ensure summary is meaningful (not garbage like "## heading" or empty)
       parsed.summary = ensureMeaningfulSummary(parsed.summary, input.title)
 
-      // Validate plan quality
-      const planQuality = validatePlanQuality(parsed, input.request, toolCallCount)
+      const planQuality = validatePlanQuality(parsed, input.request, cumulativeToolCalls)
       log.info("planner agent output", {
         goals: parsed.goals.length,
         subtasks: parsed.subtasks.length,
         milestones: parsed.milestones?.length ?? 0,
         risks: parsed.risks.length,
         prdLength: parsed.prd.length,
-        toolCalls: toolCallCount,
+        toolCalls: cumulativeToolCalls,
         quality: planQuality,
         attempt: attempt + 1,
       })
@@ -266,7 +270,6 @@ export namespace HeadlessPlannerAgent {
       lastParsed = parsed
       lastQuality = planQuality
 
-      // If quality is acceptable or we've exhausted retries, return
       if (planQuality.score >= QUALITY_RETRY_THRESHOLD || attempt >= MAX_PLAN_ATTEMPTS - 1) {
         if (planQuality.score < 0.3) {
           log.warn("planner: final plan quality is very low", { ...planQuality, attempt: attempt + 1 })
@@ -274,12 +277,15 @@ export namespace HeadlessPlannerAgent {
         return parsed
       }
 
-      // Quality too low -- retry with feedback
+      if (Array.isArray(response?.messages)) {
+        messages = [...messages, ...response.messages]
+      }
+
       log.warn("planner: plan quality below threshold, retrying", {
         score: planQuality.score,
         threshold: QUALITY_RETRY_THRESHOLD,
         reasons: planQuality.reasons,
-        toolCalls: toolCallCount,
+        toolCalls: cumulativeToolCalls,
       })
     }
 
@@ -486,6 +492,26 @@ async function tryRead(absPath: string): Promise<string | null> {
   }
 }
 
+function buildPlannerRetryMessage(
+  lastQuality: { score: number; reasons: string[] },
+  qualityThreshold: number,
+  attempt: number,
+): string {
+  return [
+    "# QUALITY RETRY - Previous Attempt Was Insufficient",
+    "",
+    `Score: ${lastQuality.score.toFixed(2)} / ${qualityThreshold}. Attempt ${attempt + 1}.`,
+    "",
+    "**Issues found:**",
+    ...lastQuality.reasons.map((r) => `- ${r}`),
+    "",
+    "You already explored the codebase in the previous round — use that knowledge. " +
+    "Do NOT repeat directory listings or file reads you already did. " +
+    "Fix all issues: each goal must have detailed description and concrete criteria, " +
+    "subtasks must reference specific file paths, every goal must trace to a spec item.",
+  ].join("\n")
+}
+
 function buildUserPrompt(
   input: {
     title: string
@@ -496,32 +522,8 @@ function buildUserPrompt(
   },
   fileRefs?: Array<{ ref: string; path: string; content: string }>,
   context?: string,
-  retryContext?: { previousScore: number; reasons: string[]; attempt: number },
-  qualityThreshold = PLANNER_DEFAULTS.quality_threshold,
 ): string {
   const sections = [`# Task\n\nTitle: ${input.title}\n\nRequest:\n${input.request}`]
-
-  // If this is a quality retry, inject feedback from the previous attempt
-  if (retryContext) {
-    sections.push(
-      [
-        "# QUALITY RETRY - Previous Attempt Was Insufficient",
-        "",
-        `Your previous plan scored ${retryContext.previousScore.toFixed(2)} / 1.0 (threshold: ${qualityThreshold}). Attempt ${retryContext.attempt + 1}.`,
-        "",
-        "**Issues found:**",
-        ...retryContext.reasons.map((r) => `- ${r}`),
-        "",
-        "**Requirements for this attempt:**",
-        "- Use tools to explore the codebase until you have enough context to write specific, grounded output",
-        "- Each goal MUST have a detailed description AND concrete, executable criteria (e.g., 'bun test src/x.test.ts passes')",
-        "- Subtasks MUST reference specific file paths discovered from your exploration",
-        "- Every goal MUST trace back to a spec item",
-      ]
-        .filter(Boolean)
-        .join("\n"),
-    )
-  }
 
   // Include user-provided goals so the planner can refine and expand them
   if (input.userGoals && input.userGoals.length > 0) {

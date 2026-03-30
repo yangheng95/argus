@@ -988,7 +988,7 @@ function renderMarkdown$1(text) {
   return html;
 }
 
-var _tmpl$$k = /* @__PURE__ */ template(`<div class=msg-text>`);
+var _tmpl$$l = /* @__PURE__ */ template(`<div class=msg-text>`);
 function splitBlocks(text) {
   if (!text) return [];
   const blocks = [];
@@ -1064,7 +1064,7 @@ function TextPart(props) {
     prevBlockCount = 0;
   });
   return (() => {
-    var _el$ = _tmpl$$k();
+    var _el$ = _tmpl$$l();
     var _ref$ = containerRef;
     typeof _ref$ === "function" ? use(_ref$, _el$) : containerRef = _el$;
     return _el$;
@@ -1890,12 +1890,12 @@ function rootTaskSessionID$2() {
   return typeof sessionID === "string" ? sessionID : "";
 }
 function goalSessionIDs() {
-  const sections = boardStore.board?.sections;
-  if (!Array.isArray(sections)) return /* @__PURE__ */ new Set();
+  const lanes = boardStore.board?.lanes;
+  if (!Array.isArray(lanes)) return /* @__PURE__ */ new Set();
   const ids = /* @__PURE__ */ new Set();
-  for (const section of sections) {
-    if (section?.id !== "goals") continue;
-    for (const card of section.cards || []) {
+  for (const lane of lanes) {
+    if (lane?.id !== "goals") continue;
+    for (const card of lane.cards || []) {
       const sid = card?.metadata?.sessionID;
       if (typeof sid === "string" && sid) ids.add(sid);
     }
@@ -1982,7 +1982,7 @@ function toggleToolOutputExpanded(partID) {
   setStore$2("expandedToolOutputs", partID, (value) => value !== true);
 }
 
-var _tmpl$$j = /* @__PURE__ */ template(`<span class=tool-detail>`), _tmpl$2$h = /* @__PURE__ */ template(`<div class=msg-tool><span class=tool-icon></span><span class=tool-name></span><span class=tool-status>`), _tmpl$3$g = /* @__PURE__ */ template(`<div class=msg-tool-input>`), _tmpl$4$g = /* @__PURE__ */ template(`<div class=msg-tool-output>`), _tmpl$5$g = /* @__PURE__ */ template(`<div class=msg-tool-error>`);
+var _tmpl$$k = /* @__PURE__ */ template(`<span class=tool-detail>`), _tmpl$2$i = /* @__PURE__ */ template(`<div class=msg-tool><span class=tool-icon></span><span class=tool-name></span><span class=tool-status>`), _tmpl$3$h = /* @__PURE__ */ template(`<div class=msg-tool-input>`), _tmpl$4$h = /* @__PURE__ */ template(`<div class=msg-tool-output>`), _tmpl$5$h = /* @__PURE__ */ template(`<div class=msg-tool-error>`);
 function ToolPart(props) {
   const state = () => props.part.state || {};
   const status = () => state().status || "pending";
@@ -2003,7 +2003,7 @@ function ToolPart(props) {
   const error = () => stripAnsi$1(state().error || "") || output();
   const expanded = () => toolOutputExpanded(props.part?.id || "");
   return [(() => {
-    var _el$ = _tmpl$2$h(), _el$2 = _el$.firstChild, _el$3 = _el$2.nextSibling, _el$5 = _el$3.nextSibling;
+    var _el$ = _tmpl$2$i(), _el$2 = _el$.firstChild, _el$3 = _el$2.nextSibling, _el$5 = _el$3.nextSibling;
     insert(_el$2, icon);
     insert(_el$3, toolName);
     insert(_el$, createComponent(Show, {
@@ -2011,7 +2011,7 @@ function ToolPart(props) {
         return detail();
       },
       get children() {
-        var _el$4 = _tmpl$$j();
+        var _el$4 = _tmpl$$k();
         insert(_el$4, detail);
         return _el$4;
       }
@@ -2032,7 +2032,7 @@ function ToolPart(props) {
       return memo(() => status() === "pending")() && raw();
     },
     get children() {
-      var _el$6 = _tmpl$3$g();
+      var _el$6 = _tmpl$3$h();
       insert(_el$6, raw);
       return _el$6;
     }
@@ -2041,7 +2041,7 @@ function ToolPart(props) {
       return memo(() => status() === "completed")() && output();
     },
     get children() {
-      var _el$7 = _tmpl$4$g();
+      var _el$7 = _tmpl$4$h();
       _el$7.$$click = () => toggleToolOutputExpanded(props.part?.id || "");
       insert(_el$7, output);
       createRenderEffect(() => _el$7.classList.toggle("msg-tool-output--expanded", !!expanded()));
@@ -2052,7 +2052,7 @@ function ToolPart(props) {
       return memo(() => status() === "error")() && error();
     },
     get children() {
-      var _el$8 = _tmpl$5$g();
+      var _el$8 = _tmpl$5$h();
       insert(_el$8, error);
       return _el$8;
     }
@@ -2115,7 +2115,10 @@ function touchReasoningPart$1(part) {
   }
 }
 
-var _tmpl$$i = /* @__PURE__ */ template(`<div class=reasoning-text>`), _tmpl$2$g = /* @__PURE__ */ template(`<div class=msg-reasoning><div class=reasoning-label> `);
+var _tmpl$$j = /* @__PURE__ */ template(`<div class=reasoning-text>`), _tmpl$2$h = /* @__PURE__ */ template(`<div class=msg-reasoning><div class=reasoning-label> `);
+function isEmptyReasoning(s) {
+  return !s.replace(/[\[\]\s]/g, "");
+}
 function ReasoningPart(props) {
   const [expanded, setExpanded] = createSignal(true);
   const text = () => String(props.part?.text || "");
@@ -2126,10 +2129,10 @@ function ReasoningPart(props) {
   const label = () => t("transcript.reasoning");
   return createComponent(Show, {
     get when() {
-      return memo(() => !!text().trim())() && !hidden();
+      return memo(() => !!(text().trim() && !isEmptyReasoning(text())))() && !hidden();
     },
     get children() {
-      var _el$ = _tmpl$2$g(), _el$2 = _el$.firstChild, _el$3 = _el$2.firstChild;
+      var _el$ = _tmpl$2$h(), _el$2 = _el$.firstChild, _el$3 = _el$2.firstChild;
       _el$2.$$click = () => setExpanded(!expanded());
       insert(_el$2, label, _el$3);
       insert(_el$2, () => expanded() ? "▼" : "▶", null);
@@ -2138,7 +2141,7 @@ function ReasoningPart(props) {
           return expanded();
         },
         get children() {
-          var _el$4 = _tmpl$$i();
+          var _el$4 = _tmpl$$j();
           insert(_el$4, text);
           return _el$4;
         }
@@ -2149,7 +2152,7 @@ function ReasoningPart(props) {
 }
 delegateEvents(["click"]);
 
-var _tmpl$$h = /* @__PURE__ */ template(`<span class=executor-goal-badge>`), _tmpl$2$f = /* @__PURE__ */ template(`<div class=executor-goal-body>`), _tmpl$3$f = /* @__PURE__ */ template(`<div class=executor-goal-block><div class=executor-goal-header role=button tabindex=0><span class=executor-goal-label></span><span class=executor-goal-count>/</span><span class=executor-goal-chevron aria-hidden=true>▼`), _tmpl$4$f = /* @__PURE__ */ template(`<span class="executor-goal-badge executor-goal-badge--running"><span class=agent-card-spinner>`), _tmpl$5$f = /* @__PURE__ */ template(`<span class=executor-tool-detail>`), _tmpl$6$c = /* @__PURE__ */ template(`<span class=executor-tool-progress>`), _tmpl$7$a = /* @__PURE__ */ template(`<pre class=executor-tool-output>`), _tmpl$8$7 = /* @__PURE__ */ template(`<div class=executor-tool-entry><div class=executor-tool-item><span class=executor-tool-icon></span><span class=executor-tool-name></span><span class=executor-tool-status>`);
+var _tmpl$$i = /* @__PURE__ */ template(`<span class=executor-goal-badge>`), _tmpl$2$g = /* @__PURE__ */ template(`<div class=executor-goal-body>`), _tmpl$3$g = /* @__PURE__ */ template(`<div class=executor-goal-block><div class=executor-goal-header role=button tabindex=0><span class=executor-goal-label></span><span class=executor-goal-count>/</span><span class=executor-goal-chevron aria-hidden=true>▼`), _tmpl$4$g = /* @__PURE__ */ template(`<span class="executor-goal-badge executor-goal-badge--running"><span class=agent-card-spinner>`), _tmpl$5$g = /* @__PURE__ */ template(`<span class=executor-tool-detail>`), _tmpl$6$d = /* @__PURE__ */ template(`<span class=executor-tool-progress>`), _tmpl$7$b = /* @__PURE__ */ template(`<pre class=executor-tool-output>`), _tmpl$8$8 = /* @__PURE__ */ template(`<div class=executor-tool-entry><div class=executor-tool-item><span class=executor-tool-icon></span><span class=executor-tool-name></span><span class=executor-tool-status>`);
 function tailLines(text, maxLines = 6) {
   const lines = text.split("\n");
   if (lines.length <= maxLines) return text;
@@ -2171,17 +2174,17 @@ function ExecutorGoalBlock(props) {
   const completedCount = createMemo(() => props.processes.filter((p) => p.status === "completed").length);
   const headerLabel = () => props.goalTitle || (props.goalRunID ? `Goal ${props.goalRunID.slice(-8)}` : t("chat.role.executor"));
   return (() => {
-    var _el$ = _tmpl$3$f(), _el$2 = _el$.firstChild, _el$4 = _el$2.firstChild, _el$5 = _el$4.nextSibling, _el$6 = _el$5.firstChild;
+    var _el$ = _tmpl$3$g(), _el$2 = _el$.firstChild, _el$4 = _el$2.firstChild, _el$5 = _el$4.nextSibling, _el$6 = _el$5.firstChild;
     _el$2.$$click = toggle;
     insert(_el$2, createComponent(Show, {
       get when() {
         return !isRunning();
       },
       get fallback() {
-        return _tmpl$4$f();
+        return _tmpl$4$g();
       },
       get children() {
-        var _el$3 = _tmpl$$h();
+        var _el$3 = _tmpl$$i();
         insert(_el$3, () => overallStatus() === "completed" ? "✓" : "✗");
         createRenderEffect((_p$) => {
           var _v$ = !!(overallStatus() === "completed"), _v$2 = !!(overallStatus() === "failed" || overallStatus() === "blocked");
@@ -2203,7 +2206,7 @@ function ExecutorGoalBlock(props) {
         return expanded();
       },
       get children() {
-        var _el$7 = _tmpl$2$f();
+        var _el$7 = _tmpl$2$g();
         insert(_el$7, createComponent(Index, {
           get each() {
             return props.processes;
@@ -2220,7 +2223,7 @@ function ExecutorGoalBlock(props) {
               return text;
             };
             return (() => {
-              var _el$9 = _tmpl$8$7(), _el$0 = _el$9.firstChild, _el$1 = _el$0.firstChild, _el$10 = _el$1.nextSibling, _el$13 = _el$10.nextSibling;
+              var _el$9 = _tmpl$8$8(), _el$0 = _el$9.firstChild, _el$1 = _el$0.firstChild, _el$10 = _el$1.nextSibling, _el$13 = _el$10.nextSibling;
               insert(_el$1, () => displayToolIcon(proc().toolName || proc().title || ""));
               insert(_el$10, () => proc().toolName || proc().title || "task");
               insert(_el$0, createComponent(Show, {
@@ -2228,7 +2231,7 @@ function ExecutorGoalBlock(props) {
                   return proc().toolDetail;
                 },
                 get children() {
-                  var _el$11 = _tmpl$5$f();
+                  var _el$11 = _tmpl$5$g();
                   insert(_el$11, () => proc().toolDetail);
                   return _el$11;
                 }
@@ -2238,7 +2241,7 @@ function ExecutorGoalBlock(props) {
                   return progress();
                 },
                 get children() {
-                  var _el$12 = _tmpl$6$c();
+                  var _el$12 = _tmpl$6$d();
                   insert(_el$12, progress);
                   return _el$12;
                 }
@@ -2252,7 +2255,7 @@ function ExecutorGoalBlock(props) {
                   return output();
                 },
                 get children() {
-                  var _el$14 = _tmpl$7$a();
+                  var _el$14 = _tmpl$7$b();
                   insert(_el$14, output);
                   return _el$14;
                 }
@@ -2389,7 +2392,7 @@ function effectiveRole$1(msg, rootSessionID, goalSessionIDs) {
     if (role === "assistant" && rootSessionID && !msg._synthetic) {
       const sessionID2 = typeof msg.info?.sessionID === "string" ? msg.info.sessionID : "";
       if (sessionID2 && sessionID2 !== rootSessionID) {
-        if (goalSessionIDs) {
+        if (goalSessionIDs && goalSessionIDs.size > 0) {
           if (goalSessionIDs.has(sessionID2)) return "executor";
         } else {
           const agent = String(msg.info?.agent || "").trim().toLowerCase();
@@ -2430,7 +2433,7 @@ function formatDuration(ms) {
   return t("time.duration.second", { seconds: s });
 }
 
-var _tmpl$$g = /* @__PURE__ */ template(`<article class="turn msg"data-executor-type=process>`), _tmpl$2$e = /* @__PURE__ */ template(`<article class="turn msg"><div class=msg-head><span class=msg-role></span><span class=msg-time></span></div><div class=msg-bubble><div class=msg-body>`), _tmpl$3$e = /* @__PURE__ */ template(`<div class=msg-patch>`), _tmpl$4$e = /* @__PURE__ */ template(`<div>`), _tmpl$5$e = /* @__PURE__ */ template(`<div class=msg-tool><span class=tool-icon>→</span><span class=tool-name>Subtask</span><span class=tool-detail>`);
+var _tmpl$$h = /* @__PURE__ */ template(`<article class="turn msg"data-executor-type=process>`), _tmpl$2$f = /* @__PURE__ */ template(`<article class="turn msg"><div class=msg-head><span class=msg-role></span><span class=msg-time></span></div><div class=msg-bubble><div class=msg-body>`), _tmpl$3$f = /* @__PURE__ */ template(`<div class=msg-patch>`), _tmpl$4$f = /* @__PURE__ */ template(`<div>`), _tmpl$5$f = /* @__PURE__ */ template(`<div class=msg-tool><span class=tool-icon>→</span><span class=tool-name>Subtask</span><span class=tool-detail>`);
 function renderFilePart(part) {
   const url = part.url || part.filename || "";
   const name = part.filename || url || "file";
@@ -2456,7 +2459,7 @@ function MessageView(props) {
     return p.some((part) => {
       if (part.type === "text") return !!(part.text || "").trim();
       if (part.type === "tool") return true;
-      if (part.type === "reasoning") return !!(part.text || "").trim();
+      if (part.type === "reasoning") return !!(part.text || "").trim() && !isEmptyReasoning(part.text || "");
       if (part.type === "executor_process") return !!part.process;
       if (part.type === "patch") return (part.files || []).length > 0;
       if (part.type === "file") return true;
@@ -2482,7 +2485,7 @@ function MessageView(props) {
         },
         get fallback() {
           return (() => {
-            var _el$2 = _tmpl$2$e(), _el$3 = _el$2.firstChild, _el$4 = _el$3.firstChild, _el$5 = _el$4.nextSibling, _el$6 = _el$3.nextSibling, _el$7 = _el$6.firstChild;
+            var _el$2 = _tmpl$2$f(), _el$3 = _el$2.firstChild, _el$4 = _el$3.firstChild, _el$5 = _el$4.nextSibling, _el$6 = _el$3.nextSibling, _el$7 = _el$6.firstChild;
             insert(_el$4, () => roleLabel(role()));
             insert(_el$5, time);
             insert(_el$7, createComponent(Index, {
@@ -2516,7 +2519,7 @@ function MessageView(props) {
                     }
                   }), createComponent(Match, {
                     get when() {
-                      return memo(() => part().type === "reasoning")() && (part().text || "").trim();
+                      return memo(() => !!(part().type === "reasoning" && (part().text || "").trim()))() && !isEmptyReasoning(part().text || "");
                     },
                     get children() {
                       return createComponent(ReasoningPart, {
@@ -2530,7 +2533,7 @@ function MessageView(props) {
                       return memo(() => part().type === "patch")() && (part().files || []).length > 0;
                     },
                     get children() {
-                      var _el$8 = _tmpl$3$e();
+                      var _el$8 = _tmpl$3$f();
                       insert(_el$8, () => "⚙ " + (part().files || []).map((f) => shortRelativePath(f, activeDirectory$2())).join(", "));
                       return _el$8;
                     }
@@ -2539,7 +2542,7 @@ function MessageView(props) {
                       return part().type === "file";
                     },
                     get children() {
-                      var _el$9 = _tmpl$4$e();
+                      var _el$9 = _tmpl$4$f();
                       createRenderEffect(() => _el$9.innerHTML = renderFilePart(part()));
                       return _el$9;
                     }
@@ -2548,7 +2551,7 @@ function MessageView(props) {
                       return part().type === "subtask";
                     },
                     get children() {
-                      var _el$0 = _tmpl$5$e(), _el$1 = _el$0.firstChild, _el$10 = _el$1.nextSibling, _el$11 = _el$10.nextSibling;
+                      var _el$0 = _tmpl$5$f(), _el$1 = _el$0.firstChild, _el$10 = _el$1.nextSibling, _el$11 = _el$10.nextSibling;
                       insert(_el$11, () => part().description || part().prompt || "");
                       return _el$0;
                     }
@@ -2569,7 +2572,7 @@ function MessageView(props) {
           })();
         },
         get children() {
-          var _el$ = _tmpl$$g();
+          var _el$ = _tmpl$$h();
           insert(_el$, createComponent(ExecutorGoalBlock, {
             get processes() {
               return executorProcesses();
@@ -2589,7 +2592,7 @@ function MessageView(props) {
   });
 }
 
-var _tmpl$$f = /* @__PURE__ */ template(`<span class="agent-card-badge agent-card-badge--done"title=Completed>✓`), _tmpl$2$d = /* @__PURE__ */ template(`<div class="agent-card-summary-content md-content">`), _tmpl$3$d = /* @__PURE__ */ template(`<span class=plan-version>v`), _tmpl$4$d = /* @__PURE__ */ template(`<div class=agent-card-summary-plan><div class="agent-card-summary-content md-content">`), _tmpl$5$d = /* @__PURE__ */ template(`<div class=goals-list>`), _tmpl$6$b = /* @__PURE__ */ template(`<span class=section-badge>`), _tmpl$7$9 = /* @__PURE__ */ template(`<div class=agent-card-summary-checks>`), _tmpl$8$6 = /* @__PURE__ */ template(`<div class=agent-card-summary-eval>`), _tmpl$9$6 = /* @__PURE__ */ template(`<div class=agent-card-summary>`), _tmpl$0$4 = /* @__PURE__ */ template(`<hr class=agent-card-summary-divider>`), _tmpl$1$3 = /* @__PURE__ */ template(`<article class="turn msg agent-card"data-role=agent-card><div class=agent-card-header role=button tabindex=0><span class=agent-card-label></span><span class=agent-card-count></span><span class=agent-card-chevron aria-hidden=true>▼</span></div><div class=agent-card-body>`), _tmpl$10$3 = /* @__PURE__ */ template(`<span class="agent-card-badge agent-card-badge--running"title=Running><span class=agent-card-spinner>`), _tmpl$11$2 = /* @__PURE__ */ template(`<span class="agent-card-badge agent-card-badge--error"title=Error>✗`), _tmpl$12$2 = /* @__PURE__ */ template(`<div class="goal-criteria md-content">`), _tmpl$13$2 = /* @__PURE__ */ template(`<span class=goal-priority>`), _tmpl$14$2 = /* @__PURE__ */ template(`<div class="goal-item agent-card-summary-goal"><span class=goal-status-icon></span><div class=goal-content><div class="goal-desc md-content">`), _tmpl$15$2 = /* @__PURE__ */ template(`<span class=agent-card-summary-check><span class=agent-card-summary-check-icon>`);
+var _tmpl$$g = /* @__PURE__ */ template(`<span class="agent-card-badge agent-card-badge--done"title=Completed>✓`), _tmpl$2$e = /* @__PURE__ */ template(`<div class="agent-card-summary-content md-content">`), _tmpl$3$e = /* @__PURE__ */ template(`<span class=plan-version>v`), _tmpl$4$e = /* @__PURE__ */ template(`<div class=agent-card-summary-plan><div class="agent-card-summary-content md-content">`), _tmpl$5$e = /* @__PURE__ */ template(`<div class=goals-list>`), _tmpl$6$c = /* @__PURE__ */ template(`<span class=section-badge>`), _tmpl$7$a = /* @__PURE__ */ template(`<div class=agent-card-summary-checks>`), _tmpl$8$7 = /* @__PURE__ */ template(`<div class=agent-card-summary-eval>`), _tmpl$9$6 = /* @__PURE__ */ template(`<div class=agent-card-summary>`), _tmpl$0$4 = /* @__PURE__ */ template(`<hr class=agent-card-summary-divider>`), _tmpl$1$3 = /* @__PURE__ */ template(`<article class="turn msg agent-card"data-role=agent-card><div class=agent-card-header role=button tabindex=0><span class=agent-card-label></span><span class=agent-card-count></span><span class=agent-card-chevron aria-hidden=true>▼</span></div><div class=agent-card-body>`), _tmpl$10$3 = /* @__PURE__ */ template(`<span class="agent-card-badge agent-card-badge--running"title=Running><span class=agent-card-spinner>`), _tmpl$11$2 = /* @__PURE__ */ template(`<span class="agent-card-badge agent-card-badge--error"title=Error>✗`), _tmpl$12$2 = /* @__PURE__ */ template(`<div class="goal-criteria md-content">`), _tmpl$13$2 = /* @__PURE__ */ template(`<span class=goal-priority>`), _tmpl$14$2 = /* @__PURE__ */ template(`<div class="goal-item agent-card-summary-goal"><span class=goal-status-icon></span><div class=goal-content><div class="goal-desc md-content">`), _tmpl$15$2 = /* @__PURE__ */ template(`<span class=agent-card-summary-check><span class=agent-card-summary-check-icon>`);
 function stageLabel(stage) {
   return agentStageLabel(stage);
 }
@@ -2694,7 +2697,7 @@ function AgentCard(props) {
             return _tmpl$11$2();
           },
           get children() {
-            return _tmpl$$f();
+            return _tmpl$$g();
           }
         });
       }
@@ -2720,7 +2723,7 @@ function AgentCard(props) {
               return memo(() => props.stage === "spec")() && specContent();
             },
             get children() {
-              var _el$8 = _tmpl$2$d();
+              var _el$8 = _tmpl$2$e();
               createRenderEffect(() => _el$8.innerHTML = renderMarkdown$1(specContent()));
               return _el$8;
             }
@@ -2730,13 +2733,13 @@ function AgentCard(props) {
               return memo(() => props.stage === "planner")() && planData();
             },
             get children() {
-              var _el$9 = _tmpl$4$d(), _el$10 = _el$9.firstChild;
+              var _el$9 = _tmpl$4$e(), _el$10 = _el$9.firstChild;
               insert(_el$9, createComponent(Show, {
                 get when() {
                   return planData().version;
                 },
                 get children() {
-                  var _el$0 = _tmpl$3$d(); _el$0.firstChild;
+                  var _el$0 = _tmpl$3$e(); _el$0.firstChild;
                   insert(_el$0, () => planData().version, null);
                   return _el$0;
                 }
@@ -2750,7 +2753,7 @@ function AgentCard(props) {
               return memo(() => props.stage === "goal")() && goalsData().length > 0;
             },
             get children() {
-              var _el$11 = _tmpl$5$d();
+              var _el$11 = _tmpl$5$e();
               insert(_el$11, createComponent(For, {
                 get each() {
                   return goalsData();
@@ -2799,13 +2802,13 @@ function AgentCard(props) {
               return memo(() => props.stage === "judge")() && evaluationData();
             },
             get children() {
-              var _el$12 = _tmpl$8$6();
+              var _el$12 = _tmpl$8$7();
               insert(_el$12, createComponent(Show, {
                 get when() {
                   return evaluationData().verdict;
                 },
                 get children() {
-                  var _el$13 = _tmpl$6$b();
+                  var _el$13 = _tmpl$6$c();
                   insert(_el$13, () => evaluationData().verdict);
                   createRenderEffect(() => setAttribute(_el$13, "data-tone", evaluationData().verdict === "accepted" ? "good" : evaluationData().verdict === "rejected" ? "bad" : "warn"));
                   return _el$13;
@@ -2816,7 +2819,7 @@ function AgentCard(props) {
                   return evaluationData().checks.length > 0;
                 },
                 get children() {
-                  var _el$14 = _tmpl$7$9();
+                  var _el$14 = _tmpl$7$a();
                   insert(_el$14, createComponent(For, {
                     get each() {
                       return evaluationData().checks;
@@ -2840,7 +2843,7 @@ function AgentCard(props) {
               return memo(() => props.stage === "delivery")() && deliveryData();
             },
             get children() {
-              var _el$15 = _tmpl$6$b();
+              var _el$15 = _tmpl$6$c();
               insert(_el$15, () => deliveryData().status);
               createRenderEffect(() => setAttribute(_el$15, "data-tone", deliveryData().status === "delivered" ? "good" : deliveryData().status === "failed" ? "bad" : "accent"));
               return _el$15;
@@ -3061,6 +3064,30 @@ function setExecutorEvents(events, runID) {
   batch(() => {
     setStore$1("events", reconcile(Array.isArray(events) ? events : []));
     if (runID !== void 0) setStore$1("runID", runID);
+    setStore$1("fetchedAt", Date.now());
+  });
+}
+function mergeExecutorEventsFromFetch(fetched, runID) {
+  if (runID && store$1.runID && store$1.runID !== runID) {
+    setExecutorEvents(fetched, runID);
+    return;
+  }
+  if (!store$1.events.length) {
+    setExecutorEvents(fetched, runID);
+    return;
+  }
+  for (const key of executorLiveTimers.keys()) {
+    stopExecutorLiveTimer(key);
+  }
+  batch(() => {
+    if (runID && !store$1.runID) {
+      setStore$1("runID", runID);
+    }
+    setStore$1("events", produce((events) => {
+      for (const event of fetched) {
+        mergeEventList(events, event);
+      }
+    }));
     setStore$1("fetchedAt", Date.now());
   });
 }
@@ -4494,7 +4521,7 @@ let _rebuildScheduled = false;
 function scheduleRebuildAgentCards() {
   if (_rebuildScheduled) return;
   _rebuildScheduled = true;
-  queueMicrotask(() => {
+  requestAnimationFrame(() => {
     _rebuildScheduled = false;
     rebuildAgentCards();
   });
@@ -4666,7 +4693,7 @@ async function loadExecutorEvents(runID) {
   }).then((res) => res.ok ? res.json() : []).catch(() => []);
   const items = (Array.isArray(data) ? data : []).map((item) => executorEventEntry(item)).filter(Boolean);
   const firstRunID = items.find((e) => e?.runID)?.runID;
-  setExecutorEvents(items, firstRunID);
+  mergeExecutorEventsFromFetch(items, firstRunID);
 }
 async function loadConversation() {
   if (!boardStore.selectedTaskID) {
@@ -4778,6 +4805,24 @@ function applyMessageEvent(event) {
     const idx = store.messages.indexOf(message);
     const partIdx = message.parts.findIndex((p) => p.id === part.id);
     if (partIdx >= 0) {
+      const existing = message.parts[partIdx];
+      if (existing.type === "tool" && part.type === "tool" && existing.state?.status && part.state?.status) {
+        const rank = {
+          pending: 0,
+          running: 1,
+          completed: 2,
+          error: 2
+        };
+        const oldRank = rank[existing.state.status] ?? 0;
+        const newRank = rank[part.state.status] ?? 0;
+        if (newRank < oldRank) {
+          setStore("messages", idx, "parts", partIdx, {
+            ...part,
+            state: { ...part.state, status: existing.state.status, output: existing.state.output || part.state.output, error: existing.state.error || part.state.error }
+          });
+          return true;
+        }
+      }
       setStore("messages", idx, "parts", partIdx, part);
     } else {
       setStore(
@@ -4861,7 +4906,7 @@ function applyMessageEvent(event) {
   }
   return false;
 }
-const FLUSH_INTERVAL = 16;
+const FLUSH_INTERVAL = 50;
 let eventQueue = [];
 let flushTimer = null;
 let lastFlushTime = 0;
@@ -5905,15 +5950,17 @@ function buildBoardContextMessages(preClassifiedMainMessages, board, agentEvents
     if (message) syntheticMsgs.push(message);
   }
   for (const interaction of Array.isArray(board.interactions) ? board.interactions : []) {
+    const isPlannerClarification = interaction.payload?.planner_clarification === true;
+    const interactionRole = isPlannerClarification ? "planner" : "system";
     const request = syntheticTextMessage(
-      "system",
+      interactionRole,
       interaction.time?.created || Date.now(),
       interactionRequestText(interaction)
     );
     if (request) syntheticMsgs.push(request);
     if (interaction.status === "answered" || interaction.status === "rejected") {
       const response = syntheticTextMessage(
-        "system",
+        isPlannerClarification ? "user" : "system",
         interaction.time?.resolved || interaction.time?.updated || Date.now(),
         interactionResponseText(interaction)
       );
@@ -5988,7 +6035,7 @@ function conversationMessages() {
   return result;
 }
 
-var _tmpl$$e = /* @__PURE__ */ template(`<div class=chat-empty>`);
+var _tmpl$$f = /* @__PURE__ */ template(`<div class=chat-empty>`);
 function Conversation(props) {
   const [autoScroll, setAutoScroll] = createSignal(true);
   const el = props.container;
@@ -6020,7 +6067,7 @@ function Conversation(props) {
       return items().length === 0;
     },
     get children() {
-      var _el$ = _tmpl$$e();
+      var _el$ = _tmpl$$f();
       insert(_el$, emptyText);
       return _el$;
     }
@@ -6062,7 +6109,7 @@ function Conversation(props) {
   })];
 }
 
-var _tmpl$$d = /* @__PURE__ */ template(`<button type=button class=task-row-delete><span class=task-row-delete-icon data-icon=delete aria-hidden=true><svg width=12 height=12 viewBox="0 0 16 16"fill=none><path d="M3.5 4.5h9"stroke=currentColor stroke-width=1.2 stroke-linecap=round></path><path d="M6 4.5V3.6c0-.5.4-.9.9-.9h2.2c.5 0 .9.4.9.9v.9"stroke=currentColor stroke-width=1.2 stroke-linecap=round></path><path d="M5.2 6.2l.4 5.4c0 .5.4.9.9.9h2.9c.5 0 .9-.4.9-.9l.4-5.4"stroke=currentColor stroke-width=1.2 stroke-linecap=round>`), _tmpl$2$c = /* @__PURE__ */ template(`<div class="task-row-mini global-task-row"><button type=button class=task-row-main><div class=task-row-head><span class=status-dot aria-hidden=true></span><strong></strong></div><span></span><small>`), _tmpl$3$c = /* @__PURE__ */ template(`<section class=sidebar-list-group><div class=sidebar-list-heading></div><div class=sidebar-list-cluster>`), _tmpl$4$c = /* @__PURE__ */ template(`<div class=task-list-panel>`), _tmpl$5$c = /* @__PURE__ */ template(`<div class=empty-hint>`);
+var _tmpl$$e = /* @__PURE__ */ template(`<button type=button class=task-row-delete><span class=task-row-delete-icon data-icon=delete aria-hidden=true><svg width=12 height=12 viewBox="0 0 16 16"fill=none><path d="M3.5 4.5h9"stroke=currentColor stroke-width=1.2 stroke-linecap=round></path><path d="M6 4.5V3.6c0-.5.4-.9.9-.9h2.2c.5 0 .9.4.9.9v.9"stroke=currentColor stroke-width=1.2 stroke-linecap=round></path><path d="M5.2 6.2l.4 5.4c0 .5.4.9.9.9h2.9c.5 0 .9-.4.9-.9l.4-5.4"stroke=currentColor stroke-width=1.2 stroke-linecap=round>`), _tmpl$2$d = /* @__PURE__ */ template(`<div class="task-row-mini global-task-row"><button type=button class=task-row-main><div class=task-row-head><span class=status-dot aria-hidden=true></span><strong></strong></div><span></span><small>`), _tmpl$3$d = /* @__PURE__ */ template(`<section class=sidebar-list-group><div class=sidebar-list-heading></div><div class=sidebar-list-cluster>`), _tmpl$4$d = /* @__PURE__ */ template(`<div class=task-list-panel>`), _tmpl$5$d = /* @__PURE__ */ template(`<div class=empty-hint>`);
 const COMPLETED_STATUSES = /* @__PURE__ */ new Set(["completed", "failed", "cancelled"]);
 function clipText$1(value, limit = 80) {
   const text = String(value || "").replace(/\s+/g, " ").trim();
@@ -6109,7 +6156,7 @@ function taskListMeta(item) {
 }
 function DeleteButton(props) {
   return (() => {
-    var _el$ = _tmpl$$d();
+    var _el$ = _tmpl$$e();
     _el$.$$click = (e) => {
       e.stopPropagation();
       props.onDelete(props.id);
@@ -6135,7 +6182,7 @@ function TaskRow(props) {
   const title = () => taskListTitle(props.item) || id();
   const isActive = () => !pending() && props.selectedTaskID === id();
   return (() => {
-    var _el$2 = _tmpl$2$c(), _el$3 = _el$2.firstChild, _el$4 = _el$3.firstChild, _el$5 = _el$4.firstChild, _el$6 = _el$5.nextSibling, _el$7 = _el$4.nextSibling, _el$8 = _el$7.nextSibling;
+    var _el$2 = _tmpl$2$d(), _el$3 = _el$2.firstChild, _el$4 = _el$3.firstChild, _el$5 = _el$4.firstChild, _el$6 = _el$5.nextSibling, _el$7 = _el$4.nextSibling, _el$8 = _el$7.nextSibling;
     _el$3.$$click = () => {
       if (!pending() && id()) props.onSelectTask(id());
     };
@@ -6185,7 +6232,7 @@ function TaskSection(props) {
       return props.items.length > 0;
     },
     get children() {
-      var _el$9 = _tmpl$3$c(), _el$0 = _el$9.firstChild, _el$1 = _el$0.nextSibling;
+      var _el$9 = _tmpl$3$d(), _el$0 = _el$9.firstChild, _el$1 = _el$0.nextSibling;
       insert(_el$0, () => props.label);
       insert(_el$1, createComponent(For, {
         get each() {
@@ -6214,14 +6261,14 @@ function TaskList(props) {
   const recentTasks = createMemo(() => sortedItems().filter((item) => COMPLETED_STATUSES.has(item?.task?.status || "")));
   const selectedID = () => boardStore.selectedTaskID;
   return (() => {
-    var _el$10 = _tmpl$4$c();
+    var _el$10 = _tmpl$4$d();
     insert(_el$10, createComponent(Show, {
       get when() {
         return sortedItems().length > 0;
       },
       get fallback() {
         return (() => {
-          var _el$11 = _tmpl$5$c();
+          var _el$11 = _tmpl$5$d();
           insert(_el$11, () => t("task.none"));
           return _el$11;
         })();
@@ -6267,7 +6314,7 @@ function TaskList(props) {
 }
 delegateEvents(["click"]);
 
-var _tmpl$2$b = /* @__PURE__ */ template(`<div class=plan-version>`), _tmpl$3$b = /* @__PURE__ */ template(`<div class="plan-version streaming-indicator">`), _tmpl$4$b = /* @__PURE__ */ template(`<p class=empty-hint>`), _tmpl$5$b = /* @__PURE__ */ template(`<div class=goals-list>`), _tmpl$6$a = /* @__PURE__ */ template(`<div class="goal-criteria md-content">`), _tmpl$7$8 = /* @__PURE__ */ template(`<div class=goal-item><span class=goal-status-icon data-status=running></span><div class=goal-content><div class=plan-version style=margin-bottom:4px></div><div class="goal-desc md-content">`), _tmpl$8$5 = /* @__PURE__ */ template(`<span class=extension-status data-state=active>`), _tmpl$9$5 = /* @__PURE__ */ template(`<span class=goal-priority>`), _tmpl$0$3 = /* @__PURE__ */ template(`<button type=button class="btn btn-ghost mini"data-goal-action=view-session title="View executor session"aria-label="View executor session">View`), _tmpl$1$2 = /* @__PURE__ */ template(`<button type=button class="btn btn-ghost mini"data-goal-action=edit>`), _tmpl$10$2 = /* @__PURE__ */ template(`<button type=button class="btn btn-ghost mini danger"data-goal-action=delete>`), _tmpl$11$1 = /* @__PURE__ */ template(`<div class=goal-actions>`), _tmpl$12$1 = /* @__PURE__ */ template(`<details class=goal-item><summary class=goal-item-head><span class=goal-item-chevron aria-hidden=true>▶</span><span class=goal-status-icon></span><span class=goal-desc-inline></span></summary><div class=goal-item-body><div class=goal-content><div class="goal-desc md-content">`), _tmpl$13$1 = /* @__PURE__ */ template(`<div class=empty-hint>`), _tmpl$14$1 = /* @__PURE__ */ template(`<section class=criteria-group><div class=criteria-group-head><span class=criteria-group-icon aria-hidden=true></span><div class=criteria-group-title></div><div class=criteria-group-count></div></div><div class=criteria-group-list>`), _tmpl$15$1 = /* @__PURE__ */ template(`<label class=criteria-item><input type=checkbox><span class=check-mark></span><span class=criteria-copy><span class=criteria-name></span><span class=criteria-desc></span></span><span class=criteria-status></span><span class=criteria-result>`), _tmpl$16$1 = /* @__PURE__ */ template(`<div class="eval-summary md-content">`), _tmpl$17 = /* @__PURE__ */ template(`<div class=eval-error-meta>`), _tmpl$18 = /* @__PURE__ */ template(`<div class=eval-error><div class=eval-error-name>✗ </div><div class="eval-error-detail md-content">`), _tmpl$19 = /* @__PURE__ */ template(`<div class=delivery-files>`), _tmpl$20 = /* @__PURE__ */ template(`<div class=delivery-card><div class=delivery-title></div><div class="delivery-summary md-content">`), _tmpl$21 = /* @__PURE__ */ template(`<button type=button class="btn btn-primary"data-task-action=retry>`), _tmpl$22 = /* @__PURE__ */ template(`<button type=button class="btn btn-ghost"data-task-action=replan>`), _tmpl$23 = /* @__PURE__ */ template(`<div class=task-actions-buttons>`), _tmpl$24 = /* @__PURE__ */ template(`<div class=task-actions-bar>`), _tmpl$25 = /* @__PURE__ */ template(`<button class="btn btn-primary"data-action=always>`), _tmpl$26 = /* @__PURE__ */ template(`<button class="btn btn-ghost"data-action=once>`), _tmpl$27 = /* @__PURE__ */ template(`<button class="btn btn-ghost"data-action=reject>`), _tmpl$28 = /* @__PURE__ */ template(`<div class=interaction-alert><div class=interaction-title> </div><div class="interaction-body md-content"></div><div class=interaction-actions>`), _tmpl$29 = /* @__PURE__ */ template(`<button class="btn btn-primary"data-action=answer>`), _tmpl$30 = /* @__PURE__ */ template(`<div class=interactions-list>`), _tmpl$33 = /* @__PURE__ */ template(`<details class=section><summary class=section-head><span class=section-icon aria-hidden=true></span><span class=section-title></span><span class=section-badge></span></summary><div class=section-body>`), _tmpl$34 = /* @__PURE__ */ template(`<div id=taskActionsBar>`);
+var _tmpl$2$c = /* @__PURE__ */ template(`<div class=plan-version>`), _tmpl$3$c = /* @__PURE__ */ template(`<div class="plan-version streaming-indicator">`), _tmpl$4$c = /* @__PURE__ */ template(`<p class=empty-hint>`), _tmpl$5$c = /* @__PURE__ */ template(`<div class="plan-summary md-content"style=margin-bottom:8px;font-size:12px;opacity:0.8>`), _tmpl$6$b = /* @__PURE__ */ template(`<div class=goals-list>`), _tmpl$7$9 = /* @__PURE__ */ template(`<div class="goal-criteria md-content">`), _tmpl$8$6 = /* @__PURE__ */ template(`<div class=goal-item><span class=goal-status-icon></span><div class=goal-content><div class=plan-version style=margin-bottom:4px></div><div class="goal-desc md-content">`), _tmpl$9$5 = /* @__PURE__ */ template(`<span class=extension-status data-state=active>`), _tmpl$0$3 = /* @__PURE__ */ template(`<span class=goal-priority>`), _tmpl$1$2 = /* @__PURE__ */ template(`<button type=button class="btn btn-ghost mini"data-goal-action=view-session title="View executor session"aria-label="View executor session">View`), _tmpl$10$2 = /* @__PURE__ */ template(`<button type=button class="btn btn-ghost mini"data-goal-action=edit>`), _tmpl$11$1 = /* @__PURE__ */ template(`<button type=button class="btn btn-ghost mini danger"data-goal-action=delete>`), _tmpl$12$1 = /* @__PURE__ */ template(`<div class=goal-actions>`), _tmpl$13$1 = /* @__PURE__ */ template(`<details class=goal-item><summary class=goal-item-head><span class=goal-item-chevron aria-hidden=true>▶</span><span class=goal-status-icon></span><span class=goal-desc-inline></span></summary><div class=goal-item-body><div class=goal-content><div class="goal-desc md-content">`), _tmpl$14$1 = /* @__PURE__ */ template(`<div class=empty-hint>`), _tmpl$15$1 = /* @__PURE__ */ template(`<section class=criteria-group><div class=criteria-group-head><span class=criteria-group-icon aria-hidden=true></span><div class=criteria-group-title></div><div class=criteria-group-count></div></div><div class=criteria-group-list>`), _tmpl$16$1 = /* @__PURE__ */ template(`<label class=criteria-item><input type=checkbox><span class=check-mark></span><span class=criteria-copy><span class=criteria-name></span><span class=criteria-desc></span></span><span class=criteria-status></span><span class=criteria-result>`), _tmpl$17 = /* @__PURE__ */ template(`<div class="eval-summary md-content">`), _tmpl$18 = /* @__PURE__ */ template(`<div class=eval-error-meta>`), _tmpl$19 = /* @__PURE__ */ template(`<div class=eval-error><div class=eval-error-name>✗ </div><div class="eval-error-detail md-content">`), _tmpl$20 = /* @__PURE__ */ template(`<div class=delivery-files>`), _tmpl$21 = /* @__PURE__ */ template(`<div class=delivery-card><div class=delivery-title></div><div class="delivery-summary md-content">`), _tmpl$22 = /* @__PURE__ */ template(`<button type=button class="btn btn-primary"data-task-action=retry>`), _tmpl$23 = /* @__PURE__ */ template(`<button type=button class="btn btn-ghost"data-task-action=replan>`), _tmpl$24 = /* @__PURE__ */ template(`<div class=task-actions-buttons>`), _tmpl$25 = /* @__PURE__ */ template(`<div class=task-actions-bar>`), _tmpl$26 = /* @__PURE__ */ template(`<button class="btn btn-primary"data-action=always>`), _tmpl$27 = /* @__PURE__ */ template(`<button class="btn btn-ghost"data-action=once>`), _tmpl$28 = /* @__PURE__ */ template(`<button class="btn btn-ghost"data-action=reject>`), _tmpl$29 = /* @__PURE__ */ template(`<div class=interaction-alert><div class=interaction-title> </div><div class="interaction-body md-content"></div><div class=interaction-actions>`), _tmpl$30 = /* @__PURE__ */ template(`<button class="btn btn-primary"data-action=answer>`), _tmpl$31 = /* @__PURE__ */ template(`<div class=interactions-list>`), _tmpl$34 = /* @__PURE__ */ template(`<details class=section><summary class=section-head><span class=section-icon aria-hidden=true></span><span class=section-title></span><span class=section-badge></span></summary><div class=section-body>`), _tmpl$35 = /* @__PURE__ */ template(`<div id=taskActionsBar>`);
 function statusIcon(status) {
   const map = {
     idle: `<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle data-stroke="true" cx="8" cy="8" r="4.5"/><circle data-fill="true" cx="8" cy="8" r="1.25"/></svg>`,
@@ -6292,7 +6339,7 @@ function SpecPanel(props) {
     },
     get fallback() {
       return (() => {
-        var _el$6 = _tmpl$4$b();
+        var _el$6 = _tmpl$4$c();
         insert(_el$6, () => t("empty.spec"));
         return _el$6;
       })();
@@ -6307,7 +6354,7 @@ function SpecPanel(props) {
           return !isPreview();
         },
         get children() {
-          var _el$4 = _tmpl$2$b();
+          var _el$4 = _tmpl$2$c();
           insert(_el$4, () => stamp(props.spec?.time?.created));
           return _el$4;
         }
@@ -6316,7 +6363,7 @@ function SpecPanel(props) {
           return isPreview();
         },
         get children() {
-          var _el$5 = _tmpl$3$b();
+          var _el$5 = _tmpl$3$c();
           insert(_el$5, () => t("common.generating") || "Generating...");
           return _el$5;
         }
@@ -6326,6 +6373,7 @@ function SpecPanel(props) {
 }
 function PlanPanel(props) {
   const isPreview = () => !props.plan?.prompt && !props.plan?.summary && !!props.preview;
+  const hasPlan = () => !!props.plan?.prompt || !!props.plan?.summary;
   const activeGoals = createMemo(() => {
     const cards = props.goalCards || [];
     const running = props.runningGoalIDs;
@@ -6335,13 +6383,21 @@ function PlanPanel(props) {
       goalIndex: idx + 1
     })).filter((card) => running.has(card.id));
   });
+  const allGoals = createMemo(() => {
+    const cards = props.goalCards || [];
+    return cards.map((card, idx) => ({
+      ...card,
+      goalIndex: idx + 1
+    }));
+  });
+  const displayGoals = () => activeGoals().length > 0 ? activeGoals() : allGoals();
   const version = () => props.plan?.version;
   return [createComponent(Show, {
     get when() {
       return isPreview();
     },
     get children() {
-      var _el$7 = _tmpl$3$b();
+      var _el$7 = _tmpl$3$c();
       insert(_el$7, () => t("common.generating") || "Generating...");
       return _el$7;
     }
@@ -6350,44 +6406,70 @@ function PlanPanel(props) {
       return !isPreview();
     },
     get children() {
-      return createComponent(Show, {
+      return [createComponent(Show, {
         get when() {
-          return activeGoals().length > 0;
-        },
-        get fallback() {
-          return (() => {
-            var _el$9 = _tmpl$4$b();
-            insert(_el$9, () => t("empty.plan"));
-            return _el$9;
-          })();
+          return memo(() => !!hasPlan())() && props.plan?.summary;
         },
         get children() {
-          var _el$8 = _tmpl$5$b();
-          insert(_el$8, createComponent(For, {
-            get each() {
-              return activeGoals();
-            },
-            children: (goal) => (() => {
-              var _el$0 = _tmpl$7$8(), _el$1 = _el$0.firstChild, _el$10 = _el$1.nextSibling, _el$11 = _el$10.firstChild, _el$12 = _el$11.nextSibling;
-              insert(_el$1, () => goalIcon("running"));
-              insert(_el$11, () => `Goal#${goal.goalIndex} Plan V${version()}`);
-              insert(_el$10, createComponent(Show, {
-                get when() {
-                  return goal.detail;
-                },
-                get children() {
-                  var _el$13 = _tmpl$6$a();
-                  createRenderEffect(() => _el$13.innerHTML = renderMarkdown$1(goal.detail));
-                  return _el$13;
-                }
-              }), null);
-              createRenderEffect(() => _el$12.innerHTML = renderMarkdown$1(goal.title || ""));
-              return _el$0;
-            })()
-          }));
+          var _el$8 = _tmpl$5$c();
+          createRenderEffect(() => _el$8.innerHTML = renderMarkdown$1(props.plan.summary));
           return _el$8;
         }
-      });
+      }), createComponent(Show, {
+        get when() {
+          return displayGoals().length > 0;
+        },
+        get fallback() {
+          return createComponent(Show, {
+            get when() {
+              return !hasPlan();
+            },
+            get children() {
+              var _el$0 = _tmpl$4$c();
+              insert(_el$0, () => t("empty.plan"));
+              return _el$0;
+            }
+          });
+        },
+        get children() {
+          var _el$9 = _tmpl$6$b();
+          insert(_el$9, createComponent(For, {
+            get each() {
+              return displayGoals();
+            },
+            children: (goal) => {
+              const isRunning = () => props.runningGoalIDs?.has(goal.id);
+              const goalStatus = () => goal.metadata?.status || (isRunning() ? "running" : "pending");
+              return (() => {
+                var _el$1 = _tmpl$8$6(), _el$10 = _el$1.firstChild, _el$11 = _el$10.nextSibling, _el$12 = _el$11.firstChild, _el$13 = _el$12.nextSibling;
+                insert(_el$10, () => goalIcon(goalStatus()));
+                insert(_el$12, () => `Goal#${goal.goalIndex} Plan V${version()}`);
+                insert(_el$11, createComponent(Show, {
+                  get when() {
+                    return goal.detail;
+                  },
+                  get children() {
+                    var _el$14 = _tmpl$7$9();
+                    createRenderEffect(() => _el$14.innerHTML = renderMarkdown$1(goal.detail));
+                    return _el$14;
+                  }
+                }), null);
+                createRenderEffect((_p$) => {
+                  var _v$4 = goalStatus(), _v$5 = renderMarkdown$1(goal.title || "");
+                  _v$4 !== _p$.e && setAttribute(_el$10, "data-status", _p$.e = _v$4);
+                  _v$5 !== _p$.t && (_el$13.innerHTML = _p$.t = _v$5);
+                  return _p$;
+                }, {
+                  e: void 0,
+                  t: void 0
+                });
+                return _el$1;
+              })();
+            }
+          }));
+          return _el$9;
+        }
+      })];
     }
   })];
 }
@@ -6405,104 +6487,82 @@ function GoalsPanel(props) {
     },
     get fallback() {
       return (() => {
-        var _el$15 = _tmpl$4$b();
-        insert(_el$15, () => t("empty.goals"));
-        return _el$15;
+        var _el$16 = _tmpl$4$c();
+        insert(_el$16, () => t("empty.goals"));
+        return _el$16;
       })();
     },
     get children() {
-      var _el$14 = _tmpl$5$b();
-      insert(_el$14, createComponent(For, {
+      var _el$15 = _tmpl$6$b();
+      insert(_el$15, createComponent(For, {
         get each() {
           return props.cards;
         },
         children: (card, idx) => (() => {
-          var _el$16 = _tmpl$12$1(), _el$17 = _el$16.firstChild, _el$18 = _el$17.firstChild, _el$19 = _el$18.nextSibling, _el$20 = _el$19.nextSibling, _el$23 = _el$17.nextSibling, _el$24 = _el$23.firstChild, _el$25 = _el$24.firstChild;
-          insert(_el$19, () => goalIcon(card.status));
-          insert(_el$20, () => `Goal#${idx() + 1}`);
-          insert(_el$17, createComponent(Show, {
+          var _el$17 = _tmpl$13$1(), _el$18 = _el$17.firstChild, _el$19 = _el$18.firstChild, _el$20 = _el$19.nextSibling, _el$21 = _el$20.nextSibling, _el$24 = _el$18.nextSibling, _el$25 = _el$24.firstChild, _el$26 = _el$25.firstChild;
+          insert(_el$20, () => goalIcon(card.status));
+          insert(_el$21, () => `Goal#${idx() + 1}`);
+          insert(_el$18, createComponent(Show, {
             get when() {
               return props.runningGoalIDs.has(card.id);
             },
             get children() {
-              var _el$21 = _tmpl$8$5();
-              insert(_el$21, () => t("goal.running"));
-              return _el$21;
+              var _el$22 = _tmpl$9$5();
+              insert(_el$22, () => t("goal.running"));
+              return _el$22;
             }
           }), null);
-          insert(_el$17, createComponent(Show, {
+          insert(_el$18, createComponent(Show, {
             get when() {
               return card.metadata?.priority;
             },
             get children() {
-              var _el$22 = _tmpl$9$5();
-              insert(_el$22, () => card.metadata.priority);
-              createRenderEffect(() => setAttribute(_el$22, "data-priority", card.metadata.priority));
-              return _el$22;
+              var _el$23 = _tmpl$0$3();
+              insert(_el$23, () => card.metadata.priority);
+              createRenderEffect(() => setAttribute(_el$23, "data-priority", card.metadata.priority));
+              return _el$23;
             }
           }), null);
-          insert(_el$24, createComponent(Show, {
+          insert(_el$25, createComponent(Show, {
             get when() {
               return card.detail;
             },
             get children() {
-              var _el$26 = _tmpl$6$a();
-              createRenderEffect(() => _el$26.innerHTML = renderMarkdown$1(card.detail));
-              return _el$26;
+              var _el$27 = _tmpl$7$9();
+              createRenderEffect(() => _el$27.innerHTML = renderMarkdown$1(card.detail));
+              return _el$27;
             }
           }), null);
-          insert(_el$23, createComponent(Show, {
+          insert(_el$24, createComponent(Show, {
             get when() {
               return memo(() => !!props.onOpenSession)() && card.metadata?.sessionID;
             },
             get children() {
-              var _el$27 = _tmpl$0$3();
-              _el$27.$$click = () => props.onOpenSession?.(card.metadata.sessionID, card.title || card.id);
-              createRenderEffect(() => setAttribute(_el$27, "data-goal-id", card.id));
-              return _el$27;
+              var _el$28 = _tmpl$1$2();
+              _el$28.$$click = () => props.onOpenSession?.(card.metadata.sessionID, card.title || card.id);
+              createRenderEffect(() => setAttribute(_el$28, "data-goal-id", card.id));
+              return _el$28;
             }
           }), null);
-          insert(_el$23, createComponent(Show, {
+          insert(_el$24, createComponent(Show, {
             get when() {
               return props.onEditGoal || props.onDeleteGoal;
             },
             get children() {
-              var _el$28 = _tmpl$11$1();
-              insert(_el$28, createComponent(Show, {
+              var _el$29 = _tmpl$12$1();
+              insert(_el$29, createComponent(Show, {
                 get when() {
                   return props.onEditGoal;
                 },
                 get children() {
-                  var _el$29 = _tmpl$1$2();
-                  _el$29.$$click = () => props.onEditGoal?.(card.id, card.title, card.detail || "");
-                  insert(_el$29, () => t("common.edit"));
-                  createRenderEffect((_p$) => {
-                    var _v$4 = card.id, _v$5 = t("goal.edit_button_title"), _v$6 = t("goal.edit_button_title");
-                    _v$4 !== _p$.e && setAttribute(_el$29, "data-goal-id", _p$.e = _v$4);
-                    _v$5 !== _p$.t && setAttribute(_el$29, "title", _p$.t = _v$5);
-                    _v$6 !== _p$.a && setAttribute(_el$29, "aria-label", _p$.a = _v$6);
-                    return _p$;
-                  }, {
-                    e: void 0,
-                    t: void 0,
-                    a: void 0
-                  });
-                  return _el$29;
-                }
-              }), null);
-              insert(_el$28, createComponent(Show, {
-                get when() {
-                  return props.onDeleteGoal;
-                },
-                get children() {
                   var _el$30 = _tmpl$10$2();
-                  _el$30.$$click = () => props.onDeleteGoal?.(card.id);
-                  insert(_el$30, () => t("common.delete"));
+                  _el$30.$$click = () => props.onEditGoal?.(card.id, card.title, card.detail || "");
+                  insert(_el$30, () => t("common.edit"));
                   createRenderEffect((_p$) => {
-                    var _v$7 = card.id, _v$8 = t("goal.delete_button_title"), _v$9 = t("goal.delete_button_title");
-                    _v$7 !== _p$.e && setAttribute(_el$30, "data-goal-id", _p$.e = _v$7);
-                    _v$8 !== _p$.t && setAttribute(_el$30, "title", _p$.t = _v$8);
-                    _v$9 !== _p$.a && setAttribute(_el$30, "aria-label", _p$.a = _v$9);
+                    var _v$6 = card.id, _v$7 = t("goal.edit_button_title"), _v$8 = t("goal.edit_button_title");
+                    _v$6 !== _p$.e && setAttribute(_el$30, "data-goal-id", _p$.e = _v$6);
+                    _v$7 !== _p$.t && setAttribute(_el$30, "title", _p$.t = _v$7);
+                    _v$8 !== _p$.a && setAttribute(_el$30, "aria-label", _p$.a = _v$8);
                     return _p$;
                   }, {
                     e: void 0,
@@ -6512,22 +6572,44 @@ function GoalsPanel(props) {
                   return _el$30;
                 }
               }), null);
-              return _el$28;
+              insert(_el$29, createComponent(Show, {
+                get when() {
+                  return props.onDeleteGoal;
+                },
+                get children() {
+                  var _el$31 = _tmpl$11$1();
+                  _el$31.$$click = () => props.onDeleteGoal?.(card.id);
+                  insert(_el$31, () => t("common.delete"));
+                  createRenderEffect((_p$) => {
+                    var _v$9 = card.id, _v$0 = t("goal.delete_button_title"), _v$1 = t("goal.delete_button_title");
+                    _v$9 !== _p$.e && setAttribute(_el$31, "data-goal-id", _p$.e = _v$9);
+                    _v$0 !== _p$.t && setAttribute(_el$31, "title", _p$.t = _v$0);
+                    _v$1 !== _p$.a && setAttribute(_el$31, "aria-label", _p$.a = _v$1);
+                    return _p$;
+                  }, {
+                    e: void 0,
+                    t: void 0,
+                    a: void 0
+                  });
+                  return _el$31;
+                }
+              }), null);
+              return _el$29;
             }
           }), null);
           createRenderEffect((_p$) => {
-            var _v$0 = card.status || "pending", _v$1 = renderMarkdown$1(card.title || "");
-            _v$0 !== _p$.e && setAttribute(_el$19, "data-status", _p$.e = _v$0);
-            _v$1 !== _p$.t && (_el$25.innerHTML = _p$.t = _v$1);
+            var _v$10 = card.status || "pending", _v$11 = renderMarkdown$1(card.title || "");
+            _v$10 !== _p$.e && setAttribute(_el$20, "data-status", _p$.e = _v$10);
+            _v$11 !== _p$.t && (_el$26.innerHTML = _p$.t = _v$11);
             return _p$;
           }, {
             e: void 0,
             t: void 0
           });
-          return _el$16;
+          return _el$17;
         })()
       }));
-      return _el$14;
+      return _el$15;
     }
   });
 }
@@ -6810,9 +6892,9 @@ function CriteriaPanel(props) {
     },
     get fallback() {
       return (() => {
-        var _el$31 = _tmpl$13$1();
-        insert(_el$31, () => t("empty.checks"));
-        return _el$31;
+        var _el$32 = _tmpl$14$1();
+        insert(_el$32, () => t("empty.checks"));
+        return _el$32;
       })();
     },
     get children() {
@@ -6821,32 +6903,32 @@ function CriteriaPanel(props) {
           return groups();
         },
         children: (group) => (() => {
-          var _el$32 = _tmpl$14$1(), _el$33 = _el$32.firstChild, _el$34 = _el$33.firstChild, _el$35 = _el$34.nextSibling, _el$36 = _el$35.nextSibling, _el$37 = _el$33.nextSibling;
-          insert(_el$35, () => group.label);
-          insert(_el$36, () => tc("checks.group_count", group.items.length, {
+          var _el$33 = _tmpl$15$1(), _el$34 = _el$33.firstChild, _el$35 = _el$34.firstChild, _el$36 = _el$35.nextSibling, _el$37 = _el$36.nextSibling, _el$38 = _el$34.nextSibling;
+          insert(_el$36, () => group.label);
+          insert(_el$37, () => tc("checks.group_count", group.items.length, {
             count: group.items.length
           }));
-          insert(_el$37, createComponent(For, {
+          insert(_el$38, createComponent(For, {
             get each() {
               return group.items;
             },
             children: (spec) => {
               const status = () => checkStatuses()[spec.key] || "pending";
               return (() => {
-                var _el$38 = _tmpl$15$1(), _el$39 = _el$38.firstChild, _el$40 = _el$39.nextSibling, _el$41 = _el$40.nextSibling, _el$42 = _el$41.firstChild, _el$43 = _el$42.nextSibling, _el$44 = _el$41.nextSibling, _el$45 = _el$44.nextSibling;
-                _el$39.addEventListener("change", (e) => props.onToggle?.(spec.key, e.currentTarget.checked));
-                insert(_el$42, () => spec.label);
-                insert(_el$43, (() => {
+                var _el$39 = _tmpl$16$1(), _el$40 = _el$39.firstChild, _el$41 = _el$40.nextSibling, _el$42 = _el$41.nextSibling, _el$43 = _el$42.firstChild, _el$44 = _el$43.nextSibling, _el$45 = _el$42.nextSibling, _el$46 = _el$45.nextSibling;
+                _el$40.addEventListener("change", (e) => props.onToggle?.(spec.key, e.currentTarget.checked));
+                insert(_el$43, () => spec.label);
+                insert(_el$44, (() => {
                   var _c$ = memo(() => !!spec.readOnly);
                   return () => _c$() ? t("detail.observed") : memo(() => !!spec.enabled)() ? t("detail.enabled") : t("detail.disabled");
                 })());
-                insert(_el$45, () => criteriaResultText(status()));
+                insert(_el$46, () => criteriaResultText(status()));
                 createRenderEffect((_p$) => {
-                  var _v$12 = spec.readOnly ? "true" : void 0, _v$13 = spec.key, _v$14 = spec.readOnly, _v$15 = status();
-                  _v$12 !== _p$.e && setAttribute(_el$38, "data-readonly", _p$.e = _v$12);
-                  _v$13 !== _p$.t && setAttribute(_el$39, "data-check", _p$.t = _v$13);
-                  _v$14 !== _p$.a && (_el$39.disabled = _p$.a = _v$14);
-                  _v$15 !== _p$.o && setAttribute(_el$44, "data-result", _p$.o = _v$15);
+                  var _v$14 = spec.readOnly ? "true" : void 0, _v$15 = spec.key, _v$16 = spec.readOnly, _v$17 = status();
+                  _v$14 !== _p$.e && setAttribute(_el$39, "data-readonly", _p$.e = _v$14);
+                  _v$15 !== _p$.t && setAttribute(_el$40, "data-check", _p$.t = _v$15);
+                  _v$16 !== _p$.a && (_el$40.disabled = _p$.a = _v$16);
+                  _v$17 !== _p$.o && setAttribute(_el$45, "data-result", _p$.o = _v$17);
                   return _p$;
                 }, {
                   e: void 0,
@@ -6854,21 +6936,21 @@ function CriteriaPanel(props) {
                   a: void 0,
                   o: void 0
                 });
-                createRenderEffect(() => _el$39.checked = spec.enabled);
-                return _el$38;
+                createRenderEffect(() => _el$40.checked = spec.enabled);
+                return _el$39;
               })();
             }
           }));
           createRenderEffect((_p$) => {
-            var _v$10 = group.key, _v$11 = CHECK_FAMILY_ICONS[group.key] || "";
-            _v$10 !== _p$.e && setAttribute(_el$32, "data-family", _p$.e = _v$10);
-            _v$11 !== _p$.t && (_el$34.innerHTML = _p$.t = _v$11);
+            var _v$12 = group.key, _v$13 = CHECK_FAMILY_ICONS[group.key] || "";
+            _v$12 !== _p$.e && setAttribute(_el$33, "data-family", _p$.e = _v$12);
+            _v$13 !== _p$.t && (_el$35.innerHTML = _p$.t = _v$13);
             return _p$;
           }, {
             e: void 0,
             t: void 0
           });
-          return _el$32;
+          return _el$33;
         })()
       });
     }
@@ -6901,29 +6983,29 @@ function EvaluationPanel(props) {
           return errors();
         },
         children: (err) => (() => {
-          var _el$47 = _tmpl$18(), _el$48 = _el$47.firstChild; _el$48.firstChild; var _el$52 = _el$48.nextSibling;
-          insert(_el$48, () => err.name, null);
-          insert(_el$47, createComponent(Show, {
+          var _el$48 = _tmpl$19(), _el$49 = _el$48.firstChild; _el$49.firstChild; var _el$53 = _el$49.nextSibling;
+          insert(_el$49, () => err.name, null);
+          insert(_el$48, createComponent(Show, {
             get when() {
               return err.family;
             },
             get children() {
-              var _el$51 = _tmpl$17();
-              insert(_el$51, () => err.family);
-              return _el$51;
+              var _el$52 = _tmpl$18();
+              insert(_el$52, () => err.family);
+              return _el$52;
             }
-          }), _el$52);
-          createRenderEffect(() => _el$52.innerHTML = renderMarkdown$1(err.evidence.slice(0, 400)));
-          return _el$47;
+          }), _el$53);
+          createRenderEffect(() => _el$53.innerHTML = renderMarkdown$1(err.evidence.slice(0, 400)));
+          return _el$48;
         })()
       }), createComponent(Show, {
         get when() {
           return props.evaluation?.summary;
         },
         get children() {
-          var _el$46 = _tmpl$16$1();
-          createRenderEffect(() => _el$46.innerHTML = renderMarkdown$1(props.evaluation.summary));
-          return _el$46;
+          var _el$47 = _tmpl$17();
+          createRenderEffect(() => _el$47.innerHTML = renderMarkdown$1(props.evaluation.summary));
+          return _el$47;
         }
       })];
     }
@@ -6942,28 +7024,28 @@ function DeliveryPanel(props) {
     },
     get fallback() {
       return (() => {
-        var _el$57 = _tmpl$4$b();
-        insert(_el$57, () => t("empty.delivery"));
-        return _el$57;
+        var _el$58 = _tmpl$4$c();
+        insert(_el$58, () => t("empty.delivery"));
+        return _el$58;
       })();
     },
     get children() {
-      var _el$53 = _tmpl$20(), _el$54 = _el$53.firstChild, _el$55 = _el$54.nextSibling;
-      insert(_el$54, () => deliveryStatusLabel(props.delivery?.status));
-      insert(_el$53, createComponent(Show, {
+      var _el$54 = _tmpl$21(), _el$55 = _el$54.firstChild, _el$56 = _el$55.nextSibling;
+      insert(_el$55, () => deliveryStatusLabel(props.delivery?.status));
+      insert(_el$54, createComponent(Show, {
         get when() {
           return props.delivery?.result?.changedFiles?.length > 0;
         },
         get children() {
-          var _el$56 = _tmpl$19();
-          insert(_el$56, () => tc("delivery.files_changed", props.delivery.result.changedFiles.length, {
+          var _el$57 = _tmpl$20();
+          insert(_el$57, () => tc("delivery.files_changed", props.delivery.result.changedFiles.length, {
             count: props.delivery.result.changedFiles.length
           }));
-          return _el$56;
+          return _el$57;
         }
       }), null);
-      createRenderEffect(() => _el$55.innerHTML = renderMarkdown$1(props.delivery?.summary || props.delivery?.result?.summary || ""));
-      return _el$53;
+      createRenderEffect(() => _el$56.innerHTML = renderMarkdown$1(props.delivery?.summary || props.delivery?.result?.summary || ""));
+      return _el$54;
     }
   });
 }
@@ -6976,43 +7058,23 @@ function TaskActionsPanel(props) {
       return visible();
     },
     get children() {
-      var _el$58 = _tmpl$24();
-      insert(_el$58, createComponent(Show, {
+      var _el$59 = _tmpl$25();
+      insert(_el$59, createComponent(Show, {
         get when() {
           return hasButtons();
         },
         get children() {
-          var _el$59 = _tmpl$23();
-          insert(_el$59, createComponent(Show, {
+          var _el$60 = _tmpl$24();
+          insert(_el$60, createComponent(Show, {
             get when() {
               return controls().canRetry;
             },
             get children() {
-              var _el$60 = _tmpl$21();
-              _el$60.$$click = () => props.onRetry?.();
-              insert(_el$60, () => t("task.action.retry"));
-              createRenderEffect((_p$) => {
-                var _v$16 = t("task.action.retry_title"), _v$17 = t("task.action.retry_title");
-                _v$16 !== _p$.e && setAttribute(_el$60, "title", _p$.e = _v$16);
-                _v$17 !== _p$.t && setAttribute(_el$60, "aria-label", _p$.t = _v$17);
-                return _p$;
-              }, {
-                e: void 0,
-                t: void 0
-              });
-              return _el$60;
-            }
-          }), null);
-          insert(_el$59, createComponent(Show, {
-            get when() {
-              return controls().canReplan;
-            },
-            get children() {
               var _el$61 = _tmpl$22();
-              _el$61.$$click = () => props.onReplan?.();
-              insert(_el$61, () => t("task.action.replan"));
+              _el$61.$$click = () => props.onRetry?.();
+              insert(_el$61, () => t("task.action.retry"));
               createRenderEffect((_p$) => {
-                var _v$18 = t("task.action.replan_title"), _v$19 = t("task.action.replan_title");
+                var _v$18 = t("task.action.retry_title"), _v$19 = t("task.action.retry_title");
                 _v$18 !== _p$.e && setAttribute(_el$61, "title", _p$.e = _v$18);
                 _v$19 !== _p$.t && setAttribute(_el$61, "aria-label", _p$.t = _v$19);
                 return _p$;
@@ -7023,10 +7085,30 @@ function TaskActionsPanel(props) {
               return _el$61;
             }
           }), null);
-          return _el$59;
+          insert(_el$60, createComponent(Show, {
+            get when() {
+              return controls().canReplan;
+            },
+            get children() {
+              var _el$62 = _tmpl$23();
+              _el$62.$$click = () => props.onReplan?.();
+              insert(_el$62, () => t("task.action.replan"));
+              createRenderEffect((_p$) => {
+                var _v$20 = t("task.action.replan_title"), _v$21 = t("task.action.replan_title");
+                _v$20 !== _p$.e && setAttribute(_el$62, "title", _p$.e = _v$20);
+                _v$21 !== _p$.t && setAttribute(_el$62, "aria-label", _p$.t = _v$21);
+                return _p$;
+              }, {
+                e: void 0,
+                t: void 0
+              });
+              return _el$62;
+            }
+          }), null);
+          return _el$60;
         }
       }));
-      return _el$58;
+      return _el$59;
     }
   });
 }
@@ -7036,34 +7118,20 @@ function interactionIcon$1(interaction) {
 function InteractionAlert(props) {
   const icon = () => interactionIcon$1(props.interaction);
   return (() => {
-    var _el$62 = _tmpl$28(), _el$63 = _el$62.firstChild, _el$64 = _el$63.firstChild, _el$65 = _el$63.nextSibling, _el$66 = _el$65.nextSibling;
-    insert(_el$63, icon, _el$64);
-    insert(_el$63, () => props.interaction.title, null);
-    insert(_el$66, createComponent(Show, {
+    var _el$63 = _tmpl$29(), _el$64 = _el$63.firstChild, _el$65 = _el$64.firstChild, _el$66 = _el$64.nextSibling, _el$67 = _el$66.nextSibling;
+    insert(_el$64, icon, _el$65);
+    insert(_el$64, () => props.interaction.title, null);
+    insert(_el$67, createComponent(Show, {
       get when() {
         return props.interaction.type === "permission";
       },
       get fallback() {
         return [(() => {
-          var _el$70 = _tmpl$29();
-          _el$70.$$click = () => props.onResolve?.(props.interaction.id, "answer");
-          insert(_el$70, () => t("interaction.answer"));
+          var _el$71 = _tmpl$30();
+          _el$71.$$click = () => props.onResolve?.(props.interaction.id, "answer");
+          insert(_el$71, () => t("interaction.answer"));
           createRenderEffect((_p$) => {
-            var _v$28 = t("interaction.answer_title"), _v$29 = t("interaction.answer_title");
-            _v$28 !== _p$.e && setAttribute(_el$70, "title", _p$.e = _v$28);
-            _v$29 !== _p$.t && setAttribute(_el$70, "aria-label", _p$.t = _v$29);
-            return _p$;
-          }, {
-            e: void 0,
-            t: void 0
-          });
-          return _el$70;
-        })(), (() => {
-          var _el$71 = _tmpl$27();
-          _el$71.$$click = () => props.onReject?.(props.interaction.id);
-          insert(_el$71, () => t("interaction.skip"));
-          createRenderEffect((_p$) => {
-            var _v$30 = t("interaction.skip_title"), _v$31 = t("interaction.skip_title");
+            var _v$30 = t("interaction.answer_title"), _v$31 = t("interaction.answer_title");
             _v$30 !== _p$.e && setAttribute(_el$71, "title", _p$.e = _v$30);
             _v$31 !== _p$.t && setAttribute(_el$71, "aria-label", _p$.t = _v$31);
             return _p$;
@@ -7072,29 +7140,29 @@ function InteractionAlert(props) {
             t: void 0
           });
           return _el$71;
-        })()];
-      },
-      get children() {
-        return [(() => {
-          var _el$67 = _tmpl$25();
-          _el$67.$$click = () => props.onResolve?.(props.interaction.id, "always");
-          insert(_el$67, () => t("interaction.always_allow"));
+        })(), (() => {
+          var _el$72 = _tmpl$28();
+          _el$72.$$click = () => props.onReject?.(props.interaction.id);
+          insert(_el$72, () => t("interaction.skip"));
           createRenderEffect((_p$) => {
-            var _v$20 = t("interaction.always_allow_title"), _v$21 = t("interaction.always_allow_title");
-            _v$20 !== _p$.e && setAttribute(_el$67, "title", _p$.e = _v$20);
-            _v$21 !== _p$.t && setAttribute(_el$67, "aria-label", _p$.t = _v$21);
+            var _v$32 = t("interaction.skip_title"), _v$33 = t("interaction.skip_title");
+            _v$32 !== _p$.e && setAttribute(_el$72, "title", _p$.e = _v$32);
+            _v$33 !== _p$.t && setAttribute(_el$72, "aria-label", _p$.t = _v$33);
             return _p$;
           }, {
             e: void 0,
             t: void 0
           });
-          return _el$67;
-        })(), (() => {
+          return _el$72;
+        })()];
+      },
+      get children() {
+        return [(() => {
           var _el$68 = _tmpl$26();
-          _el$68.$$click = () => props.onResolve?.(props.interaction.id, "once");
-          insert(_el$68, () => t("interaction.allow_once"));
+          _el$68.$$click = () => props.onResolve?.(props.interaction.id, "always");
+          insert(_el$68, () => t("interaction.always_allow"));
           createRenderEffect((_p$) => {
-            var _v$22 = t("interaction.allow_once_title"), _v$23 = t("interaction.allow_once_title");
+            var _v$22 = t("interaction.always_allow_title"), _v$23 = t("interaction.always_allow_title");
             _v$22 !== _p$.e && setAttribute(_el$68, "title", _p$.e = _v$22);
             _v$23 !== _p$.t && setAttribute(_el$68, "aria-label", _p$.t = _v$23);
             return _p$;
@@ -7105,10 +7173,10 @@ function InteractionAlert(props) {
           return _el$68;
         })(), (() => {
           var _el$69 = _tmpl$27();
-          _el$69.$$click = () => props.onReject?.(props.interaction.id);
-          insert(_el$69, () => t("interaction.reject"));
+          _el$69.$$click = () => props.onResolve?.(props.interaction.id, "once");
+          insert(_el$69, () => t("interaction.allow_once"));
           createRenderEffect((_p$) => {
-            var _v$24 = t("interaction.reject_title"), _v$25 = t("interaction.reject_title");
+            var _v$24 = t("interaction.allow_once_title"), _v$25 = t("interaction.allow_once_title");
             _v$24 !== _p$.e && setAttribute(_el$69, "title", _p$.e = _v$24);
             _v$25 !== _p$.t && setAttribute(_el$69, "aria-label", _p$.t = _v$25);
             return _p$;
@@ -7117,19 +7185,33 @@ function InteractionAlert(props) {
             t: void 0
           });
           return _el$69;
+        })(), (() => {
+          var _el$70 = _tmpl$28();
+          _el$70.$$click = () => props.onReject?.(props.interaction.id);
+          insert(_el$70, () => t("interaction.reject"));
+          createRenderEffect((_p$) => {
+            var _v$26 = t("interaction.reject_title"), _v$27 = t("interaction.reject_title");
+            _v$26 !== _p$.e && setAttribute(_el$70, "title", _p$.e = _v$26);
+            _v$27 !== _p$.t && setAttribute(_el$70, "aria-label", _p$.t = _v$27);
+            return _p$;
+          }, {
+            e: void 0,
+            t: void 0
+          });
+          return _el$70;
         })()];
       }
     }));
     createRenderEffect((_p$) => {
-      var _v$26 = props.interaction.id, _v$27 = renderMarkdown$1(props.interaction.body || "");
-      _v$26 !== _p$.e && setAttribute(_el$62, "data-id", _p$.e = _v$26);
-      _v$27 !== _p$.t && (_el$65.innerHTML = _p$.t = _v$27);
+      var _v$28 = props.interaction.id, _v$29 = renderMarkdown$1(props.interaction.body || "");
+      _v$28 !== _p$.e && setAttribute(_el$63, "data-id", _p$.e = _v$28);
+      _v$29 !== _p$.t && (_el$66.innerHTML = _p$.t = _v$29);
       return _p$;
     }, {
       e: void 0,
       t: void 0
     });
-    return _el$62;
+    return _el$63;
   })();
 }
 function InteractionsList(props) {
@@ -7139,8 +7221,8 @@ function InteractionsList(props) {
       return pending().length > 0;
     },
     get children() {
-      var _el$72 = _tmpl$30();
-      insert(_el$72, createComponent(For, {
+      var _el$73 = _tmpl$31();
+      insert(_el$73, createComponent(For, {
         get each() {
           return pending();
         },
@@ -7154,7 +7236,7 @@ function InteractionsList(props) {
           }
         })
       }));
-      return _el$72;
+      return _el$73;
     }
   });
 }
@@ -7166,17 +7248,17 @@ const SECTION_ICONS = {
   delivery: `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 5.5L8 2.5l5.5 3v5L8 13.5l-5.5-3Z"/><polyline points="2.5,5.5 8,8.5 13.5,5.5"/><line x1="8" y1="8.5" x2="8" y2="13.5"/></svg>`};
 function SectionFrame(props) {
   return (() => {
-    var _el$76 = _tmpl$33(), _el$77 = _el$76.firstChild, _el$78 = _el$77.firstChild, _el$79 = _el$78.nextSibling, _el$80 = _el$79.nextSibling, _el$81 = _el$77.nextSibling;
-    insert(_el$79, () => props.title);
-    insert(_el$80, () => props.badgeText || "");
-    insert(_el$81, () => props.children);
+    var _el$77 = _tmpl$34(), _el$78 = _el$77.firstChild, _el$79 = _el$78.firstChild, _el$80 = _el$79.nextSibling, _el$81 = _el$80.nextSibling, _el$82 = _el$78.nextSibling;
+    insert(_el$80, () => props.title);
+    insert(_el$81, () => props.badgeText || "");
+    insert(_el$82, () => props.children);
     createRenderEffect((_p$) => {
-      var _v$32 = props.id, _v$33 = props.icon || "", _v$34 = props.badgeId, _v$35 = props.badgeTone, _v$36 = props.bodyId;
-      _v$32 !== _p$.e && setAttribute(_el$76, "id", _p$.e = _v$32);
-      _v$33 !== _p$.t && (_el$78.innerHTML = _p$.t = _v$33);
-      _v$34 !== _p$.a && setAttribute(_el$80, "id", _p$.a = _v$34);
-      _v$35 !== _p$.o && setAttribute(_el$80, "data-tone", _p$.o = _v$35);
-      _v$36 !== _p$.i && setAttribute(_el$81, "id", _p$.i = _v$36);
+      var _v$34 = props.id, _v$35 = props.icon || "", _v$36 = props.badgeId, _v$37 = props.badgeTone, _v$38 = props.bodyId;
+      _v$34 !== _p$.e && setAttribute(_el$77, "id", _p$.e = _v$34);
+      _v$35 !== _p$.t && (_el$79.innerHTML = _p$.t = _v$35);
+      _v$36 !== _p$.a && setAttribute(_el$81, "id", _p$.a = _v$36);
+      _v$37 !== _p$.o && setAttribute(_el$81, "data-tone", _p$.o = _v$37);
+      _v$38 !== _p$.i && setAttribute(_el$82, "id", _p$.i = _v$38);
       return _p$;
     }, {
       e: void 0,
@@ -7185,7 +7267,7 @@ function SectionFrame(props) {
       o: void 0,
       i: void 0
     });
-    return _el$76;
+    return _el$77;
   })();
 }
 function Board(props) {
@@ -7219,8 +7301,8 @@ function Board(props) {
     return passed === cards.length ? "good" : passed > 0 ? "warn" : "";
   });
   return [(() => {
-    var _el$82 = _tmpl$34();
-    insert(_el$82, createComponent(TaskActionsPanel, {
+    var _el$83 = _tmpl$35();
+    insert(_el$83, createComponent(TaskActionsPanel, {
       get overview() {
         return overview();
       },
@@ -7234,7 +7316,7 @@ function Board(props) {
         return props.onCancel;
       }
     }));
-    return _el$82;
+    return _el$83;
   })(), createComponent(SectionFrame, {
     id: "specSection",
     get title() {
@@ -7307,38 +7389,38 @@ function Board(props) {
       })];
     }
   }), createComponent(SectionFrame, {
-        id: "planSection",
-        get title() {
-          return t("section.plan");
+    id: "planSection",
+    get title() {
+      return t("section.plan");
+    },
+    get icon() {
+      return SECTION_ICONS.plan;
+    },
+    bodyId: "planBody",
+    badgeId: "planBadge",
+    get badgeText() {
+      return memo(() => runningGoalIDs().size > 0)() ? String(runningGoalIDs().size) : "";
+    },
+    get badgeTone() {
+      return runningGoalIDs().size > 0 ? "accent" : "";
+    },
+    get children() {
+      return createComponent(PlanPanel, {
+        get plan() {
+          return plan();
         },
-        get icon() {
-          return SECTION_ICONS.plan;
+        get preview() {
+          return boardStore.planPreview;
         },
-        bodyId: "planBody",
-        badgeId: "planBadge",
-        get badgeText() {
-          return memo(() => runningGoalIDs().size > 0)() ? String(runningGoalIDs().size) : "";
+        get goalCards() {
+          return goalsCards();
         },
-        get badgeTone() {
-          return runningGoalIDs().size > 0 ? "accent" : "";
-        },
-        get children() {
-          return createComponent(PlanPanel, {
-            get plan() {
-              return plan();
-            },
-            get preview() {
-              return boardStore.planPreview;
-            },
-            get goalCards() {
-              return goalsCards();
-            },
-            get runningGoalIDs() {
-              return runningGoalIDs();
-            }
-          });
+        get runningGoalIDs() {
+          return runningGoalIDs();
         }
-      }), createComponent(SectionFrame, {
+      });
+    }
+  }), createComponent(SectionFrame, {
     id: "criteriaSection",
     get title() {
       return t("section.evaluation");
@@ -7400,7 +7482,7 @@ function Board(props) {
 }
 delegateEvents(["click"]);
 
-var _tmpl$$c = /* @__PURE__ */ template(`<div class=chat-attachments id=chatAttachments>`), _tmpl$2$a = /* @__PURE__ */ template(`<svg width=16 height=16 viewBox="0 0 16 16"fill=none><rect x=4.25 y=4.25 width=7.5 height=7.5 rx=1.2 fill=currentColor>`), _tmpl$3$a = /* @__PURE__ */ template(`<form id=chatForm class=chat-input><input id=chatFileInput type=file multiple hidden><div class=chat-compose-row><textarea id=chatTextarea class=chat-textarea rows=2></textarea><div class=chat-compose-actions><div class=chat-icon-col><button type=button id=btnChatAttach class=chat-attach-btn><svg width=16 height=16 viewBox="0 0 16 16"fill=none aria-hidden=true><path d="M13.5 7.5l-5.8 5.8a3.2 3.2 0 01-4.5-4.5L9 3a2 2 0 012.8 2.8L6 11.6a.8.8 0 01-1.1-1.1L10.5 5"stroke=currentColor stroke-width=1.2 stroke-linecap=round stroke-linejoin=round></path></svg></button><button type=button class=chat-cancel-btn><svg width=16 height=16 viewBox="0 0 16 16"fill=none aria-hidden=true><circle cx=8 cy=8 r=6.5 stroke=currentColor stroke-width=1.2></circle><path d="M5.5 5.5l5 5M10.5 5.5l-5 5"stroke=currentColor stroke-width=1.2 stroke-linecap=round></path></svg></button></div><button><span class=chat-send-icon aria-hidden=true></span><span class=chat-send-label></span></button></div></div><div class=chat-compose-meta><div class=chat-compose-meta-left><span class=chat-version id=chatVersion></span><span class=chat-author><a href=https://github.com/yangheng95/argus target=_blank rel=noopener>@yangheng95</a></span></div><div class=chat-compose-tip>`), _tmpl$4$a = /* @__PURE__ */ template(`<img class=chat-attachment-thumb>`), _tmpl$5$a = /* @__PURE__ */ template(`<div class=chat-attachment-item><span class=chat-attachment-name></span><button type=button class=chat-attachment-remove aria-label=Remove>&times;`), _tmpl$6$9 = /* @__PURE__ */ template(`<span class=chat-attachment-icon>`), _tmpl$7$7 = /* @__PURE__ */ template(`<svg width=16 height=16 viewBox="0 0 16 16"fill=none><path d="M2 8l10-5-3 5 3 5z"fill=currentColor>`);
+var _tmpl$$d = /* @__PURE__ */ template(`<div class=chat-attachments id=chatAttachments>`), _tmpl$2$b = /* @__PURE__ */ template(`<svg width=16 height=16 viewBox="0 0 16 16"fill=none><rect x=4.25 y=4.25 width=7.5 height=7.5 rx=1.2 fill=currentColor>`), _tmpl$3$b = /* @__PURE__ */ template(`<form id=chatForm class=chat-input><input id=chatFileInput type=file multiple hidden><div class=chat-compose-row><textarea id=chatTextarea class=chat-textarea rows=2></textarea><div class=chat-compose-actions><div class=chat-icon-col><button type=button id=btnChatAttach class=chat-attach-btn><svg width=16 height=16 viewBox="0 0 16 16"fill=none aria-hidden=true><path d="M13.5 7.5l-5.8 5.8a3.2 3.2 0 01-4.5-4.5L9 3a2 2 0 012.8 2.8L6 11.6a.8.8 0 01-1.1-1.1L10.5 5"stroke=currentColor stroke-width=1.2 stroke-linecap=round stroke-linejoin=round></path></svg></button><button type=button class=chat-cancel-btn><svg width=16 height=16 viewBox="0 0 16 16"fill=none aria-hidden=true><circle cx=8 cy=8 r=6.5 stroke=currentColor stroke-width=1.2></circle><path d="M5.5 5.5l5 5M10.5 5.5l-5 5"stroke=currentColor stroke-width=1.2 stroke-linecap=round></path></svg></button></div><button><span class=chat-send-icon aria-hidden=true></span><span class=chat-send-label></span></button></div></div><div class=chat-compose-meta><div class=chat-compose-meta-left><span class=chat-version id=chatVersion></span><span class=chat-author><a href=https://github.com/yangheng95/argus target=_blank rel=noopener>@yangheng95</a></span></div><div class=chat-compose-tip>`), _tmpl$4$b = /* @__PURE__ */ template(`<img class=chat-attachment-thumb>`), _tmpl$5$b = /* @__PURE__ */ template(`<div class=chat-attachment-item><span class=chat-attachment-name></span><button type=button class=chat-attachment-remove aria-label=Remove>&times;`), _tmpl$6$a = /* @__PURE__ */ template(`<span class=chat-attachment-icon>`), _tmpl$7$8 = /* @__PURE__ */ template(`<svg width=16 height=16 viewBox="0 0 16 16"fill=none><path d="M2 8l10-5-3 5 3 5z"fill=currentColor>`);
 const MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024;
 const FILE_ACCEPT = ["image/*", ".pdf", ".txt", ".md", ".json", ".csv", ".xml", ".yaml", ".yml", ".log", ".ts", ".js", ".py", ".go", ".rs", ".c", ".cpp", ".h", ".java", ".rb", ".sh", ".bat", ".ps1", ".html", ".css", ".sql", ".toml"].join(",");
 function fileToDataUrl(file) {
@@ -7505,7 +7587,7 @@ function ChatComposer(props) {
   const sendAriaLabel = () => props.busy ? t("chat.stop_label") : t("chat.send_label");
   const sendLabel = () => props.busy ? t("chat.stop_label") : t("chat.send_label");
   return (() => {
-    var _el$ = _tmpl$3$a(), _el$3 = _el$.firstChild, _el$4 = _el$3.nextSibling, _el$5 = _el$4.firstChild, _el$6 = _el$5.nextSibling, _el$7 = _el$6.firstChild, _el$8 = _el$7.firstChild, _el$9 = _el$8.nextSibling, _el$0 = _el$7.nextSibling, _el$1 = _el$0.firstChild, _el$11 = _el$1.nextSibling, _el$12 = _el$4.nextSibling, _el$13 = _el$12.firstChild, _el$14 = _el$13.nextSibling;
+    var _el$ = _tmpl$3$b(), _el$3 = _el$.firstChild, _el$4 = _el$3.nextSibling, _el$5 = _el$4.firstChild, _el$6 = _el$5.nextSibling, _el$7 = _el$6.firstChild, _el$8 = _el$7.firstChild, _el$9 = _el$8.nextSibling, _el$0 = _el$7.nextSibling, _el$1 = _el$0.firstChild, _el$11 = _el$1.nextSibling, _el$12 = _el$4.nextSibling, _el$13 = _el$12.firstChild, _el$14 = _el$13.nextSibling;
     _el$.addEventListener("drop", handleDrop);
     _el$.addEventListener("dragleave", handleDragLeave);
     _el$.addEventListener("dragover", handleDragOver);
@@ -7517,26 +7599,26 @@ function ChatComposer(props) {
         return attachments().length > 0;
       },
       get children() {
-        var _el$2 = _tmpl$$c();
+        var _el$2 = _tmpl$$d();
         insert(_el$2, createComponent(For, {
           get each() {
             return attachments();
           },
           children: (att, index) => (() => {
-            var _el$15 = _tmpl$5$a(), _el$17 = _el$15.firstChild, _el$18 = _el$17.nextSibling;
+            var _el$15 = _tmpl$5$b(), _el$17 = _el$15.firstChild, _el$18 = _el$17.nextSibling;
             insert(_el$15, createComponent(Show, {
               get when() {
                 return att.mime.startsWith("image/");
               },
               get fallback() {
                 return (() => {
-                  var _el$19 = _tmpl$6$9();
+                  var _el$19 = _tmpl$6$a();
                   insert(_el$19, () => att.filename?.split(".").pop()?.toUpperCase() || "FILE");
                   return _el$19;
                 })();
               },
               get children() {
-                var _el$16 = _tmpl$4$a();
+                var _el$16 = _tmpl$4$b();
                 createRenderEffect((_p$) => {
                   var _v$14 = att.url, _v$15 = att.filename;
                   _v$14 !== _p$.e && setAttribute(_el$16, "src", _p$.e = _v$14);
@@ -7583,10 +7665,10 @@ function ChatComposer(props) {
         return props.busy;
       },
       get fallback() {
-        return _tmpl$7$7();
+        return _tmpl$7$8();
       },
       get children() {
-        return _tmpl$2$a();
+        return _tmpl$2$b();
       }
     }));
     insert(_el$11, sendLabel);
@@ -7867,7 +7949,7 @@ function bootstrapOverlaySettings(input = settingsStore) {
   };
 }
 
-var _tmpl$$b = /* @__PURE__ */ template(`<button type=button id=btnPin class="btn btn-ghost icon-btn titlebar-btn"><svg width=12 height=12 viewBox="0 0 16 16"fill=none aria-hidden=true><path d="M9.5 2L14 6.5l-4 1.5-4 4-1.5-1.5 4-4L7 2.5 9.5 2z"stroke=currentColor stroke-width=1.3 stroke-linejoin=round></path><line x1=2 y1=14 x2=6 y2=10 stroke=currentColor stroke-width=1.3 stroke-linecap=round>`), _tmpl$2$9 = /* @__PURE__ */ template(`<button type=button id=btnMinimize class="btn btn-ghost icon-btn titlebar-btn"><svg width=11 height=11 viewBox="0 0 11 11"fill=none aria-hidden=true><line x1=1 y1=5.5 x2=10 y2=5.5 stroke=currentColor stroke-width=1.3 stroke-linecap=round>`), _tmpl$3$9 = /* @__PURE__ */ template(`<button type=button id=btnMaximize class="btn btn-ghost icon-btn titlebar-btn">`), _tmpl$4$9 = /* @__PURE__ */ template(`<button type=button id=btnClose class="btn btn-ghost icon-btn titlebar-btn titlebar-btn-close"><svg width=11 height=11 viewBox="0 0 11 11"fill=none aria-hidden=true><line x1=1 y1=1 x2=10 y2=10 stroke=currentColor stroke-width=1.3 stroke-linecap=round></line><line x1=10 y1=1 x2=1 y2=10 stroke=currentColor stroke-width=1.3 stroke-linecap=round>`), _tmpl$5$9 = /* @__PURE__ */ template(`<div class=window-controls data-no-drag=true>`);
+var _tmpl$$c = /* @__PURE__ */ template(`<button type=button id=btnPin class="btn btn-ghost icon-btn titlebar-btn"><svg width=12 height=12 viewBox="0 0 16 16"fill=none aria-hidden=true><path d="M9.5 2L14 6.5l-4 1.5-4 4-1.5-1.5 4-4L7 2.5 9.5 2z"stroke=currentColor stroke-width=1.3 stroke-linejoin=round></path><line x1=2 y1=14 x2=6 y2=10 stroke=currentColor stroke-width=1.3 stroke-linecap=round>`), _tmpl$2$a = /* @__PURE__ */ template(`<button type=button id=btnMinimize class="btn btn-ghost icon-btn titlebar-btn"><svg width=11 height=11 viewBox="0 0 11 11"fill=none aria-hidden=true><line x1=1 y1=5.5 x2=10 y2=5.5 stroke=currentColor stroke-width=1.3 stroke-linecap=round>`), _tmpl$3$a = /* @__PURE__ */ template(`<button type=button id=btnMaximize class="btn btn-ghost icon-btn titlebar-btn">`), _tmpl$4$a = /* @__PURE__ */ template(`<button type=button id=btnClose class="btn btn-ghost icon-btn titlebar-btn titlebar-btn-close"><svg width=11 height=11 viewBox="0 0 11 11"fill=none aria-hidden=true><line x1=1 y1=1 x2=10 y2=10 stroke=currentColor stroke-width=1.3 stroke-linecap=round></line><line x1=10 y1=1 x2=1 y2=10 stroke=currentColor stroke-width=1.3 stroke-linecap=round>`), _tmpl$5$a = /* @__PURE__ */ template(`<div class=window-controls data-no-drag=true>`);
 const CLOSE_HINT_KEY = "oc_close_hint_seen";
 async function currentTauriWindow$3() {
   const getCurrent = window.__TAURI__?.window?.getCurrentWindow;
@@ -7982,13 +8064,13 @@ function WindowControls() {
   const pinLabel = () => settingsStore.alwaysOnTop ? t("titlebar.pin.unpin") : t("titlebar.pin.pin");
   const maxLabel = () => maximizeLabel(isMaximized());
   return (() => {
-    var _el$ = _tmpl$5$9();
+    var _el$ = _tmpl$5$a();
     insert(_el$, createComponent(Show, {
       get when() {
         return tauriWin() !== null;
       },
       get children() {
-        var _el$2 = _tmpl$$b();
+        var _el$2 = _tmpl$$c();
         _el$2.$$click = () => void handlePin();
         createRenderEffect((_p$) => {
           var _v$ = settingsStore.alwaysOnTop ? "true" : "false", _v$2 = pinLabel(), _v$3 = pinLabel();
@@ -8009,7 +8091,7 @@ function WindowControls() {
         return tauriWin() !== null;
       },
       get children() {
-        var _el$3 = _tmpl$2$9();
+        var _el$3 = _tmpl$2$a();
         _el$3.$$click = handleMinimize;
         createRenderEffect((_p$) => {
           var _v$4 = t("titlebar.minimize"), _v$5 = t("titlebar.minimize");
@@ -8028,7 +8110,7 @@ function WindowControls() {
         return tauriWin() !== null;
       },
       get children() {
-        var _el$4 = _tmpl$3$9();
+        var _el$4 = _tmpl$3$a();
         _el$4.$$click = () => void handleMaximize();
         createRenderEffect((_p$) => {
           var _v$6 = isMaximized() ? "true" : "false", _v$7 = maxLabel(), _v$8 = maxLabel(), _v$9 = maximizeIcon(isMaximized());
@@ -8051,7 +8133,7 @@ function WindowControls() {
         return tauriWin() !== null;
       },
       get children() {
-        var _el$5 = _tmpl$4$9();
+        var _el$5 = _tmpl$4$a();
         _el$5.$$click = () => void handleClose();
         createRenderEffect((_p$) => {
           var _v$0 = t("titlebar.close"), _v$1 = t("titlebar.close");
@@ -8201,7 +8283,7 @@ async function applyWindowOpacity(opacity) {
   return ok;
 }
 
-var _tmpl$$a = /* @__PURE__ */ template(`<div class=titlebar-menu-wrap data-no-drag=true><button type=button id=btnTitlebarMenu class=titlebar-btn aria-controls=titlebarMenu aria-haspopup=true><svg width=14 height=14 viewBox="0 0 16 16"fill=none aria-hidden=true><circle cx=3.5 cy=8 r=1.2 fill=currentColor></circle><circle cx=8 cy=8 r=1.2 fill=currentColor></circle><circle cx=12.5 cy=8 r=1.2 fill=currentColor></circle></svg></button><div id=titlebarMenu class=titlebar-menu-panel data-no-drag=true><button type=button id=btnLocale class=titlebar-menu-item><span class=titlebar-menu-icon aria-hidden=true>A</span><span class=titlebar-menu-copy><span class=titlebar-menu-title></span><span class=titlebar-menu-meta id=btnLocaleLabel></span></span></button><button type=button id=btnTheme class=titlebar-menu-item><span class=titlebar-menu-icon aria-hidden=true><svg width=14 height=14 viewBox="0 0 16 16"fill=none><circle cx=8 cy=8 r=3 stroke=currentColor stroke-width=1.2></circle><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.1 3.1l1.4 1.4M11.5 11.5l1.4 1.4M3.1 12.9l1.4-1.4M11.5 4.5l1.4-1.4"stroke=currentColor stroke-width=1.2 stroke-linecap=round></path></svg></span><span class=titlebar-menu-copy><span class=titlebar-menu-title></span><span class=titlebar-menu-meta id=btnThemeValue></span></span></button><button type=button id=btnSettings class=titlebar-menu-item><span class=titlebar-menu-icon aria-hidden=true><svg width=14 height=14 viewBox="0 0 16 16"fill=none><path d="M3 4h10M3 8h10M3 12h10"stroke=currentColor stroke-width=1.2 stroke-linecap=round></path><circle cx=6 cy=4 r=1.6 fill=currentColor></circle><circle cx=10 cy=8 r=1.6 fill=currentColor></circle><circle cx=7.5 cy=12 r=1.6 fill=currentColor></circle></svg></span><span class=titlebar-menu-copy><span class=titlebar-menu-title></span><span class=titlebar-menu-meta></span></span></button><button type=button id=btnLog class=titlebar-menu-item><span class=titlebar-menu-icon aria-hidden=true><svg width=14 height=14 viewBox="0 0 16 16"fill=none><path d="M3 3h10M3 6.5h8M3 10h6M3 13.5h9"stroke=currentColor stroke-width=1.2 stroke-linecap=round></path></svg></span><span class=titlebar-menu-copy><span class=titlebar-menu-title></span><span class=titlebar-menu-meta></span></span></button><button type=button id=btnPin class=titlebar-menu-item><span class=titlebar-menu-icon aria-hidden=true><svg width=14 height=14 viewBox="0 0 16 16"fill=none><path d="M8 1v6M5.5 7h5l-.5 4H6l-.5-4z"stroke=currentColor stroke-width=1.2 stroke-linecap=round stroke-linejoin=round></path><path d="M8 11v4"stroke=currentColor stroke-width=1.2 stroke-linecap=round></path></svg></span><span class=titlebar-menu-copy><span class=titlebar-menu-title></span><span class=titlebar-menu-meta id=btnPinValue></span></span></button><div class=titlebar-menu-divider aria-hidden=true></div><label class=titlebar-menu-toggle for=chkUnattended><span class=titlebar-menu-copy><span class=titlebar-menu-title></span><span class=titlebar-menu-meta></span></span><input class=titlebar-menu-check id=chkUnattended type=checkbox></label><label class=titlebar-menu-toggle for=chkAutoPermission><span class=titlebar-menu-copy><span class=titlebar-menu-title></span><span class=titlebar-menu-meta></span></span><input class=titlebar-menu-check id=chkAutoPermission type=checkbox></label><label class=titlebar-menu-toggle for=chkAutoQuestion><span class=titlebar-menu-copy><span class=titlebar-menu-title></span><span class=titlebar-menu-meta></span></span><input class=titlebar-menu-check id=chkAutoQuestion type=checkbox></label><label class=titlebar-menu-toggle for=chkShowTranscriptDetails><span class=titlebar-menu-copy><span class=titlebar-menu-title></span><span class=titlebar-menu-meta></span></span><input class=titlebar-menu-check id=chkShowTranscriptDetails type=checkbox></label><label class=titlebar-menu-range for=opacityRange><span class=titlebar-menu-copy><span class=titlebar-menu-title></span><span class=titlebar-menu-meta></span></span><span class=titlebar-menu-range-control><input class=titlebar-menu-slider id=opacityRange type=range min=50 max=100 step=5><span class=titlebar-menu-value id=opacityValue>%`);
+var _tmpl$$b = /* @__PURE__ */ template(`<div class=titlebar-menu-wrap data-no-drag=true><button type=button id=btnTitlebarMenu class=titlebar-btn aria-controls=titlebarMenu aria-haspopup=true><svg width=14 height=14 viewBox="0 0 16 16"fill=none aria-hidden=true><circle cx=3.5 cy=8 r=1.2 fill=currentColor></circle><circle cx=8 cy=8 r=1.2 fill=currentColor></circle><circle cx=12.5 cy=8 r=1.2 fill=currentColor></circle></svg></button><div id=titlebarMenu class=titlebar-menu-panel data-no-drag=true><button type=button id=btnLocale class=titlebar-menu-item><span class=titlebar-menu-icon aria-hidden=true>A</span><span class=titlebar-menu-copy><span class=titlebar-menu-title></span><span class=titlebar-menu-meta id=btnLocaleLabel></span></span></button><button type=button id=btnTheme class=titlebar-menu-item><span class=titlebar-menu-icon aria-hidden=true><svg width=14 height=14 viewBox="0 0 16 16"fill=none><circle cx=8 cy=8 r=3 stroke=currentColor stroke-width=1.2></circle><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.1 3.1l1.4 1.4M11.5 11.5l1.4 1.4M3.1 12.9l1.4-1.4M11.5 4.5l1.4-1.4"stroke=currentColor stroke-width=1.2 stroke-linecap=round></path></svg></span><span class=titlebar-menu-copy><span class=titlebar-menu-title></span><span class=titlebar-menu-meta id=btnThemeValue></span></span></button><button type=button id=btnSettings class=titlebar-menu-item><span class=titlebar-menu-icon aria-hidden=true><svg width=14 height=14 viewBox="0 0 16 16"fill=none><path d="M3 4h10M3 8h10M3 12h10"stroke=currentColor stroke-width=1.2 stroke-linecap=round></path><circle cx=6 cy=4 r=1.6 fill=currentColor></circle><circle cx=10 cy=8 r=1.6 fill=currentColor></circle><circle cx=7.5 cy=12 r=1.6 fill=currentColor></circle></svg></span><span class=titlebar-menu-copy><span class=titlebar-menu-title></span><span class=titlebar-menu-meta></span></span></button><button type=button id=btnLog class=titlebar-menu-item><span class=titlebar-menu-icon aria-hidden=true><svg width=14 height=14 viewBox="0 0 16 16"fill=none><path d="M3 3h10M3 6.5h8M3 10h6M3 13.5h9"stroke=currentColor stroke-width=1.2 stroke-linecap=round></path></svg></span><span class=titlebar-menu-copy><span class=titlebar-menu-title></span><span class=titlebar-menu-meta></span></span></button><button type=button id=btnPin class=titlebar-menu-item><span class=titlebar-menu-icon aria-hidden=true><svg width=14 height=14 viewBox="0 0 16 16"fill=none><path d="M8 1v6M5.5 7h5l-.5 4H6l-.5-4z"stroke=currentColor stroke-width=1.2 stroke-linecap=round stroke-linejoin=round></path><path d="M8 11v4"stroke=currentColor stroke-width=1.2 stroke-linecap=round></path></svg></span><span class=titlebar-menu-copy><span class=titlebar-menu-title></span><span class=titlebar-menu-meta id=btnPinValue></span></span></button><div class=titlebar-menu-divider aria-hidden=true></div><label class=titlebar-menu-toggle for=chkUnattended><span class=titlebar-menu-copy><span class=titlebar-menu-title></span><span class=titlebar-menu-meta></span></span><input class=titlebar-menu-check id=chkUnattended type=checkbox></label><label class=titlebar-menu-toggle for=chkAutoPermission><span class=titlebar-menu-copy><span class=titlebar-menu-title></span><span class=titlebar-menu-meta></span></span><input class=titlebar-menu-check id=chkAutoPermission type=checkbox></label><label class=titlebar-menu-toggle for=chkAutoQuestion><span class=titlebar-menu-copy><span class=titlebar-menu-title></span><span class=titlebar-menu-meta></span></span><input class=titlebar-menu-check id=chkAutoQuestion type=checkbox></label><label class=titlebar-menu-toggle for=chkShowTranscriptDetails><span class=titlebar-menu-copy><span class=titlebar-menu-title></span><span class=titlebar-menu-meta></span></span><input class=titlebar-menu-check id=chkShowTranscriptDetails type=checkbox></label><label class=titlebar-menu-range for=opacityRange><span class=titlebar-menu-copy><span class=titlebar-menu-title></span><span class=titlebar-menu-meta></span></span><span class=titlebar-menu-range-control><input class=titlebar-menu-slider id=opacityRange type=range min=50 max=100 step=5><span class=titlebar-menu-value id=opacityValue>%`);
 async function currentTauriWindow$1() {
   const getCurrent = window.__TAURI__?.window?.getCurrentWindow;
   if (typeof getCurrent === "function") {
@@ -8346,7 +8428,7 @@ function TitlebarMenu(props) {
     });
   });
   return (() => {
-    var _el$ = _tmpl$$a(), _el$2 = _el$.firstChild, _el$3 = _el$2.nextSibling, _el$4 = _el$3.firstChild, _el$5 = _el$4.firstChild, _el$6 = _el$5.nextSibling, _el$7 = _el$6.firstChild, _el$8 = _el$7.nextSibling, _el$9 = _el$4.nextSibling, _el$0 = _el$9.firstChild, _el$1 = _el$0.nextSibling, _el$10 = _el$1.firstChild, _el$11 = _el$10.nextSibling, _el$12 = _el$9.nextSibling, _el$13 = _el$12.firstChild, _el$14 = _el$13.nextSibling, _el$15 = _el$14.firstChild, _el$16 = _el$15.nextSibling, _el$17 = _el$12.nextSibling, _el$18 = _el$17.firstChild, _el$19 = _el$18.nextSibling, _el$20 = _el$19.firstChild, _el$21 = _el$20.nextSibling, _el$22 = _el$17.nextSibling, _el$23 = _el$22.firstChild, _el$24 = _el$23.nextSibling, _el$25 = _el$24.firstChild, _el$26 = _el$25.nextSibling, _el$27 = _el$22.nextSibling, _el$28 = _el$27.nextSibling, _el$29 = _el$28.firstChild, _el$30 = _el$29.firstChild, _el$31 = _el$30.nextSibling, _el$32 = _el$29.nextSibling, _el$33 = _el$28.nextSibling, _el$34 = _el$33.firstChild, _el$35 = _el$34.firstChild, _el$36 = _el$35.nextSibling, _el$37 = _el$34.nextSibling, _el$38 = _el$33.nextSibling, _el$39 = _el$38.firstChild, _el$40 = _el$39.firstChild, _el$41 = _el$40.nextSibling, _el$42 = _el$39.nextSibling, _el$43 = _el$38.nextSibling, _el$44 = _el$43.firstChild, _el$45 = _el$44.firstChild, _el$46 = _el$45.nextSibling, _el$47 = _el$44.nextSibling, _el$48 = _el$43.nextSibling, _el$49 = _el$48.firstChild, _el$50 = _el$49.firstChild, _el$51 = _el$50.nextSibling, _el$52 = _el$49.nextSibling, _el$53 = _el$52.firstChild, _el$54 = _el$53.nextSibling, _el$55 = _el$54.firstChild;
+    var _el$ = _tmpl$$b(), _el$2 = _el$.firstChild, _el$3 = _el$2.nextSibling, _el$4 = _el$3.firstChild, _el$5 = _el$4.firstChild, _el$6 = _el$5.nextSibling, _el$7 = _el$6.firstChild, _el$8 = _el$7.nextSibling, _el$9 = _el$4.nextSibling, _el$0 = _el$9.firstChild, _el$1 = _el$0.nextSibling, _el$10 = _el$1.firstChild, _el$11 = _el$10.nextSibling, _el$12 = _el$9.nextSibling, _el$13 = _el$12.firstChild, _el$14 = _el$13.nextSibling, _el$15 = _el$14.firstChild, _el$16 = _el$15.nextSibling, _el$17 = _el$12.nextSibling, _el$18 = _el$17.firstChild, _el$19 = _el$18.nextSibling, _el$20 = _el$19.firstChild, _el$21 = _el$20.nextSibling, _el$22 = _el$17.nextSibling, _el$23 = _el$22.firstChild, _el$24 = _el$23.nextSibling, _el$25 = _el$24.firstChild, _el$26 = _el$25.nextSibling, _el$27 = _el$22.nextSibling, _el$28 = _el$27.nextSibling, _el$29 = _el$28.firstChild, _el$30 = _el$29.firstChild, _el$31 = _el$30.nextSibling, _el$32 = _el$29.nextSibling, _el$33 = _el$28.nextSibling, _el$34 = _el$33.firstChild, _el$35 = _el$34.firstChild, _el$36 = _el$35.nextSibling, _el$37 = _el$34.nextSibling, _el$38 = _el$33.nextSibling, _el$39 = _el$38.firstChild, _el$40 = _el$39.firstChild, _el$41 = _el$40.nextSibling, _el$42 = _el$39.nextSibling, _el$43 = _el$38.nextSibling, _el$44 = _el$43.firstChild, _el$45 = _el$44.firstChild, _el$46 = _el$45.nextSibling, _el$47 = _el$44.nextSibling, _el$48 = _el$43.nextSibling, _el$49 = _el$48.firstChild, _el$50 = _el$49.firstChild, _el$51 = _el$50.nextSibling, _el$52 = _el$49.nextSibling, _el$53 = _el$52.firstChild, _el$54 = _el$53.nextSibling, _el$55 = _el$54.firstChild;
     _el$2.$$click = (event) => {
       event.preventDefault();
       event.stopPropagation();
@@ -8433,7 +8515,7 @@ function TitlebarMenu(props) {
 }
 delegateEvents(["click", "input"]);
 
-var _tmpl$$9 = /* @__PURE__ */ template(`<span id=connBadge class=conn-badge aria-live=polite>`);
+var _tmpl$$a = /* @__PURE__ */ template(`<span id=connBadge class=conn-badge aria-live=polite>`);
 function statusLabel(status) {
   if (status === "online") return t("titlebar.connection.online");
   if (status === "connecting") return t("titlebar.connection.connecting");
@@ -8467,7 +8549,7 @@ function ConnectionBadge(props) {
   });
   const label = createMemo(() => statusLabel(status()));
   return (() => {
-    var _el$ = _tmpl$$9();
+    var _el$ = _tmpl$$a();
     _el$.$$dblclick = () => {
       void handleRestart();
     };
@@ -8552,11 +8634,20 @@ function routeSSEEvent(event) {
 }
 function executorEventKind(progressType) {
   const t = String(progressType || "").trim().toLowerCase();
+  if (!t) return "event";
   if (t === "message_delta" || t === "reasoning_delta") return t;
   if (t === "tool_call" || t === "tool_delta" || t === "tool_result") return t;
   if (t === "status") return "status";
   if (t === "git_checkpoint") return "git_checkpoint";
-  return t || "event";
+  if (t.includes("tool")) return t.includes("result") ? "tool_result" : "tool_call";
+  if (t.includes("reason")) return "reasoning_delta";
+  if (t.includes("approval") || t === "permission.asked") return "approval_request";
+  if (t.includes("input")) return "input_request";
+  if (t.includes("mcp")) return "mcp";
+  if (t.includes("command")) return "command";
+  if (t.includes("error")) return "error";
+  if (t.includes("done") || t.includes("completed")) return "done";
+  return t;
 }
 const BOARD_EVENT_DEBOUNCE = 150;
 let tasksKickTimer$1 = null;
@@ -9777,7 +9868,7 @@ function renderMeta() {
   const dirNode = document.getElementById("taskDir");
   const workspaceNode = document.getElementById("taskWorkspaceDir");
   const gitNode = document.getElementById("taskGit");
-  const dir = settingsStore.directory || "";
+  const dir = settingsStore.directory || boardStore.board?.task?.directory || "";
   const vcs = boardStore.vcs;
   if (dirNode) {
     dirNode.innerHTML = pathBreadcrumb(dir);
@@ -9840,7 +9931,7 @@ const meta = /*#__PURE__*/Object.freeze(/*#__PURE__*/Object.defineProperty({
   renderMeta
 }, Symbol.toStringTag, { value: 'Module' }));
 
-var _tmpl$$8 = /* @__PURE__ */ template(`<div class=diff-lines>`), _tmpl$2$8 = /* @__PURE__ */ template(`<div class=diff-empty><p class=empty-hint>`), _tmpl$3$8 = /* @__PURE__ */ template(`<div class=diff-row><div class=diff-gutter></div><div class=diff-num></div><div class=diff-num></div><div class=diff-code>`), _tmpl$4$8 = /* @__PURE__ */ template(`<div class=diff-row data-kind=skip><div class=diff-gutter>...</div><div class=diff-num></div><div class=diff-num></div><div class=diff-code>`), _tmpl$5$8 = /* @__PURE__ */ template(`<div class=diff-dialog-header><span class=diff-dialog-title></span><span class=diff-dialog-meta><span class=change-status></span><span class=diff-dialog-stat data-tone=add>+</span><span class=diff-dialog-stat data-tone=del>-</span></span><button type=button class=diff-dialog-close>×`), _tmpl$6$8 = /* @__PURE__ */ template(`<div class=diff-dialog-body>`), _tmpl$7$6 = /* @__PURE__ */ template(`<dialog class=diff-dialog>`), _tmpl$8$4 = /* @__PURE__ */ template(`<div class=changes-summary><span></span><span class=changes-total><span data-tone=add>+</span><span data-tone=del>-`), _tmpl$9$4 = /* @__PURE__ */ template(`<div class=changes-list>`), _tmpl$0$2 = /* @__PURE__ */ template(`<div class=changes-panel>`), _tmpl$1$1 = /* @__PURE__ */ template(`<p class=empty-hint>`), _tmpl$10$1 = /* @__PURE__ */ template(`<button type=button class=change-row><span class=change-main><span class=change-path></span><span class=change-subline></span></span><span class=change-meta><span class=change-status></span><span class=diff-dialog-stat data-tone=add>+</span><span class=diff-dialog-stat data-tone=del>-`);
+var _tmpl$$9 = /* @__PURE__ */ template(`<div class=diff-lines>`), _tmpl$2$9 = /* @__PURE__ */ template(`<div class=diff-empty><p class=empty-hint>`), _tmpl$3$9 = /* @__PURE__ */ template(`<div class=diff-row><div class=diff-gutter></div><div class=diff-num></div><div class=diff-num></div><div class=diff-code>`), _tmpl$4$9 = /* @__PURE__ */ template(`<div class=diff-row data-kind=skip><div class=diff-gutter>...</div><div class=diff-num></div><div class=diff-num></div><div class=diff-code>`), _tmpl$5$9 = /* @__PURE__ */ template(`<div class=diff-dialog-header><span class=diff-dialog-title></span><span class=diff-dialog-meta><span class=change-status></span><span class=diff-dialog-stat data-tone=add>+</span><span class=diff-dialog-stat data-tone=del>-</span></span><button type=button class=diff-dialog-close>×`), _tmpl$6$9 = /* @__PURE__ */ template(`<div class=diff-dialog-body>`), _tmpl$7$7 = /* @__PURE__ */ template(`<dialog class=diff-dialog>`), _tmpl$8$5 = /* @__PURE__ */ template(`<div class=changes-summary><span></span><span class=changes-total><span data-tone=add>+</span><span data-tone=del>-`), _tmpl$9$4 = /* @__PURE__ */ template(`<div class=changes-list>`), _tmpl$0$2 = /* @__PURE__ */ template(`<div class=changes-panel>`), _tmpl$1$1 = /* @__PURE__ */ template(`<p class=empty-hint>`), _tmpl$10$1 = /* @__PURE__ */ template(`<button type=button class=change-row><span class=change-main><span class=change-path></span><span class=change-subline></span></span><span class=change-meta><span class=change-status></span><span class=diff-dialog-stat data-tone=add>+</span><span class=diff-dialog-stat data-tone=del>-`);
 function splitDiffLines(text) {
   const value = String(text || "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
   if (!value) return [];
@@ -10016,13 +10107,13 @@ function DiffPreview(props) {
     },
     get fallback() {
       return (() => {
-        var _el$2 = _tmpl$2$8(), _el$3 = _el$2.firstChild;
+        var _el$2 = _tmpl$2$9(), _el$3 = _el$2.firstChild;
         insert(_el$3, () => t("diff.no_preview"));
         return _el$2;
       })();
     },
     get children() {
-      var _el$ = _tmpl$$8();
+      var _el$ = _tmpl$$9();
       insert(_el$, createComponent(For, {
         get each() {
           return ops();
@@ -10033,13 +10124,13 @@ function DiffPreview(props) {
           },
           get fallback() {
             return (() => {
-              var _el$9 = _tmpl$4$8(), _el$0 = _el$9.firstChild, _el$1 = _el$0.nextSibling, _el$10 = _el$1.nextSibling, _el$11 = _el$10.nextSibling;
+              var _el$9 = _tmpl$4$9(), _el$0 = _el$9.firstChild, _el$1 = _el$0.nextSibling, _el$10 = _el$1.nextSibling, _el$11 = _el$10.nextSibling;
               insert(_el$11, () => tc("diff.unchanged_hidden", line.count ?? 0));
               return _el$9;
             })();
           },
           get children() {
-            var _el$4 = _tmpl$3$8(), _el$5 = _el$4.firstChild, _el$6 = _el$5.nextSibling, _el$7 = _el$6.nextSibling, _el$8 = _el$7.nextSibling;
+            var _el$4 = _tmpl$3$9(), _el$5 = _el$4.firstChild, _el$6 = _el$5.nextSibling, _el$7 = _el$6.nextSibling, _el$8 = _el$7.nextSibling;
             insert(_el$5, (() => {
               var _c$ = memo(() => line.kind === "add");
               return () => _c$() ? "+" : line.kind === "del" ? "-" : " ";
@@ -10071,7 +10162,7 @@ function DiffDialog(props) {
     props.onClose();
   }
   return (() => {
-    var _el$12 = _tmpl$7$6();
+    var _el$12 = _tmpl$7$7();
     _el$12.$$click = (e) => {
       if (e.target === dialogRef) close();
     };
@@ -10084,7 +10175,7 @@ function DiffDialog(props) {
       },
       get children() {
         return [(() => {
-          var _el$13 = _tmpl$5$8(), _el$14 = _el$13.firstChild, _el$15 = _el$14.nextSibling, _el$16 = _el$15.firstChild, _el$17 = _el$16.nextSibling; _el$17.firstChild; var _el$19 = _el$17.nextSibling; _el$19.firstChild; var _el$21 = _el$15.nextSibling;
+          var _el$13 = _tmpl$5$9(), _el$14 = _el$13.firstChild, _el$15 = _el$14.nextSibling, _el$16 = _el$15.firstChild, _el$17 = _el$16.nextSibling; _el$17.firstChild; var _el$19 = _el$17.nextSibling; _el$19.firstChild; var _el$21 = _el$15.nextSibling;
           insert(_el$14, () => item().file);
           insert(_el$16, () => changeStatusLabel(item().status));
           insert(_el$17, () => item().additions, null);
@@ -10101,7 +10192,7 @@ function DiffDialog(props) {
           });
           return _el$13;
         })(), (() => {
-          var _el$22 = _tmpl$6$8();
+          var _el$22 = _tmpl$6$9();
           insert(_el$22, createComponent(DiffPreview, {
             get item() {
               return item();
@@ -10189,7 +10280,7 @@ function ChangesPanel(props) {
       },
       get children() {
         return [(() => {
-          var _el$24 = _tmpl$8$4(), _el$25 = _el$24.firstChild, _el$26 = _el$25.nextSibling, _el$27 = _el$26.firstChild; _el$27.firstChild; var _el$29 = _el$27.nextSibling; _el$29.firstChild;
+          var _el$24 = _tmpl$8$5(), _el$25 = _el$24.firstChild, _el$26 = _el$25.nextSibling, _el$27 = _el$26.firstChild; _el$27.firstChild; var _el$29 = _el$27.nextSibling; _el$29.firstChild;
           insert(_el$25, () => tc("files.changed", files().length));
           insert(_el$27, totalAdditions, null);
           insert(_el$29, totalDeletions, null);
@@ -10237,7 +10328,7 @@ function ChangesPanel(props) {
 }
 delegateEvents(["click"]);
 
-var _tmpl$$7 = /* @__PURE__ */ template(`<div class=log-fields>`), _tmpl$2$7 = /* @__PURE__ */ template(`<div class=log-detail-block><div class=log-detail-title></div><pre class=log-detail-pre>`), _tmpl$3$7 = /* @__PURE__ */ template(`<details class=log-detail><summary></summary><div class=log-detail-block><div class=log-detail-title></div><pre class=log-detail-pre>`), _tmpl$4$7 = /* @__PURE__ */ template(`<span class=log-chip>=`), _tmpl$5$7 = /* @__PURE__ */ template(`<span class=log-delta>`), _tmpl$6$7 = /* @__PURE__ */ template(`<span class=log-service>`), _tmpl$7$5 = /* @__PURE__ */ template(`<div class=log-line><div class=log-line-head><span class=log-source></span><span>[<!>]</span><span class=log-ts></span></div><div class=log-msg>`), _tmpl$8$3 = /* @__PURE__ */ template(`<dialog id=logDialog class="dialog dialog-wide"><div class=dialog-form><div class=dialog-header><span class=dialog-title></span><div class=dialog-header-actions><select id=logLevelFilter class="select select-sm"><option value=debug>DEBUG</option><option value=info>INFO</option><option value=warn>WARN</option><option value=error>ERROR</option></select><button type=button id=btnLogServerLogs class="btn btn-ghost mini"></button><button type=button id=btnLogRefresh class="btn btn-ghost mini"></button><button type=button id=btnLogCopy class="btn btn-ghost mini"></button><button type=button id=btnLogClear class="btn btn-ghost mini danger"></button><button type=button id=btnCloseLog class="btn btn-ghost mini"></button></div></div><div id=logViewerBody class=log-viewer>`), _tmpl$9$3 = /* @__PURE__ */ template(`<div class=empty-hint>`);
+var _tmpl$$8 = /* @__PURE__ */ template(`<div class=log-fields>`), _tmpl$2$8 = /* @__PURE__ */ template(`<div class=log-detail-block><div class=log-detail-title></div><pre class=log-detail-pre>`), _tmpl$3$8 = /* @__PURE__ */ template(`<details class=log-detail><summary></summary><div class=log-detail-block><div class=log-detail-title></div><pre class=log-detail-pre>`), _tmpl$4$8 = /* @__PURE__ */ template(`<span class=log-chip>=`), _tmpl$5$8 = /* @__PURE__ */ template(`<span class=log-delta>`), _tmpl$6$8 = /* @__PURE__ */ template(`<span class=log-service>`), _tmpl$7$6 = /* @__PURE__ */ template(`<div class=log-line><div class=log-line-head><span class=log-source></span><span>[<!>]</span><span class=log-ts></span></div><div class=log-msg>`), _tmpl$8$4 = /* @__PURE__ */ template(`<dialog id=logDialog class="dialog dialog-wide"><div class=dialog-form><div class=dialog-header><span class=dialog-title></span><div class=dialog-header-actions><select id=logLevelFilter class="select select-sm"><option value=debug>DEBUG</option><option value=info>INFO</option><option value=warn>WARN</option><option value=error>ERROR</option></select><button type=button id=btnLogServerLogs class="btn btn-ghost mini"></button><button type=button id=btnLogRefresh class="btn btn-ghost mini"></button><button type=button id=btnLogCopy class="btn btn-ghost mini"></button><button type=button id=btnLogClear class="btn btn-ghost mini danger"></button><button type=button id=btnCloseLog class="btn btn-ghost mini"></button></div></div><div id=logViewerBody class=log-viewer>`), _tmpl$9$3 = /* @__PURE__ */ template(`<div class=empty-hint>`);
 let _serverLogLines = [];
 async function loadServerLogs() {
   try {
@@ -10491,13 +10582,13 @@ function LogEntryDetail(props) {
     },
     get children() {
       return [(() => {
-        var _el$ = _tmpl$$7();
+        var _el$ = _tmpl$$8();
         insert(_el$, createComponent(For, {
           get each() {
             return items().slice(0, 6);
           },
           children: ([key, value]) => (() => {
-            var _el$13 = _tmpl$4$7(), _el$14 = _el$13.firstChild;
+            var _el$13 = _tmpl$4$8(), _el$14 = _el$13.firstChild;
             insert(_el$13, key, _el$14);
             insert(_el$13, () => logPreviewValue(value), null);
             return _el$13;
@@ -10505,7 +10596,7 @@ function LogEntryDetail(props) {
         }));
         return _el$;
       })(), (() => {
-        var _el$2 = _tmpl$3$7(), _el$3 = _el$2.firstChild, _el$4 = _el$3.nextSibling, _el$5 = _el$4.firstChild, _el$6 = _el$5.nextSibling;
+        var _el$2 = _tmpl$3$8(), _el$3 = _el$2.firstChild, _el$4 = _el$3.nextSibling, _el$5 = _el$4.firstChild, _el$6 = _el$5.nextSibling;
         insert(_el$3, () => t("log.details"));
         insert(_el$5, () => t("log.fields"));
         insert(_el$6, () => stringifyLogValue(fields(), 2));
@@ -10514,7 +10605,7 @@ function LogEntryDetail(props) {
             return !!props.entry.raw;
           },
           get children() {
-            var _el$7 = _tmpl$2$7(), _el$8 = _el$7.firstChild, _el$9 = _el$8.nextSibling;
+            var _el$7 = _tmpl$2$8(), _el$8 = _el$7.firstChild, _el$9 = _el$8.nextSibling;
             insert(_el$8, () => t("log.raw"));
             insert(_el$9, () => props.entry.raw);
             return _el$7;
@@ -10528,7 +10619,7 @@ function LogEntryDetail(props) {
       return memo(() => items().length === 0)() && !!props.entry.raw;
     },
     get children() {
-      var _el$0 = _tmpl$3$7(), _el$1 = _el$0.firstChild, _el$10 = _el$1.nextSibling, _el$11 = _el$10.firstChild, _el$12 = _el$11.nextSibling;
+      var _el$0 = _tmpl$3$8(), _el$1 = _el$0.firstChild, _el$10 = _el$1.nextSibling, _el$11 = _el$10.firstChild, _el$12 = _el$11.nextSibling;
       insert(_el$1, () => t("log.details"));
       insert(_el$11, () => t("log.raw"));
       insert(_el$12, () => props.entry.raw);
@@ -10538,7 +10629,7 @@ function LogEntryDetail(props) {
 }
 function LogLine(props) {
   return (() => {
-    var _el$15 = _tmpl$7$5(), _el$16 = _el$15.firstChild, _el$17 = _el$16.firstChild, _el$18 = _el$17.nextSibling, _el$19 = _el$18.firstChild, _el$21 = _el$19.nextSibling; _el$21.nextSibling; var _el$24 = _el$18.nextSibling, _el$25 = _el$16.nextSibling;
+    var _el$15 = _tmpl$7$6(), _el$16 = _el$15.firstChild, _el$17 = _el$16.firstChild, _el$18 = _el$17.nextSibling, _el$19 = _el$18.firstChild, _el$21 = _el$19.nextSibling; _el$21.nextSibling; var _el$24 = _el$18.nextSibling, _el$25 = _el$16.nextSibling;
     insert(_el$17, () => logSourceLabel(props.entry.source));
     insert(_el$18, () => props.entry.level.toUpperCase(), _el$21);
     insert(_el$16, createComponent(Show, {
@@ -10546,7 +10637,7 @@ function LogLine(props) {
         return !!props.entry.delta;
       },
       get children() {
-        var _el$22 = _tmpl$5$7();
+        var _el$22 = _tmpl$5$8();
         insert(_el$22, () => props.entry.delta);
         return _el$22;
       }
@@ -10556,7 +10647,7 @@ function LogLine(props) {
         return !!props.entry.service;
       },
       get children() {
-        var _el$23 = _tmpl$6$7();
+        var _el$23 = _tmpl$6$8();
         insert(_el$23, () => props.entry.service);
         return _el$23;
       }
@@ -10639,7 +10730,7 @@ function LogViewer(props) {
     Promise.resolve().then(() => scrollToBottom());
   };
   return (() => {
-    var _el$26 = _tmpl$8$3(), _el$27 = _el$26.firstChild, _el$28 = _el$27.firstChild, _el$29 = _el$28.firstChild, _el$30 = _el$29.nextSibling, _el$31 = _el$30.firstChild, _el$32 = _el$31.nextSibling, _el$33 = _el$32.nextSibling, _el$34 = _el$33.nextSibling, _el$35 = _el$34.nextSibling, _el$36 = _el$35.nextSibling, _el$37 = _el$28.nextSibling;
+    var _el$26 = _tmpl$8$4(), _el$27 = _el$26.firstChild, _el$28 = _el$27.firstChild, _el$29 = _el$28.firstChild, _el$30 = _el$29.nextSibling, _el$31 = _el$30.firstChild, _el$32 = _el$31.nextSibling, _el$33 = _el$32.nextSibling, _el$34 = _el$33.nextSibling, _el$35 = _el$34.nextSibling, _el$36 = _el$35.nextSibling, _el$37 = _el$28.nextSibling;
     use((el) => dialogRef = el, _el$26);
     insert(_el$29, () => t("log.title"));
     _el$31.addEventListener("change", handleLevelChange);
@@ -10702,7 +10793,7 @@ function LogViewer(props) {
 }
 delegateEvents(["click"]);
 
-var _tmpl$$6 = /* @__PURE__ */ template(`<details>`), _tmpl$2$6 = /* @__PURE__ */ template(`<div class="message message-user"><div class=message-body><p>`), _tmpl$3$6 = /* @__PURE__ */ template(`<div class="message message-assistant"><div class=message-body>`), _tmpl$4$6 = /* @__PURE__ */ template(`<div class=message-text><span class=typing>……`), _tmpl$5$6 = /* @__PURE__ */ template(`<div class=message-text>`), _tmpl$6$6 = /* @__PURE__ */ template(`<div class=coding-tab-root style=flex-direction:column;height:100%><div class="chat-scroll coding-scroll"style="flex:1 1 auto;overflow:auto">`), _tmpl$7$4 = /* @__PURE__ */ template(`<div class=chat-empty>Build agent — ask anything about the codebase`);
+var _tmpl$$7 = /* @__PURE__ */ template(`<details>`), _tmpl$2$7 = /* @__PURE__ */ template(`<div class="message message-user"><div class=message-body><p>`), _tmpl$3$7 = /* @__PURE__ */ template(`<div class="message message-assistant"><div class=message-body>`), _tmpl$4$7 = /* @__PURE__ */ template(`<div class=message-text><span class=typing>……`), _tmpl$5$7 = /* @__PURE__ */ template(`<div class=message-text>`), _tmpl$6$7 = /* @__PURE__ */ template(`<div class=coding-tab-root style=flex-direction:column;height:100%><div class="chat-scroll coding-scroll"style="flex:1 1 auto;overflow:auto">`), _tmpl$7$5 = /* @__PURE__ */ template(`<div class=chat-empty>Build agent — ask anything about the codebase`);
 function escapeHtml(text) {
   return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
@@ -10927,7 +11018,7 @@ function CodingTab(props) {
       return escapeHtml(stripAnsi(String(raw)).slice(0, 2e3));
     };
     return (() => {
-      var _el$ = _tmpl$$6();
+      var _el$ = _tmpl$$7();
       createRenderEffect((_p$) => {
         var _v$ = `tool-block tool-${status()}`, _v$2 = `<summary>[${icon()}] ${title()}</summary>${output() ? `<pre class="tool-output">${output()}</pre>` : ""}`;
         _v$ !== _p$.e && className(_el$, _p$.e = _v$);
@@ -10942,7 +11033,7 @@ function CodingTab(props) {
   }
   function UserMessageView(mProps) {
     return (() => {
-      var _el$2 = _tmpl$2$6(), _el$3 = _el$2.firstChild, _el$4 = _el$3.firstChild;
+      var _el$2 = _tmpl$2$7(), _el$3 = _el$2.firstChild, _el$4 = _el$3.firstChild;
       insert(_el$4, () => mProps.msg.text);
       return _el$2;
     })();
@@ -10950,7 +11041,7 @@ function CodingTab(props) {
   function AssistantMessageView(mProps) {
     const hasParts = createMemo(() => mProps.msg.parts.length > 0);
     return (() => {
-      var _el$5 = _tmpl$3$6(), _el$6 = _el$5.firstChild;
+      var _el$5 = _tmpl$3$7(), _el$6 = _el$5.firstChild;
       insert(_el$6, createComponent(Show, {
         get when() {
           return hasParts();
@@ -10961,7 +11052,7 @@ function CodingTab(props) {
               return mProps.msg.streaming;
             },
             get children() {
-              return _tmpl$4$6();
+              return _tmpl$4$7();
             }
           });
         },
@@ -10980,7 +11071,7 @@ function CodingTab(props) {
                 });
               },
               get children() {
-                var _el$8 = _tmpl$5$6();
+                var _el$8 = _tmpl$5$7();
                 createRenderEffect(() => _el$8.innerHTML = renderMarkdown(part.text));
                 return _el$8;
               }
@@ -10993,7 +11084,7 @@ function CodingTab(props) {
   }
   const isEmpty = createMemo(() => messages().length === 0);
   return (() => {
-    var _el$9 = _tmpl$6$6(), _el$0 = _el$9.firstChild;
+    var _el$9 = _tmpl$6$7(), _el$0 = _el$9.firstChild;
     var _ref$ = scrollRef;
     typeof _ref$ === "function" ? use(_ref$, _el$0) : scrollRef = _el$0;
     insert(_el$0, createComponent(Show, {
@@ -11001,7 +11092,7 @@ function CodingTab(props) {
         return !isEmpty();
       },
       get fallback() {
-        return _tmpl$7$4();
+        return _tmpl$7$5();
       },
       get children() {
         return createComponent(For, {
@@ -12586,7 +12677,7 @@ const config = /*#__PURE__*/Object.freeze(/*#__PURE__*/Object.defineProperty({
   updateConfig
 }, Symbol.toStringTag, { value: 'Module' }));
 
-var _tmpl$$5 = /* @__PURE__ */ template(`<div class=config-status-box>`), _tmpl$2$5 = /* @__PURE__ */ template(`<div class=prompt-grid>`), _tmpl$3$5 = /* @__PURE__ */ template(`<div class=empty-hint>`), _tmpl$4$5 = /* @__PURE__ */ template(`<small>`), _tmpl$5$5 = /* @__PURE__ */ template(`<details class=prompt-diff-details><summary class=prompt-diff-summary></summary><div class=prompt-preview-card style=margin-top:0;border-top:none;opacity:0.7><div class=prompt-preview-head></div><div class="md-content prompt-preview-body">`), _tmpl$6$5 = /* @__PURE__ */ template(`<div class=prompt-card><div class=prompt-card-head><div class=prompt-card-copy><strong></strong><span></span></div><span class=extension-status></span></div><label class=field><span class=field-label></span><textarea class="field-input prompt-textarea"rows=8></textarea></label><div class=prompt-toolbar><span class=config-status-box></span><div class="dialog-actions compact"><button type=button class="btn btn-ghost mini"></button><button type=button class="btn btn-primary mini"></button></div></div><details class=prompt-diff-details><summary class=prompt-diff-summary></summary><div class=prompt-preview-card style="border-top:none;border-radius:0 0 var(--radius) var(--radius)"><div class="md-content prompt-preview-body">`);
+var _tmpl$$6 = /* @__PURE__ */ template(`<div class=config-status-box>`), _tmpl$2$6 = /* @__PURE__ */ template(`<div class=prompt-grid>`), _tmpl$3$6 = /* @__PURE__ */ template(`<div class=empty-hint>`), _tmpl$4$6 = /* @__PURE__ */ template(`<small>`), _tmpl$5$6 = /* @__PURE__ */ template(`<details class=prompt-diff-details><summary class=prompt-diff-summary></summary><div class=prompt-preview-card style=margin-top:0;border-top:none;opacity:0.7><div class=prompt-preview-head></div><div class="md-content prompt-preview-body">`), _tmpl$6$6 = /* @__PURE__ */ template(`<div class=prompt-card><div class=prompt-card-head><div class=prompt-card-copy><strong></strong><span></span></div><span class=extension-status></span></div><label class=field><span class=field-label></span><textarea class="field-input prompt-textarea"rows=8></textarea></label><div class=prompt-toolbar><span class=config-status-box></span><div class="dialog-actions compact"><button type=button class="btn btn-ghost mini"></button><button type=button class="btn btn-primary mini"></button></div></div><details class=prompt-diff-details><summary class=prompt-diff-summary></summary><div class=prompt-preview-card style="border-top:none;border-radius:0 0 var(--radius) var(--radius)"><div class="md-content prompt-preview-body">`);
 function promptEntryID(entry) {
   return `${entry.scope}:${entry.key}`;
 }
@@ -12719,7 +12810,7 @@ function PromptCatalog() {
       return notice();
     },
     get children() {
-      var _el$ = _tmpl$$5();
+      var _el$ = _tmpl$$6();
       insert(_el$, notice);
       createRenderEffect(() => setAttribute(_el$, "data-status", noticeTone()));
       return _el$;
@@ -12730,13 +12821,13 @@ function PromptCatalog() {
     },
     get fallback() {
       return (() => {
-        var _el$3 = _tmpl$3$5();
+        var _el$3 = _tmpl$3$6();
         insert(_el$3, () => t("prompt.none"));
         return _el$3;
       })();
     },
     get children() {
-      var _el$2 = _tmpl$2$5();
+      var _el$2 = _tmpl$2$6();
       insert(_el$2, createComponent(For, {
         get each() {
           return entries();
@@ -12748,7 +12839,7 @@ function PromptCatalog() {
           const dirty = createMemo(() => isDirty(entry));
           const currentDraft = createMemo(() => draftValue(entry));
           return (() => {
-            var _el$4 = _tmpl$6$5(), _el$5 = _el$4.firstChild, _el$6 = _el$5.firstChild, _el$7 = _el$6.firstChild, _el$8 = _el$7.nextSibling, _el$0 = _el$6.nextSibling, _el$1 = _el$5.nextSibling, _el$10 = _el$1.firstChild, _el$11 = _el$10.nextSibling, _el$12 = _el$1.nextSibling, _el$13 = _el$12.firstChild, _el$14 = _el$13.nextSibling, _el$15 = _el$14.firstChild, _el$16 = _el$15.nextSibling, _el$22 = _el$12.nextSibling, _el$23 = _el$22.firstChild, _el$24 = _el$23.nextSibling, _el$25 = _el$24.firstChild;
+            var _el$4 = _tmpl$6$6(), _el$5 = _el$4.firstChild, _el$6 = _el$5.firstChild, _el$7 = _el$6.firstChild, _el$8 = _el$7.nextSibling, _el$0 = _el$6.nextSibling, _el$1 = _el$5.nextSibling, _el$10 = _el$1.firstChild, _el$11 = _el$10.nextSibling, _el$12 = _el$1.nextSibling, _el$13 = _el$12.firstChild, _el$14 = _el$13.nextSibling, _el$15 = _el$14.firstChild, _el$16 = _el$15.nextSibling, _el$22 = _el$12.nextSibling, _el$23 = _el$22.firstChild, _el$24 = _el$23.nextSibling, _el$25 = _el$24.firstChild;
             setAttribute(_el$4, "data-prompt-entry", entryID);
             insert(_el$7, () => entry.label || entry.key);
             insert(_el$8, () => promptGroupLabel(entry.group), null);
@@ -12760,7 +12851,7 @@ function PromptCatalog() {
             insert(_el$6, createComponent(Show, {
               when: description,
               get children() {
-                var _el$9 = _tmpl$4$5();
+                var _el$9 = _tmpl$4$6();
                 insert(_el$9, description);
                 return _el$9;
               }
@@ -12778,7 +12869,7 @@ function PromptCatalog() {
                 return memo(() => entry.configured_prompt !== null)() && entry.default_prompt;
               },
               get children() {
-                var _el$17 = _tmpl$5$5(), _el$18 = _el$17.firstChild, _el$19 = _el$18.nextSibling, _el$20 = _el$19.firstChild, _el$21 = _el$20.nextSibling;
+                var _el$17 = _tmpl$5$6(), _el$18 = _el$17.firstChild, _el$19 = _el$18.nextSibling, _el$20 = _el$19.firstChild, _el$21 = _el$20.nextSibling;
                 insert(_el$18, () => t("prompt.show_default"));
                 insert(_el$20, () => t("prompt.default_label"));
                 createRenderEffect(() => _el$21.innerHTML = promptPreviewHtml(entry.default_prompt));
@@ -12893,7 +12984,7 @@ async function nativeOpen(target) {
   }
 }
 
-var _tmpl$$4 = /* @__PURE__ */ template(`<div class=config-status-box>`), _tmpl$2$4 = /* @__PURE__ */ template(`<div class=extension-head><label class=field><span class=field-label></span><input class=field-input type=url placeholder=https://opencorvus.example.com></label><div class="dialog-actions compact"><button type=button class="btn btn-ghost mini">`), _tmpl$3$4 = /* @__PURE__ */ template(`<div class=empty-hint>`), _tmpl$4$4 = /* @__PURE__ */ template(`<div class=extension-row><div class=extension-row-main><strong></strong><span></span><small class=channel-doc-credit></small></div><div class=channel-row-actions><span class=extension-status></span><button type=button class="btn btn-ghost mini"></button><button type=button class="btn btn-primary mini">`), _tmpl$5$4 = /* @__PURE__ */ template(`<dialog class=dialog><div class=dialog-form><div class=dialog-head><h2 class=dialog-title></h2></div><div class=channel-doc-card><div class=channel-doc-copy><span class=channel-doc-title></span><small class=channel-doc-credit></small></div><button type=button class="btn btn-ghost"></button></div><div class=dialog-actions><button type=button class="btn btn-ghost"></button><button type=button class="btn btn-primary">`), _tmpl$6$4 = /* @__PURE__ */ template(`<label class="field field-inline"><span class=field-label></span><input type=checkbox>`), _tmpl$7$3 = /* @__PURE__ */ template(`<label class=field><span class=field-label></span><input class=field-input>`);
+var _tmpl$$5 = /* @__PURE__ */ template(`<div class=config-status-box>`), _tmpl$2$5 = /* @__PURE__ */ template(`<div class=extension-head><label class=field><span class=field-label></span><input class=field-input type=url placeholder=https://opencorvus.example.com></label><div class="dialog-actions compact"><button type=button class="btn btn-ghost mini">`), _tmpl$3$5 = /* @__PURE__ */ template(`<div class=empty-hint>`), _tmpl$4$5 = /* @__PURE__ */ template(`<div class=extension-row><div class=extension-row-main><strong></strong><span></span><small class=channel-doc-credit></small></div><div class=channel-row-actions><span class=extension-status></span><button type=button class="btn btn-ghost mini"></button><button type=button class="btn btn-primary mini">`), _tmpl$5$5 = /* @__PURE__ */ template(`<dialog class=dialog><div class=dialog-form><div class=dialog-head><h2 class=dialog-title></h2></div><div class=channel-doc-card><div class=channel-doc-copy><span class=channel-doc-title></span><small class=channel-doc-credit></small></div><button type=button class="btn btn-ghost"></button></div><div class=dialog-actions><button type=button class="btn btn-ghost"></button><button type=button class="btn btn-primary">`), _tmpl$6$5 = /* @__PURE__ */ template(`<label class="field field-inline"><span class=field-label></span><input type=checkbox>`), _tmpl$7$4 = /* @__PURE__ */ template(`<label class=field><span class=field-label></span><input class=field-input>`);
 const OPENCLAW_DOCS = Object.freeze({
   overview: "https://docs.openclaw.ai/channels",
   credit: "OpenClaw Docs",
@@ -13034,13 +13125,13 @@ function ChannelsPanel() {
       return notice();
     },
     get children() {
-      var _el$ = _tmpl$$4();
+      var _el$ = _tmpl$$5();
       insert(_el$, notice);
       createRenderEffect(() => setAttribute(_el$, "data-status", noticeTone()));
       return _el$;
     }
   }), (() => {
-    var _el$2 = _tmpl$2$4(), _el$3 = _el$2.firstChild, _el$4 = _el$3.firstChild, _el$5 = _el$4.nextSibling, _el$6 = _el$3.nextSibling, _el$7 = _el$6.firstChild;
+    var _el$2 = _tmpl$2$5(), _el$3 = _el$2.firstChild, _el$4 = _el$3.firstChild, _el$5 = _el$4.nextSibling, _el$6 = _el$3.nextSibling, _el$7 = _el$6.firstChild;
     insert(_el$4, () => t("channel.public_url"));
     _el$5.$$input = (e) => setLocalPublicUrl(e.currentTarget.value);
     _el$7.$$click = handleSavePublicUrl;
@@ -13049,7 +13140,7 @@ function ChannelsPanel() {
     createRenderEffect(() => _el$5.value = localPublicUrl());
     return _el$2;
   })(), (() => {
-    var _el$8 = _tmpl$3$4();
+    var _el$8 = _tmpl$3$5();
     insert(_el$8, () => t("channel.public_url_hint"));
     return _el$8;
   })(), createComponent(Show, {
@@ -13058,7 +13149,7 @@ function ChannelsPanel() {
     },
     get fallback() {
       return (() => {
-        var _el$9 = _tmpl$3$4();
+        var _el$9 = _tmpl$3$5();
         insert(_el$9, () => t("channel.none"));
         return _el$9;
       })();
@@ -13069,7 +13160,7 @@ function ChannelsPanel() {
           return channels();
         },
         children: (item) => (() => {
-          var _el$0 = _tmpl$4$4(), _el$1 = _el$0.firstChild, _el$10 = _el$1.firstChild, _el$11 = _el$10.nextSibling, _el$12 = _el$11.nextSibling, _el$13 = _el$1.nextSibling, _el$14 = _el$13.firstChild, _el$15 = _el$14.nextSibling, _el$16 = _el$15.nextSibling;
+          var _el$0 = _tmpl$4$5(), _el$1 = _el$0.firstChild, _el$10 = _el$1.firstChild, _el$11 = _el$10.nextSibling, _el$12 = _el$11.nextSibling, _el$13 = _el$1.nextSibling, _el$14 = _el$13.firstChild, _el$15 = _el$14.nextSibling, _el$16 = _el$15.nextSibling;
           insert(_el$10, () => item.name);
           insert(_el$11, () => item.summary);
           insert(_el$12, () => t("channel.tutorial_credit", {
@@ -13106,7 +13197,7 @@ function ChannelsPanel() {
     children: (_) => {
       const entry = editingEntry();
       return (() => {
-        var _el$17 = _tmpl$5$4(), _el$18 = _el$17.firstChild, _el$19 = _el$18.firstChild, _el$20 = _el$19.firstChild, _el$21 = _el$19.nextSibling, _el$22 = _el$21.firstChild, _el$23 = _el$22.firstChild, _el$24 = _el$23.nextSibling, _el$25 = _el$22.nextSibling, _el$26 = _el$21.nextSibling, _el$27 = _el$26.firstChild, _el$28 = _el$27.nextSibling;
+        var _el$17 = _tmpl$5$5(), _el$18 = _el$17.firstChild, _el$19 = _el$18.firstChild, _el$20 = _el$19.firstChild, _el$21 = _el$19.nextSibling, _el$22 = _el$21.firstChild, _el$23 = _el$22.firstChild, _el$24 = _el$23.nextSibling, _el$25 = _el$22.nextSibling, _el$26 = _el$21.nextSibling, _el$27 = _el$26.firstChild, _el$28 = _el$27.nextSibling;
         _el$17.addEventListener("close", closeEdit);
         use((el) => {
           if (el) queueMicrotask(() => el.showModal());
@@ -13129,7 +13220,7 @@ function ChannelsPanel() {
             const currentVal = () => fieldValues()[field.key];
             if (field.type === "boolean") {
               return (() => {
-                var _el$29 = _tmpl$6$4(), _el$30 = _el$29.firstChild, _el$31 = _el$30.nextSibling;
+                var _el$29 = _tmpl$6$5(), _el$30 = _el$29.firstChild, _el$31 = _el$30.nextSibling;
                 insert(_el$30, () => field.label);
                 _el$31.addEventListener("change", (e) => handleFieldChange(field.key, e.currentTarget.checked));
                 setAttribute(_el$31, "name", name);
@@ -13139,7 +13230,7 @@ function ChannelsPanel() {
             }
             const inputType = field.type === "secret" ? "password" : "text";
             return (() => {
-              var _el$32 = _tmpl$7$3(), _el$33 = _el$32.firstChild, _el$34 = _el$33.nextSibling;
+              var _el$32 = _tmpl$7$4(), _el$33 = _el$32.firstChild, _el$34 = _el$33.nextSibling;
               insert(_el$33, () => field.label);
               _el$34.$$input = (e) => handleFieldChange(field.key, e.currentTarget.value);
               setAttribute(_el$34, "type", inputType);
@@ -13177,7 +13268,7 @@ function ChannelsPanel() {
 }
 delegateEvents(["input", "click"]);
 
-var _tmpl$$3 = /* @__PURE__ */ template(`<div class=loading-hint>`), _tmpl$2$3 = /* @__PURE__ */ template(`<div class=config-status-box data-status=error><button type=button class="btn btn-ghost mini">`), _tmpl$3$3 = /* @__PURE__ */ template(`<button type=button class="btn btn-ghost mini">`), _tmpl$4$3 = /* @__PURE__ */ template(`<div class=config-inline-form><label class=field><span class=field-label></span><select class=field-input><option value=path></option><option value=url></option><option value=git></option></select></label><label class=field><span class=field-label></span><div class=field-input-group><input class=field-input type=text></div></label><label class=field><span class=field-label></span><select class=field-input><option value=ask></option><option value=allow></option><option value=deny></option></select></label><div class="dialog-actions compact"><button type=button class="btn btn-ghost"></button><button type=button class="btn btn-primary">`), _tmpl$5$3 = /* @__PURE__ */ template(`<details class=config-subsection open><summary class=config-subsection-head></summary><div class=config-subsection-body><div class=extension-head><div class="dialog-actions compact"><button type=button class="btn btn-ghost mini"></button><button type=button class="btn btn-ghost mini"></button><button type=button class="btn btn-ghost mini"></button><button type=button class="btn btn-ghost mini danger"></button></div></div><div class=extension-list id=skillList>`), _tmpl$6$3 = /* @__PURE__ */ template(`<label class=field><span class=field-label></span><input class=field-input type=url placeholder=https://example.com/mcp>`), _tmpl$7$2 = /* @__PURE__ */ template(`<label class=field><span class=field-label></span><input class=field-input type=text placeholder=npx>`), _tmpl$8$2 = /* @__PURE__ */ template(`<label class=field><span class=field-label></span><input class=field-input type=text placeholder="-y @modelcontextprotocol/server-filesystem C:\\repo">`), _tmpl$9$2 = /* @__PURE__ */ template(`<div class=config-inline-form><label class=field><span class=field-label></span><input class=field-input type=text placeholder=exa></label><label class=field><span class=field-label></span><select class=field-input><option value=remote></option><option value=local></option></select></label><div class="dialog-actions compact"><button type=button class="btn btn-ghost"></button><button type=button class="btn btn-primary">`), _tmpl$0$1 = /* @__PURE__ */ template(`<details class=config-subsection open><summary class=config-subsection-head></summary><div class=config-subsection-body><div class=extension-head><div class="dialog-actions compact"><button type=button class="btn btn-ghost mini"></button><button type=button class="btn btn-ghost mini danger"></button></div></div><div class=extension-list id=mcpList>`), _tmpl$1 = /* @__PURE__ */ template(`<details class=config-subsection><summary class=config-subsection-head></summary><div class=config-subsection-body><div class=extension-list id=skillMarketList>`), _tmpl$10 = /* @__PURE__ */ template(`<div class=empty-hint>`), _tmpl$11 = /* @__PURE__ */ template(`<button type=button class="btn btn-ghost mini danger">`), _tmpl$12 = /* @__PURE__ */ template(`<div class=extension-row><div class=extension-row-main><strong></strong><span></span><small></small></div><div class=extension-row-actions><span class=extension-status data-state=connected>`), _tmpl$13 = /* @__PURE__ */ template(`<div class=extension-row><div class=extension-row-main><strong></strong><span></span></div><span class=extension-status>`), _tmpl$14 = /* @__PURE__ */ template(`<small>`), _tmpl$15 = /* @__PURE__ */ template(`<button type=button class="btn btn-primary mini">`), _tmpl$16 = /* @__PURE__ */ template(`<div class=market-card><div class=market-card-main><strong></strong><span> · <!> · </span><small></small></div><div class=market-card-actions><span class=extension-status>`);
+var _tmpl$$4 = /* @__PURE__ */ template(`<div class=loading-hint>`), _tmpl$2$4 = /* @__PURE__ */ template(`<div class=config-status-box data-status=error><button type=button class="btn btn-ghost mini">`), _tmpl$3$4 = /* @__PURE__ */ template(`<button type=button class="btn btn-ghost mini">`), _tmpl$4$4 = /* @__PURE__ */ template(`<div class=config-inline-form><label class=field><span class=field-label></span><select class=field-input><option value=path></option><option value=url></option><option value=git></option></select></label><label class=field><span class=field-label></span><div class=field-input-group><input class=field-input type=text></div></label><label class=field><span class=field-label></span><select class=field-input><option value=ask></option><option value=allow></option><option value=deny></option></select></label><div class="dialog-actions compact"><button type=button class="btn btn-ghost"></button><button type=button class="btn btn-primary">`), _tmpl$5$4 = /* @__PURE__ */ template(`<details class=config-subsection open><summary class=config-subsection-head></summary><div class=config-subsection-body><div class=extension-head><div class="dialog-actions compact"><button type=button class="btn btn-ghost mini"></button><button type=button class="btn btn-ghost mini"></button><button type=button class="btn btn-ghost mini"></button><button type=button class="btn btn-ghost mini danger"></button></div></div><div class=extension-list id=skillList>`), _tmpl$6$4 = /* @__PURE__ */ template(`<label class=field><span class=field-label></span><input class=field-input type=url placeholder=https://example.com/mcp>`), _tmpl$7$3 = /* @__PURE__ */ template(`<label class=field><span class=field-label></span><input class=field-input type=text placeholder=npx>`), _tmpl$8$3 = /* @__PURE__ */ template(`<label class=field><span class=field-label></span><input class=field-input type=text placeholder="-y @modelcontextprotocol/server-filesystem C:\\repo">`), _tmpl$9$2 = /* @__PURE__ */ template(`<div class=config-inline-form><label class=field><span class=field-label></span><input class=field-input type=text placeholder=exa></label><label class=field><span class=field-label></span><select class=field-input><option value=remote></option><option value=local></option></select></label><div class="dialog-actions compact"><button type=button class="btn btn-ghost"></button><button type=button class="btn btn-primary">`), _tmpl$0$1 = /* @__PURE__ */ template(`<details class=config-subsection open><summary class=config-subsection-head></summary><div class=config-subsection-body><div class=extension-head><div class="dialog-actions compact"><button type=button class="btn btn-ghost mini"></button><button type=button class="btn btn-ghost mini danger"></button></div></div><div class=extension-list id=mcpList>`), _tmpl$1 = /* @__PURE__ */ template(`<details class=config-subsection><summary class=config-subsection-head></summary><div class=config-subsection-body><div class=extension-list id=skillMarketList>`), _tmpl$10 = /* @__PURE__ */ template(`<div class=empty-hint>`), _tmpl$11 = /* @__PURE__ */ template(`<button type=button class="btn btn-ghost mini danger">`), _tmpl$12 = /* @__PURE__ */ template(`<div class=extension-row><div class=extension-row-main><strong></strong><span></span><small></small></div><div class=extension-row-actions><span class=extension-status data-state=connected>`), _tmpl$13 = /* @__PURE__ */ template(`<div class=extension-row><div class=extension-row-main><strong></strong><span></span></div><span class=extension-status>`), _tmpl$14 = /* @__PURE__ */ template(`<small>`), _tmpl$15 = /* @__PURE__ */ template(`<button type=button class="btn btn-primary mini">`), _tmpl$16 = /* @__PURE__ */ template(`<div class=market-card><div class=market-card-main><strong></strong><span> · <!> · </span><small></small></div><div class=market-card-actions><span class=extension-status>`);
 function skillRemoveKind(item) {
   if (item.source_type === "managed_git") return "git";
   if (item.source_type === "config_url") return "url";
@@ -13447,7 +13538,7 @@ function SkillMarketPanel() {
       return loading();
     },
     get children() {
-      var _el$ = _tmpl$$3();
+      var _el$ = _tmpl$$4();
       insert(_el$, () => t("common.loading"));
       return _el$;
     }
@@ -13456,14 +13547,14 @@ function SkillMarketPanel() {
       return notice();
     },
     get children() {
-      var _el$2 = _tmpl$2$3(), _el$3 = _el$2.firstChild;
+      var _el$2 = _tmpl$2$4(), _el$3 = _el$2.firstChild;
       insert(_el$2, notice, _el$3);
       _el$3.$$click = () => setNotice("");
       insert(_el$3, () => t("common.dismiss"));
       return _el$2;
     }
   }), (() => {
-    var _el$4 = _tmpl$5$3(), _el$5 = _el$4.firstChild, _el$6 = _el$5.nextSibling, _el$7 = _el$6.firstChild, _el$8 = _el$7.firstChild, _el$9 = _el$8.firstChild, _el$0 = _el$9.nextSibling, _el$1 = _el$0.nextSibling, _el$10 = _el$1.nextSibling, _el$32 = _el$7.nextSibling;
+    var _el$4 = _tmpl$5$4(), _el$5 = _el$4.firstChild, _el$6 = _el$5.nextSibling, _el$7 = _el$6.firstChild, _el$8 = _el$7.firstChild, _el$9 = _el$8.firstChild, _el$0 = _el$9.nextSibling, _el$1 = _el$0.nextSibling, _el$10 = _el$1.nextSibling, _el$32 = _el$7.nextSibling;
     insert(_el$5, () => t("skill.title"));
     _el$9.$$click = handleReloadSkills;
     insert(_el$9, () => t("common.reload"));
@@ -13478,7 +13569,7 @@ function SkillMarketPanel() {
         return showAddSkill();
       },
       get children() {
-        var _el$11 = _tmpl$4$3(), _el$12 = _el$11.firstChild, _el$13 = _el$12.firstChild, _el$14 = _el$13.nextSibling, _el$15 = _el$14.firstChild, _el$16 = _el$15.nextSibling, _el$17 = _el$16.nextSibling, _el$18 = _el$12.nextSibling, _el$19 = _el$18.firstChild, _el$20 = _el$19.nextSibling, _el$21 = _el$20.firstChild, _el$23 = _el$18.nextSibling, _el$24 = _el$23.firstChild, _el$25 = _el$24.nextSibling, _el$26 = _el$25.firstChild, _el$27 = _el$26.nextSibling, _el$28 = _el$27.nextSibling, _el$29 = _el$23.nextSibling, _el$30 = _el$29.firstChild, _el$31 = _el$30.nextSibling;
+        var _el$11 = _tmpl$4$4(), _el$12 = _el$11.firstChild, _el$13 = _el$12.firstChild, _el$14 = _el$13.nextSibling, _el$15 = _el$14.firstChild, _el$16 = _el$15.nextSibling, _el$17 = _el$16.nextSibling, _el$18 = _el$12.nextSibling, _el$19 = _el$18.firstChild, _el$20 = _el$19.nextSibling, _el$21 = _el$20.firstChild, _el$23 = _el$18.nextSibling, _el$24 = _el$23.firstChild, _el$25 = _el$24.nextSibling, _el$26 = _el$25.firstChild, _el$27 = _el$26.nextSibling, _el$28 = _el$27.nextSibling, _el$29 = _el$23.nextSibling, _el$30 = _el$29.firstChild, _el$31 = _el$30.nextSibling;
         insert(_el$13, () => t("skill.source_type"));
         _el$14.addEventListener("change", (e) => setSkillForm("type", e.currentTarget.value));
         insert(_el$15, () => t("skill.source.path"));
@@ -13491,7 +13582,7 @@ function SkillMarketPanel() {
             return skillForm.type === "path";
           },
           get children() {
-            var _el$22 = _tmpl$3$3();
+            var _el$22 = _tmpl$3$4();
             _el$22.$$click = handleBrowseFolder;
             insert(_el$22, () => t("skill.browse_folder"));
             return _el$22;
@@ -13567,7 +13658,7 @@ function SkillMarketPanel() {
                 return memo(() => !!item.location)() && item.location !== "builtin";
               },
               get children() {
-                var _el$74 = _tmpl$3$3();
+                var _el$74 = _tmpl$3$4();
                 _el$74.$$click = () => handleOpenSkill(item.location);
                 insert(_el$74, () => t("common.open"));
                 createRenderEffect((_p$) => {
@@ -13617,7 +13708,7 @@ function SkillMarketPanel() {
             return mcpForm.type === "remote";
           },
           get children() {
-            var _el$49 = _tmpl$6$3(), _el$50 = _el$49.firstChild, _el$51 = _el$50.nextSibling;
+            var _el$49 = _tmpl$6$4(), _el$50 = _el$49.firstChild, _el$51 = _el$50.nextSibling;
             insert(_el$50, () => t("mcp.remote_url"));
             _el$51.$$input = (e) => setMcpForm("url", e.currentTarget.value);
             createRenderEffect(() => _el$51.value = mcpForm.url);
@@ -13630,13 +13721,13 @@ function SkillMarketPanel() {
           },
           get children() {
             return [(() => {
-              var _el$52 = _tmpl$7$2(), _el$53 = _el$52.firstChild, _el$54 = _el$53.nextSibling;
+              var _el$52 = _tmpl$7$3(), _el$53 = _el$52.firstChild, _el$54 = _el$53.nextSibling;
               insert(_el$53, () => t("mcp.command"));
               _el$54.$$input = (e) => setMcpForm("command", e.currentTarget.value);
               createRenderEffect(() => _el$54.value = mcpForm.command);
               return _el$52;
             })(), (() => {
-              var _el$55 = _tmpl$8$2(), _el$56 = _el$55.firstChild, _el$57 = _el$56.nextSibling;
+              var _el$55 = _tmpl$8$3(), _el$56 = _el$55.firstChild, _el$57 = _el$56.nextSibling;
               insert(_el$56, () => t("mcp.arguments"));
               _el$57.$$input = (e) => setMcpForm("args", e.currentTarget.value);
               createRenderEffect(() => _el$57.value = mcpForm.args);
@@ -13730,7 +13821,7 @@ function SkillMarketPanel() {
                 when: installable,
                 get fallback() {
                   return (() => {
-                    var _el$95 = _tmpl$3$3();
+                    var _el$95 = _tmpl$3$4();
                     _el$95.$$click = () => handleOpenHomepage(item.homepage);
                     insert(_el$95, () => t("skill.market.open_site"));
                     createRenderEffect((_p$) => {
@@ -13770,6 +13861,225 @@ function SkillMarketPanel() {
     }));
     return _el$62;
   })()];
+}
+delegateEvents(["click", "input"]);
+
+var _tmpl$$3 = /* @__PURE__ */ template(`<div class=config-panel-card style=opacity:0.6;font-size:13px;padding:12px>No custom providers configured. Click "+ Add" to add an OpenAI-compatible provider.`), _tmpl$2$3 = /* @__PURE__ */ template(`<label class=field><span class=field-label>Provider ID</span><input class=field-input type=text placeholder="e.g. hexin, my-gateway">`), _tmpl$3$3 = /* @__PURE__ */ template(`<div class=config-panel-card style="margin-top:8px;border:1px solid var(--color-border, #444)"><h4 style="font-size:13px;margin:0 0 8px 0"></h4><label class=field><span class=field-label>Display Name</span><input class=field-input type=text placeholder="e.g. Hexin OpenAI Gateway"></label><label class=field><span class=field-label>API Base URL</span><input class=field-input type=url placeholder="e.g. https://my-gateway.com/v1"></label><label class=field><span class=field-label>API Key Env Variable</span><input class=field-input type=text placeholder="e.g. MY_API_KEY"></label><label class=field><span class=field-label>Models (one per line: id:display_name)</span><textarea class=field-input rows=4 placeholder="gpt-5.4-mini:GPT-5.4 Mini
+gpt-5.4:GPT-5.4"style=font-family:monospace;font-size:12px;resize:vertical></textarea></label><div class="dialog-actions compact"style=margin-top:8px><button type=button class="btn mini">Cancel</button><button type=button class="btn btn-primary mini">`), _tmpl$4$3 = /* @__PURE__ */ template(`<div class=config-panel-group><h4 class=config-panel-group-title>Connected Providers</h4><div class=config-panel-card><div style=font-size:12px;opacity:0.6;margin-bottom:6px>Auto-detected providers from models.dev, env vars, and auth.`), _tmpl$5$3 = /* @__PURE__ */ template(`<div class=general-panel><div class=config-panel-group><h4 class=config-panel-group-title>Custom Providers<button type=button class="btn btn-primary mini"style=margin-left:auto;font-size:12px>+ Add`), _tmpl$6$3 = /* @__PURE__ */ template(`<div style=font-size:12px;opacity:0.7;margin-bottom:2px>Env: `), _tmpl$7$2 = /* @__PURE__ */ template(`<div class=config-panel-card style=margin-bottom:8px><div style=display:flex;align-items:center;justify-content:space-between;margin-bottom:4px><strong style=font-size:13px></strong><div style=display:flex;gap:6px><button type=button class="btn mini"style="font-size:11px;padding:2px 8px">Edit</button><button type=button class="btn mini"style="font-size:11px;padding:2px 8px;color:var(--color-danger, #e55)">Delete</button></div></div><div style=font-size:12px;opacity:0.7;margin-bottom:2px>API: </div><div style=font-size:12px;opacity:0.7>Models: `), _tmpl$8$2 = /* @__PURE__ */ template(`<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid var(--color-border, #333);font-size:12px"><span></span><span style=opacity:0.5> models`);
+function ProvidersPanel() {
+  const [saving, setSaving] = createSignal(false);
+  const [editing, setEditing] = createSignal(null);
+  const [showAdd, setShowAdd] = createSignal(false);
+  const [formId, setFormId] = createSignal("");
+  const [formName, setFormName] = createSignal("");
+  const [formApi, setFormApi] = createSignal("");
+  const [formEnvKey, setFormEnvKey] = createSignal("");
+  const [formModels, setFormModels] = createSignal("");
+  function configProviders() {
+    const cfg = appStore.config;
+    const p = cfg?.provider;
+    if (!p || typeof p !== "object" || Array.isArray(p)) return {};
+    return p;
+  }
+  function catalogProviders() {
+    return appStore.providerCatalog || {};
+  }
+  function resetForm() {
+    setFormId("");
+    setFormName("");
+    setFormApi("");
+    setFormEnvKey("");
+    setFormModels("");
+  }
+  function startAdd() {
+    resetForm();
+    setEditing(null);
+    setShowAdd(true);
+  }
+  function startEdit(id) {
+    const p = configProviders()[id];
+    if (!p) return;
+    setFormId(id);
+    setFormName(p.name || "");
+    setFormApi(p.api || "");
+    setFormEnvKey(p.env?.[0] || "");
+    const modelStr = Object.entries(p.models || {}).map(([mid, m]) => `${mid}:${m.name || mid}`).join("\n");
+    setFormModels(modelStr);
+    setEditing(id);
+    setShowAdd(true);
+  }
+  function parseModels(text) {
+    const models = {};
+    for (const line of text.split("\n")) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      const colonIdx = trimmed.indexOf(":");
+      const id = colonIdx > 0 ? trimmed.slice(0, colonIdx).trim() : trimmed;
+      const name = colonIdx > 0 ? trimmed.slice(colonIdx + 1).trim() : id;
+      if (id) {
+        models[id] = {
+          name: name || id,
+          tool_call: true
+        };
+      }
+    }
+    return models;
+  }
+  async function handleSave() {
+    const id = editing() || formId().trim().toLowerCase().replace(/[^a-z0-9-_]/g, "-");
+    if (!id || !formApi().trim()) return;
+    setSaving(true);
+    try {
+      const provider = {
+        name: formName().trim() || id,
+        api: formApi().trim().replace(/\/+$/, ""),
+        env: formEnvKey().trim() ? [formEnvKey().trim()] : [],
+        models: parseModels(formModels())
+      };
+      await updateConfig((cfg) => {
+        cfg.provider = cfg.provider || {};
+        cfg.provider[id] = provider;
+      });
+      const newCfg = await apiJson("config");
+      setAppStore("config", newCfg);
+      setShowAdd(false);
+      resetForm();
+      setEditing(null);
+    } catch (e) {
+      console.error("[providers] save failed", e);
+    } finally {
+      setSaving(false);
+    }
+  }
+  async function handleDelete(id) {
+    setSaving(true);
+    try {
+      await updateConfig((cfg) => {
+        if (cfg.provider) {
+          delete cfg.provider[id];
+          if (Object.keys(cfg.provider).length === 0) delete cfg.provider;
+        }
+      });
+      const newCfg = await apiJson("config");
+      setAppStore("config", newCfg);
+    } catch (e) {
+      console.error("[providers] delete failed", e);
+    } finally {
+      setSaving(false);
+    }
+  }
+  function cancel() {
+    setShowAdd(false);
+    resetForm();
+    setEditing(null);
+  }
+  const providerEntries = () => Object.entries(configProviders());
+  const catalogEntries = () => {
+    const custom = new Set(Object.keys(configProviders()));
+    return Object.entries(catalogProviders()).filter(([id]) => !custom.has(id)).map(([id, p]) => ({
+      id,
+      name: p.name || id,
+      source: p.source || "auto",
+      modelCount: Object.keys(p.models || {}).length
+    }));
+  };
+  return (() => {
+    var _el$ = _tmpl$5$3(), _el$2 = _el$.firstChild, _el$3 = _el$2.firstChild, _el$4 = _el$3.firstChild, _el$5 = _el$4.nextSibling;
+    _el$5.$$click = startAdd;
+    insert(_el$2, createComponent(Show, {
+      get when() {
+        return memo(() => providerEntries().length === 0)() && !showAdd();
+      },
+      get children() {
+        return _tmpl$$3();
+      }
+    }), null);
+    insert(_el$2, createComponent(For, {
+      get each() {
+        return providerEntries();
+      },
+      children: ([id, provider]) => (() => {
+        var _el$29 = _tmpl$7$2(), _el$30 = _el$29.firstChild, _el$31 = _el$30.firstChild, _el$32 = _el$31.nextSibling, _el$33 = _el$32.firstChild, _el$34 = _el$33.nextSibling, _el$35 = _el$30.nextSibling; _el$35.firstChild; var _el$39 = _el$35.nextSibling; _el$39.firstChild;
+        insert(_el$31, () => provider.name || id);
+        _el$33.$$click = () => startEdit(id);
+        _el$34.$$click = () => handleDelete(id);
+        insert(_el$35, () => provider.api, null);
+        insert(_el$29, createComponent(Show, {
+          get when() {
+            return provider.env?.length;
+          },
+          get children() {
+            var _el$37 = _tmpl$6$3(); _el$37.firstChild;
+            insert(_el$37, () => provider.env.join(", "), null);
+            return _el$37;
+          }
+        }), _el$39);
+        insert(_el$39, () => Object.keys(provider.models || {}).join(", ") || "none", null);
+        createRenderEffect(() => _el$34.disabled = saving());
+        return _el$29;
+      })()
+    }), null);
+    insert(_el$2, createComponent(Show, {
+      get when() {
+        return showAdd();
+      },
+      get children() {
+        var _el$7 = _tmpl$3$3(), _el$8 = _el$7.firstChild, _el$10 = _el$8.nextSibling, _el$11 = _el$10.firstChild, _el$12 = _el$11.nextSibling, _el$13 = _el$10.nextSibling, _el$14 = _el$13.firstChild, _el$15 = _el$14.nextSibling, _el$16 = _el$13.nextSibling, _el$17 = _el$16.firstChild, _el$18 = _el$17.nextSibling, _el$19 = _el$16.nextSibling, _el$20 = _el$19.firstChild, _el$21 = _el$20.nextSibling, _el$22 = _el$19.nextSibling, _el$23 = _el$22.firstChild, _el$24 = _el$23.nextSibling;
+        insert(_el$8, (() => {
+          var _c$ = memo(() => !!editing());
+          return () => _c$() ? `Edit: ${editing()}` : "Add Custom Provider";
+        })());
+        insert(_el$7, createComponent(Show, {
+          get when() {
+            return !editing();
+          },
+          get children() {
+            var _el$9 = _tmpl$2$3(), _el$0 = _el$9.firstChild, _el$1 = _el$0.nextSibling;
+            _el$1.$$input = (e) => setFormId(e.currentTarget.value);
+            createRenderEffect(() => _el$1.value = formId());
+            return _el$9;
+          }
+        }), _el$10);
+        _el$12.$$input = (e) => setFormName(e.currentTarget.value);
+        _el$15.$$input = (e) => setFormApi(e.currentTarget.value);
+        _el$18.$$input = (e) => setFormEnvKey(e.currentTarget.value);
+        _el$21.$$input = (e) => setFormModels(e.currentTarget.value);
+        _el$23.$$click = cancel;
+        _el$24.$$click = handleSave;
+        insert(_el$24, (() => {
+          var _c$2 = memo(() => !!saving());
+          return () => _c$2() ? "Saving..." : editing() ? "Update" : "Add Provider";
+        })());
+        createRenderEffect(() => _el$24.disabled = saving() || !editing() && !formId().trim() || !formApi().trim());
+        createRenderEffect(() => _el$12.value = formName());
+        createRenderEffect(() => _el$15.value = formApi());
+        createRenderEffect(() => _el$18.value = formEnvKey());
+        createRenderEffect(() => _el$21.value = formModels());
+        return _el$7;
+      }
+    }), null);
+    insert(_el$, createComponent(Show, {
+      get when() {
+        return catalogEntries().length > 0;
+      },
+      get children() {
+        var _el$25 = _tmpl$4$3(), _el$26 = _el$25.firstChild, _el$27 = _el$26.nextSibling; _el$27.firstChild;
+        insert(_el$27, createComponent(For, {
+          get each() {
+            return catalogEntries();
+          },
+          children: (p) => (() => {
+            var _el$41 = _tmpl$8$2(), _el$42 = _el$41.firstChild, _el$43 = _el$42.nextSibling, _el$44 = _el$43.firstChild;
+            insert(_el$42, () => p.name);
+            insert(_el$43, () => p.modelCount, _el$44);
+            return _el$41;
+          })()
+        }), null);
+        return _el$25;
+      }
+    }), null);
+    return _el$;
+  })();
 }
 delegateEvents(["click", "input"]);
 
@@ -16138,6 +16448,11 @@ const preferenceBody = document.getElementById("preferenceBody");
 if (preferenceBody) {
   preferenceBody.innerHTML = "";
   render(() => createComponent(PreferencesPanel, {}), preferenceBody);
+}
+const providersConfigBody = document.getElementById("providersConfigBody");
+if (providersConfigBody) {
+  providersConfigBody.innerHTML = "";
+  render(() => createComponent(ProvidersPanel, {}), providersConfigBody);
 }
 const interactionMountEl = document.getElementById("solidInteractionMount");
 if (interactionMountEl) {

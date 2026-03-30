@@ -879,6 +879,14 @@ export namespace MessageV2 {
           },
           { cause: e },
         ).toObject()
+      case e instanceof Error && /LLM stream stalled|stream inactivity/i.test(e.message):
+        return new MessageV2.APIError(
+          {
+            message: e.message,
+            isRetryable: true,
+          },
+          { cause: e },
+        ).toObject()
       case e instanceof Error:
         return new NamedError.Unknown({ message: e.toString() }, { cause: e }).toObject()
       default:

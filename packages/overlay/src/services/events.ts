@@ -148,15 +148,34 @@ export function routeSSEEvent(event: any): boolean {
 
 // ── executorEventKind ──
 // Map run.progress payload type to canonical executor event kind.
+// Must handle both underscore forms (tool_call) and dot forms (tool.call)
+// because executor event streams use dot notation while the internal
+// canonical form uses underscores.
 
 function executorEventKind(progressType: string | undefined): string {
   const t = String(progressType || "").trim().toLowerCase();
+  if (!t) return "event";
+  // Canonical underscore forms — pass through
   if (t === "message_delta" || t === "reasoning_delta") return t;
   if (t === "tool_call" || t === "tool_delta" || t === "tool_result") return t;
   if (t === "status") return "status";
   if (t === "git_checkpoint") return "git_checkpoint";
- // Default: use the raw type string so it stays inspectable.
-  return t || "event";
+  // Dot-notation types from executor event streams (tool.call, tool.result,
+  // reasoning.delta, permission.asked, etc.)
+  if (t.includes("tool")) return t.includes("result") ? "tool_result" : "tool_call";
+  if (t.includes("reason")) return "reasoning_delta";
+  if (t.includes("approval") || t === "permission.asked") return "approval_request";
+  if (t.includes("input")) return "input_request";
+  if (t.includes("mcp")) return "mcp";
+  if (t.includes("command")) return "command";
+  if (t.includes("error")) return "error";
+  if (t.includes("done") || t.includes("completed")) return "done";
+  // Do NOT catch-all on includes("delta")/includes("message") here.
+  // Protocol events like message.part.delta / message.part.updated flow
+  // through run.progress and must stay as-is — executorEventEntry handles
+  // extracting embedded tool parts when present. Mapping them to
+  // "message_delta" would make every streaming delta a visible message.
+  return t;
 }
 
 // ── Board / Task Lifecycle Event Handling ──

@@ -243,13 +243,20 @@ async function run(input: {
   let lastParsed: SpecOutputType | undefined
   let lastQuality: { score: number; reasons: string[] } | undefined
 
+  const systemPrompt = await specSystem()
+  const initialPrompt = buildUserPrompt(input, fileRefs, context)
+  let messages: any[] = [{ role: "user" as const, content: initialPrompt }]
+  let cumulativeToolCalls = 0
+
   for (let attempt = 0; attempt < MAX_SPEC_ATTEMPTS; attempt++) {
     if (input.signal?.aborted) throw new Error("spec agent aborted before attempt " + (attempt + 1))
 
-    const retryContext = attempt > 0 && lastQuality
-      ? { previousScore: lastQuality.score, reasons: lastQuality.reasons, attempt }
-      : undefined
-    const userPrompt = buildUserPrompt(input, fileRefs, context, retryContext, QUALITY_RETRY_THRESHOLD)
+    if (attempt > 0 && lastQuality) {
+      messages.push({
+        role: "user" as const,
+        content: buildSpecRetryMessage(lastQuality, QUALITY_RETRY_THRESHOLD, attempt),
+      })
+    }
 
     log.info("spec agent starting", {
       title: input.title,
@@ -261,12 +268,9 @@ async function run(input: {
       toolCount: Object.keys(guard.tools).length,
       attempt: attempt + 1,
       config: orchCfg.spec,
-      retryReason: retryContext ? `score ${retryContext.previousScore} < ${QUALITY_RETRY_THRESHOLD}` : undefined,
+      retryReason: attempt > 0 && lastQuality ? `score ${lastQuality.score} < ${QUALITY_RETRY_THRESHOLD}` : undefined,
     })
 
-    // Use streamText (not generateText) to keep the HTTP connection alive
-    // during extended thinking. Non-streaming requests timeout on reasoning
-    // models (kimi-k2.5, qwen3.5-plus) because no data flows during thinking.
     const baseSignal = input.signal ?? AbortSignal.timeout(TIMEOUT_MS)
     const stream = streamText({
       model: language,
@@ -274,25 +278,26 @@ async function run(input: {
       tools: guard.tools,
       maxOutputTokens: 32768,
       abortSignal: AbortSignal.any([baseSignal, guard.signal]),
-      system: await specSystem(),
-      prompt: userPrompt,
+      system: systemPrompt,
+      messages,
       ...(input.stream?.onChunk ? { onChunk: input.stream.onChunk as any } : {}),
       ...(input.stream?.onError ? { onError: input.stream.onError } : {}),
       onStepFinish: guard.onStepFinish as any,
     })
 
-    const [resultText, resultSteps, resultFinishReason] = await Promise.all([
+    const [resultText, resultSteps, resultFinishReason, response] = await Promise.all([
       stream.text,
       stream.steps,
       stream.finishReason,
+      stream.response,
     ])
 
     const toolCallCount = resultSteps.reduce(
       (sum, s) => sum + (Array.isArray((s as any).toolCalls) ? (s as any).toolCalls.length : 0),
       0,
     )
+    cumulativeToolCalls += toolCallCount
 
-    // Collect all text output across steps (multi-step agents produce text per step)
     let allText = resultText?.trim() || ""
     if (!allText) {
       allText = resultSteps.map((s) => s.text).filter(Boolean).join("\n")
@@ -303,13 +308,12 @@ async function run(input: {
       finishReason: resultFinishReason,
       textLength: allText.length,
       toolCalls: toolCallCount,
+      cumulativeToolCalls,
       attempt: attempt + 1,
     })
 
-    // Parse structured sections from text output
     let parsed: SpecOutputType = parseSpecText(allText)
 
-    // Log if output seems truncated — no fallback synthesis, force retry instead
     if (parsed.content.length < 100 || parsed.spec_items.length < 1) {
       log.warn("spec: output seems truncated or empty, will retry via quality gate", {
         contentLength: parsed.content.length,
@@ -319,13 +323,13 @@ async function run(input: {
 
     parsed.summary = ensureMeaningfulSummary(parsed.summary, input.title)
 
-    const specQuality = validateSpecQuality(parsed, input.request, toolCallCount)
+    const specQuality = validateSpecQuality(parsed, input.request, cumulativeToolCalls)
     log.info("spec agent output", {
       specItems: parsed.spec_items.length,
       contentLength: parsed.content.length,
       evidenceSources: parsed.evidence_sources.length,
       risks: parsed.risks.length,
-      toolCalls: toolCallCount,
+      toolCalls: cumulativeToolCalls,
       quality: specQuality,
       attempt: attempt + 1,
     })
@@ -340,11 +344,15 @@ async function run(input: {
       return parsed
     }
 
+    if (Array.isArray(response?.messages)) {
+      messages = [...messages, ...response.messages]
+    }
+
     log.warn("spec: spec quality below threshold, retrying", {
       score: specQuality.score,
       threshold: QUALITY_RETRY_THRESHOLD,
       reasons: specQuality.reasons,
-      toolCalls: toolCallCount,
+      toolCalls: cumulativeToolCalls,
     })
   }
 
@@ -355,6 +363,26 @@ async function run(input: {
 // ---------------------------------------------------------------------------
 // User prompt building
 // ---------------------------------------------------------------------------
+
+function buildSpecRetryMessage(
+  lastQuality: { score: number; reasons: string[] },
+  qualityThreshold: number,
+  attempt: number,
+): string {
+  return [
+    "# QUALITY RETRY - Previous Spec Was Insufficient",
+    "",
+    `Score: ${lastQuality.score.toFixed(2)} / ${qualityThreshold}. Attempt ${attempt + 1}.`,
+    "",
+    "**Issues found:**",
+    ...lastQuality.reasons.map((r) => `- ${r}`),
+    "",
+    "You already explored the codebase in the previous round — use that knowledge. " +
+    "Do NOT repeat directory listings or file reads you already did. " +
+    "Fix all issues: every spec item must reference concrete file paths, " +
+    "have a clear title/description/check_selector, and verifiable criteria.",
+  ].join("\n")
+}
 
 function buildUserPrompt(
   input: {
@@ -367,31 +395,8 @@ function buildUserPrompt(
   },
   fileRefs: Array<{ ref: string; content: string }>,
   context: string,
-  retryContext?: { previousScore: number; reasons: string[]; attempt: number },
-  qualityThreshold = SPEC_DEFAULTS.quality_threshold,
 ): string {
   const sections = [`# Task\n\nTitle: ${input.title}\n\nRequest:\n${input.request}`]
-
-  if (retryContext) {
-    sections.push(
-      [
-        "# QUALITY RETRY - Previous Spec Was Insufficient",
-        "",
-        `Your previous spec scored ${retryContext.previousScore.toFixed(2)} / 1.0 (threshold: ${qualityThreshold}). Attempt ${retryContext.attempt + 1}.`,
-        "",
-        "**Issues found:**",
-        ...retryContext.reasons.map((r) => `- ${r}`),
-        "",
-        "**Requirements for this attempt:**",
-        "- Use tools to explore the codebase until you have enough context to write specific, grounded output",
-        "- Every spec item MUST reference concrete file paths discovered from exploration",
-        "- Each spec item MUST have a clear title, detailed description, and check_selector",
-        "- Every blocking spec item MUST have verifiable success/failure criteria",
-      ]
-        .filter(Boolean)
-        .join("\n"),
-    )
-  }
 
   if (input.goals && input.goals.length > 0) {
     sections.push(

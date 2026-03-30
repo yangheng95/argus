@@ -145,7 +145,7 @@ export function renderMeta(): void {
   const dirNode = document.getElementById("taskDir");
   const workspaceNode = document.getElementById("taskWorkspaceDir");
   const gitNode = document.getElementById("taskGit");
-  const dir = settingsStore.directory || "";
+  const dir = settingsStore.directory || boardStore.board?.task?.directory || "";
   const vcs = boardStore.vcs;
 
   if (dirNode) {
