@@ -1,4 +1,4 @@
-import { Index, Show, createMemo } from "solid-js";
+import { Index, Show, createMemo, createSignal } from "solid-js";
 import { displayToolIcon } from "../utils/tool";
 import { t } from "../utils/i18n";
 import {
@@ -11,6 +11,26 @@ function tailLines(text: string, maxLines = 6): string {
   const lines = text.split("\n");
   if (lines.length <= maxLines) return text;
   return lines.slice(-maxLines).join("\n");
+}
+
+/** Check if a tool is an edit/write tool whose input contains code. */
+function hasCodeInput(proc: any): boolean {
+  if (!proc?.input || typeof proc.input !== "object") return false;
+  const name = (proc.toolName || "").toLowerCase();
+  return (name === "edit" || name === "write" || name === "patch") &&
+    !!(proc.input.new_string || proc.input.old_string || proc.input.content);
+}
+
+/** Format the code change for an edit tool. */
+function editSummary(input: any): string {
+  if (!input) return "";
+  const parts: string[] = [];
+  if (input.file_path) parts.push(input.file_path);
+  if (input.old_string && input.new_string) {
+    parts.push(`- ${String(input.old_string).split("\n").length} lines`);
+    parts.push(`+ ${String(input.new_string).split("\n").length} lines`);
+  }
+  return parts.join("  ");
 }
 
 export function ExecutorGoalBlock(props: {
@@ -83,17 +103,30 @@ export function ExecutorGoalBlock(props: {
         <div class="executor-goal-body">
           <Index each={props.processes}>
             {(proc) => {
+              const [entryExpanded, setEntryExpanded] = createSignal(false);
               const output = () => {
                 const text = (proc().output || "").trim();
                 if (!text) return "";
-                // Running: show last 6 lines; completed/failed: show last 3
+                // When individually expanded, show full output
+                if (entryExpanded()) return text;
+                // Collapsed: running shows last 6 lines, completed shows last 3
                 return proc().status === "running" ? tailLines(text, 6) : tailLines(text, 3);
+              };
+              const isOutputTruncated = () => {
+                const text = (proc().output || "").trim();
+                if (!text) return false;
+                return output() !== text;
               };
               const progress = () => {
                 const text = (proc().progress || "").trim();
-                // Don't show generic status labels that duplicate the status icon
                 if (!text || text === t("task.status.running") || text === t("task.status.completed")) return "";
                 return text;
+              };
+              const codeInput = () => hasCodeInput(proc()) ? proc().input : null;
+              const commandInput = () => {
+                const name = (proc().toolName || "").toLowerCase();
+                if (name !== "bash") return "";
+                return proc().input?.command || proc().detail || "";
               };
               return (
                 <div
@@ -101,7 +134,8 @@ export function ExecutorGoalBlock(props: {
                   data-status={proc().status || "running"}
                   data-live={proc().status === "running" ? "true" : "false"}
                 >
-                  <div class="executor-tool-item">
+                  <div class="executor-tool-item" role="button" tabindex="0"
+                       onClick={() => setEntryExpanded(!entryExpanded())}>
                     <span class="executor-tool-icon">
                       {displayToolIcon(proc().toolName || proc().title || "")}
                     </span>
@@ -127,8 +161,27 @@ export function ExecutorGoalBlock(props: {
                             : "\u2013"}
                     </span>
                   </div>
+                  <Show when={commandInput()}>
+                    <pre class="executor-tool-command">{commandInput()}</pre>
+                  </Show>
+                  <Show when={entryExpanded() && codeInput()}>
+                    <div class="executor-tool-diff">
+                      <div class="executor-tool-diff-header">{editSummary(codeInput())}</div>
+                      <Show when={codeInput()!.old_string}>
+                        <pre class="executor-tool-diff-remove">{codeInput()!.old_string}</pre>
+                      </Show>
+                      <Show when={codeInput()!.new_string}>
+                        <pre class="executor-tool-diff-add">{codeInput()!.new_string}</pre>
+                      </Show>
+                    </div>
+                  </Show>
                   <Show when={output()}>
                     <pre class="executor-tool-output">{output()}</pre>
+                  </Show>
+                  <Show when={isOutputTruncated()}>
+                    <button class="executor-tool-expand" onClick={() => setEntryExpanded(true)}>
+                      {"\u2026"}
+                    </button>
                   </Show>
                 </div>
               );

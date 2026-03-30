@@ -201,7 +201,7 @@ export function consumeExecutorEvents(
             taskID,
             runID,
             type: "text_delta",
-            text: event.summary ?? "",
+            text: event.summary ?? (typeof event.payload?.text === "string" ? event.payload.text : ""),
           })
         } else {
           Bus.publish(Event.RunProgress, {

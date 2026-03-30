@@ -51,7 +51,7 @@
   "chat.role.goal": "Goal",
   "chat.role.message": "Message",
   "chat.role.planner": "Plan",
-  "chat.role.scheduler": "Evaluator",
+  "chat.role.evaluator": "Evaluator",
   "chat.role.spec": "Spec",
   "chat.role.system": "System",
   "chat.role.user": "User",

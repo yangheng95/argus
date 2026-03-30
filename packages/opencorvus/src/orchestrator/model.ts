@@ -686,7 +686,7 @@ export const RunMetrics = z.object({
   delivery_focus_score: z.number(),
 })
 
-export type AgentStageType = "spec" | "goal" | "planner" | "judge" | "delivery"
+export type AgentStageType = "spec" | "goal" | "planner" | "evaluator" | "delivery"
 
 export const Event = {
   AgentUpdated: BusEvent.define("orchestrator.agent.updated", z.object({ taskID: z.string(), runID: z.string().optional(), stage: z.string(), kind: z.string(), id: z.string().optional(), toolName: z.string().optional(), text: z.string().optional(), summary: z.string() })),

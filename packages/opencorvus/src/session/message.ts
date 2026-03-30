@@ -100,7 +100,7 @@ export namespace MessageV2 {
     synthetic: z.boolean().optional(),
     ignored: z.boolean().optional(),
     kind: z.enum(["user_content", "control", "context", "trace"]).optional(),
-    source: z.enum(["user", "system", "scheduler", "planner", "goal_gate", "task_tool"]).optional(),
+    source: z.enum(["user", "system", "evaluator", "planner", "goal_gate", "task_tool"]).optional(),
     audience: z
       .object({
         model: z.boolean().optional(),

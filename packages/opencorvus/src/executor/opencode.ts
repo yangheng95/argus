@@ -17,7 +17,7 @@ const SubmitInput = z.object({
   sessionID: Identifier.schema("session"),
   prompt: z.string(),
   priority: z.enum(["high", "normal", "low"]).optional(),
-  source: z.enum(["planner", "scheduler", "system"]).optional(),
+  source: z.enum(["planner", "evaluator", "system"]).optional(),
 })
 
 const ResumeInput = z.object({

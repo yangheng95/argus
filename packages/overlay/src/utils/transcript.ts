@@ -76,7 +76,7 @@ function formatTranscriptText(part: any, role: string): string {
   if (!text.trim()) return "";
   if (part.audience && part.audience.ui === false) return "";
   if (part.kind === "trace" && !part.audience?.ui) return "";
-  const orchestratorRoles = ["user", "planner", "scheduler", "system"];
+  const orchestratorRoles = ["user", "planner", "evaluator", "system"];
   if (orchestratorRoles.includes(role) && text.includes("<assistant-brief>")) {
     text = stripAssistantBrief(text);
   }

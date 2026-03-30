@@ -45,7 +45,7 @@ function commandLine(value: any): string {
 function clipBlock(value: any, limit = 280): string {
   const text = String(value || "").replace(/\r\n?/g, "\n").trim();
   if (!text) return "";
-  if (text.length <= limit) return text;
+  if (limit <= 0 || text.length <= limit) return text;
   return `${text.slice(0, Math.max(0, limit - 3)).trimEnd()}...`;
 }
 
@@ -420,10 +420,10 @@ export function executorCommand(event: any): string {
 }
 
 /** Extract and clip the output text from an executor event payload. */
-export function executorOutput(event: any): string {
+export function executorOutput(event: any, limit = 280): string {
   if (!record(event?.payload)) return "";
   const output = event.payload.output;
-  if (typeof output === "string") return clipBlock(output);
+  if (typeof output === "string") return clipBlock(output, limit);
   if (record(output)) {
     const text = [
       (output as any).output,
@@ -435,10 +435,10 @@ export function executorOutput(event: any): string {
     ]
       .filter((item) => typeof item === "string" && item.trim())
       .join("\n");
-    if (text) return clipBlock(text);
+    if (text) return clipBlock(text, limit);
     return "";
   }
-  if (typeof event.payload.text === "string") return clipBlock(event.payload.text);
+  if (typeof event.payload.text === "string") return clipBlock(event.payload.text, limit);
   return "";
 }
 
@@ -707,6 +707,7 @@ export function buildExecutorProcesses(events: ExecutorEvent[] = []): any[] {
       progress: executorProcessProgress(event, events, index),
       note: "",
       output: "",
+      input: null as any,
       status: executorProcessStatus(event),
       goalRunID: event.goalRunID || "",
       executorSessionID: event.executorSessionID || "",
@@ -724,10 +725,17 @@ export function buildExecutorProcesses(events: ExecutorEvent[] = []): any[] {
     const note = executorProcessNote(event, events, index);
     if (note) current.note = note;
     current.status = executorProcessStatus(event) || current.status;
+    // Use generous limit (10KB) instead of 280 chars — truncation for display
+    // happens in the component, not here.
     const output = event.kind === "message_delta"
       ? executorTargetText(event, events, index)
-      : executorOutput(event);
+      : executorOutput(event, 10000);
     if (output) current.output = mergeExecutorProcessOutput(current.output, output, event.kind === "message_delta");
+    // Preserve parsed tool input for rich rendering
+    if (!current.input && record(event?.payload)) {
+      const rawInput = event.payload.input ?? event.payload.arguments ?? event.payload.args;
+      if (rawInput) current.input = toolStateInput(rawInput);
+    }
     current.time.updated = event.time?.created || current.time.updated;
     items.set(id, current);
   });
@@ -746,6 +754,7 @@ export function buildExecutorProcesses(events: ExecutorEvent[] = []): any[] {
       cached.progress === process.progress &&
       cached.note === process.note &&
       cached.output === process.output &&
+      cached.input === process.input &&
       cached.kind === process.kind &&
       cached.toolName === process.toolName &&
       cached.toolDetail === process.toolDetail
