@@ -124,8 +124,6 @@ const DIAG_TYPES = new Set([
   "orchestrator.agent.updated",
   "orchestrator.run.created",
   "orchestrator.run.updated",
-  "orchestrator.run.progress",
-  "orchestrator.run.output",
   "orchestrator.task.created",
   "orchestrator.task.updated",
   "orchestrator.spec.created",
@@ -134,6 +132,10 @@ const DIAG_TYPES = new Set([
   "orchestrator.plan.activated",
   "orchestrator.interaction.requested",
   "orchestrator.interaction.resolved",
+  // Executor events now flow through MessageV2 — tool calls and text arrive
+  // as message.part.updated instead of run.progress/run.output.
+  "orchestrator.message.part.updated",
+  "orchestrator.message.updated",
 ])
 const PLANNING_VISIBLE_TIMEOUT_MS = Number(flag("--planning-timeout-ms")) || 2 * 60 * 1000
 const TASK_CREATE_TIMEOUT_MS = Number(flag("--task-create-timeout-ms")) || 5 * 60 * 1000
@@ -304,13 +306,10 @@ function formatEventLine(entry: {
   toolName: string
   goalRunID: string
 }) {
-  if (entry.type === "orchestrator.run.output" && entry.text && !STREAM_PLACEHOLDERS.has(entry.text)) {
-    return `[overlay-benchmark] output=${clipText(entry.text, 240)}`
-  }
-  if (entry.type === "orchestrator.run.progress") {
-    const detail = entry.summary || entry.text || entry.progressType || entry.status
+  if (entry.type === "orchestrator.message.part.updated" || entry.type === "orchestrator.message.updated") {
+    const detail = entry.toolName || entry.summary || entry.kind || entry.status
     if (!detail || STREAM_PLACEHOLDERS.has(detail)) return ""
-    return `[overlay-benchmark] progress-event=${clipText(detail, 240)}`
+    return `[overlay-benchmark] message-event=${entry.toolName ? `tool=${entry.toolName}` : ""}${entry.kind ? ` kind=${entry.kind}` : ""} ${clipText(detail, 200)}`
   }
   const summary = entry.summary || entry.text
   const parts = [
@@ -362,11 +361,14 @@ const onEvent = ({ payload }: { payload: unknown }) => {
   // false stall detection while a reasoning model is generating tokens.
   if (payload && typeof payload === "object" && "type" in payload) {
     const rawType = String((payload as any).type ?? "")
-    if (rawType === "message.part.delta" || rawType.endsWith(".part.delta")) {
+    if (rawType === "message.part.delta" || rawType.endsWith(".part.delta") ||
+        rawType === "message.part.updated" || rawType.endsWith(".part.updated")) {
       lastEventAt = Date.now()
       lastActivityLogAt = Date.now()
       lastLogAt = Date.now()
-      return
+      // message.part.updated carries tool calls — let it through to normalizeEvent
+      // for logging, but message.part.delta is too high-frequency to log.
+      if (rawType === "message.part.delta" || rawType.endsWith(".part.delta")) return
     }
   }
   const normalized = normalizeEvent(payload)
@@ -1415,14 +1417,17 @@ function clipText(value: string, max: number) {
 function summarizeEvents(events: Array<Record<string, unknown>>, taskID: string) {
   const filtered = events.filter((item) => !taskID || item.taskID === taskID)
   const agents = filtered.filter((item) => item.type === "orchestrator.agent.updated")
-  const runEvents = filtered.filter((item) => item.type === "orchestrator.run.progress" || item.type === "orchestrator.run.output")
+  const runEvents = filtered.filter((item) =>
+    item.type === "orchestrator.message.part.updated" ||
+    item.type === "orchestrator.message.updated"
+  )
   const kinds = filtered.reduce<Record<string, number>>((map, item) => {
     const type = typeof item.type === "string" ? item.type : ""
     if (!type) return map
     map[type] = (map[type] ?? 0) + 1
     return map
   }, {})
-  const stages = ["spec", "planner", "judge"].flatMap((stage) => {
+  const stages = ["spec", "planner", "evaluator"].flatMap((stage) => {
     const list = agents.filter((item) => item.stage === stage)
     if (list.length === 0) return []
     const toolCalls = list
