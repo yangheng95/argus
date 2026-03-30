@@ -8,7 +8,6 @@ import { EvaluationCheck } from "./model"
 import {
   OrchestratorArtifactTable,
   OrchestratorDeliveryTable,
-  OrchestratorExecutorEventTable,
   OrchestratorExecutorSessionTable,
   OrchestratorEvaluationTable,
   OrchestratorGoalTable,
@@ -44,7 +43,6 @@ export type RequirementRow = typeof OrchestratorRequirementTable.$inferSelect
 export type GoalSnapshotRow = typeof OrchestratorGoalSnapshotTable.$inferSelect
 export type GoalRunRow = typeof OrchestratorGoalRunTable.$inferSelect
 export type PlanNodeRow = typeof OrchestratorPlanNodeTable.$inferSelect
-export type ExecutorEventRow = typeof OrchestratorExecutorEventTable.$inferSelect
 export type SpecSnapshotRow = typeof OrchestratorSpecSnapshotTable.$inferSelect
 export type SpecItemRow = typeof OrchestratorSpecItemTable.$inferSelect
 export type TaskProjectRow = {
@@ -315,17 +313,6 @@ export function listGoalRunsByCoordinator(coordinatorRunID: string) {
       .from(OrchestratorGoalRunTable)
       .where(eq(OrchestratorGoalRunTable.coordinator_run_id, coordinatorRunID))
       .orderBy(OrchestratorGoalRunTable.time_created)
-      .all(),
-  )
-}
-
-export function listExecutorEvents(executorSessionID: string) {
-  return Database.use((db) =>
-    db
-      .select()
-      .from(OrchestratorExecutorEventTable)
-      .where(eq(OrchestratorExecutorEventTable.executor_session_id, executorSessionID))
-      .orderBy(OrchestratorExecutorEventTable.sequence)
       .all(),
   )
 }
@@ -843,26 +830,6 @@ export function viewExecutorSession(row: ExecutorSessionRow) {
       updated: row.time_updated,
       started: row.time_started ?? undefined,
       completed: row.time_completed ?? undefined,
-    },
-  }
-}
-
-export function viewExecutorEvent(row: ExecutorEventRow) {
-  return {
-    id: row.id,
-    executorSessionID: row.executor_session_id,
-    taskID: row.task_id,
-    runID: row.run_id,
-    sequence: row.sequence,
-    kind: row.kind,
-    summary: row.summary ?? undefined,
-    refs: row.refs ?? undefined,
-    payload: row.payload ?? undefined,
-    raw: row.raw ?? undefined,
-    time: {
-      created: row.time_created,
-      updated: row.time_updated,
-      observed: row.time_observed,
     },
   }
 }

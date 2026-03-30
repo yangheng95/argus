@@ -329,24 +329,6 @@ export const ExecutorSession = z.object({
   }),
 })
 
-export const ExecutorEvent = z.object({
-  id: z.string(),
-  executorSessionID: z.string(),
-  taskID: Identifier.schema("task"),
-  runID: Identifier.schema("run"),
-  sequence: z.number().int(),
-  kind: z.string(),
-  summary: z.string().optional(),
-  refs: ProtocolRefs.optional(),
-  payload: z.record(z.string(), z.any()).optional(),
-  raw: z.record(z.string(), z.any()).optional(),
-  time: z.object({
-    created: z.number(),
-    updated: z.number(),
-    observed: z.number(),
-  }),
-})
-
 export const Interaction = z.object({
   id: Identifier.schema("interaction"),
   taskID: Identifier.schema("task"),

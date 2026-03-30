@@ -1,21 +1,14 @@
-import { Bus } from "@/bus"
-import { ExecutorRegistry } from "@/executor/registry"
 import { protocolInfo, type ProtocolCapabilitiesInfo, type ProtocolRefsInfo, type ProtocolSettingsInfo, ProtocolTransport } from "@/executor/protocol"
-import { Database, desc, eq } from "@/storage/db"
-import { Log } from "@/util/log"
+import { Database, eq } from "@/storage/db"
 import { Identifier } from "@/id/id"
 import {
-  OrchestratorExecutorEventTable,
   OrchestratorExecutorSessionTable,
   OrchestratorInteractionRequestTable,
 } from "./orchestrator.sql"
-import { Event } from "./model"
 import {
   findInteractionByExternal,
   type RunRow,
 } from "./store"
-
-const log = Log.create({ service: "orchestrator-runtime" })
 
 export function ensureExecutorSession(input: {
   taskID: string
@@ -121,104 +114,6 @@ export function updateExecutorSessionStatus(runID: string, status: typeof Orches
   )
 }
 
-export function appendExecutorEvent(
-  executorSessionID: string,
-  taskID: string,
-  runID: string,
-  provider: RunRow["executor"],
-  event: {
-    provider: RunRow["executor"]
-    kind: string
-    summary?: string
-    refs?: ProtocolRefsInfo
-    payload?: Record<string, unknown>
-    raw?: Record<string, unknown>
-  },
-) {
-  const last = Database.use((db) =>
-    db
-      .select()
-      .from(OrchestratorExecutorEventTable)
-      .where(eq(OrchestratorExecutorEventTable.executor_session_id, executorSessionID))
-      .orderBy(desc(OrchestratorExecutorEventTable.sequence))
-      .get(),
-  )
-  const now = Date.now()
-  const sequence = (last?.sequence ?? 0) + 1
-  Database.use((db) =>
-    db
-      .insert(OrchestratorExecutorEventTable)
-      .values({
-        id: Identifier.ascending("executor_event"),
-        executor_session_id: executorSessionID,
-        task_id: taskID,
-        run_id: runID,
-        sequence,
-        kind: event.kind,
-        summary: event.summary ?? null,
-        refs: event.refs,
-        payload: {
-          provider,
-          ...(event.payload ?? {}),
-        },
-        raw: event.raw,
-        time_observed: now,
-        time_created: now,
-        time_updated: now,
-      })
-      .run(),
-  )
-}
-
-/** 将 executor 的实时事件桥接到 Bus，供 SSE 转发给前端 */
-export function consumeExecutorEvents(
-  taskID: string,
-  runID: string,
-  executorName: Parameters<typeof ExecutorRegistry.require>[0],
-  sessionID: string,
-  executorSessionID: string,
-) {
-  const executor = ExecutorRegistry.require(executorName)
-  if (!executor.capabilities().events) return
-  // 异步消费 — 不阻塞 dispatch 返回
-  ;(async () => {
-    try {
-      for await (const event of executor.events({ sessionID })) {
-        upsertExecutorInteraction(taskID, runID, sessionID, executorSessionID, executorName, event)
-        appendExecutorEvent(executorSessionID, taskID, runID, executorName, {
-          provider: executorName,
-          kind: protocolEventKind(event.type),
-          summary: event.summary ?? event.type,
-          payload: event.payload,
-          raw: {
-            type: event.type,
-            summary: event.summary,
-            payload: event.payload,
-          },
-        })
-        if (event.type === "text_delta") {
-          Bus.publish(Event.RunOutput, {
-            taskID,
-            runID,
-            type: "text_delta",
-            text: event.summary ?? (typeof event.payload?.text === "string" ? event.payload.text : ""),
-          })
-        } else {
-          Bus.publish(Event.RunProgress, {
-            taskID,
-            runID,
-            type: event.type,
-            summary: event.summary ?? event.type,
-            payload: event.payload,
-          })
-        }
-      }
-    } catch (err) {
-      log.warn("executor event bridge ended", { taskID, runID, error: String(err) })
-    }
-  })()
-}
-
 function mergeRefs(current?: ProtocolRefsInfo, next?: ProtocolRefsInfo) {
   if (!current && !next) return undefined
   const result = {
@@ -226,21 +121,6 @@ function mergeRefs(current?: ProtocolRefsInfo, next?: ProtocolRefsInfo) {
     ...(next ?? {}),
   }
   return Object.keys(result).length > 0 ? result : undefined
-}
-
-function protocolEventKind(type: string) {
-  if (type.includes("tool")) return type.includes("result") ? "tool_result" : "tool_call"
-  if (type.includes("reason")) return "reasoning_delta"
-  if (type.includes("plan")) return "plan_delta"
-  if (type.includes("diff")) return "diff_delta"
-  if (type.includes("approval")) return "approval_request"
-  if (type.includes("input")) return "input_request"
-  if (type.includes("mcp")) return "mcp"
-  if (type.includes("command")) return "command"
-  if (type.includes("error")) return "error"
-  if (type.includes("done") || type.includes("completed")) return "done"
-  if (type.includes("delta") || type.includes("message")) return "message_delta"
-  return "status"
 }
 
 function upsertExecutorInteraction(

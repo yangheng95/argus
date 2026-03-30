@@ -100,7 +100,6 @@ import {
   searchProjectTasks,
   listGoals,
   listGoalsByPlan,
-  listExecutorEvents as listExecutorProtocolEvents,
   listInteractions,
   listMilestones,
   listMilestonesByPlan,
@@ -110,7 +109,6 @@ import {
   requireTask,
   viewArtifact,
   viewDelivery,
-  viewExecutorEvent,
   viewExecutorSession,
   viewEvaluation,
   viewGoal,
@@ -527,14 +525,6 @@ export namespace OrchestratorService {
     const row = findExecutorSessionByRun(runID)
     if (!row) throw new NotFoundError({ message: `Executor session not found for run ${runID}` })
     return viewExecutorSession(row)
-  }
-
-  export async function listExecutorEvents(runID: string) {
-    // Read-only — poll loop handles state advancement asynchronously.
-    requireRun(runID)
-    const row = findExecutorSessionByRun(runID)
-    if (!row) return []
-    return listExecutorProtocolEvents(row.id).map(viewExecutorEvent)
   }
 
   export async function listProtocolEvents(taskID: string) {

@@ -688,30 +688,6 @@ CREATE INDEX IF NOT EXISTS orchestrator_executor_session_run_idx ON orchestrator
 CREATE INDEX IF NOT EXISTS orchestrator_executor_session_goal_run_idx ON orchestrator_executor_session (goal_run_id);
 CREATE INDEX IF NOT EXISTS orchestrator_executor_session_status_idx   ON orchestrator_executor_session (status);
 
-CREATE TABLE IF NOT EXISTS orchestrator_executor_event (
-  id                  text PRIMARY KEY,
-  executor_session_id text NOT NULL,
-  task_id             text NOT NULL,
-  run_id              text NOT NULL,
-  goal_run_id         text REFERENCES orchestrator_goal_run(id) ON DELETE SET NULL,
-  sequence            integer NOT NULL,
-  kind                text NOT NULL,
-  summary             text,
-  refs                text,
-  payload             text,
-  raw                 text,
-  time_observed       integer NOT NULL,
-  time_created        integer NOT NULL,
-  time_updated        integer NOT NULL,
-  FOREIGN KEY (executor_session_id) REFERENCES orchestrator_executor_session(id) ON DELETE CASCADE,
-  FOREIGN KEY (task_id)             REFERENCES orchestrator_task(id)             ON DELETE CASCADE,
-  FOREIGN KEY (run_id)              REFERENCES orchestrator_run(id)              ON DELETE CASCADE
-);
-CREATE INDEX IF NOT EXISTS orchestrator_executor_event_session_idx ON orchestrator_executor_event (executor_session_id, sequence);
-CREATE INDEX IF NOT EXISTS orchestrator_executor_event_run_idx ON orchestrator_executor_event (run_id, sequence);
-CREATE INDEX IF NOT EXISTS orchestrator_executor_event_task_idx ON orchestrator_executor_event (task_id, sequence);
-CREATE INDEX IF NOT EXISTS orchestrator_executor_event_kind_idx ON orchestrator_executor_event (kind);
-
 CREATE TABLE IF NOT EXISTS orchestrator_channel_binding (
   id           text PRIMARY KEY,
   task_id      text NOT NULL,
