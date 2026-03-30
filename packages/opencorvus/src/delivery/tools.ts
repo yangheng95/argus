@@ -1,9 +1,9 @@
 /**
  * Tool set for the DeliveryAgent.
  *
- * Read-only verification tools with memory/preference awareness and command
- * execution (for builds, startup checks). The delivery agent CANNOT modify
- * files — it reports issues back to the orchestrator for retry/replan.
+ * Verification tools + write tools for fixing issues found during delivery.
+ * The delivery agent CAN modify files to fix runtime/quality issues, then
+ * re-verify. If it cannot fix, it rejects with context for replan.
  */
 import { tool } from "ai"
 import z from "zod"
@@ -22,11 +22,10 @@ const log = Log.create({ service: "delivery-tools" })
  *
  * Includes:
  * - 4 codebase tools: read_file, find_files, search_code, list_directory
+ * - 2 write tools: write_file, edit_file (for fixing issues)
  * - 2 memory tools: memory_search, memory_write
  * - 1 preference tool: preference_list
  * - 1 execution tool: run_command (for builds, startup checks)
- *
- * NO write tools — delivery agent reports issues back to orchestrator.
  */
 export function createDeliveryTools(input?: { sessionID?: string }) {
   const codebase = createCodebaseTools()
@@ -35,6 +34,52 @@ export function createDeliveryTools(input?: { sessionID?: string }) {
 
   return {
     ...codebase,
+
+    write_file: tool({
+      description:
+        "Write content to a file. Creates the file if it doesn't exist, overwrites if it does. " +
+        "Use for creating new files or completely rewriting small files during fix phases.",
+      inputSchema: z.object({
+        path: z.string().describe("File path relative to project root"),
+        content: z.string().describe("Complete file content to write"),
+      }),
+      execute: async ({ path: filePath, content }) => {
+        try {
+          const resolved = Filesystem.resolve(Instance.directory, filePath)
+          if (!resolved.startsWith(projectDir)) return "Error: path outside project directory"
+          await Filesystem.write(resolved, content)
+          return `Written: ${filePath} (${content.length} bytes)`
+        } catch (err) {
+          log.warn("write_file failed in delivery agent", { path: filePath, err })
+          return `Error writing file: ${err instanceof Error ? err.message : String(err)}`
+        }
+      },
+    }),
+
+    edit_file: tool({
+      description:
+        "Replace a specific string in a file. Use for targeted fixes — replace the exact old text with new text. " +
+        "The old_string must match exactly (including whitespace/indentation).",
+      inputSchema: z.object({
+        path: z.string().describe("File path relative to project root"),
+        old_string: z.string().describe("Exact text to find and replace"),
+        new_string: z.string().describe("Replacement text"),
+      }),
+      execute: async ({ path: filePath, old_string, new_string }) => {
+        try {
+          const resolved = Filesystem.resolve(Instance.directory, filePath)
+          if (!resolved.startsWith(projectDir)) return "Error: path outside project directory"
+          const content = await Filesystem.read(resolved)
+          if (!content.includes(old_string)) return `Error: old_string not found in ${filePath}`
+          const updated = content.replace(old_string, new_string)
+          await Filesystem.write(resolved, updated)
+          return `Edited: ${filePath} (replaced ${old_string.length} chars → ${new_string.length} chars)`
+        } catch (err) {
+          log.warn("edit_file failed in delivery agent", { path: filePath, err })
+          return `Error editing file: ${err instanceof Error ? err.message : String(err)}`
+        }
+      },
+    }),
 
     memory_search: tool({
       description:
