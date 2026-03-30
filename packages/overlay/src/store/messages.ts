@@ -273,6 +273,7 @@ export function activeAgentStages(): Set<string> {
   if (status === "spec_generating") return new Set(["spec"]);
   if (status === "goal_decomposing") return new Set(["goal"]);
   if (status === "planning") return new Set(["planner"]);
+  if (status === "running") return new Set(["executor"]);
   if (status === "evaluating") return new Set(["evaluator"]);
   if (status === "delivering") return new Set(["delivery"]);
   if (!status && Array.isArray(store.agentEvents) && store.agentEvents.length > 0) {
