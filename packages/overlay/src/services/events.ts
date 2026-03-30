@@ -1,6 +1,7 @@
 // ── SSE Event Router & Board/Task Lifecycle ──
-// Central dispatch for all incoming SSE events plus board/task lifecycle
-// processing (handleEventStreamEvent).
+// Central dispatch for all incoming SSE events.
+// Executor events (run.progress/run.output) are converted to standard
+// message events and routed to messageStore — no separate executorStore.
 
 import {
   enqueueEvent,
@@ -9,8 +10,6 @@ import {
   appendAgentEvent,
   loadConversation,
 } from "../store/messages";
-import { appendExecutorEvent } from "../store/executor";
-import { executorEventEntry } from "../utils/executor-events";
 import {
   boardStore,
   scheduleBoard,
@@ -25,6 +24,204 @@ function record(value: any): boolean {
   return !!value && typeof value === "object" && !Array.isArray(value);
 }
 
+/** Parse tool input from various executor formats. */
+function parseToolInput(raw: any): Record<string, any> {
+  if (record(raw)) return raw;
+  if (typeof raw === "string" && raw.trim()) {
+    try { return JSON.parse(raw); } catch { return { raw }; }
+  }
+  return {};
+}
+
+/** Derive a stable message ID for grouping executor events by goal/session. */
+function executorMessageID(properties: any): string {
+  const goalRunID = properties.goalRunID || properties.goal_run_id || "";
+  const execSessionID = properties.executorSessionID || properties.executor_session_id || "";
+  const runID = properties.runID || "";
+  const scope = goalRunID || execSessionID || runID || "default";
+  return `executor:msg:${scope}`;
+}
+
+/** Derive a stable part ID from a tool call's ID. */
+function executorPartID(properties: any, eventID: string): string {
+  const callID = properties.sourceID || properties.id || properties.payload?.id || eventID;
+  return `executor:part:${callID}`;
+}
+
+/** Derive the executor session ID for message info. */
+function executorSessionID(properties: any): string {
+  return properties.goalRunID || properties.goal_run_id ||
+         properties.executorSessionID || properties.executor_session_id ||
+         properties.runID || "";
+}
+
+// ── Executor event → message event conversion ──
+
+function convertExecutorEventToMessages(event: any, properties: any): any[] {
+  const kind = executorEventKind(properties.type);
+  const timestamp = Number(event.timestamp || Date.now());
+  const msgID = executorMessageID(properties);
+  const sessionID = executorSessionID(properties);
+
+  // Ensure the message exists with executor agent identity
+  const messageEvent = {
+    type: "message.updated",
+    properties: {
+      info: {
+        id: msgID,
+        sessionID,
+        role: "assistant",
+        agent: "executor",
+        time: { created: timestamp },
+      },
+    },
+  };
+
+  if (kind === "tool_call") {
+    const name = properties.name || properties.payload?.name || properties.tool || "tool";
+    const input = parseToolInput(properties.input ?? properties.arguments ?? properties.args ?? properties.payload?.input);
+    const partID = executorPartID(properties, event.event_id);
+    return [
+      messageEvent,
+      {
+        type: "message.part.updated",
+        properties: {
+          part: {
+            id: partID,
+            messageID: msgID,
+            sessionID,
+            type: "tool",
+            tool: name,
+            callID: properties.sourceID || properties.id || properties.payload?.id || partID,
+            state: {
+              status: "running",
+              input,
+              title: event.summary || name,
+              metadata: { synthetic: true },
+              time: { start: timestamp },
+            },
+          },
+        },
+      },
+    ];
+  }
+
+  if (kind === "tool_result") {
+    const name = properties.name || properties.payload?.name || properties.tool || "tool";
+    const input = parseToolInput(properties.input ?? properties.arguments ?? properties.payload?.input ?? {});
+    const output = typeof properties.output === "string" ? properties.output
+      : typeof properties.payload?.output === "string" ? properties.payload.output
+      : event.summary || "";
+    const partID = executorPartID(properties, event.event_id);
+    return [
+      messageEvent,
+      {
+        type: "message.part.updated",
+        properties: {
+          part: {
+            id: partID,
+            messageID: msgID,
+            sessionID,
+            type: "tool",
+            tool: name,
+            callID: properties.sourceID || properties.id || properties.payload?.id || partID,
+            state: {
+              status: "completed",
+              input,
+              output,
+              title: event.summary || name,
+              metadata: { synthetic: true },
+              time: { start: timestamp, end: timestamp },
+            },
+          },
+        },
+      },
+    ];
+  }
+
+  if (kind === "message_delta") {
+    const text = typeof properties.text === "string" ? properties.text : event.summary || "";
+    if (!text) return [];
+    const partID = `executor:text:${sessionID}`;
+    return [
+      messageEvent,
+      {
+        type: "message.part.delta",
+        properties: {
+          partID,
+          messageID: msgID,
+          sessionID,
+          field: "text",
+          delta: text,
+        },
+      },
+    ];
+  }
+
+  if (kind === "reasoning_delta") {
+    const text = typeof properties.text === "string" ? properties.text : event.summary || "";
+    if (!text) return [];
+    const partID = `executor:reasoning:${sessionID}`;
+    // Create or update a reasoning part — use part.updated for accumulation
+    return [
+      messageEvent,
+      {
+        type: "message.part.delta",
+        properties: {
+          partID,
+          messageID: msgID,
+          sessionID,
+          field: "text",
+          delta: text,
+        },
+      },
+    ];
+  }
+
+  if (kind === "error") {
+    const text = event.summary || properties.message || "Error";
+    const partID = `executor:error:${event.event_id || timestamp}`;
+    return [
+      messageEvent,
+      {
+        type: "message.part.updated",
+        properties: {
+          part: {
+            id: partID,
+            messageID: msgID,
+            sessionID,
+            type: "text",
+            text: `Error: ${text}`,
+          },
+        },
+      },
+    ];
+  }
+
+  // Other event types: create a text part with the summary
+  if (event.summary) {
+    const partID = `executor:status:${event.event_id || timestamp}`;
+    return [
+      messageEvent,
+      {
+        type: "message.part.updated",
+        properties: {
+          part: {
+            id: partID,
+            messageID: msgID,
+            sessionID,
+            type: "text",
+            text: event.summary,
+            kind: "trace",
+          },
+        },
+      },
+    ];
+  }
+
+  return [];
+}
+
 // ── Main router ──
 
 /**
@@ -35,7 +232,7 @@ function record(value: any): boolean {
 export function routeSSEEvent(event: any): boolean {
   const type: string = event.type || "";
 
- // ── Message stream events → batched queue ──
+  // ── Message stream events → batched queue ──
   if (
     type === "message.updated" ||
     type === "message.part.updated" ||
@@ -49,11 +246,9 @@ export function routeSSEEvent(event: any): boolean {
     return true;
   }
 
- // ── Replay buffer expired → full transcript reload ──
+  // ── Replay buffer expired → full transcript reload ──
   if (type === "task.replay_expired") {
- // Re-sync the active task's transcript then reload board state.
-    const taskID: string =
-      boardStore.selectedTaskID || "";
+    const taskID: string = boardStore.selectedTaskID || "";
     if (taskID) void syncTask(taskID);
     return true;
   }
@@ -64,68 +259,57 @@ export function routeSSEEvent(event: any): boolean {
       ? event.payload
       : {};
 
- // ── Executor progress / output events ──
+  // ── Executor progress / output events → convert to standard messages ──
   if (type === "run.progress") {
     const progressType: string = properties.type || "";
- // Skip pure protocol noise — NOT executor message events.
- // message.updated / message.part.updated / message.part.delta are the
- // executor's primary activity signals (tool calls, streaming text) and
- // must reach the executor event store.
+
+    // Protocol noise — skip
     if (
       progressType === "protocol.raw" ||
       progressType === "executor.status" ||
       progressType === "executor.progress"
     ) {
-      return true; // consume silently
+      return true;
     }
-    const executorEvent = executorEventEntry({
-      id: event.event_id,
-      runID: event.run_id || properties.runID,
-      kind: executorEventKind(properties.type),
-      summary: event.summary || properties.summary || "",
-      payload: properties,
-      sourceID: properties.sourceID || "",
-      sourceKind: "",
-      sourceLabel: "",
-      sourceStatus: "",
-      goalRunID: properties.goalRunID || "",
-      executorSessionID: properties.executorSessionID || "",
-      time: { created: Number(event.timestamp || Date.now()) },
-    });
-    if (executorEvent) appendExecutorEvent(executorEvent);
+
+    // OpenCode executor: these events already arrive via the direct message path.
+    // Skip to avoid duplication.
+    if (
+      progressType === "message.part.updated" ||
+      progressType === "message.part.delta" ||
+      progressType === "message.updated"
+    ) {
+      return true;
+    }
+
+    // Convert executor events (Codex/Claude-Code CodingEventInfo) to standard messages
+    const messages = convertExecutorEventToMessages(event, properties);
+    for (const msg of messages) {
+      enqueueEvent(msg);
+    }
     return true;
   }
 
   if (type === "run.output") {
-    const executorEvent = executorEventEntry({
-      id: event.event_id,
-      runID: event.run_id || properties.runID,
-      kind: "message_delta",
-      summary:
-        typeof properties.text === "string"
-          ? properties.text
-          : event.summary || "",
-      payload: properties,
-      sourceID: properties.sourceID || "",
-      sourceKind: "",
-      sourceLabel: "",
-      sourceStatus: "",
-      goalRunID: properties.goalRunID || "",
-      executorSessionID: properties.executorSessionID || "",
-      time: { created: Number(event.timestamp || Date.now()) },
+    // Text output from executor — convert to message delta
+    const messages = convertExecutorEventToMessages(event, {
+      ...properties,
+      type: "text_delta",
+      text: typeof properties.text === "string" ? properties.text : event.summary || "",
     });
-    if (executorEvent) appendExecutorEvent(executorEvent);
+    for (const msg of messages) {
+      enqueueEvent(msg);
+    }
     return true;
   }
 
- // ── Agent stage events ──
+  // ── Agent stage events ──
   if (type === "agent.updated") {
     appendAgentEvent(event);
     return true;
   }
 
- // ── Board-invalidating events → forwarded to handleEventStreamEvent
- // which manages board reload scheduling and task sequence tracking.
+  // ── Board-invalidating events → forwarded to handleEventStreamEvent
   if (
     type === "task.updated" ||
     type === "task.completed" ||
@@ -142,40 +326,23 @@ export function routeSSEEvent(event: any): boolean {
     return false;
   }
 
- // Unknown event — forward to handleEventStreamEvent.
   return false;
 }
 
 // ── executorEventKind ──
-// Map run.progress payload type to canonical executor event kind.
-// Must handle both underscore forms (tool_call) and dot forms (tool.call)
-// because executor event streams use dot notation while the internal
-// canonical form uses underscores.
 
 function executorEventKind(progressType: string | undefined): string {
   const t = String(progressType || "").trim().toLowerCase();
   if (!t) return "event";
-  // Canonical underscore forms — pass through
   if (t === "message_delta" || t === "reasoning_delta") return t;
   if (t === "tool_call" || t === "tool_delta" || t === "tool_result") return t;
-  if (t === "status") return "status";
-  if (t === "git_checkpoint") return "git_checkpoint";
-  // Dot-notation types from executor event streams (tool.call, tool.result,
-  // reasoning.delta, permission.asked, etc.)
   if (t.includes("tool")) return t.includes("result") ? "tool_result" : "tool_call";
   if (t.includes("reason")) return "reasoning_delta";
-  if (t.includes("approval") || t === "permission.asked") return "approval_request";
-  if (t.includes("input")) return "input_request";
-  if (t.includes("mcp")) return "mcp";
-  if (t.includes("command")) return "command";
   if (t.includes("error")) return "error";
   if (t.includes("done") || t.includes("completed")) return "done";
-  // Do NOT catch-all on includes("delta")/includes("message") here.
-  // Protocol events like message.part.delta / message.part.updated flow
-  // through run.progress and must stay as-is — executorEventEntry handles
-  // extracting embedded tool parts when present. Mapping them to
-  // "message_delta" would make every streaming delta a visible message.
-  return t;
+  if (t.includes("approval") || t === "permission.asked") return "approval_request";
+  if (t.includes("command")) return "command";
+  return "event";
 }
 
 // ── Board / Task Lifecycle Event Handling ──
@@ -214,10 +381,6 @@ function boardInvalidatingEvent(type: string): boolean {
   );
 }
 
-function scheduleBoardCompat(delay = 0): void {
-  scheduleBoard(delay);
-}
-
 function scheduleTasksCompat(delay = 0): void {
   if (tasksKickTimer) clearTimeout(tasksKickTimer);
   tasksKickTimer = setTimeout(() => {
@@ -233,16 +396,13 @@ export function handleEventStreamEvent(event: any): void {
       void loadConversation();
       return;
     }
-    enqueueEvent({
-      ...event,
-      type,
-    });
+    enqueueEvent({ ...event, type });
     return;
   }
   if (type === "task.replay_expired") {
     if (boardStore.selectedTaskID) void syncTask(boardStore.selectedTaskID);
     scheduleTasksCompat(0);
-    scheduleBoardCompat(0);
+    scheduleBoard(0);
     return;
   }
   const taskID = eventTaskID(event);
@@ -251,7 +411,7 @@ export function handleEventStreamEvent(event: any): void {
     const current = boardStore.taskSequence;
     if (current > 0 && sequence <= current) return;
     if (current > 0 && sequence > current + 1) {
-      scheduleBoardCompat(BOARD_EVENT_DEBOUNCE);
+      scheduleBoard(BOARD_EVENT_DEBOUNCE);
       scheduleTasksCompat(BOARD_EVENT_DEBOUNCE);
       startSSE(taskID);
       return;
@@ -261,7 +421,7 @@ export function handleEventStreamEvent(event: any): void {
   if (boardInvalidatingEvent(type)) {
     scheduleTasksCompat(BOARD_EVENT_DEBOUNCE);
     if (taskID && taskID === boardStore.selectedTaskID) {
-      scheduleBoardCompat(BOARD_EVENT_DEBOUNCE);
+      scheduleBoard(BOARD_EVENT_DEBOUNCE);
     }
   }
 }

@@ -38,14 +38,6 @@ function hashText(value: string): string {
   return (hash >>> 0).toString(36);
 }
 
-function processStatusLabel(status: string): string {
-  if (status === "completed") return t("task.status.completed");
-  if (status === "failed") return t("task.status.failed");
-  if (status === "blocked") return t("task.status.blocked");
-  if (status === "queued") return t("task.status.queued");
-  return t("task.status.running");
-}
-
 function evaluationVerdictLabel(status: string): string {
   if (status === "accepted") return t("evaluation.verdict.accepted");
   if (status === "rejected") return t("evaluation.verdict.rejected");
@@ -95,18 +87,6 @@ function formatTranscriptTool(part: any): string {
     .join(" ");
 }
 
-function formatTranscriptExecutorProcess(part: any): string {
-  const process = record(part?.process) ? part.process : {};
-  const title = String(process.title || process.id || "").trim();
-  const detail = String(process.detail || "").trim();
-  const note = String(process.note || "").trim();
-  const output = String(process.output || "").trim();
-  const header = [processStatusLabel(String(process.status || "running")), title]
-    .filter(Boolean)
-    .join(" ");
-  return [header, detail, note, output].filter(Boolean).join("\n");
-}
-
 function formatTranscriptPart(part: any, role: string): string {
   if (!part || typeof part !== "object") return "";
   if (part.type === "text") return formatTranscriptText(part, role);
@@ -116,7 +96,6 @@ function formatTranscriptPart(part: any, role: string): string {
       : "";
   }
   if (part.type === "tool") return formatTranscriptTool(part);
-  if (part.type === "executor_process") return formatTranscriptExecutorProcess(part);
   if (part.type === "file") {
     return part.filename || part.url
       ? t("transcript.file", { value: part.filename || part.url })

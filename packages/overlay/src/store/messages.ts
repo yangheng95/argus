@@ -6,13 +6,7 @@ import { batch } from "solid-js";
 import { apiJson, apiUrl } from "../services/api";
 import { boardStore } from "../store/board";
 import { clearConversationUiState } from "./conversation-ui";
-import {
-  setExecutorEvents,
-  clearExecutorEvents,
-  mergeExecutorEventsFromFetch,
-} from "./executor";
 import { touchReasoningPart as trackReasoningPart } from "./reasoning";
-import { executorEventEntry } from "../utils/executor-events";
 import { syncSectionPhases } from "../utils/section";
 
 // ── Types ──
@@ -672,34 +666,12 @@ export async function syncTask(taskID: string) {
 
 let _convLoading: Promise<void> | null = null;
 let _convQueued = false;
-let _execRunID = "";
-let _execFetchedAt = 0;
 
 function touchReasoningPart(part: any): any {
   if (!part || part.type !== "reasoning") return part;
   if (typeof part.text !== "string") part.text = "";
   trackReasoningPart(part);
   return part;
-}
-
-async function loadExecutorEvents(runID: string): Promise<void> {
-  const now = Date.now();
-  if (_execRunID === runID && now - _execFetchedAt < 3000) {
-    return;
-  }
-  _execRunID = runID;
-  _execFetchedAt = now;
-  const data = await fetch(apiUrl(`run/${encodeURIComponent(runID)}/executor-events`), {
-    headers: { Accept: "application/json" },
-  })
-    .then((res) => (res.ok ? res.json() : []))
-    .catch(() => []);
-  const items = (Array.isArray(data) ? data : [])
-    .map((item) => executorEventEntry(item))
-    .filter(Boolean) as ReturnType<typeof executorEventEntry>[];
-  const firstRunID = items.find(e => e?.runID)?.runID;
-  // Merge API events with existing SSE events to preserve real-time state
-  mergeExecutorEventsFromFetch(items as any[], firstRunID);
 }
 
 export async function loadConversation(): Promise<void> {
@@ -749,14 +721,6 @@ export async function loadConversation(): Promise<void> {
           : [],
       }));
       setMessages(merged);
-      const activeRunID = String(boardStore.board?.task?.activeRunID || "");
-      if (activeRunID) {
-        await loadExecutorEvents(activeRunID);
-      } else {
-        _execRunID = "";
-        _execFetchedAt = 0;
-        clearExecutorEvents();
-      }
       syncSectionPhases(boardStore.board, boardStore.changes.length);
     } while (_convQueued && requestTaskID === boardStore.selectedTaskID);
   })();
