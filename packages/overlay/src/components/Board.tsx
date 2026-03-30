@@ -171,30 +171,44 @@ export function PlanPanel(props: PlanPanelProps) {
               {(goal) => {
                 const isRunning = () => props.runningGoalIDs?.has(goal.id);
                 const goalStatus = () => goal.metadata?.status || (isRunning() ? "running" : "pending");
+                const shortTitle = () => {
+                  const raw = goal.title || "";
+                  const first = raw.split("\n")[0].replace(/^#+\s*/, "").trim();
+                  return first.length > 60 ? first.slice(0, 57) + "..." : first;
+                };
                 return (
-                  <div class="goal-item">
-                    <span
-                      class="goal-status-icon"
-                      data-status={goalStatus()}
-                    >
-                      {goalIcon(goalStatus())}
-                    </span>
-                    <div class="goal-content">
-                      <div class="plan-version" style="margin-bottom: 4px">
-                        {`Goal#${goal.goalIndex} Plan V${version()}`}
-                      </div>
-                      <div
-                        class="goal-desc md-content"
-                        innerHTML={renderMarkdown(goal.title || "")}
-                      />
-                      <Show when={goal.detail}>
-                        <div
-                          class="goal-criteria md-content"
-                          innerHTML={renderMarkdown(goal.detail)}
-                        />
+                  <details class="goal-item">
+                    <summary class="goal-item-head">
+                      <span class="goal-item-chevron" aria-hidden="true">{"\u25B6"}</span>
+                      <span class="goal-status-icon" data-status={goalStatus()}>
+                        {goalIcon(goalStatus())}
+                      </span>
+                      <span class="goal-desc-inline">
+                        {`Goal#${goal.goalIndex}`}
+                      </span>
+                      <span class="goal-title-brief">{shortTitle()}</span>
+                      <Show when={isRunning()}>
+                        <span class="extension-status" data-state="active">
+                          {t("goal.running")}
+                        </span>
                       </Show>
+                    </summary>
+                    <div class="goal-item-body">
+                      <div class="goal-content">
+                        <div class="plan-version">{`Plan V${version()}`}</div>
+                        <div
+                          class="goal-desc md-content"
+                          innerHTML={renderMarkdown(goal.title || "")}
+                        />
+                        <Show when={goal.detail}>
+                          <div
+                            class="goal-criteria md-content"
+                            innerHTML={renderMarkdown(goal.detail)}
+                          />
+                        </Show>
+                      </div>
                     </div>
-                  </div>
+                  </details>
                 );
               }}
             </For>
@@ -248,6 +262,13 @@ export function GoalsPanel(props: GoalsPanelProps) {
                   {goalIcon(card.status)}
                 </span>
                 <span class="goal-desc-inline">{`Goal#${idx() + 1}`}</span>
+                <span class="goal-title-brief">
+                  {(() => {
+                    const raw = card.title || "";
+                    const first = raw.split("\n")[0].replace(/^#+\s*/, "").trim();
+                    return first.length > 50 ? first.slice(0, 47) + "..." : first;
+                  })()}
+                </span>
                 <Show when={props.runningGoalIDs.has(card.id)}>
                   <span class="extension-status" data-state="active">
                     {t("goal.running")}
