@@ -988,7 +988,7 @@ function renderMarkdown$1(text) {
   return html;
 }
 
-var _tmpl$$l = /* @__PURE__ */ template(`<div class=msg-text>`);
+var _tmpl$$k = /* @__PURE__ */ template(`<div class=msg-text>`);
 function splitBlocks(text) {
   if (!text) return [];
   const blocks = [];
@@ -1064,18 +1064,10 @@ function TextPart(props) {
     prevBlockCount = 0;
   });
   return (() => {
-    var _el$ = _tmpl$$l();
+    var _el$ = _tmpl$$k();
     var _ref$ = containerRef;
     typeof _ref$ === "function" ? use(_ref$, _el$) : containerRef = _el$;
     return _el$;
-  })();
-}
-function StaticTextPart(props) {
-  const html = createMemo(() => renderMarkdown$1(props.text));
-  return (() => {
-    var _el$2 = _tmpl$$l();
-    createRenderEffect(() => _el$2.innerHTML = html());
-    return _el$2;
   })();
 }
 
@@ -1506,7 +1498,7 @@ let messages = {};
 let currentLocale = sanitizeLocale(
   (typeof document !== "undefined" ? document.documentElement.lang : "") || (typeof navigator !== "undefined" ? navigator.language : "") || "en-US"
 );
-function record$a(value) {
+function record$8(value) {
   return !!value && typeof value === "object" && !Array.isArray(value);
 }
 function sanitizeLocale(value) {
@@ -1518,13 +1510,13 @@ function sanitizeLocale(value) {
 function localeValue(key, locale = currentLocale) {
   appStore.localeSeq;
   const source = messages[locale];
-  if (record$a(source) && Object.hasOwn(source, key)) return source[key];
-  return key.split(".").reduce((acc, part) => record$a(acc) ? acc[part] : void 0, source);
+  if (record$8(source) && Object.hasOwn(source, key)) return source[key];
+  return key.split(".").reduce((acc, part) => record$8(acc) ? acc[part] : void 0, source);
 }
 function fillTemplate(text, vars = {}) {
   return String(text).replace(/\{\{\s*([\w.]+)\s*\}\}/g, (_, key) => {
     const value = key.split(".").reduce(
-      (acc, part) => record$a(acc) ? acc[part] : void 0,
+      (acc, part) => record$8(acc) ? acc[part] : void 0,
       vars
     );
     return value == null ? "" : String(value);
@@ -1537,7 +1529,7 @@ function t(key, vars) {
 }
 function tc(key, count, vars) {
   const value = localeValue(key) ?? localeValue(key, "en-US");
-  if (record$a(value)) {
+  if (record$8(value)) {
     const text = value[count === 1 ? "one" : "other"] ?? value.other ?? value.one;
     if (typeof text === "string") return fillTemplate(text, { count, ...vars });
   }
@@ -1550,7 +1542,7 @@ async function loadLocale(locale) {
   const normalized = sanitizeLocale(locale);
   if (messages[normalized]) return;
   const data = await fetch(`i18n/${normalized}.json`).then((res) => res.ok ? res.json() : {}).catch(() => ({}));
-  messages[normalized] = record$a(data) ? data : {};
+  messages[normalized] = record$8(data) ? data : {};
 }
 async function setLocale(locale) {
   const normalized = sanitizeLocale(locale);
@@ -1567,7 +1559,7 @@ async function loadAllLocales() {
   const entries = await Promise.all(
     SUPPORTED_LOCALES.map(async (locale) => {
       const data = await fetch(`i18n/${locale}.json`).then((res) => res.ok ? res.json() : {}).catch(() => ({}));
-      return [locale, record$a(data) ? data : {}];
+      return [locale, record$8(data) ? data : {}];
     })
   );
   for (const [locale, data] of entries) {
@@ -1609,14 +1601,14 @@ function stripAnsi$1(str) {
     ""
   );
 }
-function record$9(value) {
+function record$7(value) {
   return !!value && typeof value === "object" && !Array.isArray(value);
 }
 function toolNameKey(name) {
   return String(name || "").toLowerCase().replace(/[\s_-]+/g, "");
 }
 function toolInputCommand(input) {
-  if (!record$9(input)) return "";
+  if (!record$7(input)) return "";
   const value = input.command ?? input.argv ?? input.cmd;
   if (typeof value === "string") return value.trim();
   if (!Array.isArray(value)) return "";
@@ -1664,8 +1656,8 @@ function displayToolIcon(name) {
   return "⚡";
 }
 function displayToolDetail(name, input, state, base = "") {
-  const safeInput = record$9(input) ? input : {};
-  const safeState = record$9(state) ? state : {};
+  const safeInput = record$7(input) ? input : {};
+  const safeState = record$7(state) ? state : {};
   const n = toolNameKey(name);
   const path = safeInput.file_path || safeInput.filePath || safeInput.path || safeInput.filename || "";
   if (path) return shortRelativePath(path, base);
@@ -1893,7 +1885,7 @@ function scheduleBoard(delay = 0) {
     void loadBoard({ sync: true });
   }, delay);
 }
-function rootTaskSessionID$2() {
+function rootTaskSessionID() {
   const sessionID = boardStore.board?.task?.sessionID;
   return typeof sessionID === "string" ? sessionID : "";
 }
@@ -1963,34 +1955,34 @@ function visibleTasks() {
   ].sort((a, b) => taskUpdated$1(b) - taskUpdated$1(a));
 }
 
-const [store$2, setStore$2] = createStore({
+const [store$1, setStore$1] = createStore({
   expandedAgentCards: {},
   expandedToolOutputs: {}
 });
 function clearConversationUiState() {
-  setStore$2("expandedAgentCards", reconcile({}, { merge: false }));
-  setStore$2("expandedToolOutputs", reconcile({}, { merge: false }));
+  setStore$1("expandedAgentCards", reconcile({}, { merge: false }));
+  setStore$1("expandedToolOutputs", reconcile({}, { merge: false }));
 }
 function agentCardExpanded(cardID, running) {
   if (!cardID) return running;
-  const explicit = store$2.expandedAgentCards[cardID];
+  const explicit = store$1.expandedAgentCards[cardID];
   return typeof explicit === "boolean" ? explicit : running;
 }
 function toggleAgentCardExpanded(cardID, running) {
   if (!cardID) return;
   const next = !agentCardExpanded(cardID, running);
-  setStore$2("expandedAgentCards", cardID, next);
+  setStore$1("expandedAgentCards", cardID, next);
 }
 function toolOutputExpanded(partID) {
   if (!partID) return false;
-  return store$2.expandedToolOutputs[partID] === true;
+  return store$1.expandedToolOutputs[partID] === true;
 }
 function toggleToolOutputExpanded(partID) {
   if (!partID) return;
-  setStore$2("expandedToolOutputs", partID, (value) => value !== true);
+  setStore$1("expandedToolOutputs", partID, (value) => value !== true);
 }
 
-var _tmpl$$k = /* @__PURE__ */ template(`<span class=tool-detail>`), _tmpl$2$i = /* @__PURE__ */ template(`<div class=msg-tool><span class=tool-icon></span><span class=tool-name></span><span class=tool-status>`), _tmpl$3$h = /* @__PURE__ */ template(`<div class=msg-tool-input>`), _tmpl$4$h = /* @__PURE__ */ template(`<div class=msg-tool-output>`), _tmpl$5$h = /* @__PURE__ */ template(`<div class=msg-tool-error>`);
+var _tmpl$$j = /* @__PURE__ */ template(`<span class=tool-detail>`), _tmpl$2$h = /* @__PURE__ */ template(`<div class=msg-tool><span class=tool-icon></span><span class=tool-name></span><span class=tool-status>`), _tmpl$3$g = /* @__PURE__ */ template(`<div class=msg-tool-input>`), _tmpl$4$g = /* @__PURE__ */ template(`<div class=msg-tool-output>`), _tmpl$5$f = /* @__PURE__ */ template(`<div class=msg-tool-error>`);
 function ToolPart(props) {
   const state = () => props.part.state || {};
   const status = () => state().status || "pending";
@@ -2011,7 +2003,7 @@ function ToolPart(props) {
   const error = () => stripAnsi$1(state().error || "") || output();
   const expanded = () => toolOutputExpanded(props.part?.id || "");
   return [(() => {
-    var _el$ = _tmpl$2$i(), _el$2 = _el$.firstChild, _el$3 = _el$2.nextSibling, _el$5 = _el$3.nextSibling;
+    var _el$ = _tmpl$2$h(), _el$2 = _el$.firstChild, _el$3 = _el$2.nextSibling, _el$5 = _el$3.nextSibling;
     insert(_el$2, icon);
     insert(_el$3, toolName);
     insert(_el$, createComponent(Show, {
@@ -2019,7 +2011,7 @@ function ToolPart(props) {
         return detail();
       },
       get children() {
-        var _el$4 = _tmpl$$k();
+        var _el$4 = _tmpl$$j();
         insert(_el$4, detail);
         return _el$4;
       }
@@ -2040,7 +2032,7 @@ function ToolPart(props) {
       return memo(() => status() === "pending")() && raw();
     },
     get children() {
-      var _el$6 = _tmpl$3$h();
+      var _el$6 = _tmpl$3$g();
       insert(_el$6, raw);
       return _el$6;
     }
@@ -2049,7 +2041,7 @@ function ToolPart(props) {
       return memo(() => status() === "completed")() && output();
     },
     get children() {
-      var _el$7 = _tmpl$4$h();
+      var _el$7 = _tmpl$4$g();
       _el$7.$$click = () => toggleToolOutputExpanded(props.part?.id || "");
       insert(_el$7, output);
       createRenderEffect(() => _el$7.classList.toggle("msg-tool-output--expanded", !!expanded()));
@@ -2060,7 +2052,7 @@ function ToolPart(props) {
       return memo(() => status() === "error")() && error();
     },
     get children() {
-      var _el$8 = _tmpl$5$h();
+      var _el$8 = _tmpl$5$f();
       insert(_el$8, error);
       return _el$8;
     }
@@ -2072,11 +2064,11 @@ const reasoningVisibility = /* @__PURE__ */ new Map();
 const reasoningHideTimers = /* @__PURE__ */ new Map();
 const DEFAULT_REASONING_AUTO_CLOSE_MS = 5e3;
 const [reasoningRevision, setReasoningRevision] = createSignal(0);
-function record$8(value) {
+function record$6(value) {
   return !!value && typeof value === "object" && !Array.isArray(value);
 }
 function reasoningPartKey(part) {
-  if (!record$8(part)) return "";
+  if (!record$6(part)) return "";
   const id = typeof part.id === "string" ? part.id : "";
   const messageID = typeof part.messageID === "string" ? part.messageID : "";
   const sessionID = typeof part.sessionID === "string" ? part.sessionID : "";
@@ -2123,7 +2115,7 @@ function touchReasoningPart$1(part) {
   }
 }
 
-var _tmpl$$j = /* @__PURE__ */ template(`<div class=reasoning-text>`), _tmpl$2$h = /* @__PURE__ */ template(`<div class=msg-reasoning><div class=reasoning-label> `);
+var _tmpl$$i = /* @__PURE__ */ template(`<div class=reasoning-text>`), _tmpl$2$g = /* @__PURE__ */ template(`<div class=msg-reasoning><div class=reasoning-label> `);
 function isEmptyReasoning(s) {
   return !s.replace(/[\[\]\s]/g, "");
 }
@@ -2140,7 +2132,7 @@ function ReasoningPart(props) {
       return memo(() => !!(text().trim() && !isEmptyReasoning(text())))() && !hidden();
     },
     get children() {
-      var _el$ = _tmpl$2$h(), _el$2 = _el$.firstChild, _el$3 = _el$2.firstChild;
+      var _el$ = _tmpl$2$g(), _el$2 = _el$.firstChild, _el$3 = _el$2.firstChild;
       _el$2.$$click = () => setExpanded(!expanded());
       insert(_el$2, label, _el$3);
       insert(_el$2, () => expanded() ? "▼" : "▶", null);
@@ -2149,7 +2141,7 @@ function ReasoningPart(props) {
           return expanded();
         },
         get children() {
-          var _el$4 = _tmpl$$j();
+          var _el$4 = _tmpl$$i();
           insert(_el$4, text);
           return _el$4;
         }
@@ -2160,146 +2152,28 @@ function ReasoningPart(props) {
 }
 delegateEvents(["click"]);
 
-var _tmpl$$i = /* @__PURE__ */ template(`<span class=executor-goal-badge>`), _tmpl$2$g = /* @__PURE__ */ template(`<div class=executor-goal-body>`), _tmpl$3$g = /* @__PURE__ */ template(`<div class=executor-goal-block><div class=executor-goal-header role=button tabindex=0><span class=executor-goal-label></span><span class=executor-goal-count>/</span><span class=executor-goal-chevron aria-hidden=true>▼`), _tmpl$4$g = /* @__PURE__ */ template(`<span class="executor-goal-badge executor-goal-badge--running"><span class=agent-card-spinner>`), _tmpl$5$g = /* @__PURE__ */ template(`<span class=executor-tool-detail>`), _tmpl$6$e = /* @__PURE__ */ template(`<span class=executor-tool-progress>`), _tmpl$7$c = /* @__PURE__ */ template(`<pre class=executor-tool-output>`), _tmpl$8$9 = /* @__PURE__ */ template(`<div class=executor-tool-entry><div class=executor-tool-item><span class=executor-tool-icon></span><span class=executor-tool-name></span><span class=executor-tool-status>`);
-function tailLines(text, maxLines = 6) {
-  const lines = text.split("\n");
-  if (lines.length <= maxLines) return text;
-  return lines.slice(-maxLines).join("\n");
+const AGENT_CARD_STAGES = /* @__PURE__ */ new Set(["spec", "planner", "goal", "executor", "evaluator", "delivery"]);
+function normalizeAgentRole(name) {
+  const text = String(name || "").trim().toLowerCase();
+  if (!text) return "assistant";
+  if (text === "user") return "user";
+  if (text === "spec") return "spec";
+  if (text === "planner" || text === "plan" || text === "planning" || text === "replan") return "planner";
+  if (text === "goal" || text === "goal_gate") return "goal";
+  if (text === "executor" || text === "build" || text === "coding" || text === "general" || text === "explore" || text === "execute") return "executor";
+  if (text === "judge" || text === "evaluator" || text === "evaluation" || text === "scheduler" || text === "review" || text === "evaluate") return "evaluator";
+  if (text === "delivery" || text === "deliver" || text === "files" || text === "publish") return "delivery";
+  if (text === "system" || text === "compaction" || text === "title" || text === "summary") return "system";
+  return "assistant";
 }
-function ExecutorGoalBlock(props) {
-  const blockID = () => `executor:${props.goalRunID || "default"}`;
-  const overallStatus = createMemo(() => {
-    const procs = props.processes;
-    if (procs.some((p) => p.status === "running")) return "running";
-    if (procs.some((p) => p.status === "failed")) return "failed";
-    if (procs.some((p) => p.status === "blocked")) return "blocked";
-    if (procs.every((p) => p.status === "completed")) return "completed";
-    return "running";
-  });
-  const isRunning = () => overallStatus() === "running";
-  const expanded = () => agentCardExpanded(blockID(), isRunning());
-  const toggle = () => toggleAgentCardExpanded(blockID(), isRunning());
-  const completedCount = createMemo(() => props.processes.filter((p) => p.status === "completed").length);
-  const headerLabel = () => props.goalTitle || (props.goalRunID ? `Goal ${props.goalRunID.slice(-8)}` : t("chat.role.executor"));
-  return (() => {
-    var _el$ = _tmpl$3$g(), _el$2 = _el$.firstChild, _el$4 = _el$2.firstChild, _el$5 = _el$4.nextSibling, _el$6 = _el$5.firstChild;
-    _el$2.$$click = toggle;
-    insert(_el$2, createComponent(Show, {
-      get when() {
-        return !isRunning();
-      },
-      get fallback() {
-        return _tmpl$4$g();
-      },
-      get children() {
-        var _el$3 = _tmpl$$i();
-        insert(_el$3, () => overallStatus() === "completed" ? "✓" : "✗");
-        createRenderEffect((_p$) => {
-          var _v$ = !!(overallStatus() === "completed"), _v$2 = !!(overallStatus() === "failed" || overallStatus() === "blocked");
-          _v$ !== _p$.e && _el$3.classList.toggle("executor-goal-badge--done", _p$.e = _v$);
-          _v$2 !== _p$.t && _el$3.classList.toggle("executor-goal-badge--error", _p$.t = _v$2);
-          return _p$;
-        }, {
-          e: void 0,
-          t: void 0
-        });
-        return _el$3;
-      }
-    }), _el$4);
-    insert(_el$4, headerLabel);
-    insert(_el$5, completedCount, _el$6);
-    insert(_el$5, () => props.processes.length, null);
-    insert(_el$, createComponent(Show, {
-      get when() {
-        return expanded();
-      },
-      get children() {
-        var _el$7 = _tmpl$2$g();
-        insert(_el$7, createComponent(Index, {
-          get each() {
-            return props.processes;
-          },
-          children: (proc) => {
-            const output = () => {
-              const text = (proc().output || "").trim();
-              if (!text) return "";
-              return proc().status === "running" ? tailLines(text, 6) : tailLines(text, 3);
-            };
-            const progress = () => {
-              const text = (proc().progress || "").trim();
-              if (!text || text === t("task.status.running") || text === t("task.status.completed")) return "";
-              return text;
-            };
-            return (() => {
-              var _el$9 = _tmpl$8$9(), _el$0 = _el$9.firstChild, _el$1 = _el$0.firstChild, _el$10 = _el$1.nextSibling, _el$13 = _el$10.nextSibling;
-              insert(_el$1, () => displayToolIcon(proc().toolName || proc().title || ""));
-              insert(_el$10, () => proc().toolName || proc().title || "task");
-              insert(_el$0, createComponent(Show, {
-                get when() {
-                  return proc().toolDetail;
-                },
-                get children() {
-                  var _el$11 = _tmpl$5$g();
-                  insert(_el$11, () => proc().toolDetail);
-                  return _el$11;
-                }
-              }), _el$13);
-              insert(_el$0, createComponent(Show, {
-                get when() {
-                  return progress();
-                },
-                get children() {
-                  var _el$12 = _tmpl$6$e();
-                  insert(_el$12, progress);
-                  return _el$12;
-                }
-              }), _el$13);
-              insert(_el$13, (() => {
-                var _c$ = memo(() => proc().status === "completed");
-                return () => _c$() ? "✓" : memo(() => proc().status === "failed")() ? "✗" : proc().status === "running" ? "•" : "–";
-              })());
-              insert(_el$9, createComponent(Show, {
-                get when() {
-                  return output();
-                },
-                get children() {
-                  var _el$14 = _tmpl$7$c();
-                  insert(_el$14, output);
-                  return _el$14;
-                }
-              }), null);
-              createRenderEffect((_p$) => {
-                var _v$5 = proc().status || "running", _v$6 = proc().status === "running" ? "true" : "false", _v$7 = proc().status || "running";
-                _v$5 !== _p$.e && setAttribute(_el$9, "data-status", _p$.e = _v$5);
-                _v$6 !== _p$.t && setAttribute(_el$9, "data-live", _p$.t = _v$6);
-                _v$7 !== _p$.a && setAttribute(_el$13, "data-status", _p$.a = _v$7);
-                return _p$;
-              }, {
-                e: void 0,
-                t: void 0,
-                a: void 0
-              });
-              return _el$9;
-            })();
-          }
-        }));
-        return _el$7;
-      }
-    }), null);
-    createRenderEffect((_p$) => {
-      var _v$3 = !!expanded(), _v$4 = overallStatus();
-      _v$3 !== _p$.e && _el$.classList.toggle("executor-goal-block--expanded", _p$.e = _v$3);
-      _v$4 !== _p$.t && setAttribute(_el$, "data-status", _p$.t = _v$4);
-      return _p$;
-    }, {
-      e: void 0,
-      t: void 0
-    });
-    return _el$;
-  })();
+function agentRoleToSectionPhase(role) {
+  if (role === "spec") return "spec";
+  if (role === "planner") return "plan";
+  if (role === "goal") return "goals";
+  if (role === "evaluator") return "evaluation";
+  if (role === "delivery") return "files";
+  return "";
 }
-delegateEvents(["click"]);
-
 function escapeHtml$1(str) {
   if (!str) return "";
   return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -2319,62 +2193,22 @@ function roleLabel(role) {
   if (role === "user") return t("chat.role.user");
   if (role === "assistant") return t("chat.role.assistant");
   if (role === "planner") return t("chat.role.planner");
-  if (role === "scheduler") return t("chat.role.scheduler");
+  if (role === "evaluator") return t("chat.role.evaluator");
   if (role === "delivery") return t("chat.role.delivery");
   if (role === "spec") return t("chat.role.spec");
   if (role === "system") return t("chat.role.system");
-  if (role === "goal_gate") return t("chat.role.goal");
+  if (role === "goal" || role === "goal_gate") return t("chat.role.goal");
   if (role === "executor") return t("chat.role.executor");
   return t("chat.role.message");
 }
-function agentStageRole(stage) {
-  const text = String(stage || "").trim().toLowerCase();
-  if (text === "planner" || text === "plan") return "planner";
-  if (text === "spec") return "spec";
-  if (text === "judge" || text === "evaluation" || text === "scheduler") return "scheduler";
-  if (text === "delivery" || text === "files") return "delivery";
-  if (text === "executor" || text === "execute" || text === "coding") return "assistant";
-  return "system";
-}
-function phaseFromAgent(value) {
-  const text = String(value || "").trim().toLowerCase();
-  if (!text) return "";
-  if (text.includes("goal_gate") || text.includes("goal")) return "goals";
-  if (text.includes("scheduler") || text.includes("evaluator") || text.includes("evaluation") || text.includes("evaluate") || text.includes("review"))
-    return "evaluation";
-  if (text.includes("planner") || text.includes("planning") || text.includes("replan") || text === "plan")
-    return "plan";
-  if (text.includes("spec")) return "spec";
-  if (text.includes("deliver") || text.includes("delivery") || text.includes("publish"))
-    return "files";
-  return "";
-}
-function phaseFromMessage(message) {
-  if (!message || typeof message !== "object") return "";
-  const info = message.info && typeof message.info === "object" ? message.info : {};
-  const direct = phaseFromAgent(info.agent) || phaseFromAgent(info.role);
-  if (direct) return direct;
-  const parts = Array.isArray(message.parts) ? message.parts : [];
-  for (let index = parts.length - 1; index >= 0; index -= 1) {
-    const part = parts[index];
-    if (!part || typeof part !== "object") continue;
-    if (part.type === "subtask") {
-      const mapped2 = phaseFromAgent(part.agent) || phaseFromAgent(part.description) || phaseFromAgent(part.prompt);
-      if (mapped2) return mapped2;
-      continue;
-    }
-    if (part.type === "agent") {
-      const mapped2 = phaseFromAgent(part.name);
-      if (mapped2) return mapped2;
-      continue;
-    }
-    if (part.type !== "tool") continue;
-    const state = part.state && typeof part.state === "object" ? part.state : {};
-    const input = state.input && typeof state.input === "object" ? state.input : {};
-    const mapped = phaseFromAgent(input.agent) || phaseFromAgent(input.name) || phaseFromAgent(input.description) || phaseFromAgent(state.title) || phaseFromAgent(part.tool);
-    if (mapped) return mapped;
-  }
-  return "";
+function classifyMessage(msg, rootSessionID) {
+  if (String(msg?.info?.role || "").trim().toLowerCase() === "user") return "main";
+  const agent = String(msg?.info?.agent || "").trim().toLowerCase();
+  const role = normalizeAgentRole(agent);
+  if (AGENT_CARD_STAGES.has(role)) return role;
+  const sessionID = typeof msg?.info?.sessionID === "string" ? msg.info.sessionID : "";
+  if (rootSessionID && sessionID && sessionID !== rootSessionID) return "executor";
+  return "main";
 }
 function detectSource(msg) {
   const parts = msg.parts || [];
@@ -2387,14 +2221,16 @@ function detectSource(msg) {
   return void 0;
 }
 function agentStageLabel(stage) {
-  if (stage === "spec") return t("chat.role.spec");
-  if (stage === "planner") return t("chat.role.planner");
-  if (stage === "goal") return t("chat.role.goal");
-  if (stage === "judge" || stage === "scheduler") return t("chat.role.scheduler");
-  if (stage === "delivery") return t("chat.role.delivery");
+  const role = normalizeAgentRole(stage);
+  if (role === "spec") return t("chat.role.spec");
+  if (role === "planner") return t("chat.role.planner");
+  if (role === "goal") return t("chat.role.goal");
+  if (role === "evaluator") return t("chat.role.evaluator");
+  if (role === "delivery") return t("chat.role.delivery");
+  if (role === "executor") return t("chat.role.executor");
   return t("chat.role.message");
 }
-function effectiveRole$1(msg, rootSessionID, goalSessionIDs) {
+function effectiveRole(msg, rootSessionID, goalSessionIDs) {
   const role = msg.info?.role || "assistant";
   if (role !== "user") {
     if (role === "assistant" && rootSessionID && !msg._synthetic) {
@@ -2405,8 +2241,8 @@ function effectiveRole$1(msg, rootSessionID, goalSessionIDs) {
         }
         const agent = String(msg.info?.agent || "").trim().toLowerCase();
         if (!agent) return "executor";
-        const stageRole = agentStageRole(agent);
-        return stageRole === "assistant" ? "executor" : stageRole;
+        const normalized = normalizeAgentRole(agent);
+        return normalized === "assistant" ? "executor" : normalized;
       }
     }
     return role;
@@ -2415,10 +2251,10 @@ function effectiveRole$1(msg, rootSessionID, goalSessionIDs) {
   if (source) return source;
   const sessionID = typeof msg.info?.sessionID === "string" ? msg.info.sessionID : "";
   if (rootSessionID && sessionID && sessionID !== rootSessionID) {
-    return agentStageRole(phaseFromMessage(msg) || msg.info?.agent || "system");
+    return normalizeAgentRole(msg.info?.agent || "system");
   }
   if (msg._synthetic && msg.info?.agent) {
-    return agentStageRole(msg.info.agent);
+    return normalizeAgentRole(msg.info.agent);
   }
   return role;
 }
@@ -2440,9 +2276,7 @@ function formatDuration(ms) {
   return t("time.duration.second", { seconds: s });
 }
 
-var _tmpl$$h = /* @__PURE__ */ template(`<article class="turn msg"data-executor-type=process>`), _tmpl$2$f = /* @__PURE__ */ template(`<div class="msg-body msg-collapsed"><button class="btn mini"style=margin-top:4px;font-size:11px> ▼`), _tmpl$3$f = /* @__PURE__ */ template(`<button class="btn mini"style=margin-bottom:4px;font-size:11px> ▲`), _tmpl$4$f = /* @__PURE__ */ template(`<div class=msg-body>`), _tmpl$5$f = /* @__PURE__ */ template(`<article class="turn msg"><div class=msg-head><span class=msg-role></span><span class=msg-time></span></div><div class=msg-bubble>`), _tmpl$6$d = /* @__PURE__ */ template(`<div class=msg-patch>`), _tmpl$7$b = /* @__PURE__ */ template(`<div>`), _tmpl$8$8 = /* @__PURE__ */ template(`<div class=msg-tool><span class=tool-icon>→</span><span class=tool-name>Subtask</span><span class=tool-detail>`);
-const COLLAPSIBLE_ROLES = /* @__PURE__ */ new Set(["spec", "planner"]);
-const COLLAPSE_THRESHOLD = 300;
+var _tmpl$$h = /* @__PURE__ */ template(`<article class="turn msg"><div class=msg-head><span class=msg-role></span><span class=msg-time></span></div><div class=msg-bubble><div class=msg-body>`), _tmpl$2$f = /* @__PURE__ */ template(`<div class=msg-patch>`), _tmpl$3$f = /* @__PURE__ */ template(`<div>`), _tmpl$4$f = /* @__PURE__ */ template(`<div class=msg-tool><span class=tool-icon>→</span><span class=tool-name>Subtask</span><span class=tool-detail>`);
 function renderFilePart(part) {
   const url = part.url || part.filename || "";
   const name = part.filename || url || "file";
@@ -2454,14 +2288,9 @@ function renderFilePart(part) {
   return `<div class="msg-text" style="font-family:var(--mono);font-size:var(--ui-font-small);color:var(--text-soft)">${escapeHtml$2(name)}</div>`;
 }
 function MessageView(props) {
-  const role = () => effectiveRole$1(props.message, rootTaskSessionID$2(), goalSessionIDs());
+  const role = () => effectiveRole(props.message, rootTaskSessionID(), goalSessionIDs());
   const parts = () => orderedMessageParts(props.message);
   const time = () => stamp(props.message.info?.time?.created);
-  const executorType = createMemo(() => {
-    if (role() !== "executor") return void 0;
-    const p = parts();
-    return p.length > 0 && p.every((part) => part.type === "executor_process") ? "process" : "events";
-  });
   const hasContent = createMemo(() => {
     const p = parts();
     if (p.length === 0) return false;
@@ -2469,187 +2298,96 @@ function MessageView(props) {
       if (part.type === "text") return !!(part.text || "").trim();
       if (part.type === "tool") return true;
       if (part.type === "reasoning") return !!(part.text || "").trim() && !isEmptyReasoning(part.text || "");
-      if (part.type === "executor_process") return !!part.process;
       if (part.type === "patch") return (part.files || []).length > 0;
       if (part.type === "file") return true;
       if (part.type === "subtask") return true;
       return false;
     });
   });
-  const goalRunID = () => props.message?.info?.goalRunID;
-  const goalTitle = () => props.message?.info?.goalTitle;
-  const isExecutorProcess = () => executorType() === "process";
-  const isCollapsible = () => {
-    if (!props.message?._synthetic) return false;
-    if (!COLLAPSIBLE_ROLES.has(role())) return false;
-    const totalText = parts().reduce((acc, p) => acc + (p.text || "").length, 0);
-    return totalText > COLLAPSE_THRESHOLD;
-  };
-  const [collapsed, setCollapsed] = createSignal(true);
-  const collapsedSummary = createMemo(() => {
-    if (!isCollapsible()) return "";
-    const fullText = parts().map((p) => p.text || "").join("\n");
-    const firstLine = fullText.split("\n").find((l) => l.trim()) || "";
-    return firstLine.length > 200 ? firstLine.slice(0, 200) + "..." : firstLine;
-  });
-  const executorProcesses = createMemo(() => {
-    if (!isExecutorProcess()) return [];
-    return parts().map((p) => p.process).filter(Boolean);
-  });
   return createComponent(Show, {
     get when() {
       return hasContent();
     },
     get children() {
-      return createComponent(Show, {
-        get when() {
-          return isExecutorProcess();
+      var _el$ = _tmpl$$h(), _el$2 = _el$.firstChild, _el$3 = _el$2.firstChild, _el$4 = _el$3.nextSibling, _el$5 = _el$2.nextSibling, _el$6 = _el$5.firstChild;
+      insert(_el$3, () => roleLabel(role()));
+      insert(_el$4, time);
+      insert(_el$6, createComponent(Index, {
+        get each() {
+          return parts();
         },
-        get fallback() {
-          return (() => {
-            var _el$2 = _tmpl$5$f(), _el$3 = _el$2.firstChild, _el$4 = _el$3.firstChild, _el$5 = _el$4.nextSibling, _el$6 = _el$3.nextSibling;
-            insert(_el$4, () => roleLabel(role()));
-            insert(_el$5, time);
-            insert(_el$6, createComponent(Show, {
+        children: (part) => createComponent(Switch, {
+          fallback: null,
+          get children() {
+            return [createComponent(Match, {
               get when() {
-                return memo(() => !!isCollapsible())() && collapsed();
+                return memo(() => part().type === "text")() && (part().text || "").trim();
               },
               get children() {
-                var _el$7 = _tmpl$2$f(), _el$8 = _el$7.firstChild, _el$9 = _el$8.firstChild;
-                insert(_el$7, createComponent(StaticTextPart, {
+                return createComponent(TextPart, {
                   get text() {
-                    return collapsedSummary();
+                    return part().text || "";
                   }
-                }), _el$8);
-                _el$8.$$click = () => setCollapsed(false);
-                insert(_el$8, () => t("common.expand") || "Expand", _el$9);
+                });
+              }
+            }), createComponent(Match, {
+              get when() {
+                return part().type === "tool";
+              },
+              get children() {
+                return createComponent(ToolPart, {
+                  get part() {
+                    return part();
+                  }
+                });
+              }
+            }), createComponent(Match, {
+              get when() {
+                return memo(() => !!(part().type === "reasoning" && (part().text || "").trim()))() && !isEmptyReasoning(part().text || "");
+              },
+              get children() {
+                return createComponent(ReasoningPart, {
+                  get part() {
+                    return part();
+                  }
+                });
+              }
+            }), createComponent(Match, {
+              get when() {
+                return memo(() => part().type === "patch")() && (part().files || []).length > 0;
+              },
+              get children() {
+                var _el$7 = _tmpl$2$f();
+                insert(_el$7, () => "⚙ " + (part().files || []).map((f) => shortRelativePath(f, activeDirectory$2())).join(", "));
                 return _el$7;
               }
-            }), null);
-            insert(_el$6, createComponent(Show, {
+            }), createComponent(Match, {
               get when() {
-                return !isCollapsible() || !collapsed();
+                return part().type === "file";
               },
               get children() {
-                var _el$0 = _tmpl$4$f();
-                insert(_el$0, createComponent(Show, {
-                  get when() {
-                    return isCollapsible();
-                  },
-                  get children() {
-                    var _el$1 = _tmpl$3$f(), _el$10 = _el$1.firstChild;
-                    _el$1.$$click = () => setCollapsed(true);
-                    insert(_el$1, () => t("common.collapse") || "Collapse", _el$10);
-                    return _el$1;
-                  }
-                }), null);
-                insert(_el$0, createComponent(Index, {
-                  get each() {
-                    return parts();
-                  },
-                  children: (part) => createComponent(Switch, {
-                    fallback: null,
-                    get children() {
-                      return [createComponent(Match, {
-                        get when() {
-                          return memo(() => part().type === "text")() && (part().text || "").trim();
-                        },
-                        get children() {
-                          return createComponent(TextPart, {
-                            get text() {
-                              return part().text || "";
-                            }
-                          });
-                        }
-                      }), createComponent(Match, {
-                        get when() {
-                          return part().type === "tool";
-                        },
-                        get children() {
-                          return createComponent(ToolPart, {
-                            get part() {
-                              return part();
-                            }
-                          });
-                        }
-                      }), createComponent(Match, {
-                        get when() {
-                          return memo(() => !!(part().type === "reasoning" && (part().text || "").trim()))() && !isEmptyReasoning(part().text || "");
-                        },
-                        get children() {
-                          return createComponent(ReasoningPart, {
-                            get part() {
-                              return part();
-                            }
-                          });
-                        }
-                      }), createComponent(Match, {
-                        get when() {
-                          return memo(() => part().type === "patch")() && (part().files || []).length > 0;
-                        },
-                        get children() {
-                          var _el$11 = _tmpl$6$d();
-                          insert(_el$11, () => "⚙ " + (part().files || []).map((f) => shortRelativePath(f, activeDirectory$2())).join(", "));
-                          return _el$11;
-                        }
-                      }), createComponent(Match, {
-                        get when() {
-                          return part().type === "file";
-                        },
-                        get children() {
-                          var _el$12 = _tmpl$7$b();
-                          createRenderEffect(() => _el$12.innerHTML = renderFilePart(part()));
-                          return _el$12;
-                        }
-                      }), createComponent(Match, {
-                        get when() {
-                          return part().type === "subtask";
-                        },
-                        get children() {
-                          var _el$13 = _tmpl$8$8(), _el$14 = _el$13.firstChild, _el$15 = _el$14.nextSibling, _el$16 = _el$15.nextSibling;
-                          insert(_el$16, () => part().description || part().prompt || "");
-                          return _el$13;
-                        }
-                      })];
-                    }
-                  })
-                }), null);
-                return _el$0;
+                var _el$8 = _tmpl$3$f();
+                createRenderEffect(() => _el$8.innerHTML = renderFilePart(part()));
+                return _el$8;
               }
-            }), null);
-            createRenderEffect((_p$) => {
-              var _v$ = role(), _v$2 = executorType();
-              _v$ !== _p$.e && setAttribute(_el$2, "data-role", _p$.e = _v$);
-              _v$2 !== _p$.t && setAttribute(_el$2, "data-executor-type", _p$.t = _v$2);
-              return _p$;
-            }, {
-              e: void 0,
-              t: void 0
-            });
-            return _el$2;
-          })();
-        },
-        get children() {
-          var _el$ = _tmpl$$h();
-          insert(_el$, createComponent(ExecutorGoalBlock, {
-            get processes() {
-              return executorProcesses();
-            },
-            get goalRunID() {
-              return goalRunID();
-            },
-            get goalTitle() {
-              return goalTitle();
-            }
-          }));
-          createRenderEffect(() => setAttribute(_el$, "data-role", role()));
-          return _el$;
-        }
-      });
+            }), createComponent(Match, {
+              get when() {
+                return part().type === "subtask";
+              },
+              get children() {
+                var _el$9 = _tmpl$4$f(), _el$0 = _el$9.firstChild, _el$1 = _el$0.nextSibling, _el$10 = _el$1.nextSibling;
+                insert(_el$10, () => part().description || part().prompt || "");
+                return _el$9;
+              }
+            })];
+          }
+        })
+      }));
+      createRenderEffect(() => setAttribute(_el$, "data-role", role()));
+      return _el$;
     }
   });
 }
-delegateEvents(["click"]);
 
 var _tmpl$$g = /* @__PURE__ */ template(`<span class="agent-card-badge agent-card-badge--done"title=Completed>✓`), _tmpl$2$e = /* @__PURE__ */ template(`<div class="agent-card-summary-content md-content">`), _tmpl$3$e = /* @__PURE__ */ template(`<span class=plan-version>v`), _tmpl$4$e = /* @__PURE__ */ template(`<div class=agent-card-summary-plan><div class="agent-card-summary-content md-content">`), _tmpl$5$e = /* @__PURE__ */ template(`<div class=goals-list>`), _tmpl$6$c = /* @__PURE__ */ template(`<span class=section-badge>`), _tmpl$7$a = /* @__PURE__ */ template(`<div class=agent-card-summary-checks>`), _tmpl$8$7 = /* @__PURE__ */ template(`<div class=agent-card-summary-eval>`), _tmpl$9$6 = /* @__PURE__ */ template(`<div class=agent-card-summary>`), _tmpl$0$4 = /* @__PURE__ */ template(`<hr class=agent-card-summary-divider>`), _tmpl$1$3 = /* @__PURE__ */ template(`<article class="turn msg agent-card"data-role=agent-card><div class=agent-card-header role=button tabindex=0><span class=agent-card-label></span><span class=agent-card-count></span><span class=agent-card-chevron aria-hidden=true>▼</span></div><div class=agent-card-body>`), _tmpl$10$3 = /* @__PURE__ */ template(`<span class="agent-card-badge agent-card-badge--running"title=Running><span class=agent-card-spinner>`), _tmpl$11$2 = /* @__PURE__ */ template(`<span class="agent-card-badge agent-card-badge--error"title=Error>✗`), _tmpl$12$2 = /* @__PURE__ */ template(`<div class="goal-criteria md-content">`), _tmpl$13$2 = /* @__PURE__ */ template(`<span class=goal-priority>`), _tmpl$14$2 = /* @__PURE__ */ template(`<div class="goal-item agent-card-summary-goal"><span class=goal-status-icon></span><div class=goal-content><div class="goal-desc md-content">`), _tmpl$15$2 = /* @__PURE__ */ template(`<span class=agent-card-summary-check><span class=agent-card-summary-check-icon>`);
 function stageLabel(stage) {
@@ -2699,7 +2437,7 @@ function AgentCard(props) {
     return goalsLane?.cards || [];
   });
   const evaluationData = createMemo(() => {
-    if (props.stage !== "judge") return null;
+    if (props.stage !== "evaluator") return null;
     const evaluation = boardStore.board?.evaluation;
     if (!evaluation) return null;
     return {
@@ -2723,7 +2461,7 @@ function AgentCard(props) {
         return !!planData();
       case "goal":
         return goalsData().length > 0;
-      case "judge":
+      case "evaluator":
         return !!evaluationData();
       case "delivery":
         return !!deliveryData();
@@ -2858,7 +2596,7 @@ function AgentCard(props) {
           }), null);
           insert(_el$7, createComponent(Show, {
             get when() {
-              return memo(() => props.stage === "judge")() && evaluationData();
+              return memo(() => props.stage === "evaluator")() && evaluationData();
             },
             get children() {
               var _el$12 = _tmpl$8$7();
@@ -2937,954 +2675,6 @@ function AgentCard(props) {
   })();
 }
 delegateEvents(["click", "keydown"]);
-
-const [store$1, setStore$1] = createStore({
-  events: [],
-  runID: "",
-  fetchedAt: 0
-});
-const EXECUTOR_LIVE_INTERVAL = 32;
-const executorLiveTimers = /* @__PURE__ */ new Map();
-function executorDeltaKind(kind) {
-  return kind === "message_delta" || kind === "reasoning_delta";
-}
-function executorEventScopeID$1(event) {
-  if (!event) return "";
-  if (event.goalRunID) return `goal:${event.goalRunID}`;
-  if (event.executorSessionID) return `session:${event.executorSessionID}`;
-  if (event.runID) return `run:${event.runID}`;
-  return "";
-}
-function sameExecutorEventScope$1(left, right) {
-  const a = executorEventScopeID$1(left);
-  const b = executorEventScopeID$1(right);
-  if (!a || !b) return true;
-  return a === b;
-}
-function sameExecutorEventStream(left, right) {
-  return (!left?.runID || !right?.runID || left.runID === right.runID) && sameExecutorEventScope$1(left, right);
-}
-function record$7(value) {
-  return !!value && typeof value === "object" && !Array.isArray(value);
-}
-function executorTargetText$1(event) {
-  if (typeof event._targetText === "string") return event._targetText;
-  if (typeof event.summary === "string") return event.summary;
-  return "";
-}
-function executorEventKey(event) {
-  return String(event?.id || "").trim();
-}
-function stopExecutorLiveTimer(key) {
-  const timer = executorLiveTimers.get(key);
-  if (!timer) return;
-  clearTimeout(timer);
-  executorLiveTimers.delete(key);
-}
-function nextLiveLength$1(live, target) {
-  if (!target) return 0;
-  if (!live) return Math.min(target.length, 1);
-  const remaining = target.length - live.length;
-  if (remaining <= 0) return target.length;
-  if (remaining <= 6) return target.length;
-  return Math.min(target.length, live.length + Math.max(1, Math.ceil(remaining / 2)));
-}
-function advanceExecutorLiveText(key) {
-  const index = store$1.events.findIndex((item) => executorEventKey(item) === key);
-  if (index < 0) {
-    stopExecutorLiveTimer(key);
-    return;
-  }
-  const event = store$1.events[index];
-  const target = executorTargetText$1(event);
-  const live = typeof event?._liveText === "string" ? event._liveText : "";
-  if (!target) {
-    stopExecutorLiveTimer(key);
-    return;
-  }
-  if (live.length >= target.length) {
-    if (live !== target) {
-      setStore$1("events", index, "_liveText", target);
-    }
-    stopExecutorLiveTimer(key);
-    return;
-  }
-  setStore$1("events", index, "_liveText", target.slice(0, nextLiveLength$1(live, target)));
-  executorLiveTimers.set(
-    key,
-    setTimeout(() => advanceExecutorLiveText(key), EXECUTOR_LIVE_INTERVAL)
-  );
-}
-function scheduleExecutorLiveText(event) {
-  const key = executorEventKey(event);
-  if (!key) return;
-  const target = executorTargetText$1(event);
-  const live = typeof event?._liveText === "string" ? event._liveText : "";
-  if (!target || live.length >= target.length) {
-    stopExecutorLiveTimer(key);
-    return;
-  }
-  if (executorLiveTimers.has(key)) return;
-  executorLiveTimers.set(
-    key,
-    setTimeout(() => advanceExecutorLiveText(key), EXECUTOR_LIVE_INTERVAL)
-  );
-}
-function mergeExecutorDelta(current, event) {
-  const delta = typeof event.payload?.text === "string" ? event.payload.text : event.summary || "";
-  const previous = typeof current.payload?.text === "string" ? current.payload.text : executorTargetText$1(current);
-  return {
-    ...current,
-    summary: previous + delta,
-    payload: {
-      ...record$7(current.payload) ? current.payload : {},
-      ...record$7(event.payload) ? event.payload : {},
-      text: previous + delta
-    },
-    _targetText: previous + delta,
-    _liveText: typeof current._liveText === "string" ? current._liveText : previous
-  };
-}
-function mergeEventList(events, event) {
-  const index = event.id ? events.findIndex((item) => item.id === event.id) : -1;
-  if (index >= 0) {
-    if (executorDeltaKind(event.kind)) {
-      events[index] = mergeExecutorDelta(events[index], event);
-    } else {
-      events[index] = {
-        ...events[index],
-        ...event,
-        payload: {
-          ...record$7(events[index]?.payload) ? events[index].payload : {},
-          ...record$7(event?.payload) ? event.payload : {}
-        }
-      };
-    }
-    return events;
-  }
-  let sourceIndex = -1;
-  if (executorDeltaKind(event.kind)) {
-    for (let i = events.length - 1; i >= 0; i -= 1) {
-      const item = events[i];
-      if (item.kind !== event.kind) continue;
-      if (!sameExecutorEventStream(item, event)) continue;
-      if (event.sourceID) {
-        if (item.sourceID === event.sourceID) {
-          sourceIndex = i;
-          break;
-        }
-        continue;
-      }
-      if (event.kind === "reasoning_delta") {
-        sourceIndex = i;
-        break;
-      }
-    }
-  }
-  if (sourceIndex >= 0) {
-    const merged = mergeExecutorDelta(events[sourceIndex], event);
-    events[sourceIndex] = { ...merged, id: events[sourceIndex].id };
-    return events;
-  }
-  events.push(event);
-  return events;
-}
-function appendExecutorEvent(event) {
-  if (!event) return;
-  if (event.runID && store$1.runID && store$1.runID !== event.runID) {
-    setStore$1("events", reconcile([]));
-    setStore$1("runID", event.runID);
-  }
-  if (event.runID && !store$1.runID) {
-    setStore$1("runID", event.runID);
-  }
-  setStore$1("events", produce((events) => {
-    mergeEventList(events, event);
-  }));
-  setStore$1("fetchedAt", Date.now());
-  const key = executorEventKey(event);
-  if (key) {
-    const idx = store$1.events.findIndex((item) => executorEventKey(item) === key);
-    if (idx >= 0) scheduleExecutorLiveText(store$1.events[idx]);
-  }
-}
-function clearExecutorEvents() {
-  for (const key of executorLiveTimers.keys()) {
-    stopExecutorLiveTimer(key);
-  }
-  setStore$1("events", reconcile([]));
-  setStore$1("runID", "");
-  setStore$1("fetchedAt", 0);
-}
-function setExecutorEvents(events, runID) {
-  for (const key of executorLiveTimers.keys()) {
-    stopExecutorLiveTimer(key);
-  }
-  batch(() => {
-    setStore$1("events", reconcile(Array.isArray(events) ? events : []));
-    if (runID !== void 0) setStore$1("runID", runID);
-    setStore$1("fetchedAt", Date.now());
-  });
-}
-function mergeExecutorEventsFromFetch(fetched, runID) {
-  if (runID && store$1.runID && store$1.runID !== runID) {
-    setExecutorEvents(fetched, runID);
-    return;
-  }
-  if (!store$1.events.length) {
-    setExecutorEvents(fetched, runID);
-    return;
-  }
-  for (const key of executorLiveTimers.keys()) {
-    stopExecutorLiveTimer(key);
-  }
-  batch(() => {
-    if (runID && !store$1.runID) {
-      setStore$1("runID", runID);
-    }
-    setStore$1("events", produce((events) => {
-      for (const event of fetched) {
-        mergeEventList(events, event);
-      }
-    }));
-    setStore$1("fetchedAt", Date.now());
-  });
-}
-
-function displayString$1(value, _space = 0) {
-  if (typeof value === "string") {
-    const t = value.trim();
-    if (t === "[object Object]" || t === "[]" || t === "null" || t === "{}") {
-      return "";
-    }
-    return value;
-  }
-  if (value === void 0 || value === null) return "";
-  if (typeof value === "number" || typeof value === "boolean") {
-    return String(value);
-  }
-  return "";
-}
-function clipText$2(value, limit = 80) {
-  const text = String(value || "").replace(/\s+/g, " ").trim();
-  if (!text) return "";
-  if (text.length <= limit) return text;
-  return `${text.slice(0, Math.max(0, limit - 3)).trim()}...`;
-}
-function stripAssistantBrief(text) {
-  const briefRe = /<assistant-brief>[\s\S]*?<\/assistant-brief>/;
-  let cleaned = text.replace(briefRe, "");
-  cleaned = cleaned.replace(/Use the brief above to align your work before executing the task\.\s*/g, "").replace(/You are executing a headless coding task[^\n]*\n?/g, "").replace(/^Task:\s*[^\n]*\n?/gm, "").replace(/^Goals:\n(?:- [^\n]*\n?)*/gm, "").replace(/^Request:\s*\n?/gm, "");
-  return cleaned.trim();
-}
-function joinBullet$1(values) {
-  return values.filter(Boolean).join(" / ");
-}
-
-const MAX_ENTRIES = 2e3;
-const MAX_FLUSH_FAILURES = 5;
-const LOG_LEVEL_ORDER = {
-  debug: 0,
-  info: 1,
-  warn: 2,
-  error: 3
-};
-const entries = [];
-let filterLevel = "debug";
-let _flushQueue = [];
-let _flushTimer = null;
-let _flushFailCount = 0;
-function now() {
-  return (/* @__PURE__ */ new Date()).toISOString().split(".")[0];
-}
-function add(level, service, message, extra) {
-  const entry = { ts: now(), level, service, message, extra };
-  entries.push(entry);
-  if (entries.length > MAX_ENTRIES) {
-    entries.splice(0, entries.length - MAX_ENTRIES);
-  }
-  return entry;
-}
-function flush() {
-  _flushTimer = null;
-  const batch = _flushQueue.splice(0);
-  if (batch.length === 0) return;
-  for (const entry of batch) {
-    const extraObj = entry.extra && typeof entry.extra === "object" ? entry.extra : void 0;
-    const msg = entry.extra && !extraObj ? `${entry.message} ${entry.extra}` : entry.message;
-    fetch(apiUrl("log"), {
-      method: "POST",
-      headers: { ...apiHeaders(), "Content-Type": "application/json" },
-      body: JSON.stringify({
-        service: "overlay:" + entry.service,
-        level: entry.level,
-        message: msg,
-        extra: extraObj
-      })
-    }).then(() => {
-      _flushFailCount = 0;
-    }).catch(() => {
-      _flushFailCount++;
-      if (_flushFailCount <= MAX_FLUSH_FAILURES) {
-        _flushQueue.push(entry);
-      }
-    });
-  }
-}
-function persist(entry) {
-  _flushQueue.push(entry);
-  if (!_flushTimer) {
-    _flushTimer = setTimeout(flush, 500);
-  }
-}
-async function waitForLogDrain(timeoutMs = 2e3) {
-  const started = Date.now();
-  while (_flushTimer || _flushQueue.length > 0) {
-    if (Date.now() - started >= timeoutMs) return;
-    await new Promise((resolve) => setTimeout(resolve, 25));
-  }
-}
-function log(level, service, message, extra) {
-  const entry = add(level, service, message, extra);
-  persist(entry);
-  const storeEntry = {
-    ts: entry.ts,
-    level: entry.level,
-    service: entry.service,
-    delta: "",
-    message: entry.message,
-    fields: entry.extra && typeof entry.extra === "object" ? entry.extra : {},
-    raw: "",
-    source: "overlay"
-  };
-  appendLog(storeEntry);
-  return entry;
-}
-const AppLog = {
-  debug: (service, msg, extra) => log("debug", service, msg, extra),
-  info: (service, msg, extra) => log("info", service, msg, extra),
-  warn: (service, msg, extra) => log("warn", service, msg, extra),
-  error: (service, msg, extra) => log("error", service, msg, extra),
-  /** All accumulated entries (mutable reference, mirrors app.js behaviour). */
-  entries,
-  get filterLevel() {
-    return filterLevel;
-  },
-  set filterLevel(v) {
-    filterLevel = v;
-  },
-  /** Return entries filtered to at least the current filterLevel. */
-  filtered() {
-    const min = LOG_LEVEL_ORDER[filterLevel] ?? 0;
-    return entries.filter((e) => (LOG_LEVEL_ORDER[e.level] ?? 0) >= min);
-  },
-  /** Clear the in-memory entry buffer. */
-  clear() {
-    entries.length = 0;
-  }
-};
-
-function record$6(value) {
-  return !!value && typeof value === "object" && !Array.isArray(value);
-}
-function shellQuote(value) {
-  const text = String(value ?? "").trim();
-  if (!text) return "";
-  if (/^[\w./:=@-]+$/.test(text)) return text;
-  return JSON.stringify(text);
-}
-function commandLine(value) {
-  if (Array.isArray(value)) return value.map(shellQuote).filter(Boolean).join(" ").trim();
-  if (typeof value === "string") return value.trim();
-  return "";
-}
-function clipBlock(value, limit = 280) {
-  const text = String(value || "").replace(/\r\n?/g, "\n").trim();
-  if (!text) return "";
-  if (text.length <= limit) return text;
-  return `${text.slice(0, Math.max(0, limit - 3)).trimEnd()}...`;
-}
-function processStatusLabel$1(status) {
-  if (status === "completed") return t("task.status.completed");
-  if (status === "failed") return t("task.status.failed");
-  if (status === "blocked") return t("task.status.blocked");
-  if (status === "queued") return t("task.status.queued");
-  return t("task.status.running");
-}
-function eventToolName(event) {
-  return event?.payload?.name ?? event?.payload?.tool ?? event?.payload?.function?.name ?? event?.summary?.split(":")?.[0]?.trim() ?? "tool";
-}
-function eventToolStatus(event, override) {
-  if (override) return override;
-  const status = String(event?.payload?.status || event?.sourceStatus || "").trim().toLowerCase();
-  if (status.includes("fail") || status.includes("error")) return "error";
-  if (status.includes("complete") || status.includes("done")) return "completed";
-  if (status.includes("pending") || status.includes("queue")) return "pending";
-  if (event?.kind === "tool_result") return "completed";
-  if (event?.kind === "error") return "error";
-  return "running";
-}
-function toolStateInput(raw, fallback = "") {
-  if (record$6(raw)) return raw;
-  if (typeof raw === "string" && raw.trim()) {
-    try {
-      return JSON.parse(raw);
-    } catch {
-      return { raw };
-    }
-  }
-  if (fallback) return { raw: fallback };
-  return {};
-}
-function eventToolPart(event, options = {}) {
-  if (!event) return null;
-  const created = Number(event?.time?.created || Date.now());
-  const summary = displayString$1(event?.summary).trim();
-  const inputText = displayString$1(event?.text || event?.payload?.text).trim();
-  const input = toolStateInput(
-    event?.payload?.input ?? event?.payload?.arguments ?? event?.payload?.args ?? "",
-    inputText
-  );
-  const id = typeof event?.id === "string" && event.id ? event.id : `tool:${created}:${eventToolName(event)}`;
-  const callID = typeof event?.sourceID === "string" && event.sourceID ? event.sourceID : typeof event?.payload?.id === "string" && event.payload.id ? event.payload.id : id;
-  const tool = eventToolName(event);
-  const status = eventToolStatus(event, typeof options.status === "string" ? options.status : "");
-  const output = clipBlock(displayString$1(options.output || event?.payload?.output || event?.payload?.result || summary));
-  if (status === "completed") {
-    return {
-      id,
-      type: "tool",
-      callID,
-      tool,
-      state: {
-        status: "completed",
-        input,
-        output: output || summary || tool,
-        title: summary || tool,
-        metadata: { synthetic: true },
-        time: { start: created, end: created }
-      }
-    };
-  }
-  if (status === "error") {
-    return {
-      id,
-      type: "tool",
-      callID,
-      tool,
-      state: {
-        status: "error",
-        input,
-        error: output || summary || tool,
-        metadata: { synthetic: true },
-        time: { start: created, end: created }
-      }
-    };
-  }
-  if (status === "pending") {
-    return {
-      id,
-      type: "tool",
-      callID,
-      tool,
-      state: {
-        status: "pending",
-        input,
-        raw: inputText || summary || tool
-      }
-    };
-  }
-  return {
-    id,
-    type: "tool",
-    callID,
-    tool,
-    state: {
-      status: "running",
-      input,
-      title: summary || tool,
-      metadata: { synthetic: true },
-      time: { start: created }
-    }
-  };
-}
-function executorToolDetail(event, base = "") {
-  const name = eventToolName(event);
-  const input = toolStateInput(
-    event?.payload?.input ?? event?.payload?.arguments ?? event?.payload?.args ?? "",
-    ""
-  );
-  return displayToolDetail(name, input, {}, base);
-}
-function executorEventKind$1(type) {
-  const text = String(type || "").trim().toLowerCase();
-  if (!text) return "status";
-  if (text.includes("tool")) return text.includes("result") ? "tool_result" : "tool_call";
-  if (text.includes("reason")) return "reasoning_delta";
-  if (text.includes("plan")) return "plan_delta";
-  if (text.includes("diff")) return "diff_delta";
-  if (text.includes("approval")) return "approval_request";
-  if (text.includes("input")) return "input_request";
-  if (text.includes("mcp")) return "mcp";
-  if (text.includes("command")) return "command";
-  if (text.includes("error")) return "error";
-  if (text.includes("done") || text.includes("completed")) return "done";
-  if (text.includes("delta") || text.includes("message")) return "message_delta";
-  return "status";
-}
-function executorEventSourceKind(kind, payload = {}) {
-  if (typeof payload.sourceKind === "string" && payload.sourceKind.trim()) return payload.sourceKind.trim();
-  if (kind === "tool_call" || kind === "tool_result") return "tool";
-  if (kind === "command") return "command";
-  if (kind === "approval_request") return "approval";
-  if (kind === "input_request") return "input";
-  if (kind === "mcp") return "mcp";
-  if (kind === "reasoning_delta") return "assistant";
-  if (kind === "message_delta") return "assistant";
-  if (kind === "error") return "error";
-  return "status";
-}
-const EXECUTOR_NOISE_TYPES = /* @__PURE__ */ new Set([
-  "protocol.raw",
-  "executor.status",
-  "executor.progress",
-  "session.diff",
-  "session.idle",
-  "task.report"
-]);
-function executorEventEntry(raw) {
-  const rawType = String(raw?.type || raw?.payload?.type || raw?.raw?.type || "").trim().toLowerCase();
-  if (rawType && EXECUTOR_NOISE_TYPES.has(rawType)) return null;
-  let kind = typeof raw?.kind === "string" && raw.kind ? raw.kind : executorEventKind$1(raw?.type);
-  const payload = record$6(raw?.payload) && record$6(raw.payload.payload) ? { ...raw.payload, ...raw.payload.payload } : record$6(raw?.payload) ? raw.payload : {};
-  if (kind === "lifecycle" && rawType) {
-    kind = executorEventKind$1(rawType);
-  }
-  const part = record$6(payload?.part) ? payload.part : null;
-  if (part && (kind === "message_delta" || kind === "lifecycle" || kind === "status")) {
-    const partType = String(part.type || "").trim().toLowerCase();
-    if (partType === "tool") {
-      const state = record$6(part.state) ? part.state : {};
-      const partStatus = String(state.status || "").trim().toLowerCase();
-      kind = partStatus === "completed" || partStatus === "error" ? "tool_result" : "tool_call";
-      if (!payload.name && part.tool) payload.name = part.tool;
-      if (!payload.id && part.id) payload.id = part.id;
-      if (!payload.input && state.input) payload.input = state.input;
-      if (!payload.output && state.output) payload.output = state.output;
-      if (!payload.status) payload.status = partStatus;
-    }
-  }
-  if (rawType === "session.error" && kind !== "error") kind = "error";
-  const summary = typeof raw?.summary === "string" ? raw.summary.trim() : typeof raw?.text === "string" ? raw.text.trim() : typeof payload.summary === "string" ? payload.summary.trim() : typeof payload.text === "string" ? payload.text.trim() : "";
-  const created = Number(raw?.time?.created || raw?.timestamp || Date.now());
-  if (!summary && Object.keys(payload).length === 0) return null;
-  const marker = typeof payload.id === "string" && payload.id ? payload.id : typeof payload.name === "string" && payload.name ? payload.name : typeof raw?.type === "string" && raw.type ? raw.type : "event";
-  const sourceID = typeof payload.sourceID === "string" && payload.sourceID ? payload.sourceID : typeof payload.id === "string" && payload.id ? payload.id : "";
-  const goalRunID = typeof raw?.goalRunID === "string" && raw.goalRunID ? raw.goalRunID : typeof raw?.goal_run_id === "string" && raw.goal_run_id ? raw.goal_run_id : typeof payload.goalRunID === "string" && payload.goalRunID ? payload.goalRunID : typeof payload.goal_run_id === "string" && payload.goal_run_id ? payload.goal_run_id : "";
-  const executorSessionID = typeof raw?.executorSessionID === "string" && raw.executorSessionID ? raw.executorSessionID : typeof raw?.executor_session_id === "string" && raw.executor_session_id ? raw.executor_session_id : typeof payload.executorSessionID === "string" && payload.executorSessionID ? payload.executorSessionID : typeof payload.executor_session_id === "string" && payload.executor_session_id ? payload.executor_session_id : "";
-  const sourceKind = executorEventSourceKind(kind, payload);
-  const sourceLabel = typeof payload.sourceLabel === "string" && payload.sourceLabel.trim() ? payload.sourceLabel.trim() : "";
-  const sourceStatus = typeof payload.status === "string" && payload.status.trim() ? payload.status.trim() : "";
-  const scope = goalRunID ? `goal:${goalRunID}` : executorSessionID ? `session:${executorSessionID}` : "";
-  return {
-    id: typeof raw?.id === "string" && raw.id ? raw.id : kind === "message_delta" && sourceID ? `executor:${scope || "global"}:${sourceID}` : `executor:${kind}:${created}:${summary || marker}`,
-    runID: typeof raw?.runID === "string" ? raw.runID : typeof raw?.run_id === "string" ? raw.run_id : typeof raw?.payload?.runID === "string" ? raw.payload.runID : "",
-    kind,
-    summary,
-    payload,
-    sourceID,
-    sourceKind,
-    sourceLabel,
-    sourceStatus,
-    goalRunID,
-    executorSessionID,
-    time: { created: Number.isFinite(created) ? created : Date.now() }
-  };
-}
-function executorEventScopeID(event) {
-  if (!event) return "";
-  if (typeof event.goalRunID === "string" && event.goalRunID) return `goal:${event.goalRunID}`;
-  if (typeof event.executorSessionID === "string" && event.executorSessionID) return `session:${event.executorSessionID}`;
-  if (typeof event.runID === "string" && event.runID) return `run:${event.runID}`;
-  return "";
-}
-function sameExecutorEventScope(left, right) {
-  const a = executorEventScopeID(left);
-  const b = executorEventScopeID(right);
-  if (!a || !b) return true;
-  return a === b;
-}
-function genericExecutorSummary(event) {
-  const summary = String(event?.summary || "").trim().toLowerCase();
-  if (!summary) return true;
-  if (event.kind === "tool_call") return /^(tool call|shell command):\s*\S+$/.test(summary);
-  if (event.kind === "tool_result") {
-    return summary.startsWith("tool result:") || [
-      "shell command completed",
-      "structured output returned",
-      "approval resolved",
-      "user input received"
-    ].includes(summary);
-  }
-  if (event.kind === "command") {
-    return [
-      "command",
-      "running command",
-      "command started",
-      "command completed"
-    ].includes(summary);
-  }
-  return false;
-}
-function executorCommand(event) {
-  if (!record$6(event?.payload)) return "";
-  const input = record$6(event.payload.input) ? event.payload.input : {};
-  return commandLine(
-    event.payload.command ?? event.payload.argv ?? event.payload.cmd ?? input.command ?? input.argv ?? input.cmd ?? ""
-  );
-}
-function executorOutput(event) {
-  if (!record$6(event?.payload)) return "";
-  const output = event.payload.output;
-  if (typeof output === "string") return clipBlock(output);
-  if (record$6(output)) {
-    const text = [
-      output.output,
-      output.stdout,
-      output.stderr,
-      output.result,
-      output.message,
-      output.content
-    ].filter((item) => typeof item === "string" && item.trim()).join("\n");
-    if (text) return clipBlock(text);
-    return "";
-  }
-  if (typeof event.payload.text === "string") return clipBlock(event.payload.text);
-  return "";
-}
-function executorCall(events, index, event) {
-  const id = typeof event?.payload?.id === "string" ? event.payload.id : "";
-  if (!id || !Array.isArray(events) || index <= 0) return null;
-  return [...events.slice(0, index)].reverse().find(
-    (item) => item?.kind === "tool_call" && item?.payload?.id === id && (!item.runID || !event.runID || item.runID === event.runID) && sameExecutorEventScope(item, event)
-  ) || null;
-}
-function executorTargetText(event, events = [], index = -1) {
-  if (typeof event?._targetText === "string") return event._targetText;
-  const summary = displayString$1(event?.summary).trim();
-  const command = executorCommand(event);
-  const output = executorOutput(event);
-  if (event?.kind === "message_delta") {
-    const text = displayString$1(event?.payload?.text);
-    if (text.trim()) return text;
-    return summary;
-  }
-  if (event?.kind === "reasoning_delta") {
-    const text = displayString$1(event?.payload?.text);
-    if (text.trim()) return text;
-    return summary;
-  }
-  if (event?.kind === "tool_call") {
-    if (!command) return summary;
-    if (genericExecutorSummary(event)) return command;
-    if (summary.includes(command)) return summary;
-    return [summary, command].filter(Boolean).join("\n");
-  }
-  if (event?.kind === "command") {
-    const lines = [];
-    if (summary && (!genericExecutorSummary(event) || !command)) lines.push(summary);
-    if (command && !lines.some((item) => item.includes(command))) lines.push(command);
-    if (output) lines.push(output);
-    if (lines.length > 0) return lines.join("\n");
-    return summary;
-  }
-  if (event?.kind === "tool_result") {
-    const call = executorCall(events, index, event);
-    const linked = command || executorCommand(call);
-    const lines = [];
-    if (summary && (!genericExecutorSummary(event) || !linked && !output)) lines.push(summary);
-    if (linked && !lines.some((item) => item.includes(linked))) lines.push(linked);
-    if (output) lines.push(output);
-    if (lines.length > 0) return lines.join("\n");
-    return summary;
-  }
-  return summary;
-}
-function executorText(event, events = [], index = -1) {
-  if (typeof event?._liveText === "string") return event._liveText;
-  return executorTargetText(event, events, index);
-}
-const VISIBLE_EXECUTOR_KINDS = /* @__PURE__ */ new Set([
-  "message_delta",
-  "reasoning_delta",
-  "tool_call",
-  "tool_result",
-  "command",
-  "approval_request",
-  "input_request",
-  "error",
-  "mcp"
-]);
-function visibleExecutorEvent(event) {
-  if (!event) return false;
-  if (!VISIBLE_EXECUTOR_KINDS.has(event.kind)) return false;
-  return !!executorText(event);
-}
-function executorMessage(event, events = [], index = -1) {
-  const text = executorText(event, events, index);
-  if (!text || !visibleExecutorEvent(event)) return null;
-  const part = event.kind === "tool_call" || event.kind === "tool_result" ? eventToolPart(event, {
-    status: event.kind === "tool_result" ? "completed" : "",
-    output: event.kind === "tool_result" ? executorOutput(event) || text : ""
-  }) : {
-    id: `${event.kind === "reasoning_delta" ? "reasoning" : "text"}:${event.id || index}`,
-    type: event.kind === "reasoning_delta" ? "reasoning" : "text",
-    text,
-    messageID: event.id,
-    sessionID: ""
-  };
-  if (part.type === "reasoning" && reasoningPartHidden(part)) return null;
-  return {
-    _synthetic: true,
-    info: {
-      id: event.id,
-      role: "executor",
-      time: { created: event.time?.created || Date.now() }
-    },
-    parts: [part]
-  };
-}
-function executorProcessBaseID(event) {
-  if (!event) return "";
-  if (typeof event.sourceID === "string" && event.sourceID) return event.sourceID;
-  if (typeof event?.payload?.sourceID === "string" && event.payload.sourceID) return event.payload.sourceID;
-  if (typeof event?.payload?.id === "string" && event.payload.id) return event.payload.id;
-  if (event.kind === "command") {
-    const command = executorCommand(event);
-    if (command) return `command:${command}`;
-  }
-  return "";
-}
-function executorProcessID(event) {
-  const base = executorProcessBaseID(event);
-  if (!base) return "";
-  const scope = executorEventScopeID(event);
-  return scope ? `${scope}:${base}` : base;
-}
-function executorProcessKind(event) {
-  if (!event) return "";
-  if (typeof event.sourceKind === "string" && event.sourceKind) return event.sourceKind;
-  return executorEventSourceKind(event.kind, record$6(event?.payload) ? event.payload : {});
-}
-function executorProcessStatus(event) {
-  const status = String(event?.sourceStatus || event?.payload?.status || "").trim().toLowerCase();
-  if (status.includes("fail") || status.includes("error")) return "failed";
-  if (status.includes("complete") || status.includes("done")) return "completed";
-  if (status.includes("block")) return "blocked";
-  if (status.includes("queue") || status.includes("pending")) return "queued";
-  if (event?.kind === "tool_result") return "completed";
-  if (event?.kind === "error") return "failed";
-  if (event?.kind === "approval_request" || event?.kind === "input_request") return "blocked";
-  const summary = String(event?.summary || "").trim().toLowerCase();
-  if (summary.includes("fail") || summary.includes("error")) return "failed";
-  if (summary.includes("complete") || summary.includes("done")) return "completed";
-  if (summary.includes("block")) return "blocked";
-  if (summary.includes("queue") || summary.includes("pending")) return "queued";
-  return "running";
-}
-function executorProcessTitle(event, events = [], index = -1) {
-  const call = event?.kind === "tool_result" ? executorCall(events, index, event) : null;
-  const sourceLabel = displayString$1(event?.sourceLabel).trim();
-  if (sourceLabel) return sourceLabel;
-  const command = executorCommand(event);
-  if (command) return command;
-  const payloadName = displayString$1(event?.payload?.name).trim();
-  if (payloadName) return payloadName;
-  const callName = displayString$1(call?.payload?.name).trim();
-  if (callName) return callName;
-  return displayString$1(event?.summary).trim() || displayString$1(event?.id).trim();
-}
-function executorProcessDetail(event, events = [], index = -1) {
-  const kind = executorProcessKind(event);
-  const call = event?.kind === "tool_result" ? executorCall(events, index, event) : null;
-  const command = executorCommand(event) || executorCommand(call);
-  if (kind === "tool") {
-    if (command && command !== executorProcessTitle(event, events, index)) return command;
-    const input = displayString$1(event?.payload?.input);
-    if (input.trim()) return clipText$2(input.replace(/\s+/g, " "), 120);
-    const callInput = displayString$1(call?.payload?.input);
-    if (callInput.trim()) return clipText$2(callInput.replace(/\s+/g, " "), 120);
-  }
-  const approvalMessage = displayString$1(event?.payload?.message).trim();
-  if (kind === "approval" && approvalMessage) return approvalMessage;
-  const summary = displayString$1(event?.summary).trim();
-  if (kind === "input" && summary) return summary;
-  return "";
-}
-function executorProcessNote(event, events = [], index = -1) {
-  const summary = displayString$1(event?.summary).trim();
-  if (!summary || genericExecutorSummary(event)) return "";
-  const title = executorProcessTitle(event, events, index);
-  const detail = executorProcessDetail(event, events, index);
-  if (summary === title || summary === detail) return "";
-  return summary;
-}
-function executorProcessProgress(event, events = [], index = -1) {
-  const status = executorProcessStatus(event);
-  if (event?.kind === "message_delta") return processStatusLabel$1(status);
-  const summary = displayString$1(event?.summary).trim();
-  const title = executorProcessTitle(event, events, index);
-  const detail = executorProcessDetail(event, events, index);
-  const output = event?.kind === "message_delta" ? "" : executorOutput(event);
-  if (summary && summary !== title && summary !== detail && summary !== output && (!genericExecutorSummary(event) || event?.kind === "command" || event?.kind === "mcp")) return summary;
-  return processStatusLabel$1(status);
-}
-function mergeExecutorProcessOutput(current, next, replace = false) {
-  if (!next) return current;
-  if (!current) return next;
-  if (replace && next.startsWith(current)) return next;
-  if (current.includes(next)) return current;
-  return `${current}
-${next}`.trim();
-}
-function buildExecutorProcesses(events = []) {
-  const items = /* @__PURE__ */ new Map();
-  events.forEach((event, index) => {
-    const id = executorProcessID(event);
-    const kind = executorProcessKind(event);
-    if (!id || !kind || kind === "assistant" || kind === "status") return;
-    const base = activeDirectory$2();
-    const current = items.get(id) || {
-      id,
-      kind,
-      toolName: eventToolName(event),
-      toolDetail: executorToolDetail(event, base),
-      title: executorProcessTitle(event, events, index),
-      detail: "",
-      progress: executorProcessProgress(event, events, index),
-      note: "",
-      output: "",
-      status: executorProcessStatus(event),
-      goalRunID: event.goalRunID || "",
-      executorSessionID: event.executorSessionID || "",
-      time: {
-        created: event.time?.created || Date.now(),
-        updated: event.time?.created || Date.now()
-      }
-    };
-    current.kind = kind;
-    current.title = executorProcessTitle(event, events, index) || current.title;
-    const detail = executorProcessDetail(event, events, index);
-    if (detail) current.detail = detail;
-    const progress = executorProcessProgress(event, events, index);
-    if (progress) current.progress = progress;
-    const note = executorProcessNote(event, events, index);
-    if (note) current.note = note;
-    current.status = executorProcessStatus(event) || current.status;
-    const output = event.kind === "message_delta" ? executorTargetText(event, events, index) : executorOutput(event);
-    if (output) current.output = mergeExecutorProcessOutput(current.output, output, event.kind === "message_delta");
-    current.time.updated = event.time?.created || current.time.updated;
-    items.set(id, current);
-  });
-  const activeIDs = /* @__PURE__ */ new Set();
-  const result = [];
-  for (const [id, process] of items) {
-    activeIDs.add(id);
-    const cached = _processCache.get(id);
-    if (cached && cached.status === process.status && cached.title === process.title && cached.detail === process.detail && cached.progress === process.progress && cached.note === process.note && cached.output === process.output && cached.kind === process.kind && cached.toolName === process.toolName && cached.toolDetail === process.toolDetail) {
-      result.push(cached);
-    } else {
-      _processCache.set(id, process);
-      result.push(process);
-    }
-  }
-  for (const key of _processCache.keys()) {
-    if (!activeIDs.has(key)) _processCache.delete(key);
-  }
-  return result.sort((a, b) => (a.time?.created || 0) - (b.time?.created || 0));
-}
-const _msgCache = /* @__PURE__ */ new Map();
-const _processCache = /* @__PURE__ */ new Map();
-const _partCache = /* @__PURE__ */ new Map();
-function buildExecutorMessages() {
-  if (!boardStore.selectedTaskID) {
-    _msgCache.clear();
-    _processCache.clear();
-    _partCache.clear();
-    return [];
-  }
-  const events = Array.isArray(store$1.events) ? store$1.events : [];
-  const processes = buildExecutorProcesses(events);
-  const processIDs = new Set(processes.map((item) => item.id));
-  const processGroups = /* @__PURE__ */ new Map();
-  for (const process of processes) {
-    const key = process.goalRunID || "";
-    if (!processGroups.has(key)) processGroups.set(key, []);
-    processGroups.get(key).push(process);
-  }
-  const goalMessages = [];
-  const activeKeys = /* @__PURE__ */ new Set();
-  for (const [goalRunID, procs] of processGroups) {
-    if (procs.length === 0) continue;
-    const msgKey = `executor:processes:${goalRunID || boardStore.selectedTaskID || "active"}`;
-    activeKeys.add(msgKey);
-    let msg = _msgCache.get(msgKey);
-    if (!msg) {
-      msg = {
-        _synthetic: true,
-        info: {
-          id: msgKey,
-          role: "executor",
-          goalRunID: goalRunID || void 0,
-          goalTitle: goalRunID ? resolveGoalTitle(goalRunID) : void 0,
-          time: { created: procs[0]?.time?.created || Date.now() }
-        },
-        parts: []
-      };
-      _msgCache.set(msgKey, msg);
-    }
-    msg.parts = procs.map((process) => {
-      const cached = _partCache.get(process.id);
-      if (cached && cached.process === process) return cached;
-      const wrapper = { type: "executor_process", process };
-      _partCache.set(process.id, wrapper);
-      return wrapper;
-    });
-    if (goalRunID) msg.info.goalTitle = resolveGoalTitle(goalRunID);
-    goalMessages.push(msg);
-  }
-  for (const key of _msgCache.keys()) {
-    if (!activeKeys.has(key)) _msgCache.delete(key);
-  }
-  const activeProcessIDs = new Set(processes.map((p) => p.id));
-  for (const key of _partCache.keys()) {
-    if (!activeProcessIDs.has(key)) _partCache.delete(key);
-  }
-  const messages = events.filter((event) => {
-    const id = executorProcessID(event);
-    const kind = executorProcessKind(event);
-    return !(id && processIDs.has(id) && kind && kind !== "assistant" && kind !== "status");
-  }).map((event, index) => executorMessage(event, events, index)).filter(Boolean);
-  return [...goalMessages, ...messages];
-}
-function resolveGoalTitle(goalRunID) {
-  const board = boardStore.board;
-  if (!board) return void 0;
-  const goalRuns = board.goalRuns;
-  if (!Array.isArray(goalRuns)) return void 0;
-  const goalRun = goalRuns.find((gr) => gr.id === goalRunID || gr.goalRunID === goalRunID);
-  if (!goalRun) return void 0;
-  const goalID = goalRun.goalID || goalRun.goal_id;
-  if (!goalID) return void 0;
-  const lanes = board.lanes;
-  if (!Array.isArray(lanes)) return void 0;
-  for (const lane of lanes) {
-    if (!Array.isArray(lane.cards)) continue;
-    const card = lane.cards.find((c) => c.id === goalID);
-    if (card?.title) return card.title;
-  }
-  return void 0;
-}
 
 function getDomRefs() {
   const $ = (sel) => document.querySelector(sel);
@@ -4176,12 +2966,8 @@ function liveConversationPhase(messages) {
     const incomplete = message?.info?.role === "assistant" && !message?.info?.time?.completed;
     if (!running && !incomplete) continue;
     const agent = String(message?.info?.agent || "").trim().toLowerCase();
-    if (agent === "spec") return "spec";
-    if (agent === "planner") return "plan";
-    if (agent === "goal") return "goals";
-    if (agent === "judge") return "evaluation";
-    if (agent === "delivery") return "files";
-    return phaseFromMessage(message);
+    const phase = agentRoleToSectionPhase(normalizeAgentRole(agent));
+    if (phase) return phase;
   }
   return "";
 }
@@ -4426,36 +3212,20 @@ function mergeLoadedConversationMessages(left, right) {
   }
   return normalizeLoadedMessages(result);
 }
-const AGENT_STAGES$1 = /* @__PURE__ */ new Set(["spec", "planner", "goal", "judge", "delivery"]);
-function rootTaskSessionID$1() {
-  const sessionID = boardStore.board?.task?.sessionID;
-  return typeof sessionID === "string" ? sessionID : "";
-}
-function classifyAgentStage(message) {
-  const agent = String(message?.info?.agent || "").trim().toLowerCase();
-  if (AGENT_STAGES$1.has(agent)) {
-    if (String(message?.info?.role || "").trim().toLowerCase() === "user") return "main";
-    return agent;
-  }
-  if (agent === "agent") {
-    const rootSession = rootTaskSessionID$1();
-    const sessionID = typeof message?.info?.sessionID === "string" ? message.info.sessionID : "";
-    if (rootSession && sessionID && sessionID !== rootSession) {
-      return "agent";
-    }
-  }
-  return "main";
-}
-function activeAgentStages$1() {
+function activeAgentStages() {
   const status = String(boardStore.board?.task?.status || "").trim().toLowerCase();
   if (status === "spec_generating") return /* @__PURE__ */ new Set(["spec"]);
   if (status === "goal_decomposing") return /* @__PURE__ */ new Set(["goal"]);
   if (status === "planning") return /* @__PURE__ */ new Set(["planner"]);
-  if (status === "evaluating") return /* @__PURE__ */ new Set(["judge"]);
+  if (status === "running") return /* @__PURE__ */ new Set(["executor"]);
+  if (status === "evaluating") return /* @__PURE__ */ new Set(["evaluator"]);
   if (status === "delivering") return /* @__PURE__ */ new Set(["delivery"]);
   if (!status && Array.isArray(store.agentEvents) && store.agentEvents.length > 0) {
     return new Set(
-      store.agentEvents.map((item) => String(item?.stage || "").trim().toLowerCase()).filter(Boolean)
+      store.agentEvents.map((item) => {
+        const raw = String(item?.stage || "").trim().toLowerCase();
+        return raw ? normalizeAgentRole(raw) : "";
+      }).filter((r) => r && AGENT_CARD_STAGES.has(r))
     );
   }
   return /* @__PURE__ */ new Set();
@@ -4566,7 +3336,7 @@ function agentMessage(event) {
 }
 function agentRoundStatus(stage, round, roundIndex, rounds, latestStageEvent) {
   if (roundIndex < rounds.length - 1) return "completed";
-  const active = activeAgentStages$1().has(stage);
+  const active = activeAgentStages().has(stage);
   const latestKind = String(latestStageEvent?.kind || "").trim().toLowerCase();
   const latestSummary = String(latestStageEvent?.summary || "");
   if (latestKind === "error") return "error";
@@ -4575,6 +3345,34 @@ function agentRoundStatus(stage, round, roundIndex, rounds, latestStageEvent) {
   }
   if (active) return "running";
   return "completed";
+}
+function mergeAgentReasoningDeltas(events) {
+  const result = [];
+  let accum = null;
+  for (const event of events) {
+    const kind = String(event?.kind || "").trim().toLowerCase();
+    if (kind === "reasoning_delta") {
+      if (!accum) {
+        accum = { ...event };
+      } else {
+        const prev = String(accum._targetText || accum.summary || accum.text || "");
+        const delta = String(event._targetText || event.summary || event.text || "");
+        const merged = prev + delta;
+        accum._targetText = merged;
+        accum.summary = merged;
+        if (typeof accum.text === "string") accum.text = merged;
+        if (event.time?.created > (accum.time?.created || 0)) accum.time = event.time;
+      }
+    } else {
+      if (accum) {
+        result.push(accum);
+        accum = null;
+      }
+      result.push(event);
+    }
+  }
+  if (accum) result.push(accum);
+  return result;
 }
 let _rebuildScheduled = false;
 function scheduleRebuildAgentCards() {
@@ -4588,9 +3386,10 @@ function scheduleRebuildAgentCards() {
 function rebuildAgentCards() {
   const roundsByStage = {};
   const latestEventByStage = /* @__PURE__ */ new Map();
+  const rootSID = rootTaskSessionID();
   for (const message of store.messages) {
-    const stage = classifyAgentStage(message);
-    if (stage === "main") continue;
+    const stage = classifyMessage(message, rootSID);
+    if (stage === "main" || stage === "filtered") continue;
     const sessionID = typeof message?.info?.sessionID === "string" ? message.info.sessionID.trim() : "";
     const fallbackID = typeof message?.info?.id === "string" && message.info.id ? message.info.id : hashText$1(messageSignature(message));
     const channelID = sessionID ? `${stage}:session:${sessionID}` : `${stage}:message:${fallbackID}`;
@@ -4616,15 +3415,19 @@ function rebuildAgentCards() {
   }
   const liveEventsByStage = /* @__PURE__ */ new Map();
   for (const event of Array.isArray(store.agentEvents) ? store.agentEvents : []) {
-    const stage = String(event?.stage || "").trim().toLowerCase();
-    if (!AGENT_STAGES$1.has(stage)) continue;
+    const rawStage = String(event?.stage || "").trim().toLowerCase();
+    const stage = normalizeAgentRole(rawStage);
+    if (!AGENT_CARD_STAGES.has(stage)) continue;
     const items = liveEventsByStage.get(stage) || [];
     items.push(event);
     liveEventsByStage.set(stage, items);
     latestEventByStage.set(stage, event);
   }
   for (const [stage, events] of liveEventsByStage.entries()) {
-    const liveMessages = events.slice().sort((left, right) => agentEventTime(left) - agentEventTime(right)).map((event) => agentMessage(event)).filter(Boolean).slice(-12);
+    const mergedEvents = mergeAgentReasoningDeltas(
+      events.slice().sort((left, right) => agentEventTime(left) - agentEventTime(right))
+    );
+    const liveMessages = mergedEvents.map((event) => agentMessage(event)).filter(Boolean).slice(-12);
     if (liveMessages.length === 0) continue;
     const existing = roundsByStage[stage] || [];
     if (existing.length > 0) continue;
@@ -4732,27 +3535,11 @@ async function syncTask(taskID) {
 }
 let _convLoading = null;
 let _convQueued = false;
-let _execRunID = "";
-let _execFetchedAt = 0;
 function touchReasoningPart(part) {
   if (!part || part.type !== "reasoning") return part;
   if (typeof part.text !== "string") part.text = "";
   touchReasoningPart$1(part);
   return part;
-}
-async function loadExecutorEvents(runID) {
-  const now = Date.now();
-  if (_execRunID === runID && now - _execFetchedAt < 3e3) {
-    return;
-  }
-  _execRunID = runID;
-  _execFetchedAt = now;
-  const data = await fetch(apiUrl(`run/${encodeURIComponent(runID)}/executor-events`), {
-    headers: { Accept: "application/json" }
-  }).then((res) => res.ok ? res.json() : []).catch(() => []);
-  const items = (Array.isArray(data) ? data : []).map((item) => executorEventEntry(item)).filter(Boolean);
-  const firstRunID = items.find((e) => e?.runID)?.runID;
-  mergeExecutorEventsFromFetch(items, firstRunID);
 }
 async function loadConversation() {
   if (!boardStore.selectedTaskID) {
@@ -4795,14 +3582,6 @@ async function loadConversation() {
         parts: Array.isArray(message?.parts) ? message.parts.map((part) => touchReasoningPart(part)) : []
       }));
       setMessages(merged);
-      const activeRunID = String(boardStore.board?.task?.activeRunID || "");
-      if (activeRunID) {
-        await loadExecutorEvents(activeRunID);
-      } else {
-        _execRunID = "";
-        _execFetchedAt = 0;
-        clearExecutorEvents();
-      }
       syncSectionPhases(boardStore.board, boardStore.changes.length);
     } while (_convQueued && requestTaskID === boardStore.selectedTaskID);
   })();
@@ -5384,6 +4163,125 @@ function shouldReloadConversationForMessageEvent(event) {
   return !!messageEventSessionID(event);
 }
 
+function clipText$2(value, limit = 80) {
+  const text = String(value || "").replace(/\s+/g, " ").trim();
+  if (!text) return "";
+  if (text.length <= limit) return text;
+  return `${text.slice(0, Math.max(0, limit - 3)).trim()}...`;
+}
+function stripAssistantBrief(text) {
+  const briefRe = /<assistant-brief>[\s\S]*?<\/assistant-brief>/;
+  let cleaned = text.replace(briefRe, "");
+  cleaned = cleaned.replace(/Use the brief above to align your work before executing the task\.\s*/g, "").replace(/You are executing a headless coding task[^\n]*\n?/g, "").replace(/^Task:\s*[^\n]*\n?/gm, "").replace(/^Goals:\n(?:- [^\n]*\n?)*/gm, "").replace(/^Request:\s*\n?/gm, "");
+  return cleaned.trim();
+}
+function joinBullet$1(values) {
+  return values.filter(Boolean).join(" / ");
+}
+
+const MAX_ENTRIES = 2e3;
+const MAX_FLUSH_FAILURES = 5;
+const LOG_LEVEL_ORDER = {
+  debug: 0,
+  info: 1,
+  warn: 2,
+  error: 3
+};
+const entries = [];
+let filterLevel = "debug";
+let _flushQueue = [];
+let _flushTimer = null;
+let _flushFailCount = 0;
+function now() {
+  return (/* @__PURE__ */ new Date()).toISOString().split(".")[0];
+}
+function add(level, service, message, extra) {
+  const entry = { ts: now(), level, service, message, extra };
+  entries.push(entry);
+  if (entries.length > MAX_ENTRIES) {
+    entries.splice(0, entries.length - MAX_ENTRIES);
+  }
+  return entry;
+}
+function flush() {
+  _flushTimer = null;
+  const batch = _flushQueue.splice(0);
+  if (batch.length === 0) return;
+  for (const entry of batch) {
+    const extraObj = entry.extra && typeof entry.extra === "object" ? entry.extra : void 0;
+    const msg = entry.extra && !extraObj ? `${entry.message} ${entry.extra}` : entry.message;
+    fetch(apiUrl("log"), {
+      method: "POST",
+      headers: { ...apiHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({
+        service: "overlay:" + entry.service,
+        level: entry.level,
+        message: msg,
+        extra: extraObj
+      })
+    }).then(() => {
+      _flushFailCount = 0;
+    }).catch(() => {
+      _flushFailCount++;
+      if (_flushFailCount <= MAX_FLUSH_FAILURES) {
+        _flushQueue.push(entry);
+      }
+    });
+  }
+}
+function persist(entry) {
+  _flushQueue.push(entry);
+  if (!_flushTimer) {
+    _flushTimer = setTimeout(flush, 500);
+  }
+}
+async function waitForLogDrain(timeoutMs = 2e3) {
+  const started = Date.now();
+  while (_flushTimer || _flushQueue.length > 0) {
+    if (Date.now() - started >= timeoutMs) return;
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+}
+function log(level, service, message, extra) {
+  const entry = add(level, service, message, extra);
+  persist(entry);
+  const storeEntry = {
+    ts: entry.ts,
+    level: entry.level,
+    service: entry.service,
+    delta: "",
+    message: entry.message,
+    fields: entry.extra && typeof entry.extra === "object" ? entry.extra : {},
+    raw: "",
+    source: "overlay"
+  };
+  appendLog(storeEntry);
+  return entry;
+}
+const AppLog = {
+  debug: (service, msg, extra) => log("debug", service, msg, extra),
+  info: (service, msg, extra) => log("info", service, msg, extra),
+  warn: (service, msg, extra) => log("warn", service, msg, extra),
+  error: (service, msg, extra) => log("error", service, msg, extra),
+  /** All accumulated entries (mutable reference, mirrors app.js behaviour). */
+  entries,
+  get filterLevel() {
+    return filterLevel;
+  },
+  set filterLevel(v) {
+    filterLevel = v;
+  },
+  /** Return entries filtered to at least the current filterLevel. */
+  filtered() {
+    const min = LOG_LEVEL_ORDER[filterLevel] ?? 0;
+    return entries.filter((e) => (LOG_LEVEL_ORDER[e.level] ?? 0) >= min);
+  },
+  /** Clear the in-memory entry buffer. */
+  clear() {
+    entries.length = 0;
+  }
+};
+
 function record$4(value) {
   return !!value && typeof value === "object" && !Array.isArray(value);
 }
@@ -5395,18 +4293,6 @@ function hashText(value) {
     hash = Math.imul(hash, 16777619);
   }
   return (hash >>> 0).toString(36);
-}
-function processStatusLabel(status) {
-  if (status === "completed") return t("task.status.completed");
-  if (status === "failed") return t("task.status.failed");
-  if (status === "blocked") return t("task.status.blocked");
-  if (status === "queued") return t("task.status.queued");
-  return t("task.status.running");
-}
-function evaluationVerdictLabel(status) {
-  if (status === "accepted") return t("evaluation.verdict.accepted");
-  if (status === "rejected") return t("evaluation.verdict.rejected");
-  return t("evaluation.verdict.pending");
 }
 function transcriptRole(role) {
   return roleLabel(role);
@@ -5428,7 +4314,7 @@ function formatTranscriptText(part, role) {
   if (!text.trim()) return "";
   if (part.audience && part.audience.ui === false) return "";
   if (part.kind === "trace" && !part.audience?.ui) return "";
-  const orchestratorRoles = ["user", "planner", "scheduler", "system"];
+  const orchestratorRoles = ["user", "planner", "evaluator", "system"];
   if (orchestratorRoles.includes(role) && text.includes("<assistant-brief>")) {
     text = stripAssistantBrief(text);
   }
@@ -5443,15 +4329,6 @@ function formatTranscriptTool(part) {
   const status = st.status || "pending";
   return [t("transcript.tool", { status: toolStatusLabel(status), tool: toolName }), detail].filter(Boolean).join(" ");
 }
-function formatTranscriptExecutorProcess(part) {
-  const process = record$4(part?.process) ? part.process : {};
-  const title = String(process.title || process.id || "").trim();
-  const detail = String(process.detail || "").trim();
-  const note = String(process.note || "").trim();
-  const output = String(process.output || "").trim();
-  const header = [processStatusLabel(String(process.status || "running")), title].filter(Boolean).join(" ");
-  return [header, detail, note, output].filter(Boolean).join("\n");
-}
 function formatTranscriptPart(part, role) {
   if (!part || typeof part !== "object") return "";
   if (part.type === "text") return formatTranscriptText(part, role);
@@ -5460,7 +4337,6 @@ function formatTranscriptPart(part, role) {
 ${part.text.trim()}` : "";
   }
   if (part.type === "tool") return formatTranscriptTool(part);
-  if (part.type === "executor_process") return formatTranscriptExecutorProcess(part);
   if (part.type === "file") {
     return part.filename || part.url ? t("transcript.file", { value: part.filename || part.url }) : "";
   }
@@ -5507,10 +4383,6 @@ function errorText$1(key, error) {
   const detail = error instanceof Error ? error.message : String(error || "");
   return `${t(key)}: ${detail}`;
 }
-function boardArtifact(board, label) {
-  const list = board?.artifacts || [];
-  return list.find((item) => item.label === label);
-}
 const _syntheticCache = /* @__PURE__ */ new Map();
 function syntheticTextMessage(role, time, text) {
   if (typeof text !== "string" || !text.trim()) return null;
@@ -5538,161 +4410,6 @@ function formatConversationTranscript(messages) {
     return `${header}
 ${body}`;
   }).filter(Boolean).join("\n\n---\n\n");
-}
-function specContextText(spec) {
-  const text = typeof spec?.content === "string" ? spec.content.trim() : "";
-  return text;
-}
-function planContextText(plan, goals) {
-  const planner = plan.metadata?.planner || {};
-  const steps = Array.isArray(plan.metadata?.steps) ? plan.metadata.steps : [];
-  const milestones = Array.isArray(plan.metadata?.milestones) ? plan.metadata.milestones : [];
-  const risks = Array.isArray(plan.metadata?.risks) ? plan.metadata.risks : [];
-  const warnings = Object.values(
-    plan.metadata?.stage_sources || {}
-  ).flatMap(
-    (stage) => stage && typeof stage === "object" && typeof stage.warning === "string" && stage.warning.trim() ? [stage.warning.trim()] : []
-  ).filter(
-    (value, index, list) => list.indexOf(value) === index
-  );
-  const clarification = plan.metadata?.clarification;
-  const spec = plan.metadata?.spec_analysis;
-  const assumptions = Array.isArray(spec?.assumptions) ? spec.assumptions : [];
-  const lines = [t("plan.context.title", { version: plan.version })];
-  if (plan.summary)
-    lines.push("", t("plan.context.summary", { value: plan.summary }));
-  if (planner.role || planner.quality || planner.source) {
-    lines.push(
-      "",
-      t("plan.context.planner", {
-        value: [planner.role, planner.quality, planner.source].filter(Boolean).join(" / ")
-      })
-    );
-  }
-  if (warnings.length > 0) {
-    lines.push("", t("plan.context.warnings"));
-    lines.push(...warnings.map((warning) => `- ${warning}`));
-  }
-  if (steps.length > 0) {
-    lines.push("", t("plan.context.execution"));
-    lines.push(
-      ...steps.slice(0, 8).map((step, index) => `${index + 1}. ${step}`)
-    );
-  }
-  if (milestones.length > 0) {
-    lines.push("", t("plan.context.milestones"));
-    lines.push(
-      ...milestones.map((item, index) => `- ${index + 1}. ${item.title}`)
-    );
-  }
-  if (goals.length > 0)
-    lines.push(
-      "",
-      t("plan.context.goal_count", { count: goals.length })
-    );
-  if (risks.length > 0) {
-    lines.push("", t("plan.context.risks"));
-    lines.push(...risks.slice(0, 5).map((risk) => `- ${risk}`));
-  }
-  if (assumptions.length > 0) {
-    lines.push("", t("plan.context.assumptions"));
-    lines.push(
-      ...assumptions.slice(0, 5).map((item) => {
-        const question = typeof item?.question === "string" ? item.question.trim() : "";
-        const assumption = typeof item?.assumption === "string" ? item.assumption.trim() : "";
-        if (question && assumption) return `- ${question}: ${assumption}`;
-        return `- ${question || assumption}`;
-      })
-    );
-  }
-  if (clarification?.questions?.length) {
-    lines.push(
-      "",
-      tc("plan.context.clarification", clarification.questions.length, {
-        count: clarification.questions.length
-      })
-    );
-  }
-  return lines.join("\n");
-}
-function goalContextText(goals) {
-  const passed = goals.filter((goal) => goal.status === "passed").length;
-  const failed = goals.filter((goal) => goal.status === "failed").length;
-  const pending = goals.filter(
-    (goal) => goal.status !== "passed" && goal.status !== "failed"
-  ).length;
-  const header = passed + failed > 0 ? t("goal.context.results", {
-    passed,
-    total: goals.length,
-    failed,
-    pending
-  }) : t("goal.context.list", { total: goals.length });
-  const lines = [header, ""];
-  for (const goal of goals) {
-    const icon = goal.status === "passed" ? "✅" : goal.status === "failed" ? "❌" : "⏳";
-    lines.push(`${icon} **${goal.title}**`);
-    if (goal.detail)
-      lines.push(t("goal.context.criteria", { value: goal.detail }));
-    if (goal.metadata?.origin)
-      lines.push(t("goal.context.origin", { value: goal.metadata.origin }));
-  }
-  return lines.join("\n");
-}
-function evaluationContextText(board, goals) {
-  const evaluation = board.evaluation;
-  const analysis = boardArtifact(board, "evaluator-agent-analysis")?.payload || {};
-  const error = boardArtifact(board, "evaluator-agent-error")?.payload || {};
-  const verdictIcon = evaluation.verdict === "accepted" ? "✅" : evaluation.verdict === "rejected" ? "❌" : "⚠";
-  const lines = [
-    `${verdictIcon} ${t("evaluation.context.title", { verdict: evaluationVerdictLabel(evaluation.verdict) })}`
-  ];
-  if (analysis.classification)
-    lines.push(
-      "",
-      t("evaluation.context.classification", {
-        value: analysis.classification
-      })
-    );
-  if (evaluation.summary) lines.push("", evaluation.summary);
-  if (error.error)
-    lines.push(
-      "",
-      t("evaluation.context.error", { value: error.error })
-    );
-  const checks = evaluation.checks || [];
-  if (checks.length > 0) {
-    lines.push("", t("evaluation.context.checks"));
-    for (const check of checks) {
-      const icon = check.status === "passed" ? "✓" : check.status === "failed" ? "✗" : "—";
-      lines.push(`- ${icon} ${check.name}: ${check.evidence || check.status}`);
-    }
-  }
-  const goalStatuses = Array.isArray(analysis.goal_statuses) ? analysis.goal_statuses : [];
-  if (goalStatuses.length > 0) {
-    lines.push("", t("evaluation.context.goal_assessments"));
-    for (const item of goalStatuses) {
-      const goal = goals[item.goal_index];
-      const icon = item.status === "passed" ? "✅" : item.status === "failed" ? "❌" : "⏳";
-      const label = goal?.title || t("evaluation.context.goal_fallback", { index: item.goal_index + 1 });
-      lines.push(`- ${icon} ${label}: ${item.evidence || item.status}`);
-    }
-  }
-  if (analysis.replan_guidance?.root_cause || analysis.replan_guidance?.suggested_strategy) {
-    lines.push("", t("evaluation.context.replan"));
-    if (analysis.replan_guidance.root_cause)
-      lines.push(
-        t("evaluation.context.root_cause", {
-          value: analysis.replan_guidance.root_cause
-        })
-      );
-    if (analysis.replan_guidance.suggested_strategy)
-      lines.push(
-        t("evaluation.context.strategy", {
-          value: analysis.replan_guidance.suggested_strategy
-        })
-      );
-  }
-  return lines.join("\n");
 }
 function interactionRequestText(interaction) {
   const title = typeof interaction?.title === "string" && interaction.title.trim() ? interaction.title.trim() : t("detail.pending_interactions");
@@ -5772,258 +4489,17 @@ async function copyChatConversation() {
   }
 }
 
-const scriptRel = 'modulepreload';const assetsURL = function(dep) { return "/"+dep };const seen = {};const __vitePreload = function preload(baseModule, deps, importerUrl) {
-  let promise = Promise.resolve();
-  if (true               && deps && deps.length > 0) {
-    let allSettled2 = function(promises) {
-      return Promise.all(promises.map((p) => Promise.resolve(p).then((value) => ({ status: "fulfilled", value }), (reason) => ({ status: "rejected", reason }))));
-    };
-    document.getElementsByTagName("link"); const cspNonceMeta = document.querySelector("meta[property=csp-nonce]"), cspNonce = cspNonceMeta?.nonce || cspNonceMeta?.getAttribute("nonce");
-    promise = allSettled2(deps.map((dep) => {
-      dep = assetsURL(dep);
-      if (dep in seen)
-        return;
-      seen[dep] = true;
-      const isCss = dep.endsWith(".css"), cssSelector = isCss ? '[rel="stylesheet"]' : "";
-      if (document.querySelector(`link[href="${dep}"]${cssSelector}`))
-        return;
-      const link = document.createElement("link");
-      link.rel = isCss ? "stylesheet" : scriptRel;
-      if (!isCss)
-        link.as = "script";
-      link.crossOrigin = "";
-      link.href = dep;
-      if (cspNonce)
-        link.setAttribute("nonce", cspNonce);
-      document.head.appendChild(link);
-      if (isCss)
-        return new Promise((res, rej) => {
-          link.addEventListener("load", res);
-          link.addEventListener("error", () => rej(Error(`Unable to preload CSS for ${dep}`)));
-        });
-    }));
-  }
-  function handlePreloadError(err) {
-    const e = new Event("vite:preloadError", {
-      cancelable: true
-    });
-    e.payload = err;
-    window.dispatchEvent(e);
-    if (!e.defaultPrevented)
-      throw err;
-  }
-  return promise.then((res) => {
-    for (const item of res || []) {
-      if (item.status !== "rejected")
-        continue;
-      handlePreloadError(item.reason);
-    }
-    return baseModule().catch(handlePreloadError);
-  });
-};
-
-function record$3(value) {
-  return !!value && typeof value === "object" && !Array.isArray(value);
-}
-function gitCheckpointTitle(stage, mode) {
-  if (stage === "baseline") {
-    return mode === "created_commit" ? t("chat.git.baseline_created") : t("chat.git.baseline_recorded");
-  }
-  return mode === "created_commit" ? t("chat.git.result_created") : t("chat.git.result_recorded");
-}
-function gitCheckpointLine(key, value, options = {}) {
-  if (!value) return "";
-  const text = options.code ? `\`${value}\`` : String(value);
-  return `- ${t(key)}: ${text}`;
-}
-function gitCheckpointText(item) {
-  return [
-    `**${gitCheckpointTitle(item.stage, item.mode)}**`,
-    "",
-    gitCheckpointLine("chat.git.message", item.message),
-    gitCheckpointLine("chat.git.branch", item.branch, { code: true }),
-    gitCheckpointLine("chat.git.commit", item.commit ? String(item.commit).slice(0, 8) : "", { code: true }),
-    item.stage === "baseline" ? gitCheckpointLine("chat.git.snapshot", item.snapshot ? String(item.snapshot).slice(0, 8) : "", { code: true }) : ""
-  ].filter(Boolean).join("\n");
-}
-function boardGitCheckpoints(board) {
-  const out = [];
-  const seen = /* @__PURE__ */ new Set();
-  const meta = record$3(board?.task?.metadata) ? board.task.metadata : null;
-  const git = record$3(meta?.git) ? meta.git : null;
-  for (const stage of ["baseline", "result"]) {
-    const item = record$3(git?.[stage]) ? git[stage] : null;
-    if (!item) continue;
-    const time = Number(item.time);
-    if (!Number.isFinite(time)) continue;
-    out.push({
-      stage,
-      mode: typeof item.mode === "string" ? item.mode : "recorded_head",
-      branch: typeof item.branch === "string" ? item.branch : "",
-      commit: typeof item.commit === "string" ? item.commit : "",
-      message: typeof item.message === "string" ? item.message : "",
-      snapshot: typeof item.snapshot === "string" ? item.snapshot : "",
-      time
-    });
-    seen.add(stage);
-  }
-  for (const snap of Array.isArray(board?.snapshots) ? board.snapshots : []) {
-    const payload = record$3(snap?.payload) ? snap.payload : null;
-    const stage = typeof payload?.stage === "string" ? payload.stage : "";
-    if (payload?.kind !== "git" || !stage || seen.has(stage)) continue;
-    const time = Number(snap?.time?.created);
-    if (!Number.isFinite(time)) continue;
-    out.push({
-      stage,
-      mode: typeof payload.mode === "string" ? payload.mode : "recorded_head",
-      branch: typeof payload.branch === "string" ? payload.branch : "",
-      commit: typeof payload.commit === "string" ? payload.commit : "",
-      message: typeof payload.message === "string" ? payload.message : "",
-      snapshot: typeof payload.snapshot === "string" ? payload.snapshot : "",
-      time
-    });
-  }
-  return out.sort((a, b) => a.time - b.time);
-}
-function canInitGit$1() {
-  return !!activeDirectory$2() && appStore.connected && !boardStore.vcs?.branch;
-}
-async function initGitCurrent(options = {}) {
-  const dir = activeDirectory$2();
-  if (!dir || !canInitGit$1()) return false;
-  try {
-    const result = await apiJson("project/current/init-git", { method: "POST" });
-    const { clearProjectScopeData } = await __vitePreload(async () => { const { clearProjectScopeData } = await Promise.resolve().then(() => workspace);return { clearProjectScopeData }},true              ?void 0:void 0);
-    const { reloadProjectScope } = await __vitePreload(async () => { const { reloadProjectScope } = await Promise.resolve().then(() => config);return { reloadProjectScope }},true              ?void 0:void 0);
-    clearProjectScopeData();
-    await reloadProjectScope({ restoreWorkspace: false });
-    if (options.notify !== false) {
-      const showAppDialog = window.showAppDialog;
-      if (typeof showAppDialog === "function") {
-        const msg = result?.created ? t("git.init_done", { dir }) : t("git.init_exists", { dir });
-        await showAppDialog({ title: t("git.init"), message: msg, kind: "info" });
-      }
-    }
-    return true;
-  } catch (e) {
-    console.error("[git] Failed to initialize Git", e);
-    if (options.notify !== false) {
-      const showAppDialog = window.showAppDialog;
-      if (typeof showAppDialog === "function") {
-        await showAppDialog({ title: t("git.init"), message: String(e), kind: "error" });
-      }
-    }
-    return false;
-  }
-}
-
-const git = /*#__PURE__*/Object.freeze(/*#__PURE__*/Object.defineProperty({
-  __proto__: null,
-  boardGitCheckpoints,
-  canInitGit: canInitGit$1,
-  gitCheckpointLine,
-  gitCheckpointText,
-  gitCheckpointTitle,
-  initGitCurrent
-}, Symbol.toStringTag, { value: 'Module' }));
-
-const AGENT_STAGES = /* @__PURE__ */ new Set(["spec", "planner", "goal", "judge", "delivery"]);
-function rootTaskSessionID() {
-  const sessionID = boardStore.board?.task?.sessionID;
-  return typeof sessionID === "string" ? sessionID : "";
-}
-function classifyMessage(msg) {
-  const agent = String(msg?.info?.agent || "").trim().toLowerCase();
-  if (AGENT_STAGES.has(agent)) {
-    if (String(msg?.info?.role || "").trim().toLowerCase() === "user") return "main";
-    return agent;
-  }
-  if (agent === "agent") {
-    const rootSession = rootTaskSessionID();
-    const sessionID = typeof msg?.info?.sessionID === "string" ? msg.info.sessionID : "";
-    if (rootSession && sessionID && sessionID !== rootSession) {
-      return "agent";
-    }
-  }
-  return "main";
-}
-function activeAgentStages() {
-  const status = String(boardStore.board?.task?.status || "").trim().toLowerCase();
-  if (status === "spec_generating") return /* @__PURE__ */ new Set(["spec"]);
-  if (status === "goal_decomposing") return /* @__PURE__ */ new Set(["goal"]);
-  if (status === "planning") return /* @__PURE__ */ new Set(["planner"]);
-  if (status === "evaluating") return /* @__PURE__ */ new Set(["judge"]);
-  if (status === "delivering") return /* @__PURE__ */ new Set(["delivery"]);
-  const agentEvents = Array.isArray(store.agentEvents) ? store.agentEvents : [];
-  if (!status && agentEvents.length > 0) {
-    return new Set(agentEvents.map((item) => String(item?.stage || "").trim().toLowerCase()).filter(Boolean));
-  }
-  return /* @__PURE__ */ new Set();
-}
-function effectiveRole(message) {
-  return message?.info?.role || "assistant";
-}
-function normalizeConversationText(text) {
-  return String(text || "").replace(/\s+/g, " ").trim();
-}
-function messageConversationText(message) {
-  const role = effectiveRole(message);
-  return normalizeConversationText(
-    (message.parts || []).flatMap((part) => {
-      if (part?.type !== "text") return [];
-      if (part.audience && part.audience.ui === false) return [];
-      if (part.kind === "trace" && !part.audience?.ui) return [];
-      const text = typeof part.text === "string" ? part.text : "";
-      if (!text.trim()) return [];
-      if (["user", "planner", "scheduler", "system"].includes(role) && text.includes("<assistant-brief>")) {
-        const cleaned = stripAssistantBrief(text);
-        return cleaned ? [cleaned] : [];
-      }
-      return [text];
-    }).join("\n")
-  );
-}
-function hasConversationRequest(messages, request) {
-  const target = normalizeConversationText(request);
-  if (!target) return false;
-  return messages.some(
-    (message) => effectiveRole(message) === "user" && messageConversationText(message) === target
-  );
-}
-function deliveryStatusLabel$1(status) {
-  return status || "";
-}
-function buildBoardContextMessages(preClassifiedMainMessages, board, agentEvents, messages) {
+function buildUserContextMessages() {
+  const board = boardStore.board;
   if (!board) return [];
-  const syntheticMsgs = [];
-  const { task, plan, evaluation, delivery, lanes } = board;
-  const activeStages = activeAgentStages();
-  const liveStages = new Set(
-    (Array.isArray(agentEvents) ? agentEvents : []).map((event) => String(event?.stage || "").trim().toLowerCase()).filter((stage) => activeStages.has(stage))
-  );
-  if (task?.request && !hasConversationRequest(messages || [], task.request)) {
-    syntheticMsgs.push({
+  const msgs = [];
+  const { task } = board;
+  if (task?.request) {
+    msgs.push({
       _synthetic: true,
-      info: { role: "user", time: { created: (task.time?.created || 0) - 2 } },
+      info: { id: "ctx:user-request", role: "user", time: { created: (task.time?.created || 0) - 2 } },
       parts: [{ type: "text", text: task.request }]
     });
-  }
-  if (board.spec && !liveStages.has("spec")) {
-    const message = syntheticTextMessage(
-      "spec",
-      board.spec.time?.created || task?.time?.updated || Date.now(),
-      specContextText(board.spec)
-    );
-    if (message) syntheticMsgs.push(message);
-  }
-  if (plan && !liveStages.has("planner")) {
-    const goals2 = (lanes || []).find((lane) => lane.id === "goals")?.cards || [];
-    const message = syntheticTextMessage(
-      "planner",
-      plan.time?.created || task?.time?.updated || Date.now(),
-      planContextText(plan, goals2)
-    );
-    if (message) syntheticMsgs.push(message);
   }
   for (const interaction of Array.isArray(board.interactions) ? board.interactions : []) {
     const isAutoPermission = interaction.type === "permission" && (interaction.status === "answered" || interaction.status === "rejected") && isAutoReplied(interaction);
@@ -6035,67 +4511,33 @@ function buildBoardContextMessages(preClassifiedMainMessages, board, agentEvents
       interaction.time?.created || Date.now(),
       interactionRequestText(interaction)
     );
-    if (request) syntheticMsgs.push(request);
+    if (request) msgs.push(request);
     if (interaction.status === "answered" || interaction.status === "rejected") {
       const response = syntheticTextMessage(
         isPlannerClarification ? "user" : "system",
         interaction.time?.resolved || interaction.time?.updated || Date.now(),
         interactionResponseText(interaction)
       );
-      if (response) syntheticMsgs.push(response);
+      if (response) msgs.push(response);
     }
   }
-  for (const item of boardGitCheckpoints(board)) {
-    const message = syntheticTextMessage("system", item.time, gitCheckpointText(item));
-    if (message) syntheticMsgs.push(message);
-  }
-  const goalsLane = (lanes || []).find((lane) => lane.id === "goals");
-  const goals = goalsLane?.cards || [];
-  if (goals.length > 0) {
-    const goalTime = evaluation?.time?.created || task?.time?.updated || Date.now();
-    const message = syntheticTextMessage("goal_gate", goalTime - 1, goalContextText(goals));
-    if (message) syntheticMsgs.push(message);
-  }
-  if (evaluation?.verdict) {
-    const message = syntheticTextMessage(
-      "scheduler",
-      evaluation.time?.created || Date.now(),
-      evaluationContextText(board, goals)
-    );
-    if (message) syntheticMsgs.push(message);
-  }
-  const finalDelivery = board.acceptedDelivery || delivery;
-  if (finalDelivery?.summary && finalDelivery.status !== "candidate") {
-    const message = syntheticTextMessage(
-      "assistant",
-      (finalDelivery.time?.created || Date.now()) + 1,
-      `**${t("detail.delivery")} (${deliveryStatusLabel$1(finalDelivery.status)})**
-
-${finalDelivery.summary}`
-    );
-    if (message) syntheticMsgs.push(message);
-  }
-  return syntheticMsgs;
+  return msgs;
 }
 let _prevConversationResult = [];
 let _prevConversationKey = "";
 function conversationMessages() {
   const allMessages = store.messages || [];
-  const agentEvents = Array.isArray(store.agentEvents) ? store.agentEvents : [];
-  const board = boardStore.board;
+  const rootSID = rootTaskSessionID();
   const showTranscriptDetails = store.showTranscriptDetails;
   const mainMessages = [];
   for (const msg of allMessages) {
-    const channel = classifyMessage(msg);
+    const channel = classifyMessage(msg, rootSID);
     if (channel === "main") {
       mainMessages.push(msg);
     }
   }
-  const boardMsgs = buildBoardContextMessages(mainMessages, board, agentEvents, allMessages);
-  const executorMsgs = buildExecutorMessages();
   let filteredMain = mainMessages;
-  if (!showTranscriptDetails && boardMsgs.length > 0 && filteredMain.length > 0) {
-    const rootSID = rootTaskSessionID();
+  if (!showTranscriptDetails && filteredMain.length > 0) {
     filteredMain = filteredMain.filter((message) => {
       const text = (message.parts || []).map((part) => part.text || "").join("");
       if (text.includes("<assistant-brief>") || text.includes("You are executing a headless coding task")) return false;
@@ -6105,8 +4547,9 @@ function conversationMessages() {
       return true;
     });
   }
+  const contextMsgs = buildUserContextMessages();
   const agentCardMsgs = Array.isArray(store.agentCardOrder) ? store.agentCardOrder.map((id) => store.agentCards[id]).filter(Boolean) : [];
-  const result = [...filteredMain, ...executorMsgs, ...boardMsgs, ...agentCardMsgs].sort(
+  const result = [...filteredMain, ...contextMsgs, ...agentCardMsgs].sort(
     (a, b) => (a.info?.time?.created || 0) - (b.info?.time?.created || 0)
   );
   const key = result.map((m) => m.info?.id || m._agentCardKey || "").join(",");
@@ -6397,7 +4840,7 @@ function TaskList(props) {
 }
 delegateEvents(["click"]);
 
-var _tmpl$2$c = /* @__PURE__ */ template(`<div class=plan-version>`), _tmpl$3$c = /* @__PURE__ */ template(`<div class="plan-version streaming-indicator">`), _tmpl$4$c = /* @__PURE__ */ template(`<p class=empty-hint>`), _tmpl$5$c = /* @__PURE__ */ template(`<div class="plan-summary md-content"style=margin-bottom:8px;font-size:12px;opacity:0.8>`), _tmpl$6$b = /* @__PURE__ */ template(`<div class=goals-list>`), _tmpl$7$9 = /* @__PURE__ */ template(`<div class="goal-criteria md-content">`), _tmpl$8$6 = /* @__PURE__ */ template(`<div class=goal-item><span class=goal-status-icon></span><div class=goal-content><div class=plan-version style=margin-bottom:4px></div><div class="goal-desc md-content">`), _tmpl$9$5 = /* @__PURE__ */ template(`<span class=extension-status data-state=active>`), _tmpl$0$3 = /* @__PURE__ */ template(`<span class=goal-priority>`), _tmpl$1$2 = /* @__PURE__ */ template(`<button type=button class="btn btn-ghost mini"data-goal-action=view-session title="View executor session"aria-label="View executor session">View`), _tmpl$10$2 = /* @__PURE__ */ template(`<button type=button class="btn btn-ghost mini"data-goal-action=edit>`), _tmpl$11$1 = /* @__PURE__ */ template(`<button type=button class="btn btn-ghost mini danger"data-goal-action=delete>`), _tmpl$12$1 = /* @__PURE__ */ template(`<div class=goal-actions>`), _tmpl$13$1 = /* @__PURE__ */ template(`<details class=goal-item><summary class=goal-item-head><span class=goal-item-chevron aria-hidden=true>▶</span><span class=goal-status-icon></span><span class=goal-desc-inline></span></summary><div class=goal-item-body><div class=goal-content><div class="goal-desc md-content">`), _tmpl$14$1 = /* @__PURE__ */ template(`<div class=empty-hint>`), _tmpl$15$1 = /* @__PURE__ */ template(`<section class=criteria-group><div class=criteria-group-head><span class=criteria-group-icon aria-hidden=true></span><div class=criteria-group-title></div><div class=criteria-group-count></div></div><div class=criteria-group-list>`), _tmpl$16$1 = /* @__PURE__ */ template(`<label class=criteria-item><input type=checkbox><span class=check-mark></span><span class=criteria-copy><span class=criteria-name></span><span class=criteria-desc></span></span><span class=criteria-status></span><span class=criteria-result>`), _tmpl$17 = /* @__PURE__ */ template(`<div class="eval-summary md-content">`), _tmpl$18 = /* @__PURE__ */ template(`<div class=eval-error-meta>`), _tmpl$19 = /* @__PURE__ */ template(`<div class=eval-error><div class=eval-error-name>✗ </div><div class="eval-error-detail md-content">`), _tmpl$20 = /* @__PURE__ */ template(`<div class=delivery-files>`), _tmpl$21 = /* @__PURE__ */ template(`<div class=delivery-card><div class=delivery-title></div><div class="delivery-summary md-content">`), _tmpl$22 = /* @__PURE__ */ template(`<button type=button class="btn btn-primary"data-task-action=retry>`), _tmpl$23 = /* @__PURE__ */ template(`<button type=button class="btn btn-ghost"data-task-action=replan>`), _tmpl$24 = /* @__PURE__ */ template(`<div class=task-actions-buttons>`), _tmpl$25 = /* @__PURE__ */ template(`<div class=task-actions-bar>`), _tmpl$26 = /* @__PURE__ */ template(`<button class="btn btn-primary"data-action=always>`), _tmpl$27 = /* @__PURE__ */ template(`<button class="btn btn-ghost"data-action=once>`), _tmpl$28 = /* @__PURE__ */ template(`<button class="btn btn-ghost"data-action=reject>`), _tmpl$29 = /* @__PURE__ */ template(`<div class=interaction-alert><div class=interaction-title> </div><div class="interaction-body md-content"></div><div class=interaction-actions>`), _tmpl$30 = /* @__PURE__ */ template(`<button class="btn btn-primary"data-action=answer>`), _tmpl$31 = /* @__PURE__ */ template(`<div class=interactions-list>`), _tmpl$34 = /* @__PURE__ */ template(`<details class=section><summary class=section-head><span class=section-icon aria-hidden=true></span><span class=section-title></span><span class=section-badge></span></summary><div class=section-body>`), _tmpl$35 = /* @__PURE__ */ template(`<div id=taskActionsBar>`);
+var _tmpl$2$c = /* @__PURE__ */ template(`<div class=plan-version>`), _tmpl$3$c = /* @__PURE__ */ template(`<div class="plan-version streaming-indicator">`), _tmpl$4$c = /* @__PURE__ */ template(`<p class=empty-hint>`), _tmpl$5$c = /* @__PURE__ */ template(`<div class="plan-summary md-content"style=margin-bottom:8px;font-size:12px;opacity:0.8>`), _tmpl$6$b = /* @__PURE__ */ template(`<div class=goals-list>`), _tmpl$7$9 = /* @__PURE__ */ template(`<span class=extension-status data-state=active>`), _tmpl$8$6 = /* @__PURE__ */ template(`<div class="goal-criteria md-content">`), _tmpl$9$5 = /* @__PURE__ */ template(`<details class=goal-item><summary class=goal-item-head><span class=goal-item-chevron aria-hidden=true>▶</span><span class=goal-status-icon></span><span class=goal-desc-inline></span><span class=goal-title-brief></span></summary><div class=goal-item-body><div class=goal-content><div class=plan-version></div><div class="goal-desc md-content">`), _tmpl$0$3 = /* @__PURE__ */ template(`<span class=goal-priority>`), _tmpl$1$2 = /* @__PURE__ */ template(`<button type=button class="btn btn-ghost mini"data-goal-action=view-session title="View executor session"aria-label="View executor session">View`), _tmpl$10$2 = /* @__PURE__ */ template(`<button type=button class="btn btn-ghost mini"data-goal-action=edit>`), _tmpl$11$1 = /* @__PURE__ */ template(`<button type=button class="btn btn-ghost mini danger"data-goal-action=delete>`), _tmpl$12$1 = /* @__PURE__ */ template(`<div class=goal-actions>`), _tmpl$13$1 = /* @__PURE__ */ template(`<details class=goal-item><summary class=goal-item-head><span class=goal-item-chevron aria-hidden=true>▶</span><span class=goal-status-icon></span><span class=goal-desc-inline></span><span class=goal-title-brief></span></summary><div class=goal-item-body><div class=goal-content><div class="goal-desc md-content">`), _tmpl$14$1 = /* @__PURE__ */ template(`<div class=empty-hint>`), _tmpl$15$1 = /* @__PURE__ */ template(`<section class=criteria-group><div class=criteria-group-head><span class=criteria-group-icon aria-hidden=true></span><div class=criteria-group-title></div><div class=criteria-group-count></div></div><div class=criteria-group-list>`), _tmpl$16$1 = /* @__PURE__ */ template(`<label class=criteria-item><input type=checkbox><span class=check-mark></span><span class=criteria-copy><span class=criteria-name></span><span class=criteria-desc></span></span><span class=criteria-status></span><span class=criteria-result>`), _tmpl$17 = /* @__PURE__ */ template(`<div class="eval-summary md-content">`), _tmpl$18 = /* @__PURE__ */ template(`<div class=eval-error-meta>`), _tmpl$19 = /* @__PURE__ */ template(`<div class=eval-error><div class=eval-error-name>✗ </div><div class="eval-error-detail md-content">`), _tmpl$20 = /* @__PURE__ */ template(`<div class=delivery-files>`), _tmpl$21 = /* @__PURE__ */ template(`<div class=delivery-card><div class=delivery-title></div><div class="delivery-summary md-content">`), _tmpl$22 = /* @__PURE__ */ template(`<button type=button class="btn btn-primary"data-task-action=retry>`), _tmpl$23 = /* @__PURE__ */ template(`<button type=button class="btn btn-ghost"data-task-action=replan>`), _tmpl$24 = /* @__PURE__ */ template(`<div class=task-actions-buttons>`), _tmpl$25 = /* @__PURE__ */ template(`<div class=task-actions-bar>`), _tmpl$26 = /* @__PURE__ */ template(`<button class="btn btn-primary"data-action=always>`), _tmpl$27 = /* @__PURE__ */ template(`<button class="btn btn-ghost"data-action=once>`), _tmpl$28 = /* @__PURE__ */ template(`<button class="btn btn-ghost"data-action=reject>`), _tmpl$29 = /* @__PURE__ */ template(`<div class=interaction-alert><div class=interaction-title> </div><div class="interaction-body md-content"></div><div class=interaction-actions>`), _tmpl$30 = /* @__PURE__ */ template(`<button class="btn btn-primary"data-action=answer>`), _tmpl$31 = /* @__PURE__ */ template(`<div class=interactions-list>`), _tmpl$34 = /* @__PURE__ */ template(`<details class=section><summary class=section-head><span class=section-icon aria-hidden=true></span><span class=section-title></span><span class=section-badge></span></summary><div class=section-body>`), _tmpl$35 = /* @__PURE__ */ template(`<div id=taskActionsBar>`);
 function statusIcon(status) {
   const map = {
     idle: `<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle data-stroke="true" cx="8" cy="8" r="4.5"/><circle data-fill="true" cx="8" cy="8" r="1.25"/></svg>`,
@@ -6523,24 +4966,41 @@ function PlanPanel(props) {
             children: (goal) => {
               const isRunning = () => props.runningGoalIDs?.has(goal.id);
               const goalStatus = () => goal.metadata?.status || (isRunning() ? "running" : "pending");
+              const shortTitle = () => {
+                const raw = goal.title || "";
+                const first = raw.split("\n")[0].replace(/^#+\s*/, "").trim();
+                return first.length > 60 ? first.slice(0, 57) + "..." : first;
+              };
               return (() => {
-                var _el$1 = _tmpl$8$6(), _el$10 = _el$1.firstChild, _el$11 = _el$10.nextSibling, _el$12 = _el$11.firstChild, _el$13 = _el$12.nextSibling;
-                insert(_el$10, () => goalIcon(goalStatus()));
-                insert(_el$12, () => `Goal#${goal.goalIndex} Plan V${version()}`);
-                insert(_el$11, createComponent(Show, {
+                var _el$1 = _tmpl$9$5(), _el$10 = _el$1.firstChild, _el$11 = _el$10.firstChild, _el$12 = _el$11.nextSibling, _el$13 = _el$12.nextSibling, _el$14 = _el$13.nextSibling, _el$16 = _el$10.nextSibling, _el$17 = _el$16.firstChild, _el$18 = _el$17.firstChild, _el$19 = _el$18.nextSibling;
+                insert(_el$12, () => goalIcon(goalStatus()));
+                insert(_el$13, () => `Goal#${goal.goalIndex}`);
+                insert(_el$14, shortTitle);
+                insert(_el$10, createComponent(Show, {
+                  get when() {
+                    return isRunning();
+                  },
+                  get children() {
+                    var _el$15 = _tmpl$7$9();
+                    insert(_el$15, () => t("goal.running"));
+                    return _el$15;
+                  }
+                }), null);
+                insert(_el$18, () => `Plan V${version()}`);
+                insert(_el$17, createComponent(Show, {
                   get when() {
                     return goal.detail;
                   },
                   get children() {
-                    var _el$14 = _tmpl$7$9();
-                    createRenderEffect(() => _el$14.innerHTML = renderMarkdown$1(goal.detail));
-                    return _el$14;
+                    var _el$20 = _tmpl$8$6();
+                    createRenderEffect(() => _el$20.innerHTML = renderMarkdown$1(goal.detail));
+                    return _el$20;
                   }
                 }), null);
                 createRenderEffect((_p$) => {
                   var _v$4 = goalStatus(), _v$5 = renderMarkdown$1(goal.title || "");
-                  _v$4 !== _p$.e && setAttribute(_el$10, "data-status", _p$.e = _v$4);
-                  _v$5 !== _p$.t && (_el$13.innerHTML = _p$.t = _v$5);
+                  _v$4 !== _p$.e && setAttribute(_el$12, "data-status", _p$.e = _v$4);
+                  _v$5 !== _p$.t && (_el$19.innerHTML = _p$.t = _v$5);
                   return _p$;
                 }, {
                   e: void 0,
@@ -6570,129 +5030,134 @@ function GoalsPanel(props) {
     },
     get fallback() {
       return (() => {
-        var _el$16 = _tmpl$4$c();
-        insert(_el$16, () => t("empty.goals"));
-        return _el$16;
+        var _el$22 = _tmpl$4$c();
+        insert(_el$22, () => t("empty.goals"));
+        return _el$22;
       })();
     },
     get children() {
-      var _el$15 = _tmpl$6$b();
-      insert(_el$15, createComponent(For, {
+      var _el$21 = _tmpl$6$b();
+      insert(_el$21, createComponent(For, {
         get each() {
           return props.cards;
         },
         children: (card, idx) => (() => {
-          var _el$17 = _tmpl$13$1(), _el$18 = _el$17.firstChild, _el$19 = _el$18.firstChild, _el$20 = _el$19.nextSibling, _el$21 = _el$20.nextSibling, _el$24 = _el$18.nextSibling, _el$25 = _el$24.firstChild, _el$26 = _el$25.firstChild;
-          insert(_el$20, () => goalIcon(card.status));
-          insert(_el$21, () => `Goal#${idx() + 1}`);
-          insert(_el$18, createComponent(Show, {
+          var _el$23 = _tmpl$13$1(), _el$24 = _el$23.firstChild, _el$25 = _el$24.firstChild, _el$26 = _el$25.nextSibling, _el$27 = _el$26.nextSibling, _el$28 = _el$27.nextSibling, _el$31 = _el$24.nextSibling, _el$32 = _el$31.firstChild, _el$33 = _el$32.firstChild;
+          insert(_el$26, () => goalIcon(card.status));
+          insert(_el$27, () => `Goal#${idx() + 1}`);
+          insert(_el$28, () => {
+            const raw = card.title || "";
+            const first = raw.split("\n")[0].replace(/^#+\s*/, "").trim();
+            return first.length > 50 ? first.slice(0, 47) + "..." : first;
+          });
+          insert(_el$24, createComponent(Show, {
             get when() {
               return props.runningGoalIDs.has(card.id);
             },
             get children() {
-              var _el$22 = _tmpl$9$5();
-              insert(_el$22, () => t("goal.running"));
-              return _el$22;
+              var _el$29 = _tmpl$7$9();
+              insert(_el$29, () => t("goal.running"));
+              return _el$29;
             }
           }), null);
-          insert(_el$18, createComponent(Show, {
+          insert(_el$24, createComponent(Show, {
             get when() {
               return card.metadata?.priority;
             },
             get children() {
-              var _el$23 = _tmpl$0$3();
-              insert(_el$23, () => card.metadata.priority);
-              createRenderEffect(() => setAttribute(_el$23, "data-priority", card.metadata.priority));
-              return _el$23;
+              var _el$30 = _tmpl$0$3();
+              insert(_el$30, () => card.metadata.priority);
+              createRenderEffect(() => setAttribute(_el$30, "data-priority", card.metadata.priority));
+              return _el$30;
             }
           }), null);
-          insert(_el$25, createComponent(Show, {
+          insert(_el$32, createComponent(Show, {
             get when() {
               return card.detail;
             },
             get children() {
-              var _el$27 = _tmpl$7$9();
-              createRenderEffect(() => _el$27.innerHTML = renderMarkdown$1(card.detail));
-              return _el$27;
+              var _el$34 = _tmpl$8$6();
+              createRenderEffect(() => _el$34.innerHTML = renderMarkdown$1(card.detail));
+              return _el$34;
             }
           }), null);
-          insert(_el$24, createComponent(Show, {
+          insert(_el$31, createComponent(Show, {
             get when() {
               return memo(() => !!props.onOpenSession)() && card.metadata?.sessionID;
             },
             get children() {
-              var _el$28 = _tmpl$1$2();
-              _el$28.$$click = () => props.onOpenSession?.(card.metadata.sessionID, card.title || card.id);
-              createRenderEffect(() => setAttribute(_el$28, "data-goal-id", card.id));
-              return _el$28;
+              var _el$35 = _tmpl$1$2();
+              _el$35.$$click = () => props.onOpenSession?.(card.metadata.sessionID, card.title || card.id);
+              createRenderEffect(() => setAttribute(_el$35, "data-goal-id", card.id));
+              return _el$35;
             }
           }), null);
-          insert(_el$24, createComponent(Show, {
+          insert(_el$31, createComponent(Show, {
             get when() {
               return props.onEditGoal || props.onDeleteGoal;
             },
             get children() {
-              var _el$29 = _tmpl$12$1();
-              insert(_el$29, createComponent(Show, {
+              var _el$36 = _tmpl$12$1();
+              insert(_el$36, createComponent(Show, {
                 get when() {
                   return props.onEditGoal;
                 },
                 get children() {
-                  var _el$30 = _tmpl$10$2();
-                  _el$30.$$click = () => props.onEditGoal?.(card.id, card.title, card.detail || "");
-                  insert(_el$30, () => t("common.edit"));
+                  var _el$37 = _tmpl$10$2();
+                  _el$37.$$click = () => props.onEditGoal?.(card.id, card.title, card.detail || "");
+                  insert(_el$37, () => t("common.edit"));
                   createRenderEffect((_p$) => {
                     var _v$6 = card.id, _v$7 = t("goal.edit_button_title"), _v$8 = t("goal.edit_button_title");
-                    _v$6 !== _p$.e && setAttribute(_el$30, "data-goal-id", _p$.e = _v$6);
-                    _v$7 !== _p$.t && setAttribute(_el$30, "title", _p$.t = _v$7);
-                    _v$8 !== _p$.a && setAttribute(_el$30, "aria-label", _p$.a = _v$8);
+                    _v$6 !== _p$.e && setAttribute(_el$37, "data-goal-id", _p$.e = _v$6);
+                    _v$7 !== _p$.t && setAttribute(_el$37, "title", _p$.t = _v$7);
+                    _v$8 !== _p$.a && setAttribute(_el$37, "aria-label", _p$.a = _v$8);
                     return _p$;
                   }, {
                     e: void 0,
                     t: void 0,
                     a: void 0
                   });
-                  return _el$30;
+                  return _el$37;
                 }
               }), null);
-              insert(_el$29, createComponent(Show, {
+              insert(_el$36, createComponent(Show, {
                 get when() {
                   return props.onDeleteGoal;
                 },
                 get children() {
-                  var _el$31 = _tmpl$11$1();
-                  _el$31.$$click = () => props.onDeleteGoal?.(card.id);
-                  insert(_el$31, () => t("common.delete"));
+                  var _el$38 = _tmpl$11$1();
+                  _el$38.$$click = () => props.onDeleteGoal?.(card.id);
+                  insert(_el$38, () => t("common.delete"));
                   createRenderEffect((_p$) => {
                     var _v$9 = card.id, _v$0 = t("goal.delete_button_title"), _v$1 = t("goal.delete_button_title");
-                    _v$9 !== _p$.e && setAttribute(_el$31, "data-goal-id", _p$.e = _v$9);
-                    _v$0 !== _p$.t && setAttribute(_el$31, "title", _p$.t = _v$0);
-                    _v$1 !== _p$.a && setAttribute(_el$31, "aria-label", _p$.a = _v$1);
+                    _v$9 !== _p$.e && setAttribute(_el$38, "data-goal-id", _p$.e = _v$9);
+                    _v$0 !== _p$.t && setAttribute(_el$38, "title", _p$.t = _v$0);
+                    _v$1 !== _p$.a && setAttribute(_el$38, "aria-label", _p$.a = _v$1);
                     return _p$;
                   }, {
                     e: void 0,
                     t: void 0,
                     a: void 0
                   });
-                  return _el$31;
+                  return _el$38;
                 }
               }), null);
-              return _el$29;
+              return _el$36;
             }
           }), null);
           createRenderEffect((_p$) => {
             var _v$10 = card.status || "pending", _v$11 = renderMarkdown$1(card.title || "");
-            _v$10 !== _p$.e && setAttribute(_el$20, "data-status", _p$.e = _v$10);
-            _v$11 !== _p$.t && (_el$26.innerHTML = _p$.t = _v$11);
+            _v$10 !== _p$.e && setAttribute(_el$26, "data-status", _p$.e = _v$10);
+            _v$11 !== _p$.t && (_el$33.innerHTML = _p$.t = _v$11);
             return _p$;
           }, {
             e: void 0,
             t: void 0
           });
-          return _el$17;
+          return _el$23;
         })()
       }));
-      return _el$15;
+      return _el$21;
     }
   });
 }
@@ -6840,7 +5305,7 @@ const CHECK_FAMILY_ICONS = {
   acceptance: `<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="1.5" width="9" height="11" rx="1.2"/><polyline points="5,6.5 6.5,8 9,5.5"/><line x1="5" y1="10" x2="9" y2="10"/></svg>`,
   custom: `<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="7" r="1"/><path d="M6.1 2.5l-.2 1.2a3.4 3.4 0 0 0-.9.5L3.8 3.8l-.9.9.4 1.2a3.4 3.4 0 0 0-.5.9l-1.2.2v1.2l1.2.2c.1.3.3.6.5.9l-.4 1.2.9.9 1.2-.4c.3.2.6.4.9.5l.2 1.2h1.2l.2-1.2c.3-.1.6-.3.9-.5l1.2.4.9-.9-.4-1.2c.2-.3.4-.6.5-.9l1.2-.2V6.8l-1.2-.2a3.4 3.4 0 0 0-.5-.9l.4-1.2-.9-.9-1.2.4a3.4 3.4 0 0 0-.9-.5L7.9 2.5Z"/></svg>`
 };
-function record$2(value) {
+function record$3(value) {
   return !!value && typeof value === "object" && !Array.isArray(value);
 }
 function aggregateCheckStatus(checks, key) {
@@ -6857,15 +5322,15 @@ function criteriaEnabledValue(key, value, fallback) {
   }
   if (key === "spec_check" && value === void 0) return true;
   if (value === true) return true;
-  if (!value || !record$2(value)) return false;
+  if (!value || !record$3(value)) return false;
   return value.enabled !== false;
 }
 function criteriaSpecs(task, evaluation) {
   const checksConfig = task?.metadata?.checks;
-  const config = checksConfig && record$2(checksConfig) ? {
+  const config = checksConfig && record$3(checksConfig) ? {
     ...checksConfig
   } : {};
-  const named = config.named && record$2(config.named) ? config.named : {};
+  const named = config.named && record$3(config.named) ? config.named : {};
   const seen = /* @__PURE__ */ new Set();
   const specs = [];
   const showDefault = Object.keys(config).length === 0 && (!evaluation?.checks || evaluation.checks.length === 0);
@@ -6906,7 +5371,7 @@ function criteriaSpecs(task, evaluation) {
     });
   }
   for (const [key, value] of Object.entries(named)) {
-    if (!value || !record$2(value)) continue;
+    if (!value || !record$3(value)) continue;
     push({
       key: `named:${key}`,
       name: key,
@@ -6975,9 +5440,9 @@ function CriteriaPanel(props) {
     },
     get fallback() {
       return (() => {
-        var _el$32 = _tmpl$14$1();
-        insert(_el$32, () => t("empty.checks"));
-        return _el$32;
+        var _el$39 = _tmpl$14$1();
+        insert(_el$39, () => t("empty.checks"));
+        return _el$39;
       })();
     },
     get children() {
@@ -6986,32 +5451,32 @@ function CriteriaPanel(props) {
           return groups();
         },
         children: (group) => (() => {
-          var _el$33 = _tmpl$15$1(), _el$34 = _el$33.firstChild, _el$35 = _el$34.firstChild, _el$36 = _el$35.nextSibling, _el$37 = _el$36.nextSibling, _el$38 = _el$34.nextSibling;
-          insert(_el$36, () => group.label);
-          insert(_el$37, () => tc("checks.group_count", group.items.length, {
+          var _el$40 = _tmpl$15$1(), _el$41 = _el$40.firstChild, _el$42 = _el$41.firstChild, _el$43 = _el$42.nextSibling, _el$44 = _el$43.nextSibling, _el$45 = _el$41.nextSibling;
+          insert(_el$43, () => group.label);
+          insert(_el$44, () => tc("checks.group_count", group.items.length, {
             count: group.items.length
           }));
-          insert(_el$38, createComponent(For, {
+          insert(_el$45, createComponent(For, {
             get each() {
               return group.items;
             },
             children: (spec) => {
               const status = () => checkStatuses()[spec.key] || "pending";
               return (() => {
-                var _el$39 = _tmpl$16$1(), _el$40 = _el$39.firstChild, _el$41 = _el$40.nextSibling, _el$42 = _el$41.nextSibling, _el$43 = _el$42.firstChild, _el$44 = _el$43.nextSibling, _el$45 = _el$42.nextSibling, _el$46 = _el$45.nextSibling;
-                _el$40.addEventListener("change", (e) => props.onToggle?.(spec.key, e.currentTarget.checked));
-                insert(_el$43, () => spec.label);
-                insert(_el$44, (() => {
+                var _el$46 = _tmpl$16$1(), _el$47 = _el$46.firstChild, _el$48 = _el$47.nextSibling, _el$49 = _el$48.nextSibling, _el$50 = _el$49.firstChild, _el$51 = _el$50.nextSibling, _el$52 = _el$49.nextSibling, _el$53 = _el$52.nextSibling;
+                _el$47.addEventListener("change", (e) => props.onToggle?.(spec.key, e.currentTarget.checked));
+                insert(_el$50, () => spec.label);
+                insert(_el$51, (() => {
                   var _c$ = memo(() => !!spec.readOnly);
                   return () => _c$() ? t("detail.observed") : memo(() => !!spec.enabled)() ? t("detail.enabled") : t("detail.disabled");
                 })());
-                insert(_el$46, () => criteriaResultText(status()));
+                insert(_el$53, () => criteriaResultText(status()));
                 createRenderEffect((_p$) => {
                   var _v$14 = spec.readOnly ? "true" : void 0, _v$15 = spec.key, _v$16 = spec.readOnly, _v$17 = status();
-                  _v$14 !== _p$.e && setAttribute(_el$39, "data-readonly", _p$.e = _v$14);
-                  _v$15 !== _p$.t && setAttribute(_el$40, "data-check", _p$.t = _v$15);
-                  _v$16 !== _p$.a && (_el$40.disabled = _p$.a = _v$16);
-                  _v$17 !== _p$.o && setAttribute(_el$45, "data-result", _p$.o = _v$17);
+                  _v$14 !== _p$.e && setAttribute(_el$46, "data-readonly", _p$.e = _v$14);
+                  _v$15 !== _p$.t && setAttribute(_el$47, "data-check", _p$.t = _v$15);
+                  _v$16 !== _p$.a && (_el$47.disabled = _p$.a = _v$16);
+                  _v$17 !== _p$.o && setAttribute(_el$52, "data-result", _p$.o = _v$17);
                   return _p$;
                 }, {
                   e: void 0,
@@ -7019,21 +5484,21 @@ function CriteriaPanel(props) {
                   a: void 0,
                   o: void 0
                 });
-                createRenderEffect(() => _el$40.checked = spec.enabled);
-                return _el$39;
+                createRenderEffect(() => _el$47.checked = spec.enabled);
+                return _el$46;
               })();
             }
           }));
           createRenderEffect((_p$) => {
             var _v$12 = group.key, _v$13 = CHECK_FAMILY_ICONS[group.key] || "";
-            _v$12 !== _p$.e && setAttribute(_el$33, "data-family", _p$.e = _v$12);
-            _v$13 !== _p$.t && (_el$35.innerHTML = _p$.t = _v$13);
+            _v$12 !== _p$.e && setAttribute(_el$40, "data-family", _p$.e = _v$12);
+            _v$13 !== _p$.t && (_el$42.innerHTML = _p$.t = _v$13);
             return _p$;
           }, {
             e: void 0,
             t: void 0
           });
-          return _el$33;
+          return _el$40;
         })()
       });
     }
@@ -7066,29 +5531,29 @@ function EvaluationPanel(props) {
           return errors();
         },
         children: (err) => (() => {
-          var _el$48 = _tmpl$19(), _el$49 = _el$48.firstChild; _el$49.firstChild; var _el$53 = _el$49.nextSibling;
-          insert(_el$49, () => err.name, null);
-          insert(_el$48, createComponent(Show, {
+          var _el$55 = _tmpl$19(), _el$56 = _el$55.firstChild; _el$56.firstChild; var _el$60 = _el$56.nextSibling;
+          insert(_el$56, () => err.name, null);
+          insert(_el$55, createComponent(Show, {
             get when() {
               return err.family;
             },
             get children() {
-              var _el$52 = _tmpl$18();
-              insert(_el$52, () => err.family);
-              return _el$52;
+              var _el$59 = _tmpl$18();
+              insert(_el$59, () => err.family);
+              return _el$59;
             }
-          }), _el$53);
-          createRenderEffect(() => _el$53.innerHTML = renderMarkdown$1(err.evidence.slice(0, 400)));
-          return _el$48;
+          }), _el$60);
+          createRenderEffect(() => _el$60.innerHTML = renderMarkdown$1(err.evidence.slice(0, 400)));
+          return _el$55;
         })()
       }), createComponent(Show, {
         get when() {
           return props.evaluation?.summary;
         },
         get children() {
-          var _el$47 = _tmpl$17();
-          createRenderEffect(() => _el$47.innerHTML = renderMarkdown$1(props.evaluation.summary));
-          return _el$47;
+          var _el$54 = _tmpl$17();
+          createRenderEffect(() => _el$54.innerHTML = renderMarkdown$1(props.evaluation.summary));
+          return _el$54;
         }
       })];
     }
@@ -7107,28 +5572,28 @@ function DeliveryPanel(props) {
     },
     get fallback() {
       return (() => {
-        var _el$58 = _tmpl$4$c();
-        insert(_el$58, () => t("empty.delivery"));
-        return _el$58;
+        var _el$65 = _tmpl$4$c();
+        insert(_el$65, () => t("empty.delivery"));
+        return _el$65;
       })();
     },
     get children() {
-      var _el$54 = _tmpl$21(), _el$55 = _el$54.firstChild, _el$56 = _el$55.nextSibling;
-      insert(_el$55, () => deliveryStatusLabel(props.delivery?.status));
-      insert(_el$54, createComponent(Show, {
+      var _el$61 = _tmpl$21(), _el$62 = _el$61.firstChild, _el$63 = _el$62.nextSibling;
+      insert(_el$62, () => deliveryStatusLabel(props.delivery?.status));
+      insert(_el$61, createComponent(Show, {
         get when() {
           return props.delivery?.result?.changedFiles?.length > 0;
         },
         get children() {
-          var _el$57 = _tmpl$20();
-          insert(_el$57, () => tc("delivery.files_changed", props.delivery.result.changedFiles.length, {
+          var _el$64 = _tmpl$20();
+          insert(_el$64, () => tc("delivery.files_changed", props.delivery.result.changedFiles.length, {
             count: props.delivery.result.changedFiles.length
           }));
-          return _el$57;
+          return _el$64;
         }
       }), null);
-      createRenderEffect(() => _el$56.innerHTML = renderMarkdown$1(props.delivery?.summary || props.delivery?.result?.summary || ""));
-      return _el$54;
+      createRenderEffect(() => _el$63.innerHTML = renderMarkdown$1(props.delivery?.summary || props.delivery?.result?.summary || ""));
+      return _el$61;
     }
   });
 }
@@ -7141,57 +5606,57 @@ function TaskActionsPanel(props) {
       return visible();
     },
     get children() {
-      var _el$59 = _tmpl$25();
-      insert(_el$59, createComponent(Show, {
+      var _el$66 = _tmpl$25();
+      insert(_el$66, createComponent(Show, {
         get when() {
           return hasButtons();
         },
         get children() {
-          var _el$60 = _tmpl$24();
-          insert(_el$60, createComponent(Show, {
+          var _el$67 = _tmpl$24();
+          insert(_el$67, createComponent(Show, {
             get when() {
               return controls().canRetry;
             },
             get children() {
-              var _el$61 = _tmpl$22();
-              _el$61.$$click = () => props.onRetry?.();
-              insert(_el$61, () => t("task.action.retry"));
+              var _el$68 = _tmpl$22();
+              _el$68.$$click = () => props.onRetry?.();
+              insert(_el$68, () => t("task.action.retry"));
               createRenderEffect((_p$) => {
                 var _v$18 = t("task.action.retry_title"), _v$19 = t("task.action.retry_title");
-                _v$18 !== _p$.e && setAttribute(_el$61, "title", _p$.e = _v$18);
-                _v$19 !== _p$.t && setAttribute(_el$61, "aria-label", _p$.t = _v$19);
+                _v$18 !== _p$.e && setAttribute(_el$68, "title", _p$.e = _v$18);
+                _v$19 !== _p$.t && setAttribute(_el$68, "aria-label", _p$.t = _v$19);
                 return _p$;
               }, {
                 e: void 0,
                 t: void 0
               });
-              return _el$61;
+              return _el$68;
             }
           }), null);
-          insert(_el$60, createComponent(Show, {
+          insert(_el$67, createComponent(Show, {
             get when() {
               return controls().canReplan;
             },
             get children() {
-              var _el$62 = _tmpl$23();
-              _el$62.$$click = () => props.onReplan?.();
-              insert(_el$62, () => t("task.action.replan"));
+              var _el$69 = _tmpl$23();
+              _el$69.$$click = () => props.onReplan?.();
+              insert(_el$69, () => t("task.action.replan"));
               createRenderEffect((_p$) => {
                 var _v$20 = t("task.action.replan_title"), _v$21 = t("task.action.replan_title");
-                _v$20 !== _p$.e && setAttribute(_el$62, "title", _p$.e = _v$20);
-                _v$21 !== _p$.t && setAttribute(_el$62, "aria-label", _p$.t = _v$21);
+                _v$20 !== _p$.e && setAttribute(_el$69, "title", _p$.e = _v$20);
+                _v$21 !== _p$.t && setAttribute(_el$69, "aria-label", _p$.t = _v$21);
                 return _p$;
               }, {
                 e: void 0,
                 t: void 0
               });
-              return _el$62;
+              return _el$69;
             }
           }), null);
-          return _el$60;
+          return _el$67;
         }
       }));
-      return _el$59;
+      return _el$66;
     }
   });
 }
@@ -7201,100 +5666,100 @@ function interactionIcon$1(interaction) {
 function InteractionAlert(props) {
   const icon = () => interactionIcon$1(props.interaction);
   return (() => {
-    var _el$63 = _tmpl$29(), _el$64 = _el$63.firstChild, _el$65 = _el$64.firstChild, _el$66 = _el$64.nextSibling, _el$67 = _el$66.nextSibling;
-    insert(_el$64, icon, _el$65);
-    insert(_el$64, () => props.interaction.title, null);
-    insert(_el$67, createComponent(Show, {
+    var _el$70 = _tmpl$29(), _el$71 = _el$70.firstChild, _el$72 = _el$71.firstChild, _el$73 = _el$71.nextSibling, _el$74 = _el$73.nextSibling;
+    insert(_el$71, icon, _el$72);
+    insert(_el$71, () => props.interaction.title, null);
+    insert(_el$74, createComponent(Show, {
       get when() {
         return props.interaction.type === "permission";
       },
       get fallback() {
         return [(() => {
-          var _el$71 = _tmpl$30();
-          _el$71.$$click = () => props.onResolve?.(props.interaction.id, "answer");
-          insert(_el$71, () => t("interaction.answer"));
+          var _el$78 = _tmpl$30();
+          _el$78.$$click = () => props.onResolve?.(props.interaction.id, "answer");
+          insert(_el$78, () => t("interaction.answer"));
           createRenderEffect((_p$) => {
             var _v$30 = t("interaction.answer_title"), _v$31 = t("interaction.answer_title");
-            _v$30 !== _p$.e && setAttribute(_el$71, "title", _p$.e = _v$30);
-            _v$31 !== _p$.t && setAttribute(_el$71, "aria-label", _p$.t = _v$31);
+            _v$30 !== _p$.e && setAttribute(_el$78, "title", _p$.e = _v$30);
+            _v$31 !== _p$.t && setAttribute(_el$78, "aria-label", _p$.t = _v$31);
             return _p$;
           }, {
             e: void 0,
             t: void 0
           });
-          return _el$71;
+          return _el$78;
         })(), (() => {
-          var _el$72 = _tmpl$28();
-          _el$72.$$click = () => props.onReject?.(props.interaction.id);
-          insert(_el$72, () => t("interaction.skip"));
+          var _el$79 = _tmpl$28();
+          _el$79.$$click = () => props.onReject?.(props.interaction.id);
+          insert(_el$79, () => t("interaction.skip"));
           createRenderEffect((_p$) => {
             var _v$32 = t("interaction.skip_title"), _v$33 = t("interaction.skip_title");
-            _v$32 !== _p$.e && setAttribute(_el$72, "title", _p$.e = _v$32);
-            _v$33 !== _p$.t && setAttribute(_el$72, "aria-label", _p$.t = _v$33);
+            _v$32 !== _p$.e && setAttribute(_el$79, "title", _p$.e = _v$32);
+            _v$33 !== _p$.t && setAttribute(_el$79, "aria-label", _p$.t = _v$33);
             return _p$;
           }, {
             e: void 0,
             t: void 0
           });
-          return _el$72;
+          return _el$79;
         })()];
       },
       get children() {
         return [(() => {
-          var _el$68 = _tmpl$26();
-          _el$68.$$click = () => props.onResolve?.(props.interaction.id, "always");
-          insert(_el$68, () => t("interaction.always_allow"));
+          var _el$75 = _tmpl$26();
+          _el$75.$$click = () => props.onResolve?.(props.interaction.id, "always");
+          insert(_el$75, () => t("interaction.always_allow"));
           createRenderEffect((_p$) => {
             var _v$22 = t("interaction.always_allow_title"), _v$23 = t("interaction.always_allow_title");
-            _v$22 !== _p$.e && setAttribute(_el$68, "title", _p$.e = _v$22);
-            _v$23 !== _p$.t && setAttribute(_el$68, "aria-label", _p$.t = _v$23);
+            _v$22 !== _p$.e && setAttribute(_el$75, "title", _p$.e = _v$22);
+            _v$23 !== _p$.t && setAttribute(_el$75, "aria-label", _p$.t = _v$23);
             return _p$;
           }, {
             e: void 0,
             t: void 0
           });
-          return _el$68;
+          return _el$75;
         })(), (() => {
-          var _el$69 = _tmpl$27();
-          _el$69.$$click = () => props.onResolve?.(props.interaction.id, "once");
-          insert(_el$69, () => t("interaction.allow_once"));
+          var _el$76 = _tmpl$27();
+          _el$76.$$click = () => props.onResolve?.(props.interaction.id, "once");
+          insert(_el$76, () => t("interaction.allow_once"));
           createRenderEffect((_p$) => {
             var _v$24 = t("interaction.allow_once_title"), _v$25 = t("interaction.allow_once_title");
-            _v$24 !== _p$.e && setAttribute(_el$69, "title", _p$.e = _v$24);
-            _v$25 !== _p$.t && setAttribute(_el$69, "aria-label", _p$.t = _v$25);
+            _v$24 !== _p$.e && setAttribute(_el$76, "title", _p$.e = _v$24);
+            _v$25 !== _p$.t && setAttribute(_el$76, "aria-label", _p$.t = _v$25);
             return _p$;
           }, {
             e: void 0,
             t: void 0
           });
-          return _el$69;
+          return _el$76;
         })(), (() => {
-          var _el$70 = _tmpl$28();
-          _el$70.$$click = () => props.onReject?.(props.interaction.id);
-          insert(_el$70, () => t("interaction.reject"));
+          var _el$77 = _tmpl$28();
+          _el$77.$$click = () => props.onReject?.(props.interaction.id);
+          insert(_el$77, () => t("interaction.reject"));
           createRenderEffect((_p$) => {
             var _v$26 = t("interaction.reject_title"), _v$27 = t("interaction.reject_title");
-            _v$26 !== _p$.e && setAttribute(_el$70, "title", _p$.e = _v$26);
-            _v$27 !== _p$.t && setAttribute(_el$70, "aria-label", _p$.t = _v$27);
+            _v$26 !== _p$.e && setAttribute(_el$77, "title", _p$.e = _v$26);
+            _v$27 !== _p$.t && setAttribute(_el$77, "aria-label", _p$.t = _v$27);
             return _p$;
           }, {
             e: void 0,
             t: void 0
           });
-          return _el$70;
+          return _el$77;
         })()];
       }
     }));
     createRenderEffect((_p$) => {
       var _v$28 = props.interaction.id, _v$29 = renderMarkdown$1(props.interaction.body || "");
-      _v$28 !== _p$.e && setAttribute(_el$63, "data-id", _p$.e = _v$28);
-      _v$29 !== _p$.t && (_el$66.innerHTML = _p$.t = _v$29);
+      _v$28 !== _p$.e && setAttribute(_el$70, "data-id", _p$.e = _v$28);
+      _v$29 !== _p$.t && (_el$73.innerHTML = _p$.t = _v$29);
       return _p$;
     }, {
       e: void 0,
       t: void 0
     });
-    return _el$63;
+    return _el$70;
   })();
 }
 function InteractionsList(props) {
@@ -7304,8 +5769,8 @@ function InteractionsList(props) {
       return pending().length > 0;
     },
     get children() {
-      var _el$73 = _tmpl$31();
-      insert(_el$73, createComponent(For, {
+      var _el$80 = _tmpl$31();
+      insert(_el$80, createComponent(For, {
         get each() {
           return pending();
         },
@@ -7319,7 +5784,7 @@ function InteractionsList(props) {
           }
         })
       }));
-      return _el$73;
+      return _el$80;
     }
   });
 }
@@ -7331,17 +5796,17 @@ const SECTION_ICONS = {
   delivery: `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 5.5L8 2.5l5.5 3v5L8 13.5l-5.5-3Z"/><polyline points="2.5,5.5 8,8.5 13.5,5.5"/><line x1="8" y1="8.5" x2="8" y2="13.5"/></svg>`};
 function SectionFrame(props) {
   return (() => {
-    var _el$77 = _tmpl$34(), _el$78 = _el$77.firstChild, _el$79 = _el$78.firstChild, _el$80 = _el$79.nextSibling, _el$81 = _el$80.nextSibling, _el$82 = _el$78.nextSibling;
-    insert(_el$80, () => props.title);
-    insert(_el$81, () => props.badgeText || "");
-    insert(_el$82, () => props.children);
+    var _el$84 = _tmpl$34(), _el$85 = _el$84.firstChild, _el$86 = _el$85.firstChild, _el$87 = _el$86.nextSibling, _el$88 = _el$87.nextSibling, _el$89 = _el$85.nextSibling;
+    insert(_el$87, () => props.title);
+    insert(_el$88, () => props.badgeText || "");
+    insert(_el$89, () => props.children);
     createRenderEffect((_p$) => {
       var _v$34 = props.id, _v$35 = props.icon || "", _v$36 = props.badgeId, _v$37 = props.badgeTone, _v$38 = props.bodyId;
-      _v$34 !== _p$.e && setAttribute(_el$77, "id", _p$.e = _v$34);
-      _v$35 !== _p$.t && (_el$79.innerHTML = _p$.t = _v$35);
-      _v$36 !== _p$.a && setAttribute(_el$81, "id", _p$.a = _v$36);
-      _v$37 !== _p$.o && setAttribute(_el$81, "data-tone", _p$.o = _v$37);
-      _v$38 !== _p$.i && setAttribute(_el$82, "id", _p$.i = _v$38);
+      _v$34 !== _p$.e && setAttribute(_el$84, "id", _p$.e = _v$34);
+      _v$35 !== _p$.t && (_el$86.innerHTML = _p$.t = _v$35);
+      _v$36 !== _p$.a && setAttribute(_el$88, "id", _p$.a = _v$36);
+      _v$37 !== _p$.o && setAttribute(_el$88, "data-tone", _p$.o = _v$37);
+      _v$38 !== _p$.i && setAttribute(_el$89, "id", _p$.i = _v$38);
       return _p$;
     }, {
       e: void 0,
@@ -7350,7 +5815,7 @@ function SectionFrame(props) {
       o: void 0,
       i: void 0
     });
-    return _el$77;
+    return _el$84;
   })();
 }
 function Board(props) {
@@ -7384,8 +5849,8 @@ function Board(props) {
     return passed === cards.length ? "good" : passed > 0 ? "warn" : "";
   });
   return [(() => {
-    var _el$83 = _tmpl$35();
-    insert(_el$83, createComponent(TaskActionsPanel, {
+    var _el$90 = _tmpl$35();
+    insert(_el$90, createComponent(TaskActionsPanel, {
       get overview() {
         return overview();
       },
@@ -7399,7 +5864,7 @@ function Board(props) {
         return props.onCancel;
       }
     }));
-    return _el$83;
+    return _el$90;
   })(), createComponent(SectionFrame, {
     id: "specSection",
     get title() {
@@ -8598,6 +7063,56 @@ function TitlebarMenu(props) {
 }
 delegateEvents(["click", "input"]);
 
+const scriptRel = 'modulepreload';const assetsURL = function(dep) { return "/"+dep };const seen = {};const __vitePreload = function preload(baseModule, deps, importerUrl) {
+  let promise = Promise.resolve();
+  if (true               && deps && deps.length > 0) {
+    let allSettled2 = function(promises) {
+      return Promise.all(promises.map((p) => Promise.resolve(p).then((value) => ({ status: "fulfilled", value }), (reason) => ({ status: "rejected", reason }))));
+    };
+    document.getElementsByTagName("link"); const cspNonceMeta = document.querySelector("meta[property=csp-nonce]"), cspNonce = cspNonceMeta?.nonce || cspNonceMeta?.getAttribute("nonce");
+    promise = allSettled2(deps.map((dep) => {
+      dep = assetsURL(dep);
+      if (dep in seen)
+        return;
+      seen[dep] = true;
+      const isCss = dep.endsWith(".css"), cssSelector = isCss ? '[rel="stylesheet"]' : "";
+      if (document.querySelector(`link[href="${dep}"]${cssSelector}`))
+        return;
+      const link = document.createElement("link");
+      link.rel = isCss ? "stylesheet" : scriptRel;
+      if (!isCss)
+        link.as = "script";
+      link.crossOrigin = "";
+      link.href = dep;
+      if (cspNonce)
+        link.setAttribute("nonce", cspNonce);
+      document.head.appendChild(link);
+      if (isCss)
+        return new Promise((res, rej) => {
+          link.addEventListener("load", res);
+          link.addEventListener("error", () => rej(Error(`Unable to preload CSS for ${dep}`)));
+        });
+    }));
+  }
+  function handlePreloadError(err) {
+    const e = new Event("vite:preloadError", {
+      cancelable: true
+    });
+    e.payload = err;
+    window.dispatchEvent(e);
+    if (!e.defaultPrevented)
+      throw err;
+  }
+  return promise.then((res) => {
+    for (const item of res || []) {
+      if (item.status !== "rejected")
+        continue;
+      handlePreloadError(item.reason);
+    }
+    return baseModule().catch(handlePreloadError);
+  });
+};
+
 var _tmpl$$a = /* @__PURE__ */ template(`<span id=connBadge class=conn-badge aria-live=polite>`);
 function statusLabel(status) {
   if (status === "online") return t("titlebar.connection.online");
@@ -8653,8 +7168,208 @@ function ConnectionBadge(props) {
 }
 delegateEvents(["dblclick"]);
 
-function record$1(value) {
+function record$2(value) {
   return !!value && typeof value === "object" && !Array.isArray(value);
+}
+function parseToolInput(raw) {
+  if (record$2(raw)) return raw;
+  if (typeof raw === "string" && raw.trim()) {
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return { raw };
+    }
+  }
+  return {};
+}
+function executorMessageID(properties) {
+  const goalRunID = properties.goalRunID || properties.goal_run_id || "";
+  const execSessionID = properties.executorSessionID || properties.executor_session_id || "";
+  const runID = properties.runID || "";
+  const scope = goalRunID || execSessionID || runID || "default";
+  return `executor:msg:${scope}`;
+}
+function executorPartID(properties, eventID) {
+  const callID = properties.sourceID || properties.id || properties.payload?.id || eventID;
+  return `executor:part:${callID}`;
+}
+function executorSessionID(properties) {
+  return properties.goalRunID || properties.goal_run_id || properties.executorSessionID || properties.executor_session_id || properties.runID || "";
+}
+function convertExecutorEventToMessages(event, properties) {
+  const kind = executorEventKind(properties.type);
+  const timestamp = Number(event.timestamp || Date.now());
+  const msgID = executorMessageID(properties);
+  const sessionID = executorSessionID(properties);
+  const messageEvent = {
+    type: "message.updated",
+    properties: {
+      info: {
+        id: msgID,
+        sessionID,
+        role: "assistant",
+        agent: "executor",
+        time: { created: timestamp }
+      }
+    }
+  };
+  if (kind === "tool_call") {
+    const name = properties.name || properties.payload?.name || properties.tool || "tool";
+    const input = parseToolInput(properties.input ?? properties.arguments ?? properties.args ?? properties.payload?.input);
+    const partID = executorPartID(properties, event.event_id);
+    return [
+      messageEvent,
+      {
+        type: "message.part.updated",
+        properties: {
+          part: {
+            id: partID,
+            messageID: msgID,
+            sessionID,
+            type: "tool",
+            tool: name,
+            callID: properties.sourceID || properties.id || properties.payload?.id || partID,
+            state: {
+              status: "running",
+              input,
+              title: event.summary || name,
+              metadata: { synthetic: true },
+              time: { start: timestamp }
+            }
+          }
+        }
+      }
+    ];
+  }
+  if (kind === "tool_result") {
+    const name = properties.name || properties.payload?.name || properties.tool || "tool";
+    const input = parseToolInput(properties.input ?? properties.arguments ?? properties.payload?.input ?? {});
+    const output = typeof properties.output === "string" ? properties.output : typeof properties.payload?.output === "string" ? properties.payload.output : event.summary || "";
+    const partID = executorPartID(properties, event.event_id);
+    return [
+      messageEvent,
+      {
+        type: "message.part.updated",
+        properties: {
+          part: {
+            id: partID,
+            messageID: msgID,
+            sessionID,
+            type: "tool",
+            tool: name,
+            callID: properties.sourceID || properties.id || properties.payload?.id || partID,
+            state: {
+              status: "completed",
+              input,
+              output,
+              title: event.summary || name,
+              metadata: { synthetic: true },
+              time: { start: timestamp, end: timestamp }
+            }
+          }
+        }
+      }
+    ];
+  }
+  if (kind === "message_delta") {
+    const text = typeof properties.text === "string" ? properties.text : event.summary || "";
+    if (!text) return [];
+    const partID = `executor:text:${sessionID}`;
+    return [
+      messageEvent,
+      {
+        type: "message.part.updated",
+        properties: {
+          part: {
+            id: partID,
+            messageID: msgID,
+            sessionID,
+            type: "text",
+            text: ""
+          }
+        }
+      },
+      {
+        type: "message.part.delta",
+        properties: {
+          partID,
+          messageID: msgID,
+          sessionID,
+          field: "text",
+          delta: text
+        }
+      }
+    ];
+  }
+  if (kind === "reasoning_delta") {
+    const text = typeof properties.text === "string" ? properties.text : event.summary || "";
+    if (!text) return [];
+    const partID = `executor:reasoning:${sessionID}`;
+    return [
+      messageEvent,
+      {
+        type: "message.part.updated",
+        properties: {
+          part: {
+            id: partID,
+            messageID: msgID,
+            sessionID,
+            type: "reasoning",
+            text: ""
+          }
+        }
+      },
+      {
+        type: "message.part.delta",
+        properties: {
+          partID,
+          messageID: msgID,
+          sessionID,
+          field: "text",
+          delta: text
+        }
+      }
+    ];
+  }
+  if (kind === "error") {
+    const text = event.summary || properties.message || "Error";
+    const partID = `executor:error:${event.event_id || timestamp}`;
+    return [
+      messageEvent,
+      {
+        type: "message.part.updated",
+        properties: {
+          part: {
+            id: partID,
+            messageID: msgID,
+            sessionID,
+            type: "text",
+            text: `Error: ${text}`
+          }
+        }
+      }
+    ];
+  }
+  if (event.summary) {
+    const partID = `executor:status:${event.event_id || timestamp}`;
+    return [
+      messageEvent,
+      {
+        type: "message.part.updated",
+        properties: {
+          part: {
+            id: partID,
+            messageID: msgID,
+            sessionID,
+            type: "text",
+            text: event.summary,
+            kind: "trace"
+          }
+        }
+      }
+    ];
+  }
+  return [];
 }
 function routeSSEEvent(event) {
   const type = event.type || "";
@@ -8671,39 +7386,30 @@ function routeSSEEvent(event) {
     if (taskID) void syncTask(taskID);
     return true;
   }
-  const properties = record$1(event?.properties) ? event.properties : record$1(event?.payload) ? event.payload : {};
+  const properties = record$2(event?.properties) ? event.properties : record$2(event?.payload) ? event.payload : {};
   if (type === "run.progress") {
     const progressType = properties.type || "";
     if (progressType === "protocol.raw" || progressType === "executor.status" || progressType === "executor.progress") {
       return true;
     }
-    const executorEvent = executorEventEntry({
-      id: event.event_id,
-      runID: event.run_id || properties.runID,
-      kind: executorEventKind(properties.type),
-      summary: event.summary || properties.summary || "",
-      payload: properties,
-      sourceID: properties.sourceID || "",
-      goalRunID: properties.goalRunID || "",
-      executorSessionID: properties.executorSessionID || "",
-      time: { created: Number(event.timestamp || Date.now()) }
-    });
-    if (executorEvent) appendExecutorEvent(executorEvent);
+    if (progressType === "message.part.updated" || progressType === "message.part.delta" || progressType === "message.updated") {
+      return true;
+    }
+    const messages = convertExecutorEventToMessages(event, properties);
+    for (const msg of messages) {
+      enqueueEvent(msg);
+    }
     return true;
   }
   if (type === "run.output") {
-    const executorEvent = executorEventEntry({
-      id: event.event_id,
-      runID: event.run_id || properties.runID,
-      kind: "message_delta",
-      summary: typeof properties.text === "string" ? properties.text : event.summary || "",
-      payload: properties,
-      sourceID: properties.sourceID || "",
-      goalRunID: properties.goalRunID || "",
-      executorSessionID: properties.executorSessionID || "",
-      time: { created: Number(event.timestamp || Date.now()) }
+    const messages = convertExecutorEventToMessages(event, {
+      ...properties,
+      type: "text_delta",
+      text: typeof properties.text === "string" ? properties.text : event.summary || ""
     });
-    if (executorEvent) appendExecutorEvent(executorEvent);
+    for (const msg of messages) {
+      enqueueEvent(msg);
+    }
     return true;
   }
   if (type === "agent.updated") {
@@ -8720,17 +7426,13 @@ function executorEventKind(progressType) {
   if (!t) return "event";
   if (t === "message_delta" || t === "reasoning_delta") return t;
   if (t === "tool_call" || t === "tool_delta" || t === "tool_result") return t;
-  if (t === "status") return "status";
-  if (t === "git_checkpoint") return "git_checkpoint";
   if (t.includes("tool")) return t.includes("result") ? "tool_result" : "tool_call";
   if (t.includes("reason")) return "reasoning_delta";
-  if (t.includes("approval") || t === "permission.asked") return "approval_request";
-  if (t.includes("input")) return "input_request";
-  if (t.includes("mcp")) return "mcp";
-  if (t.includes("command")) return "command";
   if (t.includes("error")) return "error";
   if (t.includes("done") || t.includes("completed")) return "done";
-  return t;
+  if (t.includes("approval") || t === "permission.asked") return "approval_request";
+  if (t.includes("command")) return "command";
+  return "event";
 }
 const BOARD_EVENT_DEBOUNCE = 150;
 let tasksKickTimer$1 = null;
@@ -8748,9 +7450,6 @@ function eventSequence(event) {
 function boardInvalidatingEvent(type) {
   return type === "task.updated" || type === "task.completed" || type === "task.failed" || type === "task.cancelled" || type === "task.blocked" || type.startsWith("run.") || type.startsWith("plan.") || type.startsWith("goal.") || type.startsWith("delivery.") || type.startsWith("evaluation.") || type.startsWith("interaction.");
 }
-function scheduleBoardCompat(delay = 0) {
-  scheduleBoard(delay);
-}
 function scheduleTasksCompat(delay = 0) {
   if (tasksKickTimer$1) clearTimeout(tasksKickTimer$1);
   tasksKickTimer$1 = setTimeout(() => {
@@ -8765,16 +7464,13 @@ function handleEventStreamEvent(event) {
       void loadConversation();
       return;
     }
-    enqueueEvent({
-      ...event,
-      type
-    });
+    enqueueEvent({ ...event, type });
     return;
   }
   if (type === "task.replay_expired") {
     if (boardStore.selectedTaskID) void syncTask(boardStore.selectedTaskID);
     scheduleTasksCompat(0);
-    scheduleBoardCompat(0);
+    scheduleBoard(0);
     return;
   }
   const taskID = eventTaskID(event);
@@ -8783,7 +7479,7 @@ function handleEventStreamEvent(event) {
     const current = boardStore.taskSequence;
     if (current > 0 && sequence <= current) return;
     if (current > 0 && sequence > current + 1) {
-      scheduleBoardCompat(BOARD_EVENT_DEBOUNCE);
+      scheduleBoard(BOARD_EVENT_DEBOUNCE);
       scheduleTasksCompat(BOARD_EVENT_DEBOUNCE);
       startSSE(taskID);
       return;
@@ -8793,7 +7489,7 @@ function handleEventStreamEvent(event) {
   if (boardInvalidatingEvent(type)) {
     scheduleTasksCompat(BOARD_EVENT_DEBOUNCE);
     if (taskID && taskID === boardStore.selectedTaskID) {
-      scheduleBoardCompat(BOARD_EVENT_DEBOUNCE);
+      scheduleBoard(BOARD_EVENT_DEBOUNCE);
     }
   }
 }
@@ -8939,7 +7635,6 @@ function clearWorkspaceRuntime(options = {}) {
     loading: false
   });
   clearMessages();
-  clearExecutorEvents();
 }
 function clearProjectScopeData() {
   setBoardStore("tasks", []);
@@ -9930,7 +8625,7 @@ function gitTitle(vcs, dir) {
     t("git.behind", { count: vcs.behind ?? 0 })
   ].join("\n");
 }
-function canInitGit() {
+function canInitGit$1() {
   const vcs = boardStore.vcs;
   if (vcs === null || vcs === void 0) return false;
   return !!settingsStore.directory && !vcs.branch;
@@ -9972,7 +8667,7 @@ function renderMeta() {
     workspaceNode.hidden = !show;
   }
   if (gitNode) {
-    const actionable = canInitGit();
+    const actionable = canInitGit$1();
     gitNode.textContent = gitLabel(vcs, dir);
     gitNode.setAttribute("title", gitTitle(vcs, dir));
     gitNode.dataset.state = actionable ? "action" : vcs?.dirty ? "dirty" : vcs?.clean ? "clean" : "idle";
@@ -11555,7 +10250,7 @@ function chatAbortTargets(seed) {
   };
   push(seed);
   if (!boardStore.selectedTaskID) return items;
-  const runID = boardStore.board?.task?.activeRunID || store$1.runID || "";
+  const runID = boardStore.board?.task?.activeRunID || "";
   if (runID) {
     push({ kind: "run", runID });
   }
@@ -15088,6 +13783,111 @@ function stopTimers() {
   clearBoardRetry();
   stopSSE();
 }
+
+function record$1(value) {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+function gitCheckpointTitle(stage, mode) {
+  if (stage === "baseline") {
+    return mode === "created_commit" ? t("chat.git.baseline_created") : t("chat.git.baseline_recorded");
+  }
+  return mode === "created_commit" ? t("chat.git.result_created") : t("chat.git.result_recorded");
+}
+function gitCheckpointLine(key, value, options = {}) {
+  if (!value) return "";
+  const text = options.code ? `\`${value}\`` : String(value);
+  return `- ${t(key)}: ${text}`;
+}
+function gitCheckpointText(item) {
+  return [
+    `**${gitCheckpointTitle(item.stage, item.mode)}**`,
+    "",
+    gitCheckpointLine("chat.git.message", item.message),
+    gitCheckpointLine("chat.git.branch", item.branch, { code: true }),
+    gitCheckpointLine("chat.git.commit", item.commit ? String(item.commit).slice(0, 8) : "", { code: true }),
+    item.stage === "baseline" ? gitCheckpointLine("chat.git.snapshot", item.snapshot ? String(item.snapshot).slice(0, 8) : "", { code: true }) : ""
+  ].filter(Boolean).join("\n");
+}
+function boardGitCheckpoints(board) {
+  const out = [];
+  const seen = /* @__PURE__ */ new Set();
+  const meta = record$1(board?.task?.metadata) ? board.task.metadata : null;
+  const git = record$1(meta?.git) ? meta.git : null;
+  for (const stage of ["baseline", "result"]) {
+    const item = record$1(git?.[stage]) ? git[stage] : null;
+    if (!item) continue;
+    const time = Number(item.time);
+    if (!Number.isFinite(time)) continue;
+    out.push({
+      stage,
+      mode: typeof item.mode === "string" ? item.mode : "recorded_head",
+      branch: typeof item.branch === "string" ? item.branch : "",
+      commit: typeof item.commit === "string" ? item.commit : "",
+      message: typeof item.message === "string" ? item.message : "",
+      snapshot: typeof item.snapshot === "string" ? item.snapshot : "",
+      time
+    });
+    seen.add(stage);
+  }
+  for (const snap of Array.isArray(board?.snapshots) ? board.snapshots : []) {
+    const payload = record$1(snap?.payload) ? snap.payload : null;
+    const stage = typeof payload?.stage === "string" ? payload.stage : "";
+    if (payload?.kind !== "git" || !stage || seen.has(stage)) continue;
+    const time = Number(snap?.time?.created);
+    if (!Number.isFinite(time)) continue;
+    out.push({
+      stage,
+      mode: typeof payload.mode === "string" ? payload.mode : "recorded_head",
+      branch: typeof payload.branch === "string" ? payload.branch : "",
+      commit: typeof payload.commit === "string" ? payload.commit : "",
+      message: typeof payload.message === "string" ? payload.message : "",
+      snapshot: typeof payload.snapshot === "string" ? payload.snapshot : "",
+      time
+    });
+  }
+  return out.sort((a, b) => a.time - b.time);
+}
+function canInitGit() {
+  return !!activeDirectory$2() && appStore.connected && !boardStore.vcs?.branch;
+}
+async function initGitCurrent(options = {}) {
+  const dir = activeDirectory$2();
+  if (!dir || !canInitGit()) return false;
+  try {
+    const result = await apiJson("project/current/init-git", { method: "POST" });
+    const { clearProjectScopeData } = await __vitePreload(async () => { const { clearProjectScopeData } = await Promise.resolve().then(() => workspace);return { clearProjectScopeData }},true              ?void 0:void 0);
+    const { reloadProjectScope } = await __vitePreload(async () => { const { reloadProjectScope } = await Promise.resolve().then(() => config);return { reloadProjectScope }},true              ?void 0:void 0);
+    clearProjectScopeData();
+    await reloadProjectScope({ restoreWorkspace: false });
+    if (options.notify !== false) {
+      const showAppDialog = window.showAppDialog;
+      if (typeof showAppDialog === "function") {
+        const msg = result?.created ? t("git.init_done", { dir }) : t("git.init_exists", { dir });
+        await showAppDialog({ title: t("git.init"), message: msg, kind: "info" });
+      }
+    }
+    return true;
+  } catch (e) {
+    console.error("[git] Failed to initialize Git", e);
+    if (options.notify !== false) {
+      const showAppDialog = window.showAppDialog;
+      if (typeof showAppDialog === "function") {
+        await showAppDialog({ title: t("git.init"), message: String(e), kind: "error" });
+      }
+    }
+    return false;
+  }
+}
+
+const git = /*#__PURE__*/Object.freeze(/*#__PURE__*/Object.defineProperty({
+  __proto__: null,
+  boardGitCheckpoints,
+  canInitGit,
+  gitCheckpointLine,
+  gitCheckpointText,
+  gitCheckpointTitle,
+  initGitCurrent
+}, Symbol.toStringTag, { value: 'Module' }));
 
 function switchConfigTab(tabName) {
   const sidebar = document.getElementById("configSidebar");
