@@ -465,18 +465,38 @@ export function buildGoalPrompt(input: {
   node: PlanNodeRow
   goal: GoalRow
   taskRequest?: string
+  allGoals?: GoalRow[]
 }) {
   const meta = dict(input.node.metadata)
+  const goalMeta = dict(input.goal.metadata)
   const waveTitle = typeof meta.wave_title === "string" ? meta.wave_title.trim() : ""
   const waveObjective = typeof meta.wave_objective === "string" ? meta.wave_objective.trim() : ""
   const runnableChecks = executorSelectors(input.goal)
   const managedChecks = evaluatorManagedSelectors(input.goal)
   const requestScope = extractScopedRequest(input.taskRequest ?? "")
   const allowedPaths = allowedRequestPaths(input.taskRequest ?? "")
+  // Extract owned_paths and dependency context from goal metadata
+  const ownedPaths = Array.isArray(goalMeta.owned_paths) ? goalMeta.owned_paths as string[] : []
+  const dependsOnIds = Array.isArray(goalMeta.depends_on_goal_ids) ? goalMeta.depends_on_goal_ids as string[] : []
+  const dependencyContext = dependsOnIds.length > 0 && input.allGoals
+    ? dependsOnIds
+        .map((id) => input.allGoals!.find((g) => g.id === id))
+        .filter(Boolean)
+        .map((g) => `- "${g!.description}" (completed, output in your workspace)`)
+        .join("\n")
+    : ""
   return [
     "You are executing one goal in an isolated workspace (git worktree) for the coordinator.",
-    "Other goals may be executing in parallel in separate worktrees. Only modify files owned by this goal.",
+    "Other goals may be executing in parallel in separate worktrees.",
     "Treat the goal contract below as the only implementation target for this stage.",
+    // Explicit file scope from goal decomposition
+    ownedPaths.length > 0
+      ? `## File Scope (EXCLUSIVE)\n\nYou have exclusive write access to these files ONLY:\n${ownedPaths.map((p) => "- " + p).join("\n")}\n\nDo NOT create, modify, or delete any file outside this list.\nIf you need changes outside your scope, report it as a SCOPE BLOCKER.`
+      : undefined,
+    // Dependency context
+    dependencyContext
+      ? `## Dependencies (completed before this goal)\n\nThese goals completed before yours. Their output is already in your workspace:\n${dependencyContext}`
+      : undefined,
     `Goal:
 ${input.goal.description}`,
     `Acceptance:
@@ -575,8 +595,29 @@ export async function applyGoalDelivery(input: {
   delivery: {
     diffs: z.infer<typeof Snapshot.FileDiff>[]
   }
+  ownedPaths?: string[]
 }) {
   const baseDir = path.resolve(input.directory)
+  const ownedPaths = input.ownedPaths ?? []
+
+  // Validate owned_paths if specified
+  if (ownedPaths.length > 0) {
+    const { validateOwnedPaths } = await import("./merge")
+    const validation = validateOwnedPaths(
+      input.delivery.diffs.map((d) => d.file),
+      ownedPaths,
+    )
+    if (!validation.valid) {
+      log.warn("goal delivery: files outside owned_paths", {
+        violations: validation.violations,
+        ownedPaths,
+      })
+      // Allow but warn — emergent changes may be necessary
+    }
+  }
+
+  const { getMerger } = await import("./merge")
+
   for (const diff of input.delivery.diffs) {
     const file = path.resolve(path.join(input.directory, diff.file))
     if (!file.startsWith(baseDir + path.sep) && file !== baseDir) {
@@ -589,6 +630,25 @@ export async function applyGoalDelivery(input: {
       })
       continue
     }
+
+    // Use merge strategy for shared files (package.json, tsconfig.json, etc.)
+    const merger = getMerger(diff.file)
+    if (merger === "skip") {
+      log.info("goal delivery: skipping lockfile (will be regenerated)", { file: diff.file })
+      continue
+    }
+    if (merger) {
+      const existing = await Filesystem.read(file).catch(() => "")
+      const result = merger(existing, diff.after ?? "")
+      if (result.conflict) {
+        log.warn("goal delivery: merge conflict", { file: diff.file, reason: result.reason })
+      }
+      await Filesystem.write(file, result.content)
+      log.info("goal delivery: merged shared file", { file: diff.file })
+      continue
+    }
+
+    // Normal file: direct write (owned_paths guarantees no conflict)
     await Filesystem.write(file, diff.after ?? "")
   }
 }

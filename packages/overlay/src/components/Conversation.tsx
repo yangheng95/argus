@@ -1,6 +1,7 @@
 import { createSignal, createMemo, createEffect, Index, Show, onMount, onCleanup } from "solid-js";
 import { MessageView } from "./MessageView";
 import { AgentCard } from "./AgentCard";
+import { ExecutorGoalGroup } from "./ExecutorGoalGroup";
 import { t } from "../utils/i18n";
 import { conversationMessages } from "../utils/conversation";
 
@@ -55,13 +56,26 @@ export function Conversation(props: { container: HTMLElement }) {
           <Show
             when={!item()?._agentCard}
             fallback={
-              <AgentCard
-                cardID={item()._agentCardKey}
-                stage={item()._agentStage}
-                status={item()._agentStatus}
-                round={item()._agentRound}
-                messages={item()._agentMessages}
-              />
+              <Show
+                when={!item()?._agentGoalGroup}
+                fallback={
+                  <ExecutorGoalGroup
+                    cardID={item()._agentCardKey}
+                    goalTitle={item()._agentGoalTitle}
+                    goalStatus={item()._agentGoalStatus}
+                    status={item()._agentStatus}
+                    internalCards={item()._agentInternalCards || []}
+                  />
+                }
+              >
+                <AgentCard
+                  cardID={item()._agentCardKey}
+                  stage={item()._agentStage}
+                  status={item()._agentStatus}
+                  round={item()._agentRound}
+                  messages={item()._agentMessages}
+                />
+              </Show>
             }
           >
             <MessageView message={item()} />

@@ -144,3 +144,14 @@ Before outputting, verify each of these. If ANY answer is NO, use more tools to 
 4. Do subtasks reference specific file paths (not "relevant files" — actual paths)?
 5. Could an executor implement this plan WITHOUT asking follow-up questions?
 6. Does the summary accurately describe the plan in one line?
+7. Do concurrent goals (no dependency between them) own DIFFERENT files? (no two goals modify the same source file)
+
+## Parallel Execution Awareness
+
+Goals may execute **in parallel in isolated git worktrees**. When designing goals:
+- Each goal should own distinct source files — no two concurrent goals should modify the same file
+- Shared infrastructure files (package.json, tsconfig.json) are automatically merged by the system
+- Use `depends_on_goal_ids` to enforce execution order when one goal produces types, schemas, or interfaces that another goal imports
+- Bootstrap goals (database schema, shared types, project scaffolding) should have NO dependencies and run first
+- Feature goals that import from bootstrap should declare the dependency
+- A final integration/wiring goal can depend on all feature goals to connect modules together

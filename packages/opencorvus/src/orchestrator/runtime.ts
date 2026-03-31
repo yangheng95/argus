@@ -610,19 +610,10 @@ export namespace OrchestratorRuntime {
 
     const nodes = listPlanNodesByPlan(plan.id)
     const goals = listGoalsByPlan(plan.id)
-    // In worktree-parallel mode (maxGoals > 1), each goal runs in an isolated
-    // worktree from the same base snapshot — cross-layer dependencies don't
-    // block dispatch since goals can't see each other's changes anyway.
-    // Changes are merged back after each goal completes.
-    const ready = maxGoals > 1
-      ? nodes
-          .filter((n): n is typeof n & { goal_id: string } => n.kind === "goal" && !!n.goal_id)
-          .flatMap((node) => {
-            const goal = goals.find((g) => g.id === node.goal_id)
-            if (!goal || goal.status !== "pending") return []
-            return [{ node, goal }]
-          })
-      : readyGoalNodes(nodes, goals)
+    // Always respect dependencies — parallel only affects concurrency (slot count).
+    // Layer 0 goals (no deps) run in parallel up to maxGoals slots.
+    // Layer 1+ goals wait for their deps to complete, then run in parallel.
+    const ready = readyGoalNodes(nodes, goals)
     const batch = ready.slice(0, slots)
     if (batch.length === 0) return 0
 
@@ -690,12 +681,14 @@ export namespace OrchestratorRuntime {
         },
       })
 
-      // 4. Build goal-specific prompt
+      // 4. Build goal-specific prompt (with owned_paths + dependency context)
+      const allGoals = listGoalsByPlan(plan.id)
       const prompt = buildGoalPrompt({
         plan: plan as any,
         node: entry.node as any,
         goal: entry.goal as any,
         taskRequest: plan.prompt,
+        allGoals,
       })
 
       // 5. Submit to executor with cwd=worktree
@@ -895,9 +888,13 @@ export namespace OrchestratorRuntime {
     // 3. Merge worktree changes to main workspace
     if (goalRun.workspace_dir && delivery.diffs.length > 0) {
       try {
+        const goalRow = Database.use((db) => db.select().from(OrchestratorGoalTable).where(eq(OrchestratorGoalTable.id, goalRun.goal_id)).get())
+        const goalMeta = goalRow?.metadata && typeof goalRow.metadata === "object" ? goalRow.metadata as Record<string, unknown> : {}
+        const ownedPaths = Array.isArray(goalMeta.owned_paths) ? goalMeta.owned_paths as string[] : []
         await applyGoalDelivery({
           directory: Instance.directory,
           delivery: { diffs: delivery.diffs as any },
+          ownedPaths,
         })
       } catch (err) {
         log.error("goal delivery merge failed", { goalRunID: goalRun.id, error: err instanceof Error ? err.message : String(err) })
