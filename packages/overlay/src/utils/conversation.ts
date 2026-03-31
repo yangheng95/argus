@@ -25,7 +25,7 @@ function buildUserContextMessages(): any[] {
   if (task?.request) {
     msgs.push({
       _synthetic: true,
-      info: { id: "ctx:user-request", role: "user", time: { created: (task.time?.created || 0) - 2 } },
+      info: { id: "ctx:user-request", role: "user", resolvedRole: "user", channel: "main", time: { created: (task.time?.created || 0) - 2 } },
       parts: [{ type: "text", text: task.request }],
     });
   }
@@ -74,13 +74,10 @@ export function conversationMessages(): any[] {
   const mainMessages: any[] = [];
 
   for (const msg of allMessages) {
-    // Prefer backend-resolved channel; fall back to client-side inference
-    const channel = msg.info?._overlay?.channel || classifyMessage(msg, rootSID);
+    const channel = msg.info?.channel || classifyMessage(msg, rootSID);
     if (channel === "main") {
       mainMessages.push(msg);
     }
-    // Backend marks child session user messages as "filtered"
-    // (orchestrator prompts that shouldn't appear in the conversation)
   }
 
   // Filter orchestrator boilerplate when not in transcript detail mode

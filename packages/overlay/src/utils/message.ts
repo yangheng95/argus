@@ -120,19 +120,6 @@ export function classifyMessage(msg: any, rootSessionID: string): string {
   return "main";
 }
 
-// ── Source detection (used by effectiveRole) ──
-
-function detectSource(msg: any): string | undefined {
-  const parts = msg.parts || [];
-  for (const part of parts) {
-    if (part.type !== "text") continue;
-    if (part.audience && part.audience.ui === false) continue;
-    if (part.kind === "trace" && !part.audience?.ui) continue;
-    if (part.source) return part.source;
-  }
-  return undefined;
-}
-
 // ── Agent stage label ──
 
 /** Get the display label for an agent stage used in card headers. */
@@ -151,41 +138,10 @@ export function agentStageLabel(stage: string): string {
 
 /**
  * Determine the display role for a message.
- * Prefer backend-resolved _overlay.resolvedRole when available.
- * Falls back to client-side inference for synthetic/legacy messages.
+ * Backend stamps info.resolvedRole on all real messages.
+ * Synthetic messages set it at creation time.
+ * This function just reads the field.
  */
-export function effectiveRole(msg: any, rootSessionID: string): string {
-  // Backend-resolved role (preferred path)
-  const overlay = msg.info?._overlay;
-  if (overlay?.resolvedRole) return overlay.resolvedRole;
-
-  // Fallback: client-side inference for synthetic messages and legacy data
-  const role = msg.info?.role || "assistant";
-
-  if (role !== "user") {
-    if (role === "assistant" && rootSessionID && !msg._synthetic) {
-      const sessionID = typeof msg.info?.sessionID === "string" ? msg.info.sessionID : "";
-      if (sessionID && sessionID !== rootSessionID) {
-        const agent = String(msg.info?.agent || "").trim().toLowerCase();
-        if (!agent) return "executor";
-        const normalized = normalizeAgentRole(agent);
-        return normalized === "assistant" ? "executor" : normalized;
-      }
-    }
-    return role;
-  }
-
-  const source = detectSource(msg);
-  if (source) return source;
-
-  const sessionID = typeof msg.info?.sessionID === "string" ? msg.info.sessionID : "";
-  if (rootSessionID && sessionID && sessionID !== rootSessionID) {
-    return normalizeAgentRole(msg.info?.agent || "system");
-  }
-
-  if (msg._synthetic && msg.info?.agent) {
-    return normalizeAgentRole(msg.info.agent);
-  }
-
-  return role;
+export function effectiveRole(msg: any, _rootSessionID?: string): string {
+  return msg.info?.resolvedRole || msg.info?.role || "assistant";
 }
