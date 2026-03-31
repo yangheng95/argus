@@ -1,6 +1,8 @@
 ---
 name: spec-research
 description: Research and compile a comprehensive SPEC from user query using web search, tech stack analysis, and best practices
+stage: spec
+priority: 10
 ---
 
 # Spec Research Skill

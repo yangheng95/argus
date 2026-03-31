@@ -24,6 +24,12 @@ const SkillInfo = z.object({
   builtin: z.boolean().optional().default(false),
   location: z.string(),
   content: z.string(),
+  stage: z.string().optional(),
+  auto_detect: z.object({
+    files: z.array(z.string()).optional(),
+    deps: z.array(z.string()).optional(),
+  }).optional(),
+  priority: z.number().optional().default(0),
 })
 
 export namespace SkillManager {
