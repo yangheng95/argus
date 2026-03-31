@@ -3925,6 +3925,15 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
   border-radius: 2px;
 }
 
+/* Nested agent cards inside goal groups — compact styling */
+.executor-goal-body .agent-card {
+  border-left: none;
+  margin-bottom: calc(2px * var(--ui-scale));
+}
+.executor-goal-body .agent-card-header {
+  padding: calc(6px * var(--ui-scale)) calc(8px * var(--ui-scale));
+}
+
 /* Individual tool entries — item row + optional output block */
 .executor-tool-entry {
   border-radius: calc(4px * var(--ui-scale));

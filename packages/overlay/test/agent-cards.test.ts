@@ -348,6 +348,244 @@ test("store agentCards grows as new messages are added incrementally", () => {
   expect(messageStore.agentCards["spec:message:m3"]._agentMessages).toHaveLength(1)
 })
 
+// ── Executor Goal Group tests ──
+
+test("executor messages are grouped by goal when board has goals", () => {
+  // Set up board with root session and goals
+  setBoardStore("board", {
+    task: {
+      status: "running",
+      sessionID: "root-session",
+    },
+    lanes: [
+      {
+        id: "goals",
+        title: "Dynamic Goals",
+        cards: [
+          {
+            id: "goal-a",
+            kind: "goal",
+            title: "Implement auth",
+            detail: "Add login/logout",
+            status: "running",
+            metadata: { sessionID: "exec-session-a" },
+          },
+          {
+            id: "goal-b",
+            kind: "goal",
+            title: "Add API endpoint",
+            detail: "REST API",
+            status: "pending",
+            metadata: { sessionID: "exec-session-b" },
+          },
+        ],
+      },
+    ],
+  })
+
+  // Executor messages with different sessionIDs (child sessions → classified as "executor")
+  setMessages([
+    {
+      info: {
+        id: "exec-msg-a1",
+        role: "assistant",
+        agent: "opencode",
+        sessionID: "exec-session-a",
+        time: { created: 1000 },
+      },
+      parts: [{ id: "p-a1", type: "text", text: "Reading auth.ts" }],
+    },
+    {
+      info: {
+        id: "exec-msg-a2",
+        role: "assistant",
+        agent: "opencode",
+        sessionID: "exec-session-a",
+        time: { created: 2000 },
+      },
+      parts: [{ id: "p-a2", type: "text", text: "Writing auth logic" }],
+    },
+    {
+      info: {
+        id: "exec-msg-b1",
+        role: "assistant",
+        agent: "opencode",
+        sessionID: "exec-session-b",
+        time: { created: 1500 },
+      },
+      parts: [{ id: "p-b1", type: "text", text: "Reading router.ts" }],
+    },
+  ])
+
+  // Should have 2 goal group cards (not 3 flat cards)
+  const goalGroups = Object.values(messageStore.agentCards).filter(
+    (card: any) => card._agentGoalGroup,
+  )
+  expect(goalGroups).toHaveLength(2)
+
+  // Goal A group
+  const groupA = messageStore.agentCards["executor:goal:goal-a"]
+  expect(groupA).toBeDefined()
+  expect(groupA._agentGoalGroup).toBe(true)
+  expect(groupA._agentGoalTitle).toBe("Implement auth")
+  expect(groupA._agentGoalID).toBe("goal-a")
+  expect(groupA._agentInternalCards).toHaveLength(2)
+  expect(groupA._agentInternalCards![0]._agentMessages[0].parts[0].text).toBe("Reading auth.ts")
+  expect(groupA._agentInternalCards![1]._agentMessages[0].parts[0].text).toBe("Writing auth logic")
+
+  // Goal B group
+  const groupB = messageStore.agentCards["executor:goal:goal-b"]
+  expect(groupB).toBeDefined()
+  expect(groupB._agentGoalTitle).toBe("Add API endpoint")
+  expect(groupB._agentInternalCards).toHaveLength(1)
+})
+
+test("executor falls back to flat cards when no goals in board", () => {
+  setBoardStore("board", {
+    task: {
+      status: "running",
+      sessionID: "root-session",
+    },
+    lanes: [],
+  })
+
+  setMessages([
+    {
+      info: {
+        id: "exec-msg-1",
+        role: "assistant",
+        agent: "opencode",
+        sessionID: "child-session",
+        time: { created: 1000 },
+      },
+      parts: [{ id: "p1", type: "text", text: "Doing work" }],
+    },
+  ])
+
+  const goalGroups = Object.values(messageStore.agentCards).filter(
+    (card: any) => card._agentGoalGroup,
+  )
+  expect(goalGroups).toHaveLength(0)
+
+  // Should be a flat executor card
+  const cards = Object.values(messageStore.agentCards).filter(
+    (card: any) => card._agentStage === "executor",
+  )
+  expect(cards).toHaveLength(1)
+  expect(cards[0]._agentGoalGroup).toBeUndefined()
+})
+
+test("orphan executor messages (no matching goal) become flat cards", () => {
+  setBoardStore("board", {
+    task: {
+      status: "running",
+      sessionID: "root-session",
+    },
+    lanes: [
+      {
+        id: "goals",
+        title: "Goals",
+        cards: [
+          {
+            id: "goal-a",
+            title: "Goal A",
+            status: "running",
+            metadata: { sessionID: "exec-session-a" },
+          },
+        ],
+      },
+    ],
+  })
+
+  setMessages([
+    {
+      info: {
+        id: "exec-msg-a1",
+        role: "assistant",
+        agent: "opencode",
+        sessionID: "exec-session-a",
+        time: { created: 1000 },
+      },
+      parts: [{ id: "p-a1", type: "text", text: "Goal A work" }],
+    },
+    {
+      info: {
+        id: "exec-msg-orphan",
+        role: "assistant",
+        agent: "opencode",
+        sessionID: "unknown-session",
+        time: { created: 2000 },
+      },
+      parts: [{ id: "p-orphan", type: "text", text: "Orphan work" }],
+    },
+  ])
+
+  // One goal group + one flat card
+  const goalGroups = Object.values(messageStore.agentCards).filter(
+    (card: any) => card._agentGoalGroup,
+  )
+  expect(goalGroups).toHaveLength(1)
+  expect(goalGroups[0]._agentGoalTitle).toBe("Goal A")
+
+  const flatCards = Object.values(messageStore.agentCards).filter(
+    (card: any) => card._agentStage === "executor" && !card._agentGoalGroup,
+  )
+  expect(flatCards).toHaveLength(1)
+})
+
+test("goal group status reflects child card states", () => {
+  setBoardStore("board", {
+    task: {
+      status: "running",
+      sessionID: "root-session",
+    },
+    lanes: [
+      {
+        id: "goals",
+        title: "Goals",
+        cards: [
+          {
+            id: "goal-a",
+            title: "Goal A",
+            status: "running",
+            metadata: { sessionID: "exec-session-a" },
+          },
+        ],
+      },
+    ],
+  })
+
+  setMessages([
+    {
+      info: {
+        id: "exec-msg-a1",
+        role: "assistant",
+        agent: "opencode",
+        sessionID: "exec-session-a",
+        time: { created: 1000 },
+      },
+      parts: [{ id: "p-a1", type: "text", text: "Step 1" }],
+    },
+    {
+      info: {
+        id: "exec-msg-a2",
+        role: "assistant",
+        agent: "opencode",
+        sessionID: "exec-session-a",
+        time: { created: 2000 },
+      },
+      parts: [{ id: "p-a2", type: "text", text: "Step 2" }],
+    },
+  ])
+
+  const group = messageStore.agentCards["executor:goal:goal-a"]
+  expect(group).toBeDefined()
+  // Last child should be "running" (active stage), first "completed"
+  expect(group._agentStatus).toBe("running")
+  expect(group._agentInternalCards![0]._agentStatus).toBe("completed")
+  expect(group._agentInternalCards![1]._agentStatus).toBe("running")
+})
+
 test("conversation ui state resets on task switch and tracks tool output expansion externally", () => {
   toggleToolOutputExpanded("tool-part-1")
   expect(toolOutputExpanded("tool-part-1")).toBe(true)

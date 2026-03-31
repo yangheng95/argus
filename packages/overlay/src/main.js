@@ -1823,6 +1823,7 @@ async function loadBoard(options = {}) {
       if (etag) setBoardEtag(etag);
       const data = await res.json();
       setBoardStore("board", data ?? null);
+      scheduleRebuildAgentCards();
       setSnapshotVersion(boardSnapshot(data));
       const lastSequence = Number(data?.lastSequence || 0);
       if (Number.isFinite(lastSequence) && lastSequence > 0) {
@@ -3426,39 +3427,109 @@ function rebuildAgentCards() {
     });
     roundsByStage[stage] = existing;
   }
+  // Build goal-session lookup for executor grouping
+  const goalsBySession = new Map();
+  const goalsLane = (boardStore.board?.lanes || []).find((l) => l.id === "goals");
+  for (const card of goalsLane?.cards || []) {
+    const sid = card?.metadata?.sessionID;
+    if (typeof sid === "string" && sid) {
+      goalsBySession.set(sid, { id: card.id, title: card.title || "", status: card.status || "pending" });
+    }
+  }
   const nextCards = {};
   const nextOrder = [];
+  function buildCard(stage, round, roundLabel, status) {
+    const created = Number.isFinite(round.startTime) && round.startTime > 0 ? round.startTime : Date.now();
+    return {
+      _synthetic: true,
+      _agentCard: true,
+      _agentStage: stage,
+      _agentStatus: status,
+      _agentRound: roundLabel,
+      _agentCardKey: round.channelID,
+      _agentMessages: round.messages.slice().sort((left, right) => messageTime(left) - messageTime(right)),
+      info: {
+        id: `agent-card:${round.channelID}`,
+        role: "agent-card",
+        agent: stage,
+        sessionID: round.sessionID,
+        time: { created }
+      },
+      parts: []
+    };
+  }
   for (const [stage, rounds] of Object.entries(roundsByStage)) {
     rounds.sort((left, right) => left.startTime - right.startTime);
+    // Executor with goal data: group by session (one group per goal)
+    if (stage === "executor" && goalsBySession.size > 0) {
+      const bySession = new Map();
+      const orphanRounds = [];
+      for (const round of rounds) {
+        const sid = round.sessionID || "";
+        if (sid && goalsBySession.has(sid)) {
+          const arr = bySession.get(sid) || [];
+          arr.push(round);
+          bySession.set(sid, arr);
+        } else {
+          orphanRounds.push(round);
+        }
+      }
+      for (const [sid, sessionRounds] of bySession) {
+        const goal = goalsBySession.get(sid);
+        const groupKey = `executor:goal:${goal.id}`;
+        sessionRounds.sort((left, right) => left.startTime - right.startTime);
+        const childCards = [];
+        for (let i = 0; i < sessionRounds.length; i += 1) {
+          const round = sessionRounds[i];
+          const childLabel = sessionRounds.length > 1 ? i + 1 : 0;
+          const childStatus = agentRoundStatus(stage, round, i, sessionRounds, latestEventByStage.get(stage));
+          childCards.push(buildCard(stage, round, childLabel, childStatus));
+        }
+        const groupStart = Math.min(...sessionRounds.map((r) => r.startTime));
+        const groupStatus = childCards.some((c) => c._agentStatus === "running")
+          ? "running"
+          : childCards.some((c) => c._agentStatus === "error") ? "error" : "completed";
+        nextCards[groupKey] = {
+          _synthetic: true,
+          _agentCard: true,
+          _agentGoalGroup: true,
+          _agentGoalID: goal.id,
+          _agentGoalTitle: goal.title,
+          _agentGoalStatus: goal.status,
+          _agentInternalCards: childCards,
+          _agentStage: stage,
+          _agentStatus: groupStatus,
+          _agentRound: 0,
+          _agentCardKey: groupKey,
+          _agentMessages: [],
+          info: {
+            id: `agent-card:${groupKey}`,
+            role: "agent-card",
+            agent: stage,
+            sessionID: sessionRounds[0]?.sessionID || "",
+            time: { created: Number.isFinite(groupStart) && groupStart > 0 ? groupStart : Date.now() }
+          },
+          parts: []
+        };
+        nextOrder.push(groupKey);
+      }
+      for (let i = 0; i < orphanRounds.length; i += 1) {
+        const round = orphanRounds[i];
+        const label = orphanRounds.length > 1 ? i + 1 : 0;
+        const status = agentRoundStatus(stage, round, i, orphanRounds, latestEventByStage.get(stage));
+        const cardID = round.channelID;
+        nextCards[cardID] = buildCard(stage, round, label, status);
+        nextOrder.push(cardID);
+      }
+      continue;
+    }
+    // Non-executor or no goals: flat per-message cards
     for (let index = 0; index < rounds.length; index += 1) {
       const round = rounds[index];
       const roundLabel = rounds.length > 1 ? index + 1 : 0;
-      const status = agentRoundStatus(
-        stage,
-        round,
-        index,
-        rounds,
-        latestEventByStage.get(stage)
-      );
-      const created = Number.isFinite(round.startTime) && round.startTime > 0 ? round.startTime : Date.now();
+      const status = agentRoundStatus(stage, round, index, rounds, latestEventByStage.get(stage));
       const cardID = round.channelID;
-      nextCards[cardID] = {
-        _synthetic: true,
-        _agentCard: true,
-        _agentStage: stage,
-        _agentStatus: status,
-        _agentRound: roundLabel,
-        _agentCardKey: cardID,
-        _agentMessages: round.messages.slice().sort((left, right) => messageTime(left) - messageTime(right)),
-        info: {
-          id: `agent-card:${cardID}`,
-          role: "agent-card",
-          agent: stage,
-          sessionID: round.sessionID,
-          time: { created }
-        },
-        parts: []
-      };
+      nextCards[cardID] = buildCard(stage, round, roundLabel, status);
       nextOrder.push(cardID);
     }
   }
@@ -3481,13 +3552,37 @@ function rebuildAgentCards() {
         if (prev._agentRound !== card._agentRound) {
           setStore("agentCards", cardID, "_agentRound", card._agentRound);
         }
+        if (card._agentGoalGroup) {
+          if (prev._agentGoalStatus !== card._agentGoalStatus) {
+            setStore("agentCards", cardID, "_agentGoalStatus", card._agentGoalStatus);
+          }
+          if (prev._agentGoalTitle !== card._agentGoalTitle) {
+            setStore("agentCards", cardID, "_agentGoalTitle", card._agentGoalTitle);
+          }
+          const prevInternals = prev._agentInternalCards || [];
+          const nextInternals = card._agentInternalCards || [];
+          if (
+            prevInternals.length !== nextInternals.length ||
+            prevInternals.some((c, i) =>
+              c._agentCardKey !== nextInternals[i]?._agentCardKey ||
+              c._agentStatus !== nextInternals[i]?._agentStatus ||
+              c._agentMessages?.length !== nextInternals[i]?._agentMessages?.length
+            )
+          ) {
+            setStore("agentCards", cardID, "_agentInternalCards", [...nextInternals]);
+          }
+        }
         const prevMsgs = prev._agentMessages;
         const nextMsgs = card._agentMessages;
         if (prevMsgs.length !== nextMsgs.length || prevMsgs.some((m, i) => m !== nextMsgs[i])) {
           setStore("agentCards", cardID, "_agentMessages", [...nextMsgs]);
         }
       } else {
-        setStore("agentCards", cardID, { ...card, _agentMessages: [...card._agentMessages] });
+        const init = { ...card, _agentMessages: [...card._agentMessages] };
+        if (card._agentInternalCards) {
+          init._agentInternalCards = [...card._agentInternalCards];
+        }
+        setStore("agentCards", cardID, init);
       }
     }
     const prevOrder = store.agentCardOrder;
@@ -4523,6 +4618,58 @@ function conversationMessages() {
   return result;
 }
 
+var _tmpl$$goalGroup = /* @__PURE__ */ template(`<article class="turn msg executor-goal-block"data-role=executor-goal-group><div class=executor-goal-header role=button tabindex=0><span class=executor-goal-label></span><span class=executor-goal-count></span><span class=executor-goal-chevron aria-hidden=true>▼</span></div>`);
+var _tmpl$$goalBadgeDone = /* @__PURE__ */ template(`<span class="executor-goal-badge executor-goal-badge--done">✓`);
+var _tmpl$$goalBadgeError = /* @__PURE__ */ template(`<span class="executor-goal-badge executor-goal-badge--error">✗`);
+var _tmpl$$goalBadgeRunning = /* @__PURE__ */ template(`<span class="executor-goal-badge executor-goal-badge--running"><span class=agent-card-spinner>`);
+var _tmpl$$goalBody = /* @__PURE__ */ template(`<div class=executor-goal-body>`);
+function ExecutorGoalGroup(props) {
+  const expanded = () => agentCardExpanded(props.cardID, props.status === "running");
+  const toggle = () => {
+    toggleAgentCardExpanded(props.cardID, props.status === "running");
+  };
+  return (() => {
+    var _el$ = _tmpl$$goalGroup();
+    var _header = _el$.firstChild;
+    var _label = _header.childNodes[0];
+    var _count = _header.childNodes[1];
+    _header.addEventListener("click", toggle);
+    _header.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); }
+    });
+    insert(_header, () => {
+      if (props.status === "running") return _tmpl$$goalBadgeRunning();
+      if (props.status === "error") return _tmpl$$goalBadgeError();
+      return _tmpl$$goalBadgeDone();
+    }, _label);
+    insert(_label, () => props.goalTitle || "Executor");
+    insert(_count, () => (props.internalCards || []).length > 0 ? `(${(props.internalCards || []).length})` : "");
+    createRenderEffect(() => {
+      _el$.setAttribute("data-goal-id", props.cardID);
+      _header.setAttribute("aria-expanded", expanded());
+      classList(_el$, { "executor-goal-block--expanded": expanded() });
+    });
+    insert(_el$, () => createComponent(Show, {
+      get when() { return expanded(); },
+      get children() {
+        var _body = _tmpl$$goalBody();
+        insert(_body, createComponent(For, {
+          get each() { return props.internalCards || []; },
+          children: (card) => createComponent(AgentCard, {
+            get cardID() { return card._agentCardKey; },
+            get stage() { return card._agentStage; },
+            get status() { return card._agentStatus; },
+            get round() { return card._agentRound; },
+            get messages() { return card._agentMessages; }
+          })
+        }));
+        return _body;
+      }
+    }));
+    return _el$;
+  })();
+}
+
 var _tmpl$$f = /* @__PURE__ */ template(`<div class=chat-empty>`);
 function Conversation(props) {
   const [autoScroll, setAutoScroll] = createSignal(true);
@@ -4568,21 +4715,27 @@ function Conversation(props) {
         return !item()?._agentCard;
       },
       get fallback() {
-        return createComponent(AgentCard, {
-          get cardID() {
-            return item()._agentCardKey;
+        return createComponent(Show, {
+          get when() {
+            return !item()?._agentGoalGroup;
           },
-          get stage() {
-            return item()._agentStage;
+          get fallback() {
+            return createComponent(ExecutorGoalGroup, {
+              get cardID() { return item()._agentCardKey; },
+              get goalTitle() { return item()._agentGoalTitle; },
+              get goalStatus() { return item()._agentGoalStatus; },
+              get status() { return item()._agentStatus; },
+              get internalCards() { return item()._agentInternalCards || []; }
+            });
           },
-          get status() {
-            return item()._agentStatus;
-          },
-          get round() {
-            return item()._agentRound;
-          },
-          get messages() {
-            return item()._agentMessages;
+          get children() {
+            return createComponent(AgentCard, {
+              get cardID() { return item()._agentCardKey; },
+              get stage() { return item()._agentStage; },
+              get status() { return item()._agentStatus; },
+              get round() { return item()._agentRound; },
+              get messages() { return item()._agentMessages; }
+            });
           }
         });
       },
