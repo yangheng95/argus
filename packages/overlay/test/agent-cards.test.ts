@@ -177,7 +177,7 @@ test("live agent cards keep a stable identity and explicit collapse across pruni
   expect(agentCardExpanded(secondCard?._agentCardKey, true)).toBe(false)
 })
 
-test("each message becomes a separate timeline card", () => {
+test("non-executor messages merge into one card per session", () => {
   setBoardStore("board", {
     task: {
       status: "planning",
@@ -185,58 +185,7 @@ test("each message becomes a separate timeline card", () => {
     },
   })
 
-  // First message arrives — one card
-  setMessages([
-    {
-      info: {
-        id: "spec-msg-1",
-        role: "assistant",
-        agent: "spec",
-        sessionID: "spec-session-1",
-        time: { created: 1000 },
-      },
-      parts: [{ id: "p1", type: "text", text: "Analysing requirements" }],
-    },
-  ])
-
-  let cards = conversationMessages().filter((item: any) => item?._agentCard)
-  expect(cards).toHaveLength(1)
-  expect(cards[0]?._agentMessages).toHaveLength(1)
-  expect(cards[0]?._agentCardKey).toBe("spec:message:spec-msg-1")
-
-  // Second message arrives — two separate cards (one per message)
-  setMessages([
-    {
-      info: {
-        id: "spec-msg-1",
-        role: "assistant",
-        agent: "spec",
-        sessionID: "spec-session-1",
-        time: { created: 1000 },
-      },
-      parts: [{ id: "p1", type: "text", text: "Analysing requirements" }],
-    },
-    {
-      info: {
-        id: "spec-msg-2",
-        role: "assistant",
-        agent: "spec",
-        sessionID: "spec-session-1",
-        time: { created: 2000 },
-      },
-      parts: [{ id: "p2", type: "text", text: "Generated spec" }],
-    },
-  ])
-
-  cards = conversationMessages().filter((item: any) => item?._agentCard)
-  expect(cards).toHaveLength(2)
-  expect(cards[0]?._agentCardKey).toBe("spec:message:spec-msg-1")
-  expect(cards[1]?._agentCardKey).toBe("spec:message:spec-msg-2")
-  // Each card has exactly one message
-  expect(cards[0]?._agentMessages).toHaveLength(1)
-  expect(cards[1]?._agentMessages).toHaveLength(1)
-
-  // Third message arrives — three cards
+  // Multiple spec messages from the same session → one merged card
   setMessages([
     {
       info: {
@@ -270,12 +219,12 @@ test("each message becomes a separate timeline card", () => {
     },
   ])
 
-  cards = conversationMessages().filter((item: any) => item?._agentCard)
-  expect(cards).toHaveLength(3)
-  // Round labels: #1, #2, #3
-  expect(cards[0]?._agentRound).toBe(1)
-  expect(cards[1]?._agentRound).toBe(2)
-  expect(cards[2]?._agentRound).toBe(3)
+  const cards = conversationMessages().filter((item: any) => item?._agentCard)
+  // All three messages merge into one card, no round numbers
+  expect(cards).toHaveLength(1)
+  expect(cards[0]?._agentCardKey).toBe("spec:session:spec-session-1")
+  expect(cards[0]?._agentMessages).toHaveLength(3)
+  expect(cards[0]?._agentRound).toBe(0)
 })
 
 test("agent card status updates from running to completed", () => {
@@ -323,7 +272,7 @@ test("agent card status updates from running to completed", () => {
   expect(cards[0]?._agentStatus).toBe("completed")
 })
 
-test("store agentCards grows as new messages are added incrementally", () => {
+test("store agentCards merges same-session messages into one card", () => {
   setBoardStore("board", { task: { status: "planning" } })
 
   const specMsg = (id: string, time: number, text: string) => ({
@@ -333,57 +282,33 @@ test("store agentCards grows as new messages are added incrementally", () => {
 
   // 1 message → 1 card
   setMessages([specMsg("m1", 100, "a")])
-  expect(messageStore.agentCardOrder).toEqual(["spec:message:m1"])
-  expect(messageStore.agentCards["spec:message:m1"]._agentMessages).toHaveLength(1)
+  expect(messageStore.agentCardOrder).toEqual(["spec:session:s1"])
+  expect(messageStore.agentCards["spec:session:s1"]._agentMessages).toHaveLength(1)
 
-  // 2 messages → 2 cards (per-message grouping)
+  // 2 messages same session → still 1 card with 2 messages
   setMessages([specMsg("m1", 100, "a"), specMsg("m2", 200, "b")])
-  expect(messageStore.agentCardOrder).toEqual(["spec:message:m1", "spec:message:m2"])
-  expect(messageStore.agentCards["spec:message:m1"]._agentMessages).toHaveLength(1)
-  expect(messageStore.agentCards["spec:message:m2"]._agentMessages).toHaveLength(1)
+  expect(messageStore.agentCardOrder).toEqual(["spec:session:s1"])
+  expect(messageStore.agentCards["spec:session:s1"]._agentMessages).toHaveLength(2)
 
-  // 3 messages → 3 cards
+  // 3 messages same session → still 1 card with 3 messages
   setMessages([specMsg("m1", 100, "a"), specMsg("m2", 200, "b"), specMsg("m3", 300, "c")])
-  expect(messageStore.agentCardOrder).toEqual(["spec:message:m1", "spec:message:m2", "spec:message:m3"])
-  expect(messageStore.agentCards["spec:message:m3"]._agentMessages).toHaveLength(1)
+  expect(messageStore.agentCardOrder).toEqual(["spec:session:s1"])
+  expect(messageStore.agentCards["spec:session:s1"]._agentMessages).toHaveLength(3)
 })
 
 // ── Executor Goal Group tests ──
 
-test("executor messages are grouped by goal when board has goals", () => {
-  // Set up board with root session and goals
+test("multiple executor sessions auto-group by sessionID (no board dependency)", () => {
+  // Board has NO goal sessionID data — grouping should still work
   setBoardStore("board", {
     task: {
       status: "running",
       sessionID: "root-session",
     },
-    lanes: [
-      {
-        id: "goals",
-        title: "Dynamic Goals",
-        cards: [
-          {
-            id: "goal-a",
-            kind: "goal",
-            title: "Implement auth",
-            detail: "Add login/logout",
-            status: "running",
-            metadata: { sessionID: "exec-session-a" },
-          },
-          {
-            id: "goal-b",
-            kind: "goal",
-            title: "Add API endpoint",
-            detail: "REST API",
-            status: "pending",
-            metadata: { sessionID: "exec-session-b" },
-          },
-        ],
-      },
-    ],
+    lanes: [],
   })
 
-  // Executor messages with different sessionIDs (child sessions → classified as "executor")
+  // Executor messages with different sessionIDs → auto-grouped
   setMessages([
     {
       info: {
@@ -417,30 +342,61 @@ test("executor messages are grouped by goal when board has goals", () => {
     },
   ])
 
-  // Should have 2 goal group cards (not 3 flat cards)
+  // 2 session groups (grouped by sessionID, not by board goal data)
   const goalGroups = Object.values(messageStore.agentCards).filter(
     (card: any) => card._agentGoalGroup,
   )
   expect(goalGroups).toHaveLength(2)
 
-  // Goal A group
-  const groupA = messageStore.agentCards["executor:goal:goal-a"]
+  const groupA = messageStore.agentCards["executor:session:exec-session-a"]
   expect(groupA).toBeDefined()
   expect(groupA._agentGoalGroup).toBe(true)
-  expect(groupA._agentGoalTitle).toBe("Implement auth")
-  expect(groupA._agentGoalID).toBe("goal-a")
   expect(groupA._agentInternalCards).toHaveLength(2)
   expect(groupA._agentInternalCards![0]._agentMessages[0].parts[0].text).toBe("Reading auth.ts")
-  expect(groupA._agentInternalCards![1]._agentMessages[0].parts[0].text).toBe("Writing auth logic")
 
-  // Goal B group
-  const groupB = messageStore.agentCards["executor:goal:goal-b"]
+  const groupB = messageStore.agentCards["executor:session:exec-session-b"]
   expect(groupB).toBeDefined()
-  expect(groupB._agentGoalTitle).toBe("Add API endpoint")
   expect(groupB._agentInternalCards).toHaveLength(1)
 })
 
-test("executor falls back to flat cards when no goals in board", () => {
+test("goal title comes from board when available", () => {
+  setBoardStore("board", {
+    task: {
+      status: "running",
+      sessionID: "root-session",
+    },
+    lanes: [{
+      id: "goals",
+      title: "Goals",
+      cards: [{
+        id: "goal-a",
+        title: "Implement auth",
+        status: "running",
+        metadata: { sessionID: "exec-session-a" },
+      }],
+    }],
+  })
+
+  setMessages([
+    {
+      info: { id: "m1", role: "assistant", agent: "opencode", sessionID: "exec-session-a", time: { created: 1000 } },
+      parts: [{ id: "p1", type: "text", text: "Work A" }],
+    },
+    {
+      info: { id: "m2", role: "assistant", agent: "opencode", sessionID: "exec-session-b", time: { created: 2000 } },
+      parts: [{ id: "p2", type: "text", text: "Work B" }],
+    },
+  ])
+
+  // Group A has title from board, group B has empty title (no board match)
+  const groupA = messageStore.agentCards["executor:session:exec-session-a"]
+  expect(groupA._agentGoalTitle).toBe("Implement auth")
+
+  const groupB = messageStore.agentCards["executor:session:exec-session-b"]
+  expect(groupB._agentGoalTitle).toBe("")
+})
+
+test("single executor session merges into one card (no grouping)", () => {
   setBoardStore("board", {
     task: {
       status: "running",
@@ -451,86 +407,27 @@ test("executor falls back to flat cards when no goals in board", () => {
 
   setMessages([
     {
-      info: {
-        id: "exec-msg-1",
-        role: "assistant",
-        agent: "opencode",
-        sessionID: "child-session",
-        time: { created: 1000 },
-      },
-      parts: [{ id: "p1", type: "text", text: "Doing work" }],
+      info: { id: "m1", role: "assistant", agent: "opencode", sessionID: "single-session", time: { created: 1000 } },
+      parts: [{ id: "p1", type: "text", text: "Step 1" }],
+    },
+    {
+      info: { id: "m2", role: "assistant", agent: "opencode", sessionID: "single-session", time: { created: 2000 } },
+      parts: [{ id: "p2", type: "text", text: "Step 2" }],
     },
   ])
 
+  // Single session → merged into one flat card, no goal group
   const goalGroups = Object.values(messageStore.agentCards).filter(
     (card: any) => card._agentGoalGroup,
   )
   expect(goalGroups).toHaveLength(0)
 
-  // Should be a flat executor card
   const cards = Object.values(messageStore.agentCards).filter(
     (card: any) => card._agentStage === "executor",
   )
   expect(cards).toHaveLength(1)
-  expect(cards[0]._agentGoalGroup).toBeUndefined()
-})
-
-test("orphan executor messages (no matching goal) become flat cards", () => {
-  setBoardStore("board", {
-    task: {
-      status: "running",
-      sessionID: "root-session",
-    },
-    lanes: [
-      {
-        id: "goals",
-        title: "Goals",
-        cards: [
-          {
-            id: "goal-a",
-            title: "Goal A",
-            status: "running",
-            metadata: { sessionID: "exec-session-a" },
-          },
-        ],
-      },
-    ],
-  })
-
-  setMessages([
-    {
-      info: {
-        id: "exec-msg-a1",
-        role: "assistant",
-        agent: "opencode",
-        sessionID: "exec-session-a",
-        time: { created: 1000 },
-      },
-      parts: [{ id: "p-a1", type: "text", text: "Goal A work" }],
-    },
-    {
-      info: {
-        id: "exec-msg-orphan",
-        role: "assistant",
-        agent: "opencode",
-        sessionID: "unknown-session",
-        time: { created: 2000 },
-      },
-      parts: [{ id: "p-orphan", type: "text", text: "Orphan work" }],
-    },
-  ])
-
-  // One goal group + one flat card
-  const goalGroups = Object.values(messageStore.agentCards).filter(
-    (card: any) => card._agentGoalGroup,
-  )
-  expect(goalGroups).toHaveLength(1)
-  expect(goalGroups[0]._agentGoalTitle).toBe("Goal A")
-
-  const flatCards = Object.values(messageStore.agentCards).filter(
-    (card: any) => card._agentStage === "executor" && !card._agentGoalGroup,
-  )
-  expect(flatCards).toHaveLength(1)
+  expect(cards[0]._agentMessages).toHaveLength(2)
+  expect(cards[0]._agentRound).toBe(0)
 })
 
 test("goal group status reflects child card states", () => {
@@ -539,48 +436,27 @@ test("goal group status reflects child card states", () => {
       status: "running",
       sessionID: "root-session",
     },
-    lanes: [
-      {
-        id: "goals",
-        title: "Goals",
-        cards: [
-          {
-            id: "goal-a",
-            title: "Goal A",
-            status: "running",
-            metadata: { sessionID: "exec-session-a" },
-          },
-        ],
-      },
-    ],
+    lanes: [],
   })
 
+  // Two sessions so grouping triggers
   setMessages([
     {
-      info: {
-        id: "exec-msg-a1",
-        role: "assistant",
-        agent: "opencode",
-        sessionID: "exec-session-a",
-        time: { created: 1000 },
-      },
-      parts: [{ id: "p-a1", type: "text", text: "Step 1" }],
+      info: { id: "m1", role: "assistant", agent: "opencode", sessionID: "sess-a", time: { created: 1000 } },
+      parts: [{ id: "p1", type: "text", text: "Step 1" }],
     },
     {
-      info: {
-        id: "exec-msg-a2",
-        role: "assistant",
-        agent: "opencode",
-        sessionID: "exec-session-a",
-        time: { created: 2000 },
-      },
-      parts: [{ id: "p-a2", type: "text", text: "Step 2" }],
+      info: { id: "m2", role: "assistant", agent: "opencode", sessionID: "sess-a", time: { created: 2000 } },
+      parts: [{ id: "p2", type: "text", text: "Step 2" }],
+    },
+    {
+      info: { id: "m3", role: "assistant", agent: "opencode", sessionID: "sess-b", time: { created: 1500 } },
+      parts: [{ id: "p3", type: "text", text: "Other" }],
     },
   ])
 
-  const group = messageStore.agentCards["executor:goal:goal-a"]
+  const group = messageStore.agentCards["executor:session:sess-a"]
   expect(group).toBeDefined()
-  // Last child should be "running" (active stage), first "completed"
   expect(group._agentStatus).toBe("running")
   expect(group._agentInternalCards![0]._agentStatus).toBe("completed")
   expect(group._agentInternalCards![1]._agentStatus).toBe("running")

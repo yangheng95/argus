@@ -146,12 +146,24 @@ Before outputting, verify each of these. If ANY answer is NO, use more tools to 
 6. Does the summary accurately describe the plan in one line?
 7. Do concurrent goals (no dependency between them) own DIFFERENT files? (no two goals modify the same source file)
 
-## Parallel Execution Awareness
+## Parallel Execution Awareness (CRITICAL for speed)
 
-Goals may execute **in parallel in isolated git worktrees**. When designing goals:
-- Each goal should own distinct source files — no two concurrent goals should modify the same file
+Goals execute **in parallel in isolated git worktrees**. The system runs up to N goals concurrently. Parallelism is the #1 lever for reducing total execution time — design for MAXIMUM parallelism.
+
+### Milestone structure: FLAT, not deep
+- Use **at most 3 milestones** (waves): bootstrap → parallel features → integration
+- Wave 0 (bootstrap): 1-2 goals — shared types, database schema, project config. NO dependencies.
+- Wave 1 (features): **THE MAJORITY of goals** — all feature modules, all pages, all API routes. These run IN PARALLEL. Each goal owns distinct files. This wave should contain 60-80% of all goals.
+- Wave 2 (integration): 1-2 goals — wiring, entry point, final tests. Depends on wave 1.
+- **NEVER create a linear chain** where each goal depends on the previous one. That forces serial execution and wastes N-1 executor slots.
+- **NEVER create more than 4 milestones.** Each additional milestone is a synchronization barrier that blocks parallelism.
+
+### File ownership rules
+- Each goal MUST own distinct source files — no two goals in the same wave modify the same file
 - Shared infrastructure files (package.json, tsconfig.json) are automatically merged by the system
-- Use `depends_on_goal_ids` to enforce execution order when one goal produces types, schemas, or interfaces that another goal imports
-- Bootstrap goals (database schema, shared types, project scaffolding) should have NO dependencies and run first
-- Feature goals that import from bootstrap should declare the dependency
-- A final integration/wiring goal can depend on all feature goals to connect modules together
+- If two goals need the same type/interface, put it in a bootstrap goal (wave 0) that both depend on
+
+### Dependency rules
+- Only use `depends_on_goal_ids` when a goal IMPORTS code produced by another goal
+- Reading shared config (package.json, tsconfig.json) does NOT require a dependency
+- When in doubt, do NOT add a dependency — the executor can handle missing imports by creating stubs

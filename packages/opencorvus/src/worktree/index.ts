@@ -19,6 +19,23 @@ export namespace Worktree {
   const log = Log.create({ service: "worktree" })
   const caseInsensitiveCache = new Map<string, boolean>()
 
+  // Per-project git mutex: serializes worktree add/remove/reset operations
+  // to prevent concurrent git commands from corrupting the repository.
+  const gitLocks = new Map<string, Promise<void>>()
+  async function withGitLock<T>(fn: () => Promise<T>): Promise<T> {
+    const key = Instance.project.id
+    const prev = gitLocks.get(key) ?? Promise.resolve()
+    let resolve!: () => void
+    const next = new Promise<void>((r) => (resolve = r))
+    gitLocks.set(key, next)
+    await prev
+    try {
+      return await fn()
+    } finally {
+      resolve()
+    }
+  }
+
   export const Event = {
     Ready: BusEvent.define(
       "worktree.ready",
@@ -404,13 +421,26 @@ export namespace Worktree {
     const base = input?.name ? slug(input.name) : ""
     const info = await candidate(root, base || undefined)
 
-    const created = await $`git worktree add --no-checkout -b ${info.branch} ${info.directory}`
-      .quiet()
-      .nothrow()
-      .cwd(Instance.worktree)
-    if (created.exitCode !== 0) {
-      throw new CreateFailedError({ message: errorText(created) || "Failed to create git worktree" })
-    }
+    // All git operations serialized to prevent concurrent corruption
+    await withGitLock(async () => {
+      // Ensure the main repo has at least one commit — git worktree requires it.
+      // Without a commit, `git reset --hard` in the worktree does nothing (orphaned branch),
+      // leaving the worktree empty and causing delivery extraction to find 0 files.
+      const hasCommits = (await $`git rev-parse --verify HEAD`.quiet().cwd(Instance.worktree).nothrow()).exitCode === 0
+      if (!hasCommits) {
+        log.info("creating initial commit for worktree support", { directory: Instance.worktree })
+        await $`git add -A`.quiet().cwd(Instance.worktree).nothrow()
+        await $`git -c user.email=opencorvus@local -c user.name=OpenCorvus commit -m "initial scaffold" --allow-empty`.quiet().cwd(Instance.worktree).nothrow()
+      }
+
+      const created = await $`git worktree add --no-checkout -b ${info.branch} ${info.directory}`
+        .quiet()
+        .nothrow()
+        .cwd(Instance.worktree)
+      if (created.exitCode !== 0) {
+        throw new CreateFailedError({ message: errorText(created) || "Failed to create git worktree" })
+      }
+    })
 
     await Project.addSandbox(Instance.project.id, info.directory).catch(() => undefined)
 

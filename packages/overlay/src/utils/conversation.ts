@@ -69,8 +69,7 @@ export function conversationMessages(): any[] {
   const rootSID = rootTaskSessionID();
   const showTranscriptDetails = messageStore.showTranscriptDetails;
 
-  // Single-source classification: main conversation messages only.
-  // Card-stage messages are rendered as AgentCards (maintained in messageStore).
+  // Main conversation messages (non-card channels).
   const mainMessages: any[] = [];
 
   for (const msg of allMessages) {
@@ -98,12 +97,26 @@ export function conversationMessages(): any[] {
   // User request + interaction messages from board state
   const contextMsgs = buildUserContextMessages();
 
-  // Agent cards from the store
-  const agentCardMsgs = (Array.isArray(messageStore.agentCardOrder)
-    ? messageStore.agentCardOrder
-        .map((id: string) => messageStore.agentCards[id])
-        .filter(Boolean)
-    : []) as any[];
+  // Flatten agent card messages into the timeline.
+  // Exception: parallel executor goal groups stay grouped to avoid cross-goal confusion.
+  const agentCardMsgs: any[] = [];
+  for (const id of Array.isArray(messageStore.agentCardOrder) ? messageStore.agentCardOrder : []) {
+    const card = messageStore.agentCards[id];
+    if (!card) continue;
+    if (card._agentGoalGroup && Array.isArray(card._agentInternalCards)) {
+      // Parallel goals: keep as a group item but flatten internal card messages
+      const flatMsgs: any[] = [];
+      for (const child of card._agentInternalCards) {
+        if (Array.isArray(child._agentMessages)) {
+          flatMsgs.push(...child._agentMessages);
+        }
+      }
+      flatMsgs.sort((a: any, b: any) => (a.info?.time?.created || 0) - (b.info?.time?.created || 0));
+      agentCardMsgs.push({ ...card, _agentMessages: flatMsgs });
+    } else if (Array.isArray(card._agentMessages)) {
+      agentCardMsgs.push(...card._agentMessages);
+    }
+  }
 
   const result = [...filteredMain, ...contextMsgs, ...agentCardMsgs].sort(
     (a: any, b: any) => (a.info?.time?.created || 0) - (b.info?.time?.created || 0),

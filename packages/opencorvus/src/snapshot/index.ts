@@ -72,14 +72,24 @@ export namespace Snapshot {
       await $`git --git-dir ${git} config core.fsmonitor false`.quiet().nothrow()
       log.info("initialized")
     }
-    await add(git)
-    const hash = await $`git --git-dir ${git} --work-tree ${Instance.worktree} write-tree`
-      .quiet()
-      .cwd(Instance.directory)
-      .nothrow()
-      .text()
-    log.info("tracking", { hash, cwd: Instance.directory, git })
-    return hash.trim()
+    // Use per-call temporary index to prevent race conditions when multiple
+    // worktrees call track() concurrently against the same snapshot git repo.
+    // Without this, concurrent `git add .` from different work-trees overwrite
+    // the shared index, causing `write-tree` to capture the wrong directory's state.
+    const indexFile = path.join(git, `index-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`)
+    try {
+      await add(git, indexFile)
+      const hash = await $`git --git-dir ${git} --work-tree ${Instance.worktree} write-tree`
+        .env({ ...process.env, GIT_INDEX_FILE: indexFile })
+        .quiet()
+        .cwd(Instance.directory)
+        .nothrow()
+        .text()
+      log.info("tracking", { hash, cwd: Instance.directory, git })
+      return hash.trim()
+    } finally {
+      await fs.unlink(indexFile).catch(() => {})
+    }
   }
 
   export const Patch = z.object({
@@ -90,47 +100,59 @@ export namespace Snapshot {
 
   export async function patch(hash: string): Promise<Patch> {
     const git = gitdir()
-    await add(git)
-    const result =
-      await $`git -c core.autocrlf=${coreAutocrlf} -c core.longpaths=true -c core.symlinks=${coreSymlinks} -c core.quotepath=false --git-dir ${git} --work-tree ${Instance.worktree} diff --no-ext-diff --name-only ${hash} -- .`
-        .quiet()
-        .cwd(Instance.directory)
-        .nothrow()
+    const indexFile = path.join(git, `index-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`)
+    try {
+      await add(git, indexFile)
+      const result =
+        await $`git -c core.autocrlf=${coreAutocrlf} -c core.longpaths=true -c core.symlinks=${coreSymlinks} -c core.quotepath=false --git-dir ${git} --work-tree ${Instance.worktree} diff --no-ext-diff --name-only ${hash} -- .`
+          .env({ ...process.env, GIT_INDEX_FILE: indexFile })
+          .quiet()
+          .cwd(Instance.directory)
+          .nothrow()
 
-    // If git diff fails, return empty patch
-    if (result.exitCode !== 0) {
-      log.warn("failed to get diff", { hash, exitCode: result.exitCode })
-      return { hash, files: [] }
-    }
+      // If git diff fails, return empty patch
+      if (result.exitCode !== 0) {
+        log.warn("failed to get diff", { hash, exitCode: result.exitCode })
+        return { hash, files: [] }
+      }
 
-    const files = result.text()
-    return {
-      hash,
-      files: files
-        .trim()
-        .split("\n")
-        .map((x) => x.trim())
-        .filter(Boolean)
-        .map((x) => path.join(Instance.worktree, x).replaceAll("\\", "/")),
+      const files = result.text()
+      return {
+        hash,
+        files: files
+          .trim()
+          .split("\n")
+          .map((x) => x.trim())
+          .filter(Boolean)
+          .map((x) => path.join(Instance.worktree, x).replaceAll("\\", "/")),
+      }
+    } finally {
+      await fs.unlink(indexFile).catch(() => {})
     }
   }
 
   export async function restore(snapshot: string) {
     log.info("restore", { commit: snapshot })
     const git = gitdir()
-    const result =
-      await $`git -c core.longpaths=true -c core.symlinks=${coreSymlinks} --git-dir ${git} --work-tree ${Instance.worktree} read-tree ${snapshot} && git -c core.longpaths=true -c core.symlinks=${coreSymlinks} --git-dir ${git} --work-tree ${Instance.worktree} checkout-index -a -f`
-        .quiet()
-        .cwd(Instance.worktree)
-        .nothrow()
+    const indexFile = path.join(git, `index-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`)
+    try {
+      const result =
+        await $`git -c core.longpaths=true -c core.symlinks=${coreSymlinks} --git-dir ${git} --work-tree ${Instance.worktree} read-tree ${snapshot} && git -c core.longpaths=true -c core.symlinks=${coreSymlinks} --git-dir ${git} --work-tree ${Instance.worktree} checkout-index -a -f`
+          .env({ ...process.env, GIT_INDEX_FILE: indexFile })
+          .quiet()
+          .cwd(Instance.worktree)
+          .nothrow()
 
-    if (result.exitCode !== 0) {
-      log.error("failed to restore snapshot", {
-        snapshot,
-        exitCode: result.exitCode,
-        stderr: result.stderr.toString(),
-        stdout: result.stdout.toString(),
-      })
+      if (result.exitCode !== 0) {
+        log.error("failed to restore snapshot", {
+          snapshot,
+          exitCode: result.exitCode,
+          stderr: result.stderr.toString(),
+          stdout: result.stdout.toString(),
+        })
+      }
+    } finally {
+      await fs.unlink(indexFile).catch(() => {})
     }
   }
 
@@ -169,24 +191,30 @@ export namespace Snapshot {
 
   export async function diff(hash: string) {
     const git = gitdir()
-    await add(git)
-    const result =
-      await $`git -c core.autocrlf=${coreAutocrlf} -c core.longpaths=true -c core.symlinks=${coreSymlinks} -c core.quotepath=false --git-dir ${git} --work-tree ${Instance.worktree} diff --no-ext-diff ${hash} -- .`
-        .quiet()
-        .cwd(Instance.worktree)
-        .nothrow()
+    const indexFile = path.join(git, `index-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`)
+    try {
+      await add(git, indexFile)
+      const result =
+        await $`git -c core.autocrlf=${coreAutocrlf} -c core.longpaths=true -c core.symlinks=${coreSymlinks} -c core.quotepath=false --git-dir ${git} --work-tree ${Instance.worktree} diff --no-ext-diff ${hash} -- .`
+          .env({ ...process.env, GIT_INDEX_FILE: indexFile })
+          .quiet()
+          .cwd(Instance.worktree)
+          .nothrow()
 
-    if (result.exitCode !== 0) {
-      log.warn("failed to get diff", {
-        hash,
-        exitCode: result.exitCode,
-        stderr: result.stderr.toString(),
-        stdout: result.stdout.toString(),
-      })
-      return ""
+      if (result.exitCode !== 0) {
+        log.warn("failed to get diff", {
+          hash,
+          exitCode: result.exitCode,
+          stderr: result.stderr.toString(),
+          stdout: result.stdout.toString(),
+        })
+        return ""
+      }
+
+      return result.text().trim()
+    } finally {
+      await fs.unlink(indexFile).catch(() => {})
     }
-
-    return result.text().trim()
   }
 
   export const FileDiff = z
@@ -261,12 +289,15 @@ export namespace Snapshot {
     return path.join(Global.Path.data, "snapshot", project.id)
   }
 
-  async function add(git: string) {
+  async function add(git: string, indexFile?: string) {
     await syncExclude(git)
-    await $`git -c core.autocrlf=${coreAutocrlf} -c core.longpaths=true -c core.symlinks=${coreSymlinks} --git-dir ${git} --work-tree ${Instance.worktree} add .`
+    const env = indexFile ? { ...process.env, GIT_INDEX_FILE: indexFile } : undefined
+    const cmd = $`git -c core.autocrlf=${coreAutocrlf} -c core.longpaths=true -c core.symlinks=${coreSymlinks} --git-dir ${git} --work-tree ${Instance.worktree} add .`
       .quiet()
       .cwd(Instance.directory)
       .nothrow()
+    if (env) await cmd.env(env)
+    else await cmd
   }
 
   async function syncExclude(git: string) {

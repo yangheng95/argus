@@ -132,7 +132,16 @@ export namespace SessionPrompt {
       return message
     }
 
-    return loop({ sessionID: input.sessionID })
+    // Run prompt loop in the session's own Instance context.
+    // For worktree-scoped sessions (parallel goal execution), this ensures all
+    // tool calls (read/write/bash/glob/grep) resolve paths against the worktree
+    // directory instead of the main project. For main-session prompts,
+    // session.directory === Instance.directory so provide() reuses the cached
+    // context with zero overhead.
+    return Instance.provide({
+      directory: session.directory,
+      fn: () => loop({ sessionID: input.sessionID }),
+    })
   })
 
   export async function resolvePromptParts(template: string): Promise<PromptInput["parts"]> {

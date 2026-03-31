@@ -374,11 +374,13 @@ function agentMessage(event: any): any | null {
   const cacheKey = `${msgID}:${kind}:${text}`;
   const cached = _agentMsgCache.get(cacheKey);
   if (cached) return cached;
+  const resolvedRole = normalizeAgentRole(stage);
   const base = {
     _synthetic: true,
     info: {
       id: msgID,
       role: "assistant",
+      resolvedRole,
       agent: stage,
       time: { created },
     },
@@ -492,7 +494,13 @@ function rebuildAgentCards(): void {
       typeof message?.info?.sessionID === "string" ? message.info.sessionID.trim() : "";
     const fallbackID =
       typeof message?.info?.id === "string" && message.info.id ? message.info.id : hashText(messageSignature(message));
-    const channelID = `${stage}:message:${fallbackID}`;
+    // Executor: per-message cards (grouped into goal groups later).
+    // All other stages: merge by session into one card per stage.
+    const channelID = stage === "executor"
+      ? `${stage}:message:${fallbackID}`
+      : sessionID
+        ? `${stage}:session:${sessionID}`
+        : `${stage}:message:${fallbackID}`;
     const round = roundsByStage[stage] || [];
     let entry = round.find((item) => item.channelID === channelID);
     if (!entry) {
@@ -548,7 +556,8 @@ function rebuildAgentCards(): void {
     roundsByStage[stage] = existing;
   }
 
-  // ── Build goal-session lookup for executor grouping ──
+  // ── Goal title lookup (display only, not used for grouping) ──
+  // Maps sessionID → goal info so executor cards can show which goal they belong to.
   const goalsBySession = new Map<string, { id: string; title: string; status: string }>();
   const goalsLane = (boardStore.board?.lanes || []).find((l: any) => l.id === "goals");
   for (const card of goalsLane?.cards || []) {
@@ -598,25 +607,46 @@ function rebuildAgentCards(): void {
   for (const [stage, rounds] of Object.entries(roundsByStage)) {
     rounds.sort((left, right) => left.startTime - right.startTime);
 
-    // ── Executor with goal data: group by session (one group per goal) ──
-    if (stage === "executor" && goalsBySession.size > 0) {
+    // ── Executor: group by sessionID (one group per goal session) ──
+    if (stage === "executor") {
+      // Group rounds by sessionID
       const bySession = new Map<string, AgentRound[]>();
-      const orphanRounds: AgentRound[] = [];
+      const noSession: AgentRound[] = [];
       for (const round of rounds) {
         const sid = round.sessionID || "";
-        if (sid && goalsBySession.has(sid)) {
+        if (sid) {
           const arr = bySession.get(sid) || [];
           arr.push(round);
           bySession.set(sid, arr);
         } else {
-          orphanRounds.push(round);
+          noSession.push(round);
         }
       }
 
-      // Goal groups
+      // Single session (or no sessions) → merge into one card, no grouping
+      if (bySession.size <= 1 && noSession.length === 0) {
+        const allRounds = [...bySession.values()].flat();
+        if (allRounds.length > 0) {
+          // Merge all rounds into one card (like non-executor agents)
+          const merged: AgentRound = {
+            channelID: `executor:session:${allRounds[0].sessionID}`,
+            stage,
+            sessionID: allRounds[0].sessionID,
+            messages: allRounds.flatMap((r) => r.messages),
+            startTime: Math.min(...allRounds.map((r) => r.startTime)),
+            endTime: Math.max(...allRounds.map((r) => r.endTime)),
+          };
+          const status = agentRoundStatus(stage, merged, 0, [merged], latestEventByStage.get(stage));
+          const cardID = merged.channelID;
+          nextCards[cardID] = buildCard(stage, merged, 0, status);
+          nextOrder.push(cardID);
+        }
+        continue;
+      }
+
+      // Multiple sessions → each session = one goal group
       for (const [sid, sessionRounds] of bySession) {
-        const goal = goalsBySession.get(sid)!;
-        const groupKey = `executor:goal:${goal.id}`;
+        const groupKey = `executor:session:${sid}`;
         sessionRounds.sort((left, right) => left.startTime - right.startTime);
 
         // Build internal child cards
@@ -624,9 +654,7 @@ function rebuildAgentCards(): void {
         for (let i = 0; i < sessionRounds.length; i += 1) {
           const round = sessionRounds[i];
           const childLabel = sessionRounds.length > 1 ? i + 1 : 0;
-          const childStatus = agentRoundStatus(
-            stage, round, i, sessionRounds, latestEventByStage.get(stage),
-          );
+          const childStatus = agentRoundStatus(stage, round, i, sessionRounds, undefined);
           childCards.push(buildCard(stage, round, childLabel, childStatus));
         }
 
@@ -637,13 +665,15 @@ function rebuildAgentCards(): void {
             ? "error"
             : "completed";
 
+        // Look up goal title from board by matching sessionID
+        const goalInfo = goalsBySession.get(sid);
         nextCards[groupKey] = {
           _synthetic: true,
           _agentCard: true,
           _agentGoalGroup: true,
-          _agentGoalID: goal.id,
-          _agentGoalTitle: goal.title,
-          _agentGoalStatus: goal.status,
+          _agentGoalID: goalInfo?.id || sid,
+          _agentGoalTitle: goalInfo?.title || "",
+          _agentGoalStatus: goalInfo?.status || "running",
           _agentInternalCards: childCards,
           _agentStage: stage,
           _agentStatus: groupStatus,
@@ -654,7 +684,7 @@ function rebuildAgentCards(): void {
             id: `agent-card:${groupKey}`,
             role: "agent-card",
             agent: stage,
-            sessionID: sessionRounds[0]?.sessionID || "",
+            sessionID: sid,
             time: { created: Number.isFinite(groupStart) && groupStart > 0 ? groupStart : Date.now() },
           },
           parts: [],
@@ -662,21 +692,18 @@ function rebuildAgentCards(): void {
         nextOrder.push(groupKey);
       }
 
-      // Orphan executor rounds (no matching goal) → flat cards
-      for (let i = 0; i < orphanRounds.length; i += 1) {
-        const round = orphanRounds[i];
-        const label = orphanRounds.length > 1 ? i + 1 : 0;
-        const status = agentRoundStatus(
-          stage, round, i, orphanRounds, latestEventByStage.get(stage),
-        );
-        const cardID = round.channelID;
-        nextCards[cardID] = buildCard(stage, round, label, status);
-        nextOrder.push(cardID);
+      // Rounds without sessionID → flat cards
+      for (let i = 0; i < noSession.length; i += 1) {
+        const round = noSession[i];
+        const label = noSession.length > 1 ? i + 1 : 0;
+        const status = agentRoundStatus(stage, round, i, noSession, undefined);
+        nextCards[round.channelID] = buildCard(stage, round, label, status);
+        nextOrder.push(round.channelID);
       }
       continue;
     }
 
-    // ── Non-executor or no goals: flat per-message cards ──
+    // ── Non-executor: one card per session (merged) ──
     for (let index = 0; index < rounds.length; index += 1) {
       const round = rounds[index];
       const roundLabel = rounds.length > 1 ? index + 1 : 0;
@@ -729,16 +756,21 @@ function rebuildAgentCards(): void {
           if (prev._agentGoalTitle !== card._agentGoalTitle) {
             setStore("agentCards", cardID, "_agentGoalTitle", card._agentGoalTitle);
           }
-          // Diff internal cards
+          // Diff internal cards — compare key, status, round, and messages
           const prevInternals = prev._agentInternalCards || [];
           const nextInternals = card._agentInternalCards || [];
           if (
             prevInternals.length !== nextInternals.length ||
-            prevInternals.some((c: AgentCardMessage, i: number) =>
-              c._agentCardKey !== nextInternals[i]?._agentCardKey ||
-              c._agentStatus !== nextInternals[i]?._agentStatus ||
-              c._agentMessages?.length !== nextInternals[i]?._agentMessages?.length,
-            )
+            prevInternals.some((c: AgentCardMessage, i: number) => {
+              const n = nextInternals[i];
+              if (!n) return true;
+              if (c._agentCardKey !== n._agentCardKey) return true;
+              if (c._agentStatus !== n._agentStatus) return true;
+              if (c._agentRound !== n._agentRound) return true;
+              const pm = c._agentMessages || [];
+              const nm = n._agentMessages || [];
+              return pm.length !== nm.length || pm.some((m: any, j: number) => m !== nm[j]);
+            })
           ) {
             setStore("agentCards", cardID, "_agentInternalCards", [...nextInternals]);
           }
@@ -754,11 +786,13 @@ function rebuildAgentCards(): void {
           setStore("agentCards", cardID, "_agentMessages", [...nextMsgs]);
         }
       } else {
-        const init: any = { ...card, _agentMessages: [...card._agentMessages] };
-        if (card._agentInternalCards) {
-          init._agentInternalCards = [...card._agentInternalCards];
-        }
-        setStore("agentCards", cardID, init);
+        setStore("agentCards", cardID, {
+          ...card,
+          _agentMessages: [...card._agentMessages],
+          ...(card._agentInternalCards
+            ? { _agentInternalCards: [...card._agentInternalCards] }
+            : {}),
+        });
       }
     }
     // Update order only when it actually changed

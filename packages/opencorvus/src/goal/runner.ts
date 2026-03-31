@@ -590,6 +590,77 @@ export async function deliveryFromSnapshot(baseRef: string | undefined, prefix: 
   }
 }
 
+/**
+ * Extract delivery diffs using the worktree's native git.
+ * This is the reliable path for worktree-based goal execution.
+ *
+ * The Snapshot system shares a single git object store across worktrees,
+ * causing index race conditions. The worktree's own git correctly tracks
+ * all changes the executor made.
+ */
+export async function deliveryFromWorktreeGit(
+  worktreeDir: string,
+  prefix: string,
+): Promise<{ summary: string; diffs: z.infer<typeof Snapshot.FileDiff>[] }> {
+  const { $ } = await import("bun")
+
+  // Stage all changes (including new files) so we can diff
+  await $`git add -A`.quiet().cwd(worktreeDir).nothrow()
+
+  // Determine the base to diff against.
+  // If HEAD exists (repo has commits), diff against HEAD.
+  // Otherwise (empty repo), diff against the git empty tree hash.
+  const hasHead = (await $`git rev-parse --verify HEAD`.quiet().cwd(worktreeDir).nothrow()).exitCode === 0
+  const base = hasHead ? "HEAD" : "4b825dc642cb6eb9a060e54bf899d69f82cf022c"
+
+  // Get list of changed files with status
+  const statusOutput = await $`git diff --cached --name-status --no-renames ${base} -- .`
+    .quiet().cwd(worktreeDir).nothrow().text()
+
+  const files: Array<{ file: string; status: "added" | "modified" | "deleted" }> = []
+  for (const line of statusOutput.trim().split("\n")) {
+    if (!line.trim()) continue
+    const [code, file] = line.split("\t")
+    if (!code || !file) continue
+    const status = code.startsWith("A") ? "added" as const
+      : code.startsWith("D") ? "deleted" as const
+      : "modified" as const
+    if (includeDeliveryFile(file)) {
+      files.push({ file, status })
+    }
+  }
+
+  if (files.length === 0) {
+    log.warn("worktree delivery: no changed files detected", { worktreeDir })
+    return { summary: `${prefix}: no changes`, diffs: [] }
+  }
+
+  // Read file contents for diffs
+  const diffs: z.infer<typeof Snapshot.FileDiff>[] = []
+  for (const { file, status } of files) {
+    const fullPath = path.join(worktreeDir, file)
+    const after = status === "deleted" ? "" : await fs.readFile(fullPath, "utf-8").catch(() => "")
+    const before = status === "added" || !hasHead ? "" : await $`git show HEAD:${file}`.quiet().cwd(worktreeDir).nothrow().text().catch(() => "")
+
+    const afterLines = after.split("\n")
+    const beforeLines = before.split("\n")
+    diffs.push({
+      file,
+      before,
+      after,
+      additions: Math.max(0, afterLines.length - beforeLines.length),
+      deletions: Math.max(0, beforeLines.length - afterLines.length),
+      status,
+    })
+  }
+
+  log.info("worktree delivery extracted", { worktreeDir, files: diffs.length, fileNames: diffs.map((d) => d.file) })
+  return {
+    summary: summary(prefix, diffs.map((d) => d.file)),
+    diffs,
+  }
+}
+
 export async function applyGoalDelivery(input: {
   directory: string
   delivery: {
@@ -638,7 +709,7 @@ export async function applyGoalDelivery(input: {
       continue
     }
     if (merger) {
-      const existing = await Filesystem.read(file).catch(() => "")
+      const existing = await Filesystem.readText(file).catch(() => "")
       const result = merger(existing, diff.after ?? "")
       if (result.conflict) {
         log.warn("goal delivery: merge conflict", { file: diff.file, reason: result.reason })

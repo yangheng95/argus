@@ -2120,19 +2120,6 @@ body[data-theme="light"] .msg[data-role="executor"] {
 }
 
 
-/* Light theme: agent cards */
-body[data-theme="light"] .agent-card-header {
-  background: color-mix(in srgb, var(--agent-card-bg, rgba(102, 112, 133, 0.08)) 80%, white 20%);
-  border-color: var(--agent-card-border, rgba(102, 112, 133, 0.22));
-}
-body[data-theme="light"] .agent-card-body {
-  background: color-mix(in srgb, var(--agent-card-bg, rgba(102, 112, 133, 0.04)) 60%, white 40%);
-  border-color: var(--agent-card-border, rgba(102, 112, 133, 0.16));
-}
-body[data-theme="light"] .agent-card-body::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.12);
-}
-
 /* Light theme: reasoning blocks */
 body[data-theme="light"] .msg-reasoning {
   background: rgba(37, 99, 235, 0.06);
@@ -2610,17 +2597,16 @@ body[data-theme="light"] .section-badge {
 .goals-list {
   display: flex;
   flex-direction: column;
-  gap: calc(4px * var(--ui-scale));
+  gap: calc(1px * var(--ui-scale));
 }
 
 details.goal-item {
   border-radius: calc(6px * var(--ui-scale));
   background: transparent;
-  border: 1px solid var(--border);
-  transition: border-color 100ms, background 100ms;
+  border: none;
+  transition: background 100ms;
 }
 details.goal-item:hover {
-  border-color: var(--border-hover);
   background: rgba(255, 255, 255, 0.02);
 }
 details.goal-item[open] {
@@ -2630,12 +2616,12 @@ details.goal-item[open] {
 .goal-item-head {
   display: flex;
   align-items: center;
-  gap: calc(6px * var(--ui-scale));
-  padding: calc(5px * var(--ui-scale)) calc(8px * var(--ui-scale));
+  gap: calc(5px * var(--ui-scale));
+  padding: calc(2px * var(--ui-scale)) calc(8px * var(--ui-scale));
   cursor: pointer;
   user-select: none;
   list-style: none;
-  min-height: calc(28px * var(--ui-scale));
+  min-height: calc(22px * var(--ui-scale));
 }
 .goal-item-head::-webkit-details-marker { display: none; }
 .goal-item-head::marker { display: none; content: ""; }
@@ -2671,7 +2657,7 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
 
 .goal-item-body {
   padding: calc(4px * var(--ui-scale)) calc(8px * var(--ui-scale)) calc(6px * var(--ui-scale));
-  border-top: 1px solid var(--border);
+  border-top: none;
 }
 .goal-item-body .goal-desc {
   font-size: var(--ui-font-control);
@@ -3313,107 +3299,6 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
   box-shadow: none;
 }
 
-/* ── Agent Cards (collapsible per-stage containers) ── */
-.agent-card {
-  --msg-surface: var(--surface);
-  --msg-border: var(--border);
-  width: 100%;
-  align-items: stretch;
-}
-.agent-card[data-stage="spec"] {
-  --agent-card-accent: rgba(130, 100, 240, 0.80);
-  --agent-card-bg: rgba(130, 100, 240, 0.08);
-  --agent-card-border: rgba(130, 100, 240, 0.22);
-}
-.agent-card[data-stage="planner"] {
-  --agent-card-accent: rgba(84, 138, 247, 0.80);
-  --agent-card-bg: rgba(84, 138, 247, 0.08);
-  --agent-card-border: rgba(84, 138, 247, 0.22);
-}
-.agent-card[data-stage="goal"] {
-  --agent-card-accent: rgba(95, 173, 86, 0.80);
-  --agent-card-bg: rgba(95, 173, 86, 0.08);
-  --agent-card-border: rgba(95, 173, 86, 0.22);
-}
-.agent-card[data-stage="judge"] {
-  --agent-card-accent: rgba(212, 167, 44, 0.80);
-  --agent-card-bg: rgba(212, 167, 44, 0.08);
-  --agent-card-border: rgba(212, 167, 44, 0.22);
-}
-.agent-card[data-stage="delivery"] {
-  --agent-card-accent: rgba(40, 180, 160, 0.80);
-  --agent-card-bg: rgba(40, 180, 160, 0.08);
-  --agent-card-border: rgba(40, 180, 160, 0.22);
-}
-
-.agent-card-header {
-  display: flex;
-  align-items: center;
-  gap: calc(8px * var(--ui-scale));
-  padding: calc(10px * var(--ui-scale)) calc(12px * var(--ui-scale));
-  background: var(--agent-card-bg, rgba(140, 150, 168, 0.08));
-  border: 1px solid var(--agent-card-border, rgba(140, 150, 168, 0.22));
-  border-radius: calc(6px * var(--ui-scale));
-  cursor: pointer;
-  user-select: none;
-  transition: background 0.15s ease, border-color 0.15s ease;
-  font-size: var(--ui-font-control);
-  line-height: 1.5;
-}
-.agent-card-header:hover {
-  background: color-mix(in srgb, var(--agent-card-bg, rgba(140, 150, 168, 0.08)) 70%, white 6%);
-  border-color: var(--agent-card-accent, rgba(140, 150, 168, 0.40));
-}
-.agent-card-header:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-}
-
-.agent-card-label {
-  font-weight: 600;
-  color: var(--agent-card-accent, var(--text-soft));
-}
-.agent-card-count {
-  color: var(--text-soft);
-  font-size: calc(var(--ui-font-small) * 0.9);
-}
-.agent-card-time {
-  color: var(--text-soft);
-  font-size: calc(var(--ui-font-small) * 0.85);
-  margin-left: auto;
-}
-.agent-card-chevron {
-  font-size: var(--ui-font-tiny);
-  color: var(--text-soft);
-  transition: transform 0.2s ease;
-}
-.agent-card--expanded .agent-card-chevron {
-  transform: rotate(180deg);
-}
-
-.agent-card-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: calc(16px * var(--ui-scale));
-  height: calc(16px * var(--ui-scale));
-  font-size: var(--ui-font-meta);
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-.agent-card-badge--done {
-  background: rgba(95, 173, 86, 0.22);
-  color: var(--good);
-}
-.agent-card-badge--error {
-  background: rgba(220, 70, 70, 0.22);
-  color: var(--bad, #dc4646);
-}
-.agent-card-badge--running {
-  background: rgba(84, 138, 247, 0.18);
-  color: var(--accent);
-}
-
 .agent-card-spinner {
   display: inline-block;
   width: calc(10px * var(--ui-scale));
@@ -3425,120 +3310,6 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
 }
 @keyframes agent-card-spin {
   to { transform: rotate(360deg); }
-}
-
-.agent-card-body {
-  margin-top: calc(4px * var(--ui-scale));
-  padding: calc(10px * var(--ui-scale)) calc(12px * var(--ui-scale));
-  background: var(--agent-card-bg, rgba(140, 150, 168, 0.04));
-  border: 1px solid var(--agent-card-border, rgba(140, 150, 168, 0.16));
-  border-radius: calc(6px * var(--ui-scale));
-  /* collapsed: ~3 lines of body text (line-height 1.78 × ~12.6px × 3 ≈ 67px + padding) */
-  max-height: calc(84px * var(--ui-scale));
-  overflow: hidden;
-  -webkit-mask-image: linear-gradient(to bottom, black 55%, transparent 100%);
-  mask-image: linear-gradient(to bottom, black 55%, transparent 100%);
-}
-.agent-card--expanded .agent-card-body {
-  max-height: min(70vh, calc(1200px * var(--ui-scale)));
-  overflow-y: auto;
-  -webkit-mask-image: none;
-  mask-image: none;
-}
-.agent-card-body::-webkit-scrollbar {
-  width: 4px;
-}
-.agent-card-body::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.12);
-  border-radius: 2px;
-}
-.agent-card-body .msg-body {
-  font-size: var(--ui-font-small);
-}
-/* Flatten nested tool cards inside agent cards — remove double-border/bg noise */
-.agent-card-body .msg-tool {
-  background: transparent;
-  border-color: var(--subtle-3);
-  padding: calc(4px * var(--ui-scale)) calc(8px * var(--ui-scale));
-  border-radius: calc(8px * var(--ui-scale));
-}
-.agent-card-body .msg-tool-output {
-  background: var(--subtle-1, rgba(0,0,0,0.12));
-  border-color: transparent;
-  margin-left: calc(22px * var(--ui-scale));
-  font-size: var(--ui-font-small);
-}
-
-/* ── Agent card summary (structured stage data) ── */
-.agent-card-summary {
-  font-size: var(--ui-font-small);
-  padding-bottom: calc(2px * var(--ui-scale));
-}
-.agent-card-summary .goals-list {
-  display: flex;
-  flex-direction: column;
-  gap: calc(2px * var(--ui-scale));
-}
-.agent-card-summary .goal-item {
-  padding: calc(3px * var(--ui-scale)) calc(6px * var(--ui-scale));
-  background: transparent;
-  border: none;
-  box-shadow: none;
-}
-.agent-card-summary .goal-criteria {
-  font-size: var(--ui-font-control);
-  opacity: 0.7;
-}
-.agent-card-summary-content {
-  font-size: var(--ui-font-control);
-  color: var(--text-soft);
-  line-height: 1.5;
-}
-.agent-card-summary-plan {
-  display: flex;
-  flex-direction: column;
-  gap: calc(4px * var(--ui-scale));
-}
-.agent-card-summary-plan .plan-version {
-  align-self: flex-start;
-}
-.agent-card-summary-eval {
-  display: flex;
-  flex-direction: column;
-  gap: calc(6px * var(--ui-scale));
-}
-.agent-card-summary-checks {
-  display: flex;
-  flex-wrap: wrap;
-  gap: calc(4px * var(--ui-scale));
-}
-.agent-card-summary-check {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  font-size: var(--ui-font-small);
-  color: var(--text-soft);
-  padding: 1px 5px;
-  border-radius: 3px;
-  background: var(--subtle-2);
-}
-.agent-card-summary-check[data-status="passed"] {
-  color: var(--good);
-}
-.agent-card-summary-check[data-status="failed"] {
-  color: var(--bad);
-}
-.agent-card-summary-check[data-status="skipped"] {
-  color: var(--text-muted);
-  opacity: 0.6;
-}
-.agent-card-summary-check-icon {
-  font-size: var(--ui-font-meta);
-}
-.agent-card-summary-divider {
-  border: none;
-  border-top: 1px solid var(--agent-card-border, rgba(140, 150, 168, 0.16));
-  margin: calc(6px * var(--ui-scale)) 0;
 }
 
 .msg-head {
@@ -3812,14 +3583,6 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
   overflow-y: auto;
   overscroll-behavior: contain;
 }
-.agent-card-body .msg-tool-input {
-  background: var(--subtle-1, rgba(0,0,0,0.12));
-  border-color: transparent;
-  margin-left: calc(22px * var(--ui-scale));
-  font-size: var(--ui-font-small);
-  max-height: calc(120px * var(--ui-scale));
-}
-
 .msg-tool-error {
   margin: calc(3px * var(--ui-scale)) 0 var(--ui-gap-md) calc(26px * var(--ui-scale));
   padding: calc(6px * var(--ui-scale)) var(--ui-input-padding-x);
@@ -3849,6 +3612,7 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
   --executor-bg: rgba(230, 140, 50, 0.08);
   --executor-border: rgba(230, 140, 50, 0.22);
   width: 100%;
+  display: block;
 }
 
 .executor-goal-header {
@@ -3923,15 +3687,6 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
 .executor-goal-body::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.12);
   border-radius: 2px;
-}
-
-/* Nested agent cards inside goal groups — compact styling */
-.executor-goal-body .agent-card {
-  border-left: none;
-  margin-bottom: calc(2px * var(--ui-scale));
-}
-.executor-goal-body .agent-card-header {
-  padding: calc(6px * var(--ui-scale)) calc(8px * var(--ui-scale));
 }
 
 /* Individual tool entries — item row + optional output block */
@@ -8389,31 +8144,6 @@ body[data-theme="light"] {
   overscroll-behavior: contain;
 }
 
-/* Agent card tool outputs: collapsed by default, expandable on click */
-.agent-card-body .msg-tool-output {
-  max-height: calc(80px * var(--ui-scale));
-  overflow: hidden;
-  cursor: pointer;
-  position: relative;
-}
-.agent-card-body .msg-tool-output::after {
-  content: "";
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: calc(24px * var(--ui-scale));
-  background: linear-gradient(transparent, var(--subtle-2));
-  pointer-events: none;
-}
-.agent-card-body .msg-tool-output.msg-tool-output--expanded {
-  max-height: none;
-  overflow: visible;
-  cursor: auto;
-}
-.agent-card-body .msg-tool-output.msg-tool-output--expanded::after {
-  display: none;
-}
 /* Main conversation tool outputs: no height limit */
 .msg-tool-output {
   max-height: none;
@@ -8844,7 +8574,7 @@ body[data-theme="light"] .tech-sweep {
 }
 
 /* ── Disable GPU-heavy background/gradient animations ── */
-/* Keep: pulse, pulse-dot, agent-card-spin, sectionPhasePulse (all lightweight) */
+/* Keep: pulse, pulse-dot, agent-card-spin (goal-group spinner), sectionPhasePulse (all lightweight) */
 .tech-grid::before,
 .tech-sweep,
 .tech-orbit-a,
