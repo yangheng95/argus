@@ -80,6 +80,7 @@ import {
   setDirectory,
   activeDirectory,
   loadRecentDirectories,
+  removeRecentDirectory,
 } from "./services/workspace";
 import { openConfigDialog, switchConfigTab, setupDialogBackdropClose, installSettingsFormHandlers, renderAboutVersion } from "./services/dialog";
 import { installInlineLlmConfig, refreshInlineLlmConfig } from "./services/llm-inline";
@@ -1178,7 +1179,7 @@ function renderRecentDirPanel(): void {
   panel.innerHTML = dirs
     .map((dir) => {
       const isActive = current && dir.toLowerCase() === current.toLowerCase();
-      return `<button type="button" class="recent-dir-item" data-recent-dir="${escapeHtml(dir)}" data-active="${isActive}" title="${escapeHtml(dir)}">${escapeHtml(shortPath(dir))}</button>`;
+      return `<div class="recent-dir-row" data-active="${isActive}"><button type="button" class="recent-dir-item" data-recent-dir="${escapeHtml(dir)}" title="${escapeHtml(dir)}">${escapeHtml(shortPath(dir))}</button><button type="button" class="recent-dir-remove" data-recent-remove="${escapeHtml(dir)}" title="${escapeHtml(t("common.delete"))}" aria-label="${escapeHtml(t("common.delete"))}">×</button></div>`;
     })
     .join("");
 }
@@ -1220,6 +1221,17 @@ document.getElementById("taskDir")?.addEventListener("click", async (event) => {
 });
 
 document.getElementById("recentDirPanel")?.addEventListener("click", async (event) => {
+  const removeBtn = eventClosest(event, "[data-recent-remove]");
+  if (removeBtn) {
+    const dir = (removeBtn as HTMLElement).dataset.recentRemove;
+    if (dir) {
+      removeRecentDirectory(dir);
+      renderRecentDirPanel();
+      // Close panel when list becomes empty
+      if (!loadRecentDirectories().length) closeRecentDirPanel();
+    }
+    return;
+  }
   const item = eventClosest(event, "[data-recent-dir]");
   if (!item) return;
   const dir = (item as HTMLElement).dataset.recentDir;

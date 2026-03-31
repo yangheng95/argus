@@ -79,6 +79,7 @@ type VerifyInput = {
   task: { title: string; request: string; sessionID?: string; metadata?: Record<string, unknown> }
   goals: GoalInfo[]
   delivery: DeliveryInfo
+  checkResults?: Array<{ name: string; status: string; evidence?: string }>
   analysis?: GoalJudgmentType
   stream?: TextHooks
   signal?: AbortSignal
@@ -393,6 +394,7 @@ function buildUserPrompt(
     task: { title: string; request: string; metadata?: Record<string, unknown> }
     goals: GoalInfo[]
     delivery: DeliveryInfo
+    checkResults?: Array<{ name: string; status: string; evidence?: string }>
     analysis?: GoalJudgmentType
   },
   context?: string,
@@ -402,6 +404,27 @@ function buildUserPrompt(
   sections.push(
     `# Task\n\nTitle: ${input.task.title}\n\nRequest:\n${input.task.request}`,
   )
+
+  // Core check results — delivery agent must fix failures before proceeding
+  if (input.checkResults && input.checkResults.length > 0) {
+    const failed = input.checkResults.filter((c) => c.status === "failed")
+    const lines = input.checkResults.map((c) => {
+      const icon = c.status === "passed" ? "PASSED" : "FAILED"
+      const evidence = c.evidence && c.status === "failed" ? `\n  \`\`\`\n  ${c.evidence.slice(0, 4000)}\n  \`\`\`` : ""
+      return `- ${c.name}: ${icon}${evidence}`
+    })
+    if (failed.length > 0) {
+      sections.push(
+        `# Core Check Results\n\n` +
+        `**${failed.length} check(s) FAILED.** You MUST fix these before proceeding to extended verification.\n\n` +
+        lines.join("\n"),
+      )
+    } else {
+      sections.push(
+        `# Core Check Results\n\nAll core checks passed.\n\n` + lines.join("\n"),
+      )
+    }
+  }
 
   // Operator notes — user messages sent during task execution
   const taskID = input.task.metadata?.taskID as string | undefined
@@ -495,6 +518,15 @@ export const DELIVERY_AGENT_SYSTEM = `You are a senior QA engineer acting as the
 - **preference_list**: Project conventions
 
 ## Process
+
+### Phase 0: FIX CORE CHECK FAILURES (if any)
+If the Core Check Results section shows FAILED checks:
+1. Read the error output carefully — identify the exact file and line
+2. Use **read_file** to see the current code
+3. Use **edit_file** for targeted fixes — do NOT rewrite entire files
+4. Use **run_command** to re-run the failing command and verify the fix
+5. Do NOT add @ts-ignore, eslint-disable, or skip/delete failing tests
+6. Repeat until all core checks pass, then proceed to Phase 1
 
 ### Phase 1: EXTENDED CHECKS
 Run the quality checks that the evaluator skipped:

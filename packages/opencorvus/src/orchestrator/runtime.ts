@@ -1331,10 +1331,11 @@ async function completeRun(run: RunRow, hooks: RuntimeHooks) {
       setTimeout(() => reject(new Error("evaluation hard timeout")), EVALUATION_HARD_TIMEOUT_MS),
     )
 
+  // Core checks only (build/test/lint) — fast, no LLM.
+  // Delivery agent handles everything else (extended checks, fix, runtime verify).
   let result: Awaited<ReturnType<typeof EvaluatorService.evaluate>>
   try {
     result = await Promise.race([
-      // Tier 2 (task-level): core + judge + spec_check — full checks deferred to delivery
       EvaluatorService.evaluate(
         {
           taskID: task.id,
@@ -1350,92 +1351,62 @@ async function completeRun(run: RunRow, hooks: RuntimeHooks) {
           diffs: delivery.diffs,
           changedFiles: delivery.diffs.map((item) => item.file),
         },
-        "standard",
+        "core",
       ),
       hardTimeoutPromise<typeof result>(),
     ])
   } catch (evalErr) {
     const msg = evalErr instanceof Error ? evalErr.message : String(evalErr)
-    log.error("Phase 1 evaluate() threw or timed out", { error: msg })
-    const errorSummary = `Evaluator Phase 1 failure: ${msg}`
-    persistEvaluation({
-      task, run, deliveryID, evaluationID, delivery,
-      result: { status: "failed", verdict: "rejected", summary: errorSummary, checks: [], artifacts: [] },
-      analysis: fallbackAnalysis({ verdict: "rejected", summary: errorSummary }, 0, msg),
-      analysisError: msg,
-      finalVerdict: "rejected",
-      finalStatus: "failed",
-      finalSummary: errorSummary,
-      goals: [],
-    })
-    updateExecutorSessionStatus(run.id, "failed")
-    const failNow = Date.now()
-    await hooks.updateRun(run, { status: "failed", error: errorSummary, blocking_reason: null, time_completed: failNow }, errorSummary)
-    if (task.active_run_id === run.id) {
-      await hooks.updateTask(task, { status: "failed", error: errorSummary, blocking_reason: null, time_completed: failNow }, errorSummary)
-    }
-    return
+    log.error("core checks threw or timed out", { error: msg })
+    // Evaluator infrastructure failure — still try delivery, it might work
+    result = { status: "failed" as const, verdict: "rejected" as const, summary: `Core check error: ${msg}`, checks: [], artifacts: [] }
   }
 
-  // Phase 1 failed → reject immediately, route to retry/replan.
-  // Phase 1 passed → skip LLM judge, go straight to delivery agent.
-  // Delivery agent is the final authority (full checks + fix + verify).
   const goals = run.plan_version_id ? listGoalsByPlan(run.plan_version_id) : []
-  const phase1Failed = result.status === "failed"
-  const phase1Inconclusive = result.status === "inconclusive"
+  const checkSummary = `Core checks: ${result.checks.map((c) => `${c.name}:${c.status}`).join(", ") || "none"}`
 
-  if (phase1Failed || phase1Inconclusive) {
-    const failSummary = phase1Failed
-      ? `Rejected: automated checks failed. ${result.summary}`
-      : `Rejected: no automated checks ran (inconclusive). ${result.summary}`
-    const analysis = fallbackAnalysis(result, goals.length, failSummary)
-    persistEvaluation({
-      task, run, deliveryID, evaluationID, delivery, result, analysis,
-      finalVerdict: "rejected", finalStatus: "failed", finalSummary: failSummary, goals,
-    })
-    await handleEvaluationFailure(requireTask(task.id), run, failSummary, hooks, analysis)
-    return
-  }
-
-  // Phase 1 passed — persist as accepted, then hand off to delivery agent
-  const analysis: EvaluatorAnalysisType = {
-    verdict: "accepted",
-    classification: "transient",
-    summary: `Core checks passed: ${result.checks.map((c) => `${c.name}:${c.status}`).join(", ")}`,
-    goal_statuses: goals.map((g, i) => ({
-      goal_index: i,
-      status: "passed" as const,
-      evidence: "Core checks passed; deferred to delivery agent for full verification.",
-      reasoning: result.summary,
-    })),
-    replan_guidance: null,
-  }
-
+  // Persist evaluation — records core check results regardless of pass/fail
   persistEvaluation({
-    task, run, deliveryID, evaluationID, delivery, result, analysis,
-    finalVerdict: "accepted", finalStatus: "passed",
-    finalSummary: analysis.summary, goals,
+    task, run, deliveryID, evaluationID, delivery, result,
+    analysis: {
+      verdict: result.status === "failed" ? "rejected" : "accepted",
+      classification: "transient",
+      summary: checkSummary,
+      goal_statuses: goals.map((g, i) => ({
+        goal_index: i,
+        status: (result.status === "failed" ? "failed" : "passed") as "passed" | "failed",
+        evidence: checkSummary,
+        reasoning: result.summary,
+      })),
+      replan_guidance: null,
+    },
+    finalVerdict: result.status === "failed" ? "rejected" : "accepted",
+    finalStatus: result.status === "failed" ? "failed" : "passed",
+    finalSummary: checkSummary,
+    goals,
   })
 
-  if (true) {
-    const allGoals = run.plan_version_id ? listGoalsByPlan(run.plan_version_id) : []
-    const pendingBlocking = allGoals.filter((g) => g.priority === "blocking" && g.status === "pending")
+  // Always proceed to delivery — it handles fix + extended checks + runtime verify.
+  // Check for pending blocking goals first.
+  const allGoals = run.plan_version_id ? listGoalsByPlan(run.plan_version_id) : []
+  const pendingBlocking = allGoals.filter((g) => g.priority === "blocking" && g.status === "pending")
 
-    if (pendingBlocking.length === 0) {
-      const accepted = findDeliveryByRun(run.id)
-      if (!accepted) {
-        await hooks.updateTask(task, { status: "completed", blocking_reason: null, error: null, time_completed: Date.now() }, "Task completed")
-        return
-      }
-      await publishAcceptedDelivery(task, run, accepted, hooks)
-      return
-    }
+  if (pendingBlocking.length > 0) {
     const remaining = pendingBlocking.map((g) => g.description).join(", ")
-    await handleEvaluationFailure(requireTask(task.id), run, `Evaluation ${finalStatus} but blocking goals still pending: ${remaining}`, hooks, analysis)
+    await handleEvaluationFailure(requireTask(task.id), run, `Blocking goals still pending: ${remaining}`, hooks, {
+      verdict: "rejected", classification: "evaluation", summary: `Blocking goals pending: ${remaining}`,
+      goal_statuses: [], replan_guidance: null,
+    })
     return
   }
 
-  await handleEvaluationFailure(requireTask(task.id), run, finalSummary, hooks, analysis)
+  const accepted = findDeliveryByRun(run.id)
+  if (!accepted) {
+    await hooks.updateTask(task, { status: "completed", blocking_reason: null, error: null, time_completed: Date.now() }, "Task completed")
+    return
+  }
+  // publishAcceptedDelivery runs the delivery agent which handles everything
+  await publishAcceptedDelivery(task, run, accepted, hooks, result.checks)
 }
 
 async function runEvaluation(task: TaskRow, run: RunRow, existingDelivery: DeliveryRow, hooks: RuntimeHooks, signal?: AbortSignal) {
@@ -1480,101 +1451,62 @@ async function runEvaluation(task: TaskRow, run: RunRow, existingDelivery: Deliv
   // independent inner timers that can outlive the outer timeout.
   const throwIfAborted = () => { if (signal?.aborted) throw new Error("runEvaluation aborted by caller") }
 
+  // Core checks only — same as completeRun
   let result: Awaited<ReturnType<typeof EvaluatorService.evaluate>>
   try {
     throwIfAborted()
-    // Tier 2 (task-level): core + judge + spec_check
     result = await EvaluatorService.evaluate(
       {
         taskID: task.id,
         activeSpecVersionID: task.active_spec_version_id ?? undefined,
         request: task.request,
-        metadata: {
-          ...(task.metadata ?? {}),
-          delivery_changed_files: delivery.diffs.map((item) => item.file),
-        },
+        metadata: { ...(task.metadata ?? {}), delivery_changed_files: delivery.diffs.map((item) => item.file) },
       },
-      {
-        summary: delivery.summary,
-        diffs: delivery.diffs,
-        changedFiles: delivery.diffs.map((item) => item.file),
-      },
-      "standard",
+      { summary: delivery.summary, diffs: delivery.diffs, changedFiles: delivery.diffs.map((item) => item.file) },
+      "core",
     )
   } catch (evalErr) {
     const msg = evalErr instanceof Error ? evalErr.message : String(evalErr)
-    log.error("re-evaluation Phase 1 failed", { error: msg })
-    const errorSummary = `Evaluator Phase 1 failure: ${msg}`
-    persistEvaluation({
-      task, run, deliveryID, evaluationID, delivery,
-      result: { status: "failed", verdict: "rejected", summary: errorSummary, checks: [], artifacts: [] },
-      analysis: fallbackAnalysis({ verdict: "rejected", summary: errorSummary }, 0, msg),
-      analysisError: msg,
-      finalVerdict: "rejected",
-      finalStatus: "failed",
-      finalSummary: errorSummary,
-      goals: [],
-    })
-    updateExecutorSessionStatus(run.id, "failed")
-    const failNow = Date.now()
-    await hooks.updateRun(run, { status: "failed", error: errorSummary, blocking_reason: null, time_completed: failNow }, errorSummary)
-    if (task.active_run_id === run.id) {
-      await hooks.updateTask(task, { status: "failed", error: errorSummary, blocking_reason: null, time_completed: failNow }, errorSummary)
-    }
-    return
+    log.error("re-evaluation core checks failed", { error: msg })
+    result = { status: "failed" as const, verdict: "rejected" as const, summary: `Core check error: ${msg}`, checks: [], artifacts: [] }
   }
 
-  // Same logic as completeRun: Phase 1 failed → retry/replan, Phase 1 passed → delivery decides
   const goals = run.plan_version_id ? listGoalsByPlan(run.plan_version_id) : []
-  const phase1Failed = result.status === "failed"
-  const phase1Inconclusive = result.status === "inconclusive"
+  const checkSummary = `Core checks: ${result.checks.map((c) => `${c.name}:${c.status}`).join(", ") || "none"}`
 
-  if (phase1Failed || phase1Inconclusive) {
-    const failSummary = phase1Failed
-      ? `Rejected: automated checks failed. ${result.summary}`
-      : `Rejected: no automated checks ran (inconclusive). ${result.summary}`
-    const analysis = fallbackAnalysis(result, goals.length, failSummary)
-    persistEvaluation({
-      task, run, deliveryID, evaluationID, delivery, result, analysis,
-      finalVerdict: "rejected", finalStatus: "failed", finalSummary: failSummary, goals,
-    })
-    await handleEvaluationFailure(requireTask(task.id), run, failSummary, hooks, analysis)
-    return
-  }
-
-  // Phase 1 passed → accept, hand off to delivery agent
-  const analysis: EvaluatorAnalysisType = {
-    verdict: "accepted",
-    classification: "transient",
-    summary: `Core checks passed: ${result.checks.map((c) => `${c.name}:${c.status}`).join(", ")}`,
-    goal_statuses: goals.map((g, i) => ({
-      goal_index: i,
-      status: "passed" as const,
-      evidence: "Core checks passed; deferred to delivery agent.",
-      reasoning: result.summary,
-    })),
-    replan_guidance: null,
-  }
   persistEvaluation({
-    task, run, deliveryID, evaluationID, delivery, result, analysis,
-    finalVerdict: "accepted", finalStatus: "passed", finalSummary: analysis.summary, goals,
+    task, run, deliveryID, evaluationID, delivery, result,
+    analysis: {
+      verdict: result.status === "failed" ? "rejected" : "accepted",
+      classification: "transient", summary: checkSummary,
+      goal_statuses: goals.map((g, i) => ({
+        goal_index: i, status: (result.status === "failed" ? "failed" : "passed") as "passed" | "failed",
+        evidence: checkSummary, reasoning: result.summary,
+      })),
+      replan_guidance: null,
+    },
+    finalVerdict: result.status === "failed" ? "rejected" : "accepted",
+    finalStatus: result.status === "failed" ? "failed" : "passed",
+    finalSummary: checkSummary, goals,
   })
 
-  {
-    const allGoals = run.plan_version_id ? listGoalsByPlan(run.plan_version_id) : []
-    const pendingBlocking = allGoals.filter((g) => g.priority === "blocking" && g.status === "pending")
-    if (pendingBlocking.length === 0) {
-      const accepted = findDeliveryByRun(run.id)
-      if (!accepted) {
-        await hooks.updateTask(task, { status: "completed", blocking_reason: null, error: null, time_completed: Date.now() }, "Task completed")
-        return
-      }
-      await publishAcceptedDelivery(task, run, accepted, hooks)
-      return
-    }
+  const allGoals = run.plan_version_id ? listGoalsByPlan(run.plan_version_id) : []
+  const pendingBlocking = allGoals.filter((g) => g.priority === "blocking" && g.status === "pending")
+  if (pendingBlocking.length > 0) {
     const remaining = pendingBlocking.map((g) => g.description).join(", ")
-    await handleEvaluationFailure(requireTask(task.id), run, `Core checks passed but blocking goals still pending: ${remaining}`, hooks, analysis)
+    await handleEvaluationFailure(requireTask(task.id), run, `Blocking goals pending: ${remaining}`, hooks, {
+      verdict: "rejected", classification: "evaluation", summary: `Blocking goals pending: ${remaining}`,
+      goal_statuses: [], replan_guidance: null,
+    })
+    return
   }
+
+  const accepted = findDeliveryByRun(run.id)
+  if (!accepted) {
+    await hooks.updateTask(task, { status: "completed", blocking_reason: null, error: null, time_completed: Date.now() }, "Task completed")
+    return
+  }
+  await publishAcceptedDelivery(task, run, accepted, hooks, result.checks)
 }
 
 function recoverStrandedTasks(hooks: RuntimeHooks) {
@@ -1633,7 +1565,7 @@ async function failRun(run: RunRow, error: string, hooks: RuntimeHooks) {
   }
 }
 
-async function publishAcceptedDelivery(task: TaskRow, run: RunRow, delivery: DeliveryRow, hooks: RuntimeHooks) {
+async function publishAcceptedDelivery(task: TaskRow, run: RunRow, delivery: DeliveryRow, hooks: RuntimeHooks, checkResults?: Array<{ name: string; status: string; evidence?: string }>) {
   if (task.active_run_id !== run.id) return
   if (delivery.status === "delivered") {
     const current = requireTask(task.id)
@@ -1695,6 +1627,7 @@ async function publishAcceptedDelivery(task: TaskRow, run: RunRow, delivery: Del
             changedFiles,
             diffs: Array.isArray(deliveryResult.diffs) ? deliveryResult.diffs : [],
           },
+          checkResults,
           analysis,
           stream: deliveryStream,
         }),
@@ -1887,40 +1820,6 @@ function requirementIDsFromMetadata(metadata: unknown): string[] {
   const ids = (metadata as Record<string, unknown>).requirement_ids
   if (Array.isArray(ids)) return ids.filter((item): item is string => typeof item === "string" && item.length > 0)
   return []
-}
-
-function fallbackAnalysis(
-  result: {
-    verdict: "accepted" | "rejected" | "inconclusive"
-    summary: string
-  },
-  goalCount: number,
-  message: string,
-): EvaluatorAnalysisType {
-  // When the evaluator agent (Phase 2) crashes, we cannot trust Phase 1's verdict alone.
-  // Phase 1 "accepted" only means automated checks passed — without Phase 2 LLM review,
-  // we cannot confirm goal completion. Force to "rejected" so the run gets retried.
-  const safeVerdict = result.verdict === "accepted" ? "rejected" as const : result.verdict
-  const goalStatus = safeVerdict === "rejected" ? "failed" : "inconclusive"
-  const summary = `${result.summary} — Evaluator agent unavailable: ${message}. Verdict downgraded to ${safeVerdict}.`
-  const reasoning = `Evaluator agent (Phase 2) failed: ${message}. Phase 1 automated checks returned "${result.verdict}" but without LLM goal-level review, acceptance cannot be confirmed.`
-  return {
-    verdict: safeVerdict,
-    classification: "evaluation",
-    summary,
-    goal_statuses: Array.from({ length: goalCount }, (_, goal_index) => ({
-      goal_index,
-      status: goalStatus,
-      evidence: summary,
-      reasoning,
-    })),
-    replan_guidance: {
-      root_cause: `Evaluator agent unavailable: ${message}`,
-      what_failed: result.summary,
-      suggested_strategy: "Retry evaluation — the evaluator agent crashed but the automated checks may have passed.",
-      avoid_approaches: [],
-    },
-  }
 }
 
 

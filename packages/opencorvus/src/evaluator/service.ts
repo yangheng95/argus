@@ -1,7 +1,6 @@
 import { Plugin } from "@/plugin"
 import { CheckConfig, EvaluationCheck } from "@/orchestrator/model"
-import { EvaluatorAgent, type EvaluatorAnalysisType, type GoalInfo, type CheckResult, type DeliveryInfo } from "./agent"
-import type { TextHooks } from "@/llm/api"
+import type { GoalInfo, DeliveryInfo } from "./agent"
 import { Log } from "@/util/log"
 import z from "zod"
 import { resolveConfig, autoSpecCheck, discoverChecks, resolvedChecks, commandGroups } from "./discovery"
@@ -90,16 +89,6 @@ export namespace EvaluatorService {
     const checks = [...core.checks, ...optional.flatMap((item) => Array.isArray(item.checks) ? item.checks : [])]
     const artifacts = [...core.artifacts, ...optional.flatMap((item) => Array.isArray(item.artifacts) ? item.artifacts : [])]
     return publishResult(task, finalizeEvaluation(commands, checks, artifacts, optional))
-  }
-
-  export async function analyzeDelivery(input: {
-    task: { title: string; request: string; sessionID?: string }
-    goals: GoalInfo[]
-    delivery: DeliveryInfo
-    checkResults: CheckResult[]
-    stream?: TextHooks
-  }): Promise<EvaluatorAnalysisType> {
-    return EvaluatorAgent.analyze(input)
   }
 }
 
