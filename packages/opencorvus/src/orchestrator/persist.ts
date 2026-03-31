@@ -1744,6 +1744,15 @@ export function insertPlanItems(
     }
   }
 
+  // Log the dependency graph for diagnosis
+  const depGraph = input.goals.map((goal, i) => ({
+    index: i,
+    id: goal.id,
+    title: goal.description?.slice(0, 50),
+    deps: goalDeps[i].map((d) => input.goals[d]?.id),
+  }))
+  log.info("goal dependency graph", { taskID: input.taskID, goalCount: input.goals.length, graph: depGraph })
+
   for (const [index, goal] of input.goals.entries()) {
     const waveIndex = goalWaveIndex.get(index) ?? 0
     const wave = waves[waveIndex]
