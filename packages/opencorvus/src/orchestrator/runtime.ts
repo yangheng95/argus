@@ -1385,7 +1385,6 @@ async function completeRun(run: RunRow, hooks: RuntimeHooks) {
   const phase1Inconclusive = result.status === "inconclusive"
 
   if (phase1Failed || phase1Inconclusive) {
-    // Core checks failed — no need for LLM analysis or delivery, go straight to retry/replan
     const failSummary = phase1Failed
       ? `Rejected: automated checks failed. ${result.summary}`
       : `Rejected: no automated checks ran (inconclusive). ${result.summary}`

@@ -78,7 +78,7 @@ import {
   persistInitialTransitionFailure,
   specDraftFromFailure,
 } from "./persist"
-import { persistQueuedTask } from "./pipeline"
+import { persistQueuedTask, abortTaskPipeline, awaitPipelineSettled } from "./pipeline"
 import {
   activeRunBySession,
   findArtifacts,
@@ -597,6 +597,8 @@ export namespace OrchestratorService {
     if (!["completed", "failed", "cancelled"].includes(task.status)) {
       await cancelTask(taskID)
     }
+    // Wait for any in-progress pipeline stage to settle after abort
+    await awaitPipelineSettled(taskID)
     // Delete session tree (CASCADE handles plans, goals, runs, etc.)
     if (task.session_id) {
       await Session.remove(task.session_id)
@@ -721,6 +723,8 @@ export namespace OrchestratorService {
 
   export async function cancelTask(taskID: string) {
     const task = requireTask(taskID)
+    // Abort any in-progress pipeline stage (spec/goal/plan) immediately
+    abortTaskPipeline(taskID)
     const run = task.active_run_id ? findRun(task.active_run_id) : undefined
     if (run) {
       await ExecutorRegistry.require(run.executor).abort({

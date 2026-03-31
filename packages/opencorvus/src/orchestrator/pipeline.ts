@@ -56,6 +56,35 @@ import type { Requirement } from "@/spec/agent"
 const log = Log.create({ service: "orchestrator-pipeline" })
 
 // ---------------------------------------------------------------------------
+// Task-level abort registry — allows cancelTask to abort in-progress pipeline stages
+// ---------------------------------------------------------------------------
+
+const taskAborts = new Map<string, AbortController>()
+
+/**
+ * Abort the pipeline stage currently running for the given task.
+ * Called by cancelTask() to ensure immediate interruption.
+ */
+export function abortTaskPipeline(taskID: string): void {
+  const ctrl = taskAborts.get(taskID)
+  if (ctrl) ctrl.abort("task cancelled")
+}
+
+/**
+ * Wait for a running pipeline stage to settle (resolve or reject).
+ * Called by deleteTask() to ensure cleanup is safe.
+ */
+export async function awaitPipelineSettled(taskID: string): Promise<void> {
+  // runningStages is in runtime.ts; we only manage our own abort here.
+  // The abort signal causes the stage to fail fast, so the caller just
+  // needs a short delay for the Promise to settle.
+  const ctrl = taskAborts.get(taskID)
+  if (!ctrl) return
+  // Give the aborted stage a moment to unwind
+  await new Promise<void>((resolve) => setTimeout(resolve, 200))
+}
+
+// ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
@@ -229,6 +258,7 @@ async function runSpecStage(
   task = await updateTask(task, { status: "spec_generating" }, "Spec generation started")
 
   const ctrl = new AbortController()
+  taskAborts.set(task.id, ctrl)
   const guard = createInactivityGuard(stageTimeout("spec"), () => {
     ctrl.abort("spec stage inactivity timeout")
   })
@@ -303,6 +333,7 @@ async function runSpecStage(
     return
   } finally {
     guard.clear()
+    taskAborts.delete(task.id)
   }
 }
 
@@ -346,6 +377,7 @@ async function runGoalStage(
   }
 
   const ctrl = new AbortController()
+  taskAborts.set(task.id, ctrl)
   const guard = createInactivityGuard(stageTimeout("goal"), () => {
     ctrl.abort("goal stage inactivity timeout")
   })
@@ -454,6 +486,7 @@ async function runGoalStage(
     return
   } finally {
     guard.clear()
+    taskAborts.delete(task.id)
   }
 }
 
@@ -496,6 +529,7 @@ async function runPlanStage(
   }
 
   const ctrl = new AbortController()
+  taskAborts.set(task.id, ctrl)
   const guard = createInactivityGuard(stageTimeout("plan"), () => {
     ctrl.abort("plan stage inactivity timeout")
   })
@@ -640,6 +674,7 @@ async function runPlanStage(
     return
   } finally {
     guard.clear()
+    taskAborts.delete(task.id)
   }
 }
 
