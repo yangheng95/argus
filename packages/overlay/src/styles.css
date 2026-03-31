@@ -68,7 +68,6 @@
   --ui-font-meta: clamp(10px, calc(10.4px * var(--ui-scale)), 11px);
   --ui-font-small: clamp(9px, calc(9.4px * var(--ui-scale)), 10px);
   --ui-font-tiny: clamp(8px, calc(8.4px * var(--ui-scale)), 9px);
-  --ui-font-panel-leaf: 9px;
   --ui-font-label: var(--ui-font-meta);
   --ui-gap-xs: calc(4px * var(--ui-scale));
   --ui-gap-sm: calc(6px * var(--ui-scale));
@@ -5556,21 +5555,21 @@ select.field-input option {
   word-break: break-word;
 }
 .md-content .md-h1 {
-  font-size: var(--ui-font-body);
+  font-size: var(--ui-font-heading);
   font-weight: 700;
   color: var(--text-strong);
   margin-top: 8px;
   margin-bottom: 3px;
 }
 .md-content .md-h2 {
-  font-size: var(--ui-font-body);
+  font-size: var(--ui-font-title);
   font-weight: 600;
   color: var(--text-strong);
   margin-top: 6px;
   margin-bottom: 2px;
 }
 .md-content .md-h3 {
-  font-size: var(--ui-font-control);
+  font-size: var(--ui-font-body);
   font-weight: 600;
   color: var(--text-strong);
   margin-top: 6px;
@@ -5602,25 +5601,25 @@ select.field-input option {
   margin-bottom: calc(6px * var(--ui-scale));
 }
 
-.session-content .md-h1 { font-size: var(--ui-font-heading); }
-.session-content .md-h2 { font-size: var(--ui-font-title); }
+.session-content .md-h1 { font-size: var(--ui-font-display); }
+.session-content .md-h2 { font-size: var(--ui-font-heading); }
 .session-content .md-h3 { font-size: var(--ui-font-title); }
 
 .session-content .md-p {
-  font-size: var(--ui-font-control);
+  font-size: var(--ui-font-body);
   margin: 0 0 calc(12px * var(--ui-scale));
   line-height: 1.68;
   color: var(--text);
 }
 
 .session-content .md-list {
-  font-size: var(--ui-font-control);
+  font-size: var(--ui-font-body);
   margin: calc(6px * var(--ui-scale)) 0 calc(14px * var(--ui-scale));
   padding-left: calc(22px * var(--ui-scale));
 }
 
 .session-content .md-list li {
-  font-size: var(--ui-font-control);
+  font-size: var(--ui-font-body);
   margin: 0 0 calc(10px * var(--ui-scale));
   padding-left: calc(6px * var(--ui-scale));
   line-height: 1.62;
@@ -7950,40 +7949,10 @@ body[data-resizing="true"] * {
   font-size: var(--ui-font-meta);
 }
 
-.sections .empty-hint,
-.sections .changes-summary,
-.sections .change-path,
-.sections .change-subline,
+/* Sections meta labels — small auxiliary info only */
 .sections .change-meta,
-.sections .overview-summary,
-.sections .overview-next-step,
-.sections .plan-summary,
-.sections .overview-summary,
-.sections .overview-next-step,
-.sections .goal-desc,
-.sections .goal-criteria,
-.sections .goal-priority,
-.sections .criteria-name,
-.sections .criteria-desc,
-.sections .criteria-result,
-.sections .interaction-title,
-.sections .interaction-body,
-.sections .eval-error-name,
-.sections .plan-version,
-.sections .eval-error-meta,
-.sections .eval-error-detail,
-.sections .eval-summary,
-.sections .delivery-title,
-.sections .delivery-summary,
-.sections .delivery-files,
-.sections .md-h1,
-.sections .md-h2,
-.sections .md-h3,
-.sections .md-h4,
-.sections .md-h5,
-.sections .md-h6,
-.sections .md-code-block {
-  font-size: var(--ui-font-panel-leaf);
+.sections .plan-version {
+  font-size: var(--ui-font-meta);
 }
 
 /* Legacy visual restore */
