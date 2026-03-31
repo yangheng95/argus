@@ -1,7 +1,7 @@
 import path from "path"
 import z from "zod"
 import { Identifier } from "../id/id"
-import { MessageV2 } from "./message"
+import { Message } from "./message"
 import { Log } from "../util/log"
 import { Session } from "."
 import { SessionRevert } from "./revert"
@@ -33,7 +33,7 @@ export type ShellInput = z.infer<typeof ShellInput>
 export async function shell(
   input: ShellInput,
   deps: {
-    loop: (input: { sessionID: string; resume_existing?: boolean }) => Promise<MessageV2.WithParts>
+    loop: (input: { sessionID: string; resume_existing?: boolean }) => Promise<Message.WithParts>
   },
 ) {
   installRuntimeShims()
@@ -61,7 +61,7 @@ export async function shell(
   }
   const agent = await Agent.get(input.agent)
   const model = input.model ?? agent.model ?? (await lastModel(input.sessionID))
-  const userMsg: MessageV2.User = {
+  const userMsg: Message.User = {
     id: Identifier.ascending("message"),
     sessionID: input.sessionID,
     time: {
@@ -75,7 +75,7 @@ export async function shell(
     },
   }
   await Session.updateMessage(userMsg)
-  const userPart: MessageV2.Part = {
+  const userPart: Message.Part = {
     type: "text",
     id: Identifier.ascending("part"),
     messageID: userMsg.id,
@@ -85,7 +85,7 @@ export async function shell(
   }
   await Session.updatePart(userPart)
 
-  const msg: MessageV2.Assistant = {
+  const msg: Message.Assistant = {
     id: Identifier.ascending("message"),
     sessionID: input.sessionID,
     parentID: userMsg.id,
@@ -110,7 +110,7 @@ export async function shell(
     providerID: model.providerID,
   }
   await Session.updateMessage(msg)
-  const part: MessageV2.Part = {
+  const part: Message.Part = {
     type: "tool",
     id: Identifier.ascending("part"),
     messageID: msg.id,

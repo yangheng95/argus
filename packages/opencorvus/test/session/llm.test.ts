@@ -9,7 +9,7 @@ import { ModelsDev } from "../../src/provider/models"
 import { Filesystem } from "../../src/util/filesystem"
 import { tmpdir } from "../fixture/fixture"
 import type { Agent } from "../../src/agent/agent"
-import type { MessageV2 } from "../../src/session/message"
+import type { Message } from "../../src/session/message"
 
 describe("session.llm.hasToolCalls", () => {
   test("returns false for empty messages array", () => {
@@ -281,7 +281,7 @@ describe("session.llm.stream", () => {
           agent: agent.name,
           model: { providerID, modelID: resolved.id },
           variant: "high",
-        } satisfies MessageV2.User
+        } satisfies Message.User
 
         const stream = await LLM.stream({
           user,
@@ -410,7 +410,7 @@ describe("session.llm.stream", () => {
           agent: agent.name,
           model: { providerID: "openai", modelID: resolved.id },
           variant: "high",
-        } satisfies MessageV2.User
+        } satisfies Message.User
 
         const stream = await LLM.stream({
           user,
@@ -531,7 +531,7 @@ describe("session.llm.stream", () => {
           time: { created: Date.now() },
           agent: agent.name,
           model: { providerID, modelID: resolved.id },
-        } satisfies MessageV2.User
+        } satisfies Message.User
 
         const stream = await LLM.stream({
           user,
@@ -631,7 +631,7 @@ describe("session.llm.stream", () => {
           time: { created: Date.now() },
           agent: agent.name,
           model: { providerID, modelID: resolved.id },
-        } satisfies MessageV2.User
+        } satisfies Message.User
 
         const stream = await LLM.stream({
           user,

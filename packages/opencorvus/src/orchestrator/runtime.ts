@@ -9,7 +9,7 @@ import { Instance } from "@/project/instance"
 import { Project } from "@/project/project"
 import { installRuntimeShims } from "@/runtime/shims"
 import { Session } from "@/session"
-import { MessageV2 } from "@/session/message"
+import { Message } from "@/session/message"
 import { Database, and, eq, inArray } from "@/storage/db"
 import { Log } from "@/util/log"
 import { WorkbenchService } from "@/workbench/service"
@@ -104,10 +104,10 @@ const PIPELINE_STATUSES = ["queued", "spec_generating", "goal_decomposing", "pla
 const runningStages = new Map<string, Promise<void>>()
 
 type TranscriptState = {
-  message: MessageV2.Assistant
-  text?: MessageV2.TextPart
-  reasoning?: MessageV2.ReasoningPart
-  tools: Map<string, MessageV2.ToolPart>
+  message: Message.Assistant
+  text?: Message.TextPart
+  reasoning?: Message.ReasoningPart
+  tools: Map<string, Message.ToolPart>
   usage: {
     input: number
     output: number
@@ -148,7 +148,7 @@ async function projectExecutorEventToSession(taskID: string, run: RunRow, event:
         sessionID,
         type: "text",
         text: "",
-      } satisfies MessageV2.TextPart) as MessageV2.TextPart
+      } satisfies Message.TextPart) as Message.TextPart
     }
     state.text!.text += delta
     await Session.updatePartDelta({
@@ -170,7 +170,7 @@ async function projectExecutorEventToSession(taskID: string, run: RunRow, event:
         sessionID,
         type: "text",
         text: "",
-      } satisfies MessageV2.TextPart) as MessageV2.TextPart
+      } satisfies Message.TextPart) as Message.TextPart
     }
     state.text!.text += payload.delta
     await Session.updatePartDelta({
@@ -196,7 +196,7 @@ async function projectExecutorEventToSession(taskID: string, run: RunRow, event:
         time: {
           start: Date.now(),
         },
-      } satisfies MessageV2.ReasoningPart) as MessageV2.ReasoningPart
+      } satisfies Message.ReasoningPart) as Message.ReasoningPart
     }
     state.reasoning!.text += delta
     await Session.updatePartDelta({
@@ -230,7 +230,7 @@ async function projectExecutorEventToSession(taskID: string, run: RunRow, event:
           start: Date.now(),
         },
       },
-    } satisfies MessageV2.ToolPart) as MessageV2.ToolPart
+    } satisfies Message.ToolPart) as Message.ToolPart
     state.tools.set(id, part)
     return
   }
@@ -256,7 +256,7 @@ async function projectExecutorEventToSession(taskID: string, run: RunRow, event:
           end: Date.now(),
         },
       },
-    } satisfies MessageV2.ToolPart) as MessageV2.ToolPart
+    } satisfies Message.ToolPart) as Message.ToolPart
     state.tools.set(id, next)
     return
   }
@@ -282,7 +282,7 @@ async function projectExecutorEventToSession(taskID: string, run: RunRow, event:
         sessionID,
         type: "text",
         text: payload.output,
-      } satisfies MessageV2.TextPart) as MessageV2.TextPart
+      } satisfies Message.TextPart) as Message.TextPart
     }
     if (event.type === "session.error" && typeof payload.error === "string" && payload.error) {
       if (!state.text) {
@@ -292,7 +292,7 @@ async function projectExecutorEventToSession(taskID: string, run: RunRow, event:
           sessionID,
           type: "text",
           text: payload.error,
-        } satisfies MessageV2.TextPart) as MessageV2.TextPart
+        } satisfies Message.TextPart) as Message.TextPart
       } else if (!state.text.text.trim()) {
         state.text.text = payload.error
         await Session.updatePart(state.text)
@@ -316,7 +316,7 @@ async function projectExecutorEventToSession(taskID: string, run: RunRow, event:
           write: 0,
         },
       },
-    } satisfies MessageV2.Assistant) as MessageV2.Assistant
+    } satisfies Message.Assistant) as Message.Assistant
     transcript.delete(run.id)
   }
 }
@@ -351,18 +351,18 @@ async function ensureTranscriptState(taskID: string, run: RunRow, sessionID: str
         write: 0,
       },
     },
-  } satisfies MessageV2.Assistant) as MessageV2.Assistant
+  } satisfies Message.Assistant) as Message.Assistant
   const next = {
     message,
-    tools: new Map<string, MessageV2.ToolPart>(),
+    tools: new Map<string, Message.ToolPart>(),
     usage: {
       input: 0,
       output: 0,
       total: 0,
       cost: 0,
     },
-    text: undefined as MessageV2.TextPart | undefined,
-    reasoning: undefined as MessageV2.ReasoningPart | undefined,
+    text: undefined as Message.TextPart | undefined,
+    reasoning: undefined as Message.ReasoningPart | undefined,
   }
   transcript.set(run.id, next)
   return next
@@ -376,8 +376,8 @@ async function transcriptParentID(sessionID: string, taskID: string, runID: stri
 }
 
 async function flushTranscriptText(state: {
-  text?: MessageV2.TextPart
-  reasoning?: MessageV2.ReasoningPart
+  text?: Message.TextPart
+  reasoning?: Message.ReasoningPart
 }) {
   if (state.text) await Session.updatePart(state.text)
   if (state.reasoning) await Session.updatePart({
@@ -386,7 +386,7 @@ async function flushTranscriptText(state: {
       ...state.reasoning.time,
       end: Date.now(),
     },
-  } satisfies MessageV2.ReasoningPart)
+  } satisfies Message.ReasoningPart)
 }
 
 function toolInput(input: unknown) {
@@ -1947,7 +1947,7 @@ function consumeExecutorEvents(
       for await (const event of executor.events({ sessionID })) {
         if (ctrl.signal.aborted) break
         upsertExecutorInteraction(taskID, runID, sessionID, executorSessionID, executorName, event)
-        // Project executor events into the MessageV2 session system.
+        // Project executor events into the Message session system.
         // This creates real ToolPart/TextPart/ReasoningPart objects that flow
         // through the standard message protocol bridge → ProtocolStore → SSE.
         // No separate RunProgress/RunOutput publishing needed.

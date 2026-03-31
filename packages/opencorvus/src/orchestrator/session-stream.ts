@@ -8,7 +8,7 @@
  */
 import type { TextHooks } from "@/llm/api"
 import { Session } from "@/session"
-import { MessageV2 } from "@/session/message"
+import { Message } from "@/session/message"
 import { Identifier } from "@/id/id"
 import { Log } from "@/util/log"
 
@@ -16,7 +16,7 @@ const log = Log.create({ service: "session-stream" })
 
 /**
  * Create TextHooks that write streaming content (text deltas, tool calls,
- * tool results) into a session as MessageV2 parts.
+ * tool results) into a session as Message parts.
  *
  * Events are persisted to DB and published via Bus → SSE automatically
  * through Session.updatePart / Session.updatePartDelta.
@@ -34,7 +34,7 @@ export function sessionStreamHooks(input: {
   let messageID: string | undefined
   let textPartID: string | undefined
   let textAccumulated = ""
-  const toolParts = new Map<string, MessageV2.ToolPart>()
+  const toolParts = new Map<string, Message.ToolPart>()
 
   async function ensureMessage() {
     if (messageID) return messageID
@@ -53,7 +53,7 @@ export function sessionStreamHooks(input: {
       path: { cwd: "", root: "" },
       cost: 0,
       tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-    } as MessageV2.Assistant)
+    } as Message.Assistant)
     messageID = id
     return id
   }
@@ -72,7 +72,7 @@ export function sessionStreamHooks(input: {
               sessionID: input.sessionID,
               type: "text",
               text: "",
-            } as MessageV2.TextPart)
+            } as Message.TextPart)
             textPartID = id
           }
           textAccumulated += chunk.text
@@ -96,7 +96,7 @@ export function sessionStreamHooks(input: {
               sessionID: input.sessionID,
               type: "text",
               text: textAccumulated,
-            } as MessageV2.TextPart)
+            } as Message.TextPart)
             textAccumulated = ""
           }
           // Pause text accumulation — next text-delta after tools should create a new part
@@ -114,8 +114,8 @@ export function sessionStreamHooks(input: {
               input: {},
               raw: "",
             },
-          } as MessageV2.ToolPart)
-          toolParts.set(chunk.id, part as MessageV2.ToolPart)
+          } as Message.ToolPart)
+          toolParts.set(chunk.id, part as Message.ToolPart)
           return
         }
 
@@ -152,8 +152,8 @@ export function sessionStreamHooks(input: {
               input: chunk.input ?? {},
               time: { start: Date.now() },
             },
-          } as MessageV2.ToolPart)
-          toolParts.set(chunk.toolCallId, part as MessageV2.ToolPart)
+          } as Message.ToolPart)
+          toolParts.set(chunk.toolCallId, part as Message.ToolPart)
           return
         }
 
@@ -187,7 +187,7 @@ export function sessionStreamHooks(input: {
                 end: Date.now(),
               },
             },
-          } as MessageV2.ToolPart)
+          } as Message.ToolPart)
           toolParts.delete(chunk.toolCallId)
           return
         }
@@ -214,7 +214,7 @@ export function sessionStreamHooks(input: {
           sessionID: input.sessionID,
           type: "text",
           text: textAccumulated,
-        } as MessageV2.TextPart)
+        } as Message.TextPart)
         log.info("session-stream flushed", {
           sessionID: input.sessionID,
           partID: textPartID,

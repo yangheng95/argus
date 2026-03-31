@@ -1,4 +1,4 @@
-import { MessageV2 } from "./message"
+import { Message } from "./message"
 import { Log } from "@/util/log"
 import { Identifier } from "@/id/id"
 import { Session } from "."
@@ -24,12 +24,12 @@ export namespace SessionProcessor {
   export type Result = Awaited<ReturnType<Info["process"]>>
 
   export function create(input: {
-    assistantMessage: MessageV2.Assistant
+    assistantMessage: Message.Assistant
     sessionID: string
     model: Provider.Model
     abort: AbortSignal
   }) {
-    const toolcalls: Record<string, MessageV2.ToolPart> = {}
+    const toolcalls: Record<string, Message.ToolPart> = {}
     let snapshot: string | undefined
     let blocked = false
     let attempt = 0
@@ -51,8 +51,8 @@ export namespace SessionProcessor {
         const shouldBreak = (await Config.get()).experimental?.continue_loop_on_deny !== true
         while (true) {
           try {
-            let currentText: MessageV2.TextPart | undefined
-            let reasoningMap: Record<string, MessageV2.ReasoningPart> = {}
+            let currentText: Message.TextPart | undefined
+            let reasoningMap: Record<string, Message.ReasoningPart> = {}
             const stream = await LLM.stream(streamInput)
             const pauseInactivity = (stream as any).pauseInactivityTimer as (() => void) | undefined
             const resumeInactivity = (stream as any).resumeInactivityTimer as (() => void) | undefined
@@ -164,7 +164,7 @@ export namespace SessionProcessor {
                       raw: "",
                     },
                   })
-                  toolcalls[value.id] = part as MessageV2.ToolPart
+                  toolcalls[value.id] = part as Message.ToolPart
                   break
 
                 case "tool-input-delta": {
@@ -205,9 +205,9 @@ export namespace SessionProcessor {
                       },
                       metadata: value.providerMetadata,
                     })
-                    toolcalls[value.toolCallId] = part as MessageV2.ToolPart
+                    toolcalls[value.toolCallId] = part as Message.ToolPart
 
-                    const parts = await MessageV2.parts(input.assistantMessage.id)
+                    const parts = await Message.parts(input.assistantMessage.id)
                     const lastThree = parts.slice(-DOOM_LOOP_THRESHOLD)
 
                     const exactMatch =
@@ -416,8 +416,8 @@ export namespace SessionProcessor {
               error: e,
               stack: JSON.stringify(e.stack),
             })
-            const error = MessageV2.fromError(e, { providerID: input.model.providerID })
-            if (MessageV2.ContextOverflowError.isInstance(error)) {
+            const error = Message.fromError(e, { providerID: input.model.providerID })
+            if (Message.ContextOverflowError.isInstance(error)) {
               needsCompaction = true
               break
             }
@@ -455,7 +455,7 @@ export namespace SessionProcessor {
             }
             snapshot = undefined
           }
-          const p = await MessageV2.parts(input.assistantMessage.id)
+          const p = await Message.parts(input.assistantMessage.id)
           for (const part of p) {
             if (part.type === "tool" && part.state.status !== "completed" && part.state.status !== "error") {
               await Session.updatePart({

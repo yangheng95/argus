@@ -1,6 +1,6 @@
 import { Instance } from "../project/instance"
 import { Log } from "../util/log"
-import { MessageV2 } from "./message"
+import { Message } from "./message"
 import { SessionStatus } from "./status"
 import { Channel } from "@/util/channel"
 
@@ -8,12 +8,12 @@ export namespace SessionActor {
   export const log = Log.create({ service: "session.actor" })
 
   type Reply =
-    | { type: "result"; value: MessageV2.WithParts }
+    | { type: "result"; value: Message.WithParts }
     | { type: "error"; error: Error }
 
   type Command =
     | { type: "wait"; reply: Channel<Reply> }
-    | { type: "resolve"; value: MessageV2.WithParts }
+    | { type: "resolve"; value: Message.WithParts }
     | { type: "reject"; error: unknown }
     | { type: "pending"; reply: Channel<number> }
     | { type: "close"; error: Error }
@@ -130,7 +130,7 @@ export namespace SessionActor {
     return result.value
   }
 
-  export function resolve(sessionID: string, value: MessageV2.WithParts) {
+  export function resolve(sessionID: string, value: Message.WithParts) {
     return actors()[sessionID]?.inbox.send({ type: "resolve", value }) ?? false
   }
 
@@ -161,7 +161,7 @@ export namespace SessionActor {
   }
 
   export async function lastModel(sessionID: string) {
-    for await (const item of MessageV2.stream(sessionID)) {
+    for await (const item of Message.stream(sessionID)) {
       if (item.info.role === "user" && item.info.model) return item.info.model
     }
     const { Provider } = await import("../provider/provider")

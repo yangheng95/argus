@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test"
 import { Instance } from "../../src/project/instance"
 import { SessionActor } from "../../src/session/actor"
-import { MessageV2 } from "../../src/session/message"
+import { Message } from "../../src/session/message"
 import { tmpdir } from "../fixture/fixture"
 
-function assistant(sessionID: string, id: string): MessageV2.WithParts {
+function assistant(sessionID: string, id: string): Message.WithParts {
   return {
     info: {
       id,

@@ -2,7 +2,7 @@ import { Hono } from "hono"
 import { describeRoute, validator, resolver } from "hono-openapi"
 import z from "zod"
 import { Session } from "../../session"
-import { MessageV2 } from "../../session/message"
+import { Message } from "../../session/message"
 import { SessionPrompt } from "../../session/prompt"
 import { errors } from "../error"
 
@@ -19,7 +19,7 @@ export function SessionInteractionMessageRoutes() {
             description: "List of messages",
             content: {
               "application/json": {
-                schema: resolver(MessageV2.WithParts.array()),
+                schema: resolver(Message.WithParts.array()),
               },
             },
           },
@@ -60,8 +60,8 @@ export function SessionInteractionMessageRoutes() {
               "application/json": {
                 schema: resolver(
                   z.object({
-                    info: MessageV2.Info,
-                    parts: MessageV2.Part.array(),
+                    info: Message.Info,
+                    parts: Message.Part.array(),
                   }),
                 ),
               },
@@ -79,7 +79,7 @@ export function SessionInteractionMessageRoutes() {
       ),
       async (c) => {
         const params = c.req.valid("param")
-        const message = await MessageV2.get({
+        const message = await Message.get({
           sessionID: params.sessionID,
           messageID: params.messageID,
         })
@@ -167,7 +167,7 @@ export function SessionInteractionMessageRoutes() {
             description: "Successfully updated part",
             content: {
               "application/json": {
-                schema: resolver(MessageV2.Part),
+                schema: resolver(Message.Part),
               },
             },
           },
@@ -182,7 +182,7 @@ export function SessionInteractionMessageRoutes() {
           partID: z.string().meta({ description: "Part ID" }),
         }),
       ),
-      validator("json", MessageV2.Part),
+      validator("json", Message.Part),
       async (c) => {
         const params = c.req.valid("param")
         const body = c.req.valid("json")

@@ -18,7 +18,7 @@ import { Project } from "@/project/project"
 import { Question } from "@/question"
 import { Scheduler } from "@/scheduler"
 import { Session } from "@/session"
-import { MessageV2 } from "@/session/message"
+import { Message } from "@/session/message"
 import { Database, NotFoundError, and, eq, inArray } from "@/storage/db"
 import { Log } from "@/util/log"
 import { WorkbenchService } from "@/workbench/service"
@@ -195,7 +195,7 @@ async function appendTaskSessionMessage(task: TaskRow, text: string) {
     },
     agent: ctx.agent,
     model: ctx.model,
-  } satisfies MessageV2.User)
+  } satisfies Message.User)
   await Session.updatePart({
     id: Identifier.ascending("part"),
     messageID: msg.id,
@@ -203,7 +203,7 @@ async function appendTaskSessionMessage(task: TaskRow, text: string) {
     type: "text",
     text,
     kind: "user_content",
-  } satisfies MessageV2.TextPart)
+  } satisfies Message.TextPart)
   await Session.touch(task.session_id)
 }
 

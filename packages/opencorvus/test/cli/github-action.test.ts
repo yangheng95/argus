@@ -1,9 +1,9 @@
 import { test, expect, describe } from "bun:test"
 import { extractResponseText, formatPromptTooLargeError } from "../../src/cli/cmd/github"
-import type { MessageV2 } from "../../src/session/message"
+import type { Message } from "../../src/session/message"
 
 // Helper to create minimal valid parts
-function createTextPart(text: string): MessageV2.Part {
+function createTextPart(text: string): Message.Part {
   return {
     id: "1",
     sessionID: "s",
@@ -13,7 +13,7 @@ function createTextPart(text: string): MessageV2.Part {
   }
 }
 
-function createReasoningPart(text: string): MessageV2.Part {
+function createReasoningPart(text: string): Message.Part {
   return {
     id: "1",
     sessionID: "s",
@@ -24,7 +24,7 @@ function createReasoningPart(text: string): MessageV2.Part {
   }
 }
 
-function createToolPart(tool: string, title: string, status: "completed" | "running" = "completed"): MessageV2.Part {
+function createToolPart(tool: string, title: string, status: "completed" | "running" = "completed"): Message.Part {
   if (status === "completed") {
     return {
       id: "1",
@@ -58,7 +58,7 @@ function createToolPart(tool: string, title: string, status: "completed" | "runn
   }
 }
 
-function createStepStartPart(): MessageV2.Part {
+function createStepStartPart(): Message.Part {
   return {
     id: "1",
     sessionID: "s",
@@ -67,7 +67,7 @@ function createStepStartPart(): MessageV2.Part {
   }
 }
 
-function createStepFinishPart(): MessageV2.Part {
+function createStepFinishPart(): Message.Part {
   return {
     id: "1",
     sessionID: "s",

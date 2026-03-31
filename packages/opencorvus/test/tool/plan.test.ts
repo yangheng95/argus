@@ -5,7 +5,7 @@ import { tmpdir } from "../fixture/fixture"
 import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
 import { Identifier } from "../../src/id/id"
-import { MessageV2 } from "../../src/session/message"
+import { Message } from "../../src/session/message"
 import { Question } from "../../src/question"
 import { PlanEnterTool, PlanExitTool } from "../../src/tool/plan"
 
@@ -22,7 +22,7 @@ function ctx(input: { sessionID: string; messageID: string }) {
 }
 
 async function seed(sessionID: string) {
-  const msg: MessageV2.User = {
+  const msg: Message.User = {
     id: Identifier.ascending("message"),
     sessionID,
     role: "user",
@@ -37,7 +37,7 @@ async function seed(sessionID: string) {
     sessionID,
     type: "text",
     text: "seed",
-  } satisfies MessageV2.TextPart)
+  } satisfies Message.TextPart)
 }
 
 async function nextQuestion() {

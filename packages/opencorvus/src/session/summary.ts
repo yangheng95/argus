@@ -2,7 +2,7 @@ import { fn } from "@/util/fn"
 import z from "zod"
 import { Session } from "."
 
-import { MessageV2 } from "./message"
+import { Message } from "./message"
 import { Identifier } from "@/id/id"
 import { Snapshot } from "@/snapshot"
 
@@ -80,7 +80,7 @@ export namespace SessionSummary {
     },
   )
 
-  async function summarizeSession(input: { sessionID: string; messages: MessageV2.WithParts[] }) {
+  async function summarizeSession(input: { sessionID: string; messages: Message.WithParts[] }) {
     const diffs = await computeDiff({ messages: input.messages })
     await Session.setSummary({
       sessionID: input.sessionID,
@@ -97,12 +97,12 @@ export namespace SessionSummary {
     })
   }
 
-  async function summarizeMessage(input: { messageID: string; messages: MessageV2.WithParts[] }) {
+  async function summarizeMessage(input: { messageID: string; messages: Message.WithParts[] }) {
     const messages = input.messages.filter(
       (m) => m.info.id === input.messageID || (m.info.role === "assistant" && m.info.parentID === input.messageID),
     )
     const msgWithParts = messages.find((m) => m.info.id === input.messageID)!
-    const userMsg = msgWithParts.info as MessageV2.User
+    const userMsg = msgWithParts.info as Message.User
     const diffs = await computeDiff({ messages })
     userMsg.summary = {
       ...userMsg.summary,
@@ -132,7 +132,7 @@ export namespace SessionSummary {
     },
   )
 
-  export async function computeDiff(input: { messages: MessageV2.WithParts[] }) {
+  export async function computeDiff(input: { messages: Message.WithParts[] }) {
     let from: string | undefined
     let to: string | undefined
 

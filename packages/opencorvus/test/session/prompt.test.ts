@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test"
 import { fileURLToPath } from "url"
 import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
-import { MessageV2 } from "../../src/session/message"
+import { Message } from "../../src/session/message"
 import { SessionPrompt } from "../../src/session/prompt"
 import { Log } from "../../src/util/log"
 import { tmpdir } from "../fixture/fixture"
@@ -91,7 +91,7 @@ describe("session.prompt missing file", () => {
 
         if (msg.info.role !== "user") throw new Error("expected user message")
 
-        const stored = await MessageV2.get({
+        const stored = await Message.get({
           sessionID: session.id,
           messageID: msg.info.id,
         })
@@ -141,7 +141,7 @@ describe("session.prompt special characters", () => {
             parts,
             noReply: true,
           })
-          const stored = await MessageV2.get({ sessionID: session.id, messageID: message.info.id })
+          const stored = await Message.get({ sessionID: session.id, messageID: message.info.id })
           const textParts = stored.parts.filter((part) => part.type === "text")
           const hasContent = textParts.some((part) => part.text.includes("special content"))
           expect(hasContent).toBe(true)
@@ -259,7 +259,7 @@ describe("session.prompt plan mode reminders", () => {
       fn: async () => {
         const session = await Session.create({})
         await Bun.write(Session.plan(session), "# plan\n")
-        const seed: MessageV2.User = {
+        const seed: Message.User = {
           id: "msg_seed",
           sessionID: session.id,
           role: "user",
@@ -274,7 +274,7 @@ describe("session.prompt plan mode reminders", () => {
           sessionID: session.id,
           type: "text",
           text: "planning",
-        } satisfies MessageV2.TextPart)
+        } satisfies Message.TextPart)
 
         const msg = await SessionPrompt.prompt({
           sessionID: session.id,

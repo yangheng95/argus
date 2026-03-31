@@ -1,6 +1,6 @@
 import z from "zod"
 import { Identifier } from "../id/id"
-import { MessageV2 } from "./message"
+import { Message } from "./message"
 import { Session } from "."
 import { Agent } from "../agent/agent"
 import { Provider } from "../provider/provider"
@@ -51,17 +51,17 @@ const STRUCTURED_OUTPUT_SYSTEM_PROMPT = `IMPORTANT: The user has requested struc
 export namespace SessionLoop {
   const { log, state, cancel, flushCallbacks, start, resume } = SessionPromptState
 
-  function collectLoopState(msgs: MessageV2.WithParts[]) {
-    let lastUser: MessageV2.User | undefined
-    let lastAssistant: MessageV2.Assistant | undefined
-    let lastFinished: MessageV2.Assistant | undefined
-    const tasks: (MessageV2.CompactionPart | MessageV2.SubtaskPart)[] = []
+  function collectLoopState(msgs: Message.WithParts[]) {
+    let lastUser: Message.User | undefined
+    let lastAssistant: Message.Assistant | undefined
+    let lastFinished: Message.Assistant | undefined
+    const tasks: (Message.CompactionPart | Message.SubtaskPart)[] = []
     for (let i = msgs.length - 1; i >= 0; i--) {
       const msg = msgs[i]
-      if (!lastUser && msg.info.role === "user") lastUser = msg.info as MessageV2.User
-      if (!lastAssistant && msg.info.role === "assistant") lastAssistant = msg.info as MessageV2.Assistant
+      if (!lastUser && msg.info.role === "user") lastUser = msg.info as Message.User
+      if (!lastAssistant && msg.info.role === "assistant") lastAssistant = msg.info as Message.Assistant
       if (!lastFinished && msg.info.role === "assistant" && msg.info.finish)
-        lastFinished = msg.info as MessageV2.Assistant
+        lastFinished = msg.info as Message.Assistant
       if (lastUser && lastFinished) break
       if (!lastFinished) {
         tasks.push(...msg.parts.filter((part) => part.type === "compaction" || part.type === "subtask"))
@@ -71,7 +71,7 @@ export namespace SessionLoop {
     return { lastUser, lastAssistant, lastFinished, tasks }
   }
 
-  function shouldEnterStandby(input: { lastUser: MessageV2.User; lastAssistant: MessageV2.Assistant | undefined }) {
+  function shouldEnterStandby(input: { lastUser: Message.User; lastAssistant: Message.Assistant | undefined }) {
     return !!(
       input.lastAssistant?.finish &&
       !["tool-calls", "unknown"].includes(input.lastAssistant.finish) &&
@@ -87,10 +87,10 @@ export namespace SessionLoop {
   }
 
   async function runSubtask(input: {
-    task: MessageV2.SubtaskPart
+    task: Message.SubtaskPart
     model: Provider.Model
-    lastUser: MessageV2.User
-    msgs: MessageV2.WithParts[]
+    lastUser: Message.User
+    msgs: Message.WithParts[]
     session: Session.Info
     sessionID: string
     abort: AbortSignal
@@ -123,7 +123,7 @@ export namespace SessionLoop {
       time: {
         created: Date.now(),
       },
-    })) as MessageV2.Assistant
+    })) as Message.Assistant
     const part = (await Session.updatePart({
       id: Identifier.ascending("part"),
       messageID: assistantMessage.id,
@@ -143,7 +143,7 @@ export namespace SessionLoop {
           start: Date.now(),
         },
       },
-    })) as MessageV2.ToolPart
+    })) as Message.ToolPart
     const args = {
       prompt: input.task.prompt,
       description: input.task.description,
@@ -177,7 +177,7 @@ export namespace SessionLoop {
             ...part.state,
             ...next,
           },
-        } satisfies MessageV2.ToolPart)
+        } satisfies Message.ToolPart)
       },
       async ask(req) {
         await PermissionNext.ask({
@@ -230,7 +230,7 @@ export namespace SessionLoop {
             end: Date.now(),
           },
         },
-      } satisfies MessageV2.ToolPart)
+      } satisfies Message.ToolPart)
     }
     if (!result) {
       await Session.updatePart({
@@ -245,11 +245,11 @@ export namespace SessionLoop {
           metadata: part.metadata,
           input: part.state.input,
         },
-      } satisfies MessageV2.ToolPart)
+      } satisfies Message.ToolPart)
     }
 
     if (input.task.command) {
-      const summaryUserMsg: MessageV2.User = {
+      const summaryUserMsg: Message.User = {
         id: Identifier.ascending("message"),
         sessionID: input.sessionID,
         role: "user",
@@ -267,7 +267,7 @@ export namespace SessionLoop {
         type: "text",
         text: "Summarize the task tool output above and continue with your task.",
         synthetic: true,
-      } satisfies MessageV2.TextPart)
+      } satisfies Message.TextPart)
     }
   }
 
@@ -275,9 +275,9 @@ export namespace SessionLoop {
     step: number
     sessionID: string
     session: Session.Info
-    msgs: MessageV2.WithParts[]
-    lastUser: MessageV2.User
-    lastFinished: MessageV2.Assistant | undefined
+    msgs: Message.WithParts[]
+    lastUser: Message.User
+    lastFinished: Message.Assistant | undefined
     model: Provider.Model
     abort: AbortSignal
   }) {
@@ -310,7 +310,7 @@ export namespace SessionLoop {
           created: Date.now(),
         },
         sessionID: input.sessionID,
-      })) as MessageV2.Assistant,
+      })) as Message.Assistant,
       sessionID: input.sessionID,
       model: input.model,
       abort: input.abort,
@@ -382,7 +382,7 @@ export namespace SessionLoop {
     })
     if (preferenceSection) system.push(preferenceSection)
     const memoryQuery = (lastUserMsg?.parts ?? [])
-      .filter((part): part is MessageV2.TextPart => part.type === "text" && textForBoth(part))
+      .filter((part): part is Message.TextPart => part.type === "text" && textForBoth(part))
       .map((part) => part.text)
       .join(" ")
       .trim()
@@ -398,7 +398,7 @@ export namespace SessionLoop {
     if (taskPlanSection) system.push(taskPlanSection)
 
     const modelMessages = [
-      ...MessageV2.toModelMessages(input.msgs, input.model),
+      ...Message.toModelMessages(input.msgs, input.model),
       ...(isLastStep
         ? [
             {
@@ -476,7 +476,7 @@ export namespace SessionLoop {
 
     const modelFinished = processor.message.finish && !["tool-calls", "unknown"].includes(processor.message.finish)
     if (modelFinished && !processor.message.error && format.type === "json_schema") {
-      processor.message.error = new MessageV2.StructuredOutputError({
+      processor.message.error = new Message.StructuredOutputError({
         message: "Model did not produce structured output",
         retries: 0,
       }).toObject()
@@ -505,12 +505,12 @@ export namespace SessionLoop {
 
     const abort = resume_existing ? resume(sessionID) : start(sessionID)
     if (!abort) {
-      return new Promise<MessageV2.WithParts>((resolve, reject) => {
+      return new Promise<Message.WithParts>((resolve, reject) => {
         state()[sessionID].callbacks.push({ resolve, reject })
       })
     }
 
-    const firstResult = new Promise<MessageV2.WithParts>((resolve, reject) => {
+    const firstResult = new Promise<Message.WithParts>((resolve, reject) => {
       state()[sessionID].callbacks.push({ resolve, reject })
     })
 
@@ -522,7 +522,7 @@ export namespace SessionLoop {
           SessionStatus.set(sessionID, { type: "busy" })
           log.info("loop", { step, sessionID })
           if (abort.aborted) break
-          const msgs = await MessageV2.filterCompacted(MessageV2.stream(sessionID))
+          const msgs = await Message.filterCompacted(Message.stream(sessionID))
           const { lastUser, lastAssistant, lastFinished, tasks } = collectLoopState(msgs)
           if (shouldEnterStandby({ lastUser, lastAssistant })) {
             if (!lastAssistant) break
@@ -608,7 +608,7 @@ export namespace SessionLoop {
           continue
         }
         SessionCompaction.prune({ sessionID })
-        for await (const item of MessageV2.stream(sessionID)) {
+        for await (const item of Message.stream(sessionID)) {
           if (item.info.role === "user") continue
           flushCallbacks(sessionID, item)
           break
@@ -643,7 +643,7 @@ export namespace SessionLoop {
         resolve()
       }
 
-      const unsub = Bus.subscribe(MessageV2.Event.Updated, (event) => {
+      const unsub = Bus.subscribe(Message.Event.Updated, (event) => {
         if (
           event.properties.info.role === "user" &&
           event.properties.info.sessionID === sessionID &&
@@ -655,7 +655,7 @@ export namespace SessionLoop {
       abort.addEventListener("abort", settle, { once: true })
 
       void (async () => {
-        for await (const item of MessageV2.stream(sessionID)) {
+        for await (const item of Message.stream(sessionID)) {
           if (item.info.id <= afterID) break
           if (item.info.role === "user") {
             settle()
@@ -674,7 +674,7 @@ export namespace SessionLoop {
     processor: SessionProcessor.Info
     bypassAgentCheck: boolean
     extra?: Record<string, unknown>
-    messages: MessageV2.WithParts[]
+    messages: Message.WithParts[]
   }) {
     using _ = log.time("resolveTools")
     const tools: Record<string, AITool> = {}
@@ -804,7 +804,7 @@ export namespace SessionLoop {
         )
 
         const textParts: string[] = []
-        const attachments: Omit<MessageV2.FilePart, "id" | "sessionID" | "messageID">[] = []
+        const attachments: Omit<Message.FilePart, "id" | "sessionID" | "messageID">[] = []
 
         for (const contentItem of result.content) {
           if (contentItem.type === "text") {
@@ -886,7 +886,7 @@ export namespace SessionLoop {
 
   async function ensureTitle(input: {
     session: Session.Info
-    history: MessageV2.WithParts[]
+    history: Message.WithParts[]
     providerID: string
     modelID: string
   }) {
@@ -902,7 +902,7 @@ export namespace SessionLoop {
     const contextMessages = input.history.slice(0, firstRealUserIdx + 1)
     const firstRealUser = contextMessages[firstRealUserIdx]
 
-    const subtaskParts = firstRealUser.parts.filter((p) => p.type === "subtask") as MessageV2.SubtaskPart[]
+    const subtaskParts = firstRealUser.parts.filter((p) => p.type === "subtask") as Message.SubtaskPart[]
     const hasOnlySubtaskParts = subtaskParts.length > 0 && firstRealUser.parts.every((p) => p.type === "subtask")
 
     const agent = await Agent.get("title")
@@ -915,7 +915,7 @@ export namespace SessionLoop {
     })
     const result = await LLM.stream({
       agent,
-      user: firstRealUser.info as MessageV2.User,
+      user: firstRealUser.info as Message.User,
       system: [],
       small: true,
       tools: {},
@@ -930,7 +930,7 @@ export namespace SessionLoop {
         },
         ...(hasOnlySubtaskParts
           ? [{ role: "user" as const, content: subtaskParts.map((p) => p.prompt).join("\n") }]
-          : MessageV2.toModelMessages(contextMessages, model)),
+          : Message.toModelMessages(contextMessages, model)),
       ],
     })
     const text = await result.text.catch((err) => log.error("failed to generate title", { error: err }))

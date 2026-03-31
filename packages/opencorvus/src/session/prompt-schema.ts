@@ -1,6 +1,6 @@
 import z from "zod"
 import { Identifier } from "../id/id"
-import { MessageV2 } from "./message"
+import { Message } from "./message"
 
 export const PromptInput = z.object({
   sessionID: Identifier.schema("session"),
@@ -19,13 +19,13 @@ export const PromptInput = z.object({
     .describe(
       "@deprecated tools and permissions have been merged, you can set permissions on the session itself now",
     ),
-  format: MessageV2.Format.optional(),
+  format: Message.Format.optional(),
   system: z.string().optional(),
   variant: z.string().optional(),
   extra: z.record(z.string(), z.any()).optional(),
   parts: z.array(
     z.discriminatedUnion("type", [
-      MessageV2.TextPart.omit({
+      Message.TextPart.omit({
         messageID: true,
         sessionID: true,
       })
@@ -35,7 +35,7 @@ export const PromptInput = z.object({
         .meta({
           ref: "TextPartInput",
         }),
-      MessageV2.FilePart.omit({
+      Message.FilePart.omit({
         messageID: true,
         sessionID: true,
       })
@@ -45,7 +45,7 @@ export const PromptInput = z.object({
         .meta({
           ref: "FilePartInput",
         }),
-      MessageV2.AgentPart.omit({
+      Message.AgentPart.omit({
         messageID: true,
         sessionID: true,
       })
@@ -55,7 +55,7 @@ export const PromptInput = z.object({
         .meta({
           ref: "AgentPartInput",
         }),
-      MessageV2.SubtaskPart.omit({
+      Message.SubtaskPart.omit({
         messageID: true,
         sessionID: true,
       })

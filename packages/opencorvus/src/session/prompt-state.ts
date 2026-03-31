@@ -1,6 +1,6 @@
 import { Instance } from "../project/instance"
 import { Log } from "../util/log"
-import { MessageV2 } from "./message"
+import { Message } from "./message"
 import { SessionStatus } from "./status"
 import { Session } from "."
 
@@ -17,7 +17,7 @@ export namespace SessionPromptState {
         {
           abort: AbortController
           callbacks: {
-            resolve(input: MessageV2.WithParts): void
+            resolve(input: Message.WithParts): void
             reject(reason?: any): void
           }[]
         }
@@ -69,7 +69,7 @@ export namespace SessionPromptState {
     return
   }
 
-  export function flushCallbacks(sessionID: string, result: MessageV2.WithParts) {
+  export function flushCallbacks(sessionID: string, result: Message.WithParts) {
     const s = state()[sessionID]
     if (!s) return
     for (const q of s.callbacks) q.resolve(result)

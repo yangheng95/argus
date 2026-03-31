@@ -2,7 +2,7 @@ import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
 import { tmpdir } from "../fixture/fixture"
 import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
-import { MessageV2 } from "../../src/session/message"
+import { Message } from "../../src/session/message"
 import { Identifier } from "../../src/id/id"
 import { PermissionNext } from "../../src/permission/next"
 import { TaskTool } from "../../src/tool/task"
@@ -22,7 +22,7 @@ describe("plan mode read-only enforcement", () => {
       directory: tmp.path,
       fn: async () => {
         const parent = await Session.create({ title: "parent" })
-        const user: MessageV2.User = {
+        const user: Message.User = {
           id: Identifier.ascending("message"),
           sessionID: parent.id,
           role: "user",
@@ -31,7 +31,7 @@ describe("plan mode read-only enforcement", () => {
           model: { providerID: "openai", modelID: "gpt-5.2" },
         }
         await Session.updateMessage(user)
-        const assistant: MessageV2.Assistant = {
+        const assistant: Message.Assistant = {
           id: Identifier.ascending("message"),
           sessionID: parent.id,
           role: "assistant",
@@ -65,7 +65,7 @@ describe("plan mode read-only enforcement", () => {
               providerID: "openai",
               time: { created: Date.now(), completed: Date.now() },
               finish: "stop",
-            } satisfies MessageV2.Assistant,
+            } satisfies Message.Assistant,
             parts: [
               {
                 id: Identifier.ascending("part"),
@@ -73,7 +73,7 @@ describe("plan mode read-only enforcement", () => {
                 messageID: input.messageID ?? Identifier.ascending("message"),
                 type: "text",
                 text: "exploration only",
-              } satisfies MessageV2.TextPart,
+              } satisfies Message.TextPart,
             ],
           }
         }, {

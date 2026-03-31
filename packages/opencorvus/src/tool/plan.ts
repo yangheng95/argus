@@ -4,7 +4,7 @@ import z from "zod"
 import { Tool } from "./tool"
 import { Question } from "../question"
 import { Session } from "../session"
-import { MessageV2 } from "../session/message"
+import { Message } from "../session/message"
 import { Identifier } from "../id/id"
 import { Provider } from "../provider/provider"
 import { Instance } from "../project/instance"
@@ -41,7 +41,7 @@ export const PlanExitTool = Tool.define("plan_exit", {
     if (answers[0]?.[0] === "No") throw new Question.RejectedError()
 
     const model = await lastModel(ctx.sessionID)
-    const userMsg: MessageV2.User = {
+    const userMsg: Message.User = {
       id: Identifier.ascending("message"),
       sessionID: ctx.sessionID,
       role: "user",
@@ -59,7 +59,7 @@ export const PlanExitTool = Tool.define("plan_exit", {
       synthetic: true,
       kind: "control",
       source: "system",
-    } satisfies MessageV2.TextPart)
+    } satisfies Message.TextPart)
 
     return {
       title: "Switching to build mode",
@@ -95,7 +95,7 @@ export const PlanEnterTool = Tool.define("plan_enter", {
 
     await fs.mkdir(path.dirname(plan), { recursive: true })
     const model = await lastModel(ctx.sessionID)
-    const userMsg: MessageV2.User = {
+    const userMsg: Message.User = {
       id: Identifier.ascending("message"),
       sessionID: ctx.sessionID,
       role: "user",
@@ -113,7 +113,7 @@ export const PlanEnterTool = Tool.define("plan_enter", {
       synthetic: true,
       kind: "control",
       source: "system",
-    } satisfies MessageV2.TextPart)
+    } satisfies Message.TextPart)
 
     return {
       title: "Switching to plan mode",

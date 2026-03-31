@@ -17,7 +17,7 @@ import { Installation } from "@/installation"
 import { PermissionNext } from "@/permission/next"
 import { Identifier } from "@/id/id"
 import { Log } from "@/util/log"
-import type { MessageV2 } from "@/session/message"
+import type { Message } from "@/session/message"
 import { MCP } from "@/mcp"
 import { Bus } from "@/bus"
 import path from "path"
@@ -401,7 +401,7 @@ async function executeLocal(
     agent: "executor-mcp",
     abort: AbortSignal.any([]),
     extra: {},
-    messages: [] as MessageV2.WithParts[],
+    messages: [] as Message.WithParts[],
     metadata(input) {
       if (input.title) title = input.title
       if (input.metadata) metadata = input.metadata

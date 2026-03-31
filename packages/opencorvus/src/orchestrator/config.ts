@@ -78,7 +78,7 @@ const DEFAULTS: OrchestratorConfigType = {
     timeout_ms: 300_000,
     quality_threshold: 0.6,
     max_attempts: 3,
-    skills: [],
+    skills: ["spec-research"],
   },
   goal: {
     max_steps: 30,

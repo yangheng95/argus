@@ -1,7 +1,7 @@
 import z from "zod"
 import { Identifier } from "../id/id"
 import { Snapshot } from "../snapshot"
-import { MessageV2 } from "./message"
+import { Message } from "./message"
 import { Session } from "."
 import { Log } from "../util/log"
 import { Database, eq } from "../storage/db"
@@ -24,14 +24,14 @@ export namespace SessionRevert {
   export async function revert(input: RevertInput) {
     SessionPrompt.assertNotBusy(input.sessionID)
     const all = await Session.messages({ sessionID: input.sessionID })
-    let lastUser: MessageV2.User | undefined
+    let lastUser: Message.User | undefined
     const session = await Session.get(input.sessionID)
 
     let revert: Session.Info["revert"]
     const patches: Snapshot.Patch[] = []
     for (const msg of all) {
       if (msg.info.role === "user") lastUser = msg.info
-      const remaining: MessageV2.Part[] = []
+      const remaining: Message.Part[] = []
       for (const part of msg.parts) {
         if (revert) {
           if (part.type === "patch") {
@@ -93,9 +93,9 @@ export namespace SessionRevert {
     const sessionID = session.id
     const msgs = await Session.messages({ sessionID })
     const messageID = session.revert.messageID
-    const preserve = [] as MessageV2.WithParts[]
-    const remove = [] as MessageV2.WithParts[]
-    let target: MessageV2.WithParts | undefined
+    const preserve = [] as Message.WithParts[]
+    const remove = [] as Message.WithParts[]
+    let target: Message.WithParts | undefined
     for (const msg of msgs) {
       if (msg.info.id < messageID) {
         preserve.push(msg)
@@ -114,7 +114,7 @@ export namespace SessionRevert {
     }
     for (const msg of remove) {
       Database.use((db) => db.delete(MessageTable).where(eq(MessageTable.id, msg.info.id)).run())
-      await Bus.publish(MessageV2.Event.Removed, { sessionID: sessionID, messageID: msg.info.id })
+      await Bus.publish(Message.Event.Removed, { sessionID: sessionID, messageID: msg.info.id })
     }
     if (session.revert.partID && target) {
       const partID = session.revert.partID
@@ -125,7 +125,7 @@ export namespace SessionRevert {
         target.parts = preserveParts
         for (const part of removeParts) {
           Database.use((db) => db.delete(PartTable).where(eq(PartTable.id, part.id)).run())
-          await Bus.publish(MessageV2.Event.PartRemoved, {
+          await Bus.publish(Message.Event.PartRemoved, {
             sessionID: sessionID,
             messageID: target.info.id,
             partID: part.id,

@@ -16,7 +16,7 @@ import { ProviderTransform } from "@/provider/transform"
 import { Config } from "@/config/config"
 import { Instance } from "@/project/instance"
 import type { Agent } from "@/agent/agent"
-import type { MessageV2 } from "./message"
+import type { Message } from "./message"
 import { Plugin } from "@/plugin"
 import { SystemPrompt } from "./system"
 import { Flag } from "@/flag/flag"
@@ -30,7 +30,7 @@ export namespace LLM {
   export const OUTPUT_TOKEN_MAX = ProviderTransform.OUTPUT_TOKEN_MAX
 
   export type StreamInput = {
-    user: MessageV2.User
+    user: Message.User
     sessionID: string
     model: Provider.Model
     agent: Agent.Info

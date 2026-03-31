@@ -1,6 +1,6 @@
 import z from "zod"
 import { Identifier } from "../id/id"
-import { MessageV2 } from "./message"
+import { Message } from "./message"
 import { Log } from "../util/log"
 import { Agent } from "../agent/agent"
 import { Provider } from "../provider/provider"
@@ -29,7 +29,7 @@ export const CommandInput = z.object({
   parts: z
     .array(
       z.discriminatedUnion("type", [
-        MessageV2.FilePart.omit({
+        Message.FilePart.omit({
           messageID: true,
           sessionID: true,
         }).partial({
@@ -50,7 +50,7 @@ const quoteTrimRegex = /^["']|["']$/g
 export async function command(
   input: CommandInput,
   deps: {
-    prompt: (input: PromptInput) => Promise<MessageV2.WithParts>
+    prompt: (input: PromptInput) => Promise<Message.WithParts>
   },
 ) {
   installRuntimeShims()
@@ -185,7 +185,7 @@ export async function command(
     agent: userAgent,
     parts,
     variant: input.variant,
-  })) as MessageV2.WithParts
+  })) as Message.WithParts
 
   Bus.publish(Command.Event.Executed, {
     name: input.command,

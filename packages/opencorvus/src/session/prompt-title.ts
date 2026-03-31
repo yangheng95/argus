@@ -1,7 +1,7 @@
 import { Session } from "."
 import { Agent } from "../agent/agent"
 import { Provider } from "../provider/provider"
-import { MessageV2 } from "./message"
+import { Message } from "./message"
 import { LLM } from "./llm"
 import { iife } from "@/util/iife"
 import { messageControlOnly } from "./part-visibility"
@@ -11,7 +11,7 @@ const log = Log.create({ service: "session.prompt" })
 
 export async function ensureTitle(input: {
   session: Session.Info
-  history: MessageV2.WithParts[]
+  history: Message.WithParts[]
   providerID: string
   modelID: string
 }) {
@@ -32,7 +32,7 @@ export async function ensureTitle(input: {
 
   // For subtask-only messages (from command invocations), extract the prompt directly
   // since toModelMessage converts subtask parts to generic "The following tool was executed by the user"
-  const subtaskParts = firstRealUser.parts.filter((p) => p.type === "subtask") as MessageV2.SubtaskPart[]
+  const subtaskParts = firstRealUser.parts.filter((p) => p.type === "subtask") as Message.SubtaskPart[]
   const hasOnlySubtaskParts = subtaskParts.length > 0 && firstRealUser.parts.every((p) => p.type === "subtask")
 
   const agent = await Agent.get("title")
@@ -45,7 +45,7 @@ export async function ensureTitle(input: {
   })
   const result = await LLM.stream({
     agent,
-    user: firstRealUser.info as MessageV2.User,
+    user: firstRealUser.info as Message.User,
     system: [],
     small: true,
     tools: {},
@@ -60,7 +60,7 @@ export async function ensureTitle(input: {
       },
       ...(hasOnlySubtaskParts
         ? [{ role: "user" as const, content: subtaskParts.map((p) => p.prompt).join("\n") }]
-        : MessageV2.toModelMessages(contextMessages, model)),
+        : Message.toModelMessages(contextMessages, model)),
     ],
   })
   const text = await result.text.catch((err) => log.error("failed to generate title", { error: err }))

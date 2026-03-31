@@ -132,7 +132,7 @@ const DIAG_TYPES = new Set([
   "orchestrator.plan.activated",
   "orchestrator.interaction.requested",
   "orchestrator.interaction.resolved",
-  // Executor events now flow through MessageV2 — tool calls and text arrive
+  // Executor events now flow through Message — tool calls and text arrive
   // as message.part.updated instead of run.progress/run.output.
   "orchestrator.message.part.updated",
   "orchestrator.message.updated",

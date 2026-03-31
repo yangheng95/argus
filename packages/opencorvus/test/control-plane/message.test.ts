@@ -2,7 +2,7 @@ import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
 import { ControlMessage } from "../../src/control"
 import { Instance } from "../../src/project/instance"
 import { SessionPrompt } from "../../src/session/prompt"
-import { MessageV2 } from "../../src/session/message"
+import { Message } from "../../src/session/message"
 import { Log } from "../../src/util/log"
 import { resetDatabase } from "../fixture/db"
 import { installControlModel } from "./mock-control-model"
@@ -90,7 +90,7 @@ describe("control.message", () => {
     installControlModel()
 
     spyOn(SessionPrompt, "prompt").mockResolvedValue({
-      info: MessageV2.Assistant.parse({
+      info: Message.Assistant.parse({
         id: "msg_error",
         sessionID: "ses_mock",
         role: "assistant",

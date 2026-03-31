@@ -2,7 +2,7 @@ import z from "zod"
 import { Agent } from "@/agent/agent"
 import { Provider } from "@/provider/provider"
 import { Session } from "@/session"
-import { MessageV2 } from "@/session/message"
+import { Message } from "@/session/message"
 import { SessionPrompt } from "@/session/prompt"
 import { Skill } from "@/skill"
 import { ToolRegistry } from "@/tool/registry"
@@ -84,7 +84,7 @@ async function run(input: z.infer<typeof ControlMessageInput>, onEvent?: StreamC
 
     if (onEvent) {
       unsubs.push(
-        Bus.subscribe(MessageV2.Event.PartUpdated, (event) => {
+        Bus.subscribe(Message.Event.PartUpdated, (event) => {
           const part = event.properties.part as Record<string, unknown>
           if (part.sessionID !== control?.info.id) return
           if (part.type === "tool") {
@@ -292,14 +292,14 @@ async function panelTools() {
   return Object.fromEntries(ids.map((id) => [id, id === "panel"]))
 }
 
-function textFromMessage(message: MessageV2.WithParts) {
+function textFromMessage(message: Message.WithParts) {
   return message.parts
     .filter((part): part is Extract<typeof part, { type: "text" }> => part.type === "text")
     .map((part) => part.text)
     .join("\n")
 }
 
-function assistantErrorText(message: MessageV2.WithParts) {
+function assistantErrorText(message: Message.WithParts) {
   if (message.info.role !== "assistant" || !message.info.error) return
   const source = `${message.info.providerID}/${message.info.modelID}`
   const error = message.info.error
@@ -310,7 +310,7 @@ function assistantErrorText(message: MessageV2.WithParts) {
   return `Provider error (${source}): ${error.name}`
 }
 
-function parseTextAsResult(rawText: string, message?: MessageV2.WithParts): z.infer<typeof ControlMessageResult> {
+function parseTextAsResult(rawText: string, message?: Message.WithParts): z.infer<typeof ControlMessageResult> {
   // Try to parse as JSON directly
   try {
     return ControlMessageResult.parse(JSON.parse(rawText))
@@ -390,7 +390,7 @@ function shouldRemoveSession(control?: ControlSession) {
   return !control.keep
 }
 
-async function appendSummary(sessionID: string, message: MessageV2.WithParts, text: string) {
+async function appendSummary(sessionID: string, message: Message.WithParts, text: string) {
   if (message.info.role !== "assistant") return
   const now = Date.now()
   const info = await Session.updateMessage({

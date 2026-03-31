@@ -25,7 +25,7 @@ import { Session } from "../../session"
 import { Identifier } from "../../id/id"
 import { Provider } from "../../provider/provider"
 import { Bus } from "../../bus"
-import { MessageV2 } from "../../session/message"
+import { Message } from "../../session/message"
 import { SessionPrompt } from "@/session/prompt"
 import { $ } from "bun"
 
@@ -164,7 +164,7 @@ export function parseGitHubRemote(url: string): { owner: string; repo: string } 
  * Returns null for non-text responses (signals summary needed).
  * Throws only for truly empty responses.
  */
-export function extractResponseText(parts: MessageV2.Part[]): string | null {
+export function extractResponseText(parts: Message.Part[]): string | null {
   const textPart = parts.findLast((p) => p.type === "text")
   if (textPart) return textPart.text
 
@@ -856,7 +856,7 @@ export const GithubRunCommand = cmd({
         }
 
         let text = ""
-        Bus.subscribe(MessageV2.Event.PartUpdated, async (evt) => {
+        Bus.subscribe(Message.Event.PartUpdated, async (evt) => {
           if (evt.properties.part.sessionID !== session.id) return
           //if (evt.properties.part.messageID === messageID) return
           const part = evt.properties.part
