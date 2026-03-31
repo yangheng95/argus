@@ -150,13 +150,22 @@ async function bridgeEvent<Definition extends typeof Message.Event[keyof typeof 
   if (!sessionID) return
   const taskID = taskIDForSession(sessionID)
   if (!taskID) {
-    log.debug("skipping message protocol bridge: task unresolved", {
+    log.info("skipping message protocol bridge: task unresolved", {
       type: def.type,
       sessionID,
     })
     return
   }
   const enriched = enrichProperties(properties, sessionID, taskID)
+  const meta = overlayMeta(sessionID, taskID, infoForEvent(properties))
+  log.info("bridge → protocol", {
+    type: def.type,
+    sessionID,
+    taskID,
+    resolvedRole: meta.resolvedRole,
+    channel: meta.channel,
+    msgID: (properties.info as any)?.id ?? (properties.part as any)?.messageID ?? "",
+  })
   await OrchestratorProtocol.emit(def as any, enriched as any, {
     taskID,
     sessionID,

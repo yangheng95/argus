@@ -44,6 +44,8 @@ export interface DeliveryConfig {
   max_steps: number
   timeout_ms: number
   max_retries: number
+  /** Max eval↔delivery loop iterations before falling back to retry/replan. */
+  max_eval_delivery_rounds: number
   skills: string[]
 }
 
@@ -103,6 +105,7 @@ const DEFAULTS: OrchestratorConfigType = {
     max_steps: 40,
     timeout_ms: 600_000,
     max_retries: 2,
+    max_eval_delivery_rounds: 3,
     skills: [],
   },
   max_runs: 10,
@@ -194,6 +197,7 @@ function merge(user?: Config.Info["orchestrator"]): OrchestratorConfigType {
       max_steps: user?.delivery?.max_steps ?? DEFAULTS.delivery.max_steps,
       timeout_ms: envInt("OPENCORVUS_DELIVERY_AGENT_TIMEOUT_MS") ?? user?.delivery?.timeout_ms ?? DEFAULTS.delivery.timeout_ms,
       max_retries: user?.delivery?.max_retries ?? DEFAULTS.delivery.max_retries,
+      max_eval_delivery_rounds: envInt("OPENCORVUS_MAX_EVAL_DELIVERY_ROUNDS") ?? (user?.delivery as any)?.max_eval_delivery_rounds ?? DEFAULTS.delivery.max_eval_delivery_rounds,
       skills: (user?.delivery as any)?.skills ?? DEFAULTS.delivery.skills,
     },
     max_runs: envInt("OPENCORVUS_MAX_RUNS") ?? user?.max_runs ?? DEFAULTS.max_runs,

@@ -4219,6 +4219,14 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
   max-width: var(--ui-dialog-diff-width) !important;
 }
 
+.diff-dialog-body {
+  overflow-y: auto;
+  max-height: calc(60vh * var(--ui-scale));
+  font-family: var(--mono);
+  font-size: var(--ui-font-small);
+  line-height: 1.5;
+}
+
 .session-dialog-body {
   overflow-y: auto;
   max-height: calc(70vh * var(--ui-scale));

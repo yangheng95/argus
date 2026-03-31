@@ -33,6 +33,7 @@ import {
   effectiveMaxExecutorGroups,
   orchestratorState,
 } from "./helpers"
+import { OrchestratorConfig } from "./config"
 import {
   createGoalRun,
   createReplanRun,
@@ -901,6 +902,10 @@ export namespace OrchestratorRuntime {
         log.error("goal delivery merge failed", { goalRunID: goalRun.id, error: err instanceof Error ? err.message : String(err) })
         updateGoalRun(goalRun.id, { status: "failed", error: `Merge failed: ${err instanceof Error ? err.message : String(err)}`, time_completed: Date.now() })
         Database.use((db) => db.update(OrchestratorGoalTable).set({ status: "failed", time_updated: Date.now() }).where(eq(OrchestratorGoalTable.id, goalRun.goal_id)).run())
+        const failedGoal = listGoalsByPlan(plan.id).find((g) => g.id === goalRun.goal_id)
+        if (failedGoal) {
+          OrchestratorProtocol.emit(Event.GoalFailed, { taskID: task.id, goalID: failedGoal.id, summary: `${failedGoal.description}: Merge failed` }, { source: "runtime.finalizeGoalRun" })
+        }
         await cleanupGoalWorkspace(goalRun.workspace_dir).catch(() => {})
         return
       }
@@ -918,6 +923,7 @@ export namespace OrchestratorRuntime {
           .where(eq(OrchestratorGoalTable.id, goal.id))
           .run(),
       )
+      OrchestratorProtocol.emit(Event.GoalPassed, { taskID: task.id, goalID: goal.id, summary: goal.description }, { source: "runtime.finalizeGoalRun" })
     }
 
     // 5. Cleanup worktree
@@ -1554,84 +1560,97 @@ async function publishAcceptedDelivery(task: TaskRow, run: RunRow, delivery: Del
   await hooks.updateRun(run, { phase: "deliver" }, "Publishing accepted delivery")
   await hooks.updateTask(task, { status: "delivering", blocking_reason: null, error: null }, "Publishing accepted delivery")
 
-  // --- Delivery verification: run the DeliveryAgent to verify runtime behavior ---
+  // --- Eval↔Delivery loop: delivery agent verifies & fixes, core eval re-checks ---
   const verifyGoals = run.plan_version_id ? listGoalsByPlan(run.plan_version_id) : []
   if (verifyGoals.length > 0) {
-    const deliveryLive = agentStream({ taskID: task.id, runID: run.id, stage: "delivery" })
-    // Create a child session so delivery verification output is persisted and streamed
-    const deliverySession = await Session.createNext({
-      parentID: task.session_id ?? undefined,
-      title: `Delivery: ${task.title}`,
-      directory: Instance.directory,
-    })
-    registerGoalRunSession(deliverySession.id, task.id)
-    const deliveryContentHooks = sessionStreamHooks({ sessionID: deliverySession.id, taskID: task.id, stage: "delivery" })
-    const deliveryStream = mergeTextHooks(deliveryContentHooks, deliveryLive.hooks)
-    await deliveryLive.start("Delivery verification started")
-    let deliveryVerdict: DeliveryVerdictType | undefined
-    try {
-      const analysisArtifact = Database.use((db) =>
-        db.select().from(OrchestratorArtifactTable)
-          .where(and(eq(OrchestratorArtifactTable.run_id, run.id), eq(OrchestratorArtifactTable.label, "evaluator-agent-analysis")))
-          .limit(1).get(),
-      )
-      const analysis = analysisArtifact?.payload as EvaluatorAnalysisType | undefined
-      const deliveryResult = delivery.result ?? {}
-      const changedFiles = Array.isArray(deliveryResult.changed_files)
-        ? (deliveryResult.changed_files as unknown[]).filter((f): f is string => typeof f === "string")
-        : Array.isArray(deliveryResult.diffs)
-          ? (deliveryResult.diffs as Array<{ file?: string }>).map(d => d.file).filter(Boolean) as string[]
-          : []
-      deliveryVerdict = await Promise.race([
-        DeliveryService.verify({
-          task: { title: task.title, request: task.request, sessionID: task.session_id ?? undefined, metadata: task.metadata ?? undefined },
-          goals: verifyGoals.map(g => ({
-            description: g.description,
-            criteria: g.criteria,
-            priority: g.priority as "blocking" | "advisory",
-            check_selector: selectorList(g.metadata) as string[],
-          })),
-          delivery: {
-            summary: delivery.summary,
-            changedFiles,
-            diffs: Array.isArray(deliveryResult.diffs) ? deliveryResult.diffs : [],
-          },
-          checkResults,
-          analysis,
-          stream: deliveryStream,
-        }),
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error("delivery verification timeout")), DELIVERY_VERIFY_TIMEOUT_MS),
-        ),
-      ])
-      await deliveryContentHooks.flush()
-      await deliveryLive.finish(`Delivery verification: ${deliveryVerdict.verdict}`)
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
-      log.error("delivery verification failed", { runID: run.id, error: msg })
-      await deliveryContentHooks.flush().catch(() => undefined)
-      deliveryLive.error(err)
-      await handleEvaluationFailure(requireTask(task.id), run, `Delivery verification failed: ${msg}`, hooks, {
-        verdict: "rejected",
-        classification: "evaluation",
-        summary: `Delivery verification failed: ${msg}`,
-        goal_statuses: verifyGoals.map((_, i) => ({
-          goal_index: i,
-          status: "failed" as const,
-          evidence: msg,
-          reasoning: `Delivery agent error: ${msg}`,
-        })),
-        replan_guidance: {
-          root_cause: msg,
-          what_failed: "Delivery agent",
-          suggested_strategy: `Fix the delivery agent error: ${msg}`,
-          avoid_approaches: [],
-        },
+    const deliveryCfg = await OrchestratorConfig.get()
+    const maxRounds = deliveryCfg.delivery.max_eval_delivery_rounds
+    let currentCheckResults = checkResults
+    let lastVerdict: DeliveryVerdictType | undefined
+    let loopAccepted = false
+
+    const analysisArtifact = Database.use((db) =>
+      db.select().from(OrchestratorArtifactTable)
+        .where(and(eq(OrchestratorArtifactTable.run_id, run.id), eq(OrchestratorArtifactTable.label, "evaluator-agent-analysis")))
+        .limit(1).get(),
+    )
+    const analysis = analysisArtifact?.payload as EvaluatorAnalysisType | undefined
+
+    for (let round = 0; round < maxRounds; round++) {
+      log.info("eval-delivery loop round", { runID: run.id, round: round + 1, maxRounds })
+
+      // --- Delivery agent round ---
+      const deliveryLive = agentStream({ taskID: task.id, runID: run.id, stage: "delivery" })
+      const deliverySession = await Session.createNext({
+        parentID: task.session_id ?? undefined,
+        title: round === 0 ? `Delivery: ${task.title}` : `Delivery fix round ${round + 1}: ${task.title}`,
+        directory: Instance.directory,
       })
-      return
-    }
-    // Persist verdict as artifact
-    if (deliveryVerdict) {
+      registerGoalRunSession(deliverySession.id, task.id)
+      const deliveryContentHooks = sessionStreamHooks({ sessionID: deliverySession.id, taskID: task.id, stage: "delivery" })
+      const deliveryStream = mergeTextHooks(deliveryContentHooks, deliveryLive.hooks)
+      await deliveryLive.start(round === 0 ? "Delivery verification started" : `Delivery fix round ${round + 1} started`)
+
+      let roundVerdict: DeliveryVerdictType | undefined
+      try {
+        const deliveryResult = delivery.result ?? {}
+        const changedFiles = Array.isArray(deliveryResult.changed_files)
+          ? (deliveryResult.changed_files as unknown[]).filter((f): f is string => typeof f === "string")
+          : Array.isArray(deliveryResult.diffs)
+            ? (deliveryResult.diffs as Array<{ file?: string }>).map(d => d.file).filter(Boolean) as string[]
+            : []
+        roundVerdict = await Promise.race([
+          DeliveryService.verify({
+            task: { title: task.title, request: task.request, sessionID: task.session_id ?? undefined, metadata: task.metadata ?? undefined },
+            goals: verifyGoals.map(g => ({
+              description: g.description,
+              criteria: g.criteria,
+              priority: g.priority as "blocking" | "advisory",
+              check_selector: selectorList(g.metadata) as string[],
+            })),
+            delivery: {
+              summary: delivery.summary,
+              changedFiles,
+              diffs: Array.isArray(deliveryResult.diffs) ? deliveryResult.diffs : [],
+            },
+            checkResults: currentCheckResults,
+            analysis,
+            stream: deliveryStream,
+          }),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error("delivery verification timeout")), DELIVERY_VERIFY_TIMEOUT_MS),
+          ),
+        ])
+        await deliveryContentHooks.flush()
+        await deliveryLive.finish(`Delivery round ${round + 1}: ${roundVerdict.verdict}`)
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        log.error("delivery verification failed", { runID: run.id, round: round + 1, error: msg })
+        await deliveryContentHooks.flush().catch(() => undefined)
+        deliveryLive.error(err)
+        await handleEvaluationFailure(requireTask(task.id), run, `Delivery verification failed: ${msg}`, hooks, {
+          verdict: "rejected",
+          classification: "evaluation",
+          summary: `Delivery verification failed: ${msg}`,
+          goal_statuses: verifyGoals.map((_, i) => ({
+            goal_index: i,
+            status: "failed" as const,
+            evidence: msg,
+            reasoning: `Delivery agent error: ${msg}`,
+          })),
+          replan_guidance: {
+            root_cause: msg,
+            what_failed: "Delivery agent",
+            suggested_strategy: `Fix the delivery agent error: ${msg}`,
+            avoid_approaches: [],
+          },
+        })
+        return
+      }
+
+      lastVerdict = roundVerdict
+
+      // Persist verdict artifact for this round
       try {
         Database.use((db) =>
           db.insert(OrchestratorArtifactTable).values({
@@ -1640,18 +1659,120 @@ async function publishAcceptedDelivery(task: TaskRow, run: RunRow, delivery: Del
             run_id: run.id,
             delivery_id: delivery.id,
             kind: "report",
-            label: "delivery-agent-verdict",
-            payload: deliveryVerdict as unknown as Record<string, unknown>,
+            label: round === 0 ? "delivery-agent-verdict" : `delivery-agent-verdict-round-${round + 1}`,
+            payload: roundVerdict as unknown as Record<string, unknown>,
             time_created: Date.now(),
             time_updated: Date.now(),
           }).run(),
         )
       } catch { /* non-critical */ }
+
+      const hasFixes = roundVerdict.fixes_applied && roundVerdict.fixes_applied.length > 0
+
+      // Accepted with no fixes → trust the verdict, done
+      if (roundVerdict.verdict === "accepted" && !hasFixes) {
+        log.info("delivery accepted (no fixes)", { runID: run.id, round: round + 1 })
+        loopAccepted = true
+        break
+      }
+
+      // Rejected with no fixes → delivery agent can't fix, break to retry/replan
+      if (roundVerdict.verdict === "rejected" && !hasFixes) {
+        log.info("delivery rejected (no fixes applied)", { runID: run.id, round: round + 1, issues: roundVerdict.issues_found })
+        break
+      }
+
+      // Delivery agent made fixes → re-run core eval to verify
+      log.info("delivery agent applied fixes, re-evaluating", {
+        runID: run.id,
+        round: round + 1,
+        fixCount: roundVerdict.fixes_applied!.length,
+        fixes: roundVerdict.fixes_applied!.map(f => f.file),
+      })
+
+      const reEvalDeliveryResult = delivery.result as { diffs?: Array<{ file: string; [k: string]: unknown }>; changed_files?: string[] } | null
+      const reEvalDiffs = Array.isArray(reEvalDeliveryResult?.diffs) ? reEvalDeliveryResult!.diffs : []
+      const reEvalChangedFiles = reEvalDiffs.map(d => d.file)
+
+      let reEvalResult: Awaited<ReturnType<typeof EvaluatorService.evaluate>>
+      try {
+        // Core checks run against the current filesystem state (which includes delivery agent's fixes)
+        reEvalResult = await Promise.race([
+          EvaluatorService.evaluate(
+            {
+              taskID: task.id,
+              activeSpecVersionID: task.active_spec_version_id ?? undefined,
+              request: task.request,
+              metadata: {
+                ...(task.metadata ?? {}),
+                delivery_changed_files: reEvalChangedFiles,
+              },
+            },
+            {
+              summary: delivery.summary,
+              diffs: reEvalDiffs as any,
+              changedFiles: reEvalChangedFiles,
+            },
+            "core",
+          ),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error("re-evaluation hard timeout")), EVALUATION_HARD_TIMEOUT_MS),
+          ),
+        ])
+      } catch (evalErr) {
+        const msg = evalErr instanceof Error ? evalErr.message : String(evalErr)
+        log.error("re-evaluation failed after delivery fixes", { runID: run.id, round: round + 1, error: msg })
+        reEvalResult = { status: "failed" as const, verdict: "rejected" as const, summary: `Re-eval error: ${msg}`, checks: [], artifacts: [] }
+      }
+
+      const reEvalSummary = `Re-eval round ${round + 1}: ${reEvalResult.checks.map((c) => `${c.name}:${c.status}`).join(", ") || "none"}`
+      log.info("re-evaluation result", { runID: run.id, round: round + 1, status: reEvalResult.status, summary: reEvalSummary })
+
+      // Persist re-evaluation
+      const reEvalID = Identifier.ascending("evaluation")
+      const goals = run.plan_version_id ? listGoalsByPlan(run.plan_version_id) : []
+      persistEvaluation({
+        task: requireTask(task.id), run, deliveryID: delivery.id, evaluationID: reEvalID,
+        delivery: { summary: delivery.summary, diffs: reEvalDiffs },
+        result: reEvalResult,
+        analysis: {
+          verdict: reEvalResult.status === "failed" ? "rejected" : "accepted",
+          classification: "transient", summary: reEvalSummary,
+          goal_statuses: goals.map((g, i) => ({
+            goal_index: i, status: (reEvalResult.status === "failed" ? "failed" : "passed") as "passed" | "failed",
+            evidence: reEvalSummary, reasoning: reEvalResult.summary,
+          })),
+          replan_guidance: null,
+        },
+        finalVerdict: reEvalResult.status === "failed" ? "rejected" : "accepted",
+        finalStatus: reEvalResult.status === "failed" ? "failed" : "passed",
+        finalSummary: reEvalSummary, goals,
+      })
+
+      if (reEvalResult.status !== "failed") {
+        // Core checks pass after fixes → accept
+        log.info("core checks passed after delivery fixes", { runID: run.id, round: round + 1 })
+        loopAccepted = true
+        break
+      }
+
+      // Core checks still fail → update check results for next delivery round
+      currentCheckResults = reEvalResult.checks.map(c => ({
+        name: c.name,
+        status: c.status,
+        evidence: typeof c.evidence === "string" ? c.evidence : undefined,
+      }))
+      log.info("core checks still failing, continuing eval-delivery loop", {
+        runID: run.id,
+        round: round + 1,
+        failedChecks: currentCheckResults.filter(c => c.status === "failed").map(c => c.name),
+      })
     }
-    // If rejected, route to retry/replan instead of publishing
-    if (deliveryVerdict?.verdict === "rejected") {
-      log.info("delivery verification rejected", { runID: run.id, issues: deliveryVerdict.issues_found })
-      const rejectionSummary = `Delivery verification rejected: ${deliveryVerdict.summary}`
+
+    // --- Loop finished: decide outcome ---
+    if (!loopAccepted && lastVerdict) {
+      log.info("eval-delivery loop exhausted without acceptance", { runID: run.id, rounds: maxRounds, verdict: lastVerdict.verdict })
+      const rejectionSummary = `Delivery verification rejected after ${maxRounds} eval-delivery round(s): ${lastVerdict.summary}`
       const rejectionAnalysis: EvaluatorAnalysisType = {
         verdict: "rejected",
         classification: "evaluation",
@@ -1659,17 +1780,22 @@ async function publishAcceptedDelivery(task: TaskRow, run: RunRow, delivery: Del
         goal_statuses: verifyGoals.map((_, i) => ({
           goal_index: i,
           status: "failed" as const,
-          evidence: deliveryVerdict!.issues_found.join("; "),
+          evidence: lastVerdict!.issues_found.join("; "),
           reasoning: rejectionSummary,
         })),
         replan_guidance: {
-          root_cause: deliveryVerdict.issues_found.join("; "),
-          what_failed: deliveryVerdict.startup_verification.success ? "Runtime behavior" : "Application startup",
-          suggested_strategy: `Fix the runtime issues: ${deliveryVerdict.issues_found.join("; ")}`,
+          root_cause: lastVerdict.issues_found.join("; "),
+          what_failed: lastVerdict.startup_verification.success ? "Runtime behavior" : "Application startup",
+          suggested_strategy: `Fix the runtime issues: ${lastVerdict.issues_found.join("; ")}`,
           avoid_approaches: [],
         },
       }
       await handleEvaluationFailure(requireTask(task.id), run, rejectionSummary, hooks, rejectionAnalysis)
+      return
+    }
+    if (!loopAccepted && !lastVerdict) {
+      // Should not happen, but guard against it
+      await handleEvaluationFailure(requireTask(task.id), run, "Delivery loop produced no verdict", hooks)
       return
     }
   }

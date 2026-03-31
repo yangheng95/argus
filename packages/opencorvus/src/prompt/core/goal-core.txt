@@ -77,13 +77,15 @@ Output using section tags:
 
 ## Parallel Execution & Isolation
 
-Goals may be executed **in parallel, each in an isolated git worktree**. This means:
+Goals are executed **in parallel, each in an isolated git worktree**. Maximize parallelism:
 
-- **File ownership must be disjoint**: Two goals that might execute simultaneously MUST NOT write to the same file. If two goals both need to modify `src/index.ts`, one must depend on the other.
-- **Shared code goes into a bootstrap goal**: Types, interfaces, config schemas, database migrations, and any code needed by multiple goals MUST be in an early bootstrap/infrastructure goal that others depend on. This goal runs first and its output is available to all downstream goals.
-- **Dependencies encode execution order**: If Goal B reads files produced by Goal A, Goal B MUST list Goal A in `depends_on_goal_ids`. This ensures Goal A completes before Goal B starts.
+- **Parallel-first design**: The default state is that goals have NO dependencies and run simultaneously. Only add `depends_on_goal_ids` when there is a genuine data dependency (one goal MUST read output produced by another). Do NOT add dependencies just because goals touch the same domain — if their interfaces are well-defined, they can run in parallel.
+- **File ownership must be disjoint**: Two concurrent goals MUST NOT write to the same file. If two goals both need to modify `src/index.ts`, one must depend on the other OR a final integration goal should wire them together.
+- **Shared code goes into a bootstrap goal**: Types, interfaces, config schemas, database migrations, and any code needed by multiple goals MUST be in an early bootstrap/infrastructure goal that others depend on. This goal runs first and its output is available to all downstream goals. Keep bootstrap goals minimal — only truly shared definitions.
+- **Dependencies encode data flow, not domain proximity**: If Goal B reads files produced by Goal A, Goal B MUST list Goal A in `depends_on_goal_ids`. But if Goal A and Goal B work on independent modules that will be integrated later, they SHOULD NOT depend on each other — use an integration goal instead.
 - **Minimize cross-goal coupling**: Design goals so each one produces a self-contained module. Avoid designs where many goals modify a single shared entry point file — instead, use a final integration goal that wires modules together.
 - **Owned paths = exclusive write access**: During execution, each goal can ONLY write to its `owned_paths`. If you assign `src/db.ts` to Goal A, no other concurrent goal may modify it.
+- **Anti-pattern: serial chain**: If your goals form a strict linear chain (A→B→C→D→E), your decomposition has failed. A well-decomposed plan should have most feature goals at the same dependency depth, branching from a shared bootstrap.
 
 ## Rules
 
@@ -106,3 +108,4 @@ Before outputting, verify each of these. If ANY answer is NO, use more tools:
 4. Does each goal have a concrete, verifiable done_definition?
 5. Are goals independently executable (respecting declared dependencies)?
 6. Could a planner create implementation steps from these goals WITHOUT further exploration?
+7. **Parallelism check**: Can at least 50% of feature goals run in parallel (depth ≤ 2 from root)? If most goals form a linear chain, redesign the decomposition.
