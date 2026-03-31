@@ -9,6 +9,7 @@ import { t } from "./i18n";
 export type AgentRole =
   | "user"
   | "assistant"
+  | "orchestrator"
   | "spec"
   | "planner"
   | "goal"
@@ -18,7 +19,7 @@ export type AgentRole =
   | "system";
 
 /** Stages that get their own collapsible AgentCard in the conversation view. */
-export const AGENT_CARD_STAGES = new Set<AgentRole>(["spec", "planner", "goal", "executor", "evaluator", "delivery"]);
+export const AGENT_CARD_STAGES = new Set<AgentRole>(["orchestrator", "spec", "planner", "goal", "executor", "evaluator", "delivery"]);
 
 /**
  * Map any backend agent name to a canonical AgentRole.
@@ -28,6 +29,7 @@ export function normalizeAgentRole(name: string): AgentRole {
   const text = String(name || "").trim().toLowerCase();
   if (!text) return "assistant";
   if (text === "user") return "user";
+  if (text === "orchestrator" || text === "task_agent") return "orchestrator";
   if (text === "spec") return "spec";
   if (text === "planner" || text === "plan" || text === "planning" || text === "replan") return "planner";
   if (text === "goal" || text === "goal_gate") return "goal";

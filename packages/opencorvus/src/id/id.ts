@@ -26,7 +26,6 @@ export namespace Identifier {
     evaluation: "evl",
     binding: "bnd",
     progress: "prg",
-    preference: "prf",
     note: "nte",
     brief: "brf",
     milestone: "mst",

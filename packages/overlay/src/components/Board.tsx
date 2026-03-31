@@ -160,7 +160,7 @@ export function PlanPanel(props: PlanPanelProps) {
       </Show>
       <Show when={!isPreview()}>
         <Show when={hasPlan() && props.plan?.summary}>
-          <div class="plan-summary md-content" style="margin-bottom: 8px; font-size: 12px; opacity: 0.8;" innerHTML={renderMarkdown(props.plan.summary)} />
+          <div class="plan-summary md-content" innerHTML={renderMarkdown(props.plan.summary)} />
         </Show>
         <Show
           when={displayGoals().length > 0}

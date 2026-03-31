@@ -14,7 +14,7 @@ let initialized = false
 
 /** Canonical display roles for the overlay UI. */
 type OverlayRole =
-  | "user" | "assistant" | "spec" | "planner" | "goal"
+  | "user" | "assistant" | "orchestrator" | "spec" | "planner" | "goal"
   | "executor" | "evaluator" | "delivery" | "system"
 
 /** Map raw agent name → canonical overlay role. Single source of truth. */
@@ -22,6 +22,7 @@ function resolveRole(agent: string): OverlayRole {
   const a = (agent || "").trim().toLowerCase()
   if (!a) return "assistant"
   if (a === "user") return "user"
+  if (a === "orchestrator" || a === "task_agent") return "orchestrator"
   if (a === "spec") return "spec"
   if (a === "planner" || a === "plan" || a === "planning" || a === "replan") return "planner"
   if (a === "goal" || a === "goal_gate") return "goal"
@@ -33,7 +34,7 @@ function resolveRole(agent: string): OverlayRole {
 }
 
 /** Stages that get their own AgentCard in the overlay. */
-const CARD_STAGES = new Set<OverlayRole>(["spec", "planner", "goal", "executor", "evaluator", "delivery"])
+const CARD_STAGES = new Set<OverlayRole>(["orchestrator", "spec", "planner", "goal", "executor", "evaluator", "delivery"])
 
 /**
  * Compute overlay metadata for a message event.

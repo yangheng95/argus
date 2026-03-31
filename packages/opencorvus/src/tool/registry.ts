@@ -29,7 +29,6 @@ import { Truncate } from "./truncation"
 import { AnalyticsTool } from "./analytics"
 import { ApplyPatchTool } from "./apply_patch"
 import { MemoryTool } from "./memory"
-import { PreferenceTool } from "./preference"
 import { ScheduleTool } from "./schedule"
 import { PlannerTool } from "./planner"
 import { PanelTool } from "./panel"
@@ -135,7 +134,6 @@ export namespace ToolRegistry {
       SkillTool,
       ApplyPatchTool,
       MemoryTool,
-      PreferenceTool,
       ScheduleTool,
       PlannerTool,
       PanelTool,

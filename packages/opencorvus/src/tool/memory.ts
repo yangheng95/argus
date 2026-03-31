@@ -7,7 +7,7 @@ const MemoryKinds = ["note", "episode", "fact", "lesson", "profile"] as const
 
 const DESCRIPTION = `Scoped memory store for project knowledge.
 
-**Mandatory recall**: Before answering about prior work, decisions, dates, preferences, or project history, ALWAYS recall memory and preferences first.
+**Mandatory recall**: Before answering about prior work, decisions, dates, or project history, ALWAYS recall memory first.
 
 **Proactive writing**: Write memory whenever you discover useful knowledge — do not wait until task end. Write test commands, build steps, deployment procedures, environment configs, non-obvious gotchas, root causes, effective patterns, task summaries, historical decisions, inspirations, and ideas.
 

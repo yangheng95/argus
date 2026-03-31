@@ -239,8 +239,8 @@ export async function scaffoldProjectConfig(dir: string): Promise<void> {
 
 /**
  * Reset and then reload project-scope data (tasks, meta, extensions, config,
- * executors, preferences). Delegates to the during the Solid
- * migration; direct port available for post-migration use.
+ * executors). Delegates to the during the Solid migration; direct
+ * port available for post-migration use.
  */
 export async function reloadProjectScope(options: { restoreWorkspace?: boolean } = {}): Promise<void> {
  // Mirrors loadInitialData's parallel reload — must load all project-scope
@@ -248,14 +248,12 @@ export async function reloadProjectScope(options: { restoreWorkspace?: boolean }
   const { loadConfigInfo } = await import("./init");
   const { loadExtensions } = await import("./extensions");
   const { loadMeta } = await import("./meta");
-  const { loadPreferences } = await import("./memory");
   const { loadTasks } = await import("../store/board");
   const { loadExecutors } = await import("./executor");
   await Promise.all([
     loadConfigInfo().catch((e: unknown) => console.error("[reloadProjectScope] loadConfigInfo", e)),
     loadExtensions().catch((e: unknown) => console.error("[reloadProjectScope] loadExtensions", e)),
     loadMeta().catch((e: unknown) => console.error("[reloadProjectScope] loadMeta", e)),
-    loadPreferences().catch((e: unknown) => console.error("[reloadProjectScope] loadPreferences", e)),
     loadTasks().catch((e: unknown) => console.error("[reloadProjectScope] loadTasks", e)),
     loadExecutors().catch((e: unknown) => console.error("[reloadProjectScope] loadExecutors", e)),
   ]);

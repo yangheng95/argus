@@ -9,7 +9,6 @@ import { tool } from "ai"
 import z from "zod"
 import { createCodebaseTools } from "@/orchestrator/codebase-tools"
 import { Memory } from "@/memory"
-import { Preference } from "@/preference"
 import { Instance } from "@/project/instance"
 import { Shell } from "@/shell/shell"
 import { Filesystem } from "@/util/filesystem"
@@ -24,7 +23,6 @@ const log = Log.create({ service: "delivery-tools" })
  * - 4 codebase tools: read_file, find_files, search_code, list_directory
  * - 2 write tools: write_file, edit_file (for fixing issues)
  * - 2 memory tools: memory_search, memory_write
- * - 1 preference tool: preference_list
  * - 1 execution tool: run_command (for builds, startup checks)
  */
 export function createDeliveryTools(input?: { sessionID?: string }) {
@@ -136,25 +134,6 @@ export function createDeliveryTools(input?: { sessionID?: string }) {
         } catch (err) {
           log.warn("memory write failed in delivery agent", { title, err })
           return "Memory write failed."
-        }
-      },
-    }),
-
-    preference_list: tool({
-      description:
-        "List active project preferences and conventions. " +
-        "Use when checking if fixes follow project standards.",
-      inputSchema: z.object({
-        scope: z.enum(["all", "global"]).optional().describe("Which scope to list (default: all)"),
-      }),
-      execute: async () => {
-        try {
-          const prefs = Preference.merged({ projectID: projectId })
-          if (prefs.length === 0) return "No preferences configured."
-          return prefs.map((p) => `- **${p.key}**: ${p.value} [source: ${p.source}]`).join("\n")
-        } catch (err) {
-          log.warn("preference list failed in delivery agent", { err })
-          return "Preferences unavailable."
         }
       },
     }),

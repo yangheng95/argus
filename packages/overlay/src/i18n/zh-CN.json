@@ -363,18 +363,9 @@
   "plan.context.title": "**Plan v{{version}}**",
   "plan.context.warnings": "**注意事项**",
   "plan.version": "v{{version}}",
-  "preference.add": "添加偏好",
-  "preference.add_title": "新增一条偏好配置。",
-  "preference.delete_button_title": "删除该条偏好。",
-  "preference.edit": "编辑偏好",
-  "preference.key": "键 <em>*</em>",
-  "preference.none": "暂无偏好配置",
-  "preference.scope.cwd": "当前目录",
-  "preference.scope.global": "全局",
-  "preference.scope.session": "任务上下文",
-  "preference.title": "偏好设置",
-  "preference.value": "值 <em>*</em>",
-  "preference.refresh_title": "从服务端重新拉取偏好列表。",
+  "memory.scope.cwd": "当前目录",
+  "memory.scope.global": "全局",
+  "memory.scope.session": "任务上下文",
   "section.delivery": "交付",
   "section.budget": "任务预算",
   "section.files": "文件变更",
@@ -517,9 +508,6 @@
     "status": {
       "connecting": "连接中"
     }
-  },
-  "preference": {
-    "save_failed": "偏好保存失败"
   },
   "prompt": {
     "reset_done": "已重置"

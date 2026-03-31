@@ -1,11 +1,10 @@
-// ── Memory & Preferences Service ──
-// TypeScript port of knowledge/memory and preference functions
+// ── Memory Service ──
+// TypeScript port of knowledge/memory functions:
 // loadMemory, searchMemory, deleteMemory, clearWorkspaceMemory,
-// openMemoryDetail,
-// loadPreferences, deletePreference, openPrefEdit, savePrefEdit.
-// DOM-rendering functions (renderMemory, renderPreferences) are intentionally
+// openMemoryDetail.
+// DOM-rendering functions (renderMemory) are intentionally
 // NOT ported here — they are superseded by declarative Solid.js components
-// (MemoryPanel.tsx, PreferencesPanel.tsx).
+// (MemoryPanel.tsx).
 
 import { appStore, setAppStore } from "../store/app";
 import { boardStore } from "../store/board";
@@ -133,67 +132,3 @@ export async function fetchMemoryDetail(fileId: string): Promise<{
   }
 }
 
-// ── Preferences ──
-
-/**
- * Loads preferences from the server and updates the app store.
- * Mirrors loadPreferences.
- */
-export async function loadPreferences(): Promise<void> {
-  try {
-    const prefs = await apiJson("panel/knowledge/preference");
-    setAppStore("preferences", Array.isArray(prefs) ? prefs : []);
-  } catch (e) {
-    AppLog.debug("preferences", "loadPreferences failed, resetting to empty", {
-      error: String(e),
-    });
-    setAppStore("preferences", []);
-  }
-}
-
-/**
- * Deletes a preference by ID via the API, then reloads the preferences list.
- * Mirrors deletePreference.
- */
-export async function deletePreference(prefId: string): Promise<void> {
-  if (!prefId) return;
-  try {
-    await apiJson(
-      `panel/knowledge/preference/${encodeURIComponent(prefId)}`,
-      { method: "DELETE" },
-    );
-    await loadPreferences();
-  } catch (e) {
-    AppLog.error("ui", "Failed to delete preference", { error: String(e) });
-  }
-}
-
-/**
- * Saves a preference (create or update) via the API, then reloads the list.
- * NOTE: The original savePrefEdit.
- * This function accepts the values as parameters so callers can drive it from
- * Solid.js reactive form state.
- * Mirrors savePrefEdit.
- */
-export async function savePrefEdit(
-  key: string,
-  value: string,
-  prefId?: string,
-): Promise<void> {
-  if (!key || !value) return;
-  try {
-    await apiJson(
-      prefId
-        ? `panel/knowledge/preference/${encodeURIComponent(prefId)}`
-        : "panel/knowledge/preference",
-      {
-        method: prefId ? "PATCH" : "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ key, value }),
-      },
-    );
-    await loadPreferences();
-  } catch (e) {
-    AppLog.error("ui", "Failed to save preference", { error: String(e) });
-  }
-}

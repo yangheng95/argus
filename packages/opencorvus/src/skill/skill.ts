@@ -17,6 +17,8 @@ import { Glob } from "../util/glob"
 import { channelBundles } from "./builtin/channel"
 import panelMd from "./builtin/panel.md" with { type: "text" }
 import specResearchMd from "./builtin/spec-research.md" with { type: "text" }
+import deliveryVerifyWebMd from "./builtin/delivery-verify-web.md" with { type: "text" }
+import deliveryVerifyApiMd from "./builtin/delivery-verify-api.md" with { type: "text" }
 
 export namespace Skill {
   const log = Log.create({ service: "skill" })
@@ -30,6 +32,15 @@ export namespace Skill {
     builtin: z.boolean().optional().default(false),
     location: z.string(),
     content: z.string(),
+    /** Which pipeline stage this skill is for (e.g. "delivery", "spec", "planner"). */
+    stage: z.string().optional(),
+    /** Auto-detect conditions — skill is loaded when any condition matches the project. */
+    auto_detect: z.object({
+      files: z.array(z.string()).optional(),
+      deps: z.array(z.string()).optional(),
+    }).optional(),
+    /** Priority for ordering when multiple skills match (higher = first). */
+    priority: z.number().optional().default(0),
   })
   export type Info = z.infer<typeof Info>
 
@@ -61,14 +72,10 @@ export namespace Skill {
 
   const builtins = [
     ...channelBundles,
-    {
-      skill: panelMd,
-      files: {},
-    },
-    {
-      skill: specResearchMd,
-      files: {},
-    },
+    { skill: panelMd, files: {} },
+    { skill: specResearchMd, files: {} },
+    { skill: deliveryVerifyWebMd, files: {} },
+    { skill: deliveryVerifyApiMd, files: {} },
   ] as const
 
   async function install(id: string, skill: string, files: Readonly<Record<string, string>>) {
@@ -85,7 +92,7 @@ export namespace Skill {
     // Register built-in skills (lowest priority — user skills with same name override)
     for (const raw of builtins) {
       const md = matter(raw.skill)
-      const parsed = Info.pick({ name: true, description: true, platforms: true }).safeParse(md.data)
+      const parsed = Info.pick({ name: true, description: true, platforms: true, stage: true, auto_detect: true, priority: true }).safeParse(md.data)
       if (!parsed.success) continue
       const location =
         Object.keys(raw.files).length === 0 ? "builtin" : await install(parsed.data.name, raw.skill, raw.files)
@@ -96,6 +103,9 @@ export namespace Skill {
         builtin: true,
         location,
         content: md.content,
+        stage: parsed.data.stage,
+        auto_detect: parsed.data.auto_detect,
+        priority: parsed.data.priority,
       }
     }
 
@@ -111,7 +121,7 @@ export namespace Skill {
 
       if (!md) return
 
-      const parsed = Info.pick({ name: true, description: true, platforms: true }).safeParse(md.data)
+      const parsed = Info.pick({ name: true, description: true, platforms: true, stage: true, auto_detect: true, priority: true }).safeParse(md.data)
       if (!parsed.success) return
 
       // Warn on duplicate skill names
@@ -132,6 +142,9 @@ export namespace Skill {
         builtin: false,
         location: match,
         content: md.content,
+        stage: parsed.data.stage,
+        auto_detect: parsed.data.auto_detect,
+        priority: parsed.data.priority,
       }
     }
 

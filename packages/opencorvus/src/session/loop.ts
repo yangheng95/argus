@@ -33,7 +33,6 @@ import { TaskPlan } from "@/memory/task-plan"
 import { messageControlOnly, textForBoth } from "./part-visibility"
 import { SessionSummary } from "./summary"
 import { SessionPromptState } from "./prompt-state"
-import { Preference } from "@/preference"
 import { muteAISdkWarnings } from "@/runtime/shims"
 
 muteAISdkWarnings()
@@ -376,11 +375,6 @@ export namespace SessionLoop {
       system.push(STRUCTURED_OUTPUT_SYSTEM_PROMPT)
     }
 
-    const preferenceSection = Preference.systemPromptSection({
-      projectID: Instance.project.id,
-      sessionID: input.sessionID,
-    })
-    if (preferenceSection) system.push(preferenceSection)
     const memoryQuery = (lastUserMsg?.parts ?? [])
       .filter((part): part is Message.TextPart => part.type === "text" && textForBoth(part))
       .map((part) => part.text)

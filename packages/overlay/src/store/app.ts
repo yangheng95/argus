@@ -87,8 +87,6 @@ export interface AppState {
   memoryFiles: any[];
   /** Whether the memory panel is in search mode */
   memorySearchMode: boolean;
- // ── Preferences (mirrors state.preferences) ──
-  preferences: any[];
  // ── Prompts (mirrors state.promptEntries / state.promptDrafts) ──
   promptEntries: any[];
   /** Map of prompt ID → draft text */
@@ -130,7 +128,6 @@ const DEFAULT_APP_STATE: AppState = {
   ndjsonStartMs: 0,
   memoryFiles: [],
   memorySearchMode: false,
-  preferences: [],
   promptEntries: [],
   promptDrafts: {},
   criteriaSpecs: [],

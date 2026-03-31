@@ -931,7 +931,7 @@ function buildWorkflowSection(input: {
   }
 
   sections.push(
-    `\n**Tools**: memory (search/write knowledge), preference (project conventions — binding), planner (task tracking), task (parallel sub-agents), websearch/webfetch (external docs).`,
+    `\n**Tools**: memory (search/write knowledge), planner (task tracking), task (parallel sub-agents), websearch/webfetch (external docs).`,
   )
 
   return sections.join("\n")
@@ -977,7 +977,7 @@ ${truncatedPrevious}
 4. Execute the new plan. Verify each step immediately.
 5. Run ALL acceptance checks. Confirm every blocking goal is met.
 
-**Tools**: memory (search/write knowledge), preference (project conventions — binding), planner (task tracking), task (parallel sub-agents).`
+**Tools**: memory (search/write knowledge), planner (task tracking), task (parallel sub-agents).`
 }
 
 // ---------------------------------------------------------------------------

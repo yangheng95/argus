@@ -49,7 +49,6 @@ import {
   CheckConfig,
   UpdateGoalInput,
   UpdateTaskChecksInput,
-  UpdatePreferenceInput,
 } from "./model"
 import {
   DEFAULT_MAX_REPLANS,
@@ -79,6 +78,7 @@ import {
   specDraftFromFailure,
 } from "./persist"
 import { persistQueuedTask, abortTaskPipeline, awaitPipelineSettled } from "./pipeline"
+import { TaskAgent } from "./task-agent"
 import {
   activeRunBySession,
   findArtifacts,
@@ -330,11 +330,13 @@ export namespace OrchestratorService {
       AutoReply.subscribe()
       current.booted = true
     }
+    // Monitor active runs (executor status) — no pipeline advancement.
+    // Pipeline advancement is now driven by the Task Agent.
     Scheduler.register({
       id: "orchestrator.poll",
       interval: ORCHESTRATOR_POLL_INTERVAL_MS,
       scope: "instance",
-      run: () => OrchestratorRuntime.poll(hooks()),
+      run: () => OrchestratorRuntime.monitorRuns(hooks()),
     })
   }
 
@@ -394,8 +396,10 @@ export namespace OrchestratorService {
       taskID, content: input.request,
       source: input.source ?? "api", userID: slackUser(metadata),
     })
-    // Pipeline advancement is driven by the poll loop in runtime.ts (every 1.5s).
-    // No fire-and-forget here — avoids race with poll loop picking up the same task.
+    // Trigger the Task Agent to process the new task (fire-and-forget)
+    TaskAgent.processTask(taskID, { kind: "created" }).catch((err) => {
+      log.error("task agent failed on creation", { taskID, error: err instanceof Error ? err.message : String(err) })
+    })
     return taskID
   }
 
@@ -553,21 +557,6 @@ export namespace OrchestratorService {
     return writeTaskChecks(requireTask(taskID), checks)
   }
 
-  export async function updatePreference(preferenceID: string, input: z.input<typeof UpdatePreferenceInput>) {
-    const body = UpdatePreferenceInput.parse(input)
-    WorkbenchService.updatePreference({
-      preferenceID,
-      key: body.key,
-      value: body.value,
-    })
-    return true
-  }
-
-  export async function deletePreference(preferenceID: string) {
-    WorkbenchService.deletePreference(preferenceID)
-    return true
-  }
-
   export async function updateGoal(goalID: string, input: z.input<typeof UpdateGoalInput>) {
     const body = UpdateGoalInput.parse(input)
     const row = Database.use((db) =>
@@ -723,7 +712,8 @@ export namespace OrchestratorService {
 
   export async function cancelTask(taskID: string) {
     const task = requireTask(taskID)
-    // Abort any in-progress pipeline stage (spec/goal/plan) immediately
+    // Abort Task Agent and any in-progress pipeline stage
+    TaskAgent.abort(taskID)
     abortTaskPipeline(taskID)
     const run = task.active_run_id ? findRun(task.active_run_id) : undefined
     if (run) {
@@ -804,11 +794,12 @@ export namespace OrchestratorService {
     if (["queued", "spec_generating", "goal_decomposing", "planning", "planned", "running", "evaluating", "delivering"].includes(task.status)) {
       throw new Error(`task ${taskID} is already active`)
     }
-    const run = task.active_run_id ? findRun(task.active_run_id) : findRuns(task.id).at(-1)
-    if (!run) throw new NotFoundError({ message: `Run not found for task ${taskID}` })
-    const summary = task.error ?? findEvaluationByRun(run.id)?.summary ?? "Retry requested by operator."
-    const nextRunID = await OrchestratorRuntime.queueRetry(task, run, summary, hooks())
-    return viewRun(requireRun(nextRunID))
+    // Reset to queued and let the Task Agent decide the retry strategy
+    await updateTask(task, { status: "queued", error: null, blocking_reason: null }, "Retry requested by operator")
+    TaskAgent.processTask(taskID, { kind: "retry" }).catch((err) => {
+      log.error("task agent failed on retry", { taskID, error: err instanceof Error ? err.message : String(err) })
+    })
+    return viewTask(requireTask(taskID))
   }
 
   export async function replanTask(taskID: string) {
@@ -816,11 +807,12 @@ export namespace OrchestratorService {
     if (["queued", "spec_generating", "goal_decomposing", "planning", "planned", "running", "evaluating", "delivering"].includes(task.status)) {
       throw new Error(`task ${taskID} is already active`)
     }
-    const run = task.active_run_id ? findRun(task.active_run_id) : findRuns(task.id).at(-1)
-    if (!run) throw new NotFoundError({ message: `Run not found for task ${taskID}` })
-    const summary = task.error ?? findEvaluationByRun(run.id)?.summary ?? "Replan requested by operator."
-    const nextRunID = await OrchestratorRuntime.queueReplan(task, run, summary, hooks())
-    return viewRun(requireRun(nextRunID))
+    // Reset to queued and let the Task Agent decide the replan strategy
+    await updateTask(task, { status: "queued", error: null, blocking_reason: null }, "Replan requested by operator")
+    TaskAgent.processTask(taskID, { kind: "replan" }).catch((err) => {
+      log.error("task agent failed on replan", { taskID, error: err instanceof Error ? err.message : String(err) })
+    })
+    return viewTask(requireTask(taskID))
   }
 
   export async function recordOperatorNote(taskID: string, note: string) {

@@ -4,7 +4,7 @@
 // - Compute the current workspace mode ("offline" | "task" | "empty")
 // - Enter / clear workspace contexts (empty workspace, task workspace)
 // - Clear board/executor runtime state when switching workspaces
-// - Clear project-scope data (tasks, path, vcs, memory files, preferences)
+// - Clear project-scope data (tasks, path, vcs, memory files)
 // - Directory pick / browse / create (Tauri-backed)
 // - Recent directories persistence (localStorage)
 // - Workspace memory (rememberWorkspace / workspaceRestoreDirectory)
@@ -233,14 +233,13 @@ export function clearWorkspaceRuntime(
  * Clear project-scoped state that is tied to a directory/connection rather
  * than a single task.
  * Mirrors workspace.js clearProjectScopeData.
- * NOTE: tasks, globalTasks, path, vcs, memoryFiles, memorySearchMode, and
- * preferences live. Only the
- * boardStore tasks field is managed here; the remaining fields are owned by
- * for now.
+ * NOTE: tasks, globalTasks, path, vcs, memoryFiles, memorySearchMode
+ * live. Only the boardStore tasks field is managed here; the remaining
+ * fields are owned by for now.
  */
 export function clearProjectScopeData(): void {
   setBoardStore("tasks", []);
- // path, vcs, memoryFiles, memorySearchMode, preferences remain
+ // path, vcs, memoryFiles, memorySearchMode remain
  // state and are not yet migrated to a Solid store.
 }
 
