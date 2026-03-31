@@ -129,10 +129,39 @@ async function projectExecutorEventToSession(taskID: string, run: RunRow, event:
   if (!sessionID) return
   if (event.type === "executor.progress") return
 
+  // Normalize event type: CodingEventInfo uses underscores (tool_call, text_delta)
+  // while the session protocol uses dots (tool.call, message.part.delta).
+  // Accept both formats.
+  const type = event.type.replace(/_/g, ".")
+
   const state = await ensureTranscriptState(taskID, run, sessionID)
   if (!state) return
 
-  if (event.type === "message.part.delta") {
+  // text.delta = normalized from CodingEventInfo "text_delta"
+  if (type === "text.delta") {
+    const delta = typeof event.summary === "string" ? event.summary : typeof payload.text === "string" ? payload.text : ""
+    if (!delta) return
+    if (!state.text) {
+      state.text = await Session.updatePart({
+        id: Identifier.ascending("part"),
+        messageID: state.message.id,
+        sessionID,
+        type: "text",
+        text: "",
+      } satisfies MessageV2.TextPart) as MessageV2.TextPart
+    }
+    state.text!.text += delta
+    await Session.updatePartDelta({
+      sessionID,
+      messageID: state.message.id,
+      partID: state.text!.id,
+      field: "text",
+      delta,
+    })
+    return
+  }
+
+  if (type === "message.part.delta") {
     if (payload.field !== "text" || typeof payload.delta !== "string" || payload.delta.length === 0) return
     if (!state.text) {
       state.text = await Session.updatePart({
@@ -154,7 +183,7 @@ async function projectExecutorEventToSession(taskID: string, run: RunRow, event:
     return
   }
 
-  if (event.type === "reasoning.delta") {
+  if (type === "reasoning.delta") {
     const delta = typeof event.summary === "string" ? event.summary : ""
     if (!delta) return
     if (!state.reasoning) {
@@ -180,7 +209,7 @@ async function projectExecutorEventToSession(taskID: string, run: RunRow, event:
     return
   }
 
-  if (event.type === "tool.call") {
+  if (type === "tool.call") {
     await flushTranscriptText(state)
     state.text = undefined
     state.reasoning = undefined
@@ -206,7 +235,7 @@ async function projectExecutorEventToSession(taskID: string, run: RunRow, event:
     return
   }
 
-  if (event.type === "tool.result") {
+  if (type === "tool.result") {
     await flushTranscriptText(state)
     state.text = undefined
     state.reasoning = undefined
@@ -232,7 +261,7 @@ async function projectExecutorEventToSession(taskID: string, run: RunRow, event:
     return
   }
 
-  if (event.type === "usage.updated") {
+  if (type === "usage.updated") {
     state.usage = {
       input: toNumber(payload.inputTokens),
       output: toNumber(payload.outputTokens),
@@ -242,11 +271,11 @@ async function projectExecutorEventToSession(taskID: string, run: RunRow, event:
     return
   }
 
-  if (event.type === "session.idle" || event.type === "session.error") {
+  if (type === "session.idle" || type === "session.error") {
     await flushTranscriptText(state)
     state.text = undefined
     state.reasoning = undefined
-    if (event.type === "session.idle" && !state.text && typeof payload.output === "string" && payload.output.trim()) {
+    if (type === "session.idle" && !state.text && typeof payload.output === "string" && payload.output.trim()) {
       state.text = await Session.updatePart({
         id: Identifier.ascending("part"),
         messageID: state.message.id,
