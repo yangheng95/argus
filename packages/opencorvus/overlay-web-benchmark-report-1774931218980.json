@@ -1,0 +1,287 @@
+{
+  "generated_at": "2026-03-31T04:31:26.131Z",
+  "title": "Overlay Web Benchmark NoteStore",
+  "request_file": null,
+  "executor": "opencode",
+  "model": "hexin/gpt-5.4",
+  "directory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-BFkSvW",
+  "server": "http://127.0.0.1:7878/",
+  "taskID": "tsk_d422515ac001LaIcR6Pyrje1wJ",
+  "stage_timeout_ms": {
+    "spec": 86400000,
+    "planner": 86400000,
+    "tool": 600000,
+    "standby": 86400000,
+    "stall": 1200000,
+    "request": 30000
+  },
+  "stage_max_steps": {
+    "spec": 80,
+    "planner": 96
+  },
+  "stall_timeout_ms": 1200000,
+  "completion_hard_timeout_ms": null,
+  "request_timeout_ms": 30000,
+  "taskStatus": "completed",
+  "evaluation": "accepted",
+  "changedFiles": [
+    "src/note-store.test.ts",
+    "src/note-store.ts",
+    ".opencorvus/evaluations/2026-03-31T04-30-49-298Z-tsk_d422515ac001LaIcR6Pyrje1wJ-coordinator-eval-evl_d42289589002sx0K4FqxJ3T3ce-overlay-web-benchmark-notestore.md",
+    ".opencorvus/goals/2026-03-31T04-30-49-298Z-tsk_d422515ac001LaIcR6Pyrje1wJ-goal-snapshot-v1-overlay-web-benchmark-notestore.md"
+  ],
+  "transcriptCount": 21,
+  "timelineCount": 0,
+  "runCount": 1,
+  "planning": {
+    "pendingCount": 0,
+    "taskList": "暂无任务",
+    "reasoning": "",
+    "assistantText": ""
+  },
+  "streaming": {
+    "reasoning": "",
+    "assistantText": "Spec generation started",
+    "liveRole": "assistant",
+    "liveText": "Spec generation started",
+    "reasoningVisible": false,
+    "assistantVisible": true,
+    "liveVisible": true
+  },
+  "materialization": {
+    "boardTaskID": "tsk_d422515ac001LaIcR6Pyrje1wJ",
+    "boardStatus": "spec_generating",
+    "specVersion": null,
+    "goalCount": 0,
+    "goalRunCount": 0,
+    "criteriaCount": 0
+  },
+  "screenshot": "C:\\Users\\chuan\\myhexin-local\\argus-opencode\\packages\\opencorvus\\overlay-web-benchmark-1774931485189.png",
+  "resume": {
+    "restored": true,
+    "selectedAt": 2073
+  },
+  "timings_ms": {
+    "online": 589,
+    "submit": 609,
+    "planning_visible": 941,
+    "streaming_visible": 1508,
+    "task_created": 946,
+    "task_selected": 1001,
+    "board_loaded": 1005,
+    "resumed": 2073,
+    "completed": 265966,
+    "execution": 265357
+  },
+  "assertions": {
+    "planning_visible": {
+      "pass": true,
+      "sample": {
+        "directory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-BFkSvW",
+        "savedDirectory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-BFkSvW",
+        "workspaceDirectory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-BFkSvW",
+        "selectedTaskID": "",
+        "pendingCount": 0,
+        "taskIDs": [
+          "tsk_d422515ac001LaIcR6Pyrje1wJ"
+        ],
+        "taskList": "暂无任务",
+        "reasoning": "",
+        "assistantText": "",
+        "liveRole": "",
+        "liveText": "",
+        "visibleTurns": [],
+        "storage": {
+          "directory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-BFkSvW",
+          "directoryMode": "custom",
+          "workspaceDirectory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-BFkSvW",
+          "workspaceTaskID": ""
+        }
+      }
+    },
+    "streaming_visible": {
+      "pass": true,
+      "sample": {
+        "directory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-BFkSvW",
+        "savedDirectory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-BFkSvW",
+        "workspaceDirectory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-BFkSvW",
+        "selectedTaskID": "tsk_d422515ac001LaIcR6Pyrje1wJ",
+        "pendingCount": 0,
+        "taskIDs": [
+          "tsk_d422515ac001LaIcR6Pyrje1wJ"
+        ],
+        "taskList": "进行中Overlay Web Benchmark NoteStore排队中12:26:59 / .../Local/Temp/opencorvus-overlay-benchmark-project-BFkSvW",
+        "reasoning": "",
+        "assistantText": "Spec generation started",
+        "liveRole": "assistant",
+        "liveText": "Spec generation started",
+        "visibleTurns": [
+          {
+            "role": "agent-card",
+            "text": "Spec generation started"
+          },
+          {
+            "role": "assistant",
+            "text": "Spec generation started"
+          }
+        ],
+        "storage": {
+          "directory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-BFkSvW",
+          "directoryMode": "custom",
+          "workspaceDirectory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-BFkSvW",
+          "workspaceTaskID": ""
+        }
+      }
+    },
+    "materialized": {
+      "pass": true,
+      "sample": {
+        "taskID": "tsk_d422515ac001LaIcR6Pyrje1wJ",
+        "boardTaskID": "tsk_d422515ac001LaIcR6Pyrje1wJ",
+        "resumed": true
+      }
+    },
+    "delivery": {
+      "pass": true,
+      "sample": {
+        "taskStatus": "completed",
+        "verdict": "accepted",
+        "localExit": 0,
+        "qualityVerdict": "accepted"
+      }
+    }
+  },
+  "local_verify": {
+    "mode": "command",
+    "command": "bun test ./src/note-store.test.ts",
+    "exitCode": 0,
+    "stdout": "bun test v1.3.10 (30e609e0)",
+    "stderr": "5 pass\n 0 fail\n 15 expect() calls\nRan 5 tests across 1 file. [70.00ms]"
+  },
+  "artifact_audit": {
+    "source_files_added": 2,
+    "config_files_added": 0,
+    "doc_files_added": 0,
+    "source_file_count": 2,
+    "doc_file_count": 0,
+    "non_source_churn_ratio": 0,
+    "readme_proliferation_count": 0,
+    "out_of_scope_file_count": 0,
+    "scaffold_noise_count": 0,
+    "placeholder_count": 0,
+    "out_of_scope_files": [],
+    "unmapped_files": [],
+    "placeholder_hits": [],
+    "duplicate_docs": [],
+    "scaffold_expansion_flags": []
+  },
+  "run_metrics": {
+    "meaningful_change_gap_ms": 68495,
+    "noop_cycle_count": 0,
+    "repeat_command_ratio": 0.8930131004366813,
+    "repeat_reasoning_similarity": 0.8930131004366813,
+    "required_check_pass_rate": 0,
+    "critical_check_pass_rate": 0,
+    "check_relevance_score": 0.25,
+    "verification_edit_ratio": 2,
+    "feature_coverage_p0": 0,
+    "scope_drift_score": 0,
+    "plan_to_change_traceability": 1,
+    "delivery_focus_score": 0.9912663755458515
+  },
+  "failure_matrix": {
+    "verdict": "accepted",
+    "primary_failure": null,
+    "failures": []
+  },
+  "manual_review_summary": "No quality-gate failures detected.",
+  "overlay": {
+    "directory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-BFkSvW",
+    "savedDirectory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-BFkSvW",
+    "workspaceDirectory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-BFkSvW",
+    "selectedTaskID": "tsk_d422515ac001LaIcR6Pyrje1wJ",
+    "pendingCount": 0,
+    "taskIDs": [
+      "tsk_d422515ac001LaIcR6Pyrje1wJ"
+    ],
+    "taskList": "进行中Overlay Web Benchmark NoteStore交付验证中12:30:50 / .../Local/Temp/opencorvus-overlay-benchmark-project-BFkSvW",
+    "reasoning": "",
+    "assistantText": "",
+    "liveRole": "executor",
+    "liveText": "✏️apply_patchSuccess. Updated the following files:\nA src/note-store.test.ts\n\nLSP errors detected in src/note-store.test.ts, please fix:\n<diagnostics file=\"C:\\Users\\chuan\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-BFkSvW\\src\\note-store.test.ts\">\nERROR [1:47] Cannot find module 'bun:test' or its corresponding type declarations.\n</diagnostics>已完成Success. Updated the following files:\nA src/note-store.test.ts\n\nLSP errors detected in src/note-store.test.ts, please fix:\n<diagnostics file=\"C:\\Users\\chuan\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-BFkSvW\\src\\note-store.test.ts\">\nERROR [1:47] Cannot find module 'bun:test' or its corresponding type declarations.\n</diagnostics>⚙ .../opencorvus-overlay-benchmark-project-BFkSvW/src/note-store.test.ts",
+    "visibleTurns": [
+      {
+        "role": "executor",
+        "text": "⚡memorySaved: overlay-web-benchmark module constraints已完成{\"fileId\":\"mem_d4227a2b8001dVsWfjbC6u45ef\",\"title\":\"overlay-web-benchmark module constraints\",\"scope\":\"global\",\"kind\":\"fact\",\"importance\":76,\"confidence\":80}"
+      },
+      {
+        "role": "executor",
+        "text": "✏️apply_patchSuccess. Updated the following files:\nA src/note-store.ts已完成Success. Updated the following files:\nA src/note-store.ts⚙ .../opencorvus-overlay-benchmark-project-BFkSvW/src/note-store.ts"
+      },
+      {
+        "role": "executor",
+        "text": "⚡plannerUpdated: Implement src/note-store.ts Note interface and Not已完成{\"id\":\"tsk_d42274589001IfNbiqyVvlMuie\",\"goal\":\"Implement src/note-store.ts Note interface and NoteStore methods\",\"status\":\"completed\",\"progressPct\":100,\"notes\":\"Created src/note-store.ts with Note interface and Map-backed NoteStore methods: create/get/list/toggle/remove.\"}"
+      },
+      {
+        "role": "executor",
+        "text": "⚡plannerUpdated: Write bun:test coverage in src/note-store.test.ts已完成{\"id\":\"tsk_d42275219001M9PvveUyOYZUxO\",\"goal\":\"Write bun:test coverage in src/note-store.test.ts\",\"status\":\"in_progress\",\"progressPct\":0,\"notes\":null}"
+      },
+      {
+        "role": "executor",
+        "text": "✏️apply_patchSuccess. Updated the following files:\nA src/note-store.test.ts\n\nLSP errors detected in src/note-store.test.ts, please fix:\n<diagnostics file=\"C:\\Users\\chuan\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-BFkSvW\\src\\note-store.test.ts\">\nERROR [1:47] Cannot find module 'bun:test' or its corresponding type declarations.\n</diagnostics>已完成Success. Updated the following files:\nA src/note-store.test.ts\n\nLSP errors detected in src/note-store.test.ts, please fix:\n<diagnostics file=\"C:\\Users\\chuan\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-BFkSvW\\src\\note-store.test.ts\">\nERROR [1:47] Cannot find module 'bun:test' or its corresponding type declarations.\n</diagnostics>⚙ .../opencorvus-overlay-benchmark-project-BFkSvW/src/note-store.test.ts"
+      }
+    ],
+    "storage": {
+      "directory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-BFkSvW",
+      "directoryMode": "custom",
+      "workspaceDirectory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-BFkSvW",
+      "workspaceTaskID": "tsk_d422515ac001LaIcR6Pyrje1wJ"
+    }
+  },
+  "diagnostics": {
+    "event_file": "C:\\Users\\chuan\\myhexin-local\\argus-opencode\\packages\\opencorvus\\overlay-web-benchmark-report-1774931218980.events.json",
+    "event_count": 458,
+    "stage_summary": {
+      "types": {
+        "orchestrator.task.created": 1,
+        "orchestrator.task.updated": 7,
+        "orchestrator.agent.updated": 113,
+        "orchestrator.spec.created": 1,
+        "orchestrator.plan.created": 1,
+        "orchestrator.plan.activated": 1,
+        "orchestrator.run.created": 1,
+        "orchestrator.run.updated": 4
+      },
+      "stages": {
+        "spec": {
+          "event_count": 32,
+          "first_event_ms": 1506,
+          "first_message_ms": null,
+          "first_tool_call_ms": null,
+          "first_tool_result_ms": null,
+          "submit_tool_ms": null,
+          "error_ms": null,
+          "last_event_ms": 56424,
+          "kind_counts": {
+            "status": 32
+          },
+          "tool_calls": {}
+        },
+        "planner": {
+          "event_count": 22,
+          "first_event_ms": 82340,
+          "first_message_ms": null,
+          "first_tool_call_ms": null,
+          "first_tool_result_ms": null,
+          "submit_tool_ms": null,
+          "error_ms": null,
+          "last_event_ms": 139905,
+          "kind_counts": {
+            "status": 22
+          },
+          "tool_calls": {}
+        }
+      }
+    }
+  }
+}
