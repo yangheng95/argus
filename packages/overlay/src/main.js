@@ -1889,19 +1889,6 @@ function rootTaskSessionID() {
   const sessionID = boardStore.board?.task?.sessionID;
   return typeof sessionID === "string" ? sessionID : "";
 }
-function goalSessionIDs() {
-  const lanes = boardStore.board?.lanes;
-  if (!Array.isArray(lanes)) return /* @__PURE__ */ new Set();
-  const ids = /* @__PURE__ */ new Set();
-  for (const lane of lanes) {
-    if (lane?.id !== "goals") continue;
-    for (const card of lane.cards || []) {
-      const sid = card?.metadata?.sessionID;
-      if (typeof sid === "string" && sid) ids.add(sid);
-    }
-  }
-  return ids;
-}
 function activeDirectory$2() {
   return boardStore.board?.task?.directory ?? "";
 }
@@ -2226,15 +2213,14 @@ function agentStageLabel(stage) {
   if (role === "executor") return t("chat.role.executor");
   return t("chat.role.message");
 }
-function effectiveRole(msg, rootSessionID, goalSessionIDs) {
+function effectiveRole(msg, rootSessionID) {
+  const overlay = msg.info?._overlay;
+  if (overlay?.resolvedRole) return overlay.resolvedRole;
   const role = msg.info?.role || "assistant";
   if (role !== "user") {
     if (role === "assistant" && rootSessionID && !msg._synthetic) {
       const sessionID2 = typeof msg.info?.sessionID === "string" ? msg.info.sessionID : "";
       if (sessionID2 && sessionID2 !== rootSessionID) {
-        if (goalSessionIDs && goalSessionIDs.size > 0 && goalSessionIDs.has(sessionID2)) {
-          return "executor";
-        }
         const agent = String(msg.info?.agent || "").trim().toLowerCase();
         if (!agent) return "executor";
         const normalized = normalizeAgentRole(agent);
@@ -2284,7 +2270,7 @@ function renderFilePart(part) {
   return `<div class="msg-text" style="font-family:var(--mono);font-size:var(--ui-font-small);color:var(--text-soft)">${escapeHtml$1(name)}</div>`;
 }
 function MessageView(props) {
-  const role = () => effectiveRole(props.message, rootTaskSessionID(), goalSessionIDs());
+  const role = () => props.message.info?._overlay?.resolvedRole || effectiveRole(props.message, rootTaskSessionID());
   const parts = () => orderedMessageParts(props.message);
   const time = () => stamp(props.message.info?.time?.created);
   const hasContent = createMemo(() => {
@@ -3384,7 +3370,7 @@ function rebuildAgentCards() {
   const latestEventByStage = /* @__PURE__ */ new Map();
   const rootSID = rootTaskSessionID();
   for (const message of store.messages) {
-    const stage = classifyMessage(message, rootSID);
+    const stage = message.info?._overlay?.channel || classifyMessage(message, rootSID);
     if (stage === "main" || stage === "filtered") continue;
     const sessionID = typeof message?.info?.sessionID === "string" ? message.info.sessionID.trim() : "";
     const fallbackID = typeof message?.info?.id === "string" && message.info.id ? message.info.id : hashText$1(messageSignature(message));
@@ -3596,6 +3582,10 @@ function applyMessageEvent(event) {
   if (type === "message.updated") {
     const info = properties.info;
     if (!info?.id) return false;
+    const overlay = properties._overlay;
+    if (overlay && typeof overlay === "object") {
+      info._overlay = overlay;
+    }
     const existing = messageById(info.id);
     if (existing) {
       const idx = store.messages.indexOf(existing);
@@ -3619,11 +3609,13 @@ function applyMessageEvent(event) {
     if (!part?.id || !part?.messageID) return false;
     let message = messageById(part.messageID);
     if (!message) {
+      const overlay = properties._overlay;
       const msg = {
         info: {
           id: part.messageID,
           sessionID: part.sessionID,
-          role: "assistant"
+          role: "assistant",
+          ...overlay && typeof overlay === "object" ? { _overlay: overlay } : {}
         },
         parts: []
       };
@@ -3639,24 +3631,6 @@ function applyMessageEvent(event) {
     const idx = store.messages.indexOf(message);
     const partIdx = message.parts.findIndex((p) => p.id === part.id);
     if (partIdx >= 0) {
-      const existing = message.parts[partIdx];
-      if (existing.type === "tool" && part.type === "tool" && existing.state?.status && part.state?.status) {
-        const rank = {
-          pending: 0,
-          running: 1,
-          completed: 2,
-          error: 2
-        };
-        const oldRank = rank[existing.state.status] ?? 0;
-        const newRank = rank[part.state.status] ?? 0;
-        if (newRank < oldRank) {
-          setStore("messages", idx, "parts", partIdx, {
-            ...part,
-            state: { ...part.state, status: existing.state.status, output: existing.state.output || part.state.output, error: existing.state.error || part.state.error }
-          });
-          return true;
-        }
-      }
       setStore("messages", idx, "parts", partIdx, part);
     } else {
       setStore(
@@ -3675,11 +3649,13 @@ function applyMessageEvent(event) {
     if (properties.field !== "text" && properties.field !== "raw") return false;
     let message = messageById(properties.messageID);
     if (!message) {
+      const overlay = properties._overlay;
       const msg = {
         info: {
           id: properties.messageID,
           sessionID: properties.sessionID,
-          role: "assistant"
+          role: "assistant",
+          ...overlay && typeof overlay === "object" ? { _overlay: overlay } : {}
         },
         parts: []
       };
@@ -4527,7 +4503,7 @@ function conversationMessages() {
   const showTranscriptDetails = store.showTranscriptDetails;
   const mainMessages = [];
   for (const msg of allMessages) {
-    const channel = classifyMessage(msg, rootSID);
+    const channel = msg.info?._overlay?.channel || classifyMessage(msg, rootSID);
     if (channel === "main") {
       mainMessages.push(msg);
     }
@@ -4537,9 +4513,6 @@ function conversationMessages() {
     filteredMain = filteredMain.filter((message) => {
       const text = (message.parts || []).map((part) => part.text || "").join("");
       if (text.includes("<assistant-brief>") || text.includes("You are executing a headless coding task")) return false;
-      const role = message.info?.role || "";
-      const sid = message.info?.sessionID || "";
-      if (role === "user" && rootSID && sid && sid !== rootSID) return false;
       return true;
     });
   }

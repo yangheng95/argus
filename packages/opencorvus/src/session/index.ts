@@ -721,10 +721,24 @@ export namespace Session {
 
   const UpdatePartInput = MessageV2.Part
 
+  const TOOL_STATUS_RANK: Record<string, number> = { pending: 0, running: 1, completed: 2, error: 2 }
+
   export const updatePart = fn(UpdatePartInput, async (part) => {
     const { id, messageID, sessionID, ...data } = part
     const time = Date.now()
     Database.use((db) => {
+      // Tool status monotonicity: never regress a tool part's status
+      if (part.type === "tool" && part.state?.status) {
+        const existing = db.select({ data: PartTable.data }).from(PartTable).where(eq(PartTable.id, id)).get()
+        if (existing?.data) {
+          const prev = (existing.data as any)
+          if (prev.type === "tool" && prev.state?.status) {
+            const oldRank = TOOL_STATUS_RANK[prev.state.status] ?? 0
+            const newRank = TOOL_STATUS_RANK[part.state.status] ?? 0
+            if (newRank < oldRank) return
+          }
+        }
+      }
       db.insert(PartTable)
         .values({
           id,
