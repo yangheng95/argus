@@ -262,9 +262,6 @@ function evaluatorManagedSelectors(goal: GoalRow) {
   return goalSelectors(goal).filter((item) => EVALUATOR_MANAGED_SELECTORS.has(item))
 }
 
-// analysisFailure removed — delivery agent handles all failure analysis
-}
-
 function goalChecks(goal: GoalRow, task: TaskRow) {
   const selectors = executorSelectors(goal)
   const base = dict(task.metadata?.checks)
