@@ -120,11 +120,24 @@ function infoForEvent(properties: Record<string, unknown>): { role: string; agen
   return { role: "assistant", agent: "" }
 }
 
-/** Inject _overlay metadata into event properties. */
+/**
+ * Stamp resolvedRole and channel directly into info (message.updated)
+ * or as top-level fields (part/delta events).
+ * Every event that reaches the frontend MUST carry these fields.
+ */
 function enrichProperties(properties: Record<string, unknown>, sessionID: string, taskID: string): Record<string, unknown> {
   const info = infoForEvent(properties)
   const meta = overlayMeta(sessionID, taskID, info)
-  return { ...properties, _overlay: meta }
+  const enriched = { ...properties }
+
+  // message.updated: stamp into info object directly
+  if (enriched.info && typeof enriched.info === "object") {
+    enriched.info = { ...(enriched.info as any), resolvedRole: meta.resolvedRole, channel: meta.channel }
+  }
+  // Always set at top level so part/delta events also carry the metadata
+  enriched.resolvedRole = meta.resolvedRole
+  enriched.channel = meta.channel
+  return enriched
 }
 
 /** Persist a message event to protocol_event (has sequence, replayable on reconnect). */

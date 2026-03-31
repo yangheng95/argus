@@ -481,8 +481,7 @@ function rebuildAgentCards(): void {
 
   const rootSID = rootTaskSessionID();
   for (const message of store.messages) {
-    // Prefer backend-resolved channel; fall back to client-side inference
-    const stage = (message as any).info?._overlay?.channel || classifyMessage(message, rootSID);
+    const stage = message.info?.channel || classifyMessage(message, rootSID);
     if (stage === "main" || stage === "filtered") continue;
     const sessionID =
       typeof message?.info?.sessionID === "string" ? message.info.sessionID.trim() : "";
@@ -754,11 +753,6 @@ export function applyMessageEvent(event: any): boolean {
   if (type === "message.updated") {
     const info = properties.info;
     if (!info?.id) return false;
-    // Attach backend-resolved overlay metadata to message info
-    const overlay = properties._overlay;
-    if (overlay && typeof overlay === "object") {
-      info._overlay = overlay;
-    }
     const existing = messageById(info.id);
     if (existing) {
       const idx = store.messages.indexOf(existing);
@@ -783,13 +777,13 @@ export function applyMessageEvent(event: any): boolean {
     if (!part?.id || !part?.messageID) return false;
     let message = messageById(part.messageID);
     if (!message) {
-      const overlay = properties._overlay;
       const msg: Message = {
         info: {
           id: part.messageID,
           sessionID: part.sessionID,
           role: "assistant",
-          ...(overlay && typeof overlay === "object" ? { _overlay: overlay } : {}),
+          resolvedRole: properties.resolvedRole || "assistant",
+          channel: properties.channel || "main",
         },
         parts: [],
       };
@@ -825,13 +819,13 @@ export function applyMessageEvent(event: any): boolean {
 
     let message = messageById(properties.messageID);
     if (!message) {
-      const overlay = properties._overlay;
       const msg: Message = {
         info: {
           id: properties.messageID,
           sessionID: properties.sessionID,
           role: "assistant",
-          ...(overlay && typeof overlay === "object" ? { _overlay: overlay } : {}),
+          resolvedRole: properties.resolvedRole || "assistant",
+          channel: properties.channel || "main",
         },
         parts: [],
       };

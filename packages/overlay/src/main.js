@@ -2193,16 +2193,6 @@ function classifyMessage(msg, rootSessionID) {
   if (rootSessionID && sessionID && sessionID !== rootSessionID) return "executor";
   return "main";
 }
-function detectSource(msg) {
-  const parts = msg.parts || [];
-  for (const part of parts) {
-    if (part.type !== "text") continue;
-    if (part.audience && part.audience.ui === false) continue;
-    if (part.kind === "trace" && !part.audience?.ui) continue;
-    if (part.source) return part.source;
-  }
-  return void 0;
-}
 function agentStageLabel(stage) {
   const role = normalizeAgentRole(stage);
   if (role === "spec") return t("chat.role.spec");
@@ -2213,32 +2203,8 @@ function agentStageLabel(stage) {
   if (role === "executor") return t("chat.role.executor");
   return t("chat.role.message");
 }
-function effectiveRole(msg, rootSessionID) {
-  const overlay = msg.info?._overlay;
-  if (overlay?.resolvedRole) return overlay.resolvedRole;
-  const role = msg.info?.role || "assistant";
-  if (role !== "user") {
-    if (role === "assistant" && rootSessionID && !msg._synthetic) {
-      const sessionID2 = typeof msg.info?.sessionID === "string" ? msg.info.sessionID : "";
-      if (sessionID2 && sessionID2 !== rootSessionID) {
-        const agent = String(msg.info?.agent || "").trim().toLowerCase();
-        if (!agent) return "executor";
-        const normalized = normalizeAgentRole(agent);
-        return normalized === "assistant" ? "executor" : normalized;
-      }
-    }
-    return role;
-  }
-  const source = detectSource(msg);
-  if (source) return source;
-  const sessionID = typeof msg.info?.sessionID === "string" ? msg.info.sessionID : "";
-  if (rootSessionID && sessionID && sessionID !== rootSessionID) {
-    return normalizeAgentRole(msg.info?.agent || "system");
-  }
-  if (msg._synthetic && msg.info?.agent) {
-    return normalizeAgentRole(msg.info.agent);
-  }
-  return role;
+function effectiveRole(msg, _rootSessionID) {
+  return msg.info?.resolvedRole || msg.info?.role || "assistant";
 }
 
 function timeLocaleOptions(includeSeconds = true) {
@@ -2270,7 +2236,7 @@ function renderFilePart(part) {
   return `<div class="msg-text" style="font-family:var(--mono);font-size:var(--ui-font-small);color:var(--text-soft)">${escapeHtml$1(name)}</div>`;
 }
 function MessageView(props) {
-  const role = () => props.message.info?._overlay?.resolvedRole || effectiveRole(props.message, rootTaskSessionID());
+  const role = () => props.message.info?.resolvedRole || effectiveRole(props.message, rootTaskSessionID());
   const parts = () => orderedMessageParts(props.message);
   const time = () => stamp(props.message.info?.time?.created);
   const hasContent = createMemo(() => {
@@ -3370,7 +3336,7 @@ function rebuildAgentCards() {
   const latestEventByStage = /* @__PURE__ */ new Map();
   const rootSID = rootTaskSessionID();
   for (const message of store.messages) {
-    const stage = message.info?._overlay?.channel || classifyMessage(message, rootSID);
+    const stage = message.info?.channel || classifyMessage(message, rootSID);
     if (stage === "main" || stage === "filtered") continue;
     const sessionID = typeof message?.info?.sessionID === "string" ? message.info.sessionID.trim() : "";
     const fallbackID = typeof message?.info?.id === "string" && message.info.id ? message.info.id : hashText$1(messageSignature(message));
@@ -3582,10 +3548,6 @@ function applyMessageEvent(event) {
   if (type === "message.updated") {
     const info = properties.info;
     if (!info?.id) return false;
-    const overlay = properties._overlay;
-    if (overlay && typeof overlay === "object") {
-      info._overlay = overlay;
-    }
     const existing = messageById(info.id);
     if (existing) {
       const idx = store.messages.indexOf(existing);
@@ -3609,13 +3571,13 @@ function applyMessageEvent(event) {
     if (!part?.id || !part?.messageID) return false;
     let message = messageById(part.messageID);
     if (!message) {
-      const overlay = properties._overlay;
       const msg = {
         info: {
           id: part.messageID,
           sessionID: part.sessionID,
           role: "assistant",
-          ...overlay && typeof overlay === "object" ? { _overlay: overlay } : {}
+          resolvedRole: properties.resolvedRole || "assistant",
+          channel: properties.channel || "main"
         },
         parts: []
       };
@@ -3649,13 +3611,13 @@ function applyMessageEvent(event) {
     if (properties.field !== "text" && properties.field !== "raw") return false;
     let message = messageById(properties.messageID);
     if (!message) {
-      const overlay = properties._overlay;
       const msg = {
         info: {
           id: properties.messageID,
           sessionID: properties.sessionID,
           role: "assistant",
-          ...overlay && typeof overlay === "object" ? { _overlay: overlay } : {}
+          resolvedRole: properties.resolvedRole || "assistant",
+          channel: properties.channel || "main"
         },
         parts: []
       };
@@ -4364,7 +4326,7 @@ function syntheticTextMessage(role, time, text) {
   if (cached) return cached;
   const msg = {
     _synthetic: true,
-    info: { id, role, time: { created } },
+    info: { id, role, resolvedRole: role, channel: "main", time: { created } },
     parts: [{ type: "text", text }]
   };
   _syntheticCache.set(id, msg);
@@ -4469,7 +4431,7 @@ function buildUserContextMessages() {
   if (task?.request) {
     msgs.push({
       _synthetic: true,
-      info: { id: "ctx:user-request", role: "user", time: { created: (task.time?.created || 0) - 2 } },
+      info: { id: "ctx:user-request", role: "user", resolvedRole: "user", channel: "main", time: { created: (task.time?.created || 0) - 2 } },
       parts: [{ type: "text", text: task.request }]
     });
   }
@@ -4503,7 +4465,7 @@ function conversationMessages() {
   const showTranscriptDetails = store.showTranscriptDetails;
   const mainMessages = [];
   for (const msg of allMessages) {
-    const channel = msg.info?._overlay?.channel || classifyMessage(msg, rootSID);
+    const channel = msg.info?.channel || classifyMessage(msg, rootSID);
     if (channel === "main") {
       mainMessages.push(msg);
     }

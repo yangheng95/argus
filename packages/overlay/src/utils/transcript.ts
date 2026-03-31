@@ -182,7 +182,7 @@ export function syntheticTextMessage(
   if (cached) return cached;
   const msg = {
     _synthetic: true,
-    info: { id, role, time: { created } },
+    info: { id, role, resolvedRole: role, channel: "main", time: { created } },
     parts: [{ type: "text", text }],
   };
   _syntheticCache.set(id, msg);
