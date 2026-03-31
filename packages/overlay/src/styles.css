@@ -5555,9 +5555,24 @@ select.field-input option {
 .md-content {
   word-break: break-word;
 }
-.md-content .md-h1,
-.md-content .md-h2,
+.md-content .md-h1 {
+  font-size: var(--ui-font-body);
+  font-weight: 700;
+  color: var(--text-strong);
+  margin-top: 8px;
+  margin-bottom: 3px;
+}
+.md-content .md-h2 {
+  font-size: var(--ui-font-body);
+  font-weight: 600;
+  color: var(--text-strong);
+  margin-top: 6px;
+  margin-bottom: 2px;
+}
 .md-content .md-h3 {
+  font-size: var(--ui-font-control);
+  font-weight: 600;
+  color: var(--text-strong);
   margin-top: 6px;
   margin-bottom: 2px;
 }
