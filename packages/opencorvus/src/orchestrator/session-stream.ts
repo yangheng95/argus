@@ -189,6 +189,13 @@ export function sessionStreamHooks(input: {
             },
           } as Message.ToolPart)
           toolParts.delete(chunk.toolCallId)
+          // When all parallel tools complete, start a new message for the next step.
+          // This splits each agent invocation into per-step messages so the overlay
+          // can render them as separate timeline cards.
+          if (toolParts.size === 0) {
+            messageID = undefined
+            textPartID = undefined
+          }
           return
         }
       } catch (err) {

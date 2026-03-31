@@ -185,7 +185,7 @@ test("live agent cards keep a stable identity and explicit collapse across pruni
   expect(agentCardExpanded(secondCard?._agentCardKey, true)).toBe(false)
 })
 
-test("transcript-backed card count grows as new messages arrive", () => {
+test("each message becomes a separate timeline card", () => {
   setBoardStore("board", {
     task: {
       status: "planning",
@@ -193,7 +193,7 @@ test("transcript-backed card count grows as new messages arrive", () => {
     },
   })
 
-  // First message arrives
+  // First message arrives — one card
   setMessages([
     {
       info: {
@@ -210,8 +210,9 @@ test("transcript-backed card count grows as new messages arrive", () => {
   let cards = conversationMessages().filter((item: any) => item?._agentCard)
   expect(cards).toHaveLength(1)
   expect(cards[0]?._agentMessages).toHaveLength(1)
+  expect(cards[0]?._agentCardKey).toBe("spec:message:spec-msg-1")
 
-  // Second message arrives for the same session
+  // Second message arrives — two separate cards (one per message)
   setMessages([
     {
       info: {
@@ -236,11 +237,14 @@ test("transcript-backed card count grows as new messages arrive", () => {
   ])
 
   cards = conversationMessages().filter((item: any) => item?._agentCard)
-  expect(cards).toHaveLength(1)
-  expect(cards[0]?._agentMessages).toHaveLength(2)
-  expect(cards[0]?._agentCardKey).toBe("spec:session:spec-session-1")
+  expect(cards).toHaveLength(2)
+  expect(cards[0]?._agentCardKey).toBe("spec:message:spec-msg-1")
+  expect(cards[1]?._agentCardKey).toBe("spec:message:spec-msg-2")
+  // Each card has exactly one message
+  expect(cards[0]?._agentMessages).toHaveLength(1)
+  expect(cards[1]?._agentMessages).toHaveLength(1)
 
-  // Third message arrives
+  // Third message arrives — three cards
   setMessages([
     {
       info: {
@@ -275,8 +279,11 @@ test("transcript-backed card count grows as new messages arrive", () => {
   ])
 
   cards = conversationMessages().filter((item: any) => item?._agentCard)
-  expect(cards).toHaveLength(1)
-  expect(cards[0]?._agentMessages).toHaveLength(3)
+  expect(cards).toHaveLength(3)
+  // Round labels: #1, #2, #3
+  expect(cards[0]?._agentRound).toBe(1)
+  expect(cards[1]?._agentRound).toBe(2)
+  expect(cards[2]?._agentRound).toBe(3)
 })
 
 test("agent card status updates from running to completed", () => {
@@ -324,7 +331,7 @@ test("agent card status updates from running to completed", () => {
   expect(cards[0]?._agentStatus).toBe("completed")
 })
 
-test("store agentCards._agentMessages grows when messages are added incrementally", () => {
+test("store agentCards grows as new messages are added incrementally", () => {
   setBoardStore("board", { task: { status: "planning" } })
 
   const specMsg = (id: string, time: number, text: string) => ({
@@ -332,22 +339,21 @@ test("store agentCards._agentMessages grows when messages are added incrementall
     parts: [{ id: `p-${id}`, type: "text", text }],
   })
 
-  // 1 message
+  // 1 message → 1 card
   setMessages([specMsg("m1", 100, "a")])
-  const cardID = messageStore.agentCardOrder[0]
-  expect(cardID).toBe("spec:session:s1")
-  expect(messageStore.agentCards[cardID]._agentMessages).toHaveLength(1)
+  expect(messageStore.agentCardOrder).toEqual(["spec:message:m1"])
+  expect(messageStore.agentCards["spec:message:m1"]._agentMessages).toHaveLength(1)
 
-  // 2 messages — count must grow via the same store path
+  // 2 messages → 2 cards (per-message grouping)
   setMessages([specMsg("m1", 100, "a"), specMsg("m2", 200, "b")])
-  expect(messageStore.agentCards[cardID]._agentMessages).toHaveLength(2)
+  expect(messageStore.agentCardOrder).toEqual(["spec:message:m1", "spec:message:m2"])
+  expect(messageStore.agentCards["spec:message:m1"]._agentMessages).toHaveLength(1)
+  expect(messageStore.agentCards["spec:message:m2"]._agentMessages).toHaveLength(1)
 
-  // 3 messages
+  // 3 messages → 3 cards
   setMessages([specMsg("m1", 100, "a"), specMsg("m2", 200, "b"), specMsg("m3", 300, "c")])
-  expect(messageStore.agentCards[cardID]._agentMessages).toHaveLength(3)
-
-  // Card key stays stable across all updates
-  expect(messageStore.agentCardOrder).toEqual(["spec:session:s1"])
+  expect(messageStore.agentCardOrder).toEqual(["spec:message:m1", "spec:message:m2", "spec:message:m3"])
+  expect(messageStore.agentCards["spec:message:m3"]._agentMessages).toHaveLength(1)
 })
 
 test("conversation ui state resets on task switch and tracks tool output expansion externally", () => {
