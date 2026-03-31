@@ -34,6 +34,7 @@ export namespace DeliveryService {
     task: { title: string; request: string; sessionID?: string; metadata?: Record<string, unknown> }
     goals: GoalInfo[]
     delivery: DeliveryInfo
+    checkResults?: Array<{ name: string; status: string; evidence?: string }>
     analysis?: GoalJudgmentType
     timeoutMs?: number
     signal?: AbortSignal
@@ -73,6 +74,7 @@ export namespace DeliveryService {
         task: input.task,
         goals: input.goals,
         delivery: input.delivery,
+        checkResults: input.checkResults,
         analysis: input.analysis,
         stream,
         signal,

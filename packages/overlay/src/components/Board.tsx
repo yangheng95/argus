@@ -170,7 +170,7 @@ export function PlanPanel(props: PlanPanelProps) {
             <For each={displayGoals()}>
               {(goal) => {
                 const isRunning = () => props.runningGoalIDs?.has(goal.id);
-                const goalStatus = () => goal.metadata?.status || (isRunning() ? "running" : "pending");
+                const goalStatus = () => goal.status || (isRunning() ? "running" : "pending");
                 const shortTitle = () => {
                   const raw = goal.title || "";
                   const first = raw.split("\n")[0].replace(/^#+\s*/, "").trim();
@@ -184,6 +184,12 @@ export function PlanPanel(props: PlanPanelProps) {
                         {`Goal#${goal.goalIndex}`}
                       </span>
                       <span class="goal-title-brief">{shortTitle()}</span>
+                      <Show when={goalStatus() === "passed"}>
+                        <span class="extension-status" data-state="passed">{"\u2713"}</span>
+                      </Show>
+                      <Show when={goalStatus() === "failed"}>
+                        <span class="extension-status" data-state="failed">{"\u2717"}</span>
+                      </Show>
                       <Show when={isRunning()}>
                         <span class="extension-status" data-state="active">
                           {t("goal.running")}

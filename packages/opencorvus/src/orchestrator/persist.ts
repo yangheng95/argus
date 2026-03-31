@@ -1681,7 +1681,7 @@ export function insertPlanItems(
     goals: input.goals,
   })
 
-  // Pre-generate plan node IDs for sequential dependency resolution (each stage depends on all prior stages)
+  // Pre-generate plan node IDs
   const goalNodeIDs = input.goals.map(() => Identifier.ascending("plan_node"))
   const milestoneNodeIDs = waves.map(() => Identifier.ascending("plan_node"))
   const goalWaveIndex = new Map<number, number>()
@@ -1691,13 +1691,27 @@ export function insertPlanItems(
     }
   }
 
-  // Pre-compute depends_on_ids per goal and validate acyclicity
-  const goalDeps = input.goals.map((_, index) => {
-    const waveIndex = goalWaveIndex.get(index) ?? 0
-    return waveIndex > 0
-      ? waves.slice(0, waveIndex).flatMap((entry) => entry.goal_indices)
-      : []
+  // ── Compute goal dependencies from goal agent's declared depends_on_goal_ids ──
+  // The goal agent declares minimal, precise dependencies between goals.
+  // Honor those instead of the coarse wave-based linear chain.
+  const goalIDToIndex = new Map<string, number>()
+  for (const [index, goal] of input.goals.entries()) {
+    if (goal.id) goalIDToIndex.set(goal.id, index)
+  }
+
+  const goalDeps = input.goals.map((goal, _index) => {
+    const meta = goal.metadata as Record<string, unknown> | undefined
+    const declaredDeps = Array.isArray(meta?.depends_on_goal_ids) ? meta.depends_on_goal_ids : []
+    const indices: number[] = []
+    for (const depID of declaredDeps) {
+      if (typeof depID !== "string") continue
+      const depIndex = goalIDToIndex.get(depID)
+      if (depIndex !== undefined) indices.push(depIndex)
+    }
+    return indices
   })
+
+  // Validate acyclicity via Kahn's algorithm
   const inDegree = new Map<number, number>()
   for (let i = 0; i < input.goals.length; i++) inDegree.set(i, 0)
   for (const [i, deps] of goalDeps.entries()) {

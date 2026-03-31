@@ -310,7 +310,7 @@ function DiffDialog(props: DiffDialogProps) {
   return (
     <dialog
       ref={dialogRef}
-      class="diff-dialog"
+      class="dialog"
       onClose={props.onClose}
       onClick={(e) => {
  // Close on backdrop click
@@ -318,33 +318,37 @@ function DiffDialog(props: DiffDialogProps) {
       }}
     >
       <Show when={!!item()}>
-        <div class="diff-dialog-header">
-          <span class="diff-dialog-title">{item()!.file}</span>
-          <span class="diff-dialog-meta">
-            <span
-              class="change-status"
-              data-status={item()!.status}
+        <div class="dialog-form diff-dialog-form">
+          <div class="dialog-head">
+            <div class="diff-dialog-head">
+              <span class="dialog-title">{item()!.file}</span>
+              <span class="diff-dialog-meta">
+                <span
+                  class="change-status"
+                  data-status={item()!.status}
+                >
+                  {changeStatusLabel(item()!.status)}
+                </span>
+                <span class="diff-dialog-stat" data-tone="add">
+                  +{item()!.additions}
+                </span>
+                <span class="diff-dialog-stat" data-tone="del">
+                  -{item()!.deletions}
+                </span>
+              </span>
+            </div>
+            <button
+              type="button"
+              class="btn btn-ghost mini"
+              aria-label={t("common.close")}
+              onClick={close}
             >
-              {changeStatusLabel(item()!.status)}
-            </span>
-            <span class="diff-dialog-stat" data-tone="add">
-              +{item()!.additions}
-            </span>
-            <span class="diff-dialog-stat" data-tone="del">
-              -{item()!.deletions}
-            </span>
-          </span>
-          <button
-            type="button"
-            class="diff-dialog-close"
-            aria-label={t("common.close")}
-            onClick={close}
-          >
-            ×
-          </button>
-        </div>
-        <div class="diff-dialog-body">
-          <DiffPreview item={item()!} />
+              ×
+            </button>
+          </div>
+          <div class="diff-dialog-body">
+            <DiffPreview item={item()!} />
+          </div>
         </div>
       </Show>
     </dialog>
