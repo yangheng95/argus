@@ -691,6 +691,7 @@ async function scaffoldProject(dir: string, model: string) {
     {
       $schema: "https://opencorvus.ai/config.json",
       model,
+      executor: executor !== "opencode" ? executor : undefined,
       experimental: {
         unattended: true,
       },
