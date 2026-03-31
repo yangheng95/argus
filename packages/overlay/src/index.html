@@ -110,7 +110,6 @@
             <span class="task-dir" id="taskDir" title="" data-i18n="cwd.unavailable">Working directory unavailable</span>
             <div class="task-dir-actions"></div>
           </div>
-          <div class="recent-dir-panel" id="recentDirPanel" hidden></div>
           <span class="task-workspace" id="taskWorkspaceDir" hidden></span>
         </div>
         <div class="task-meta-actions">
@@ -675,6 +674,10 @@
 
   <!-- Log Viewer Dialog (managed by Solid LogViewer component) -->
   <div id="solidLogViewer"></div>
+
+  <!-- Recent directory dropdown — must live outside .task-bar / .panel to
+       escape their stacking context (backdrop-filter) and overflow clip. -->
+  <div class="recent-dir-panel" id="recentDirPanel" hidden></div>
 
   <script type="module" src="main.js"></script>
 </body>

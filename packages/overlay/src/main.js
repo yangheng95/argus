@@ -1616,7 +1616,7 @@ function toolInputCommand(input) {
     (item) => typeof item === "string" && item.trim() ? [item.trim()] : []
   ).join(" ").trim();
 }
-function clipText$3(value, limit = 80) {
+function clipText$2(value, limit = 80) {
   const text = String(value || "").replace(/\s+/g, " ").trim();
   if (!text) return "";
   if (text.length <= limit) return text;
@@ -1662,15 +1662,15 @@ function displayToolDetail(name, input, state, base = "") {
   const path = safeInput.file_path || safeInput.filePath || safeInput.path || safeInput.filename || "";
   if (path) return shortRelativePath(path, base);
   if (n === "bash" || n === "shellcommand")
-    return clipText$3(toolInputCommand(safeInput), 80);
+    return clipText$2(toolInputCommand(safeInput), 80);
   if (n === "grep" || n === "searchcode")
     return safeInput.pattern || safeInput.query || safeInput.q || "";
   if (n === "glob" || n === "findfiles")
     return safeInput.pattern || safeInput.glob || "";
   if (n === "agent" || n === "spawnagent")
-    return clipText$3(safeInput.description || safeInput.prompt || "", 80);
+    return clipText$2(safeInput.description || safeInput.prompt || "", 80);
   if (typeof safeInput.raw === "string" && safeInput.raw.trim())
-    return clipText$3(safeInput.raw, 80);
+    return clipText$2(safeInput.raw, 80);
   if ((safeState.status === "completed" || safeState.status === "running") && typeof safeState.title === "string")
     return safeState.title;
   return "";
@@ -1855,7 +1855,7 @@ async function loadBoard(options = {}) {
 async function loadTasks() {
   try {
     const data = await apiJson("tasks");
-    const tasks = sortedTasks$1(data);
+    const tasks = sortedTasks(data);
     const seen = new Set(
       tasks.map((item) => item?.task?.requestID).filter(Boolean)
     );
@@ -1919,10 +1919,7 @@ function setSnapshotVersion(version) {
 function setTaskSequence(sequence) {
   setBoardStore("taskSequence", typeof sequence === "number" ? sequence : 0);
 }
-function setPendingTasks(tasks) {
-  setBoardStore("pendingTasks", Array.isArray(tasks) ? tasks : []);
-}
-function sortedTasks$1(data) {
+function sortedTasks(data) {
   return [...Array.isArray(data?.tasks) ? data.tasks : []].sort(
     (a, b) => (b.updated_at || b.task?.time?.updated || 0) - (a.updated_at || a.task?.time?.updated || 0)
   );
@@ -1941,6 +1938,46 @@ function visibleTasks() {
     ...boardStore.tasks
   ].sort((a, b) => taskUpdated$1(b) - taskUpdated$1(a));
 }
+const INTERRUPTABLE_STATUSES = /* @__PURE__ */ new Set([
+  "queued",
+  "spec_generating",
+  "goal_decomposing",
+  "planning",
+  "planned",
+  "running",
+  "blocked",
+  "evaluating",
+  "delivering"
+]);
+function isTaskInterruptable() {
+  const status = boardStore.board?.task?.status;
+  return !!status && INTERRUPTABLE_STATUSES.has(status);
+}
+
+const board = /*#__PURE__*/Object.freeze(/*#__PURE__*/Object.defineProperty({
+  __proto__: null,
+  activeDirectory: activeDirectory$2,
+  boardStore,
+  isTaskInterruptable,
+  loadBoard,
+  loadTasks,
+  rootTaskSessionID,
+  scheduleBoard,
+  setBoardEtag,
+  setBoardQueued,
+  setBoardRetryCount,
+  setBoardStore,
+  setBoardSyncPending,
+  setBoardUpdatedAt,
+  setPath,
+  setSnapshotVersion,
+  setTaskSequence,
+  setTasksData,
+  setVcs,
+  sortedTasks,
+  taskUpdated: taskUpdated$1,
+  visibleTasks
+}, Symbol.toStringTag, { value: 'Module' }));
 
 const [store$1, setStore$1] = createStore({
   expandedAgentCards: {},
@@ -4097,12 +4134,6 @@ function shouldReloadConversationForMessageEvent(event) {
   return !!messageEventSessionID(event);
 }
 
-function clipText$2(value, limit = 80) {
-  const text = String(value || "").replace(/\s+/g, " ").trim();
-  if (!text) return "";
-  if (text.length <= limit) return text;
-  return `${text.slice(0, Math.max(0, limit - 3)).trim()}...`;
-}
 function stripAssistantBrief(text) {
   const briefRe = /<assistant-brief>[\s\S]*?<\/assistant-brief>/;
   let cleaned = text.replace(briefRe, "");
@@ -5961,7 +5992,7 @@ function Board(props) {
 }
 delegateEvents(["click"]);
 
-var _tmpl$$d = /* @__PURE__ */ template(`<div class=chat-attachments id=chatAttachments>`), _tmpl$2$b = /* @__PURE__ */ template(`<svg width=16 height=16 viewBox="0 0 16 16"fill=none><rect x=4.25 y=4.25 width=7.5 height=7.5 rx=1.2 fill=currentColor>`), _tmpl$3$b = /* @__PURE__ */ template(`<form id=chatForm class=chat-input><input id=chatFileInput type=file multiple hidden><div class=chat-compose-row><textarea id=chatTextarea class=chat-textarea rows=2></textarea><div class=chat-compose-actions><div class=chat-icon-col><button type=button id=btnChatAttach class=chat-attach-btn><svg width=16 height=16 viewBox="0 0 16 16"fill=none aria-hidden=true><path d="M13.5 7.5l-5.8 5.8a3.2 3.2 0 01-4.5-4.5L9 3a2 2 0 012.8 2.8L6 11.6a.8.8 0 01-1.1-1.1L10.5 5"stroke=currentColor stroke-width=1.2 stroke-linecap=round stroke-linejoin=round></path></svg></button><button type=button class=chat-cancel-btn><svg width=16 height=16 viewBox="0 0 16 16"fill=none aria-hidden=true><circle cx=8 cy=8 r=6.5 stroke=currentColor stroke-width=1.2></circle><path d="M5.5 5.5l5 5M10.5 5.5l-5 5"stroke=currentColor stroke-width=1.2 stroke-linecap=round></path></svg></button></div><button><span class=chat-send-icon aria-hidden=true></span><span class=chat-send-label></span></button></div></div><div class=chat-compose-meta><div class=chat-compose-meta-left><span class=chat-version id=chatVersion></span><span class=chat-author><a href=https://github.com/yangheng95/argus target=_blank rel=noopener>@yangheng95</a></span></div><div class=chat-compose-tip>`), _tmpl$4$b = /* @__PURE__ */ template(`<img class=chat-attachment-thumb>`), _tmpl$5$b = /* @__PURE__ */ template(`<div class=chat-attachment-item><span class=chat-attachment-name></span><button type=button class=chat-attachment-remove aria-label=Remove>&times;`), _tmpl$6$a = /* @__PURE__ */ template(`<span class=chat-attachment-icon>`), _tmpl$7$8 = /* @__PURE__ */ template(`<svg width=16 height=16 viewBox="0 0 16 16"fill=none><path d="M2 8l10-5-3 5 3 5z"fill=currentColor>`);
+var _tmpl$$d = /* @__PURE__ */ template(`<div class=chat-attachments id=chatAttachments>`), _tmpl$2$b = /* @__PURE__ */ template(`<svg width=16 height=16 viewBox="0 0 16 16"fill=none><rect x=4.25 y=4.25 width=7.5 height=7.5 rx=1.2 fill=currentColor>`), _tmpl$3$b = /* @__PURE__ */ template(`<form id=chatForm class=chat-input><input id=chatFileInput type=file multiple hidden><div class=chat-compose-row><textarea id=chatTextarea class=chat-textarea rows=2></textarea><div class=chat-compose-actions><button type=button id=btnChatAttach class=chat-attach-btn><svg width=16 height=16 viewBox="0 0 16 16"fill=none aria-hidden=true><path d="M13.5 7.5l-5.8 5.8a3.2 3.2 0 01-4.5-4.5L9 3a2 2 0 012.8 2.8L6 11.6a.8.8 0 01-1.1-1.1L10.5 5"stroke=currentColor stroke-width=1.2 stroke-linecap=round stroke-linejoin=round></path></svg></button><button><span class=chat-send-icon aria-hidden=true></span><span class=chat-send-label></span></button></div></div><div class=chat-compose-meta><div class=chat-compose-meta-left><span class=chat-version id=chatVersion></span><span class=chat-author><a href=https://github.com/yangheng95/argus target=_blank rel=noopener>@yangheng95</a></span></div><div class=chat-compose-tip>`), _tmpl$4$b = /* @__PURE__ */ template(`<img class=chat-attachment-thumb>`), _tmpl$5$b = /* @__PURE__ */ template(`<div class=chat-attachment-item><span class=chat-attachment-name></span><button type=button class=chat-attachment-remove aria-label=Remove>&times;`), _tmpl$6$a = /* @__PURE__ */ template(`<span class=chat-attachment-icon>`), _tmpl$7$8 = /* @__PURE__ */ template(`<svg width=16 height=16 viewBox="0 0 16 16"fill=none><path d="M2 8l10-5-3 5 3 5z"fill=currentColor>`);
 const MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024;
 const FILE_ACCEPT = ["image/*", ".pdf", ".txt", ".md", ".json", ".csv", ".xml", ".yaml", ".yml", ".log", ".ts", ".js", ".py", ".go", ".rs", ".c", ".cpp", ".h", ".java", ".rb", ".sh", ".bat", ".ps1", ".html", ".css", ".sql", ".toml"].join(",");
 function fileToDataUrl(file) {
@@ -6066,7 +6097,7 @@ function ChatComposer(props) {
   const sendAriaLabel = () => props.busy ? t("chat.stop_label") : t("chat.send_label");
   const sendLabel = () => props.busy ? t("chat.stop_label") : t("chat.send_label");
   return (() => {
-    var _el$ = _tmpl$3$b(), _el$3 = _el$.firstChild, _el$4 = _el$3.nextSibling, _el$5 = _el$4.firstChild, _el$6 = _el$5.nextSibling, _el$7 = _el$6.firstChild, _el$8 = _el$7.firstChild, _el$9 = _el$8.nextSibling, _el$0 = _el$7.nextSibling, _el$1 = _el$0.firstChild, _el$11 = _el$1.nextSibling, _el$12 = _el$4.nextSibling, _el$13 = _el$12.firstChild, _el$14 = _el$13.nextSibling;
+    var _el$ = _tmpl$3$b(), _el$3 = _el$.firstChild, _el$4 = _el$3.nextSibling, _el$5 = _el$4.firstChild, _el$6 = _el$5.nextSibling, _el$7 = _el$6.firstChild, _el$8 = _el$7.nextSibling, _el$9 = _el$8.firstChild, _el$1 = _el$9.nextSibling, _el$10 = _el$4.nextSibling, _el$11 = _el$10.firstChild, _el$12 = _el$11.nextSibling;
     _el$.addEventListener("drop", handleDrop);
     _el$.addEventListener("dragleave", handleDragLeave);
     _el$.addEventListener("dragover", handleDragOver);
@@ -6084,36 +6115,36 @@ function ChatComposer(props) {
             return attachments();
           },
           children: (att, index) => (() => {
-            var _el$15 = _tmpl$5$b(), _el$17 = _el$15.firstChild, _el$18 = _el$17.nextSibling;
-            insert(_el$15, createComponent(Show, {
+            var _el$13 = _tmpl$5$b(), _el$15 = _el$13.firstChild, _el$16 = _el$15.nextSibling;
+            insert(_el$13, createComponent(Show, {
               get when() {
                 return att.mime.startsWith("image/");
               },
               get fallback() {
                 return (() => {
-                  var _el$19 = _tmpl$6$a();
-                  insert(_el$19, () => att.filename?.split(".").pop()?.toUpperCase() || "FILE");
-                  return _el$19;
+                  var _el$17 = _tmpl$6$a();
+                  insert(_el$17, () => att.filename?.split(".").pop()?.toUpperCase() || "FILE");
+                  return _el$17;
                 })();
               },
               get children() {
-                var _el$16 = _tmpl$4$b();
+                var _el$14 = _tmpl$4$b();
                 createRenderEffect((_p$) => {
-                  var _v$14 = att.url, _v$15 = att.filename;
-                  _v$14 !== _p$.e && setAttribute(_el$16, "src", _p$.e = _v$14);
-                  _v$15 !== _p$.t && setAttribute(_el$16, "alt", _p$.t = _v$15);
+                  var _v$11 = att.url, _v$12 = att.filename;
+                  _v$11 !== _p$.e && setAttribute(_el$14, "src", _p$.e = _v$11);
+                  _v$12 !== _p$.t && setAttribute(_el$14, "alt", _p$.t = _v$12);
                   return _p$;
                 }, {
                   e: void 0,
                   t: void 0
                 });
-                return _el$16;
+                return _el$14;
               }
-            }), _el$17);
-            insert(_el$17, () => att.filename || "file");
-            _el$18.$$click = () => removeAttachment(index());
-            createRenderEffect(() => setAttribute(_el$15, "title", att.filename));
-            return _el$15;
+            }), _el$15);
+            insert(_el$15, () => att.filename || "file");
+            _el$16.$$click = () => removeAttachment(index());
+            createRenderEffect(() => setAttribute(_el$13, "title", att.filename));
+            return _el$13;
           })()
         }));
         return _el$2;
@@ -6131,15 +6162,14 @@ function ChatComposer(props) {
     };
     var _ref$3 = textareaRef;
     typeof _ref$3 === "function" ? use(_ref$3, _el$5) : textareaRef = _el$5;
-    _el$8.$$click = () => fileInputRef?.click();
-    _el$9.$$click = () => props.onCancel?.();
-    _el$0.$$click = (e) => {
+    _el$7.$$click = () => fileInputRef?.click();
+    _el$8.$$click = (e) => {
       if (props.busy) {
         e.preventDefault();
         props.onStop?.();
       }
     };
-    insert(_el$1, createComponent(Show, {
+    insert(_el$9, createComponent(Show, {
       get when() {
         return props.busy;
       },
@@ -6150,25 +6180,22 @@ function ChatComposer(props) {
         return _tmpl$2$b();
       }
     }));
-    insert(_el$11, sendLabel);
-    insert(_el$14, () => t("chat.tip"));
+    insert(_el$1, sendLabel);
+    insert(_el$12, () => t("chat.tip"));
     createRenderEffect((_p$) => {
-      var _v$ = dragover() ? "true" : void 0, _v$2 = !props.enabled, _v$3 = props.enabled ? t("chat.placeholder") : t("chat.placeholder_disabled"), _v$4 = t("chat.attach_title"), _v$5 = t("chat.attach_title"), _v$6 = t("task.action.cancel_title"), _v$7 = t("task.action.cancel_title"), _v$8 = !props.canCancel, _v$9 = props.busy ? "btnTaskInterrupt" : "chatSend", _v$0 = `chat-send${props.busy ? " chat-interrupt" : ""}`, _v$1 = props.busy ? "button" : "submit", _v$10 = props.busy ? "stop" : "send", _v$11 = sendDisabled(), _v$12 = sendTitle(), _v$13 = sendAriaLabel();
+      var _v$ = dragover() ? "true" : void 0, _v$2 = !props.enabled, _v$3 = props.enabled ? t("chat.placeholder") : t("chat.placeholder_disabled"), _v$4 = t("chat.attach_title"), _v$5 = t("chat.attach_title"), _v$6 = props.busy ? "btnTaskInterrupt" : "chatSend", _v$7 = `chat-send${props.busy ? " chat-interrupt" : ""}`, _v$8 = props.busy ? "button" : "submit", _v$9 = props.busy ? "stop" : "send", _v$0 = sendDisabled(), _v$1 = sendTitle(), _v$10 = sendAriaLabel();
       _v$ !== _p$.e && setAttribute(_el$, "data-dragover", _p$.e = _v$);
       _v$2 !== _p$.t && (_el$5.disabled = _p$.t = _v$2);
       _v$3 !== _p$.a && setAttribute(_el$5, "placeholder", _p$.a = _v$3);
-      _v$4 !== _p$.o && setAttribute(_el$8, "title", _p$.o = _v$4);
-      _v$5 !== _p$.i && setAttribute(_el$8, "aria-label", _p$.i = _v$5);
-      _v$6 !== _p$.n && setAttribute(_el$9, "title", _p$.n = _v$6);
-      _v$7 !== _p$.s && setAttribute(_el$9, "aria-label", _p$.s = _v$7);
-      _v$8 !== _p$.h && (_el$9.disabled = _p$.h = _v$8);
-      _v$9 !== _p$.r && setAttribute(_el$0, "id", _p$.r = _v$9);
-      _v$0 !== _p$.d && className(_el$0, _p$.d = _v$0);
-      _v$1 !== _p$.l && setAttribute(_el$0, "type", _p$.l = _v$1);
-      _v$10 !== _p$.u && setAttribute(_el$0, "data-mode", _p$.u = _v$10);
-      _v$11 !== _p$.c && (_el$0.disabled = _p$.c = _v$11);
-      _v$12 !== _p$.w && setAttribute(_el$0, "title", _p$.w = _v$12);
-      _v$13 !== _p$.m && setAttribute(_el$0, "aria-label", _p$.m = _v$13);
+      _v$4 !== _p$.o && setAttribute(_el$7, "title", _p$.o = _v$4);
+      _v$5 !== _p$.i && setAttribute(_el$7, "aria-label", _p$.i = _v$5);
+      _v$6 !== _p$.n && setAttribute(_el$8, "id", _p$.n = _v$6);
+      _v$7 !== _p$.s && className(_el$8, _p$.s = _v$7);
+      _v$8 !== _p$.h && setAttribute(_el$8, "type", _p$.h = _v$8);
+      _v$9 !== _p$.r && setAttribute(_el$8, "data-mode", _p$.r = _v$9);
+      _v$0 !== _p$.d && (_el$8.disabled = _p$.d = _v$0);
+      _v$1 !== _p$.l && setAttribute(_el$8, "title", _p$.l = _v$1);
+      _v$10 !== _p$.u && setAttribute(_el$8, "aria-label", _p$.u = _v$10);
       return _p$;
     }, {
       e: void 0,
@@ -6182,10 +6209,7 @@ function ChatComposer(props) {
       r: void 0,
       d: void 0,
       l: void 0,
-      u: void 0,
-      c: void 0,
-      w: void 0,
-      m: void 0
+      u: void 0
     });
     createRenderEffect(() => _el$5.value = text());
     return _el$;
@@ -7493,6 +7517,376 @@ function stopSSE() {
   clearEventQueue();
 }
 
+function chatRequestTimeoutMs() {
+  const overlayTiming = window.__ocOverlayTiming;
+  const testTiming = window.__overlayTest;
+  const override = typeof overlayTiming?.chatTimeoutMs === "number" ? overlayTiming.chatTimeoutMs : typeof testTiming?.chatTimeoutMs === "number" ? testTiming.chatTimeoutMs : void 0;
+  const value = typeof override === "number" ? override : 10 * 60 * 1e3;
+  return Math.max(value, 1e3);
+}
+function activeDirectory$1() {
+  return boardStore.board?.task?.directory || settingsStore.directory || "";
+}
+function inactivityTimeoutError(timeoutMs) {
+  return new DOMException(
+    `Panel stream inactive for ${timeoutMs}ms`,
+    "TimeoutError"
+  );
+}
+function relayAbort(source, controller) {
+  if (!source) return () => void 0;
+  const abort = () => {
+    controller.abort(
+      source.reason instanceof Error ? source.reason : source.reason ?? void 0
+    );
+  };
+  if (source.aborted) {
+    abort();
+    return () => void 0;
+  }
+  source.addEventListener("abort", abort, { once: true });
+  return () => source.removeEventListener("abort", abort);
+}
+async function readWithAbort(reader, signal) {
+  if (signal.aborted) {
+    await reader.cancel(signal.reason).catch(() => void 0);
+    throw signal.reason ?? new DOMException("Aborted", "AbortError");
+  }
+  return new Promise((resolve, reject) => {
+    const abort = () => {
+      signal.removeEventListener("abort", abort);
+      void reader.cancel(signal.reason).catch(() => void 0);
+      reject(signal.reason ?? new DOMException("Aborted", "AbortError"));
+    };
+    signal.addEventListener("abort", abort, { once: true });
+    reader.read().then(
+      (value) => {
+        signal.removeEventListener("abort", abort);
+        resolve(value);
+      },
+      (error) => {
+        signal.removeEventListener("abort", abort);
+        reject(error);
+      }
+    );
+  });
+}
+function panelRequestBody(text, metadata = {}, requestID = "", attachments = [], executor = "opencode") {
+  const taskID = boardStore.selectedTaskID || void 0;
+  const body = {
+    surface: "panel",
+    text,
+    time_created: Date.now(),
+    taskID,
+    executor,
+    request_id: requestID || void 0,
+    allow_create: true,
+    allow_session_mutation: false,
+    directory: activeDirectory$1() || void 0,
+    metadata: {
+      selectedTaskID: taskID,
+      ...metadata
+    }
+  };
+  if (attachments.length > 0) {
+    body.attachments = attachments.map((att) => ({
+      mime: att.mime,
+      url: att.url,
+      ...att.filename ? { filename: att.filename } : {}
+    }));
+  }
+  return body;
+}
+async function selectTask(taskID, options = {}) {
+  const nextTaskID = taskID || "";
+  if (nextTaskID === boardStore.selectedTaskID && boardStore.board) {
+    return;
+  }
+  stopSSE();
+  setBoardStore("board", null);
+  clearMessages();
+  clearAgentEvents();
+  if (appStore.budgetDirty) {
+    setAppStore("budgetDirty", false);
+  }
+  setSelectedTaskID(nextTaskID);
+  setBoardStore("selectedTaskID", nextTaskID);
+  if (!nextTaskID) {
+    return;
+  }
+  await Promise.all([
+    loadBoard({ sync: true }).catch(
+      (e) => console.error("[selectTask] loadBoard failed:", e)
+    ),
+    syncTask(nextTaskID).catch(
+      (e) => console.error("[selectTask] syncTask failed:", e)
+    )
+  ]);
+  startSSE(nextTaskID);
+}
+async function deleteTask(taskID) {
+  if (!taskID) return false;
+  try {
+    await apiJson(`task/${encodeURIComponent(taskID)}`, {
+      method: "DELETE"
+    });
+    if (boardStore.selectedTaskID === taskID) {
+      await selectTask("");
+    }
+    await loadTasks();
+    return true;
+  } catch (e) {
+    console.error("[deleteTask] failed", { error: String(e), taskID });
+    return false;
+  }
+}
+async function submitMessage(text, attachments = [], options = {}) {
+  const requestID = options.requestID ?? crypto.randomUUID();
+  const timeoutMs = chatRequestTimeoutMs();
+  const controller = new AbortController();
+  const cleanupRelay = relayAbort(options.signal, controller);
+  const executor = settingsStore.executor ?? "opencode";
+  let inactivityTimer = null;
+  const markActivity = () => {
+    if (inactivityTimer) clearTimeout(inactivityTimer);
+    inactivityTimer = setTimeout(() => {
+      controller.abort(inactivityTimeoutError(timeoutMs));
+    }, timeoutMs);
+  };
+  const body = JSON.stringify(
+    panelRequestBody(
+      text,
+      options.metadata ?? {},
+      requestID,
+      attachments,
+      executor
+    )
+  );
+  markActivity();
+  try {
+    const res = await fetch(apiUrl("panel/message/stream"), {
+      method: "POST",
+      headers: { ...apiHeaders(), "Content-Type": "application/json" },
+      body,
+      signal: controller.signal
+    });
+    markActivity();
+    if (!res.ok || !res.body) {
+      throw new Error(`Panel stream failed: ${res.status} ${res.statusText}`);
+    }
+    await options.onOpen?.();
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = "";
+    let result = null;
+    const consume = async (chunk, flush = false) => {
+      buf += chunk;
+      const blocks = buf.split(/\r?\n\r?\n/);
+      if (!flush) {
+        buf = blocks.pop() || "";
+      } else {
+        buf = "";
+      }
+      for (const block of blocks) {
+        const data = block.split(/\r?\n/).filter((line) => line.startsWith("data:")).map((line) => line.slice(5).trim()).join("\n");
+        if (!data) continue;
+        try {
+          const ev = JSON.parse(data);
+          markActivity();
+          await options.onEvent?.(ev);
+          if (ev.type === "done") {
+            result = ev.result;
+          }
+        } catch {
+        }
+      }
+    };
+    while (true) {
+      const { done, value } = await readWithAbort(reader, controller.signal);
+      if (done) {
+        await consume(decoder.decode(), true);
+        break;
+      }
+      markActivity();
+      await consume(decoder.decode(value, { stream: true }));
+    }
+    if (!result) {
+      throw new Error("Panel stream ended without a final result");
+    }
+    return result;
+  } finally {
+    if (inactivityTimer) clearTimeout(inactivityTimer);
+    cleanupRelay();
+  }
+}
+async function createTask(options) {
+  const { text, attachments = [], metadata = {}, signal } = options;
+  if (!text) throw new Error("createTask: text is required");
+  const requestID = crypto.randomUUID();
+  const executor = settingsStore.executor ?? "opencode";
+  const result = await apiJson("task", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      request: text,
+      executor,
+      requestID,
+      metadata,
+      source: "panel",
+      ...attachments.length > 0 ? {
+        attachments: attachments.map((att) => ({
+          mime: att.mime,
+          url: att.url,
+          ...att.filename ? { filename: att.filename } : {}
+        }))
+      } : {}
+    }),
+    signal
+  });
+  return typeof result?.task_id === "string" ? result.task_id : "";
+}
+async function retryTask(taskID) {
+  if (!taskID) return;
+  await apiJson(`task/${encodeURIComponent(taskID)}/retry`, {
+    method: "POST"
+  });
+  await loadBoard();
+}
+async function replanTask(taskID) {
+  if (!taskID) return;
+  await apiJson(`task/${encodeURIComponent(taskID)}/replan`, {
+    method: "POST"
+  });
+  await loadBoard();
+}
+async function cancelTask(taskID) {
+  if (!taskID) return;
+  await apiJson(`task/${encodeURIComponent(taskID)}/cancel`, {
+    method: "POST"
+  });
+  await loadBoard();
+}
+async function interruptTask(taskID) {
+  if (!taskID) return false;
+  try {
+    await apiJson(`task/${encodeURIComponent(taskID)}/cancel`, {
+      method: "POST"
+    });
+    await loadBoard();
+    return true;
+  } catch (e) {
+    console.error("[interruptTask] failed", { error: String(e), taskID });
+    return false;
+  }
+}
+
+function jsonAttr(value) {
+  return JSON.stringify(String(value ?? ""));
+}
+function eventClosest(event, selector) {
+  const target = event?.target;
+  if (target instanceof Element) return target.closest(selector);
+  const parent = target?.parentElement;
+  if (parent instanceof Element) return parent.closest(selector);
+  return null;
+}
+function pathItems(value) {
+  const text = String(value || "").trim();
+  if (!text) return [];
+  const windows = /^[A-Za-z]:[\\/]/.test(text);
+  const unix = text.startsWith("/");
+  const parts = text.split(/[\\/]+/).filter(Boolean);
+  if (!parts.length) return [];
+  function joinPath(a, b) {
+    return a.replace(/[\\/]+$/, "") + "/" + b;
+  }
+  if (windows) {
+    let path2 = `${parts[0]}\\`;
+    const items2 = [{ label: parts[0], path: path2 }];
+    return items2.concat(
+      parts.slice(1).map((part) => {
+        path2 = joinPath(path2, part);
+        return { label: part, path: path2 };
+      })
+    );
+  }
+  if (unix) {
+    let path2 = "/";
+    const items2 = [{ label: "/", path: path2 }];
+    return items2.concat(
+      parts.map((part) => {
+        path2 = path2 === "/" ? `/${part}` : `${path2}/${part}`;
+        return { label: part, path: path2 };
+      })
+    );
+  }
+  let path = parts[0];
+  const items = [{ label: parts[0], path }];
+  return items.concat(
+    parts.slice(1).map((part) => {
+      path = path.replace(/[\\/]+$/, "") + "/" + part;
+      return { label: part, path };
+    })
+  );
+}
+function pathIcon(kind) {
+  if (kind === "browse") {
+    return `<svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path d="M2.5 4.5h4l1.2 1.5h5.8v5.2a1.3 1.3 0 01-1.3 1.3H3.8a1.3 1.3 0 01-1.3-1.3V5.8a1.3 1.3 0 011.3-1.3z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>
+    </svg>`;
+  }
+  if (kind === "new") {
+    return `<svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path d="M8 3.2v9.6M3.2 8h9.6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+    </svg>`;
+  }
+  if (kind === "history") {
+    return `<svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path d="M8 4v4l2.5 1.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M3.05 8a5 5 0 1 1 .5 2.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+      <path d="M3 10.5L3.05 8 1 9" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>`;
+  }
+  return `<svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+    <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+  </svg>`;
+}
+function pathBreadcrumb(value) {
+  const browse = escapeHtml$1(t("cwd.browse"));
+  const create = escapeHtml$1(t("cwd.new"));
+  const reset = escapeHtml$1(t("cwd.reset"));
+  const recent = escapeHtml$1(t("cwd.recent"));
+  const directory = settingsStore.directory;
+  const actions = [
+    `<button type="button" class="task-dir-tool" data-path-action="recent" title="${recent}" aria-label="${recent}">${pathIcon("history")}</button>`,
+    `<button type="button" class="task-dir-tool" data-path-action="browse" title="${browse}" aria-label="${browse}">${pathIcon("browse")}</button>`,
+    `<button type="button" class="task-dir-tool" data-path-action="create" title="${create}" aria-label="${create}">${pathIcon("new")}</button>`,
+    directory ? `<button type="button" class="task-dir-tool danger" data-path-action="reset" title="${reset}" aria-label="${reset}">${pathIcon("reset")}</button>` : ""
+  ].filter(Boolean).join("");
+  if (!value) {
+    return `
+      <span class="task-dir-shell" data-empty="true">
+        <span class="task-dir-empty">${escapeHtml$1(t("cwd.unavailable"))}</span>
+        <span class="task-dir-actions">${actions}</span>
+      </span>
+    `;
+  }
+  const items = pathItems(value);
+  const open = t("cwd.open");
+  const choose = t("cwd.choose_level");
+  const nodes = items.map((item, index) => {
+    const current = index === items.length - 1 ? ' data-current="true"' : "";
+    const step = index ? `<button type="button" class="task-dir-step" data-path-set=${jsonAttr(items[index - 1].path)} title="${escapeHtml$1(`${choose}: ${items[index - 1].path}`)}" aria-label="${escapeHtml$1(`${choose}: ${items[index - 1].path}`)}">/</button>` : "";
+    return `${step}<button type="button" class="task-dir-node" data-path-open=${jsonAttr(item.path)} title="${escapeHtml$1(`${open}: ${item.path}`)}" aria-label="${escapeHtml$1(`${open}: ${item.path}`)}"${current}>${escapeHtml$1(item.label)}</button>`;
+  }).join("");
+  return `
+    <span class="task-dir-shell">
+      <span class="task-dir-path">${nodes}</span>
+      <span class="task-dir-actions">${actions}</span>
+    </span>
+  `;
+}
+
 let workspaceEpoch = 0;
 let tasksSeq = 0;
 let boardKickTimer = null;
@@ -7707,7 +8101,7 @@ async function pickFiles(start) {
   );
   return Array.isArray(result) ? result : [];
 }
-function activeDirectory$1() {
+function activeDirectory() {
   return settingsStore.directory;
 }
 function sanitizeDirectoryMode(value, directory) {
@@ -7736,7 +8130,7 @@ function workspaceRestoreDirectory(value) {
 }
 function rememberWorkspace(input = {}) {
   const taskID = typeof input.taskID === "string" ? input.taskID.trim() : boardStore.selectedTaskID || settingsStore.workspaceTaskID || "";
-  const rawDir = typeof input.directory === "string" ? input.directory.trim() : settingsStore.savedDirectory || activeDirectory$1() || settingsStore.directory || "";
+  const rawDir = typeof input.directory === "string" ? input.directory.trim() : settingsStore.savedDirectory || activeDirectory() || settingsStore.directory || "";
   const directory = workspaceRestoreDirectory(rawDir) || workspaceRestoreDirectory(settingsStore.savedDirectory || "") || "";
   setSettingsStore("workspaceTaskID", taskID);
   setSettingsStore("workspaceDirectory", taskID ? directory : "");
@@ -7802,6 +8196,7 @@ async function applyDirectory(next, options = {}) {
     "directoryMode",
     settingsStore.savedDirectory ? "custom" : "temp"
   );
+  configure({ directory: next });
   setBoardStore("pendingTasks", []);
   setSettingsStore("workspaceTaskID", "");
   setSettingsStore("workspaceDirectory", "");
@@ -7811,6 +8206,7 @@ async function applyDirectory(next, options = {}) {
     if (typeof persistFn === "function") await persistFn();
   }
   if (options.save === true && next) addRecentDirectory(next);
+  const epoch = settingsStore.directoryEpoch;
   const { checkConnection } = await __vitePreload(async () => { const { checkConnection } = await Promise.resolve().then(() => connection);return { checkConnection }},true              ?void 0:void 0);
   if (typeof checkConnection === "function") {
     console.log("[applyDir] checking connection");
@@ -7820,9 +8216,17 @@ async function applyDirectory(next, options = {}) {
       return;
     }
   }
+  if (epoch !== settingsStore.directoryEpoch) {
+    console.log("[applyDir] superseded after connection check, aborting");
+    return;
+  }
   const { reloadProjectScope } = await __vitePreload(async () => { const { reloadProjectScope } = await Promise.resolve().then(() => config);return { reloadProjectScope }},true              ?void 0:void 0);
   console.log("[applyDir] reloading project scope");
   await reloadProjectScope(options);
+  if (epoch !== settingsStore.directoryEpoch) {
+    console.log("[applyDir] superseded after reload, discarding");
+    return;
+  }
   console.log("[applyDir] done, tasks=", boardStore.tasks.length);
 }
 async function setActiveDirectory(value, options = {}) {
@@ -7832,7 +8236,7 @@ async function setActiveDirectory(value, options = {}) {
 }
 async function browseDirectory() {
   try {
-    const selected = await pickDirectory(activeDirectory$1());
+    const selected = await pickDirectory(activeDirectory());
     if (!selected) return;
     await setDirectory(selected);
   } catch (e) {
@@ -7845,7 +8249,7 @@ async function browseDirectory() {
 }
 async function createDirectory() {
   try {
-    const parent = await pickDirectory(activeDirectory$1());
+    const parent = await pickDirectory(activeDirectory());
     if (!parent) return;
     const name = await nativePrompt$1(t("cwd.create_prompt"), {
       title: t("cwd.create_title"),
@@ -7874,7 +8278,7 @@ async function createDirectory() {
   }
 }
 async function openDirectory(target) {
-  const dir = target ?? activeDirectory$1();
+  const dir = target ?? activeDirectory();
   try {
     if (!dir) return;
     const opened = await nativeOpen$1(dir);
@@ -7952,13 +8356,13 @@ async function ensureDefaultDirectory() {
   return true;
 }
 async function ensureWorkspaceDirectory() {
-  if (activeDirectory$1()) return activeDirectory$1();
+  if (activeDirectory()) return activeDirectory();
   const { loadMeta } = await __vitePreload(async () => { const { loadMeta } = await Promise.resolve().then(() => meta);return { loadMeta }},true              ?void 0:void 0);
   if (typeof loadMeta === "function") await loadMeta();
   if (!settingsStore.directory && boardStore.path?.directory) {
     setSettingsStore("directory", boardStore.path.directory);
   }
-  return activeDirectory$1();
+  return activeDirectory();
 }
 function goalRunPriority(status) {
   if (status === "running") return 0;
@@ -7982,7 +8386,7 @@ function currentExecutionDirectory() {
 
 const workspace = /*#__PURE__*/Object.freeze(/*#__PURE__*/Object.defineProperty({
   __proto__: null,
-  activeDirectory: activeDirectory$1,
+  activeDirectory,
   addRecentDirectory,
   applyDirectory,
   browseDirectory,
@@ -8024,468 +8428,6 @@ const workspace = /*#__PURE__*/Object.freeze(/*#__PURE__*/Object.defineProperty(
   workspaceModeWithConnection,
   workspaceRestoreDirectory
 }, Symbol.toStringTag, { value: 'Module' }));
-
-function chatRequestTimeoutMs() {
-  const overlayTiming2 = window.__ocOverlayTiming;
-  const testTiming = window.__overlayTest;
-  const override = typeof overlayTiming2?.chatTimeoutMs === "number" ? overlayTiming2.chatTimeoutMs : typeof testTiming?.chatTimeoutMs === "number" ? testTiming.chatTimeoutMs : void 0;
-  const value = typeof override === "number" ? override : 10 * 60 * 1e3;
-  return Math.max(value, 1e3);
-}
-function activeDirectory() {
-  return boardStore.board?.task?.directory ?? "";
-}
-function inactivityTimeoutError(timeoutMs) {
-  return new DOMException(
-    `Panel stream inactive for ${timeoutMs}ms`,
-    "TimeoutError"
-  );
-}
-function relayAbort(source, controller) {
-  if (!source) return () => void 0;
-  const abort = () => {
-    controller.abort(
-      source.reason instanceof Error ? source.reason : source.reason ?? void 0
-    );
-  };
-  if (source.aborted) {
-    abort();
-    return () => void 0;
-  }
-  source.addEventListener("abort", abort, { once: true });
-  return () => source.removeEventListener("abort", abort);
-}
-async function readWithAbort(reader, signal) {
-  if (signal.aborted) {
-    await reader.cancel(signal.reason).catch(() => void 0);
-    throw signal.reason ?? new DOMException("Aborted", "AbortError");
-  }
-  return new Promise((resolve, reject) => {
-    const abort = () => {
-      signal.removeEventListener("abort", abort);
-      void reader.cancel(signal.reason).catch(() => void 0);
-      reject(signal.reason ?? new DOMException("Aborted", "AbortError"));
-    };
-    signal.addEventListener("abort", abort, { once: true });
-    reader.read().then(
-      (value) => {
-        signal.removeEventListener("abort", abort);
-        resolve(value);
-      },
-      (error) => {
-        signal.removeEventListener("abort", abort);
-        reject(error);
-      }
-    );
-  });
-}
-function panelRequestBody(text, metadata = {}, requestID = "", attachments = [], executor = "opencode") {
-  const taskID = boardStore.selectedTaskID || void 0;
-  const body = {
-    surface: "panel",
-    text,
-    time_created: Date.now(),
-    taskID,
-    executor,
-    request_id: requestID || void 0,
-    allow_create: true,
-    allow_session_mutation: false,
-    directory: activeDirectory() || void 0,
-    metadata: {
-      selectedTaskID: taskID,
-      ...metadata
-    }
-  };
-  if (attachments.length > 0) {
-    body.attachments = attachments.map((att) => ({
-      mime: att.mime,
-      url: att.url,
-      ...att.filename ? { filename: att.filename } : {}
-    }));
-  }
-  return body;
-}
-async function selectTask(taskID, options = {}) {
-  const nextTaskID = taskID || "";
-  if (nextTaskID === boardStore.selectedTaskID && boardStore.board) {
-    return;
-  }
-  stopSSE();
-  setBoardStore("board", null);
-  clearMessages();
-  clearAgentEvents();
-  if (appStore.budgetDirty) {
-    setAppStore("budgetDirty", false);
-  }
-  setSelectedTaskID(nextTaskID);
-  setBoardStore("selectedTaskID", nextTaskID);
-  if (!nextTaskID) {
-    return;
-  }
-  await Promise.all([
-    loadBoard({ sync: true }).catch(
-      (e) => console.error("[selectTask] loadBoard failed:", e)
-    ),
-    syncTask(nextTaskID).catch(
-      (e) => console.error("[selectTask] syncTask failed:", e)
-    )
-  ]);
-  startSSE(nextTaskID);
-}
-async function deleteTask(taskID) {
-  if (!taskID) return false;
-  try {
-    await apiJson(`task/${encodeURIComponent(taskID)}`, {
-      method: "DELETE"
-    });
-    if (boardStore.selectedTaskID === taskID) {
-      await selectTask("");
-    }
-    await loadTasks();
-    return true;
-  } catch (e) {
-    console.error("[deleteTask] failed", { error: String(e), taskID });
-    return false;
-  }
-}
-async function submitMessage(text, attachments = [], options = {}) {
-  const requestID = options.requestID ?? crypto.randomUUID();
-  const timeoutMs = chatRequestTimeoutMs();
-  const controller = new AbortController();
-  const cleanupRelay = relayAbort(options.signal, controller);
-  const executor = settingsStore.executor ?? "opencode";
-  let inactivityTimer = null;
-  const markActivity = () => {
-    if (inactivityTimer) clearTimeout(inactivityTimer);
-    inactivityTimer = setTimeout(() => {
-      controller.abort(inactivityTimeoutError(timeoutMs));
-    }, timeoutMs);
-  };
-  const body = JSON.stringify(
-    panelRequestBody(
-      text,
-      options.metadata ?? {},
-      requestID,
-      attachments,
-      executor
-    )
-  );
-  markActivity();
-  try {
-    const res = await fetch(apiUrl("panel/message/stream"), {
-      method: "POST",
-      headers: { ...apiHeaders(), "Content-Type": "application/json" },
-      body,
-      signal: controller.signal
-    });
-    markActivity();
-    if (!res.ok || !res.body) {
-      throw new Error(`Panel stream failed: ${res.status} ${res.statusText}`);
-    }
-    await options.onOpen?.();
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let buf = "";
-    let result = null;
-    const consume = async (chunk, flush = false) => {
-      buf += chunk;
-      const blocks = buf.split(/\r?\n\r?\n/);
-      if (!flush) {
-        buf = blocks.pop() || "";
-      } else {
-        buf = "";
-      }
-      for (const block of blocks) {
-        const data = block.split(/\r?\n/).filter((line) => line.startsWith("data:")).map((line) => line.slice(5).trim()).join("\n");
-        if (!data) continue;
-        try {
-          const ev = JSON.parse(data);
-          markActivity();
-          await options.onEvent?.(ev);
-          if (ev.type === "done") {
-            result = ev.result;
-          }
-        } catch {
-        }
-      }
-    };
-    while (true) {
-      const { done, value } = await readWithAbort(reader, controller.signal);
-      if (done) {
-        await consume(decoder.decode(), true);
-        break;
-      }
-      markActivity();
-      await consume(decoder.decode(value, { stream: true }));
-    }
-    if (!result) {
-      throw new Error("Panel stream ended without a final result");
-    }
-    return result;
-  } finally {
-    if (inactivityTimer) clearTimeout(inactivityTimer);
-    cleanupRelay();
-  }
-}
-async function retryTask(taskID, note) {
-  if (!taskID) return;
-  const message = note?.trim() ? `Retry task ${taskID} with this operator guidance: ${note}` : `Perform retry on task ${taskID}.`;
-  await submitMessage(
-    message,
-    [],
-    {
-      metadata: {
-        taskID,
-        ui_context: "task_controls",
-        ...note?.trim() ? { operator_note: note.trim() } : {}
-      }
-    }
-  );
-  await loadBoard();
-}
-async function replanTask(taskID) {
-  if (!taskID) return;
-  await submitMessage(
-    `Perform replan on task ${taskID}.`,
-    [],
-    {
-      metadata: {
-        taskID,
-        ui_context: "task_controls"
-      }
-    }
-  );
-  await loadBoard();
-}
-async function cancelTask(taskID) {
-  if (!taskID) return;
-  await submitMessage(
-    `Perform cancel on task ${taskID}.`,
-    [],
-    {
-      metadata: {
-        taskID,
-        ui_context: "task_controls"
-      }
-    }
-  );
-  await loadBoard();
-}
-function overlayTiming(name, fallback, min = 50) {
-  const cfg = window.__overlayTest;
-  const value = Number(cfg?.[name]);
-  if (!Number.isFinite(value)) return fallback;
-  return Math.max(min, Math.floor(value));
-}
-function taskRecoveryTimeoutMs() {
-  return overlayTiming("taskRecoveryTimeoutMs", 10 * 60 * 1e3, 1e3);
-}
-function taskRecoveryPollMs() {
-  return overlayTiming("taskRecoveryPollMs", 2e3, 50);
-}
-function delay(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-function sortedTasks(data) {
-  return [...Array.isArray(data?.tasks) ? data.tasks : []].sort(
-    (a, b) => (b.updated_at || b.task?.time?.updated || 0) - (a.updated_at || a.task?.time?.updated || 0)
-  );
-}
-function taskByRequestID(requestID, list) {
-  if (!requestID || !Array.isArray(list)) return null;
-  return list.find((item) => item?.task?.requestID === requestID) || null;
-}
-function startTaskRecovery(request) {
-  if (!request?.requestID) return null;
-  const recovery = {
-    active: true,
-    stop() {
-      recovery.active = false;
-    },
-    promise: Promise.resolve("")
-  };
-  recovery.promise = (async () => {
-    const started = Date.now();
-    const epochAtStart = request.workspaceEpoch;
-    while (recovery.active && Date.now() - started < taskRecoveryTimeoutMs()) {
-      if (request.manualAbort) break;
-      if (epochAtStart !== void 0 && // workspaceEpoch comparison: use window fallback for
-      getWorkspaceEpoch() !== epochAtStart && !request.recoveredTaskID) {
-        break;
-      }
-      const data = await apiJson("tasks").catch(() => null);
-      const tasks = Array.isArray(data?.tasks) ? sortedTasks(data) : [];
-      const match = taskByRequestID(request.requestID, tasks);
-      const taskID = match?.task?.id || "";
-      if (taskID) {
-        request.recoveredTaskID = taskID;
-        if (!request.timedOut && !request.aborted) {
-          request.aborted = true;
-          request.controller?.abort();
-        }
-        await selectTask(taskID);
-        recovery.stop();
-        return taskID;
-      }
-      await delay(taskRecoveryPollMs());
-    }
-    recovery.stop();
-    return "";
-  })();
-  return recovery;
-}
-function pendingTaskKey(requestID) {
-  const value = typeof requestID === "string" ? requestID.trim() : "";
-  return value ? `pending:${value}` : "";
-}
-function rememberPendingTask(requestID, title) {
-  const value = typeof requestID === "string" ? requestID.trim() : "";
-  if (!value) return;
-  const headline = clipText$2(title || value, 72) || value;
-  const now = Date.now();
-  const next = [
-    {
-      _pending: true,
-      requestID: value,
-      task: {
-        id: pendingTaskKey(value),
-        requestID: value,
-        source: "panel",
-        title: headline,
-        status: "planning",
-        directory: boardStore.board?.task?.directory ?? "",
-        time: {
-          created: now,
-          updated: now
-        }
-      },
-      overview: {
-        headline
-      },
-      updated_at: now,
-      pending_interactions: 0
-    },
-    ...boardStore.pendingTasks.filter((item) => item?.requestID !== value)
-  ];
-  setPendingTasks(next);
-}
-function forgetPendingTask(requestID) {
-  const value = typeof requestID === "string" ? requestID.trim() : "";
-  if (!value || !boardStore.pendingTasks.some((item) => item?.requestID === value)) {
-    return false;
-  }
-  setPendingTasks(
-    boardStore.pendingTasks.filter((item) => item?.requestID !== value)
-  );
-  return true;
-}
-
-function jsonAttr(value) {
-  return JSON.stringify(String(value ?? ""));
-}
-function eventClosest(event, selector) {
-  const target = event?.target;
-  if (target instanceof Element) return target.closest(selector);
-  const parent = target?.parentElement;
-  if (parent instanceof Element) return parent.closest(selector);
-  return null;
-}
-function pathItems(value) {
-  const text = String(value || "").trim();
-  if (!text) return [];
-  const windows = /^[A-Za-z]:[\\/]/.test(text);
-  const unix = text.startsWith("/");
-  const parts = text.split(/[\\/]+/).filter(Boolean);
-  if (!parts.length) return [];
-  function joinPath(a, b) {
-    return a.replace(/[\\/]+$/, "") + "/" + b;
-  }
-  if (windows) {
-    let path2 = `${parts[0]}\\`;
-    const items2 = [{ label: parts[0], path: path2 }];
-    return items2.concat(
-      parts.slice(1).map((part) => {
-        path2 = joinPath(path2, part);
-        return { label: part, path: path2 };
-      })
-    );
-  }
-  if (unix) {
-    let path2 = "/";
-    const items2 = [{ label: "/", path: path2 }];
-    return items2.concat(
-      parts.map((part) => {
-        path2 = path2 === "/" ? `/${part}` : `${path2}/${part}`;
-        return { label: part, path: path2 };
-      })
-    );
-  }
-  let path = parts[0];
-  const items = [{ label: parts[0], path }];
-  return items.concat(
-    parts.slice(1).map((part) => {
-      path = path.replace(/[\\/]+$/, "") + "/" + part;
-      return { label: part, path };
-    })
-  );
-}
-function pathIcon(kind) {
-  if (kind === "browse") {
-    return `<svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path d="M2.5 4.5h4l1.2 1.5h5.8v5.2a1.3 1.3 0 01-1.3 1.3H3.8a1.3 1.3 0 01-1.3-1.3V5.8a1.3 1.3 0 011.3-1.3z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>
-    </svg>`;
-  }
-  if (kind === "new") {
-    return `<svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path d="M8 3.2v9.6M3.2 8h9.6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
-    </svg>`;
-  }
-  if (kind === "history") {
-    return `<svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path d="M8 4v4l2.5 1.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
-      <path d="M3.05 8a5 5 0 1 1 .5 2.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
-      <path d="M3 10.5L3.05 8 1 9" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
-    </svg>`;
-  }
-  return `<svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-    <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
-  </svg>`;
-}
-function pathBreadcrumb(value) {
-  const browse = escapeHtml$1(t("cwd.browse"));
-  const create = escapeHtml$1(t("cwd.new"));
-  const reset = escapeHtml$1(t("cwd.reset"));
-  const recent = escapeHtml$1(t("cwd.recent"));
-  const directory = settingsStore.directory;
-  const actions = [
-    `<button type="button" class="task-dir-tool" data-path-action="recent" title="${recent}" aria-label="${recent}">${pathIcon("history")}</button>`,
-    `<button type="button" class="task-dir-tool" data-path-action="browse" title="${browse}" aria-label="${browse}">${pathIcon("browse")}</button>`,
-    `<button type="button" class="task-dir-tool" data-path-action="create" title="${create}" aria-label="${create}">${pathIcon("new")}</button>`,
-    directory ? `<button type="button" class="task-dir-tool danger" data-path-action="reset" title="${reset}" aria-label="${reset}">${pathIcon("reset")}</button>` : ""
-  ].filter(Boolean).join("");
-  if (!value) {
-    return `
-      <span class="task-dir-shell" data-empty="true">
-        <span class="task-dir-empty">${escapeHtml$1(t("cwd.unavailable"))}</span>
-        <span class="task-dir-actions">${actions}</span>
-      </span>
-    `;
-  }
-  const items = pathItems(value);
-  const open = t("cwd.open");
-  const choose = t("cwd.choose_level");
-  const nodes = items.map((item, index) => {
-    const current = index === items.length - 1 ? ' data-current="true"' : "";
-    const step = index ? `<button type="button" class="task-dir-step" data-path-set=${jsonAttr(items[index - 1].path)} title="${escapeHtml$1(`${choose}: ${items[index - 1].path}`)}" aria-label="${escapeHtml$1(`${choose}: ${items[index - 1].path}`)}">/</button>` : "";
-    return `${step}<button type="button" class="task-dir-node" data-path-open=${jsonAttr(item.path)} title="${escapeHtml$1(`${open}: ${item.path}`)}" aria-label="${escapeHtml$1(`${open}: ${item.path}`)}"${current}>${escapeHtml$1(item.label)}</button>`;
-  }).join("");
-  return `
-    <span class="task-dir-shell">
-      <span class="task-dir-path">${nodes}</span>
-      <span class="task-dir-actions">${actions}</span>
-    </span>
-  `;
-}
 
 async function loadMeta() {
   const epoch = settingsStore.directoryEpoch;
@@ -10009,6 +9951,15 @@ async function setExecutorModel(executorID, model) {
   }
 }
 
+const executor = /*#__PURE__*/Object.freeze(/*#__PURE__*/Object.defineProperty({
+  __proto__: null,
+  executorCurrentModel,
+  executorInfo,
+  executorSelectable,
+  loadExecutors,
+  setExecutorModel
+}, Symbol.toStringTag, { value: 'Module' }));
+
 async function loadPreferences() {
   try {
     const prefs = await apiJson("panel/knowledge/preference");
@@ -10192,9 +10143,6 @@ function chatAbortTargets(seed) {
   push({ kind: "task", taskID: boardStore.selectedTaskID });
   return items;
 }
-function chatAbortTarget(seed) {
-  return chatAbortTargets(seed)[0] || null;
-}
 async function abortChatTargetRemote(target) {
   if (!target) return false;
   if (target.kind === "run" && target.runID) {
@@ -10311,12 +10259,6 @@ function insertPendingUserMessage(requestID, text) {
     }
   ]);
 }
-function isRecoveryAwaitableError(error) {
-  if (error instanceof DOMException) {
-    return error.name === "AbortError" || error.name === "TimeoutError";
-  }
-  return false;
-}
 function ensureTaskListEntry(taskID, requestID, requestText, resultMessage) {
   if (!taskID) return;
   const task = boardStore.board?.task && boardStore.board.task.id === taskID ? boardStore.board.task : null;
@@ -10350,9 +10292,6 @@ async function applyPanelResult(result) {
   const requestID = String(result?._requestID || "");
   if (taskID) {
     ensureTaskListEntry(taskID, requestID, requestText, String(result?.message || ""));
-    if (requestID) {
-      forgetPendingTask(requestID);
-    }
     await selectTask(taskID);
     ensureTaskListEntry(taskID, requestID, requestText, String(result?.message || ""));
     if (result?.message) {
@@ -10381,35 +10320,36 @@ async function applyPanelResult(result) {
 }
 async function panelMessage(text, attachments = [], metadata = {}) {
   const requestID = crypto.randomUUID();
-  rememberPendingTask(requestID, text);
   const controller = new AbortController();
-  const target = chatAbortTarget() || void 0;
   const request = {
     requestID,
     controller,
-    target,
     stopping: false,
     aborted: false,
     manualAbort: false
-  };
-  const ensureRecovery = () => {
-    if (!request.recovery) {
-      request.recovery = startTaskRecovery(request);
-    }
   };
   insertPendingUserMessage(requestID, text);
   setConnectionStatus("online");
   setChatRequest(request);
   try {
+    if (!boardStore.selectedTaskID) {
+      const taskID = await createTask({
+        text,
+        attachments,
+        metadata,
+        signal: controller.signal
+      });
+      if (taskID) {
+        await selectTask(taskID);
+        return { task_id: taskID };
+      }
+      throw new Error("Task creation returned no task_id");
+    }
     const result = await submitMessage(text, attachments, {
       requestID,
       metadata,
       signal: controller.signal,
-      onOpen: () => {
-        ensureRecovery();
-      },
       onEvent: async (event) => {
-        ensureRecovery();
         const type = String(event?.type || "");
         if (type === "reasoning_delta") {
           appendPendingAssistantPart(requestID, "reasoning", String(event?.delta || ""));
@@ -10420,20 +10360,12 @@ async function panelMessage(text, attachments = [], metadata = {}) {
         }
       }
     });
-    request.recovery?.stop?.();
     await applyPanelResult({ ...result, _request: text, _requestID: requestID });
     return result;
   } catch (error) {
-    const recoveredTaskID = typeof request.recoveredTaskID === "string" && request.recoveredTaskID ? request.recoveredTaskID : !request.manualAbort && isRecoveryAwaitableError(error) && typeof request.recovery?.promise?.then === "function" ? await request.recovery.promise.catch(() => "") : "";
-    if (!request.manualAbort && recoveredTaskID) {
-      const result = { task_id: recoveredTaskID, _request: text, _requestID: requestID };
-      await applyPanelResult(result);
-      return result;
-    }
-    request.recovery?.stop?.();
+    if (request.manualAbort) throw error;
     throw error;
   } finally {
-    request.recovery?.stop?.();
     if (store.chatRequest?.requestID === request.requestID) {
       setChatRequest(null);
     }
@@ -11289,11 +11221,15 @@ async function reloadProjectScope(options = {}) {
   const { loadExtensions } = await __vitePreload(async () => { const { loadExtensions } = await Promise.resolve().then(() => extensions);return { loadExtensions }},true              ?void 0:void 0);
   const { loadMeta } = await __vitePreload(async () => { const { loadMeta } = await Promise.resolve().then(() => meta);return { loadMeta }},true              ?void 0:void 0);
   const { loadPreferences } = await __vitePreload(async () => { const { loadPreferences } = await Promise.resolve().then(() => memory);return { loadPreferences }},true              ?void 0:void 0);
+  const { loadTasks } = await __vitePreload(async () => { const { loadTasks } = await Promise.resolve().then(() => board);return { loadTasks }},true              ?void 0:void 0);
+  const { loadExecutors } = await __vitePreload(async () => { const { loadExecutors } = await Promise.resolve().then(() => executor);return { loadExecutors }},true              ?void 0:void 0);
   await Promise.all([
     loadConfigInfo().catch((e) => console.error("[reloadProjectScope] loadConfigInfo", e)),
     loadExtensions().catch((e) => console.error("[reloadProjectScope] loadExtensions", e)),
     loadMeta().catch((e) => console.error("[reloadProjectScope] loadMeta", e)),
-    loadPreferences().catch((e) => console.error("[reloadProjectScope] loadPreferences", e))
+    loadPreferences().catch((e) => console.error("[reloadProjectScope] loadPreferences", e)),
+    loadTasks().catch((e) => console.error("[reloadProjectScope] loadTasks", e)),
+    loadExecutors().catch((e) => console.error("[reloadProjectScope] loadExecutors", e))
   ]);
   if (options.restoreWorkspace) {
     const { restoreWorkspaceDirectory } = await __vitePreload(async () => { const { restoreWorkspaceDirectory } = await Promise.resolve().then(() => workspace);return { restoreWorkspaceDirectory }},true              ?void 0:void 0);
@@ -14847,7 +14783,7 @@ function installGlobalBridges() {
   const testStateTarget = {};
   const readState = (prop) => {
     if (typeof prop !== "string") return Reflect.get(testStateTarget, prop);
-    if (prop === "directory") return activeDirectory$1();
+    if (prop === "directory") return activeDirectory();
     if (prop === "board") return boardStore.board;
     if (prop === "tasks") return boardStore.tasks;
     if (prop === "pendingTasks") return boardStore.pendingTasks;
@@ -15018,11 +14954,7 @@ if (taskListEl) {
   render(() => createComponent(TaskList, {
     onSelectTask: (taskID) => void selectTask(taskID),
     onDeleteTask: (taskID) => {
-      if (taskID.startsWith("pending:")) {
-        forgetPendingTask(taskID.slice("pending:".length));
-      } else {
-        void deleteTask(taskID);
-      }
+      void deleteTask(taskID);
     }
   }), taskListEl);
 }
@@ -15033,11 +14965,7 @@ if (boardEl) {
     onRetry: async () => {
       const id = boardStore.selectedTaskID;
       if (!id) return;
-      const note = await nativePrompt(t("task.action.retry_title"), {
-        title: t("task.action.retry")
-      });
-      if (note === null) return;
-      void retryTask(id, note || void 0);
+      void retryTask(id);
     },
     onReplan: () => {
       const id = boardStore.selectedTaskID;
@@ -15157,7 +15085,7 @@ if (composerEl) {
       return memo(() => !!codingActive())() ? true : canComposeChat();
     },
     get busy() {
-      return memo(() => !!codingActive())() ? codingAPI?.busy() ?? false : !!store.chatRequest;
+      return memo(() => !!codingActive())() ? codingAPI?.busy() ?? false : !!store.chatRequest || isTaskInterruptable();
     },
     get stopping() {
       return memo(() => !!codingActive())() ? false : !!store.chatRequest?.stopping;
@@ -15173,15 +15101,18 @@ if (composerEl) {
       if (codingActive() && codingAPI) {
         codingAPI.stop();
       } else {
-        void stopChatRequest();
+        if (store.chatRequest) {
+          void stopChatRequest({
+            remote: false
+          });
+        }
+        const id = boardStore.selectedTaskID;
+        if (id) {
+          void interruptTask(id);
+        } else {
+          void stopChatRequest();
+        }
       }
-    },
-    get canCancel() {
-      return !!boardStore.board?.overview?.controls?.canCancel;
-    },
-    onCancel: () => {
-      const id = boardStore.selectedTaskID;
-      if (id) void cancelTask(id);
     }
   }), composerEl);
 }
@@ -15623,14 +15554,14 @@ function renderRecentDirPanel() {
   const panel = document.getElementById("recentDirPanel");
   if (!panel) return;
   const dirs = loadRecentDirectories();
-  const current = activeDirectory$1();
+  const current = activeDirectory();
   if (!dirs.length) {
     panel.innerHTML = `<div class="recent-dir-empty">${escapeHtml$1(t("cwd.recent_empty"))}</div>`;
     return;
   }
   panel.innerHTML = dirs.map((dir) => {
     const isActive = current && dir.toLowerCase() === current.toLowerCase();
-    return `<button type="button" class="recent-dir-item" data-recent-dir="${escapeHtml$1(dir)}" data-active="${isActive}" title="${escapeHtml$1(dir)}">${escapeHtml$1(shortPath$2(dir))}</button>`;
+    return `<div class="recent-dir-row" data-active="${isActive}"><button type="button" class="recent-dir-item" data-recent-dir="${escapeHtml$1(dir)}" title="${escapeHtml$1(dir)}">${escapeHtml$1(shortPath$2(dir))}</button><button type="button" class="recent-dir-remove" data-recent-remove="${escapeHtml$1(dir)}" title="${escapeHtml$1(t("common.delete"))}" aria-label="${escapeHtml$1(t("common.delete"))}">×</button></div>`;
   }).join("");
 }
 function openRecentDirPanel() {
@@ -15690,6 +15621,16 @@ document.getElementById("taskDir")?.addEventListener("click", async (event) => {
   }
 });
 document.getElementById("recentDirPanel")?.addEventListener("click", async (event) => {
+  const removeBtn = eventClosest(event, "[data-recent-remove]");
+  if (removeBtn) {
+    const dir2 = removeBtn.dataset.recentRemove;
+    if (dir2) {
+      removeRecentDirectory(dir2);
+      renderRecentDirPanel();
+      if (!loadRecentDirectories().length) closeRecentDirPanel();
+    }
+    return;
+  }
   const item = eventClosest(event, "[data-recent-dir]");
   if (!item) return;
   const dir = item.dataset.recentDir;
@@ -15698,8 +15639,8 @@ document.getElementById("recentDirPanel")?.addEventListener("click", async (even
   try {
     await setDirectory(dir);
   } catch (e) {
-    removeRecentDirectory(dir);
     AppLog.error("ui", "Failed to switch to recent directory", {
+      dir,
       error: String(e)
     });
   }

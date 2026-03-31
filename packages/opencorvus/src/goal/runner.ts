@@ -262,29 +262,7 @@ function evaluatorManagedSelectors(goal: GoalRow) {
   return goalSelectors(goal).filter((item) => EVALUATOR_MANAGED_SELECTORS.has(item))
 }
 
-function analysisFailure(
-  result: CheckReport,
-  goals: Array<{ description: string; criteria: string; priority: GoalRow["priority"] }>,
-  message: string,
-): GoalJudgmentType {
-  const summary = `Evaluator agent analysis failed: ${message}`
-  return {
-    verdict: "rejected",
-    classification: "environment",
-    summary,
-    goal_statuses: goals.map((goal, goal_index) => ({
-      goal_index,
-      status: "failed",
-      evidence: result.summary,
-      reasoning: summary,
-    })),
-    replan_guidance: {
-      root_cause: summary,
-      what_failed: result.summary,
-      suggested_strategy: "Retry evaluation after restoring evaluator analysis, or continue with a revised execution plan.",
-      avoid_approaches: [],
-    },
-  }
+// analysisFailure removed — delivery agent handles all failure analysis
 }
 
 function goalChecks(goal: GoalRow, task: TaskRow) {
@@ -697,7 +675,7 @@ export async function evaluateTask(input: {
   analysisError?: string
 }> {
   const delivery = await evaluationDelivery(input.task, input.delivery)
-  // Tier 2 (task-level): core + judge + spec_check, with Phase 2 LLM analysis
+  // Core checks only — no LLM judge. Delivery agent handles full verification.
   const result = await CheckRunner.evaluate(
     {
       taskID: input.task.id,
@@ -709,112 +687,62 @@ export async function evaluateTask(input: {
       },
     },
     delivery,
-    "standard",
+    "core",
   )
-  const analysisInput = {
-    task: {
-      title: input.task.title,
-      request: input.task.request,
-      sessionID: input.task.session_id ?? undefined,
-      metadata: input.task.metadata ?? undefined,
-    },
-    goals: input.goals.map((goal) => ({
-      description: goal.description,
-      criteria: goal.criteria,
-      priority: goal.priority as "blocking" | "advisory",
-      check_selector: selectorList(goal.metadata),
-    })),
-    delivery: {
-      summary: delivery.summary,
-      changedFiles: delivery.changedFiles ?? [],
-      diffs: delivery.diffs ?? [],
-    },
-    checkResults: result.checks.map((item) => ({
-      name: item.name,
-      status: item.status,
-      evidence: item.evidence,
-    })),
-  }
-  const live = agentStream({
-    taskID: input.task.id,
-    runID: typeof input.task.active_run_id === "string" ? input.task.active_run_id : undefined,
-    stage: "evaluator",
-  })
-  await live.start("Goal judge started")
-  const analyzed = await CheckRunner.analyzeDelivery({
-    ...analysisInput,
-  })
-    .then(async (analysis) => {
-      await live.finish("Goal judge finished")
-      return { analysis }
-    })
-    .catch(async (error) => {
-      await live.error(error)
-      const message = error instanceof Error ? error.message : String(error)
-      return {
-        analysis: analysisFailure(result, input.goals, message),
-        analysisError: message,
-      }
-    })
-  // When no blocking checks ran (all disabled), the LLM judge is the sole arbiter.
-  // Override the check-based result with the LLM judge's verdict so the orchestrator
-  // can accept/retry correctly instead of always hard-failing.
-  const noChecksRan = result.status === "failed" && result.summary === "No blocking evaluator checks ran."
-  let finalResult = noChecksRan
-    ? {
-        ...result,
-        status: analyzed.analysis.verdict === "accepted" ? ("passed" as const) : ("failed" as const),
-        verdict: analyzed.analysis.verdict === "accepted" ? ("accepted" as const) : ("rejected" as const),
-        summary: analyzed.analysis.summary ?? result.summary,
-      }
-    : result
 
-  // Hard mechanical delivery acceptance check.
-  // If the task metadata includes `delivery_verify_cmd`, run it after the LLM analysis.
-  // A non-zero exit code unconditionally overrides any LLM "accepted" verdict — preventing
-  // the LLM from rationalizing away failures in required acceptance commands.
+  // Construct minimal analysis from check results — no LLM call
+  const analysis: GoalJudgmentType = {
+    verdict: result.status === "failed" ? "rejected" : "accepted",
+    classification: result.status === "failed" ? "evaluation" : "transient",
+    summary: `Core checks: ${result.checks.map((c) => `${c.name}:${c.status}`).join(", ")}`,
+    goal_statuses: input.goals.map((g, i) => ({
+      goal_index: i,
+      status: result.status === "failed" ? ("failed" as const) : ("passed" as const),
+      evidence: result.checks.map((c) => `${c.name}: ${c.status}`).join("; "),
+      reasoning: result.summary,
+    })),
+    replan_guidance: result.status === "failed" ? {
+      root_cause: result.checks.filter((c) => c.status === "failed").map((c) => `${c.name}: ${c.evidence}`).join("; "),
+      what_failed: result.checks.filter((c) => c.status === "failed").map((c) => c.name).join(", "),
+      suggested_strategy: "Fix failing core checks.",
+      avoid_approaches: [],
+    } : null,
+  }
+
+  // delivery_verify_cmd — run if present and checks passed
   const deliveryVerifyCmd = typeof input.task.metadata?.delivery_verify_cmd === "string"
-    ? input.task.metadata.delivery_verify_cmd
-    : null
-  const DELIVERY_VERIFY_TIMEOUT_MS = 120_000 // 2 minutes max for delivery_verify_cmd
-  if (deliveryVerifyCmd && finalResult.status === "passed") {
-    const projectDir = Filesystem.resolve(Instance.directory)
+    ? input.task.metadata.delivery_verify_cmd : null
+  let finalResult = result
+  if (deliveryVerifyCmd && result.status !== "failed") {
     try {
-      const result = await Shell.run(deliveryVerifyCmd, {
-        cwd: projectDir,
+      const verifyResult = await Shell.run(deliveryVerifyCmd, {
+        cwd: Filesystem.resolve(Instance.directory),
         env: process.env,
-        timeoutMs: DELIVERY_VERIFY_TIMEOUT_MS,
+        timeoutMs: 120_000,
       })
-      if (result.timedOut) {
-        log.warn("delivery_verify_cmd timed out, killed", { cmd: deliveryVerifyCmd, timeoutMs: DELIVERY_VERIFY_TIMEOUT_MS })
-      }
-      if (result.exitCode !== 0) {
-        const output = (result.stderr || result.stdout).slice(0, 800)
+      if (verifyResult.exitCode !== 0) {
+        const output = (verifyResult.stderr || verifyResult.stdout).slice(0, 800)
         finalResult = {
-          ...finalResult,
+          ...result,
           status: "failed" as const,
           verdict: "rejected" as const,
-          summary: `Delivery acceptance command failed (exit ${result.exitCode}): ${output}`,
+          summary: `Delivery verify command failed (exit ${verifyResult.exitCode}): ${output}`,
         }
-        analyzed.analysis = {
-          ...analyzed.analysis,
-          verdict: "rejected" as const,
-          classification: "evaluation" as const,
-          summary: `Delivery acceptance command failed (exit ${result.exitCode}). Output: ${output}`,
-          replan_guidance: {
-            root_cause: `Delivery command '${deliveryVerifyCmd}' exited with code ${result.exitCode}`,
-            what_failed: output,
-            suggested_strategy: "Fix the errors reported above before the next attempt. Check project dependencies, TypeScript configuration, and test setup.",
-            avoid_approaches: [],
-          },
+        analysis.verdict = "rejected"
+        analysis.classification = "evaluation"
+        analysis.replan_guidance = {
+          root_cause: `'${deliveryVerifyCmd}' exited ${verifyResult.exitCode}`,
+          what_failed: output,
+          suggested_strategy: "Fix the errors reported by the verify command.",
+          avoid_approaches: [],
         }
       }
     } catch (err) {
-      log.warn("delivery_verify_cmd failed to execute", { cmd: deliveryVerifyCmd, err })
+      log.warn("delivery_verify_cmd failed", { cmd: deliveryVerifyCmd, err })
     }
   }
 
-  return { result: finalResult, ...analyzed }
+  return { result: finalResult, analysis }
 }
 
 /**
