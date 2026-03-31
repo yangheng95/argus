@@ -509,7 +509,7 @@ if (boardEl) {
           bodyEl.innerHTML = '<p class="empty-hint">Loading…</p>';
           dialog.showModal();
           try {
-            // API returns MessageV2.WithParts[]: each element is { info: { role, ... }, parts: [...] }
+            // API returns Message.WithParts[]: each element is { info: { role, ... }, parts: [...] }
             const messages: any[] = await apiJson(`session/${sessionID}/message`);
             if (!messages || messages.length === 0) {
               bodyEl.innerHTML = '<p class="empty-hint">No messages yet.</p>';

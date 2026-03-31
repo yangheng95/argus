@@ -1,6 +1,6 @@
 import { Memory } from "./index"
 import { Session } from "@/session"
-import { MessageV2 } from "@/session/message"
+import { Message } from "@/session/message"
 import { Instance } from "@/project/instance"
 import { Config } from "@/config/config"
 import { Log } from "@/util/log"
@@ -18,8 +18,8 @@ export namespace MemoryFlush {
 
     try {
       // Find the compaction summary message (the most recent assistant message with summary=true)
-      let summaryMsg: MessageV2.WithParts | null = null
-      for await (const msg of MessageV2.stream(sessionID)) {
+      let summaryMsg: Message.WithParts | null = null
+      for await (const msg of Message.stream(sessionID)) {
         if (msg.info.role === "assistant" && (msg.info as any).summary === true) {
           summaryMsg = msg
           break // stream returns newest first
@@ -33,7 +33,7 @@ export namespace MemoryFlush {
 
       // Extract text content from the summary
       const textParts = summaryMsg.parts
-        .filter((p): p is MessageV2.TextPart => p.type === "text")
+        .filter((p): p is Message.TextPart => p.type === "text")
         .map((p) => p.text)
         .filter(Boolean)
 

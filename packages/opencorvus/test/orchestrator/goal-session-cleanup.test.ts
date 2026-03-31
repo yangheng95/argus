@@ -15,7 +15,7 @@ import { hooks } from "../../src/orchestrator/state"
 import { createGoalRun, updateGoalRun } from "../../src/orchestrator/transition"
 import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
-import { MessageV2 } from "../../src/session/message"
+import { Message } from "../../src/session/message"
 import { SessionTable } from "../../src/session/session.sql"
 import { Database, eq } from "../../src/storage/db"
 import { resetDatabase } from "../fixture/db"
@@ -146,7 +146,7 @@ describe("orchestrator.goal session cleanup", () => {
         const userID = Identifier.ascending("message")
         const assistantID = Identifier.ascending("message")
 
-        const user: MessageV2.User = {
+        const user: Message.User = {
           id: userID,
           sessionID: child.id,
           role: "user",
@@ -164,7 +164,7 @@ describe("orchestrator.goal session cleanup", () => {
         })
         await Session.updateMessage(user)
 
-        const assistant: MessageV2.Assistant = {
+        const assistant: Message.Assistant = {
           id: assistantID,
           sessionID: child.id,
           role: "assistant",

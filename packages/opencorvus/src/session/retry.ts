@@ -1,5 +1,5 @@
 import type { NamedError } from "@opencorvus-ai/util/error"
-import { MessageV2 } from "./message"
+import { Message } from "./message"
 import { iife } from "@/util/iife"
 
 export namespace SessionRetry {
@@ -25,7 +25,7 @@ export namespace SessionRetry {
     })
   }
 
-  export function delay(attempt: number, error?: MessageV2.APIError) {
+  export function delay(attempt: number, error?: Message.APIError) {
     if (error) {
       const headers = error.data.responseHeaders
       if (headers) {
@@ -60,8 +60,8 @@ export namespace SessionRetry {
 
   export function retryable(error: ReturnType<NamedError["toObject"]>) {
     // context overflow errors should not be retried
-    if (MessageV2.ContextOverflowError.isInstance(error)) return undefined
-    if (MessageV2.APIError.isInstance(error)) {
+    if (Message.ContextOverflowError.isInstance(error)) return undefined
+    if (Message.APIError.isInstance(error)) {
       if (!error.data.isRetryable) return undefined
       if (error.data.responseBody?.includes("FreeUsageLimitError"))
         return `Free usage exceeded, add credits https://opencorvus.ai/zen`

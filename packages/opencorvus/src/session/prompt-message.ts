@@ -3,7 +3,7 @@ import os from "os"
 import fs from "fs/promises"
 import { Filesystem } from "../util/filesystem"
 import { Identifier } from "../id/id"
-import { MessageV2 } from "./message"
+import { Message } from "./message"
 import { Log } from "../util/log"
 import { Session } from "."
 import { Agent } from "../agent/agent"
@@ -103,7 +103,7 @@ export async function createUserMessage(input: PromptInput) {
       : undefined
   const variant = input.variant ?? (agent.variant && full?.variants?.[agent.variant] ? agent.variant : undefined)
 
-  const info: MessageV2.Info = {
+  const info: Message.Info = {
     id: input.messageID ?? Identifier.ascending("message"),
     role: "user",
     sessionID: input.sessionID,
@@ -120,13 +120,13 @@ export async function createUserMessage(input: PromptInput) {
   }
   using _ = defer(() => InstructionPrompt.clear(info.id))
 
-  type Draft<T> = T extends MessageV2.Part ? Omit<T, "id"> & { id?: string } : never
-  const assign = (part: Draft<MessageV2.Part>): MessageV2.Part => ({
+  type Draft<T> = T extends Message.Part ? Omit<T, "id"> & { id?: string } : never
+  const assign = (part: Draft<Message.Part>): Message.Part => ({
     ...part,
     id: part.id ?? Identifier.ascending("part"),
   })
 
-  const reminders = await iife(async (): Promise<Draft<MessageV2.Part>[]> => {
+  const reminders = await iife(async (): Promise<Draft<Message.Part>[]> => {
     const session = await Session.get(input.sessionID)
     const msgs = await Session.messages({ sessionID: input.sessionID, limit: 8 })
     const last = msgs.at(-1)?.info
@@ -154,7 +154,7 @@ export async function createUserMessage(input: PromptInput) {
 
     if (agent.name === "plan") {
       if (last?.agent === "plan") return []
-      const parts: Draft<MessageV2.Part>[] = []
+      const parts: Draft<Message.Part>[] = []
 
       // If transitioning from spec mode, inject spec context
       if (last?.agent === "spec") {
@@ -227,14 +227,14 @@ export async function createUserMessage(input: PromptInput) {
   const parts = [
     ...reminders,
     ...(await Promise.all(
-      input.parts.map(async (part): Promise<Draft<MessageV2.Part>[]> => {
+      input.parts.map(async (part): Promise<Draft<Message.Part>[]> => {
         if (part.type === "file") {
           // before checking the protocol we check if this is an mcp resource because it needs special handling
           if (part.source?.type === "resource") {
             const { clientName, uri } = part.source
             log.info("mcp resource", { clientName, uri, mime: part.mime })
 
-            const pieces: Draft<MessageV2.Part>[] = [
+            const pieces: Draft<Message.Part>[] = [
               {
                 messageID: info.id,
                 sessionID: input.sessionID,
@@ -364,7 +364,7 @@ export async function createUserMessage(input: PromptInput) {
                 }
                 const args = { filePath: filepath, offset, limit }
 
-                const pieces: Draft<MessageV2.Part>[] = [
+                const pieces: Draft<Message.Part>[] = [
                   {
                     messageID: info.id,
                     sessionID: input.sessionID,

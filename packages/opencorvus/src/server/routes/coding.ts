@@ -7,7 +7,7 @@ import { Bus } from "@/bus"
 import { Session } from "@/session"
 import { SessionPrompt } from "@/session/prompt"
 import { SessionStatus } from "@/session/status"
-import { MessageV2 } from "@/session/message"
+import { Message } from "@/session/message"
 import { Log } from "@/util/log"
 
 const log = Log.create({ service: "coding" })
@@ -71,7 +71,7 @@ export function CodingRoutes() {
           try {
             // Subscribe to part deltas (text streaming chunks)
             unsubs.push(
-              Bus.subscribe(MessageV2.Event.PartDelta, (event) => {
+              Bus.subscribe(Message.Event.PartDelta, (event) => {
                 if (event.properties.sessionID !== sessionID) return
                 stream.writeSSE({
                   data: JSON.stringify({
@@ -87,7 +87,7 @@ export function CodingRoutes() {
 
             // Subscribe to part updates (tool calls, results, step markers)
             unsubs.push(
-              Bus.subscribe(MessageV2.Event.PartUpdated, (event) => {
+              Bus.subscribe(Message.Event.PartUpdated, (event) => {
                 const part = event.properties.part as Record<string, unknown>
                 if (part.sessionID !== sessionID) return
                 stream.writeSSE({
@@ -101,7 +101,7 @@ export function CodingRoutes() {
 
             // Subscribe to message updates (completion, tokens)
             unsubs.push(
-              Bus.subscribe(MessageV2.Event.Updated, (event) => {
+              Bus.subscribe(Message.Event.Updated, (event) => {
                 const info = event.properties.info as Record<string, unknown>
                 if (info.sessionID !== sessionID) return
                 if (info.role !== "assistant") return

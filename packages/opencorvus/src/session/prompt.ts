@@ -4,7 +4,7 @@ import fs from "fs/promises"
 import z from "zod"
 import { Filesystem } from "../util/filesystem"
 import { Identifier } from "../id/id"
-import { MessageV2 } from "./message"
+import { Message } from "./message"
 import { Log } from "../util/log"
 import { SessionRevert } from "./revert"
 import { Session } from "."
@@ -57,13 +57,13 @@ export namespace SessionPrompt {
       .describe(
         "@deprecated tools and permissions have been merged, you can set permissions on the session itself now",
       ),
-    format: MessageV2.Format.optional(),
+    format: Message.Format.optional(),
     system: z.string().optional(),
     variant: z.string().optional(),
     extra: z.record(z.string(), z.any()).optional(),
     parts: z.array(
       z.discriminatedUnion("type", [
-        MessageV2.TextPart.omit({
+        Message.TextPart.omit({
           messageID: true,
           sessionID: true,
         })
@@ -73,7 +73,7 @@ export namespace SessionPrompt {
           .meta({
             ref: "TextPartInput",
           }),
-        MessageV2.FilePart.omit({
+        Message.FilePart.omit({
           messageID: true,
           sessionID: true,
         })
@@ -83,7 +83,7 @@ export namespace SessionPrompt {
           .meta({
             ref: "FilePartInput",
           }),
-        MessageV2.AgentPart.omit({
+        Message.AgentPart.omit({
           messageID: true,
           sessionID: true,
         })
@@ -93,7 +93,7 @@ export namespace SessionPrompt {
           .meta({
             ref: "AgentPartInput",
           }),
-        MessageV2.SubtaskPart.omit({
+        Message.SubtaskPart.omit({
           messageID: true,
           sessionID: true,
         })
@@ -200,7 +200,7 @@ export namespace SessionPrompt {
         : undefined
     const variant = input.variant ?? (agent.variant && full?.variants?.[agent.variant] ? agent.variant : undefined)
 
-    const info: MessageV2.Info = {
+    const info: Message.Info = {
       id: input.messageID ?? Identifier.ascending("message"),
       role: "user",
       sessionID: input.sessionID,
@@ -217,20 +217,20 @@ export namespace SessionPrompt {
     }
     using _ = defer(() => InstructionPrompt.clear(info.id))
 
-    type Draft<T> = T extends MessageV2.Part ? Omit<T, "id"> & { id?: string } : never
-    const assign = (part: Draft<MessageV2.Part>): MessageV2.Part => ({
+    type Draft<T> = T extends Message.Part ? Omit<T, "id"> & { id?: string } : never
+    const assign = (part: Draft<Message.Part>): Message.Part => ({
       ...part,
       id: part.id ?? Identifier.ascending("part"),
     })
 
     const parts = await Promise.all(
-      input.parts.map(async (part): Promise<Draft<MessageV2.Part>[]> => {
+      input.parts.map(async (part): Promise<Draft<Message.Part>[]> => {
         if (part.type === "file") {
           if (part.source?.type === "resource") {
             const { clientName, uri } = part.source
             Log.create({ service: "session.prompt" }).info("mcp resource", { clientName, uri, mime: part.mime })
 
-            const pieces: Draft<MessageV2.Part>[] = [
+            const pieces: Draft<Message.Part>[] = [
               {
                 messageID: info.id,
                 sessionID: input.sessionID,
@@ -371,7 +371,7 @@ export namespace SessionPrompt {
                 }
                 const args = { filePath: filepath, offset, limit }
 
-                const pieces: Draft<MessageV2.Part>[] = [
+                const pieces: Draft<Message.Part>[] = [
                   {
                     messageID: info.id,
                     sessionID: input.sessionID,

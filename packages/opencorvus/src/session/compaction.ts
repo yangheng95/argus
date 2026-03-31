@@ -4,7 +4,7 @@ import { Session } from "."
 import { Identifier } from "../id/id"
 import { Instance } from "../project/instance"
 import { Provider } from "../provider/provider"
-import { MessageV2 } from "./message"
+import { Message } from "./message"
 import z from "zod"
 import { Token } from "../util/token"
 import { Log } from "../util/log"
@@ -30,7 +30,7 @@ export namespace SessionCompaction {
 
   const COMPACTION_BUFFER = 20_000
 
-  export async function isOverflow(input: { tokens: MessageV2.Assistant["tokens"]; model: Provider.Model }) {
+  export async function isOverflow(input: { tokens: Message.Assistant["tokens"]; model: Provider.Model }) {
     const config = await Config.get()
     if (config.compaction?.auto === false) return false
     const context = input.model.limit.context
@@ -63,7 +63,7 @@ export namespace SessionCompaction {
     const msgs = await Session.messages({ sessionID: input.sessionID })
     let total = 0
     let pruned = 0
-    const toPrune: MessageV2.ToolPart[] = []
+    const toPrune: Message.ToolPart[] = []
     let turns = 0
 
     loop: for (let msgIndex = msgs.length - 1; msgIndex >= 0; msgIndex--) {
@@ -101,12 +101,12 @@ export namespace SessionCompaction {
 
   export async function process(input: {
     parentID: string
-    messages: MessageV2.WithParts[]
+    messages: Message.WithParts[]
     sessionID: string
     abort: AbortSignal
     auto: boolean
   }) {
-    const userMessage = input.messages.findLast((m) => m.info.id === input.parentID)!.info as MessageV2.User
+    const userMessage = input.messages.findLast((m) => m.info.id === input.parentID)!.info as Message.User
     const agent = await Agent.get("compaction")
     const model = agent.model
       ? await Provider.getModel(agent.model.providerID, agent.model.modelID)
@@ -136,7 +136,7 @@ export namespace SessionCompaction {
       time: {
         created: Date.now(),
       },
-    })) as MessageV2.Assistant
+    })) as Message.Assistant
     const processor = SessionProcessor.create({
       assistantMessage: msg,
       sessionID: input.sessionID,
@@ -186,7 +186,7 @@ When constructing the summary, try to stick to this template:
       tools: {},
       system: [],
       messages: [
-        ...MessageV2.toModelMessages(input.messages, model),
+        ...Message.toModelMessages(input.messages, model),
         {
           role: "user",
           content: [

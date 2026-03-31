@@ -32,7 +32,7 @@ import {
 import { ExecutorNotConfiguredError, OrchestratorService, PlannerFailureError } from "@/orchestrator/service"
 import { ProtocolStore } from "@/protocol/store"
 import { Session } from "@/session"
-import { MessageV2 } from "@/session/message"
+import { Message } from "@/session/message"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
 import { registerGoalRunSession, taskSession } from "./task-event"
@@ -365,7 +365,7 @@ export const OrchestratorRoutes = lazy(() =>
             description: "Task session messages including tool calls",
             content: {
               "application/json": {
-                schema: resolver(MessageV2.WithParts.array()),
+                schema: resolver(Message.WithParts.array()),
               },
             },
           },

@@ -4,7 +4,7 @@ import { TaskQueueService } from "@/scheduler/task-queue-service"
 import { TaskQueueTable } from "@/scheduler/task-queue.sql"
 import { Bus } from "@/bus"
 import { Session } from "@/session"
-import { MessageV2 } from "@/session/message"
+import { Message } from "@/session/message"
 import { SessionSummary } from "@/session/summary"
 import { SessionPrompt } from "@/session/prompt"
 import { SessionStatus } from "@/session/status"
@@ -198,7 +198,7 @@ function mapEvent(event: { type: string; properties: Record<string, unknown> }, 
       payload: props,
     }
   }
-  if (event.type === MessageV2.Event.Updated.type) {
+  if (event.type === Message.Event.Updated.type) {
     const info = props.info as Record<string, unknown>
     return {
       type: "message.updated",
@@ -206,7 +206,7 @@ function mapEvent(event: { type: string; properties: Record<string, unknown> }, 
       payload: props,
     }
   }
-  if (event.type === MessageV2.Event.PartUpdated.type) {
+  if (event.type === Message.Event.PartUpdated.type) {
     const part = props.part as Record<string, unknown>
     return {
       type: "message.part.updated",
@@ -214,21 +214,21 @@ function mapEvent(event: { type: string; properties: Record<string, unknown> }, 
       payload: props,
     }
   }
-  if (event.type === MessageV2.Event.PartDelta.type) {
+  if (event.type === Message.Event.PartDelta.type) {
     return {
       type: "message.part.delta",
       summary: typeof props.field === "string" ? `Delta: ${props.field}` : "Message delta",
       payload: props,
     }
   }
-  if (event.type === MessageV2.Event.Removed.type) {
+  if (event.type === Message.Event.Removed.type) {
     return {
       type: "message.removed",
       summary: "Message removed",
       payload: props,
     }
   }
-  if (event.type === MessageV2.Event.PartRemoved.type) {
+  if (event.type === Message.Event.PartRemoved.type) {
     return {
       type: "message.part.removed",
       summary: "Part removed",
@@ -284,11 +284,11 @@ function mapEvent(event: { type: string; properties: Record<string, unknown> }, 
   }
 }
 
-function summarize(messages: MessageV2.WithParts[]) {
+function summarize(messages: Message.WithParts[]) {
   const assistant = [...messages].filter((item) => item.info.role === "assistant").at(-1)
   if (!assistant) return "Run completed without an assistant summary."
   const text = assistant.parts
-    .filter((part): part is MessageV2.TextPart => part.type === "text")
+    .filter((part): part is Message.TextPart => part.type === "text")
     .map((part) => part.text.trim())
     .filter(Boolean)
     .join("\n\n")

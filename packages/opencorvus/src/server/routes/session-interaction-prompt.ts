@@ -1,7 +1,7 @@
 import { Hono } from "hono"
 import { describeRoute, validator, resolver } from "hono-openapi"
 import z from "zod"
-import { MessageV2 } from "../../session/message"
+import { Message } from "../../session/message"
 import { SessionPrompt } from "../../session/prompt"
 import { errors } from "../error"
 import { TaskQueueService } from "@/scheduler/task-queue-service"
@@ -23,8 +23,8 @@ export function SessionInteractionPromptRoutes() {
               "application/json": {
                 schema: resolver(
                   z.object({
-                    info: MessageV2.Assistant,
-                    parts: MessageV2.Part.array(),
+                    info: Message.Assistant,
+                    parts: Message.Part.array(),
                   }),
                 ),
               },
@@ -178,8 +178,8 @@ export function SessionInteractionPromptRoutes() {
               "application/json": {
                 schema: resolver(
                   z.object({
-                    info: MessageV2.Assistant,
-                    parts: MessageV2.Part.array(),
+                    info: Message.Assistant,
+                    parts: Message.Part.array(),
                   }),
                 ),
               },
@@ -213,7 +213,7 @@ export function SessionInteractionPromptRoutes() {
             description: "Created message",
             content: {
               "application/json": {
-                schema: resolver(MessageV2.Assistant),
+                schema: resolver(Message.Assistant),
               },
             },
           },

@@ -16,6 +16,7 @@ import { Discovery } from "./discovery"
 import { Glob } from "../util/glob"
 import { channelBundles } from "./builtin/channel"
 import panelMd from "./builtin/panel.md" with { type: "text" }
+import specResearchMd from "./builtin/spec-research.md" with { type: "text" }
 
 export namespace Skill {
   const log = Log.create({ service: "skill" })
@@ -62,6 +63,10 @@ export namespace Skill {
     ...channelBundles,
     {
       skill: panelMd,
+      files: {},
+    },
+    {
+      skill: specResearchMd,
       files: {},
     },
   ] as const

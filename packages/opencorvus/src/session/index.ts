@@ -15,7 +15,7 @@ import { SessionTable, MessageTable, PartTable } from "./session.sql"
 import { ProjectTable } from "../project/project.sql"
 import { Storage } from "@/storage/storage"
 import { Log } from "../util/log"
-import { MessageV2 } from "./message"
+import { Message } from "./message"
 import { Instance } from "../project/instance"
 import { SessionPrompt } from "./prompt"
 import path from "path"
@@ -203,7 +203,7 @@ export namespace Session {
       "session.error",
       z.object({
         sessionID: z.string().optional(),
-        error: MessageV2.Assistant.shape.error,
+        error: Message.Assistant.shape.error,
       }),
     ),
   }
@@ -483,8 +483,8 @@ export namespace Session {
       limit: z.number().optional(),
     }),
     async (input) => {
-      const result = [] as MessageV2.WithParts[]
-      for await (const msg of MessageV2.stream(input.sessionID)) {
+      const result = [] as Message.WithParts[]
+      for await (const msg of Message.stream(input.sessionID)) {
         if (input.limit && result.length >= input.limit) break
         result.push(msg)
       }
@@ -629,7 +629,7 @@ export namespace Session {
     })
   })
 
-  export const updateMessage = fn(MessageV2.Info, async (msg) => {
+  export const updateMessage = fn(Message.Info, async (msg) => {
     const time_created = msg.time.created
     const { id, sessionID, ...data } = msg
     Database.use((db) => {
@@ -643,7 +643,7 @@ export namespace Session {
         .onConflictDoUpdate({ target: MessageTable.id, set: { data } })
         .run()
       Database.effect(() =>
-        Bus.publish(MessageV2.Event.Updated, {
+        Bus.publish(Message.Event.Updated, {
           info: msg,
         }),
       )
@@ -657,7 +657,7 @@ export namespace Session {
    * for parts) but the notification should be deferred until the message is
    * fully assembled. Follow up with `updateMessage` to publish the event.
    */
-  export const saveMessage = fn(MessageV2.Info, async (msg) => {
+  export const saveMessage = fn(Message.Info, async (msg) => {
     const time_created = msg.time.created
     const { id, sessionID, ...data } = msg
     Database.use((db) => {
@@ -686,7 +686,7 @@ export namespace Session {
           .where(and(eq(MessageTable.id, input.messageID), eq(MessageTable.session_id, input.sessionID)))
           .run()
         Database.effect(() =>
-          Bus.publish(MessageV2.Event.Removed, {
+          Bus.publish(Message.Event.Removed, {
             sessionID: input.sessionID,
             messageID: input.messageID,
           }),
@@ -708,7 +708,7 @@ export namespace Session {
           .where(and(eq(PartTable.id, input.partID), eq(PartTable.session_id, input.sessionID)))
           .run()
         Database.effect(() =>
-          Bus.publish(MessageV2.Event.PartRemoved, {
+          Bus.publish(Message.Event.PartRemoved, {
             sessionID: input.sessionID,
             messageID: input.messageID,
             partID: input.partID,
@@ -719,7 +719,7 @@ export namespace Session {
     },
   )
 
-  const UpdatePartInput = MessageV2.Part
+  const UpdatePartInput = Message.Part
 
   const TOOL_STATUS_RANK: Record<string, number> = { pending: 0, running: 1, completed: 2, error: 2 }
 
@@ -750,7 +750,7 @@ export namespace Session {
         .onConflictDoUpdate({ target: PartTable.id, set: { data } })
         .run()
       Database.effect(() =>
-        Bus.publish(MessageV2.Event.PartUpdated, {
+        Bus.publish(Message.Event.PartUpdated, {
           part,
         }),
       )
@@ -767,7 +767,7 @@ export namespace Session {
       delta: z.string(),
     }),
     async (input) => {
-      Bus.publish(MessageV2.Event.PartDelta, input)
+      Bus.publish(Message.Event.PartDelta, input)
     },
   )
 

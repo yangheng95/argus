@@ -11,7 +11,7 @@ import { findTask } from "../../src/orchestrator/store"
 import { updateTask } from "../../src/orchestrator/state"
 import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
-import { MessageV2 } from "../../src/session/message"
+import { Message } from "../../src/session/message"
 import { ensureTaskMessageProtocolBridge } from "../../src/server/routes/task-message-protocol-bridge"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
@@ -162,14 +162,14 @@ describe("orchestrator protocol", () => {
           time: { created: now },
           agent: "planner",
           model: { providerID: "test", modelID: "test" },
-        } satisfies MessageV2.User)
+        } satisfies Message.User)
         await Session.updatePart({
           id: Identifier.ascending("part"),
           sessionID: root.id,
           messageID: rootMessageID,
           type: "text",
           text: "planner output",
-        } satisfies MessageV2.TextPart)
+        } satisfies Message.TextPart)
 
         const childMessageID = Identifier.ascending("message")
         await Session.updateMessage({
@@ -179,8 +179,8 @@ describe("orchestrator protocol", () => {
           time: { created: now + 2 },
           agent: "judge",
           model: { providerID: "test", modelID: "test" },
-        } satisfies MessageV2.User)
-        await Bus.publish(MessageV2.Event.PartDelta, {
+        } satisfies Message.User)
+        await Bus.publish(Message.Event.PartDelta, {
           sessionID: child.id,
           messageID: childMessageID,
           partID: Identifier.ascending("part"),

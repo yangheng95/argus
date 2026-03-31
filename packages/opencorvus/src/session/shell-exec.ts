@@ -1,7 +1,7 @@
 import path from "path"
 import z from "zod"
 import { Identifier } from "../id/id"
-import { MessageV2 } from "./message"
+import { Message } from "./message"
 import { Session } from "."
 import { Agent } from "../agent/agent"
 import { Instance } from "../project/instance"
@@ -52,7 +52,7 @@ export namespace SessionShell {
     }
     const agent = await Agent.get(input.agent)
     const model = input.model ?? agent.model ?? (await lastModel(input.sessionID))
-    const userMsg: MessageV2.User = {
+    const userMsg: Message.User = {
       id: Identifier.ascending("message"),
       sessionID: input.sessionID,
       time: {
@@ -66,7 +66,7 @@ export namespace SessionShell {
       },
     }
     await Session.updateMessage(userMsg)
-    const userPart: MessageV2.Part = {
+    const userPart: Message.Part = {
       type: "text",
       id: Identifier.ascending("part"),
       messageID: userMsg.id,
@@ -76,7 +76,7 @@ export namespace SessionShell {
     }
     await Session.updatePart(userPart)
 
-    const msg: MessageV2.Assistant = {
+    const msg: Message.Assistant = {
       id: Identifier.ascending("message"),
       sessionID: input.sessionID,
       parentID: userMsg.id,
@@ -101,7 +101,7 @@ export namespace SessionShell {
       providerID: model.providerID,
     }
     await Session.updateMessage(msg)
-    const part: MessageV2.Part = {
+    const part: Message.Part = {
       type: "tool",
       id: Identifier.ascending("part"),
       messageID: msg.id,

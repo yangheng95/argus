@@ -14,7 +14,7 @@ import { type SystemError } from "bun"
 import type { Provider } from "@/provider/provider"
 import { textForModel } from "./part-visibility"
 
-export namespace MessageV2 {
+export namespace Message {
   export const OutputLengthError = NamedError.create("MessageOutputLengthError", z.object({}))
   export const AbortedError = NamedError.create("MessageAbortedError", z.object({ message: z.string() }))
   export const StructuredOutputError = NamedError.create(
@@ -600,7 +600,7 @@ export namespace MessageV2 {
         if (
           msg.info.error &&
           !(
-            MessageV2.AbortedError.isInstance(msg.info.error) &&
+            Message.AbortedError.isInstance(msg.info.error) &&
             msg.parts.some((part) => part.type !== "step-start" && part.type !== "reasoning")
           )
         ) {
@@ -743,7 +743,7 @@ export namespace MessageV2 {
       if (rows.length === 0) break
 
       const ids = rows.map((row) => row.id)
-      const partsByMessage = new Map<string, MessageV2.Part[]>()
+      const partsByMessage = new Map<string, Message.Part[]>()
       if (ids.length > 0) {
         const partRows = Database.use((db) =>
           db
@@ -759,7 +759,7 @@ export namespace MessageV2 {
             id: row.id,
             sessionID: row.session_id,
             messageID: row.message_id,
-          } as MessageV2.Part
+          } as Message.Part
           const list = partsByMessage.get(row.message_id)
           if (list) list.push(part)
           else partsByMessage.set(row.message_id, [part])
@@ -767,7 +767,7 @@ export namespace MessageV2 {
       }
 
       for (const row of rows) {
-        const info = { ...row.data, id: row.id, sessionID: row.session_id } as MessageV2.Info
+        const info = { ...row.data, id: row.id, sessionID: row.session_id } as Message.Info
         yield {
           info,
           parts: partsByMessage.get(row.id) ?? [],
@@ -784,7 +784,7 @@ export namespace MessageV2 {
       db.select().from(PartTable).where(eq(PartTable.message_id, message_id)).orderBy(PartTable.id).all(),
     )
     return rows.map(
-      (row) => ({ ...row.data, id: row.id, sessionID: row.session_id, messageID: row.message_id }) as MessageV2.Part,
+      (row) => ({ ...row.data, id: row.id, sessionID: row.session_id, messageID: row.message_id }) as Message.Part,
     )
   })
 
@@ -796,7 +796,7 @@ export namespace MessageV2 {
     async (input): Promise<WithParts> => {
       const row = Database.use((db) => db.select().from(MessageTable).where(eq(MessageTable.id, input.messageID)).get())
       if (!row) throw new Error(`Message not found: ${input.messageID}`)
-      const info = { ...row.data, id: row.id, sessionID: row.session_id } as MessageV2.Info
+      const info = { ...row.data, id: row.id, sessionID: row.session_id } as Message.Info
       return {
         info,
         parts: await parts(input.messageID),
@@ -804,8 +804,8 @@ export namespace MessageV2 {
     },
   )
 
-  export async function filterCompacted(stream: AsyncIterable<MessageV2.WithParts>) {
-    const result = [] as MessageV2.WithParts[]
+  export async function filterCompacted(stream: AsyncIterable<Message.WithParts>) {
+    const result = [] as Message.WithParts[]
     const completed = new Set<string>()
     for await (const msg of stream) {
       result.push(msg)
@@ -824,16 +824,16 @@ export namespace MessageV2 {
   export function fromError(e: unknown, ctx: { providerID: string }) {
     switch (true) {
       case e instanceof DOMException && e.name === "AbortError":
-        return new MessageV2.AbortedError(
+        return new Message.AbortedError(
           { message: e.message },
           {
             cause: e,
           },
         ).toObject()
-      case MessageV2.OutputLengthError.isInstance(e):
+      case Message.OutputLengthError.isInstance(e):
         return e
       case LoadAPIKeyError.isInstance(e):
-        return new MessageV2.AuthError(
+        return new Message.AuthError(
           {
             providerID: ctx.providerID,
             message: e.message,
@@ -841,7 +841,7 @@ export namespace MessageV2 {
           { cause: e },
         ).toObject()
       case (e as SystemError)?.code === "ECONNRESET":
-        return new MessageV2.APIError(
+        return new Message.APIError(
           {
             message: "Connection reset by server",
             isRetryable: true,
@@ -859,7 +859,7 @@ export namespace MessageV2 {
           error: e,
         })
         if (parsed.type === "context_overflow") {
-          return new MessageV2.ContextOverflowError(
+          return new Message.ContextOverflowError(
             {
               message: parsed.message,
               responseBody: parsed.responseBody,
@@ -868,7 +868,7 @@ export namespace MessageV2 {
           ).toObject()
         }
 
-        return new MessageV2.APIError(
+        return new Message.APIError(
           {
             message: parsed.message,
             statusCode: parsed.statusCode,
@@ -880,7 +880,7 @@ export namespace MessageV2 {
           { cause: e },
         ).toObject()
       case e instanceof Error && /LLM stream stalled|stream inactivity/i.test(e.message):
-        return new MessageV2.APIError(
+        return new Message.APIError(
           {
             message: e.message,
             isRetryable: true,
@@ -894,7 +894,7 @@ export namespace MessageV2 {
           const parsed = ProviderError.parseStreamError(e)
           if (parsed) {
             if (parsed.type === "context_overflow") {
-              return new MessageV2.ContextOverflowError(
+              return new Message.ContextOverflowError(
                 {
                   message: parsed.message,
                   responseBody: parsed.responseBody,
@@ -902,7 +902,7 @@ export namespace MessageV2 {
                 { cause: e },
               ).toObject()
             }
-            return new MessageV2.APIError(
+            return new Message.APIError(
               {
                 message: parsed.message,
                 isRetryable: parsed.isRetryable,

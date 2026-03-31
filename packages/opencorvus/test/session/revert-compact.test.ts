@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { Session } from "../../src/session"
 import { SessionRevert } from "../../src/session/revert"
-import { MessageV2 } from "../../src/session/message"
+import { Message } from "../../src/session/message"
 import { Log } from "../../src/util/log"
 import { Instance } from "../../src/project/instance"
 import { Identifier } from "../../src/id/id"
@@ -44,7 +44,7 @@ describe("revert + compact workflow", () => {
         })
 
         // Create an assistant response message
-        const assistantMsg1: MessageV2.Assistant = {
+        const assistantMsg1: Message.Assistant = {
           id: Identifier.ascending("message"),
           role: "assistant",
           sessionID,
@@ -104,7 +104,7 @@ describe("revert + compact workflow", () => {
         })
 
         // Create another assistant response
-        const assistantMsg2: MessageV2.Assistant = {
+        const assistantMsg2: Message.Assistant = {
           id: Identifier.ascending("message"),
           role: "assistant",
           sessionID,
@@ -218,7 +218,7 @@ describe("revert + compact workflow", () => {
           text: "Hello",
         })
 
-        const assistantMsg: MessageV2.Assistant = {
+        const assistantMsg: Message.Assistant = {
           id: Identifier.ascending("message"),
           role: "assistant",
           sessionID,

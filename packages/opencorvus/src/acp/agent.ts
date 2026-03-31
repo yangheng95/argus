@@ -36,7 +36,7 @@ import type { ACPConfig } from "./types"
 import { Provider } from "../provider/provider"
 import { Agent as AgentModule } from "../agent/agent"
 import { Installation } from "@/installation"
-import { MessageV2 } from "@/session/message"
+import { Message } from "@/session/message"
 import { textAudience, textForACP } from "@/session/part-visibility"
 import { Config } from "@/config/config"
 import { Todo } from "@/session/todo"
@@ -589,7 +589,7 @@ export namespace ACP {
           _meta: load._meta,
         }
       } catch (e) {
-        const error = MessageV2.fromError(e, {
+        const error = Message.fromError(e, {
           providerID: this.config.defaultModel?.providerID ?? "unknown",
         })
         if (LoadAPIKeyError.isInstance(error)) {
@@ -656,7 +656,7 @@ export namespace ACP {
 
         return result
       } catch (e) {
-        const error = MessageV2.fromError(e, {
+        const error = Message.fromError(e, {
           providerID: this.config.defaultModel?.providerID ?? "unknown",
         })
         if (LoadAPIKeyError.isInstance(error)) {
@@ -701,7 +701,7 @@ export namespace ACP {
         if (next) response.nextCursor = next
         return response
       } catch (e) {
-        const error = MessageV2.fromError(e, {
+        const error = Message.fromError(e, {
           providerID: this.config.defaultModel?.providerID ?? "unknown",
         })
         if (LoadAPIKeyError.isInstance(error)) {
@@ -766,7 +766,7 @@ export namespace ACP {
 
         return mode
       } catch (e) {
-        const error = MessageV2.fromError(e, {
+        const error = Message.fromError(e, {
           providerID: this.config.defaultModel?.providerID ?? "unknown",
         })
         if (LoadAPIKeyError.isInstance(error)) {
@@ -797,7 +797,7 @@ export namespace ACP {
 
         return result
       } catch (e) {
-        const error = MessageV2.fromError(e, {
+        const error = Message.fromError(e, {
           providerID: this.config.defaultModel?.providerID ?? "unknown",
         })
         if (LoadAPIKeyError.isInstance(error)) {

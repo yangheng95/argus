@@ -2,14 +2,14 @@ import { describe, expect, test } from "bun:test"
 import type { NamedError } from "@opencorvus-ai/util/error"
 import { APICallError } from "ai"
 import { SessionRetry } from "../../src/session/retry"
-import { MessageV2 } from "../../src/session/message"
+import { Message } from "../../src/session/message"
 
-function apiError(headers?: Record<string, string>): MessageV2.APIError {
-  return new MessageV2.APIError({
+function apiError(headers?: Record<string, string>): Message.APIError {
+  return new Message.APIError({
     message: "boom",
     isRetryable: true,
     responseHeaders: headers,
-  }).toObject() as MessageV2.APIError
+  }).toObject() as Message.APIError
 }
 
 function wrap(message: unknown): ReturnType<NamedError["toObject"]> {
@@ -114,7 +114,7 @@ describe("session.retry.retryable", () => {
   })
 
   test("does not retry context overflow errors", () => {
-    const error = new MessageV2.ContextOverflowError({
+    const error = new Message.ContextOverflowError({
       message: "Input exceeds context window of this model",
       responseBody: '{"error":{"code":"context_length_exceeded"}}',
     }).toObject() as ReturnType<NamedError["toObject"]>
@@ -149,23 +149,23 @@ describe("session.message.fromError", () => {
         .then((res) => res.text())
         .catch((e) => e)
 
-      const result = MessageV2.fromError(error, { providerID: "test" })
+      const result = Message.fromError(error, { providerID: "test" })
 
-      expect(MessageV2.APIError.isInstance(result)).toBe(true)
-      expect((result as MessageV2.APIError).data.isRetryable).toBe(true)
-      expect((result as MessageV2.APIError).data.message).toBe("Connection reset by server")
-      expect((result as MessageV2.APIError).data.metadata?.code).toBe("ECONNRESET")
-      expect((result as MessageV2.APIError).data.metadata?.message).toInclude("socket connection")
+      expect(Message.APIError.isInstance(result)).toBe(true)
+      expect((result as Message.APIError).data.isRetryable).toBe(true)
+      expect((result as Message.APIError).data.message).toBe("Connection reset by server")
+      expect((result as Message.APIError).data.metadata?.code).toBe("ECONNRESET")
+      expect((result as Message.APIError).data.metadata?.message).toInclude("socket connection")
     },
     15_000,
   )
 
   test("ECONNRESET socket error is retryable", () => {
-    const error = new MessageV2.APIError({
+    const error = new Message.APIError({
       message: "Connection reset by server",
       isRetryable: true,
       metadata: { code: "ECONNRESET", message: "The socket connection was closed unexpectedly" },
-    }).toObject() as MessageV2.APIError
+    }).toObject() as Message.APIError
 
     const retryable = SessionRetry.retryable(error)
     expect(retryable).toBeDefined()
@@ -182,7 +182,7 @@ describe("session.message.fromError", () => {
       responseBody: '{"error":"boom"}',
       isRetryable: false,
     })
-    const result = MessageV2.fromError(error, { providerID: "openai" }) as MessageV2.APIError
+    const result = Message.fromError(error, { providerID: "openai" }) as Message.APIError
     expect(result.data.isRetryable).toBe(true)
   })
 })

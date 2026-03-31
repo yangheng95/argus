@@ -1,6 +1,6 @@
 import z from "zod"
 import { Identifier } from "../id/id"
-import { MessageV2 } from "./message"
+import { Message } from "./message"
 import { Log } from "../util/log"
 import { Session } from "."
 import { Agent } from "../agent/agent"
@@ -39,10 +39,10 @@ import { ensureTitle } from "./prompt-title"
 const log = Log.create({ service: "session.prompt" })
 
 async function runSubtask(input: {
-  task: MessageV2.SubtaskPart
+  task: Message.SubtaskPart
   model: Provider.Model
-  lastUser: MessageV2.User
-  msgs: MessageV2.WithParts[]
+  lastUser: Message.User
+  msgs: Message.WithParts[]
   session: Session.Info
   sessionID: string
   abort: AbortSignal
@@ -75,7 +75,7 @@ async function runSubtask(input: {
     time: {
       created: Date.now(),
     },
-  })) as MessageV2.Assistant
+  })) as Message.Assistant
   const part = (await Session.updatePart({
     id: Identifier.ascending("part"),
     messageID: assistantMessage.id,
@@ -95,7 +95,7 @@ async function runSubtask(input: {
         start: Date.now(),
       },
     },
-  })) as MessageV2.ToolPart
+  })) as Message.ToolPart
   const args = {
     prompt: input.task.prompt,
     description: input.task.description,
@@ -129,7 +129,7 @@ async function runSubtask(input: {
           ...part.state,
           ...next,
         },
-      } satisfies MessageV2.ToolPart)
+      } satisfies Message.ToolPart)
     },
     async ask(req) {
       await PermissionNext.ask({
@@ -182,7 +182,7 @@ async function runSubtask(input: {
           end: Date.now(),
         },
       },
-    } satisfies MessageV2.ToolPart)
+    } satisfies Message.ToolPart)
   }
   if (!result) {
     await Session.updatePart({
@@ -197,14 +197,14 @@ async function runSubtask(input: {
         metadata: part.metadata,
         input: part.state.input,
       },
-    } satisfies MessageV2.ToolPart)
+    } satisfies Message.ToolPart)
   }
 
   if (input.task.command) {
     // Add synthetic user message to prevent certain reasoning models from erroring
     // If we create assistant messages w/ out user ones following mid loop thinking signatures
     // will be missing and it can cause errors for models like gemini for example
-    const summaryUserMsg: MessageV2.User = {
+    const summaryUserMsg: Message.User = {
       id: Identifier.ascending("message"),
       sessionID: input.sessionID,
       role: "user",
@@ -222,21 +222,21 @@ async function runSubtask(input: {
       type: "text",
       text: "Summarize the task tool output above and continue with your task.",
       synthetic: true,
-    } satisfies MessageV2.TextPart)
+    } satisfies Message.TextPart)
   }
 }
 
-function collectLoopState(msgs: MessageV2.WithParts[]) {
-  let lastUser: MessageV2.User | undefined
-  let lastAssistant: MessageV2.Assistant | undefined
-  let lastFinished: MessageV2.Assistant | undefined
-  const tasks: (MessageV2.CompactionPart | MessageV2.SubtaskPart)[] = []
+function collectLoopState(msgs: Message.WithParts[]) {
+  let lastUser: Message.User | undefined
+  let lastAssistant: Message.Assistant | undefined
+  let lastFinished: Message.Assistant | undefined
+  const tasks: (Message.CompactionPart | Message.SubtaskPart)[] = []
   for (let i = msgs.length - 1; i >= 0; i--) {
     const msg = msgs[i]
-    if (!lastUser && msg.info.role === "user") lastUser = msg.info as MessageV2.User
-    if (!lastAssistant && msg.info.role === "assistant") lastAssistant = msg.info as MessageV2.Assistant
+    if (!lastUser && msg.info.role === "user") lastUser = msg.info as Message.User
+    if (!lastAssistant && msg.info.role === "assistant") lastAssistant = msg.info as Message.Assistant
     if (!lastFinished && msg.info.role === "assistant" && msg.info.finish)
-      lastFinished = msg.info as MessageV2.Assistant
+      lastFinished = msg.info as Message.Assistant
     if (lastUser && lastFinished) break
     if (!lastFinished) {
       tasks.push(...msg.parts.filter((part) => part.type === "compaction" || part.type === "subtask"))
@@ -246,7 +246,7 @@ function collectLoopState(msgs: MessageV2.WithParts[]) {
   return { lastUser, lastAssistant, lastFinished, tasks }
 }
 
-function shouldEnterStandby(input: { lastUser: MessageV2.User; lastAssistant: MessageV2.Assistant | undefined }) {
+function shouldEnterStandby(input: { lastUser: Message.User; lastAssistant: Message.Assistant | undefined }) {
   return !!(
     input.lastAssistant?.finish &&
     !["tool-calls", "unknown"].includes(input.lastAssistant.finish) &&
@@ -265,9 +265,9 @@ async function processTurn(input: {
   step: number
   sessionID: string
   session: Session.Info
-  msgs: MessageV2.WithParts[]
-  lastUser: MessageV2.User
-  lastFinished: MessageV2.Assistant | undefined
+  msgs: Message.WithParts[]
+  lastUser: Message.User
+  lastFinished: Message.Assistant | undefined
   model: Provider.Model
   abort: AbortSignal
 }) {
@@ -300,7 +300,7 @@ async function processTurn(input: {
         created: Date.now(),
       },
       sessionID: input.sessionID,
-    })) as MessageV2.Assistant,
+    })) as Message.Assistant,
     sessionID: input.sessionID,
     model: input.model,
     abort: input.abort,
@@ -372,7 +372,7 @@ async function processTurn(input: {
   })
   if (preferenceSection) system.push(preferenceSection)
   const memoryQuery = (lastUserMsg?.parts ?? [])
-    .filter((part): part is MessageV2.TextPart => part.type === "text" && textForBoth(part))
+    .filter((part): part is Message.TextPart => part.type === "text" && textForBoth(part))
     .map((part) => part.text)
     .join(" ")
     .trim()
@@ -388,7 +388,7 @@ async function processTurn(input: {
   if (taskPlanSection) system.push(taskPlanSection)
 
   const modelMessages = [
-    ...MessageV2.toModelMessages(input.msgs, input.model),
+    ...Message.toModelMessages(input.msgs, input.model),
     ...(isLastStep
       ? [
           {
@@ -505,7 +505,7 @@ function waitForUserMessage(sessionID: string, abort: AbortSignal, afterID: stri
     }
 
     // 1. Subscribe to future events first
-    const unsub = Bus.subscribe(MessageV2.Event.Updated, (event) => {
+    const unsub = Bus.subscribe(Message.Event.Updated, (event) => {
       if (
         event.properties.info.role === "user" &&
         event.properties.info.sessionID === sessionID &&
@@ -518,7 +518,7 @@ function waitForUserMessage(sessionID: string, abort: AbortSignal, afterID: stri
 
     // 2. Then check DB for messages that may have arrived before subscription
     void (async () => {
-      for await (const item of MessageV2.stream(sessionID)) {
+      for await (const item of Message.stream(sessionID)) {
         if (item.info.id <= afterID) break
         if (item.info.role === "user") {
           settle()
@@ -540,13 +540,13 @@ export const loop = fn(LoopInput, async (input) => {
 
   const abort = resume_existing ? resumeSession(sessionID) : startSession(sessionID)
   if (!abort) {
-    return new Promise<MessageV2.WithParts>((resolve, reject) => {
+    return new Promise<Message.WithParts>((resolve, reject) => {
       promptState()[sessionID].callbacks.push({ resolve, reject })
     })
   }
 
   // First caller also uses callback — loop runs in background and resolves it
-  const firstResult = new Promise<MessageV2.WithParts>((resolve, reject) => {
+  const firstResult = new Promise<Message.WithParts>((resolve, reject) => {
     promptState()[sessionID].callbacks.push({ resolve, reject })
   })
 
@@ -560,7 +560,7 @@ export const loop = fn(LoopInput, async (input) => {
         SessionStatus.set(sessionID, { type: "busy" })
         log.info("loop", { step, sessionID })
         if (abort.aborted) break
-        const msgs = await MessageV2.filterCompacted(MessageV2.stream(sessionID))
+        const msgs = await Message.filterCompacted(Message.stream(sessionID))
         const { lastUser, lastAssistant, lastFinished, tasks } = collectLoopState(msgs)
         if (shouldEnterStandby({ lastUser, lastAssistant })) {
           // Task complete — deliver result to waiting prompt() callers
@@ -650,7 +650,7 @@ export const loop = fn(LoopInput, async (input) => {
       }
       // Loop exited (abort or fatal break) — flush remaining callbacks
       SessionCompaction.prune({ sessionID })
-      for await (const item of MessageV2.stream(sessionID)) {
+      for await (const item of Message.stream(sessionID)) {
         if (item.info.role === "user") continue
         flushCallbacks(sessionID, item)
         break

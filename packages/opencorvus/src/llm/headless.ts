@@ -5,7 +5,7 @@ import { completeText, type TextHooks } from "@/llm/api"
 import { Provider } from "@/provider/provider"
 import { ProviderTransform } from "@/provider/transform"
 import { Instance } from "@/project/instance"
-import { MessageV2 } from "@/session/message"
+import { Message } from "@/session/message"
 import { mergeDeep, pipe } from "remeda"
 
 type ModelRef = {
@@ -25,7 +25,7 @@ function taskModel(metadata?: Record<string, unknown>) {
 }
 
 async function sessionModel(sessionID: string) {
-  for await (const item of MessageV2.stream(sessionID)) {
+  for await (const item of Message.stream(sessionID)) {
     if (item.info.role === "user" && item.info.model) return item.info.model
   }
 }

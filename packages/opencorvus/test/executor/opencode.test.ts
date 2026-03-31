@@ -4,7 +4,7 @@ import { TaskQueueService } from "../../src/scheduler/task-queue-service"
 import { Database, eq } from "../../src/storage/db"
 import { TaskQueueTable } from "../../src/scheduler/task-queue.sql"
 import { Session } from "../../src/session"
-import { MessageV2 } from "../../src/session/message"
+import { Message } from "../../src/session/message"
 import { SessionSummary } from "../../src/session/summary"
 import { Bus } from "../../src/bus"
 import { PermissionNext } from "../../src/permission/next"
@@ -47,7 +47,7 @@ describe("executor.opencode", () => {
         const session = await Session.create({ title: "executor events" })
         const stream = OpencodeExecutor.events({ sessionID: session.id })
         const next = stream.next()
-        await Bus.publish(MessageV2.Event.PartDelta, {
+        await Bus.publish(Message.Event.PartDelta, {
           sessionID: session.id,
           messageID: "msg_1",
           partID: "prt_1",
@@ -120,7 +120,7 @@ describe("executor.opencode", () => {
           time: {
             created: old,
           },
-        } as MessageV2.Assistant,
+        } as Message.Assistant,
         parts: [
           {
             id: "prt_old",
@@ -128,7 +128,7 @@ describe("executor.opencode", () => {
             messageID: "msg_old",
             type: "text",
             text: "old summary",
-          } as MessageV2.TextPart,
+          } as Message.TextPart,
         ],
       },
       {
@@ -139,7 +139,7 @@ describe("executor.opencode", () => {
           time: {
             created: now,
           },
-        } as MessageV2.Assistant,
+        } as Message.Assistant,
         parts: [
           {
             id: "prt_new",
@@ -147,10 +147,10 @@ describe("executor.opencode", () => {
             messageID: "msg_new",
             type: "text",
             text: "new summary",
-          } as MessageV2.TextPart,
+          } as Message.TextPart,
         ],
       },
-    ] as MessageV2.WithParts[])
+    ] as Message.WithParts[])
 
     await Instance.provide({
       directory: tmp.path,

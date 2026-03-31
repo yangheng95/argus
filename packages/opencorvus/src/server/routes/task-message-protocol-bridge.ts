@@ -1,7 +1,7 @@
 import { Bus } from "@/bus"
 import { OrchestratorProtocol } from "@/orchestrator/protocol"
 import { ProtocolStore } from "@/protocol/store"
-import { MessageV2 } from "@/session/message"
+import { Message } from "@/session/message"
 import { Log } from "@/util/log"
 import { taskIDForSession, taskSession } from "./task-event"
 
@@ -141,7 +141,7 @@ function enrichProperties(properties: Record<string, unknown>, sessionID: string
 }
 
 /** Persist a message event to protocol_event (has sequence, replayable on reconnect). */
-async function bridgeEvent<Definition extends typeof MessageV2.Event[keyof typeof MessageV2.Event]>(
+async function bridgeEvent<Definition extends typeof Message.Event[keyof typeof Message.Event]>(
   def: Definition,
   properties: Record<string, unknown>,
 ) {
@@ -171,7 +171,7 @@ function bridgeDelta(properties: Record<string, unknown>) {
   if (!taskID) return
   const enriched = enrichProperties(properties, sessionID, taskID)
   ProtocolStore.dispatchEphemeral({
-    type: MessageV2.Event.PartDelta.type,
+    type: Message.Event.PartDelta.type,
     aggregate: "task",
     taskID,
     sessionID,
@@ -184,15 +184,15 @@ export function ensureTaskMessageProtocolBridge() {
   if (initialized) return
   initialized = true
   // Persisted events — written to protocol_event, replayable on reconnect
-  Bus.subscribe(MessageV2.Event.Updated, (event) => {
+  Bus.subscribe(Message.Event.Updated, (event) => {
     cacheMessageInfo(event.properties)
-    return bridgeEvent(MessageV2.Event.Updated, event.properties)
+    return bridgeEvent(Message.Event.Updated, event.properties)
   })
-  Bus.subscribe(MessageV2.Event.PartUpdated, (event) => bridgeEvent(MessageV2.Event.PartUpdated, event.properties))
-  Bus.subscribe(MessageV2.Event.Removed, (event) => bridgeEvent(MessageV2.Event.Removed, event.properties))
-  Bus.subscribe(MessageV2.Event.PartRemoved, (event) => bridgeEvent(MessageV2.Event.PartRemoved, event.properties))
+  Bus.subscribe(Message.Event.PartUpdated, (event) => bridgeEvent(Message.Event.PartUpdated, event.properties))
+  Bus.subscribe(Message.Event.Removed, (event) => bridgeEvent(Message.Event.Removed, event.properties))
+  Bus.subscribe(Message.Event.PartRemoved, (event) => bridgeEvent(Message.Event.PartRemoved, event.properties))
   // Ephemeral — dispatched to live SSE subscribers but NOT persisted.
   // High frequency (every text token); on reconnect, client recovers full
   // text from persisted message.part.updated or transcript snapshot.
-  Bus.subscribe(MessageV2.Event.PartDelta, (event) => bridgeDelta(event.properties))
+  Bus.subscribe(Message.Event.PartDelta, (event) => bridgeDelta(event.properties))
 }

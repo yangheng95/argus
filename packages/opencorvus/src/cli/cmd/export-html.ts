@@ -1,4 +1,4 @@
-import type { MessageV2 } from "../../session/message"
+import type { Message } from "../../session/message"
 import type { CallRecord } from "../../session/llm-trace"
 
 type SessionLike = {
@@ -12,7 +12,7 @@ type SessionLike = {
 
 export async function buildSessionTraceHtml(input: {
   session: SessionLike
-  messages: MessageV2.WithParts[]
+  messages: Message.WithParts[]
   calls: CallRecord[]
 }) {
   const calls = [...input.calls].sort((a, b) => a.started_at - b.started_at)
@@ -191,7 +191,7 @@ export async function buildSessionTraceHtml(input: {
   ].join("\n")
 }
 
-async function renderPart(part: MessageV2.Part) {
+async function renderPart(part: Message.Part) {
   switch (part.type) {
     case "text":
       return `<section class="part"><h4>text</h4><pre>${escape(part.text)}</pre></section>`

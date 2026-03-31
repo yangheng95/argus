@@ -2,7 +2,7 @@ import z from "zod"
 import { asSchema, jsonSchema, tool, type Tool as AITool, type ToolCallOptions } from "ai"
 import { Log } from "../util/log"
 import { Identifier } from "../id/id"
-import { MessageV2 } from "./message"
+import { Message } from "./message"
 import { Session } from "."
 import { ProviderTransform } from "../provider/transform"
 import { Plugin } from "../plugin"
@@ -24,7 +24,7 @@ type ResolveToolsInput = {
   tools?: Record<string, boolean>
   processor: SessionProcessor.Info
   bypassAgentCheck: boolean
-  messages: MessageV2.WithParts[]
+  messages: Message.WithParts[]
   extra?: Record<string, any>
 }
 
@@ -73,7 +73,7 @@ function toolContext(input: ResolveToolsInput) {
 }
 
 function attachFiles(
-  attachments: Omit<MessageV2.FilePart, "id" | "sessionID" | "messageID">[] | undefined,
+  attachments: Omit<Message.FilePart, "id" | "sessionID" | "messageID">[] | undefined,
   sessionID: string,
   messageID: string,
 ) {
@@ -184,7 +184,7 @@ export async function resolveTools(input: ResolveToolsInput) {
         )
 
         const textParts: string[] = []
-        const attachments: Omit<MessageV2.FilePart, "id" | "sessionID" | "messageID">[] = []
+        const attachments: Omit<Message.FilePart, "id" | "sessionID" | "messageID">[] = []
 
         for (const contentItem of result.content) {
           if (contentItem.type === "text") {

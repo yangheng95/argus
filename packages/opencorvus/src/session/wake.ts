@@ -4,7 +4,7 @@ import { Instance } from "@/project/instance"
 import { Log } from "@/util/log"
 import { Provider } from "@/provider/provider"
 import { SessionPrompt } from "./prompt"
-import { MessageV2 } from "./message"
+import { Message } from "./message"
 import { Agent } from "@/agent/agent"
 
 /**
@@ -104,7 +104,7 @@ export namespace SessionWake {
   /** Resolve model from the session's last user message, or fall back to default. */
   async function resolveModel(sessionID: string): Promise<{ providerID: string; modelID: string }> {
     // Check last user message in this session for model info
-    for await (const item of MessageV2.stream(sessionID)) {
+    for await (const item of Message.stream(sessionID)) {
       if (item.info.role === "user" && item.info.model) {
         return item.info.model
       }

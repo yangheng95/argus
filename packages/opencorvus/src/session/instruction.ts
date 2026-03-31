@@ -7,7 +7,7 @@ import { Instance } from "../project/instance"
 import { Flag } from "@/flag/flag"
 import { Log } from "../util/log"
 import { Glob } from "../util/glob"
-import type { MessageV2 } from "./message"
+import type { Message } from "./message"
 
 const log = Log.create({ service: "instruction" })
 
@@ -137,7 +137,7 @@ export namespace InstructionPrompt {
     return Promise.all([...files, ...fetches]).then((result) => result.filter(Boolean))
   }
 
-  export function loaded(messages: MessageV2.WithParts[]) {
+  export function loaded(messages: Message.WithParts[]) {
     const paths = new Set<string>()
     for (const msg of messages) {
       for (const part of msg.parts) {
@@ -161,7 +161,7 @@ export namespace InstructionPrompt {
     }
   }
 
-  export async function resolve(messages: MessageV2.WithParts[], filepath: string, messageID: string) {
+  export async function resolve(messages: Message.WithParts[], filepath: string, messageID: string) {
     const system = await systemPaths()
     const already = loaded(messages)
     const results: { filepath: string; content: string }[] = []
