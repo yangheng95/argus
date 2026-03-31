@@ -28,6 +28,7 @@ import PLAN_REMINDER from "../session/prompt/plan-reminder-anthropic.txt"
 import SPEC_REMINDER from "../session/prompt/spec-reminder-anthropic.txt"
 import { lastModel } from "./prompt-state"
 import type { PromptInput } from "./prompt-schema"
+import { isDecodableText, decodeDataUrlText } from "./text-mime"
 
 const log = Log.create({ service: "session.prompt" })
 
@@ -297,7 +298,7 @@ export async function createUserMessage(input: PromptInput) {
           const url = new URL(part.url)
           switch (url.protocol) {
             case "data:":
-              if (part.mime === "text/plain") {
+              if (isDecodableText(part.mime, part.filename)) {
                 return [
                   {
                     messageID: info.id,
@@ -311,7 +312,7 @@ export async function createUserMessage(input: PromptInput) {
                     sessionID: input.sessionID,
                     type: "text",
                     synthetic: true,
-                    text: Buffer.from(part.url, "base64url").toString(),
+                    text: decodeDataUrlText(part.url),
                   },
                   {
                     ...part,

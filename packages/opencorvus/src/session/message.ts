@@ -13,6 +13,7 @@ import { iife } from "@/util/iife"
 import { type SystemError } from "bun"
 import type { Provider } from "@/provider/provider"
 import { textForModel } from "./part-visibility"
+import { isDecodableText } from "./text-mime"
 
 export namespace Message {
   export const OutputLengthError = NamedError.create("MessageOutputLengthError", z.object({}))
@@ -569,8 +570,9 @@ export namespace Message {
               type: "text",
               text: part.text,
             })
-          // text/plain and directory files are converted into text parts, ignore them
-          if (part.type === "file" && part.mime !== "text/plain" && part.mime !== "application/x-directory")
+          // Text files are decoded into text parts upstream; skip them here.
+          // Only pass through binary file parts (images, PDFs, etc.) to the model.
+          if (part.type === "file" && !isDecodableText(part.mime, part.filename) && part.mime !== "application/x-directory")
             userMessage.parts.push({
               type: "file",
               url: part.url,

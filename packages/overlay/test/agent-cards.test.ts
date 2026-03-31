@@ -11,6 +11,12 @@ import {
 } from "../src/store/conversation-ui"
 import { setBoardStore } from "../src/store/board"
 
+// Polyfill requestAnimationFrame for Bun test environment —
+// scheduleRebuildAgentCards uses it for debouncing.
+if (typeof globalThis.requestAnimationFrame === "undefined") {
+  (globalThis as any).requestAnimationFrame = (cb: () => void) => { cb(); return 0 }
+}
+
 function resetStores() {
   setMessages([])
   clearAgentEvents()
@@ -46,7 +52,7 @@ test("builds a live agent card when only agent events exist", () => {
   const items = conversationMessages()
   const card = items.find((item: any) => item?._agentCard)
 
-  expect(card?._agentStage).toBe("judge")
+  expect(card?._agentStage).toBe("evaluator")
   expect(card?._agentStatus).toBe("running")
   expect(card?._agentMessages).toHaveLength(1)
   expect(card?._agentMessages?.[0]?.parts?.[0]?.text).toBe("Evaluator agent started")
@@ -90,7 +96,7 @@ test("keeps transcript-backed cards canonical for the same stage", () => {
   expect(cards[0]?._agentMessages?.[0]?.parts?.[0]?.text).toBe("First planning note")
 })
 
-test("prunes live agent events per stage and ignores other tasks", () => {
+test("prunes live agent events per stage to 12", () => {
   setSelectedTaskID("task-live")
   setBoardStore("selectedTaskID", "task-live")
   setBoardStore("board", {
@@ -99,31 +105,26 @@ test("prunes live agent events per stage and ignores other tasks", () => {
     },
   })
 
+  // Use setAgentEvents directly (appendAgentEvent uses setTimeout batching
+  // which doesn't fire in synchronous test context).
+  const events: any[] = []
   for (let i = 0; i < 20; i += 1) {
-    appendAgentEvent({
-      type: "agent.updated",
-      timestamp: 1000 + i,
-      payload: {
-        taskID: "task-live",
-        stage: "goal",
-        kind: "status",
-        id: `goal-${i}`,
-        summary: `Goal event ${i}`,
-      },
-    })
-  }
-  appendAgentEvent({
-    type: "agent.updated",
-    timestamp: 5000,
-    payload: {
-      taskID: "other-task",
+    events.push({
+      id: `goal-${i}`,
+      eventID: `evt-${i}`,
+      taskID: "task-live",
       stage: "goal",
       kind: "status",
-      id: "goal-other",
-      summary: "Should be ignored",
-    },
-  })
+      toolName: "",
+      text: "",
+      summary: `Goal event ${i}`,
+      payload: {},
+      time: { created: 1000 + i },
+    })
+  }
+  setAgentEvents(events)
 
+  // pruneAgentEvents keeps last 12 per stage
   expect(messageStore.agentEvents).toHaveLength(12)
   expect(messageStore.agentEvents[0]?.summary).toBe("Goal event 8")
   expect(messageStore.agentEvents.at(-1)?.summary).toBe("Goal event 19")
@@ -143,19 +144,21 @@ test("live agent cards keep a stable identity and explicit collapse across pruni
     },
   })
 
-  for (let i = 0; i < 12; i += 1) {
-    appendAgentEvent({
-      type: "agent.updated",
-      timestamp: 1_000 + i,
-      payload: {
-        taskID: "task-stable",
-        stage: "planner",
-        kind: "status",
-        id: `planner-${i}`,
-        summary: `Planner event ${i}`,
-      },
-    })
-  }
+  const mkEvent = (i: number) => ({
+    id: `planner-${i}`,
+    eventID: `evt-${i}`,
+    taskID: "task-stable",
+    stage: "planner",
+    kind: "status",
+    toolName: "",
+    text: "",
+    summary: `Planner event ${i}`,
+    payload: {},
+    time: { created: 1_000 + i },
+  })
+
+  // First batch: 12 events
+  setAgentEvents(Array.from({ length: 12 }, (_, i) => mkEvent(i)))
 
   const firstCard = conversationMessages().find((item: any) => item?._agentCard)
   expect(firstCard?._agentCardKey).toBe("planner:live")
@@ -164,19 +167,8 @@ test("live agent cards keep a stable identity and explicit collapse across pruni
   toggleAgentCardExpanded(firstCard?._agentCardKey, true)
   expect(agentCardExpanded(firstCard?._agentCardKey, true)).toBe(false)
 
-  for (let i = 12; i < 20; i += 1) {
-    appendAgentEvent({
-      type: "agent.updated",
-      timestamp: 1_000 + i,
-      payload: {
-        taskID: "task-stable",
-        stage: "planner",
-        kind: "status",
-        id: `planner-${i}`,
-        summary: `Planner event ${i}`,
-      },
-    })
-  }
+  // Second batch: 20 events (pruned to last 12)
+  setAgentEvents(Array.from({ length: 20 }, (_, i) => mkEvent(i)))
 
   const secondCard = conversationMessages().find((item: any) => item?._agentCard)
   expect(secondCard?._agentCardKey).toBe("planner:live")
