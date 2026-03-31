@@ -2290,7 +2290,7 @@ body[data-theme="light"] .section-badge {
 
 .section-title {
   flex: 1;
-  font-size: var(--ui-font-meta);
+  font-size: var(--ui-font-control);
   font-weight: 700;
   color: var(--text-strong);
   letter-spacing: var(--title-track);
@@ -2299,7 +2299,7 @@ body[data-theme="light"] .section-badge {
 
 .section-badge {
   margin-left: auto;
-  font-size: var(--ui-font-small);
+  font-size: var(--ui-font-control);
   font-weight: 600;
   min-height: var(--section-badge-height);
   padding: 0 calc(6px * var(--ui-scale));
@@ -2326,7 +2326,7 @@ body[data-theme="light"] .section-badge {
   min-height: calc(22px * var(--ui-scale));
   padding: 0 calc(8px * var(--ui-scale));
   border-radius: 999px;
-  font-size: var(--ui-font-small);
+  font-size: var(--ui-font-control);
   line-height: 1;
 }
 
@@ -2419,7 +2419,7 @@ body[data-theme="light"] .section-badge {
 
 .task-actions-buttons .btn {
   padding: calc(4px * var(--ui-scale)) var(--ui-section-padding-x);
-  font-size: var(--ui-font-meta);
+  font-size: var(--ui-font-control);
 }
 
 .task-failure-alert {
@@ -2432,7 +2432,7 @@ body[data-theme="light"] .section-badge {
 }
 
 .plan-version {
-  font-size: var(--ui-font-meta);
+  font-size: var(--ui-font-control);
   color: var(--text-muted);
   margin-top: 6px;
 }
@@ -2445,7 +2445,7 @@ body[data-theme="light"] .section-badge {
   gap: 6px;
   flex-wrap: wrap;
   margin-bottom: 4px;
-  font-size: var(--ui-font-meta);
+  font-size: var(--ui-font-control);
   color: var(--text-soft);
 }
 
@@ -2515,7 +2515,7 @@ body[data-theme="light"] .section-badge {
 }
 
 .change-subline {
-  font-size: var(--ui-font-meta);
+  font-size: var(--ui-font-control);
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -2528,7 +2528,7 @@ body[data-theme="light"] .section-badge {
   flex-wrap: wrap;
   justify-content: flex-end;
   flex-shrink: 0;
-  font-size: var(--ui-font-meta);
+  font-size: var(--ui-font-control);
   font-variant-numeric: tabular-nums;
 }
 
@@ -2599,7 +2599,7 @@ details.goal-item {
 .goal-item-head::marker { display: none; content: ""; }
 
 .goal-item-chevron {
-  font-size: var(--ui-font-tiny, 10px);
+  font-size: var(--ui-font-control);
   color: var(--text-soft);
   flex-shrink: 0;
   transition: transform 0.15s ease;
@@ -2611,13 +2611,13 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
 
 .goal-desc-inline {
   flex-shrink: 0;
-  font-size: var(--ui-font-small);
+  font-size: var(--ui-font-title);
   font-weight: 600;
   color: var(--text-strong);
 }
 .goal-title-brief {
   flex: 1;
-  font-size: var(--ui-font-small);
+  font-size: var(--ui-font-body);
   color: var(--text);
   min-width: 0;
   overflow: hidden;
@@ -2630,19 +2630,19 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
   border-top: 1px solid var(--border);
 }
 .goal-item-body .goal-desc {
-  font-size: var(--ui-font-control);
+  font-size: var(--ui-font-body);
   font-weight: 400;
   color: var(--text);
   line-height: 1.55;
 }
 .goal-item-body .goal-criteria {
-  font-size: var(--ui-font-tiny, 11px);
+  font-size: var(--ui-font-control);
   color: var(--text-muted);
   margin-top: 4px;
   line-height: 1.5;
 }
 .goal-item-body .plan-version {
-  font-size: var(--ui-font-tiny, 11px);
+  font-size: var(--ui-font-control);
   color: var(--text-muted);
   margin-bottom: 4px;
 }
@@ -2665,8 +2665,8 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
 .goal-content { flex: 1; min-width: 0; }
 
 .goal-desc {
-  font-size: var(--ui-font-body);
-  font-weight: 500;
+  font-size: var(--ui-font-title);
+  font-weight: 600;
   color: var(--text-strong);
   word-break: break-word;
 }
@@ -2680,7 +2680,7 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
 }
 
 .goal-priority {
-  font-size: var(--ui-font-small);
+  font-size: var(--ui-font-control);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -2736,14 +2736,14 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
 
 .criteria-group-title {
   flex: 1;
-  font-size: var(--ui-font-label);
+  font-size: var(--ui-font-control);
   font-weight: 600;
   color: var(--text-strong);
   letter-spacing: 0.02em;
 }
 
 .criteria-group-count {
-  font-size: var(--ui-font-small);
+  font-size: var(--ui-font-control);
   color: var(--text-soft);
   font-family: var(--mono);
 }
@@ -2819,7 +2819,7 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
 }
 
 .criteria-desc {
-  font-size: var(--ui-font-small);
+  font-size: var(--ui-font-control);
   color: var(--text-muted);
   line-height: 1.3;
   min-width: 0;
@@ -2836,7 +2836,7 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
 }
 .criteria-result {
   min-width: calc(40px * var(--ui-scale));
-  font-size: var(--ui-font-small);
+  font-size: var(--ui-font-control);
   font-family: var(--mono);
   text-transform: uppercase;
   letter-spacing: 0.03em;
@@ -2856,7 +2856,7 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
 
 .budget-note {
   margin-bottom: calc(10px * var(--ui-scale));
-  font-size: var(--ui-font-label);
+  font-size: var(--ui-font-control);
   color: var(--text-soft);
 }
 
@@ -2883,7 +2883,7 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
 }
 .eval-error-meta {
   margin-top: 1px;
-  font-size: var(--ui-font-small);
+  font-size: var(--ui-font-control);
   color: var(--text-soft);
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -7946,12 +7946,6 @@ body[data-resizing="true"] * {
 
 .sidebar-subtitle,
 .sidebar-btn {
-  font-size: var(--ui-font-meta);
-}
-
-/* Sections meta labels — small auxiliary info only */
-.sections .change-meta,
-.sections .plan-version {
   font-size: var(--ui-font-meta);
 }
 

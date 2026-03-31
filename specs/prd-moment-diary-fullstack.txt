@@ -1,29 +1,81 @@
 基于 specs/prd.txt 的 Moment Diary PRD，交付一个商业级可运行的 MVP 全栈 Web 应用。
 
-## 技术栈建议
+## 技术栈（固定，不可更改）
 
-- 后端：Bun + TypeScript + Hono + SQLite (bun:sqlite)
-- 前端：使用成熟的现代前端框架（React/Vue/Svelte 等，由你根据项目需要选择）
-- 构建工具：使用 Vite 或等价现代构建工具
-- UI：可选用 Tailwind CSS 或成熟 UI 组件库
-- 数据库文件：`data/moment-diary.db`
-- 启动方式：`bun run index.ts`，同时服务 API 和前端
-- 前端构建产物由后端静态托管
+### 后端
+- **运行时**: Bun
+- **语言**: TypeScript (strict mode)
+- **框架**: Hono（轻量 Web 框架）
+- **数据库**: SQLite via `bun:sqlite`，数据文件 `data/moment-diary.db`
+- **密码哈希**: `Bun.password.hash()` / `Bun.password.verify()`（Argon2 内置）
+- **入口**: `index.ts`，同时服务 API 和前端静态资源
+
+### 前端
+- **框架**: React 19 + TypeScript
+- **脚手架**: Vite（`npm create vite@latest` 的 react-ts 模板结构）
+- **路由**: React Router v7
+- **样式**: Tailwind CSS v4
+- **图表**: Recharts（统计面板）
+- **HTTP 客户端**: 原生 fetch + 自封装 api client
+- **前端目录**: `web/`，构建产物 `web/dist/`，由后端 Hono 静态托管
+
+### 项目结构
+```
+index.ts              # Hono 服务入口，挂载 API + 静态资源
+src/
+  db.ts               # SQLite 初始化 + DDL
+  auth.ts             # 认证中间件 + 路由
+  diary.ts            # 日记 CRUD 路由
+  timeline.ts         # 时间轴路由
+  calendar.ts         # 日历路由
+  stats.ts            # 统计路由
+web/
+  index.html
+  src/
+    main.tsx          # React 入口
+    App.tsx           # 路由配置
+    api.ts            # API client (fetch 封装，自动带 token)
+    components/       # UI 组件
+    pages/            # 页面组件
+    hooks/            # 自定义 hooks
+    styles/           # Tailwind 入口
+  tailwind.config.ts
+  vite.config.ts
+  tsconfig.json
+data/                 # SQLite 数据目录（gitignore）
+tests/
+  api.test.ts         # 后端 API 测试
+```
+
+### 启动方式
+```bash
+# 首次
+cd web && bun install && bun run build && cd ..
+bun run index.ts
+
+# 开发
+# 终端1: cd web && bun run dev（Vite dev server，proxy 到 3000）
+# 终端2: bun run index.ts
+
+# 生产
+bun run index.ts
+# 浏览器打开 http://localhost:3000
+```
 
 ## 交付范围（MVP P0 功能）
 
 ### 后端 API
 
 1. **认证**
-   - `POST /api/auth/register` — 邮箱+密码注册
+   - `POST /api/auth/register` — 邮箱+密码注册，密码用 `Bun.password.hash()` 存储
    - `POST /api/auth/login` — 登录返回 Bearer token
-   - 密码哈希存储，Bearer session token 认证
+   - 中间件：从 `Authorization: Bearer <token>` 解析用户
 
 2. **日记 CRUD**
-   - `POST /api/diaries` — 创建日记（标题、正文、心情、标签、是否收藏）
+   - `POST /api/diaries` — 创建日记（标题、正文、心情、标签[]、是否收藏）
    - `GET /api/diaries` — 列表（支持 ?tag=&mood=&favorite=&limit=&offset= 筛选）
-   - `GET /api/diaries/:id` — 详情
-   - `PATCH /api/diaries/:id` — 更新（刷新 updated_at）
+   - `GET /api/diaries/:id` — 详情（含标签）
+   - `PATCH /api/diaries/:id` — 更新（刷新 updated_at，同步更新 tags）
    - `DELETE /api/diaries/:id` — 删除（同步清理 diary_tags）
 
 3. **时间轴**
@@ -37,65 +89,136 @@
 
 ### 前端页面
 
-一个 SPA 应用，包含以下视图：
+React SPA，6 个主要视图：
 
-1. **登录/注册页** — 现代表单设计，输入验证，错误提示
-2. **首页（时间轴）** — 日记卡片列表，按时间倒序，展示标题/摘要/心情emoji/标签/时间
-3. **新建/编辑日记** — 富文本或 textarea，心情选择器（7级：😄很开心/😊开心/😌平静/😔低落/😢难过/😰焦虑/😡愤怒），标签输入，收藏勾选
-4. **日记详情** — 完整展示，编辑/删除操作
-5. **日历视图** — 月历网格，有日记的日期高亮显示心情色彩，点击查看当日日记
-6. **统计面板** — 心情分布图表、连续记录天数、高频标签可视化
+1. **登录/注册页** (`/login`, `/register`)
+   - 表单验证（邮箱格式、密码长度≥6）
+   - 错误提示（邮箱已存在、密码错误）
+   - 登录成功自动跳转首页
 
-### 视觉设计要求
+2. **首页/时间轴** (`/`)
+   - 日记卡片列表，按时间倒序
+   - 每张卡片展示：标题、正文摘要(前100字)、心情 emoji、标签 chips、时间
+   - 顶部筛选栏：心情、标签、收藏
+   - 无限滚动或分页加载
+   - 空状态引导："写下你的第一篇日记"
+
+3. **新建/编辑日记** (`/write`, `/edit/:id`)
+   - 标题输入
+   - 正文 textarea（支持换行，不需要富文本编辑器）
+   - 心情选择器：7级（😄很开心/😊开心/😌平静/😔低落/😢难过/😰焦虑/😡愤怒）
+   - 标签输入：逗号或回车分隔，显示为 chips
+   - 收藏开关
+   - 保存/取消按钮
+
+4. **日记详情** (`/diary/:id`)
+   - 完整展示标题、正文、心情、标签、时间
+   - 编辑/删除按钮
+   - 删除需确认对话框
+
+5. **日历视图** (`/calendar`)
+   - 月历网格，当前月份
+   - 有日记的日期显示心情色彩圆点
+   - 点击有日记的日期，展示当日日记列表
+   - 可切换上/下月
+
+6. **统计面板** (`/stats`)
+   - 心情分布饼图（Recharts PieChart）
+   - 连续记录天数（数字+描述）
+   - 高频标签 top5（柱状图或标签云）
+   - 总篇数
+
+### 全局 UI
+
+- **导航栏**: 底部 Tab 导航（移动端）/ 顶部导航（桌面），包含：首页、写日记、日历、统计、退出
+- **主题切换**: 暗色/亮色，按钮在导航栏，状态持久化到 localStorage
+- **响应式**: 移动端优先，断点 sm(640px)/md(768px)/lg(1024px)
+- **加载态**: 骨架屏或 spinner
+- **Toast**: 操作成功/失败提示
+
+## 视觉设计要求
 
 - 商业级设计品质，不是 demo 风格
-- 暗色/亮色主题切换
-- 移动端优先的响应式布局（手机/平板/桌面都美观）
-- 流畅的页面切换和交互动画
-- 空状态设计（无日记时的引导）
-- 加载状态指示
+- 配色方案：暖色调为主（日记软件的温馨感）
+- 圆角卡片、适当阴影、过渡动画
+- 心情 emoji 配色映射：😄黄色/😊绿色/😌蓝色/😔灰色/😢靛蓝/😰橙色/😡红色
+- 空状态有插图或引导文案
+- 表单有 focus 效果和验证反馈
 
 ## 数据表
 
-- `users`: id, email, password_hash, nickname, created_at
-- `sessions`: token, user_id, created_at
-- `diary_entries`: id, user_id, title, content, mood, is_favorite, created_at, updated_at
-- `tags`: id, user_id, name, normalized_name
-- `diary_tags`: diary_id, tag_id
+```sql
+CREATE TABLE users (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  email TEXT NOT NULL UNIQUE,
+  password_hash TEXT NOT NULL,
+  nickname TEXT,
+  created_at INTEGER NOT NULL DEFAULT (unixepoch())
+);
+
+CREATE TABLE sessions (
+  token TEXT PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at INTEGER NOT NULL DEFAULT (unixepoch())
+);
+
+CREATE TABLE diary_entries (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  content TEXT NOT NULL DEFAULT '',
+  mood TEXT NOT NULL DEFAULT 'calm',
+  is_favorite INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+  updated_at INTEGER NOT NULL DEFAULT (unixepoch())
+);
+
+CREATE TABLE tags (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  normalized_name TEXT NOT NULL,
+  UNIQUE(user_id, normalized_name)
+);
+
+CREATE TABLE diary_tags (
+  diary_id INTEGER NOT NULL REFERENCES diary_entries(id) ON DELETE CASCADE,
+  tag_id INTEGER NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
+  PRIMARY KEY (diary_id, tag_id)
+);
+```
+
+mood 枚举值：`very_happy`, `happy`, `calm`, `down`, `sad`, `anxious`, `angry`
 
 ## 安全规则
 
-- 密码不能明文存储
-- 未认证请求不能访问受保护接口
-- 用户不能访问其他用户的日记
-- 标签按小写去重
+- 密码用 `Bun.password.hash()` (Argon2) 存储
+- 未认证请求返回 401
+- 用户不能访问其他用户的日记（所有查询带 user_id 条件）
+- 标签按小写去重（normalized_name = name.toLowerCase().trim()）
+- Session token 使用 `crypto.randomUUID()`
 
 ## 测试要求
 
-至少覆盖：
-1. 注册后密码是哈希
+`tests/api.test.ts` 使用 `bun:test`，至少覆盖：
+
+1. 注册后密码是哈希（不等于原始密码）
 2. 登录返回 token
-3. 创建日记带 mood + tags
-4. 时间轴倒序
+3. 带 token 创建日记（含 mood + tags），返回完整对象
+4. 时间轴按 created_at 倒序
 5. tag 过滤有效
 6. mood 过滤有效
-7. 用户隔离
-8. 更新刷新 updated_at
-9. 删除清理 diary_tags
+7. 用户隔离（用户 A 看不到用户 B 的日记）
+8. 更新日记后 updated_at 刷新
+9. 删除日记后 diary_tags 同步清理
 
 ## 验收标准
 
-- `bunx tsc --noEmit` 通过
-- `bun test` 通过
-- `bun run index.ts` 可启动，浏览器打开 http://localhost:3000 能看到完整的商业级日记应用
-- 前端使用了现代框架和构建工具，不是原始 HTML 拼接
-- 可以注册、登录、写日记、查看时间轴、切换日历视图、查看统计
-- 暗色主题可切换
-- 移动端响应式正常
-- 没有 README、文档等无关产物
-
-## 执行要求
-
-- 先调研项目需要的前端框架和工具链，选择最合适的
-- 使用 Vite、Tailwind 等成熟生态工具
-- 优先交付可运行、可测试、在浏览器中体验良好的完整应用
+- `cd web && bun install && bun run build` 前端构建成功
+- `bunx tsc --noEmit` 后端类型检查通过
+- `bun test` API 测试通过
+- `bun run index.ts` 启动后，浏览器打开 http://localhost:3000 看到完整应用
+- 可以完成完整流程：注册 → 登录 → 写日记 → 查看时间轴 → 日历视图 → 统计面板
+- 暗色/亮色主题可切换
+- 手机宽度(375px)下布局正常
+- 没有 README、文档、.env.example 等无关产物
