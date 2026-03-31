@@ -16,7 +16,7 @@ import { boardStore, setBoardStore } from "../store/board";
 import { clearMessages } from "../store/messages";
 import { AppLog } from "../utils/log";
 import { t } from "../utils/i18n";
-import { apiJson } from "./api";
+import { apiJson, configure as configureApi } from "./api";
 
 // ── Types ──
 
@@ -718,6 +718,11 @@ export async function applyDirectory(
     "directoryMode",
     settingsStore.savedDirectory ? "custom" : "temp",
   );
+
+ // Sync the API client's directory context immediately so all subsequent
+ // API calls (checkConnection, reloadProjectScope, etc.) target the new
+ // directory on the backend.
+  configureApi({ directory: next });
   setBoardStore("pendingTasks", []);
 
  // Clear stale workspace memory so restoreInitialWorkspace() won't revert the switch.
@@ -735,6 +740,10 @@ export async function applyDirectory(
 
   if (options.save === true && next) addRecentDirectory(next);
 
+ // Capture epoch before entering async phase — if another applyDirectory
+ // call supersedes us while we await, our epoch will be stale.
+  const epoch = settingsStore.directoryEpoch;
+
  // Connection check + reload via .
   const { checkConnection } = await import("./connection");
   if (typeof checkConnection === "function") {
@@ -746,9 +755,19 @@ export async function applyDirectory(
     }
   }
 
+  if (epoch !== settingsStore.directoryEpoch) {
+    console.log("[applyDir] superseded after connection check, aborting");
+    return;
+  }
+
   const { reloadProjectScope } = await import("./config");
   console.log("[applyDir] reloading project scope");
   await reloadProjectScope(options);
+
+  if (epoch !== settingsStore.directoryEpoch) {
+    console.log("[applyDir] superseded after reload, discarding");
+    return;
+  }
   console.log("[applyDir] done, tasks=", boardStore.tasks.length);
 }
 

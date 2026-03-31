@@ -1,6 +1,7 @@
 import z from "zod"
 import { Preference } from "@/preference"
 import { findSpecSnapshot, viewSpecSnapshot } from "@/orchestrator/store"
+import { isActive, isTerminal, isInterruptable, type TaskStatus } from "@/orchestrator/state-machine"
 import {
   OrchestratorArtifactTable,
   OrchestratorChannelBindingTable,
@@ -766,7 +767,7 @@ function boardOverview(input: {
       }
     | undefined
 }) {
-  const active = ["queued", "planning", "running", "evaluating", "delivering"].includes(input.task.status)
+  const active = isActive(input.task.status as TaskStatus)
   const canResume = Boolean(input.run) && !active && input.pendingInteractions.length === 0
   const headline =
     input.pendingInteractions.length > 0
@@ -850,9 +851,9 @@ function boardOverview(input: {
     currentFailure: input.currentFailure,
     nextStep,
     controls: {
-      canRetry: canResume,
-      canReplan: canResume && Boolean(input.task.active_plan_version_id ?? input.run?.plan_version_id),
-      canCancel: Boolean(input.run) && ["queued", "planning", "running", "evaluating", "blocked"].includes(input.task.status),
+      canRetry: isTerminal(input.task.status as TaskStatus) && input.pendingInteractions.length === 0,
+      canReplan: isTerminal(input.task.status as TaskStatus) && Boolean(input.task.active_plan_version_id ?? input.run?.plan_version_id),
+      canCancel: isInterruptable(input.task.status as TaskStatus),
     },
   }
 }

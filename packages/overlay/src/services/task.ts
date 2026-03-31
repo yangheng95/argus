@@ -2,10 +2,9 @@
 // Responsibilities:
 // - Select a task (stop SSE, clear messages, load board + transcript, start SSE)
 // - Delete a task
-// - Create a task (via panelMessage)
-// - Submit a message to the current task (panelMessage stream)
-// - Retry / replan / cancel a task (via panelMessage)
-// - Task recovery polling (startTaskRecovery)
+// - Create a task (direct API)
+// - Submit a message to the current task (direct API)
+// - Retry / replan / cancel / interrupt a task (direct API)
 // This module owns no render-side effects. Callers are responsible for
 // driving UI updates through reactive Solid stores.
 
@@ -22,12 +21,9 @@ import {
   loadTasks,
   boardStore,
   setBoardStore,
-  setPendingTasks,
 } from "../store/board";
-import { clipText } from "../utils/string";
 import { settingsStore } from "../store/settings";
 import { appStore, setAppStore } from "../store/app";
-import { getWorkspaceEpoch } from "./workspace";
 
 // ── Types ──
 
@@ -81,7 +77,7 @@ function chatRequestTimeoutMs(): number {
 }
 
 function activeDirectory(): string {
-  return boardStore.board?.task?.directory ?? "";
+  return boardStore.board?.task?.directory || settingsStore.directory || "";
 }
 
 function inactivityTimeoutError(timeoutMs: number): DOMException {
@@ -362,16 +358,33 @@ export async function submitMessage(
 // ── Public: createTask ──
 
 /**
- * Create a new task by submitting the initial message to the panel endpoint.
- * Returns the resolved task_id string, or empty string if not resolved.
+ * Create a new task via direct API. Returns the task_id immediately.
+ * No LLM round-trip — the backend persists the task in ~10ms.
  */
 export async function createTask(options: CreateTaskOptions): Promise<string> {
   const { text, attachments = [], metadata = {}, signal } = options;
   if (!text) throw new Error("createTask: text is required");
   const requestID = crypto.randomUUID();
-  const result = (await submitMessage(text, attachments, {
-    requestID,
-    metadata,
+  const executor = settingsStore.executor ?? "opencode";
+  const result = (await apiJson("task", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      request: text,
+      executor,
+      requestID,
+      metadata,
+      source: "panel",
+      ...(attachments.length > 0
+        ? {
+            attachments: attachments.map((att) => ({
+              mime: att.mime,
+              url: att.url,
+              ...(att.filename ? { filename: att.filename } : {}),
+            })),
+          }
+        : {}),
+    }),
     signal,
   })) as any;
   return typeof result?.task_id === "string" ? result.task_id : "";
@@ -380,284 +393,59 @@ export async function createTask(options: CreateTaskOptions): Promise<string> {
 // ── Public: retryTask ──
 
 /**
- * Retry a failed task, optionally with operator guidance.
+ * Retry a failed task. Direct API call, no LLM involvement.
  */
-export async function retryTask(
-  taskID: string,
-  note?: string,
-): Promise<void> {
+export async function retryTask(taskID: string): Promise<void> {
   if (!taskID) return;
-  const message = note?.trim()
-    ? `Retry task ${taskID} with this operator guidance: ${note}`
-    : `Perform retry on task ${taskID}.`;
-  await submitMessage(
-    message,
-    [],
-    {
-      metadata: {
-        taskID,
-        ui_context: "task_controls",
-        ...(note?.trim() ? { operator_note: note.trim() } : {}),
-      },
-    },
-  );
+  await apiJson(`task/${encodeURIComponent(taskID)}/retry`, {
+    method: "POST",
+  });
   await loadBoard();
 }
 
 // ── Public: replanTask ──
 
 /**
- * Trigger a replan for the given task.
+ * Trigger a replan for the given task. Direct API call, no LLM involvement.
  */
 export async function replanTask(taskID: string): Promise<void> {
   if (!taskID) return;
-  await submitMessage(
-    `Perform replan on task ${taskID}.`,
-    [],
-    {
-      metadata: {
-        taskID,
-        ui_context: "task_controls",
-      },
-    },
-  );
+  await apiJson(`task/${encodeURIComponent(taskID)}/replan`, {
+    method: "POST",
+  });
   await loadBoard();
 }
 
 // ── Public: cancelTask ──
 
 /**
- * Cancel the given task.
+ * Cancel the given task. Direct API call, no LLM involvement.
  */
 export async function cancelTask(taskID: string): Promise<void> {
   if (!taskID) return;
-  await submitMessage(
-    `Perform cancel on task ${taskID}.`,
-    [],
-    {
-      metadata: {
-        taskID,
-        ui_context: "task_controls",
-      },
-    },
-  );
+  await apiJson(`task/${encodeURIComponent(taskID)}/cancel`, {
+    method: "POST",
+  });
   await loadBoard();
 }
 
-// ── Task recovery timing helpers ──
-
-function overlayTiming(name: string, fallback: number, min = 50): number {
-  const cfg = (window as any).__overlayTest;
-  const value = Number(cfg?.[name]);
-  if (!Number.isFinite(value)) return fallback;
-  return Math.max(min, Math.floor(value));
-}
+// ── Public: interruptTask ──
 
 /**
- * Maximum time to spend polling for a task to appear after submission.
+ * Interrupt an active task: abort any in-flight chat request, then cancel
+ * the task via direct API. This is the unified "stop" operation.
  */
-export function taskRecoveryTimeoutMs(): number {
-  return overlayTiming("taskRecoveryTimeoutMs", 10 * 60 * 1000, 1000);
-}
-
-/**
- * Interval between task-list polls during recovery.
- */
-export function taskRecoveryPollMs(): number {
-  return overlayTiming("taskRecoveryPollMs", 2000, 50);
-}
-
-// ── Types ──
-
-export interface TaskRecoveryRequest {
-  requestID: string;
-  workspaceEpoch?: number;
-  manualAbort?: boolean;
-  recoveredTaskID?: string;
-  timedOut?: boolean;
-  aborted?: boolean;
-  controller?: AbortController;
-}
-
-export interface TaskRecovery {
-  active: boolean;
-  stop(): void;
-  promise: Promise<string>;
-}
-
-// ── Internal helpers ──
-
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function sortedTasks(data: any): any[] {
-  return [...(Array.isArray(data?.tasks) ? data.tasks : [])].sort(
-    (a, b) =>
-      (b.updated_at || b.task?.time?.updated || 0) -
-      (a.updated_at || a.task?.time?.updated || 0),
-  );
-}
-
-function taskByRequestID(requestID: string, list: any[]): any {
-  if (!requestID || !Array.isArray(list)) return null;
-  return list.find((item) => item?.task?.requestID === requestID) || null;
-}
-
-// ── Public: startTaskRecovery ──
-
-/**
- * Poll the task list until the pending request appears as a confirmed task,
- * then select it and stop the recovery loop.
- * @param request The pending chat request descriptor.
- * @returns A recovery handle with `stop()` and `promise` (resolves to taskID or "").
- */
-export function startTaskRecovery(
-  request: TaskRecoveryRequest,
-): TaskRecovery | null {
-  if (!request?.requestID) return null;
-
-  const recovery: TaskRecovery = {
-    active: true,
-    stop() {
-      recovery.active = false;
-    },
-    promise: Promise.resolve(""),
-  };
-
-  recovery.promise = (async (): Promise<string> => {
-    const started = Date.now();
-    const epochAtStart = request.workspaceEpoch;
-
-    while (
-      recovery.active &&
-      Date.now() - started < taskRecoveryTimeoutMs()
-    ) {
-      if (request.manualAbort) break;
- // Stop if workspace changed and task hasn't been recovered yet
-      if (
-        epochAtStart !== undefined &&
- // workspaceEpoch comparison: use window fallback for
-        getWorkspaceEpoch() !== epochAtStart &&
-        !request.recoveredTaskID
-      ) {
-        break;
-      }
-
-      const data = await apiJson("tasks").catch(() => null);
-      const tasks = Array.isArray(data?.tasks) ? sortedTasks(data) : [];
-      const match = taskByRequestID(request.requestID, tasks);
-      const taskID: string = match?.task?.id || "";
-
-      if (taskID) {
- // Mark as recovered before selecting
-        request.recoveredTaskID = taskID;
-
-        if (!request.timedOut && !request.aborted) {
-          request.aborted = true;
-          request.controller?.abort();
-        }
-
- // Select the newly confirmed task
-        await selectTask(taskID);
-
-        recovery.stop();
-        return taskID;
-      }
-
-      await delay(taskRecoveryPollMs());
-    }
-
-    recovery.stop();
-    return "";
-  })();
-
-  return recovery;
-}
-
-// ── Pending task management ──
-// These functions manage the client-side list of tasks that have been submitted
-// locally but not yet confirmed by the server.
-
-/**
- * Build the localStorage / state key for a pending task request.
- */
-export function pendingTaskKey(requestID: string): string {
-  const value = typeof requestID === "string" ? requestID.trim() : "";
-  return value ? `pending:${value}` : "";
-}
-
-/**
- * Add (or refresh) a pending-task placeholder in boardStore.pendingTasks.
- * The placeholder is removed automatically by syncPendingTasks once the server
- * confirms the task.
- */
-export function rememberPendingTask(requestID: string, title?: string): void {
-  const value = typeof requestID === "string" ? requestID.trim() : "";
-  if (!value) return;
-  const headline = clipText(title || value, 72) || value;
-  const now = Date.now();
-  const next = [
-    {
-      _pending: true,
-      requestID: value,
-      task: {
-        id: pendingTaskKey(value),
-        requestID: value,
-        source: "panel",
-        title: headline,
-        status: "planning",
-        directory: boardStore.board?.task?.directory ?? "",
-        time: {
-          created: now,
-          updated: now,
-        },
-      },
-      overview: {
-        headline,
-      },
-      updated_at: now,
-      pending_interactions: 0,
-    },
-    ...boardStore.pendingTasks.filter((item: any) => item?.requestID !== value),
-  ];
-  setPendingTasks(next);
-}
-
-/**
- * Remove a pending-task placeholder from boardStore.pendingTasks.
- * Returns true if the placeholder was present and removed, false otherwise.
- */
-export function forgetPendingTask(requestID: string): boolean {
-  const value = typeof requestID === "string" ? requestID.trim() : "";
-  if (
-    !value ||
-    !boardStore.pendingTasks.some((item: any) => item?.requestID === value)
-  ) {
+export async function interruptTask(taskID: string): Promise<boolean> {
+  if (!taskID) return false;
+  try {
+    await apiJson(`task/${encodeURIComponent(taskID)}/cancel`, {
+      method: "POST",
+    });
+    await loadBoard();
+    return true;
+  } catch (e) {
+    console.error("[interruptTask] failed", { error: String(e), taskID });
     return false;
   }
-  setPendingTasks(
-    boardStore.pendingTasks.filter((item: any) => item?.requestID !== value),
-  );
-  return true;
 }
 
-/**
- * Prune confirmed tasks from boardStore.pendingTasks.
- * Removes any pending placeholder whose requestID now appears in the given
- * confirmed task list (defaults to boardStore.tasks).
- */
-export function syncPendingTasks(items: any[] = boardStore.tasks): void {
-  if (boardStore.pendingTasks.length === 0) return;
-  const seen = new Set(
-    (Array.isArray(items) ? items : [])
-      .map((item: any) => item?.task?.requestID)
-      .filter(Boolean),
-  );
-  if (seen.size === 0) return;
-  const next = boardStore.pendingTasks.filter(
-    (item: any) => !seen.has(item?.requestID),
-  );
-  if (next.length === boardStore.pendingTasks.length) return;
-  setPendingTasks(next);
-}

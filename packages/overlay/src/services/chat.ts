@@ -23,9 +23,7 @@ import { workspaceMode } from "./workspace";
 import {
   selectTask,
   submitMessage,
-  startTaskRecovery,
-  forgetPendingTask,
-  rememberPendingTask,
+  createTask,
 } from "./task";
 import { syntheticTextMessage } from "../utils/transcript";
 
@@ -384,13 +382,6 @@ function insertPendingUserMessage(requestID: string, text: string): void {
   ]);
 }
 
-function isRecoveryAwaitableError(error: unknown): boolean {
-  if (error instanceof DOMException) {
-    return error.name === "AbortError" || error.name === "TimeoutError";
-  }
-  return false;
-}
-
 function ensureTaskListEntry(
   taskID: string,
   requestID: string,
@@ -436,9 +427,6 @@ async function applyPanelResult(result: any): Promise<void> {
   const requestID = String(result?._requestID || "");
   if (taskID) {
     ensureTaskListEntry(taskID, requestID, requestText, String(result?.message || ""));
-    if (requestID) {
-      forgetPendingTask(requestID);
-    }
     await selectTask(taskID);
     ensureTaskListEntry(taskID, requestID, requestText, String(result?.message || ""));
     if (result?.message) {
@@ -468,35 +456,38 @@ async function applyPanelResult(result: any): Promise<void> {
 
 export async function panelMessage(text: string, attachments: any[] = [], metadata: any = {}): Promise<any> {
   const requestID = crypto.randomUUID();
-  rememberPendingTask(requestID, text);
   const controller = new AbortController();
-  const target = chatAbortTarget() || undefined;
   const request: any = {
     requestID,
     controller,
-    target,
     stopping: false,
     aborted: false,
     manualAbort: false,
-  };
-  const ensureRecovery = () => {
-    if (!request.recovery) {
-      request.recovery = startTaskRecovery(request);
-    }
   };
   insertPendingUserMessage(requestID, text);
   setConnectionStatus("online");
   setChatRequest(request as any);
   try {
+    // If no task is selected, create a new task via direct API (no LLM round-trip)
+    if (!boardStore.selectedTaskID) {
+      const taskID = await createTask({
+        text,
+        attachments,
+        metadata,
+        signal: controller.signal,
+      });
+      if (taskID) {
+        await selectTask(taskID);
+        return { task_id: taskID };
+      }
+      throw new Error("Task creation returned no task_id");
+    }
+    // If a task is selected, send a follow-up message via the panel stream
     const result = await submitMessage(text, attachments, {
       requestID,
       metadata,
       signal: controller.signal,
-      onOpen: () => {
-        ensureRecovery();
-      },
       onEvent: async (event) => {
-        ensureRecovery();
         const type = String(event?.type || "");
         if (type === "reasoning_delta") {
           appendPendingAssistantPart(requestID, "reasoning", String(event?.delta || ""));
@@ -507,26 +498,12 @@ export async function panelMessage(text: string, attachments: any[] = [], metada
         }
       },
     });
-    request.recovery?.stop?.();
     await applyPanelResult({ ...(result as any), _request: text, _requestID: requestID });
     return result;
   } catch (error) {
-    const recoveredTaskID = typeof request.recoveredTaskID === "string" && request.recoveredTaskID
-      ? request.recoveredTaskID
-      : !request.manualAbort &&
-          isRecoveryAwaitableError(error) &&
-          typeof request.recovery?.promise?.then === "function"
-        ? await request.recovery.promise.catch(() => "")
-        : "";
-    if (!request.manualAbort && recoveredTaskID) {
-      const result = { task_id: recoveredTaskID, _request: text, _requestID: requestID };
-      await applyPanelResult(result);
-      return result;
-    }
-    request.recovery?.stop?.();
+    if (request.manualAbort) throw error;
     throw error;
   } finally {
-    request.recovery?.stop?.();
     if ((messageStore.chatRequest as any)?.requestID === request.requestID) {
       setChatRequest(null as any);
     }

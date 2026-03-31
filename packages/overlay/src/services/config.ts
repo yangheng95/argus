@@ -243,18 +243,21 @@ export async function scaffoldProjectConfig(dir: string): Promise<void> {
  * migration; direct port available for post-migration use.
  */
 export async function reloadProjectScope(options: { restoreWorkspace?: boolean } = {}): Promise<void> {
- // 
- // Mirrors the parallel reload
- // reload config, extensions, meta, and optionally restore workspace.
+ // Mirrors loadInitialData's parallel reload — must load all project-scope
+ // data including tasks and executors so the UI fully reflects the new directory.
   const { loadConfigInfo } = await import("./init");
   const { loadExtensions } = await import("./extensions");
   const { loadMeta } = await import("./meta");
   const { loadPreferences } = await import("./memory");
+  const { loadTasks } = await import("../store/board");
+  const { loadExecutors } = await import("./executor");
   await Promise.all([
     loadConfigInfo().catch((e: unknown) => console.error("[reloadProjectScope] loadConfigInfo", e)),
     loadExtensions().catch((e: unknown) => console.error("[reloadProjectScope] loadExtensions", e)),
     loadMeta().catch((e: unknown) => console.error("[reloadProjectScope] loadMeta", e)),
     loadPreferences().catch((e: unknown) => console.error("[reloadProjectScope] loadPreferences", e)),
+    loadTasks().catch((e: unknown) => console.error("[reloadProjectScope] loadTasks", e)),
+    loadExecutors().catch((e: unknown) => console.error("[reloadProjectScope] loadExecutors", e)),
   ]);
   if (options.restoreWorkspace) {
     const { restoreWorkspaceDirectory } = await import("./workspace");

@@ -32,9 +32,10 @@ import {
   replanTask,
   cancelTask,
   createTask,
-  forgetPendingTask,
+  interruptTask,
 } from "./services/task";
 import { canComposeChat, stopChatRequest } from "./services/chat";
+import { isTaskInterruptable } from "./store/board";
 import { setLocale } from "./utils/i18n";
 import { apiJson, configure as configureApi } from "./services/api";
 import { t } from "./utils/i18n";
@@ -79,7 +80,6 @@ import {
   setDirectory,
   activeDirectory,
   loadRecentDirectories,
-  removeRecentDirectory,
 } from "./services/workspace";
 import { openConfigDialog, switchConfigTab, setupDialogBackdropClose, installSettingsFormHandlers, renderAboutVersion } from "./services/dialog";
 import { installInlineLlmConfig, refreshInlineLlmConfig } from "./services/llm-inline";
@@ -452,11 +452,7 @@ if (taskListEl) {
       <TaskList
         onSelectTask={(taskID) => void selectTask(taskID)}
         onDeleteTask={(taskID) => {
-          if (taskID.startsWith("pending:")) {
-            forgetPendingTask(taskID.slice("pending:".length));
-          } else {
-            void deleteTask(taskID);
-          }
+          void deleteTask(taskID);
         }}
       />
     ),
@@ -475,11 +471,7 @@ if (boardEl) {
         onRetry={async () => {
           const id = boardStore.selectedTaskID;
           if (!id) return;
-          const note = await nativePrompt(t("task.action.retry_title"), {
-            title: t("task.action.retry"),
-          });
-          if (note === null) return;
-          void retryTask(id, note || undefined);
+          void retryTask(id);
         }}
         onReplan={() => {
           const id = boardStore.selectedTaskID;
@@ -603,7 +595,7 @@ if (composerEl) {
     () => (
       <ChatComposer
         enabled={codingActive() ? true : canComposeChat()}
-        busy={codingActive() ? (codingAPI?.busy() ?? false) : !!messageStore.chatRequest}
+        busy={codingActive() ? (codingAPI?.busy() ?? false) : (!!messageStore.chatRequest || isTaskInterruptable())}
         stopping={codingActive() ? false : !!(messageStore.chatRequest as any)?.stopping}
         onSubmit={(text, attachments) => {
           if (codingActive() && codingAPI) {
@@ -616,13 +608,18 @@ if (composerEl) {
           if (codingActive() && codingAPI) {
             codingAPI.stop();
           } else {
-            void stopChatRequest();
+            // Abort any in-flight HTTP request first
+            if (messageStore.chatRequest) {
+              void stopChatRequest({ remote: false });
+            }
+            // Cancel the task via direct API
+            const id = boardStore.selectedTaskID;
+            if (id) {
+              void interruptTask(id);
+            } else {
+              void stopChatRequest();
+            }
           }
-        }}
-        canCancel={!!(boardStore.board?.overview?.controls?.canCancel)}
-        onCancel={() => {
-          const id = boardStore.selectedTaskID;
-          if (id) void cancelTask(id);
         }}
       />
     ),
@@ -1229,8 +1226,7 @@ document.getElementById("recentDirPanel")?.addEventListener("click", async (even
   if (!dir) return;
   closeRecentDirPanel();
   try { await setDirectory(dir); } catch (e) {
-    removeRecentDirectory(dir);
-    AppLog.error("ui", "Failed to switch to recent directory", { error: String(e) });
+    AppLog.error("ui", "Failed to switch to recent directory", { dir, error: String(e) });
   }
 });
 

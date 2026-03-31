@@ -350,3 +350,30 @@ export function visibleTasks(): any[] {
     ...boardStore.tasks,
   ].sort((a, b) => taskUpdated(b) - taskUpdated(a));
 }
+
+// ── Task state classifiers ──
+
+const INTERRUPTABLE_STATUSES = new Set([
+  "queued", "spec_generating", "goal_decomposing", "planning",
+  "planned", "running", "blocked", "evaluating", "delivering",
+]);
+
+const TERMINAL_STATUSES = new Set(["completed", "failed", "cancelled"]);
+
+/**
+ * Returns true when the currently selected task can be interrupted (stopped).
+ * Derived from the task status in the board — single source of truth for
+ * the stop button's availability.
+ */
+export function isTaskInterruptable(): boolean {
+  const status = boardStore.board?.task?.status;
+  return !!status && INTERRUPTABLE_STATUSES.has(status);
+}
+
+/**
+ * Returns true when the currently selected task is in a terminal state.
+ */
+export function isTaskTerminal(): boolean {
+  const status = boardStore.board?.task?.status;
+  return !!status && TERMINAL_STATUSES.has(status);
+}

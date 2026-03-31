@@ -5719,17 +5719,16 @@ select.field-input option {
   color: var(--text);
 }
 
-/* ── Config Area (bottom of right column) ── */
+/* ── Config Area (bottom of right column, pinned outside scroll) ── */
 .config-area {
   --config-toggle-padding-y: calc(4px * var(--ui-scale) + 1px);
   --config-toggle-min-height: calc(var(--section-control-height) + 4px);
-  margin-top: auto;
   display: flex;
   flex-direction: column;
   gap: calc(6px * var(--ui-scale));
   border-top: 1px solid var(--divider-soft);
   flex-shrink: 0;
-  padding-top: calc(8px * var(--ui-scale));
+  padding: calc(8px * var(--ui-scale)) calc(10px * var(--ui-scale)) calc(10px * var(--ui-scale));
 }
 
 .config-toggle {

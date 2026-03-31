@@ -5,6 +5,7 @@ import { progressStatus } from "./helpers"
 import { OrchestratorProgressSnapshotTable, OrchestratorRunTable, OrchestratorTaskTable } from "./orchestrator.sql"
 import { requireRun, requireTask, type RunRow, type TaskRow } from "./store"
 import { Identifier } from "@/id/id"
+import { assertTransition, type TaskStatus } from "./state-machine"
 
 export async function updateTask(
   row: TaskRow,
@@ -12,6 +13,10 @@ export async function updateTask(
   summary: string,
 ) {
   const nextStatus = values.status ?? row.status
+  // Validate the status transition against the formal state machine
+  if (nextStatus !== row.status) {
+    assertTransition(row.status as TaskStatus, nextStatus as TaskStatus)
+  }
   const nextBlocking = values.blocking_reason === undefined ? row.blocking_reason : values.blocking_reason
   const nextError = values.error === undefined ? row.error : values.error
   const nextStarted = values.time_started === undefined ? row.time_started : values.time_started
