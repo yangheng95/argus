@@ -17,7 +17,7 @@ import { boardStore } from "../store/board";
 import { selectTask } from "../services/task";
 import { settingsStore } from "../store/settings";
 import { t } from "./i18n";
-import { escapeHtml } from "./message";
+import { escapeHtml } from "./markdown";
 export { sanitizeDirectoryMode } from "../store/settings";
 
 // ── Public API ──

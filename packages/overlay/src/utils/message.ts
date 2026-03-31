@@ -67,17 +67,6 @@ export function isPendingPlaceholderPart(part: any): boolean {
   );
 }
 
-// ── HTML escaping ──
-
-export function escapeHtml(str: string): string {
-  if (!str) return "";
-  return str
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
-
 // ── Part ordering ──
 
 export function orderedMessageParts(message: any): any[] {

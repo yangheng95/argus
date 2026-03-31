@@ -889,12 +889,12 @@ function cleanChildren(parent, current, marker, replacement) {
   return [node];
 }
 
-function escapeHtml$2(str) {
+function escapeHtml$1(str) {
   if (!str) return "";
   return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 function inlineMarkdown(text) {
-  let s = escapeHtml$2(text);
+  let s = escapeHtml$1(text);
   function unescapeUrl(url) {
     return url.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"');
   }
@@ -980,7 +980,7 @@ function renderMarkdown$1(text) {
     if (seg.startsWith("```")) {
       const match = seg.match(/^```(\w*)\n?([\s\S]*?)```$/);
       const code = match ? match[2] : seg.slice(3, -3);
-      html += `<pre class="md-code-block"><code>${escapeHtml$2(code.replace(/\n$/, ""))}</code></pre>`;
+      html += `<pre class="md-code-block"><code>${escapeHtml$1(code.replace(/\n$/, ""))}</code></pre>`;
     } else {
       html += renderMarkdownBlock(seg);
     }
@@ -2174,10 +2174,6 @@ function agentRoleToSectionPhase(role) {
   if (role === "delivery") return "files";
   return "";
 }
-function escapeHtml$1(str) {
-  if (!str) return "";
-  return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-}
 function orderedMessageParts(message) {
   const parts = Array.isArray(message?.parts) ? message.parts : [];
   if (parts.length < 2) return parts;
@@ -2283,9 +2279,9 @@ function renderFilePart(part) {
   const mime = part.mime || part.mediaType || "";
   const isImg = mime && mime.startsWith("image/") || /^data:image\//i.test(url) || /\.(png|jpe?g|gif|webp|svg|bmp|ico)(\?|$)/i.test(url);
   if (isImg && url) {
-    return `<div class="msg-img-wrap"><img class="md-img" src="${escapeHtml$2(url)}" alt="${escapeHtml$2(name)}" loading="lazy"></div>`;
+    return `<div class="msg-img-wrap"><img class="md-img" src="${escapeHtml$1(url)}" alt="${escapeHtml$1(name)}" loading="lazy"></div>`;
   }
-  return `<div class="msg-text" style="font-family:var(--mono);font-size:var(--ui-font-small);color:var(--text-soft)">${escapeHtml$2(name)}</div>`;
+  return `<div class="msg-text" style="font-family:var(--mono);font-size:var(--ui-font-small);color:var(--text-soft)">${escapeHtml$1(name)}</div>`;
 }
 function MessageView(props) {
   const role = () => effectiveRole(props.message, rootTaskSessionID(), goalSessionIDs());
@@ -15144,20 +15140,20 @@ if (boardEl) {
         const html = messages.map((msg) => {
           const role = msg.info?.role ?? msg.role ?? "unknown";
           const parts = Array.isArray(msg.parts) ? msg.parts : [];
-          const textParts = parts.filter((p) => p.type === "text" && p.text && p.audience?.ui !== false).map((p) => `<p class="session-msg-text">${escapeHtml$2(p.text)}</p>`).join("");
+          const textParts = parts.filter((p) => p.type === "text" && p.text && p.audience?.ui !== false).map((p) => `<p class="session-msg-text">${escapeHtml$1(p.text)}</p>`).join("");
           const toolParts = parts.filter((p) => p.type === "tool-invocation" || p.type === "tool-call").map((p) => {
             const name = p.toolName ?? p.tool ?? "tool";
-            return `<p class="session-msg-tool">⚙ ${escapeHtml$2(name)}</p>`;
+            return `<p class="session-msg-tool">⚙ ${escapeHtml$1(name)}</p>`;
           }).join("");
           if (!textParts && !toolParts) return "";
-          return `<div class="session-msg" data-role="${escapeHtml$2(role)}">
-                <span class="session-msg-role">${escapeHtml$2(role)}</span>
+          return `<div class="session-msg" data-role="${escapeHtml$1(role)}">
+                <span class="session-msg-role">${escapeHtml$1(role)}</span>
                 ${textParts}${toolParts}
               </div>`;
         }).filter(Boolean).join("");
         bodyEl.innerHTML = html || '<p class="empty-hint">No displayable messages.</p>';
       } catch (e) {
-        bodyEl.innerHTML = `<p class="empty-hint">Failed to load session: ${escapeHtml$2(String(e))}</p>`;
+        bodyEl.innerHTML = `<p class="empty-hint">Failed to load session: ${escapeHtml$1(String(e))}</p>`;
       }
     },
     onDeleteGoal: async (goalId) => {
@@ -15458,9 +15454,9 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!panel) return;
     const current = executorCurrentModel(executorID);
     const models = executorModels(executorID);
-    const currentLabel = current ? `<div class="engine-model-current">${escapeHtml$2(t("executor.current_model") || "Current")}: <strong>${escapeHtml$2(current)}</strong></div>` : "";
-    const items = models.map((mid) => `<button type="button" class="engine-model-item" data-executor-model="${escapeHtml$2(mid)}" data-active="${mid === current}">${escapeHtml$2(mid)}</button>`).join("");
-    panel.innerHTML = currentLabel + (items || `<div class="engine-model-current">${escapeHtml$2(t("empty.overview") || "No models available")}</div>`);
+    const currentLabel = current ? `<div class="engine-model-current">${escapeHtml$1(t("executor.current_model") || "Current")}: <strong>${escapeHtml$1(current)}</strong></div>` : "";
+    const items = models.map((mid) => `<button type="button" class="engine-model-item" data-executor-model="${escapeHtml$1(mid)}" data-active="${mid === current}">${escapeHtml$1(mid)}</button>`).join("");
+    panel.innerHTML = currentLabel + (items || `<div class="engine-model-current">${escapeHtml$1(t("empty.overview") || "No models available")}</div>`);
   }
   function openModelPanel(executorID) {
     closeAllModelPanels();
@@ -15538,7 +15534,7 @@ const interactionBridge = createOverlayInteractions({
   dom: {
     goalsBody: null
   },
-  escapeHtml: escapeHtml$2,
+  escapeHtml: escapeHtml$1,
   renderMarkdown: renderMarkdown$1,
   t,
   record: isRecord,
@@ -15694,12 +15690,12 @@ function renderRecentDirPanel() {
   const dirs = loadRecentDirectories();
   const current = activeDirectory$1();
   if (!dirs.length) {
-    panel.innerHTML = `<div class="recent-dir-empty">${escapeHtml$2(t("cwd.recent_empty"))}</div>`;
+    panel.innerHTML = `<div class="recent-dir-empty">${escapeHtml$1(t("cwd.recent_empty"))}</div>`;
     return;
   }
   panel.innerHTML = dirs.map((dir) => {
     const isActive = current && dir.toLowerCase() === current.toLowerCase();
-    return `<button type="button" class="recent-dir-item" data-recent-dir="${escapeHtml$2(dir)}" data-active="${isActive}" title="${escapeHtml$2(dir)}">${escapeHtml$2(shortPath$2(dir))}</button>`;
+    return `<button type="button" class="recent-dir-item" data-recent-dir="${escapeHtml$1(dir)}" data-active="${isActive}" title="${escapeHtml$1(dir)}">${escapeHtml$1(shortPath$2(dir))}</button>`;
   }).join("");
 }
 function openRecentDirPanel() {
