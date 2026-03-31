@@ -95,6 +95,16 @@ const eventBridgeAborts = new Map<string, AbortController>() // runID → AbortC
 // emitted at the executor level, so every event that arrives is meaningful.
 const EVALUATING_STALE_MS = EVALUATION_HARD_TIMEOUT_MS + 60_000 // consider stale after hard timeout + 1 min buffer
 
+// Per-run merge serialization: ensures parallel goal deliveries are merged one at a time.
+// Without this, concurrent applyGoalDelivery() calls can overwrite each other's changes.
+const mergeLocksPerRun = new Map<string, Promise<void>>()
+async function serializedMerge(runID: string, fn: () => Promise<void>) {
+  const prev = mergeLocksPerRun.get(runID) ?? Promise.resolve()
+  const next = prev.then(fn, fn)
+  mergeLocksPerRun.set(runID, next)
+  await next
+}
+
 
 // Unattended-mode safeguards
 const INTERACTION_STALE_MS = parseInt(process.env.OPENCORVUS_INTERACTION_TIMEOUT_MS || "30000", 10) // auto-reject stale interactions (30s default)
@@ -657,16 +667,11 @@ export namespace OrchestratorRuntime {
       })
       worktreeDir = worktreeInfo.directory
 
-      // 2. Capture base snapshot in the worktree context for delivery diff later
-      const baseRef = await Instance.provide({
-        directory: worktreeDir,
-        fn: () => Snapshot.track(),
-      }).catch(() => undefined)
-
-      // 3. Create goal session scoped to worktree
+      // 2. Create goal session scoped to worktree
       const goalSession = await createGoalSession(task as any, entry.goal as any, worktreeDir)
 
-      // 4. Create GoalRun record
+      // 3. Create GoalRun record
+      // No base_ref needed — delivery extraction uses worktree's native git diff against HEAD
       const goalRun = createGoalRun({
         taskID: task.id,
         goalID: entry.goal.id,
@@ -675,7 +680,6 @@ export namespace OrchestratorRuntime {
         sessionID: goalSession.id,
         executor: run.executor,
         workspaceDir: worktreeDir,
-        baseRef,
         metadata: {
           worktree_branch: worktreeInfo.branch,
         },
@@ -848,21 +852,15 @@ export namespace OrchestratorRuntime {
     stopEventBridge(goalRun.id) // Stop the per-goal event bridge (keyed by goalRunID)
     updateGoalRunExecutorSessionStatus(goalRun.id, "completed")
 
-    // 1. Extract delivery by computing snapshot diff in the worktree context.
-    //    executor.delivery() uses global Snapshot which doesn't see worktree changes.
-    //    Instead, compute diff directly in the worktree using the baseRef captured at dispatch.
+    // 1. Extract delivery by computing diff in the worktree.
+    //    For worktree mode: use the worktree's native git to diff against the base commit.
+    //    The Snapshot system shares a single git index across all worktrees which causes
+    //    race conditions — worktree's own git is authoritative.
     let delivery: { summary: string; diffs: Array<{ file: string; [key: string]: unknown }> }
     try {
       if (goalRun.workspace_dir) {
-        const { deliveryFromSnapshot } = await import("@/goal/runner")
-        const result = await Instance.provide({
-          directory: goalRun.workspace_dir,
-          fn: () => deliveryFromSnapshot(goalRun.base_ref ?? undefined, `Goal ${goalRun.goal_id?.slice(-8) ?? "unknown"}`),
-        })
-        delivery = result.delivery
-        if (result.mergeRef) {
-          updateGoalRun(goalRun.id, { merge_ref: result.mergeRef })
-        }
+        const { deliveryFromWorktreeGit } = await import("@/goal/runner")
+        delivery = await deliveryFromWorktreeGit(goalRun.workspace_dir, `Goal ${goalRun.goal_id?.slice(-8) ?? "unknown"}`)
       } else {
         // No worktree — fall back to executor.delivery (serial mode)
         const executor = ExecutorRegistry.require(run.executor)
@@ -891,11 +889,14 @@ export namespace OrchestratorRuntime {
         const goalRow = Database.use((db) => db.select().from(OrchestratorGoalTable).where(eq(OrchestratorGoalTable.id, goalRun.goal_id)).get())
         const goalMeta = goalRow?.metadata && typeof goalRow.metadata === "object" ? goalRow.metadata as Record<string, unknown> : {}
         const ownedPaths = Array.isArray(goalMeta.owned_paths) ? goalMeta.owned_paths as string[] : []
-        await applyGoalDelivery({
-          directory: Instance.directory,
-          delivery: { diffs: delivery.diffs as any },
-          ownedPaths,
-        })
+        // Serialize merges per-run: parallel goals must merge one at a time
+        await serializedMerge(run.id, () =>
+          applyGoalDelivery({
+            directory: Instance.directory,
+            delivery: { diffs: delivery.diffs as any },
+            ownedPaths,
+          }),
+        )
       } catch (err) {
         log.error("goal delivery merge failed", { goalRunID: goalRun.id, error: err instanceof Error ? err.message : String(err) })
         updateGoalRun(goalRun.id, { status: "failed", error: `Merge failed: ${err instanceof Error ? err.message : String(err)}`, time_completed: Date.now() })
@@ -1490,8 +1491,8 @@ async function runEvaluation(task: TaskRow, run: RunRow, existingDelivery: Deliv
  * Recover tasks stuck in non-terminal states without an active Task Agent.
  * Re-triggers the Task Agent for orphaned tasks.
  */
-function recoverOrphanedTasks() {
-  const { TaskAgent } = require("./task-agent") as typeof import("./task-agent")
+async function recoverOrphanedTasks() {
+  const { TaskAgent } = await import("./task-agent")
   const strandedTasks = Database.use((db) =>
     db.select().from(OrchestratorTaskTable).where(and(
       eq(OrchestratorTaskTable.project_id, Instance.project.id),

@@ -17,8 +17,8 @@ export type DiffStatus = "added" | "deleted" | "modified";
 
 export interface DiffItem {
   file: string;
-  before: string;
-  after: string;
+  before?: string;
+  after?: string;
   additions: number;
   deletions: number;
   status: DiffStatus;
@@ -192,8 +192,8 @@ export function normalizeDiffs(list: any[]): DiffItem[] {
     .filter((item) => item && typeof item.file === "string")
     .map((item) => ({
       file: String(item.file || "").replace(/^[ab]\//, ""),
-      before: typeof item.before === "string" ? item.before : "",
-      after: typeof item.after === "string" ? item.after : "",
+      before: typeof item.before === "string" ? item.before : undefined,
+      after: typeof item.after === "string" ? item.after : undefined,
       additions: Number.isFinite(Number(item.additions))
         ? Number(item.additions)
         : 0,

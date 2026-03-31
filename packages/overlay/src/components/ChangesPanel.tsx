@@ -231,6 +231,7 @@ function DiffPreview(props: DiffPreviewProps) {
   );
 
   const hasChanges = createMemo(() => {
+    if (props.item.before == null && props.item.after == null) return false;
     if (!props.item.before && !props.item.after) return false;
     return ops().some((op) => op.kind === "add" || op.kind === "del");
   });

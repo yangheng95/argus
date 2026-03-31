@@ -95,7 +95,7 @@ export function roleLabel(role: string): string {
   if (role === "system") return t("chat.role.system");
   if (role === "goal" || role === "goal_gate") return t("chat.role.goal");
   if (role === "executor") return t("chat.role.executor");
-  return t("chat.role.message");
+  return t("chat.role.assistant");
 }
 
 // ── Message classification ──
@@ -112,10 +112,21 @@ export function roleLabel(role: string): string {
 export function classifyMessage(msg: any, rootSessionID: string): string {
   // User-role messages always go to main conversation
   if (String(msg?.info?.role || "").trim().toLowerCase() === "user") return "main";
+
+  // Prefer backend-resolved channel/role (set by task-message-protocol-bridge).
+  // This is authoritative — it knows the session tree and agent identity.
+  const backendChannel = String(msg?.info?.channel || "").trim().toLowerCase();
+  if (backendChannel && backendChannel !== "main") {
+    const resolved = String(msg?.info?.resolvedRole || "").trim().toLowerCase() as AgentRole;
+    if (AGENT_CARD_STAGES.has(resolved)) return resolved;
+    if (backendChannel === "filtered") return "filtered";
+  }
+
+  // Fallback: classify by agent name
   const agent = String(msg?.info?.agent || "").trim().toLowerCase();
   const role = normalizeAgentRole(agent);
-  // Card-stage agents get their own AgentCards
   if (AGENT_CARD_STAGES.has(role)) return role;
+
   // Child session messages from unknown agents → treat as executor
   const sessionID = typeof msg?.info?.sessionID === "string" ? msg.info.sessionID : "";
   if (rootSessionID && sessionID && sessionID !== rootSessionID) return "executor";
@@ -133,7 +144,7 @@ export function agentStageLabel(stage: string): string {
   if (role === "evaluator") return t("chat.role.evaluator");
   if (role === "delivery") return t("chat.role.delivery");
   if (role === "executor") return t("chat.role.executor");
-  return t("chat.role.message");
+  return t("chat.role.assistant");
 }
 
 // ── Effective role ──

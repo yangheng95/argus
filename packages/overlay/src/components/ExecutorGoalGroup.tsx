@@ -1,5 +1,5 @@
 import { For, Show } from "solid-js";
-import { AgentCard } from "./AgentCard";
+import { MessageView } from "./MessageView";
 import {
   agentCardExpanded,
   toggleAgentCardExpanded,
@@ -10,7 +10,7 @@ interface ExecutorGoalGroupProps {
   goalTitle: string;
   goalStatus: string;
   status: string;
-  internalCards: any[];
+  messages: any[];
 }
 
 export function ExecutorGoalGroup(props: ExecutorGoalGroupProps) {
@@ -66,24 +66,16 @@ export function ExecutorGoalGroup(props: ExecutorGoalGroupProps) {
         </Show>
         <span class="executor-goal-label">{props.goalTitle || "Executor"}</span>
         <span class="executor-goal-count">
-          <Show when={props.internalCards.length > 0}>
-            ({props.internalCards.length})
+          <Show when={props.messages.length > 0}>
+            ({props.messages.length})
           </Show>
         </span>
         <span class="executor-goal-chevron" aria-hidden="true">{"\u25BC"}</span>
       </div>
       <Show when={expanded()}>
         <div class="executor-goal-body">
-          <For each={props.internalCards}>
-            {(card) => (
-              <AgentCard
-                cardID={card._agentCardKey}
-                stage={card._agentStage}
-                status={card._agentStatus}
-                round={card._agentRound}
-                messages={card._agentMessages}
-              />
-            )}
+          <For each={props.messages}>
+            {(msg) => <MessageView message={msg} />}
           </For>
         </div>
       </Show>

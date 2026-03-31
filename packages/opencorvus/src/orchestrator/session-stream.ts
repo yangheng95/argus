@@ -35,6 +35,10 @@ export function sessionStreamHooks(input: {
   let textPartID: string | undefined
   let textAccumulated = ""
   const toolParts = new Map<string, Message.ToolPart>()
+  // AI SDK uses `chunk.id` for tool-input-* events and `chunk.toolCallId` for
+  // tool-call/tool-result events. These may differ, so we maintain a mapping
+  // from input-phase id → call-phase toolCallId to unify lookups.
+  const inputIdToCallId = new Map<string, string>()
 
   async function ensureMessage() {
     if (messageID) return messageID
@@ -137,7 +141,20 @@ export function sessionStreamHooks(input: {
 
         if (chunk.type === "tool-call") {
           const msgID = await ensureMessage()
-          const existing = toolParts.get(chunk.toolCallId)
+          // Resolve part: try toolCallId first, then check if tool-input-start
+          // stored it under a different id (AI SDK uses different field names).
+          let existing = toolParts.get(chunk.toolCallId)
+          if (!existing) {
+            // Find part stored by tool-input-start under chunk.id (which may differ)
+            for (const [inputId, part] of toolParts) {
+              if (part.tool === chunk.toolName && part.state?.status === "pending") {
+                existing = part
+                inputIdToCallId.set(inputId, chunk.toolCallId)
+                toolParts.delete(inputId)
+                break
+              }
+            }
+          }
           const partID = existing?.id ?? Identifier.ascending("part")
           const part = await Session.updatePart({
             ...(existing ?? {}),
@@ -189,6 +206,10 @@ export function sessionStreamHooks(input: {
             },
           } as Message.ToolPart)
           toolParts.delete(chunk.toolCallId)
+          // Clean up id mapping
+          for (const [k, v] of inputIdToCallId) {
+            if (v === chunk.toolCallId) { inputIdToCallId.delete(k); break }
+          }
           // When all parallel tools complete, start a new message for the next step.
           // This splits each agent invocation into per-step messages so the overlay
           // can render them as separate timeline cards.

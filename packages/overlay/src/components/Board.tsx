@@ -180,9 +180,6 @@ export function PlanPanel(props: PlanPanelProps) {
                   <details class="goal-item">
                     <summary class="goal-item-head">
                       <span class="goal-item-chevron" aria-hidden="true">{"\u25B6"}</span>
-                      <span class="goal-status-icon" data-status={goalStatus()}>
-                        {goalIcon(goalStatus())}
-                      </span>
                       <span class="goal-desc-inline">
                         {`Goal#${goal.goalIndex}`}
                       </span>
@@ -255,12 +252,6 @@ export function GoalsPanel(props: GoalsPanelProps) {
             <details class="goal-item">
               <summary class="goal-item-head">
                 <span class="goal-item-chevron" aria-hidden="true">{"\u25B6"}</span>
-                <span
-                  class="goal-status-icon"
-                  data-status={card.status || "pending"}
-                >
-                  {goalIcon(card.status)}
-                </span>
                 <span class="goal-desc-inline">{`Goal#${idx() + 1}`}</span>
                 <span class="goal-title-brief">
                   {(() => {

@@ -113,7 +113,6 @@ export async function loadBoard(options: LoadBoardOptions = {}): Promise<void> {
       if (etag) setBoardEtag(etag);
       const data = await res.json();
       setBoardStore("board", data ?? null);
-      scheduleRebuildAgentCards();
       setSnapshotVersion(boardSnapshot(data));
       const lastSequence = Number(data?.lastSequence || 0);
       if (Number.isFinite(lastSequence) && lastSequence > 0) {
@@ -121,6 +120,9 @@ export async function loadBoard(options: LoadBoardOptions = {}): Promise<void> {
       }
       clearBoardRetry();
       setBoardUpdatedAt(Date.now());
+      // Board data includes goal sessionIDs needed by executor card grouping.
+      // Rebuild agent cards so executor groups pick up goal titles.
+      scheduleRebuildAgentCards();
     } catch (e) {
       failed = true;
       console.error("loadBoard failed", e);

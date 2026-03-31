@@ -22,3 +22,6 @@ coverage/
 .turbo/
 .DS_Store
 Thumbs.db
+
+# Benchmark reports (generated artifacts)
+overlay-web-benchmark*
