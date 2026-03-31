@@ -369,7 +369,7 @@ export namespace Provider {
         name: "Hexin OpenAI Gateway",
         env: ["HEXIN_API_KEY"],
         options: {},
-        source: "builtin",
+        source: "custom",
         models: {
           "gpt-5.4-mini": hexinModel("gpt-5.4-mini", "GPT-5.4 Mini"),
           "gpt-5.4": hexinModel("gpt-5.4", "GPT-5.4"),
@@ -492,6 +492,14 @@ export namespace Provider {
       mergeProvider(providerID, {
         source: "env",
         key: apiKey,
+      })
+    }
+
+    // hexin: always available with embedded key; env HEXIN_API_KEY overrides
+    if (!disabled.has("hexin") && !providers["hexin"]) {
+      mergeProvider("hexin", {
+        source: "custom",
+        key: "sk-eq7WQu0ylelH6uyedbf6PA",
       })
     }
 
