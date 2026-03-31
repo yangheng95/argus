@@ -10,6 +10,7 @@ import { artifactResult } from "./checks"
 import { visualResult } from "./checks"
 import { puppeteerResult } from "./checks"
 import { uiReviewResult, codeQualityResult, codeReviewResult, deadCodeReviewResult, judgeResult, specCheckResult } from "./review"
+import { screenshotReviewResult } from "./screenshot-review"
 import {
   type EvaluationTask,
   type EvaluationDelivery,
@@ -40,6 +41,7 @@ const OPTIONAL_CHECK_DEFS = [
   { name: "dead_code_review", label: "Dead Code Review", family: "review", run: (config, task, delivery) => deadCodeReviewResult(config.dead_code_review, task.request, delivery) },
   { name: "judge", label: "LLM Judge", family: "acceptance", run: (config, task, delivery) => judgeResult(config.judge, task.request, delivery) },
   { name: "spec_check", label: "Spec Check", family: "acceptance", run: (config, task, delivery) => specCheckResult(config.spec_check, task.request, task.activeSpecVersionID, delivery) },
+  { name: "screenshot_review", label: "Screenshot Review", family: "review", run: (config, task, delivery) => screenshotReviewResult(config.ui_review, task, delivery) },
 ] as const satisfies OptionalCheckDef[]
 
 const BUILTIN_CHECK_DEFS = [...CORE_CHECK_DEFS, ...OPTIONAL_CHECK_DEFS]

@@ -77,3 +77,9 @@ If `bun run index.ts` produces no output, add:
 ```typescript
 console.log(`Server running on http://localhost:${port}`)
 ```
+
+### Visual Rendering (automated)
+An automated screenshot review runs separately — it launches a headless browser,
+takes a screenshot of the running app, and sends it to an LLM for visual analysis.
+If this check reports a blank page or broken rendering, investigate the MIME type
+and SPA routing issues above first.

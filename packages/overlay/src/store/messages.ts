@@ -487,9 +487,7 @@ function rebuildAgentCards(): void {
       typeof message?.info?.sessionID === "string" ? message.info.sessionID.trim() : "";
     const fallbackID =
       typeof message?.info?.id === "string" && message.info.id ? message.info.id : hashText(messageSignature(message));
-    const channelID = sessionID
-      ? `${stage}:session:${sessionID}`
-      : `${stage}:message:${fallbackID}`;
+    const channelID = `${stage}:message:${fallbackID}`;
     const round = roundsByStage[stage] || [];
     let entry = round.find((item) => item.channelID === channelID);
     if (!entry) {
