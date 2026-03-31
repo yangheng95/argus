@@ -11,15 +11,17 @@ export type TaskStatus = OrchestratorTaskStatus
 // Valid transitions
 // ---------------------------------------------------------------------------
 
+// Agent-driven transitions: the Task Agent decides the path, so intermediate
+// states can be skipped (e.g. queued → planning, queued → running).
 const VALID_TRANSITIONS: Record<TaskStatus, readonly TaskStatus[]> = {
-  queued:           ["spec_generating", "cancelled", "failed"],
-  spec_generating:  ["goal_decomposing", "cancelled", "failed"],
-  goal_decomposing: ["planning", "cancelled", "failed"],
-  planning:         ["planned", "cancelled", "failed"],
-  planned:          ["running", "cancelled", "failed"],
-  running:          ["blocked", "evaluating", "completed", "cancelled", "failed"],
+  queued:           ["spec_generating", "goal_decomposing", "planning", "planned", "running", "cancelled", "failed"],
+  spec_generating:  ["queued", "goal_decomposing", "planning", "planned", "running", "cancelled", "failed"],
+  goal_decomposing: ["queued", "planning", "planned", "running", "cancelled", "failed"],
+  planning:         ["queued", "planned", "running", "cancelled", "failed"],
+  planned:          ["queued", "running", "cancelled", "failed"],
+  running:          ["blocked", "evaluating", "delivering", "completed", "cancelled", "failed"],
   blocked:          ["running", "cancelled", "failed"],
-  evaluating:       ["delivering", "running", "failed", "cancelled"],
+  evaluating:       ["delivering", "running", "queued", "failed", "cancelled"],
   delivering:       ["completed", "failed", "cancelled"],
   completed:        [],
   failed:           ["queued", "running"],

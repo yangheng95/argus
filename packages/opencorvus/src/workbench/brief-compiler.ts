@@ -1,6 +1,5 @@
 import { Identifier } from "@/id/id"
 import { Memory } from "@/memory"
-import { Preference } from "@/preference"
 import { Database, desc, eq } from "@/storage/db"
 import {
   OrchestratorGoalTable,
@@ -18,7 +17,6 @@ function briefSignature(input: {
   plan: { id: string; summary?: string | null } | undefined
   runID?: string
   goals: Array<{ id: string; status: string }>
-  prefs: Array<{ key: string; value: string }>
   notes: Array<{ id: string }>
 }): string {
   const parts = [
@@ -28,7 +26,6 @@ function briefSignature(input: {
     input.plan?.id ?? "no-plan",
     input.runID ?? "no-run",
     input.goals.map((g) => `${g.id}:${g.status}`).join(","),
-    input.prefs.length.toString(),
     input.notes.length.toString(),
   ]
   return parts.join("|")
@@ -56,11 +53,6 @@ export function compileBrief(input: {
           .all(),
       )
     : []
-  const prefs = Preference.list({
-    projectID: task.project_id,
-    sessionID: task.session_id ?? input.sessionID,
-    scope: "all",
-  })
   const notes = Database.use((db) =>
     db
       .select()
@@ -71,14 +63,11 @@ export function compileBrief(input: {
       .all()
       .reverse(),
   )
-  const globalPrefs = prefs.filter((item) => item.scope === "global")
-  const sessionPrefs = prefs.filter((item) => item.scope === "session")
   const signature = briefSignature({
     task,
     plan,
     runID: input.runID,
     goals,
-    prefs,
     notes,
   })
   const snapshot = Database.use((db) =>
@@ -94,13 +83,6 @@ export function compileBrief(input: {
     return {
       content: snapshot.content,
       updatedAt: snapshot.time_created,
-      preferences: Preference.merged({
-        projectID: task.project_id,
-        sessionID: task.session_id ?? input.sessionID,
-      }).map((item) => ({
-        key: item.key,
-        value: item.value,
-      })),
       notes,
       goals,
     }
@@ -137,12 +119,6 @@ export function compileBrief(input: {
           )
           .join("\n")
       : "",
-    globalPrefs.length > 0
-      ? "Global preferences:\n" + globalPrefs.map((pref) => `- ${pref.key}: ${pref.value}`).join("\n")
-      : "",
-    sessionPrefs.length > 0
-      ? "Session preferences:\n" + sessionPrefs.map((pref) => `- ${pref.key}: ${pref.value}`).join("\n")
-      : "",
     notes.length > 0
       ? "Recent task notes:\n" + notes.slice(-6).map((note) => `- [${note.kind}] ${note.content}`).join("\n")
       : "",
@@ -172,8 +148,6 @@ export function compileBrief(input: {
           signature,
           template: BRIEF_VERSION,
           notes: notes.length,
-          globalPreferences: globalPrefs.length,
-          sessionPreferences: sessionPrefs.length,
           memory: memory.length,
         },
         time_created: now,
@@ -185,13 +159,6 @@ export function compileBrief(input: {
   return {
     content,
     updatedAt: now,
-    preferences: Preference.merged({
-      projectID: task.project_id,
-      sessionID: task.session_id ?? input.sessionID,
-    }).map((item) => ({
-      key: item.key,
-      value: item.value,
-    })),
     notes,
     goals,
   }

@@ -77,7 +77,6 @@ export namespace Agent {
       codesearch: "allow",
       lsp: "allow",
       memory: "allow",
-      preference: "allow",
       schedule: "allow",
       skill: "allow",
       panel: "allow",

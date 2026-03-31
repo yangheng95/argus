@@ -39,9 +39,9 @@ interface MemoryDetail {
 // ── Helpers ──
 
 function knowledgeScopeLabel(scope: string): string {
-  if (scope === "session") return t("preference.scope.session");
-  if (scope === "cwd") return t("preference.scope.cwd");
-  if (scope === "global") return t("preference.scope.global");
+  if (scope === "session") return t("memory.scope.session");
+  if (scope === "cwd") return t("memory.scope.cwd");
+  if (scope === "global") return t("memory.scope.global");
   return scope || "";
 }
 

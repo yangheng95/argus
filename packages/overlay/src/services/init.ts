@@ -4,7 +4,7 @@
 // - Load i18n locale data
 // - Configure the API client
 // - Check server connection
-// - Load initial board / tasks / meta / config / executors / preferences
+// - Load initial board / tasks / meta / config / executors
 // - Restore last workspace
 // - Set up a periodic reconnect loop
 
@@ -31,7 +31,6 @@ import { boardStore, setBoardStore, loadTasks } from "../store/board";
 import { loadMeta } from "./meta";
 import { loadExtensions } from "./extensions";
 import { loadExecutors } from "./executor";
-import { loadPreferences } from "./memory";
 import { ensureWorkspaceDirectory } from "./workspace";
 import { ensureDefaultDirectory } from "./workspace";
 import { workspaceRestoreDirectory } from "./workspace";
@@ -83,7 +82,6 @@ async function loadInitialData(): Promise<void> {
     loadExtensions(),
     loadConfigInfo(),
     loadExecutors(),
-    loadPreferences(),
   ]);
 }
 

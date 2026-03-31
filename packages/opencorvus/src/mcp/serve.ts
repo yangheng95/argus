@@ -85,12 +85,6 @@ const EXECUTOR_TOOLS = {
       destructive: true,
     },
   },
-  preference: {
-    name: "preference",
-    annotations: {
-      destructive: true,
-    },
-  },
   task_report: {
     name: "task_report",
     annotations: {},

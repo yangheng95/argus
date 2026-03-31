@@ -1,11 +1,10 @@
 import z from "zod"
 import { generateObject } from "ai"
-import { Preference } from "@/preference"
 import { Provider } from "@/provider/provider"
 import { GoalService } from "@/orchestrator/goal-service"
 import { Database, eq } from "@/storage/db"
 import { OrchestratorTaskTable, OrchestratorPlanVersionTable } from "@/orchestrator/orchestrator.sql"
-import { setPreference, recordNote } from "./preference"
+import { recordNote } from "./note-store"
 
 const MessageInput = z.object({
   taskID: z.string(),
@@ -15,16 +14,7 @@ const MessageInput = z.object({
 })
 
 const WorkbenchIntent = z.object({
-  kind: z.enum(["preference", "goal", "plan", "note"]),
-  preferences: z
-    .array(
-      z.object({
-        key: z.string(),
-        value: z.string(),
-        scope: z.enum(["session", "global"]).default("global"),
-      }),
-    )
-    .default([]),
+  kind: z.enum(["goal", "plan", "note"]),
   goals: z.array(z.string()).default([]),
   plan_hints: z.array(z.string()).default([]),
   note: z.string().nullable().default(null),
@@ -43,22 +33,6 @@ export async function ingestTaskMessage(raw: z.input<typeof MessageInput>) {
     return {
       kind: "note" as const,
       message: "Ignored empty message.",
-      should_resume: false,
-    }
-  }
-
-  const explicitPreference = parsePreference(text)
-  if (explicitPreference) {
-    setPreference({
-      taskID: input.taskID,
-      userID: input.userID,
-      key: explicitPreference.key,
-      value: explicitPreference.value,
-      scope: explicitPreference.scope,
-    })
-    return {
-      kind: "preference" as const,
-      message: `Preference saved (${explicitPreference.scope}): \`${explicitPreference.key}=${explicitPreference.value}\``,
       should_resume: false,
     }
   }
@@ -114,30 +88,11 @@ export async function ingestTaskMessage(raw: z.input<typeof MessageInput>) {
     })
     return {
       kind: "note" as const,
-      message: "Intent analysis failed; recorded as operator note without changing goals, plans, or preferences.",
+      message: "Intent analysis failed; recorded as operator note without changing goals or plans.",
       should_resume: false,
     }
   }
   const resolved = interpreted.intent
-
-  if (resolved.kind === "preference" && Array.isArray(resolved.preferences) && resolved.preferences.length > 0) {
-    for (const pref of resolved.preferences) {
-      const scope = pref.scope ?? "global"
-      setPreference({
-        taskID: input.taskID,
-        userID: input.userID,
-        key: pref.key,
-        value: pref.value,
-        scope,
-      })
-    }
-    const displayScope = resolved.preferences[0]?.scope ?? "global"
-    return {
-      kind: "preference" as const,
-      message: `Preference saved (${displayScope}): ${resolved.preferences.map((item) => `\`${item.key}=${item.value}\``).join(", ")}`,
-      should_resume: false,
-    }
-  }
 
   if (resolved.kind === "goal" && Array.isArray(resolved.goals) && resolved.goals.length > 0) {
     for (const goal of resolved.goals) {
@@ -213,13 +168,10 @@ async function interpretWithLLM(input: z.infer<typeof MessageInput>) {
           content: `Classify the user's message into exactly one workbench action.
 
 Rules:
-- Use "preference" when the user expresses durable preferences or style constraints.
-- Default preferences to global unless the user clearly says they only apply to this session.
-- For each preference, set scope to "session" when the user's language indicates temporary or session-only intent (e.g., "for this session", "temporarily", "just for now", "only for now", "暂时", "本次", "这次会话", "仅本次"). Otherwise set scope to "global".
 - Use "goal" when the user adds or changes acceptance goals.
 - Use "plan" when the user suggests how the task should be executed.
 - Use "note" for everything else.
-- Do not invent preferences, goals, or plan hints that are not supported by the text.
+- Do not invent goals or plan hints that are not supported by the text.
 - Keep extracted strings concise and directly usable.`,
         },
         {
@@ -244,14 +196,6 @@ async function workbenchModel() {
   const def = await Provider.defaultModel().catch(() => undefined)
   if (!def) return undefined
   return Provider.getModel(def.providerID, def.modelID).catch(() => undefined)
-}
-
-/**
- * Preference scope must come from the LLM's structured output.
- * If not available, defaults to "global".
- */
-function inferPreferenceScope(_text: string): Exclude<Preference.Scope, "cwd"> {
-  return "global"
 }
 
 function rememberUser(input: { taskID: string; userID?: string }) {
@@ -313,24 +257,4 @@ function parseCommand(text: string, prefix: string) {
   const value = text.slice(prefix.length).trim()
   if (!value) return undefined
   return value
-}
-
-function parsePreference(text: string) {
-  const pref = parseCommand(text, "/pref")
-  if (!pref) return undefined
-  const scoped = pref.match(/^(global|session)\s+([a-zA-Z0-9._-]+)\s*[:=]\s*(.+)$/i)
-  if (scoped) {
-    return {
-      scope: scoped[1].toLowerCase() as Exclude<Preference.Scope, "cwd">,
-      key: scoped[2],
-      value: scoped[3].trim(),
-    }
-  }
-  const match = pref.match(/^([a-zA-Z0-9._-]+)\s*[:=]\s*(.+)$/)
-  if (!match) return undefined
-  return {
-    scope: "global" as const,
-    key: match[1],
-    value: match[2].trim(),
-  }
 }

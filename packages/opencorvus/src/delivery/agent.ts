@@ -16,7 +16,6 @@ import { extractRawJSON, repairTruncatedJSON, sanitizeJSON, trimToLastComplete, 
 import { completeHeadlessText, resolveHeadlessLanguageModel } from "@/llm/headless"
 import { createDeliveryTools } from "./tools"
 import { Memory } from "@/memory"
-import { Preference } from "@/preference"
 import { Instance } from "@/project/instance"
 import { Log } from "@/util/log"
 import { toolGuard } from "@/util/tool-guard"
@@ -369,19 +368,6 @@ function prefetchDeliveryContext(input: {
     log.warn("delivery: memory prefetch failed", { error: err instanceof Error ? err.message : String(err) })
   }
 
-  try {
-    const projectId = Instance.project.id
-    const prefs = Preference.merged({ projectID: projectId })
-    if (prefs.length > 0) {
-      const items = prefs.map((p) => `- **${p.key}**: ${p.value}`).join("\n")
-      sections.push(
-        "## Active Preferences\n\n" + items,
-      )
-    }
-  } catch (err) {
-    log.warn("delivery: preferences prefetch failed", { error: err instanceof Error ? err.message : String(err) })
-  }
-
   return sections.length > 0 ? sections.join("\n\n") : ""
 }
 
@@ -515,7 +501,6 @@ export const DELIVERY_AGENT_SYSTEM = `You are a senior QA engineer acting as the
 ### Context
 - **memory_search**: Search past delivery issues
 - **memory_write**: Persist findings for future deliveries
-- **preference_list**: Project conventions
 
 ## Process
 
@@ -532,7 +517,7 @@ If the Core Check Results section shows FAILED checks:
 Run the quality checks that the evaluator skipped:
 1. **Code review**: Read changed files, check for obvious bugs, bad patterns, security issues
 2. **Dead code**: Check if any imports or functions became unused
-3. **Style/conventions**: Check against project preferences (preference_list)
+3. **Style/conventions**: Check against project conventions
 4. Record each check result with pass/fail and evidence.
 
 ### Phase 2: RUNTIME VERIFICATION
@@ -582,6 +567,6 @@ export async function deliveryAgentSystem() {
   const agentPrompt = (config.agent as Record<string, any> | undefined)?.delivery?.prompt
   const core = typeof agentPrompt === "string" ? agentPrompt : DELIVERY_AGENT_SYSTEM
   const orchCfg = await OrchestratorConfig.get()
-  const skills = await loadStageSkills(orchCfg.delivery.skills)
+  const skills = await loadStageSkills(orchCfg.delivery.skills, "delivery")
   return core + skills
 }

@@ -1,5 +1,4 @@
 import z from "zod"
-import { Preference } from "@/preference"
 import { findSpecSnapshot, viewSpecSnapshot } from "@/orchestrator/store"
 import {
   OrchestratorArtifactTable,
@@ -17,7 +16,6 @@ import {
 import { EvaluationCheck } from "@/orchestrator/model"
 import { Database, desc, eq, sql } from "@/storage/db"
 import { WorkbenchTaskNoteTable } from "./workbench.sql"
-import { preferences, taskNotes } from "./preference"
 import { compileBrief } from "./brief"
 
 const BOARD_SNAPSHOT_LIMIT = 80
@@ -79,11 +77,16 @@ function buildBoard(task: typeof OrchestratorTaskTable.$inferSelect) {
       .orderBy(OrchestratorInteractionRequestTable.time_created)
       .all(),
   )
-  const prefs = preferences({
-    projectID: task.project_id,
-    sessionID: task.session_id ?? undefined,
-  })
-  const notes = taskNotes(task.id, 12)
+  const notes = Database.use((db) =>
+    db
+      .select()
+      .from(WorkbenchTaskNoteTable)
+      .where(eq(WorkbenchTaskNoteTable.task_id, task.id))
+      .orderBy(desc(WorkbenchTaskNoteTable.time_created))
+      .limit(12)
+      .all()
+      .reverse(),
+  )
   const brief = compileBrief({
     taskID: task.id,
     runID: run?.id ?? undefined,
@@ -407,18 +410,6 @@ function buildBoard(task: typeof OrchestratorTaskTable.$inferSelect) {
             })),
         },
         {
-          id: "preferences",
-          title: "Preferences",
-          cards: prefs.map((pref) => ({
-            id: pref.id,
-            kind: "preference" as const,
-            title: pref.key,
-            detail: pref.value,
-            status: pref.scope,
-            time: pref.timeUpdated,
-          })),
-        },
-        {
           id: "notes",
           title: "History",
           cards: history.slice(-8).map((note) => ({
@@ -523,12 +514,6 @@ function boardTagForTask(task: typeof OrchestratorTaskTable.$inferSelect) {
       .where(eq(WorkbenchTaskNoteTable.task_id, task.id))
       .get(),
   )
-  const prefs = Preference.list({
-    projectID: task.project_id,
-    sessionID: task.session_id ?? undefined,
-    scope: "all",
-  })
-  const prefUpdated = prefs.reduce((max, item) => Math.max(max, item.timeUpdated), 0)
   return [
     task.id,
     task.time_created,
@@ -543,8 +528,6 @@ function boardTagForTask(task: typeof OrchestratorTaskTable.$inferSelect) {
     plan?.time_updated ?? 0,
     goals?.count ?? 0,
     goals?.updated ?? 0,
-    prefs.length,
-    prefUpdated,
     noteStats?.count ?? 0,
     noteStats?.updated ?? 0,
     interactions?.count ?? 0,

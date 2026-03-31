@@ -1,29 +1,19 @@
 import { Identifier } from "@/id/id"
-import { Preference } from "@/preference"
-import { Database, eq } from "@/storage/db"
+import { Database, desc, eq } from "@/storage/db"
 import { OrchestratorPlanVersionTable, OrchestratorTaskTable } from "@/orchestrator/orchestrator.sql"
 import { WorkbenchTaskNoteTable } from "./workbench.sql"
 
-export function setPreference(input: {
-  taskID: string
-  userID?: string
-  key: string
-  value: string
-  scope?: Exclude<Preference.Scope, "cwd">
-}) {
-  const task = Database.use((db) => db.select().from(OrchestratorTaskTable).where(eq(OrchestratorTaskTable.id, input.taskID)).get())
-  if (!task) throw new Error(`Task not found: ${input.taskID}`)
-  Preference.set({
-    projectID: task.project_id,
-    taskID: task.id,
-    sessionID: task.session_id ?? undefined,
-    userID: input.userID,
-    key: input.key,
-    value: input.value,
-    scope: input.scope ?? "global",
-    source: "user_message",
-    confidence: 100,
-  })
+export function taskNotes(taskID: string, limit = 8) {
+  return Database.use((db) =>
+    db
+      .select()
+      .from(WorkbenchTaskNoteTable)
+      .where(eq(WorkbenchTaskNoteTable.task_id, taskID))
+      .orderBy(desc(WorkbenchTaskNoteTable.time_created))
+      .limit(limit)
+      .all()
+      .reverse(),
+  )
 }
 
 export function appendPlanHint(input: { taskID: string; hint: string }) {

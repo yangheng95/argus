@@ -454,11 +454,6 @@
             <span data-i18n="memory.title">Task Context</span>
             <span class="config-nav-badge" id="memoryBadge"></span>
           </button>
-          <button class="config-nav-item" data-config-tab="preference">
-            <svg class="config-nav-icon" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.5"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            <span data-i18n="preference.title">Preferences</span>
-            <span class="config-nav-badge" id="preferenceBadge"></span>
-          </button>
           <button class="config-nav-item" data-config-tab="providers">
             <svg class="config-nav-icon" viewBox="0 0 24 24" fill="none"><path d="M12 2L2 7l10 5 10-5-10-5z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 17l10 5 10-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 12l10 5 10-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
             <span>Providers</span>
@@ -563,18 +558,6 @@
             </div>
           </div>
 
-          <div class="config-tab-panel" data-config-panel="preference">
-            <div class="config-section-body" id="preferenceBody">
-              <div class="knowledge-toolbar">
-                <button type="button" class="btn btn-ghost mini" id="btnPreferenceRefresh" data-i18n="common.refresh" data-i18n-title="preference.refresh_title" data-i18n-aria-label="preference.refresh_title">Refresh</button>
-                <button type="button" class="btn btn-ghost mini" id="btnPreferenceAdd" data-i18n="common.add" data-i18n-title="preference.add_title" data-i18n-aria-label="preference.add_title">Add</button>
-              </div>
-              <div class="knowledge-list" id="preferenceList">
-                <div class="empty-hint" data-i18n="preference.none">No preferences</div>
-              </div>
-            </div>
-          </div>
-
           <div class="config-tab-panel" data-config-panel="providers">
             <div class="config-section-body" id="providersConfigBody"></div>
           </div>
@@ -669,8 +652,7 @@
     </div>
   </dialog>
 
-  <!-- Memory/Preference dialogs removed — Phase 4.
-       MemoryPanel.tsx and PreferencesPanel.tsx handle detail/edit dialogs inline. -->
+  <!-- Memory detail/edit dialogs are handled inline by MemoryPanel.tsx. -->
 
   <!-- Log Viewer Dialog (managed by Solid LogViewer component) -->
   <div id="solidLogViewer"></div>

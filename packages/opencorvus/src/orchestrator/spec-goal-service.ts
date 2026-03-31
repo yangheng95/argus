@@ -1,5 +1,5 @@
 import type { GoalJudgmentType } from "@/evaluator/agent"
-import { taskNotes } from "@/workbench/preference"
+import { taskNotes } from "@/workbench/note-store"
 import { listGoalsForPlan, type PlanRow, type TaskRow } from "./store"
 
 function noteText(input: string) {

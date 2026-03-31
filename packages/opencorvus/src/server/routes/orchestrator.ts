@@ -27,7 +27,6 @@ import {
   Task,
   UpdateGoalInput,
   UpdateTaskChecksInput,
-  UpdatePreferenceInput,
 } from "@/orchestrator/model"
 import { ExecutorNotConfiguredError, OrchestratorService, PlannerFailureError } from "@/orchestrator/service"
 import { ProtocolStore } from "@/protocol/store"
@@ -781,21 +780,6 @@ export const OrchestratorRoutes = lazy(() =>
         return c.json(
           await OrchestratorService.rejectInteraction(c.req.valid("param").interactionID, c.req.valid("json")),
         )
-      },
-    )
-    .patch(
-      "/preference/:preferenceID",
-      validator("param", z.object({ preferenceID: z.string() })),
-      validator("json", UpdatePreferenceInput),
-      async (c) => {
-        return c.json(await OrchestratorService.updatePreference(c.req.valid("param").preferenceID, c.req.valid("json")))
-      },
-    )
-    .delete(
-      "/preference/:preferenceID",
-      validator("param", z.object({ preferenceID: z.string() })),
-      async (c) => {
-        return c.json(await OrchestratorService.deletePreference(c.req.valid("param").preferenceID))
       },
     )
     .patch(

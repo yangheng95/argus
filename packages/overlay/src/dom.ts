@@ -255,16 +255,12 @@ export interface DomRefs {
   localeMode: HTMLSelectElement | null;
   themeMode: HTMLSelectElement | null;
 
- // Knowledge: Memory & Preferences
+ // Knowledge: Memory
   memoryBadge: HTMLElement | null;
   memoryList: HTMLElement | null;
   memorySearch: HTMLInputElement | null;
   btnMemorySearch: HTMLButtonElement | null;
   btnMemoryRefresh: HTMLButtonElement | null;
-  preferenceBadge: HTMLElement | null;
-  preferenceList: HTMLElement | null;
-  btnPreferenceRefresh: HTMLButtonElement | null;
-  btnPreferenceAdd: HTMLButtonElement | null;
   memoryDialog: HTMLDialogElement | null;
   memoryDialogTitle: HTMLElement | null;
   memoryDialogMeta: HTMLElement | null;
@@ -283,14 +279,6 @@ export interface DomRefs {
   btnCloseLog: HTMLButtonElement | null;
   btnLogServerLogs: HTMLButtonElement | null;
 
- // Preference edit dialog
-  prefEditDialog: HTMLDialogElement | null;
-  prefEditForm: HTMLFormElement | null;
-  prefEditTitle: HTMLElement | null;
-  prefEditId: HTMLInputElement | null;
-  prefEditKey: HTMLInputElement | null;
-  prefEditValue: HTMLTextAreaElement | null;
-  btnCancelPrefEdit: HTMLButtonElement | null;
 }
 
 // ── Factory ──
@@ -558,16 +546,12 @@ export function getDomRefs(): DomRefs {
     localeMode: $<HTMLSelectElement>("#localeMode"),
     themeMode: $<HTMLSelectElement>("#themeMode"),
 
- // Knowledge: Memory & Preferences
+ // Knowledge: Memory
     memoryBadge: $<HTMLElement>("#memoryBadge"),
     memoryList: $<HTMLElement>("#memoryList"),
     memorySearch: $<HTMLInputElement>("#memorySearch"),
     btnMemorySearch: $<HTMLButtonElement>("#btnMemorySearch"),
     btnMemoryRefresh: $<HTMLButtonElement>("#btnMemoryRefresh"),
-    preferenceBadge: $<HTMLElement>("#preferenceBadge"),
-    preferenceList: $<HTMLElement>("#preferenceList"),
-    btnPreferenceRefresh: $<HTMLButtonElement>("#btnPreferenceRefresh"),
-    btnPreferenceAdd: $<HTMLButtonElement>("#btnPreferenceAdd"),
     memoryDialog: $<HTMLDialogElement>("#memoryDialog"),
     memoryDialogTitle: $<HTMLElement>("#memoryDialogTitle"),
     memoryDialogMeta: $<HTMLElement>("#memoryDialogMeta"),
@@ -586,13 +570,5 @@ export function getDomRefs(): DomRefs {
     btnCloseLog: $<HTMLButtonElement>("#btnCloseLog"),
     btnLogServerLogs: $<HTMLButtonElement>("#btnLogServerLogs"),
 
- // Preference edit dialog
-    prefEditDialog: $<HTMLDialogElement>("#prefEditDialog"),
-    prefEditForm: $<HTMLFormElement>("#prefEditForm"),
-    prefEditTitle: $<HTMLElement>("#prefEditTitle"),
-    prefEditId: $<HTMLInputElement>("#prefEditId"),
-    prefEditKey: $<HTMLInputElement>("#prefEditKey"),
-    prefEditValue: $<HTMLTextAreaElement>("#prefEditValue"),
-    btnCancelPrefEdit: $<HTMLButtonElement>("#btnCancelPrefEdit"),
   };
 }

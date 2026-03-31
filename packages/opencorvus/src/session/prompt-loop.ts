@@ -23,7 +23,6 @@ import { SessionStatus } from "./status"
 import { MemoryInjection } from "@/memory/injection"
 import { Scratchpad } from "@/memory/scratchpad"
 import { TaskPlan } from "@/memory/task-plan"
-import { Preference } from "@/preference"
 import { messageControlOnly, textForBoth } from "./part-visibility"
 import { SessionSummary } from "./summary"
 import { installRuntimeShims } from "@/runtime/shims"
@@ -366,11 +365,6 @@ async function processTurn(input: {
     system.push(STRUCTURED_OUTPUT_SYSTEM_PROMPT)
   }
 
-  const preferenceSection = Preference.systemPromptSection({
-    projectID: Instance.project.id,
-    sessionID: input.sessionID,
-  })
-  if (preferenceSection) system.push(preferenceSection)
   const memoryQuery = (lastUserMsg?.parts ?? [])
     .filter((part): part is Message.TextPart => part.type === "text" && textForBoth(part))
     .map((part) => part.text)

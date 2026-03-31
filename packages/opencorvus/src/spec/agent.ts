@@ -4,8 +4,7 @@
  *
  * Positioned as a first-class agent alongside the PlannerAgent:
  * 1. Memory recall — searches project memory for prior work, patterns, gotchas
- * 2. Preference awareness — respects project conventions and constraints
- * 3. Codebase exploration — reads files, searches code, lists directories
+ * 2. Codebase exploration — reads files, searches code, lists directories
  * 4. Web research — searches external documentation when needed
  * 5. Structured output — scope, requirements, acceptance criteria, spec items
  * 6. Rewrite — receives failure analysis and revises spec for replan
@@ -622,6 +621,6 @@ export async function specSystem(): Promise<string> {
   const agentPrompt = (config.agent as Record<string, any> | undefined)?.spec?.prompt
   const core = typeof agentPrompt === "string" ? agentPrompt : SPEC_CORE
   const orchCfg = await OrchestratorConfig.get()
-  const skills = await loadStageSkills(orchCfg.spec.skills)
+  const skills = await loadStageSkills(orchCfg.spec.skills, "spec")
   return core + skills
 }

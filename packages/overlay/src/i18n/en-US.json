@@ -363,18 +363,9 @@
   "plan.context.title": "**Plan v{{version}}**",
   "plan.context.warnings": "**Warnings**",
   "plan.version": "v{{version}}",
-  "preference.add": "Add Preference",
-  "preference.add_title": "Add a new preference entry.",
-  "preference.delete_button_title": "Delete this preference.",
-  "preference.edit": "Edit Preference",
-  "preference.key": "Key <em>*</em>",
-  "preference.none": "No preferences",
-  "preference.scope.cwd": "cwd",
-  "preference.scope.global": "Global",
-  "preference.scope.session": "Task context",
-  "preference.title": "Preferences",
-  "preference.value": "Value <em>*</em>",
-  "preference.refresh_title": "Reload preferences from the server.",
+  "memory.scope.cwd": "cwd",
+  "memory.scope.global": "Global",
+  "memory.scope.session": "Task context",
   "section.delivery": "Delivery",
   "section.budget": "Task Budget",
   "section.files": "Files",
@@ -517,9 +508,6 @@
     "status": {
       "connecting": "Connecting"
     }
-  },
-  "preference": {
-    "save_failed": "Failed to save preference"
   },
   "prompt": {
     "reset_done": "Reset"

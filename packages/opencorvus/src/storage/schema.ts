@@ -9,7 +9,7 @@ export { EventJobTable } from "../scheduler/event.sql"
 export { TaskQueueTable } from "../scheduler/task-queue.sql"
 export { ScratchpadTable } from "../memory/scratchpad.sql"
 export { TaskPlanTable } from "../memory/task-plan.sql"
-export { WorkbenchPreferenceTable, WorkbenchTaskNoteTable, WorkbenchBriefSnapshotTable } from "../workbench/workbench.sql"
+export { WorkbenchTaskNoteTable, WorkbenchBriefSnapshotTable } from "../workbench/workbench.sql"
 export {
   OrchestratorSpecSnapshotTable,
   OrchestratorSpecItemTable,

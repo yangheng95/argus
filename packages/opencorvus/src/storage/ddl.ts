@@ -710,27 +710,6 @@ CREATE UNIQUE INDEX IF NOT EXISTS orchestrator_channel_binding_thread_idx ON orc
 
 -- ===== workbench =====
 
-CREATE TABLE IF NOT EXISTS workbench_preference (
-  id           text PRIMARY KEY,
-  project_id   text,
-  task_id      text,
-  session_id   text,
-  user_id      text,
-  scope        text NOT NULL DEFAULT 'global',
-  key          text NOT NULL,
-  value        text NOT NULL,
-  source       text NOT NULL DEFAULT 'user_message',
-  confidence   integer NOT NULL DEFAULT 100,
-  time_created integer NOT NULL,
-  time_updated integer NOT NULL,
-  FOREIGN KEY (project_id) REFERENCES project(id)           ON DELETE CASCADE,
-  FOREIGN KEY (task_id)    REFERENCES orchestrator_task(id)  ON DELETE CASCADE
-);
-CREATE INDEX IF NOT EXISTS workbench_preference_project_idx ON workbench_preference (project_id);
-CREATE INDEX IF NOT EXISTS workbench_preference_task_idx    ON workbench_preference (task_id);
-CREATE INDEX IF NOT EXISTS workbench_preference_user_idx    ON workbench_preference (user_id);
-CREATE INDEX IF NOT EXISTS workbench_preference_key_idx     ON workbench_preference (key);
-
 CREATE TABLE IF NOT EXISTS workbench_task_note (
   id           text PRIMARY KEY,
   task_id      text NOT NULL,

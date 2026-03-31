@@ -4,8 +4,7 @@
  *
  * Positioned as a first-class agent alongside SpecAgent and PlannerAgent:
  * 1. Memory recall — searches project memory for prior decompositions, patterns
- * 2. Preference awareness — respects project conventions and constraints
- * 3. Codebase exploration — reads files, searches code, discovers module structure
+ * 2. Codebase exploration — reads files, searches code, discovers module structure
  * 4. Web research — when requirements involve unfamiliar technology
  * 5. Structured output — GoalDraft with coverage-validated goal contracts
  * 6. Iterative quality gate — retries until all spec requirements are covered
@@ -481,6 +480,6 @@ export async function goalSystem(): Promise<string> {
   const agentPrompt = (config.agent as Record<string, any> | undefined)?.goal?.prompt
   const core = typeof agentPrompt === "string" ? agentPrompt : GOAL_CORE
   const orchCfg = await OrchestratorConfig.get()
-  const skills = await loadStageSkills(orchCfg.goal.skills)
+  const skills = await loadStageSkills(orchCfg.goal.skills, "goal")
   return core + skills
 }

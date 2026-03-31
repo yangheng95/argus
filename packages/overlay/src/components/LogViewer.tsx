@@ -37,7 +37,6 @@ const NDJSON_TOOL_COLORS: Record<string, string> = {
   find_files: "#76D7EA",
   search_code: "#F39C12",
   memory_search: "#9B59B6",
-  preference_list: "#8E44AD",
   web_search: "#E67E22",
   write_file: "#27AE60",
   edit_file: "#2ECC71",

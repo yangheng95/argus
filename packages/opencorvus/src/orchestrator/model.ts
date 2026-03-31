@@ -447,11 +447,6 @@ export const RejectInteractionInput = z.object({
   message: z.string().optional(),
 })
 
-export const UpdatePreferenceInput = z.object({
-  key: z.string().min(1),
-  value: z.string().min(1),
-})
-
 export const UpdateGoalInput = z.object({
   description: z.string().min(1),
   criteria: z.string().min(1),
@@ -476,19 +471,13 @@ export const InjectMessageInput = z.object({
 })
 
 export const TaskMessageResult = z.object({
-  kind: z.enum(["preference", "goal", "plan", "note"]),
+  kind: z.enum(["goal", "plan", "note"]),
   message: z.string(),
   should_resume: z.boolean(),
 })
 
 export const TaskBrief = z.object({
   content: z.string(),
-  preferences: z.array(
-    z.object({
-      key: z.string(),
-      value: z.string(),
-    }),
-  ),
   notes: z.array(
     z.object({
       kind: z.string(),
@@ -517,7 +506,7 @@ export const TaskChannelBinding = z.object({
 
 export const TaskBoardCard = z.object({
   id: z.string(),
-  kind: z.enum(["goal", "interaction", "preference", "note", "run", "plan_hint"]),
+  kind: z.enum(["goal", "interaction", "note", "run", "plan_hint"]),
   title: z.string(),
   detail: z.string().optional(),
   status: z.string().optional(),
@@ -668,7 +657,7 @@ export const RunMetrics = z.object({
   delivery_focus_score: z.number(),
 })
 
-export type AgentStageType = "spec" | "goal" | "planner" | "evaluator" | "delivery"
+export type AgentStageType = "orchestrator" | "spec" | "goal" | "planner" | "evaluator" | "delivery"
 
 export const Event = {
   AgentUpdated: BusEvent.define("orchestrator.agent.updated", z.object({ taskID: z.string(), runID: z.string().optional(), stage: z.string(), kind: z.string(), id: z.string().optional(), toolName: z.string().optional(), text: z.string().optional(), summary: z.string() })),

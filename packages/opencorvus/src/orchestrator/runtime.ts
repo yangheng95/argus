@@ -48,7 +48,7 @@ import {
   updateGoalRun,
   updateGoalRunExecutorSessionStatus,
 } from "./persist"
-import { advanceTaskStage } from "./pipeline"
+// advanceTaskStage removed — pipeline advancement now driven by Task Agent
 import { sessionStreamHooks } from "./session-stream"
 import { registerGoalRunSession } from "@/server/routes/task-event"
 import { buildRetryContext, decideRetryOrReplan } from "./strategy"
@@ -101,7 +101,7 @@ const INTERACTION_STALE_MS = parseInt(process.env.OPENCORVUS_INTERACTION_TIMEOUT
 const RUN_MAX_EXECUTION_MS = parseInt(process.env.OPENCORVUS_RUN_TIMEOUT_MS || String(2 * 60 * 60 * 1000), 10) // max run execution time (2h default)
 const PIPELINE_STALE_MS = 10 * 60 * 1000 // 10 min — pipeline tasks stuck longer without in-memory tracking are recovered
 const PIPELINE_STATUSES = ["queued", "spec_generating", "goal_decomposing", "planning", "planned"] as const
-const runningStages = new Map<string, Promise<void>>()
+// runningStages removed — Task Agent has its own concurrency guard
 
 type TranscriptState = {
   message: Message.Assistant
@@ -439,37 +439,17 @@ export function hasActiveSessions(): boolean {
 }
 
 export namespace OrchestratorRuntime {
-  export async function poll(hooks: RuntimeHooks) {
+  // Legacy alias — kept so existing callers compile; routes to monitorRuns.
+  export const poll = monitorRuns
+
+  /**
+   * Monitor active runs (executor status). No pipeline advancement.
+   * Pipeline advancement is now driven by the Task Agent.
+   */
+  export async function monitorRuns(hooks: RuntimeHooks) {
     const current = orchestratorState()
 
-    // Phase 1: Pipeline advancement — always runs, never blocked by slow run sync.
-    // Per-task exclusion via runningStages Map; no global guard needed.
-    const pipelineTasks = Database.use((db) =>
-      db.select({ id: OrchestratorTaskTable.id, status: OrchestratorTaskTable.status })
-        .from(OrchestratorTaskTable)
-        .where(and(
-          eq(OrchestratorTaskTable.project_id, Instance.project.id),
-          inArray(OrchestratorTaskTable.status, [...PIPELINE_STATUSES]),
-        ))
-        .all(),
-    )
-    for (const row of pipelineTasks) {
-      if (runningStages.has(row.id)) continue
-      // "queued" and "planned" are normal advancement triggers.
-      // Intermediate states (spec_generating, goal_decomposing, planning) indicate
-      // a server restart interrupted a running stage — trigger recovery immediately
-      // instead of waiting for recoverStrandedTasks (10+ min delay).
-      const isRecovery = row.status !== "queued" && row.status !== "planned"
-      const p = (async () => {
-        const result = await advanceTaskStage(row.id, hooks.updateTask, isRecovery)
-        if (result?.runID) await OrchestratorRuntime.dispatch(result.runID, hooks)
-      })().catch((err) => {
-        log.error("pipeline advancement failed", { taskID: row.id, error: err instanceof Error ? err.message : String(err) })
-      }).finally(() => runningStages.delete(row.id))
-      runningStages.set(row.id, p)
-    }
-
-    // Phase 2: Sync active runs — guarded to prevent overlapping sync waves.
+    // Sync active runs — guarded to prevent overlapping sync waves.
     if (current.syncing) return
     current.syncing = true
     try {
@@ -498,7 +478,7 @@ export namespace OrchestratorRuntime {
           }),
         ),
       )
-      recoverStrandedTasks(hooks)
+      recoverOrphanedTasks()
     } finally {
       current.syncing = false
     }
@@ -1509,13 +1489,17 @@ async function runEvaluation(task: TaskRow, run: RunRow, existingDelivery: Deliv
   await publishAcceptedDelivery(task, run, accepted, hooks, result.checks)
 }
 
-function recoverStrandedTasks(hooks: RuntimeHooks) {
+/**
+ * Recover tasks stuck in non-terminal states without an active Task Agent.
+ * Re-triggers the Task Agent for orphaned tasks.
+ */
+function recoverOrphanedTasks() {
+  const { TaskAgent } = require("./task-agent") as typeof import("./task-agent")
   const strandedTasks = Database.use((db) =>
     db.select().from(OrchestratorTaskTable).where(and(
       eq(OrchestratorTaskTable.project_id, Instance.project.id),
       inArray(OrchestratorTaskTable.status, [
-        "spec_generating", "goal_decomposing", "planning",  // pipeline
-        "evaluating", "delivering",                          // execution
+        "queued", "spec_generating", "goal_decomposing", "planning",
       ]),
     )).all(),
   )
@@ -1523,25 +1507,12 @@ function recoverStrandedTasks(hooks: RuntimeHooks) {
   for (const task of strandedTasks) {
     const updated = task.time_status_changed ?? task.time_updated ?? task.time_created ?? 0
     const age = now - updated
-    const isPipeline = (PIPELINE_STATUSES as readonly string[]).includes(task.status)
-    const threshold = isPipeline ? PIPELINE_STALE_MS : EVALUATING_STALE_MS
-    if (age < threshold) continue
-    if (isPipeline && runningStages.has(task.id)) continue
-    if (task.active_run_id && evaluatingRuns.has(task.active_run_id)) continue
-    // Pipeline recovery: re-trigger advancement instead of failing
-    if (isPipeline) {
-      log.warn("recovering stranded pipeline task", { taskID: task.id, status: task.status, ageMs: age })
-      const p = advanceTaskStage(task.id, hooks.updateTask, true)
-        .then(async (result) => { if (result?.runID) await OrchestratorRuntime.dispatch(result.runID, hooks) })
-        .catch((err) => log.error("pipeline recovery failed", { taskID: task.id, error: String(err) }))
-        .finally(() => runningStages.delete(task.id))
-      runningStages.set(task.id, p)
-      continue
-    }
-    log.warn("recovering stranded task", { taskID: task.id, status: task.status, ageMs: age })
-    const error = `Task was stranded in '${task.status}' state for ${Math.round(age / 60000)}min (server restart recovery)`
-    hooks.updateTask(task, { status: "failed", error, blocking_reason: null, time_completed: now }, error)
-      .catch((err) => log.error("failed to recover stranded task", { taskID: task.id, error: String(err) }))
+    if (age < PIPELINE_STALE_MS) continue
+    if (TaskAgent.isRunning(task.id)) continue
+    log.warn("recovering orphaned task — re-triggering Task Agent", { taskID: task.id, status: task.status, ageMs: age })
+    TaskAgent.processTask(task.id, { kind: "created" }).catch((err) =>
+      log.error("orphan recovery failed", { taskID: task.id, error: String(err) }),
+    )
   }
 }
 

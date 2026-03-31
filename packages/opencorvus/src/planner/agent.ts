@@ -5,8 +5,7 @@
  *
  * Capabilities:
  * 1. Memory recall — searches project memory for prior work, patterns, gotchas
- * 2. Preference awareness — respects project conventions and constraints
- * 3. Codebase exploration — reads files, searches code, lists directories
+ * 2. Codebase exploration — reads files, searches code, lists directories
  * 4. Web research — searches external documentation when needed
  * 5. Structured output — PRD, goals, milestones, subtasks, risks, assumptions
  * 6. Replan — receives structured failure analysis and produces alternative strategies
@@ -628,6 +627,6 @@ export async function plannerSystem(): Promise<string> {
   const agentPrompt = (config.agent as Record<string, any> | undefined)?.plan?.prompt
   const core = typeof agentPrompt === "string" ? agentPrompt : PLAN_CORE
   const orchCfg = await OrchestratorConfig.get()
-  const skills = await loadStageSkills(orchCfg.planner.skills)
+  const skills = await loadStageSkills(orchCfg.planner.skills, "planner")
   return core + skills
 }
