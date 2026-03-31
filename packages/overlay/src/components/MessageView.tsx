@@ -6,7 +6,7 @@ import { orderedMessageParts, roleLabel, effectiveRole } from "../utils/message"
 import { escapeHtml } from "../utils/markdown";
 import { stamp } from "../utils/time";
 import { shortRelativePath } from "../utils/tool";
-import { activeDirectory, rootTaskSessionID, goalSessionIDs } from "../store/board";
+import { activeDirectory, rootTaskSessionID } from "../store/board";
 
 /** Render a file part — images get <img>, others get filename text. */
 function renderFilePart(part: any): string {
@@ -24,7 +24,8 @@ function renderFilePart(part: any): string {
 }
 
 export function MessageView(props: { message: any }) {
-  const role = () => effectiveRole(props.message, rootTaskSessionID(), goalSessionIDs());
+  // Prefer backend-resolved role; fall back to client-side inference
+  const role = () => props.message.info?._overlay?.resolvedRole || effectiveRole(props.message, rootTaskSessionID());
   const parts = () => orderedMessageParts(props.message);
   const time = () => stamp(props.message.info?.time?.created);
 

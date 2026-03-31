@@ -149,17 +149,23 @@ export function agentStageLabel(stage: string): string {
 
 // ── Effective role ──
 
-export function effectiveRole(msg: any, rootSessionID: string, goalSessionIDs?: Set<string>): string {
+/**
+ * Determine the display role for a message.
+ * Prefer backend-resolved _overlay.resolvedRole when available.
+ * Falls back to client-side inference for synthetic/legacy messages.
+ */
+export function effectiveRole(msg: any, rootSessionID: string): string {
+  // Backend-resolved role (preferred path)
+  const overlay = msg.info?._overlay;
+  if (overlay?.resolvedRole) return overlay.resolvedRole;
+
+  // Fallback: client-side inference for synthetic messages and legacy data
   const role = msg.info?.role || "assistant";
 
   if (role !== "user") {
-    // Assistant messages from child sessions
     if (role === "assistant" && rootSessionID && !msg._synthetic) {
       const sessionID = typeof msg.info?.sessionID === "string" ? msg.info.sessionID : "";
       if (sessionID && sessionID !== rootSessionID) {
-        if (goalSessionIDs && goalSessionIDs.size > 0 && goalSessionIDs.has(sessionID)) {
-          return "executor";
-        }
         const agent = String(msg.info?.agent || "").trim().toLowerCase();
         if (!agent) return "executor";
         const normalized = normalizeAgentRole(agent);
@@ -169,17 +175,14 @@ export function effectiveRole(msg: any, rootSessionID: string, goalSessionIDs?: 
     return role;
   }
 
-  // User messages: check source annotation
   const source = detectSource(msg);
   if (source) return source;
 
-  // Child session user messages
   const sessionID = typeof msg.info?.sessionID === "string" ? msg.info.sessionID : "";
   if (rootSessionID && sessionID && sessionID !== rootSessionID) {
     return normalizeAgentRole(msg.info?.agent || "system");
   }
 
-  // Synthetic user messages from board context
   if (msg._synthetic && msg.info?.agent) {
     return normalizeAgentRole(msg.info.agent);
   }

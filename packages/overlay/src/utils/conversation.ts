@@ -74,24 +74,26 @@ export function conversationMessages(): any[] {
   const mainMessages: any[] = [];
 
   for (const msg of allMessages) {
-    const channel = classifyMessage(msg, rootSID);
+    // Prefer backend-resolved channel; fall back to client-side inference
+    const channel = msg.info?._overlay?.channel || classifyMessage(msg, rootSID);
     if (channel === "main") {
       mainMessages.push(msg);
     }
+    // Backend marks child session user messages as "filtered"
+    // (orchestrator prompts that shouldn't appear in the conversation)
   }
 
   // Filter orchestrator boilerplate when not in transcript detail mode
   let filteredMain = mainMessages;
   if (!showTranscriptDetails && filteredMain.length > 0) {
     filteredMain = filteredMain.filter((message: any) => {
+      // Backend already filters child session user messages via channel="filtered",
+      // but for messages without _overlay (e.g. synthetic), apply legacy filters
       const text = (message.parts || []).map((part: any) => part.text || "").join("");
       if (
         text.includes("<assistant-brief>") ||
         text.includes("You are executing a headless coding task")
       ) return false;
-      const role = message.info?.role || "";
-      const sid = message.info?.sessionID || "";
-      if (role === "user" && rootSID && sid && sid !== rootSID) return false;
       return true;
     });
   }
