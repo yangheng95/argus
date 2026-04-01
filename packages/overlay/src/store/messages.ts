@@ -93,16 +93,74 @@ export function messageById(id: string): Message | undefined {
 
 // ── Sorting ──
 
+const UNTIMED_MESSAGE_ORDER = Number.MAX_SAFE_INTEGER;
+
+function finiteMessageTime(item: Message | undefined): number | undefined {
+  const created = item?.info?.time?.created;
+  if (Number.isFinite(created)) return Number(created);
+  const updated = item?.info?.time?.updated;
+  if (Number.isFinite(updated)) return Number(updated);
+  return undefined;
+}
+
 function messageTime(item: Message): number {
-  return Number(item?.info?.time?.created || item?.info?.time?.updated || 0);
+  return finiteMessageTime(item) ?? 0;
+}
+
+function messageOrderTime(item: Message): number {
+  return finiteMessageTime(item) ?? UNTIMED_MESSAGE_ORDER;
 }
 
 function sortMessages(list: Message[]): Message[] {
   // V8 Array.sort is stable since ES2019 — no need for index-based tie-breaking.
   // Single slice instead of slice + 2× map.
   const result = list.slice();
-  result.sort((a, b) => messageTime(a) - messageTime(b));
+  result.sort((a, b) => messageOrderTime(a) - messageOrderTime(b));
   return result;
+}
+
+/** Append message in sorted position. Fast path: if newer than last, just push. */
+function insertSorted(msgs: Message[], msg: Message): number {
+  const t = messageOrderTime(msg);
+  // Fast path: normal chronological append (most common case)
+  if (msgs.length === 0 || messageOrderTime(msgs[msgs.length - 1]) <= t) {
+    msgs.push(msg);
+    return msgs.length - 1;
+  }
+  // Slow path: out-of-order arrival (SSE replay, cross-session), binary search
+  let lo = 0, hi = msgs.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1;
+    if (messageOrderTime(msgs[mid]) <= t) lo = mid + 1;
+    else hi = mid;
+  }
+  msgs.splice(lo, 0, msg);
+  return lo;
+}
+
+function mergeMessageInfo(
+  existing: MessageInfo | undefined,
+  next: MessageInfo,
+): MessageInfo {
+  const existingTime = existing?.time;
+  const nextTime = next?.time;
+  const createdCandidates = [existingTime?.created, nextTime?.created]
+    .filter((value): value is number => Number.isFinite(value));
+  const updatedCandidates = [existingTime?.updated, nextTime?.updated]
+    .filter((value): value is number => Number.isFinite(value));
+  const completedCandidates = [existingTime?.completed, nextTime?.completed]
+    .filter((value): value is number => Number.isFinite(value));
+
+  const time: MessageInfo["time"] = {};
+  if (createdCandidates.length > 0) time.created = Math.min(...createdCandidates);
+  if (updatedCandidates.length > 0) time.updated = Math.max(...updatedCandidates);
+  if (completedCandidates.length > 0) time.completed = Math.max(...completedCandidates);
+
+  return {
+    ...(existing || {}),
+    ...next,
+    time,
+  };
 }
 
 function record(value: unknown): value is Record<string, any> {
@@ -516,7 +574,7 @@ function rebuildAgentCards(): void {
       roundsByStage[stage] = round;
     }
     entry.messages.push(message);
-    const created = messageTime(message);
+    const created = finiteMessageTime(message) ?? Infinity;
     if (created < entry.startTime) entry.startTime = created;
     const completed = messageEndTime(message);
     if (completed > entry.endTime) entry.endTime = completed;
@@ -592,7 +650,7 @@ function rebuildAgentCards(): void {
       _agentCardKey: round.channelID,
       _agentMessages: round.messages
         .slice()
-        .sort((left, right) => messageTime(left) - messageTime(right)),
+        .sort((left, right) => messageOrderTime(left) - messageOrderTime(right)),
       info: {
         id: `agent-card:${round.channelID}`,
         role: "agent-card",
@@ -722,7 +780,7 @@ function rebuildAgentCards(): void {
 
   nextOrder.sort(
     (left, right) =>
-      messageTime(nextCards[left]) - messageTime(nextCards[right]) || left.localeCompare(right),
+      messageOrderTime(nextCards[left]) - messageOrderTime(nextCards[right]) || left.localeCompare(right),
   );
 
   // Apply targeted per-card updates instead of reconcile.
@@ -776,7 +834,8 @@ function rebuildAgentCards(): void {
           }
         }
         // Only replace _agentMessages when the list actually changed
-        // (by reference or length) to avoid triggering <For> re-diff
+        // (by reference or length). Note: part status updates propagate through
+        // live proxy resolution in conversationMessages(), not through agent card copies.
         const prevMsgs = prev._agentMessages;
         const nextMsgs = card._agentMessages;
         if (
@@ -925,18 +984,19 @@ export function applyMessageEvent(event: any): boolean {
     if (existing) {
       const idx = store.messages.indexOf(existing);
       if (idx >= 0) {
-        setStore("messages", idx, "info", info);
+        setStore("messages", idx, "info", mergeMessageInfo(existing.info, info));
       }
       return true;
     }
-    const msg: Message = { info, parts: [] };
+    const msg: Message = { info: mergeMessageInfo(undefined, info), parts: [] };
+    let insertIdx = 0;
     setStore(
       "messages",
       produce((msgs: Message[]) => {
-        msgs.push(msg);
+        insertIdx = insertSorted(msgs, msg);
       }),
     );
-    messageIndex.set(info.id, store.messages[store.messages.length - 1]);
+    messageIndex.set(info.id, store.messages[insertIdx]);
     return true;
   }
 
@@ -952,16 +1012,18 @@ export function applyMessageEvent(event: any): boolean {
           role: "assistant",
           resolvedRole: properties.resolvedRole || "assistant",
           channel: properties.channel || "main",
+          time: { created: part.state?.time?.start || Date.now() },
         },
         parts: [],
       };
+      let partInsertIdx = 0;
       setStore(
         "messages",
         produce((msgs: Message[]) => {
-          msgs.push(msg);
+          partInsertIdx = insertSorted(msgs, msg);
         }),
       );
-      message = store.messages[store.messages.length - 1];
+      message = store.messages[partInsertIdx];
       messageIndex.set(part.messageID, message);
     }
     const idx = store.messages.indexOf(message);
@@ -994,16 +1056,18 @@ export function applyMessageEvent(event: any): boolean {
           role: "assistant",
           resolvedRole: properties.resolvedRole || "assistant",
           channel: properties.channel || "main",
+          time: { created: Date.now() },
         },
         parts: [],
       };
+      let deltaInsertIdx = 0;
       setStore(
         "messages",
         produce((msgs: Message[]) => {
-          msgs.push(msg);
+          deltaInsertIdx = insertSorted(msgs, msg);
         }),
       );
-      message = store.messages[store.messages.length - 1];
+      message = store.messages[deltaInsertIdx];
       messageIndex.set(properties.messageID, message);
     }
 
@@ -1533,7 +1597,7 @@ export function setMessages(messages: any[]) {
     }
 
     // Re-sort in place
-    msgs.sort((a, b) => messageTime(a) - messageTime(b));
+    msgs.sort((a, b) => messageOrderTime(a) - messageOrderTime(b));
   }));
   rebuildMessageIndex();
   scheduleRebuildAgentCards();

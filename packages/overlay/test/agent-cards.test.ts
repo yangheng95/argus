@@ -96,6 +96,34 @@ test("keeps transcript-backed cards canonical for the same stage", () => {
   expect(cards[0]?._agentMessages?.[0]?.parts?.[0]?.text).toBe("First planning note")
 })
 
+test("root task request stays ahead of untimed agent transcript cards", () => {
+  setBoardStore("board", {
+    task: {
+      status: "goal_decomposing",
+      request: "Implement a minimal NoteStore",
+      time: { created: 1000 },
+    },
+    interactions: [],
+    lanes: [],
+  })
+
+  setMessages([
+    {
+      info: {
+        id: "goal-msg-1",
+        role: "assistant",
+        agent: "goal",
+        sessionID: "goal-session-1",
+      },
+      parts: [{ id: "goal-part-1", type: "tool", tool: "decompose_goals", state: { status: "running" } }],
+    },
+  ])
+
+  const items = conversationMessages()
+
+  expect(items[0]?.info?.id).toBe("ctx:user-request")
+})
+
 test("prunes live agent events per stage to 12", () => {
   setSelectedTaskID("task-live")
   setBoardStore("selectedTaskID", "task-live")

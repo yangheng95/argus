@@ -1,9 +1,6 @@
 import { existsSync } from "fs"
 import path from "path"
 import { Bus } from "@/bus"
-import { selectorList } from "@/check/policy"
-import { EvaluatorService } from "@/evaluator/service"
-import { type EvaluatorAnalysisType, EvaluatorAgent } from "@/evaluator/agent"
 import { ExecutorRegistry } from "@/executor/registry"
 
 import { Plugin } from "@/plugin"
@@ -15,12 +12,7 @@ import { Message } from "@/session/message"
 import { Database, and, eq, inArray } from "@/storage/db"
 import { Log } from "@/util/log"
 import { WorkbenchService } from "@/workbench/service"
-import { DeliveryService } from "@/delivery/service"
-import type { DeliveryVerdictType } from "@/delivery/agent"
-import { mergeTextHooks } from "@/llm/tool-hooks"
-import { Publisher } from "./publisher"
 import { OrchestratorGit } from "./git"
-import { OrchestratorMemoryBridge } from "./memory-bridge"
 import {
   OrchestratorGoalTable,
   OrchestratorInteractionRequestTable,
@@ -35,22 +27,16 @@ import {
   effectiveMaxExecutorGroups,
   orchestratorState,
 } from "./helpers"
-import { OrchestratorConfig } from "./config"
 import {
   createGoalRun,
   createFixRun,
   ensureExecutorSession,
-  failGoals,
-  finalizeDeliveryResult,
-  markDeliveryPublishing,
   persistDelivery,
-  persistEvaluation,
   persistFailedRunEvaluation,
   updateExecutorSessionStatus,
   updateGoalRun,
   updateGoalRunExecutorSessionStatus,
 } from "./persist"
-// advanceTaskStage removed — pipeline advancement now driven by Task Agent
 import { sessionStreamHooks } from "./session-stream"
 import { registerGoalRunSession } from "@/server/routes/task-event"
 import { TaskAgent } from "./task-agent"
@@ -69,7 +55,6 @@ import {
   listPlanNodesByPlan,
   requireRun,
   requireTask,
-  type DeliveryRow,
   type GoalRunRow,
   type PlanRow,
   type RunRow,
@@ -81,21 +66,17 @@ import { readyGoalNodes, pendingBlockingGoals, hasBlockingFailures } from "@/goa
 import { buildGoalPrompt, createGoalSession, applyGoalDelivery, cleanupGoalWorkspace } from "@/goal/runner"
 import { Identifier } from "@/id/id"
 import { agentStream } from "./agent-stream"
-import { OrchestratorArtifactTable } from "./orchestrator.sql"
 
 const log = Log.create({ service: "orchestrator-runtime" })
-const EVALUATION_HARD_TIMEOUT_MS = 10 * 60 * 1000 // 10 minutes total for entire evaluation phase
 const DELIVERY_FETCH_TIMEOUT_MS = parseInt(process.env.OPENCORVUS_DELIVERY_FETCH_TIMEOUT_MS || "300000", 10) // 5 min for executor.delivery() (git operations can be slow on Windows with large repos)
-const DELIVERY_SERVICE_TIMEOUT_MS = 60_000 // 60 seconds for Publisher.deliver()
-const DELIVERY_VERIFY_TIMEOUT_MS = parseInt(process.env.OPENCORVUS_DELIVERY_VERIFY_TIMEOUT_MS || "600000", 10) // 10 min for delivery agent verification
-const SYNC_RUN_TIMEOUT_MS = parseInt(process.env.OPENCORVUS_SYNC_RUN_TIMEOUT_MS || String(DELIVERY_FETCH_TIMEOUT_MS + EVALUATION_HARD_TIMEOUT_MS + DELIVERY_VERIFY_TIMEOUT_MS + DELIVERY_SERVICE_TIMEOUT_MS + 3 * 60 * 1000), 10) // must exceed fetch + eval + verify + publish + buffer
+const SYNC_RUN_TIMEOUT_MS = parseInt(process.env.OPENCORVUS_SYNC_RUN_TIMEOUT_MS || String(DELIVERY_FETCH_TIMEOUT_MS + 15 * 60 * 1000), 10) // must exceed fetch + Task Agent eval/verify/publish time
 const EXECUTOR_STATUS_TIMEOUT_MS = 30_000 // 30s for executor.status()
 const EXECUTOR_SUBMIT_TIMEOUT_MS = 60_000 // 60s for executor.submit()
-const evaluatingRuns = new Map<string, number>() // runID → start timestamp, guards against concurrent re-evaluation
 const eventBridgeAborts = new Map<string, AbortController>() // runID → AbortController for consumeExecutorEvents
-// No BROADCAST_EVENT_TYPES whitelist needed — garbage types are no longer
-// emitted at the executor level, so every event that arrives is meaningful.
-const EVALUATING_STALE_MS = EVALUATION_HARD_TIMEOUT_MS + 60_000 // consider stale after hard timeout + 1 min buffer
+// Guard: runs that have already notified Task Agent via run_completed.
+// Prevents syncRun from re-calling completeRun every 1.5s cycle, which would
+// abort the running Task Agent mid-eval/delivery.
+const agentNotifiedRuns = new Set<string>()
 
 // Per-run merge serialization: ensures parallel goal deliveries are merged one at a time.
 // Without this, concurrent applyGoalDelivery() calls can overwrite each other's changes.
@@ -112,8 +93,6 @@ async function serializedMerge(runID: string, fn: () => Promise<void>) {
 const INTERACTION_STALE_MS = parseInt(process.env.OPENCORVUS_INTERACTION_TIMEOUT_MS || "30000", 10) // auto-reject stale interactions (30s default)
 const RUN_MAX_EXECUTION_MS = parseInt(process.env.OPENCORVUS_RUN_TIMEOUT_MS || String(2 * 60 * 60 * 1000), 10) // max run execution time (2h default)
 const PIPELINE_STALE_MS = 10 * 60 * 1000 // 10 min — pipeline tasks stuck longer without in-memory tracking are recovered
-const PIPELINE_STATUSES = ["queued", "spec_generating", "goal_decomposing", "planning", "planned", "evaluating", "delivering"] as const
-// runningStages removed — Task Agent has its own concurrency guard
 
 type TranscriptState = {
   message: Message.Assistant
@@ -990,10 +969,9 @@ export namespace OrchestratorRuntime {
     // Check if blocking goals failed
     if (hasBlockingFailures(goals)) {
       TaskAgent.processTask(task.id, {
-        kind: "eval_failed",
+        kind: "executor_failed",
         runID: run.id,
-        summary: "Blocking goal(s) failed during parallel execution",
-        checks: [],
+        error: "Blocking goal(s) failed during parallel execution",
       }).catch(err => log.error("task agent failed on goal failure", { taskID: task.id, error: String(err) }))
       return
     }
@@ -1003,10 +981,9 @@ export namespace OrchestratorRuntime {
     if (pending.length > 0) {
       // Pending goals exist but none are ready — dependency chain broken
       TaskAgent.processTask(task.id, {
-        kind: "eval_failed",
+        kind: "executor_failed",
         runID: run.id,
-        summary: `${pending.length} blocking goal(s) pending but not ready (dependency failure)`,
-        checks: [],
+        error: `${pending.length} blocking goal(s) pending but not ready (dependency failure)`,
       }).catch(err => log.error("task agent failed on dependency failure", { taskID: task.id, error: String(err) }))
       return
     }
@@ -1245,92 +1222,64 @@ export namespace OrchestratorRuntime {
 
 
 async function completeRun(run: RunRow, hooks: RuntimeHooks) {
+  // Guard: prevent syncRun from re-triggering completeRun every cycle while
+  // Task Agent is processing eval/delivery/publish.
+  if (agentNotifiedRuns.has(run.id)) return
+
   installRuntimeShims()
   stopEventBridge(run.id)
   updateExecutorSessionStatus(run.id, "completed")
+
+  const task = requireTask(run.task_id)
+  if (task.active_run_id !== run.id) return
+
+  // If delivery already exists (e.g. per-goal aggregation or prior restart),
+  // just mark run completed and notify Task Agent.
   const existingDelivery = findDeliveryByRun(run.id)
   if (existingDelivery) {
-    const task = requireTask(run.task_id)
-    const evaluation = findEvaluationByRun(run.id)
     if (run.status !== "completed") {
       await hooks.updateRun(run, { status: "completed", blocking_reason: null, error: null, time_completed: Date.now() }, "Run completed")
     }
-    if (!evaluation) {
-      if (task.active_run_id === run.id) {
-        await hooks.updateTask(task, { status: "evaluating", blocking_reason: null, error: null }, "Evaluating delivery")
-      }
-      // Re-run evaluation for this existing delivery (evaluation was interrupted by prior restart)
-      // Atomic guard: check-and-set in a single synchronous block to prevent concurrent syncRuns
-      // from both starting evaluation for the same run (Promise.allSettled race).
-      const evalStart = evaluatingRuns.get(run.id)
-      const isStale = evalStart !== undefined && (Date.now() - evalStart) > EVALUATING_STALE_MS
-      if (isStale) {
-        log.warn("clearing stale evaluatingRuns entry", { runID: run.id, ageMs: Date.now() - evalStart })
-        evaluatingRuns.delete(run.id)
-      }
-      if (task.active_run_id !== run.id || !run.session_id || evaluatingRuns.has(run.id)) return
-      // Atomic: set guard immediately in the same microtask as the check
-      evaluatingRuns.set(run.id, Date.now())
-      {
-        const reEvalCtrl = new AbortController()
-        const reEvalTimer = setTimeout(() => reEvalCtrl.abort("runEvaluation hard timeout"), EVALUATION_HARD_TIMEOUT_MS)
-        try {
-          await runEvaluation(task, run, existingDelivery, hooks, reEvalCtrl.signal)
-        } catch (timeoutErr) {
-          const msg = timeoutErr instanceof Error ? timeoutErr.message : String(timeoutErr)
-          log.error("runEvaluation timed out or failed", { runID: run.id, error: msg })
-          const now = Date.now()
-          await hooks.updateRun(run, { status: "failed", error: msg, blocking_reason: null, time_completed: now }, msg)
-          if (task.active_run_id === run.id) {
-            await hooks.updateTask(task, { status: "failed", error: msg, blocking_reason: null, time_completed: now }, msg)
-          }
-        } finally {
-          clearTimeout(reEvalTimer)
-          evaluatingRuns.delete(run.id)
-        }
-      }
-      return
-    }
-    if (task.active_run_id !== run.id) return
-    if (evaluation.status === "passed" && existingDelivery.status === "delivered") {
-      await publishAcceptedDelivery(task, run, existingDelivery, hooks)
-      return
-    }
-    if (evaluation.status === "passed" && existingDelivery.status !== "delivered") {
-      await publishAcceptedDelivery(task, run, existingDelivery, hooks)
-      return
-    }
-    if (evaluation.status !== "passed") {
-      const evalChecks = Array.isArray(evaluation.checks) ? (evaluation.checks as Array<{name: string; status: string; evidence?: string}>) : []
-      TaskAgent.processTask(task.id, {
-        kind: "eval_failed",
-        runID: run.id,
-        summary: evaluation.summary,
-        checks: evalChecks.map(c => ({ name: c.name, status: c.status, evidence: c.evidence })),
-      }).catch(err => log.error("task agent failed on eval_failed (existing)", { taskID: task.id, error: String(err) }))
-    }
+    agentNotifiedRuns.add(run.id)
+    TaskAgent.processTask(task.id, {
+      kind: "run_completed",
+      runID: run.id,
+    }).catch(err => log.error("task agent failed on run_completed", { taskID: task.id, error: String(err) }))
     return
   }
 
+  // Fetch delivery from executor
   if (!run.session_id) throw new Error(`Run ${run.id} has no session`)
-  const task = requireTask(run.task_id)
   const completedAt = Date.now()
   await hooks.updateRun(run, { status: "completed", blocking_reason: null, error: null, time_completed: completedAt }, "Run completed")
-  await hooks.updateTask(task, { status: "evaluating", blocking_reason: null, error: null }, "Evaluating delivery")
-  const executor = ExecutorRegistry.require(run.executor)
-  const delivery = await Promise.race([
-    executor.delivery({
-      sessionID: run.session_id,
-      since: run.time_started ?? run.time_created,
-    }),
-    new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error("executor.delivery() timeout")), DELIVERY_FETCH_TIMEOUT_MS),
-    ),
-  ])
+
+  let delivery: Awaited<ReturnType<ReturnType<typeof ExecutorRegistry.require>["delivery"]>>
+  try {
+    const executor = ExecutorRegistry.require(run.executor)
+    delivery = await Promise.race([
+      executor.delivery({
+        sessionID: run.session_id,
+        since: run.time_started ?? run.time_created,
+      }),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("executor.delivery() timeout")), DELIVERY_FETCH_TIMEOUT_MS),
+      ),
+    ])
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    log.error("completeRun: delivery fetch failed", { runID: run.id, error: msg })
+    // Notify Task Agent with executor_failed so it can decide recovery
+    agentNotifiedRuns.add(run.id)
+    TaskAgent.processTask(task.id, {
+      kind: "executor_failed",
+      runID: run.id,
+      error: `Delivery fetch failed: ${msg}`,
+    }).catch(e => log.error("task agent failed on delivery fetch error", { taskID: task.id, error: String(e) }))
+    return
+  }
+
   const now = Date.now()
   const deliveryID = Identifier.ascending("delivery")
-  const evaluationID = Identifier.ascending("evaluation")
-
   persistDelivery({ task, run, deliveryID, delivery, now })
 
   await Plugin.trigger("delivery.ready", {
@@ -1344,231 +1293,14 @@ async function completeRun(run: RunRow, hooks: RuntimeHooks) {
     },
   }, { actions: [] }).catch(() => undefined)
 
-  const hardTimeoutPromise = <T>() =>
-    new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error("evaluation hard timeout")), EVALUATION_HARD_TIMEOUT_MS),
-    )
+  log.info("delivery fetched, notifying task agent", { runID: run.id, taskID: task.id })
 
-  // Task-level evaluation: tier from config (default "standard" = core + judge + spec_check + code_review).
-  const evalCfg = await OrchestratorConfig.get()
-  const evalTier = evalCfg.evaluator.tier ?? "standard"
-  let result: Awaited<ReturnType<typeof EvaluatorService.evaluate>>
-  try {
-    result = await Promise.race([
-      EvaluatorService.evaluate(
-        {
-          taskID: task.id,
-          activeSpecVersionID: task.active_spec_version_id ?? undefined,
-          request: task.request,
-          metadata: {
-            ...(task.metadata ?? {}),
-            delivery_changed_files: delivery.diffs.map((item) => item.file),
-          },
-        },
-        {
-          summary: delivery.summary,
-          diffs: delivery.diffs,
-          changedFiles: delivery.diffs.map((item) => item.file),
-        },
-        evalTier,
-      ),
-      hardTimeoutPromise<typeof result>(),
-    ])
-  } catch (evalErr) {
-    const msg = evalErr instanceof Error ? evalErr.message : String(evalErr)
-    log.error("core checks threw or timed out", { error: msg })
-    // Evaluator infrastructure failure — still try delivery, it might work
-    result = { status: "failed" as const, verdict: "rejected" as const, summary: `Core check error: ${msg}`, checks: [], artifacts: [] }
-  }
-
-  const goals = run.plan_version_id ? listGoalsByPlan(run.plan_version_id) : []
-  const checkSummary = `Core checks: ${result.checks.map((c) => `${c.name}:${c.status}`).join(", ") || "none"}`
-
-  // Only an explicit "passed" is acceptable — "inconclusive" (no checks ran) must be treated as failure
-  // to prevent empty/broken projects from being accepted.
-  const evalPassed = result.status === "passed"
-  if (result.status === "inconclusive") {
-    log.warn("core checks inconclusive — treating as failed", { runID: run.id, summary: result.summary })
-  }
-
-  // Persist evaluation — records core check results regardless of pass/fail
-  persistEvaluation({
-    task, run, deliveryID, evaluationID, delivery, result,
-    analysis: {
-      verdict: evalPassed ? "accepted" : "rejected",
-      classification: "transient",
-      summary: checkSummary,
-      goal_statuses: goals.map((g, i) => ({
-        goal_index: i,
-        status: (evalPassed ? "passed" : "failed") as "passed" | "failed",
-        evidence: checkSummary,
-        reasoning: result.summary,
-      })),
-      replan_guidance: null,
-    },
-    finalVerdict: evalPassed ? "accepted" : "rejected",
-    finalStatus: evalPassed ? "passed" : "failed",
-    finalSummary: checkSummary,
-    goals,
-  })
-
-  // Check for pending blocking goals
-  const allGoals = run.plan_version_id ? listGoalsByPlan(run.plan_version_id) : []
-  const pendingBlocking = allGoals.filter((g) => g.priority === "blocking" && g.status === "pending")
-
-  if (pendingBlocking.length > 0) {
-    const remaining = pendingBlocking.map((g) => g.description).join(", ")
-    const failSummary = `Blocking goals still pending: ${remaining}`
-    // Notify Task Agent to decide
-    TaskAgent.processTask(task.id, {
-      kind: "eval_failed",
-      runID: run.id,
-      summary: failSummary,
-      checks: result.checks.map(c => ({ name: c.name, status: c.status, evidence: typeof c.evidence === "string" ? c.evidence : undefined })),
-    }).catch(err => log.error("task agent failed on eval_failed (pending goals)", { taskID: task.id, error: String(err) }))
-    return
-  }
-
-  if (!evalPassed) {
-    // Eval failed → notify Task Agent to decide fix or fail
-    TaskAgent.processTask(task.id, {
-      kind: "eval_failed",
-      runID: run.id,
-      summary: checkSummary,
-      checks: result.checks.map(c => ({ name: c.name, status: c.status, evidence: typeof c.evidence === "string" ? c.evidence : undefined })),
-    }).catch(err => log.error("task agent failed on eval_failed", { taskID: task.id, error: String(err) }))
-    return
-  }
-
-  // Eval passed → proceed to delivery automatically (normal path, no LLM delay)
-  const accepted = findDeliveryByRun(run.id)
-  if (!accepted) {
-    await hooks.updateTask(task, { status: "completed", blocking_reason: null, error: null, time_completed: Date.now() }, "Task completed")
-    return
-  }
-  await publishAcceptedDelivery(task, run, accepted, hooks, result.checks)
-}
-
-async function runEvaluation(task: TaskRow, run: RunRow, existingDelivery: DeliveryRow, hooks: RuntimeHooks, signal?: AbortSignal) {
-  if (signal?.aborted) throw new Error("runEvaluation aborted before start")
-  if (!run.session_id) return
-
-  // In per-goal mode, the aggregated delivery already has the correct diffs
-  // from all goal worktrees. Re-fetching from executor.delivery() would query
-  // the coordinator session which has no file changes — producing empty diffs.
-  const existingResult = existingDelivery.result as { diffs?: Array<{ file: string; [key: string]: unknown }>; summary?: string } | null
-  const hasAggregatedDiffs = existingResult?.diffs && existingResult.diffs.length > 0
-
-  const executor = ExecutorRegistry.require(run.executor)
-  let delivery: Awaited<ReturnType<typeof executor.delivery>>
-  if (hasAggregatedDiffs) {
-    delivery = {
-      summary: existingResult!.summary ?? existingDelivery.summary ?? "",
-      diffs: existingResult!.diffs!,
-    }
-  } else {
-    try {
-      delivery = await Promise.race([
-        executor.delivery({
-          sessionID: run.session_id,
-          since: run.time_started ?? run.time_created,
-        }),
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error("executor.delivery() timeout")), DELIVERY_FETCH_TIMEOUT_MS),
-        ),
-      ])
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
-      log.error("re-evaluation: failed to fetch delivery from executor", { error: msg })
-      throw new Error(`Cannot re-evaluate: executor.delivery() failed: ${msg}`)
-    }
-  }
-
-  const deliveryID = existingDelivery.id
-  const evaluationID = Identifier.ascending("evaluation")
-
-  // Use the signal from the outer caller (which has its own timer) instead of spawning
-  // independent inner timers that can outlive the outer timeout.
-  const throwIfAborted = () => { if (signal?.aborted) throw new Error("runEvaluation aborted by caller") }
-
-  // Task-level re-evaluation: tier from config (same as completeRun)
-  const evalCfg = await OrchestratorConfig.get()
-  const evalTier = evalCfg.evaluator.tier ?? "standard"
-  let result: Awaited<ReturnType<typeof EvaluatorService.evaluate>>
-  try {
-    throwIfAborted()
-    result = await EvaluatorService.evaluate(
-      {
-        taskID: task.id,
-        activeSpecVersionID: task.active_spec_version_id ?? undefined,
-        request: task.request,
-        metadata: { ...(task.metadata ?? {}), delivery_changed_files: delivery.diffs.map((item) => item.file) },
-      },
-      { summary: delivery.summary, diffs: delivery.diffs, changedFiles: delivery.diffs.map((item) => item.file) },
-      evalTier,
-    )
-  } catch (evalErr) {
-    const msg = evalErr instanceof Error ? evalErr.message : String(evalErr)
-    log.error("re-evaluation core checks failed", { error: msg })
-    result = { status: "failed" as const, verdict: "rejected" as const, summary: `Core check error: ${msg}`, checks: [], artifacts: [] }
-  }
-
-  const goals = run.plan_version_id ? listGoalsByPlan(run.plan_version_id) : []
-  const checkSummary = `Core checks: ${result.checks.map((c) => `${c.name}:${c.status}`).join(", ") || "none"}`
-
-  const evalPassed = result.status === "passed"
-  if (result.status === "inconclusive") {
-    log.warn("re-evaluation: core checks inconclusive — treating as failed", { runID: run.id, summary: result.summary })
-  }
-
-  persistEvaluation({
-    task, run, deliveryID, evaluationID, delivery, result,
-    analysis: {
-      verdict: evalPassed ? "accepted" : "rejected",
-      classification: "transient", summary: checkSummary,
-      goal_statuses: goals.map((g, i) => ({
-        goal_index: i, status: (evalPassed ? "passed" : "failed") as "passed" | "failed",
-        evidence: checkSummary, reasoning: result.summary,
-      })),
-      replan_guidance: null,
-    },
-    finalVerdict: evalPassed ? "accepted" : "rejected",
-    finalStatus: evalPassed ? "passed" : "failed",
-    finalSummary: checkSummary, goals,
-  })
-
-  // Check for pending blocking goals
-  const allGoals = run.plan_version_id ? listGoalsByPlan(run.plan_version_id) : []
-  const pendingBlocking = allGoals.filter((g) => g.priority === "blocking" && g.status === "pending")
-  if (pendingBlocking.length > 0) {
-    const remaining = pendingBlocking.map((g) => g.description).join(", ")
-    TaskAgent.processTask(task.id, {
-      kind: "eval_failed",
-      runID: run.id,
-      summary: `Blocking goals still pending: ${remaining}`,
-      checks: result.checks.map(c => ({ name: c.name, status: c.status, evidence: typeof c.evidence === "string" ? c.evidence : undefined })),
-    }).catch(err => log.error("task agent failed on eval_failed (pending goals)", { taskID: task.id, error: String(err) }))
-    return
-  }
-
-  if (!evalPassed) {
-    // Eval failed → notify Task Agent
-    TaskAgent.processTask(task.id, {
-      kind: "eval_failed",
-      runID: run.id,
-      summary: checkSummary,
-      checks: result.checks.map(c => ({ name: c.name, status: c.status, evidence: typeof c.evidence === "string" ? c.evidence : undefined })),
-    }).catch(err => log.error("task agent failed on eval_failed", { taskID: task.id, error: String(err) }))
-    return
-  }
-
-  // Eval passed → proceed to delivery automatically
-  const accepted = findDeliveryByRun(run.id)
-  if (!accepted) {
-    await hooks.updateTask(task, { status: "completed", blocking_reason: null, error: null, time_completed: Date.now() }, "Task completed")
-    return
-  }
-  await publishAcceptedDelivery(task, run, accepted, hooks, result.checks)
+  // Notify Task Agent — it controls eval → delivery verify → publish via tools
+  agentNotifiedRuns.add(run.id)
+  TaskAgent.processTask(task.id, {
+    kind: "run_completed",
+    runID: run.id,
+  }).catch(err => log.error("task agent failed on run_completed", { taskID: task.id, error: String(err) }))
 }
 
 /**
@@ -1582,6 +1314,7 @@ async function recoverOrphanedTasks() {
       eq(OrchestratorTaskTable.project_id, Instance.project.id),
       inArray(OrchestratorTaskTable.status, [
         "queued", "spec_generating", "goal_decomposing", "planning",
+        "evaluating", "delivering", // Task Agent controls eval/delivery — recover if stalled
       ]),
     )).all(),
   )
@@ -1592,7 +1325,11 @@ async function recoverOrphanedTasks() {
     if (age < PIPELINE_STALE_MS) continue
     if (TaskAgent.isRunning(task.id)) continue
     log.warn("recovering orphaned task — re-triggering Task Agent", { taskID: task.id, status: task.status, ageMs: age })
-    TaskAgent.processTask(task.id, { kind: "created" }).catch((err) =>
+    // Tasks in evaluating/delivering were waiting for Task Agent to run eval/delivery — re-trigger with run_completed
+    const trigger = (task.status === "evaluating" || task.status === "delivering") && task.active_run_id
+      ? { kind: "run_completed" as const, runID: task.active_run_id }
+      : { kind: "created" as const }
+    TaskAgent.processTask(task.id, trigger).catch((err) =>
       log.error("orphan recovery failed", { taskID: task.id, error: String(err) }),
     )
   }
@@ -1621,258 +1358,6 @@ async function failRun(run: RunRow, error: string, hooks: RuntimeHooks) {
       error,
     }).catch(err => log.error("task agent failed on executor_failed", { taskID: task.id, error: String(err) }))
   }
-}
-
-async function publishAcceptedDelivery(task: TaskRow, run: RunRow, delivery: DeliveryRow, hooks: RuntimeHooks, checkResults?: Array<{ name: string; status: string; evidence?: string }>) {
-  if (task.active_run_id !== run.id) return
-  if (delivery.status === "delivered") {
-    const current = requireTask(task.id)
-    const plan = run.plan_version_id ? findPlan(run.plan_version_id) : undefined
-    const finalized = await OrchestratorGit.complete(current, plan, delivery)
-    if (finalized.error) {
-      await hooks.updateTask(current, { status: "failed", blocking_reason: null, error: finalized.error, time_completed: Date.now() }, finalized.error)
-      return
-    }
-    if (task.status !== "completed") {
-      await hooks.updateTask(finalized.task, { status: "completed", blocking_reason: null, error: null, time_completed: Date.now() }, "Task completed")
-    }
-    return
-  }
-
-  const now = Date.now()
-  await hooks.updateRun(run, { phase: "deliver" }, "Publishing accepted delivery")
-  await hooks.updateTask(task, { status: "delivering", blocking_reason: null, error: null }, "Publishing accepted delivery")
-
-  // --- Single delivery agent verification (read-only, no fix loop) ---
-  const verifyGoals = run.plan_version_id ? listGoalsByPlan(run.plan_version_id) : []
-  if (verifyGoals.length > 0) {
-    const analysisArtifact = Database.use((db) =>
-      db.select().from(OrchestratorArtifactTable)
-        .where(and(eq(OrchestratorArtifactTable.run_id, run.id), eq(OrchestratorArtifactTable.label, "evaluator-agent-analysis")))
-        .limit(1).get(),
-    )
-    const analysis = analysisArtifact?.payload as EvaluatorAnalysisType | undefined
-
-    const deliveryLive = agentStream({ taskID: task.id, runID: run.id, stage: "delivery" })
-    const deliverySession = await Session.createNext({
-      parentID: task.session_id ?? undefined,
-      title: `Delivery: ${task.title}`,
-      directory: Instance.directory,
-    })
-    registerGoalRunSession(deliverySession.id, task.id)
-    const deliveryContentHooks = sessionStreamHooks({ sessionID: deliverySession.id, taskID: task.id, stage: "delivery" })
-    const deliveryStream = mergeTextHooks(deliveryContentHooks, deliveryLive.hooks)
-    await deliveryLive.start("Delivery verification started")
-
-    let verdict: DeliveryVerdictType | undefined
-    try {
-      const deliveryResult = delivery.result ?? {}
-      const changedFiles = Array.isArray(deliveryResult.changed_files)
-        ? (deliveryResult.changed_files as unknown[]).filter((f): f is string => typeof f === "string")
-        : Array.isArray(deliveryResult.diffs)
-          ? (deliveryResult.diffs as Array<{ file?: string }>).map(d => d.file).filter(Boolean) as string[]
-          : []
-      verdict = await Promise.race([
-          DeliveryService.verify({
-            task: { title: task.title, request: task.request, sessionID: task.session_id ?? undefined, metadata: task.metadata ?? undefined },
-            goals: verifyGoals.map(g => ({
-              description: g.description,
-              criteria: g.criteria,
-              priority: g.priority as "blocking" | "advisory",
-              check_selector: selectorList(g.metadata) as string[],
-            })),
-            delivery: {
-              summary: delivery.summary,
-              changedFiles,
-              diffs: Array.isArray(deliveryResult.diffs) ? deliveryResult.diffs : [],
-            },
-          checkResults,
-          analysis,
-          stream: deliveryStream,
-        }),
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error("delivery verification timeout")), DELIVERY_VERIFY_TIMEOUT_MS),
-        ),
-      ])
-      await deliveryContentHooks.flush()
-      await deliveryLive.finish(`Delivery: ${verdict.verdict}`)
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
-      log.error("delivery verification failed", { runID: run.id, error: msg })
-      await deliveryContentHooks.flush().catch(() => undefined)
-      deliveryLive.error(err)
-      TaskAgent.processTask(task.id, {
-        kind: "executor_failed",
-        runID: run.id,
-        error: `Delivery verification failed: ${msg}`,
-      }).catch(err => log.error("task agent failed on delivery error", { taskID: task.id, error: String(err) }))
-      return
-    }
-
-    // Persist verdict artifact
-    try {
-      Database.use((db) =>
-        db.insert(OrchestratorArtifactTable).values({
-          id: Identifier.ascending("artifact"),
-          task_id: task.id,
-          run_id: run.id,
-          delivery_id: delivery.id,
-          kind: "report",
-          label: "delivery-agent-verdict",
-          payload: verdict as unknown as Record<string, unknown>,
-          time_created: Date.now(),
-          time_updated: Date.now(),
-        }).run(),
-      )
-    } catch { /* non-critical */ }
-
-    // Delivery rejected → create fix run with rejection context
-    if (verdict.verdict === "rejected") {
-      log.info("delivery rejected, creating fix run", { runID: run.id, issues: verdict.issues_found })
-      // Delivery rejected → notify Task Agent to decide fix or fail
-      TaskAgent.processTask(task.id, {
-        kind: "delivery_rejected",
-        runID: run.id,
-        summary: verdict.summary,
-        issues: verdict.issues_found,
-        rejectionDetails: verdict.rejection_details?.map(d => ({
-          category: d.category,
-          file: d.file,
-          error: d.error,
-          suggestion: d.suggestion,
-        })),
-      }).catch(err => log.error("task agent failed on delivery_rejected", { taskID: task.id, error: String(err) }))
-      return
-    }
-
-    log.info("delivery agent accepted, running independent evaluator agent", { runID: run.id })
-
-    // Independent verification: full EvaluatorAgent investigates the delivery with tools,
-    // reads code, and produces a structured verdict. The delivery agent must not be the
-    // sole judge of its own work.
-    const deliveryResult = delivery.result ?? {}
-    const verifyDiffs = Array.isArray(deliveryResult.diffs) ? deliveryResult.diffs : []
-    const verifyChangedFiles = verifyDiffs.map((d: any) => d.file).filter(Boolean) as string[]
-    let agentVerdict: EvaluatorAnalysisType
-    try {
-      agentVerdict = await Promise.race([
-        EvaluatorAgent.analyze({
-          task: { title: task.title, request: task.request, sessionID: task.session_id ?? undefined, taskID: task.id },
-          goals: verifyGoals.map(g => ({
-            description: g.description,
-            criteria: g.criteria,
-            priority: g.priority as "blocking" | "advisory",
-            check_selector: selectorList(g.metadata) as string[],
-          })),
-          delivery: { summary: delivery.summary, changedFiles: verifyChangedFiles, diffs: verifyDiffs as any },
-          checkResults: (checkResults ?? []).map(c => ({
-            name: c.name,
-            status: c.status as "passed" | "failed" | "skipped",
-            evidence: typeof c.evidence === "string" ? c.evidence : undefined,
-          })),
-        }),
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error("evaluator agent timeout")), EVALUATION_HARD_TIMEOUT_MS),
-        ),
-      ])
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
-      log.error("evaluator agent failed", { runID: run.id, error: msg })
-      // Agent infrastructure failure — reject, do not silently accept
-      agentVerdict = {
-        verdict: "rejected",
-        classification: "evaluation",
-        summary: `Evaluator agent error: ${msg}`,
-        goal_statuses: verifyGoals.map((_, i) => ({
-          goal_index: i,
-          status: "failed" as const,
-          evidence: msg,
-          reasoning: `Evaluator agent failed: ${msg}`,
-        })),
-        replan_guidance: { root_cause: msg, what_failed: "Evaluator agent", suggested_strategy: "Retry evaluation", avoid_approaches: [] },
-      }
-    }
-
-    // Persist evaluator agent verdict as artifact
-    try {
-      Database.use((db) =>
-        db.insert(OrchestratorArtifactTable).values({
-          id: Identifier.ascending("artifact"),
-          task_id: task.id,
-          run_id: run.id,
-          delivery_id: delivery.id,
-          kind: "report",
-          label: "evaluator-agent-analysis",
-          payload: agentVerdict as unknown as Record<string, unknown>,
-          time_created: Date.now(),
-          time_updated: Date.now(),
-        }).run(),
-      )
-    } catch { /* non-critical */ }
-
-    if (agentVerdict.verdict !== "accepted") {
-      log.warn("delivery agent accepted but evaluator agent rejected", {
-        runID: run.id,
-        verdict: agentVerdict.verdict,
-        summary: agentVerdict.summary,
-      })
-      const agentChecks = Array.isArray(agentVerdict.goal_statuses)
-        ? agentVerdict.goal_statuses.map((gs: any) => ({ name: `goal_${gs.goal_index}`, status: gs.status, evidence: gs.evidence }))
-        : []
-      TaskAgent.processTask(task.id, {
-        kind: "eval_failed",
-        runID: run.id,
-        summary: agentVerdict.summary,
-        checks: agentChecks,
-      }).catch(err => log.error("task agent failed on evaluator rejection", { taskID: task.id, error: String(err) }))
-      return
-    }
-    log.info("evaluator agent accepted", { runID: run.id })
-  }
-
-  markDeliveryPublishing(delivery.id, Date.now())
-
-  const result = await Promise.race([
-    Publisher.deliver({ task, run, delivery }),
-    new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error("Publisher.deliver() timeout")), DELIVERY_SERVICE_TIMEOUT_MS),
-    ),
-  ])
-
-  const completed = Date.now()
-  finalizeDeliveryResult({
-    deliveryId: delivery.id,
-    taskId: task.id,
-    runId: run.id,
-    delivery,
-    result,
-    now: completed,
-  })
-
-  if (result.status === "delivered") {
-    const current = requireTask(task.id)
-    const currentPlan = run.plan_version_id ? findPlan(run.plan_version_id) : undefined
-    const published = findDeliveryByRun(run.id) ?? delivery
-    const finalized = await OrchestratorGit.complete(current, currentPlan, published)
-    if (finalized.error) {
-      await hooks.updateTask(current, { status: "failed", blocking_reason: null, error: finalized.error, time_completed: completed }, finalized.error)
-      return
-    }
-    await hooks.updateTask(finalized.task, { status: "completed", blocking_reason: null, error: null, time_completed: completed }, "Task completed")
-    await hooks.updateRun(run, { phase: "deliver" }, "Delivery published")
-    // Flush task learnings to memory (fire-and-forget)
-    const evaluation = findEvaluationByRun(run.id)
-    OrchestratorMemoryBridge.flushTaskLearnings({
-      task,
-      run,
-      delivery,
-      evaluation,
-      plan: currentPlan,
-    }).catch((err) => log.warn("failed to flush task learnings", { error: String(err) }))
-    return
-  }
-
-  await hooks.updateTask(task, { status: "failed", blocking_reason: null, error: result.summary, time_completed: completed }, result.summary)
 }
 
 function requirementIDsFromMetadata(metadata: unknown): string[] {

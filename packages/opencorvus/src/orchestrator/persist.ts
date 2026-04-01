@@ -14,7 +14,7 @@ import { writeEvaluationSnapshot, writeGoalSnapshot, writePlanSnapshot, writePrd
 import { writeSpec } from "@/orchestrator/spec"
 import { type Requirement } from "@/spec/agent"
 import { SpecFailureError, SpecService } from "@/spec/service"
-import { Database, and, desc, eq, inArray, isNull, lte, ne, or } from "@/storage/db"
+import { Database, and, desc, eq, inArray, isNull, lte, or } from "@/storage/db"
 import { Log } from "@/util/log"
 import { budgetRow, buildFixPrompt, type FixContext } from "./helpers"
 import { CreateTaskInput, Event } from "./model"
@@ -2486,46 +2486,6 @@ export function persistFailedRunEvaluation(input: {
     })(),
     createdAt: input.now,
   })
-}
-
-export function failGoals(run: RunRow, summary: string) {
-  const planVersionID = run.plan_version_id
-  if (!planVersionID) return
-  const plan = findPlan(planVersionID)
-  if (!plan) return
-  const goals = listGoalsForPlan(plan)
-  if (goals.length === 0) return
-  const now = Date.now()
-  Database.use((db) =>
-    db
-      .update(OrchestratorGoalTable)
-      .set({
-        status: "failed",
-        time_updated: now,
-      })
-      .where(and(
-        inArray(OrchestratorGoalTable.id, goals.map((goal) => goal.id)),
-        ne(OrchestratorGoalTable.status, "passed"),
-      ))
-      .run(),
-  )
-  const task = findTask(run.task_id)
-  if (task && plan) {
-    writeGoalSnapshot({
-      task,
-      plan,
-      goals: listGoalsForPlan(plan),
-      milestones: listMilestonesByPlan(planVersionID),
-      createdAt: now,
-    })
-  }
-  for (const goal of goals) {
-    OrchestratorProtocol.emit(Event.GoalFailed, {
-      taskID: run.task_id,
-      goalID: goal.id,
-      summary: `${goal.description}: ${summary}`,
-    }, { source: "persist.failed_run" })
-  }
 }
 
 function claimExecutorSessionLeaseWhere(id: string, now: number) {

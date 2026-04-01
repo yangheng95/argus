@@ -11,21 +11,22 @@ export type TaskStatus = OrchestratorTaskStatus
 // Valid transitions
 // ---------------------------------------------------------------------------
 
-// Agent-driven transitions: the Task Agent decides the path, so intermediate
-// states can be skipped (e.g. queued → planning, queued → running).
+// Strict sequential pipeline: each state only allows the next adjacent step
+// forward. Backward movement goes through "queued" (restart) or "running"
+// (fix run from evaluating/delivering). No skipping steps.
 const VALID_TRANSITIONS: Record<TaskStatus, readonly TaskStatus[]> = {
-  queued:           ["spec_generating", "goal_decomposing", "planning", "planned", "running", "cancelled", "failed"],
-  spec_generating:  ["queued", "goal_decomposing", "planning", "planned", "running", "cancelled", "failed"],
-  goal_decomposing: ["queued", "planning", "planned", "running", "cancelled", "failed"],
-  planning:         ["queued", "planned", "running", "cancelled", "failed"],
-  planned:          ["queued", "running", "cancelled", "failed"],
-  running:          ["blocked", "evaluating", "delivering", "completed", "cancelled", "failed"],
+  queued:           ["spec_generating", "cancelled", "failed"],
+  spec_generating:  ["goal_decomposing", "queued", "cancelled", "failed"],
+  goal_decomposing: ["planning", "queued", "cancelled", "failed"],
+  planning:         ["planned", "queued", "cancelled", "failed"],
+  planned:          ["running", "queued", "cancelled", "failed"],
+  running:          ["evaluating", "blocked", "cancelled", "failed"],
   blocked:          ["running", "cancelled", "failed"],
-  evaluating:       ["running", "delivering", "failed", "cancelled"],
+  evaluating:       ["delivering", "running", "failed", "cancelled"],
   delivering:       ["completed", "running", "failed", "cancelled"],
   completed:        [],
-  failed:           ["queued", "running"],
-  cancelled:        ["queued", "running"],
+  failed:           ["queued"],
+  cancelled:        ["queued"],
 }
 
 /**

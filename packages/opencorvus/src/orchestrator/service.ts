@@ -55,8 +55,6 @@ import {
   DEFAULT_MAX_FIX_RUNS,
   ORCHESTRATOR_POLL_INTERVAL_MS,
   budgetRow,
-  buildOperatorPrompt,
-  buildFixPrompt,
   deriveTitle,
   orchestratorState,
   progressStatus,

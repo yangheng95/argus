@@ -334,12 +334,16 @@ function* notification(threadID: string, turnID: string, method: string, params?
     if (!item) return
     const type = typeof item.type === "string" ? item.type : ""
     if (type === "dynamicToolCall") {
+      const itemID = typeof item.id === "string" ? item.id : currentTurn
+      const callID = toolCallID(item.callId, itemID)
       const adapter = ToolAdapterRegistry.classify(String(item.tool || ""))
       yield {
         type: "tool_result",
-        id: typeof item.id === "string" ? item.id : currentTurn,
+        id: callID,
         output: text(item.contentItems ?? item),
         meta: {
+          item_id: itemID,
+          call_id: callID,
           tool_name: String(item.tool || ""),
           adapter: adapter?.id,
           tool_kind: adapter?.kind,
@@ -440,14 +444,16 @@ function* request(item: Extract<CodexInbound, { type: "request" }>): Generator<C
     if (item.method === "item/tool/call" || item.method === "dynamicToolCall") {
       const name = text(data.tool)
       const adapter = ToolAdapterRegistry.classify(name)
+      const callID = toolCallID(data.callId, item.id)
       yield {
         type: "tool_call",
-        id: String(data.callId || item.id),
+        id: callID,
         name,
         input: text(data.arguments),
         meta: {
           adapter: adapter?.id,
           tool_kind: adapter?.kind,
+          call_id: callID,
           request_id: item.id,
         },
       }
@@ -526,6 +532,12 @@ function sessionID(threadID: string, turnID?: string) {
 
 function provisionalID() {
   return `codex-app-server-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
+}
+
+function toolCallID(value: unknown, fallback: unknown) {
+  const callID = typeof value === "string" ? value.trim() : ""
+  if (callID) return callID
+  return String(fallback)
 }
 
 function approvalPolicy() {

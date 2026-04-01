@@ -2,7 +2,7 @@
 // Assembles the conversation view from the message store.
 // All data is read from Solid stores (messageStore / boardStore) for reactivity.
 
-import { messageStore } from "../store/messages";
+import { messageStore, messageById } from "../store/messages";
 import { boardStore, rootTaskSessionID } from "../store/board";
 import { classifyMessage } from "./message";
 import { t } from "./i18n";
@@ -12,6 +12,16 @@ import {
   interactionResponseText,
   isAutoReplied,
 } from "./transcript";
+
+const UNTIMED_CONVERSATION_ORDER = Number.MAX_SAFE_INTEGER;
+
+function conversationTime(message: any): number {
+  const created = message?.info?.time?.created;
+  if (Number.isFinite(created)) return Number(created);
+  const updated = message?.info?.time?.updated;
+  if (Number.isFinite(updated)) return Number(updated);
+  return UNTIMED_CONVERSATION_ORDER;
+}
 
 // ── Internal: build user request + interaction messages ──
 
@@ -105,21 +115,29 @@ export function conversationMessages(): any[] {
     if (!card) continue;
     if (card._agentGoalGroup && Array.isArray(card._agentInternalCards)) {
       // Parallel goals: keep as a group item but flatten internal card messages
+      // Resolve via messageById to get live store proxies (not stale agent card copies)
       const flatMsgs: any[] = [];
       for (const child of card._agentInternalCards) {
         if (Array.isArray(child._agentMessages)) {
-          flatMsgs.push(...child._agentMessages);
+          for (const m of child._agentMessages) {
+            const live = m?.info?.id ? messageById(m.info.id) : undefined;
+            if (live) flatMsgs.push(live);
+          }
         }
       }
-      flatMsgs.sort((a: any, b: any) => (a.info?.time?.created || 0) - (b.info?.time?.created || 0));
+      flatMsgs.sort((a: any, b: any) => conversationTime(a) - conversationTime(b));
       agentCardMsgs.push({ ...card, _agentMessages: flatMsgs });
     } else if (Array.isArray(card._agentMessages)) {
-      agentCardMsgs.push(...card._agentMessages);
+      // Resolve via messageById to get live store proxies
+      for (const m of card._agentMessages) {
+        const live = m?.info?.id ? messageById(m.info.id) : undefined;
+        if (live) agentCardMsgs.push(live);
+      }
     }
   }
 
   const result = [...filteredMain, ...contextMsgs, ...agentCardMsgs].sort(
-    (a: any, b: any) => (a.info?.time?.created || 0) - (b.info?.time?.created || 0),
+    (a: any, b: any) => conversationTime(a) - conversationTime(b),
   );
 
   // Referential stability for Solid's <Index>

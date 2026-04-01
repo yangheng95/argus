@@ -14,6 +14,64 @@ import { Log } from "@/util/log"
 
 const log = Log.create({ service: "session-stream" })
 
+function record(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === "object" && !Array.isArray(value)
+}
+
+function stableStringify(value: unknown): string {
+  if (value == null) return "null"
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    return JSON.stringify(value)
+  }
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => stableStringify(item)).join(",")}]`
+  }
+  if (!record(value)) return JSON.stringify(String(value))
+  return `{${Object.keys(value)
+    .sort()
+    .map((key) => `${JSON.stringify(key)}:${stableStringify(value[key])}`)
+    .join(",")}}`
+}
+
+function pendingToolInput(part: Message.ToolPart): Record<string, unknown> | undefined {
+  if (part.state.status !== "pending") return undefined
+  const raw = typeof part.state.raw === "string" ? part.state.raw.trim() : ""
+  if (!raw) return undefined
+  try {
+    const parsed = JSON.parse(raw)
+    return record(parsed) ? parsed : undefined
+  } catch {
+    return undefined
+  }
+}
+
+function resolvePendingToolPart(
+  toolParts: Map<string, Message.ToolPart>,
+  toolName: string,
+  toolCallID: string,
+  input: unknown,
+): { inputID?: string; part?: Message.ToolPart } {
+  const direct = toolParts.get(toolCallID)
+  if (direct) return { inputID: toolCallID, part: direct }
+
+  const pending = [...toolParts.entries()].filter(([, part]) =>
+    part.tool === toolName && part.state?.status === "pending",
+  )
+  if (pending.length === 0) return {}
+
+  const normalizedInput = record(input) ? stableStringify(input) : ""
+  if (normalizedInput) {
+    const exact = pending.find(([, part]) => stableStringify(pendingToolInput(part) ?? {}) === normalizedInput)
+    if (exact) return { inputID: exact[0], part: exact[1] }
+  }
+
+  if (pending.length === 1) {
+    return { inputID: pending[0][0], part: pending[0][1] }
+  }
+
+  return {}
+}
+
 /**
  * Create TextHooks that write streaming content (text deltas, tool calls,
  * tool results) into a session as Message parts.
@@ -141,19 +199,11 @@ export function sessionStreamHooks(input: {
 
         if (chunk.type === "tool-call") {
           const msgID = await ensureMessage()
-          // Resolve part: try toolCallId first, then check if tool-input-start
-          // stored it under a different id (AI SDK uses different field names).
-          let existing = toolParts.get(chunk.toolCallId)
-          if (!existing) {
-            // Find part stored by tool-input-start under chunk.id (which may differ)
-            for (const [inputId, part] of toolParts) {
-              if (part.tool === chunk.toolName && part.state?.status === "pending") {
-                existing = part
-                inputIdToCallId.set(inputId, chunk.toolCallId)
-                toolParts.delete(inputId)
-                break
-              }
-            }
+          const resolved = resolvePendingToolPart(toolParts, chunk.toolName, chunk.toolCallId, chunk.input)
+          const existing = resolved.part
+          if (resolved.inputID && resolved.inputID !== chunk.toolCallId) {
+            inputIdToCallId.set(resolved.inputID, chunk.toolCallId)
+            toolParts.delete(resolved.inputID)
           }
           const partID = existing?.id ?? Identifier.ascending("part")
           const part = await Session.updatePart({
@@ -234,26 +284,56 @@ export function sessionStreamHooks(input: {
       })
     },
     async flush() {
-      if (!messageID || !textPartID || !textAccumulated) return
-      try {
-        await Session.updatePart({
-          id: textPartID,
-          messageID,
-          sessionID: input.sessionID,
-          type: "text",
-          text: textAccumulated,
-        } as Message.TextPart)
-        log.info("session-stream flushed", {
-          sessionID: input.sessionID,
-          partID: textPartID,
-          chars: textAccumulated.length,
-        })
-      } catch (err) {
-        log.warn("session-stream flush failed", {
-          sessionID: input.sessionID,
-          error: String(err),
-        })
+      // Flush accumulated text
+      if (messageID && textPartID && textAccumulated) {
+        try {
+          await Session.updatePart({
+            id: textPartID,
+            messageID,
+            sessionID: input.sessionID,
+            type: "text",
+            text: textAccumulated,
+          } as Message.TextPart)
+          log.info("session-stream flushed text", {
+            sessionID: input.sessionID,
+            partID: textPartID,
+            chars: textAccumulated.length,
+          })
+        } catch (err) {
+          log.warn("session-stream flush text failed", {
+            sessionID: input.sessionID,
+            error: String(err),
+          })
+        }
       }
+      // Finalize any tool parts still in running/pending state
+      // (e.g. stream ended or agent aborted before tool-result chunk arrived)
+      for (const [, part] of toolParts) {
+        const status = part.state?.status
+        if (status === "running" || status === "pending") {
+          try {
+            await Session.updatePart({
+              ...part,
+              state: {
+                ...part.state,
+                status: "completed",
+                output: (part.state as any)?.output ?? "",
+                time: {
+                  start: (part.state as any)?.time?.start ?? Date.now(),
+                  end: Date.now(),
+                },
+              },
+            } as Message.ToolPart)
+          } catch (err) {
+            log.warn("session-stream flush tool part failed", {
+              sessionID: input.sessionID,
+              partID: part.id,
+              error: String(err),
+            })
+          }
+        }
+      }
+      toolParts.clear()
     },
   }
 }
