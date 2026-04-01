@@ -2,7 +2,7 @@
 // Assembles the conversation view from the message store.
 // All data is read from Solid stores (messageStore / boardStore) for reactivity.
 
-import { messageStore, messageById } from "../store/messages";
+import { messageStore, messageById, agentCards, agentCardOrder } from "../store/messages";
 
 /** Resolve an agent card message to its live store proxy when available.
  *  Agent card _agentMessages are snapshots in a separate SolidJS store path;
@@ -20,7 +20,6 @@ function resolveMessage(m: any): any {
 }
 import { boardStore, rootTaskSessionID } from "../store/board";
 import { classifyMessage } from "./message";
-import { t } from "./i18n";
 import {
   syntheticTextMessage,
   interactionRequestText,
@@ -119,11 +118,14 @@ export function conversationMessages(): any[] {
   // User request + interaction messages from board state
   const contextMsgs = buildUserContextMessages();
 
-  // Flatten agent card messages into the timeline.
-  // Exception: parallel executor goal groups stay grouped to avoid cross-goal confusion.
+  // Agent card messages — keep parallel executor goal groups grouped.
+  // Single-session executor runs stay as a single AgentCard.
+  // Other stages (spec, planner, evaluator, delivery) are flattened into the timeline.
   const agentCardMsgs: any[] = [];
-  for (const id of Array.isArray(messageStore.agentCardOrder) ? messageStore.agentCardOrder : []) {
-    const card = messageStore.agentCards[id];
+  const currentOrder = agentCardOrder();
+  const currentCards = agentCards();
+  for (const id of currentOrder) {
+    const card = currentCards[id];
     if (!card) continue;
     if (card._agentGoalGroup && Array.isArray(card._agentInternalCards)) {
       // Parallel goals: keep as a group item but flatten internal card messages.
@@ -139,6 +141,13 @@ export function conversationMessages(): any[] {
       }
       flatMsgs.sort((a: any, b: any) => conversationTime(a) - conversationTime(b));
       agentCardMsgs.push({ ...card, _agentMessages: flatMsgs });
+    } else if (card._agentStage === "executor" && Array.isArray(card._agentMessages) && card._agentMessages.length > 0) {
+      const resolved = card._agentMessages.map((m: any) => resolveMessage(m));
+      resolved.sort((a: any, b: any) => conversationTime(a) - conversationTime(b));
+      agentCardMsgs.push({
+        ...card,
+        _agentMessages: resolved,
+      });
     } else if (Array.isArray(card._agentMessages)) {
       for (const m of card._agentMessages) {
         agentCardMsgs.push(resolveMessage(m));

@@ -1,0 +1,1726 @@
+User / 04/01/2026, 23:51:34
+构建一个全功能的模拟股票交易系统，支持用户注册、模拟资金账户、实时行情展示、下单交易（买入/卖出）、持仓管理、交易历史查询和收益分析。系统采用前后端分离架构。
+
+Bun 运行时和 bun:test 已可用，项目脚手架已就绪。不要创建 README 文件。
+
+## 技术选型
+
+后端：
+
+- 框架：Hono（轻量、类型安全）
+- ORM：Drizzle ORM + better-sqlite3
+- 认证：JWT (jose)
+- 校验：Zod
+- 实时：WebSocket (Hono)
+
+前端：
+
+- 框架：React 19 + Vite 6
+- 状态管理：Zustand
+- UI 组件：Ant Design 5
+- 图表：ECharts (echarts-for-react) — K线、分时图
+- 路由：React Router 7
+- CSS：Tailwind CSS 4
+
+Only create or modify these files:
+
+- package.json
+- tsconfig.json
+- server/index.ts
+- server/app.ts
+- server/db/schema.ts
+- server/db/migrate.ts
+- server/db/seed.ts
+- server/routes/auth.ts
+- server/routes/quotes.ts
+- server/routes/orders.ts
+- server/routes/positions.ts
+- server/routes/trades.ts
+- server/routes/account.ts
+- server/engine/market.ts
+- server/engine/matching.ts
+- server/engine/risk.ts
+- server/middleware/auth.ts
+- server/ws/quotes.ts
+- server/test/engine.test.ts
+- web/index.html
+- web/vite.config.ts
+- web/tailwind.config.ts
+- web/tsconfig.json
+- web/src/main.tsx
+- web/src/App.tsx
+- web/src/api/client.ts
+- web/src/stores/auth.ts
+- web/src/stores/quotes.ts
+- web/src/stores/orders.ts
+- web/src/stores/account.ts
+- web/src/pages/Login.tsx
+- web/src/pages/Register.tsx
+- web/src/pages/Dashboard.tsx
+- web/src/pages/Market.tsx
+- web/src/pages/StockDetail.tsx
+- web/src/pages/Orders.tsx
+- web/src/pages/Trades.tsx
+- web/src/pages/Positions.tsx
+- web/src/components/KLineChart.tsx
+- web/src/components/TimelineChart.tsx
+- web/src/components/OrderBook.tsx
+- web/src/components/TradePanel.tsx
+- web/src/components/PnlChart.tsx
+- web/src/components/PositionPie.tsx
+- web/src/components/StockTable.tsx
+- web/src/utils/format.ts
+- web/src/utils/constants.ts
+- shared/types.ts
+
+## 数据模型
+
+### 用户 (users)
+
+- id: TEXT (UUID) 主键
+- username: TEXT 唯一
+- password_hash: TEXT (bcrypt)
+- initial_capital: REAL 默认 1,000,000
+- available_balance: REAL
+- frozen_balance: REAL
+- created_at: INTEGER
+
+### 股票 (stocks)
+
+- code: TEXT 主键（如 SH600000）
+- name: TEXT
+- sector: TEXT
+- initial_price: REAL
+- current_price: REAL
+- prev_close: REAL
+- open_price: REAL
+- high: REAL
+- low: REAL
+- volume: INTEGER
+- turnover: REAL
+- updated_at: INTEGER
+
+### 订单 (orders)
+
+- id: TEXT (UUID)
+- user_id: TEXT
+- stock_code: TEXT
+- direction: TEXT (buy/sell)
+- order_type: TEXT (market/limit)
+- price: REAL
+- quantity: INTEGER (手，1手=100股)
+- filled_quantity: INTEGER
+- filled_price: REAL
+- status: TEXT (pending/partial/filled/cancelled)
+- created_at: INTEGER
+- updated_at: INTEGER
+
+### 持仓 (positions)
+
+- id: TEXT (UUID)
+- user_id: TEXT
+- stock_code: TEXT
+- quantity: INTEGER (股)
+- available_quantity: INTEGER (T+1)
+- avg_cost: REAL
+- created_at: INTEGER
+- updated_at: INTEGER
+
+### 成交记录 (trades)
+
+- id: TEXT (UUID)
+- order_id: TEXT
+- user_id: TEXT
+- stock_code: TEXT
+- direction: TEXT
+- price: REAL
+- quantity: INTEGER
+- amount: REAL
+- commission: REAL
+- traded_at: INTEGER
+
+### 行情快照 (quotes)
+
+- id: INTEGER 自增
+- stock_code: TEXT
+- price: REAL
+- volume: INTEGER
+- timestamp: INTEGER
+
+## API 设计
+
+认证：
+
+- POST /api/auth/register
+- POST /api/auth/login → JWT
+- GET /api/auth/me
+
+行情：
+
+- GET /api/quotes/list
+- GET /api/quotes/:code
+- GET /api/quotes/:code/kline (1m/5m/15m/30m/60m/1d)
+- WS /ws/quotes 实时推送
+
+交易：
+
+- POST /api/orders 下单
+- DELETE /api/orders/:id 撤单
+- GET /api/orders 当日委托
+- GET /api/orders/history
+
+持仓与资产：
+
+- GET /api/positions
+- GET /api/account/summary
+- GET /api/account/pnl
+
+成交：
+
+- GET /api/trades
+
+## 核心业务逻辑
+
+### 行情模拟引擎
+
+- 模型：几何布朗运动 (GBM)
+- 参数：drift (μ)、volatility (σ)
+- 更新频率：每秒一个 tick
+- 涨跌停：±10%（基于昨收价）
+- 盘口：5 档买卖
+
+### 撮合引擎
+
+- 市价单：当前最优价立即成交
+- 限价单：挂入订单簿，当前价 ≤ 委托价(买)或 ≥ 委托价(卖)时成交
+- 手续费：买 0.03%，卖 0.03% + 印花税 0.05%
+
+### 风控
+
+- 涨停不可买入，跌停不可卖出
+- 资金/持仓校验
+- T+1
+- 委托数量必须为 100 整数倍
+
+## 前端页面
+
+- /login — 登录
+- /register — 注册
+- /dashboard — 仪表盘（总资产、持仓市值、盈亏、收益曲线、持仓饼图）
+- /market — 行情大盘（股票列表、实时更新、红涨绿跌）
+- /market/:code — 个股详情（K线/分时图、5档盘口、交易面板）
+- /orders — 委托管理
+- /trades — 成交记录
+- /positions — 持仓明细
+
+## 初始化数据
+
+预置 20 只 A 股：
+SH600000 浦发银行 银行 7.50, SH600036 招商银行 银行 35.20, SH601318 中国平安 保险 45.80,
+SZ000001 平安银行 银行 11.30, SZ000858 五粮液 白酒 152.60, SH600519 贵州茅台 白酒 1680.00,
+SZ300750 宁德时代 新能源 198.50, SH601012 隆基绿能 新能源 22.40, SZ002594 比亚迪 汽车 265.30,
+SH600887 伊利股份 食品 28.60, SZ000333 美的集团 家电 62.80, SH600276 恒瑞医药 医药 43.20,
+SZ300059 东方财富 证券 16.80, SH601688 华泰证券 证券 15.40, SZ002415 海康威视 科技 31.50,
+SH688981 中芯国际 芯片 48.90, SZ000725 京东方A 面板 4.20, SH601899 紫金矿业 矿业 14.60,
+SZ002352 顺丰控股 物流 38.70, SH600809 山西汾酒 白酒 215.40
+
+## 验收标准
+
+Requirements for server/test/engine.test.ts:
+
+- use bun:test
+- cover these cases:
+  1. 行情引擎生成合法 tick（在涨跌停范围内）
+  2. 市价单立即成交，资金正确扣减
+  3. 限价买单在价格满足时成交
+  4. 卖出手续费包含印花税
+  5. 资金不足时下单失败
+  6. T+1 限制：当日买入不可当日卖出
+  7. 委托数量非 100 整数倍时拒绝
+
+Acceptance:
+
+- run bunx tsc --noEmit
+- that command must pass
+- run bun test server/test/engine.test.ts
+- that command must pass
+
+---
+
+User / 04/01/2026, 23:51:34
+New task created. Process it.
+
+Title: prd-stock-trading-system
+Request: 构建一个全功能的模拟股票交易系统，支持用户注册、模拟资金账户、实时行情展示、下单交易（买入/卖出）、持仓管理、交易历史查询和收益分析。系统采用前后端分离架构。
+
+Bun 运行时和 bun:test 已可用，项目脚手架已就绪。不要创建 README 文件。
+
+## 技术选型
+
+后端：
+
+- 框架：Hono（轻量、类型安全）
+- ORM：Drizzle ORM + better-sqlite3
+- 认证：JWT (jose)
+- 校验：Zod
+- 实时：WebSocket (Hono)
+
+前端：
+
+- 框架：React 19 + Vite 6
+- 状态管理：Zustand
+- UI 组件：Ant Design 5
+- 图表：ECharts (echarts-for-react) — K线、分时图
+- 路由：React Router 7
+- CSS：Tailwind CSS 4
+
+Only create or modify these files:
+
+- package.json
+- tsconfig.json
+- server/index.ts
+- server/app.ts
+- server/db/schema.ts
+- server/db/migrate.ts
+- server/db/seed.ts
+- server/routes/auth.ts
+- server/routes/quotes.ts
+- server/routes/orders.ts
+- server/routes/positions.ts
+- server/routes/trades.ts
+- server/routes/account.ts
+- server/engine/market.ts
+- server/engine/matching.ts
+- server/engine/risk.ts
+- server/middleware/auth.ts
+- server/ws/quotes.ts
+- server/test/engine.test.ts
+- web/index.html
+- web/vite.config.ts
+- web/tailwind.config.ts
+- web/tsconfig.json
+- web/src/main.tsx
+- web/src/App.tsx
+- web/src/api/client.ts
+- web/src/stores/auth.ts
+- web/src/stores/quotes.ts
+- web/src/stores/orders.ts
+- web/src/stores/account.ts
+- web/src/pages/Login.tsx
+- web/src/pages/Register.tsx
+- web/src/pages/Dashboard.tsx
+- web/src/pages/Market.tsx
+- web/src/pages/StockDetail.tsx
+- web/src/pages/Orders.tsx
+- web/src/pages/Trades.tsx
+- web/src/pages/Positions.tsx
+- web/src/components/KLineChart.tsx
+- web/src/components/TimelineChart.tsx
+- web/src/components/OrderBook.tsx
+- web/src/components/TradePanel.tsx
+- web/src/components/PnlChart.tsx
+- web/src/components/PositionPie.tsx
+- web/src/components/StockTable.tsx
+- web/src/utils/format.ts
+- web/src/utils/constants.ts
+- shared/types.ts
+
+## 数据模型
+
+### 用户 (users)
+
+- id: TEXT (UUID) 主键
+- username: TEXT 唯一
+- password_hash: TEXT (bcrypt)
+- initial_capital: REAL 默认 1,000,000
+- available_balance: REAL
+- frozen_balance: REAL
+- created_at: INTEGER
+
+### 股票 (stocks)
+
+- code: TEXT 主键（如 SH600000）
+- name: TEXT
+- sector: TEXT
+- initial_price: REAL
+- current_price: REAL
+- prev_close: REAL
+- open_price: REAL
+- high: REAL
+- low: REAL
+- volume: INTEGER
+- turnover: REAL
+- updated_at: INTEGER
+
+### 订单 (orders)
+
+- id: TEXT (UUID)
+- user_id: TEXT
+- stock_code: TEXT
+- direction: TEXT (buy/sell)
+- order_type: TEXT (market/limit)
+- price: REAL
+- quantity: INTEGER (手，1手=100股)
+- filled_quantity: INTEGER
+- filled_price: REAL
+- status: TEXT (pending/partial/filled/cancelled)
+- created_at: INTEGER
+- updated_at: INTEGER
+
+### 持仓 (positions)
+
+- id: TEXT (UUID)
+- user_id: TEXT
+- stock_code: TEXT
+- quantity: INTEGER (股)
+- available_quantity: INTEGER (T+1)
+- avg_cost: REAL
+- created_at: INTEGER
+- updated_at: INTEGER
+
+### 成交记录 (trades)
+
+- id: TEXT (UUID)
+- order_id: TEXT
+- user_id: TEXT
+- stock_code: TEXT
+- direction: TEXT
+- price: REAL
+- quantity: INTEGER
+- amount: REAL
+- commission: REAL
+- traded_at: INTEGER
+
+### 行情快照 (quotes)
+
+- id: INTEGER 自增
+- stock_code: TEXT
+- price: REAL
+- volume: INTEGER
+- timestamp: INTEGER
+
+## API 设计
+
+认证：
+
+- POST /api/auth/register
+- POST /api/auth/login → JWT
+- GET /api/auth/me
+
+行情：
+
+- GET /api/quotes/list
+- GET /api/quotes/:code
+- GET /api/quotes/:code/kline (1m/5m/15m/30m/60m/1d)
+- WS /ws/quotes 实时推送
+
+交易：
+
+- POST /api/orders 下单
+- DELETE /api/orders/:id 撤单
+- GET /api/orders 当日委托
+- GET /api/orders/history
+
+持仓与资产：
+
+- GET /api/positions
+- GET /api/account/summary
+- GET /api/account/pnl
+
+成交：
+
+- GET /api/trades
+
+## 核心业务逻辑
+
+### 行情模拟引擎
+
+- 模型：几何布朗运动 (GBM)
+- 参数：drift (μ)、volatility (σ)
+- 更新频率：每秒一个 tick
+- 涨跌停：±10%（基于昨收价）
+- 盘口：5 档买卖
+
+### 撮合引擎
+
+- 市价单：当前最优价立即成交
+- 限价单：挂入订单簿，当前价 ≤ 委托价(买)或 ≥ 委托价(卖)时成交
+- 手续费：买 0.03%，卖 0.03% + 印花税 0.05%
+
+### 风控
+
+- 涨停不可买入，跌停不可卖出
+- 资金/持仓校验
+- T+1
+- 委托数量必须为 100 整数倍
+
+## 前端页面
+
+- /login — 登录
+- /register — 注册
+- /dashboard — 仪表盘（总资产、持仓市值、盈亏、收益曲线、持仓饼图）
+- /market — 行情大盘（股票列表、实时更新、红涨绿跌）
+- /market/:code — 个股详情（K线/分时图、5档盘口、交易面板）
+- /orders — 委托管理
+- /trades — 成交记录
+- /positions — 持仓明细
+
+## 初始化数据
+
+预置 20 只 A 股：
+SH600000 浦发银行 银行 7.50, SH600036 招商银行 银行 35.20, SH601318 中国平安 保险 45.80,
+SZ000001 平安银行 银行 11.30, SZ000858 五粮液 白酒 152.60, SH600519 贵州茅台 白酒 1680.00,
+SZ300750 宁德时代 新能源 198.50, SH601012 隆基绿能 新能源 22.40, SZ002594 比亚迪 汽车 265.30,
+SH600887 伊利股份 食品 28.60, SZ000333 美的集团 家电 62.80, SH600276 恒瑞医药 医药 43.20,
+SZ300059 东方财富 证券 16.80, SH601688 华泰证券 证券 15.40, SZ002415 海康威视 科技 31.50,
+SH688981 中芯国际 芯片 48.90, SZ000725 京东方A 面板 4.20, SH601899 紫金矿业 矿业 14.60,
+SZ002352 顺丰控股 物流 38.70, SH600809 山西汾酒 白酒 215.40
+
+## 验收标准
+
+Requirements for server/test/engine.test.ts:
+
+- use bun:test
+- cover these cases:
+  1. 行情引擎生成合法 tick（在涨跌停范围内）
+  2. 市价单立即成交，资金正确扣减
+  3. 限价买单在价格满足时成交
+  4. 卖出手续费包含印花税
+  5. 资金不足时下单失败
+  6. T+1 限制：当日买入不可当日卖出
+  7. 委托数量非 100 整数倍时拒绝
+
+Acceptance:
+
+- run bunx tsc --noEmit
+- that command must pass
+- run bun test server/test/engine.test.ts
+- that command must pass
+
+---
+
+Assistant / 04/01/2026, 23:51:37
+先进行需求分析，生成结构化规范，确保后续分解、计划与执行都严格对齐任务约束（尤其是限定可修改文件、验收命令、测试覆盖点和技术栈要求）。
+
+[Tool:Running] analyze_requirements
+
+---
+
+Assistant / 04/01/2026, 23:51:46
+[Tool:Completed] memory_search memory_search
+
+---
+
+Assistant / 04/01/2026, 23:51:46
+[Tool:Completed] memory_search memory_search
+
+---
+
+Assistant / 04/01/2026, 23:51:46
+[Tool:Completed] list_directory list_directory
+
+---
+
+Assistant / 04/01/2026, 23:51:46
+[Tool:Completed] find_files **/*
+
+---
+
+Assistant / 04/01/2026, 23:51:49
+[Tool:Completed] read_file package.json
+
+---
+
+Assistant / 04/01/2026, 23:51:49
+[Tool:Completed] read_file tsconfig.json
+
+---
+
+Assistant / 04/01/2026, 23:51:49
+[Tool:Completed] read_file prd-stock-trading-system.md
+
+---
+
+Assistant / 04/01/2026, 23:51:49
+[Tool:Completed] read_file opencorvus.json
+
+---
+
+Assistant / 04/01/2026, 23:51:55
+[Tool:Completed] search_code Hono|React|Vite|Drizzle|Zustand|Ant Design|tailwind|better-sqlite3|bun:test
+
+[Tool:Completed] list_directory src
+
+[Tool:Completed] find_files src/**/*
+
+---
+
+Assistant / 04/01/2026, 23:51:57
+<summary>基于当前仅含根级脚手架的 Bun 项目，为指定白名单文件补齐一个前后端分离的模拟股票交易系统规格：涵盖 Drizzle/SQLite 数据模型、Hono API 与 WebSocket 行情、撮合/风控引擎、React 19 前端页面与状态层，以及可通过 bunx tsc 与 bun:test 的测试约束。</summary>
+
+<scope>
+- 以用户限定的白名单文件为唯一可修改范围，新增并实现服务端、前端、共享类型与测试文件。
+- 将 `package.json` 与根 `tsconfig.json` 扩展为可同时支持 server/web/shared 的单仓运行与类型检查配置。
+- 在 `server/**` 中定义 SQLite + Drizzle schema、迁移/seed、认证中间件、行情/订单/持仓/成交/账户路由、行情模拟/撮合/风控引擎、WebSocket 推送与 `bun:test` 引擎测试。
+- 在 `web/**` 中定义 Vite + React 19 + Router 7 + Zustand + Ant Design + Tailwind 4 的前端壳、页面、图表组件、交易面板、状态管理与 API 客户端。
+- 在 `shared/types.ts` 中集中放置前后端共用的领域类型、接口与枚举，供 Hono 路由、引擎和前端状态层复用。
+</scope>
+
+<content>
+## Scope
+本任务是在当前极简 Bun 脚手架之上实现一个可运行的模拟股票交易系统，且只能修改用户列出的文件。代码库现状经探索确认如下：
+
+- 根目录仅存在 `package.json`、`tsconfig.json`、`prd-stock-trading-system.md`、`opencorvus.json`，没有任何现成的 `server/`、`web/`、`shared/` 代码可复用。
+- `package.json` 当前仅含：
+  - `name: "overlay-web-benchmark"`
+  - `private: true`
+  - `type: "module"`
+- 根 `tsconfig.json` 当前仅含 ES2022 + `moduleResolution: "Bundler"` + `strict: true` 等最小配置。
+- `src/` 目录存在但为空；未发现任何现有 Hono、React、Drizzle、Zustand、Tailwind、测试或数据库实现。
+
+因此，该规格需要为一个“近似 greenfield、但技术栈已固定、文件白名单严格受限”的项目给出完整、可验证的实现约束。
+
+## Requirements
+
+### 1. 根级构建与类型系统
+
+1. `package.json` 必须补齐本任务所需依赖与脚本，至少覆盖：
+   - 服务端：`hono`、`drizzle-orm`、`better-sqlite3`、`jose`、`zod`、`bcryptjs`（或与用户数据模型一致的 bcrypt 实现，优先选择 Bun/TS 兼容度更高的纯 JS 版本避免原生编译风险）。
+   - 前端：`react`、`react-dom`、`vite`、`@vitejs/plugin-react`、`zustand`、`antd`、`react-router-dom`、`echarts`、`echarts-for-react`、`tailwindcss`。
+   - 类型/开发支持：`typescript` 及需要的 `@types/*`。
+2. 根 `tsconfig.json` 必须能让 `bunx tsc --noEmit` 对以下路径完成类型检查：
+   - `server/**/*.ts`
+   - `web/**/*.ts`
+   - `web/**/*.tsx`
+   - `shared/**/*.ts`
+3. `web/tsconfig.json` 应从根配置继承或与根配置协同，确保 Vite/React TSX 正常解析，且不破坏根级 `bunx tsc --noEmit`。
+
+### 2. 共享领域类型
+
+1. `shared/types.ts` 必须定义前后端共用的核心领域类型，至少包括：
+   - 用户、股票、订单、持仓、成交、行情快照的 TypeScript 类型。
+   - 订单方向/类型/状态、K 线周期、账户汇总、盈亏点位、盘口档位等字面量联合类型或 `const` 枚举式对象。
+   - WebSocket 行情消息体、下单请求体、登录/注册请求体、分页/筛选参数等接口。
+2. `server/routes/*.ts`、`server/engine/*.ts`、`web/src/api/client.ts`、`web/src/stores/*.ts` 应以 `shared/types.ts` 为唯一共享契约来源，避免前后端字段名漂移。
+
+### 3. 数据库与初始化数据
+
+1. `server/db/schema.ts` 必须使用 Drizzle ORM 定义与 PRD 一致的表结构：
+   - `users`
+   - `stocks`
+   - `orders`
+   - `positions`
+   - `trades`
+   - `quotes`
+2. 字段语义必须与 `prd-stock-trading-system.md` 中的数据模型对齐，特别是：
+   - `orders.quantity` 表示“手”
+   - `positions.quantity` / `available_quantity` 表示“股”
+   - `quotes.id` 为自增主键
+   - 金额字段使用可表示小数的 SQLite REAL
+3. `server/db/migrate.ts` 需要负责初始化数据库结构；鉴于白名单中没有 Drizzle 配置文件，允许在该文件内直接使用 Drizzle + SQLite 建表逻辑，只要与 `schema.ts` 保持一致且类型可用。
+4. `server/db/seed.ts` 必须预置 PRD 中列出的 20 只 A 股，写入 `stocks` 表，初始字段至少要包含：
+   - `code`、`name`、`sector`
+   - `initial_price`、`current_price`、`prev_close`、`open_price`
+   - `high`、`low` 初始化为初始价
+   - `volume`、`turnover` 初始化为 0
+   - `updated_at`
+5. 如果种子脚本会重复执行，需保证不会制造重复主键冲突导致整个系统不可启动；应使用 upsert/insert-ignore 风格策略。
+
+### 4. 服务端应用装配
+
+1. `server/app.ts` 必须创建 Hono 应用并完成以下装配：
+   - 基础中间件（如 JSON、错误响应、CORS，如实现需要）
+   - 路由挂载：`/api/auth`、`/api/quotes`、`/api/orders`、`/api/positions`、`/api/trades`、`/api/account`
+   - WebSocket 入口 `/ws/quotes`
+2. `server/index.ts` 必须作为 Bun 运行入口，负责：
+   - 初始化数据库/seed（若约定为启动时执行）
+   - 初始化行情引擎与撮合引擎的周期任务
+   - 启动 Hono/Bun 服务
+3. 鉴于代码库中不存在其它基础设施文件，应用内依赖注入、数据库句柄、引擎实例共享应在 `server/app.ts` 与 `server/index.ts` 内自洽完成，避免依赖未列入白名单的新模块。
+
+### 5. 认证与授权
+
+1. `server/routes/auth.ts` 必须实现：
+   - `POST /api/auth/register`
+   - `POST /api/auth/login`
+   - `GET /api/auth/me`
+2. 注册要求：
+   - 用户名唯一
+   - 密码经 bcrypt 哈希后写入 `users.password_hash`
+   - 初始资金默认为 1,000,000，并同步设置 `available_balance`
+3. 登录成功返回 JWT；JWT 需由 `jose` 生成并在 `server/middleware/auth.ts` 中解析验证。
+4. `server/middleware/auth.ts` 需为受保护路由注入当前用户身份，供订单、持仓、账户、成交等接口使用。
+5. 认证失败、缺失 token、用户不存在等情况必须返回统一错误结构或至少一致的 HTTP 错误码，供前端 `web/src/api/client.ts` 处理。
+
+### 6. 行情模拟引擎与行情接口
+
+1. `server/engine/market.ts` 必须实现基于几何布朗运动（GBM）的 tick 生成逻辑，满足：
+   - 每秒更新一次
+   - 输入参数至少包含 `drift (μ)`、`volatility (σ)`
+   - 输出价格被钳制在昨收价的 ±10% 范围内
+   - 更新 `stocks.current_price/open_price/high/low/volume/turnover/updated_at`
+   - 记录 `quotes` 快照
+2. 行情引擎还必须生成 5 档买卖盘口数据，供：
+   - `server/routes/quotes.ts`
+   - `server/ws/quotes.ts`
+   - `web/src/components/OrderBook.tsx`
+   使用。
+3. `server/routes/quotes.ts` 必须实现：
+   - `GET /api/quotes/list`：返回股票列表及实时核心字段
+   - `GET /api/quotes/:code`：返回单股详情、盘口、最新快照
+   - `GET /api/quotes/:code/kline`：按 `1m/5m/15m/30m/60m/1d` 聚合 `quotes` 快照形成 K 线数据
+4. 由于代码库中没有独立缓存或消息队列，行情内存态（例如盘口、订阅者列表、当日时间序列）需要由 `server/engine/market.ts` 与 `server/ws/quotes.ts` 在进程内维护。
+
+### 7. 撮合引擎与风控
+
+1. `server/engine/risk.ts` 必须封装下单前校验逻辑，至少覆盖：
+   - 委托数量必须为 100 的整数倍（用户 PRD 写明 quantity 字段为“手”，但风控又要求 100 整数倍；实现规格需明确统一：对 API 入参建议按“股”接收并持久化到 `orders.quantity` 时采用“手”或统一按“股”衍生转换，否则会与测试标准冲突。执行时必须在 `shared/types.ts`、路由校验和测试中保持单一口径。）
+   - 资金校验
+   - 持仓校验
+   - T+1：当日买入不可当日卖出
+   - 涨停不可买入，跌停不可卖出
+2. `server/engine/matching.ts` 必须实现：
+   - 市价单：按当前最优价立即成交
+   - 限价单：若当前价满足买/卖条件则即时成交，否则挂为 `pending` 并在后续 tick 到达时检查成交
+   - 成交时生成 `trades` 记录、更新 `orders`、更新 `positions`、更新用户余额
+3. 手续费规则必须严格体现在撮合逻辑中：
+   - 买入：0.03%
+   - 卖出：0.03% + 0.05% 印花税
+4. 撤单规则：
+   - `DELETE /api/orders/:id` 仅允许撤销未完全成交订单
+   - 撤单后应释放冻结资金或冻结持仓（若采用冻结模型）
+5. 由于没有白名单允许新增专门 service/repository 文件，`server/routes/orders.ts` 与 `server/engine/*.ts` 的职责边界需清楚：
+   - 路由负责认证、参数校验、调用引擎
+   - 引擎负责业务判定与数据库写入
+   - 避免将复杂业务散落在路由中
+
+### 8. 交易、持仓、账户接口
+
+1. `server/routes/orders.ts` 必须实现：
+   - `POST /api/orders`
+   - `DELETE /api/orders/:id`
+   - `GET /api/orders`（当日委托）
+   - `GET /api/orders/history`
+2. `server/routes/positions.ts` 必须返回当前用户持仓明细，字段至少包括：
+   - 股票代码/名称
+   - 持仓数量
+   - 可卖数量
+   - 成本价
+   - 当前价
+   - 浮动盈亏、收益率
+3. `server/routes/trades.ts` 必须返回当前用户成交记录，可按时间倒序。
+4. `server/routes/account.ts` 必须实现：
+   - `GET /api/account/summary`
+   - `GET /api/account/pnl`
+5. `summary` 需至少包含：
+   - 初始资金
+   - 可用资金
+   - 冻结资金
+   - 持仓市值
+   - 总资产
+   - 当日/累计盈亏的一个清晰定义
+6. `pnl` 需提供前端 `web/src/components/PnlChart.tsx` 所需的时序数据；若数据库中无完整日级净值表，可按当前持仓与快照推导生成进程内/查询时数据，但输出结构必须稳定。
+
+### 9. WebSocket 行情推送
+
+1. `server/ws/quotes.ts` 必须提供 `/ws/quotes` 端点。
+2. WebSocket 推送内容至少包括：
+   - 股票代码
+   - 最新价格
+   - 涨跌额/涨跌幅
+   - 成交量/成交额增量或累计值
+   - 5 档盘口
+   - 时间戳
+3. 前端 `web/src/stores/quotes.ts` 应能基于该消息结构增量更新行情列表和个股详情，避免每个 tick 都全量刷新页面。
+4. 若 Hono on Bun 的 WebSocket API 需要特定导出/升级方式，必须在 `server/app.ts` 与 `server/ws/quotes.ts` 中使用同一套模式，确保类型通过。
+
+### 10. 前端应用结构
+
+1. `web/index.html`、`web/vite.config.ts`、`web/tailwind.config.ts`、`web/src/main.tsx`、`web/src/App.tsx` 必须完成前端启动壳。
+2. 路由必须覆盖：
+   - `/login`
+   - `/register`
+   - `/dashboard`
+   - `/market`
+   - `/market/:code`
+   - `/orders`
+   - `/trades`
+   - `/positions`
+3. `web/src/App.tsx` 必须配置 React Router 7 路由树，并对受保护页面应用登录态守卫。
+4. UI 库应以 Ant Design 5 为主，Tailwind 4 用于布局/辅助样式，不应引入额外 CSS 框架文件（白名单也未包含）。
+
+### 11. 前端 API 与状态层
+
+1. `web/src/api/client.ts` 必须集中封装 HTTP 请求：
+   - 注入 JWT
+   - 统一处理 401/错误消息
+   - 暴露 auth、quotes、orders、positions、trades、account 等调用方法
+2. 状态管理文件必须各司其职：
+   - `web/src/stores/auth.ts`：token、当前用户、登录/注册/登出
+   - `web/src/stores/quotes.ts`：行情列表、个股详情、WebSocket 连接、K 线数据
+   - `web/src/stores/orders.ts`：下单、撤单、委托列表、成交列表
+   - `web/src/stores/account.ts`：账户汇总、盈亏曲线、持仓概览
+3. 状态层与页面层应复用 `shared/types.ts`，避免重复声明请求/响应类型。
+
+### 12. 前端页面与组件
+
+1. `web/src/pages/Login.tsx` 与 `web/src/pages/Register.tsx`：
+   - 使用 Ant Design 表单
+   - 成功后跳转到受保护页面
+2. `web/src/pages/Dashboard.tsx`：
+   - 展示总资产、持仓市值、可用资金、盈亏摘要卡片
+   - 使用 `PnlChart.tsx` 显示收益曲线
+   - 使用 `PositionPie.tsx` 显示持仓分布
+3. `web/src/pages/Market.tsx`：
+   - 使用 `StockTable.tsx` 展示股票列表
+   - 展示红涨绿跌
+   - 支持跳转 `/market/:code`
+4. `web/src/pages/StockDetail.tsx`：
+   - 使用 `KLineChart.tsx`、`TimelineChart.tsx`、`OrderBook.tsx`、`TradePanel.tsx`
+   - 能实时显示 WebSocket 行情
+   - 能提交买入/卖出委托
+5. `web/src/pages/Orders.tsx`、`Trades.tsx`、`Positions.tsx`：
+   - 分别展示当日/历史委托、成交记录、持仓明细
+   - 必须与后端对应接口联动
+6. 图表组件要求：
+   - `KLineChart.tsx`：K 线 + 成交量基本能力，数据来自 `/api/quotes/:code/kline`
+   - `TimelineChart.tsx`：分时走势
+   - `PnlChart.tsx`：账户净值/收益曲线
+   - `PositionPie.tsx`：持仓市值占比
+7. `TradePanel.tsx` 必须支持：
+   - 股票代码上下文
+   - 买/卖切换
+   - 市价/限价切换
+   - 数量输入与基础校验
+   - 提交结果反馈
+8. `web/src/utils/format.ts` 与 `web/src/utils/constants.ts` 应承载格式化函数和固定常量（如周期选项、颜色、默认分页、涨跌色），避免在页面中散落魔法值。
+
+## Constraints
+
+1. 文件约束是硬性边界：只能创建/修改用户白名单中的文件。当前仓库没有任何额外可复用模块，因此实现必须把必要逻辑内聚在这些文件中，不能通过新增 `lib/`、`services/`、`hooks/`、`.env`、Drizzle 配置文件、README 等方式扩展。
+2. 当前项目是纯 ESM（`package.json` 已声明 `"type": "module"`），所有新增代码都必须遵循 ESM import/export。
+3. 根 `tsconfig.json` 当前使用 `"moduleResolution": "Bundler"`；若服务端依赖 Node/Bun 内置模块类型，配置调整必须兼容前后端共同编译，不能只对某一侧可用。
+4. 代码库未发现现有数据库目录或迁移工具配置；SQLite 数据库文件位置需要在允许修改的文件中自行约定，且测试逻辑应避免依赖生产数据库。
+5. 因无现成测试辅助设施，`server/test/engine.test.ts` 应尽量直接测试 `server/engine/market.ts`、`server/engine/matching.ts`、`server/engine/risk.ts` 的纯业务能力，减少对 Hono 路由和真实 WebSocket 的耦合。
+6. PRD 的数量单位存在歧义：
+   - 数据模型中 `orders.quantity` 定义为“手”
+   - 风控验收中又要求“委托数量非 100 整数倍时拒绝”
+   - 持仓/成交又以“股”为单位
+   执行时必须在 `shared/types.ts`、Zod 校验、撮合逻辑、测试用例中统一解释，否则极易导致接口与测试相互冲突。
+7. 用户指定 ORM 为 Drizzle + better-sqlite3，认证为 JWT(jose)，校验为 Zod，前端技术栈也全部固定；规格不允许替换技术选型。
+8. 用户验收只强制两个命令：
+   - `bunx tsc --noEmit`
+   - `bun test server/test/engine.test.ts`
+   因此实现时应优先保证类型系统和引擎测试稳定，其次再追求完整 UI 交互细节。
+
+## Acceptance Criteria
+
+1. 根 `package.json`、`tsconfig.json`、`web/tsconfig.json` 配置完成后，执行 `bunx tsc --noEmit` 能在当前仓库根目录通过，且不依赖白名单之外的文件。
+2. `server/db/schema.ts`、`server/db/migrate.ts`、`server/db/seed.ts` 可在不新增额外配置文件的前提下定义并初始化 `users/stocks/orders/positions/trades/quotes` 六张表，并包含 20 只预置股票。
+3. `server/routes/auth.ts` + `server/middleware/auth.ts` 能支持注册、登录、读取当前用户，注册后账户默认资金为 1,000,000，登录返回可用于受保护接口的 JWT。
+4. `server/engine/market.ts` 能按秒生成受昨收 ±10% 约束的 tick，并提供 5 档盘口数据；`server/routes/quotes.ts` 与 `server/ws/quotes.ts` 能消费该引擎输出。
+5. `server/engine/risk.ts` + `server/engine/matching.ts` 能实现市价/限价订单、手续费、印花税、资金与持仓校验、T+1、涨跌停限制、撤单释放，且 `server/routes/orders.ts` 对外暴露下单/撤单/查询接口。
+6. `server/routes/positions.ts`、`server/routes/trades.ts`、`server/routes/account.ts` 能为前端页面提供持仓、成交、账户汇总与盈亏曲线所需数据。
+7. `web/src/App.tsx`、页面组件、图表组件与 Zustand stores 能完成登录、行情列表、个股详情、下单、委托、成交、持仓、仪表盘展示的基本闭环，并与服务端接口字段保持一致。
+8. `server/test/engine.test.ts` 使用 `bun:test`，且至少覆盖以下 7 个场景并通过：
+   - 行情引擎生成合法 tick（在涨跌停范围内）
+   - 市价单立即成交，资金正确扣减
+   - 限价买单在价格满足时成交
+   - 卖出手续费包含印花税
+   - 资金不足时下单失败
+   - T+1 限制：当日买入不可当日卖出
+   - 委托数量非 100 整数倍时拒绝
+</content>
+
+<spec_items>
+
+- title: 根级构建与类型检查配置
+  description: 在 `package.json`、`tsconfig.json`、`web/tsconfig.json` 中补齐 Bun + Hono + Drizzle + React 19 + Vite 6 + Zustand + Ant Design 5 + ECharts + Tailwind 4 所需依赖与 TypeScript 配置，确保根目录执行 `bunx tsc --noEmit` 可同时检查 `server/**`、`web/**`、`shared/types.ts`。
+  check_selector: build
+  priority: blocking
+
+- title: Drizzle 数据模型与种子数据
+  description: 在 `server/db/schema.ts`、`server/db/migrate.ts`、`server/db/seed.ts` 中定义并初始化 `users`、`stocks`、`orders`、`positions`、`trades`、`quotes` 六张表，且按 `prd-stock-trading-system.md` 预置 20 只 A 股，重复执行 seed 不得导致系统不可启动。
+  check_selector: build
+  priority: blocking
+
+- title: 认证与受保护 API 装配
+  description: 在 `server/app.ts`、`server/index.ts`、`server/routes/auth.ts`、`server/middleware/auth.ts` 中实现 Hono 应用装配、JWT 注册/登录/鉴权、当前用户读取，并将 `/api/auth` 及其它受保护路由挂载到统一应用实例。
+  check_selector: build
+  priority: blocking
+
+- title: 行情引擎、行情接口与 WebSocket 推送
+  description: 在 `server/engine/market.ts`、`server/routes/quotes.ts`、`server/ws/quotes.ts` 中实现 GBM 行情模拟、昨收 ±10% 限制、5 档盘口、`/api/quotes/list`、`/api/quotes/:code`、`/api/quotes/:code/kline` 与 `/ws/quotes` 推送，并与 `shared/types.ts` 的消息体契约保持一致。
+  check_selector: test
+  priority: blocking
+
+- title: 风控与撮合交易闭环
+  description: 在 `server/engine/risk.ts`、`server<summary>基于当前几乎空白的 Bun 项目脚手架，为受限文件清单内的 Hono + Drizzle + React/Vite 模拟股票交易系统定义完整且可验证的后端、引擎、前端与测试规格。</summary>
+
+<scope>
+本任务范围是：在当前仅包含根级 `package.json`、`tsconfig.json`、`prd-stock-trading-system.md`、`opencorvus.json` 的仓库中，严格只新增/修改用户列出的目标文件，搭建一个前后端分离的模拟股票交易系统的可运行骨架与核心功能，包括数据库模型、认证、行情模拟、撮合/风控、REST API、WebSocket 行情推送、React 前端页面、共享类型以及 `bun:test` 引擎测试。
+</scope>
+
+<content>
+## Scope
+
+- 在根目录 `package.json` 与 `tsconfig.json` 中补齐 Bun/TypeScript/前后端所需依赖与编译配置。
+- 新建并实现用户允许的后端文件：`server/index.ts`、`server/app.ts`、`server/db/*.ts`、`server/routes/*.ts`、`server/engine/*.ts`、`server/middleware/auth.ts`、`server/ws/quotes.ts`、`server/test/engine.test.ts`。
+- 新建并实现用户允许的前端文件：`web/index.html`、`web/vite.config.ts`、`web/tailwind.config.ts`、`web/tsconfig.json`、`web/src/**/*` 指定文件。
+- 新建 `shared/types.ts` 作为前后端共享领域类型与 API 载荷定义。
+- 不创建 README；不修改用户未列出的任何其他文件。
+
+## Requirements
+
+### 1. 项目与构建配置
+
+- 根级 `package.json` 必须从当前最小内容扩展为可支撑后端、前端、测试与类型检查的清单，至少覆盖 PRD 指定技术：Hono、Drizzle ORM、better-sqlite3、jose、zod、React 19、Vite 6、Zustand、Ant Design 5、echarts、echarts-for-react、React Router 7、Tailwind CSS 4，以及 `bun:test` 所需脚本入口。
+- 根级 `tsconfig.json` 当前仅有基础 strict 配置；需扩展到能够同时覆盖 `server/**/*.ts`、`shared/types.ts`，并与 `web/tsconfig.json` 协同工作，使 `bunx tsc --noEmit` 成功。
+- `web/vite.config.ts` 与 `web/tsconfig.json` 需要明确前端构建根目录为 `web/`，并处理前端对 `shared/types.ts` 的导入路径。
+
+### 2. 数据模型与数据库初始化
+
+- `server/db/schema.ts` 必须使用 Drizzle ORM 定义 PRD 中 6 张表：`users`、`stocks`、`orders`、`positions`、`trades`、`quotes`，字段与约束需与 `prd-stock-trading-system.md` 对齐。
+- 关键约束需在 schema 中体现：
+  - `users.username` 唯一；
+  - `stocks.code` 主键；
+  - `orders.direction/order_type/status` 采用受限字符串联合；
+  - `positions`、`orders`、`trades`、`quotes` 的时间戳为整数；
+  - `quotes.id` 为自增主键。
+- `server/db/migrate.ts` 需负责以 better-sqlite3/Drizzle 初始化 SQLite 数据库并确保表存在；由于当前仓库没有现成 drizzle 配置文件，迁移逻辑应放在该文件内自包含完成。
+- `server/db/seed.ts` 必须写入 PRD 指定的 20 只 A 股基础数据到 `stocks` 表，字段至少包括代码、名称、板块、初始价、昨收、开盘、当前价、高低价、成交量、成交额、更新时间。
+- 由于允许修改文件列表中没有独立 DB client 文件，数据库连接与 schema 导出模式需在 `server/db/schema.ts` / `server/db/migrate.ts` / 使用方文件之间复用，而不能依赖新增未授权文件。
+
+### 3. 共享类型
+
+- `shared/types.ts` 必须定义前后端共享的核心类型，至少包括：
+  - 用户认证载荷与 JWT claims；
+  - 股票、盘口档位、tick、K 线、订单、持仓、成交、账户汇总、盈亏曲线点；
+  - API 请求/响应体的 TypeScript 类型；
+  - 订单方向、订单类型、订单状态、K 线周期等字符串联合。
+- 所有后端路由返回与前端 store/API client 消费的数据形状，应以 `shared/types.ts` 为单一事实来源，减少前后端重复定义。
+
+### 4. 认证与鉴权
+
+- `server/routes/auth.ts` 需实现：
+  - `POST /api/auth/register`：校验用户名/密码，密码以 bcrypt 哈希存储，用户创建时初始资金 `1_000_000`，可用资金与初始资金相同，冻结资金为 0；
+  - `POST /api/auth/login`：校验凭据并签发 JWT；
+  - `GET /api/auth/me`：基于 JWT 返回当前用户基础信息和资金字段。
+- `server/middleware/auth.ts` 必须实现 Hono 中间件，负责：
+  - 解析 `Authorization: Bearer <token>`；
+  - 使用 `jose` 校验 JWT；
+  - 将当前用户身份信息注入上下文，供 `server/routes/orders.ts`、`server/routes/positions.ts`、`server/routes/trades.ts`、`server/routes/account.ts`、`server/routes/auth.ts` 的 me 接口使用。
+- JWT 密钥来源必须在当前允许文件范围内可配置；若无环境变量时需有开发态默认值，但规范中应标注这只是本地模拟用途。
+
+### 5. 行情模拟引擎与 WebSocket
+
+- `server/engine/market.ts` 必须封装行情模拟引擎，基于几何布朗运动（GBM）生成每秒 tick：
+  - 输入至少包含 `drift (μ)`、`volatility (σ)`、当前价格、昨收；
+  - 输出价格必须被限制在昨收 ±10% 范围内；
+  - 更新 `stocks.current_price/open_price/high/low/volume/turnover/updated_at`；
+  - 写入 `quotes` 快照，用于分时/K 线聚合。
+- 引擎还必须生成 5 档买卖盘口数据，供 `GET /api/quotes/:code` 与 `WS /ws/quotes` 返回。
+- `server/ws/quotes.ts` 必须实现 Hono WebSocket 行情推送端点 `/ws/quotes`，能向连接客户端广播全市场或单股行情更新。若 Hono 的 WS 集成需要在 `server/app.ts` 注册，也必须在那里完成。
+- `server/routes/quotes.ts` 需实现：
+  - `GET /api/quotes/list`：股票列表及最新行情；
+  - `GET /api/quotes/:code`：单股详情，至少包含股票基本行情、涨跌幅、5 档盘口；
+  - `GET /api/quotes/:code/kline`：按 `1m/5m/15m/30m/60m/1d` 返回 K 线数据。由于当前只有秒级 quotes 快照，K 线可由 `quotes` 表聚合生成。
+
+### 6. 撮合引擎与风控
+
+- `server/engine/risk.ts` 必须封装委托前校验逻辑，至少覆盖：
+  - 委托数量必须为 100 整数倍；
+  - 资金是否充足（买入）；
+  - 可卖数量与 T+1 限制（卖出仅允许 `positions.available_quantity`）；
+  - 涨停不可买、跌停不可卖。
+- `server/engine/matching.ts` 必须封装订单撮合与结算逻辑，至少覆盖：
+  - 市价单按当前最优价立即成交；
+  - 限价单在价格满足时成交，否则保留 `pending` 状态；
+  - 成交后更新 `orders.filled_quantity/filled_price/status/updated_at`；
+  - 生成 `trades` 记录；
+  - 结算资金与持仓：
+    - 买入手续费 0.03%；
+    - 卖出手续费 0.03% + 印花税 0.05%；
+    - 买入更新/创建 `positions`；
+    - 卖出减少 `positions.quantity` 与 `available_quantity`；
+    - 买入冻结/扣减资金，撤单释放冻结资金。
+- 由于只允许修改 `server/routes/orders.ts` 而没有单独服务层文件，订单路由必须调用 `server/engine/risk.ts` 与 `server/engine/matching.ts` 中的显式导出函数，保持职责分离。
+- T+1 的实现需要在买入成交时将新增仓位记为当日不可卖；在现有限定文件中，推荐通过 `positions.available_quantity` 与买入时间/当日归集逻辑组合表达，并在 `server/routes/positions.ts` 返回可用数量。
+
+### 7. 交易与账户 API
+
+- `server/routes/orders.ts` 需实现：
+  - `POST /api/orders`：下单，支持 `buy/sell`、`market/limit`；
+  - `DELETE /api/orders/:id`：仅允许撤销仍未完全成交的订单，并释放相应冻结资金/冻结卖出数量；
+  - `GET /api/orders`：返回当日委托；
+  - `GET /api/orders/history`：返回历史委托。
+- `server/routes/positions.ts` 实现 `GET /api/positions`，返回当前用户持仓、可卖数量、成本价、浮动盈亏。
+- `server/routes/trades.ts` 实现 `GET /api/trades`，返回成交列表，至少支持按时间倒序。
+- `server/routes/account.ts` 必须提供：
+  - `GET /api/account/summary`：总资产、可用资金、冻结资金、持仓市值、累计盈亏、当日盈亏；
+  - `GET /api/account/pnl`：收益分析序列，至少可供前端收益曲线图展示。
+- `server/app.ts` 必须装配所有 API 路由与 WS 路由，形成单一 Hono app。
+- `server/index.ts` 必须作为 Bun 启动入口，启动 DB 初始化、seed（幂等）以及 HTTP/WS 服务。
+
+### 8. 前端架构与路由
+
+- `web/src/main.tsx` 必须创建 React 19 应用入口，挂载路由、Ant Design 基础样式和全局状态。
+- `web/src/App.tsx` 必须定义 React Router 7 路由：
+  - `/login`
+  - `/register`
+  - `/dashboard`
+  - `/market`
+  - `/market/:code`
+  - `/orders`
+  - `/trades`
+  - `/positions`
+- 路由守卫可通过 `web/src/stores/auth.ts` 与 `web/src/api/client.ts` 在前端完成：未登录访问受保护页面时跳转登录页。
+- `web/src/api/client.ts` 必须集中封装 REST 请求与 JWT header 注入，并处理 WebSocket 连接辅助函数（如实现放这里或 `web/src/stores/quotes.ts`）。
+
+### 9. 前端状态管理
+
+- `web/src/stores/auth.ts` 负责登录、注册、当前用户获取、token 持久化。
+- `web/src/stores/quotes.ts` 负责：
+  - 拉取市场列表；
+  - 拉取单股详情与 K 线；
+  - 订阅 `/ws/quotes` 实时更新并合并到 store。
+- `web/src/stores/orders.ts` 负责下单、撤单、委托列表、成交列表。
+- `web/src/stores/account.ts` 负责资产摘要、持仓、收益曲线。
+- 各 store 的状态与方法签名应直接引用 `shared/types.ts` 类型。
+
+### 10. 前端页面与组件
+
+- `web/src/pages/Login.tsx`、`web/src/pages/Register.tsx` 使用 Ant Design 表单完成认证流程。
+- `web/src/pages/Dashboard.tsx` 展示：
+  - 总资产、持仓市值、盈亏等摘要卡片；
+  - `web/src/components/PnlChart.tsx` 收益曲线；
+  - `web/src/components/PositionPie.tsx` 持仓饼图。
+- `web/src/pages/Market.tsx` 使用 `web/src/components/StockTable.tsx` 展示股票列表、实时涨跌颜色与跳转详情。
+- `web/src/pages/StockDetail.tsx` 集成：
+  - `web/src/components/KLineChart.tsx`
+  - `web/src/components/TimelineChart.tsx`
+  - `web/src/components/OrderBook.tsx`
+  - `web/src/components/TradePanel.tsx`
+- `web/src/pages/Orders.tsx`、`web/src/pages/Trades.tsx`、`web/src/pages/Positions.tsx` 分别展示委托、成交、持仓表格。
+- `web/src/utils/format.ts` 提供价格、金额、百分比、数量等格式化函数。
+- `web/src/utils/constants.ts` 定义周期枚举、默认分页/轮询/WS 地址等常量。
+- `web/index.html`、`web/tailwind.config.ts` 必须足以让 Tailwind 4 与 Vite 前端运行；若实际页面主要用 Ant Design，Tailwind 可作为辅助样式工具，不应阻碍构建。
+
+### 11. 测试要求
+
+- `server/test/engine.test.ts` 必须使用 `bun:test`，且直接测试 `server/engine/market.ts`、`server/engine/matching.ts`、`server/engine/risk.ts` 的可导出函数，而不是仅通过 HTTP 接口间接测试。
+- 测试需覆盖 PRD 强制的 7 个场景：
+  1. 行情引擎生成 tick 在涨跌停范围内；
+  2. 市价单立即成交，资金正确扣减；
+  3. 限价买单在价格满足时成交；
+  4. 卖出手续费包含印花税；
+  5. 资金不足时下单失败；
+  6. T+1 限制：当日买入不可当日卖出；
+  7. 委托数量非 100 整数倍时拒绝。
+- 为保证测试稳定性，`server/engine/market.ts` 中的随机数入口应支持注入种子或自定义随机函数。
+
+## Constraints
+
+- 当前仓库探索结果显示：除 `package.json`、`tsconfig.json`、`prd-stock-trading-system.md`、`opencorvus.json` 外，没有现成 `server/`、`web/`、`shared/` 文件；因此本任务本质上是在“受限文件白名单”内从零搭建系统。
+- 只能创建/修改用户列出的文件，不能补充常见辅助文件（例如 `.env`、`drizzle.config.ts`、独立 `db.ts`、额外 hooks/components/tests`）；因此实现必须将连接、配置、类型与工具集中收纳到已授权文件中。
+- 用户明确指定技术栈，不能替换：
+  - 后端必须是 Hono；
+  - ORM 必须是 Drizzle ORM + better-sqlite3；
+  - 认证必须是 JWT + jose；
+  - 校验必须是 Zod；
+  - 前端必须是 React 19 + Vite 6 + Zustand + Ant Design 5 + React Router 7 + Tailwind 4；
+  - 图表必须使用 ECharts / echarts-for-react。
+- 验收只明确要求 `bunx tsc --noEmit` 与 `bun test server/test/engine.test.ts` 通过，但规范仍要求路由、页面、类型与配置完整到可编译。
+- 根级 `tsconfig.json` 当前 `moduleResolution` 为 `Bundler`，这对前后端共享是可行的，但实现必须避免 Node 专属 CommonJS 写法。
+- 因项目是模拟交易系统，撮合可简化为“基于当前行情/盘口的单用户模拟成交”，不要求真实多用户订单簿竞价撮合；但接口与状态字段仍需符合 PRD。
+- `better-sqlite3` 为同步驱动，后端实现应接受同步 DB 操作模式，并在 Hono route 中谨慎组织调用，避免假定异步事务 API。
+
+## Acceptance Criteria
+
+1. 根级 `package.json`、`tsconfig.json`、`web/vite.config.ts`、`web/tsconfig.json` 的配置足以让 `bunx tsc --noEmit` 成功，且不会因前后端共享类型或缺失依赖导致编译失败。
+2. `server/db/schema.ts` 定义出 `users`、`stocks`、`orders`、`positions`、`trades`、`quotes` 六张 Drizzle 表，字段名与 `prd-stock-trading-system.md` 一致；`server/db/migrate.ts` 可初始化数据库；`server/db/seed.ts` 幂等写入 20 只预置股票。
+3. `server/routes/auth.ts`、`server/middleware/auth.ts`、`shared/types.ts` 协同实现注册/登录/me 与 JWT 鉴权，且注册后的资金初始值为 1,000,000。
+4. `server/engine/market.ts`、`server/ws/quotes.ts`、`server/routes/quotes.ts` 实现每秒行情更新、涨跌停限制、5 档盘口、REST 查询与 WS 推送。
+5. `server/engine/risk.ts`、`server/engine/matching.ts`、`server/routes/orders.ts` 正确执行数量校验、涨跌停校验、资金/持仓校验、T+1 校验、市价/限价撮合、手续费/印花税计算、订单状态更新与撤单释放。
+6. `server/routes/positions.ts`、`server/routes/trades.ts`、`server/routes/account.ts` 返回能支撑前端持仓、成交、资产分析页面的数据，包含浮盈亏与收益曲线所需字段。
+7. `web/src/App.tsx`、页面文件、组件文件、store 文件、`web/src/api/client.ts` 完成前端路由和核心交互，并消费后端 REST/WS 数据；页面至少包含 PRD 要求的可视化/表格组件占位与数据绑定。
+8. `server/test/engine.test.ts` 使用 `bun:test` 且覆盖 7 个强制场景；执行 `bun test server/test/engine.test.ts` 必须通过。
+
+## Out-of-Scope
+
+- 不要求实现生产级行情数据源接入、真实证券交易所规则、撮合深度簿、多用户竞争撮合。
+- 不要求实现管理员后台、角色权限、刷新 token、找回密码、邮箱短信验证。
+- 不要求新增 README、CI、Docker、部署脚本、环境变量模板、额外 lint 配置。
+- 不要求在允许文件清单外新增更细粒度模块，即使这会让工程结构更理想。
+
+## Open Questions
+
+1. 数据库文件路径应放在何处（例如项目根目录 `data/` 下某个 sqlite 文件）？仓库存在 `data/` 目录，但用户未显式指定路径；默认可放入该目录。
+2. `/api/orders/history`、`/api/trades`、`/api/positions` 是否需要分页/筛选参数？PRD 未强制，规范可允许先返回全量或有限条数。
+3. `/api/account/pnl` 的收益曲线粒度（日级/分钟级）未明确；在无历史账户快照表情况下，建议基于成交与当前市值生成简化时间序列。
+4. WebSocket 行情订阅是否需要按股票代码过滤频道？PRD 只要求 `WS /ws/quotes` 实时推送，规范建议支持可选过滤，但不是阻塞项。
+</content>
+
+<spec_items>
+
+- title: 根级构建与依赖配置
+  description: 在 `package.json`、`tsconfig.json`、`web/vite.config.ts`、`web/tsconfig.json` 中补齐 Bun/Hono/Drizzle/React/Vite/Zustand/Ant Design/ECharts/Tailwind 所需依赖与编译配置，使前后端与 `shared/types.ts` 能在同一仓库下通过 `bunx tsc --noEmit`。
+  check_selector: build
+  priority: blocking
+
+- title: Drizzle 数据模型、迁移与种子
+  description: 在 `server/db/schema.ts`、`server/db/migrate.ts`、`server/db/seed.ts` 中定义并初始化 `users`、`stocks`、`orders`、`positions`、`trades`、`quotes` 六张表，并幂等写入 `prd-stock-trading-system.md` 指定的 20 只股票。
+  check_selector: build
+  priority: blocking
+
+- title: JWT 认证与受保护 API 基础设施
+  description: 在 `server/routes/auth.ts`、`server/middleware/auth.ts`、`server/app.ts`、`shared/types.ts` 中实现注册、登录、me 接口和 Hono JWT 鉴权上下文注入，确保后续订单、持仓、成交、账户路由可复用当前用户信息。
+  check_selector: build
+  priority: blocking
+
+- title: 行情模拟、K 线聚合与 WebSocket 推送
+  description: 在 `server/engine/market.ts`、`server/routes/quotes.ts`、`server/ws/quotes.ts`、`server/app.ts`、`server/index.ts` 中实现 GBM tick 生成、涨跌停限制、5 档盘口、REST 行情/K线接口与 `/ws/quotes` 广播机制。
+  check_selector: build
+  priority: blocking
+
+- title: 风控、撮合与订单生命周期
+  description: 在 `server/engine/risk.ts`、`server/engine/matching.ts`、`server/routes/orders.ts`、`server/routes/positions.ts`、`server/routes/trades.ts`、`server/routes/account.ts` 中实现数量校验、资金/持仓/T+1/涨跌停风控、市价与限价成交、手续费与印花税结算、撤单、持仓与资产汇总。
+  check_selector: test
+  priority: blocking
+
+- title: 前端路由、状态与交易页面
+  description: 在 `web/src/main.tsx`、`web/src/App.tsx`、`web/src/api/client.ts`、`web/src/stores/*.ts`、`web/src/pages/*.tsx`、`web/src/components/*.tsx`、`web/src/utils/*.ts`、`shared/types.ts` 中实现登录注册、仪表盘、行情、个股详情、委托、成交、持仓页面及其与 REST/WS 的数据绑定。
+  check_selector: build
+  priority: blocking
+
+- title: 引擎单元测试覆盖 7 个指定场景
+  description: 在 `server/test/engine.test.ts` 中使用 `bun:test` 直接验证 `server/engine/market.ts`、`server/engine/matching.ts`、`server/engine/risk.ts` 的核心逻辑，覆盖 PRD 明确列出的 7 个验收场景，并保证 `bun test server/test/engine.test.ts` 通过。
+  check_selector: test
+  priority: blocking
+</spec_items>
+
+<out_of_scope>
+
+- 真实券商级撮合、清算、风控规则细节
+- 允许文件清单之外的工程优化拆分
+- README、部署、CI、容器化
+</out_of_scope>
+
+<assumptions>
+- Q: 当前仓库是否已有任何可复用前后端代码？
+  A: 假设没有；探索结果仅发现根级 `package.json`、`tsconfig.json`、`prd-stock-trading-system.md`、`opencorvus.json`。
+
+- Q: 是否允许在白名单文件中自包含数据库连接与配置？
+  A: 假设允许，因为不存在可修改的独立 DB 配置文件。
+
+- Q: 行情与撮合是否只需支持模拟单市场、单币种、本地 SQLite？
+  A: 假设是，依据 PRD 的“模拟股票交易系统”定位与 SQLite 技术选型。
+</assumptions>
+
+<risks>
+- 当前仓库是近乎空白的 greenfield 状态，而允许文件列表严格受限，可能导致某些通常应拆分的逻辑被迫集中在 `server/app.ts`、`server/db/*.ts`、`web/src/stores/*.ts` 中，需格外注意类型边界。
+- `better-sqlite3` 与 Drizzle 在 Bun 环境下的类型与运行时组合必须谨慎配置，否则最容易在 `bunx tsc --noEmit` 阶段出错。
+- React Router 7、React 19、Tailwind 4、Ant Design 5 组合在空项目中需要最小但正确的 Vite 配置；若引入方式不当，类型检查可能先于运行暴露问题。
+- 账户收益曲线没有独立账户快照表，`server/routes/account.ts` 的 `/api/account/pnl` 只能提供基于成交/持仓推导的简化分析结果。
+</risks>
+
+<evidence>
+- `package.json`
+- `tsconfig.json`
+- `prd-stock-trading-system.md`
+- `opencorvus.json`
+- 项目根目录列表：`.opencorvus/`, `data/`, `src/`, `.gitignore`, `opencorvus.json`, `package.json`, `prd-stock-trading-system.md`, `tsconfig.json`
+- 文件搜索结果仅发现根级文件，未发现现成 `server/`、`web/`、`shared/` 实现
+- memory_search: “stock trading system Bun Hono React conventions existing scaffold preferences” → 无结果
+- memory_search: “project conventions Bun React Vite Hono Drizzle existing structure” → 无结果
+</evidence>
+
+<unresolved>
+- `src/` 目录存在但工具未返回内部文件；从 `find_files` 结果看项目当前有效文件仍仅有根级文件，若执行阶段发现 `src/` 内另有内容，需要遵守“不可修改未授权文件”的约束并避免冲突。
+- JWT 密钥、SQLite 文件名与服务端口未在 PRD 固定，需要在允许文件内给出本地默认值。
+</unresolved>
+
+---
+
+Assistant / 04/01/2026, 23:57:12
+规范已建立。接下来将把大任务拆解为可验证目标，便于覆盖后端引擎、API、前端页面、数据库初始化以及测试验收之间的依赖关系。
+
+[Tool:Running] decompose_goals
+
+---
+
+Assistant / 04/01/2026, 23:57:19
+[Tool:Completed] memory_search memory_search
+
+---
+
+Assistant / 04/01/2026, 23:57:19
+[Tool:Completed] memory_search memory_search
+
+---
+
+Assistant / 04/01/2026, 23:57:19
+[Tool:Completed] list_directory list_directory
+
+---
+
+Assistant / 04/01/2026, 23:57:19
+[Tool:Completed] find_files **/*
+
+---
+
+Assistant / 04/01/2026, 23:57:25
+[Tool:Pending] read_file
+
+---
+
+Assistant / 04/01/2026, 23:57:25
+[Tool:Completed] read_file tsconfig.json
+
+---
+
+Assistant / 04/01/2026, 23:57:25
+[Tool:Completed] read_file prd-stock-trading-system.md
+
+---
+
+Assistant / 04/01/2026, 23:57:25
+[Tool:Completed] read_file opencorvus.json
+
+---
+
+Assistant / 04/01/2026, 23:57:28
+[Tool:Completed] search_code prd-stock-trading-system.md
+
+[Tool:Completed] list_directory src
+
+[Tool:Completed] list_directory data
+
+[Tool:Completed] find_files .opencorvus/**/*
+
+---
+
+Assistant / 04/01/2026, 23:57:49
+<summary>基于已探索到的极简 Bun 仓库现状，将该模拟股票交易系统拆解为共享契约/构建、数据库、认证、行情、交易、前端和测试七个可并行执行的目标，并用最终集成目标完成应用装配。</summary>
+<goals>
+- id: goal_bootstrap_contracts
+  title: 建立共享类型与根级构建配置
+  objective: 补齐前后端共用的领域类型、API 契约及 Bun/TypeScript/Vite 基础配置，使后续服务端、前端与测试都能基于统一类型编译。
+  requirement_ids: req_1, req_6
+  source: explicit
+  depends_on_goal_ids:
+  owned_paths: package.json, tsconfig.json, web/vite.config.ts, web/tsconfig.json, shared/types.ts
+  done_definition: package.json 含 PRD 指定后后端与前端依赖及类型检查/测试脚本；根 tsconfig.json 与 web/tsconfig.json 能覆盖 server、web、shared 路径；web/vite.config.ts 能解析 web 根目录与 shared/types.ts 导入；shared/types.ts 定义认证、行情、订单、持仓、成交、账户、K 线、WebSocket 消息及相关字符串联合类型，供其它模块直接导入。
+  qa_rule_selectors: build, spec_check
+  priority: blocking
+  kind: bootstrap
+
+- id: goal_db_foundation
+  title: 实现 Drizzle 数据库模型与幂等初始化
+  objective: 在受限文件内完成 SQLite/Drizzle 表结构、数据库初始化和 20 只预置股票 seed，为认证、行情和交易模块提供可复用的数据基础。
+  requirement_ids: req_2, req_7
+  source: explicit
+  depends_on_goal_ids: goal_bootstrap_contracts
+  owned_paths: server/db/schema.ts, server/db/migrate.ts, server/db/seed.ts
+  done_definition: schema.ts 定义 users、stocks、orders、positions、trades、quotes 六张表且字段/主键/唯一约束与 PRD 一致；migrate.ts 可初始化 better-sqlite3 + Drizzle 并确保表存在；seed.ts 幂等写入 20 只股票，重复执行不会因主键冲突导致启动失败。
+  qa_rule_selectors: build, spec_check
+  priority: blocking
+  kind: bootstrap
+
+- id: goal_auth_api
+  title: 实现 JWT 认证、中间件与用户接口
+  objective: 完成注册、登录、me 接口及 Bearer Token 鉴权上下文注入，为所有受保护路由提供统一用户身份读取能力。
+  requirement_ids: req_3, req_8
+  source: explicit
+  depends_on_goal_ids: goal_bootstrap_contracts, goal_db_foundation
+  owned_paths: server/routes/auth.ts, server/middleware/auth.ts
+  done_definition: auth.ts 提供 POST /api/auth/register、POST /api/auth/login、GET /api/auth/me；注册时用户名唯一、密码 bcrypt 哈希存储、初始资金为 1000000；middleware/auth.ts 能解析并校验 jose JWT、把当前用户信息写入 Hono 上下文，并对缺失/无效 token 返回一致错误响应。
+  qa_rule_selectors: build, spec_check, code_review
+  priority: blocking
+  kind: feature
+
+- id: goal_market_data
+  title: 实现行情模拟引擎、行情 REST 与 WebSocket
+  objective: 构建 GBM 行情引擎、5 档盘口、K 线聚合、REST 行情查询与 WS 广播能力，形成实时市场数据链路。
+  requirement_ids: req_4, req_9
+  source: explicit
+  depends_on_goal_ids: goal_bootstrap_contracts, goal_db_foundation
+  owned_paths: server/engine/market.ts, server/routes/quotes.ts, server/ws/quotes.ts
+  done_definition: market.ts 提供可注入随机源的 GBM tick 生成、昨收 ±10% 钳制、盘口生成、stocks/quotes 更新逻辑；quotes.ts 提供 /api/quotes/list、/api/quotes/:code、/api/quotes/:code/kline；ws/quotes.ts 提供 /ws/quotes 广播与可选按 code 订阅能力，消息体符合 shared/types.ts。
+  qa_rule_selectors: build, spec_check, test
+  priority: blocking
+  kind: feature
+
+- id: goal_trading_core
+  title: 实现风控、撮合与账户交易接口
+  objective: 完成下单前风控、订单撮合、撤单、持仓、成交、账户汇总与收益分析接口，形成完整模拟交易闭环。
+  requirement_ids: req_5, req_10
+  source: explicit
+  depends_on_goal_ids: goal_bootstrap_contracts, goal_db_foundation, goal_auth_api, goal_market_data
+  owned_paths: server/engine/risk.ts, server/engine/matching.ts, server/routes/orders.ts, server/routes/positions.ts, server/routes/trades.ts, server/routes/account.ts
+  done_definition: risk.ts 覆盖 100 股整数倍、资金充足、可卖数量/T+1、涨停不可买和跌停不可卖校验；matching.ts 实现市价立即成交、限价满足时成交/否则 pending、手续费和卖出印花税、订单/成交/持仓/资金更新及撤单释放；orders.ts、positions.ts、trades.ts、account.ts 提供 PRD 要求的全部 REST 接口并返回 shared/types.ts 定义的数据结构。
+  qa_rule_selectors: build, test, spec_check, code_review
+  priority: blocking
+  kind: feature
+
+- id: goal_frontend_app
+  title: 实现 React 路由、状态管理与交易页面组件
+  objective: 在 web/ 下完成 Vite + React 19 前端入口、受保护路由、API 客户端、Zustand stores、页面与图表/表格组件，消费后端 REST/WS 数据。
+  requirement_ids: req_11
+  source: explicit
+  depends_on_goal_ids: goal_bootstrap_contracts
+  owned_paths: web/index.html, web/tailwind.config.ts, web/src/main.tsx, web/src/App.tsx, web/src/api/client.ts, web/src/stores/auth.ts, web/src/stores/quotes.ts, web/src/stores/orders.ts, web/src/stores/account.ts, web/src/pages/Login.tsx, web/src/pages/Register.tsx, web/src/pages/Dashboard.tsx, web/src/pages/Market.tsx, web/src/pages/StockDetail.tsx, web/src/pages/Orders.tsx, web/src/pages/Trades.tsx, web/src/pages/Positions.tsx, web/src/components/KLineChart.tsx, web/src/components/TimelineChart.tsx, web/src/components/OrderBook.tsx, web/src/components/TradePanel.tsx, web/src/components/PnlChart.tsx, web/src/components/PositionPie.tsx, web/src/components/StockTable.tsx, web/src/utils/format.ts, web/src/utils/constants.ts
+  done_definition: main.tsx 和 App.tsx 建立 /login、/register、/dashboard、/market、/market/:code、/orders、/trades、/positions 路由与登录守卫；api/client.ts 统一处理 REST 请求、JWT 注入和 WS 连接；各 store 使用 shared/types.ts 类型并实现认证、行情、订单、成交、资产数据流；各页面和组件使用 Ant Design/ECharts/Tailwind 完成 PRD 要求的表格、图表和交易面板占位与数据绑定，项目可通过类型检查。
+  qa_rule_selectors: build, ui_review, spec_check
+  priority: blocking
+  kind: feature
+
+- id: goal_engine_tests
+  title: 编写引擎单元测试覆盖 7 个指定场景
+  objective: 用 bun:test 直接验证行情、风控和撮合导出函数，确保核心交易规则可回归。
+  requirement_ids: req_12
+  source: explicit
+  depends_on_goal_ids: goal_bootstrap_contracts, goal_market_data, goal_trading_core
+  owned_paths: server/test/engine.test.ts
+  done_definition: engine.test.ts 使用 bun:test 且不经 HTTP 间接测试；覆盖合法 tick 涨跌停范围、市价单立即成交并正确扣款、限价买单满足价格后成交、卖出手续费含印花税、资金不足下单失败、T+1 禁止当日卖出、非 100 整数倍拒绝七个场景；bun test server/test/engine.test.ts 可通过。
+  qa_rule_selectors: test, spec_check
+  priority: blocking
+  kind: verification
+
+- id: goal_server_integration
+  title: 装配 Hono 应用入口、启动流程与受保护路由
+  objective: 将数据库初始化、路由、WebSocket、行情定时任务和 Bun 启动入口整合成单一可运行服务。
+  requirement_ids:
+  source: implicit
+  depends_on_goal_ids: goal_db_foundation, goal_auth_api, goal_market_data, goal_trading_core
+  owned_paths: server/app.ts, server/index.ts
+  done_definition: app.ts 创建并导出统一 Hono 应用，挂载 /api/auth、/api/quotes、/api/orders、/api/positions、/api/trades、/api/account 和 /ws/quotes，受保护路由复用 auth 中间件；index.ts 在启动时执行数据库初始化与幂等 seed、启动行情引擎定时任务并启动 Bun HTTP/WS 服务；不新增白名单外基础设施文件。
+  qa_rule_selectors: build, startup, spec_check
+  priority: blocking
+  kind: integration
+</goals>
+
+---
+
+Assistant / 04/01/2026, 23:58:35
+目标已拆解。现在创建执行计划，把各目标组织成可落地的实现步骤，并生成 run 记录以便提交给执行器异步完成。
+
+[Tool:Running] create_plan
+
+---
+
+Assistant / 04/01/2026, 23:58:40
+[Tool:Completed] memory_search memory_search
+
+---
+
+Assistant / 04/01/2026, 23:58:40
+[Tool:Completed] memory_search memory_search
+
+---
+
+Assistant / 04/01/2026, 23:58:40
+[Tool:Completed] list_directory list_directory
+
+---
+
+Assistant / 04/01/2026, 23:58:40
+[Tool:Completed] read_file package.json
+
+---
+
+Assistant / 04/01/2026, 23:58:40
+[Tool:Completed] read_file tsconfig.json
+
+---
+
+Assistant / 04/01/2026, 23:58:49
+[Tool:Completed] find_files server/**/*
+
+[Tool:Completed] find_files web/**/*
+
+[Tool:Completed] find_files shared/**/*
+
+[Tool:Completed] read_file prd-stock-trading-system.md
+
+[Tool:Completed] search_code package.json
+
+---
+
+Assistant / 04/01/2026, 23:58:54
+[Tool:Completed] question question
+
+---
+
+Assistant / 04/01/2026, 23:59:07
+[Tool:Completed] find_files *.json
+
+[Tool:Completed] find_files web/**
+
+[Tool:Completed] find_files server/**
+
+[Tool:Completed] find_files shared/**
+
+---
+
+Assistant / 04/01/2026, 23:59:21
+<summary>在现有极简 Bun 脚手架上，按白名单文件一次性补齐共享类型、Drizzle/SQLite 数据层、Hono+JWT+WebSocket 后端、撮合/风控/行情引擎、React+Zustand+AntD 前端，以及可通过 bunx tsc 与 bun:test 的核心引擎测试。</summary>
+
+<prd>
+- 根配置与共享契约
+  - 修改 `package.json`：补齐服务端依赖 `hono`、`drizzle-orm`、`better-sqlite3`、`jose`、`zod`、`bcryptjs`；前端依赖 `react`、`react-dom`、`vite`、`@vitejs/plugin-react`、`zustand`、`antd`、`react-router-dom`、`echarts`、`echarts-for-react`、`tailwindcss`；类型依赖 `typescript`、`@types/react`、`@types/react-dom`、`@types/better-sqlite3`。加入至少以下脚本：`typecheck: bunx tsc --noEmit`、`test: bun test server/test/engine.test.ts`、`dev: bun --watch server/index.ts`、前端 Vite 启动脚本。
+  - 修改 `tsconfig.json`：保留当前 `moduleResolution: "Bundler"` 与 ESM 方向，补充 `jsx: "react-jsx"`、`lib`、`types`、`baseUrl`、`paths`（至少让 `shared/*` 可导入），并用 `include` 覆盖 `server/**/*.ts`、`web/**/*.ts`、`web/**/*.tsx`、`shared/**/*.ts`。
+  - 新建 `web/tsconfig.json`：继承根配置，显式包含 `src/**/*.ts`、`src/**/*.tsx`、`vite.config.ts`、`tailwind.config.ts`。
+  - 新建 `shared/types.ts`：作为全仓唯一共享契约源，定义：
+    - 字面量联合：`OrderDirection = "buy" | "sell"`、`OrderType = "market" | "limit"`、`OrderStatus = "pending" | "partial" | "filled" | "cancelled"`、`KlinePeriod = "1m" | "5m" | "15m" | "30m" | "60m" | "1d"`、`WsMessageType`
+    - 领域对象：`UserProfile`、`StockQuote`、`QuoteSnapshot`、`Order`、`Position`、`Trade`、`AccountSummary`、`PnlPoint`、`OrderBookLevel`、`OrderBook`
+    - 请求/响应：`RegisterRequest`、`LoginRequest`、`AuthResponse`、`CreateOrderRequest`、`CancelOrderResponse`、`QuotesListResponse`、`QuoteDetailResponse`、`KlineCandle`、`WsQuoteMessage`
+  - 数量口径统一：尽管 PRD 中 `orders.quantity` 写“手”，为了满足“非 100 整数倍拒绝”的业务与测试，计划中统一按“股”处理 `quantity`；`shared/types.ts`、Zod 校验、引擎、测试全部使用“股，且必须是 100 的整数倍”这一单一语义，避免 API/测试冲突。
+
+- 数据层与初始化
+  - 新建 `server/db/schema.ts`：用 Drizzle `sqliteTable` 定义 `users`、`stocks`、`orders`、`positions`、`trades`、`quotes` 六表；字段名严格使用 PRD 原文中的 snake_case：如 `password_hash`、`initial_capital`、`available_balance`、`stock_code`、`filled_quantity`、`filled_price`、`available_quantity`、`traded_at`。
+  - 新建 `server/db/migrate.ts`：
+    - 在文件内集中创建 `better-sqlite3` 连接与 Drizzle db 实例，例如导出 `getDb()`、`runMigrations()`。
+    - 因无 Drizzle 配置白名单，直接用 SQLite `CREATE TABLE IF NOT EXISTS` 或 Drizzle 支持的建表调用做幂等初始化；要求 schema 与 `server/db/schema.ts` 保持一致。
+    - 数据库文件路径在此文件中固定约定，例如 `data/stock-trading.db`，不依赖额外 env 文件。
+  - 新建 `server/db/seed.ts`：
+    - 导出 `seedStocks(db)` 与 `STOCK_SEED_DATA` 常量。
+    - 写入 PRD 指定的 20 只股票，字段含 `code/name/sector/initial_price/current_price/prev_close/open_price/high/low/volume/turnover/updated_at`。
+    - 采用 `INSERT OR IGNORE` / upsert 风格保证重复执行不报主键冲突。
+
+- 服务端认证与应用装配
+  - 新建 `server/middleware/auth.ts`：
+    - 定义 Hono 上下文变量类型，例如 `user: { id: string; username: string }`。
+    - 导出 `signJwt(payload)`、`verifyJwt(token)`、`authMiddleware`。
+    - 使用 `jose` 的 `SignJWT` / `jwtVerify`；密钥在该文件内提供默认常量，并允许 `process.env.JWT_SECRET` 覆盖。
+    - 对缺失 token 返回 401，对无效 token 返回 401，对用户不存在返回 401；统一 JSON 结构建议 `{ success: false, message: string }`。
+  - 新建 `server/routes/auth.ts`：
+    - 导出 `createAuthRouter(deps)`，依赖中传入 db。
+    - `POST /register`：Zod 校验、检查唯一用户名、`bcryptjs.hash`、插入用户、默认 `initial_capital=1000000`、`available_balance=1000000`、`frozen_balance=0`。
+    - `POST /login`：按用户名查用户，`bcryptjs.compare` 校验，返回 JWT 与用户资料。
+    - `GET /me`：复用 `authMiddleware`，返回当前用户。
+  - 新建 `server/app.ts`：
+    - 创建并导出 `createApp(deps)`，接收 db、marketEngine、matchingEngine。
+    - 挂载 `/api/auth`、`/api/quotes`、`/api/orders`、`/api/positions`、`/api/trades`、`/api/account`、`/ws/quotes`。
+    - 对 `/api/orders`、`/api/positions`、`/api/trades`、`/api/account` 下的路由复用 `authMiddleware`。
+  - 新建 `server/index.ts`：
+    - 启动顺序：`runMigrations()` → `seedStocks()` → 初始化 market/matching 引擎 → `createApp(...)` → `Bun.serve(...)`。
+    - 行情每秒 tick 的 `setInterval` 放在此文件，触发 `marketEngine.tickAll()` 后再调用 `matchingEngine.processPendingOrders(...)` 并通过 WS 广播。
+
+- 行情引擎、行情 REST、WebSocket
+  - 新建 `server/engine/market.ts`：
+    - 导出 `createMarketEngine({ db, random? })`。
+    - 纯函数级导出：`clampToLimit(prevClose, price)`、`generateNextPrice({ currentPrice, prevClose, drift, volatility, dt, random })`、`buildOrderBook(price)`、`aggregateKlines(quotes, period)`，便于测试与路由复用。
+    - `tickAll()` 读取 `stocks` 表，为每只股票基于 GBM 生成下一 tick，钳制在昨收 ±10%，更新 `stocks.current_price/open_price/high/low/volume/turnover/updated_at`，插入 `quotes` 快照，并在内存维护 `Map<code, OrderBook>`。
+    - 盘口生成固定 5 档，围绕最新价按最小步长展开；返回 `bids`、`asks`。
+  - 新建 `server/routes/quotes.ts`：
+    - 导出 `createQuotesRouter({ db, marketEngine })`。
+    - `GET /list`：返回股票列表及 `current_price/prev_close/change/change_percent/volume/turnover`。
+    - `GET /:code`：返回单股详情、最新盘口、最近快照。
+    - `GET /:code/kline?period=1m`：读取 `quotes` 表并调用 `aggregateKlines` 聚合成 `KlineCandle[]`。
+  - 新建 `server/ws/quotes.ts`：
+    - 导出 `createQuotesWs({ marketEngine })` 或导出适用于 `Bun.serve` 的 websocket handlers。
+    - 在文件内维护连接集合与按 `code` 订阅关系；支持连接后发送 `{ type: "subscribe", code?: string }`。
+    - 广播消息结构必须直接使用 `shared/types.ts` 中的 `WsQuoteMessage`。
+    - 由于无额外基础设施，订阅表、连接表、最后一笔行情缓存全部留在该文件或 `market.ts` 进程内内存。
+
+- 风控与撮合
+  - 新建 `server/engine/risk.ts`：
+    - 导出纯函数 `validateOrder(input)` 与引擎方法 `checkOrder({ db, userId, order, stock, now })`。
+    - 覆盖：
+      - `quantity % 100 === 0`
+      - 买单资金充足：`available_balance >= estimatedAmount + fees`
+      - 卖单可卖数量足够：`positions.available_quantity >= quantity`
+      - T+1：若持仓为当日新增且 `available_quantity < quantity`，拒绝卖出
+      - 涨停不可买：`current_price >= prev_close * 1.1`
+      - 跌停不可卖：`current_price <= prev_close * 0.9`
+    - 返回稳定错误对象，供路由与测试断言。
+  - 新建 `server/engine/matching.ts`：
+    - 导出纯计算函数：`calculateBuyCommission(amount)`、`calculateSellCommission(amount)`、`canFillLimitOrder(order, marketPrice)`。
+    - 导出 `createMatchingEngine({ db, marketEngine, riskEngine })`，至少含：
+      - `placeOrder({ userId, input })`
+      - `cancelOrder({ userId, orderId })`
+      - `processPendingOrders(stockCode?)`
+    - `placeOrder` 流程：
+      - 查股价与用户
+      - 调用 risk
+      - 建立订单记录
+      - 买单先冻结预计资金；卖单冻结可卖数量（若不做独立冻结仓位字段，则至少通过减 `available_quantity` 保证不可重复卖）
+      - 市价单按当前最优价立即成交
+      - 限价单若价格满足则即时成交，否则写 `pending`
+    - 成交时：
+      - 更新 `orders.filled_quantity/filled_price/status/updated_at`
+      - 写 `trades`
+      - 买入：增加/新建 `positions.quantity`，并将新增股份先记入 `quantity`、但不增加 `available_quantity`（当日不可卖）
+      - 卖出：减少 `positions.quantity` 和已冻结/可卖数量
+      - 更新用户 `available_balance/frozen_balance`
+      - 买手续费 0.03%，卖手续费 0.03% + 0.05% 印花税
+    - `cancelOrder`：
+      - 仅 `pending/partial` 可撤
+      - 买单释放剩余冻结资金；卖单恢复未成交部分 `available_quantity`
+      - 更新状态为 `cancelled`
+    - `processPendingOrders`：由 `server/index.ts` 在每次行情 tick 后调用，遍历 `pending` 限价单，满足价格则成交。
+
+- 交易、持仓、账户接口
+  - 新建 `server/routes/orders.ts`：
+    - 导出 `createOrdersRouter({ matchingEngine })`。
+    - `POST /`：Zod 校验 `stock_code/direction/order_type/price?/quantity`，调用 `placeOrder`。
+    - `DELETE /:id`：调用 `cancelOrder`。
+    - `GET /`：返回当日委托。
+    - `GET /history`：返回历史委托，按 `created_at desc`。
+  - 新建 `server/routes/positions.ts`：
+    - 导出 `createPositionsRouter({ db })`。
+    - 查询当前用户持仓并 join `stocks`，返回 `stock_code/name/quantity/available_quantity/avg_cost/current_price/market_value/unrealized_pnl/pnl_ratio`。
+  - 新建 `server/routes/trades.ts`：
+    - 导出 `createTradesRouter({ db })`。
+    - 返回当前用户成交记录，按 `traded_at desc`。
+  - 新建 `server/routes/account.ts`：
+    - 导出 `createAccountRouter({ db })`。
+    - `GET /summary`：返回 `initial_capital/available_balance/frozen_balance/market_value/total_assets/total_pnl/total_pnl_ratio`。
+    - `GET /pnl`：可基于 `quotes` 与当前持仓估算生成时序净值点；即使是查询时推导，也要稳定返回 `PnlPoint[]` 给 `PnlChart.tsx`。
+
+- 前端 Vite 壳、路由、API 与状态层
+  - 新建 `web/index.html`：Vite 标准入口，挂载 `#root`。
+  - 新建 `web/vite.config.ts`：
+    - 使用 `@vitejs/plugin-react`。
+    - 设定 `root: "web"`。
+    - 配置 alias，使 `../../shared/types` 或 `@shared/types` 在 web 中可解析。
+  - 新建 `web/tailwind.config.ts`：内容扫描至少覆盖 `web/index.html`、`web/src/**/*.{ts,tsx}`。
+  - 新建 `web/src/main.tsx`：使用 `ReactDOM.createRoot` 挂载 `App`，引入 Ant Design reset（若直接通过包路径导入）与基础全局样式方式保持在代码内，不新增 CSS 文件。
+  - 新建 `web/src/App.tsx`：
+    - 用 React Router 定义 `/login`、`/register`、`/dashboard`、`/market`、`/market/:code`、`/orders`、`/trades`、`/positions`。
+    - 在文件内定义 `ProtectedRoute` 组件，依赖 `web/src/stores/auth.ts` 的 token/user。
+  - 新建 `web/src/api/client.ts`：
+    - 导出 `apiClient` 与模块化方法：`authApi`、`quotesApi`、`ordersApi`、`positionsApi`、`tradesApi`、`accountApi`、`connectQuotesWs`。
+    - 自动从 localStorage 或 auth store 注入 `Authorization: Bearer ...`。
+    - 对 401 清 token 并抛出统一错误。
+  - 新建 Zustand stores：
+    - `web/src/stores/auth.ts`：`token/user/login/register/fetchMe/logout`
+    - `web/src/stores/quotes.ts`：`list/detail/kline/orderBook/connect/disconnect/fetchList/fetchDetail/fetchKline/applyWsMessage`
+    - `web/src/stores/orders.ts`：`orders/history/trades/placeOrder/cancelOrder/fetchToday/fetchHistory/fetchTrades`
+    - `web/src/stores/account.ts`：`summary/pnl/positions/fetchSummary/fetchPnl/fetchPositions`
+    - 所有 state/action 类型直接引用 `shared/types.ts`
+
+- 前端页面与组件
+  - `web/src/pages/Login.tsx`、`Register.tsx`：Ant Design `Form` + `Input` + `Button`，提交后调用 auth store；成功跳转 `/dashboard`。
+  - `web/src/pages/Dashboard.tsx`：展示账户 summary 卡片、`PnlChart`、`PositionPie`。
+  - `web/src/pages/Market.tsx`：调用 quotes store 的 `fetchList/connect`，用 `StockTable` 呈现全市场列表。
+  - `web/src/pages/StockDetail.tsx`：根据路由参数加载详情与 K 线，组合 `KLineChart`、`TimelineChart`、`OrderBook`、`TradePanel`。
+  - `web/src/pages/Orders.tsx`：展示今日委托与历史委托，可撤单按钮只对 `pending/partial` 显示。
+  - `web/src/pages/Trades.tsx`：成交表格。
+  - `web/src/pages/Positions.tsx`：持仓表格，展示盈亏。
+  - 组件实现：
+    - `web/src/components/KLineChart.tsx`：`echarts-for-react` 蜡烛图 + volume
+    - `web/src/components/TimelineChart.tsx`：价格折线
+    - `web/src/components/OrderBook.tsx`：5 档买卖表
+    - `web/src/components/TradePanel.tsx`：买卖切换、市价/限价切换、数量输入（前端先做 `quantity % 100 === 0` 校验）、提交反馈
+    - `web/src/components/PnlChart.tsx`：净值/收益曲线
+    - `web/src/components/PositionPie.tsx`：持仓市值占比
+    - `web/src/components/StockTable.tsx`：股票列表、涨跌色与详情跳转
+  - 工具文件：
+    - `web/src/utils/format.ts`：金额、数量、百分比、涨跌色格式化
+    - `web/src/utils/constants.ts`：K 线周期、涨跌颜色、默认分页、路由常量
+
+- 测试
+  - 新建 `server/test/engine.test.ts`，只用 `bun:test`，直接测试 `server/engine/market.ts`、`server/engine/risk.ts`、`server/engine/matching.ts` 导出的纯函数/轻量引擎，不通过 HTTP。
+  - 测试数据应尽量使用内存态 mock db 或最小 stub，不依赖生产数据库文件。
+  - 至少 7 个 `it()`：
+    - `generateNextPrice` 结果在 `prevClose * 0.9` 到 `prevClose * 1.1`
+    - 市价单立即成交且买方 `available_balance` 正确减少、`frozen_balance` 回归正确值
+    - 限价买单在市场价下降到委托价后由 `processPendingOrders` 成交
+    - 卖出手续费 = `amount * 0.0003 + amount * 0.0005`
+    - 余额不足时 `risk`/`placeOrder` 返回失败
+    - 当日买入形成的股份不可当日卖出
+    - 非 100 整数倍数量被拒绝
+  - 验证命令：
+    - `bunx tsc --noEmit`
+    - `bun test server/test/engine.test.ts`
+</prd>
+
+<goals>
+- description: 建立根级构建配置与共享领域类型，使 `server/`、`web/`、`shared/` 三侧都能基于同一套 TypeScript 契约编译，并解决订单数量单位歧义，统一按“股且必须为100整数倍”实现下单/测试逻辑
+  criteria: 修改 `package.json`、`tsconfig.json`、`web/tsconfig.json`、`web/vite.config.ts`、`shared/types.ts` 后，运行 `bunx tsc --noEmit` 成功退出 0，且 `shared/types.ts` 中可见 OrderDirection、OrderType、OrderStatus、KlinePeriod、WsQuoteMessage、CreateOrderRequest、AccountSummary、PnlPoint 等导出类型
+  check_selector: build, spec_check
+  priority: blocking
+
+- description: 在 `server/db/schema.ts`、`server/db/migrate.ts`、`server/db/seed.ts` 内完成 Drizzle + better-sqlite3 的 SQLite 表结构与幂等股票初始化，确保六张核心表和 20 只预置股票可由启动流程直接复用
+  criteria: 完成后运行 `bunx tsc --noEmit` 成功退出 0，并检查 `server/db/schema.ts` 含 users/stocks/orders/positions/trades/quotes 六个表定义，`server/db/seed.ts` 含 20 条股票 seed 数据且采用 insert-ignore/upsert 风格避免重复执行报错
+  check_selector: build, code_review, spec_check
+  priority: blocking
+
+- description: 实现 JWT 认证、中间件与用户接口，在 `server/routes/auth.ts`、`server/middleware/auth.ts`、`server/app.ts` 中打通注册、登录、获取当前用户与受保护路由身份注入
+  criteria: 完成后运行 `bunx tsc --noEmit` 成功退出 0，并检查 `server/routes/auth.ts` 提供 POST /api/auth/register、POST /api/auth/login、GET /api/auth/me，`server/middleware/auth.ts` 使用 jose 校验 Bearer Token 并向 Hono context 注入用户信息
+  check_selector: build, code_review, spec_check
+  priority: blocking
+
+- description: 在 `server/engine/market.ts`、`server/routes/quotes.ts`、`server/ws/quotes.ts` 中实现 GBM 行情引擎、5档盘口、K线聚合、REST 查询与 WebSocket 广播，形成实时市场数据链路
+  criteria: 完成后运行 `bunx tsc --noEmit` 成功退出 0，并检查 `server/engine/market.ts` 导出 GBM tick 生成/涨跌停钳制/K线聚合函数，`server/routes/quotes.ts` 提供 /api/quotes/list、/:code、/:code/kline，`server/ws/quotes.ts` 提供 /ws/quotes 并发送符合 `shared/types.ts` 的 WsQuoteMessage
+  check_selector: build, code_review, spec_check
+  priority: blocking
+
+- description: 在 `server/engine/risk.ts`、`server/engine/matching.ts`、`server/routes/orders.ts`、`server/routes/positions.ts`、`server/routes/trades.ts`、`server/routes/account.ts` 中完成风控、撮合、撤单、持仓、成交、账户汇总与收益查询，形成完整模拟交易闭环
+  criteria: 完成后运行 `bunx tsc --noEmit` 成功退出 0，并检查 risk.ts 覆盖资金/持仓/T+1/涨跌停/100股整数倍规则，matching.ts 覆盖市价立即成交、限价挂单成交、买卖手续费及卖出印花税、撤单释放，相关 routes 提供 PRD 列出的全部 REST 接口
+  check_selector: build, code_review, spec_check
+  priority: blocking
+
+- description: 在 `web/` 下完成 React 19 + Vite 6 前端壳、React Router 7 路由、Zustand 状态层、Ant Design 页面与 ECharts 组件，消费后端 REST/WS 数据并覆盖登录、行情、个股、委托、成交、持仓、仪表盘页面
+  criteria: 完成后运行 `bunx tsc --noEmit` 成功退出 0，并检查 `web/src/App.tsx` 定义 /login、/register、/dashboard、/market、/market/:code、/orders、/trades、/positions 路由，`web/src/api/client.ts` 统一处理 JWT 与 401，四个 store 文件均直接引用 `shared/types.ts`
+  check_selector: build, code_review, spec_check
+  priority: blocking
+
+- description: 在 `server/test/engine.test.ts` 中用 bun:test 直接覆盖行情、风控、撮合的 7 个指定场景，确保核心交易规则可回归验证
+  criteria: 运行 `bun test server/test/engine.test.ts` 成功退出 0，且测试文件可见 7 个场景：合法 tick 范围、市价单立即成交扣款、限价买单满足价格成交、卖出手续费含印花税、资金不足失败、T+1 禁卖、非100整数倍拒绝
+  check_selector: test, verify_cmd, spec_check
+  priority: blocking
+
+- description: 在 `server/app.ts` 与 `server/index.ts` 中装配统一 Hono 应用入口、数据库初始化、股票 seed、行情定时任务、撮合轮询与 Bun HTTP/WS 启动流程，使后端成为单一可运行服务
+  criteria: 完成后运行 `bunx tsc --noEmit` 成功退出 0，并检查 `server/index.ts` 按 migrate → seed → create engines → create app → Bun.serve 顺序启动，`server/app.ts` 挂载全部 API 路由与 /ws/quotes
+  check_selector: build, startup, spec_check
+  priority: blocking
+</goals>
+
+<milestones>
+- title: Wave 0 — 共享基础与数据底座
+  goal_indices: 1, 2
+
+- title: Wave 1 — 并行功能实现
+  goal_indices: 3, 4, 5, 6, 7
+
+- title: Wave 2 — 应用装配与启动集成
+  goal_indices: 8
+</milestones>
+
+<subtasks>
+- title: 补齐依赖、脚本与跨端 TypeScript 配置
+  description: 修改 `package.json`、`tsconfig.json`、新建 `web/tsconfig.json`，让根级 `bunx tsc --noEmit` 能同时检查 `server/**/*.ts`、`web/**/*.ts(x)`、`shared/**/*.ts`；在 `package.json` 中加入 `typecheck` 与 `test` 脚本，并保留 ESM `type: "module"` 模式
+  order: 1
+
+- title: 定义共享类型并统一订单数量语义
+  description: 新建 `shared/types.ts`，集中定义认证、行情、订单、持仓、成交、账户、K线、盘口、WS 消息契约；明确 `CreateOrderRequest.quantity`、`Order.quantity`、`Trade.quantity` 均按“股”处理，且风控要求 100 的整数倍
+  order: 2
+
+- title: 实现 SQLite 表结构与数据库初始化入口
+  description: 新建 `server/db/schema.ts` 与 `server/db/migrate.ts`，在 `migrate.ts` 中导出 `getDb()` / `runMigrations()` 一类函数，内部初始化 `better-sqlite3` 和 Drizzle，并为 `users/stocks/orders/positions/trades/quotes` 执行幂等建表
+  order: 3
+
+- title: 编写 20 只 A 股幂等 seed
+  description: 新建 `server/db/seed.ts`，将 PRD 列出的 20 只股票写入 `stocks`，高低开收初始化为初始价、成交量与成交额为 0，使用 insert-ignore/upsert 保证重复启动不报错
+  order: 4
+
+- title: 实现 JWT 签发、校验与 Hono 认证中间件
+  description: 新建 `server/middleware/auth.ts`，使用 `jose` 封装 JWT 签发与校验；实现 Bearer Token 解析、401 错误响应、用户上下文注入，并为 Hono 声明 context variable 类型
+  order: 5
+
+- title: 实现注册、登录、me 路由
+  description: 新建 `server/routes/auth.ts`，用 Zod 校验输入，`bcryptjs` 哈希密码，用户名唯一检查，登录成功签发 JWT，`GET /me` 通过 `authMiddleware` 返回当前用户资料
+  order: 6
+  dependencies: 5, 3
+
+- title: 实现行情引擎纯函数与内存态盘口缓存
+  description: 新建 `server/engine/market.ts`，导出 `generateNextPrice`、`clampToLimit`、`buildOrderBook`、`aggregateKlines` 与 `createMarketEngine`；在 `tickAll()` 中读写 `stocks` 与 `quotes`，并维护 `Map<string, OrderBook>`
+  order: 7
+  dependencies: 3, 4, 2
+
+- title: 实现行情 REST 查询接口
+  description: 新建 `server/routes/quotes.ts`，使用 `marketEngine` 与 db 提供 `/api/quotes/list`、`/api/quotes/:code`、`/api/quotes/:code/kline`；K 线聚合调用 `market.ts` 中的 `aggregateKlines`
+  order: 8
+  dependencies: 7, 2
+
+- title: 实现 WebSocket 行情广播与订阅
+  description: 新建 `server/ws/quotes.ts`，维护客户端连接与按股票代码订阅关系；广播 `WsQuoteMessage`，支持可选 `subscribe` 消息过滤单股推送，并与 `server/index.ts` 的 tick 循环联动
+  order: 9
+  dependencies: 7, 2
+
+- title: 实现下单前风控规则
+  description: 新建 `server/engine/risk.ts`，导出纯校验函数与 db 依赖版本的 `checkOrder`，覆盖 100 股整数倍、买入余额、卖出可卖数量、T+1、涨停不可买、跌停不可卖，返回稳定错误码/消息供路由和测试复用
+  order: 10
+  dependencies: 3, 2
+
+- title: 实现撮合、成交、撤单与资金持仓更新
+  description: 新建 `server/engine/matching.ts`，实现 `placeOrder`、`cancelOrder`、`processPendingOrders`，并导出手续费/限价成交判定纯函数；成交时更新 `orders/trades/positions/users`，买入冻结资金、卖出控制可卖数量，撤单释放剩余冻结资源
+  order: 11
+  dependencies: 10, 7, 3, 2
+
+- title: 实现订单、持仓、成交、账户 REST 路由
+  description: 新建 `server/routes/orders.ts`、`server/routes/positions.ts`、`server/routes/trades.ts`、`server/routes/account.ts`；orders 路由调用 `matchingEngine`，其余路由用 db 查询并 join `stocks` 返回前端需要的字段，如持仓浮盈、账户总资产、收益率、净值曲线
+  order: 12
+  dependencies: 11, 3, 2
+
+- title: 实现前端 Vite 壳与路由守卫
+  description: 新建 `web/index.html`、`web/vite.config.ts`、`web/tailwind.config.ts`、`web/src/main.tsx`、`web/src/App.tsx`，配置 React 19 + Vite 6 + Router 7，定义 `ProtectedRoute`，并保证 `web` 根目录构建和 `shared/types.ts` 导入解析正常
+  order: 13
+  dependencies: 1, 2
+
+- title: 实现前端 API 客户端与 Zustand stores
+  description: 新建 `web/src/api/client.ts`、`web/src/stores/auth.ts`、`web/src/stores/quotes.ts`、`web/src/stores/orders.ts`、`web/src/stores/account.ts`；封装 JWT 注入、401 统一处理、REST 调用与 quotes WebSocket 连接，并全部使用 `shared/types.ts` 类型
+  order: 14
+  dependencies: 13, 2
+
+- title: 实现认证、仪表盘、行情、个股、委托、成交、持仓页面
+  description: 新建 `web/src/pages/Login.tsx`、`Register.tsx`、`Dashboard.tsx`、`Market.tsx`、`StockDetail.tsx`、`Orders.tsx`、`Trades.tsx`、`Positions.tsx`；用 Ant Design 表单、表格、卡片组织数据，并与对应 store actions 绑定
+  order: 15
+  dependencies: 14
+
+- title: 实现图表与交易组件
+  description: 新建 `web/src/components/KLineChart.tsx`、`TimelineChart.tsx`、`OrderBook.tsx`、`TradePanel.tsx`、`PnlChart.tsx`、`PositionPie.tsx`、`StockTable.tsx`，并在 `web/src/utils/format.ts`、`web/src/utils/constants.ts` 中沉淀格式化与固定常量；`TradePanel.tsx` 必须支持买卖/市价限价切换与数量整百校验
+  order: 16
+  dependencies: 14, 15
+
+- title: 编写 bun:test 引擎测试覆盖 7 个强制场景
+  description: 新建 `server/test/engine.test.ts`，直接导入 `server/engine/market.ts`、`server/engine/risk.ts`、`server/engine/matching.ts` 的纯函数和轻量引擎；构造最小 stub 数据环境，断言涨跌停范围、市价/限价成交、手续费、余额不足、T+1、非100整数倍等行为
+  order: 17
+  dependencies: 7, 10, 11
+
+- title: 装配统一 Hono 应用与 Bun 启动流程
+  description: 新建 `server/app.ts` 与 `server/index.ts`，把 auth/quotes/orders/positions/trades/account 路由与 `/ws/quotes` 接到同一 Hono app，启动时执行 migrate + seed，创建 market/matching 引擎并注册每秒 tick 与 pending 订单处理循环，最终通过 `Bun.serve` 启动
+  order: 18
+  dependencies: 6, 8, 9, 12
+
+- title: 执行最终验收命令并修正类型边界
+  description: 在全部文件完成后运行 `bunx tsc --noEmit` 与 `bun test server/test/engine.test.ts`；若报错，优先修复 `shared/types.ts`、Hono context 类型、Vite alias、Zustand store 返回类型、引擎测试 stub 类型不一致问题
+  order: 19
+  dependencies: 17, 18, 16
+</subtasks>
+
+<risks>
+- risk: PRD 中 `orders.quantity` 的“手”与测试/风控中的“100 整数倍”存在语义冲突，若实现时一部分按手、一部分按股，HTTP、DB、测试会互相打架
+  mitigation: 从 `shared/types.ts` 开始统一 quantity 为“股”，所有校验、路由、引擎、测试使用同一口径；在 `server/db/schema.ts` 虽沿用字段名 `quantity`，但语义在代码注释与类型中明确为股
+
+- risk: 当前仓库没有任何现成 `server/`、`web/`、`shared/` 目录与样板，若在实现中依赖未列入白名单的新文件会直接违规
+  mitigation: 所有逻辑都内聚到用户允许的文件中；应用级依赖注入集中在 `server/app.ts` 与 `server/index.ts`，不新增 service/lib/helper 文件
+
+- risk: Hono on Bun 的 WebSocket 挂载方式容易与普通 Hono 路由写法不一致，导致类型通过但运行时握手失败
+  mitigation: 在 `server/ws/quotes.ts` 中采用与 `server/index.ts` 同一套 Bun websocket handler 模式；不要把 WS 逻辑分散到多个文件，统一由 app/index 装配
+
+- risk: Drizzle 常规迁移流程通常依赖额外配置文件，但本任务白名单不允许新增 drizzle.config.ts
+  mitigation: 在 `server/db/migrate.ts` 中直接实现幂等建表逻辑，并把 Drizzle 主要用于 schema/typesafe query，不依赖外部迁移基础设施
+
+- risk: React Router 7、Tailwind 4、Ant Design 5、ECharts 在纯 TS 类型层集成时容易出现额外样式或模块声明问题
+  mitigation: 以前端“类型可通过”为首要目标，避免依赖未白名单的 CSS 文件；图表组件优先实现最小可用 props 与 option 组合，样式以 Ant Design + 内联 className 为主
+
+- risk: 引擎测试若直接依赖真实 SQLite 文件，会引入状态污染和不稳定
+  mitigation: `server/test/engine.test.ts` 只测试纯函数和最小 stub 引擎交互，不读取生产数据库文件；将手续费计算、限价成交判定、涨跌停钳制等核心逻辑做成可直接导入的纯函数
+</risks>
+
+<assumptions>
+- Q: 当前仓库是否已有任何可复用前后端代码？
+  A: 没有。经探索仅存在根级 `package.json`、`tsconfig.json`、`prd-stock-trading-system.md`、`opencorvus.json`，`server/`、`web/`、`shared/` 目录均不存在，需要从零创建白名单文件。
+
+- Q: 最终强制验收命令有哪些？
+  A: 以用户 PRD 和已探索文件为准，强制命令只有 `bunx tsc --noEmit` 与 `bun test server/test/engine.test.ts`。
+
+- Q: 是否需要为了完整体验加入额外样式文件、环境配置文件、Drizzle 配置文件？
+  A: 不需要，也不允许；必须只在白名单文件内解决配置、类型、运行与初始化问题。
+</assumptions>
+
+---
+
+Assistant / 04/02/2026, 00:01:24
+计划已生成，下一步提交给执行器开始异步实现。按流程，提交后我会停止，等待执行完成后再进入评估与发布阶段。
+
+[Tool:Completed] submit_execution submit_execution
+
+---
+
+Assistant / 04/02/2026, 00:01:27
+已提交执行，等待异步完成。

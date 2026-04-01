@@ -82,6 +82,7 @@ export interface DomRefs {
   specSection: HTMLElement | null;
   planSection: HTMLElement | null;
   goalsSection: HTMLElement | null;
+  executorSection: HTMLElement | null;
   criteriaSection: HTMLElement | null;
   deliverySection: HTMLElement | null;
   deliveryBadge: HTMLElement | null;
@@ -373,6 +374,7 @@ export function getDomRefs(): DomRefs {
     specSection: $<HTMLElement>("#specSection"),
     planSection: $<HTMLElement>("#planSection"),
     goalsSection: $<HTMLElement>("#goalsSection"),
+    executorSection: $<HTMLElement>("#executorSection"),
     criteriaSection: $<HTMLElement>("#criteriaSection"),
     deliverySection: $<HTMLElement>("#deliverySection"),
     deliveryBadge: $<HTMLElement>("#deliveryBadge"),

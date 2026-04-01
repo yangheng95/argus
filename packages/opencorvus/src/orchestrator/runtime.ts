@@ -41,6 +41,7 @@ import { sessionStreamHooks } from "./session-stream"
 import { registerGoalRunSession } from "@/server/routes/task-event"
 import { TaskAgent } from "./task-agent"
 import {
+  findDeliveryByGoalRun,
   findDeliveryByRun,
   findEvaluationByRun,
   findInteractionByExternal,
@@ -524,26 +525,28 @@ export namespace OrchestratorRuntime {
       ),
     ])
     const now = Date.now()
-    await hooks.updateRun(
-      run,
-      {
-        status: "accepted",
-        executor_ref: {
-          session_id: submission.sessionID,
-          queue_task_id: submission.queueTaskID,
+    await Promise.all([
+      hooks.updateRun(
+        run,
+        {
+          status: "accepted",
+          executor_ref: {
+            session_id: submission.sessionID,
+            queue_task_id: submission.queueTaskID,
+          },
+          time_started: now,
         },
-        time_started: now,
-      },
-      "Run accepted by executor",
-    )
-    await hooks.updateTask(
-      task,
-      {
-        status: "running",
-        time_started: task.time_started ?? now,
-      },
-      "Run dispatched",
-    )
+        "Run accepted by executor",
+      ),
+      hooks.updateTask(
+        task,
+        {
+          status: "running",
+          time_started: task.time_started ?? now,
+        },
+        "Run dispatched",
+      ),
+    ])
     const session = ensureExecutorSession({
       taskID: task.id,
       runID: run.id,
@@ -583,8 +586,10 @@ export namespace OrchestratorRuntime {
     task = prepared
 
     const now = Date.now()
-    await hooks.updateRun(run, { status: "accepted", time_started: now }, "Per-goal parallel dispatch")
-    await hooks.updateTask(task, { status: "running", time_started: task.time_started ?? now }, "Dispatching goals in parallel")
+    await Promise.all([
+      hooks.updateRun(run, { status: "accepted", time_started: now }, "Per-goal parallel dispatch"),
+      hooks.updateTask(task, { status: "running", time_started: task.time_started ?? now }, "Dispatching goals in parallel"),
+    ])
 
     await queueReadyGoalRuns(task, run, plan, hooks)
   }
@@ -608,13 +613,9 @@ export namespace OrchestratorRuntime {
     const batch = ready.slice(0, slots)
     if (batch.length === 0) return 0
 
-    let queued = 0
-    for (const entry of batch) {
-      await queueGoalRun(task, run, plan, entry, hooks)
-      queued++
-    }
-    log.info("queued goal runs", { runID: run.id, queued, active: active.length, ready: ready.length })
-    return queued
+    await Promise.all(batch.map((entry) => queueGoalRun(task, run, plan, entry, hooks)))
+    log.info("queued goal runs", { runID: run.id, queued: batch.length, active: active.length, ready: ready.length })
+    return batch.length
   }
 
   /**
@@ -997,7 +998,6 @@ export namespace OrchestratorRuntime {
       const seenFiles = new Set<string>()
       const summaries: string[] = []
       for (const gr of goalRuns) {
-        const { findDeliveryByGoalRun } = await import("./store")
         const d = findDeliveryByGoalRun(gr.id)
         if (!d) continue
         if (d.summary) summaries.push(d.summary)
@@ -1069,28 +1069,22 @@ export namespace OrchestratorRuntime {
         }
         const stillPending = findPendingInteractions(run.id)
         if (stillPending.length === 0) {
-          if (run.status === "blocked") {
-            await hooks.updateRun(run, { status: "accepted", blocking_reason: null }, "Stale interactions auto-rejected")
-          }
-          if (task.status === "blocked") {
-            await hooks.updateTask(task, { status: "running", blocking_reason: null }, "Stale interactions auto-rejected")
-          }
+          await Promise.all([
+            run.status === "blocked" ? hooks.updateRun(run, { status: "accepted", blocking_reason: null }, "Stale interactions auto-rejected") : undefined,
+            task.status === "blocked" ? hooks.updateTask(task, { status: "running", blocking_reason: null }, "Stale interactions auto-rejected") : undefined,
+          ])
         } else {
-          if (run.status !== "blocked") {
-            await hooks.updateRun(run, { status: "blocked", blocking_reason: stillPending[0].request_type }, "Run blocked")
-          }
-          if (task.status !== "blocked") {
-            await hooks.updateTask(task, { status: "blocked", blocking_reason: stillPending[0].request_type }, "Awaiting user input")
-          }
+          await Promise.all([
+            run.status !== "blocked" ? hooks.updateRun(run, { status: "blocked", blocking_reason: stillPending[0].request_type }, "Run blocked") : undefined,
+            task.status !== "blocked" ? hooks.updateTask(task, { status: "blocked", blocking_reason: stillPending[0].request_type }, "Awaiting user input") : undefined,
+          ])
           return
         }
       } else {
-        if (run.status !== "blocked") {
-          await hooks.updateRun(run, { status: "blocked", blocking_reason: pending[0].request_type }, "Run blocked")
-        }
-        if (task.status !== "blocked") {
-          await hooks.updateTask(task, { status: "blocked", blocking_reason: pending[0].request_type }, "Awaiting user input")
-        }
+        await Promise.all([
+          run.status !== "blocked" ? hooks.updateRun(run, { status: "blocked", blocking_reason: pending[0].request_type }, "Run blocked") : undefined,
+          task.status !== "blocked" ? hooks.updateTask(task, { status: "blocked", blocking_reason: pending[0].request_type }, "Awaiting user input") : undefined,
+        ])
         return
       }
     }

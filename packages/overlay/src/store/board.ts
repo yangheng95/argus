@@ -4,7 +4,6 @@
 
 import { createStore } from "solid-js/store";
 import { apiHeaders, apiJson, apiUrl } from "../services/api";
-import { scheduleRebuildAgentCards } from "./messages";
 import { t } from "../utils/i18n";
 
 // ── Store ──
@@ -120,9 +119,7 @@ export async function loadBoard(options: LoadBoardOptions = {}): Promise<void> {
       }
       clearBoardRetry();
       setBoardUpdatedAt(Date.now());
-      // Board data includes goal sessionIDs needed by executor card grouping.
-      // Rebuild agent cards so executor groups pick up goal titles.
-      scheduleRebuildAgentCards();
+      // Agent cards are derived reactively from boardStore — no manual rebuild needed.
     } catch (e) {
       failed = true;
       console.error("loadBoard failed", e);

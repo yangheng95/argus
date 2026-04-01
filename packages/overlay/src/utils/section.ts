@@ -19,6 +19,7 @@ function phaseSections(): Record<string, HTMLElement | null> {
     spec: dom.specSection,
     plan: dom.planSection,
     goals: dom.goalsSection,
+    executor: dom.executorSection,
     evaluation: dom.criteriaSection,
     delivery: dom.deliverySection,
     files: dom.changesSection,
@@ -149,7 +150,8 @@ export function syncSectionPhases(board: any, changesCount = 0): void {
   }
 
   if (board?.task && active.length === 0 && board.task.status === "running") {
-    active.push(goals.length > 0 ? "goals" : board.plan ? "plan" : "spec");
+    active.push("executor");
+    if (goals.length > 0) related.push("goals");
     if (board.plan) related.push("plan");
     if (changesCount > 0) related.push("files");
   }

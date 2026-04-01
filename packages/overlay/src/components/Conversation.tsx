@@ -1,5 +1,6 @@
 import { createSignal, createMemo, createEffect, Index, Show, onMount, onCleanup } from "solid-js";
 import { MessageView } from "./MessageView";
+import { AgentCard } from "./AgentCard";
 import { ExecutorGoalGroup } from "./ExecutorGoalGroup";
 import { t } from "../utils/i18n";
 import { conversationMessages } from "../utils/conversation";
@@ -59,9 +60,13 @@ export function Conversation(props: { container: HTMLElement }) {
                 when={item()?._agentCard && (item()._agentMessages || []).length > 0}
                 fallback={<MessageView message={item()} />}
               >
-                <Index each={item()._agentMessages || []}>
-                  {(msg) => <MessageView message={msg()} />}
-                </Index>
+                <AgentCard
+                  cardID={item()._agentCardKey}
+                  stage={item()._agentStage}
+                  status={item()._agentStatus}
+                  messages={item()._agentMessages || []}
+                  round={item()._agentRound || 0}
+                />
               </Show>
             }
           >

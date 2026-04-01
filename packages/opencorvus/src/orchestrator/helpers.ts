@@ -7,7 +7,7 @@ import { OrchestratorConfig } from "./config"
 import type { OrchestratorBudget, OrchestratorTaskStatus } from "./orchestrator.sql"
 import type { TaskRow } from "./store"
 
-export const ORCHESTRATOR_POLL_INTERVAL_MS = 1500
+export const ORCHESTRATOR_POLL_INTERVAL_MS = 500
 
 // 同步默认值 — 用于无法 await 的场景（如模块级 export）
 const syncDefaults = OrchestratorConfig.getDefaults()
