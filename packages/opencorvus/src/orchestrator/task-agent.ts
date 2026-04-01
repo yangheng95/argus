@@ -1,14 +1,18 @@
 /**
- * Task Agent — headless LLM-driven task processor.
+ * Task Agent — event-driven LLM task supervisor.
  *
  * Uses streamText() from AI SDK directly (same pattern as spec/planner/goal agents).
  * NOT SessionPrompt — that requires a registered Agent config.
  *
  * Triggered by:
  * - Task creation (kind: "created")
- * - Executor completion (kind: "completed")
- * - Executor failure (kind: "failed")
+ * - Eval failure (kind: "eval_failed") — runtime ran eval, it failed
+ * - Delivery rejection (kind: "delivery_rejected") — runtime ran delivery agent, it rejected
+ * - Executor failure (kind: "executor_failed") — executor crashed or errored
  * - User retry request (kind: "retry")
+ *
+ * Normal path (eval pass → delivery accept → publish) is fully automatic.
+ * Task Agent is only invoked at decision branch points.
  */
 import { streamText, stepCountIs } from "ai"
 import { Provider } from "@/provider/provider"
@@ -20,16 +24,19 @@ import { registerGoalRunSession } from "@/server/routes/task-event"
 import { agentStream } from "./agent-stream"
 import { sessionStreamHooks } from "./session-stream"
 import { createTaskAgentTools } from "./task-tools"
+import { operatorNotesSection } from "./helpers"
 import {
   findDeliveryByRun,
   findEvaluationByRun,
   findPlan,
   findRun,
+  findRuns,
   findSpecSnapshot,
   listGoals,
   requireTask,
   type TaskRow,
 } from "./store"
+import { DEFAULT_MAX_RUNS, DEFAULT_MAX_FIX_RUNS } from "./helpers"
 
 const log = Log.create({ service: "task-agent" })
 const MAX_STEPS = 20
@@ -38,10 +45,14 @@ const MAX_STEPS = 20
 // Trigger types
 // ---------------------------------------------------------------------------
 
+export type CheckResult = { name: string; status: string; evidence?: string }
+export type RejectionDetail = { category: string; file?: string; error: string; suggestion?: string }
+
 export type TaskAgentTrigger =
   | { kind: "created" }
-  | { kind: "completed"; runID: string }
-  | { kind: "failed"; runID: string; error: string }
+  | { kind: "eval_failed"; runID: string; summary: string; checks: CheckResult[] }
+  | { kind: "delivery_rejected"; runID: string; summary: string; issues: string[]; rejectionDetails?: RejectionDetail[] }
+  | { kind: "executor_failed"; runID: string; error: string }
   | { kind: "retry" }
 
 // ---------------------------------------------------------------------------
@@ -176,19 +187,51 @@ function describeTrigger(task: TaskRow, trigger: TaskAgentTrigger): string {
     case "created":
       return `New task created. Process it.\n\nTitle: ${task.title}\nRequest: ${task.request}`
 
-    case "completed": {
-      const run = findRun(trigger.runID)
-      const evaluation = run ? findEvaluationByRun(run.id) : undefined
-      const delivery = run ? findDeliveryByRun(run.id) : undefined
+    case "eval_failed": {
+      const checkLines = trigger.checks.map(
+        c => `- **${c.name}**: ${c.status}${c.evidence ? ` — ${c.evidence.slice(0, 500)}` : ""}`,
+      )
       return [
-        `Executor completed run ${trigger.runID}. Review results and decide next steps.`,
-        evaluation ? `Evaluation: ${evaluation.verdict} — ${evaluation.summary}` : "Evaluation: pending",
-        delivery ? `Delivery: ${(delivery.result as any)?.verdict ?? delivery.status} — ${delivery.summary}` : "Delivery: pending",
+        `Core evaluation failed for run ${trigger.runID}.`,
+        "",
+        `## Failure Summary`,
+        trigger.summary,
+        "",
+        `## Check Results`,
+        ...checkLines,
+        "",
+        "Decide: call create_fix_run with guidance for the executor, or fail_task if unrecoverable.",
       ].join("\n")
     }
 
-    case "failed":
-      return `Executor run ${trigger.runID} failed.\nError: ${trigger.error}\nDecide: retry or fail.`
+    case "delivery_rejected": {
+      const lines = [
+        `Delivery verification rejected run ${trigger.runID}.`,
+        "",
+        `## Rejection Summary`,
+        trigger.summary,
+      ]
+      if (trigger.issues.length > 0) {
+        lines.push("", "## Issues Found")
+        for (const issue of trigger.issues) lines.push(`- ${issue}`)
+      }
+      if (trigger.rejectionDetails && trigger.rejectionDetails.length > 0) {
+        lines.push("", "## Rejection Details")
+        for (const d of trigger.rejectionDetails) {
+          lines.push(`- **[${d.category}]**${d.file ? ` ${d.file}` : ""}: ${d.error}${d.suggestion ? ` → ${d.suggestion}` : ""}`)
+        }
+      }
+      lines.push("", "Decide: call create_fix_run with guidance for the executor, or fail_task if unrecoverable.")
+      return lines.join("\n")
+    }
+
+    case "executor_failed":
+      return [
+        `Executor run ${trigger.runID} failed.`,
+        `Error: ${trigger.error}`,
+        "",
+        "Decide: call create_fix_run if the error is recoverable, or fail_task if not.",
+      ].join("\n")
 
     case "retry":
       return `User requested retry.${task.error ? ` Previous error: ${task.error}` : ""}\nDecide how to proceed.`
@@ -234,19 +277,73 @@ function buildSystemPrompt(task: TaskRow, trigger: TaskAgentTrigger): string {
   }
   if (task.error) sections.push(`- Error: ${task.error}`)
 
+  // Fix budget status
+  const totalRuns = findRuns(task.id).length
+  const maxRuns = task.budget?.max_runs ?? DEFAULT_MAX_RUNS
+  const maxFixRuns = task.budget?.max_fix_runs ?? DEFAULT_MAX_FIX_RUNS
+  const activeRun = task.active_run_id ? findRun(task.active_run_id) : undefined
+  const fixCount = activeRun?.retry_count ?? 0
+  sections.push(`- Run budget: ${totalRuns}/${maxRuns} total runs used, ${fixCount}/${maxFixRuns} fix runs used`)
+
+  // Pending user messages (operator notes)
+  const notes = operatorNotesSection(task.id)
+  if (notes) sections.push(notes)
+
+  // Previous run context for failure triggers
+  if (trigger.kind === "eval_failed" || trigger.kind === "delivery_rejected" || trigger.kind === "executor_failed") {
+    const runID = trigger.runID
+    const delivery = findDeliveryByRun(runID)
+    if (delivery) {
+      sections.push("")
+      sections.push("## Previous Run Context")
+      sections.push(`- Delivery summary: ${delivery.summary}`)
+      const changedFiles = delivery.result?.changed_files as string[] | undefined
+      if (changedFiles && changedFiles.length > 0) {
+        sections.push(`- Changed files: ${changedFiles.join(", ")}`)
+      }
+    }
+    const evaluation = findEvaluationByRun(runID)
+    if (evaluation) {
+      sections.push(`- Evaluation: ${evaluation.verdict} — ${evaluation.summary}`)
+    }
+  }
+
   sections.push("")
-  sections.push("## How to Decide")
+
+  // Decision guidance based on trigger type
+  if (trigger.kind === "created" || trigger.kind === "retry") {
+    sections.push("## How to Decide")
+    sections.push(
+      "- Simple bug fix / small change: skip analysis, call create_plan directly, then submit_execution.",
+      "- Complex multi-file change: analyze_requirements first, optionally decompose_goals, then create_plan, then submit_execution.",
+    )
+  } else if (trigger.kind === "eval_failed" || trigger.kind === "delivery_rejected") {
+    sections.push("## How to Decide")
+    sections.push(
+      "- Analyze the failure: understand what went wrong and why.",
+      "- If the issue is fixable: call create_fix_run with a clear error_summary and fix_guidance for the executor.",
+      "- If the issue is unrecoverable (e.g., impossible requirements, repeated identical failures): call fail_task.",
+      "- If the approach is fundamentally wrong and needs a fresh start: call restart_from_stage.",
+      "- Check the fix budget before deciding — if budget is exhausted, call fail_task.",
+    )
+  } else if (trigger.kind === "executor_failed") {
+    sections.push("## How to Decide")
+    sections.push(
+      "- Analyze the executor error.",
+      "- If it's a transient error (network, timeout): call create_fix_run to retry.",
+      "- If it's a configuration or environment error: call fail_task with explanation.",
+      "- If the approach needs adjustment: call create_fix_run with specific fix guidance.",
+    )
+  }
+
   sections.push(
-    "- Simple bug fix / small change: skip analysis, call create_plan directly, then submit_execution.",
-    "- Complex multi-file change: analyze_requirements first, optionally decompose_goals, then create_plan, then submit_execution.",
-    "- Executor completed: use check_run_result, then complete_task or fail_task.",
-    "- Executor failed: analyze error, retry or fail_task.",
     "",
     "## Rules",
     "- Explain your reasoning before each tool call.",
-    "- After calling submit_execution, STOP. Do not call more tools.",
+    "- After calling submit_execution or create_fix_run, STOP. Do not call more tools.",
     "- Never call complete_task without checking run results first.",
     "- If the task is already in a terminal state (completed/failed/cancelled), do nothing.",
+    "- If user messages are pending in Operator Notes, acknowledge them in your reasoning.",
   )
 
   return sections.join("\n")

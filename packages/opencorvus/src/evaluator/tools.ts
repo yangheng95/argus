@@ -8,7 +8,6 @@ import { tool } from "ai"
 import z from "zod"
 import { createCodebaseTools } from "@/orchestrator/codebase-tools"
 import { Memory } from "@/memory"
-import { Preference } from "@/preference"
 import { Instance } from "@/project/instance"
 import { Log } from "@/util/log"
 
@@ -88,23 +87,5 @@ export function createEvaluatorTools(input?: { sessionID?: string }) {
       },
     }),
 
-    preference_list: tool({
-      description:
-        "List active project preferences and conventions. " +
-        "Use when checking if the delivered code follows project conventions.",
-      inputSchema: z.object({
-        scope: z.enum(["all", "global"]).optional().describe("Which scope to list (default: all)"),
-      }),
-      execute: async () => {
-        try {
-          const prefs = Preference.merged({ projectID: projectId })
-          if (prefs.length === 0) return "No preferences configured."
-          return prefs.map((p) => `- **${p.key}**: ${p.value} [source: ${p.source}]`).join("\n")
-        } catch (err) {
-          log.warn("preference list failed in evaluator", { err })
-          return "Preferences unavailable."
-        }
-      },
-    }),
   }
 }

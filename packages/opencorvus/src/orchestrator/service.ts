@@ -131,6 +131,8 @@ const log = Log.create({ service: "orchestrator" })
 async function continueTaskMessage(taskID: string, text: string) {
   const task = requireTask(taskID)
   const run = task.active_run_id ? findRun(task.active_run_id) : undefined
+
+  // If executor is running and supports resume → inject directly
   const injected = run ? await injectRunningTaskMessage(task, run, text) : false
   if (injected) {
     return {
@@ -139,11 +141,30 @@ async function continueTaskMessage(taskID: string, text: string) {
       status: "running" as const,
     }
   }
+
+  // Always store the message in session history so Task Agent can see it later
   await appendTaskSessionMessage(task, text)
-  const note = await OrchestratorService.recordOperatorNote(taskID, text)
+
+  // If task is in a terminal/blocked state → wake up Task Agent to handle the message
+  if (["failed", "blocked", "cancelled"].includes(task.status)) {
+    await updateTask(task, { status: "queued", error: null, blocking_reason: null }, "User message received, re-queuing")
+    TaskAgent.processTask(taskID, { kind: "retry" }).catch((err) => {
+      log.error("task agent failed on user message retry", { taskID, error: err instanceof Error ? err.message : String(err) })
+    })
+    return {
+      mode: "agent_retry" as const,
+      resumed: true,
+      status: "queued" as const,
+    }
+  }
+
+  // Otherwise: executor is running but doesn't support inject, or task is in pipeline stages.
+  // Queue the message — Task Agent will see it at the next decision point via operatorNotesSection.
+  await OrchestratorService.recordOperatorNote(taskID, text)
   return {
-    mode: note.resumed ? "queued" as const : "recorded" as const,
-    ...note,
+    mode: "queued" as const,
+    resumed: false,
+    status: task.status as string,
   }
 }
 

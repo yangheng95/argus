@@ -53,7 +53,7 @@ import {
 // advanceTaskStage removed — pipeline advancement now driven by Task Agent
 import { sessionStreamHooks } from "./session-stream"
 import { registerGoalRunSession } from "@/server/routes/task-event"
-import { buildFixContext, decideFixOrFail } from "./strategy"
+import { TaskAgent } from "./task-agent"
 import {
   findDeliveryByRun,
   findEvaluationByRun,
@@ -112,7 +112,7 @@ async function serializedMerge(runID: string, fn: () => Promise<void>) {
 const INTERACTION_STALE_MS = parseInt(process.env.OPENCORVUS_INTERACTION_TIMEOUT_MS || "30000", 10) // auto-reject stale interactions (30s default)
 const RUN_MAX_EXECUTION_MS = parseInt(process.env.OPENCORVUS_RUN_TIMEOUT_MS || String(2 * 60 * 60 * 1000), 10) // max run execution time (2h default)
 const PIPELINE_STALE_MS = 10 * 60 * 1000 // 10 min — pipeline tasks stuck longer without in-memory tracking are recovered
-const PIPELINE_STATUSES = ["queued", "spec_generating", "goal_decomposing", "planning", "planned"] as const
+const PIPELINE_STATUSES = ["queued", "spec_generating", "goal_decomposing", "planning", "planned", "evaluating", "delivering"] as const
 // runningStages removed — Task Agent has its own concurrency guard
 
 type TranscriptState = {
@@ -989,7 +989,12 @@ export namespace OrchestratorRuntime {
 
     // Check if blocking goals failed
     if (hasBlockingFailures(goals)) {
-      await handleEvaluationFailure(task, run, "Blocking goal(s) failed during parallel execution", hooks)
+      TaskAgent.processTask(task.id, {
+        kind: "eval_failed",
+        runID: run.id,
+        summary: "Blocking goal(s) failed during parallel execution",
+        checks: [],
+      }).catch(err => log.error("task agent failed on goal failure", { taskID: task.id, error: String(err) }))
       return
     }
 
@@ -997,7 +1002,12 @@ export namespace OrchestratorRuntime {
     const pending = pendingBlockingGoals(goals)
     if (pending.length > 0) {
       // Pending goals exist but none are ready — dependency chain broken
-      await handleEvaluationFailure(task, run, `${pending.length} blocking goal(s) pending but not ready (dependency failure)`, hooks)
+      TaskAgent.processTask(task.id, {
+        kind: "eval_failed",
+        runID: run.id,
+        summary: `${pending.length} blocking goal(s) pending but not ready (dependency failure)`,
+        checks: [],
+      }).catch(err => log.error("task agent failed on dependency failure", { taskID: task.id, error: String(err) }))
       return
     }
 
@@ -1291,7 +1301,13 @@ async function completeRun(run: RunRow, hooks: RuntimeHooks) {
       return
     }
     if (evaluation.status !== "passed") {
-      await handleEvaluationFailure(task, run, evaluation.summary, hooks)
+      const evalChecks = Array.isArray(evaluation.checks) ? (evaluation.checks as Array<{name: string; status: string; evidence?: string}>) : []
+      TaskAgent.processTask(task.id, {
+        kind: "eval_failed",
+        runID: run.id,
+        summary: evaluation.summary,
+        checks: evalChecks.map(c => ({ name: c.name, status: c.status, evidence: c.evidence })),
+      }).catch(err => log.error("task agent failed on eval_failed (existing)", { taskID: task.id, error: String(err) }))
     }
     return
   }
@@ -1396,26 +1412,40 @@ async function completeRun(run: RunRow, hooks: RuntimeHooks) {
     goals,
   })
 
-  // Always proceed to delivery — it handles fix + extended checks + runtime verify.
-  // Check for pending blocking goals first.
+  // Check for pending blocking goals
   const allGoals = run.plan_version_id ? listGoalsByPlan(run.plan_version_id) : []
   const pendingBlocking = allGoals.filter((g) => g.priority === "blocking" && g.status === "pending")
 
   if (pendingBlocking.length > 0) {
     const remaining = pendingBlocking.map((g) => g.description).join(", ")
-    await handleEvaluationFailure(requireTask(task.id), run, `Blocking goals still pending: ${remaining}`, hooks, {
-      verdict: "rejected", classification: "evaluation", summary: `Blocking goals pending: ${remaining}`,
-      goal_statuses: [], replan_guidance: null,
-    })
+    const failSummary = `Blocking goals still pending: ${remaining}`
+    // Notify Task Agent to decide
+    TaskAgent.processTask(task.id, {
+      kind: "eval_failed",
+      runID: run.id,
+      summary: failSummary,
+      checks: result.checks.map(c => ({ name: c.name, status: c.status, evidence: typeof c.evidence === "string" ? c.evidence : undefined })),
+    }).catch(err => log.error("task agent failed on eval_failed (pending goals)", { taskID: task.id, error: String(err) }))
     return
   }
 
+  if (!evalPassed) {
+    // Eval failed → notify Task Agent to decide fix or fail
+    TaskAgent.processTask(task.id, {
+      kind: "eval_failed",
+      runID: run.id,
+      summary: checkSummary,
+      checks: result.checks.map(c => ({ name: c.name, status: c.status, evidence: typeof c.evidence === "string" ? c.evidence : undefined })),
+    }).catch(err => log.error("task agent failed on eval_failed", { taskID: task.id, error: String(err) }))
+    return
+  }
+
+  // Eval passed → proceed to delivery automatically (normal path, no LLM delay)
   const accepted = findDeliveryByRun(run.id)
   if (!accepted) {
     await hooks.updateTask(task, { status: "completed", blocking_reason: null, error: null, time_completed: Date.now() }, "Task completed")
     return
   }
-  // publishAcceptedDelivery runs the delivery agent which handles everything
   await publishAcceptedDelivery(task, run, accepted, hooks, result.checks)
 }
 
@@ -1507,17 +1537,32 @@ async function runEvaluation(task: TaskRow, run: RunRow, existingDelivery: Deliv
     finalSummary: checkSummary, goals,
   })
 
+  // Check for pending blocking goals
   const allGoals = run.plan_version_id ? listGoalsByPlan(run.plan_version_id) : []
   const pendingBlocking = allGoals.filter((g) => g.priority === "blocking" && g.status === "pending")
   if (pendingBlocking.length > 0) {
     const remaining = pendingBlocking.map((g) => g.description).join(", ")
-    await handleEvaluationFailure(requireTask(task.id), run, `Blocking goals pending: ${remaining}`, hooks, {
-      verdict: "rejected", classification: "evaluation", summary: `Blocking goals pending: ${remaining}`,
-      goal_statuses: [], replan_guidance: null,
-    })
+    TaskAgent.processTask(task.id, {
+      kind: "eval_failed",
+      runID: run.id,
+      summary: `Blocking goals still pending: ${remaining}`,
+      checks: result.checks.map(c => ({ name: c.name, status: c.status, evidence: typeof c.evidence === "string" ? c.evidence : undefined })),
+    }).catch(err => log.error("task agent failed on eval_failed (pending goals)", { taskID: task.id, error: String(err) }))
     return
   }
 
+  if (!evalPassed) {
+    // Eval failed → notify Task Agent
+    TaskAgent.processTask(task.id, {
+      kind: "eval_failed",
+      runID: run.id,
+      summary: checkSummary,
+      checks: result.checks.map(c => ({ name: c.name, status: c.status, evidence: typeof c.evidence === "string" ? c.evidence : undefined })),
+    }).catch(err => log.error("task agent failed on eval_failed", { taskID: task.id, error: String(err) }))
+    return
+  }
+
+  // Eval passed → proceed to delivery automatically
   const accepted = findDeliveryByRun(run.id)
   if (!accepted) {
     await hooks.updateTask(task, { status: "completed", blocking_reason: null, error: null, time_completed: Date.now() }, "Task completed")
@@ -1569,7 +1614,12 @@ async function failRun(run: RunRow, error: string, hooks: RuntimeHooks) {
   }
   await hooks.updateRun(run, { status: "failed", error, blocking_reason: null, time_completed: now }, error)
   if (task.active_run_id === run.id) {
-    await hooks.updateTask(task, { status: "failed", error, blocking_reason: null, time_completed: now }, error)
+    // Notify Task Agent to decide recovery instead of directly failing the task
+    TaskAgent.processTask(task.id, {
+      kind: "executor_failed",
+      runID: run.id,
+      error,
+    }).catch(err => log.error("task agent failed on executor_failed", { taskID: task.id, error: String(err) }))
   }
 }
 
@@ -1651,23 +1701,11 @@ async function publishAcceptedDelivery(task: TaskRow, run: RunRow, delivery: Del
       log.error("delivery verification failed", { runID: run.id, error: msg })
       await deliveryContentHooks.flush().catch(() => undefined)
       deliveryLive.error(err)
-      await handleEvaluationFailure(requireTask(task.id), run, `Delivery verification failed: ${msg}`, hooks, {
-        verdict: "rejected",
-        classification: "evaluation",
-        summary: `Delivery verification failed: ${msg}`,
-        goal_statuses: verifyGoals.map((_, i) => ({
-          goal_index: i,
-          status: "failed" as const,
-          evidence: msg,
-          reasoning: `Delivery agent error: ${msg}`,
-        })),
-        replan_guidance: {
-          root_cause: msg,
-          what_failed: "Delivery agent",
-          suggested_strategy: `Fix the delivery agent error: ${msg}`,
-          avoid_approaches: [],
-        },
-      })
+      TaskAgent.processTask(task.id, {
+        kind: "executor_failed",
+        runID: run.id,
+        error: `Delivery verification failed: ${msg}`,
+      }).catch(err => log.error("task agent failed on delivery error", { taskID: task.id, error: String(err) }))
       return
     }
 
@@ -1691,7 +1729,19 @@ async function publishAcceptedDelivery(task: TaskRow, run: RunRow, delivery: Del
     // Delivery rejected → create fix run with rejection context
     if (verdict.verdict === "rejected") {
       log.info("delivery rejected, creating fix run", { runID: run.id, issues: verdict.issues_found })
-      await handleDeliveryRejection(requireTask(task.id), run, verdict, hooks)
+      // Delivery rejected → notify Task Agent to decide fix or fail
+      TaskAgent.processTask(task.id, {
+        kind: "delivery_rejected",
+        runID: run.id,
+        summary: verdict.summary,
+        issues: verdict.issues_found,
+        rejectionDetails: verdict.rejection_details?.map(d => ({
+          category: d.category,
+          file: d.file,
+          error: d.error,
+          suggestion: d.suggestion,
+        })),
+      }).catch(err => log.error("task agent failed on delivery_rejected", { taskID: task.id, error: String(err) }))
       return
     }
 
@@ -1766,7 +1816,15 @@ async function publishAcceptedDelivery(task: TaskRow, run: RunRow, delivery: Del
         verdict: agentVerdict.verdict,
         summary: agentVerdict.summary,
       })
-      await handleEvaluationFailure(requireTask(task.id), run, agentVerdict.summary, hooks, agentVerdict)
+      const agentChecks = Array.isArray(agentVerdict.goal_statuses)
+        ? agentVerdict.goal_statuses.map((gs: any) => ({ name: `goal_${gs.goal_index}`, status: gs.status, evidence: gs.evidence }))
+        : []
+      TaskAgent.processTask(task.id, {
+        kind: "eval_failed",
+        runID: run.id,
+        summary: agentVerdict.summary,
+        checks: agentChecks,
+      }).catch(err => log.error("task agent failed on evaluator rejection", { taskID: task.id, error: String(err) }))
       return
     }
     log.info("evaluator agent accepted", { runID: run.id })
@@ -1815,86 +1873,6 @@ async function publishAcceptedDelivery(task: TaskRow, run: RunRow, delivery: Del
   }
 
   await hooks.updateTask(task, { status: "failed", blocking_reason: null, error: result.summary, time_completed: completed }, result.summary)
-}
-
-async function handleDeliveryRejection(task: TaskRow, run: RunRow, verdict: DeliveryVerdictType, hooks: RuntimeHooks) {
-  const fixCtx = buildFixContext(run, verdict.summary, undefined, "delivery_rejection")
-  // Enrich with structured rejection details
-  if (verdict.rejection_details && verdict.rejection_details.length > 0) {
-    fixCtx.deliveryRejectionDetails = verdict.rejection_details.map(d => ({
-      category: d.category,
-      file: d.file,
-      error: d.error,
-      suggestion: d.suggestion,
-    }))
-  }
-  const decision = decideFixOrFail(task, run, verdict.summary, undefined, fixCtx)
-  if (decision.action === "fail") {
-    failGoals(run, verdict.summary)
-    OrchestratorMemoryBridge.flushFailureLearnings({
-      task, run, summary: verdict.summary, retryContext: fixCtx,
-    }).catch((err) => log.warn("failed to flush failure learnings", { error: String(err) }))
-    const freshTask = findTask(task.id)
-    if (freshTask && freshTask.status !== "failed" && freshTask.status !== "completed" && freshTask.status !== "cancelled") {
-      await hooks.updateTask(freshTask, { status: "failed", blocking_reason: null, error: verdict.summary, time_completed: Date.now() }, verdict.summary)
-    }
-    return
-  }
-  const nextRunID = createFixRun(task, run, decision.summary, decision.fixContext)
-  await OrchestratorRuntime.dispatch(nextRunID, hooks)
-}
-
-async function handleEvaluationFailure(task: TaskRow, run: RunRow, summary: string, hooks: RuntimeHooks, analysis?: EvaluatorAnalysisType) {
-  if (task.active_run_id !== run.id) return
-
-  const fixCtx = buildFixContext(run, summary, analysis, "eval_failure")
-  const decision = decideFixOrFail(task, run, summary, analysis, fixCtx)
-
-  const executed = await executeDecision(task, run, decision, hooks).catch(async (error) => {
-    const message = error instanceof Error ? error.message : String(error)
-    log.error("fix run failed", { taskID: task.id, runID: run.id, error: message })
-    // Re-read task from DB to avoid clobbering state changes made during executeDecision
-    const freshTask = findTask(task.id)
-    if (freshTask && freshTask.status !== "failed" && freshTask.status !== "completed" && freshTask.status !== "cancelled") {
-      await hooks.updateTask(
-        freshTask,
-        {
-          status: "failed",
-          blocking_reason: null,
-          error: `Fix run failure: ${message}`,
-          time_completed: Date.now(),
-        },
-        `Fix run failure: ${message}`,
-      )
-    }
-    return false
-  })
-  if (executed) return
-  failGoals(run, summary)
-  OrchestratorMemoryBridge.flushFailureLearnings({
-    task,
-    run,
-    summary,
-    retryContext: fixCtx,
-  }).catch((err) => log.warn("failed to flush failure learnings", { error: String(err) }))
-  // Re-read task from DB for final status update
-  const freshTask = findTask(task.id)
-  if (freshTask && freshTask.status !== "failed" && freshTask.status !== "completed" && freshTask.status !== "cancelled") {
-    await hooks.updateTask(freshTask, { status: "failed", blocking_reason: null, error: summary, time_completed: Date.now() }, summary)
-  }
-}
-
-async function executeDecision(
-  task: TaskRow,
-  run: RunRow,
-  decision: import("./strategy").StrategyDecision,
-  hooks: RuntimeHooks,
-): Promise<boolean> {
-  if (decision.action === "fail") return false
-
-  const nextRunID = createFixRun(task, run, decision.summary, decision.fixContext)
-  await OrchestratorRuntime.dispatch(nextRunID, hooks)
-  return true
 }
 
 function requirementIDsFromMetadata(metadata: unknown): string[] {
