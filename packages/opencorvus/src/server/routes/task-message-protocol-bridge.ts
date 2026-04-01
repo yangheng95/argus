@@ -50,10 +50,15 @@ export function overlayMeta(
   const agent = String(info.agent || "")
   const isRoot = !rootSessionID || sessionID === rootSessionID
 
-  // User messages always go to main conversation
+  // User messages: root session → main conversation, child session → parent agent's card
   if (role === "user") {
-    // Child session user messages are orchestrator prompts — hide from main
-    return { resolvedRole: "user" as OverlayRole, channel: isRoot ? "main" : "filtered" }
+    if (isRoot) return { resolvedRole: "user" as OverlayRole, channel: "main" }
+    // Child session user messages are orchestrator prompts — route to the
+    // agent card that owns this session so they are visible alongside replies.
+    const parentRole = sessionRole(sessionID)
+    const resolved = parentRole ? resolveRole(parentRole) : ("user" as OverlayRole)
+    const channel = CARD_STAGES.has(resolved) ? resolved : "main"
+    return { resolvedRole: "user" as OverlayRole, channel }
   }
 
   // Root session assistant messages stay as-is

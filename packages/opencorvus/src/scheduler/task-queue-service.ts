@@ -24,7 +24,7 @@ const EnqueuePromptInput = z.object({
 export namespace TaskQueueService {
   const log = Log.create({ service: "task-queue-service" })
 
-  const POLL_INTERVAL_MS = 2000
+  const POLL_INTERVAL_MS = 500
   const RUN_TIMEOUT_ENV = "OPENCORVUS_TASK_QUEUE_RUN_TIMEOUT_MS"
   const RUN_TIMEOUT_MS = 30 * 60 * 1000
   const HEARTBEAT_ENV = "OPENCORVUS_TASK_QUEUE_HEARTBEAT_MS"

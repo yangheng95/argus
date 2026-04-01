@@ -988,7 +988,7 @@ function renderMarkdown$1(text) {
   return html;
 }
 
-var _tmpl$$j = /* @__PURE__ */ template(`<div class=msg-text>`);
+var _tmpl$$k = /* @__PURE__ */ template(`<div class=msg-text>`);
 function splitBlocks(text) {
   if (!text) return [];
   const blocks = [];
@@ -1064,7 +1064,7 @@ function TextPart(props) {
     prevBlockCount = 0;
   });
   return (() => {
-    var _el$ = _tmpl$$j();
+    var _el$ = _tmpl$$k();
     var _ref$ = containerRef;
     typeof _ref$ === "function" ? use(_ref$, _el$) : containerRef = _el$;
     return _el$;
@@ -1730,6 +1730,254 @@ const api = /*#__PURE__*/Object.freeze(/*#__PURE__*/Object.defineProperty({
   configure
 }, Symbol.toStringTag, { value: 'Module' }));
 
+const [boardStore, setBoardStore] = createStore({
+  board: null,
+  tasks: [],
+  selectedTaskID: "",
+  taskSequence: 0,
+  loading: false,
+  // ── Task list internals (mirrors state.pendingTasks / state.tasksSeq) ──
+  /** Tasks that have been created locally but not yet confirmed by the server */
+  pendingTasks: [],
+  /** Monotonic counter incremented on each tasks-list refresh */
+  tasksSeq: 0,
+  // ── Board sync internals (mirrors state.boardEtag / state.boardQueued / etc.) ──
+  /** ETag of the last board response, used for conditional fetches */
+  boardEtag: "",
+  /** Whether a board reload is currently queued (debounce guard) */
+  boardQueued: false,
+  /** Retry attempt counter for board fetch failures */
+  boardRetryCount: 0,
+  /** Whether an in-flight board sync is pending */
+  boardSyncPending: false,
+  /** Unix-ms timestamp of the last successful board update */
+  boardUpdatedAt: 0,
+  /** Snapshot version string returned by the server with the board payload */
+  snapshotVersion: "",
+  // ── VCS state (mirrors state.path / state.vcs) ──
+  /** Git path info object for the active working directory */
+  path: null,
+  /** Git / VCS status object for the active task */
+  vcs: null,
+  // ── File changes (mirrors state.changes) ──
+  /** File change entries for the current task's working tree */
+  changes: []
+});
+let _boardRetryTimer = null;
+let _boardLoading = null;
+let _boardQueued = false;
+function boardSnapshot(board) {
+  return typeof board?.snapshotVersion === "string" ? board.snapshotVersion : "";
+}
+function clearBoardRetry$1() {
+  if (_boardRetryTimer) {
+    clearTimeout(_boardRetryTimer);
+    _boardRetryTimer = null;
+  }
+  setBoardRetryCount(0);
+}
+function retryBoard(sync) {
+  if (!boardStore.selectedTaskID || _boardRetryTimer) return;
+  if (sync) setBoardSyncPending(true);
+  const delay = Math.min(1e3 * Math.pow(2, Math.min(boardStore.boardRetryCount, 4)), 15e3);
+  setBoardRetryCount(boardStore.boardRetryCount + 1);
+  _boardRetryTimer = setTimeout(() => {
+    _boardRetryTimer = null;
+    void loadBoard({ sync: boardStore.boardSyncPending });
+  }, delay);
+}
+async function loadBoard(options = {}) {
+  const taskID = boardStore.selectedTaskID;
+  if (!taskID) {
+    setBoardStore("board", null);
+    setSnapshotVersion("");
+    return;
+  }
+  if (options.sync) setBoardSyncPending(true);
+  if (_boardLoading) {
+    _boardQueued = true;
+    if (options.sync) setBoardSyncPending(true);
+    return _boardLoading;
+  }
+  const sync = options.sync === true || boardStore.boardSyncPending;
+  if (sync) setBoardSyncPending(true);
+  const loading = (async () => {
+    let failed = false;
+    try {
+      const headers = apiHeaders();
+      if (boardStore.boardEtag) headers["If-None-Match"] = boardStore.boardEtag;
+      const res = await fetch(apiUrl(`task/${encodeURIComponent(taskID)}/board?sync=${sync ? "1" : "0"}`), {
+        headers,
+        signal: AbortSignal.timeout(1e4)
+      });
+      if (taskID !== boardStore.selectedTaskID) return;
+      setBoardSyncPending(false);
+      if (res.status === 304) {
+        clearBoardRetry$1();
+        setBoardUpdatedAt(Date.now());
+        return;
+      }
+      if (!res.ok) throw new Error(`API ${res.status}: ${res.statusText}`);
+      const etag = res.headers.get("etag");
+      if (etag) setBoardEtag(etag);
+      const data = await res.json();
+      setBoardStore("board", data ?? null);
+      setSnapshotVersion(boardSnapshot(data));
+      const lastSequence = Number(data?.lastSequence || 0);
+      if (Number.isFinite(lastSequence) && lastSequence > 0) {
+        setTaskSequence(lastSequence);
+      }
+      clearBoardRetry$1();
+      setBoardUpdatedAt(Date.now());
+    } catch (e) {
+      failed = true;
+      console.error("loadBoard failed", e);
+      if (taskID === boardStore.selectedTaskID) retryBoard(sync);
+    } finally {
+      _boardLoading = null;
+      setBoardStore("loading", false);
+      if (_boardQueued || boardStore.boardQueued) {
+        _boardQueued = false;
+        setBoardQueued(false);
+        if (!failed && !_boardRetryTimer) {
+          queueMicrotask(() => {
+            void loadBoard({ sync: boardStore.boardSyncPending });
+          });
+        }
+      }
+    }
+  })();
+  _boardLoading = loading;
+  setBoardStore("loading", true);
+  return loading;
+}
+async function loadTasks() {
+  try {
+    const data = await apiJson("tasks");
+    const tasks = sortedTasks(data);
+    const seen = new Set(
+      tasks.map((item) => item?.task?.requestID).filter(Boolean)
+    );
+    setBoardStore({
+      tasks,
+      pendingTasks: boardStore.pendingTasks.filter(
+        (item) => !seen.has(item?.requestID)
+      )
+    });
+  } catch (e) {
+    console.error("loadTasks failed", e);
+  }
+}
+function setTasksData(tasks) {
+  setBoardStore("tasks", Array.isArray(tasks) ? tasks : []);
+}
+let boardLoadTimer = null;
+function scheduleBoard(delay = 0) {
+  setBoardSyncPending(true);
+  clearBoardRetry$1();
+  if (boardLoadTimer) {
+    clearTimeout(boardLoadTimer);
+    boardLoadTimer = null;
+  }
+  boardLoadTimer = setTimeout(() => {
+    boardLoadTimer = null;
+    void loadBoard({ sync: true });
+  }, delay);
+}
+function rootTaskSessionID() {
+  const sessionID = boardStore.board?.task?.sessionID;
+  return typeof sessionID === "string" ? sessionID : "";
+}
+function activeDirectory$2() {
+  return boardStore.board?.task?.directory ?? "";
+}
+function setPath(path) {
+  setBoardStore("path", path ?? null);
+}
+function setVcs(vcs) {
+  setBoardStore("vcs", vcs ?? null);
+}
+function setBoardEtag(etag) {
+  setBoardStore("boardEtag", typeof etag === "string" ? etag : "");
+}
+function setBoardQueued(queued) {
+  setBoardStore("boardQueued", queued);
+}
+function setBoardRetryCount(count) {
+  setBoardStore("boardRetryCount", typeof count === "number" ? count : 0);
+}
+function setBoardSyncPending(pending) {
+  setBoardStore("boardSyncPending", pending);
+}
+function setBoardUpdatedAt(ms) {
+  setBoardStore("boardUpdatedAt", typeof ms === "number" ? ms : 0);
+}
+function setSnapshotVersion(version) {
+  setBoardStore("snapshotVersion", typeof version === "string" ? version : "");
+}
+function setTaskSequence(sequence) {
+  setBoardStore("taskSequence", typeof sequence === "number" ? sequence : 0);
+}
+function sortedTasks(data) {
+  return [...Array.isArray(data?.tasks) ? data.tasks : []].sort(
+    (a, b) => (b.updated_at || b.task?.time?.updated || 0) - (a.updated_at || a.task?.time?.updated || 0)
+  );
+}
+function taskUpdated$1(item) {
+  return item?.updated_at || item?.task?.time?.updated || item?.task?.time?.created || 0;
+}
+function visibleTasks() {
+  const seen = new Set(
+    boardStore.tasks.map((item) => item?.task?.requestID || item?.task?.id).filter(Boolean)
+  );
+  return [
+    ...boardStore.pendingTasks.filter(
+      (item) => !seen.has(item?.requestID || item?.task?.id)
+    ),
+    ...boardStore.tasks
+  ].sort((a, b) => taskUpdated$1(b) - taskUpdated$1(a));
+}
+const INTERRUPTABLE_STATUSES = /* @__PURE__ */ new Set([
+  "queued",
+  "spec_generating",
+  "goal_decomposing",
+  "planning",
+  "planned",
+  "running",
+  "blocked",
+  "evaluating",
+  "delivering"
+]);
+function isTaskInterruptable() {
+  const status = boardStore.board?.task?.status;
+  return !!status && INTERRUPTABLE_STATUSES.has(status);
+}
+
+const board = /*#__PURE__*/Object.freeze(/*#__PURE__*/Object.defineProperty({
+  __proto__: null,
+  activeDirectory: activeDirectory$2,
+  boardStore,
+  isTaskInterruptable,
+  loadBoard,
+  loadTasks,
+  rootTaskSessionID,
+  scheduleBoard,
+  setBoardEtag,
+  setBoardQueued,
+  setBoardRetryCount,
+  setBoardStore,
+  setBoardSyncPending,
+  setBoardUpdatedAt,
+  setPath,
+  setSnapshotVersion,
+  setTaskSequence,
+  setTasksData,
+  setVcs,
+  sortedTasks,
+  taskUpdated: taskUpdated$1,
+  visibleTasks
+}, Symbol.toStringTag, { value: 'Module' }));
+
 const [store$1, setStore$1] = createStore({
   expandedAgentCards: {},
   expandedToolOutputs: {}
@@ -1757,9 +2005,84 @@ function toggleToolOutputExpanded(partID) {
   setStore$1("expandedToolOutputs", partID, (value) => value !== true);
 }
 
-const reasoningVisibility = /* @__PURE__ */ new Map();
-const reasoningHideTimers = /* @__PURE__ */ new Map();
-const DEFAULT_REASONING_AUTO_CLOSE_MS = 5e3;
+var _tmpl$$j = /* @__PURE__ */ template(`<span class=tool-detail>`), _tmpl$2$h = /* @__PURE__ */ template(`<div class=msg-tool><span class=tool-icon></span><span class=tool-name></span><span class=tool-status>`), _tmpl$3$g = /* @__PURE__ */ template(`<div class=msg-tool-input>`), _tmpl$4$g = /* @__PURE__ */ template(`<div class=msg-tool-output>`), _tmpl$5$e = /* @__PURE__ */ template(`<div class=msg-tool-error>`);
+function ToolPart(props) {
+  const state = () => props.part.state || {};
+  const status = () => state().status || "pending";
+  const toolName = () => props.part.tool || "unknown";
+  const input = () => state().input || {};
+  const icon = () => displayToolIcon(toolName());
+  const statusLabel = () => toolStatusLabel(status());
+  const detail = () => {
+    const raw2 = displayToolDetail(toolName(), input(), state(), activeDirectory$2());
+    return raw2 && raw2.toLowerCase() !== toolName().toLowerCase() ? raw2 : "";
+  };
+  const raw = () => {
+    const st = state();
+    const r = typeof st.raw === "string" ? typeof props.part._targetRaw === "string" ? props.part._targetRaw : st.raw : "";
+    return r;
+  };
+  const output = () => stripAnsi$1(state().output || "");
+  const error = () => stripAnsi$1(state().error || "") || output();
+  const expanded = () => toolOutputExpanded(props.part?.id || "");
+  return [(() => {
+    var _el$ = _tmpl$2$h(), _el$2 = _el$.firstChild, _el$3 = _el$2.nextSibling, _el$5 = _el$3.nextSibling;
+    insert(_el$2, icon);
+    insert(_el$3, toolName);
+    insert(_el$, createComponent(Show, {
+      get when() {
+        return detail();
+      },
+      get children() {
+        var _el$4 = _tmpl$$j();
+        insert(_el$4, detail);
+        return _el$4;
+      }
+    }), _el$5);
+    insert(_el$5, statusLabel);
+    createRenderEffect((_p$) => {
+      var _v$ = status(), _v$2 = statusLabel();
+      _v$ !== _p$.e && setAttribute(_el$5, "data-status", _p$.e = _v$);
+      _v$2 !== _p$.t && setAttribute(_el$5, "title", _p$.t = _v$2);
+      return _p$;
+    }, {
+      e: void 0,
+      t: void 0
+    });
+    return _el$;
+  })(), createComponent(Show, {
+    get when() {
+      return memo(() => status() === "pending")() && raw();
+    },
+    get children() {
+      var _el$6 = _tmpl$3$g();
+      insert(_el$6, raw);
+      return _el$6;
+    }
+  }), createComponent(Show, {
+    get when() {
+      return memo(() => status() === "completed")() && output();
+    },
+    get children() {
+      var _el$7 = _tmpl$4$g();
+      _el$7.$$click = () => toggleToolOutputExpanded(props.part?.id || "");
+      insert(_el$7, output);
+      createRenderEffect(() => _el$7.classList.toggle("msg-tool-output--expanded", !!expanded()));
+      return _el$7;
+    }
+  }), createComponent(Show, {
+    get when() {
+      return memo(() => status() === "error")() && error();
+    },
+    get children() {
+      var _el$8 = _tmpl$5$e();
+      insert(_el$8, error);
+      return _el$8;
+    }
+  })];
+}
+delegateEvents(["click"]);
+
 const [reasoningRevision, setReasoningRevision] = createSignal(0);
 function record$6(value) {
   return !!value && typeof value === "object" && !Array.isArray(value);
@@ -1772,45 +2095,455 @@ function reasoningPartKey(part) {
   if (!id && !messageID && !sessionID) return "";
   return `reasoning:${sessionID}:${messageID}:${id}`;
 }
-function reasoningPartHidden(part) {
-  const key = reasoningPartKey(part);
-  return key ? reasoningVisibility.get(key)?.hidden === true : false;
-}
-function reasoningAutoCloseMs() {
-  const testConfig = window.__overlayTest;
-  const value = testConfig && typeof testConfig === "object" ? Number(testConfig.reasoningAutoCloseMs) : NaN;
-  if (Number.isFinite(value)) return Math.max(0, Math.floor(value));
-  return DEFAULT_REASONING_AUTO_CLOSE_MS;
-}
-function stopReasoningHideTimer(key) {
-  const timer = reasoningHideTimers.get(key);
-  if (!timer) return;
-  clearTimeout(timer);
-  reasoningHideTimers.delete(key);
-}
-function scheduleReasoningAutoHide(key) {
-  if (!key) return;
-  stopReasoningHideTimer(key);
-  const timer = setTimeout(() => {
-    reasoningHideTimers.delete(key);
-    const current = reasoningVisibility.get(key) || { hidden: false };
-    if (current.hidden) return;
-    reasoningVisibility.set(key, { ...current, hidden: true });
-    setReasoningRevision((r) => r + 1);
-  }, reasoningAutoCloseMs());
-  reasoningHideTimers.set(key, timer);
+function reasoningPartHidden(_part) {
+  return false;
 }
 function touchReasoningPart$1(part) {
   const key = reasoningPartKey(part);
   if (!key) return;
-  const current = reasoningVisibility.get(key);
-  reasoningVisibility.set(key, { ...current || {}, hidden: false });
-  stopReasoningHideTimer(key);
-  scheduleReasoningAutoHide(key);
-  if (current?.hidden) {
-    setReasoningRevision((r) => r + 1);
-  }
+  setReasoningRevision((r) => r + 1);
 }
+
+var _tmpl$$i = /* @__PURE__ */ template(`<div class=reasoning-text>`), _tmpl$2$g = /* @__PURE__ */ template(`<div class=msg-reasoning><div class=reasoning-label> `);
+function isEmptyReasoning(s) {
+  return !s.replace(/[\[\]\s]/g, "");
+}
+function ReasoningPart(props) {
+  const [expanded, setExpanded] = createSignal(true);
+  const text = () => String(props.part?.text || "");
+  const hidden = createMemo(() => {
+    reasoningRevision();
+    return reasoningPartHidden(props.part);
+  });
+  const label = () => t("transcript.reasoning");
+  return createComponent(Show, {
+    get when() {
+      return memo(() => !!(text().trim() && !isEmptyReasoning(text())))() && !hidden();
+    },
+    get children() {
+      var _el$ = _tmpl$2$g(), _el$2 = _el$.firstChild, _el$3 = _el$2.firstChild;
+      _el$2.$$click = () => setExpanded(!expanded());
+      insert(_el$2, label, _el$3);
+      insert(_el$2, () => expanded() ? "▼" : "▶", null);
+      insert(_el$, createComponent(Show, {
+        get when() {
+          return expanded();
+        },
+        get children() {
+          var _el$4 = _tmpl$$i();
+          insert(_el$4, text);
+          return _el$4;
+        }
+      }), null);
+      return _el$;
+    }
+  });
+}
+delegateEvents(["click"]);
+
+const AGENT_CARD_STAGES = /* @__PURE__ */ new Set(["spec", "planner", "goal", "executor", "evaluator", "delivery"]);
+function normalizeAgentRole(name) {
+  const text = String(name || "").trim().toLowerCase();
+  if (!text) return "assistant";
+  if (text === "user") return "user";
+  if (text === "orchestrator" || text === "task_agent") return "assistant";
+  if (text === "spec") return "spec";
+  if (text === "planner" || text === "plan" || text === "planning" || text === "replan") return "planner";
+  if (text === "goal" || text === "goal_gate") return "goal";
+  if (text === "executor" || text === "build" || text === "coding" || text === "general" || text === "explore" || text === "execute" || text === "opencode" || text === "codex" || text === "claude-code") return "executor";
+  if (text === "judge" || text === "evaluator" || text === "evaluation" || text === "scheduler" || text === "review" || text === "evaluate") return "evaluator";
+  if (text === "delivery" || text === "deliver" || text === "files" || text === "publish") return "delivery";
+  if (text === "system" || text === "compaction" || text === "title" || text === "summary") return "system";
+  return "assistant";
+}
+function agentRoleToSectionPhase(role) {
+  if (role === "spec") return "spec";
+  if (role === "planner") return "plan";
+  if (role === "goal") return "goals";
+  if (role === "executor") return "executor";
+  if (role === "evaluator") return "evaluation";
+  if (role === "delivery") return "files";
+  return "";
+}
+function orderedMessageParts(message) {
+  const parts = Array.isArray(message?.parts) ? message.parts : [];
+  if (parts.length < 2) return parts;
+  const reasoning = [];
+  const rest = [];
+  for (const part of parts) {
+    if (part?.type === "reasoning") reasoning.push(part);
+    else rest.push(part);
+  }
+  return [...reasoning, ...rest];
+}
+function roleLabel(role) {
+  if (role === "user") return t("chat.role.user");
+  if (role === "assistant") return t("chat.role.assistant");
+  if (role === "planner") return t("chat.role.planner");
+  if (role === "evaluator") return t("chat.role.evaluator");
+  if (role === "delivery") return t("chat.role.delivery");
+  if (role === "spec") return t("chat.role.spec");
+  if (role === "system") return t("chat.role.system");
+  if (role === "goal" || role === "goal_gate") return t("chat.role.goal");
+  if (role === "executor") return t("chat.role.executor");
+  return t("chat.role.assistant");
+}
+function classifyMessage(msg, rootSessionID) {
+  if (String(msg?.info?.role || "").trim().toLowerCase() === "user") return "main";
+  const backendChannel = String(msg?.info?.channel || "").trim().toLowerCase();
+  if (backendChannel && backendChannel !== "main") {
+    const resolved2 = String(msg?.info?.resolvedRole || "").trim().toLowerCase();
+    if (AGENT_CARD_STAGES.has(resolved2)) return resolved2;
+  }
+  const resolved = String(msg?.info?.resolvedRole || "").trim().toLowerCase();
+  if (AGENT_CARD_STAGES.has(resolved)) return resolved;
+  const agent = String(msg?.info?.agent || "").trim().toLowerCase();
+  const normalized = normalizeAgentRole(agent);
+  if (AGENT_CARD_STAGES.has(normalized)) return normalized;
+  return "main";
+}
+function agentStageLabel(stage) {
+  const role = normalizeAgentRole(stage);
+  if (role === "spec") return t("chat.role.spec");
+  if (role === "planner") return t("chat.role.planner");
+  if (role === "goal") return t("chat.role.goal");
+  if (role === "evaluator") return t("chat.role.evaluator");
+  if (role === "delivery") return t("chat.role.delivery");
+  if (role === "executor") return t("chat.role.executor");
+  return t("chat.role.assistant");
+}
+function effectiveRole(msg, _rootSessionID) {
+  const resolved = msg.info?.resolvedRole;
+  if (resolved) return resolved;
+  const agent = String(msg.info?.agent || "").trim().toLowerCase();
+  if (agent) {
+    const normalized = normalizeAgentRole(agent);
+    if (AGENT_CARD_STAGES.has(normalized)) return normalized;
+  }
+  return msg.info?.role || "assistant";
+}
+
+function timeLocaleOptions(includeSeconds = true) {
+  return includeSeconds ? { hour: "2-digit", minute: "2-digit", second: "2-digit" } : { hour: "2-digit", minute: "2-digit" };
+}
+function stamp(ts) {
+  if (!ts) return "";
+  const d = new Date(ts);
+  return d.toLocaleTimeString(localeTag(), timeLocaleOptions());
+}
+function formatDuration(ms) {
+  const s = Math.floor(ms / 1e3);
+  const m = Math.floor(s / 60);
+  const h = Math.floor(m / 60);
+  if (h > 0) return t("time.duration.hour_minute", { hours: h, minutes: m % 60 });
+  if (m > 0) return t("time.duration.minute_second", { minutes: m, seconds: s % 60 });
+  return t("time.duration.second", { seconds: s });
+}
+
+var _tmpl$$h = /* @__PURE__ */ template(`<article class="turn msg"><div class=msg-head><span class=msg-role></span><span class=msg-time></span></div><div class=msg-bubble><div class=msg-body>`), _tmpl$2$f = /* @__PURE__ */ template(`<div class=msg-patch>`), _tmpl$3$f = /* @__PURE__ */ template(`<div>`), _tmpl$4$f = /* @__PURE__ */ template(`<div class=msg-tool><span class=tool-icon>→</span><span class=tool-name>Subtask</span><span class=tool-detail>`);
+function renderFilePart(part) {
+  const url = part.url || part.filename || "";
+  const name = part.filename || url || "file";
+  const mime = part.mime || part.mediaType || "";
+  const isImg = mime && mime.startsWith("image/") || /^data:image\//i.test(url) || /\.(png|jpe?g|gif|webp|svg|bmp|ico)(\?|$)/i.test(url);
+  if (isImg && url) {
+    return `<div class="msg-img-wrap"><img class="md-img" src="${escapeHtml$1(url)}" alt="${escapeHtml$1(name)}" loading="lazy"></div>`;
+  }
+  return `<div class="msg-text" style="font-family:var(--mono);font-size:var(--ui-font-small);color:var(--text-soft)">${escapeHtml$1(name)}</div>`;
+}
+function MessageView(props) {
+  const role = () => props.message.info?.resolvedRole || effectiveRole(props.message, rootTaskSessionID());
+  const parts = () => orderedMessageParts(props.message);
+  const time = () => stamp(props.message.info?.time?.created);
+  const hasContent = createMemo(() => {
+    const p = parts();
+    if (p.length === 0) return false;
+    return p.some((part) => {
+      if (part.type === "text") return !!(part.text || "").trim();
+      if (part.type === "tool") return true;
+      if (part.type === "reasoning") return !!(part.text || "").trim() && !isEmptyReasoning(part.text || "");
+      if (part.type === "patch") return (part.files || []).length > 0;
+      if (part.type === "file") return true;
+      if (part.type === "subtask") return true;
+      return false;
+    });
+  });
+  return createComponent(Show, {
+    get when() {
+      return hasContent();
+    },
+    get children() {
+      var _el$ = _tmpl$$h(), _el$2 = _el$.firstChild, _el$3 = _el$2.firstChild, _el$4 = _el$3.nextSibling, _el$5 = _el$2.nextSibling, _el$6 = _el$5.firstChild;
+      insert(_el$3, () => roleLabel(role()));
+      insert(_el$4, time);
+      insert(_el$6, createComponent(Index, {
+        get each() {
+          return parts();
+        },
+        children: (part) => createComponent(Switch, {
+          fallback: null,
+          get children() {
+            return [createComponent(Match, {
+              get when() {
+                return memo(() => part().type === "text")() && (part().text || "").trim();
+              },
+              get children() {
+                return createComponent(TextPart, {
+                  get text() {
+                    return part().text || "";
+                  }
+                });
+              }
+            }), createComponent(Match, {
+              get when() {
+                return part().type === "tool";
+              },
+              get children() {
+                return createComponent(ToolPart, {
+                  get part() {
+                    return part();
+                  }
+                });
+              }
+            }), createComponent(Match, {
+              get when() {
+                return memo(() => !!(part().type === "reasoning" && (part().text || "").trim()))() && !isEmptyReasoning(part().text || "");
+              },
+              get children() {
+                return createComponent(ReasoningPart, {
+                  get part() {
+                    return part();
+                  }
+                });
+              }
+            }), createComponent(Match, {
+              get when() {
+                return memo(() => part().type === "patch")() && (part().files || []).length > 0;
+              },
+              get children() {
+                var _el$7 = _tmpl$2$f();
+                insert(_el$7, () => "⚙ " + (part().files || []).map((f) => shortRelativePath(f, activeDirectory$2())).join(", "));
+                return _el$7;
+              }
+            }), createComponent(Match, {
+              get when() {
+                return part().type === "file";
+              },
+              get children() {
+                var _el$8 = _tmpl$3$f();
+                createRenderEffect(() => _el$8.innerHTML = renderFilePart(part()));
+                return _el$8;
+              }
+            }), createComponent(Match, {
+              get when() {
+                return part().type === "subtask";
+              },
+              get children() {
+                var _el$9 = _tmpl$4$f(), _el$0 = _el$9.firstChild, _el$1 = _el$0.nextSibling, _el$10 = _el$1.nextSibling;
+                insert(_el$10, () => part().description || part().prompt || "");
+                return _el$9;
+              }
+            })];
+          }
+        })
+      }));
+      createRenderEffect(() => setAttribute(_el$, "data-role", role()));
+      return _el$;
+    }
+  });
+}
+
+var _tmpl$$g = /* @__PURE__ */ template(`<span>`), _tmpl$2$e = /* @__PURE__ */ template(`<span class=agent-card-round>#`), _tmpl$3$e = /* @__PURE__ */ template(`<div class=agent-card-body>`), _tmpl$4$e = /* @__PURE__ */ template(`<article class="turn msg agent-card"data-role=agent-card><div class=agent-card-header role=button tabindex=0><span class=agent-card-label></span><span class=agent-card-count></span><span class=agent-card-chevron aria-hidden=true>▼`), _tmpl$5$d = /* @__PURE__ */ template(`<span class="agent-card-badge agent-card-badge--running"title=Running><span class=agent-card-spinner>`);
+function AgentCard(props) {
+  const expanded = () => agentCardExpanded(props.cardID, props.status === "running");
+  const toggle = () => {
+    toggleAgentCardExpanded(props.cardID, props.status === "running");
+  };
+  const badgeClass = () => {
+    if (props.status === "running") return "agent-card-badge agent-card-badge--running";
+    if (props.status === "error") return "agent-card-badge agent-card-badge--error";
+    return "agent-card-badge agent-card-badge--done";
+  };
+  const badgeContent = () => {
+    if (props.status === "running") return "";
+    if (props.status === "error") return "✗";
+    return "✓";
+  };
+  return (() => {
+    var _el$ = _tmpl$4$e(), _el$2 = _el$.firstChild, _el$4 = _el$2.firstChild, _el$7 = _el$4.nextSibling;
+    _el$2.$$keydown = (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        toggle();
+      }
+    };
+    _el$2.$$click = toggle;
+    insert(_el$2, createComponent(Show, {
+      get when() {
+        return props.status !== "running";
+      },
+      get fallback() {
+        return _tmpl$5$d();
+      },
+      get children() {
+        var _el$3 = _tmpl$$g();
+        insert(_el$3, badgeContent);
+        createRenderEffect((_p$) => {
+          var _v$ = badgeClass(), _v$2 = props.status;
+          _v$ !== _p$.e && className(_el$3, _p$.e = _v$);
+          _v$2 !== _p$.t && setAttribute(_el$3, "title", _p$.t = _v$2);
+          return _p$;
+        }, {
+          e: void 0,
+          t: void 0
+        });
+        return _el$3;
+      }
+    }), _el$4);
+    insert(_el$4, () => agentStageLabel(props.stage));
+    insert(_el$2, createComponent(Show, {
+      get when() {
+        return props.round > 0;
+      },
+      get children() {
+        var _el$5 = _tmpl$2$e(); _el$5.firstChild;
+        insert(_el$5, () => props.round, null);
+        return _el$5;
+      }
+    }), _el$7);
+    insert(_el$7, createComponent(Show, {
+      get when() {
+        return props.messages.length > 0;
+      },
+      get children() {
+        return ["(", memo(() => props.messages.length), ")"];
+      }
+    }));
+    insert(_el$, createComponent(Show, {
+      get when() {
+        return expanded();
+      },
+      get children() {
+        var _el$8 = _tmpl$3$e();
+        insert(_el$8, createComponent(For, {
+          get each() {
+            return props.messages;
+          },
+          children: (msg) => createComponent(MessageView, {
+            message: msg
+          })
+        }));
+        return _el$8;
+      }
+    }), null);
+    createRenderEffect((_p$) => {
+      var _v$3 = !!expanded(), _v$4 = props.stage, _v$5 = expanded();
+      _v$3 !== _p$.e && _el$.classList.toggle("agent-card--expanded", _p$.e = _v$3);
+      _v$4 !== _p$.t && setAttribute(_el$, "data-agent-stage", _p$.t = _v$4);
+      _v$5 !== _p$.a && setAttribute(_el$2, "aria-expanded", _p$.a = _v$5);
+      return _p$;
+    }, {
+      e: void 0,
+      t: void 0,
+      a: void 0
+    });
+    return _el$;
+  })();
+}
+delegateEvents(["click", "keydown"]);
+
+var _tmpl$$f = /* @__PURE__ */ template(`<span>`), _tmpl$2$d = /* @__PURE__ */ template(`<div class=executor-goal-body>`), _tmpl$3$d = /* @__PURE__ */ template(`<article class="turn msg executor-goal-block"data-role=executor-goal-group><div class=executor-goal-header role=button tabindex=0><span class=executor-goal-label></span><span class=executor-goal-count></span><span class=executor-goal-chevron aria-hidden=true>▼`), _tmpl$4$d = /* @__PURE__ */ template(`<span class="executor-goal-badge executor-goal-badge--running"title=Running><span class=agent-card-spinner>`);
+function ExecutorGoalGroup(props) {
+  const expanded = () => agentCardExpanded(props.cardID, props.status === "running");
+  const toggle = () => {
+    toggleAgentCardExpanded(props.cardID, props.status === "running");
+  };
+  const badgeClass = () => {
+    if (props.status === "running") return "executor-goal-badge executor-goal-badge--running";
+    if (props.goalStatus === "passed") return "executor-goal-badge executor-goal-badge--done";
+    if (props.goalStatus === "failed") return "executor-goal-badge executor-goal-badge--error";
+    if (props.status === "error") return "executor-goal-badge executor-goal-badge--error";
+    return "executor-goal-badge executor-goal-badge--done";
+  };
+  const badgeContent = () => {
+    if (props.status === "running") return "";
+    if (props.goalStatus === "passed") return "✓";
+    if (props.goalStatus === "failed") return "✗";
+    if (props.status === "error") return "✗";
+    return "✓";
+  };
+  return (() => {
+    var _el$ = _tmpl$3$d(), _el$2 = _el$.firstChild, _el$4 = _el$2.firstChild, _el$5 = _el$4.nextSibling;
+    _el$2.$$keydown = (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        toggle();
+      }
+    };
+    _el$2.$$click = toggle;
+    insert(_el$2, createComponent(Show, {
+      get when() {
+        return props.status !== "running";
+      },
+      get fallback() {
+        return _tmpl$4$d();
+      },
+      get children() {
+        var _el$3 = _tmpl$$f();
+        insert(_el$3, badgeContent);
+        createRenderEffect((_p$) => {
+          var _v$ = badgeClass(), _v$2 = props.status;
+          _v$ !== _p$.e && className(_el$3, _p$.e = _v$);
+          _v$2 !== _p$.t && setAttribute(_el$3, "title", _p$.t = _v$2);
+          return _p$;
+        }, {
+          e: void 0,
+          t: void 0
+        });
+        return _el$3;
+      }
+    }), _el$4);
+    insert(_el$4, () => props.goalTitle || "Executor");
+    insert(_el$5, createComponent(Show, {
+      get when() {
+        return props.messages.length > 0;
+      },
+      get children() {
+        return ["(", memo(() => props.messages.length), ")"];
+      }
+    }));
+    insert(_el$, createComponent(Show, {
+      get when() {
+        return expanded();
+      },
+      get children() {
+        var _el$6 = _tmpl$2$d();
+        insert(_el$6, createComponent(For, {
+          get each() {
+            return props.messages;
+          },
+          children: (msg) => createComponent(MessageView, {
+            message: msg
+          })
+        }));
+        return _el$6;
+      }
+    }), null);
+    createRenderEffect((_p$) => {
+      var _v$3 = !!expanded(), _v$4 = props.cardID, _v$5 = expanded();
+      _v$3 !== _p$.e && _el$.classList.toggle("executor-goal-block--expanded", _p$.e = _v$3);
+      _v$4 !== _p$.t && setAttribute(_el$, "data-goal-id", _p$.t = _v$4);
+      _v$5 !== _p$.a && setAttribute(_el$2, "aria-expanded", _p$.a = _v$5);
+      return _p$;
+    }, {
+      e: void 0,
+      t: void 0,
+      a: void 0
+    });
+    return _el$;
+  })();
+}
+delegateEvents(["click", "keydown"]);
 
 function getDomRefs() {
   const $ = (sel) => document.querySelector(sel);
@@ -1882,6 +2615,7 @@ function getDomRefs() {
     specSection: $("#specSection"),
     planSection: $("#planSection"),
     goalsSection: $("#goalsSection"),
+    executorSection: $("#executorSection"),
     criteriaSection: $("#criteriaSection"),
     deliverySection: $("#deliverySection"),
     deliveryBadge: $("#deliveryBadge"),
@@ -2059,84 +2793,13 @@ function getDomRefs() {
   };
 }
 
-const AGENT_CARD_STAGES = /* @__PURE__ */ new Set(["spec", "planner", "goal", "executor", "evaluator", "delivery"]);
-function normalizeAgentRole(name) {
-  const text = String(name || "").trim().toLowerCase();
-  if (!text) return "assistant";
-  if (text === "user") return "user";
-  if (text === "orchestrator" || text === "task_agent") return "assistant";
-  if (text === "spec") return "spec";
-  if (text === "planner" || text === "plan" || text === "planning" || text === "replan") return "planner";
-  if (text === "goal" || text === "goal_gate") return "goal";
-  if (text === "executor" || text === "build" || text === "coding" || text === "general" || text === "explore" || text === "execute" || text === "opencode" || text === "codex" || text === "claude-code") return "executor";
-  if (text === "judge" || text === "evaluator" || text === "evaluation" || text === "scheduler" || text === "review" || text === "evaluate") return "evaluator";
-  if (text === "delivery" || text === "deliver" || text === "files" || text === "publish") return "delivery";
-  if (text === "system" || text === "compaction" || text === "title" || text === "summary") return "system";
-  return "assistant";
-}
-function agentRoleToSectionPhase(role) {
-  if (role === "spec") return "spec";
-  if (role === "planner") return "plan";
-  if (role === "goal") return "goals";
-  if (role === "evaluator") return "evaluation";
-  if (role === "delivery") return "files";
-  return "";
-}
-function orderedMessageParts(message) {
-  const parts = Array.isArray(message?.parts) ? message.parts : [];
-  if (parts.length < 2) return parts;
-  const reasoning = [];
-  const rest = [];
-  for (const part of parts) {
-    if (part?.type === "reasoning") reasoning.push(part);
-    else rest.push(part);
-  }
-  return [...reasoning, ...rest];
-}
-function roleLabel(role) {
-  if (role === "user") return t("chat.role.user");
-  if (role === "assistant") return t("chat.role.assistant");
-  if (role === "planner") return t("chat.role.planner");
-  if (role === "evaluator") return t("chat.role.evaluator");
-  if (role === "delivery") return t("chat.role.delivery");
-  if (role === "spec") return t("chat.role.spec");
-  if (role === "system") return t("chat.role.system");
-  if (role === "goal" || role === "goal_gate") return t("chat.role.goal");
-  if (role === "executor") return t("chat.role.executor");
-  return t("chat.role.assistant");
-}
-function classifyMessage(msg, rootSessionID) {
-  if (String(msg?.info?.role || "").trim().toLowerCase() === "user") return "main";
-  const backendChannel = String(msg?.info?.channel || "").trim().toLowerCase();
-  if (backendChannel && backendChannel !== "main") {
-    const resolved2 = String(msg?.info?.resolvedRole || "").trim().toLowerCase();
-    if (AGENT_CARD_STAGES.has(resolved2)) return resolved2;
-    if (backendChannel === "filtered") return "filtered";
-  }
-  const resolved = String(msg?.info?.resolvedRole || "").trim().toLowerCase();
-  if (AGENT_CARD_STAGES.has(resolved)) return resolved;
-  const agent = String(msg?.info?.agent || "").trim().toLowerCase();
-  const normalized = normalizeAgentRole(agent);
-  if (AGENT_CARD_STAGES.has(normalized)) return normalized;
-  return "main";
-}
-function effectiveRole(msg, _rootSessionID) {
-  const resolved = msg.info?.resolvedRole;
-  if (resolved) return resolved;
-  const agent = String(msg.info?.agent || "").trim().toLowerCase();
-  if (agent) {
-    const normalized = normalizeAgentRole(agent);
-    if (AGENT_CARD_STAGES.has(normalized)) return normalized;
-  }
-  return msg.info?.role || "assistant";
-}
-
 function phaseSections() {
   const dom = getDomRefs();
   return {
     spec: dom.specSection,
     plan: dom.planSection,
     goals: dom.goalsSection,
+    executor: dom.executorSection,
     evaluation: dom.criteriaSection,
     delivery: dom.deliverySection,
     files: dom.changesSection
@@ -2225,7 +2888,8 @@ function syncSectionPhases(board, changesCount = 0) {
     if (board.plan) related.push("plan");
   }
   if (board?.task && active.length === 0 && board.task.status === "running") {
-    active.push(goals.length > 0 ? "goals" : board.plan ? "plan" : "spec");
+    active.push("executor");
+    if (goals.length > 0) related.push("goals");
     if (board.plan) related.push("plan");
     if (changesCount > 0) related.push("files");
   }
@@ -2268,8 +2932,6 @@ function syncSectionPhases(board, changesCount = 0) {
 const [store, setStore] = createStore({
   messages: [],
   agentEvents: [],
-  agentCards: {},
-  agentCardOrder: [],
   selectedTaskID: "",
   showTranscriptDetails: false,
   agentStatus: null,
@@ -2615,22 +3277,13 @@ function mergeAgentReasoningDeltas(events) {
   if (accum) result.push(accum);
   return result;
 }
-let _rebuildScheduled = false;
-function scheduleRebuildAgentCards() {
-  if (_rebuildScheduled) return;
-  _rebuildScheduled = true;
-  requestAnimationFrame(() => {
-    _rebuildScheduled = false;
-    rebuildAgentCards();
-  });
-}
-function rebuildAgentCards() {
+function computeAgentCards() {
   const roundsByStage = {};
   const latestEventByStage = /* @__PURE__ */ new Map();
   rootTaskSessionID();
   for (const message of store.messages) {
     const stage = message.info?.channel || classifyMessage(message);
-    if (stage === "main" || stage === "filtered") continue;
+    if (stage === "main") continue;
     const sessionID = typeof message?.info?.sessionID === "string" ? message.info.sessionID.trim() : "";
     const fallbackID = typeof message?.info?.id === "string" && message.info.id ? message.info.id : hashText$1(messageSignature(message));
     const channelID = stage === "executor" ? `${stage}:message:${fallbackID}` : sessionID ? `${stage}:session:${sessionID}` : `${stage}:message:${fallbackID}`;
@@ -2813,62 +3466,16 @@ function rebuildAgentCards() {
   nextOrder.sort(
     (left, right) => messageOrderTime(nextCards[left]) - messageOrderTime(nextCards[right]) || left.localeCompare(right)
   );
-  batch(() => {
-    const prevKeys = Object.keys(store.agentCards);
-    for (const key of prevKeys) {
-      if (!(key in nextCards)) {
-        setStore("agentCards", key, void 0);
-      }
-    }
-    for (const [cardID, card] of Object.entries(nextCards)) {
-      if (cardID in store.agentCards) {
-        const prev = store.agentCards[cardID];
-        if (prev._agentStatus !== card._agentStatus) {
-          setStore("agentCards", cardID, "_agentStatus", card._agentStatus);
-        }
-        if (prev._agentRound !== card._agentRound) {
-          setStore("agentCards", cardID, "_agentRound", card._agentRound);
-        }
-        if (card._agentGoalGroup) {
-          if (prev._agentGoalStatus !== card._agentGoalStatus) {
-            setStore("agentCards", cardID, "_agentGoalStatus", card._agentGoalStatus);
-          }
-          if (prev._agentGoalTitle !== card._agentGoalTitle) {
-            setStore("agentCards", cardID, "_agentGoalTitle", card._agentGoalTitle);
-          }
-          const prevInternals = prev._agentInternalCards || [];
-          const nextInternals = card._agentInternalCards || [];
-          if (prevInternals.length !== nextInternals.length || prevInternals.some((c, i) => {
-            const n = nextInternals[i];
-            if (!n) return true;
-            if (c._agentCardKey !== n._agentCardKey) return true;
-            if (c._agentStatus !== n._agentStatus) return true;
-            if (c._agentRound !== n._agentRound) return true;
-            const pm = c._agentMessages || [];
-            const nm = n._agentMessages || [];
-            return pm.length !== nm.length || pm.some((m, j) => m !== nm[j]);
-          })) {
-            setStore("agentCards", cardID, "_agentInternalCards", [...nextInternals]);
-          }
-        }
-        const prevMsgs = prev._agentMessages;
-        const nextMsgs = card._agentMessages;
-        if (prevMsgs.length !== nextMsgs.length || prevMsgs.some((m, i) => m !== nextMsgs[i])) {
-          setStore("agentCards", cardID, "_agentMessages", [...nextMsgs]);
-        }
-      } else {
-        setStore("agentCards", cardID, {
-          ...card,
-          _agentMessages: [...card._agentMessages],
-          ...card._agentInternalCards ? { _agentInternalCards: [...card._agentInternalCards] } : {}
-        });
-      }
-    }
-    const prevOrder = store.agentCardOrder;
-    if (prevOrder.length !== nextOrder.length || prevOrder.some((id, i) => id !== nextOrder[i])) {
-      setStore("agentCardOrder", nextOrder);
-    }
-  });
+  return { cards: nextCards, order: nextOrder };
+}
+const agentCardsMemo = createRoot(
+  () => createMemo(computeAgentCards, { cards: {}, order: [] })
+);
+function agentCards() {
+  return agentCardsMemo().cards;
+}
+function agentCardOrder() {
+  return agentCardsMemo().order;
 }
 async function syncTask(taskID) {
   if (!taskID) {
@@ -3097,15 +3704,11 @@ function flushEvents() {
   eventQueue = [];
   flushTimer = null;
   lastFlushTime = Date.now();
-  let needsUpdate = false;
   batch(() => {
     for (const event of events) {
-      if (applyMessageEvent(event)) needsUpdate = true;
+      applyMessageEvent(event);
     }
   });
-  if (needsUpdate) {
-    scheduleRebuildAgentCards();
-  }
 }
 function clearEventQueue() {
   if (flushTimer) {
@@ -3347,7 +3950,6 @@ function flushAgentEvents() {
     merged = mergeAgentEventList(merged, raw);
   }
   setStore("agentEvents", reconcile(merged));
-  scheduleRebuildAgentCards();
   for (const raw of queued) {
     const payload = agentEventRecord(raw?.payload) ? raw.payload : agentEventRecord(raw?.properties) ? raw.properties : {};
     const key = agentEventKey({
@@ -3373,14 +3975,12 @@ function setAgentEvents(events) {
   }
   const normalized = pruneAgentEvents(Array.isArray(events) ? events : []);
   setStore("agentEvents", reconcile(normalized));
-  scheduleRebuildAgentCards();
 }
 function clearAgentEvents() {
   for (const key of [...agentLiveTimers.keys()]) {
     stopAgentLiveTimer(key);
   }
   setStore("agentEvents", []);
-  scheduleRebuildAgentCards();
 }
 function setMessages(messages) {
   const next = sortMessages(Array.isArray(messages) ? messages : []);
@@ -3420,7 +4020,6 @@ function setMessages(messages) {
     msgs.sort((a, b) => messageOrderTime(a) - messageOrderTime(b));
   }));
   rebuildMessageIndex();
-  scheduleRebuildAgentCards();
 }
 function setSelectedTaskID(taskID) {
   if (store.selectedTaskID !== taskID) {
@@ -3433,8 +4032,6 @@ function setSseConnected(connected) {
 }
 function clearMessages() {
   setStore("messages", []);
-  setStore("agentCards", reconcile({}, { merge: false }));
-  setStore("agentCardOrder", []);
   messageIndex.clear();
 }
 function setChatRequest(req) {
@@ -3479,593 +4076,6 @@ function shouldReloadConversationForMessageEvent(event) {
   if (currentTaskSessionID$1()) return false;
   return !!messageEventSessionID(event);
 }
-
-const [boardStore, setBoardStore] = createStore({
-  board: null,
-  tasks: [],
-  selectedTaskID: "",
-  taskSequence: 0,
-  loading: false,
-  // ── Task list internals (mirrors state.pendingTasks / state.tasksSeq) ──
-  /** Tasks that have been created locally but not yet confirmed by the server */
-  pendingTasks: [],
-  /** Monotonic counter incremented on each tasks-list refresh */
-  tasksSeq: 0,
-  // ── Board sync internals (mirrors state.boardEtag / state.boardQueued / etc.) ──
-  /** ETag of the last board response, used for conditional fetches */
-  boardEtag: "",
-  /** Whether a board reload is currently queued (debounce guard) */
-  boardQueued: false,
-  /** Retry attempt counter for board fetch failures */
-  boardRetryCount: 0,
-  /** Whether an in-flight board sync is pending */
-  boardSyncPending: false,
-  /** Unix-ms timestamp of the last successful board update */
-  boardUpdatedAt: 0,
-  /** Snapshot version string returned by the server with the board payload */
-  snapshotVersion: "",
-  // ── VCS state (mirrors state.path / state.vcs) ──
-  /** Git path info object for the active working directory */
-  path: null,
-  /** Git / VCS status object for the active task */
-  vcs: null,
-  // ── File changes (mirrors state.changes) ──
-  /** File change entries for the current task's working tree */
-  changes: []
-});
-let _boardRetryTimer = null;
-let _boardLoading = null;
-let _boardQueued = false;
-function boardSnapshot(board) {
-  return typeof board?.snapshotVersion === "string" ? board.snapshotVersion : "";
-}
-function clearBoardRetry$1() {
-  if (_boardRetryTimer) {
-    clearTimeout(_boardRetryTimer);
-    _boardRetryTimer = null;
-  }
-  setBoardRetryCount(0);
-}
-function retryBoard(sync) {
-  if (!boardStore.selectedTaskID || _boardRetryTimer) return;
-  if (sync) setBoardSyncPending(true);
-  const delay = Math.min(1e3 * Math.pow(2, Math.min(boardStore.boardRetryCount, 4)), 15e3);
-  setBoardRetryCount(boardStore.boardRetryCount + 1);
-  _boardRetryTimer = setTimeout(() => {
-    _boardRetryTimer = null;
-    void loadBoard({ sync: boardStore.boardSyncPending });
-  }, delay);
-}
-async function loadBoard(options = {}) {
-  const taskID = boardStore.selectedTaskID;
-  if (!taskID) {
-    setBoardStore("board", null);
-    setSnapshotVersion("");
-    return;
-  }
-  if (options.sync) setBoardSyncPending(true);
-  if (_boardLoading) {
-    _boardQueued = true;
-    if (options.sync) setBoardSyncPending(true);
-    return _boardLoading;
-  }
-  const sync = options.sync === true || boardStore.boardSyncPending;
-  if (sync) setBoardSyncPending(true);
-  const loading = (async () => {
-    let failed = false;
-    try {
-      const headers = apiHeaders();
-      if (boardStore.boardEtag) headers["If-None-Match"] = boardStore.boardEtag;
-      const res = await fetch(apiUrl(`task/${encodeURIComponent(taskID)}/board?sync=${sync ? "1" : "0"}`), {
-        headers,
-        signal: AbortSignal.timeout(1e4)
-      });
-      if (taskID !== boardStore.selectedTaskID) return;
-      setBoardSyncPending(false);
-      if (res.status === 304) {
-        clearBoardRetry$1();
-        setBoardUpdatedAt(Date.now());
-        return;
-      }
-      if (!res.ok) throw new Error(`API ${res.status}: ${res.statusText}`);
-      const etag = res.headers.get("etag");
-      if (etag) setBoardEtag(etag);
-      const data = await res.json();
-      setBoardStore("board", data ?? null);
-      setSnapshotVersion(boardSnapshot(data));
-      const lastSequence = Number(data?.lastSequence || 0);
-      if (Number.isFinite(lastSequence) && lastSequence > 0) {
-        setTaskSequence(lastSequence);
-      }
-      clearBoardRetry$1();
-      setBoardUpdatedAt(Date.now());
-      scheduleRebuildAgentCards();
-    } catch (e) {
-      failed = true;
-      console.error("loadBoard failed", e);
-      if (taskID === boardStore.selectedTaskID) retryBoard(sync);
-    } finally {
-      _boardLoading = null;
-      setBoardStore("loading", false);
-      if (_boardQueued || boardStore.boardQueued) {
-        _boardQueued = false;
-        setBoardQueued(false);
-        if (!failed && !_boardRetryTimer) {
-          queueMicrotask(() => {
-            void loadBoard({ sync: boardStore.boardSyncPending });
-          });
-        }
-      }
-    }
-  })();
-  _boardLoading = loading;
-  setBoardStore("loading", true);
-  return loading;
-}
-async function loadTasks() {
-  try {
-    const data = await apiJson("tasks");
-    const tasks = sortedTasks(data);
-    const seen = new Set(
-      tasks.map((item) => item?.task?.requestID).filter(Boolean)
-    );
-    setBoardStore({
-      tasks,
-      pendingTasks: boardStore.pendingTasks.filter(
-        (item) => !seen.has(item?.requestID)
-      )
-    });
-  } catch (e) {
-    console.error("loadTasks failed", e);
-  }
-}
-function setTasksData(tasks) {
-  setBoardStore("tasks", Array.isArray(tasks) ? tasks : []);
-}
-let boardLoadTimer = null;
-function scheduleBoard(delay = 0) {
-  setBoardSyncPending(true);
-  clearBoardRetry$1();
-  if (boardLoadTimer) {
-    clearTimeout(boardLoadTimer);
-    boardLoadTimer = null;
-  }
-  boardLoadTimer = setTimeout(() => {
-    boardLoadTimer = null;
-    void loadBoard({ sync: true });
-  }, delay);
-}
-function rootTaskSessionID() {
-  const sessionID = boardStore.board?.task?.sessionID;
-  return typeof sessionID === "string" ? sessionID : "";
-}
-function activeDirectory$2() {
-  return boardStore.board?.task?.directory ?? "";
-}
-function setPath(path) {
-  setBoardStore("path", path ?? null);
-}
-function setVcs(vcs) {
-  setBoardStore("vcs", vcs ?? null);
-}
-function setBoardEtag(etag) {
-  setBoardStore("boardEtag", typeof etag === "string" ? etag : "");
-}
-function setBoardQueued(queued) {
-  setBoardStore("boardQueued", queued);
-}
-function setBoardRetryCount(count) {
-  setBoardStore("boardRetryCount", typeof count === "number" ? count : 0);
-}
-function setBoardSyncPending(pending) {
-  setBoardStore("boardSyncPending", pending);
-}
-function setBoardUpdatedAt(ms) {
-  setBoardStore("boardUpdatedAt", typeof ms === "number" ? ms : 0);
-}
-function setSnapshotVersion(version) {
-  setBoardStore("snapshotVersion", typeof version === "string" ? version : "");
-}
-function setTaskSequence(sequence) {
-  setBoardStore("taskSequence", typeof sequence === "number" ? sequence : 0);
-}
-function sortedTasks(data) {
-  return [...Array.isArray(data?.tasks) ? data.tasks : []].sort(
-    (a, b) => (b.updated_at || b.task?.time?.updated || 0) - (a.updated_at || a.task?.time?.updated || 0)
-  );
-}
-function taskUpdated$1(item) {
-  return item?.updated_at || item?.task?.time?.updated || item?.task?.time?.created || 0;
-}
-function visibleTasks() {
-  const seen = new Set(
-    boardStore.tasks.map((item) => item?.task?.requestID || item?.task?.id).filter(Boolean)
-  );
-  return [
-    ...boardStore.pendingTasks.filter(
-      (item) => !seen.has(item?.requestID || item?.task?.id)
-    ),
-    ...boardStore.tasks
-  ].sort((a, b) => taskUpdated$1(b) - taskUpdated$1(a));
-}
-const INTERRUPTABLE_STATUSES = /* @__PURE__ */ new Set([
-  "queued",
-  "spec_generating",
-  "goal_decomposing",
-  "planning",
-  "planned",
-  "running",
-  "blocked",
-  "evaluating",
-  "delivering"
-]);
-function isTaskInterruptable() {
-  const status = boardStore.board?.task?.status;
-  return !!status && INTERRUPTABLE_STATUSES.has(status);
-}
-
-const board = /*#__PURE__*/Object.freeze(/*#__PURE__*/Object.defineProperty({
-  __proto__: null,
-  activeDirectory: activeDirectory$2,
-  boardStore,
-  isTaskInterruptable,
-  loadBoard,
-  loadTasks,
-  rootTaskSessionID,
-  scheduleBoard,
-  setBoardEtag,
-  setBoardQueued,
-  setBoardRetryCount,
-  setBoardStore,
-  setBoardSyncPending,
-  setBoardUpdatedAt,
-  setPath,
-  setSnapshotVersion,
-  setTaskSequence,
-  setTasksData,
-  setVcs,
-  sortedTasks,
-  taskUpdated: taskUpdated$1,
-  visibleTasks
-}, Symbol.toStringTag, { value: 'Module' }));
-
-var _tmpl$$i = /* @__PURE__ */ template(`<span class=tool-detail>`), _tmpl$2$g = /* @__PURE__ */ template(`<div class=msg-tool><span class=tool-icon></span><span class=tool-name></span><span class=tool-status>`), _tmpl$3$f = /* @__PURE__ */ template(`<div class=msg-tool-input>`), _tmpl$4$f = /* @__PURE__ */ template(`<div class=msg-tool-output>`), _tmpl$5$d = /* @__PURE__ */ template(`<div class=msg-tool-error>`);
-function ToolPart(props) {
-  const state = () => props.part.state || {};
-  const status = () => state().status || "pending";
-  const toolName = () => props.part.tool || "unknown";
-  const input = () => state().input || {};
-  const icon = () => displayToolIcon(toolName());
-  const statusLabel = () => toolStatusLabel(status());
-  const detail = () => {
-    const raw2 = displayToolDetail(toolName(), input(), state(), activeDirectory$2());
-    return raw2 && raw2.toLowerCase() !== toolName().toLowerCase() ? raw2 : "";
-  };
-  const raw = () => {
-    const st = state();
-    const r = typeof st.raw === "string" ? typeof props.part._targetRaw === "string" ? props.part._targetRaw : st.raw : "";
-    return r;
-  };
-  const output = () => stripAnsi$1(state().output || "");
-  const error = () => stripAnsi$1(state().error || "") || output();
-  const expanded = () => toolOutputExpanded(props.part?.id || "");
-  return [(() => {
-    var _el$ = _tmpl$2$g(), _el$2 = _el$.firstChild, _el$3 = _el$2.nextSibling, _el$5 = _el$3.nextSibling;
-    insert(_el$2, icon);
-    insert(_el$3, toolName);
-    insert(_el$, createComponent(Show, {
-      get when() {
-        return detail();
-      },
-      get children() {
-        var _el$4 = _tmpl$$i();
-        insert(_el$4, detail);
-        return _el$4;
-      }
-    }), _el$5);
-    insert(_el$5, statusLabel);
-    createRenderEffect((_p$) => {
-      var _v$ = status(), _v$2 = statusLabel();
-      _v$ !== _p$.e && setAttribute(_el$5, "data-status", _p$.e = _v$);
-      _v$2 !== _p$.t && setAttribute(_el$5, "title", _p$.t = _v$2);
-      return _p$;
-    }, {
-      e: void 0,
-      t: void 0
-    });
-    return _el$;
-  })(), createComponent(Show, {
-    get when() {
-      return memo(() => status() === "pending")() && raw();
-    },
-    get children() {
-      var _el$6 = _tmpl$3$f();
-      insert(_el$6, raw);
-      return _el$6;
-    }
-  }), createComponent(Show, {
-    get when() {
-      return memo(() => status() === "completed")() && output();
-    },
-    get children() {
-      var _el$7 = _tmpl$4$f();
-      _el$7.$$click = () => toggleToolOutputExpanded(props.part?.id || "");
-      insert(_el$7, output);
-      createRenderEffect(() => _el$7.classList.toggle("msg-tool-output--expanded", !!expanded()));
-      return _el$7;
-    }
-  }), createComponent(Show, {
-    get when() {
-      return memo(() => status() === "error")() && error();
-    },
-    get children() {
-      var _el$8 = _tmpl$5$d();
-      insert(_el$8, error);
-      return _el$8;
-    }
-  })];
-}
-delegateEvents(["click"]);
-
-var _tmpl$$h = /* @__PURE__ */ template(`<div class=reasoning-text>`), _tmpl$2$f = /* @__PURE__ */ template(`<div class=msg-reasoning><div class=reasoning-label> `);
-function isEmptyReasoning(s) {
-  return !s.replace(/[\[\]\s]/g, "");
-}
-function ReasoningPart(props) {
-  const [expanded, setExpanded] = createSignal(true);
-  const text = () => String(props.part?.text || "");
-  const hidden = createMemo(() => {
-    reasoningRevision();
-    return reasoningPartHidden(props.part);
-  });
-  const label = () => t("transcript.reasoning");
-  return createComponent(Show, {
-    get when() {
-      return memo(() => !!(text().trim() && !isEmptyReasoning(text())))() && !hidden();
-    },
-    get children() {
-      var _el$ = _tmpl$2$f(), _el$2 = _el$.firstChild, _el$3 = _el$2.firstChild;
-      _el$2.$$click = () => setExpanded(!expanded());
-      insert(_el$2, label, _el$3);
-      insert(_el$2, () => expanded() ? "▼" : "▶", null);
-      insert(_el$, createComponent(Show, {
-        get when() {
-          return expanded();
-        },
-        get children() {
-          var _el$4 = _tmpl$$h();
-          insert(_el$4, text);
-          return _el$4;
-        }
-      }), null);
-      return _el$;
-    }
-  });
-}
-delegateEvents(["click"]);
-
-function timeLocaleOptions(includeSeconds = true) {
-  return includeSeconds ? { hour: "2-digit", minute: "2-digit", second: "2-digit" } : { hour: "2-digit", minute: "2-digit" };
-}
-function stamp(ts) {
-  if (!ts) return "";
-  const d = new Date(ts);
-  return d.toLocaleTimeString(localeTag(), timeLocaleOptions());
-}
-function formatDuration(ms) {
-  const s = Math.floor(ms / 1e3);
-  const m = Math.floor(s / 60);
-  const h = Math.floor(m / 60);
-  if (h > 0) return t("time.duration.hour_minute", { hours: h, minutes: m % 60 });
-  if (m > 0) return t("time.duration.minute_second", { minutes: m, seconds: s % 60 });
-  return t("time.duration.second", { seconds: s });
-}
-
-var _tmpl$$g = /* @__PURE__ */ template(`<article class="turn msg"><div class=msg-head><span class=msg-role></span><span class=msg-time></span></div><div class=msg-bubble><div class=msg-body>`), _tmpl$2$e = /* @__PURE__ */ template(`<div class=msg-patch>`), _tmpl$3$e = /* @__PURE__ */ template(`<div>`), _tmpl$4$e = /* @__PURE__ */ template(`<div class=msg-tool><span class=tool-icon>→</span><span class=tool-name>Subtask</span><span class=tool-detail>`);
-function renderFilePart(part) {
-  const url = part.url || part.filename || "";
-  const name = part.filename || url || "file";
-  const mime = part.mime || part.mediaType || "";
-  const isImg = mime && mime.startsWith("image/") || /^data:image\//i.test(url) || /\.(png|jpe?g|gif|webp|svg|bmp|ico)(\?|$)/i.test(url);
-  if (isImg && url) {
-    return `<div class="msg-img-wrap"><img class="md-img" src="${escapeHtml$1(url)}" alt="${escapeHtml$1(name)}" loading="lazy"></div>`;
-  }
-  return `<div class="msg-text" style="font-family:var(--mono);font-size:var(--ui-font-small);color:var(--text-soft)">${escapeHtml$1(name)}</div>`;
-}
-function MessageView(props) {
-  const role = () => props.message.info?.resolvedRole || effectiveRole(props.message, rootTaskSessionID());
-  const parts = () => orderedMessageParts(props.message);
-  const time = () => stamp(props.message.info?.time?.created);
-  const hasContent = createMemo(() => {
-    const p = parts();
-    if (p.length === 0) return false;
-    return p.some((part) => {
-      if (part.type === "text") return !!(part.text || "").trim();
-      if (part.type === "tool") return true;
-      if (part.type === "reasoning") return !!(part.text || "").trim() && !isEmptyReasoning(part.text || "");
-      if (part.type === "patch") return (part.files || []).length > 0;
-      if (part.type === "file") return true;
-      if (part.type === "subtask") return true;
-      return false;
-    });
-  });
-  return createComponent(Show, {
-    get when() {
-      return hasContent();
-    },
-    get children() {
-      var _el$ = _tmpl$$g(), _el$2 = _el$.firstChild, _el$3 = _el$2.firstChild, _el$4 = _el$3.nextSibling, _el$5 = _el$2.nextSibling, _el$6 = _el$5.firstChild;
-      insert(_el$3, () => roleLabel(role()));
-      insert(_el$4, time);
-      insert(_el$6, createComponent(Index, {
-        get each() {
-          return parts();
-        },
-        children: (part) => createComponent(Switch, {
-          fallback: null,
-          get children() {
-            return [createComponent(Match, {
-              get when() {
-                return memo(() => part().type === "text")() && (part().text || "").trim();
-              },
-              get children() {
-                return createComponent(TextPart, {
-                  get text() {
-                    return part().text || "";
-                  }
-                });
-              }
-            }), createComponent(Match, {
-              get when() {
-                return part().type === "tool";
-              },
-              get children() {
-                return createComponent(ToolPart, {
-                  get part() {
-                    return part();
-                  }
-                });
-              }
-            }), createComponent(Match, {
-              get when() {
-                return memo(() => !!(part().type === "reasoning" && (part().text || "").trim()))() && !isEmptyReasoning(part().text || "");
-              },
-              get children() {
-                return createComponent(ReasoningPart, {
-                  get part() {
-                    return part();
-                  }
-                });
-              }
-            }), createComponent(Match, {
-              get when() {
-                return memo(() => part().type === "patch")() && (part().files || []).length > 0;
-              },
-              get children() {
-                var _el$7 = _tmpl$2$e();
-                insert(_el$7, () => "⚙ " + (part().files || []).map((f) => shortRelativePath(f, activeDirectory$2())).join(", "));
-                return _el$7;
-              }
-            }), createComponent(Match, {
-              get when() {
-                return part().type === "file";
-              },
-              get children() {
-                var _el$8 = _tmpl$3$e();
-                createRenderEffect(() => _el$8.innerHTML = renderFilePart(part()));
-                return _el$8;
-              }
-            }), createComponent(Match, {
-              get when() {
-                return part().type === "subtask";
-              },
-              get children() {
-                var _el$9 = _tmpl$4$e(), _el$0 = _el$9.firstChild, _el$1 = _el$0.nextSibling, _el$10 = _el$1.nextSibling;
-                insert(_el$10, () => part().description || part().prompt || "");
-                return _el$9;
-              }
-            })];
-          }
-        })
-      }));
-      createRenderEffect(() => setAttribute(_el$, "data-role", role()));
-      return _el$;
-    }
-  });
-}
-
-var _tmpl$$f = /* @__PURE__ */ template(`<span>`), _tmpl$2$d = /* @__PURE__ */ template(`<div class=executor-goal-body>`), _tmpl$3$d = /* @__PURE__ */ template(`<article class="turn msg executor-goal-block"data-role=executor-goal-group><div class=executor-goal-header role=button tabindex=0><span class=executor-goal-label></span><span class=executor-goal-count></span><span class=executor-goal-chevron aria-hidden=true>▼`), _tmpl$4$d = /* @__PURE__ */ template(`<span class="executor-goal-badge executor-goal-badge--running"title=Running><span class=agent-card-spinner>`);
-function ExecutorGoalGroup(props) {
-  const expanded = () => agentCardExpanded(props.cardID, props.status === "running");
-  const toggle = () => {
-    toggleAgentCardExpanded(props.cardID, props.status === "running");
-  };
-  const badgeClass = () => {
-    if (props.status === "running") return "executor-goal-badge executor-goal-badge--running";
-    if (props.goalStatus === "passed") return "executor-goal-badge executor-goal-badge--done";
-    if (props.goalStatus === "failed") return "executor-goal-badge executor-goal-badge--error";
-    if (props.status === "error") return "executor-goal-badge executor-goal-badge--error";
-    return "executor-goal-badge executor-goal-badge--done";
-  };
-  const badgeContent = () => {
-    if (props.status === "running") return "";
-    if (props.goalStatus === "passed") return "✓";
-    if (props.goalStatus === "failed") return "✗";
-    if (props.status === "error") return "✗";
-    return "✓";
-  };
-  return (() => {
-    var _el$ = _tmpl$3$d(), _el$2 = _el$.firstChild, _el$4 = _el$2.firstChild, _el$5 = _el$4.nextSibling;
-    _el$2.$$keydown = (e) => {
-      if (e.key === "Enter" || e.key === " ") {
-        e.preventDefault();
-        toggle();
-      }
-    };
-    _el$2.$$click = toggle;
-    insert(_el$2, createComponent(Show, {
-      get when() {
-        return props.status !== "running";
-      },
-      get fallback() {
-        return _tmpl$4$d();
-      },
-      get children() {
-        var _el$3 = _tmpl$$f();
-        insert(_el$3, badgeContent);
-        createRenderEffect((_p$) => {
-          var _v$ = badgeClass(), _v$2 = props.status;
-          _v$ !== _p$.e && className(_el$3, _p$.e = _v$);
-          _v$2 !== _p$.t && setAttribute(_el$3, "title", _p$.t = _v$2);
-          return _p$;
-        }, {
-          e: void 0,
-          t: void 0
-        });
-        return _el$3;
-      }
-    }), _el$4);
-    insert(_el$4, () => props.goalTitle || "Executor");
-    insert(_el$5, createComponent(Show, {
-      get when() {
-        return props.messages.length > 0;
-      },
-      get children() {
-        return ["(", memo(() => props.messages.length), ")"];
-      }
-    }));
-    insert(_el$, createComponent(Show, {
-      get when() {
-        return expanded();
-      },
-      get children() {
-        var _el$6 = _tmpl$2$d();
-        insert(_el$6, createComponent(For, {
-          get each() {
-            return props.messages;
-          },
-          children: (msg) => createComponent(MessageView, {
-            message: msg
-          })
-        }));
-        return _el$6;
-      }
-    }), null);
-    createRenderEffect((_p$) => {
-      var _v$3 = !!expanded(), _v$4 = props.cardID, _v$5 = expanded();
-      _v$3 !== _p$.e && _el$.classList.toggle("executor-goal-block--expanded", _p$.e = _v$3);
-      _v$4 !== _p$.t && setAttribute(_el$, "data-goal-id", _p$.t = _v$4);
-      _v$5 !== _p$.a && setAttribute(_el$2, "aria-expanded", _p$.a = _v$5);
-      return _p$;
-    }, {
-      e: void 0,
-      t: void 0,
-      a: void 0
-    });
-    return _el$;
-  })();
-}
-delegateEvents(["click", "keydown"]);
 
 function stripAssistantBrief(text) {
   const briefRe = /<assistant-brief>[\s\S]*?<\/assistant-brief>/;
@@ -4458,8 +4468,10 @@ function conversationMessages() {
   }
   const contextMsgs = buildUserContextMessages();
   const agentCardMsgs = [];
-  for (const id of Array.isArray(store.agentCardOrder) ? store.agentCardOrder : []) {
-    const card = store.agentCards[id];
+  const currentOrder = agentCardOrder();
+  const currentCards = agentCards();
+  for (const id of currentOrder) {
+    const card = currentCards[id];
     if (!card) continue;
     if (card._agentGoalGroup && Array.isArray(card._agentInternalCards)) {
       const flatMsgs = [];
@@ -4472,6 +4484,13 @@ function conversationMessages() {
       }
       flatMsgs.sort((a, b) => conversationTime(a) - conversationTime(b));
       agentCardMsgs.push({ ...card, _agentMessages: flatMsgs });
+    } else if (card._agentStage === "executor" && Array.isArray(card._agentMessages) && card._agentMessages.length > 0) {
+      const resolved = card._agentMessages.map((m) => resolveMessage(m));
+      resolved.sort((a, b) => conversationTime(a) - conversationTime(b));
+      agentCardMsgs.push({
+        ...card,
+        _agentMessages: resolved
+      });
     } else if (Array.isArray(card._agentMessages)) {
       for (const m of card._agentMessages) {
         agentCardMsgs.push(resolveMessage(m));
@@ -4541,15 +4560,22 @@ function Conversation(props) {
             });
           },
           get children() {
-            return createComponent(Index, {
-              get each() {
+            return createComponent(AgentCard, {
+              get cardID() {
+                return item()._agentCardKey;
+              },
+              get stage() {
+                return item()._agentStage;
+              },
+              get status() {
+                return item()._agentStatus;
+              },
+              get messages() {
                 return item()._agentMessages || [];
               },
-              children: (msg) => createComponent(MessageView, {
-                get message() {
-                  return msg();
-                }
-              })
+              get round() {
+                return item()._agentRound || 0;
+              }
             });
           }
         });
@@ -4782,7 +4808,7 @@ function TaskList(props) {
 }
 delegateEvents(["click"]);
 
-var _tmpl$2$b = /* @__PURE__ */ template(`<div class=plan-version>`), _tmpl$3$b = /* @__PURE__ */ template(`<div class="plan-version streaming-indicator">`), _tmpl$4$b = /* @__PURE__ */ template(`<p class=empty-hint>`), _tmpl$5$b = /* @__PURE__ */ template(`<div class="plan-summary md-content">`), _tmpl$6$a = /* @__PURE__ */ template(`<div class=goals-list>`), _tmpl$7$9 = /* @__PURE__ */ template(`<span class=extension-status data-state=passed>✓`), _tmpl$8$6 = /* @__PURE__ */ template(`<span class=extension-status data-state=failed>✗`), _tmpl$9$5 = /* @__PURE__ */ template(`<span class=extension-status data-state=active>`), _tmpl$0$3 = /* @__PURE__ */ template(`<div class="goal-criteria md-content">`), _tmpl$1$2 = /* @__PURE__ */ template(`<details class=goal-item><summary class=goal-item-head><span class=goal-item-chevron aria-hidden=true>▶</span><span class=goal-desc-inline></span><span class=goal-title-brief></span></summary><div class=goal-item-body><div class=goal-content><div class=plan-version></div><div class="goal-desc md-content">`), _tmpl$10$1 = /* @__PURE__ */ template(`<span class=goal-priority>`), _tmpl$11$1 = /* @__PURE__ */ template(`<button type=button class="btn btn-ghost mini"data-goal-action=view-session title="View executor session"aria-label="View executor session">View`), _tmpl$12$1 = /* @__PURE__ */ template(`<button type=button class="btn btn-ghost mini"data-goal-action=edit>`), _tmpl$13$1 = /* @__PURE__ */ template(`<button type=button class="btn btn-ghost mini danger"data-goal-action=delete>`), _tmpl$14$1 = /* @__PURE__ */ template(`<div class=goal-actions>`), _tmpl$15$1 = /* @__PURE__ */ template(`<details class=goal-item><summary class=goal-item-head><span class=goal-item-chevron aria-hidden=true>▶</span><span class=goal-desc-inline></span><span class=goal-title-brief></span></summary><div class=goal-item-body><div class=goal-content><div class="goal-desc md-content">`), _tmpl$16$1 = /* @__PURE__ */ template(`<div class=empty-hint>`), _tmpl$17 = /* @__PURE__ */ template(`<section class=criteria-group><div class=criteria-group-head><span class=criteria-group-icon aria-hidden=true></span><div class=criteria-group-title></div><div class=criteria-group-count></div></div><div class=criteria-group-list>`), _tmpl$18 = /* @__PURE__ */ template(`<label class=criteria-item><input type=checkbox><span class=check-mark></span><span class=criteria-copy><span class=criteria-name></span><span class=criteria-desc></span></span><span class=criteria-status></span><span class=criteria-result>`), _tmpl$19 = /* @__PURE__ */ template(`<div class="eval-summary md-content">`), _tmpl$20 = /* @__PURE__ */ template(`<div class=eval-error-meta>`), _tmpl$21 = /* @__PURE__ */ template(`<div class=eval-error><div class=eval-error-name>✗ </div><div class="eval-error-detail md-content">`), _tmpl$22 = /* @__PURE__ */ template(`<div class=delivery-files>`), _tmpl$23 = /* @__PURE__ */ template(`<div class=delivery-card><div class=delivery-title></div><div class="delivery-summary md-content">`), _tmpl$24 = /* @__PURE__ */ template(`<button type=button class="btn btn-primary"data-task-action=retry>`), _tmpl$25 = /* @__PURE__ */ template(`<button type=button class="btn btn-ghost"data-task-action=replan>`), _tmpl$26 = /* @__PURE__ */ template(`<div class=task-actions-buttons>`), _tmpl$27 = /* @__PURE__ */ template(`<div class=task-actions-bar>`), _tmpl$28 = /* @__PURE__ */ template(`<button class="btn btn-primary"data-action=always>`), _tmpl$29 = /* @__PURE__ */ template(`<button class="btn btn-ghost"data-action=once>`), _tmpl$30 = /* @__PURE__ */ template(`<button class="btn btn-ghost"data-action=reject>`), _tmpl$31 = /* @__PURE__ */ template(`<div class=interaction-alert><div class=interaction-title> </div><div class="interaction-body md-content"></div><div class=interaction-actions>`), _tmpl$32 = /* @__PURE__ */ template(`<button class="btn btn-primary"data-action=answer>`), _tmpl$33 = /* @__PURE__ */ template(`<div class=interactions-list>`), _tmpl$36 = /* @__PURE__ */ template(`<details class=section><summary class=section-head><span class=section-icon aria-hidden=true></span><span class=section-title></span><span class=section-badge></span></summary><div class=section-body>`), _tmpl$37 = /* @__PURE__ */ template(`<div id=taskActionsBar>`);
+var _tmpl$2$b = /* @__PURE__ */ template(`<div class=plan-version>`), _tmpl$3$b = /* @__PURE__ */ template(`<div class="plan-version streaming-indicator">`), _tmpl$4$b = /* @__PURE__ */ template(`<p class=empty-hint>`), _tmpl$5$b = /* @__PURE__ */ template(`<div class="plan-summary md-content">`), _tmpl$6$a = /* @__PURE__ */ template(`<div class=goals-list>`), _tmpl$7$9 = /* @__PURE__ */ template(`<span class=extension-status data-state=passed>✓`), _tmpl$8$6 = /* @__PURE__ */ template(`<span class=extension-status data-state=failed>✗`), _tmpl$9$5 = /* @__PURE__ */ template(`<span class=extension-status data-state=active>`), _tmpl$0$3 = /* @__PURE__ */ template(`<div class="goal-criteria md-content">`), _tmpl$1$2 = /* @__PURE__ */ template(`<details class=goal-item><summary class=goal-item-head><span class=goal-item-chevron aria-hidden=true>▶</span><span class=goal-desc-inline></span><span class=goal-title-brief></span></summary><div class=goal-item-body><div class=goal-content><div class=plan-version></div><div class="goal-desc md-content">`), _tmpl$10$1 = /* @__PURE__ */ template(`<span class=goal-priority>`), _tmpl$11$1 = /* @__PURE__ */ template(`<button type=button class="btn btn-ghost mini"data-goal-action=view-session title="View executor session"aria-label="View executor session">View`), _tmpl$12$1 = /* @__PURE__ */ template(`<button type=button class="btn btn-ghost mini"data-goal-action=edit>`), _tmpl$13$1 = /* @__PURE__ */ template(`<button type=button class="btn btn-ghost mini danger"data-goal-action=delete>`), _tmpl$14$1 = /* @__PURE__ */ template(`<div class=goal-actions>`), _tmpl$15$1 = /* @__PURE__ */ template(`<details class=goal-item><summary class=goal-item-head><span class=goal-item-chevron aria-hidden=true>▶</span><span class=goal-desc-inline></span><span class=goal-title-brief></span></summary><div class=goal-item-body><div class=goal-content><div class="goal-desc md-content">`), _tmpl$16$1 = /* @__PURE__ */ template(`<div class=empty-hint>`), _tmpl$17 = /* @__PURE__ */ template(`<section class=criteria-group><div class=criteria-group-head><span class=criteria-group-icon aria-hidden=true></span><div class=criteria-group-title></div><div class=criteria-group-count></div></div><div class=criteria-group-list>`), _tmpl$18 = /* @__PURE__ */ template(`<label class=criteria-item><input type=checkbox><span class=check-mark></span><span class=criteria-copy><span class=criteria-name></span><span class=criteria-desc></span></span><span class=criteria-status></span><span class=criteria-result>`), _tmpl$19 = /* @__PURE__ */ template(`<div class="eval-summary md-content">`), _tmpl$20 = /* @__PURE__ */ template(`<div class=eval-error-meta>`), _tmpl$21 = /* @__PURE__ */ template(`<div class=eval-error><div class=eval-error-name>✗ </div><div class="eval-error-detail md-content">`), _tmpl$22 = /* @__PURE__ */ template(`<div class=delivery-files>`), _tmpl$23 = /* @__PURE__ */ template(`<div class=delivery-card><div class=delivery-title></div><div class="delivery-summary md-content">`), _tmpl$24 = /* @__PURE__ */ template(`<button type=button class="btn btn-primary"data-task-action=retry>`), _tmpl$25 = /* @__PURE__ */ template(`<button type=button class="btn btn-ghost"data-task-action=replan>`), _tmpl$26 = /* @__PURE__ */ template(`<div class=task-actions-buttons>`), _tmpl$27 = /* @__PURE__ */ template(`<div class=task-actions-bar>`), _tmpl$28 = /* @__PURE__ */ template(`<button class="btn btn-primary"data-action=always>`), _tmpl$29 = /* @__PURE__ */ template(`<button class="btn btn-ghost"data-action=once>`), _tmpl$30 = /* @__PURE__ */ template(`<button class="btn btn-ghost"data-action=reject>`), _tmpl$31 = /* @__PURE__ */ template(`<div class=interaction-alert><div class=interaction-title> </div><div class="interaction-body md-content"></div><div class=interaction-actions>`), _tmpl$32 = /* @__PURE__ */ template(`<button class="btn btn-primary"data-action=answer>`), _tmpl$33 = /* @__PURE__ */ template(`<div class=interactions-list>`), _tmpl$36 = /* @__PURE__ */ template(`<div class=executor-summary-stat><span class=executor-summary-value></span><span class=executor-summary-label>`), _tmpl$37 = /* @__PURE__ */ template(`<div class=executor-summary><div class=executor-summary-stat><span class=executor-summary-value></span><span class=executor-summary-label>`), _tmpl$38 = /* @__PURE__ */ template(`<details class=section><summary class=section-head><span class=section-icon aria-hidden=true></span><span class=section-title></span><span class=section-badge></span></summary><div class=section-body>`), _tmpl$39 = /* @__PURE__ */ template(`<div id=taskActionsBar>`);
 function statusIcon(status) {
   const map = {
     idle: `<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle data-stroke="true" cx="8" cy="8" r="4.5"/><circle data-fill="true" cx="8" cy="8" r="1.25"/></svg>`,
@@ -5739,25 +5765,73 @@ function InteractionsList(props) {
     }
   });
 }
+function ExecutorSummaryPanel(props) {
+  const toolCalls = createMemo(() => {
+    let count = 0;
+    for (const card of props.cards) {
+      const msgs = Array.isArray(card._agentMessages) ? card._agentMessages : [];
+      for (const msg of msgs) {
+        const parts = Array.isArray(msg?.parts) ? msg.parts : [];
+        count += parts.filter((p) => p?.type === "tool").length;
+      }
+    }
+    return count;
+  });
+  const isRunning = () => props.status === "running";
+  const hasActivity = () => props.cards.length > 0;
+  return createComponent(Show, {
+    get when() {
+      return hasActivity();
+    },
+    get fallback() {
+      return (() => {
+        var _el$93 = _tmpl$4$b();
+        insert(_el$93, (() => {
+          var _c$2 = memo(() => !!isRunning());
+          return () => _c$2() ? t("executor.waiting") : t("empty.executor");
+        })());
+        return _el$93;
+      })();
+    },
+    get children() {
+      var _el$86 = _tmpl$37(), _el$87 = _el$86.firstChild, _el$88 = _el$87.firstChild, _el$89 = _el$88.nextSibling;
+      insert(_el$88, toolCalls);
+      insert(_el$89, () => t("executor.tool_calls"));
+      insert(_el$86, createComponent(Show, {
+        get when() {
+          return props.cards.length > 0;
+        },
+        get children() {
+          var _el$90 = _tmpl$36(), _el$91 = _el$90.firstChild, _el$92 = _el$91.nextSibling;
+          insert(_el$91, () => props.cards.length);
+          insert(_el$92, () => t("executor.sessions"));
+          return _el$90;
+        }
+      }), null);
+      return _el$86;
+    }
+  });
+}
 const SECTION_ICONS = {
   spec: `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 2H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.5L9.5 2Z"/><polyline points="9.5,2 9.5,4.5 12,4.5"/><line x1="6" y1="7" x2="10" y2="7"/><line x1="6" y1="9.5" x2="10" y2="9.5"/></svg>`,
   plan: `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="4" x2="13" y2="4"/><line x1="6" y1="8" x2="13" y2="8"/><line x1="6" y1="12" x2="13" y2="12"/><circle cx="3.5" cy="4" r="0.8" fill="currentColor" stroke="none"/><circle cx="3.5" cy="8" r="0.8" fill="currentColor" stroke="none"/><circle cx="3.5" cy="12" r="0.8" fill="currentColor" stroke="none"/></svg>`,
   goals: `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="5.5"/><circle cx="8" cy="8" r="3"/><circle cx="8" cy="8" r="0.8" fill="currentColor" stroke="none"/></svg>`,
+  executor: `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4.6L11.3 8 6 11.4Z"/></svg>`,
   criteria: `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="2" width="10" height="12" rx="1.2"/><path d="M6 6l1.2 1.2L9.5 5"/><line x1="6" y1="9.5" x2="10" y2="9.5"/><line x1="6" y1="11.5" x2="9" y2="11.5"/></svg>`,
   delivery: `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 5.5L8 2.5l5.5 3v5L8 13.5l-5.5-3Z"/><polyline points="2.5,5.5 8,8.5 13.5,5.5"/><line x1="8" y1="8.5" x2="8" y2="13.5"/></svg>`};
 function SectionFrame(props) {
   return (() => {
-    var _el$86 = _tmpl$36(), _el$87 = _el$86.firstChild, _el$88 = _el$87.firstChild, _el$89 = _el$88.nextSibling, _el$90 = _el$89.nextSibling, _el$91 = _el$87.nextSibling;
-    insert(_el$89, () => props.title);
-    insert(_el$90, () => props.badgeText || "");
-    insert(_el$91, () => props.children);
+    var _el$94 = _tmpl$38(), _el$95 = _el$94.firstChild, _el$96 = _el$95.firstChild, _el$97 = _el$96.nextSibling, _el$98 = _el$97.nextSibling, _el$99 = _el$95.nextSibling;
+    insert(_el$97, () => props.title);
+    insert(_el$98, () => props.badgeText || "");
+    insert(_el$99, () => props.children);
     createRenderEffect((_p$) => {
       var _v$30 = props.id, _v$31 = props.icon || "", _v$32 = props.badgeId, _v$33 = props.badgeTone, _v$34 = props.bodyId;
-      _v$30 !== _p$.e && setAttribute(_el$86, "id", _p$.e = _v$30);
-      _v$31 !== _p$.t && (_el$88.innerHTML = _p$.t = _v$31);
-      _v$32 !== _p$.a && setAttribute(_el$90, "id", _p$.a = _v$32);
-      _v$33 !== _p$.o && setAttribute(_el$90, "data-tone", _p$.o = _v$33);
-      _v$34 !== _p$.i && setAttribute(_el$91, "id", _p$.i = _v$34);
+      _v$30 !== _p$.e && setAttribute(_el$94, "id", _p$.e = _v$30);
+      _v$31 !== _p$.t && (_el$96.innerHTML = _p$.t = _v$31);
+      _v$32 !== _p$.a && setAttribute(_el$98, "id", _p$.a = _v$32);
+      _v$33 !== _p$.o && setAttribute(_el$98, "data-tone", _p$.o = _v$33);
+      _v$34 !== _p$.i && setAttribute(_el$99, "id", _p$.i = _v$34);
       return _p$;
     }, {
       e: void 0,
@@ -5766,7 +5840,7 @@ function SectionFrame(props) {
       o: void 0,
       i: void 0
     });
-    return _el$86;
+    return _el$94;
   })();
 }
 function Board(props) {
@@ -5799,9 +5873,30 @@ function Board(props) {
     const passed = cards.filter((c) => c.status === "passed").length;
     return passed === cards.length ? "good" : passed > 0 ? "warn" : "";
   });
+  const executorCards = createMemo(() => {
+    const order = agentCardOrder();
+    const cards = agentCards();
+    return order.map((id) => cards[id]).filter((c) => c && c._agentStage === "executor");
+  });
+  const executorBadgeText = createMemo(() => {
+    const cards = executorCards();
+    if (cards.length === 0) return "";
+    const totalMsgs = cards.reduce((sum, c) => sum + (Array.isArray(c._agentMessages) ? c._agentMessages.length : 0), 0);
+    const running = cards.some((c) => c._agentStatus === "running");
+    if (running) return t("common.active");
+    return totalMsgs > 0 ? String(totalMsgs) : "";
+  });
+  const executorBadgeTone = createMemo(() => {
+    const cards = executorCards();
+    if (cards.length === 0) return "";
+    const running = cards.some((c) => c._agentStatus === "running");
+    if (running) return "accent";
+    const error = cards.some((c) => c._agentStatus === "error");
+    return error ? "bad" : "good";
+  });
   return [(() => {
-    var _el$92 = _tmpl$37();
-    insert(_el$92, createComponent(TaskActionsPanel, {
+    var _el$100 = _tmpl$39();
+    insert(_el$100, createComponent(TaskActionsPanel, {
       get overview() {
         return overview();
       },
@@ -5815,7 +5910,7 @@ function Board(props) {
         return props.onCancel;
       }
     }));
-    return _el$92;
+    return _el$100;
   })(), createComponent(SectionFrame, {
     id: "specSection",
     get title() {
@@ -5916,6 +6011,35 @@ function Board(props) {
         },
         get runningGoalIDs() {
           return runningGoalIDs();
+        }
+      });
+    }
+  }), createComponent(SectionFrame, {
+    id: "executorSection",
+    get title() {
+      return t("section.executor");
+    },
+    get icon() {
+      return SECTION_ICONS.executor;
+    },
+    bodyId: "executorBody",
+    badgeId: "executorBadge",
+    get badgeText() {
+      return executorBadgeText();
+    },
+    get badgeTone() {
+      return executorBadgeTone();
+    },
+    get children() {
+      return createComponent(ExecutorSummaryPanel, {
+        get cards() {
+          return executorCards();
+        },
+        get goalCards() {
+          return goalsCards();
+        },
+        get status() {
+          return task()?.status;
         }
       });
     }

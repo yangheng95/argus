@@ -3588,6 +3588,27 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
   border-left: 3px solid var(--msg-role-tone);
   border-radius: calc(8px * var(--ui-scale));
 }
+/* ── Executor Summary Panel (right-panel section) ── */
+.executor-summary {
+  display: flex;
+  gap: 16px;
+  padding: 6px 0;
+}
+.executor-summary-stat {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+}
+.executor-summary-value {
+  font-size: var(--ui-font-base, 13px);
+  font-weight: 600;
+  color: var(--text-strong, #fff);
+  font-variant-numeric: tabular-nums;
+}
+.executor-summary-label {
+  font-size: var(--ui-font-small, 11px);
+  color: var(--text-soft, #888);
+}
 /* ── Executor Goal Block (collapsible per-goal container) ── */
 .executor-goal-block {
   --executor-accent: rgba(230, 140, 50, 0.80);
@@ -3667,6 +3688,99 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
 }
 .executor-goal-body::-webkit-scrollbar { width: 4px; }
 .executor-goal-body::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 2px;
+}
+
+/* ── Agent Card (single-session stage container) ── */
+.agent-card {
+  --agent-accent: rgba(110, 183, 255, 0.82);
+  --agent-bg: rgba(110, 183, 255, 0.08);
+  --agent-border: rgba(110, 183, 255, 0.22);
+  width: 100%;
+  display: block;
+}
+
+.agent-card[data-agent-stage="executor"] {
+  --agent-accent: rgba(230, 140, 50, 0.80);
+  --agent-bg: rgba(230, 140, 50, 0.08);
+  --agent-border: rgba(230, 140, 50, 0.22);
+}
+
+.agent-card-header {
+  display: flex;
+  align-items: center;
+  gap: calc(8px * var(--ui-scale));
+  padding: calc(8px * var(--ui-scale)) calc(12px * var(--ui-scale));
+  background: var(--agent-bg);
+  border: 1px solid var(--agent-border);
+  border-radius: calc(6px * var(--ui-scale));
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s ease, border-color 0.15s ease;
+  font-size: var(--ui-font-control);
+  line-height: 1.5;
+}
+
+.agent-card-header:hover {
+  background: color-mix(in srgb, var(--agent-bg) 70%, white 6%);
+  border-color: var(--agent-accent);
+}
+
+.agent-card-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(20px * var(--ui-scale));
+  height: calc(20px * var(--ui-scale));
+  font-size: var(--ui-font-control);
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.agent-card-badge--done { background: rgba(95, 173, 86, 0.22); color: var(--good); }
+.agent-card-badge--error { background: rgba(220, 70, 70, 0.22); color: var(--bad); }
+.agent-card-badge--running { background: rgba(230, 140, 50, 0.18); }
+
+.agent-card-label {
+  font-weight: 600;
+  color: var(--agent-accent);
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-card-round,
+.agent-card-count {
+  color: var(--text-soft);
+  font-size: var(--ui-font-control);
+  font-family: var(--mono);
+}
+
+.agent-card-chevron {
+  font-size: var(--ui-font-control);
+  color: var(--text-soft);
+  margin-left: auto;
+  transition: transform 0.2s ease;
+}
+
+.agent-card--expanded .agent-card-chevron {
+  transform: rotate(180deg);
+}
+
+.agent-card-body {
+  margin-top: calc(4px * var(--ui-scale));
+  padding: calc(4px * var(--ui-scale)) calc(8px * var(--ui-scale));
+  background: var(--agent-bg);
+  border: 1px solid color-mix(in srgb, var(--agent-border) 60%, transparent);
+  border-radius: calc(6px * var(--ui-scale));
+  max-height: min(60vh, calc(800px * var(--ui-scale)));
+  overflow-y: auto;
+}
+
+.agent-card-body::-webkit-scrollbar { width: 4px; }
+.agent-card-body::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.12);
   border-radius: 2px;
 }

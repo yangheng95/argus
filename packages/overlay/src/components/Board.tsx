@@ -7,6 +7,7 @@
 
 import { createMemo, For, Show, createSignal, onMount, onCleanup } from "solid-js";
 import { boardStore } from "../store/board";
+import { messageStore, agentCards, agentCardOrder } from "../store/messages";
 import { t, tc } from "../utils/i18n";
 import { renderMarkdown } from "../utils/markdown";
 import { stamp } from "../utils/time";
@@ -997,6 +998,56 @@ interface BoardProps {
   onRejectInteraction?: (id: string) => void;
 }
 
+// ── ExecutorSummaryPanel ──
+// Shows executor activity summary: tool calls, running goals.
+
+interface ExecutorSummaryPanelProps {
+  cards: any[];
+  goalCards: any[];
+  status?: string;
+}
+
+function ExecutorSummaryPanel(props: ExecutorSummaryPanelProps) {
+  const toolCalls = createMemo(() => {
+    let count = 0;
+    for (const card of props.cards) {
+      const msgs = Array.isArray(card._agentMessages) ? card._agentMessages : [];
+      for (const msg of msgs) {
+        const parts = Array.isArray(msg?.parts) ? msg.parts : [];
+        count += parts.filter((p: any) => p?.type === "tool").length;
+      }
+    }
+    return count;
+  });
+
+  const isRunning = () => props.status === "running";
+  const hasActivity = () => props.cards.length > 0;
+
+  return (
+    <Show
+      when={hasActivity()}
+      fallback={
+        <p class="empty-hint">
+          {isRunning() ? t("executor.waiting") : t("empty.executor")}
+        </p>
+      }
+    >
+      <div class="executor-summary">
+        <div class="executor-summary-stat">
+          <span class="executor-summary-value">{toolCalls()}</span>
+          <span class="executor-summary-label">{t("executor.tool_calls")}</span>
+        </div>
+        <Show when={props.cards.length > 0}>
+          <div class="executor-summary-stat">
+            <span class="executor-summary-value">{props.cards.length}</span>
+            <span class="executor-summary-label">{t("executor.sessions")}</span>
+          </div>
+        </Show>
+      </div>
+    </Show>
+  );
+}
+
 interface SectionFrameProps {
   id: string;
   title: string;
@@ -1015,6 +1066,7 @@ const SECTION_ICONS: Record<string, string> = {
   spec: `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 2H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.5L9.5 2Z"/><polyline points="9.5,2 9.5,4.5 12,4.5"/><line x1="6" y1="7" x2="10" y2="7"/><line x1="6" y1="9.5" x2="10" y2="9.5"/></svg>`,
   plan: `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="4" x2="13" y2="4"/><line x1="6" y1="8" x2="13" y2="8"/><line x1="6" y1="12" x2="13" y2="12"/><circle cx="3.5" cy="4" r="0.8" fill="currentColor" stroke="none"/><circle cx="3.5" cy="8" r="0.8" fill="currentColor" stroke="none"/><circle cx="3.5" cy="12" r="0.8" fill="currentColor" stroke="none"/></svg>`,
   goals: `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="5.5"/><circle cx="8" cy="8" r="3"/><circle cx="8" cy="8" r="0.8" fill="currentColor" stroke="none"/></svg>`,
+  executor: `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4.6L11.3 8 6 11.4Z"/></svg>`,
   criteria: `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="2" width="10" height="12" rx="1.2"/><path d="M6 6l1.2 1.2L9.5 5"/><line x1="6" y1="9.5" x2="10" y2="9.5"/><line x1="6" y1="11.5" x2="9" y2="11.5"/></svg>`,
   delivery: `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 5.5L8 2.5l5.5 3v5L8 13.5l-5.5-3Z"/><polyline points="2.5,5.5 8,8.5 13.5,5.5"/><line x1="8" y1="8.5" x2="8" y2="13.5"/></svg>`,
   files: `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V5L9 2Z"/><polyline points="9,2 9,5 12,5"/></svg>`,
@@ -1087,6 +1139,36 @@ export function Board(props: BoardProps) {
     return passed === cards.length ? "good" : passed > 0 ? "warn" : "";
   });
 
+ // Executor card data (derived reactively from messages + events)
+  const executorCards = createMemo(() => {
+    const order = agentCardOrder();
+    const cards = agentCards();
+    return order
+      .map((id: string) => cards[id])
+      .filter((c: any) => c && c._agentStage === "executor");
+  });
+
+  const executorBadgeText = createMemo(() => {
+    const cards = executorCards();
+    if (cards.length === 0) return "";
+    const totalMsgs = cards.reduce(
+      (sum: number, c: any) => sum + (Array.isArray(c._agentMessages) ? c._agentMessages.length : 0),
+      0,
+    );
+    const running = cards.some((c: any) => c._agentStatus === "running");
+    if (running) return t("common.active");
+    return totalMsgs > 0 ? String(totalMsgs) : "";
+  });
+
+  const executorBadgeTone = createMemo(() => {
+    const cards = executorCards();
+    if (cards.length === 0) return "";
+    const running = cards.some((c: any) => c._agentStatus === "running");
+    if (running) return "accent";
+    const error = cards.some((c: any) => c._agentStatus === "error");
+    return error ? "bad" : "good";
+  });
+
   return (
     <>
       <div id="taskActionsBar">
@@ -1147,6 +1229,22 @@ export function Board(props: BoardProps) {
           preview={boardStore.planPreview}
           goalCards={goalsCards()}
           runningGoalIDs={runningGoalIDs()}
+        />
+      </SectionFrame>
+
+      <SectionFrame
+        id="executorSection"
+        title={t("section.executor")}
+        icon={SECTION_ICONS.executor}
+        bodyId="executorBody"
+        badgeId="executorBadge"
+        badgeText={executorBadgeText()}
+        badgeTone={executorBadgeTone()}
+      >
+        <ExecutorSummaryPanel
+          cards={executorCards()}
+          goalCards={goalsCards()}
+          status={task()?.status}
         />
       </SectionFrame>
 

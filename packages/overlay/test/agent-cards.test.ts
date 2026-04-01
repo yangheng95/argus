@@ -214,6 +214,61 @@ test("single executor session merges into one card (no grouping)", () => {
   expect(cards[0]._agentRound).toBe(0)
 })
 
+test("conversation keeps single executor session as a collapsible card", () => {
+  setBoardStore("board", {
+    task: {
+      status: "running",
+      sessionID: "root-session",
+    },
+    interactions: [],
+    lanes: [],
+  })
+
+  setMessages([
+    {
+      info: { id: "m1", role: "assistant", agent: "opencode", sessionID: "single-session", time: { created: 1000 } },
+      parts: [{ id: "p1", type: "text", text: "Step 1" }],
+    },
+    {
+      info: { id: "m2", role: "assistant", agent: "opencode", sessionID: "single-session", time: { created: 2000 } },
+      parts: [{ id: "p2", type: "text", text: "Step 2" }],
+    },
+  ])
+
+  const items = conversationMessages()
+
+  expect(items).toHaveLength(1)
+  expect(items[0]?._agentCard).toBe(true)
+  expect(items[0]?._agentGoalGroup).toBeUndefined()
+  expect(items[0]?._agentStage).toBe("executor")
+  expect(items[0]?._agentMessages).toHaveLength(2)
+  expect(items[0]?._agentMessages[0]?.parts[0]?.text).toBe("Step 1")
+})
+
+test("conversation still flattens non-executor agent cards", () => {
+  setBoardStore("board", {
+    task: {
+      status: "planning",
+      sessionID: "root-session",
+    },
+    interactions: [],
+    lanes: [],
+  })
+
+  setMessages([
+    {
+      info: { id: "spec-1", role: "assistant", agent: "spec", sessionID: "spec-session", time: { created: 1000 } },
+      parts: [{ id: "spec-p1", type: "text", text: "Drafting spec" }],
+    },
+  ])
+
+  const items = conversationMessages()
+
+  expect(items).toHaveLength(1)
+  expect(items[0]?._agentCard).toBeUndefined()
+  expect(items[0]?.info?.id).toBe("spec-1")
+})
+
 test("goal group status reflects child card states", () => {
   setBoardStore("board", {
     task: {

@@ -43,7 +43,8 @@ export function abortTaskPipeline(taskID: string): void {
 export async function awaitPipelineSettled(taskID: string): Promise<void> {
   const ctrl = taskAborts.get(taskID)
   if (!ctrl) return
-  await new Promise<void>((resolve) => setTimeout(resolve, 200))
+  // Wait for the abort signal to propagate — no fixed delay, just yield once.
+  await new Promise<void>((resolve) => setTimeout(resolve, 0))
 }
 
 /** Register an AbortController for a task stage (used by task-tools). */

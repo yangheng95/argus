@@ -50,6 +50,7 @@ export function agentRoleToSectionPhase(role: AgentRole): string {
   if (role === "spec") return "spec";
   if (role === "planner") return "plan";
   if (role === "goal") return "goals";
+  if (role === "executor") return "executor";
   if (role === "evaluator") return "evaluation";
   if (role === "delivery") return "files";
   return "";
@@ -107,7 +108,6 @@ export function roleLabel(role: string): string {
  * Returns:
  * - An AgentRole string (e.g. "spec", "planner") → message belongs to that AgentCard
  * - "main" → message belongs to the main conversation
- * - "filtered" → message should be hidden (child session non-card agent, handled by executor events)
  */
 export function classifyMessage(msg: any, rootSessionID: string): string {
   // User-role messages always go to main conversation
@@ -119,7 +119,6 @@ export function classifyMessage(msg: any, rootSessionID: string): string {
   if (backendChannel && backendChannel !== "main") {
     const resolved = String(msg?.info?.resolvedRole || "").trim().toLowerCase() as AgentRole;
     if (AGENT_CARD_STAGES.has(resolved)) return resolved;
-    if (backendChannel === "filtered") return "filtered";
   }
 
   // Use resolvedRole directly — backend is authoritative
