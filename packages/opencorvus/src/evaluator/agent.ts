@@ -161,7 +161,6 @@ export namespace EvaluatorAgent {
     try {
       const { object } = await generateObject({
         model: language,
-        mode: "json",
         schema: EvaluatorAnalysis,
         maxRetries: 2,
         abortSignal: AbortSignal.timeout(phase2TimeoutMs),

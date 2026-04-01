@@ -33,6 +33,7 @@ import {
   OrchestratorTaskTable,
 } from "./orchestrator.sql"
 import {
+  createFixRun,
   insertPlanItems,
   persistGoalSnapshot,
   persistSpecSnapshot,
@@ -42,6 +43,7 @@ import {
   findEvaluationByRun,
   findPlan,
   findRequirements,
+  findRuns,
   findSpecSnapshot,
   listGoals,
   listGoalsForPlan,
@@ -50,6 +52,7 @@ import {
   requireTask,
 } from "./store"
 import { updateTask } from "./state"
+import { DEFAULT_MAX_RUNS, DEFAULT_MAX_FIX_RUNS, type FixContext } from "./helpers"
 
 const log = Log.create({ service: "task-tools" })
 
@@ -398,6 +401,67 @@ export function createTaskAgentTools(input: { taskID: string; signal?: AbortSign
         const task = requireTask(taskID)
         await updateTask(task, { status: "failed", error, time_completed: Date.now() }, `Failed: ${error}`)
         return `Task ${taskID} failed: ${error}`
+      },
+    }),
+
+    create_fix_run: tool({
+      description: "Create a new executor run to fix issues found by eval or delivery. Provide a clear error summary and fix guidance so the executor knows exactly what to fix. After calling this, STOP — the executor runs asynchronously.",
+      inputSchema: z.object({
+        error_summary: z.string().describe("What failed and why — be specific about which checks failed or what the delivery agent rejected"),
+        fix_guidance: z.string().describe("Specific guidance for the executor on how to fix the issues"),
+      }),
+      execute: async ({ error_summary, fix_guidance }) => {
+        const task = requireTask(taskID)
+        const run = task.active_run_id ? requireRun(task.active_run_id) : undefined
+        if (!run) return "No active run to fix. Use create_plan + submit_execution instead."
+
+        // Budget check
+        const totalRuns = findRuns(task.id).length
+        const maxRuns = task.budget?.max_runs ?? DEFAULT_MAX_RUNS
+        if (totalRuns >= maxRuns) {
+          return `Run budget exhausted (${totalRuns}/${maxRuns}). Call fail_task instead.`
+        }
+        const maxFixRuns = task.budget?.max_fix_runs ?? DEFAULT_MAX_FIX_RUNS
+        if (run.retry_count >= maxFixRuns) {
+          return `Fix run budget exhausted (${run.retry_count}/${maxFixRuns}). Call fail_task instead.`
+        }
+
+        // Build fix context from eval/delivery results + agent guidance
+        const delivery = findDeliveryByRun(run.id)
+        const evaluation = findEvaluationByRun(run.id)
+        const fixContext: FixContext = {
+          source: "eval_failure",
+          rootCause: error_summary,
+          suggestedStrategy: fix_guidance,
+          deliverySummary: delivery?.summary ?? undefined,
+          changedFiles: delivery?.result?.changed_files as string[] | undefined,
+          checks: (evaluation?.checks as Array<{ name: string; status: string; evidence: string }>) ?? undefined,
+        }
+        const nextRunID = createFixRun(task, run, error_summary, fixContext)
+        const { OrchestratorRuntime } = await import("./runtime")
+        const { hooks } = await import("./state")
+        await OrchestratorRuntime.dispatch(nextRunID, hooks())
+        return `Fix run ${nextRunID} created and dispatched. STOP HERE — the executor is now running.`
+      },
+    }),
+
+    restart_from_stage: tool({
+      description: "Restart the task from a specific stage. Use when the current approach is fundamentally wrong, the user requests a restart, or you need to redo spec/goal/plan from scratch.",
+      inputSchema: z.object({
+        stage: z.enum(["spec", "goal", "plan", "executor"]).describe("Which stage to restart from"),
+        reason: z.string().describe("Why restarting from this stage"),
+      }),
+      execute: async ({ stage, reason }) => {
+        const task = requireTask(taskID)
+        const statusMap: Record<string, string> = {
+          spec: "queued",
+          goal: "queued",
+          plan: "queued",
+          executor: "planned",
+        }
+        const targetStatus = statusMap[stage] as any
+        await updateTask(task, { status: targetStatus, error: null, blocking_reason: null }, `Restart from ${stage}: ${reason}`)
+        return `Task restarted from ${stage} stage. Reason: ${reason}. Continue with the appropriate tool (analyze_requirements for spec, decompose_goals for goal, create_plan for plan, submit_execution for executor).`
       },
     }),
   }
