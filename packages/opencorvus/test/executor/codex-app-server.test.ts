@@ -277,6 +277,69 @@ describe("codex app server executor", () => {
     expect(result.filter((item) => item.type === "input_request").length).toBe(2)
   })
 
+  test("keeps dynamic tool call and result IDs aligned", async () => {
+    const provider = CodexAppServerExecutor.create(client([
+      {
+        type: "request",
+        id: 11,
+        method: "item/tool/call",
+        params: {
+          threadId: "thr_1",
+          turnId: "turn_1",
+          itemId: "item_write",
+          callId: "call_write",
+          tool: "write",
+          arguments: {
+            file: "src/note-store.ts",
+          },
+        },
+      },
+      {
+        type: "notification",
+        method: "item/completed",
+        params: {
+          threadId: "thr_1",
+          turnId: "turn_1",
+          item: {
+            id: "item_write",
+            callId: "call_write",
+            type: "dynamicToolCall",
+            tool: "write",
+            contentItems: [
+              {
+                type: "output_text",
+                text: "Wrote file successfully.",
+              },
+            ],
+          },
+        },
+      },
+      {
+        type: "notification",
+        method: "turn/completed",
+        params: {
+          threadId: "thr_1",
+          turn: {
+            id: "turn_1",
+            items: [],
+            status: "completed",
+            error: null,
+          },
+        },
+      },
+    ]))
+
+    const result = await collect(provider.run({ prompt: "test" }))
+    const toolCall = result.find((item): item is Extract<CodingEventInfo, { type: "tool_call" }> => item.type === "tool_call")
+    const toolResult = result.find((item): item is Extract<CodingEventInfo, { type: "tool_result" }> => item.type === "tool_result")
+
+    expect(toolCall?.id).toBe("call_write")
+    expect(toolCall?.meta?.["call_id"]).toBe("call_write")
+    expect(toolResult?.id).toBe("call_write")
+    expect(toolResult?.meta?.["call_id"]).toBe("call_write")
+    expect(toolResult?.meta?.["item_id"]).toBe("item_write")
+  })
+
   test("stops streaming once the current turn completes", async () => {
     const provider = CodexAppServerExecutor.create({
       async initialize() {

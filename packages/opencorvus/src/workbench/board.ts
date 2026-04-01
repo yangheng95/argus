@@ -48,16 +48,14 @@ function buildBoard(task: typeof OrchestratorTaskTable.$inferSelect) {
   const plan = task.active_plan_version_id
     ? Database.use((db) => db.select().from(OrchestratorPlanVersionTable).where(eq(OrchestratorPlanVersionTable.id, task.active_plan_version_id!)).get())
     : undefined
-  const goals = plan
-    ? Database.use((db) =>
-        db
-          .select()
-          .from(OrchestratorGoalTable)
-          .where(eq(OrchestratorGoalTable.plan_version_id, plan.id))
-          .orderBy(OrchestratorGoalTable.order_index)
-          .all(),
-      )
-    : []
+  const goals = Database.use((db) =>
+    db
+      .select()
+      .from(OrchestratorGoalTable)
+      .where(eq(OrchestratorGoalTable.task_id, task.id))
+      .orderBy(OrchestratorGoalTable.order_index)
+      .all(),
+  )
   const goalRunSessionMap = run
     ? new Map(
         Database.use((db) =>
@@ -432,18 +430,16 @@ function boardTagForTask(task: typeof OrchestratorTaskTable.$inferSelect) {
   const plan = task.active_plan_version_id
     ? Database.use((db) => db.select().from(OrchestratorPlanVersionTable).where(eq(OrchestratorPlanVersionTable.id, task.active_plan_version_id!)).get())
     : undefined
-  const goals = plan
-    ? Database.use((db) =>
-        db
-          .select({
-            count: sql<number>`count(*)`,
-            updated: sql<number>`coalesce(max(${OrchestratorGoalTable.time_updated}), 0)`,
-          })
-          .from(OrchestratorGoalTable)
-          .where(eq(OrchestratorGoalTable.plan_version_id, plan.id))
-          .get(),
-      )
-    : undefined
+  const goals = Database.use((db) =>
+    db
+      .select({
+        count: sql<number>`count(*)`,
+        updated: sql<number>`coalesce(max(${OrchestratorGoalTable.time_updated}), 0)`,
+      })
+      .from(OrchestratorGoalTable)
+      .where(eq(OrchestratorGoalTable.task_id, task.id))
+      .get(),
+  )
   const interactions = Database.use((db) =>
     db
       .select({

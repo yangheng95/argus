@@ -64,17 +64,29 @@ describe("canTransition", () => {
     }
   })
 
-  test("failed can transition to queued (retry) or running (replan)", () => {
+  test("failed can only transition to queued (retry)", () => {
     expect(canTransition("failed", "queued")).toBe(true)
-    expect(canTransition("failed", "running")).toBe(true)
+    expect(canTransition("failed", "running")).toBe(false)
     expect(canTransition("failed", "completed")).toBe(false)
     expect(canTransition("failed", "delivering")).toBe(false)
   })
 
-  test("cancelled can transition to queued or running (retry)", () => {
+  test("cancelled can only transition to queued (retry)", () => {
     expect(canTransition("cancelled", "queued")).toBe(true)
-    expect(canTransition("cancelled", "running")).toBe(true)
+    expect(canTransition("cancelled", "running")).toBe(false)
     expect(canTransition("cancelled", "completed")).toBe(false)
+  })
+
+  test("skipping pipeline steps is rejected", () => {
+    expect(canTransition("queued", "planning")).toBe(false)
+    expect(canTransition("queued", "planned")).toBe(false)
+    expect(canTransition("queued", "running")).toBe(false)
+    expect(canTransition("spec_generating", "planned")).toBe(false)
+    expect(canTransition("spec_generating", "running")).toBe(false)
+    expect(canTransition("goal_decomposing", "planned")).toBe(false)
+    expect(canTransition("goal_decomposing", "running")).toBe(false)
+    expect(canTransition("running", "completed")).toBe(false)
+    expect(canTransition("running", "delivering")).toBe(false)
   })
 
   test("invalid backward transitions are rejected", () => {
@@ -208,8 +220,8 @@ describe("resume and retry transitions", () => {
     expect(canTransition("failed", "queued")).toBe(true)
   })
 
-  test("failed task can be replanned (failed → running)", () => {
-    expect(canTransition("failed", "running")).toBe(true)
+  test("failed task cannot skip to running (must go through queued)", () => {
+    expect(canTransition("failed", "running")).toBe(false)
   })
 
   test("cancelled task can be retried (cancelled → queued)", () => {

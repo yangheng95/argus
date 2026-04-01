@@ -2285,13 +2285,55 @@ function rebuildMessageIndex() {
 function messageById(id) {
   return messageIndex.get(id);
 }
+const UNTIMED_MESSAGE_ORDER = Number.MAX_SAFE_INTEGER;
+function finiteMessageTime(item) {
+  const created = item?.info?.time?.created;
+  if (Number.isFinite(created)) return Number(created);
+  const updated = item?.info?.time?.updated;
+  if (Number.isFinite(updated)) return Number(updated);
+  return void 0;
+}
 function messageTime(item) {
-  return Number(item?.info?.time?.created || item?.info?.time?.updated || 0);
+  return finiteMessageTime(item) ?? 0;
+}
+function messageOrderTime(item) {
+  return finiteMessageTime(item) ?? UNTIMED_MESSAGE_ORDER;
 }
 function sortMessages(list) {
   const result = list.slice();
-  result.sort((a, b) => messageTime(a) - messageTime(b));
+  result.sort((a, b) => messageOrderTime(a) - messageOrderTime(b));
   return result;
+}
+function insertSorted(msgs, msg) {
+  const t = messageOrderTime(msg);
+  if (msgs.length === 0 || messageOrderTime(msgs[msgs.length - 1]) <= t) {
+    msgs.push(msg);
+    return msgs.length - 1;
+  }
+  let lo = 0, hi = msgs.length;
+  while (lo < hi) {
+    const mid = lo + hi >>> 1;
+    if (messageOrderTime(msgs[mid]) <= t) lo = mid + 1;
+    else hi = mid;
+  }
+  msgs.splice(lo, 0, msg);
+  return lo;
+}
+function mergeMessageInfo(existing, next) {
+  const existingTime = existing?.time;
+  const nextTime = next?.time;
+  const createdCandidates = [existingTime?.created, nextTime?.created].filter((value) => Number.isFinite(value));
+  const updatedCandidates = [existingTime?.updated, nextTime?.updated].filter((value) => Number.isFinite(value));
+  const completedCandidates = [existingTime?.completed, nextTime?.completed].filter((value) => Number.isFinite(value));
+  const time = {};
+  if (createdCandidates.length > 0) time.created = Math.min(...createdCandidates);
+  if (updatedCandidates.length > 0) time.updated = Math.max(...updatedCandidates);
+  if (completedCandidates.length > 0) time.completed = Math.max(...completedCandidates);
+  return {
+    ...existing || {},
+    ...next,
+    time
+  };
 }
 function record$5(value) {
   return !!value && typeof value === "object" && !Array.isArray(value);
@@ -2599,7 +2641,7 @@ function rebuildAgentCards() {
       roundsByStage[stage] = round;
     }
     entry.messages.push(message);
-    const created = messageTime(message);
+    const created = finiteMessageTime(message) ?? Infinity;
     if (created < entry.startTime) entry.startTime = created;
     const completed = messageEndTime(message);
     if (completed > entry.endTime) entry.endTime = completed;
@@ -2655,7 +2697,7 @@ function rebuildAgentCards() {
       _agentStatus: status,
       _agentRound: roundLabel,
       _agentCardKey: round.channelID,
-      _agentMessages: round.messages.slice().sort((left, right) => messageTime(left) - messageTime(right)),
+      _agentMessages: round.messages.slice().sort((left, right) => messageOrderTime(left) - messageOrderTime(right)),
       info: {
         id: `agent-card:${round.channelID}`,
         role: "agent-card",
@@ -2761,7 +2803,7 @@ function rebuildAgentCards() {
     }
   }
   nextOrder.sort(
-    (left, right) => messageTime(nextCards[left]) - messageTime(nextCards[right]) || left.localeCompare(right)
+    (left, right) => messageOrderTime(nextCards[left]) - messageOrderTime(nextCards[right]) || left.localeCompare(right)
   );
   batch(() => {
     const prevKeys = Object.keys(store.agentCards);
@@ -2913,18 +2955,19 @@ function applyMessageEvent(event) {
     if (existing) {
       const idx = store.messages.indexOf(existing);
       if (idx >= 0) {
-        setStore("messages", idx, "info", info);
+        setStore("messages", idx, "info", mergeMessageInfo(existing.info, info));
       }
       return true;
     }
-    const msg = { info, parts: [] };
+    const msg = { info: mergeMessageInfo(void 0, info), parts: [] };
+    let insertIdx = 0;
     setStore(
       "messages",
       produce((msgs) => {
-        msgs.push(msg);
+        insertIdx = insertSorted(msgs, msg);
       })
     );
-    messageIndex.set(info.id, store.messages[store.messages.length - 1]);
+    messageIndex.set(info.id, store.messages[insertIdx]);
     return true;
   }
   if (type === "message.part.updated") {
@@ -2938,17 +2981,19 @@ function applyMessageEvent(event) {
           sessionID: part.sessionID,
           role: "assistant",
           resolvedRole: properties.resolvedRole || "assistant",
-          channel: properties.channel || "main"
+          channel: properties.channel || "main",
+          time: { created: part.state?.time?.start || Date.now() }
         },
         parts: []
       };
+      let partInsertIdx = 0;
       setStore(
         "messages",
         produce((msgs) => {
-          msgs.push(msg);
+          partInsertIdx = insertSorted(msgs, msg);
         })
       );
-      message = store.messages[store.messages.length - 1];
+      message = store.messages[partInsertIdx];
       messageIndex.set(part.messageID, message);
     }
     const idx = store.messages.indexOf(message);
@@ -2978,17 +3023,19 @@ function applyMessageEvent(event) {
           sessionID: properties.sessionID,
           role: "assistant",
           resolvedRole: properties.resolvedRole || "assistant",
-          channel: properties.channel || "main"
+          channel: properties.channel || "main",
+          time: { created: Date.now() }
         },
         parts: []
       };
+      let deltaInsertIdx = 0;
       setStore(
         "messages",
         produce((msgs) => {
-          msgs.push(msg);
+          deltaInsertIdx = insertSorted(msgs, msg);
         })
       );
-      message = store.messages[store.messages.length - 1];
+      message = store.messages[deltaInsertIdx];
       messageIndex.set(properties.messageID, message);
     }
     const msgIdx = store.messages.indexOf(message);
@@ -3395,7 +3442,7 @@ function setMessages(messages) {
         msgs.push(m);
       }
     }
-    msgs.sort((a, b) => messageTime(a) - messageTime(b));
+    msgs.sort((a, b) => messageOrderTime(a) - messageOrderTime(b));
   }));
   rebuildMessageIndex();
   scheduleRebuildAgentCards();
@@ -4361,6 +4408,14 @@ async function copyChatConversation() {
   }
 }
 
+const UNTIMED_CONVERSATION_ORDER = Number.MAX_SAFE_INTEGER;
+function conversationTime(message) {
+  const created = message?.info?.time?.created;
+  if (Number.isFinite(created)) return Number(created);
+  const updated = message?.info?.time?.updated;
+  if (Number.isFinite(updated)) return Number(updated);
+  return UNTIMED_CONVERSATION_ORDER;
+}
 function buildUserContextMessages() {
   const board = boardStore.board;
   if (!board) return [];
@@ -4425,17 +4480,23 @@ function conversationMessages() {
       const flatMsgs = [];
       for (const child of card._agentInternalCards) {
         if (Array.isArray(child._agentMessages)) {
-          flatMsgs.push(...child._agentMessages);
+          for (const m of child._agentMessages) {
+            const live = m?.info?.id ? messageById(m.info.id) : void 0;
+            if (live) flatMsgs.push(live);
+          }
         }
       }
-      flatMsgs.sort((a, b) => (a.info?.time?.created || 0) - (b.info?.time?.created || 0));
+      flatMsgs.sort((a, b) => conversationTime(a) - conversationTime(b));
       agentCardMsgs.push({ ...card, _agentMessages: flatMsgs });
     } else if (Array.isArray(card._agentMessages)) {
-      agentCardMsgs.push(...card._agentMessages);
+      for (const m of card._agentMessages) {
+        const live = m?.info?.id ? messageById(m.info.id) : void 0;
+        if (live) agentCardMsgs.push(live);
+      }
     }
   }
   const result = [...filteredMain, ...contextMsgs, ...agentCardMsgs].sort(
-    (a, b) => (a.info?.time?.created || 0) - (b.info?.time?.created || 0)
+    (a, b) => conversationTime(a) - conversationTime(b)
   );
   const key = result.map((m) => m.info?.id || m._agentCardKey || "").join(",");
   if (key === _prevConversationKey && result.length === _prevConversationResult.length) {

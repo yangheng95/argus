@@ -1,23 +1,24 @@
 /**
- * Task Agent — event-driven LLM task supervisor.
+ * Task Agent — master agent in the Agent Team architecture.
  *
  * Uses streamText() from AI SDK directly (same pattern as spec/planner/goal agents).
  * NOT SessionPrompt — that requires a registered Agent config.
  *
  * Triggered by:
- * - Task creation (kind: "created")
- * - Eval failure (kind: "eval_failed") — runtime ran eval, it failed
- * - Delivery rejection (kind: "delivery_rejected") — runtime ran delivery agent, it rejected
- * - Executor failure (kind: "executor_failed") — executor crashed or errored
+ * - Task creation (kind: "created") — new task, agent plans and submits execution
+ * - Run completion (kind: "run_completed") — executor finished, agent runs eval → verify → publish
+ * - Executor failure (kind: "executor_failed") — executor crashed, agent decides recovery
  * - User retry request (kind: "retry")
  *
- * Normal path (eval pass → delivery accept → publish) is fully automatic.
- * Task Agent is only invoked at decision branch points.
+ * The Task Agent controls the entire pipeline via tools:
+ * spec → goals → plan → execute → eval → delivery verify → publish
+ * All other agents (spec, goal, plan, eval, delivery) are subordinate workers.
  */
 import { streamText, stepCountIs } from "ai"
 import { Provider } from "@/provider/provider"
 import { Session } from "@/session"
 import { Instance } from "@/project/instance"
+import { Identifier } from "@/id/id"
 import { Log } from "@/util/log"
 import { toolGuard } from "@/util/tool-guard"
 import { registerGoalRunSession } from "@/server/routes/task-event"
@@ -37,6 +38,7 @@ import {
   type TaskRow,
 } from "./store"
 import { DEFAULT_MAX_RUNS, DEFAULT_MAX_FIX_RUNS } from "./helpers"
+import { updateTask } from "./state"
 
 const log = Log.create({ service: "task-agent" })
 const MAX_STEPS = 20
@@ -45,13 +47,9 @@ const MAX_STEPS = 20
 // Trigger types
 // ---------------------------------------------------------------------------
 
-export type CheckResult = { name: string; status: string; evidence?: string }
-export type RejectionDetail = { category: string; file?: string; error: string; suggestion?: string }
-
 export type TaskAgentTrigger =
   | { kind: "created" }
-  | { kind: "eval_failed"; runID: string; summary: string; checks: CheckResult[] }
-  | { kind: "delivery_rejected"; runID: string; summary: string; issues: string[]; rejectionDetails?: RejectionDetail[] }
+  | { kind: "run_completed"; runID: string }
   | { kind: "executor_failed"; runID: string; error: string }
   | { kind: "retry" }
 
@@ -84,6 +82,7 @@ export namespace TaskAgent {
     const ctrl = new AbortController()
     running.set(taskID, ctrl)
 
+    let contentHooks: ReturnType<typeof sessionStreamHooks> | undefined
     try {
       const task = requireTask(taskID)
       if (!task.session_id) {
@@ -107,7 +106,7 @@ export namespace TaskAgent {
         directory: Instance.directory,
       })
       registerGoalRunSession(agentSession.id, taskID)
-      const contentHooks = sessionStreamHooks({
+      contentHooks = sessionStreamHooks({
         sessionID: agentSession.id,
         taskID,
         stage: "orchestrator",
@@ -115,13 +114,29 @@ export namespace TaskAgent {
       const live = agentStream({ taskID, stage: "orchestrator" })
       await live.start("Task Agent started")
 
-      // 3. Create tools (taskID captured in closure)
-      const tools = createTaskAgentTools({ taskID, signal: ctrl.signal })
+      // 3. Create tools (agentSessionID passed so tool sessions become children)
+      const tools = createTaskAgentTools({ taskID, agentSessionID: agentSession.id, signal: ctrl.signal })
       const guard = toolGuard(tools)
 
-      // 4. Build prompt
+      // 4. Build prompt + persist user message as timeline anchor
       const system = buildSystemPrompt(task, trigger)
       const userMessage = describeTrigger(task, trigger)
+      const userMsgID = Identifier.ascending("message")
+      await Session.updateMessage({
+        id: userMsgID,
+        sessionID: agentSession.id,
+        role: "user",
+        time: { created: Date.now() },
+        agent: "task-agent",
+        model: { providerID: def.providerID, modelID: def.modelID },
+      } as any)
+      await Session.updatePart({
+        id: Identifier.ascending("part"),
+        messageID: userMsgID,
+        sessionID: agentSession.id,
+        type: "text",
+        text: userMessage,
+      } as any)
 
       log.info("task agent starting", {
         taskID,
@@ -139,8 +154,8 @@ export namespace TaskAgent {
         abortSignal: AbortSignal.any([ctrl.signal, guard.signal]),
         system,
         messages: [{ role: "user" as const, content: userMessage }],
-        ...(contentHooks.onChunk ? { onChunk: contentHooks.onChunk as any } : {}),
-        ...(contentHooks.onError ? { onError: contentHooks.onError } : {}),
+        ...(contentHooks!.onChunk ? { onChunk: contentHooks!.onChunk as any } : {}),
+        ...(contentHooks!.onError ? { onError: contentHooks!.onError } : {}),
         onStepFinish: guard.onStepFinish as any,
       })
 
@@ -150,7 +165,7 @@ export namespace TaskAgent {
         stream.steps,
         stream.finishReason,
       ])
-      await contentHooks.flush()
+      await contentHooks!.flush()
       await live.finish("Task Agent finished")
 
       const toolCallCount = resultSteps.reduce(
@@ -166,12 +181,22 @@ export namespace TaskAgent {
         textLength: resultText?.length ?? 0,
       })
     } catch (error) {
+      // Finalize any tool parts stuck in running/pending before returning
+      await contentHooks?.flush().catch(() => undefined)
       if (ctrl.signal.aborted) {
         log.info("task agent was aborted", { taskID })
         return
       }
       const msg = error instanceof Error ? error.message : String(error)
       log.error("task agent failed", { taskID, trigger: trigger.kind, error: msg })
+      // Surface the error on the task so UI/orphan-recovery can see it.
+      // Don't change task status — let orphan recovery decide the next step.
+      try {
+        const current = requireTask(taskID)
+        if (current.status !== "completed" && current.status !== "failed" && current.status !== "cancelled") {
+          await updateTask(current, { error: `Task Agent error: ${msg}` }, `Task Agent failed: ${msg}`)
+        }
+      } catch { /* task may have been deleted */ }
     } finally {
       running.delete(taskID)
     }
@@ -187,43 +212,14 @@ function describeTrigger(task: TaskRow, trigger: TaskAgentTrigger): string {
     case "created":
       return `New task created. Process it.\n\nTitle: ${task.title}\nRequest: ${task.request}`
 
-    case "eval_failed": {
-      const checkLines = trigger.checks.map(
-        c => `- **${c.name}**: ${c.status}${c.evidence ? ` — ${c.evidence.slice(0, 500)}` : ""}`,
-      )
+    case "run_completed":
       return [
-        `Core evaluation failed for run ${trigger.runID}.`,
+        `Executor run ${trigger.runID} completed.`,
         "",
-        `## Failure Summary`,
-        trigger.summary,
-        "",
-        `## Check Results`,
-        ...checkLines,
-        "",
-        "Decide: call create_fix_run with guidance for the executor, or fail_task if unrecoverable.",
+        "The executor has finished. You are now in control.",
+        "Run evaluation (run_eval), then delivery verification (run_delivery_verify), then publish (publish_delivery).",
+        "If any step fails, decide: create_fix_run or fail_task.",
       ].join("\n")
-    }
-
-    case "delivery_rejected": {
-      const lines = [
-        `Delivery verification rejected run ${trigger.runID}.`,
-        "",
-        `## Rejection Summary`,
-        trigger.summary,
-      ]
-      if (trigger.issues.length > 0) {
-        lines.push("", "## Issues Found")
-        for (const issue of trigger.issues) lines.push(`- ${issue}`)
-      }
-      if (trigger.rejectionDetails && trigger.rejectionDetails.length > 0) {
-        lines.push("", "## Rejection Details")
-        for (const d of trigger.rejectionDetails) {
-          lines.push(`- **[${d.category}]**${d.file ? ` ${d.file}` : ""}: ${d.error}${d.suggestion ? ` → ${d.suggestion}` : ""}`)
-        }
-      }
-      lines.push("", "Decide: call create_fix_run with guidance for the executor, or fail_task if unrecoverable.")
-      return lines.join("\n")
-    }
 
     case "executor_failed":
       return [
@@ -289,13 +285,13 @@ function buildSystemPrompt(task: TaskRow, trigger: TaskAgentTrigger): string {
   const notes = operatorNotesSection(task.id)
   if (notes) sections.push(notes)
 
-  // Previous run context for failure triggers
-  if (trigger.kind === "eval_failed" || trigger.kind === "delivery_rejected" || trigger.kind === "executor_failed") {
+  // Run context for completion/failure triggers
+  if (trigger.kind === "run_completed" || trigger.kind === "executor_failed") {
     const runID = trigger.runID
     const delivery = findDeliveryByRun(runID)
     if (delivery) {
       sections.push("")
-      sections.push("## Previous Run Context")
+      sections.push("## Run Context")
       sections.push(`- Delivery summary: ${delivery.summary}`)
       const changedFiles = delivery.result?.changed_files as string[] | undefined
       if (changedFiles && changedFiles.length > 0) {
@@ -314,17 +310,21 @@ function buildSystemPrompt(task: TaskRow, trigger: TaskAgentTrigger): string {
   if (trigger.kind === "created" || trigger.kind === "retry") {
     sections.push("## How to Decide")
     sections.push(
-      "- Simple bug fix / small change: skip analysis, call create_plan directly, then submit_execution.",
-      "- Complex multi-file change: analyze_requirements first, optionally decompose_goals, then create_plan, then submit_execution.",
+      "1. Always call analyze_requirements first to create a spec — the evaluator checks spec compliance.",
+      "2. For multi-goal tasks, call decompose_goals to break down the spec into verifiable goals.",
+      "3. Call create_plan to create an execution plan.",
+      "4. Call submit_execution to dispatch the run to the executor.",
+      "5. After calling submit_execution, STOP. You will be re-triggered when execution completes.",
     )
-  } else if (trigger.kind === "eval_failed" || trigger.kind === "delivery_rejected") {
+  } else if (trigger.kind === "run_completed") {
     sections.push("## How to Decide")
     sections.push(
-      "- Analyze the failure: understand what went wrong and why.",
-      "- If the issue is fixable: call create_fix_run with a clear error_summary and fix_guidance for the executor.",
-      "- If the issue is unrecoverable (e.g., impossible requirements, repeated identical failures): call fail_task.",
-      "- If the approach is fundamentally wrong and needs a fresh start: call restart_from_stage.",
-      "- Check the fix budget before deciding — if budget is exhausted, call fail_task.",
+      "You control the full post-execution pipeline. Follow this sequence:",
+      "1. Call run_eval to run evaluation checks on the delivery.",
+      "2. If eval passes: call run_delivery_verify for delivery agent verification.",
+      "3. If delivery verification passes: call publish_delivery to publish and complete the task.",
+      "4. If any step fails: analyze the results, then call create_fix_run (with clear guidance) or fail_task (if unrecoverable).",
+      "- Check the fix budget before creating fix runs — if exhausted, call fail_task.",
     )
   } else if (trigger.kind === "executor_failed") {
     sections.push("## How to Decide")
@@ -341,7 +341,8 @@ function buildSystemPrompt(task: TaskRow, trigger: TaskAgentTrigger): string {
     "## Rules",
     "- Explain your reasoning before each tool call.",
     "- After calling submit_execution or create_fix_run, STOP. Do not call more tools.",
-    "- Never call complete_task without checking run results first.",
+    "- When triggered with run_completed, follow the full eval → verify → publish pipeline via tools.",
+    "- To complete a task, always use publish_delivery (which handles git publish + task completion).",
     "- If the task is already in a terminal state (completed/failed/cancelled), do nothing.",
     "- If user messages are pending in Operator Notes, acknowledge them in your reasoning.",
   )
