@@ -8,7 +8,7 @@
  * - Task creation (kind: "created")
  * - Executor completion (kind: "completed")
  * - Executor failure (kind: "failed")
- * - User retry/replan request (kind: "retry" / "replan")
+ * - User retry request (kind: "retry")
  */
 import { streamText, stepCountIs } from "ai"
 import { Provider } from "@/provider/provider"
@@ -43,7 +43,6 @@ export type TaskAgentTrigger =
   | { kind: "completed"; runID: string }
   | { kind: "failed"; runID: string; error: string }
   | { kind: "retry" }
-  | { kind: "replan" }
 
 // ---------------------------------------------------------------------------
 // Concurrency guard
@@ -189,13 +188,10 @@ function describeTrigger(task: TaskRow, trigger: TaskAgentTrigger): string {
     }
 
     case "failed":
-      return `Executor run ${trigger.runID} failed.\nError: ${trigger.error}\nDecide: retry, replan, or fail.`
+      return `Executor run ${trigger.runID} failed.\nError: ${trigger.error}\nDecide: retry or fail.`
 
     case "retry":
       return `User requested retry.${task.error ? ` Previous error: ${task.error}` : ""}\nDecide how to proceed.`
-
-    case "replan":
-      return `User requested replan.${task.error ? ` Previous error: ${task.error}` : ""}\nCreate a new plan.`
   }
 }
 
@@ -243,8 +239,8 @@ function buildSystemPrompt(task: TaskRow, trigger: TaskAgentTrigger): string {
   sections.push(
     "- Simple bug fix / small change: skip analysis, call create_plan directly, then submit_execution.",
     "- Complex multi-file change: analyze_requirements first, optionally decompose_goals, then create_plan, then submit_execution.",
-    "- Executor completed: use check_run_result, then complete_task or retry.",
-    "- Executor failed: analyze error, create new plan and retry, or fail_task.",
+    "- Executor completed: use check_run_result, then complete_task or fail_task.",
+    "- Executor failed: analyze error, retry or fail_task.",
     "",
     "## Rules",
     "- Explain your reasoning before each tool call.",

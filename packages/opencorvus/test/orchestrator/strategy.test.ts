@@ -746,7 +746,7 @@ test("buildRetryContext merges current delivery files with historical same-run f
   })
 })
 
-test("decideRetryOrReplan replans immediately for empty deliveries", async () => {
+test("decideFixOrFail creates fix run for empty deliveries", async () => {
   await using tmp = await tmpdir({ git: true })
 
   await Instance.provide({
@@ -837,12 +837,12 @@ test("decideRetryOrReplan replans immediately for empty deliveries", async () =>
         changedFiles: [],
       })
 
-      expect(decision.action).toBe("replan")
+      expect(decision.action).toBe("fix")
     },
   })
 })
 
-test("decideRetryOrReplan replans immediately for placeholder implementations", async () => {
+test("decideFixOrFail creates fix run for placeholder implementations", async () => {
   await using tmp = await tmpdir({ git: true })
 
   await Instance.provide({
@@ -933,7 +933,7 @@ test("decideRetryOrReplan replans immediately for placeholder implementations", 
         changedFiles: ["src/data/sync/sync-queue.ts"],
       })
 
-      expect(decision.action).toBe("replan")
+      expect(decision.action).toBe("fix")
     },
   })
 })

@@ -52,11 +52,11 @@ const completionHardTimeoutMs = Number(flag("--completion-hard-timeout-ms")) || 
 const specMaxSteps = Number(flag("--spec-max-steps")) || 80
 const plannerMaxSteps = Number(flag("--planner-max-steps")) || 96
 const maxRuns = Number(flag("--max-runs")) || 20
-const maxReplans = Number(flag("--max-replans")) || 8
+const maxFixRuns = Number(flag("--max-fix-runs")) || 8
 const maxEvaluations = Number(flag("--max-evaluations")) || 200
 const report = flag("--report")
 const keep = !process.argv.includes("--no-keep")
-const headless = !process.argv.includes("--headed")
+const headless = process.argv.includes("--headless")
 const executor = (flag("--executor") || "opencode") as
   | "opencode"
   | "codex"
@@ -485,7 +485,7 @@ try {
       budget: {
         maxWallTimeMs: undefined,
         maxRuns,
-        maxReplans,
+        maxFixRuns,
         maxEvaluations,
         ...(maxExecutorGroups > 1 ? { maxExecutorGroups } : {}),
       },
@@ -537,7 +537,7 @@ try {
       budget: {
         maxWallTimeMs: undefined,
         maxRuns,
-        maxReplans,
+        maxFixRuns,
         maxEvaluations,
         ...(maxExecutorGroups > 1 ? { maxExecutorGroups } : {}),
       },

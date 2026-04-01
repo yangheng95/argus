@@ -3,7 +3,7 @@ import { CheckConfig, EvaluationCheck } from "@/orchestrator/model"
 import type { GoalInfo, DeliveryInfo } from "./agent"
 import { Log } from "@/util/log"
 import z from "zod"
-import { resolveConfig, autoSpecCheck, discoverChecks, resolvedChecks, commandGroups } from "./discovery"
+import { resolveConfig, autoSpecCheck, autoJudge, autoCodeReview, discoverChecks, resolvedChecks, commandGroups } from "./discovery"
 import { commandChecks } from "./checks"
 import { startupResult } from "./checks"
 import { artifactResult } from "./checks"
@@ -56,7 +56,7 @@ initBuiltinCheckIndex(BUILTIN_CHECK_DEFS)
 export type EvaluationTier = "core" | "standard" | "full"
 
 /** Names of optional checks included at the "standard" tier. */
-const STANDARD_TIER_CHECKS = new Set(["judge", "spec_check"])
+const STANDARD_TIER_CHECKS = new Set(["judge", "spec_check", "code_review"])
 
 function filterOptionalChecksByTier(tier: EvaluationTier): typeof OPTIONAL_CHECK_DEFS[number][] {
   if (tier === "core") return []
@@ -77,7 +77,12 @@ export namespace EvaluatorService {
     tier: EvaluationTier = "full",
   ) {
     const rawConfig = await resolveConfig(task.metadata)
-    const config = { ...rawConfig, ...(!rawConfig.spec_check ? autoSpecCheck(task) : {}) } as typeof rawConfig
+    const config = {
+      ...rawConfig,
+      ...(!rawConfig.spec_check ? autoSpecCheck(task) : {}),
+      ...(tier !== "core" && !rawConfig.judge ? autoJudge() : {}),
+      ...(tier !== "core" && !rawConfig.code_review ? autoCodeReview() : {}),
+    } as typeof rawConfig
     const discovered = await discoverChecks(task.metadata?.delivery_changed_files)
     const commands = commandGroups(config, discovered)
     const core = await commandChecks(commands, config.timeout_ms ?? DEFAULT_TIMEOUT_MS, delivery)

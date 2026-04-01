@@ -3,9 +3,9 @@ import path from "path"
 import { Bus } from "@/bus"
 import { selectorList } from "@/check/policy"
 import { EvaluatorService } from "@/evaluator/service"
-import { type EvaluatorAnalysisType } from "@/evaluator/agent"
+import { type EvaluatorAnalysisType, EvaluatorAgent } from "@/evaluator/agent"
 import { ExecutorRegistry } from "@/executor/registry"
-import { PlannerFailureError } from "@/planner/service"
+
 import { Plugin } from "@/plugin"
 import { Instance } from "@/project/instance"
 import { Project } from "@/project/project"
@@ -38,8 +38,7 @@ import {
 import { OrchestratorConfig } from "./config"
 import {
   createGoalRun,
-  createReplanRun,
-  createRetryRun,
+  createFixRun,
   ensureExecutorSession,
   failGoals,
   finalizeDeliveryResult,
@@ -54,7 +53,7 @@ import {
 // advanceTaskStage removed — pipeline advancement now driven by Task Agent
 import { sessionStreamHooks } from "./session-stream"
 import { registerGoalRunSession } from "@/server/routes/task-event"
-import { buildRetryContext, decideRetryOrReplan } from "./strategy"
+import { buildFixContext, decideFixOrFail } from "./strategy"
 import {
   findDeliveryByRun,
   findEvaluationByRun,
@@ -1228,20 +1227,9 @@ export namespace OrchestratorRuntime {
   }
 
   export async function queueRetry(task: TaskRow, run: RunRow, summary: string, hooks: RuntimeHooks) {
-    const nextRunID = createRetryRun(task, run, summary)
+    const nextRunID = createFixRun(task, run, summary)
     await dispatch(nextRunID, hooks)
     return nextRunID
-  }
-
-  export async function queueReplan(task: TaskRow, run: RunRow, summary: string, hooks: RuntimeHooks) {
-    const planID = task.active_plan_version_id ?? run.plan_version_id
-    if (!planID) throw new Error(`Task ${task.id} has no plan to replan`)
-    const plan = findPlan(planID)
-    if (!plan) throw new Error(`Plan not found: ${planID}`)
-    const next = await createReplanRun(task, plan, run, summary)
-    if (!next.queued || !next.runID) throw new PlannerFailureError(next.error ?? "replan failed")
-    await dispatch(next.runID, hooks)
-    return next.runID
   }
 }
 
@@ -1345,8 +1333,9 @@ async function completeRun(run: RunRow, hooks: RuntimeHooks) {
       setTimeout(() => reject(new Error("evaluation hard timeout")), EVALUATION_HARD_TIMEOUT_MS),
     )
 
-  // Core checks only (build/test/lint) — fast, no LLM.
-  // Delivery agent handles everything else (extended checks, fix, runtime verify).
+  // Task-level evaluation: tier from config (default "standard" = core + judge + spec_check + code_review).
+  const evalCfg = await OrchestratorConfig.get()
+  const evalTier = evalCfg.evaluator.tier ?? "standard"
   let result: Awaited<ReturnType<typeof EvaluatorService.evaluate>>
   try {
     result = await Promise.race([
@@ -1365,7 +1354,7 @@ async function completeRun(run: RunRow, hooks: RuntimeHooks) {
           diffs: delivery.diffs,
           changedFiles: delivery.diffs.map((item) => item.file),
         },
-        "core",
+        evalTier,
       ),
       hardTimeoutPromise<typeof result>(),
     ])
@@ -1472,7 +1461,9 @@ async function runEvaluation(task: TaskRow, run: RunRow, existingDelivery: Deliv
   // independent inner timers that can outlive the outer timeout.
   const throwIfAborted = () => { if (signal?.aborted) throw new Error("runEvaluation aborted by caller") }
 
-  // Core checks only — same as completeRun
+  // Task-level re-evaluation: tier from config (same as completeRun)
+  const evalCfg = await OrchestratorConfig.get()
+  const evalTier = evalCfg.evaluator.tier ?? "standard"
   let result: Awaited<ReturnType<typeof EvaluatorService.evaluate>>
   try {
     throwIfAborted()
@@ -1484,7 +1475,7 @@ async function runEvaluation(task: TaskRow, run: RunRow, existingDelivery: Deliv
         metadata: { ...(task.metadata ?? {}), delivery_changed_files: delivery.diffs.map((item) => item.file) },
       },
       { summary: delivery.summary, diffs: delivery.diffs, changedFiles: delivery.diffs.map((item) => item.file) },
-      "core",
+      evalTier,
     )
   } catch (evalErr) {
     const msg = evalErr instanceof Error ? evalErr.message : String(evalErr)
@@ -1602,15 +1593,9 @@ async function publishAcceptedDelivery(task: TaskRow, run: RunRow, delivery: Del
   await hooks.updateRun(run, { phase: "deliver" }, "Publishing accepted delivery")
   await hooks.updateTask(task, { status: "delivering", blocking_reason: null, error: null }, "Publishing accepted delivery")
 
-  // --- Eval↔Delivery loop: delivery agent verifies & fixes, core eval re-checks ---
+  // --- Single delivery agent verification (read-only, no fix loop) ---
   const verifyGoals = run.plan_version_id ? listGoalsByPlan(run.plan_version_id) : []
   if (verifyGoals.length > 0) {
-    const deliveryCfg = await OrchestratorConfig.get()
-    const maxRounds = deliveryCfg.delivery.max_eval_delivery_rounds
-    let currentCheckResults = checkResults
-    let lastVerdict: DeliveryVerdictType | undefined
-    let loopAccepted = false
-
     const analysisArtifact = Database.use((db) =>
       db.select().from(OrchestratorArtifactTable)
         .where(and(eq(OrchestratorArtifactTable.run_id, run.id), eq(OrchestratorArtifactTable.label, "evaluator-agent-analysis")))
@@ -1618,30 +1603,26 @@ async function publishAcceptedDelivery(task: TaskRow, run: RunRow, delivery: Del
     )
     const analysis = analysisArtifact?.payload as EvaluatorAnalysisType | undefined
 
-    for (let round = 0; round < maxRounds; round++) {
-      log.info("eval-delivery loop round", { runID: run.id, round: round + 1, maxRounds })
+    const deliveryLive = agentStream({ taskID: task.id, runID: run.id, stage: "delivery" })
+    const deliverySession = await Session.createNext({
+      parentID: task.session_id ?? undefined,
+      title: `Delivery: ${task.title}`,
+      directory: Instance.directory,
+    })
+    registerGoalRunSession(deliverySession.id, task.id)
+    const deliveryContentHooks = sessionStreamHooks({ sessionID: deliverySession.id, taskID: task.id, stage: "delivery" })
+    const deliveryStream = mergeTextHooks(deliveryContentHooks, deliveryLive.hooks)
+    await deliveryLive.start("Delivery verification started")
 
-      // --- Delivery agent round ---
-      const deliveryLive = agentStream({ taskID: task.id, runID: run.id, stage: "delivery" })
-      const deliverySession = await Session.createNext({
-        parentID: task.session_id ?? undefined,
-        title: round === 0 ? `Delivery: ${task.title}` : `Delivery fix round ${round + 1}: ${task.title}`,
-        directory: Instance.directory,
-      })
-      registerGoalRunSession(deliverySession.id, task.id)
-      const deliveryContentHooks = sessionStreamHooks({ sessionID: deliverySession.id, taskID: task.id, stage: "delivery" })
-      const deliveryStream = mergeTextHooks(deliveryContentHooks, deliveryLive.hooks)
-      await deliveryLive.start(round === 0 ? "Delivery verification started" : `Delivery fix round ${round + 1} started`)
-
-      let roundVerdict: DeliveryVerdictType | undefined
-      try {
-        const deliveryResult = delivery.result ?? {}
-        const changedFiles = Array.isArray(deliveryResult.changed_files)
-          ? (deliveryResult.changed_files as unknown[]).filter((f): f is string => typeof f === "string")
-          : Array.isArray(deliveryResult.diffs)
-            ? (deliveryResult.diffs as Array<{ file?: string }>).map(d => d.file).filter(Boolean) as string[]
-            : []
-        roundVerdict = await Promise.race([
+    let verdict: DeliveryVerdictType | undefined
+    try {
+      const deliveryResult = delivery.result ?? {}
+      const changedFiles = Array.isArray(deliveryResult.changed_files)
+        ? (deliveryResult.changed_files as unknown[]).filter((f): f is string => typeof f === "string")
+        : Array.isArray(deliveryResult.diffs)
+          ? (deliveryResult.diffs as Array<{ file?: string }>).map(d => d.file).filter(Boolean) as string[]
+          : []
+      verdict = await Promise.race([
           DeliveryService.verify({
             task: { title: task.title, request: task.request, sessionID: task.session_id ?? undefined, metadata: task.metadata ?? undefined },
             goals: verifyGoals.map(g => ({
@@ -1655,191 +1636,140 @@ async function publishAcceptedDelivery(task: TaskRow, run: RunRow, delivery: Del
               changedFiles,
               diffs: Array.isArray(deliveryResult.diffs) ? deliveryResult.diffs : [],
             },
-            checkResults: currentCheckResults,
-            analysis,
-            stream: deliveryStream,
-          }),
-          new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error("delivery verification timeout")), DELIVERY_VERIFY_TIMEOUT_MS),
-          ),
-        ])
-        await deliveryContentHooks.flush()
-        await deliveryLive.finish(`Delivery round ${round + 1}: ${roundVerdict.verdict}`)
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err)
-        log.error("delivery verification failed", { runID: run.id, round: round + 1, error: msg })
-        await deliveryContentHooks.flush().catch(() => undefined)
-        deliveryLive.error(err)
-        await handleEvaluationFailure(requireTask(task.id), run, `Delivery verification failed: ${msg}`, hooks, {
-          verdict: "rejected",
-          classification: "evaluation",
-          summary: `Delivery verification failed: ${msg}`,
-          goal_statuses: verifyGoals.map((_, i) => ({
-            goal_index: i,
-            status: "failed" as const,
-            evidence: msg,
-            reasoning: `Delivery agent error: ${msg}`,
-          })),
-          replan_guidance: {
-            root_cause: msg,
-            what_failed: "Delivery agent",
-            suggested_strategy: `Fix the delivery agent error: ${msg}`,
-            avoid_approaches: [],
-          },
-        })
-        return
-      }
-
-      lastVerdict = roundVerdict
-
-      // Persist verdict artifact for this round
-      try {
-        Database.use((db) =>
-          db.insert(OrchestratorArtifactTable).values({
-            id: Identifier.ascending("artifact"),
-            task_id: task.id,
-            run_id: run.id,
-            delivery_id: delivery.id,
-            kind: "report",
-            label: round === 0 ? "delivery-agent-verdict" : `delivery-agent-verdict-round-${round + 1}`,
-            payload: roundVerdict as unknown as Record<string, unknown>,
-            time_created: Date.now(),
-            time_updated: Date.now(),
-          }).run(),
-        )
-      } catch { /* non-critical */ }
-
-      const hasFixes = roundVerdict.fixes_applied && roundVerdict.fixes_applied.length > 0
-
-      // Accepted with no fixes → trust the verdict, done
-      if (roundVerdict.verdict === "accepted" && !hasFixes) {
-        log.info("delivery accepted (no fixes)", { runID: run.id, round: round + 1 })
-        loopAccepted = true
-        break
-      }
-
-      // Rejected with no fixes → delivery agent can't fix, break to retry/replan
-      if (roundVerdict.verdict === "rejected" && !hasFixes) {
-        log.info("delivery rejected (no fixes applied)", { runID: run.id, round: round + 1, issues: roundVerdict.issues_found })
-        break
-      }
-
-      // Delivery agent made fixes → re-run core eval to verify
-      log.info("delivery agent applied fixes, re-evaluating", {
-        runID: run.id,
-        round: round + 1,
-        fixCount: roundVerdict.fixes_applied!.length,
-        fixes: roundVerdict.fixes_applied!.map(f => f.file),
-      })
-
-      const reEvalDeliveryResult = delivery.result as { diffs?: Array<{ file: string; [k: string]: unknown }>; changed_files?: string[] } | null
-      const reEvalDiffs = Array.isArray(reEvalDeliveryResult?.diffs) ? reEvalDeliveryResult!.diffs : []
-      const reEvalChangedFiles = reEvalDiffs.map(d => d.file)
-
-      let reEvalResult: Awaited<ReturnType<typeof EvaluatorService.evaluate>>
-      try {
-        // Core checks run against the current filesystem state (which includes delivery agent's fixes)
-        reEvalResult = await Promise.race([
-          EvaluatorService.evaluate(
-            {
-              taskID: task.id,
-              activeSpecVersionID: task.active_spec_version_id ?? undefined,
-              request: task.request,
-              metadata: {
-                ...(task.metadata ?? {}),
-                delivery_changed_files: reEvalChangedFiles,
-              },
-            },
-            {
-              summary: delivery.summary,
-              diffs: reEvalDiffs as any,
-              changedFiles: reEvalChangedFiles,
-            },
-            "core",
-          ),
-          new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error("re-evaluation hard timeout")), EVALUATION_HARD_TIMEOUT_MS),
-          ),
-        ])
-      } catch (evalErr) {
-        const msg = evalErr instanceof Error ? evalErr.message : String(evalErr)
-        log.error("re-evaluation failed after delivery fixes", { runID: run.id, round: round + 1, error: msg })
-        reEvalResult = { status: "failed" as const, verdict: "rejected" as const, summary: `Re-eval error: ${msg}`, checks: [], artifacts: [] }
-      }
-
-      const reEvalSummary = `Re-eval round ${round + 1}: ${reEvalResult.checks.map((c) => `${c.name}:${c.status}`).join(", ") || "none"}`
-      log.info("re-evaluation result", { runID: run.id, round: round + 1, status: reEvalResult.status, summary: reEvalSummary })
-
-      // Persist re-evaluation
-      const reEvalID = Identifier.ascending("evaluation")
-      const goals = run.plan_version_id ? listGoalsByPlan(run.plan_version_id) : []
-      persistEvaluation({
-        task: requireTask(task.id), run, deliveryID: delivery.id, evaluationID: reEvalID,
-        delivery: { summary: delivery.summary, diffs: reEvalDiffs },
-        result: reEvalResult,
-        analysis: {
-          verdict: reEvalResult.status === "failed" ? "rejected" : "accepted",
-          classification: "transient", summary: reEvalSummary,
-          goal_statuses: goals.map((g, i) => ({
-            goal_index: i, status: (reEvalResult.status === "failed" ? "failed" : "passed") as "passed" | "failed",
-            evidence: reEvalSummary, reasoning: reEvalResult.summary,
-          })),
-          replan_guidance: null,
-        },
-        finalVerdict: reEvalResult.status === "failed" ? "rejected" : "accepted",
-        finalStatus: reEvalResult.status === "failed" ? "failed" : "passed",
-        finalSummary: reEvalSummary, goals,
-      })
-
-      if (reEvalResult.status !== "failed") {
-        // Core checks pass after fixes → accept
-        log.info("core checks passed after delivery fixes", { runID: run.id, round: round + 1 })
-        loopAccepted = true
-        break
-      }
-
-      // Core checks still fail → update check results for next delivery round
-      currentCheckResults = reEvalResult.checks.map(c => ({
-        name: c.name,
-        status: c.status,
-        evidence: typeof c.evidence === "string" ? c.evidence : undefined,
-      }))
-      log.info("core checks still failing, continuing eval-delivery loop", {
-        runID: run.id,
-        round: round + 1,
-        failedChecks: currentCheckResults.filter(c => c.status === "failed").map(c => c.name),
-      })
-    }
-
-    // --- Loop finished: decide outcome ---
-    if (!loopAccepted && lastVerdict) {
-      log.info("eval-delivery loop exhausted without acceptance", { runID: run.id, rounds: maxRounds, verdict: lastVerdict.verdict })
-      const rejectionSummary = `Delivery verification rejected after ${maxRounds} eval-delivery round(s): ${lastVerdict.summary}`
-      const rejectionAnalysis: EvaluatorAnalysisType = {
+          checkResults,
+          analysis,
+          stream: deliveryStream,
+        }),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("delivery verification timeout")), DELIVERY_VERIFY_TIMEOUT_MS),
+        ),
+      ])
+      await deliveryContentHooks.flush()
+      await deliveryLive.finish(`Delivery: ${verdict.verdict}`)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      log.error("delivery verification failed", { runID: run.id, error: msg })
+      await deliveryContentHooks.flush().catch(() => undefined)
+      deliveryLive.error(err)
+      await handleEvaluationFailure(requireTask(task.id), run, `Delivery verification failed: ${msg}`, hooks, {
         verdict: "rejected",
         classification: "evaluation",
-        summary: rejectionSummary,
+        summary: `Delivery verification failed: ${msg}`,
         goal_statuses: verifyGoals.map((_, i) => ({
           goal_index: i,
           status: "failed" as const,
-          evidence: lastVerdict!.issues_found.join("; "),
-          reasoning: rejectionSummary,
+          evidence: msg,
+          reasoning: `Delivery agent error: ${msg}`,
         })),
         replan_guidance: {
-          root_cause: lastVerdict.issues_found.join("; "),
-          what_failed: lastVerdict.startup_verification.success ? "Runtime behavior" : "Application startup",
-          suggested_strategy: `Fix the runtime issues: ${lastVerdict.issues_found.join("; ")}`,
+          root_cause: msg,
+          what_failed: "Delivery agent",
+          suggested_strategy: `Fix the delivery agent error: ${msg}`,
           avoid_approaches: [],
         },
+      })
+      return
+    }
+
+    // Persist verdict artifact
+    try {
+      Database.use((db) =>
+        db.insert(OrchestratorArtifactTable).values({
+          id: Identifier.ascending("artifact"),
+          task_id: task.id,
+          run_id: run.id,
+          delivery_id: delivery.id,
+          kind: "report",
+          label: "delivery-agent-verdict",
+          payload: verdict as unknown as Record<string, unknown>,
+          time_created: Date.now(),
+          time_updated: Date.now(),
+        }).run(),
+      )
+    } catch { /* non-critical */ }
+
+    // Delivery rejected → create fix run with rejection context
+    if (verdict.verdict === "rejected") {
+      log.info("delivery rejected, creating fix run", { runID: run.id, issues: verdict.issues_found })
+      await handleDeliveryRejection(requireTask(task.id), run, verdict, hooks)
+      return
+    }
+
+    log.info("delivery agent accepted, running independent evaluator agent", { runID: run.id })
+
+    // Independent verification: full EvaluatorAgent investigates the delivery with tools,
+    // reads code, and produces a structured verdict. The delivery agent must not be the
+    // sole judge of its own work.
+    const deliveryResult = delivery.result ?? {}
+    const verifyDiffs = Array.isArray(deliveryResult.diffs) ? deliveryResult.diffs : []
+    const verifyChangedFiles = verifyDiffs.map((d: any) => d.file).filter(Boolean) as string[]
+    let agentVerdict: EvaluatorAnalysisType
+    try {
+      agentVerdict = await Promise.race([
+        EvaluatorAgent.analyze({
+          task: { title: task.title, request: task.request, sessionID: task.session_id ?? undefined, taskID: task.id },
+          goals: verifyGoals.map(g => ({
+            description: g.description,
+            criteria: g.criteria,
+            priority: g.priority as "blocking" | "advisory",
+            check_selector: selectorList(g.metadata) as string[],
+          })),
+          delivery: { summary: delivery.summary, changedFiles: verifyChangedFiles, diffs: verifyDiffs as any },
+          checkResults: (checkResults ?? []).map(c => ({
+            name: c.name,
+            status: c.status as "passed" | "failed" | "skipped",
+            evidence: typeof c.evidence === "string" ? c.evidence : undefined,
+          })),
+        }),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("evaluator agent timeout")), EVALUATION_HARD_TIMEOUT_MS),
+        ),
+      ])
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      log.error("evaluator agent failed", { runID: run.id, error: msg })
+      // Agent infrastructure failure — reject, do not silently accept
+      agentVerdict = {
+        verdict: "rejected",
+        classification: "evaluation",
+        summary: `Evaluator agent error: ${msg}`,
+        goal_statuses: verifyGoals.map((_, i) => ({
+          goal_index: i,
+          status: "failed" as const,
+          evidence: msg,
+          reasoning: `Evaluator agent failed: ${msg}`,
+        })),
+        replan_guidance: { root_cause: msg, what_failed: "Evaluator agent", suggested_strategy: "Retry evaluation", avoid_approaches: [] },
       }
-      await handleEvaluationFailure(requireTask(task.id), run, rejectionSummary, hooks, rejectionAnalysis)
+    }
+
+    // Persist evaluator agent verdict as artifact
+    try {
+      Database.use((db) =>
+        db.insert(OrchestratorArtifactTable).values({
+          id: Identifier.ascending("artifact"),
+          task_id: task.id,
+          run_id: run.id,
+          delivery_id: delivery.id,
+          kind: "report",
+          label: "evaluator-agent-analysis",
+          payload: agentVerdict as unknown as Record<string, unknown>,
+          time_created: Date.now(),
+          time_updated: Date.now(),
+        }).run(),
+      )
+    } catch { /* non-critical */ }
+
+    if (agentVerdict.verdict !== "accepted") {
+      log.warn("delivery agent accepted but evaluator agent rejected", {
+        runID: run.id,
+        verdict: agentVerdict.verdict,
+        summary: agentVerdict.summary,
+      })
+      await handleEvaluationFailure(requireTask(task.id), run, agentVerdict.summary, hooks, agentVerdict)
       return
     }
-    if (!loopAccepted && !lastVerdict) {
-      // Should not happen, but guard against it
-      await handleEvaluationFailure(requireTask(task.id), run, "Delivery loop produced no verdict", hooks)
-      return
-    }
+    log.info("evaluator agent accepted", { runID: run.id })
   }
 
   markDeliveryPublishing(delivery.id, Date.now())
@@ -1887,15 +1817,42 @@ async function publishAcceptedDelivery(task: TaskRow, run: RunRow, delivery: Del
   await hooks.updateTask(task, { status: "failed", blocking_reason: null, error: result.summary, time_completed: completed }, result.summary)
 }
 
+async function handleDeliveryRejection(task: TaskRow, run: RunRow, verdict: DeliveryVerdictType, hooks: RuntimeHooks) {
+  const fixCtx = buildFixContext(run, verdict.summary, undefined, "delivery_rejection")
+  // Enrich with structured rejection details
+  if (verdict.rejection_details && verdict.rejection_details.length > 0) {
+    fixCtx.deliveryRejectionDetails = verdict.rejection_details.map(d => ({
+      category: d.category,
+      file: d.file,
+      error: d.error,
+      suggestion: d.suggestion,
+    }))
+  }
+  const decision = decideFixOrFail(task, run, verdict.summary, undefined, fixCtx)
+  if (decision.action === "fail") {
+    failGoals(run, verdict.summary)
+    OrchestratorMemoryBridge.flushFailureLearnings({
+      task, run, summary: verdict.summary, retryContext: fixCtx,
+    }).catch((err) => log.warn("failed to flush failure learnings", { error: String(err) }))
+    const freshTask = findTask(task.id)
+    if (freshTask && freshTask.status !== "failed" && freshTask.status !== "completed" && freshTask.status !== "cancelled") {
+      await hooks.updateTask(freshTask, { status: "failed", blocking_reason: null, error: verdict.summary, time_completed: Date.now() }, verdict.summary)
+    }
+    return
+  }
+  const nextRunID = createFixRun(task, run, decision.summary, decision.fixContext)
+  await OrchestratorRuntime.dispatch(nextRunID, hooks)
+}
+
 async function handleEvaluationFailure(task: TaskRow, run: RunRow, summary: string, hooks: RuntimeHooks, analysis?: EvaluatorAnalysisType) {
   if (task.active_run_id !== run.id) return
 
-  const retryContext = buildRetryContext(run, summary, analysis)
-  const decision = decideRetryOrReplan(task, run, summary, analysis, retryContext)
+  const fixCtx = buildFixContext(run, summary, analysis, "eval_failure")
+  const decision = decideFixOrFail(task, run, summary, analysis, fixCtx)
 
   const executed = await executeDecision(task, run, decision, hooks).catch(async (error) => {
     const message = error instanceof Error ? error.message : String(error)
-    log.error("retry/replan failed", { taskID: task.id, runID: run.id, error: message })
+    log.error("fix run failed", { taskID: task.id, runID: run.id, error: message })
     // Re-read task from DB to avoid clobbering state changes made during executeDecision
     const freshTask = findTask(task.id)
     if (freshTask && freshTask.status !== "failed" && freshTask.status !== "completed" && freshTask.status !== "cancelled") {
@@ -1904,10 +1861,10 @@ async function handleEvaluationFailure(task: TaskRow, run: RunRow, summary: stri
         {
           status: "failed",
           blocking_reason: null,
-          error: `Planner failure: ${message}`,
+          error: `Fix run failure: ${message}`,
           time_completed: Date.now(),
         },
-        `Planner failure: ${message}`,
+        `Fix run failure: ${message}`,
       )
     }
     return false
@@ -1918,7 +1875,7 @@ async function handleEvaluationFailure(task: TaskRow, run: RunRow, summary: stri
     task,
     run,
     summary,
-    retryContext,
+    retryContext: fixCtx,
   }).catch((err) => log.warn("failed to flush failure learnings", { error: String(err) }))
   // Re-read task from DB for final status update
   const freshTask = findTask(task.id)
@@ -1935,18 +1892,8 @@ async function executeDecision(
 ): Promise<boolean> {
   if (decision.action === "fail") return false
 
-  if (decision.action === "retry") {
-    const nextRunID = createRetryRun(task, run, decision.summary, decision.retryContext)
-    await OrchestratorRuntime.dispatch(nextRunID, hooks)
-    return true
-  }
-
-  const currentPlan = run.plan_version_id ? findPlan(run.plan_version_id) : undefined
-  if (!currentPlan) return false
-  const next = await createReplanRun(task, currentPlan, run, decision.summary, decision.analysis)
-  if (!next.queued) return false
-  if (!next.runID) return false
-  await OrchestratorRuntime.dispatch(next.runID, hooks)
+  const nextRunID = createFixRun(task, run, decision.summary, decision.fixContext)
+  await OrchestratorRuntime.dispatch(nextRunID, hooks)
   return true
 }
 

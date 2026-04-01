@@ -18,7 +18,7 @@ type OverlayRole =
   | "executor" | "evaluator" | "delivery" | "system"
 
 /** Map raw agent name → canonical overlay role. Single source of truth. */
-function resolveRole(agent: string): OverlayRole {
+export function resolveRole(agent: string): OverlayRole {
   const a = (agent || "").trim().toLowerCase()
   if (!a) return "assistant"
   if (a === "user") return "user"
@@ -40,7 +40,7 @@ const CARD_STAGES = new Set<OverlayRole>(["orchestrator", "spec", "planner", "go
  * Compute overlay metadata for a message event.
  * Returns { resolvedRole, channel } to be injected into the event payload.
  */
-function overlayMeta(
+export function overlayMeta(
   sessionID: string,
   taskID: string,
   info: { role?: string; agent?: string; sessionID?: string },
