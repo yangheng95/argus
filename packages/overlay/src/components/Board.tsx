@@ -266,7 +266,13 @@ export function GoalsPanel(props: GoalsPanelProps) {
                     return first.length > 50 ? first.slice(0, 47) + "..." : first;
                   })()}
                 </span>
-                <Show when={props.runningGoalIDs.has(card.id)}>
+                <Show when={card.status === "passed"}>
+                  <span class="extension-status" data-state="passed">{"\u2713"}</span>
+                </Show>
+                <Show when={card.status === "failed"}>
+                  <span class="extension-status" data-state="failed">{"\u2717"}</span>
+                </Show>
+                <Show when={props.runningGoalIDs.has(card.id) && card.status !== "passed" && card.status !== "failed"}>
                   <span class="extension-status" data-state="active">
                     {t("goal.running")}
                   </span>

@@ -320,7 +320,6 @@ export function logDetailFields(
 
 export function ndjsonEventTypeLabel(type: string): string {
   return (type || "")
-    .replace("orchestrator.", "")
     .replace(/\./g, " › ");
 }
 

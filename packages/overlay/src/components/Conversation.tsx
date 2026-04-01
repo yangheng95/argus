@@ -54,7 +54,16 @@ export function Conversation(props: { container: HTMLElement }) {
         {(item) => (
           <Show
             when={item()?._agentGoalGroup}
-            fallback={<MessageView message={item()} />}
+            fallback={
+              <Show
+                when={item()?._agentCard && (item()._agentMessages || []).length > 0}
+                fallback={<MessageView message={item()} />}
+              >
+                <Index each={item()._agentMessages || []}>
+                  {(msg) => <MessageView message={msg()} />}
+                </Index>
+              </Show>
+            }
           >
             <ExecutorGoalGroup
               cardID={item()._agentCardKey}

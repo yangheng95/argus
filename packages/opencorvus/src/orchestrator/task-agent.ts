@@ -105,13 +105,13 @@ export namespace TaskAgent {
         title: `Agent: ${task.title}`,
         directory: Instance.directory,
       })
-      registerGoalRunSession(agentSession.id, taskID)
+      registerGoalRunSession(agentSession.id, taskID, "assistant")
       contentHooks = sessionStreamHooks({
         sessionID: agentSession.id,
         taskID,
-        stage: "orchestrator",
+        stage: "assistant",
       })
-      const live = agentStream({ taskID, stage: "orchestrator" })
+      const live = agentStream({ taskID, stage: "assistant" })
       await live.start("Task Agent started")
 
       // 3. Create tools (agentSessionID passed so tool sessions become children)

@@ -1,14 +1,17 @@
 /**
  * Tool set for the EvaluatorAgent.
  *
- * Includes codebase exploration, memory, and preference tools.
- * The evaluator uses these to investigate deliveries and verify goal completion.
+ * Includes codebase exploration, command execution, and memory tools.
+ * The evaluator uses these to investigate deliveries and verify goal completion
+ * by reading code, running tests/builds, and referencing prior knowledge.
  */
 import { tool } from "ai"
 import z from "zod"
 import { createCodebaseTools } from "@/orchestrator/codebase-tools"
 import { Memory } from "@/memory"
 import { Instance } from "@/project/instance"
+import { Shell } from "@/shell/shell"
+import { Filesystem } from "@/util/filesystem"
 import { Log } from "@/util/log"
 
 const log = Log.create({ service: "evaluator-tools" })
@@ -18,15 +21,46 @@ const log = Log.create({ service: "evaluator-tools" })
  *
  * Includes:
  * - 4 codebase tools: read_file, find_files, search_code, list_directory
+ * - 1 execution tool: run_command (for tests, builds, type checks)
  * - 2 memory tools: memory_search, memory_write
- * - 1 preference tool: preference_list
  */
 export function createEvaluatorTools(input?: { sessionID?: string }) {
   const codebase = createCodebaseTools()
   const projectId = Instance.project.id
+  const projectDir = Filesystem.resolve(Instance.directory)
 
   return {
     ...codebase,
+
+    run_command: tool({
+      description:
+        "Run a shell command in the project directory and capture stdout/stderr/exit code. " +
+        "Use to run unit tests (bun test, npm test), type checks (tsc --noEmit), " +
+        "builds (bun build, npm run build), linters, or any verification command. " +
+        "Always verify deliveries by actually running tests and builds, not just reading code.",
+      inputSchema: z.object({
+        command: z.string().describe("Shell command to run (runs in project root)"),
+        timeout_ms: z.number().optional().describe("Max execution time ms (default: 120000)"),
+      }),
+      execute: async ({ command, timeout_ms }) => {
+        const timeout = timeout_ms ?? 120_000
+        try {
+          const result = await Shell.run(command, {
+            cwd: projectDir,
+            env: process.env,
+            timeoutMs: timeout,
+          })
+          const parts = [`exit_code: ${result.exitCode}`]
+          if (result.timedOut) parts.push(`timeout_ms: ${timeout}`)
+          if (result.stdout.trim()) parts.push(`stdout:\n${result.stdout.slice(0, 8000)}`)
+          if (result.stderr.trim()) parts.push(`stderr:\n${result.stderr.slice(0, 5000)}`)
+          return parts.join("\n") || `exit_code: ${result.exitCode} (no output)`
+        } catch (e) {
+          log.warn("run_command failed in evaluator", { command, err: e })
+          return `Error running command: ${e instanceof Error ? e.message : String(e)}`
+        }
+      },
+    }),
 
     memory_search: tool({
       description:

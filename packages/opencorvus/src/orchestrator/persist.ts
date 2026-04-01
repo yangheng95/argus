@@ -1250,7 +1250,7 @@ export function buildReplanContext(input: {
         .map((gi) => goalStatuses.find((gs) => gs.goal_index === gi))
         .filter((gs) => gs?.status === "failed")
       if (failedGoals.length > 0) {
-        const evidence = failedGoals.map((gs) => gs!.evidence).filter(Boolean).join("; ")
+        const evidence = failedGoals.map((gs) => Array.isArray(gs!.evidence) ? gs!.evidence.join("; ") : gs!.evidence).filter(Boolean).join("; ")
         failedRequirements.push({
           id: sourceRequirementIDOfRow(requirement),
           title: requirement.title,
@@ -2241,7 +2241,7 @@ export function persistEvaluation(input: {
           )
         } else if (goalStatus === "failed") {
           Database.effect(() =>
-            OrchestratorProtocol.emit(Event.GoalFailed, { taskID: input.task.id, goalID: goal.id, summary: `${goal.description}: ${gs.evidence}` }, { source: "persist.evaluation" }),
+            OrchestratorProtocol.emit(Event.GoalFailed, { taskID: input.task.id, goalID: goal.id, summary: `${goal.description}: ${Array.isArray(gs.evidence) ? gs.evidence.join("; ") : gs.evidence}` }, { source: "persist.evaluation" }),
           )
         }
       }

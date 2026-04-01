@@ -3,6 +3,21 @@
 // All data is read from Solid stores (messageStore / boardStore) for reactivity.
 
 import { messageStore, messageById } from "../store/messages";
+
+/** Resolve an agent card message to its live store proxy when available.
+ *  Agent card _agentMessages are snapshots in a separate SolidJS store path;
+ *  part status updates (running→completed) don't propagate to those copies.
+ *  Looking up by ID from store.messages returns the canonical proxy where
+ *  fine-grained reactivity works correctly. Synthetic messages (from live
+ *  agent events, not in store.messages) are returned as-is. */
+function resolveMessage(m: any): any {
+  const id = m?.info?.id;
+  if (typeof id === "string" && id) {
+    const live = messageById(id);
+    if (live) return live;
+  }
+  return m;
+}
 import { boardStore, rootTaskSessionID } from "../store/board";
 import { classifyMessage } from "./message";
 import { t } from "./i18n";
@@ -71,9 +86,6 @@ function buildUserContextMessages(): any[] {
 
 // ── Public: conversationMessages ──
 
-let _prevConversationResult: any[] = [];
-let _prevConversationKey = "";
-
 export function conversationMessages(): any[] {
   const allMessages = messageStore.messages || [];
   const rootSID = rootTaskSessionID();
@@ -89,7 +101,7 @@ export function conversationMessages(): any[] {
     }
   }
 
-  // Filter orchestrator boilerplate when not in transcript detail mode
+  // Filter assistant boilerplate when not in transcript detail mode
   let filteredMain = mainMessages;
   if (!showTranscriptDetails && filteredMain.length > 0) {
     filteredMain = filteredMain.filter((message: any) => {
@@ -114,24 +126,22 @@ export function conversationMessages(): any[] {
     const card = messageStore.agentCards[id];
     if (!card) continue;
     if (card._agentGoalGroup && Array.isArray(card._agentInternalCards)) {
-      // Parallel goals: keep as a group item but flatten internal card messages
-      // Resolve via messageById to get live store proxies (not stale agent card copies)
+      // Parallel goals: keep as a group item but flatten internal card messages.
+      // Resolve via messageById to get live store proxies so part status updates
+      // propagate through SolidJS reactivity (agent card copies are stale snapshots).
       const flatMsgs: any[] = [];
       for (const child of card._agentInternalCards) {
         if (Array.isArray(child._agentMessages)) {
           for (const m of child._agentMessages) {
-            const live = m?.info?.id ? messageById(m.info.id) : undefined;
-            if (live) flatMsgs.push(live);
+            flatMsgs.push(resolveMessage(m));
           }
         }
       }
       flatMsgs.sort((a: any, b: any) => conversationTime(a) - conversationTime(b));
       agentCardMsgs.push({ ...card, _agentMessages: flatMsgs });
     } else if (Array.isArray(card._agentMessages)) {
-      // Resolve via messageById to get live store proxies
       for (const m of card._agentMessages) {
-        const live = m?.info?.id ? messageById(m.info.id) : undefined;
-        if (live) agentCardMsgs.push(live);
+        agentCardMsgs.push(resolveMessage(m));
       }
     }
   }
@@ -140,12 +150,5 @@ export function conversationMessages(): any[] {
     (a: any, b: any) => conversationTime(a) - conversationTime(b),
   );
 
-  // Referential stability for Solid's <Index>
-  const key = result.map((m: any) => m.info?.id || m._agentCardKey || "").join(",");
-  if (key === _prevConversationKey && result.length === _prevConversationResult.length) {
-    return _prevConversationResult;
-  }
-  _prevConversationKey = key;
-  _prevConversationResult = result;
   return result;
 }

@@ -139,7 +139,7 @@ export namespace OrchestratorConfig {
    */
   export async function get(): Promise<OrchestratorConfigType> {
     const cfg = await Config.get().catch(() => ({} as Config.Info))
-    const user = cfg.orchestrator
+    const user = cfg.assistant
     return merge(user)
   }
 
@@ -160,7 +160,7 @@ export namespace OrchestratorConfig {
 // 内部合并逻辑
 // ═══════════════════════════════════════════════════════════════════
 
-function merge(user?: Config.Info["orchestrator"]): OrchestratorConfigType {
+function merge(user?: Config.Info["assistant"]): OrchestratorConfigType {
   return {
     spec: {
       max_steps: user?.spec?.max_steps ?? DEFAULTS.spec.max_steps,

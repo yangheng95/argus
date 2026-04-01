@@ -34,18 +34,18 @@ export const ConfigRoutes = lazy(() =>
       }),
       async (c) => {
         const [raw, orch] = await Promise.all([Config.get(), OrchestratorConfig.get()])
-        // Merge effective scalar orchestrator values into the response so the frontend
+        // Merge effective scalar assistant values into the response so the frontend
         // can display correct placeholder values.
         // Only scalar fields are merged — nested agent configs are intentionally omitted.
         // User-supplied values always win.
-        const userOrch = raw.orchestrator || {}
-        const orchestrator = {
-          max_runs: userOrch.max_runs ?? orch.max_runs,
-          max_fix_runs: (userOrch as any).max_fix_runs ?? orch.max_fix_runs,
-          stage_max_retries: userOrch.stage_max_retries ?? orch.stage_max_retries,
-          ...userOrch,
+        const userAsst = raw.assistant || {}
+        const assistant = {
+          max_runs: userAsst.max_runs ?? orch.max_runs,
+          max_fix_runs: (userAsst as any).max_fix_runs ?? orch.max_fix_runs,
+          stage_max_retries: userAsst.stage_max_retries ?? orch.stage_max_retries,
+          ...userAsst,
         }
-        return c.json({ ...raw, orchestrator })
+        return c.json({ ...raw, assistant })
       },
     )
     .patch(

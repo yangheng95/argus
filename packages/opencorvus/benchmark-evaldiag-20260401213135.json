@@ -1,0 +1,287 @@
+{
+  "generated_at": "2026-04-01T13:32:45.601Z",
+  "title": "Overlay Web Benchmark NoteStore",
+  "request_file": null,
+  "executor": "claude-code",
+  "model": "hexin/gpt-5.4-mini",
+  "directory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-project-tnxJhh",
+  "server": "http://127.0.0.1:60639/",
+  "taskID": "tsk_d493e340b001VGbPEANaOGZyk7",
+  "stage_timeout_ms": {
+    "spec": 86400000,
+    "planner": 86400000,
+    "tool": 600000,
+    "standby": 86400000,
+    "stall": 1200000,
+    "request": 30000
+  },
+  "stage_max_steps": {
+    "spec": 80,
+    "planner": 96
+  },
+  "stall_timeout_ms": 1200000,
+  "completion_hard_timeout_ms": null,
+  "request_timeout_ms": 30000,
+  "taskStatus": "cancelled",
+  "evaluation": "",
+  "changedFiles": [
+    ".gitignore",
+    ".opencorvus/opencorvus.json",
+    "opencorvus.json",
+    "package.json",
+    "tsconfig.json"
+  ],
+  "transcriptCount": 27,
+  "timelineCount": 0,
+  "runCount": 0,
+  "planning": {
+    "pendingCount": 0,
+    "taskList": "暂无任务",
+    "reasoning": "",
+    "assistantText": ""
+  },
+  "streaming": {
+    "reasoning": "",
+    "assistantText": "先按流程整理需求并形成规格，确保实现和测试都严格对齐。",
+    "liveRole": "spec",
+    "liveText": "Spec generation started",
+    "reasoningVisible": false,
+    "assistantVisible": true,
+    "liveVisible": true
+  },
+  "materialization": {
+    "boardTaskID": "tsk_d493e340b001VGbPEANaOGZyk7",
+    "boardStatus": "spec_generating",
+    "specVersion": null,
+    "goalCount": 0,
+    "goalRunCount": 0,
+    "criteriaCount": 0
+  },
+  "screenshot": "C:\\Users\\chuan\\myhexin-local\\argus-opencode\\packages\\opencorvus\\overlay-web-benchmark-1775050364555.png",
+  "resume": {
+    "restored": true,
+    "selectedAt": 5223
+  },
+  "timings_ms": {
+    "online": 1281,
+    "submit": 1306,
+    "planning_visible": 1672,
+    "streaming_visible": 4196,
+    "task_created": 1678,
+    "task_selected": 1743,
+    "board_loaded": 1744,
+    "resumed": 5223,
+    "completed": 59418,
+    "execution": 58112
+  },
+  "assertions": {
+    "planning_visible": {
+      "pass": true,
+      "sample": {
+        "directory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-project-tnxJhh",
+        "savedDirectory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-project-tnxJhh",
+        "workspaceDirectory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-project-tnxJhh",
+        "selectedTaskID": "",
+        "pendingCount": 0,
+        "taskIDs": [
+          "tsk_d493e340b001VGbPEANaOGZyk7"
+        ],
+        "taskList": "暂无任务",
+        "reasoning": "",
+        "assistantText": "",
+        "liveRole": "",
+        "liveText": "",
+        "visibleTurns": [],
+        "storage": {
+          "directory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-project-tnxJhh",
+          "directoryMode": "custom",
+          "workspaceDirectory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-project-tnxJhh",
+          "workspaceTaskID": ""
+        }
+      }
+    },
+    "streaming_visible": {
+      "pass": true,
+      "sample": {
+        "directory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-project-tnxJhh",
+        "savedDirectory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-project-tnxJhh",
+        "workspaceDirectory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-project-tnxJhh",
+        "selectedTaskID": "tsk_d493e340b001VGbPEANaOGZyk7",
+        "pendingCount": 0,
+        "taskIDs": [
+          "tsk_d493e340b001VGbPEANaOGZyk7"
+        ],
+        "taskList": "进行中Overlay Web Benchmark NoteStore排队中21:31:46 / .../Local/Temp/mirrorcode-overlay-benchmark-project-tnxJhh",
+        "reasoning": "",
+        "assistantText": "先按流程整理需求并形成规格，确保实现和测试都严格对齐。",
+        "liveRole": "spec",
+        "liveText": "Spec generation started",
+        "visibleTurns": [
+          {
+            "role": "assistant",
+            "text": "先按流程整理需求并形成规格，确保实现和测试都严格对齐。⚡analyze_requirements执行中"
+          },
+          {
+            "role": "spec",
+            "text": "Spec generation started"
+          }
+        ],
+        "storage": {
+          "directory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-project-tnxJhh",
+          "directoryMode": "custom",
+          "workspaceDirectory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-project-tnxJhh",
+          "workspaceTaskID": ""
+        }
+      }
+    },
+    "materialized": {
+      "pass": true,
+      "sample": {
+        "taskID": "tsk_d493e340b001VGbPEANaOGZyk7",
+        "boardTaskID": "tsk_d493e340b001VGbPEANaOGZyk7",
+        "resumed": true
+      }
+    },
+    "delivery": {
+      "pass": false,
+      "sample": {
+        "taskStatus": "cancelled",
+        "verdict": "",
+        "localExit": 1,
+        "qualityVerdict": "rejected"
+      }
+    }
+  },
+  "local_verify": {
+    "mode": "command",
+    "command": "bun test ./src/note-store.test.ts",
+    "exitCode": 1,
+    "stdout": "bun test v1.3.10 (30e609e0)",
+    "stderr": "Test filter \"./src/note-store.test.ts\" had no matches in --cwd=\"C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-project-tnxJhh\""
+  },
+  "artifact_audit": {
+    "source_files_added": 0,
+    "config_files_added": 2,
+    "doc_files_added": 0,
+    "source_file_count": 0,
+    "doc_file_count": 0,
+    "non_source_churn_ratio": 1,
+    "readme_proliferation_count": 0,
+    "out_of_scope_file_count": 2,
+    "scaffold_noise_count": 0,
+    "placeholder_count": 0,
+    "out_of_scope_files": [
+      ".gitignore",
+      "opencorvus.json"
+    ],
+    "unmapped_files": [
+      ".gitignore",
+      "opencorvus.json"
+    ],
+    "placeholder_hits": [],
+    "duplicate_docs": [],
+    "scaffold_expansion_flags": []
+  },
+  "run_metrics": {
+    "meaningful_change_gap_ms": 64309,
+    "noop_cycle_count": 0,
+    "repeat_command_ratio": 0.8777777777777778,
+    "repeat_reasoning_similarity": 0.8777777777777778,
+    "required_check_pass_rate": 0,
+    "critical_check_pass_rate": 0,
+    "check_relevance_score": 0,
+    "verification_edit_ratio": 0.25,
+    "feature_coverage_p0": 0.5,
+    "scope_drift_score": 1,
+    "plan_to_change_traceability": 0,
+    "delivery_focus_score": 0.9944444444444445
+  },
+  "failure_matrix": {
+    "verdict": "rejected",
+    "primary_failure": "verification_gap",
+    "failures": [
+      {
+        "category": "verification_gap",
+        "message": "Core delivery acceptance checks did not all pass",
+        "evidence": "taskStatus=cancelled, evaluationVerdict=, localVerifyExitCode=1"
+      },
+      {
+        "category": "scope_drift",
+        "message": "Changed files are not cleanly traceable to approved module blocks",
+        "evidence": "out_of_scope_file_count=2, scope_drift_score=1.00, plan_to_change_traceability=0.00"
+      }
+    ]
+  },
+  "manual_review_summary": "verification_gap: Core delivery acceptance checks did not all pass | scope_drift: Changed files are not cleanly traceable to approved module blocks",
+  "overlay": {
+    "directory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-project-tnxJhh",
+    "savedDirectory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-project-tnxJhh",
+    "workspaceDirectory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-project-tnxJhh",
+    "selectedTaskID": "tsk_d493e340b001VGbPEANaOGZyk7",
+    "pendingCount": 0,
+    "taskIDs": [
+      "tsk_d493e340b001VGbPEANaOGZyk7"
+    ],
+    "taskList": "进行中Overlay Web Benchmark NoteStoregoal_decomposing21:32:30 / .../Local/Temp/mirrorcode-overlay-benchmark-project-tnxJhh",
+    "reasoning": "",
+    "assistantText": "先按流程整理需求并形成规格，确保实现和测试都严格对齐。",
+    "liveRole": "goal",
+    "liveText": "🔍search_code.已完成No matches found.🔍search_code.已完成No matches found.",
+    "visibleTurns": [
+      {
+        "role": "goal",
+        "text": "📄read_filepackage.json已完成    1 | {\n    2 |   \"name\": \"overlay-web-benchmark\",\n    3 |   \"private\": true,\n    4 |   \"type\": \"module\"\n    5 | }"
+      },
+      {
+        "role": "goal",
+        "text": "📄read_filetsconfig.json已完成    1 | {\n    2 |   \"compilerOptions\": {\n    3 |     \"target\": \"ES2022\",\n    4 |     \"module\": \"Preserve\",\n    5 |     \"moduleResolution\": \"Bundler\",\n    6 |     \"strict\": true,\n    7 |     \"skipLibCheck\": true\n    8 |   }\n    9 | }"
+      },
+      {
+        "role": "goal",
+        "text": "⚡list_directorysrc已完成"
+      },
+      {
+        "role": "goal",
+        "text": "📄read_file.opencorvus/opencorvus.json已完成    1 | {\n    2 |   \"$schema\": \"https://opencorvus.ai/config.json\",\n    3 |   \"model\": \"hexin/gpt-5.4-mini\",\n    4 |   \"experimental\": {\n    5 |     \"unattended\": true\n    6 |   },\n    7 |   \"lsp\": {\n    8 |     \"biome\": {\n    9 |       \"disabled\": true\n   10 |     },\n   11 |     \"eslint\": {\n   12 |       \"disabled\": true\n   13 |     }\n   14 |   },\n   15 |   \"provider\": {\n   16 |     \"hexin\": {\n   17 |       \"options\": {\n   18 |         \"timeout\": 30000\n   19 |       }\n   20 |     }\n   21 |   }\n   22 | }"
+      },
+      {
+        "role": "goal",
+        "text": "🔍search_code.已完成No matches found.🔍search_code.已完成No matches found."
+      }
+    ],
+    "storage": {
+      "directory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-project-tnxJhh",
+      "directoryMode": "custom",
+      "workspaceDirectory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-project-tnxJhh",
+      "workspaceTaskID": "tsk_d493e340b001VGbPEANaOGZyk7"
+    }
+  },
+  "diagnostics": {
+    "event_file": "C:\\Users\\chuan\\myhexin-local\\argus-opencode\\packages\\opencorvus\\benchmark-evaldiag-20260401213135.events.json",
+    "event_count": 180,
+    "stage_summary": {
+      "types": {
+        "orchestrator.task.created": 1,
+        "orchestrator.task.updated": 3,
+        "orchestrator.agent.updated": 57,
+        "orchestrator.spec.created": 1
+      },
+      "stages": {
+        "spec": {
+          "event_count": 36,
+          "first_event_ms": 3940,
+          "first_message_ms": null,
+          "first_tool_call_ms": null,
+          "first_tool_result_ms": null,
+          "submit_tool_ms": null,
+          "error_ms": null,
+          "last_event_ms": 43337,
+          "kind_counts": {
+            "status": 36
+          },
+          "tool_calls": {}
+        }
+      }
+    }
+  }
+}

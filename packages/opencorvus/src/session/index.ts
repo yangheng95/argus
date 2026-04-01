@@ -723,6 +723,39 @@ export namespace Session {
 
   const TOOL_STATUS_RANK: Record<string, number> = { pending: 0, running: 1, completed: 2, error: 2 }
 
+  function applyPartDelta(
+    part: Omit<Message.Part, "id" | "sessionID" | "messageID">,
+    input: {
+      field: string
+      delta: string
+    },
+  ) {
+    if (input.field === "text") {
+      if (!("text" in part) || typeof part.text !== "string") {
+        throw new Error(`Part ${part.type} does not support text deltas`)
+      }
+      return {
+        ...part,
+        text: part.text + input.delta,
+      }
+    }
+
+    if (input.field === "raw") {
+      if (part.type !== "tool") {
+        throw new Error(`Part ${part.type} does not support raw deltas`)
+      }
+      return {
+        ...part,
+        state: {
+          ...part.state,
+          raw: String(part.state?.raw ?? "") + input.delta,
+        },
+      }
+    }
+
+    throw new Error(`Unsupported part delta field: ${input.field}`)
+  }
+
   export const updatePart = fn(UpdatePartInput, async (part) => {
     const { id, messageID, sessionID, ...data } = part
     const time = Date.now()
@@ -767,7 +800,39 @@ export namespace Session {
       delta: z.string(),
     }),
     async (input) => {
-      Bus.publish(Message.Event.PartDelta, input)
+      const time = Date.now()
+      Database.use((db) => {
+        const row = db
+          .select({ data: PartTable.data })
+          .from(PartTable)
+          .where(
+            and(
+              eq(PartTable.id, input.partID),
+              eq(PartTable.message_id, input.messageID),
+              eq(PartTable.session_id, input.sessionID),
+            ),
+          )
+          .get()
+        if (!row?.data) {
+          throw new NotFoundError({ message: `Part not found: ${input.partID}` })
+        }
+        db.update(PartTable)
+          .set({
+            data: applyPartDelta(row.data as Omit<Message.Part, "id" | "sessionID" | "messageID">, input),
+            time_updated: time,
+          })
+          .where(
+            and(
+              eq(PartTable.id, input.partID),
+              eq(PartTable.message_id, input.messageID),
+              eq(PartTable.session_id, input.sessionID),
+            ),
+          )
+          .run()
+        Database.effect(() =>
+          Bus.publish(Message.Event.PartDelta, input),
+        )
+      })
     },
   )
 

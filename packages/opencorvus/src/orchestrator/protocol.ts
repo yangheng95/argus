@@ -57,7 +57,7 @@ export namespace OrchestratorProtocol {
       session_id: meta.sessionID ?? text(data, "sessionID") ?? null,
       interaction_id: meta.interactionID ?? text(data, "interactionID") ?? null,
       stream_id: null,
-      source: meta.source ?? "orchestrator",
+      source: meta.source ?? "assistant",
       target: meta.target ?? null,
       correlation_id: meta.correlationID ?? null,
       causation_id: meta.causationID ?? null,

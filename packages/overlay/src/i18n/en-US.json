@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "en-US",
-    "panel_revision": "cc1b51e086aee5ea"
+    "panel_revision": "7ab58db91790e0c3"
   },
   "brand.guide_kicker": "Quick Guide",
   "brand.guide_positioning_body": "This is the task cockpit — left picks the task, center drives execution, right verifies spec, plan, evaluation, and file changes so the agent stays on track.",
@@ -80,7 +80,7 @@
   "about.go_version": "Go Version",
   "about.platform": "Platform",
   "about.runtime_type": "Runtime Type",
-  "budget.hint": "Set budget for the selected task. Leave blank for orchestrator defaults.",
+  "budget.hint": "Set budget for the selected task. Leave blank for defaults.",
   "budget.empty": "Select a task to configure its budget.",
   "budget.max_evaluations": "Max Evaluations",
   "budget.max_replans": "Max Replans",
@@ -156,7 +156,7 @@
   "prompt.none": "No configurable prompts available",
   "prompt.group.core": "Core",
   "prompt.group.generator": "Generator",
-  "prompt.group.orchestrator": "Orchestrator",
+  "prompt.group.assistant": "Assistant",
   "prompt.group.primary_agent": "Primary Agent",
   "prompt.group.subagent": "Subagent",
   "prompt.group.hidden_agent": "Hidden Agent",
@@ -312,7 +312,7 @@
   "llm.summary_empty": "Not configured",
   "llm.summary_value": "{{provider}} / {{model}}",
   "llm.title": "Model & Provider",
-  "llm.title_hint": "Used by orchestrator stages (Spec, Planner, Evaluator). Does not affect Codex or Claude Code — they use their own model configuration.",
+  "llm.title_hint": "Used by assistant stages (Spec, Planner, Evaluator). Does not affect Codex or Claude Code — they use their own model configuration.",
   "mcp.add_action": "Add MCP",
   "mcp.add_action_title": "Add a new MCP server configuration.",
   "mcp.arguments": "Arguments",

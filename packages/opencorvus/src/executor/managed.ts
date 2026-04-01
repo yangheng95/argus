@@ -1,7 +1,10 @@
 import { Identifier } from "@/id/id"
 import { Snapshot } from "@/snapshot"
+import { Log } from "@/util/log"
 import { PlanningCapabilities, type CodingEventInfo, type CodingProvider, type CodingToolInfo, type ExecutorStatusInfo } from "./compat"
 import type { ExecutorAdapter } from "./compat"
+
+const log = Log.create({ service: "managed-executor" })
 
 type Status = Exclude<ExecutorStatusInfo, "blocked">
 type Notify = {
@@ -67,7 +70,21 @@ export const ManagedCodingExecutor = {
         },
       })
 
-      void consume(stream, state, latest)
+      consume(stream, state, latest).catch((err) => {
+        if (state.status !== "failed" && state.status !== "completed" && !state.abort.signal.aborted) {
+          state.status = "failed"
+          state.error = err instanceof Error ? err.message : String(err)
+          push(state, {
+            type: "session.error",
+            summary: state.error,
+            payload: {
+              sessionID: state.sessionID,
+              queueTaskID: state.id,
+              error: state.error,
+            },
+          })
+        }
+      })
     }
 
     return {
@@ -272,8 +289,14 @@ function value<T>(input: T | (() => T)) {
 }
 
 async function consume(stream: AsyncIterable<CodingEventInfo>, state: State, latest: Map<string, string>) {
+  let eventCount = 0
+  log.info("consume started", { sessionID: state.sessionID, queueTaskID: state.id })
   for await (const event of stream) {
     if (state.abort.signal.aborted || state.status === "failed") return
+    eventCount++
+    if (eventCount <= 5 || eventCount % 20 === 0) {
+      log.info("consume event", { sessionID: state.sessionID, queueTaskID: state.id, eventCount, type: event.type })
+    }
     sync(state, event)
     push(state, map(state, event))
 
@@ -295,7 +318,30 @@ async function consume(stream: AsyncIterable<CodingEventInfo>, state: State, lat
     }
   }
 
-  if (!state.abort.signal.aborted && (state.status === "running" || state.status === "retrying" || state.status === "queued")) {
+  if (state.abort.signal.aborted) return
+
+  if (state.status === "running" || state.status === "retrying" || state.status === "queued") {
+    // Stream ended without an explicit "done" event.
+    // If zero events were produced and no output was generated, the executor
+    // likely failed to start (e.g. auth error, spawn failure). Mark as failed
+    // so the orchestrator can detect the problem instead of treating an empty
+    // run as a successful completion.
+    if (eventCount === 0 && !state.output) {
+      log.error("consume ended with zero events", { sessionID: state.sessionID, queueTaskID: state.id })
+      state.status = "failed"
+      state.error = "Executor stream ended without producing any events — the process likely failed to start"
+      push(state, {
+        type: "session.error",
+        summary: state.error,
+        payload: {
+          sessionID: state.sessionID,
+          queueTaskID: state.id,
+          error: state.error,
+        },
+      })
+      return
+    }
+    log.info("consume completed", { sessionID: state.sessionID, queueTaskID: state.id, eventCount, outputLength: state.output.length })
     state.status = "completed"
   }
 }

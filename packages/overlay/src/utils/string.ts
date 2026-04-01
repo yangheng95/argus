@@ -54,7 +54,7 @@ export function clipText(value: unknown, limit = 80): string {
 // ── stripAssistantBrief ──
 
 /**
- * Strip orchestrator-injected <assistant-brief> block and boilerplate from
+ * Strip injected <assistant-brief> block and boilerplate from
  * user messages. Extracts only the "Request:" field value as the actual user
  * content.
  */
@@ -63,7 +63,7 @@ export function stripAssistantBrief(text: string): string {
   const briefRe = /<assistant-brief>[\s\S]*?<\/assistant-brief>/;
   let cleaned = text.replace(briefRe, "");
 
- // Remove orchestrator instruction lines that follow the brief
+ // Remove instruction lines that follow the brief
   cleaned = cleaned
     .replace(/Use the brief above to align your work before executing the task\.\s*/g, "")
     .replace(/You are executing a headless coding task[^\n]*\n?/g, "")

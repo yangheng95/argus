@@ -36,8 +36,8 @@ function setBudgetInputs(budget?: Budget): void {
   );
 }
 
-function orchestratorDefaults(): { maxRuns?: number; maxReplans?: number; maxEvaluations?: number; maxWallTimeMs?: number } {
-  const orch = (appStore.config as any)?.orchestrator;
+function configDefaults(): { maxRuns?: number; maxReplans?: number; maxEvaluations?: number; maxWallTimeMs?: number } {
+  const orch = (appStore.config as any)?.assistant;
   if (!orch || typeof orch !== "object") return {};
   return {
     maxRuns: Number.isFinite(orch.max_runs) ? orch.max_runs : undefined,
@@ -48,7 +48,7 @@ function orchestratorDefaults(): { maxRuns?: number; maxReplans?: number; maxEva
 }
 
 function setPlaceholders(): void {
-  const defaults = orchestratorDefaults();
+  const defaults = configDefaults();
   const setPlaceholder = (id: string, value: string): void => {
     const node = document.getElementById(id) as HTMLInputElement | null;
     if (node) node.placeholder = value || t("budget.placeholder");

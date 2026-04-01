@@ -40,31 +40,31 @@ export namespace PromptCatalog {
     {
       key: "spec_system",
       label: "Spec Agent",
-      group: "orchestrator",
+      group: "assistant",
       description: "System prompt used by the spec agent when it extracts requirements and constraints",
     },
     {
       key: "goal_system",
       label: "Goal Agent",
-      group: "orchestrator",
+      group: "assistant",
       description: "System prompt used by the goal agent when it decomposes spec requirements into executable implementation goals",
     },
     {
       key: "planner_system",
       label: "Planner Agent",
-      group: "orchestrator",
+      group: "assistant",
       description: "System prompt used by the planner when it builds execution plans",
     },
     {
       key: "evaluator_system",
       label: "Evaluator Agent",
-      group: "orchestrator",
+      group: "assistant",
       description: "System prompt used by the evaluator when it decides acceptance or replanning",
     },
     {
       key: "delivery_system",
       label: "Delivery Agent",
-      group: "orchestrator",
+      group: "assistant",
       description: "System prompt used by the delivery agent when it verifies startup, fixes bugs, and makes the final acceptance decision",
     },
   ]
@@ -122,8 +122,8 @@ export namespace PromptCatalog {
     if (agent.hidden) return "hidden_agent"
     if (!agent.native) return "custom_agent"
     if (agent.mode === "subagent") return "subagent"
-    // Orchestrator-level agents
-    if (["spec", "plan"].includes(agent.name)) return "orchestrator"
+    // Assistant-level agents
+    if (["spec", "plan"].includes(agent.name)) return "assistant"
     return "primary_agent"
   }
 
