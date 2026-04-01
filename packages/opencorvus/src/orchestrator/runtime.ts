@@ -1,3 +1,5 @@
+import { existsSync } from "fs"
+import path from "path"
 import { Bus } from "@/bus"
 import { selectorList } from "@/check/policy"
 import { EvaluatorService } from "@/evaluator/service"
@@ -911,6 +913,34 @@ export namespace OrchestratorRuntime {
       }
     }
 
+    // 3b. Verify merge: check that non-deleted files actually exist in the target directory
+    if (goalRun.workspace_dir && delivery.diffs.length > 0) {
+      const expectedFiles = delivery.diffs
+        .filter((d: any) => d.status !== "deleted")
+        .map((d: any) => ({ rel: d.file as string, abs: path.resolve(Instance.directory, d.file as string) }))
+      const missingFiles = expectedFiles.filter((f) => !existsSync(f.abs))
+      if (missingFiles.length > 0) {
+        log.error("goal delivery merge verification failed: files missing after apply", {
+          goalRunID: goalRun.id,
+          total: expectedFiles.length,
+          missing: missingFiles.length,
+          files: missingFiles.slice(0, 10).map((f) => f.rel),
+        })
+        updateGoalRun(goalRun.id, {
+          status: "failed",
+          error: `Merge verification failed: ${missingFiles.length}/${expectedFiles.length} files not written to target directory`,
+          time_completed: Date.now(),
+        })
+        Database.use((db) => db.update(OrchestratorGoalTable).set({ status: "failed", time_updated: Date.now() }).where(eq(OrchestratorGoalTable.id, goalRun.goal_id)).run())
+        const failedGoal = listGoalsByPlan(plan.id).find((g) => g.id === goalRun.goal_id)
+        if (failedGoal) {
+          OrchestratorProtocol.emit(Event.GoalFailed, { taskID: task.id, goalID: failedGoal.id, summary: `${failedGoal.description}: Merge verification failed — ${missingFiles.length} files missing` }, { source: "runtime.finalizeGoalRun" })
+        }
+        await cleanupGoalWorkspace(goalRun.workspace_dir).catch(() => {})
+        return
+      }
+    }
+
     // 4. Mark goal run completed and update goal status
     updateGoalRun(goalRun.id, { status: "completed", time_completed: Date.now() })
 
@@ -1349,23 +1379,30 @@ async function completeRun(run: RunRow, hooks: RuntimeHooks) {
   const goals = run.plan_version_id ? listGoalsByPlan(run.plan_version_id) : []
   const checkSummary = `Core checks: ${result.checks.map((c) => `${c.name}:${c.status}`).join(", ") || "none"}`
 
+  // Only an explicit "passed" is acceptable — "inconclusive" (no checks ran) must be treated as failure
+  // to prevent empty/broken projects from being accepted.
+  const evalPassed = result.status === "passed"
+  if (result.status === "inconclusive") {
+    log.warn("core checks inconclusive — treating as failed", { runID: run.id, summary: result.summary })
+  }
+
   // Persist evaluation — records core check results regardless of pass/fail
   persistEvaluation({
     task, run, deliveryID, evaluationID, delivery, result,
     analysis: {
-      verdict: result.status === "failed" ? "rejected" : "accepted",
+      verdict: evalPassed ? "accepted" : "rejected",
       classification: "transient",
       summary: checkSummary,
       goal_statuses: goals.map((g, i) => ({
         goal_index: i,
-        status: (result.status === "failed" ? "failed" : "passed") as "passed" | "failed",
+        status: (evalPassed ? "passed" : "failed") as "passed" | "failed",
         evidence: checkSummary,
         reasoning: result.summary,
       })),
       replan_guidance: null,
     },
-    finalVerdict: result.status === "failed" ? "rejected" : "accepted",
-    finalStatus: result.status === "failed" ? "failed" : "passed",
+    finalVerdict: evalPassed ? "accepted" : "rejected",
+    finalStatus: evalPassed ? "passed" : "failed",
     finalSummary: checkSummary,
     goals,
   })
@@ -1458,19 +1495,24 @@ async function runEvaluation(task: TaskRow, run: RunRow, existingDelivery: Deliv
   const goals = run.plan_version_id ? listGoalsByPlan(run.plan_version_id) : []
   const checkSummary = `Core checks: ${result.checks.map((c) => `${c.name}:${c.status}`).join(", ") || "none"}`
 
+  const evalPassed = result.status === "passed"
+  if (result.status === "inconclusive") {
+    log.warn("re-evaluation: core checks inconclusive — treating as failed", { runID: run.id, summary: result.summary })
+  }
+
   persistEvaluation({
     task, run, deliveryID, evaluationID, delivery, result,
     analysis: {
-      verdict: result.status === "failed" ? "rejected" : "accepted",
+      verdict: evalPassed ? "accepted" : "rejected",
       classification: "transient", summary: checkSummary,
       goal_statuses: goals.map((g, i) => ({
-        goal_index: i, status: (result.status === "failed" ? "failed" : "passed") as "passed" | "failed",
+        goal_index: i, status: (evalPassed ? "passed" : "failed") as "passed" | "failed",
         evidence: checkSummary, reasoning: result.summary,
       })),
       replan_guidance: null,
     },
-    finalVerdict: result.status === "failed" ? "rejected" : "accepted",
-    finalStatus: result.status === "failed" ? "failed" : "passed",
+    finalVerdict: evalPassed ? "accepted" : "rejected",
+    finalStatus: evalPassed ? "passed" : "failed",
     finalSummary: checkSummary, goals,
   })
 

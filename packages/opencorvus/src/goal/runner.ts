@@ -752,42 +752,26 @@ export async function evaluateGoal(input: {
     delivery,
     "core",
   )
-  const selectors = goalSelectors(input.goal)
-  const matched = selectors.flatMap((selector) =>
-    result.checks.filter((item) => item.name === selector || item.name.startsWith(`${selector}#`)),
-  )
-  const analysisOnly =
-    result.status === "failed" &&
-    matched.length === 0 &&
-    result.summary === "No blocking evaluator checks ran."
-  const checked = analysisOnly
-    ? {
-        ...result,
-        status: "passed" as const,
-        verdict: "accepted" as const,
-        summary: "No goal-local automated checks ran; deferring to task-level evaluation.",
-      }
-    : result
-  // Skip Phase 2 LLM analysis at goal level — deferred to task-level evaluator.
-  // Construct a minimal analysis from core check results.
+  // "No checks ran" is not a pass — let it propagate as-is so task-level
+  // evaluation sees the real status instead of a fabricated "passed".
   const analysis: GoalJudgmentType = {
-    verdict: checked.verdict === "accepted" ? "accepted" : "rejected",
-    classification: checked.verdict === "accepted" ? "transient" : "evaluation",
-    summary: checked.summary,
+    verdict: result.verdict === "accepted" ? "accepted" : "rejected",
+    classification: result.verdict === "accepted" ? "transient" : "evaluation",
+    summary: result.summary,
     goal_statuses: [{
       goal_index: 0,
-      status: checked.verdict === "accepted" ? "passed" : "failed",
-      evidence: checked.checks.map((c) => `${c.name}: ${c.status}`).join("; "),
-      reasoning: checked.summary,
+      status: result.verdict === "accepted" ? "passed" : "failed",
+      evidence: result.checks.map((c) => `${c.name}: ${c.status}`).join("; "),
+      reasoning: result.summary,
     }],
-    replan_guidance: checked.verdict === "accepted" ? null : {
-      root_cause: checked.checks.filter((c) => c.status === "failed").map((c) => `${c.name}: ${c.evidence}`).join("; "),
-      what_failed: checked.checks.filter((c) => c.status === "failed").map((c) => c.name).join(", "),
+    replan_guidance: result.verdict === "accepted" ? null : {
+      root_cause: result.checks.filter((c) => c.status === "failed").map((c) => `${c.name}: ${c.evidence}`).join("; "),
+      what_failed: result.checks.filter((c) => c.status === "failed").map((c) => c.name).join(", "),
       suggested_strategy: "Fix failing core checks before proceeding.",
       avoid_approaches: [],
     },
   }
-  return { result: checked, analysis }
+  return { result, analysis }
 }
 
 export async function evaluateTask(input: {

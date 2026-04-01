@@ -56,22 +56,23 @@ export namespace Filesystem {
     return typeof e === "object" && e !== null && "code" in e && (e as { code: string }).code === "ENOENT"
   }
 
+  function isEexist(e: unknown): e is { code: "EEXIST" } {
+    return typeof e === "object" && e !== null && "code" in e && (e as { code: string }).code === "EEXIST"
+  }
+
   export async function write(p: string, content: string | Buffer | Uint8Array, mode?: number): Promise<void> {
+    const doWrite = () => mode ? writeFile(p, content, { mode }) : writeFile(p, content)
     try {
-      if (mode) {
-        await writeFile(p, content, { mode })
-      } else {
-        await writeFile(p, content)
-      }
+      await doWrite()
     } catch (e) {
       if (isEnoent(e)) {
         await mkdir(dirname(p), { recursive: true })
-        if (mode) {
-          await writeFile(p, content, { mode })
-        } else {
-          await writeFile(p, content)
-        }
+        await doWrite()
         return
+      }
+      if (isEexist(e)) {
+        // On Windows, EEXIST from writeFile means the target path is a directory, not a file.
+        throw new Error(`Filesystem.write: target path is a directory, cannot write file: ${p}`)
       }
       throw e
     }
