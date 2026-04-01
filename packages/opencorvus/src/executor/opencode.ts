@@ -200,6 +200,8 @@ function mapEvent(event: { type: string; properties: Record<string, unknown> }, 
   }
   if (event.type === Message.Event.Updated.type) {
     const info = props.info as Record<string, unknown>
+    // Stamp agent identity — external executor processes don't set this
+    if (!info.agent) info.agent = "executor"
     return {
       type: "message.updated",
       summary: typeof info.role === "string" ? `Message updated: ${info.role}` : "Message updated",

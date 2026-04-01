@@ -2069,7 +2069,7 @@ body[data-theme="light"] .msg[data-role="planner"] {
   --msg-role-border: rgba(44, 112, 179, 0.32);
   --msg-role-tone: var(--accent);
 }
-body[data-theme="light"] .msg[data-role="scheduler"] {
+body[data-theme="light"] .msg[data-role="evaluator"] {
   --msg-surface: rgba(196, 138, 21, 0.10);
   --msg-border: rgba(196, 138, 21, 0.26);
   --msg-role-bg: rgba(196, 138, 21, 0.14);
@@ -2097,19 +2097,12 @@ body[data-theme="light"] .msg[data-role="delivery"] {
   --msg-role-border: rgba(14, 150, 130, 0.32);
   --msg-role-tone: #0e9682;
 }
-body[data-theme="light"] .msg[data-role="goal_gate"] {
+body[data-theme="light"] .msg[data-role="goal"] {
   --msg-surface: rgba(73, 156, 84, 0.10);
   --msg-border: rgba(73, 156, 84, 0.26);
   --msg-role-bg: rgba(73, 156, 84, 0.14);
   --msg-role-border: rgba(73, 156, 84, 0.32);
   --msg-role-tone: var(--good);
-}
-body[data-theme="light"] .msg[data-role="task_tool"] {
-  --msg-surface: rgba(22, 163, 148, 0.10);
-  --msg-border: rgba(22, 163, 148, 0.26);
-  --msg-role-bg: rgba(22, 163, 148, 0.14);
-  --msg-role-border: rgba(22, 163, 148, 0.32);
-  --msg-role-tone: #0e7868;
 }
 body[data-theme="light"] .msg[data-role="executor"] {
   --msg-surface: rgba(230, 140, 50, 0.08);
@@ -3224,7 +3217,7 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
   --msg-role-tone: var(--accent);
 }
 
-.msg[data-role="scheduler"] {
+.msg[data-role="evaluator"] {
   align-items: flex-start;
   --msg-surface: rgba(212, 167, 44, 0.14);
   --msg-border: rgba(212, 167, 44, 0.30);
@@ -3260,22 +3253,13 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
   --msg-role-tone: #28b4a0;
 }
 
-.msg[data-role="goal_gate"] {
+.msg[data-role="goal"] {
   align-items: flex-start;
   --msg-surface: rgba(95, 173, 86, 0.14);
   --msg-border: rgba(95, 173, 86, 0.30);
   --msg-role-bg: rgba(95, 173, 86, 0.18);
   --msg-role-border: rgba(95, 173, 86, 0.38);
   --msg-role-tone: var(--good);
-}
-
-.msg[data-role="task_tool"] {
-  align-items: flex-start;
-  --msg-surface: rgba(52, 190, 170, 0.14);
-  --msg-border: rgba(52, 190, 170, 0.30);
-  --msg-role-bg: rgba(52, 190, 170, 0.18);
-  --msg-role-border: rgba(52, 190, 170, 0.38);
-  --msg-role-tone: color-mix(in srgb, var(--accent) 68%, var(--good) 32%);
 }
 
 .msg[data-role="executor"] {
@@ -3323,12 +3307,11 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
 }
 
 .msg[data-role="planner"] .msg-head,
-.msg[data-role="scheduler"] .msg-head,
+.msg[data-role="evaluator"] .msg-head,
 .msg[data-role="delivery"] .msg-head,
 .msg[data-role="spec"] .msg-head,
 .msg[data-role="system"] .msg-head,
-.msg[data-role="goal_gate"] .msg-head,
-.msg[data-role="task_tool"] .msg-head {
+.msg[data-role="goal"] .msg-head {
   width: fit-content;
   max-width: var(--msg-max-width);
   justify-content: flex-start;
@@ -3350,11 +3333,11 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
 
 .msg[data-role="user"] .msg-role,
 .msg[data-role="planner"] .msg-role,
-.msg[data-role="scheduler"] .msg-role,
+.msg[data-role="evaluator"] .msg-role,
 .msg[data-role="delivery"] .msg-role,
 .msg[data-role="spec"] .msg-role,
 .msg[data-role="system"] .msg-role,
-.msg[data-role="goal_gate"] .msg-role {
+.msg[data-role="goal"] .msg-role {
   font-size: var(--ui-font-meta);
 }
 
@@ -3367,11 +3350,11 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
 
 .msg[data-role="user"] .msg-time,
 .msg[data-role="planner"] .msg-time,
-.msg[data-role="scheduler"] .msg-time,
+.msg[data-role="evaluator"] .msg-time,
 .msg[data-role="delivery"] .msg-time,
 .msg[data-role="spec"] .msg-time,
 .msg[data-role="system"] .msg-time,
-.msg[data-role="goal_gate"] .msg-time,
+.msg[data-role="goal"] .msg-time,
 .msg[data-role="executor"] .msg-time {
   font-size: var(--ui-font-meta);
 }
@@ -3424,12 +3407,11 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
 }
 
 .msg[data-role="planner"] .msg-bubble,
-.msg[data-role="scheduler"] .msg-bubble,
+.msg[data-role="evaluator"] .msg-bubble,
 .msg[data-role="delivery"] .msg-bubble,
 .msg[data-role="spec"] .msg-bubble,
 .msg[data-role="system"] .msg-bubble,
-.msg[data-role="goal_gate"] .msg-bubble,
-.msg[data-role="task_tool"] .msg-bubble {
+.msg[data-role="goal"] .msg-bubble {
   width: fit-content;
   max-width: var(--msg-max-width);
   border-radius: calc(14px * var(--ui-scale));
@@ -3478,11 +3460,11 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
 
 .msg[data-role="user"] .msg-text,
 .msg[data-role="planner"] .msg-text,
-.msg[data-role="scheduler"] .msg-text,
+.msg[data-role="evaluator"] .msg-text,
 .msg[data-role="delivery"] .msg-text,
 .msg[data-role="spec"] .msg-text,
 .msg[data-role="system"] .msg-text,
-.msg[data-role="goal_gate"] .msg-text {
+.msg[data-role="goal"] .msg-text {
   font-size: var(--ui-font-control);
   line-height: 1.72;
 }

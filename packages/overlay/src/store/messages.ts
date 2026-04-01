@@ -79,6 +79,8 @@ export { store as messageStore };
 // ── O(1) message lookup ──
 
 const messageIndex = new Map<string, Message>();
+// Buffer for parts that arrive before their parent message.updated event.
+const _pendingParts = new Map<string, any[]>();
 
 function rebuildMessageIndex() {
   messageIndex.clear();
@@ -103,12 +105,13 @@ function finiteMessageTime(item: Message | undefined): number | undefined {
   return undefined;
 }
 
-function messageTime(item: Message): number {
-  return finiteMessageTime(item) ?? 0;
-}
-
 function messageOrderTime(item: Message): number {
   return finiteMessageTime(item) ?? UNTIMED_MESSAGE_ORDER;
+}
+
+/** @deprecated Use finiteMessageTime or messageOrderTime instead */
+function messageTime(item: Message): number {
+  return finiteMessageTime(item) ?? 0;
 }
 
 function sortMessages(list: Message[]): Message[] {
@@ -988,7 +991,10 @@ export function applyMessageEvent(event: any): boolean {
       }
       return true;
     }
-    const msg: Message = { info: mergeMessageInfo(undefined, info), parts: [] };
+    // Flush any parts that arrived before this message
+    const buffered = _pendingParts.get(info.id);
+    if (buffered) _pendingParts.delete(info.id);
+    const msg: Message = { info: mergeMessageInfo(undefined, info), parts: buffered || [] };
     let insertIdx = 0;
     setStore(
       "messages",
@@ -1005,26 +1011,11 @@ export function applyMessageEvent(event: any): boolean {
     if (!part?.id || !part?.messageID) return false;
     let message = messageById(part.messageID);
     if (!message) {
-      const msg: Message = {
-        info: {
-          id: part.messageID,
-          sessionID: part.sessionID,
-          role: "assistant",
-          resolvedRole: properties.resolvedRole || "assistant",
-          channel: properties.channel || "main",
-          time: { created: part.state?.time?.start || Date.now() },
-        },
-        parts: [],
-      };
-      let partInsertIdx = 0;
-      setStore(
-        "messages",
-        produce((msgs: Message[]) => {
-          partInsertIdx = insertSorted(msgs, msg);
-        }),
-      );
-      message = store.messages[partInsertIdx];
-      messageIndex.set(part.messageID, message);
+      // Buffer: message.updated hasn't arrived yet. Store part for later.
+      const buf = _pendingParts.get(part.messageID) || [];
+      buf.push(part);
+      _pendingParts.set(part.messageID, buf);
+      return true;
     }
     const idx = store.messages.indexOf(message);
     const partIdx = message.parts.findIndex((p: Part) => p.id === part.id);
@@ -1049,26 +1040,9 @@ export function applyMessageEvent(event: any): boolean {
 
     let message = messageById(properties.messageID);
     if (!message) {
-      const msg: Message = {
-        info: {
-          id: properties.messageID,
-          sessionID: properties.sessionID,
-          role: "assistant",
-          resolvedRole: properties.resolvedRole || "assistant",
-          channel: properties.channel || "main",
-          time: { created: Date.now() },
-        },
-        parts: [],
-      };
-      let deltaInsertIdx = 0;
-      setStore(
-        "messages",
-        produce((msgs: Message[]) => {
-          deltaInsertIdx = insertSorted(msgs, msg);
-        }),
-      );
-      message = store.messages[deltaInsertIdx];
-      messageIndex.set(properties.messageID, message);
+      // Delta for unknown message — drop silently. The full part will arrive
+      // via message.part.updated (persisted) when SSE reconnects or transcript loads.
+      return false;
     }
 
     const msgIdx = store.messages.indexOf(message);

@@ -68,8 +68,8 @@ function formatTranscriptText(part: any, role: string): string {
   if (!text.trim()) return "";
   if (part.audience && part.audience.ui === false) return "";
   if (part.kind === "trace" && !part.audience?.ui) return "";
-  const orchestratorRoles = ["user", "planner", "evaluator", "system"];
-  if (orchestratorRoles.includes(role) && text.includes("<assistant-brief>")) {
+  const briefRoles = ["user", "planner", "evaluator", "system"];
+  if (briefRoles.includes(role) && text.includes("<assistant-brief>")) {
     text = stripAssistantBrief(text);
   }
   return text.trim();
@@ -522,7 +522,7 @@ export function interactionAnswerLines(interaction: any): string[] {
   return message ? [message] : [];
 }
 
-/** Check if an interaction was auto-replied by the orchestrator. */
+/** Check if an interaction was auto-replied by the assistant. */
 export function isAutoReplied(interaction: any): boolean {
   const response = record(interaction?.response) ? interaction.response : null;
   return response?.auto_reply === true;

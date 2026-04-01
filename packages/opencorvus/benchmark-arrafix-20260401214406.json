@@ -1,0 +1,301 @@
+{
+  "generated_at": "2026-04-01T13:49:53.105Z",
+  "title": "Overlay Web Benchmark NoteStore",
+  "request_file": null,
+  "executor": "claude-code",
+  "model": "hexin/gpt-5.4-mini",
+  "directory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-project-ymqr5K",
+  "server": "http://127.0.0.1:57158/",
+  "taskID": "tsk_d49499de400189RMj36075iarj",
+  "stage_timeout_ms": {
+    "spec": 86400000,
+    "planner": 86400000,
+    "tool": 600000,
+    "standby": 86400000,
+    "stall": 1200000,
+    "request": 30000
+  },
+  "stage_max_steps": {
+    "spec": 80,
+    "planner": 96
+  },
+  "stall_timeout_ms": 1200000,
+  "completion_hard_timeout_ms": null,
+  "request_timeout_ms": 30000,
+  "taskStatus": "completed",
+  "evaluation": "accepted",
+  "changedFiles": [
+    "src/note-store.test.ts",
+    "src/note-store.ts",
+    ".opencorvus/evaluations/2026-04-01T13-49-16-727Z-tsk_d49499de400189RMj36075iarj-coordinator-eval-evl_d494e3a370019PuPC1dkwYoieg-overlay-web-benchmark-notestore.md",
+    ".opencorvus/goals/2026-04-01T13-49-16-727Z-tsk_d49499de400189RMj36075iarj-goal-snapshot-v1-overlay-web-benchmark-notestore.md"
+  ],
+  "transcriptCount": 61,
+  "timelineCount": 0,
+  "runCount": 1,
+  "planning": {
+    "pendingCount": 0,
+    "taskList": "暂无任务",
+    "reasoning": "",
+    "assistantText": ""
+  },
+  "streaming": {
+    "reasoning": "",
+    "assistantText": "",
+    "liveRole": "spec",
+    "liveText": "Spec generation started",
+    "reasoningVisible": false,
+    "assistantVisible": false,
+    "liveVisible": true
+  },
+  "materialization": {
+    "boardTaskID": "tsk_d49499de400189RMj36075iarj",
+    "boardStatus": "spec_generating",
+    "specVersion": null,
+    "goalCount": 0,
+    "goalRunCount": 0,
+    "criteriaCount": 0
+  },
+  "screenshot": "C:\\Users\\chuan\\myhexin-local\\argus-opencode\\packages\\opencorvus\\overlay-web-benchmark-1775051392211.png",
+  "resume": {
+    "restored": true,
+    "selectedAt": 4436
+  },
+  "timings_ms": {
+    "online": 575,
+    "submit": 747,
+    "planning_visible": 1116,
+    "streaming_visible": 3483,
+    "task_created": 1121,
+    "task_selected": 1194,
+    "board_loaded": 1196,
+    "resumed": 4436,
+    "completed": 338212,
+    "execution": 337465
+  },
+  "assertions": {
+    "planning_visible": {
+      "pass": true,
+      "sample": {
+        "directory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-project-ymqr5K",
+        "savedDirectory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-project-ymqr5K",
+        "workspaceDirectory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-project-ymqr5K",
+        "selectedTaskID": "",
+        "pendingCount": 0,
+        "taskIDs": [
+          "tsk_d49499de400189RMj36075iarj"
+        ],
+        "taskList": "暂无任务",
+        "reasoning": "",
+        "assistantText": "",
+        "liveRole": "",
+        "liveText": "",
+        "visibleTurns": [],
+        "storage": {
+          "directory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-project-ymqr5K",
+          "directoryMode": "custom",
+          "workspaceDirectory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-project-ymqr5K",
+          "workspaceTaskID": ""
+        }
+      }
+    },
+    "streaming_visible": {
+      "pass": true,
+      "sample": {
+        "directory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-project-ymqr5K",
+        "savedDirectory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-project-ymqr5K",
+        "workspaceDirectory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-project-ymqr5K",
+        "selectedTaskID": "tsk_d49499de400189RMj36075iarj",
+        "pendingCount": 0,
+        "taskIDs": [
+          "tsk_d49499de400189RMj36075iarj"
+        ],
+        "taskList": "进行中Overlay Web Benchmark NoteStore排队中21:44:14 / .../Local/Temp/mirrorcode-overlay-benchmark-project-ymqr5K",
+        "reasoning": "",
+        "assistantText": "",
+        "liveRole": "spec",
+        "liveText": "Spec generation started",
+        "visibleTurns": [
+          {
+            "role": "executor",
+            "text": "先分析需求并形成可验证规格，再拆解目标、制定计划并提交执行。⚡analyze_requirements执行中"
+          },
+          {
+            "role": "spec",
+            "text": "Spec generation started"
+          }
+        ],
+        "storage": {
+          "directory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-project-ymqr5K",
+          "directoryMode": "custom",
+          "workspaceDirectory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-project-ymqr5K",
+          "workspaceTaskID": ""
+        }
+      }
+    },
+    "materialized": {
+      "pass": true,
+      "sample": {
+        "taskID": "tsk_d49499de400189RMj36075iarj",
+        "boardTaskID": "tsk_d49499de400189RMj36075iarj",
+        "resumed": true
+      }
+    },
+    "delivery": {
+      "pass": true,
+      "sample": {
+        "taskStatus": "completed",
+        "verdict": "accepted",
+        "localExit": 0,
+        "qualityVerdict": "accepted"
+      }
+    }
+  },
+  "local_verify": {
+    "mode": "command",
+    "command": "bun test ./src/note-store.test.ts",
+    "exitCode": 0,
+    "stdout": "bun test v1.3.10 (30e609e0)",
+    "stderr": "5 pass\n 0 fail\n 17 expect() calls\nRan 5 tests across 1 file. [74.00ms]"
+  },
+  "artifact_audit": {
+    "source_files_added": 2,
+    "config_files_added": 0,
+    "doc_files_added": 0,
+    "source_file_count": 2,
+    "doc_file_count": 0,
+    "non_source_churn_ratio": 0,
+    "readme_proliferation_count": 0,
+    "out_of_scope_file_count": 0,
+    "scaffold_noise_count": 0,
+    "placeholder_count": 0,
+    "out_of_scope_files": [],
+    "unmapped_files": [],
+    "placeholder_hits": [],
+    "duplicate_docs": [],
+    "scaffold_expansion_flags": []
+  },
+  "run_metrics": {
+    "meaningful_change_gap_ms": 77415,
+    "noop_cycle_count": 0,
+    "repeat_command_ratio": 0.8930041152263375,
+    "repeat_reasoning_similarity": 0.8930041152263375,
+    "required_check_pass_rate": 0.75,
+    "critical_check_pass_rate": 0.75,
+    "check_relevance_score": 1,
+    "verification_edit_ratio": 2,
+    "feature_coverage_p0": 0,
+    "scope_drift_score": 0,
+    "plan_to_change_traceability": 1,
+    "delivery_focus_score": 0.9917695473251029
+  },
+  "failure_matrix": {
+    "verdict": "accepted",
+    "primary_failure": null,
+    "failures": []
+  },
+  "manual_review_summary": "No quality-gate failures detected.",
+  "overlay": {
+    "directory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-project-ymqr5K",
+    "savedDirectory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-project-ymqr5K",
+    "workspaceDirectory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-project-ymqr5K",
+    "selectedTaskID": "tsk_d49499de400189RMj36075iarj",
+    "pendingCount": 0,
+    "taskIDs": [
+      "tsk_d49499de400189RMj36075iarj"
+    ],
+    "taskList": "进行中Overlay Web Benchmark NoteStore交付验证中21:49:18 / .../Local/Temp/mirrorcode-overlay-benchmark-project-ymqr5K",
+    "reasoning": "The Write tool claims success but the files don't actually exist on disk. This is unusual. Let me try using Bash to create the files directly.",
+    "assistantText": "I'll implement the NoteStore module and its tests. Let me start by checking the current project structure, then create both files.I'll implement the NoteStore module and its tests. Let me start by checking the current project structure, then create both files.",
+    "liveRole": "delivery",
+    "liveText": "⚡memory_write已完成Saved: NoteStore verification passed (id: mem_d494e75b2001jLIM5pxqZ2n5vC)",
+    "visibleTurns": [
+      {
+        "role": "delivery",
+        "text": "📄read_filesrc/note-store.test.ts已完成    1 | import { describe, test, expect } from \"bun:test\";\n    2 | import { NoteStore } from \"./note-store\";\n    3 | \n    4 | describe(\"NoteStore\", () => {\n    5 |   test(\"create returns a complete Note\", () => {\n    6 |     const store = new NoteStore();\n    7 |     const note = store.create(\"Buy milk\");\n    8 |     expect(note.id).toBeString();\n    9 |     expect(note.title).toBe(\"Buy milk\");\n   10 |     expect(note.done).toBe(false);\n   11 |     expect(typeof note.created_at).toBe(\"number\");\n   12 |   });\n   13 | \n   14 |   test(\"empty title throws\", () => {\n   15 |     const store = new NoteStore();\n   16 |     expect(() => store.create(\"\")).toThrow();\n   17 |     expect(() => store.create(\"   \")).toThrow();\n   18 |   });\n   19 | \n   20 |   test(\"list preserves creation order\", () => {\n   21 |     const store = new NoteStore();\n   22 |     const original = Date.now;\n   23 |     let time = 1000;\n   24 |     Date.now = () => time++;\n   25 |     try {\n   26 |       const a = store.create(\"First\");\n   27 |       const b = store.create(\"Second\");\n   28 |       const c = store.create(\"Third\");\n   29 |       const list = store.list();\n   30 |       expect(list.length).toBe(3);\n   31 |       expect(list[0].id).toBe(a.id);\n   32 |       expect(list[1].id).toBe(b.id);\n   33 |       expect(list[2].id).toBe(c.id);\n   34 |     } finally {\n   35 |       Date.now = original;\n   36 |     }\n   37 |   });\n   38 | \n   39 |   test(\"toggle flips done\", () => {\n   40 |     const store = new NoteStore();\n   41 |     const note = store.create(\"Task\");\n   42 |     expect(note.done).toBe(false);\n   43 |     const toggled = store.toggle(note.id);\n   44 |     expect(toggled?.done).toBe(true);\n   45 |     const toggledAgain = store.toggle(note.id);\n   46 |     expect(toggledAgain?.done).toBe(false);\n   47 |     expect(store.toggle(\"nonexistent\")).toBeUndefined();\n   48 |   });\n   49 | \n   50 |   test(\"remove deletes and get returns undefined\", () => {\n   51 |     const store = new NoteStore();\n   52 |     const note = store.create(\"To remove\");\n   53 |     expect(store.remove(note.id)).toBe(true);\n   54 |     expect(store.get(note.id)).toBeUndefined();\n   55 |     expect(store.remove(note.id)).toBe(false);\n   56 |   });\n   57 | });\n   58 |"
+      },
+      {
+        "role": "delivery",
+        "text": "🔍search_codesrc已完成C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-project-ymqr5K\\src\\note-store.ts:8:export class NoteStore {"
+      },
+      {
+        "role": "delivery",
+        "text": "⚡run_command已完成exit_code: 0\nstdout:\nbun test v1.3.10 (30e609e0)\n\nstderr:\n\n 5 pass\n 0 fail\n 17 expect() calls\nRan 5 tests across 1 file. [80.00ms]"
+      },
+      {
+        "role": "delivery",
+        "text": "⚡memory_search已完成No relevant memories found."
+      },
+      {
+        "role": "delivery",
+        "text": "⚡memory_write已完成Saved: NoteStore verification passed (id: mem_d494e75b2001jLIM5pxqZ2n5vC)"
+      }
+    ],
+    "storage": {
+      "directory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-project-ymqr5K",
+      "directoryMode": "custom",
+      "workspaceDirectory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-project-ymqr5K",
+      "workspaceTaskID": "tsk_d49499de400189RMj36075iarj"
+    }
+  },
+  "diagnostics": {
+    "event_file": "C:\\Users\\chuan\\myhexin-local\\argus-opencode\\packages\\opencorvus\\benchmark-arrafix-20260401214406.events.json",
+    "event_count": 490,
+    "stage_summary": {
+      "types": {
+        "orchestrator.task.created": 1,
+        "orchestrator.task.updated": 8,
+        "orchestrator.agent.updated": 122,
+        "orchestrator.spec.created": 1,
+        "orchestrator.plan.created": 1,
+        "orchestrator.plan.activated": 1,
+        "orchestrator.run.created": 1,
+        "orchestrator.run.updated": 3
+      },
+      "stages": {
+        "spec": {
+          "event_count": 28,
+          "first_event_ms": 3409,
+          "first_message_ms": null,
+          "first_tool_call_ms": null,
+          "first_tool_result_ms": null,
+          "submit_tool_ms": null,
+          "error_ms": null,
+          "last_event_ms": 25317,
+          "kind_counts": {
+            "status": 28
+          },
+          "tool_calls": {}
+        },
+        "planner": {
+          "event_count": 34,
+          "first_event_ms": 47290,
+          "first_message_ms": null,
+          "first_tool_call_ms": null,
+          "first_tool_result_ms": null,
+          "submit_tool_ms": null,
+          "error_ms": null,
+          "last_event_ms": 82826,
+          "kind_counts": {
+            "status": 34
+          },
+          "tool_calls": {}
+        },
+        "evaluator": {
+          "event_count": 2,
+          "first_event_ms": 298299,
+          "first_message_ms": null,
+          "first_tool_call_ms": null,
+          "first_tool_result_ms": null,
+          "submit_tool_ms": null,
+          "error_ms": null,
+          "last_event_ms": 303253,
+          "kind_counts": {
+            "status": 2
+          },
+          "tool_calls": {}
+        }
+      }
+    }
+  }
+}

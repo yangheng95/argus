@@ -9,7 +9,6 @@ import { t } from "./i18n";
 export type AgentRole =
   | "user"
   | "assistant"
-  | "orchestrator"
   | "spec"
   | "planner"
   | "goal"
@@ -19,7 +18,7 @@ export type AgentRole =
   | "system";
 
 /** Stages that get their own collapsible AgentCard in the conversation view. */
-export const AGENT_CARD_STAGES = new Set<AgentRole>(["orchestrator", "spec", "planner", "goal", "executor", "evaluator", "delivery"]);
+export const AGENT_CARD_STAGES = new Set<AgentRole>(["spec", "planner", "goal", "executor", "evaluator", "delivery"]);
 
 /**
  * Map any backend agent name to a canonical AgentRole.
@@ -29,12 +28,13 @@ export function normalizeAgentRole(name: string): AgentRole {
   const text = String(name || "").trim().toLowerCase();
   if (!text) return "assistant";
   if (text === "user") return "user";
-  if (text === "orchestrator" || text === "task_agent") return "orchestrator";
+  if (text === "orchestrator" || text === "task_agent") return "assistant";
   if (text === "spec") return "spec";
   if (text === "planner" || text === "plan" || text === "planning" || text === "replan") return "planner";
   if (text === "goal" || text === "goal_gate") return "goal";
   if (text === "executor" || text === "build" || text === "coding" ||
-      text === "general" || text === "explore" || text === "execute") return "executor";
+      text === "general" || text === "explore" || text === "execute" ||
+      text === "opencode" || text === "codex" || text === "claude-code") return "executor";
   if (text === "judge" || text === "evaluator" || text === "evaluation" ||
       text === "scheduler" || text === "review" || text === "evaluate") return "evaluator";
   if (text === "delivery" || text === "deliver" || text === "files" || text === "publish") return "delivery";
@@ -122,14 +122,17 @@ export function classifyMessage(msg: any, rootSessionID: string): string {
     if (backendChannel === "filtered") return "filtered";
   }
 
-  // Fallback: classify by agent name
-  const agent = String(msg?.info?.agent || "").trim().toLowerCase();
-  const role = normalizeAgentRole(agent);
-  if (AGENT_CARD_STAGES.has(role)) return role;
+  // Use resolvedRole directly — backend is authoritative
+  const resolved = String(msg?.info?.resolvedRole || "").trim().toLowerCase();
+  if (AGENT_CARD_STAGES.has(resolved as AgentRole)) return resolved;
 
-  // Child session messages from unknown agents → treat as executor
-  const sessionID = typeof msg?.info?.sessionID === "string" ? msg.info.sessionID : "";
-  if (rootSessionID && sessionID && sessionID !== rootSessionID) return "executor";
+  // The store may receive direct message objects before overlay stamping
+  // (tests, synthetic entries, or partial reloads). The agent field is still
+  // first-party message metadata, so classify it canonically here.
+  const agent = String(msg?.info?.agent || "").trim().toLowerCase();
+  const normalized = normalizeAgentRole(agent);
+  if (AGENT_CARD_STAGES.has(normalized)) return normalized;
+
   return "main";
 }
 
@@ -151,10 +154,17 @@ export function agentStageLabel(stage: string): string {
 
 /**
  * Determine the display role for a message.
- * Backend stamps info.resolvedRole on all real messages.
- * Synthetic messages set it at creation time.
- * This function just reads the field.
+ * Priority: resolvedRole > agent (normalized) > role > "assistant".
+ * This ensures executor messages always display as "executor" even if
+ * the backend only stamped agent="executor" without resolvedRole.
  */
 export function effectiveRole(msg: any, _rootSessionID?: string): string {
-  return msg.info?.resolvedRole || msg.info?.role || "assistant";
+  const resolved = msg.info?.resolvedRole;
+  if (resolved) return resolved;
+  const agent = String(msg.info?.agent || "").trim().toLowerCase();
+  if (agent) {
+    const normalized = normalizeAgentRole(agent);
+    if (AGENT_CARD_STAGES.has(normalized)) return normalized;
+  }
+  return msg.info?.role || "assistant";
 }

@@ -1199,7 +1199,7 @@ export namespace Config {
             .describe("Token buffer for compaction. Leaves enough window to avoid overflow during compaction."),
         })
         .optional(),
-      orchestrator: z
+      assistant: z
         .object({
           spec: z
             .object({
@@ -1238,10 +1238,10 @@ export namespace Config {
           max_runs: z.number().int().min(1).optional().describe("Maximum total task runs (default: 10)"),
           max_replans: z.number().int().min(0).optional().describe("Maximum replan cycles (default: 3)"),
           same_plan_retry_limit: z.number().int().min(0).optional().describe("Max retries with the same plan (default: 2)"),
-          stage_max_retries: z.number().int().min(0).optional().describe("Max retries per orchestrator stage (default: 2)"),
+          stage_max_retries: z.number().int().min(0).optional().describe("Max retries per assistant stage (default: 2)"),
         })
         .optional()
-        .describe("Orchestrator pipeline configuration — controls spec, planner, evaluator, and delivery agent behavior"),
+        .describe("Assistant pipeline configuration — controls spec, planner, evaluator, and delivery agent behavior"),
       experimental: z
         .object({
           disable_paste_summary: z.boolean().optional(),
@@ -1420,7 +1420,7 @@ export namespace Config {
     await writeConfigFile(projectConfigFile(), config)
     // Reset cached config state without destroying the instance.
     // Instance.dispose() would kill running sessions (executor, evaluator)
-    // and cause race conditions with concurrent orchestrator operations.
+    // and cause race conditions with concurrent assistant operations.
     state.reset()
     global.reset()
   }

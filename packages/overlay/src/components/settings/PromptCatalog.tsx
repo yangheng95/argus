@@ -49,7 +49,7 @@ function promptEntryID(entry: PromptEntry): string {
 function promptGroupLabel(group: string): string {
   if (group === "core") return t("prompt.group.core");
   if (group === "generator") return t("prompt.group.generator");
-  if (group === "orchestrator") return t("prompt.group.orchestrator");
+  if (group === "assistant") return t("prompt.group.assistant");
   if (group === "subagent") return t("prompt.group.subagent");
   if (group === "hidden_agent") return t("prompt.group.hidden_agent");
   if (group === "custom_agent") return t("prompt.group.custom_agent");

@@ -31,7 +31,7 @@ export interface ExecutorDescriptor {
 export function executorLabel(value: string): string {
   if (value === "codex") return "Codex";
   if (value === "claude-code") return "Claude Code";
-  return "OpenCorvus";
+  return "MirrorCode";
 }
 
 /** Returns the full descriptor for an executor from the store, or undefined. */

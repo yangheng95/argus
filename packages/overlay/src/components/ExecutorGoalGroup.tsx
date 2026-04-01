@@ -22,12 +22,16 @@ export function ExecutorGoalGroup(props: ExecutorGoalGroupProps) {
 
   const badgeClass = () => {
     if (props.status === "running") return "executor-goal-badge executor-goal-badge--running";
+    if (props.goalStatus === "passed") return "executor-goal-badge executor-goal-badge--done";
+    if (props.goalStatus === "failed") return "executor-goal-badge executor-goal-badge--error";
     if (props.status === "error") return "executor-goal-badge executor-goal-badge--error";
     return "executor-goal-badge executor-goal-badge--done";
   };
 
   const badgeContent = () => {
     if (props.status === "running") return "";
+    if (props.goalStatus === "passed") return "\u2713";
+    if (props.goalStatus === "failed") return "\u2717";
     if (props.status === "error") return "\u2717";
     return "\u2713";
   };

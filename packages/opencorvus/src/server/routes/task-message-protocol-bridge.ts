@@ -3,7 +3,7 @@ import { OrchestratorProtocol } from "@/orchestrator/protocol"
 import { ProtocolStore } from "@/protocol/store"
 import { Message } from "@/session/message"
 import { Log } from "@/util/log"
-import { taskIDForSession, taskSession } from "./task-event"
+import { taskIDForSession, taskSession, sessionRole } from "./task-event"
 
 const log = Log.create({ service: "task-message-protocol-bridge" })
 let initialized = false
@@ -14,7 +14,7 @@ let initialized = false
 
 /** Canonical display roles for the overlay UI. */
 type OverlayRole =
-  | "user" | "assistant" | "orchestrator" | "spec" | "planner" | "goal"
+  | "user" | "assistant" | "spec" | "planner" | "goal"
   | "executor" | "evaluator" | "delivery" | "system"
 
 /** Map raw agent name → canonical overlay role. Single source of truth. */
@@ -22,11 +22,11 @@ export function resolveRole(agent: string): OverlayRole {
   const a = (agent || "").trim().toLowerCase()
   if (!a) return "assistant"
   if (a === "user") return "user"
-  if (a === "orchestrator" || a === "task_agent") return "orchestrator"
+  if (a === "orchestrator" || a === "task_agent") return "assistant"
   if (a === "spec") return "spec"
   if (a === "planner" || a === "plan" || a === "planning" || a === "replan") return "planner"
   if (a === "goal" || a === "goal_gate") return "goal"
-  if (a === "executor" || a === "build" || a === "coding" || a === "general" || a === "explore" || a === "execute") return "executor"
+  if (a === "executor" || a === "build" || a === "coding" || a === "general" || a === "explore" || a === "execute" || a === "opencode" || a === "codex" || a === "claude-code") return "executor"
   if (a === "judge" || a === "evaluator" || a === "evaluation" || a === "scheduler" || a === "review" || a === "evaluate") return "evaluator"
   if (a === "delivery" || a === "deliver" || a === "files" || a === "publish") return "delivery"
   if (a === "system" || a === "compaction" || a === "title" || a === "summary") return "system"
@@ -34,7 +34,7 @@ export function resolveRole(agent: string): OverlayRole {
 }
 
 /** Stages that get their own AgentCard in the overlay. */
-const CARD_STAGES = new Set<OverlayRole>(["orchestrator", "spec", "planner", "goal", "executor", "evaluator", "delivery"])
+const CARD_STAGES = new Set<OverlayRole>(["spec", "planner", "goal", "executor", "evaluator", "delivery"])
 
 /**
  * Compute overlay metadata for a message event.
@@ -63,13 +63,10 @@ export function overlayMeta(
     return { resolvedRole: resolved, channel }
   }
 
-  // Child session — determine if it's a pipeline stage or executor
+  // Child session — agent field is authoritative, same logic as root
   const resolved = resolveRole(agent)
-  if (CARD_STAGES.has(resolved)) {
-    return { resolvedRole: resolved, channel: resolved }
-  }
-  // Unknown child session agent → executor
-  return { resolvedRole: "executor" as OverlayRole, channel: "executor" }
+  const channel = CARD_STAGES.has(resolved) ? resolved : "main"
+  return { resolvedRole: resolved, channel }
 }
 
 function sessionFromProperties(properties: Record<string, unknown>) {
@@ -128,6 +125,11 @@ function infoForEvent(properties: Record<string, unknown>): { role: string; agen
  */
 function enrichProperties(properties: Record<string, unknown>, sessionID: string, taskID: string): Record<string, unknown> {
   const info = infoForEvent(properties)
+  // External executor processes don't stamp agent — fill from session registry
+  if (!info.agent) {
+    const role = sessionRole(sessionID)
+    if (role) info.agent = role
+  }
   const meta = overlayMeta(sessionID, taskID, info)
   const enriched = { ...properties }
 

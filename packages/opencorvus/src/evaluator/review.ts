@@ -206,7 +206,9 @@ async function reviewResult(input: {
     messages: [
       {
         role: "system",
-        content: input.prompt,
+        content: input.prompt +
+          "\n\nRespond with verdict 'accepted' if the change is satisfactory, 'rejected' if there are real problems, or 'inconclusive' if evidence is insufficient. " +
+          "Include a rationale string, a strengths array, and a concerns array.",
       },
       {
         role: "user",
@@ -371,7 +373,9 @@ export async function judgeResult(
       {
         role: "system",
         content:
-          "Judge whether the implementation appears complete based on the request and concrete delivery summary. Be pragmatic. If evidence is weak, return inconclusive.",
+          "Judge whether the implementation satisfies the task request based on the delivery summary. " +
+          "Respond with verdict 'accepted' if the delivery meets the requirements, 'rejected' if it does not, or 'inconclusive' if evidence is too weak to decide. " +
+          "Include a rationale explaining your reasoning. Be pragmatic.",
       },
       {
         role: "user",

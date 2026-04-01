@@ -124,7 +124,7 @@ import {
 } from "./store"
 import { Identifier } from "@/id/id"
 
-const log = Log.create({ service: "orchestrator" })
+const log = Log.create({ service: "assistant" })
 
 async function continueTaskMessage(taskID: string, text: string) {
   const task = requireTask(taskID)

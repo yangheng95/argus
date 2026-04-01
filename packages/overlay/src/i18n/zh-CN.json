@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "zh-CN",
-    "panel_revision": "cc1b51e086aee5ea"
+    "panel_revision": "7ab58db91790e0c3"
   },
   "brand.guide_kicker": "快速上手",
   "brand.guide_positioning_body": "这不是装饰——左栏选任务，中栏推执行，右栏盯 Spec、Plan、评估和文件变更，防止 agent 跑偏。",
@@ -156,7 +156,7 @@
   "prompt.none": "暂无可配置的 Prompt",
   "prompt.group.core": "核心",
   "prompt.group.generator": "生成器",
-  "prompt.group.orchestrator": "编排器",
+  "prompt.group.assistant": "助手",
   "prompt.group.primary_agent": "主 Agent",
   "prompt.group.subagent": "子 Agent",
   "prompt.group.hidden_agent": "内部 Agent",

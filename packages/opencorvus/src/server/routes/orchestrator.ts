@@ -34,7 +34,7 @@ import { Session } from "@/session"
 import { Message } from "@/session/message"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
-import { registerGoalRunSession, taskSession } from "./task-event"
+import { registerGoalRunSession, sessionRole, taskSession } from "./task-event"
 import { ensureTaskMessageProtocolBridge, overlayMeta } from "./task-message-protocol-bridge"
 
 export const OrchestratorRoutes = lazy(() =>
@@ -387,13 +387,26 @@ export const OrchestratorRoutes = lazy(() =>
         }
         const all = await Promise.all(sessionIDs.map((id) => Session.messages({ sessionID: id })))
         const messages = all.flat().sort((a, b) => (a.info.time?.created ?? 0) - (b.info.time?.created ?? 0))
+        // Seed the goal-run registry with child sessions so sessionRole()
+        // can resolve the agent identity. Same logic as the SSE endpoint
+        // (lines 217-225) — child sessions are executor sessions by default.
+        const taskID = task.id
+        for (const id of sessionIDs) {
+          if (id !== rootSessionID) registerGoalRunSession(id, taskID)
+        }
         // Enrich each message with resolvedRole/channel — same logic as the
         // SSE bridge so the overlay receives identical metadata regardless of
         // whether messages arrive via SSE or transcript reload.
-        const taskID = task.id
         for (const msg of messages) {
           const sid = msg.info.sessionID || ""
-          const meta = overlayMeta(sid, taskID, { role: msg.info.role, agent: (msg.info as any).agent || "" })
+          // Fill missing agent from session registry — matches bridge enrichment
+          // in task-message-protocol-bridge.ts enrichProperties().
+          let agent = (msg.info as any).agent || ""
+          if (!agent) {
+            const role = sessionRole(sid)
+            if (role) agent = role
+          }
+          const meta = overlayMeta(sid, taskID, { role: msg.info.role, agent })
           ;(msg.info as any).resolvedRole = meta.resolvedRole
           ;(msg.info as any).channel = meta.channel
         }

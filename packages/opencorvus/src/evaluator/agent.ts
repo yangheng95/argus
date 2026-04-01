@@ -54,14 +54,14 @@ export const ReplanGuidance = z.object({
 export const GoalAssessment = z.object({
   goal_index: z.number(),
   status: z.enum(["passed", "failed", "inconclusive"]),
-  evidence: z.string().describe("Specific evidence supporting this assessment"),
-  reasoning: z.string().describe("Why this goal was assessed this way"),
+  evidence: z.array(z.string()).describe("List of specific evidence items supporting this assessment"),
+  reasoning: z.string().optional().describe("Why this goal was assessed this way"),
 })
 
 export const EvaluatorAnalysis = z.object({
   verdict: z.enum(["accepted", "rejected", "inconclusive"]),
   classification: FailureClassification,
-  summary: z.string(),
+  summary: z.string().optional().default(""),
   goal_statuses: z.array(GoalAssessment),
   replan_guidance: ReplanGuidance.nullish(),
 })
@@ -180,7 +180,12 @@ export namespace EvaluatorAgent {
       }
       if (!verdict) {
         const errorMsg = err instanceof Error ? err.message : String(err)
-        log.warn("evaluator judgment failed", { error: errorMsg })
+        const e = err as any
+        log.warn("evaluator judgment failed", {
+          error: errorMsg,
+          responseText: String(e?.text ?? "").slice(0, 500),
+          cause: String(e?.cause ?? "").slice(0, 300),
+        })
         throw new Error(`Evaluator judgment failed: ${errorMsg}`)
       }
     }
@@ -438,19 +443,21 @@ const JUDGMENT_SYSTEM = `You are producing a structured verdict based on investi
 
 ## Verdict Rules
 
-- **Accept**: core functionality works, all verifiable criteria pass with evidence.
-- **Reject**: concrete code-level failures the executor CAN fix. Must include replan_guidance.
-- **Inconclusive**: ONLY for genuinely unmeasurable criteria (runtime metrics, device-specific, UX requiring human eval). Never use for repeated failures.
+- **"accepted"**: core functionality works, all verifiable criteria pass with evidence.
+- **"rejected"**: concrete code-level failures the executor CAN fix. Must include replan_guidance.
+- **"inconclusive"**: ONLY for genuinely unmeasurable criteria (runtime metrics, device-specific, UX requiring human eval). Never use for repeated failures.
 
-## Classification
+The verdict field MUST be exactly one of: "accepted", "rejected", "inconclusive" (lowercase).
 
-- **transient**: Flaky test, race condition — retry will likely work. Rare.
-- **environment**: Missing dependency, wrong runtime.
-- **input**: Ambiguous or impossible request.
-- **permission**: Missing filesystem/network access.
-- **evaluation**: Code partially correct, targeted fixes needed. Most common.
-- **strategy**: Fundamental approach wrong, needs different plan.
-- **unknown**: Cannot determine. Very rare.
+## Classification (must be exactly one of these lowercase strings)
+
+- **"transient"**: Flaky test, race condition — retry will likely work. Rare.
+- **"environment"**: Missing dependency, wrong runtime.
+- **"input"**: Ambiguous or impossible request.
+- **"permission"**: Missing filesystem/network access.
+- **"evaluation"**: Code partially correct, targeted fixes needed. Most common.
+- **"strategy"**: Fundamental approach wrong, needs different plan.
+- **"unknown"**: Cannot determine. Very rare.
 
 ## Replan Guidance (required for "evaluation" and "strategy")
 
@@ -460,8 +467,14 @@ Be specific:
 - **suggested_strategy**: Concrete fix, not "fix the bug".
 - **avoid_approaches**: What was tried and failed.
 
+## Required Output Fields
+- **verdict**: exactly "accepted", "rejected", or "inconclusive" (lowercase)
+- **classification**: exactly one of "transient", "environment", "input", "permission", "evaluation", "strategy", "unknown" (lowercase)
+- **summary**: a brief one-line summary of the evaluation result
+- **goal_statuses**: array covering ALL goals in order. Each has goal_index (number), status ("passed"/"failed"/"inconclusive"), evidence (array of strings citing file paths)
+- **replan_guidance**: required when verdict is "rejected", null/omitted when "accepted"
+
 ## Rules
-- goal_statuses MUST include ALL goals, in order.
 - Evidence must cite file paths from investigation findings.
 - Write in the same language as the task request.`
 

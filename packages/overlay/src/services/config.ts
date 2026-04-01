@@ -208,7 +208,7 @@ export async function scaffoldProjectConfig(dir: string): Promise<void> {
       biome: { disabled: true },
       eslint: { disabled: true },
     },
-    orchestrator: {
+    assistant: {
       spec: { max_steps: 30, timeout_ms: 300000, min_tool_calls: 3, quality_threshold: 0.6, max_attempts: 3 },
       planner: { max_steps: 30, timeout_ms: 300000, min_tool_calls: 3, quality_threshold: 0.5, max_attempts: 3 },
       evaluator: { max_steps: 25, timeout_ms: 240000, min_tool_calls: 3 },

@@ -71,6 +71,7 @@ function convertExecutorEventToMessages(event: any, properties: any): any[] {
         id: msgID,
         sessionID,
         role: "assistant",
+        resolvedRole: "executor",
         agent: "executor",
         time: { created: timestamp },
       },
@@ -378,7 +379,7 @@ let tasksKickTimer: ReturnType<typeof setTimeout> | null = null;
 
 function normalizedEventType(event: any): string {
   const raw = String(event?.type || "").trim();
-  return raw.startsWith("orchestrator.") ? raw.slice("orchestrator.".length) : raw;
+  return raw;
 }
 
 function eventTaskID(event: any): string {
