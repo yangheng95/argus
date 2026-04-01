@@ -12,6 +12,8 @@ const state = {
   items: base(),
 }
 
+const providerRegistry = new Map<string, { provider: CodingProvider; options: Record<string, any> }>()
+
 export namespace ExecutorRegistry {
   function get(name: ExecutorNameInfo): ExecutorAdapter | undefined {
     if (name === "opencode") return state.items.get(name) ?? OpencodeExecutor
@@ -43,7 +45,20 @@ export namespace ExecutorRegistry {
       tools?: CodingToolInfo[] | (() => CodingToolInfo[] | undefined)
     },
   ) {
+    // Store provider + options so createInstance() can spawn fresh adapters
+    providerRegistry.set(name, { provider, options })
     return register(name, ManagedCodingExecutor.create(provider, options))
+  }
+
+  /**
+   * Create a fresh, independent executor adapter instance.
+   * Used by per-goal dispatch so each goal gets its own state.
+   * Falls back to the shared singleton if no provider is registered.
+   */
+  export function createInstance(name: ExecutorNameInfo): ExecutorAdapter {
+    const entry = providerRegistry.get(name as any)
+    if (entry) return ManagedCodingExecutor.create(entry.provider, entry.options)
+    return require(name)
   }
 
   export function reset() {

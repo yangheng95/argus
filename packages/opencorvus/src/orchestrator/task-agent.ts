@@ -21,6 +21,7 @@ import { Instance } from "@/project/instance"
 import { Identifier } from "@/id/id"
 import { Log } from "@/util/log"
 import { toolGuard } from "@/util/tool-guard"
+import { AgentTrace } from "@/util/agent-trace"
 import { registerGoalRunSession } from "@/server/routes/task-event"
 import { agentStream } from "./agent-stream"
 import { sessionStreamHooks } from "./session-stream"
@@ -180,6 +181,12 @@ export namespace TaskAgent {
         finishReason: resultFinishReason,
         textLength: resultText?.length ?? 0,
       })
+
+      AgentTrace.capture("task-agent", 1,
+        { system, messages: [{ role: "user", content: userMessage }] },
+        resultText ?? "",
+        { trigger: trigger.kind, taskID, toolCalls: toolCallCount, finishReason: resultFinishReason },
+      )
     } catch (error) {
       // Finalize any tool parts stuck in running/pending before returning
       await contentHooks?.flush().catch(() => undefined)

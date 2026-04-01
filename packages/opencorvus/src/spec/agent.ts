@@ -18,6 +18,7 @@ import { Instance } from "@/project/instance"
 import { Log } from "@/util/log"
 import { toolGuard } from "@/util/tool-guard"
 import { parseSpecText } from "./parse-spec-text"
+import { AgentTrace } from "@/util/agent-trace"
 import { OrchestratorConfig } from "@/orchestrator/config"
 import { loadStageSkills } from "@/orchestrator/skill-inject"
 import path from "path"
@@ -311,6 +312,12 @@ async function run(input: {
       attempt: attempt + 1,
     })
 
+    AgentTrace.capture("spec", attempt + 1,
+      { system: systemPrompt, messages: messages.map((m: any) => ({ role: m.role, content: typeof m.content === "string" ? m.content : JSON.stringify(m.content) })) },
+      allText,
+      { mode: input.mode, model: language.modelId, toolCalls: cumulativeToolCalls, finishReason: resultFinishReason },
+    )
+
     let parsed: SpecOutputType = parseSpecText(allText)
 
     if (parsed.content.length < 100 || parsed.spec_items.length < 1) {
@@ -397,6 +404,20 @@ function buildUserPrompt(
 ): string {
   const sections = [`# Task\n\nTitle: ${input.title}\n\nRequest:\n${input.request}`]
 
+  // Delta-mode directive for comprehensive PRDs
+  const prdLevel = assessPRDCompleteness(input.request)
+  if (prdLevel === "comprehensive") {
+    sections.push(
+      `# IMPORTANT: Comprehensive PRD Detected\n\n` +
+      `This PRD is comprehensive — it already contains data models, API designs, tech stack, and acceptance criteria.\n` +
+      `Produce a DELTA spec:\n` +
+      `- DO NOT restate requirements, data models, APIs, or tech stack already in the PRD\n` +
+      `- DO focus on: ambiguities discovered, technical decisions resolved, constraints from codebase exploration, risks identified, and anything the PRD missed\n` +
+      `- Reference PRD sections by name rather than repeating their content\n` +
+      `- Target 200-400 lines of spec content, not 800+`,
+    )
+  }
+
   if (input.goals && input.goals.length > 0) {
     sections.push(
       `# User-Provided Goals\n\nIncorporate these goals into the specification. Ensure each goal has corresponding spec items.\n\n${input.goals
@@ -470,10 +491,34 @@ function buildUserPrompt(
 }
 
 // ---------------------------------------------------------------------------
+// PRD completeness assessment
+// ---------------------------------------------------------------------------
+
+/**
+ * Assess whether the input PRD is already comprehensive enough that the spec
+ * should be a delta document (ambiguities, constraints, risks) rather than
+ * a full restating of the PRD.
+ */
+function assessPRDCompleteness(request: string): "comprehensive" | "partial" | "vague" {
+  let indicators = 0
+  // Structural indicators of a comprehensive PRD
+  if (/##\s*(数据模型|data\s*model|schema|表结构)/i.test(request)) indicators++
+  if (/##\s*(API|接口|endpoint|路由)/i.test(request)) indicators++
+  if (/##\s*(技术选型|tech|stack|框架|依赖)/i.test(request)) indicators++
+  if (/##\s*(验收|acceptance|criteria|标准)/i.test(request)) indicators++
+  if (/\b(POST|GET|DELETE|PUT|PATCH)\s+\/\w/i.test(request)) indicators++
+  // Word count check
+  const wordCount = request.split(/\s+/).length
+  if (wordCount > 500 && indicators >= 3) return "comprehensive"
+  if (wordCount > 200 && indicators >= 2) return "partial"
+  return "vague"
+}
+
+// ---------------------------------------------------------------------------
 // Quality validation
 // ---------------------------------------------------------------------------
 
-function validateSpecQuality(
+export function validateSpecQuality(
   spec: SpecOutputType,
   request: string,
   toolCallCount: number,
@@ -539,6 +584,21 @@ function validateSpecQuality(
     score += 0.07
   } else {
     reasons.push("Spec content lacks specific file paths or detailed technical design keywords")
+  }
+
+  // 6. Redundancy check — spec shouldn't restate a comprehensive PRD
+  const prdLevel = assessPRDCompleteness(request)
+  if (prdLevel === "comprehensive") {
+    const requestSentences = new Set(
+      request.split(/[.。!\n]+/).map(s => s.trim().toLowerCase()).filter(s => s.length > 20),
+    )
+    const specSentences = spec.content.split(/[.。!\n]+/).map(s => s.trim().toLowerCase()).filter(s => s.length > 20)
+    const overlap = specSentences.filter(s => requestSentences.has(s)).length
+    const overlapRatio = specSentences.length > 0 ? overlap / specSentences.length : 0
+    if (overlapRatio > 0.4) {
+      score -= 0.15
+      reasons.push(`Spec restates ${(overlapRatio * 100).toFixed(0)}% of PRD content — produce a delta analysis instead`)
+    }
   }
 
   return { score: Math.min(score, 1), reasons }
