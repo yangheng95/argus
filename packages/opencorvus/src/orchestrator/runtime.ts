@@ -86,6 +86,10 @@ const goalRunExecutors = new Map<string, import("@/executor/compat").ExecutorAda
 // Per-run merge serialization: ensures parallel goal deliveries are merged one at a time.
 // Without this, concurrent applyGoalDelivery() calls can overwrite each other's changes.
 const mergeLocksPerRun = new Map<string, Promise<void>>()
+
+// Guard: runs whose goal pipeline completion is already in progress.
+// Prevents concurrent syncGoalRuns polls from re-entering continueGoalPipeline.
+const pipelineCompletingRuns = new Set<string>()
 async function serializedMerge(runID: string, fn: () => Promise<void>) {
   const prev = mergeLocksPerRun.get(runID) ?? Promise.resolve()
   const next = prev.then(fn, fn)
@@ -313,12 +317,13 @@ async function projectExecutorEventToSession(taskID: string, run: RunRow, event:
         },
       },
     } satisfies Message.Assistant) as Message.Assistant
-    transcript.delete(run.id)
+    transcript.delete(`${run.id}:${sessionID}`)
   }
 }
 
 async function ensureTranscriptState(taskID: string, run: RunRow, sessionID: string) {
-  const current = transcript.get(run.id)
+  const key = `${run.id}:${sessionID}`
+  const current = transcript.get(key)
   if (current) return current
   const parentID = await transcriptParentID(sessionID, taskID, run.id)
   const message = await Session.updateMessage({
@@ -360,7 +365,7 @@ async function ensureTranscriptState(taskID: string, run: RunRow, sessionID: str
     text: undefined as Message.TextPart | undefined,
     reasoning: undefined as Message.ReasoningPart | undefined,
   }
-  transcript.set(run.id, next)
+  transcript.set(key, next)
   return next
 }
 
@@ -564,7 +569,7 @@ export namespace OrchestratorRuntime {
     // Register executor session so bridge can resolve sessionID → taskID for SSE
     if (sessionID) registerGoalRunSession(sessionID, task.id)
     // Start executor event bridge (fire-and-forget background coroutine)
-    consumeExecutorEvents(task.id, run.id, run.executor, sessionID, session.id)
+    consumeExecutorEvents(task.id, run.id, executor, sessionID, session.id, undefined, run.executor)
   }
 
   // ═══════════════════════════════════════════════════════════════════
@@ -723,9 +728,9 @@ export namespace OrchestratorRuntime {
         goalRunID: goalRun.id,
       })
 
-      // 8. Start event bridge
+      // 8. Start event bridge — pass the per-goal executor instance (not the shared singleton)
       registerGoalRunSession(goalSession.id, task.id)
-      consumeExecutorEvents(task.id, run.id, run.executor, goalSession.id, executorSession.id, goalRun.id)
+      consumeExecutorEvents(task.id, run.id, executor, goalSession.id, executorSession.id, goalRun.id, run.executor)
 
       log.info("dispatched goal run", {
         runID: run.id,
@@ -969,6 +974,8 @@ export namespace OrchestratorRuntime {
    * - Blocking goals failed → handle failure
    */
   async function continueGoalPipeline(task: TaskRow, run: RunRow, plan: PlanRow, hooks: RuntimeHooks) {
+    // Prevent concurrent re-entry from overlapping poll cycles
+    if (pipelineCompletingRuns.has(run.id)) return
     const goals = listGoalsByPlan(plan.id)
     const activeRuns = listActiveGoalRunsByCoordinator(run.id)
 
@@ -1002,8 +1009,9 @@ export namespace OrchestratorRuntime {
     }
 
     // All goals done — aggregate per-goal deliveries into a run-level delivery,
-    // then finalize the run. completeRun looks for findDeliveryByRun(run.id)
-    // which only finds deliveries without goalRunID.
+    // then finalize the run. Mark as completing to block concurrent re-entry.
+    pipelineCompletingRuns.add(run.id)
+    try {
     if (!findDeliveryByRun(run.id)) {
       const goalRuns = listGoalRunsByCoordinator(run.id)
       const allDiffs: Array<{ file: string; [key: string]: unknown }> = []
@@ -1038,6 +1046,9 @@ export namespace OrchestratorRuntime {
 
     log.info("all goals completed, finalizing run", { runID: run.id })
     await completeRun(run, hooks)
+    } finally {
+      pipelineCompletingRuns.delete(run.id)
+    }
   }
 
   export async function syncTask(taskID: string, hooks: RuntimeHooks) {
@@ -1237,7 +1248,9 @@ async function completeRun(run: RunRow, hooks: RuntimeHooks) {
   updateExecutorSessionStatus(run.id, "completed")
 
   const task = requireTask(run.task_id)
-  if (task.active_run_id !== run.id) return
+  // Only the active run should complete and notify the task agent.
+  // Stale runs (replaced by fix runs) are already superseded.
+  if (task.active_run_id && task.active_run_id !== run.id) return
 
   // If delivery already exists (e.g. per-goal aggregation or prior restart),
   // just mark run completed and notify Task Agent.
@@ -1383,12 +1396,12 @@ function requirementIDsFromMetadata(metadata: unknown): string[] {
 function consumeExecutorEvents(
   taskID: string,
   runID: string,
-  executorName: Parameters<typeof ExecutorRegistry.require>[0],
+  executor: import("@/executor/compat").ExecutorAdapter,
   sessionID: string,
   executorSessionID: string,
   goalRunID?: string,
+  executorProvider?: RunRow["executor"],
 ) {
-  const executor = ExecutorRegistry.require(executorName)
   if (!executor.capabilities().events) return
   // Create an AbortController so we can stop the event bridge when the run/goal completes/fails.
   // Per-goal bridges use goalRunID as key; serial bridges use runID.
@@ -1400,12 +1413,19 @@ function consumeExecutorEvents(
     try {
       for await (const event of executor.events({ sessionID })) {
         if (ctrl.signal.aborted) break
-        upsertExecutorInteraction(taskID, runID, sessionID, executorSessionID, executorName, event)
+        upsertExecutorInteraction(taskID, runID, sessionID, executorSessionID, executorProvider ?? "opencode", event)
         // Project executor events into the Message session system.
         // This creates real ToolPart/TextPart/ReasoningPart objects that flow
         // through the standard message protocol bridge → ProtocolStore → SSE.
         // No separate RunProgress/RunOutput publishing needed.
-        await projectExecutorEventToSession(taskID, requireRun(runID), event)
+        const currentRun = findRun(runID)
+        if (currentRun) {
+          // Inject the goal session ID into the event so projectExecutorEventToSession
+          // creates messages in the goal session (not the root session).
+          // This ensures the bridge stamps them as resolvedRole=executor.
+          const projected = { ...event, payload: { ...event.payload, sessionID } }
+          await projectExecutorEventToSession(taskID, currentRun, projected)
+        }
       }
     } catch (err) {
       if (!ctrl.signal.aborted) {
