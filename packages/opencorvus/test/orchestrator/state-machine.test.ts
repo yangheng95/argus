@@ -81,7 +81,10 @@ describe("canTransition", () => {
     expect(canTransition("running", "queued")).toBe(false)
     expect(canTransition("evaluating", "queued")).toBe(false)
     expect(canTransition("planned", "spec_generating")).toBe(false)
-    expect(canTransition("delivering", "running")).toBe(false)
+  })
+
+  test("delivering → running is valid (delivery rejection triggers fix run)", () => {
+    expect(canTransition("delivering", "running")).toBe(true)
   })
 
   test("running → blocked and blocked → running are valid", () => {

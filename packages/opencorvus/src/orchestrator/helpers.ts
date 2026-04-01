@@ -11,9 +11,8 @@ export const ORCHESTRATOR_POLL_INTERVAL_MS = 1500
 
 // 同步默认值 — 用于无法 await 的场景（如模块级 export）
 const syncDefaults = OrchestratorConfig.getDefaults()
-export const SAME_PLAN_RETRY_LIMIT = syncDefaults.same_plan_retry_limit
 export const DEFAULT_MAX_RUNS = syncDefaults.max_runs
-export const DEFAULT_MAX_REPLANS = syncDefaults.max_replans
+export const DEFAULT_MAX_FIX_RUNS = syncDefaults.max_fix_runs
 export const MAX_EXECUTOR_GROUPS = syncDefaults.max_executor_groups
 
 export const orchestratorState = Instance.state(() => ({
@@ -31,7 +30,8 @@ export function deriveTitle(request: string) {
   return line.slice(0, 77) + "..."
 }
 
-export interface RetryContext {
+export interface FixContext {
+  source?: "eval_failure" | "delivery_rejection"
   deliverySummary?: string
   changedFiles?: string[]
   checks?: Array<{ name: string; status: string; evidence: string }>
@@ -39,20 +39,32 @@ export interface RetryContext {
   avoidApproaches?: string[]
   suggestedStrategy?: string
   classification?: string
+  deliveryRejectionDetails?: Array<{
+    category: string
+    file?: string
+    error: string
+    suggestion?: string
+  }>
 }
 
-export function buildRetryPrompt(summary: string, context?: RetryContext) {
+/** @deprecated Use FixContext instead */
+export type RetryContext = FixContext
+
+export function buildFixPrompt(summary: string, context?: FixContext) {
   if (!context) {
     return [
       "The previous attempt did not satisfy the acceptance checks.",
       "Failure summary:",
       summary,
-      "Retry the current plan. Fix the issues, verify the result, and continue until the task is complete or blocked.",
+      "Fix the issues using the current plan, verify the result, and continue until the task is complete or blocked.",
     ].join("\n\n")
   }
 
+  const isDeliveryRejection = context.source === "delivery_rejection"
   const sections: string[] = [
-    "The previous attempt did not satisfy the acceptance checks.",
+    isDeliveryRejection
+      ? "The delivery verification agent rejected the previous attempt."
+      : "The previous attempt did not satisfy the acceptance checks.",
   ]
 
   if (context.deliverySummary || (context.changedFiles && context.changedFiles.length > 0)) {
@@ -71,6 +83,13 @@ export function buildRetryPrompt(summary: string, context?: RetryContext) {
     sections.push("## Check Results\n" + lines.join("\n"))
   }
 
+  if (context.deliveryRejectionDetails && context.deliveryRejectionDetails.length > 0) {
+    const lines = context.deliveryRejectionDetails.map(
+      (d) => `- **[${d.category}]**${d.file ? ` ${d.file}` : ""}: ${d.error}${d.suggestion ? ` → ${d.suggestion}` : ""}`,
+    )
+    sections.push("## Delivery Rejection Details\n" + lines.join("\n"))
+  }
+
   if (context.rootCause) {
     sections.push("## Root Cause\n" + context.rootCause)
   }
@@ -83,10 +102,13 @@ export function buildRetryPrompt(summary: string, context?: RetryContext) {
     sections.push("## Suggested Strategy\n" + context.suggestedStrategy)
   }
 
-  sections.push("Retry the current plan. Fix the issues, verify the result, and continue until the task is complete or blocked.")
+  sections.push("Fix the issues using the current plan, verify the result, and continue until the task is complete or blocked.")
 
   return sections.join("\n\n")
 }
+
+/** @deprecated Use buildFixPrompt instead */
+export const buildRetryPrompt = buildFixPrompt
 
 export function buildOperatorPrompt(note: string) {
   return [
@@ -113,7 +135,7 @@ export function budgetRow(input?: z.infer<typeof Budget>): OrchestratorBudget | 
   if (!input) return undefined
   return {
     max_runs: input.maxRuns,
-    max_replans: input.maxReplans,
+    max_fix_runs: input.maxFixRuns,
     max_evaluations: input.maxEvaluations,
     max_wall_time_ms: input.maxWallTimeMs,
     max_executor_groups: input.maxExecutorGroups,

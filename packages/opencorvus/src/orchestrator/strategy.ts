@@ -42,15 +42,13 @@ export async function withStageRetry<T>(
   throw lastError!
 }
 import {
-  DEFAULT_MAX_REPLANS,
   DEFAULT_MAX_RUNS,
-  SAME_PLAN_RETRY_LIMIT,
-  type RetryContext,
+  DEFAULT_MAX_FIX_RUNS,
+  type FixContext,
 } from "./helpers"
 import {
   findDeliveryByRun,
   findEvaluationByRun,
-  findPlans,
   findRuns,
   type RunRow,
   type TaskRow,
@@ -58,90 +56,66 @@ import {
 
 const log = Log.create({ service: "orchestrator-strategy" })
 
-export type RetryDecision = {
-  action: "retry"
+export type FixDecision = {
+  action: "fix"
   summary: string
-  retryContext: RetryContext
-}
-
-export type ReplanDecision = {
-  action: "replan"
-  summary: string
-  analysis?: EvaluatorAnalysisType
+  fixContext: FixContext
 }
 
 export type FailDecision = {
   action: "fail"
   summary: string
-  retryContext: RetryContext
+  fixContext: FixContext
 }
 
-export type StrategyDecision = RetryDecision | ReplanDecision | FailDecision
+export type StrategyDecision = FixDecision | FailDecision
 
-export function decideRetryOrReplan(
+export function decideFixOrFail(
   task: TaskRow,
   run: RunRow,
   summary: string,
   analysis?: EvaluatorAnalysisType,
-  retryContext?: RetryContext,
+  fixContext?: FixContext,
 ): StrategyDecision {
-  const ctx = retryContext ?? {}
+  const ctx = fixContext ?? {}
   const limits = {
     maxRuns: task.budget?.max_runs ?? DEFAULT_MAX_RUNS,
-    maxReplans: task.budget?.max_replans ?? DEFAULT_MAX_REPLANS,
+    maxFixRuns: task.budget?.max_fix_runs ?? DEFAULT_MAX_FIX_RUNS,
   }
   const totalRuns = findRuns(task.id).length
   if (totalRuns >= limits.maxRuns) {
-    return { action: "fail", summary, retryContext: ctx }
+    log.info("total runs budget exhausted", { totalRuns, maxRuns: limits.maxRuns, taskID: task.id })
+    return { action: "fail", summary, fixContext: ctx }
   }
 
   const classification = analysis?.classification ?? "unknown"
 
   if (classification === "input" || classification === "permission") {
     log.info("failure classified as non-retryable", { classification, taskID: task.id })
-    return { action: "fail", summary, retryContext: ctx }
+    return { action: "fail", summary, fixContext: ctx }
   }
 
-  if (classification === "strategy") {
-    log.info("failure classified as strategy -> replanning", { classification, taskID: task.id })
-    const replans = findPlans(task.id).length - 1
-    if (replans >= limits.maxReplans) {
-      return { action: "fail", summary, retryContext: ctx }
-    }
-    return { action: "replan", summary, analysis }
+  // Count fix runs for the current plan
+  const fixRunCount = run.retry_count
+  if (fixRunCount >= limits.maxFixRuns) {
+    log.info("fix runs budget exhausted", { fixRunCount, maxFixRuns: limits.maxFixRuns, taskID: task.id })
+    return { action: "fail", summary, fixContext: ctx }
   }
 
-  if (classification === "evaluation") {
-    // Evaluator infrastructure failure (e.g. phase 2 schema mismatch).
-    // One retry is reasonable in case it's transient. Beyond that, retrying the executor
-    // won't fix the evaluator — fail rather than waste resources on repeated executor runs.
-    if (run.retry_count >= 1) {
-      log.info("evaluation infrastructure failure exceeded retry budget, failing", { classification, retryCount: run.retry_count, taskID: task.id })
-      return { action: "fail", summary, retryContext: ctx }
-    }
-  }
-
-  if (run.retry_count < SAME_PLAN_RETRY_LIMIT) {
-    log.info("retrying current plan", { classification, retryCount: run.retry_count, taskID: task.id })
-    return { action: "retry", summary, retryContext: ctx }
-  }
-
-  const replans = findPlans(task.id).length - 1
-  if (replans >= limits.maxReplans) {
-    return { action: "fail", summary, retryContext: ctx }
-  }
-  log.info("retries exhausted, replanning", { classification, replans, taskID: task.id })
-  return { action: "replan", summary, analysis }
+  log.info("creating fix run", { classification, fixRunCount, taskID: task.id })
+  return { action: "fix", summary, fixContext: ctx }
 }
 
-export function buildRetryContext(
+export function buildFixContext(
   run: RunRow,
   summary: string,
   analysis?: EvaluatorAnalysisType,
-): RetryContext {
+  source?: "eval_failure" | "delivery_rejection",
+): FixContext {
   const delivery = findDeliveryByRun(run.id)
   const evaluation = findEvaluationByRun(run.id)
   return {
+    source,
     deliverySummary: delivery?.summary ?? undefined,
     changedFiles: delivery?.result?.changed_files as string[] | undefined,
     checks: (evaluation?.checks as Array<{ name: string; status: string; evidence: string }>) ?? undefined,
@@ -151,3 +125,8 @@ export function buildRetryContext(
     classification: analysis?.classification ?? undefined,
   }
 }
+
+/** @deprecated Use decideFixOrFail instead */
+export const decideRetryOrReplan = decideFixOrFail
+/** @deprecated Use buildFixContext instead */
+export const buildRetryContext = buildFixContext

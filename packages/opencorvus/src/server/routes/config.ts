@@ -34,16 +34,14 @@ export const ConfigRoutes = lazy(() =>
       }),
       async (c) => {
         const [raw, orch] = await Promise.all([Config.get(), OrchestratorConfig.get()])
-        // Merge effective scalar orchestrator values (max_runs / max_replans / etc.) into the
-        // response so the frontend can display correct placeholder values.
-        // Only scalar fields are merged — nested agent configs (spec/planner/evaluator/delivery)
-        // are intentionally omitted to avoid writing verbose defaults into the user's config file.
+        // Merge effective scalar orchestrator values into the response so the frontend
+        // can display correct placeholder values.
+        // Only scalar fields are merged — nested agent configs are intentionally omitted.
         // User-supplied values always win.
         const userOrch = raw.orchestrator || {}
         const orchestrator = {
           max_runs: userOrch.max_runs ?? orch.max_runs,
-          max_replans: userOrch.max_replans ?? orch.max_replans,
-          same_plan_retry_limit: userOrch.same_plan_retry_limit ?? orch.same_plan_retry_limit,
+          max_fix_runs: (userOrch as any).max_fix_runs ?? orch.max_fix_runs,
           stage_max_retries: userOrch.stage_max_retries ?? orch.stage_max_retries,
           ...userOrch,
         }

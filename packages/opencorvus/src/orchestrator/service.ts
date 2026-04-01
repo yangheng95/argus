@@ -51,13 +51,12 @@ import {
   UpdateTaskChecksInput,
 } from "./model"
 import {
-  DEFAULT_MAX_REPLANS,
   DEFAULT_MAX_RUNS,
+  DEFAULT_MAX_FIX_RUNS,
   ORCHESTRATOR_POLL_INTERVAL_MS,
-  SAME_PLAN_RETRY_LIMIT,
   budgetRow,
   buildOperatorPrompt,
-  buildRetryPrompt,
+  buildFixPrompt,
   deriveTitle,
   orchestratorState,
   progressStatus,
@@ -802,17 +801,9 @@ export namespace OrchestratorService {
     return viewTask(requireTask(taskID))
   }
 
+  /** @deprecated Replan is no longer supported. Use retryTask instead. */
   export async function replanTask(taskID: string) {
-    const task = requireTask(taskID)
-    if (["queued", "spec_generating", "goal_decomposing", "planning", "planned", "running", "evaluating", "delivering"].includes(task.status)) {
-      throw new Error(`task ${taskID} is already active`)
-    }
-    // Reset to queued and let the Task Agent decide the replan strategy
-    await updateTask(task, { status: "queued", error: null, blocking_reason: null }, "Replan requested by operator")
-    TaskAgent.processTask(taskID, { kind: "replan" }).catch((err) => {
-      log.error("task agent failed on replan", { taskID, error: err instanceof Error ? err.message : String(err) })
-    })
-    return viewTask(requireTask(taskID))
+    return retryTask(taskID)
   }
 
   export async function recordOperatorNote(taskID: string, note: string) {

@@ -16,7 +16,7 @@ import { type Requirement } from "@/spec/agent"
 import { SpecFailureError, SpecService } from "@/spec/service"
 import { Database, and, desc, eq, inArray, isNull, lte, ne, or } from "@/storage/db"
 import { Log } from "@/util/log"
-import { budgetRow, buildRetryPrompt, type RetryContext } from "./helpers"
+import { budgetRow, buildFixPrompt, type FixContext } from "./helpers"
 import { CreateTaskInput, Event } from "./model"
 import {
   OrchestratorArtifactTable,
@@ -44,7 +44,7 @@ import {
 import { plannerClarification } from "./planner-clarification"
 import { OrchestratorProtocol } from "./protocol"
 import { suppressClarifications, unattendedProject } from "./unattended"
-import { buildSpecReplanInput } from "./spec-goal-service"
+
 import { withStageRetry } from "./strategy"
 import { findGoalSnapshot, findPlan, findRequirements, findSpecSnapshot, findTask, goalSnapshotIDOfPlan, listGoalsForPlan, listMilestonesByPlan, listPlanNodesByPlan, type GoalRow, type PlanRow, type RequirementRow, type RunRow, type TaskRow } from "./store"
 import { agentStream } from "./agent-stream"
@@ -1151,375 +1151,6 @@ export function persistInitialTransitionFailure(input: PersistInitialFailureInpu
   })
 }
 
-export function persistReplanTransition(input: PersistReplanInput): ReplanQueueResult {
-  const previousSpecSnapshotID = input.previousPlan.spec_snapshot_id
-  if (!previousSpecSnapshotID) {
-    throw new PlannerFailureError("Cannot replan: previous plan has no spec_snapshot_id")
-  }
-  const previousSpecSnapshot = findSpecSnapshot(previousSpecSnapshotID)
-  const specRewrite = input.compiled.specStrategy === "rewritten"
-  const specSnapshotID: string = specRewrite ? Identifier.ascending("spec") : previousSpecSnapshotID
-  const specVersion = specRewrite ? (previousSpecSnapshot?.version ?? 0) + 1 : (previousSpecSnapshot?.version ?? 1)
-  const nextVersion = input.previousPlan.version + 1
-  const previousGoalSnapshotID = goalSnapshotIDOfPlan(input.previousPlan)
-  const previousGoalSnapshot = previousGoalSnapshotID ? findGoalSnapshot(previousGoalSnapshotID) : undefined
-  const nextGoalSnapshotID = input.compiled.goalDraft ? Identifier.ascending("goal_snapshot") : undefined
-  const nextGoalSnapshotVersion = previousGoalSnapshot ? previousGoalSnapshot.version + 1 : 1
-  const clarification = plannerClarification(input.compiled.planDraft)
-  const planMetadata = {
-    ...input.compiled.planMetadata,
-    ...(nextGoalSnapshotID ? { goal_snapshot_id: nextGoalSnapshotID } : {}),
-  }
-  if (clarification) {
-    Database.transaction((db) => {
-      if (specRewrite) {
-        db.update(OrchestratorSpecSnapshotTable)
-          .set({
-            status: "superseded",
-            time_updated: input.now,
-          })
-          .where(eq(OrchestratorSpecSnapshotTable.id, previousSpecSnapshotID))
-          .run()
-        persistSpecSnapshot(db, {
-          taskID: input.task.id,
-          specSnapshotID,
-          version: specVersion,
-          specDraft: input.compiled.specDraft,
-          now: input.now,
-        })
-      }
-      db.insert(OrchestratorRunTable)
-        .values({
-          id: input.nextRunID,
-          task_id: input.task.id,
-          plan_version_id: input.previousPlan.id,
-          session_id: input.task.session_id,
-          executor: input.previousRun.executor,
-          status: "blocked",
-          phase: "replan",
-          retry_count: 0,
-          blocking_reason: "clarification",
-          metadata: {
-            previous_run_id: input.previousRun.id,
-            strategy: "replan",
-            failure_summary: input.summary,
-            ...(input.replanContext ? { replan_context: input.replanContext } : {}),
-            ...(input.compiled.planDraft.metadata?.stage_sources
-              ? { stage_sources: input.compiled.planDraft.metadata.stage_sources }
-              : {}),
-          },
-          time_created: input.now,
-          time_updated: input.now,
-        })
-        .run()
-      db.update(OrchestratorTaskTable)
-        .set({
-          active_spec_version_id: specSnapshotID,
-          active_run_id: input.nextRunID,
-          status: "blocked",
-          error: null,
-          blocking_reason: "clarification",
-          metadata: input.compiled.taskMetadata,
-          time_completed: null,
-          time_updated: input.now,
-        })
-        .where(eq(OrchestratorTaskTable.id, input.task.id))
-        .run()
-      persistPlannerClarification(db, {
-        taskID: input.task.id,
-        runID: input.nextRunID,
-        sessionID: input.previousRun.session_id ?? undefined,
-        now: input.now,
-        source: input.compiled.planDraft.metadata?.planner?.source === "spec_stage" ? "spec" : "planner",
-        reason: clarification.reason,
-        questions: clarification.questions,
-        provisionalPlan: {
-          summary: input.compiled.planDraft.summary,
-          prompt: input.compiled.planDraft.prompt,
-          metadata: input.compiled.planDraft.metadata,
-        },
-      })
-      db.insert(OrchestratorProgressSnapshotTable)
-        .values({
-          id: Identifier.ascending("progress"),
-          task_id: input.task.id,
-          status: "blocked",
-          summary: "Replanning blocked pending clarification",
-          payload: {
-            previousPlanID: input.previousPlan.id,
-            nextRunID: input.nextRunID,
-            reason: input.summary,
-            clarification_reason: clarification.reason,
-            questionCount: clarification.questions.length,
-          },
-          time_created: input.now,
-          time_updated: input.now,
-        })
-        .run()
-      Database.effect(() =>
-        OrchestratorProtocol.emit(Event.RunCreated, {
-          taskID: input.task.id,
-          runID: input.nextRunID,
-          status: "blocked",
-          summary: "Run blocked pending clarification",
-        }, { source: "persist.replan_clarification" }),
-      )
-      Database.effect(() =>
-        OrchestratorProtocol.emit(Event.TaskUpdated, {
-          taskID: input.task.id,
-          status: "blocked",
-          summary: "Replanning blocked pending clarification",
-        }, { source: "persist.replan_clarification" }),
-      )
-    })
-    return {
-      queued: true,
-      runID: input.nextRunID,
-    }
-  }
-  Database.transaction((db) => {
-    db.update(OrchestratorPlanVersionTable)
-      .set({
-        status: "superseded",
-        time_updated: input.now,
-      })
-      .where(eq(OrchestratorPlanVersionTable.id, input.previousPlan.id))
-      .run()
-    const persistedSpec = specRewrite
-      ? (() => {
-          db.update(OrchestratorSpecSnapshotTable)
-            .set({
-              status: "superseded",
-              time_updated: input.now,
-            })
-            .where(eq(OrchestratorSpecSnapshotTable.id, previousSpecSnapshotID))
-            .run()
-          return persistSpecSnapshot(db, {
-            taskID: input.task.id,
-            specSnapshotID,
-            version: specVersion,
-            specDraft: input.compiled.specDraft,
-            now: input.now,
-          })
-        })()
-      : undefined
-    if (previousGoalSnapshotID) {
-      db.update(OrchestratorGoalSnapshotTable)
-        .set({
-          status: "superseded",
-          time_updated: input.now,
-        })
-        .where(eq(OrchestratorGoalSnapshotTable.id, previousGoalSnapshotID))
-        .run()
-    }
-    const persistedGoals =
-      nextGoalSnapshotID && input.compiled.goalDraft
-        ? persistGoalSnapshot(db, {
-            taskID: input.task.id,
-            specSnapshotID,
-            goalSnapshotID: nextGoalSnapshotID,
-            version: nextGoalSnapshotVersion,
-            goalDraft: input.compiled.goalDraft,
-            requirements: persistedSpec?.requirements ?? requirementLinks(findRequirements(specSnapshotID)),
-            now: input.now,
-          })
-        : []
-    db.insert(OrchestratorPlanVersionTable)
-      .values({
-        id: input.nextPlanID,
-        task_id: input.task.id,
-        spec_snapshot_id: specSnapshotID,
-        version: nextVersion,
-        status: "active",
-        summary: input.compiled.planDraft.summary,
-        prompt: input.compiled.planDraft.prompt,
-        metadata: planMetadata,
-        time_created: input.now,
-        time_updated: input.now,
-      })
-      .run()
-    insertPlanItems(db, {
-      taskID: input.task.id,
-      planID: input.nextPlanID,
-      goals: persistedGoals,
-      planDraft: input.compiled.planDraft,
-      now: input.now,
-      milestones: [],
-    })
-    db.insert(OrchestratorRunTable)
-      .values({
-        id: input.nextRunID,
-        task_id: input.task.id,
-        plan_version_id: input.nextPlanID,
-        session_id: input.task.session_id,
-        executor: input.previousRun.executor,
-        status: clarification ? "blocked" : "queued",
-        phase: "replan",
-        retry_count: 0,
-        blocking_reason: clarification ? "clarification" : null,
-        metadata: {
-          previous_run_id: input.previousRun.id,
-          strategy: "replan",
-          failure_summary: input.summary,
-          ...(input.replanContext ? { replan_context: input.replanContext } : {}),
-          ...(input.compiled.planDraft.metadata?.stage_sources
-            ? { stage_sources: input.compiled.planDraft.metadata.stage_sources }
-            : {}),
-        },
-        time_created: input.now,
-        time_updated: input.now,
-      })
-      .run()
-    db.update(OrchestratorTaskTable)
-      .set({
-        active_spec_version_id: specSnapshotID,
-        active_plan_version_id: input.nextPlanID,
-        active_run_id: input.nextRunID,
-        status: "running",
-        error: null,
-        blocking_reason: null,
-        time_completed: null,
-        metadata: input.compiled.taskMetadata,
-        time_updated: input.now,
-      })
-      .where(eq(OrchestratorTaskTable.id, input.task.id))
-      .run()
-    db.insert(OrchestratorProgressSnapshotTable)
-      .values({
-        id: Identifier.ascending("progress"),
-        task_id: input.task.id,
-        status: "running",
-        summary: "Replanning after evaluation failure",
-        payload: {
-          previousPlanID: input.previousPlan.id,
-          nextPlanID: input.nextPlanID,
-          previousRunID: input.previousRun.id,
-          nextRunID: input.nextRunID,
-          reason: input.summary,
-        },
-        time_created: input.now,
-        time_updated: input.now,
-      })
-      .run()
-    Database.effect(() =>
-      specRewrite
-        ? OrchestratorProtocol.emit(Event.SpecCreated, {
-            taskID: input.task.id,
-            specID: specSnapshotID,
-            summary: input.compiled.specDraft.summary,
-          }, { source: "persist.replan" })
-        : undefined,
-    )
-    Database.effect(() =>
-      OrchestratorProtocol.emit(Event.PlanCreated, {
-        taskID: input.task.id,
-        planID: input.nextPlanID,
-        summary: input.compiled.planDraft.summary,
-      }, { source: "persist.replan" }),
-    )
-    Database.effect(() =>
-      OrchestratorProtocol.emit(Event.PlanActivated, {
-        taskID: input.task.id,
-        planID: input.nextPlanID,
-        summary: "Replanned version activated",
-      }, { source: "persist.replan" }),
-    )
-    Database.effect(() =>
-      OrchestratorProtocol.emit(Event.RunCreated, {
-        taskID: input.task.id,
-        runID: input.nextRunID,
-        status: clarification ? "blocked" : "queued",
-        summary: clarification ? "Run blocked pending clarification" : "Run queued after replan",
-      }, { source: "persist.replan" }),
-    )
-    Database.effect(() =>
-      OrchestratorProtocol.emit(Event.TaskUpdated, {
-        taskID: input.task.id,
-        status: clarification ? "blocked" : "running",
-        summary: clarification ? "Replanning blocked pending clarification" : "Replanning after evaluation failure",
-      }, { source: "persist.replan" }),
-    )
-  })
-  writePrdSnapshot({
-    task: input.task,
-    plan: {
-      id: input.nextPlanID,
-      version: nextVersion,
-      summary: input.compiled.planDraft.summary,
-      metadata: planMetadata,
-    },
-    createdAt: input.now,
-  })
-  writePlanSnapshot({
-    task: input.task,
-    plan: {
-      id: input.nextPlanID,
-      version: nextVersion,
-      summary: input.compiled.planDraft.summary,
-      prompt: input.compiled.planDraft.prompt,
-      metadata: planMetadata,
-    },
-    createdAt: input.now,
-  })
-  const persistedPlan = findPlan(input.nextPlanID)
-  writeGoalSnapshot({
-    task: input.task,
-    plan: {
-      id: input.nextPlanID,
-      version: nextVersion,
-      summary: input.compiled.planDraft.summary,
-    },
-    goals: persistedPlan ? listGoalsForPlan(persistedPlan) : [],
-    milestones: listMilestonesByPlan(input.nextPlanID),
-    createdAt: input.now,
-  })
-  return {
-    queued: true,
-    runID: input.nextRunID,
-    error: undefined,
-  }
-}
-
-export function persistReplanTransitionFailure(input: PersistReplanFailureInput): ReplanQueueResult {
-  Database.transaction((db) => {
-    db.update(OrchestratorTaskTable)
-      .set({
-        status: "failed",
-        blocking_reason: null,
-        error: input.error,
-        time_completed: input.now,
-        time_updated: input.now,
-      })
-      .where(eq(OrchestratorTaskTable.id, input.task.id))
-      .run()
-    db.insert(OrchestratorProgressSnapshotTable)
-      .values({
-        id: Identifier.ascending("progress"),
-        task_id: input.task.id,
-        status: "failed",
-        summary: input.error,
-        payload: {
-          error: input.error,
-        },
-        time_created: input.now,
-        time_updated: input.now,
-      })
-      .run()
-    Database.effect(() =>
-      OrchestratorProtocol.emit(Event.TaskUpdated, {
-        taskID: input.task.id,
-        status: "failed",
-        summary: input.error,
-      }, { source: "persist.replan_failure" }),
-    )
-  })
-  return {
-    queued: false,
-    runID: undefined,
-    error: input.error,
-  }
-}
-
 function buildPreviousWaves(planID: string, goals: GoalRow[]): WaveStatus[] {
   const nodes = listPlanNodesByPlan(planID)
   const goalNodes = nodes.filter((n) => n.kind === "goal" && n.goal_id)
@@ -2165,7 +1796,8 @@ export function persistGoalSnapshot(
   })
 }
 
-export function createRetryRun(task: TaskRow, run: RunRow, summary: string, retryContext?: RetryContext) {
+export function createFixRun(task: TaskRow, run: RunRow, summary: string, fixContext?: FixContext) {
+  const strategy = fixContext?.source === "delivery_rejection" ? "fix_from_delivery" : "fix_from_eval"
   const existing = Database.use((db) =>
     db
       .select()
@@ -2179,11 +1811,14 @@ export function createRetryRun(task: TaskRow, run: RunRow, summary: string, retr
       ))
       .orderBy(desc(OrchestratorRunTable.time_created), desc(OrchestratorRunTable.id))
       .all()
-      .find((item) => item.metadata?.previous_run_id === run.id && item.metadata?.strategy === "retry_same_plan"),
+      .find((item) => item.metadata?.previous_run_id === run.id && (item.metadata?.strategy === strategy || item.metadata?.strategy === "retry_same_plan")),
   )
   if (existing) return existing.id
   const nextRunID = Identifier.ascending("run")
   const now = Date.now()
+  const progressMsg = fixContext?.source === "delivery_rejection"
+    ? "Fix run created after delivery rejection"
+    : "Fix run created after evaluation failure"
   Database.transaction((db) => {
     const plan = run.plan_version_id ? findPlan(run.plan_version_id) : undefined
     if (plan) {
@@ -2212,9 +1847,9 @@ export function createRetryRun(task: TaskRow, run: RunRow, summary: string, retr
         retry_count: run.retry_count + 1,
         metadata: {
           previous_run_id: run.id,
-          strategy: "retry_same_plan",
-          prompt_override: buildRetryPrompt(summary, retryContext),
-          retry_context: retryContext,
+          strategy,
+          prompt_override: buildFixPrompt(summary, fixContext),
+          fix_context: fixContext,
         },
         time_created: now,
         time_updated: now,
@@ -2236,11 +1871,12 @@ export function createRetryRun(task: TaskRow, run: RunRow, summary: string, retr
         id: Identifier.ascending("progress"),
         task_id: task.id,
         status: "running",
-        summary: "Retrying current plan after evaluation failure",
+        summary: progressMsg,
         payload: {
           previousRunID: run.id,
           nextRunID,
           reason: summary,
+          source: fixContext?.source,
         },
         time_created: now,
         time_updated: now,
@@ -2251,19 +1887,22 @@ export function createRetryRun(task: TaskRow, run: RunRow, summary: string, retr
         taskID: task.id,
         runID: nextRunID,
         status: "queued",
-        summary: "Retrying current plan after evaluation failure",
-      }, { source: "persist.retry" }),
+        summary: progressMsg,
+      }, { source: "persist.fix" }),
     )
     Database.effect(() =>
       OrchestratorProtocol.emit(Event.TaskUpdated, {
         taskID: task.id,
         status: "running",
-        summary: "Retrying current plan after evaluation failure",
-      }, { source: "persist.retry" }),
+        summary: progressMsg,
+      }, { source: "persist.fix" }),
     )
   })
   return nextRunID
 }
+
+/** @deprecated Use createFixRun instead */
+export const createRetryRun = createFixRun
 
 export function createGoalRun(input: {
   taskID: string
@@ -2361,64 +2000,6 @@ export function updateGoalRun(
       .where(eq(OrchestratorGoalRunTable.id, goalRunID))
       .get(),
   )
-}
-
-export async function createReplanRun(task: TaskRow, plan: PlanRow, run: RunRow, summary: string, analysis?: GoalJudgmentType) {
-  const rewrite = buildSpecReplanInput(task, plan, analysis)
-  const goals = listGoalsForPlan(plan)
-  const routing =
-    task.metadata?.routing && typeof task.metadata.routing === "object" && !Array.isArray(task.metadata.routing)
-      ? (task.metadata.routing as RoutingInput)
-      : undefined
-  const replanContext = buildReplanContext({
-    analysis,
-    goals,
-    planID: plan.id,
-    summary,
-    previousSummary: plan.summary,
-    specSnapshotID: task.active_spec_version_id ?? undefined,
-  })
-  const now = Date.now()
-  try {
-    const compiled = await withStageRetry("plan", () => compileTransition({
-      mode: "replan",
-      taskID: task.id,
-      now,
-      title: task.title,
-      request: rewrite.request,
-      goals: rewrite.goals,
-      rewriteSpec: rewrite.rewriteSpec,
-      executor: run.executor,
-      routing,
-      task,
-      previousPlan: plan,
-      previousRun: run,
-      failureSummary: summary,
-      replanContext,
-    }), {
-      onRetry: (attempt, error) => {
-        log.info("retrying replan compilation", { attempt, taskID: task.id, error: String(error) })
-      },
-    })
-    return persistReplanTransition({
-      task,
-      previousPlan: plan,
-      previousRun: run,
-      nextPlanID: Identifier.ascending("plan"),
-      nextRunID: Identifier.ascending("run"),
-      now,
-      summary,
-      replanContext,
-      compiled,
-    })
-  } catch (error) {
-    if (!(error instanceof PlannerFailureError)) throw error
-    return persistReplanTransitionFailure({
-      task,
-      now,
-      error: `Planner failure: ${error.message}`,
-    })
-  }
 }
 
 type EvaluationStatus = "passed" | "failed" | "pending"

@@ -38,14 +38,14 @@ export interface EvaluatorConfig {
   timeout_ms: number
   skills: string[]
   model?: string
+  /** Evaluation tier: "core" (build/test/lint only), "standard" (+ judge/spec_check/code_review), "full" (all checks). Default: "standard". */
+  tier?: "core" | "standard" | "full"
 }
 
 export interface DeliveryConfig {
   max_steps: number
   timeout_ms: number
   max_retries: number
-  /** Max eval↔delivery loop iterations before falling back to retry/replan. */
-  max_eval_delivery_rounds: number
   skills: string[]
 }
 
@@ -64,8 +64,7 @@ export interface OrchestratorConfigType {
   evaluator: EvaluatorConfig
   delivery: DeliveryConfig
   max_runs: number
-  max_replans: number
-  same_plan_retry_limit: number
+  max_fix_runs: number
   stage_max_retries: number
   max_executor_groups: number
 }
@@ -105,12 +104,10 @@ const DEFAULTS: OrchestratorConfigType = {
     max_steps: 40,
     timeout_ms: 600_000,
     max_retries: 2,
-    max_eval_delivery_rounds: 3,
     skills: [],
   },
   max_runs: 10,
-  max_replans: 3,
-  same_plan_retry_limit: 2,
+  max_fix_runs: 5,
   stage_max_retries: 2,
   max_executor_groups: 1,
 }
@@ -153,8 +150,7 @@ export namespace OrchestratorConfig {
   export function getDefaults(): OrchestratorConfigType {
     const d = { ...DEFAULTS }
     d.max_runs = envInt("OPENCORVUS_MAX_RUNS") ?? d.max_runs
-    d.max_replans = envInt("OPENCORVUS_MAX_REPLANS") ?? d.max_replans
-    d.same_plan_retry_limit = envInt("OPENCORVUS_SAME_PLAN_RETRY_LIMIT") ?? d.same_plan_retry_limit
+    d.max_fix_runs = envInt("OPENCORVUS_MAX_FIX_RUNS") ?? d.max_fix_runs
     d.max_executor_groups = envInt("OPENCORVUS_MAX_EXECUTOR_GROUPS") ?? d.max_executor_groups
     return d
   }
@@ -192,17 +188,16 @@ function merge(user?: Config.Info["orchestrator"]): OrchestratorConfigType {
       timeout_ms: user?.evaluator?.timeout_ms ?? DEFAULTS.evaluator.timeout_ms,
       skills: (user?.evaluator as any)?.skills ?? DEFAULTS.evaluator.skills,
       model: (user?.evaluator as any)?.model ?? undefined,
+      tier: (user?.evaluator as any)?.tier ?? "standard",
     },
     delivery: {
       max_steps: user?.delivery?.max_steps ?? DEFAULTS.delivery.max_steps,
       timeout_ms: envInt("OPENCORVUS_DELIVERY_AGENT_TIMEOUT_MS") ?? user?.delivery?.timeout_ms ?? DEFAULTS.delivery.timeout_ms,
       max_retries: user?.delivery?.max_retries ?? DEFAULTS.delivery.max_retries,
-      max_eval_delivery_rounds: envInt("OPENCORVUS_MAX_EVAL_DELIVERY_ROUNDS") ?? (user?.delivery as any)?.max_eval_delivery_rounds ?? DEFAULTS.delivery.max_eval_delivery_rounds,
       skills: (user?.delivery as any)?.skills ?? DEFAULTS.delivery.skills,
     },
     max_runs: envInt("OPENCORVUS_MAX_RUNS") ?? user?.max_runs ?? DEFAULTS.max_runs,
-    max_replans: envInt("OPENCORVUS_MAX_REPLANS") ?? user?.max_replans ?? DEFAULTS.max_replans,
-    same_plan_retry_limit: envInt("OPENCORVUS_SAME_PLAN_RETRY_LIMIT") ?? user?.same_plan_retry_limit ?? DEFAULTS.same_plan_retry_limit,
+    max_fix_runs: envInt("OPENCORVUS_MAX_FIX_RUNS") ?? (user as any)?.max_fix_runs ?? DEFAULTS.max_fix_runs,
     stage_max_retries: user?.stage_max_retries ?? DEFAULTS.stage_max_retries,
     max_executor_groups: envInt("OPENCORVUS_MAX_EXECUTOR_GROUPS") ?? (user as any)?.max_executor_groups ?? DEFAULTS.max_executor_groups,
   }

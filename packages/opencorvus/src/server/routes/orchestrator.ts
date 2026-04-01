@@ -35,7 +35,7 @@ import { Message } from "@/session/message"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
 import { registerGoalRunSession, taskSession } from "./task-event"
-import { ensureTaskMessageProtocolBridge } from "./task-message-protocol-bridge"
+import { ensureTaskMessageProtocolBridge, overlayMeta } from "./task-message-protocol-bridge"
 
 export const OrchestratorRoutes = lazy(() =>
   new Hono()
@@ -387,6 +387,16 @@ export const OrchestratorRoutes = lazy(() =>
         }
         const all = await Promise.all(sessionIDs.map((id) => Session.messages({ sessionID: id })))
         const messages = all.flat().sort((a, b) => (a.info.time?.created ?? 0) - (b.info.time?.created ?? 0))
+        // Enrich each message with resolvedRole/channel — same logic as the
+        // SSE bridge so the overlay receives identical metadata regardless of
+        // whether messages arrive via SSE or transcript reload.
+        const taskID = task.id
+        for (const msg of messages) {
+          const sid = msg.info.sessionID || ""
+          const meta = overlayMeta(sid, taskID, { role: msg.info.role, agent: (msg.info as any).agent || "" })
+          ;(msg.info as any).resolvedRole = meta.resolvedRole
+          ;(msg.info as any).channel = meta.channel
+        }
         return c.json(messages)
       },
     )

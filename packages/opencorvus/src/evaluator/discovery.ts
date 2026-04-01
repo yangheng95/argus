@@ -27,6 +27,16 @@ export function autoSpecCheck(task?: EvaluationTask): Record<string, unknown> {
   return {}
 }
 
+/** Auto-enable judge check — always active at standard+ tier. */
+export function autoJudge(): Record<string, unknown> {
+  return { judge: { enabled: true, mode: "strict" } }
+}
+
+/** Auto-enable code review — always active at standard+ tier. */
+export function autoCodeReview(): Record<string, unknown> {
+  return { code_review: { enabled: true, mode: "strict" } }
+}
+
 export function resolvedChecks(
   config: z.infer<typeof CheckConfig>,
   discovered: Awaited<ReturnType<typeof discoverChecks>>,
