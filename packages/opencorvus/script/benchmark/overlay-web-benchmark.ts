@@ -202,20 +202,11 @@ console.log(
   `[overlay-benchmark] config model=${model} executor=${executor} routing=${routingOverride ?? "default"} groups=${maxExecutorGroups} stall=${stallTimeoutMs / 1000}s planning-stall=${planningStallTimeoutMs / 1000}s spec=${specTimeoutMs === 86400000 ? "∞" : specTimeoutMs / 1000 + "s"} planner=${plannerTimeoutMs === 86400000 ? "∞" : plannerTimeoutMs / 1000 + "s"} tool=${toolTimeoutMs / 1000}s standby=${standbyTimeoutMs === 86400000 ? "∞" : standbyTimeoutMs / 1000 + "s"} request=${requestTimeoutMs / 1000}s hard=${completionHardTimeoutMs > 0 ? completionHardTimeoutMs / 1000 + "s" : "none"}`,
 )
 
-// Detect stale SQLite WAL lock from a crashed previous run
+// Force-remove SQLite WAL/SHM before reset — prevents previous benchmark's
+// uncommitted data from being recovered into the fresh database.
 const dbPath = path.join(os.homedir(), ".local", "share", "opencorvus", "opencorvus.db")
-const walPath = `${dbPath}-wal`
-try {
-  const walStat = await fs.stat(walPath)
-  const ageMs = Date.now() - walStat.mtimeMs
-  // WAL older than 5 minutes with no running bun process is a stale lock — remove it
-  if (ageMs > 5 * 60 * 1000) {
-    await fs.rm(walPath, { force: true })
-    await fs.rm(`${dbPath}-shm`, { force: true })
-  }
-} catch {
-  // no WAL file, fine
-}
+await fs.rm(`${dbPath}-wal`, { force: true }).catch(() => {})
+await fs.rm(`${dbPath}-shm`, { force: true }).catch(() => {})
 
 await resetDatabase()
 if (!projectDir) {
@@ -262,6 +253,13 @@ const eventFile = reportFile.endsWith(".json")
 const eventLogFile = reportFile.endsWith(".json")
   ? reportFile.slice(0, -".json".length) + ".events.ndjson"
   : `${reportFile}.events.ndjson`
+const agentTraceDir = reportFile.endsWith(".json")
+  ? reportFile.slice(0, -".json".length) + ".agent-trace"
+  : `${reportFile}.agent-trace`
+// Enable agent-level IO tracing — captures each agent's full system prompt,
+// user messages, and complete output text to agentTraceDir/<seq>-<agent>.md
+process.env.OPENCORVUS_AGENT_TRACE_DIR = agentTraceDir
+console.log(`[overlay-benchmark] agent_trace_dir=${agentTraceDir}`)
 const events: Array<Record<string, unknown>> = []
 let flushed = Promise.resolve()
 let lastEventAt = Date.now()
@@ -606,6 +604,7 @@ try {
   logLine(`report: ${reportFile}`)
   logLine(`events: ${eventFile}`)
   logLine(`events_ndjson: ${eventLogFile}`)
+  logLine(`agent_trace: ${agentTraceDir}`)
 
   const pass = out.assertions.planning_visible.pass && out.assertions.streaming_visible.pass && out.assertions.materialized.pass && out.assertions.delivery.pass && out.failure_matrix.verdict === "accepted"
   if (!pass) {
@@ -628,6 +627,7 @@ try {
   errorLine(`report: ${reportFile}`)
   errorLine(`events: ${eventFile}`)
   errorLine(`events_ndjson: ${eventLogFile}`)
+  errorLine(`agent_trace: ${agentTraceDir}`)
   process.exitCode = 1
 } finally {
   await cleanup("events.stop", () => eventStream.stop())

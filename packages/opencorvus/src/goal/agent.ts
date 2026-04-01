@@ -18,6 +18,7 @@ import { Instance } from "@/project/instance"
 import { Log } from "@/util/log"
 import { toolGuard } from "@/util/tool-guard"
 import { parseGoalText, type ParsedGoalDraft } from "./parse-goal-text"
+import { AgentTrace } from "@/util/agent-trace"
 import { OrchestratorConfig } from "@/orchestrator/config"
 import { loadStageSkills } from "@/orchestrator/skill-inject"
 import { Config } from "@/config/config"
@@ -216,6 +217,12 @@ async function run(input: {
       cumulativeToolCalls,
       attempt: attempt + 1,
     })
+
+    AgentTrace.capture("goal", attempt + 1,
+      { system: systemPrompt, messages: messages.map((m: any) => ({ role: m.role, content: typeof m.content === "string" ? m.content : JSON.stringify(m.content) })) },
+      allText,
+      { mode: input.mode, model: language.modelId, toolCalls: cumulativeToolCalls, finishReason: resultFinishReason },
+    )
 
     const parsed = parseGoalText(allText)
     lastParsed = parsed

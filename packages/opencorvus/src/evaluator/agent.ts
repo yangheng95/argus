@@ -23,6 +23,7 @@ import { Memory } from "@/memory"
 import { Instance } from "@/project/instance"
 import { Log } from "@/util/log"
 import { toolGuard } from "@/util/tool-guard"
+import { AgentTrace } from "@/util/agent-trace"
 import { OrchestratorConfig } from "@/orchestrator/config"
 import { operatorNotesSection } from "@/orchestrator/helpers"
 import { loadStageSkills } from "@/orchestrator/skill-inject"
@@ -154,9 +155,19 @@ export namespace EvaluatorAgent {
       findingsLength: investigationText.length,
     })
 
+    {
+      const evalSystem = await evaluatorSystem()
+      AgentTrace.capture("evaluator-investigate", 1,
+        { system: evalSystem, messages: [{ role: "user", content: buildInvestigationPrompt(input, context) }] },
+        investigationText,
+        { toolCalls: toolCallCount, finishReason: investigationFinishReason },
+      )
+    }
+
     // ── Phase 2: Judgment ─────────────────────────────────────────
     // Fresh context with investigation findings → structured verdict.
     const phase2TimeoutMs = Math.max(evalCfg.timeout_ms, 120_000)
+    const judgmentPrompt = buildJudgmentPrompt(input, investigationText)
     let verdict: z.infer<typeof EvaluatorAnalysis> | undefined
     try {
       const { object } = await generateObject({
@@ -165,7 +176,7 @@ export namespace EvaluatorAgent {
         maxRetries: 2,
         abortSignal: AbortSignal.timeout(phase2TimeoutMs),
         system: JUDGMENT_SYSTEM,
-        prompt: buildJudgmentPrompt(input, investigationText),
+        prompt: judgmentPrompt,
       })
       verdict = object
     } catch (err) {
@@ -197,6 +208,12 @@ export namespace EvaluatorAgent {
       goalsFailed: verdict.goal_statuses.filter((g) => g.status === "failed").length,
       hasReplanGuidance: !!verdict.replan_guidance,
     })
+
+    AgentTrace.capture("evaluator-judge", 1,
+      { system: JUDGMENT_SYSTEM, messages: [{ role: "user", content: judgmentPrompt }] },
+      JSON.stringify(verdict, null, 2),
+      { verdict: verdict.verdict, classification: verdict.classification },
+    )
 
     return verdict
   }

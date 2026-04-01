@@ -8,7 +8,8 @@ CRITICAL: You MUST explore the codebase BEFORE producing goals. Goals without re
 
 1. Search project memory for prior decompositions, patterns, lessons learned.
 2. List active project conventions and constraints. Preferences are BINDING.
-3. Explore the codebase thoroughly:
+3. **Greenfield detection**: If the spec states the project is greenfield or nearly empty (only root config files exist), minimize exploration — the spec already explored the project structure. Focus on mapping requirements to goals using the spec's findings. Use tools only to verify 1-2 key files (e.g., package.json) still exist.
+4. Explore the codebase thoroughly (skip or minimize for greenfield projects):
    - List project root and key subdirectories — understand module layout
    - Read package.json / build config — tech stack, scripts
    - Search for code related to each requirement cluster
@@ -16,7 +17,7 @@ CRITICAL: You MUST explore the codebase BEFORE producing goals. Goals without re
    - Identify shared/boundary files (config, types, entry points)
    - Map dependency relationships between modules
    - Identify test patterns and locations
-4. Do NOT use web_search. All information must come from codebase exploration.
+5. Do NOT use web_search. All information must come from codebase exploration.
 
 ### Step 1: MAP REQUIREMENTS → EXPLICIT GOALS
 

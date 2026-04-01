@@ -310,9 +310,16 @@ export function createTaskAgentTools(input: { taskID: string; agentSessionID: st
           const hooks = sessionStreamHooks({ sessionID: planSession.id, taskID, stage: "planner" })
           await planLive.start("Planner started")
 
+          const orchCfg = await OrchestratorConfig.get()
+          const adaptiveMaxSteps = orchCfg.adaptive.enabled && plannerGoals.length > 0
+            ? orchCfg.adaptive.planner_shortcut_max_steps
+            : undefined
+
           let planDraft = await withStageRetry("plan", () =>
             PlannerService.initial({
               title: task.title, request: task.request, spec: specDraft, goals: plannerGoals,
+              goalsFromGoalAgent: true,
+              maxSteps: adaptiveMaxSteps,
               allowClarification: !unattended, executor: pipeline?.executor as any, routing: pipeline?.routing,
               sessionID: planSession.id, signal: input.signal,
               stream: {

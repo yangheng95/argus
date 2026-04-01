@@ -26,6 +26,7 @@ import { OrchestratorConfig } from "@/orchestrator/config"
 import { operatorNotesSection } from "@/orchestrator/helpers"
 import { loadStageSkills } from "@/orchestrator/skill-inject"
 import { collectText, countToolCalls, firstContentLine, sectionBody } from "@/util/agent-text"
+import { AgentTrace } from "@/util/agent-trace"
 import type { GoalJudgmentType, GoalInfo, DeliveryInfo } from "@/evaluator/agent"
 
 const log = Log.create({ service: "delivery-agent" })
@@ -164,6 +165,15 @@ export namespace DeliveryAgent {
         finishReason: result.finishReason,
         textLength: collectText(result).length,
       })
+
+      {
+        const deliverySystem = await deliveryAgentSystem()
+        AgentTrace.capture("delivery", attempt + 1,
+          { system: deliverySystem, messages: [{ role: "user", content: userPrompt }] },
+          collectText(result),
+          { toolCalls: toolCallCount, finishReason: result.finishReason },
+        )
+      }
 
       try {
         const allText = collectText(result)

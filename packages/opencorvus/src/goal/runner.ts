@@ -466,6 +466,7 @@ export function buildGoalPrompt(input: {
   goal: GoalRow
   taskRequest?: string
   allGoals?: GoalRow[]
+  cwd?: string
 }) {
   const meta = dict(input.node.metadata)
   const goalMeta = dict(input.goal.metadata)
@@ -487,6 +488,9 @@ export function buildGoalPrompt(input: {
     : ""
   return [
     "You are executing one goal in an isolated workspace (git worktree) for the coordinator.",
+    input.cwd
+      ? `Your working directory is: ${input.cwd}\nAll file paths MUST be relative to this directory or use this absolute prefix. Never write files outside this directory.`
+      : undefined,
     "Other goals may be executing in parallel in separate worktrees.",
     "Treat the goal contract below as the only implementation target for this stage.",
     // Explicit file scope from goal decomposition

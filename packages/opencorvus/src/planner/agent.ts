@@ -20,6 +20,7 @@ import { Instance } from "@/project/instance"
 import { Log } from "@/util/log"
 import { toolGuard } from "@/util/tool-guard"
 import { parsePlanText } from "./parse-plan-text"
+import { AgentTrace } from "@/util/agent-trace"
 import { OrchestratorConfig } from "@/orchestrator/config"
 import { loadStageSkills } from "@/orchestrator/skill-inject"
 import path from "path"
@@ -132,8 +133,12 @@ export namespace HeadlessPlannerAgent {
     request: string
     /** User-provided goals -- planner should refine/expand, not discard */
     userGoals?: Array<{ description: string; criteria: string; priority?: string }>
+    /** Whether userGoals originate from GoalAgent (authoritative, no re-decomposition needed) */
+    goalsFromGoalAgent?: boolean
     spec?: { summary?: string; content: string }
     replanContext?: ReplanContext
+    /** Override max_steps (e.g., reduced steps when goals are pre-provided) */
+    maxStepsOverride?: number
     /** Session ID for question tool support */
     sessionID?: string
     /** External abort signal (overrides internal timeout when provided) */
@@ -145,7 +150,8 @@ export namespace HeadlessPlannerAgent {
     if (input.signal?.aborted) throw new Error("planner aborted before model resolution")
 
     const orchCfg = await OrchestratorConfig.get()
-    const { max_steps: MAX_STEPS, timeout_ms: TIMEOUT_MS, quality_threshold: QUALITY_RETRY_THRESHOLD, max_attempts: MAX_PLAN_ATTEMPTS } = orchCfg.planner
+    const { max_steps: DEFAULT_MAX_STEPS, timeout_ms: TIMEOUT_MS, quality_threshold: QUALITY_RETRY_THRESHOLD, max_attempts: MAX_PLAN_ATTEMPTS } = orchCfg.planner
+    const MAX_STEPS = input.maxStepsOverride ?? DEFAULT_MAX_STEPS
 
     const resolved = await agentLanguageModel()
     if (!resolved) throw new Error("no LLM model available for planner agent")
@@ -243,18 +249,26 @@ export namespace HeadlessPlannerAgent {
         attempt: attempt + 1,
       })
 
+      AgentTrace.capture("planner", attempt + 1,
+        { system: systemPrompt, messages: messages.map((m: any) => ({ role: m.role, content: typeof m.content === "string" ? m.content : JSON.stringify(m.content) })) },
+        allText,
+        { model: language.modelId, toolCalls: cumulativeToolCalls, finishReason: resultFinishReason, goalsFromGoalAgent: !!input.goalsFromGoalAgent },
+      )
+
       let parsed: PlannerOutputType = parsePlanText(allText)
 
-      if (parsed.prd.length < 100 || parsed.subtasks.length < 2) {
+      // When goals are from GoalAgent, subtasks are not expected
+      if (parsed.prd.length < 100 || (!input.goalsFromGoalAgent && parsed.subtasks.length < 2)) {
         log.warn("planner: plan seems truncated or empty, will retry via quality gate", {
           prdLength: parsed.prd.length,
           subtasksCount: parsed.subtasks.length,
+          goalsFromGoalAgent: !!input.goalsFromGoalAgent,
         })
       }
 
       parsed.summary = ensureMeaningfulSummary(parsed.summary, input.title)
 
-      const planQuality = validatePlanQuality(parsed, input.request, cumulativeToolCalls)
+      const planQuality = validatePlanQuality(parsed, input.request, cumulativeToolCalls, { goalsPreProvided: input.goalsFromGoalAgent })
       log.info("planner agent output", {
         goals: parsed.goals.length,
         subtasks: parsed.subtasks.length,
@@ -330,14 +344,20 @@ function validatePlanQuality(
   plan: PlannerOutputType,
   request: string,
   toolCallCount: number,
+  opts?: { goalsPreProvided?: boolean },
 ): { score: number; reasons: string[] } {
   let score = 0
   const reasons: string[] = []
 
+  // When goals are pre-provided from GoalAgent, the planner needs less exploration
+  // (spec and goal agents already explored thoroughly)
+  const toolCallThreshold = opts?.goalsPreProvided ? 2 : 5
+  const toolCallPartial = opts?.goalsPreProvided ? 1 : 2
+
   // 1. Tool call count — did the agent actually explore?
-  if (toolCallCount >= 5) {
+  if (toolCallCount >= toolCallThreshold) {
     score += 0.3
-  } else if (toolCallCount >= 2) {
+  } else if (toolCallCount >= toolCallPartial) {
     score += 0.15
     reasons.push(`only ${toolCallCount} tool calls — exploration may be shallow`)
   } else if (toolCallCount === 0) {
@@ -371,12 +391,17 @@ function validatePlanQuality(
   }
 
   // 4. Subtasks reference specific file paths
-  const subtaskText = plan.subtasks.map((s) => `${s.title} ${s.description}`).join(" ")
-  const subtaskPaths = Array.from(subtaskText.matchAll(FILE_PAT))
-  if (subtaskPaths.length >= 2) {
-    score += 0.15
+  // Skip when goals are pre-provided — planner is instructed not to produce subtasks
+  if (opts?.goalsPreProvided) {
+    score += 0.15 // Auto-pass: subtasks not expected
   } else {
-    reasons.push("subtasks don't reference specific file paths")
+    const subtaskText = plan.subtasks.map((s) => `${s.title} ${s.description}`).join(" ")
+    const subtaskPaths = Array.from(subtaskText.matchAll(FILE_PAT))
+    if (subtaskPaths.length >= 2) {
+      score += 0.15
+    } else {
+      reasons.push("subtasks don't reference specific file paths")
+    }
   }
 
   // 5. PRD length — detailed specs are longer
@@ -516,6 +541,7 @@ function buildUserPrompt(
     title: string
     request: string
     userGoals?: Array<{ description: string; criteria: string; priority?: string }>
+    goalsFromGoalAgent?: boolean
     spec?: { summary?: string; content: string }
     replanContext?: ReplanContext
   },
@@ -524,13 +550,25 @@ function buildUserPrompt(
 ): string {
   const sections = [`# Task\n\nTitle: ${input.title}\n\nRequest:\n${input.request}`]
 
-  // Include user-provided goals so the planner can refine and expand them
   if (input.userGoals && input.userGoals.length > 0) {
-    sections.push(
-      `# User-Provided Goals\n\nThe user specified these goals. Incorporate them into your plan, refine their criteria to be more specific, and add any missing goals discovered during codebase exploration.\n\n${input.userGoals
-        .map((g, i) => `${i + 1}. [${g.priority ?? "blocking"}] ${g.description}\n   Criteria: ${g.criteria}`)
-        .join("\n")}`,
-    )
+    if (input.goalsFromGoalAgent) {
+      // GoalAgent goals are authoritative — planner should NOT re-decompose
+      sections.push(
+        `# Pre-Decomposed Goals (from GoalAgent)\n\n` +
+        `These goals are authoritative — validated for requirement coverage, dependency correctness, and file ownership disjointness. ` +
+        `DO NOT produce your own <goals> or <subtasks>. Focus on producing a detailed <prd> for the executor.\n\n` +
+        `${input.userGoals
+          .map((g, i) => `${i + 1}. [${g.priority ?? "blocking"}] ${g.description}\n   Criteria: ${g.criteria}`)
+          .join("\n")}`,
+      )
+    } else {
+      // User-provided goals — planner can refine and expand
+      sections.push(
+        `# User-Provided Goals\n\nThe user specified these goals. Incorporate them into your plan, refine their criteria to be more specific, and add any missing goals discovered during codebase exploration.\n\n${input.userGoals
+          .map((g, i) => `${i + 1}. [${g.priority ?? "blocking"}] ${g.description}\n   Criteria: ${g.criteria}`)
+          .join("\n")}`,
+      )
+    }
   }
 
   if (input.spec?.content) {

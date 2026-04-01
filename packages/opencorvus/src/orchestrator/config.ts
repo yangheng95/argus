@@ -57,12 +57,20 @@ export interface GoalAgentConfig {
   skills: string[]
 }
 
+export interface AdaptivePipelineConfig {
+  /** Enable adaptive pipeline shortcuts (delta spec, reduced planner exploration). Default: true */
+  enabled: boolean
+  /** Max planner tool-call steps when GoalAgent goals are pre-provided. Default: 15 */
+  planner_shortcut_max_steps: number
+}
+
 export interface OrchestratorConfigType {
   spec: SpecConfig
   goal: GoalAgentConfig
   planner: PlannerConfig
   evaluator: EvaluatorConfig
   delivery: DeliveryConfig
+  adaptive: AdaptivePipelineConfig
   max_runs: number
   max_fix_runs: number
   stage_max_retries: number
@@ -105,6 +113,10 @@ const DEFAULTS: OrchestratorConfigType = {
     timeout_ms: 600_000,
     max_retries: 2,
     skills: [],
+  },
+  adaptive: {
+    enabled: true,
+    planner_shortcut_max_steps: 15,
   },
   max_runs: 10,
   max_fix_runs: 5,
@@ -195,6 +207,10 @@ function merge(user?: Config.Info["assistant"]): OrchestratorConfigType {
       timeout_ms: envInt("OPENCORVUS_DELIVERY_AGENT_TIMEOUT_MS") ?? user?.delivery?.timeout_ms ?? DEFAULTS.delivery.timeout_ms,
       max_retries: user?.delivery?.max_retries ?? DEFAULTS.delivery.max_retries,
       skills: (user?.delivery as any)?.skills ?? DEFAULTS.delivery.skills,
+    },
+    adaptive: {
+      enabled: (user as any)?.adaptive?.enabled ?? DEFAULTS.adaptive.enabled,
+      planner_shortcut_max_steps: (user as any)?.adaptive?.planner_shortcut_max_steps ?? DEFAULTS.adaptive.planner_shortcut_max_steps,
     },
     max_runs: envInt("OPENCORVUS_MAX_RUNS") ?? user?.max_runs ?? DEFAULTS.max_runs,
     max_fix_runs: envInt("OPENCORVUS_MAX_FIX_RUNS") ?? (user as any)?.max_fix_runs ?? DEFAULTS.max_fix_runs,

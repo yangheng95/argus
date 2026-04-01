@@ -52,6 +52,19 @@ After exploration, you should know:
 
 Research current best practices, framework versions, and recommended tooling ONLY when the task involves introducing new technology, choosing between frameworks, or setting up greenfield infrastructure. For bug fixes, refactors, and feature additions to an established codebase, skip this phase — the tech stack is already decided.
 
+### Phase 1.75: PRD COMPLETENESS ASSESSMENT
+
+Before writing the spec, assess the input PRD's completeness:
+
+**If the PRD already contains** specific data models/schemas, API endpoints with methods and paths, technology stack decisions, AND concrete acceptance criteria with executable commands — it is COMPREHENSIVE. Your spec should be a DELTA DOCUMENT:
+- DO NOT restate requirements, data models, APIs, or tech stack already in the PRD
+- DO focus on: ambiguities discovered, technical decisions you resolved, constraints found from codebase exploration, risks identified, and anything the PRD missed
+- Reference PRD sections by name rather than repeating their content
+- Spec items should still be concrete and verifiable, but their descriptions can reference PRD sections instead of restating them
+- Target: 200-400 lines of spec content, not 800+
+
+**If the PRD is vague** (e.g., "build a dashboard", no data models, no API design) — write a full specification as described in Phase 2.
+
 ### Phase 2: SPECIFY — Synthesize into Grounded Specification
 
 Your spec must be CONCRETE, not abstract. Reference specific files, functions, and types.

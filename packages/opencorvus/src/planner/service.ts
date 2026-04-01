@@ -142,6 +142,10 @@ export namespace HeadlessPlannerService {
     request: string
     spec?: SpecDraft
     goals?: z.infer<typeof GoalInput>[]
+    /** Whether goals originate from GoalAgent (authoritative, no re-decomposition needed) */
+    goalsFromGoalAgent?: boolean
+    /** Override planner max_steps (e.g., reduced when goals are pre-provided) */
+    maxSteps?: number
     allowClarification?: boolean
     executor?: ExecutorNameInfo
     routing?: z.infer<typeof StageRouting>
@@ -211,6 +215,8 @@ export namespace HeadlessPlannerService {
               priority: g.priority,
             }))
           : undefined,
+        goalsFromGoalAgent: input.goalsFromGoalAgent,
+        maxStepsOverride: input.maxSteps,
         spec: spec ? { summary: spec.summary, content: spec.content } : undefined,
         sessionID: input.sessionID,
         signal: controller.signal,
@@ -242,6 +248,7 @@ export namespace HeadlessPlannerService {
           spec,
           stages,
           source: "planner_agent",
+          goalsFromGoalAgent: input.goalsFromGoalAgent,
         },
       )
     }
@@ -463,6 +470,8 @@ function agentOutputToDraft(
     spec?: SpecDraft
     stages?: StageSet
     source: "planner_agent" | "executor_native"
+    /** When true, subtasks from planner are ignored — goals are authoritative */
+    goalsFromGoalAgent?: boolean
   },
 ): PlanDraft {
   // Normalize output arrays — tool-call args may lack Zod defaults for optional fields
@@ -509,6 +518,11 @@ function agentOutputToDraft(
   const assumptions = mergeAssumptions(stage?.spec?.assumptions, output.assumptions)
   const risks = mergeStrings(stage?.spec?.risks ?? [], output.risks)
 
+  // When goals are from GoalAgent, derive subtasks from goals instead of planner output
+  const effectiveSubtasks = stage?.goalsFromGoalAgent
+    ? goals.map((g, i) => ({ title: g.description, description: g.criteria, order: i + 1 }))
+    : output.subtasks
+
   // Planner agent's PRD is grounded in codebase exploration and takes priority.
   // Spec content provides the requirements context; planner output provides
   // implementation-level detail.
@@ -517,14 +531,14 @@ function agentOutputToDraft(
     request,
     prd: output.prd || stage?.spec?.content || "",
     goals,
-    subtasks: output.subtasks,
+    subtasks: effectiveSubtasks,
     risks,
     assumptions,
     strategy,
     milestones: output.milestones?.map((m) => ({ title: m.title })),
   })
 
-  const steps = output.subtasks
+  const steps = effectiveSubtasks
     .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
     .map((s, i) => `${s.order ?? i + 1}. ${s.title}: ${s.description}`)
   const clarification = allowClarification ? deriveClarification(request, output, stage?.spec) : undefined
