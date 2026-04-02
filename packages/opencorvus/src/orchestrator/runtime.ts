@@ -70,6 +70,7 @@ import { Identifier } from "@/id/id"
 import { agentStream } from "./agent-stream"
 
 const log = Log.create({ service: "orchestrator-runtime" })
+const processStartTime = Date.now()
 const DELIVERY_FETCH_TIMEOUT_MS = parseInt(process.env.OPENCORVUS_DELIVERY_FETCH_TIMEOUT_MS || "300000", 10) // 5 min for executor.delivery() (git operations can be slow on Windows with large repos)
 const SYNC_RUN_TIMEOUT_MS = parseInt(process.env.OPENCORVUS_SYNC_RUN_TIMEOUT_MS || String(DELIVERY_FETCH_TIMEOUT_MS + 15 * 60 * 1000), 10) // must exceed fetch + Task Agent eval/verify/publish time
 const EXECUTOR_STATUS_TIMEOUT_MS = 30_000 // 30s for executor.status()
@@ -665,6 +666,10 @@ export namespace OrchestratorRuntime {
         },
       })
 
+      // Pre-register event bridge so syncGoalRuns orphan detection
+      // doesn't race with the async dispatch flow below.
+      eventBridgeAborts.set(goalRun.id, new AbortController())
+
       // 4. Build goal-specific prompt (with owned_paths + dependency context + explicit cwd)
       const allGoals = listGoalsByPlan(plan.id)
       const prompt = buildGoalPrompt({
@@ -779,13 +784,15 @@ export namespace OrchestratorRuntime {
       return
     }
 
-    // Orphan detection: goal runs active in DB but no event bridge running.
-    // This happens after process restart — the in-memory event bridges are lost.
+    // Orphan detection: goal runs created BEFORE the current process started
+    // that have no event bridge. These are leftovers from a crashed process.
+    // Goal runs created during this process lifetime always have an event bridge
+    // (registered synchronously in queueGoalRun before any async work).
     for (const goalRun of activeGoalRuns) {
       if (finalizingGoalRuns.has(goalRun.id)) continue
       if (eventBridgeAborts.has(goalRun.id)) continue
-      // No event bridge for this goal run — it's orphaned
-      log.warn("orphaned goal run detected (no event bridge), marking failed", { runID, goalRunID: goalRun.id })
+      if ((goalRun.time_created ?? 0) >= processStartTime) continue // created in this process — not orphan
+      log.warn("orphaned goal run from previous process, marking failed", { runID, goalRunID: goalRun.id })
       updateGoalRun(goalRun.id, { status: "failed", error: "Orphaned: event bridge lost (process restart)", time_completed: Date.now() })
       updateGoalRunExecutorSessionStatus(goalRun.id, "failed")
       Database.use((db) =>
@@ -1389,7 +1396,8 @@ function consumeExecutorEvents(ctx: {
   const { taskID, runID, executor, goalSessionID, executorSessionID, queueTaskID, goalRunID, executorProvider, hooks } = ctx
   if (!executor.capabilities().events) return
   const bridgeKey = goalRunID || runID
-  const ctrl = new AbortController()
+  // Use pre-registered controller (from queueGoalRun) or create new one (serial path)
+  const ctrl = eventBridgeAborts.get(bridgeKey) ?? new AbortController()
   eventBridgeAborts.set(bridgeKey, ctrl)
 
   // Register abort handler: when stopEventBridge is called, abort the executor process
