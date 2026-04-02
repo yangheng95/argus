@@ -88,7 +88,13 @@ function stageTimeout(stage: "spec" | "goal" | "plan"): number {
 export function createTaskAgentTools(input: { taskID: string; agentSessionID: string; signal?: AbortSignal }) {
   const { taskID } = input
 
-  return {
+  // Blocking tools (submit_execution, execute_goal, dispatch_ready_goals) signal
+  // this controller on success. The agent loop is then forcefully terminated so
+  // the model can't spin-wait with read_context calls. The agent gets re-triggered
+  // when execution completes.
+  const stopAfterDispatch = new AbortController()
+
+  const tools = {
     decompose: tool({
       description: "Explore the codebase, analyze the task, and decompose it into executable goal contracts with cross-goal interface declarations. This single tool replaces the old analyze_requirements + decompose_goals two-step process.",
       inputSchema: z.object({
@@ -111,7 +117,7 @@ export function createTaskAgentTools(input: { taskID: string; agentSessionID: st
             title: `Decompose: ${task.title}`,
             directory: Instance.directory,
           })
-          registerGoalRunSession(decomposeSession.id, taskID)
+          registerGoalRunSession(decomposeSession.id, taskID, "goal")
           const hooks = sessionStreamHooks({ sessionID: decomposeSession.id, taskID, stage: "goal" })
           await decomposeLive.start("Decomposition started")
 
@@ -262,7 +268,7 @@ export function createTaskAgentTools(input: { taskID: string; agentSessionID: st
           title: `Plan: ${goal.title}`,
           directory: Instance.directory,
         })
-        registerGoalRunSession(planSession.id, taskID)
+        registerGoalRunSession(planSession.id, taskID, "planner")
         const hooks = sessionStreamHooks({ sessionID: planSession.id, taskID, stage: "plan" })
 
         const contract = buildGoalContract(task, goal, dbGoals)
@@ -316,7 +322,7 @@ export function createTaskAgentTools(input: { taskID: string; agentSessionID: st
           title: `Eval: ${goal.title}`,
           directory: Instance.directory,
         })
-        registerGoalRunSession(evalSession.id, taskID)
+        registerGoalRunSession(evalSession.id, taskID, "evaluator")
         const hooks = sessionStreamHooks({ sessionID: evalSession.id, taskID, stage: "eval" })
 
         const contract = buildGoalContract(task, goal, dbGoals)
@@ -488,6 +494,7 @@ export function createTaskAgentTools(input: { taskID: string; agentSessionID: st
         const { OrchestratorRuntime } = await import("@/orchestrator/runtime")
         const { hooks } = await import("@/orchestrator/state")
         await OrchestratorRuntime.dispatchSingleGoal(taskID, runID, goalID, hooks())
+        stopAfterDispatch.abort("execute_goal dispatched")
         return `Goal "${goal.title}" (${goalID}) submitted to executor. Execution running asynchronously. STOP HERE — you will be re-triggered when it completes.`
       },
     }),
@@ -513,6 +520,7 @@ export function createTaskAgentTools(input: { taskID: string; agentSessionID: st
           const running = goals.filter(g => g.status === "running").length
           return `No goals ready to dispatch. Pending: ${pending}, Running: ${running}. Check dependencies with read_context.`
         }
+        stopAfterDispatch.abort("dispatch_ready_goals dispatched")
         return `${dispatched} goal(s) dispatched in parallel. STOP HERE — you will be re-triggered when the batch completes.`
       },
     }),
@@ -682,6 +690,7 @@ export function createTaskAgentTools(input: { taskID: string; agentSessionID: st
         const { OrchestratorRuntime } = await import("@/orchestrator/runtime")
         const { hooks } = await import("@/orchestrator/state")
         const dispatched = await OrchestratorRuntime.dispatchReadyGoals(taskID, runID, plan.id, hooks())
+        stopAfterDispatch.abort("submit_execution dispatched")
         return `Run ${runID} activated. ${dispatched} goal(s) dispatched in parallel. STOP HERE — you will be re-triggered when the batch completes.`
       },
     }),
@@ -721,6 +730,14 @@ export function createTaskAgentTools(input: { taskID: string; agentSessionID: st
         const task = requireTask(taskID)
         if (!task.active_run_id) return "No active run. Execute goals first."
         const run = requireRun(task.active_run_id)
+
+        // Gate: all blocking goals must be passed before delivery
+        const goals = listGoals(taskID)
+        const blockingNotPassed = goals.filter(g => g.priority === "blocking" && g.status !== "passed")
+        if (blockingNotPassed.length > 0) {
+          const summary = blockingNotPassed.map(g => `[${g.status}] ${g.title}`).join("; ")
+          return `Cannot deliver: ${blockingNotPassed.length} blocking goal(s) not passed. Fix them first: ${summary}`
+        }
 
         // Aggregate per-goal deliveries
         const { listGoalRunsByCoordinator, findDeliveryByGoalRun } = await import("@/orchestrator/store")
@@ -775,7 +792,7 @@ export function createTaskAgentTools(input: { taskID: string; agentSessionID: st
           title: `Delivery verification: ${task.title}`,
           directory: Instance.directory,
         })
-        registerGoalRunSession(deliverySession.id, taskID)
+        registerGoalRunSession(deliverySession.id, taskID, "delivery")
         const hooks = sessionStreamHooks({ sessionID: deliverySession.id, taskID, stage: "delivery" })
         await deliveryLive.start("Delivery verification started")
 
@@ -841,6 +858,14 @@ export function createTaskAgentTools(input: { taskID: string; agentSessionID: st
         const task = requireTask(taskID)
         const run = task.active_run_id ? requireRun(task.active_run_id) : undefined
         if (!run) return "No active run."
+
+        // Gate: all blocking goals must be passed
+        const goals = listGoals(taskID)
+        const blockingNotPassed = goals.filter(g => g.priority === "blocking" && g.status !== "passed")
+        if (blockingNotPassed.length > 0) {
+          return `Cannot publish: ${blockingNotPassed.length} blocking goal(s) not passed. Fix them first.`
+        }
+
         const delivery = findDeliveryByRun(run.id)
         if (!delivery) return "No delivery found."
 
@@ -875,6 +900,32 @@ export function createTaskAgentTools(input: { taskID: string; agentSessionID: st
           const current = requireTask(task.id)
           const currentPlan = run.plan_version_id ? findPlan(run.plan_version_id) : undefined
           const published = findDeliveryByRun(run.id) ?? delivery
+
+          // Create evaluation record from delivery-agent-verdict so board/quality-gate can read it
+          const verdictPayload = verdictArtifact.payload as { verdict?: string; summary?: string; issues_found?: string[] } | null
+          if (verdictPayload?.verdict && !findEvaluationByRun(run.id)) {
+            const { OrchestratorEvaluationTable } = await import("@/orchestrator/orchestrator.sql")
+            Database.use((db) =>
+              db.insert(OrchestratorEvaluationTable).values({
+                id: Identifier.ascending("eval"),
+                task_id: task.id,
+                run_id: run.id,
+                delivery_id: delivery.id,
+                status: verdictPayload.verdict === "accepted" ? "passed" : "failed",
+                verdict: verdictPayload.verdict as any,
+                summary: verdictPayload.summary ?? "Delivery agent verification",
+                checks: (verdictPayload.issues_found ?? []).map((issue: string) => ({
+                  name: "delivery-agent",
+                  status: "info" as const,
+                  evidence: issue,
+                })),
+                time_completed: completed,
+                time_created: completed,
+                time_updated: completed,
+              }).run(),
+            )
+          }
+
           const finalized = await OrchestratorGit.complete(current, currentPlan, published)
           if (finalized.error) {
             await updateTask(current, { status: "failed", blocking_reason: null, error: finalized.error, time_completed: completed }, finalized.error)
@@ -895,4 +946,6 @@ export function createTaskAgentTools(input: { taskID: string; agentSessionID: st
       },
     }),
   }
+
+  return Object.assign(tools, { stopSignal: stopAfterDispatch.signal })
 }
