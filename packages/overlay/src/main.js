@@ -5307,7 +5307,7 @@ function criteriaEnabledValue(key, value, fallback) {
   if (["build", "test", "lint", "verify_cmd"].includes(key)) {
     return value !== false && (value !== void 0 || fallback);
   }
-  if (["artifact", "judge", "spec_check"].includes(key) && value === void 0) return true;
+  if (["artifact", "visual", "puppeteer", "judge", "spec_check"].includes(key) && value === void 0) return true;
   if (value === true) return true;
   if (!value || !record$3(value)) return false;
   return value.enabled !== false;
@@ -5343,7 +5343,7 @@ function criteriaSpecs(task, evaluation) {
   }
   for (const item of TOGGLE_CHECKS) {
     const value = config[item.key];
-    const canToggle = ["artifact", "ui_review", "code_quality", "code_review", "dead_code_review", "judge", "spec_check"].includes(item.key);
+    const canToggle = ["artifact", "visual", "puppeteer", "ui_review", "code_quality", "code_review", "dead_code_review", "judge", "spec_check"].includes(item.key);
     const visible = value !== void 0 || aggregateCheckStatus(evaluation?.checks, item.key) !== "pending" || canToggle;
     if (!visible) continue;
     push({
