@@ -136,6 +136,10 @@ const DIAG_TYPES = new Set([
   // as message.part.updated instead of run.progress/run.output.
   "orchestrator.message.part.updated",
   "orchestrator.message.updated",
+  // Per-goal heartbeat from event bridge (bypasses Session→Bus→Bridge chain)
+  "orchestrator.goal.progress",
+  "orchestrator.goal.passed",
+  "orchestrator.goal.failed",
 ])
 const PLANNING_VISIBLE_TIMEOUT_MS = Number(flag("--planning-timeout-ms")) || 2 * 60 * 1000
 const TASK_CREATE_TIMEOUT_MS = Number(flag("--task-create-timeout-ms")) || 5 * 60 * 1000

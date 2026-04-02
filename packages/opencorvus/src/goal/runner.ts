@@ -508,6 +508,12 @@ export function buildGoalPrompt(input: {
 ${input.goal.description}`,
     `Acceptance:
 ${input.goal.criteria}`,
+    // Plan node brief — the planner's specific implementation steps for this goal.
+    // Without this, the executor only sees the goal's description/criteria from the
+    // goal decomposition stage and misses the planner's detailed guidance.
+    input.node.brief
+      ? `## Implementation Plan (from Planner)\n\n${input.node.title ? `**${input.node.title}**\n\n` : ""}${input.node.brief}`
+      : undefined,
     runnableChecks.length > 0
       ? `Required self-run checks for this goal:
 ${runnableChecks.join(", ")}`
