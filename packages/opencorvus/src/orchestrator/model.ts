@@ -671,6 +671,7 @@ export const Event = {
   SpecApproved: BusEvent.define("spec.approved", z.object({ taskID: Identifier.schema("task"), specID: Identifier.schema("spec"), summary: z.string() })),
   PlanCreated: BusEvent.define("plan.created", z.object({ taskID: Identifier.schema("task"), planID: Identifier.schema("plan"), summary: z.string() })),
   PlanActivated: BusEvent.define("plan.activated", z.object({ taskID: Identifier.schema("task"), planID: Identifier.schema("plan"), summary: z.string() })),
+  GoalProgress: BusEvent.define("goal.progress", z.object({ taskID: Identifier.schema("task"), goalRunID: z.string(), summary: z.string() })),
   GoalPassed: BusEvent.define("goal.passed", z.object({ taskID: Identifier.schema("task"), goalID: Identifier.schema("goal"), summary: z.string() })),
   GoalFailed: BusEvent.define("goal.failed", z.object({ taskID: Identifier.schema("task"), goalID: Identifier.schema("goal"), summary: z.string() })),
   MilestoneActivated: BusEvent.define("milestone.activated", z.object({ taskID: Identifier.schema("task"), milestoneID: z.string(), summary: z.string() })),

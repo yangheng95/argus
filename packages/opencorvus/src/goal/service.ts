@@ -1028,7 +1028,38 @@ async function compile(input: GoalCompileInput): Promise<GoalDraft> {
 
 async function run(input: GoalCompileInput) {
   try {
-    const goalDraft = await compile(input)
+    let goalDraft = await compile(input)
+
+    // Fidelity review: LLM-based verification that goals cover all spec requirements.
+    // Catches omissions, distortions, and incorrect merges that the structural
+    // quality gate in the Goal Agent cannot detect.
+    try {
+      const { GoalFidelityReview, applyGoalCorrections } = await import("./fidelity-review")
+      const review = await GoalFidelityReview.run({
+        request: input.request,
+        spec: input.spec,
+        goalDraft,
+        sessionID: input.sessionID,
+        metadata: input.metadata,
+        signal: input.signal,
+      })
+      if (review.verdict === "needs_correction") {
+        log.warn("fidelity review found issues, applying corrections", {
+          issues: review.coverage_issues.length,
+          corrections: review.goal_corrections.length,
+          missing: review.missing_goals.length,
+        })
+        goalDraft = applyGoalCorrections(goalDraft, review)
+      } else {
+        log.info("fidelity review passed", { goals: goalDraft.goals.length })
+      }
+    } catch (reviewErr) {
+      // Fidelity review failure is non-fatal — proceed with uncorrected goals
+      log.error("fidelity review failed, proceeding with uncorrected goals", {
+        error: reviewErr instanceof Error ? reviewErr.message : String(reviewErr),
+      })
+    }
+
     return scopedGoalDraft(goalDraft, input)
   } catch (error) {
     if (error instanceof GoalFailureError) throw error
