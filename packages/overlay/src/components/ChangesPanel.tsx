@@ -431,9 +431,14 @@ export function ChangesPanel(props: ChangesPanelProps) {
       setSelectedItem(item);
       return;
     }
-    const fullDiffs = await fetchFullDiffs(runID);
-    const full = fullDiffs.find((d) => d.file === item.file);
-    setSelectedItem(full || item);
+    try {
+      const fullDiffs = await fetchFullDiffs(runID);
+      const full = fullDiffs.find((d) => d.file === item.file);
+      setSelectedItem(full || item);
+    } catch {
+      // API unavailable — still show the file entry (without diff content)
+      setSelectedItem(item);
+    }
   }
 
   function closeDiff() {
