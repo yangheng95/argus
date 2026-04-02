@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "en-US",
-    "panel_revision": "10412750415f0a92"
+    "panel_revision": "42725a0a6011824d"
   },
   "brand.guide_kicker": "Quick Guide",
   "brand.guide_positioning_body": "This is the task cockpit — left picks the task, center drives execution, right verifies spec, plan, evaluation, and file changes so the agent stays on track.",
@@ -447,6 +447,11 @@
   "task.status.completed": "Completed",
   "task.status.failed": "Failed",
   "task.status.idle": "Idle",
+  "task.status.blocked": "Blocked",
+  "task.status.delivering": "Delivering",
+  "task.status.evaluating": "Evaluating",
+  "task.status.planning": "Planning",
+  "task.status.running": "Running",
   "task.status.queued": "Queued",
   "time.duration.hour_minute": "{{hours}}h {{minutes}}m",
   "time.duration.minute_second": "{{minutes}}m {{seconds}}s",

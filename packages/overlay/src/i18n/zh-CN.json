@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "zh-CN",
-    "panel_revision": "10412750415f0a92"
+    "panel_revision": "42725a0a6011824d"
   },
   "brand.guide_kicker": "快速上手",
   "brand.guide_positioning_body": "这不是装饰——左栏选任务，中栏推执行，右栏盯 Spec、Plan、评估和文件变更，防止 agent 跑偏。",
@@ -447,6 +447,11 @@
   "task.status.completed": "已完成",
   "task.status.failed": "失败",
   "task.status.idle": "空闲",
+  "task.status.blocked": "阻塞",
+  "task.status.delivering": "交付中",
+  "task.status.evaluating": "评估中",
+  "task.status.planning": "规划中",
+  "task.status.running": "执行中",
   "task.status.queued": "排队中",
   "time.duration.hour_minute": "{{hours}} 时 {{minutes}} 分",
   "time.duration.minute_second": "{{minutes}} 分 {{seconds}} 秒",

@@ -1676,7 +1676,7 @@ function displayToolDetail(name, input, state, base = "") {
 }
 function toolStatusLabel(status) {
   if (status === "completed") return t("task.status.completed");
-  if (status === "running") return t("task.status.running");
+  if (status === "running") return t("common.active");
   if (status === "error") return t("common.error");
   return t("checks.pending");
 }
@@ -1941,17 +1941,7 @@ function visibleTasks() {
     ...boardStore.tasks
   ].sort((a, b) => taskUpdated$1(b) - taskUpdated$1(a));
 }
-const INTERRUPTABLE_STATUSES = /* @__PURE__ */ new Set([
-  "queued",
-  "spec_generating",
-  "goal_decomposing",
-  "planning",
-  "planned",
-  "running",
-  "blocked",
-  "evaluating",
-  "delivering"
-]);
+const INTERRUPTABLE_STATUSES = /* @__PURE__ */ new Set(["queued", "active"]);
 function isTaskInterruptable() {
   const status = boardStore.board?.task?.status;
   return !!status && INTERRUPTABLE_STATUSES.has(status);
@@ -2869,20 +2859,21 @@ function syncSectionPhases(board, changesCount = 0) {
   if (!board?.task && !live) return;
   const goals = (board?.lanes || []).find((lane) => lane.id === "goals")?.cards || [];
   const pending = (board?.interactions || []).some((item) => item.status === "pending");
-  const planning = board?.task ? board.task.status === "planning" || board.run?.phase === "plan" || board.run?.phase === "replan" : false;
+  const taskStatus = board?.task?.status || "";
+  const planning = board?.task ? board.run?.phase === "plan" || board.run?.phase === "replan" : false;
   const active = [];
   const related = [];
   if (live) {
     active.push(live);
     relatePhase(live, related, board, goals, changesCount);
   }
-  if (board?.task && (pending || board.task.status === "blocked")) {
+  if (board?.task && pending) {
     active.length = 0;
     if (board.plan) active.push("plan");
     else if (goals.length > 0) active.push("goals");
     else if (board.spec) active.push("spec");
   }
-  if (board?.task && active.length === 0 && board.task.status === "queued") {
+  if (board?.task && active.length === 0 && taskStatus === "queued") {
     if (board.spec) active.push("spec");
     else if (board.plan) active.push("plan");
   }
@@ -2891,22 +2882,26 @@ function syncSectionPhases(board, changesCount = 0) {
     if (board.spec) related.push("spec");
     if (board.plan) related.push("plan");
   }
-  if (board?.task && active.length === 0 && board.task.status === "running") {
-    active.push("executor");
-    if (goals.length > 0) related.push("goals");
-    if (board.plan) related.push("plan");
-    if (changesCount > 0) related.push("files");
-  }
-  if (board?.task && active.length === 0 && board.task.status === "evaluating") {
-    active.push("evaluation");
-    if (goals.length > 0) related.push("goals");
-    if (changesCount > 0) related.push("files");
-  }
-  if (board?.task && active.length === 0 && board.task.status === "delivering") {
-    active.push("delivery");
-    if (changesCount > 0) related.push("files");
-    if (board.evaluation) related.push("evaluation");
-    if (goals.length > 0) related.push("goals");
+  if (board?.task && active.length === 0 && taskStatus === "active") {
+    if (board.evaluation) {
+      active.push("evaluation");
+      if (goals.length > 0) related.push("goals");
+      if (changesCount > 0) related.push("files");
+    } else if (board.delivery) {
+      active.push("delivery");
+      if (changesCount > 0) related.push("files");
+      if (goals.length > 0) related.push("goals");
+    } else if (goals.length > 0) {
+      active.push("executor");
+      related.push("goals");
+      if (board.plan) related.push("plan");
+      if (changesCount > 0) related.push("files");
+    } else if (board.plan) {
+      active.push("plan");
+      if (board.spec) related.push("spec");
+    } else {
+      active.push("spec");
+    }
   }
   if (board?.task && active.length === 0 && board.task.status === "completed") {
     active.push(
@@ -3119,13 +3114,7 @@ function mergeLoadedConversationMessages(left, right) {
 }
 function activeAgentStages() {
   const status = String(boardStore.board?.task?.status || "").trim().toLowerCase();
-  if (status === "spec_generating") return /* @__PURE__ */ new Set(["spec"]);
-  if (status === "goal_decomposing") return /* @__PURE__ */ new Set(["goal"]);
-  if (status === "planning") return /* @__PURE__ */ new Set(["planner"]);
-  if (status === "running") return /* @__PURE__ */ new Set(["executor"]);
-  if (status === "evaluating") return /* @__PURE__ */ new Set(["evaluator"]);
-  if (status === "delivering") return /* @__PURE__ */ new Set(["delivery"]);
-  if (!status && Array.isArray(store.agentEvents) && store.agentEvents.length > 0) {
+  if (status === "active" && Array.isArray(store.agentEvents) && store.agentEvents.length > 0) {
     return new Set(
       store.agentEvents.map((item) => {
         const raw = String(item?.stage || "").trim().toLowerCase();
@@ -4633,11 +4622,7 @@ function statusLabel$1(status) {
   const map = {
     idle: t("task.status.idle"),
     queued: t("task.status.queued"),
-    planning: t("task.status.planning"),
-    running: t("task.status.running"),
-    blocked: t("task.status.blocked"),
-    evaluating: t("task.status.evaluating"),
-    delivering: t("task.status.delivering"),
+    active: t("task.status.active"),
     completed: t("task.status.completed"),
     failed: t("task.status.failed"),
     cancelled: t("task.status.cancelled")
@@ -4645,7 +4630,7 @@ function statusLabel$1(status) {
   return map[status] || status;
 }
 function taskListBadge(item) {
-  if (item?._pending) return statusLabel$1("planning");
+  if (item?._pending) return statusLabel$1("active");
   const pending = Number(item?.pending_interactions || 0) > 0;
   return pending ? t("detail.pending_interactions") : statusLabel$1(item?.task?.status || "idle");
 }
@@ -4676,7 +4661,7 @@ function DeleteButton(props) {
 function TaskRow(props) {
   const id = () => props.item?.task?.id || "";
   const pending = () => props.item?._pending === true;
-  const status = () => pending() ? "planning" : props.item?.task?.status || "idle";
+  const status = () => pending() ? "active" : props.item?.task?.status || "idle";
   const title = () => taskListTitle(props.item) || id();
   const isActive = () => !pending() && props.selectedTaskID === id();
   return (() => {
@@ -4814,14 +4799,11 @@ delegateEvents(["click"]);
 
 var _tmpl$2$b = /* @__PURE__ */ template(`<div class=plan-version>`), _tmpl$3$b = /* @__PURE__ */ template(`<div class="plan-version streaming-indicator">`), _tmpl$4$b = /* @__PURE__ */ template(`<p class=empty-hint>`), _tmpl$5$b = /* @__PURE__ */ template(`<div class="plan-summary md-content">`), _tmpl$6$a = /* @__PURE__ */ template(`<div class=goals-list>`), _tmpl$7$9 = /* @__PURE__ */ template(`<span class=extension-status data-state=passed>✓`), _tmpl$8$6 = /* @__PURE__ */ template(`<span class=extension-status data-state=failed>✗`), _tmpl$9$5 = /* @__PURE__ */ template(`<span class=extension-status data-state=active>`), _tmpl$0$3 = /* @__PURE__ */ template(`<div class="goal-criteria md-content">`), _tmpl$1$2 = /* @__PURE__ */ template(`<details class=goal-item><summary class=goal-item-head><span class=goal-item-chevron aria-hidden=true>▶</span><span class=goal-desc-inline></span><span class=goal-title-brief></span></summary><div class=goal-item-body><div class=goal-content><div class=plan-version></div><div class="goal-desc md-content">`), _tmpl$10$1 = /* @__PURE__ */ template(`<span class=goal-priority>`), _tmpl$11$1 = /* @__PURE__ */ template(`<button type=button class="btn btn-ghost mini"data-goal-action=view-session title="View executor session"aria-label="View executor session">View`), _tmpl$12$1 = /* @__PURE__ */ template(`<button type=button class="btn btn-ghost mini"data-goal-action=edit>`), _tmpl$13$1 = /* @__PURE__ */ template(`<button type=button class="btn btn-ghost mini danger"data-goal-action=delete>`), _tmpl$14$1 = /* @__PURE__ */ template(`<div class=goal-actions>`), _tmpl$15$1 = /* @__PURE__ */ template(`<details class=goal-item><summary class=goal-item-head><span class=goal-item-chevron aria-hidden=true>▶</span><span class=goal-desc-inline></span><span class=goal-title-brief></span></summary><div class=goal-item-body><div class=goal-content><div class="goal-desc md-content">`), _tmpl$16$1 = /* @__PURE__ */ template(`<div class=empty-hint>`), _tmpl$17 = /* @__PURE__ */ template(`<section class=criteria-group><div class=criteria-group-head><span class=criteria-group-icon aria-hidden=true></span><div class=criteria-group-title></div><div class=criteria-group-count></div></div><div class=criteria-group-list>`), _tmpl$18 = /* @__PURE__ */ template(`<label class=criteria-item><input type=checkbox><span class=check-mark></span><span class=criteria-copy><span class=criteria-name></span><span class=criteria-desc></span></span><span class=criteria-status></span><span class=criteria-result>`), _tmpl$19 = /* @__PURE__ */ template(`<div class="eval-summary md-content">`), _tmpl$20 = /* @__PURE__ */ template(`<div class=eval-error-meta>`), _tmpl$21 = /* @__PURE__ */ template(`<div class=eval-error><div class=eval-error-name>✗ </div><div class="eval-error-detail md-content">`), _tmpl$22 = /* @__PURE__ */ template(`<div class=delivery-files>`), _tmpl$23 = /* @__PURE__ */ template(`<div class=delivery-card><div class=delivery-title></div><div class="delivery-summary md-content">`), _tmpl$24 = /* @__PURE__ */ template(`<button type=button class="btn btn-primary"data-task-action=retry>`), _tmpl$25 = /* @__PURE__ */ template(`<button type=button class="btn btn-ghost"data-task-action=replan>`), _tmpl$26 = /* @__PURE__ */ template(`<div class=task-actions-buttons>`), _tmpl$27 = /* @__PURE__ */ template(`<div class=task-actions-bar>`), _tmpl$28 = /* @__PURE__ */ template(`<button class="btn btn-primary"data-action=always>`), _tmpl$29 = /* @__PURE__ */ template(`<button class="btn btn-ghost"data-action=once>`), _tmpl$30 = /* @__PURE__ */ template(`<button class="btn btn-ghost"data-action=reject>`), _tmpl$31 = /* @__PURE__ */ template(`<div class=interaction-alert><div class=interaction-title> </div><div class="interaction-body md-content"></div><div class=interaction-actions>`), _tmpl$32 = /* @__PURE__ */ template(`<button class="btn btn-primary"data-action=answer>`), _tmpl$33 = /* @__PURE__ */ template(`<div class=interactions-list>`), _tmpl$36 = /* @__PURE__ */ template(`<div class=executor-summary-stat><span class=executor-summary-value></span><span class=executor-summary-label>`), _tmpl$37 = /* @__PURE__ */ template(`<div class=executor-summary><div class=executor-summary-stat><span class=executor-summary-value></span><span class=executor-summary-label>`), _tmpl$38 = /* @__PURE__ */ template(`<details class=section><summary class=section-head><span class=section-icon aria-hidden=true></span><span class=section-title></span><span class=section-badge></span></summary><div class=section-body>`), _tmpl$39 = /* @__PURE__ */ template(`<div id=taskActionsBar>`);
 function statusIcon(status) {
+  const activeIcon = `<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path data-fill="true" d="M6 4.6L11.3 8 6 11.4Z"/></svg>`;
   const map = {
     idle: `<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle data-stroke="true" cx="8" cy="8" r="4.5"/><circle data-fill="true" cx="8" cy="8" r="1.25"/></svg>`,
     queued: `<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle data-stroke="true" cx="8" cy="8" r="4.5"/><path data-stroke="true" d="M8 5.4v2.8l2.1 1.3"/></svg>`,
-    planning: `<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path data-stroke="true" d="M5 3.5v9"/><path data-stroke="true" d="M5 5.5h6"/><path data-stroke="true" d="M5 10.5h4"/><circle data-fill="true" cx="5" cy="3.5" r="1.15"/><circle data-fill="true" cx="11" cy="5.5" r="1.15"/><circle data-fill="true" cx="9" cy="10.5" r="1.15"/></svg>`,
-    running: `<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path data-fill="true" d="M6 4.6L11.3 8 6 11.4Z"/></svg>`,
-    blocked: `<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path data-fill="true" d="M8 3.1L13 12H3Z"/><path data-stroke="true" d="M8 5.8v2.8"/><circle data-fill="true" cx="8" cy="10.8" r="0.9" style="fill: var(--surface-strong);"/></svg>`,
-    evaluating: `<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle data-stroke="true" cx="6.7" cy="6.7" r="3.5"/><path data-stroke="true" d="M9.5 9.5l2.9 2.9"/><circle data-fill="true" cx="6.7" cy="6.7" r="1.2"/></svg>`,
-    delivering: `<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path data-stroke="true" d="M3.5 8h9"/><path data-stroke="true" d="M9 4.5L12.5 8 9 11.5"/><circle data-fill="true" cx="3.5" cy="8" r="1"/></svg>`,
+    active: activeIcon,
     completed: `<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle data-stroke="true" cx="8" cy="8" r="4.5"/><path data-stroke="true" d="M5.1 8.2l2 2 3.8-3.8"/></svg>`,
     failed: `<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle data-stroke="true" cx="8" cy="8" r="4.5"/><path data-stroke="true" d="M5.4 5.4l5.2 5.2"/><path data-stroke="true" d="M10.6 5.4l-5.2 5.2"/></svg>`,
     cancelled: `<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle data-stroke="true" cx="8" cy="8" r="4.5"/><path data-stroke="true" d="M5.2 10.8l5.6-5.6"/></svg>`
@@ -4976,11 +4958,11 @@ function PlanPanel(props) {
                 insert(_el$19, () => `Plan V${version()}`);
                 insert(_el$18, createComponent(Show, {
                   get when() {
-                    return goal.detail;
+                    return goal.done_definition;
                   },
                   get children() {
                     var _el$21 = _tmpl$0$3();
-                    createRenderEffect(() => _el$21.innerHTML = renderMarkdown$1(goal.detail));
+                    createRenderEffect(() => _el$21.innerHTML = renderMarkdown$1(goal.done_definition));
                     return _el$21;
                   }
                 }), null);
@@ -5062,11 +5044,11 @@ function GoalsPanel(props) {
           }), null);
           insert(_el$34, createComponent(Show, {
             get when() {
-              return card.detail;
+              return card.done_definition;
             },
             get children() {
               var _el$36 = _tmpl$0$3();
-              createRenderEffect(() => _el$36.innerHTML = renderMarkdown$1(card.detail));
+              createRenderEffect(() => _el$36.innerHTML = renderMarkdown$1(card.done_definition));
               return _el$36;
             }
           }), null);
@@ -5093,7 +5075,7 @@ function GoalsPanel(props) {
                 },
                 get children() {
                   var _el$39 = _tmpl$12$1();
-                  _el$39.$$click = () => props.onEditGoal?.(card.id, card.title, card.detail || "");
+                  _el$39.$$click = () => props.onEditGoal?.(card.id, card.title, card.done_definition || "");
                   insert(_el$39, () => t("common.edit"));
                   createRenderEffect((_p$) => {
                     var _v$4 = card.id, _v$5 = t("goal.edit_button_title"), _v$6 = t("goal.edit_button_title");
@@ -10363,7 +10345,7 @@ function ensureTaskListEntry(taskID, requestID, requestText, resultMessage) {
       id: taskID,
       requestID: requestID || task?.requestID || "",
       title,
-      status: task?.status || "planning",
+      status: task?.status || "active",
       directory: task?.directory || "",
       time: {
         created,
@@ -14781,20 +14763,20 @@ function installGoalFormHandlers() {
     e.preventDefault();
     if (!boardStore.selectedTaskID) return;
     const goalID = document.getElementById("goalId")?.value.trim() || "";
-    const description = document.getElementById("goalDescription")?.value.trim() || "";
-    const criteria = document.getElementById("goalCriteria")?.value.trim() || "";
-    if (!description) return;
+    const title = document.getElementById("goalDescription")?.value.trim() || "";
+    const doneDefinition = document.getElementById("goalCriteria")?.value.trim() || "";
+    if (!title) return;
     try {
       if (goalID) {
         await panelMessage(`Update goal ${goalID}.`, {
           goalID,
-          description,
-          criteria: criteria || "The requested change is implemented and acceptance checks pass.",
+          title,
+          done_definition: doneDefinition || "The requested change is implemented and acceptance checks pass.",
           taskID: boardStore.selectedTaskID || void 0
         });
       } else {
-        const payload = criteria ? `/goal ${description}
-Criteria: ${criteria}` : `/goal ${description}`;
+        const payload = doneDefinition ? `/goal ${title}
+Criteria: ${doneDefinition}` : `/goal ${title}`;
         await panelMessage(payload, {
           taskID: boardStore.selectedTaskID || void 0
         });
@@ -15398,7 +15380,7 @@ createRoot(() => {
     }
     const completedTime = task?.time?.completed || 0;
     const status = task?.status || "idle";
-    const isActive = ["running", "planning", "evaluating", "delivering", "queued"].includes(status);
+    const isActive = ["active", "queued"].includes(status);
     const end = completedTime && !isActive ? completedTime : Date.now();
     elapsedEl.textContent = formatDuration(end - startTime);
   }, 1e3);

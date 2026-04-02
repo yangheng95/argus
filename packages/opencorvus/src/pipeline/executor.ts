@@ -50,7 +50,7 @@ export async function* runGoalPipeline(
 ): AsyncGenerator<PipelineEvent> {
   const { goal, run, task } = contract
   const { executor, workDir, sessionID, executorSessionID, queueTaskID, signal } = deps
-  const goalRunID = findGoalRunByGoalAndRun(goal.id, run.id)
+  const goalRunID = await findGoalRunByGoalAndRun(goal.id, run.id)
   if (!goalRunID) {
     yield { type: "failed", error: "No goal_run record found", failureClass: "goal_wrong" }
     return
@@ -171,7 +171,7 @@ async function* streamExecutorEvents(
   }
 
   let lastHeartbeat = Date.now()
-  for await (const event of executor.events({ sessionID, signal })) {
+  for await (const event of executor.events({ sessionID, queueTaskID, signal })) {
     if (signal.aborted) break
 
     yield { type: "executor_event", event }
@@ -230,8 +230,8 @@ async function extractDelivery(
 // Helpers
 // ---------------------------------------------------------------------------
 
-function findGoalRunByGoalAndRun(goalID: string, runID: string): string | undefined {
-  const { listGoalRunsByCoordinator } = require("@/orchestrator/store")
+async function findGoalRunByGoalAndRun(goalID: string, runID: string): Promise<string | undefined> {
+  const { listGoalRunsByCoordinator } = await import("@/orchestrator/store")
   const runs = listGoalRunsByCoordinator(runID) as Array<{ id: string; goal_id: string; status: string }>
   const active = runs.find((gr) => gr.goal_id === goalID && gr.status !== "completed" && gr.status !== "failed")
   return active?.id

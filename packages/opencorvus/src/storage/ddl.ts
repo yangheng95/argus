@@ -4,9 +4,8 @@
  * All tables use CREATE TABLE IF NOT EXISTS so the schema is idempotent —
  * safe to run on every startup whether the DB is fresh or already populated.
  *
- * When you need to add a new table, just add it here. No migration directory needed.
- * When you need to alter an existing table (add column, etc.), add a guarded
- * ALTER TABLE statement to SCHEMA_MIGRATIONS at the bottom.
+ * No migrations — DDL is the single source of truth. Change columns here directly.
+ * The benchmark resets the DB on each run via resetDatabase().
  */
 
 // ---------------------------------------------------------------------------
@@ -446,13 +445,20 @@ CREATE TABLE IF NOT EXISTS orchestrator_goal (
   plan_version_id  text,
   spec_snapshot_id text,
   milestone_id     text,
-  description      text NOT NULL,
-  criteria         text NOT NULL,
-  metadata         text,
+  title            text NOT NULL,
+  objective        text NOT NULL,
+  done_definition  text NOT NULL,
+  owned_paths      text NOT NULL DEFAULT '[]',
+  depends_on       text NOT NULL DEFAULT '[]',
+  exports          text NOT NULL DEFAULT '[]',
+  imports          text NOT NULL DEFAULT '[]',
+  kind             text NOT NULL DEFAULT 'feature',
+  requirement_ids  text NOT NULL DEFAULT '[]',
   priority         text NOT NULL DEFAULT 'blocking',
   source           text NOT NULL DEFAULT 'spec',
   status           text NOT NULL DEFAULT 'pending',
   order_index      integer NOT NULL DEFAULT 0,
+  metadata         text,
   time_created     integer NOT NULL,
   time_updated     integer NOT NULL,
   FOREIGN KEY (task_id)          REFERENCES orchestrator_task(id)          ON DELETE CASCADE,
@@ -561,6 +567,7 @@ CREATE TABLE IF NOT EXISTS orchestrator_goal_run (
   base_ref            text,
   merge_ref           text,
   metadata            text,
+  lease_until          integer,
   time_started        integer,
   time_completed      integer,
   time_created        integer NOT NULL,
@@ -605,6 +612,9 @@ CREATE TABLE IF NOT EXISTS orchestrator_delivery (
   status       text NOT NULL DEFAULT 'ready',
   summary      text NOT NULL,
   result       text,
+  lease_until  integer,
+  time_started integer,
+  time_completed integer,
   time_created integer NOT NULL,
   time_updated integer NOT NULL,
   FOREIGN KEY (task_id) REFERENCES orchestrator_task(id) ON DELETE CASCADE,
@@ -640,6 +650,8 @@ CREATE TABLE IF NOT EXISTS orchestrator_evaluation (
   verdict        text NOT NULL DEFAULT 'inconclusive',
   summary        text NOT NULL,
   checks         text,
+  lease_until    integer,
+  time_started   integer,
   time_completed integer,
   time_created   integer NOT NULL,
   time_updated   integer NOT NULL,
@@ -707,6 +719,22 @@ WHERE rowid NOT IN (
 );
 CREATE INDEX IF NOT EXISTS orchestrator_channel_task_idx ON orchestrator_channel_binding (task_id);
 CREATE UNIQUE INDEX IF NOT EXISTS orchestrator_channel_binding_thread_idx ON orchestrator_channel_binding (platform, channel, thread);
+
+-- ===== decision log =====
+
+CREATE TABLE IF NOT EXISTS decision_log (
+  id           text PRIMARY KEY,
+  task_id      text NOT NULL,
+  goal_id      text,
+  phase        text NOT NULL,
+  key          text NOT NULL,
+  value        text NOT NULL,
+  reason       text NOT NULL,
+  time_created integer NOT NULL,
+  FOREIGN KEY (task_id) REFERENCES orchestrator_task(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS decision_log_task_idx ON decision_log (task_id);
+CREATE INDEX IF NOT EXISTS decision_log_task_key_idx ON decision_log (task_id, key);
 
 -- ===== workbench =====
 
@@ -818,29 +846,3 @@ CREATE INDEX IF NOT EXISTS protocol_stream_chunk_session_idx           ON protoc
 
 `
 
-// ---------------------------------------------------------------------------
-// Schema migrations — guarded ALTER TABLE statements for existing databases.
-// Each migration checks for the column/table before altering, so it's safe
-// to run on every startup (idempotent).
-// ---------------------------------------------------------------------------
-
-export const SCHEMA_MIGRATIONS = /* sql */ `
-
--- Add time_status_changed to orchestrator_task (used by stranded-task recovery)
-ALTER TABLE orchestrator_task ADD COLUMN time_status_changed integer;
-
--- Add time_started, time_completed, lease_until to orchestrator_goal_run
-ALTER TABLE orchestrator_goal_run ADD COLUMN time_started integer;
-ALTER TABLE orchestrator_goal_run ADD COLUMN time_completed integer;
-ALTER TABLE orchestrator_goal_run ADD COLUMN lease_until integer;
-
--- Add time_started, time_completed, lease_until to orchestrator_delivery
-ALTER TABLE orchestrator_delivery ADD COLUMN time_started integer;
-ALTER TABLE orchestrator_delivery ADD COLUMN time_completed integer;
-ALTER TABLE orchestrator_delivery ADD COLUMN lease_until integer;
-
--- Add time_started, lease_until to orchestrator_evaluation
-ALTER TABLE orchestrator_evaluation ADD COLUMN time_started integer;
-ALTER TABLE orchestrator_evaluation ADD COLUMN lease_until integer;
-
-`

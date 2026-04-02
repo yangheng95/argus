@@ -8,12 +8,15 @@ import {
   OrchestratorGoalRunTable,
   OrchestratorGoalTable,
   OrchestratorInteractionRequestTable,
+  OrchestratorPlanNodeTable,
   OrchestratorPlanVersionTable,
   OrchestratorProgressSnapshotTable,
   OrchestratorRunTable,
   OrchestratorTaskTable,
 } from "@/orchestrator/orchestrator.sql"
 import { EvaluationCheck } from "@/orchestrator/model"
+import { Instance } from "@/project/instance"
+import { ProtocolEventTable } from "@/protocol/protocol.sql"
 import { Database, desc, eq, sql } from "@/storage/db"
 import { WorkbenchTaskNoteTable } from "./workbench.sql"
 import { compileBrief } from "./brief"
@@ -56,17 +59,26 @@ function buildBoard(task: typeof OrchestratorTaskTable.$inferSelect) {
       .orderBy(OrchestratorGoalTable.order_index)
       .all(),
   )
-  const goalRunSessionMap = run
-    ? new Map(
-        Database.use((db) =>
-          db
-            .select({ goalID: OrchestratorGoalRunTable.goal_id, sessionID: OrchestratorGoalRunTable.session_id })
-            .from(OrchestratorGoalRunTable)
-            .where(eq(OrchestratorGoalRunTable.coordinator_run_id, run.id))
-            .all(),
-        ).map((r) => [r.goalID, r.sessionID]),
+  const planNodes = plan
+    ? Database.use((db) =>
+        db
+          .select()
+          .from(OrchestratorPlanNodeTable)
+          .where(eq(OrchestratorPlanNodeTable.plan_version_id, plan.id))
+          .orderBy(OrchestratorPlanNodeTable.order_index)
+          .all(),
       )
-    : new Map<string, string | null>()
+    : []
+  const goalRunRows = run
+    ? Database.use((db) =>
+        db
+          .select()
+          .from(OrchestratorGoalRunTable)
+          .where(eq(OrchestratorGoalRunTable.coordinator_run_id, run.id))
+          .all(),
+      )
+    : []
+  const goalRunSessionMap = new Map(goalRunRows.map((r) => [r.goal_id, r.session_id]))
   const interactions = Database.use((db) =>
     db
       .select()
@@ -183,11 +195,24 @@ function buildBoard(task: typeof OrchestratorTaskTable.$inferSelect) {
   const specRow = task.active_spec_version_id ? findSpecSnapshot(task.active_spec_version_id) : undefined
   const specSnapshot = specRow ? viewSpecSnapshot(specRow) : undefined
 
+  // lastSequence: must use the same sequence space as protocol_event.seq
+  // (auto-incrementing integer), NOT timestamps. The panel's monotonic guard
+  // compares this against SSE event.sequence — mismatched number spaces
+  // would cause ALL SSE events to be silently discarded.
+  const lastSequence = Database.use((db) =>
+    db.select({ seq: sql<number>`coalesce(max(seq), 0)` })
+      .from(ProtocolEventTable)
+      .where(eq(ProtocolEventTable.task_id, task.id))
+      .get()?.seq ?? 0
+  )
+
   return {
+      lastSequence,
       spec: specSnapshot,
       task: {
         id: task.id,
         projectID: task.project_id,
+        directory: Instance.directory,
         sessionID: task.session_id ?? undefined,
         activePlanVersionID: task.active_plan_version_id ?? undefined,
         activeRunID: task.active_run_id ?? undefined,
@@ -230,6 +255,28 @@ function buildBoard(task: typeof OrchestratorTaskTable.$inferSelect) {
             },
           }
         : undefined,
+      planNodes: planNodes.map((node) => ({
+        id: node.id,
+        goalID: node.goal_id ?? undefined,
+        kind: node.kind,
+        title: node.title,
+        brief: node.brief,
+        orderIndex: node.order_index,
+      })),
+      goalRuns: goalRunRows.map((gr) => ({
+        id: gr.id,
+        goalID: gr.goal_id,
+        status: gr.status,
+        sessionID: gr.session_id ?? undefined,
+        workspaceDir: gr.workspace_dir ?? undefined,
+        error: gr.error ?? undefined,
+        time: {
+          created: gr.time_created,
+          updated: gr.time_updated,
+          started: gr.time_started ?? undefined,
+          completed: gr.time_completed ?? undefined,
+        },
+      })),
       run: run
         ? {
             id: run.id,

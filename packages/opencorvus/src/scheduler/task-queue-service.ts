@@ -1,5 +1,7 @@
 import z from "zod"
 import { Instance } from "@/project/instance"
+import { Bus } from "@/bus"
+import { BusEvent } from "@/bus/bus-event"
 import { SessionPrompt } from "@/session/prompt"
 import { SessionTable } from "@/session/session.sql"
 import { Database, and, eq, sql } from "@/storage/db"
@@ -7,6 +9,13 @@ import { Identifier } from "@/id/id"
 import { Log } from "@/util/log"
 import { Scheduler } from "./index"
 import { TaskQueueTable } from "./task-queue.sql"
+
+export const TaskQueueEvent = {
+  Completed: BusEvent.define("task-queue.completed", z.object({
+    queueTaskID: z.string(),
+    sessionID: z.string(),
+  })),
+}
 
 const RawTaskMetadata = z.object({
   kind: z.literal("session_prompt"),
@@ -281,6 +290,7 @@ export namespace TaskQueueService {
         .run(),
     )
     log.info("task completed", { id: task.id, sessionID: task.session_id })
+    Bus.publish(TaskQueueEvent.Completed, { queueTaskID: task.id, sessionID: task.session_id })
   }
 
   function recover(now: number) {
