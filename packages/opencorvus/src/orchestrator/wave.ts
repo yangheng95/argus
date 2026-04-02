@@ -65,20 +65,20 @@ function preferOneBased(waves: Array<Record<string, unknown>>, goalCount: number
   return !zeroBased.zeroSeen && oneBased.covered > 0
 }
 
-function defaultWaveTitle(index: number, goal: { description?: string } | undefined) {
-  const description = cleanText(goal?.description)
-  if (!description) return `Wave ${index + 1}`
-  return `Wave ${index + 1}: ${description}`
+function defaultWaveTitle(index: number, goal: { title?: string } | undefined) {
+  const title = cleanText(goal?.title)
+  if (!title) return `Wave ${index + 1}`
+  return `Wave ${index + 1}: ${title}`
 }
 
 function stageWaveTitle(input: {
   title: string
   description?: string
-  goal: { description?: string } | undefined
+  goal: { title?: string } | undefined
   index: number
   total: number
 }) {
-  const goal = cleanText(input.goal?.description)
+  const goal = cleanText(input.goal?.title)
   if (input.total <= 1) return input.title
   if (!goal) return `${input.title} · Stage ${input.index + 1}`
   return `${input.title} · ${goal}`
@@ -86,7 +86,7 @@ function stageWaveTitle(input: {
 
 export function normalizePlanWaves(input: {
   waves?: unknown
-  goals: Array<{ description: string }>
+  goals: Array<{ title: string }>
 }) {
   const raw = Array.isArray(input.waves)
     ? input.waves.flatMap((item) => item && typeof item === "object" && !Array.isArray(item) ? [item as Record<string, unknown>] : [])
@@ -107,7 +107,7 @@ export function normalizePlanWaves(input: {
     for (const goalIndex of goal_indices) claimed.add(goalIndex)
     const base = {
       title: cleanText(item.title) || defaultWaveTitle(index, input.goals[goal_indices[0]]),
-      objective: cleanText(item.objective) || cleanText(item.description) || undefined,
+      objective: cleanText(item.objective) || cleanText(item.title) || cleanText(item.description) || undefined,
       owned_paths: cleanList(item.owned_paths),
       produces: cleanList(item.produces),
       consumes: cleanList(item.consumes),
@@ -121,7 +121,7 @@ export function normalizePlanWaves(input: {
           index: stageIndex,
           total: goal_indices.length,
         }),
-        objective: base.objective || cleanText(input.goals[goalIndex]?.description) || undefined,
+        objective: base.objective || cleanText(input.goals[goalIndex]?.title) || undefined,
         goal_indices: [goalIndex],
         owned_paths: base.owned_paths,
         produces: stageIndex === goal_indices.length - 1 ? base.produces : [],
@@ -139,7 +139,7 @@ export function normalizePlanWaves(input: {
     for (const goalIndex of missing) {
       waves.push(WaveContract.parse({
         title: defaultWaveTitle(waves.length, input.goals[goalIndex]),
-        objective: cleanText(input.goals[goalIndex]?.description) || undefined,
+        objective: cleanText(input.goals[goalIndex]?.title) || undefined,
         goal_indices: [goalIndex],
       }))
     }

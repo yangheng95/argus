@@ -118,9 +118,9 @@ export function syncSectionPhases(board: any, changesCount = 0): void {
 
   const goals = (board?.lanes || []).find((lane: any) => lane.id === "goals")?.cards || [];
   const pending = (board?.interactions || []).some((item: any) => item.status === "pending");
+  const taskStatus = board?.task?.status || "";
   const planning = board?.task
-    ? board.task.status === "planning" ||
-      board.run?.phase === "plan" ||
+    ? board.run?.phase === "plan" ||
       board.run?.phase === "replan"
     : false;
   const active: string[] = [];
@@ -131,14 +131,14 @@ export function syncSectionPhases(board: any, changesCount = 0): void {
     relatePhase(live, related, board, goals, changesCount);
   }
 
-  if (board?.task && (pending || board.task.status === "blocked")) {
+  if (board?.task && pending) {
     active.length = 0;
     if (board.plan) active.push("plan");
     else if (goals.length > 0) active.push("goals");
     else if (board.spec) active.push("spec");
   }
 
-  if (board?.task && active.length === 0 && board.task.status === "queued") {
+  if (board?.task && active.length === 0 && taskStatus === "queued") {
     if (board.spec) active.push("spec");
     else if (board.plan) active.push("plan");
   }
@@ -149,24 +149,27 @@ export function syncSectionPhases(board: any, changesCount = 0): void {
     if (board.plan) related.push("plan");
   }
 
-  if (board?.task && active.length === 0 && board.task.status === "running") {
-    active.push("executor");
-    if (goals.length > 0) related.push("goals");
-    if (board.plan) related.push("plan");
-    if (changesCount > 0) related.push("files");
-  }
-
-  if (board?.task && active.length === 0 && board.task.status === "evaluating") {
-    active.push("evaluation");
-    if (goals.length > 0) related.push("goals");
-    if (changesCount > 0) related.push("files");
-  }
-
-  if (board?.task && active.length === 0 && board.task.status === "delivering") {
-    active.push("delivery");
-    if (changesCount > 0) related.push("files");
-    if (board.evaluation) related.push("evaluation");
-    if (goals.length > 0) related.push("goals");
+  // New "active" status: infer the best section from available board data
+  if (board?.task && active.length === 0 && taskStatus === "active") {
+    if (board.evaluation) {
+      active.push("evaluation");
+      if (goals.length > 0) related.push("goals");
+      if (changesCount > 0) related.push("files");
+    } else if (board.delivery) {
+      active.push("delivery");
+      if (changesCount > 0) related.push("files");
+      if (goals.length > 0) related.push("goals");
+    } else if (goals.length > 0) {
+      active.push("executor");
+      related.push("goals");
+      if (board.plan) related.push("plan");
+      if (changesCount > 0) related.push("files");
+    } else if (board.plan) {
+      active.push("plan");
+      if (board.spec) related.push("spec");
+    } else {
+      active.push("spec");
+    }
   }
 
   if (board?.task && active.length === 0 && board.task.status === "completed") {

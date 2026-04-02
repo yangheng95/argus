@@ -349,8 +349,9 @@ export function goalContextText(goals: any[]): string {
           ? "\u274C"
           : "\u23F3";
     lines.push(`${icon} **${goal.title}**`);
-    if (goal.detail)
-      lines.push(t("goal.context.criteria", { value: goal.detail }));
+    const goalDef = goal.done_definition;
+    if (goalDef)
+      lines.push(t("goal.context.criteria", { value: goalDef }));
     if (goal.metadata?.origin)
       lines.push(t("goal.context.origin", { value: goal.metadata.origin }));
   }

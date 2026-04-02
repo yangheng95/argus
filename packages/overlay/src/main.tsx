@@ -380,20 +380,20 @@ function installGoalFormHandlers(): void {
     e.preventDefault();
     if (!boardStore.selectedTaskID) return;
     const goalID = (document.getElementById("goalId") as HTMLInputElement | null)?.value.trim() || "";
-    const description = (document.getElementById("goalDescription") as HTMLTextAreaElement | null)?.value.trim() || "";
-    const criteria = (document.getElementById("goalCriteria") as HTMLTextAreaElement | null)?.value.trim() || "";
-    if (!description) return;
+    const title = (document.getElementById("goalDescription") as HTMLTextAreaElement | null)?.value.trim() || "";
+    const doneDefinition = (document.getElementById("goalCriteria") as HTMLTextAreaElement | null)?.value.trim() || "";
+    if (!title) return;
 
     try {
       if (goalID) {
         await panelMessage(`Update goal ${goalID}.`, {
           goalID,
-          description,
-          criteria: criteria || "The requested change is implemented and acceptance checks pass.",
+          title,
+          done_definition: doneDefinition || "The requested change is implemented and acceptance checks pass.",
           taskID: boardStore.selectedTaskID || undefined,
         });
       } else {
-        const payload = criteria ? `/goal ${description}\nCriteria: ${criteria}` : `/goal ${description}`;
+        const payload = doneDefinition ? `/goal ${title}\nCriteria: ${doneDefinition}` : `/goal ${title}`;
         await panelMessage(payload, {
           taskID: boardStore.selectedTaskID || undefined,
         });
@@ -1120,7 +1120,7 @@ createRoot(() => {
     }
     const completedTime = task?.time?.completed || 0;
     const status = task?.status || "idle";
-    const isActive = ["running", "planning", "evaluating", "delivering", "queued"].includes(status);
+    const isActive = ["active", "queued"].includes(status);
     const end = completedTime && !isActive ? completedTime : Date.now();
     elapsedEl.textContent = formatDuration(end - startTime);
   }, 1000);

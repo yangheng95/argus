@@ -365,10 +365,7 @@ export function visibleTasks(): any[] {
 
 // ── Task state classifiers ──
 
-const INTERRUPTABLE_STATUSES = new Set([
-  "queued", "spec_generating", "goal_decomposing", "planning",
-  "planned", "running", "blocked", "evaluating", "delivering",
-]);
+const INTERRUPTABLE_STATUSES = new Set(["queued", "active"]);
 
 const TERMINAL_STATUSES = new Set(["completed", "failed", "cancelled"]);
 

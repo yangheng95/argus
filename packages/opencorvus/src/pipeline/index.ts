@@ -1,26 +1,24 @@
 /**
- * Pipeline module — per-goal self-driving execution pipeline.
+ * Pipeline module — per-goal execution tools.
  *
- * Core exports:
- *   runGoalPipeline  — async generator: GoalContract → AsyncIterable<PipelineEvent>
- *   createTieredRetryPolicy — default retry policy (bug→executor, plan→planner, goal→give up)
+ * These are TOOLS the Task Agent can call, not a fixed pipeline.
+ * The agent decides when to plan, execute, eval — not this code.
  *
- * Types:
- *   GoalContract, PipelineEvent, PipelineDelivery, EvalVerdict,
- *   RetryPolicy, RetryDecision, PipelineDeps
+ * Tools:
+ *   runGoalPipeline  — execute a goal (worktree + executor + delivery)
+ *   planGoal          — create implementation steps for a goal (optional)
+ *   evaluateGoal      — autonomous eval of a goal's delivery (optional)
  */
 
-export { runGoalPipeline } from "./goal-pipeline"
-export { createTieredRetryPolicy } from "./retry"
+export { runGoalPipeline } from "./executor"
+export { planGoal, type PlanSteps } from "@/planner/per-goal"
+export { evaluateGoal } from "@/evaluator/per-goal"
 export type {
   GoalContract,
   GoalContractFields,
   PipelineEvent,
   PipelineDelivery,
   EvalVerdict,
-  RetryPolicy,
-  RetryDecision,
-  RetryLevel,
   FailureClass,
   PipelineDeps,
 } from "./types"

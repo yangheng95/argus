@@ -13,42 +13,28 @@ function flag(name: string) {
   return process.argv.find((item) => item.startsWith(`${name}=`))?.slice(name.length + 1)
 }
 
-function benchmarkRoutingForExecutor(executor: "opencode" | "codex" | "claude-code", routingOverride?: string) {
-  // --routing=opencorvus forces all stages through internal agents (useful when
-  // an external executor like codex is used only for coding, while a separate
-  // model handles orchestration via the opencorvus agent pipeline).
-  if (routingOverride === "opencorvus" || executor === "opencode") {
-    return {
-      spec: "opencorvus" as const,
-      goal: "opencorvus" as const,
-      plan: "opencorvus" as const,
-    }
-  }
-  return {
-    spec: "executor" as const,
-    goal: "opencorvus" as const,
-    plan: "executor" as const,
-  }
-}
-
 // No overall hard timeout. The only execution gate is stall: if there is no
 // event/progress/log activity for stallTimeoutMs, the benchmark aborts.
 // All stage timeouts (spec, planner, standby) default to effectively unlimited
 // so that slow models are never killed mid-thought.
 //
 // --planning-stall-timeout-ms: separate (usually longer) stall timeout applied
-// while the task is in "planning" status. During spec generation the task stays
-// in "planning" with no progress changes even when the spec agent is actively
-// making tool calls — using the normal stallTimeoutMs here causes false stalls.
+// while the task is in early pipeline statuses (queued/active before execution
+// begins). The Task Agent may be making tool calls (decompose, plan_goal, etc.)
+// without visible progress changes — using the normal stallTimeoutMs causes
+// false stalls.
 const stallTimeoutMs = Number(flag("--stall-timeout-ms")) || 20 * 60 * 1000
 const planningStallTimeoutMs = Number(flag("--planning-stall-timeout-ms")) || stallTimeoutMs
 const requestTimeoutMs = Number(flag("--request-timeout-ms")) || 30_000
+// Legacy: spec/planner timeouts from the old fixed-pipeline architecture.
+// Kept for backward compatibility — config may still read these env vars.
 const specTimeoutMs = Number(flag("--spec-timeout-ms")) || 24 * 60 * 60 * 1000
 const plannerTimeoutMs = Number(flag("--planner-timeout-ms")) || 24 * 60 * 60 * 1000
 const toolTimeoutMs = Number(flag("--tool-timeout-ms")) || 10 * 60 * 1000
 const standbyTimeoutMs = Number(flag("--standby-timeout-ms")) || 24 * 60 * 60 * 1000
 const completionHardTimeoutMs = Number(flag("--completion-hard-timeout-ms")) || 0
 // --timeout-ms accepted for backwards compat but no longer drives other timeouts
+// Legacy: spec/planner max steps from the old fixed-pipeline architecture.
 const specMaxSteps = Number(flag("--spec-max-steps")) || 80
 const plannerMaxSteps = Number(flag("--planner-max-steps")) || 96
 const maxRuns = Number(flag("--max-runs")) || 20
@@ -65,7 +51,6 @@ const requestFile = flag("--request-file")
 const deliveryVerifyCmd = flag("--delivery-verify-cmd")
 const skipLocalVerify = process.argv.includes("--skip-local-verify")
 const noBrowser = process.argv.includes("--no-browser")
-const routingOverride = flag("--routing")
 const maxExecutorGroups = Number(flag("--max-executor-groups")) || 1
 
 const DEFAULT_TASK_TITLE = "Overlay Web Benchmark NoteStore"
@@ -107,13 +92,9 @@ const TASK_TITLE = flag("--title")?.trim() || (requestFile ? path.parse(requestF
 // Never passed to the orchestrator as per-goal checks — per-goal evaluation uses the LLM judge only.
 // For the default NoteStore task, use bun test as the acceptance command.
 const DELIVERY_VERIFY_CMD = skipLocalVerify ? "" : (deliveryVerifyCmd?.trim() || (requestFile ? "" : "bun test ./src/note-store.test.ts"))
-const TASK_GOALS = requestFile
-  ? undefined
-  : [{
-      description: "Implement NoteStore and tests",
-      criteria: "Create src/note-store.ts and src/note-store.test.ts so bun test ./src/note-store.test.ts passes.",
-      priority: "blocking" as const,
-    }]
+// Legacy: TASK_GOALS used the old { description, criteria, priority } format
+// to hint the Goal Agent. In the new agent-driven architecture, the Decompose
+// Agent infers goals entirely from the request text — no hints needed.
 
 const AUTO_REPLY =
   "Complete the task autonomously end-to-end. Choose reasonable defaults consistent with the request, keep scope minimal, continue execution, and do not ask again unless the request is contradictory or unsafe."
@@ -126,13 +107,14 @@ const DIAG_TYPES = new Set([
   "orchestrator.run.updated",
   "orchestrator.task.created",
   "orchestrator.task.updated",
+  // Legacy spec/plan events — kept for backward compatibility with older traces
   "orchestrator.spec.created",
   "orchestrator.spec.updated",
   "orchestrator.plan.created",
   "orchestrator.plan.activated",
   "orchestrator.interaction.requested",
   "orchestrator.interaction.resolved",
-  // Executor events now flow through Message — tool calls and text arrive
+  // Executor events flow through Message — tool calls and text arrive
   // as message.part.updated instead of run.progress/run.output.
   "orchestrator.message.part.updated",
   "orchestrator.message.updated",
@@ -140,6 +122,9 @@ const DIAG_TYPES = new Set([
   "orchestrator.goal.progress",
   "orchestrator.goal.passed",
   "orchestrator.goal.failed",
+  // Task Agent tool invocations in the new agent-driven architecture
+  "orchestrator.goal.created",
+  "orchestrator.goal.updated",
 ])
 const PLANNING_VISIBLE_TIMEOUT_MS = Number(flag("--planning-timeout-ms")) || 2 * 60 * 1000
 const TASK_CREATE_TIMEOUT_MS = Number(flag("--task-create-timeout-ms")) || 5 * 60 * 1000
@@ -155,7 +140,7 @@ temp.home = await fs.mkdtemp(path.join(os.tmpdir(), "mirrorcode-overlay-benchmar
 temp.dir = projectDir ? path.resolve(projectDir) : await fs.mkdtemp(path.join(os.tmpdir(), "mirrorcode-overlay-benchmark-project-"))
 temp.config = path.join(temp.home, "config-override")
 process.env.OPENCORVUS_HOME = temp.home
-// Copy request file into the project directory so the spec agent can reference it
+// Copy request file into the project directory so the Task Agent can reference it
 if (requestFile) {
   const dest = path.join(temp.dir, path.basename(requestFile))
   await fs.copyFile(path.resolve(requestFile), dest).catch(() => undefined)
@@ -193,17 +178,20 @@ await ensureBenchmarkModel(import.meta.dir, model)
 process.env.OPENCORVUS_AUTO_DISCOVER_EXECUTORS = "1"
 process.env.OPENCORVUS_EXECUTOR_CLAUDE_PERMISSION_MODE = "bypassPermissions"
 process.env.OPENCORVUS_GOAL_RUN_TIMEOUT_MS = String(standbyTimeoutMs)
+// Legacy env vars from old fixed-pipeline architecture — kept for backward
+// compatibility as config may still read them during transition.
 process.env.OPENCORVUS_SPEC_TIMEOUT_MS = String(specTimeoutMs)
 process.env.OPENCORVUS_PLANNER_TIMEOUT_MS = String(plannerTimeoutMs)
 process.env.OPENCORVUS_SPEC_AGENT_TIMEOUT_MS = String(specTimeoutMs)
 process.env.OPENCORVUS_PLANNER_AGENT_TIMEOUT_MS = String(plannerTimeoutMs)
 process.env.OPENCORVUS_TOOL_TIMEOUT_MS = String(toolTimeoutMs)
 process.env.OPENCORVUS_STANDBY_TIMEOUT_MS = String(standbyTimeoutMs)
+// Legacy env vars from old fixed-pipeline architecture
 process.env.OPENCORVUS_SPEC_AGENT_MAX_STEPS = String(specMaxSteps)
 process.env.OPENCORVUS_PLANNER_AGENT_MAX_STEPS = String(plannerMaxSteps)
 
 console.log(
-  `[overlay-benchmark] config model=${model} executor=${executor} routing=${routingOverride ?? "default"} groups=${maxExecutorGroups} stall=${stallTimeoutMs / 1000}s planning-stall=${planningStallTimeoutMs / 1000}s spec=${specTimeoutMs === 86400000 ? "∞" : specTimeoutMs / 1000 + "s"} planner=${plannerTimeoutMs === 86400000 ? "∞" : plannerTimeoutMs / 1000 + "s"} tool=${toolTimeoutMs / 1000}s standby=${standbyTimeoutMs === 86400000 ? "∞" : standbyTimeoutMs / 1000 + "s"} request=${requestTimeoutMs / 1000}s hard=${completionHardTimeoutMs > 0 ? completionHardTimeoutMs / 1000 + "s" : "none"}`,
+  `[overlay-benchmark] config model=${model} executor=${executor} groups=${maxExecutorGroups} stall=${stallTimeoutMs / 1000}s planning-stall=${planningStallTimeoutMs / 1000}s tool=${toolTimeoutMs / 1000}s standby=${standbyTimeoutMs === 86400000 ? "∞" : standbyTimeoutMs / 1000 + "s"} request=${requestTimeoutMs / 1000}s hard=${completionHardTimeoutMs > 0 ? completionHardTimeoutMs / 1000 + "s" : "none"}`,
 )
 
 // Force-remove SQLite WAL/SHM before reset — prevents previous benchmark's
@@ -491,12 +479,9 @@ try {
         maxEvaluations,
         ...(maxExecutorGroups > 1 ? { maxExecutorGroups } : {}),
       },
-      routing: benchmarkRoutingForExecutor(executor, routingOverride),
-      checks: {
-        // build, lint, test: undefined → auto-discovery from package.json scripts
-        verify_cmd: false,
-      },
-      goals: TASK_GOALS,
+      // routing, checks, goals: removed — the new agent-driven architecture
+      // handles decomposition, planning, and evaluation autonomously via the
+      // Task Agent. The request text is sufficient.
       ...(DELIVERY_VERIFY_CMD ? { metadata: { delivery_verify_cmd: DELIVERY_VERIFY_CMD } } : {}),
     }),
   })
@@ -508,7 +493,7 @@ try {
   if (page) {
     planning = await waitForPlanningVisible(page, api, PLANNING_VISIBLE_TIMEOUT_MS)
   } else {
-    // no-browser: poll API until task enters planning or later stage
+    // no-browser: poll API until task leaves "queued" (becomes active or terminal)
     const waitStart = Date.now()
     while (Date.now() - waitStart < TASK_CREATE_TIMEOUT_MS) {
       const prog = await api(`/task/${taskID}/progress`).then((r) => r.json()).catch(() => null)
@@ -867,6 +852,7 @@ async function buildBenchmarkReport(error?: unknown) {
     taskID,
     error: reportError,
     stage_timeout_ms: {
+      // Legacy spec/planner timeouts kept for backward compatibility
       spec: specTimeoutMs,
       planner: plannerTimeoutMs,
       tool: toolTimeoutMs,
@@ -875,6 +861,7 @@ async function buildBenchmarkReport(error?: unknown) {
       request: requestTimeoutMs,
     },
     stage_max_steps: {
+      // Legacy spec/planner max steps kept for backward compatibility
       spec: specMaxSteps,
       planner: plannerMaxSteps,
     },
@@ -1174,11 +1161,12 @@ async function waitForFinal(
     const now = Date.now()
     const silentFor = inactivityAgeMs(now, lastEventAt, lastProgressAt)
     const logSilentFor = inactivityAgeMs(now, lastActivityLogAt)
-    // Use a separate (usually longer) stall timeout during the planning phase.
-    // In "planning" status the task shows no progress changes while the spec agent
-    // is actively making tool calls, so the normal stallTimeoutMs causes false stalls.
+    // Use a separate (usually longer) stall timeout while the Task Agent is in
+    // early stages (queued/active). During "active" the Task Agent may be invoking
+    // tools (decompose, plan_goal, etc.) without visible progress changes, so the
+    // normal stallTimeoutMs causes false stalls.
     const taskStatus = progress?.task?.status || ""
-    const pipelineStatuses = ["queued", "spec_generating", "goal_decomposing", "planning", "planned"]
+    const pipelineStatuses = ["queued", "active"]
     const effectiveStallMs = pipelineStatuses.includes(taskStatus) ? planningStallTimeoutMs : stallTimeoutMs
     if (now - lastHeartbeatAt >= 60_000) {
       lastHeartbeatAt = now
@@ -1428,7 +1416,8 @@ function summarizeEvents(events: Array<Record<string, unknown>>, taskID: string)
     map[type] = (map[type] ?? 0) + 1
     return map
   }, {})
-  const stages = ["spec", "planner", "evaluator"].flatMap((stage) => {
+  // Include both legacy stage names (spec, planner) and new agent names (task, decompose, eval)
+  const stages = ["spec", "planner", "evaluator", "task", "decompose", "eval"].flatMap((stage) => {
     const list = agents.filter((item) => item.stage === stage)
     if (list.length === 0) return []
     const toolCalls = list

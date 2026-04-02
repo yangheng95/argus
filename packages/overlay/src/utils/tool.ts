@@ -146,7 +146,7 @@ export function displayToolDetail(
 
 export function toolStatusLabel(status: string): string {
   if (status === "completed") return t("task.status.completed");
-  if (status === "running") return t("task.status.running");
+  if (status === "running") return t("common.active");
   if (status === "error") return t("common.error");
   return t("checks.pending");
 }

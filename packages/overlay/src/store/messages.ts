@@ -334,13 +334,7 @@ type AgentRound = {
 /** Active pipeline stages — exported so conversation.ts can reuse. */
 export function activeAgentStages(): Set<string> {
   const status = String(boardStore.board?.task?.status || "").trim().toLowerCase();
-  if (status === "spec_generating") return new Set(["spec"]);
-  if (status === "goal_decomposing") return new Set(["goal"]);
-  if (status === "planning") return new Set(["planner"]);
-  if (status === "running") return new Set(["executor"]);
-  if (status === "evaluating") return new Set(["evaluator"]);
-  if (status === "delivering") return new Set(["delivery"]);
-  if (!status && Array.isArray(store.agentEvents) && store.agentEvents.length > 0) {
+  if (status === "active" && Array.isArray(store.agentEvents) && store.agentEvents.length > 0) {
     return new Set(
       store.agentEvents
         .map((item: any) => {

@@ -109,7 +109,7 @@ export function compileBrief(input: {
       ? "Goals:\n" +
         goals
           .map((goal) =>
-            `- ${goal.description} (criteria: ${goal.criteria}${
+            `- ${goal.title} (criteria: ${goal.done_definition}${
               Array.isArray((goal.metadata as Record<string, unknown> | null | undefined)?.check_selector)
                 ? `; checks: ${(((goal.metadata as Record<string, unknown>).check_selector as unknown[]) ?? [])
                     .filter((item): item is string => typeof item === "string")

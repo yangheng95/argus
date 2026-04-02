@@ -8,6 +8,7 @@
 
 import type { GoalRunRow, PlanRow, RunRow, TaskRow, PlanNodeRow } from "@/orchestrator/store"
 import type { ExecutorAdapter } from "@/executor/compat"
+import type { DecisionLog } from "@/decision-log"
 
 // ---------------------------------------------------------------------------
 // Goal Contract — the ONLY interface between Decompose and Pipeline.
@@ -76,16 +77,11 @@ export interface GoalContract {
 // ---------------------------------------------------------------------------
 
 export type PipelineEvent =
-  | { type: "planning" }
-  | { type: "planned"; planNodeID: string }
   | { type: "executing" }
   | { type: "executor_event"; event: { type: string; summary?: string; payload?: Record<string, unknown> } }
   | { type: "executed"; delivery: PipelineDelivery }
-  | { type: "evaluating" }
-  | { type: "evaluated"; verdict: EvalVerdict }
-  | { type: "retrying"; level: RetryLevel; attempt: number; reason: string }
   | { type: "completed"; delivery: PipelineDelivery }
-  | { type: "failed"; verdict?: EvalVerdict; error: string; failureClass: FailureClass }
+  | { type: "failed"; error: string; failureClass: FailureClass }
   | { type: "aborted" }
   | { type: "heartbeat" }
 
@@ -112,25 +108,13 @@ export interface EvalVerdict {
 }
 
 // ---------------------------------------------------------------------------
-// Retry types
+// Failure classification (used by eval verdict, read by Task Agent for reasoning)
 // ---------------------------------------------------------------------------
 
-export type RetryLevel = "executor" | "planner"
 export type FailureClass = "bug" | "plan_wrong" | "goal_wrong"
 
-export interface RetryDecision {
-  type: "retry" | "give_up"
-  level?: RetryLevel
-  class?: FailureClass
-}
-
-export interface RetryPolicy {
-  /** Given an eval verdict and current attempt number, decide what to do. */
-  decide(verdict: EvalVerdict, attempt: number): RetryDecision
-}
-
 // ---------------------------------------------------------------------------
-// Pipeline Dependencies — injected via constructor (not global state)
+// Execution Dependencies — what execute_goal needs to run
 // ---------------------------------------------------------------------------
 
 export interface PipelineDeps {
@@ -144,8 +128,8 @@ export interface PipelineDeps {
   executorSessionID: string
   /** Queue task ID from executor.submit(). */
   queueTaskID: string
-  /** Retry policy (injected, not hardcoded). */
-  retryPolicy: RetryPolicy
-  /** Abort signal (orchestrator can abort the pipeline). */
+  /** Abort signal (orchestrator can abort the execution). */
   signal: AbortSignal
+  /** Decision Log (injected, scoped to task). */
+  decisionLog?: DecisionLog
 }

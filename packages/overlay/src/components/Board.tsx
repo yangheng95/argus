@@ -46,11 +46,7 @@ export function statusLabel(status: string): string {
   const map: Record<string, string> = {
     idle: t("task.status.idle"),
     queued: t("task.status.queued"),
-    planning: t("task.status.planning"),
-    running: t("task.status.running"),
-    blocked: t("task.status.blocked"),
-    evaluating: t("task.status.evaluating"),
-    delivering: t("task.status.delivering"),
+    active: t("task.status.active"),
     completed: t("task.status.completed"),
     failed: t("task.status.failed"),
     cancelled: t("task.status.cancelled"),
@@ -59,14 +55,11 @@ export function statusLabel(status: string): string {
 }
 
 export function statusIcon(status: string): string {
+  const activeIcon = `<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path data-fill="true" d="M6 4.6L11.3 8 6 11.4Z"/></svg>`;
   const map: Record<string, string> = {
     idle: `<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle data-stroke="true" cx="8" cy="8" r="4.5"/><circle data-fill="true" cx="8" cy="8" r="1.25"/></svg>`,
     queued: `<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle data-stroke="true" cx="8" cy="8" r="4.5"/><path data-stroke="true" d="M8 5.4v2.8l2.1 1.3"/></svg>`,
-    planning: `<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path data-stroke="true" d="M5 3.5v9"/><path data-stroke="true" d="M5 5.5h6"/><path data-stroke="true" d="M5 10.5h4"/><circle data-fill="true" cx="5" cy="3.5" r="1.15"/><circle data-fill="true" cx="11" cy="5.5" r="1.15"/><circle data-fill="true" cx="9" cy="10.5" r="1.15"/></svg>`,
-    running: `<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path data-fill="true" d="M6 4.6L11.3 8 6 11.4Z"/></svg>`,
-    blocked: `<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path data-fill="true" d="M8 3.1L13 12H3Z"/><path data-stroke="true" d="M8 5.8v2.8"/><circle data-fill="true" cx="8" cy="10.8" r="0.9" style="fill: var(--surface-strong);"/></svg>`,
-    evaluating: `<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle data-stroke="true" cx="6.7" cy="6.7" r="3.5"/><path data-stroke="true" d="M9.5 9.5l2.9 2.9"/><circle data-fill="true" cx="6.7" cy="6.7" r="1.2"/></svg>`,
-    delivering: `<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path data-stroke="true" d="M3.5 8h9"/><path data-stroke="true" d="M9 4.5L12.5 8 9 11.5"/><circle data-fill="true" cx="3.5" cy="8" r="1"/></svg>`,
+    active: activeIcon,
     completed: `<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle data-stroke="true" cx="8" cy="8" r="4.5"/><path data-stroke="true" d="M5.1 8.2l2 2 3.8-3.8"/></svg>`,
     failed: `<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle data-stroke="true" cx="8" cy="8" r="4.5"/><path data-stroke="true" d="M5.4 5.4l5.2 5.2"/><path data-stroke="true" d="M10.6 5.4l-5.2 5.2"/></svg>`,
     cancelled: `<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle data-stroke="true" cx="8" cy="8" r="4.5"/><path data-stroke="true" d="M5.2 10.8l5.6-5.6"/></svg>`,
@@ -119,7 +112,7 @@ export function SpecPanel(props: SpecPanelProps) {
 
 // ── PlanPanel ──
 // Shows only active (running) goals with their plan context.
-// Each active goal is rendered as "Goal#N Plan VX" + goal description + criteria.
+// Each active goal is rendered as "Goal#N Plan VX" + goal title + done definition.
 
 interface PlanPanelProps {
   plan: any;
@@ -204,10 +197,10 @@ export function PlanPanel(props: PlanPanelProps) {
                           class="goal-desc md-content"
                           innerHTML={renderMarkdown(goal.title || "")}
                         />
-                        <Show when={goal.detail}>
+                        <Show when={goal.done_definition}>
                           <div
                             class="goal-criteria md-content"
-                            innerHTML={renderMarkdown(goal.detail)}
+                            innerHTML={renderMarkdown(goal.done_definition)}
                           />
                         </Show>
                       </div>
@@ -293,10 +286,10 @@ export function GoalsPanel(props: GoalsPanelProps) {
                     class="goal-desc md-content"
                     innerHTML={renderMarkdown(card.title || "")}
                   />
-                  <Show when={card.detail}>
+                  <Show when={card.done_definition}>
                     <div
                       class="goal-criteria md-content"
-                      innerHTML={renderMarkdown(card.detail)}
+                      innerHTML={renderMarkdown(card.done_definition)}
                     />
                   </Show>
                 </div>
@@ -326,7 +319,7 @@ export function GoalsPanel(props: GoalsPanelProps) {
                         title={t("goal.edit_button_title")}
                         aria-label={t("goal.edit_button_title")}
                         onClick={() =>
-                          props.onEditGoal?.(card.id, card.title, card.detail || "")
+                          props.onEditGoal?.(card.id, card.title, card.done_definition || "")
                         }
                       >
                         {t("common.edit")}

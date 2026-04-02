@@ -56,7 +56,7 @@ export namespace Agent {
     const cfg = await Config.get()
     // Lazy-load orchestrator-only agent prompts to avoid pulling in large modules at startup
     const [{ EVALUATOR_DEFAULT_SYSTEM }, { DELIVERY_AGENT_SYSTEM }] = await Promise.all([
-      import("@/evaluator/agent"),
+      import("@/types/evaluator"),
       import("@/delivery/agent"),
     ])
 

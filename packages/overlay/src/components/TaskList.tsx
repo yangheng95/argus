@@ -42,11 +42,7 @@ function statusLabel(status: string): string {
   const map: Record<string, string> = {
     idle: t("task.status.idle"),
     queued: t("task.status.queued"),
-    planning: t("task.status.planning"),
-    running: t("task.status.running"),
-    blocked: t("task.status.blocked"),
-    evaluating: t("task.status.evaluating"),
-    delivering: t("task.status.delivering"),
+    active: t("task.status.active"),
     completed: t("task.status.completed"),
     failed: t("task.status.failed"),
     cancelled: t("task.status.cancelled"),
@@ -55,7 +51,7 @@ function statusLabel(status: string): string {
 }
 
 function taskListBadge(item: any): string {
-  if (item?._pending) return statusLabel("planning");
+  if (item?._pending) return statusLabel("active");
   const pending = Number(item?.pending_interactions || 0) > 0;
   return pending ? t("detail.pending_interactions") : statusLabel(item?.task?.status || "idle");
 }
@@ -110,7 +106,7 @@ function TaskRow(props: {
 }) {
   const id = () => props.item?.task?.id || "";
   const pending = () => props.item?._pending === true;
-  const status = () => (pending() ? "planning" : props.item?.task?.status || "idle");
+  const status = () => (pending() ? "active" : props.item?.task?.status || "idle");
   const title = () => taskListTitle(props.item) || id();
   const isActive = () => !pending() && props.selectedTaskID === id();
 

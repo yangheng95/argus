@@ -18,14 +18,7 @@ export type OrchestratorMetadata = Record<string, unknown>
 
 export type OrchestratorTaskStatus =
   | "queued"
-  | "spec_generating"
-  | "goal_decomposing"
-  | "planning"
-  | "planned"
-  | "running"
-  | "blocked"
-  | "evaluating"
-  | "delivering"
+  | "active"
   | "completed"
   | "failed"
   | "cancelled"
@@ -98,7 +91,7 @@ export type OrchestratorArtifactKind =
 export type OrchestratorDeliveryStatus = "candidate" | "publishing" | "delivered" | "failed"
 export type OrchestratorEvaluationStatus = "pending" | "passed" | "failed" | "inconclusive"
 export type OrchestratorEvaluationVerdict = "accepted" | "rejected" | "inconclusive"
-export type OrchestratorProgressStatus = "created" | "running" | "blocked" | "completed" | "failed" | "cancelled" | "planning" | "planned" | "spec_generating" | "goal_decomposing"
+export type OrchestratorProgressStatus = "created" | "active" | "completed" | "failed" | "cancelled"
 export type OrchestratorExecutorTransport = "inproc" | "stdio" | "ws" | "http"
 export type OrchestratorExecutorSessionStatus = "active" | "completed" | "failed" | "aborted"
 
@@ -208,13 +201,34 @@ export const OrchestratorGoalTable = sqliteTable(
     spec_snapshot_id: text()
       .references(() => OrchestratorSpecSnapshotTable.id, { onDelete: "cascade" }),
     milestone_id: text().references(() => OrchestratorMilestoneTable.id, { onDelete: "set null" }),
-    description: text().notNull(),
-    criteria: text().notNull(),
-    metadata: text({ mode: "json" }).$type<OrchestratorMetadata>(),
+
+    // --- GoalContractFields: each field is an independent column (no compression) ---
+    /** Short goal title. */
+    title: text().notNull(),
+    /** Full objective statement — what this goal accomplishes. */
+    objective: text().notNull(),
+    /** Verifiable pass/fail criteria. Must be Eval Agent executable. */
+    done_definition: text().notNull(),
+    /** Files this goal owns exclusively. Executor hard write boundary. */
+    owned_paths: text({ mode: "json" }).$type<string[]>().notNull().default([]),
+    /** Goal IDs this depends on (must complete before this goal starts). */
+    depends_on: text({ mode: "json" }).$type<string[]>().notNull().default([]),
+    /** Interfaces this goal EXPORTS for dependent goals. */
+    exports: text({ mode: "json" }).$type<string[]>().notNull().default([]),
+    /** Interfaces this goal IMPORTS from its dependencies. */
+    imports: text({ mode: "json" }).$type<string[]>().notNull().default([]),
+    /** Goal category (e.g. bootstrap, feature, verification). */
+    kind: text().notNull().default("feature"),
+    /** Requirement IDs from user input that this goal covers (fidelity tracing). */
+    requirement_ids: text({ mode: "json" }).$type<string[]>().notNull().default([]),
+
+    // --- Orchestrator-managed fields ---
     priority: text().notNull().$type<OrchestratorGoalPriority>().default("blocking"),
     source: text().notNull().default("spec"),
     status: text().notNull().$type<OrchestratorGoalStatus>().default("pending"),
     order_index: integer().notNull().default(0),
+    /** Remaining metadata (qa_profile, check_selector, etc.) */
+    metadata: text({ mode: "json" }).$type<OrchestratorMetadata>(),
     ...Timestamps,
   },
   (table) => [
@@ -224,7 +238,7 @@ export const OrchestratorGoalTable = sqliteTable(
   ],
 )
 
-export type OrchestratorGoalRunStatus = "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
+export type OrchestratorGoalRunStatus = "queued" | "accepted" | "planning" | "running" | "evaluating" | "blocked" | "completed" | "failed" | "aborted"
 
 export const OrchestratorRequirementTable = sqliteTable(
   "orchestrator_requirement",

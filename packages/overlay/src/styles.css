@@ -1083,20 +1083,9 @@ a { color: inherit; text-decoration: none; }
   background: var(--subtle-4);
 }
 
-.titlebar-task-status[data-status="planning"],
-.titlebar-task-status[data-status="running"] {
+.titlebar-task-status[data-status="active"] {
   border-color: rgba(91, 141, 239, 0.24);
   background: rgba(91, 141, 239, 0.12);
-}
-
-.titlebar-task-status[data-status="blocked"] {
-  border-color: rgba(251, 191, 36, 0.24);
-  background: rgba(251, 191, 36, 0.10);
-}
-
-.titlebar-task-status[data-status="evaluating"] {
-  border-color: rgba(122, 167, 245, 0.24);
-  background: rgba(122, 167, 245, 0.12);
 }
 
 .titlebar-task-status[data-status="completed"] {
@@ -1146,10 +1135,7 @@ a { color: inherit; text-decoration: none; }
 
 .status-icon[data-status="idle"] { color: var(--text-muted); }
 .status-icon[data-status="queued"] { color: var(--text-soft); }
-.status-icon[data-status="planning"] { color: var(--accent); animation: pulse 2s ease-in-out infinite; }
-.status-icon[data-status="running"] { color: var(--accent); animation: pulse 1.5s ease-in-out infinite; }
-.status-icon[data-status="blocked"] { color: var(--warn); animation: pulse 2s ease-in-out infinite; }
-.status-icon[data-status="evaluating"] { color: var(--accent); animation: pulse 1.5s ease-in-out infinite; }
+.status-icon[data-status="active"] { color: var(--accent); animation: pulse 1.5s ease-in-out infinite; }
 .status-icon[data-status="completed"] { color: var(--good); }
 .status-icon[data-status="failed"] { color: var(--bad); }
 .status-icon[data-status="cancelled"] { color: var(--text-muted); }
@@ -7723,8 +7709,7 @@ body[data-resizing="true"] * {
   background: var(--text-dim);
 }
 
-.global-task-row .status-dot[data-status="running"],
-.global-task-row .status-dot[data-status="evaluating"] {
+.global-task-row .status-dot[data-status="active"] {
   background: var(--accent);
   animation: pulse-dot 1.5s infinite;
 }
@@ -7737,11 +7722,6 @@ body[data-resizing="true"] * {
   background: var(--danger);
 }
 
-.global-task-row .status-dot[data-status="blocked"] {
-  background: var(--warning);
-}
-
-.global-task-row .status-dot[data-status="planning"],
 .global-task-row .status-dot[data-status="queued"] {
   background: var(--info, var(--accent));
 }
@@ -8035,14 +8015,6 @@ body[data-theme="light"] .chat:focus-within {
   box-shadow: none;
 }
 
-.titlebar-task-status[data-status="evaluating"] {
-  border-color: rgba(167, 139, 250, 0.24);
-  background: rgba(167, 139, 250, 0.12);
-}
-
-.status-icon[data-status="evaluating"] {
-  color: #a78bfa;
-}
 
 .engine-chip {
   font-weight: 600;

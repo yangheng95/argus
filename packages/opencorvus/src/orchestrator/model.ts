@@ -8,7 +8,7 @@ import { Question } from "@/question"
 import { Snapshot } from "@/snapshot"
 
 /** Task statuses that indicate a terminal or notable state change worth mirroring to channels. */
-export const TASK_TERMINAL_STATUSES = ["blocked", "completed", "failed", "cancelled"] as const
+export const TASK_TERMINAL_STATUSES = ["completed", "failed", "cancelled"] as const
 
 /** Run statuses that indicate a terminal or notable state change worth mirroring to channels. */
 export const RUN_TERMINAL_STATUSES = ["blocked", "failed", "completed", "aborted"] as const
@@ -221,7 +221,7 @@ export const Task = z.object({
   source: z.string(),
   title: z.string(),
   request: z.string(),
-  status: z.enum(["queued", "spec_generating", "goal_decomposing", "planning", "planned", "running", "blocked", "evaluating", "delivering", "completed", "failed", "cancelled"]),
+  status: z.enum(["queued", "active", "completed", "failed", "cancelled"]),
   priority: z.enum(["high", "normal", "low"]),
   blockingReason: z.string().optional(),
   error: z.string().optional(),
@@ -418,7 +418,7 @@ export const Evaluation = z.object({
 export const ProgressSnapshot = z.object({
   id: Identifier.schema("progress"),
   taskID: Identifier.schema("task"),
-  status: z.enum(["created", "spec_generating", "goal_decomposing", "planning", "planned", "running", "blocked", "completed", "failed", "cancelled"]),
+  status: z.enum(["created", "active", "completed", "failed", "cancelled"]),
   summary: z.string(),
   payload: z.record(z.string(), z.any()).optional(),
   time: z.object({

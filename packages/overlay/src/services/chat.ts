@@ -407,7 +407,7 @@ function ensureTaskListEntry(
       id: taskID,
       requestID: requestID || task?.requestID || "",
       title,
-      status: task?.status || "planning",
+      status: task?.status || "active",
       directory: task?.directory || "",
       time: {
         created,

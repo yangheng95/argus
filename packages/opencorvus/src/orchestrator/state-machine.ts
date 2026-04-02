@@ -11,22 +11,14 @@ export type TaskStatus = OrchestratorTaskStatus
 // Valid transitions
 // ---------------------------------------------------------------------------
 
-// Strict sequential pipeline: each state only allows the next adjacent step
-// forward. Backward movement goes through "queued" (restart) or "running"
-// (fix run from evaluating/delivering). No skipping steps.
+// Agent-driven: "active" is the primary working state. Agent decides what to do.
+// No granular states — the agent's reasoning determines the flow.
 const VALID_TRANSITIONS: Record<TaskStatus, readonly TaskStatus[]> = {
-  queued:           ["spec_generating", "cancelled", "failed"],
-  spec_generating:  ["goal_decomposing", "queued", "cancelled", "failed"],
-  goal_decomposing: ["planning", "queued", "cancelled", "failed"],
-  planning:         ["planned", "queued", "cancelled", "failed"],
-  planned:          ["running", "queued", "cancelled", "failed"],
-  running:          ["evaluating", "blocked", "cancelled", "failed"],
-  blocked:          ["running", "cancelled", "failed"],
-  evaluating:       ["delivering", "running", "failed", "cancelled"],
-  delivering:       ["completed", "running", "failed", "cancelled"],
-  completed:        [],
-  failed:           ["queued"],
-  cancelled:        ["queued"],
+  queued:    ["active", "cancelled", "failed"],
+  active:    ["completed", "failed", "cancelled", "queued"],
+  completed: [],
+  failed:    ["queued", "active"],
+  cancelled: ["queued", "active"],
 }
 
 /**
@@ -55,13 +47,11 @@ export function assertTransition(from: TaskStatus, to: TaskStatus): void {
 const TERMINAL: ReadonlySet<TaskStatus> = new Set(["completed", "failed", "cancelled"])
 
 const INTERRUPTABLE: ReadonlySet<TaskStatus> = new Set([
-  "queued", "spec_generating", "goal_decomposing", "planning",
-  "planned", "running", "blocked", "evaluating", "delivering",
+  "queued", "active",
 ])
 
 const ACTIVE: ReadonlySet<TaskStatus> = new Set([
-  "queued", "spec_generating", "goal_decomposing", "planning",
-  "planned", "running", "evaluating", "delivering",
+  "queued", "active",
 ])
 
 /** Terminal states — no further transitions expected. */
