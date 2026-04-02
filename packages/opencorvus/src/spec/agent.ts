@@ -20,6 +20,7 @@ import { toolGuard } from "@/util/tool-guard"
 import { parseSpecText } from "./parse-spec-text"
 import { AgentTrace } from "@/util/agent-trace"
 import { OrchestratorConfig } from "@/orchestrator/config"
+import { operatorNotesSection } from "@/orchestrator/helpers"
 import { loadStageSkills } from "@/orchestrator/skill-inject"
 import path from "path"
 import SPEC_CORE from "@/prompt/core/spec-core.txt"
@@ -160,6 +161,7 @@ export namespace HeadlessSpecAgent {
   export async function initial(input: {
     title: string
     request: string
+    taskID?: string
     goals?: Array<{ description: string; criteria: string; priority?: string }>
     sessionID?: string
     signal?: AbortSignal
@@ -208,6 +210,7 @@ async function run(input: {
   title: string
   request: string
   mode: "initial" | "compile" | "rewrite"
+  taskID?: string
   goals?: Array<{ description: string; criteria: string; priority?: string }>
   previousSpec?: string
   rewriteContext?: SpecRewriteContext
@@ -395,6 +398,7 @@ function buildUserPrompt(
     title: string
     request: string
     mode: "initial" | "compile" | "rewrite"
+    taskID?: string
     goals?: Array<{ description: string; criteria: string; priority?: string }>
     previousSpec?: string
     rewriteContext?: SpecRewriteContext
@@ -403,6 +407,11 @@ function buildUserPrompt(
   context: string,
 ): string {
   const sections = [`# Task\n\nTitle: ${input.title}\n\nRequest:\n${input.request}`]
+
+  if (input.taskID) {
+    const notes = operatorNotesSection(input.taskID)
+    if (notes) sections.push(notes)
+  }
 
   // Delta-mode directive for comprehensive PRDs
   const prdLevel = assessPRDCompleteness(input.request)

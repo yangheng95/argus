@@ -479,9 +479,6 @@ export function ChangesPanel(props: ChangesPanelProps) {
               >
                 <span class="change-main">
                   <span class="change-path">{item.file}</span>
-                  <span class="change-subline">
-                    {changeStatusLabel(item.status)}
-                  </span>
                 </span>
                 <span class="change-meta">
                   <span

@@ -179,6 +179,7 @@ export function createTaskAgentTools(input: { taskID: string; agentSessionID: st
             SpecService.initial({
               title: task.title,
               request: task.request,
+              taskID,
               goals: (task.metadata?._pipeline as any)?.goals,
               sessionID: specSession.id,
               signal: input.signal,
@@ -237,7 +238,7 @@ export function createTaskAgentTools(input: { taskID: string; agentSessionID: st
 
           const reviewed = await withStageRetry("goal", async () => {
             const draft = await HeadlessGoalAgent.initial({
-              title: task.title, request: task.request, spec: specDraft,
+              title: task.title, request: task.request, taskID, spec: specDraft,
               goalHints: pipeline?.goals, sessionID: goalSession.id, signal: input.signal,
               stream: {
                 onChunk: async (arg: any) => { guard.bump(); if (hooks.onChunk) await hooks.onChunk(arg); if (goalLive.hooks.onChunk) await goalLive.hooks.onChunk(arg) },
@@ -313,7 +314,7 @@ export function createTaskAgentTools(input: { taskID: string; agentSessionID: st
 
           let planDraft = await withStageRetry("plan", () =>
             PlannerService.initial({
-              title: task.title, request: task.request, spec: specDraft, goals: plannerGoals,
+              title: task.title, request: task.request, taskID, spec: specDraft, goals: plannerGoals,
               goalsFromGoalAgent: true,
               maxSteps: adaptiveMaxSteps,
               allowClarification: !unattended, executor: pipeline?.executor as any, routing: pipeline?.routing,

@@ -140,6 +140,7 @@ export namespace HeadlessPlannerService {
   export async function initial(input: {
     title: string
     request: string
+    taskID?: string
     spec?: SpecDraft
     goals?: z.infer<typeof GoalInput>[]
     /** Whether goals originate from GoalAgent (authoritative, no re-decomposition needed) */
