@@ -481,7 +481,7 @@ function criteriaEnabledValue(key: string, value: any, fallback: boolean): boole
   if (["build", "test", "lint", "verify_cmd"].includes(key)) {
     return value !== false && (value !== undefined || fallback);
   }
-  if (["artifact", "judge", "spec_check"].includes(key) && value === undefined) return true;
+  if (["artifact", "visual", "puppeteer", "judge", "spec_check"].includes(key) && value === undefined) return true;
   if (value === true) return true;
   if (!value || !record(value)) return false;
   return (value as any).enabled !== false;
@@ -528,6 +528,8 @@ function criteriaSpecs(task: any, evaluation: any): CriteriaSpec[] {
     const value = config[item.key];
     const canToggle = [
       "artifact",
+      "visual",
+      "puppeteer",
       "ui_review",
       "code_quality",
       "code_review",
