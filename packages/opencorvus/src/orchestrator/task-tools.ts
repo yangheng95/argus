@@ -246,11 +246,7 @@ export function createTaskAgentTools(input: { taskID: string; agentSessionID: st
               onStatus: goalLive.statusHook.bind(goalLive),
             })
             if (!draft) throw new Error("Goal decomposition produced no result")
-            let result = draft
-            if (draft.goals.length > 0 && Array.isArray(specDraft.requirements) && specDraft.requirements.length > 0) {
-              const review = await GoalFidelityReview.run({ request: task.request, spec: specDraft, goalDraft: draft, sessionID: pipeline?.sessionID ?? task.session_id!, metadata: task.metadata ?? undefined, timeoutMs: 120_000, signal: input.signal })
-              if (review.verdict === "needs_correction") result = applyGoalCorrections(draft, review)
-            }
+            const result = draft
             validateGoalGraph(result, specDraft)
             return result
           }, { signal: input.signal })

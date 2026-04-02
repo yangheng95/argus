@@ -256,11 +256,9 @@ async function run(input: {
       return toDraft(parsed)
     }
 
-    // Append response messages (including tool calls/results) to history
-    // so the next attempt retains full exploration context.
-    if (Array.isArray(response?.messages)) {
-      messages = [...messages, ...response.messages]
-    }
+    // Retry with fresh context — previous attempt's reasoning tokens and tool call
+    // history can be 50-100KB, causing context overflow on retry.
+    messages = [{ role: "user" as const, content: initialPrompt }]
 
     log.warn("goal agent: quality below threshold, retrying", {
       score: goalQuality.score,
