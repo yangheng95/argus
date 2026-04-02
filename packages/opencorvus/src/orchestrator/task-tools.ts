@@ -656,42 +656,7 @@ export function createTaskAgentTools(input: { taskID: string; agentSessionID: st
           )
         } catch { /* non-critical */ }
 
-        // Run independent evaluator agent analysis
-        let agentVerdict: Awaited<ReturnType<typeof EvaluatorAgent.analyze>> | undefined
-        try {
-          agentVerdict = await Promise.race([
-            EvaluatorAgent.analyze({
-              task: { title: task.title, request: task.request, sessionID: task.session_id ?? undefined, taskID: task.id },
-              goals: goals.map(g => ({
-                description: g.description, criteria: g.criteria,
-                priority: g.priority as "blocking" | "advisory",
-                check_selector: selectorList(g.metadata) as string[],
-              })),
-              delivery: { summary: delivery.summary, changedFiles, diffs: diffs as any },
-              checkResults: checkResults.map(c => ({
-                name: c.name, status: c.status as "passed" | "failed" | "skipped",
-                evidence: typeof c.evidence === "string" ? c.evidence : undefined,
-              })),
-            }),
-            new Promise<never>((_, reject) => setTimeout(() => reject(new Error("evaluator agent timeout")), 10 * 60 * 1000)),
-          ])
-          // Persist evaluator agent verdict
-          try {
-            Database.use((db) =>
-              db.insert(OrchestratorArtifactTable).values({
-                id: Identifier.ascending("artifact"),
-                task_id: task.id, run_id: run.id, delivery_id: delivery.id,
-                kind: "report", label: "evaluator-agent-analysis",
-                payload: agentVerdict as unknown as Record<string, unknown>,
-                time_created: Date.now(), time_updated: Date.now(),
-              }).run(),
-            )
-          } catch { /* non-critical */ }
-        } catch (err) {
-          log.warn("evaluator agent failed, proceeding with delivery verdict only", { error: String(err) })
-        }
-
-        // Return combined results
+        // Return structured verdict for Task Agent decision
         const lines = [`Delivery verdict: ${verdict.verdict}`, `Summary: ${verdict.summary}`]
         if (verdict.issues_found.length > 0) {
           lines.push("Issues found:")
@@ -703,21 +668,11 @@ export function createTaskAgentTools(input: { taskID: string; agentSessionID: st
             lines.push(`  - [${d.category}]${d.file ? ` ${d.file}` : ""}: ${d.error}${d.suggestion ? ` → ${d.suggestion}` : ""}`)
           }
         }
-        if (agentVerdict) {
-          lines.push(`Evaluator agent verdict: ${agentVerdict.verdict}`)
-          if (agentVerdict.verdict !== "accepted") {
-            lines.push(`Evaluator agent summary: ${agentVerdict.summary}`)
-          }
-        }
 
-        const bothAccepted = verdict.verdict === "accepted" && (!agentVerdict || agentVerdict.verdict === "accepted")
-        if (bothAccepted) {
-          lines.push("", "Both verifiers accepted. Next step: call publish_delivery to publish.")
+        if (verdict.verdict === "accepted") {
+          lines.push("", "Delivery accepted. Next step: call publish_delivery to publish.")
         } else {
-          const rejectReasons: string[] = []
-          if (verdict.verdict === "rejected") rejectReasons.push("delivery agent")
-          if (agentVerdict && agentVerdict.verdict !== "accepted") rejectReasons.push("evaluator agent")
-          lines.push("", `Rejected by: ${rejectReasons.join(" and ")}. Decide: call create_fix_run with guidance, or fail_task if unrecoverable.`)
+          lines.push("", "Rejected by delivery agent. Decide: call create_fix_run with guidance, or fail_task if unrecoverable.")
         }
         return lines.join("\n")
       },

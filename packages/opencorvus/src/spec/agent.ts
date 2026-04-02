@@ -350,9 +350,9 @@ async function run(input: {
       return parsed
     }
 
-    if (Array.isArray(response?.messages)) {
-      messages = [...messages, ...response.messages]
-    }
+    // Retry with fresh context — do NOT accumulate previous attempt's message history.
+    // Reasoning tokens (50-100KB/attempt) cause context overflow on retry.
+    messages = [{ role: "user" as const, content: initialPrompt }]
 
     log.warn("spec: spec quality below threshold, retrying", {
       score: specQuality.score,

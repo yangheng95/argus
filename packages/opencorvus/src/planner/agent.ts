@@ -573,10 +573,10 @@ function buildUserPrompt(
     }
   }
 
-  if (input.spec?.content) {
-    sections.push(
-      `# Approved Specification\n\n${input.spec.summary ? `Summary: ${input.spec.summary}\n\n` : ""}${input.spec.content}`,
-    )
+  // Spec: only include summary — full content is too large (200-800 lines).
+  // Planner has tools to read specific files if needed.
+  if (input.spec?.summary) {
+    sections.push(`# Approved Specification (Summary)\n\n${input.spec.summary}`)
   }
 
   // Inject prefetched context (auto-recalled memory + active preferences)

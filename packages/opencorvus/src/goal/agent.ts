@@ -336,33 +336,23 @@ function buildUserPrompt(
 ): string {
   const sections = [`# Task\n\nTitle: ${input.title}\n\nRequest:\n${input.request}`]
 
-  // Include spec requirements
+  // Include spec requirements (compressed: id + title + acceptance only)
   const requirements = input.spec.requirements ?? []
   if (requirements.length > 0) {
     const reqLines = requirements.map((r: any) => {
       const id = r.id || "?"
       const title = r.title || ""
-      const desc = r.description || ""
       const acceptance = Array.isArray(r.acceptance) ? r.acceptance.join("; ") : ""
       const priority = r.priority || "blocking"
-      const selectors = Array.isArray(r.check_selector) ? r.check_selector.join(", ")
-        : Array.isArray(r.metadata?.check_selector) ? r.metadata.check_selector.join(", ") : ""
-      return [
-        `- **${id}**: ${title} [${priority}]`,
-        desc ? `  Description: ${desc}` : "",
-        acceptance ? `  Acceptance: ${acceptance}` : "",
-        selectors ? `  Check selectors: ${selectors}` : "",
-      ].filter(Boolean).join("\n")
+      return `- **${id}**: ${title} [${priority}]${acceptance ? ` — ${acceptance}` : ""}`
     })
-    sections.push(`# Spec Requirements (${requirements.length} total)\n\nEach requirement MUST be covered by at least one goal.\n\n${reqLines.join("\n\n")}`)
+    sections.push(`# Spec Requirements (${requirements.length} total)\n\nEach requirement MUST be covered by at least one goal.\n\n${reqLines.join("\n")}`)
   }
 
-  // Include spec content summary
-  if (input.spec.content) {
-    const content = input.spec.content.length > 4000
-      ? input.spec.content.slice(0, 4000) + "\n... (truncated)"
-      : input.spec.content
-    sections.push(`# Spec Content\n\n${content}`)
+  // Spec summary only — full spec.content is NOT included to prevent context bloat.
+  // The goal agent has tools to read specific files if needed.
+  if (input.spec.summary) {
+    sections.push(`# Spec Summary\n\n${input.spec.summary}`)
   }
 
   // Include architectural layers if available
