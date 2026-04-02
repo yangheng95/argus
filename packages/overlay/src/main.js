@@ -1821,9 +1821,13 @@ async function loadBoard(options = {}) {
       const etag = res.headers.get("etag");
       if (etag) setBoardEtag(etag);
       const data = await res.json();
+      const lastSequence = Number(data?.lastSequence || 0);
+      if (Number.isFinite(lastSequence) && lastSequence > 0 && boardStore.taskSequence > 0 && lastSequence < boardStore.taskSequence) {
+        clearBoardRetry$1();
+        return;
+      }
       setBoardStore("board", data ?? null);
       setSnapshotVersion(boardSnapshot(data));
-      const lastSequence = Number(data?.lastSequence || 0);
       if (Number.isFinite(lastSequence) && lastSequence > 0) {
         setTaskSequence(lastSequence);
       }
@@ -7509,7 +7513,7 @@ function executorEventKind(progressType) {
   if (t.includes("command")) return "command";
   return "event";
 }
-const BOARD_EVENT_DEBOUNCE = 150;
+const BOARD_EVENT_DEBOUNCE = 500;
 let tasksKickTimer$1 = null;
 function normalizedEventType(event) {
   const raw = String(event?.type || "").trim();
@@ -7556,8 +7560,6 @@ function handleEventStreamEvent(event) {
     if (current > 0 && sequence > current + 1) {
       scheduleBoard(BOARD_EVENT_DEBOUNCE);
       scheduleTasksCompat(BOARD_EVENT_DEBOUNCE);
-      startSSE(taskID);
-      return;
     }
     setTaskSequence(sequence);
   }

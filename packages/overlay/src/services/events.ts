@@ -373,7 +373,7 @@ function executorEventKind(progressType: string | undefined): string {
 
 // ── Board / Task Lifecycle Event Handling ──
 
-const BOARD_EVENT_DEBOUNCE = 150;
+const BOARD_EVENT_DEBOUNCE = 500;
 
 let tasksKickTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -439,8 +439,8 @@ export function handleEventStreamEvent(event: any): void {
     if (current > 0 && sequence > current + 1) {
       scheduleBoard(BOARD_EVENT_DEBOUNCE);
       scheduleTasksCompat(BOARD_EVENT_DEBOUNCE);
-      startSSE(taskID);
-      return;
+      // Don't restart SSE for sequence gaps — the refresh will catch up.
+      // Restarting SSE here causes cascading refreshes that lead to flickering.
     }
     setTaskSequence(sequence);
   }

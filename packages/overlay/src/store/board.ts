@@ -111,9 +111,20 @@ export async function loadBoard(options: LoadBoardOptions = {}): Promise<void> {
       const etag = res.headers.get("etag");
       if (etag) setBoardEtag(etag);
       const data = await res.json();
+      const lastSequence = Number(data?.lastSequence || 0);
+      // Monotonic guard: discard stale responses whose sequence is lower
+      // than what we already have. This prevents flickering when a slower
+      // response arrives after a newer one.
+      if (
+        Number.isFinite(lastSequence) && lastSequence > 0 &&
+        boardStore.taskSequence > 0 &&
+        lastSequence < boardStore.taskSequence
+      ) {
+        clearBoardRetry();
+        return;
+      }
       setBoardStore("board", data ?? null);
       setSnapshotVersion(boardSnapshot(data));
-      const lastSequence = Number(data?.lastSequence || 0);
       if (Number.isFinite(lastSequence) && lastSequence > 0) {
         setTaskSequence(lastSequence);
       }
