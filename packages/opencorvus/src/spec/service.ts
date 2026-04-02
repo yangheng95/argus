@@ -50,6 +50,7 @@ export namespace HeadlessSpecService {
   export async function initial(input: {
     title: string
     request: string
+    taskID?: string
     goals?: Array<{ description: string; criteria: string; priority?: "blocking" | "advisory" }>
     sessionID?: string
     signal?: AbortSignal
@@ -70,6 +71,7 @@ export namespace HeadlessSpecService {
         SpecAgent.initial({
           title: input.title,
           request: input.request,
+          taskID: input.taskID,
           goals: input.goals?.map(g => ({
             description: g.description,
             criteria: g.criteria,

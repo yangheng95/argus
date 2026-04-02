@@ -677,6 +677,7 @@ export namespace OrchestratorRuntime {
         node: entry.node as any,
         goal: entry.goal as any,
         taskRequest: plan.prompt,
+        taskID: task.id,
         allGoals,
         cwd: worktreeDir,
       })
@@ -803,24 +804,26 @@ export namespace OrchestratorRuntime {
       }
     }
 
-    // 3. After orphan cleanup: if NO active goal runs remain and NO event bridges
-    //    exist for this run, the pipeline is stuck — all bridges died with the
-    //    previous process. Notify Task Agent directly (this is the ONLY case
-    //    where syncGoalRuns touches the pipeline).
+    // After orphan cleanup: if we actually marked orphans AND no event bridges
+    // remain for this run, the pipeline is fully dead (process restart killed
+    // everything). Only then do we failRun — this is the ONLY case where
+    // syncGoalRuns touches the pipeline.
     const remaining = listActiveGoalRunsByCoordinator(runID)
-    const hasLiveBridge = remaining.some((gr) => eventBridgeAborts.has(gr.id))
-    if (remaining.length === 0 && !agentNotifiedRuns.has(run.id)) {
-      const task = requireTask(run.task_id)
-      if (task.active_run_id === run.id) {
-        log.warn("all goal runs dead after orphan cleanup, notifying task agent", { runID })
-        agentNotifiedRuns.add(run.id)
-        await failRun(run, "All goal runs failed (orphaned from previous process)", hooks)
+    const hasAnyBridge = remaining.some((gr) => eventBridgeAborts.has(gr.id))
+    if (remaining.length === 0 && !hasAnyBridge && !agentNotifiedRuns.has(run.id)) {
+      // Double-check: were there actually orphans we just cleaned up?
+      // If all goal runs completed normally via event bridges, remaining=0
+      // is expected and continueGoalPipeline was already called by the bridge.
+      const allGoalRuns = listGoalRunsByCoordinator(runID)
+      const orphanedCount = allGoalRuns.filter((gr) => gr.status === "failed" && gr.error?.includes("Orphaned")).length
+      if (orphanedCount > 0) {
+        const task = requireTask(run.task_id)
+        if (task.active_run_id === run.id) {
+          log.warn("all goal runs dead after orphan cleanup, failing run", { runID, orphanedCount })
+          agentNotifiedRuns.add(run.id)
+          await failRun(run, `All goal runs failed (${orphanedCount} orphaned from previous process)`, hooks)
+        }
       }
-    } else if (remaining.length > 0 && !hasLiveBridge) {
-      // Active goal runs exist but none have event bridges — all orphaned.
-      // Mark them failed (will be picked up on next poll cycle via the orphan
-      // detection above, since they now satisfy the processStartTime check).
-      log.warn("active goal runs with no event bridges", { runID, count: remaining.length })
     }
   }
 

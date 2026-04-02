@@ -8696,7 +8696,7 @@ const meta = /*#__PURE__*/Object.freeze(/*#__PURE__*/Object.defineProperty({
   renderMeta
 }, Symbol.toStringTag, { value: 'Module' }));
 
-var _tmpl$$8 = /* @__PURE__ */ template(`<div class=diff-lines>`), _tmpl$2$8 = /* @__PURE__ */ template(`<div class=diff-empty><p class=empty-hint>`), _tmpl$3$8 = /* @__PURE__ */ template(`<div class=diff-row><div class=diff-gutter></div><div class=diff-num></div><div class=diff-num></div><div class=diff-code>`), _tmpl$4$8 = /* @__PURE__ */ template(`<div class=diff-row data-kind=skip><div class=diff-gutter>...</div><div class=diff-num></div><div class=diff-num></div><div class=diff-code>`), _tmpl$5$8 = /* @__PURE__ */ template(`<div class="dialog-form diff-dialog-form"><div class=dialog-head><div class=diff-dialog-head><span class=dialog-title></span><span class=diff-dialog-meta><span class=change-status></span><span class=diff-dialog-stat data-tone=add>+</span><span class=diff-dialog-stat data-tone=del>-</span></span></div><button type=button class="btn btn-ghost mini">×</button></div><div class=diff-dialog-body>`), _tmpl$6$8 = /* @__PURE__ */ template(`<dialog class=dialog>`), _tmpl$7$7 = /* @__PURE__ */ template(`<div class=changes-summary><span></span><span class=changes-total><span data-tone=add>+</span><span data-tone=del>-`), _tmpl$8$5 = /* @__PURE__ */ template(`<div class=changes-list>`), _tmpl$9$4 = /* @__PURE__ */ template(`<div class=changes-panel>`), _tmpl$0$2 = /* @__PURE__ */ template(`<p class=empty-hint>`), _tmpl$1$1 = /* @__PURE__ */ template(`<button type=button class=change-row><span class=change-main><span class=change-path></span><span class=change-subline></span></span><span class=change-meta><span class=change-status></span><span class=diff-dialog-stat data-tone=add>+</span><span class=diff-dialog-stat data-tone=del>-`);
+var _tmpl$$8 = /* @__PURE__ */ template(`<div class=diff-lines>`), _tmpl$2$8 = /* @__PURE__ */ template(`<div class=diff-empty><p class=empty-hint>`), _tmpl$3$8 = /* @__PURE__ */ template(`<div class=diff-row><div class=diff-gutter></div><div class=diff-num></div><div class=diff-num></div><div class=diff-code>`), _tmpl$4$8 = /* @__PURE__ */ template(`<div class=diff-row data-kind=skip><div class=diff-gutter>...</div><div class=diff-num></div><div class=diff-num></div><div class=diff-code>`), _tmpl$5$8 = /* @__PURE__ */ template(`<div class="dialog-form diff-dialog-form"><div class=dialog-head><div class=diff-dialog-head><span class=dialog-title></span><span class=diff-dialog-meta><span class=change-status></span><span class=diff-dialog-stat data-tone=add>+</span><span class=diff-dialog-stat data-tone=del>-</span></span></div><button type=button class="btn btn-ghost mini">×</button></div><div class=diff-dialog-body>`), _tmpl$6$8 = /* @__PURE__ */ template(`<dialog class=dialog>`), _tmpl$7$7 = /* @__PURE__ */ template(`<div class=changes-summary><span></span><span class=changes-total><span data-tone=add>+</span><span data-tone=del>-`), _tmpl$8$5 = /* @__PURE__ */ template(`<div class=changes-list>`), _tmpl$9$4 = /* @__PURE__ */ template(`<div class=changes-panel>`), _tmpl$0$2 = /* @__PURE__ */ template(`<p class=empty-hint>`), _tmpl$1$1 = /* @__PURE__ */ template(`<button type=button class=change-row><span class=change-main><span class=change-path></span></span><span class=change-meta><span class=change-status></span><span class=diff-dialog-stat data-tone=add>+</span><span class=diff-dialog-stat data-tone=del>-`);
 function splitDiffLines(text) {
   const value = String(text || "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
   if (!value) return [];
@@ -9016,9 +9016,13 @@ function ChangesPanel(props) {
       setSelectedItem(item);
       return;
     }
-    const fullDiffs = await fetchFullDiffs(runID);
-    const full = fullDiffs.find((d) => d.file === item.file);
-    setSelectedItem(full || item);
+    try {
+      const fullDiffs = await fetchFullDiffs(runID);
+      const full = fullDiffs.find((d) => d.file === item.file);
+      setSelectedItem(full || item);
+    } catch {
+      setSelectedItem(item);
+    }
   }
   function closeDiff() {
     setSelectedItem(null);
@@ -9053,18 +9057,17 @@ function ChangesPanel(props) {
               return files();
             },
             children: (item, index) => (() => {
-              var _el$35 = _tmpl$1$1(), _el$36 = _el$35.firstChild, _el$37 = _el$36.firstChild, _el$38 = _el$37.nextSibling, _el$39 = _el$36.nextSibling, _el$40 = _el$39.firstChild, _el$41 = _el$40.nextSibling; _el$41.firstChild; var _el$43 = _el$41.nextSibling; _el$43.firstChild;
+              var _el$35 = _tmpl$1$1(), _el$36 = _el$35.firstChild, _el$37 = _el$36.firstChild, _el$38 = _el$36.nextSibling, _el$39 = _el$38.firstChild, _el$40 = _el$39.nextSibling; _el$40.firstChild; var _el$42 = _el$40.nextSibling; _el$42.firstChild;
               _el$35.$$click = () => openDiff(index());
               insert(_el$37, () => item.file);
-              insert(_el$38, () => changeStatusLabel(item.status));
-              insert(_el$40, () => changeStatusLabel(item.status));
-              insert(_el$41, () => item.additions, null);
-              insert(_el$43, () => item.deletions, null);
+              insert(_el$39, () => changeStatusLabel(item.status));
+              insert(_el$40, () => item.additions, null);
+              insert(_el$42, () => item.deletions, null);
               createRenderEffect((_p$) => {
                 var _v$3 = index(), _v$4 = item.file, _v$5 = item.status;
                 _v$3 !== _p$.e && setAttribute(_el$35, "data-change-index", _p$.e = _v$3);
                 _v$4 !== _p$.t && setAttribute(_el$35, "title", _p$.t = _v$4);
-                _v$5 !== _p$.a && setAttribute(_el$40, "data-status", _p$.a = _v$5);
+                _v$5 !== _p$.a && setAttribute(_el$39, "data-status", _p$.a = _v$5);
                 return _p$;
               }, {
                 e: void 0,

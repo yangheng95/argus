@@ -22,6 +22,7 @@ import { toolGuard } from "@/util/tool-guard"
 import { parsePlanText } from "./parse-plan-text"
 import { AgentTrace } from "@/util/agent-trace"
 import { OrchestratorConfig } from "@/orchestrator/config"
+import { operatorNotesSection } from "@/orchestrator/helpers"
 import { loadStageSkills } from "@/orchestrator/skill-inject"
 import path from "path"
 import PLAN_CORE from "@/prompt/core/plan-core.txt"
@@ -131,6 +132,7 @@ export namespace HeadlessPlannerAgent {
   export async function plan(input: {
     title: string
     request: string
+    taskID?: string
     /** User-provided goals -- planner should refine/expand, not discard */
     userGoals?: Array<{ description: string; criteria: string; priority?: string }>
     /** Whether userGoals originate from GoalAgent (authoritative, no re-decomposition needed) */
@@ -542,6 +544,7 @@ function buildUserPrompt(
   input: {
     title: string
     request: string
+    taskID?: string
     userGoals?: Array<{ description: string; criteria: string; priority?: string }>
     goalsFromGoalAgent?: boolean
     spec?: { summary?: string; content: string }
@@ -551,6 +554,11 @@ function buildUserPrompt(
   context?: string,
 ): string {
   const sections = [`# Task\n\nTitle: ${input.title}\n\nRequest:\n${input.request}`]
+
+  if (input.taskID) {
+    const notes = operatorNotesSection(input.taskID)
+    if (notes) sections.push(notes)
+  }
 
   if (input.userGoals && input.userGoals.length > 0) {
     if (input.goalsFromGoalAgent) {

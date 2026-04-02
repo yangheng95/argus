@@ -20,6 +20,7 @@ import { toolGuard } from "@/util/tool-guard"
 import { parseGoalText, type ParsedGoalDraft } from "./parse-goal-text"
 import { AgentTrace } from "@/util/agent-trace"
 import { OrchestratorConfig } from "@/orchestrator/config"
+import { operatorNotesSection } from "@/orchestrator/helpers"
 import { loadStageSkills } from "@/orchestrator/skill-inject"
 import { Config } from "@/config/config"
 import type { SpecDraft } from "@/spec/agent"
@@ -62,6 +63,7 @@ export namespace HeadlessGoalAgent {
   export async function initial(input: {
     title: string
     request: string
+    taskID?: string
     spec: SpecDraft
     goalHints?: Array<{ description: string; criteria: string; priority?: string }>
     sessionID?: string
@@ -100,6 +102,7 @@ export { HeadlessGoalAgent as GoalAgent }
 async function run(input: {
   title: string
   request: string
+  taskID?: string
   spec: SpecDraft
   mode: "initial" | "recompile"
   goalHints?: Array<{ description: string; criteria: string; priority?: string }>
@@ -327,6 +330,7 @@ function buildUserPrompt(
   input: {
     title: string
     request: string
+    taskID?: string
     spec: SpecDraft
     mode: "initial" | "recompile"
     goalHints?: Array<{ description: string; criteria: string; priority?: string }>
@@ -335,6 +339,11 @@ function buildUserPrompt(
   context: string,
 ): string {
   const sections = [`# Task\n\nTitle: ${input.title}\n\nRequest:\n${input.request}`]
+
+  if (input.taskID) {
+    const notes = operatorNotesSection(input.taskID)
+    if (notes) sections.push(notes)
+  }
 
   // Include spec requirements (compressed: id + title + acceptance only)
   const requirements = input.spec.requirements ?? []
