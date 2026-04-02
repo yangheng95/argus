@@ -456,6 +456,7 @@ export const UpdateGoalInput = z.object({
 
 export const UpdateTaskChecksInput = z.object({
   checks: CheckConfig.optional(),
+  selection: z.record(z.string(), z.boolean()).optional(),
 })
 
 export const TaskAccepted = z.object({

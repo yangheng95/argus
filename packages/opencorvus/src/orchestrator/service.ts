@@ -571,7 +571,10 @@ export namespace OrchestratorService {
   }
 
   export async function updateTaskChecks(taskID: string, raw: z.input<typeof UpdateTaskChecksInput>) {
-    const { checks } = UpdateTaskChecksInput.parse(raw)
+    const { checks, selection } = UpdateTaskChecksInput.parse(raw)
+    if (selection && Object.keys(selection).length > 0) {
+      return selectTaskChecks(taskID, selection)
+    }
     return writeTaskChecks(requireTask(taskID), checks)
   }
 

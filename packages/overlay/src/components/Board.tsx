@@ -374,6 +374,7 @@ const TOGGLE_CHECKS = [
   { key: "code_quality", label: "Code Quality", kind: "toggle", family: "review" },
   { key: "code_review", label: "Code Review", kind: "toggle", family: "review" },
   { key: "dead_code_review", label: "Dead Code Review", kind: "toggle", family: "review" },
+  { key: "judge", label: "LLM Judge", kind: "toggle", family: "acceptance" },
   { key: "spec_check", label: "Spec Check", kind: "toggle", family: "acceptance" },
 ];
 
@@ -415,6 +416,7 @@ function checkLabel(key: string): string {
     code_quality: t("checks.code_quality"),
     code_review: t("checks.code_review"),
     dead_code_review: t("checks.dead_code_review"),
+    judge: t("checks.judge"),
     spec_check: t("checks.spec_check"),
   };
   if (known[key]) return known[key];
@@ -437,7 +439,7 @@ function checkFamilyKey(family: string, name: string): string {
   if (["startup", "visual", "puppeteer"].includes(base)) return "runtime";
   if (base === "artifact") return "artifact";
   if (["ui_review", "code_quality", "code_review", "dead_code_review"].includes(base)) return "review";
-  if (base === "spec_check") return "acceptance";
+  if (base === "judge" || base === "spec_check") return "acceptance";
   return "custom";
 }
 
@@ -479,7 +481,7 @@ function criteriaEnabledValue(key: string, value: any, fallback: boolean): boole
   if (["build", "test", "lint", "verify_cmd"].includes(key)) {
     return value !== false && (value !== undefined || fallback);
   }
-  if (key === "spec_check" && value === undefined) return true;
+  if (["artifact", "judge", "spec_check"].includes(key) && value === undefined) return true;
   if (value === true) return true;
   if (!value || !record(value)) return false;
   return (value as any).enabled !== false;
@@ -508,7 +510,7 @@ function criteriaSpecs(task: any, evaluation: any): CriteriaSpec[] {
     const visible =
       value !== undefined ||
       aggregateCheckStatus(evaluation?.checks, item.key) !== "pending" ||
-      (showDefault && ["build", "test", "lint"].includes(item.key));
+      (showDefault && ["build", "test", "lint", "verify_cmd"].includes(item.key));
     if (!visible) continue;
     push({
       key: item.key,
@@ -530,6 +532,7 @@ function criteriaSpecs(task: any, evaluation: any): CriteriaSpec[] {
       "code_quality",
       "code_review",
       "dead_code_review",
+      "judge",
       "spec_check",
     ].includes(item.key);
     const visible =

@@ -115,6 +115,7 @@
   "checks.pytest": "Pytest",
   "checks.ruff": "Ruff",
   "checks.skip": "Skipped",
+  "checks.judge": "LLM Judge",
   "checks.spec_check": "Spec Check",
   "checks.startup": "Startup",
   "checks.test": "Unit Tests",

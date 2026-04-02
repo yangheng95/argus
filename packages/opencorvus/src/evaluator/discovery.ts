@@ -37,6 +37,11 @@ export function autoCodeReview(): Record<string, unknown> {
   return { code_review: { enabled: true, mode: "strict" } }
 }
 
+/** Auto-enable artifact check — always active at standard+ tier. */
+export function autoArtifact(): Record<string, unknown> {
+  return { artifact: { require_changed_files: true, require_diff: true, mode: "strict" } }
+}
+
 export function resolvedChecks(
   config: z.infer<typeof CheckConfig>,
   discovered: Awaited<ReturnType<typeof discoverChecks>>,
@@ -47,14 +52,14 @@ export function resolvedChecks(
     ...(config.lint !== undefined ? { lint: config.lint } : discovered.lint.length > 0 ? { lint: discovered.lint.map((item) => item.command) } : {}),
     ...(config.verify_cmd !== undefined ? { verify_cmd: config.verify_cmd } : {}),
     ...(config.startup ? { startup: config.startup } : {}),
-    ...(config.artifact ? { artifact: config.artifact } : {}),
+    ...(config.artifact ? { artifact: config.artifact } : autoArtifact()),
     ...(config.visual ? { visual: config.visual } : {}),
     ...(config.puppeteer ? { puppeteer: config.puppeteer } : {}),
     ...(config.ui_review ? { ui_review: config.ui_review } : {}),
     ...(config.code_quality ? { code_quality: config.code_quality } : {}),
     ...(config.code_review ? { code_review: config.code_review } : {}),
     ...(config.dead_code_review ? { dead_code_review: config.dead_code_review } : {}),
-    ...(config.judge ? { judge: config.judge } : {}),
+    ...(config.judge ? { judge: config.judge } : autoJudge()),
     ...(config.spec_check ? { spec_check: config.spec_check } : autoSpecCheck()),
     ...(config.custom ? { custom: config.custom } : {}),
     ...(config.timeout_ms ? { timeout_ms: config.timeout_ms } : {}),
