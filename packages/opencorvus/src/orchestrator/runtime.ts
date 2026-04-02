@@ -142,6 +142,10 @@ async function projectExecutorEventToSession(taskID: string, run: RunRow, goalSe
   summary?: string
   payload?: Record<string, unknown>
 }) {
+  // opencode executor manages its own session natively — projecting events
+  // would create duplicate messages and break standby/completion detection.
+  // opencode session messages reach the panel via task-message-protocol-bridge
+  // (the session is registered with registerGoalRunSession).
   if (run.executor === "opencode") return
   if (!goalSessionID) return
   if (event.type === "executor.progress") return
@@ -788,7 +792,7 @@ export namespace OrchestratorRuntime {
       if (activeRuns.length > 0) return
 
       // All goals in current batch done — notify Task Agent
-      const { listGoals: listAllGoals } = require("./store")
+      const { listGoals: listAllGoals } = await import("./store")
       const goals = listAllGoals(task.id) as GoalRow[]
       const failedGoals = goals.filter(g => g.status === "failed" && g.priority === "blocking")
 
@@ -1014,7 +1018,7 @@ export namespace OrchestratorRuntime {
     const run = findRun(runID)
     if (!run) throw new Error(`Run ${runID} not found`)
     const plan = run.plan_version_id ? findPlan(run.plan_version_id) : null
-    const { listGoals: listTaskGoals } = require("./store")
+    const { listGoals: listTaskGoals } = await import("./store")
     const goal = (listTaskGoals(taskID) as GoalRow[]).find(g => g.id === goalID)
     if (!goal) throw new Error(`Goal ${goalID} not found`)
 

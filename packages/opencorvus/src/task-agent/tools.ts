@@ -98,6 +98,7 @@ export function createTaskAgentTools(input: { taskID: string; agentSessionID: st
         let task = requireTask(taskID)
         const existingGoals = listGoals(taskID)
         if (existingGoals.length > 0) return `${existingGoals.length} goals already defined. Skipping.`
+        if (task.active_spec_version_id) return `Decompose already completed (spec=${task.active_spec_version_id}). Use read_context to see goals.`
 
         task = await updateTask(task, { status: "active" }, "Decomposition started")
         const guard = createInactivityGuard(stageTimeout("goal"), () => {
@@ -127,7 +128,18 @@ export function createTaskAgentTools(input: { taskID: string; agentSessionID: st
               signal: input.signal,
               decisionLog,
               stream: {
-                onChunk: async (arg: any) => { guard.bump(); if (hooks.onChunk) await hooks.onChunk(arg); if (decomposeLive.hooks.onChunk) await decomposeLive.hooks.onChunk(arg) },
+                onChunk: async (arg: any) => {
+                  guard.bump()
+                  // sessionStreamHooks: persists full tool content to session (input/output/status)
+                  if (hooks.onChunk) await hooks.onChunk(arg)
+                  // agentStream: only forward non-tool events for section status indicator.
+                  // Tool-call events are already persisted by sessionStreamHooks with full content;
+                  // forwarding them to agentStream would create duplicate empty status bubbles in the panel.
+                  const chunk = (arg as any)?.chunk
+                  if (chunk?.type !== "tool-input-start" && chunk?.type !== "tool-call" && chunk?.type !== "tool-result" && chunk?.type !== "tool-input-delta") {
+                    if (decomposeLive.hooks.onChunk) await decomposeLive.hooks.onChunk(arg)
+                  }
+                },
                 onError: async (arg: any) => { if (hooks.onError) await hooks.onError(arg); if (decomposeLive.hooks.onError) await decomposeLive.hooks.onError(arg) },
               },
               onStatus: decomposeLive.statusHook.bind(decomposeLive),
@@ -137,12 +149,59 @@ export function createTaskAgentTools(input: { taskID: string; agentSessionID: st
           await hooks.flush()
           await decomposeLive.finish("Decomposition finished")
 
-          // Persist goals directly to new schema (independent columns, no metadata compression)
-          const { insertGoalRows } = await import("@/orchestrator/persist")
+          // Persist spec snapshot, requirements, and goals
+          const { insertGoalRows, insertRequirements } = await import("@/orchestrator/persist")
+          const { OrchestratorSpecSnapshotTable } = await import("@/orchestrator/orchestrator.sql")
           const now = Date.now()
-          // Use a placeholder spec snapshot ID — decompose replaces spec stage
           const specSnapshotID = Identifier.ascending("spec")
+
+          // Build spec content from decompose output
+          const specContent = [
+            `# ${task.title}`,
+            "",
+            result.summary,
+            "",
+            "## Requirements",
+            ...result.requirements.map(r => `- **${r.id}** [${r.type}]: ${r.description}`),
+            "",
+            "## Decisions",
+            ...result.decisions.map(d => `- **${d.key}** = ${d.value} — ${d.reason}`),
+            "",
+            "## Traceability",
+            ...result.traceability.map(t => `- ${t.requirementID} → ${t.goalIDs.join(", ")}`),
+          ].join("\n")
+
           Database.transaction((db) => {
+            // Spec snapshot — makes SPEC section visible in panel
+            db.insert(OrchestratorSpecSnapshotTable).values({
+              id: specSnapshotID,
+              task_id: taskID,
+              version: 1,
+              status: "ready",
+              summary: result.summary,
+              content: specContent,
+              scope: result.requirements.map(r => r.description).join("; "),
+              time_created: now,
+              time_updated: now,
+            }).run()
+
+            // Persist requirements for traceability
+            if (result.requirements.length > 0) {
+              insertRequirements(db, {
+                taskID,
+                specSnapshotID,
+                requirements: result.requirements.map(r => ({
+                  id: r.id,
+                  title: r.description,
+                  description: r.description,
+                  acceptance: [] as string[],
+                  evidence_refs: [] as string[],
+                  priority: r.type === "explicit" ? "blocking" as const : "advisory" as const,
+                })),
+                now,
+              })
+            }
+
             insertGoalRows(db, {
               taskID,
               specSnapshotID,
@@ -578,6 +637,15 @@ export function createTaskAgentTools(input: { taskID: string; agentSessionID: st
             metadata: {}, time_created: now, time_updated: now,
           }).run()
 
+          // Link goals to this plan so listGoalsByPlan() finds them during dispatch
+          const { OrchestratorGoalTable: GT } = require("@/orchestrator/orchestrator.sql")
+          for (const goal of dbGoals) {
+            db.update(GT)
+              .set({ plan_version_id: planID, time_updated: now })
+              .where(eq(GT.id, goal.id))
+              .run()
+          }
+
           // Update task
           db.update(OrchestratorTaskTable)
             .set({ active_plan_version_id: planID, active_run_id: runID, status: "active", time_updated: now })
@@ -601,9 +669,9 @@ export function createTaskAgentTools(input: { taskID: string; agentSessionID: st
         // Activate the run
         const { updateGoalRun: _, ...persist } = await import("@/orchestrator/persist")
         Database.use((db) => {
-          const { OrchestratorRunTable } = require("./orchestrator.sql")
+          const { OrchestratorRunTable } = require("@/orchestrator/orchestrator.sql")
           db.update(OrchestratorRunTable).set({ status: "running", time_started: Date.now(), time_updated: Date.now() }).where(eq(OrchestratorRunTable.id, runID)).run()
-          const { OrchestratorTaskTable: TT } = require("./orchestrator.sql")
+          const { OrchestratorTaskTable: TT } = require("@/orchestrator/orchestrator.sql")
           db.update(TT).set({ status: "active", time_updated: Date.now() }).where(eq(TT.id, taskID)).run()
         })
 
@@ -645,12 +713,11 @@ export function createTaskAgentTools(input: { taskID: string; agentSessionID: st
     }),
 
     deliver: tool({
-      description: "Aggregate all goal deliveries into a final run-level delivery. Optionally run overall integration evaluation. Call this when you believe all goals are complete and ready for publication.",
+      description: "Aggregate all goal deliveries, then run the DeliveryAgent to verify build/test/startup before publication. Call this when you believe all goals are complete.",
       inputSchema: z.object({
-        run_overall_eval: z.boolean().default(false).describe("Whether to run an overall integration evaluation before publishing"),
         reason: z.string().optional().describe("Why you decided to deliver now"),
       }),
-      execute: async ({ run_overall_eval }) => {
+      execute: async () => {
         const task = requireTask(taskID)
         if (!task.active_run_id) return "No active run. Execute goals first."
         const run = requireRun(task.active_run_id)
@@ -658,14 +725,14 @@ export function createTaskAgentTools(input: { taskID: string; agentSessionID: st
         // Aggregate per-goal deliveries
         const { listGoalRunsByCoordinator, findDeliveryByGoalRun } = await import("@/orchestrator/store")
         const goalRuns = listGoalRunsByCoordinator(run.id)
-        const allDiffs: Array<{ file: string; [key: string]: unknown }> = []
+        const allDiffs: Array<{ file: string; diff?: string; [key: string]: unknown }> = []
         const seenFiles = new Set<string>()
         const summaries: string[] = []
         for (const gr of goalRuns) {
           const d = findDeliveryByGoalRun(gr.id)
           if (!d) continue
           if (d.summary) summaries.push(d.summary)
-          const result = d.result as { diffs?: Array<{ file: string; [key: string]: unknown }> } | null
+          const result = d.result as { diffs?: Array<{ file: string; diff?: string; [key: string]: unknown }> } | null
           if (!result?.diffs) continue
           for (const diff of result.diffs) {
             if (!seenFiles.has(diff.file)) {
@@ -689,19 +756,79 @@ export function createTaskAgentTools(input: { taskID: string; agentSessionID: st
           now: Date.now(),
         })
 
+        // Run DeliveryAgent to verify build/test/startup
         const goals = listGoals(taskID)
-        const passedCount = goals.filter(g => g.status === "passed").length
-        const failedCount = goals.filter(g => g.status === "failed").length
-
-        let summary = `Delivery aggregated: ${allDiffs.length} files from ${goalRuns.length} goal runs. Goals: ${passedCount} passed, ${failedCount} failed.`
-
-        if (run_overall_eval) {
-          summary += " Overall eval requested — call eval_goal on each goal to verify."
-        } else {
-          summary += " Ready for publication — call publish_delivery to complete the task."
+        const goalInfos = goals.map(g => ({
+          description: g.objective,
+          criteria: g.done_definition,
+          priority: g.priority as "blocking" | "advisory",
+        }))
+        const deliveryInfo = {
+          summary: summaries.join("\n"),
+          changedFiles: allDiffs.map(d => d.file),
+          diffs: allDiffs.map(d => ({ file: d.file, diff: d.diff })),
         }
 
-        return summary
+        const deliveryLive = agentStream({ taskID, stage: "delivery" })
+        const deliverySession = await Session.createNext({
+          parentID: input.agentSessionID,
+          title: `Delivery verification: ${task.title}`,
+          directory: Instance.directory,
+        })
+        registerGoalRunSession(deliverySession.id, taskID)
+        const hooks = sessionStreamHooks({ sessionID: deliverySession.id, taskID, stage: "delivery" })
+        await deliveryLive.start("Delivery verification started")
+
+        try {
+          const { DeliveryService } = await import("@/delivery/service")
+          const verdict = await DeliveryService.verify({
+            task: { title: task.title, request: task.request, sessionID: task.session_id ?? undefined, metadata: task.metadata ?? undefined },
+            goals: goalInfos,
+            delivery: deliveryInfo,
+            signal: input.signal,
+            stream: {
+              onChunk: async (arg: any) => {
+                if (hooks.onChunk) await hooks.onChunk(arg)
+                const chunk = (arg as any)?.chunk
+                if (chunk?.type !== "tool-input-start" && chunk?.type !== "tool-call" && chunk?.type !== "tool-result" && chunk?.type !== "tool-input-delta") {
+                  if (deliveryLive.hooks.onChunk) await deliveryLive.hooks.onChunk(arg)
+                }
+              },
+              onError: async (arg: any) => { if (hooks.onError) await hooks.onError(arg); if (deliveryLive.hooks.onError) await deliveryLive.hooks.onError(arg) },
+            },
+          })
+          await hooks.flush()
+          await deliveryLive.finish("Delivery verification finished")
+
+          // Persist verdict as artifact so publish_delivery can proceed
+          const { OrchestratorArtifactTable } = await import("@/orchestrator/orchestrator.sql")
+          Database.use((db) =>
+            db.insert(OrchestratorArtifactTable).values({
+              id: Identifier.ascending("art"),
+              task_id: taskID,
+              run_id: run.id,
+              delivery_id: deliveryID,
+              kind: "verdict",
+              label: "delivery-agent-verdict",
+              payload: verdict,
+              time_created: Date.now(),
+              time_updated: Date.now(),
+            }).run()
+          )
+
+          const passedCount = goals.filter(g => g.status === "passed").length
+          const failedCount = goals.filter(g => g.status === "failed").length
+          if (verdict.verdict === "accepted") {
+            return `Delivery verified and ACCEPTED. ${allDiffs.length} files, ${passedCount}/${goals.length} goals passed. Call publish_delivery to complete.`
+          }
+          const issues = verdict.issues_found.join("; ")
+          return `Delivery REJECTED: ${verdict.summary}. Issues: ${issues}. Goals: ${passedCount} passed, ${failedCount} failed. Fix issues and retry.`
+        } catch (err) {
+          await deliveryLive.finish("Delivery verification failed")
+          const msg = err instanceof Error ? err.message : String(err)
+          log.error("deliver: verification failed", { taskID, error: msg })
+          return `Delivery aggregated (${allDiffs.length} files) but verification failed: ${msg}. Decide whether to retry or publish without verification.`
+        }
       },
     }),
 

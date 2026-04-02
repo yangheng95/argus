@@ -139,6 +139,14 @@ export namespace OpencodeExecutor {
       const next = mapEvent(event, sessionID)
       if (!next) return
       push(next)
+      // When task-queue marks the task as completed, terminate the event stream.
+      if (next.type === "task-queue.completed" && input.queueTaskID) {
+        const payload = next.payload as { queueTaskID?: string } | undefined
+        if (payload?.queueTaskID === input.queueTaskID) {
+          done = true
+          wake?.()
+        }
+      }
     })
     const abort = () => {
       done = true

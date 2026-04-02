@@ -557,10 +557,37 @@ export const SpecSnapshot = z.object({
   }),
 })
 
+export const TaskBoardGoalRun = z.object({
+  id: z.string(),
+  goalID: z.string(),
+  status: z.string(),
+  sessionID: z.string().optional(),
+  workspaceDir: z.string().optional(),
+  error: z.string().optional(),
+  time: z.object({
+    created: z.number(),
+    updated: z.number(),
+    started: z.number().optional(),
+    completed: z.number().optional(),
+  }),
+})
+
+export const TaskBoardPlanNode = z.object({
+  id: z.string(),
+  goalID: z.string().optional(),
+  kind: z.string(),
+  title: z.string(),
+  brief: z.string(),
+  orderIndex: z.number(),
+})
+
 export const TaskBoard = z.object({
+  lastSequence: z.number().optional(),
   task: Task,
   spec: SpecSnapshot.optional(),
   plan: PlanVersion.optional(),
+  planNodes: TaskBoardPlanNode.array().optional(),
+  goalRuns: TaskBoardGoalRun.array().optional(),
   run: Run.optional(),
   delivery: Delivery.optional(),
   candidateDelivery: Delivery.optional(),

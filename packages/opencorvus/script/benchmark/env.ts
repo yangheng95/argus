@@ -181,9 +181,6 @@ export async function resolveBenchmarkModel(
       if (providers["alibaba-coding-plan-cn"]?.models["kimi-k2.5"]) return "alibaba-coding-plan-cn/kimi-k2.5"
       if (providers["alibaba-coding-plan"]?.models["kimi-k2.5"]) return "alibaba-coding-plan/kimi-k2.5"
       if (providers["alibaba-cn"]?.models["kimi-k2.5"]) return "alibaba-cn/kimi-k2.5"
-      if (providers["alibaba-coding-plan-cn"]?.models["qwen3.5-plus"]) return "alibaba-coding-plan-cn/qwen3.5-plus"
-      if (providers["alibaba-coding-plan"]?.models["qwen3.5-plus"]) return "alibaba-coding-plan/qwen3.5-plus"
-      if (providers["alibaba-cn"]?.models["qwen3.5-plus"]) return "alibaba-cn/qwen3.5-plus"
       if (providers["hexin"]?.models["gpt-5.4-mini"]) return "hexin/gpt-5.4-mini"
 
       for (const providerID of preferredProviders) {
