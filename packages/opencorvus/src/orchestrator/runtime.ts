@@ -757,20 +757,21 @@ export namespace OrchestratorRuntime {
   }
 
   /**
-   * Sync per-goal runs: timeout enforcement + orphan recovery.
-   * Goal completion is driven by consumeExecutorEvents (event-driven), not poll.
-   * This function only handles:
-   * 1. Run-level timeout
-   * 2. Orphan detection: goal runs active in DB but no event bridge (process restart)
-   * 3. Pipeline continuation when no active goals remain
+   * Sync per-goal runs: timeout enforcement + orphan recovery ONLY.
+   *
+   * Goal completion is driven exclusively by consumeExecutorEvents (event-driven).
+   * This function NEVER calls continueGoalPipeline — that is the event bridge's
+   * sole responsibility. Two actors advancing the same state machine causes races.
+   *
+   * This function handles:
+   * 1. Run-level timeout → failRun
+   * 2. Orphan detection: goal runs from a previous process (no event bridge) → mark failed
    */
   async function syncGoalRuns(runID: string, hooks: RuntimeHooks) {
     const run = requireRun(runID)
-    const task = requireTask(run.task_id)
-    const plan = run.plan_version_id ? findPlan(run.plan_version_id) : undefined
-    if (!plan) return
+    if (!run.plan_version_id) return
 
-    // Run execution timeout
+    // 1. Run execution timeout
     const started = run.time_started ?? run.time_created
     if (started && (Date.now() - started) > RUN_MAX_EXECUTION_MS) {
       log.warn("per-goal run exceeded max execution time", { runID, maxMs: RUN_MAX_EXECUTION_MS })
@@ -778,20 +779,16 @@ export namespace OrchestratorRuntime {
       return
     }
 
+    // 2. Orphan detection: goal runs created BEFORE the current process started
+    //    that have no event bridge. These are leftovers from a crashed process.
+    //    The executor process is dead — we can only mark them failed so
+    //    continueGoalPipeline (called by the LAST surviving event bridge) can
+    //    detect the failure and notify the Task Agent.
     const activeGoalRuns = listActiveGoalRunsByCoordinator(runID)
-    if (activeGoalRuns.length === 0) {
-      await continueGoalPipeline(task, run, plan, hooks)
-      return
-    }
-
-    // Orphan detection: goal runs created BEFORE the current process started
-    // that have no event bridge. These are leftovers from a crashed process.
-    // Goal runs created during this process lifetime always have an event bridge
-    // (registered synchronously in queueGoalRun before any async work).
     for (const goalRun of activeGoalRuns) {
       if (finalizingGoalRuns.has(goalRun.id)) continue
       if (eventBridgeAborts.has(goalRun.id)) continue
-      if ((goalRun.time_created ?? 0) >= processStartTime) continue // created in this process — not orphan
+      if ((goalRun.time_created ?? 0) >= processStartTime) continue
       log.warn("orphaned goal run from previous process, marking failed", { runID, goalRunID: goalRun.id })
       updateGoalRun(goalRun.id, { status: "failed", error: "Orphaned: event bridge lost (process restart)", time_completed: Date.now() })
       updateGoalRunExecutorSessionStatus(goalRun.id, "failed")
@@ -806,10 +803,24 @@ export namespace OrchestratorRuntime {
       }
     }
 
-    // Re-check after orphan cleanup
+    // 3. After orphan cleanup: if NO active goal runs remain and NO event bridges
+    //    exist for this run, the pipeline is stuck — all bridges died with the
+    //    previous process. Notify Task Agent directly (this is the ONLY case
+    //    where syncGoalRuns touches the pipeline).
     const remaining = listActiveGoalRunsByCoordinator(runID)
-    if (remaining.length === 0) {
-      await continueGoalPipeline(task, run, plan, hooks)
+    const hasLiveBridge = remaining.some((gr) => eventBridgeAborts.has(gr.id))
+    if (remaining.length === 0 && !agentNotifiedRuns.has(run.id)) {
+      const task = requireTask(run.task_id)
+      if (task.active_run_id === run.id) {
+        log.warn("all goal runs dead after orphan cleanup, notifying task agent", { runID })
+        agentNotifiedRuns.add(run.id)
+        await failRun(run, "All goal runs failed (orphaned from previous process)", hooks)
+      }
+    } else if (remaining.length > 0 && !hasLiveBridge) {
+      // Active goal runs exist but none have event bridges — all orphaned.
+      // Mark them failed (will be picked up on next poll cycle via the orphan
+      // detection above, since they now satisfy the processStartTime check).
+      log.warn("active goal runs with no event bridges", { runID, count: remaining.length })
     }
   }
 
