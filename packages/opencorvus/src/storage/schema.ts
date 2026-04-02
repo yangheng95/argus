@@ -35,3 +35,4 @@ export {
   ProtocolInboxTable,
   ProtocolStreamChunkTable,
 } from "../protocol/protocol.sql"
+export { DecisionLogTable } from "../decision-log/schema"
