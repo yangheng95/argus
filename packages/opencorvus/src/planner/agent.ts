@@ -290,9 +290,11 @@ export namespace HeadlessPlannerAgent {
         return parsed
       }
 
-      if (Array.isArray(response?.messages)) {
-        messages = [...messages, ...response.messages]
-      }
+      // Retry with fresh context — do NOT accumulate previous attempt's message history.
+      // Previous attempts may contain 50-100KB of reasoning tokens that bloat the context
+      // and cause backend buffer overflow on models like Kimi K2.5.
+      // Instead, start fresh with the original prompt + retry guidance.
+      messages = [{ role: "user" as const, content: initialPrompt }]
 
       log.warn("planner: plan quality below threshold, retrying", {
         score: planQuality.score,

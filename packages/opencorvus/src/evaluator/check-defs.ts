@@ -31,7 +31,7 @@ export const CORE_CHECK_DEFS = [
 ] as const satisfies readonly CheckDef[]
 
 /** LLM-based review checks */
-export const REVIEW_CHECK_NAMES = ["code_quality", "code_review", "dead_code_review", "judge", "spec_check"] as const
+export const REVIEW_CHECK_NAMES = ["spec_check"] as const
 
 /** Runtime checks (need live process or browser) */
 export const RUNTIME_CHECK_NAMES = ["startup", "visual", "puppeteer"] as const
@@ -39,7 +39,7 @@ export const RUNTIME_CHECK_NAMES = ["startup", "visual", "puppeteer"] as const
 // Full ordered list of optional check names
 export const OPTIONAL_CHECK_NAMES = [
   "startup", "artifact", "visual", "puppeteer",
-  "ui_review", ...REVIEW_CHECK_NAMES,
+  ...REVIEW_CHECK_NAMES,
 ] as const
 
 // ---------------------------------------------------------------------------
@@ -55,11 +55,6 @@ const ALL_CHECK_DEFS: CheckDef[] = [
   { name: "artifact", label: "Artifacts", family: "artifact" },
   { name: "visual", label: "Visual Check", family: "runtime" },
   { name: "puppeteer", label: "Puppeteer", family: "runtime" },
-  { name: "ui_review", label: "UI Review", family: "review" },
-  { name: "code_quality", label: "Code Quality", family: "review" },
-  { name: "code_review", label: "Code Review", family: "review" },
-  { name: "dead_code_review", label: "Dead Code Review", family: "review" },
-  { name: "judge", label: "LLM Judge", family: "acceptance" },
   { name: "spec_check", label: "Spec Check", family: "acceptance" },
 ]
 

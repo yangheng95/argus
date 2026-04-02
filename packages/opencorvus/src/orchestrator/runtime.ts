@@ -44,6 +44,7 @@ import {
   findDeliveryByGoalRun,
   findDeliveryByRun,
   findEvaluationByRun,
+  findGoalRun,
   findInteractionByExternal,
   findPendingInteractions,
   findPlan,
@@ -73,23 +74,14 @@ const DELIVERY_FETCH_TIMEOUT_MS = parseInt(process.env.OPENCORVUS_DELIVERY_FETCH
 const SYNC_RUN_TIMEOUT_MS = parseInt(process.env.OPENCORVUS_SYNC_RUN_TIMEOUT_MS || String(DELIVERY_FETCH_TIMEOUT_MS + 15 * 60 * 1000), 10) // must exceed fetch + Task Agent eval/verify/publish time
 const EXECUTOR_STATUS_TIMEOUT_MS = 30_000 // 30s for executor.status()
 const EXECUTOR_SUBMIT_TIMEOUT_MS = 60_000 // 60s for executor.submit()
-const eventBridgeAborts = new Map<string, AbortController>() // runID → AbortController for consumeExecutorEvents
+const eventBridgeAborts = new Map<string, AbortController>() // goalRunID or runID → AbortController
 // Guard: runs that have already notified Task Agent via run_completed.
-// Prevents syncRun from re-calling completeRun every 1.5s cycle, which would
-// abort the running Task Agent mid-eval/delivery.
+// Prevents syncRun from re-calling completeRun every poll cycle.
 const agentNotifiedRuns = new Set<string>()
-
-// Per-goal-run executor instances: each goal run gets its own managed executor
-// so status() queries hit the correct task state.
-const goalRunExecutors = new Map<string, import("@/executor/compat").ExecutorAdapter>()
-
 // Per-run merge serialization: ensures parallel goal deliveries are merged one at a time.
-// Without this, concurrent applyGoalDelivery() calls can overwrite each other's changes.
 const mergeLocksPerRun = new Map<string, Promise<void>>()
-
-// Guard: runs whose goal pipeline completion is already in progress.
-// Prevents concurrent syncGoalRuns polls from re-entering continueGoalPipeline.
-const pipelineCompletingRuns = new Set<string>()
+// Guard: goal runs currently being finalized (prevents concurrent finalization from event bridge + poll).
+const finalizingGoalRuns = new Set<string>()
 async function serializedMerge(runID: string, fn: () => Promise<void>) {
   const prev = mergeLocksPerRun.get(runID) ?? Promise.resolve()
   const next = prev.then(fn, fn)
@@ -118,16 +110,17 @@ type TranscriptState = {
 
 const transcript = new Map<string, TranscriptState>()
 
-async function projectExecutorEventToSession(taskID: string, run: RunRow, event: {
+async function projectExecutorEventToSession(taskID: string, run: RunRow, goalSessionID: string, event: {
   type: string
   summary?: string
   payload?: Record<string, unknown>
 }) {
-  if (run.executor === "opencode" || !run.session_id) return
-  const payload = event.payload ?? {}
-  const sessionID = typeof payload.sessionID === "string" ? payload.sessionID : run.session_id
-  if (!sessionID) return
+  if (run.executor === "opencode") return
+  if (!goalSessionID) return
   if (event.type === "executor.progress") return
+
+  const payload = event.payload ?? {}
+  const sessionID = goalSessionID
 
   // Normalize event type: CodingEventInfo uses underscores (tool_call, text_delta)
   // while the session protocol uses dots (tool.call, message.part.delta).
@@ -317,13 +310,12 @@ async function projectExecutorEventToSession(taskID: string, run: RunRow, event:
         },
       },
     } satisfies Message.Assistant) as Message.Assistant
-    transcript.delete(`${run.id}:${sessionID}`)
+    transcript.delete(sessionID)
   }
 }
 
 async function ensureTranscriptState(taskID: string, run: RunRow, sessionID: string) {
-  const key = `${run.id}:${sessionID}`
-  const current = transcript.get(key)
+  const current = transcript.get(sessionID)
   if (current) return current
   const parentID = await transcriptParentID(sessionID, taskID, run.id)
   const message = await Session.updateMessage({
@@ -365,7 +357,7 @@ async function ensureTranscriptState(taskID: string, run: RunRow, sessionID: str
     text: undefined as Message.TextPart | undefined,
     reasoning: undefined as Message.ReasoningPart | undefined,
   }
-  transcript.set(key, next)
+  transcript.set(sessionID, next)
   return next
 }
 
@@ -569,7 +561,7 @@ export namespace OrchestratorRuntime {
     // Register executor session so bridge can resolve sessionID → taskID for SSE
     if (sessionID) registerGoalRunSession(sessionID, task.id)
     // Start executor event bridge (fire-and-forget background coroutine)
-    consumeExecutorEvents(task.id, run.id, executor, sessionID, session.id, undefined, run.executor)
+    consumeSerialExecutorEvents(task.id, run.id, executor, sessionID, session.id, run.executor)
   }
 
   // ═══════════════════════════════════════════════════════════════════
@@ -700,10 +692,7 @@ export namespace OrchestratorRuntime {
         ),
       ])
 
-      // 6. Store per-goal executor instance for status tracking
-      goalRunExecutors.set(goalRun.id, executor)
-
-      // 7. Update goal run with executor refs
+      // 6. Update goal run with executor refs
       updateGoalRun(goalRun.id, {
         status: "accepted",
         time_started: Date.now(),
@@ -728,9 +717,19 @@ export namespace OrchestratorRuntime {
         goalRunID: goalRun.id,
       })
 
-      // 8. Start event bridge — pass the per-goal executor instance (not the shared singleton)
+      // 8. Start event bridge — drives goal completion (event-driven, not poll)
       registerGoalRunSession(goalSession.id, task.id)
-      consumeExecutorEvents(task.id, run.id, executor, goalSession.id, executorSession.id, goalRun.id, run.executor)
+      consumeExecutorEvents({
+        taskID: task.id,
+        runID: run.id,
+        executor,
+        goalSessionID: goalSession.id,
+        executorSessionID: executorSession.id,
+        queueTaskID: submission.queueTaskID,
+        goalRunID: goalRun.id,
+        executorProvider: run.executor,
+        hooks,
+      })
 
       log.info("dispatched goal run", {
         runID: run.id,
@@ -752,12 +751,13 @@ export namespace OrchestratorRuntime {
     }
   }
 
-  /** Guard: prevent concurrent finalization of the same goal run */
-  const finalizingGoalRuns = new Set<string>()
-
   /**
-   * Sync per-goal executor runs: check status of each active goal run,
-   * finalize completed ones, dispatch newly-ready goals.
+   * Sync per-goal runs: timeout enforcement + orphan recovery.
+   * Goal completion is driven by consumeExecutorEvents (event-driven), not poll.
+   * This function only handles:
+   * 1. Run-level timeout
+   * 2. Orphan detection: goal runs active in DB but no event bridge (process restart)
+   * 3. Pipeline continuation when no active goals remain
    */
   async function syncGoalRuns(runID: string, hooks: RuntimeHooks) {
     const run = requireRun(runID)
@@ -775,65 +775,35 @@ export namespace OrchestratorRuntime {
 
     const activeGoalRuns = listActiveGoalRunsByCoordinator(runID)
     if (activeGoalRuns.length === 0) {
-      // No active goal runs — check if we need to dispatch more or finalize
       await continueGoalPipeline(task, run, plan, hooks)
       return
     }
 
+    // Orphan detection: goal runs active in DB but no event bridge running.
+    // This happens after process restart — the in-memory event bridges are lost.
     for (const goalRun of activeGoalRuns) {
-      const queueTaskID = goalRunQueueTaskID(goalRun)
-      if (!queueTaskID) continue
-
-      // Use the per-goal executor instance (created in queueGoalRun) for status.
-      // Falls back to shared singleton for backward compat (serial dispatch mode).
-      const executor = goalRunExecutors.get(goalRun.id) ?? ExecutorRegistry.require(run.executor)
-
-      try {
-        const queue = await Promise.race([
-          executor.status(queueTaskID),
-          new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error(`executor.status() timeout for goal run ${goalRun.id}`)), EXECUTOR_STATUS_TIMEOUT_MS),
-          ),
-        ])
-
-        if (queue.status === "completed") {
-          if (finalizingGoalRuns.has(goalRun.id)) {
-            log.warn("skipping duplicate finalization", { goalRunID: goalRun.id })
-          } else {
-            finalizingGoalRuns.add(goalRun.id)
-            try {
-              await finalizeGoalRun(task, run, plan, goalRun, hooks)
-            } finally {
-              finalizingGoalRuns.delete(goalRun.id)
-            }
-          }
-        } else if (queue.status === "failed") {
-          log.error("goal run executor failed", { runID, goalRunID: goalRun.id, error: queue.error })
-          goalRunExecutors.delete(goalRun.id)
-          updateGoalRun(goalRun.id, { status: "failed", error: queue.error ?? "Executor failed", time_completed: Date.now() })
-          updateGoalRunExecutorSessionStatus(goalRun.id, "failed")
-          // Update goal status to "failed"
-          Database.use((db) =>
-            db.update(OrchestratorGoalTable)
-              .set({ status: "failed", time_updated: Date.now() })
-              .where(eq(OrchestratorGoalTable.id, goalRun.goal_id))
-              .run(),
-          )
-          if (goalRun.workspace_dir) {
-            await cleanupGoalWorkspace(goalRun.workspace_dir).catch(() => {})
-          }
-        }
-      } catch (err) {
-        log.warn("goal run status check failed", {
-          runID,
-          goalRunID: goalRun.id,
-          error: err instanceof Error ? err.message : String(err),
-        })
+      if (finalizingGoalRuns.has(goalRun.id)) continue
+      if (eventBridgeAborts.has(goalRun.id)) continue
+      // No event bridge for this goal run — it's orphaned
+      log.warn("orphaned goal run detected (no event bridge), marking failed", { runID, goalRunID: goalRun.id })
+      updateGoalRun(goalRun.id, { status: "failed", error: "Orphaned: event bridge lost (process restart)", time_completed: Date.now() })
+      updateGoalRunExecutorSessionStatus(goalRun.id, "failed")
+      Database.use((db) =>
+        db.update(OrchestratorGoalTable)
+          .set({ status: "failed", time_updated: Date.now() })
+          .where(eq(OrchestratorGoalTable.id, goalRun.goal_id))
+          .run(),
+      )
+      if (goalRun.workspace_dir) {
+        await cleanupGoalWorkspace(goalRun.workspace_dir).catch(() => {})
       }
     }
 
-    // After processing, check if more goals can be dispatched
-    await continueGoalPipeline(task, run, plan, hooks)
+    // Re-check after orphan cleanup
+    const remaining = listActiveGoalRunsByCoordinator(runID)
+    if (remaining.length === 0) {
+      await continueGoalPipeline(task, run, plan, hooks)
+    }
   }
 
   /**
@@ -951,8 +921,7 @@ export namespace OrchestratorRuntime {
       OrchestratorProtocol.emit(Event.GoalPassed, { taskID: task.id, goalID: goal.id, summary: goal.description }, { source: "runtime.finalizeGoalRun" })
     }
 
-    // 5. Cleanup worktree and per-goal executor instance
-    goalRunExecutors.delete(goalRun.id)
+    // 5. Cleanup worktree
     if (goalRun.workspace_dir) {
       await cleanupGoalWorkspace(goalRun.workspace_dir).catch((err) => {
         log.warn("worktree cleanup failed (non-fatal)", { goalRunID: goalRun.id, error: String(err) })
@@ -974,8 +943,9 @@ export namespace OrchestratorRuntime {
    * - Blocking goals failed → handle failure
    */
   async function continueGoalPipeline(task: TaskRow, run: RunRow, plan: PlanRow, hooks: RuntimeHooks) {
-    // Prevent concurrent re-entry from overlapping poll cycles
-    if (pipelineCompletingRuns.has(run.id)) return
+    // Already completed — agentNotifiedRuns guard in completeRun is the canonical check
+    if (agentNotifiedRuns.has(run.id)) return
+
     const goals = listGoalsByPlan(plan.id)
     const activeRuns = listActiveGoalRunsByCoordinator(run.id)
 
@@ -999,7 +969,6 @@ export namespace OrchestratorRuntime {
     // Check if there are pending blocking goals with no ready path
     const pending = pendingBlockingGoals(goals)
     if (pending.length > 0) {
-      // Pending goals exist but none are ready — dependency chain broken
       TaskAgent.processTask(task.id, {
         kind: "executor_failed",
         runID: run.id,
@@ -1008,10 +977,7 @@ export namespace OrchestratorRuntime {
       return
     }
 
-    // All goals done — aggregate per-goal deliveries into a run-level delivery,
-    // then finalize the run. Mark as completing to block concurrent re-entry.
-    pipelineCompletingRuns.add(run.id)
-    try {
+    // All goals done — aggregate per-goal deliveries into a run-level delivery
     if (!findDeliveryByRun(run.id)) {
       const goalRuns = listGoalRunsByCoordinator(run.id)
       const allDiffs: Array<{ file: string; [key: string]: unknown }> = []
@@ -1032,9 +998,7 @@ export namespace OrchestratorRuntime {
       }
       const deliveryID = Identifier.ascending("delivery")
       persistDelivery({
-        task,
-        run,
-        deliveryID,
+        task, run, deliveryID,
         delivery: {
           summary: summaries.length > 0 ? summaries.join("\n") : "Per-goal delivery aggregate",
           diffs: allDiffs,
@@ -1046,9 +1010,6 @@ export namespace OrchestratorRuntime {
 
     log.info("all goals completed, finalizing run", { runID: run.id })
     await completeRun(run, hooks)
-    } finally {
-      pipelineCompletingRuns.delete(run.id)
-    }
   }
 
   export async function syncTask(taskID: string, hooks: RuntimeHooks) {
@@ -1235,6 +1196,13 @@ export namespace OrchestratorRuntime {
     await dispatch(nextRunID, hooks)
     return nextRunID
   }
+
+  // Internal accessors for consumeExecutorEvents (module-level, outside namespace).
+  // These are NOT part of the public API — only used by the event bridge.
+  export const _internal = {
+    finalizeGoalRun,
+    continueGoalPipeline,
+  }
 }
 
 
@@ -1250,7 +1218,12 @@ async function completeRun(run: RunRow, hooks: RuntimeHooks) {
   const task = requireTask(run.task_id)
   // Only the active run should complete and notify the task agent.
   // Stale runs (replaced by fix runs) are already superseded.
-  if (task.active_run_id && task.active_run_id !== run.id) return
+  if (task.active_run_id && task.active_run_id !== run.id) {
+    log.info("completeRun: skipping stale run", { runID: run.id, activeRunID: task.active_run_id })
+    return
+  }
+  // Cleanup in-memory state for this run
+  mergeLocksPerRun.delete(run.id)
 
   // If delivery already exists (e.g. per-goal aggregation or prior restart),
   // just mark run completed and notify Task Agent.
@@ -1356,11 +1329,10 @@ async function recoverOrphanedTasks() {
 
 async function failRun(run: RunRow, error: string, hooks: RuntimeHooks) {
   stopEventBridge(run.id) // serial bridge
-  // Stop all per-goal event bridges and mark goal runs as failed
+  // Stop all per-goal event bridges (abort propagates to executor via consumeExecutorEvents)
   const goalRuns = listActiveGoalRunsByCoordinator(run.id)
   for (const gr of goalRuns) {
-    stopEventBridge(gr.id)
-    goalRunExecutors.delete(gr.id)
+    stopEventBridge(gr.id) // aborts the controller → consumeExecutorEvents loop breaks → executor.abort() called
     updateGoalRun(gr.id, { status: "failed", error: `Parent run failed: ${error}`, time_completed: Date.now() })
     updateGoalRunExecutorSessionStatus(gr.id, "failed")
     if (gr.workspace_dir) await cleanupGoalWorkspace(gr.workspace_dir).catch(() => {})
@@ -1392,47 +1364,132 @@ function requirementIDsFromMetadata(metadata: unknown): string[] {
 }
 
 
-/** 将 executor 的实时事件桥接到 Bus，供 SSE 转发给前端 */
-function consumeExecutorEvents(
+/**
+ * Event bridge: streams executor events to the session system AND drives goal completion.
+ * This is the primary completion mechanism for per-goal runs — not the poll in syncGoalRuns.
+ *
+ * Lifecycle:
+ * 1. for-await yields events from the executor → projected to session system (overlay visibility)
+ * 2. Stream ends → query executor.status() on the SAME instance (guaranteed correct)
+ * 3. If completed: finalizeGoalRun → continueGoalPipeline → completeRun
+ * 4. If failed: mark goal failed → continueGoalPipeline
+ * 5. On abort (stopEventBridge): calls executor.abort() to kill the subprocess
+ */
+function consumeExecutorEvents(ctx: {
+  taskID: string
+  runID: string
+  executor: import("@/executor/compat").ExecutorAdapter
+  goalSessionID: string
+  executorSessionID: string
+  queueTaskID: string
+  goalRunID: string
+  executorProvider: RunRow["executor"]
+  hooks: RuntimeHooks
+}) {
+  const { taskID, runID, executor, goalSessionID, executorSessionID, queueTaskID, goalRunID, executorProvider, hooks } = ctx
+  if (!executor.capabilities().events) return
+  const bridgeKey = goalRunID || runID
+  const ctrl = new AbortController()
+  eventBridgeAborts.set(bridgeKey, ctrl)
+
+  // Register abort handler: when stopEventBridge is called, abort the executor process
+  ctrl.signal.addEventListener("abort", () => {
+    executor.abort({ sessionID: goalSessionID, queueTaskID }).catch(() => {})
+  }, { once: true })
+
+  ;(async () => {
+    try {
+      // Phase 1: Stream events → project to session system for overlay visibility
+      for await (const event of executor.events({ sessionID: goalSessionID, signal: ctrl.signal })) {
+        if (ctrl.signal.aborted) break
+        upsertExecutorInteraction(taskID, runID, goalSessionID, executorSessionID, executorProvider, event)
+        const currentRun = findRun(runID)
+        if (currentRun) {
+          await projectExecutorEventToSession(taskID, currentRun, goalSessionID, event)
+        }
+      }
+
+      // Phase 2: Stream ended — drive goal completion
+      if (ctrl.signal.aborted) return
+      if (!goalRunID) return // serial mode — completion handled by syncRun
+
+      const status = await executor.status(queueTaskID).catch(() => ({ status: "failed" as const, error: "status check failed after stream end" }))
+      const goalRun = findGoalRun(goalRunID)
+      if (!goalRun || goalRun.status === "completed" || goalRun.status === "failed") return
+
+      const run = findRun(runID)
+      const task = run ? findTask(run.task_id) : undefined
+      const plan = run?.plan_version_id ? findPlan(run.plan_version_id) : undefined
+      if (!run || !task || !plan) return
+
+      if (status.status === "completed") {
+        if (!finalizingGoalRuns.has(goalRunID)) {
+          finalizingGoalRuns.add(goalRunID)
+          try {
+            await OrchestratorRuntime._internal.finalizeGoalRun(task, run, plan, goalRun, hooks)
+          } finally {
+            finalizingGoalRuns.delete(goalRunID)
+          }
+        }
+      } else {
+        log.error("goal executor failed", { runID, goalRunID, error: status.error })
+        updateGoalRun(goalRunID, { status: "failed", error: status.error ?? "Executor failed", time_completed: Date.now() })
+        updateGoalRunExecutorSessionStatus(goalRunID, "failed")
+        Database.use((db) =>
+          db.update(OrchestratorGoalTable)
+            .set({ status: "failed", time_updated: Date.now() })
+            .where(eq(OrchestratorGoalTable.id, goalRun.goal_id))
+            .run(),
+        )
+        if (goalRun.workspace_dir) {
+          await cleanupGoalWorkspace(goalRun.workspace_dir).catch(() => {})
+        }
+      }
+
+      // Phase 3: After finalization/failure, advance the pipeline
+      await OrchestratorRuntime._internal.continueGoalPipeline(task, run, plan, hooks)
+
+    } catch (err) {
+      if (!ctrl.signal.aborted) {
+        log.warn("executor event bridge ended with error", { taskID, runID, goalRunID, error: String(err) })
+      }
+    } finally {
+      eventBridgeAborts.delete(bridgeKey)
+    }
+  })()
+}
+
+/**
+ * Serial-mode event bridge (for single-executor dispatch path).
+ * Only projects events to the session system — completion is handled by syncRun.
+ */
+function consumeSerialExecutorEvents(
   taskID: string,
   runID: string,
   executor: import("@/executor/compat").ExecutorAdapter,
   sessionID: string,
   executorSessionID: string,
-  goalRunID?: string,
-  executorProvider?: RunRow["executor"],
+  executorProvider: RunRow["executor"],
 ) {
   if (!executor.capabilities().events) return
-  // Create an AbortController so we can stop the event bridge when the run/goal completes/fails.
-  // Per-goal bridges use goalRunID as key; serial bridges use runID.
-  const bridgeKey = goalRunID || runID
   const ctrl = new AbortController()
-  eventBridgeAborts.set(bridgeKey, ctrl)
-  // 异步消费 — 不阻塞 dispatch 返回
+  eventBridgeAborts.set(runID, ctrl)
   ;(async () => {
     try {
-      for await (const event of executor.events({ sessionID })) {
+      for await (const event of executor.events({ sessionID, signal: ctrl.signal })) {
         if (ctrl.signal.aborted) break
-        upsertExecutorInteraction(taskID, runID, sessionID, executorSessionID, executorProvider ?? "opencode", event)
-        // Project executor events into the Message session system.
-        // This creates real ToolPart/TextPart/ReasoningPart objects that flow
-        // through the standard message protocol bridge → ProtocolStore → SSE.
-        // No separate RunProgress/RunOutput publishing needed.
+        upsertExecutorInteraction(taskID, runID, sessionID, executorSessionID, executorProvider, event)
         const currentRun = findRun(runID)
         if (currentRun) {
-          // Inject the goal session ID into the event so projectExecutorEventToSession
-          // creates messages in the goal session (not the root session).
-          // This ensures the bridge stamps them as resolvedRole=executor.
-          const projected = { ...event, payload: { ...event.payload, sessionID } }
-          await projectExecutorEventToSession(taskID, currentRun, projected)
+          await projectExecutorEventToSession(taskID, currentRun, sessionID, event)
         }
       }
     } catch (err) {
       if (!ctrl.signal.aborted) {
-        log.warn("executor event bridge ended", { taskID, runID, error: String(err) })
+        log.warn("serial executor event bridge ended", { taskID, runID, error: String(err) })
       }
     } finally {
-      eventBridgeAborts.delete(bridgeKey)
+      eventBridgeAborts.delete(runID)
     }
   })()
 }

@@ -9,8 +9,7 @@ import { startupResult } from "./checks"
 import { artifactResult } from "./checks"
 import { visualResult } from "./checks"
 import { puppeteerResult } from "./checks"
-import { uiReviewResult, codeQualityResult, codeReviewResult, deadCodeReviewResult, judgeResult, specCheckResult } from "./review"
-import { screenshotReviewResult } from "./screenshot-review"
+import { specCheckResult } from "./review"
 import {
   type EvaluationTask,
   type EvaluationDelivery,
@@ -35,13 +34,7 @@ const OPTIONAL_CHECK_DEFS = [
   { name: "artifact", label: "Artifacts", family: "artifact", run: (config, _task, delivery) => artifactResult(config.artifact, delivery) },
   { name: "visual", label: "Visual Check", family: "runtime", run: (config) => visualResult(config.visual) },
   { name: "puppeteer", label: "Puppeteer", family: "runtime", run: (config) => puppeteerResult(config.puppeteer) },
-  { name: "ui_review", label: "UI Review", family: "review", run: (config, task, delivery) => uiReviewResult(config.ui_review, task.request, delivery) },
-  { name: "code_quality", label: "Code Quality", family: "review", run: (config, task, delivery) => codeQualityResult(config.code_quality, task.request, delivery) },
-  { name: "code_review", label: "Code Review", family: "review", run: (config, task, delivery) => codeReviewResult(config.code_review, task.request, delivery) },
-  { name: "dead_code_review", label: "Dead Code Review", family: "review", run: (config, task, delivery) => deadCodeReviewResult(config.dead_code_review, task.request, delivery) },
-  { name: "judge", label: "LLM Judge", family: "acceptance", run: (config, task, delivery) => judgeResult(config.judge, task.request, delivery) },
   { name: "spec_check", label: "Spec Check", family: "acceptance", run: (config, task, delivery) => specCheckResult(config.spec_check, task.request, task.activeSpecVersionID, delivery) },
-  { name: "screenshot_review", label: "Screenshot Review", family: "review", run: (config, task, delivery) => screenshotReviewResult(config.ui_review, task, delivery) },
 ] as const satisfies OptionalCheckDef[]
 
 const BUILTIN_CHECK_DEFS = [...CORE_CHECK_DEFS, ...OPTIONAL_CHECK_DEFS]
@@ -56,7 +49,7 @@ initBuiltinCheckIndex(BUILTIN_CHECK_DEFS)
 export type EvaluationTier = "core" | "standard" | "full"
 
 /** Names of optional checks included at the "standard" tier. */
-const STANDARD_TIER_CHECKS = new Set(["judge", "spec_check", "code_review"])
+const STANDARD_TIER_CHECKS = new Set(["spec_check"])
 
 function filterOptionalChecksByTier(tier: EvaluationTier): typeof OPTIONAL_CHECK_DEFS[number][] {
   if (tier === "core") return []
@@ -80,8 +73,7 @@ export namespace EvaluatorService {
     const config = {
       ...rawConfig,
       ...(!rawConfig.spec_check ? autoSpecCheck(task) : {}),
-      ...(tier !== "core" && !rawConfig.judge ? autoJudge() : {}),
-      ...(tier !== "core" && !rawConfig.code_review ? autoCodeReview() : {}),
+      // LLM-based review checks (judge, code_review, etc.) removed — only spec_check remains
     } as typeof rawConfig
     const discovered = await discoverChecks(task.metadata?.delivery_changed_files)
     const commands = commandGroups(config, discovered)

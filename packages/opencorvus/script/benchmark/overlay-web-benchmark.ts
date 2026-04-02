@@ -489,10 +489,7 @@ try {
       },
       routing: benchmarkRoutingForExecutor(executor, routingOverride),
       checks: {
-        // build, lint: undefined → auto-discovery from package.json scripts
-        // spec_check: undefined → auto-enabled when spec exists
-        // test: disabled by default for benchmark (greenfield projects have no tests initially)
-        test: false,
+        // build, lint, test: undefined → auto-discovery from package.json scripts
         verify_cmd: false,
       },
       goals: TASK_GOALS,
