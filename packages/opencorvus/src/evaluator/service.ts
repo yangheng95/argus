@@ -3,13 +3,13 @@ import { CheckConfig, EvaluationCheck } from "@/orchestrator/model"
 import type { GoalInfo, DeliveryInfo } from "./agent"
 import { Log } from "@/util/log"
 import z from "zod"
-import { resolveConfig, autoSpecCheck, autoJudge, autoCodeReview, discoverChecks, resolvedChecks, commandGroups } from "./discovery"
+import { resolveConfig, autoSpecCheck, discoverChecks, resolvedChecks, commandGroups } from "./discovery"
 import { commandChecks } from "./checks"
 import { startupResult } from "./checks"
 import { artifactResult } from "./checks"
 import { visualResult } from "./checks"
 import { puppeteerResult } from "./checks"
-import { specCheckResult } from "./review"
+import { specCheckResult, judgeResult } from "./review"
 import {
   type EvaluationTask,
   type EvaluationDelivery,
@@ -34,6 +34,7 @@ const OPTIONAL_CHECK_DEFS = [
   { name: "artifact", label: "Artifacts", family: "artifact", run: (config, _task, delivery) => artifactResult(config.artifact, delivery) },
   { name: "visual", label: "Visual Check", family: "runtime", run: (config) => visualResult(config.visual) },
   { name: "puppeteer", label: "Puppeteer", family: "runtime", run: (config) => puppeteerResult(config.puppeteer) },
+  { name: "judge", label: "LLM Judge", family: "acceptance", run: (config, task, delivery) => judgeResult(config.judge, task.request, delivery) },
   { name: "spec_check", label: "Spec Check", family: "acceptance", run: (config, task, delivery) => specCheckResult(config.spec_check, task.request, task.activeSpecVersionID, delivery) },
 ] as const satisfies OptionalCheckDef[]
 
@@ -49,7 +50,7 @@ initBuiltinCheckIndex(BUILTIN_CHECK_DEFS)
 export type EvaluationTier = "core" | "standard" | "full"
 
 /** Names of optional checks included at the "standard" tier. */
-const STANDARD_TIER_CHECKS = new Set(["spec_check"])
+const STANDARD_TIER_CHECKS = new Set(["artifact", "spec_check"])
 
 function filterOptionalChecksByTier(tier: EvaluationTier): typeof OPTIONAL_CHECK_DEFS[number][] {
   if (tier === "core") return []
@@ -73,7 +74,6 @@ export namespace EvaluatorService {
     const config = {
       ...rawConfig,
       ...(!rawConfig.spec_check ? autoSpecCheck(task) : {}),
-      // LLM-based review checks (judge, code_review, etc.) removed — only spec_check remains
     } as typeof rawConfig
     const discovered = await discoverChecks(task.metadata?.delivery_changed_files)
     const commands = commandGroups(config, discovered)

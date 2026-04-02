@@ -115,6 +115,7 @@
   "checks.pytest": "Pytest",
   "checks.ruff": "Ruff",
   "checks.skip": "已跳过",
+  "checks.judge": "LLM 验收",
   "checks.spec_check": "Spec 检查",
   "checks.startup": "启动检查",
   "checks.test": "单元测试",

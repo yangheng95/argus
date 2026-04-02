@@ -5200,6 +5200,11 @@ const TOGGLE_CHECKS = [{
   kind: "toggle",
   family: "review"
 }, {
+  key: "judge",
+  label: "LLM Judge",
+  kind: "toggle",
+  family: "acceptance"
+}, {
   key: "spec_check",
   label: "Spec Check",
   kind: "toggle",
@@ -5249,6 +5254,7 @@ function checkLabel(key) {
     code_quality: t("checks.code_quality"),
     code_review: t("checks.code_review"),
     dead_code_review: t("checks.dead_code_review"),
+    judge: t("checks.judge"),
     spec_check: t("checks.spec_check")
   };
   if (known[key]) return known[key];
@@ -5263,7 +5269,7 @@ function checkFamilyKey(family, name) {
   if (["startup", "visual", "puppeteer"].includes(base)) return "runtime";
   if (base === "artifact") return "artifact";
   if (["ui_review", "code_quality", "code_review", "dead_code_review"].includes(base)) return "review";
-  if (base === "spec_check") return "acceptance";
+  if (base === "judge" || base === "spec_check") return "acceptance";
   return "custom";
 }
 function checkFamilyText(key) {
@@ -5297,7 +5303,7 @@ function criteriaEnabledValue(key, value, fallback) {
   if (["build", "test", "lint", "verify_cmd"].includes(key)) {
     return value !== false && (value !== void 0 || fallback);
   }
-  if (key === "spec_check" && value === void 0) return true;
+  if (["artifact", "judge", "spec_check"].includes(key) && value === void 0) return true;
   if (value === true) return true;
   if (!value || !record$3(value)) return false;
   return value.enabled !== false;
@@ -5318,7 +5324,7 @@ function criteriaSpecs(task, evaluation) {
   };
   for (const item of COMMAND_CHECKS) {
     const value = config[item.key];
-    const visible = value !== void 0 || aggregateCheckStatus(evaluation?.checks, item.key) !== "pending" || showDefault && ["build", "test", "lint"].includes(item.key);
+    const visible = value !== void 0 || aggregateCheckStatus(evaluation?.checks, item.key) !== "pending" || showDefault && ["build", "test", "lint", "verify_cmd"].includes(item.key);
     if (!visible) continue;
     push({
       key: item.key,
@@ -5333,7 +5339,7 @@ function criteriaSpecs(task, evaluation) {
   }
   for (const item of TOGGLE_CHECKS) {
     const value = config[item.key];
-    const canToggle = ["artifact", "ui_review", "code_quality", "code_review", "dead_code_review", "spec_check"].includes(item.key);
+    const canToggle = ["artifact", "ui_review", "code_quality", "code_review", "dead_code_review", "judge", "spec_check"].includes(item.key);
     const visible = value !== void 0 || aggregateCheckStatus(evaluation?.checks, item.key) !== "pending" || canToggle;
     if (!visible) continue;
     push({
@@ -14918,6 +14924,30 @@ if (boardEl) {
         });
       } catch (e) {
         console.error("Failed to delete goal", e);
+      }
+    },
+    onToggleCriteria: async (key, enabled) => {
+      const taskID = boardStore.selectedTaskID;
+      if (!taskID) return;
+      try {
+        await apiJson(`task/${taskID}/checks`, {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            selection: {
+              [key]: enabled
+            }
+          }),
+          signal: AbortSignal.timeout(3e4)
+        });
+      } catch (err) {
+        console.error("[main] toggleCriteria failed", err);
+      } finally {
+        await loadBoard({
+          sync: true
+        });
       }
     },
     onResolveInteraction: async (id, action) => {

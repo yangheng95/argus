@@ -370,6 +370,7 @@ describe("evaluator.service", () => {
                   enabled: true,
                   mode: "strict",
                 },
+                judge: { enabled: false },
               },
             },
           },
@@ -735,8 +736,8 @@ describe("evaluator.service", () => {
         expect(result.status).toBe("failed")
         expect(result.checks.find((item) => item.name === "artifact")?.status).toBe("failed")
         expect(result.checks.find((item) => item.name === "code_review")).toBeUndefined()
-        expect(result.checks.find((item) => item.name === "judge")).toBeUndefined()
-        expect(defaultModel).not.toHaveBeenCalled()
+        // judge is now in OPTIONAL_CHECK_DEFS — it runs but fails (no model, soft mode)
+        expect(result.checks.find((item) => item.name === "judge")?.status).toBe("failed")
       },
     })
   })
