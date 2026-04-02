@@ -25,8 +25,15 @@ export namespace GoalService {
           id: Identifier.ascending("goal"),
           task_id: task.id,
           plan_version_id: planVersionID,
-          description: input.description,
-          criteria: "This operator-provided goal is satisfied and acceptance checks still pass.",
+          title: input.description,
+          objective: input.description,
+          done_definition: "This operator-provided goal is satisfied and acceptance checks still pass.",
+          owned_paths: [],
+          depends_on: [],
+          exports: [],
+          imports: [],
+          kind: "feature",
+          requirement_ids: [],
           metadata: {
             origin: "operator",
           },
@@ -45,7 +52,7 @@ export namespace GoalService {
         .values({
           id: Identifier.ascending("progress"),
           task_id: task.id,
-          status: "running",
+          status: "active",
           summary: "Goal added from operator message",
           payload: {
             description: input.description,
@@ -60,16 +67,15 @@ export namespace GoalService {
 
   export function updateGoal(input: {
     goalID: string
-    description: string
-    criteria: string
+    title: string
+    done_definition: string
   }) {
     return Database.use((db) =>
       db
         .update(OrchestratorGoalTable)
         .set({
-          description: input.description,
-          criteria: input.criteria,
-          metadata: undefined,
+          title: input.title,
+          done_definition: input.done_definition,
           time_updated: Date.now(),
         })
         .where(eq(OrchestratorGoalTable.id, input.goalID))

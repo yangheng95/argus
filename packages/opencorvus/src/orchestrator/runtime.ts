@@ -3,15 +3,11 @@ import path from "path"
 import { Bus } from "@/bus"
 import { ExecutorRegistry } from "@/executor/registry"
 
-import { Plugin } from "@/plugin"
 import { Instance } from "@/project/instance"
-import { Project } from "@/project/project"
-import { installRuntimeShims } from "@/runtime/shims"
 import { Session } from "@/session"
 import { Message } from "@/session/message"
 import { Database, and, eq, inArray } from "@/storage/db"
 import { Log } from "@/util/log"
-import { OrchestratorGit } from "./git"
 import {
   OrchestratorGoalTable,
   OrchestratorInteractionRequestTable,
@@ -28,9 +24,7 @@ import {
 } from "./helpers"
 import {
   createGoalRun,
-  createFixRun,
   ensureExecutorSession,
-  persistDelivery,
   persistFailedRunEvaluation,
   updateExecutorSessionStatus,
   updateGoalRun,
@@ -38,7 +32,7 @@ import {
 } from "./persist"
 import { sessionStreamHooks } from "./session-stream"
 import { registerGoalRunSession } from "@/server/routes/task-event"
-import { TaskAgent } from "./task-agent"
+import { TaskAgent } from "@/task-agent/agent"
 import {
   findDeliveryByGoalRun,
   findDeliveryByRun,
@@ -56,6 +50,7 @@ import {
   listPlanNodesByPlan,
   requireRun,
   requireTask,
+  type GoalRow,
   type GoalRunRow,
   type PlanRow,
   type RunRow,
@@ -69,22 +64,21 @@ import { Identifier } from "@/id/id"
 import { agentStream } from "./agent-stream"
 import { runGoalPipeline, type PipelineEvent, type GoalContract, type GoalContractFields } from "@/pipeline"
 
-/** Adapt legacy GoalRow to GoalContractFields. Will be removed when DB schema is updated. */
-function goalRowToContract(row: any): GoalContractFields & Record<string, unknown> {
-  const meta = row.metadata && typeof row.metadata === "object" ? row.metadata : {}
+function goalRowToContract(row: GoalRow | ({ id: string; title: string } & Record<string, unknown>)): GoalContractFields & Record<string, unknown> {
+  const r = row as Record<string, unknown>
   return {
     ...row,
     id: row.id,
-    title: meta.title ?? row.description ?? "",
-    objective: meta.objective ?? row.description ?? "",
-    done_definition: meta.done_definition ?? row.criteria ?? "",
-    owned_paths: Array.isArray(meta.owned_paths) ? meta.owned_paths : [],
-    depends_on: Array.isArray(meta.depends_on_goal_ids) ? meta.depends_on_goal_ids : [],
-    priority: row.priority ?? "blocking",
-    kind: meta.kind ?? "feature",
-    requirement_ids: Array.isArray(meta.requirement_ids) ? meta.requirement_ids : [],
-    exports: Array.isArray(meta.exports) ? meta.exports : [],
-    imports: Array.isArray(meta.imports) ? meta.imports : [],
+    title: row.title,
+    objective: (r.objective as string) ?? "",
+    done_definition: (r.done_definition as string) ?? "",
+    owned_paths: (r.owned_paths as string[]) ?? [],
+    depends_on: (r.depends_on as string[]) ?? [],
+    priority: ((r.priority as string) ?? "blocking") as "blocking" | "advisory",
+    kind: (r.kind as string) ?? "feature",
+    requirement_ids: (r.requirement_ids as string[]) ?? [],
+    exports: (r.exports as string[]) ?? [],
+    imports: (r.imports as string[]) ?? [],
   }
 }
 
@@ -98,11 +92,11 @@ const GOAL_STALL_TIMEOUT_MS = parseInt(process.env.OPENCORVUS_GOAL_STALL_TIMEOUT
 const GOAL_HEARTBEAT_INTERVAL_MS = 30_000 // emit progress heartbeat every 30s per goal
 const eventBridgeAborts = new Map<string, AbortController>() // goalRunID or runID → AbortController
 // Guard: runs that have already notified Task Agent via run_completed.
-// Prevents syncRun from re-calling completeRun every poll cycle.
+// Prevents syncRun from re-notifying Task Agent every poll cycle.
 const agentNotifiedRuns = new Set<string>()
 // Per-run merge serialization: ensures parallel goal deliveries are merged one at a time.
 const mergeLocksPerRun = new Map<string, Promise<void>>()
-// Per-run pipeline lock: serializes continueGoalPipeline calls so concurrent event bridges
+// Per-run pipeline lock: serializes notifyGoalResult calls so concurrent event bridges
 // don't race on dispatch/completion checks.
 const pipelineLocksPerRun = new Map<string, Promise<void>>()
 // Per-goal-run last activity timestamp: used by syncGoalRuns for stall detection.
@@ -429,22 +423,6 @@ function toNumber(value: unknown) {
   return Number.isFinite(Number(value)) ? Number(value) : 0
 }
 
-async function prepareRun(task: TaskRow, run: RunRow, plan: PlanRow | undefined, hooks: RuntimeHooks) {
-  if (Instance.project.vcs !== "git") {
-    await Project.initGit(Instance.directory)
-    await Instance.refresh()
-  }
-  if (task.time_started) return task
-  const prepared = await OrchestratorGit.prepare(task, plan)
-  if (!prepared.error) return prepared.task
-  const now = Date.now()
-  await hooks.updateRun(run, { status: "failed", error: prepared.error, blocking_reason: null, time_completed: now }, prepared.error)
-  if (task.active_run_id === run.id) {
-    await hooks.updateTask(task, { status: "failed", error: prepared.error, blocking_reason: null, time_completed: now }, prepared.error)
-  }
-  return
-}
-
 /** Check if any executor session is active for the current project. Used as a guard before Instance.dispose(). */
 export function hasActiveSessions(): boolean {
   try {
@@ -510,49 +488,6 @@ export namespace OrchestratorRuntime {
     }
   }
 
-  export async function dispatch(runID: string, hooks: RuntimeHooks) {
-    installRuntimeShims()
-    const run = requireRun(runID)
-    if (run.status !== "queued") return
-    let task = requireTask(run.task_id)
-    const plan = run.plan_version_id ? findPlan(run.plan_version_id) : undefined
-    if (!task.session_id) throw new Error(`Task ${task.id} has no session`)
-    if (!plan) throw new Error(`Task ${task.id} has no plan`)
-
-    // Always use per-goal dispatch. Each goal gets its own worktree, session,
-    // and executor submission. maxExecutorGroups controls concurrency (how many
-    // goals run simultaneously), not whether per-goal dispatch is used.
-    return dispatchGoalRuns(runID, hooks)
-  }
-
-  // ═══════════════════════════════════════════════════════════════════
-  // Per-Goal Parallel Dispatch (spec Phase 2)
-  // ═══════════════════════════════════════════════════════════════════
-
-  /**
-   * Dispatch ready goals individually, each with its own worktree and executor session.
-   * Called from dispatch() when maxConcurrentGoals > 1 and multiple goals exist.
-   */
-  async function dispatchGoalRuns(runID: string, hooks: RuntimeHooks) {
-    const run = requireRun(runID)
-    let task = requireTask(run.task_id)
-    const plan = run.plan_version_id ? findPlan(run.plan_version_id) : undefined
-    if (!task.session_id) throw new Error(`Task ${task.id} has no session`)
-    if (!plan) throw new Error(`Task ${task.id} has no plan`)
-
-    const prepared = await prepareRun(task, run, plan, hooks)
-    if (!prepared) return
-    task = prepared
-
-    const now = Date.now()
-    await Promise.all([
-      hooks.updateRun(run, { status: "accepted", time_started: now }, "Per-goal parallel dispatch"),
-      hooks.updateTask(task, { status: "running", time_started: task.time_started ?? now }, "Dispatching goals in parallel"),
-    ])
-
-    await queueReadyGoalRuns(task, run, plan, hooks)
-  }
-
   /**
    * Dispatch up to maxConcurrentGoals ready goals.
    * Each goal gets its own worktree, session, and executor submission.
@@ -584,7 +519,7 @@ export namespace OrchestratorRuntime {
     task: TaskRow,
     run: RunRow,
     plan: PlanRow,
-    entry: { node: { id: string; goal_id: string } & Record<string, unknown>; goal: { id: string; description: string } & Record<string, unknown> },
+    entry: { node: { id: string; goal_id: string } & Record<string, unknown>; goal: { id: string; title: string } & Record<string, unknown> },
     hooks: RuntimeHooks,
   ) {
     const sessionID = task.session_id
@@ -729,7 +664,7 @@ export namespace OrchestratorRuntime {
    * Sync per-goal runs: timeout enforcement + orphan recovery ONLY.
    *
    * Goal completion is driven exclusively by consumeExecutorEvents (event-driven).
-   * This function NEVER calls continueGoalPipeline — that is the event bridge's
+   * This function NEVER calls notifyGoalResult — that is the event bridge's
    * sole responsibility. Two actors advancing the same state machine causes races.
    *
    * This function handles:
@@ -751,7 +686,7 @@ export namespace OrchestratorRuntime {
     // 2. Orphan detection: goal runs created BEFORE the current process started
     //    that have no event bridge. These are leftovers from a crashed process.
     //    The executor process is dead — we can only mark them failed so
-    //    continueGoalPipeline (called by the LAST surviving event bridge) can
+    //    notifyGoalResult (called by the LAST surviving event bridge) can
     //    detect the failure and notify the Task Agent.
     const activeGoalRuns = listActiveGoalRunsByCoordinator(runID)
     for (const goalRun of activeGoalRuns) {
@@ -811,7 +746,7 @@ export namespace OrchestratorRuntime {
     if (remaining.length === 0 && !hasAnyBridge && !agentNotifiedRuns.has(run.id)) {
       // Double-check: were there actually failed goals from cleanup (orphan or stall)?
       // If all goal runs completed normally via event bridges, remaining=0
-      // is expected and continueGoalPipeline was already called by the bridge.
+      // is expected and notifyGoalResult was already called by the bridge.
       const allGoalRuns = listGoalRunsByCoordinator(runID)
       const cleanupFailCount = allGoalRuns.filter((gr) =>
         gr.status === "failed" && (gr.error?.includes("Orphaned") || gr.error?.includes("stalled")),
@@ -838,79 +773,40 @@ export namespace OrchestratorRuntime {
    * - All goals are done → finalize the run
    * - Blocking goals failed → handle failure
    */
-  async function continueGoalPipeline(task: TaskRow, run: RunRow, plan: PlanRow, hooks: RuntimeHooks) {
-    // Serialize per run: multiple event bridges may call this concurrently
-    // when parallel goals finish around the same time. The lock ensures
-    // dispatch/completion checks see a consistent state.
+  /**
+   * Notify Task Agent that a goal completed or failed.
+   * Infrastructure ONLY notifies — does NOT dispatch next goals or complete runs.
+   * Task Agent decides what to do next.
+   */
+  async function notifyGoalResult(task: TaskRow, run: RunRow, goalID: string, result: "completed" | "failed") {
     await serializedPipeline(run.id, async () => {
-      // Already completed — agentNotifiedRuns guard in completeRun is the canonical check
       if (agentNotifiedRuns.has(run.id)) return
 
-      // Re-read state inside the lock — caller's snapshot may be stale
-      const goals = listGoalsByPlan(plan.id)
       const activeRuns = listActiveGoalRunsByCoordinator(run.id)
 
-      // Try to dispatch more ready goals
-      const queued = await queueReadyGoalRuns(task, run, plan, hooks)
-      if (queued > 0) return
-
-      // If goals are still executing, wait
+      // If other goals still executing, don't notify yet — wait for all in this batch
       if (activeRuns.length > 0) return
 
-      // Check if blocking goals failed
-      if (hasBlockingFailures(goals)) {
+      // All goals in current batch done — notify Task Agent
+      const { listGoals: listAllGoals } = require("./store")
+      const goals = listAllGoals(task.id) as GoalRow[]
+      const failedGoals = goals.filter(g => g.status === "failed" && g.priority === "blocking")
+
+      if (failedGoals.length > 0) {
+        const failSummary = failedGoals.map(g => `${g.title}`).join(", ")
+        log.info("batch complete with failures, notifying Task Agent", { taskID: task.id, failed: failSummary })
         TaskAgent.processTask(task.id, {
           kind: "executor_failed",
           runID: run.id,
-          error: "Blocking goal(s) failed during parallel execution",
-        }).catch(err => log.error("task agent failed on goal failure", { taskID: task.id, error: String(err) }))
-        return
-      }
-
-      // Check if there are pending blocking goals with no ready path
-      const pending = pendingBlockingGoals(goals)
-      if (pending.length > 0) {
+          error: `Goal(s) failed: ${failSummary}. Use read_context to see evidence, then decide next step.`,
+        }).catch(err => log.error("task agent notification failed", { taskID: task.id, error: String(err) }))
+      } else {
+        log.info("batch complete, notifying Task Agent", { taskID: task.id, runID: run.id })
         TaskAgent.processTask(task.id, {
-          kind: "executor_failed",
+          kind: "run_completed",
           runID: run.id,
-          error: `${pending.length} blocking goal(s) pending but not ready (dependency failure)`,
-        }).catch(err => log.error("task agent failed on dependency failure", { taskID: task.id, error: String(err) }))
-        return
+        }).catch(err => log.error("task agent notification failed", { taskID: task.id, error: String(err) }))
       }
-
-      // All goals done — aggregate per-goal deliveries into a run-level delivery
-      if (!findDeliveryByRun(run.id)) {
-        const goalRuns = listGoalRunsByCoordinator(run.id)
-        const allDiffs: Array<{ file: string; [key: string]: unknown }> = []
-        const seenFiles = new Set<string>()
-        const summaries: string[] = []
-        for (const gr of goalRuns) {
-          const d = findDeliveryByGoalRun(gr.id)
-          if (!d) continue
-          if (d.summary) summaries.push(d.summary)
-          const result = d.result as { diffs?: Array<{ file: string; [key: string]: unknown }> } | null
-          if (!result?.diffs) continue
-          for (const diff of result.diffs) {
-            if (!seenFiles.has(diff.file)) {
-              seenFiles.add(diff.file)
-              allDiffs.push(diff)
-            }
-          }
-        }
-        const deliveryID = Identifier.ascending("delivery")
-        persistDelivery({
-          task, run, deliveryID,
-          delivery: {
-            summary: summaries.length > 0 ? summaries.join("\n") : "Per-goal delivery aggregate",
-            diffs: allDiffs,
-          },
-          now: Date.now(),
-        })
-        log.info("aggregated per-goal deliveries into run delivery", { runID: run.id, goals: goalRuns.length, files: allDiffs.length })
-      }
-
-      log.info("all goals completed, finalizing run", { runID: run.id })
-      await completeRun(run, hooks)
     })
   }
 
@@ -957,32 +853,37 @@ export namespace OrchestratorRuntime {
         if (stillPending.length === 0) {
           await Promise.all([
             run.status === "blocked" ? hooks.updateRun(run, { status: "accepted", blocking_reason: null }, "Stale interactions auto-rejected") : undefined,
-            task.status === "blocked" ? hooks.updateTask(task, { status: "running", blocking_reason: null }, "Stale interactions auto-rejected") : undefined,
+            task.status === "active" && task.blocking_reason ? hooks.updateTask(task, { status: "active", blocking_reason: null }, "Stale interactions auto-rejected") : undefined,
           ])
         } else {
           await Promise.all([
             run.status !== "blocked" ? hooks.updateRun(run, { status: "blocked", blocking_reason: stillPending[0].request_type }, "Run blocked") : undefined,
-            task.status !== "blocked" ? hooks.updateTask(task, { status: "blocked", blocking_reason: stillPending[0].request_type }, "Awaiting user input") : undefined,
+            !task.blocking_reason ? hooks.updateTask(task, { status: "active", blocking_reason: stillPending[0].request_type }, "Awaiting user input") : undefined,
           ])
           return
         }
       } else {
         await Promise.all([
           run.status !== "blocked" ? hooks.updateRun(run, { status: "blocked", blocking_reason: pending[0].request_type }, "Run blocked") : undefined,
-          task.status !== "blocked" ? hooks.updateTask(task, { status: "blocked", blocking_reason: pending[0].request_type }, "Awaiting user input") : undefined,
+          !task.blocking_reason ? hooks.updateTask(task, { status: "active", blocking_reason: pending[0].request_type }, "Awaiting user input") : undefined,
         ])
         return
       }
     }
 
-    if (run.status === "completed" && delivery) {
-      await completeRun(run, hooks)
-      return
-    }
-
-    if (run.status === "completed" && !delivery) {
-      log.error("run completed but no delivery found", { runID: run.id, taskID: run.task_id })
-      await failRun(run, "Run marked completed but no delivery was persisted", hooks)
+    if (run.status === "completed") {
+      // Legacy single-executor path: notify Task Agent (delivery extraction
+      // is handled by the per-goal pipeline in the new architecture).
+      if (!agentNotifiedRuns.has(run.id)) {
+        agentNotifiedRuns.add(run.id)
+        stopEventBridge(run.id)
+        updateExecutorSessionStatus(run.id, "completed")
+        TaskAgent.processTask(task.id, {
+          kind: delivery ? "run_completed" : "executor_failed",
+          runID: run.id,
+          ...(delivery ? {} : { error: "Run marked completed but no delivery was persisted" }),
+        } as any).catch(err => log.error("task agent notification failed", { taskID: task.id, error: String(err) }))
+      }
       return
     }
 
@@ -1004,8 +905,8 @@ export namespace OrchestratorRuntime {
       if (run.status === "blocked") {
         await hooks.updateRun(run, { status: "accepted", blocking_reason: null }, "Run resumed")
       }
-      if (task.status === "blocked") {
-        await hooks.updateTask(task, { status: "running", blocking_reason: null }, "Run resumed")
+      if (task.blocking_reason) {
+        await hooks.updateTask(task, { status: "active", blocking_reason: null }, "Run resumed")
       }
       return
     }
@@ -1021,8 +922,8 @@ export namespace OrchestratorRuntime {
       if (run.status !== "running") {
         await hooks.updateRun(run, { status: "running", blocking_reason: null }, "Run executing")
       }
-      if (task.status !== "running") {
-        await hooks.updateTask(task, { status: "running", blocking_reason: null }, "Run executing")
+      if (task.status !== "active") {
+        await hooks.updateTask(task, { status: "active", blocking_reason: null }, "Run executing")
       }
       return
     }
@@ -1033,7 +934,17 @@ export namespace OrchestratorRuntime {
     }
 
     if (queue.status === "completed") {
-      await completeRun(run, hooks)
+      // Legacy single-executor path: mark run completed and notify Task Agent.
+      if (!agentNotifiedRuns.has(run.id)) {
+        agentNotifiedRuns.add(run.id)
+        stopEventBridge(run.id)
+        updateExecutorSessionStatus(run.id, "completed")
+        await hooks.updateRun(run, { status: "completed", blocking_reason: null, error: null, time_completed: Date.now() }, "Run completed")
+        TaskAgent.processTask(task.id, {
+          kind: "run_completed",
+          runID: run.id,
+        }).catch(err => log.error("task agent notification failed", { taskID: task.id, error: String(err) }))
+      }
     }
   }
 
@@ -1066,7 +977,7 @@ export namespace OrchestratorRuntime {
       db.update(OrchestratorTaskTable)
         .set({
           active_run_id: nextRunID,
-          status: "running",
+          status: "active",
           error: null,
           blocking_reason: null,
           time_completed: null,
@@ -1085,7 +996,7 @@ export namespace OrchestratorRuntime {
       Database.effect(() =>
         OrchestratorProtocol.emit(Event.TaskUpdated, {
           taskID: task.id,
-          status: "running",
+          status: "active",
           summary: "Operator note queued a follow-up run",
         }, { taskID: task.id, source: "runtime.operator" }),
       )
@@ -1093,121 +1004,58 @@ export namespace OrchestratorRuntime {
     return nextRunID
   }
 
-  export async function queueRetry(task: TaskRow, run: RunRow, summary: string, hooks: RuntimeHooks) {
-    const nextRunID = createFixRun(task, run, summary)
-    await dispatch(nextRunID, hooks)
-    return nextRunID
+  /**
+   * Dispatch a single goal by ID (called by execute_goal tool).
+   * Creates worktree, submits to executor, starts event bridge.
+   */
+  export async function dispatchSingleGoal(taskID: string, runID: string, goalID: string, hooks: RuntimeHooks) {
+    const task = findTask(taskID)
+    if (!task) throw new Error(`Task ${taskID} not found`)
+    const run = findRun(runID)
+    if (!run) throw new Error(`Run ${runID} not found`)
+    const plan = run.plan_version_id ? findPlan(run.plan_version_id) : null
+    const { listGoals: listTaskGoals } = require("./store")
+    const goal = (listTaskGoals(taskID) as GoalRow[]).find(g => g.id === goalID)
+    if (!goal) throw new Error(`Goal ${goalID} not found`)
+
+    // Find plan node for this goal (may not exist if agent skipped planning)
+    const nodes = plan ? listPlanNodesByPlan(plan.id) : []
+    const node = nodes.find(n => n.goal_id === goalID) ?? { id: `inline_${goalID}`, goal_id: goalID, title: goal.title, brief: goal.done_definition }
+
+    await queueGoalRun(task, run, plan ?? { id: "", task_id: taskID, summary: "", prompt: "" } as any, { node: node as any, goal: goal as any }, hooks)
   }
 
-  // Internal accessor for consumeGoalPipeline (module-level, outside namespace).
+  /**
+   * Dispatch all dependency-ready goals in parallel (called by Task Agent's dispatch_ready_goals action).
+   * Returns number of goals dispatched.
+   */
+  export async function dispatchReadyGoals(taskID: string, runID: string, planID: string, hooks: RuntimeHooks): Promise<number> {
+    const task = findTask(taskID)
+    if (!task) throw new Error(`Task ${taskID} not found`)
+    const run = findRun(runID)
+    if (!run) throw new Error(`Run ${runID} not found`)
+    const plan = findPlan(planID)
+    if (!plan) throw new Error(`Plan ${planID} not found`)
+    return queueReadyGoalRuns(task, run, plan, hooks)
+  }
+
+  // Internal accessor for event bridge (module-level, outside namespace).
   export const _internal = {
-    continueGoalPipeline,
+    notifyGoalResult,
   }
 }
 
-
-async function completeRun(run: RunRow, hooks: RuntimeHooks) {
-  // Guard: prevent syncRun from re-triggering completeRun every cycle while
-  // Task Agent is processing eval/delivery/publish.
-  if (agentNotifiedRuns.has(run.id)) return
-
-  installRuntimeShims()
-  stopEventBridge(run.id)
-  updateExecutorSessionStatus(run.id, "completed")
-
-  const task = requireTask(run.task_id)
-  // Only the active run should complete and notify the task agent.
-  // Stale runs (replaced by fix runs) are already superseded.
-  if (task.active_run_id && task.active_run_id !== run.id) {
-    log.info("completeRun: skipping stale run", { runID: run.id, activeRunID: task.active_run_id })
-    return
-  }
-  // Cleanup in-memory state for this run
-  mergeLocksPerRun.delete(run.id)
-
-  // If delivery already exists (e.g. per-goal aggregation or prior restart),
-  // just mark run completed and notify Task Agent.
-  const existingDelivery = findDeliveryByRun(run.id)
-  if (existingDelivery) {
-    if (run.status !== "completed") {
-      await hooks.updateRun(run, { status: "completed", blocking_reason: null, error: null, time_completed: Date.now() }, "Run completed")
-    }
-    agentNotifiedRuns.add(run.id)
-    TaskAgent.processTask(task.id, {
-      kind: "run_completed",
-      runID: run.id,
-    }).catch(err => log.error("task agent failed on run_completed", { taskID: task.id, error: String(err) }))
-    return
-  }
-
-  // Fetch delivery from executor
-  if (!run.session_id) throw new Error(`Run ${run.id} has no session`)
-  const completedAt = Date.now()
-  await hooks.updateRun(run, { status: "completed", blocking_reason: null, error: null, time_completed: completedAt }, "Run completed")
-
-  let delivery: Awaited<ReturnType<ReturnType<typeof ExecutorRegistry.require>["delivery"]>>
-  try {
-    const executor = ExecutorRegistry.require(run.executor)
-    delivery = await Promise.race([
-      executor.delivery({
-        sessionID: run.session_id,
-        since: run.time_started ?? run.time_created,
-      }),
-      new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error("executor.delivery() timeout")), DELIVERY_FETCH_TIMEOUT_MS),
-      ),
-    ])
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err)
-    log.error("completeRun: delivery fetch failed", { runID: run.id, error: msg })
-    // Notify Task Agent with executor_failed so it can decide recovery
-    agentNotifiedRuns.add(run.id)
-    TaskAgent.processTask(task.id, {
-      kind: "executor_failed",
-      runID: run.id,
-      error: `Delivery fetch failed: ${msg}`,
-    }).catch(e => log.error("task agent failed on delivery fetch error", { taskID: task.id, error: String(e) }))
-    return
-  }
-
-  const now = Date.now()
-  const deliveryID = Identifier.ascending("delivery")
-  persistDelivery({ task, run, deliveryID, delivery, now })
-
-  await Plugin.trigger("delivery.ready", {
-    taskID: task.id,
-    runID: run.id,
-    deliveryID,
-    delivery: {
-      summary: delivery.summary,
-      changedFiles: delivery.diffs.map((item) => item.file),
-      diffs: delivery.diffs,
-    },
-  }, { actions: [] }).catch(() => undefined)
-
-  log.info("delivery fetched, notifying task agent", { runID: run.id, taskID: task.id })
-
-  // Notify Task Agent — it controls eval → delivery verify → publish via tools
-  agentNotifiedRuns.add(run.id)
-  TaskAgent.processTask(task.id, {
-    kind: "run_completed",
-    runID: run.id,
-  }).catch(err => log.error("task agent failed on run_completed", { taskID: task.id, error: String(err) }))
-}
 
 /**
  * Recover tasks stuck in non-terminal states without an active Task Agent.
  * Re-triggers the Task Agent for orphaned tasks.
  */
 async function recoverOrphanedTasks() {
-  const { TaskAgent } = await import("./task-agent")
+  const { TaskAgent } = await import("@/task-agent/agent")
   const strandedTasks = Database.use((db) =>
     db.select().from(OrchestratorTaskTable).where(and(
       eq(OrchestratorTaskTable.project_id, Instance.project.id),
-      inArray(OrchestratorTaskTable.status, [
-        "queued", "spec_generating", "goal_decomposing", "planning",
-        "evaluating", "delivering", // Task Agent controls eval/delivery — recover if stalled
-      ]),
+      inArray(OrchestratorTaskTable.status, ["queued", "active"]),
     )).all(),
   )
   const now = Date.now()
@@ -1217,8 +1065,8 @@ async function recoverOrphanedTasks() {
     if (age < PIPELINE_STALE_MS) continue
     if (TaskAgent.isRunning(task.id)) continue
     log.warn("recovering orphaned task — re-triggering Task Agent", { taskID: task.id, status: task.status, ageMs: age })
-    // Tasks in evaluating/delivering were waiting for Task Agent to run eval/delivery — re-trigger with run_completed
-    const trigger = (task.status === "evaluating" || task.status === "delivering") && task.active_run_id
+    // Active tasks with a run → re-trigger as run_completed; otherwise fresh start
+    const trigger = task.status === "active" && task.active_run_id
       ? { kind: "run_completed" as const, runID: task.active_run_id }
       : { kind: "created" as const }
     TaskAgent.processTask(task.id, trigger).catch((err) =>
@@ -1302,7 +1150,6 @@ function consumeGoalPipeline(ctx: {
         sessionID: goalSessionID,
         executorSessionID,
         queueTaskID,
-        retryPolicy: { decide: () => ({ type: "give_up" as const, class: "bug" as const }) }, // TODO: use createTieredRetryPolicy after eval integration
         signal: ctrl.signal,
       })
 
@@ -1335,8 +1182,8 @@ function consumeGoalPipeline(ctx: {
                 log.warn("worktree cleanup failed (non-fatal)", { goalRunID, error: String(err) })
               })
             }
-            log.info("goal pipeline completed, advancing", { goalRunID, goalID: goal.id })
-            await OrchestratorRuntime._internal.continueGoalPipeline(task, run, plan, hooks)
+            log.info("goal completed, notifying Task Agent", { goalRunID, goalID: goal.id })
+            await OrchestratorRuntime._internal.notifyGoalResult(task, run, goal.id, "completed")
             break
           }
 
@@ -1345,8 +1192,8 @@ function consumeGoalPipeline(ctx: {
             if (goalRun?.workspace_dir) {
               await cleanupGoalWorkspace(goalRun.workspace_dir).catch(() => {})
             }
-            log.warn("goal pipeline failed, advancing", { goalRunID, goalID: goal.id, error: event.error })
-            await OrchestratorRuntime._internal.continueGoalPipeline(task, run, plan, hooks)
+            log.warn("goal failed, notifying Task Agent", { goalRunID, goalID: goal.id, error: event.error })
+            await OrchestratorRuntime._internal.notifyGoalResult(task, run, goal.id, "failed")
             break
           }
 
@@ -1375,11 +1222,10 @@ async function mergeGoalDelivery(
   delivery: { diffs: Array<{ file: string; [key: string]: unknown }> },
   hooks: RuntimeHooks,
 ) {
-  const goalMeta = goalRun.goal_id ? Database.use((db) =>
+  const goalRow = goalRun.goal_id ? Database.use((db) =>
     db.select().from(OrchestratorGoalTable).where(eq(OrchestratorGoalTable.id, goalRun.goal_id)).get(),
   ) : undefined
-  const metaObj = goalMeta?.metadata && typeof goalMeta.metadata === "object" ? goalMeta.metadata as Record<string, unknown> : {}
-  const ownedPaths = Array.isArray(metaObj.owned_paths) ? metaObj.owned_paths as string[] : []
+  const ownedPaths = Array.isArray(goalRow?.owned_paths) ? goalRow.owned_paths : []
 
   await serializedMerge(run.id, async () => {
     await applyGoalDelivery({

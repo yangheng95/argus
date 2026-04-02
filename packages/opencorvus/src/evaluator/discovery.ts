@@ -6,7 +6,7 @@ import { which } from "@/util/which"
 import fs from "fs/promises"
 import path from "path"
 import z from "zod"
-import type { EvaluatorCommand, CommandGroup, EvaluationTask } from "./shared"
+import type { EvaluatorCommand, CommandGroup, EvaluationTask } from "@/types/evaluator"
 
 export async function resolveConfig(metadata?: Record<string, unknown>) {
   const configured = CheckConfig.safeParse(metadata?.checks)

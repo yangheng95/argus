@@ -155,6 +155,6 @@ async function resolveInteraction(
 }
 
 type RuntimeHooks = {
-  updateTask: Parameters<typeof OrchestratorRuntime.dispatch>[1]["updateTask"]
-  updateRun: Parameters<typeof OrchestratorRuntime.dispatch>[1]["updateRun"]
+  updateTask: Parameters<typeof OrchestratorRuntime.monitorRuns>[0]["updateTask"]
+  updateRun: Parameters<typeof OrchestratorRuntime.monitorRuns>[0]["updateRun"]
 }

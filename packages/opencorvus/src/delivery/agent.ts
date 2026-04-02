@@ -27,7 +27,7 @@ import { operatorNotesSection } from "@/orchestrator/helpers"
 import { loadStageSkills } from "@/orchestrator/skill-inject"
 import { collectText, countToolCalls, firstContentLine, sectionBody } from "@/util/agent-text"
 import { AgentTrace } from "@/util/agent-trace"
-import type { GoalJudgmentType, GoalInfo, DeliveryInfo } from "@/evaluator/agent"
+import type { GoalJudgmentType, GoalInfo, DeliveryInfo } from "@/types/evaluator"
 
 const log = Log.create({ service: "delivery-agent" })
 

@@ -1,6 +1,6 @@
 import { mkdirSync, writeFileSync } from "fs"
 import path from "path"
-import type { GoalJudgmentType } from "@/evaluator/agent"
+import type { GoalJudgmentType } from "@/types/evaluator"
 import { evaluationGroups } from "@/orchestrator/evaluation-group"
 import { Instance } from "@/project/instance"
 import { Log } from "@/util/log"
@@ -303,8 +303,8 @@ function goalText(input: {
     const meta = obj(goal.metadata)
     const checks = selectors(meta)
     const origin = text(meta?.origin)
-    lines.push(`${index + 1}. [${goal.status}] [${goal.priority}] ${goal.description}`)
-    lines.push(`   - Criteria: ${goal.criteria}`)
+    lines.push(`${index + 1}. [${goal.status}] [${goal.priority}] ${goal.title}`)
+    lines.push(`   - Done Definition: ${goal.done_definition}`)
     if (checks.length > 0) lines.push(`   - Checks: ${checks.join(", ")}`)
     if (origin) lines.push(`   - Origin: ${origin}`)
   }
@@ -388,8 +388,8 @@ function evaluationText(input: {
     lines.push("", "## Goal Assessment", "")
     for (const item of statuses) {
       const goal = input.goals[item.goal_index]
-      lines.push(`- [${item.status}] ${goal?.description || `Goal ${item.goal_index + 1}`}`)
-      if (goal?.criteria) lines.push(`  - Criteria: ${goal.criteria}`)
+      lines.push(`- [${item.status}] ${goal?.title || `Goal ${item.goal_index + 1}`}`)
+      if (goal?.done_definition) lines.push(`  - Done Definition: ${goal.done_definition}`)
       if (text(item.evidence)) lines.push(`  - Evidence: ${item.evidence}`)
       if (text(item.reasoning)) lines.push(`  - Reasoning: ${item.reasoning}`)
     }

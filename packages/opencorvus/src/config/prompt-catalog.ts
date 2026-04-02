@@ -80,20 +80,18 @@ export namespace PromptCatalog {
         return PROMPT_SYSTEM
       case "agent_generate":
         return PROMPT_GENERATE
-      case "spec_system": {
-        const { SPEC_SYSTEM } = await import("@/spec/agent")
-        return SPEC_SYSTEM
-      }
-      case "goal_system": {
-        const { GOAL_SYSTEM } = await import("@/goal/agent")
-        return GOAL_SYSTEM
+      case "spec_system":
+      case "goal_system":
+      case "decompose_system": {
+        const { DECOMPOSE_SYSTEM } = await import("@/decompose/agent")
+        return DECOMPOSE_SYSTEM
       }
       case "planner_system": {
-        const { PLANNER_SYSTEM_DEFAULT } = await import("@/planner/agent")
+        const { PLANNER_SYSTEM_DEFAULT } = await import("@/types/planner")
         return PLANNER_SYSTEM_DEFAULT
       }
       case "evaluator_system": {
-        const { EVALUATOR_DEFAULT_SYSTEM } = await import("@/evaluator/agent")
+        const { EVALUATOR_DEFAULT_SYSTEM } = await import("@/types/evaluator")
         return EVALUATOR_DEFAULT_SYSTEM
       }
       case "delivery_system": {

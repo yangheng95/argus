@@ -25,7 +25,7 @@ export const AnalyticsTool = Tool.define("analytics", {
       action: z.literal("search"),
       query: z.string().optional().describe("Text to search in task title or request"),
       status: z
-        .enum(["queued", "planning", "running", "blocked", "evaluating", "delivering", "completed", "failed", "cancelled"])
+        .enum(["queued", "active", "completed", "failed", "cancelled"])
         .optional()
         .describe("Filter by task status"),
       limit: z.number().int().positive().optional().describe("Max results (default: 20)"),
@@ -44,8 +44,8 @@ export const AnalyticsTool = Tool.define("analytics", {
       const total = tasks.length
       const completed = tasks.filter((t) => t.status === "completed").length
       const failed = tasks.filter((t) => t.status === "failed").length
-      const running = tasks.filter((t) => ["running", "evaluating", "delivering"].includes(t.status)).length
-      const blocked = tasks.filter((t) => t.status === "blocked").length
+      const running = tasks.filter((t) => t.status === "active").length
+      const blocked = 0
 
       // 计算完成时间中位数
       const durations = tasks

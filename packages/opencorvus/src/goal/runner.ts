@@ -6,21 +6,14 @@ import { Log } from "@/util/log"
 import { dict } from "@/util/object"
 import { selectorList } from "@/check/policy"
 import { operatorNotesSection } from "@/orchestrator/helpers"
-import { CheckRunner } from "@/evaluator/service"
 import { Instance } from "@/project/instance"
 import { Project } from "@/project/project"
-import { Shell } from "@/shell/shell"
 import { Session } from "@/session"
 import { Snapshot } from "@/snapshot"
-import { type CheckDelivery, type CheckReport } from "@/evaluator/shared"
-import { type GoalJudgmentType } from "@/evaluator/agent"
 import { Worktree } from "@/worktree"
 import { Identifier } from "@/id/id"
 import z from "zod"
 import {
-  findDeliveryByGoalRun,
-  findDeliveryByRun,
-  findRun,
   findTask,
   listGoalRunsByTask,
   type TaskRow,
@@ -50,60 +43,6 @@ function includeDeliveryFile(file: string) {
 
 function filterDeliveryDiffs(diffs: z.infer<typeof Snapshot.FileDiff>[]) {
   return diffs.filter((item) => includeDeliveryFile(item.file))
-}
-
-function strings(input: unknown) {
-  return [...new Set(Array.isArray(input) ? input.filter((item): item is string => typeof item === "string" && item.length > 0) : [])]
-}
-
-function mergeFiles(...groups: Array<string[] | undefined>) {
-  return [...new Set(groups.flatMap((group) => group ?? []))]
-}
-
-function filesFromDeliveryResult(input: unknown) {
-  const result = dict(input)
-  const changed = strings(result.changed_files).filter(includeDeliveryFile)
-  if (changed.length > 0) return changed
-  const diffs = Array.isArray(result.diffs)
-    ? result.diffs.flatMap((item) => {
-        const parsed = Snapshot.FileDiff.safeParse(item)
-        return parsed.success && includeDeliveryFile(parsed.data.file) ? [parsed.data.file] : []
-      })
-    : []
-  return [...new Set(diffs)]
-}
-
-function retryFiles(task: TaskRow) {
-  const seen = new Set<string>()
-  const goalRuns = listGoalRunsByTask(task.id)
-  const files = new Set<string>()
-  let runID = task.active_run_id ?? undefined
-  while (runID && !seen.has(runID)) {
-    seen.add(runID)
-    const run = findRun(runID)
-    if (!run) break
-    const context = dict(run.metadata?.retry_context)
-    for (const file of strings(context.changedFiles).filter(includeDeliveryFile)) files.add(file)
-    const runFiles = filesFromDeliveryResult(findDeliveryByRun(run.id)?.result)
-    for (const file of runFiles) files.add(file)
-    const runGoalRuns = goalRuns
-      .filter((goalRun) => goalRun.coordinator_run_id === run.id)
-      .sort((a, b) => (b.time_created ?? 0) - (a.time_created ?? 0) || b.id.localeCompare(a.id))
-    for (const goalRun of runGoalRuns) {
-      const goalFiles = filesFromDeliveryResult(findDeliveryByGoalRun(goalRun.id)?.result)
-      for (const file of goalFiles) files.add(file)
-    }
-    runID = typeof run.metadata?.previous_run_id === "string" ? run.metadata.previous_run_id : undefined
-  }
-  return [...files]
-}
-
-function retrySummary(prefix: string, files: string[]) {
-  const sample = files.slice(0, 3).join(", ")
-  if (files.length <= 3) {
-    return `${prefix} No new file changes were detected in this retry; re-evaluating previously changed files: ${sample}.`
-  }
-  return `${prefix} No new file changes were detected in this retry; re-evaluating previously changed files: ${sample} and ${files.length - 3} more.`
 }
 
 export function goalRunLocalSessionID(goalRun: GoalRunRow) {
@@ -177,78 +116,6 @@ export async function removeGoalRunSession(goalRun: GoalRunRow) {
   })
 }
 
-async function evaluationDelivery(task: TaskRow, delivery: { summary: string; diffs: z.infer<typeof Snapshot.FileDiff>[] }): Promise<CheckDelivery> {
-  const filtered = filterDeliveryDiffs(delivery.diffs)
-  const currentFiles = filtered.map((item) => item.file)
-  const historicalFiles = retryFiles(task)
-  const missingHistory = historicalFiles.filter((file) => !currentFiles.includes(file))
-  if (filtered.length > 0 && missingHistory.length === 0) {
-    return {
-      summary: delivery.summary,
-      diffs: filtered,
-      changedFiles: currentFiles,
-    }
-  }
-  if (filtered.length === 0 && missingHistory.length === 0) {
-    return {
-      summary: delivery.summary,
-      diffs: delivery.diffs,
-      changedFiles: [],
-    }
-  }
-  const replayed = (await Promise.all(missingHistory.map(materializeDiff))).flatMap((item) => item ? [item] : [])
-  const mergedDiffs = [...filtered, ...replayed]
-  const changedFiles = mergeFiles(currentFiles, replayed.map((item) => item.file))
-  if (changedFiles.length === 0) {
-    return {
-      summary: delivery.summary,
-      diffs: filtered.length > 0 ? filtered : delivery.diffs,
-      changedFiles: [],
-    }
-  }
-  if (filtered.length > 0) {
-    return {
-      summary: `${delivery.summary} Re-evaluating cumulative changed files from the current delivery and prior run history.`,
-      diffs: mergedDiffs,
-      changedFiles,
-    }
-  }
-  return {
-    summary: retrySummary(delivery.summary, replayed.map((item) => item.file)),
-    diffs: replayed,
-    changedFiles,
-  }
-}
-
-async function materializeDiff(file: string) {
-  if (!file || path.isAbsolute(file)) return
-  const base = path.resolve(Instance.directory)
-  const resolved = path.resolve(base, file)
-  const relative = path.relative(base, resolved)
-  if (relative.startsWith("..") || path.isAbsolute(relative)) return
-  const next = relative.replace(/\\/g, "/")
-  const stat = await fs.stat(resolved).catch(() => undefined)
-  if (!stat?.isFile()) {
-    return {
-      file: next,
-      before: "",
-      after: "",
-      additions: 0,
-      deletions: 0,
-      status: "deleted" as const,
-    }
-  }
-  const after = await Bun.file(resolved).text()
-  return {
-    file: next,
-    before: "",
-    after,
-    additions: after ? after.split("\n").length : 0,
-    deletions: 0,
-    status: "modified" as const,
-  }
-}
-
 const EVALUATOR_MANAGED_SELECTORS = new Set(["ui_review", "startup", "code_quality", "code_review", "dead_code_review"])
 
 function goalSelectors(goal: GoalRow) {
@@ -261,42 +128,6 @@ function executorSelectors(goal: GoalRow) {
 
 function evaluatorManagedSelectors(goal: GoalRow) {
   return goalSelectors(goal).filter((item) => EVALUATOR_MANAGED_SELECTORS.has(item))
-}
-
-function goalChecks(goal: GoalRow, task: TaskRow) {
-  const selectors = executorSelectors(goal)
-  const base = dict(task.metadata?.checks)
-  const pick = (name: string, family?: string) => selectors.includes(name) || (family ? selectors.includes(family) : false)
-  const next: Record<string, unknown> = {
-    spec_check: { enabled: false, mode: "strict" },
-    // Matching selectors → undefined (auto-discovery fallback enabled)
-    // Non-matching selectors → false (explicitly disabled, no fallback)
-    build: selectors.includes("build") ? (base.build ?? undefined) : false,
-    test: selectors.includes("test") ? (base.test ?? undefined) : false,
-    lint: selectors.includes("lint") ? (base.lint ?? undefined) : false,
-    verify_cmd: selectors.includes("verify_cmd") ? (base.verify_cmd ?? undefined) : false,
-    // Enable named check auto-discovery only when the goal's selectors include
-    // lint or test families. This allows the verification goal (selectors: ["test", "lint"])
-    // to auto-discover typecheck/pytest/py_compile, while feature goals (selectors: ["build"])
-    // don't get irrelevant named checks.
-    _autoDiscoverNamed: selectors.includes("lint") || selectors.includes("test"),
-  }
-  const named =
-    base.named && typeof base.named === "object" && !Array.isArray(base.named)
-      ? Object.fromEntries(
-          Object.entries(base.named as Record<string, unknown>).flatMap(([name, raw]) => {
-            if (!raw || typeof raw !== "object" || Array.isArray(raw)) return []
-            const value = raw as Record<string, unknown>
-            if (value.enabled === false) return []
-            const family = typeof value.family === "string" ? value.family : undefined
-            return pick(name, family) ? [[name, { ...value, enabled: true }]] : []
-          }),
-        )
-      : undefined
-  if (named && Object.keys(named).length > 0) next.named = named
-  if (typeof base.timeout_ms === "number") next.timeout_ms = base.timeout_ms
-  if (base.custom && typeof base.custom === "object" && !Array.isArray(base.custom)) next.custom = base.custom
-  return next
 }
 
 export async function createGoalWorkspace(_input: {
@@ -369,7 +200,7 @@ export async function cleanupStaleGoalWorkspaces(taskID: string) {
 export async function createGoalSession(task: TaskRow, goal: GoalRow, directory?: string) {
   const session = await Session.createNext({
     parentID: task.session_id ?? undefined,
-    title: `${task.title}: ${goal.description}`,
+    title: `${task.title}: ${goal.title}`,
     directory: directory ?? (await import("@/project/instance")).Instance.directory,
   })
   const parent = task.session_id ? await Session.get(task.session_id) : undefined
@@ -382,6 +213,10 @@ export async function createGoalSession(task: TaskRow, goal: GoalRow, directory?
   // Register so SSE can match this session's events to the task
   registerGoalRunSession(session.id, task.id)
   return session
+}
+
+function strings(input: unknown) {
+  return [...new Set(Array.isArray(input) ? input.filter((item): item is string => typeof item === "string" && item.length > 0) : [])]
 }
 
 function compactPlanContext(plan: PlanRow) {
@@ -485,7 +320,7 @@ export function buildGoalPrompt(input: {
     ? dependsOnIds
         .map((id) => input.allGoals!.find((g) => g.id === id))
         .filter(Boolean)
-        .map((g) => `- "${g!.description}" (completed, output in your workspace)`)
+        .map((g) => `- "${g!.title}" (completed, output in your workspace)`)
         .join("\n")
     : ""
   return [
@@ -505,9 +340,9 @@ export function buildGoalPrompt(input: {
       ? `## Dependencies (completed before this goal)\n\nThese goals completed before yours. Their output is already in your workspace:\n${dependencyContext}`
       : undefined,
     `Goal:
-${input.goal.description}`,
+${input.goal.title}: ${input.goal.objective}`,
     `Acceptance:
-${input.goal.criteria}`,
+${input.goal.done_definition}`,
     // Plan node brief — the planner's specific implementation steps for this goal.
     // Without this, the executor only sees the goal's description/criteria from the
     // goal decomposition stage and misses the planner's detailed guidance.
@@ -737,172 +572,3 @@ export async function applyGoalDelivery(input: {
   }
 }
 
-export async function evaluateGoal(input: {
-  task: TaskRow
-  goal: GoalRow
-  delivery: {
-    summary: string
-    diffs: z.infer<typeof Snapshot.FileDiff>[]
-  }
-}): Promise<{
-  result: CheckReport
-  analysis: GoalJudgmentType
-  analysisError?: string
-}> {
-  const delivery = await evaluationDelivery(input.task, input.delivery)
-  // Tier 1 (goal-level): core checks only, no LLM judge — fast path (< 30s)
-  const result = await CheckRunner.evaluate(
-    {
-      taskID: input.task.id,
-      activeSpecVersionID: input.task.active_spec_version_id ?? undefined,
-      request: `${input.task.request}\n\nFocused goal:\n${input.goal.description}\n${input.goal.criteria}`,
-      metadata: {
-        ...(input.task.metadata ?? {}),
-        checks: goalChecks(input.goal, input.task),
-        delivery_changed_files: delivery.changedFiles,
-      },
-    },
-    delivery,
-    "core",
-  )
-  // "No checks ran" is not a pass — let it propagate as-is so task-level
-  // evaluation sees the real status instead of a fabricated "passed".
-  const analysis: GoalJudgmentType = {
-    verdict: result.verdict === "accepted" ? "accepted" : "rejected",
-    classification: result.verdict === "accepted" ? "transient" : "evaluation",
-    summary: result.summary,
-    goal_statuses: [{
-      goal_index: 0,
-      status: result.verdict === "accepted" ? "passed" : "failed",
-      evidence: result.checks.map((c) => `${c.name}: ${c.status}`).join("; "),
-      reasoning: result.summary,
-    }],
-    replan_guidance: result.verdict === "accepted" ? null : {
-      root_cause: result.checks.filter((c) => c.status === "failed").map((c) => `${c.name}: ${c.evidence}`).join("; "),
-      what_failed: result.checks.filter((c) => c.status === "failed").map((c) => c.name).join(", "),
-      suggested_strategy: "Fix failing core checks before proceeding.",
-      avoid_approaches: [],
-    },
-  }
-  return { result, analysis }
-}
-
-export async function evaluateTask(input: {
-  task: TaskRow
-  goals: GoalRow[]
-  delivery: {
-    summary: string
-    diffs: z.infer<typeof Snapshot.FileDiff>[]
-  }
-}): Promise<{
-  result: CheckReport
-  analysis: GoalJudgmentType
-  analysisError?: string
-}> {
-  const delivery = await evaluationDelivery(input.task, input.delivery)
-  // Core checks only — no LLM judge. Delivery agent handles full verification.
-  const result = await CheckRunner.evaluate(
-    {
-      taskID: input.task.id,
-      activeSpecVersionID: input.task.active_spec_version_id ?? undefined,
-      request: input.task.request,
-      metadata: {
-        ...(input.task.metadata ?? {}),
-        delivery_changed_files: delivery.changedFiles,
-      },
-    },
-    delivery,
-    "core",
-  )
-
-  // Construct minimal analysis from check results — no LLM call
-  const analysis: GoalJudgmentType = {
-    verdict: result.status === "failed" ? "rejected" : "accepted",
-    classification: result.status === "failed" ? "evaluation" : "transient",
-    summary: `Core checks: ${result.checks.map((c) => `${c.name}:${c.status}`).join(", ")}`,
-    goal_statuses: input.goals.map((g, i) => ({
-      goal_index: i,
-      status: result.status === "failed" ? ("failed" as const) : ("passed" as const),
-      evidence: result.checks.map((c) => `${c.name}: ${c.status}`).join("; "),
-      reasoning: result.summary,
-    })),
-    replan_guidance: result.status === "failed" ? {
-      root_cause: result.checks.filter((c) => c.status === "failed").map((c) => `${c.name}: ${c.evidence}`).join("; "),
-      what_failed: result.checks.filter((c) => c.status === "failed").map((c) => c.name).join(", "),
-      suggested_strategy: "Fix failing core checks.",
-      avoid_approaches: [],
-    } : null,
-  }
-
-  // delivery_verify_cmd — run if present and checks passed
-  const deliveryVerifyCmd = typeof input.task.metadata?.delivery_verify_cmd === "string"
-    ? input.task.metadata.delivery_verify_cmd : null
-  let finalResult = result
-  if (deliveryVerifyCmd && result.status !== "failed") {
-    try {
-      const verifyResult = await Shell.run(deliveryVerifyCmd, {
-        cwd: Filesystem.resolve(Instance.directory),
-        env: process.env,
-        timeoutMs: 120_000,
-      })
-      if (verifyResult.exitCode !== 0) {
-        const output = (verifyResult.stderr || verifyResult.stdout).slice(0, 800)
-        finalResult = {
-          ...result,
-          status: "failed" as const,
-          verdict: "rejected" as const,
-          summary: `Delivery verify command failed (exit ${verifyResult.exitCode}): ${output}`,
-        }
-        analysis.verdict = "rejected"
-        analysis.classification = "evaluation"
-        analysis.replan_guidance = {
-          root_cause: `'${deliveryVerifyCmd}' exited ${verifyResult.exitCode}`,
-          what_failed: output,
-          suggested_strategy: "Fix the errors reported by the verify command.",
-          avoid_approaches: [],
-        }
-      }
-    } catch (err) {
-      log.warn("delivery_verify_cmd failed", { cmd: deliveryVerifyCmd, err })
-    }
-  }
-
-  return { result: finalResult, analysis }
-}
-
-/**
- * Detect infra failure using only the structured `infra_failure` field.
- * If the field does not exist on the check result, returns false.
- */
-function reviewInfraFailure(check: { name: string; status: string; infra_failure?: boolean }) {
-  if (check.status !== "failed") return false
-  return check.infra_failure === true
-}
-
-export function blockingEvaluationFailure(result: CheckReport) {
-  if (result.status !== "failed") return false
-  const failed = result.checks.filter((check) => check.status === "failed")
-  if (failed.length === 0) return true
-  return failed.some((check) => !reviewInfraFailure(check))
-}
-
-export function goalEvaluationOutcome(
-  result: CheckReport,
-  analysis: GoalJudgmentType,
-) {
-  const phase1Failed = blockingEvaluationFailure(result)
-  const verdict = phase1Failed ? "rejected" : analysis.verdict
-  const status = verdict === "accepted" ? "passed" : "failed"
-  const summary = phase1Failed && analysis.verdict === "accepted"
-    ? `Rejected: automated checks failed. ${result.summary}`
-    : analysis.summary
-  return {
-    verdict,
-    status,
-    summary,
-  }
-}
-
-export function currentGoal(goalRun: GoalRunRow, goals: GoalRow[]) {
-  return goals.find((goal) => goal.id === goalRun.goal_id)
-}

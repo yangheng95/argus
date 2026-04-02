@@ -47,8 +47,10 @@ export async function recordOperatorNote(taskID: string, note: string) {
     return { resumed: false, status: run.status }
   }
   const nextRunID = await OrchestratorRuntime.createOperatorRun(task, run, note)
-  await OrchestratorRuntime.dispatch(nextRunID, hooks())
-  return { resumed: true, status: "running" as const }
+  if (task.active_plan_version_id) {
+    await OrchestratorRuntime.dispatchReadyGoals(task.id, nextRunID, task.active_plan_version_id, hooks())
+  }
+  return { resumed: true, status: "active" as const }
 }
 
 export async function handleTaskMessage(taskID: string, raw: z.input<typeof TaskMessageInputSchema>) {
@@ -125,5 +127,5 @@ export async function injectMessage(taskID: string, message: string) {
     summary: "Operator message injected into running session",
   })
 
-  return { resumed: true, status: "running" as const }
+  return { resumed: true, status: "active" as const }
 }

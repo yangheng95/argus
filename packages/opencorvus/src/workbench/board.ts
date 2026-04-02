@@ -367,8 +367,8 @@ function buildBoard(task: typeof OrchestratorTaskTable.$inferSelect) {
             .map((goal) => ({
               id: goal.id,
               kind: "goal" as const,
-              title: goal.description,
-              detail: goal.criteria,
+              title: goal.title,
+              detail: goal.done_definition,
               status: goal.status,
               time: goal.time_updated,
               metadata: {
@@ -750,41 +750,33 @@ function boardOverview(input: {
       }
     | undefined
 }) {
-  const active = ["queued", "planning", "running", "evaluating", "delivering"].includes(input.task.status)
+  const active = ["queued", "active"].includes(input.task.status)
   const canResume = Boolean(input.run) && !active && input.pendingInteractions.length === 0
   const headline =
     input.pendingInteractions.length > 0
       ? "Waiting on human input"
       : input.task.status === "completed"
         ? "Accepted delivery is ready"
-        : input.task.status === "delivering"
-          ? "Publishing the accepted delivery"
         : input.task.status === "failed"
           ? "Current attempt failed acceptance"
           : input.task.status === "cancelled"
             ? "Task was cancelled"
-            : input.task.status === "blocked"
-              ? "Task is blocked"
-              : input.task.status === "evaluating"
-                ? "Evaluating the latest candidate delivery"
-                : input.task.status === "running"
-                  ? "Task is actively progressing"
-                  : "Task is queued"
+            : input.task.status === "active"
+              ? input.task.blocking_reason
+                ? "Task is blocked"
+                : "Task is actively progressing"
+              : "Task is queued"
   const summary =
     input.pendingInteractions.length > 0
       ? `${input.pendingInteractions.length} interaction${input.pendingInteractions.length > 1 ? "s" : ""} need attention before the task can continue.`
       : input.task.status === "completed" && input.acceptedDelivery
         ? clipBoard(input.acceptedDelivery.summary)
-        : input.task.status === "delivering" && input.candidateDelivery
-          ? clipBoard(input.candidateDelivery.summary)
         : input.currentFailure?.summary ??
-          (input.task.status === "evaluating"
-            ? "Execution finished. Acceptance checks are running against the latest delivery."
-            : input.candidateDelivery
-              ? clipBoard(input.candidateDelivery.summary)
-              : input.run
-                ? `Current run is in ${input.run.phase}.`
-                : "Task is ready for the first run.")
+          (input.candidateDelivery
+            ? clipBoard(input.candidateDelivery.summary)
+            : input.run
+              ? `Current run is in ${input.run.phase}.`
+              : "Task is ready for the first run.")
   const nextStep =
     input.pendingInteractions.length > 0
       ? {
@@ -810,12 +802,6 @@ function boardOverview(input: {
                   title: "Review the accepted delivery",
                   detail: "Inspect the accepted result, changed files, and evaluation evidence before closing the loop.",
                 }
-              : input.task.status === "delivering"
-                ? {
-                    kind: "observe" as const,
-                    title: "Wait for delivery exports",
-                    detail: "Delivery artifacts are being published and summarized.",
-                  }
               : active
               ? {
                   kind: "observe" as const,
@@ -836,7 +822,7 @@ function boardOverview(input: {
     controls: {
       canRetry: canResume,
       canReplan: canResume && Boolean(input.task.active_plan_version_id ?? input.run?.plan_version_id),
-      canCancel: Boolean(input.run) && ["queued", "planning", "running", "evaluating", "blocked"].includes(input.task.status),
+      canCancel: Boolean(input.run) && ["queued", "active"].includes(input.task.status),
     },
   }
 }
