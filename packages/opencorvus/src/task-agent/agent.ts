@@ -117,6 +117,7 @@ export namespace TaskAgent {
 
       // 3. Create tools (agentSessionID passed so tool sessions become children)
       const tools = createTaskAgentTools({ taskID, agentSessionID: agentSession.id, signal: ctrl.signal })
+      const { stopSignal } = tools
       const guard = toolGuard(tools)
 
       // 4. Build prompt + persist user message as timeline anchor
@@ -152,7 +153,7 @@ export namespace TaskAgent {
         model: language,
         stopWhen: stepCountIs(MAX_STEPS),
         tools: guard.tools,
-        abortSignal: AbortSignal.any([ctrl.signal, guard.signal]),
+        abortSignal: AbortSignal.any([ctrl.signal, guard.signal, stopSignal]),
         system,
         messages: [{ role: "user" as const, content: userMessage }],
         ...(contentHooks!.onChunk ? { onChunk: contentHooks!.onChunk as any } : {}),

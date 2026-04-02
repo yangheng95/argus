@@ -17,6 +17,7 @@ import { TaskQueueService } from "../scheduler/task-queue-service"
 import { OrchestratorService } from "@/orchestrator/service"
 import { ChannelSupervisor } from "@/channel/supervisor"
 import { Config } from "@/config/config"
+import { ensureTaskMessageProtocolBridge } from "@/server/routes/task-message-protocol-bridge"
 
 export async function InstanceBootstrap() {
   Log.Default.info("bootstrapping", { directory: Instance.directory })
@@ -32,6 +33,7 @@ export async function InstanceBootstrap() {
   EventService.init()
   TaskQueueService.init()
   OrchestratorService.init()
+  ensureTaskMessageProtocolBridge()
   await ChannelSupervisor.sync(await Config.get()).catch((error) => {
     Log.Default.warn("channel supervisor init failed", { error: String(error) })
   })

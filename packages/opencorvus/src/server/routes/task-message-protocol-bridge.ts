@@ -1,4 +1,6 @@
 import { Bus } from "@/bus"
+import { GlobalBus } from "@/bus/global"
+import { Instance } from "@/project/instance"
 import { OrchestratorProtocol } from "@/orchestrator/protocol"
 import { ProtocolStore } from "@/protocol/store"
 import { Message } from "@/session/message"
@@ -200,6 +202,8 @@ function bridgeDelta(properties: Record<string, unknown>) {
 export function ensureTaskMessageProtocolBridge() {
   if (initialized) return
   initialized = true
+  const hostDirectory = Instance.directory
+
   // Persisted events — written to protocol_event, replayable on reconnect
   Bus.subscribe(Message.Event.Updated, (event) => {
     cacheMessageInfo(event.properties)
@@ -212,4 +216,39 @@ export function ensureTaskMessageProtocolBridge() {
   // High frequency (every text token); on reconnect, client recovers full
   // text from persisted message.part.updated or transcript snapshot.
   Bus.subscribe(Message.Event.PartDelta, (event) => bridgeDelta(event.properties))
+
+  // ── Cross-Instance bridge ──
+  // Executor sessions run in worktree Instances (different Instance.directory).
+  // Their Bus.publish() goes to the worktree's Instance-scoped Bus, which the
+  // subscriptions above never see. GlobalBus receives ALL events from ALL
+  // Instances, so we subscribe here to catch worktree-scoped message events.
+  // We skip events from our own Instance (already handled above) to avoid
+  // double-processing.
+  const MESSAGE_TYPES = new Set([
+    Message.Event.Updated.type,
+    Message.Event.PartUpdated.type,
+    Message.Event.Removed.type,
+    Message.Event.PartRemoved.type,
+    Message.Event.PartDelta.type,
+  ])
+  GlobalBus.on("event", (envelope) => {
+    if (!envelope.payload || !MESSAGE_TYPES.has(envelope.payload.type)) return
+    // Skip events from the host Instance — already handled by Bus.subscribe above
+    if (envelope.directory === hostDirectory) return
+    const props = envelope.payload.properties
+    if (!props) return
+    // Run the same bridge logic inside the host Instance context so that
+    // Database/ProtocolStore calls use the main project's DB, not the worktree's.
+    Instance.provide({ directory: hostDirectory, fn: () => {
+      const type = envelope.payload.type
+      if (type === Message.Event.Updated.type) {
+        cacheMessageInfo(props)
+        return bridgeEvent(Message.Event.Updated, props)
+      }
+      if (type === Message.Event.PartUpdated.type) return bridgeEvent(Message.Event.PartUpdated, props)
+      if (type === Message.Event.Removed.type) return bridgeEvent(Message.Event.Removed, props)
+      if (type === Message.Event.PartRemoved.type) return bridgeEvent(Message.Event.PartRemoved, props)
+      if (type === Message.Event.PartDelta.type) return bridgeDelta(props)
+    }})
+  })
 }

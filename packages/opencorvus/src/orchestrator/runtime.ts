@@ -623,7 +623,11 @@ export namespace OrchestratorRuntime {
       })
 
       // 8. Start goal pipeline (event-driven, self-driving)
-      registerGoalRunSession(goalSession.id, task.id)
+      // Register BOTH sessions so bridge can resolve taskID for their events:
+      // - goalSession: the goal-scoped session (receives projected events for non-opencode executors)
+      // - executorSession: the opencode executor's native session (publishes message events directly)
+      registerGoalRunSession(goalSession.id, task.id, "executor")
+      registerGoalRunSession(executorSession.id, task.id, "executor")
       const pipelineContract: GoalContract = {
         goal: goalRowToContract(entry.goal),
         planNode: entry.node as any,
