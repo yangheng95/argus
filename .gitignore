@@ -29,7 +29,7 @@ target/
 .direnv/
 backups/
 code_review.txt
-specs/
+
 
 # Local dev files
 .opencorvus/
