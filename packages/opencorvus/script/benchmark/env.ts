@@ -178,9 +178,8 @@ export async function resolveBenchmarkModel(
       const providers = await Provider.list()
       const explicit = env(...(options?.explicitKeys ?? ["OPENCORVUS_BENCHMARK_MODEL", "OPENCORVUS_E2E_MODEL"]))
       if (explicit) return explicitModel(providers, explicit, options?.allowOpenAICodex)
+      if (providers["alibaba-coding-plan-cn"]?.models["glm-5"]) return "alibaba-coding-plan-cn/glm-5"
       if (providers["alibaba-coding-plan-cn"]?.models["kimi-k2.5"]) return "alibaba-coding-plan-cn/kimi-k2.5"
-      if (providers["alibaba-coding-plan"]?.models["kimi-k2.5"]) return "alibaba-coding-plan/kimi-k2.5"
-      if (providers["alibaba-cn"]?.models["kimi-k2.5"]) return "alibaba-cn/kimi-k2.5"
       if (providers["hexin"]?.models["gpt-5.4-mini"]) return "hexin/gpt-5.4-mini"
 
       for (const providerID of preferredProviders) {

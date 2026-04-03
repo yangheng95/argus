@@ -1,10 +1,11 @@
-import { For, Show } from "solid-js";
+import { For, Show, onCleanup } from "solid-js";
 import { MessageView } from "./MessageView";
 import {
   agentCardExpanded,
   toggleAgentCardExpanded,
 } from "../store/conversation-ui";
 import { agentStageLabel } from "../utils/message";
+import { setupAutoScroll } from "../utils/dom-utils";
 
 interface AgentCardProps {
   cardID: string;
@@ -76,13 +77,15 @@ export function AgentCard(props: AgentCardProps) {
         </span>
         <span class="agent-card-chevron" aria-hidden="true">{"\u25BC"}</span>
       </div>
-      <Show when={expanded()}>
-        <div class="agent-card-body">
-          <For each={props.messages}>
-            {(msg) => <MessageView message={msg} />}
-          </For>
-        </div>
-      </Show>
+      <div
+        class="agent-card-body"
+        classList={{ "agent-card-body--preview": !expanded() }}
+        ref={(el) => onCleanup(setupAutoScroll(el))}
+      >
+        <For each={props.messages.filter((m: any) => String(m?.info?.role || "").toLowerCase() !== "user")}>
+          {(msg) => <MessageView message={msg} />}
+        </For>
+      </div>
     </article>
   );
 }

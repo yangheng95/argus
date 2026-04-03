@@ -93,6 +93,7 @@ export namespace TaskAgent {
     running.set(taskID, ctrl)
 
     let contentHooks: ReturnType<typeof sessionStreamHooks> | undefined
+    let stopSignal: AbortSignal | undefined
     try {
       const task = requireTask(taskID)
       if (!task.session_id) {
@@ -153,28 +154,16 @@ export namespace TaskAgent {
 
       // 3. Create tools (agentSessionID passed so tool sessions become children)
       const tools = createTaskAgentTools({ taskID, agentSessionID: agentSession.id, signal: ctrl.signal, workflow, workflowState })
-      const { stopSignal } = tools
+      stopSignal = tools.stopSignal
       const guard = toolGuard(tools)
 
-      // 4. Build prompt + persist user message as timeline anchor
+      // 4. Build prompt — use the user's original request as the user message
+      // for "created" triggers (it IS the user's intent). For re-triggers
+      // (run_completed, executor_failed, retry) use a short event description.
       const system = buildSystemPrompt(task, trigger, workflow, workflowState)
-      const userMessage = describeTrigger(task, trigger)
-      const userMsgID = Identifier.ascending("message")
-      await Session.updateMessage({
-        id: userMsgID,
-        sessionID: agentSession.id,
-        role: "user",
-        time: { created: Date.now() },
-        agent: "task-agent",
-        model: { providerID: def.providerID, modelID: def.modelID },
-      } as any)
-      await Session.updatePart({
-        id: Identifier.ascending("part"),
-        messageID: userMsgID,
-        sessionID: agentSession.id,
-        type: "text",
-        text: userMessage,
-      } as any)
+      const userContent = trigger.kind === "created"
+        ? task.request
+        : describeTrigger(task, trigger)
 
       log.info("task agent starting", {
         taskID,
@@ -191,7 +180,7 @@ export namespace TaskAgent {
         tools: guard.tools,
         abortSignal: AbortSignal.any([ctrl.signal, guard.signal, stopSignal]),
         system,
-        messages: [{ role: "user" as const, content: userMessage }],
+        messages: [{ role: "user" as const, content: userContent }],
         ...(contentHooks!.onChunk ? { onChunk: contentHooks!.onChunk as any } : {}),
         ...(contentHooks!.onError ? { onError: contentHooks!.onError } : {}),
         onStepFinish: guard.onStepFinish as any,
@@ -220,7 +209,7 @@ export namespace TaskAgent {
       })
 
       AgentTrace.capture("task-agent", 1,
-        { system, messages: [{ role: "user", content: userMessage }] },
+        { system, messages: [{ role: "user", content: userContent }] },
         resultText ?? "",
         { trigger: trigger.kind, taskID, toolCalls: toolCallCount, finishReason: resultFinishReason },
       )
@@ -229,6 +218,12 @@ export namespace TaskAgent {
       await contentHooks?.flush().catch(() => undefined)
       if (ctrl.signal.aborted) {
         log.info("task agent was aborted", { taskID })
+        return
+      }
+      // stopSignal abort is a normal termination (submit_execution/dispatch/execute_goal
+      // dispatched work). NOT an error — the agent will be re-triggered on completion.
+      if (stopSignal?.aborted) {
+        log.info("task agent stopped after dispatch", { taskID, trigger: trigger.kind })
         return
       }
       const msg = error instanceof Error ? error.message : String(error)
@@ -254,7 +249,7 @@ export namespace TaskAgent {
 function describeTrigger(task: TaskRow, trigger: TaskAgentTrigger): string {
   switch (trigger.kind) {
     case "created":
-      return `New task created. Process it.\n\nTitle: ${task.title}\nRequest: ${task.request}`
+      return "New task created. Process it."
 
     case "run_completed":
       return [
@@ -297,7 +292,11 @@ function buildSystemPrompt(task: TaskRow, trigger: TaskAgentTrigger, workflow?: 
   sections.push("## Current Task")
   sections.push(`- Title: ${task.title}`)
   sections.push(`- Status: ${task.status}`)
-  sections.push(`- Request: ${task.request}`)
+  // For re-triggers the request is included here for context; for "created"
+  // triggers the user message IS the request so no duplication needed.
+  if (trigger.kind !== "created") {
+    sections.push(`- Request: ${task.request}`)
+  }
 
   if (task.active_spec_version_id) {
     const spec = findSpecSnapshot(task.active_spec_version_id)
@@ -363,22 +362,30 @@ function buildSystemPrompt(task: TaskRow, trigger: TaskAgentTrigger, workflow?: 
     }
   }
 
-  // ── Reasoning Guidance (NOT a fixed pipeline) ──
+  // ── Reasoning Guidance ──
   sections.push(`
-## How to Think (not a fixed pipeline — use your judgment)
+## Mandatory Stage Sequence
+
+Every task MUST go through ALL five stages in order. No stage may be skipped.
+
+1. **requirements** — Decompose the task into goal contracts. ALWAYS call this first.
+2. **goal** — Create run and plan goals (create_run, plan_goal for complex goals, then submit_execution).
+3. **exe** — Execute goals (execute_goal / dispatch_ready_goals). Wait for completion.
+4. **eval** — Evaluate EVERY goal (eval_goal on each goal). No goal may skip evaluation.
+5. **deliver** — Aggregate and publish (deliver, then publish_delivery).
 
 You have these tools: requirements, architect, plan_goal, execute_goal, eval_goal, add_goal, modify_goal,
 dispatch_ready_goals, read_context, create_run, submit_execution, deliver, publish_delivery,
 fail_task, restart_from_stage.
 
 **For new tasks:**
-- Assess complexity first. Simple (typo, config change)? Skip requirements, directly create_run + submit_execution.
-- Complex (multi-feature, PRD)? Call requirements first, then create_run, then submit_execution.
+- ALWAYS call requirements first to decompose the task into goals. No exceptions.
+- Then create_run, then submit_execution.
 - You can plan individual goals with plan_goal if they're complex, or skip planning for simple ones.
 
 **After execution completes:**
 - Read the delivery and evidence carefully (use read_context).
-- Call eval_goal on individual goals for per-goal verification.
+- Call eval_goal on EVERY goal — no goal may skip evaluation.
 - Based on eval results, REASON about what to do:
   - Tests pass → deliver to aggregate, then publish_delivery
   - Tests fail due to missing dependency → add_goal to create the dependency, then execute_goal
@@ -403,7 +410,7 @@ fail_task, restart_from_stage.
 - Use deliver + publish_delivery to complete (handles aggregation + git publish + task completion).
 - Terminal state (completed/failed/cancelled) → do nothing.
 - User messages in Operator Notes → acknowledge in your reasoning.
-- NEVER follow a fixed sequence blindly. ALWAYS reason about the current situation.`)
+- NEVER skip requirements, eval_goal, or deliver stages. All five stages are mandatory.`)
 
   return sections.join("\n")
 }

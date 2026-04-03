@@ -430,7 +430,7 @@ export function createTaskAgentTools(input: {
     // -----------------------------------------------------------------------
 
     plan_goal: tool({
-      description: "Create an implementation plan for a specific goal. Optional — skip for simple goals. The plan gives the executor detailed steps.",
+      description: "Create an implementation plan for a specific goal. The plan gives the executor detailed steps. Can be skipped for simple goals if the goal contract is already clear enough.",
       inputSchema: z.object({
         goalID: z.string().describe("The goal ID to plan"),
         reason: z.string().optional().describe("Why you decided to plan this goal"),
@@ -454,7 +454,7 @@ export function createTaskAgentTools(input: {
           title: `Plan: ${goal.title}`,
           directory: Instance.directory,
         })
-        registerGoalRunSession(planSession.id, taskID, "planner")
+        registerGoalRunSession(planSession.id, taskID, "planner", goalID)
         const hooks = sessionStreamHooks({ sessionID: planSession.id, taskID, stage: "plan" })
 
         const contract = buildGoalContract(task, goal, dbGoals)
@@ -478,7 +478,7 @@ export function createTaskAgentTools(input: {
     }),
 
     eval_goal: tool({
-      description: "Run autonomous evaluation on a goal's delivery. The eval agent reads done_definition, examines the code, infers tests, and runs them. Returns verdict + evidence.",
+      description: "Run autonomous evaluation on a goal's delivery. The eval agent reads done_definition, examines the code, infers tests, and runs them. Returns verdict + evidence. Max 3 evals per goal — after that, fix the code or fail.",
       inputSchema: z.object({
         goalID: z.string().describe("The goal ID to evaluate"),
         reason: z.string().optional().describe("Why you decided to evaluate this goal"),
@@ -488,6 +488,26 @@ export function createTaskAgentTools(input: {
         const dbGoals = listGoals(taskID)
         const goal = dbGoals.find(g => g.id === goalID)
         if (!goal) return `Goal ${goalID} not found.`
+
+        // Check eval attempt count to prevent infinite eval loops
+        const MAX_EVAL_PER_GOAL = 3
+        const { OrchestratorEvaluationTable } = await import("@/orchestrator/orchestrator.sql")
+        const existingEvals = Database.use((db) =>
+          db.select().from(OrchestratorEvaluationTable)
+            .where(and(eq(OrchestratorEvaluationTable.task_id, taskID), eq(OrchestratorEvaluationTable.goal_run_id, goalID)))
+            .all(),
+        )
+        // Count evals for this goal across all goal_runs
+        const { listGoalRunsByTask: listGR } = await import("@/orchestrator/store")
+        const goalRunIDs = new Set(listGR(taskID).filter(gr => gr.goal_id === goalID).map(gr => gr.id))
+        const evalCount = Database.use((db) =>
+          db.select().from(OrchestratorEvaluationTable)
+            .where(eq(OrchestratorEvaluationTable.task_id, taskID))
+            .all(),
+        ).filter(e => goalRunIDs.has(e.goal_run_id)).length
+        if (evalCount >= MAX_EVAL_PER_GOAL) {
+          return `EVAL LIMIT REACHED: Goal "${goal.title}" has been evaluated ${evalCount} times (max ${MAX_EVAL_PER_GOAL}). You MUST either fix the underlying code and re-execute, or fail_task if unrecoverable.`
+        }
 
         ensureGoalInWorkflow(goalID, goal.title)
         await trackStepStart("eval_goal", goalID)
@@ -512,7 +532,7 @@ export function createTaskAgentTools(input: {
           title: `Eval: ${goal.title}`,
           directory: Instance.directory,
         })
-        registerGoalRunSession(evalSession.id, taskID, "evaluator")
+        registerGoalRunSession(evalSession.id, taskID, "evaluator", goalID)
         const hooks = sessionStreamHooks({ sessionID: evalSession.id, taskID, stage: "eval" })
 
         const contract = buildGoalContract(task, goal, dbGoals)
@@ -533,11 +553,10 @@ export function createTaskAgentTools(input: {
           await hooks.flush()
         }
 
-        // Persist evaluation to DB (direct INSERT — simpler than legacy persistEvaluation)
-        const { OrchestratorEvaluationTable } = await import("@/orchestrator/orchestrator.sql")
+        // Persist evaluation to DB
         const evalID = Identifier.ascending("evaluation")
         const now = Date.now()
-        Database.use((db) =>
+        Database.use((db) => {
           db.insert(OrchestratorEvaluationTable).values({
             id: evalID,
             task_id: taskID,
@@ -554,8 +573,26 @@ export function createTaskAgentTools(input: {
             })),
             time_created: now,
             time_updated: now,
-          }).run(),
-        )
+          }).run()
+
+          // Task Agent decision: update goal.status based on eval verdict.
+          // Per architecture spec, goal.status writer is Task Agent — this IS the agent's decision.
+          const goalStatus = verdict.pass ? "passed" : "failed"
+          const { OrchestratorGoalTable: GT } = require("@/orchestrator/orchestrator.sql")
+          db.update(GT)
+            .set({ status: goalStatus, time_updated: now })
+            .where(eq(GT.id, goalID))
+            .run()
+        })
+
+        // Emit event for overlay reactivity
+        const { Event: OrcEvent } = await import("@/orchestrator/model")
+        const { OrchestratorProtocol: Proto } = await import("@/orchestrator/protocol")
+        if (verdict.pass) {
+          Proto.emit(OrcEvent.GoalPassed, { taskID, goalID: goal.id, summary: goal.title }, { source: "eval_goal" }).catch(() => {})
+        } else {
+          Proto.emit(OrcEvent.GoalFailed, { taskID, goalID: goal.id, summary: `${goal.title}: ${verdict.reasoning.slice(0, 200)}` }, { source: "eval_goal" }).catch(() => {})
+        }
 
         await trackStepComplete("eval_goal", goalID, !verdict.pass)
         const evidenceStr = verdict.evidence.slice(0, 5).join("; ")
@@ -652,7 +689,18 @@ export function createTaskAgentTools(input: {
         const goal = dbGoals.find(g => g.id === goalID)
         if (!goal) return `Goal ${goalID} not found.`
         if (goal.status === "running") return `Goal ${goalID} is already running.`
-        if (goal.status === "passed") return `Goal ${goalID} already passed.`
+
+        // Reset goal to "pending" so infrastructure dispatch can pick it up.
+        // Task Agent is the decision-maker: it decides when to re-execute.
+        if (goal.status === "passed" || goal.status === "failed") {
+          Database.use((db) => {
+            const { OrchestratorGoalTable: GT } = require("@/orchestrator/orchestrator.sql")
+            db.update(GT)
+              .set({ status: "pending", time_updated: Date.now() })
+              .where(eq(GT.id, goalID))
+              .run()
+          })
+        }
 
         ensureGoalInWorkflow(goalID, goal.title)
         await trackStepStart("execute_goal", goalID)
@@ -927,12 +975,14 @@ export function createTaskAgentTools(input: {
         await trackStepStart("deliver")
         const run = requireRun(task.active_run_id)
 
-        // Gate: all blocking goals must be passed before delivery
+        // Gate: all blocking goals must have completed goal_runs (with delivery).
+        // Goal.status may be "running" (not yet eval'd) or "passed" (eval'd) — both are OK
+        // as long as execution actually completed. Only "failed" goals block delivery.
         const goals = listGoals(taskID)
-        const blockingNotPassed = goals.filter(g => g.priority === "blocking" && g.status !== "passed")
-        if (blockingNotPassed.length > 0) {
-          const summary = blockingNotPassed.map(g => `[${g.status}] ${g.title}`).join("; ")
-          return `Cannot deliver: ${blockingNotPassed.length} blocking goal(s) not passed. Fix them first: ${summary}`
+        const blockingFailed = goals.filter(g => g.priority === "blocking" && g.status === "failed")
+        if (blockingFailed.length > 0) {
+          const summary = blockingFailed.map(g => `[${g.status}] ${g.title}`).join("; ")
+          return `Cannot deliver: ${blockingFailed.length} blocking goal(s) failed. Fix them first: ${summary}`
         }
 
         // Aggregate per-goal deliveries
@@ -1058,11 +1108,11 @@ export function createTaskAgentTools(input: {
         const run = task.active_run_id ? requireRun(task.active_run_id) : undefined
         if (!run) return "No active run."
 
-        // Gate: all blocking goals must be passed
+        // Gate: no blocking goals in "failed" state
         const goals = listGoals(taskID)
-        const blockingNotPassed = goals.filter(g => g.priority === "blocking" && g.status !== "passed")
-        if (blockingNotPassed.length > 0) {
-          return `Cannot publish: ${blockingNotPassed.length} blocking goal(s) not passed. Fix them first.`
+        const blockingFailed = goals.filter(g => g.priority === "blocking" && g.status === "failed")
+        if (blockingFailed.length > 0) {
+          return `Cannot publish: ${blockingFailed.length} blocking goal(s) failed. Fix them first.`
         }
 
         const delivery = findDeliveryByRun(run.id)

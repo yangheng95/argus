@@ -5,7 +5,7 @@ import { OrchestratorProtocol } from "@/orchestrator/protocol"
 import { ProtocolStore } from "@/protocol/store"
 import { Message } from "@/session/message"
 import { Log } from "@/util/log"
-import { taskIDForSession, taskSession, sessionRole } from "./task-event"
+import { taskIDForSession, taskSession, sessionRole, sessionGoalID } from "./task-event"
 
 const log = Log.create({ service: "task-message-protocol-bridge" })
 let initialized = false
@@ -37,7 +37,7 @@ export function resolveRole(agent: string): OverlayRole {
 }
 
 /** Stages that get their own AgentCard in the overlay. */
-const CARD_STAGES = new Set<OverlayRole>(["spec", "architect", "planner", "goal", "executor", "evaluator", "delivery"])
+const CARD_STAGES = new Set<OverlayRole>(["assistant", "spec", "architect", "planner", "goal", "executor", "evaluator", "delivery"])
 
 /**
  * Compute overlay metadata for a message event.
@@ -142,15 +142,22 @@ function enrichProperties(properties: Record<string, unknown>, sessionID: string
     if (role) info.agent = role
   }
   const meta = overlayMeta(sessionID, taskID, info)
+  const goalID = sessionGoalID(sessionID)
   const enriched = { ...properties }
 
   // message.updated: stamp into info object directly
   if (enriched.info && typeof enriched.info === "object") {
-    enriched.info = { ...(enriched.info as any), resolvedRole: meta.resolvedRole, channel: meta.channel }
+    enriched.info = {
+      ...(enriched.info as any),
+      resolvedRole: meta.resolvedRole,
+      channel: meta.channel,
+      ...(goalID ? { goalID } : {}),
+    }
   }
   // Always set at top level so part/delta events also carry the metadata
   enriched.resolvedRole = meta.resolvedRole
   enriched.channel = meta.channel
+  if (goalID) enriched.goalID = goalID
   return enriched
 }
 

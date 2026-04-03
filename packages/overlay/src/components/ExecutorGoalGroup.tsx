@@ -129,59 +129,61 @@ export function ExecutorGoalGroup(props: ExecutorGoalGroupProps) {
         <span class="executor-goal-label">{props.goalTitle || "Goal"}</span>
         <span class="executor-goal-chevron" aria-hidden="true">{"\u25BC"}</span>
       </div>
-      <Show when={expanded()}>
-        <div class="executor-goal-body" ref={(el) => onCleanup(setupAutoScroll(el))}>
-          {/* Goal description (done_definition from decompose) */}
-          <Show when={props.goalDescription}>
-            <div class="executor-goal-description">{props.goalDescription}</div>
-          </Show>
+      <div
+        class="executor-goal-body"
+        classList={{ "executor-goal-body--preview": !expanded() }}
+        ref={(el) => onCleanup(setupAutoScroll(el))}
+      >
+        {/* Goal description (done_definition from decompose) */}
+        <Show when={props.goalDescription}>
+          <div class="executor-goal-description">{props.goalDescription}</div>
+        </Show>
 
-          {/* Architect decisions (shared across goals) */}
-          <Show when={props.architect?.summary}>
-            <div class="executor-goal-architect">
-              <span class="executor-goal-architect-icon">{"\u2692"}</span>
-              <span class="executor-goal-architect-text">{props.architect!.summary}</span>
-              <Show when={props.architect!.categories?.length}>
-                <span class="executor-goal-architect-cats">
-                  {props.architect!.categories!.join(", ")}
-                </span>
-              </Show>
-            </div>
-          </Show>
+        {/* Architect decisions (shared across goals) */}
+        <Show when={props.architect?.summary}>
+          <div class="executor-goal-architect">
+            <span class="executor-goal-architect-icon">{"\u2692"}</span>
+            <span class="executor-goal-architect-text">{props.architect!.summary}</span>
+            <Show when={props.architect!.categories?.length}>
+              <span class="executor-goal-architect-cats">
+                {props.architect!.categories!.join(", ")}
+              </span>
+            </Show>
+          </div>
+        </Show>
 
-          {/* Workflow-driven steps (plan → execute → eval) with messages */}
-          <Show
-            when={(props.goalSteps || []).length > 0}
-            fallback={
-              <For each={sortedCards()}>
-                {(card: any) => (
-                  <GoalStepCard
-                    stage={card._agentStage}
-                    status={card._agentStatus}
-                    messages={card._agentMessages || []}
-                  />
-                )}
-              </For>
-            }
-          >
-            <For each={props.goalSteps}>
-              {(step) => {
-                const stage = stepIDToStage(step.stepID);
-                const card = () => cardsByStage().get(stage);
-                const msgs = () => card()?._agentMessages || [];
-                const effectiveStatus = () => card()?._agentStatus || step.status;
-                return (
-                  <WorkflowStepRow
-                    step={step}
-                    effectiveStatus={effectiveStatus()}
-                    messages={msgs()}
-                  />
-                );
-              }}
+        {/* Workflow-driven steps (plan → execute → eval) with messages */}
+        <Show
+          when={(props.goalSteps || []).length > 0}
+          fallback={
+            <For each={sortedCards()}>
+              {(card: any) => (
+                <GoalStepCard
+                  stage={card._agentStage}
+                  status={card._agentStatus}
+                  messages={card._agentMessages || []}
+                />
+              )}
             </For>
-          </Show>
-        </div>
-      </Show>
+          }
+        >
+          <For each={props.goalSteps}>
+            {(step) => {
+              const stage = stepIDToStage(step.stepID);
+              const card = () => cardsByStage().get(stage);
+              const msgs = () => card()?._agentMessages || [];
+              const effectiveStatus = () => card()?._agentStatus || step.status;
+              return (
+                <WorkflowStepRow
+                  step={step}
+                  effectiveStatus={effectiveStatus()}
+                  messages={msgs()}
+                />
+              );
+            }}
+          </For>
+        </Show>
+      </div>
     </article>
   );
 }

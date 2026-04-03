@@ -309,17 +309,18 @@ export function sessionStreamHooks(input: {
       // Finalize any tool parts still in running/pending state
       // (e.g. stream ended or agent aborted before tool-result chunk arrived)
       for (const [, part] of toolParts) {
-        const status = part.state?.status
-        if (status === "running" || status === "pending") {
+        const currentState = part.state && typeof part.state === "object" ? part.state : {} as Record<string, unknown>
+        const status = (currentState as any).status
+        if (status === "running" || status === "pending" || !status) {
           try {
             await Session.updatePart({
               ...part,
               state: {
-                ...part.state,
+                ...currentState,
                 status: "completed",
-                output: (part.state as any)?.output ?? "",
+                output: (currentState as any).output ?? "",
                 time: {
-                  start: (part.state as any)?.time?.start ?? Date.now(),
+                  start: (currentState as any).time?.start ?? Date.now(),
                   end: Date.now(),
                 },
               },

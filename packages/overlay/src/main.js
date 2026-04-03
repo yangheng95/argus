@@ -1980,14 +1980,14 @@ function clearConversationUiState() {
   setStore$1("expandedAgentCards", reconcile({}, { merge: false }));
   setStore$1("expandedToolOutputs", reconcile({}, { merge: false }));
 }
-function agentCardExpanded(cardID, running) {
-  if (!cardID) return running;
+function agentCardExpanded(cardID, _running) {
+  if (!cardID) return false;
   const explicit = store$1.expandedAgentCards[cardID];
-  return typeof explicit === "boolean" ? explicit : running;
+  return typeof explicit === "boolean" ? explicit : false;
 }
 function toggleAgentCardExpanded(cardID, running) {
   if (!cardID) return;
-  const next = !agentCardExpanded(cardID, running);
+  const next = !agentCardExpanded(cardID);
   setStore$1("expandedAgentCards", cardID, next);
 }
 function toolOutputExpanded(partID) {
@@ -2135,13 +2135,14 @@ function ReasoningPart(props) {
 }
 delegateEvents(["click"]);
 
-const AGENT_CARD_STAGES = /* @__PURE__ */ new Set(["spec", "planner", "goal", "executor", "evaluator", "delivery"]);
+const AGENT_CARD_STAGES = /* @__PURE__ */ new Set(["assistant", "spec", "architect", "planner", "goal", "executor", "evaluator", "delivery"]);
 function normalizeAgentRole(name) {
   const text = String(name || "").trim().toLowerCase();
   if (!text) return "assistant";
   if (text === "user") return "user";
   if (text === "orchestrator" || text === "task_agent") return "assistant";
   if (text === "spec") return "spec";
+  if (text === "architect" || text === "architecture" || text === "coordination") return "architect";
   if (text === "planner" || text === "plan" || text === "planning" || text === "replan") return "planner";
   if (text === "goal" || text === "goal_gate") return "goal";
   if (text === "executor" || text === "build" || text === "coding" || text === "general" || text === "explore" || text === "execute" || text === "opencode" || text === "codex" || text === "claude-code") return "executor";
@@ -2152,6 +2153,7 @@ function normalizeAgentRole(name) {
 }
 function agentRoleToSectionPhase(role) {
   if (role === "spec") return "spec";
+  if (role === "architect") return "architect";
   if (role === "planner") return "plan";
   if (role === "goal") return "goals";
   if (role === "executor") return "executor";
@@ -2173,6 +2175,7 @@ function orderedMessageParts(message) {
 function roleLabel(role) {
   if (role === "user") return t("chat.role.user");
   if (role === "assistant") return t("chat.role.assistant");
+  if (role === "architect") return t("chat.role.architect");
   if (role === "planner") return t("chat.role.planner");
   if (role === "evaluator") return t("chat.role.evaluator");
   if (role === "delivery") return t("chat.role.delivery");
@@ -2183,12 +2186,13 @@ function roleLabel(role) {
   return t("chat.role.assistant");
 }
 function classifyMessage(msg, rootSessionID) {
-  if (String(msg?.info?.role || "").trim().toLowerCase() === "user") return "main";
   const backendChannel = String(msg?.info?.channel || "").trim().toLowerCase();
   if (backendChannel && backendChannel !== "main") {
+    if (backendChannel === "filtered") return "filtered";
     const resolved2 = String(msg?.info?.resolvedRole || "").trim().toLowerCase();
     if (AGENT_CARD_STAGES.has(resolved2)) return resolved2;
   }
+  if (String(msg?.info?.role || "").trim().toLowerCase() === "user") return "main";
   const resolved = String(msg?.info?.resolvedRole || "").trim().toLowerCase();
   if (AGENT_CARD_STAGES.has(resolved)) return resolved;
   const agent = String(msg?.info?.agent || "").trim().toLowerCase();
@@ -2199,6 +2203,7 @@ function classifyMessage(msg, rootSessionID) {
 function agentStageLabel(stage) {
   const role = normalizeAgentRole(stage);
   if (role === "spec") return t("chat.role.spec");
+  if (role === "architect") return t("chat.role.architect");
   if (role === "planner") return t("chat.role.planner");
   if (role === "goal") return t("chat.role.goal");
   if (role === "evaluator") return t("chat.role.evaluator");
@@ -2347,197 +2352,55 @@ function MessageView(props) {
   });
 }
 
-var _tmpl$$m = /* @__PURE__ */ template(`<span>`), _tmpl$2$j = /* @__PURE__ */ template(`<span class=agent-card-round>#`), _tmpl$3$j = /* @__PURE__ */ template(`<div class=agent-card-body>`), _tmpl$4$i = /* @__PURE__ */ template(`<article class="turn msg agent-card"data-role=agent-card><div class=agent-card-header role=button tabindex=0><span class=agent-card-label></span><span class=agent-card-count></span><span class=agent-card-chevron aria-hidden=true>▼`), _tmpl$5$h = /* @__PURE__ */ template(`<span class="agent-card-badge agent-card-badge--running"title=Running><span class=agent-card-spinner>`);
-function AgentCard(props) {
-  const expanded = () => agentCardExpanded(props.cardID, props.status === "running");
-  const toggle = () => {
-    toggleAgentCardExpanded(props.cardID, props.status === "running");
-  };
-  const badgeClass = () => {
-    if (props.status === "running") return "agent-card-badge agent-card-badge--running";
-    if (props.status === "error") return "agent-card-badge agent-card-badge--error";
-    return "agent-card-badge agent-card-badge--done";
-  };
-  const badgeContent = () => {
-    if (props.status === "running") return "";
-    if (props.status === "error") return "✗";
-    return "✓";
-  };
-  return (() => {
-    var _el$ = _tmpl$4$i(), _el$2 = _el$.firstChild, _el$4 = _el$2.firstChild, _el$7 = _el$4.nextSibling;
-    _el$2.$$keydown = (e) => {
-      if (e.key === "Enter" || e.key === " ") {
-        e.preventDefault();
-        toggle();
-      }
+const scriptRel = 'modulepreload';const assetsURL = function(dep) { return "/"+dep };const seen = {};const __vitePreload = function preload(baseModule, deps, importerUrl) {
+  let promise = Promise.resolve();
+  if (true               && deps && deps.length > 0) {
+    let allSettled2 = function(promises) {
+      return Promise.all(promises.map((p) => Promise.resolve(p).then((value) => ({ status: "fulfilled", value }), (reason) => ({ status: "rejected", reason }))));
     };
-    _el$2.$$click = toggle;
-    insert(_el$2, createComponent(Show, {
-      get when() {
-        return props.status !== "running";
-      },
-      get fallback() {
-        return _tmpl$5$h();
-      },
-      get children() {
-        var _el$3 = _tmpl$$m();
-        insert(_el$3, badgeContent);
-        createRenderEffect((_p$) => {
-          var _v$ = badgeClass(), _v$2 = props.status;
-          _v$ !== _p$.e && className(_el$3, _p$.e = _v$);
-          _v$2 !== _p$.t && setAttribute(_el$3, "title", _p$.t = _v$2);
-          return _p$;
-        }, {
-          e: void 0,
-          t: void 0
+    document.getElementsByTagName("link"); const cspNonceMeta = document.querySelector("meta[property=csp-nonce]"), cspNonce = cspNonceMeta?.nonce || cspNonceMeta?.getAttribute("nonce");
+    promise = allSettled2(deps.map((dep) => {
+      dep = assetsURL(dep);
+      if (dep in seen)
+        return;
+      seen[dep] = true;
+      const isCss = dep.endsWith(".css"), cssSelector = isCss ? '[rel="stylesheet"]' : "";
+      if (document.querySelector(`link[href="${dep}"]${cssSelector}`))
+        return;
+      const link = document.createElement("link");
+      link.rel = isCss ? "stylesheet" : scriptRel;
+      if (!isCss)
+        link.as = "script";
+      link.crossOrigin = "";
+      link.href = dep;
+      if (cspNonce)
+        link.setAttribute("nonce", cspNonce);
+      document.head.appendChild(link);
+      if (isCss)
+        return new Promise((res, rej) => {
+          link.addEventListener("load", res);
+          link.addEventListener("error", () => rej(Error(`Unable to preload CSS for ${dep}`)));
         });
-        return _el$3;
-      }
-    }), _el$4);
-    insert(_el$4, () => agentStageLabel(props.stage));
-    insert(_el$2, createComponent(Show, {
-      get when() {
-        return props.round > 0;
-      },
-      get children() {
-        var _el$5 = _tmpl$2$j(); _el$5.firstChild;
-        insert(_el$5, () => props.round, null);
-        return _el$5;
-      }
-    }), _el$7);
-    insert(_el$7, createComponent(Show, {
-      get when() {
-        return props.messages.length > 0;
-      },
-      get children() {
-        return ["(", memo(() => props.messages.length), ")"];
-      }
     }));
-    insert(_el$, createComponent(Show, {
-      get when() {
-        return expanded();
-      },
-      get children() {
-        var _el$8 = _tmpl$3$j();
-        insert(_el$8, createComponent(For, {
-          get each() {
-            return props.messages;
-          },
-          children: (msg) => createComponent(MessageView, {
-            message: msg
-          })
-        }));
-        return _el$8;
-      }
-    }), null);
-    createRenderEffect((_p$) => {
-      var _v$3 = !!expanded(), _v$4 = props.stage, _v$5 = expanded();
-      _v$3 !== _p$.e && _el$.classList.toggle("agent-card--expanded", _p$.e = _v$3);
-      _v$4 !== _p$.t && setAttribute(_el$, "data-agent-stage", _p$.t = _v$4);
-      _v$5 !== _p$.a && setAttribute(_el$2, "aria-expanded", _p$.a = _v$5);
-      return _p$;
-    }, {
-      e: void 0,
-      t: void 0,
-      a: void 0
+  }
+  function handlePreloadError(err) {
+    const e = new Event("vite:preloadError", {
+      cancelable: true
     });
-    return _el$;
-  })();
-}
-delegateEvents(["click", "keydown"]);
-
-var _tmpl$$l = /* @__PURE__ */ template(`<span>`), _tmpl$2$i = /* @__PURE__ */ template(`<div class=executor-goal-body>`), _tmpl$3$i = /* @__PURE__ */ template(`<article class="turn msg executor-goal-block"data-role=executor-goal-group><div class=executor-goal-header role=button tabindex=0><span class=executor-goal-label></span><span class=executor-goal-count></span><span class=executor-goal-chevron aria-hidden=true>▼`), _tmpl$4$h = /* @__PURE__ */ template(`<span class="executor-goal-badge executor-goal-badge--running"title=Running><span class=agent-card-spinner>`);
-function ExecutorGoalGroup(props) {
-  const expanded = () => agentCardExpanded(props.cardID, props.status === "running");
-  const toggle = () => {
-    toggleAgentCardExpanded(props.cardID, props.status === "running");
-  };
-  const badgeClass = () => {
-    if (props.status === "running") return "executor-goal-badge executor-goal-badge--running";
-    if (props.goalStatus === "passed") return "executor-goal-badge executor-goal-badge--done";
-    if (props.goalStatus === "failed") return "executor-goal-badge executor-goal-badge--error";
-    if (props.status === "error") return "executor-goal-badge executor-goal-badge--error";
-    return "executor-goal-badge executor-goal-badge--done";
-  };
-  const badgeContent = () => {
-    if (props.status === "running") return "";
-    if (props.goalStatus === "passed") return "✓";
-    if (props.goalStatus === "failed") return "✗";
-    if (props.status === "error") return "✗";
-    return "✓";
-  };
-  return (() => {
-    var _el$ = _tmpl$3$i(), _el$2 = _el$.firstChild, _el$4 = _el$2.firstChild, _el$5 = _el$4.nextSibling;
-    _el$2.$$keydown = (e) => {
-      if (e.key === "Enter" || e.key === " ") {
-        e.preventDefault();
-        toggle();
-      }
-    };
-    _el$2.$$click = toggle;
-    insert(_el$2, createComponent(Show, {
-      get when() {
-        return props.status !== "running";
-      },
-      get fallback() {
-        return _tmpl$4$h();
-      },
-      get children() {
-        var _el$3 = _tmpl$$l();
-        insert(_el$3, badgeContent);
-        createRenderEffect((_p$) => {
-          var _v$ = badgeClass(), _v$2 = props.status;
-          _v$ !== _p$.e && className(_el$3, _p$.e = _v$);
-          _v$2 !== _p$.t && setAttribute(_el$3, "title", _p$.t = _v$2);
-          return _p$;
-        }, {
-          e: void 0,
-          t: void 0
-        });
-        return _el$3;
-      }
-    }), _el$4);
-    insert(_el$4, () => props.goalTitle || "Executor");
-    insert(_el$5, createComponent(Show, {
-      get when() {
-        return props.messages.length > 0;
-      },
-      get children() {
-        return ["(", memo(() => props.messages.length), ")"];
-      }
-    }));
-    insert(_el$, createComponent(Show, {
-      get when() {
-        return expanded();
-      },
-      get children() {
-        var _el$6 = _tmpl$2$i();
-        insert(_el$6, createComponent(For, {
-          get each() {
-            return props.messages;
-          },
-          children: (msg) => createComponent(MessageView, {
-            message: msg
-          })
-        }));
-        return _el$6;
-      }
-    }), null);
-    createRenderEffect((_p$) => {
-      var _v$3 = !!expanded(), _v$4 = props.cardID, _v$5 = expanded();
-      _v$3 !== _p$.e && _el$.classList.toggle("executor-goal-block--expanded", _p$.e = _v$3);
-      _v$4 !== _p$.t && setAttribute(_el$, "data-goal-id", _p$.t = _v$4);
-      _v$5 !== _p$.a && setAttribute(_el$2, "aria-expanded", _p$.a = _v$5);
-      return _p$;
-    }, {
-      e: void 0,
-      t: void 0,
-      a: void 0
-    });
-    return _el$;
-  })();
-}
-delegateEvents(["click", "keydown"]);
+    e.payload = err;
+    window.dispatchEvent(e);
+    if (!e.defaultPrevented)
+      throw err;
+  }
+  return promise.then((res) => {
+    for (const item of res || []) {
+      if (item.status !== "rejected")
+        continue;
+      handlePreloadError(item.reason);
+    }
+    return baseModule().catch(handlePreloadError);
+  });
+};
 
 function getDomRefs() {
   const $ = (sel) => document.querySelector(sel);
@@ -3276,7 +3139,8 @@ function computeAgentCards() {
   rootTaskSessionID();
   for (const message of store.messages) {
     const stage = message.info?.channel || classifyMessage(message);
-    if (stage === "main") continue;
+    if (stage === "main" || stage === "filtered") continue;
+    if (String(message.info?.role || "").toLowerCase() === "user") continue;
     const sessionID = typeof message?.info?.sessionID === "string" ? message.info.sessionID.trim() : "";
     const fallbackID = typeof message?.info?.id === "string" && message.info.id ? message.info.id : hashText$1(messageSignature(message));
     const channelID = stage === "executor" ? `${stage}:message:${fallbackID}` : sessionID ? `${stage}:session:${sessionID}` : `${stage}:message:${fallbackID}`;
@@ -3328,17 +3192,35 @@ function computeAgentCards() {
     });
     roundsByStage[stage] = existing;
   }
-  const goalsBySession = /* @__PURE__ */ new Map();
+  const PER_GOAL_STAGES = /* @__PURE__ */ new Set(["planner", "executor", "evaluator"]);
+  const sessionToGoal = /* @__PURE__ */ new Map();
+  const goalInfoMap = /* @__PURE__ */ new Map();
+  for (const gw of boardStore.board?.goalWorkflows || []) {
+    goalInfoMap.set(gw.goalID, { id: gw.goalID, title: gw.goalTitle, status: gw.goalStatus });
+  }
   const goalsLane = (boardStore.board?.lanes || []).find((l) => l.id === "goals");
   for (const card of goalsLane?.cards || []) {
+    if (!goalInfoMap.has(card.id)) {
+      goalInfoMap.set(card.id, { id: card.id, title: card.title || "", status: card.status || "pending" });
+    }
     const sid = card?.metadata?.sessionID;
     if (typeof sid === "string" && sid) {
-      goalsBySession.set(sid, {
-        id: card.id,
-        title: card.title || "",
-        status: card.status || "pending"
-      });
+      sessionToGoal.set(sid, card.id);
     }
+    const exSid = card?.metadata?.executorSessionID;
+    if (typeof exSid === "string" && exSid) {
+      sessionToGoal.set(exSid, card.id);
+    }
+  }
+  function resolveGoalID(round) {
+    if (round.sessionID && sessionToGoal.has(round.sessionID)) {
+      return sessionToGoal.get(round.sessionID);
+    }
+    for (const msg of round.messages) {
+      const gid = typeof msg?.info?.goalID === "string" ? msg.info.goalID : "";
+      if (gid) return gid;
+    }
+    return "";
   }
   const nextCards = {};
   const nextOrder = [];
@@ -3362,99 +3244,86 @@ function computeAgentCards() {
       parts: []
     };
   }
+  const goalStepCards = /* @__PURE__ */ new Map();
   for (const [stage, rounds] of Object.entries(roundsByStage)) {
     rounds.sort((left, right) => left.startTime - right.startTime);
-    if (stage === "executor") {
-      const bySession = /* @__PURE__ */ new Map();
-      const noSession = [];
-      for (const round of rounds) {
-        const sid = round.sessionID || "";
-        if (sid) {
-          const arr = bySession.get(sid) || [];
-          arr.push(round);
-          bySession.set(sid, arr);
+    if (PER_GOAL_STAGES.has(stage)) {
+      for (let index = 0; index < rounds.length; index += 1) {
+        const round = rounds[index];
+        const gid = resolveGoalID(round);
+        const roundLabel = rounds.length > 1 ? index + 1 : 0;
+        const status = agentRoundStatus(stage, round, index, rounds, latestEventByStage.get(stage));
+        const card = buildCard(stage, round, roundLabel, status);
+        if (gid) {
+          const entries = goalStepCards.get(gid) || [];
+          entries.push({ stage, card, startTime: round.startTime });
+          goalStepCards.set(gid, entries);
         } else {
-          noSession.push(round);
+          nextCards[round.channelID] = card;
+          nextOrder.push(round.channelID);
         }
       }
-      if (bySession.size <= 1 && noSession.length === 0) {
-        const allRounds = [...bySession.values()].flat();
-        if (allRounds.length > 0) {
-          const merged = {
-            channelID: `executor:session:${allRounds[0].sessionID}`,
-            stage,
-            sessionID: allRounds[0].sessionID,
-            messages: allRounds.flatMap((r) => r.messages),
-            startTime: Math.min(...allRounds.map((r) => r.startTime)),
-            endTime: Math.max(...allRounds.map((r) => r.endTime))
-          };
-          const status = agentRoundStatus(stage, merged, 0, [merged], latestEventByStage.get(stage));
-          const cardID = merged.channelID;
-          nextCards[cardID] = buildCard(stage, merged, 0, status);
-          nextOrder.push(cardID);
-        }
-        continue;
+    } else {
+      for (let index = 0; index < rounds.length; index += 1) {
+        const round = rounds[index];
+        const roundLabel = rounds.length > 1 ? index + 1 : 0;
+        const status = agentRoundStatus(stage, round, index, rounds, latestEventByStage.get(stage));
+        const cardID = round.channelID;
+        nextCards[cardID] = buildCard(stage, round, roundLabel, status);
+        nextOrder.push(cardID);
       }
-      for (const [sid, sessionRounds] of bySession) {
-        const groupKey = `executor:session:${sid}`;
-        sessionRounds.sort((left, right) => left.startTime - right.startTime);
-        const childCards = [];
-        for (let i = 0; i < sessionRounds.length; i += 1) {
-          const round = sessionRounds[i];
-          const childLabel = sessionRounds.length > 1 ? i + 1 : 0;
-          const childStatus = agentRoundStatus(stage, round, i, sessionRounds, void 0);
-          childCards.push(buildCard(stage, round, childLabel, childStatus));
-        }
-        const groupStart = Math.min(...sessionRounds.map((r) => r.startTime));
-        const groupStatus = childCards.some((c) => c._agentStatus === "running") ? "running" : childCards.some((c) => c._agentStatus === "error") ? "error" : "completed";
-        const goalInfo = goalsBySession.get(sid);
-        nextCards[groupKey] = {
-          _synthetic: true,
-          _agentCard: true,
-          _agentGoalGroup: true,
-          _agentGoalID: goalInfo?.id || sid,
-          _agentGoalTitle: goalInfo?.title || "",
-          _agentGoalStatus: goalInfo?.status || "running",
-          _agentInternalCards: childCards,
-          _agentStage: stage,
-          _agentStatus: groupStatus,
-          _agentRound: 0,
-          _agentCardKey: groupKey,
-          _agentMessages: [],
-          info: {
-            id: `agent-card:${groupKey}`,
-            role: "agent-card",
-            agent: stage,
-            sessionID: sid,
-            time: { created: Number.isFinite(groupStart) && groupStart > 0 ? groupStart : Date.now() }
-          },
-          parts: []
-        };
-        nextOrder.push(groupKey);
-      }
-      for (let i = 0; i < noSession.length; i += 1) {
-        const round = noSession[i];
-        const label = noSession.length > 1 ? i + 1 : 0;
-        const status = agentRoundStatus(stage, round, i, noSession, void 0);
-        nextCards[round.channelID] = buildCard(stage, round, label, status);
-        nextOrder.push(round.channelID);
-      }
-      continue;
     }
-    for (let index = 0; index < rounds.length; index += 1) {
-      const round = rounds[index];
-      const roundLabel = rounds.length > 1 ? index + 1 : 0;
-      const status = agentRoundStatus(
-        stage,
-        round,
-        index,
-        rounds,
-        latestEventByStage.get(stage)
-      );
-      const cardID = round.channelID;
-      nextCards[cardID] = buildCard(stage, round, roundLabel, status);
-      nextOrder.push(cardID);
-    }
+  }
+  const goalDescMap = /* @__PURE__ */ new Map();
+  for (const gc of goalsLane?.cards || []) {
+    const desc = gc.detail || gc.description;
+    if (gc.id && desc) goalDescMap.set(gc.id, desc);
+  }
+  const goalStepsMap = /* @__PURE__ */ new Map();
+  for (const gw of boardStore.board?.goalWorkflows || []) {
+    goalStepsMap.set(gw.goalID, (gw.steps || []).map((s) => ({
+      stepID: s.stepID,
+      label: s.label,
+      status: s.status,
+      summary: s.summary
+    })));
+  }
+  const architectData = boardStore.board?.architect;
+  for (const [gid] of goalInfoMap) {
+    if (!goalStepCards.has(gid)) goalStepCards.set(gid, []);
+  }
+  for (const [gid, entries] of goalStepCards) {
+    entries.sort((a, b) => a.startTime - b.startTime);
+    const goalInfo = goalInfoMap.get(gid);
+    const groupKey = `goal-group:${gid}`;
+    const groupStart = entries.length > 0 ? Math.min(...entries.map((e) => e.startTime)) : Date.now();
+    const groupStatus = entries.length === 0 ? goalInfo?.status === "passed" || goalInfo?.status === "failed" ? goalInfo.status : "pending" : entries.some((e) => e.card._agentStatus === "running") ? "running" : entries.some((e) => e.card._agentStatus === "error") ? "error" : "completed";
+    nextCards[groupKey] = {
+      _synthetic: true,
+      _agentCard: true,
+      _agentGoalGroup: true,
+      _agentGoalID: gid,
+      _agentGoalTitle: goalInfo?.title || "",
+      _agentGoalStatus: goalInfo?.status || groupStatus,
+      _agentGoalDescription: goalDescMap.get(gid) || "",
+      _agentGoalSteps: goalStepsMap.get(gid),
+      _agentArchitect: architectData?.summary ? { summary: architectData.summary, categories: architectData.categories } : void 0,
+      _agentInternalCards: entries.map((e) => e.card),
+      _agentStage: "executor",
+      _agentStatus: groupStatus,
+      _agentRound: 0,
+      _agentCardKey: groupKey,
+      _agentMessages: [],
+      info: {
+        id: `agent-card:${groupKey}`,
+        role: "agent-card",
+        agent: "executor",
+        sessionID: entries[0]?.card.info.sessionID || "",
+        time: { created: Number.isFinite(groupStart) && groupStart > 0 ? groupStart : Date.now() }
+      },
+      parts: []
+    };
+    nextOrder.push(groupKey);
   }
   nextOrder.sort(
     (left, right) => messageOrderTime(nextCards[left]) - messageOrderTime(nextCards[right]) || left.localeCompare(right)
@@ -4070,6 +3939,1377 @@ function shouldReloadConversationForMessageEvent(event) {
   return !!messageEventSessionID(event);
 }
 
+function record$4(value) {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+function parseToolInput(raw) {
+  if (record$4(raw)) return raw;
+  if (typeof raw === "string" && raw.trim()) {
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return { raw };
+    }
+  }
+  return {};
+}
+function executorMessageID(properties) {
+  const goalRunID = properties.goalRunID || properties.goal_run_id || "";
+  const execSessionID = properties.executorSessionID || properties.executor_session_id || "";
+  const runID = properties.runID || "";
+  const scope = goalRunID || execSessionID || runID || "default";
+  return `executor:msg:${scope}`;
+}
+function executorPartID(properties, eventID) {
+  const callID = properties.sourceID || properties.id || properties.payload?.id || eventID;
+  return `executor:part:${callID}`;
+}
+function executorSessionID(properties) {
+  return properties.goalRunID || properties.goal_run_id || properties.executorSessionID || properties.executor_session_id || properties.runID || "";
+}
+function convertExecutorEventToMessages(event, properties) {
+  const kind = executorEventKind(properties.type);
+  const timestamp = Number(event.timestamp || Date.now());
+  const msgID = executorMessageID(properties);
+  const sessionID = executorSessionID(properties);
+  const messageEvent = {
+    type: "message.updated",
+    properties: {
+      info: {
+        id: msgID,
+        sessionID,
+        role: "assistant",
+        resolvedRole: "executor",
+        agent: "executor",
+        time: { created: timestamp }
+      }
+    }
+  };
+  if (kind === "tool_call") {
+    const name = properties.name || properties.payload?.name || properties.tool || "tool";
+    const input = parseToolInput(properties.input ?? properties.arguments ?? properties.args ?? properties.payload?.input);
+    const partID = executorPartID(properties, event.event_id);
+    return [
+      messageEvent,
+      {
+        type: "message.part.updated",
+        properties: {
+          part: {
+            id: partID,
+            messageID: msgID,
+            sessionID,
+            type: "tool",
+            tool: name,
+            callID: properties.sourceID || properties.id || properties.payload?.id || partID,
+            state: {
+              status: "running",
+              input,
+              title: event.summary || name,
+              metadata: { synthetic: true },
+              time: { start: timestamp }
+            }
+          }
+        }
+      }
+    ];
+  }
+  if (kind === "tool_result") {
+    const name = properties.name || properties.payload?.name || properties.tool || "tool";
+    const input = parseToolInput(properties.input ?? properties.arguments ?? properties.payload?.input ?? {});
+    const output = typeof properties.output === "string" ? properties.output : typeof properties.payload?.output === "string" ? properties.payload.output : event.summary || "";
+    const partID = executorPartID(properties, event.event_id);
+    return [
+      messageEvent,
+      {
+        type: "message.part.updated",
+        properties: {
+          part: {
+            id: partID,
+            messageID: msgID,
+            sessionID,
+            type: "tool",
+            tool: name,
+            callID: properties.sourceID || properties.id || properties.payload?.id || partID,
+            state: {
+              status: "completed",
+              input,
+              output,
+              title: event.summary || name,
+              metadata: { synthetic: true },
+              time: { start: timestamp, end: timestamp }
+            }
+          }
+        }
+      }
+    ];
+  }
+  if (kind === "message_delta") {
+    const text = typeof properties.text === "string" ? properties.text : event.summary || "";
+    if (!text) return [];
+    const partID = `executor:text:${sessionID}`;
+    return [
+      messageEvent,
+      {
+        type: "message.part.updated",
+        properties: {
+          part: {
+            id: partID,
+            messageID: msgID,
+            sessionID,
+            type: "text",
+            text: ""
+          }
+        }
+      },
+      {
+        type: "message.part.delta",
+        properties: {
+          partID,
+          messageID: msgID,
+          sessionID,
+          field: "text",
+          delta: text
+        }
+      }
+    ];
+  }
+  if (kind === "reasoning_delta") {
+    const text = typeof properties.text === "string" ? properties.text : event.summary || "";
+    if (!text) return [];
+    const partID = `executor:reasoning:${sessionID}`;
+    return [
+      messageEvent,
+      {
+        type: "message.part.updated",
+        properties: {
+          part: {
+            id: partID,
+            messageID: msgID,
+            sessionID,
+            type: "reasoning",
+            text: ""
+          }
+        }
+      },
+      {
+        type: "message.part.delta",
+        properties: {
+          partID,
+          messageID: msgID,
+          sessionID,
+          field: "text",
+          delta: text
+        }
+      }
+    ];
+  }
+  if (kind === "error") {
+    const text = event.summary || properties.message || "Error";
+    const partID = `executor:error:${event.event_id || timestamp}`;
+    return [
+      messageEvent,
+      {
+        type: "message.part.updated",
+        properties: {
+          part: {
+            id: partID,
+            messageID: msgID,
+            sessionID,
+            type: "text",
+            text: `Error: ${text}`
+          }
+        }
+      }
+    ];
+  }
+  if (event.summary) {
+    const partID = `executor:status:${event.event_id || timestamp}`;
+    return [
+      messageEvent,
+      {
+        type: "message.part.updated",
+        properties: {
+          part: {
+            id: partID,
+            messageID: msgID,
+            sessionID,
+            type: "text",
+            text: event.summary,
+            kind: "trace"
+          }
+        }
+      }
+    ];
+  }
+  return [];
+}
+function routeSSEEvent(event) {
+  const type = event.type || "";
+  if (type === "message.updated" || type === "message.part.updated" || type === "message.part.delta") {
+    if (shouldReloadConversationForMessageEvent(event)) {
+      void loadConversation();
+      return true;
+    }
+    enqueueEvent(event);
+    return true;
+  }
+  if (type === "task.replay_expired") {
+    const taskID = boardStore.selectedTaskID || "";
+    if (taskID) void syncTask(taskID);
+    return true;
+  }
+  const properties = record$4(event?.properties) ? event.properties : record$4(event?.payload) ? event.payload : {};
+  if (type === "run.progress") {
+    const progressType = properties.type || "";
+    if (progressType === "protocol.raw" || progressType === "executor.status" || progressType === "executor.progress") {
+      return true;
+    }
+    if (progressType === "message.part.updated" || progressType === "message.part.delta" || progressType === "message.updated") {
+      return true;
+    }
+    const messages = convertExecutorEventToMessages(event, properties);
+    for (const msg of messages) {
+      enqueueEvent(msg);
+    }
+    return true;
+  }
+  if (type === "run.output") {
+    const messages = convertExecutorEventToMessages(event, {
+      ...properties,
+      type: "text_delta",
+      text: typeof properties.text === "string" ? properties.text : event.summary || ""
+    });
+    for (const msg of messages) {
+      enqueueEvent(msg);
+    }
+    return true;
+  }
+  if (type === "agent.updated") {
+    appendAgentEvent(event);
+    return true;
+  }
+  if (type === "config.changed") {
+    void __vitePreload(async () => { const {loadConfigInfo} = await Promise.resolve().then(() => init);return { loadConfigInfo }},true              ?void 0:void 0).then(({ loadConfigInfo }) => loadConfigInfo()).catch(() => {
+    });
+    return true;
+  }
+  if (type === "task.updated" || type === "task.completed" || type === "task.failed" || type === "task.cancelled" || type === "task.blocked" || type.startsWith("run.") || type.startsWith("plan.") || type.startsWith("goal.") || type.startsWith("delivery.") || type.startsWith("evaluation.") || type.startsWith("interaction.")) {
+    return false;
+  }
+  return false;
+}
+function executorEventKind(progressType) {
+  const t = String(progressType || "").trim().toLowerCase();
+  if (!t) return "event";
+  if (t === "message_delta" || t === "reasoning_delta") return t;
+  if (t === "tool_call" || t === "tool_delta" || t === "tool_result") return t;
+  if (t.includes("tool")) return t.includes("result") ? "tool_result" : "tool_call";
+  if (t.includes("reason")) return "reasoning_delta";
+  if (t.includes("error")) return "error";
+  if (t.includes("done") || t.includes("completed")) return "done";
+  if (t.includes("approval") || t === "permission.asked") return "approval_request";
+  if (t.includes("command")) return "command";
+  return "event";
+}
+const BOARD_EVENT_DEBOUNCE = 500;
+let tasksKickTimer$1 = null;
+function normalizedEventType(event) {
+  const raw = String(event?.type || "").trim();
+  return raw;
+}
+function eventTaskID(event) {
+  return String(event?.properties?.taskID || event?.payload?.taskID || "");
+}
+function eventSequence(event) {
+  const value = Number(event?.sequence);
+  return Number.isFinite(value) ? value : 0;
+}
+function boardInvalidatingEvent(type) {
+  return type === "task.updated" || type === "task.completed" || type === "task.failed" || type === "task.cancelled" || type === "task.blocked" || type.startsWith("run.") || type.startsWith("plan.") || type.startsWith("goal.") || type.startsWith("delivery.") || type.startsWith("evaluation.") || type.startsWith("interaction.") || type.startsWith("workflow.");
+}
+function scheduleTasksCompat(delay = 0) {
+  if (tasksKickTimer$1) clearTimeout(tasksKickTimer$1);
+  tasksKickTimer$1 = setTimeout(() => {
+    tasksKickTimer$1 = null;
+    void loadTasks();
+  }, delay);
+}
+function handleEventStreamEvent(event) {
+  const type = normalizedEventType(event);
+  if (type.startsWith("message.")) {
+    if (shouldReloadConversationForMessageEvent({ ...event, type })) {
+      void loadConversation();
+      return;
+    }
+    enqueueEvent({ ...event, type });
+    return;
+  }
+  if (type === "task.replay_expired") {
+    if (boardStore.selectedTaskID) void syncTask(boardStore.selectedTaskID);
+    scheduleTasksCompat(0);
+    scheduleBoard(0);
+    return;
+  }
+  const taskID = eventTaskID(event);
+  const sequence = eventSequence(event);
+  if (taskID && taskID === boardStore.selectedTaskID && sequence > 0) {
+    const current = boardStore.taskSequence;
+    if (current > 0 && sequence <= current) return;
+    if (current > 0 && sequence > current + 1) {
+      scheduleBoard(BOARD_EVENT_DEBOUNCE);
+      scheduleTasksCompat(BOARD_EVENT_DEBOUNCE);
+    }
+    setTaskSequence(sequence);
+  }
+  if (boardInvalidatingEvent(type)) {
+    scheduleTasksCompat(BOARD_EVENT_DEBOUNCE);
+    if (taskID && taskID === boardStore.selectedTaskID) {
+      scheduleBoard(BOARD_EVENT_DEBOUNCE);
+    }
+  }
+}
+
+let sseController = null;
+let sseRetryTimer = null;
+function startSSE(taskID) {
+  stopSSE();
+  const controller = new AbortController();
+  sseController = controller;
+  setSseConnected(false);
+  (async () => {
+    try {
+      const after = Number(boardStore.taskSequence || 0);
+      const path = after > 0 ? `task/${encodeURIComponent(taskID)}/events?after=${after}` : `task/${encodeURIComponent(taskID)}/events`;
+      const res = await fetch(apiUrl(path), {
+        headers: apiHeaders(),
+        signal: controller.signal
+      });
+      if (!res.ok || !res.body) throw new Error(`SSE ${res.status}`);
+      setSseConnected(true);
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+        for (const line of lines) {
+          if (!line.startsWith("data:")) continue;
+          try {
+            const event = JSON.parse(line.slice(5).trim());
+            if (event.type === "task.heartbeat" || event.type === "task.connected")
+              continue;
+            const handled = routeSSEEvent(event);
+            if (!handled) {
+              handleEventStreamEvent(event);
+            }
+          } catch {
+          }
+        }
+      }
+    } catch (e) {
+      if (e.name === "AbortError") return;
+      console.warn("SSE disconnected", e.message);
+    }
+    setSseConnected(false);
+    if (sseRetryTimer) clearTimeout(sseRetryTimer);
+    sseRetryTimer = setTimeout(async () => {
+      sseRetryTimer = null;
+      if (boardStore.selectedTaskID !== taskID) return;
+      await syncTask(taskID);
+      await loadBoard();
+      startSSE(taskID);
+    }, 3e3);
+  })();
+}
+function stopSSE() {
+  if (sseRetryTimer) {
+    clearTimeout(sseRetryTimer);
+    sseRetryTimer = null;
+  }
+  if (sseController) {
+    sseController.abort();
+  }
+  sseController = null;
+  setSseConnected(false);
+  clearEventQueue();
+}
+
+function sanitizeTheme$1(value) {
+  const text = String(value || "").trim();
+  return text === "light" || text === "dark" || text === "vscode-dark" ? text : "dark";
+}
+const MIN_WINDOW_OPACITY = 0.5;
+function sanitizeOpacity(value) {
+  const n = parseFloat(String(value ?? ""));
+  if (!Number.isFinite(n)) return 0.8;
+  return Math.max(
+    MIN_WINDOW_OPACITY,
+    Math.min(1, Math.round(n * 100) / 100)
+  );
+}
+function sanitizeZoom$1(value) {
+  const n = parseFloat(String(value ?? ""));
+  if (!Number.isFinite(n)) return 1;
+  return Math.min(1.6, Math.max(0.8, n));
+}
+function sanitizePaneWidth(value) {
+  const n = parseInt(String(value ?? ""), 10);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return n;
+}
+function defaultAutoServer(url) {
+  return !url || url === DEFAULT_SERVER;
+}
+function sanitizeAutoServer(value, serverUrl) {
+  if (value === true || value === false) return value;
+  return defaultAutoServer(serverUrl);
+}
+const DEFAULT_LOCALE = sanitizeLocale(
+  typeof document !== "undefined" ? document.documentElement.lang : typeof navigator !== "undefined" ? navigator.language : "en-US"
+);
+const DEFAULT_SETTINGS = {
+  serverUrl: DEFAULT_SERVER,
+  autoServer: true,
+  password: "",
+  username: "opencorvus",
+  executor: "opencode",
+  initGit: true,
+  alwaysOnTop: false,
+  showTranscriptDetails: false,
+  sidebarCollapsed: false,
+  sidebarWidth: null,
+  sectionsWidth: null,
+  opacity: 0.8,
+  zoom: 1,
+  theme: "dark",
+  locale: DEFAULT_LOCALE,
+  directoryMode: "temp",
+  directory: "",
+  workspaceTaskID: "",
+  workspaceDirectory: "",
+  savedDirectory: "",
+  tempDirectory: "",
+  workspaceEpoch: 0,
+  directoryEpoch: 0
+};
+const [settingsStore, setSettingsStore] = createStore({ ...DEFAULT_SETTINGS });
+function applySettings(input) {
+  const serverUrl = typeof input?.serverUrl === "string" && input.serverUrl.trim() ? input.serverUrl.trim() : DEFAULT_SETTINGS.serverUrl;
+  setSettingsStore({
+    serverUrl,
+    autoServer: sanitizeAutoServer(input?.autoServer, serverUrl),
+    password: typeof input?.password === "string" ? input.password : DEFAULT_SETTINGS.password,
+    username: typeof input?.username === "string" && input.username.trim() ? input.username.trim() : DEFAULT_SETTINGS.username,
+    executor: typeof input?.executor === "string" && input.executor.trim() ? input.executor.trim() : DEFAULT_SETTINGS.executor,
+    initGit: true,
+    alwaysOnTop: input?.alwaysOnTop === true,
+    showTranscriptDetails: input?.showTranscriptDetails === true,
+    sidebarCollapsed: input?.sidebarCollapsed === true,
+    sidebarWidth: sanitizePaneWidth(input?.sidebarWidth),
+    sectionsWidth: sanitizePaneWidth(input?.sectionsWidth),
+    opacity: sanitizeOpacity(input?.opacity),
+    zoom: sanitizeZoom$1(input?.zoom),
+    theme: sanitizeTheme$1(input?.theme),
+    locale: sanitizeLocale(
+      (typeof input?.locale === "string" ? input.locale : "") || DEFAULT_SETTINGS.locale
+    ),
+    directoryMode: typeof input?.directory === "string" && input.directory.trim() ? "custom" : "temp",
+    directory: typeof input?.directory === "string" ? input.directory.trim() : "",
+    workspaceTaskID: typeof input?.workspaceTaskID === "string" ? input.workspaceTaskID.trim() : DEFAULT_SETTINGS.workspaceTaskID,
+    workspaceDirectory: typeof input?.workspaceDirectory === "string" ? input.workspaceDirectory.trim() : DEFAULT_SETTINGS.workspaceDirectory
+  });
+}
+function saveSettings() {
+  const s = settingsStore;
+  localStorage.setItem("oc_server_url", s.serverUrl);
+  localStorage.setItem("oc_auto_server", String(s.autoServer));
+  localStorage.setItem("oc_password", s.password);
+  localStorage.setItem("oc_username", s.username);
+  localStorage.setItem("oc_executor", s.executor || DEFAULT_SETTINGS.executor);
+  localStorage.setItem("oc_always_on_top", String(s.alwaysOnTop));
+  localStorage.removeItem("oc_unattended");
+  localStorage.removeItem("oc_auto_permission");
+  localStorage.removeItem("oc_auto_question");
+  localStorage.setItem(
+    "oc_show_transcript_details",
+    String(s.showTranscriptDetails)
+  );
+  localStorage.setItem("oc_sidebar_collapsed", String(s.sidebarCollapsed));
+  if (s.sidebarWidth != null) {
+    localStorage.setItem("oc_sidebar_width", String(s.sidebarWidth));
+  } else {
+    localStorage.removeItem("oc_sidebar_width");
+  }
+  if (s.sectionsWidth != null) {
+    localStorage.setItem("oc_sections_width", String(s.sectionsWidth));
+  } else {
+    localStorage.removeItem("oc_sections_width");
+  }
+  localStorage.setItem("oc_opacity", String(s.opacity));
+  localStorage.setItem("oc_zoom", String(s.zoom));
+  localStorage.setItem("oc_theme", s.theme || DEFAULT_SETTINGS.theme);
+  localStorage.setItem("oc_locale", s.locale || DEFAULT_SETTINGS.locale);
+  if (s.workspaceTaskID) {
+    localStorage.setItem("oc_workspace_task", s.workspaceTaskID);
+  } else {
+    localStorage.removeItem("oc_workspace_task");
+  }
+  if (s.workspaceDirectory) {
+    localStorage.setItem("oc_workspace_directory", s.workspaceDirectory);
+  } else {
+    localStorage.removeItem("oc_workspace_directory");
+  }
+  if (s.directory) {
+    localStorage.setItem("oc_directory", s.directory);
+    localStorage.setItem("oc_directory_mode", s.directoryMode);
+  } else {
+    localStorage.removeItem("oc_directory");
+    localStorage.removeItem("oc_directory_mode");
+  }
+  const invoke = window.__TAURI__?.core?.invoke;
+  if (typeof invoke === "function") {
+    void invoke("overlay_settings_save", {
+      settings: bootstrapOverlaySettings(s)
+    }).catch(() => void 0);
+  }
+}
+function loadSettings() {
+  const serverUrl = localStorage.getItem("oc_server_url") || DEFAULT_SETTINGS.serverUrl;
+  const autoServerRaw = localStorage.getItem("oc_auto_server");
+  const autoServer = autoServerRaw === null ? defaultAutoServer(serverUrl) : autoServerRaw !== "false";
+  const directory = (() => {
+    const raw = localStorage.getItem("oc_directory") || "";
+    return raw.trim();
+  })();
+  setSettingsStore({
+    serverUrl,
+    autoServer,
+    password: localStorage.getItem("oc_password") || DEFAULT_SETTINGS.password,
+    username: localStorage.getItem("oc_username") || DEFAULT_SETTINGS.username,
+    executor: localStorage.getItem("oc_executor") || DEFAULT_SETTINGS.executor,
+    initGit: true,
+    alwaysOnTop: localStorage.getItem("oc_always_on_top") === "true",
+    showTranscriptDetails: localStorage.getItem("oc_show_transcript_details") === "true",
+    sidebarCollapsed: localStorage.getItem("oc_sidebar_collapsed") === "true",
+    sidebarWidth: sanitizePaneWidth(
+      localStorage.getItem("oc_sidebar_width")
+    ),
+    sectionsWidth: sanitizePaneWidth(
+      localStorage.getItem("oc_sections_width")
+    ),
+    opacity: sanitizeOpacity(localStorage.getItem("oc_opacity")),
+    zoom: sanitizeZoom$1(localStorage.getItem("oc_zoom")),
+    theme: sanitizeTheme$1(localStorage.getItem("oc_theme")),
+    locale: sanitizeLocale(
+      localStorage.getItem("oc_locale") || DEFAULT_SETTINGS.locale
+    ),
+    directoryMode: directory ? "custom" : "temp",
+    directory,
+    workspaceTaskID: localStorage.getItem("oc_workspace_task") || DEFAULT_SETTINGS.workspaceTaskID,
+    workspaceDirectory: localStorage.getItem("oc_workspace_directory") || DEFAULT_SETTINGS.workspaceDirectory,
+    // Runtime-only fields — not persisted in localStorage; reset to defaults on load.
+    savedDirectory: directory,
+    tempDirectory: DEFAULT_SETTINGS.tempDirectory,
+    workspaceEpoch: DEFAULT_SETTINGS.workspaceEpoch,
+    directoryEpoch: DEFAULT_SETTINGS.directoryEpoch
+  });
+}
+function setSavedDirectory(path) {
+  setSettingsStore("savedDirectory", typeof path === "string" ? path : "");
+}
+function bumpWorkspaceEpoch() {
+  setSettingsStore("workspaceEpoch", (n) => n + 1);
+}
+function bumpDirectoryEpoch() {
+  setSettingsStore("directoryEpoch", (n) => n + 1);
+}
+function sanitizeDirectoryMode$1(value, directory) {
+  if (value === "custom") return "custom";
+  if (typeof value === "string" && value.trim() === "temp") return "temp";
+  return typeof directory === "string" && directory.trim() ? "custom" : DEFAULT_SETTINGS.directoryMode;
+}
+function savedDirectoryValue$1(directory, mode) {
+  const next = typeof directory === "string" ? directory.trim() : "";
+  if (!next) return "";
+  return sanitizeDirectoryMode$1(mode, next) === "custom" ? next : "";
+}
+function bootstrapOverlaySettings(input = settingsStore) {
+  return {
+    serverUrl: input.serverUrl ?? DEFAULT_SETTINGS.serverUrl,
+    autoServer: input.autoServer ?? DEFAULT_SETTINGS.autoServer,
+    password: input.password ?? DEFAULT_SETTINGS.password,
+    username: input.username ?? DEFAULT_SETTINGS.username,
+    executor: input.executor ?? DEFAULT_SETTINGS.executor,
+    initGit: true,
+    alwaysOnTop: input.alwaysOnTop ?? DEFAULT_SETTINGS.alwaysOnTop,
+    showTranscriptDetails: input.showTranscriptDetails ?? DEFAULT_SETTINGS.showTranscriptDetails,
+    sidebarCollapsed: input.sidebarCollapsed ?? DEFAULT_SETTINGS.sidebarCollapsed,
+    sidebarWidth: input.sidebarWidth || void 0,
+    sectionsWidth: input.sectionsWidth || void 0,
+    opacity: input.opacity ?? DEFAULT_SETTINGS.opacity,
+    zoom: input.zoom ?? DEFAULT_SETTINGS.zoom,
+    theme: input.theme ?? DEFAULT_SETTINGS.theme,
+    locale: input.locale ?? DEFAULT_SETTINGS.locale,
+    directoryMode: input.savedDirectory ? "custom" : "temp",
+    directory: input.savedDirectory || void 0,
+    workspaceTaskID: input.workspaceTaskID || void 0,
+    workspaceDirectory: input.workspaceDirectory || void 0
+  };
+}
+
+function chatRequestTimeoutMs() {
+  const overlayTiming = window.__ocOverlayTiming;
+  const testTiming = window.__overlayTest;
+  const override = typeof overlayTiming?.chatTimeoutMs === "number" ? overlayTiming.chatTimeoutMs : typeof testTiming?.chatTimeoutMs === "number" ? testTiming.chatTimeoutMs : void 0;
+  const value = typeof override === "number" ? override : 10 * 60 * 1e3;
+  return Math.max(value, 1e3);
+}
+function activeDirectory$1() {
+  return boardStore.board?.task?.directory || settingsStore.directory || "";
+}
+function inactivityTimeoutError(timeoutMs) {
+  return new DOMException(
+    `Panel stream inactive for ${timeoutMs}ms`,
+    "TimeoutError"
+  );
+}
+function relayAbort(source, controller) {
+  if (!source) return () => void 0;
+  const abort = () => {
+    controller.abort(
+      source.reason instanceof Error ? source.reason : source.reason ?? void 0
+    );
+  };
+  if (source.aborted) {
+    abort();
+    return () => void 0;
+  }
+  source.addEventListener("abort", abort, { once: true });
+  return () => source.removeEventListener("abort", abort);
+}
+async function readWithAbort(reader, signal) {
+  if (signal.aborted) {
+    await reader.cancel(signal.reason).catch(() => void 0);
+    throw signal.reason ?? new DOMException("Aborted", "AbortError");
+  }
+  return new Promise((resolve, reject) => {
+    const abort = () => {
+      signal.removeEventListener("abort", abort);
+      void reader.cancel(signal.reason).catch(() => void 0);
+      reject(signal.reason ?? new DOMException("Aborted", "AbortError"));
+    };
+    signal.addEventListener("abort", abort, { once: true });
+    reader.read().then(
+      (value) => {
+        signal.removeEventListener("abort", abort);
+        resolve(value);
+      },
+      (error) => {
+        signal.removeEventListener("abort", abort);
+        reject(error);
+      }
+    );
+  });
+}
+function panelRequestBody(text, metadata = {}, requestID = "", attachments = [], executor = "opencode") {
+  const taskID = boardStore.selectedTaskID || void 0;
+  const body = {
+    surface: "panel",
+    text,
+    time_created: Date.now(),
+    taskID,
+    executor,
+    request_id: requestID || void 0,
+    allow_create: true,
+    allow_session_mutation: false,
+    directory: activeDirectory$1() || void 0,
+    metadata: {
+      selectedTaskID: taskID,
+      ...metadata
+    }
+  };
+  if (attachments.length > 0) {
+    body.attachments = attachments.map((att) => ({
+      mime: att.mime,
+      url: att.url,
+      ...att.filename ? { filename: att.filename } : {}
+    }));
+  }
+  return body;
+}
+async function selectTask(taskID, options = {}) {
+  const nextTaskID = taskID || "";
+  if (nextTaskID === boardStore.selectedTaskID && boardStore.board) {
+    return;
+  }
+  stopSSE();
+  setBoardStore("board", null);
+  clearMessages();
+  clearAgentEvents();
+  if (appStore.budgetDirty) {
+    setAppStore("budgetDirty", false);
+  }
+  setSelectedTaskID(nextTaskID);
+  setBoardStore("selectedTaskID", nextTaskID);
+  if (!nextTaskID) {
+    return;
+  }
+  await Promise.all([
+    loadBoard({ sync: true }).catch(
+      (e) => console.error("[selectTask] loadBoard failed:", e)
+    ),
+    syncTask(nextTaskID).catch(
+      (e) => console.error("[selectTask] syncTask failed:", e)
+    )
+  ]);
+  startSSE(nextTaskID);
+}
+async function deleteTask(taskID) {
+  if (!taskID) return false;
+  try {
+    await apiJson(`task/${encodeURIComponent(taskID)}`, {
+      method: "DELETE"
+    });
+    if (boardStore.selectedTaskID === taskID) {
+      await selectTask("");
+    }
+    await loadTasks();
+    return true;
+  } catch (e) {
+    console.error("[deleteTask] failed", { error: String(e), taskID });
+    return false;
+  }
+}
+async function submitMessage(text, attachments = [], options = {}) {
+  const requestID = options.requestID ?? crypto.randomUUID();
+  const timeoutMs = chatRequestTimeoutMs();
+  const controller = new AbortController();
+  const cleanupRelay = relayAbort(options.signal, controller);
+  const executor = settingsStore.executor ?? "opencode";
+  let inactivityTimer = null;
+  const markActivity = () => {
+    if (inactivityTimer) clearTimeout(inactivityTimer);
+    inactivityTimer = setTimeout(() => {
+      controller.abort(inactivityTimeoutError(timeoutMs));
+    }, timeoutMs);
+  };
+  const body = JSON.stringify(
+    panelRequestBody(
+      text,
+      options.metadata ?? {},
+      requestID,
+      attachments,
+      executor
+    )
+  );
+  markActivity();
+  try {
+    const res = await fetch(apiUrl("panel/message/stream"), {
+      method: "POST",
+      headers: { ...apiHeaders(), "Content-Type": "application/json" },
+      body,
+      signal: controller.signal
+    });
+    markActivity();
+    if (!res.ok || !res.body) {
+      throw new Error(`Panel stream failed: ${res.status} ${res.statusText}`);
+    }
+    await options.onOpen?.();
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = "";
+    let result = null;
+    const consume = async (chunk, flush = false) => {
+      buf += chunk;
+      const blocks = buf.split(/\r?\n\r?\n/);
+      if (!flush) {
+        buf = blocks.pop() || "";
+      } else {
+        buf = "";
+      }
+      for (const block of blocks) {
+        const data = block.split(/\r?\n/).filter((line) => line.startsWith("data:")).map((line) => line.slice(5).trim()).join("\n");
+        if (!data) continue;
+        try {
+          const ev = JSON.parse(data);
+          markActivity();
+          await options.onEvent?.(ev);
+          if (ev.type === "done") {
+            result = ev.result;
+          }
+        } catch {
+        }
+      }
+    };
+    while (true) {
+      const { done, value } = await readWithAbort(reader, controller.signal);
+      if (done) {
+        await consume(decoder.decode(), true);
+        break;
+      }
+      markActivity();
+      await consume(decoder.decode(value, { stream: true }));
+    }
+    if (!result) {
+      throw new Error("Panel stream ended without a final result");
+    }
+    return result;
+  } finally {
+    if (inactivityTimer) clearTimeout(inactivityTimer);
+    cleanupRelay();
+  }
+}
+async function createTask(options) {
+  const { text, attachments = [], metadata = {}, signal } = options;
+  if (!text) throw new Error("createTask: text is required");
+  const requestID = crypto.randomUUID();
+  const executor = settingsStore.executor ?? "opencode";
+  const result = await apiJson("task", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      request: text,
+      executor,
+      requestID,
+      metadata,
+      source: "panel",
+      ...attachments.length > 0 ? {
+        attachments: attachments.map((att) => ({
+          mime: att.mime,
+          url: att.url,
+          ...att.filename ? { filename: att.filename } : {}
+        }))
+      } : {}
+    }),
+    signal
+  });
+  return typeof result?.task_id === "string" ? result.task_id : "";
+}
+async function retryTask(taskID) {
+  if (!taskID) return;
+  await apiJson(`task/${encodeURIComponent(taskID)}/retry`, {
+    method: "POST"
+  });
+  await loadBoard();
+}
+async function replanTask(taskID) {
+  if (!taskID) return;
+  await apiJson(`task/${encodeURIComponent(taskID)}/replan`, {
+    method: "POST"
+  });
+  await loadBoard();
+}
+async function cancelTask(taskID) {
+  if (!taskID) return;
+  await apiJson(`task/${encodeURIComponent(taskID)}/cancel`, {
+    method: "POST"
+  });
+  await loadBoard();
+}
+async function interruptTask(taskID) {
+  if (!taskID) return false;
+  try {
+    await apiJson(`task/${encodeURIComponent(taskID)}/cancel`, {
+      method: "POST"
+    });
+    await loadBoard();
+    return true;
+  } catch (e) {
+    console.error("[interruptTask] failed", { error: String(e), taskID });
+    return false;
+  }
+}
+
+function setupAutoScroll(el, threshold = 60) {
+  let tracking = true;
+  function onScroll() {
+    tracking = el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
+  }
+  function scrollDown() {
+    if (tracking) {
+      requestAnimationFrame(() => {
+        el.scrollTop = el.scrollHeight;
+      });
+    }
+  }
+  el.addEventListener("scroll", onScroll, { passive: true });
+  const observer = new MutationObserver(scrollDown);
+  observer.observe(el, { childList: true, subtree: true, characterData: true });
+  scrollDown();
+  return () => {
+    el.removeEventListener("scroll", onScroll);
+    observer.disconnect();
+  };
+}
+function jsonAttr(value) {
+  return JSON.stringify(String(value ?? ""));
+}
+function eventClosest(event, selector) {
+  const target = event?.target;
+  if (target instanceof Element) return target.closest(selector);
+  const parent = target?.parentElement;
+  if (parent instanceof Element) return parent.closest(selector);
+  return null;
+}
+function pathItems(value) {
+  const text = String(value || "").trim();
+  if (!text) return [];
+  const windows = /^[A-Za-z]:[\\/]/.test(text);
+  const unix = text.startsWith("/");
+  const parts = text.split(/[\\/]+/).filter(Boolean);
+  if (!parts.length) return [];
+  function joinPath(a, b) {
+    return a.replace(/[\\/]+$/, "") + "/" + b;
+  }
+  if (windows) {
+    let path2 = `${parts[0]}\\`;
+    const items2 = [{ label: parts[0], path: path2 }];
+    return items2.concat(
+      parts.slice(1).map((part) => {
+        path2 = joinPath(path2, part);
+        return { label: part, path: path2 };
+      })
+    );
+  }
+  if (unix) {
+    let path2 = "/";
+    const items2 = [{ label: "/", path: path2 }];
+    return items2.concat(
+      parts.map((part) => {
+        path2 = path2 === "/" ? `/${part}` : `${path2}/${part}`;
+        return { label: part, path: path2 };
+      })
+    );
+  }
+  let path = parts[0];
+  const items = [{ label: parts[0], path }];
+  return items.concat(
+    parts.slice(1).map((part) => {
+      path = path.replace(/[\\/]+$/, "") + "/" + part;
+      return { label: part, path };
+    })
+  );
+}
+function pathIcon(kind) {
+  if (kind === "browse") {
+    return `<svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path d="M2.5 4.5h4l1.2 1.5h5.8v5.2a1.3 1.3 0 01-1.3 1.3H3.8a1.3 1.3 0 01-1.3-1.3V5.8a1.3 1.3 0 011.3-1.3z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>
+    </svg>`;
+  }
+  if (kind === "new") {
+    return `<svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path d="M8 3.2v9.6M3.2 8h9.6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+    </svg>`;
+  }
+  if (kind === "history") {
+    return `<svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path d="M8 4v4l2.5 1.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M3.05 8a5 5 0 1 1 .5 2.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+      <path d="M3 10.5L3.05 8 1 9" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>`;
+  }
+  return `<svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+    <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+  </svg>`;
+}
+function pathBreadcrumb(value) {
+  const browse = escapeHtml$1(t("cwd.browse"));
+  const create = escapeHtml$1(t("cwd.new"));
+  const reset = escapeHtml$1(t("cwd.reset"));
+  const recent = escapeHtml$1(t("cwd.recent"));
+  const directory = settingsStore.directory;
+  const actions = [
+    `<button type="button" class="task-dir-tool" data-path-action="recent" title="${recent}" aria-label="${recent}">${pathIcon("history")}</button>`,
+    `<button type="button" class="task-dir-tool" data-path-action="browse" title="${browse}" aria-label="${browse}">${pathIcon("browse")}</button>`,
+    `<button type="button" class="task-dir-tool" data-path-action="create" title="${create}" aria-label="${create}">${pathIcon("new")}</button>`,
+    directory ? `<button type="button" class="task-dir-tool danger" data-path-action="reset" title="${reset}" aria-label="${reset}">${pathIcon("reset")}</button>` : ""
+  ].filter(Boolean).join("");
+  if (!value) {
+    return `
+      <span class="task-dir-shell" data-empty="true">
+        <span class="task-dir-empty">${escapeHtml$1(t("cwd.unavailable"))}</span>
+        <span class="task-dir-actions">${actions}</span>
+      </span>
+    `;
+  }
+  const items = pathItems(value);
+  const open = t("cwd.open");
+  const choose = t("cwd.choose_level");
+  const nodes = items.map((item, index) => {
+    const current = index === items.length - 1 ? ' data-current="true"' : "";
+    const step = index ? `<button type="button" class="task-dir-step" data-path-set=${jsonAttr(items[index - 1].path)} title="${escapeHtml$1(`${choose}: ${items[index - 1].path}`)}" aria-label="${escapeHtml$1(`${choose}: ${items[index - 1].path}`)}">/</button>` : "";
+    return `${step}<button type="button" class="task-dir-node" data-path-open=${jsonAttr(item.path)} title="${escapeHtml$1(`${open}: ${item.path}`)}" aria-label="${escapeHtml$1(`${open}: ${item.path}`)}"${current}>${escapeHtml$1(item.label)}</button>`;
+  }).join("");
+  return `
+    <span class="task-dir-shell">
+      <span class="task-dir-path">${nodes}</span>
+      <span class="task-dir-actions">${actions}</span>
+    </span>
+  `;
+}
+
+var _tmpl$$m = /* @__PURE__ */ template(`<span>`), _tmpl$2$j = /* @__PURE__ */ template(`<span class=agent-card-round>#`), _tmpl$3$j = /* @__PURE__ */ template(`<article class="turn msg agent-card"data-role=agent-card><div class=agent-card-header role=button tabindex=0><span class=agent-card-label></span><span class=agent-card-count></span><span class=agent-card-chevron aria-hidden=true>▼</span></div><div class=agent-card-body>`), _tmpl$4$i = /* @__PURE__ */ template(`<span class="agent-card-badge agent-card-badge--running"title=Running><span class=agent-card-spinner>`);
+function AgentCard(props) {
+  const expanded = () => agentCardExpanded(props.cardID, props.status === "running");
+  const toggle = () => {
+    toggleAgentCardExpanded(props.cardID, props.status === "running");
+  };
+  const badgeClass = () => {
+    if (props.status === "running") return "agent-card-badge agent-card-badge--running";
+    if (props.status === "error") return "agent-card-badge agent-card-badge--error";
+    return "agent-card-badge agent-card-badge--done";
+  };
+  const badgeContent = () => {
+    if (props.status === "running") return "";
+    if (props.status === "error") return "✗";
+    return "✓";
+  };
+  return (() => {
+    var _el$ = _tmpl$3$j(), _el$2 = _el$.firstChild, _el$4 = _el$2.firstChild, _el$7 = _el$4.nextSibling, _el$8 = _el$2.nextSibling;
+    _el$2.$$keydown = (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        toggle();
+      }
+    };
+    _el$2.$$click = toggle;
+    insert(_el$2, createComponent(Show, {
+      get when() {
+        return props.status !== "running";
+      },
+      get fallback() {
+        return _tmpl$4$i();
+      },
+      get children() {
+        var _el$3 = _tmpl$$m();
+        insert(_el$3, badgeContent);
+        createRenderEffect((_p$) => {
+          var _v$ = badgeClass(), _v$2 = props.status;
+          _v$ !== _p$.e && className(_el$3, _p$.e = _v$);
+          _v$2 !== _p$.t && setAttribute(_el$3, "title", _p$.t = _v$2);
+          return _p$;
+        }, {
+          e: void 0,
+          t: void 0
+        });
+        return _el$3;
+      }
+    }), _el$4);
+    insert(_el$4, () => agentStageLabel(props.stage));
+    insert(_el$2, createComponent(Show, {
+      get when() {
+        return props.round > 0;
+      },
+      get children() {
+        var _el$5 = _tmpl$2$j(); _el$5.firstChild;
+        insert(_el$5, () => props.round, null);
+        return _el$5;
+      }
+    }), _el$7);
+    insert(_el$7, createComponent(Show, {
+      get when() {
+        return props.messages.length > 0;
+      },
+      get children() {
+        return ["(", memo(() => props.messages.length), ")"];
+      }
+    }));
+    use((el) => onCleanup(setupAutoScroll(el)), _el$8);
+    insert(_el$8, createComponent(For, {
+      get each() {
+        return props.messages.filter((m) => String(m?.info?.role || "").toLowerCase() !== "user");
+      },
+      children: (msg) => createComponent(MessageView, {
+        message: msg
+      })
+    }));
+    createRenderEffect((_p$) => {
+      var _v$3 = !!expanded(), _v$4 = props.stage, _v$5 = expanded(), _v$6 = !expanded();
+      _v$3 !== _p$.e && _el$.classList.toggle("agent-card--expanded", _p$.e = _v$3);
+      _v$4 !== _p$.t && setAttribute(_el$, "data-agent-stage", _p$.t = _v$4);
+      _v$5 !== _p$.a && setAttribute(_el$2, "aria-expanded", _p$.a = _v$5);
+      _v$6 !== _p$.o && _el$8.classList.toggle("agent-card-body--preview", _p$.o = _v$6);
+      return _p$;
+    }, {
+      e: void 0,
+      t: void 0,
+      a: void 0,
+      o: void 0
+    });
+    return _el$;
+  })();
+}
+delegateEvents(["click", "keydown"]);
+
+var _tmpl$$l = /* @__PURE__ */ template(`<span>`), _tmpl$2$i = /* @__PURE__ */ template(`<div class=executor-goal-description>`), _tmpl$3$i = /* @__PURE__ */ template(`<span class=executor-goal-architect-cats>`), _tmpl$4$h = /* @__PURE__ */ template(`<div class=executor-goal-architect><span class=executor-goal-architect-icon>⚒</span><span class=executor-goal-architect-text>`), _tmpl$5$h = /* @__PURE__ */ template(`<article class="turn msg executor-goal-block"data-role=executor-goal-group><div class=executor-goal-header role=button tabindex=0><span class=executor-goal-label></span><span class=executor-goal-chevron aria-hidden=true>▼</span></div><div class=executor-goal-body>`), _tmpl$6$f = /* @__PURE__ */ template(`<span class="executor-goal-badge executor-goal-badge--running"title=Running><span class=agent-card-spinner>`), _tmpl$7$d = /* @__PURE__ */ template(`<span class=goal-step-icon>`), _tmpl$8$9 = /* @__PURE__ */ template(`<span class=goal-step-summary>`), _tmpl$9$7 = /* @__PURE__ */ template(`<div class=goal-step-body>`), _tmpl$0$5 = /* @__PURE__ */ template(`<div><div class=goal-step-header><span class=goal-step-label>`), _tmpl$1$4 = /* @__PURE__ */ template(`<span class="goal-step-icon goal-step-icon--running"><span class=agent-card-spinner>`);
+const STEP_ORDER = ["planner", "executor", "evaluator"];
+function stepIDToStage(stepID) {
+  if (stepID === "plan") return "planner";
+  if (stepID === "execute") return "executor";
+  if (stepID === "eval") return "evaluator";
+  return stepID;
+}
+function stepStatusIcon$1(status) {
+  if (status === "completed") return "✓";
+  if (status === "running") return "○";
+  if (status === "failed") return "✗";
+  if (status === "skipped") return "—";
+  return "·";
+}
+function stepStatusClass$1(status) {
+  if (status === "completed") return "goal-step--done";
+  if (status === "running") return "goal-step--running";
+  if (status === "failed" || status === "error") return "goal-step--error";
+  if (status === "skipped") return "goal-step--skipped";
+  return "goal-step--pending";
+}
+function ExecutorGoalGroup(props) {
+  const expanded = () => agentCardExpanded(props.cardID);
+  const toggle = () => {
+    toggleAgentCardExpanded(props.cardID);
+  };
+  const badgeClass = () => {
+    if (props.status === "running") return "executor-goal-badge executor-goal-badge--running";
+    if (props.goalStatus === "passed") return "executor-goal-badge executor-goal-badge--done";
+    if (props.goalStatus === "failed") return "executor-goal-badge executor-goal-badge--error";
+    if (props.status === "error") return "executor-goal-badge executor-goal-badge--error";
+    if (props.status === "pending") return "executor-goal-badge executor-goal-badge--pending";
+    return "executor-goal-badge executor-goal-badge--done";
+  };
+  const badgeContent = () => {
+    if (props.status === "pending") return "·";
+    if (props.status === "running") return "";
+    if (props.goalStatus === "passed") return "✓";
+    if (props.goalStatus === "failed") return "✗";
+    if (props.status === "error") return "✗";
+    return "✓";
+  };
+  const cardsByStage = () => {
+    const map = /* @__PURE__ */ new Map();
+    for (const card of props.internalCards || []) {
+      map.set(card._agentStage, card);
+    }
+    return map;
+  };
+  const sortedCards = () => {
+    const cards = props.internalCards || [];
+    return cards.slice().sort((a, b) => STEP_ORDER.indexOf(a._agentStage) - STEP_ORDER.indexOf(b._agentStage));
+  };
+  return (() => {
+    var _el$ = _tmpl$5$h(), _el$2 = _el$.firstChild, _el$4 = _el$2.firstChild, _el$5 = _el$2.nextSibling;
+    _el$2.$$keydown = (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        toggle();
+      }
+    };
+    _el$2.$$click = toggle;
+    insert(_el$2, createComponent(Show, {
+      get when() {
+        return props.status !== "running";
+      },
+      get fallback() {
+        return _tmpl$6$f();
+      },
+      get children() {
+        var _el$3 = _tmpl$$l();
+        insert(_el$3, badgeContent);
+        createRenderEffect((_p$) => {
+          var _v$ = badgeClass(), _v$2 = props.status;
+          _v$ !== _p$.e && className(_el$3, _p$.e = _v$);
+          _v$2 !== _p$.t && setAttribute(_el$3, "title", _p$.t = _v$2);
+          return _p$;
+        }, {
+          e: void 0,
+          t: void 0
+        });
+        return _el$3;
+      }
+    }), _el$4);
+    insert(_el$4, () => props.goalTitle || "Goal");
+    use((el) => onCleanup(setupAutoScroll(el)), _el$5);
+    insert(_el$5, createComponent(Show, {
+      get when() {
+        return props.goalDescription;
+      },
+      get children() {
+        var _el$6 = _tmpl$2$i();
+        insert(_el$6, () => props.goalDescription);
+        return _el$6;
+      }
+    }), null);
+    insert(_el$5, createComponent(Show, {
+      get when() {
+        return props.architect?.summary;
+      },
+      get children() {
+        var _el$7 = _tmpl$4$h(), _el$8 = _el$7.firstChild, _el$9 = _el$8.nextSibling;
+        insert(_el$9, () => props.architect.summary);
+        insert(_el$7, createComponent(Show, {
+          get when() {
+            return props.architect.categories?.length;
+          },
+          get children() {
+            var _el$0 = _tmpl$3$i();
+            insert(_el$0, () => props.architect.categories.join(", "));
+            return _el$0;
+          }
+        }), null);
+        return _el$7;
+      }
+    }), null);
+    insert(_el$5, createComponent(Show, {
+      get when() {
+        return (props.goalSteps || []).length > 0;
+      },
+      get fallback() {
+        return createComponent(For, {
+          get each() {
+            return sortedCards();
+          },
+          children: (card) => createComponent(GoalStepCard, {
+            get stage() {
+              return card._agentStage;
+            },
+            get status() {
+              return card._agentStatus;
+            },
+            get messages() {
+              return card._agentMessages || [];
+            }
+          })
+        });
+      },
+      get children() {
+        return createComponent(For, {
+          get each() {
+            return props.goalSteps;
+          },
+          children: (step) => {
+            const stage = stepIDToStage(step.stepID);
+            const card = () => cardsByStage().get(stage);
+            const msgs = () => card()?._agentMessages || [];
+            const effectiveStatus = () => card()?._agentStatus || step.status;
+            return createComponent(WorkflowStepRow, {
+              step,
+              get effectiveStatus() {
+                return effectiveStatus();
+              },
+              get messages() {
+                return msgs();
+              }
+            });
+          }
+        });
+      }
+    }), null);
+    createRenderEffect((_p$) => {
+      var _v$3 = !!expanded(), _v$4 = props.cardID, _v$5 = expanded(), _v$6 = !expanded();
+      _v$3 !== _p$.e && _el$.classList.toggle("executor-goal-block--expanded", _p$.e = _v$3);
+      _v$4 !== _p$.t && setAttribute(_el$, "data-goal-id", _p$.t = _v$4);
+      _v$5 !== _p$.a && setAttribute(_el$2, "aria-expanded", _p$.a = _v$5);
+      _v$6 !== _p$.o && _el$5.classList.toggle("executor-goal-body--preview", _p$.o = _v$6);
+      return _p$;
+    }, {
+      e: void 0,
+      t: void 0,
+      a: void 0,
+      o: void 0
+    });
+    return _el$;
+  })();
+}
+function WorkflowStepRow(props) {
+  return (() => {
+    var _el$10 = _tmpl$0$5(), _el$11 = _el$10.firstChild, _el$13 = _el$11.firstChild;
+    insert(_el$11, createComponent(Show, {
+      get when() {
+        return props.effectiveStatus !== "running";
+      },
+      get fallback() {
+        return _tmpl$1$4();
+      },
+      get children() {
+        var _el$12 = _tmpl$7$d();
+        insert(_el$12, () => stepStatusIcon$1(props.effectiveStatus));
+        return _el$12;
+      }
+    }), _el$13);
+    insert(_el$13, () => props.step.label);
+    insert(_el$11, createComponent(Show, {
+      get when() {
+        return props.step.summary;
+      },
+      get children() {
+        var _el$14 = _tmpl$8$9();
+        insert(_el$14, () => props.step.summary);
+        return _el$14;
+      }
+    }), null);
+    insert(_el$10, createComponent(Show, {
+      get when() {
+        return props.messages.length > 0;
+      },
+      get children() {
+        var _el$15 = _tmpl$9$7();
+        insert(_el$15, createComponent(For, {
+          get each() {
+            return props.messages.filter((m) => String(m?.info?.role || "").toLowerCase() !== "user");
+          },
+          children: (msg) => createComponent(MessageView, {
+            message: msg
+          })
+        }));
+        return _el$15;
+      }
+    }), null);
+    createRenderEffect(() => className(_el$10, `goal-step ${stepStatusClass$1(props.effectiveStatus)}`));
+    return _el$10;
+  })();
+}
+function GoalStepCard(props) {
+  return (() => {
+    var _el$17 = _tmpl$0$5(), _el$18 = _el$17.firstChild, _el$20 = _el$18.firstChild;
+    insert(_el$18, createComponent(Show, {
+      get when() {
+        return props.status !== "running";
+      },
+      get fallback() {
+        return _tmpl$1$4();
+      },
+      get children() {
+        var _el$19 = _tmpl$7$d();
+        insert(_el$19, () => stepStatusIcon$1(props.status));
+        return _el$19;
+      }
+    }), _el$20);
+    insert(_el$20, () => props.stage);
+    insert(_el$17, createComponent(Show, {
+      get when() {
+        return props.messages.length > 0;
+      },
+      get children() {
+        var _el$21 = _tmpl$9$7();
+        insert(_el$21, createComponent(For, {
+          get each() {
+            return props.messages.filter((m) => String(m?.info?.role || "").toLowerCase() !== "user");
+          },
+          children: (msg) => createComponent(MessageView, {
+            message: msg
+          })
+        }));
+        return _el$21;
+      }
+    }), null);
+    createRenderEffect(() => className(_el$17, `goal-step ${stepStatusClass$1(props.status)}`));
+    return _el$17;
+  })();
+}
+delegateEvents(["click", "keydown"]);
+
 function stripAssistantBrief(text) {
   const briefRe = /<assistant-brief>[\s\S]*?<\/assistant-brief>/;
   let cleaned = text.replace(briefRe, "");
@@ -4183,7 +5423,7 @@ const AppLog = {
   }
 };
 
-function record$4(value) {
+function record$3(value) {
   return !!value && typeof value === "object" && !Array.isArray(value);
 }
 function hashText(value) {
@@ -4323,8 +5563,8 @@ function interactionReplyLabel$1(reply) {
   return t("interaction.allow_once");
 }
 function interactionAnswerLines$1(interaction) {
-  const response = record$4(interaction?.response) ? interaction.response : null;
-  const payload = record$4(interaction?.payload) ? interaction.payload : null;
+  const response = record$3(interaction?.response) ? interaction.response : null;
+  const payload = record$3(interaction?.payload) ? interaction.payload : null;
   const questions = Array.isArray(payload?.questions) ? payload.questions : [];
   if (Array.isArray(response?.answers)) {
     return response.answers.flatMap((answer, index) => {
@@ -4332,20 +5572,20 @@ function interactionAnswerLines$1(interaction) {
         (item) => typeof item === "string" && item.trim()
       ).join(", ") : "";
       if (!value) return [];
-      const question = record$4(questions[index]) ? questions[index] : null;
+      const question = record$3(questions[index]) ? questions[index] : null;
       const label = typeof question?.header === "string" && question.header.trim() ? question.header.trim() : typeof question?.question === "string" && question.question.trim() ? question.question.trim() : "";
       return [label ? `- **${label}**: ${value}` : `- ${value}`];
     });
   }
-  if (record$4(response?.answers)) {
+  if (record$3(response?.answers)) {
     return Object.entries(response.answers).flatMap(
       ([key, item], index) => {
-        const answer = record$4(item) ? item : null;
+        const answer = record$3(item) ? item : null;
         const value = Array.isArray(answer?.answers) ? answer.answers.filter(
           (entry) => typeof entry === "string" && entry.trim()
         ).join(", ") : "";
         if (!value) return [];
-        const question = record$4(questions[index]) ? questions[index] : null;
+        const question = record$3(questions[index]) ? questions[index] : null;
         const label = typeof question?.header === "string" && question.header.trim() ? question.header.trim() : typeof question?.question === "string" && question.question.trim() ? question.question.trim() : key;
         return [label ? `- **${label}**: ${value}` : `- ${value}`];
       }
@@ -4355,7 +5595,7 @@ function interactionAnswerLines$1(interaction) {
   return message ? [message] : [];
 }
 function isAutoReplied(interaction) {
-  const response = record$4(interaction?.response) ? interaction.response : null;
+  const response = record$3(interaction?.response) ? interaction.response : null;
   return response?.auto_reply === true;
 }
 function interactionResponseText(interaction) {
@@ -4363,7 +5603,7 @@ function interactionResponseText(interaction) {
   const prefix = auto ? `[${t("interaction.auto_reply")}] ` : "";
   if (interaction?.type === "permission") {
     if (interaction.status === "rejected") return prefix + t("interaction.reject");
-    const response = record$4(interaction?.response) ? interaction.response : null;
+    const response = record$3(interaction?.response) ? interaction.response : null;
     return prefix + interactionReplyLabel$1(
       typeof response?.reply === "string" ? response.reply : "once"
     );
@@ -4467,27 +5707,20 @@ function conversationMessages() {
     const card = currentCards[id];
     if (!card) continue;
     if (card._agentGoalGroup && Array.isArray(card._agentInternalCards)) {
-      const flatMsgs = [];
-      for (const child of card._agentInternalCards) {
-        if (Array.isArray(child._agentMessages)) {
-          for (const m of child._agentMessages) {
-            flatMsgs.push(resolveMessage(m));
-          }
-        }
-      }
-      flatMsgs.sort((a, b) => conversationTime(a) - conversationTime(b));
-      agentCardMsgs.push({ ...card, _agentMessages: flatMsgs });
-    } else if (card._agentStage === "executor" && Array.isArray(card._agentMessages) && card._agentMessages.length > 0) {
+      const resolvedChildren = card._agentInternalCards.map((child) => {
+        if (!Array.isArray(child._agentMessages)) return child;
+        const resolved = child._agentMessages.map((m) => resolveMessage(m));
+        resolved.sort((a, b) => conversationTime(a) - conversationTime(b));
+        return { ...child, _agentMessages: resolved };
+      });
+      agentCardMsgs.push({ ...card, _agentInternalCards: resolvedChildren });
+    } else if (Array.isArray(card._agentMessages) && card._agentMessages.length > 0) {
       const resolved = card._agentMessages.map((m) => resolveMessage(m));
       resolved.sort((a, b) => conversationTime(a) - conversationTime(b));
       agentCardMsgs.push({
         ...card,
         _agentMessages: resolved
       });
-    } else if (Array.isArray(card._agentMessages)) {
-      for (const m of card._agentMessages) {
-        agentCardMsgs.push(resolveMessage(m));
-      }
     }
   }
   const result = [...filteredMain, ...contextMsgs, ...agentCardMsgs].sort(
@@ -4498,29 +5731,11 @@ function conversationMessages() {
 
 var _tmpl$$k = /* @__PURE__ */ template(`<div class=chat-empty>`);
 function Conversation(props) {
-  const [autoScroll, setAutoScroll] = createSignal(true);
   const el = props.container;
   const items = createMemo(() => conversationMessages());
-  function onScroll() {
-    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
-    setAutoScroll(atBottom);
-  }
-  function scrollToBottom() {
-    if (autoScroll()) {
-      requestAnimationFrame(() => {
-        el.scrollTop = el.scrollHeight;
-      });
-    }
-  }
   onMount(() => {
-    el.addEventListener("scroll", onScroll);
-  });
-  onCleanup(() => {
-    el.removeEventListener("scroll", onScroll);
-  });
-  createEffect(() => {
-    items().length;
-    scrollToBottom();
+    const cleanup = setupAutoScroll(el);
+    onCleanup(cleanup);
   });
   const emptyText = () => t("chat.empty");
   return [createComponent(Show, {
@@ -4581,14 +5796,23 @@ function Conversation(props) {
           get goalTitle() {
             return item()._agentGoalTitle;
           },
+          get goalDescription() {
+            return item()._agentGoalDescription;
+          },
+          get goalSteps() {
+            return item()._agentGoalSteps;
+          },
+          get architect() {
+            return item()._agentArchitect;
+          },
           get goalStatus() {
             return item()._agentGoalStatus;
           },
           get status() {
             return item()._agentStatus;
           },
-          get messages() {
-            return item()._agentMessages || [];
+          get internalCards() {
+            return item()._agentInternalCards;
           }
         });
       }
@@ -5775,7 +6999,7 @@ const CHECK_FAMILY_ICONS = {
   acceptance: `<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="1.5" width="9" height="11" rx="1.2"/><polyline points="5,6.5 6.5,8 9,5.5"/><line x1="5" y1="10" x2="9" y2="10"/></svg>`,
   custom: `<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="7" r="1"/><path d="M6.1 2.5l-.2 1.2a3.4 3.4 0 0 0-.9.5L3.8 3.8l-.9.9.4 1.2a3.4 3.4 0 0 0-.5.9l-1.2.2v1.2l1.2.2c.1.3.3.6.5.9l-.4 1.2.9.9 1.2-.4c.3.2.6.4.9.5l.2 1.2h1.2l.2-1.2c.3-.1.6-.3.9-.5l1.2.4.9-.9-.4-1.2c.2-.3.4-.6.5-.9l1.2-.2V6.8l-1.2-.2a3.4 3.4 0 0 0-.5-.9l.4-1.2-.9-.9-1.2.4a3.4 3.4 0 0 0-.9-.5L7.9 2.5Z"/></svg>`
 };
-function record$3(value) {
+function record$2(value) {
   return !!value && typeof value === "object" && !Array.isArray(value);
 }
 function aggregateCheckStatus(checks, key) {
@@ -5792,15 +7016,15 @@ function criteriaEnabledValue(key, value, fallback) {
   }
   if (["artifact", "judge", "spec_check"].includes(key) && value === void 0) return true;
   if (value === true) return true;
-  if (!value || !record$3(value)) return false;
+  if (!value || !record$2(value)) return false;
   return value.enabled !== false;
 }
 function criteriaSpecs(task, evaluation) {
   const checksConfig = task?.metadata?.checks;
-  const config = checksConfig && record$3(checksConfig) ? {
+  const config = checksConfig && record$2(checksConfig) ? {
     ...checksConfig
   } : {};
-  const named = config.named && record$3(config.named) ? config.named : {};
+  const named = config.named && record$2(config.named) ? config.named : {};
   const seen = /* @__PURE__ */ new Set();
   const specs = [];
   const showDefault = Object.keys(config).length === 0 && (!evaluation?.checks || evaluation.checks.length === 0);
@@ -5841,7 +7065,7 @@ function criteriaSpecs(task, evaluation) {
     });
   }
   for (const [key, value] of Object.entries(named)) {
-    if (!value || !record$3(value)) continue;
+    if (!value || !record$2(value)) continue;
     push({
       key: `named:${key}`,
       name: key,
@@ -7112,229 +8336,6 @@ function ChatComposer(props) {
 }
 delegateEvents(["input", "keydown", "click"]);
 
-function sanitizeTheme$1(value) {
-  const text = String(value || "").trim();
-  return text === "light" || text === "dark" || text === "vscode-dark" ? text : "dark";
-}
-const MIN_WINDOW_OPACITY = 0.5;
-function sanitizeOpacity(value) {
-  const n = parseFloat(String(value ?? ""));
-  if (!Number.isFinite(n)) return 0.8;
-  return Math.max(
-    MIN_WINDOW_OPACITY,
-    Math.min(1, Math.round(n * 100) / 100)
-  );
-}
-function sanitizeZoom$1(value) {
-  const n = parseFloat(String(value ?? ""));
-  if (!Number.isFinite(n)) return 1;
-  return Math.min(1.6, Math.max(0.8, n));
-}
-function sanitizePaneWidth(value) {
-  const n = parseInt(String(value ?? ""), 10);
-  if (!Number.isFinite(n) || n <= 0) return null;
-  return n;
-}
-function defaultAutoServer(url) {
-  return !url || url === DEFAULT_SERVER;
-}
-function sanitizeAutoServer(value, serverUrl) {
-  if (value === true || value === false) return value;
-  return defaultAutoServer(serverUrl);
-}
-const DEFAULT_LOCALE = sanitizeLocale(
-  typeof document !== "undefined" ? document.documentElement.lang : typeof navigator !== "undefined" ? navigator.language : "en-US"
-);
-const DEFAULT_SETTINGS = {
-  serverUrl: DEFAULT_SERVER,
-  autoServer: true,
-  password: "",
-  username: "opencorvus",
-  executor: "opencode",
-  initGit: true,
-  alwaysOnTop: false,
-  showTranscriptDetails: false,
-  sidebarCollapsed: false,
-  sidebarWidth: null,
-  sectionsWidth: null,
-  opacity: 0.8,
-  zoom: 1,
-  theme: "dark",
-  locale: DEFAULT_LOCALE,
-  directoryMode: "temp",
-  directory: "",
-  workspaceTaskID: "",
-  workspaceDirectory: "",
-  savedDirectory: "",
-  tempDirectory: "",
-  workspaceEpoch: 0,
-  directoryEpoch: 0
-};
-const [settingsStore, setSettingsStore] = createStore({ ...DEFAULT_SETTINGS });
-function applySettings(input) {
-  const serverUrl = typeof input?.serverUrl === "string" && input.serverUrl.trim() ? input.serverUrl.trim() : DEFAULT_SETTINGS.serverUrl;
-  setSettingsStore({
-    serverUrl,
-    autoServer: sanitizeAutoServer(input?.autoServer, serverUrl),
-    password: typeof input?.password === "string" ? input.password : DEFAULT_SETTINGS.password,
-    username: typeof input?.username === "string" && input.username.trim() ? input.username.trim() : DEFAULT_SETTINGS.username,
-    executor: typeof input?.executor === "string" && input.executor.trim() ? input.executor.trim() : DEFAULT_SETTINGS.executor,
-    initGit: true,
-    alwaysOnTop: input?.alwaysOnTop === true,
-    showTranscriptDetails: input?.showTranscriptDetails === true,
-    sidebarCollapsed: input?.sidebarCollapsed === true,
-    sidebarWidth: sanitizePaneWidth(input?.sidebarWidth),
-    sectionsWidth: sanitizePaneWidth(input?.sectionsWidth),
-    opacity: sanitizeOpacity(input?.opacity),
-    zoom: sanitizeZoom$1(input?.zoom),
-    theme: sanitizeTheme$1(input?.theme),
-    locale: sanitizeLocale(
-      (typeof input?.locale === "string" ? input.locale : "") || DEFAULT_SETTINGS.locale
-    ),
-    directoryMode: typeof input?.directory === "string" && input.directory.trim() ? "custom" : "temp",
-    directory: typeof input?.directory === "string" ? input.directory.trim() : "",
-    workspaceTaskID: typeof input?.workspaceTaskID === "string" ? input.workspaceTaskID.trim() : DEFAULT_SETTINGS.workspaceTaskID,
-    workspaceDirectory: typeof input?.workspaceDirectory === "string" ? input.workspaceDirectory.trim() : DEFAULT_SETTINGS.workspaceDirectory
-  });
-}
-function saveSettings() {
-  const s = settingsStore;
-  localStorage.setItem("oc_server_url", s.serverUrl);
-  localStorage.setItem("oc_auto_server", String(s.autoServer));
-  localStorage.setItem("oc_password", s.password);
-  localStorage.setItem("oc_username", s.username);
-  localStorage.setItem("oc_executor", s.executor || DEFAULT_SETTINGS.executor);
-  localStorage.setItem("oc_always_on_top", String(s.alwaysOnTop));
-  localStorage.removeItem("oc_unattended");
-  localStorage.removeItem("oc_auto_permission");
-  localStorage.removeItem("oc_auto_question");
-  localStorage.setItem(
-    "oc_show_transcript_details",
-    String(s.showTranscriptDetails)
-  );
-  localStorage.setItem("oc_sidebar_collapsed", String(s.sidebarCollapsed));
-  if (s.sidebarWidth != null) {
-    localStorage.setItem("oc_sidebar_width", String(s.sidebarWidth));
-  } else {
-    localStorage.removeItem("oc_sidebar_width");
-  }
-  if (s.sectionsWidth != null) {
-    localStorage.setItem("oc_sections_width", String(s.sectionsWidth));
-  } else {
-    localStorage.removeItem("oc_sections_width");
-  }
-  localStorage.setItem("oc_opacity", String(s.opacity));
-  localStorage.setItem("oc_zoom", String(s.zoom));
-  localStorage.setItem("oc_theme", s.theme || DEFAULT_SETTINGS.theme);
-  localStorage.setItem("oc_locale", s.locale || DEFAULT_SETTINGS.locale);
-  if (s.workspaceTaskID) {
-    localStorage.setItem("oc_workspace_task", s.workspaceTaskID);
-  } else {
-    localStorage.removeItem("oc_workspace_task");
-  }
-  if (s.workspaceDirectory) {
-    localStorage.setItem("oc_workspace_directory", s.workspaceDirectory);
-  } else {
-    localStorage.removeItem("oc_workspace_directory");
-  }
-  if (s.directory) {
-    localStorage.setItem("oc_directory", s.directory);
-    localStorage.setItem("oc_directory_mode", s.directoryMode);
-  } else {
-    localStorage.removeItem("oc_directory");
-    localStorage.removeItem("oc_directory_mode");
-  }
-  const invoke = window.__TAURI__?.core?.invoke;
-  if (typeof invoke === "function") {
-    void invoke("overlay_settings_save", {
-      settings: bootstrapOverlaySettings(s)
-    }).catch(() => void 0);
-  }
-}
-function loadSettings() {
-  const serverUrl = localStorage.getItem("oc_server_url") || DEFAULT_SETTINGS.serverUrl;
-  const autoServerRaw = localStorage.getItem("oc_auto_server");
-  const autoServer = autoServerRaw === null ? defaultAutoServer(serverUrl) : autoServerRaw !== "false";
-  const directory = (() => {
-    const raw = localStorage.getItem("oc_directory") || "";
-    return raw.trim();
-  })();
-  setSettingsStore({
-    serverUrl,
-    autoServer,
-    password: localStorage.getItem("oc_password") || DEFAULT_SETTINGS.password,
-    username: localStorage.getItem("oc_username") || DEFAULT_SETTINGS.username,
-    executor: localStorage.getItem("oc_executor") || DEFAULT_SETTINGS.executor,
-    initGit: true,
-    alwaysOnTop: localStorage.getItem("oc_always_on_top") === "true",
-    showTranscriptDetails: localStorage.getItem("oc_show_transcript_details") === "true",
-    sidebarCollapsed: localStorage.getItem("oc_sidebar_collapsed") === "true",
-    sidebarWidth: sanitizePaneWidth(
-      localStorage.getItem("oc_sidebar_width")
-    ),
-    sectionsWidth: sanitizePaneWidth(
-      localStorage.getItem("oc_sections_width")
-    ),
-    opacity: sanitizeOpacity(localStorage.getItem("oc_opacity")),
-    zoom: sanitizeZoom$1(localStorage.getItem("oc_zoom")),
-    theme: sanitizeTheme$1(localStorage.getItem("oc_theme")),
-    locale: sanitizeLocale(
-      localStorage.getItem("oc_locale") || DEFAULT_SETTINGS.locale
-    ),
-    directoryMode: directory ? "custom" : "temp",
-    directory,
-    workspaceTaskID: localStorage.getItem("oc_workspace_task") || DEFAULT_SETTINGS.workspaceTaskID,
-    workspaceDirectory: localStorage.getItem("oc_workspace_directory") || DEFAULT_SETTINGS.workspaceDirectory,
-    // Runtime-only fields — not persisted in localStorage; reset to defaults on load.
-    savedDirectory: directory,
-    tempDirectory: DEFAULT_SETTINGS.tempDirectory,
-    workspaceEpoch: DEFAULT_SETTINGS.workspaceEpoch,
-    directoryEpoch: DEFAULT_SETTINGS.directoryEpoch
-  });
-}
-function setSavedDirectory(path) {
-  setSettingsStore("savedDirectory", typeof path === "string" ? path : "");
-}
-function bumpWorkspaceEpoch() {
-  setSettingsStore("workspaceEpoch", (n) => n + 1);
-}
-function bumpDirectoryEpoch() {
-  setSettingsStore("directoryEpoch", (n) => n + 1);
-}
-function sanitizeDirectoryMode$1(value, directory) {
-  if (value === "custom") return "custom";
-  if (typeof value === "string" && value.trim() === "temp") return "temp";
-  return typeof directory === "string" && directory.trim() ? "custom" : DEFAULT_SETTINGS.directoryMode;
-}
-function savedDirectoryValue$1(directory, mode) {
-  const next = typeof directory === "string" ? directory.trim() : "";
-  if (!next) return "";
-  return sanitizeDirectoryMode$1(mode, next) === "custom" ? next : "";
-}
-function bootstrapOverlaySettings(input = settingsStore) {
-  return {
-    serverUrl: input.serverUrl ?? DEFAULT_SETTINGS.serverUrl,
-    autoServer: input.autoServer ?? DEFAULT_SETTINGS.autoServer,
-    password: input.password ?? DEFAULT_SETTINGS.password,
-    username: input.username ?? DEFAULT_SETTINGS.username,
-    executor: input.executor ?? DEFAULT_SETTINGS.executor,
-    initGit: true,
-    alwaysOnTop: input.alwaysOnTop ?? DEFAULT_SETTINGS.alwaysOnTop,
-    showTranscriptDetails: input.showTranscriptDetails ?? DEFAULT_SETTINGS.showTranscriptDetails,
-    sidebarCollapsed: input.sidebarCollapsed ?? DEFAULT_SETTINGS.sidebarCollapsed,
-    sidebarWidth: input.sidebarWidth || void 0,
-    sectionsWidth: input.sectionsWidth || void 0,
-    opacity: input.opacity ?? DEFAULT_SETTINGS.opacity,
-    zoom: input.zoom ?? DEFAULT_SETTINGS.zoom,
-    theme: input.theme ?? DEFAULT_SETTINGS.theme,
-    locale: input.locale ?? DEFAULT_SETTINGS.locale,
-    directoryMode: input.savedDirectory ? "custom" : "temp",
-    directory: input.savedDirectory || void 0,
-    workspaceTaskID: input.workspaceTaskID || void 0,
-    workspaceDirectory: input.workspaceDirectory || void 0
-  };
-}
-
 var _tmpl$$d = /* @__PURE__ */ template(`<button type=button id=btnPin class="btn btn-ghost icon-btn titlebar-btn"><svg width=12 height=12 viewBox="0 0 16 16"fill=none aria-hidden=true><path d="M9.5 2L14 6.5l-4 1.5-4 4-1.5-1.5 4-4L7 2.5 9.5 2z"stroke=currentColor stroke-width=1.3 stroke-linejoin=round></path><line x1=2 y1=14 x2=6 y2=10 stroke=currentColor stroke-width=1.3 stroke-linecap=round>`), _tmpl$2$a = /* @__PURE__ */ template(`<button type=button id=btnMinimize class="btn btn-ghost icon-btn titlebar-btn"><svg width=11 height=11 viewBox="0 0 11 11"fill=none aria-hidden=true><line x1=1 y1=5.5 x2=10 y2=5.5 stroke=currentColor stroke-width=1.3 stroke-linecap=round>`), _tmpl$3$a = /* @__PURE__ */ template(`<button type=button id=btnMaximize class="btn btn-ghost icon-btn titlebar-btn">`), _tmpl$4$a = /* @__PURE__ */ template(`<button type=button id=btnClose class="btn btn-ghost icon-btn titlebar-btn titlebar-btn-close"><svg width=11 height=11 viewBox="0 0 11 11"fill=none aria-hidden=true><line x1=1 y1=1 x2=10 y2=10 stroke=currentColor stroke-width=1.3 stroke-linecap=round></line><line x1=10 y1=1 x2=1 y2=10 stroke=currentColor stroke-width=1.3 stroke-linecap=round>`), _tmpl$5$a = /* @__PURE__ */ template(`<div class=window-controls data-no-drag=true>`);
 const CLOSE_HINT_KEY = "oc_close_hint_seen";
 async function currentTauriWindow$3() {
@@ -7537,56 +8538,6 @@ function WindowControls() {
   })();
 }
 delegateEvents(["click"]);
-
-const scriptRel = 'modulepreload';const assetsURL = function(dep) { return "/"+dep };const seen = {};const __vitePreload = function preload(baseModule, deps, importerUrl) {
-  let promise = Promise.resolve();
-  if (true               && deps && deps.length > 0) {
-    let allSettled2 = function(promises) {
-      return Promise.all(promises.map((p) => Promise.resolve(p).then((value) => ({ status: "fulfilled", value }), (reason) => ({ status: "rejected", reason }))));
-    };
-    document.getElementsByTagName("link"); const cspNonceMeta = document.querySelector("meta[property=csp-nonce]"), cspNonce = cspNonceMeta?.nonce || cspNonceMeta?.getAttribute("nonce");
-    promise = allSettled2(deps.map((dep) => {
-      dep = assetsURL(dep);
-      if (dep in seen)
-        return;
-      seen[dep] = true;
-      const isCss = dep.endsWith(".css"), cssSelector = isCss ? '[rel="stylesheet"]' : "";
-      if (document.querySelector(`link[href="${dep}"]${cssSelector}`))
-        return;
-      const link = document.createElement("link");
-      link.rel = isCss ? "stylesheet" : scriptRel;
-      if (!isCss)
-        link.as = "script";
-      link.crossOrigin = "";
-      link.href = dep;
-      if (cspNonce)
-        link.setAttribute("nonce", cspNonce);
-      document.head.appendChild(link);
-      if (isCss)
-        return new Promise((res, rej) => {
-          link.addEventListener("load", res);
-          link.addEventListener("error", () => rej(Error(`Unable to preload CSS for ${dep}`)));
-        });
-    }));
-  }
-  function handlePreloadError(err) {
-    const e = new Event("vite:preloadError", {
-      cancelable: true
-    });
-    e.payload = err;
-    window.dispatchEvent(e);
-    if (!e.defaultPrevented)
-      throw err;
-  }
-  return promise.then((res) => {
-    for (const item of res || []) {
-      if (item.status !== "rejected")
-        continue;
-      handlePreloadError(item.reason);
-    }
-    return baseModule().catch(handlePreloadError);
-  });
-};
 
 const MIN_UI_ZOOM = 0.8;
 const MAX_UI_ZOOM = 1.6;
@@ -8035,774 +8986,6 @@ function ConnectionBadge(props) {
   })();
 }
 delegateEvents(["dblclick"]);
-
-function record$2(value) {
-  return !!value && typeof value === "object" && !Array.isArray(value);
-}
-function parseToolInput(raw) {
-  if (record$2(raw)) return raw;
-  if (typeof raw === "string" && raw.trim()) {
-    try {
-      return JSON.parse(raw);
-    } catch {
-      return { raw };
-    }
-  }
-  return {};
-}
-function executorMessageID(properties) {
-  const goalRunID = properties.goalRunID || properties.goal_run_id || "";
-  const execSessionID = properties.executorSessionID || properties.executor_session_id || "";
-  const runID = properties.runID || "";
-  const scope = goalRunID || execSessionID || runID || "default";
-  return `executor:msg:${scope}`;
-}
-function executorPartID(properties, eventID) {
-  const callID = properties.sourceID || properties.id || properties.payload?.id || eventID;
-  return `executor:part:${callID}`;
-}
-function executorSessionID(properties) {
-  return properties.goalRunID || properties.goal_run_id || properties.executorSessionID || properties.executor_session_id || properties.runID || "";
-}
-function convertExecutorEventToMessages(event, properties) {
-  const kind = executorEventKind(properties.type);
-  const timestamp = Number(event.timestamp || Date.now());
-  const msgID = executorMessageID(properties);
-  const sessionID = executorSessionID(properties);
-  const messageEvent = {
-    type: "message.updated",
-    properties: {
-      info: {
-        id: msgID,
-        sessionID,
-        role: "assistant",
-        resolvedRole: "executor",
-        agent: "executor",
-        time: { created: timestamp }
-      }
-    }
-  };
-  if (kind === "tool_call") {
-    const name = properties.name || properties.payload?.name || properties.tool || "tool";
-    const input = parseToolInput(properties.input ?? properties.arguments ?? properties.args ?? properties.payload?.input);
-    const partID = executorPartID(properties, event.event_id);
-    return [
-      messageEvent,
-      {
-        type: "message.part.updated",
-        properties: {
-          part: {
-            id: partID,
-            messageID: msgID,
-            sessionID,
-            type: "tool",
-            tool: name,
-            callID: properties.sourceID || properties.id || properties.payload?.id || partID,
-            state: {
-              status: "running",
-              input,
-              title: event.summary || name,
-              metadata: { synthetic: true },
-              time: { start: timestamp }
-            }
-          }
-        }
-      }
-    ];
-  }
-  if (kind === "tool_result") {
-    const name = properties.name || properties.payload?.name || properties.tool || "tool";
-    const input = parseToolInput(properties.input ?? properties.arguments ?? properties.payload?.input ?? {});
-    const output = typeof properties.output === "string" ? properties.output : typeof properties.payload?.output === "string" ? properties.payload.output : event.summary || "";
-    const partID = executorPartID(properties, event.event_id);
-    return [
-      messageEvent,
-      {
-        type: "message.part.updated",
-        properties: {
-          part: {
-            id: partID,
-            messageID: msgID,
-            sessionID,
-            type: "tool",
-            tool: name,
-            callID: properties.sourceID || properties.id || properties.payload?.id || partID,
-            state: {
-              status: "completed",
-              input,
-              output,
-              title: event.summary || name,
-              metadata: { synthetic: true },
-              time: { start: timestamp, end: timestamp }
-            }
-          }
-        }
-      }
-    ];
-  }
-  if (kind === "message_delta") {
-    const text = typeof properties.text === "string" ? properties.text : event.summary || "";
-    if (!text) return [];
-    const partID = `executor:text:${sessionID}`;
-    return [
-      messageEvent,
-      {
-        type: "message.part.updated",
-        properties: {
-          part: {
-            id: partID,
-            messageID: msgID,
-            sessionID,
-            type: "text",
-            text: ""
-          }
-        }
-      },
-      {
-        type: "message.part.delta",
-        properties: {
-          partID,
-          messageID: msgID,
-          sessionID,
-          field: "text",
-          delta: text
-        }
-      }
-    ];
-  }
-  if (kind === "reasoning_delta") {
-    const text = typeof properties.text === "string" ? properties.text : event.summary || "";
-    if (!text) return [];
-    const partID = `executor:reasoning:${sessionID}`;
-    return [
-      messageEvent,
-      {
-        type: "message.part.updated",
-        properties: {
-          part: {
-            id: partID,
-            messageID: msgID,
-            sessionID,
-            type: "reasoning",
-            text: ""
-          }
-        }
-      },
-      {
-        type: "message.part.delta",
-        properties: {
-          partID,
-          messageID: msgID,
-          sessionID,
-          field: "text",
-          delta: text
-        }
-      }
-    ];
-  }
-  if (kind === "error") {
-    const text = event.summary || properties.message || "Error";
-    const partID = `executor:error:${event.event_id || timestamp}`;
-    return [
-      messageEvent,
-      {
-        type: "message.part.updated",
-        properties: {
-          part: {
-            id: partID,
-            messageID: msgID,
-            sessionID,
-            type: "text",
-            text: `Error: ${text}`
-          }
-        }
-      }
-    ];
-  }
-  if (event.summary) {
-    const partID = `executor:status:${event.event_id || timestamp}`;
-    return [
-      messageEvent,
-      {
-        type: "message.part.updated",
-        properties: {
-          part: {
-            id: partID,
-            messageID: msgID,
-            sessionID,
-            type: "text",
-            text: event.summary,
-            kind: "trace"
-          }
-        }
-      }
-    ];
-  }
-  return [];
-}
-function routeSSEEvent(event) {
-  const type = event.type || "";
-  if (type === "message.updated" || type === "message.part.updated" || type === "message.part.delta") {
-    if (shouldReloadConversationForMessageEvent(event)) {
-      void loadConversation();
-      return true;
-    }
-    enqueueEvent(event);
-    return true;
-  }
-  if (type === "task.replay_expired") {
-    const taskID = boardStore.selectedTaskID || "";
-    if (taskID) void syncTask(taskID);
-    return true;
-  }
-  const properties = record$2(event?.properties) ? event.properties : record$2(event?.payload) ? event.payload : {};
-  if (type === "run.progress") {
-    const progressType = properties.type || "";
-    if (progressType === "protocol.raw" || progressType === "executor.status" || progressType === "executor.progress") {
-      return true;
-    }
-    if (progressType === "message.part.updated" || progressType === "message.part.delta" || progressType === "message.updated") {
-      return true;
-    }
-    const messages = convertExecutorEventToMessages(event, properties);
-    for (const msg of messages) {
-      enqueueEvent(msg);
-    }
-    return true;
-  }
-  if (type === "run.output") {
-    const messages = convertExecutorEventToMessages(event, {
-      ...properties,
-      type: "text_delta",
-      text: typeof properties.text === "string" ? properties.text : event.summary || ""
-    });
-    for (const msg of messages) {
-      enqueueEvent(msg);
-    }
-    return true;
-  }
-  if (type === "agent.updated") {
-    appendAgentEvent(event);
-    return true;
-  }
-  if (type === "config.changed") {
-    void __vitePreload(async () => { const {loadConfigInfo} = await Promise.resolve().then(() => init);return { loadConfigInfo }},true              ?void 0:void 0).then(({ loadConfigInfo }) => loadConfigInfo()).catch(() => {
-    });
-    return true;
-  }
-  if (type === "task.updated" || type === "task.completed" || type === "task.failed" || type === "task.cancelled" || type === "task.blocked" || type.startsWith("run.") || type.startsWith("plan.") || type.startsWith("goal.") || type.startsWith("delivery.") || type.startsWith("evaluation.") || type.startsWith("interaction.")) {
-    return false;
-  }
-  return false;
-}
-function executorEventKind(progressType) {
-  const t = String(progressType || "").trim().toLowerCase();
-  if (!t) return "event";
-  if (t === "message_delta" || t === "reasoning_delta") return t;
-  if (t === "tool_call" || t === "tool_delta" || t === "tool_result") return t;
-  if (t.includes("tool")) return t.includes("result") ? "tool_result" : "tool_call";
-  if (t.includes("reason")) return "reasoning_delta";
-  if (t.includes("error")) return "error";
-  if (t.includes("done") || t.includes("completed")) return "done";
-  if (t.includes("approval") || t === "permission.asked") return "approval_request";
-  if (t.includes("command")) return "command";
-  return "event";
-}
-const BOARD_EVENT_DEBOUNCE = 500;
-let tasksKickTimer$1 = null;
-function normalizedEventType(event) {
-  const raw = String(event?.type || "").trim();
-  return raw;
-}
-function eventTaskID(event) {
-  return String(event?.properties?.taskID || event?.payload?.taskID || "");
-}
-function eventSequence(event) {
-  const value = Number(event?.sequence);
-  return Number.isFinite(value) ? value : 0;
-}
-function boardInvalidatingEvent(type) {
-  return type === "task.updated" || type === "task.completed" || type === "task.failed" || type === "task.cancelled" || type === "task.blocked" || type.startsWith("run.") || type.startsWith("plan.") || type.startsWith("goal.") || type.startsWith("delivery.") || type.startsWith("evaluation.") || type.startsWith("interaction.") || type.startsWith("workflow.");
-}
-function scheduleTasksCompat(delay = 0) {
-  if (tasksKickTimer$1) clearTimeout(tasksKickTimer$1);
-  tasksKickTimer$1 = setTimeout(() => {
-    tasksKickTimer$1 = null;
-    void loadTasks();
-  }, delay);
-}
-function handleEventStreamEvent(event) {
-  const type = normalizedEventType(event);
-  if (type.startsWith("message.")) {
-    if (shouldReloadConversationForMessageEvent({ ...event, type })) {
-      void loadConversation();
-      return;
-    }
-    enqueueEvent({ ...event, type });
-    return;
-  }
-  if (type === "task.replay_expired") {
-    if (boardStore.selectedTaskID) void syncTask(boardStore.selectedTaskID);
-    scheduleTasksCompat(0);
-    scheduleBoard(0);
-    return;
-  }
-  const taskID = eventTaskID(event);
-  const sequence = eventSequence(event);
-  if (taskID && taskID === boardStore.selectedTaskID && sequence > 0) {
-    const current = boardStore.taskSequence;
-    if (current > 0 && sequence <= current) return;
-    if (current > 0 && sequence > current + 1) {
-      scheduleBoard(BOARD_EVENT_DEBOUNCE);
-      scheduleTasksCompat(BOARD_EVENT_DEBOUNCE);
-    }
-    setTaskSequence(sequence);
-  }
-  if (boardInvalidatingEvent(type)) {
-    scheduleTasksCompat(BOARD_EVENT_DEBOUNCE);
-    if (taskID && taskID === boardStore.selectedTaskID) {
-      scheduleBoard(BOARD_EVENT_DEBOUNCE);
-    }
-  }
-}
-
-let sseController = null;
-let sseRetryTimer = null;
-function startSSE(taskID) {
-  stopSSE();
-  const controller = new AbortController();
-  sseController = controller;
-  setSseConnected(false);
-  (async () => {
-    try {
-      const after = Number(boardStore.taskSequence || 0);
-      const path = after > 0 ? `task/${encodeURIComponent(taskID)}/events?after=${after}` : `task/${encodeURIComponent(taskID)}/events`;
-      const res = await fetch(apiUrl(path), {
-        headers: apiHeaders(),
-        signal: controller.signal
-      });
-      if (!res.ok || !res.body) throw new Error(`SSE ${res.status}`);
-      setSseConnected(true);
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() || "";
-        for (const line of lines) {
-          if (!line.startsWith("data:")) continue;
-          try {
-            const event = JSON.parse(line.slice(5).trim());
-            if (event.type === "task.heartbeat" || event.type === "task.connected")
-              continue;
-            const handled = routeSSEEvent(event);
-            if (!handled) {
-              handleEventStreamEvent(event);
-            }
-          } catch {
-          }
-        }
-      }
-    } catch (e) {
-      if (e.name === "AbortError") return;
-      console.warn("SSE disconnected", e.message);
-    }
-    setSseConnected(false);
-    if (sseRetryTimer) clearTimeout(sseRetryTimer);
-    sseRetryTimer = setTimeout(async () => {
-      sseRetryTimer = null;
-      if (boardStore.selectedTaskID !== taskID) return;
-      await syncTask(taskID);
-      await loadBoard();
-      startSSE(taskID);
-    }, 3e3);
-  })();
-}
-function stopSSE() {
-  if (sseRetryTimer) {
-    clearTimeout(sseRetryTimer);
-    sseRetryTimer = null;
-  }
-  if (sseController) {
-    sseController.abort();
-  }
-  sseController = null;
-  setSseConnected(false);
-  clearEventQueue();
-}
-
-function chatRequestTimeoutMs() {
-  const overlayTiming = window.__ocOverlayTiming;
-  const testTiming = window.__overlayTest;
-  const override = typeof overlayTiming?.chatTimeoutMs === "number" ? overlayTiming.chatTimeoutMs : typeof testTiming?.chatTimeoutMs === "number" ? testTiming.chatTimeoutMs : void 0;
-  const value = typeof override === "number" ? override : 10 * 60 * 1e3;
-  return Math.max(value, 1e3);
-}
-function activeDirectory$1() {
-  return boardStore.board?.task?.directory || settingsStore.directory || "";
-}
-function inactivityTimeoutError(timeoutMs) {
-  return new DOMException(
-    `Panel stream inactive for ${timeoutMs}ms`,
-    "TimeoutError"
-  );
-}
-function relayAbort(source, controller) {
-  if (!source) return () => void 0;
-  const abort = () => {
-    controller.abort(
-      source.reason instanceof Error ? source.reason : source.reason ?? void 0
-    );
-  };
-  if (source.aborted) {
-    abort();
-    return () => void 0;
-  }
-  source.addEventListener("abort", abort, { once: true });
-  return () => source.removeEventListener("abort", abort);
-}
-async function readWithAbort(reader, signal) {
-  if (signal.aborted) {
-    await reader.cancel(signal.reason).catch(() => void 0);
-    throw signal.reason ?? new DOMException("Aborted", "AbortError");
-  }
-  return new Promise((resolve, reject) => {
-    const abort = () => {
-      signal.removeEventListener("abort", abort);
-      void reader.cancel(signal.reason).catch(() => void 0);
-      reject(signal.reason ?? new DOMException("Aborted", "AbortError"));
-    };
-    signal.addEventListener("abort", abort, { once: true });
-    reader.read().then(
-      (value) => {
-        signal.removeEventListener("abort", abort);
-        resolve(value);
-      },
-      (error) => {
-        signal.removeEventListener("abort", abort);
-        reject(error);
-      }
-    );
-  });
-}
-function panelRequestBody(text, metadata = {}, requestID = "", attachments = [], executor = "opencode") {
-  const taskID = boardStore.selectedTaskID || void 0;
-  const body = {
-    surface: "panel",
-    text,
-    time_created: Date.now(),
-    taskID,
-    executor,
-    request_id: requestID || void 0,
-    allow_create: true,
-    allow_session_mutation: false,
-    directory: activeDirectory$1() || void 0,
-    metadata: {
-      selectedTaskID: taskID,
-      ...metadata
-    }
-  };
-  if (attachments.length > 0) {
-    body.attachments = attachments.map((att) => ({
-      mime: att.mime,
-      url: att.url,
-      ...att.filename ? { filename: att.filename } : {}
-    }));
-  }
-  return body;
-}
-async function selectTask(taskID, options = {}) {
-  const nextTaskID = taskID || "";
-  if (nextTaskID === boardStore.selectedTaskID && boardStore.board) {
-    return;
-  }
-  stopSSE();
-  setBoardStore("board", null);
-  clearMessages();
-  clearAgentEvents();
-  if (appStore.budgetDirty) {
-    setAppStore("budgetDirty", false);
-  }
-  setSelectedTaskID(nextTaskID);
-  setBoardStore("selectedTaskID", nextTaskID);
-  if (!nextTaskID) {
-    return;
-  }
-  await Promise.all([
-    loadBoard({ sync: true }).catch(
-      (e) => console.error("[selectTask] loadBoard failed:", e)
-    ),
-    syncTask(nextTaskID).catch(
-      (e) => console.error("[selectTask] syncTask failed:", e)
-    )
-  ]);
-  startSSE(nextTaskID);
-}
-async function deleteTask(taskID) {
-  if (!taskID) return false;
-  try {
-    await apiJson(`task/${encodeURIComponent(taskID)}`, {
-      method: "DELETE"
-    });
-    if (boardStore.selectedTaskID === taskID) {
-      await selectTask("");
-    }
-    await loadTasks();
-    return true;
-  } catch (e) {
-    console.error("[deleteTask] failed", { error: String(e), taskID });
-    return false;
-  }
-}
-async function submitMessage(text, attachments = [], options = {}) {
-  const requestID = options.requestID ?? crypto.randomUUID();
-  const timeoutMs = chatRequestTimeoutMs();
-  const controller = new AbortController();
-  const cleanupRelay = relayAbort(options.signal, controller);
-  const executor = settingsStore.executor ?? "opencode";
-  let inactivityTimer = null;
-  const markActivity = () => {
-    if (inactivityTimer) clearTimeout(inactivityTimer);
-    inactivityTimer = setTimeout(() => {
-      controller.abort(inactivityTimeoutError(timeoutMs));
-    }, timeoutMs);
-  };
-  const body = JSON.stringify(
-    panelRequestBody(
-      text,
-      options.metadata ?? {},
-      requestID,
-      attachments,
-      executor
-    )
-  );
-  markActivity();
-  try {
-    const res = await fetch(apiUrl("panel/message/stream"), {
-      method: "POST",
-      headers: { ...apiHeaders(), "Content-Type": "application/json" },
-      body,
-      signal: controller.signal
-    });
-    markActivity();
-    if (!res.ok || !res.body) {
-      throw new Error(`Panel stream failed: ${res.status} ${res.statusText}`);
-    }
-    await options.onOpen?.();
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let buf = "";
-    let result = null;
-    const consume = async (chunk, flush = false) => {
-      buf += chunk;
-      const blocks = buf.split(/\r?\n\r?\n/);
-      if (!flush) {
-        buf = blocks.pop() || "";
-      } else {
-        buf = "";
-      }
-      for (const block of blocks) {
-        const data = block.split(/\r?\n/).filter((line) => line.startsWith("data:")).map((line) => line.slice(5).trim()).join("\n");
-        if (!data) continue;
-        try {
-          const ev = JSON.parse(data);
-          markActivity();
-          await options.onEvent?.(ev);
-          if (ev.type === "done") {
-            result = ev.result;
-          }
-        } catch {
-        }
-      }
-    };
-    while (true) {
-      const { done, value } = await readWithAbort(reader, controller.signal);
-      if (done) {
-        await consume(decoder.decode(), true);
-        break;
-      }
-      markActivity();
-      await consume(decoder.decode(value, { stream: true }));
-    }
-    if (!result) {
-      throw new Error("Panel stream ended without a final result");
-    }
-    return result;
-  } finally {
-    if (inactivityTimer) clearTimeout(inactivityTimer);
-    cleanupRelay();
-  }
-}
-async function createTask(options) {
-  const { text, attachments = [], metadata = {}, signal } = options;
-  if (!text) throw new Error("createTask: text is required");
-  const requestID = crypto.randomUUID();
-  const executor = settingsStore.executor ?? "opencode";
-  const result = await apiJson("task", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      request: text,
-      executor,
-      requestID,
-      metadata,
-      source: "panel",
-      ...attachments.length > 0 ? {
-        attachments: attachments.map((att) => ({
-          mime: att.mime,
-          url: att.url,
-          ...att.filename ? { filename: att.filename } : {}
-        }))
-      } : {}
-    }),
-    signal
-  });
-  return typeof result?.task_id === "string" ? result.task_id : "";
-}
-async function retryTask(taskID) {
-  if (!taskID) return;
-  await apiJson(`task/${encodeURIComponent(taskID)}/retry`, {
-    method: "POST"
-  });
-  await loadBoard();
-}
-async function replanTask(taskID) {
-  if (!taskID) return;
-  await apiJson(`task/${encodeURIComponent(taskID)}/replan`, {
-    method: "POST"
-  });
-  await loadBoard();
-}
-async function cancelTask(taskID) {
-  if (!taskID) return;
-  await apiJson(`task/${encodeURIComponent(taskID)}/cancel`, {
-    method: "POST"
-  });
-  await loadBoard();
-}
-async function interruptTask(taskID) {
-  if (!taskID) return false;
-  try {
-    await apiJson(`task/${encodeURIComponent(taskID)}/cancel`, {
-      method: "POST"
-    });
-    await loadBoard();
-    return true;
-  } catch (e) {
-    console.error("[interruptTask] failed", { error: String(e), taskID });
-    return false;
-  }
-}
-
-function jsonAttr(value) {
-  return JSON.stringify(String(value ?? ""));
-}
-function eventClosest(event, selector) {
-  const target = event?.target;
-  if (target instanceof Element) return target.closest(selector);
-  const parent = target?.parentElement;
-  if (parent instanceof Element) return parent.closest(selector);
-  return null;
-}
-function pathItems(value) {
-  const text = String(value || "").trim();
-  if (!text) return [];
-  const windows = /^[A-Za-z]:[\\/]/.test(text);
-  const unix = text.startsWith("/");
-  const parts = text.split(/[\\/]+/).filter(Boolean);
-  if (!parts.length) return [];
-  function joinPath(a, b) {
-    return a.replace(/[\\/]+$/, "") + "/" + b;
-  }
-  if (windows) {
-    let path2 = `${parts[0]}\\`;
-    const items2 = [{ label: parts[0], path: path2 }];
-    return items2.concat(
-      parts.slice(1).map((part) => {
-        path2 = joinPath(path2, part);
-        return { label: part, path: path2 };
-      })
-    );
-  }
-  if (unix) {
-    let path2 = "/";
-    const items2 = [{ label: "/", path: path2 }];
-    return items2.concat(
-      parts.map((part) => {
-        path2 = path2 === "/" ? `/${part}` : `${path2}/${part}`;
-        return { label: part, path: path2 };
-      })
-    );
-  }
-  let path = parts[0];
-  const items = [{ label: parts[0], path }];
-  return items.concat(
-    parts.slice(1).map((part) => {
-      path = path.replace(/[\\/]+$/, "") + "/" + part;
-      return { label: part, path };
-    })
-  );
-}
-function pathIcon(kind) {
-  if (kind === "browse") {
-    return `<svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path d="M2.5 4.5h4l1.2 1.5h5.8v5.2a1.3 1.3 0 01-1.3 1.3H3.8a1.3 1.3 0 01-1.3-1.3V5.8a1.3 1.3 0 011.3-1.3z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>
-    </svg>`;
-  }
-  if (kind === "new") {
-    return `<svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path d="M8 3.2v9.6M3.2 8h9.6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
-    </svg>`;
-  }
-  if (kind === "history") {
-    return `<svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path d="M8 4v4l2.5 1.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
-      <path d="M3.05 8a5 5 0 1 1 .5 2.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
-      <path d="M3 10.5L3.05 8 1 9" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
-    </svg>`;
-  }
-  return `<svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-    <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
-  </svg>`;
-}
-function pathBreadcrumb(value) {
-  const browse = escapeHtml$1(t("cwd.browse"));
-  const create = escapeHtml$1(t("cwd.new"));
-  const reset = escapeHtml$1(t("cwd.reset"));
-  const recent = escapeHtml$1(t("cwd.recent"));
-  const directory = settingsStore.directory;
-  const actions = [
-    `<button type="button" class="task-dir-tool" data-path-action="recent" title="${recent}" aria-label="${recent}">${pathIcon("history")}</button>`,
-    `<button type="button" class="task-dir-tool" data-path-action="browse" title="${browse}" aria-label="${browse}">${pathIcon("browse")}</button>`,
-    `<button type="button" class="task-dir-tool" data-path-action="create" title="${create}" aria-label="${create}">${pathIcon("new")}</button>`,
-    directory ? `<button type="button" class="task-dir-tool danger" data-path-action="reset" title="${reset}" aria-label="${reset}">${pathIcon("reset")}</button>` : ""
-  ].filter(Boolean).join("");
-  if (!value) {
-    return `
-      <span class="task-dir-shell" data-empty="true">
-        <span class="task-dir-empty">${escapeHtml$1(t("cwd.unavailable"))}</span>
-        <span class="task-dir-actions">${actions}</span>
-      </span>
-    `;
-  }
-  const items = pathItems(value);
-  const open = t("cwd.open");
-  const choose = t("cwd.choose_level");
-  const nodes = items.map((item, index) => {
-    const current = index === items.length - 1 ? ' data-current="true"' : "";
-    const step = index ? `<button type="button" class="task-dir-step" data-path-set=${jsonAttr(items[index - 1].path)} title="${escapeHtml$1(`${choose}: ${items[index - 1].path}`)}" aria-label="${escapeHtml$1(`${choose}: ${items[index - 1].path}`)}">/</button>` : "";
-    return `${step}<button type="button" class="task-dir-node" data-path-open=${jsonAttr(item.path)} title="${escapeHtml$1(`${open}: ${item.path}`)}" aria-label="${escapeHtml$1(`${open}: ${item.path}`)}"${current}>${escapeHtml$1(item.label)}</button>`;
-  }).join("");
-  return `
-    <span class="task-dir-shell">
-      <span class="task-dir-path">${nodes}</span>
-      <span class="task-dir-actions">${actions}</span>
-    </span>
-  `;
-}
 
 let workspaceEpoch = 0;
 let tasksSeq = 0;
@@ -10242,7 +10425,6 @@ function LogLine(props) {
 }
 function LogViewer(props) {
   let dialogRef;
-  let bodyRef;
   const [loading, setLoading] = createSignal(false);
   const [serverLogsSeq, setServerLogsSeq] = createSignal(0);
   const entries = createMemo(() => {
@@ -10257,10 +10439,6 @@ function LogViewer(props) {
     } finally {
       setLoading(false);
     }
-    scrollToBottom();
-  };
-  const scrollToBottom = () => {
-    if (bodyRef) bodyRef.scrollTop = bodyRef.scrollHeight;
   };
   const handleCopy = async () => {
     const text = formatLogText(entries());
@@ -10293,9 +10471,6 @@ function LogViewer(props) {
     }
     if (dialog.open) dialog.close();
   });
-  const doScroll = () => {
-    Promise.resolve().then(() => scrollToBottom());
-  };
   return (() => {
     var _el$26 = _tmpl$8$5(), _el$27 = _el$26.firstChild, _el$28 = _el$27.firstChild, _el$29 = _el$28.firstChild, _el$30 = _el$29.nextSibling, _el$31 = _el$30.firstChild, _el$32 = _el$31.nextSibling, _el$33 = _el$32.nextSibling, _el$34 = _el$33.nextSibling, _el$35 = _el$34.nextSibling, _el$36 = _el$35.nextSibling, _el$37 = _el$28.nextSibling;
     use((el) => dialogRef = el, _el$26);
@@ -10314,7 +10489,7 @@ function LogViewer(props) {
       props.onClose?.();
     };
     insert(_el$36, () => t("common.close"));
-    use((el) => bodyRef = el, _el$37);
+    use((el) => onCleanup(setupAutoScroll(el)), _el$37);
     insert(_el$37, createComponent(Show, {
       get when() {
         return entries().length > 0;
@@ -10332,12 +10507,9 @@ function LogViewer(props) {
             return entries();
           },
           fallback: null,
-          children: (entry) => {
-            doScroll();
-            return createComponent(LogLine, {
-              entry
-            });
-          }
+          children: (entry) => createComponent(LogLine, {
+            entry
+          })
         });
       }
     }));
@@ -10376,25 +10548,10 @@ function CodingTab(props) {
   const [busy, setBusy] = createSignal(false);
   let textBuffer = /* @__PURE__ */ new Map();
   let abortController = null;
-  let scrollRef;
   props.onReady?.({
     send: (text) => void sendCodingMessage(text),
     stop: () => abortController?.abort(),
     busy
-  });
-  function scrollToBottomIfNeeded() {
-    if (!scrollRef) return;
-    const atBottom = scrollRef.scrollHeight - scrollRef.scrollTop - scrollRef.clientHeight < 80;
-    if (atBottom) {
-      requestAnimationFrame(() => {
-        scrollRef.scrollTop = scrollRef.scrollHeight;
-      });
-    }
-  }
-  createEffect(() => {
-    if (!props.active) return;
-    messages();
-    scrollToBottomIfNeeded();
   });
   function handleCodingEvent(msgIndex, event) {
     if (event.type === "session") {
@@ -10652,8 +10809,7 @@ function CodingTab(props) {
   const isEmpty = createMemo(() => messages().length === 0);
   return (() => {
     var _el$9 = _tmpl$6$7(), _el$0 = _el$9.firstChild;
-    var _ref$ = scrollRef;
-    typeof _ref$ === "function" ? use(_ref$, _el$0) : scrollRef = _el$0;
+    use((el) => onCleanup(setupAutoScroll(el)), _el$0);
     insert(_el$0, createComponent(Show, {
       get when() {
         return !isEmpty();

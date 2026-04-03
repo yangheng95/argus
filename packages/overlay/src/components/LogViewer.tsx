@@ -9,10 +9,12 @@ import {
   createEffect,
   createSignal,
   createMemo,
+  onCleanup,
   For,
   Show,
   onMount,
 } from "solid-js";
+import { setupAutoScroll } from "../utils/dom-utils";
 import { appStore, setAppStore, filteredLogEntries } from "../store/app";
 import type { LogEntry, LogLevel, LogSource } from "../store/app";
 import { t } from "../utils/i18n";
@@ -411,7 +413,6 @@ export interface LogViewerProps {
 
 export function LogViewer(props: LogViewerProps) {
   let dialogRef: HTMLDialogElement | undefined;
-  let bodyRef: HTMLDivElement | undefined;
 
   const [loading, setLoading] = createSignal(false);
   const [serverLogsSeq, setServerLogsSeq] = createSignal(0);
@@ -434,11 +435,6 @@ export function LogViewer(props: LogViewerProps) {
     } finally {
       setLoading(false);
     }
-    scrollToBottom();
-  };
-
-  const scrollToBottom = () => {
-    if (bodyRef) bodyRef.scrollTop = bodyRef.scrollHeight;
   };
 
   const handleCopy = async () => {
@@ -478,11 +474,6 @@ export function LogViewer(props: LogViewerProps) {
     if (dialog.open) dialog.close();
   });
 
- // Scroll to bottom whenever entries change
-  const doScroll = () => {
- // Use a microtask to ensure the DOM has updated
-    Promise.resolve().then(() => scrollToBottom());
-  };
 
   return (
     <dialog
@@ -558,7 +549,7 @@ export function LogViewer(props: LogViewerProps) {
         <div
           id="logViewerBody"
           class="log-viewer"
-          ref={(el) => (bodyRef = el)}
+          ref={(el) => onCleanup(setupAutoScroll(el))}
         >
           <Show
             when={entries().length > 0}
@@ -567,10 +558,7 @@ export function LogViewer(props: LogViewerProps) {
             }
           >
             <For each={entries()} fallback={null}>
-              {(entry) => {
-                doScroll();
-                return <LogLine entry={entry} />;
-              }}
+              {(entry) => <LogLine entry={entry} />}
             </For>
           </Show>
         </div>

@@ -49,6 +49,9 @@ export interface AgentCardMessage {
   _agentGoalID?: string;
   _agentGoalTitle?: string;
   _agentGoalStatus?: string;
+  _agentGoalDescription?: string;
+  _agentGoalSteps?: Array<{ stepID: string; label: string; status: string; summary?: string }>;
+  _agentArchitect?: { summary: string; categories?: string[] };
   _agentInternalCards?: AgentCardMessage[];
   info: MessageInfo;
   parts: Part[];
@@ -537,7 +540,10 @@ function computeAgentCards(): { cards: Record<string, AgentCardMessage>; order: 
   const rootSID = rootTaskSessionID();
   for (const message of store.messages) {
     const stage = message.info?.channel || classifyMessage(message, rootSID);
-    if (stage === "main") continue;
+    if (stage === "main" || stage === "filtered") continue;
+    // Skip user-role messages inside agent cards — they are internal orchestrator
+    // prompts (goal prompts, trigger messages), never actual user input.
+    if (String(message.info?.role || "").toLowerCase() === "user") continue;
     const sessionID =
       typeof message?.info?.sessionID === "string" ? message.info.sessionID.trim() : "";
     const fallbackID =
@@ -601,18 +607,50 @@ function computeAgentCards(): { cards: Record<string, AgentCardMessage>; order: 
     roundsByStage[stage] = existing;
   }
 
-  // Goal title lookup (display only)
-  const goalsBySession = new Map<string, { id: string; title: string; status: string }>();
+  // ── Goal group assembly ──
+  // Board-driven: use goalWorkflows + lanes for goal info & sessionID→goalID mapping.
+  // Executor messages are matched to goals via sessionID.
+  // Other per-goal stages (planner, evaluator) use message goalID (bridge-stamped).
+  // All per-goal stages are collected into goal group cards.
+  // Task-scope stages (goal/decompose, architect, delivery, spec) stay standalone.
+
+  const PER_GOAL_STAGES = new Set(["planner", "executor", "evaluator"]);
+
+  // Build sessionID→goalID + goalID→info maps from board data
+  const sessionToGoal = new Map<string, string>();
+  const goalInfoMap = new Map<string, { id: string; title: string; status: string }>();
+
+  for (const gw of boardStore.board?.goalWorkflows || []) {
+    goalInfoMap.set(gw.goalID, { id: gw.goalID, title: gw.goalTitle, status: gw.goalStatus });
+  }
   const goalsLane = (boardStore.board?.lanes || []).find((l: any) => l.id === "goals");
   for (const card of goalsLane?.cards || []) {
+    if (!goalInfoMap.has(card.id)) {
+      goalInfoMap.set(card.id, { id: card.id, title: card.title || "", status: card.status || "pending" });
+    }
     const sid = card?.metadata?.sessionID;
     if (typeof sid === "string" && sid) {
-      goalsBySession.set(sid, {
-        id: card.id,
-        title: card.title || "",
-        status: card.status || "pending",
-      });
+      sessionToGoal.set(sid, card.id);
     }
+    // Also map executorSessionID (the opencode executor's native session)
+    const exSid = card?.metadata?.executorSessionID;
+    if (typeof exSid === "string" && exSid) {
+      sessionToGoal.set(exSid, card.id);
+    }
+  }
+
+  /** Resolve goalID for a round: session mapping (executor) → message goalID (bridge) → "" */
+  function resolveGoalID(round: AgentRound): string {
+    // 1. Session-based (from board lanes, reliable for executor)
+    if (round.sessionID && sessionToGoal.has(round.sessionID)) {
+      return sessionToGoal.get(round.sessionID)!;
+    }
+    // 2. Message-based (bridge-stamped goalID, for planner/evaluator)
+    for (const msg of round.messages) {
+      const gid = typeof msg?.info?.goalID === "string" ? msg.info.goalID : "";
+      if (gid) return gid;
+    }
+    return "";
   }
 
   const nextCards: Record<string, AgentCardMessage> = {};
@@ -647,111 +685,109 @@ function computeAgentCards(): { cards: Record<string, AgentCardMessage>; order: 
     };
   }
 
+  // Collect per-goal step cards: goalID → step entries
+  const goalStepCards = new Map<string, { stage: string; card: AgentCardMessage; startTime: number }[]>();
+
   for (const [stage, rounds] of Object.entries(roundsByStage)) {
     rounds.sort((left, right) => left.startTime - right.startTime);
 
-    if (stage === "executor") {
-      const bySession = new Map<string, AgentRound[]>();
-      const noSession: AgentRound[] = [];
-      for (const round of rounds) {
-        const sid = round.sessionID || "";
-        if (sid) {
-          const arr = bySession.get(sid) || [];
-          arr.push(round);
-          bySession.set(sid, arr);
+    if (PER_GOAL_STAGES.has(stage)) {
+      for (let index = 0; index < rounds.length; index += 1) {
+        const round = rounds[index];
+        const gid = resolveGoalID(round);
+        const roundLabel = rounds.length > 1 ? index + 1 : 0;
+        const status = agentRoundStatus(stage, round, index, rounds, latestEventByStage.get(stage));
+        const card = buildCard(stage, round, roundLabel, status);
+
+        if (gid) {
+          const entries = goalStepCards.get(gid) || [];
+          entries.push({ stage, card, startTime: round.startTime });
+          goalStepCards.set(gid, entries);
         } else {
-          noSession.push(round);
+          // No goal association — standalone card
+          nextCards[round.channelID] = card;
+          nextOrder.push(round.channelID);
         }
       }
-
-      if (bySession.size <= 1 && noSession.length === 0) {
-        const allRounds = [...bySession.values()].flat();
-        if (allRounds.length > 0) {
-          const merged: AgentRound = {
-            channelID: `executor:session:${allRounds[0].sessionID}`,
-            stage,
-            sessionID: allRounds[0].sessionID,
-            messages: allRounds.flatMap((r) => r.messages),
-            startTime: Math.min(...allRounds.map((r) => r.startTime)),
-            endTime: Math.max(...allRounds.map((r) => r.endTime)),
-          };
-          const status = agentRoundStatus(stage, merged, 0, [merged], latestEventByStage.get(stage));
-          const cardID = merged.channelID;
-          nextCards[cardID] = buildCard(stage, merged, 0, status);
-          nextOrder.push(cardID);
-        }
-        continue;
+    } else {
+      // Task-scope stages: standalone cards
+      for (let index = 0; index < rounds.length; index += 1) {
+        const round = rounds[index];
+        const roundLabel = rounds.length > 1 ? index + 1 : 0;
+        const status = agentRoundStatus(stage, round, index, rounds, latestEventByStage.get(stage));
+        const cardID = round.channelID;
+        nextCards[cardID] = buildCard(stage, round, roundLabel, status);
+        nextOrder.push(cardID);
       }
-
-      for (const [sid, sessionRounds] of bySession) {
-        const groupKey = `executor:session:${sid}`;
-        sessionRounds.sort((left, right) => left.startTime - right.startTime);
-
-        const childCards: AgentCardMessage[] = [];
-        for (let i = 0; i < sessionRounds.length; i += 1) {
-          const round = sessionRounds[i];
-          const childLabel = sessionRounds.length > 1 ? i + 1 : 0;
-          const childStatus = agentRoundStatus(stage, round, i, sessionRounds, undefined);
-          childCards.push(buildCard(stage, round, childLabel, childStatus));
-        }
-
-        const groupStart = Math.min(...sessionRounds.map((r) => r.startTime));
-        const groupStatus = childCards.some((c) => c._agentStatus === "running")
-          ? "running"
-          : childCards.some((c) => c._agentStatus === "error")
-            ? "error"
-            : "completed";
-
-        const goalInfo = goalsBySession.get(sid);
-        nextCards[groupKey] = {
-          _synthetic: true,
-          _agentCard: true,
-          _agentGoalGroup: true,
-          _agentGoalID: goalInfo?.id || sid,
-          _agentGoalTitle: goalInfo?.title || "",
-          _agentGoalStatus: goalInfo?.status || "running",
-          _agentInternalCards: childCards,
-          _agentStage: stage,
-          _agentStatus: groupStatus,
-          _agentRound: 0,
-          _agentCardKey: groupKey,
-          _agentMessages: [],
-          info: {
-            id: `agent-card:${groupKey}`,
-            role: "agent-card",
-            agent: stage,
-            sessionID: sid,
-            time: { created: Number.isFinite(groupStart) && groupStart > 0 ? groupStart : Date.now() },
-          },
-          parts: [],
-        };
-        nextOrder.push(groupKey);
-      }
-
-      for (let i = 0; i < noSession.length; i += 1) {
-        const round = noSession[i];
-        const label = noSession.length > 1 ? i + 1 : 0;
-        const status = agentRoundStatus(stage, round, i, noSession, undefined);
-        nextCards[round.channelID] = buildCard(stage, round, label, status);
-        nextOrder.push(round.channelID);
-      }
-      continue;
     }
+  }
 
-    for (let index = 0; index < rounds.length; index += 1) {
-      const round = rounds[index];
-      const roundLabel = rounds.length > 1 ? index + 1 : 0;
-      const status = agentRoundStatus(
-        stage,
-        round,
-        index,
-        rounds,
-        latestEventByStage.get(stage),
-      );
-      const cardID = round.channelID;
-      nextCards[cardID] = buildCard(stage, round, roundLabel, status);
-      nextOrder.push(cardID);
-    }
+  // Build goal group cards — board-driven: every goal from board gets a card,
+  // even if no planner/executor/evaluator messages have arrived yet.
+  // Look up goal descriptions from board lanes
+  const goalDescMap = new Map<string, string>();
+  for (const gc of goalsLane?.cards || []) {
+    const desc = gc.detail || gc.description;
+    if (gc.id && desc) goalDescMap.set(gc.id, desc);
+  }
+
+  // Build per-goal step info from goalWorkflows
+  const goalStepsMap = new Map<string, Array<{ stepID: string; label: string; status: string; summary?: string }>>();
+  for (const gw of boardStore.board?.goalWorkflows || []) {
+    goalStepsMap.set(gw.goalID, (gw.steps || []).map((s: any) => ({
+      stepID: s.stepID, label: s.label, status: s.status, summary: s.summary,
+    })));
+  }
+
+  // Architect summary (shared across all goals)
+  const architectData = boardStore.board?.architect as { summary?: string; categories?: string[] } | undefined;
+
+  // Ensure every board goal has an entry in goalStepCards (may be empty)
+  for (const [gid] of goalInfoMap) {
+    if (!goalStepCards.has(gid)) goalStepCards.set(gid, []);
+  }
+
+  for (const [gid, entries] of goalStepCards) {
+    entries.sort((a, b) => a.startTime - b.startTime);
+    const goalInfo = goalInfoMap.get(gid);
+    const groupKey = `goal-group:${gid}`;
+    const groupStart = entries.length > 0
+      ? Math.min(...entries.map(e => e.startTime))
+      : Date.now();
+    const groupStatus = entries.length === 0
+      ? (goalInfo?.status === "passed" || goalInfo?.status === "failed" ? goalInfo.status : "pending")
+      : entries.some(e => e.card._agentStatus === "running")
+        ? "running"
+        : entries.some(e => e.card._agentStatus === "error")
+          ? "error"
+          : "completed";
+
+    nextCards[groupKey] = {
+      _synthetic: true,
+      _agentCard: true,
+      _agentGoalGroup: true,
+      _agentGoalID: gid,
+      _agentGoalTitle: goalInfo?.title || "",
+      _agentGoalStatus: goalInfo?.status || groupStatus,
+      _agentGoalDescription: goalDescMap.get(gid) || "",
+      _agentGoalSteps: goalStepsMap.get(gid),
+      _agentArchitect: architectData?.summary ? { summary: architectData.summary, categories: architectData.categories } : undefined,
+      _agentInternalCards: entries.map(e => e.card),
+      _agentStage: "executor",
+      _agentStatus: groupStatus,
+      _agentRound: 0,
+      _agentCardKey: groupKey,
+      _agentMessages: [],
+      info: {
+        id: `agent-card:${groupKey}`,
+        role: "agent-card",
+        agent: "executor",
+        sessionID: entries[0]?.card.info.sessionID || "",
+        time: { created: Number.isFinite(groupStart) && groupStart > 0 ? groupStart : Date.now() },
+      },
+      parts: [],
+    };
+    nextOrder.push(groupKey);
   }
 
   nextOrder.sort(

@@ -11,17 +11,15 @@
  *   3. Update goal_run status in DB
  *   4. That's it. No planning, no evaluation, no retry logic.
  *
- * Design (from SVG spec — agent-driven, not state machine):
- *   - This is one of several TOOLS the Task Agent can call
- *   - Task Agent decides: when to execute, whether to plan first, whether to eval after
- *   - Retry is agent reasoning, not mechanical policy
+ * IMPORTANT: This is INFRASTRUCTURE. Per the architecture spec:
+ *   - goal_run writer: Infrastructure (this file)
+ *   - goal writer: Task Agent ONLY
+ *   - Infrastructure NEVER writes goal.status — that's the Task Agent's decision.
  */
 
 import { Log } from "@/util/log"
 import { Event } from "@/orchestrator/model"
 import { OrchestratorProtocol } from "@/orchestrator/protocol"
-import { Database, eq } from "@/storage/db"
-import { OrchestratorGoalTable } from "@/orchestrator/orchestrator.sql"
 import { updateGoalRun, updateGoalRunExecutorSessionStatus, persistDelivery } from "@/orchestrator/persist"
 import { Identifier } from "@/id/id"
 import { deliveryFromWorktreeGit, cleanupGoalWorkspace } from "@/goal/runner"
@@ -40,9 +38,8 @@ const HEARTBEAT_INTERVAL_MS = 30_000
 /**
  * Execute a single goal: stream executor events, extract delivery.
  *
- * Returns an async generator of PipelineEvents. The Task Agent consumes
- * the "completed" event (with delivery) and decides what to do next
- * (eval? merge? retry? — that's the agent's decision, not ours).
+ * Returns an async generator of PipelineEvents.
+ * Infrastructure only writes goal_run status. Goal status is the Task Agent's decision.
  */
 export async function* runGoalPipeline(
   contract: GoalContract,
@@ -69,8 +66,14 @@ export async function* runGoalPipeline(
     }
 
     if (!delivery) {
-      markGoalFailed(goalRunID, goal.id, task.id, goalLabel(goal),
-        "Executor did not produce a delivery", workDir)
+      // Only update goal_run — NOT goal.status (that's the Task Agent's job)
+      updateGoalRun(goalRunID, {
+        status: "failed",
+        error: "Executor did not produce a delivery",
+        time_completed: Date.now(),
+      })
+      updateGoalRunExecutorSessionStatus(goalRunID, "failed")
+      if (workDir) cleanupGoalWorkspace(workDir).catch(() => {})
       yield { type: "failed", error: "Executor did not produce a delivery", failureClass: "bug" }
       return
     }
@@ -85,20 +88,11 @@ export async function* runGoalPipeline(
       now: Date.now(),
     })
 
-    // Mark goal run completed (execution done — Task Agent decides what's next)
+    // Mark goal_run completed — NOT goal.status (Task Agent decides after eval)
     updateGoalRun(goalRunID, { status: "completed", time_completed: Date.now() })
-    Database.use((db) =>
-      db.update(OrchestratorGoalTable)
-        .set({ status: "passed", time_updated: Date.now() })
-        .where(eq(OrchestratorGoalTable.id, goal.id))
-        .run(),
-    )
+    updateGoalRunExecutorSessionStatus(goalRunID, "completed")
 
-    OrchestratorProtocol.emit(Event.GoalPassed, {
-      taskID: task.id, goalID: goal.id, summary: goalLabel(goal),
-    }, { source: "goal-executor" }).catch(() => {})
-
-    log.info("goal execution completed", {
+    log.info("goal_run completed", {
       goalRunID, goalID: goal.id, files: delivery.diffs.length,
     })
 
@@ -110,40 +104,16 @@ export async function* runGoalPipeline(
       return
     }
     const error = err instanceof Error ? err.message : String(err)
-    log.error("goal execution failed", { goalRunID, goalID: goal.id, error })
-    markGoalFailed(goalRunID, goal.id, task.id, goalLabel(goal), `Execution error: ${error}`, workDir)
+    log.error("goal_run failed", { goalRunID, goalID: goal.id, error })
+    updateGoalRun(goalRunID, {
+      status: "failed",
+      error: `Execution error: ${error}`,
+      time_completed: Date.now(),
+    })
+    updateGoalRunExecutorSessionStatus(goalRunID, "failed")
+    if (workDir) cleanupGoalWorkspace(workDir).catch(() => {})
     yield { type: "failed", error, failureClass: "bug" }
   }
-}
-
-// ---------------------------------------------------------------------------
-// Mark goal as failed
-// ---------------------------------------------------------------------------
-
-function markGoalFailed(
-  goalRunID: string,
-  goalID: string,
-  taskID: string,
-  label: string,
-  error: string,
-  workDir?: string,
-) {
-  updateGoalRun(goalRunID, {
-    status: "failed",
-    error,
-    time_completed: Date.now(),
-  })
-  updateGoalRunExecutorSessionStatus(goalRunID, "failed")
-  Database.use((db) =>
-    db.update(OrchestratorGoalTable)
-      .set({ status: "failed", time_updated: Date.now() })
-      .where(eq(OrchestratorGoalTable.id, goalID))
-      .run(),
-  )
-  OrchestratorProtocol.emit(Event.GoalFailed, {
-    taskID, goalID, summary: `${label}: ${error.slice(0, 200)}`,
-  }, { source: "goal-executor" }).catch(() => {})
-  if (workDir) cleanupGoalWorkspace(workDir).catch(() => {})
 }
 
 // ---------------------------------------------------------------------------
@@ -170,10 +140,46 @@ async function* streamExecutorEvents(
     return await extractDelivery(goalRunID, workDir, goal.id)
   }
 
-  let lastHeartbeat = Date.now()
-  for await (const event of executor.events({ sessionID, queueTaskID, signal })) {
-    if (signal.aborted) break
+  // Three-layer completion detection (matches production patterns):
+  // 1. Primary: event stream delivers task-queue.completed → for-await loop exits
+  // 2. Fallback: status poller detects executor finished every 5s
+  // 3. Safety net: inactivity timeout — no events AND no status change → dead
+  const INACTIVITY_TIMEOUT_MS = Number(process.env.OPENCORVUS_GOAL_INACTIVITY_TIMEOUT_MS) || 90_000
+  const STATUS_POLL_INTERVAL_MS = 5_000
 
+  const streamAbort = new AbortController()
+  const combinedSignal = AbortSignal.any([signal, streamAbort.signal])
+  let streamDone = false
+  let lastActivityAt = Date.now()
+
+  // Status poller + inactivity watchdog
+  const poller = (async () => {
+    while (!streamDone && !combinedSignal.aborted) {
+      await new Promise(r => setTimeout(r, STATUS_POLL_INTERVAL_MS))
+      if (streamDone || combinedSignal.aborted) break
+      try {
+        const s = await executor.status(queueTaskID)
+        if (s.status === "completed" || s.status === "failed") {
+          log.info("status poller detected executor completion", { goalRunID, status: s.status })
+          streamAbort.abort("executor completed (poller)")
+          break
+        }
+      } catch { /* ignore status check errors */ }
+      // Inactivity watchdog: if no event activity for INACTIVITY_TIMEOUT_MS, abort
+      const inactiveMs = Date.now() - lastActivityAt
+      if (inactiveMs >= INACTIVITY_TIMEOUT_MS) {
+        log.warn("inactivity timeout — no executor events", { goalRunID, inactiveMs })
+        streamAbort.abort("inactivity timeout")
+        break
+      }
+    }
+  })()
+
+  let lastHeartbeat = Date.now()
+  for await (const event of executor.events({ sessionID, queueTaskID, signal: combinedSignal })) {
+    if (combinedSignal.aborted) break
+
+    lastActivityAt = Date.now()
     yield { type: "executor_event", event }
 
     const now = Date.now()
@@ -185,6 +191,9 @@ async function* streamExecutorEvents(
       yield { type: "heartbeat" }
     }
   }
+  streamDone = true
+  streamAbort.abort("stream ended")
+  await poller.catch(() => {})
 
   if (signal.aborted) return undefined
 
@@ -199,7 +208,7 @@ async function* streamExecutorEvents(
   }))
 
   if (status.status !== "completed") {
-    log.error("goal executor failed", { runID: run.id, goalRunID, error: status.error })
+    log.error("goal_run executor status not completed", { runID: run.id, goalRunID, goalID: goal.id, statusResult: status.status, error: status.error })
     updateGoalRun(goalRunID, { status: "failed", error: status.error ?? "Executor failed", time_completed: Date.now() })
     updateGoalRunExecutorSessionStatus(goalRunID, "failed")
     return undefined

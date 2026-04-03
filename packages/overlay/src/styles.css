@@ -3678,6 +3678,12 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
   background: rgba(255, 255, 255, 0.12);
   border-radius: 2px;
 }
+.executor-goal-body--preview {
+  max-height: calc(68px * var(--ui-scale));
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to bottom, black 40%, transparent 100%);
+  mask-image: linear-gradient(to bottom, black 40%, transparent 100%);
+}
 .executor-goal-description {
   font-size: calc(11px * var(--ui-scale));
   color: rgba(255, 255, 255, 0.55);
@@ -3884,6 +3890,12 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
 .agent-card-body::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.12);
   border-radius: 2px;
+}
+.agent-card-body--preview {
+  max-height: calc(68px * var(--ui-scale));
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to bottom, black 40%, transparent 100%);
+  mask-image: linear-gradient(to bottom, black 40%, transparent 100%);
 }
 
 /* Individual tool entries — item row + optional output block */
