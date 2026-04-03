@@ -618,6 +618,8 @@ export const TaskBoardGoalWorkflowStep = z.object({
   status: z.enum(["pending", "running", "completed", "skipped", "failed"]),
   startedAt: z.number().optional(),
   completedAt: z.number().optional(),
+  /** Human-readable summary: "5 steps", "12 files", "3/4 checks" */
+  summary: z.string().optional(),
 })
 
 export const TaskBoardGoalWorkflow = z.object({
@@ -751,7 +753,7 @@ export const RunMetrics = z.object({
   delivery_focus_score: z.number(),
 })
 
-export type AgentStageType = "assistant" | "requirements" | "spec" | "goal" | "planner" | "evaluator" | "delivery"
+export type AgentStageType = "assistant" | "requirements" | "spec" | "goal" | "architect" | "planner" | "evaluator" | "delivery"
 
 export const Event = {
   AgentUpdated: BusEvent.define("agent.updated", z.object({ taskID: z.string(), runID: z.string().optional(), stage: z.string(), kind: z.string(), id: z.string().optional(), toolName: z.string().optional(), text: z.string().optional(), summary: z.string() })),

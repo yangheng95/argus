@@ -10,6 +10,7 @@ export type AgentRole =
   | "user"
   | "assistant"
   | "spec"
+  | "architect"
   | "planner"
   | "goal"
   | "executor"
@@ -18,7 +19,7 @@ export type AgentRole =
   | "system";
 
 /** Stages that get their own collapsible AgentCard in the conversation view. */
-export const AGENT_CARD_STAGES = new Set<AgentRole>(["spec", "planner", "goal", "executor", "evaluator", "delivery"]);
+export const AGENT_CARD_STAGES = new Set<AgentRole>(["spec", "architect", "planner", "goal", "executor", "evaluator", "delivery"]);
 
 /**
  * Map any backend agent name to a canonical AgentRole.
@@ -30,6 +31,7 @@ export function normalizeAgentRole(name: string): AgentRole {
   if (text === "user") return "user";
   if (text === "orchestrator" || text === "task_agent") return "assistant";
   if (text === "spec") return "spec";
+  if (text === "architect" || text === "architecture" || text === "coordination") return "architect";
   if (text === "planner" || text === "plan" || text === "planning" || text === "replan") return "planner";
   if (text === "goal" || text === "goal_gate") return "goal";
   if (text === "executor" || text === "build" || text === "coding" ||
@@ -48,6 +50,7 @@ export function normalizeAgentRole(name: string): AgentRole {
  */
 export function agentRoleToSectionPhase(role: AgentRole): string {
   if (role === "spec") return "spec";
+  if (role === "architect") return "architect";
   if (role === "planner") return "plan";
   if (role === "goal") return "goals";
   if (role === "executor") return "executor";
@@ -89,6 +92,7 @@ export function orderedMessageParts(message: any): any[] {
 export function roleLabel(role: string): string {
   if (role === "user") return t("chat.role.user");
   if (role === "assistant") return t("chat.role.assistant");
+  if (role === "architect") return t("chat.role.architect");
   if (role === "planner") return t("chat.role.planner");
   if (role === "evaluator") return t("chat.role.evaluator");
   if (role === "delivery") return t("chat.role.delivery");
@@ -141,6 +145,7 @@ export function classifyMessage(msg: any, rootSessionID: string): string {
 export function agentStageLabel(stage: string): string {
   const role = normalizeAgentRole(stage);
   if (role === "spec") return t("chat.role.spec");
+  if (role === "architect") return t("chat.role.architect");
   if (role === "planner") return t("chat.role.planner");
   if (role === "goal") return t("chat.role.goal");
   if (role === "evaluator") return t("chat.role.evaluator");

@@ -50,6 +50,9 @@ function buildBoard(task: typeof OrchestratorTaskTable.$inferSelect) {
   const plan = task.active_plan_version_id
     ? Database.use((db) => db.select().from(OrchestratorPlanVersionTable).where(eq(OrchestratorPlanVersionTable.id, task.active_plan_version_id!)).get())
     : undefined
+  // Query goals by plan if available, otherwise fall back to task_id so that
+  // goals created during decomposition are visible before create_run sets
+  // active_plan_version_id.
   const goals = plan
     ? Database.use((db) =>
         db
@@ -59,7 +62,14 @@ function buildBoard(task: typeof OrchestratorTaskTable.$inferSelect) {
           .orderBy(OrchestratorGoalTable.order_index)
           .all(),
       )
-    : []
+    : Database.use((db) =>
+        db
+          .select()
+          .from(OrchestratorGoalTable)
+          .where(eq(OrchestratorGoalTable.task_id, task.id))
+          .orderBy(OrchestratorGoalTable.order_index)
+          .all(),
+      )
   const goalRunSessionMap = run
     ? new Map(
         Database.use((db) =>
@@ -868,6 +878,7 @@ function buildWorkflowFields(
           status: (gws?.steps[s.id]?.status ?? "pending") as "pending" | "running" | "completed" | "skipped" | "failed",
           startedAt: gws?.steps[s.id]?.startedAt,
           completedAt: gws?.steps[s.id]?.completedAt,
+          summary: buildStepSummary(task.id, goal.id, s.id, gws?.steps[s.id]?.status),
         })),
     }
   })
@@ -919,6 +930,66 @@ function buildRequirements(taskID: string) {
   } catch {
     return undefined
   }
+}
+
+/** Build per-step summary text (e.g., "5 steps", "12 files", "3/4 checks") */
+function buildStepSummary(taskID: string, goalID: string, stepID: string, status?: string): string | undefined {
+  if (!status || status === "pending") return undefined
+  try {
+    if (stepID === "plan") {
+      // Count plan node steps for this goal
+      const { OrchestratorPlanNodeTable } = require("@/orchestrator/orchestrator.sql")
+      const nodes = Database.use((db: any) =>
+        db.select().from(OrchestratorPlanNodeTable)
+          .where(eq(OrchestratorPlanNodeTable.goal_id, goalID))
+          .all()
+      )
+      if (nodes?.length) return `${nodes.length} steps`
+    }
+    if (stepID === "execute") {
+      // Count changed files from goal delivery
+      const { OrchestratorGoalRunTable, OrchestratorDeliveryTable } = require("@/orchestrator/orchestrator.sql")
+      const goalRun = Database.use((db: any) =>
+        db.select().from(OrchestratorGoalRunTable)
+          .where(eq(OrchestratorGoalRunTable.goal_id, goalID))
+          .limit(1).get()
+      )
+      if (goalRun) {
+        const delivery = Database.use((db: any) =>
+          db.select().from(OrchestratorDeliveryTable)
+            .where(eq(OrchestratorDeliveryTable.goal_run_id, goalRun.id))
+            .limit(1).get()
+        )
+        if (delivery) {
+          const result = delivery.result as { changed_files?: string[]; diffs?: unknown[] } | null
+          const fileCount = result?.changed_files?.length ?? result?.diffs?.length ?? 0
+          if (fileCount > 0) return `${fileCount} files`
+        }
+      }
+    }
+    if (stepID === "eval") {
+      // Count evaluation checks
+      const { OrchestratorEvaluationTable, OrchestratorGoalRunTable } = require("@/orchestrator/orchestrator.sql")
+      const goalRun = Database.use((db: any) =>
+        db.select().from(OrchestratorGoalRunTable)
+          .where(eq(OrchestratorGoalRunTable.goal_id, goalID))
+          .limit(1).get()
+      )
+      if (goalRun) {
+        const evaluation = Database.use((db: any) =>
+          db.select().from(OrchestratorEvaluationTable)
+            .where(eq(OrchestratorEvaluationTable.goal_run_id, goalRun.id))
+            .limit(1).get()
+        )
+        if (evaluation) {
+          const checks = Array.isArray(evaluation.checks) ? evaluation.checks : []
+          const passed = checks.filter((c: any) => c.status === "passed").length
+          return `${passed}/${checks.length} checks`
+        }
+      }
+    }
+  } catch { /* best effort */ }
+  return undefined
 }
 
 /** Build architect summary from Decision Log */

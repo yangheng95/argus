@@ -16,7 +16,7 @@ let initialized = false
 
 /** Canonical display roles for the overlay UI. */
 type OverlayRole =
-  | "user" | "assistant" | "spec" | "planner" | "goal"
+  | "user" | "assistant" | "spec" | "architect" | "planner" | "goal"
   | "executor" | "evaluator" | "delivery" | "system"
 
 /** Map raw agent name → canonical overlay role. Single source of truth. */
@@ -26,6 +26,7 @@ export function resolveRole(agent: string): OverlayRole {
   if (a === "user") return "user"
   if (a === "orchestrator" || a === "task_agent") return "assistant"
   if (a === "spec") return "spec"
+  if (a === "architect" || a === "architecture" || a === "coordination") return "architect"
   if (a === "planner" || a === "plan" || a === "planning" || a === "replan") return "planner"
   if (a === "goal" || a === "goal_gate") return "goal"
   if (a === "executor" || a === "build" || a === "coding" || a === "general" || a === "explore" || a === "execute" || a === "opencode" || a === "codex" || a === "claude-code") return "executor"
@@ -36,7 +37,7 @@ export function resolveRole(agent: string): OverlayRole {
 }
 
 /** Stages that get their own AgentCard in the overlay. */
-const CARD_STAGES = new Set<OverlayRole>(["spec", "planner", "goal", "executor", "evaluator", "delivery"])
+const CARD_STAGES = new Set<OverlayRole>(["spec", "architect", "planner", "goal", "executor", "evaluator", "delivery"])
 
 /**
  * Compute overlay metadata for a message event.
@@ -59,7 +60,10 @@ export function overlayMeta(
     // agent card that owns this session so they are visible alongside replies.
     const parentRole = sessionRole(sessionID)
     const resolved = parentRole ? resolveRole(parentRole) : ("user" as OverlayRole)
-    const channel = CARD_STAGES.has(resolved) ? resolved : "main"
+    // Route to the parent stage's card if it has one; otherwise these are
+    // internal orchestrator prompts (e.g. Task Agent → child) that should
+    // NOT appear in the main conversation — mark as "filtered".
+    const channel = CARD_STAGES.has(resolved) ? resolved : "filtered"
     return { resolvedRole: "user" as OverlayRole, channel }
   }
 

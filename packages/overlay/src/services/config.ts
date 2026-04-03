@@ -175,7 +175,8 @@ export async function scaffoldProjectConfig(dir: string): Promise<void> {
   const configFile = base + "/.opencorvus/opencorvus.jsonc";
   const username = settingsStore.username || "";
   const unattended = appStore.config?.experimental?.unattended !== false;
-  // Default values aligned with OrchestratorConfig.defaults on the server
+  // Default values aligned with OrchestratorConfig.defaults on the server.
+  // Keep in sync with packages/opencorvus/src/orchestrator/config.ts DEFAULTS.
   const config = {
     $schema: "https://opencorvus.ai/config.json",
     experimental: {
@@ -187,12 +188,14 @@ export async function scaffoldProjectConfig(dir: string): Promise<void> {
     },
     assistant: {
       decompose: { max_steps: 30, timeout_ms: 300000, quality_threshold: 0.5, max_attempts: 3 },
+      architect: { max_steps: 20, timeout_ms: 180000 },
       planner: { max_steps: 30, timeout_ms: 300000, quality_threshold: 0.5, max_attempts: 3 },
       evaluator: { max_steps: 25, timeout_ms: 240000 },
       delivery: { max_steps: 40, timeout_ms: 600000, max_retries: 2 },
       max_runs: 10,
       max_fix_runs: 5,
       max_executor_groups: 1,
+      default_workflow: "standard",
     },
     compaction: {
       auto: true,

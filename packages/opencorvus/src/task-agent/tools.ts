@@ -369,6 +369,18 @@ export function createTaskAgentTools(input: {
           : allGoals
 
         const task = requireTask(taskID)
+
+        // Register architect session so its messages appear in the overlay architect card
+        const architectSession = await Session.createNext({
+          parentID: input.agentSessionID,
+          title: `Architect: ${task.title}`,
+          directory: Instance.directory,
+        })
+        registerGoalRunSession(architectSession.id, taskID, "architect")
+        const hooks = sessionStreamHooks({ sessionID: architectSession.id, taskID, stage: "architect" })
+        const architectLive = agentStream({ taskID, stage: "architect" })
+        await architectLive.start("Architect coordination started")
+
         const { createDecisionLog } = await import("@/decision-log")
         const decisionLog = createDecisionLog(taskID)
 
@@ -394,6 +406,8 @@ export function createTaskAgentTools(input: {
           decisionLog,
           signal: input.signal,
         })
+
+        await architectLive.finish("Architect coordination finished")
 
         const summary = [
           `Architect coordination complete: ${result.entriesWritten} contracts written to Decision Log.`,
