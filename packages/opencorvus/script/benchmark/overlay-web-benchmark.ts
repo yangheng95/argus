@@ -1084,7 +1084,15 @@ async function launchBrowser(headless: boolean) {
     executablePath,
     headless: headless ? "new" : false,
     userDataDir: mkdtempSync(path.join(os.tmpdir(), "pptr-overlay-web-benchmark-")),
-    args: ["--no-sandbox", "--no-first-run", "--no-default-browser-check"],
+    args: [
+      "--no-sandbox",
+      "--no-first-run",
+      "--no-default-browser-check",
+      "--disable-gpu",
+      "--disable-dev-shm-usage",
+      "--disable-setuid-sandbox",
+      "--disable-extensions",
+    ],
   })
 }
 

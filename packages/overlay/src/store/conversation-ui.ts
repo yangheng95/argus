@@ -12,10 +12,12 @@ export function clearConversationUiState(): void {
   setStore("expandedToolOutputs", reconcile({}, { merge: false }));
 }
 
-export function agentCardExpanded(cardID: string, _running?: boolean): boolean {
+export function agentCardExpanded(cardID: string, running?: boolean): boolean {
   if (!cardID) return false;
   const explicit = store.expandedAgentCards[cardID];
-  return typeof explicit === "boolean" ? explicit : false;
+  if (typeof explicit === "boolean") return explicit;
+  // Default: expanded while running, collapsed when done
+  return running === true;
 }
 
 export function toggleAgentCardExpanded(cardID: string, running: boolean): void {

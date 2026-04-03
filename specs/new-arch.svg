@@ -303,7 +303,7 @@
   <text class="mono" x="40" y="178">goal_run         writer: Infrastructure          per-goal execution instance (status: queued→running→completed|failed)</text>
   <text class="mono" x="40" y="194">plan_node        writer: Planner Agent           per-goal implementation steps</text>
   <text class="mono" x="40" y="210">delivery         writer: Infrastructure          per-goal delivery (diffs)</text>
-  <text class="mono" x="40" y="226">evaluation       writer: Infrastructure (auto-eval) / Eval Agent (manual re-eval via eval_goal)  per-goal verdict + evidence</text>
+  <text class="mono" x="40" y="226">evaluation       writer: Infrastructure (auto-eval) / Eval Agent (manual re-eval via eval_goal)  per-goal verdict + evidence; 按 task_id + goal_run_id 双索引</text>
   <text class="mono" x="40" y="242">decision_log     writer: ALL agents (append)     shared context — Architect 是主要写入者 (接口契约·目录蓝图·导出清单)</text>
 
   <!-- Task Agent actions -->
@@ -316,12 +316,12 @@
   <text class="mono" x="40" y="360">  eval_goal(goalID)           → 手动重评 (eval 已由 Infrastructure 自动完成, 仅用于 retry 后重新评估)</text>
 
   <text class="mono-h" x="40" y="384">调用 Infrastructure:</text>
-  <text class="mono" x="40" y="400">  execute_goal(goalID)        → 重置 goal 为 pending → worktree + executor submit (async, 完成后 re-trigger)</text>
+  <text class="mono" x="40" y="400">  execute_goal(goalID)        → 重置 goal 为 pending → worktree + executor submit (async, 完成后 re-trigger); retry 时自动追加上次 eval 失败 evidence 到 prompt</text>
   <text class="mono" x="40" y="416">  dispatch_ready_goals()      → 计算所有依赖满足的 goals (DAG) → 批量 execute (并行)</text>
   <text class="mono" x="40" y="432">  create_run()                → 创建 run record + plan nodes (goals 作为 plan 节点)</text>
   <text class="mono" x="40" y="448">  submit_execution(runID)     → 激活 run + dispatch_ready_goals (等价于 activate + dispatch)</text>
   <text class="mono" x="40" y="464">  deliver()                   → 聚合所有 goal deliveries → DeliveryAgent 验证 build/test</text>
-  <text class="mono" x="40" y="480">  read_context(scope)         → 读 goal 状态 / eval evidence / Decision Log / deliveries</text>
+  <text class="mono" x="40" y="480">  read_context(scope)         → 读 goal 状态 / eval evidence (按 task_id 查) / Decision Log / deliveries</text>
 
   <text class="mono-h" x="40" y="504">Goal 动态调整:</text>
   <text class="mono" x="40" y="520">  add_goal(contract)          → INSERT goal row (eval 发现缺少依赖时)</text>

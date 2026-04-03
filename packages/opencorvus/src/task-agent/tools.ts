@@ -206,8 +206,10 @@ export function createTaskAgentTools(input: {
 
         await trackStepStart("requirements")
         task = await updateTask(task, { status: "active" }, "Requirements analysis started")
+        const stallController = new AbortController()
         const guard = createInactivityGuard(stageTimeout("goal"), () => {
           log.warn("decompose stage inactivity timeout", { taskID })
+          stallController.abort(new Error("decompose stall timeout"))
         })
         try {
           const decomposeLive = agentStream({ taskID, stage: "goal" })
@@ -231,7 +233,9 @@ export function createTaskAgentTools(input: {
               request: task.request,
               taskID,
               sessionID: decomposeSession.id,
-              signal: input.signal,
+              signal: input.signal
+                ? AbortSignal.any([input.signal, stallController.signal])
+                : stallController.signal,
               decisionLog,
               stream: {
                 onChunk: async (arg: any) => {
@@ -252,6 +256,7 @@ export function createTaskAgentTools(input: {
             }),
             { signal: input.signal },
           )
+          guard.clear()
           await hooks.flush()
           await decomposeLive.finish("Decomposition finished")
 
@@ -405,8 +410,23 @@ export function createTaskAgentTools(input: {
           taskID,
           decisionLog,
           signal: input.signal,
+          stream: {
+            onChunk: async (arg: any) => {
+              if (hooks.onChunk) await hooks.onChunk(arg)
+              const chunk = (arg as any)?.chunk
+              if (chunk?.type !== "tool-input-start" && chunk?.type !== "tool-call" && chunk?.type !== "tool-result" && chunk?.type !== "tool-input-delta") {
+                if (architectLive.hooks.onChunk) await architectLive.hooks.onChunk(arg)
+              }
+            },
+            onError: async (arg: any) => {
+              if (hooks.onError) await hooks.onError(arg)
+              if (architectLive.hooks.onError) await architectLive.hooks.onError(arg)
+            },
+          },
+          onStatus: architectLive.statusHook.bind(architectLive),
         })
 
+        await hooks.flush()
         await architectLive.finish("Architect coordination finished")
 
         const summary = [
@@ -808,8 +828,8 @@ export function createTaskAgentTools(input: {
         }
 
         if (scope === "evaluations" || scope === "all") {
-          const { findEvaluations } = await import("@/orchestrator/store")
-          const evals = findEvaluations(taskID)
+          const { findEvaluationsByTask } = await import("@/orchestrator/store")
+          const evals = findEvaluationsByTask(taskID)
           if (evals.length > 0) {
             sections.push(`\n## Evaluations (${evals.length})`)
             for (const e of evals) {

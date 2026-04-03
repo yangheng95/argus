@@ -26,6 +26,7 @@ import { Shell } from "@/shell/shell"
 import { Filesystem } from "@/util/filesystem"
 import { toolGuard } from "@/util/tool-guard"
 import { Log } from "@/util/log"
+import { createInactivityGuard } from "@/util/inactivity-guard"
 import { AgentTrace } from "@/util/agent-trace"
 import { OrchestratorConfig } from "@/orchestrator/config"
 import { extractTag } from "@/util/parse-section-tags"
@@ -107,24 +108,39 @@ export async function evaluateGoal(input: {
   const systemPrompt = buildEvalSystem()
   const userPrompt = buildEvalPrompt(contract, delivery, decisionSection, task.request)
 
-  const baseSignal = signal ?? AbortSignal.timeout(TIMEOUT_MS)
+  const stallController = new AbortController()
+  const stallGuard = createInactivityGuard(TIMEOUT_MS, () => {
+    log.warn("evaluator agent stall timeout", { goalID: input.contract.goal.id })
+    stallController.abort(new Error("stall timeout"))
+  })
+  const abortSignals: AbortSignal[] = [stallController.signal, guard.signal]
+  if (signal) abortSignals.push(signal)
+
   const stream = streamText({
     model: language,
     stopWhen: stepCountIs(MAX_STEPS),
     tools: guard.tools,
     maxOutputTokens: 16384,
-    abortSignal: AbortSignal.any([baseSignal, guard.signal]),
+    abortSignal: AbortSignal.any(abortSignals),
     system: systemPrompt,
     messages: [{ role: "user" as const, content: userPrompt }],
-    ...(input.stream?.onChunk ? { onChunk: input.stream.onChunk as any } : {}),
+    onChunk: async (arg: any) => {
+      stallGuard.bump()
+      if (input.stream?.onChunk) await (input.stream.onChunk as any)(arg)
+    },
     ...(input.stream?.onError ? { onError: input.stream.onError } : {}),
     onStepFinish: guard.onStepFinish as any,
   })
 
-  const [resultText, resultSteps] = await Promise.all([
-    stream.text,
-    stream.steps,
-  ])
+  let resultText: string, resultSteps: any[]
+  try {
+    ;[resultText, resultSteps] = await Promise.all([
+      stream.text,
+      stream.steps,
+    ])
+  } finally {
+    stallGuard.clear()
+  }
 
   let allText = resultText?.trim() || ""
   if (!allText) {

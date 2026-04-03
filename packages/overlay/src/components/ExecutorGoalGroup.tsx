@@ -53,10 +53,11 @@ function stepStatusClass(status: string): string {
 }
 
 export function ExecutorGoalGroup(props: ExecutorGoalGroupProps) {
-  const expanded = () => agentCardExpanded(props.cardID);
+  const running = () => props.status === "running";
+  const expanded = () => agentCardExpanded(props.cardID, running());
 
   const toggle = () => {
-    toggleAgentCardExpanded(props.cardID);
+    toggleAgentCardExpanded(props.cardID, running());
   };
 
   const badgeClass = () => {
