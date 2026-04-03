@@ -45,6 +45,8 @@ export namespace DecomposeService {
 
     const start = Date.now()
     try {
+      // Timeout protects only the decompose agent step, not fidelity review.
+      // Fidelity review runs after decompose completes and has its own signal check.
       const result = await Promise.race([
         DecomposeAgent.decompose({
           title: input.title,
@@ -65,7 +67,8 @@ export namespace DecomposeService {
         throw new DecomposeFailureError("decompose produced no goals")
       }
 
-      // Fidelity Review: verify goals vs ORIGINAL user input
+      // Fidelity Review runs outside the timeout race so complex PRDs don't
+      // cause spurious timeouts after a slow but successful decompose agent run.
       const fidelity = await reviewFidelity({
         userRequest: input.request,
         taskTitle: input.title,

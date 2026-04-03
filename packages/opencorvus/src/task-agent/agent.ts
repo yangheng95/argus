@@ -367,10 +367,11 @@ function buildSystemPrompt(task: TaskRow, trigger: TaskAgentTrigger, workflow?: 
 ## Stage Sequence
 
 1. **requirements** — Decompose the task into goal contracts. ALWAYS call this first.
-2. **goal** — Create run and plan goals (create_run, plan_goal for complex goals, then submit_execution).
-3. **exe** — Execute goals (execute_goal / dispatch_ready_goals). Wait for completion.
-4. **eval** — AUTOMATIC: infrastructure runs eval on each goal after execution. By the time you are re-triggered, all goals have verdict (passed/failed). You do NOT need to call eval_goal manually (use it only to re-evaluate after a retry).
-5. **deliver** — Aggregate and publish (deliver, then publish_delivery). Only when all blocking goals passed.
+2. **architect** — Coordinate cross-goal interface contracts. REQUIRED for multi-goal tasks — call after requirements returns 2+ goals. Skip only for single-goal tasks (the tool will enforce this automatically).
+3. **goal** — Create run and plan goals (create_run, plan_goal for complex goals, then submit_execution).
+4. **exe** — Execute goals (execute_goal / dispatch_ready_goals). Wait for completion.
+5. **eval** — AUTOMATIC: infrastructure runs eval on each goal after execution. By the time you are re-triggered, all goals have verdict (passed/failed). You do NOT need to call eval_goal manually (use it only to re-evaluate after a retry).
+6. **deliver** — Aggregate and publish (deliver, then publish_delivery). Only when all blocking goals passed.
 
 You have these tools: requirements, architect, plan_goal, execute_goal, eval_goal, add_goal, modify_goal,
 dispatch_ready_goals, read_context, create_run, submit_execution, deliver, publish_delivery,
@@ -378,6 +379,7 @@ fail_task, restart_from_stage.
 
 **For new tasks:**
 - ALWAYS call requirements first to decompose the task into goals. No exceptions.
+- After requirements: ALWAYS call architect next if there are 2+ goals. It coordinates interface contracts that all executors depend on. Skip only when requirements returned exactly 1 goal.
 - Then create_run, then submit_execution.
 - You can plan individual goals with plan_goal if they're complex, or skip planning for simple ones.
 

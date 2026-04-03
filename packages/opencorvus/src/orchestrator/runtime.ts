@@ -18,6 +18,7 @@ import { Event } from "./model"
 import { OrchestratorProtocol } from "./protocol"
 import { ProtocolStore } from "@/protocol/store"
 import {
+  buildFixPrompt,
   buildOperatorPrompt,
   effectiveMaxExecutorGroups,
   orchestratorState,
@@ -39,6 +40,7 @@ import {
   findEvaluationByRun,
   findGoalRun,
   findInteractionByExternal,
+  findLatestFailedEvalForGoal,
   findPendingInteractions,
   findPlan,
   findRun,
@@ -571,7 +573,7 @@ export namespace OrchestratorRuntime {
 
       // 4. Build goal-specific prompt (with owned_paths + dependency context + explicit cwd)
       const allGoals = listGoalsByPlan(plan.id)
-      const prompt = buildGoalPrompt({
+      let prompt = buildGoalPrompt({
         plan: plan as any,
         node: entry.node as any,
         goal: entry.goal as any,
@@ -580,6 +582,21 @@ export namespace OrchestratorRuntime {
         allGoals,
         cwd: worktreeDir,
       })
+
+      // Append failure context from the most recent rejected evaluation for this goal,
+      // so the executor knows exactly what to fix on retry.
+      const failedEvals = findLatestFailedEvalForGoal(entry.goal.id)
+      if (failedEvals.length > 0) {
+        const lastFail = failedEvals[0]!
+        const checks = lastFail.checks as Array<{ name: string; status: string; evidence?: string }> | null
+        const failedChecks = checks?.filter(c => c.status === "failed").map(c => ({
+          name: c.name,
+          status: c.status,
+          evidence: c.evidence ?? "",
+        })) ?? []
+        const fixContext = failedChecks.length > 0 ? { source: "eval_failure" as const, checks: failedChecks } : undefined
+        prompt = prompt + "\n\n---\n\n" + buildFixPrompt(lastFail.summary, fixContext)
+      }
 
       // 5. Submit to executor with cwd=worktree
       //    Each goal gets its own executor instance — no shared state between parallel goals.

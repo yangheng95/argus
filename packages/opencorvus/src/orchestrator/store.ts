@@ -584,6 +584,40 @@ export function findEvaluations(runID: string) {
   )
 }
 
+export function findEvaluationsByTask(taskID: string) {
+  return Database.use((db) =>
+    db
+      .select()
+      .from(OrchestratorEvaluationTable)
+      .where(eq(OrchestratorEvaluationTable.task_id, taskID))
+      .orderBy(desc(OrchestratorEvaluationTable.time_created))
+      .all(),
+  )
+}
+
+/** Returns the most recent rejected evaluation for a given goal (across all goal runs). */
+export function findLatestFailedEvalForGoal(goalID: string) {
+  return Database.use((db) =>
+    db
+      .select({
+        verdict: OrchestratorEvaluationTable.verdict,
+        summary: OrchestratorEvaluationTable.summary,
+        checks: OrchestratorEvaluationTable.checks,
+      })
+      .from(OrchestratorEvaluationTable)
+      .innerJoin(OrchestratorGoalRunTable, eq(OrchestratorEvaluationTable.goal_run_id, OrchestratorGoalRunTable.id))
+      .where(
+        and(
+          eq(OrchestratorGoalRunTable.goal_id, goalID),
+          eq(OrchestratorEvaluationTable.verdict, "rejected"),
+        ),
+      )
+      .orderBy(desc(OrchestratorEvaluationTable.time_created))
+      .limit(1)
+      .all(),
+  )
+}
+
 export function listSnapshots(taskID: string) {
   return Database.use((db) =>
     db

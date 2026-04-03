@@ -6,6 +6,7 @@ import { Log } from "@/util/log"
 import { dict } from "@/util/object"
 import { selectorList } from "@/check/policy"
 import { operatorNotesSection } from "@/orchestrator/helpers"
+import { createDecisionLog } from "@/decision-log"
 import { Instance } from "@/project/instance"
 import { Project } from "@/project/project"
 import { Session } from "@/session"
@@ -323,6 +324,12 @@ export function buildGoalPrompt(input: {
         .map((g) => `- "${g!.title}" (completed, output in your workspace)`)
         .join("\n")
     : ""
+  // Include architect consensus from Decision Log (interface contracts, directory blueprint, naming conventions).
+  // Only populated when Task Agent called architect(); empty string if skipped (single goal / simple task).
+  const architectConsensus = input.taskID
+    ? createDecisionLog(input.taskID).phasePromptSection("architect")
+    : ""
+
   return [
     "You are executing one goal in an isolated workspace (git worktree) for the coordinator.",
     input.taskID ? operatorNotesSection(input.taskID) || undefined : undefined,
@@ -339,6 +346,7 @@ export function buildGoalPrompt(input: {
     dependencyContext
       ? `## Dependencies (completed before this goal)\n\nThese goals completed before yours. Their output is already in your workspace:\n${dependencyContext}`
       : undefined,
+    architectConsensus || undefined,
     `Goal:
 ${input.goal.title}: ${input.goal.objective}`,
     `Acceptance:

@@ -19,6 +19,7 @@ import { Provider } from "@/provider/provider"
 import { createPlannerTools } from "@/planner/tools"
 import { Log } from "@/util/log"
 import { toolGuard } from "@/util/tool-guard"
+import { createInactivityGuard } from "@/util/inactivity-guard"
 import { AgentTrace } from "@/util/agent-trace"
 import { OrchestratorConfig } from "@/orchestrator/config"
 import { Config } from "@/config/config"
@@ -104,25 +105,40 @@ async function run(input: {
     model: language.modelId,
   })
 
-  const baseSignal = input.signal ?? AbortSignal.timeout(TIMEOUT_MS)
+  const stallController = new AbortController()
+  const stallGuard = createInactivityGuard(TIMEOUT_MS, () => {
+    log.warn("architect agent stall timeout", { taskID: input.taskID })
+    stallController.abort(new Error("stall timeout"))
+  })
+  const abortSignals: AbortSignal[] = [stallController.signal, guard.signal]
+  if (input.signal) abortSignals.push(input.signal)
+
   const stream = streamText({
     model: language,
     stopWhen: stepCountIs(MAX_STEPS),
     tools: guard.tools,
     maxOutputTokens: 16384,
-    abortSignal: AbortSignal.any([baseSignal, guard.signal]),
+    abortSignal: AbortSignal.any(abortSignals),
     system: systemPrompt,
     messages: [{ role: "user" as const, content: userPrompt }],
-    ...(input.stream?.onChunk ? { onChunk: input.stream.onChunk as any } : {}),
+    onChunk: async (arg: any) => {
+      stallGuard.bump()
+      if (input.stream?.onChunk) await (input.stream.onChunk as any)(arg)
+    },
     ...(input.stream?.onError ? { onError: input.stream.onError } : {}),
     onStepFinish: guard.onStepFinish as any,
   })
 
-  const [resultText, resultSteps, resultFinishReason] = await Promise.all([
-    stream.text,
-    stream.steps,
-    stream.finishReason,
-  ])
+  let resultText: string, resultSteps: any[], resultFinishReason: any
+  try {
+    ;[resultText, resultSteps, resultFinishReason] = await Promise.all([
+      stream.text,
+      stream.steps,
+      stream.finishReason,
+    ])
+  } finally {
+    stallGuard.clear()
+  }
 
   let allText = resultText?.trim() || ""
   if (!allText) {

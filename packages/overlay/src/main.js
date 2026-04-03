@@ -1980,14 +1980,15 @@ function clearConversationUiState() {
   setStore$1("expandedAgentCards", reconcile({}, { merge: false }));
   setStore$1("expandedToolOutputs", reconcile({}, { merge: false }));
 }
-function agentCardExpanded(cardID, _running) {
+function agentCardExpanded(cardID, running) {
   if (!cardID) return false;
   const explicit = store$1.expandedAgentCards[cardID];
-  return typeof explicit === "boolean" ? explicit : false;
+  if (typeof explicit === "boolean") return explicit;
+  return running === true;
 }
 function toggleAgentCardExpanded(cardID, running) {
   if (!cardID) return;
-  const next = !agentCardExpanded(cardID);
+  const next = !agentCardExpanded(cardID, running);
   setStore$1("expandedAgentCards", cardID, next);
 }
 function toolOutputExpanded(partID) {
@@ -5067,9 +5068,10 @@ function stepStatusClass$1(status) {
   return "goal-step--pending";
 }
 function ExecutorGoalGroup(props) {
-  const expanded = () => agentCardExpanded(props.cardID);
+  const running = () => props.status === "running";
+  const expanded = () => agentCardExpanded(props.cardID, running());
   const toggle = () => {
-    toggleAgentCardExpanded(props.cardID);
+    toggleAgentCardExpanded(props.cardID, running());
   };
   const badgeClass = () => {
     if (props.status === "running") return "executor-goal-badge executor-goal-badge--running";
