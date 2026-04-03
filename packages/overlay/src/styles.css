@@ -3636,6 +3636,7 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
 .executor-goal-badge--done { background: rgba(95, 173, 86, 0.22); color: var(--good); }
 .executor-goal-badge--error { background: rgba(220, 70, 70, 0.22); color: var(--bad); }
 .executor-goal-badge--running { background: rgba(230, 140, 50, 0.18); }
+.executor-goal-badge--pending { background: rgba(255, 255, 255, 0.08); color: rgba(255, 255, 255, 0.4); }
 
 .executor-goal-label {
   font-weight: 600;
@@ -3677,6 +3678,90 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
   background: rgba(255, 255, 255, 0.12);
   border-radius: 2px;
 }
+.executor-goal-description {
+  font-size: calc(11px * var(--ui-scale));
+  color: rgba(255, 255, 255, 0.55);
+  padding: calc(4px * var(--ui-scale)) calc(6px * var(--ui-scale));
+  margin-bottom: calc(4px * var(--ui-scale));
+  border-left: 2px solid rgba(255, 255, 255, 0.15);
+  line-height: 1.4;
+  white-space: pre-wrap;
+}
+.executor-goal-architect {
+  display: flex;
+  align-items: baseline;
+  gap: calc(4px * var(--ui-scale));
+  font-size: calc(11px * var(--ui-scale));
+  color: rgba(255, 255, 255, 0.5);
+  padding: calc(3px * var(--ui-scale)) calc(6px * var(--ui-scale));
+  margin-bottom: calc(4px * var(--ui-scale));
+  border-left: 2px solid rgba(0, 180, 180, 0.35);
+  line-height: 1.3;
+}
+.executor-goal-architect-icon { flex-shrink: 0; }
+.executor-goal-architect-cats {
+  color: rgba(0, 200, 200, 0.6);
+  font-size: calc(10px * var(--ui-scale));
+}
+.goal-step-summary {
+  font-size: calc(10px * var(--ui-scale));
+  color: rgba(255, 255, 255, 0.4);
+  margin-left: auto;
+}
+
+/* ── Goal Step (per-step inside goal group) ── */
+.goal-step {
+  margin: calc(4px * var(--ui-scale)) 0;
+  border-left: 2px solid rgba(255, 255, 255, 0.08);
+  padding-left: calc(8px * var(--ui-scale));
+}
+.goal-step-header {
+  display: flex;
+  align-items: center;
+  gap: calc(6px * var(--ui-scale));
+  padding: calc(4px * var(--ui-scale)) calc(6px * var(--ui-scale));
+  font-size: var(--ui-font-control);
+}
+.goal-step-icon {
+  width: calc(16px * var(--ui-scale));
+  text-align: center;
+  flex-shrink: 0;
+}
+.goal-step-icon--running {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(16px * var(--ui-scale));
+}
+.goal-step-label {
+  font-weight: 500;
+  opacity: 0.9;
+}
+.goal-step-count {
+  opacity: 0.5;
+  font-size: 0.85em;
+}
+.goal-step-body {
+  padding: calc(4px * var(--ui-scale)) 0 calc(4px * var(--ui-scale)) calc(4px * var(--ui-scale));
+}
+
+/* Step status colors */
+.goal-step--done {
+  border-left-color: rgba(80, 190, 100, 0.5);
+}
+.goal-step--done .goal-step-icon { color: rgba(80, 190, 100, 0.9); }
+.goal-step--running {
+  border-left-color: rgba(110, 183, 255, 0.5);
+}
+.goal-step--running .goal-step-icon { color: rgba(110, 183, 255, 0.9); }
+.goal-step--error {
+  border-left-color: rgba(240, 80, 80, 0.5);
+}
+.goal-step--error .goal-step-icon { color: rgba(240, 80, 80, 0.9); }
+.goal-step--pending {
+  border-left-color: rgba(255, 255, 255, 0.08);
+}
+.goal-step--pending .goal-step-icon { opacity: 0.3; }
 
 /* ── Agent Card (single-session stage container) ── */
 .agent-card {
@@ -3687,10 +3772,40 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
   display: block;
 }
 
+.agent-card[data-agent-stage="goal"] {
+  --agent-accent: rgba(140, 110, 220, 0.80);
+  --agent-bg: rgba(140, 110, 220, 0.08);
+  --agent-border: rgba(140, 110, 220, 0.22);
+}
+
+.agent-card[data-agent-stage="architect"] {
+  --agent-accent: rgba(80, 170, 160, 0.80);
+  --agent-bg: rgba(80, 170, 160, 0.08);
+  --agent-border: rgba(80, 170, 160, 0.22);
+}
+
+.agent-card[data-agent-stage="planner"] {
+  --agent-accent: rgba(100, 160, 220, 0.80);
+  --agent-bg: rgba(100, 160, 220, 0.08);
+  --agent-border: rgba(100, 160, 220, 0.22);
+}
+
 .agent-card[data-agent-stage="executor"] {
   --agent-accent: rgba(230, 140, 50, 0.80);
   --agent-bg: rgba(230, 140, 50, 0.08);
   --agent-border: rgba(230, 140, 50, 0.22);
+}
+
+.agent-card[data-agent-stage="evaluator"] {
+  --agent-accent: rgba(200, 180, 60, 0.80);
+  --agent-bg: rgba(200, 180, 60, 0.08);
+  --agent-border: rgba(200, 180, 60, 0.22);
+}
+
+.agent-card[data-agent-stage="delivery"] {
+  --agent-accent: rgba(80, 190, 100, 0.80);
+  --agent-bg: rgba(80, 190, 100, 0.08);
+  --agent-border: rgba(80, 190, 100, 0.22);
 }
 
 .agent-card-header {
