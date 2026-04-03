@@ -3177,11 +3177,11 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
 .msg[data-role="user"] {
   align-items: flex-end;
   --msg-max-width: min(74%, calc(640px * var(--ui-scale)));
-  --msg-surface: linear-gradient(180deg, rgba(101, 134, 122, 0.96), rgba(73, 98, 89, 0.98));
-  --msg-border: rgba(160, 203, 190, 0.24);
+  --msg-surface: linear-gradient(180deg, rgba(84, 138, 247, 0.98), rgba(60, 110, 220, 0.98));
+  --msg-border: rgba(84, 138, 247, 0.4);
   --msg-role-bg: rgba(255, 255, 255, 0.08);
-  --msg-role-border: rgba(160, 203, 190, 0.18);
-  --msg-role-tone: #effbf7;
+  --msg-role-border: rgba(84, 138, 247, 0.3);
+  --msg-role-tone: #fff;
 }
 
 .msg[data-role="assistant"] {
@@ -3349,47 +3349,18 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
   position: relative;
   width: fit-content;
   max-width: var(--msg-max-width);
-  padding: calc(10px * var(--ui-scale)) calc(12px * var(--ui-scale));
-  border-radius: calc(14px * var(--ui-scale));
-  border: 1px solid var(--msg-border);
-  background: var(--msg-surface);
-  box-shadow: var(--msg-shadow);
-  isolation: isolate;
+  padding: calc(12px * var(--ui-scale)) calc(16px * var(--ui-scale));
+  border-radius: calc(16px * var(--ui-scale));
   overflow: visible;
 }
 
 .msg[data-role="user"] .msg-bubble {
-  border-bottom-right-radius: calc(6px * var(--ui-scale));
+  border-bottom-right-radius: calc(4px * var(--ui-scale));
   color: #f2fbf8;
 }
 
 .msg[data-role="assistant"] .msg-bubble {
-  border-bottom-left-radius: calc(6px * var(--ui-scale));
-}
-
-.msg[data-role="user"] .msg-bubble::after,
-.msg[data-role="assistant"] .msg-bubble::after {
-  content: "";
-  position: absolute;
-  bottom: calc(8px * var(--ui-scale));
-  width: calc(12px * var(--ui-scale));
-  height: calc(12px * var(--ui-scale));
-  background: var(--msg-surface);
-  z-index: -1;
-}
-
-.msg[data-role="assistant"] .msg-bubble::after {
-  left: calc(-5px * var(--ui-scale));
-  border-left: 1px solid var(--msg-border);
-  border-bottom: 1px solid var(--msg-border);
-  transform: rotate(45deg);
-}
-
-.msg[data-role="user"] .msg-bubble::after {
-  right: calc(-5px * var(--ui-scale));
-  border-right: 1px solid var(--msg-border);
-  border-bottom: 1px solid var(--msg-border);
-  transform: rotate(-45deg);
+  border-bottom-left-radius: calc(4px * var(--ui-scale));
 }
 
 .msg[data-role="planner"] .msg-bubble,
@@ -3400,9 +3371,9 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
 .msg[data-role="goal"] .msg-bubble {
   width: fit-content;
   max-width: var(--msg-max-width);
-  border-radius: calc(14px * var(--ui-scale));
-  border-bottom-left-radius: calc(6px * var(--ui-scale));
-  border-left-width: 3px;
+  border-radius: calc(16px * var(--ui-scale));
+  border-bottom-left-radius: calc(4px * var(--ui-scale));
+  border-left-width: 4px;
   border-left-color: var(--msg-role-tone);
 }
 
@@ -3423,6 +3394,13 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
   color: var(--text);
   word-break: break-word;
 }
+
+.msg[data-role="user"] .msg-text,
+.msg[data-role="user"] .msg-text strong,
+.msg[data-role="user"] .msg-text em {
+  color: #ffffff;
+}
+
 /* Live thinking status — replaces static "思考中" placeholder */
 .msg-thinking-live {
   color: var(--text-soft);
@@ -3636,7 +3614,7 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
 .executor-goal-badge--done { background: rgba(95, 173, 86, 0.22); color: var(--good); }
 .executor-goal-badge--error { background: rgba(220, 70, 70, 0.22); color: var(--bad); }
 .executor-goal-badge--running { background: rgba(230, 140, 50, 0.18); }
-.executor-goal-badge--pending { background: rgba(255, 255, 255, 0.08); color: rgba(255, 255, 255, 0.4); }
+.executor-goal-badge--pending { background: rgba(255, 255, 255, 0.08); color: var(--text-muted); }
 
 .executor-goal-label {
   font-weight: 600;
@@ -3686,10 +3664,10 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
 }
 .executor-goal-description {
   font-size: calc(11px * var(--ui-scale));
-  color: rgba(255, 255, 255, 0.55);
+  color: var(--text-soft);
   padding: calc(4px * var(--ui-scale)) calc(6px * var(--ui-scale));
   margin-bottom: calc(4px * var(--ui-scale));
-  border-left: 2px solid rgba(255, 255, 255, 0.15);
+  border-left: 2px solid var(--border-strong);
   line-height: 1.4;
   white-space: pre-wrap;
 }
@@ -3698,7 +3676,7 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
   align-items: baseline;
   gap: calc(4px * var(--ui-scale));
   font-size: calc(11px * var(--ui-scale));
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--text-soft);
   padding: calc(3px * var(--ui-scale)) calc(6px * var(--ui-scale));
   margin-bottom: calc(4px * var(--ui-scale));
   border-left: 2px solid rgba(0, 180, 180, 0.35);
@@ -3706,19 +3684,19 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
 }
 .executor-goal-architect-icon { flex-shrink: 0; }
 .executor-goal-architect-cats {
-  color: rgba(0, 200, 200, 0.6);
+  color: rgba(0, 150, 150, 0.8);
   font-size: calc(10px * var(--ui-scale));
 }
 .goal-step-summary {
   font-size: calc(10px * var(--ui-scale));
-  color: rgba(255, 255, 255, 0.4);
+  color: var(--text-muted);
   margin-left: auto;
 }
 
 /* ── Goal Step (per-step inside goal group) ── */
 .goal-step {
   margin: calc(4px * var(--ui-scale)) 0;
-  border-left: 2px solid rgba(255, 255, 255, 0.08);
+  border-left: 2px solid var(--border);
   padding-left: calc(8px * var(--ui-scale));
 }
 .goal-step-header {

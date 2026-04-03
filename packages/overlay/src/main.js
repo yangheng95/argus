@@ -2146,7 +2146,7 @@ function normalizeAgentRole(name) {
   if (text === "planner" || text === "plan" || text === "planning" || text === "replan") return "planner";
   if (text === "goal" || text === "goal_gate") return "goal";
   if (text === "executor" || text === "build" || text === "coding" || text === "general" || text === "explore" || text === "execute" || text === "opencode" || text === "codex" || text === "claude-code") return "executor";
-  if (text === "judge" || text === "evaluator" || text === "evaluation" || text === "scheduler" || text === "review" || text === "evaluate") return "evaluator";
+  if (text === "judge" || text === "evaluator" || text === "evaluation" || text === "eval" || text === "scheduler" || text === "review" || text === "evaluate") return "evaluator";
   if (text === "delivery" || text === "deliver" || text === "files" || text === "publish") return "delivery";
   if (text === "system" || text === "compaction" || text === "title" || text === "summary") return "system";
   return "assistant";

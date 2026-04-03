@@ -102,6 +102,8 @@ export interface EvalVerdict {
   pass: boolean
   verdict: "accepted" | "rejected" | "inconclusive"
   evidence: string[]
+  /** Per-evidence pass/fail status parsed from PASS:/FAIL: prefixes. undefined = no explicit marker. */
+  evidenceStatus?: Array<"passed" | "failed" | undefined>
   reasoning: string
   /** Eval agent's classification of why it failed (used by retry policy). */
   failureClass?: FailureClass

@@ -37,7 +37,7 @@ export function normalizeAgentRole(name: string): AgentRole {
   if (text === "executor" || text === "build" || text === "coding" ||
       text === "general" || text === "explore" || text === "execute" ||
       text === "opencode" || text === "codex" || text === "claude-code") return "executor";
-  if (text === "judge" || text === "evaluator" || text === "evaluation" ||
+  if (text === "judge" || text === "evaluator" || text === "evaluation" || text === "eval" ||
       text === "scheduler" || text === "review" || text === "evaluate") return "evaluator";
   if (text === "delivery" || text === "deliver" || text === "files" || text === "publish") return "delivery";
   if (text === "system" || text === "compaction" || text === "title" || text === "summary") return "system";

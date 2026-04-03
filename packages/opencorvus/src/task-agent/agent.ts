@@ -364,15 +364,13 @@ function buildSystemPrompt(task: TaskRow, trigger: TaskAgentTrigger, workflow?: 
 
   // ── Reasoning Guidance ──
   sections.push(`
-## Mandatory Stage Sequence
-
-Every task MUST go through ALL five stages in order. No stage may be skipped.
+## Stage Sequence
 
 1. **requirements** — Decompose the task into goal contracts. ALWAYS call this first.
 2. **goal** — Create run and plan goals (create_run, plan_goal for complex goals, then submit_execution).
 3. **exe** — Execute goals (execute_goal / dispatch_ready_goals). Wait for completion.
-4. **eval** — Evaluate EVERY goal (eval_goal on each goal). No goal may skip evaluation.
-5. **deliver** — Aggregate and publish (deliver, then publish_delivery).
+4. **eval** — AUTOMATIC: infrastructure runs eval on each goal after execution. By the time you are re-triggered, all goals have verdict (passed/failed). You do NOT need to call eval_goal manually (use it only to re-evaluate after a retry).
+5. **deliver** — Aggregate and publish (deliver, then publish_delivery). Only when all blocking goals passed.
 
 You have these tools: requirements, architect, plan_goal, execute_goal, eval_goal, add_goal, modify_goal,
 dispatch_ready_goals, read_context, create_run, submit_execution, deliver, publish_delivery,
@@ -383,18 +381,18 @@ fail_task, restart_from_stage.
 - Then create_run, then submit_execution.
 - You can plan individual goals with plan_goal if they're complex, or skip planning for simple ones.
 
-**After execution completes:**
-- Read the delivery and evidence carefully (use read_context).
-- Call eval_goal on EVERY goal — no goal may skip evaluation.
+**After execution completes (re-triggered with run_completed):**
+- All goals have already been evaluated automatically. goal.status is "passed" or "failed".
+- Read the eval results carefully (use read_context).
 - Based on eval results, REASON about what to do:
-  - Tests pass → deliver to aggregate, then publish_delivery
-  - Tests fail due to missing dependency → add_goal to create the dependency, then execute_goal
-  - Tests fail due to code bug → execute_goal again to retry the failed goal
-  - Tests fail due to wrong approach → modify_goal to adjust, then execute_goal
+  - All goals passed → deliver to aggregate, then publish_delivery
+  - Goal failed due to missing dependency → add_goal to create the dependency, then execute_goal
+  - Goal failed due to code bug → execute_goal again to retry the failed goal (eval will re-run automatically)
+  - Goal failed due to wrong approach → modify_goal to adjust, then execute_goal
   - Unrecoverable → fail_task with explanation
 
-**After executor failure:**
-- Read the error. Reason about root cause.
+**After executor failure (re-triggered with executor_failed):**
+- Read the error and eval evidence. Reason about root cause.
 - Transient (network, timeout)? → execute_goal to retry
 - Config/env issue? → fail_task or add_goal to fix environment
 - Wrong approach? → modify_goal or restart_from_stage
@@ -406,11 +404,11 @@ fail_task, restart_from_stage.
 
 ## Rules
 - Explain your reasoning before each tool call.
-- After submit_execution, execute_goal, or dispatch_ready_goals, STOP — you'll be re-triggered on completion.
+- After submit_execution, execute_goal, or dispatch_ready_goals, STOP — you'll be re-triggered on completion (with eval already done).
 - Use deliver + publish_delivery to complete (handles aggregation + git publish + task completion).
 - Terminal state (completed/failed/cancelled) → do nothing.
 - User messages in Operator Notes → acknowledge in your reasoning.
-- NEVER skip requirements, eval_goal, or deliver stages. All five stages are mandatory.`)
+- NEVER skip requirements or deliver stages.`)
 
   return sections.join("\n")
 }

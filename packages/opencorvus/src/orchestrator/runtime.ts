@@ -764,9 +764,14 @@ export namespace OrchestratorRuntime {
    * - Blocking goals failed → handle failure
    */
   /**
-   * Notify Task Agent that a goal completed or failed.
-   * Infrastructure ONLY notifies — does NOT dispatch next goals or complete runs.
-   * Task Agent decides what to do next.
+   * Notify Task Agent after a goal completes or fails.
+   *
+   * Goal status lock: when ALL goal_runs in the batch finish (executor done),
+   * infrastructure automatically runs eval on each completed goal BEFORE
+   * notifying the Task Agent. This ensures goal.status is in a terminal state
+   * (passed/failed) by the time the Task Agent is re-triggered.
+   *
+   * Flow per spec: Goal → Executor → Eval → verdict → notify Task Agent
    */
   async function notifyGoalResult(task: TaskRow, run: RunRow, goalID: string, result: "completed" | "failed") {
     await serializedPipeline(run.id, async () => {
@@ -777,21 +782,129 @@ export namespace OrchestratorRuntime {
       // If other goals still executing, don't notify yet — wait for all in this batch
       if (activeRuns.length > 0) return
 
-      // All goals in current batch done — notify Task Agent
+      // ── Goal status lock: auto-eval all completed goals ──
+      // All goal_runs in this batch are done. Run eval on each goal that has
+      // a delivery before notifying Task Agent. This ensures goal.status
+      // transitions from "running" to "passed"/"failed" atomically.
       const { listGoals: listAllGoals } = await import("./store")
+      const { listGoalRunsByTask: listGR, findDeliveryByGoalRun } = await import("./store")
       const goals = listAllGoals(task.id) as GoalRow[]
-      const failedGoals = goals.filter(g => g.status === "failed" && g.priority === "blocking")
+      const goalRuns = listGR(task.id)
+
+      for (const goal of goals) {
+        // Only eval goals that are still "running" (executor finished but not yet evaluated)
+        if (goal.status !== "running") continue
+        const latestRun = goalRuns.filter(gr => gr.goal_id === goal.id)
+          .find(gr => gr.status === "completed") ?? goalRuns.filter(gr => gr.goal_id === goal.id)[0]
+        if (!latestRun) continue
+        const delivery = findDeliveryByGoalRun(latestRun.id)
+        if (!delivery) continue
+
+        try {
+          const { evaluateGoal } = await import("@/evaluator/per-goal")
+          const { createDecisionLog } = await import("@/decision-log")
+          const { Session } = await import("@/session")
+          const { Instance } = await import("@/project/instance")
+          const { Identifier } = await import("@/id/id")
+          const { registerGoalRunSession } = await import("@/server/routes/task-event")
+          const { sessionStreamHooks } = await import("./session-stream")
+          const { OrchestratorEvaluationTable, OrchestratorGoalTable } = await import("./orchestrator.sql")
+
+          const decisionLog = createDecisionLog(task.id)
+          const diffs = Array.isArray((delivery.result as any)?.diffs) ? (delivery.result as any).diffs : []
+          const contract = {
+            goal: { id: goal.id, title: goal.title, done_definition: goal.done_definition ?? "", owned_paths: (goal.owned_paths ?? []) as string[] },
+            task: { id: task.id, title: task.title, request: task.request ?? "" },
+          }
+
+          // Create eval session for overlay visibility
+          const evalSession = await Session.createNext({
+            parentID: task.session_id ?? "",
+            title: `Eval: ${goal.title}`,
+            directory: Instance.directory,
+          })
+          registerGoalRunSession(evalSession.id, task.id, "evaluator", goal.id)
+          const hooks = sessionStreamHooks({ sessionID: evalSession.id, taskID: task.id, stage: "eval" })
+
+          const verdict = await evaluateGoal({
+            contract,
+            delivery: { summary: delivery.summary, diffs },
+            decisionLog,
+            sessionID: evalSession.id,
+            stream: { onChunk: hooks.onChunk as any, onError: hooks.onError },
+          })
+          await hooks.flush()
+
+          // Persist evaluation + update goal.status
+          const evalID = Identifier.ascending("evaluation")
+          const now = Date.now()
+          Database.use((db) => {
+            db.insert(OrchestratorEvaluationTable).values({
+              id: evalID,
+              task_id: task.id,
+              run_id: latestRun.coordinator_run_id,
+              goal_run_id: latestRun.id,
+              delivery_id: delivery.id,
+              status: verdict.pass ? "passed" : "failed",
+              verdict: verdict.pass ? "accepted" : "rejected",
+              summary: verdict.reasoning.slice(0, 500),
+              checks: [
+                { name: "judge", status: verdict.pass ? "passed" : "failed", evidence: verdict.reasoning.slice(0, 500) },
+                { name: "artifact", status: verdict.pass ? "passed" : "failed", evidence: `Delivery: ${diffs.length} file(s) changed` },
+                { name: "spec_check", status: verdict.pass ? "passed" : "failed", evidence: verdict.evidence[0] || "done_definition check" },
+                ...verdict.evidence.map((e, i) => ({
+                  name: `evidence_${i + 1}`,
+                  status: verdict.evidenceStatus?.[i] ?? (verdict.pass ? "passed" : "failed"),
+                  evidence: e,
+                })),
+              ],
+              time_created: now,
+              time_updated: now,
+            }).run()
+
+            const goalStatus = verdict.pass ? "passed" : "failed"
+            db.update(OrchestratorGoalTable)
+              .set({ status: goalStatus, time_updated: now })
+              .where(eq(OrchestratorGoalTable.id, goal.id))
+              .run()
+          })
+
+          // Emit event for overlay
+          const { Event: OrcEvent } = await import("./model")
+          const { OrchestratorProtocol: Proto } = await import("./protocol")
+          if (verdict.pass) {
+            Proto.emit(OrcEvent.GoalPassed, { taskID: task.id, goalID: goal.id, summary: goal.title }, { source: "auto_eval" }).catch(() => {})
+          } else {
+            Proto.emit(OrcEvent.GoalFailed, { taskID: task.id, goalID: goal.id, summary: `${goal.title}: ${verdict.reasoning.slice(0, 200)}` }, { source: "auto_eval" }).catch(() => {})
+          }
+
+          log.info("auto-eval completed", { taskID: task.id, goalID: goal.id, verdict: verdict.pass ? "passed" : "failed" })
+        } catch (err) {
+          log.error("auto-eval failed, marking goal as failed", { taskID: task.id, goalID: goal.id, error: String(err) })
+          const { OrchestratorGoalTable } = await import("./orchestrator.sql")
+          Database.use((db) => {
+            db.update(OrchestratorGoalTable)
+              .set({ status: "failed", time_updated: Date.now() })
+              .where(eq(OrchestratorGoalTable.id, goal.id))
+              .run()
+          })
+        }
+      }
+
+      // ── All goals now in terminal state (passed/failed) — notify Task Agent ──
+      const updatedGoals = listAllGoals(task.id) as GoalRow[]
+      const failedGoals = updatedGoals.filter(g => g.status === "failed" && g.priority === "blocking")
 
       if (failedGoals.length > 0) {
         const failSummary = failedGoals.map(g => `${g.title}`).join(", ")
-        log.info("batch complete with failures, notifying Task Agent", { taskID: task.id, failed: failSummary })
+        log.info("batch complete with eval failures, notifying Task Agent", { taskID: task.id, failed: failSummary })
         TaskAgent.processTask(task.id, {
           kind: "executor_failed",
           runID: run.id,
-          error: `Goal(s) failed: ${failSummary}. Use read_context to see evidence, then decide next step.`,
+          error: `Goal(s) failed evaluation: ${failSummary}. Use read_context to see evidence, then decide next step.`,
         }).catch(err => log.error("task agent notification failed", { taskID: task.id, error: String(err) }))
       } else {
-        log.info("batch complete, notifying Task Agent", { taskID: task.id, runID: run.id })
+        log.info("batch complete, all goals evaluated, notifying Task Agent", { taskID: task.id, runID: run.id })
         TaskAgent.processTask(task.id, {
           kind: "run_completed",
           runID: run.id,

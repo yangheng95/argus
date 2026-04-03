@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "en-US",
-    "panel_revision": "8c8cec5984fc9785"
+    "panel_revision": "4acc04d0fb6d782a"
   },
   "brand.guide_kicker": "Quick Guide",
   "brand.guide_positioning_body": "This is the task cockpit — left picks the task, center drives execution, right verifies spec, plan, evaluation, and file changes so the agent stays on track.",

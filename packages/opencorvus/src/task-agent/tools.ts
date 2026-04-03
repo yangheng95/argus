@@ -478,7 +478,7 @@ export function createTaskAgentTools(input: {
     }),
 
     eval_goal: tool({
-      description: "Run autonomous evaluation on a goal's delivery. The eval agent reads done_definition, examines the code, infers tests, and runs them. Returns verdict + evidence. Max 3 evals per goal — after that, fix the code or fail.",
+      description: "Manually re-evaluate a goal's delivery. Evaluation runs automatically after execution — use this only to re-evaluate after a fix (execute_goal retry). Max 3 evals per goal.",
       inputSchema: z.object({
         goalID: z.string().describe("The goal ID to evaluate"),
         reason: z.string().optional().describe("Why you decided to evaluate this goal"),
@@ -566,11 +566,30 @@ export function createTaskAgentTools(input: {
             status: verdict.pass ? "passed" : "failed",
             verdict: verdict.pass ? "accepted" : "rejected",
             summary: verdict.reasoning.slice(0, 500),
-            checks: verdict.evidence.map((e, i) => ({
-              name: `evidence_${i + 1}`,
-              status: verdict.pass ? "passed" : "failed",
-              evidence: e,
-            })),
+            checks: [
+              // Inspection panel expected checks: judge, artifact, spec_check
+              {
+                name: "judge",
+                status: verdict.pass ? "passed" : "failed",
+                evidence: verdict.reasoning.slice(0, 500),
+              },
+              {
+                name: "artifact",
+                status: verdict.pass ? "passed" : "failed",
+                evidence: `Delivery: ${diffs.length} file(s) changed`,
+              },
+              {
+                name: "spec_check",
+                status: verdict.pass ? "passed" : "failed",
+                evidence: verdict.evidence[0] || "done_definition check",
+              },
+              // Per-evidence detail items
+              ...verdict.evidence.map((e, i) => ({
+                name: `evidence_${i + 1}`,
+                status: verdict.evidenceStatus?.[i] ?? (verdict.pass ? "passed" : "failed"),
+                evidence: e,
+              })),
+            ],
             time_created: now,
             time_updated: now,
           }).run()
@@ -964,7 +983,7 @@ export function createTaskAgentTools(input: {
     }),
 
     deliver: tool({
-      description: "Aggregate all goal deliveries, then run the DeliveryAgent to verify build/test/startup before publication. Call this when you believe all goals are complete.",
+      description: "Aggregate all goal deliveries, then run the DeliveryAgent to verify build/test/startup before publication. All goals have already been auto-evaluated by infrastructure — check goal statuses via read_context before calling.",
       inputSchema: z.object({
         reason: z.string().optional().describe("Why you decided to deliver now"),
       }),
@@ -975,9 +994,6 @@ export function createTaskAgentTools(input: {
         await trackStepStart("deliver")
         const run = requireRun(task.active_run_id)
 
-        // Gate: all blocking goals must have completed goal_runs (with delivery).
-        // Goal.status may be "running" (not yet eval'd) or "passed" (eval'd) — both are OK
-        // as long as execution actually completed. Only "failed" goals block delivery.
         const goals = listGoals(taskID)
         const blockingFailed = goals.filter(g => g.priority === "blocking" && g.status === "failed")
         if (blockingFailed.length > 0) {
