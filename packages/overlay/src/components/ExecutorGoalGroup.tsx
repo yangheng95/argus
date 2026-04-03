@@ -4,7 +4,6 @@ import {
   agentCardExpanded,
   toggleAgentCardExpanded,
 } from "../store/conversation-ui";
-import { agentStageLabel } from "../utils/message";
 import { setupAutoScroll } from "../utils/dom-utils";
 
 interface GoalStepInfo {
@@ -22,19 +21,12 @@ interface ExecutorGoalGroupProps {
   architect?: { summary: string; categories?: string[] };
   goalStatus: string;
   status: string;
-  /** Flat list of messages (legacy single-stage rendering) */
-  messages: any[];
   /** Per-stage child cards: each has _agentStage and _agentMessages */
   internalCards?: any[];
 }
 
 /** Canonical step order for per-goal stages */
 const STEP_ORDER = ["planner", "executor", "evaluator"];
-
-function stepSortKey(stage: string): number {
-  const idx = STEP_ORDER.indexOf(stage);
-  return idx >= 0 ? idx : 999;
-}
 
 /** Map workflow stepID to the agent stage name used in internalCards */
 function stepIDToStage(stepID: string): string {
@@ -94,15 +86,11 @@ export function ExecutorGoalGroup(props: ExecutorGoalGroupProps) {
     return map;
   };
 
-  /** Use workflow steps if available, otherwise fall back to internal cards */
-  const hasWorkflowSteps = () => (props.goalSteps || []).length > 0;
-  const hasInternalCards = () => (props.internalCards || []).length > 0;
-
   /** Sort internal cards into canonical step order (fallback when no workflow steps) */
   const sortedCards = () => {
     const cards = props.internalCards || [];
     return cards.slice().sort((a: any, b: any) =>
-      stepSortKey(a._agentStage) - stepSortKey(b._agentStage)
+      STEP_ORDER.indexOf(a._agentStage) - STEP_ORDER.indexOf(b._agentStage)
     );
   };
 
@@ -163,26 +151,17 @@ export function ExecutorGoalGroup(props: ExecutorGoalGroupProps) {
 
           {/* Workflow-driven steps (plan → execute → eval) with messages */}
           <Show
-            when={hasWorkflowSteps()}
+            when={(props.goalSteps || []).length > 0}
             fallback={
-              <Show
-                when={hasInternalCards()}
-                fallback={
-                  <For each={props.messages.filter((m: any) => String(m?.info?.role || "").toLowerCase() !== "user")}>
-                    {(msg) => <MessageView message={msg} />}
-                  </For>
-                }
-              >
-                <For each={sortedCards()}>
-                  {(card: any) => (
-                    <GoalStepCard
-                      stage={card._agentStage}
-                      status={card._agentStatus}
-                      messages={card._agentMessages || []}
-                    />
-                  )}
-                </For>
-              </Show>
+              <For each={sortedCards()}>
+                {(card: any) => (
+                  <GoalStepCard
+                    stage={card._agentStage}
+                    status={card._agentStatus}
+                    messages={card._agentMessages || []}
+                  />
+                )}
+              </For>
             }
           >
             <For each={props.goalSteps}>
@@ -190,7 +169,6 @@ export function ExecutorGoalGroup(props: ExecutorGoalGroupProps) {
                 const stage = stepIDToStage(step.stepID);
                 const card = () => cardsByStage().get(stage);
                 const msgs = () => card()?._agentMessages || [];
-                // Use card status if it has messages, otherwise use workflow step status
                 const effectiveStatus = () => card()?._agentStatus || step.status;
                 return (
                   <WorkflowStepRow
@@ -239,7 +217,7 @@ function WorkflowStepRow(props: {
   );
 }
 
-/** Legacy: standalone step card without workflow info */
+/** Fallback step card when goalWorkflows data is absent */
 function GoalStepCard(props: { stage: string; status: string; messages: any[] }) {
   return (
     <div class={`goal-step ${stepStatusClass(props.status)}`}>
@@ -250,7 +228,7 @@ function GoalStepCard(props: { stage: string; status: string; messages: any[] })
         >
           <span class="goal-step-icon">{stepStatusIcon(props.status)}</span>
         </Show>
-        <span class="goal-step-label">{agentStageLabel(props.stage)}</span>
+        <span class="goal-step-label">{props.stage}</span>
       </div>
       <Show when={props.messages.length > 0}>
         <div class="goal-step-body">
