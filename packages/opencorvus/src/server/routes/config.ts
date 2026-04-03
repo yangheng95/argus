@@ -34,15 +34,12 @@ export const ConfigRoutes = lazy(() =>
       }),
       async (c) => {
         const [raw, orch] = await Promise.all([Config.get(), OrchestratorConfig.get()])
-        // Merge effective scalar assistant values into the response so the frontend
-        // can display correct placeholder values.
-        // Only scalar fields are merged — nested agent configs are intentionally omitted.
-        // User-supplied values always win.
+        // Merge effective scalar assistant values so the frontend can display correct defaults.
         const userAsst = raw.assistant || {}
         const assistant = {
           max_runs: userAsst.max_runs ?? orch.max_runs,
-          max_fix_runs: (userAsst as any).max_fix_runs ?? orch.max_fix_runs,
-          stage_max_retries: userAsst.stage_max_retries ?? orch.stage_max_retries,
+          max_fix_runs: userAsst.max_fix_runs ?? orch.max_fix_runs,
+          max_executor_groups: userAsst.max_executor_groups ?? orch.max_executor_groups,
           ...userAsst,
         }
         return c.json({ ...raw, assistant })
@@ -51,8 +48,8 @@ export const ConfigRoutes = lazy(() =>
     .patch(
       "/",
       describeRoute({
-        summary: "Update configuration",
-        description: "Update OpenCorvus configuration settings and preferences.",
+        summary: "Update configuration (JSON Merge Patch)",
+        description: "Partially update OpenCorvus configuration. Accepts a partial config object (RFC 7396 JSON Merge Patch) — only include fields to change.",
         operationId: "config.update",
         responses: {
           200: {
@@ -66,15 +63,17 @@ export const ConfigRoutes = lazy(() =>
           ...errors(400),
         },
       }),
-      validator("json", Config.Info),
+      validator("json", Config.Info.partial()),
       async (c) => {
-        const config = c.req.valid("json")
-        await Config.update(config)
+        const partial = c.req.valid("json")
+        // Config.update() internally reads current config and deep-merges
+        await Config.update(partial as Config.Info)
+        const updated = await Config.get()
         Provider.reset()
-        await ChannelSupervisor.sync(config).catch((error) => {
+        await ChannelSupervisor.sync(updated).catch((error) => {
           log.warn("channel runtime sync failed", { error: String(error) })
         })
-        return c.json(config)
+        return c.json(updated)
       },
     )
     .get(

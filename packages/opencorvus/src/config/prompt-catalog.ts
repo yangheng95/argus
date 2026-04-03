@@ -82,9 +82,10 @@ export namespace PromptCatalog {
         return PROMPT_GENERATE
       case "spec_system":
       case "goal_system":
-      case "decompose_system": {
-        const { DECOMPOSE_SYSTEM } = await import("@/decompose/agent")
-        return DECOMPOSE_SYSTEM
+      case "decompose_system":
+      case "requirements_system": {
+        const { REQUIREMENTS_SYSTEM } = await import("@/requirements")
+        return REQUIREMENTS_SYSTEM
       }
       case "planner_system": {
         const { PLANNER_SYSTEM_DEFAULT } = await import("@/types/planner")

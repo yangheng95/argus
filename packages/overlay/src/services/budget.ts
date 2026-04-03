@@ -13,7 +13,6 @@ function taskBudget(task: any = boardStore.board?.task): Budget | undefined {
   if (!budget || typeof budget !== "object") return undefined;
   return {
     maxRuns: Number.isFinite(budget.maxRuns) ? budget.maxRuns : undefined,
-    maxReplans: Number.isFinite(budget.maxReplans) ? budget.maxReplans : undefined,
     maxEvaluations: Number.isFinite(budget.maxEvaluations) ? budget.maxEvaluations : undefined,
     maxWallTimeMs: Number.isFinite(budget.maxWallTimeMs) ? budget.maxWallTimeMs : undefined,
   };
@@ -25,7 +24,6 @@ function setBudgetInputs(budget?: Budget): void {
     if (node) node.value = value;
   };
   setValue("budgetMaxRuns", budget?.maxRuns === undefined ? "" : String(budget.maxRuns));
-  setValue("budgetMaxReplans", budget?.maxReplans === undefined ? "" : String(budget.maxReplans));
   setValue(
     "budgetMaxEvaluations",
     budget?.maxEvaluations === undefined ? "" : String(budget.maxEvaluations),
@@ -36,12 +34,11 @@ function setBudgetInputs(budget?: Budget): void {
   );
 }
 
-function configDefaults(): { maxRuns?: number; maxReplans?: number; maxEvaluations?: number; maxWallTimeMs?: number } {
+function configDefaults(): { maxRuns?: number; maxEvaluations?: number; maxWallTimeMs?: number } {
   const orch = (appStore.config as any)?.assistant;
   if (!orch || typeof orch !== "object") return {};
   return {
     maxRuns: Number.isFinite(orch.max_runs) ? orch.max_runs : undefined,
-    maxReplans: Number.isFinite(orch.max_replans) ? orch.max_replans : undefined,
     maxEvaluations: Number.isFinite(orch.max_evaluations) ? orch.max_evaluations : undefined,
     maxWallTimeMs: Number.isFinite(orch.max_wall_time_ms) ? orch.max_wall_time_ms : undefined,
   };
@@ -54,7 +51,6 @@ function setPlaceholders(): void {
     if (node) node.placeholder = value || t("budget.placeholder");
   };
   setPlaceholder("budgetMaxRuns", defaults.maxRuns != null ? String(defaults.maxRuns) : "");
-  setPlaceholder("budgetMaxReplans", defaults.maxReplans != null ? String(defaults.maxReplans) : "");
   setPlaceholder("budgetMaxEvaluations", defaults.maxEvaluations != null ? String(defaults.maxEvaluations) : "");
   setPlaceholder("budgetMaxWallTime", defaults.maxWallTimeMs != null ? budgetMinutes(defaults.maxWallTimeMs) : "");
 }
@@ -77,7 +73,6 @@ function renderBudgetState(task: any = boardStore.board?.task): void {
   setPlaceholders();
   for (const input of [
     document.getElementById("budgetMaxRuns"),
-    document.getElementById("budgetMaxReplans"),
     document.getElementById("budgetMaxEvaluations"),
     document.getElementById("budgetMaxWallTime"),
   ]) {

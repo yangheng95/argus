@@ -20,6 +20,7 @@
 // - Calls loadBoard() after every resolve / reject to refresh state.
 
 import { settingsStore } from "../store/settings";
+import { appStore } from "../store/app";
 import { apiJson } from "./api";
 import { AppLog } from "../utils/log";
 
@@ -171,13 +172,14 @@ export function createOverlayInteractions(deps: InteractionsDeps) {
 
   function shouldAutoResolveInteraction(interaction: Interaction): boolean {
     if (!interaction || interaction.status !== "pending") return false;
+    const exp = appStore.config?.experimental;
     if (interaction.type === "permission") {
-      return stateFlag("autoPermission", settingsStore.autoPermission);
+      return stateFlag("autoPermission", exp?.auto_permission === true);
     }
     if (interaction.type === "question")
       return (
-        stateFlag("autoQuestion", settingsStore.autoQuestion) ||
-        stateFlag("unattended", settingsStore.unattended)
+        stateFlag("autoQuestion", exp?.auto_question === true) ||
+        stateFlag("unattended", exp?.unattended !== false)
       );
     return false;
   }

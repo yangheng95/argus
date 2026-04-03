@@ -12,7 +12,6 @@
 
 export interface Budget {
   maxRuns?: number;
-  maxReplans?: number;
   maxEvaluations?: number;
   /** Wall-time limit in milliseconds */
   maxWallTimeMs?: number;
@@ -70,10 +69,6 @@ export function draftBudget(): Budget | undefined {
   const budget: Budget = {
     maxRuns: budgetNumber(
       document.getElementById("budgetMaxRuns") as HTMLInputElement | null,
-    ),
-    maxReplans: budgetNumber(
-      document.getElementById("budgetMaxReplans") as HTMLInputElement | null,
-      { allowZero: true },
     ),
     maxEvaluations: budgetNumber(
       document.getElementById("budgetMaxEvaluations") as HTMLInputElement | null,

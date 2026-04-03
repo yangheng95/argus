@@ -12,6 +12,10 @@ import { t, tc } from "../utils/i18n";
 import { renderMarkdown } from "../utils/markdown";
 import { stamp } from "../utils/time";
 import { TextPart } from "./TextPart";
+import { WorkflowProgressBar } from "./WorkflowProgressBar";
+import { GoalWorkflowList } from "./GoalWorkflowGroup";
+import { RequirementsPanel } from "./RequirementsPanel";
+import { ArchitectPanel } from "./ArchitectPanel";
 
 // ── Types ──
 
@@ -1165,6 +1169,97 @@ export function Board(props: BoardProps) {
     return error ? "bad" : "good";
   });
 
+  // ── Workflow-structured data (new) ──
+  const workflow = () => board()?.workflow;
+  const requirements = () => board()?.requirements;
+  const architect = () => board()?.architect;
+  const goalWorkflows = () => board()?.goalWorkflows || [];
+  const hasWorkflow = createMemo(() => !!workflow());
+
+  // Derive streaming state from workflow step statuses
+  const isRequirementsGenerating = createMemo(() => {
+    const wf = workflow();
+    if (!wf) return false;
+    const reqStep = wf.steps.find((s: any) => s.id === "requirements");
+    return reqStep?.status === "running";
+  });
+  const isArchitectGenerating = createMemo(() => {
+    const wf = workflow();
+    if (!wf) return false;
+    const archStep = wf.steps.find((s: any) => s.id === "architect");
+    return archStep?.status === "running";
+  });
+
+  // Collect agent messages for requirements stage (spec/goal stages map to requirements)
+  const requirementsMessages = createMemo(() => {
+    if (!hasWorkflow()) return [];
+    const cards = agentCards();
+    const order = agentCardOrder();
+    const msgs: any[] = [];
+    for (const cardID of order) {
+      const card = cards[cardID];
+      if (!card) continue;
+      const stage: string = card._agentStage || "";
+      if (stage === "spec" || stage === "goal") {
+        const m = Array.isArray(card._agentMessages) ? card._agentMessages : [];
+        msgs.push(...m);
+      }
+    }
+    return msgs;
+  });
+
+  // Bridge: map agent card messages to workflow goal steps.
+  // Agent stages → workflow step IDs:
+  //   planner → plan, executor → execute, evaluator → eval
+  const STAGE_TO_STEP: Record<string, string> = {
+    planner: "plan",
+    executor: "execute",
+    evaluator: "eval",
+  };
+
+  const goalStepMessages = createMemo(() => {
+    if (!hasWorkflow()) return {};
+    const cards = agentCards();
+    const order = agentCardOrder();
+    const result: Record<string, Record<string, any[]>> = {};
+
+    for (const cardID of order) {
+      const card = cards[cardID];
+      if (!card) continue;
+      const stage: string = card._agentStage || "";
+      const stepID = STAGE_TO_STEP[stage];
+      if (!stepID) continue;
+
+      // Try to extract goalID from card metadata or session mapping
+      const goalID: string | undefined = card._agentGoalID || card._goalID;
+      if (!goalID) continue;
+
+      if (!result[goalID]) result[goalID] = {};
+      if (!result[goalID][stepID]) result[goalID][stepID] = [];
+      const msgs = Array.isArray(card._agentMessages) ? card._agentMessages : [];
+      result[goalID][stepID].push(...msgs);
+    }
+    return result;
+  });
+
+  const goalEvalChecks = createMemo(() => {
+    if (!hasWorkflow()) return {};
+    const ev = evaluation();
+    if (!ev?.checks) return {};
+    // For now, broadcast task-level checks to all goals
+    // (per-goal eval checks would need per-goal evaluation data from board)
+    const checks = Array.isArray(ev.checks) ? ev.checks : [];
+    const result: Record<string, Array<{ name: string; status: string; evidence?: string }>> = {};
+    for (const gw of goalWorkflows()) {
+      result[gw.goalID] = checks.map((c: any) => ({
+        name: c.name || "check",
+        status: c.status || "pending",
+        evidence: c.evidence,
+      }));
+    }
+    return result;
+  });
+
   return (
     <>
       <div id="taskActionsBar">
@@ -1176,117 +1271,244 @@ export function Board(props: BoardProps) {
         />
       </div>
 
-      <SectionFrame
-        id="specSection"
-        title={t("section.spec")}
-        icon={SECTION_ICONS.spec}
-        bodyId="specBody"
-        badgeId="specBadge"
-        badgeText={spec() ? t("common.active") : ""}
-        badgeTone={spec() ? "accent" : ""}
-      >
-        <SpecPanel spec={spec()} preview={boardStore.specPreview} />
-      </SectionFrame>
+      {/* ── Workflow-structured layout (when workflow data is available) ── */}
+      <Show when={hasWorkflow()}>
+        <WorkflowProgressBar workflow={workflow()} />
 
-      <SectionFrame
-        id="goalsSection"
-        title={t("section.goals")}
-        icon={SECTION_ICONS.goals}
-        bodyId="goalsBody"
-        badgeId="goalsBadge"
-        badgeText={goalsBadgeText()}
-        badgeTone={goalsBadgeTone()}
-      >
-        <GoalsPanel
-          cards={goalsCards()}
-          runningGoalIDs={runningGoalIDs()}
-          onEditGoal={props.onEditGoal}
-          onDeleteGoal={props.onDeleteGoal}
-          onOpenSession={props.onOpenSession}
-        />
-        <InteractionsList
-          interactions={interactions()}
-          onResolve={props.onResolveInteraction}
-          onReject={props.onRejectInteraction}
-        />
-      </SectionFrame>
+        <SectionFrame
+          id="requirementsSection"
+          title={t("workflow.requirements") || "Requirements"}
+          icon={SECTION_ICONS.spec}
+          bodyId="requirementsBody"
+          badgeId="requirementsBadge"
+          badgeText={requirements()?.length ? String(requirements()!.length) : ""}
+          badgeTone={requirements()?.length ? "accent" : ""}
+        >
+          <RequirementsPanel
+            requirements={requirements()}
+            specContent={spec()?.content}
+            isGenerating={isRequirementsGenerating()}
+            streamingMessages={requirementsMessages()}
+          />
+        </SectionFrame>
 
-      <SectionFrame
-        id="planSection"
-        title={t("section.plan")}
-        icon={SECTION_ICONS.plan}
-        bodyId="planBody"
-        badgeId="planBadge"
-        badgeText={runningGoalIDs().size > 0 ? String(runningGoalIDs().size) : ""}
-        badgeTone={runningGoalIDs().size > 0 ? "accent" : ""}
-      >
-        <PlanPanel
-          plan={plan()}
-          preview={boardStore.planPreview}
-          goalCards={goalsCards()}
-          runningGoalIDs={runningGoalIDs()}
-        />
-      </SectionFrame>
+        <Show when={architect()}>
+          <SectionFrame
+            id="architectSection"
+            title={t("workflow.architect") || "Architect"}
+            icon={SECTION_ICONS.plan}
+            bodyId="architectBody"
+            badgeId="architectBadge"
+            badgeText={architect() ? String(architect()!.contractCount) : ""}
+            badgeTone={architect() ? "accent" : ""}
+          >
+            <ArchitectPanel architect={architect()} isGenerating={isArchitectGenerating()} />
+          </SectionFrame>
+        </Show>
 
-      <SectionFrame
-        id="executorSection"
-        title={t("section.executor")}
-        icon={SECTION_ICONS.executor}
-        bodyId="executorBody"
-        badgeId="executorBadge"
-        badgeText={executorBadgeText()}
-        badgeTone={executorBadgeTone()}
-      >
-        <ExecutorSummaryPanel
-          cards={executorCards()}
-          goalCards={goalsCards()}
-          status={task()?.status}
-        />
-      </SectionFrame>
+        <Show when={goalWorkflows().length > 0}>
+          <SectionFrame
+            id="goalWorkflowsSection"
+            title={t("workflow.goals") || "Goals"}
+            icon={SECTION_ICONS.goals}
+            bodyId="goalWorkflowsBody"
+            badgeId="goalWorkflowsBadge"
+            badgeText={(() => {
+              const gw = goalWorkflows();
+              const passed = gw.filter(g => g.goalStatus === "passed").length;
+              return gw.length > 0 ? `${passed}/${gw.length}` : "";
+            })()}
+            badgeTone={(() => {
+              const gw = goalWorkflows();
+              const passed = gw.filter(g => g.goalStatus === "passed").length;
+              if (gw.length === 0) return "";
+              return passed === gw.length ? "good" : gw.some(g => g.goalStatus === "failed") ? "bad" : "accent";
+            })()}
+          >
+            <GoalWorkflowList
+              goals={goalWorkflows()}
+              goalStepMessages={goalStepMessages()}
+              goalEvalChecks={goalEvalChecks()}
+            />
+          </SectionFrame>
+        </Show>
 
-      <SectionFrame
-        id="criteriaSection"
-        title={t("section.evaluation")}
-        icon={SECTION_ICONS.criteria}
-        bodyId="criteriaBody"
-        badgeId="criteriaBadge"
-        badgeText={(() => {
-          const specs = criteriaSpecs(task(), evaluation());
-          if (specs.length === 0) return "";
-          const enabled = specs.filter((item) => item.enabled).length;
-          if (enabled === 0) return t("checks.zero_enabled");
-          const passed = specs.filter((item) => item.enabled && aggregateCheckStatus(evaluation()?.checks, item.name) === "passed").length;
-          return `${passed}/${enabled}`;
-        })()}
-      >
-        <CriteriaPanel
-          task={task()}
-          evaluation={evaluation()}
-          onToggle={props.onToggleCriteria}
-        />
-        <EvaluationPanel evaluation={evaluation()} />
-      </SectionFrame>
+        {/* Evaluation / Criteria — shared with legacy layout */}
+        <SectionFrame
+          id="criteriaSection"
+          title={t("section.evaluation")}
+          icon={SECTION_ICONS.criteria}
+          bodyId="criteriaBody"
+          badgeId="criteriaBadge"
+          badgeText={(() => {
+            const specs = criteriaSpecs(task(), evaluation());
+            if (specs.length === 0) return "";
+            const enabled = specs.filter((item) => item.enabled).length;
+            if (enabled === 0) return t("checks.zero_enabled");
+            const passed = specs.filter((item) => item.enabled && aggregateCheckStatus(evaluation()?.checks, item.name) === "passed").length;
+            return `${passed}/${enabled}`;
+          })()}
+        >
+          <CriteriaPanel
+            task={task()}
+            evaluation={evaluation()}
+            onToggle={props.onToggleCriteria}
+          />
+          <EvaluationPanel evaluation={evaluation()} />
+        </SectionFrame>
 
-      <SectionFrame
-        id="deliverySection"
-        title={t("section.delivery")}
-        icon={SECTION_ICONS.delivery}
-        bodyId="evalBody"
-        badgeId="deliveryBadge"
-        badgeText={delivery() ? deliveryStatusLabel(delivery()?.status) : ""}
-        badgeTone={
-          delivery()?.status === "delivered"
-            ? "good"
-            : delivery()?.status === "failed"
-              ? "bad"
-              : delivery()
-                ? "accent"
-                : ""
-        }
-      >
-        <DeliveryPanel delivery={delivery()} />
-      </SectionFrame>
+        <SectionFrame
+          id="deliverySection"
+          title={t("section.delivery")}
+          icon={SECTION_ICONS.delivery}
+          bodyId="evalBody"
+          badgeId="deliveryBadge"
+          badgeText={delivery() ? deliveryStatusLabel(delivery()?.status) : ""}
+          badgeTone={
+            delivery()?.status === "delivered"
+              ? "good"
+              : delivery()?.status === "failed"
+                ? "bad"
+                : delivery()
+                  ? "accent"
+                  : ""
+          }
+        >
+          <DeliveryPanel delivery={delivery()} />
+        </SectionFrame>
 
+        <Show when={interactions().some((i: any) => i.status === "pending")}>
+          <SectionFrame
+            id="interactionsSection"
+            title={t("workflow.interactions") || "Interactions"}
+            icon={SECTION_ICONS.criteria}
+            bodyId="interactionsBody"
+            badgeId="interactionsBadge"
+            badgeText={String(interactions().filter((i: any) => i.status === "pending").length)}
+            badgeTone="warn"
+          >
+            <InteractionsList
+              interactions={interactions()}
+              onResolve={props.onResolveInteraction}
+              onReject={props.onRejectInteraction}
+            />
+          </SectionFrame>
+        </Show>
+      </Show>
+
+      {/* ── Legacy flat layout (fallback when no workflow data) ── */}
+      <Show when={!hasWorkflow()}>
+        <SectionFrame
+          id="specSection"
+          title={t("section.spec")}
+          icon={SECTION_ICONS.spec}
+          bodyId="specBody"
+          badgeId="specBadge"
+          badgeText={spec() ? t("common.active") : ""}
+          badgeTone={spec() ? "accent" : ""}
+        >
+          <SpecPanel spec={spec()} preview={boardStore.specPreview} />
+        </SectionFrame>
+
+        <SectionFrame
+          id="goalsSection"
+          title={t("section.goals")}
+          icon={SECTION_ICONS.goals}
+          bodyId="goalsBody"
+          badgeId="goalsBadge"
+          badgeText={goalsBadgeText()}
+          badgeTone={goalsBadgeTone()}
+        >
+          <GoalsPanel
+            cards={goalsCards()}
+            runningGoalIDs={runningGoalIDs()}
+            onEditGoal={props.onEditGoal}
+            onDeleteGoal={props.onDeleteGoal}
+            onOpenSession={props.onOpenSession}
+          />
+          <InteractionsList
+            interactions={interactions()}
+            onResolve={props.onResolveInteraction}
+            onReject={props.onRejectInteraction}
+          />
+        </SectionFrame>
+
+        <SectionFrame
+          id="planSection"
+          title={t("section.plan")}
+          icon={SECTION_ICONS.plan}
+          bodyId="planBody"
+          badgeId="planBadge"
+          badgeText={runningGoalIDs().size > 0 ? String(runningGoalIDs().size) : ""}
+          badgeTone={runningGoalIDs().size > 0 ? "accent" : ""}
+        >
+          <PlanPanel
+            plan={plan()}
+            preview={boardStore.planPreview}
+            goalCards={goalsCards()}
+            runningGoalIDs={runningGoalIDs()}
+          />
+        </SectionFrame>
+
+        <SectionFrame
+          id="executorSection"
+          title={t("section.executor")}
+          icon={SECTION_ICONS.executor}
+          bodyId="executorBody"
+          badgeId="executorBadge"
+          badgeText={executorBadgeText()}
+          badgeTone={executorBadgeTone()}
+        >
+          <ExecutorSummaryPanel
+            cards={executorCards()}
+            goalCards={goalsCards()}
+            status={task()?.status}
+          />
+        </SectionFrame>
+
+        <SectionFrame
+          id="criteriaSection"
+          title={t("section.evaluation")}
+          icon={SECTION_ICONS.criteria}
+          bodyId="criteriaBody"
+          badgeId="criteriaBadge"
+          badgeText={(() => {
+            const specs = criteriaSpecs(task(), evaluation());
+            if (specs.length === 0) return "";
+            const enabled = specs.filter((item) => item.enabled).length;
+            if (enabled === 0) return t("checks.zero_enabled");
+            const passed = specs.filter((item) => item.enabled && aggregateCheckStatus(evaluation()?.checks, item.name) === "passed").length;
+            return `${passed}/${enabled}`;
+          })()}
+        >
+          <CriteriaPanel
+            task={task()}
+            evaluation={evaluation()}
+            onToggle={props.onToggleCriteria}
+          />
+          <EvaluationPanel evaluation={evaluation()} />
+        </SectionFrame>
+
+        <SectionFrame
+          id="deliverySection"
+          title={t("section.delivery")}
+          icon={SECTION_ICONS.delivery}
+          bodyId="evalBody"
+          badgeId="deliveryBadge"
+          badgeText={delivery() ? deliveryStatusLabel(delivery()?.status) : ""}
+          badgeTone={
+            delivery()?.status === "delivered"
+              ? "good"
+              : delivery()?.status === "failed"
+                ? "bad"
+                : delivery()
+                  ? "accent"
+                  : ""
+          }
+        >
+          <DeliveryPanel delivery={delivery()} />
+        </SectionFrame>
+      </Show>
     </>
   );
 }

@@ -61,6 +61,8 @@ import PromptCatalog from "./components/settings/PromptCatalog";
 import ChannelsPanel from "./components/settings/ChannelsPanel";
 import SkillMarketPanel from "./components/settings/SkillMarketPanel";
 import ProvidersPanel from "./components/settings/ProvidersPanel";
+import GeneralPanel from "./components/settings/GeneralPanel";
+import { OrchestrationPanel } from "./components/settings/OrchestrationPanel";
 import { MemoryPanel } from "./components/MemoryPanel";
 import { InteractionPanel } from "./components/InteractionPanel";
 import { waitForLogDrain, AppLog } from "./utils/log";
@@ -725,6 +727,18 @@ const promptBody = document.getElementById("promptBody");
 if (promptBody) {
   promptBody.innerHTML = "";
   render(() => <PromptCatalog />, promptBody);
+}
+
+const generalBody = document.getElementById("generalBody");
+if (generalBody) {
+  generalBody.innerHTML = "";
+  render(() => <GeneralPanel />, generalBody);
+}
+
+const orchestrationBody = document.getElementById("orchestrationBody");
+if (orchestrationBody) {
+  orchestrationBody.innerHTML = "";
+  render(() => <OrchestrationPanel />, orchestrationBody);
 }
 
 const channelConfigBody = document.getElementById("channelConfigBody");

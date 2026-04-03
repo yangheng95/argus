@@ -16,8 +16,6 @@ export const RUN_TERMINAL_STATUSES = ["blocked", "failed", "completed", "aborted
 export const Budget = z.object({
   maxRuns: z.number().int().positive().optional(),
   maxFixRuns: z.number().int().positive().optional(),
-  /** @deprecated Use maxFixRuns instead */
-  maxReplans: z.number().int().positive().optional(),
   maxEvaluations: z.number().int().positive().optional(),
   maxWallTimeMs: z.number().int().positive().optional(),
   maxExecutorGroups: z.number().int().positive().optional(),
@@ -581,11 +579,65 @@ export const TaskBoardPlanNode = z.object({
   orderIndex: z.number(),
 })
 
+// ---------------------------------------------------------------------------
+// MiniWorkflow — workflow state projected to TaskBoard
+// ---------------------------------------------------------------------------
+
+export const TaskBoardWorkflowStep = z.object({
+  id: z.string(),
+  label: z.string(),
+  tool: z.string(),
+  scope: z.enum(["task", "goal"]),
+  skippable: z.boolean(),
+  status: z.enum(["pending", "running", "completed", "skipped", "failed"]),
+})
+
+export const TaskBoardWorkflow = z.object({
+  id: z.string(),
+  name: z.string(),
+  steps: TaskBoardWorkflowStep.array(),
+  goalLoopStepIDs: z.array(z.string()),
+})
+
+export const TaskBoardRequirement = z.object({
+  id: z.string(),
+  description: z.string(),
+  type: z.enum(["explicit", "inferred", "system"]),
+  priority: z.enum(["blocking", "advisory"]),
+})
+
+export const TaskBoardArchitect = z.object({
+  summary: z.string(),
+  contractCount: z.number(),
+  categories: z.array(z.string()),
+})
+
+export const TaskBoardGoalWorkflowStep = z.object({
+  stepID: z.string(),
+  label: z.string(),
+  status: z.enum(["pending", "running", "completed", "skipped", "failed"]),
+  startedAt: z.number().optional(),
+  completedAt: z.number().optional(),
+})
+
+export const TaskBoardGoalWorkflow = z.object({
+  goalID: z.string(),
+  goalTitle: z.string(),
+  goalStatus: z.string(),
+  priority: z.enum(["blocking", "advisory"]),
+  steps: TaskBoardGoalWorkflowStep.array(),
+})
+
+// ---------------------------------------------------------------------------
+// TaskBoard — full board projection
+// ---------------------------------------------------------------------------
+
 export const TaskBoard = z.object({
   lastSequence: z.number().optional(),
   task: Task,
   spec: SpecSnapshot.optional(),
   plan: PlanVersion.optional(),
+  /** @deprecated — use goalWorkflows instead */
   planNodes: TaskBoardPlanNode.array().optional(),
   goalRuns: TaskBoardGoalRun.array().optional(),
   run: Run.optional(),
@@ -596,13 +648,25 @@ export const TaskBoard = z.object({
   interactions: Interaction.array(),
   channels: TaskChannelBinding.array(),
   artifacts: Artifact.array(),
+  /** @deprecated — workflow step statuses provide better progress tracking */
   snapshots: ProgressSnapshot.array(),
   overview: TaskBoardOverview,
   brief: z.object({
     content: z.string(),
     updated_at: z.number(),
   }),
+  /** @deprecated — replaced by workflow-structured view */
   lanes: TaskBoardLane.array(),
+
+  // ── New workflow-structured fields ──
+  /** Active workflow state (from task.metadata._workflow + WorkflowRegistry) */
+  workflow: TaskBoardWorkflow.optional(),
+  /** Structured requirements from Requirements Agent output */
+  requirements: TaskBoardRequirement.array().optional(),
+  /** Architect Agent consensus summary */
+  architect: TaskBoardArchitect.optional(),
+  /** Per-goal workflow groups with step-level progress */
+  goalWorkflows: TaskBoardGoalWorkflow.array().optional(),
 })
 
 export const TaskProject = z.object({
@@ -687,7 +751,7 @@ export const RunMetrics = z.object({
   delivery_focus_score: z.number(),
 })
 
-export type AgentStageType = "assistant" | "spec" | "goal" | "planner" | "evaluator" | "delivery"
+export type AgentStageType = "assistant" | "requirements" | "spec" | "goal" | "planner" | "evaluator" | "delivery"
 
 export const Event = {
   AgentUpdated: BusEvent.define("agent.updated", z.object({ taskID: z.string(), runID: z.string().optional(), stage: z.string(), kind: z.string(), id: z.string().optional(), toolName: z.string().optional(), text: z.string().optional(), summary: z.string() })),
@@ -714,4 +778,9 @@ export const Event = {
   RunProgress: BusEvent.define("run.progress", z.object({ taskID: Identifier.schema("task"), runID: Identifier.schema("run"), type: z.string(), summary: z.string(), payload: z.record(z.string(), z.any()).optional() })),
   RunOutput: BusEvent.define("run.output", z.object({ taskID: Identifier.schema("task"), runID: Identifier.schema("run"), type: z.string(), text: z.string() })),
   MessageInjected: BusEvent.define("message.injected", z.object({ taskID: Identifier.schema("task"), runID: Identifier.schema("run"), text: z.string(), summary: z.string() })),
+
+  // ── MiniWorkflow events ──
+  WorkflowSelected: BusEvent.define("workflow.selected", z.object({ taskID: Identifier.schema("task"), workflowID: z.string(), workflowName: z.string(), summary: z.string() })),
+  WorkflowStepUpdated: BusEvent.define("workflow.step.updated", z.object({ taskID: Identifier.schema("task"), stepID: z.string(), goalID: z.string().optional(), status: z.enum(["pending", "running", "completed", "skipped", "failed"]), summary: z.string() })),
+  GoalWorkflowProgress: BusEvent.define("goal.workflow.progress", z.object({ taskID: Identifier.schema("task"), goalID: Identifier.schema("goal"), completedSteps: z.number(), totalSteps: z.number(), currentStep: z.string().optional(), summary: z.string() })),
 }

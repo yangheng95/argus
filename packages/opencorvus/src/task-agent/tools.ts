@@ -39,6 +39,8 @@ import {
 } from "@/orchestrator/store"
 import { updateTask } from "@/orchestrator/state"
 
+import { findStepByTool, type WorkflowState, type MiniWorkflow } from "@/orchestrator/workflow"
+
 const log = Log.create({ service: "task-tools" })
 
 // ---------------------------------------------------------------------------
@@ -75,9 +77,9 @@ function buildGoalContract(task: any, goal: any, allGoals: any[]): import("@/pip
   }
 }
 
-function stageTimeout(stage: "spec" | "goal" | "plan"): number {
-  const env = { spec: "OPENCORVUS_SPEC_TIMEOUT_MS", goal: "OPENCORVUS_GOAL_TIMEOUT_MS", plan: "OPENCORVUS_PLAN_TIMEOUT_MS" }
-  const defaults = { spec: 300_000, goal: 180_000, plan: 300_000 }
+function stageTimeout(stage: "requirements" | "goal" | "plan"): number {
+  const env = { requirements: "OPENCORVUS_REQUIREMENTS_TIMEOUT_MS", goal: "OPENCORVUS_GOAL_TIMEOUT_MS", plan: "OPENCORVUS_PLAN_TIMEOUT_MS" }
+  const defaults = { requirements: 300_000, goal: 180_000, plan: 300_000 }
   return parseInt(process.env[env[stage]] || String(defaults[stage]), 10)
 }
 
@@ -85,7 +87,13 @@ function stageTimeout(stage: "spec" | "goal" | "plan"): number {
 // Tool factory
 // ---------------------------------------------------------------------------
 
-export function createTaskAgentTools(input: { taskID: string; agentSessionID: string; signal?: AbortSignal }) {
+export function createTaskAgentTools(input: {
+  taskID: string
+  agentSessionID: string
+  signal?: AbortSignal
+  workflow?: import("@/orchestrator/workflow").MiniWorkflow
+  workflowState?: import("@/orchestrator/workflow").WorkflowState
+}) {
   const { taskID } = input
 
   // Blocking tools (submit_execution, execute_goal, dispatch_ready_goals) signal
@@ -94,19 +102,110 @@ export function createTaskAgentTools(input: { taskID: string; agentSessionID: st
   // when execution completes.
   const stopAfterDispatch = new AbortController()
 
+  // ── Workflow step tracking (passive observation) ──
+
+  async function trackStepStart(toolName: string, goalID?: string): Promise<void> {
+    if (!input.workflow || !input.workflowState) return
+    const step = findStepByTool(input.workflow, toolName)
+    if (!step) return
+    const now = Date.now()
+    const ws = input.workflowState
+
+    if (step.scope === "task") {
+      ws.taskSteps[step.id] = { status: "running", startedAt: now }
+    } else if (goalID && ws.goalSteps[goalID]) {
+      ws.goalSteps[goalID].steps[step.id] = { status: "running", startedAt: now }
+    }
+    ws.currentStepID = step.id
+
+    // Persist + emit
+    try {
+      const task = requireTask(taskID)
+      const meta = { ...(task.metadata ?? {}), _workflow: ws }
+      await updateTask(task, { metadata: meta }, `Workflow step started: ${step.label}`)
+      OrchestratorProtocol.emit(OrchestratorEvent.WorkflowStepUpdated, {
+        taskID, stepID: step.id, goalID, status: "running",
+        summary: `Step "${step.label}" started`,
+      })
+    } catch { /* best effort */ }
+  }
+
+  async function trackStepComplete(toolName: string, goalID?: string, failed = false): Promise<void> {
+    if (!input.workflow || !input.workflowState) return
+    const step = findStepByTool(input.workflow, toolName)
+    if (!step) return
+    const now = Date.now()
+    const ws = input.workflowState
+    const status = failed ? "failed" as const : "completed" as const
+
+    if (step.scope === "task") {
+      const existing = ws.taskSteps[step.id]
+      ws.taskSteps[step.id] = { ...existing, status, completedAt: now }
+    } else if (goalID && ws.goalSteps[goalID]) {
+      const existing = ws.goalSteps[goalID].steps[step.id]
+      ws.goalSteps[goalID].steps[step.id] = { ...existing, status, completedAt: now }
+    }
+
+    // Advance currentStepID to next pending step
+    const nextStep = input.workflow.steps.find(s => {
+      if (s.scope === "task") return ws.taskSteps[s.id]?.status === "pending"
+      return false // goal-scope steps don't drive currentStepID
+    })
+    ws.currentStepID = nextStep?.id ?? null
+
+    try {
+      const task = requireTask(taskID)
+      const meta = { ...(task.metadata ?? {}), _workflow: ws }
+      await updateTask(task, { metadata: meta }, `Workflow step ${status}: ${step.label}`)
+      OrchestratorProtocol.emit(OrchestratorEvent.WorkflowStepUpdated, {
+        taskID, stepID: step.id, goalID, status,
+        summary: `Step "${step.label}" ${status}`,
+      })
+
+      // Emit per-goal progress when a goal-scope step completes
+      if (goalID && step.scope === "goal" && ws.goalSteps[goalID]) {
+        const goalSteps = ws.goalSteps[goalID].steps
+        const totalSteps = Object.keys(goalSteps).length
+        const completedSteps = Object.values(goalSteps).filter(s => s.status === "completed" || s.status === "skipped").length
+        const currentStep = Object.entries(goalSteps).find(([, s]) => s.status === "running")?.[0]
+        OrchestratorProtocol.emit(OrchestratorEvent.GoalWorkflowProgress, {
+          taskID,
+          goalID,
+          completedSteps,
+          totalSteps,
+          currentStep,
+          summary: `Goal ${goalID}: ${completedSteps}/${totalSteps} steps done`,
+        })
+      }
+    } catch { /* best effort */ }
+  }
+
+  /** Ensure a goal has initialized step states in workflow tracking */
+  function ensureGoalInWorkflow(goalID: string, goalTitle: string): void {
+    if (!input.workflow || !input.workflowState) return
+    const ws = input.workflowState
+    if (ws.goalSteps[goalID]) return
+    const steps: Record<string, { status: "pending" }> = {}
+    for (const s of input.workflow.steps) {
+      if (s.scope === "goal") steps[s.id] = { status: "pending" }
+    }
+    ws.goalSteps[goalID] = { goalID, goalTitle, goalStatus: "pending", steps }
+  }
+
   const tools = {
-    decompose: tool({
-      description: "Explore the codebase, analyze the task, and decompose it into executable goal contracts with cross-goal interface declarations. This single tool replaces the old analyze_requirements + decompose_goals two-step process.",
+    requirements: tool({
+      description: "Explore the codebase, analyze the task, extract requirements, and decompose into executable goal contracts with cross-goal interface declarations.",
       inputSchema: z.object({
-        reason: z.string().optional().describe("Why you decided to decompose the task"),
+        reason: z.string().optional().describe("Why you decided to analyze requirements"),
       }),
       execute: async () => {
         let task = requireTask(taskID)
         const existingGoals = listGoals(taskID)
         if (existingGoals.length > 0) return `${existingGoals.length} goals already defined. Skipping.`
-        if (task.active_spec_version_id) return `Decompose already completed (spec=${task.active_spec_version_id}). Use read_context to see goals.`
+        if (task.active_spec_version_id) return `Requirements analysis already completed (spec=${task.active_spec_version_id}). Use read_context to see goals.`
 
-        task = await updateTask(task, { status: "active" }, "Decomposition started")
+        await trackStepStart("requirements")
+        task = await updateTask(task, { status: "active" }, "Requirements analysis started")
         const guard = createInactivityGuard(stageTimeout("goal"), () => {
           log.warn("decompose stage inactivity timeout", { taskID })
         })
@@ -121,7 +220,8 @@ export function createTaskAgentTools(input: { taskID: string; agentSessionID: st
           const hooks = sessionStreamHooks({ sessionID: decomposeSession.id, taskID, stage: "goal" })
           await decomposeLive.start("Decomposition started")
 
-          const { DecomposeService } = await import("@/decompose/service")
+          const { RequirementsService } = await import("@/requirements")
+          const DecomposeService = RequirementsService
           const { createDecisionLog } = await import("@/decision-log")
           const decisionLog = createDecisionLog(taskID)
 
@@ -235,10 +335,79 @@ export function createTaskAgentTools(input: { taskID: string; agentSessionID: st
               OrchestratorProtocol.emit(OrchestratorEvent.TaskUpdated, { taskID, status: task.status, summary: "Goals defined" }, { source: "task-agent.decompose" }),
             )
           })
+          // Initialize workflow tracking for newly created goals
+          for (const g of result.goals) {
+            ensureGoalInWorkflow(g.id, g.title)
+          }
+          await trackStepComplete("requirements")
           return `${result.goals.length} goals created. Summary: ${result.summary}. Decisions: ${result.decisions.map(d => `${d.key}=${d.value}`).join(", ")}`
         } finally {
           guard.clear()
         }
+      },
+    }),
+
+    // -----------------------------------------------------------------------
+    // Cross-goal coordination — Architect Agent
+    // -----------------------------------------------------------------------
+
+    architect: tool({
+      description: "Coordinate cross-goal contracts. Call after decompose when multiple goals have exports/imports dependencies. Writes precise interface contracts, directory blueprints, and shared type definitions to the Decision Log so parallel goals don't conflict. Skip for single-goal or trivial tasks.",
+      inputSchema: z.object({
+        goalIDs: z.array(z.string()).optional().describe("Goal IDs to coordinate (default: all goals)"),
+        reason: z.string().optional().describe("Why you decided to run architect"),
+      }),
+      execute: async ({ goalIDs }) => {
+        const allGoals = listGoals(taskID)
+        if (allGoals.length === 0) return "No goals to coordinate. Run requirements first."
+        if (allGoals.length === 1) return "Single goal — architect coordination not needed."
+
+        await trackStepStart("architect")
+
+        const targetGoals = goalIDs?.length
+          ? allGoals.filter(g => goalIDs.includes(g.id))
+          : allGoals
+
+        const task = requireTask(taskID)
+        const { createDecisionLog } = await import("@/decision-log")
+        const decisionLog = createDecisionLog(taskID)
+
+        const { ArchitectAgent } = await import("@/architect/agent")
+
+        const result = await ArchitectAgent.coordinate({
+          goals: targetGoals.map(g => ({
+            id: g.id,
+            title: g.title,
+            objective: g.objective,
+            done_definition: g.done_definition,
+            owned_paths: typeof g.owned_paths === "string" ? JSON.parse(g.owned_paths) : (g.owned_paths ?? []),
+            depends_on: typeof g.depends_on === "string" ? JSON.parse(g.depends_on) : (g.depends_on ?? []),
+            exports: typeof g.exports === "string" ? JSON.parse(g.exports) : (g.exports ?? []),
+            imports: typeof g.imports === "string" ? JSON.parse(g.imports) : (g.imports ?? []),
+            priority: g.priority as "blocking" | "advisory",
+            kind: g.kind,
+            requirement_ids: typeof g.requirement_ids === "string" ? JSON.parse(g.requirement_ids) : (g.requirement_ids ?? []),
+          })),
+          taskRequest: task.request,
+          taskTitle: task.title,
+          taskID,
+          decisionLog,
+          signal: input.signal,
+        })
+
+        const summary = [
+          `Architect coordination complete: ${result.entriesWritten} contracts written to Decision Log.`,
+          result.blueprint.summary,
+          result.blueprint.contracts.length > 0
+            ? `Categories: ${[...new Set(result.blueprint.contracts.map(c => c.category))].join(", ")}`
+            : "",
+          result.recommendedNext.length > 0
+            ? `Recommended next: ${result.recommendedNext.map(r => `${r.agent}(${r.priority})`).join(", ")}`
+            : "",
+        ].filter(Boolean).join("\n")
+
+        await trackStepComplete("architect")
+        return summary
       },
     }),
 
@@ -257,6 +426,9 @@ export function createTaskAgentTools(input: { taskID: string; agentSessionID: st
         const dbGoals = listGoals(taskID)
         const goal = dbGoals.find(g => g.id === goalID)
         if (!goal) return `Goal ${goalID} not found.`
+
+        ensureGoalInWorkflow(goalID, goal.title)
+        await trackStepStart("plan_goal", goalID)
 
         const { planGoal } = await import("@/planner/per-goal")
         const { createDecisionLog } = await import("@/decision-log")
@@ -283,6 +455,7 @@ export function createTaskAgentTools(input: { taskID: string; agentSessionID: st
               onError: hooks.onError,
             },
           })
+          await trackStepComplete("plan_goal", goalID)
           return `Plan created for "${goal.title}": ${steps.brief.slice(0, 500)}`
         } finally {
           await hooks.flush()
@@ -301,6 +474,9 @@ export function createTaskAgentTools(input: { taskID: string; agentSessionID: st
         const dbGoals = listGoals(taskID)
         const goal = dbGoals.find(g => g.id === goalID)
         if (!goal) return `Goal ${goalID} not found.`
+
+        ensureGoalInWorkflow(goalID, goal.title)
+        await trackStepStart("eval_goal", goalID)
 
         const { evaluateGoal } = await import("@/evaluator/per-goal")
         const { createDecisionLog } = await import("@/decision-log")
@@ -367,6 +543,7 @@ export function createTaskAgentTools(input: { taskID: string; agentSessionID: st
           }).run(),
         )
 
+        await trackStepComplete("eval_goal", goalID, !verdict.pass)
         const evidenceStr = verdict.evidence.slice(0, 5).join("; ")
         return verdict.pass
           ? `PASS: ${goal.title}. Evidence: ${evidenceStr}`
@@ -462,6 +639,9 @@ export function createTaskAgentTools(input: { taskID: string; agentSessionID: st
         if (!goal) return `Goal ${goalID} not found.`
         if (goal.status === "running") return `Goal ${goalID} is already running.`
         if (goal.status === "passed") return `Goal ${goalID} already passed.`
+
+        ensureGoalInWorkflow(goalID, goal.title)
+        await trackStepStart("execute_goal", goalID)
 
         // Ensure run exists
         let runID = task.active_run_id
@@ -598,7 +778,7 @@ export function createTaskAgentTools(input: { taskID: string; agentSessionID: st
       execute: async () => {
         const task = requireTask(taskID)
         const dbGoals = listGoals(taskID)
-        if (dbGoals.length === 0) return "No goals found. Run decompose first."
+        if (dbGoals.length === 0) return "No goals found. Run requirements first."
 
         const runID = Identifier.ascending("run")
         const now = Date.now()
@@ -708,16 +888,16 @@ export function createTaskAgentTools(input: { taskID: string; agentSessionID: st
     }),
 
     restart_from_stage: tool({
-      description: "Restart the task from a specific stage. Use when the current approach is fundamentally wrong, the user requests a restart, or you need to redo decompose/plan from scratch.",
+      description: "Restart the task from a specific stage. Use when the current approach is fundamentally wrong, the user requests a restart, or you need to redo requirements/plan from scratch.",
       inputSchema: z.object({
-        stage: z.enum(["decompose", "plan", "executor"]).describe("Which stage to restart from"),
+        stage: z.enum(["requirements", "plan", "executor"]).describe("Which stage to restart from"),
         reason: z.string().describe("Why restarting from this stage"),
       }),
       execute: async ({ stage, reason }) => {
         const task = requireTask(taskID)
         // All restarts go to "active" — the agent decides what to do next
         await updateTask(task, { status: "active", error: null, blocking_reason: null }, `Restart from ${stage}: ${reason}`)
-        return `Task restarted from ${stage} stage. Reason: ${reason}. Continue with the appropriate tool (decompose for decompose, create_plan for plan, submit_execution for executor).`
+        return `Task restarted from ${stage} stage. Reason: ${reason}. Continue with the appropriate tool (requirements for requirements, create_plan for plan, submit_execution for executor).`
       },
     }),
 
@@ -729,6 +909,8 @@ export function createTaskAgentTools(input: { taskID: string; agentSessionID: st
       execute: async () => {
         const task = requireTask(taskID)
         if (!task.active_run_id) return "No active run. Execute goals first."
+
+        await trackStepStart("deliver")
         const run = requireRun(task.active_run_id)
 
         // Gate: all blocking goals must be passed before delivery
@@ -774,8 +956,8 @@ export function createTaskAgentTools(input: { taskID: string; agentSessionID: st
         })
 
         // Run DeliveryAgent to verify build/test/startup
-        const goals = listGoals(taskID)
-        const goalInfos = goals.map(g => ({
+        const allGoals = listGoals(taskID)
+        const goalInfos = allGoals.map(g => ({
           description: g.objective,
           criteria: g.done_definition,
           priority: g.priority as "blocking" | "advisory",
@@ -836,11 +1018,14 @@ export function createTaskAgentTools(input: { taskID: string; agentSessionID: st
           const passedCount = goals.filter(g => g.status === "passed").length
           const failedCount = goals.filter(g => g.status === "failed").length
           if (verdict.verdict === "accepted") {
+            await trackStepComplete("deliver")
             return `Delivery verified and ACCEPTED. ${allDiffs.length} files, ${passedCount}/${goals.length} goals passed. Call publish_delivery to complete.`
           }
           const issues = verdict.issues_found.join("; ")
+          await trackStepComplete("deliver", undefined, true)
           return `Delivery REJECTED: ${verdict.summary}. Issues: ${issues}. Goals: ${passedCount} passed, ${failedCount} failed. Fix issues and retry.`
         } catch (err) {
+          await trackStepComplete("deliver", undefined, true)
           await deliveryLive.finish("Delivery verification failed")
           const msg = err instanceof Error ? err.message : String(err)
           log.error("deliver: verification failed", { taskID, error: msg })

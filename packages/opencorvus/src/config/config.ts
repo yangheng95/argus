@@ -1201,21 +1201,32 @@ export namespace Config {
         .optional(),
       assistant: z
         .object({
-          spec: z
+          decompose: z
             .object({
-              max_steps: z.number().int().min(1).optional().describe("Maximum agentic steps for spec agent (default: 30)"),
-              timeout_ms: z.number().int().min(1000).optional().describe("Spec agent timeout in milliseconds (default: 300000)"),
-              quality_threshold: z.number().min(0).max(1).optional().describe("Quality score threshold for retry (0.0-1.0, default: 0.6)"),
-              max_attempts: z.number().int().min(1).optional().describe("Maximum spec generation attempts (default: 3)"),
+              max_steps: z.number().int().min(1).optional().describe("Maximum agentic steps for requirements agent (default: 30)"),
+              timeout_ms: z.number().int().min(1000).optional().describe("Requirements agent timeout in milliseconds (default: 300000)"),
+              quality_threshold: z.number().min(0).max(1).optional().describe("Quality score threshold for retry (0.0-1.0, default: 0.5)"),
+              max_attempts: z.number().int().min(1).optional().describe("Maximum requirements analysis attempts (default: 3)"),
+              skills: z.array(z.string()).optional().describe("Additional skill paths for requirements agent"),
             })
             .optional()
-            .describe("Spec agent configuration"),
+            .describe("Requirements agent configuration — analyzes input, extracts requirements, decomposes into goal contracts"),
+          architect: z
+            .object({
+              max_steps: z.number().int().min(1).optional().describe("Maximum agentic steps for architect agent (default: 20)"),
+              timeout_ms: z.number().int().min(1000).optional().describe("Architect agent timeout in milliseconds (default: 180000)"),
+              skills: z.array(z.string()).optional().describe("Additional skill paths for architect agent"),
+              model: z.string().optional().describe("Model override for architect agent"),
+            })
+            .optional()
+            .describe("Architect agent configuration — cross-goal coordination, interface contracts"),
           planner: z
             .object({
               max_steps: z.number().int().min(1).optional().describe("Maximum agentic steps for planner agent (default: 30)"),
               timeout_ms: z.number().int().min(1000).optional().describe("Planner agent timeout in milliseconds (default: 300000)"),
               quality_threshold: z.number().min(0).max(1).optional().describe("Quality score threshold for retry (0.0-1.0, default: 0.5)"),
               max_attempts: z.number().int().min(1).optional().describe("Maximum plan generation attempts (default: 3)"),
+              skills: z.array(z.string()).optional().describe("Additional skill paths for planner agent"),
             })
             .optional()
             .describe("Planner agent configuration"),
@@ -1224,6 +1235,8 @@ export namespace Config {
               max_steps: z.number().int().min(1).optional().describe("Maximum agentic steps for evaluator agent (default: 25)"),
               timeout_ms: z.number().int().min(1000).optional().describe("Evaluator agent timeout in milliseconds (default: 240000)"),
               model: z.string().optional().describe("Model to use for evaluator agent (e.g. 'github-copilot/claude-haiku-4-5'). Defaults to the project default model."),
+              tier: z.enum(["core", "standard", "full"]).optional().describe("Evaluation tier: 'core' (build/test/lint only), 'standard' (+ judge/spec_check), 'full' (all checks). Default: 'standard'."),
+              skills: z.array(z.string()).optional().describe("Additional skill paths for evaluator agent"),
             })
             .optional()
             .describe("Evaluator agent configuration"),
@@ -1232,16 +1245,46 @@ export namespace Config {
               max_steps: z.number().int().min(1).optional().describe("Maximum agentic steps for delivery agent (default: 40)"),
               timeout_ms: z.number().int().min(1000).optional().describe("Delivery agent timeout in milliseconds (default: 600000). Also overridable via OPENCORVUS_DELIVERY_AGENT_TIMEOUT_MS env var"),
               max_retries: z.number().int().min(0).optional().describe("Maximum delivery generation retries (default: 2)"),
+              skills: z.array(z.string()).optional().describe("Additional skill paths for delivery agent"),
             })
             .optional()
             .describe("Delivery agent configuration"),
+          adaptive: z
+            .object({
+              enabled: z.boolean().optional().describe("Enable adaptive pipeline shortcuts (default: true)"),
+              planner_shortcut_max_steps: z.number().int().min(1).optional().describe("Max planner steps when goals are pre-provided (default: 15)"),
+            })
+            .optional()
+            .describe("Adaptive pipeline configuration"),
           max_runs: z.number().int().min(1).optional().describe("Maximum total task runs (default: 10)"),
-          max_replans: z.number().int().min(0).optional().describe("Maximum replan cycles (default: 3)"),
-          same_plan_retry_limit: z.number().int().min(0).optional().describe("Max retries with the same plan (default: 2)"),
-          stage_max_retries: z.number().int().min(0).optional().describe("Max retries per assistant stage (default: 2)"),
+          max_fix_runs: z.number().int().min(0).optional().describe("Maximum fix runs after failure (default: 5)"),
+          max_executor_groups: z.number().int().min(1).optional().describe("Maximum parallel executor groups (default: 1)"),
+          default_workflow: z.string().optional().describe("Default workflow for new tasks: 'standard', 'quick-fix', 'plan-only', or custom ID (default: 'standard')"),
+          workflows: z
+            .array(
+              z.object({
+                id: z.string().describe("Workflow unique ID"),
+                name: z.string().describe("Display name"),
+                description: z.string().optional().describe("One-line description"),
+                steps: z.array(
+                  z.object({
+                    id: z.string().describe("Step unique ID within workflow"),
+                    tool: z.string().describe("Task Agent tool name this step maps to"),
+                    label: z.string().describe("UI display label"),
+                    hint: z.string().optional().describe("Brief guidance injected into system prompt"),
+                    scope: z.enum(["task", "goal"]).describe("task = once per task, goal = once per goal"),
+                    skippable: z.boolean().optional().describe("Whether Task Agent can skip this step"),
+                    after: z.array(z.string()).optional().describe("Prerequisite step IDs"),
+                  }),
+                ),
+                goalLoopStepIDs: z.array(z.string()).optional().describe("Step IDs forming the per-goal loop (for UI grouping)"),
+              }),
+            )
+            .optional()
+            .describe("Custom workflow definitions. Override built-in workflows by matching ID."),
         })
         .optional()
-        .describe("Assistant pipeline configuration — controls spec, planner, evaluator, and delivery agent behavior"),
+        .describe("Assistant agent configuration — controls decompose, planner, evaluator, and delivery agent behavior"),
       experimental: z
         .object({
           disable_paste_summary: z.boolean().optional(),
@@ -1259,6 +1302,14 @@ export namespace Config {
             .boolean()
             .optional()
             .describe("Enable unattended mode — auto-approve permissions and auto-reject stale interactions"),
+          auto_permission: z
+            .boolean()
+            .optional()
+            .describe("Auto-approve permission requests in unattended mode (default: false)"),
+          auto_question: z
+            .boolean()
+            .optional()
+            .describe("Auto-answer clarification questions in unattended mode (default: false)"),
           mcp_timeout: z
             .number()
             .int()
@@ -1417,12 +1468,20 @@ export namespace Config {
 
   export async function update(config: Info) {
     await fs.mkdir(projectConfigDirectory(), { recursive: true })
-    await writeConfigFile(projectConfigFile(), config)
+    const merged = await writeConfigFile(projectConfigFile(), config)
     // Reset cached config state without destroying the instance.
     // Instance.dispose() would kill running sessions (executor, evaluator)
     // and cause race conditions with concurrent assistant operations.
     state.reset()
     global.reset()
+    // Notify all connected clients that config changed
+    GlobalBus.emit("event", {
+      directory: "config",
+      payload: {
+        type: "config.changed",
+        properties: merged ?? {},
+      },
+    })
   }
 
   function globalConfigFile() {

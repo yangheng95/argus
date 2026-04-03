@@ -68,14 +68,16 @@ export async function planGoal(input: {
   const guard = toolGuard(createPlannerTools(input.workDir, input.sessionID))
   const context = prefetchContext(task.title, task.request)
 
-  // Build Decision Log section
+  // Build Decision Log section — architect consensus gets its own prominent section
   let decisionSection = ""
+  let architectSection = ""
   if (input.decisionLog) {
     decisionSection = input.decisionLog.toPromptSection()
+    architectSection = input.decisionLog.phasePromptSection("architect")
   }
 
   const systemPrompt = buildPlannerSystem()
-  const userPrompt = buildPlannerPrompt(contract, context, decisionSection, task.request)
+  const userPrompt = buildPlannerPrompt(contract, context, decisionSection, task.request, architectSection)
 
   const baseSignal = signal ?? AbortSignal.timeout(TIMEOUT_MS)
   const stream = streamText({
@@ -161,6 +163,7 @@ function buildPlannerPrompt(
   context: string,
   decisionSection: string,
   taskRequest: string,
+  architectSection?: string,
 ): string {
   const { goal, allGoals } = contract
   const sections: string[] = []
@@ -190,6 +193,12 @@ function buildPlannerPrompt(
   }
 
   sections.push(`## Task Context\n\n${taskRequest}`)
+
+  // Architect consensus (binding contracts) — injected prominently before general decisions
+  if (architectSection) {
+    sections.push(architectSection)
+    sections.push("**IMPORTANT**: The above architect contracts are BINDING. File paths, interface signatures, and export names MUST match exactly.")
+  }
 
   if (decisionSection) {
     sections.push(decisionSection)

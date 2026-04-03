@@ -335,6 +335,12 @@ export function routeSSEEvent(event: any): boolean {
     return true;
   }
 
+  // ── Config changed → refresh appStore.config ──
+  if (type === "config.changed") {
+    void import("./init").then(({ loadConfigInfo }) => loadConfigInfo()).catch(() => {});
+    return true;
+  }
+
   // ── Board-invalidating events → forwarded to handleEventStreamEvent
   if (
     type === "task.updated" ||
@@ -403,7 +409,8 @@ function boardInvalidatingEvent(type: string): boolean {
     type.startsWith("goal.") ||
     type.startsWith("delivery.") ||
     type.startsWith("evaluation.") ||
-    type.startsWith("interaction.")
+    type.startsWith("interaction.") ||
+    type.startsWith("workflow.")
   );
 }
 

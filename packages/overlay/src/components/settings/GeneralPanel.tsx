@@ -4,11 +4,12 @@
 // card-based groups inside the config dialog General tab:
 //   - Connection: server URL, username, password
 //   - Appearance: theme, locale, opacity
-//   - Behaviour: always-on-top, unattended, auto-permission, auto-question, transcript details
+//   - Behaviour: always-on-top, transcript details (unattended/auto-* moved to OrchestrationPanel)
 
 import { createSignal } from "solid-js";
 import { t } from "../../utils/i18n";
 import { settingsStore, setSettingsStore, saveSettings } from "../../store/settings";
+import { appStore } from "../../store/app";
 import { configure as configureApi } from "../../services/api";
 import { checkConnection } from "../../services/connection";
 import { reloadProjectScope } from "../../services/config";
@@ -38,7 +39,7 @@ export default function GeneralPanel() {
   }
 
   function handleToggle(
-    key: "alwaysOnTop" | "unattended" | "autoPermission" | "autoQuestion" | "showTranscriptDetails",
+    key: "alwaysOnTop" | "showTranscriptDetails",
     e: Event,
   ) {
     setSettingsStore(key, (e.currentTarget as HTMLInputElement).checked);
@@ -186,32 +187,7 @@ export default function GeneralPanel() {
               />
             </label>
 
-            <label class="config-toggle-list-item">
-              <span class="toggle-label">{t("settings.unattended")}</span>
-              <input
-                type="checkbox"
-                checked={settingsStore.unattended}
-                onChange={(e) => handleToggle("unattended", e)}
-              />
-            </label>
-
-            <label class="config-toggle-list-item">
-              <span class="toggle-label">{t("settings.auto_permission")}</span>
-              <input
-                type="checkbox"
-                checked={settingsStore.autoPermission}
-                onChange={(e) => handleToggle("autoPermission", e)}
-              />
-            </label>
-
-            <label class="config-toggle-list-item">
-              <span class="toggle-label">{t("settings.auto_question")}</span>
-              <input
-                type="checkbox"
-                checked={settingsStore.autoQuestion}
-                onChange={(e) => handleToggle("autoQuestion", e)}
-              />
-            </label>
+            {/* Unattended / Auto-permission / Auto-question moved to Orchestration tab */}
 
             <label class="config-toggle-list-item">
               <span class="toggle-label">{t("settings.show_transcript_details")}</span>

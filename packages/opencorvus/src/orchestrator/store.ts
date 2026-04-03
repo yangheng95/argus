@@ -845,7 +845,6 @@ function budgetModel(input?: OrchestratorBudget | null) {
   if (!input) return undefined
   return {
     maxRuns: input.max_runs,
-    maxReplans: input.max_replans,
     maxEvaluations: input.max_evaluations,
     maxWallTimeMs: input.max_wall_time_ms,
   }

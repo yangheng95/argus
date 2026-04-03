@@ -17,9 +17,6 @@ export interface OverlaySettings {
   executor: string;
   initGit: boolean;
   alwaysOnTop: boolean;
-  unattended: boolean;
-  autoPermission: boolean;
-  autoQuestion: boolean;
   showTranscriptDetails: boolean;
   sidebarCollapsed: boolean;
   sidebarWidth: number | null;
@@ -105,9 +102,6 @@ export const DEFAULT_SETTINGS: OverlaySettings = {
   executor: "opencode",
   initGit: true,
   alwaysOnTop: false,
-  unattended: true,
-  autoPermission: false,
-  autoQuestion: false,
   showTranscriptDetails: false,
   sidebarCollapsed: false,
   sidebarWidth: null,
@@ -157,9 +151,6 @@ export function applySettings(input: Partial<OverlaySettings>): void {
         : DEFAULT_SETTINGS.executor,
     initGit: true,
     alwaysOnTop: input?.alwaysOnTop === true,
-    unattended: input?.unattended !== false,
-    autoPermission: input?.autoPermission === true,
-    autoQuestion: input?.autoQuestion === true,
     showTranscriptDetails: input?.showTranscriptDetails === true,
     sidebarCollapsed: input?.sidebarCollapsed === true,
     sidebarWidth: sanitizePaneWidth(input?.sidebarWidth),
@@ -200,9 +191,10 @@ export function saveSettings(): void {
   localStorage.setItem("oc_username", s.username);
   localStorage.setItem("oc_executor", s.executor || DEFAULT_SETTINGS.executor);
   localStorage.setItem("oc_always_on_top", String(s.alwaysOnTop));
-  localStorage.setItem("oc_unattended", String(s.unattended));
-  localStorage.setItem("oc_auto_permission", String(s.autoPermission));
-  localStorage.setItem("oc_auto_question", String(s.autoQuestion));
+  // Clean up legacy localStorage keys (behavior settings moved to server config)
+  localStorage.removeItem("oc_unattended");
+  localStorage.removeItem("oc_auto_permission");
+  localStorage.removeItem("oc_auto_question");
   localStorage.setItem(
     "oc_show_transcript_details",
     String(s.showTranscriptDetails),
@@ -277,9 +269,6 @@ export function loadSettings(): void {
       localStorage.getItem("oc_executor") || DEFAULT_SETTINGS.executor,
     initGit: true,
     alwaysOnTop: localStorage.getItem("oc_always_on_top") === "true",
-    unattended: localStorage.getItem("oc_unattended") !== "false",
-    autoPermission: localStorage.getItem("oc_auto_permission") === "true",
-    autoQuestion: localStorage.getItem("oc_auto_question") === "true",
     showTranscriptDetails:
       localStorage.getItem("oc_show_transcript_details") === "true",
     sidebarCollapsed:
@@ -381,9 +370,6 @@ export function bootstrapOverlaySettings(
     executor: input.executor ?? DEFAULT_SETTINGS.executor,
     initGit: true,
     alwaysOnTop: input.alwaysOnTop ?? DEFAULT_SETTINGS.alwaysOnTop,
-    unattended: input.unattended ?? DEFAULT_SETTINGS.unattended,
-    autoPermission: input.autoPermission ?? DEFAULT_SETTINGS.autoPermission,
-    autoQuestion: input.autoQuestion ?? DEFAULT_SETTINGS.autoQuestion,
     showTranscriptDetails: input.showTranscriptDetails ?? DEFAULT_SETTINGS.showTranscriptDetails,
     sidebarCollapsed: input.sidebarCollapsed ?? DEFAULT_SETTINGS.sidebarCollapsed,
     sidebarWidth: input.sidebarWidth || undefined,

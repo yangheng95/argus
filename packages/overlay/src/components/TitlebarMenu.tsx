@@ -191,27 +191,30 @@ export function TitlebarMenu(props: TitlebarMenuProps) {
     closeMenu();
   }
 
- // Unattended toggle —
+ // Unattended toggle — PATCH server config (behavior setting)
   async function handleUnattendedChange(checked: boolean) {
-    setSettingsStore("unattended", checked);
-    applySettings({ ...settingsStore, unattended: checked });
-    saveSettings();
+    try {
+      const { patchConfig } = await import("../services/config");
+      await patchConfig({ experimental: { unattended: checked } });
+    } catch (e) { console.error("[titlebar] failed to update unattended", e); }
     closeMenu();
   }
 
- // Auto-permission toggle —
+ // Auto-permission toggle — PATCH server config
   async function handleAutoPermissionChange(checked: boolean) {
-    setSettingsStore("autoPermission", checked);
-    applySettings({ ...settingsStore, autoPermission: checked });
-    saveSettings();
+    try {
+      const { patchConfig } = await import("../services/config");
+      await patchConfig({ experimental: { auto_permission: checked } });
+    } catch (e) { console.error("[titlebar] failed to update auto_permission", e); }
     closeMenu();
   }
 
- // Auto-question toggle —
+ // Auto-question toggle — PATCH server config
   async function handleAutoQuestionChange(checked: boolean) {
-    setSettingsStore("autoQuestion", checked);
-    applySettings({ ...settingsStore, autoQuestion: checked });
-    saveSettings();
+    try {
+      const { patchConfig } = await import("../services/config");
+      await patchConfig({ experimental: { auto_question: checked } });
+    } catch (e) { console.error("[titlebar] failed to update auto_question", e); }
     closeMenu();
   }
 
@@ -509,7 +512,7 @@ export function TitlebarMenu(props: TitlebarMenuProps) {
             class="titlebar-menu-check"
             id="chkUnattended"
             type="checkbox"
-            checked={settingsStore.unattended}
+            checked={appStore.config?.experimental?.unattended !== false}
             onChange={(e) =>
               void handleUnattendedChange(
                 (e.target as HTMLInputElement).checked,
@@ -532,7 +535,7 @@ export function TitlebarMenu(props: TitlebarMenuProps) {
             class="titlebar-menu-check"
             id="chkAutoPermission"
             type="checkbox"
-            checked={settingsStore.autoPermission}
+            checked={appStore.config?.experimental?.auto_permission === true}
             onChange={(e) =>
               void handleAutoPermissionChange(
                 (e.target as HTMLInputElement).checked,
@@ -555,7 +558,7 @@ export function TitlebarMenu(props: TitlebarMenuProps) {
             class="titlebar-menu-check"
             id="chkAutoQuestion"
             type="checkbox"
-            checked={settingsStore.autoQuestion}
+            checked={appStore.config?.experimental?.auto_question === true}
             onChange={(e) =>
               void handleAutoQuestionChange(
                 (e.target as HTMLInputElement).checked,
