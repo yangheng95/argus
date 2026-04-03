@@ -9213,6 +9213,11 @@ body[data-theme="light"] .section-badge[data-tone="accent"] {
   font-weight: 500;
   color: var(--text);
 }
+.gwg-step-summary {
+  font-size: var(--ui-font-small);
+  color: var(--text-muted);
+  margin-left: auto;
+}
 .gwg-step-status {
   font-size: var(--ui-font-small);
   font-weight: 600;

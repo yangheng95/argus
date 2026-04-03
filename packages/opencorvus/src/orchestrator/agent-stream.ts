@@ -14,6 +14,7 @@ type Meta = {
 
 function stageLabel(stage: AgentStageType) {
   if (stage === "requirements" || stage === "spec" || stage === "goal") return "Requirements agent"
+  if (stage === "architect") return "Architect agent"
   if (stage === "planner") return "Planner agent"
   if (stage === "delivery") return "Delivery agent"
   return "Evaluator agent"

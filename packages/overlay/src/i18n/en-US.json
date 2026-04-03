@@ -45,6 +45,7 @@
   "chat.git.snapshot": "Snapshot",
   "chat.placeholder": "Send a message…",
   "chat.placeholder_disabled": "Connect to OpenCorvus to start a task.",
+  "chat.role.architect": "Architect",
   "chat.role.assistant": "Assistant",
   "chat.role.delivery": "Delivery",
   "chat.role.executor": "Executor",

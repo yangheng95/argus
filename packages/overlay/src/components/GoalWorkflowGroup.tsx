@@ -23,6 +23,8 @@ interface GoalStep {
   status: "pending" | "running" | "completed" | "skipped" | "failed";
   startedAt?: number;
   completedAt?: number;
+  /** Summary detail: e.g., "5 steps" for plan, "12 files changed" for execute, "3/4 checks passed" for eval */
+  summary?: string;
 }
 
 interface EvalCheck {
@@ -123,6 +125,9 @@ function StepRow(props: {
         <div class={`gwg-step ${stepClass(props.step.status)}`}>
           <span class="gwg-step-icon">{stepIcon(props.step.status)}</span>
           <span class="gwg-step-label">{props.step.label}</span>
+          <Show when={props.step.summary}>
+            <span class="gwg-step-summary">{props.step.summary}</span>
+          </Show>
           <span class="gwg-step-status">{props.step.status}</span>
         </div>
       }
@@ -131,6 +136,9 @@ function StepRow(props: {
         <summary class={`gwg-step ${stepClass(props.step.status)}`}>
           <span class="gwg-step-icon">{stepIcon(props.step.status)}</span>
           <span class="gwg-step-label">{props.step.label}</span>
+          <Show when={props.step.summary}>
+            <span class="gwg-step-summary">{props.step.summary}</span>
+          </Show>
           <span class="gwg-step-status">{props.step.status}</span>
           <Show when={props.messages && props.messages.length > 0}>
             <span class="gwg-step-count">({props.messages!.length})</span>
@@ -171,9 +179,9 @@ function StepRow(props: {
 
 export function GoalWorkflowGroup(props: GoalWorkflowGroupProps) {
   const shouldOpen = () =>
-    props.defaultOpen ??
-    props.goal.goalStatus === "running" ||
-    props.goal.goalStatus === "failed";
+    (props.defaultOpen ??
+    (props.goal.goalStatus === "running" ||
+    props.goal.goalStatus === "failed"));
 
   return (
     <details class={`gwg ${goalStatusClass(props.goal.goalStatus)}`} open={shouldOpen()}>

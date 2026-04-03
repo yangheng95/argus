@@ -45,6 +45,7 @@
   "chat.git.snapshot": "快照",
   "chat.placeholder": "输入消息…",
   "chat.placeholder_disabled": "请先连接 OpenCorvus 再开始任务。",
+  "chat.role.architect": "架构",
   "chat.role.assistant": "助手",
   "chat.role.delivery": "交付",
   "chat.role.executor": "执行器",
