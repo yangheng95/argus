@@ -18,9 +18,12 @@
  *   • user original input
  *   • NO predefined checks
  */
-import { streamText, stepCountIs } from "ai"
+import { streamText, stepCountIs, tool } from "ai"
+import z from "zod"
 import { Provider } from "@/provider/provider"
 import { createPlannerTools } from "@/planner/tools"
+import { Shell } from "@/shell/shell"
+import { Filesystem } from "@/util/filesystem"
 import { toolGuard } from "@/util/tool-guard"
 import { Log } from "@/util/log"
 import { AgentTrace } from "@/util/agent-trace"
@@ -62,7 +65,38 @@ export async function evaluateGoal(input: {
   const model = await Provider.getModel(def.providerID, def.modelID)
   const language = await Provider.getLanguage(model)
 
-  const guard = toolGuard(createPlannerTools(input.workDir, input.sessionID))
+  const projectDir = Filesystem.resolve(input.workDir ?? (await import("@/project/instance")).Instance.directory)
+  const guard = toolGuard({
+    ...createPlannerTools(input.workDir, input.sessionID),
+    run_command: tool({
+      description:
+        "Run a shell command in the project directory and capture stdout/stderr/exit code. " +
+        "Use to run tests (bun test, vitest, jest), build checks, lint, or any verification command. " +
+        "This is the primary tool for evaluating whether code actually works.",
+      inputSchema: z.object({
+        command: z.string().describe("Shell command to run (runs in project root)"),
+        timeout_ms: z.number().optional().describe("Max execution time ms (default: 120000)"),
+      }),
+      execute: async ({ command, timeout_ms }) => {
+        const timeout = timeout_ms ?? 120_000
+        try {
+          const result = await Shell.run(command, {
+            cwd: projectDir,
+            env: process.env,
+            timeoutMs: timeout,
+          })
+          const parts = [`exit_code: ${result.exitCode}`]
+          if (result.timedOut) parts.push(`timeout_ms: ${timeout}`)
+          if (result.stdout.trim()) parts.push(`stdout:\n${result.stdout.slice(0, 8000)}`)
+          if (result.stderr.trim()) parts.push(`stderr:\n${result.stderr.slice(0, 5000)}`)
+          return parts.join("\n") || `exit_code: ${result.exitCode} (no output)`
+        } catch (e) {
+          log.warn("run_command failed in evaluator", { command, err: e })
+          return `Error running command: ${e instanceof Error ? e.message : String(e)}`
+        }
+      },
+    }),
+  })
 
   // Build Decision Log section
   let decisionSection = ""
@@ -130,10 +164,12 @@ function parseEvalOutput(text: string, goalID: string): EvalVerdict {
   const pass = verdictRaw === "pass" || verdictRaw === "accepted"
   const verdict = pass ? "accepted" as const : verdictRaw === "inconclusive" ? "inconclusive" as const : "rejected" as const
 
-  const evidence = evidenceRaw
+  const evidenceLines = evidenceRaw
     .split("\n")
     .map(line => line.trim().replace(/^[-•]\s*/, ""))
     .filter(Boolean)
+  const evidence = evidenceLines.map(line => line.replace(/^(PASS|FAIL):\s*/i, ""))
+  const evidenceStatus = evidenceLines.map(line => /^PASS:/i.test(line) ? "passed" as const : /^FAIL:/i.test(line) ? "failed" as const : undefined)
 
   let failureClass: FailureClass | undefined
   if (!pass && failureClassRaw) {
@@ -154,6 +190,7 @@ function parseEvalOutput(text: string, goalID: string): EvalVerdict {
     pass,
     verdict,
     evidence,
+    evidenceStatus,
     reasoning: reasoningRaw.slice(0, 2000), // cap reasoning length
     failureClass,
   }
@@ -197,8 +234,8 @@ function buildEvalSystem(): string {
     "",
     "<verdict>pass | fail | inconclusive</verdict>",
     "<evidence>",
-    "- Evidence item 1 (test output, check result, observation)",
-    "- Evidence item 2",
+    "- PASS: Evidence item that passed (e.g. test output, check result)",
+    "- FAIL: Evidence item that failed (e.g. test error, missing feature)",
     "</evidence>",
     "<reasoning>",
     "Why you reached this verdict. Reference specific test outputs and code.",

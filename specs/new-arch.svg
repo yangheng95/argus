@@ -296,14 +296,14 @@
   <!-- DB Tables -->
   <text class="h3" x="40" y="78">DB 表 (唯一写入者)</text>
   <text class="mono" x="40" y="98">task             writer: Task Agent              status(queued|active|completed|failed|cancelled)</text>
-  <text class="mono" x="40" y="114">goal             writer: Requirements Agent (创建) / Task Agent (add/modify/状态决策)</text>
-  <text class="mono" x="40" y="130">                 status: pending → running (Infrastructure dispatch lock) → passed|failed (Task Agent via eval_goal/execute_goal)</text>
-  <text class="mono" x="40" y="146">                 注意: Infrastructure 只写 "running" 用于防重 dispatch. "passed"/"failed" 是 Task Agent 的决策.</text>
+  <text class="mono" x="40" y="114">goal             writer: Requirements Agent (创建) / Task Agent (add/modify) / Infrastructure (eval 后写状态)</text>
+  <text class="mono" x="40" y="130">                 status: pending → running (Infrastructure dispatch lock) → passed|failed (Infrastructure auto-eval 后写入)</text>
+  <text class="mono" x="40" y="146">                 Goal 状态锁: executor 完成后 Infrastructure 自动跑 Eval Agent, eval 完成才解锁 goal.status 为终态.</text>
   <text class="mono" x="40" y="162">run              writer: Task Agent              per-task execution run</text>
   <text class="mono" x="40" y="178">goal_run         writer: Infrastructure          per-goal execution instance (status: queued→running→completed|failed)</text>
   <text class="mono" x="40" y="194">plan_node        writer: Planner Agent           per-goal implementation steps</text>
   <text class="mono" x="40" y="210">delivery         writer: Infrastructure          per-goal delivery (diffs)</text>
-  <text class="mono" x="40" y="226">evaluation       writer: Eval Agent (via eval_goal)  per-goal verdict + evidence + 同时写 goal.status</text>
+  <text class="mono" x="40" y="226">evaluation       writer: Infrastructure (auto-eval) / Eval Agent (manual re-eval via eval_goal)  per-goal verdict + evidence</text>
   <text class="mono" x="40" y="242">decision_log     writer: ALL agents (append)     shared context — Architect 是主要写入者 (接口契约·目录蓝图·导出清单)</text>
 
   <!-- Task Agent actions -->
@@ -313,7 +313,7 @@
   <text class="mono" x="40" y="312">  requirements(request)         → Requirements Agent → GoalContracts[] + decisions + traceability + recommended_next[]</text>
   <text class="mono" x="40" y="328">  architect(goalIDs)          → Architect Agent → Decision Log 共识 (接口契约·目录蓝图·导出清单) + recommended_next[]</text>
   <text class="mono" x="40" y="344">  plan_goal(goalID)           → Planner Agent → implementation steps (消费 architect 共识)</text>
-  <text class="mono" x="40" y="360">  eval_goal(goalID)           → Eval Agent → verdict + evidence + reasoning → 同时写 goal.status (passed|failed)</text>
+  <text class="mono" x="40" y="360">  eval_goal(goalID)           → 手动重评 (eval 已由 Infrastructure 自动完成, 仅用于 retry 后重新评估)</text>
 
   <text class="mono-h" x="40" y="384">调用 Infrastructure:</text>
   <text class="mono" x="40" y="400">  execute_goal(goalID)        → 重置 goal 为 pending → worktree + executor submit (async, 完成后 re-trigger)</text>
@@ -339,9 +339,10 @@
   <text class="mono" x="40" y="678">2. Scheduler 计算 dependency DAG → 所有依赖已满足的 goals (不限层, 跨层满足即可 dispatch)</text>
   <text class="mono" x="40" y="694">3. Infrastructure: goal.status→running (防重 dispatch) → create worktree → submit executor → event bridge</text>
   <text class="mono" x="40" y="710">4. 并行 goals 各自独立执行. Event bridge 将事件投射到 session system.</text>
-  <text class="mono" x="40" y="726">5. 当前 batch 所有 goal_run 结束后 → Infrastructure 通知 Task Agent (batch 粒度, 非逐 goal)</text>
-  <text class="mono" x="40" y="742">6. Task Agent 看到结果 → 推理: eval? dispatch 下一批? add_goal? fail?</text>
-  <text class="mono" x="40" y="762">关键: Infrastructure 只通知, 不决策. goal.status 由 Task Agent 通过 eval_goal 写入.</text>
+  <text class="mono" x="40" y="726">5. 当前 batch 所有 goal_run 结束后 → Infrastructure 自动跑 Eval Agent (每个 goal) → goal.status 写入终态</text>
+  <text class="mono" x="40" y="742">6. 所有 goal eval 完成 (不论 pass/fail) → Infrastructure 通知 Task Agent (batch 粒度)</text>
+  <text class="mono" x="40" y="762">7. Task Agent 看到 eval 结果 → 推理: deliver? retry 失败 goal? add_goal? fail?</text>
+  <text class="mono" x="40" y="778">关键: Goal 状态锁 — goal.status 在 eval 完成前不离开 "running". Task Agent 收到通知时所有 goal 已有终态.</text>
 
   <text class="mono" x="40" y="786">owned_paths 互斥: 并行 goals 的 owned_paths 不重叠 (Requirements Agent 保证).</text>
   <text class="mono" x="40" y="802">Merge 串行化: per-run lock, 同一时间只有一个 goal 的 delivery 被 merge.</text>
@@ -351,8 +352,8 @@
   <text class="mono" x="40" y="850">• 收到 task → "这是 typo fix, 不需要 requirements" → create_run → execute_goal</text>
   <text class="mono" x="40" y="866">• requirements 返回 5 goals, recommended_next=[architect] → "多 goal, 需要共识" → architect(goalIDs)</text>
   <text class="mono" x="40" y="882">• architect 完成 → create_run → submit_execution (dispatch 所有依赖满足的 goals)</text>
-  <text class="mono" x="40" y="898">• batch 完成 → eval_goal 逐个评估 → goal_3 fail → execute_goal(goal_3) 重试</text>
-  <text class="mono" x="40" y="914">• 全部 eval passed → deliver() → publish_delivery()</text>
+  <text class="mono" x="40" y="898">• batch 完成 → auto-eval 已完成, goal_3 failed → "代码 bug" → execute_goal(goal_3) 重试 (eval 自动重跑)</text>
+  <text class="mono" x="40" y="914">• 全部 goal passed → deliver() → publish_delivery()</text>
   </g>
 
   <!-- ================================================================ -->
