@@ -2,25 +2,30 @@ import { OrchestratorTaskTable } from "@/orchestrator/orchestrator.sql"
 import { SessionTable } from "@/session/session.sql"
 import { Database, eq } from "@/storage/db"
 
-// In-memory registry of goal run session IDs → { taskID, role }.
+// In-memory registry of goal run session IDs → { taskID, role, goalID? }.
 // Maintained by the orchestrator runtime when goal runs are created/finalized.
 // O(1) lookup with no DB queries at event-dispatch time.
-const goalRunSessionRegistry = new Map<string, { taskID: string; role: string }>()
+const goalRunSessionRegistry = new Map<string, { taskID: string; role: string; goalID?: string }>()
 
-function cacheTaskSessions(taskID: string, role: string, ...sessionIDs: Array<string | undefined>) {
+function cacheTaskSessions(taskID: string, role: string, goalID: string | undefined, ...sessionIDs: Array<string | undefined>) {
   for (const sessionID of sessionIDs) {
     if (!sessionID) continue
-    goalRunSessionRegistry.set(sessionID, { taskID, role })
+    goalRunSessionRegistry.set(sessionID, { taskID, role, goalID })
   }
 }
 
-export function registerGoalRunSession(sessionID: string, taskID: string, role = "executor") {
-  cacheTaskSessions(taskID, role, sessionID)
+export function registerGoalRunSession(sessionID: string, taskID: string, role = "executor", goalID?: string) {
+  cacheTaskSessions(taskID, role, goalID, sessionID)
 }
 
 /** Look up the registered role for a session (e.g. "executor", "assistant"). */
 export function sessionRole(sessionID: string): string | undefined {
   return goalRunSessionRegistry.get(sessionID)?.role
+}
+
+/** Look up the goalID associated with a session (if any). */
+export function sessionGoalID(sessionID: string): string | undefined {
+  return goalRunSessionRegistry.get(sessionID)?.goalID
 }
 
 export function unregisterGoalRunSession(sessionID: string) {
@@ -36,7 +41,7 @@ export function taskSession(taskID: string) {
       .get(),
   )
   const sessionID = row?.sessionID ?? undefined
-  cacheTaskSessions(taskID, "assistant", sessionID)
+  cacheTaskSessions(taskID, "assistant", undefined, sessionID)
   return sessionID
 }
 
@@ -49,7 +54,7 @@ export function taskIDForSession(sessionID: string) {
     visited.push(current)
     const cached = goalRunSessionRegistry.get(current)
     if (cached) {
-      cacheTaskSessions(cached.taskID, cached.role, ...visited)
+      cacheTaskSessions(cached.taskID, cached.role, cached.goalID, ...visited)
       return cached.taskID
     }
     const task = Database.use((db) =>
@@ -60,7 +65,7 @@ export function taskIDForSession(sessionID: string) {
         .get(),
     )
     if (task?.id) {
-      cacheTaskSessions(task.id, "assistant", ...visited)
+      cacheTaskSessions(task.id, "assistant", undefined, ...visited)
       return task.id
     }
     const parent = Database.use((db) =>

@@ -179,14 +179,14 @@ function buildEvalSystem(): string {
     "   - API endpoint → test with curl or by reading test files",
     "   - Database changes → verify migrations",
     "   - Config changes → validate syntax",
-    "5. RUN the tests/checks using run_command",
-    "6. CHECK for owned_paths violations (files modified outside owned_paths = REJECT)",
-    "7. PRODUCE your verdict",
+    "5. RUN the tests/checks using run_command — this is the most important step",
+    "6. PRODUCE your verdict based on whether done_definition is satisfied",
     "",
     "## Rules",
     "",
     "- You have NO predefined checks. YOU decide what to test based on the code.",
-    "- Use run_command to actually execute tests, build, lint, etc.",
+    "- You MUST use run_command to actually execute tests, build, lint, etc. Reading test code is NOT enough — you must RUN them.",
+    "- Your verdict must be based on actual test execution results, not static code review.",
     "- A goal passes ONLY if done_definition is fully satisfied",
     "- If tests fail, classify WHY:",
     "  - bug: code has errors that can be fixed by re-executing",
@@ -219,9 +219,9 @@ function buildEvalPrompt(
 
   sections.push(`# Goal Contract\n\n**${goal.title}**\n\nDone Definition (YOUR ACCEPTANCE CRITERIA):\n${goal.done_definition}`)
 
-  if (goal.owned_paths.length > 0) {
-    sections.push(`## Owned Paths (file boundary — changes outside = violation)\n\n${goal.owned_paths.map(p => `- ${p}`).join("\n")}`)
-  }
+  // owned_paths is a coordination mechanism between concurrent executors,
+  // NOT an evaluation criterion. The runner validates it separately (warn-only).
+  // The evaluator's sole job is to check whether done_definition is satisfied.
 
   // Delivery summary
   sections.push(`## Executor Delivery\n\nSummary: ${delivery.summary}\n\nChanged files (${delivery.diffs.length}):`)

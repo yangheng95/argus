@@ -118,9 +118,8 @@ export function conversationMessages(): any[] {
   // User request + interaction messages from board state
   const contextMsgs = buildUserContextMessages();
 
-  // Agent card messages — keep parallel executor goal groups grouped.
-  // Single-session executor runs stay as a single AgentCard.
-  // Other stages (spec, planner, evaluator, delivery) are flattened into the timeline.
+  // Agent card messages — all AGENT_CARD_STAGES render as collapsible AgentCard.
+  // Parallel executor goal groups get ExecutorGoalGroup rendering.
   const agentCardMsgs: any[] = [];
   const currentOrder = agentCardOrder();
   const currentCards = agentCards();
@@ -128,30 +127,24 @@ export function conversationMessages(): any[] {
     const card = currentCards[id];
     if (!card) continue;
     if (card._agentGoalGroup && Array.isArray(card._agentInternalCards)) {
-      // Parallel goals: keep as a group item but flatten internal card messages.
-      // Resolve via messageById to get live store proxies so part status updates
-      // propagate through SolidJS reactivity (agent card copies are stale snapshots).
-      const flatMsgs: any[] = [];
-      for (const child of card._agentInternalCards) {
-        if (Array.isArray(child._agentMessages)) {
-          for (const m of child._agentMessages) {
-            flatMsgs.push(resolveMessage(m));
-          }
-        }
-      }
-      flatMsgs.sort((a: any, b: any) => conversationTime(a) - conversationTime(b));
-      agentCardMsgs.push({ ...card, _agentMessages: flatMsgs });
-    } else if (card._agentStage === "executor" && Array.isArray(card._agentMessages) && card._agentMessages.length > 0) {
+      // Goal groups: resolve messages inside each internal step card so SolidJS
+      // reactivity works, then keep the card structure for per-step rendering.
+      const resolvedChildren = card._agentInternalCards.map((child: any) => {
+        if (!Array.isArray(child._agentMessages)) return child;
+        const resolved = child._agentMessages.map((m: any) => resolveMessage(m));
+        resolved.sort((a: any, b: any) => conversationTime(a) - conversationTime(b));
+        return { ...child, _agentMessages: resolved };
+      });
+      agentCardMsgs.push({ ...card, _agentInternalCards: resolvedChildren });
+    } else if (Array.isArray(card._agentMessages) && card._agentMessages.length > 0) {
+      // All agent card stages (goal, architect, planner, executor, evaluator,
+      // delivery, spec) are kept as collapsible AgentCard items.
       const resolved = card._agentMessages.map((m: any) => resolveMessage(m));
       resolved.sort((a: any, b: any) => conversationTime(a) - conversationTime(b));
       agentCardMsgs.push({
         ...card,
         _agentMessages: resolved,
       });
-    } else if (Array.isArray(card._agentMessages)) {
-      for (const m of card._agentMessages) {
-        agentCardMsgs.push(resolveMessage(m));
-      }
     }
   }
 

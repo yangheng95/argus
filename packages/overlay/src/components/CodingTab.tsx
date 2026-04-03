@@ -6,12 +6,12 @@
 
 import {
   createSignal,
-  createEffect,
   onCleanup,
   For,
   Show,
   createMemo,
 } from "solid-js";
+import { setupAutoScroll } from "../utils/dom-utils";
 import { apiUrl, apiHeaders } from "../services/api";
 
 // ── Types ──
@@ -109,34 +109,12 @@ export function CodingTab(props: CodingTabProps) {
  // partID → accumulated text (mirrors coding.textBuffer)
   let textBuffer = new Map<string, string>();
   let abortController: AbortController | null = null;
-  let scrollRef!: HTMLDivElement;
 
   // Expose API to parent so ChatComposer can route messages here
   props.onReady?.({
     send: (text: string) => void sendCodingMessage(text),
     stop: () => abortController?.abort(),
     busy,
-  });
-
- // ── Scroll helper ──
-
-  function scrollToBottomIfNeeded() {
-    if (!scrollRef) return;
-    const atBottom =
-      scrollRef.scrollHeight - scrollRef.scrollTop - scrollRef.clientHeight <
-      80;
-    if (atBottom) {
-      requestAnimationFrame(() => {
-        scrollRef.scrollTop = scrollRef.scrollHeight;
-      });
-    }
-  }
-
- // Scroll when messages change and tab is active
-  createEffect(() => {
-    if (!props.active) return;
-    messages(); // track
-    scrollToBottomIfNeeded();
   });
 
  // ── handleCodingEvent (
@@ -416,7 +394,7 @@ export function CodingTab(props: CodingTabProps) {
     >
       {/* Scroll area */}
       <div
-        ref={scrollRef}
+        ref={(el) => onCleanup(setupAutoScroll(el))}
         class="chat-scroll coding-scroll"
         style={{ flex: "1 1 auto", overflow: "auto" }}
       >

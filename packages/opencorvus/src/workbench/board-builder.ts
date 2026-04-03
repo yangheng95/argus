@@ -70,17 +70,24 @@ function buildBoard(task: typeof OrchestratorTaskTable.$inferSelect) {
           .orderBy(OrchestratorGoalTable.order_index)
           .all(),
       )
-  const goalRunSessionMap = run
-    ? new Map(
-        Database.use((db) =>
-          db
-            .select({ goalID: OrchestratorGoalRunTable.goal_id, sessionID: OrchestratorGoalRunTable.session_id })
-            .from(OrchestratorGoalRunTable)
-            .where(eq(OrchestratorGoalRunTable.coordinator_run_id, run.id))
-            .all(),
-        ).map((r) => [r.goalID, r.sessionID]),
+  // goalRunSessionMap: goalID → goalSession.id (from GoalRun table)
+  // goalRunExecutorSessionMap: goalID → executorSession.id (from GoalRun metadata.provider_session_id)
+  // Both are needed because executor messages come from executorSession, not goalSession.
+  const goalRunRows = run
+    ? Database.use((db) =>
+        db
+          .select({ goalID: OrchestratorGoalRunTable.goal_id, sessionID: OrchestratorGoalRunTable.session_id, metadata: OrchestratorGoalRunTable.metadata })
+          .from(OrchestratorGoalRunTable)
+          .where(eq(OrchestratorGoalRunTable.coordinator_run_id, run.id))
+          .all(),
       )
-    : new Map<string, string | null>()
+    : []
+  const goalRunSessionMap = new Map(goalRunRows.map((r) => [r.goalID, r.sessionID]))
+  const goalRunExecutorSessionMap = new Map(
+    goalRunRows
+      .filter((r) => typeof (r.metadata as any)?.provider_session_id === "string")
+      .map((r) => [r.goalID, (r.metadata as any).provider_session_id as string]),
+  )
   const interactions = Database.use((db) =>
     db
       .select()
@@ -387,6 +394,7 @@ function buildBoard(task: typeof OrchestratorTaskTable.$inferSelect) {
               metadata: {
                 ...(goal.metadata as Record<string, unknown> | null ?? {}),
                 sessionID: goalRunSessionMap.get(goal.id) ?? undefined,
+                executorSessionID: goalRunExecutorSessionMap.get(goal.id) ?? undefined,
               },
             })),
         },

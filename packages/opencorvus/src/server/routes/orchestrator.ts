@@ -36,6 +36,7 @@ import { errors } from "../error"
 import { lazy } from "../../util/lazy"
 import { registerGoalRunSession, sessionRole, taskSession } from "./task-event"
 import { ensureTaskMessageProtocolBridge, overlayMeta } from "./task-message-protocol-bridge"
+import { listGoalRunsByTask } from "@/orchestrator/store"
 
 export const OrchestratorRoutes = lazy(() =>
   new Hono()
@@ -387,14 +388,26 @@ export const OrchestratorRoutes = lazy(() =>
         }
         const all = await Promise.all(sessionIDs.map((id) => Session.messages({ sessionID: id })))
         const messages = all.flat().sort((a, b) => (a.info.time?.created ?? 0) - (b.info.time?.created ?? 0))
-        // Seed the goal-run registry with child sessions so sessionRole()
-        // can resolve the agent identity. Same logic as the SSE endpoint
-        // (lines 217-225) — child sessions are executor sessions by default.
+        // Build session→goalID map from goal run records so executor sessions
+        // can be matched to their parent goal during transcript enrichment.
         const taskID = task.id
-        for (const id of sessionIDs) {
-          if (id !== rootSessionID) registerGoalRunSession(id, taskID)
+        const goalRuns = listGoalRunsByTask(taskID)
+        const sessionToGoal = new Map<string, string>()
+        for (const gr of goalRuns) {
+          if (gr.session_id) sessionToGoal.set(gr.session_id, gr.goal_id)
+          const provSid = (gr.metadata as any)?.provider_session_id
+          if (typeof provSid === "string" && provSid) sessionToGoal.set(provSid, gr.goal_id)
         }
-        // Enrich each message with resolvedRole/channel — same logic as the
+
+        // Seed the goal-run registry with child sessions (with goalID when known)
+        // so sessionRole() and sessionGoalID() resolve correctly for enrichment.
+        for (const id of sessionIDs) {
+          if (id !== rootSessionID) {
+            const goalID = sessionToGoal.get(id)
+            registerGoalRunSession(id, taskID, "executor", goalID)
+          }
+        }
+        // Enrich each message with resolvedRole/channel/goalID — same logic as the
         // SSE bridge so the overlay receives identical metadata regardless of
         // whether messages arrive via SSE or transcript reload.
         for (const msg of messages) {
@@ -409,6 +422,9 @@ export const OrchestratorRoutes = lazy(() =>
           const meta = overlayMeta(sid, taskID, { role: msg.info.role, agent })
           ;(msg.info as any).resolvedRole = meta.resolvedRole
           ;(msg.info as any).channel = meta.channel
+          // Stamp goalID so the overlay can group executor messages into their goal card
+          const goalID = sessionToGoal.get(sid)
+          if (goalID) (msg.info as any).goalID = goalID
         }
         return c.json(messages)
       },

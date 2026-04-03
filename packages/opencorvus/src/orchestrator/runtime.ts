@@ -626,8 +626,8 @@ export namespace OrchestratorRuntime {
       // Register BOTH sessions so bridge can resolve taskID for their events:
       // - goalSession: the goal-scoped session (receives projected events for non-opencode executors)
       // - executorSession: the opencode executor's native session (publishes message events directly)
-      registerGoalRunSession(goalSession.id, task.id, "executor")
-      registerGoalRunSession(executorSession.id, task.id, "executor")
+      registerGoalRunSession(goalSession.id, task.id, "executor", entry.goal.id)
+      registerGoalRunSession(executorSession.id, task.id, "executor", entry.goal.id)
       const pipelineContract: GoalContract = {
         goal: goalRowToContract(entry.goal),
         planNode: entry.node as any,
@@ -655,14 +655,8 @@ export namespace OrchestratorRuntime {
         worktreeDir,
       })
     } catch (err) {
-      // Dispatch failed — mark goal as "failed" so it doesn't block dependents forever.
+      // Dispatch failed — log and propagate. Goal status is Task Agent's decision.
       log.error("goal dispatch failed", { goalID: entry.goal.id, error: err instanceof Error ? err.message : String(err) })
-      Database.use((db) =>
-        db.update(OrchestratorGoalTable)
-          .set({ status: "failed", time_updated: Date.now() })
-          .where(eq(OrchestratorGoalTable.id, entry.goal.id))
-          .run(),
-      )
       if (worktreeDir) await cleanupGoalWorkspace(worktreeDir).catch(() => {})
       throw err // Let caller handle run-level failure
     }
@@ -701,15 +695,9 @@ export namespace OrchestratorRuntime {
       // Pipeline-internal finalization — no external guard needed
       if (eventBridgeAborts.has(goalRun.id)) continue
       if ((goalRun.time_created ?? 0) >= processStartTime) continue
-      log.warn("orphaned goal run from previous process, marking failed", { runID, goalRunID: goalRun.id })
+      log.warn("orphaned goal_run from previous process", { runID, goalRunID: goalRun.id, goalID: goalRun.goal_id })
       updateGoalRun(goalRun.id, { status: "failed", error: "Orphaned: event bridge lost (process restart)", time_completed: Date.now() })
       updateGoalRunExecutorSessionStatus(goalRun.id, "failed")
-      Database.use((db) =>
-        db.update(OrchestratorGoalTable)
-          .set({ status: "failed", time_updated: Date.now() })
-          .where(eq(OrchestratorGoalTable.id, goalRun.goal_id))
-          .run(),
-      )
       if (goalRun.workspace_dir) {
         await cleanupGoalWorkspace(goalRun.workspace_dir).catch(() => {})
       }
@@ -726,7 +714,7 @@ export namespace OrchestratorRuntime {
       const lastActivity = goalRunLastActivity.get(goalRun.id) ?? goalRun.time_started ?? goalRun.time_created ?? 0
       const staleMs = now - lastActivity
       if (staleMs < GOAL_STALL_TIMEOUT_MS) continue
-      log.warn("goal run stalled — no executor activity", { runID, goalRunID: goalRun.id, staleMs, thresholdMs: GOAL_STALL_TIMEOUT_MS })
+      log.warn("goal_run stalled — no executor activity", { runID, goalRunID: goalRun.id, goalID: goalRun.goal_id, staleMs, thresholdMs: GOAL_STALL_TIMEOUT_MS })
       stopEventBridge(goalRun.id)
       updateGoalRun(goalRun.id, {
         status: "failed",
@@ -734,12 +722,6 @@ export namespace OrchestratorRuntime {
         time_completed: now,
       })
       updateGoalRunExecutorSessionStatus(goalRun.id, "failed")
-      Database.use((db) =>
-        db.update(OrchestratorGoalTable)
-          .set({ status: "failed", time_updated: now })
-          .where(eq(OrchestratorGoalTable.id, goalRun.goal_id))
-          .run(),
-      )
       if (goalRun.workspace_dir) {
         await cleanupGoalWorkspace(goalRun.workspace_dir).catch(() => {})
       }
@@ -1086,6 +1068,7 @@ async function recoverOrphanedTasks() {
 async function failRun(run: RunRow, error: string, hooks: RuntimeHooks) {
   stopEventBridge(run.id) // serial bridge
   // Stop all per-goal event bridges (abort propagates to executor via consumeExecutorEvents)
+  // Infrastructure only writes goal_run.status — goal.status is Task Agent's decision
   const goalRuns = listActiveGoalRunsByCoordinator(run.id)
   for (const gr of goalRuns) {
     stopEventBridge(gr.id) // aborts the controller → consumeExecutorEvents loop breaks → executor.abort() called

@@ -20,6 +20,48 @@ import { t } from "./i18n";
 import { escapeHtml } from "./markdown";
 export { sanitizeDirectoryMode } from "../store/settings";
 
+// ── Auto-scroll ──
+
+/**
+ * Set up auto-scroll-to-bottom on a scrollable container.
+ *
+ * Behavior:
+ * - Automatically scrolls to the bottom when new content appears
+ * - If the user scrolls up, auto-scroll pauses
+ * - When the user scrolls back to the bottom, auto-scroll resumes
+ *
+ * Uses MutationObserver to detect DOM changes (works with SolidJS reactivity).
+ * Returns a cleanup function that removes the listener and disconnects the observer.
+ */
+export function setupAutoScroll(el: HTMLElement, threshold = 60): () => void {
+  let tracking = true;
+
+  function onScroll() {
+    tracking = el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
+  }
+
+  function scrollDown() {
+    if (tracking) {
+      requestAnimationFrame(() => {
+        el.scrollTop = el.scrollHeight;
+      });
+    }
+  }
+
+  el.addEventListener("scroll", onScroll, { passive: true });
+
+  const observer = new MutationObserver(scrollDown);
+  observer.observe(el, { childList: true, subtree: true, characterData: true });
+
+  // Initial scroll to bottom
+  scrollDown();
+
+  return () => {
+    el.removeEventListener("scroll", onScroll);
+    observer.disconnect();
+  };
+}
+
 // ── Public API ──
 
 /**

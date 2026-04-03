@@ -211,7 +211,7 @@ export async function createGoalSession(task: TaskRow, goal: GoalRow, directory?
     })
   }
   // Register so SSE can match this session's events to the task
-  registerGoalRunSession(session.id, task.id)
+  registerGoalRunSession(session.id, task.id, "executor", goal.id)
   return session
 }
 

@@ -19,7 +19,7 @@ export type AgentRole =
   | "system";
 
 /** Stages that get their own collapsible AgentCard in the conversation view. */
-export const AGENT_CARD_STAGES = new Set<AgentRole>(["spec", "architect", "planner", "goal", "executor", "evaluator", "delivery"]);
+export const AGENT_CARD_STAGES = new Set<AgentRole>(["assistant", "spec", "architect", "planner", "goal", "executor", "evaluator", "delivery"]);
 
 /**
  * Map any backend agent name to a canonical AgentRole.
@@ -114,16 +114,18 @@ export function roleLabel(role: string): string {
  * - "main" → message belongs to the main conversation
  */
 export function classifyMessage(msg: any, rootSessionID: string): string {
-  // User-role messages always go to main conversation
-  if (String(msg?.info?.role || "").trim().toLowerCase() === "user") return "main";
-
-  // Prefer backend-resolved channel/role (set by task-message-protocol-bridge).
+  // Prefer backend-resolved channel (set by task-message-protocol-bridge).
   // This is authoritative — it knows the session tree and agent identity.
   const backendChannel = String(msg?.info?.channel || "").trim().toLowerCase();
   if (backendChannel && backendChannel !== "main") {
+    // "filtered" means the backend intentionally hid this message
+    if (backendChannel === "filtered") return "filtered";
     const resolved = String(msg?.info?.resolvedRole || "").trim().toLowerCase() as AgentRole;
     if (AGENT_CARD_STAGES.has(resolved)) return resolved;
   }
+
+  // User-role messages without a backend channel go to main conversation
+  if (String(msg?.info?.role || "").trim().toLowerCase() === "user") return "main";
 
   // Use resolvedRole directly — backend is authoritative
   const resolved = String(msg?.info?.resolvedRole || "").trim().toLowerCase();

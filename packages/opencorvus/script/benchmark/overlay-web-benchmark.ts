@@ -51,7 +51,7 @@ const requestFile = flag("--request-file")
 const deliveryVerifyCmd = flag("--delivery-verify-cmd")
 const skipLocalVerify = process.argv.includes("--skip-local-verify")
 const noBrowser = process.argv.includes("--no-browser")
-const maxExecutorGroups = Number(flag("--max-executor-groups")) || 1
+const maxExecutorGroups = Number(flag("--max-executor-groups")) || 3
 
 const DEFAULT_TASK_TITLE = "Overlay Web Benchmark NoteStore"
 const DEFAULT_TASK_REQUEST = `
@@ -1343,7 +1343,11 @@ async function overlaySnapshot(page: Page) {
         .map((node) => {
           const element = node as HTMLElement
           const role = element.dataset.role || ""
-          const text = element.querySelector(".msg-body")?.textContent?.trim() || ""
+          const text = element.querySelector(".msg-body")?.textContent?.trim()
+            || element.querySelector(".agent-card-label")?.textContent?.trim()
+            || element.querySelector(".executor-goal-label")?.textContent?.trim()
+            || element.textContent?.trim().slice(0, 200)
+            || ""
           return { role, text }
         })
         .filter((item) => item.role && item.role !== "user" && item.text)
@@ -1364,8 +1368,12 @@ async function overlaySnapshot(page: Page) {
           ? state.tasks.map((item: { task?: { id?: string } }) => item?.task?.id || "").filter(Boolean).slice(0, 5)
           : [],
         taskList: document.querySelector("#taskListPanel")?.textContent?.trim() || "",
-        reasoning: document.querySelector('.turn[data-role="assistant"] .reasoning-text')?.textContent?.trim() || "",
-        assistantText: document.querySelector('.turn[data-role="assistant"] .msg-text')?.textContent?.trim() || "",
+        reasoning: document.querySelector('.turn[data-role="assistant"] .reasoning-text')?.textContent?.trim()
+          || document.querySelector('.turn[data-role="agent-card"] .reasoning-text')?.textContent?.trim() || "",
+        assistantText: document.querySelector('.turn[data-role="assistant"] .msg-text')?.textContent?.trim()
+          || document.querySelector('.turn[data-role="agent-card"] .msg-text')?.textContent?.trim()
+          || document.querySelector('.turn[data-role="agent-card"]')?.textContent?.trim()
+          || document.querySelector('.turn[data-role="executor-goal-group"]')?.textContent?.trim() || "",
         liveRole: liveTurn.role,
         liveText: liveTurn.text,
         visibleTurns: visibleTurns.slice(-5),
