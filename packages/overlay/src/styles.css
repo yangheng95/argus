@@ -9042,3 +9042,554 @@ body[data-theme="light"] .section-badge[data-tone="accent"] {
 .ndjson-badge.msg-delta { background: #F3E8FF; color: #6B21A8; }
 .ndjson-badge.status-badge { background: #F1F5F9; color: #475569; }
 .log-divider { font-size: var(--ui-font-control); color: #9CA3AF; padding: 8px 4px 4px; border-top: 1px solid var(--border, #e5e7eb); margin-top: 8px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; }
+
+/* ═══════════════════════════════════════════════════════════════════
+   MiniWorkflow — WorkflowProgressBar
+   ═══════════════════════════════════════════════════════════════════ */
+
+.wf-progress {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-gap-xs);
+  padding: var(--ui-section-padding-y) var(--ui-section-padding-x);
+  border-bottom: 1px solid var(--border);
+}
+.wf-progress-label {
+  font-size: var(--ui-font-meta);
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.wf-progress-steps {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  flex-wrap: wrap;
+}
+.wf-step {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ui-gap-xs);
+  padding: var(--ui-badge-padding-y) var(--ui-pill-padding-x);
+  font-size: var(--ui-font-small);
+  font-weight: 600;
+  border-radius: 999px;
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s;
+}
+.wf-step-icon {
+  font-size: var(--ui-font-control);
+  line-height: 1;
+}
+.wf-step-label {
+  line-height: 1;
+}
+.wf-step-connector {
+  display: inline-block;
+  width: calc(12px * var(--ui-scale));
+  height: 1px;
+  background: var(--border-strong);
+  flex-shrink: 0;
+}
+.wf-step--pending {
+  color: var(--text-muted);
+  background: transparent;
+}
+.wf-step--running {
+  color: var(--accent);
+  background: var(--accent-dim);
+}
+.wf-step--done {
+  color: var(--good);
+  background: var(--good-dim);
+}
+.wf-step--failed {
+  color: var(--bad);
+  background: var(--bad-dim);
+}
+.wf-step--skipped {
+  color: var(--text-muted);
+  background: var(--subtle-1);
+  text-decoration: line-through;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   MiniWorkflow — GoalWorkflowGroup
+   ═══════════════════════════════════════════════════════════════════ */
+
+.gwg-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-gap-xs);
+}
+.gwg {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card-fill);
+  overflow: hidden;
+  transition: border-color 0.15s;
+}
+.gwg:hover {
+  border-color: var(--border-hover);
+}
+.gwg[open] {
+  background: var(--card-fill-hover);
+}
+.gwg-header {
+  display: flex;
+  align-items: center;
+  gap: var(--ui-gap-sm);
+  padding: var(--ui-card-padding-y) var(--ui-card-padding-x);
+  cursor: pointer;
+  list-style: none;
+  font-size: var(--ui-font-body);
+  font-weight: 600;
+  color: var(--text-strong);
+}
+.gwg-header::-webkit-details-marker,
+.gwg-header::marker {
+  display: none;
+}
+.gwg-header::before {
+  content: "";
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  border-right: 1.5px solid var(--text-muted);
+  border-bottom: 1.5px solid var(--text-muted);
+  transform: rotate(-45deg);
+  transition: transform 0.15s;
+  flex-shrink: 0;
+}
+.gwg[open] > .gwg-header::before {
+  transform: rotate(45deg);
+}
+.gwg-status-icon {
+  font-size: var(--ui-font-body);
+  flex-shrink: 0;
+  width: 16px;
+  text-align: center;
+}
+.gwg-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.gwg-priority-badge {
+  font-size: var(--ui-font-tiny);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: var(--ui-badge-padding-y) var(--ui-badge-padding-x);
+  border-radius: 999px;
+  background: var(--warn-dim);
+  color: var(--warn);
+}
+.gwg-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 0 var(--ui-card-padding-x) var(--ui-card-padding-y);
+}
+.gwg-step {
+  display: flex;
+  align-items: center;
+  gap: var(--ui-gap-sm);
+  padding: var(--ui-gap-xs) var(--ui-gap-sm);
+  font-size: var(--ui-font-control);
+  border-radius: calc(var(--radius) / 2);
+}
+.gwg-step-icon {
+  width: 14px;
+  text-align: center;
+  flex-shrink: 0;
+  font-size: var(--ui-font-body);
+}
+.gwg-step-label {
+  flex: 1;
+  font-weight: 500;
+  color: var(--text);
+}
+.gwg-step-status {
+  font-size: var(--ui-font-small);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.gwg-step--pending .gwg-step-icon,
+.gwg-step--pending .gwg-step-status { color: var(--text-muted); }
+.gwg-step--running { background: var(--accent-dim); }
+.gwg-step--running .gwg-step-icon,
+.gwg-step--running .gwg-step-status { color: var(--accent); }
+.gwg-step--done .gwg-step-icon,
+.gwg-step--done .gwg-step-status { color: var(--good); }
+.gwg-step--failed { background: var(--bad-dim); }
+.gwg-step--failed .gwg-step-icon,
+.gwg-step--failed .gwg-step-status { color: var(--bad); }
+.gwg-step--skipped .gwg-step-icon,
+.gwg-step--skipped .gwg-step-status { color: var(--text-muted); }
+.gwg-step--skipped .gwg-step-label { text-decoration: line-through; color: var(--text-muted); }
+
+/* Step as expandable detail container */
+.gwg-step-detail {
+  border-radius: calc(var(--radius) / 2);
+  overflow: hidden;
+}
+.gwg-step-detail > .gwg-step {
+  cursor: pointer;
+  list-style: none;
+}
+.gwg-step-detail > .gwg-step::-webkit-details-marker,
+.gwg-step-detail > .gwg-step::marker { display: none; }
+.gwg-step-count {
+  font-size: var(--ui-font-small);
+  color: var(--text-muted);
+  margin-left: auto;
+}
+.gwg-step-body {
+  padding: var(--ui-gap-xs) var(--ui-gap-sm) var(--ui-gap-sm);
+  border-top: 1px solid var(--subtle-2);
+}
+.gwg-step-messages {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-gap-xs);
+  max-height: 200px;
+  overflow-y: auto;
+}
+.gwg-step-messages::-webkit-scrollbar { width: 4px; }
+.gwg-step-messages::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 2px; }
+
+/* Eval checks inside step body */
+.gwg-checks {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin-top: var(--ui-gap-xs);
+}
+.gwg-check {
+  display: flex;
+  align-items: baseline;
+  gap: var(--ui-gap-sm);
+  padding: var(--ui-gap-xs) 0;
+  font-size: var(--ui-font-control);
+}
+.gwg-check-icon { width: 12px; text-align: center; flex-shrink: 0; }
+.gwg-check-name { font-weight: 500; color: var(--text); }
+.gwg-check-evidence { font-size: var(--ui-font-small); color: var(--text-muted); margin-left: auto; max-width: 50%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gwg-check--passed .gwg-check-icon { color: var(--good); }
+.gwg-check--failed .gwg-check-icon { color: var(--bad); }
+.gwg-check--failed .gwg-check-name { color: var(--bad); }
+.gwg-check--pending .gwg-check-icon { color: var(--text-muted); }
+
+/* Goal group status accents */
+.gwg--passed { border-color: rgba(95, 173, 86, 0.3); }
+.gwg--failed { border-color: rgba(247, 84, 100, 0.3); }
+.gwg--running { border-color: rgba(84, 138, 247, 0.3); }
+
+/* ═══════════════════════════════════════════════════════════════════
+   MiniWorkflow — RequirementsPanel
+   ═══════════════════════════════════════════════════════════════════ */
+
+.req-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-gap-sm);
+}
+.req-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.req-item {
+  display: flex;
+  align-items: baseline;
+  gap: var(--ui-gap-sm);
+  padding: var(--ui-gap-xs) 0;
+  font-size: var(--ui-font-control);
+  border-bottom: 1px solid var(--subtle-1);
+}
+.req-item:last-child { border-bottom: none; }
+.req-id {
+  font-family: var(--mono);
+  font-size: var(--ui-font-small);
+  font-weight: 700;
+  color: var(--accent);
+  flex-shrink: 0;
+  min-width: 48px;
+}
+.req-type {
+  font-size: var(--ui-font-tiny);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: var(--ui-badge-padding-y) var(--ui-badge-padding-x);
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+.req-type--explicit { background: var(--accent-dim); color: var(--accent); }
+.req-type--inferred { background: var(--warn-dim); color: var(--warn); }
+.req-type--system { background: var(--subtle-2); color: var(--text-muted); }
+.req-desc {
+  flex: 1;
+  min-width: 0;
+  color: var(--text);
+  line-height: 1.4;
+}
+.req-priority {
+  font-size: var(--ui-font-tiny);
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: var(--ui-badge-padding-y) var(--ui-badge-padding-x);
+  border-radius: 999px;
+  background: var(--warn-dim);
+  color: var(--warn);
+  flex-shrink: 0;
+}
+.req-empty {
+  font-size: var(--ui-font-control);
+  color: var(--text-muted);
+  font-style: italic;
+  padding: var(--ui-gap-md) 0;
+}
+.req-streaming {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-gap-sm);
+}
+.req-streaming-indicator {
+  display: flex;
+  align-items: center;
+  gap: var(--ui-gap-sm);
+  padding: var(--ui-gap-xs) 0;
+  color: var(--accent);
+  font-size: var(--ui-font-control);
+  font-weight: 600;
+}
+.req-streaming-label { color: var(--accent); }
+.req-streaming-messages {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-gap-xs);
+  max-height: 160px;
+  overflow-y: auto;
+  padding-left: var(--ui-gap-sm);
+  border-left: 2px solid var(--accent-dim);
+}
+.req-streaming-messages::-webkit-scrollbar { width: 4px; }
+.req-streaming-messages::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 2px; }
+.req-spec-detail {
+  margin-top: var(--ui-gap-sm);
+}
+.req-spec-detail > summary {
+  font-size: var(--ui-font-control);
+  font-weight: 600;
+  color: var(--text-soft);
+  cursor: pointer;
+  padding: var(--ui-gap-xs) 0;
+}
+.req-spec-content {
+  font-family: var(--mono);
+  font-size: var(--ui-font-small);
+  color: var(--text-soft);
+  white-space: pre-wrap;
+  word-break: break-word;
+  padding: var(--ui-gap-sm);
+  background: var(--subtle-1);
+  border-radius: calc(var(--radius) / 2);
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   MiniWorkflow — ArchitectPanel
+   ═══════════════════════════════════════════════════════════════════ */
+
+.arch-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-gap-sm);
+}
+.arch-summary {
+  display: flex;
+  align-items: baseline;
+  gap: var(--ui-gap-sm);
+}
+.arch-count {
+  font-size: var(--ui-font-heading);
+  font-weight: 700;
+  color: var(--accent);
+}
+.arch-count-label {
+  font-size: var(--ui-font-control);
+  color: var(--text-muted);
+}
+.arch-categories {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ui-gap-xs);
+}
+.arch-cat-badge {
+  font-size: var(--ui-font-small);
+  font-weight: 600;
+  padding: var(--ui-badge-padding-y) var(--ui-pill-padding-x);
+  border-radius: 999px;
+  background: var(--subtle-2);
+  color: var(--text-soft);
+  white-space: nowrap;
+}
+.arch-detail {
+  font-size: var(--ui-font-control);
+  color: var(--text);
+  line-height: 1.5;
+}
+.arch-generating {
+  display: flex;
+  align-items: center;
+  gap: var(--ui-gap-sm);
+  padding: var(--ui-gap-sm) 0;
+  color: var(--accent);
+  font-size: var(--ui-font-control);
+  font-weight: 600;
+}
+.arch-generating-label { color: var(--accent); }
+
+/* ═══════════════════════════════════════════════════════════════════
+   OrchestrationPanel — Settings Tab
+   ═══════════════════════════════════════════════════════════════════ */
+
+.orch-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-gap-lg);
+  padding: var(--ui-panel-padding-y) var(--ui-panel-padding-x);
+}
+.orch-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-gap-md);
+}
+.orch-section-title {
+  font-size: var(--ui-font-title);
+  font-weight: 700;
+  color: var(--text-strong);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin: 0;
+  padding-bottom: var(--ui-gap-xs);
+  border-bottom: 1px solid var(--border);
+}
+.orch-field {
+  display: flex;
+  align-items: center;
+  gap: var(--ui-gap-md);
+  padding: var(--ui-gap-xs) 0;
+}
+.orch-field-label {
+  flex: 1;
+  font-size: var(--ui-font-body);
+  font-weight: 500;
+  color: var(--text);
+}
+.orch-field-input {
+  width: 80px;
+  padding: var(--ui-input-padding-y) var(--ui-input-padding-x);
+  font-size: var(--ui-font-control);
+  font-family: var(--mono);
+  background: var(--surface-inset);
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) / 2);
+  color: var(--text-strong);
+  text-align: right;
+}
+.orch-field-input:focus {
+  border-color: var(--accent);
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent-dim);
+}
+.orch-field-select {
+  padding: var(--ui-input-padding-y) var(--ui-input-padding-x);
+  font-size: var(--ui-font-control);
+  background: var(--surface-inset);
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) / 2);
+  color: var(--text-strong);
+  cursor: pointer;
+  min-width: 100px;
+}
+.orch-field-select:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+.orch-agent-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.orch-agent-card + .orch-agent-card {
+  margin-top: -1px;
+}
+.orch-agent-header {
+  display: flex;
+  align-items: center;
+  padding: var(--ui-card-padding-y) var(--ui-card-padding-x);
+  font-size: var(--ui-font-body);
+  font-weight: 600;
+  color: var(--text-strong);
+  cursor: pointer;
+  list-style: none;
+  background: var(--subtle-1);
+}
+.orch-agent-header::-webkit-details-marker,
+.orch-agent-header::marker { display: none; }
+.orch-agent-header::before {
+  content: "";
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  border-right: 1.5px solid var(--text-muted);
+  border-bottom: 1.5px solid var(--text-muted);
+  transform: rotate(-45deg);
+  transition: transform 0.15s;
+  margin-right: var(--ui-gap-sm);
+  flex-shrink: 0;
+}
+.orch-agent-card[open] > .orch-agent-header::before {
+  transform: rotate(45deg);
+}
+.orch-agent-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-gap-xs);
+  padding: var(--ui-card-padding-y) var(--ui-card-padding-x);
+  border-top: 1px solid var(--border);
+}
+.orch-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--ui-gap-md);
+  padding: var(--ui-gap-sm) 0;
+  cursor: pointer;
+}
+.orch-toggle input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.orch-toggle-label {
+  font-size: var(--ui-font-body);
+  font-weight: 500;
+  color: var(--text-strong);
+}
+.orch-toggle-desc {
+  display: block;
+  font-size: var(--ui-font-small);
+  color: var(--text-muted);
+  margin-top: 2px;
+  line-height: 1.3;
+}

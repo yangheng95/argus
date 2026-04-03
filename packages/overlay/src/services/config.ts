@@ -1,19 +1,5 @@
 // ── Config Service ──
-// Functions ported (with original line numbers):
-// checkConfig (line 6679)
-// hasExplicitChecks (line 6685)
-// checkCanToggle (line 6700)
-// checkSelectionConfig (line 6704)
-// buildCheckConfig (line 6874) — DOM-dependent; see note below
-// configUnattended (line 2394)
-// syncUnattendedConfig (line 2399)
-// updateConfig (line 2383)
-// scaffoldProjectConfig (line 1597)
-// reloadProjectScope (line 4278) 
-// NOTE: buildCheckConfig reads DOM checkboxes directly. In the Solid migration
-// the criteria spec list lives in appStore.criteriaSpecs; callers that need to
-// build a config diff from the current UI should call buildCheckConfigFromSpecs
-// instead of reading the DOM.
+// Check config accessors, config update helpers, project scaffold, prompt catalog.
 
 import { apiJson } from "./api";
 import { appStore, setAppStore } from "../store/app";
@@ -138,43 +124,33 @@ export function buildCheckConfigFromSpecs(
   return next;
 }
 
-// ── Config Unattended Sync ──
+// ── Config Update ──
 
 /**
- * Extract the `experimental.unattended` boolean from a server config object.
- * Returns null when the field is absent or not a boolean.
+ * Send a partial config diff to the server (JSON Merge Patch).
+ * Updates appStore.config with the server response.
  */
-export function configUnattended(config: any): boolean | null {
-  const value = config?.experimental?.unattended;
-  return typeof value === "boolean" ? value : null;
-}
-
-/**
- * PATCH /config to set `experimental.unattended` to the current
- * `settingsStore.unattended` value. Skips the request when not connected,
- * or when the remote value already matches (unless `force` is true).
- */
-export async function syncUnattendedConfig(force = false): Promise<boolean> {
-  if (!appStore.connected) return false;
-  const unattended = settingsStore.unattended ?? true;
-  const remote = configUnattended(appStore.config);
-  if (!force && remote === unattended) return false;
+export async function patchConfig(diff: Record<string, any>): Promise<any> {
+  if (!appStore.connected) return null;
   try {
-    const saved = await updateConfig((current) => {
-      current.experimental = current.experimental || {};
-      current.experimental.unattended = unattended;
+    const saved = await apiJson("config", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(diff),
     });
     setAppStore("config", saved);
-    return true;
+    return saved;
   } catch (e) {
-    console.error("[config] Failed to sync unattended mode", e);
-    return false;
+    console.error("[config] patchConfig failed", e);
+    return null;
   }
 }
 
 /**
  * Fetch the current server config, apply `mutator` to a clone, then PATCH the
  * result back. Returns the saved config.
+ * Use patchConfig() for simple field updates; use this for complex mutations
+ * that need the current state (e.g., conditional delete of nested keys).
  */
 export async function updateConfig(mutator: (config: Record<string, any>) => void): Promise<any> {
   const current = await apiJson("config");
@@ -198,7 +174,8 @@ export async function scaffoldProjectConfig(dir: string): Promise<void> {
   const base = dir.replace(/[\\/]+$/, "");
   const configFile = base + "/.opencorvus/opencorvus.jsonc";
   const username = settingsStore.username || "";
-  const unattended = settingsStore.unattended !== false;
+  const unattended = appStore.config?.experimental?.unattended !== false;
+  // Default values aligned with OrchestratorConfig.defaults on the server
   const config = {
     $schema: "https://opencorvus.ai/config.json",
     experimental: {
@@ -209,21 +186,19 @@ export async function scaffoldProjectConfig(dir: string): Promise<void> {
       eslint: { disabled: true },
     },
     assistant: {
-      spec: { max_steps: 30, timeout_ms: 300000, min_tool_calls: 3, quality_threshold: 0.6, max_attempts: 3 },
-      planner: { max_steps: 30, timeout_ms: 300000, min_tool_calls: 3, quality_threshold: 0.5, max_attempts: 3 },
-      evaluator: { max_steps: 25, timeout_ms: 240000, min_tool_calls: 3 },
-      delivery: { max_steps: 40, timeout_ms: 600000, max_retries: 2, min_tool_calls: 3 },
+      decompose: { max_steps: 30, timeout_ms: 300000, quality_threshold: 0.5, max_attempts: 3 },
+      planner: { max_steps: 30, timeout_ms: 300000, quality_threshold: 0.5, max_attempts: 3 },
+      evaluator: { max_steps: 25, timeout_ms: 240000 },
+      delivery: { max_steps: 40, timeout_ms: 600000, max_retries: 2 },
       max_runs: 10,
-      max_replans: 3,
-      same_plan_retry_limit: 2,
-      stage_max_retries: 2,
+      max_fix_runs: 5,
+      max_executor_groups: 1,
     },
     compaction: {
       auto: true,
       prune: true,
     },
     agent: {},
-    mode: {},
     plugin: [],
     command: {},
     username,

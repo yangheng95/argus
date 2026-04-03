@@ -24,8 +24,10 @@ import { operatorNotesSection } from "@/orchestrator/helpers"
 import { loadStageSkills } from "@/orchestrator/skill-inject"
 import { Config } from "@/config/config"
 import { parseDecomposeText, type DecomposeOutput, type ParsedGoalContract, type DecomposeDecision, type ParsedRequirement, type TraceabilityEntry } from "./parse"
+import { parseRecommendedNext } from "@/architect/parse-recommended"
 import type { GoalContractFields } from "@/pipeline/types"
 import type { DecisionLog } from "@/decision-log"
+import type { RecommendedNext } from "@/architect/types"
 
 import DECOMPOSE_CORE from "@/prompt/core/decompose-core.txt"
 
@@ -43,6 +45,8 @@ export interface DecomposeResult {
   decisions: DecomposeDecision[]
   /** Requirement → Goal traceability matrix */
   traceability: TraceabilityEntry[]
+  /** Recommended next actions for Task Agent */
+  recommendedNext: RecommendedNext[]
 }
 
 // ---------------------------------------------------------------------------
@@ -108,13 +112,12 @@ async function run(input: {
   if (input.signal?.aborted) throw new Error("decompose agent aborted before model resolution")
 
   const orchCfg = await OrchestratorConfig.get()
-  // Use goal config for step/timeout/quality settings (decompose replaces goal)
   const {
     max_steps: MAX_STEPS,
     timeout_ms: TIMEOUT_MS,
     quality_threshold: QUALITY_RETRY_THRESHOLD,
     max_attempts: MAX_ATTEMPTS,
-  } = orchCfg.goal
+  } = orchCfg.decompose
 
   const def = await Provider.defaultModel().catch(() => undefined)
   if (!def) throw new Error("no LLM model available for decompose agent")
@@ -223,7 +226,7 @@ async function run(input: {
     })
 
     if (quality.score >= QUALITY_RETRY_THRESHOLD || attempt >= MAX_ATTEMPTS - 1) {
-      const result = toResult(parsed)
+      const result = toResult(parsed, allText)
 
       // Seed Decision Log with foundational decisions
       if (input.decisionLog && result.decisions.length > 0) {
@@ -251,20 +254,44 @@ async function run(input: {
   }
 
   if (!lastParsed) throw new Error("Decompose agent produced no output after all attempts")
-  return toResult(lastParsed)
+  return toResult(lastParsed, "")
 }
 
 // ---------------------------------------------------------------------------
 // Convert parsed output to DecomposeResult
 // ---------------------------------------------------------------------------
 
-function toResult(parsed: DecomposeOutput): DecomposeResult {
+function toResult(parsed: DecomposeOutput, rawText?: string): DecomposeResult {
+  const goals = parsed.goals.map(goalToContract)
+  // Generate recommended_next from LLM output or default heuristic
+  let recommendedNext: RecommendedNext[] = []
+  if (rawText) {
+    recommendedNext = parseRecommendedNext(rawText)
+  }
+  // Default recommendation: multi-goal → architect, single-goal → plan_goal
+  if (recommendedNext.length === 0 && goals.length > 1) {
+    recommendedNext.push({
+      agent: "architect",
+      reason: `${goals.length} goals with cross-dependencies — architect coordination recommended`,
+      confidence: 0.9,
+      priority: "required",
+    })
+  } else if (recommendedNext.length === 0 && goals.length === 1) {
+    recommendedNext.push({
+      agent: "plan_goal",
+      args: { goalID: goals[0].id },
+      reason: "Single goal — plan directly",
+      confidence: 0.8,
+      priority: "suggested",
+    })
+  }
   return {
     summary: parsed.summary || "Task decomposition",
     requirements: parsed.requirements,
-    goals: parsed.goals.map(goalToContract),
+    goals,
     decisions: parsed.decisions,
     traceability: parsed.traceability,
+    recommendedNext,
   }
 }
 
@@ -443,7 +470,6 @@ async function decomposeSystem(): Promise<string> {
   const agentPrompt = (config.agent as Record<string, any> | undefined)?.decompose?.prompt
   const core = typeof agentPrompt === "string" ? agentPrompt : DECOMPOSE_CORE
   const orchCfg = await OrchestratorConfig.get()
-  // Use goal skills config for decompose (same tool set)
-  const skills = await loadStageSkills(orchCfg.goal.skills, "goal")
+  const skills = await loadStageSkills(orchCfg.decompose.skills, "decompose")
   return core + skills
 }

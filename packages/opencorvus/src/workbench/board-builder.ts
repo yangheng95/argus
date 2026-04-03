@@ -15,6 +15,7 @@ import {
   OrchestratorTaskTable,
 } from "@/orchestrator/orchestrator.sql"
 import { EvaluationCheck } from "@/orchestrator/model"
+import { WorkflowRegistry, type WorkflowState, type MiniWorkflow } from "@/orchestrator/workflow"
 import { Database, desc, eq, sql } from "@/storage/db"
 import { WorkbenchTaskNoteTable } from "./workbench.sql"
 import { compileBrief } from "./brief-compiler"
@@ -205,7 +206,6 @@ function buildBoard(task: typeof OrchestratorTaskTable.$inferSelect) {
         budget: task.budget
           ? {
               maxRuns: task.budget.max_runs,
-              maxReplans: task.budget.max_replans,
               maxEvaluations: task.budget.max_evaluations,
               maxWallTimeMs: task.budget.max_wall_time_ms,
             }
@@ -423,6 +423,9 @@ function buildBoard(task: typeof OrchestratorTaskTable.$inferSelect) {
           })),
         },
       ],
+
+      // ── MiniWorkflow structured fields ──
+      ...buildWorkflowFields(task, goals),
   }
 }
 
@@ -815,5 +818,123 @@ function boardOverview(input: {
       canReplan: isTerminal(input.task.status as TaskStatus) && Boolean(input.task.active_plan_version_id ?? input.run?.plan_version_id),
       canCancel: isInterruptable(input.task.status as TaskStatus),
     },
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// MiniWorkflow board fields
+// ═══════════════════════════════════════════════════════════════════
+
+function buildWorkflowFields(
+  task: typeof OrchestratorTaskTable.$inferSelect,
+  goals: Array<typeof OrchestratorGoalTable.$inferSelect>,
+) {
+  const ws = (task.metadata as any)?._workflow as WorkflowState | undefined
+  if (!ws) return {}
+
+  const workflow = WorkflowRegistry.resolveSync(ws.workflowID)
+  if (!workflow) return {}
+
+  // Build workflow state for TaskBoard
+  const workflowBoard = {
+    id: workflow.id,
+    name: workflow.name,
+    steps: workflow.steps.map(step => ({
+      id: step.id,
+      label: step.label,
+      tool: step.tool,
+      scope: step.scope as "task" | "goal",
+      skippable: step.skippable,
+      status: (step.scope === "task"
+        ? ws.taskSteps[step.id]?.status ?? "pending"
+        : deriveGoalScopeStatus(ws, step.id)) as "pending" | "running" | "completed" | "skipped" | "failed",
+    })),
+    goalLoopStepIDs: workflow.goalLoopStepIDs,
+  }
+
+  // Build per-goal workflow groups
+  const goalWorkflows = goals.map(goal => {
+    const gws = ws.goalSteps[goal.id]
+    return {
+      goalID: goal.id,
+      goalTitle: goal.title,
+      goalStatus: goal.status,
+      priority: (goal.priority ?? "blocking") as "blocking" | "advisory",
+      steps: workflow.steps
+        .filter(s => s.scope === "goal")
+        .map(s => ({
+          stepID: s.id,
+          label: s.label,
+          status: (gws?.steps[s.id]?.status ?? "pending") as "pending" | "running" | "completed" | "skipped" | "failed",
+          startedAt: gws?.steps[s.id]?.startedAt,
+          completedAt: gws?.steps[s.id]?.completedAt,
+        })),
+    }
+  })
+
+  // Build requirements from DB (if decompose has run)
+  const requirements = task.active_spec_version_id
+    ? buildRequirements(task.id)
+    : undefined
+
+  // Build architect summary from Decision Log
+  const architect = buildArchitectSummary(task.id)
+
+  return {
+    workflow: workflowBoard,
+    ...(goalWorkflows.length > 0 ? { goalWorkflows } : {}),
+    ...(requirements ? { requirements } : {}),
+    ...(architect ? { architect } : {}),
+  }
+}
+
+/** Derive aggregate status for a goal-scope step across all goals */
+function deriveGoalScopeStatus(ws: WorkflowState, stepID: string): string {
+  const entries = Object.values(ws.goalSteps)
+  if (entries.length === 0) return "pending"
+  const statuses = entries.map(g => g.steps[stepID]?.status ?? "pending")
+  if (statuses.some(s => s === "running")) return "running"
+  if (statuses.every(s => s === "completed" || s === "skipped")) return "completed"
+  if (statuses.some(s => s === "failed")) return "failed"
+  if (statuses.some(s => s === "completed")) return "running" // partial = still in progress
+  return "pending"
+}
+
+/** Build structured requirements array from DB */
+function buildRequirements(taskID: string) {
+  try {
+    const { OrchestratorRequirementTable } = require("@/orchestrator/orchestrator.sql")
+    const rows = Database.use((db: any) =>
+      db.select().from(OrchestratorRequirementTable)
+        .where(eq(OrchestratorRequirementTable.task_id, taskID))
+        .all()
+    )
+    if (!rows || rows.length === 0) return undefined
+    return rows.map((r: any) => ({
+      id: r.id ?? r.requirement_id ?? "",
+      description: r.title ?? r.description ?? "",
+      type: r.priority === "blocking" ? "explicit" as const : "inferred" as const,
+      priority: (r.priority ?? "blocking") as "blocking" | "advisory",
+    }))
+  } catch {
+    return undefined
+  }
+}
+
+/** Build architect summary from Decision Log */
+function buildArchitectSummary(taskID: string) {
+  try {
+    const { createDecisionLog } = require("@/decision-log")
+    const log = createDecisionLog(taskID)
+    const entries = log.readByPhase("architect")
+    if (!entries || entries.length === 0) return undefined
+    const categories = [...new Set(entries.map((e: any) => e.key))]
+    return {
+      summary: `${entries.length} architect decisions across ${categories.length} categories`,
+      contractCount: entries.length,
+      categories,
+    }
+  } catch {
+    return undefined
   }
 }

@@ -40,6 +40,15 @@ import {
 } from "@/orchestrator/store"
 import { DEFAULT_MAX_RUNS, DEFAULT_MAX_FIX_RUNS } from "@/orchestrator/helpers"
 import { updateTask } from "@/orchestrator/state"
+import {
+  WorkflowRegistry,
+  createWorkflowState,
+  renderWorkflowPrompt,
+  type WorkflowState,
+  type MiniWorkflow,
+} from "@/orchestrator/workflow"
+import { OrchestratorProtocol } from "@/orchestrator/protocol"
+import { Event as OrchestratorEvent } from "@/orchestrator/model"
 
 const log = Log.create({ service: "task-agent" })
 const MAX_STEPS = 20
@@ -91,6 +100,33 @@ export namespace TaskAgent {
         return
       }
 
+      // 0. Initialize workflow state on new task creation
+      let workflow: MiniWorkflow | undefined
+      let workflowState: WorkflowState | undefined
+      if (trigger.kind === "created") {
+        const requestedID = (task.metadata as any)?._workflow?.workflowID
+        const workflowID = requestedID ?? await WorkflowRegistry.defaultID()
+        workflow = await WorkflowRegistry.resolve(workflowID) ?? WorkflowRegistry.resolveSync("standard")
+        if (workflow) {
+          workflowState = createWorkflowState(workflow)
+          const meta = { ...(task.metadata ?? {}), _workflow: workflowState }
+          await updateTask(task, { metadata: meta }, `Workflow selected: ${workflow.name}`)
+          OrchestratorProtocol.emit(OrchestratorEvent.WorkflowSelected, {
+            taskID,
+            workflowID: workflow.id,
+            workflowName: workflow.name,
+            summary: `Workflow "${workflow.name}" selected`,
+          })
+        }
+      } else {
+        // Load existing workflow state for re-triggers
+        const existingState = (task.metadata as any)?._workflow as WorkflowState | undefined
+        if (existingState) {
+          workflow = await WorkflowRegistry.resolve(existingState.workflowID) ?? WorkflowRegistry.resolveSync(existingState.workflowID)
+          workflowState = existingState
+        }
+      }
+
       // 1. Resolve model — same pattern as spec/planner agent
       const def = await Provider.defaultModel().catch(() => undefined)
       if (!def) {
@@ -116,12 +152,12 @@ export namespace TaskAgent {
       await live.start("Task Agent started")
 
       // 3. Create tools (agentSessionID passed so tool sessions become children)
-      const tools = createTaskAgentTools({ taskID, agentSessionID: agentSession.id, signal: ctrl.signal })
+      const tools = createTaskAgentTools({ taskID, agentSessionID: agentSession.id, signal: ctrl.signal, workflow, workflowState })
       const { stopSignal } = tools
       const guard = toolGuard(tools)
 
       // 4. Build prompt + persist user message as timeline anchor
-      const system = buildSystemPrompt(task, trigger)
+      const system = buildSystemPrompt(task, trigger, workflow, workflowState)
       const userMessage = describeTrigger(task, trigger)
       const userMsgID = Identifier.ascending("message")
       await Session.updateMessage({
@@ -246,12 +282,12 @@ function describeTrigger(task: TaskRow, trigger: TaskAgentTrigger): string {
 // System prompt
 // ---------------------------------------------------------------------------
 
-function buildSystemPrompt(task: TaskRow, trigger: TaskAgentTrigger): string {
+function buildSystemPrompt(task: TaskRow, trigger: TaskAgentTrigger, workflow?: MiniWorkflow, workflowState?: WorkflowState): string {
   const sections: string[] = []
 
   sections.push(
     "You are the OpenCorvus Task Agent — the central intelligence that drives task completion.",
-    "You have tools to decompose, plan, execute, evaluate goals. YOU decide what to do and when.",
+    "You have tools to analyze requirements, plan, execute, evaluate goals. YOU decide what to do and when.",
     "There is NO fixed pipeline. You reason about the situation and choose the right action.",
     "Always respond in the same language as the task request. Default to Chinese (simplified) if ambiguous.",
     "",
@@ -296,6 +332,12 @@ function buildSystemPrompt(task: TaskRow, trigger: TaskAgentTrigger): string {
   const notes = operatorNotesSection(task.id)
   if (notes) sections.push(notes)
 
+  // ── Workflow guidance (injected as recommended path, not enforced) ──
+  if (workflow && workflowState) {
+    sections.push("")
+    sections.push(renderWorkflowPrompt(workflow, workflowState))
+  }
+
   // Run context (delivery + eval results for reasoning)
   if (trigger.kind === "run_completed" || trigger.kind === "executor_failed") {
     const runID = trigger.runID
@@ -325,13 +367,13 @@ function buildSystemPrompt(task: TaskRow, trigger: TaskAgentTrigger): string {
   sections.push(`
 ## How to Think (not a fixed pipeline — use your judgment)
 
-You have these tools: decompose, plan_goal, execute_goal, eval_goal, add_goal, modify_goal,
+You have these tools: requirements, architect, plan_goal, execute_goal, eval_goal, add_goal, modify_goal,
 dispatch_ready_goals, read_context, create_run, submit_execution, deliver, publish_delivery,
 fail_task, restart_from_stage.
 
 **For new tasks:**
-- Assess complexity first. Simple (typo, config change)? Skip decompose, directly create_run + submit_execution.
-- Complex (multi-feature, PRD)? Call decompose first, then create_run, then submit_execution.
+- Assess complexity first. Simple (typo, config change)? Skip requirements, directly create_run + submit_execution.
+- Complex (multi-feature, PRD)? Call requirements first, then create_run, then submit_execution.
 - You can plan individual goals with plan_goal if they're complex, or skip planning for simple ones.
 
 **After execution completes:**

@@ -435,7 +435,15 @@
       </div>
       <div class="config-dialog-layout">
         <nav class="config-sidebar" id="configSidebar">
-          <button class="config-nav-item active" data-config-tab="prompt">
+          <button class="config-nav-item active" data-config-tab="general">
+            <svg class="config-nav-icon" viewBox="0 0 24 24" fill="none"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" stroke="currentColor" stroke-width="1.5"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.5"/></svg>
+            <span data-i18n="settings.title">General</span>
+          </button>
+          <button class="config-nav-item" data-config-tab="orchestration">
+            <svg class="config-nav-icon" viewBox="0 0 24 24" fill="none"><path d="M3 12h4l3-9 4 18 3-9h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <span data-i18n="orchestration.workflow">Orchestration</span>
+          </button>
+          <button class="config-nav-item" data-config-tab="prompt">
             <svg class="config-nav-icon" viewBox="0 0 24 24" fill="none"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
             <span data-i18n="prompt.title">Prompts</span>
             <span class="config-nav-badge" id="promptBadge"></span>
@@ -470,7 +478,15 @@
         </nav>
         <div class="config-resizer" id="configResizer"></div>
         <div class="config-content" id="configContent">
-          <div class="config-tab-panel active" id="promptSection" data-config-panel="prompt">
+          <div class="config-tab-panel active" data-config-panel="general">
+            <div class="config-section-body" id="generalBody"></div>
+          </div>
+
+          <div class="config-tab-panel" data-config-panel="orchestration">
+            <div class="config-section-body" id="orchestrationBody"></div>
+          </div>
+
+          <div class="config-tab-panel" data-config-panel="prompt">
             <div class="config-section-body" id="promptBody">
               <div class="empty-hint" data-i18n="prompt.loading">Loading prompts...</div>
             </div>
@@ -569,10 +585,6 @@
                 <label class="field">
                   <span class="field-label" data-i18n="budget.max_runs">Max Runs</span>
                   <input class="field-input" id="budgetMaxRuns" type="number" min="1" step="1" placeholder="Default" data-i18n-placeholder="budget.placeholder">
-                </label>
-                <label class="field">
-                  <span class="field-label" data-i18n="budget.max_replans">Max Replans</span>
-                  <input class="field-input" id="budgetMaxReplans" type="number" min="0" step="1" placeholder="Default" data-i18n-placeholder="budget.placeholder">
                 </label>
               </div>
               <div class="field-row budget-grid">

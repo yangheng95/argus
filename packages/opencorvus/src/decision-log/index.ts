@@ -45,10 +45,14 @@ export interface DecisionLogWriter {
 export interface DecisionLogReader {
   /** Read all decisions for this task, ordered by creation time. */
   read(): DecisionEntry[]
+  /** Read all decisions for a specific phase (e.g., "architect", "decompose"). */
+  readByPhase(phase: string): DecisionEntry[]
   /** Read the latest decision for a specific key. */
   readByKey(key: string): DecisionEntry | undefined
   /** Format all decisions as a text block for LLM context injection. */
   toPromptSection(): string
+  /** Format decisions for a specific phase as a prompt section. */
+  phasePromptSection(phase: string): string
 }
 
 export type DecisionLog = DecisionLogWriter & DecisionLogReader
@@ -90,6 +94,15 @@ export function createDecisionLog(taskID: string): DecisionLog {
       ).map(rowToEntry)
     },
 
+    readByPhase(phase: string): DecisionEntry[] {
+      return Database.use((db) =>
+        db.select().from(DecisionLogTable)
+          .where(and(eq(DecisionLogTable.task_id, taskID), eq(DecisionLogTable.phase, phase)))
+          .orderBy(DecisionLogTable.time_created)
+          .all(),
+      ).map(rowToEntry)
+    },
+
     readByKey(key: string): DecisionEntry | undefined {
       const row = Database.use((db) =>
         db.select().from(DecisionLogTable)
@@ -107,6 +120,15 @@ export function createDecisionLog(taskID: string): DecisionLog {
         `- **${e.key}**: ${e.value}${e.reason ? ` (${e.reason})` : ""}${e.goalID ? ` [goal:${e.goalID.slice(-8)}]` : ""}`,
       )
       return `## Decision Log (${entries.length} entries)\n\n${lines.join("\n")}`
+    },
+
+    phasePromptSection(phase: string): string {
+      const entries = this.readByPhase(phase)
+      if (entries.length === 0) return ""
+      const lines = entries.map((e) =>
+        `### ${e.key}\n${e.value}${e.reason ? `\n_Why: ${e.reason}_` : ""}${e.goalID ? ` [goal:${e.goalID.slice(-8)}]` : ""}`,
+      )
+      return `## Architect Consensus (${entries.length} contracts)\n\n${lines.join("\n\n")}`
     },
   }
 }

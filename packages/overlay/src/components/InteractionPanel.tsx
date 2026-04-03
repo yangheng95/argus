@@ -13,6 +13,7 @@ import {
 } from "solid-js";
 import { boardStore } from "../store/board";
 import { settingsStore } from "../store/settings";
+import { appStore } from "../store/app";
 import { apiJson } from "../services/api";
 import { t } from "../utils/i18n";
 
@@ -143,9 +144,10 @@ function autoInteractionAnswers(
 
 function shouldAutoResolve(interaction: Interaction): boolean {
   if (!interaction || interaction.status !== "pending") return false;
-  if (interaction.type === "permission") return settingsStore.autoPermission;
+  const exp = appStore.config?.experimental;
+  if (interaction.type === "permission") return exp?.auto_permission === true;
   if (interaction.type === "question")
-    return settingsStore.autoQuestion || settingsStore.unattended;
+    return exp?.auto_question === true || exp?.unattended !== false;
   return false;
 }
 
@@ -285,7 +287,7 @@ export function InteractionPanel(props: InteractionPanelProps) {
     if (lastFail && Date.now() - lastFail < COOLDOWN_MS) return;
 
     if (interaction.type === "permission") {
-      const reply = settingsStore.autoPermission ? "always" : "once";
+      const reply = appStore.config?.experimental?.auto_permission ? "always" : "once";
       void resolveInteraction(interaction.id, reply);
       return;
     }

@@ -178,9 +178,7 @@ test("automatic permission replies default to once and honor always", async () =
           }
         }).createOverlayInteractions({
           state: {
-            autoPermission: true,
             autoPermissionReply: reply,
-            autoQuestion: false,
           },
           dom: {
             goalsBody,

@@ -6363,9 +6363,6 @@ const DEFAULT_SETTINGS = {
   executor: "opencode",
   initGit: true,
   alwaysOnTop: false,
-  unattended: true,
-  autoPermission: false,
-  autoQuestion: false,
   showTranscriptDetails: false,
   sidebarCollapsed: false,
   sidebarWidth: null,
@@ -6394,9 +6391,6 @@ function applySettings(input) {
     executor: typeof input?.executor === "string" && input.executor.trim() ? input.executor.trim() : DEFAULT_SETTINGS.executor,
     initGit: true,
     alwaysOnTop: input?.alwaysOnTop === true,
-    unattended: input?.unattended !== false,
-    autoPermission: input?.autoPermission === true,
-    autoQuestion: input?.autoQuestion === true,
     showTranscriptDetails: input?.showTranscriptDetails === true,
     sidebarCollapsed: input?.sidebarCollapsed === true,
     sidebarWidth: sanitizePaneWidth(input?.sidebarWidth),
@@ -6421,9 +6415,9 @@ function saveSettings() {
   localStorage.setItem("oc_username", s.username);
   localStorage.setItem("oc_executor", s.executor || DEFAULT_SETTINGS.executor);
   localStorage.setItem("oc_always_on_top", String(s.alwaysOnTop));
-  localStorage.setItem("oc_unattended", String(s.unattended));
-  localStorage.setItem("oc_auto_permission", String(s.autoPermission));
-  localStorage.setItem("oc_auto_question", String(s.autoQuestion));
+  localStorage.removeItem("oc_unattended");
+  localStorage.removeItem("oc_auto_permission");
+  localStorage.removeItem("oc_auto_question");
   localStorage.setItem(
     "oc_show_transcript_details",
     String(s.showTranscriptDetails)
@@ -6483,9 +6477,6 @@ function loadSettings() {
     executor: localStorage.getItem("oc_executor") || DEFAULT_SETTINGS.executor,
     initGit: true,
     alwaysOnTop: localStorage.getItem("oc_always_on_top") === "true",
-    unattended: localStorage.getItem("oc_unattended") !== "false",
-    autoPermission: localStorage.getItem("oc_auto_permission") === "true",
-    autoQuestion: localStorage.getItem("oc_auto_question") === "true",
     showTranscriptDetails: localStorage.getItem("oc_show_transcript_details") === "true",
     sidebarCollapsed: localStorage.getItem("oc_sidebar_collapsed") === "true",
     sidebarWidth: sanitizePaneWidth(
@@ -6539,9 +6530,6 @@ function bootstrapOverlaySettings(input = settingsStore) {
     executor: input.executor ?? DEFAULT_SETTINGS.executor,
     initGit: true,
     alwaysOnTop: input.alwaysOnTop ?? DEFAULT_SETTINGS.alwaysOnTop,
-    unattended: input.unattended ?? DEFAULT_SETTINGS.unattended,
-    autoPermission: input.autoPermission ?? DEFAULT_SETTINGS.autoPermission,
-    autoQuestion: input.autoQuestion ?? DEFAULT_SETTINGS.autoQuestion,
     showTranscriptDetails: input.showTranscriptDetails ?? DEFAULT_SETTINGS.showTranscriptDetails,
     sidebarCollapsed: input.sidebarCollapsed ?? DEFAULT_SETTINGS.sidebarCollapsed,
     sidebarWidth: input.sidebarWidth || void 0,
@@ -6760,6 +6748,56 @@ function WindowControls() {
 }
 delegateEvents(["click"]);
 
+const scriptRel = 'modulepreload';const assetsURL = function(dep) { return "/"+dep };const seen = {};const __vitePreload = function preload(baseModule, deps, importerUrl) {
+  let promise = Promise.resolve();
+  if (true               && deps && deps.length > 0) {
+    let allSettled2 = function(promises) {
+      return Promise.all(promises.map((p) => Promise.resolve(p).then((value) => ({ status: "fulfilled", value }), (reason) => ({ status: "rejected", reason }))));
+    };
+    document.getElementsByTagName("link"); const cspNonceMeta = document.querySelector("meta[property=csp-nonce]"), cspNonce = cspNonceMeta?.nonce || cspNonceMeta?.getAttribute("nonce");
+    promise = allSettled2(deps.map((dep) => {
+      dep = assetsURL(dep);
+      if (dep in seen)
+        return;
+      seen[dep] = true;
+      const isCss = dep.endsWith(".css"), cssSelector = isCss ? '[rel="stylesheet"]' : "";
+      if (document.querySelector(`link[href="${dep}"]${cssSelector}`))
+        return;
+      const link = document.createElement("link");
+      link.rel = isCss ? "stylesheet" : scriptRel;
+      if (!isCss)
+        link.as = "script";
+      link.crossOrigin = "";
+      link.href = dep;
+      if (cspNonce)
+        link.setAttribute("nonce", cspNonce);
+      document.head.appendChild(link);
+      if (isCss)
+        return new Promise((res, rej) => {
+          link.addEventListener("load", res);
+          link.addEventListener("error", () => rej(Error(`Unable to preload CSS for ${dep}`)));
+        });
+    }));
+  }
+  function handlePreloadError(err) {
+    const e = new Event("vite:preloadError", {
+      cancelable: true
+    });
+    e.payload = err;
+    window.dispatchEvent(e);
+    if (!e.defaultPrevented)
+      throw err;
+  }
+  return promise.then((res) => {
+    for (const item of res || []) {
+      if (item.status !== "rejected")
+        continue;
+      handlePreloadError(item.reason);
+    }
+    return baseModule().catch(handlePreloadError);
+  });
+};
+
 const MIN_UI_ZOOM = 0.8;
 const MAX_UI_ZOOM = 1.6;
 const systemThemeMedia = typeof window !== "undefined" && typeof window.matchMedia === "function" ? window.matchMedia("(prefers-color-scheme: light)") : null;
@@ -6962,30 +7000,60 @@ function TitlebarMenu(props) {
     closeMenu();
   }
   async function handleUnattendedChange(checked) {
-    setSettingsStore("unattended", checked);
-    applySettings({
-      ...settingsStore,
-      unattended: checked
-    });
-    saveSettings();
+    try {
+      const {
+        patchConfig
+      } = await __vitePreload(async () => { const {
+        patchConfig
+      } = await Promise.resolve().then(() => config);return {
+        patchConfig
+      }},true              ?void 0:void 0);
+      await patchConfig({
+        experimental: {
+          unattended: checked
+        }
+      });
+    } catch (e) {
+      console.error("[titlebar] failed to update unattended", e);
+    }
     closeMenu();
   }
   async function handleAutoPermissionChange(checked) {
-    setSettingsStore("autoPermission", checked);
-    applySettings({
-      ...settingsStore,
-      autoPermission: checked
-    });
-    saveSettings();
+    try {
+      const {
+        patchConfig
+      } = await __vitePreload(async () => { const {
+        patchConfig
+      } = await Promise.resolve().then(() => config);return {
+        patchConfig
+      }},true              ?void 0:void 0);
+      await patchConfig({
+        experimental: {
+          auto_permission: checked
+        }
+      });
+    } catch (e) {
+      console.error("[titlebar] failed to update auto_permission", e);
+    }
     closeMenu();
   }
   async function handleAutoQuestionChange(checked) {
-    setSettingsStore("autoQuestion", checked);
-    applySettings({
-      ...settingsStore,
-      autoQuestion: checked
-    });
-    saveSettings();
+    try {
+      const {
+        patchConfig
+      } = await __vitePreload(async () => { const {
+        patchConfig
+      } = await Promise.resolve().then(() => config);return {
+        patchConfig
+      }},true              ?void 0:void 0);
+      await patchConfig({
+        experimental: {
+          auto_question: checked
+        }
+      });
+    } catch (e) {
+      console.error("[titlebar] failed to update auto_question", e);
+    }
     closeMenu();
   }
   async function handleShowTranscriptDetailsChange(checked) {
@@ -7113,65 +7181,15 @@ function TitlebarMenu(props) {
       f: void 0,
       y: void 0
     });
-    createRenderEffect(() => _el$32.checked = settingsStore.unattended);
-    createRenderEffect(() => _el$37.checked = settingsStore.autoPermission);
-    createRenderEffect(() => _el$42.checked = settingsStore.autoQuestion);
+    createRenderEffect(() => _el$32.checked = appStore.config?.experimental?.unattended !== false);
+    createRenderEffect(() => _el$37.checked = appStore.config?.experimental?.auto_permission === true);
+    createRenderEffect(() => _el$42.checked = appStore.config?.experimental?.auto_question === true);
     createRenderEffect(() => _el$47.checked = settingsStore.showTranscriptDetails);
     createRenderEffect(() => _el$53.value = String(opacityPct()));
     return _el$;
   })();
 }
 delegateEvents(["click", "input"]);
-
-const scriptRel = 'modulepreload';const assetsURL = function(dep) { return "/"+dep };const seen = {};const __vitePreload = function preload(baseModule, deps, importerUrl) {
-  let promise = Promise.resolve();
-  if (true               && deps && deps.length > 0) {
-    let allSettled2 = function(promises) {
-      return Promise.all(promises.map((p) => Promise.resolve(p).then((value) => ({ status: "fulfilled", value }), (reason) => ({ status: "rejected", reason }))));
-    };
-    document.getElementsByTagName("link"); const cspNonceMeta = document.querySelector("meta[property=csp-nonce]"), cspNonce = cspNonceMeta?.nonce || cspNonceMeta?.getAttribute("nonce");
-    promise = allSettled2(deps.map((dep) => {
-      dep = assetsURL(dep);
-      if (dep in seen)
-        return;
-      seen[dep] = true;
-      const isCss = dep.endsWith(".css"), cssSelector = isCss ? '[rel="stylesheet"]' : "";
-      if (document.querySelector(`link[href="${dep}"]${cssSelector}`))
-        return;
-      const link = document.createElement("link");
-      link.rel = isCss ? "stylesheet" : scriptRel;
-      if (!isCss)
-        link.as = "script";
-      link.crossOrigin = "";
-      link.href = dep;
-      if (cspNonce)
-        link.setAttribute("nonce", cspNonce);
-      document.head.appendChild(link);
-      if (isCss)
-        return new Promise((res, rej) => {
-          link.addEventListener("load", res);
-          link.addEventListener("error", () => rej(Error(`Unable to preload CSS for ${dep}`)));
-        });
-    }));
-  }
-  function handlePreloadError(err) {
-    const e = new Event("vite:preloadError", {
-      cancelable: true
-    });
-    e.payload = err;
-    window.dispatchEvent(e);
-    if (!e.defaultPrevented)
-      throw err;
-  }
-  return promise.then((res) => {
-    for (const item of res || []) {
-      if (item.status !== "rejected")
-        continue;
-      handlePreloadError(item.reason);
-    }
-    return baseModule().catch(handlePreloadError);
-  });
-};
 
 var _tmpl$$9 = /* @__PURE__ */ template(`<span id=connBadge class=conn-badge aria-live=polite>`);
 function statusLabel(status) {
@@ -7475,6 +7493,11 @@ function routeSSEEvent(event) {
   }
   if (type === "agent.updated") {
     appendAgentEvent(event);
+    return true;
+  }
+  if (type === "config.changed") {
+    void __vitePreload(async () => { const {loadConfigInfo} = await Promise.resolve().then(() => init);return { loadConfigInfo }},true              ?void 0:void 0).then(({ loadConfigInfo }) => loadConfigInfo()).catch(() => {
+    });
     return true;
   }
   if (type === "task.updated" || type === "task.completed" || type === "task.failed" || type === "task.cancelled" || type === "task.blocked" || type.startsWith("run.") || type.startsWith("plan.") || type.startsWith("goal.") || type.startsWith("delivery.") || type.startsWith("evaluation.") || type.startsWith("interaction.")) {
@@ -10495,11 +10518,12 @@ function createOverlayInteractions(deps) {
   }
   function shouldAutoResolveInteraction(interaction) {
     if (!interaction || interaction.status !== "pending") return false;
+    const exp = appStore.config?.experimental;
     if (interaction.type === "permission") {
-      return stateFlag("autoPermission", settingsStore.autoPermission);
+      return stateFlag("autoPermission", exp?.auto_permission === true);
     }
     if (interaction.type === "question")
-      return stateFlag("autoQuestion", settingsStore.autoQuestion) || stateFlag("unattended", settingsStore.unattended);
+      return stateFlag("autoQuestion", exp?.auto_question === true) || stateFlag("unattended", exp?.unattended !== false);
     return false;
   }
   function bindInteractionActions(root) {
@@ -11220,21 +11244,19 @@ function configUnattended(config) {
   const value = config?.experimental?.unattended;
   return typeof value === "boolean" ? value : null;
 }
-async function syncUnattendedConfig(force = false) {
-  if (!appStore.connected) return false;
-  const unattended = settingsStore.unattended ?? true;
-  const remote = configUnattended(appStore.config);
-  if (!force && remote === unattended) return false;
+async function patchConfig(diff) {
+  if (!appStore.connected) return null;
   try {
-    const saved = await updateConfig((current) => {
-      current.experimental = current.experimental || {};
-      current.experimental.unattended = unattended;
+    const saved = await apiJson("config", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(diff)
     });
     setAppStore("config", saved);
-    return true;
+    return saved;
   } catch (e) {
-    console.error("[config] Failed to sync unattended mode", e);
-    return false;
+    console.error("[config] patchConfig failed", e);
+    return null;
   }
 }
 async function updateConfig(mutator) {
@@ -11252,7 +11274,7 @@ async function scaffoldProjectConfig(dir) {
   const base = dir.replace(/[\\/]+$/, "");
   const configFile = base + "/.opencorvus/opencorvus.jsonc";
   const username = settingsStore.username || "";
-  const unattended = settingsStore.unattended !== false;
+  const unattended = appStore.config?.experimental?.unattended !== false;
   const config = {
     $schema: "https://opencorvus.ai/config.json",
     experimental: {
@@ -11263,21 +11285,19 @@ async function scaffoldProjectConfig(dir) {
       eslint: { disabled: true }
     },
     assistant: {
-      spec: { max_steps: 30, timeout_ms: 3e5, min_tool_calls: 3, quality_threshold: 0.6, max_attempts: 3 },
-      planner: { max_steps: 30, timeout_ms: 3e5, min_tool_calls: 3, quality_threshold: 0.5, max_attempts: 3 },
-      evaluator: { max_steps: 25, timeout_ms: 24e4, min_tool_calls: 3 },
-      delivery: { max_steps: 40, timeout_ms: 6e5, max_retries: 2, min_tool_calls: 3 },
+      decompose: { max_steps: 30, timeout_ms: 3e5, quality_threshold: 0.5, max_attempts: 3 },
+      planner: { max_steps: 30, timeout_ms: 3e5, quality_threshold: 0.5, max_attempts: 3 },
+      evaluator: { max_steps: 25, timeout_ms: 24e4 },
+      delivery: { max_steps: 40, timeout_ms: 6e5, max_retries: 2 },
       max_runs: 10,
-      max_replans: 3,
-      same_plan_retry_limit: 2,
-      stage_max_retries: 2
+      max_fix_runs: 5,
+      max_executor_groups: 1
     },
     compaction: {
       auto: true,
       prune: true
     },
     agent: {},
-    mode: {},
     plugin: [],
     command: {},
     username
@@ -11384,11 +11404,11 @@ const config = /*#__PURE__*/Object.freeze(/*#__PURE__*/Object.defineProperty({
   configUnattended,
   hasExplicitChecks,
   loadPromptCatalog,
+  patchConfig,
   reloadProjectScope,
   resetPromptEntry,
   savePromptEntry,
   scaffoldProjectConfig,
-  syncUnattendedConfig,
   updateConfig
 }, Symbol.toStringTag, { value: 'Module' }));
 
@@ -13179,8 +13199,9 @@ function autoInteractionAnswers(interaction) {
 }
 function shouldAutoResolve(interaction) {
   if (!interaction || interaction.status !== "pending") return false;
-  if (interaction.type === "permission") return settingsStore.autoPermission;
-  if (interaction.type === "question") return settingsStore.autoQuestion || settingsStore.unattended;
+  const exp = appStore.config?.experimental;
+  if (interaction.type === "permission") return exp?.auto_permission === true;
+  if (interaction.type === "question") return exp?.auto_question === true || exp?.unattended !== false;
   return false;
 }
 function interactionResponseSummary(interaction) {
@@ -13305,7 +13326,7 @@ function InteractionPanel(props) {
     const lastFail = autoResolveFailed.get(interaction.id);
     if (lastFail && Date.now() - lastFail < COOLDOWN_MS) return;
     if (interaction.type === "permission") {
-      const reply = settingsStore.autoPermission ? "always" : "once";
+      const reply = appStore.config?.experimental?.auto_permission ? "always" : "once";
       void resolveInteraction(interaction.id, reply);
       return;
     }

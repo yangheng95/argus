@@ -1,21 +1,27 @@
-import { OrchestratorConfig } from "./config"
 import { Log } from "@/util/log"
 
 /**
- * Unified stage retry wrapper. Attempts fn once, retries up to STAGE_MAX_RETRIES
- * times on failure. Agents are pure (attempt once, succeed or throw); this
- * wrapper applies the retry policy uniformly across all stages.
+ * Transient-failure retry wrapper for LLM API calls.
+ *
+ * This is INFRASTRUCTURE, not a decision-making retry policy.
+ * It handles transient failures (network timeout, rate limit, API 5xx)
+ * by retrying the same call. It does NOT retry based on agent output
+ * quality or eval verdicts — that's the Task Agent's job.
  *
  * If signal is provided and already aborted, throws immediately.
- * Between retries, checks signal to avoid wasting time on aborted stages.
+ * Between retries, checks signal to avoid wasting time on aborted calls.
  */
+
+/** Maximum transient retries for LLM API calls. Not user-configurable. */
+const LLM_TRANSIENT_RETRIES = 2
+
 export async function withStageRetry<T>(
   stage: string,
   fn: () => Promise<T>,
   options?: { onRetry?: (attempt: number, error: Error) => void; signal?: AbortSignal },
 ): Promise<T> {
   const retryLog = Log.create({ service: "stage-retry" })
-  const maxRetries = (await OrchestratorConfig.get()).stage_max_retries
+  const maxRetries = LLM_TRANSIENT_RETRIES
   let lastError: Error | undefined
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     // Check signal before each attempt to avoid retrying after abort

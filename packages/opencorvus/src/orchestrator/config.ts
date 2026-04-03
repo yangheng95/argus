@@ -1,28 +1,36 @@
 /**
- * OrchestratorConfig — 编排流水线的统一配置中心
+ * OrchestratorConfig — 编排 agent 的统一配置中心
  *
- * 所有 agent（spec / planner / evaluator / delivery）和编排策略的默认值
- * 集中定义在此，并从 opencorvus.jsonc 的 `orchestrator` 字段加载用户自定义值。
+ * 所有 agent（decompose / planner / evaluator / delivery）和编排策略的默认值
+ * 集中定义在此，并从 opencorvus.jsonc 的 `assistant` 字段加载用户自定义值。
  *
  * 优先级：环境变量 > opencorvus.jsonc > 此处硬编码默认值
  *
  * 使用方式：
  *   import { OrchestratorConfig } from "@/orchestrator/config"
  *   const cfg = await OrchestratorConfig.get()
- *   cfg.spec.max_steps   // 30 (或用户自定义值)
+ *   cfg.decompose.max_steps   // 30 (或用户自定义值)
  */
 import { Config } from "@/config/config"
+import type { MiniWorkflow } from "./workflow"
 
 // ═══════════════════════════════════════════════════════════════════
 // 类型定义
 // ═══════════════════════════════════════════════════════════════════
 
-export interface SpecConfig {
+export interface DecomposeConfig {
   max_steps: number
   timeout_ms: number
   quality_threshold: number
   max_attempts: number
   skills: string[]
+}
+
+export interface ArchitectConfig {
+  max_steps: number
+  timeout_ms: number
+  skills: string[]
+  model?: string
 }
 
 export interface PlannerConfig {
@@ -49,14 +57,6 @@ export interface DeliveryConfig {
   skills: string[]
 }
 
-export interface GoalAgentConfig {
-  max_steps: number
-  timeout_ms: number
-  quality_threshold: number
-  max_attempts: number
-  skills: string[]
-}
-
 export interface AdaptivePipelineConfig {
   /** Enable adaptive pipeline shortcuts (delta spec, reduced planner exploration). Default: true */
   enabled: boolean
@@ -65,16 +65,19 @@ export interface AdaptivePipelineConfig {
 }
 
 export interface OrchestratorConfigType {
-  spec: SpecConfig
-  goal: GoalAgentConfig
+  decompose: DecomposeConfig
+  architect: ArchitectConfig
   planner: PlannerConfig
   evaluator: EvaluatorConfig
   delivery: DeliveryConfig
   adaptive: AdaptivePipelineConfig
   max_runs: number
   max_fix_runs: number
-  stage_max_retries: number
   max_executor_groups: number
+  /** Default workflow ID for new tasks. Default: "standard". */
+  default_workflow: string
+  /** User-defined workflow definitions. Override built-ins by matching ID. */
+  workflows: MiniWorkflow[]
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -82,18 +85,16 @@ export interface OrchestratorConfigType {
 // ═══════════════════════════════════════════════════════════════════
 
 const DEFAULTS: OrchestratorConfigType = {
-  spec: {
-    max_steps: 30,
-    timeout_ms: 300_000,
-    quality_threshold: 0.6,
-    max_attempts: 3,
-    skills: ["spec-research"],
-  },
-  goal: {
+  decompose: {
     max_steps: 30,
     timeout_ms: 300_000,
     quality_threshold: 0.5,
     max_attempts: 3,
+    skills: [],
+  },
+  architect: {
+    max_steps: 20,
+    timeout_ms: 180_000,
     skills: [],
   },
   planner: {
@@ -120,8 +121,9 @@ const DEFAULTS: OrchestratorConfigType = {
   },
   max_runs: 10,
   max_fix_runs: 5,
-  stage_max_retries: 2,
   max_executor_groups: 1,
+  default_workflow: "standard",
+  workflows: [],
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -174,47 +176,61 @@ export namespace OrchestratorConfig {
 
 function merge(user?: Config.Info["assistant"]): OrchestratorConfigType {
   return {
-    spec: {
-      max_steps: user?.spec?.max_steps ?? DEFAULTS.spec.max_steps,
-      timeout_ms: user?.spec?.timeout_ms ?? DEFAULTS.spec.timeout_ms,
-      quality_threshold: user?.spec?.quality_threshold ?? DEFAULTS.spec.quality_threshold,
-      max_attempts: user?.spec?.max_attempts ?? DEFAULTS.spec.max_attempts,
-      skills: (user?.spec as any)?.skills ?? DEFAULTS.spec.skills,
+    decompose: {
+      max_steps: user?.decompose?.max_steps ?? DEFAULTS.decompose.max_steps,
+      timeout_ms: user?.decompose?.timeout_ms ?? DEFAULTS.decompose.timeout_ms,
+      quality_threshold: user?.decompose?.quality_threshold ?? DEFAULTS.decompose.quality_threshold,
+      max_attempts: user?.decompose?.max_attempts ?? DEFAULTS.decompose.max_attempts,
+      skills: user?.decompose?.skills ?? DEFAULTS.decompose.skills,
     },
-    goal: {
-      max_steps: (user as any)?.goal?.max_steps ?? DEFAULTS.goal.max_steps,
-      timeout_ms: (user as any)?.goal?.timeout_ms ?? DEFAULTS.goal.timeout_ms,
-      quality_threshold: (user as any)?.goal?.quality_threshold ?? DEFAULTS.goal.quality_threshold,
-      max_attempts: (user as any)?.goal?.max_attempts ?? DEFAULTS.goal.max_attempts,
-      skills: (user as any)?.goal?.skills ?? DEFAULTS.goal.skills,
+    architect: {
+      max_steps: user?.architect?.max_steps ?? DEFAULTS.architect.max_steps,
+      timeout_ms: user?.architect?.timeout_ms ?? DEFAULTS.architect.timeout_ms,
+      skills: user?.architect?.skills ?? DEFAULTS.architect.skills,
+      model: user?.architect?.model ?? undefined,
     },
     planner: {
       max_steps: user?.planner?.max_steps ?? DEFAULTS.planner.max_steps,
       timeout_ms: user?.planner?.timeout_ms ?? DEFAULTS.planner.timeout_ms,
       quality_threshold: user?.planner?.quality_threshold ?? DEFAULTS.planner.quality_threshold,
       max_attempts: user?.planner?.max_attempts ?? DEFAULTS.planner.max_attempts,
-      skills: (user?.planner as any)?.skills ?? DEFAULTS.planner.skills,
+      skills: user?.planner?.skills ?? DEFAULTS.planner.skills,
     },
     evaluator: {
       max_steps: user?.evaluator?.max_steps ?? DEFAULTS.evaluator.max_steps,
       timeout_ms: user?.evaluator?.timeout_ms ?? DEFAULTS.evaluator.timeout_ms,
-      skills: (user?.evaluator as any)?.skills ?? DEFAULTS.evaluator.skills,
-      model: (user?.evaluator as any)?.model ?? undefined,
-      tier: (user?.evaluator as any)?.tier ?? "standard",
+      skills: user?.evaluator?.skills ?? DEFAULTS.evaluator.skills,
+      model: user?.evaluator?.model ?? undefined,
+      tier: user?.evaluator?.tier ?? "standard",
     },
     delivery: {
       max_steps: user?.delivery?.max_steps ?? DEFAULTS.delivery.max_steps,
       timeout_ms: envInt("OPENCORVUS_DELIVERY_AGENT_TIMEOUT_MS") ?? user?.delivery?.timeout_ms ?? DEFAULTS.delivery.timeout_ms,
       max_retries: user?.delivery?.max_retries ?? DEFAULTS.delivery.max_retries,
-      skills: (user?.delivery as any)?.skills ?? DEFAULTS.delivery.skills,
+      skills: user?.delivery?.skills ?? DEFAULTS.delivery.skills,
     },
     adaptive: {
-      enabled: (user as any)?.adaptive?.enabled ?? DEFAULTS.adaptive.enabled,
-      planner_shortcut_max_steps: (user as any)?.adaptive?.planner_shortcut_max_steps ?? DEFAULTS.adaptive.planner_shortcut_max_steps,
+      enabled: user?.adaptive?.enabled ?? DEFAULTS.adaptive.enabled,
+      planner_shortcut_max_steps: user?.adaptive?.planner_shortcut_max_steps ?? DEFAULTS.adaptive.planner_shortcut_max_steps,
     },
     max_runs: envInt("OPENCORVUS_MAX_RUNS") ?? user?.max_runs ?? DEFAULTS.max_runs,
-    max_fix_runs: envInt("OPENCORVUS_MAX_FIX_RUNS") ?? (user as any)?.max_fix_runs ?? DEFAULTS.max_fix_runs,
-    stage_max_retries: user?.stage_max_retries ?? DEFAULTS.stage_max_retries,
-    max_executor_groups: envInt("OPENCORVUS_MAX_EXECUTOR_GROUPS") ?? (user as any)?.max_executor_groups ?? DEFAULTS.max_executor_groups,
+    max_fix_runs: envInt("OPENCORVUS_MAX_FIX_RUNS") ?? user?.max_fix_runs ?? DEFAULTS.max_fix_runs,
+    max_executor_groups: envInt("OPENCORVUS_MAX_EXECUTOR_GROUPS") ?? user?.max_executor_groups ?? DEFAULTS.max_executor_groups,
+    default_workflow: user?.default_workflow ?? DEFAULTS.default_workflow,
+    workflows: (user?.workflows ?? DEFAULTS.workflows).map(w => ({
+      id: w.id,
+      name: w.name,
+      description: w.description ?? "",
+      steps: w.steps.map(s => ({
+        id: s.id,
+        tool: s.tool,
+        label: s.label,
+        hint: s.hint ?? "",
+        scope: s.scope,
+        skippable: s.skippable ?? false,
+        after: s.after ?? [],
+      })),
+      goalLoopStepIDs: w.goalLoopStepIDs ?? [],
+    })),
   }
 }
