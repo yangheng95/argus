@@ -283,6 +283,14 @@ export namespace Config {
   }
 
   export async function installDependencies(dir: string) {
+    // Skip plugin installation when plugins are disabled (e.g. benchmark, CI).
+    // The @opencorvus-ai/plugin package is only used for type definitions and
+    // fetching it requires a private registry that may be unreachable.
+    if (process.env.OPENCORVUS_DISABLE_DEFAULT_PLUGINS === "1") {
+      log.debug("plugins disabled, skipping dependency install", { dir })
+      return
+    }
+
     const pkg = path.join(dir, "package.json")
     const targetVersion = Installation.isLocal() ? "*" : Installation.VERSION
 
@@ -324,6 +332,8 @@ export namespace Config {
   }
 
   export async function needsInstall(dir: string) {
+    if (process.env.OPENCORVUS_DISABLE_DEFAULT_PLUGINS === "1") return false
+
     // Some config dirs may be read-only.
     // Installing deps there will fail; skip installation in that case.
     const writable = await isWritable(dir)

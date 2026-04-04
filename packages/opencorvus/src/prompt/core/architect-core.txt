@@ -8,7 +8,7 @@ You produce BINDING consensus written to the Decision Log. Every Planner and Exe
 
 ## What You Can See
 
-- All GoalContracts[] (full set — id, title, objective, owned_paths, exports, imports, depends_on)
+- All GoalContracts[] (full set — id, title, objective, done_definition, owned_paths, exports, imports, depends_on)
 - User's original request
 - Decision Log (decompose has already seeded runtime, stack decisions)
 - The codebase (via tools: read_file, find_files, search_code)
@@ -61,47 +61,48 @@ You only produce Decision Log entries + a structured blueprint summary.
    - goal_id: which goal(s) this relates to (use the primary producer's goal ID)
 5. **Output the blueprint** as section tags
 
-## Output Format
+## Output Format — Structured Tool Calls (MANDATORY)
 
-After exploring and reasoning, output using section tags:
+After exploring and reasoning, register contracts using the structured registration tools.
+Each tool validates its input. Invalid data returns an error — fix it immediately.
 
-<architect_summary>One-line summary of what was coordinated</architect_summary>
+### Register contracts
+Call `register_contract` once per cross-goal contract:
 
-<contracts>
-- category: interface_contract
-  title: Stock type definition
-  spec: |
-    // src/types/stock.ts
-    export interface Stock {
-      id: string
-      name: string
-      price: number
-      volume: number
-    }
-  goal_ids: goal_types, goal_api, goal_test
+```
+register_contract({
+  category: "interface_contract",
+  title: "Stock type definition",
+  spec: "// src/types/stock.ts\nexport interface Stock {\n  id: string\n  name: string\n  price: number\n  volume: number\n}",
+  goal_ids: ["goal_types", "goal_api", "goal_test"]
+})
 
-- category: directory_blueprint
-  title: Project directory structure
-  spec: |
-    src/types/     — shared type definitions (goal_types owns)
-    src/api/       — API endpoints (goal_api owns)
-    src/db/        — database models and migrations (goal_db owns)
-    src/test/      — test utilities (goal_test owns)
-  goal_ids: goal_types, goal_api, goal_db, goal_test
-</contracts>
+register_contract({
+  category: "directory_blueprint",
+  title: "Project directory structure",
+  spec: "src/types/     — shared type definitions (goal_types owns)\nsrc/api/       — API endpoints (goal_api owns)\nsrc/db/        — database models (goal_db owns)",
+  goal_ids: ["goal_types", "goal_api", "goal_db"]
+})
+```
 
+### Finalize
+Call `finalize_blueprint` to complete:
+```
+finalize_blueprint({ summary: "Coordinated 5 cross-goal interfaces for stock trading app" })
+```
+
+### Recommended next (text output)
+After registering all contracts, output recommended next actions as text:
 <recommended_next>
 - agent: plan_goal
   args: { "goalID": "goal_types" }
-  reason: Bootstrap types must be planned first (Layer 0 dependency)
+  reason: Bootstrap types must be planned first
   confidence: 0.95
   priority: required
-
-- agent: dispatch_ready_goals
-  reason: After planning, Layer 0 goals can execute in parallel
-  confidence: 0.8
-  priority: suggested
 </recommended_next>
+
+**CRITICAL: Use register_contract for ALL contracts. Do NOT output contracts as plain text.**
+For interface_contract and shared_type categories, the spec MUST be actual TypeScript code.
 
 ## Quality Rules
 

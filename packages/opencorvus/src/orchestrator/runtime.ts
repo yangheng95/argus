@@ -540,6 +540,7 @@ export namespace OrchestratorRuntime {
         .run(),
     )
 
+
     let worktreeDir: string | undefined
     try {
       // 1. Create isolated worktree with synchronous checkout
@@ -844,7 +845,7 @@ export namespace OrchestratorRuntime {
           const hooks = sessionStreamHooks({ sessionID: evalSession.id, taskID: task.id, stage: "eval" })
 
           const verdict = await evaluateGoal({
-            contract,
+            contract: contract as any,
             delivery: { summary: delivery.summary, diffs },
             decisionLog,
             sessionID: evalSession.id,
@@ -909,6 +910,13 @@ export namespace OrchestratorRuntime {
       }
 
       // ── All goals now in terminal state (passed/failed) — notify Task Agent ──
+      // Mark as notified BEFORE triggering. This prevents a race where
+      // concurrent notifyGoalResult calls (from the serializedPipeline queue)
+      // see activeRuns=0 and re-trigger the Task Agent while it's still
+      // processing the first notification. The mark is cleared when new goals
+      // are dispatched (queueGoalRun), so subsequent batches still work.
+      agentNotifiedRuns.add(run.id)
+
       const updatedGoals = listAllGoals(task.id) as GoalRow[]
       const failedGoals = updatedGoals.filter(g => g.status === "failed" && g.priority === "blocking")
 
@@ -1143,6 +1151,8 @@ export namespace OrchestratorRuntime {
     const node = nodes.find(n => n.goal_id === goalID) ?? { id: `inline_${goalID}`, goal_id: goalID, title: goal.title, brief: goal.done_definition }
 
     await queueGoalRun(task, run, plan ?? { id: "", task_id: taskID, summary: "", prompt: "" } as any, { node: node as any, goal: goal as any }, hooks)
+    // Clear AFTER goal_run is created so notifyGoalResult can re-trigger when it completes.
+    agentNotifiedRuns.delete(runID)
   }
 
   /**
@@ -1156,7 +1166,11 @@ export namespace OrchestratorRuntime {
     if (!run) throw new Error(`Run ${runID} not found`)
     const plan = findPlan(planID)
     if (!plan) throw new Error(`Plan ${planID} not found`)
-    return queueReadyGoalRuns(task, run, plan, hooks)
+    const dispatched = await queueReadyGoalRuns(task, run, plan, hooks)
+    // Clear AFTER goal_runs are created (not before) — prevents a window
+    // where notifyGoalResult sees has=false AND activeRuns=0 simultaneously.
+    if (dispatched > 0) agentNotifiedRuns.delete(runID)
+    return dispatched
   }
 
   // Internal accessor for event bridge (module-level, outside namespace).
@@ -1184,6 +1198,23 @@ async function recoverOrphanedTasks() {
     const age = now - updated
     if (age < PIPELINE_STALE_MS) continue
     if (TaskAgent.isRunning(task.id)) continue
+    // Don't re-trigger while goal executors are still active or recently completed.
+    // Check ALL goal_runs (not just active) — a goal_run may have just completed
+    // and notifyGoalResult is about to run auto-eval + trigger Task Agent.
+    // Without this, orphan recovery races with notifyGoalResult and causes
+    // duplicate Task Agent triggers → goals executed twice.
+    if (task.active_run_id) {
+      const activeGoalRuns = listActiveGoalRunsByCoordinator(task.active_run_id)
+      if (activeGoalRuns.length > 0) continue
+      // Also check if any goal_run completed recently (within stale window).
+      // This prevents racing with notifyGoalResult which needs time to
+      // auto-eval and trigger the Task Agent after the last goal completes.
+      const allGoalRuns = listGoalRunsByCoordinator(task.active_run_id)
+      const recentCompletion = allGoalRuns.some(gr =>
+        gr.time_completed && (now - gr.time_completed) < PIPELINE_STALE_MS
+      )
+      if (recentCompletion) continue
+    }
     log.warn("recovering orphaned task — re-triggering Task Agent", { taskID: task.id, status: task.status, ageMs: age })
     // Active tasks with a run → re-trigger as run_completed; otherwise fresh start
     const trigger = task.status === "active" && task.active_run_id

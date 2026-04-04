@@ -1,6 +1,11 @@
 /**
- * DecomposeService — wraps DecomposeAgent with timeout protection,
- * Decision Log injection, and orchestrator lifecycle management.
+ * DecomposeService — wraps DecomposeAgent with error handling,
+ * fidelity review, Decision Log injection, and orchestrator lifecycle management.
+ *
+ * NO hard timeout — the DecomposeAgent has its own inactivity guard
+ * (createInactivityGuard) that aborts on stall. A hard deadline is harmful
+ * for complex PRDs where the agent is actively working (making tool calls)
+ * but the total wall-clock time is long.
  *
  * Single entry point replaces old SpecService + GoalService pipeline.
  */
@@ -22,7 +27,10 @@ export class DecomposeFailureError extends Error {
 export namespace DecomposeService {
   /**
    * Decompose a task into goal contracts.
-   * Wraps DecomposeAgent.decompose() with timeout and error handling.
+   * Wraps DecomposeAgent.decompose() with fidelity review and error handling.
+   *
+   * No hard timeout — the agent's own inactivity guard handles stalls.
+   * The caller's AbortSignal is the only cancellation mechanism.
    */
   export async function decompose(input: {
     title: string
@@ -33,42 +41,32 @@ export namespace DecomposeService {
     stream?: TextHooks
     onStatus?: (summary: string) => void | Promise<void>
     decisionLog?: DecisionLog
+    /** @deprecated — ignored. Inactivity timeout is inside the agent. */
     timeoutMs?: number
   }): Promise<DecomposeResult> {
-    const timeout = input.timeoutMs ?? 300_000
-
     log.info("decompose service starting", {
       taskID: input.taskID,
       title: input.title,
-      timeout,
     })
 
     const start = Date.now()
     try {
-      // Timeout protects only the decompose agent step, not fidelity review.
-      // Fidelity review runs after decompose completes and has its own signal check.
-      const result = await Promise.race([
-        DecomposeAgent.decompose({
-          title: input.title,
-          request: input.request,
-          taskID: input.taskID,
-          sessionID: input.sessionID,
-          signal: input.signal,
-          stream: input.stream,
-          onStatus: input.onStatus,
-          decisionLog: input.decisionLog,
-        }),
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new DecomposeFailureError("decompose timeout")), timeout),
-        ),
-      ])
+      const result = await DecomposeAgent.decompose({
+        title: input.title,
+        request: input.request,
+        taskID: input.taskID,
+        sessionID: input.sessionID,
+        signal: input.signal,
+        stream: input.stream,
+        onStatus: input.onStatus,
+        decisionLog: input.decisionLog,
+      })
 
       if (result.goals.length === 0) {
         throw new DecomposeFailureError("decompose produced no goals")
       }
 
-      // Fidelity Review runs outside the timeout race so complex PRDs don't
-      // cause spurious timeouts after a slow but successful decompose agent run.
+      // Fidelity Review — LLM verifies goals cover the original user request
       const fidelity = await reviewFidelity({
         userRequest: input.request,
         taskTitle: input.title,
@@ -117,10 +115,9 @@ export namespace DecomposeService {
     stream?: TextHooks
     onStatus?: (summary: string) => void | Promise<void>
     decisionLog?: DecisionLog
+    /** @deprecated — ignored. Inactivity timeout is inside the agent. */
     timeoutMs?: number
   }): Promise<DecomposeResult> {
-    const timeout = input.timeoutMs ?? 300_000
-
     log.info("redecompose service starting", {
       taskID: input.taskID,
       title: input.title,
@@ -128,22 +125,17 @@ export namespace DecomposeService {
 
     const start = Date.now()
     try {
-      const result = await Promise.race([
-        DecomposeAgent.decompose({
-          title: input.title,
-          request: input.request,
-          taskID: input.taskID,
-          sessionID: input.sessionID,
-          signal: input.signal,
-          stream: input.stream,
-          onStatus: input.onStatus,
-          decisionLog: input.decisionLog,
-          redecomposeContext: input.redecomposeContext,
-        }),
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new DecomposeFailureError("redecompose timeout")), timeout),
-        ),
-      ])
+      const result = await DecomposeAgent.decompose({
+        title: input.title,
+        request: input.request,
+        taskID: input.taskID,
+        sessionID: input.sessionID,
+        signal: input.signal,
+        stream: input.stream,
+        onStatus: input.onStatus,
+        decisionLog: input.decisionLog,
+        redecomposeContext: input.redecomposeContext,
+      })
 
       log.info("redecompose service completed", {
         taskID: input.taskID,

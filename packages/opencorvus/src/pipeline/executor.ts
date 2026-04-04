@@ -21,6 +21,7 @@ import { Log } from "@/util/log"
 import { Event } from "@/orchestrator/model"
 import { OrchestratorProtocol } from "@/orchestrator/protocol"
 import { updateGoalRun, updateGoalRunExecutorSessionStatus, persistDelivery } from "@/orchestrator/persist"
+import { Database, eq } from "@/storage/db"
 import { Identifier } from "@/id/id"
 import { deliveryFromWorktreeGit, cleanupGoalWorkspace } from "@/goal/runner"
 
@@ -126,7 +127,7 @@ async function* streamExecutorEvents(
   goalRunID: string,
 ): AsyncGenerator<PipelineEvent, PipelineDelivery | undefined> {
   const { goal, run, task } = contract
-  const { executor, workDir, sessionID, queueTaskID, signal } = deps
+  const { executor, workDir, sessionID, executorSessionID, queueTaskID, signal } = deps
 
   if (!executor.capabilities().events) {
     const status = await executor.status(queueTaskID).catch(() => ({
@@ -208,9 +209,28 @@ async function* streamExecutorEvents(
   }))
 
   if (status.status !== "completed") {
-    log.error("goal_run executor status not completed", { runID: run.id, goalRunID, goalID: goal.id, statusResult: status.status, error: status.error })
-    updateGoalRun(goalRunID, { status: "failed", error: status.error ?? "Executor failed", time_completed: Date.now() })
+    const failError = status.error ?? "Executor failed"
+    log.error("goal_run executor status not completed", { runID: run.id, goalRunID, goalID: goal.id, statusResult: status.status, error: failError })
+    updateGoalRun(goalRunID, { status: "failed", error: failError, time_completed: Date.now() })
     updateGoalRunExecutorSessionStatus(goalRunID, "failed")
+
+    // CRITICAL: also transition goal.status to "failed".
+    // Without this, goal stays "running" forever — auto-eval never runs on failed
+    // executors, so nothing else will transition goal.status. The Task Agent sees
+    // goals stuck at "running" and loops endlessly.
+    try {
+      const { OrchestratorGoalTable } = await import("@/orchestrator/orchestrator.sql")
+      Database.use((db) => {
+        db.update(OrchestratorGoalTable)
+          .set({ status: "failed", time_updated: Date.now() })
+          .where(eq(OrchestratorGoalTable.id, goal.id))
+          .run()
+      })
+      log.info("goal status transitioned to failed after executor failure", { goalID: goal.id, error: failError })
+    } catch (err) {
+      log.error("failed to transition goal status", { goalID: goal.id, error: String(err) })
+    }
+
     return undefined
   }
 
