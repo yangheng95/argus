@@ -141,8 +141,14 @@ export async function createGoalWorkspace(_input: {
 
 export async function cleanupGoalWorkspace(directory?: string) {
   if (!directory) return
-  const root = path.join(Global.Path.data, "goal-workspace")
-  if (!Filesystem.contains(root, directory)) return
+  // Accept both goal-workspace paths AND .opencorvus-worktrees paths.
+  // Per-goal dispatch creates worktrees under .opencorvus-worktrees/ (via Worktree.create),
+  // not under goal-workspace/. Without this check, cleanup is silently skipped,
+  // leaking LSP servers and worktree directories.
+  const goalWorkspaceRoot = path.join(Global.Path.data, "goal-workspace")
+  const isGoalWorkspace = Filesystem.contains(goalWorkspaceRoot, directory)
+  const isWorktree = directory.includes(".opencorvus-worktrees")
+  if (!isGoalWorkspace && !isWorktree) return
   const projectID = Instance.project.id
   if (!(await Filesystem.exists(directory))) {
     await Project.removeSandbox(projectID, directory).catch((err) => {

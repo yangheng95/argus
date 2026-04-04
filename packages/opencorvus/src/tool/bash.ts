@@ -25,6 +25,21 @@ export const log = Log.create({ service: "bash-tool" })
 const DYNAMIC_PATH_PATTERN = /[*?[\]{}$`~]/
 const FORBIDDEN_ENV_KEYS = new Set(["LD_PRELOAD", "LD_AUDIT", "DYLD_INSERT_LIBRARIES", "DYLD_FORCE_FLAT_NAMESPACE"])
 
+// Commands that kill processes by name — can destroy the host process (benchmark,
+// server, other executors) when run inside an isolated worktree. Worktree isolation
+// protects the filesystem but NOT the process namespace.
+const HOST_KILLING_PATTERNS = [
+  /\btaskkill\b.*\/IM\b/i,                      // taskkill /F /IM bun.exe
+  /\bStop-Process\b.*-Name\b/i,                  // Stop-Process -Name 'bun'
+  /\bkillall\b/i,                                // killall bun
+  /\bpkill\b/i,                                  // pkill bun
+  /\bwmic\b.*process.*\bcall\b.*terminate/i,     // wmic process where name="bun.exe" call terminate
+]
+
+function isHostKillingCommand(command: string): boolean {
+  return HOST_KILLING_PATTERNS.some(pattern => pattern.test(command))
+}
+
 const resolveWasm = (asset: string) => {
   if (asset.startsWith("file://")) return fileURLToPath(asset)
   if (asset.startsWith("/") || /^[a-z]:/i.test(asset)) return asset
@@ -115,6 +130,16 @@ export const BashTool = Tool.define("bash", async () => {
         throw new Error(`Invalid timeout value: ${params.timeout}. Timeout must be a positive number.`)
       }
       const timeout = params.timeout ?? DEFAULT_TIMEOUT
+      // Block commands that kill processes by name — these can destroy the host
+      // process, benchmark, or sibling executors. Worktree isolation only covers
+      // the filesystem; the process namespace is shared.
+      if (isHostKillingCommand(params.command)) {
+        return {
+          output: `Refused: this command kills processes by name and would destroy the host process. Use process-specific alternatives (e.g. kill a PID you spawned, or stop a service you started).`,
+          metadata: { refused: true, command: params.command },
+        }
+      }
+
       const tree = await parser().then((p) => p.parse(params.command))
       if (!tree) {
         throw new Error("Failed to parse command")
