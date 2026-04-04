@@ -1,0 +1,263 @@
+/**
+ * Structured output tools for the Decompose Agent.
+ *
+ * Instead of producing YAML-like text parsed by regex, the LLM registers each
+ * item via a Zod-validated tool call. Benefits over text-based output:
+ *
+ * ① Schema validation per call — required fields, enums, min lengths enforced
+ * ② Anti-hallucination — owned_paths verified against filesystem
+ * ③ Anti-omission — missing fields produce immediate error messages
+ * ④ Multi-line support — JSON strings handle objectives/definitions naturally
+ * ⑤ Incremental — LLM registers one goal at a time, reducing context pressure
+ *
+ * Each tool call is small (~500 bytes), avoiding the buffering hang that killed
+ * the old monolithic submit_spec/submit_plan approach (see parse-section-tags.ts).
+ */
+import { tool } from "ai"
+import z from "zod"
+import path from "path"
+import fs from "fs"
+import { Instance } from "@/project/instance"
+
+// ---------------------------------------------------------------------------
+// Collector — accumulates registered items across tool calls
+// ---------------------------------------------------------------------------
+
+export interface DecomposeCollector {
+  requirements: RegisteredRequirement[]
+  goals: RegisteredGoal[]
+  decisions: RegisteredDecision[]
+  traceability: RegisteredTraceability[]
+  summary: string
+  finalized: boolean
+}
+
+export interface RegisteredRequirement {
+  id: string
+  type: "explicit" | "implicit"
+  description: string
+}
+
+export interface RegisteredGoal {
+  id: string
+  title: string
+  objective: string
+  done_definition: string
+  owned_paths: string[]
+  depends_on: string[]
+  exports: string[]
+  imports: string[]
+  priority: "blocking" | "advisory"
+  kind: "bootstrap" | "feature" | "verification" | "integration" | "system"
+  requirement_ids: string[]
+}
+
+export interface RegisteredDecision {
+  key: string
+  value: string
+  reason: string
+}
+
+export interface RegisteredTraceability {
+  requirementID: string
+  goalIDs: string[]
+}
+
+function emptyCollector(): DecomposeCollector {
+  return { requirements: [], goals: [], decisions: [], traceability: [], summary: "", finalized: false }
+}
+
+// ---------------------------------------------------------------------------
+// Tool factory
+// ---------------------------------------------------------------------------
+
+export function createDecomposeOutputTools(workDir?: string) {
+  let collector = emptyCollector()
+  const dir = workDir ?? Instance.directory
+
+  const tools = {
+    register_requirement: tool({
+      description: "Register a parsed requirement from user input. Call once per requirement.",
+      inputSchema: z.object({
+        id: z.string().describe("Requirement ID in REQ-N format, e.g. REQ-1"),
+        type: z.enum(["explicit", "implicit"]).describe("explicit = directly stated, implicit = logically required"),
+        description: z.string().min(5).describe("What the requirement asks for"),
+      }),
+      execute: async ({ id, type, description }) => {
+        if (!/^REQ-\d+$/.test(id)) return `Error: id must be REQ-N format (got "${id}")`
+        if (collector.requirements.some(r => r.id === id)) return `Error: ${id} already registered`
+        collector.requirements.push({ id, type, description })
+        return `OK: ${id} registered (${collector.requirements.length} total)`
+      },
+    }),
+
+    register_goal: tool({
+      description:
+        "Register a goal contract. Each goal executes in an isolated worktree — " +
+        "the objective must be SELF-CONTAINED (executor sees only this goal). " +
+        "All fields are schema-validated; invalid input returns an error to fix.",
+      inputSchema: z.object({
+        id: z.string().min(1).describe("Unique goal ID, e.g. goal_bootstrap, goal_api, goal_ui"),
+        title: z.string().min(1).describe("Short human-readable goal title"),
+        objective: z.string().min(50).describe(
+          "Self-contained objective for an isolated executor. " +
+          "Include: what to implement, key interfaces/types, expected behavior, edge cases.",
+        ),
+        done_definition: z.string().min(10).describe(
+          "Concrete pass/fail criteria for Eval Agent. " +
+          "Must be verifiable by running code, not vague.",
+        ),
+        owned_paths: z.array(z.string().min(1)).min(1).describe(
+          "Files this goal has EXCLUSIVE write access to. " +
+          "Must be discovered via tool exploration — do not guess.",
+        ),
+        depends_on: z.array(z.string()).default([]).describe("Goal IDs this depends on (execution order)"),
+        exports: z.array(z.string()).default([]).describe(
+          "Interfaces this goal PROVIDES — function signatures, type definitions. " +
+          "Dependent goals code against these.",
+        ),
+        imports: z.array(z.string()).default([]).describe("Interfaces this goal CONSUMES from dependencies"),
+        priority: z.enum(["blocking", "advisory"]).default("blocking"),
+        kind: z.enum(["bootstrap", "feature", "verification", "integration", "system"]).default("feature"),
+        requirement_ids: z.array(z.string()).default([]).describe("REQ-N references this goal covers"),
+      }),
+      execute: async (input) => {
+        // Unique ID check
+        if (collector.goals.some(g => g.id === input.id)) {
+          return `Error: goal "${input.id}" already registered. Use a different ID.`
+        }
+
+        // Owned-path overlap check (concurrent goals must be disjoint)
+        const concurrent = collector.goals.filter(
+          g => !input.depends_on.includes(g.id) && !g.depends_on.includes(input.id),
+        )
+        const overlaps: string[] = []
+        for (const other of concurrent) {
+          for (const p of input.owned_paths) {
+            if (other.owned_paths.includes(p)) overlaps.push(`${other.id}:${p}`)
+          }
+        }
+        if (overlaps.length > 0) {
+          return `Error: owned_paths overlap with concurrent goals: ${overlaps.join(", ")}. Concurrent goals MUST have disjoint file ownership.`
+        }
+
+        // Path existence check (warning, not error — new projects create files)
+        const warnings: string[] = []
+        for (const p of input.owned_paths) {
+          try {
+            const abs = path.resolve(dir, p)
+            if (!fs.existsSync(abs) && !fs.existsSync(path.dirname(abs))) {
+              warnings.push(p)
+            }
+          } catch { /* cross-platform path issues — skip */ }
+        }
+
+        collector.goals.push(input)
+        let msg = `OK: goal "${input.id}" registered (${collector.goals.length} total)`
+        if (warnings.length > 0) {
+          msg += `\nWarning: paths with no existing parent directory: ${warnings.join(", ")}. Verify these are intentional.`
+        }
+        return msg
+      },
+    }),
+
+    register_decision: tool({
+      description: "Register a technical decision (runtime, framework, test strategy, etc.).",
+      inputSchema: z.object({
+        key: z.string().min(1).describe("Decision key, e.g. runtime, backend_framework, test_framework"),
+        value: z.string().min(1).describe("Decision value, e.g. Bun, Hono, bun:test"),
+        reason: z.string().describe("Why this decision was made (based on codebase evidence)"),
+      }),
+      execute: async ({ key, value, reason }) => {
+        collector.decisions.push({ key, value, reason })
+        return `OK: decision "${key}=${value}" registered`
+      },
+    }),
+
+    register_traceability: tool({
+      description: "Map a requirement to the goals that cover it. Call once per requirement.",
+      inputSchema: z.object({
+        requirement_id: z.string().describe("REQ-N format"),
+        goal_ids: z.array(z.string().min(1)).min(1).describe("Goal IDs that implement this requirement"),
+      }),
+      execute: async ({ requirement_id, goal_ids }) => {
+        const warnings: string[] = []
+        if (!collector.requirements.some(r => r.id === requirement_id)) {
+          warnings.push(`${requirement_id} not registered as requirement`)
+        }
+        const missing = goal_ids.filter(g => !collector.goals.some(gl => gl.id === g))
+        if (missing.length > 0) warnings.push(`goals not registered: ${missing.join(", ")}`)
+        collector.traceability.push({ requirementID: requirement_id, goalIDs: goal_ids })
+        let msg = `OK: ${requirement_id} → ${goal_ids.join(", ")}`
+        if (warnings.length > 0) msg += `\nWarning: ${warnings.join("; ")}`
+        return msg
+      },
+    }),
+
+    finalize_decomposition: tool({
+      description:
+        "Validate decomposition completeness and finalize. " +
+        "Call AFTER registering all requirements, goals, decisions, and traceability. " +
+        "Returns quality issues if any — fix them and call again.",
+      inputSchema: z.object({
+        summary: z.string().min(5).describe("One-line summary of the decomposition"),
+      }),
+      execute: async ({ summary }) => {
+        collector.summary = summary
+        const issues: string[] = []
+
+        if (collector.requirements.length === 0) {
+          issues.push("No requirements registered")
+        }
+        if (collector.goals.length === 0) {
+          issues.push("No goals registered")
+        }
+        if (collector.decisions.length < 2) {
+          issues.push(`Only ${collector.decisions.length} decisions — record at least runtime + framework`)
+        }
+
+        // Traceability coverage
+        if (collector.requirements.length > 0) {
+          const covered = new Set(collector.traceability.map(t => t.requirementID))
+          const uncovered = collector.requirements.filter(r => !covered.has(r.id))
+          if (uncovered.length > 0) {
+            issues.push(`Uncovered requirements: ${uncovered.map(r => r.id).join(", ")}`)
+          }
+        }
+
+        // Per-goal checks
+        for (const g of collector.goals) {
+          if (g.exports.length === 0 && g.kind !== "verification" && g.kind !== "system") {
+            issues.push(`Goal ${g.id}: no exports — dependents can't code against its interfaces`)
+          }
+          // Validate depends_on references
+          for (const dep of g.depends_on) {
+            if (!collector.goals.some(gl => gl.id === dep)) {
+              issues.push(`Goal ${g.id}: depends_on "${dep}" not registered`)
+            }
+          }
+        }
+
+        if (issues.length === 0) {
+          collector.finalized = true
+          return [
+            `PASS: Decomposition complete.`,
+            `  ${collector.goals.length} goals, ${collector.requirements.length} requirements,`,
+            `  ${collector.decisions.length} decisions, ${collector.traceability.length} traceability mappings.`,
+          ].join("\n")
+        }
+
+        return `ISSUES (${issues.length}):\n${issues.map((i, n) => `${n + 1}. ${i}`).join("\n")}\n\nFix and call finalize_decomposition again.`
+      },
+    }),
+  }
+
+  return {
+    tools,
+    collector,
+    /** Reset collector between retry attempts. */
+    reset() { collector = emptyCollector(); return collector },
+    /** Get current collector reference. */
+    getCollector() { return collector },
+  }
+}

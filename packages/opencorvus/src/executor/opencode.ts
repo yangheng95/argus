@@ -3,6 +3,7 @@ import { Identifier } from "@/id/id"
 import { TaskQueueService } from "@/scheduler/task-queue-service"
 import { TaskQueueTable } from "@/scheduler/task-queue.sql"
 import { Bus } from "@/bus"
+import { GlobalBus } from "@/bus/global"
 import { Session } from "@/session"
 import { Message } from "@/session/message"
 import { SessionSummary } from "@/session/summary"
@@ -135,11 +136,19 @@ export namespace OpencodeExecutor {
       queue.push(event)
       wake?.()
     }
-    const unsub = Bus.subscribeAll((event) => {
+
+    // Subscribe to GlobalBus instead of Instance-scoped Bus.
+    // Goal executors run in worktree Instances (separate directories),
+    // so their SessionPrompt publishes events to the WORKTREE Instance's Bus.
+    // The pipeline consumer runs in the MAIN Instance.
+    // Bus.subscribeAll() only sees the current Instance's events — deaf to worktrees.
+    // GlobalBus receives ALL events from ALL Instances (Bus.publish line 88).
+    const handler = (msg: { payload: any }) => {
+      const event = msg.payload
+      if (!event || typeof event.type !== "string") return
       const next = mapEvent(event, sessionID)
       if (!next) return
       push(next)
-      // When task-queue marks the task as completed, terminate the event stream.
       if (next.type === "task-queue.completed" && input.queueTaskID) {
         const payload = next.payload as { queueTaskID?: string } | undefined
         if (payload?.queueTaskID === input.queueTaskID) {
@@ -147,10 +156,12 @@ export namespace OpencodeExecutor {
           wake?.()
         }
       }
-    })
+    }
+    GlobalBus.on("event", handler)
+
     const abort = () => {
       done = true
-      unsub()
+      GlobalBus.off("event", handler)
       wake?.()
     }
     input.signal?.addEventListener("abort", abort)
@@ -168,7 +179,7 @@ export namespace OpencodeExecutor {
       }
     } finally {
       input.signal?.removeEventListener("abort", abort)
-      unsub()
+      GlobalBus.off("event", handler)
     }
   }
 }

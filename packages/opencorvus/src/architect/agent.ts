@@ -26,6 +26,7 @@ import { Config } from "@/config/config"
 import type { GoalContractFields } from "@/pipeline/types"
 import type { DecisionLog } from "@/decision-log"
 import type { ArchitectResult, ArchitectBlueprint, ArchitectContract, RecommendedNext, ArchitectDecisionKey } from "./types"
+import { createArchitectOutputTools } from "./output-tools"
 import { parseYamlLikeList } from "@/util/parse-section-tags"
 import { extractTag } from "@/util/parse-section-tags"
 
@@ -92,8 +93,10 @@ async function run(input: {
 
   if (input.signal?.aborted) throw new Error("architect agent aborted after model resolution")
 
-  // Read-only codebase tools (architect cannot write files)
-  const guard = toolGuard(createPlannerTools(undefined, undefined))
+  // Read-only codebase tools + structured output tools (architect cannot write files)
+  const goalIDs = input.goals.map(g => g.id)
+  const outputToolKit = createArchitectOutputTools(goalIDs)
+  const guard = toolGuard({ ...createPlannerTools(undefined, undefined), ...outputToolKit.tools })
 
   await input.onStatus?.("Architect agent: coordinating cross-goal contracts")
 
@@ -163,8 +166,16 @@ async function run(input: {
     { model: language.modelId, toolCalls: toolCallCount, finishReason: resultFinishReason },
   )
 
-  // Parse output
-  const blueprint = parseBlueprint(allText)
+  // Prefer structured tool-call data over text parsing.
+  // Collector data is Zod-validated — no YAML-like parsing issues.
+  const collector = outputToolKit.getCollector()
+  let blueprint: ArchitectBlueprint
+  if (collector.contracts.length > 0) {
+    blueprint = { contracts: collector.contracts, summary: collector.summary || "Cross-goal coordination" }
+    log.info("architect agent: using structured output", { contracts: collector.contracts.length })
+  } else {
+    blueprint = parseBlueprint(allText)
+  }
   const recommendedNext = parseRecommendedNext(allText)
 
   // Write contracts to Decision Log
@@ -185,6 +196,7 @@ async function run(input: {
     contracts: blueprint.contracts.length,
     entriesWritten,
     recommendedNext: recommendedNext.length,
+    structured: collector.contracts.length > 0,
   })
 
   return { blueprint, entriesWritten, recommendedNext }
@@ -204,10 +216,12 @@ function buildUserPrompt(input: {
 
   sections.push(`# Task\n\nTitle: ${input.taskTitle}\n\nRequest:\n${input.taskRequest}`)
 
-  // All goals
+  // All goals — include done_definition so architect can see exact acceptance
+  // criteria and produce contracts that match what eval will verify.
   const goalsText = input.goals.map((g) => [
     `## ${g.id}: ${g.title}`,
     `objective: ${g.objective}`,
+    `done_definition: ${g.done_definition}`,
     `owned_paths: ${g.owned_paths.join(", ") || "(none)"}`,
     `exports: ${g.exports.join("; ") || "(none)"}`,
     `imports: ${g.imports.join("; ") || "(none)"}`,

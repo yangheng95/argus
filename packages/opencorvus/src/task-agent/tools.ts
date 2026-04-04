@@ -524,7 +524,7 @@ export function createTaskAgentTools(input: {
           db.select().from(OrchestratorEvaluationTable)
             .where(eq(OrchestratorEvaluationTable.task_id, taskID))
             .all(),
-        ).filter(e => goalRunIDs.has(e.goal_run_id)).length
+        ).filter(e => e.goal_run_id && goalRunIDs.has(e.goal_run_id)).length
         if (evalCount >= MAX_EVAL_PER_GOAL) {
           return `EVAL LIMIT REACHED: Goal "${goal.title}" has been evaluated ${evalCount} times (max ${MAX_EVAL_PER_GOAL}). You MUST either fix the underlying code and re-execute, or fail_task if unrecoverable.`
         }
@@ -1015,6 +1015,13 @@ export function createTaskAgentTools(input: {
         const run = requireRun(task.active_run_id)
 
         const goals = listGoals(taskID)
+
+        // Hard lock: refuse delivery while any goals are still running/pending
+        const notDone = goals.filter(g => g.status === "running" || g.status === "pending")
+        if (notDone.length > 0) {
+          return `Cannot deliver: ${notDone.length} goal(s) still in progress (${notDone.map(g => `${g.title}:${g.status}`).join(", ")}). Wait for ALL goals to complete before delivering.`
+        }
+
         const blockingFailed = goals.filter(g => g.priority === "blocking" && g.status === "failed")
         if (blockingFailed.length > 0) {
           const summary = blockingFailed.map(g => `[${g.status}] ${g.title}`).join("; ")
@@ -1103,7 +1110,7 @@ export function createTaskAgentTools(input: {
           const { OrchestratorArtifactTable } = await import("@/orchestrator/orchestrator.sql")
           Database.use((db) =>
             db.insert(OrchestratorArtifactTable).values({
-              id: Identifier.ascending("art"),
+              id: Identifier.ascending("artifact"),
               task_id: taskID,
               run_id: run.id,
               delivery_id: deliveryID,
@@ -1192,7 +1199,7 @@ export function createTaskAgentTools(input: {
             const { OrchestratorEvaluationTable } = await import("@/orchestrator/orchestrator.sql")
             Database.use((db) =>
               db.insert(OrchestratorEvaluationTable).values({
-                id: Identifier.ascending("eval"),
+                id: Identifier.ascending("evaluation"),
                 task_id: task.id,
                 run_id: run.id,
                 delivery_id: delivery.id,
@@ -1201,7 +1208,7 @@ export function createTaskAgentTools(input: {
                 summary: verdictPayload.summary ?? "Delivery agent verification",
                 checks: (verdictPayload.issues_found ?? []).map((issue: string) => ({
                   name: "delivery-agent",
-                  status: "info" as const,
+                  status: "failed" as const,
                   evidence: issue,
                 })),
                 time_completed: completed,

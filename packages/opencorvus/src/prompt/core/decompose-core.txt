@@ -165,44 +165,69 @@ REQ-8 → goal_api (explicit)
 
 If ANY REQ-N has no goal → you MUST add a goal or expand an existing one.
 
-## Output Format
+## Output Format — Structured Tool Calls (MANDATORY)
 
-Output using section tags:
+After exploration, register your outputs using the structured registration tools.
+Each tool validates its input with a schema. Invalid data returns an error — fix it immediately.
 
-<requirements>
-- REQ-1: [explicit] description
-- REQ-2: [explicit] description
-- REQ-3: [implicit] description
-...
-</requirements>
-<summary>One-line summary</summary>
-<decisions>
-- key: runtime
-  value: Bun
-  reason: package.json specifies bun scripts
-</decisions>
-<goals>
-- id: goal_types
-  title: Shared types and interfaces
-  objective: (detailed, self-contained description)
-  done_definition: All types compile, are importable from src/types/index.ts
-  owned_paths: src/types/index.ts, src/types/stock.ts
-  depends_on:
-  exports: type Stock = { id: string; name: string; price: number }, type Portfolio
-  imports:
-  priority: blocking
-  kind: bootstrap
-  requirement_ids: REQ-3, REQ-4
-</goals>
-<traceability>
-REQ-1 → goal_api
-REQ-2 → goal_api
-REQ-3 → goal_types
-...
-</traceability>
+### Step 1: Register requirements
+Call `register_requirement` once per requirement:
+```
+register_requirement({ id: "REQ-1", type: "explicit", description: "Implement GET /api/stocks" })
+register_requirement({ id: "REQ-2", type: "implicit", description: "TypeScript type definitions for Stock" })
+```
 
-**Goal kinds:** bootstrap, feature, verification, integration, system
-**Priority:** blocking or advisory
+### Step 2: Register decisions
+Call `register_decision` for each technical decision:
+```
+register_decision({ key: "runtime", value: "Bun", reason: "package.json specifies bun scripts" })
+```
+
+### Step 3: Register goals
+Call `register_goal` once per goal. All fields are validated:
+- objective must be >= 50 chars (self-contained for isolated executor)
+- done_definition must be >= 10 chars (verifiable by Eval Agent)
+- owned_paths must have >= 1 entry (discovered via tool exploration)
+- kind must be: bootstrap | feature | verification | integration | system
+- priority must be: blocking | advisory
+
+Example:
+```
+register_goal({
+  id: "goal_types",
+  title: "Shared types and interfaces",
+  objective: "Create shared TypeScript type definitions for the Stock, Portfolio, and Trade entities. These types are consumed by all other goals. Define them in src/types/ with full JSDoc documentation. Stock must include id, name, price, volume fields. Portfolio tracks holdings with current value computation.",
+  done_definition: "All types compile with tsc --noEmit, are importable from src/types/index.ts, and include all fields specified in the requirements",
+  owned_paths: ["src/types/index.ts", "src/types/stock.ts"],
+  depends_on: [],
+  exports: ["type Stock = { id: string; name: string; price: number; volume: number }", "type Portfolio"],
+  imports: [],
+  priority: "blocking",
+  kind: "bootstrap",
+  requirement_ids: ["REQ-3", "REQ-4"]
+})
+```
+
+The tool will return errors if:
+- Goal ID is already registered (duplicate)
+- owned_paths overlap with a concurrent goal (no dependency between them)
+- Parent directories don't exist (warning for new projects)
+
+### Step 4: Register traceability
+Call `register_traceability` to map each requirement to its goals:
+```
+register_traceability({ requirement_id: "REQ-1", goal_ids: ["goal_api"] })
+register_traceability({ requirement_id: "REQ-3", goal_ids: ["goal_types"] })
+```
+
+### Step 5: Finalize
+Call `finalize_decomposition` to validate completeness:
+```
+finalize_decomposition({ summary: "Stock trading app: 5 goals covering 12 requirements" })
+```
+If issues are found, the tool tells you exactly what to fix. Fix and finalize again.
+
+**CRITICAL: Use the registration tools. Do NOT output goals as plain text.**
 
 ## Parallel Execution & Isolation
 
@@ -223,11 +248,11 @@ Goals execute in parallel, each in an isolated git worktree. Maximize parallelis
 - Every goal MUST have exports declaring what it provides.
 - Every import MUST reference an existing export from a dependency.
 - Write in the same language as the request (Chinese request → Chinese output).
-- Output text directly. Do NOT output JSON. Do NOT wrap in code blocks.
+- Use the structured registration tools for ALL output. Do NOT output goals as plain text.
 
 ## Quality Self-Check (MANDATORY)
 
-Before outputting, verify ALL of these. If ANY answer is NO, use more tools or add goals:
+Before calling finalize_decomposition, verify ALL of these. If ANY answer is NO, register more items:
 
 1. Have you extracted EVERY requirement (explicit and implicit) from the user's input?
 2. Does EVERY REQ-N appear in at least one goal's requirement_ids (or is covered by an implicit goal)?

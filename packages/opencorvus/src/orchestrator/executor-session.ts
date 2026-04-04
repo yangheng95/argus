@@ -1,4 +1,6 @@
 import { protocolInfo, type ProtocolCapabilitiesInfo, type ProtocolRefsInfo, type ProtocolSettingsInfo, ProtocolTransport } from "@/executor/protocol"
+import { Bus } from "@/bus"
+import { Event } from "@/orchestrator/model"
 import { Database, eq } from "@/storage/db"
 import { Identifier } from "@/id/id"
 import {

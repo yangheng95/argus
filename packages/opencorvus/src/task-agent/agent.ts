@@ -34,6 +34,8 @@ import {
   findRun,
   findRuns,
   findSpecSnapshot,
+  findTask,
+  listActiveGoalRunsByCoordinator,
   listGoals,
   requireTask,
   type TaskRow,
@@ -88,6 +90,28 @@ export namespace TaskAgent {
   }
 
   export async function processTask(taskID: string, trigger: TaskAgentTrigger): Promise<void> {
+    // ── Dispatch gate: suppress wake-up while goals are executing ──
+    // When goals are running in parallel, the Task Agent has nothing useful
+    // to do — it would waste API tokens asking LLM to spin-wait.
+    // notifyGoalResult() ensures all goal_runs are in terminal state before
+    // calling processTask, so legitimate completion triggers pass naturally.
+    // failRun() marks all active goal_runs as failed before calling, so it
+    // also passes. Only spurious triggers (orphan recovery, user retry,
+    // legacy syncRun) are blocked.
+    const gateTask = findTask(taskID)
+    if (gateTask?.active_run_id) {
+      const activeGoalRuns = listActiveGoalRunsByCoordinator(gateTask.active_run_id)
+      if (activeGoalRuns.length > 0) {
+        log.info("task agent suppressed by dispatch gate", {
+          taskID,
+          trigger: trigger.kind,
+          activeGoalRuns: activeGoalRuns.length,
+          goalRunIDs: activeGoalRuns.map(gr => gr.id),
+        })
+        return
+      }
+    }
+
     abort(taskID)
     const ctrl = new AbortController()
     running.set(taskID, ctrl)
@@ -177,7 +201,7 @@ export namespace TaskAgent {
       const stream = streamText({
         model: language,
         stopWhen: stepCountIs(MAX_STEPS),
-        tools: guard.tools,
+        tools: guard.tools as any,
         abortSignal: AbortSignal.any([ctrl.signal, guard.signal, stopSignal]),
         system,
         messages: [{ role: "user" as const, content: userContent }],
@@ -255,9 +279,10 @@ function describeTrigger(task: TaskRow, trigger: TaskAgentTrigger): string {
       return [
         `Executor run ${trigger.runID} completed.`,
         "",
-        "The executor has finished. You are now in control.",
-        "Call deliver to aggregate goal deliveries, then publish_delivery to complete.",
-        "If any step fails, decide: execute_goal to retry, or fail_task if not recoverable.",
+        "A goal execution finished. Check goal statuses with read_context first.",
+        "If goals are still running/pending → do NOTHING (you will be re-triggered when they finish).",
+        "Only when ALL goals have terminal status (passed/failed): deliver → publish_delivery.",
+        "If a goal failed: decide execute_goal to retry, or fail_task if not recoverable.",
       ].join("\n")
 
     case "executor_failed":
@@ -384,10 +409,14 @@ fail_task, restart_from_stage.
 - You can plan individual goals with plan_goal if they're complex, or skip planning for simple ones.
 
 **After execution completes (re-triggered with run_completed):**
-- All goals have already been evaluated automatically. goal.status is "passed" or "failed".
-- Read the eval results carefully (use read_context).
+- FIRST: Check goal statuses via read_context. With parallel dispatch, you are re-triggered
+  each time ANY goal completes — NOT when ALL goals complete.
+- **If ANY goals are still "running" or "pending" → do NOTHING. Stop immediately.**
+  You will be re-triggered again when the next goal completes.
+- Only proceed when ALL goals have terminal status (passed/failed).
+- Then read the eval results carefully.
 - Based on eval results, REASON about what to do:
-  - All goals passed → deliver to aggregate, then publish_delivery
+  - All blocking goals passed → deliver to aggregate, then publish_delivery
   - Goal failed due to missing dependency → add_goal to create the dependency, then execute_goal
   - Goal failed due to code bug → execute_goal again to retry the failed goal (eval will re-run automatically)
   - Goal failed due to wrong approach → modify_goal to adjust, then execute_goal

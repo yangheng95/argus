@@ -25,6 +25,7 @@ import { operatorNotesSection } from "@/orchestrator/helpers"
 import { loadStageSkills } from "@/orchestrator/skill-inject"
 import { Config } from "@/config/config"
 import { parseDecomposeText, type DecomposeOutput, type ParsedGoalContract, type DecomposeDecision, type ParsedRequirement, type TraceabilityEntry } from "./parse"
+import { createDecomposeOutputTools, type DecomposeCollector, type RegisteredGoal } from "./output-tools"
 import { parseRecommendedNext } from "@/architect/parse-recommended"
 import type { GoalContractFields } from "@/pipeline/types"
 import type { DecisionLog } from "@/decision-log"
@@ -133,7 +134,11 @@ async function run(input: {
     input.request.match(/(?:工作目录|working dir(?:ectory)?)[^\n]*?([A-Z]:[/\\][^\s)）]+|\/[^\s)）]+)/i)
   const taskWorkDir = cwdMatch ? cwdMatch[1].replace(/[/\\]+$/, "") : undefined
 
-  const guard = toolGuard(createPlannerTools(taskWorkDir, input.sessionID))
+  // Merge planner tools (codebase exploration) + structured output tools (goal registration).
+  // Each registration tool call is small (~500 bytes) — no buffering risk.
+  const plannerTools = createPlannerTools(taskWorkDir, input.sessionID)
+  const outputToolKit = createDecomposeOutputTools(taskWorkDir)
+  const guard = toolGuard({ ...plannerTools, ...outputToolKit.tools })
 
   if (input.signal?.aborted) throw new Error("decompose agent aborted before context prefetch")
 
@@ -227,7 +232,23 @@ async function run(input: {
       { model: language.modelId, toolCalls: cumulativeToolCalls, finishReason: resultFinishReason },
     )
 
-    const parsed = parseDecomposeText(allText)
+    // Prefer structured tool-call data over text parsing.
+    // If collector has registered goals, use them (schema-validated, anti-hallucination).
+    // Otherwise fall back to text-based section tag parsing (backward compat).
+    const collector = outputToolKit.getCollector()
+    const useStructured = collector.goals.length > 0
+
+    let parsed: DecomposeOutput
+    if (useStructured) {
+      parsed = collectorToOutput(collector)
+      log.info("decompose agent: using structured output", {
+        goals: parsed.goals.length,
+        requirements: parsed.requirements.length,
+        decisions: parsed.decisions.length,
+      })
+    } else {
+      parsed = parseDecomposeText(allText)
+    }
     lastParsed = parsed
 
     const quality = validateQuality(parsed, cumulativeToolCalls)
@@ -239,6 +260,7 @@ async function run(input: {
       toolCalls: cumulativeToolCalls,
       quality,
       attempt: attempt + 1,
+      structured: useStructured,
     })
 
     if (quality.score >= QUALITY_RETRY_THRESHOLD || attempt >= MAX_ATTEMPTS - 1) {
@@ -259,8 +281,9 @@ async function run(input: {
       return result
     }
 
-    // Retry with fresh context to avoid reasoning token overflow
+    // Retry with fresh context — reset both messages and collector
     messages = [{ role: "user" as const, content: initialPrompt }]
+    outputToolKit.reset()
 
     log.warn("decompose: quality below threshold, retrying", {
       score: quality.score,
@@ -308,6 +331,44 @@ function toResult(parsed: DecomposeOutput, rawText?: string): DecomposeResult {
     decisions: parsed.decisions,
     traceability: parsed.traceability,
     recommendedNext,
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Convert structured collector → DecomposeOutput (same shape as text parsing)
+// ---------------------------------------------------------------------------
+
+function collectorToOutput(collector: DecomposeCollector): DecomposeOutput {
+  return {
+    summary: collector.summary,
+    requirements: collector.requirements.map(r => ({
+      id: r.id,
+      type: r.type,
+      description: r.description,
+    })),
+    decisions: collector.decisions.map(d => ({
+      key: d.key,
+      value: d.value,
+      reason: d.reason,
+    })),
+    goals: collector.goals.map((g): ParsedGoalContract => ({
+      id: g.id,
+      title: g.title,
+      objective: g.objective,
+      done_definition: g.done_definition,
+      owned_paths: g.owned_paths,
+      depends_on: g.depends_on,
+      exports: g.exports,
+      imports: g.imports,
+      priority: g.priority,
+      kind: g.kind,
+      requirement_ids: g.requirement_ids,
+      source: g.requirement_ids.length > 0 ? "explicit" : "implicit",
+    })),
+    traceability: collector.traceability.map(t => ({
+      requirementID: t.requirementID,
+      goalIDs: t.goalIDs,
+    })),
   }
 }
 

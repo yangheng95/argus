@@ -85,6 +85,8 @@ export type OrchestratorArtifactKind =
   | "html_trace"
   | "link"
   | "git_ref"
+  | "verdict"
+  | "evaluation"
   | "pr"
 export type OrchestratorDeliveryStatus = "candidate" | "publishing" | "delivered" | "failed"
 export type OrchestratorEvaluationStatus = "pending" | "passed" | "failed" | "inconclusive"

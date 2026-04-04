@@ -71,16 +71,16 @@
 
   <rect class="sub-agent" x="60" y="254" width="150" height="70"/>
   <text class="h2" x="135" y="274">Requirements Agent</text>
-  <text class="body" x="135" y="290">逐行解析输入</text>
+  <text class="body" x="135" y="290">Zod tool calls 注册</text>
   <text class="body" x="135" y="304">→ Goals[] + 追溯矩阵</text>
-  <text class="body" x="135" y="318">含 recommended_next[]</text>
+  <text class="body" x="135" y="318">schema 验证 + 路径检查</text>
   <line class="agent-conn" x1="220" y1="150" x2="135" y2="252"/>
 
   <rect class="sub-agent" x="220" y="254" width="150" height="70" style="stroke:#7c3aed; stroke-width:2"/>
   <text class="h2" x="295" y="274" style="fill:#5b21b6">Architect Agent</text>
-  <text class="body" x="295" y="290">跨 goal 共识协调</text>
+  <text class="body" x="295" y="290">Zod tool calls 注册</text>
   <text class="body" x="295" y="304">接口·目录·导出契约</text>
-  <text class="body" x="295" y="318">含 recommended_next[]</text>
+  <text class="body" x="295" y="318">TypeScript 代码验证</text>
   <line class="agent-conn" x1="350" y1="150" x2="295" y2="252"/>
 
   <rect class="sub-agent" x="380" y="254" width="150" height="70"/>
@@ -227,17 +227,19 @@
   <text class="mono" x="980" y="128">  task-agent/agent.ts              Task Agent: coordinator LLM, 调用 sub-agents</text>
   <text class="mono" x="980" y="142">  task-agent/tools.ts              Task Agent 调用 sub-agent 的接口 (不是 tool, 是 invoke)</text>
   <text class="mono" x="980" y="156">  decompose/agent.ts               Requirements Agent: user input → GoalContracts[] (自有 LLM)</text>
-  <text class="mono" x="980" y="170">  decompose/fidelity.ts            Fidelity Review: goals vs original input (自有 LLM)</text>
-  <text class="mono" x="980" y="184">  architect/agent.ts              Architect Agent: cross-goal 共识协调 (自有 LLM + tools)</text>
-  <text class="mono" x="980" y="198">  planner/per-goal.ts             Planner Agent: per-goal 实现, 消费 architect 输出 (自有 LLM)</text>
-  <text class="mono" x="980" y="212">  evaluator/per-goal.ts           Eval Agent: autonomous eval (自有 LLM + run_command)</text>
+  <text class="mono" x="980" y="170">  decompose/output-tools.ts        Zod 结构化注册工具: register_goal, register_requirement 等 (防幻觉+防省略)</text>
+  <text class="mono" x="980" y="184">  decompose/fidelity.ts            Fidelity Review: goals vs original input (自有 LLM)</text>
+  <text class="mono" x="980" y="198">  architect/agent.ts              Architect Agent: cross-goal 共识协调 (自有 LLM + tools)</text>
+  <text class="mono" x="980" y="212">  architect/output-tools.ts        Zod 结构化注册工具: register_contract (TypeScript 代码验证)</text>
+  <text class="mono" x="980" y="228">  planner/per-goal.ts             Planner Agent: per-goal 实现, 消费 architect 输出 (自有 LLM)</text>
+  <text class="mono" x="980" y="244">  evaluator/per-goal.ts           Eval Agent: autonomous eval (自有 LLM + run_command)</text>
 
   <text class="mono-h" x="980" y="238">EXTERNAL AGENT (外部, 不受我们控制)</text>
   <text class="mono" x="980" y="258">  executor/                       opencode / claude-code / codex adapters</text>
 
   <text class="mono-h" x="980" y="286">INFRASTRUCTURE (无 LLM, 无决策, 纯机械)</text>
   <text class="mono" x="980" y="306">  pipeline/executor.ts            Goal execution bridge: worktree + executor + delivery extraction</text>
-  <text class="mono" x="980" y="322">  orchestrator/runtime.ts         Event bridge: executor events → session projection</text>
+  <text class="mono" x="980" y="322">  executor/opencode.ts            Event bridge: GlobalBus 跨 Instance 接收 (Bus 是 Instance 隔离的, worktree ≠ 主进程)</text>
   <text class="mono" x="980" y="338">  goal/merge.ts                   Serialized merge + commit + HEAD advance</text>
   <text class="mono" x="980" y="354">  goal/scheduler.ts               Dependency DAG → layer computation (utility)</text>
   <text class="mono" x="980" y="370">  orchestrator/persist.ts         DB read/write operations</text>
@@ -280,9 +282,10 @@
 
   <!-- GoalContract spec -->
   <line class="sep" x1="970" y1="862" x2="1960" y2="862"/>
-  <text class="h3" x="980" y="882">GoalContract — Requirements Agent 唯一产出, 所有 sub-agents 消费</text>
-  <text class="mono" x="980" y="902">  id, title, objective, done_definition, owned_paths, depends_on,</text>
-  <text class="mono" x="980" y="918">  priority, kind, requirement_ids, exports, imports</text>
+  <text class="h3" x="980" y="882">GoalContract — Zod tool call 注册, schema 验证, 防幻觉+防省略</text>
+  <text class="mono" x="980" y="902">  id, title, objective(min50), done_definition(min10), owned_paths(min1, 路径验证),</text>
+  <text class="mono" x="980" y="918">  depends_on, priority(enum), kind(enum), requirement_ids, exports, imports</text>
+  <text class="mono-c" x="980" y="934">  register_goal tool call → Zod schema 即时校验 → 错误反馈 → LLM 修正; 不再依赖 YAML-like 文本解析</text>
 
   <!-- ================================================================ -->
   <!--  SECTION C: TASK AGENT BEHAVIOR + DB                              -->
@@ -310,8 +313,8 @@
   <text class="h3" x="40" y="272">Task Agent 可执行的动作 (通过 task-tools.ts 调用 sub-agents / infrastructure)</text>
 
   <text class="mono-h" x="40" y="296">调用 Sub-Agents:</text>
-  <text class="mono" x="40" y="312">  requirements(request)         → Requirements Agent → GoalContracts[] + decisions + traceability + recommended_next[]</text>
-  <text class="mono" x="40" y="328">  architect(goalIDs)          → Architect Agent → Decision Log 共识 (接口契约·目录蓝图·导出清单) + recommended_next[]</text>
+  <text class="mono" x="40" y="312">  requirements(request)         → Requirements Agent → GoalContracts[] (Zod tool call 注册, schema 验证) + decisions + traceability</text>
+  <text class="mono" x="40" y="328">  architect(goalIDs)          → Architect Agent → Decision Log 共识 (Zod tool call 注册, TypeScript 代码验证) + recommended_next[]</text>
   <text class="mono" x="40" y="344">  plan_goal(goalID)           → Planner Agent → implementation steps (消费 architect 共识)</text>
   <text class="mono" x="40" y="360">  eval_goal(goalID)           → 手动重评 (eval 已由 Infrastructure 自动完成, 仅用于 retry 后重新评估)</text>
 
@@ -337,23 +340,40 @@
 
   <text class="mono" x="40" y="662">1. Task Agent 调用 dispatch_ready_goals() 或 execute_goal()</text>
   <text class="mono" x="40" y="678">2. Scheduler 计算 dependency DAG → 所有依赖已满足的 goals (不限层, 跨层满足即可 dispatch)</text>
-  <text class="mono" x="40" y="694">3. Infrastructure: goal.status→running (防重 dispatch) → create worktree → submit executor → event bridge</text>
-  <text class="mono" x="40" y="710">4. 并行 goals 各自独立执行. Event bridge 将事件投射到 session system.</text>
+  <text class="mono" x="40" y="694">3. Infrastructure: goal.status→running (防重 dispatch) → create worktree Instance → submit executor → GlobalBus event bridge</text>
+  <text class="mono" x="40" y="710">4. 并行 goals 在独立 worktree Instance 中执行. Event bridge 通过 GlobalBus 跨 Instance 接收事件 (非 Instance-scoped Bus).</text>
   <text class="mono" x="40" y="726">5. 当前 batch 所有 goal_run 结束后 → Infrastructure 自动跑 Eval Agent (每个 goal) → goal.status 写入终态</text>
-  <text class="mono" x="40" y="742">6. 所有 goal eval 完成 (不论 pass/fail) → Infrastructure 通知 Task Agent (batch 粒度)</text>
+  <text class="mono" x="40" y="742">6. 所有 goal eval 完成 → agentNotifiedRuns.add(runID) → 通知 Task Agent (batch 粒度)</text>
+  <text class="mono" x="40" y="750">   queueGoalRun 时 agentNotifiedRuns.delete(runID) → 下一个 batch 完成后可再次通知</text>
   <text class="mono" x="40" y="762">7. Task Agent 看到 eval 结果 → 推理: deliver? retry 失败 goal? add_goal? fail?</text>
   <text class="mono" x="40" y="778">关键: Goal 状态锁 — goal.status 在 eval 完成前不离开 "running". Task Agent 收到通知时所有 goal 已有终态.</text>
 
   <text class="mono" x="40" y="786">owned_paths 互斥: 并行 goals 的 owned_paths 不重叠 (Requirements Agent 保证).</text>
   <text class="mono" x="40" y="802">Merge 串行化: per-run lock, 同一时间只有一个 goal 的 delivery 被 merge.</text>
 
+  <!-- Dispatch gate -->
+  <text class="h3" x="40" y="826">Dispatch Gate — Task Agent 入口级统一门控 (task-agent/agent.ts)</text>
+
+  <text class="mono" x="40" y="846">问题: 以前的保护分散在各调用点 (notifyGoalResult, recoverOrphanedTasks, deliver tool),</text>
+  <text class="mono" x="40" y="862">  但 service.ts 的 retry 触发、legacy syncRun 路径等可以绕过, 导致 goals 并行时 Task Agent 被虚假唤醒.</text>
+  <text class="mono" x="40" y="882">方案: 在 TaskAgent.processTask() 入口处统一检查 listActiveGoalRunsByCoordinator().</text>
+  <text class="mono" x="40" y="898">  如果 active goal_runs &gt; 0 → 直接 return, 不启动 agent loop, 不消耗 API token.</text>
+  <text class="mono" x="40" y="918">为什么合法通知不会被误拦:</text>
+  <text class="mono" x="40" y="934">  • notifyGoalResult: 已确保 activeRuns.length===0 后才调用 processTask → 门控自然通过</text>
+  <text class="mono" x="40" y="950">  • failRun: 先 updateGoalRun(status=failed) 再调用 processTask → goal_runs 已终态 → 门控自然通过</text>
+  <text class="mono" x="40" y="966">  • created: 新 task 没有 active_run_id → 门控不生效</text>
+  <text class="mono" x="40" y="986">被拦截的路径 (正确行为):</text>
+  <text class="mono" x="40" y="1002">  • orphan recovery: goals 还在跑 → 拦截 (event bridge 完成后会自动通知)</text>
+  <text class="mono" x="40" y="1018">  • user retry: goals 还在跑 → 拦截 (用户无法干预正在执行的 goals)</text>
+  <text class="mono" x="40" y="1034">  • legacy syncRun: goals 还在跑 → 拦截 (等 consumeGoalPipeline 正常流程)</text>
+
   <!-- Task Agent reasoning examples -->
-  <text class="h3" x="40" y="830">Task Agent 推理示例</text>
-  <text class="mono" x="40" y="850">• 收到 task → "这是 typo fix, 不需要 requirements" → create_run → execute_goal</text>
-  <text class="mono" x="40" y="866">• requirements 返回 5 goals, recommended_next=[architect] → "多 goal, 需要共识" → architect(goalIDs)</text>
-  <text class="mono" x="40" y="882">• architect 完成 → create_run → submit_execution (dispatch 所有依赖满足的 goals)</text>
-  <text class="mono" x="40" y="898">• batch 完成 → auto-eval 已完成, goal_3 failed → "代码 bug" → execute_goal(goal_3) 重试 (eval 自动重跑)</text>
-  <text class="mono" x="40" y="914">• 全部 goal passed → deliver() → publish_delivery()</text>
+  <text class="h3" x="40" y="1066">Task Agent 推理示例</text>
+  <text class="mono" x="40" y="1086">• 收到 task → "这是 typo fix, 不需要 requirements" → create_run → execute_goal</text>
+  <text class="mono" x="40" y="1102">• requirements 返回 5 goals, recommended_next=[architect] → "多 goal, 需要共识" → architect(goalIDs)</text>
+  <text class="mono" x="40" y="1118">• architect 完成 → create_run → submit_execution (dispatch 所有依赖满足的 goals)</text>
+  <text class="mono" x="40" y="1134">• batch 完成 → auto-eval 已完成, goal_3 failed → "代码 bug" → execute_goal(goal_3) 重试 (eval 自动重跑)</text>
+  <text class="mono" x="40" y="1150">• 全部 goal passed → deliver() → publish_delivery()</text>
   </g>
 
   <!-- ================================================================ -->
@@ -733,7 +753,7 @@
   <text class="mono" x="40" y="350">      shared_type            跨目标共享类型定义 (enum, interface, const, 定义位置)</text>
   <text class="mono" x="40" y="366">      naming_convention      文件、函数、类型、变量、目录命名规范</text>
   <text class="mono" x="40" y="382">      dependency_order       精化后的构建/初始化/导入顺序</text>
-  <text class="mono" x="40" y="398">  · 输出 ArchitectBlueprint (结构化摘要, 注入 planner 上下文)</text>
+  <text class="mono" x="40" y="398">  · 输出 ArchitectBlueprint — 通过 register_contract tool call (Zod 验证, TypeScript 代码检查)</text>
   <text class="mono" x="40" y="414">  · 输出 recommended_next[] (建议后续调用)</text>
 
   <rect class="warn" x="30" y="430" width="900" height="56"/>
@@ -748,12 +768,12 @@
   <text class="mono" x="40" y="582">     Goal A exports → Goal B imports: 精确到 { filePath, functionName, typeSignature }</text>
   <text class="mono" x="40" y="598">     目录结构: 哪些目录由哪个 goal 创建, 命名模式, 嵌套规则</text>
   <text class="mono" x="40" y="614">     共享类型: 定义在哪个文件, 被哪些 goals 消费, 具体字段</text>
-  <text class="mono" x="40" y="630">4. 写入 Decision Log (每条含 WHY + goal_id 关联 + phase="architect")</text>
-  <text class="mono" x="40" y="646">5. 输出 ArchitectBlueprint + recommended_next[plan_goal × N]</text>
+  <text class="mono" x="40" y="630">4. 调用 register_contract tool 注册每个契约 (Zod schema 即时验证, TypeScript 代码检查)</text>
+  <text class="mono" x="40" y="646">5. 调用 finalize_blueprint 完成验证 → 写入 Decision Log → recommended_next[plan_goal × N]</text>
 
   <text class="h3" x="40" y="678">与现有 agent 的分工边界</text>
-  <text class="mono" x="40" y="698">  Requirements: "要建什么"     — 产出 GoalContracts[], 声明 exports/imports (高层, 抽象)</text>
-  <text class="mono" x="40" y="714">  Architect:  "如何衔接"     — 精化 exports/imports 为精确契约, 建立跨 goal 共享约定</text>
+  <text class="mono" x="40" y="698">  Requirements: "要建什么"     — register_goal tool call 注册 GoalContracts[] (Zod 验证, 路径检查, 防幻觉)</text>
+  <text class="mono" x="40" y="714">  Architect:  "如何衔接"     — register_contract tool call 精化接口为 TypeScript 代码 (schema 验证)</text>
   <text class="mono" x="40" y="730">  Planner:    "如何实现"     — per-goal, 消费 architect 共识, 产出实现步骤 (不再猜接口)</text>
   <text class="mono" x="40" y="746">  Task Agent: "何时调谁"     — 编排决策, architect 的调用时机由它决定</text>
 
