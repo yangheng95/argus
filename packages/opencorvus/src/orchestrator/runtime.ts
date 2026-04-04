@@ -103,6 +103,9 @@ const mergeLocksPerRun = new Map<string, Promise<void>>()
 const pipelineLocksPerRun = new Map<string, Promise<void>>()
 // Per-goal-run last activity timestamp: used by syncGoalRuns for stall detection.
 const goalRunLastActivity = new Map<string, number>()
+// Per-run last activity timestamp: updated whenever any goal in the run has activity.
+// Used by syncGoalRuns for run-level stall detection (replaces absolute timeout).
+const runLastActivity = new Map<string, number>()
 
 async function serializedMerge(runID: string, fn: () => Promise<void>) {
   const prev = mergeLocksPerRun.get(runID) ?? Promise.resolve()
@@ -121,7 +124,7 @@ async function serializedPipeline(runID: string, fn: () => Promise<void>) {
 
 // Unattended-mode safeguards
 const INTERACTION_STALE_MS = parseInt(process.env.OPENCORVUS_INTERACTION_TIMEOUT_MS || "30000", 10) // auto-reject stale interactions (30s default)
-const RUN_MAX_EXECUTION_MS = parseInt(process.env.OPENCORVUS_RUN_TIMEOUT_MS || String(2 * 60 * 60 * 1000), 10) // max run execution time (2h default)
+const RUN_STALL_TIMEOUT_MS = parseInt(process.env.OPENCORVUS_RUN_STALL_TIMEOUT_MS || process.env.OPENCORVUS_RUN_TIMEOUT_MS || String(30 * 60 * 1000), 10) // run-level stall: no goal activity for 30 min
 const PIPELINE_STALE_MS = 10 * 60 * 1000 // 10 min — pipeline tasks stuck longer without in-memory tracking are recovered
 
 type TranscriptState = {
@@ -513,9 +516,20 @@ export namespace OrchestratorRuntime {
     const batch = ready.slice(0, slots)
     if (batch.length === 0) return 0
 
-    await Promise.all(batch.map((entry) => queueGoalRun(task, run, plan, entry, hooks)))
-    log.info("queued goal runs", { runID: run.id, queued: batch.length, active: active.length, ready: ready.length })
-    return batch.length
+    // Use allSettled so one dispatch failure doesn't kill the entire batch.
+    // Successfully dispatched goals continue; failed ones are logged and skipped.
+    const results = await Promise.allSettled(batch.map((entry) => queueGoalRun(task, run, plan, entry, hooks)))
+    let dispatched = 0
+    for (let i = 0; i < results.length; i++) {
+      if (results[i].status === "fulfilled") {
+        dispatched++
+      } else {
+        const reason = (results[i] as PromiseRejectedResult).reason
+        log.error("goal dispatch failed (batch continues)", { goalID: batch[i].goal.id, error: reason instanceof Error ? reason.message : String(reason) })
+      }
+    }
+    log.info("queued goal runs", { runID: run.id, queued: dispatched, failed: batch.length - dispatched, active: active.length, ready: ready.length })
+    return dispatched
   }
 
   /**
@@ -695,11 +709,16 @@ export namespace OrchestratorRuntime {
     const run = requireRun(runID)
     if (!run.plan_version_id) return
 
-    // 1. Run execution timeout
-    const started = run.time_started ?? run.time_created
-    if (started && (Date.now() - started) > RUN_MAX_EXECUTION_MS) {
-      log.warn("per-goal run exceeded max execution time", { runID, maxMs: RUN_MAX_EXECUTION_MS })
-      await failRun(run, `Run exceeded maximum execution time (${Math.round(RUN_MAX_EXECUTION_MS / 60000)}min)`, hooks)
+    // 1. Run-level stall detection (inactivity-based, NOT absolute timeout).
+    //    The run is stalled if no goal has reported activity for RUN_STALL_TIMEOUT_MS.
+    //    This correctly handles long-running plans: spec/decompose/architect time
+    //    doesn't count because goal activity resets the timer each time.
+    const now0 = Date.now()
+    const lastRunActivity = runLastActivity.get(runID) ?? run.time_started ?? run.time_created ?? 0
+    const runStaleMs = now0 - lastRunActivity
+    if (lastRunActivity > 0 && runStaleMs > RUN_STALL_TIMEOUT_MS) {
+      log.warn("run stalled — no goal activity", { runID, staleMs: runStaleMs, thresholdMs: RUN_STALL_TIMEOUT_MS })
+      await failRun(run, `Run stalled: no goal activity for ${Math.round(runStaleMs / 60000)}min`, hooks)
       return
     }
 
@@ -794,6 +813,9 @@ export namespace OrchestratorRuntime {
   async function notifyGoalResult(task: TaskRow, run: RunRow, goalID: string, result: "completed" | "failed") {
     await serializedPipeline(run.id, async () => {
       if (agentNotifiedRuns.has(run.id)) return
+
+      // Goal completion is activity — refresh run-level timer
+      runLastActivity.set(run.id, Date.now())
 
       const activeRuns = listActiveGoalRunsByCoordinator(run.id)
 
@@ -1141,6 +1163,11 @@ export namespace OrchestratorRuntime {
     if (!task) throw new Error(`Task ${taskID} not found`)
     const run = findRun(runID)
     if (!run) throw new Error(`Run ${runID} not found`)
+    // Block dispatch on a dead run — prevents zombie run from consuming resources
+    if (run.status === "failed" || run.status === "completed" || run.status === "aborted") {
+      log.warn("dispatch blocked: run is in terminal state", { runID, status: run.status })
+      return
+    }
     const plan = run.plan_version_id ? findPlan(run.plan_version_id) : null
     const { listGoals: listTaskGoals } = await import("./store")
     const goal = (listTaskGoals(taskID) as GoalRow[]).find(g => g.id === goalID)
@@ -1151,6 +1178,7 @@ export namespace OrchestratorRuntime {
     const node = nodes.find(n => n.goal_id === goalID) ?? { id: `inline_${goalID}`, goal_id: goalID, title: goal.title, brief: goal.done_definition }
 
     await queueGoalRun(task, run, plan ?? { id: "", task_id: taskID, summary: "", prompt: "" } as any, { node: node as any, goal: goal as any }, hooks)
+    runLastActivity.set(runID, Date.now())
     // Clear AFTER goal_run is created so notifyGoalResult can re-trigger when it completes.
     agentNotifiedRuns.delete(runID)
   }
@@ -1164,12 +1192,20 @@ export namespace OrchestratorRuntime {
     if (!task) throw new Error(`Task ${taskID} not found`)
     const run = findRun(runID)
     if (!run) throw new Error(`Run ${runID} not found`)
+    // Block dispatch on a dead run — prevents zombie run from consuming resources
+    if (run.status === "failed" || run.status === "completed" || run.status === "aborted") {
+      log.warn("dispatch blocked: run is in terminal state", { runID, status: run.status })
+      return 0
+    }
     const plan = findPlan(planID)
     if (!plan) throw new Error(`Plan ${planID} not found`)
     const dispatched = await queueReadyGoalRuns(task, run, plan, hooks)
     // Clear AFTER goal_runs are created (not before) — prevents a window
     // where notifyGoalResult sees has=false AND activeRuns=0 simultaneously.
-    if (dispatched > 0) agentNotifiedRuns.delete(runID)
+    if (dispatched > 0) {
+      runLastActivity.set(runID, Date.now())
+      agentNotifiedRuns.delete(runID)
+    }
     return dispatched
   }
 
@@ -1237,6 +1273,12 @@ async function failRun(run: RunRow, error: string, hooks: RuntimeHooks) {
     updateGoalRunExecutorSessionStatus(gr.id, "failed")
     if (gr.workspace_dir) await cleanupGoalWorkspace(gr.workspace_dir).catch(() => {})
   }
+  // Clean up all in-memory tracking — run is dead, prevent stale map entries and leaks
+  runLastActivity.delete(run.id)
+  for (const gr of goalRuns) goalRunLastActivity.delete(gr.id)
+  mergeLocksPerRun.delete(run.id)
+  pipelineLocksPerRun.delete(run.id)
+  agentNotifiedRuns.delete(run.id)
   updateExecutorSessionStatus(run.id, "failed")
   const task = requireTask(run.task_id)
   const now = Date.now()
@@ -1293,6 +1335,7 @@ function consumeGoalPipeline(ctx: {
   }, { once: true })
 
   goalRunLastActivity.set(goalRunID, Date.now())
+  runLastActivity.set(run.id, Date.now())
 
   ;(async () => {
     try {
@@ -1309,19 +1352,25 @@ function consumeGoalPipeline(ctx: {
         if (ctrl.signal.aborted) break
 
         switch (event.type) {
-          case "executor_event":
+          case "executor_event": {
             // Project to session system for overlay visibility
             upsertExecutorInteraction(task.id, run.id, goalSessionID, executorSessionID, executorProvider, event.event)
             const currentRun = findRun(run.id)
             if (currentRun) {
               await projectExecutorEventToSession(task.id, currentRun, goalSessionID, event.event)
             }
-            goalRunLastActivity.set(goalRunID, Date.now())
+            const ts = Date.now()
+            goalRunLastActivity.set(goalRunID, ts)
+            runLastActivity.set(run.id, ts)
             break
+          }
 
-          case "heartbeat":
-            goalRunLastActivity.set(goalRunID, Date.now())
+          case "heartbeat": {
+            const ts2 = Date.now()
+            goalRunLastActivity.set(goalRunID, ts2)
+            runLastActivity.set(run.id, ts2)
             break
+          }
 
           case "completed": {
             // Orchestrator responsibility: merge + commit + cleanup + dispatch next

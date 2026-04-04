@@ -70,6 +70,9 @@ export type TaskAgentTrigger =
 // ---------------------------------------------------------------------------
 
 const running = new Map<string, AbortController>()
+// Cooldown: when the Task Agent last finished for each task.
+// Orphan recovery checks this to avoid re-triggering immediately.
+const lastFinished = new Map<string, number>()
 
 // ---------------------------------------------------------------------------
 // Public API

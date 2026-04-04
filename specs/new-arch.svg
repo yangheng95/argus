@@ -344,28 +344,36 @@
   <text class="mono" x="40" y="710">4. 并行 goals 在独立 worktree Instance 中执行. Event bridge 通过 GlobalBus 跨 Instance 接收事件 (非 Instance-scoped Bus).</text>
   <text class="mono" x="40" y="726">5. 当前 batch 所有 goal_run 结束后 → Infrastructure 自动跑 Eval Agent (每个 goal) → goal.status 写入终态</text>
   <text class="mono" x="40" y="742">6. 所有 goal eval 完成 → agentNotifiedRuns.add(runID) → 通知 Task Agent (batch 粒度)</text>
-  <text class="mono" x="40" y="750">   queueGoalRun 时 agentNotifiedRuns.delete(runID) → 下一个 batch 完成后可再次通知</text>
-  <text class="mono" x="40" y="762">7. Task Agent 看到 eval 结果 → 推理: deliver? retry 失败 goal? add_goal? fail?</text>
-  <text class="mono" x="40" y="778">关键: Goal 状态锁 — goal.status 在 eval 完成前不离开 "running". Task Agent 收到通知时所有 goal 已有终态.</text>
+  <text class="mono" x="40" y="758">7. Task Agent 看到 eval 结果 → 推理: deliver? retry 失败 goal? add_goal? fail?</text>
+  <text class="mono" x="40" y="774">8. 如果 dispatch 新 goals → dispatchReadyGoals/dispatchSingleGoal 在 queueGoalRun 之后 delete(runID) → 下批可再通知</text>
+  <text class="mono" x="40" y="794">关键: Goal 状态锁 — goal.status 在 eval 完成前不离开 "running". Task Agent 收到通知时所有 goal 已有终态.</text>
 
-  <text class="mono" x="40" y="786">owned_paths 互斥: 并行 goals 的 owned_paths 不重叠 (Requirements Agent 保证).</text>
-  <text class="mono" x="40" y="802">Merge 串行化: per-run lock, 同一时间只有一个 goal 的 delivery 被 merge.</text>
+  <text class="mono" x="40" y="810">owned_paths 互斥: 并行 goals 的 owned_paths 不重叠 (Requirements Agent 保证).</text>
+  <text class="mono" x="40" y="826">Merge 串行化: per-run lock, 同一时间只有一个 goal 的 delivery 被 merge.</text>
 
-  <!-- Dispatch gate -->
-  <text class="h3" x="40" y="826">Dispatch Gate — Task Agent 入口级统一门控 (task-agent/agent.ts)</text>
+  <!-- Task Agent wake protection: 3-layer defense -->
+  <text class="h3" x="40" y="854">Task Agent 唤醒保护 — 三层防御 (防重复触发 + 防虚假唤醒)</text>
 
-  <text class="mono" x="40" y="846">问题: 以前的保护分散在各调用点 (notifyGoalResult, recoverOrphanedTasks, deliver tool),</text>
-  <text class="mono" x="40" y="862">  但 service.ts 的 retry 触发、legacy syncRun 路径等可以绕过, 导致 goals 并行时 Task Agent 被虚假唤醒.</text>
-  <text class="mono" x="40" y="882">方案: 在 TaskAgent.processTask() 入口处统一检查 listActiveGoalRunsByCoordinator().</text>
-  <text class="mono" x="40" y="898">  如果 active goal_runs &gt; 0 → 直接 return, 不启动 agent loop, 不消耗 API token.</text>
-  <text class="mono" x="40" y="918">为什么合法通知不会被误拦:</text>
-  <text class="mono" x="40" y="934">  • notifyGoalResult: 已确保 activeRuns.length===0 后才调用 processTask → 门控自然通过</text>
-  <text class="mono" x="40" y="950">  • failRun: 先 updateGoalRun(status=failed) 再调用 processTask → goal_runs 已终态 → 门控自然通过</text>
-  <text class="mono" x="40" y="966">  • created: 新 task 没有 active_run_id → 门控不生效</text>
-  <text class="mono" x="40" y="986">被拦截的路径 (正确行为):</text>
-  <text class="mono" x="40" y="1002">  • orphan recovery: goals 还在跑 → 拦截 (event bridge 完成后会自动通知)</text>
-  <text class="mono" x="40" y="1018">  • user retry: goals 还在跑 → 拦截 (用户无法干预正在执行的 goals)</text>
-  <text class="mono" x="40" y="1034">  • legacy syncRun: goals 还在跑 → 拦截 (等 consumeGoalPipeline 正常流程)</text>
+  <text class="mono-h" x="40" y="874">Layer 1: agentNotifiedRuns (notifyGoalResult 内, serializedPipeline 串行化)</text>
+  <text class="mono" x="40" y="890">  • batch 所有 goal_runs 完成 → activeRuns=0 → has(runID)=false → auto-eval → add(runID) → 触发 Task Agent</text>
+  <text class="mono" x="40" y="906">  • 同 batch 并发的 notifyGoalResult → has(runID)=true → return (不重复触发)</text>
+  <text class="mono" x="40" y="922">  • dispatch 新 goals 后 → delete(runID) 在 goal_runs 已创建之后 (activeRuns &gt; 0), 下批可再触发</text>
+  <text class="mono" x="40" y="938">  • 关键时序: delete 必须在 queueGoalRun 之后, 否则存在 has=false + activeRuns=0 的竞态窗口</text>
+
+  <text class="mono-h" x="40" y="962">Layer 2: Dispatch Gate (TaskAgent.processTask 入口)</text>
+  <text class="mono" x="40" y="978">  • listActiveGoalRunsByCoordinator(active_run_id) &gt; 0 → return, 不启动 agent loop</text>
+  <text class="mono" x="40" y="994">  • 合法通知自然通过: notifyGoalResult/failRun 确保 goal_runs 终态后才调 processTask</text>
+  <text class="mono" x="40" y="1010">  • 拦截: orphan recovery, user retry, legacy syncRun — goals 在跑时不唤醒</text>
+
+  <text class="mono-h" x="40" y="1034">Layer 3: Orphan Recovery 竞态防护 (recoverOrphanedTasks)</text>
+  <text class="mono" x="40" y="1050">  • 问题: goal_runs 刚完成 (activeRuns=0) 但 notifyGoalResult 还没跑 auto-eval → orphan recovery 抢先触发</text>
+  <text class="mono" x="40" y="1066">  • 修复: 检查 recentCompletion — 如果有 goal_run 在 PIPELINE_STALE_MS 内完成, 不触发</text>
+  <text class="mono" x="40" y="1082">  • 原因: notifyGoalResult 需要时间 auto-eval, 这期间 task 看起来像 orphan 但实际 pipeline 在处理</text>
+
+  <text class="mono-h" x="40" y="1106">Retry 时的 eval 反馈机制:</text>
+  <text class="mono" x="40" y="1122">  • queueGoalRun 调用 findLatestFailedEvalForGoal(goalID) 获取最近 rejected 的 eval</text>
+  <text class="mono" x="40" y="1138">  • 提取 status=failed 的 check 条目 (name + evidence) → buildFixPrompt 追加到 executor prompt</text>
+  <text class="mono" x="40" y="1154">  • executor 收到的 prompt = goal prompt + "## Check Results\n- **evidence**: failed — ..." + 修复指令</text>
 
   <!-- Task Agent reasoning examples -->
   <text class="h3" x="40" y="1066">Task Agent 推理示例</text>
@@ -409,7 +417,10 @@
   <line class="sep" x1="20" y1="54" x2="1980" y2="54"/>
 
   <text class="mono" x="40" y="78">✗ Infrastructure 自动 dispatch 下一层 goals (continueGoalPipeline 自动调度)</text>
-  <text class="mono" x="40" y="94">✗ 硬编码状态机 (if status==evaluating → if pass → complete else retry)</text>
+  <text class="mono" x="40" y="94">✗ Executor bash 执行按名杀进程命令 (taskkill /IM, Stop-Process -Name, killall, pkill)</text>
+  <text class="mono" x="40" y="110">  Worktree 隔离文件系统, 不隔离进程空间. 按名杀进程会杀死宿主 (benchmark/server/其他 executor).</text>
+  <text class="mono" x="40" y="126">  bash.ts 在执行前拦截 HOST_KILLING_PATTERNS → 返回 refused 而不是执行. 允许 kill PID (杀自己启动的进程).</text>
+  <text class="mono" x="40" y="146">✗ 硬编码状态机 (if status==evaluating → if pass → complete else retry)</text>
   <text class="mono" x="40" y="110">✗ 机械 RetryPolicy (bug→re-execute, plan_wrong→re-plan)</text>
   <text class="mono" x="40" y="126">✗ 固定 pipeline 顺序 (Plan→Execute→Eval→Retry loop)</text>
   <text class="mono" x="40" y="142">✗ Sub-agent 降级为 tool function (它们有自己的 LLM, 是 agent)</text>
