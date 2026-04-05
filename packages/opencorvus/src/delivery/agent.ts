@@ -51,6 +51,7 @@ export const FrontendCheck = z.object({
 export const DeliveryVerdict = z.object({
   verdict: z.enum(["accepted", "rejected"]),
   summary: z.string(),
+  launch_command: z.string().optional().describe("The exact verified command to start the application (only present when startup_verification.success is true). Will be used to auto-launch after publish."),
   startup_verification: StartupVerification,
   frontend_check: FrontendCheck,
   issues_found: z.array(z.string()),
@@ -253,9 +254,11 @@ function extractVerdictText(text: string): DeliveryVerdictType {
   if (!raw) throw new Error("delivery output empty")
   if (raw.startsWith("{") || raw.includes("```json")) return extractVerdictJSON(raw)
 
+  const launchCmd = sectionBody(raw, ["Launch Command", "启动命令"]).trim().replace(/^`+|`+$/g, "").trim()
   return normalizeVerdict({
     verdict: sectionBody(raw, ["Verdict", "结论"]).split(/\r?\n/)[0]?.trim().toLowerCase(),
     summary: sectionBody(raw, ["Summary", "摘要"]) || firstContentLine(raw),
+    launch_command: launchCmd || undefined,
     startup_verification: parseStartupVerification(sectionBody(raw, ["Startup Verification", "启动验证"])),
     frontend_check: parseFrontendCheck(sectionBody(raw, ["Frontend Check", "前端检查"])),
     issues_found: parseIssuesFound(sectionBody(raw, ["Issues Found", "发现的问题"])),
@@ -279,6 +282,11 @@ function normalizeVerdict(input: unknown): DeliveryVerdictType {
 
   if (!obj.summary || typeof obj.summary !== "string") {
     throw new Error("Delivery agent produced no summary")
+  }
+
+  // launch_command is optional — strip if empty
+  if (typeof obj.launch_command === "string") {
+    obj.launch_command = obj.launch_command.trim().replace(/^`+|`+$/g, "").trim() || undefined
   }
 
   if (!obj.startup_verification || typeof obj.startup_verification !== "object") {
@@ -535,6 +543,7 @@ Output your decision as plain markdown with these sections:
 
 - \`# Verdict\` — accepted or rejected
 - \`# Summary\` — 1-3 sentences
+- \`# Launch Command\` — the exact command used to successfully start the application (e.g. \`bun run start\`, \`node dist/index.js\`). REQUIRED when startup_verification.success is true. This command will be used to auto-launch the deliverable after publish — make it runnable from the project root with no extra arguments.
 - \`# Startup Verification\` — attempted, command, success, output
 - \`# Frontend Check\` — attempted, renders_correctly, issues
 - \`# Issues Found\` — all issues discovered (empty if none)

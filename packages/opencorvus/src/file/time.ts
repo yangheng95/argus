@@ -23,6 +23,7 @@ export namespace FileTime {
   })
 
   export function read(sessionID: string, file: string) {
+    file = Filesystem.normalizePath(file)
     log.info("read", { sessionID, file })
     const { read } = state()
     read[sessionID] = read[sessionID] || {}
@@ -30,10 +31,12 @@ export namespace FileTime {
   }
 
   export function get(sessionID: string, file: string) {
+    file = Filesystem.normalizePath(file)
     return state().read[sessionID]?.[file]
   }
 
   export async function withLock<T>(filepath: string, fn: () => Promise<T>): Promise<T> {
+    filepath = Filesystem.normalizePath(filepath)
     const current = state()
     const currentLock = current.locks.get(filepath) ?? Promise.resolve()
     let release: () => void = () => {}
@@ -58,6 +61,7 @@ export namespace FileTime {
       return
     }
 
+    filepath = Filesystem.normalizePath(filepath)
     const time = get(sessionID, filepath)
     if (!time) throw new Error(`You must read file ${filepath} before overwriting it. Use the Read tool first`)
     const mtime = Filesystem.stat(filepath)?.mtime
