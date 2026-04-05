@@ -6,8 +6,8 @@
  *
  * Triggered by:
  * - Task creation (kind: "created") — new task, agent plans and submits execution
- * - Run completion (kind: "run_completed") — executor finished, agent runs eval → verify → publish
- * - Executor failure (kind: "executor_failed") — executor crashed, agent decides recovery
+ * - Batch complete (kind: "batch_complete") — goal batch finished (any mix of pass/fail),
+ *   agent reads fresh context and decides next action (NOT biased by single-event semantics)
  * - User retry request (kind: "retry")
  *
  * The Task Agent controls the entire pipeline via tools:
@@ -61,8 +61,7 @@ const MAX_STEPS = 20
 
 export type TaskAgentTrigger =
   | { kind: "created" }
-  | { kind: "run_completed"; runID: string }
-  | { kind: "executor_failed"; runID: string; error: string }
+  | { kind: "batch_complete"; runID: string; summary: { passed: number; failed: number; total: number } }
   | { kind: "retry" }
 
 // ---------------------------------------------------------------------------
@@ -186,7 +185,7 @@ export namespace TaskAgent {
 
       // 4. Build prompt — use the user's original request as the user message
       // for "created" triggers (it IS the user's intent). For re-triggers
-      // (run_completed, executor_failed, retry) use a short event description.
+      // (batch_complete, retry) use a short event description.
       const system = buildSystemPrompt(task, trigger, workflow, workflowState)
       const userContent = trigger.kind === "created"
         ? task.request
@@ -278,22 +277,13 @@ function describeTrigger(task: TaskRow, trigger: TaskAgentTrigger): string {
     case "created":
       return "New task created. Process it."
 
-    case "run_completed":
+    case "batch_complete":
       return [
-        `Executor run ${trigger.runID} completed.`,
+        `Goal batch complete on run ${trigger.runID}.`,
+        `Summary: ${trigger.summary.passed} passed, ${trigger.summary.failed} failed, ${trigger.summary.total} total.`,
         "",
-        "A goal execution finished. Check goal statuses with read_context first.",
-        "If goals are still running/pending → do NOTHING (you will be re-triggered when they finish).",
-        "Only when ALL goals have terminal status (passed/failed): deliver → publish_delivery.",
-        "If a goal failed: decide execute_goal to retry, or fail_task if not recoverable.",
-      ].join("\n")
-
-    case "executor_failed":
-      return [
-        `Executor run ${trigger.runID} failed.`,
-        `Error: ${trigger.error}`,
-        "",
-        "Decide: call execute_goal to retry if the error is recoverable, or fail_task if not.",
+        "Read context (read_context) to see goal statuses and eval evidence.",
+        "Decide next action based on current state — no predetermined action.",
       ].join("\n")
 
     case "retry":
@@ -366,7 +356,7 @@ function buildSystemPrompt(task: TaskRow, trigger: TaskAgentTrigger, workflow?: 
   }
 
   // Run context (delivery + eval results for reasoning)
-  if (trigger.kind === "run_completed" || trigger.kind === "executor_failed") {
+  if (trigger.kind === "batch_complete") {
     const runID = trigger.runID
     const delivery = findDeliveryByRun(runID)
     if (delivery) {
@@ -385,9 +375,9 @@ function buildSystemPrompt(task: TaskRow, trigger: TaskAgentTrigger, workflow?: 
         }
       }
     }
-    if (trigger.kind === "executor_failed") {
-      sections.push(`- Executor error: ${trigger.error}`)
-    }
+    sections.push(
+      `- Batch summary: ${trigger.summary.passed} passed, ${trigger.summary.failed} failed, ${trigger.summary.total} total.`,
+    )
   }
 
   // ── Reasoning Guidance ──
@@ -411,25 +401,20 @@ fail_task, restart_from_stage.
 - Then create_run, then submit_execution.
 - You can plan individual goals with plan_goal if they're complex, or skip planning for simple ones.
 
-**After execution completes (re-triggered with run_completed):**
-- FIRST: Check goal statuses via read_context. With parallel dispatch, you are re-triggered
-  each time ANY goal completes — NOT when ALL goals complete.
+**After batch completes (re-triggered with batch_complete):**
+- FIRST: Check goal statuses via read_context. The trigger summary tells you counts;
+  read_context tells you WHICH goals passed/failed and WHY.
 - **If ANY goals are still "running" or "pending" → do NOTHING. Stop immediately.**
-  You will be re-triggered again when the next goal completes.
+  You will be re-triggered again when the next batch completes.
 - Only proceed when ALL goals have terminal status (passed/failed).
-- Then read the eval results carefully.
-- Based on eval results, REASON about what to do:
+- Based on eval evidence, REASON about what to do:
   - All blocking goals passed → deliver to aggregate, then publish_delivery
-  - Goal failed due to missing dependency → add_goal to create the dependency, then execute_goal
-  - Goal failed due to code bug → execute_goal again to retry the failed goal (eval will re-run automatically)
-  - Goal failed due to wrong approach → modify_goal to adjust, then execute_goal
+  - Goal failed due to missing dependency → add_goal to create the dependency, then retry_failed_goals
+  - Goal failed due to code bug → retry_failed_goals (eval evidence auto-appended to each retry)
+  - Goal failed due to wrong approach → modify_goal to adjust, then execute_goal on that specific goal
   - Unrecoverable → fail_task with explanation
-
-**After executor failure (re-triggered with executor_failed):**
-- Read the error and eval evidence. Reason about root cause.
-- Transient (network, timeout)? → execute_goal to retry
-- Config/env issue? → fail_task or add_goal to fix environment
-- Wrong approach? → modify_goal or restart_from_stage
+- **NEVER call execute_goal on a passed goal.** Passed goals are terminal success state.
+  To re-validate a passed goal, use eval_goal. To change its contract, use modify_goal.
 
 **Dynamic adjustment (anytime):**
 - Discovered a missing requirement? → add_goal
