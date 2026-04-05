@@ -1874,6 +1874,11 @@ async function loadTasks() {
 }
 function clearBoard() {
   clearBoardRetry$1();
+  if (boardLoadTimer) {
+    clearTimeout(boardLoadTimer);
+    boardLoadTimer = null;
+  }
+  boardLoadDeadline = 0;
   _boardQueued = false;
   setBoardStore({
     board: null,
@@ -1892,17 +1897,26 @@ function setTasksData(tasks) {
   setBoardStore("tasks", Array.isArray(tasks) ? tasks : []);
 }
 let boardLoadTimer = null;
+let boardLoadDeadline = 0;
+const BOARD_MAX_DELAY_MS = 2e3;
 function scheduleBoard(delay = 0) {
   setBoardSyncPending(true);
   clearBoardRetry$1();
+  const now = Date.now();
+  if (!boardLoadTimer || boardLoadDeadline === 0) {
+    boardLoadDeadline = now + BOARD_MAX_DELAY_MS;
+  }
   if (boardLoadTimer) {
     clearTimeout(boardLoadTimer);
     boardLoadTimer = null;
   }
+  const remaining = Math.max(0, boardLoadDeadline - now);
+  const effectiveDelay = Math.min(delay, remaining);
   boardLoadTimer = setTimeout(() => {
     boardLoadTimer = null;
+    boardLoadDeadline = 0;
     void loadBoard({ sync: true });
-  }, delay);
+  }, effectiveDelay);
 }
 function rootTaskSessionID() {
   const sessionID = boardStore.board?.task?.sessionID;

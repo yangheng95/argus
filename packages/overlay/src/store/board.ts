@@ -184,6 +184,11 @@ export async function loadTasks(): Promise<void> {
  */
 export function clearBoard(): void {
   clearBoardRetry();
+  if (boardLoadTimer) {
+    clearTimeout(boardLoadTimer);
+    boardLoadTimer = null;
+  }
+  boardLoadDeadline = 0;
   _boardQueued = false;
   setBoardStore({
     board: null,
@@ -212,23 +217,40 @@ export function setTasksData(tasks: any[]): void {
 // ── Scheduled board reload ──
 
 let boardLoadTimer: any = null;
+let boardLoadDeadline = 0;
+const BOARD_MAX_DELAY_MS = 2000;
 
 /**
  * Schedule a board reload after an optional delay.
- * Cancels any previously pending reload before scheduling a new one.
+ *
+ * Debounce + max-delay: each call delays by `delay`, but the reload fires
+ * at most BOARD_MAX_DELAY_MS after the FIRST call in a burst. This prevents
+ * starvation when events arrive continuously at intervals < delay (e.g.
+ * rapid progress SSE events resetting the 500ms timer forever).
+ *
  * @param delay Delay in milliseconds before calling loadBoard. Defaults to 0.
  */
 export function scheduleBoard(delay = 0): void {
   setBoardSyncPending(true);
   clearBoardRetry();
+  const now = Date.now();
+  // First scheduling in a burst: set deadline
+  if (!boardLoadTimer || boardLoadDeadline === 0) {
+    boardLoadDeadline = now + BOARD_MAX_DELAY_MS;
+  }
   if (boardLoadTimer) {
     clearTimeout(boardLoadTimer);
     boardLoadTimer = null;
   }
+  // Effective delay is min(requested, remaining-until-deadline).
+  // When remaining is negative (deadline passed), fire immediately.
+  const remaining = Math.max(0, boardLoadDeadline - now);
+  const effectiveDelay = Math.min(delay, remaining);
   boardLoadTimer = setTimeout(() => {
     boardLoadTimer = null;
+    boardLoadDeadline = 0;
     void loadBoard({ sync: true });
-  }, delay);
+  }, effectiveDelay);
 }
 
 // ── Derived accessors ──
