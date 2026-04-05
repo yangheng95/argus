@@ -169,13 +169,13 @@ export function WindowControls() {
   const maxLabel = () => maximizeLabel(isMaximized());
 
   return (
-    <div class="window-controls" data-no-drag="true">
+    <div class="titlebar-window-controls" data-no-drag="true">
       {/* Always-on-top pin */}
       <Show when={tauriWin() !== null}>
         <button
           type="button"
           id="btnPin"
-          class="btn btn-ghost icon-btn titlebar-btn"
+          class="titlebar-btn"
           data-pinned={settingsStore.alwaysOnTop ? "true" : "false"}
           title={pinLabel()}
           aria-label={pinLabel()}
@@ -206,7 +206,7 @@ export function WindowControls() {
         <button
           type="button"
           id="btnMinimize"
-          class="btn btn-ghost icon-btn titlebar-btn"
+          class="titlebar-btn"
           title={t("titlebar.minimize")}
           aria-label={t("titlebar.minimize")}
           onClick={handleMinimize}
@@ -230,7 +230,7 @@ export function WindowControls() {
         <button
           type="button"
           id="btnMaximize"
-          class="btn btn-ghost icon-btn titlebar-btn"
+          class="titlebar-btn"
           data-maximized={isMaximized() ? "true" : "false"}
           title={maxLabel()}
           aria-label={maxLabel()}
@@ -246,7 +246,7 @@ export function WindowControls() {
         <button
           type="button"
           id="btnClose"
-          class="btn btn-ghost icon-btn titlebar-btn titlebar-btn-close"
+          class="titlebar-btn titlebar-close"
           title={t("titlebar.close")}
           aria-label={t("titlebar.close")}
           onClick={() => void handleClose()}

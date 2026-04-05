@@ -83,7 +83,16 @@ const requestFile = flag("--request-file")
 const deliveryVerifyCmd = flag("--delivery-verify-cmd")
 const skipLocalVerify = process.argv.includes("--skip-local-verify")
 const noBrowser = process.argv.includes("--no-browser")
-const maxExecutorGroups = Number(flag("--max-executor-groups")) || 3
+// Only set task-level budget when explicitly provided via CLI flag OR env var.
+// Otherwise leave undefined so the task inherits the config-level default
+// (which is driven by OPENCORVUS_MAX_EXECUTOR_GROUPS / user config / defaults).
+const maxExecutorGroupsFlag = flag("--max-executor-groups")
+const maxExecutorGroupsEnv = process.env.OPENCORVUS_MAX_EXECUTOR_GROUPS
+const maxExecutorGroups = maxExecutorGroupsFlag
+  ? Number(maxExecutorGroupsFlag)
+  : maxExecutorGroupsEnv
+    ? Number(maxExecutorGroupsEnv)
+    : undefined
 
 const DEFAULT_TASK_TITLE = "Overlay Web Benchmark NoteStore"
 const DEFAULT_TASK_REQUEST = `
@@ -223,7 +232,7 @@ process.env.OPENCORVUS_SPEC_AGENT_MAX_STEPS = String(specMaxSteps)
 process.env.OPENCORVUS_PLANNER_AGENT_MAX_STEPS = String(plannerMaxSteps)
 
 console.log(
-  `[overlay-benchmark] config model=${model} executor=${executor} groups=${maxExecutorGroups} stall=${stallTimeoutMs / 1000}s planning-stall=${planningStallTimeoutMs / 1000}s tool=${toolTimeoutMs / 1000}s standby=${standbyTimeoutMs === 86400000 ? "∞" : standbyTimeoutMs / 1000 + "s"} request=${requestTimeoutMs / 1000}s hard=${completionHardTimeoutMs > 0 ? completionHardTimeoutMs / 1000 + "s" : "none"}`,
+  `[overlay-benchmark] config model=${model} executor=${executor} groups=${maxExecutorGroups ?? "config-default"} stall=${stallTimeoutMs / 1000}s planning-stall=${planningStallTimeoutMs / 1000}s tool=${toolTimeoutMs / 1000}s standby=${standbyTimeoutMs === 86400000 ? "∞" : standbyTimeoutMs / 1000 + "s"} request=${requestTimeoutMs / 1000}s hard=${completionHardTimeoutMs > 0 ? completionHardTimeoutMs / 1000 + "s" : "none"}`,
 )
 
 // Force-remove SQLite WAL/SHM before reset — prevents previous benchmark's

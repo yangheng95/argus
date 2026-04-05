@@ -6,6 +6,7 @@ import { boardStore, loadBoard } from "../store/board";
 import { appStore, setAppStore } from "../store/app";
 import { sameBudget, draftBudget, budgetMinutes, type Budget } from "../utils/budget";
 import { apiJson } from "./api";
+import { patchConfig } from "./config";
 import { t } from "../utils/i18n";
 
 function taskBudget(task: any = boardStore.board?.task): Budget | undefined {
@@ -64,18 +65,23 @@ function setPlaceholders(): void {
 
 function renderBudgetState(task: any = boardStore.board?.task): void {
   const budget = taskBudget(task);
-  const changed = !sameBudget(draftBudget(), budget);
   const taskID = task?.id || boardStore.selectedTaskID;
-  const enabled = !!taskID && !appStore.budgetSaving;
+  // Editable only when no task is selected — budget is pre-task configuration.
+  // After a task starts the values are locked in; editing makes no sense.
+  const inputsEnabled = !taskID && !appStore.budgetSaving;
+  const changed = taskID
+    ? !sameBudget(draftBudget(), budget)
+    : appStore.budgetDirty;
+  const enabled = !appStore.budgetSaving;
   const saveButton = document.getElementById("btnBudgetSave") as HTMLButtonElement | null;
   const resetButton = document.getElementById("btnBudgetReset") as HTMLButtonElement | null;
   const reloadButton = document.getElementById("btnBudgetReload") as HTMLButtonElement | null;
   const hint = document.getElementById("budgetHint");
-  if (saveButton) saveButton.disabled = !enabled || !changed;
-  if (resetButton) resetButton.disabled = !enabled || (!changed && !appStore.budgetDirty);
+  if (saveButton) saveButton.disabled = !inputsEnabled || !changed;
+  if (resetButton) resetButton.disabled = !inputsEnabled || (!changed && !appStore.budgetDirty);
   if (reloadButton) reloadButton.disabled = !enabled || appStore.budgetSaving;
   if (hint) {
-    hint.textContent = taskID ? t("budget.hint") : t("budget.empty");
+    hint.textContent = taskID ? t("budget.hint_readonly") : t("budget.hint");
   }
   setPlaceholders();
   for (const input of [
@@ -84,13 +90,17 @@ function renderBudgetState(task: any = boardStore.board?.task): void {
     document.getElementById("budgetMaxWallTime"),
     document.getElementById("budgetMaxExecutorGroups"),
   ]) {
-    if (input instanceof HTMLInputElement) input.disabled = !enabled;
+    if (input instanceof HTMLInputElement) input.disabled = !inputsEnabled;
   }
 }
 
 export function renderBudget(task?: any): void {
-  const budget = taskBudget(task);
-  if (!appStore.budgetDirty) setBudgetInputs(budget);
+  const taskID = task?.id || boardStore.selectedTaskID;
+  if (!appStore.budgetDirty) {
+    // When no task is selected, populate from global config defaults.
+    // When a task is selected, show that task's actual budget.
+    setBudgetInputs(taskID ? taskBudget(task) : (configDefaults() as Budget));
+  }
   renderBudgetState(task);
 }
 
@@ -111,7 +121,8 @@ export function installBudgetBindings(): void {
 
   document.getElementById("btnBudgetReset")?.addEventListener("click", () => {
     setAppStore("budgetDirty", false);
-    setBudgetInputs(taskBudget());
+    const taskID = boardStore.selectedTaskID;
+    setBudgetInputs(taskID ? taskBudget() : (configDefaults() as Budget));
     renderBudgetState(boardStore.board?.task);
   });
 
@@ -129,19 +140,33 @@ export function installBudgetBindings(): void {
   });
 
   document.getElementById("btnBudgetSave")?.addEventListener("click", async () => {
-    if (!boardStore.selectedTaskID || appStore.budgetSaving) return;
+    if (appStore.budgetSaving) return;
     setAppStore("budgetSaving", true);
     renderBudgetState(boardStore.board?.task);
     try {
-      await apiJson(`task/${encodeURIComponent(boardStore.selectedTaskID)}/budget`, {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ budget: draftBudget() || null }),
-      });
+      const budget = draftBudget();
+      if (boardStore.selectedTaskID) {
+        // Task already running — patch the task budget.
+        await apiJson(`task/${encodeURIComponent(boardStore.selectedTaskID)}/budget`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ budget: budget || null }),
+        });
+        await loadBoard({ sync: true });
+      } else {
+        // No task yet — persist as global default config for future tasks.
+        await patchConfig({
+          assistant: {
+            max_runs: budget?.maxRuns ?? null,
+            max_evaluations: budget?.maxEvaluations ?? null,
+            max_wall_time_ms: budget?.maxWallTimeMs ?? null,
+            max_executor_groups: budget?.maxExecutorGroups ?? null,
+          },
+        });
+      }
       setAppStore("budgetDirty", false);
-      await loadBoard({ sync: true });
     } catch (error) {
-      console.error("Failed to update task budget", error);
+      console.error("Failed to update budget", error);
       const nativeMessage = (window as any).nativeMessage;
       if (typeof nativeMessage === "function") {
         await nativeMessage(budgetSaveError(error), {
