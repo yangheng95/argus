@@ -17,6 +17,7 @@ import {
 import { EvaluationCheck } from "@/orchestrator/model"
 import { Instance } from "@/project/instance"
 import { ProtocolEventTable } from "@/protocol/protocol.sql"
+import { WorkflowRegistry, type WorkflowState } from "@/orchestrator/workflow"
 import { Database, desc, eq, sql } from "@/storage/db"
 import { WorkbenchTaskNoteTable } from "./workbench.sql"
 import { compileBrief } from "./brief"
@@ -51,14 +52,26 @@ function buildBoard(task: typeof OrchestratorTaskTable.$inferSelect) {
   const plan = task.active_plan_version_id
     ? Database.use((db) => db.select().from(OrchestratorPlanVersionTable).where(eq(OrchestratorPlanVersionTable.id, task.active_plan_version_id!)).get())
     : undefined
-  const goals = Database.use((db) =>
-    db
-      .select()
-      .from(OrchestratorGoalTable)
-      .where(eq(OrchestratorGoalTable.task_id, task.id))
-      .orderBy(OrchestratorGoalTable.order_index)
-      .all(),
-  )
+  // Query goals by plan if available, otherwise fall back to task_id so that
+  // goals created during decomposition are visible before create_run sets
+  // active_plan_version_id.
+  const goals = plan
+    ? Database.use((db) =>
+        db
+          .select()
+          .from(OrchestratorGoalTable)
+          .where(eq(OrchestratorGoalTable.plan_version_id, plan.id))
+          .orderBy(OrchestratorGoalTable.order_index)
+          .all(),
+      )
+    : Database.use((db) =>
+        db
+          .select()
+          .from(OrchestratorGoalTable)
+          .where(eq(OrchestratorGoalTable.task_id, task.id))
+          .orderBy(OrchestratorGoalTable.order_index)
+          .all(),
+      )
   const planNodes = plan
     ? Database.use((db) =>
         db
@@ -206,8 +219,13 @@ function buildBoard(task: typeof OrchestratorTaskTable.$inferSelect) {
       .get()?.seq ?? 0
   )
 
+  // Workflow-structured fields (workflow, goalWorkflows, requirements, architect).
+  // Returns empty object when task has no _workflow state.
+  const workflowFields = buildWorkflowFields(task, goals)
+
   return {
       lastSequence,
+      ...workflowFields,
       spec: specSnapshot,
       task: {
         id: task.id,
@@ -486,6 +504,20 @@ function boardTagForTask(task: typeof OrchestratorTaskTable.$inferSelect) {
       .where(eq(OrchestratorGoalTable.task_id, task.id))
       .get(),
   )
+  // goalRuns: include goal_run status transitions in the tag. Goal-scoped state
+  // changes (queued → running → completed/failed) happen on goal_run rows BEFORE
+  // the parent goal.status is updated, so we need both tables in the tag or the
+  // frontend will see stale "running" state during execution.
+  const goalRuns = Database.use((db) =>
+    db
+      .select({
+        count: sql<number>`count(*)`,
+        updated: sql<number>`coalesce(max(${OrchestratorGoalRunTable.time_updated}), 0)`,
+      })
+      .from(OrchestratorGoalRunTable)
+      .where(eq(OrchestratorGoalRunTable.task_id, task.id))
+      .get(),
+  )
   const interactions = Database.use((db) =>
     db
       .select({
@@ -569,6 +601,8 @@ function boardTagForTask(task: typeof OrchestratorTaskTable.$inferSelect) {
     plan?.time_updated ?? 0,
     goals?.count ?? 0,
     goals?.updated ?? 0,
+    goalRuns?.count ?? 0,
+    goalRuns?.updated ?? 0,
     noteStats?.count ?? 0,
     noteStats?.updated ?? 0,
     interactions?.count ?? 0,
@@ -869,5 +903,176 @@ function boardOverview(input: {
       canReplan: canResume && Boolean(input.task.active_plan_version_id ?? input.run?.plan_version_id),
       canCancel: Boolean(input.run) && ["queued", "active"].includes(input.task.status),
     },
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// MiniWorkflow board fields — workflow state, per-goal workflows,
+// requirements list, and architect summary. Empty when task has no
+// _workflow metadata (e.g. simple tasks that skip decompose).
+// ═══════════════════════════════════════════════════════════════════
+
+function buildWorkflowFields(
+  task: typeof OrchestratorTaskTable.$inferSelect,
+  goals: Array<typeof OrchestratorGoalTable.$inferSelect>,
+) {
+  const ws = (task.metadata as any)?._workflow as WorkflowState | undefined
+  if (!ws) return {}
+
+  const workflow = WorkflowRegistry.resolveSync(ws.workflowID)
+  if (!workflow) return {}
+
+  const workflowBoard = {
+    id: workflow.id,
+    name: workflow.name,
+    steps: workflow.steps.map(step => ({
+      id: step.id,
+      label: step.label,
+      tool: step.tool,
+      scope: step.scope as "task" | "goal",
+      skippable: step.skippable,
+      status: (step.scope === "task"
+        ? ws.taskSteps[step.id]?.status ?? "pending"
+        : deriveGoalScopeStatus(ws, step.id)) as "pending" | "running" | "completed" | "skipped" | "failed",
+    })),
+    goalLoopStepIDs: workflow.goalLoopStepIDs,
+  }
+
+  const goalWorkflows = goals.map(goal => {
+    const gws = ws.goalSteps[goal.id]
+    return {
+      goalID: goal.id,
+      goalTitle: goal.title,
+      goalStatus: goal.status,
+      priority: (goal.priority ?? "blocking") as "blocking" | "advisory",
+      steps: workflow.steps
+        .filter(s => s.scope === "goal")
+        .map(s => ({
+          stepID: s.id,
+          label: s.label,
+          status: (gws?.steps[s.id]?.status ?? "pending") as "pending" | "running" | "completed" | "skipped" | "failed",
+          startedAt: gws?.steps[s.id]?.startedAt,
+          completedAt: gws?.steps[s.id]?.completedAt,
+          summary: buildStepSummary(goal.id, s.id, gws?.steps[s.id]?.status),
+        })),
+    }
+  })
+
+  const requirements = task.active_spec_version_id
+    ? buildRequirements(task.id)
+    : undefined
+
+  const architect = buildArchitectSummary(task.id)
+
+  return {
+    workflow: workflowBoard,
+    ...(goalWorkflows.length > 0 ? { goalWorkflows } : {}),
+    ...(requirements ? { requirements } : {}),
+    ...(architect ? { architect } : {}),
+  }
+}
+
+/** Derive aggregate status for a goal-scope step across all goals */
+function deriveGoalScopeStatus(ws: WorkflowState, stepID: string): string {
+  const entries = Object.values(ws.goalSteps)
+  if (entries.length === 0) return "pending"
+  const statuses = entries.map(g => g.steps[stepID]?.status ?? "pending")
+  if (statuses.some(s => s === "running")) return "running"
+  if (statuses.every(s => s === "completed" || s === "skipped")) return "completed"
+  if (statuses.some(s => s === "failed")) return "failed"
+  if (statuses.some(s => s === "completed")) return "running"
+  return "pending"
+}
+
+/** Build structured requirements array from DB */
+function buildRequirements(taskID: string) {
+  try {
+    const { OrchestratorRequirementTable } = require("@/orchestrator/orchestrator.sql")
+    const rows = Database.use((db: any) =>
+      db.select().from(OrchestratorRequirementTable)
+        .where(eq(OrchestratorRequirementTable.task_id, taskID))
+        .all()
+    )
+    if (!rows || rows.length === 0) return undefined
+    return rows.map((r: any) => ({
+      id: r.id ?? r.requirement_id ?? "",
+      description: r.title ?? r.description ?? "",
+      type: r.priority === "blocking" ? "explicit" as const : "inferred" as const,
+      priority: (r.priority ?? "blocking") as "blocking" | "advisory",
+    }))
+  } catch {
+    return undefined
+  }
+}
+
+/** Build per-step summary text (e.g., "5 steps", "12 files", "3/4 checks") */
+function buildStepSummary(goalID: string, stepID: string, status?: string): string | undefined {
+  if (!status || status === "pending") return undefined
+  try {
+    if (stepID === "plan") {
+      const nodes = Database.use((db: any) =>
+        db.select().from(OrchestratorPlanNodeTable)
+          .where(eq(OrchestratorPlanNodeTable.goal_id, goalID))
+          .all()
+      )
+      if (nodes?.length) return `${nodes.length} steps`
+    }
+    if (stepID === "execute") {
+      const goalRun = Database.use((db: any) =>
+        db.select().from(OrchestratorGoalRunTable)
+          .where(eq(OrchestratorGoalRunTable.goal_id, goalID))
+          .limit(1).get()
+      )
+      if (goalRun) {
+        const delivery = Database.use((db: any) =>
+          db.select().from(OrchestratorDeliveryTable)
+            .where(eq(OrchestratorDeliveryTable.goal_run_id, goalRun.id))
+            .limit(1).get()
+        )
+        if (delivery) {
+          const result = delivery.result as { changed_files?: string[]; diffs?: unknown[] } | null
+          const fileCount = result?.changed_files?.length ?? result?.diffs?.length ?? 0
+          if (fileCount > 0) return `${fileCount} files`
+        }
+      }
+    }
+    if (stepID === "eval") {
+      const goalRun = Database.use((db: any) =>
+        db.select().from(OrchestratorGoalRunTable)
+          .where(eq(OrchestratorGoalRunTable.goal_id, goalID))
+          .limit(1).get()
+      )
+      if (goalRun) {
+        const evaluation = Database.use((db: any) =>
+          db.select().from(OrchestratorEvaluationTable)
+            .where(eq(OrchestratorEvaluationTable.goal_run_id, goalRun.id))
+            .limit(1).get()
+        )
+        if (evaluation) {
+          const checks = Array.isArray(evaluation.checks) ? evaluation.checks : []
+          const passed = checks.filter((c: any) => c.status === "passed").length
+          return `${passed}/${checks.length} checks`
+        }
+      }
+    }
+  } catch { /* best effort */ }
+  return undefined
+}
+
+/** Build architect summary from Decision Log */
+function buildArchitectSummary(taskID: string) {
+  try {
+    const { createDecisionLog } = require("@/decision-log")
+    const log = createDecisionLog(taskID)
+    const entries = log.readByPhase("architect")
+    if (!entries || entries.length === 0) return undefined
+    const categories = [...new Set(entries.map((e: any) => e.key))]
+    return {
+      summary: `${entries.length} architect decisions across ${categories.length} categories`,
+      contractCount: entries.length,
+      categories,
+    }
+  } catch {
+    return undefined
   }
 }
