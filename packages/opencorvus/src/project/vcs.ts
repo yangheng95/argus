@@ -2,8 +2,10 @@ import { BusEvent } from "@/bus/bus-event"
 import { Bus } from "@/bus"
 import { $ } from "bun"
 import z from "zod"
+import path from "path"
 import { Log } from "@/util/log"
 import { Instance } from "./instance"
+import { Filesystem } from "@/util/filesystem"
 import { FileWatcher } from "@/file/watcher"
 
 const log = Log.create({ service: "vcs" })
@@ -22,7 +24,10 @@ export namespace Vcs {
     .object({
       /** True when a git repository exists at the working directory. False means no .git is present. */
       initialized: z.boolean(),
+      /** Current branch name. Undefined when no commits exist (unborn HEAD). */
       branch: z.string().optional(),
+      /** Current HEAD commit short hash. Undefined when no commits exist (unborn HEAD). */
+      commit: z.string().optional(),
       clean: z.boolean(),
       dirty: z.boolean(),
       staged: z.number().int().nonnegative(),
@@ -37,7 +42,7 @@ export namespace Vcs {
     })
   export type Info = z.infer<typeof Info>
 
-  function parse(text: string, branch?: string, initialized = false): Info {
+  function parse(text: string, input: { initialized: boolean; branch?: string; commit?: string }): Info {
     let ahead = 0
     let behind = 0
     let staged = 0
@@ -76,8 +81,9 @@ export namespace Vcs {
 
     const dirty = staged > 0 || modified > 0 || untracked > 0 || conflicts > 0
     return {
-      initialized,
-      branch,
+      initialized: input.initialized,
+      branch: input.branch,
+      commit: input.commit,
       clean: !dirty,
       dirty,
       staged,
@@ -87,6 +93,17 @@ export namespace Vcs {
       ahead,
       behind,
     }
+  }
+
+  async function currentCommit(cwd: string): Promise<string | undefined> {
+    const out = await $`git rev-parse --short HEAD`
+      .quiet()
+      .nothrow()
+      .cwd(cwd)
+      .text()
+      .then((x) => x.trim())
+      .catch(() => "")
+    return out || undefined
   }
 
   async function currentBranch() {
@@ -147,17 +164,25 @@ export namespace Vcs {
   }
 
   export async function info() {
-    const initialized = Instance.project.vcs === "git"
-    const branch = await state().then((s) => s.branch())
+    // Check .git directory directly (bypass Instance.project.vcs cache)
+    // so info() reflects the current filesystem state even if the Instance
+    // cache is stale (e.g. immediately after `git init`).
+    const initialized = Filesystem.stat(path.join(Instance.directory, ".git"))?.isDirectory() === true
     if (!initialized) {
-      return parse("", branch, false)
+      return parse("", { initialized: false })
     }
+    // Suppress branch when no commits exist (unborn HEAD). git rev-parse
+    // --abbrev-ref HEAD returns the configured default (e.g. "main") even
+    // before any commit; we only report it once a commit exists.
+    const commit = await currentCommit(Instance.directory)
+    const rawBranch = await state().then((s) => s.branch())
+    const branch = commit ? rawBranch : undefined
     const text = await $`git status --porcelain=v1 --branch`
       .quiet()
       .nothrow()
       .cwd(Instance.directory)
       .text()
       .catch(() => "")
-    return parse(text, branch, true)
+    return parse(text, { initialized: true, branch, commit })
   }
 }

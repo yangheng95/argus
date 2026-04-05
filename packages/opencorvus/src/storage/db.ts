@@ -9,6 +9,7 @@ import { Log } from "../util/log"
 import { NamedError } from "@opencorvus-ai/util/error"
 import z from "zod"
 import path from "path"
+import { mkdirSync } from "fs"
 import * as schema from "./schema"
 import { SCHEMA_DDL } from "./ddl"
 
@@ -23,7 +24,12 @@ const log = Log.create({ service: "db" })
 
 
 export namespace Database {
-  export const Path = path.join(Global.Path.data, "opencorvus.db")
+  // Path() is a function (not a const) so it resolves OPENCORVUS_HOME lazily.
+  // Required for benchmark isolation — benchmarks set OPENCORVUS_HOME at runtime
+  // after static imports have already completed.
+  export function Path() {
+    return path.join(Global.Path.data, "opencorvus.db")
+  }
   type Schema = typeof schema
   export type Transaction = SQLiteTransaction<"sync", void, Schema>
 
@@ -34,9 +40,14 @@ export namespace Database {
   }
 
   export const Client = lazy(() => {
-    log.info("opening database", { path: path.join(Global.Path.data, "opencorvus.db") })
+    const dbPath = Path()
+    log.info("opening database", { path: dbPath })
+    // Ensure data dir exists — benchmarks create OPENCORVUS_HOME at runtime,
+    // so the data subdirectory may not have been created by global/index.ts
+    // module-load ensureDirectory calls.
+    mkdirSync(path.dirname(dbPath), { recursive: true })
 
-    const sqlite = new BunDatabase(path.join(Global.Path.data, "opencorvus.db"), { create: true })
+    const sqlite = new BunDatabase(dbPath, { create: true })
     state.sqlite = sqlite
 
     sqlite.run("PRAGMA journal_mode = WAL")

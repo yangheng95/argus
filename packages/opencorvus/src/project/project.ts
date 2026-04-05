@@ -365,6 +365,11 @@ export namespace Project {
       throw new Error("git init completed without creating .git")
     }
     const next = await fromDirectory(directory)
+    // Refresh the Instance cache so Vcs.info() (and any other Instance.project
+    // consumers) observe the new .vcs="git" state immediately. Dynamic import
+    // to avoid a circular dependency between project.ts and instance.ts.
+    const { Instance } = await import("./instance")
+    await Instance.refresh(directory).catch(() => undefined)
     return InitGitResult.parse({
       created: true,
       project: next.project,
