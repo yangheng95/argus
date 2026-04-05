@@ -717,9 +717,9 @@ export function createTaskAgentTools(input: {
     }),
 
     execute_goal: tool({
-      description: "Execute a single goal in an isolated git worktree. Creates worktree, submits to executor, returns asynchronously. You will be re-triggered when execution completes. STOP after calling this.",
+      description: "Execute a pending or failed goal in an isolated git worktree. Creates worktree, submits to executor, returns asynchronously. Only valid for goals in pending or failed status — passed goals are terminal and cannot be re-executed (use eval_goal to re-validate or modify_goal to change the contract). You will be re-triggered when execution completes. STOP after calling this.",
       inputSchema: z.object({
-        goalID: z.string().describe("The goal ID to execute"),
+        goalID: z.string().describe("The goal ID to execute (must be pending or failed status)"),
         reason: z.string().optional().describe("Why you decided to execute this goal now"),
       }),
       execute: async ({ goalID }) => {
@@ -728,10 +728,15 @@ export function createTaskAgentTools(input: {
         const goal = dbGoals.find(g => g.id === goalID)
         if (!goal) return `Goal ${goalID} not found.`
         if (goal.status === "running") return `Goal ${goalID} is already running.`
+        if (goal.status === "passed") {
+          return `Goal ${goalID} is already passed (terminal success state). ` +
+                 `To re-validate it without changes, use eval_goal(${goalID}). ` +
+                 `To change its contract (done_definition, owned_paths), use modify_goal(${goalID}, ...) which will reset to pending automatically. ` +
+                 `execute_goal does not re-run passed goals.`
+        }
 
-        // Reset goal to "pending" so infrastructure dispatch can pick it up.
-        // Task Agent is the decision-maker: it decides when to re-execute.
-        if (goal.status === "passed" || goal.status === "failed") {
+        // goal.status === "pending" | "failed" — reset failed to pending so infrastructure picks it up
+        if (goal.status === "failed") {
           Database.use((db) => {
             const { OrchestratorGoalTable: GT } = require("@/orchestrator/orchestrator.sql")
             db.update(GT)
@@ -774,6 +779,40 @@ export function createTaskAgentTools(input: {
         // Signal task loop to dispatch via GoalPool (goal is now "pending", pool will pick it up)
         stopAfterDispatch.abort("execute_goal")
         return `Goal "${goal.title}" (${goalID}) queued for execution. STOP HERE — task loop will dispatch via GoalPool and re-trigger you when it completes.`
+      },
+    }),
+
+    retry_failed_goals: tool({
+      description: "Retry ALL currently failed goals in parallel. Each goal is reset to pending with its failure evidence auto-appended to the executor prompt. Use this when you want to re-execute all failed goals with no special treatment (infrastructure handles evidence enrichment). For a single specific goal or modified contract, use execute_goal or modify_goal. STOP after calling this.",
+      inputSchema: z.object({
+        reason: z.string().describe("Why you decided to retry all failed goals now (e.g. 'fixing after delivery feedback', 'after architect contract update')"),
+      }),
+      execute: async ({ reason }) => {
+        const task = requireTask(taskID)
+        if (!task.active_run_id) return "No active run. Nothing to retry."
+        const dbGoals = listGoals(taskID)
+        const failed = dbGoals.filter(g => g.status === "failed")
+        if (failed.length === 0) return "No failed goals to retry."
+
+        // Reset all failed goals to pending. GoalPool picks them up and auto-appends eval evidence.
+        Database.use((db) => {
+          const { OrchestratorGoalTable: GT } = require("@/orchestrator/orchestrator.sql")
+          const now = Date.now()
+          for (const goal of failed) {
+            db.update(GT)
+              .set({ status: "pending", time_updated: now })
+              .where(eq(GT.id, goal.id))
+              .run()
+          }
+        })
+
+        for (const goal of failed) {
+          ensureGoalInWorkflow(goal.id, goal.title)
+          await trackStepStart("retry_failed_goals", goal.id)
+        }
+
+        stopAfterDispatch.abort("retry_failed_goals")
+        return `Retrying ${failed.length} failed goal(s): ${failed.map(g => g.title).join(", ")}. Reason: ${reason}. STOP HERE — task loop dispatches via GoalPool and re-triggers you when batch completes.`
       },
     }),
 

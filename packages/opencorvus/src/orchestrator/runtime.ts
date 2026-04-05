@@ -613,9 +613,9 @@ export namespace OrchestratorRuntime {
           runTaskLoop({
             taskID: task.id,
             trigger: {
-              kind: delivery ? "run_completed" : "executor_failed",
+              kind: "batch_complete",
               runID: run.id,
-              ...(delivery ? {} : { error: "Run marked completed but no delivery was persisted" }),
+              summary: { passed: 0, failed: 0, total: 0 },
             },
             hooks: getHooks(),
           }).catch(err => log.error("task loop failed (legacy syncRun)", { taskID: task.id, error: String(err) }))
@@ -682,7 +682,7 @@ export namespace OrchestratorRuntime {
         Promise.all([import("@/orchestrator/task-loop"), import("@/orchestrator/state")]).then(([{ runTaskLoop }, { hooks: getHooks }]) => {
           runTaskLoop({
             taskID: task.id,
-            trigger: { kind: "run_completed", runID: run.id },
+            trigger: { kind: "batch_complete", runID: run.id, summary: { passed: 0, failed: 0, total: 0 } },
             hooks: getHooks(),
           }).catch(err => log.error("task loop failed (legacy syncRun completed)", { taskID: task.id, error: String(err) }))
         })

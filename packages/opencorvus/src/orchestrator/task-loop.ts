@@ -49,7 +49,7 @@ const DECISION_INACTIVITY_MS = parseInt(
  */
 export async function runTaskLoop(input: {
   taskID: string
-  trigger: { kind: string; runID?: string; error?: string }
+  trigger: { kind: string; runID?: string; summary?: { passed: number; failed: number; total: number } }
   signal?: AbortSignal
   hooks: GoalPoolOptions["hooks"]
 }) {
@@ -111,14 +111,14 @@ export async function runTaskLoop(input: {
       // The Task Agent's tool calls (spec, decompose, etc.) are handled within processTask.
       // Loop back to decision point.
       log.info("no active run with plan, re-triggering", { taskID })
-      trigger = { kind: "run_completed", runID: run?.id }
+      trigger = { kind: "batch_complete", runID: run?.id ?? "", summary: { passed: 0, failed: 0, total: 0 } }
       continue
     }
 
     const plan = findPlan(run.plan_version_id)
     if (!plan) {
       log.warn("plan not found", { taskID, planID: run.plan_version_id })
-      trigger = { kind: "run_completed", runID: run.id }
+      trigger = { kind: "batch_complete", runID: run.id, summary: { passed: 0, failed: 0, total: 0 } }
       continue
     }
 
@@ -132,9 +132,11 @@ export async function runTaskLoop(input: {
       const passed = goals.filter(g => g.status === "passed").length
       const failed = goals.filter(g => g.status === "failed").length
       log.info("all goals in terminal state", { taskID, passed, failed })
-      trigger = failed > 0
-        ? { kind: "executor_failed", runID: run.id, error: `${failed} goal(s) failed evaluation` }
-        : { kind: "run_completed", runID: run.id }
+      trigger = {
+        kind: "batch_complete",
+        runID: run.id,
+        summary: { passed, failed, total: goals.length },
+      }
       continue
     }
 
@@ -204,14 +206,14 @@ export async function runTaskLoop(input: {
       pending: pendingGoals.length,
     })
 
-    if (failedGoals.length > 0) {
-      trigger = {
-        kind: "executor_failed",
-        runID: run.id,
-        error: `Goal(s) failed: ${failedGoals.map(g => g.title).join(", ")}. Use read_context for evidence.`,
-      }
-    } else {
-      trigger = { kind: "run_completed", runID: run.id }
+    trigger = {
+      kind: "batch_complete",
+      runID: run.id,
+      summary: {
+        passed: passedGoals.length,
+        failed: failedGoals.length,
+        total: goalsAfter.length,
+      },
     }
   }
 
