@@ -782,19 +782,78 @@ export function createTaskAgentTools(input: {
       },
     }),
 
+    query_failed_goals: tool({
+      description: "Query all currently failed goals with their latest eval evidence. Returns structured data for each failed goal: title, owned_paths, done_definition, latest eval verdict, failed checks with evidence. Use this BEFORE calling retry_failed_goals to understand per-goal failure reasons.",
+      inputSchema: z.object({}),
+      execute: async () => {
+        const dbGoals = listGoals(taskID)
+        const failed = dbGoals.filter(g => g.status === "failed")
+        if (failed.length === 0) return "No failed goals."
+        const { findLatestFailedEvalForGoal } = await import("@/orchestrator/store")
+        const sections: string[] = [`## Failed Goals (${failed.length})`]
+        for (const goal of failed) {
+          sections.push(`\n### ${goal.id}: ${goal.title}`)
+          sections.push(`- done_definition: ${goal.done_definition.slice(0, 300)}`)
+          if (goal.owned_paths?.length) sections.push(`- owned_paths: ${goal.owned_paths.join(", ")}`)
+          const evalRows = findLatestFailedEvalForGoal(goal.id)
+          if (evalRows.length === 0) {
+            sections.push(`- eval: no rejected evaluation found`)
+            continue
+          }
+          const row = evalRows[0]!
+          sections.push(`- eval verdict: ${row.verdict}`)
+          sections.push(`- eval summary: ${row.summary}`)
+          const checks = Array.isArray(row.checks) ? row.checks : []
+          const failedChecks = checks.filter((c: any) => c.status === "failed")
+          if (failedChecks.length > 0) {
+            sections.push(`- failed checks:`)
+            for (const c of failedChecks.slice(0, 5)) {
+              const anyC = c as any
+              const ev = anyC.evidence ? String(anyC.evidence).slice(0, 300) : ""
+              sections.push(`  - ${anyC.name}: ${ev}`)
+            }
+          }
+        }
+        return sections.join("\n")
+      },
+    }),
+
     retry_failed_goals: tool({
-      description: "Retry ALL currently failed goals in parallel. Each goal is reset to pending with its failure evidence auto-appended to the executor prompt. Use this when you want to re-execute all failed goals with no special treatment (infrastructure handles evidence enrichment). For a single specific goal or modified contract, use execute_goal or modify_goal. STOP after calling this.",
+      description: "Retry ALL currently failed goals in parallel. Each goal is reset to pending with its failure evidence auto-appended to the executor prompt. You MUST first call query_failed_goals to understand each failure, then articulate per-goal root cause analysis in this tool's input. Schema enforces you demonstrate understanding before retry — reflexive retry without analysis is impossible. STOP after calling this.",
       inputSchema: z.object({
-        reason: z.string().describe("Why you decided to retry all failed goals now (e.g. 'fixing after delivery feedback', 'after architect contract update')"),
+        reason: z.string().min(20).describe("Overall reason for batch retry (min 20 chars, e.g. 'eval caught integration bugs, retrying with fresh context + failure evidence appended')"),
+        per_goal_analysis: z.record(
+          z.string(),
+          z.object({
+            root_cause: z.string().min(30).describe("What went wrong in this specific goal (min 30 chars). Cite specific eval evidence."),
+            failure_class: z.enum([
+              "code_bug",
+              "test_failure",
+              "missing_dependency",
+              "wrong_approach",
+              "cross_goal_integration",
+              "flaky_environment",
+            ]).describe("Category of failure"),
+            expected_fix: z.string().min(20).describe("What should retry do differently (min 20 chars)"),
+          }),
+        ).describe("Per-goal analysis keyed by goalID. MUST include an entry for each currently-failed goal."),
       }),
-      execute: async ({ reason }) => {
+      execute: async ({ reason, per_goal_analysis }) => {
         const task = requireTask(taskID)
         if (!task.active_run_id) return "No active run. Nothing to retry."
         const dbGoals = listGoals(taskID)
         const failed = dbGoals.filter(g => g.status === "failed")
         if (failed.length === 0) return "No failed goals to retry."
 
-        // Reset all failed goals to pending. GoalPool picks them up and auto-appends eval evidence.
+        // Enforce: per_goal_analysis MUST cover every failed goal
+        const analyzedIDs = new Set(Object.keys(per_goal_analysis))
+        const missing = failed.filter(g => !analyzedIDs.has(g.id)).map(g => g.id)
+        if (missing.length > 0) {
+          return `Missing per_goal_analysis for failed goal(s): ${missing.join(", ")}. Call query_failed_goals first, then provide analysis for EVERY failed goal before retry. Retry rejected.`
+        }
+
+        // Reset all failed goals to pending. GoalPool picks them up + auto-appends eval evidence.
+        // Also log the articulated analysis to decision log for observability.
         Database.use((db) => {
           const { OrchestratorGoalTable: GT } = require("@/orchestrator/orchestrator.sql")
           const now = Date.now()
@@ -806,13 +865,32 @@ export function createTaskAgentTools(input: {
           }
         })
 
+        // Record analysis in decision log for future retry context
+        try {
+          const { createDecisionLog } = await import("@/decision-log")
+          const log = createDecisionLog(taskID)
+          for (const [goalID, analysis] of Object.entries(per_goal_analysis)) {
+            log.append({
+              goalID,
+              phase: "retry",
+              key: `retry_analysis_${goalID}`,
+              value: `[${analysis.failure_class}] ${analysis.expected_fix}`,
+              reason: analysis.root_cause,
+            })
+          }
+        } catch { /* best effort */ }
+
         for (const goal of failed) {
           ensureGoalInWorkflow(goal.id, goal.title)
           await trackStepStart("retry_failed_goals", goal.id)
         }
 
         stopAfterDispatch.abort("retry_failed_goals")
-        return `Retrying ${failed.length} failed goal(s): ${failed.map(g => g.title).join(", ")}. Reason: ${reason}. STOP HERE — task loop dispatches via GoalPool and re-triggers you when batch completes.`
+        const summary = failed.map(g => {
+          const a = per_goal_analysis[g.id]
+          return `  - ${g.title} [${a?.failure_class}]: ${a?.expected_fix.slice(0, 80)}`
+        }).join("\n")
+        return `Retrying ${failed.length} failed goal(s):\n${summary}\nReason: ${reason}\nSTOP HERE — task loop dispatches via GoalPool and re-triggers you when batch completes.`
       },
     }),
 
