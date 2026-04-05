@@ -322,21 +322,22 @@
   <text class="mono" x="40" y="360">  eval_goal(goalID)           → 手动重评 (eval 已由 Infrastructure 自动完成, 仅用于 retry 后重新评估)</text>
 
   <text class="mono-h" x="40" y="384">调用 Infrastructure (工具只标记意图, GoalPool 实际执行):</text>
-  <text class="mono" x="40" y="400">  execute_goal(goalID)        → 重置 goal 为 pending → abort 信号 → GoalPool 自动 pick up; retry 时自动追加 eval 失败 evidence</text>
-  <text class="mono" x="40" y="416">  dispatch_ready_goals()      → 检查 ready goals 数量 → abort 信号 → GoalPool 自动 dispatch (依赖 DAG)</text>
-  <text class="mono" x="40" y="432">  create_run()                → 创建 run record + plan nodes (goals 作为 plan 节点)</text>
-  <text class="mono" x="40" y="448">  submit_execution(runID)     → 激活 run → abort 信号 → GoalPool 在 Task Control Loop 中执行</text>
-  <text class="mono" x="40" y="464">  deliver()                   → 聚合所有 goal deliveries → DeliveryAgent 验证 build/test</text>
-  <text class="mono" x="40" y="480">  read_context(scope)         → 读 goal 状态 / eval evidence (按 task_id 查) / Decision Log / deliveries</text>
+  <text class="mono" x="40" y="400">  execute_goal(goalID)        → 仅 pending/failed; passed 拒绝 (引导 eval_goal/modify_goal) — GoalPool auto-pickup</text>
+  <text class="mono" x="40" y="416">  retry_failed_goals(reason)  → 批量重置 failed → pending; GoalPool dispatch + 自动追加 eval 失败 evidence</text>
+  <text class="mono" x="40" y="432">  dispatch_ready_goals()      → 检查 ready goals → abort 信号 → GoalPool dispatch (依赖 DAG)</text>
+  <text class="mono" x="40" y="448">  create_run()                → 创建 run record + plan nodes (goals 作为 plan 节点)</text>
+  <text class="mono" x="40" y="464">  submit_execution(runID)     → 激活 run → abort 信号 → GoalPool 在 Task Control Loop 中执行</text>
+  <text class="mono" x="40" y="480">  deliver()                   → 聚合所有 goal deliveries → DeliveryAgent 验证 build/test</text>
+  <text class="mono" x="40" y="496">  read_context(scope)         → 读 goal 状态 / eval evidence / Decision Log / deliveries</text>
 
-  <text class="mono-h" x="40" y="504">Goal 动态调整:</text>
-  <text class="mono" x="40" y="520">  add_goal(contract)          → INSERT goal row (eval 发现缺少依赖时)</text>
-  <text class="mono" x="40" y="536">  modify_goal(goalID, updates) → UPDATE goal row (done_definition 不够精确时)</text>
+  <text class="mono-h" x="40" y="520">Goal 动态调整:</text>
+  <text class="mono" x="40" y="536">  add_goal(contract)          → INSERT goal row (eval 发现缺少依赖时)</text>
+  <text class="mono" x="40" y="552">  modify_goal(goalID, updates) → UPDATE goal row (done_definition 不够精确时)</text>
 
-  <text class="mono-h" x="40" y="560">终态 + 重启控制:</text>
-  <text class="mono" x="40" y="576">  publish_delivery()          → git publish + task.status='completed'</text>
-  <text class="mono" x="40" y="592">  fail_task(reason)           → task.status='failed'</text>
-  <text class="mono" x="40" y="608">  restart_from_stage(stage)   → task.status='active' (从 requirements/plan/executor 重来)</text>
+  <text class="mono-h" x="40" y="576">终态 + 重启控制:</text>
+  <text class="mono" x="40" y="592">  publish_delivery()          → git publish + task.status='completed'</text>
+  <text class="mono" x="40" y="608">  fail_task(reason)           → task.status='failed'</text>
+  <text class="mono" x="40" y="624">  restart_from_stage(stage)   → task.status='active' (从 requirements/plan/executor 重来)</text>
 
   <!-- Task Control Loop + GoalPool model -->
   <text class="h3" x="40" y="640">Task Control Loop + GoalPool (替代 fire-and-forget)</text>
@@ -353,7 +354,7 @@
   <text class="mono" x="40" y="802">  submit: ready goals (依赖满足) → queue → auto-fill slots (up to concurrency)</text>
   <text class="mono" x="40" y="818">  per-goal: worktree → session → executor → pipeline → merge → cleanup → eval</text>
   <text class="mono" x="40" y="834">  drain: 阻塞直到 queue 空 + 所有 slots idle → 返回 GoalResult[]</text>
-  <text class="mono" x="40" y="850">Phase 4: Collect Results → 构建 trigger → loop back to Phase 1</text>
+  <text class="mono" x="40" y="850">Phase 4: Collect Results → 构建 batch_complete trigger (summary: passed/failed/total) → loop back</text>
 
   <text class="mono-h" x="40" y="878">GoalPool 内部 (goal-pool.ts):</text>
   <text class="mono" x="40" y="894">  • 每个 goal 独立 worktree, session, executor 实例, pipeline</text>
@@ -380,7 +381,7 @@
   <text class="mono" x="40" y="1086">• 收到 task → "这是 typo fix, 不需要 requirements" → create_run → execute_goal</text>
   <text class="mono" x="40" y="1102">• requirements 返回 5 goals, recommended_next=[architect] → "多 goal, 需要共识" → architect(goalIDs)</text>
   <text class="mono" x="40" y="1118">• architect 完成 → create_run → submit_execution (dispatch 所有依赖满足的 goals)</text>
-  <text class="mono" x="40" y="1134">• batch 完成 → auto-eval 已完成, goal_3 failed → "代码 bug" → execute_goal(goal_3) 重试 (eval 自动重跑)</text>
+  <text class="mono" x="40" y="1134">• batch 完成 → auto-eval 已完成, 2 passed + 1 failed → read_context 拿 evidence → retry_failed_goals("fix bug") 或 execute_goal(failed_goal_id)</text>
   <text class="mono" x="40" y="1150">• 全部 goal passed → deliver() → publish_delivery()</text>
   </g>
 
