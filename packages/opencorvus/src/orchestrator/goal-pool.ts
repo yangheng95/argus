@@ -30,6 +30,7 @@ import {
   listGoalsByPlan,
   findLatestFailedEvalForGoal,
   findDeliveryByGoalRun,
+  findLatestDeliveryForGoal,
   type TaskRow,
   type RunRow,
   type PlanRow,
@@ -268,6 +269,35 @@ export class GoalPool {
         checkout: "sync",
       })
       worktreeDir = worktreeInfo.directory
+
+      // ── 2b. Apply previous failed delivery (if retry) ──
+      // When a goal is retried, the new worktree branches from HEAD, which
+      // does NOT include the failed goal's previous code attempt (failed
+      // goals don't merge to HEAD). Without this, the executor starts from
+      // scratch and may make the same mistakes. By preserving the last
+      // delivery's diffs INTO the retry worktree, the executor sees its
+      // own buggy code + eval evidence, enabling targeted fixes.
+      const prevDelivery = findLatestDeliveryForGoal(entry.goal.id)
+      if (prevDelivery) {
+        const result = prevDelivery.result as { diffs?: Array<{ file: string; status?: string; after?: string }> } | null
+        if (result?.diffs && result.diffs.length > 0) {
+          const { applyGoalDelivery } = await import("@/goal/runner")
+          await applyGoalDelivery({
+            directory: worktreeDir,
+            delivery: { diffs: result.diffs as any },
+            ownedPaths: entry.goal.owned_paths ?? [],
+          }).catch((err) => {
+            log.warn("retry: failed to apply previous delivery into worktree", {
+              goalID: entry.goal.id,
+              error: String(err),
+            })
+          })
+          log.info("retry: restored previous delivery into worktree", {
+            goalID: entry.goal.id,
+            files: result.diffs.length,
+          })
+        }
+      }
 
       // ── 3. Create goal session ──
       const goalSession = await createGoalSession(task as any, entry.goal as any, worktreeDir)
