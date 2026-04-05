@@ -131,8 +131,15 @@ async function continueTaskMessage(taskID: string, text: string) {
   // If task is in a terminal/blocked state → wake up Task Agent to handle the message
   if (["failed", "cancelled"].includes(task.status)) {
     await updateTask(task, { status: "queued", error: null, blocking_reason: null }, "User message received, re-queuing")
-    TaskAgent.processTask(taskID, { kind: "retry" }).catch((err) => {
-      log.error("task agent failed on user message retry", { taskID, error: err instanceof Error ? err.message : String(err) })
+    import("@/orchestrator/task-loop").then(async ({ runTaskLoop }) => {
+      const { hooks } = await import("@/orchestrator/state")
+      runTaskLoop({
+        taskID,
+        trigger: { kind: "retry" },
+        hooks: hooks(),
+      }).catch((err) => {
+        log.error("task loop failed on retry", { taskID, error: err instanceof Error ? err.message : String(err) })
+      })
     })
     return {
       mode: "agent_retry" as const,
@@ -399,9 +406,19 @@ export namespace OrchestratorService {
       taskID, content: input.request,
       source: input.source ?? "api", userID: slackUser(metadata),
     })
-    // Trigger the Task Agent to process the new task (fire-and-forget)
-    TaskAgent.processTask(taskID, { kind: "created" }).catch((err) => {
-      log.error("task agent failed on creation", { taskID, error: err instanceof Error ? err.message : String(err) })
+    // Start the task control loop (replaces fire-and-forget triggers).
+    // The loop drives the entire lifecycle: Decision → GoalPool → Decision → ...
+    // It runs in the background but is NOT fire-and-forget — it's a single
+    // structured loop that exits when the task reaches a terminal state.
+    import("@/orchestrator/task-loop").then(async ({ runTaskLoop }) => {
+      const { hooks } = await import("@/orchestrator/state")
+      runTaskLoop({
+        taskID,
+        trigger: { kind: "created" },
+        hooks: hooks(),
+      }).catch((err) => {
+        log.error("task loop failed", { taskID, error: err instanceof Error ? err.message : String(err) })
+      })
     })
     return taskID
   }
@@ -800,10 +817,17 @@ export namespace OrchestratorService {
     if (["queued", "active"].includes(task.status)) {
       throw new Error(`task ${taskID} is already active`)
     }
-    // Reset to queued and let the Task Agent decide the retry strategy
+    // Reset to queued and start the task loop
     await updateTask(task, { status: "queued", error: null, blocking_reason: null }, "Retry requested by operator")
-    TaskAgent.processTask(taskID, { kind: "retry" }).catch((err) => {
-      log.error("task agent failed on retry", { taskID, error: err instanceof Error ? err.message : String(err) })
+    import("@/orchestrator/task-loop").then(async ({ runTaskLoop }) => {
+      const { hooks } = await import("@/orchestrator/state")
+      runTaskLoop({
+        taskID,
+        trigger: { kind: "retry" },
+        hooks: hooks(),
+      }).catch((err) => {
+        log.error("task loop failed on retry", { taskID, error: err instanceof Error ? err.message : String(err) })
+      })
     })
     return viewTask(requireTask(taskID))
   }
@@ -844,9 +868,14 @@ export namespace OrchestratorService {
       return { resumed: false, status: run.status }
     }
     const nextRunID = await OrchestratorRuntime.createOperatorRun(task, run, note)
-    if (task.active_plan_version_id) {
-      await OrchestratorRuntime.dispatchReadyGoals(task.id, nextRunID, task.active_plan_version_id, hooks())
-    }
+    // Start task loop — it handles dispatch via GoalPool
+    import("@/orchestrator/task-loop").then(({ runTaskLoop }) => {
+      runTaskLoop({
+        taskID: task.id,
+        trigger: { kind: "retry", runID: nextRunID },
+        hooks: hooks(),
+      }).catch(() => {})
+    })
     return { resumed: true, status: "active" as const }
   }
 

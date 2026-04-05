@@ -5,7 +5,8 @@ import { WorkbenchTaskNoteTable } from "@/workbench/workbench.sql"
 import { Budget } from "./model"
 import { OrchestratorConfig } from "./config"
 import type { OrchestratorBudget, OrchestratorTaskStatus } from "./orchestrator.sql"
-import type { TaskRow } from "./store"
+import type { TaskRow, GoalRow } from "./store"
+import type { GoalContractFields } from "@/pipeline/types"
 
 export const ORCHESTRATOR_POLL_INTERVAL_MS = 500
 
@@ -167,4 +168,22 @@ export function operatorNotesSection(taskID: string): string {
     .map((n) => `- [${new Date(n.time_created).toISOString()}] ${n.content}`)
     .join("\n")
   return `\n\n## Operator Notes\n\nThe following messages were sent by the operator during task execution. Incorporate these instructions into your analysis and decisions.\n\n${items}\n`
+}
+
+export function goalRowToContract(row: GoalRow | ({ id: string; title: string } & Record<string, unknown>)): GoalContractFields & Record<string, unknown> {
+  const r = row as Record<string, unknown>
+  return {
+    ...row,
+    id: row.id,
+    title: row.title,
+    objective: (r.objective as string) ?? "",
+    done_definition: (r.done_definition as string) ?? "",
+    owned_paths: (r.owned_paths as string[]) ?? [],
+    depends_on: (r.depends_on as string[]) ?? [],
+    priority: ((r.priority as string) ?? "blocking") as "blocking" | "advisory",
+    kind: (r.kind as string) ?? "feature",
+    requirement_ids: (r.requirement_ids as string[]) ?? [],
+    exports: (r.exports as string[]) ?? [],
+    imports: (r.imports as string[]) ?? [],
+  }
 }

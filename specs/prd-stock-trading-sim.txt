@@ -1,4 +1,18 @@
-模拟股票交易 Web 应用 PRD — 交付一个商业级可运行的 MVP 全栈应用。
+股票交易 Web 应用 PRD — 交付一个接近成熟券商终端体验的商业级可运行 MVP，全栈实现行情、下单、持仓、资产、记录与风控闭环，并在样式层面达到“专业交易软件”而不是普通后台页面的质感。
+
+## 产品定位
+
+- **产品目标**: 构建一个模拟 A 股交易 Web 终端，支持用户完成注册、登录、看盘、下单、撤单、持仓管理、收益分析和交易复盘。
+- **目标体验**: 以“高信息密度、低操作摩擦、实时反馈、专业深色终端”为核心，而不是通用 SaaS 仪表盘。
+- **目标用户**:
+  - 新手投资者：熟悉股票交易流程与术语
+  - 轻度交易者：进行模拟练习与策略试错
+  - 产品/面试演示场景：展示完整交易闭环与实时 UI 能力
+- **成功标准**:
+  - 用户可在 5 分钟内完成注册到第一次买入
+  - 行情刷新具有实时感，连接状态明确可感知
+  - 核心交易链路无歧义：可买、可卖、可撤、可查、可回看
+  - UI 具有交易终端风格，不出现“默认 Vite 页面”或“普通管理后台”观感
 
 ## 技术栈（固定）
 
@@ -16,21 +30,24 @@
 - **脚手架**: Vite (react-ts 模板结构)
 - **路由**: React Router v7
 - **样式**: Tailwind CSS v4
-- **图表**: Recharts（K线简化版用柱状图 + 折线图）
+- **图表**: Recharts（真实蜡烛图 K 线 + 均线叠加 + MACD 子图、分时图、成交量、资产曲线、市场热力图 Treemap）
 - **HTTP**: 原生 fetch + SSE EventSource
 - **前端目录**: `web/`，构建产物 `web/dist/`
 
-### 项目结构
-```
+## 项目结构
+
+```text
 index.ts                 # Hono 入口，挂载 API + SSE + 静态资源
 src/
   db.ts                  # SQLite DDL + 初始化 + 种子数据
-  auth.ts                # 认证中间件 + 路由
-  market.ts              # 行情路由 + SSE 推送
-  trading.ts             # 交易路由（买入/卖出/撤单）
-  portfolio.ts           # 持仓 + 资产路由
-  history.ts             # 交易历史 + 收益统计
-  simulator.ts           # 行情模拟引擎（随机波动 + 趋势）
+  auth.ts                # 注册、登录、会话校验
+  market.ts              # 行情列表、个股详情、SSE 推送
+  trading.ts             # 下单、撤单、委托列表
+  portfolio.ts           # 持仓、资产汇总、自选股
+  history.ts             # 成交记录、资产曲线、交易复盘摘要
+  simulator.ts           # 行情模拟引擎（随机波动 + 趋势 + 撮合）
+  news.ts                # 个股新闻生成引擎（情绪驱动随机新闻，内存队列）
+  risk.ts                # 下单校验、资金冻结、持仓可卖校验
 web/
   index.html
   src/
@@ -38,9 +55,14 @@ web/
     App.tsx
     api.ts               # API client + SSE 订阅
     components/
+      market/
+      trading/
+      portfolio/
+      shared/
     pages/
     hooks/
     styles/
+      theme.css          # 颜色变量、滚动条、表格、卡片、图表皮肤
   tailwind.config.ts
   vite.config.ts
   tsconfig.json
@@ -49,96 +71,360 @@ tests/
   api.test.ts            # 后端 API 测试
 ```
 
-### 启动方式
+## 启动方式
+
 ```bash
 cd web && bun install && bun run build && cd ..
 bun run index.ts
 # 浏览器打开 http://localhost:3000
 ```
 
-## 交付范围（MVP P0 功能）
+## 设计原则
 
-### 后端 API
+- **实时优先**: 行情、委托状态、持仓盈亏必须实时响应，不允许用户依赖刷新页面确认结果。
+- **交易优先**: 页面结构围绕“看盘 -> 判断 -> 下单 -> 跟踪 -> 复盘”组织，而不是围绕 CRUD 菜单组织。
+- **高密度但不混乱**: 桌面端优先采用多栏布局、紧凑表格、固定数值对齐、明确分区。
+- **结果可解释**: 每笔订单的状态变化、成交价格、资金变化必须能在界面上追溯。
+- **风控前置**: 在输入阶段就提示可买数量、可卖数量、价格区间与错误原因，减少提交后报错。
 
-1. **认证**
-   - `POST /api/auth/register` — 用户名+密码注册，初始资金 1,000,000
-   - `POST /api/auth/login` — 登录返回 Bearer token
+## 用户核心场景
 
-2. **行情**
-   - `GET /api/market/stocks` — 股票列表（代码、名称、最新价、涨跌幅、成交量）
-   - `GET /api/market/stocks/:code` — 单只股票详情 + 最近 60 个价格点
-   - `GET /api/market/sse` — SSE 实时行情推送（每 2 秒一次全量快照）
+1. 新用户注册并进入模拟账户，查看初始 100 万资金。
+2. 用户在首页观察实时行情、涨跌榜与自选股，选择目标股票。
+3. 用户进入个股详情，阅读分时走势、盘口摘要、当日波动区间后下单。
+4. 用户在持仓页确认成本、浮盈浮亏、总资产与当日收益变化。
+5. 用户在记录页查看成交流水、筛选历史记录并回顾交易表现。
 
-3. **交易**
-   - `POST /api/trading/buy` — 限价买入（股票代码、数量、价格）
-   - `POST /api/trading/sell` — 限价卖出
-   - `POST /api/trading/cancel/:id` — 撤销挂单
-   - `GET /api/trading/orders` — 当前委托单列表（pending/filled/cancelled）
+## 交付范围
 
-4. **持仓**
-   - `GET /api/portfolio` — 当前持仓（股票、数量、成本价、市值、盈亏）
-   - `GET /api/portfolio/summary` — 总资产、可用资金、总市值、总盈亏、收益率
+### P0 必做能力
 
-5. **历史**
-   - `GET /api/history/trades` — 成交记录（支持 ?stock=&limit=&offset=）
-   - `GET /api/history/daily` — 每日资产曲线（最近 30 天）
+#### 1. 认证与会话
 
-### 行情模拟引擎
+- `POST /api/auth/register` — 用户名+密码注册，初始资金 1,000,000
+- `POST /api/auth/login` — 登录返回 Bearer token
+- `GET /api/auth/me` — 获取当前登录用户基础信息与账户余额
+- `POST /api/auth/logout` — 注销当前会话
+
+#### 2. 行情中心
+
+- `GET /api/market/stocks` — 股票列表（代码、名称、最新价、涨跌额、涨跌幅、成交量、最高、最低）
+- `GET /api/market/stocks/:code` — 单只股票详情 + 当日摘要
+- `GET /api/market/stocks/:code/kline?period=1m|5m|15m|1d` — K 线数据（OHLCV + MA5/MA10/MA20 + MACD 三线）
+- `GET /api/market/overview` — 大盘摘要（上涨家数、下跌家数、成交总量、领涨股、领跌股）
+- `GET /api/market/heatmap` — 热力图数据（所有股票代码、名称、涨跌幅）
+- `GET /api/market/sse` — SSE 实时行情推送（每 2 秒一次全量快照）
+- `GET /api/market/watchlist` — 自选股列表
+- `POST /api/market/watchlist` — 添加自选股
+- `DELETE /api/market/watchlist/:code` — 删除自选股
+- `GET /api/news/:code?limit=20&offset=0` — 个股新闻列表（含情绪标签、来源、影响力）
+- `GET /api/news/market?limit=20&offset=0` — 全市场综合新闻
+
+#### 3. 交易中心
+
+- `POST /api/trading/buy` — 限价买入（股票代码、数量、价格）
+- `POST /api/trading/sell` — 限价卖出
+- `POST /api/trading/cancel/:id` — 撤销挂单
+- `GET /api/trading/orders` — 当前委托单列表（pending/filled/cancelled）
+- `GET /api/trading/orders/history` — 历史委托列表
+- 订单状态至少支持：`pending`、`filled`、`cancelled`
+- 下单成功后立即返回订单摘要、冻结资金或占用持仓信息
+
+#### 4. 持仓与资产
+
+- `GET /api/portfolio` — 当前持仓（股票、数量、可卖数量、成本价、现价、市值、盈亏）
+- `GET /api/portfolio/summary` — 总资产、可用资金、冻结资金、总市值、总盈亏、收益率
+- `GET /api/portfolio/exposure` — 仓位结构摘要（股票数量、持仓集中度、最大持仓）
+
+#### 5. 历史与复盘
+
+- `GET /api/history/trades` — 成交记录（支持 `?stock=&direction=&limit=&offset=`）
+- `GET /api/history/daily` — 每日资产曲线（最近 30 天）
+- `GET /api/history/highlights` — 当日交易摘要（成交次数、买卖次数、已实现盈亏、最大单笔成交额）
+
+### P1 扩展能力（PRD 预留，不作为本次强制验收）
+
+- 市价单与更丰富的委托类型
+- 五档盘口深度展示
+- 股票搜索、拼音缩写搜索、快捷键下单
+- 风险提示中心（连续亏损、重仓提醒、撤单频繁提示）
+- 个股标签、行业分组、自选分组
+- 成交回报 toast 流与操作通知中心
+- 资产日报导出、简版交易复盘卡片
+
+## 行情模拟引擎
 
 - 预置 10 只模拟股票（代码 SH600001-SH600010，中文名称）
-- 每 2 秒生成一次新价格：
-  - 基于上一个价格 ± 随机波动（正态分布，σ=0.5%）
+- 服务启动时生成当日历史价格（模拟 9:30 开盘至今，每分钟一个 tick，约 240 点，以 OHLCV 格式存储于 `price_history`）
+- 每 2 秒生成一次新 tick（更新当前 1 分钟 bar）：
+  - 基于上一个价格 ± 随机波动（正态分布，σ = 0.5%）
   - 叠加趋势因子（每只股票有隐含趋势 -0.1% ~ +0.1%）
   - 涨跌幅限制 ±10%（基于当日开盘价）
+  - 当前 bar 的 high/low 随 tick 持续更新，满 60 秒封闭当根 K 线，开启新 bar
+- K 线聚合规则（kline 接口实时计算）：
+  - `1m` — 原始每分钟 bar
+  - `5m`、`15m` — 将 1m bar 按时间窗口合并：首根 open、末根 close、区间 high/low 极值、累计 volume
+  - `1d` — 当天全部 1m bar 合并为一根日 K
+  - 技术指标随 K 线响应一同返回：
+    - MA5、MA10、MA20（close 的简单移动平均）
+    - MACD：EMA12/EMA26 -> DIF；EMA9(DIF) -> DEA；BAR = (DIF − DEA) × 2
 - 每次价格变动自动撮合挂单：
-  - 买单：市价 ≤ 买入价 → 成交
-  - 卖单：市价 ≥ 卖出价 → 成交
-- 服务启动时生成当日历史价格（60 个点，模拟开盘至今）
+  - 买单：市价 ≤ 买入价 -> 成交
+  - 卖单：市价 ≥ 卖出价 -> 成交
+- 每次撮合后需要同步更新：
+  - 用户余额与冻结资金
+  - 持仓数量、可卖数量、成本价
+  - 股票成交量
+  - 成交记录与委托状态
+  - SSE 推送载荷
 
-### 前端页面
+## 个股新闻生成引擎（`src/news.ts`）
 
-React SPA，5 个主要视图：
+### 设计目标
 
-1. **登录/注册页** (`/login`, `/register`)
-   - 用户名+密码表单
-   - 注册成功显示初始资金
-   - 登录成功跳转首页
+用情绪驱动的随机新闻让模拟系统具有"真实市场"氛围感，提升演示体验。新闻不落入数据库，仅在内存中维护（每只股票最多 50 条，全市场混排队列最多 100 条），服务重启后重新生成。
 
-2. **行情大盘** (`/`) — 首页
-   - 10 只股票实时报价表格（SSE 驱动，实时刷新）
-   - 每行：代码、名称、最新价、涨跌额、涨跌幅%、成交量
-   - 涨红跌绿配色（中国股市惯例）
-   - 点击某只股票进入详情
+### 生成逻辑
 
-3. **股票详情 + 交易** (`/stock/:code`)
-   - 价格走势图（Recharts AreaChart，60 个点，实时追加）
-   - 当前价格、涨跌幅、最高/最低/开盘价
-   - 买入/卖出面板：
-     - 输入数量（100 的整数倍）和价格
-     - 可用资金/可卖数量提示
-     - 买入/卖出按钮
-   - 该股票的当前挂单列表（可撤单）
+- 服务启动时为每只股票预生成 8 条历史新闻（模拟早盘前已发布）
+- 此后每只股票每 30~120 秒（独立随机间隔）追加一条新新闻
+- 情绪类型按当前涨跌幅加权随机选取：
+  - `涨幅 > 3%` → 利好 70% + 中性 20% + 利空 10%（噪音）
+  - `跌幅 > 3%` → 利空 70% + 中性 20% + 利好 10%（噪音）
+  - `波动 ±3%` → 利好 40% + 利空 40% + 中性 20%
+- 每条新闻数据结构：
+  - `id`: UUID
+  - `stock_code`: 股票代码（全市场新闻为 `MARKET`）
+  - `title`: 标题（15-40 字，从模板插值）
+  - `summary`: 摘要（50-120 字）
+  - `sentiment`: `positive` | `negative` | `neutral`
+  - `source`: 轮换自「东方财富」「证券时报」「21 世纪经济报道」「界面新闻」「上海证券报」
+  - `impact`: `high` | `medium` | `low`
+  - `created_at`: Unix 时间戳
 
-4. **我的持仓** (`/portfolio`)
-   - 资产概览：总资产、可用资金、总市值、总盈亏（金额+百分比）
-   - 持仓列表：股票、数量、成本价、现价、市值、盈亏额、盈亏率
-   - 盈亏颜色：盈利红色、亏损绿色
-   - 每日资产曲线图（Recharts LineChart，30 天）
+### 模板库（定义于 `news.ts` 常量数组中）
 
-5. **交易记录** (`/history`)
-   - 成交记录表格：时间、股票、方向（买/卖）、数量、价格、金额
-   - 筛选：按股票代码
-   - 分页加载
+**利好类**：
+- `{{name}}主力资金大单净流入，机构持续增持信号明显`
+- `{{name}}核心业务超预期，分析师上调目标价`
+- `{{name}}入选重要指数成分，被动配置资金或大幅流入`
+- `{{name}}签署战略合作协议，业绩增长预期显著改善`
+- `{{name}}回购计划落地，彰显管理层对长期价值的信心`
+- `{{name}}所属板块受政策利好提振，资金积极布局`
 
-### 全局 UI
+**利空类**：
+- `{{name}}大股东减持计划出炉，市场情绪受到压制`
+- `{{name}}所属行业政策趋严，多家机构下调评级`
+- `{{name}}季报净利润低于预期，业绩拐点尚未确认`
+- `{{name}}外资持续流出，北向资金近三日累计净卖出`
+- `{{name}}竞争格局恶化，分析师警示毛利率下滑风险`
+- `{{name}}收到监管关注函，短期合规压力不容忽视`
 
-- **顶部导航**: 行情 | 持仓 | 记录 | 退出
-- **实时连接状态**: SSE 连接指示器（绿点=连接中）
-- **主题**: 深色主题（交易软件标配）
-- **响应式**: 桌面优先，平板可用
-- **数字格式**: 价格保留 2 位小数，金额千分位分隔，百分比 1 位小数
+**中性类**：
+- `{{name}}发布公告：董事会审议通过独立董事换届议案`
+- `{{name}}拟回购不超过总股本 1% 股份，维护股东利益`
+- `分析师：{{name}}估值回归历史中位区间，建议持有观察`
+- `{{name}}参加行业发展峰会，介绍未来两年战略布局`
+- `机构调研纪要：{{name}}管理层就经营情况作出详细说明`
 
-## 数据表
+## 交易规则与风控
+
+- 密码用 Argon2 哈希存储
+- 未认证请求返回 401
+- 用户只能操作自己的订单、自选股和持仓
+- 交易数量必须是 100 的整数倍（1 手 = 100 股）
+- 挂单价格限制：当前价 ±10%
+- 买入校验：可用资金 ≥ 数量 × 价格
+- 买入挂单未成交前，相应资金进入冻结态
+- 卖出校验：持仓数量 ≥ 卖出数量
+- 卖出挂单未成交前，相应可卖持仓进入冻结态
+- 撤单成功后恢复对应冻结资金或可卖持仓
+- 价格、数量、股票代码必须进行基础格式校验，返回明确错误文案
+- 所有涉及资金的接口返回最新资产摘要，避免前端自行推算
+
+## 前端信息架构
+
+React SPA，建议 6 个主要视图：
+
+1. **登录页** (`/login`)
+   - 左侧品牌与市场氛围背景，右侧登录卡片
+   - 支持跳转注册页
+   - 明确显示“模拟账户，不涉及真实交易”说明
+
+2. **注册页** (`/register`)
+   - 用户名、密码、确认密码
+   - 注册成功后强调初始资金与下一步引导
+
+3. **行情首页** (`/`)
+   - 顶部账户摘要条：总资产、可用资金、持仓市值、当日盈亏（数字变化时播放滚动动画）
+   - 左侧主区：
+     - 10 只股票实时报价表格（价格变化时该单元格触发 0.3 秒颜色 flash 动画）
+     - 下方市场热力图：Recharts Treemap，每只股票一个色块，颜色按涨跌幅插值（深红→红→灰→绿→深绿），节点显示名称与涨跌幅，随 SSE 实时刷新
+   - 右侧辅助区：自选股列表、涨幅榜 Top 3、跌幅榜 Top 3、滚动新闻 ticker（最新 5 条市场新闻标题循环滚动）、SSE 连接状态
+   - 点击股票进入详情
+
+4. **股票详情 + 交易** (`/stock/:code`)
+   - 顶部信息条：代码、名称、最新价（大号字体）、涨跌幅、成交量、开盘、最高、最低、昨收
+   - 图表区（支持图表类型切换 + 周期切换）：
+     - **分时图**（默认）：Recharts ComposedChart，折线 + 渐变面积 + 下方成交量Bar，hover 显示精确 OHLCV
+     - **K 线图**：用 Recharts ComposedChart 实现真实蜡烛图：
+       - 蜡烛实体：用自定义 `<shape>` 函数绘制 open/close 矩形实体（涨红跌绿）
+       - 上下影线：在 shape 函数中用 SVG `<line>` 绘制 high/low 竖线
+       - MA 均线：MA5（琥珀 `#f6c453`）、MA10（电青 `#3bc9db`）、MA20（紫 `#a78bfa`）作为 `<Line>` 叠加
+       - MACD 子图：与 K 线图共用 X 轴，独立 Y 轴（占图表高度约 25%），DIF 线、DEA 线、BAR 柱（正值红/负值绿）
+       - 成交量子图：K 线图下方，Bar 按 open/close 方向染色
+     - 周期切换 Tab：`分时 | 5分 | 15分 | 日K`，切换时请求对应 period 数据
+     - X 轴格式：分时显示 `HH:mm`，日 K 显示 `MM/DD`
+     - 鼠标移动时显示全宽 crosshair 线 + 悬浮 tooltip（展示 OHLCV 及当前 MA/MACD 值）
+   - 右侧交易面板：买入/卖出 Tab、快捷数量按钮、资金/持仓提示
+   - 下方区域分 Tab：**当前委托** | **个股新闻**
+     - 当前委托：挂单列表 + 最近 10 条成交记录
+     - 个股新闻：最新 20 条新闻卡片，带情绪徽章（利好红/利空绿/中性灰）、来源、时间、可展开摘要
+
+5. **我的持仓** (`/portfolio`)
+   - 资产概览：总资产、可用资金、冻结资金、总市值、总盈亏
+   - 持仓列表：股票、数量、可卖、成本价、现价、市值、盈亏额、盈亏率
+   - 每日资产曲线图（最近 30 天）
+   - 仓位结构卡：持仓集中度、最大持仓、盈利股票数、亏损股票数
+
+6. **交易记录** (`/history`)
+   - 成交记录表格：时间、股票、方向、数量、价格、金额、状态
+   - 支持按股票代码、方向筛选与分页加载
+   - 顶部摘要条显示今日成交额、成交笔数、已实现盈亏
+
+## 组件级要求
+
+- **行情表格**:
+  - 行固定高度，数值右对齐，代码与名称左对齐
+  - 当前价格、涨跌额、涨跌幅三列采用联动色彩表达
+  - 价格字段在每次 SSE 刷新时若发生变化，触发 `flash` 动画：涨时红色背景淡出、跌时绿色背景淡出、持平无动画（CSS keyframe 实现，时长 0.3s）
+  - 支持 hover 高亮与点击整行进入详情
+
+- **K 线图组件** (`KLineChart`)：
+  - 使用 Recharts `ComposedChart` 实现，tick 数据结构：`{ time, open, high, low, close, volume, ma5, ma10, ma20, macdDif, macdDea, macdBar }`
+  - 蜡烛实体：通过自定义 `shape` 函数绘制 SVG 矩形（实体）+ 上下两根 SVG `<line>`（影线）；涨时实体红色（`#ff5b5b`），跌时实体绿色（`#27c281`）
+  - MA 均线：MA5 琥珀、MA10 电青、MA20 紫，strokeWidth 1，不遮挡蜡烛
+  - 成交量子图：`ComposedChart` 下方独立区域，Bar 按方向染色，占图表总高度约 20%
+  - MACD 子图：DIF 折线、DEA 折线（两种颜色）+ BAR 柱状图，占图表总高度约 25%，三者共用 X 轴
+  - X 轴刻度：分时/5m/15m 显示 `HH:mm`，日 K 显示 `MM/DD`
+  - 自定义 Tooltip：鼠标 hover 时显示完整 OHLCV + MA + MACD 指标数值，固定在图表角落不遮挡主体
+
+- **市场热力图组件** (`MarketHeatmap`)：
+  - 使用 Recharts `Treemap` 实现，所有 10 只股票平均分布节点面积
+  - 节点颜色按涨跌幅线性插值：`+10% -> #b91c1c`，`0% -> #1e293b`，`-10% -> #064e3b`
+  - 节点内显示：股票名称（上）+ 涨跌幅（下，带 +/- 符号）
+  - hover 显示完整信息 tooltip（代码、名称、最新价、涨跌额、成交量）
+  - 每次 SSE 推送后颜色直接更新（不做动画过渡，避免 Treemap 重排抖动）
+
+- **新闻组件** (`NewsFeed`)：
+  - 每条新闻卡片：左侧情绪徽章 pill（利好红/利空绿/中性灰）+ 来源与时间（右对齐，次要颜色）+ 标题加粗 + 摘要折叠（点击展开）
+  - 卡片 hover 时左侧出现 2px 竖条（accent 色）+ 背景轻微高亮
+  - 新闻 ticker（首页右栏底部）：单行横向 CSS marquee，循环播放最近 5 条标题；hover 时暂停滚动
+
+- **数字动画组件** (`AnimatedNumber`)：
+  - 接收 `value: number` prop，每次 value 变化时播放从旧值到新值的滚动数字动画（odometer 效果）
+  - 使用 `requestAnimationFrame` + CSS clip，纯 JavaScript 实现，不引入额外库
+  - 应用于首页账户摘要条与持仓资产概览的核心金额数字
+
+- **交易面板**:
+  - 买卖按钮颜色明显区分，主操作按钮必须固定在面板底部可见区
+  - 预设数量快捷按钮：100 / 500 / 1000 / 全仓
+  - 表单提交前即展示预计成交额与资金占用
+
+- **资产卡片**:
+  - 强调数字，不强调图标
+  - 盈亏数字使用等宽数字字体或 tabular figures
+
+- **连接状态组件**:
+  - 明确显示 `已连接`、`重连中`、`已断开`
+  - 断线时顶部出现非阻塞横幅提示
+
+- **空状态/错误态**:
+  - 无持仓、无成交、无自选都需要专属空状态，不允许只显示空白表格
+  - 下单失败提示必须直给原因，例如“可用资金不足”而不是泛化错误
+
+## 视觉与样式规范
+
+### 视觉关键词
+
+- 专业
+- 克制
+- 高频信息流
+- 金融终端感
+- 深色、对比清晰、数字突出
+
+### 主题方向
+
+- **整体基调**: 深色主题，接近桌面交易软件，不采用通用紫色 SaaS 风格
+- **背景层次**:
+  - 页面主背景：偏冷黑蓝色
+  - 面板背景：略浅一级，形成多层纵深
+  - 卡片与表格使用细边框和低透明度高光分层
+- **强调色**:
+  - 涨：暖红或橙红
+  - 跌：冷绿
+  - 中性信息：蓝灰色
+  - 主交互高亮：电青或琥珀色二选一，避免与涨跌色混淆
+
+### 建议色板
+
+- `bg-base`: `#0a0f14`
+- `bg-panel`: `#101722`
+- `bg-elevated`: `#161f2d`
+- `border-soft`: `#233044`
+- `text-primary`: `#e6edf7`
+- `text-secondary`: `#8ea0b8`
+- `text-muted`: `#607089`
+- `up`: `#ff5b5b`
+- `down`: `#27c281`
+- `accent`: `#3bc9db`
+- `warning`: `#f6c453`
+
+### 排版
+
+- 使用更有终端感的英数字体与中文无衬线搭配，避免默认系统栈的平庸观感
+- 大数字区域采用更大的字重与更紧凑的字间距
+- 表格数字必须启用等宽数字样式，减少跳动感
+- 页面标题、股票代码、价格数字应形成三级信息层级，一眼看出重点
+
+### 布局密度
+
+- 桌面端采用三段式：顶部账户条 + 主内容区 + 底部状态区或表格区
+- 行情页与个股页优先使用多栏布局，避免大面积留白
+- 表格、卡片、图表边距统一，控制在紧凑区间，呈现交易软件的“压缩感”与效率感
+
+### 图表样式
+
+- 分时图：折线使用 accent 色（`#3bc9db`），面积区域为渐变填充——当日涨时用红色系渐变（`#ff5b5b` -> 透明），跌时用绿色系渐变（`#27c281` -> 透明），基准线从昨收价处展开
+- K 线蜡烛图：涨实体红（`#ff5b5b`）、跌实体绿（`#27c281`），影线同色，实体边框加深 20%，平收时以灰色实体表示
+- MA 均线细而不抢眼，strokeWidth 1，opacity 0.85
+- MACD BAR：正值红色，负值绿色；DIF 与 DEA 使用对比明显的两种线色，不与 MA 冲突
+- 热力图色阶：最大涨（`#7f1d1d`）→ 涨（`#ff5b5b`）→ 平盘（`#1e293b`）→ 跌（`#27c281`）→ 最大跌（`#064e3b`）
+- 图表网格线低对比（`#233044` 细线），背景透明，弱化装饰感
+- 鼠标 hover 交叉线：颜色 `#607089`，0.5px 宽；tooltip 固定在角落，不随鼠标移动遮挡图表主体
+
+### 动效与反馈
+
+- 首屏卡片、表格和图表采用轻量级分段进入动画，速度快，不拖泥带水
+- 数字刷新使用瞬时变色或轻微闪动，强化“有数据流动”感
+- 下单、撤单、成交反馈采用顶部 toast 或侧边消息流，不阻塞操作
+- 禁止使用夸张弹簧动画或泛用玻璃拟态效果
+
+### 响应式
+
+- 桌面优先，1440 宽度下信息密度最佳
+- 平板可用，允许部分侧栏折叠
+- 移动端不是本期重点，但必须保证核心表格与交易表单可浏览，不出现布局崩坏
+
+### 数字格式
+
+- 价格保留 2 位小数
+- 百分比保留 1 位小数
+- 金额千分位分隔
+- 成交量可使用 `万`、`亿` 简写，但 tooltip 中显示完整数值
+- 时间统一展示为本地时区格式
+
+## 数据模型
 
 ```sql
 CREATE TABLE users (
@@ -146,6 +432,7 @@ CREATE TABLE users (
   username TEXT NOT NULL UNIQUE,
   password_hash TEXT NOT NULL,
   balance REAL NOT NULL DEFAULT 1000000,
+  frozen_balance REAL NOT NULL DEFAULT 0,
   created_at INTEGER NOT NULL DEFAULT (unixepoch())
 );
 
@@ -162,6 +449,7 @@ CREATE TABLE stocks (
   current_price REAL NOT NULL,
   high_price REAL NOT NULL,
   low_price REAL NOT NULL,
+  prev_close REAL NOT NULL,
   volume INTEGER NOT NULL DEFAULT 0,
   trend REAL NOT NULL DEFAULT 0,
   updated_at INTEGER NOT NULL DEFAULT (unixepoch())
@@ -182,6 +470,7 @@ CREATE TABLE orders (
   direction TEXT NOT NULL CHECK(direction IN ('buy', 'sell')),
   quantity INTEGER NOT NULL,
   price REAL NOT NULL,
+  frozen_amount REAL NOT NULL DEFAULT 0,
   status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'filled', 'cancelled')),
   filled_at INTEGER,
   created_at INTEGER NOT NULL DEFAULT (unixepoch())
@@ -192,7 +481,16 @@ CREATE TABLE positions (
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   stock_code TEXT NOT NULL REFERENCES stocks(code),
   quantity INTEGER NOT NULL DEFAULT 0,
+  available_quantity INTEGER NOT NULL DEFAULT 0,
   cost_basis REAL NOT NULL DEFAULT 0,
+  UNIQUE(user_id, stock_code)
+);
+
+CREATE TABLE watchlists (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  stock_code TEXT NOT NULL REFERENCES stocks(code),
+  created_at INTEGER NOT NULL DEFAULT (unixepoch()),
   UNIQUE(user_id, stock_code)
 );
 
@@ -200,11 +498,13 @@ CREATE TABLE daily_snapshots (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   total_assets REAL NOT NULL,
+  cash REAL NOT NULL,
+  market_value REAL NOT NULL,
   created_at INTEGER NOT NULL DEFAULT (unixepoch())
 );
 ```
 
-### 种子数据（10 只股票）
+## 种子数据（10 只股票）
 
 | 代码 | 名称 | 开盘价 | 趋势 |
 |------|------|--------|------|
@@ -219,16 +519,6 @@ CREATE TABLE daily_snapshots (
 | SH600009 | 上海机场 | 45.60 | +0.06% |
 | SH600010 | 包钢股份 | 2.10 | -0.04% |
 
-## 安全规则
-
-- 密码用 Argon2 哈希存储
-- 未认证请求返回 401
-- 用户只能操作自己的订单和持仓
-- 买入校验：可用资金 ≥ 数量 × 价格
-- 卖出校验：持仓数量 ≥ 卖出数量
-- 交易数量必须是 100 的整数倍（1 手 = 100 股）
-- 挂单价格限制：当前价 ±10%
-
 ## 测试要求
 
 `tests/api.test.ts` 使用 `bun:test`，至少覆盖：
@@ -236,21 +526,38 @@ CREATE TABLE daily_snapshots (
 1. 注册返回用户信息和初始资金
 2. 登录返回 token
 3. 获取股票列表返回 10 只股票
-4. 买入成功扣减资金
-5. 买入数量不是 100 倍数被拒绝
-6. 资金不足买入被拒绝
-7. 卖出成功增加资金
-8. 持仓不足卖出被拒绝
-9. 撤单成功恢复资金/持仓
-10. 用户隔离（A 不能撤 B 的单）
+4. 获取当前用户信息返回余额与冻结资金
+5. 买入成功扣减可用资金并增加冻结资金
+6. 买入数量不是 100 倍数被拒绝
+7. 资金不足买入被拒绝
+8. 卖出成功增加资金
+9. 持仓不足卖出被拒绝
+10. 撤单成功恢复资金或持仓
+11. 用户隔离（A 不能撤 B 的单）
+12. 自选股添加/删除生效
+13. SSE 行情载荷结构正确
+14. K 线接口返回正确 OHLCV 字段与 MA5/MA10/MA20/MACD 值
+15. 新闻接口返回 sentiment 字段且为合法枚举值（`positive`/`negative`/`neutral`）
+16. 热力图接口返回所有股票且包含涨跌幅字段
 
 ## 验收标准
 
 - `cd web && bun install && bun run build` 前端构建成功
 - `bunx tsc --noEmit` 后端类型检查通过
 - `bun test` API 测试通过
-- `bun run index.ts` 启动后，浏览器打开 http://localhost:3000 看到完整交易应用
+- `bun run index.ts` 启动后，浏览器打开 http://localhost:3000 可看到完整交易应用
 - 行情表格每 2 秒实时刷新（SSE 驱动，非轮询）
-- 可完成完整流程：注册 → 登录 → 查看行情 → 买入 → 查看持仓 → 卖出 → 查看记录
-- 深色主题，涨红跌绿
+- 可完成完整流程：注册 -> 登录 -> 查看行情 -> 加入自选 -> 买入 -> 查看持仓 -> 卖出 -> 查看记录
+- 交易面板在下单前可看到可买数量或可卖数量提示
+- 资产页能同时看到总资产、可用资金、冻结资金、总盈亏
+- K 线图在日 K 周期下正确渲染蜡烛实体 + 上下影线 + MA 均线叠加 + MACD 子图
+- 个股详情页下方新闻 Tab 至少显示 5 条有情绪标签的模拟新闻
+- 首页热力图可见，颜色随 SSE 数据更新
+- 价格变化时表格对应单元格有明确的 flash 动画（涨红/跌绿）
+- 账户摘要核心数字在变化时有数字滚动动画
+- 行情表格每 2 秒实时刷新（SSE 驱动，非轮询）
+- 可完成完整流程：注册 -> 登录 -> 查看行情 -> 加入自选 -> 切换 K 线图 -> 买入 -> 查看持仓 -> 卖出 -> 查看记录
+- 交易面板在下单前可看到可买数量或可卖数量提示
+- 资产页能同时看到总资产、可用资金、冻结资金、总盈亏
+- 页面整体为专业深色交易终端风格，涨红跌绿，表格与数字层级清晰
 - 没有 README、文档等无关产物
