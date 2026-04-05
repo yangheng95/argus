@@ -47,9 +47,14 @@ export async function recordOperatorNote(taskID: string, note: string) {
     return { resumed: false, status: run.status }
   }
   const nextRunID = await OrchestratorRuntime.createOperatorRun(task, run, note)
-  if (task.active_plan_version_id) {
-    await OrchestratorRuntime.dispatchReadyGoals(task.id, nextRunID, task.active_plan_version_id, hooks())
-  }
+  // Start task loop — it handles dispatch via GoalPool
+  import("@/orchestrator/task-loop").then(({ runTaskLoop }) => {
+    runTaskLoop({
+      taskID: task.id,
+      trigger: { kind: "retry", runID: nextRunID },
+      hooks: hooks(),
+    }).catch(() => {})
+  })
   return { resumed: true, status: "active" as const }
 }
 

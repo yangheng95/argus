@@ -771,12 +771,9 @@ export function createTaskAgentTools(input: {
           })
         }
 
-        // Dispatch via runtime (creates worktree, submits to executor, starts event bridge)
-        const { OrchestratorRuntime } = await import("@/orchestrator/runtime")
-        const { hooks } = await import("@/orchestrator/state")
-        await OrchestratorRuntime.dispatchSingleGoal(taskID, runID, goalID, hooks())
-        stopAfterDispatch.abort("execute_goal dispatched")
-        return `Goal "${goal.title}" (${goalID}) submitted to executor. Execution running asynchronously. STOP HERE — you will be re-triggered when it completes.`
+        // Signal task loop to dispatch via GoalPool (goal is now "pending", pool will pick it up)
+        stopAfterDispatch.abort("execute_goal")
+        return `Goal "${goal.title}" (${goalID}) queued for execution. STOP HERE — task loop will dispatch via GoalPool and re-trigger you when it completes.`
       },
     }),
 
@@ -792,17 +789,23 @@ export function createTaskAgentTools(input: {
         const plan = run.plan_version_id ? findPlan(run.plan_version_id) : undefined
         if (!plan) return "No plan found. Use create_plan first."
 
-        const { OrchestratorRuntime } = await import("@/orchestrator/runtime")
-        const { hooks } = await import("@/orchestrator/state")
-        const dispatched = await OrchestratorRuntime.dispatchReadyGoals(taskID, run.id, plan.id, hooks())
-        if (dispatched === 0) {
-          const goals = listGoals(taskID)
-          const pending = goals.filter(g => g.status === "pending").length
-          const running = goals.filter(g => g.status === "running").length
+        // Check how many goals are ready (without dispatching — task loop handles dispatch via GoalPool)
+        const { readyGoalNodes } = await import("@/goal/scheduler")
+        const { listPlanNodesByPlan, listGoalsByPlan } = await import("@/orchestrator/store")
+        const nodes = listPlanNodesByPlan(plan.id)
+        const goals = listGoalsByPlan(plan.id)
+        const ready = readyGoalNodes(nodes, goals)
+
+        if (ready.length === 0) {
+          const allGoals = listGoals(taskID)
+          const pending = allGoals.filter(g => g.status === "pending").length
+          const running = allGoals.filter(g => g.status === "running").length
           return `No goals ready to dispatch. Pending: ${pending}, Running: ${running}. Check dependencies with read_context.`
         }
-        stopAfterDispatch.abort("dispatch_ready_goals dispatched")
-        return `${dispatched} goal(s) dispatched in parallel. STOP HERE — you will be re-triggered when the batch completes.`
+
+        // Signal task loop to dispatch via GoalPool (don't dispatch here — let the pool handle it)
+        stopAfterDispatch.abort("dispatch_ready_goals")
+        return `${ready.length} goal(s) ready for dispatch. STOP HERE — task loop will dispatch via GoalPool and re-trigger you when the batch completes.`
       },
     }),
 
@@ -956,7 +959,6 @@ export function createTaskAgentTools(input: {
         const run = requireRun(runID)
 
         // Activate the run
-        const { updateGoalRun: _, ...persist } = await import("@/orchestrator/persist")
         Database.use((db) => {
           const { OrchestratorRunTable } = require("@/orchestrator/orchestrator.sql")
           db.update(OrchestratorRunTable).set({ status: "running", time_started: Date.now(), time_updated: Date.now() }).where(eq(OrchestratorRunTable.id, runID)).run()
@@ -964,15 +966,9 @@ export function createTaskAgentTools(input: {
           db.update(TT).set({ status: "active", time_updated: Date.now() }).where(eq(TT.id, taskID)).run()
         })
 
-        // Dispatch ready goals via infrastructure
-        const plan = run.plan_version_id ? findPlan(run.plan_version_id) : undefined
-        if (!plan) return `Run ${runID} activated but no plan found. Use dispatch_ready_goals or execute_goal manually.`
-
-        const { OrchestratorRuntime } = await import("@/orchestrator/runtime")
-        const { hooks } = await import("@/orchestrator/state")
-        const dispatched = await OrchestratorRuntime.dispatchReadyGoals(taskID, runID, plan.id, hooks())
-        stopAfterDispatch.abort("submit_execution dispatched")
-        return `Run ${runID} activated. ${dispatched} goal(s) dispatched in parallel. STOP HERE — you will be re-triggered when the batch completes.`
+        // Signal task loop to dispatch via GoalPool (don't dispatch here)
+        stopAfterDispatch.abort("submit_execution")
+        return `Run ${runID} activated. STOP HERE — task loop will dispatch goals via GoalPool and re-trigger you when the batch completes.`
       },
     }),
 

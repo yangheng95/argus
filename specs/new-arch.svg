@@ -191,11 +191,11 @@
   <text class="h2" x="825" y="476">Infrastructure</text>
   <text class="body" x="825" y="492">(纯机械, 无 LLM)</text>
   <line x1="750" y1="500" x2="900" y2="500" stroke="#94a3b8" stroke-width="0.6"/>
-  <text class="bl" x="752" y="518">Worktree Manager</text>
-  <text class="bl" x="752" y="534">  create / cleanup</text>
-  <text class="bl" x="752" y="554">Event Bridge</text>
-  <text class="bl" x="752" y="570">  executor → session</text>
-  <text class="bl" x="752" y="590">Merge + Commit</text>
+  <text class="bl" x="752" y="518">Task Control Loop</text>
+  <text class="bl" x="752" y="534">  Decision → Pool → repeat</text>
+  <text class="bl" x="752" y="554">GoalPool (queue-based)</text>
+  <text class="bl" x="752" y="570">  submit → drain → results</text>
+  <text class="bl" x="752" y="590">Worktree + Merge</text>
   <text class="bl" x="752" y="606">  serialize per-run</text>
   <text class="bl" x="752" y="626">Scheduler (utility)</text>
   <text class="bl" x="752" y="642">  dependency DAG 计算</text>
@@ -204,8 +204,8 @@
   <line x1="750" y1="690" x2="900" y2="690" stroke="#94a3b8" stroke-width="0.6"/>
   <text class="bl" x="752" y="708" style="font-weight:600">不做决策.</text>
   <text class="bl" x="752" y="724">不调 LLM.</text>
-  <text class="bl" x="752" y="740">不自动 dispatch.</text>
-  <text class="bl" x="752" y="756">Task Agent 调用它.</text>
+  <text class="bl" x="752" y="740">无 fire-and-forget.</text>
+  <text class="bl" x="752" y="756">Loop 阻塞等待结果.</text>
 
   <!-- OUTPUT -->
   <line class="arrow" x1="400" y1="810" x2="400" y2="836"/>
@@ -238,11 +238,11 @@
   <text class="mono" x="980" y="258">  executor/                       opencode / claude-code / codex adapters</text>
 
   <text class="mono-h" x="980" y="286">INFRASTRUCTURE (无 LLM, 无决策, 纯机械)</text>
-  <text class="mono" x="980" y="306">  pipeline/executor.ts            Goal execution bridge: worktree + executor + delivery extraction</text>
-  <text class="mono" x="980" y="322">  executor/opencode.ts            Event bridge: GlobalBus 跨 Instance 接收 (Bus 是 Instance 隔离的, worktree ≠ 主进程)</text>
-  <text class="mono" x="980" y="338">  goal/merge.ts                   Serialized merge + commit + HEAD advance</text>
-  <text class="mono" x="980" y="354">  goal/scheduler.ts               Dependency DAG → layer computation (utility)</text>
-  <text class="mono" x="980" y="370">  orchestrator/persist.ts         DB read/write operations</text>
+  <text class="mono" x="980" y="306">  orchestrator/task-loop.ts       Task Control Loop: Decision → GoalPool → collect → repeat (单入口)</text>
+  <text class="mono" x="980" y="322">  orchestrator/goal-pool.ts       GoalPool: queue-based concurrent execution + auto-eval + drain</text>
+  <text class="mono" x="980" y="338">  pipeline/executor.ts            Goal pipeline: worktree + executor + delivery extraction (async generator)</text>
+  <text class="mono" x="980" y="354">  goal/merge.ts                   Serialized merge + commit + HEAD advance</text>
+  <text class="mono" x="980" y="370">  goal/scheduler.ts               Dependency DAG → layer computation (utility)</text>
   <text class="mono" x="980" y="386">  decision-log/                   Shared context (DB-backed, append-only, DI)</text>
 
   <text class="mono-h" x="980" y="414">SHARED TYPES</text>
@@ -318,11 +318,11 @@
   <text class="mono" x="40" y="344">  plan_goal(goalID)           → Planner Agent → implementation steps (消费 architect 共识)</text>
   <text class="mono" x="40" y="360">  eval_goal(goalID)           → 手动重评 (eval 已由 Infrastructure 自动完成, 仅用于 retry 后重新评估)</text>
 
-  <text class="mono-h" x="40" y="384">调用 Infrastructure:</text>
-  <text class="mono" x="40" y="400">  execute_goal(goalID)        → 重置 goal 为 pending → worktree + executor submit (async, 完成后 re-trigger); retry 时自动追加上次 eval 失败 evidence 到 prompt</text>
-  <text class="mono" x="40" y="416">  dispatch_ready_goals()      → 计算所有依赖满足的 goals (DAG) → 批量 execute (并行)</text>
+  <text class="mono-h" x="40" y="384">调用 Infrastructure (工具只标记意图, GoalPool 实际执行):</text>
+  <text class="mono" x="40" y="400">  execute_goal(goalID)        → 重置 goal 为 pending → abort 信号 → GoalPool 自动 pick up; retry 时自动追加 eval 失败 evidence</text>
+  <text class="mono" x="40" y="416">  dispatch_ready_goals()      → 检查 ready goals 数量 → abort 信号 → GoalPool 自动 dispatch (依赖 DAG)</text>
   <text class="mono" x="40" y="432">  create_run()                → 创建 run record + plan nodes (goals 作为 plan 节点)</text>
-  <text class="mono" x="40" y="448">  submit_execution(runID)     → 激活 run + dispatch_ready_goals (等价于 activate + dispatch)</text>
+  <text class="mono" x="40" y="448">  submit_execution(runID)     → 激活 run → abort 信号 → GoalPool 在 Task Control Loop 中执行</text>
   <text class="mono" x="40" y="464">  deliver()                   → 聚合所有 goal deliveries → DeliveryAgent 验证 build/test</text>
   <text class="mono" x="40" y="480">  read_context(scope)         → 读 goal 状态 / eval evidence (按 task_id 查) / Decision Log / deliveries</text>
 
@@ -335,43 +335,40 @@
   <text class="mono" x="40" y="592">  fail_task(reason)           → task.status='failed'</text>
   <text class="mono" x="40" y="608">  restart_from_stage(stage)   → task.status='active' (从 requirements/plan/executor 重来)</text>
 
-  <!-- Parallel dispatch detail -->
-  <text class="h3" x="40" y="640">并行 dispatch 机制 (由 Task Agent 触发, infrastructure 执行)</text>
+  <!-- Task Control Loop + GoalPool model -->
+  <text class="h3" x="40" y="640">Task Control Loop + GoalPool (替代 fire-and-forget)</text>
 
-  <text class="mono" x="40" y="662">1. Task Agent 调用 dispatch_ready_goals() 或 execute_goal()</text>
-  <text class="mono" x="40" y="678">2. Scheduler 计算 dependency DAG → 所有依赖已满足的 goals (不限层, 跨层满足即可 dispatch)</text>
-  <text class="mono" x="40" y="694">3. Infrastructure: goal.status→running (防重 dispatch) → create worktree Instance → submit executor → GlobalBus event bridge</text>
-  <text class="mono" x="40" y="710">4. 并行 goals 在独立 worktree Instance 中执行. Event bridge 通过 GlobalBus 跨 Instance 接收事件 (非 Instance-scoped Bus).</text>
-  <text class="mono" x="40" y="726">5. 当前 batch 所有 goal_run 结束后 → Infrastructure 自动跑 Eval Agent (每个 goal) → goal.status 写入终态</text>
-  <text class="mono" x="40" y="742">6. 所有 goal eval 完成 → agentNotifiedRuns.add(runID) → 通知 Task Agent (batch 粒度)</text>
-  <text class="mono" x="40" y="758">7. Task Agent 看到 eval 结果 → 推理: deliver? retry 失败 goal? add_goal? fail?</text>
-  <text class="mono" x="40" y="774">8. 如果 dispatch 新 goals → dispatchReadyGoals/dispatchSingleGoal 在 queueGoalRun 之后 delete(runID) → 下批可再通知</text>
-  <text class="mono" x="40" y="794">关键: Goal 状态锁 — goal.status 在 eval 完成前不离开 "running". Task Agent 收到通知时所有 goal 已有终态.</text>
+  <text class="mono" x="40" y="662">核心: runTaskLoop() 是 task 生命周期的唯一入口. 单线程阻塞循环, 无 fire-and-forget.</text>
+  <text class="mono" x="40" y="678">每个 task 同时只有一个 loop (activeLoops Set guard). 进程重启后自动恢复.</text>
 
-  <text class="mono" x="40" y="810">owned_paths 互斥: 并行 goals 的 owned_paths 不重叠 (Requirements Agent 保证).</text>
-  <text class="mono" x="40" y="826">Merge 串行化: per-run lock, 同一时间只有一个 goal 的 delivery 被 merge.</text>
+  <text class="mono-h" x="40" y="706">循环四阶段:</text>
+  <text class="mono" x="40" y="722">Phase 1: Decision Point — await TaskAgent.processTask(taskID, trigger)</text>
+  <text class="mono" x="40" y="738">  Task Agent 读上下文, 推理: dispatch goals / complete task / fail task / no-op</text>
+  <text class="mono" x="40" y="754">  工具调用 (dispatch_ready_goals, execute_goal, submit_execution) 只标记意图, 不执行.</text>
+  <text class="mono" x="40" y="770">Phase 2: State Check — 读取 task/run/plan 状态, 检查 goals 是否需要执行</text>
+  <text class="mono" x="40" y="786">Phase 3: GoalPool — queue-based execution, await pool.drain()</text>
+  <text class="mono" x="40" y="802">  submit: ready goals (依赖满足) → queue → auto-fill slots (up to concurrency)</text>
+  <text class="mono" x="40" y="818">  per-goal: worktree → session → executor → pipeline → merge → cleanup → eval</text>
+  <text class="mono" x="40" y="834">  drain: 阻塞直到 queue 空 + 所有 slots idle → 返回 GoalResult[]</text>
+  <text class="mono" x="40" y="850">Phase 4: Collect Results → 构建 trigger → loop back to Phase 1</text>
 
-  <!-- Task Agent wake protection: 3-layer defense -->
-  <text class="h3" x="40" y="854">Task Agent 唤醒保护 — 三层防御 (防重复触发 + 防虚假唤醒)</text>
+  <text class="mono-h" x="40" y="878">GoalPool 内部 (goal-pool.ts):</text>
+  <text class="mono" x="40" y="894">  • 每个 goal 独立 worktree, session, executor 实例, pipeline</text>
+  <text class="mono" x="40" y="910">  • goal 完成 → auto-eval (per-goal evaluateGoal) → verdict → 释放 slot</text>
+  <text class="mono" x="40" y="926">  • slot 释放 → auto-fill 从 queue 取下一个 ready goal (依赖重新检查)</text>
+  <text class="mono" x="40" y="942">  • 不活动超时 (GOAL_STALL_MS, 30min) — 日志告警, pipeline 自身超时处理</text>
 
-  <text class="mono-h" x="40" y="874">Layer 1: agentNotifiedRuns (notifyGoalResult 内, serializedPipeline 串行化)</text>
-  <text class="mono" x="40" y="890">  • batch 所有 goal_runs 完成 → activeRuns=0 → has(runID)=false → auto-eval → add(runID) → 触发 Task Agent</text>
-  <text class="mono" x="40" y="906">  • 同 batch 并发的 notifyGoalResult → has(runID)=true → return (不重复触发)</text>
-  <text class="mono" x="40" y="922">  • dispatch 新 goals 后 → delete(runID) 在 goal_runs 已创建之后 (activeRuns &gt; 0), 下批可再触发</text>
-  <text class="mono" x="40" y="938">  • 关键时序: delete 必须在 queueGoalRun 之后, 否则存在 has=false + activeRuns=0 的竞态窗口</text>
+  <text class="mono-h" x="40" y="970">关键设计:</text>
+  <text class="mono" x="40" y="986">  • 所有超时必须是不活动超时 (inactivity-based), 从不硬超时 (RUN_STALL_TIMEOUT_MS / GOAL_STALL_TIMEOUT_MS)</text>
+  <text class="mono" x="40" y="1002">  • 无竞态: 单线程循环, Task Agent 只在 pool drain 之后被调用, 不存在并发唤醒</text>
+  <text class="mono" x="40" y="1018">  • 无 fire-and-forget: 删除了 notifyGoalResult, consumeGoalPipeline, dispatchReadyGoals, recoverOrphanedTasks</text>
+  <text class="mono" x="40" y="1034">  • 无 agentNotifiedRuns dedup: 单控制点不需要去重</text>
 
-  <text class="mono-h" x="40" y="962">Layer 2: Dispatch Gate (TaskAgent.processTask 入口)</text>
-  <text class="mono" x="40" y="978">  • listActiveGoalRunsByCoordinator(active_run_id) &gt; 0 → return, 不启动 agent loop</text>
-  <text class="mono" x="40" y="994">  • 合法通知自然通过: notifyGoalResult/failRun 确保 goal_runs 终态后才调 processTask</text>
-  <text class="mono" x="40" y="1010">  • 拦截: orphan recovery, user retry, legacy syncRun — goals 在跑时不唤醒</text>
-
-  <text class="mono-h" x="40" y="1034">Layer 3: Orphan Recovery 竞态防护 (recoverOrphanedTasks)</text>
-  <text class="mono" x="40" y="1050">  • 问题: goal_runs 刚完成 (activeRuns=0) 但 notifyGoalResult 还没跑 auto-eval → orphan recovery 抢先触发</text>
-  <text class="mono" x="40" y="1066">  • 修复: 检查 recentCompletion — 如果有 goal_run 在 PIPELINE_STALE_MS 内完成, 不触发</text>
-  <text class="mono" x="40" y="1082">  • 原因: notifyGoalResult 需要时间 auto-eval, 这期间 task 看起来像 orphan 但实际 pipeline 在处理</text>
+  <text class="mono" x="40" y="1058">owned_paths 互斥: 并行 goals 的 owned_paths 不重叠 (Requirements Agent 保证).</text>
+  <text class="mono" x="40" y="1074">Merge 串行化: per-run lock, 同一时间只有一个 goal 的 delivery 被 merge + commit → HEAD advance.</text>
 
   <text class="mono-h" x="40" y="1106">Retry 时的 eval 反馈机制:</text>
-  <text class="mono" x="40" y="1122">  • queueGoalRun 调用 findLatestFailedEvalForGoal(goalID) 获取最近 rejected 的 eval</text>
+  <text class="mono" x="40" y="1122">  • GoalPool.executeAndEval 调用 findLatestFailedEvalForGoal(goalID) 获取最近 rejected 的 eval</text>
   <text class="mono" x="40" y="1138">  • 提取 status=failed 的 check 条目 (name + evidence) → buildFixPrompt 追加到 executor prompt</text>
   <text class="mono" x="40" y="1154">  • executor 收到的 prompt = goal prompt + "## Check Results\n- **evidence**: failed — ..." + 修复指令</text>
 
@@ -416,17 +413,14 @@
   <text class="h1" x="1000" y="44" style="font-size:14px; fill:#ef4444">ANTI-PATTERNS — 禁止</text>
   <line class="sep" x1="20" y1="54" x2="1980" y2="54"/>
 
-  <text class="mono" x="40" y="78">✗ Infrastructure 自动 dispatch 下一层 goals (continueGoalPipeline 自动调度)</text>
-  <text class="mono" x="40" y="94">✗ Executor bash 执行按名杀进程命令 (taskkill /IM, Stop-Process -Name, killall, pkill)</text>
-  <text class="mono" x="40" y="110">  Worktree 隔离文件系统, 不隔离进程空间. 按名杀进程会杀死宿主 (benchmark/server/其他 executor).</text>
-  <text class="mono" x="40" y="126">  bash.ts 在执行前拦截 HOST_KILLING_PATTERNS → 返回 refused 而不是执行. 允许 kill PID (杀自己启动的进程).</text>
-  <text class="mono" x="40" y="146">✗ 硬编码状态机 (if status==evaluating → if pass → complete else retry)</text>
-  <text class="mono" x="40" y="110">✗ 机械 RetryPolicy (bug→re-execute, plan_wrong→re-plan)</text>
-  <text class="mono" x="40" y="126">✗ 固定 pipeline 顺序 (Plan→Execute→Eval→Retry loop)</text>
-  <text class="mono" x="40" y="142">✗ Sub-agent 降级为 tool function (它们有自己的 LLM, 是 agent)</text>
-  <text class="mono" x="40" y="158">✗ Orchestrator 做决策 (orchestrator = infrastructure, 不是决策层)</text>
-  <text class="mono" x="40" y="174">✗ 任何 fallback 逻辑</text>
-  <text class="mono" x="40" y="190">✗ 细粒度 task 状态 (spec_generating, goal_decomposing, planning, running, ...)</text>
+  <text class="mono" x="40" y="78">✗ Fire-and-forget 触发 (TaskAgent.processTask().catch() — 已删除, 用 Task Control Loop 替代)</text>
+  <text class="mono" x="40" y="94">✗ 硬超时 / 绝对超时 (所有超时必须是 inactivity-based, 从不从进程启动计时)</text>
+  <text class="mono" x="40" y="110">✗ Executor bash 执行按名杀进程命令 (taskkill /IM, Stop-Process -Name, killall, pkill)</text>
+  <text class="mono" x="40" y="126">  Worktree 隔离文件系统, 不隔离进程空间. bash.ts HOST_KILLING_PATTERNS 拦截.</text>
+  <text class="mono" x="40" y="142">✗ 硬编码状态机 (if status==evaluating → if pass → complete else retry)</text>
+  <text class="mono" x="40" y="158">✗ 机械 RetryPolicy (bug→re-execute, plan_wrong→re-plan)</text>
+  <text class="mono" x="40" y="174">✗ Sub-agent 降级为 tool function (它们有自己的 LLM, 是 agent)</text>
+  <text class="mono" x="40" y="190">✗ 任何 fallback 逻辑 / 任何关键字匹配规则</text>
   </g>
 
   <!-- ================================================================ -->
