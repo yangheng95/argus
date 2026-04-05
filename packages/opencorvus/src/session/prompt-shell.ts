@@ -14,7 +14,8 @@ import { defer } from "../util/defer"
 import { Shell } from "@/shell/shell"
 import { PidGuard } from "@/shell/pid-guard"
 import { installRuntimeShims } from "@/runtime/shims"
-import { promptState, startSession, cancelSession, lastModel } from "./prompt-state"
+import { SessionPromptState } from "./prompt-state"
+const { state: promptState, start: startSession, cancel: cancelSession, lastModel } = SessionPromptState
 
 const log = Log.create({ service: "session.prompt" })
 
