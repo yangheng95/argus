@@ -26,6 +26,7 @@ import {
   createTask,
 } from "./task";
 import { syntheticTextMessage } from "../utils/transcript";
+import { draftBudget } from "../utils/budget";
 
 // ── Types ──
 
@@ -475,6 +476,7 @@ export async function panelMessage(text: string, attachments: any[] = [], metada
         attachments,
         metadata,
         signal: controller.signal,
+        budget: draftBudget(),
       });
       if (taskID) {
         await selectTask(taskID);

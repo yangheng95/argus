@@ -56,6 +56,12 @@ export interface CreateTaskOptions {
   attachments?: Attachment[];
   metadata?: Record<string, unknown>;
   signal?: AbortSignal;
+  budget?: {
+    maxRuns?: number;
+    maxEvaluations?: number;
+    maxWallTimeMs?: number;
+    maxExecutorGroups?: number;
+  };
 }
 
 export interface SelectTaskOptions {
@@ -370,7 +376,7 @@ export async function submitMessage(
  * No LLM round-trip — the backend persists the task in ~10ms.
  */
 export async function createTask(options: CreateTaskOptions): Promise<string> {
-  const { text, attachments = [], metadata = {}, signal } = options;
+  const { text, attachments = [], metadata = {}, signal, budget } = options;
   if (!text) throw new Error("createTask: text is required");
   const requestID = crypto.randomUUID();
   const executor = settingsStore.executor ?? "opencode";
@@ -383,6 +389,7 @@ export async function createTask(options: CreateTaskOptions): Promise<string> {
       requestID,
       metadata,
       source: "panel",
+      ...(budget ? { budget } : {}),
       ...(attachments.length > 0
         ? {
             attachments: attachments.map((att) => ({

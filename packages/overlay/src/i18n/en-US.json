@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "en-US",
-    "panel_revision": "b7e3a1d2c8f04e5b"
+    "panel_revision": "f42033a043bfdbac"
   },
   "brand.guide_kicker": "Quick Guide",
   "brand.guide_positioning_body": "This is the task cockpit — left picks the task, center drives execution, right verifies spec, plan, evaluation, and file changes so the agent stays on track.",
@@ -81,7 +81,7 @@
   "about.go_version": "Go Version",
   "about.platform": "Platform",
   "about.runtime_type": "Runtime Type",
-  "budget.hint": "Set budget for the selected task. Leave blank for defaults.",
+  "budget.hint": "Configure budget for the next new task. Leave blank to use global defaults.",
   "budget.empty": "Select a task to configure its budget.",
   "budget.max_evaluations": "Max Evaluations",
   "budget.max_runs": "Max Runs",
