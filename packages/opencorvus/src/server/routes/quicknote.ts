@@ -17,23 +17,8 @@ export const QuickNoteRoutes = lazy(() =>
         summary: "创建笔记",
         description: "创建新的快速笔记，自动提取标题和生成摘要",
         operationId: "quicknote.create",
-        request: {
-          body: {
-            description: "笔记创建参数",
-            required: true,
-            content: {
-              "application/json": {
-                schema: resolver(
-                  z.object({
-                    content: z.string().min(1).max(2000).meta({
-                      description: "笔记内容（最多 2000 字符）",
-                    }),
-                  }),
-                ),
-              },
-            },
-          },
-        },
+        // Body schema is declared via validator("json", ...) middleware below;
+        // hono-openapi picks up the validator for OpenAPI spec generation.
         responses: {
           200: {
             description: "笔记创建成功",

@@ -113,7 +113,7 @@ async function run(input: z.infer<typeof ControlMessageInput>, onEvent?: StreamC
       agent,
       model,
       system,
-      parts,
+      parts: parts as any,
       tools,
       format: {
         type: "json_schema" as const,
