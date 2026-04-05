@@ -5,7 +5,8 @@ import os from "os"
 import { Filesystem } from "../util/filesystem"
 
 const app = "opencorvus"
-const portableRoot = process.env.OPENCORVUS_HOME?.trim()
+const isWin = process.platform === "win32"
+const cwd = process.cwd()
 
 function resolveHome() {
   if (process.env.OPENCORVUS_TEST_HOME) return process.env.OPENCORVUS_TEST_HOME
@@ -16,34 +17,44 @@ function resolveHome() {
   return process.env.HOME || process.env.USERPROFILE || os.tmpdir()
 }
 
-const home = resolveHome()
-const isWin = process.platform === "win32"
-const winLocal = process.env.LOCALAPPDATA || path.join(home, "AppData", "Local")
-const cwd = process.cwd()
+// All Global.Path entries resolve OPENCORVUS_HOME lazily on each access.
+// This ensures benchmarks and tests can override OPENCORVUS_HOME AFTER
+// static import chains have completed loading this module.
+function portableRoot() {
+  return process.env.OPENCORVUS_HOME?.trim()
+}
 
-const data = portableRoot
-  ? path.join(portableRoot, "data")
-  : path.join(xdgData || (isWin ? winLocal : path.join(home, ".local", "share")), app)
-const cache = portableRoot
-  ? path.join(portableRoot, "cache")
-  : path.join(xdgCache || (isWin ? winLocal : path.join(home, ".cache")), app)
-const config = cwd
-const state = portableRoot
-  ? path.join(portableRoot, "state")
-  : path.join(xdgState || (isWin ? winLocal : path.join(home, ".local", "state")), app)
+function winLocalDir() {
+  return process.env.LOCALAPPDATA || path.join(resolveHome(), "AppData", "Local")
+}
+
+function dataPath() {
+  const root = portableRoot()
+  if (root) return path.join(root, "data")
+  return path.join(xdgData || (isWin ? winLocalDir() : path.join(resolveHome(), ".local", "share")), app)
+}
+
+function cachePath() {
+  const root = portableRoot()
+  if (root) return path.join(root, "cache")
+  return path.join(xdgCache || (isWin ? winLocalDir() : path.join(resolveHome(), ".cache")), app)
+}
+
+function statePath() {
+  const root = portableRoot()
+  if (root) return path.join(root, "state")
+  return path.join(xdgState || (isWin ? winLocalDir() : path.join(resolveHome(), ".local", "state")), app)
+}
 
 export namespace Global {
   export const Path = {
-    // Allow override via OPENCORVUS_TEST_HOME for test isolation
-    get home() {
-      return resolveHome()
-    },
-    data,
-    bin: path.join(data, "bin"),
-    log: path.join(data, "log"),
-    cache,
-    config,
-    state,
+    get home() { return resolveHome() },
+    get data() { return dataPath() },
+    get bin() { return path.join(dataPath(), "bin") },
+    get log() { return path.join(dataPath(), "log") },
+    get cache() { return cachePath() },
+    get config() { return cwd },
+    get state() { return statePath() },
   }
 }
 
