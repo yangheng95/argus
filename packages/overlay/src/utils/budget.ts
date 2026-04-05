@@ -15,6 +15,8 @@ export interface Budget {
   maxEvaluations?: number;
   /** Wall-time limit in milliseconds */
   maxWallTimeMs?: number;
+  /** Max concurrent goal executor groups */
+  maxExecutorGroups?: number;
 }
 
 // ── sameBudget ──
@@ -76,6 +78,9 @@ export function draftBudget(): Budget | undefined {
     maxWallTimeMs: budgetNumber(
       document.getElementById("budgetMaxWallTime") as HTMLInputElement | null,
       { scale: 60000 },
+    ),
+    maxExecutorGroups: budgetNumber(
+      document.getElementById("budgetMaxExecutorGroups") as HTMLInputElement | null,
     ),
   };
   if (Object.values(budget).every((v) => v === undefined)) return undefined;

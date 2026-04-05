@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2000 7600" width="100%" height="100%">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2000 7960" width="100%" height="100%">
   <defs>
     <style>
       text { font-family: 'Segoe UI', Arial, sans-serif; }
@@ -201,11 +201,13 @@
   <text class="bl" x="752" y="642">  dependency DAG 计算</text>
   <text class="bl" x="752" y="662">DB Persistence</text>
   <text class="bl" x="752" y="678">  single writer per row</text>
-  <line x1="750" y1="690" x2="900" y2="690" stroke="#94a3b8" stroke-width="0.6"/>
-  <text class="bl" x="752" y="708" style="font-weight:600">不做决策.</text>
-  <text class="bl" x="752" y="724">不调 LLM.</text>
-  <text class="bl" x="752" y="740">无 fire-and-forget.</text>
-  <text class="bl" x="752" y="756">Loop 阻塞等待结果.</text>
+  <text class="bl" x="752" y="698">PID Guard (BASH_ENV/ZDOTDIR)</text>
+  <text class="bl" x="752" y="714">  shell kill() 拦截保护 host PID</text>
+  <line x1="750" y1="726" x2="900" y2="726" stroke="#94a3b8" stroke-width="0.6"/>
+  <text class="bl" x="752" y="744" style="font-weight:600">不做决策.</text>
+  <text class="bl" x="752" y="760">不调 LLM.</text>
+  <text class="bl" x="752" y="776">无 fire-and-forget.</text>
+  <text class="bl" x="752" y="792">Loop 阻塞等待结果.</text>
 
   <!-- OUTPUT -->
   <line class="arrow" x1="400" y1="810" x2="400" y2="836"/>
@@ -243,7 +245,8 @@
   <text class="mono" x="980" y="338">  pipeline/executor.ts            Goal pipeline: worktree + executor + delivery extraction (async generator)</text>
   <text class="mono" x="980" y="354">  goal/merge.ts                   Serialized merge + commit + HEAD advance</text>
   <text class="mono" x="980" y="370">  goal/scheduler.ts               Dependency DAG → layer computation (utility)</text>
-  <text class="mono" x="980" y="386">  decision-log/                   Shared context (DB-backed, append-only, DI)</text>
+  <text class="mono" x="980" y="386">  shell/pid-guard.ts              PID guard: BASH_ENV/ZDOTDIR kill() override protects host PIDs</text>
+  <text class="mono" x="980" y="402">  decision-log/                   Shared context (DB-backed, append-only, DI)</text>
 
   <text class="mono-h" x="980" y="414">SHARED TYPES</text>
   <text class="mono" x="980" y="434">  pipeline/types.ts               GoalContract, PipelineEvent, EvalVerdict</text>
@@ -1205,6 +1208,79 @@
   <text class="mono" x="42" y="968">✗ GoalsPanel (扁平列表)     → GoalWorkflowGroup header 替代</text>
   <text class="mono" x="42" y="984">✗ CriteriaPanel (全局 checks) → per-goal eval 内嵌 (check family 保留在 eval 区)</text>
   <text class="mono" x="42" y="1000">✗ TaskBoardLane 泳道概念     → goals 直接从 goalWorkflows 获取, 不走 lane.cards</text>
+
+  </g>
+
+  <!-- ================================================================ -->
+  <!--  SECTION K: FILE ATTACHMENT ARCHITECTURE                         -->
+  <!-- ================================================================ -->
+
+  <g transform="translate(0, 7180)">
+  <line class="sep" x1="20" y1="20" x2="1980" y2="20"/>
+  <text class="h1" x="1000" y="44" style="font-size:14px; fill:#0369a1">FILE ATTACHMENT ARCHITECTURE — 文件附件处理机制</text>
+  <line class="sep" x1="20" y1="54" x2="1980" y2="54"/>
+
+  <!-- Problem -->
+  <rect class="warn" x="30" y="64" width="900" height="92"/>
+  <text class="h3" x="42" y="84">根本缺陷 (修复前)</text>
+  <text class="mono" x="42" y="104">1. 决策点分散: FILE_ACCEPT (overlay) · isDecodableText (backend) · toModelMessages 无能力判断</text>
+  <text class="mono" x="42" y="120">2. model.capabilities.input.image/pdf 从未在发送消息前检查 → 非图片二进制文件 → UnsupportedFunctionalityError crash</text>
+  <text class="mono" x="42" y="136">3. 文本解码无大小限制 → 10MB txt 文件创建 10MB 模型上下文</text>
+  <text class="mono" x="42" y="152">4. panel create_task 未取 ctx.extra.attachments → 文件内容不传入任务请求</text>
+
+  <!-- Unified Decision Hierarchy -->
+  <text class="h3" x="42" y="184">统一决策层级 (修复后 — 单一职责, 无 fallback)</text>
+
+  <rect class="log" x="30" y="198" width="900" height="240"/>
+  <text class="mono-h" x="42" y="220">层级 1: isDecodableText(mime, filename)  ←  唯一判定"是否为文本"的入口</text>
+  <text class="mono" x="42" y="238">  text/* 或 TEXT_APP_MIMES 或 (octet-stream + TEXT_EXTS 扩展名) → YES</text>
+  <text class="mono" x="42" y="254">  YES: decodeDataUrlText() → UTF-8 文本 → 注入为 synthetic text part (对所有模型有效)</text>
+  <text class="mono" x="42" y="270">  YES: panel create_task → 追加到 task request string (executor 也获得文件内容)</text>
+
+  <text class="mono-h" x="42" y="298">层级 2: toModelMessages() 能力检查  ←  唯一决定"二进制是否发给模型"的入口</text>
+  <text class="mono" x="42" y="316">  image/* + model.capabilities.input.image=true  → 发送图片 file part</text>
+  <text class="mono" x="42" y="332">  application/pdf + model.capabilities.input.pdf=true → 发送 PDF file part</text>
+  <text class="mono" x="42" y="348">  其他所有二进制 (不满足上述条件) → 过滤, 不发送 (防止 UnsupportedFunctionalityError)</text>
+
+  <text class="mono-h" x="42" y="376">层级 3: 大小保护  ←  decodeDataUrlText() 内置 200KB 截断</text>
+  <text class="mono" x="42" y="394">  MAX_TEXT_DECODE_BYTES = 200_000 (session/text-mime.ts)</text>
+  <text class="mono" x="42" y="410">  超限时追加注释 "[... truncated — file exceeds 200KB limit ...]" — 模型知晓截断, 非静默丢失</text>
+
+  <!-- Data Flow -->
+  <text class="h3" x="952" y="78">数据流 — 从 Overlay 到 Executor</text>
+
+  <text class="mono" x="952" y="100">Overlay 附件 (data: URL, base64)</text>
+  <text class="mono" x="952" y="116">  │</text>
+  <text class="mono" x="952" y="132">  ├→ isDecodableText() = YES (txt/md/ts/py/...)</text>
+  <text class="mono" x="952" y="148">  │    ├→ createUserMessage(): decodeDataUrlText() → synthetic text part (LLM 读取)</text>
+  <text class="mono" x="952" y="164">  │    └→ panel create_task: 追加到 request string → executor 也获得文件内容</text>
+  <text class="mono" x="952" y="180">  │</text>
+  <text class="mono" x="952" y="196">  ├→ isDecodableText() = NO + image/* + model.input.image=true</text>
+  <text class="mono" x="952" y="212">  │    └→ toModelMessages(): 发送 image file part → AI SDK → provider</text>
+  <text class="mono" x="952" y="228">  │</text>
+  <text class="mono" x="952" y="244">  ├→ isDecodableText() = NO + application/pdf + model.input.pdf=true</text>
+  <text class="mono" x="952" y="260">  │    └→ toModelMessages(): 发送 PDF file part → AI SDK → provider</text>
+  <text class="mono" x="952" y="276">  │</text>
+  <text class="mono" x="952" y="292">  └→ 其他二进制 (不满足上述条件)</text>
+  <text class="mono" x="952" y="308">       └→ toModelMessages() 过滤掉 — 模型不会收到, 也不会 crash</text>
+
+  <line class="sep" x1="942" y1="324" x2="1970" y2="324"/>
+
+  <text class="h3" x="952" y="346">关键文件</text>
+  <text class="mono" x="952" y="368">session/text-mime.ts         isDecodableText() · decodeDataUrlText() · MAX_TEXT_DECODE_BYTES</text>
+  <text class="mono" x="952" y="384">session/message.ts           toModelMessages(): 能力检查过滤 (lines ~575-591)</text>
+  <text class="mono" x="952" y="400">session/prompt-message.ts    createUserMessage(): data: URL 文本解码 · file: URL 文件读取</text>
+  <text class="mono" x="952" y="416">tool/panel.ts                create_task: ctx.extra.attachments → 文本追加到任务请求</text>
+  <text class="mono" x="952" y="432">control/message.ts           extra.attachments 传递给 panel tool context</text>
+  <text class="mono" x="952" y="448">overlay/ChatComposer.tsx     FILE_ACCEPT · MAX_ATTACHMENT_SIZE=10MB · data URL 编码</text>
+
+  <line class="sep" x1="942" y1="464" x2="1970" y2="464"/>
+
+  <text class="h3" x="952" y="486">设计原则 (与系统架构一致)</text>
+  <text class="mono" x="952" y="508">1. 单一决策点 — isDecodableText() 是文本判定的唯一入口; toModelMessages() 是二进制能力检查的唯一入口.</text>
+  <text class="mono" x="952" y="524">2. 无 fallback — 不支持的二进制格式不会静默降级为占位符, 而是直接过滤 (模型完全不收到).</text>
+  <text class="mono" x="952" y="540">3. 显式截断 — 超限文本追加截断注释, 模型知晓; 不静默丢失数据.</text>
+  <text class="mono" x="952" y="556">4. 能力驱动 — 二进制附件由 model.capabilities.input.{image,pdf} 决定是否发送, 不由硬编码逻辑决定.</text>
 
   </g>
 </svg>

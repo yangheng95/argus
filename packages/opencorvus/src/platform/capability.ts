@@ -84,9 +84,64 @@ export namespace Capability {
     }
   }
 
+  async function bunPty() {
+    try {
+      await import("bun-pty")
+      return line("bun_pty", "PTY native module", "ok", "bun-pty")
+    } catch (err) {
+      return line(
+        "bun_pty",
+        "PTY native module",
+        "warn",
+        `bun-pty unavailable: ${text(err)}`,
+        "PTY falls back to pipe spawning — resize/signals unavailable. Install bun-pty for full terminal features.",
+      )
+    }
+  }
+
+  async function screenCapture() {
+    try {
+      await import("node-screenshots" as any)
+      return line("screen_capture", "Screen capture module", "ok", "node-screenshots")
+    } catch (err) {
+      return line(
+        "screen_capture",
+        "Screen capture module",
+        "warn",
+        `node-screenshots unavailable: ${text(err)}`,
+        "Screen tool will fail. Reinstall dependencies or platform may not be supported.",
+      )
+    }
+  }
+
+  async function gitBash() {
+    if (process.platform !== "win32")
+      return line("git_bash", "Git Bash (Windows only)", "ok", "n/a")
+    try {
+      const { Shell } = await import("@/shell/shell")
+      const shellPath = Shell.acceptable()
+      const base = shellPath.toLowerCase()
+      if (base.endsWith("bash.exe")) {
+        return line("git_bash", "Git Bash (Windows)", "ok", shellPath)
+      }
+      return line(
+        "git_bash",
+        "Git Bash (Windows)",
+        "warn",
+        `Falling back to ${shellPath}`,
+        "Install Git for Windows to enable full bash/PID-guard support. Without it, cmd.exe is used.",
+      )
+    } catch (err) {
+      return line("git_bash", "Git Bash (Windows)", "warn", text(err))
+    }
+  }
+
   async function collectFresh() {
     const checks = [
       winFfi(),
+      bunPty(),
+      screenCapture(),
+      gitBash(),
       Promise.resolve(watcher()),
       executors(),
     ]

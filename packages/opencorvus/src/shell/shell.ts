@@ -4,6 +4,7 @@ import { Filesystem } from "@/util/filesystem"
 import path from "path"
 import { spawn, type ChildProcess } from "child_process"
 import { which } from "@/util/which"
+import { PidGuard } from "./pid-guard"
 
 const SIGKILL_TIMEOUT_MS = 200
 
@@ -95,10 +96,11 @@ export namespace Shell {
   }
 
   export async function run(command: string, opts: RunOptions = {}): Promise<RunResult> {
+    const guardEnv = await PidGuard.env(acceptable())
     const proc = spawn(command, {
       shell: acceptable(),
       cwd: opts.cwd,
-      env: opts.env,
+      env: { ...opts.env, ...guardEnv },
       stdio: ["ignore", "pipe", "pipe"],
       detached: process.platform !== "win32",
     })

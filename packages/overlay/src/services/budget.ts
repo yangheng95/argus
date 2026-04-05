@@ -15,6 +15,7 @@ function taskBudget(task: any = boardStore.board?.task): Budget | undefined {
     maxRuns: Number.isFinite(budget.maxRuns) ? budget.maxRuns : undefined,
     maxEvaluations: Number.isFinite(budget.maxEvaluations) ? budget.maxEvaluations : undefined,
     maxWallTimeMs: Number.isFinite(budget.maxWallTimeMs) ? budget.maxWallTimeMs : undefined,
+    maxExecutorGroups: Number.isFinite(budget.maxExecutorGroups) ? budget.maxExecutorGroups : undefined,
   };
 }
 
@@ -32,15 +33,20 @@ function setBudgetInputs(budget?: Budget): void {
     "budgetMaxWallTime",
     budget?.maxWallTimeMs === undefined ? "" : budgetMinutes(budget.maxWallTimeMs),
   );
+  setValue(
+    "budgetMaxExecutorGroups",
+    budget?.maxExecutorGroups === undefined ? "" : String(budget.maxExecutorGroups),
+  );
 }
 
-function configDefaults(): { maxRuns?: number; maxEvaluations?: number; maxWallTimeMs?: number } {
+function configDefaults(): { maxRuns?: number; maxEvaluations?: number; maxWallTimeMs?: number; maxExecutorGroups?: number } {
   const orch = (appStore.config as any)?.assistant;
   if (!orch || typeof orch !== "object") return {};
   return {
     maxRuns: Number.isFinite(orch.max_runs) ? orch.max_runs : undefined,
     maxEvaluations: Number.isFinite(orch.max_evaluations) ? orch.max_evaluations : undefined,
     maxWallTimeMs: Number.isFinite(orch.max_wall_time_ms) ? orch.max_wall_time_ms : undefined,
+    maxExecutorGroups: Number.isFinite(orch.max_executor_groups) ? orch.max_executor_groups : undefined,
   };
 }
 
@@ -53,6 +59,7 @@ function setPlaceholders(): void {
   setPlaceholder("budgetMaxRuns", defaults.maxRuns != null ? String(defaults.maxRuns) : "");
   setPlaceholder("budgetMaxEvaluations", defaults.maxEvaluations != null ? String(defaults.maxEvaluations) : "");
   setPlaceholder("budgetMaxWallTime", defaults.maxWallTimeMs != null ? budgetMinutes(defaults.maxWallTimeMs) : "");
+  setPlaceholder("budgetMaxExecutorGroups", defaults.maxExecutorGroups != null ? String(defaults.maxExecutorGroups) : "");
 }
 
 function renderBudgetState(task: any = boardStore.board?.task): void {
@@ -75,6 +82,7 @@ function renderBudgetState(task: any = boardStore.board?.task): void {
     document.getElementById("budgetMaxRuns"),
     document.getElementById("budgetMaxEvaluations"),
     document.getElementById("budgetMaxWallTime"),
+    document.getElementById("budgetMaxExecutorGroups"),
   ]) {
     if (input instanceof HTMLInputElement) input.disabled = !enabled;
   }

@@ -1,5 +1,37 @@
 #!/usr/bin/env bun
 
+// ── Crash Diagnostics ──
+// Capture the exact reason and call stack when the process exits unexpectedly.
+const DIAG_LOG = "/tmp/benchmark-crash-diag.log"
+function diagWrite(msg: string) {
+  const ts = new Date().toISOString()
+  const line = `[${ts}] ${msg}\n`
+  try { require("node:fs").appendFileSync(DIAG_LOG, line) } catch {}
+  process.stderr.write(line)
+}
+diagWrite(`benchmark PID=${process.pid} started`)
+
+process.on("exit", (code) => {
+  diagWrite(`process.exit event — code=${code}`)
+  diagWrite(`stack:\n${new Error("exit-trace").stack}`)
+})
+process.on("SIGTERM", () => {
+  diagWrite(`SIGTERM received PID=${process.pid}`)
+  diagWrite(`stack:\n${new Error("sigterm-trace").stack}`)
+})
+process.on("SIGINT", () => {
+  diagWrite(`SIGINT received PID=${process.pid}`)
+})
+process.on("SIGHUP", () => {
+  diagWrite(`SIGHUP received PID=${process.pid}`)
+})
+process.on("uncaughtException", (err) => {
+  diagWrite(`uncaughtException: ${err.message}\n${err.stack}`)
+})
+process.on("unhandledRejection", (reason) => {
+  diagWrite(`unhandledRejection: ${reason instanceof Error ? reason.message + "\n" + reason.stack : String(reason)}`)
+})
+
 import { mkdtempSync } from "node:fs"
 import fs from "node:fs/promises"
 import os from "node:os"
@@ -288,6 +320,7 @@ function errorLine(value: string) {
 
 function formatEventLine(entry: {
   type: string
+  kind: string
   stage: string
   status: string
   progressType: string
@@ -300,6 +333,19 @@ function formatEventLine(entry: {
     const detail = entry.toolName || entry.summary || entry.kind || entry.status
     if (!detail || STREAM_PLACEHOLDERS.has(detail)) return ""
     return `[overlay-benchmark] message-event=${entry.toolName ? `tool=${entry.toolName}` : ""}${entry.kind ? ` kind=${entry.kind}` : ""} ${clipText(detail, 200)}`
+  }
+  // Architect contracts: show category + spec excerpt for tool_result
+  if (entry.stage === "architect" && entry.kind === "tool_result" && entry.toolName === "register_contract") {
+    const content = entry.text || entry.summary
+    return `[overlay-benchmark] architect contract registered: ${clipText(content, 300)}`
+  }
+  if (entry.stage === "architect" && entry.kind === "status") {
+    return `[overlay-benchmark] architect ${clipText(entry.summary || entry.status, 120)}`
+  }
+  // Plan: show plan summary when plan is created or activated
+  if (entry.type === "orchestrator.plan.created" || entry.type === "orchestrator.plan.activated") {
+    const detail = entry.summary || entry.text
+    return `[overlay-benchmark] event=${entry.type.replace("orchestrator.", "")}${detail ? ` detail=${clipText(detail, 240)}` : ""}`
   }
   const summary = entry.summary || entry.text
   const parts = [
@@ -907,6 +953,21 @@ async function buildBenchmarkReport(error?: unknown) {
         return Array.isArray(evalChecks) ? evalChecks.length : 0
       })(),
     },
+    architect: currentFinalBoard?.architect
+      ? {
+          summary: currentFinalBoard.architect.summary ?? null,
+          contractCount: currentFinalBoard.architect.contractCount ?? null,
+          categories: currentFinalBoard.architect.categories ?? null,
+        }
+      : null,
+    plan: currentFinalBoard?.plan
+      ? {
+          id: currentFinalBoard.plan.id ?? null,
+          version: currentFinalBoard.plan.version ?? null,
+          status: currentFinalBoard.plan.status ?? null,
+          summary: currentFinalBoard.plan.summary ?? null,
+        }
+      : null,
     screenshot,
     resume: {
       restored: marks.resumedAt > 0,
@@ -1432,8 +1493,8 @@ function summarizeEvents(events: Array<Record<string, unknown>>, taskID: string)
     map[type] = (map[type] ?? 0) + 1
     return map
   }, {})
-  // Include both legacy stage names (spec, planner) and new agent names (task, decompose, eval)
-  const stages = ["spec", "planner", "evaluator", "task", "decompose", "eval"].flatMap((stage) => {
+  // Include both legacy stage names (spec, planner) and new agent names (task, decompose, eval, architect)
+  const stages = ["spec", "planner", "evaluator", "task", "decompose", "eval", "architect"].flatMap((stage) => {
     const list = agents.filter((item) => item.stage === stage)
     if (list.length === 0) return []
     const toolCalls = list

@@ -17,6 +17,7 @@ import { Shell } from "@/shell/shell"
 import { BashArity } from "@/permission/arity"
 import { Truncate } from "./truncation"
 import { Plugin } from "@/plugin"
+import { PidGuard } from "@/shell/pid-guard"
 
 const MAX_METADATA_LENGTH = 30_000
 const DEFAULT_TIMEOUT = Flag.OPENCORVUS_EXPERIMENTAL_BASH_DEFAULT_TIMEOUT_MS || 2 * 60 * 1000
@@ -34,6 +35,10 @@ const HOST_KILLING_PATTERNS = [
   /\bkillall\b/i,                                // killall bun
   /\bpkill\b/i,                                  // pkill bun
   /\bwmic\b.*process.*\bcall\b.*terminate/i,     // wmic process where name="bun.exe" call terminate
+  /\bxargs\s+kill\b/i,                           // ps | grep bun | xargs kill
+  /\bxargs\s+.*\bkill\b/i,                       // ps | xargs -I{} kill {}
+  /\bkill\b.*\$\(/i,                             // kill $(pgrep bun)
+  /\bkill\b.*`/i,                                // kill `pgrep bun`
 ]
 
 function isHostKillingCommand(command: string): boolean {
@@ -221,10 +226,11 @@ export const BashTool = Tool.define("bash", async () => {
         { cwd, sessionID: ctx.sessionID, callID: ctx.callID },
         { env: {} },
       )
+      const guardEnv = await PidGuard.env(shell)
       const proc = spawn(params.command, {
         shell,
         cwd,
-        env: sanitizeChildEnv(process.env, shellEnv.env),
+        env: sanitizeChildEnv(process.env, { ...shellEnv.env, ...guardEnv }),
         stdio: ["ignore", "pipe", "pipe"],
         detached: process.platform !== "win32",
       })

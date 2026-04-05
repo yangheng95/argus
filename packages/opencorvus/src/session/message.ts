@@ -571,14 +571,24 @@ export namespace Message {
               text: part.text,
             })
           // Text files are decoded into text parts upstream; skip them here.
-          // Only pass through binary file parts (images, PDFs, etc.) to the model.
-          if (part.type === "file" && !isDecodableText(part.mime, part.filename) && part.mime !== "application/x-directory")
-            userMessage.parts.push({
-              type: "file",
-              url: part.url,
-              mediaType: part.mime,
-              filename: part.filename,
-            })
+          // Binary file parts are only forwarded when the target model declares
+          // the capability to handle them — otherwise the AI SDK / provider
+          // conversion layer throws UnsupportedFunctionalityError at runtime.
+          if (part.type === "file" && !isDecodableText(part.mime, part.filename) && part.mime !== "application/x-directory") {
+            const isImage = part.mime.startsWith("image/")
+            const isPdf = part.mime === "application/pdf"
+            const capable =
+              (isImage && model.capabilities.input.image) ||
+              (isPdf && model.capabilities.input.pdf)
+            if (capable) {
+              userMessage.parts.push({
+                type: "file",
+                url: part.url,
+                mediaType: part.mime,
+                filename: part.filename,
+              })
+            }
+          }
 
           if (part.type === "compaction") {
             userMessage.parts.push({

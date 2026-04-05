@@ -131,6 +131,17 @@ export namespace Vcs {
     return state()
   }
 
+  /**
+   * Discard the cached VCS state for the current instance directory.
+   * The next call to `info()` or `branch()` will re-initialize from scratch,
+   * picking up the latest `Instance.project.vcs` value and re-attaching the
+   * `.git/HEAD` file watcher.  Call this after `git init` completes while
+   * active sessions prevent a full `Instance.dispose()`.
+   */
+  export function resetState() {
+    state.reset()
+  }
+
   export async function branch() {
     return await state().then((s) => s.branch())
   }
