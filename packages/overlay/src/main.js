@@ -4790,7 +4790,7 @@ async function submitMessage(text, attachments = [], options = {}) {
   }
 }
 async function createTask(options) {
-  const { text, attachments = [], metadata = {}, signal } = options;
+  const { text, attachments = [], metadata = {}, signal, budget } = options;
   if (!text) throw new Error("createTask: text is required");
   const requestID = crypto.randomUUID();
   const executor = settingsStore.executor ?? "opencode";
@@ -4803,6 +4803,7 @@ async function createTask(options) {
       requestID,
       metadata,
       source: "panel",
+      ...budget ? { budget } : {},
       ...attachments.length > 0 ? {
         attachments: attachments.map((att) => ({
           mime: att.mime,
@@ -6572,7 +6573,7 @@ function ArchitectPanel(props) {
   })();
 }
 
-var _tmpl$2$c = /* @__PURE__ */ template(`<div class=plan-version>`), _tmpl$3$c = /* @__PURE__ */ template(`<div class="plan-version streaming-indicator">`), _tmpl$4$c = /* @__PURE__ */ template(`<p class=empty-hint>`), _tmpl$5$c = /* @__PURE__ */ template(`<div class="plan-summary md-content">`), _tmpl$6$b = /* @__PURE__ */ template(`<div class=goals-list>`), _tmpl$7$a = /* @__PURE__ */ template(`<span class=extension-status data-state=passed>✓`), _tmpl$8$7 = /* @__PURE__ */ template(`<span class=extension-status data-state=failed>✗`), _tmpl$9$5 = /* @__PURE__ */ template(`<span class=extension-status data-state=active>`), _tmpl$0$3 = /* @__PURE__ */ template(`<div class="goal-criteria md-content">`), _tmpl$1$2 = /* @__PURE__ */ template(`<details class=goal-item><summary class=goal-item-head><span class=goal-item-chevron aria-hidden=true>▶</span><span class=goal-desc-inline></span><span class=goal-title-brief></span></summary><div class=goal-item-body><div class=goal-content><div class=plan-version></div><div class="goal-desc md-content">`), _tmpl$10$1 = /* @__PURE__ */ template(`<span class=goal-priority>`), _tmpl$11$1 = /* @__PURE__ */ template(`<button type=button class="btn btn-ghost mini"data-goal-action=view-session title="View executor session"aria-label="View executor session">View`), _tmpl$12$1 = /* @__PURE__ */ template(`<button type=button class="btn btn-ghost mini"data-goal-action=edit>`), _tmpl$13$1 = /* @__PURE__ */ template(`<button type=button class="btn btn-ghost mini danger"data-goal-action=delete>`), _tmpl$14$1 = /* @__PURE__ */ template(`<div class=goal-actions>`), _tmpl$15$1 = /* @__PURE__ */ template(`<details class=goal-item><summary class=goal-item-head><span class=goal-item-chevron aria-hidden=true>▶</span><span class=goal-desc-inline></span><span class=goal-title-brief></span></summary><div class=goal-item-body><div class=goal-content><div class="goal-desc md-content">`), _tmpl$16$1 = /* @__PURE__ */ template(`<div class=empty-hint>`), _tmpl$17 = /* @__PURE__ */ template(`<section class=criteria-group><div class=criteria-group-head><span class=criteria-group-icon aria-hidden=true></span><div class=criteria-group-title></div><div class=criteria-group-count></div></div><div class=criteria-group-list>`), _tmpl$18 = /* @__PURE__ */ template(`<label class=criteria-item><input type=checkbox><span class=check-mark></span><span class=criteria-copy><span class=criteria-name></span><span class=criteria-desc></span></span><span class=criteria-status></span><span class=criteria-result>`), _tmpl$19 = /* @__PURE__ */ template(`<div class="eval-summary md-content">`), _tmpl$20 = /* @__PURE__ */ template(`<div class=eval-error-meta>`), _tmpl$21 = /* @__PURE__ */ template(`<div class=eval-error><div class=eval-error-name>✗ </div><div class="eval-error-detail md-content">`), _tmpl$22 = /* @__PURE__ */ template(`<div class=delivery-files>`), _tmpl$23 = /* @__PURE__ */ template(`<div class=delivery-card><div class=delivery-title></div><div class="delivery-summary md-content">`), _tmpl$24 = /* @__PURE__ */ template(`<button type=button class="btn btn-primary"data-task-action=retry>`), _tmpl$25 = /* @__PURE__ */ template(`<button type=button class="btn btn-ghost"data-task-action=replan>`), _tmpl$26 = /* @__PURE__ */ template(`<div class=task-actions-buttons>`), _tmpl$27 = /* @__PURE__ */ template(`<div class=task-actions-bar>`), _tmpl$28 = /* @__PURE__ */ template(`<button class="btn btn-primary"data-action=always>`), _tmpl$29 = /* @__PURE__ */ template(`<button class="btn btn-ghost"data-action=once>`), _tmpl$30 = /* @__PURE__ */ template(`<button class="btn btn-ghost"data-action=reject>`), _tmpl$31 = /* @__PURE__ */ template(`<div class=interaction-alert><div class=interaction-title> </div><div class="interaction-body md-content"></div><div class=interaction-actions>`), _tmpl$32 = /* @__PURE__ */ template(`<button class="btn btn-primary"data-action=answer>`), _tmpl$33 = /* @__PURE__ */ template(`<div class=interactions-list>`), _tmpl$36 = /* @__PURE__ */ template(`<div class=executor-summary-stat><span class=executor-summary-value></span><span class=executor-summary-label>`), _tmpl$37 = /* @__PURE__ */ template(`<div class=executor-summary><div class=executor-summary-stat><span class=executor-summary-value></span><span class=executor-summary-label>`), _tmpl$38 = /* @__PURE__ */ template(`<details class=section><summary class=section-head><span class=section-icon aria-hidden=true></span><span class=section-title></span><span class=section-badge></span></summary><div class=section-body>`), _tmpl$39 = /* @__PURE__ */ template(`<div id=taskActionsBar>`);
+var _tmpl$2$c = /* @__PURE__ */ template(`<div class=plan-version>`), _tmpl$3$c = /* @__PURE__ */ template(`<div class="plan-version streaming-indicator">`), _tmpl$4$c = /* @__PURE__ */ template(`<p class=empty-hint>`), _tmpl$5$c = /* @__PURE__ */ template(`<div class="plan-summary md-content">`), _tmpl$6$b = /* @__PURE__ */ template(`<div class=goals-list>`), _tmpl$7$a = /* @__PURE__ */ template(`<span class=extension-status data-state=passed>✓`), _tmpl$8$7 = /* @__PURE__ */ template(`<span class=extension-status data-state=failed>✗`), _tmpl$9$5 = /* @__PURE__ */ template(`<span class=extension-status data-state=active>`), _tmpl$0$3 = /* @__PURE__ */ template(`<div class="goal-criteria md-content">`), _tmpl$1$2 = /* @__PURE__ */ template(`<details class=goal-item><summary class=goal-item-head><span class=goal-item-chevron aria-hidden=true>▶</span><span class=goal-desc-inline></span><span class=goal-title-brief></span></summary><div class=goal-item-body><div class=goal-content><div class=plan-version></div><div class="goal-desc md-content">`), _tmpl$10$1 = /* @__PURE__ */ template(`<span class=goal-priority>`), _tmpl$11$1 = /* @__PURE__ */ template(`<button type=button class="btn btn-ghost mini"data-goal-action=view-session title="View executor session"aria-label="View executor session">View`), _tmpl$12$1 = /* @__PURE__ */ template(`<button type=button class="btn btn-ghost mini"data-goal-action=edit>`), _tmpl$13$1 = /* @__PURE__ */ template(`<button type=button class="btn btn-ghost mini danger"data-goal-action=delete>`), _tmpl$14$1 = /* @__PURE__ */ template(`<div class=goal-actions>`), _tmpl$15$1 = /* @__PURE__ */ template(`<details class=goal-item><summary class=goal-item-head><span class=goal-item-chevron aria-hidden=true>▶</span><span class=goal-desc-inline></span><span class=goal-title-brief></span></summary><div class=goal-item-body><div class=goal-content><div class="goal-desc md-content">`), _tmpl$16$1 = /* @__PURE__ */ template(`<div class=empty-hint>`), _tmpl$17 = /* @__PURE__ */ template(`<section class=criteria-group><div class=criteria-group-head><span class=criteria-group-icon aria-hidden=true></span><div class=criteria-group-title></div><div class=criteria-group-count></div></div><div class=criteria-group-list>`), _tmpl$18 = /* @__PURE__ */ template(`<label class=criteria-item><input type=checkbox><span class=check-mark></span><span class=criteria-copy><span class=criteria-name></span><span class=criteria-desc></span></span><span class=criteria-status></span><span class=criteria-result>`), _tmpl$19 = /* @__PURE__ */ template(`<div class="eval-summary md-content">`), _tmpl$20 = /* @__PURE__ */ template(`<div class=eval-error-meta>`), _tmpl$21 = /* @__PURE__ */ template(`<div class=eval-error><div class=eval-error-name>✗ </div><div class="eval-error-detail md-content">`), _tmpl$22 = /* @__PURE__ */ template(`<div class=delivery-files>`), _tmpl$23 = /* @__PURE__ */ template(`<div class=delivery-card><div class=delivery-title></div><div class="delivery-summary md-content">`), _tmpl$24 = /* @__PURE__ */ template(`<button type=button class="btn btn-primary"data-task-action=retry>`), _tmpl$25 = /* @__PURE__ */ template(`<button type=button class="btn btn-ghost"data-task-action=replan>`), _tmpl$26 = /* @__PURE__ */ template(`<div class=task-actions-buttons>`), _tmpl$27 = /* @__PURE__ */ template(`<div class=task-actions-bar>`), _tmpl$28 = /* @__PURE__ */ template(`<button class="btn btn-primary"data-action=always>`), _tmpl$29 = /* @__PURE__ */ template(`<button class="btn btn-ghost"data-action=once>`), _tmpl$30 = /* @__PURE__ */ template(`<button class="btn btn-ghost"data-action=reject>`), _tmpl$31 = /* @__PURE__ */ template(`<div class=interaction-alert><div class=interaction-title> </div><div class="interaction-body md-content"></div><div class=interaction-actions>`), _tmpl$32 = /* @__PURE__ */ template(`<button class="btn btn-primary"data-action=answer>`), _tmpl$33 = /* @__PURE__ */ template(`<div class=interactions-list>`), _tmpl$34 = /* @__PURE__ */ template(`<div class=executor-summary-stat><span class=executor-summary-value></span><span class=executor-summary-label>`), _tmpl$35 = /* @__PURE__ */ template(`<div class=executor-summary><div class=executor-summary-stat><span class=executor-summary-value></span><span class=executor-summary-label>`), _tmpl$36 = /* @__PURE__ */ template(`<details class=section><summary class=section-head><span class=section-icon aria-hidden=true></span><span class=section-title></span><span class=section-badge></span></summary><div class=section-body>`), _tmpl$37 = /* @__PURE__ */ template(`<div id=taskActionsBar>`);
 function statusIcon(status) {
   const activeIcon = `<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path data-fill="true" d="M6 4.6L11.3 8 6 11.4Z"/></svg>`;
   const map = {
@@ -7552,30 +7553,30 @@ function ExecutorSummaryPanel(props) {
     },
     get fallback() {
       return (() => {
-        var _el$93 = _tmpl$4$c();
-        insert(_el$93, (() => {
+        var _el$90 = _tmpl$4$c();
+        insert(_el$90, (() => {
           var _c$2 = memo(() => !!isRunning());
           return () => _c$2() ? t("executor.waiting") : t("empty.executor");
         })());
-        return _el$93;
+        return _el$90;
       })();
     },
     get children() {
-      var _el$86 = _tmpl$37(), _el$87 = _el$86.firstChild, _el$88 = _el$87.firstChild, _el$89 = _el$88.nextSibling;
-      insert(_el$88, toolCalls);
-      insert(_el$89, () => t("executor.tool_calls"));
-      insert(_el$86, createComponent(Show, {
+      var _el$83 = _tmpl$35(), _el$84 = _el$83.firstChild, _el$85 = _el$84.firstChild, _el$86 = _el$85.nextSibling;
+      insert(_el$85, toolCalls);
+      insert(_el$86, () => t("executor.tool_calls"));
+      insert(_el$83, createComponent(Show, {
         get when() {
           return props.cards.length > 0;
         },
         get children() {
-          var _el$90 = _tmpl$36(), _el$91 = _el$90.firstChild, _el$92 = _el$91.nextSibling;
-          insert(_el$91, () => props.cards.length);
-          insert(_el$92, () => t("executor.sessions"));
-          return _el$90;
+          var _el$87 = _tmpl$34(), _el$88 = _el$87.firstChild, _el$89 = _el$88.nextSibling;
+          insert(_el$88, () => props.cards.length);
+          insert(_el$89, () => t("executor.sessions"));
+          return _el$87;
         }
       }), null);
-      return _el$86;
+      return _el$83;
     }
   });
 }
@@ -7588,17 +7589,17 @@ const SECTION_ICONS = {
   delivery: `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 5.5L8 2.5l5.5 3v5L8 13.5l-5.5-3Z"/><polyline points="2.5,5.5 8,8.5 13.5,5.5"/><line x1="8" y1="8.5" x2="8" y2="13.5"/></svg>`};
 function SectionFrame(props) {
   return (() => {
-    var _el$94 = _tmpl$38(), _el$95 = _el$94.firstChild, _el$96 = _el$95.firstChild, _el$97 = _el$96.nextSibling, _el$98 = _el$97.nextSibling, _el$99 = _el$95.nextSibling;
-    insert(_el$97, () => props.title);
-    insert(_el$98, () => props.badgeText || "");
-    insert(_el$99, () => props.children);
+    var _el$91 = _tmpl$36(), _el$92 = _el$91.firstChild, _el$93 = _el$92.firstChild, _el$94 = _el$93.nextSibling, _el$95 = _el$94.nextSibling, _el$96 = _el$92.nextSibling;
+    insert(_el$94, () => props.title);
+    insert(_el$95, () => props.badgeText || "");
+    insert(_el$96, () => props.children);
     createRenderEffect((_p$) => {
       var _v$30 = props.id, _v$31 = props.icon || "", _v$32 = props.badgeId, _v$33 = props.badgeTone, _v$34 = props.bodyId;
-      _v$30 !== _p$.e && setAttribute(_el$94, "id", _p$.e = _v$30);
-      _v$31 !== _p$.t && (_el$96.innerHTML = _p$.t = _v$31);
-      _v$32 !== _p$.a && setAttribute(_el$98, "id", _p$.a = _v$32);
-      _v$33 !== _p$.o && setAttribute(_el$98, "data-tone", _p$.o = _v$33);
-      _v$34 !== _p$.i && setAttribute(_el$99, "id", _p$.i = _v$34);
+      _v$30 !== _p$.e && setAttribute(_el$91, "id", _p$.e = _v$30);
+      _v$31 !== _p$.t && (_el$93.innerHTML = _p$.t = _v$31);
+      _v$32 !== _p$.a && setAttribute(_el$95, "id", _p$.a = _v$32);
+      _v$33 !== _p$.o && setAttribute(_el$95, "data-tone", _p$.o = _v$33);
+      _v$34 !== _p$.i && setAttribute(_el$96, "id", _p$.i = _v$34);
       return _p$;
     }, {
       e: void 0,
@@ -7607,7 +7608,7 @@ function SectionFrame(props) {
       o: void 0,
       i: void 0
     });
-    return _el$94;
+    return _el$91;
   })();
 }
 function Board(props) {
@@ -7665,7 +7666,6 @@ function Board(props) {
   const requirements = () => board()?.requirements;
   const architect = () => board()?.architect;
   const goalWorkflows = () => board()?.goalWorkflows || [];
-  const hasWorkflow = createMemo(() => !!workflow());
   const isRequirementsGenerating = createMemo(() => {
     const wf = workflow();
     if (!wf) return false;
@@ -7679,7 +7679,6 @@ function Board(props) {
     return archStep?.status === "running";
   });
   const requirementsMessages = createMemo(() => {
-    if (!hasWorkflow()) return [];
     const cards = agentCards();
     const order = agentCardOrder();
     const msgs = [];
@@ -7700,7 +7699,6 @@ function Board(props) {
     evaluator: "eval"
   };
   const goalStepMessages = createMemo(() => {
-    if (!hasWorkflow()) return {};
     const cards = agentCards();
     const order = agentCardOrder();
     const result = {};
@@ -7720,7 +7718,6 @@ function Board(props) {
     return result;
   });
   const goalEvalChecks = createMemo(() => {
-    if (!hasWorkflow()) return {};
     const ev = evaluation();
     if (!ev?.checks) return {};
     const checks = Array.isArray(ev.checks) ? ev.checks : [];
@@ -7734,9 +7731,40 @@ function Board(props) {
     }
     return result;
   });
+  const evaluationBadge = createMemo(() => {
+    const specs = criteriaSpecs(task(), evaluation());
+    if (specs.length === 0) return {
+      text: "",
+      tone: ""
+    };
+    const enabled = specs.filter((item) => item.enabled).length;
+    if (enabled === 0) return {
+      text: t("checks.zero_enabled"),
+      tone: ""
+    };
+    const passed = specs.filter((item) => item.enabled && aggregateCheckStatus(evaluation()?.checks, item.name) === "passed").length;
+    const tone = passed === enabled ? "good" : passed > 0 ? "warn" : "";
+    return {
+      text: `${passed}/${enabled}`,
+      tone
+    };
+  });
+  const showWorkflowProgress = createMemo(() => !!workflow());
+  const showRequirements = createMemo(() => !!requirements() || !!spec() || isRequirementsGenerating() || requirementsMessages().length > 0);
+  const showArchitect = createMemo(() => !!architect() || isArchitectGenerating());
+  const showGoals = createMemo(() => goalWorkflows().length > 0 || goalsCards().length > 0);
+  const usePerGoalWorkflow = createMemo(() => goalWorkflows().length > 0);
+  const showPlan = createMemo(() => !usePerGoalWorkflow() && (!!plan() || !!boardStore.planPreview || runningGoalIDs().size > 0));
+  const showExecutor = createMemo(() => !usePerGoalWorkflow() && executorCards().length > 0);
+  const showEvaluation = createMemo(() => {
+    const specs = criteriaSpecs(task(), evaluation());
+    return specs.length > 0 || !!evaluation();
+  });
+  const showDelivery = createMemo(() => !!delivery());
+  const showInteractions = createMemo(() => interactions().some((i) => i.status === "pending"));
   return [(() => {
-    var _el$100 = _tmpl$39();
-    insert(_el$100, createComponent(TaskActionsPanel, {
+    var _el$97 = _tmpl$37();
+    insert(_el$97, createComponent(TaskActionsPanel, {
       get overview() {
         return overview();
       },
@@ -7750,17 +7778,24 @@ function Board(props) {
         return props.onCancel;
       }
     }));
-    return _el$100;
+    return _el$97;
   })(), createComponent(Show, {
     get when() {
-      return hasWorkflow();
+      return showWorkflowProgress();
     },
     get children() {
-      return [createComponent(WorkflowProgressBar, {
+      return createComponent(WorkflowProgressBar, {
         get workflow() {
           return workflow();
         }
-      }), createComponent(SectionFrame, {
+      });
+    }
+  }), createComponent(Show, {
+    get when() {
+      return showRequirements();
+    },
+    get children() {
+      return createComponent(SectionFrame, {
         id: "requirementsSection",
         get title() {
           return t("workflow.requirements") || "Requirements";
@@ -7771,63 +7806,125 @@ function Board(props) {
         bodyId: "requirementsBody",
         badgeId: "requirementsBadge",
         get badgeText() {
-          return memo(() => !!requirements()?.length)() ? String(requirements().length) : "";
+          return memo(() => !!requirements()?.length)() ? String(requirements().length) : memo(() => !!spec())() ? t("common.active") : "";
         },
         get badgeTone() {
-          return requirements()?.length ? "accent" : "";
+          return requirements()?.length || spec() ? "accent" : "";
         },
         get children() {
-          return createComponent(RequirementsPanel, {
-            get requirements() {
-              return requirements();
+          return createComponent(Show, {
+            get when() {
+              return requirements() || isRequirementsGenerating() || requirementsMessages().length > 0;
             },
-            get specContent() {
-              return spec()?.content;
-            },
-            get isGenerating() {
-              return isRequirementsGenerating();
-            },
-            get streamingMessages() {
-              return requirementsMessages();
-            }
-          });
-        }
-      }), createComponent(Show, {
-        get when() {
-          return architect();
-        },
-        get children() {
-          return createComponent(SectionFrame, {
-            id: "architectSection",
-            get title() {
-              return t("workflow.architect") || "Architect";
-            },
-            get icon() {
-              return SECTION_ICONS.plan;
-            },
-            bodyId: "architectBody",
-            badgeId: "architectBadge",
-            get badgeText() {
-              return memo(() => !!architect())() ? String(architect().contractCount) : "";
-            },
-            get badgeTone() {
-              return architect() ? "accent" : "";
+            get fallback() {
+              return createComponent(SpecPanel, {
+                get spec() {
+                  return spec();
+                },
+                get preview() {
+                  return boardStore.specPreview;
+                }
+              });
             },
             get children() {
-              return createComponent(ArchitectPanel, {
-                get architect() {
-                  return architect();
+              return createComponent(RequirementsPanel, {
+                get requirements() {
+                  return requirements();
+                },
+                get specContent() {
+                  return spec()?.content;
                 },
                 get isGenerating() {
-                  return isArchitectGenerating();
+                  return isRequirementsGenerating();
+                },
+                get streamingMessages() {
+                  return requirementsMessages();
                 }
               });
             }
           });
         }
-      }), createComponent(Show, {
+      });
+    }
+  }), createComponent(Show, {
+    get when() {
+      return showArchitect();
+    },
+    get children() {
+      return createComponent(SectionFrame, {
+        id: "architectSection",
+        get title() {
+          return t("workflow.architect") || "Architect";
+        },
+        get icon() {
+          return SECTION_ICONS.plan;
+        },
+        bodyId: "architectBody",
+        badgeId: "architectBadge",
+        get badgeText() {
+          return memo(() => !!architect())() ? String(architect().contractCount) : "";
+        },
+        get badgeTone() {
+          return architect() ? "accent" : "";
+        },
+        get children() {
+          return createComponent(ArchitectPanel, {
+            get architect() {
+              return architect();
+            },
+            get isGenerating() {
+              return isArchitectGenerating();
+            }
+          });
+        }
+      });
+    }
+  }), createComponent(Show, {
+    get when() {
+      return showGoals();
+    },
+    get children() {
+      return createComponent(Show, {
         get when() {
-          return goalWorkflows().length > 0;
+          return usePerGoalWorkflow();
+        },
+        get fallback() {
+          return createComponent(SectionFrame, {
+            id: "goalsSection",
+            get title() {
+              return t("section.goals");
+            },
+            get icon() {
+              return SECTION_ICONS.goals;
+            },
+            bodyId: "goalsBody",
+            badgeId: "goalsBadge",
+            get badgeText() {
+              return goalsBadgeText();
+            },
+            get badgeTone() {
+              return goalsBadgeTone();
+            },
+            get children() {
+              return createComponent(GoalsPanel, {
+                get cards() {
+                  return goalsCards();
+                },
+                get runningGoalIDs() {
+                  return runningGoalIDs();
+                },
+                get onEditGoal() {
+                  return props.onEditGoal;
+                },
+                get onDeleteGoal() {
+                  return props.onDeleteGoal;
+                },
+                get onOpenSession() {
+                  return props.onOpenSession;
+                }
+              });
+            }
+          });
         },
         get children() {
           return createComponent(SectionFrame, {
@@ -7847,8 +7944,8 @@ function Board(props) {
             },
             get badgeTone() {
               const gw = goalWorkflows();
-              const passed = gw.filter((g) => g.goalStatus === "passed").length;
               if (gw.length === 0) return "";
+              const passed = gw.filter((g) => g.goalStatus === "passed").length;
               return passed === gw.length ? "good" : gw.some((g) => g.goalStatus === "failed") ? "bad" : "accent";
             },
             get children() {
@@ -7866,177 +7963,14 @@ function Board(props) {
             }
           });
         }
-      }), createComponent(SectionFrame, {
-        id: "criteriaSection",
-        get title() {
-          return t("section.evaluation");
-        },
-        get icon() {
-          return SECTION_ICONS.criteria;
-        },
-        bodyId: "criteriaBody",
-        badgeId: "criteriaBadge",
-        get badgeText() {
-          const specs = criteriaSpecs(task(), evaluation());
-          if (specs.length === 0) return "";
-          const enabled = specs.filter((item) => item.enabled).length;
-          if (enabled === 0) return t("checks.zero_enabled");
-          const passed = specs.filter((item) => item.enabled && aggregateCheckStatus(evaluation()?.checks, item.name) === "passed").length;
-          return `${passed}/${enabled}`;
-        },
-        get children() {
-          return [createComponent(CriteriaPanel, {
-            get task() {
-              return task();
-            },
-            get evaluation() {
-              return evaluation();
-            },
-            get onToggle() {
-              return props.onToggleCriteria;
-            }
-          }), createComponent(EvaluationPanel, {
-            get evaluation() {
-              return evaluation();
-            }
-          })];
-        }
-      }), createComponent(SectionFrame, {
-        id: "deliverySection",
-        get title() {
-          return t("section.delivery");
-        },
-        get icon() {
-          return SECTION_ICONS.delivery;
-        },
-        bodyId: "evalBody",
-        badgeId: "deliveryBadge",
-        get badgeText() {
-          return memo(() => !!delivery())() ? deliveryStatusLabel(delivery()?.status) : "";
-        },
-        get badgeTone() {
-          return memo(() => delivery()?.status === "delivered")() ? "good" : memo(() => delivery()?.status === "failed")() ? "bad" : delivery() ? "accent" : "";
-        },
-        get children() {
-          return createComponent(DeliveryPanel, {
-            get delivery() {
-              return delivery();
-            }
-          });
-        }
-      }), createComponent(Show, {
-        get when() {
-          return interactions().some((i) => i.status === "pending");
-        },
-        get children() {
-          return createComponent(SectionFrame, {
-            id: "interactionsSection",
-            get title() {
-              return t("workflow.interactions") || "Interactions";
-            },
-            get icon() {
-              return SECTION_ICONS.criteria;
-            },
-            bodyId: "interactionsBody",
-            badgeId: "interactionsBadge",
-            get badgeText() {
-              return String(interactions().filter((i) => i.status === "pending").length);
-            },
-            badgeTone: "warn",
-            get children() {
-              return createComponent(InteractionsList, {
-                get interactions() {
-                  return interactions();
-                },
-                get onResolve() {
-                  return props.onResolveInteraction;
-                },
-                get onReject() {
-                  return props.onRejectInteraction;
-                }
-              });
-            }
-          });
-        }
-      })];
+      });
     }
   }), createComponent(Show, {
     get when() {
-      return !hasWorkflow();
+      return showPlan();
     },
     get children() {
-      return [createComponent(SectionFrame, {
-        id: "specSection",
-        get title() {
-          return t("section.spec");
-        },
-        get icon() {
-          return SECTION_ICONS.spec;
-        },
-        bodyId: "specBody",
-        badgeId: "specBadge",
-        get badgeText() {
-          return memo(() => !!spec())() ? t("common.active") : "";
-        },
-        get badgeTone() {
-          return spec() ? "accent" : "";
-        },
-        get children() {
-          return createComponent(SpecPanel, {
-            get spec() {
-              return spec();
-            },
-            get preview() {
-              return boardStore.specPreview;
-            }
-          });
-        }
-      }), createComponent(SectionFrame, {
-        id: "goalsSection",
-        get title() {
-          return t("section.goals");
-        },
-        get icon() {
-          return SECTION_ICONS.goals;
-        },
-        bodyId: "goalsBody",
-        badgeId: "goalsBadge",
-        get badgeText() {
-          return goalsBadgeText();
-        },
-        get badgeTone() {
-          return goalsBadgeTone();
-        },
-        get children() {
-          return [createComponent(GoalsPanel, {
-            get cards() {
-              return goalsCards();
-            },
-            get runningGoalIDs() {
-              return runningGoalIDs();
-            },
-            get onEditGoal() {
-              return props.onEditGoal;
-            },
-            get onDeleteGoal() {
-              return props.onDeleteGoal;
-            },
-            get onOpenSession() {
-              return props.onOpenSession;
-            }
-          }), createComponent(InteractionsList, {
-            get interactions() {
-              return interactions();
-            },
-            get onResolve() {
-              return props.onResolveInteraction;
-            },
-            get onReject() {
-              return props.onRejectInteraction;
-            }
-          })];
-        }
-      }), createComponent(SectionFrame, {
+      return createComponent(SectionFrame, {
         id: "planSection",
         get title() {
           return t("section.plan");
@@ -8068,7 +8002,14 @@ function Board(props) {
             }
           });
         }
-      }), createComponent(SectionFrame, {
+      });
+    }
+  }), createComponent(Show, {
+    get when() {
+      return showExecutor();
+    },
+    get children() {
+      return createComponent(SectionFrame, {
         id: "executorSection",
         get title() {
           return t("section.executor");
@@ -8097,7 +8038,14 @@ function Board(props) {
             }
           });
         }
-      }), createComponent(SectionFrame, {
+      });
+    }
+  }), createComponent(Show, {
+    get when() {
+      return showEvaluation();
+    },
+    get children() {
+      return createComponent(SectionFrame, {
         id: "criteriaSection",
         get title() {
           return t("section.evaluation");
@@ -8108,12 +8056,10 @@ function Board(props) {
         bodyId: "criteriaBody",
         badgeId: "criteriaBadge",
         get badgeText() {
-          const specs = criteriaSpecs(task(), evaluation());
-          if (specs.length === 0) return "";
-          const enabled = specs.filter((item) => item.enabled).length;
-          if (enabled === 0) return t("checks.zero_enabled");
-          const passed = specs.filter((item) => item.enabled && aggregateCheckStatus(evaluation()?.checks, item.name) === "passed").length;
-          return `${passed}/${enabled}`;
+          return evaluationBadge().text;
+        },
+        get badgeTone() {
+          return evaluationBadge().tone;
         },
         get children() {
           return [createComponent(CriteriaPanel, {
@@ -8132,7 +8078,14 @@ function Board(props) {
             }
           })];
         }
-      }), createComponent(SectionFrame, {
+      });
+    }
+  }), createComponent(Show, {
+    get when() {
+      return showDelivery();
+    },
+    get children() {
+      return createComponent(SectionFrame, {
         id: "deliverySection",
         get title() {
           return t("section.delivery");
@@ -8140,7 +8093,7 @@ function Board(props) {
         get icon() {
           return SECTION_ICONS.delivery;
         },
-        bodyId: "evalBody",
+        bodyId: "deliveryBody",
         badgeId: "deliveryBadge",
         get badgeText() {
           return memo(() => !!delivery())() ? deliveryStatusLabel(delivery()?.status) : "";
@@ -8155,7 +8108,41 @@ function Board(props) {
             }
           });
         }
-      })];
+      });
+    }
+  }), createComponent(Show, {
+    get when() {
+      return showInteractions();
+    },
+    get children() {
+      return createComponent(SectionFrame, {
+        id: "interactionsSection",
+        get title() {
+          return t("workflow.interactions") || "Interactions";
+        },
+        get icon() {
+          return SECTION_ICONS.criteria;
+        },
+        bodyId: "interactionsBody",
+        badgeId: "interactionsBadge",
+        get badgeText() {
+          return String(interactions().filter((i) => i.status === "pending").length);
+        },
+        badgeTone: "warn",
+        get children() {
+          return createComponent(InteractionsList, {
+            get interactions() {
+              return interactions();
+            },
+            get onResolve() {
+              return props.onResolveInteraction;
+            },
+            get onReject() {
+              return props.onRejectInteraction;
+            }
+          });
+        }
+      });
     }
   })];
 }
@@ -8386,7 +8373,7 @@ function ChatComposer(props) {
 }
 delegateEvents(["input", "keydown", "click"]);
 
-var _tmpl$$d = /* @__PURE__ */ template(`<button type=button id=btnPin class="btn btn-ghost icon-btn titlebar-btn"><svg width=12 height=12 viewBox="0 0 16 16"fill=none aria-hidden=true><path d="M9.5 2L14 6.5l-4 1.5-4 4-1.5-1.5 4-4L7 2.5 9.5 2z"stroke=currentColor stroke-width=1.3 stroke-linejoin=round></path><line x1=2 y1=14 x2=6 y2=10 stroke=currentColor stroke-width=1.3 stroke-linecap=round>`), _tmpl$2$a = /* @__PURE__ */ template(`<button type=button id=btnMinimize class="btn btn-ghost icon-btn titlebar-btn"><svg width=11 height=11 viewBox="0 0 11 11"fill=none aria-hidden=true><line x1=1 y1=5.5 x2=10 y2=5.5 stroke=currentColor stroke-width=1.3 stroke-linecap=round>`), _tmpl$3$a = /* @__PURE__ */ template(`<button type=button id=btnMaximize class="btn btn-ghost icon-btn titlebar-btn">`), _tmpl$4$a = /* @__PURE__ */ template(`<button type=button id=btnClose class="btn btn-ghost icon-btn titlebar-btn titlebar-btn-close"><svg width=11 height=11 viewBox="0 0 11 11"fill=none aria-hidden=true><line x1=1 y1=1 x2=10 y2=10 stroke=currentColor stroke-width=1.3 stroke-linecap=round></line><line x1=10 y1=1 x2=1 y2=10 stroke=currentColor stroke-width=1.3 stroke-linecap=round>`), _tmpl$5$a = /* @__PURE__ */ template(`<div class=window-controls data-no-drag=true>`);
+var _tmpl$$d = /* @__PURE__ */ template(`<button type=button id=btnPin class=titlebar-btn><svg width=12 height=12 viewBox="0 0 16 16"fill=none aria-hidden=true><path d="M9.5 2L14 6.5l-4 1.5-4 4-1.5-1.5 4-4L7 2.5 9.5 2z"stroke=currentColor stroke-width=1.3 stroke-linejoin=round></path><line x1=2 y1=14 x2=6 y2=10 stroke=currentColor stroke-width=1.3 stroke-linecap=round>`), _tmpl$2$a = /* @__PURE__ */ template(`<button type=button id=btnMinimize class=titlebar-btn><svg width=11 height=11 viewBox="0 0 11 11"fill=none aria-hidden=true><line x1=1 y1=5.5 x2=10 y2=5.5 stroke=currentColor stroke-width=1.3 stroke-linecap=round>`), _tmpl$3$a = /* @__PURE__ */ template(`<button type=button id=btnMaximize class=titlebar-btn>`), _tmpl$4$a = /* @__PURE__ */ template(`<button type=button id=btnClose class="titlebar-btn titlebar-close"><svg width=11 height=11 viewBox="0 0 11 11"fill=none aria-hidden=true><line x1=1 y1=1 x2=10 y2=10 stroke=currentColor stroke-width=1.3 stroke-linecap=round></line><line x1=10 y1=1 x2=1 y2=10 stroke=currentColor stroke-width=1.3 stroke-linecap=round>`), _tmpl$5$a = /* @__PURE__ */ template(`<div class=titlebar-window-controls data-no-drag=true>`);
 const CLOSE_HINT_KEY = "oc_close_hint_seen";
 async function currentTauriWindow$3() {
   const getCurrent = window.__TAURI__?.window?.getCurrentWindow;
@@ -11204,6 +11191,42 @@ const init = /*#__PURE__*/Object.freeze(/*#__PURE__*/Object.defineProperty({
   teardownApp
 }, Symbol.toStringTag, { value: 'Module' }));
 
+function sameBudget(a, b) {
+  return JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+}
+function budgetMinutes(value) {
+  if (!Number.isFinite(value) || value <= 0) return "";
+  const next = Math.round(value / 6e4 * 10) / 10;
+  return Number.isInteger(next) ? String(next) : next.toFixed(1);
+}
+function budgetNumber(input, options = {}) {
+  const text = input?.value?.trim() || "";
+  if (!text) return void 0;
+  const value = Number(text);
+  if (!Number.isFinite(value)) return void 0;
+  if (options.allowZero ? value < 0 : value <= 0) return void 0;
+  return Math.round(value * (options.scale || 1));
+}
+function draftBudget() {
+  const budget = {
+    maxRuns: budgetNumber(
+      document.getElementById("budgetMaxRuns")
+    ),
+    maxEvaluations: budgetNumber(
+      document.getElementById("budgetMaxEvaluations")
+    ),
+    maxWallTimeMs: budgetNumber(
+      document.getElementById("budgetMaxWallTime"),
+      { scale: 6e4 }
+    ),
+    maxExecutorGroups: budgetNumber(
+      document.getElementById("budgetMaxExecutorGroups")
+    )
+  };
+  if (Object.values(budget).every((v) => v === void 0)) return void 0;
+  return budget;
+}
+
 function currentTaskSessionID() {
   return boardStore.board?.task?.sessionID || boardStore.tasks.find(
     (item) => item?.task?.id === boardStore.selectedTaskID
@@ -11431,7 +11454,8 @@ async function panelMessage(text, attachments = [], metadata = {}) {
         text,
         attachments,
         metadata,
-        signal: controller.signal
+        signal: controller.signal,
+        budget: draftBudget()
       });
       if (taskID) {
         await selectTask(taskID);
@@ -12006,168 +12030,6 @@ async function cancelPaneResize(callbacks) {
   await stopPaneResize(callbacks);
 }
 
-function sameBudget(a, b) {
-  return JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
-}
-function budgetMinutes(value) {
-  if (!Number.isFinite(value) || value <= 0) return "";
-  const next = Math.round(value / 6e4 * 10) / 10;
-  return Number.isInteger(next) ? String(next) : next.toFixed(1);
-}
-function budgetNumber(input, options = {}) {
-  const text = input?.value?.trim() || "";
-  if (!text) return void 0;
-  const value = Number(text);
-  if (!Number.isFinite(value)) return void 0;
-  if (options.allowZero ? value < 0 : value <= 0) return void 0;
-  return Math.round(value * (options.scale || 1));
-}
-function draftBudget() {
-  const budget = {
-    maxRuns: budgetNumber(
-      document.getElementById("budgetMaxRuns")
-    ),
-    maxEvaluations: budgetNumber(
-      document.getElementById("budgetMaxEvaluations")
-    ),
-    maxWallTimeMs: budgetNumber(
-      document.getElementById("budgetMaxWallTime"),
-      { scale: 6e4 }
-    )
-  };
-  if (Object.values(budget).every((v) => v === void 0)) return void 0;
-  return budget;
-}
-
-function taskBudget(task = boardStore.board?.task) {
-  const budget = task?.budget;
-  if (!budget || typeof budget !== "object") return void 0;
-  return {
-    maxRuns: Number.isFinite(budget.maxRuns) ? budget.maxRuns : void 0,
-    maxEvaluations: Number.isFinite(budget.maxEvaluations) ? budget.maxEvaluations : void 0,
-    maxWallTimeMs: Number.isFinite(budget.maxWallTimeMs) ? budget.maxWallTimeMs : void 0
-  };
-}
-function setBudgetInputs(budget) {
-  const setValue = (id, value) => {
-    const node = document.getElementById(id);
-    if (node) node.value = value;
-  };
-  setValue("budgetMaxRuns", budget?.maxRuns === void 0 ? "" : String(budget.maxRuns));
-  setValue(
-    "budgetMaxEvaluations",
-    budget?.maxEvaluations === void 0 ? "" : String(budget.maxEvaluations)
-  );
-  setValue(
-    "budgetMaxWallTime",
-    budget?.maxWallTimeMs === void 0 ? "" : budgetMinutes(budget.maxWallTimeMs)
-  );
-}
-function configDefaults() {
-  const orch = appStore.config?.assistant;
-  if (!orch || typeof orch !== "object") return {};
-  return {
-    maxRuns: Number.isFinite(orch.max_runs) ? orch.max_runs : void 0,
-    maxEvaluations: Number.isFinite(orch.max_evaluations) ? orch.max_evaluations : void 0,
-    maxWallTimeMs: Number.isFinite(orch.max_wall_time_ms) ? orch.max_wall_time_ms : void 0
-  };
-}
-function setPlaceholders() {
-  const defaults = configDefaults();
-  const setPlaceholder = (id, value) => {
-    const node = document.getElementById(id);
-    if (node) node.placeholder = value || t("budget.placeholder");
-  };
-  setPlaceholder("budgetMaxRuns", defaults.maxRuns != null ? String(defaults.maxRuns) : "");
-  setPlaceholder("budgetMaxEvaluations", defaults.maxEvaluations != null ? String(defaults.maxEvaluations) : "");
-  setPlaceholder("budgetMaxWallTime", defaults.maxWallTimeMs != null ? budgetMinutes(defaults.maxWallTimeMs) : "");
-}
-function renderBudgetState(task = boardStore.board?.task) {
-  const budget = taskBudget(task);
-  const changed = !sameBudget(draftBudget(), budget);
-  const taskID = task?.id || boardStore.selectedTaskID;
-  const enabled = !!taskID && !appStore.budgetSaving;
-  const saveButton = document.getElementById("btnBudgetSave");
-  const resetButton = document.getElementById("btnBudgetReset");
-  const reloadButton = document.getElementById("btnBudgetReload");
-  const hint = document.getElementById("budgetHint");
-  if (saveButton) saveButton.disabled = !enabled || !changed;
-  if (resetButton) resetButton.disabled = !enabled || !changed && !appStore.budgetDirty;
-  if (reloadButton) reloadButton.disabled = !enabled || appStore.budgetSaving;
-  if (hint) {
-    hint.textContent = taskID ? t("budget.hint") : t("budget.empty");
-  }
-  setPlaceholders();
-  for (const input of [
-    document.getElementById("budgetMaxRuns"),
-    document.getElementById("budgetMaxEvaluations"),
-    document.getElementById("budgetMaxWallTime")
-  ]) {
-    if (input instanceof HTMLInputElement) input.disabled = !enabled;
-  }
-}
-function renderBudget(task) {
-  const budget = taskBudget(task);
-  if (!appStore.budgetDirty) setBudgetInputs(budget);
-  renderBudgetState(task);
-}
-function budgetSaveError(error) {
-  const detail = error instanceof Error ? error.message : String(error || "").trim();
-  return detail ? `${t("budget.save_failed")}: ${detail}` : t("budget.save_failed");
-}
-function installBudgetBindings() {
-  const body = document.getElementById("budgetConfigBody");
-  if (!(body instanceof HTMLElement) || body.dataset.boundBudget === "true") return;
-  body.dataset.boundBudget = "true";
-  body.addEventListener("input", () => {
-    setAppStore("budgetDirty", true);
-    renderBudgetState(boardStore.board?.task);
-  });
-  document.getElementById("btnBudgetReset")?.addEventListener("click", () => {
-    setAppStore("budgetDirty", false);
-    setBudgetInputs(taskBudget());
-    renderBudgetState(boardStore.board?.task);
-  });
-  document.getElementById("btnBudgetReload")?.addEventListener("click", async () => {
-    if (!boardStore.selectedTaskID || appStore.budgetSaving) return;
-    setAppStore("budgetDirty", false);
-    setAppStore("budgetSaving", true);
-    renderBudgetState(boardStore.board?.task);
-    try {
-      await loadBoard({ sync: true });
-    } finally {
-      setAppStore("budgetSaving", false);
-      renderBudget(boardStore.board?.task);
-    }
-  });
-  document.getElementById("btnBudgetSave")?.addEventListener("click", async () => {
-    if (!boardStore.selectedTaskID || appStore.budgetSaving) return;
-    setAppStore("budgetSaving", true);
-    renderBudgetState(boardStore.board?.task);
-    try {
-      await apiJson(`task/${encodeURIComponent(boardStore.selectedTaskID)}/budget`, {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ budget: draftBudget() || null })
-      });
-      setAppStore("budgetDirty", false);
-      await loadBoard({ sync: true });
-    } catch (error) {
-      console.error("Failed to update task budget", error);
-      const nativeMessage = window.nativeMessage;
-      if (typeof nativeMessage === "function") {
-        await nativeMessage(budgetSaveError(error), {
-          title: t("section.budget"),
-          kind: "error"
-        });
-      }
-    } finally {
-      setAppStore("budgetSaving", false);
-      renderBudgetState(boardStore.board?.task);
-    }
-  });
-}
-
 async function tauriInvoke(command, args) {
   const globalInvoke = window.__TAURI__?.core?.invoke;
   if (typeof globalInvoke === "function") {
@@ -12398,6 +12260,159 @@ const config = /*#__PURE__*/Object.freeze(/*#__PURE__*/Object.defineProperty({
   scaffoldProjectConfig,
   updateConfig
 }, Symbol.toStringTag, { value: 'Module' }));
+
+function taskBudget(task = boardStore.board?.task) {
+  const budget = task?.budget;
+  if (!budget || typeof budget !== "object") return void 0;
+  return {
+    maxRuns: Number.isFinite(budget.maxRuns) ? budget.maxRuns : void 0,
+    maxEvaluations: Number.isFinite(budget.maxEvaluations) ? budget.maxEvaluations : void 0,
+    maxWallTimeMs: Number.isFinite(budget.maxWallTimeMs) ? budget.maxWallTimeMs : void 0,
+    maxExecutorGroups: Number.isFinite(budget.maxExecutorGroups) ? budget.maxExecutorGroups : void 0
+  };
+}
+function setBudgetInputs(budget) {
+  const setValue = (id, value) => {
+    const node = document.getElementById(id);
+    if (node) node.value = value;
+  };
+  setValue("budgetMaxRuns", budget?.maxRuns === void 0 ? "" : String(budget.maxRuns));
+  setValue(
+    "budgetMaxEvaluations",
+    budget?.maxEvaluations === void 0 ? "" : String(budget.maxEvaluations)
+  );
+  setValue(
+    "budgetMaxWallTime",
+    budget?.maxWallTimeMs === void 0 ? "" : budgetMinutes(budget.maxWallTimeMs)
+  );
+  setValue(
+    "budgetMaxExecutorGroups",
+    budget?.maxExecutorGroups === void 0 ? "" : String(budget.maxExecutorGroups)
+  );
+}
+function configDefaults() {
+  const orch = appStore.config?.assistant;
+  if (!orch || typeof orch !== "object") return {};
+  return {
+    maxRuns: Number.isFinite(orch.max_runs) ? orch.max_runs : void 0,
+    maxEvaluations: Number.isFinite(orch.max_evaluations) ? orch.max_evaluations : void 0,
+    maxWallTimeMs: Number.isFinite(orch.max_wall_time_ms) ? orch.max_wall_time_ms : void 0,
+    maxExecutorGroups: Number.isFinite(orch.max_executor_groups) ? orch.max_executor_groups : void 0
+  };
+}
+function setPlaceholders() {
+  const defaults = configDefaults();
+  const setPlaceholder = (id, value) => {
+    const node = document.getElementById(id);
+    if (node) node.placeholder = value || t("budget.placeholder");
+  };
+  setPlaceholder("budgetMaxRuns", defaults.maxRuns != null ? String(defaults.maxRuns) : "");
+  setPlaceholder("budgetMaxEvaluations", defaults.maxEvaluations != null ? String(defaults.maxEvaluations) : "");
+  setPlaceholder("budgetMaxWallTime", defaults.maxWallTimeMs != null ? budgetMinutes(defaults.maxWallTimeMs) : "");
+  setPlaceholder("budgetMaxExecutorGroups", defaults.maxExecutorGroups != null ? String(defaults.maxExecutorGroups) : "");
+}
+function renderBudgetState(task = boardStore.board?.task) {
+  const budget = taskBudget(task);
+  const taskID = task?.id || boardStore.selectedTaskID;
+  const inputsEnabled = !taskID && !appStore.budgetSaving;
+  const changed = taskID ? !sameBudget(draftBudget(), budget) : appStore.budgetDirty;
+  const enabled = !appStore.budgetSaving;
+  const saveButton = document.getElementById("btnBudgetSave");
+  const resetButton = document.getElementById("btnBudgetReset");
+  const reloadButton = document.getElementById("btnBudgetReload");
+  const hint = document.getElementById("budgetHint");
+  if (saveButton) saveButton.disabled = !inputsEnabled || !changed;
+  if (resetButton) resetButton.disabled = !inputsEnabled || !changed && !appStore.budgetDirty;
+  if (reloadButton) reloadButton.disabled = !enabled || appStore.budgetSaving;
+  if (hint) {
+    hint.textContent = taskID ? t("budget.hint_readonly") : t("budget.hint");
+  }
+  setPlaceholders();
+  for (const input of [
+    document.getElementById("budgetMaxRuns"),
+    document.getElementById("budgetMaxEvaluations"),
+    document.getElementById("budgetMaxWallTime"),
+    document.getElementById("budgetMaxExecutorGroups")
+  ]) {
+    if (input instanceof HTMLInputElement) input.disabled = !inputsEnabled;
+  }
+}
+function renderBudget(task) {
+  const taskID = task?.id || boardStore.selectedTaskID;
+  if (!appStore.budgetDirty) {
+    setBudgetInputs(taskID ? taskBudget(task) : configDefaults());
+  }
+  renderBudgetState(task);
+}
+function budgetSaveError(error) {
+  const detail = error instanceof Error ? error.message : String(error || "").trim();
+  return detail ? `${t("budget.save_failed")}: ${detail}` : t("budget.save_failed");
+}
+function installBudgetBindings() {
+  const body = document.getElementById("budgetConfigBody");
+  if (!(body instanceof HTMLElement) || body.dataset.boundBudget === "true") return;
+  body.dataset.boundBudget = "true";
+  body.addEventListener("input", () => {
+    setAppStore("budgetDirty", true);
+    renderBudgetState(boardStore.board?.task);
+  });
+  document.getElementById("btnBudgetReset")?.addEventListener("click", () => {
+    setAppStore("budgetDirty", false);
+    const taskID = boardStore.selectedTaskID;
+    setBudgetInputs(taskID ? taskBudget() : configDefaults());
+    renderBudgetState(boardStore.board?.task);
+  });
+  document.getElementById("btnBudgetReload")?.addEventListener("click", async () => {
+    if (!boardStore.selectedTaskID || appStore.budgetSaving) return;
+    setAppStore("budgetDirty", false);
+    setAppStore("budgetSaving", true);
+    renderBudgetState(boardStore.board?.task);
+    try {
+      await loadBoard({ sync: true });
+    } finally {
+      setAppStore("budgetSaving", false);
+      renderBudget(boardStore.board?.task);
+    }
+  });
+  document.getElementById("btnBudgetSave")?.addEventListener("click", async () => {
+    if (appStore.budgetSaving) return;
+    setAppStore("budgetSaving", true);
+    renderBudgetState(boardStore.board?.task);
+    try {
+      const budget = draftBudget();
+      if (boardStore.selectedTaskID) {
+        await apiJson(`task/${encodeURIComponent(boardStore.selectedTaskID)}/budget`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ budget: budget || null })
+        });
+        await loadBoard({ sync: true });
+      } else {
+        await patchConfig$1({
+          assistant: {
+            max_runs: budget?.maxRuns ?? null,
+            max_evaluations: budget?.maxEvaluations ?? null,
+            max_wall_time_ms: budget?.maxWallTimeMs ?? null,
+            max_executor_groups: budget?.maxExecutorGroups ?? null
+          }
+        });
+      }
+      setAppStore("budgetDirty", false);
+    } catch (error) {
+      console.error("Failed to update budget", error);
+      const nativeMessage = window.nativeMessage;
+      if (typeof nativeMessage === "function") {
+        await nativeMessage(budgetSaveError(error), {
+          title: t("section.budget"),
+          kind: "error"
+        });
+      }
+    } finally {
+      setAppStore("budgetSaving", false);
+      renderBudgetState(boardStore.board?.task);
+    }
+  });
+}
 
 var _tmpl$$7 = /* @__PURE__ */ template(`<div class=config-status-box>`), _tmpl$2$6 = /* @__PURE__ */ template(`<div class=prompt-grid>`), _tmpl$3$6 = /* @__PURE__ */ template(`<div class=empty-hint>`), _tmpl$4$6 = /* @__PURE__ */ template(`<small>`), _tmpl$5$6 = /* @__PURE__ */ template(`<details class=prompt-diff-details><summary class=prompt-diff-summary></summary><div class=prompt-preview-card style=margin-top:0;border-top:none;opacity:0.7><div class=prompt-preview-head></div><div class="md-content prompt-preview-body">`), _tmpl$6$6 = /* @__PURE__ */ template(`<div class=prompt-card><div class=prompt-card-head><div class=prompt-card-copy><strong></strong><span></span></div><span class=extension-status></span></div><label class=field><span class=field-label></span><textarea class="field-input prompt-textarea"rows=8></textarea></label><div class=prompt-toolbar><span class=config-status-box></span><div class="dialog-actions compact"><button type=button class="btn btn-ghost mini"></button><button type=button class="btn btn-primary mini"></button></div></div><details class=prompt-diff-details><summary class=prompt-diff-summary></summary><div class=prompt-preview-card style="border-top:none;border-radius:0 0 var(--radius) var(--radius)"><div class="md-content prompt-preview-body">`);
 function promptEntryID(entry) {

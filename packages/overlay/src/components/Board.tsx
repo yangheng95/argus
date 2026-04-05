@@ -954,33 +954,6 @@ export function InteractionsList(props: InteractionsListProps) {
   );
 }
 
-// ── ExecutorPanel ──
-// Mirrors renderExecutor() — shows the engine bar state (read-only view).
-// Actual executor selection buttons live in ; this component
-// provides a Solid-friendly read-only view of the active executor.
-
-interface ExecutorPanelProps {
-  executors: any[];
-  selectedExecutor: string;
-}
-
-export function ExecutorPanel(props: ExecutorPanelProps) {
-  const current = createMemo(() =>
-    props.executors.find((e) => e.id === props.selectedExecutor),
-  );
-
-  return (
-    <Show when={current()}>
-      <div class="executor-status">
-        <span class="executor-id">{current()!.id}</span>
-        <Show when={current()!.model}>
-          <span class="executor-model">{current()!.model}</span>
-        </Show>
-      </div>
-    </Show>
-  );
-}
-
 // ── Board (top-level) ──
 // Main board panel that orchestrates all sub-panels.
 // Reads from boardStore; action callbacks are passed via props so that
@@ -1174,7 +1147,6 @@ export function Board(props: BoardProps) {
   const requirements = () => board()?.requirements;
   const architect = () => board()?.architect;
   const goalWorkflows = () => board()?.goalWorkflows || [];
-  const hasWorkflow = createMemo(() => !!workflow());
 
   // Derive streaming state from workflow step statuses
   const isRequirementsGenerating = createMemo(() => {
@@ -1190,9 +1162,9 @@ export function Board(props: BoardProps) {
     return archStep?.status === "running";
   });
 
-  // Collect agent messages for requirements stage (spec/goal stages map to requirements)
+  // Collect agent messages for requirements stage (spec/goal stages map to requirements).
+  // Data-driven: emit whenever spec/goal cards exist, independent of workflow mode.
   const requirementsMessages = createMemo(() => {
-    if (!hasWorkflow()) return [];
     const cards = agentCards();
     const order = agentCardOrder();
     const msgs: any[] = [];
@@ -1218,7 +1190,6 @@ export function Board(props: BoardProps) {
   };
 
   const goalStepMessages = createMemo(() => {
-    if (!hasWorkflow()) return {};
     const cards = agentCards();
     const order = agentCardOrder();
     const result: Record<string, Record<string, any[]>> = {};
@@ -1243,7 +1214,6 @@ export function Board(props: BoardProps) {
   });
 
   const goalEvalChecks = createMemo(() => {
-    if (!hasWorkflow()) return {};
     const ev = evaluation();
     if (!ev?.checks) return {};
     // For now, broadcast task-level checks to all goals
@@ -1260,6 +1230,41 @@ export function Board(props: BoardProps) {
     return result;
   });
 
+  // Evaluation badge (criteria pass ratio) — extracted from duplicated IIFE
+  const evaluationBadge = createMemo(() => {
+    const specs = criteriaSpecs(task(), evaluation());
+    if (specs.length === 0) return { text: "", tone: "" };
+    const enabled = specs.filter((item) => item.enabled).length;
+    if (enabled === 0) return { text: t("checks.zero_enabled"), tone: "" };
+    const passed = specs.filter(
+      (item) => item.enabled && aggregateCheckStatus(evaluation()?.checks, item.name) === "passed",
+    ).length;
+    const tone = passed === enabled ? "good" : passed > 0 ? "warn" : "";
+    return { text: `${passed}/${enabled}`, tone };
+  });
+
+  // ── Data-driven visibility signals ──
+  // Each section appears when its data exists, independent of mode.
+  const showWorkflowProgress = createMemo(() => !!workflow());
+  const showRequirements = createMemo(() =>
+    !!requirements() || !!spec() || isRequirementsGenerating() || requirementsMessages().length > 0,
+  );
+  const showArchitect = createMemo(() => !!architect() || isArchitectGenerating());
+  const showGoals = createMemo(() => goalWorkflows().length > 0 || goalsCards().length > 0);
+  const usePerGoalWorkflow = createMemo(() => goalWorkflows().length > 0);
+  const showPlan = createMemo(() =>
+    !usePerGoalWorkflow() && (!!plan() || !!boardStore.planPreview || runningGoalIDs().size > 0),
+  );
+  const showExecutor = createMemo(() => !usePerGoalWorkflow() && executorCards().length > 0);
+  const showEvaluation = createMemo(() => {
+    const specs = criteriaSpecs(task(), evaluation());
+    return specs.length > 0 || !!evaluation();
+  });
+  const showDelivery = createMemo(() => !!delivery());
+  const showInteractions = createMemo(() =>
+    interactions().some((i: any) => i.status === "pending"),
+  );
+
   return (
     <>
       <div id="taskActionsBar">
@@ -1271,42 +1276,81 @@ export function Board(props: BoardProps) {
         />
       </div>
 
-      {/* ── Workflow-structured layout (when workflow data is available) ── */}
-      <Show when={hasWorkflow()}>
-        <WorkflowProgressBar workflow={workflow()} />
+      {/* ── Data-driven unified layout ── */}
+      {/* Sections appear based on their data availability, not a mode flag. */}
+      {/* Matches Task Agent's adaptive pipeline (per specs/new-arch.svg). */}
 
+      <Show when={showWorkflowProgress()}>
+        <WorkflowProgressBar workflow={workflow()} />
+      </Show>
+
+      <Show when={showRequirements()}>
         <SectionFrame
           id="requirementsSection"
           title={t("workflow.requirements") || "Requirements"}
           icon={SECTION_ICONS.spec}
           bodyId="requirementsBody"
           badgeId="requirementsBadge"
-          badgeText={requirements()?.length ? String(requirements()!.length) : ""}
-          badgeTone={requirements()?.length ? "accent" : ""}
+          badgeText={
+            requirements()?.length
+              ? String(requirements()!.length)
+              : spec()
+                ? t("common.active")
+                : ""
+          }
+          badgeTone={requirements()?.length || spec() ? "accent" : ""}
         >
-          <RequirementsPanel
-            requirements={requirements()}
-            specContent={spec()?.content}
-            isGenerating={isRequirementsGenerating()}
-            streamingMessages={requirementsMessages()}
-          />
-        </SectionFrame>
-
-        <Show when={architect()}>
-          <SectionFrame
-            id="architectSection"
-            title={t("workflow.architect") || "Architect"}
-            icon={SECTION_ICONS.plan}
-            bodyId="architectBody"
-            badgeId="architectBadge"
-            badgeText={architect() ? String(architect()!.contractCount) : ""}
-            badgeTone={architect() ? "accent" : ""}
+          <Show
+            when={requirements() || isRequirementsGenerating() || requirementsMessages().length > 0}
+            fallback={<SpecPanel spec={spec()} preview={boardStore.specPreview} />}
           >
-            <ArchitectPanel architect={architect()} isGenerating={isArchitectGenerating()} />
-          </SectionFrame>
-        </Show>
+            <RequirementsPanel
+              requirements={requirements()}
+              specContent={spec()?.content}
+              isGenerating={isRequirementsGenerating()}
+              streamingMessages={requirementsMessages()}
+            />
+          </Show>
+        </SectionFrame>
+      </Show>
 
-        <Show when={goalWorkflows().length > 0}>
+      <Show when={showArchitect()}>
+        <SectionFrame
+          id="architectSection"
+          title={t("workflow.architect") || "Architect"}
+          icon={SECTION_ICONS.plan}
+          bodyId="architectBody"
+          badgeId="architectBadge"
+          badgeText={architect() ? String(architect()!.contractCount) : ""}
+          badgeTone={architect() ? "accent" : ""}
+        >
+          <ArchitectPanel architect={architect()} isGenerating={isArchitectGenerating()} />
+        </SectionFrame>
+      </Show>
+
+      <Show when={showGoals()}>
+        <Show
+          when={usePerGoalWorkflow()}
+          fallback={
+            <SectionFrame
+              id="goalsSection"
+              title={t("section.goals")}
+              icon={SECTION_ICONS.goals}
+              bodyId="goalsBody"
+              badgeId="goalsBadge"
+              badgeText={goalsBadgeText()}
+              badgeTone={goalsBadgeTone()}
+            >
+              <GoalsPanel
+                cards={goalsCards()}
+                runningGoalIDs={runningGoalIDs()}
+                onEditGoal={props.onEditGoal}
+                onDeleteGoal={props.onDeleteGoal}
+                onOpenSession={props.onOpenSession}
+              />
+            </SectionFrame>
+          }
+        >
           <SectionFrame
             id="goalWorkflowsSection"
             title={t("workflow.goals") || "Goals"}
@@ -1315,14 +1359,18 @@ export function Board(props: BoardProps) {
             badgeId="goalWorkflowsBadge"
             badgeText={(() => {
               const gw = goalWorkflows();
-              const passed = gw.filter(g => g.goalStatus === "passed").length;
+              const passed = gw.filter((g) => g.goalStatus === "passed").length;
               return gw.length > 0 ? `${passed}/${gw.length}` : "";
             })()}
             badgeTone={(() => {
               const gw = goalWorkflows();
-              const passed = gw.filter(g => g.goalStatus === "passed").length;
               if (gw.length === 0) return "";
-              return passed === gw.length ? "good" : gw.some(g => g.goalStatus === "failed") ? "bad" : "accent";
+              const passed = gw.filter((g) => g.goalStatus === "passed").length;
+              return passed === gw.length
+                ? "good"
+                : gw.some((g) => g.goalStatus === "failed")
+                  ? "bad"
+                  : "accent";
             })()}
           >
             <GoalWorkflowList
@@ -1332,107 +1380,9 @@ export function Board(props: BoardProps) {
             />
           </SectionFrame>
         </Show>
-
-        {/* Evaluation / Criteria — shared with legacy layout */}
-        <SectionFrame
-          id="criteriaSection"
-          title={t("section.evaluation")}
-          icon={SECTION_ICONS.criteria}
-          bodyId="criteriaBody"
-          badgeId="criteriaBadge"
-          badgeText={(() => {
-            const specs = criteriaSpecs(task(), evaluation());
-            if (specs.length === 0) return "";
-            const enabled = specs.filter((item) => item.enabled).length;
-            if (enabled === 0) return t("checks.zero_enabled");
-            const passed = specs.filter((item) => item.enabled && aggregateCheckStatus(evaluation()?.checks, item.name) === "passed").length;
-            return `${passed}/${enabled}`;
-          })()}
-        >
-          <CriteriaPanel
-            task={task()}
-            evaluation={evaluation()}
-            onToggle={props.onToggleCriteria}
-          />
-          <EvaluationPanel evaluation={evaluation()} />
-        </SectionFrame>
-
-        <SectionFrame
-          id="deliverySection"
-          title={t("section.delivery")}
-          icon={SECTION_ICONS.delivery}
-          bodyId="evalBody"
-          badgeId="deliveryBadge"
-          badgeText={delivery() ? deliveryStatusLabel(delivery()?.status) : ""}
-          badgeTone={
-            delivery()?.status === "delivered"
-              ? "good"
-              : delivery()?.status === "failed"
-                ? "bad"
-                : delivery()
-                  ? "accent"
-                  : ""
-          }
-        >
-          <DeliveryPanel delivery={delivery()} />
-        </SectionFrame>
-
-        <Show when={interactions().some((i: any) => i.status === "pending")}>
-          <SectionFrame
-            id="interactionsSection"
-            title={t("workflow.interactions") || "Interactions"}
-            icon={SECTION_ICONS.criteria}
-            bodyId="interactionsBody"
-            badgeId="interactionsBadge"
-            badgeText={String(interactions().filter((i: any) => i.status === "pending").length)}
-            badgeTone="warn"
-          >
-            <InteractionsList
-              interactions={interactions()}
-              onResolve={props.onResolveInteraction}
-              onReject={props.onRejectInteraction}
-            />
-          </SectionFrame>
-        </Show>
       </Show>
 
-      {/* ── Legacy flat layout (fallback when no workflow data) ── */}
-      <Show when={!hasWorkflow()}>
-        <SectionFrame
-          id="specSection"
-          title={t("section.spec")}
-          icon={SECTION_ICONS.spec}
-          bodyId="specBody"
-          badgeId="specBadge"
-          badgeText={spec() ? t("common.active") : ""}
-          badgeTone={spec() ? "accent" : ""}
-        >
-          <SpecPanel spec={spec()} preview={boardStore.specPreview} />
-        </SectionFrame>
-
-        <SectionFrame
-          id="goalsSection"
-          title={t("section.goals")}
-          icon={SECTION_ICONS.goals}
-          bodyId="goalsBody"
-          badgeId="goalsBadge"
-          badgeText={goalsBadgeText()}
-          badgeTone={goalsBadgeTone()}
-        >
-          <GoalsPanel
-            cards={goalsCards()}
-            runningGoalIDs={runningGoalIDs()}
-            onEditGoal={props.onEditGoal}
-            onDeleteGoal={props.onDeleteGoal}
-            onOpenSession={props.onOpenSession}
-          />
-          <InteractionsList
-            interactions={interactions()}
-            onResolve={props.onResolveInteraction}
-            onReject={props.onRejectInteraction}
-          />
-        </SectionFrame>
-
+      <Show when={showPlan()}>
         <SectionFrame
           id="planSection"
           title={t("section.plan")}
@@ -1449,7 +1399,9 @@ export function Board(props: BoardProps) {
             runningGoalIDs={runningGoalIDs()}
           />
         </SectionFrame>
+      </Show>
 
+      <Show when={showExecutor()}>
         <SectionFrame
           id="executorSection"
           title={t("section.executor")}
@@ -1465,21 +1417,17 @@ export function Board(props: BoardProps) {
             status={task()?.status}
           />
         </SectionFrame>
+      </Show>
 
+      <Show when={showEvaluation()}>
         <SectionFrame
           id="criteriaSection"
           title={t("section.evaluation")}
           icon={SECTION_ICONS.criteria}
           bodyId="criteriaBody"
           badgeId="criteriaBadge"
-          badgeText={(() => {
-            const specs = criteriaSpecs(task(), evaluation());
-            if (specs.length === 0) return "";
-            const enabled = specs.filter((item) => item.enabled).length;
-            if (enabled === 0) return t("checks.zero_enabled");
-            const passed = specs.filter((item) => item.enabled && aggregateCheckStatus(evaluation()?.checks, item.name) === "passed").length;
-            return `${passed}/${enabled}`;
-          })()}
+          badgeText={evaluationBadge().text}
+          badgeTone={evaluationBadge().tone}
         >
           <CriteriaPanel
             task={task()}
@@ -1488,12 +1436,14 @@ export function Board(props: BoardProps) {
           />
           <EvaluationPanel evaluation={evaluation()} />
         </SectionFrame>
+      </Show>
 
+      <Show when={showDelivery()}>
         <SectionFrame
           id="deliverySection"
           title={t("section.delivery")}
           icon={SECTION_ICONS.delivery}
-          bodyId="evalBody"
+          bodyId="deliveryBody"
           badgeId="deliveryBadge"
           badgeText={delivery() ? deliveryStatusLabel(delivery()?.status) : ""}
           badgeTone={
@@ -1509,55 +1459,25 @@ export function Board(props: BoardProps) {
           <DeliveryPanel delivery={delivery()} />
         </SectionFrame>
       </Show>
+
+      <Show when={showInteractions()}>
+        <SectionFrame
+          id="interactionsSection"
+          title={t("workflow.interactions") || "Interactions"}
+          icon={SECTION_ICONS.criteria}
+          bodyId="interactionsBody"
+          badgeId="interactionsBadge"
+          badgeText={String(interactions().filter((i: any) => i.status === "pending").length)}
+          badgeTone="warn"
+        >
+          <InteractionsList
+            interactions={interactions()}
+            onResolve={props.onResolveInteraction}
+            onReject={props.onRejectInteraction}
+          />
+        </SectionFrame>
+      </Show>
     </>
   );
 }
 
-// ── CriteriaBadge ──
-// Computed badge for the criteria section header.
-
-function CriteriaBadge(props: { task: any; evaluation: any }) {
-  const specs = createMemo(() => criteriaSpecs(props.task, props.evaluation));
-
-  const { enabledCount, passedCount } = {
-    enabledCount: createMemo(() => {
-      let count = 0;
-      for (const spec of specs()) {
-        if (spec.enabled) count++;
-      }
-      return count;
-    }),
-    passedCount: createMemo(() => {
-      let count = 0;
-      for (const spec of specs()) {
-        if (!spec.enabled) continue;
-        const status = aggregateCheckStatus(props.evaluation?.checks, spec.name);
-        if (status === "passed") count++;
-      }
-      return count;
-    }),
-  };
-
-  const text = createMemo(() => {
-    if (specs().length === 0) return "";
-    if (enabledCount() === 0) return t("checks.zero_enabled");
-    return `${passedCount()}/${enabledCount()}`;
-  });
-
-  const tone = createMemo(() => {
-    if (enabledCount() === 0) return "";
-    return passedCount() === enabledCount()
-      ? "good"
-      : passedCount() > 0
-        ? "warn"
-        : "";
-  });
-
-  return (
-    <Show when={text()}>
-      <span class="section-badge" data-tone={tone()}>
-        {text()}
-      </span>
-    </Show>
-  );
-}
