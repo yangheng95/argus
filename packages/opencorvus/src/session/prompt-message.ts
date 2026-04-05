@@ -26,7 +26,8 @@ import { fileURLToPath, pathToFileURL } from "bun"
 import { textForBoth } from "./part-visibility"
 import PLAN_REMINDER from "../session/prompt/plan-reminder-anthropic.txt"
 import SPEC_REMINDER from "../session/prompt/spec-reminder-anthropic.txt"
-import { lastModel } from "./prompt-state"
+import { SessionPromptState } from "./prompt-state"
+const { lastModel } = SessionPromptState
 import type { PromptInput } from "./prompt-schema"
 import { isDecodableText, decodeDataUrlText } from "./text-mime"
 

@@ -44,7 +44,7 @@ function toolContext(input: ResolveToolsInput) {
     },
     agent: input.agent.name,
     messages: input.messages,
-    metadata: async (val: { title?: string; metadata?: unknown }) => {
+    metadata: async (val: { title?: string; metadata?: Record<string, any> }) => {
       const match = input.processor.partFromToolCall(options.toolCallId)
       if (match && match.state.status === "running") {
         await Session.updatePart({
@@ -53,7 +53,7 @@ function toolContext(input: ResolveToolsInput) {
             title: val.title,
             metadata: val.metadata,
             status: "running",
-            input: args,
+            input: args as Record<string, any>,
             time: {
               start: Date.now(),
             },

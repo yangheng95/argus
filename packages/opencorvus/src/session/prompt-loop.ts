@@ -32,7 +32,8 @@ import {
 } from "./structured-output"
 import { resolveTools as resolveSessionTools } from "./tool-resolver"
 import MAX_STEPS from "../session/prompt/max-steps.txt"
-import { promptState, startSession, resumeSession, cancelSession, flushCallbacks } from "./prompt-state"
+import { SessionPromptState } from "./prompt-state"
+const { state: promptState, start: startSession, resume: resumeSession, cancel: cancelSession, flushCallbacks } = SessionPromptState
 import { ensureTitle } from "./prompt-title"
 
 const log = Log.create({ service: "session.prompt" })

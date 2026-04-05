@@ -12,7 +12,7 @@ interface Context {
   project: Project.Info
 }
 
-type StateFactory = <S>(init: () => S, dispose?: (state: Awaited<S>) => Promise<void>) => () => S
+type StateFactory = <S>(init: () => S, dispose?: (state: Awaited<S>) => Promise<void>) => (() => S) & { reset(): void }
 
 type InstanceApi = {
   provide<R>(input: { directory: string; init?: () => Promise<unknown>; fn: () => R }): Promise<R>
@@ -104,7 +104,7 @@ export const Instance: InstanceApi = {
     if (Instance.worktree === "/") return false
     return Filesystem.contains(Instance.worktree, filepath)
   },
-  state<S>(init: () => S, dispose?: (state: Awaited<S>) => Promise<void>): () => S {
+  state<S>(init: () => S, dispose?: (state: Awaited<S>) => Promise<void>): (() => S) & { reset(): void } {
     return State.create(() => Instance.directory, init, dispose)
   },
   async dispose() {

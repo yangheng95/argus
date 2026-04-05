@@ -15,7 +15,8 @@
  */
 
 import { Log } from "@/util/log"
-import { GoalPool, type GoalPoolOptions, type PoolHooks } from "./goal-pool"
+import { GoalPool, type PoolHooks } from "./goal-pool"
+import type { RuntimeHooks } from "./runtime-hooks"
 import { TaskAgent } from "@/task-agent/agent"
 import { effectiveMaxExecutorGroups } from "./helpers"
 import { mergeGoalDelivery } from "./runtime"
@@ -51,7 +52,7 @@ export async function runTaskLoop(input: {
   taskID: string
   trigger: { kind: string; runID?: string; summary?: { passed: number; failed: number; total: number } }
   signal?: AbortSignal
-  hooks: GoalPoolOptions["hooks"]
+  hooks: RuntimeHooks
 }) {
   const { taskID, signal, hooks } = input
   let trigger = input.trigger
@@ -71,7 +72,7 @@ export async function runTaskLoop(input: {
     iteration++
     const task = findTask(taskID)
     if (!task) { log.error("task not found, exiting loop", { taskID }); break }
-    if (task.status === "completed" || task.status === "failed" || task.status === "aborted") {
+    if (task.status === "completed" || task.status === "failed" || task.status === "cancelled") {
       log.info("task in terminal state, exiting loop", { taskID, status: task.status })
       break
     }
@@ -96,7 +97,7 @@ export async function runTaskLoop(input: {
     // Re-read task state after agent decision
     const taskAfter = findTask(taskID)
     if (!taskAfter) break
-    if (taskAfter.status === "completed" || taskAfter.status === "failed" || taskAfter.status === "aborted") {
+    if (taskAfter.status === "completed" || taskAfter.status === "failed" || taskAfter.status === "cancelled") {
       log.info("task reached terminal state after decision", { taskID, status: taskAfter.status })
       break
     }
@@ -152,7 +153,11 @@ export async function runTaskLoop(input: {
 
     const poolHooks: PoolHooks = {
       mergeDelivery: (t, r, p, gr, delivery) => mergeGoalDelivery(t, r, p, gr, delivery, hooks),
-      updateRun: hooks.updateRun,
+      updateRun: async (run, update, reason) => {
+        // RuntimeHooks.updateRun returns RunRow; PoolHooks.updateRun returns void.
+        // Pool doesn't need the returned row.
+        await hooks.updateRun(run, update as any, reason)
+      },
       onGoalResult: (result) => {
         log.info("goal result", { taskID, goalID: result.goalID, status: result.status, verdict: result.verdict })
       },
@@ -282,7 +287,7 @@ async function waitForGoalCompletion(
 
     // Re-check task status
     const task = findTask(taskID)
-    if (!task || task.status === "completed" || task.status === "failed" || task.status === "aborted") {
+    if (!task || task.status === "completed" || task.status === "failed" || task.status === "cancelled") {
       return
     }
   }

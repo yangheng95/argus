@@ -12,7 +12,8 @@ import { NamedError } from "@opencorvus-ai/util/error"
 import { Session } from "."
 import { Command } from "../command"
 import { installRuntimeShims } from "@/runtime/shims"
-import { lastModel } from "./prompt-state"
+import { SessionPromptState } from "./prompt-state"
+const { lastModel } = SessionPromptState
 import { resolvePromptParts } from "./prompt-message"
 import type { PromptInput } from "./prompt-schema"
 
