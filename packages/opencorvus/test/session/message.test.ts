@@ -21,7 +21,7 @@ const model: Provider.Model = {
     input: {
       text: true,
       audio: false,
-      image: false,
+      image: true,
       video: false,
       pdf: false,
     },

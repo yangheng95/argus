@@ -38,11 +38,26 @@ export function isDecodableText(mime: string, filename?: string): boolean {
 }
 
 /**
+ * Maximum bytes to decode from a text attachment.
+ * Files larger than this are truncated — a note is appended so the model
+ * knows content was cut off rather than silently receiving incomplete data.
+ */
+export const MAX_TEXT_DECODE_BYTES = 200_000
+
+/**
  * Extract and decode the base64 payload from a data URL to UTF-8 text.
  * e.g. "data:text/markdown;base64,IyBIZWxsbw==" → "# Hello"
+ *
+ * Truncates at MAX_TEXT_DECODE_BYTES and appends a note when the file is
+ * larger, so the model is explicitly aware of the truncation.
  */
 export function decodeDataUrlText(dataUrl: string): string {
   const commaIndex = dataUrl.indexOf(",")
   if (commaIndex === -1) return ""
-  return Buffer.from(dataUrl.slice(commaIndex + 1), "base64").toString("utf-8")
+  const raw = Buffer.from(dataUrl.slice(commaIndex + 1), "base64")
+  if (raw.length > MAX_TEXT_DECODE_BYTES) {
+    const truncated = raw.subarray(0, MAX_TEXT_DECODE_BYTES).toString("utf-8")
+    return `${truncated}\n\n[... truncated — file exceeds ${MAX_TEXT_DECODE_BYTES / 1024}KB limit ...]`
+  }
+  return raw.toString("utf-8")
 }

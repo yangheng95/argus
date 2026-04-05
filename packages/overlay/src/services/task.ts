@@ -15,10 +15,13 @@ import {
   clearMessages,
   clearAgentEvents,
   setSelectedTaskID,
+  abortChatRequest,
+  setChatAttachments,
 } from "../store/messages";
 import {
   loadBoard,
   loadTasks,
+  clearBoard,
   boardStore,
   setBoardStore,
 } from "../store/board";
@@ -186,18 +189,16 @@ export async function selectTask(
     return;
   }
 
- // Stop any running SSE stream
+ // Abort any in-flight chat request so the composer does not remain "busy".
+  abortChatRequest();
+  // Clear attachments staged for the previous task.
+  setChatAttachments([]);
+
+ // Stop any running SSE stream.
   stopSSE();
 
- // Clear board and message state immediately
-  setBoardStore("board", null);
-  // Reset per-task board sync state so:
-  // 1. loadBoard's monotonic guard doesn't reject new-task board data
-  //    (stale taskSequence from old task > new task's lastSequence → early return)
-  // 2. startSSE requests events from the beginning (?after=0) instead of
-  //    using the old task's sequence offset which the new task cannot satisfy
-  setBoardStore("taskSequence", 0);
-  setBoardStore("boardEtag", "");
+ // Clear all task-scoped state.
+  clearBoard();
   clearMessages();
   clearAgentEvents();
   // Reset budget dirty flag so the new task's budget values populate correctly.

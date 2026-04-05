@@ -1,6 +1,0 @@
-interface:
-  display_name: "OpenCorvus Slack Channel Config"
-  short_description: "Configure Slack channel integration for OpenCorvus"
-  default_prompt: "Use $opencorvus-slack-channel-config to set up or debug Slack channel integration for OpenCorvus."
-
-

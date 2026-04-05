@@ -174,6 +174,31 @@ export async function loadTasks(): Promise<void> {
   }
 }
 
+// ── Task lifecycle ──
+
+/**
+ * Clear all task-scoped board state on task switch.
+ * Symmetric with clearMessages() / clearAgentEvents() in messages.ts.
+ * Cancels pending retry timers and resets all per-task sync machinery so that
+ * the next loadBoard() call starts from a clean slate.
+ */
+export function clearBoard(): void {
+  clearBoardRetry();
+  _boardQueued = false;
+  setBoardStore({
+    board: null,
+    taskSequence: 0,
+    boardEtag: "",
+    boardSyncPending: false,
+    boardQueued: false,
+    boardUpdatedAt: 0,
+    snapshotVersion: "",
+    path: null,
+    vcs: null,
+    changes: [],
+  });
+}
+
 // ── Direct setters (used by / SSE handlers) ──
 
 export function setBoardData(data: any): void {

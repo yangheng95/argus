@@ -1872,6 +1872,22 @@ async function loadTasks() {
     console.error("loadTasks failed", e);
   }
 }
+function clearBoard() {
+  clearBoardRetry$1();
+  _boardQueued = false;
+  setBoardStore({
+    board: null,
+    taskSequence: 0,
+    boardEtag: "",
+    boardSyncPending: false,
+    boardQueued: false,
+    boardUpdatedAt: 0,
+    snapshotVersion: "",
+    path: null,
+    vcs: null,
+    changes: []
+  });
+}
 function setTasksData(tasks) {
   setBoardStore("tasks", Array.isArray(tasks) ? tasks : []);
 }
@@ -1951,6 +1967,7 @@ const board = /*#__PURE__*/Object.freeze(/*#__PURE__*/Object.defineProperty({
   __proto__: null,
   activeDirectory: activeDirectory$2,
   boardStore,
+  clearBoard,
   isTaskInterruptable,
   loadBoard,
   loadTasks,
@@ -3846,6 +3863,7 @@ function clearAgentEvents() {
     stopAgentLiveTimer(key);
   }
   setStore("agentEvents", []);
+  _agentMsgCache.clear();
 }
 function setMessages(messages) {
   const next = sortMessages(Array.isArray(messages) ? messages : []);
@@ -3898,6 +3916,7 @@ function setSseConnected(connected) {
 function clearMessages() {
   setStore("messages", []);
   messageIndex.clear();
+  _pendingParts.clear();
 }
 function setChatRequest(req) {
   setStore("chatRequest", req ?? null);
@@ -3911,6 +3930,9 @@ function abortChatRequest() {
     }
   }
   setStore("chatRequest", null);
+}
+function setChatAttachments(attachments) {
+  setStore("chatAttachments", Array.isArray(attachments) ? attachments : []);
 }
 function currentTaskSessionID$1() {
   const boardSession = boardStore.board?.task?.sessionID;
@@ -4648,8 +4670,10 @@ async function selectTask(taskID, options = {}) {
   if (nextTaskID === boardStore.selectedTaskID && boardStore.board) {
     return;
   }
+  abortChatRequest();
+  setChatAttachments([]);
   stopSSE();
-  setBoardStore("board", null);
+  clearBoard();
   clearMessages();
   clearAgentEvents();
   if (appStore.budgetDirty) {

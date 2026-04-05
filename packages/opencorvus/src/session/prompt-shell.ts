@@ -12,6 +12,7 @@ import { ulid } from "ulid"
 import { spawn } from "child_process"
 import { defer } from "../util/defer"
 import { Shell } from "@/shell/shell"
+import { PidGuard } from "@/shell/pid-guard"
 import { installRuntimeShims } from "@/runtime/shims"
 import { promptState, startSession, cancelSession, lastModel } from "./prompt-state"
 
@@ -189,6 +190,7 @@ export async function shell(
     { cwd, sessionID: input.sessionID, callID: part.callID },
     { env: {} },
   )
+  const guardEnv = await PidGuard.env(preferredShell)
   const proc = spawn(preferredShell, args, {
     cwd,
     detached: process.platform !== "win32",
@@ -197,6 +199,7 @@ export async function shell(
       ...process.env,
       ...shellEnv.env,
       TERM: "dumb",
+      ...guardEnv,
     },
   })
 

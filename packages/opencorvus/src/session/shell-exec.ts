@@ -11,6 +11,7 @@ import { ulid } from "ulid"
 import { SessionRevert } from "./revert"
 import { spawn } from "child_process"
 import { Shell } from "@/shell/shell"
+import { PidGuard } from "@/shell/pid-guard"
 import { SessionPromptState } from "./prompt-state"
 
 export namespace SessionShell {
@@ -176,6 +177,7 @@ export namespace SessionShell {
       { cwd, sessionID: input.sessionID, callID: part.callID },
       { env: {} },
     )
+    const guardEnv = await PidGuard.env(shellBin)
     const proc = spawn(shellBin, args, {
       cwd,
       detached: process.platform !== "win32",
@@ -184,6 +186,7 @@ export namespace SessionShell {
         ...process.env,
         ...shellEnv.env,
         TERM: "dumb",
+        ...guardEnv,
       },
     })
 
