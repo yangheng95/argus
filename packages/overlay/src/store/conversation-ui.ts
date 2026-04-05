@@ -1,7 +1,13 @@
 import { createStore, reconcile } from "solid-js/store";
 
+// Each explicit override stores the value AND the running-state when it was set.
+// An override is only honoured when the card is still in the same running-state;
+// it is silently discarded on the next running-state transition, allowing
+// auto-expand / auto-collapse to take over again.
+type ExplicitEntry = { value: boolean; running: boolean };
+
 const [store, setStore] = createStore({
-  expandedAgentCards: {} as Record<string, boolean>,
+  expandedAgentCards: {} as Record<string, ExplicitEntry>,
   expandedToolOutputs: {} as Record<string, boolean>,
 });
 
@@ -15,15 +21,19 @@ export function clearConversationUiState(): void {
 export function agentCardExpanded(cardID: string, running?: boolean): boolean {
   if (!cardID) return false;
   const explicit = store.expandedAgentCards[cardID];
-  if (typeof explicit === "boolean") return explicit;
-  // Default: expanded while running, collapsed when done
+  // Only honour the explicit override if it was set while the card was in the
+  // same running-state.  When the state changes the override is stale and the
+  // default protocol (running → open, done → closed) resumes automatically.
+  if (explicit !== undefined && explicit.running === (running === true)) {
+    return explicit.value;
+  }
   return running === true;
 }
 
 export function toggleAgentCardExpanded(cardID: string, running: boolean): void {
   if (!cardID) return;
   const next = !agentCardExpanded(cardID, running);
-  setStore("expandedAgentCards", cardID, next);
+  setStore("expandedAgentCards", cardID, { value: next, running });
 }
 
 export function toolOutputExpanded(partID: string): boolean {

@@ -20,6 +20,8 @@ export namespace Vcs {
 
   export const Info = z
     .object({
+      /** True when a git repository exists at the working directory. False means no .git is present. */
+      initialized: z.boolean(),
       branch: z.string().optional(),
       clean: z.boolean(),
       dirty: z.boolean(),
@@ -35,7 +37,7 @@ export namespace Vcs {
     })
   export type Info = z.infer<typeof Info>
 
-  function parse(text: string, branch?: string): Info {
+  function parse(text: string, branch?: string, initialized = false): Info {
     let ahead = 0
     let behind = 0
     let staged = 0
@@ -74,6 +76,7 @@ export namespace Vcs {
 
     const dirty = staged > 0 || modified > 0 || untracked > 0 || conflicts > 0
     return {
+      initialized,
       branch,
       clean: !dirty,
       dirty,
@@ -133,9 +136,10 @@ export namespace Vcs {
   }
 
   export async function info() {
+    const initialized = Instance.project.vcs === "git"
     const branch = await state().then((s) => s.branch())
-    if (Instance.project.vcs !== "git") {
-      return parse("", branch)
+    if (!initialized) {
+      return parse("", branch, false)
     }
     const text = await $`git status --porcelain=v1 --branch`
       .quiet()
@@ -143,6 +147,6 @@ export namespace Vcs {
       .cwd(Instance.directory)
       .text()
       .catch(() => "")
-    return parse(text, branch)
+    return parse(text, branch, true)
   }
 }

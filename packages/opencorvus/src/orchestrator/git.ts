@@ -186,7 +186,7 @@ Thumbs.db
 `
 
 /** Ensure .gitignore exists so heavy directories (node_modules, dist) are never git-tracked. */
-async function ensureGitignore() {
+export async function ensureGitignore() {
   const dir = Instance.directory
   const file = Bun.file(`${dir}/.gitignore`)
   if (await file.exists()) {
@@ -308,6 +308,10 @@ export namespace OrchestratorGit {
       })
       return { task, error: summary }
     }
+
+    // Ensure .gitignore is in place before git add -A so node_modules/dist etc. are never tracked.
+    // This is the primary safeguard because prepare() is not always called before execution.
+    await ensureGitignore()
 
     const before = await head()
     const next =

@@ -267,6 +267,8 @@
   "git.init": "Init Git",
   "git.init_done": "Git initialized in {{dir}}",
   "git.init_exists": "Git already exists in {{dir}}",
+  "git.no_commits": "No commits",
+  "git.no_commits_title": "Git initialized · No commits yet",
   "git.unavailable": "Git unavailable",
   "goal.context.criteria": "   Criteria: {{value}}",
   "goal.context.list": "**Goals** ({{total}})",

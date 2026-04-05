@@ -1465,6 +1465,7 @@ export function clearAgentEvents(): void {
     stopAgentLiveTimer(key);
   }
   setStore("agentEvents", []);
+  _agentMsgCache.clear();
 }
 
 export function setMessages(messages: any[]) {
@@ -1517,6 +1518,7 @@ export function setMessages(messages: any[]) {
 export function setSelectedTaskID(taskID: string) {
   if (store.selectedTaskID !== taskID) {
     clearConversationUiState();
+    clearKnownChildSessions();
   }
   setStore("selectedTaskID", taskID);
 }
@@ -1536,6 +1538,7 @@ export function setSseConnected(connected: boolean) {
 export function clearMessages() {
   setStore("messages", []);
   messageIndex.clear();
+  _pendingParts.clear();
 }
 
 // ── Chat request helpers ──

@@ -85,7 +85,8 @@ export async function loadMeta(): Promise<void> {
 function gitLabel(vcs: any, dir: string): string {
   if (!dir) return t("git.unavailable");
   if (vcs === null || vcs === undefined) return t("git.unavailable");
-  if (!vcs.branch) return t("git.init");
+  if (!vcs.initialized) return t("git.init");
+  if (!vcs.branch) return t("git.no_commits");
   const parts: string[] = [vcs.branch];
   if (vcs.ahead) parts.push(`+${vcs.ahead}`);
   if (vcs.behind) parts.push(`-${vcs.behind}`);
@@ -108,7 +109,8 @@ function gitLabel(vcs: any, dir: string): string {
 function gitTitle(vcs: any, dir: string): string {
   if (!dir) return "";
   if (vcs === null || vcs === undefined) return "";
-  if (!vcs.branch) return t("git.init_title");
+  if (!vcs.initialized) return t("git.init_title");
+  if (!vcs.branch) return t("git.no_commits_title");
   return [
     t("git.branch", { value: vcs.branch }),
     t("git.clean_title", { value: vcs.clean ? t("common.yes") : t("common.no") }),
@@ -124,7 +126,7 @@ function gitTitle(vcs: any, dir: string): string {
 function canInitGit(): boolean {
   const vcs = boardStore.vcs;
   if (vcs === null || vcs === undefined) return false;
-  return !!settingsStore.directory && !vcs.branch;
+  return !!settingsStore.directory && !vcs.initialized;
 }
 
 function relativePathFrom(base: string, target: string): string {
@@ -172,11 +174,12 @@ export function renderMeta(): void {
 
   if (gitNode) {
     const actionable = canInitGit();
+    const unborn = vcs?.initialized && !vcs?.branch;
     gitNode.textContent = gitLabel(vcs, dir);
     gitNode.setAttribute("title", gitTitle(vcs, dir));
-    (gitNode as HTMLElement).dataset.state = actionable ? "action" : vcs?.dirty ? "dirty" : vcs?.clean ? "clean" : "idle";
+    (gitNode as HTMLElement).dataset.state = actionable ? "action" : unborn ? "unborn" : vcs?.dirty ? "dirty" : vcs?.clean ? "clean" : "idle";
     (gitNode as HTMLElement).dataset.actionable = String(actionable);
-    gitNode.toggleAttribute("disabled", !actionable && !vcs?.branch);
+    gitNode.toggleAttribute("disabled", !actionable);
   }
 }
 
