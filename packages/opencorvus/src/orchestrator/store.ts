@@ -232,6 +232,27 @@ export function findDeliveryByGoalRun(goalRunID: string) {
   )
 }
 
+/** Returns the most recent delivery for a goal (across all goal runs for that goal). */
+export function findLatestDeliveryForGoal(goalID: string) {
+  return Database.use((db) =>
+    db
+      .select({
+        id: OrchestratorDeliveryTable.id,
+        goalRunID: OrchestratorDeliveryTable.goal_run_id,
+        summary: OrchestratorDeliveryTable.summary,
+        result: OrchestratorDeliveryTable.result,
+        status: OrchestratorDeliveryTable.status,
+        timeCreated: OrchestratorDeliveryTable.time_created,
+      })
+      .from(OrchestratorDeliveryTable)
+      .innerJoin(OrchestratorGoalRunTable, eq(OrchestratorDeliveryTable.goal_run_id, OrchestratorGoalRunTable.id))
+      .where(eq(OrchestratorGoalRunTable.goal_id, goalID))
+      .orderBy(desc(OrchestratorDeliveryTable.time_created))
+      .limit(1)
+      .get(),
+  )
+}
+
 export function listGoalRunsByTask(taskID: string) {
   return Database.use((db) =>
     db
