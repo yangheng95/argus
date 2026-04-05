@@ -392,8 +392,8 @@ function buildSystemPrompt(task: TaskRow, trigger: TaskAgentTrigger, workflow?: 
 6. **deliver** — Aggregate and publish (deliver, then publish_delivery). Only when all blocking goals passed.
 
 You have these tools: requirements, architect, plan_goal, execute_goal, eval_goal, add_goal, modify_goal,
-dispatch_ready_goals, read_context, create_run, submit_execution, deliver, publish_delivery,
-fail_task, restart_from_stage.
+dispatch_ready_goals, retry_failed_goals, query_failed_goals, read_context, create_run,
+submit_execution, deliver, publish_delivery, fail_task, restart_from_stage.
 
 **For new tasks:**
 - ALWAYS call requirements first to decompose the task into goals. No exceptions.
@@ -402,19 +402,24 @@ fail_task, restart_from_stage.
 - You can plan individual goals with plan_goal if they're complex, or skip planning for simple ones.
 
 **After batch completes (re-triggered with batch_complete):**
-- FIRST: Check goal statuses via read_context. The trigger summary tells you counts;
-  read_context tells you WHICH goals passed/failed and WHY.
+- FIRST: If any goals failed, call query_failed_goals to get structured per-goal
+  eval evidence. This returns each failed goal's done_definition, verdict, and
+  failed checks with evidence text. Without this information you CANNOT make
+  an informed retry decision.
 - **If ANY goals are still "running" or "pending" → do NOTHING. Stop immediately.**
   You will be re-triggered again when the next batch completes.
 - Only proceed when ALL goals have terminal status (passed/failed).
-- Based on eval evidence, REASON about what to do:
+- Based on query_failed_goals output, REASON about each failure:
   - All blocking goals passed → deliver to aggregate, then publish_delivery
-  - Goal failed due to missing dependency → add_goal to create the dependency, then retry_failed_goals
-  - Goal failed due to code bug → retry_failed_goals (eval evidence auto-appended to each retry)
-  - Goal failed due to wrong approach → modify_goal to adjust, then execute_goal on that specific goal
-  - Unrecoverable → fail_task with explanation
-- **NEVER call execute_goal on a passed goal.** Passed goals are terminal success state.
-  To re-validate a passed goal, use eval_goal. To change its contract, use modify_goal.
+  - Some failed → call retry_failed_goals with per_goal_analysis articulating
+    root_cause + failure_class + expected_fix for EVERY failed goal. The tool
+    schema enforces this — reflexive retry without analysis will be rejected.
+  - Missing dependency discovered → add_goal to create the dependency, then
+    retry_failed_goals (include the new goal's analysis if it was also failed).
+  - Wrong contract for a specific goal → modify_goal, then execute_goal.
+  - Unrecoverable → fail_task with explanation.
+- **NEVER call execute_goal on a passed goal.** Passed goals are terminal success
+  state. To re-validate use eval_goal. To change contract use modify_goal.
 
 **Dynamic adjustment (anytime):**
 - Discovered a missing requirement? → add_goal
