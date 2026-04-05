@@ -8,6 +8,7 @@ import { LLMTrace } from "@/session/llm-trace"
 import { buildSessionTraceHtml } from "@/cli/cmd/export-html"
 import { captureWindowScreenshot } from "@/gui/screenshot"
 import { PanelActionSchema } from "@/panel/capability"
+import { isDecodableText, decodeDataUrlText } from "@/session/text-mime"
 
 const localOnly = (ctx: Tool.Context) => ctx.extra?.surface === "panel"
 
@@ -76,9 +77,25 @@ export const PanelTool = Tool.define("panel", {
         // Use original user text when available to prevent the control-plane
         // LLM from silently summarising or truncating the user's request.
         const originalText = typeof ctx.extra?.originalText === "string" ? ctx.extra.originalText : undefined
+        // Decode text attachments (e.g. PRD .txt files) and append to the request so the
+        // executor session also has access to the file content.
+        const rawAttachments = Array.isArray(ctx.extra?.attachments)
+          ? (ctx.extra.attachments as Array<{ mime: string; url: string; filename?: string }>)
+          : []
+        const attachmentTexts = rawAttachments
+          .filter((a) => isDecodableText(a.mime, a.filename))
+          .map((a) => {
+            const content = decodeDataUrlText(a.url)
+            if (!content) return ""
+            return `\n\n--- ${a.filename ?? "attachment"} ---\n${content}`
+          })
+          .filter(Boolean)
+          .join("")
+        const baseRequest = originalText || params.request
+        const request = attachmentTexts ? baseRequest + attachmentTexts : baseRequest
         const taskID = await OrchestratorService.createTask({
           requestID: params.request_id ?? ctx.extra?.requestID,
-          request: originalText || params.request,
+          request,
           executor: params.executor,
           checks: params.checks,
           routing: params.routing,

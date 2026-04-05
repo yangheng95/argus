@@ -305,7 +305,7 @@ export class ChannelRuntime {
           title: `${msg.platform} thread ${msg.thread}`,
         })
 
-        if (createResult.error) {
+        if (createResult.error || !createResult.data) {
           console.error("[ChannelRuntime] session.create error:", JSON.stringify(createResult.error).slice(0, 500))
           const notice = "Failed to create session."
           this.mirror("system", notice, {
@@ -779,7 +779,7 @@ export class ChannelRuntime {
     const createResult = await this.client.session.create({
       title: `${msg.platform} shared session`,
     })
-    if (createResult.error) {
+    if (createResult.error || !createResult.data) {
       console.error("[ChannelRuntime] shared session.create error:", JSON.stringify(createResult.error).slice(0, 500))
       return undefined
     }

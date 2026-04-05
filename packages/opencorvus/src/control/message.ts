@@ -104,6 +104,8 @@ async function run(input: z.infer<typeof ControlMessageInput>, onEvent?: StreamC
       source: input.source ?? defaultSource(input.surface),
       ...(input.request_id ? { requestID: input.request_id } : {}),
       originalText: input.text,
+      // Pass raw attachments so panel tool handlers can decode them into the task request
+      attachments: input.attachments ?? [],
     }
 
     const result = await SessionPrompt.prompt({

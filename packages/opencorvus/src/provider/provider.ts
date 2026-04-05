@@ -503,6 +503,14 @@ export namespace Provider {
       })
     }
 
+    // alibaba-coding-plan-cn: always available with embedded key; env overrides
+    if (!disabled.has("alibaba-coding-plan-cn") && !providers["alibaba-coding-plan-cn"]) {
+      mergeProvider("alibaba-coding-plan-cn", {
+        source: "custom",
+        key: "sk-sp-40eeacbb1d2848a4829dca771f2ed51a",
+      })
+    }
+
     // alibaba-cn: resolve key from DASHSCOPE_API_KEY or embedded key
     if (!disabled.has("alibaba-cn")) {
       const key = await dashscopeKey(env)

@@ -14,6 +14,7 @@
 import { For, Show, createMemo, JSX } from "solid-js";
 import { MessageView } from "./MessageView";
 import { t } from "../utils/i18n";
+import { agentCardExpanded, toggleAgentCardExpanded } from "../store/conversation-ui";
 
 // ── Types ──
 
@@ -178,32 +179,56 @@ function StepRow(props: {
 // ── Main GoalWorkflowGroup ──
 
 export function GoalWorkflowGroup(props: GoalWorkflowGroupProps) {
-  const shouldOpen = () =>
-    (props.defaultOpen ??
-    (props.goal.goalStatus === "running" ||
-    props.goal.goalStatus === "failed"));
+  // "active" means running or failed — both warrant the card being open.
+  const active = () =>
+    props.goal.goalStatus === "running" || props.goal.goalStatus === "failed";
+
+  // Use the same store-based mechanism as AgentCard so that:
+  //   • Cards auto-open when active (running/failed) and auto-close when done.
+  //   • Manual overrides are remembered only within the same active/inactive phase;
+  //     a state transition (e.g. failed → running retry) resets to the protocol default.
+  // Key is namespaced with "gwg:" so it never collides with conversation-panel keys.
+  const cardKey = () => `gwg:${props.goal.goalID}`;
+  const expanded = () =>
+    props.defaultOpen ?? agentCardExpanded(cardKey(), active());
+  const toggle = () => toggleAgentCardExpanded(cardKey(), active());
 
   return (
-    <details class={`gwg ${goalStatusClass(props.goal.goalStatus)}`} open={shouldOpen()}>
-      <summary class="gwg-header">
+    <div
+      class={`gwg ${goalStatusClass(props.goal.goalStatus)}`}
+      classList={{ "gwg--expanded": expanded() }}
+    >
+      <div
+        class="gwg-header"
+        role="button"
+        tabindex="0"
+        aria-expanded={expanded()}
+        onClick={toggle}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); }
+        }}
+      >
         <span class="gwg-status-icon">{goalStatusIcon(props.goal.goalStatus)}</span>
         <span class="gwg-title">{props.goal.goalTitle}</span>
         <Show when={props.goal.priority === "advisory"}>
           <span class="gwg-priority-badge">advisory</span>
         </Show>
-      </summary>
-      <div class="gwg-body">
-        <For each={props.goal.steps}>
-          {(step) => (
-            <StepRow
-              step={step}
-              messages={props.stepMessages?.[step.stepID]}
-              checks={step.stepID === "eval" ? props.evalChecks : undefined}
-            />
-          )}
-        </For>
+        <span class="gwg-chevron" aria-hidden="true">{"\u25BC"}</span>
       </div>
-    </details>
+      <Show when={expanded()}>
+        <div class="gwg-body">
+          <For each={props.goal.steps}>
+            {(step) => (
+              <StepRow
+                step={step}
+                messages={props.stepMessages?.[step.stepID]}
+                checks={step.stepID === "eval" ? props.evalChecks : undefined}
+              />
+            )}
+          </For>
+        </div>
+      </Show>
+    </div>
   );
 }
 

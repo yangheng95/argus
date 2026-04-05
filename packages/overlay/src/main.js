@@ -1647,7 +1647,7 @@ function displayToolIcon(name) {
   if (n === "read" || n === "readfile") return "📄";
   if (n === "edit" || n === "editfile" || n === "applypatch") return "✏️";
   if (n === "write" || n === "writefile") return "📝";
-  if (n === "bash" || n === "shellcommand") return "💻";
+  if (n === "bash" || n === "shellcommand" || n === "runcommand") return "💻";
   if (n === "grep" || n === "searchcode") return "🔍";
   if (n === "glob" || n === "findfiles") return "📂";
   if (n === "agent" || n === "spawnagent") return "🤖";
@@ -1660,7 +1660,7 @@ function displayToolDetail(name, input, state, base = "") {
   const n = toolNameKey(name);
   const path = safeInput.file_path || safeInput.filePath || safeInput.path || safeInput.filename || "";
   if (path) return shortRelativePath(path, base);
-  if (n === "bash" || n === "shellcommand")
+  if (n === "bash" || n === "shellcommand" || n === "runcommand")
     return clipText$2(toolInputCommand(safeInput), 80);
   if (n === "grep" || n === "searchcode")
     return safeInput.pattern || safeInput.query || safeInput.q || "";
@@ -1983,13 +1983,15 @@ function clearConversationUiState() {
 function agentCardExpanded(cardID, running) {
   if (!cardID) return false;
   const explicit = store$1.expandedAgentCards[cardID];
-  if (typeof explicit === "boolean") return explicit;
+  if (explicit !== void 0 && explicit.running === (running === true)) {
+    return explicit.value;
+  }
   return running === true;
 }
 function toggleAgentCardExpanded(cardID, running) {
   if (!cardID) return;
   const next = !agentCardExpanded(cardID, running);
-  setStore$1("expandedAgentCards", cardID, next);
+  setStore$1("expandedAgentCards", cardID, { value: next, running });
 }
 function toolOutputExpanded(partID) {
   if (!partID) return false;
@@ -6131,7 +6133,7 @@ function WorkflowProgressBar(props) {
   });
 }
 
-var _tmpl$$h = /* @__PURE__ */ template(`<span class=gwg-step-summary>`), _tmpl$2$f = /* @__PURE__ */ template(`<span class=gwg-step-count>(<!>)`), _tmpl$3$f = /* @__PURE__ */ template(`<div class=gwg-step-messages>`), _tmpl$4$f = /* @__PURE__ */ template(`<div class=gwg-checks>`), _tmpl$5$f = /* @__PURE__ */ template(`<details><summary><span class=gwg-step-icon></span><span class=gwg-step-label></span><span class=gwg-step-status></span></summary><div class=gwg-step-body>`), _tmpl$6$e = /* @__PURE__ */ template(`<div><span class=gwg-step-icon></span><span class=gwg-step-label></span><span class=gwg-step-status>`), _tmpl$7$c = /* @__PURE__ */ template(`<span class=gwg-check-evidence>`), _tmpl$8$8 = /* @__PURE__ */ template(`<div><span class=gwg-check-icon></span><span class=gwg-check-name>`), _tmpl$9$6 = /* @__PURE__ */ template(`<span class=gwg-priority-badge>advisory`), _tmpl$0$4 = /* @__PURE__ */ template(`<details><summary class=gwg-header><span class=gwg-status-icon></span><span class=gwg-title></span></summary><div class=gwg-body>`), _tmpl$1$3 = /* @__PURE__ */ template(`<div class=gwg-list>`);
+var _tmpl$$h = /* @__PURE__ */ template(`<span class=gwg-step-summary>`), _tmpl$2$f = /* @__PURE__ */ template(`<span class=gwg-step-count>(<!>)`), _tmpl$3$f = /* @__PURE__ */ template(`<div class=gwg-step-messages>`), _tmpl$4$f = /* @__PURE__ */ template(`<div class=gwg-checks>`), _tmpl$5$f = /* @__PURE__ */ template(`<details><summary><span class=gwg-step-icon></span><span class=gwg-step-label></span><span class=gwg-step-status></span></summary><div class=gwg-step-body>`), _tmpl$6$e = /* @__PURE__ */ template(`<div><span class=gwg-step-icon></span><span class=gwg-step-label></span><span class=gwg-step-status>`), _tmpl$7$c = /* @__PURE__ */ template(`<span class=gwg-check-evidence>`), _tmpl$8$8 = /* @__PURE__ */ template(`<div><span class=gwg-check-icon></span><span class=gwg-check-name>`), _tmpl$9$6 = /* @__PURE__ */ template(`<span class=gwg-priority-badge>advisory`), _tmpl$0$4 = /* @__PURE__ */ template(`<div class=gwg-body>`), _tmpl$1$3 = /* @__PURE__ */ template(`<div><div class=gwg-header role=button tabindex=0><span class=gwg-status-icon></span><span class=gwg-title></span><span class=gwg-chevron aria-hidden=true>▼`), _tmpl$10$2 = /* @__PURE__ */ template(`<div class=gwg-list>`);
 function stepIcon(status) {
   switch (status) {
     case "completed":
@@ -6314,9 +6316,19 @@ function StepRow(props) {
   });
 }
 function GoalWorkflowGroup(props) {
-  const shouldOpen = () => props.defaultOpen ?? (props.goal.goalStatus === "running" || props.goal.goalStatus === "failed");
+  const active = () => props.goal.goalStatus === "running" || props.goal.goalStatus === "failed";
+  const cardKey = () => `gwg:${props.goal.goalID}`;
+  const expanded = () => props.defaultOpen ?? agentCardExpanded(cardKey(), active());
+  const toggle = () => toggleAgentCardExpanded(cardKey(), active());
   return (() => {
-    var _el$21 = _tmpl$0$4(), _el$22 = _el$21.firstChild, _el$23 = _el$22.firstChild, _el$24 = _el$23.nextSibling, _el$26 = _el$22.nextSibling;
+    var _el$21 = _tmpl$1$3(), _el$22 = _el$21.firstChild, _el$23 = _el$22.firstChild, _el$24 = _el$23.nextSibling, _el$26 = _el$24.nextSibling;
+    _el$22.$$keydown = (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        toggle();
+      }
+    };
+    _el$22.$$click = toggle;
     insert(_el$23, () => goalStatusIcon(props.goal.goalStatus));
     insert(_el$24, () => props.goal.goalTitle);
     insert(_el$22, createComponent(Show, {
@@ -6326,37 +6338,48 @@ function GoalWorkflowGroup(props) {
       get children() {
         return _tmpl$9$6();
       }
-    }), null);
-    insert(_el$26, createComponent(For, {
-      get each() {
-        return props.goal.steps;
+    }), _el$26);
+    insert(_el$21, createComponent(Show, {
+      get when() {
+        return expanded();
       },
-      children: (step) => createComponent(StepRow, {
-        step,
-        get messages() {
-          return props.stepMessages?.[step.stepID];
-        },
-        get checks() {
-          return memo(() => step.stepID === "eval")() ? props.evalChecks : void 0;
-        }
-      })
-    }));
+      get children() {
+        var _el$27 = _tmpl$0$4();
+        insert(_el$27, createComponent(For, {
+          get each() {
+            return props.goal.steps;
+          },
+          children: (step) => createComponent(StepRow, {
+            step,
+            get messages() {
+              return props.stepMessages?.[step.stepID];
+            },
+            get checks() {
+              return memo(() => step.stepID === "eval")() ? props.evalChecks : void 0;
+            }
+          })
+        }));
+        return _el$27;
+      }
+    }), null);
     createRenderEffect((_p$) => {
-      var _v$4 = `gwg ${goalStatusClass(props.goal.goalStatus)}`, _v$5 = shouldOpen();
+      var _v$4 = `gwg ${goalStatusClass(props.goal.goalStatus)}`, _v$5 = !!expanded(), _v$6 = expanded();
       _v$4 !== _p$.e && className(_el$21, _p$.e = _v$4);
-      _v$5 !== _p$.t && (_el$21.open = _p$.t = _v$5);
+      _v$5 !== _p$.t && _el$21.classList.toggle("gwg--expanded", _p$.t = _v$5);
+      _v$6 !== _p$.a && setAttribute(_el$22, "aria-expanded", _p$.a = _v$6);
       return _p$;
     }, {
       e: void 0,
-      t: void 0
+      t: void 0,
+      a: void 0
     });
     return _el$21;
   })();
 }
 function GoalWorkflowList(props) {
   return (() => {
-    var _el$27 = _tmpl$1$3();
-    insert(_el$27, createComponent(For, {
+    var _el$28 = _tmpl$10$2();
+    insert(_el$28, createComponent(For, {
       get each() {
         return props.goals;
       },
@@ -6370,9 +6393,10 @@ function GoalWorkflowList(props) {
         }
       })
     }));
-    return _el$27;
+    return _el$28;
   })();
 }
+delegateEvents(["click", "keydown"]);
 
 var _tmpl$$g = /* @__PURE__ */ template(`<div class=req-streaming><div class=req-streaming-indicator><span class=agent-card-spinner></span><span class=req-streaming-label></span></div><div class=req-streaming-messages>`), _tmpl$2$e = /* @__PURE__ */ template(`<div class=req-list>`), _tmpl$3$e = /* @__PURE__ */ template(`<p class=req-empty>`), _tmpl$4$e = /* @__PURE__ */ template(`<details class=req-spec-detail><summary></summary><pre class=req-spec-content>`), _tmpl$5$e = /* @__PURE__ */ template(`<div class=req-panel>`), _tmpl$6$d = /* @__PURE__ */ template(`<span class=req-priority>advisory`), _tmpl$7$b = /* @__PURE__ */ template(`<div class=req-item><span class=req-id></span><span></span><span class=req-desc>`);
 function typeBadgeClass(type) {
@@ -9569,7 +9593,8 @@ async function loadMeta() {
 function gitLabel(vcs, dir) {
   if (!dir) return t("git.unavailable");
   if (vcs === null || vcs === void 0) return t("git.unavailable");
-  if (!vcs.branch) return t("git.init");
+  if (!vcs.initialized) return t("git.init");
+  if (!vcs.branch) return t("git.no_commits");
   const parts = [vcs.branch];
   if (vcs.ahead) parts.push(`+${vcs.ahead}`);
   if (vcs.behind) parts.push(`-${vcs.behind}`);
@@ -9588,7 +9613,8 @@ function gitLabel(vcs, dir) {
 function gitTitle(vcs, dir) {
   if (!dir) return "";
   if (vcs === null || vcs === void 0) return "";
-  if (!vcs.branch) return t("git.init_title");
+  if (!vcs.initialized) return t("git.init_title");
+  if (!vcs.branch) return t("git.no_commits_title");
   return [
     t("git.branch", { value: vcs.branch }),
     t("git.clean_title", { value: vcs.clean ? t("common.yes") : t("common.no") }),
@@ -9603,7 +9629,7 @@ function gitTitle(vcs, dir) {
 function canInitGit$1() {
   const vcs = boardStore.vcs;
   if (vcs === null || vcs === void 0) return false;
-  return !!settingsStore.directory && !vcs.branch;
+  return !!settingsStore.directory && !vcs.initialized;
 }
 function relativePathFrom(base, target) {
   if (!base || !target) return "";
@@ -9643,11 +9669,12 @@ function renderMeta() {
   }
   if (gitNode) {
     const actionable = canInitGit$1();
+    const unborn = vcs?.initialized && !vcs?.branch;
     gitNode.textContent = gitLabel(vcs, dir);
     gitNode.setAttribute("title", gitTitle(vcs, dir));
-    gitNode.dataset.state = actionable ? "action" : vcs?.dirty ? "dirty" : vcs?.clean ? "clean" : "idle";
+    gitNode.dataset.state = actionable ? "action" : unborn ? "unborn" : vcs?.dirty ? "dirty" : vcs?.clean ? "clean" : "idle";
     gitNode.dataset.actionable = String(actionable);
-    gitNode.toggleAttribute("disabled", !actionable && !vcs?.branch);
+    gitNode.toggleAttribute("disabled", !actionable);
   }
 }
 function normalizeDiffs(list) {
@@ -14914,7 +14941,7 @@ function boardGitCheckpoints(board) {
   return out.sort((a, b) => a.time - b.time);
 }
 function canInitGit() {
-  return !!activeDirectory$2() && appStore.connected && !boardStore.vcs?.branch;
+  return !!activeDirectory$2() && appStore.connected && boardStore.vcs !== null && !boardStore.vcs?.initialized;
 }
 async function initGitCurrent(options = {}) {
   const dir = activeDirectory$2();

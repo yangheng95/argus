@@ -10,6 +10,7 @@ import { PlannerFailureError } from "@/types/planner"
 import { Provider } from "@/provider/provider"
 import { ProtocolStore } from "@/protocol/store"
 import { OrchestratorProtocol } from "./protocol"
+import { ensureGitignore } from "./git"
 import { Instance } from "@/project/instance"
 import { Project } from "@/project/project"
 import { Question } from "@/question"
@@ -254,6 +255,8 @@ async function prepareProject(project?: string) {
     await Project.initGit(Instance.directory)
     await Instance.refresh()
   }
+  // Create .gitignore before executor starts so the agent's own commits never include node_modules/dist etc.
+  await ensureGitignore()
   if (!project) return
   if (project === Instance.project.id) return
   throw new Error(`project mismatch: expected ${Instance.project.id}, got ${project}`)

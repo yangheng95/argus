@@ -92,7 +92,7 @@ export function displayToolIcon(name: string): string {
   if (n === "read" || n === "readfile") return "\uD83D\uDCC4";
   if (n === "edit" || n === "editfile" || n === "applypatch") return "\u270F\uFE0F";
   if (n === "write" || n === "writefile") return "\uD83D\uDCDD";
-  if (n === "bash" || n === "shellcommand") return "\uD83D\uDCBB";
+  if (n === "bash" || n === "shellcommand" || n === "runcommand") return "\uD83D\uDCBB";
   if (n === "grep" || n === "searchcode") return "\uD83D\uDD0D";
   if (n === "glob" || n === "findfiles") return "\uD83D\uDCC2";
   if (n === "agent" || n === "spawnagent") return "\uD83E\uDD16";
@@ -124,7 +124,7 @@ export function displayToolDetail(
     (safeInput as any).filename ||
     "";
   if (path) return shortRelativePath(path, base);
-  if (n === "bash" || n === "shellcommand")
+  if (n === "bash" || n === "shellcommand" || n === "runcommand")
     return clipText(toolInputCommand(safeInput), 80);
   if (n === "grep" || n === "searchcode")
     return (safeInput as any).pattern || (safeInput as any).query || (safeInput as any).q || "";

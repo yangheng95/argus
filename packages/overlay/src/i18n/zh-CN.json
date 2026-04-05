@@ -267,6 +267,8 @@
   "git.init": "初始化 Git",
   "git.init_done": "已在 {{dir}} 初始化 Git",
   "git.init_exists": "{{dir}} 已有 Git 仓库",
+  "git.no_commits": "无提交",
+  "git.no_commits_title": "Git 已初始化 · 尚无提交",
   "git.unavailable": "Git 不可用",
   "goal.context.criteria": "   验收标准：{{value}}",
   "goal.context.list": "**目标**（共 {{total}} 项）",

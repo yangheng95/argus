@@ -136,7 +136,7 @@ export function boardGitCheckpoints(board: any): GitCheckpoint[] {
  * and the directory has no git VCS branch yet (i.e. git is not initialised).
  */
 export function canInitGit(): boolean {
-  return !!activeDirectory() && appStore.connected && !boardStore.vcs?.branch;
+  return !!activeDirectory() && appStore.connected && boardStore.vcs !== null && !boardStore.vcs?.initialized;
 }
 
 /**
