@@ -1226,6 +1226,25 @@ export function createTaskAgentTools(input: {
           const evaluation = findEvaluationByRun(run.id)
           OrchestratorMemoryBridge.flushTaskLearnings({ task, run, delivery, evaluation, plan: currentPlan })
             .catch(err => log.warn("failed to flush task learnings", { error: String(err) }))
+
+          // Auto-launch the deliverable if the delivery agent recorded a launch command
+          const launchCmd = (verdictPayload as any)?.launch_command as string | undefined
+          if (launchCmd) {
+            try {
+              const { Shell } = await import("@/shell/shell")
+              const { Filesystem } = await import("@/util/filesystem")
+              const projectDir = Filesystem.resolve(Instance.directory)
+              const launched = await Shell.launch(launchCmd, { cwd: projectDir })
+              const addrNote = launched.address ? ` — running at ${launched.address}` : ` (PID ${launched.pid})`
+              log.info("deliverable launched", { pid: launched.pid, address: launched.address, command: launchCmd })
+              return `Delivery published and task completed successfully. Deliverable launched${addrNote}.`
+            } catch (err) {
+              const msg = err instanceof Error ? err.message : String(err)
+              log.warn("auto-launch failed after publish", { error: msg, command: launchCmd })
+              return `Delivery published and task completed successfully. Auto-launch failed: ${msg}. Launch manually with: ${launchCmd}`
+            }
+          }
+
           return `Delivery published and task completed successfully.`
         }
 

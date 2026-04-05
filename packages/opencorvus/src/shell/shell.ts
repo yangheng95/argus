@@ -169,6 +169,64 @@ export namespace Shell {
     }
   }
 
+  export interface LaunchResult {
+    pid: number
+    address?: string
+    initialOutput: string
+  }
+
+  /**
+   * Launch a long-running process in the background.
+   *
+   * Spawns the process, collects initial output for `outputSniffMs` to detect
+   * the address/port, then unrefs the process so it keeps running independently.
+   * Returns the PID and detected address (if any).
+   */
+  export async function launch(
+    command: string,
+    opts: { cwd?: string; env?: NodeJS.ProcessEnv; outputSniffMs?: number } = {},
+  ): Promise<LaunchResult> {
+    const { cwd, env, outputSniffMs = 8000 } = opts
+    const guardEnv = await PidGuard.env(acceptable())
+    const proc = spawn(command, {
+      shell: acceptable(),
+      cwd,
+      env: { ...process.env, ...env, ...guardEnv },
+      stdio: ["ignore", "pipe", "pipe"],
+      detached: process.platform !== "win32",
+    })
+
+    if (!proc.pid) throw new Error(`Failed to start process: ${command}`)
+
+    let initialOutput = ""
+    let exited = false
+    proc.stdout?.on("data", (chunk: Buffer) => { initialOutput += chunk.toString() })
+    proc.stderr?.on("data", (chunk: Buffer) => { initialOutput += chunk.toString() })
+    proc.once("exit", () => { exited = true })
+
+    await new Promise((r) => setTimeout(r, outputSniffMs))
+
+    if (exited) {
+      throw new Error(
+        `Process exited immediately after launch. Output:\n${initialOutput.slice(0, 1000)}`,
+      )
+    }
+
+    proc.unref()
+
+    const address = detectLaunchAddress(initialOutput)
+    return { pid: proc.pid, address, initialOutput: initialOutput.slice(0, 2000) }
+  }
+
+  function detectLaunchAddress(output: string): string | undefined {
+    // Match full http/https URLs first
+    const urlMatch = output.match(/https?:\/\/[^\s\n"'><,]+/)
+    if (urlMatch) return urlMatch[0].replace(/\/$/, "")
+    // Match bare host:port
+    const hostPortMatch = output.match(/(?:localhost|0\.0\.0\.0|127\.0\.0\.1):\d{2,5}/)
+    if (hostPortMatch) return `http://${hostPortMatch[0]}`
+  }
+
   const BLACKLIST = new Set(["fish", "nu"])
 
   function fallback() {
