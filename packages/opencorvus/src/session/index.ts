@@ -744,13 +744,16 @@ export namespace Session {
       if (part.type !== "tool") {
         throw new Error(`Part ${part.type} does not support raw deltas`)
       }
+      // Tool parts have a .state field; the Omit<union> type doesn't narrow
+      // via the type === "tool" discriminant so we access state via cast.
+      const toolState = (part as { state?: { raw?: unknown } }).state
       return {
         ...part,
         state: {
-          ...part.state,
-          raw: String(part.state?.raw ?? "") + input.delta,
+          ...toolState,
+          raw: String(toolState?.raw ?? "") + input.delta,
         },
-      }
+      } as typeof part
     }
 
     throw new Error(`Unsupported part delta field: ${input.field}`)

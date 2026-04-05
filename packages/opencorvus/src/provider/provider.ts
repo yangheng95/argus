@@ -483,7 +483,12 @@ export namespace Provider {
     const dashscopeCommonKeys = ["CODING_DASHSCOPE_API_KEY", "DASHSCOPE_API_KEY"]
     for (const [providerID, provider] of entries(database)) {
       if (disabled.has(providerID)) continue
-      const isDashScope = provider.api?.includes("dashscope")
+      // DashScope detection: any model in this provider uses a dashscope API URL.
+      // Previously checked provider.api?.includes("dashscope") but Provider.Info
+      // has no top-level .api field — api.url lives per-model.
+      const isDashScope = Object.values(provider.models).some(
+        (m) => m.api?.url?.includes("dashscope"),
+      )
       // alibaba-cn has special embedded-key logic below
       if (providerID === "alibaba-cn" || providerID === "alibaba") continue
       const candidates = isDashScope ? [...provider.env, ...dashscopeCommonKeys] : provider.env
