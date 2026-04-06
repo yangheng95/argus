@@ -2,7 +2,8 @@
 
 // ── Crash Diagnostics ──
 // Capture the exact reason and call stack when the process exits unexpectedly.
-const DIAG_LOG = "/tmp/benchmark-crash-diag.log"
+// Use os.tmpdir() for cross-platform compatibility (avoids /tmp failure on Windows).
+const DIAG_LOG = require("node:path").join(require("node:os").tmpdir(), "benchmark-crash-diag.log")
 function diagWrite(msg: string) {
   const ts = new Date().toISOString()
   const line = `[${ts}] ${msg}\n`
@@ -10,10 +11,37 @@ function diagWrite(msg: string) {
   process.stderr.write(line)
 }
 diagWrite(`benchmark PID=${process.pid} started`)
+diagWrite(`diag_log=${DIAG_LOG}`)
+
+// Emergency partial report path — set once reportFile is known, used in exit handler.
+// Captures in-flight state when process is killed (OOM, SIGKILL, exit 127, etc.)
+// before the normal finally block can run.
+let _emergencyReportPath = ""
+let _emergencyWritten = false
 
 process.on("exit", (code) => {
   diagWrite(`process.exit event — code=${code}`)
   diagWrite(`stack:\n${new Error("exit-trace").stack}`)
+  // Write emergency partial report if the task was running but never completed normally.
+  if (_emergencyReportPath && !_emergencyWritten) {
+    try {
+      require("node:fs").writeFileSync(
+        _emergencyReportPath,
+        JSON.stringify({
+          generated_at: new Date().toISOString(),
+          type: "emergency_exit",
+          exit_code: code,
+          taskID,
+          elapsed_ms: Date.now() - marks.startedAt,
+          marks,
+          last_progress_signature: lastProgressSignature,
+          events_captured: events.length,
+          last_event_at: lastEventAt,
+          last_activity_at: lastActivityLogAt,
+        }, null, 2),
+      )
+    } catch {}
+  }
 })
 process.on("SIGTERM", () => {
   diagWrite(`SIGTERM received PID=${process.pid}`)
@@ -74,6 +102,13 @@ const maxFixRuns = Number(flag("--max-fix-runs")) || 8
 const maxEvaluations = Number(flag("--max-evaluations")) || 200
 const report = flag("--report")
 const keep = !process.argv.includes("--no-keep")
+// Resume mode: re-attach to an existing task rather than creating a new one.
+// --resume-task-id  : ID of the task to resume (e.g. tsk_xxx)
+// --resume-home-dir : opencorvus home directory from the original run (contains the database)
+// --resume-message  : user message injected to wake up the failed task
+const resumeTaskID = flag("--resume-task-id")
+const resumeHomeDir = flag("--resume-home-dir")
+const resumeMessage = flag("--resume-message") || "请继续完成项目，修复所有失败的goals并重试，直到全部通过。"
 const headless = process.argv.includes("--headless")
 const executor = (flag("--executor") || "opencode") as
   | "opencode"
@@ -177,7 +212,10 @@ const temp = {
   config: "",
 }
 
-temp.home = await fs.mkdtemp(path.join(os.tmpdir(), "mirrorcode-overlay-benchmark-home-"))
+temp.home = resumeHomeDir
+  ? path.resolve(resumeHomeDir)
+  : await fs.mkdtemp(path.join(os.tmpdir(), "mirrorcode-overlay-benchmark-home-"))
+if (resumeTaskID && !projectDir) throw new Error("--resume-task-id requires --project-dir")
 temp.dir = projectDir ? path.resolve(projectDir) : await fs.mkdtemp(path.join(os.tmpdir(), "mirrorcode-overlay-benchmark-project-"))
 temp.config = path.join(temp.home, "config-override")
 process.env.OPENCORVUS_HOME = temp.home
@@ -241,14 +279,20 @@ const dbPath = path.join(os.homedir(), ".local", "share", "opencorvus", "opencor
 await fs.rm(`${dbPath}-wal`, { force: true }).catch(() => {})
 await fs.rm(`${dbPath}-shm`, { force: true }).catch(() => {})
 
-await resetDatabase()
-if (!projectDir) {
-  await scaffoldProject(temp.dir, model)
-} else {
-  // Strip project-level opencorvus state to prevent old task IDs from bleeding into new runs
-  await fs.rm(path.join(temp.dir, "opencorvus.json"), { force: true })
-  await fs.rm(path.join(temp.dir, ".opencorvus"), { recursive: true, force: true })
+if (resumeTaskID) {
+  // Resume mode: keep existing database and project state intact.
+  // Only ensure the config-override directory exists (server bootstrap needs it).
   await fs.mkdir(temp.config, { recursive: true })
+} else {
+  await resetDatabase()
+  if (!projectDir) {
+    await scaffoldProject(temp.dir, model)
+  } else {
+    // Strip project-level opencorvus state to prevent old task IDs from bleeding into new runs
+    await fs.rm(path.join(temp.dir, "opencorvus.json"), { force: true })
+    await fs.rm(path.join(temp.dir, ".opencorvus"), { recursive: true, force: true })
+    await fs.mkdir(temp.config, { recursive: true })
+  }
 }
 // Re-inject local provider configs after scaffoldProject (which overwrites config-override)
 await prepareLocalProviders()
@@ -280,6 +324,9 @@ const marks = {
 }
 let taskID = ""
 const reportFile = report ? path.resolve(report) : path.join(process.cwd(), `overlay-web-benchmark-report-${Date.now()}.json`)
+_emergencyReportPath = reportFile.endsWith(".json")
+  ? reportFile.slice(0, -".json".length) + ".emergency.json"
+  : `${reportFile}.emergency.json`
 const eventFile = reportFile.endsWith(".json")
   ? reportFile.slice(0, -".json".length) + ".events.json"
   : `${reportFile}.events.json`
@@ -518,104 +565,161 @@ try {
     logLine(`[overlay-benchmark] directory=${overlay.directory} saved=${overlay.savedDirectory}`)
   }
   marks.submittedAt = Date.now()
-  taskID = await api("/task", {
-    method: "POST",
-    headers: {
-      "content-type": "application/json; charset=utf-8",
-    },
-    body: JSON.stringify({
-      title: TASK_TITLE,
-      request: TASK_REQUEST,
-      executor,
-      budget: {
-        maxWallTimeMs: undefined,
-        maxRuns,
-        maxFixRuns,
-        maxEvaluations,
-        ...(maxExecutorGroups > 1 ? { maxExecutorGroups } : {}),
-      },
-      // routing, checks, goals: removed — the new agent-driven architecture
-      // handles decomposition, planning, and evaluation autonomously via the
-      // Task Agent. The request text is sufficient.
-      ...(DELIVERY_VERIFY_CMD ? { metadata: { delivery_verify_cmd: DELIVERY_VERIFY_CMD } } : {}),
-    }),
-  })
-    .then((res) => res.json())
-    .then((body) => String(body.task_id || ""))
-  if (!taskID) throw new Error("Task creation did not return task_id")
-  eventStream = subscribeTaskEvents(taskID)
 
-  if (page) {
-    planning = await waitForPlanningVisible(page, api, PLANNING_VISIBLE_TIMEOUT_MS)
-  } else {
-    // no-browser: poll API until task leaves "queued" (becomes active or terminal)
-    const waitStart = Date.now()
-    while (Date.now() - waitStart < TASK_CREATE_TIMEOUT_MS) {
-      const prog = await api(`/task/${taskID}/progress`).then((r) => r.json()).catch(() => null)
-      if (prog?.task?.status && prog.task.status !== "queued") {
-        planning = { pendingCount: 0, taskList: [], reasoning: "", assistantText: "", taskIDs: [taskID], selectedTaskID: taskID }
-        break
-      }
-      await Bun.sleep(1000)
+  if (resumeTaskID) {
+    // ── Resume mode ──────────────────────────────────────────────────────────
+    // Attach to an existing task without creating a new one.
+    taskID = resumeTaskID
+    eventStream = subscribeTaskEvents(taskID)
+
+    // Navigate browser to the overlay and select the existing task
+    if (page) {
+      await page.evaluate(async (id) => {
+        await window.eval("loadTasks")()
+        await window.eval("selectTask")(id)
+      }, taskID)
+      await page.waitForFunction((id) => {
+        try {
+          return window.eval("state").selectedTaskID === id
+        } catch {
+          return false
+        }
+      }, { timeout: TASK_RESUME_TIMEOUT_MS }, taskID)
     }
-    if (!planning) planning = { pendingCount: 0, taskList: [], reasoning: "", assistantText: "", taskIDs: [taskID], selectedTaskID: taskID }
-  }
-  marks.planningAt = Date.now()
 
-  if (page) {
-    taskID = await waitForTaskCreated(page, api, TASK_CREATE_TIMEOUT_MS)
-  }
-  marks.createdAt = Date.now()
-  // Budget is already set during task creation; PATCH /budget is optional
-  await api(`/task/${taskID}/budget`, {
-    method: "PATCH",
-    headers: {
-      "content-type": "application/json; charset=utf-8",
-    },
-    body: JSON.stringify({
-      budget: {
-        maxWallTimeMs: undefined,
-        maxRuns,
-        maxFixRuns,
-        maxEvaluations,
-        ...(maxExecutorGroups > 1 ? { maxExecutorGroups } : {}),
-      },
-    }),
-  }).catch(() => undefined)
+    // Synthesize planning/streaming snapshots from current board state
+    const currentProg = await api(`/task/${taskID}/progress`).then((r) => r.json()).catch(() => null)
+    planning = {
+      pendingCount: 0,
+      taskList: currentProg?.task?.title ?? TASK_TITLE,
+      reasoning: "",
+      assistantText: "",
+      taskIDs: [taskID],
+      selectedTaskID: taskID,
+    }
+    marks.planningAt = Date.now()
+    marks.createdAt = Date.now()
+    marks.selectedAt = Date.now()
 
-  if (page) {
-    await page.evaluate(async (id) => {
-      const state = window.eval("state")
-      if (state.selectedTaskID === id) return
-      await window.eval("loadTasks")()
-      await window.eval("selectTask")(id)
-    }, taskID)
-    await page.waitForFunction((id) => {
-      try {
-        return window.eval("state").selectedTaskID === id
-      } catch {
-        return false
-      }
-    }, { timeout: 120_000 }, taskID)
-  }
-  marks.selectedAt = Date.now()
+    if (page) {
+      await page.waitForFunction(() => {
+        try { return !!window.eval("state").board?.task?.id } catch { return false }
+      }, { timeout: 60_000 })
+    }
+    marks.boardAt = Date.now()
 
-  if (page) {
-    await page.waitForFunction(() => {
-      try {
-        return !!window.eval("state").board?.task?.id
-      } catch {
-        return false
-      }
-    }, { timeout: 120_000 })
-  }
-  marks.boardAt = Date.now()
-  if (page) {
-    streaming = await waitForStreamingVisible(page, PLANNING_VISIBLE_TIMEOUT_MS)
+    // Inject user message to wake up a failed/cancelled task, or to add guidance to a running one.
+    logLine(`[overlay-benchmark] resume taskID=${taskID} injecting message: ${resumeMessage}`)
+    await api(`/task/${taskID}/message`, {
+      method: "POST",
+      headers: { "content-type": "application/json; charset=utf-8" },
+      body: JSON.stringify({ text: resumeMessage, source: "user_message" }),
+    }).catch((err) => logLine(`[overlay-benchmark] resume message inject failed: ${err}`))
+
+    if (page) {
+      streaming = await waitForStreamingVisible(page, PLANNING_VISIBLE_TIMEOUT_MS).catch(() => ({
+        reasoning: "", assistantText: "", liveRole: "", liveText: "",
+      }))
+    } else {
+      streaming = { reasoning: "", assistantText: "", liveRole: "", liveText: "" }
+    }
+    marks.streamingAt = Date.now()
+    // ─────────────────────────────────────────────────────────────────────────
   } else {
-    streaming = { reasoning: "", assistantText: "", liveRole: "", liveText: "" }
+    // ── Normal mode: create a new task ────────────────────────────────────────
+    taskID = await api("/task", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json; charset=utf-8",
+      },
+      body: JSON.stringify({
+        title: TASK_TITLE,
+        request: TASK_REQUEST,
+        executor,
+        budget: {
+          maxWallTimeMs: undefined,
+          maxRuns,
+          maxFixRuns,
+          maxEvaluations,
+          ...(maxExecutorGroups > 1 ? { maxExecutorGroups } : {}),
+        },
+        ...(DELIVERY_VERIFY_CMD ? { metadata: { delivery_verify_cmd: DELIVERY_VERIFY_CMD } } : {}),
+      }),
+    })
+      .then((res) => res.json())
+      .then((body) => String(body.task_id || ""))
+    if (!taskID) throw new Error("Task creation did not return task_id")
+    eventStream = subscribeTaskEvents(taskID)
+
+    if (page) {
+      planning = await waitForPlanningVisible(page, api, PLANNING_VISIBLE_TIMEOUT_MS)
+    } else {
+      const waitStart = Date.now()
+      while (Date.now() - waitStart < TASK_CREATE_TIMEOUT_MS) {
+        const prog = await api(`/task/${taskID}/progress`).then((r) => r.json()).catch(() => null)
+        if (prog?.task?.status && prog.task.status !== "queued") {
+          planning = { pendingCount: 0, taskList: [], reasoning: "", assistantText: "", taskIDs: [taskID], selectedTaskID: taskID }
+          break
+        }
+        await Bun.sleep(1000)
+      }
+      if (!planning) planning = { pendingCount: 0, taskList: [], reasoning: "", assistantText: "", taskIDs: [taskID], selectedTaskID: taskID }
+    }
+    marks.planningAt = Date.now()
+
+    if (page) {
+      taskID = await waitForTaskCreated(page, api, TASK_CREATE_TIMEOUT_MS)
+    }
+    marks.createdAt = Date.now()
+    await api(`/task/${taskID}/budget`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json; charset=utf-8" },
+      body: JSON.stringify({
+        budget: {
+          maxWallTimeMs: undefined,
+          maxRuns,
+          maxFixRuns,
+          maxEvaluations,
+          ...(maxExecutorGroups > 1 ? { maxExecutorGroups } : {}),
+        },
+      }),
+    }).catch(() => undefined)
+
+    if (page) {
+      await page.evaluate(async (id) => {
+        const state = window.eval("state")
+        if (state.selectedTaskID === id) return
+        await window.eval("loadTasks")()
+        await window.eval("selectTask")(id)
+      }, taskID)
+      await page.waitForFunction((id) => {
+        try {
+          return window.eval("state").selectedTaskID === id
+        } catch {
+          return false
+        }
+      }, { timeout: 120_000 }, taskID)
+    }
+    marks.selectedAt = Date.now()
+
+    if (page) {
+      await page.waitForFunction(() => {
+        try {
+          return !!window.eval("state").board?.task?.id
+        } catch {
+          return false
+        }
+      }, { timeout: 120_000 })
+    }
+    marks.boardAt = Date.now()
+    if (page) {
+      streaming = await waitForStreamingVisible(page, PLANNING_VISIBLE_TIMEOUT_MS)
+    } else {
+      streaming = { reasoning: "", assistantText: "", liveRole: "", liveText: "" }
+    }
+    marks.streamingAt = Date.now()
+    // ─────────────────────────────────────────────────────────────────────────
   }
-  marks.streamingAt = Date.now()
   if (page && browser) {
     page = await verifyResume(browser, page, server.url.origin, taskID, temp.dir, api)
   }
@@ -641,6 +745,7 @@ try {
     events,
   }, null, 2))
   await Bun.write(reportFile, JSON.stringify(out, null, 2))
+  _emergencyWritten = true
   logLine(JSON.stringify(out, null, 2))
   logLine(`report: ${reportFile}`)
   logLine(`events: ${eventFile}`)
@@ -664,6 +769,7 @@ try {
     events,
   }, null, 2))
   await Bun.write(reportFile, JSON.stringify(out, null, 2))
+  _emergencyWritten = true
   errorLine(JSON.stringify(out, null, 2))
   errorLine(`report: ${reportFile}`)
   errorLine(`events: ${eventFile}`)
@@ -684,6 +790,15 @@ try {
   if (browser) await cleanup("browser.close", () => browser!.close().catch(() => undefined), () => browser!.process()?.kill("SIGKILL"))
   await cleanup("server.stop", () => server.stop(true))
   await cleanup("instance.disposeAll", () => Instance.disposeAll().catch(() => undefined))
+  // Kill any orphaned processes that executors left behind in the workspace
+  // (e.g. test scripts with setInterval that never exit on their own).
+  if (temp.dir) {
+    await cleanup("orphan.kill", async () => {
+      try {
+        await Bun.spawn(["pkill", "-9", "-f", temp.dir], { stdout: "pipe", stderr: "pipe" }).exited
+      } catch { /* best effort — pkill not available on all platforms */ }
+    })
+  }
   if (!keep && temp.dir) await cleanup("temp.dir", () => fs.rm(temp.dir, { recursive: true, force: true }).catch(() => undefined))
   if (!keep && temp.home) await cleanup("temp.home", () => fs.rm(temp.home, { recursive: true, force: true }).catch(() => undefined))
   process.exit(process.exitCode ?? 0)
@@ -692,6 +807,10 @@ try {
 async function scaffoldProject(dir: string, model: string) {
   await fs.mkdir(path.join(dir, "src"), { recursive: true })
   await fs.mkdir(path.join(dir, "data"), { recursive: true })
+  // .gitkeep ensures data/ is tracked by git and survives git clean / executor git ops.
+  // Without this, executors that run git init or git clean can remove the directory,
+  // causing db.ts to fail at runtime when it opens data/trading.db.
+  await Bun.write(path.join(dir, "data", ".gitkeep"), "")
   await fs.mkdir(path.join(dir, ".opencorvus"), { recursive: true })
   await fs.mkdir(temp.config, { recursive: true })
   // Generate .gitignore only if one doesn't already exist
@@ -981,6 +1100,9 @@ async function buildBenchmarkReport(error?: unknown) {
     resume: {
       restored: marks.resumedAt > 0,
       selectedAt: elapsedOrNull(marks.resumedAt),
+      // resume mode metadata
+      resumeTaskID: resumeTaskID ?? null,
+      resumeHomeDir: resumeHomeDir ?? null,
     },
     timings_ms: {
       online: elapsedOrNull(marks.onlineAt),
@@ -1248,8 +1370,10 @@ async function waitForFinal(
     const effectiveStallMs = pipelineStatuses.includes(taskStatus) ? planningStallTimeoutMs : stallTimeoutMs
     if (now - lastHeartbeatAt >= 60_000) {
       lastHeartbeatAt = now
+      const retryCount = progress?.run?.retryCount ?? progress?.activeRun?.retryCount ?? 0
+      const maxFixRuns = (progress?.task as any)?.budget?.maxFixRuns ?? "?"
       logLine(
-        `[overlay-benchmark] heartbeat status=${taskStatus} signal_age_ms=${silentFor} activity_log_age_ms=${logSilentFor} log_age_ms=${now - lastLogAt} effective_stall_ms=${effectiveStallMs} last_progress=${lastProgressSignature || "none"}`,
+        `[overlay-benchmark] heartbeat status=${taskStatus} retry=${retryCount}/${maxFixRuns} signal_age_ms=${silentFor} activity_log_age_ms=${logSilentFor} log_age_ms=${now - lastLogAt} effective_stall_ms=${effectiveStallMs} last_progress=${lastProgressSignature || "none"}`,
       )
     }
     if (silentFor >= effectiveStallMs || logSilentFor >= effectiveStallMs) {
@@ -1269,6 +1393,7 @@ function progressSignature(progress: any) {
     task: progress?.task?.status || "",
     run: progress?.run?.status || progress?.activeRun?.status || "",
     phase: progress?.run?.phase || progress?.activeRun?.phase || "",
+    retry_count: progress?.run?.retryCount ?? progress?.activeRun?.retryCount ?? 0,
     verdict: progress?.evaluation?.verdict || "",
     delivery: progress?.delivery?.status || "",
     goals: Array.isArray(progress?.goals)

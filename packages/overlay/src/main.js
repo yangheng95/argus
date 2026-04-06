@@ -6172,7 +6172,7 @@ function WorkflowProgressBar(props) {
   });
 }
 
-var _tmpl$$h = /* @__PURE__ */ template(`<span class=gwg-step-summary>`), _tmpl$2$f = /* @__PURE__ */ template(`<span class=gwg-step-count>(<!>)`), _tmpl$3$f = /* @__PURE__ */ template(`<div class=gwg-step-messages>`), _tmpl$4$f = /* @__PURE__ */ template(`<div class=gwg-checks>`), _tmpl$5$f = /* @__PURE__ */ template(`<details><summary><span class=gwg-step-icon></span><span class=gwg-step-label></span><span class=gwg-step-status></span></summary><div class=gwg-step-body>`), _tmpl$6$e = /* @__PURE__ */ template(`<div><span class=gwg-step-icon></span><span class=gwg-step-label></span><span class=gwg-step-status>`), _tmpl$7$c = /* @__PURE__ */ template(`<span class=gwg-check-evidence>`), _tmpl$8$8 = /* @__PURE__ */ template(`<div><span class=gwg-check-icon></span><span class=gwg-check-name>`), _tmpl$9$6 = /* @__PURE__ */ template(`<span class=gwg-priority-badge>advisory`), _tmpl$0$4 = /* @__PURE__ */ template(`<div class=gwg-body>`), _tmpl$1$3 = /* @__PURE__ */ template(`<div><div class=gwg-header role=button tabindex=0><span class=gwg-status-icon></span><span class=gwg-title></span><span class=gwg-chevron aria-hidden=true>▼`), _tmpl$10$2 = /* @__PURE__ */ template(`<div class=gwg-list>`);
+var _tmpl$$h = /* @__PURE__ */ template(`<span class=gwg-step-summary>`), _tmpl$2$f = /* @__PURE__ */ template(`<span class=gwg-step-count>(<!>)`), _tmpl$3$f = /* @__PURE__ */ template(`<div class=gwg-step-messages>`), _tmpl$4$f = /* @__PURE__ */ template(`<div class=gwg-checks>`), _tmpl$5$f = /* @__PURE__ */ template(`<details><summary><span class=gwg-step-icon></span><span class=gwg-step-label></span><span class=gwg-step-status></span></summary><div class=gwg-step-body>`), _tmpl$6$e = /* @__PURE__ */ template(`<div><span class=gwg-step-icon></span><span class=gwg-step-label></span><span class=gwg-step-status>`), _tmpl$7$c = /* @__PURE__ */ template(`<span class=gwg-check-evidence>`), _tmpl$8$8 = /* @__PURE__ */ template(`<div><span class=gwg-check-icon></span><span class=gwg-check-name>`), _tmpl$9$6 = /* @__PURE__ */ template(`<span class=gwg-index>#`), _tmpl$0$4 = /* @__PURE__ */ template(`<span class=gwg-priority-badge>advisory`), _tmpl$1$3 = /* @__PURE__ */ template(`<div class=gwg-body>`), _tmpl$10$2 = /* @__PURE__ */ template(`<div><div class=gwg-header role=button tabindex=0><span class=gwg-status-icon></span><span class=gwg-title></span><span class=gwg-chevron aria-hidden=true>▼`), _tmpl$11$2 = /* @__PURE__ */ template(`<div class=gwg-list>`);
 function stepIcon(status) {
   switch (status) {
     case "completed":
@@ -6360,7 +6360,7 @@ function GoalWorkflowGroup(props) {
   const expanded = () => props.defaultOpen ?? agentCardExpanded(cardKey(), active());
   const toggle = () => toggleAgentCardExpanded(cardKey(), active());
   return (() => {
-    var _el$21 = _tmpl$1$3(), _el$22 = _el$21.firstChild, _el$23 = _el$22.firstChild, _el$24 = _el$23.nextSibling, _el$26 = _el$24.nextSibling;
+    var _el$21 = _tmpl$10$2(), _el$22 = _el$21.firstChild, _el$23 = _el$22.firstChild, _el$26 = _el$23.nextSibling, _el$28 = _el$26.nextSibling;
     _el$22.$$keydown = (e) => {
       if (e.key === "Enter" || e.key === " ") {
         e.preventDefault();
@@ -6369,22 +6369,32 @@ function GoalWorkflowGroup(props) {
     };
     _el$22.$$click = toggle;
     insert(_el$23, () => goalStatusIcon(props.goal.goalStatus));
-    insert(_el$24, () => props.goal.goalTitle);
+    insert(_el$22, createComponent(Show, {
+      get when() {
+        return props.goalIndex !== void 0;
+      },
+      get children() {
+        var _el$24 = _tmpl$9$6(); _el$24.firstChild;
+        insert(_el$24, () => props.goalIndex, null);
+        return _el$24;
+      }
+    }), _el$26);
+    insert(_el$26, () => props.goal.goalTitle);
     insert(_el$22, createComponent(Show, {
       get when() {
         return props.goal.priority === "advisory";
       },
       get children() {
-        return _tmpl$9$6();
+        return _tmpl$0$4();
       }
-    }), _el$26);
+    }), _el$28);
     insert(_el$21, createComponent(Show, {
       get when() {
         return expanded();
       },
       get children() {
-        var _el$27 = _tmpl$0$4();
-        insert(_el$27, createComponent(For, {
+        var _el$29 = _tmpl$1$3();
+        insert(_el$29, createComponent(For, {
           get each() {
             return props.goal.steps;
           },
@@ -6398,7 +6408,7 @@ function GoalWorkflowGroup(props) {
             }
           })
         }));
-        return _el$27;
+        return _el$29;
       }
     }), null);
     createRenderEffect((_p$) => {
@@ -6417,13 +6427,16 @@ function GoalWorkflowGroup(props) {
 }
 function GoalWorkflowList(props) {
   return (() => {
-    var _el$28 = _tmpl$10$2();
-    insert(_el$28, createComponent(For, {
+    var _el$30 = _tmpl$11$2();
+    insert(_el$30, createComponent(For, {
       get each() {
         return props.goals;
       },
-      children: (goal) => createComponent(GoalWorkflowGroup, {
+      children: (goal, idx) => createComponent(GoalWorkflowGroup, {
         goal,
+        get goalIndex() {
+          return idx() + 1;
+        },
         get stepMessages() {
           return props.goalStepMessages?.[goal.goalID];
         },
@@ -6432,7 +6445,7 @@ function GoalWorkflowList(props) {
         }
       })
     }));
-    return _el$28;
+    return _el$30;
   })();
 }
 delegateEvents(["click", "keydown"]);

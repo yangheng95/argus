@@ -9285,6 +9285,14 @@ body[data-theme="light"] .section-badge[data-tone="accent"] {
   width: 16px;
   text-align: center;
 }
+.gwg-index {
+  font-size: var(--ui-font-tiny);
+  font-weight: 700;
+  color: var(--color-accent, #7b6ef6);
+  opacity: 0.8;
+  flex-shrink: 0;
+  margin-right: 2px;
+}
 .gwg-title {
   flex: 1;
   min-width: 0;

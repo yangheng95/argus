@@ -16,7 +16,6 @@ import { Identifier } from "@/id/id"
 import z from "zod"
 import {
   findTask,
-  listGoalRunsByTask,
   type TaskRow,
   type GoalRow,
   type PlanRow,
@@ -28,7 +27,7 @@ import { agentStream } from "@/orchestrator/agent-stream"
 import { registerGoalRunSession, unregisterGoalRunSession } from "@/server/routes/task-event"
 
 const log = Log.create({ service: "goal-runner" })
-export const GOAL_RUN_RETENTION_MS = 72 * 60 * 60 * 1000
+const GOAL_RUN_RETENTION_MS = 72 * 60 * 60 * 1000
 
 function summary(prefix: string, files: string[]) {
   if (files.length === 0) return `${prefix}. No file changes were detected.`
@@ -46,12 +45,12 @@ function filterDeliveryDiffs(diffs: z.infer<typeof Snapshot.FileDiff>[]) {
   return diffs.filter((item) => includeDeliveryFile(item.file))
 }
 
-export function goalRunLocalSessionID(goalRun: GoalRunRow) {
+function goalRunLocalSessionID(goalRun: GoalRunRow) {
   const id = dict(goalRun.metadata).local_session_id
   return typeof id === "string" && id ? id : goalRun.session_id ?? undefined
 }
 
-export function goalRunExpired(goalRun: GoalRunRow, now = Date.now(), ttl = GOAL_RUN_RETENTION_MS) {
+function goalRunExpired(goalRun: GoalRunRow, now = Date.now(), ttl = GOAL_RUN_RETENTION_MS) {
   const time = goalRun.time_completed ?? goalRun.time_updated ?? goalRun.time_created ?? now
   return now - time >= ttl
 }
@@ -97,7 +96,7 @@ async function archiveGoalRunTranscript(goalRun: GoalRunRow) {
   await Session.touch(targetSessionID)
 }
 
-export async function removeGoalRunSession(goalRun: GoalRunRow) {
+async function removeGoalRunSession(goalRun: GoalRunRow) {
   const id = goalRunLocalSessionID(goalRun)
   if (id) {
     await archiveGoalRunTranscript(goalRun).catch((err) => {
@@ -129,14 +128,6 @@ function executorSelectors(goal: GoalRow) {
 
 function evaluatorManagedSelectors(goal: GoalRow) {
   return goalSelectors(goal).filter((item) => EVALUATOR_MANAGED_SELECTORS.has(item))
-}
-
-export async function createGoalWorkspace(_input: {
-  task: TaskRow
-  goal: GoalRow
-  snapshot: string | undefined
-}) {
-  return Instance.directory
 }
 
 export async function cleanupGoalWorkspace(directory?: string) {
@@ -179,29 +170,6 @@ export async function cleanupGoalWorkspace(directory?: string) {
   await Project.removeSandbox(projectID, directory).catch((err) => {
     log.warn("removeSandbox failed during goal workspace cleanup", { directory, error: String(err) })
   })
-}
-
-export async function cleanupStaleGoalWorkspaces(taskID: string) {
-  const root = path.join(Global.Path.data, "goal-workspace", Instance.project.id, taskID)
-  const exists = await fs.stat(root).then(() => true, () => false)
-  if (!exists) return
-  const activeGoalRuns = listGoalRunsByTask(taskID)
-  const activeDirs = new Set(
-    activeGoalRuns
-      .filter((gr) => gr.status === "running" || gr.status === "accepted" || gr.status === "queued")
-      .map((gr) => gr.workspace_dir)
-      .filter(Boolean),
-  )
-  const entries = await fs.readdir(root).catch((err) => {
-    log.warn("failed to read goal workspace directory for cleanup", { root, error: String(err) })
-    return [] as string[]
-  })
-  for (const entry of entries) {
-    const dir = path.join(root, entry)
-    if (activeDirs.has(dir)) continue
-    log.info("cleaning up stale goal workspace", { directory: dir, taskID })
-    await cleanupGoalWorkspace(dir)
-  }
 }
 
 export async function createGoalSession(task: TaskRow, goal: GoalRow, directory?: string) {
@@ -438,18 +406,6 @@ ${compactPlanContext(input.plan)}`,
     ].join("\n"),
     "Do not redefine the goal or broaden scope. Implement only what is needed for this stage, verify it, and stop.",
   ].filter(Boolean).join("\n\n")
-}
-
-export async function deliveryFromSnapshot(baseRef: string | undefined, prefix: string) {
-  const mergeRef = await Snapshot.track()
-  const diffs = filterDeliveryDiffs(baseRef && mergeRef ? await Snapshot.diffFull(baseRef, mergeRef) : [])
-  return {
-    mergeRef,
-    delivery: {
-      summary: summary(prefix, diffs.map((item) => item.file)),
-      diffs,
-    },
-  }
 }
 
 /**

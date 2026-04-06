@@ -246,6 +246,7 @@ function buildBoard(task: typeof OrchestratorTaskTable.$inferSelect) {
         budget: task.budget
           ? {
               maxRuns: task.budget.max_runs,
+              maxFixRuns: task.budget.max_fix_runs,
               maxEvaluations: task.budget.max_evaluations,
               maxWallTimeMs: task.budget.max_wall_time_ms,
             }
