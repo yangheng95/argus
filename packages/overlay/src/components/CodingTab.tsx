@@ -1,8 +1,7 @@
 // ── CodingTab Component ──
-// Solid.js port of the Coding tab
-// Covers: coding state, renderCodingMessages, codingMessageHTML,
-// renderMarkdown, sendCodingMessage, handleCodingEvent, and the
-// mode-toggle / form-submit intercept logic.
+// Solid.js port of the Coding tab.
+// Renders using the same .msg / .agent-card CSS classes as the Conversation
+// component so that Build mode messages get the same card treatment as task mode.
 
 import {
   createSignal,
@@ -13,13 +12,22 @@ import {
 } from "solid-js";
 import { setupAutoScroll } from "../utils/dom-utils";
 import { apiUrl, apiHeaders } from "../services/api";
+import { TextPart } from "./TextPart";
+import { stripAnsi, displayToolIcon, toolStatusLabel } from "../utils/tool";
+import {
+  agentCardExpanded,
+  toggleAgentCardExpanded,
+  toggleToolOutputExpanded,
+  toolOutputExpanded,
+} from "../store/conversation-ui";
+import { t } from "../utils/i18n";
+import { agentStageLabel } from "../utils/message";
 
 // ── Types ──
 
 interface CodingTextPart {
   type: "text";
   text: string;
-  /** Internal tracking ID — matches partID from delta events */
   _partID?: string;
 }
 
@@ -31,7 +39,6 @@ interface CodingToolPart {
     title?: string;
     output?: string;
   };
-  /** Internal tracking ID — matches part.id from part events */
   _partID?: string;
 }
 
@@ -49,34 +56,6 @@ interface CodingAssistantMessage {
 }
 
 type CodingMessage = CodingUserMessage | CodingAssistantMessage;
-
-// ── Helpers ──
-
-function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
-
-function stripAnsi(text: string): string {
- // eslint-disable-next-line no-control-regex
-  return text.replace(/\x1b\[[0-9;]*m/g, "");
-}
-
-// ── renderMarkdown (
-// Minimal markdown: fenced code blocks, inline code, bold, newlines.
-function renderMarkdown(text: string): string {
-  return escapeHtml(text)
-    .replace(
-      /```(\w*)\n([\s\S]*?)```/g,
-      '<pre class="code-block"><code>$2</code></pre>',
-    )
-    .replace(/`([^`]+)`/g, "<code>$1</code>")
-    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
-    .replace(/\n/g, "<br>");
-}
 
 // ── Component ──
 
@@ -308,27 +287,47 @@ export function CodingTab(props: CodingTabProps) {
     abortController?.abort();
   });
 
- // ── Tool-part rendering ──
+ // ── Tool-part rendering (reuses .msg-tool CSS from conversation) ──
 
-  function ToolPartView(pProps: { part: CodingToolPart }) {
+  function CodingToolView(pProps: { part: CodingToolPart }) {
     const status = () => pProps.part.state?.status ?? "running";
-    const icon = () => {
-      const s = status();
-      return s === "completed" ? "done" : s === "error" ? "err" : "run";
+    const toolName = () => pProps.part.tool || "tool";
+    const icon = () => displayToolIcon(toolName());
+    const statusLabel = () => toolStatusLabel(status());
+    const detail = () => {
+      const title = pProps.part.state?.title || "";
+      return title && title.toLowerCase() !== toolName().toLowerCase() ? title : "";
     };
-    const title = () =>
-      escapeHtml(pProps.part.state?.title ?? pProps.part.tool ?? "tool");
-    const output = () => {
-      const raw = pProps.part.state?.output;
-      if (!raw) return "";
-      return escapeHtml(stripAnsi(String(raw)).slice(0, 2000));
-    };
+    const output = () => stripAnsi(pProps.part.state?.output || "").slice(0, 2000);
+    const error = () => stripAnsi((pProps.part.state as any)?.error || "") || output();
+    const partKey = () => pProps.part._partID || toolName();
+    const isExpanded = () => toolOutputExpanded(partKey());
 
     return (
-      <details
-        class={`tool-block tool-${status()}`}
-        innerHTML={`<summary>[${icon()}] ${title()}</summary>${output() ? `<pre class="tool-output">${output()}</pre>` : ""}`}
-      />
+      <>
+        <div class="msg-tool">
+          <span class="tool-icon">{icon()}</span>
+          <span class="tool-name">{toolName()}</span>
+          <Show when={detail()}>
+            <span class="tool-detail">{detail()}</span>
+          </Show>
+          <span class="tool-status" data-status={status()} title={statusLabel()}>
+            {statusLabel()}
+          </span>
+        </div>
+        <Show when={status() === "completed" && output()}>
+          <div
+            class="msg-tool-output"
+            classList={{ "msg-tool-output--expanded": isExpanded() }}
+            onClick={() => toggleToolOutputExpanded(partKey())}
+          >
+            {output()}
+          </div>
+        </Show>
+        <Show when={status() === "error" && error()}>
+          <div class="msg-tool-error">{error()}</div>
+        </Show>
+      </>
     );
   }
 
@@ -336,26 +335,85 @@ export function CodingTab(props: CodingTabProps) {
 
   function UserMessageView(mProps: { msg: CodingUserMessage }) {
     return (
-      <div class="message message-user">
-        <div class="message-body">
-          <p>{mProps.msg.text}</p>
+      <article class="turn msg" data-role="user">
+        <div class="msg-head">
+          <span class="msg-role">{t("chat.role.user") || "You"}</span>
         </div>
-      </div>
+        <div class="msg-bubble">
+          <div class="msg-body">
+            <div class="msg-text">{mProps.msg.text}</div>
+          </div>
+        </div>
+      </article>
     );
   }
 
-  function AssistantMessageView(mProps: { msg: CodingAssistantMessage }) {
+  function AssistantMessageView(mProps: { msg: CodingAssistantMessage; index: number }) {
+    const cardKey = () => `coding:${mProps.index}`;
+    const isStreaming = () => mProps.msg.streaming;
+    const expanded = () => agentCardExpanded(cardKey(), isStreaming());
+    const toggle = () => toggleAgentCardExpanded(cardKey(), isStreaming());
+
     const hasParts = createMemo(() => mProps.msg.parts.length > 0);
+    const hasError = createMemo(() =>
+      mProps.msg.parts.some(
+        (p) => p.type === "text" && (p as CodingTextPart).text.startsWith("Error:"),
+      ),
+    );
+    const toolCount = createMemo(() =>
+      mProps.msg.parts.filter((p) => p.type === "tool").length,
+    );
 
     return (
-      <div class="message message-assistant">
-        <div class="message-body">
+      <article
+        class="turn msg agent-card"
+        classList={{ "agent-card--expanded": expanded() }}
+        data-role="assistant"
+        data-agent-stage="executor"
+      >
+        <div
+          class="agent-card-header"
+          role="button"
+          tabindex="0"
+          aria-expanded={expanded()}
+          onClick={toggle}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); }
+          }}
+        >
+          <Show
+            when={!isStreaming()}
+            fallback={
+              <span class="agent-card-badge agent-card-badge--running" title="Running">
+                <span class="agent-card-spinner" />
+              </span>
+            }
+          >
+            <span
+              class={hasError() ? "agent-card-badge agent-card-badge--error" : "agent-card-badge agent-card-badge--done"}
+              title={hasError() ? "Error" : "Done"}
+            >
+              {hasError() ? "\u2717" : "\u2713"}
+            </span>
+          </Show>
+          <span class="agent-card-label">{agentStageLabel("executor")}</span>
+          <span class="agent-card-count">
+            <Show when={toolCount() > 0}>({toolCount()})</Show>
+          </span>
+          <span class="agent-card-chevron" aria-hidden="true">{"\u25BC"}</span>
+        </div>
+        <div
+          class="agent-card-body"
+          classList={{ "agent-card-body--preview": !expanded() }}
+          ref={(el) => onCleanup(setupAutoScroll(el))}
+        >
           <Show
             when={hasParts()}
             fallback={
-              <Show when={mProps.msg.streaming}>
-                <div class="message-text">
-                  <span class="typing">……</span>
+              <Show when={isStreaming()}>
+                <div class="msg-thinking-live">
+                  <span class="msg-thinking-dot" />
+                  <span>{t("chat.thinking") || "Thinking…"}</span>
                 </div>
               </Show>
             }
@@ -364,22 +422,15 @@ export function CodingTab(props: CodingTabProps) {
               {(part) => (
                 <Show
                   when={part.type === "text"}
-                  fallback={
-                    <ToolPartView part={part as CodingToolPart} />
-                  }
+                  fallback={<CodingToolView part={part as CodingToolPart} />}
                 >
-                  <div
-                    class="message-text"
-                    innerHTML={renderMarkdown(
-                      (part as CodingTextPart).text,
-                    )}
-                  />
+                  <TextPart text={(part as CodingTextPart).text} />
                 </Show>
               )}
             </For>
           </Show>
         </div>
-      </div>
+      </article>
     );
   }
 
@@ -392,7 +443,6 @@ export function CodingTab(props: CodingTabProps) {
       class="coding-tab-root"
       style={{ display: props.active ? "flex" : "none", "flex-direction": "column", height: "100%" }}
     >
-      {/* Scroll area */}
       <div
         ref={(el) => onCleanup(setupAutoScroll(el))}
         class="chat-scroll coding-scroll"
@@ -402,17 +452,18 @@ export function CodingTab(props: CodingTabProps) {
           when={!isEmpty()}
           fallback={
             <div class="chat-empty">
-              Build agent — ask anything about the codebase
+              {t("coding.empty") || "Build agent — ask anything about the codebase"}
             </div>
           }
         >
           <For each={messages()}>
-            {(msg) => (
+            {(msg, idx) => (
               <Show
                 when={msg.role === "user"}
                 fallback={
                   <AssistantMessageView
                     msg={msg as CodingAssistantMessage}
+                    index={idx()}
                   />
                 }
               >
@@ -422,7 +473,6 @@ export function CodingTab(props: CodingTabProps) {
           </For>
         </Show>
       </div>
-
     </div>
   );
 }
