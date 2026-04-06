@@ -33,10 +33,13 @@ import {
   findDeliveryByRun,
   findEvaluationByRun,
   findPlan,
+  findRuns,
   listGoals,
   requireRun,
   requireTask,
 } from "@/orchestrator/store"
+import { DEFAULT_MAX_RUNS, DEFAULT_MAX_FIX_RUNS } from "@/orchestrator/helpers"
+import type { OrchestratorBudget } from "@/orchestrator/orchestrator.sql"
 import { updateTask } from "@/orchestrator/state"
 
 import { findStepByTool, type WorkflowState, type MiniWorkflow } from "@/orchestrator/workflow"
@@ -282,6 +285,17 @@ export function createTaskAgentTools(input: {
             ...result.traceability.map(t => `- ${t.requirementID} → ${t.goalIDs.join(", ")}`),
           ].join("\n")
 
+          // Pre-generate DB IDs and build LLM-ID → DB-ID mapping so
+          // depends_on references resolve to actual DB goal IDs.
+          // The Requirements agent assigns internal IDs (e.g. "setup-db")
+          // in register_goal tool calls; depends_on references those IDs.
+          const llmToDBID = new Map<string, string>()
+          const dbGoalIDs = result.goals.map((goal) => {
+            const dbID = Identifier.ascending("goal")
+            if (goal.id) llmToDBID.set(goal.id, dbID)
+            return dbID
+          })
+
           Database.transaction((db) => {
             // Spec snapshot — makes SPEC section visible in panel
             db.insert(OrchestratorSpecSnapshotTable).values({
@@ -317,12 +331,16 @@ export function createTaskAgentTools(input: {
               taskID,
               specSnapshotID,
               goals: result.goals.map((goal, index) => ({
-                goalID: Identifier.ascending("goal"),
+                goalID: dbGoalIDs[index],
                 title: goal.title,
                 objective: goal.objective,
                 done_definition: goal.done_definition,
                 owned_paths: goal.owned_paths,
-                depends_on: goal.depends_on,
+                depends_on: goal.depends_on.flatMap(dep => {
+                  const dbID = llmToDBID.get(dep)
+                  if (!dbID) log.warn("requirements: depends_on references unknown LLM goal ID — dropping", { goalTitle: goal.title, unknownDep: dep })
+                  return dbID ? [dbID] : []
+                }),
                 exports: goal.exports,
                 imports: goal.imports,
                 kind: goal.kind,
@@ -340,9 +358,9 @@ export function createTaskAgentTools(input: {
               OrchestratorProtocol.emit(OrchestratorEvent.TaskUpdated, { taskID, status: task.status, summary: "Goals defined" }, { source: "task-agent.decompose" }),
             )
           })
-          // Initialize workflow tracking for newly created goals
-          for (const g of result.goals) {
-            ensureGoalInWorkflow(g.id, g.title)
+          // Initialize workflow tracking for newly created goals (use DB IDs)
+          for (const [i, g] of result.goals.entries()) {
+            ensureGoalInWorkflow(dbGoalIDs[i], g.title)
           }
           await trackStepComplete("requirements")
           return `${result.goals.length} goals created. Summary: ${result.summary}. Decisions: ${result.decisions.map(d => `${d.key}=${d.value}`).join(", ")}`
@@ -841,6 +859,15 @@ export function createTaskAgentTools(input: {
       execute: async ({ reason, per_goal_analysis }) => {
         const task = requireTask(taskID)
         if (!task.active_run_id) return "No active run. Nothing to retry."
+
+        // Budget enforcement: max_fix_runs
+        const run = requireRun(task.active_run_id)
+        const fixCount = run.retry_count ?? 0
+        const maxFixRuns = (task.budget as OrchestratorBudget | null)?.max_fix_runs ?? DEFAULT_MAX_FIX_RUNS
+        if (fixCount >= maxFixRuns) {
+          return `Fix budget exhausted: ${fixCount}/${maxFixRuns} fix runs used. Consider delivering current state or failing the task.`
+        }
+
         const dbGoals = listGoals(taskID)
         const failed = dbGoals.filter(g => g.status === "failed")
         if (failed.length === 0) return "No failed goals to retry."
@@ -852,10 +879,10 @@ export function createTaskAgentTools(input: {
           return `Missing per_goal_analysis for failed goal(s): ${missing.join(", ")}. Call query_failed_goals first, then provide analysis for EVERY failed goal before retry. Retry rejected.`
         }
 
-        // Reset all failed goals to pending. GoalPool picks them up + auto-appends eval evidence.
-        // Also log the articulated analysis to decision log for observability.
+        // Reset all failed goals to pending and increment retry_count for budget tracking.
+        // GoalPool picks them up + auto-appends eval evidence.
         Database.use((db) => {
-          const { OrchestratorGoalTable: GT } = require("@/orchestrator/orchestrator.sql")
+          const { OrchestratorGoalTable: GT, OrchestratorRunTable: RT } = require("@/orchestrator/orchestrator.sql")
           const now = Date.now()
           for (const goal of failed) {
             db.update(GT)
@@ -863,6 +890,10 @@ export function createTaskAgentTools(input: {
               .where(eq(GT.id, goal.id))
               .run()
           }
+          db.update(RT)
+            .set({ retry_count: (run.retry_count ?? 0) + 1, time_updated: now })
+            .where(eq(RT.id, run.id))
+            .run()
         })
 
         // Record analysis in decision log for future retry context
@@ -1001,6 +1032,13 @@ export function createTaskAgentTools(input: {
         const dbGoals = listGoals(taskID)
         if (dbGoals.length === 0) return "No goals found. Run requirements first."
 
+        // Budget enforcement: max_runs
+        const totalRuns = findRuns(taskID).length
+        const maxRuns = (task.budget as OrchestratorBudget | null)?.max_runs ?? DEFAULT_MAX_RUNS
+        if (totalRuns >= maxRuns) {
+          return `Budget exhausted: ${totalRuns}/${maxRuns} runs used. Cannot create more runs. Consider delivering current state or failing the task.`
+        }
+
         const runID = Identifier.ascending("run")
         const now = Date.now()
         const executor = (task.metadata?._pipeline as any)?.executor ?? "opencode"
@@ -1021,17 +1059,33 @@ export function createTaskAgentTools(input: {
             time_created: now, time_updated: now,
           }).run()
 
+          // Pre-generate plan_node IDs and build goal_id → plan_node_id mapping
+          // so depends_on_ids references plan_node IDs (not goal IDs).
+          const goalToPlanNode = new Map<string, string>()
+          const planNodeIDs: string[] = []
+          for (const goal of dbGoals) {
+            const pnID = Identifier.ascending("plan_node")
+            planNodeIDs.push(pnID)
+            goalToPlanNode.set(goal.id, pnID)
+          }
+
           // Each goal becomes a plan node (so scheduler can compute DAG)
           for (const [index, goal] of dbGoals.entries()) {
+            const resolvedDeps = (goal.depends_on ?? []).flatMap((depGoalID: string) => {
+              const pnID = goalToPlanNode.get(depGoalID)
+              if (!pnID) log.warn("create_run: goal.depends_on references unknown goal ID — dropping", { goalID: goal.id, goalTitle: goal.title, unknownDep: depGoalID })
+              return pnID ? [pnID] : []
+            })
+
             db.insert(OrchestratorPlanNodeTable).values({
-              id: Identifier.ascending("plan_node"),
+              id: planNodeIDs[index],
               task_id: taskID,
               plan_version_id: planID,
               kind: "goal",
               goal_id: goal.id,
               title: goal.title,
               brief: goal.done_definition,
-              depends_on_ids: goal.depends_on?.length ? goal.depends_on : undefined,
+              depends_on_ids: resolvedDeps.length > 0 ? resolvedDeps : undefined,
               order_index: index,
               metadata: {},
               time_created: now, time_updated: now,

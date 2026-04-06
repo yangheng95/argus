@@ -55,7 +55,6 @@ const DELIVERY_FETCH_TIMEOUT_MS = parseInt(process.env.OPENCORVUS_DELIVERY_FETCH
 const SYNC_RUN_TIMEOUT_MS = parseInt(process.env.OPENCORVUS_SYNC_RUN_TIMEOUT_MS || String(DELIVERY_FETCH_TIMEOUT_MS + 15 * 60 * 1000), 10) // must exceed fetch + Task Agent eval/verify/publish time
 const EXECUTOR_STATUS_TIMEOUT_MS = 30_000 // 30s for executor.status()
 
-const GOAL_STALL_TIMEOUT_MS = parseInt(process.env.OPENCORVUS_GOAL_STALL_TIMEOUT_MS || String(30 * 60 * 1000), 10) // 30 min per-goal stall threshold
 const GOAL_HEARTBEAT_INTERVAL_MS = 30_000 // emit progress heartbeat every 30s per goal
 const eventBridgeAborts = new Map<string, AbortController>() // goalRunID or runID → AbortController
 // Guard: runs that have already notified Task Agent via run_completed.
@@ -63,11 +62,6 @@ const eventBridgeAborts = new Map<string, AbortController>() // goalRunID or run
 const agentNotifiedRuns = new Set<string>()
 // Per-run merge serialization: ensures parallel goal deliveries are merged one at a time.
 const mergeLocksPerRun = new Map<string, Promise<void>>()
-// Per-goal-run last activity timestamp: used by syncGoalRuns for stall detection.
-const goalRunLastActivity = new Map<string, number>()
-// Per-run last activity timestamp: updated whenever any goal in the run has activity.
-// Used by syncGoalRuns for run-level stall detection (replaces absolute timeout).
-const runLastActivity = new Map<string, number>()
 
 async function serializedMerge(runID: string, fn: () => Promise<void>) {
   const prev = mergeLocksPerRun.get(runID) ?? Promise.resolve()
@@ -79,7 +73,6 @@ async function serializedMerge(runID: string, fn: () => Promise<void>) {
 
 // Unattended-mode safeguards
 const INTERACTION_STALE_MS = parseInt(process.env.OPENCORVUS_INTERACTION_TIMEOUT_MS || "30000", 10) // auto-reject stale interactions (30s default)
-const RUN_STALL_TIMEOUT_MS = parseInt(process.env.OPENCORVUS_RUN_STALL_TIMEOUT_MS || process.env.OPENCORVUS_RUN_TIMEOUT_MS || String(30 * 60 * 1000), 10) // run-level stall: no goal activity for 30 min
 const PIPELINE_STALE_MS = 10 * 60 * 1000 // 10 min — pipeline tasks stuck longer without in-memory tracking are recovered
 
 type TranscriptState = {
@@ -455,35 +448,21 @@ export namespace OrchestratorRuntime {
    * Sync per-goal runs: stall detection + orphan recovery.
    *
    * Goal completion is driven by GoalPool (within the Task Control Loop).
-   * This function handles:
-   * 1. Run-level inactivity stall → failRun
-   * 2. Orphan detection: goal runs from a previous process → mark failed
-   * 3. Per-goal inactivity stall detection
+   * GoalPool handles per-goal stall detection internally (goal-pool.ts).
+   *
+   * This function only handles orphan detection: goal runs from a previous
+   * process that have no event bridge (leftovers from a crash).
    */
   async function syncGoalRuns(runID: string, hooks: RuntimeHooks) {
     const run = requireRun(runID)
     if (!run.plan_version_id) return
 
-    // 1. Run-level stall detection (inactivity-based, NOT absolute timeout).
-    //    The run is stalled if no goal has reported activity for RUN_STALL_TIMEOUT_MS.
-    //    This correctly handles long-running plans: spec/decompose/architect time
-    //    doesn't count because goal activity resets the timer each time.
-    const now0 = Date.now()
-    const lastRunActivity = runLastActivity.get(runID) ?? run.time_started ?? run.time_created ?? 0
-    const runStaleMs = now0 - lastRunActivity
-    if (lastRunActivity > 0 && runStaleMs > RUN_STALL_TIMEOUT_MS) {
-      log.warn("run stalled — no goal activity", { runID, staleMs: runStaleMs, thresholdMs: RUN_STALL_TIMEOUT_MS })
-      await failRun(run, `Run stalled: no goal activity for ${Math.round(runStaleMs / 60000)}min`, hooks)
-      return
-    }
-
-    // 2. Orphan detection: goal runs created BEFORE the current process started
-    //    that have no event bridge. These are leftovers from a crashed process.
-    //    The executor process is dead — mark them failed so the task loop
-    //    can detect the failure and let Task Agent decide next steps.
+    // Orphan detection: goal runs created BEFORE the current process started
+    // that have no event bridge. These are leftovers from a crashed process.
+    // The executor process is dead — mark them failed so the task loop
+    // can detect the failure and let Task Agent decide next steps.
     const activeGoalRuns = listActiveGoalRunsByCoordinator(runID)
     for (const goalRun of activeGoalRuns) {
-      // Pipeline-internal finalization — no external guard needed
       if (eventBridgeAborts.has(goalRun.id)) continue
       if ((goalRun.time_created ?? 0) >= processStartTime) continue
       log.warn("orphaned goal_run from previous process", { runID, goalRunID: goalRun.id, goalID: goalRun.goal_id })
@@ -494,49 +473,21 @@ export namespace OrchestratorRuntime {
       }
     }
 
-    // 3. Per-goal stall detection: active goals whose event bridge exists but
-    //    hasn't received any executor event for GOAL_STALL_TIMEOUT_MS.
-    //    This catches executor processes that silently hang without producing events.
-    const now = Date.now()
-    const refreshedGoalRuns = listActiveGoalRunsByCoordinator(runID)
-    for (const goalRun of refreshedGoalRuns) {
-      // Pipeline-internal finalization — no external guard needed
-      if (!eventBridgeAborts.has(goalRun.id)) continue // orphan detection handles bridgeless goals
-      const lastActivity = goalRunLastActivity.get(goalRun.id) ?? goalRun.time_started ?? goalRun.time_created ?? 0
-      const staleMs = now - lastActivity
-      if (staleMs < GOAL_STALL_TIMEOUT_MS) continue
-      log.warn("goal_run stalled — no executor activity", { runID, goalRunID: goalRun.id, goalID: goalRun.goal_id, staleMs, thresholdMs: GOAL_STALL_TIMEOUT_MS })
-      stopEventBridge(goalRun.id)
-      updateGoalRun(goalRun.id, {
-        status: "failed",
-        error: `Goal stalled: no executor activity for ${Math.round(staleMs / 60000)}min`,
-        time_completed: now,
-      })
-      updateGoalRunExecutorSessionStatus(goalRun.id, "failed")
-      if (goalRun.workspace_dir) {
-        await cleanupGoalWorkspace(goalRun.workspace_dir).catch(() => {})
-      }
-    }
-
-    // After orphan + stall cleanup: if we actually marked orphans AND no event bridges
-    // remain for this run, the pipeline is fully dead (process restart killed
-    // everything). Only then do we failRun — this is the ONLY case where
-    // syncGoalRuns touches the pipeline.
+    // After orphan cleanup: if all goal runs are dead and no event bridges remain,
+    // the pipeline is fully dead (process restart killed everything).
     const remaining = listActiveGoalRunsByCoordinator(runID)
     const hasAnyBridge = remaining.some((gr) => eventBridgeAborts.has(gr.id))
     if (remaining.length === 0 && !hasAnyBridge && !agentNotifiedRuns.has(run.id)) {
-      // Double-check: were there actually failed goals from cleanup (orphan or stall)?
-      // If all goal runs completed normally via GoalPool, remaining=0 is expected.
       const allGoalRuns = listGoalRunsByCoordinator(runID)
-      const cleanupFailCount = allGoalRuns.filter((gr) =>
-        gr.status === "failed" && (gr.error?.includes("Orphaned") || gr.error?.includes("stalled")),
+      const orphanFailCount = allGoalRuns.filter((gr) =>
+        gr.status === "failed" && gr.error?.includes("Orphaned"),
       ).length
-      if (cleanupFailCount > 0) {
+      if (orphanFailCount > 0) {
         const task = requireTask(run.task_id)
         if (task.active_run_id === run.id) {
-          log.warn("all goal runs dead after cleanup, failing run", { runID, cleanupFailCount })
+          log.warn("all goal runs dead after orphan cleanup, failing run", { runID, orphanFailCount })
           agentNotifiedRuns.add(run.id)
-          await failRun(run, `All goal runs failed (${cleanupFailCount} orphaned/stalled)`, hooks)
+          await failRun(run, `All goal runs failed (${orphanFailCount} orphaned)`, hooks)
         }
       }
     }
@@ -649,11 +600,13 @@ export namespace OrchestratorRuntime {
     }
 
     if (queue.status === "running") {
-      // Inactivity-based stall detection (never absolute timeout)
-      const lastActivity = runLastActivity.get(run.id) ?? run.time_started ?? run.time_created ?? Date.now()
+      // Legacy single-session run: use DB timestamps for inactivity detection.
+      // (GoalPool-managed runs don't reach this path.)
+      const LEGACY_RUN_STALL_MS = 30 * 60 * 1000 // 30 min
+      const lastActivity = run.time_updated ?? run.time_started ?? run.time_created ?? Date.now()
       const inactiveMs = Date.now() - lastActivity
-      if (inactiveMs > RUN_STALL_TIMEOUT_MS) {
-        log.warn("run stalled — no activity (legacy syncRun)", { runID: run.id, inactiveMs, thresholdMs: RUN_STALL_TIMEOUT_MS })
+      if (inactiveMs > LEGACY_RUN_STALL_MS) {
+        log.warn("run stalled — no activity (legacy syncRun)", { runID: run.id, inactiveMs })
         try { await executor.abort({ sessionID: run.session_id ?? undefined, queueTaskID }) } catch {}
         await failRun(run, `Run stalled — no activity for ${Math.round(inactiveMs / 60000)}min`, hooks)
         return
@@ -761,9 +714,7 @@ async function failRun(run: RunRow, error: string, hooks: RuntimeHooks) {
     updateGoalRunExecutorSessionStatus(gr.id, "failed")
     if (gr.workspace_dir) await cleanupGoalWorkspace(gr.workspace_dir).catch(() => {})
   }
-  // Clean up all in-memory tracking — run is dead, prevent stale map entries and leaks
-  runLastActivity.delete(run.id)
-  for (const gr of goalRuns) goalRunLastActivity.delete(gr.id)
+  // Clean up in-memory tracking — run is dead, prevent stale map entries and leaks
   mergeLocksPerRun.delete(run.id)
   agentNotifiedRuns.delete(run.id)
   updateExecutorSessionStatus(run.id, "failed")

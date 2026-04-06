@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "en-US",
-    "panel_revision": "f42033a043bfdbac"
+    "panel_revision": "cb5aa631e2621641"
   },
   "brand.guide_kicker": "Quick Guide",
   "brand.guide_positioning_body": "This is the task cockpit — left picks the task, center drives execution, right verifies spec, plan, evaluation, and file changes so the agent stays on track.",
@@ -82,6 +82,7 @@
   "about.platform": "Platform",
   "about.runtime_type": "Runtime Type",
   "budget.hint": "Configure budget for the next new task. Leave blank to use global defaults.",
+  "budget.hint_readonly": "Budget is locked after a task has started and cannot be changed.",
   "budget.empty": "Select a task to configure its budget.",
   "budget.max_evaluations": "Max Evaluations",
   "budget.max_runs": "Max Runs",

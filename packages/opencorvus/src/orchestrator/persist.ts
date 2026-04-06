@@ -453,6 +453,7 @@ export function insertGoalRows(
 ) {
   return input.goals.map((goal, index) => {
     const goalID = goal.goalID ?? Identifier.ascending("goal")
+    const deps = goal.depends_on ?? []
     const metadata =
       goal.metadata && typeof goal.metadata === "object" && !Array.isArray(goal.metadata)
         ? goal.metadata
@@ -467,12 +468,15 @@ export function insertGoalRows(
         objective: goal.objective,
         done_definition: goal.done_definition,
         owned_paths: goal.owned_paths ?? [],
-        depends_on: goal.depends_on ?? [],
+        depends_on: deps,
         exports: goal.exports ?? [],
         imports: goal.imports ?? [],
         kind: goal.kind ?? "feature",
         requirement_ids: goal.requirement_ids ?? [],
-        metadata,
+        metadata: {
+          ...metadata,
+          depends_on_goal_ids: deps.length > 0 ? deps : undefined,
+        },
         priority: goal.priority ?? "blocking",
         source: goal.source ?? "spec",
         status: "pending",

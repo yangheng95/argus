@@ -1,4 +1,7 @@
 import { type GoalRow, type PlanNodeRow } from "@/orchestrator/store"
+import { Log } from "@/util/log"
+
+const log = Log.create({ service: "goal-scheduler" })
 
 function goalNodes(nodes: PlanNodeRow[]) {
   return nodes.filter((node): node is PlanNodeRow & { goal_id: string } => node.kind === "goal" && !!node.goal_id)
@@ -29,7 +32,10 @@ export function readyGoalNodes(nodes: PlanNodeRow[], goals: GoalRow[]): GoalNode
     if (!goal || goal.status !== "pending") return []
     const ready = (node.depends_on_ids ?? []).every((depID) => {
       const dep = ordered.find((item) => item.id === depID)
-      if (!dep?.goal_id) return true
+      if (!dep) {
+        log.warn("depends_on_ids contains unresolvable ID — treating as unsatisfied (data corruption?)", { nodeID: node.id, goalID: node.goal_id, depID })
+        return false
+      }
       return isGoalSatisfied(goals.find((item) => item.id === dep.goal_id))
     })
     if (!ready) return []
@@ -48,11 +54,8 @@ export function readyGoalNodes(nodes: PlanNodeRow[], goals: GoalRow[]): GoalNode
 export function goalDependencyLayers(nodes: PlanNodeRow[], goals: GoalRow[]): GoalNodeEntry[][] {
   const ordered = goalNodes(nodes)
   const goalMap = new Map(goals.map((g) => [g.id, g]))
-  // Map from goal_id to its node
   const nodeByGoal = new Map(ordered.map((n) => [n.goal_id, n]))
-  // Map from node_id to goal_id for dependency resolution
-  const nodeToGoal = new Map(ordered.map((n) => [n.id, n.goal_id]))
-  // Compute depth (layer) for each goal node
+  const nodeIDToGoal = new Map(ordered.map((n) => [n.id, n.goal_id]))
   const depthCache = new Map<string, number>()
 
   function computeDepth(goalId: string): number {
@@ -61,18 +64,23 @@ export function goalDependencyLayers(nodes: PlanNodeRow[], goals: GoalRow[]): Go
     const node = nodeByGoal.get(goalId)
     if (!node) return 0
     const deps = (node.depends_on_ids ?? [])
-      .map((depNodeId) => nodeToGoal.get(depNodeId))
+      .map((depID) => {
+        const resolved = nodeIDToGoal.get(depID)
+        if (!resolved) {
+          log.warn("goalDependencyLayers: unresolvable depID (data corruption?)", { goalId, depID })
+        }
+        return resolved
+      })
       .filter((id): id is string => !!id)
     if (deps.length === 0) {
       depthCache.set(goalId, 0)
       return 0
     }
-    // Prevent cycles: temporarily mark as processing
     depthCache.set(goalId, -1)
     let maxDep = 0
     for (const depGoalId of deps) {
       const d = computeDepth(depGoalId)
-      if (d < 0) continue // cycle detected, skip
+      if (d < 0) continue
       maxDep = Math.max(maxDep, d)
     }
     const depth = maxDep + 1
@@ -80,7 +88,6 @@ export function goalDependencyLayers(nodes: PlanNodeRow[], goals: GoalRow[]): Go
     return depth
   }
 
-  // Compute depth for all goals
   const entries: Array<{ entry: GoalNodeEntry; depth: number }> = []
   for (const node of ordered) {
     const goal = goalMap.get(node.goal_id)
@@ -89,7 +96,6 @@ export function goalDependencyLayers(nodes: PlanNodeRow[], goals: GoalRow[]): Go
     entries.push({ entry: { node, goal }, depth })
   }
 
-  // Group by depth
   const layers: GoalNodeEntry[][] = []
   for (const { entry, depth } of entries) {
     while (layers.length <= depth) layers.push([])

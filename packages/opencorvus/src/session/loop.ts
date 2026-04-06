@@ -73,7 +73,7 @@ export namespace SessionLoop {
   function shouldEnterStandby(input: { lastUser: Message.User; lastAssistant: Message.Assistant | undefined }) {
     return !!(
       input.lastAssistant?.finish &&
-      !["tool-calls", "unknown"].includes(input.lastAssistant.finish) &&
+      input.lastAssistant.finish !== "tool-calls" &&
       input.lastUser.id < input.lastAssistant.id
     )
   }
