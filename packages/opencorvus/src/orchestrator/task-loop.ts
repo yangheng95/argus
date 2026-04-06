@@ -19,6 +19,7 @@ import { GoalPool, type PoolHooks } from "./goal-pool"
 import type { RuntimeHooks } from "./runtime-hooks"
 import { TaskAgent } from "@/task-agent/agent"
 import { effectiveMaxExecutorGroups } from "./helpers"
+import type { OrchestratorBudget } from "./orchestrator.sql"
 import { mergeGoalDelivery } from "./runtime"
 import {
   findTask,
@@ -75,6 +76,16 @@ export async function runTaskLoop(input: {
     if (task.status === "completed" || task.status === "failed" || task.status === "cancelled") {
       log.info("task in terminal state, exiting loop", { taskID, status: task.status })
       break
+    }
+
+    // Budget enforcement: wall time
+    const maxWallTime = (task.budget as OrchestratorBudget | null)?.max_wall_time_ms
+    if (maxWallTime && task.time_created) {
+      const elapsed = Date.now() - task.time_created
+      if (elapsed > maxWallTime) {
+        log.warn("wall time budget exhausted", { taskID, elapsed, maxWallTime })
+        break
+      }
     }
 
     // ── Phase 1: Decision Point ──

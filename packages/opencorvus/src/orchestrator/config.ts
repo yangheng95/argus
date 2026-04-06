@@ -121,7 +121,7 @@ const DEFAULTS: OrchestratorConfigType = {
   },
   max_runs: 10,
   max_fix_runs: 5,
-  max_executor_groups: 1,
+  max_executor_groups: 2,
   default_workflow: "standard",
   workflows: [],
 }

@@ -21,7 +21,7 @@ import { Log } from "@/util/log"
 import { Event } from "@/orchestrator/model"
 import { OrchestratorProtocol } from "@/orchestrator/protocol"
 import { updateGoalRun, updateGoalRunExecutorSessionStatus, persistDelivery } from "@/orchestrator/persist"
-import { Database, eq } from "@/storage/db"
+import { Database, eq, and } from "@/storage/db"
 import { Identifier } from "@/id/id"
 import { deliveryFromWorktreeGit, cleanupGoalWorkspace } from "@/goal/runner"
 
@@ -141,19 +141,28 @@ async function* streamExecutorEvents(
     return await extractDelivery(goalRunID, workDir, goal.id)
   }
 
-  // Three-layer completion detection (matches production patterns):
-  // 1. Primary: event stream delivers task-queue.completed → for-await loop exits
-  // 2. Fallback: status poller detects executor finished every 5s
-  // 3. Safety net: inactivity timeout — no events AND no status change → dead
+  // Completion detection (multi-signal):
+  // 1. Primary: task-queue.completed event → for-await loop exits
+  // 2. Secondary: session.idle event → LLM turn finished; grace-window then exit
+  //    Rationale: task-queue.completed depends on SessionPrompt.prompt() returning
+  //    after flushCallbacks. Under parallel load this chain sometimes breaks
+  //    (callback promise does not resolve), leaving the queue task stuck in
+  //    "running". session.idle is emitted synchronously when the session enters
+  //    standby, so it's a more reliable LLM-turn-done signal.
+  // 3. Fallback: status poller detects executor finished every 5s
+  // 4. Safety net: inactivity timeout — no events for this period → dead
   const INACTIVITY_TIMEOUT_MS = Number(process.env.OPENCORVUS_GOAL_INACTIVITY_TIMEOUT_MS) || 90_000
   const STATUS_POLL_INTERVAL_MS = 5_000
+  const IDLE_GRACE_MS = Number(process.env.OPENCORVUS_GOAL_IDLE_GRACE_MS) || 15_000
 
   const streamAbort = new AbortController()
   const combinedSignal = AbortSignal.any([signal, streamAbort.signal])
   let streamDone = false
   let lastActivityAt = Date.now()
+  let idleSince: number | undefined
+  let idleGraceExceeded = false
 
-  // Status poller + inactivity watchdog
+  // Status poller + inactivity watchdog + idle-grace detector
   const poller = (async () => {
     while (!streamDone && !combinedSignal.aborted) {
       await new Promise(r => setTimeout(r, STATUS_POLL_INTERVAL_MS))
@@ -166,6 +175,18 @@ async function* streamExecutorEvents(
           break
         }
       } catch { /* ignore status check errors */ }
+      // Idle-grace detector: session signalled idle → LLM turn done.
+      // If queue task doesn't complete within IDLE_GRACE_MS, the callback chain
+      // is stuck — trust the session.idle signal and break out.
+      if (idleSince !== undefined) {
+        const idleMs = Date.now() - idleSince
+        if (idleMs >= IDLE_GRACE_MS) {
+          log.warn("session idle + queue task still running — forcing completion", { goalRunID, idleMs })
+          idleGraceExceeded = true
+          streamAbort.abort("session idle grace exceeded")
+          break
+        }
+      }
       // Inactivity watchdog: if no event activity for INACTIVITY_TIMEOUT_MS, abort
       const inactiveMs = Date.now() - lastActivityAt
       if (inactiveMs >= INACTIVITY_TIMEOUT_MS) {
@@ -181,6 +202,10 @@ async function* streamExecutorEvents(
     if (combinedSignal.aborted) break
 
     lastActivityAt = Date.now()
+    if (event.type === "session.idle" && idleSince === undefined) {
+      idleSince = Date.now()
+      log.info("session idle detected — starting grace window", { goalRunID, graceMs: IDLE_GRACE_MS })
+    }
     yield { type: "executor_event", event }
 
     const now = Date.now()
@@ -197,6 +222,27 @@ async function* streamExecutorEvents(
   await poller.catch(() => {})
 
   if (signal.aborted) return undefined
+
+  // When idle-grace forced completion, the LLM turn finished but the queue task
+  // row is still "running" (callback chain stuck). Treat as success and
+  // sync the DB so task-queue-service doesn't re-run the stale row.
+  if (idleGraceExceeded) {
+    log.info("idle-grace forced — proceeding to extract delivery", { goalRunID })
+    try {
+      const { TaskQueueTable } = await import("@/scheduler/task-queue.sql")
+      Database.use((db) =>
+        db
+          .update(TaskQueueTable)
+          .set({ status: "completed", time_completed: Date.now(), time_updated: Date.now() })
+          .where(and(eq(TaskQueueTable.id, queueTaskID), eq(TaskQueueTable.status, "running")))
+          .run(),
+      )
+    } catch (err) {
+      log.warn("failed to force-complete queue task row", { queueTaskID, error: String(err) })
+    }
+    updateGoalRunExecutorSessionStatus(goalRunID, "completed")
+    return await extractDelivery(goalRunID, workDir, goal.id)
+  }
 
   const status = await Promise.race([
     executor.status(queueTaskID),

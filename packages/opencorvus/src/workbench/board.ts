@@ -1,4 +1,5 @@
 import z from "zod"
+import { createDecisionLog } from "@/decision-log"
 import { findSpecSnapshot, viewSpecSnapshot } from "@/orchestrator/store"
 import {
   OrchestratorArtifactTable,
@@ -1062,7 +1063,6 @@ function buildStepSummary(goalID: string, stepID: string, status?: string): stri
 /** Build architect summary from Decision Log */
 function buildArchitectSummary(taskID: string) {
   try {
-    const { createDecisionLog } = require("@/decision-log")
     const log = createDecisionLog(taskID)
     const entries = log.readByPhase("architect")
     if (!entries || entries.length === 0) return undefined
