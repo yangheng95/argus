@@ -550,7 +550,7 @@ export class GoalPool {
       if (verdict.pass) {
         OrchestratorProtocol.emit(Event.GoalPassed, { taskID: task.id, goalID: goal.id, summary: goal.title }, { source: "auto_eval" }).catch(() => {})
       } else {
-        OrchestratorProtocol.emit(Event.GoalFailed, { taskID: task.id, goalID: goal.id, summary: `${goal.title}: ${verdict.reasoning.slice(0, 200)}` }, { source: "auto_eval" }).catch(() => {})
+        OrchestratorProtocol.emit(Event.GoalFailed, { taskID: task.id, goalID: goal.id, summary: `${goal.title}: ${verdict.reasoning}` }, { source: "auto_eval" }).catch(() => {})
       }
 
       return {

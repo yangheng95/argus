@@ -99,6 +99,46 @@ goal.workflow.progress    → { taskID, goalID, completedSteps, totalSteps, curr
 
 ---
 
+## Section K: Goal 依赖 ID 映射不变量
+
+### 修正 10: 依赖 ID 在两层翻译中必须严格映射，禁止 fallback
+
+系统存在两层 ID 命名空间：
+
+1. **LLM Agent ID → DB Goal ID** — Requirements Agent 内部使用临时 ID（如 `"setup-db"`），持久化时翻译为数据库 ID（如 `"goal_01JXY..."`）。
+2. **DB Goal ID → Plan Node ID** — 调度器使用 `plan_node.depends_on_ids` 构建 DAG，其中每个值必须是 `plan_node.id`，不是 `goal.id`。
+
+**翻译点与不变量**：
+
+| 层 | 翻译执行位置 | 不变量 |
+|----|-------------|--------|
+| LLM → DB Goal | `task-agent/tools.ts` `requirements` 工具 | `goal.depends_on` 的每个值必须是合法的 DB goal ID |
+| DB Goal → Plan Node | `task-agent/tools.ts` `create_run` 工具 | `plan_node.depends_on_ids` 的每个值必须是同 plan 内合法的 `plan_node.id` |
+| Plan Node → Scheduler | `goal/scheduler.ts` `readyGoalNodes` | 仅按 `plan_node.id` 查找；查不到视为数据损坏，log.warn + 阻塞调度 |
+
+**禁止的模式**：
+
+- ❌ Scheduler 中 fallback 到 `goal_id` 查找 — 掩盖上游数据错误
+- ❌ `?? dep` 保留未映射的原始 LLM ID — 产生死链
+- ❌ 将 `goal.depends_on`（goal ID）直接拷贝到 `plan_node.depends_on_ids`（期望 plan node ID）
+
+**错误处理**：
+
+翻译失败时，写入端（`requirements`、`create_run`）丢弃无效依赖并 `log.warn`。读取端（`readyGoalNodes`）将不可解析的依赖视为未满足（阻塞该 goal 的调度）并 `log.warn`。不做 fallback。
+
+### 修正 11: `insertPlanItems` 已移除
+
+**SVG 描述**: 未提及
+**实际状态**: `persist.ts` 中的 `insertPlanItems` 函数（含 wave/milestone/Kahn 环检测逻辑）已移除。其职责由 `create_run` 工具的内联计划节点创建逻辑取代（更简化，无 wave/milestone，但依赖映射正确）。
+
+### 修正 12: `retry_failed_goals` 必须递增 `retry_count`
+
+**SVG 描述**: "`max_fix_runs` 控制修复重试预算"
+**实际状态（修复前）**: `retry_failed_goals` 工具检查 `run.retry_count` 对 `max_fix_runs` 的预算，但从不递增 `retry_count`，导致无限重试。
+**修复后**: 每次调用 `retry_failed_goals` 时，`run.retry_count` 在 `OrchestratorRunTable` 中递增。
+
+---
+
 ## 实现状态总览
 
 | SVG Section | 状态 | 备注 |
@@ -113,3 +153,4 @@ goal.workflow.progress    → { taskID, goalID, completedSteps, totalSteps, curr
 | H: Architect + RecommendedNext | ✅ 已实现 | 无变化 |
 | I: Mini Workflow | ✅ 已实现 | 移除 auto_select，类型/registry/tracking 完成 |
 | J: Panel Architecture | ❌ 待实现 | 后端就绪，overlay 组件未创建 |
+| K: Goal 依赖 ID 映射 | ✅ 已修复 | 两层翻译 + 严格不变量，见修正10-12 |

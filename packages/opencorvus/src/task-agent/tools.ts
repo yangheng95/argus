@@ -648,7 +648,7 @@ export function createTaskAgentTools(input: {
         if (verdict.pass) {
           Proto.emit(OrcEvent.GoalPassed, { taskID, goalID: goal.id, summary: goal.title }, { source: "eval_goal" }).catch(() => {})
         } else {
-          Proto.emit(OrcEvent.GoalFailed, { taskID, goalID: goal.id, summary: `${goal.title}: ${verdict.reasoning.slice(0, 200)}` }, { source: "eval_goal" }).catch(() => {})
+          Proto.emit(OrcEvent.GoalFailed, { taskID, goalID: goal.id, summary: `${goal.title}: ${verdict.reasoning}` }, { source: "eval_goal" }).catch(() => {})
         }
 
         await trackStepComplete("eval_goal", goalID, !verdict.pass)

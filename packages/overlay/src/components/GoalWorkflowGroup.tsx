@@ -44,6 +44,8 @@ interface GoalWorkflow {
 
 interface GoalWorkflowGroupProps {
   goal: GoalWorkflow;
+  /** 1-based display index shown in the header (e.g. #3) */
+  goalIndex?: number;
   /** Agent card messages grouped by step: { plan: msg[], execute: msg[], eval: msg[] } */
   stepMessages?: Record<string, any[]>;
   /** Evaluation checks for this goal (from board.evaluation or per-goal eval) */
@@ -209,6 +211,9 @@ export function GoalWorkflowGroup(props: GoalWorkflowGroupProps) {
         }}
       >
         <span class="gwg-status-icon">{goalStatusIcon(props.goal.goalStatus)}</span>
+        <Show when={props.goalIndex !== undefined}>
+          <span class="gwg-index">#{props.goalIndex}</span>
+        </Show>
         <span class="gwg-title">{props.goal.goalTitle}</span>
         <Show when={props.goal.priority === "advisory"}>
           <span class="gwg-priority-badge">advisory</span>
@@ -243,9 +248,10 @@ export function GoalWorkflowList(props: {
   return (
     <div class="gwg-list">
       <For each={props.goals}>
-        {(goal) => (
+        {(goal, idx) => (
           <GoalWorkflowGroup
             goal={goal}
+            goalIndex={idx() + 1}
             stepMessages={props.goalStepMessages?.[goal.goalID]}
             evalChecks={props.goalEvalChecks?.[goal.goalID]}
           />
