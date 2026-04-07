@@ -194,7 +194,7 @@ export async function scaffoldProjectConfig(dir: string): Promise<void> {
       delivery: { max_steps: 40, timeout_ms: 600000, max_retries: 2 },
       max_runs: 10,
       max_fix_runs: 5,
-      max_executor_groups: 1,
+      max_executor_groups: 2,
       default_workflow: "standard",
     },
     compaction: {

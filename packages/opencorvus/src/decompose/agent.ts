@@ -307,7 +307,8 @@ function toResult(parsed: DecomposeOutput, rawText?: string): DecomposeResult {
   if (rawText) {
     recommendedNext = parseRecommendedNext(rawText)
   }
-  // Default recommendation: multi-goal → architect, single-goal → plan_goal
+  // Default recommendation: multi-goal → architect, single-goal → create_run + submit_execution
+  // (per-goal planning happens automatically inside the execution engine, not as a Task Agent step)
   if (recommendedNext.length === 0 && goals.length > 1) {
     recommendedNext.push({
       agent: "architect",
@@ -317,11 +318,10 @@ function toResult(parsed: DecomposeOutput, rawText?: string): DecomposeResult {
     })
   } else if (recommendedNext.length === 0 && goals.length === 1) {
     recommendedNext.push({
-      agent: "plan_goal",
-      args: { goalID: goals[0].id },
-      reason: "Single goal — plan directly",
-      confidence: 0.8,
-      priority: "suggested",
+      agent: "create_run",
+      reason: "Single goal — create run then submit_execution (planning happens automatically inside execution)",
+      confidence: 0.9,
+      priority: "required",
     })
   }
   return {

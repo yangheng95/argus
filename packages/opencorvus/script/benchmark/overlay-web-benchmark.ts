@@ -99,7 +99,6 @@ const specMaxSteps = Number(flag("--spec-max-steps")) || 80
 const plannerMaxSteps = Number(flag("--planner-max-steps")) || 96
 const maxRuns = Number(flag("--max-runs")) || 20
 const maxFixRuns = Number(flag("--max-fix-runs")) || 8
-const maxEvaluations = Number(flag("--max-evaluations")) || 200
 const report = flag("--report")
 const keep = !process.argv.includes("--no-keep")
 // Resume mode: re-attach to an existing task rather than creating a new one.
@@ -118,16 +117,9 @@ const requestFile = flag("--request-file")
 const deliveryVerifyCmd = flag("--delivery-verify-cmd")
 const skipLocalVerify = process.argv.includes("--skip-local-verify")
 const noBrowser = process.argv.includes("--no-browser")
-// Only set task-level budget when explicitly provided via CLI flag OR env var.
-// Otherwise leave undefined so the task inherits the config-level default
-// (which is driven by OPENCORVUS_MAX_EXECUTOR_GROUPS / user config / defaults).
-const maxExecutorGroupsFlag = flag("--max-executor-groups")
-const maxExecutorGroupsEnv = process.env.OPENCORVUS_MAX_EXECUTOR_GROUPS
-const maxExecutorGroups = maxExecutorGroupsFlag
-  ? Number(maxExecutorGroupsFlag)
-  : maxExecutorGroupsEnv
-    ? Number(maxExecutorGroupsEnv)
-    : undefined
+// Only set task-level budget when explicitly provided via CLI flag.
+// Otherwise leave undefined so the task inherits the config-level default (opencorvus.jsonc).
+const maxExecutorGroups = flag("--max-executor-groups") ? Number(flag("--max-executor-groups")) : undefined
 
 const DEFAULT_TASK_TITLE = "Overlay Web Benchmark NoteStore"
 const DEFAULT_TASK_REQUEST = `
@@ -637,11 +629,9 @@ try {
         request: TASK_REQUEST,
         executor,
         budget: {
-          maxWallTimeMs: undefined,
           maxRuns,
           maxFixRuns,
-          maxEvaluations,
-          ...(maxExecutorGroups > 1 ? { maxExecutorGroups } : {}),
+          ...(maxExecutorGroups != null && maxExecutorGroups > 1 ? { maxExecutorGroups } : {}),
         },
         ...(DELIVERY_VERIFY_CMD ? { metadata: { delivery_verify_cmd: DELIVERY_VERIFY_CMD } } : {}),
       }),
@@ -676,11 +666,9 @@ try {
       headers: { "content-type": "application/json; charset=utf-8" },
       body: JSON.stringify({
         budget: {
-          maxWallTimeMs: undefined,
           maxRuns,
           maxFixRuns,
-          maxEvaluations,
-          ...(maxExecutorGroups > 1 ? { maxExecutorGroups } : {}),
+          ...(maxExecutorGroups != null && maxExecutorGroups > 1 ? { maxExecutorGroups } : {}),
         },
       }),
     }).catch(() => undefined)

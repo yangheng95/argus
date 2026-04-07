@@ -57,20 +57,12 @@ export interface DeliveryConfig {
   skills: string[]
 }
 
-export interface AdaptivePipelineConfig {
-  /** Enable adaptive pipeline shortcuts (delta spec, reduced planner exploration). Default: true */
-  enabled: boolean
-  /** Max planner tool-call steps when GoalAgent goals are pre-provided. Default: 15 */
-  planner_shortcut_max_steps: number
-}
-
 export interface OrchestratorConfigType {
   decompose: DecomposeConfig
   architect: ArchitectConfig
   planner: PlannerConfig
   evaluator: EvaluatorConfig
   delivery: DeliveryConfig
-  adaptive: AdaptivePipelineConfig
   max_runs: number
   max_fix_runs: number
   max_executor_groups: number
@@ -115,26 +107,11 @@ const DEFAULTS: OrchestratorConfigType = {
     max_retries: 2,
     skills: [],
   },
-  adaptive: {
-    enabled: true,
-    planner_shortcut_max_steps: 15,
-  },
   max_runs: 10,
   max_fix_runs: 5,
   max_executor_groups: 2,
   default_workflow: "standard",
   workflows: [],
-}
-
-// ═══════════════════════════════════════════════════════════════════
-// 环境变量覆盖（最高优先级）
-// ═══════════════════════════════════════════════════════════════════
-
-function envInt(name: string): number | undefined {
-  const raw = process.env[name]
-  if (!raw) return undefined
-  const n = parseInt(raw, 10)
-  return Number.isFinite(n) ? n : undefined
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -146,7 +123,7 @@ export namespace OrchestratorConfig {
   export const defaults: Readonly<OrchestratorConfigType> = DEFAULTS
 
   /**
-   * 加载完整配置：默认值 ← opencorvus.jsonc ← 环境变量
+   * 加载完整配置：默认值 ← opencorvus.jsonc
    *
    * 每次调用都会重新读取 Config（Config 内部有缓存），
    * 因此运行时修改 opencorvus.jsonc 后下一次调用即生效。
@@ -157,16 +134,9 @@ export namespace OrchestratorConfig {
     return merge(user)
   }
 
-  /**
-   * 同步获取默认值 + 环境变量覆盖（不读取配置文件）
-   * 用于模块初始化阶段无法 await 的场景
-   */
+  /** 同步获取硬编码默认值（不读取配置文件），用于模块初始化阶段无法 await 的场景 */
   export function getDefaults(): OrchestratorConfigType {
-    const d = { ...DEFAULTS }
-    d.max_runs = envInt("OPENCORVUS_MAX_RUNS") ?? d.max_runs
-    d.max_fix_runs = envInt("OPENCORVUS_MAX_FIX_RUNS") ?? d.max_fix_runs
-    d.max_executor_groups = envInt("OPENCORVUS_MAX_EXECUTOR_GROUPS") ?? d.max_executor_groups
-    return d
+    return { ...DEFAULTS }
   }
 }
 
@@ -205,17 +175,13 @@ function merge(user?: Config.Info["assistant"]): OrchestratorConfigType {
     },
     delivery: {
       max_steps: user?.delivery?.max_steps ?? DEFAULTS.delivery.max_steps,
-      timeout_ms: envInt("OPENCORVUS_DELIVERY_AGENT_TIMEOUT_MS") ?? user?.delivery?.timeout_ms ?? DEFAULTS.delivery.timeout_ms,
+      timeout_ms: user?.delivery?.timeout_ms ?? DEFAULTS.delivery.timeout_ms,
       max_retries: user?.delivery?.max_retries ?? DEFAULTS.delivery.max_retries,
       skills: user?.delivery?.skills ?? DEFAULTS.delivery.skills,
     },
-    adaptive: {
-      enabled: user?.adaptive?.enabled ?? DEFAULTS.adaptive.enabled,
-      planner_shortcut_max_steps: user?.adaptive?.planner_shortcut_max_steps ?? DEFAULTS.adaptive.planner_shortcut_max_steps,
-    },
-    max_runs: envInt("OPENCORVUS_MAX_RUNS") ?? user?.max_runs ?? DEFAULTS.max_runs,
-    max_fix_runs: envInt("OPENCORVUS_MAX_FIX_RUNS") ?? user?.max_fix_runs ?? DEFAULTS.max_fix_runs,
-    max_executor_groups: envInt("OPENCORVUS_MAX_EXECUTOR_GROUPS") ?? user?.max_executor_groups ?? DEFAULTS.max_executor_groups,
+    max_runs: user?.max_runs ?? DEFAULTS.max_runs,
+    max_fix_runs: user?.max_fix_runs ?? DEFAULTS.max_fix_runs,
+    max_executor_groups: user?.max_executor_groups ?? DEFAULTS.max_executor_groups,
     default_workflow: user?.default_workflow ?? DEFAULTS.default_workflow,
     workflows: (user?.workflows ?? DEFAULTS.workflows).map(w => ({
       id: w.id,

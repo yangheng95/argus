@@ -83,7 +83,7 @@ export interface WorkflowState {
 const STANDARD: MiniWorkflow = {
   id: "standard",
   name: "Standard",
-  description: "完整 requirements → architect → per-goal [plan → execute → eval] → deliver 流程",
+  description: "完整 requirements → architect → per-goal [execute → eval] → deliver 流程（planning 在 goal 内部自动进行）",
   steps: [
     {
       id: "requirements",
@@ -104,22 +104,13 @@ const STANDARD: MiniWorkflow = {
       after: ["requirements"],
     },
     {
-      id: "plan",
-      tool: "plan_goal",
-      label: "Plan",
-      hint: "创建 per-goal 实现计划，消费 architect 共识。",
-      scope: "goal",
-      skippable: true,
-      after: ["architect"],
-    },
-    {
       id: "execute",
       tool: "execute_goal",
       label: "Execute",
-      hint: "在隔离 worktree 中执行 goal 实现。",
+      hint: "在隔离 worktree 中执行 goal 实现（含自动 planning）。",
       scope: "goal",
       skippable: false,
-      after: ["plan"],
+      after: ["architect"],
     },
     {
       id: "eval",
@@ -140,7 +131,7 @@ const STANDARD: MiniWorkflow = {
       after: ["eval"],
     },
   ],
-  goalLoopStepIDs: ["plan", "execute", "eval"],
+  goalLoopStepIDs: ["execute", "eval"],
 }
 
 /** quick-fix — 极简修复 */
@@ -204,17 +195,8 @@ const PLAN_ONLY: MiniWorkflow = {
       skippable: true,
       after: ["requirements"],
     },
-    {
-      id: "plan",
-      tool: "plan_goal",
-      label: "Plan",
-      hint: "为每个 goal 制定详细实现计划。",
-      scope: "goal",
-      skippable: false,
-      after: ["architect"],
-    },
   ],
-  goalLoopStepIDs: ["plan"],
+  goalLoopStepIDs: [],
 }
 
 // ═══════════════════════════════════════════════════════════════════

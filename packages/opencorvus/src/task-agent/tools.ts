@@ -243,12 +243,22 @@ export function createTaskAgentTools(input: {
               stream: {
                 onChunk: async (arg: any) => {
                   guard.bump()
-                  // sessionStreamHooks: persists full tool content to session (input/output/status)
-                  if (hooks.onChunk) await hooks.onChunk(arg)
+                  const chunk = (arg as any)?.chunk
+                  // Decompose agent's meaningful output comes exclusively through structured tool
+                  // registrations (register_requirement, register_goal, etc.). The model also emits
+                  // large text-delta streams (analysis, reasoning) while simultaneously calling
+                  // exploration tools (list_directory, read_file), which interleaves text and tool
+                  // call blocks in the TUI and makes the output unreadable. Re-emit text-delta as
+                  // reasoning-delta so it renders in a collapsible thinking block, visually separated
+                  // from tool calls, instead of being interleaved inline.
+                  if (chunk?.type === "text-delta") {
+                    if (hooks.onChunk) await hooks.onChunk({ chunk: { ...chunk, type: "reasoning-delta" } })
+                  } else {
+                    if (hooks.onChunk) await hooks.onChunk(arg)
+                  }
                   // agentStream: only forward non-tool events for section status indicator.
                   // Tool-call events are already persisted by sessionStreamHooks with full content;
                   // forwarding them to agentStream would create duplicate empty status bubbles in the panel.
-                  const chunk = (arg as any)?.chunk
                   if (chunk?.type !== "tool-input-start" && chunk?.type !== "tool-call" && chunk?.type !== "tool-result" && chunk?.type !== "tool-input-delta") {
                     if (decomposeLive.hooks.onChunk) await decomposeLive.hooks.onChunk(arg)
                   }
@@ -430,8 +440,12 @@ export function createTaskAgentTools(input: {
           signal: input.signal,
           stream: {
             onChunk: async (arg: any) => {
-              if (hooks.onChunk) await hooks.onChunk(arg)
               const chunk = (arg as any)?.chunk
+              if (chunk?.type === "text-delta") {
+                if (hooks.onChunk) await hooks.onChunk({ chunk: { ...chunk, type: "reasoning-delta" } })
+              } else {
+                if (hooks.onChunk) await hooks.onChunk(arg)
+              }
               if (chunk?.type !== "tool-input-start" && chunk?.type !== "tool-call" && chunk?.type !== "tool-result" && chunk?.type !== "tool-input-delta") {
                 if (architectLive.hooks.onChunk) await architectLive.hooks.onChunk(arg)
               }
@@ -467,53 +481,6 @@ export function createTaskAgentTools(input: {
     // Per-goal tools — Task Agent decides when to call each
     // -----------------------------------------------------------------------
 
-    plan_goal: tool({
-      description: "Create an implementation plan for a specific goal. The plan gives the executor detailed steps. Can be skipped for simple goals if the goal contract is already clear enough.",
-      inputSchema: z.object({
-        goalID: z.string().describe("The goal ID to plan"),
-        reason: z.string().optional().describe("Why you decided to plan this goal"),
-      }),
-      execute: async ({ goalID }) => {
-        const task = requireTask(taskID)
-        const dbGoals = listGoals(taskID)
-        const goal = dbGoals.find(g => g.id === goalID)
-        if (!goal) return `Goal ${goalID} not found.`
-
-        ensureGoalInWorkflow(goalID, goal.title)
-        await trackStepStart("plan_goal", goalID)
-
-        const { planGoal } = await import("@/planner/per-goal")
-        const { createDecisionLog } = await import("@/decision-log")
-        const decisionLog = createDecisionLog(taskID)
-
-        // Create child session for planner agent messages
-        const planSession = await Session.createNext({
-          parentID: input.agentSessionID,
-          title: `Plan: ${goal.title}`,
-          directory: Instance.directory,
-        })
-        registerGoalRunSession(planSession.id, taskID, "planner", goalID)
-        const hooks = sessionStreamHooks({ sessionID: planSession.id, taskID, stage: "plan" })
-
-        const contract = buildGoalContract(task, goal, dbGoals)
-        try {
-          const steps = await planGoal({
-            contract,
-            decisionLog,
-            sessionID: planSession.id,
-            signal: input.signal,
-            stream: {
-              onChunk: hooks.onChunk as any,
-              onError: hooks.onError,
-            },
-          })
-          await trackStepComplete("plan_goal", goalID)
-          return `Plan created for "${goal.title}": ${steps.brief.slice(0, 500)}`
-        } finally {
-          await hooks.flush()
-        }
-      },
-    }),
 
     eval_goal: tool({
       description: "Manually re-evaluate a goal's delivery. Evaluation runs automatically after execution — use this only to re-evaluate after a fix (execute_goal retry). Max 3 evals per goal.",
@@ -583,7 +550,14 @@ export function createTaskAgentTools(input: {
             sessionID: evalSession.id,
             signal: input.signal,
             stream: {
-              onChunk: hooks.onChunk as any,
+              onChunk: async (arg: any) => {
+                const chunk = (arg as any)?.chunk
+                if (chunk?.type === "text-delta") {
+                  if (hooks.onChunk) await hooks.onChunk({ chunk: { ...chunk, type: "reasoning-delta" } })
+                } else {
+                  if (hooks.onChunk) await hooks.onChunk(arg as any)
+                }
+              },
               onError: hooks.onError,
             },
           })
@@ -1023,7 +997,7 @@ export function createTaskAgentTools(input: {
     }),
 
     create_run: tool({
-      description: "Create a run record for goal execution. Returns the runID needed for submit_execution or dispatch_ready_goals. Use after decompose (and optionally plan_goal for complex goals).",
+      description: "Create a run record for goal execution. Returns the runID needed for submit_execution or dispatch_ready_goals. Use after requirements + architect.",
       inputSchema: z.object({
         reason: z.string().optional().describe("Why you decided to create a run"),
       }),
@@ -1261,8 +1235,12 @@ export function createTaskAgentTools(input: {
             signal: input.signal,
             stream: {
               onChunk: async (arg: any) => {
-                if (hooks.onChunk) await hooks.onChunk(arg)
                 const chunk = (arg as any)?.chunk
+                if (chunk?.type === "text-delta") {
+                  if (hooks.onChunk) await hooks.onChunk({ chunk: { ...chunk, type: "reasoning-delta" } })
+                } else {
+                  if (hooks.onChunk) await hooks.onChunk(arg)
+                }
                 if (chunk?.type !== "tool-input-start" && chunk?.type !== "tool-call" && chunk?.type !== "tool-result" && chunk?.type !== "tool-input-delta") {
                   if (deliveryLive.hooks.onChunk) await deliveryLive.hooks.onChunk(arg)
                 }
