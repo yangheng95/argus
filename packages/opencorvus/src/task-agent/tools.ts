@@ -834,13 +834,7 @@ export function createTaskAgentTools(input: {
         const task = requireTask(taskID)
         if (!task.active_run_id) return "No active run. Nothing to retry."
 
-        // Budget enforcement: max_fix_runs
         const run = requireRun(task.active_run_id)
-        const fixCount = run.retry_count ?? 0
-        const maxFixRuns = (task.budget as OrchestratorBudget | null)?.max_fix_runs ?? DEFAULT_MAX_FIX_RUNS
-        if (fixCount >= maxFixRuns) {
-          return `Fix budget exhausted: ${fixCount}/${maxFixRuns} fix runs used. Consider delivering current state or failing the task.`
-        }
 
         const dbGoals = listGoals(taskID)
         const failed = dbGoals.filter(g => g.status === "failed")
@@ -853,17 +847,71 @@ export function createTaskAgentTools(input: {
           return `Missing per_goal_analysis for failed goal(s): ${missing.join(", ")}. Call query_failed_goals first, then provide analysis for EVERY failed goal before retry. Retry rejected.`
         }
 
-        // Reset all failed goals to pending and increment retry_count for budget tracking.
-        // GoalPool picks them up + auto-appends eval evidence.
+        // ── Per-goal retry budget ──
+        // Each goal has its own retry_count. Goals that exceeded max_goal_retries
+        // are permanently failed and excluded from retry.
+        const orchCfg = await OrchestratorConfig.get()
+        const maxGoalRetries = orchCfg.max_goal_retries
+
+        const retryable: typeof failed = []
+        const exhausted: typeof failed = []
+
+        for (const goal of failed) {
+          const goalRetries = (goal as any).retry_count ?? 0
+          if (goalRetries >= maxGoalRetries) {
+            exhausted.push(goal)
+          } else {
+            retryable.push(goal)
+          }
+        }
+
+        // ── Cascade: mark pending goals whose deps are all permanently failed ──
+        const permanentlyFailedIDs = new Set(exhausted.map(g => g.id))
+        const cascaded: typeof failed = []
+        let changed = true
+        while (changed) {
+          changed = false
+          for (const goal of dbGoals) {
+            if (goal.status !== "pending") continue
+            if (permanentlyFailedIDs.has(goal.id)) continue
+            const deps = goal.depends_on ?? []
+            if (deps.length === 0) continue
+            const allDepsFailed = deps.every(depID => {
+              const dep = dbGoals.find(g => g.id === depID)
+              if (!dep) return true // missing dep treated as failed
+              return permanentlyFailedIDs.has(depID) || (dep.status === "failed" && ((dep as any).retry_count ?? 0) >= maxGoalRetries)
+            })
+            if (allDepsFailed) {
+              permanentlyFailedIDs.add(goal.id)
+              cascaded.push(goal)
+              changed = true
+            }
+          }
+        }
+
+        // Apply DB changes
         Database.use((db) => {
           const { OrchestratorGoalTable: GT, OrchestratorRunTable: RT } = require("@/orchestrator/orchestrator.sql")
           const now = Date.now()
-          for (const goal of failed) {
+
+          // Reset retryable goals to pending + increment their per-goal retry_count
+          for (const goal of retryable) {
+            const goalRetries = (goal as any).retry_count ?? 0
             db.update(GT)
-              .set({ status: "pending", time_updated: now })
+              .set({ status: "pending", retry_count: goalRetries + 1, time_updated: now })
               .where(eq(GT.id, goal.id))
               .run()
           }
+
+          // Mark cascaded pending goals as failed (blocked by permanently failed deps)
+          for (const goal of cascaded) {
+            db.update(GT)
+              .set({ status: "failed", time_updated: now })
+              .where(eq(GT.id, goal.id))
+              .run()
+          }
+
+          // Increment run-level retry_count for global budget tracking
           db.update(RT)
             .set({ retry_count: (run.retry_count ?? 0) + 1, time_updated: now })
             .where(eq(RT.id, run.id))
@@ -885,17 +933,46 @@ export function createTaskAgentTools(input: {
           }
         } catch { /* best effort */ }
 
-        for (const goal of failed) {
+        for (const goal of retryable) {
           ensureGoalInWorkflow(goal.id, goal.title)
           await trackStepStart("retry_failed_goals", goal.id)
         }
 
-        stopAfterDispatch.abort("retry_failed_goals")
-        const summary = failed.map(g => {
-          const a = per_goal_analysis[g.id]
-          return `  - ${g.title} [${a?.failure_class}]: ${a?.expected_fix.slice(0, 80)}`
-        }).join("\n")
-        return `Retrying ${failed.length} failed goal(s):\n${summary}\nReason: ${reason}\nSTOP HERE — task loop dispatches via GoalPool and re-triggers you when batch completes.`
+        // Build response
+        const lines: string[] = []
+
+        if (retryable.length > 0) {
+          stopAfterDispatch.abort("retry_failed_goals")
+          lines.push(`Retrying ${retryable.length} goal(s):`)
+          for (const g of retryable) {
+            const a = per_goal_analysis[g.id]
+            const retries = ((g as any).retry_count ?? 0) + 1
+            lines.push(`  - ${g.title} [${a?.failure_class}] (retry ${retries}/${maxGoalRetries}): ${a?.expected_fix.slice(0, 80)}`)
+          }
+        }
+
+        if (exhausted.length > 0) {
+          lines.push(`\nPermanently failed (${exhausted.length} goal(s) exhausted ${maxGoalRetries} retries):`)
+          for (const g of exhausted) {
+            lines.push(`  - ${g.title} (${(g as any).retry_count ?? 0}/${maxGoalRetries} retries used)`)
+          }
+        }
+
+        if (cascaded.length > 0) {
+          lines.push(`\nCascade-failed (${cascaded.length} pending goal(s) blocked by permanently failed deps):`)
+          for (const g of cascaded) {
+            lines.push(`  - ${g.title}`)
+          }
+        }
+
+        if (retryable.length === 0) {
+          lines.push(`\nNo goals left to retry. Consider delivering current state or calling fail_task.`)
+          return lines.join("\n")
+        }
+
+        lines.push(`\nReason: ${reason}`)
+        lines.push("STOP HERE — task loop dispatches via GoalPool and re-triggers you when batch completes.")
+        return lines.join("\n")
       },
     }),
 

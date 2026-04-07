@@ -225,6 +225,8 @@ export const OrchestratorGoalTable = sqliteTable(
     priority: text().notNull().$type<OrchestratorGoalPriority>().default("blocking"),
     source: text().notNull().default("spec"),
     status: text().notNull().$type<OrchestratorGoalStatus>().default("pending"),
+    /** Per-goal retry counter. Incremented each time retry_failed_goals resets this goal. */
+    retry_count: integer().notNull().default(0),
     order_index: integer().notNull().default(0),
     /** Remaining metadata (qa_profile, check_selector, etc.) */
     metadata: text({ mode: "json" }).$type<OrchestratorMetadata>(),

@@ -21,6 +21,7 @@ import { TaskAgent } from "@/task-agent/agent"
 import { effectiveMaxExecutorGroups } from "./helpers"
 import type { OrchestratorBudget } from "./orchestrator.sql"
 import { mergeGoalDelivery } from "./runtime"
+import { Database, eq } from "@/storage/db"
 import {
   findTask,
   findRun,
@@ -209,8 +210,44 @@ export async function runTaskLoop(input: {
       }
     }
 
-    // ── Phase 4: Collect results and loop back ──
+    // ── Phase 4: Dependency deadlock detection ──
+    // Pending goals whose ALL dependencies are permanently failed will never
+    // become ready. Mark them as failed to prevent infinite retry loops.
     const goalsAfter = listGoalsByPlan(plan.id)
+    const failedIDs = new Set(goalsAfter.filter(g => g.status === "failed").map(g => g.id))
+    let cascaded = 0
+    let cascadeChanged = true
+    while (cascadeChanged) {
+      cascadeChanged = false
+      for (const goal of goalsAfter) {
+        if (goal.status !== "pending") continue
+        if (failedIDs.has(goal.id)) continue
+        const deps = goal.depends_on ?? []
+        if (deps.length === 0) continue
+        const allDepsFailed = deps.every(depID => failedIDs.has(depID))
+        if (allDepsFailed) {
+          failedIDs.add(goal.id)
+          goal.status = "failed" as any
+          cascaded++
+          cascadeChanged = true
+          Database.use((db) => {
+            const { OrchestratorGoalTable: GT } = require("@/orchestrator/orchestrator.sql")
+            db.update(GT)
+              .set({ status: "failed", time_updated: Date.now() })
+              .where(eq(GT.id, goal.id))
+              .run()
+          })
+          log.warn("cascade-failed pending goal (all deps permanently failed)", {
+            taskID, goalID: goal.id, title: goal.title, deps,
+          })
+        }
+      }
+    }
+    if (cascaded > 0) {
+      log.info("dependency deadlock resolved", { taskID, cascadeFailed: cascaded })
+    }
+
+    // ── Phase 5: Collect results and loop back ──
     const failedGoals = goalsAfter.filter(g => g.status === "failed")
     const passedGoals = goalsAfter.filter(g => g.status === "passed")
     const pendingGoals = goalsAfter.filter(g => g.status === "pending")
