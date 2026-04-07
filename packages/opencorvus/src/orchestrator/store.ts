@@ -221,6 +221,18 @@ export function findDeliveryByRun(runID: string) {
   )
 }
 
+/** Find the most recent delivery for a run, including goal-run deliveries. */
+export function findLatestDeliveryForRun(runID: string) {
+  return Database.use((db) =>
+    db
+      .select()
+      .from(OrchestratorDeliveryTable)
+      .where(eq(OrchestratorDeliveryTable.run_id, runID))
+      .orderBy(desc(OrchestratorDeliveryTable.time_created))
+      .get(),
+  )
+}
+
 export function findDeliveryByGoalRun(goalRunID: string) {
   return Database.use((db) =>
     db
@@ -731,6 +743,7 @@ export function viewGoal(row: GoalRow) {
     requirement_ids: row.requirement_ids,
     priority: row.priority,
     status: row.status,
+    retryCount: row.retry_count,
     orderIndex: row.order_index,
     time: {
       created: row.time_created,

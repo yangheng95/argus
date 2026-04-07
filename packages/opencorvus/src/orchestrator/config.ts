@@ -65,6 +65,8 @@ export interface OrchestratorConfigType {
   delivery: DeliveryConfig
   max_runs: number
   max_fix_runs: number
+  /** Max retries per individual goal. Goal permanently fails after this many retries. */
+  max_goal_retries: number
   max_executor_groups: number
   /** Default workflow ID for new tasks. Default: "standard". */
   default_workflow: string
@@ -109,6 +111,7 @@ const DEFAULTS: OrchestratorConfigType = {
   },
   max_runs: 10,
   max_fix_runs: 5,
+  max_goal_retries: 3,
   max_executor_groups: 2,
   default_workflow: "standard",
   workflows: [],
@@ -181,6 +184,7 @@ function merge(user?: Config.Info["assistant"]): OrchestratorConfigType {
     },
     max_runs: user?.max_runs ?? DEFAULTS.max_runs,
     max_fix_runs: user?.max_fix_runs ?? DEFAULTS.max_fix_runs,
+    max_goal_retries: user?.max_goal_retries ?? DEFAULTS.max_goal_retries,
     max_executor_groups: user?.max_executor_groups ?? DEFAULTS.max_executor_groups,
     default_workflow: user?.default_workflow ?? DEFAULTS.default_workflow,
     workflows: (user?.workflows ?? DEFAULTS.workflows).map(w => ({
