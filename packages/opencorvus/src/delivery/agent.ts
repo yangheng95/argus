@@ -74,9 +74,6 @@ export type DeliveryVerdictType = z.infer<typeof DeliveryVerdict>
 // DeliveryAgent
 // ---------------------------------------------------------------------------
 
-// deliveryTimeoutMs 已迁移到 OrchestratorConfig.delivery.timeout_ms
-// 环境变量 OPENCORVUS_DELIVERY_AGENT_TIMEOUT_MS 仍然生效（最高优先级）
-
 type VerifyInput = {
   task: { title: string; request: string; sessionID?: string; metadata?: Record<string, unknown> }
   goals: GoalInfo[]

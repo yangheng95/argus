@@ -14,7 +14,6 @@ function taskBudget(task: any = boardStore.board?.task): Budget | undefined {
   if (!budget || typeof budget !== "object") return undefined;
   return {
     maxRuns: Number.isFinite(budget.maxRuns) ? budget.maxRuns : undefined,
-    maxEvaluations: Number.isFinite(budget.maxEvaluations) ? budget.maxEvaluations : undefined,
     maxWallTimeMs: Number.isFinite(budget.maxWallTimeMs) ? budget.maxWallTimeMs : undefined,
     maxExecutorGroups: Number.isFinite(budget.maxExecutorGroups) ? budget.maxExecutorGroups : undefined,
   };
@@ -26,27 +25,18 @@ function setBudgetInputs(budget?: Budget): void {
     if (node) node.value = value;
   };
   setValue("budgetMaxRuns", budget?.maxRuns === undefined ? "" : String(budget.maxRuns));
-  setValue(
-    "budgetMaxEvaluations",
-    budget?.maxEvaluations === undefined ? "" : String(budget.maxEvaluations),
-  );
-  setValue(
-    "budgetMaxWallTime",
-    budget?.maxWallTimeMs === undefined ? "" : budgetMinutes(budget.maxWallTimeMs),
-  );
-  setValue(
-    "budgetMaxExecutorGroups",
-    budget?.maxExecutorGroups === undefined ? "" : String(budget.maxExecutorGroups),
-  );
+  setValue("budgetMaxWallTime", budget?.maxWallTimeMs === undefined ? "" : budgetMinutes(budget.maxWallTimeMs));
+  setValue("budgetMaxExecutorGroups", budget?.maxExecutorGroups === undefined ? "" : String(budget.maxExecutorGroups));
 }
 
-function configDefaults(): { maxRuns?: number; maxEvaluations?: number; maxWallTimeMs?: number; maxExecutorGroups?: number } {
+function configDefaults(): { maxRuns?: number; maxExecutorGroups?: number } {
   const orch = (appStore.config as any)?.assistant;
   if (!orch || typeof orch !== "object") return {};
+  // max_evaluations and max_wall_time_ms have no server-side defaults — they are
+  // purely per-task budget overrides. Only expose fields that OrchestratorConfig
+  // actually defines as defaults.
   return {
     maxRuns: Number.isFinite(orch.max_runs) ? orch.max_runs : undefined,
-    maxEvaluations: Number.isFinite(orch.max_evaluations) ? orch.max_evaluations : undefined,
-    maxWallTimeMs: Number.isFinite(orch.max_wall_time_ms) ? orch.max_wall_time_ms : undefined,
     maxExecutorGroups: Number.isFinite(orch.max_executor_groups) ? orch.max_executor_groups : undefined,
   };
 }
@@ -58,8 +48,7 @@ function setPlaceholders(): void {
     if (node) node.placeholder = value || t("budget.placeholder");
   };
   setPlaceholder("budgetMaxRuns", defaults.maxRuns != null ? String(defaults.maxRuns) : "");
-  setPlaceholder("budgetMaxEvaluations", defaults.maxEvaluations != null ? String(defaults.maxEvaluations) : "");
-  setPlaceholder("budgetMaxWallTime", defaults.maxWallTimeMs != null ? budgetMinutes(defaults.maxWallTimeMs) : "");
+  setPlaceholder("budgetMaxWallTime", "");
   setPlaceholder("budgetMaxExecutorGroups", defaults.maxExecutorGroups != null ? String(defaults.maxExecutorGroups) : "");
 }
 
@@ -86,7 +75,6 @@ function renderBudgetState(task: any = boardStore.board?.task): void {
   setPlaceholders();
   for (const input of [
     document.getElementById("budgetMaxRuns"),
-    document.getElementById("budgetMaxEvaluations"),
     document.getElementById("budgetMaxWallTime"),
     document.getElementById("budgetMaxExecutorGroups"),
   ]) {
@@ -155,11 +143,11 @@ export function installBudgetBindings(): void {
         await loadBoard({ sync: true });
       } else {
         // No task yet — persist as global default config for future tasks.
+        // Only max_runs and max_executor_groups are valid config fields.
+        // max_wall_time_ms is a per-task budget override, not a global default.
         await patchConfig({
           assistant: {
             max_runs: budget?.maxRuns ?? null,
-            max_evaluations: budget?.maxEvaluations ?? null,
-            max_wall_time_ms: budget?.maxWallTimeMs ?? null,
             max_executor_groups: budget?.maxExecutorGroups ?? null,
           },
         });

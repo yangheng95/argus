@@ -35,12 +35,13 @@ export const ConfigRoutes = lazy(() =>
       async (c) => {
         const [raw, orch] = await Promise.all([Config.get(), OrchestratorConfig.get()])
         // Merge effective scalar assistant values so the frontend can display correct defaults.
+        // Spread userAsst first so that the explicitly-computed ?? fallbacks always win.
         const userAsst = raw.assistant || {}
         const assistant = {
+          ...userAsst,
           max_runs: userAsst.max_runs ?? orch.max_runs,
           max_fix_runs: userAsst.max_fix_runs ?? orch.max_fix_runs,
           max_executor_groups: userAsst.max_executor_groups ?? orch.max_executor_groups,
-          ...userAsst,
         }
         return c.json({ ...raw, assistant })
       },

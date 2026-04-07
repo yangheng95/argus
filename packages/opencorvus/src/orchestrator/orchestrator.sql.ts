@@ -7,7 +7,6 @@ import type { ProtocolCapabilitiesInfo, ProtocolRefsInfo, ProtocolSettingsInfo }
 export type OrchestratorBudget = {
   max_runs?: number
   max_fix_runs?: number
-  max_evaluations?: number
   max_wall_time_ms?: number
   max_executor_groups?: number
 }
@@ -28,7 +27,7 @@ export type OrchestratorGoalPriority = "blocking" | "advisory"
 export type OrchestratorGoalStatus = "pending" | "running" | "passed" | "failed"
 export type OrchestratorMilestoneStatus = "pending" | "active" | "passed" | "failed"
 export type OrchestratorRunStatus = "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
-export type OrchestratorRunPhase = "plan" | "spec" | "execute" | "evaluate" | "deliver" | "replan" | "dispatch"
+export type OrchestratorRunPhase = "plan" | "execute" | "evaluate" | "deliver" | "dispatch" | "retry"
 export type OrchestratorInteractionType = "permission" | "question"
 export type OrchestratorInteractionStatus = "pending" | "answered" | "rejected" | "expired"
 

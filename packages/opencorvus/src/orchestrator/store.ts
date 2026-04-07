@@ -900,7 +900,6 @@ function budgetModel(input?: OrchestratorBudget | null) {
   if (!input) return undefined
   return {
     maxRuns: input.max_runs,
-    maxEvaluations: input.max_evaluations,
     maxWallTimeMs: input.max_wall_time_ms,
     maxExecutorGroups: input.max_executor_groups,
   }

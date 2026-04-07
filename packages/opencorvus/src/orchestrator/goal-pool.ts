@@ -44,7 +44,7 @@ import {
   persistDelivery,
   ensureExecutorSession,
 } from "./persist"
-import { OrchestratorGoalTable, OrchestratorEvaluationTable } from "./orchestrator.sql"
+import { OrchestratorGoalTable, OrchestratorEvaluationTable, OrchestratorPlanNodeTable } from "./orchestrator.sql"
 import { buildFixPrompt, goalRowToContract } from "./helpers"
 import { buildGoalPrompt, createGoalSession } from "@/goal/runner"
 import { registerGoalRunSession } from "@/server/routes/task-event"
@@ -299,6 +299,61 @@ export class GoalPool {
         }
       }
 
+      // ── 2c. Per-goal planning (mandatory — runs just before execution, not upfront) ──
+      // Planning is tightly coupled to execution: it runs inside the pool with the
+      // actual worktree available for codebase exploration. This ensures plans are
+      // accurate (not stale from an empty project) and happen lazily per-goal
+      // (not all 24 goals in parallel before any execution starts).
+      // Planning is NOT optional — failure propagates and the goal run fails.
+      let planNodeBrief: string
+      {
+        const allGoalsForPlan = listGoalsByPlan(plan.id)
+        const planContract: GoalContract = {
+          goal: goalRowToContract(entry.goal),
+          planNode: entry.node as any,
+          run, task, plan,
+          allGoals: allGoalsForPlan.map(goalRowToContract),
+        }
+        const planSession = await Session.createNext({
+          parentID: sessionID,
+          title: `Plan: ${entry.goal.title}`,
+          directory: Instance.directory,
+        })
+        registerGoalRunSession(planSession.id, task.id, "planner", entry.goal.id)
+        const planHooks = sessionStreamHooks({ sessionID: planSession.id, taskID: task.id, stage: "plan" })
+        try {
+          const { planGoal } = await import("@/planner/per-goal")
+          const plannerDL = createDecisionLog(task.id)
+          const planSteps = await planGoal({
+            contract: planContract,
+            decisionLog: plannerDL,
+            workDir: worktreeDir,
+            sessionID: planSession.id,
+            signal,
+            stream: {
+              onChunk: async (arg: any) => {
+                const chunk = (arg as any)?.chunk
+                if (chunk?.type === "text-delta") {
+                  if (planHooks.onChunk) await planHooks.onChunk({ chunk: { ...chunk, type: "reasoning-delta" } })
+                } else {
+                  if (planHooks.onChunk) await planHooks.onChunk(arg as any)
+                }
+              },
+              onError: planHooks.onError,
+            },
+          })
+          planNodeBrief = planSteps.brief
+          // Persist to plan node so buildGoalPrompt and the UI pick up the actual plan
+          Database.use(db => db.update(OrchestratorPlanNodeTable)
+            .set({ brief: planSteps.brief, time_updated: Date.now() })
+            .where(eq(OrchestratorPlanNodeTable.id, entry.node.id))
+            .run())
+          log.info("goal pool: per-goal plan created", { goalID: entry.goal.id, briefLen: planSteps.brief.length })
+        } finally {
+          await planHooks.flush()
+        }
+      }
+
       // ── 3. Create goal session ──
       const goalSession = await createGoalSession(task as any, entry.goal as any, worktreeDir)
 
@@ -322,7 +377,7 @@ export class GoalPool {
       const allGoals = listGoalsByPlan(plan.id)
       let prompt = buildGoalPrompt({
         plan: plan as any,
-        node: entry.node as any,
+        node: { ...entry.node, brief: planNodeBrief } as any,
         goal: entry.goal as any,
         taskRequest: plan.prompt,
         taskID: task.id,
@@ -510,7 +565,17 @@ export class GoalPool {
         decisionLog,
         sessionID: evalSession.id,
         signal,
-        stream: { onChunk: evalHooks.onChunk as any, onError: evalHooks.onError },
+        stream: {
+          onChunk: async (arg: any) => {
+            const chunk = (arg as any)?.chunk
+            if (chunk?.type === "text-delta") {
+              if (evalHooks.onChunk) await evalHooks.onChunk({ chunk: { ...chunk, type: "reasoning-delta" } })
+            } else {
+              if (evalHooks.onChunk) await evalHooks.onChunk(arg as any)
+            }
+          },
+          onError: evalHooks.onError,
+        },
       })
       await evalHooks.flush()
 

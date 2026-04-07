@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "en-US",
-    "panel_revision": "aebfbe3e8e91dc19"
+    "panel_revision": "3b3b546e86329c53"
   },
   "brand.guide_kicker": "Quick Guide",
   "brand.guide_positioning_body": "This is the task cockpit — left picks the task, center drives execution, right verifies spec, plan, evaluation, and file changes so the agent stays on track.",
@@ -84,7 +84,6 @@
   "budget.hint": "Configure budget for the next new task. Leave blank to use global defaults.",
   "budget.hint_readonly": "Budget is locked after a task has started and cannot be changed.",
   "budget.empty": "Select a task to configure its budget.",
-  "budget.max_evaluations": "Max Evaluations",
   "budget.max_runs": "Max Runs",
   "budget.max_wall_time": "Wall Time (Minutes)",
   "budget.max_executor_groups": "Goal Concurrency",
@@ -126,6 +125,7 @@
   "checks.verify_cmd": "Verify Command",
   "checks.visual": "Visual Check",
   "checks.zero_enabled": "None enabled",
+  "coding.empty": "Build agent — ask anything about the codebase",
   "common.active": "Active",
   "common.add": "Add",
   "common.cancel": "Cancel",

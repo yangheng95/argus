@@ -1253,22 +1253,15 @@ export namespace Config {
           delivery: z
             .object({
               max_steps: z.number().int().min(1).optional().describe("Maximum agentic steps for delivery agent (default: 40)"),
-              timeout_ms: z.number().int().min(1000).optional().describe("Delivery agent timeout in milliseconds (default: 600000). Also overridable via OPENCORVUS_DELIVERY_AGENT_TIMEOUT_MS env var"),
+              timeout_ms: z.number().int().min(1000).optional().describe("Delivery agent timeout in milliseconds (default: 600000)"),
               max_retries: z.number().int().min(0).optional().describe("Maximum delivery generation retries (default: 2)"),
               skills: z.array(z.string()).optional().describe("Additional skill paths for delivery agent"),
             })
             .optional()
             .describe("Delivery agent configuration"),
-          adaptive: z
-            .object({
-              enabled: z.boolean().optional().describe("Enable adaptive pipeline shortcuts (default: true)"),
-              planner_shortcut_max_steps: z.number().int().min(1).optional().describe("Max planner steps when goals are pre-provided (default: 15)"),
-            })
-            .optional()
-            .describe("Adaptive pipeline configuration"),
           max_runs: z.number().int().min(1).optional().describe("Maximum total task runs (default: 10)"),
           max_fix_runs: z.number().int().min(0).optional().describe("Maximum fix runs after failure (default: 5)"),
-          max_executor_groups: z.number().int().min(1).optional().describe("Maximum parallel executor groups (default: 1)"),
+          max_executor_groups: z.number().int().min(1).optional().describe("Maximum parallel executor groups (default: 2)"),
           default_workflow: z.string().optional().describe("Default workflow for new tasks: 'standard', 'quick-fix', 'plan-only', or custom ID (default: 'standard')"),
           workflows: z
             .array(

@@ -57,9 +57,9 @@ export async function planGoal(input: {
   if (signal?.aborted) throw new Error("planner aborted")
 
   const orchCfg = await OrchestratorConfig.get()
-  const planCfg = (orchCfg as any).plan ?? {}
-  const MAX_STEPS = planCfg.max_steps ?? 20
-  const TIMEOUT_MS = planCfg.timeout_ms ?? 180_000
+  const planCfg = orchCfg.planner
+  const MAX_STEPS = planCfg.max_steps
+  const TIMEOUT_MS = planCfg.timeout_ms
 
   const def = await Provider.defaultModel().catch(() => undefined)
   if (!def) throw new Error("no LLM model available for per-goal planner")
@@ -137,8 +137,8 @@ export async function planGoal(input: {
   )
 
   // Parse output — extract plan section or use full text
-  const planBrief = extractTag(allText, "plan") || extractTag(allText, "steps") || allText
-  const planTitle = extractTag(allText, "title") || goal.title
+  const planBrief = extractTag(allText, "plan_steps") || extractTag(allText, "plan") || extractTag(allText, "steps") || allText
+  const planTitle = extractTag(allText, "plan_title") || extractTag(allText, "title") || goal.title
 
   return {
     title: planTitle,
@@ -167,10 +167,10 @@ function buildPlannerSystem(): string {
     "- If the Decision Log has tech stack decisions, respect them",
     "",
     "Output format:",
-    "<title>Short plan title</title>",
-    "<plan>",
+    "<plan_title>Short plan title</plan_title>",
+    "<plan_steps>",
     "Step-by-step implementation plan...",
-    "</plan>",
+    "</plan_steps>",
   ].join("\n")
 }
 
@@ -227,7 +227,7 @@ function buildPlannerPrompt(
   const notes = operatorNotesSection(contract.task.id)
   if (notes) sections.push(notes)
 
-  sections.push("Now explore the codebase, then output your implementation plan using <title> and <plan> tags.")
+  sections.push("Now explore the codebase, then output your implementation plan using <plan_title> and <plan_steps> tags.")
 
   return sections.join("\n\n")
 }

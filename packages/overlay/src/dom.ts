@@ -133,7 +133,6 @@ export interface DomRefs {
   budgetHint: HTMLElement | null;
   budgetMaxRuns: HTMLInputElement | null;
   budgetMaxReplans: HTMLInputElement | null;
-  budgetMaxEvaluations: HTMLInputElement | null;
   budgetMaxWallTime: HTMLInputElement | null;
   btnBudgetReset: HTMLButtonElement | null;
   btnBudgetSave: HTMLButtonElement | null;
@@ -425,7 +424,6 @@ export function getDomRefs(): DomRefs {
     budgetHint: $<HTMLElement>("#budgetHint"),
     budgetMaxRuns: $<HTMLInputElement>("#budgetMaxRuns"),
     budgetMaxReplans: $<HTMLInputElement>("#budgetMaxReplans"),
-    budgetMaxEvaluations: $<HTMLInputElement>("#budgetMaxEvaluations"),
     budgetMaxWallTime: $<HTMLInputElement>("#budgetMaxWallTime"),
     btnBudgetReset: $<HTMLButtonElement>("#btnBudgetReset"),
     btnBudgetSave: $<HTMLButtonElement>("#btnBudgetSave"),

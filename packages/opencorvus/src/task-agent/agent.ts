@@ -386,20 +386,20 @@ function buildSystemPrompt(task: TaskRow, trigger: TaskAgentTrigger, workflow?: 
 
 1. **requirements** — Decompose the task into goal contracts. ALWAYS call this first.
 2. **architect** — Coordinate cross-goal interface contracts. REQUIRED for multi-goal tasks — call after requirements returns 2+ goals. Skip only for single-goal tasks (the tool will enforce this automatically).
-3. **goal** — Create run and plan goals (create_run, plan_goal for complex goals, then submit_execution).
-4. **exe** — Execute goals (execute_goal / dispatch_ready_goals). Wait for completion.
-5. **eval** — AUTOMATIC: infrastructure runs eval on each goal after execution. By the time you are re-triggered, all goals have verdict (passed/failed). You do NOT need to call eval_goal manually (use it only to re-evaluate after a retry).
-6. **deliver** — Aggregate and publish (deliver, then publish_delivery). Only when all blocking goals passed.
+3. **run** — Create run (create_run), then dispatch (submit_execution). The execution engine plans each goal automatically just before it executes — do NOT call plan_goal upfront for all goals.
+4. **eval** — AUTOMATIC: infrastructure runs eval on each goal after execution. By the time you are re-triggered, all goals have verdict (passed/failed). You do NOT need to call eval_goal manually (use it only to re-evaluate after a retry).
+5. **deliver** — Aggregate and publish (deliver, then publish_delivery). Only when all blocking goals passed.
 
-You have these tools: requirements, architect, plan_goal, execute_goal, eval_goal, add_goal, modify_goal,
+You have these tools: requirements, architect, execute_goal, eval_goal, add_goal, modify_goal,
 dispatch_ready_goals, retry_failed_goals, query_failed_goals, read_context, create_run,
 submit_execution, deliver, publish_delivery, fail_task, restart_from_stage.
+(Note: per-goal planning happens automatically inside the execution engine — no plan_goal tool needed.)
 
 **For new tasks:**
 - ALWAYS call requirements first to decompose the task into goals. No exceptions.
 - After requirements: ALWAYS call architect next if there are 2+ goals. It coordinates interface contracts that all executors depend on. Skip only when requirements returned exactly 1 goal.
-- Then create_run, then submit_execution.
-- You can plan individual goals with plan_goal if they're complex, or skip planning for simple ones.
+- Then create_run, then submit_execution. The execution engine plans each goal automatically.
+- Do NOT call plan_goal for goals upfront — planning is lazy and happens per-goal inside the execution engine, right before each goal executes.
 
 **After batch completes (re-triggered with batch_complete):**
 - FIRST: If any goals failed, call query_failed_goals to get structured per-goal
@@ -411,13 +411,18 @@ submit_execution, deliver, publish_delivery, fail_task, restart_from_stage.
 - Only proceed when ALL goals have terminal status (passed/failed).
 - Based on query_failed_goals output, REASON about each failure:
   - All blocking goals passed → deliver to aggregate, then publish_delivery
-  - Some failed → call retry_failed_goals with per_goal_analysis articulating
-    root_cause + failure_class + expected_fix for EVERY failed goal. The tool
-    schema enforces this — reflexive retry without analysis will be rejected.
+  - Some failed → **DEFAULT ACTION: autonomously fix and retry.** Call
+    retry_failed_goals with per_goal_analysis articulating root_cause +
+    failure_class + expected_fix for EVERY failed goal. The tool schema
+    enforces this — reflexive retry without analysis will be rejected.
   - Missing dependency discovered → add_goal to create the dependency, then
     retry_failed_goals (include the new goal's analysis if it was also failed).
   - Wrong contract for a specific goal → modify_goal, then execute_goal.
-  - Unrecoverable → fail_task with explanation.
+  - **ONLY use fail_task when the delivered code is empty, garbled, or
+    fundamentally unusable (e.g., no meaningful code produced, output is
+    random characters, or the executor produced nothing at all). All other
+    errors — logic bugs, test failures, missing imports, wrong approach —
+    MUST be fixed autonomously via retry_failed_goals.**
 - **NEVER call execute_goal on a passed goal.** Passed goals are terminal success
   state. To re-validate use eval_goal. To change contract use modify_goal.
 
@@ -432,7 +437,8 @@ submit_execution, deliver, publish_delivery, fail_task, restart_from_stage.
 - Use deliver + publish_delivery to complete (handles aggregation + git publish + task completion).
 - Terminal state (completed/failed/cancelled) → do nothing.
 - User messages in Operator Notes → acknowledge in your reasoning.
-- NEVER skip requirements or deliver stages.`)
+- NEVER skip requirements or deliver stages.
+- When executor delivers errors, your default response is to fix and retry — not to give up.`)
 
   return sections.join("\n")
 }

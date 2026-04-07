@@ -16,7 +16,6 @@ export const RUN_TERMINAL_STATUSES = ["blocked", "failed", "completed", "aborted
 export const Budget = z.object({
   maxRuns: z.number().int().positive().optional(),
   maxFixRuns: z.number().int().positive().optional(),
-  maxEvaluations: z.number().int().positive().optional(),
   maxWallTimeMs: z.number().int().positive().optional(),
   maxExecutorGroups: z.number().int().positive().optional(),
 })
@@ -295,7 +294,7 @@ export const Run = z.object({
   sessionID: Identifier.schema("session").nullable().optional(),
   executor: ExecutorName,
   status: z.enum(["queued", "accepted", "running", "blocked", "completed", "failed", "aborted"]),
-  phase: z.enum(["plan", "execute", "evaluate", "deliver", "replan"]),
+  phase: z.enum(["plan", "execute", "evaluate", "deliver", "dispatch", "retry"]),
   blockingReason: z.string().optional(),
   error: z.string().optional(),
   retryCount: z.number().int(),

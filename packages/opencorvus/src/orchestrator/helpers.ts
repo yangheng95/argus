@@ -48,8 +48,6 @@ export interface FixContext {
   }>
 }
 
-/** @deprecated Use FixContext instead */
-export type RetryContext = FixContext
 
 export function buildFixPrompt(summary: string, context?: FixContext) {
   if (!context) {
@@ -108,8 +106,6 @@ export function buildFixPrompt(summary: string, context?: FixContext) {
   return sections.join("\n\n")
 }
 
-/** @deprecated Use buildFixPrompt instead */
-export const buildRetryPrompt = buildFixPrompt
 
 export function buildOperatorPrompt(note: string) {
   return [
@@ -132,7 +128,6 @@ export function budgetRow(input?: z.infer<typeof Budget>): OrchestratorBudget | 
   return {
     max_runs: input.maxRuns,
     max_fix_runs: input.maxFixRuns,
-    max_evaluations: input.maxEvaluations,
     max_wall_time_ms: input.maxWallTimeMs,
     max_executor_groups: input.maxExecutorGroups,
   }
@@ -140,7 +135,7 @@ export function budgetRow(input?: z.infer<typeof Budget>): OrchestratorBudget | 
 
 /**
  * Resolve the effective max executor groups for a task.
- * Priority: task budget > config (env + jsonc) > hardcoded default (1).
+ * Priority: task budget > config (env + jsonc) > hardcoded default (2).
  */
 export function effectiveMaxExecutorGroups(task: TaskRow): number {
   const budgetMax = (task.budget as OrchestratorBudget | null)?.max_executor_groups

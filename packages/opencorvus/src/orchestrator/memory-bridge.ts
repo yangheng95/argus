@@ -1,7 +1,7 @@
 import { Memory } from "@/memory"
 import { Instance } from "@/project/instance"
 import { Log } from "@/util/log"
-import type { RetryContext } from "./helpers"
+import type { FixContext } from "./helpers"
 
 const log = Log.create({ service: "orchestrator-memory-bridge" })
 
@@ -125,7 +125,7 @@ export namespace OrchestratorMemoryBridge {
     task: TaskRow
     run: RunRow
     summary: string
-    retryContext?: RetryContext
+    retryContext?: FixContext
   }) {
     const { task, run, summary, retryContext } = input
     try {
