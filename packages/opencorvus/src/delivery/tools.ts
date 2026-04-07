@@ -1,13 +1,14 @@
 /**
  * Tool set for the DeliveryAgent.
  *
- * Read-only verification tools for final acceptance checking.
- * The delivery agent verifies runtime behavior and quality but does NOT
- * modify files. If issues are found, it rejects with structured context
- * so a new executor run can fix them.
+ * Includes exploration tools, execution tools, write tools, and memory tools.
+ * The delivery agent verifies runtime behavior, fixes issues found during
+ * verification, and makes the final acceptance decision.
  */
 import { tool } from "ai"
 import z from "zod"
+import fs from "fs/promises"
+import path from "path"
 import { createCodebaseTools } from "@/orchestrator/codebase-tools"
 import { Memory } from "@/memory"
 import { Instance } from "@/project/instance"
@@ -21,7 +22,8 @@ const log = Log.create({ service: "delivery-tools" })
  * Creates the tool set for the DeliveryAgent.
  *
  * Includes:
- * - 4 codebase tools: read_file, find_files, search_code, list_directory
+ * - 4 codebase read tools: read_file, find_files, search_code, list_directory
+ * - 2 write tools: write_file, edit_file (for rework during verification)
  * - 2 memory tools: memory_search, memory_write
  * - 1 execution tool: run_command (for builds, startup checks)
  */
@@ -88,6 +90,63 @@ export function createDeliveryTools(input?: { sessionID?: string }) {
         } catch (err) {
           log.warn("memory write failed in delivery agent", { title, err })
           return "Memory write failed."
+        }
+      },
+    }),
+
+    write_file: tool({
+      description:
+        "Write content to a file in the project directory. Creates the file if it does not exist, " +
+        "overwrites it if it does. Use to fix issues found during verification — apply minimal targeted " +
+        "edits only. Always re-run the relevant check after writing to confirm the fix.",
+      inputSchema: z.object({
+        file_path: z.string().describe("Path relative to project root (e.g. src/app.ts)"),
+        content: z.string().describe("Full file content to write"),
+      }),
+      execute: async ({ file_path, content }) => {
+        const abs = path.resolve(projectDir, file_path)
+        if (!Filesystem.contains(projectDir, abs)) {
+          return `Error: path escapes project root — ${file_path}`
+        }
+        try {
+          await fs.mkdir(path.dirname(abs), { recursive: true })
+          await fs.writeFile(abs, content, "utf8")
+          log.info("delivery agent wrote file", { file_path })
+          return `Written: ${file_path} (${content.length} chars)`
+        } catch (e) {
+          log.warn("write_file failed in delivery agent", { file_path, err: e })
+          return `Error writing ${file_path}: ${e instanceof Error ? e.message : String(e)}`
+        }
+      },
+    }),
+
+    edit_file: tool({
+      description:
+        "Replace an exact string in a file. The old_string must match exactly (including whitespace). " +
+        "Use for surgical fixes — prefer this over write_file when changing a small section. " +
+        "Always re-run the relevant check after editing to confirm the fix.",
+      inputSchema: z.object({
+        file_path: z.string().describe("Path relative to project root"),
+        old_string: z.string().describe("Exact text to find and replace"),
+        new_string: z.string().describe("Replacement text"),
+      }),
+      execute: async ({ file_path, old_string, new_string }) => {
+        const abs = path.resolve(projectDir, file_path)
+        if (!Filesystem.contains(projectDir, abs)) {
+          return `Error: path escapes project root — ${file_path}`
+        }
+        try {
+          const original = await fs.readFile(abs, "utf8")
+          if (!original.includes(old_string)) {
+            return `Error: old_string not found in ${file_path} — verify whitespace and content match exactly`
+          }
+          const updated = original.replace(old_string, new_string)
+          await fs.writeFile(abs, updated, "utf8")
+          log.info("delivery agent edited file", { file_path })
+          return `Edited: ${file_path}`
+        } catch (e) {
+          log.warn("edit_file failed in delivery agent", { file_path, err: e })
+          return `Error editing ${file_path}: ${e instanceof Error ? e.message : String(e)}`
         }
       },
     }),

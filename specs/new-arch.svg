@@ -90,12 +90,11 @@
   <text class="body" x="455" y="318">→ steps (无 recommended)</text>
   <line class="agent-conn" x1="460" y1="150" x2="455" y2="252"/>
 
-  <rect class="sub-agent" x="540" y="254" width="150" height="70"/>
-  <text class="h2" x="615" y="274">Eval Agent</text>
-  <text class="body" x="615" y="290">autonomous 推断测试</text>
-  <text class="body" x="615" y="304">verdict + evidence</text>
-  <text class="body" x="615" y="318">→ verdict (无 recommended)</text>
-  <line class="agent-conn" x1="600" y1="150" x2="615" y2="252"/>
+  <rect class="infra" x="540" y="254" width="150" height="70"/>
+  <text class="h2" x="615" y="274">Deterministic Eval</text>
+  <text class="body" x="615" y="290">build+test runner</text>
+  <text class="body" x="615" y="304">exit code → pass/fail</text>
+  <text class="body" x="615" y="318">no LLM, no inference</text>
 
   <rect class="agent" x="700" y="254" width="210" height="70"/>
   <text class="h2" x="805" y="274">Executor (外部)</text>
@@ -106,7 +105,7 @@
   <!-- Decision Log (shared) -->
   <rect class="log" x="60" y="336" width="850" height="54"/>
   <text class="h2" x="485" y="354">Decision Log — 全局共享上下文 (append-only, all agents R/W, DI 注入)</text>
-  <text class="ltag" x="72" y="378">Requirements seeds: runtime, stack · Architect writes: 接口契约, 目录蓝图, 导出清单, 命名规范 · Eval appends: test cmds · 传 WHY 不只 WHAT</text>
+  <text class="ltag" x="72" y="378">Requirements seeds: runtime, stack · Architect writes: 接口契约, 目录蓝图, 导出清单, 命名规范 · 传 WHY 不只 WHAT</text>
 
   <!-- ═══════════════════════════════════════════════════════════════ -->
   <!--  PARALLEL GOAL EXECUTION — core visualization                   -->
@@ -126,7 +125,7 @@
   <text class="body" x="150" y="528">Executor · worktree #1</text>
   <line class="arrow" x1="150" y1="538" x2="150" y2="550"/>
   <rect class="sub-agent" x="72" y="552" width="156" height="28"/>
-  <text class="body" x="150" y="570">Eval Agent → verdict</text>
+  <text class="body" x="150" y="570">Eval (exit code)</text>
   <text class="body" x="150" y="600" style="fill:#16a34a">merge → HEAD ↑</text>
 
   <rect class="col" x="260" y="456" width="180" height="160"/>
@@ -137,7 +136,7 @@
   <text class="body" x="350" y="528">Executor · worktree #2</text>
   <line class="arrow" x1="350" y1="538" x2="350" y2="550"/>
   <rect class="sub-agent" x="272" y="552" width="156" height="28"/>
-  <text class="body" x="350" y="570">Eval Agent → verdict</text>
+  <text class="body" x="350" y="570">Eval (exit code)</text>
   <text class="body" x="350" y="600" style="fill:#16a34a">merge → HEAD ↑</text>
 
   <!-- Layer 0 → Layer 1 arrow -->
@@ -157,7 +156,7 @@
   <text class="body" x="150" y="734">Executor · worktree #3</text>
   <line class="arrow" x1="150" y1="744" x2="150" y2="756"/>
   <rect class="sub-agent" x="72" y="758" width="156" height="28"/>
-  <text class="body" x="150" y="776">Eval Agent → verdict</text>
+  <text class="body" x="150" y="776">Eval (exit code)</text>
 
   <rect class="col" x="260" y="662" width="180" height="140"/>
   <rect class="sub-agent" x="272" y="674" width="156" height="28"/>
@@ -167,7 +166,7 @@
   <text class="body" x="350" y="734">Executor · worktree #4</text>
   <line class="arrow" x1="350" y1="744" x2="350" y2="756"/>
   <rect class="sub-agent" x="272" y="758" width="156" height="28"/>
-  <text class="body" x="350" y="776">Eval Agent → verdict</text>
+  <text class="body" x="350" y="776">Eval (exit code)</text>
 
   <text class="h1" x="490" y="734" style="fill:#94a3b8">···</text>
 
@@ -179,7 +178,7 @@
   <text class="body" x="620" y="734">Executor · worktree #N</text>
   <line class="arrow" x1="620" y1="744" x2="620" y2="756"/>
   <rect class="sub-agent" x="542" y="758" width="156" height="28"/>
-  <text class="body" x="620" y="776">Eval Agent → verdict</text>
+  <text class="body" x="620" y="776">Eval (exit code)</text>
 
   <!-- Dependency arrows layer 0 → layer 1 -->
   <line class="dep" x1="150" y1="616" x2="150" y2="662"/>
@@ -234,14 +233,12 @@
   <text class="mono" x="980" y="198">  architect/agent.ts              Architect Agent: cross-goal 共识协调 (自有 LLM + tools)</text>
   <text class="mono" x="980" y="212">  architect/output-tools.ts        Zod 结构化注册工具: register_contract (TypeScript 代码验证)</text>
   <text class="mono" x="980" y="228">  planner/per-goal.ts             Planner Agent: per-goal 实现, 消费 architect 输出 (自有 LLM)</text>
-  <text class="mono" x="980" y="244">  evaluator/per-goal.ts           Eval Agent: autonomous eval (自有 LLM + run_command)</text>
-
   <text class="mono-h" x="980" y="238">EXTERNAL AGENT (外部, 不受我们控制)</text>
   <text class="mono" x="980" y="258">  executor/                       opencode / claude-code / codex adapters</text>
 
   <text class="mono-h" x="980" y="286">INFRASTRUCTURE (无 LLM, 无决策, 纯机械)</text>
   <text class="mono" x="980" y="306">  orchestrator/task-loop.ts       Task Control Loop: Decision → GoalPool → collect → repeat (单入口)</text>
-  <text class="mono" x="980" y="322">  orchestrator/goal-pool.ts       GoalPool: queue-based concurrent execution + auto-eval + drain</text>
+  <text class="mono" x="980" y="322">  orchestrator/goal-pool.ts       GoalPool: concurrent execution + deterministic-eval (exit code) + drain</text>
   <text class="mono" x="980" y="338">  pipeline/executor.ts            Goal pipeline: worktree + executor + delivery extraction (async generator)</text>
   <text class="mono" x="980" y="354">  goal/merge.ts                   Serialized merge + commit + HEAD advance</text>
   <text class="mono" x="980" y="370">  goal/scheduler.ts               Dependency DAG → layer computation (utility)</text>
@@ -261,7 +258,7 @@
   <text class="mono" x="980" y="562">   infrastructure 只执行, 不决策, 不自动 dispatch.</text>
 
   <text class="mono-h" x="980" y="584">2. Sub-agents 是 agent, 不是 tool</text>
-  <text class="mono" x="980" y="600">   Requirements/Planner/Eval 各有自己的 LLM + tools + 推理循环.</text>
+  <text class="mono" x="980" y="600">   Requirements/Planner/Delivery 各有自己的 LLM + tools + 推理循环.</text>
   <text class="mono" x="980" y="616">   它们返回结构化结果, Task Agent 据此推理下一步.</text>
 
   <text class="mono-h" x="980" y="638">3. Goal 并行执行, 依赖驱动调度</text>
@@ -303,13 +300,13 @@
   <text class="h3" x="40" y="78">DB 表 (唯一写入者)</text>
   <text class="mono" x="40" y="98">task             writer: Task Agent              status(queued|active|completed|failed|cancelled)</text>
   <text class="mono" x="40" y="114">goal             writer: Requirements Agent (创建) / Task Agent (add/modify) / Infrastructure (eval 后写状态)</text>
-  <text class="mono" x="40" y="130">                 status: pending → running (Infrastructure dispatch lock) → passed|failed (Infrastructure auto-eval 后写入)</text>
-  <text class="mono" x="40" y="146">                 Goal 状态锁: executor 完成后 Infrastructure 自动跑 Eval Agent, eval 完成才解锁 goal.status 为终态.</text>
+  <text class="mono" x="40" y="130">                 status: pending → running (Infrastructure dispatch lock) → passed|failed (deterministic eval 后写入)</text>
+  <text class="mono" x="40" y="146">                 Goal 状态锁: executor 完成后 Infrastructure 自动跑 deterministic eval (exit code), 完成才解锁 goal.status 为终态.</text>
   <text class="mono" x="40" y="162">run              writer: Task Agent              per-task execution run</text>
   <text class="mono" x="40" y="178">goal_run         writer: Infrastructure          per-goal execution instance (status: queued→running→completed|failed)</text>
   <text class="mono" x="40" y="194">plan_node        writer: Planner Agent           per-goal implementation steps</text>
   <text class="mono" x="40" y="210">delivery         writer: Infrastructure          per-goal delivery (diffs)</text>
-  <text class="mono" x="40" y="226">evaluation       writer: Infrastructure (auto-eval) / Eval Agent (manual re-eval via eval_goal)  per-goal verdict + evidence; 按 task_id + goal_run_id 双索引</text>
+  <text class="mono" x="40" y="226">evaluation       writer: Infrastructure (deterministic eval) / Task Agent (manual re-eval via eval_goal)  per-goal verdict + evidence; 按 task_id + goal_run_id 双索引</text>
   <text class="mono" x="40" y="242">decision_log     writer: ALL agents (append)     shared context — Architect 是主要写入者 (接口契约·目录蓝图·导出清单)</text>
 
   <!-- Task Agent actions -->
@@ -352,13 +349,13 @@
   <text class="mono" x="40" y="770">Phase 2: State Check — 读取 task/run/plan 状态, 检查 goals 是否需要执行</text>
   <text class="mono" x="40" y="786">Phase 3: GoalPool — queue-based execution, await pool.drain()</text>
   <text class="mono" x="40" y="802">  submit: ready goals (依赖满足) → queue → auto-fill slots (up to concurrency)</text>
-  <text class="mono" x="40" y="818">  per-goal: worktree → session → executor → pipeline → merge → cleanup → eval</text>
+  <text class="mono" x="40" y="818">  per-goal: worktree → session → executor → pipeline → merge → cleanup → deterministic-eval</text>
   <text class="mono" x="40" y="834">  drain: 阻塞直到 queue 空 + 所有 slots idle → 返回 GoalResult[]</text>
   <text class="mono" x="40" y="850">Phase 4: Collect Results → 构建 batch_complete trigger (summary: passed/failed/total) → loop back</text>
 
   <text class="mono-h" x="40" y="878">GoalPool 内部 (goal-pool.ts):</text>
   <text class="mono" x="40" y="894">  • 每个 goal 独立 worktree, session, executor 实例, pipeline</text>
-  <text class="mono" x="40" y="910">  • goal 完成 → auto-eval (per-goal evaluateGoal) → verdict → 释放 slot</text>
+  <text class="mono" x="40" y="910">  • goal 完成 → deterministic-eval (Shell.run exit code) → verdict → 释放 slot</text>
   <text class="mono" x="40" y="926">  • slot 释放 → auto-fill 从 queue 取下一个 ready goal (依赖重新检查)</text>
   <text class="mono" x="40" y="942">  • 不活动超时 (GOAL_STALL_MS, 30min) — 日志告警, pipeline 自身超时处理</text>
 
@@ -381,7 +378,7 @@
   <text class="mono" x="40" y="1086">• 收到 task → "这是 typo fix, 不需要 requirements" → create_run → execute_goal</text>
   <text class="mono" x="40" y="1102">• requirements 返回 5 goals, recommended_next=[architect] → "多 goal, 需要共识" → architect(goalIDs)</text>
   <text class="mono" x="40" y="1118">• architect 完成 → create_run → submit_execution (dispatch 所有依赖满足的 goals)</text>
-  <text class="mono" x="40" y="1134">• batch 完成 → auto-eval 已完成, 2 passed + 1 failed → read_context 拿 evidence → retry_failed_goals("fix bug") 或 execute_goal(failed_goal_id)</text>
+  <text class="mono" x="40" y="1134">• batch 完成 → deterministic eval 已完成, 2 passed + 1 failed → read_context 拿 evidence → retry_failed_goals("fix bug") 或 execute_goal(failed_goal_id)</text>
   <text class="mono" x="40" y="1150">• 全部 goal passed → deliver() → publish_delivery()</text>
   </g>
 
