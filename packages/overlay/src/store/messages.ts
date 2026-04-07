@@ -619,9 +619,12 @@ function computeAgentCards(): { cards: Record<string, AgentCardMessage>; order: 
   // Build sessionID→goalID + goalID→info maps from board data
   const sessionToGoal = new Map<string, string>();
   const goalInfoMap = new Map<string, { id: string; title: string; status: string }>();
+  const goalIndexMap = new Map<string, number>();
 
-  for (const gw of boardStore.board?.goalWorkflows || []) {
+  for (let i = 0; i < (boardStore.board?.goalWorkflows || []).length; i++) {
+    const gw = boardStore.board!.goalWorkflows![i];
     goalInfoMap.set(gw.goalID, { id: gw.goalID, title: gw.goalTitle, status: gw.goalStatus });
+    goalIndexMap.set(gw.goalID, i + 1);
   }
   const goalsLane = (boardStore.board?.lanes || []).find((l: any) => l.id === "goals");
   for (const card of goalsLane?.cards || []) {
@@ -775,7 +778,7 @@ function computeAgentCards(): { cards: Record<string, AgentCardMessage>; order: 
       _agentInternalCards: entries.map(e => e.card),
       _agentStage: "executor",
       _agentStatus: groupStatus,
-      _agentRound: 0,
+      _agentRound: goalIndexMap.get(gid) ?? 0,
       _agentCardKey: groupKey,
       _agentMessages: [],
       info: {
