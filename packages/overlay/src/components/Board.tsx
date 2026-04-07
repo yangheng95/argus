@@ -1294,11 +1294,11 @@ export function Board(props: BoardProps) {
           badgeText={
             requirements()?.length
               ? String(requirements()!.length)
-              : spec()
+              : isRequirementsGenerating()
                 ? t("common.active")
                 : ""
           }
-          badgeTone={requirements()?.length || spec() ? "accent" : ""}
+          badgeTone={requirements()?.length || isRequirementsGenerating() ? "accent" : ""}
         >
           <Show
             when={requirements() || isRequirementsGenerating() || requirementsMessages().length > 0}

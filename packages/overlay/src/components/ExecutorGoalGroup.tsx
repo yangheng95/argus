@@ -23,6 +23,8 @@ interface ExecutorGoalGroupProps {
   status: string;
   /** Per-stage child cards: each has _agentStage and _agentMessages */
   internalCards?: any[];
+  /** 1-based index of this goal in the goals list (mirrors GoalWorkflowGroup #N) */
+  goalIndex?: number;
 }
 
 /** Canonical step order for per-goal stages */
@@ -126,6 +128,9 @@ export function ExecutorGoalGroup(props: ExecutorGoalGroupProps) {
           <span class={badgeClass()} title={props.status}>
             {badgeContent()}
           </span>
+        </Show>
+        <Show when={(props.goalIndex ?? 0) > 0}>
+          <span class="agent-card-round">#{props.goalIndex}</span>
         </Show>
         <span class="executor-goal-label">{props.goalTitle || "Goal"}</span>
         <span class="executor-goal-chevron" aria-hidden="true">{"\u25BC"}</span>

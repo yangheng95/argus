@@ -57,6 +57,7 @@ export function Conversation(props: { container: HTMLElement }) {
               goalStatus={item()._agentGoalStatus}
               status={item()._agentStatus}
               internalCards={item()._agentInternalCards}
+              goalIndex={item()._agentRound || 0}
             />
           </Show>
         )}

@@ -1,25 +1,36 @@
 // ── CodingTab Component ──
 // Solid.js port of the Coding tab.
-// Renders using the same .msg / .agent-card CSS classes as the Conversation
-// component so that Build mode messages get the same card treatment as task mode.
+// Uses createStore for fine-grained reactive updates so that <For> can track
+// list items by reference and TextPart's streaming state is preserved across
+// delta events — same pattern as the task-mode message store.
 
 import {
-  createSignal,
+  createMemo,
   onCleanup,
   For,
   Show,
-  createMemo,
+  Switch,
+  Match,
 } from "solid-js";
+import { createStore, produce } from "solid-js/store";
 import { setupAutoScroll } from "../utils/dom-utils";
 import { apiUrl, apiHeaders } from "../services/api";
-import { TextPart } from "./TextPart";
-import { stripAnsi, displayToolIcon, toolStatusLabel } from "../utils/tool";
+import { TextPart, StaticTextPart } from "./TextPart";
+import { ReasoningPart, isEmptyReasoning } from "./ReasoningPart";
+import {
+  stripAnsi,
+  displayToolIcon,
+  displayToolDetail,
+  toolStatusLabel,
+  shortRelativePath,
+} from "../utils/tool";
 import {
   agentCardExpanded,
   toggleAgentCardExpanded,
   toggleToolOutputExpanded,
   toolOutputExpanded,
 } from "../store/conversation-ui";
+import { activeDirectory } from "../store/board";
 import { t } from "../utils/i18n";
 import { agentStageLabel } from "../utils/message";
 
@@ -31,18 +42,35 @@ interface CodingTextPart {
   _partID?: string;
 }
 
-interface CodingToolPart {
-  type: "tool";
-  tool: string;
-  state?: {
-    status?: "running" | "completed" | "error";
-    title?: string;
-    output?: string;
-  };
+interface CodingReasoningPart {
+  type: "reasoning";
+  text: string;
   _partID?: string;
 }
 
-type CodingPart = CodingTextPart | CodingToolPart;
+interface CodingToolState {
+  status: "pending" | "running" | "completed" | "error";
+  title?: string;
+  input?: Record<string, any>;
+  output?: string;
+  error?: string;
+  raw?: string;
+}
+
+interface CodingToolPart {
+  type: "tool";
+  tool: string;
+  state: CodingToolState;
+  _partID?: string;
+}
+
+interface CodingPatchPart {
+  type: "patch";
+  files: string[];
+  _partID?: string;
+}
+
+type CodingPart = CodingTextPart | CodingReasoningPart | CodingToolPart | CodingPatchPart;
 
 interface CodingUserMessage {
   role: "user";
@@ -60,15 +88,7 @@ type CodingMessage = CodingUserMessage | CodingAssistantMessage;
 // ── Component ──
 
 export interface CodingTabProps {
-  /**
- * Whether this tab is currently active (visible).
- * When false the scroll container is hidden.
- */
   active: boolean;
-  /**
-   * Called once on mount with the coding tab's API so the parent can wire
-   * ChatComposer to route messages into this tab when in coding mode.
-   */
   onReady?: (api: CodingTabAPI) => void;
 }
 
@@ -79,151 +99,175 @@ export interface CodingTabAPI {
 }
 
 export function CodingTab(props: CodingTabProps) {
- // ── State ──
+// ── Store (fine-grained, same pattern as messageStore) ──
 
-  const [sessionID, setSessionID] = createSignal<string | null>(null);
-  const [messages, setMessages] = createSignal<CodingMessage[]>([]);
-  const [busy, setBusy] = createSignal(false);
+  const [store, setStore] = createStore({
+    messages: [] as CodingMessage[],
+    sessionID: null as string | null,
+    busy: false,
+  });
 
- // partID → accumulated text (mirrors coding.textBuffer)
-  let textBuffer = new Map<string, string>();
+  const busy = () => store.busy;
+
   let abortController: AbortController | null = null;
 
-  // Expose API to parent so ChatComposer can route messages here
   props.onReady?.({
     send: (text: string) => void sendCodingMessage(text),
     stop: () => abortController?.abort(),
     busy,
   });
 
- // ── handleCodingEvent (
+// ── handleCodingEvent ──
 
-  function handleCodingEvent(
-    msgIndex: number,
-    event: Record<string, any>,
-  ) {
+  function handleCodingEvent(msgIndex: number, event: Record<string, any>) {
     if (event.type === "session") {
-      setSessionID(event.sessionID ?? null);
+      setStore("sessionID", event.sessionID ?? null);
       return;
     }
+
     if (event.type === "delta") {
-      const current = textBuffer.get(event.partID) ?? "";
-      const next = current + (event.delta ?? "");
-      textBuffer.set(event.partID, next);
-      setMessages((prev) => {
-        const updated = prev.map((m, i) => {
-          if (i !== msgIndex || m.role !== "assistant") return m;
-          const parts = (m as CodingAssistantMessage).parts.map((p) => {
-            if (p.type === "text" && p._partID === event.partID) {
-              return { ...p, text: next } as CodingTextPart;
-            }
-            return p;
-          });
-          const hasPart = parts.some(
-            (p) => p.type === "text" && p._partID === event.partID,
-          );
-          if (!hasPart) {
-            parts.push({
-              type: "text",
-              text: next,
-              _partID: event.partID,
-            } as CodingTextPart);
-          }
-          return { ...m, parts } as CodingAssistantMessage;
-        });
-        return updated;
-      });
-      return;
-    }
-    if (event.type === "part") {
-      const p = event.part;
-      if (p?.type === "tool") {
-        setMessages((prev) =>
-          prev.map((m, i) => {
-            if (i !== msgIndex || m.role !== "assistant") return m;
-            const existing = (m as CodingAssistantMessage).parts.find(
-              (x) => x.type === "tool" && x._partID === p.id,
-            );
-            if (!existing) {
-              return {
-                ...m,
-                parts: [
-                  ...(m as CodingAssistantMessage).parts,
-                  {
-                    type: "tool",
-                    tool: p.tool,
-                    state: p.state,
-                    _partID: p.id,
-                  } as CodingToolPart,
-                ],
-              } as CodingAssistantMessage;
-            }
-            return {
-              ...m,
-              parts: (m as CodingAssistantMessage).parts.map((x) =>
-                x.type === "tool" && x._partID === p.id
-                  ? { ...x, state: p.state, tool: p.tool }
-                  : x,
-              ),
-            } as CodingAssistantMessage;
+      const field: string = event.field ?? "text";
+      const partID: string = event.partID;
+      const delta: string = event.delta ?? "";
+
+      const parts = (store.messages[msgIndex] as CodingAssistantMessage)?.parts;
+      if (!parts) return;
+
+      if (field === "raw") {
+        const partIdx = parts.findIndex(
+          (p) => p.type === "tool" && (p as CodingToolPart)._partID === partID,
+        );
+        if (partIdx < 0) return;
+        setStore("messages", msgIndex, "parts", partIdx, "state", "raw",
+          (prev: string | undefined) => (prev ?? "") + delta,
+        );
+        return;
+      }
+
+      // field === "text"
+      const partIdx = parts.findIndex(
+        (p) => (p.type === "text" || p.type === "reasoning") && p._partID === partID,
+      );
+      if (partIdx >= 0) {
+        setStore("messages", msgIndex, "parts", partIdx, "text",
+          (prev: string | undefined) => (prev ?? "") + delta,
+        );
+      } else {
+        setStore("messages", msgIndex, "parts",
+          produce((ps: CodingPart[]) => {
+            ps.push({ type: "text", text: delta, _partID: partID } as CodingTextPart);
           }),
         );
       }
       return;
     }
+
+    if (event.type === "part") {
+      const p = event.part;
+      if (!p) return;
+
+      if (p.type === "tool") {
+        const parts = (store.messages[msgIndex] as CodingAssistantMessage)?.parts;
+        if (!parts) return;
+        const partIdx = parts.findIndex(
+          (x) => x.type === "tool" && (x as CodingToolPart)._partID === p.id,
+        );
+        if (partIdx >= 0) {
+          setStore("messages", msgIndex, "parts", partIdx, "state", p.state);
+          setStore("messages", msgIndex, "parts", partIdx, "tool", p.tool);
+        } else {
+          setStore("messages", msgIndex, "parts",
+            produce((ps: CodingPart[]) => {
+              ps.push({
+                type: "tool",
+                tool: p.tool,
+                state: p.state ?? { status: "pending", input: {}, raw: "" },
+                _partID: p.id,
+              } as CodingToolPart);
+            }),
+          );
+        }
+        return;
+      }
+
+      if (p.type === "reasoning") {
+        const parts = (store.messages[msgIndex] as CodingAssistantMessage)?.parts;
+        if (!parts) return;
+        const partIdx = parts.findIndex((x) => x._partID === p.id);
+        if (partIdx >= 0) {
+          // Upgrade existing placeholder to reasoning
+          setStore("messages", msgIndex, "parts", partIdx, "type", "reasoning");
+        } else {
+          setStore("messages", msgIndex, "parts",
+            produce((ps: CodingPart[]) => {
+              ps.push({ type: "reasoning", text: p.text ?? "", _partID: p.id } as CodingReasoningPart);
+            }),
+          );
+        }
+        return;
+      }
+
+      if (p.type === "patch") {
+        const files: string[] = p.files ?? [];
+        if (files.length === 0) return;
+        const parts = (store.messages[msgIndex] as CodingAssistantMessage)?.parts;
+        if (!parts) return;
+        const partIdx = parts.findIndex((x) => x._partID === p.id);
+        if (partIdx >= 0) {
+          setStore("messages", msgIndex, "parts", partIdx, "files", files);
+        } else {
+          setStore("messages", msgIndex, "parts",
+            produce((ps: CodingPart[]) => {
+              ps.push({ type: "patch", files, _partID: p.id } as CodingPatchPart);
+            }),
+          );
+        }
+        return;
+      }
+
+      return;
+    }
+
     if (event.type === "error") {
       const errorText = event.error?.message ?? JSON.stringify(event.error);
-      setMessages((prev) =>
-        prev.map((m, i) => {
-          if (i !== msgIndex || m.role !== "assistant") return m;
-          return {
-            ...m,
-            parts: [
-              ...(m as CodingAssistantMessage).parts,
-              { type: "text", text: `Error: ${errorText}` } as CodingTextPart,
-            ],
-          } as CodingAssistantMessage;
+      setStore("messages", msgIndex, "parts",
+        produce((ps: CodingPart[]) => {
+          ps.push({ type: "text", text: `Error: ${errorText}` } as CodingTextPart);
         }),
       );
       return;
     }
+
     if (event.type === "done") {
-      textBuffer.clear();
+      setStore("messages", msgIndex, "streaming", false);
     }
   }
 
- // ── sendCodingMessage (
+// ── sendCodingMessage ──
 
   async function sendCodingMessage(text: string) {
-    if (busy() || !text.trim()) return;
-    setBusy(true);
-    textBuffer.clear();
+    if (store.busy || !text.trim()) return;
+    setStore("busy", true);
 
- // Add user message + assistant placeholder
-    setMessages((prev) => [
-      ...prev,
-      { role: "user", text } as CodingUserMessage,
-      { role: "assistant", parts: [], streaming: true } as CodingAssistantMessage,
-    ]);
+    setStore("messages",
+      produce((msgs: CodingMessage[]) => {
+        msgs.push({ role: "user", text } as CodingUserMessage);
+        msgs.push({ role: "assistant", parts: [], streaming: true } as CodingAssistantMessage);
+      }),
+    );
 
-    const assistantIndex = messages().length - 1;
+    const assistantIndex = store.messages.length - 1;
     const controller = new AbortController();
     abortController = controller;
 
     try {
-      const body = JSON.stringify({
-        text,
-        sessionID: sessionID() ?? undefined,
-      });
       const res = await fetch(apiUrl("coding/message/stream"), {
         method: "POST",
         headers: { ...apiHeaders(), "Content-Type": "application/json" },
-        body,
+        body: JSON.stringify({ text, sessionID: store.sessionID ?? undefined }),
         signal: controller.signal,
       });
-      if (!res.ok || !res.body) {
-        throw new Error(`Coding stream failed: ${res.status}`);
-      }
+      if (!res.ok || !res.body) throw new Error(`Coding stream failed: ${res.status}`);
 
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
@@ -238,47 +282,30 @@ export function CodingTab(props: CodingTabProps) {
         for (const line of lines) {
           if (!line.startsWith("data:")) continue;
           try {
-            const event = JSON.parse(line.slice(5).trim());
-            handleCodingEvent(assistantIndex, event);
+            handleCodingEvent(assistantIndex, JSON.parse(line.slice(5).trim()));
           } catch {
- // malformed JSON — skip
+            // malformed JSON — skip
           }
         }
       }
- // Process remaining buffer
       if (buffer.startsWith("data:")) {
         try {
-          const event = JSON.parse(buffer.slice(5).trim());
-          handleCodingEvent(assistantIndex, event);
+          handleCodingEvent(assistantIndex, JSON.parse(buffer.slice(5).trim()));
         } catch {
- // malformed JSON — skip
+          // malformed JSON — skip
         }
       }
     } catch (err: any) {
       if (err?.name !== "AbortError") {
-        const errText = err?.message ?? String(err);
-        setMessages((prev) =>
-          prev.map((m, i) => {
-            if (i !== assistantIndex || m.role !== "assistant") return m;
-            return {
-              ...m,
-              parts: [
-                ...(m as CodingAssistantMessage).parts,
-                { type: "text", text: `Error: ${errText}` } as CodingTextPart,
-              ],
-            } as CodingAssistantMessage;
+        setStore("messages", assistantIndex, "parts",
+          produce((ps: CodingPart[]) => {
+            ps.push({ type: "text", text: `Error: ${err?.message ?? String(err)}` } as CodingTextPart);
           }),
         );
       }
     } finally {
- // Mark streaming complete
-      setMessages((prev) =>
-        prev.map((m, i) => {
-          if (i !== assistantIndex || m.role !== "assistant") return m;
-          return { ...m, streaming: false } as CodingAssistantMessage;
-        }),
-      );
-      setBusy(false);
+      setStore("messages", assistantIndex, "streaming", false);
+      setStore("busy", false);
       abortController = null;
     }
   }
@@ -287,34 +314,37 @@ export function CodingTab(props: CodingTabProps) {
     abortController?.abort();
   });
 
- // ── Tool-part rendering (reuses .msg-tool CSS from conversation) ──
+// ── Tool-part rendering ──
 
   function CodingToolView(pProps: { part: CodingToolPart }) {
     const status = () => pProps.part.state?.status ?? "running";
     const toolName = () => pProps.part.tool || "tool";
-    const icon = () => displayToolIcon(toolName());
-    const statusLabel = () => toolStatusLabel(status());
+    const input = () => pProps.part.state?.input ?? {};
     const detail = () => {
-      const title = pProps.part.state?.title || "";
-      return title && title.toLowerCase() !== toolName().toLowerCase() ? title : "";
+      const raw = displayToolDetail(toolName(), input(), pProps.part.state ?? {}, activeDirectory());
+      return raw && raw.toLowerCase() !== toolName().toLowerCase() ? raw : "";
     };
-    const output = () => stripAnsi(pProps.part.state?.output || "").slice(0, 2000);
-    const error = () => stripAnsi((pProps.part.state as any)?.error || "") || output();
+    const raw = () => pProps.part.state?.raw || "";
+    const output = () => stripAnsi(pProps.part.state?.output || "");
+    const error = () => stripAnsi(pProps.part.state?.error || "") || output();
     const partKey = () => pProps.part._partID || toolName();
     const isExpanded = () => toolOutputExpanded(partKey());
 
     return (
       <>
         <div class="msg-tool">
-          <span class="tool-icon">{icon()}</span>
+          <span class="tool-icon">{displayToolIcon(toolName())}</span>
           <span class="tool-name">{toolName()}</span>
           <Show when={detail()}>
             <span class="tool-detail">{detail()}</span>
           </Show>
-          <span class="tool-status" data-status={status()} title={statusLabel()}>
-            {statusLabel()}
+          <span class="tool-status" data-status={status()} title={toolStatusLabel(status())}>
+            {toolStatusLabel(status())}
           </span>
         </div>
+        <Show when={status() === "pending" && raw()}>
+          <div class="msg-tool-input">{raw()}</div>
+        </Show>
         <Show when={status() === "completed" && output()}>
           <div
             class="msg-tool-output"
@@ -331,7 +361,7 @@ export function CodingTab(props: CodingTabProps) {
     );
   }
 
- // ── Message rendering ──
+// ── Message rendering ──
 
   function UserMessageView(mProps: { msg: CodingUserMessage }) {
     return (
@@ -341,7 +371,7 @@ export function CodingTab(props: CodingTabProps) {
         </div>
         <div class="msg-bubble">
           <div class="msg-body">
-            <div class="msg-text">{mProps.msg.text}</div>
+            <StaticTextPart text={mProps.msg.text} />
           </div>
         </div>
       </article>
@@ -420,12 +450,29 @@ export function CodingTab(props: CodingTabProps) {
           >
             <For each={mProps.msg.parts}>
               {(part) => (
-                <Show
-                  when={part.type === "text"}
-                  fallback={<CodingToolView part={part as CodingToolPart} />}
-                >
-                  <TextPart text={(part as CodingTextPart).text} />
-                </Show>
+                <Switch fallback={null}>
+                  <Match when={part.type === "text" && (part as CodingTextPart).text.trim()}>
+                    <TextPart text={(part as CodingTextPart).text} />
+                  </Match>
+                  <Match when={
+                    part.type === "reasoning" &&
+                    (part as CodingReasoningPart).text.trim() &&
+                    !isEmptyReasoning((part as CodingReasoningPart).text)
+                  }>
+                    <ReasoningPart part={part} />
+                  </Match>
+                  <Match when={part.type === "tool"}>
+                    <CodingToolView part={part as CodingToolPart} />
+                  </Match>
+                  <Match when={part.type === "patch" && (part as CodingPatchPart).files.length > 0}>
+                    <div class="msg-patch">
+                      {"\u2699 " +
+                        (part as CodingPatchPart).files
+                          .map((f) => shortRelativePath(f, activeDirectory()))
+                          .join(", ")}
+                    </div>
+                  </Match>
+                </Switch>
               )}
             </For>
           </Show>
@@ -434,9 +481,9 @@ export function CodingTab(props: CodingTabProps) {
     );
   }
 
- // ── Render ──
+// ── Render ──
 
-  const isEmpty = createMemo(() => messages().length === 0);
+  const isEmpty = createMemo(() => store.messages.length === 0);
 
   return (
     <div
@@ -456,7 +503,7 @@ export function CodingTab(props: CodingTabProps) {
             </div>
           }
         >
-          <For each={messages()}>
+          <For each={store.messages}>
             {(msg, idx) => (
               <Show
                 when={msg.role === "user"}

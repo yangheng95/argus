@@ -354,7 +354,7 @@ export function ChatComposer(props: ChatComposerProps) {
       <div class="chat-compose-meta">
         <div class="chat-compose-meta-left">
           <span class="chat-version" id="chatVersion"></span>
-          <span class="chat-author">代码生成组@同花顺</span>
+          <span class="chat-author">杨恒@代码生成组</span>
         </div>
         <div class="chat-compose-tip">{t("chat.tip")}</div>
       </div>
