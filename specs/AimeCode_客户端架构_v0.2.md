@@ -1,8 +1,8 @@
-# MirrorCode 客户端架构设计 v0.2
+# AimeCode 客户端架构设计 v0.2
 
 **架构方向**：纯客户端 SPA，服务层 Mock 优先，真实接口后续替换
 **运行前提**：无需后端，`npm install && npm run dev` 即可启动
-**对应 PRD**：MirrorCode 骨架 PRD v0.1
+**对应 PRD**：AimeCode 骨架 PRD v0.1
 
 ---
 
@@ -39,7 +39,7 @@
 ## 二、目录结构
 
 ```
-mirrorcode/
+aimecode/
 │
 ├── index.html
 ├── vite.config.ts
@@ -132,43 +132,45 @@ mirrorcode/
 
 ```typescript
 // ─── 流式事件（UI 消费的最小单元）────────────────────────────────
-export type StreamEventType =
-  | 'thinking'       // AI 思考中（显示 loading 动画）
-  | 'tool_start'     // 工具调用开始（显示数据源气泡）
-  | 'tool_end'       // 工具调用完成
-  | 'tool_error'     // 工具调用失败
-  | 'text_delta'     // 文本增量（流式拼接）
-  | 'code_block'     // 完整代码块（一次性输出）
-  | 'chart_data'     // Plotly JSON spec（一次性输出）
-  | 'table_data'     // 表格数据（一次性输出）
-  | 'disclaimer'     // 合规免责声明
-  | 'done'           // 流结束
-  | 'error'          // 系统错误
+// 使用 discriminated union 而非可选字段 interface。
+// 好处：TypeScript 在 switch(event.type) 分支中自动收窄类型，
+// 消费端无需 null check，编译器保证每个分支的字段一定存在。
 
-export interface StreamEvent {
-  type: StreamEventType
-  // thinking
-  content?: string
-  // tool_start / tool_end
-  tool?: string
-  source?: string       // 数据源名称，如 'tushare'
-  params?: Record<string, unknown>
-  // text_delta
-  delta?: string
-  // code_block
-  language?: string
-  code?: string
-  // chart_data
-  chartSpec?: object    // Plotly layout + data JSON
-  // table_data
-  columns?: string[]
-  rows?: unknown[][]
-  // done
-  messageId?: string
+export type StreamEvent =
+  | { type: 'thinking';    content: string }
+  | { type: 'tool_start';  tool: string; source: string; params?: Record<string, unknown> }
+  | { type: 'tool_end';    tool: string; source: string; summary?: string }
+  | { type: 'tool_error';  tool: string; source: string; error: string }
+  | { type: 'text_delta';  delta: string }
+  | { type: 'code_block';  language: string; code: string }
+  | { type: 'chart_data';  chartSpec: object }
+  | { type: 'table_data';  columns: string[]; rows: unknown[][] }
+  | { type: 'disclaimer' }                      // 内容取客户端常量，不由 LLM 生成
+  | { type: 'done';        messageId: string }
+  | { type: 'error';       content: string }
+
+// 提取 type 字面量联合（供运行时 exhaustive check 使用）
+export type StreamEventType = StreamEvent['type']
+
+// ─── 工具定义（与 Anthropic Tool Use API 对齐）──────────────────────
+export interface ToolDefinition {
+  name: string
+  description: string
+  input_schema: {
+    type: 'object'
+    properties: Record<string, unknown>
+    required?: string[]
+  }
+}
+
+export interface ChatOptions {
+  tools?: ToolDefinition[]   // 注入 Claude Tool Use 工具列表
+  systemPrompt?: string      // 覆盖默认 BASE_SYSTEM_PROMPT
 }
 
 // ─── LLM 消息格式 ────────────────────────────────────────────────
-export type MessageRole = 'user' | 'assistant' | 'system'
+// 注意：'system' 不出现在 messages 数组中，系统提示通过 ChatOptions.systemPrompt 传入
+export type MessageRole = 'user' | 'assistant'
 
 export interface Message {
   id: string
@@ -179,15 +181,16 @@ export interface Message {
 }
 
 export type ContentBlock =
-  | { type: 'text';  content: string }
-  | { type: 'code';  language: string; code: string }
-  | { type: 'chart'; spec: object }
-  | { type: 'table'; columns: string[]; rows: unknown[][] }
+  | { type: 'text';       content: string }
+  | { type: 'code';       language: string; code: string }
+  | { type: 'chart';      spec: object }
+  | { type: 'table';      columns: string[]; rows: unknown[][] }
+  | { type: 'disclaimer'; content: string }  // LLM 信令驱动，见 M11
 
 // ─── 金融数据类型 ──────────────────────────────────────────────
 export interface FinancialReport {
   ticker: string
-  period: string          // 如 '2024Q3'
+  period: string          // 格式统一为 'YYYY-QN'（如 '2024-Q3'）或 'YYYY'（年报）
   reportDate: string
   fields: Record<string, number | null>  // { roe: 0.29, revenue: 14836000000, ... }
 }
@@ -207,7 +210,11 @@ export interface ExecutionResult {
   status: 'ok' | 'error' | 'timeout'
   stdout: string
   stderr: string
-  charts: Array<{ id: string; imageDataUrl: string }>
+  charts: Array<{
+    id: string
+    spec: object           // Plotly JSON spec（Mock 模式直接返回，Real 模式可选）
+    imageDataUrl?: string  // Real 沙箱模式：base64 PNG 备用
+  }>
   durationMs: number
 }
 ```
@@ -217,7 +224,7 @@ export interface ExecutionResult {
 ### 3.2 LLM 服务接口（`src/services/llm/interface.ts`）
 
 ```typescript
-import type { Message, StreamEvent } from '../types'
+import type { Message, StreamEvent, ChatOptions } from '../types'
 
 export interface ILLMService {
   /**
@@ -226,7 +233,7 @@ export interface ILLMService {
    */
   chat(
     messages: Message[],
-    systemPrompt?: string,
+    options?: ChatOptions,   // 包含 tools（Tool Use）和 systemPrompt
   ): AsyncGenerator<StreamEvent, void, unknown>
 
   /** 中止当前流（用户点击"停止"按钮） */
@@ -249,6 +256,7 @@ export class MockLLMService implements ILLMService {
 
   async *chat(
     messages: Message[],
+    _options?: ChatOptions,  // Mock 模式下 options 不使用，仅符合接口
   ): AsyncGenerator<StreamEvent, void, unknown> {
     this.abortFlag = false
     const lastUserMessage = messages.at(-1)?.content ?? ''
@@ -287,9 +295,9 @@ import type { FinancialReport, OHLCVBar } from '../types'
 
 export interface IFinanceService {
   getFinancialReport(params: {
-    ticker: string
-    startDate: string
-    endDate: string
+    tickers: string[]           // 支持批量查询，最多 5 个标的（M05 约束）
+    startDate?: string
+    endDate?: string
     freq: 'quarterly' | 'annual'
     fields: string[]
   }): Promise<FinancialReport[]>
@@ -303,11 +311,8 @@ export interface IFinanceService {
 
   getIndexComponents(params: {
     indexCode: string
-    date: string
+    date?: string   // 默认为最新交易日
   }): Promise<Array<{ ticker: string; name: string; weight: number }>>
-
-  /** 将公司名称或简称解析为标准股票代码 */
-  resolveTicker(nameOrCode: string): Promise<string | null>
 }
 ```
 
@@ -321,7 +326,7 @@ import type { ExecutionResult } from '../types'
 export interface IExecutorService {
   execute(params: {
     code: string
-    language: 'python'
+    language: 'python' | 'sql' | 'r'  // sql/r 为阶段 1 功能，接口提前定义避免破坏性变更
     sessionId: string
   }): Promise<ExecutionResult>
 }
@@ -382,8 +387,12 @@ export function getExecutorService(): IExecutorService {
   return _executor
 }
 
-/** 切换 Mock/Real 时清空缓存，强制重新实例化 */
+/**
+ * 切换 Mock/Real 时：先 abort 旧实例的进行中请求，再清空缓存。
+ * 防止旧 MockLLMService 的 for-await 循环在切换后继续 yield 事件。
+ */
 export function resetServiceCache(): void {
+  _llm?.abort()          // ILLMService 接口保证有 abort()
   _llm = null
   _finance = null
   _executor = null
@@ -398,8 +407,21 @@ export function resetServiceCache(): void {
 
 ```typescript
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
+import { persist, createJSONStorage } from 'zustand/middleware'
 import type { Message, ContentBlock, StreamEvent } from '../services/types'
+import { DISCLAIMER_TEXT } from '../constants/disclaimer'
+
+// 注意：自定义 storage 用于处理 Date 对象的 JSON hydration。
+// Zustand persist 默认 JSON.stringify/parse 会将 Date 序列化为字符串，
+// 恢复后类型变为 string，必须在 reviver 中转回 Date。
+const dateReviver = (_key: string, value: unknown) =>
+  typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(value)
+    ? new Date(value)
+    : value
+
+const hydratedStorage = createJSONStorage(() => localStorage, {
+  reviver: dateReviver,
+})
 
 interface ChatSession {
   id: string
@@ -409,10 +431,12 @@ interface ChatSession {
 }
 
 interface SessionState {
-  sessions: ChatSession[]
+  // 用 Record 替代数组：按 id 直接读写为 O(1)，不再 sessions.map() 遍历
+  sessionsById: Record<string, ChatSession>
+  sessionOrder: string[]            // 按 updatedAt 降序排列的 id 列表
   currentSessionId: string | null
   isStreaming: boolean
-  streamingBlocks: ContentBlock[]  // 当前流中积累的块
+  streamingBlocks: ContentBlock[]
 
   // Actions
   createSession: () => string
@@ -427,18 +451,20 @@ interface SessionState {
 export const useSessionStore = create<SessionState>()(
   persist(
     (set, get) => ({
-      sessions: [],
+      sessionsById: {},
+      sessionOrder: [],
       currentSessionId: null,
       isStreaming: false,
       streamingBlocks: [],
 
       createSession: () => {
         const id = crypto.randomUUID()
+        const session: ChatSession = {
+          id, title: '新对话', messages: [], createdAt: new Date(),
+        }
         set(s => ({
-          sessions: [...s.sessions, {
-            id, title: '新对话',
-            messages: [], createdAt: new Date()
-          }],
+          sessionsById: { ...s.sessionsById, [id]: session },
+          sessionOrder: [id, ...s.sessionOrder],   // 最新在前
           currentSessionId: id,
         }))
         return id
@@ -447,52 +473,70 @@ export const useSessionStore = create<SessionState>()(
       selectSession: (id) => set({ currentSessionId: id }),
 
       addUserMessage: (content) => {
-        const { currentSessionId, sessions } = get()
+        const { currentSessionId, sessionsById } = get()
         if (!currentSessionId) return
+        const session = sessionsById[currentSessionId]
+        if (!session) return
         const msg: Message = {
           id: crypto.randomUUID(),
           role: 'user', content,
           createdAt: new Date(),
         }
+        // O(1) 更新，不遍历全部会话
         set({
-          sessions: sessions.map(s =>
-            s.id === currentSessionId
-              ? { ...s, messages: [...s.messages, msg],
-                  title: s.messages.length === 0 ? content.slice(0, 30) : s.title }
-              : s
-          )
+          sessionsById: {
+            ...sessionsById,
+            [currentSessionId]: {
+              ...session,
+              messages: [...session.messages, msg],
+              title: session.messages.length === 0 ? content.slice(0, 30) : session.title,
+            },
+          },
         })
       },
 
       appendStreamEvent: (event) => {
-        // text_delta：追加到当前文本块
-        // code_block / chart_data / table_data：新增结构化块
+        // 利用 discriminated union，switch 分支中 TypeScript 自动收窄类型，
+        // 无需任何 null check（event.delta / event.code 等在对应分支中必然存在）。
         set(s => {
           const blocks = [...s.streamingBlocks]
-          if (event.type === 'text_delta' && event.delta) {
-            const last = blocks.at(-1)
-            if (last?.type === 'text') {
-              blocks[blocks.length - 1] = { type: 'text', content: last.content + event.delta }
-            } else {
-              blocks.push({ type: 'text', content: event.delta })
+          switch (event.type) {
+            case 'text_delta': {
+              const last = blocks.at(-1)
+              if (last?.type === 'text') {
+                blocks[blocks.length - 1] = { type: 'text', content: last.content + event.delta }
+              } else {
+                blocks.push({ type: 'text', content: event.delta })
+              }
+              break
             }
-          } else if (event.type === 'code_block' && event.code) {
-            blocks.push({ type: 'code', language: event.language ?? 'python', code: event.code })
-          } else if (event.type === 'chart_data' && event.chartSpec) {
-            blocks.push({ type: 'chart', spec: event.chartSpec })
-          } else if (event.type === 'table_data') {
-            blocks.push({ type: 'table', columns: event.columns ?? [], rows: event.rows ?? [] })
+            case 'code_block':
+              blocks.push({ type: 'code', language: event.language, code: event.code })
+              break
+            case 'chart_data':
+              blocks.push({ type: 'chart', spec: event.chartSpec })
+              break
+            case 'table_data':
+              blocks.push({ type: 'table', columns: event.columns, rows: event.rows })
+              break
+            case 'disclaimer':
+              blocks.push({ type: 'disclaimer', content: DISCLAIMER_TEXT })
+              break
+            // thinking / tool_start / tool_end / tool_error / done / error
+            // 不产生 ContentBlock，由其他 UI 组件（ToolCallBadge 等）消费
           }
           return { streamingBlocks: blocks }
         })
       },
 
       finalizeAssistantMessage: (messageId) => {
-        const { currentSessionId, sessions, streamingBlocks } = get()
+        const { currentSessionId, sessionsById, streamingBlocks } = get()
         if (!currentSessionId) return
+        const session = sessionsById[currentSessionId]
+        if (!session) return
         const fullText = streamingBlocks
-          .filter(b => b.type === 'text')
-          .map(b => (b as { type: 'text'; content: string }).content)
+          .filter((b): b is { type: 'text'; content: string } => b.type === 'text')
+          .map(b => b.content)
           .join('')
         const msg: Message = {
           id: messageId,
@@ -502,11 +546,10 @@ export const useSessionStore = create<SessionState>()(
           createdAt: new Date(),
         }
         set({
-          sessions: sessions.map(s =>
-            s.id === currentSessionId
-              ? { ...s, messages: [...s.messages, msg] }
-              : s
-          ),
+          sessionsById: {
+            ...sessionsById,
+            [currentSessionId]: { ...session, messages: [...session.messages, msg] },
+          },
           streamingBlocks: [],
           isStreaming: false,
         })
@@ -515,7 +558,7 @@ export const useSessionStore = create<SessionState>()(
       setStreaming: (v) => set({ isStreaming: v }),
       clearStreamingBlocks: () => set({ streamingBlocks: [] }),
     }),
-    { name: 'mirrorcode-sessions' }
+    { name: 'aimecode-sessions', storage: hydratedStorage }
   )
 )
 ```
@@ -549,9 +592,12 @@ export const useConfigStore = create<ConfigState>()(
         set({ useMock: v })
         resetServiceCache()     // 清空服务单例，下次 get 时重新实例化
       },
-      setApiKey: (key) => set({ anthropicApiKey: key }),
+      setApiKey: (key) => {
+        set({ anthropicApiKey: key })
+        resetServiceCache()     // Key 变更时同样必须刷新缓存，旧实例持有旧 Key
+      },
     }),
-    { name: 'mirrorcode-config' }
+    { name: 'aimecode-config' }
   )
 )
 ```
@@ -715,6 +761,7 @@ export function resolveTicker(input: string): string | null {
 ```typescript
 import { useSessionStore } from '../stores/session.store'
 import { getLLMService }   from '../services/registry'
+import { TOOL_DEFINITIONS } from '../services/tool_definitions'  // 见 M02 §3.3
 
 export function useChat() {
   const store = useSessionStore()
@@ -734,7 +781,9 @@ export function useChat() {
 
     // 3. 消费流
     try {
-      const stream = llm.chat(currentSession.messages)
+      const stream = llm.chat(currentSession.messages, {
+        tools: TOOL_DEFINITIONS,   // 工具定义由 tool_definitions.ts 提供，见 M02 §3.3
+      })
       for await (const event of stream) {
         if (event.type === 'done') {
           store.finalizeAssistantMessage(event.messageId ?? crypto.randomUUID())
