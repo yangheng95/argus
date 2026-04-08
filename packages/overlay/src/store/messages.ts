@@ -334,20 +334,18 @@ type AgentRound = {
   endTime: number;
 };
 
-/** Active pipeline stages — exported so conversation.ts can reuse. */
+/** Active pipeline stages — derived from session messages with running tool parts. */
 export function activeAgentStages(): Set<string> {
   const status = String(boardStore.board?.task?.status || "").trim().toLowerCase();
-  if (status === "active" && Array.isArray(store.agentEvents) && store.agentEvents.length > 0) {
-    return new Set(
-      store.agentEvents
-        .map((item: any) => {
-          const raw = String(item?.stage || "").trim().toLowerCase();
-          return raw ? normalizeAgentRole(raw) : "";
-        })
-        .filter((r: string) => r && AGENT_CARD_STAGES.has(r as any)),
-    );
+  if (status !== "active") return new Set();
+  const stages = new Set<string>();
+  for (const msg of store.messages) {
+    const role = normalizeAgentRole(String(msg?.info?.resolvedRole || msg?.info?.channel || ""));
+    if (!AGENT_CARD_STAGES.has(role as any)) continue;
+    const hasRunning = (msg.parts || []).some((p: any) => p?.state?.status === "running");
+    if (hasRunning) stages.add(role);
   }
-  return new Set();
+  return stages;
 }
 
 function messageEndTime(message: any): number {
@@ -572,39 +570,6 @@ function computeAgentCards(): { cards: Record<string, AgentCardMessage>; order: 
     if (created < entry.startTime) entry.startTime = created;
     const completed = messageEndTime(message);
     if (completed > entry.endTime) entry.endTime = completed;
-  }
-
-  const liveEventsByStage = new Map<string, any[]>();
-  for (const event of Array.isArray(store.agentEvents) ? store.agentEvents : []) {
-    const rawStage = String(event?.stage || "").trim().toLowerCase();
-    const stage = normalizeAgentRole(rawStage);
-    if (!AGENT_CARD_STAGES.has(stage)) continue;
-    const items = liveEventsByStage.get(stage) || [];
-    items.push(event);
-    liveEventsByStage.set(stage, items);
-    latestEventByStage.set(stage, event);
-  }
-
-  for (const [stage, events] of liveEventsByStage.entries()) {
-    const mergedEvents = mergeAgentReasoningDeltas(
-      events.slice().sort((left, right) => agentEventTime(left) - agentEventTime(right)),
-    );
-    const liveMessages = mergedEvents
-      .map((event) => agentMessage(event))
-      .filter(Boolean)
-      .slice(-MAX_LIVE_AGENT_MESSAGES);
-    if (liveMessages.length === 0) continue;
-    const existing = roundsByStage[stage] || [];
-    if (existing.length > 0) continue;
-    existing.push({
-      channelID: `${stage}:live`,
-      stage,
-      sessionID: "",
-      messages: liveMessages,
-      startTime: messageTime(liveMessages[0]),
-      endTime: Math.max(...liveMessages.map((message: any) => messageEndTime(message))),
-    });
-    roundsByStage[stage] = existing;
   }
 
   // ── Goal group assembly ──

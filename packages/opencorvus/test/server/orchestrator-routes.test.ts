@@ -562,7 +562,6 @@ describe("orchestrator routes", () => {
               maxRuns: 4,
               maxReplans: 2,
               maxEvaluations: 5,
-              maxWallTimeMs: 180000,
             },
           }),
         })
@@ -585,7 +584,6 @@ describe("orchestrator routes", () => {
               maxRuns?: number
               maxReplans?: number
               maxEvaluations?: number
-              maxWallTimeMs?: number
             }
           }
         }
@@ -593,7 +591,6 @@ describe("orchestrator routes", () => {
           maxRuns: 4,
           maxReplans: 2,
           maxEvaluations: 5,
-          maxWallTimeMs: 180000,
         })
       },
     })

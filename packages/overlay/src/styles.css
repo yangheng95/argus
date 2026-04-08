@@ -5705,6 +5705,73 @@ select.field-input option {
   margin: 3px 0;
 }
 
+/* Standard HTML tags from marked — scoped to message/content containers */
+.msg-text h1, .msg-text h2, .msg-text h3, .msg-text h4, .msg-text h5, .msg-text h6,
+.md-content h1, .md-content h2, .md-content h3, .md-content h4, .md-content h5, .md-content h6 {
+  color: var(--text-strong);
+  font-weight: 600;
+  margin: 10px 0 4px;
+  line-height: 1.45;
+}
+.msg-text h1, .md-content h1 { font-size: var(--ui-font-display); }
+.msg-text h2, .md-content h2 { font-size: var(--ui-font-heading); }
+.msg-text h3, .md-content h3 { font-size: var(--ui-font-title); }
+
+.msg-text p, .md-content p {
+  margin: 6px 0;
+  line-height: 1.75;
+}
+
+.msg-text ul, .msg-text ol,
+.md-content ul, .md-content ol {
+  margin: 6px 0;
+  padding-left: 22px;
+  line-height: 1.7;
+}
+.msg-text li, .md-content li {
+  margin: 3px 0;
+}
+
+.msg-text pre, .md-content pre {
+  background: var(--surface-inset);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 8px 10px;
+  margin: 6px 0;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: var(--ui-font-title);
+  line-height: 1.6;
+  color: var(--text);
+  white-space: pre;
+}
+
+.msg-text code, .md-content code {
+  background: var(--subtle-4);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 1px 4px;
+  font-family: var(--mono);
+  font-size: 0.92em;
+  color: var(--text-strong);
+}
+.msg-text pre code, .md-content pre code {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: inherit;
+  color: inherit;
+}
+
+.msg-text a, .md-content a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.msg-text a:hover, .md-content a:hover {
+  color: var(--accent-hover);
+}
+
 .md-link {
   color: var(--accent);
   text-decoration: underline;
@@ -5719,6 +5786,48 @@ select.field-input option {
   border-radius: 4px;
   margin: 4px 0;
   border: 1px solid var(--border);
+}
+
+/* marked outputs standard HTML — style via .md-content parent scope */
+.md-content table,
+.msg-text table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0;
+  font-size: var(--ui-font-sm);
+}
+.md-content th, .md-content td,
+.msg-text th, .msg-text td {
+  border: 1px solid var(--border);
+  padding: 6px 10px;
+  text-align: left;
+}
+.md-content th,
+.msg-text th {
+  background: var(--surface-raised, var(--bg-secondary));
+  font-weight: 600;
+}
+.md-content tr:nth-child(even),
+.msg-text tr:nth-child(even) {
+  background: var(--surface-subtle, transparent);
+}
+.md-content blockquote,
+.msg-text blockquote {
+  border-left: 3px solid var(--accent);
+  margin: 6px 0;
+  padding: 4px 12px;
+  color: var(--text-secondary);
+}
+.md-content hr,
+.msg-text hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 8px 0;
+}
+.md-content del,
+.msg-text del {
+  text-decoration: line-through;
+  opacity: 0.7;
 }
 
 .msg-img-wrap {

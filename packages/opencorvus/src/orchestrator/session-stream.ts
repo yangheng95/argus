@@ -1,10 +1,11 @@
 /**
  * Session-stream adapter — routes AI SDK stream events into the session/message
- * system so that spec/planner/delivery agent output is persisted and delivered
- * via the standard message.part.* SSE path.
+ * system so that all agent output is persisted and delivered via the standard
+ * message.part.* SSE path.
  *
- * Replaces the fire-and-forget agent-stream for content events.
- * Agent-stream is kept only for lightweight status events (start/finish/error).
+ * This is the SINGLE data channel for all agent → overlay communication.
+ * There is no separate "agent-stream" — all content AND status events go
+ * through the session, bridged to SSE by task-message-protocol-bridge.
  */
 import type { TextHooks } from "@/llm/api"
 import { Session } from "@/session"
@@ -385,3 +386,4 @@ export function sessionStreamHooks(input: {
     },
   }
 }
+

@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "zh-CN",
-    "panel_revision": "a59a6c605c97ffe5"
+    "panel_revision": "0371264c806551ce"
   },
   "brand.guide_kicker": "快速上手",
   "brand.guide_positioning_body": "这不是装饰——左栏选任务，中栏推执行，右栏盯 Spec、Plan、评估和文件变更，防止 agent 跑偏。",
@@ -85,7 +85,6 @@
   "budget.hint_readonly": "任务启动后预算已锁定，不可修改。",
   "budget.empty": "请先选择任务再配置预算。",
   "budget.max_runs": "最大执行轮次",
-  "budget.max_wall_time": "时间上限（分钟）",
   "budget.max_executor_groups": "Goal 并行数",
   "budget.placeholder": "默认",
   "budget.reset": "重置",

@@ -247,7 +247,6 @@ function buildBoard(task: typeof OrchestratorTaskTable.$inferSelect) {
           ? {
               maxRuns: task.budget.max_runs,
               maxFixRuns: task.budget.max_fix_runs,
-              maxWallTimeMs: task.budget.max_wall_time_ms,
             }
           : undefined,
         metadata: task.metadata ?? undefined,
@@ -594,7 +593,6 @@ function boardTagForTask(task: typeof OrchestratorTaskTable.$inferSelect) {
     task.time_created,
     task.time_updated,
     task.budget?.max_runs ?? "",
-    task.budget?.max_wall_time_ms ?? "",
     run?.id ?? "",
     run?.time_updated ?? 0,
     plan?.id ?? "",

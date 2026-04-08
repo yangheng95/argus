@@ -7,7 +7,6 @@ import type { ProtocolCapabilitiesInfo, ProtocolRefsInfo, ProtocolSettingsInfo }
 export type OrchestratorBudget = {
   max_runs?: number
   max_fix_runs?: number
-  max_wall_time_ms?: number
   max_executor_groups?: number
 }
 

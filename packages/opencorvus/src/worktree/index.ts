@@ -463,6 +463,19 @@ export namespace Worktree {
         throw new CreateFailedError({ message })
       }
 
+      // Symlink node_modules from the primary worktree so that LSP type resolution
+      // works correctly in isolated worktrees (prevents false "Cannot find module" errors).
+      const primaryNodeModules = path.join(Instance.worktree, "node_modules")
+      const worktreeNodeModules = path.join(info.directory, "node_modules")
+      try {
+        const stat = await fs.stat(primaryNodeModules)
+        if (stat.isDirectory()) {
+          await fs.symlink(primaryNodeModules, worktreeNodeModules, "junction")
+        }
+      } catch {
+        // Primary project has no node_modules — nothing to link
+      }
+
       const booted = await Instance.provide({
         directory: info.directory,
         init: InstanceBootstrap,
