@@ -9,7 +9,7 @@
  * 使用方式：
  *   import { OrchestratorConfig } from "@/orchestrator/config"
  *   const cfg = await OrchestratorConfig.get()
- *   cfg.decompose.max_steps   // 30 (或用户自定义值)
+ *   cfg.decompose.max_steps   // 100 (或用户自定义值)
  */
 import { Config } from "@/config/config"
 import type { MiniWorkflow } from "./workflow"
@@ -80,7 +80,7 @@ export interface OrchestratorConfigType {
 
 const DEFAULTS: OrchestratorConfigType = {
   decompose: {
-    max_steps: 30,
+    max_steps: 100,
     timeout_ms: 300_000,
     quality_threshold: 0.5,
     max_attempts: 3,

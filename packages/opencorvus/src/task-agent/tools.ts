@@ -204,8 +204,9 @@ export function createTaskAgentTools(input: {
       execute: async () => {
         let task = requireTask(taskID)
         const existingGoals = listGoals(taskID)
-        if (existingGoals.length > 0) return `${existingGoals.length} goals already defined. Skipping.`
-        if (task.active_spec_version_id) return `Requirements analysis already completed (spec=${task.active_spec_version_id}). Use read_context to see goals.`
+        log.info("requirements guard check", { taskID, existingGoals: existingGoals.length, hasSpec: !!task.active_spec_version_id })
+        if (existingGoals.length > 0) return `${existingGoals.length} goals already defined. Skipping. Proceed to architect (for multi-goal) or create_run + submit_execution.`
+        if (task.active_spec_version_id) return `Requirements analysis already completed (spec=${task.active_spec_version_id}). Proceed to architect or create_run + submit_execution.`
 
         await trackStepStart("requirements")
         task = await updateTask(task, { status: "active" }, "Requirements analysis started")
@@ -234,6 +235,7 @@ export function createTaskAgentTools(input: {
             DecomposeService.decompose({
               title: task.title,
               request: task.request,
+              attachments: Array.isArray(task.attachments) ? task.attachments as any : undefined,
               taskID,
               sessionID: decomposeSession.id,
               signal: input.signal
@@ -306,7 +308,7 @@ export function createTaskAgentTools(input: {
             return dbID
           })
 
-          Database.transaction((db) => {
+          try { Database.transaction((db) => {
             // Spec snapshot — makes SPEC section visible in panel
             db.insert(OrchestratorSpecSnapshotTable).values({
               id: specSnapshotID,
@@ -367,13 +369,19 @@ export function createTaskAgentTools(input: {
             Database.effect(() =>
               OrchestratorProtocol.emit(OrchestratorEvent.TaskUpdated, { taskID, status: task.status, summary: "Goals defined" }, { source: "task-agent.decompose" }),
             )
-          })
+          }) } catch (dbErr) {
+            log.error("requirements: failed to persist goals to DB", { taskID, error: dbErr instanceof Error ? dbErr.message : String(dbErr), stack: dbErr instanceof Error ? dbErr.stack : undefined })
+            throw dbErr
+          }
           // Initialize workflow tracking for newly created goals (use DB IDs)
           for (const [i, g] of result.goals.entries()) {
             ensureGoalInWorkflow(dbGoalIDs[i], g.title)
           }
           await trackStepComplete("requirements")
-          return `${result.goals.length} goals created. Summary: ${result.summary}. Decisions: ${result.decisions.map(d => `${d.key}=${d.value}`).join(", ")}`
+          const nextStep = result.goals.length > 1
+            ? "NEXT: call architect to coordinate cross-goal contracts, then create_run + submit_execution."
+            : "NEXT: call create_run then submit_execution to start goal execution."
+          return `SUCCESS: ${result.goals.length} goals created. ${nextStep}\n\nSummary: ${result.summary}.\nDecisions: ${result.decisions.map(d => `${d.key}=${d.value}`).join(", ")}`
         } finally {
           guard.clear()
         }
@@ -1480,5 +1488,5 @@ export function createTaskAgentTools(input: {
     }),
   }
 
-  return Object.assign(tools, { stopSignal: stopAfterDispatch.signal })
+  return { tools, stopSignal: stopAfterDispatch.signal }
 }

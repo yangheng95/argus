@@ -66,6 +66,7 @@ import {
   activeRunBySession,
   findArtifacts,
   findDeliveryByRun,
+  findLatestDeliveryForRun,
   findExecutorSessionByRun,
   findEvaluationByRun,
   findEvaluations,
@@ -392,7 +393,8 @@ export namespace OrchestratorService {
     try {
       persistQueuedTask({
         taskID, sessionID: session.id, now, executor, title,
-        request: input.request, requestID, source: input.source,
+        request: input.request, attachments: input.attachments,
+        requestID, source: input.source,
         priority: input.priority, budget: input.budget, metadata,
         channelBinding: input.channelBinding, milestones: input.milestones,
         goals: input.goals, routing: input.routing,
@@ -529,7 +531,9 @@ export namespace OrchestratorService {
 
   export async function getDelivery(runID: string) {
     // Read-only — poll loop handles state advancement asynchronously.
-    const delivery = findDeliveryByRun(runID)
+    // Prefer task-level delivery (goal_run_id IS NULL); fall back to any delivery for this run
+    // so that goal-run deliveries (shown in the board) are also previewable.
+    const delivery = findDeliveryByRun(runID) ?? findLatestDeliveryForRun(runID)
     if (!delivery) throw new NotFoundError({ message: `Delivery not found for run ${runID}` })
     return viewDelivery(delivery)
   }

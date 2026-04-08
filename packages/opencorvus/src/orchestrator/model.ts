@@ -190,6 +190,16 @@ export const CheckConfig = z.object({
   timeout_ms: z.number().int().positive().optional(),
 })
 
+/** A base64-encoded image attachment for multimodal task input. */
+export const TaskAttachment = z.object({
+  /** MIME type, e.g. "image/png", "image/jpeg" */
+  mime: z.string(),
+  /** Base64-encoded file data (no data-URL prefix) */
+  data: z.string(),
+  /** Optional display name */
+  filename: z.string().optional(),
+})
+
 export const CreateTaskInput = z.object({
   project: z.string().optional(),
   requestID: z.string().optional(),
@@ -197,6 +207,8 @@ export const CreateTaskInput = z.object({
   executor: ExecutorName.optional(),
   title: z.string().optional(),
   request: z.string(),
+  /** Image attachments sent as first-class vision content to all agents. */
+  attachments: TaskAttachment.array().optional(),
   priority: z.enum(["high", "normal", "low"]).optional(),
   budget: Budget.optional(),
   checks: CheckConfig.optional(),

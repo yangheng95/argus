@@ -35,6 +35,8 @@ export namespace DecomposeService {
   export async function decompose(input: {
     title: string
     request: string
+    /** Base64 image attachments — injected as vision content alongside the request text. */
+    attachments?: Array<{ mime: string; data: string; filename?: string }>
     taskID?: string
     sessionID?: string
     signal?: AbortSignal
@@ -54,6 +56,7 @@ export namespace DecomposeService {
       const result = await DecomposeAgent.decompose({
         title: input.title,
         request: input.request,
+        attachments: input.attachments,
         taskID: input.taskID,
         sessionID: input.sessionID,
         signal: input.signal,
@@ -108,6 +111,7 @@ export namespace DecomposeService {
   export async function redecompose(input: {
     title: string
     request: string
+    attachments?: Array<{ mime: string; data: string; filename?: string }>
     taskID?: string
     sessionID?: string
     redecomposeContext: RedecomposeContext
@@ -128,6 +132,7 @@ export namespace DecomposeService {
       const result = await DecomposeAgent.decompose({
         title: input.title,
         request: input.request,
+        attachments: input.attachments,
         taskID: input.taskID,
         sessionID: input.sessionID,
         signal: input.signal,

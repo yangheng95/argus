@@ -224,7 +224,7 @@
 
   <text class="h3" x="980" y="86">模块结构 — Agent 是 agent, Infrastructure 是 infrastructure</text>
 
-  <text class="mono-h" x="980" y="110">AGENTS (有 LLM, 有 tools, 有独立推理)</text>
+  <text class="mono-h" x="980" y="110">AGENTS (有 LLM, 有 tools, 有独立推理) — 全部通过 ProviderLLM.stream() 调用 LLM</text>
   <text class="mono" x="980" y="128">  task-agent/agent.ts              Task Agent: coordinator LLM, 调用 sub-agents</text>
   <text class="mono" x="980" y="142">  task-agent/tools.ts              Task Agent 调用 sub-agent 的接口 (不是 tool, 是 invoke)</text>
   <text class="mono" x="980" y="156">  decompose/agent.ts               Requirements Agent: user input → GoalContracts[] (自有 LLM)</text>
@@ -236,13 +236,16 @@
   <text class="mono-h" x="980" y="238">EXTERNAL AGENT (外部, 不受我们控制)</text>
   <text class="mono" x="980" y="258">  executor/                       opencode / claude-code / codex adapters</text>
 
-  <text class="mono-h" x="980" y="286">INFRASTRUCTURE (无 LLM, 无决策, 纯机械)</text>
-  <text class="mono" x="980" y="306">  orchestrator/task-loop.ts       Task Control Loop: Decision → GoalPool → collect → repeat (单入口)</text>
-  <text class="mono" x="980" y="322">  orchestrator/goal-pool.ts       GoalPool: concurrent execution + deterministic-eval (exit code) + drain</text>
-  <text class="mono" x="980" y="338">  pipeline/executor.ts            Goal pipeline: worktree + executor + delivery extraction (async generator)</text>
-  <text class="mono" x="980" y="354">  goal/merge.ts                   Serialized merge + commit + HEAD advance</text>
-  <text class="mono" x="980" y="370">  goal/scheduler.ts               Dependency DAG → layer computation (utility)</text>
-  <text class="mono" x="980" y="386">  shell/pid-guard.ts              PID guard: BASH_ENV/ZDOTDIR kill() override protects host PIDs</text>
+  <text class="mono-h" x="980" y="286">LLM CALL LAYER (provider 适配, agent 不直接 import streamText)</text>
+  <text class="mono" x="980" y="306">  provider/llm.ts                 ProviderLLM.stream() — agent 唯一入口; wrapModel() + baseHeaders() 给 session 复用</text>
+
+  <text class="mono-h" x="980" y="326">INFRASTRUCTURE (无 LLM, 无决策, 纯机械)</text>
+  <text class="mono" x="980" y="346">  orchestrator/task-loop.ts       Task Control Loop: Decision → GoalPool → collect → repeat (单入口)</text>
+  <text class="mono" x="980" y="362">  orchestrator/goal-pool.ts       GoalPool: concurrent execution + deterministic-eval (exit code) + drain</text>
+  <text class="mono" x="980" y="378">  pipeline/executor.ts            Goal pipeline: worktree + executor + delivery extraction (async generator)</text>
+  <text class="mono" x="980" y="394">  goal/merge.ts                   Serialized merge + commit + HEAD advance</text>
+  <text class="mono" x="980" y="410">  goal/scheduler.ts               Dependency DAG → layer computation (utility)</text>
+  <text class="mono" x="980" y="426">  shell/pid-guard.ts              PID guard: BASH_ENV/ZDOTDIR kill() override protects host PIDs</text>
   <text class="mono" x="980" y="402">  decision-log/                   Shared context (DB-backed, append-only, DI)</text>
 
   <text class="mono-h" x="980" y="414">SHARED TYPES</text>
@@ -691,38 +694,40 @@
 
   <text class="mono" x="952" y="560">Agent.run()                                    agent 发起 LLM 调用</text>
   <text class="mono" x="952" y="576">  │</text>
-  <text class="mono" x="952" y="592">  ├→ Provider.getModel(modelRef)                Layer 1: 解析模型引用</text>
-  <text class="mono" x="952" y="608">  ├→ Provider.getSDK(model)                     Layer 2+3: SDK + Auth 初始化</text>
-  <text class="mono" x="952" y="624">  ├→ CustomLoader.getModel(sdk, modelID)         Layer 4: 创建 LanguageModelV2</text>
-  <text class="mono" x="952" y="640">  ├→ ProviderTransform.options(model)             Layer 5: 参数适配</text>
-  <text class="mono" x="952" y="656">  ├→ ProviderTransform.message(msgs, model)       Layer 5: 消息格式修复</text>
-  <text class="mono" x="952" y="672">  ├→ Plugin.trigger("chat.params", ...)           扩展点: 插件修改参数</text>
-  <text class="mono" x="952" y="688">  ├→ streamText({ model, ... })                  Vercel AI SDK 统一调用</text>
+  <text class="mono" x="952" y="592">  ├→ ProviderLLM.stream({ model, system, ... }) 统一 LLM 调用入口 (provider/llm.ts)</text>
+  <text class="mono" x="952" y="608">  │   ├→ Provider.getLanguage(model)             Layer 1-4: 解析 + SDK + Auth + LanguageModelV2</text>
+  <text class="mono" x="952" y="624">  │   ├→ ProviderTransform.options(model)         Layer 5: 参数适配 (reasoning, caching, store...)</text>
+  <text class="mono" x="952" y="640">  │   ├→ ProviderTransform.providerOptions()      Layer 5: SDK namespace 封装</text>
+  <text class="mono" x="952" y="656">  │   ├→ ProviderTransform.maxOutputTokens()      Layer 5: 输出 token 限制</text>
+  <text class="mono" x="952" y="672">  │   ├→ ProviderLLM.wrapModel() + message()      Layer 5: 消息格式修复 middleware</text>
+  <text class="mono" x="952" y="688">  │   └→ streamText({ wrappedModel, ... })        Vercel AI SDK 统一调用</text>
   <text class="mono" x="952" y="704">  └→ Error Normalization                         Layer 6: 错误分类 + 超时</text>
+  <text class="mono-c" x="952" y="720">session/llm.ts 复用 ProviderLLM.wrapModel() + baseHeaders(), 叠加 session 特有逻辑 (plugin/trace/permission)</text>
 
   <line class="sep" x1="942" y1="720" x2="1970" y2="720"/>
 
   <!-- Core Files -->
-  <text class="h3" x="952" y="742">核心文件 (provider/ + session/)</text>
+  <text class="h3" x="952" y="750">核心文件 (provider/ + session/)</text>
 
-  <text class="mono" x="952" y="764">provider/provider.ts            Model Registry + SDK Router + 状态管理 (1040 行)</text>
-  <text class="mono" x="952" y="780">provider/transform.ts           Parameter Transform + Message 标准化 (1054 行)</text>
-  <text class="mono" x="952" y="796">provider/vendor.ts              Custom Loaders — per-provider 特殊逻辑 (502 行)</text>
-  <text class="mono" x="952" y="812">provider/auth.ts                Auth 管理 — API Key / OAuth / IAM (241 行)</text>
-  <text class="mono" x="952" y="828">provider/error.ts               Error Normalization + Overflow 检测 (190 行)</text>
-  <text class="mono" x="952" y="844">provider/bundled.ts             21 个打包 SDK 映射 (48 行)</text>
-  <text class="mono" x="952" y="860">session/llm.ts                  LLM.stream() — agent 调用 LLM 的唯一入口 (357 行)</text>
-  <text class="mono" x="952" y="876">config/config.ts                Agent model 配置 + Provider 配置 (1300 行)</text>
+  <text class="mono" x="952" y="772">provider/llm.ts                 ProviderLLM.stream() — agent 唯一 LLM 入口 + wrapModel/baseHeaders helpers</text>
+  <text class="mono" x="952" y="788">provider/provider.ts            Model Registry + SDK Router + 状态管理</text>
+  <text class="mono" x="952" y="804">provider/transform.ts           Parameter Transform + Message 标准化</text>
+  <text class="mono" x="952" y="820">provider/vendor.ts              Custom Loaders — per-provider 特殊逻辑</text>
+  <text class="mono" x="952" y="836">provider/auth.ts                Auth 管理 — API Key / OAuth / IAM</text>
+  <text class="mono" x="952" y="852">provider/error.ts               Error Normalization + Overflow 检测</text>
+  <text class="mono" x="952" y="868">provider/bundled.ts             21 个打包 SDK 映射</text>
+  <text class="mono" x="952" y="884">session/llm.ts                  Session LLM — 复用 ProviderLLM helpers + plugin/trace/permission/inactivity</text>
+  <text class="mono" x="952" y="900">config/config.ts                Agent model 配置 + Provider 配置</text>
 
-  <line class="sep" x1="942" y1="892" x2="1970" y2="892"/>
+  <line class="sep" x1="942" y1="916" x2="1970" y2="916"/>
 
   <!-- Integration Principles -->
-  <text class="h3" x="952" y="914">与 Agent 架构的集成原则</text>
+  <text class="h3" x="952" y="938">与 Agent 架构的集成原则</text>
 
-  <text class="mono" x="952" y="934">1. Provider 层是纯 infrastructure — 不做决策, 不选模型, Agent 告诉它用什么.</text>
-  <text class="mono" x="952" y="950">2. 每个 Agent 通过 config 独立选模型 — Task Agent 可用 Claude, Eval 可用 GPT.</text>
-  <text class="mono" x="952" y="966">3. Executor 是外部 agent — 它有自己的 LLM, Provider 层不管它.</text>
-  <text class="mono" x="952" y="982">4. 新增 provider 不影响任何 agent 代码 — 只改 provider/ 下的注册和适配.</text>
+  <text class="mono" x="952" y="958">1. Agent 调用 ProviderLLM.stream() — 不直接 import streamText, 不接触 provider 差异.</text>
+  <text class="mono" x="952" y="974">2. session/llm.ts 复用 ProviderLLM.wrapModel() + baseHeaders() — session 特有逻辑留在 session 层.</text>
+  <text class="mono" x="952" y="990">3. 每个 Agent 通过 config 独立选模型 — Task Agent 可用 Claude, Eval 可用 GPT.</text>
+  <text class="mono" x="952" y="1006">4. 新增 provider 只改 provider/ — agent 代码零变更.</text>
 
   </g>
 

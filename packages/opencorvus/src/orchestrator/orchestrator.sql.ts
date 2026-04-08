@@ -124,6 +124,8 @@ export const OrchestratorTaskTable = sqliteTable(
     source: text().notNull().default("api"),
     title: text().notNull(),
     request: text().notNull(),
+    /** JSON array of { mime, data, filename? } — base64 image attachments for multimodal input */
+    attachments: text({ mode: "json" }).$type<Array<{ mime: string; data: string; filename?: string }>>(),
     status: text().notNull().$type<OrchestratorTaskStatus>().default("queued"),
     priority: text().notNull().$type<OrchestratorTaskPriority>().default("normal"),
     blocking_reason: text(),

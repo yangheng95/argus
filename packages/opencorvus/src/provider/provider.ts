@@ -364,6 +364,29 @@ export namespace Provider {
         release_date: "",
         variants: {},
       })
+      const hexinClaude = (id: string, name: string, context: number, output: number): Model => ({
+        id,
+        api: { id, npm: "@ai-sdk/openai-compatible", url: "https://arsenal-openai.10jqka.com.cn:8443/ai-gateway/v1" },
+        status: "active",
+        name,
+        providerID: "hexin",
+        capabilities: {
+          temperature: true,
+          reasoning: true,
+          attachment: true,
+          toolcall: true,
+          input: { text: true, audio: false, image: true, video: false, pdf: true },
+          output: { text: true, audio: false, image: false, video: false, pdf: false },
+          interleaved: false,
+        },
+        cost: { input: 0, output: 0, cache: { read: 0, write: 0 } },
+        options: {},
+        limit: { context, output },
+        headers: {},
+        family: "claude",
+        release_date: "",
+        variants: {},
+      })
       database["hexin"] = {
         id: "hexin",
         name: "Hexin OpenAI Gateway",
@@ -373,6 +396,8 @@ export namespace Provider {
         models: {
           "gpt-5.4-mini": hexinModel("gpt-5.4-mini", "GPT-5.4 Mini"),
           "gpt-5.4": hexinModel("gpt-5.4", "GPT-5.4"),
+          "claude-sonnet-4-6": hexinClaude("claude-sonnet-4-6", "Claude Sonnet 4.6", 200000, 16384),
+          "claude-opus-4-6": hexinClaude("claude-opus-4-6", "Claude Opus 4.6", 200000, 16384),
         },
       }
     }

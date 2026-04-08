@@ -13,8 +13,9 @@
  *   • operator notes
  *   • tech stack context (from Decision Log)
  */
-import { streamText, stepCountIs } from "ai"
+import { stepCountIs } from "ai"
 import { Provider } from "@/provider/provider"
+import { ProviderLLM } from "@/provider/llm"
 import { createPlannerTools, prefetchContext } from "@/planner/tools"
 import { toolGuard } from "@/util/tool-guard"
 import { Log } from "@/util/log"
@@ -64,7 +65,6 @@ export async function planGoal(input: {
   const def = await Provider.defaultModel().catch(() => undefined)
   if (!def) throw new Error("no LLM model available for per-goal planner")
   const model = await Provider.getModel(def.providerID, def.modelID)
-  const language = await Provider.getLanguage(model)
 
   const guard = toolGuard(createPlannerTools(input.workDir, input.sessionID))
   const context = prefetchContext(task.title, task.request)
@@ -88,11 +88,10 @@ export async function planGoal(input: {
   const abortSignals: AbortSignal[] = [stallController.signal, guard.signal]
   if (signal) abortSignals.push(signal)
 
-  const stream = streamText({
-    model: language,
+  const stream = await ProviderLLM.stream({
+    model,
     stopWhen: stepCountIs(MAX_STEPS),
     tools: guard.tools,
-    maxOutputTokens: 16384,
     abortSignal: AbortSignal.any(abortSignals),
     system: systemPrompt,
     messages: [{ role: "user" as const, content: userPrompt }],
@@ -133,7 +132,7 @@ export async function planGoal(input: {
   AgentTrace.capture("pipeline-planner", 1,
     { system: systemPrompt, messages: [{ role: "user", content: userPrompt }] },
     allText,
-    { goalID: goal.id, model: language.modelId, toolCalls: toolCallCount },
+    { goalID: goal.id, model: model.id, toolCalls: toolCallCount },
   )
 
   // Parse output — extract plan section or use full text
