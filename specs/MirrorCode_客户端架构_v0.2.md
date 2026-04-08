@@ -1,8 +1,8 @@
-# AimeCode 客户端架构设计 v0.2
+# MirrorCode 客户端架构设计 v0.2
 
 **架构方向**：纯客户端 SPA，服务层 Mock 优先，真实接口后续替换
 **运行前提**：无需后端，`npm install && npm run dev` 即可启动
-**对应 PRD**：AimeCode 骨架 PRD v0.1
+**对应 PRD**：MirrorCode 骨架 PRD v0.1
 
 ---
 
@@ -21,178 +21,25 @@
 
 ## 一、技术栈
 
-> 选型原则：每个类目选一个成熟库，不造轮子。所有库必须满足：npm 周下载量 > 50k、TypeScript 类型完整、最近 6 个月有维护。
-
-### 1.1 核心框架
-
-| 类别 | 选型 | 版本 | 理由 |
-|---|---|---|---|
-| 构建工具 | **Vite** | ^5.4 | 秒级热更新，零配置启动，ESM 原生支持 |
-| 框架 | **React** | ^18.3 | 生态完善，hooks 体系成熟，并发特性（Suspense / Transition） |
-| 语言 | **TypeScript** | ^5.5 | 接口定义是 Mock/Real 切换机制的基石 |
-| 包管理 | **pnpm** | ^9.0 | 磁盘空间效率高，monorepo 友好，严格的依赖隔离 |
-
-### 1.2 AI / LLM 集成
-
-| 类别 | 选型 | 版本 | 理由 |
-|---|---|---|---|
-| LLM SDK | **@anthropic-ai/sdk** | ^0.30 | 官方 TypeScript SDK，流式（streaming）原生支持，Tool Use API 直接对应 M02 工具定义 |
-| 流式消费 | **原生 AsyncGenerator** | — | Mock 和 Real 共用同一 `ILLMService` 接口，无需额外封装 |
-| AI UI 框架 | **不使用** Vercel AI SDK | — | Vercel AI SDK 绑定 Next.js 生态过深，且抽象了流式细节，与本项目的 StreamEvent discriminated union 设计冲突。直接用 `@anthropic-ai/sdk` + 自定义 AsyncGenerator 更可控 |
-
-**为什么不用 Vercel AI SDK**：
-- Vercel AI SDK 的 `useChat` hook 内部管理消息状态，与本项目的 `session.store`（Zustand）职责冲突
-- Tool Use 的处理逻辑被 SDK 封装，无法精确控制 ToolCallBadge 的 pending/done/error 状态
-- 流式事件类型是 Vercel 自定义格式，需要额外适配层转成本项目的 `StreamEvent` 类型
-- 直接用 `@anthropic-ai/sdk` 的 `messages.stream()` + `for await` 消费，代码量相当，但完全可控
-
-### 1.3 UI 组件 & 样式
-
-| 类别 | 选型 | 版本 | 理由 |
-|---|---|---|---|
-| CSS 框架 | **Tailwind CSS** | ^3.4 | utility-first，无额外打包体积，与 shadcn/ui 配套 |
-| 组件库 | **shadcn/ui** | latest（copy-paste） | 非 npm 依赖，复制源码到项目中完全可控；基于 Radix UI primitives，可访问性内建 |
-| 底层 primitives | **Radix UI** | ^1.1 | shadcn/ui 的底层，提供 Dialog / Popover / DropdownMenu / Tooltip 等无样式可访问组件 |
-| 图标 | **Lucide React** | ^0.400 | shadcn/ui 默认图标库，1000+ 图标，tree-shakeable，与 Tailwind 配色一致 |
-| 类名合并 | **clsx** + **tailwind-merge** | ^2.1 / ^2.3 | clsx 合并条件类名，tailwind-merge 解决 Tailwind 类冲突 |
-| CSS 变量方案 | **Tailwind CSS + CSS Custom Properties** | — | M14 GUI 规范的色彩系统通过 CSS 变量实现，Tailwind 通过 `theme.extend.colors` 映射 |
-
-### 1.4 数据展示
-
-| 类别 | 选型 | 版本 | 理由 |
-|---|---|---|---|
-| 图表 | **Plotly.js**（`plotly.js-dist-min`） | ^2.35 | 金融图表首选：K 线（candlestick）、多子图（subplots）、范围选择器原生支持 |
-| 图表 React 封装 | **react-plotly.js** | ^2.6 | Plotly.js 的薄 React wrapper，支持 responsive resize |
-| 数据表格 | **@tanstack/react-table** | ^8.17 | 无 UI 的 headless 表格引擎，排序/分页/列调整全内建，与 shadcn/ui Table 组件搭配 |
-| 代码高亮 | **Shiki** | ^1.10 | VSCode 同源语法高亮引擎，支持 200+ 语言主题，比 Monaco 轻 10 倍（仅高亮无编辑） |
-| 代码编辑器 | **@monaco-editor/react** | ^4.6 | 仅用于阶段 1 M13 工作区（代码编辑场景）。阶段 0 代码块只读展示用 Shiki |
-| Markdown 渲染 | **react-markdown** | ^9.0 | 左栏 AI 文字回复的 Markdown 渲染 |
-| Markdown 代码块 | **rehype-highlight** | ^7.0 | react-markdown 的插件，代码块语法高亮 |
-
-**为什么阶段 0 用 Shiki 替代 Monaco**：
-- 代码块场景是只读展示 + 复制，不需要编辑器功能
-- Monaco 包体 ~3.5MB（gzip ~800KB），Shiki ~200KB，首屏加载差 4 倍
-- Shiki 用 VSCode 同源的 TextMate 语法，高亮效果与 Monaco 完全一致
-- Monaco 保留在 `devDependencies` 中，阶段 1 M13 工作区编辑场景再启用
-
-### 1.5 布局 & 交互
-
-| 类别 | 选型 | 版本 | 理由 |
-|---|---|---|---|
-| 面板分栏拖拽 | **react-resizable-panels** | ^2.0 | M07 双栏布局的核心：左右栏拖拽调整比例，API 简洁，SSR 兼容 |
-| 虚拟滚动 | **@tanstack/react-virtual** | ^3.8 | MessageList 大量消息时的虚拟化渲染，与 TanStack Table 同生态 |
-| 键盘快捷键 | **tinykeys** | ^2.1 | 0.7KB 的快捷键库，声明式 API，支持组合键和序列键 |
-| 拖拽（文件上传） | **阶段 1 再定** | — | 阶段 0 不支持文件上传，阶段 1 若需要可用 `react-dropzone` |
-| Toast 通知 | **sonner** | ^1.5 | shadcn/ui 推荐的 Toast 库，支持 promise toast（工具调用进度）、可堆叠 |
-| 动效 | **CSS Transition + Tailwind** | — | 全部动效 ≤ 200ms，不需要 framer-motion 的复杂编排能力。用 Tailwind 的 `transition-*` 类即可 |
-
-**为什么不用 framer-motion**：
-- 本项目动效极简（hover 120ms、面板展开 200ms、消息出现 150ms），全部用 CSS transition 覆盖
-- framer-motion 包体 ~32KB（gzip），为了几个 transition 不值得
-- 如果阶段 1 需要复杂动画（如图表切换动画），再引入
-
-### 1.6 数据处理
-
-| 类别 | 选型 | 版本 | 理由 |
-|---|---|---|---|
-| 日期处理 | **dayjs** | ^1.11 | M02 时间表述解析（"最近三年"→日期区间），2KB 轻量，API 与 moment 兼容 |
-| CSV 导出 | **papaparse** | ^5.4 | M07 DataTable 的 CSV 导出功能，支持大数据量流式序列化 |
-| 数字格式化 | **原生 `Intl.NumberFormat`** | — | M07 的百分比/亿元/倍数格式化，浏览器原生 API 足够，不需要额外库 |
-| UUID 生成 | **`crypto.randomUUID()`** | — | 浏览器原生 API，session/message ID 生成 |
-
-### 1.7 数据持久化
-
-| 类别 | 选型 | 版本 | 理由 |
-|---|---|---|---|
-| 会话持久化 | **zustand/middleware/persist** + **localStorage** | — | 会话数据量小（<5MB），localStorage 简单可靠，刷新/崩溃后自动恢复 |
-| 大数据缓存 | **idb-keyval** | ^6.2 | M06 行情数据（500 bar × 6 只 = ~200KB）超出 localStorage 5MB 限制时，用 IndexedDB。idb-keyval 是最轻量的 IndexedDB 封装（600B） |
-| API Key 存储 | **localStorage**（Base64 编码） | — | 仅防止明文直接可见，不是加密。UI 明确提示"仅存本地" |
-
-**为什么不用 SQLite / Dexie / PouchDB**：
-- 阶段 0 数据量极小（会话文本 + Mock 数据），localStorage + IndexedDB 足够
-- SQLite（sql.js / wa-sqlite）需要 WASM 加载，首屏多 ~500ms
-- Dexie 功能强大但 API 偏重（ORM 风格），本项目只需 key-value 读写
-- 如果阶段 2 需要复杂查询（会话全文搜索、跨会话数据分析），再考虑 Dexie
-
-### 1.8 HTTP 客户端（Real 模式）
-
-| 类别 | 选型 | 版本 | 理由 |
-|---|---|---|---|
-| LLM API 调用 | **@anthropic-ai/sdk 内置** | — | SDK 自带 HTTP 客户端 + 流式支持 + 重试逻辑 |
-| 金融数据 API | **ky** | ^1.4 | 轻量 HTTP 客户端（3.4KB），基于 fetch，内建重试、超时、JSON 解析。用于 TushareService / AkshareService 的 HTTP 调用 |
-
-**为什么不用 axios**：
-- axios 包体 ~13KB（gzip），ky 仅 3.4KB，功能覆盖本项目需求
-- ky 基于原生 fetch，与现代浏览器 API 一致
-- 不需要 axios 的请求/响应拦截器链式架构
-
-### 1.9 状态管理
-
-| 类别 | 选型 | 版本 | 理由 |
-|---|---|---|---|
-| 全局状态 | **Zustand** | ^4.5 | 轻量（0.9KB），无 boilerplate，persist 中间件内建，TypeScript 支持优秀 |
-| 派生状态 | **Zustand selector** + **useMemo** | — | 简单的 selector 函数足够，不需要 Recoil/Jotai 的 atom 模型 |
-| URL 状态 | **不管理** | — | 单页应用无路由需求（阶段 0 只有一个 ChatPage），不需要 URL 状态同步 |
-
-### 1.10 开发工具 & 质量
-
-| 类别 | 选型 | 版本 | 理由 |
-|---|---|---|---|
-| 测试框架 | **Vitest** | ^2.0 | Vite 原生测试框架，配置零成本，兼容 Jest API |
-| 组件测试 | **@testing-library/react** | ^16.0 | 以用户行为驱动测试，与 Vitest 搭配 |
-| 合约测试 | **Vitest** `describe.each` | — | M12 的 Mock/Real 合约一致性测试 |
-| E2E 测试 | **Playwright** | ^1.45 | 阶段 0.5 跑 S01-S05 端到端验证，跨浏览器支持 |
-| Lint | **ESLint** + **@antfu/eslint-config** | ^9.0 / latest | Anthony Fu 的 flat config，内建 TypeScript + React 规则，零配置 |
-| 格式化 | **Prettier** | ^3.3 | 与 ESLint 配合，统一代码风格 |
-| Git hooks | **simple-git-hooks** + **lint-staged** | ^2.11 / ^15.2 | 提交前自动 lint + format，比 husky 轻量 |
-| 类型检查 | **tsc --noEmit** | — | CI 中独立运行，不依赖 Vite 的类型检查 |
-| 错误追踪 | **Sentry** (`@sentry/react`) | ^8.0 | 阶段 0.5 Real 模式上线后启用，捕获运行时异常 + 性能指标（Web Vitals） |
-| 性能监控 | **web-vitals** | ^4.0 | 首屏加载（LCP）、交互延迟（INP）、布局偏移（CLS）指标采集，上报到 Sentry |
-
-### 1.11 部署
-
 | 类别 | 选型 | 理由 |
 |---|---|---|
-| 静态托管 | **Vercel** 或 **Cloudflare Pages** | 零配置部署 Vite SPA，全球 CDN，免费额度足够 MVP |
-| 域名 | 待定 | — |
-| CI/CD | **GitHub Actions** | 与代码仓库同平台，Vercel/CF Pages 自动集成 |
-
-### 1.12 技术栈全景图
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                        AimeCode SPA                         │
-├─────────────────┬───────────────────────────────────────────┤
-│   UI 层         │  React 18 + Tailwind CSS 3 + shadcn/ui   │
-│                 │  Radix UI + Lucide Icons + sonner         │
-├─────────────────┼───────────────────────────────────────────┤
-│   数据展示      │  Plotly.js (图表) + TanStack Table (表格) │
-│                 │  Shiki (代码高亮) + react-markdown (文字) │
-├─────────────────┼───────────────────────────────────────────┤
-│   布局/交互     │  react-resizable-panels (分栏)            │
-│                 │  TanStack Virtual (虚拟列表) + tinykeys   │
-├─────────────────┼───────────────────────────────────────────┤
-│   AI 集成       │  @anthropic-ai/sdk (LLM)                  │
-│                 │  AsyncGenerator (流式消费)                 │
-├─────────────────┼───────────────────────────────────────────┤
-│   状态/存储     │  Zustand (状态) + localStorage (会话)     │
-│                 │  idb-keyval (IndexedDB 大数据缓存)        │
-├─────────────────┼───────────────────────────────────────────┤
-│   数据处理      │  dayjs (日期) + papaparse (CSV)           │
-│                 │  ky (HTTP) + Intl.NumberFormat (格式化)   │
-├─────────────────┼───────────────────────────────────────────┤
-│   质量/工具     │  Vite 5 + TypeScript 5 + pnpm             │
-│                 │  Vitest + Playwright + ESLint + Prettier  │
-│                 │  Sentry + web-vitals                       │
-└─────────────────┴───────────────────────────────────────────┘
-```
+| 构建工具 | Vite 5 | 秒级热更新，零配置启动 |
+| 框架 | React 18 | 生态完善，hooks 体系成熟 |
+| 语言 | TypeScript 5 | 接口定义是 Mock 机制的基石 |
+| 样式 | Tailwind CSS 3 | 快速布局，无额外打包体积 |
+| 组件库 | shadcn/ui | 复制粘贴式组件，完全可控 |
+| 代码编辑器 | Monaco Editor | 与 VSCode 同源，免费商用 |
+| 图表 | Plotly.js | 金融图表（K线/折线）首选 |
+| 状态管理 | Zustand 4 | 轻量，无 boilerplate |
+| 数据请求 | 无（服务层直接调用）| Mock 阶段不需要 HTTP 客户端 |
+| 流式消费 | 原生 AsyncGenerator | Mock 和真实实现共用同一接口 |
 
 ---
 
 ## 二、目录结构
 
 ```
-aimecode/
+mirrorcode/
 │
 ├── index.html
 ├── vite.config.ts
@@ -540,12 +387,8 @@ export function getExecutorService(): IExecutorService {
   return _executor
 }
 
-/**
- * 切换 Mock/Real 时：先 abort 旧实例的进行中请求，再清空缓存。
- * 防止旧 MockLLMService 的 for-await 循环在切换后继续 yield 事件。
- */
+/** 切换 Mock/Real 时清空缓存，强制重新实例化 */
 export function resetServiceCache(): void {
-  _llm?.abort()          // ILLMService 接口保证有 abort()
   _llm = null
   _finance = null
   _executor = null
@@ -584,12 +427,10 @@ interface ChatSession {
 }
 
 interface SessionState {
-  // 用 Record 替代数组：按 id 直接读写为 O(1)，不再 sessions.map() 遍历
-  sessionsById: Record<string, ChatSession>
-  sessionOrder: string[]            // 按 updatedAt 降序排列的 id 列表
+  sessions: ChatSession[]
   currentSessionId: string | null
   isStreaming: boolean
-  streamingBlocks: ContentBlock[]
+  streamingBlocks: ContentBlock[]  // 当前流中积累的块
 
   // Actions
   createSession: () => string
@@ -604,20 +445,18 @@ interface SessionState {
 export const useSessionStore = create<SessionState>()(
   persist(
     (set, get) => ({
-      sessionsById: {},
-      sessionOrder: [],
+      sessions: [],
       currentSessionId: null,
       isStreaming: false,
       streamingBlocks: [],
 
       createSession: () => {
         const id = crypto.randomUUID()
-        const session: ChatSession = {
-          id, title: '新对话', messages: [], createdAt: new Date(),
-        }
         set(s => ({
-          sessionsById: { ...s.sessionsById, [id]: session },
-          sessionOrder: [id, ...s.sessionOrder],   // 最新在前
+          sessions: [...s.sessions, {
+            id, title: '新对话',
+            messages: [], createdAt: new Date()
+          }],
           currentSessionId: id,
         }))
         return id
@@ -626,70 +465,57 @@ export const useSessionStore = create<SessionState>()(
       selectSession: (id) => set({ currentSessionId: id }),
 
       addUserMessage: (content) => {
-        const { currentSessionId, sessionsById } = get()
+        const { currentSessionId, sessions } = get()
         if (!currentSessionId) return
-        const session = sessionsById[currentSessionId]
-        if (!session) return
         const msg: Message = {
           id: crypto.randomUUID(),
           role: 'user', content,
           createdAt: new Date(),
         }
-        // O(1) 更新，不遍历全部会话
         set({
-          sessionsById: {
-            ...sessionsById,
-            [currentSessionId]: {
-              ...session,
-              messages: [...session.messages, msg],
-              title: session.messages.length === 0 ? content.slice(0, 30) : session.title,
-            },
-          },
+          sessions: sessions.map(s =>
+            s.id === currentSessionId
+              ? { ...s, messages: [...s.messages, msg],
+                  title: s.messages.length === 0 ? content.slice(0, 30) : s.title }
+              : s
+          )
         })
       },
 
       appendStreamEvent: (event) => {
-        // 利用 discriminated union，switch 分支中 TypeScript 自动收窄类型，
-        // 无需任何 null check（event.delta / event.code 等在对应分支中必然存在）。
+        // text_delta：追加到当前文本块
+        // code_block / chart_data / table_data：新增结构化块
+        // disclaimer：追加免责声明块（内容取常量，不由 LLM 生成）
         set(s => {
           const blocks = [...s.streamingBlocks]
-          switch (event.type) {
-            case 'text_delta': {
-              const last = blocks.at(-1)
-              if (last?.type === 'text') {
-                blocks[blocks.length - 1] = { type: 'text', content: last.content + event.delta }
-              } else {
-                blocks.push({ type: 'text', content: event.delta })
-              }
-              break
+          if (event.type === 'text_delta' && event.delta) {
+            const last = blocks.at(-1)
+            if (last?.type === 'text') {
+              blocks[blocks.length - 1] = { type: 'text', content: last.content + event.delta }
+            } else {
+              blocks.push({ type: 'text', content: event.delta })
             }
-            case 'code_block':
-              blocks.push({ type: 'code', language: event.language, code: event.code })
-              break
-            case 'chart_data':
-              blocks.push({ type: 'chart', spec: event.chartSpec })
-              break
-            case 'table_data':
-              blocks.push({ type: 'table', columns: event.columns, rows: event.rows })
-              break
-            case 'disclaimer':
-              blocks.push({ type: 'disclaimer', content: DISCLAIMER_TEXT })
-              break
-            // thinking / tool_start / tool_end / tool_error / done / error
-            // 不产生 ContentBlock，由其他 UI 组件（ToolCallBadge 等）消费
+          } else if (event.type === 'code_block' && event.code) {
+            blocks.push({ type: 'code', language: event.language ?? 'python', code: event.code })
+          } else if (event.type === 'chart_data' && event.chartSpec) {
+            blocks.push({ type: 'chart', spec: event.chartSpec })
+          } else if (event.type === 'table_data') {
+            blocks.push({ type: 'table', columns: event.columns ?? [], rows: event.rows ?? [] })
+          } else if (event.type === 'disclaimer') {
+            // 内容来自常量 DISCLAIMER_TEXT，不可由 AI 动态生成。
+            // 导入路径：'../constants/disclaimer'
+            blocks.push({ type: 'disclaimer', content: DISCLAIMER_TEXT })
           }
           return { streamingBlocks: blocks }
         })
       },
 
       finalizeAssistantMessage: (messageId) => {
-        const { currentSessionId, sessionsById, streamingBlocks } = get()
+        const { currentSessionId, sessions, streamingBlocks } = get()
         if (!currentSessionId) return
-        const session = sessionsById[currentSessionId]
-        if (!session) return
         const fullText = streamingBlocks
-          .filter((b): b is { type: 'text'; content: string } => b.type === 'text')
-          .map(b => b.content)
+          .filter(b => b.type === 'text')
+          .map(b => (b as { type: 'text'; content: string }).content)
           .join('')
         const msg: Message = {
           id: messageId,
@@ -699,10 +525,11 @@ export const useSessionStore = create<SessionState>()(
           createdAt: new Date(),
         }
         set({
-          sessionsById: {
-            ...sessionsById,
-            [currentSessionId]: { ...session, messages: [...session.messages, msg] },
-          },
+          sessions: sessions.map(s =>
+            s.id === currentSessionId
+              ? { ...s, messages: [...s.messages, msg] }
+              : s
+          ),
           streamingBlocks: [],
           isStreaming: false,
         })
@@ -711,7 +538,7 @@ export const useSessionStore = create<SessionState>()(
       setStreaming: (v) => set({ isStreaming: v }),
       clearStreamingBlocks: () => set({ streamingBlocks: [] }),
     }),
-    { name: 'aimecode-sessions', storage: hydratedStorage }
+    { name: 'mirrorcode-sessions', storage: hydratedStorage }
   )
 )
 ```
@@ -750,7 +577,7 @@ export const useConfigStore = create<ConfigState>()(
         resetServiceCache()     // Key 变更时同样必须刷新缓存，旧实例持有旧 Key
       },
     }),
-    { name: 'aimecode-config' }
+    { name: 'mirrorcode-config' }
   )
 )
 ```
@@ -926,8 +753,10 @@ export function useChat() {
     store.setStreaming(true)
     store.clearStreamingBlocks()
 
-    // 2. 构建消息历史（取当前会话，硬截断最近 N 轮，见 M01 §3.6）
-    const currentSession = store.sessionsById[store.currentSessionId ?? '']
+    // 2. 构建消息历史（取当前会话的全部消息）
+    const currentSession = store.sessions.find(
+      s => s.id === store.currentSessionId
+    )
     if (!currentSession) return
 
     // 3. 消费流
@@ -937,7 +766,7 @@ export function useChat() {
       })
       for await (const event of stream) {
         if (event.type === 'done') {
-          store.finalizeAssistantMessage(event.messageId)  // discriminated union 保证 done 类型有 messageId
+          store.finalizeAssistantMessage(event.messageId ?? crypto.randomUUID())
           break
         }
         if (event.type === 'error') {
@@ -1080,74 +909,31 @@ npm run lint
 npm run typecheck
 ```
 
-### package.json 完整依赖
+### package.json 关键依赖
 
 ```json
 {
   "dependencies": {
     "react": "^18.3.0",
     "react-dom": "^18.3.0",
-
     "zustand": "^4.5.0",
-
-    "plotly.js-dist-min": "^2.35.0",
+    "@monaco-editor/react": "^4.6.0",
+    "plotly.js-dist-min": "^2.30.0",
     "react-plotly.js": "^2.6.0",
-    "@tanstack/react-table": "^8.17.0",
-    "@tanstack/react-virtual": "^3.8.0",
-
-    "shiki": "^1.10.0",
-    "react-markdown": "^9.0.0",
-    "rehype-highlight": "^7.0.0",
-
-    "react-resizable-panels": "^2.0.0",
-    "tinykeys": "^2.1.0",
-    "sonner": "^1.5.0",
-
-    "dayjs": "^1.11.0",
-    "papaparse": "^5.4.0",
-    "idb-keyval": "^6.2.0",
-    "ky": "^1.4.0",
-
+    "tailwindcss": "^3.4.0",
     "clsx": "^2.1.0",
-    "tailwind-merge": "^2.3.0",
-    "lucide-react": "^0.400.0",
-
-    "@anthropic-ai/sdk": "^0.30.0"
+    "react-markdown": "^9.0.0",
+    "rehype-highlight": "^7.0.0"
   },
   "devDependencies": {
-    "typescript": "^5.5.0",
-    "vite": "^5.4.0",
-    "@vitejs/plugin-react": "^4.3.0",
-
+    "typescript": "^5.4.0",
+    "vite": "^5.2.0",
     "@types/react": "^18.3.0",
-    "@types/react-dom": "^18.3.0",
-    "@types/react-plotly.js": "^2.6.0",
-    "@types/papaparse": "^5.3.0",
-
-    "tailwindcss": "^3.4.0",
-    "autoprefixer": "^10.4.0",
-    "postcss": "^8.4.0",
-
-    "vitest": "^2.0.0",
-    "@testing-library/react": "^16.0.0",
-    "@testing-library/jest-dom": "^6.4.0",
-    "playwright": "^1.45.0",
-
-    "eslint": "^9.0.0",
-    "@antfu/eslint-config": "latest",
-    "prettier": "^3.3.0",
-    "simple-git-hooks": "^2.11.0",
-    "lint-staged": "^15.2.0",
-
-    "@sentry/react": "^8.0.0",
-    "web-vitals": "^4.0.0",
-
-    "@monaco-editor/react": "^4.6.0"
+    "@vitejs/plugin-react": "^4.3.0",
+    "eslint": "^9.0.0"
   }
 }
 ```
-
-> 注意：`@monaco-editor/react` 放在 `devDependencies` 中，阶段 0 不打包。阶段 1 M13 工作区启用时移入 `dependencies` 并动态加载（`React.lazy`）。
 
 ---
 
@@ -1159,90 +945,6 @@ npm run typecheck
 2. `registry.ts` 中已经有 `useMock ? Mock : Real` 的分支，无需修改
 3. 在 `DevToolbar` 中关闭 Mock 开关，验证真实调用
 4. 全部场景测试通过后，可考虑将该服务的 `useMock` 默认值改为 `false`
-
----
-
-## 附录 B：横切关注点
-
-以下关注点跨越多个模块，需要在阶段 0 统一处理，不能推迟。
-
-### B.1 上下文窗口管理（Phase 0 硬截断）
-
-M08（上下文记忆引擎）推迟到阶段 1，但 Phase 0 仍必须防止上下文爆炸。
-
-**策略**：`useChat.ts` 构建消息历史时，取最近 N 轮对话（默认 N=20，即 20 条 user + 20 条 assistant = 40 条消息）。超出部分直接丢弃，不做摘要压缩。
-
-```typescript
-// useChat.ts 中构建消息历史
-const MAX_CONTEXT_TURNS = 20
-const messages = currentSession.messages.slice(-MAX_CONTEXT_TURNS * 2)
-```
-
-**配置**：`config.store` 新增 `maxContextTurns: number`（默认 20），DevToolbar 可调。
-
-**降级行为**：截断后第一条消息如果是 assistant，丢弃它（保证消息历史以 user 开头）。不做任何提示——这是 Phase 0 的临时策略，Phase 1 由 M08 接管。
-
-### B.2 React Error Boundary
-
-每个右栏渲染组件（ChartRenderer / DataTable / CodeBlock）必须包裹在独立的 Error Boundary 中，防止单个组件崩溃导致整个应用白屏。
-
-```typescript
-// src/components/output/SafeRender.tsx
-export function SafeRender({ children, fallback }: {
-  children: React.ReactNode
-  fallback: (error: Error) => React.ReactNode
-}) {
-  // React class component Error Boundary 标准实现
-  // 捕获渲染异常，显示 fallback UI，console.error 完整堆栈
-}
-```
-
-**使用**：`OutputPanel` 中每个 ContentBlock 渲染单元独立包裹：
-
-```tsx
-{richBlocks.map((block, i) => (
-  <SafeRender key={i} fallback={(err) => <ErrorCard error={err} block={block} />}>
-    <BlockRenderer block={block} />
-  </SafeRender>
-))}
-```
-
-### B.3 LLM API 重试与限流（Real 模式）
-
-| 场景 | 策略 |
-|---|---|
-| 429 Too Many Requests | 指数退避重试，最多 3 次（1s → 2s → 4s），超过后向用户显示"请求过于频繁" |
-| 5xx Server Error | 同上重试策略 |
-| 网络断开 | 不重试，立即显示"网络连接中断" |
-| 流中断（partial stream） | 保留已接收内容，显示"回复中断，已保留已生成内容" |
-
-重试逻辑在 `AnthropicLLMService.chat()` 内部实现，不暴露给 `useChat`。
-
-### B.4 Token 预算控制（Real 模式）
-
-`config.store` 新增：
-
-```typescript
-maxTokensPerRequest: number   // 单次请求最大输出 token，默认 4096
-dailyTokenBudget: number      // 每日 token 预算，默认 100000（约 $3）
-dailyTokenUsed: number        // 当日已用（persist 到 localStorage，每日零点重置）
-```
-
-**行为**：
-- 每次 LLM 调用前检查 `dailyTokenUsed + maxTokensPerRequest > dailyTokenBudget`，若超预算则拒绝发送并提示用户
-- 每次流结束后，累加实际消耗的 token 数（从 Anthropic API 响应的 `usage` 字段读取）
-- DevToolbar 显示当日已用/预算
-
-### B.5 请求/响应日志（Phase 0 基础版）
-
-M11 的审计日志在 Phase 1 才做，但 Phase 0 需要基础调试能力。
-
-**策略**：`registry.ts` 的每个工厂函数返回的服务实例包裹一层 `LoggingProxy`，在 `console.group` 中记录：
-- 调用方法名 + 参数
-- 响应时间
-- 成功/失败状态
-
-**仅开发环境**（`import.meta.env.DEV`）生效，生产构建自动剥离。
 
 ---
 
