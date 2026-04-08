@@ -1,12 +1,13 @@
 import { beforeEach, expect, test } from "bun:test"
 import { conversationMessages } from "../src/utils/conversation"
-import { clearAgentEvents, messageStore, setMessages, setAgentEvents, setSelectedTaskID } from "../src/store/messages"
+import { agentCards, clearAgentEvents, messageStore, setMessages, setAgentEvents, setSelectedTaskID } from "../src/store/messages"
 import {
   clearConversationUiState,
   toggleToolOutputExpanded,
   toolOutputExpanded,
 } from "../src/store/conversation-ui"
 import { setBoardStore } from "../src/store/board"
+import { routeSSEEvent } from "../src/services/events"
 
 // Polyfill requestAnimationFrame for Bun test environment —
 // scheduleRebuildAgentCards uses it for debouncing.
@@ -329,6 +330,91 @@ test("coding executor ids classify as executor cards", () => {
     expect(card?._agentStage).toBe("executor")
     expect(card?._agentMessages[0]?.parts[0]?.text).toBe(`${agent} text`)
   }
+})
+
+test("live agent.updated events render agent cards before transcript persistence", async () => {
+  setSelectedTaskID("task-1")
+  setBoardStore("selectedTaskID", "task-1")
+  setBoardStore("board", {
+    task: {
+      id: "task-1",
+      status: "active",
+      sessionID: "root-session",
+    },
+    interactions: [],
+    lanes: [],
+  })
+
+  expect(routeSSEEvent({
+    type: "agent.updated",
+    payload: {
+      taskID: "task-1",
+      stage: "architect",
+      kind: "status",
+      summary: "Designing contracts",
+    },
+  })).toBe(true)
+
+  await Bun.sleep(40)
+
+  const items = conversationMessages()
+  expect(items).toHaveLength(1)
+  expect(items[0]?._agentCard).toBe(true)
+  expect(items[0]?._agentStage).toBe("architect")
+  expect(items[0]?._agentMessages).toHaveLength(1)
+})
+
+test("run.progress keeps executor messages attached to the real goal session", async () => {
+  setSelectedTaskID("task-1")
+  setBoardStore("selectedTaskID", "task-1")
+  setBoardStore("board", {
+    task: {
+      id: "task-1",
+      status: "running",
+      sessionID: "root-session",
+    },
+    interactions: [],
+    goalWorkflows: [{
+      goalID: "goal-1",
+      goalTitle: "Implement auth",
+      goalStatus: "running",
+      priority: "blocking",
+      steps: [],
+    }],
+    lanes: [{
+      id: "goals",
+      title: "Goals",
+      cards: [{
+        id: "goal-1",
+        title: "Implement auth",
+        status: "running",
+        metadata: { sessionID: "goal-session-1" },
+      }],
+    }],
+  })
+
+  expect(routeSSEEvent({
+    type: "run.progress",
+    timestamp: 1000,
+    summary: "Tool call: read_file",
+    payload: {
+      taskID: "task-1",
+      runID: "run-1",
+      type: "tool_call",
+      sessionID: "goal-session-1",
+      sourceID: "tool-1",
+      name: "read_file",
+      input: { file: "src/auth.ts" },
+    },
+  })).toBe(true)
+
+  await Bun.sleep(80)
+
+  const group = agentCards()["goal-group:goal-1"]
+  expect(group).toBeDefined()
+  expect(group._agentGoalGroup).toBe(true)
+  expect(group._agentInternalCards).toHaveLength(1)
+  expect(group._agentInternalCards?.[0]?._agentStage).toBe("executor")
 })
 
 test("conversation ui state resets on task switch and tracks tool output expansion externally", () => {

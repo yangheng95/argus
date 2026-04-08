@@ -5,6 +5,7 @@ import {
   OrchestratorArtifactTable,
   OrchestratorChannelBindingTable,
   OrchestratorDeliveryTable,
+  OrchestratorExecutorSessionTable,
   OrchestratorEvaluationTable,
   OrchestratorGoalRunTable,
   OrchestratorGoalTable,
@@ -92,7 +93,22 @@ function buildBoard(task: typeof OrchestratorTaskTable.$inferSelect) {
           .all(),
       )
     : []
+  const executorSessionRows = run
+    ? Database.use((db) =>
+        db
+          .select()
+          .from(OrchestratorExecutorSessionTable)
+          .where(eq(OrchestratorExecutorSessionTable.run_id, run.id))
+          .all(),
+      )
+    : []
+  const goalRunByGoalID = new Map(goalRunRows.map((r) => [r.goal_id, r]))
   const goalRunSessionMap = new Map(goalRunRows.map((r) => [r.goal_id, r.session_id]))
+  const goalRunExecutorSessionMap = new Map(
+    executorSessionRows.flatMap((row) =>
+      row.goal_run_id ? [[row.goal_run_id, row.id] as const] : [],
+    ),
+  )
   const interactions = Database.use((db) =>
     db
       .select()
@@ -438,6 +454,10 @@ function buildBoard(task: typeof OrchestratorTaskTable.$inferSelect) {
               metadata: {
                 ...(goal.metadata as Record<string, unknown> | null ?? {}),
                 sessionID: goalRunSessionMap.get(goal.id) ?? undefined,
+                executorSessionID: (() => {
+                  const goalRun = goalRunByGoalID.get(goal.id)
+                  return goalRun ? goalRunExecutorSessionMap.get(goalRun.id) ?? undefined : undefined
+                })(),
               },
             })),
         },
@@ -516,6 +536,16 @@ function boardTagForTask(task: typeof OrchestratorTaskTable.$inferSelect) {
       })
       .from(OrchestratorGoalRunTable)
       .where(eq(OrchestratorGoalRunTable.task_id, task.id))
+      .get(),
+  )
+  const executorSessions = Database.use((db) =>
+    db
+      .select({
+        count: sql<number>`count(*)`,
+        updated: sql<number>`coalesce(max(${OrchestratorExecutorSessionTable.time_updated}), 0)`,
+      })
+      .from(OrchestratorExecutorSessionTable)
+      .where(eq(OrchestratorExecutorSessionTable.task_id, task.id))
       .get(),
   )
   const interactions = Database.use((db) =>
@@ -601,6 +631,8 @@ function boardTagForTask(task: typeof OrchestratorTaskTable.$inferSelect) {
     goals?.updated ?? 0,
     goalRuns?.count ?? 0,
     goalRuns?.updated ?? 0,
+    executorSessions?.count ?? 0,
+    executorSessions?.updated ?? 0,
     noteStats?.count ?? 0,
     noteStats?.updated ?? 0,
     interactions?.count ?? 0,

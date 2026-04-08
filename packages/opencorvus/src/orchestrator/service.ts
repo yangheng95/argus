@@ -1,6 +1,7 @@
 import z from "zod"
 import { Agent } from "@/agent/agent"
 import { Bus } from "@/bus"
+import { Config } from "@/config/config"
 import { discoverChecks, resolveConfig, resolvedChecks } from "@/evaluator/discovery"
 import { ExecutorNotConfiguredError } from "@/executor/compat"
 import { ExecutorBootstrap } from "@/executor/bootstrap"
@@ -416,16 +417,25 @@ export namespace OrchestratorService {
       ...(input.routing ? { routing: input.routing } : {}),
       ...(Object.keys(resolvedChecks).length > 0 ? { checks: resolvedChecks } : {}),
     }
+    const cfg = await Config.get()
+    const tp = cfg.tool_permissions ?? {}
+    // Helper: resolve per-tool action; defaults to "allow" unless explicitly configured.
+    const toolAction = (key: keyof NonNullable<typeof tp>): "allow" | "ask" | "deny" =>
+      tp[key] ?? "allow"
     await Session.setPermission({
       sessionID: session.id,
       permission: [
-        { permission: "*", pattern: "*", action: "allow" },
-        { permission: "skill", pattern: "*", action: "ask" },
-        { permission: "external_directory", pattern: "*", action: "ask" },
-        { permission: "webfetch", pattern: "*", action: "ask" },
-        { permission: "websearch", pattern: "*", action: (metadata as any)?.web_search === true ? "allow" : "ask" },
-        { permission: "task", pattern: "*", action: "ask" },
-        { permission: "schedule", pattern: "*", action: "ask" },
+        { permission: "*",                  pattern: "*", action: "allow" },
+        { permission: "skill",              pattern: "*", action: toolAction("skill") },
+        { permission: "external_directory", pattern: "*", action: toolAction("external_directory") },
+        { permission: "webfetch",           pattern: "*", action: toolAction("webfetch") },
+        // metadata.web_search=true is a per-task override from the chat toggle
+        {
+          permission: "websearch", pattern: "*",
+          action: (metadata as any)?.web_search === true ? "allow" : toolAction("websearch"),
+        },
+        { permission: "task",               pattern: "*", action: toolAction("task") },
+        { permission: "schedule",           pattern: "*", action: toolAction("schedule") },
       ],
     })
     // Async pipeline: persist task immediately, run stages in background
