@@ -106,6 +106,8 @@ async function run(input: z.infer<typeof ControlMessageInput>, onEvent?: StreamC
       originalText: input.text,
       // Pass raw attachments so panel tool handlers can decode them into the task request
       attachments: input.attachments ?? [],
+      // Forward web_search flag so panel tool handlers can propagate it to task metadata
+      ...(input.metadata?.web_search === true ? { web_search: true } : {}),
     }
 
     const result = await SessionPrompt.prompt({

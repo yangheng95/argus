@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "zh-CN",
-    "panel_revision": "0371264c806551ce"
+    "panel_revision": "1780e30820b6e18e"
   },
   "brand.guide_kicker": "快速上手",
   "brand.guide_positioning_body": "这不是装饰——左栏选任务，中栏推执行，右栏盯 Spec、Plan、评估和文件变更，防止 agent 跑偏。",
@@ -63,6 +63,7 @@
   "chat.thinking": "思考中…",
   "chat.tip": "Enter 发送 · Shift+Enter 换行",
   "chat.attach_title": "附加文件或图片",
+  "chat.web_search_title": "联网搜索",
   "chat.title": "任务",
   "about.title": "关于",
   "about.author": "作者",

@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "en-US",
-    "panel_revision": "0371264c806551ce"
+    "panel_revision": "1780e30820b6e18e"
   },
   "brand.guide_kicker": "Quick Guide",
   "brand.guide_positioning_body": "This is the task cockpit — left picks the task, center drives execution, right verifies spec, plan, evaluation, and file changes so the agent stays on track.",
@@ -63,6 +63,7 @@
   "chat.thinking": "Thinking…",
   "chat.tip": "Enter to send · Shift+Enter for newline",
   "chat.attach_title": "Attach files or images",
+  "chat.web_search_title": "Web search",
   "chat.title": "Task",
   "about.title": "About",
   "about.author": "Author",

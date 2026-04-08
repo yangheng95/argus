@@ -40,6 +40,11 @@ export const [boardStore, setBoardStore] = createStore({
  // ── File changes (mirrors state.changes) ──
   /** File change entries for the current task's working tree */
   changes: [] as any[],
+ // ── Streaming previews ──
+  /** Streaming preview text for the plan section */
+  planPreview: "" as string,
+  /** Streaming preview text for the spec section */
+  specPreview: "" as string,
 });
 
 // ── Loaders ──

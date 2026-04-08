@@ -3,7 +3,7 @@
 // Mounts all Solid components and initialises the application.
 // Self-sufficient — no external script dependencies.
 
-import { render } from "solid-js/web/dist/web";
+import { render } from "solid-js/web";
 import { createEffect, createRoot, createSignal, onCleanup } from "solid-js";
 import { Conversation } from "./components/Conversation";
 import { TaskList } from "./components/TaskList";
@@ -268,9 +268,9 @@ function installGlobalBridges(): void {
     if (prop === "messages") return messageStore.messages;
     if (prop === "agentEvents") return messageStore.agentEvents;
     if (prop === "sseConnected") return messageStore.sseConnected;
-    if (prop in appStore) return (appStore as Record<string, unknown>)[prop];
+    if (prop in appStore) return (appStore as unknown as Record<string, unknown>)[prop];
     if (prop === "settings") return settingsStore;
-    if (prop in settingsStore) return (settingsStore as Record<string, unknown>)[prop];
+    if (prop in settingsStore) return (settingsStore as unknown as Record<string, unknown>)[prop];
     return Reflect.get(testStateTarget, prop);
   };
   const writeState = (prop: PropertyKey, value: unknown): boolean => {
@@ -615,11 +615,11 @@ if (composerEl) {
         enabled={codingActive() ? true : canComposeChat()}
         busy={codingActive() ? (codingAPI?.busy() ?? false) : (!!messageStore.chatRequest || isTaskInterruptable())}
         stopping={codingActive() ? false : !!(messageStore.chatRequest as any)?.stopping}
-        onSubmit={(text, attachments) => {
+        onSubmit={(text, attachments, webSearch) => {
           if (codingActive() && codingAPI) {
             codingAPI.send(text);
           } else {
-            void panelMessage(text, attachments);
+            void panelMessage(text, attachments, webSearch ? { web_search: true } : {});
           }
         }}
         onStop={() => {

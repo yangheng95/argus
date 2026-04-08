@@ -28,7 +28,7 @@ export interface ChatComposerProps {
  */
   stopping?: boolean;
   /** Called when the user submits a message. */
-  onSubmit: (text: string, attachments: ChatAttachment[]) => void;
+  onSubmit: (text: string, attachments: ChatAttachment[], webSearch: boolean) => void;
   /** Called when the user clicks the stop button while busy. */
   onStop?: () => void;
 }
@@ -88,6 +88,7 @@ export function ChatComposer(props: ChatComposerProps) {
   const [text, setText] = createSignal("");
   const [attachments, setAttachments] = createSignal<ChatAttachment[]>([]);
   const [dragover, setDragover] = createSignal(false);
+  const [webSearch, setWebSearch] = createSignal(false);
 
   const hasText = createMemo(() => text().trim().length > 0);
   const stopping = () => props.stopping === true;
@@ -142,7 +143,7 @@ export function ChatComposer(props: ChatComposerProps) {
       textareaRef.value = "";
       sizeTextarea();
     }
-    props.onSubmit(trimmed, sentAttachments);
+    props.onSubmit(trimmed, sentAttachments, webSearch());
   }
 
  // ── Keyboard: Enter to send, Shift+Enter for newline ──
@@ -282,31 +283,58 @@ export function ChatComposer(props: ChatComposerProps) {
           onPaste={handlePaste}
         />
         <div class="chat-compose-actions">
-          {/* Attach button */}
-          <button
-            type="button"
-            id="btnChatAttach"
-            class="chat-attach-btn"
-            title={t("chat.attach_title")}
-            aria-label={t("chat.attach_title")}
-            onClick={() => fileInputRef?.click()}
-          >
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 16 16"
-              fill="none"
-              aria-hidden="true"
+          {/* Left tool column: attach + web search */}
+          <div class="chat-icon-col">
+            {/* Attach button */}
+            <button
+              type="button"
+              id="btnChatAttach"
+              class="chat-attach-btn"
+              title={t("chat.attach_title")}
+              aria-label={t("chat.attach_title")}
+              onClick={() => fileInputRef?.click()}
             >
-              <path
-                d="M13.5 7.5l-5.8 5.8a3.2 3.2 0 01-4.5-4.5L9 3a2 2 0 012.8 2.8L6 11.6a.8.8 0 01-1.1-1.1L10.5 5"
-                stroke="currentColor"
-                stroke-width="1.2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              />
-            </svg>
-          </button>
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 16 16"
+                fill="none"
+                aria-hidden="true"
+              >
+                <path
+                  d="M13.5 7.5l-5.8 5.8a3.2 3.2 0 01-4.5-4.5L9 3a2 2 0 012.8 2.8L6 11.6a.8.8 0 01-1.1-1.1L10.5 5"
+                  stroke="currentColor"
+                  stroke-width="1.2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+              </svg>
+            </button>
+
+            {/* Web search toggle */}
+            <button
+              type="button"
+              id="btnWebSearch"
+              class="chat-web-search-btn"
+              data-active={webSearch() ? "true" : undefined}
+              title={t("chat.web_search_title")}
+              aria-label={t("chat.web_search_title")}
+              aria-pressed={webSearch()}
+              onClick={() => setWebSearch((v) => !v)}
+            >
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.2"/>
+                <path
+                  d="M8 1.5C8 1.5 5.5 4.5 5.5 8S8 14.5 8 14.5M8 1.5C8 1.5 10.5 4.5 10.5 8S8 14.5 8 14.5"
+                  stroke="currentColor"
+                  stroke-width="1.2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+                <path d="M1.5 8h13" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+              </svg>
+            </button>
+          </div>
 
           {/* Send / Stop button */}
           <button

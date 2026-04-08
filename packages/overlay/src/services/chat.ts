@@ -455,7 +455,9 @@ async function applyPanelResult(result: any): Promise<void> {
   }
 }
 
-export async function panelMessage(text: string, attachments: any[] = [], metadata: any = {}): Promise<any> {
+export async function panelMessage(text: string, attachmentsOrMeta: any[] | Record<string, any> = [], metadata: any = {}): Promise<any> {
+  const attachments = Array.isArray(attachmentsOrMeta) ? attachmentsOrMeta : [];
+  const meta = Array.isArray(attachmentsOrMeta) ? metadata : attachmentsOrMeta;
   const requestID = crypto.randomUUID();
   const controller = new AbortController();
   const request: any = {
@@ -474,7 +476,7 @@ export async function panelMessage(text: string, attachments: any[] = [], metada
       const taskID = await createTask({
         text,
         attachments,
-        metadata,
+        metadata: meta,
         signal: controller.signal,
         budget: draftBudget(),
       });
@@ -509,7 +511,7 @@ export async function panelMessage(text: string, attachments: any[] = [], metada
     // If a task is selected, send a follow-up message via the panel stream
     const result = await submitMessage(text, attachments, {
       requestID,
-      metadata,
+      metadata: meta,
       signal: controller.signal,
       onEvent: async (event) => {
         const type = String(event?.type || "");

@@ -241,7 +241,7 @@ function normalizeLoadedPart(
   sessionID: string,
   index: number,
 ): Part {
-  const part = record(input) ? { ...input } : { type: "text", text: String(input || "") };
+  const part: Record<string, any> = record(input) ? { ...input } : { type: "text", text: String(input || "") };
   const id =
     typeof part.id === "string" && part.id.trim()
       ? part.id.trim()
@@ -257,7 +257,7 @@ function normalizeLoadedPart(
       typeof part.sessionID === "string" && part.sessionID.trim()
         ? part.sessionID.trim()
         : sessionID,
-  };
+  } as Part;
 }
 
 function normalizeLoadedMessage(input: any): Message {
