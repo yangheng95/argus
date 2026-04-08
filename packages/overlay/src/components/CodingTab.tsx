@@ -22,8 +22,10 @@ import {
   displayToolIcon,
   displayToolDetail,
   toolStatusLabel,
+  toolNameKey,
   shortRelativePath,
 } from "../utils/tool";
+import { extToLang, renderCodeBlock } from "../utils/markdown";
 import {
   agentCardExpanded,
   toggleAgentCardExpanded,
@@ -40,12 +42,18 @@ interface CodingTextPart {
   type: "text";
   text: string;
   _partID?: string;
+  state?: never;
+  tool?: never;
+  files?: never;
 }
 
 interface CodingReasoningPart {
   type: "reasoning";
   text: string;
   _partID?: string;
+  state?: never;
+  tool?: never;
+  files?: never;
 }
 
 interface CodingToolState {
@@ -62,12 +70,17 @@ interface CodingToolPart {
   tool: string;
   state: CodingToolState;
   _partID?: string;
+  text?: never;
+  files?: never;
 }
 
 interface CodingPatchPart {
   type: "patch";
   files: string[];
   _partID?: string;
+  text?: never;
+  state?: never;
+  tool?: never;
 }
 
 type CodingPart = CodingTextPart | CodingReasoningPart | CodingToolPart | CodingPatchPart;
@@ -75,6 +88,10 @@ type CodingPart = CodingTextPart | CodingReasoningPart | CodingToolPart | Coding
 interface CodingUserMessage {
   role: "user";
   text: string;
+  // These never-typed fields make "parts" and "streaming" valid keys on the
+  // CodingMessage union, so Solid.js store setter path inference doesn't fail.
+  parts?: never;
+  streaming?: never;
 }
 
 interface CodingAssistantMessage {
@@ -316,6 +333,31 @@ export function CodingTab(props: CodingTabProps) {
 
 // ── Tool-part rendering ──
 
+  // File-content tools: completed state shows syntax-highlighted code
+  const FILE_WRITE_TOOLS = new Set(["write", "writefile"]);
+  const FILE_EDIT_TOOLS = new Set(["edit", "editfile", "applypatch"]);
+  const FILE_READ_TOOLS = new Set(["read", "readfile"]);
+
+  function isFileContentTool(key: string): boolean {
+    return FILE_WRITE_TOOLS.has(key) || FILE_EDIT_TOOLS.has(key) || FILE_READ_TOOLS.has(key);
+  }
+
+  function extractFilePath(inp: any): string {
+    return inp?.file_path ?? inp?.filePath ?? inp?.path ?? inp?.filename ?? "";
+  }
+
+  function extractCodeContent(key: string, inp: any, out: string): string {
+    if (FILE_WRITE_TOOLS.has(key)) return inp?.content ?? inp?.text ?? "";
+    if (FILE_EDIT_TOOLS.has(key)) {
+      const oldStr = inp?.old_string ?? "";
+      const newStr = inp?.new_string ?? "";
+      if (oldStr && newStr) return `--- old\n${oldStr}\n--- new\n${newStr}`;
+      return newStr || (inp?.content ?? "");
+    }
+    if (FILE_READ_TOOLS.has(key)) return out;
+    return "";
+  }
+
   function CodingToolView(pProps: { part: CodingToolPart }) {
     const status = () => pProps.part.state?.status ?? "running";
     const toolName = () => pProps.part.tool || "tool";
@@ -329,6 +371,17 @@ export function CodingTab(props: CodingTabProps) {
     const error = () => stripAnsi(pProps.part.state?.error || "") || output();
     const partKey = () => pProps.part._partID || toolName();
     const isExpanded = () => toolOutputExpanded(partKey());
+    const key = () => toolNameKey(toolName());
+
+    const codeResult = createMemo(() => {
+      if (status() !== "completed") return null;
+      const k = key();
+      if (!isFileContentTool(k)) return null;
+      const content = extractCodeContent(k, input(), output());
+      if (!content) return null;
+      const lang = extToLang(extractFilePath(input()));
+      return renderCodeBlock(content, lang, isExpanded() ? Infinity : 100);
+    });
 
     return (
       <>
@@ -345,7 +398,18 @@ export function CodingTab(props: CodingTabProps) {
         <Show when={status() === "pending" && raw()}>
           <div class="msg-tool-input">{raw()}</div>
         </Show>
-        <Show when={status() === "completed" && output()}>
+        <Show when={codeResult()}>
+          <div class="msg-tool-code md-content" innerHTML={codeResult()!.html} />
+          <Show when={codeResult()!.truncated}>
+            <button
+              class="msg-tool-expand"
+              onClick={() => toggleToolOutputExpanded(partKey())}
+            >
+              +{codeResult()!.totalLines - 100} 行 · 展开全部
+            </button>
+          </Show>
+        </Show>
+        <Show when={status() === "completed" && output() && !codeResult()}>
           <div
             class="msg-tool-output"
             classList={{ "msg-tool-output--expanded": isExpanded() }}

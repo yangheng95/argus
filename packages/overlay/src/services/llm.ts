@@ -109,7 +109,7 @@ export interface AuthDialogCallbacks {
   ) => Promise<boolean>;
 
   /** Open a URL in an external browser. */
-  nativeOpen: (url: string) => Promise<void>;
+  nativeOpen: (url: string) => Promise<boolean | void>;
 
   /**
  * Show the LLM notice banner.

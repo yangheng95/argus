@@ -485,21 +485,9 @@ export class GoalPool {
         return { goalID: entry.goal.id, goalRunID: goalRun.id, title: entry.goal.title, status: "failed", error: "aborted", attempts: failedEvals.length + 1 }
       }
 
-      // ── 8. Merge delivery ──
-      const finalGoalRun = findGoalRun(goalRun.id)
-      if (finalGoalRun && delivery && delivery.diffs.length > 0) {
-        await hooks.mergeDelivery(task, run, plan, finalGoalRun, delivery)
-      }
-
-      // ── 9. Cleanup worktree ──
-      if (worktreeDir) {
-        await cleanupGoalWorkspace(worktreeDir).catch(err => {
-          log.warn("worktree cleanup failed", { goalRunID: goalRun.id, error: String(err) })
-        })
-      }
-
-      // ── 10. Auto-eval ──
+      // ── 8. Auto-eval (BEFORE cleanup — worktree still has node_modules) ──
       if (!delivery) {
+        if (worktreeDir) await cleanupGoalWorkspace(worktreeDir).catch(() => {})
         Database.use(db => db.update(OrchestratorGoalTable)
           .set({ status: "failed", time_updated: Date.now() })
           .where(eq(OrchestratorGoalTable.id, entry.goal.id)).run())
@@ -510,7 +498,20 @@ export class GoalPool {
         }
       }
 
-      const evalResult = await this.evalGoal(task, run, goalRun, entry.goal as GoalRow, delivery, signal)
+      const evalResult = await this.evalGoal(task, run, goalRun, entry.goal as GoalRow, delivery, signal, worktreeDir)
+
+      // ── 9. Merge delivery ──
+      const finalGoalRun = findGoalRun(goalRun.id)
+      if (finalGoalRun && delivery && delivery.diffs.length > 0) {
+        await hooks.mergeDelivery(task, run, plan, finalGoalRun, delivery)
+      }
+
+      // ── 10. Cleanup worktree ──
+      if (worktreeDir) {
+        await cleanupGoalWorkspace(worktreeDir).catch(err => {
+          log.warn("worktree cleanup failed", { goalRunID: goalRun.id, error: String(err) })
+        })
+      }
 
       log.info("goal pool: goal eval complete", {
         goalID: entry.goal.id, verdict: evalResult.status,
@@ -541,7 +542,7 @@ export class GoalPool {
 
   private async evalGoal(
     task: TaskRow, run: RunRow, goalRun: GoalRunRow, goal: GoalRow,
-    delivery: PipelineDelivery, signal: AbortSignal,
+    delivery: PipelineDelivery, signal: AbortSignal, workDir?: string,
   ): Promise<Omit<GoalResult, "goalRunID" | "title" | "attempts">> {
     try {
       const decisionLog = createDecisionLog(task.id)
@@ -563,6 +564,7 @@ export class GoalPool {
         contract: contract as any,
         delivery: { summary: delivery.summary, diffs },
         decisionLog,
+        workDir,
         sessionID: evalSession.id,
         signal,
         stream: {

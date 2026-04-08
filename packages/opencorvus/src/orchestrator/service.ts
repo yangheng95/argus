@@ -423,7 +423,7 @@ export namespace OrchestratorService {
         { permission: "skill", pattern: "*", action: "ask" },
         { permission: "external_directory", pattern: "*", action: "ask" },
         { permission: "webfetch", pattern: "*", action: "ask" },
-        { permission: "websearch", pattern: "*", action: "ask" },
+        { permission: "websearch", pattern: "*", action: (metadata as any)?.web_search === true ? "allow" : "ask" },
         { permission: "task", pattern: "*", action: "ask" },
         { permission: "schedule", pattern: "*", action: "ask" },
       ],

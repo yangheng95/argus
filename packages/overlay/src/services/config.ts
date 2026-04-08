@@ -237,9 +237,11 @@ export async function reloadProjectScope(options: { restoreWorkspace?: boolean }
   ]);
   if (options.restoreWorkspace) {
     const { restoreWorkspaceDirectory } = await import("./workspace");
-    await restoreWorkspaceDirectory().catch((e: unknown) =>
-      console.error("[reloadProjectScope] restoreWorkspaceDirectory", e),
-    );
+    try {
+      restoreWorkspaceDirectory();
+    } catch (e: unknown) {
+      console.error("[reloadProjectScope] restoreWorkspaceDirectory", e);
+    }
   }
 }
 

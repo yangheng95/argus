@@ -1409,13 +1409,35 @@ export function createTaskAgentTools(input: {
           }
           const issues = verdict.issues_found.join("; ")
           await trackStepComplete("deliver", undefined, true)
-          return `Delivery REJECTED: ${verdict.summary}. Issues: ${issues}. Goals: ${passedCount} passed, ${failedCount} failed. Fix issues and retry.`
+          // "rejected" means the delivery agent exhausted its own retries and determined
+          // the code does not work end-to-end. This is a task failure — the executor needs
+          // to re-run. We set the task to "failed" here rather than returning a message
+          // for the LLM to interpret, because:
+          //   1. The LLM has no mechanism to fix the code from here (goals are "passed").
+          //   2. Returning a message causes the outer task-loop to re-trigger, which calls
+          //      deliver again on the exact same diffs → infinite loop.
+          const failMsg = `Delivery rejected: ${verdict.summary}. Issues: ${issues}`
+          const currentTaskR = requireTask(taskID)
+          if (currentTaskR.status === "active") {
+            await updateTask(currentTaskR, { status: "failed", error: failMsg, time_completed: Date.now() }, failMsg)
+          }
+          stopAfterDispatch.abort("deliver_rejected")
+          return failMsg
         } catch (err) {
           await trackStepComplete("deliver", undefined, true)
 
           const msg = err instanceof Error ? err.message : String(err)
           log.error("deliver: verification failed", { taskID, error: msg })
-          return `Delivery aggregated (${allDiffs.length} files) but verification failed: ${msg}. Decide whether to retry or publish without verification.`
+          // Delivery verification threw — treat as task failure for the same reasons as
+          // "rejected": the delivery agent could not verify the deliverable, and returning
+          // a message would cause the outer loop to re-trigger deliver on the same diffs.
+          const failMsg = `Delivery verification failed: ${msg}`
+          const currentTaskE = requireTask(taskID)
+          if (currentTaskE.status === "active") {
+            await updateTask(currentTaskE, { status: "failed", error: failMsg, time_completed: Date.now() }, failMsg)
+          }
+          stopAfterDispatch.abort("deliver_rejected")
+          return failMsg
         }
       },
     }),

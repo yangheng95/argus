@@ -1202,7 +1202,7 @@ export function Board(props: BoardProps) {
       if (!stepID) continue;
 
       // Try to extract goalID from card metadata or session mapping
-      const goalID: string | undefined = card._agentGoalID || card._goalID;
+      const goalID: string | undefined = card._agentGoalID;
       if (!goalID) continue;
 
       if (!result[goalID]) result[goalID] = {};

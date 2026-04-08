@@ -129,10 +129,9 @@ export function ExecutorGoalGroup(props: ExecutorGoalGroupProps) {
             {badgeContent()}
           </span>
         </Show>
-        <Show when={(props.goalIndex ?? 0) > 0}>
-          <span class="agent-card-round">#{props.goalIndex}</span>
-        </Show>
-        <span class="executor-goal-label">{props.goalTitle || "Goal"}</span>
+        <span class="executor-goal-label">
+          {(props.goalIndex ?? 0) > 0 ? `Goal#${props.goalIndex} ` : ""}{props.goalTitle || "Goal"}
+        </span>
         <span class="executor-goal-chevron" aria-hidden="true">{"\u25BC"}</span>
       </div>
       <div

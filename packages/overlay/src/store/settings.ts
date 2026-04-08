@@ -39,6 +39,8 @@ export interface OverlaySettings {
   workspaceEpoch: number;
   /** Incremented each time the working directory changes */
   directoryEpoch: number;
+  /** Whether the overlay is running in unattended (autonomous) mode; synced from server config */
+  unattended: boolean;
 }
 
 // ── Sanitisers (mirror helpers) ──
@@ -118,6 +120,7 @@ export const DEFAULT_SETTINGS: OverlaySettings = {
   tempDirectory: "",
   workspaceEpoch: 0,
   directoryEpoch: 0,
+  unattended: false,
 };
 
 // ── Store ──
@@ -382,6 +385,7 @@ export function bootstrapOverlaySettings(
     directory: input.savedDirectory || undefined,
     workspaceTaskID: input.workspaceTaskID || undefined,
     workspaceDirectory: input.workspaceDirectory || undefined,
+    unattended: input.unattended ?? DEFAULT_SETTINGS.unattended,
   };
 }
 

@@ -162,7 +162,7 @@ export default function ProvidersPanel() {
           <button
             type="button"
             class="btn btn-primary mini"
-            style="margin-left: auto; font-size: 12px;"
+            style="margin-left: auto; font-size: var(--ui-font-meta);"
             onClick={startAdd}
           >
             + Add
@@ -170,7 +170,7 @@ export default function ProvidersPanel() {
         </h4>
 
         <Show when={providerEntries().length === 0 && !showAdd()}>
-          <div class="config-panel-card" style="opacity: 0.6; font-size: 13px; padding: 12px;">
+          <div class="config-panel-card" style="opacity: 0.6; font-size: var(--ui-font-control); padding: 12px;">
             No custom providers configured. Click "+ Add" to add an OpenAI-compatible provider.
           </div>
         </Show>
@@ -179,12 +179,12 @@ export default function ProvidersPanel() {
           {([id, provider]) => (
             <div class="config-panel-card" style="margin-bottom: 8px;">
               <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
-                <strong style="font-size: 13px;">{provider.name || id}</strong>
+                <strong style="font-size: var(--ui-font-title);">{provider.name || id}</strong>
                 <div style="display: flex; gap: 6px;">
                   <button
                     type="button"
                     class="btn mini"
-                    style="font-size: 11px; padding: 2px 8px;"
+                    style="font-size: var(--ui-font-meta); padding: 2px 8px;"
                     onClick={() => startEdit(id)}
                   >
                     Edit
@@ -192,7 +192,7 @@ export default function ProvidersPanel() {
                   <button
                     type="button"
                     class="btn mini"
-                    style="font-size: 11px; padding: 2px 8px; color: var(--color-danger, #e55);"
+                    style="font-size: var(--ui-font-meta); padding: 2px 8px; color: var(--color-danger, #e55);"
                     onClick={() => handleDelete(id)}
                     disabled={saving()}
                   >
@@ -200,15 +200,15 @@ export default function ProvidersPanel() {
                   </button>
                 </div>
               </div>
-              <div style="font-size: 12px; opacity: 0.7; margin-bottom: 2px;">
+              <div style="font-size: var(--ui-font-control); opacity: 0.7; margin-bottom: 2px;">
                 API: {provider.api}
               </div>
               <Show when={provider.env?.length}>
-                <div style="font-size: 12px; opacity: 0.7; margin-bottom: 2px;">
+                <div style="font-size: var(--ui-font-control); opacity: 0.7; margin-bottom: 2px;">
                   Env: {provider.env.join(", ")}
                 </div>
               </Show>
-              <div style="font-size: 12px; opacity: 0.7;">
+              <div style="font-size: var(--ui-font-control); opacity: 0.7;">
                 Models: {Object.keys(provider.models || {}).join(", ") || "none"}
               </div>
             </div>
@@ -218,7 +218,7 @@ export default function ProvidersPanel() {
         {/* ── Add / Edit Form ── */}
         <Show when={showAdd()}>
           <div class="config-panel-card" style="margin-top: 8px; border: 1px solid var(--color-border, #444);">
-            <h4 style="font-size: 13px; margin: 0 0 8px 0;">
+            <h4 style="font-size: var(--ui-font-title); margin: 0 0 8px 0;">
               {editing() ? `Edit: ${editing()}` : "Add Custom Provider"}
             </h4>
 
@@ -276,7 +276,7 @@ export default function ProvidersPanel() {
                 placeholder={"gpt-5.4-mini:GPT-5.4 Mini\ngpt-5.4:GPT-5.4"}
                 value={formModels()}
                 onInput={(e) => setFormModels(e.currentTarget.value)}
-                style="font-family: monospace; font-size: 12px; resize: vertical;"
+                style="font-family: var(--mono); font-size: var(--ui-font-control); resize: vertical;"
               />
             </label>
 
@@ -302,12 +302,12 @@ export default function ProvidersPanel() {
         <div class="config-panel-group">
           <h4 class="config-panel-group-title">Connected Providers</h4>
           <div class="config-panel-card">
-            <div style="font-size: 12px; opacity: 0.6; margin-bottom: 6px;">
+            <div style="font-size: var(--ui-font-control); opacity: 0.6; margin-bottom: 6px;">
               Auto-detected providers from models.dev, env vars, and auth.
             </div>
             <For each={catalogEntries()}>
               {(p) => (
-                <div style="display: flex; justify-content: space-between; align-items: center; padding: 4px 0; border-bottom: 1px solid var(--color-border, #333); font-size: 12px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 4px 0; border-bottom: 1px solid var(--color-border, #333); font-size: var(--ui-font-control);">
                   <span>{p.name}</span>
                   <span style="opacity: 0.5;">{p.modelCount} models</span>
                 </div>
