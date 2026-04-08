@@ -78,6 +78,8 @@ import {
   findRuns,
   findTask,
   findTaskByRequest,
+  hasActiveTaskInProject,
+  findNextQueuedTaskForProject,
   listGlobalTasks,
   listProjectTasks,
   listTaskRows,
@@ -352,6 +354,38 @@ export namespace OrchestratorService {
       scope: "instance",
       run: () => OrchestratorRuntime.monitorRuns(hooks()),
     })
+    // Serial queue recovery: if the process was restarted while a task was
+    // running, the "active" task may be stuck (its loop is gone). Find it,
+    // reset it to "queued", then kick off the queue from the front.
+    // We do this after a short delay to allow other init code to finish.
+    setTimeout(() => {
+      try {
+        const projectID = Instance.project.id
+        // Reset any "active" tasks that have no running loop (orphaned by restart)
+        const orphaned = searchProjectTasks(projectID, { status: "active" })
+        for (const task of orphaned) {
+          log.warn("serial queue recovery: resetting orphaned active task to queued", { taskID: task.id })
+          import("@/orchestrator/state").then(({ updateTask: ut }) => {
+            ut(task, { status: "queued", error: null, blocking_reason: null }, "Requeued after process restart")
+          })
+        }
+        // Start the queue if there's anything waiting
+        if (!hasActiveTaskInProject(projectID)) {
+          const next = findNextQueuedTaskForProject(projectID)
+          if (next) {
+            log.info("serial queue recovery: starting queued task", { taskID: next.id })
+            import("@/orchestrator/task-loop").then(async ({ runTaskLoop }) => {
+              const { hooks: h } = await import("@/orchestrator/state")
+              runTaskLoop({ taskID: next.id, trigger: { kind: "restart-recovery" }, hooks: h() }).catch((err) => {
+                log.error("serial queue recovery: task loop failed", { taskID: next.id, error: err instanceof Error ? err.message : String(err) })
+              })
+            })
+          }
+        }
+      } catch (err) {
+        log.error("serial queue recovery failed", { error: err instanceof Error ? err.message : String(err) })
+      }
+    }, 500)
   }
 
   export async function createTask(raw: z.input<typeof CreateTaskInput>) {
@@ -411,20 +445,23 @@ export namespace OrchestratorService {
       taskID, content: input.request,
       source: input.source ?? "api", userID: slackUser(metadata),
     })
-    // Start the task control loop (replaces fire-and-forget triggers).
-    // The loop drives the entire lifecycle: Decision → GoalPool → Decision → ...
-    // It runs in the background but is NOT fire-and-forget — it's a single
-    // structured loop that exits when the task reaches a terminal state.
-    import("@/orchestrator/task-loop").then(async ({ runTaskLoop }) => {
-      const { hooks } = await import("@/orchestrator/state")
-      runTaskLoop({
-        taskID,
-        trigger: { kind: "created" },
-        hooks: hooks(),
-      }).catch((err) => {
-        log.error("task loop failed", { taskID, error: err instanceof Error ? err.message : String(err) })
+    // Serial queue: only start the loop immediately if no other task is active.
+    // If a task is already running, this task stays in "queued" state and will
+    // be picked up by the serial queue trigger when the active task finishes.
+    if (!hasActiveTaskInProject(Instance.project.id)) {
+      import("@/orchestrator/task-loop").then(async ({ runTaskLoop }) => {
+        const { hooks } = await import("@/orchestrator/state")
+        runTaskLoop({
+          taskID,
+          trigger: { kind: "created" },
+          hooks: hooks(),
+        }).catch((err) => {
+          log.error("task loop failed", { taskID, error: err instanceof Error ? err.message : String(err) })
+        })
       })
-    })
+    } else {
+      log.info("task queued (serial): another task is active", { taskID, projectID: Instance.project.id })
+    }
     return taskID
   }
 

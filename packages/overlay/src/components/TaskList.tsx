@@ -50,10 +50,15 @@ function statusLabel(status: string): string {
   return map[status] || status;
 }
 
-function taskListBadge(item: any): string {
+function taskListBadge(item: any, queuePos?: number): string {
   if (item?._pending) return statusLabel("active");
   const pending = Number(item?.pending_interactions || 0) > 0;
-  return pending ? t("detail.pending_interactions") : statusLabel(item?.task?.status || "idle");
+  if (pending) return t("detail.pending_interactions");
+  const status = item?.task?.status || "idle";
+  if (status === "queued" && queuePos !== undefined && queuePos > 0) {
+    return `${statusLabel("queued")} #${queuePos}`;
+  }
+  return statusLabel(status);
 }
 
 function taskListMeta(item: any): string {
@@ -101,6 +106,7 @@ function DeleteButton(props: { id: string; onDelete: (id: string) => void }) {
 function TaskRow(props: {
   item: any;
   selectedTaskID: string;
+  queuePos?: number;
   onSelectTask: (id: string) => void;
   onDeleteTask?: (id: string) => void;
 }) {
@@ -131,7 +137,7 @@ function TaskRow(props: {
           <span class="status-dot" data-status={status()} aria-hidden="true" />
           <strong>{title()}</strong>
         </div>
-        <span>{taskListBadge(props.item)}</span>
+        <span>{taskListBadge(props.item, props.queuePos)}</span>
         <small>{taskListMeta(props.item)}</small>
       </button>
       <Show when={!!id() && !!props.onDeleteTask}>
@@ -147,6 +153,7 @@ function TaskSection(props: {
   label: string;
   items: any[];
   selectedTaskID: string;
+  queuePositions?: Map<string, number>;
   onSelectTask: (id: string) => void;
   onDeleteTask?: (id: string) => void;
 }) {
@@ -160,6 +167,7 @@ function TaskSection(props: {
               <TaskRow
                 item={item}
                 selectedTaskID={props.selectedTaskID}
+                queuePos={props.queuePositions?.get(item?.task?.id || "")}
                 onSelectTask={props.onSelectTask}
                 onDeleteTask={props.onDeleteTask}
               />
@@ -191,6 +199,26 @@ export function TaskList(props: TaskListProps) {
     sortedItems().filter((item) => COMPLETED_STATUSES.has(item?.task?.status || "")),
   );
 
+  // Compute queue positions for "queued" tasks: sort by priority (high=0,normal=1,low=2)
+  // then by creation time (FIFO), assign 1-based position numbers.
+  const queuePositions = createMemo<Map<string, number>>(() => {
+    const PRIORITY_ORDER: Record<string, number> = { high: 0, normal: 1, low: 2 };
+    const queued = sortedItems()
+      .filter((item) => item?.task?.status === "queued" && !item?._pending)
+      .sort((a, b) => {
+        const pa = PRIORITY_ORDER[a?.task?.priority ?? "normal"] ?? 1;
+        const pb = PRIORITY_ORDER[b?.task?.priority ?? "normal"] ?? 1;
+        if (pa !== pb) return pa - pb;
+        return (a?.task?.time?.created ?? 0) - (b?.task?.time?.created ?? 0);
+      });
+    const map = new Map<string, number>();
+    queued.forEach((item, idx) => {
+      const id = item?.task?.id;
+      if (id) map.set(id, idx + 1);
+    });
+    return map;
+  });
+
   const selectedID = () => boardStore.selectedTaskID;
 
   return (
@@ -203,6 +231,7 @@ export function TaskList(props: TaskListProps) {
           label={t("task.group.active")}
           items={activeTasks()}
           selectedTaskID={selectedID()}
+          queuePositions={queuePositions()}
           onSelectTask={props.onSelectTask}
           onDeleteTask={props.onDeleteTask}
         />
