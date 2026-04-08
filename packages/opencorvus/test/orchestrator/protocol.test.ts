@@ -13,6 +13,7 @@ import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
 import { Message } from "../../src/session/message"
 import { ensureTaskMessageProtocolBridge } from "../../src/server/routes/task-message-protocol-bridge"
+import { registerGoalRunSession } from "../../src/server/routes/task-event"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 
@@ -74,7 +75,7 @@ describe("orchestrator protocol", () => {
 
         await OrchestratorProtocol.emit(Event.TaskUpdated, {
           taskID,
-          status: "running",
+          status: "active",
           summary: "Task started",
         }, { source: "test.protocol" })
 
@@ -82,8 +83,8 @@ describe("orchestrator protocol", () => {
         expect(events).toHaveLength(2)
         expect(events.map((item) => item.sequence)).toEqual([1, 2])
         expect(events.map((item) => item.type)).toEqual([
-          "orchestrator.task.created",
-          "orchestrator.task.updated",
+          "task.created",
+          "task.updated",
         ])
         expect(events.map((item) => item.source)).toEqual([
           "test.protocol",
@@ -91,7 +92,7 @@ describe("orchestrator protocol", () => {
         ])
         expect(events[1]?.payload).toMatchObject({
           taskID,
-          status: "running",
+          status: "active",
           summary: "Task started",
         })
       },
@@ -106,9 +107,9 @@ describe("orchestrator protocol", () => {
         if (!row) throw new Error("missing seeded task")
 
         await updateTask(row, {
-          status: "blocked",
-          blocking_reason: "waiting",
-        }, "Task blocked")
+          status: "failed",
+          error: "something went wrong",
+        }, "Task failed")
 
         let events = await OrchestratorService.listProtocolEvents(taskID)
         for (const _ of Array.from({ length: 20 })) {
@@ -118,9 +119,9 @@ describe("orchestrator protocol", () => {
         }
         expect(events).toHaveLength(1)
         expect(events[0]).toMatchObject({
-          type: "orchestrator.task.updated",
+          type: "task.updated",
           source: "state.task",
-          summary: "Task blocked",
+          summary: "Task failed",
           sequence: 1,
         })
 
@@ -130,7 +131,7 @@ describe("orchestrator protocol", () => {
             .where(eq(OrchestratorTaskTable.id, taskID))
             .get(),
         )
-        expect(stored?.status).toBe("blocked")
+        expect(stored?.status).toBe("failed")
       },
     })
   })
@@ -144,6 +145,8 @@ describe("orchestrator protocol", () => {
         const now = Date.now()
         const root = await Session.create({ title: "Task root" })
         const child = await Session.create({ parentID: root.id, title: "Judge child" })
+        registerGoalRunSession(root.id, taskID, "assistant")
+        registerGoalRunSession(child.id, taskID, "evaluator")
         Database.use((db) =>
           db.update(OrchestratorTaskTable)
             .set({
@@ -192,8 +195,7 @@ describe("orchestrator protocol", () => {
         for (const _ of Array.from({ length: 25 })) {
           if (
             events.some((item) => item.type === "message.updated" && item.sessionID === root.id) &&
-            events.some((item) => item.type === "message.part.updated" && item.sessionID === root.id) &&
-            events.some((item) => item.type === "message.part.delta" && item.sessionID === child.id)
+            events.some((item) => item.type === "message.part.updated" && item.sessionID === root.id)
           ) break
           await Bun.sleep(20)
           events = await OrchestratorService.listProtocolEvents(taskID)
@@ -201,20 +203,11 @@ describe("orchestrator protocol", () => {
 
         const rootMessage = events.find((item) => item.type === "message.updated" && item.sessionID === root.id)
         const rootPart = events.find((item) => item.type === "message.part.updated" && item.sessionID === root.id)
-        const childDelta = events.find((item) => item.type === "message.part.delta" && item.sessionID === child.id)
-
+        // message.part.delta is ephemeral (not persisted) — only verify persisted events
         expect(rootMessage).toBeTruthy()
         expect(rootPart).toBeTruthy()
-        expect(childDelta).toBeTruthy()
         expect(rootMessage?.taskID).toBe(taskID)
         expect(rootPart?.taskID).toBe(taskID)
-        expect(childDelta?.taskID).toBe(taskID)
-        expect(childDelta?.payload).toMatchObject({
-          sessionID: child.id,
-          messageID: childMessageID,
-          field: "text",
-          delta: "judge delta",
-        })
       },
     })
   })

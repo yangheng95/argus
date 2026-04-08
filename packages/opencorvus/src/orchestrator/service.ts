@@ -358,33 +358,38 @@ export namespace OrchestratorService {
     // running, the "active" task may be stuck (its loop is gone). Find it,
     // reset it to "queued", then kick off the queue from the front.
     // We do this after a short delay to allow other init code to finish.
-    setTimeout(() => {
-      try {
-        const projectID = Instance.project.id
-        // Reset any "active" tasks that have no running loop (orphaned by restart)
-        const orphaned = searchProjectTasks(projectID, { status: "active" })
-        for (const task of orphaned) {
-          log.warn("serial queue recovery: resetting orphaned active task to queued", { taskID: task.id })
-          import("@/orchestrator/state").then(({ updateTask: ut }) => {
-            ut(task, { status: "queued", error: null, blocking_reason: null }, "Requeued after process restart")
+    // Note: extracted into a named async function because Bun does not support
+    // await inside setTimeout(async () => {...}) in bundled output.
+    async function recoverSerialQueue() {
+      const projectID = Instance.project.id
+      // Reset "active" tasks that have no running loop (orphaned by restart).
+      // CRITICAL: check isTaskLoopActive() — tasks with an active loop are NOT orphaned.
+      const { isTaskLoopActive } = await import("@/orchestrator/task-loop")
+      const orphaned = searchProjectTasks(projectID, { status: "active" })
+      for (const task of orphaned) {
+        if (isTaskLoopActive(task.id)) continue
+        log.warn("serial queue recovery: resetting orphaned active task to queued", { taskID: task.id })
+        const { updateTask: ut } = await import("@/orchestrator/state")
+        await ut(task, { status: "queued", error: null, blocking_reason: null }, "Requeued after process restart")
+      }
+      // Start the queue if there's anything waiting
+      if (!hasActiveTaskInProject(projectID)) {
+        const next = findNextQueuedTaskForProject(projectID)
+        if (next) {
+          log.info("serial queue recovery: starting queued task", { taskID: next.id })
+          import("@/orchestrator/task-loop").then(async ({ runTaskLoop }) => {
+            const { hooks: h } = await import("@/orchestrator/state")
+            runTaskLoop({ taskID: next.id, trigger: { kind: "restart-recovery" }, hooks: h() }).catch((err) => {
+              log.error("serial queue recovery: task loop failed", { taskID: next.id, error: err instanceof Error ? err.message : String(err) })
+            })
           })
         }
-        // Start the queue if there's anything waiting
-        if (!hasActiveTaskInProject(projectID)) {
-          const next = findNextQueuedTaskForProject(projectID)
-          if (next) {
-            log.info("serial queue recovery: starting queued task", { taskID: next.id })
-            import("@/orchestrator/task-loop").then(async ({ runTaskLoop }) => {
-              const { hooks: h } = await import("@/orchestrator/state")
-              runTaskLoop({ taskID: next.id, trigger: { kind: "restart-recovery" }, hooks: h() }).catch((err) => {
-                log.error("serial queue recovery: task loop failed", { taskID: next.id, error: err instanceof Error ? err.message : String(err) })
-              })
-            })
-          }
-        }
-      } catch (err) {
-        log.error("serial queue recovery failed", { error: err instanceof Error ? err.message : String(err) })
       }
+    }
+    setTimeout(() => {
+      recoverSerialQueue().catch((err) => {
+        log.error("serial queue recovery failed", { error: err instanceof Error ? err.message : String(err) })
+      })
     }, 500)
   }
 
@@ -925,6 +930,28 @@ export namespace OrchestratorService {
 
   export async function handleTaskMessage(taskID: string, raw: z.input<typeof TaskMessageInput>) {
     const input = TaskMessageInput.parse(raw)
+
+    // Fast-path: cancelled/failed tasks skip LLM intent classification.
+    // Any message to a stopped task is an unambiguous restart signal.
+    const task = requireTask(taskID)
+    if (task.status === "cancelled" || task.status === "failed") {
+      await OrchestratorProtocol.emit(Event.TaskMessageRecorded, {
+        taskID,
+        kind: "note",
+        source: input.source ?? "user_message",
+        text: input.text,
+        summary: "User message on stopped task",
+      }, { taskID, source: "service.message" })
+      const note = await continueTaskMessage(taskID, input.text)
+      return {
+        kind: "note" as const,
+        message: note.resumed
+          ? "Task restarted with your message."
+          : "Message recorded.",
+        should_resume: note.resumed,
+      }
+    }
+
     const result = await WorkbenchService.ingestTaskMessage({
       taskID,
       text: input.text,

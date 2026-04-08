@@ -128,7 +128,6 @@ export function budgetRow(input?: z.infer<typeof Budget>): OrchestratorBudget | 
   return {
     max_runs: input.maxRuns,
     max_fix_runs: input.maxFixRuns,
-    max_wall_time_ms: input.maxWallTimeMs,
     max_executor_groups: input.maxExecutorGroups,
   }
 }

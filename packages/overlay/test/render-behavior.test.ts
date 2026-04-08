@@ -5362,7 +5362,6 @@ test("budget section renders task limits and saves edits through the budget rout
             maxRuns: 2,
             maxReplans: 1,
             maxEvaluations: 3,
-            maxWallTimeMs: 120000,
           },
           time: { created: 1, updated: 2 },
         },
@@ -5395,7 +5394,6 @@ test("budget section renders task limits and saves edits through the budget rout
               maxRuns: 4,
               maxReplans: 0,
               maxEvaluations: 5,
-              maxWallTimeMs: 180000,
             },
             time: { created: 1, updated: 3 },
           },
@@ -5419,7 +5417,6 @@ test("budget section renders task limits and saves edits through the budget rout
       setValue("#budgetMaxRuns", "4")
       setValue("#budgetMaxReplans", "0")
       setValue("#budgetMaxEvaluations", "5")
-      setValue("#budgetMaxWallTime", "3")
       const save = document.querySelector("#btnBudgetSave")
       if (!(save instanceof HTMLButtonElement)) throw new Error("Missing budget save button")
       if (save.disabled) throw new Error("Budget save button did not enable")
@@ -5436,7 +5433,6 @@ test("budget section renders task limits and saves edits through the budget rout
         maxRuns: (document.querySelector("#budgetMaxRuns") as HTMLInputElement | null)?.value || "",
         maxReplans: (document.querySelector("#budgetMaxReplans") as HTMLInputElement | null)?.value || "",
         maxEvaluations: (document.querySelector("#budgetMaxEvaluations") as HTMLInputElement | null)?.value || "",
-        maxWallTime: (document.querySelector("#budgetMaxWallTime") as HTMLInputElement | null)?.value || "",
         saveDisabled: (document.querySelector("#btnBudgetSave") as HTMLButtonElement | null)?.disabled ?? true,
       }
     })
@@ -5446,13 +5442,11 @@ test("budget section renders task limits and saves edits through the budget rout
         maxRuns: 4,
         maxReplans: 0,
         maxEvaluations: 5,
-        maxWallTimeMs: 180000,
       },
     }])
     expect(result.maxRuns).toBe("4")
     expect(result.maxReplans).toBe("0")
     expect(result.maxEvaluations).toBe("5")
-    expect(result.maxWallTime).toBe("3")
     expect(result.saveDisabled).toBe(true)
   } finally {
     await page.close()

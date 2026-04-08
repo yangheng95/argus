@@ -1,6 +1,7 @@
 import { createMemo, createSignal, Show } from "solid-js";
 import { reasoningPartHidden, reasoningRevision } from "../store/reasoning";
 import { t } from "../utils/i18n";
+import { renderMarkdown } from "../utils/markdown";
 
 export function isEmptyReasoning(s: string): boolean {
   // Filter out reasoning that is only brackets/whitespace (e.g. "[]", "[[]]", "[] []")
@@ -24,7 +25,7 @@ export function ReasoningPart(props: { part: any }) {
           {label()} {expanded() ? "\u25BC" : "\u25B6"}
         </div>
         <Show when={expanded()}>
-          <div class="reasoning-text">{text()}</div>
+          <div class="reasoning-text md-content" innerHTML={renderMarkdown(text())} />
         </Show>
       </div>
     </Show>

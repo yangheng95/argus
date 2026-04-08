@@ -58,7 +58,6 @@ export interface CreateTaskOptions {
   signal?: AbortSignal;
   budget?: {
     maxRuns?: number;
-    maxWallTimeMs?: number;
     maxExecutorGroups?: number;
   };
 }

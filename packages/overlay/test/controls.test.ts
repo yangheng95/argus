@@ -40,7 +40,6 @@ test("overlay controls trigger without runtime failures", async () => {
       maxRuns: 2,
       maxReplans: 1,
       maxEvaluations: 3,
-      maxWallTimeMs: 120000,
     },
     time: {
       created: now - 90_000,

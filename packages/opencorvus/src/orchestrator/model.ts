@@ -16,7 +16,6 @@ export const RUN_TERMINAL_STATUSES = ["blocked", "failed", "completed", "aborted
 export const Budget = z.object({
   maxRuns: z.number().int().positive().optional(),
   maxFixRuns: z.number().int().positive().optional(),
-  maxWallTimeMs: z.number().int().positive().optional(),
   maxExecutorGroups: z.number().int().positive().optional(),
 })
 

@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "en-US",
-    "panel_revision": "a59a6c605c97ffe5"
+    "panel_revision": "0371264c806551ce"
   },
   "brand.guide_kicker": "Quick Guide",
   "brand.guide_positioning_body": "This is the task cockpit — left picks the task, center drives execution, right verifies spec, plan, evaluation, and file changes so the agent stays on track.",
@@ -85,7 +85,6 @@
   "budget.hint_readonly": "Budget is locked after a task has started and cannot be changed.",
   "budget.empty": "Select a task to configure its budget.",
   "budget.max_runs": "Max Runs",
-  "budget.max_wall_time": "Wall Time (Minutes)",
   "budget.max_executor_groups": "Goal Concurrency",
   "budget.placeholder": "Default",
   "budget.reset": "Reset",

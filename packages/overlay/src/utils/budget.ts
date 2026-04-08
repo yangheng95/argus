@@ -2,7 +2,6 @@
 // Exported functions / types:
 // Budget — interface describing a task budget object
 // sameBudget — deep-equality comparison of two Budget objects
-// budgetMinutes — convert a millisecond wall-time value to a display string
 // budgetNumber — parse a numeric value from an <input> element
 // draftBudget — read the current budget form inputs into a Budget object
 // These helpers operate on the live DOM (document.getElementById) where needed
@@ -12,8 +11,6 @@
 
 export interface Budget {
   maxRuns?: number;
-  /** Wall-time limit in milliseconds */
-  maxWallTimeMs?: number;
   /** Max concurrent goal executor groups */
   maxExecutorGroups?: number;
 }
@@ -24,16 +21,6 @@ export interface Budget {
 
 export function sameBudget(a: Budget | null | undefined, b: Budget | null | undefined): boolean {
   return JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
-}
-
-// ── budgetMinutes ──
-// Convert a millisecond wall-time value to a human-readable minutes string.
-// Returns "" for non-positive or non-finite inputs.
-
-export function budgetMinutes(value: number): string {
-  if (!Number.isFinite(value) || value <= 0) return "";
-  const next = Math.round((value / 60000) * 10) / 10;
-  return Number.isInteger(next) ? String(next) : next.toFixed(1);
 }
 
 // ── budgetNumber ──
@@ -63,17 +50,13 @@ export function budgetNumber(
 }
 
 // ── draftBudget ──
-// Read the current values of the four budget form inputs and return a Budget
+// Read the current values of the budget form inputs and return a Budget
 // object, or undefined when all inputs are empty/invalid.
 
 export function draftBudget(): Budget | undefined {
   const budget: Budget = {
     maxRuns: budgetNumber(
       document.getElementById("budgetMaxRuns") as HTMLInputElement | null,
-    ),
-    maxWallTimeMs: budgetNumber(
-      document.getElementById("budgetMaxWallTime") as HTMLInputElement | null,
-      { scale: 60000 },
     ),
     maxExecutorGroups: budgetNumber(
       document.getElementById("budgetMaxExecutorGroups") as HTMLInputElement | null,

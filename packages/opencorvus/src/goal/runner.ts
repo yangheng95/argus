@@ -23,7 +23,6 @@ import {
   type PlanNodeRow,
 } from "@/orchestrator/store"
 import { updateGoalRun } from "@/orchestrator/persist"
-import { agentStream } from "@/orchestrator/agent-stream"
 import { registerGoalRunSession, unregisterGoalRunSession } from "@/server/routes/task-event"
 
 const log = Log.create({ service: "goal-runner" })

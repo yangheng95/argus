@@ -8,104 +8,97 @@ import {
   type TaskStatus,
 } from "../../src/orchestrator/state-machine"
 
+// 5-state model: queued | active | completed | failed | cancelled
+// Agent-driven: "active" is the single working state — the agent decides progress.
+
+const ALL_STATES: TaskStatus[] = ["queued", "active", "completed", "failed", "cancelled"]
+
 // ── canTransition ──
 
 describe("canTransition", () => {
   test("identity transitions are always valid", () => {
-    const statuses: TaskStatus[] = [
-      "queued", "spec_generating", "goal_decomposing", "planning",
-      "planned", "running", "blocked", "evaluating", "delivering",
-      "completed", "failed", "cancelled",
-    ]
-    for (const s of statuses) {
+    for (const s of ALL_STATES) {
       expect(canTransition(s, s)).toBe(true)
     }
   })
 
-  test("normal forward pipeline transitions", () => {
-    expect(canTransition("queued", "spec_generating")).toBe(true)
-    expect(canTransition("spec_generating", "goal_decomposing")).toBe(true)
-    expect(canTransition("goal_decomposing", "planning")).toBe(true)
-    expect(canTransition("planning", "planned")).toBe(true)
-    expect(canTransition("planned", "running")).toBe(true)
-    expect(canTransition("running", "evaluating")).toBe(true)
-    expect(canTransition("evaluating", "delivering")).toBe(true)
-    expect(canTransition("delivering", "completed")).toBe(true)
+  // -- queued --
+
+  test("queued → active (task starts)", () => {
+    expect(canTransition("queued", "active")).toBe(true)
   })
 
-  test("any non-terminal state can transition to cancelled", () => {
-    const interruptable: TaskStatus[] = [
-      "queued", "spec_generating", "goal_decomposing", "planning",
-      "planned", "running", "blocked", "evaluating", "delivering",
-    ]
-    for (const s of interruptable) {
-      expect(canTransition(s, "cancelled")).toBe(true)
-    }
+  test("queued → cancelled / failed (interrupted before start)", () => {
+    expect(canTransition("queued", "cancelled")).toBe(true)
+    expect(canTransition("queued", "failed")).toBe(true)
   })
 
-  test("any non-terminal state can transition to failed", () => {
-    const interruptable: TaskStatus[] = [
-      "queued", "spec_generating", "goal_decomposing", "planning",
-      "planned", "running", "blocked", "evaluating", "delivering",
-    ]
-    for (const s of interruptable) {
-      expect(canTransition(s, "failed")).toBe(true)
-    }
+  test("queued cannot jump to completed", () => {
+    expect(canTransition("queued", "completed")).toBe(false)
   })
 
-  test("completed is a terminal state — no outgoing transitions", () => {
-    const all: TaskStatus[] = [
-      "queued", "spec_generating", "goal_decomposing", "planning",
-      "planned", "running", "blocked", "evaluating", "delivering",
-      "failed", "cancelled",
-    ]
-    for (const s of all) {
+  // -- active --
+
+  test("active → completed / failed / cancelled (terminal outcomes)", () => {
+    expect(canTransition("active", "completed")).toBe(true)
+    expect(canTransition("active", "failed")).toBe(true)
+    expect(canTransition("active", "cancelled")).toBe(true)
+  })
+
+  test("active → queued (re-queued by loop)", () => {
+    expect(canTransition("active", "queued")).toBe(true)
+  })
+
+  // -- completed (terminal, no outgoing) --
+
+  test("completed has no outgoing transitions", () => {
+    for (const s of ALL_STATES) {
+      if (s === "completed") continue
       expect(canTransition("completed", s)).toBe(false)
     }
   })
 
-  test("failed can only transition to queued (retry)", () => {
+  // -- failed (recovery) --
+
+  test("failed → queued (retry) and failed → active (direct restart)", () => {
     expect(canTransition("failed", "queued")).toBe(true)
-    expect(canTransition("failed", "running")).toBe(false)
+    expect(canTransition("failed", "active")).toBe(true)
+  })
+
+  test("failed cannot reach completed or cancelled directly", () => {
     expect(canTransition("failed", "completed")).toBe(false)
-    expect(canTransition("failed", "delivering")).toBe(false)
+    expect(canTransition("failed", "cancelled")).toBe(false)
   })
 
-  test("cancelled can only transition to queued (retry)", () => {
+  // -- cancelled (recovery) --
+
+  test("cancelled → queued (retry) and cancelled → active (direct restart)", () => {
     expect(canTransition("cancelled", "queued")).toBe(true)
-    expect(canTransition("cancelled", "running")).toBe(false)
+    expect(canTransition("cancelled", "active")).toBe(true)
+  })
+
+  test("cancelled cannot reach completed or failed directly", () => {
     expect(canTransition("cancelled", "completed")).toBe(false)
+    expect(canTransition("cancelled", "failed")).toBe(false)
   })
 
-  test("skipping pipeline steps is rejected", () => {
-    expect(canTransition("queued", "planning")).toBe(false)
-    expect(canTransition("queued", "planned")).toBe(false)
-    expect(canTransition("queued", "running")).toBe(false)
-    expect(canTransition("spec_generating", "planned")).toBe(false)
-    expect(canTransition("spec_generating", "running")).toBe(false)
-    expect(canTransition("goal_decomposing", "planned")).toBe(false)
-    expect(canTransition("goal_decomposing", "running")).toBe(false)
-    expect(canTransition("running", "completed")).toBe(false)
-    expect(canTransition("running", "delivering")).toBe(false)
-  })
+  // -- exhaustive invalid pairs --
 
-  test("invalid backward transitions are rejected", () => {
-    expect(canTransition("running", "queued")).toBe(false)
-    expect(canTransition("evaluating", "queued")).toBe(false)
-    expect(canTransition("planned", "spec_generating")).toBe(false)
-  })
-
-  test("delivering → running is valid (delivery rejection triggers fix run)", () => {
-    expect(canTransition("delivering", "running")).toBe(true)
-  })
-
-  test("running → blocked and blocked → running are valid", () => {
-    expect(canTransition("running", "blocked")).toBe(true)
-    expect(canTransition("blocked", "running")).toBe(true)
-  })
-
-  test("evaluating → running is valid (retry after eval failure)", () => {
-    expect(canTransition("evaluating", "running")).toBe(true)
+  test("all invalid pairs are rejected", () => {
+    const valid: Record<string, string[]> = {
+      queued:    ["active", "cancelled", "failed"],
+      active:    ["completed", "failed", "cancelled", "queued"],
+      completed: [],
+      failed:    ["queued", "active"],
+      cancelled: ["queued", "active"],
+    }
+    for (const from of ALL_STATES) {
+      for (const to of ALL_STATES) {
+        if (from === to) continue
+        const expected = valid[from].includes(to)
+        expect(canTransition(from, to)).toBe(expected)
+      }
+    }
   })
 })
 
@@ -113,22 +106,23 @@ describe("canTransition", () => {
 
 describe("assertTransition", () => {
   test("valid transitions do not throw", () => {
-    expect(() => assertTransition("queued", "spec_generating")).not.toThrow()
-    expect(() => assertTransition("running", "cancelled")).not.toThrow()
+    expect(() => assertTransition("queued", "active")).not.toThrow()
+    expect(() => assertTransition("active", "cancelled")).not.toThrow()
     expect(() => assertTransition("failed", "queued")).not.toThrow()
+    expect(() => assertTransition("cancelled", "active")).not.toThrow()
   })
 
   test("invalid transitions throw with descriptive message", () => {
-    expect(() => assertTransition("completed", "running")).toThrow(
-      "Invalid task transition: completed → running"
+    expect(() => assertTransition("completed", "active")).toThrow(
+      "Invalid task transition: completed → active"
     )
-    expect(() => assertTransition("running", "queued")).toThrow(
-      "Invalid task transition: running → queued"
+    expect(() => assertTransition("cancelled", "completed")).toThrow(
+      "Invalid task transition: cancelled → completed"
     )
   })
 
-  test("identity transition does not throw", () => {
-    expect(() => assertTransition("running", "running")).not.toThrow()
+  test("identity transitions do not throw", () => {
+    expect(() => assertTransition("active", "active")).not.toThrow()
     expect(() => assertTransition("completed", "completed")).not.toThrow()
   })
 })
@@ -142,32 +136,18 @@ describe("isTerminal", () => {
     expect(isTerminal("cancelled")).toBe(true)
   })
 
-  test("all other states are not terminal", () => {
-    const nonTerminal: TaskStatus[] = [
-      "queued", "spec_generating", "goal_decomposing", "planning",
-      "planned", "running", "blocked", "evaluating", "delivering",
-    ]
-    for (const s of nonTerminal) {
-      expect(isTerminal(s)).toBe(false)
-    }
+  test("queued and active are not terminal", () => {
+    expect(isTerminal("queued")).toBe(false)
+    expect(isTerminal("active")).toBe(false)
   })
 })
 
 // ── isActive ──
 
 describe("isActive", () => {
-  test("pipeline and execution states are active", () => {
-    const active: TaskStatus[] = [
-      "queued", "spec_generating", "goal_decomposing", "planning",
-      "planned", "running", "evaluating", "delivering",
-    ]
-    for (const s of active) {
-      expect(isActive(s)).toBe(true)
-    }
-  })
-
-  test("blocked is not active (it is waiting, not progressing)", () => {
-    expect(isActive("blocked")).toBe(false)
+  test("queued and active are active states", () => {
+    expect(isActive("queued")).toBe(true)
+    expect(isActive("active")).toBe(true)
   })
 
   test("terminal states are not active", () => {
@@ -180,14 +160,9 @@ describe("isActive", () => {
 // ── isInterruptable ──
 
 describe("isInterruptable", () => {
-  test("all non-terminal states (including blocked) are interruptable", () => {
-    const interruptable: TaskStatus[] = [
-      "queued", "spec_generating", "goal_decomposing", "planning",
-      "planned", "running", "blocked", "evaluating", "delivering",
-    ]
-    for (const s of interruptable) {
-      expect(isInterruptable(s)).toBe(true)
-    }
+  test("queued and active are interruptable", () => {
+    expect(isInterruptable("queued")).toBe(true)
+    expect(isInterruptable("active")).toBe(true)
   })
 
   test("terminal states are not interruptable", () => {
@@ -197,14 +172,11 @@ describe("isInterruptable", () => {
   })
 })
 
-// ── Cancel-from-any-state scenario ──
+// ── Cancel from any active state ──
 
 describe("cancel from any active state", () => {
   test("every interruptable state can transition to cancelled", () => {
-    const interruptable: TaskStatus[] = [
-      "queued", "spec_generating", "goal_decomposing", "planning",
-      "planned", "running", "blocked", "evaluating", "delivering",
-    ]
+    const interruptable: TaskStatus[] = ["queued", "active"]
     for (const s of interruptable) {
       expect(isInterruptable(s)).toBe(true)
       expect(canTransition(s, "cancelled")).toBe(true)
@@ -216,24 +188,22 @@ describe("cancel from any active state", () => {
 // ── Resume/retry scenarios ──
 
 describe("resume and retry transitions", () => {
-  test("failed task can be retried (failed → queued)", () => {
+  test("failed task can be retried or directly restarted", () => {
     expect(canTransition("failed", "queued")).toBe(true)
+    expect(canTransition("failed", "active")).toBe(true)
   })
 
-  test("failed task cannot skip to running (must go through queued)", () => {
-    expect(canTransition("failed", "running")).toBe(false)
-  })
-
-  test("cancelled task can be retried (cancelled → queued)", () => {
+  test("cancelled task can be retried or directly restarted", () => {
     expect(canTransition("cancelled", "queued")).toBe(true)
+    expect(canTransition("cancelled", "active")).toBe(true)
   })
 
   test("completed task cannot be retried or resumed", () => {
     expect(canTransition("completed", "queued")).toBe(false)
-    expect(canTransition("completed", "running")).toBe(false)
+    expect(canTransition("completed", "active")).toBe(false)
   })
 
-  test("running task cannot go back to queued", () => {
-    expect(canTransition("running", "queued")).toBe(false)
+  test("active task can be re-queued (loop handoff)", () => {
+    expect(canTransition("active", "queued")).toBe(true)
   })
 })

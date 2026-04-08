@@ -514,7 +514,7 @@ if (boardEl) {
               const parts: any[] = Array.isArray(msg.parts) ? msg.parts : [];
               const textParts = parts
                 .filter((p) => p.type === "text" && p.text && p.audience?.ui !== false)
-                .map((p) => `<p class="session-msg-text">${escapeHtml(p.text)}</p>`)
+                .map((p) => `<div class="session-msg-text md-content">${renderMarkdown(p.text)}</div>`)
                 .join("");
               const toolParts = parts
                 .filter((p) => p.type === "tool-invocation" || p.type === "tool-call")

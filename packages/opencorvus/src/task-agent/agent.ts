@@ -23,7 +23,6 @@ import { Log } from "@/util/log"
 import { toolGuard } from "@/util/tool-guard"
 import { AgentTrace } from "@/util/agent-trace"
 import { registerGoalRunSession } from "@/server/routes/task-event"
-import { agentStream } from "@/orchestrator/agent-stream"
 import { sessionStreamHooks } from "@/orchestrator/session-stream"
 import { createTaskAgentTools } from "./tools"
 import { operatorNotesSection } from "@/orchestrator/helpers"
@@ -174,8 +173,7 @@ export namespace TaskAgent {
         taskID,
         stage: "assistant",
       })
-      const live = agentStream({ taskID, stage: "assistant" })
-      await live.start("Task Agent started")
+
 
       // 3. Create tools (agentSessionID passed so tool sessions become children)
       const { tools, stopSignal: dispatchSignal } = createTaskAgentTools({ taskID, agentSessionID: agentSession.id, signal: ctrl.signal, workflow, workflowState })
@@ -231,7 +229,7 @@ export namespace TaskAgent {
         stream.finishReason,
       ])
       await contentHooks!.flush()
-      await live.finish("Task Agent finished")
+
 
       const toolCallCount = resultSteps.reduce(
         (sum, s) => sum + (Array.isArray((s as any).toolCalls) ? (s as any).toolCalls.length : 0),

@@ -7,7 +7,6 @@ import {
   enqueueEvent,
   shouldReloadConversationForMessageEvent,
   syncTask,
-  appendAgentEvent,
   loadConversation,
 } from "../store/messages";
 import {
@@ -326,12 +325,6 @@ export function routeSSEEvent(event: any): boolean {
     for (const msg of messages) {
       enqueueEvent(msg);
     }
-    return true;
-  }
-
-  // ── Agent stage events ──
-  if (type === "agent.updated") {
-    appendAgentEvent(event);
     return true;
   }
 

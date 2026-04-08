@@ -17,7 +17,7 @@ import {
   setMessages,
   mergeLoadedConversationMessages,
 } from "../store/messages";
-import { boardStore, setTasksData } from "../store/board";
+import { boardStore, setTasksData, loadBoard } from "../store/board";
 import { appStore, setConnectionStatus } from "../store/app";
 import { workspaceMode } from "./workspace";
 import {
@@ -483,6 +483,28 @@ export async function panelMessage(text: string, attachments: any[] = [], metada
         return { task_id: taskID };
       }
       throw new Error("Task creation returned no task_id");
+    }
+    // Fast-path: cancelled/failed tasks — direct API restart, no LLM streaming.
+    const taskStatus = boardStore.board?.task?.status;
+    if (taskStatus === "cancelled" || taskStatus === "failed") {
+      const result = await apiJson(
+        `task/${encodeURIComponent(boardStore.selectedTaskID)}/message`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text, source: "panel" }),
+          signal: controller.signal,
+        },
+      );
+      await loadBoard();
+      if ((result as any)?.message) {
+        setMessages(
+          mergeMessages(messageStore.messages, [
+            syntheticTextMessage("assistant", Date.now(), String((result as any).message)),
+          ]),
+        );
+      }
+      return result;
     }
     // If a task is selected, send a follow-up message via the panel stream
     const result = await submitMessage(text, attachments, {

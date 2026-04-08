@@ -16,7 +16,6 @@ import { registerGoalRunSession } from "@/server/routes/task-event"
 import { Publisher } from "@/orchestrator/publisher"
 import { OrchestratorGit } from "@/orchestrator/git"
 import { OrchestratorMemoryBridge } from "@/orchestrator/memory-bridge"
-import { agentStream } from "@/orchestrator/agent-stream"
 import { sessionStreamHooks } from "@/orchestrator/session-stream"
 import { withStageRetry } from "@/orchestrator/strategy"
 import { Event as OrchestratorEvent } from "@/orchestrator/model"
@@ -216,7 +215,6 @@ export function createTaskAgentTools(input: {
           stallController.abort(new Error("decompose stall timeout"))
         })
         try {
-          const decomposeLive = agentStream({ taskID, stage: "goal" })
           const decomposeSession = await Session.createNext({
             parentID: input.agentSessionID,
             title: `Decompose: ${task.title}`,
@@ -224,7 +222,7 @@ export function createTaskAgentTools(input: {
           })
           registerGoalRunSession(decomposeSession.id, taskID, "goal")
           const hooks = sessionStreamHooks({ sessionID: decomposeSession.id, taskID, stage: "goal" })
-          await decomposeLive.start("Decomposition started")
+
 
           const { RequirementsService } = await import("@/requirements")
           const DecomposeService = RequirementsService
@@ -246,34 +244,23 @@ export function createTaskAgentTools(input: {
                 onChunk: async (arg: any) => {
                   guard.bump()
                   const chunk = (arg as any)?.chunk
-                  // Decompose agent's meaningful output comes exclusively through structured tool
-                  // registrations (register_requirement, register_goal, etc.). The model also emits
-                  // large text-delta streams (analysis, reasoning) while simultaneously calling
-                  // exploration tools (list_directory, read_file), which interleaves text and tool
-                  // call blocks in the TUI and makes the output unreadable. Re-emit text-delta as
-                  // reasoning-delta so it renders in a collapsible thinking block, visually separated
-                  // from tool calls, instead of being interleaved inline.
+                  // Re-emit text-delta as reasoning-delta so it renders in a collapsible
+                  // thinking block, visually separated from tool calls.
                   if (chunk?.type === "text-delta") {
                     if (hooks.onChunk) await hooks.onChunk({ chunk: { ...chunk, type: "reasoning-delta" } })
                   } else {
                     if (hooks.onChunk) await hooks.onChunk(arg)
                   }
-                  // agentStream: only forward non-tool events for section status indicator.
-                  // Tool-call events are already persisted by sessionStreamHooks with full content;
-                  // forwarding them to agentStream would create duplicate empty status bubbles in the panel.
-                  if (chunk?.type !== "tool-input-start" && chunk?.type !== "tool-call" && chunk?.type !== "tool-result" && chunk?.type !== "tool-input-delta") {
-                    if (decomposeLive.hooks.onChunk) await decomposeLive.hooks.onChunk(arg)
-                  }
                 },
-                onError: async (arg: any) => { if (hooks.onError) await hooks.onError(arg); if (decomposeLive.hooks.onError) await decomposeLive.hooks.onError(arg) },
+                onError: async (arg: any) => { if (hooks.onError) await hooks.onError(arg) },
               },
-              onStatus: decomposeLive.statusHook.bind(decomposeLive),
+              onStatus: () => {},
             }),
             { signal: input.signal },
           )
           guard.clear()
           await hooks.flush()
-          await decomposeLive.finish("Decomposition finished")
+
 
           // Persist spec snapshot, requirements, and goals
           const { insertGoalRows, insertRequirements } = await import("@/orchestrator/persist")
@@ -419,8 +406,7 @@ export function createTaskAgentTools(input: {
         })
         registerGoalRunSession(architectSession.id, taskID, "architect")
         const hooks = sessionStreamHooks({ sessionID: architectSession.id, taskID, stage: "architect" })
-        const architectLive = agentStream({ taskID, stage: "architect" })
-        await architectLive.start("Architect coordination started")
+
 
         const { createDecisionLog } = await import("@/decision-log")
         const decisionLog = createDecisionLog(taskID)
@@ -454,20 +440,14 @@ export function createTaskAgentTools(input: {
               } else {
                 if (hooks.onChunk) await hooks.onChunk(arg)
               }
-              if (chunk?.type !== "tool-input-start" && chunk?.type !== "tool-call" && chunk?.type !== "tool-result" && chunk?.type !== "tool-input-delta") {
-                if (architectLive.hooks.onChunk) await architectLive.hooks.onChunk(arg)
-              }
             },
-            onError: async (arg: any) => {
-              if (hooks.onError) await hooks.onError(arg)
-              if (architectLive.hooks.onError) await architectLive.hooks.onError(arg)
-            },
+            onError: async (arg: any) => { if (hooks.onError) await hooks.onError(arg) },
           },
-          onStatus: architectLive.statusHook.bind(architectLive),
+          onStatus: () => {},
         })
 
         await hooks.flush()
-        await architectLive.finish("Architect coordination finished")
+
 
         const summary = [
           `Architect coordination complete: ${result.entriesWritten} contracts written to Decision Log.`,
@@ -1301,7 +1281,6 @@ export function createTaskAgentTools(input: {
           diffs: allDiffs.map(d => ({ file: d.file, diff: d.diff })),
         }
 
-        const deliveryLive = agentStream({ taskID, stage: "delivery" })
         const deliverySession = await Session.createNext({
           parentID: input.agentSessionID,
           title: `Delivery verification: ${task.title}`,
@@ -1309,7 +1288,7 @@ export function createTaskAgentTools(input: {
         })
         registerGoalRunSession(deliverySession.id, taskID, "delivery")
         const hooks = sessionStreamHooks({ sessionID: deliverySession.id, taskID, stage: "delivery" })
-        await deliveryLive.start("Delivery verification started")
+
 
         try {
           const { DeliveryService } = await import("@/delivery/service")
@@ -1326,21 +1305,19 @@ export function createTaskAgentTools(input: {
                 } else {
                   if (hooks.onChunk) await hooks.onChunk(arg)
                 }
-                if (chunk?.type !== "tool-input-start" && chunk?.type !== "tool-call" && chunk?.type !== "tool-result" && chunk?.type !== "tool-input-delta") {
-                  if (deliveryLive.hooks.onChunk) await deliveryLive.hooks.onChunk(arg)
-                }
               },
-              onError: async (arg: any) => { if (hooks.onError) await hooks.onError(arg); if (deliveryLive.hooks.onError) await deliveryLive.hooks.onError(arg) },
+              onError: async (arg: any) => { if (hooks.onError) await hooks.onError(arg) },
             },
           })
           await hooks.flush()
-          await deliveryLive.finish("Delivery verification finished")
 
-          // Persist verdict as artifact so publish_delivery can proceed
+
+          // Persist verdict as artifact
           const { OrchestratorArtifactTable } = await import("@/orchestrator/orchestrator.sql")
+          const verdictArtifactId = Identifier.ascending("artifact")
           Database.use((db) =>
             db.insert(OrchestratorArtifactTable).values({
-              id: Identifier.ascending("artifact"),
+              id: verdictArtifactId,
               task_id: taskID,
               run_id: run.id,
               delivery_id: deliveryID,
@@ -1356,14 +1333,86 @@ export function createTaskAgentTools(input: {
           const failedCount = goals.filter(g => g.status === "failed").length
           if (verdict.verdict === "accepted") {
             await trackStepComplete("deliver")
-            return `Delivery verified and ACCEPTED. ${allDiffs.length} files, ${passedCount}/${goals.length} goals passed. Call publish_delivery to complete.`
+            log.info("deliver: verdict accepted, auto-publishing", { taskID, runID: run.id, deliveryID })
+            // Auto-publish: verification passed → immediately complete task.
+            // No second LLM turn needed — avoids infinite loop where LLM ends turn
+            // without calling publish_delivery.
+            try {
+              const delivery = findDeliveryByRun(run.id)
+              if (!delivery) return `Delivery verified and ACCEPTED but no delivery record found.`
+              const verdictArtifact = Database.use((db) =>
+                db.select().from(OrchestratorArtifactTable)
+                  .where(eq(OrchestratorArtifactTable.id, verdictArtifactId))
+                  .get()
+              )
+              markDeliveryPublishing(delivery.id, Date.now())
+              const PUBLISH_TIMEOUT_MS = 60_000
+              const currentTask = requireTask(taskID)
+              const publishResult = await Promise.race([
+                Publisher.deliver({ task: currentTask, run, delivery }),
+                new Promise<never>((_, reject) => setTimeout(() => reject(new Error("Publisher.deliver() timeout")), PUBLISH_TIMEOUT_MS)),
+              ])
+              const completed = Date.now()
+              finalizeDeliveryResult({ deliveryId: delivery.id, taskId: taskID, runId: run.id, delivery, result: publishResult, now: completed })
+              if (publishResult.status === "delivered") {
+                const current = requireTask(taskID)
+                const currentPlan = run.plan_version_id ? findPlan(run.plan_version_id) : undefined
+                const published = findDeliveryByRun(run.id) ?? delivery
+                const verdictPayload = verdictArtifact?.payload as { verdict?: string; summary?: string; issues_found?: string[] } | null
+                if (verdictPayload?.verdict && !findEvaluationByRun(run.id)) {
+                  const { OrchestratorEvaluationTable } = await import("@/orchestrator/orchestrator.sql")
+                  Database.use((db) =>
+                    db.insert(OrchestratorEvaluationTable).values({
+                      id: Identifier.ascending("evaluation"),
+                      task_id: taskID,
+                      run_id: run.id,
+                      delivery_id: delivery.id,
+                      status: verdictPayload.verdict === "accepted" ? "passed" : "failed",
+                      verdict: verdictPayload.verdict as any,
+                      summary: verdictPayload.summary ?? "Delivery agent verification",
+                      checks: (verdictPayload.issues_found ?? []).map((issue: string) => ({
+                        name: "delivery-agent",
+                        status: "failed" as const,
+                        evidence: issue,
+                      })),
+                      time_completed: completed,
+                      time_created: completed,
+                      time_updated: completed,
+                    }).run(),
+                  )
+                }
+                const finalized = await OrchestratorGit.complete(current, currentPlan, published)
+                if (finalized.error) {
+                  await updateTask(current, { status: "failed", blocking_reason: null, error: finalized.error, time_completed: completed }, finalized.error)
+                  return `Git finalization failed: ${finalized.error}`
+                }
+                // Ensure task is in "active" before completing (recovery may have reset to "queued")
+                const preComplete = requireTask(taskID)
+                if (preComplete.status === "queued") {
+                  await updateTask(preComplete, { status: "active" }, "Activating for completion")
+                }
+                const readyTask = requireTask(taskID)
+                await updateTask(readyTask, { status: "completed", blocking_reason: null, error: null, time_completed: completed }, "Task completed")
+                const { Plugin } = await import("@/plugin")
+                await Plugin.trigger("delivery.ready", { taskID, runID: run.id, deliveryID: delivery.id }, { actions: [] }).catch(() => undefined)
+                OrchestratorMemoryBridge.flushTaskLearnings({ task: currentTask, run, delivery, evaluation: findEvaluationByRun(run.id), plan: currentPlan })
+                  .catch(err => log.warn("failed to flush task learnings", { error: String(err) }))
+                return `Delivery published and task completed successfully.`
+              }
+              await updateTask(currentTask, { status: "failed", blocking_reason: null, error: publishResult.summary, time_completed: completed }, publishResult.summary)
+              return `Publish returned non-delivered status: ${publishResult.summary}`
+            } catch (err) {
+              const msg = err instanceof Error ? err.message : String(err)
+              log.error("deliver: auto-publish failed", { taskID, error: msg, stack: err instanceof Error ? err.stack : undefined })
+              return `Delivery verified and ACCEPTED but publish failed: ${msg}. Call publish_delivery to retry.`
+            }
           }
           const issues = verdict.issues_found.join("; ")
           await trackStepComplete("deliver", undefined, true)
           return `Delivery REJECTED: ${verdict.summary}. Issues: ${issues}. Goals: ${passedCount} passed, ${failedCount} failed. Fix issues and retry.`
         } catch (err) {
           await trackStepComplete("deliver", undefined, true)
-          await deliveryLive.finish("Delivery verification failed")
+
           const msg = err instanceof Error ? err.message : String(err)
           log.error("deliver: verification failed", { taskID, error: msg })
           return `Delivery aggregated (${allDiffs.length} files) but verification failed: ${msg}. Decide whether to retry or publish without verification.`
