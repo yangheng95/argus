@@ -572,6 +572,39 @@ function computeAgentCards(): { cards: Record<string, AgentCardMessage>; order: 
     if (completed > entry.endTime) entry.endTime = completed;
   }
 
+  const liveEventsByStage = new Map<string, any[]>();
+  for (const event of store.agentEvents) {
+    const stage = String(event?.stage || "").trim().toLowerCase();
+    if (!stage) continue;
+    const stageEvents = liveEventsByStage.get(stage) || [];
+    stageEvents.push(event);
+    liveEventsByStage.set(stage, stageEvents);
+    latestEventByStage.set(stage, event);
+  }
+
+  for (const [stage, events] of liveEventsByStage) {
+    if ((roundsByStage[stage]?.length ?? 0) > 0) continue;
+    const merged = mergeAgentReasoningDeltas(
+      events
+        .slice()
+        .sort((left, right) => agentEventTime(left) - agentEventTime(right)),
+    );
+    const messages = merged
+      .map((event) => agentMessage(event))
+      .filter((message): message is Message => !!message);
+    if (messages.length === 0) continue;
+    const startTime = agentEventTime(merged[0]);
+    const endTime = agentEventTime(merged[merged.length - 1]);
+    roundsByStage[stage] = [{
+      channelID: `${stage}:live`,
+      stage,
+      sessionID: "",
+      messages,
+      startTime: Number.isFinite(startTime) && startTime > 0 ? startTime : Date.now(),
+      endTime: Number.isFinite(endTime) && endTime > 0 ? endTime : Date.now(),
+    }];
+  }
+
   // ── Goal group assembly ──
   // Board-driven: use goalWorkflows + lanes for goal info & sessionID→goalID mapping.
   // Executor messages are matched to goals via sessionID.

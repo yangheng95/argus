@@ -8,6 +8,7 @@ import {
   shouldReloadConversationForMessageEvent,
   syncTask,
   loadConversation,
+  appendAgentEvent,
 } from "../store/messages";
 import {
   boardStore,
@@ -49,8 +50,11 @@ function executorPartID(properties: any, eventID: string): string {
 
 /** Derive the executor session ID for message info. */
 function executorSessionID(properties: any): string {
-  return properties.goalRunID || properties.goal_run_id ||
+  return properties.sessionID || properties.session_id ||
+         properties.goalSessionID || properties.goal_session_id ||
+         properties.goalRunSessionID || properties.goal_run_session_id ||
          properties.executorSessionID || properties.executor_session_id ||
+         properties.goalRunID || properties.goal_run_id ||
          properties.runID || "";
 }
 
@@ -331,6 +335,12 @@ export function routeSSEEvent(event: any): boolean {
   // ── Config changed → refresh appStore.config ──
   if (type === "config.changed") {
     void import("./init").then(({ loadConfigInfo }) => loadConfigInfo()).catch(() => {});
+    return true;
+  }
+
+  // ── Live agent status / tool activity ──
+  if (type === "agent.updated") {
+    appendAgentEvent(event);
     return true;
   }
 

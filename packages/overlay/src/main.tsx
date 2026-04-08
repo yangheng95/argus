@@ -63,6 +63,7 @@ import SkillMarketPanel from "./components/settings/SkillMarketPanel";
 import ProvidersPanel from "./components/settings/ProvidersPanel";
 import GeneralPanel from "./components/settings/GeneralPanel";
 import { OrchestrationPanel } from "./components/settings/OrchestrationPanel";
+import { PermissionsPanel } from "./components/settings/PermissionsPanel";
 import { MemoryPanel } from "./components/MemoryPanel";
 import { InteractionPanel } from "./components/InteractionPanel";
 import { waitForLogDrain, AppLog } from "./utils/log";
@@ -739,6 +740,12 @@ const orchestrationBody = document.getElementById("orchestrationBody");
 if (orchestrationBody) {
   orchestrationBody.innerHTML = "";
   render(() => <OrchestrationPanel />, orchestrationBody);
+}
+
+const permissionsBody = document.getElementById("permissionsBody");
+if (permissionsBody) {
+  permissionsBody.innerHTML = "";
+  render(() => <PermissionsPanel />, permissionsBody);
 }
 
 const channelConfigBody = document.getElementById("channelConfigBody");

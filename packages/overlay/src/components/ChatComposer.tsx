@@ -89,21 +89,10 @@ export function ChatComposer(props: ChatComposerProps) {
   const [attachments, setAttachments] = createSignal<ChatAttachment[]>([]);
   const [dragover, setDragover] = createSignal(false);
   const [webSearch, setWebSearch] = createSignal(false);
+  const [expanded, setExpanded] = createSignal(false);
 
   const hasText = createMemo(() => text().trim().length > 0);
   const stopping = () => props.stopping === true;
-
- // ── Auto-resize textarea (
-
-  function sizeTextarea() {
-    if (!textareaRef) return;
-    textareaRef.style.height = "auto";
-    const style = getComputedStyle(document.documentElement);
-    const min = Number.parseFloat(style.getPropertyValue("--ui-chat-min-height")) || 72;
-    const max = Number.parseFloat(style.getPropertyValue("--ui-chat-max-height")) || 180;
-    const h = Math.min(textareaRef.scrollHeight, max);
-    textareaRef.style.height = `${Math.max(h, min)}px`;
-  }
 
  // ── Attachment handling ──
 
@@ -135,14 +124,10 @@ export function ChatComposer(props: ChatComposerProps) {
     const trimmed = text().trim();
     if (!trimmed) return;
     const sentAttachments = [...attachments()];
- // Clear state immediately (
     setText("");
     setAttachments([]);
- // Resize back to minimum
-    if (textareaRef) {
-      textareaRef.value = "";
-      sizeTextarea();
-    }
+    setExpanded(false);
+    if (textareaRef) textareaRef.value = "";
     props.onSubmit(trimmed, sentAttachments, webSearch());
   }
 
@@ -265,117 +250,129 @@ export function ChatComposer(props: ChatComposerProps) {
         onChange={handleFileChange}
       />
 
-      {/* Compose row */}
+      {/* Compose row: textarea + icon column + send */}
       <div class="chat-compose-row">
         <textarea
           ref={textareaRef}
           id="chatTextarea"
           class="chat-textarea"
+          data-expanded={expanded() ? "true" : undefined}
           rows={2}
           disabled={!props.enabled}
           placeholder={props.enabled ? t("chat.placeholder") : t("chat.placeholder_disabled")}
           value={text()}
           onInput={(e) => {
             setText(e.currentTarget.value);
-            sizeTextarea();
           }}
           onKeyDown={handleKeyDown}
           onPaste={handlePaste}
         />
-        <div class="chat-compose-actions">
-          {/* Left tool column: attach + web search */}
-          <div class="chat-icon-col">
-            {/* Attach button */}
-            <button
-              type="button"
-              id="btnChatAttach"
-              class="chat-attach-btn"
-              title={t("chat.attach_title")}
-              aria-label={t("chat.attach_title")}
-              onClick={() => fileInputRef?.click()}
-            >
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 16 16"
-                fill="none"
-                aria-hidden="true"
-              >
-                <path
-                  d="M13.5 7.5l-5.8 5.8a3.2 3.2 0 01-4.5-4.5L9 3a2 2 0 012.8 2.8L6 11.6a.8.8 0 01-1.1-1.1L10.5 5"
-                  stroke="currentColor"
-                  stroke-width="1.2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                />
-              </svg>
-            </button>
 
-            {/* Web search toggle */}
-            <button
-              type="button"
-              id="btnWebSearch"
-              class="chat-web-search-btn"
-              data-active={webSearch() ? "true" : undefined}
-              title={t("chat.web_search_title")}
-              aria-label={t("chat.web_search_title")}
-              aria-pressed={webSearch()}
-              onClick={() => setWebSearch((v) => !v)}
+        {/* Icon column: attach / web search / expand */}
+        <div class="chat-icon-col">
+          <button
+            type="button"
+            id="btnChatAttach"
+            class="chat-toolbar-btn"
+            title={t("chat.attach_title")}
+            aria-label={t("chat.attach_title")}
+            onClick={() => fileInputRef?.click()}
+          >
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path
+                d="M13.5 7.5l-5.8 5.8a3.2 3.2 0 01-4.5-4.5L9 3a2 2 0 012.8 2.8L6 11.6a.8.8 0 01-1.1-1.1L10.5 5"
+                stroke="currentColor"
+                stroke-width="1.2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+          </button>
+          <button
+            type="button"
+            id="btnWebSearch"
+            class="chat-toolbar-btn"
+            data-active={webSearch() ? "true" : undefined}
+            title={t("chat.web_search_title")}
+            aria-label={t("chat.web_search_title")}
+            aria-pressed={webSearch()}
+            onClick={() => setWebSearch((v) => !v)}
+          >
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.2"/>
+              <path
+                d="M8 1.5C8 1.5 5.5 4.5 5.5 8S8 14.5 8 14.5M8 1.5C8 1.5 10.5 4.5 10.5 8S8 14.5 8 14.5"
+                stroke="currentColor"
+                stroke-width="1.2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+              <path d="M1.5 8h13" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+            </svg>
+          </button>
+          <button
+            type="button"
+            class="chat-toolbar-btn"
+            data-active={expanded() ? "true" : undefined}
+            title={expanded() ? t("chat.collapse_title") : t("chat.expand_title")}
+            aria-label={expanded() ? t("chat.collapse_title") : t("chat.expand_title")}
+            aria-pressed={expanded()}
+            onClick={() => setExpanded((v) => !v)}
+          >
+            <Show
+              when={expanded()}
+              fallback={
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                  <path d="M4 10l4-4 4 4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              }
             >
               <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                <circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.2"/>
-                <path
-                  d="M8 1.5C8 1.5 5.5 4.5 5.5 8S8 14.5 8 14.5M8 1.5C8 1.5 10.5 4.5 10.5 8S8 14.5 8 14.5"
-                  stroke="currentColor"
-                  stroke-width="1.2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                />
-                <path d="M1.5 8h13" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+                <path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
               </svg>
-            </button>
-          </div>
-
-          {/* Send / Stop button */}
-          <button
-            id={props.busy ? "btnTaskInterrupt" : "chatSend"}
-            class={`chat-send${props.busy ? " chat-interrupt" : ""}`}
-            type={props.busy ? "button" : "submit"}
-            data-mode={props.busy ? "stop" : "send"}
-            disabled={sendDisabled()}
-            title={sendTitle()}
-            aria-label={sendAriaLabel()}
-            onClick={(e) => {
-              if (props.busy) {
-                e.preventDefault();
-                props.onStop?.();
-              }
-            }}
-          >
-            <span class="chat-send-icon" aria-hidden="true">
-              <Show
-                when={props.busy}
-                fallback={
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                    <path d="M2 8l10-5-3 5 3 5z" fill="currentColor" />
-                  </svg>
-                }
-              >
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                  <rect
-                    x="4.25"
-                    y="4.25"
-                    width="7.5"
-                    height="7.5"
-                    rx="1.2"
-                    fill="currentColor"
-                  />
-                </svg>
-              </Show>
-            </span>
-            <span class="chat-send-label">{sendLabel()}</span>
+            </Show>
           </button>
         </div>
+
+        {/* Send / Stop button */}
+        <button
+          id={props.busy ? "btnTaskInterrupt" : "chatSend"}
+          class={`chat-send${props.busy ? " chat-interrupt" : ""}`}
+          type={props.busy ? "button" : "submit"}
+          data-mode={props.busy ? "stop" : "send"}
+          disabled={sendDisabled()}
+          title={sendTitle()}
+          aria-label={sendAriaLabel()}
+          onClick={(e) => {
+            if (props.busy) {
+              e.preventDefault();
+              props.onStop?.();
+            }
+          }}
+        >
+          <span class="chat-send-icon" aria-hidden="true">
+            <Show
+              when={props.busy}
+              fallback={
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                  <path d="M2 8l10-5-3 5 3 5z" fill="currentColor" />
+                </svg>
+              }
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <rect
+                  x="4.25"
+                  y="4.25"
+                  width="7.5"
+                  height="7.5"
+                  rx="1.2"
+                  fill="currentColor"
+                />
+              </svg>
+            </Show>
+          </span>
+          <span class="chat-send-label">{sendLabel()}</span>
+        </button>
       </div>
 
       {/* Compose meta (version/author + tip) */}

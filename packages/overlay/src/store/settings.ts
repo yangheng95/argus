@@ -9,6 +9,17 @@ import { sanitizeLocale } from "../utils/i18n";
 
 // ── Types ──
 
+export type ToolPermAction = "allow" | "ask" | "deny";
+
+export interface ToolPermissions {
+  websearch:          ToolPermAction;
+  webfetch:           ToolPermAction;
+  skill:              ToolPermAction;
+  external_directory: ToolPermAction;
+  task:               ToolPermAction;
+  schedule:           ToolPermAction;
+}
+
 export interface OverlaySettings {
   serverUrl: string;
   autoServer: boolean;
@@ -41,6 +52,8 @@ export interface OverlaySettings {
   directoryEpoch: number;
   /** Whether the overlay is running in unattended (autonomous) mode; synced from server config */
   unattended: boolean;
+  /** Default tool permission actions; synced from server config */
+  toolPermissions: ToolPermissions;
 }
 
 // ── Sanitisers (mirror helpers) ──
@@ -121,6 +134,14 @@ export const DEFAULT_SETTINGS: OverlaySettings = {
   workspaceEpoch: 0,
   directoryEpoch: 0,
   unattended: false,
+  toolPermissions: {
+    websearch:          "allow",
+    webfetch:           "allow",
+    skill:              "allow",
+    external_directory: "allow",
+    task:               "allow",
+    schedule:           "allow",
+  },
 };
 
 // ── Store ──
@@ -386,6 +407,7 @@ export function bootstrapOverlaySettings(
     workspaceTaskID: input.workspaceTaskID || undefined,
     workspaceDirectory: input.workspaceDirectory || undefined,
     unattended: input.unattended ?? DEFAULT_SETTINGS.unattended,
+    toolPermissions: input.toolPermissions ?? DEFAULT_SETTINGS.toolPermissions,
   };
 }
 

@@ -20,47 +20,6 @@
     <div class="titlebar-brand" data-tauri-drag-region>
       <img class="brand-logo" src="opencorvus-logo-dark.svg" alt="OpenCorvus logo" data-i18n-alt="brand.logo_alt">
       <div class="brand-heading">
-        <div class="brand-guide" tabindex="0" data-no-drag="true" data-i18n-aria-label="brand.guide_trigger">
-          <span class="brand-name">OpenCorvus</span>
-          <div class="brand-guide-card" aria-hidden="true">
-            <div class="brand-guide-kicker" data-i18n="brand.guide_kicker">Quick Guide</div>
-            <div class="brand-guide-section">
-              <div class="brand-guide-title" data-i18n="brand.guide_positioning_title">What This Panel Is For</div>
-              <p class="brand-guide-copy" data-i18n="brand.guide_positioning_body">
-                This is the task cockpit, not decorative chrome: left selects tasks, center drives execution, right verifies spec, plan, evaluation, and file changes so the agent does not drift.
-              </p>
-            </div>
-            <div class="brand-guide-section">
-              <div class="brand-guide-title" data-i18n="brand.guide_usage_title">Fast Path</div>
-              <div class="brand-guide-steps">
-                <div class="brand-guide-step">
-                  <span class="brand-guide-step-index" aria-hidden="true">1</span>
-                  <span class="brand-guide-step-copy" data-i18n="brand.guide_usage_1">
-                    Set scope first: pick the task on the left, or start a new one, and verify the working directory before you send anything.
-                  </span>
-                </div>
-                <div class="brand-guide-step">
-                  <span class="brand-guide-step-index" aria-hidden="true">2</span>
-                  <span class="brand-guide-step-copy" data-i18n="brand.guide_usage_2">
-                    Then give a real brief: choose an executor and send the goal, constraints, and acceptance bar, not just a vague prompt.
-                  </span>
-                </div>
-                <div class="brand-guide-step">
-                  <span class="brand-guide-step-index" aria-hidden="true">3</span>
-                  <span class="brand-guide-step-copy" data-i18n="brand.guide_usage_3">
-                    Watch the right side while it runs: Spec checks understanding, Plan checks route, Goals and Evaluation catch drift, Files shows what actually changed.
-                  </span>
-                </div>
-                <div class="brand-guide-step">
-                  <span class="brand-guide-step-index" aria-hidden="true">4</span>
-                  <span class="brand-guide-step-copy" data-i18n="brand.guide_usage_4">
-                    The titlebar actions are operational tools: Channels for delivery, Settings and Logs for debugging, pin-to-top for long-running supervision.
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
         <span id="solidConnBadge"></span>
       </div>
     </div>
@@ -471,6 +430,10 @@
             <svg class="config-nav-icon" viewBox="0 0 24 24" fill="none"><path d="M3 12h4l3-9 4 18 3-9h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
             <span data-i18n="orchestration.workflow">Orchestration</span>
           </button>
+          <button class="config-nav-item" data-config-tab="permissions">
+            <svg class="config-nav-icon" viewBox="0 0 24 24" fill="none"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <span data-i18n="permissions.title">Permissions</span>
+          </button>
           <button class="config-nav-item" data-config-tab="prompt">
             <svg class="config-nav-icon" viewBox="0 0 24 24" fill="none"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
             <span data-i18n="prompt.title">Prompts</span>
@@ -508,6 +471,10 @@
 
           <div class="config-tab-panel" data-config-panel="orchestration">
             <div class="config-section-body" id="orchestrationBody"></div>
+          </div>
+
+          <div class="config-tab-panel" data-config-panel="permissions">
+            <div class="config-section-body" id="permissionsBody"></div>
           </div>
 
           <div class="config-tab-panel" data-config-panel="prompt">

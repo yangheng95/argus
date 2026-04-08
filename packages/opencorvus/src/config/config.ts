@@ -1197,6 +1197,20 @@ export namespace Config {
       instructions: z.array(z.string()).optional().describe("Additional instruction files or patterns to include"),
       permission: Permission.optional(),
       tools: z.record(z.string(), z.boolean()).optional(),
+      tool_permissions: z
+        .object({
+          websearch:          PermissionAction.optional(),
+          webfetch:           PermissionAction.optional(),
+          skill:              PermissionAction.optional(),
+          external_directory: PermissionAction.optional(),
+          task:               PermissionAction.optional(),
+          schedule:           PermissionAction.optional(),
+        })
+        .optional()
+        .describe(
+          "Default tool permission actions for new tasks. When not set, defaults to 'allow'. " +
+          "Set a tool to 'ask' to require confirmation at runtime, or 'deny' to block it entirely.",
+        ),
       compaction: z
         .object({
           auto: z.boolean().optional().describe("Enable automatic compaction when context is full (default: true)"),

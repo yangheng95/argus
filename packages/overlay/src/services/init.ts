@@ -25,6 +25,8 @@ import {
   applySettings,
   setSavedDirectory,
   savedDirectoryValue,
+  DEFAULT_SETTINGS,
+  type ToolPermissions,
 } from "../store/settings";
 import { setAppStore } from "../store/app";
 import { boardStore, setBoardStore, loadTasks } from "../store/board";
@@ -196,13 +198,26 @@ export async function loadConfigInfo(): Promise<void> {
       promptEntries: Array.isArray(prompts) ? prompts : [],
     });
 
- // Unattended: if the server config carries a boolean value, honour it and
- // persist it to localStorage so it survives a page reload.
  // Sync unattended flag from server config to local settings.
     const remoteUnattended = (config as any)?.unattended;
     if (typeof remoteUnattended === "boolean") {
       setSettingsStore("unattended", remoteUnattended);
       saveSettings();
+    }
+
+ // Sync tool_permissions from server config into settingsStore.
+    const remoteTP = (config as any)?.tool_permissions;
+    if (remoteTP && typeof remoteTP === "object") {
+      const def = DEFAULT_SETTINGS.toolPermissions;
+      const merged: ToolPermissions = {
+        websearch:          remoteTP.websearch          ?? def.websearch,
+        webfetch:           remoteTP.webfetch           ?? def.webfetch,
+        skill:              remoteTP.skill              ?? def.skill,
+        external_directory: remoteTP.external_directory ?? def.external_directory,
+        task:               remoteTP.task               ?? def.task,
+        schedule:           remoteTP.schedule           ?? def.schedule,
+      };
+      setSettingsStore("toolPermissions", merged);
     }
   } catch (e) {
     console.warn("[init] loadConfigInfo failed", e);
