@@ -140,8 +140,9 @@ export const BashTool = Tool.define("bash", async () => {
       // the filesystem; the process namespace is shared.
       if (isHostKillingCommand(params.command)) {
         return {
+          title: "Refused",
           output: `Refused: this command kills processes by name and would destroy the host process. Use process-specific alternatives (e.g. kill a PID you spawned, or stop a service you started).`,
-          metadata: { refused: true, command: params.command },
+          metadata: { refused: true as boolean, command: params.command, output: "", exit: null as number | null, description: params.description },
         }
       }
 
@@ -318,6 +319,8 @@ export const BashTool = Tool.define("bash", async () => {
       return {
         title: params.description,
         metadata: {
+          refused: false as boolean,
+          command: params.command,
           output: output.length > MAX_METADATA_LENGTH ? output.slice(0, MAX_METADATA_LENGTH) + "\n\n..." : output,
           exit: proc.exitCode,
           description: params.description,
