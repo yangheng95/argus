@@ -1,7 +1,7 @@
 import { Instance } from "@/project/instance"
 import { ProjectTable } from "@/project/project.sql"
 import { SessionTable } from "@/session/session.sql"
-import { Database, NotFoundError, and, desc, eq, inArray, isNull, like, lt } from "@/storage/db"
+import { Database, NotFoundError, and, asc, desc, eq, inArray, isNull, like, lt, sql } from "@/storage/db"
 import type { SQL } from "@/storage/db"
 import { Snapshot } from "@/snapshot"
 import { EvaluationCheck } from "./model"
@@ -494,6 +494,37 @@ function taskRows(rows: TaskRow[]) {
 
 export function listTaskRows(rows: TaskRow[]) {
   return taskRows(rows)
+}
+
+/** Returns true if the project has at least one task with status "active". */
+export function hasActiveTaskInProject(projectID: string): boolean {
+  return !!Database.use((db) =>
+    db
+      .select({ id: OrchestratorTaskTable.id })
+      .from(OrchestratorTaskTable)
+      .where(and(eq(OrchestratorTaskTable.project_id, projectID), eq(OrchestratorTaskTable.status, "active")))
+      .limit(1)
+      .get(),
+  )
+}
+
+/**
+ * Find the next queued task for a project, ordered by priority (high→normal→low)
+ * then by creation time (FIFO). Used by the serial task queue to pick the next task.
+ */
+export function findNextQueuedTaskForProject(projectID: string): TaskRow | undefined {
+  return Database.use((db) =>
+    db
+      .select()
+      .from(OrchestratorTaskTable)
+      .where(and(eq(OrchestratorTaskTable.project_id, projectID), eq(OrchestratorTaskTable.status, "queued")))
+      .orderBy(
+        asc(sql`CASE ${OrchestratorTaskTable.priority} WHEN 'high' THEN 0 WHEN 'normal' THEN 1 ELSE 2 END`),
+        asc(OrchestratorTaskTable.time_created),
+      )
+      .limit(1)
+      .get(),
+  )
 }
 
 export function listProjectTasks(projectID: string, limit = 50) {

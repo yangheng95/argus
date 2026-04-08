@@ -28,6 +28,7 @@ import {
   findPlan,
   listGoalsByPlan,
   listPlanNodesByPlan,
+  findNextQueuedTaskForProject,
   type TaskRow,
   type RunRow,
 } from "./store"
@@ -272,6 +273,20 @@ export async function runTaskLoop(input: {
 
   activeLoops.delete(taskID)
   log.info("task loop exited", { taskID, iteration })
+
+  // Serial queue: when this task's loop exits, start the next queued task in the project.
+  const completedTask = findTask(taskID)
+  if (completedTask?.project_id) {
+    const next = findNextQueuedTaskForProject(completedTask.project_id)
+    if (next) {
+      log.info("serial queue: starting next queued task", { nextTaskID: next.id, projectID: completedTask.project_id })
+      import("@/orchestrator/state").then(async ({ hooks }) => {
+        runTaskLoop({ taskID: next.id, trigger: { kind: "queued" }, hooks: hooks() }).catch((err) => {
+          log.error("serial queue: task loop failed", { taskID: next.id, error: err instanceof Error ? err.message : String(err) })
+        })
+      })
+    }
+  }
 }
 
 /**
