@@ -393,7 +393,8 @@ export async function createTask(options: CreateTaskOptions): Promise<string> {
         ? {
             attachments: attachments.map((att) => ({
               mime: att.mime,
-              url: att.url,
+              // TaskAttachment schema expects pure base64 (no data URL prefix)
+              data: att.url.includes(",") ? att.url.split(",")[1] : att.url,
               ...(att.filename ? { filename: att.filename } : {}),
             })),
           }
