@@ -108,15 +108,16 @@ const keep = !process.argv.includes("--no-keep")
 const resumeTaskID = flag("--resume-task-id")
 const resumeHomeDir = flag("--resume-home-dir")
 const resumeMessage = flag("--resume-message") || "请继续完成项目，修复所有失败的goals并重试，直到全部通过。"
-const headless = process.argv.includes("--headless")
+const headless = false
 const executor = (flag("--executor") || "opencode") as
   | "opencode"
   | "codex"
   | "claude-code"
 const requestFile = flag("--request-file")
+const referenceImages = flag("--reference-images")?.split(",").map(s => s.trim()).filter(Boolean) ?? []
 const deliveryVerifyCmd = flag("--delivery-verify-cmd")
 const skipLocalVerify = process.argv.includes("--skip-local-verify")
-const noBrowser = process.argv.includes("--no-browser")
+const noBrowser = false
 // Only set task-level budget when explicitly provided via CLI flag.
 // Otherwise leave undefined so the task inherits the config-level default (opencorvus.jsonc).
 const maxExecutorGroups = flag("--max-executor-groups") ? Number(flag("--max-executor-groups")) : undefined
@@ -154,7 +155,30 @@ Acceptance:
 - run bun test ./src/note-store.test.ts
 - that command must pass
 `.trim()
-const TASK_REQUEST = requestFile ? (await Bun.file(path.resolve(requestFile)).text()).trim() : DEFAULT_TASK_REQUEST
+let TASK_REQUEST = requestFile ? (await Bun.file(path.resolve(requestFile)).text()).trim() : DEFAULT_TASK_REQUEST
+// Build base64 attachments from reference images (sent as multimodal vision content)
+const TASK_ATTACHMENTS: Array<{ mime: string; data: string; filename: string }> = []
+if (referenceImages.length > 0) {
+  for (const img of referenceImages) {
+    const src = path.resolve(img)
+    try {
+      const bytes = await Bun.file(src).arrayBuffer()
+      const ext = path.extname(src).toLowerCase().replace(".", "")
+      const mime = ext === "jpg" || ext === "jpeg" ? "image/jpeg" : ext === "png" ? "image/png" : ext === "webp" ? "image/webp" : ext === "gif" ? "image/gif" : `image/${ext}`
+      TASK_ATTACHMENTS.push({
+        mime,
+        data: Buffer.from(bytes).toString("base64"),
+        filename: path.basename(src),
+      })
+      console.log(`[overlay-benchmark] attachment ${path.basename(src)} ${mime} ${Math.round(bytes.byteLength / 1024)}KB`)
+    } catch (e) {
+      console.warn(`[overlay-benchmark] failed to read reference image ${src}: ${e}`)
+    }
+  }
+  // Also note image filenames in the text so agents have context even without vision
+  const refLines = referenceImages.map(img => `- ${path.basename(img)}`).join("\n")
+  TASK_REQUEST += `\n\n## Reference Images\nThe following reference images are attached as visual input. They show the target UI style:\n${refLines}`
+}
 const TASK_TITLE = flag("--title")?.trim() || (requestFile ? path.parse(requestFile).name : DEFAULT_TASK_TITLE)
 // DELIVERY_VERIFY_CMD: runs only at final quality gate (buildBenchmarkReport).
 // Never passed to the orchestrator as per-goal checks — per-goal evaluation uses the LLM judge only.
@@ -215,6 +239,16 @@ process.env.OPENCORVUS_HOME = temp.home
 if (requestFile) {
   const dest = path.join(temp.dir, path.basename(requestFile))
   await fs.copyFile(path.resolve(requestFile), dest).catch(() => undefined)
+}
+// Copy reference images into the project directory under references/
+if (referenceImages.length > 0) {
+  const refDir = path.join(temp.dir, "references")
+  await fs.mkdir(refDir, { recursive: true })
+  for (const img of referenceImages) {
+    const src = path.resolve(img)
+    const dest = path.join(refDir, path.basename(src))
+    await fs.copyFile(src, dest).catch((e) => console.warn(`[overlay-benchmark] failed to copy reference image ${src}: ${e}`))
+  }
 }
 // Copy real auth.json into temp home so OAuth providers (e.g. github-copilot) work in isolated home
 {
@@ -298,8 +332,8 @@ await Instance.provide({
 })
 
 const server = Server.listen({ port: 0, hostname: "127.0.0.1" })
-const browser = noBrowser ? undefined : await launchBrowser(headless)
-let page = noBrowser ? undefined : await browser!.newPage()
+const browser = await launchBrowser()
+let page = await browser.newPage()
 if (page) await page.setViewport({ width: 1600, height: 1200 })
 
 const marks = {
@@ -627,6 +661,7 @@ try {
       body: JSON.stringify({
         title: TASK_TITLE,
         request: TASK_REQUEST,
+        ...(TASK_ATTACHMENTS.length > 0 ? { attachments: TASK_ATTACHMENTS } : {}),
         executor,
         budget: {
           maxRuns,
@@ -1258,11 +1293,11 @@ function resolveModuleBlocks(progress: any, board: any, request: string) {
   return moduleBlocksFromRequest(request)
 }
 
-async function launchBrowser(headless: boolean) {
+async function launchBrowser() {
   const executablePath = await findBrowser()
   return puppeteer.launch({
     executablePath,
-    headless: headless ? "new" : false,
+    headless: false,
     userDataDir: mkdtempSync(path.join(os.tmpdir(), "pptr-overlay-web-benchmark-")),
     args: [
       "--no-sandbox",

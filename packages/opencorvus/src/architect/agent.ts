@@ -13,9 +13,10 @@
  * ✗ Cannot change goal set
  * ✓ Only produces Decision Log entries + ArchitectBlueprint
  */
-import { streamText, stepCountIs } from "ai"
+import { stepCountIs } from "ai"
 import type { TextHooks } from "@/llm/api"
 import { Provider } from "@/provider/provider"
+import { ProviderLLM } from "@/provider/llm"
 import { createPlannerTools } from "@/planner/tools"
 import { Log } from "@/util/log"
 import { toolGuard } from "@/util/tool-guard"
@@ -89,7 +90,6 @@ async function run(input: {
   if (!def) throw new Error("no LLM model available for architect agent")
 
   const model = await Provider.getModel(def.providerID, def.modelID)
-  const language = await Provider.getLanguage(model)
 
   if (input.signal?.aborted) throw new Error("architect agent aborted after model resolution")
 
@@ -105,7 +105,7 @@ async function run(input: {
 
   log.info("architect agent starting", {
     goals: input.goals.length,
-    model: language.modelId,
+    model: model.id,
   })
 
   const stallController = new AbortController()
@@ -116,11 +116,10 @@ async function run(input: {
   const abortSignals: AbortSignal[] = [stallController.signal, guard.signal]
   if (input.signal) abortSignals.push(input.signal)
 
-  const stream = streamText({
-    model: language,
+  const stream = await ProviderLLM.stream({
+    model,
     stopWhen: stepCountIs(MAX_STEPS),
     tools: guard.tools,
-    maxOutputTokens: 16384,
     abortSignal: AbortSignal.any(abortSignals),
     system: systemPrompt,
     messages: [{ role: "user" as const, content: userPrompt }],
@@ -163,7 +162,7 @@ async function run(input: {
   AgentTrace.capture("architect", 1,
     { system: systemPrompt, messages: [{ role: "user", content: userPrompt }] },
     allText,
-    { model: language.modelId, toolCalls: toolCallCount, finishReason: resultFinishReason },
+    { model: model.id, toolCalls: toolCallCount, finishReason: resultFinishReason },
   )
 
   // Prefer structured tool-call data over text parsing.

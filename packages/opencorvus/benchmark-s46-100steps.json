@@ -1,0 +1,274 @@
+{
+  "generated_at": "2026-04-07T13:47:58.613Z",
+  "title": "prd-stock-trading-sim",
+  "request_file": "C:\\Users\\chuan\\myhexin-local\\argus-opencode\\specs\\prd-stock-trading-sim.txt",
+  "executor": "opencode",
+  "model": "hexin/claude-sonnet-4-6",
+  "directory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-project-eDUogj",
+  "server": "http://127.0.0.1:56422/",
+  "taskID": "tsk_d682b73d2001MhJ5XEIpWNrsIB",
+  "stage_timeout_ms": {
+    "spec": 86400000,
+    "planner": 86400000,
+    "tool": 600000,
+    "standby": 86400000,
+    "stall": 1200000,
+    "request": 30000
+  },
+  "stage_max_steps": {
+    "spec": 80,
+    "planner": 96
+  },
+  "stall_timeout_ms": 1200000,
+  "completion_hard_timeout_ms": null,
+  "request_timeout_ms": 30000,
+  "taskStatus": "cancelled",
+  "evaluation": "",
+  "changedFiles": [
+    ".gitignore",
+    ".opencorvus/opencorvus.json",
+    "data/.gitkeep",
+    "opencorvus.json",
+    "package.json",
+    "prd-stock-trading-sim.txt",
+    "tsconfig.json"
+  ],
+  "transcriptCount": 59,
+  "timelineCount": 0,
+  "runCount": 0,
+  "planning": {
+    "pendingCount": 0,
+    "taskList": "暂无任务",
+    "reasoning": "",
+    "assistantText": ""
+  },
+  "streaming": {
+    "reasoning": "",
+    "assistantText": "I'll analyze this comprehensive stock trading web application PRD and decompose it into executable goals.",
+    "liveRole": "goal",
+    "liveText": "Decomposition started",
+    "reasoningVisible": false,
+    "assistantVisible": true,
+    "liveVisible": true
+  },
+  "materialization": {
+    "boardTaskID": "tsk_d682b73d2001MhJ5XEIpWNrsIB",
+    "boardStatus": "active",
+    "specVersion": null,
+    "goalCount": 0,
+    "goalRunCount": 0,
+    "criteriaCount": 0
+  },
+  "architect": null,
+  "plan": null,
+  "screenshot": "C:\\Users\\chuan\\myhexin-local\\argus-opencode\\packages\\opencorvus\\overlay-web-benchmark-1775569677496.png",
+  "resume": {
+    "restored": true,
+    "selectedAt": 15511,
+    "resumeTaskID": null,
+    "resumeHomeDir": null
+  },
+  "timings_ms": {
+    "online": 1340,
+    "submit": 1364,
+    "planning_visible": 2261,
+    "streaming_visible": 13150,
+    "task_created": 2269,
+    "task_selected": 2652,
+    "board_loaded": 2655,
+    "resumed": 15511,
+    "completed": 508164,
+    "execution": 506800
+  },
+  "assertions": {
+    "planning_visible": {
+      "pass": true,
+      "sample": {
+        "directory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-project-eDUogj",
+        "savedDirectory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-project-eDUogj",
+        "workspaceDirectory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-project-eDUogj",
+        "selectedTaskID": "",
+        "pendingCount": 0,
+        "taskIDs": [
+          "tsk_d682b73d2001MhJ5XEIpWNrsIB"
+        ],
+        "taskList": "暂无任务",
+        "reasoning": "",
+        "assistantText": "",
+        "liveRole": "",
+        "liveText": "",
+        "visibleTurns": [],
+        "storage": {
+          "directory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-project-eDUogj",
+          "directoryMode": "custom",
+          "workspaceDirectory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-project-eDUogj",
+          "workspaceTaskID": ""
+        }
+      }
+    },
+    "streaming_visible": {
+      "pass": true,
+      "sample": {
+        "directory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-project-eDUogj",
+        "savedDirectory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-project-eDUogj",
+        "workspaceDirectory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-project-eDUogj",
+        "selectedTaskID": "tsk_d682b73d2001MhJ5XEIpWNrsIB",
+        "pendingCount": 0,
+        "taskIDs": [
+          "tsk_d682b73d2001MhJ5XEIpWNrsIB"
+        ],
+        "taskList": "进行中prd-stock-trading-sim排队中21:39:31 / .../Local/Temp/mirrorcode-overlay-benchmark-project-eDUogj",
+        "reasoning": "",
+        "assistantText": "I'll analyze this comprehensive stock trading web application PRD and decompose it into executable goals.",
+        "liveRole": "goal",
+        "liveText": "Decomposition started",
+        "visibleTurns": [
+          {
+            "role": "agent-card",
+            "text": "I'll analyze this comprehensive stock trading web application PRD and decompose it into executable goals.⚡requirements等待中{\"reason\": \"This is a complex full-stack stock trading simulation web application with detailed PRD. Need to analyze requirements and de"
+          },
+          {
+            "role": "assistant",
+            "text": "I'll analyze this comprehensive stock trading web application PRD and decompose it into executable goals.⚡requirements等待中{\"reason\": \"This is a complex full-stack stock trading simulation web application with detailed PRD. Need to analyze requirements and de"
+          },
+          {
+            "role": "agent-card",
+            "text": "Decomposition started"
+          },
+          {
+            "role": "goal",
+            "text": "Decomposition started"
+          }
+        ],
+        "storage": {
+          "directory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-project-eDUogj",
+          "directoryMode": "custom",
+          "workspaceDirectory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-project-eDUogj",
+          "workspaceTaskID": ""
+        }
+      }
+    },
+    "materialized": {
+      "pass": true,
+      "sample": {
+        "taskID": "tsk_d682b73d2001MhJ5XEIpWNrsIB",
+        "boardTaskID": "tsk_d682b73d2001MhJ5XEIpWNrsIB",
+        "resumed": true
+      }
+    },
+    "delivery": {
+      "pass": false,
+      "sample": {
+        "taskStatus": "cancelled",
+        "verdict": "",
+        "localExit": 0,
+        "qualityVerdict": "rejected"
+      }
+    }
+  },
+  "local_verify": {
+    "mode": "skipped",
+    "command": null,
+    "exitCode": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  "artifact_audit": {
+    "source_files_added": 0,
+    "config_files_added": 2,
+    "doc_files_added": 1,
+    "source_file_count": 0,
+    "doc_file_count": 1,
+    "non_source_churn_ratio": 1,
+    "readme_proliferation_count": 0,
+    "out_of_scope_file_count": 0,
+    "scaffold_noise_count": 0,
+    "placeholder_count": 0,
+    "out_of_scope_files": [],
+    "unmapped_files": [],
+    "placeholder_hits": [],
+    "duplicate_docs": [],
+    "scaffold_expansion_flags": []
+  },
+  "run_metrics": {
+    "meaningful_change_gap_ms": 512860,
+    "noop_cycle_count": 0,
+    "repeat_command_ratio": 0.9715447154471545,
+    "repeat_reasoning_similarity": 0.9715447154471545,
+    "required_check_pass_rate": 0,
+    "critical_check_pass_rate": 0,
+    "check_relevance_score": 0,
+    "verification_edit_ratio": 0,
+    "feature_coverage_p0": 0.5,
+    "scope_drift_score": 0,
+    "plan_to_change_traceability": 1,
+    "delivery_focus_score": 1
+  },
+  "failure_matrix": {
+    "verdict": "rejected",
+    "primary_failure": "verification_gap",
+    "failures": [
+      {
+        "category": "verification_gap",
+        "message": "Core delivery acceptance checks did not all pass",
+        "evidence": "taskStatus=cancelled, evaluationVerdict=, localVerifyExitCode=0"
+      }
+    ]
+  },
+  "manual_review_summary": "verification_gap: Core delivery acceptance checks did not all pass",
+  "overlay": {
+    "directory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-project-eDUogj",
+    "savedDirectory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-project-eDUogj",
+    "workspaceDirectory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-project-eDUogj",
+    "selectedTaskID": "tsk_d682b73d2001MhJ5XEIpWNrsIB",
+    "pendingCount": 0,
+    "taskIDs": [
+      "tsk_d682b73d2001MhJ5XEIpWNrsIB"
+    ],
+    "taskList": "最近prd-stock-trading-sim已取消21:47:56 / .../Local/Temp/mirrorcode-overlay-benchmark-project-eDUogj",
+    "reasoning": "I'll start by searching memory for relevant patterns, then explore the codebase.",
+    "assistantText": "I'll analyze this comprehensive stock trading web application PRD and decompose it into executable goals.",
+    "liveRole": "goal",
+    "liveText": "⚡register_goal已完成OK: goal \"goal_simulator\" registered (4 total)",
+    "visibleTurns": [
+      {
+        "role": "goal",
+        "text": "⚡register_decision已完成OK: decision \"market_simulation_strategy=In-process timer-based simulation with SQLite persistence for price_history\" registered"
+      },
+      {
+        "role": "goal",
+        "text": "[推理] ▼Now register goals. I'll decompose into logical, parallelizable goals:⚡register_goal已完成OK: goal \"goal_bootstrap\" registered (1 total)\nWarning: paths with no existing parent directory: web/package.json, web/tsconfig.json, web/tsconfig.node.json, web/vite.config.ts, web/index.html. Verify these are intentional."
+      },
+      {
+        "role": "goal",
+        "text": "⚡register_goal已完成OK: goal \"goal_db\" registered (2 total)"
+      },
+      {
+        "role": "goal",
+        "text": "⚡register_goal已完成OK: goal \"goal_auth_risk\" registered (3 total)"
+      },
+      {
+        "role": "goal",
+        "text": "⚡register_goal已完成OK: goal \"goal_simulator\" registered (4 total)"
+      }
+    ],
+    "storage": {
+      "directory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-project-eDUogj",
+      "directoryMode": "custom",
+      "workspaceDirectory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-project-eDUogj",
+      "workspaceTaskID": "tsk_d682b73d2001MhJ5XEIpWNrsIB"
+    }
+  },
+  "diagnostics": {
+    "event_file": "C:\\Users\\chuan\\myhexin-local\\argus-opencode\\packages\\opencorvus\\benchmark-s46-100steps.events.json",
+    "event_count": 246,
+    "stage_summary": {
+      "types": {
+        "orchestrator.task.created": 1,
+        "orchestrator.task.updated": 2,
+        "orchestrator.agent.updated": 2
+      },
+      "stages": {}
+    }
+  }
+}

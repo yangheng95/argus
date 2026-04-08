@@ -12,9 +12,10 @@
  * ④ owned_paths is the hard write boundary for Executor.
  * ⑤ Contract is immutable once created. Only re-decompose can change it.
  */
-import { streamText, stepCountIs } from "ai"
+import { stepCountIs } from "ai"
 import type { TextHooks } from "@/llm/api"
 import { Provider } from "@/provider/provider"
+import { ProviderLLM } from "@/provider/llm"
 import { createPlannerTools, prefetchContext } from "@/planner/tools"
 import { Log } from "@/util/log"
 import { toolGuard } from "@/util/tool-guard"
@@ -82,6 +83,8 @@ export namespace DecomposeAgent {
   export async function decompose(input: {
     title: string
     request: string
+    /** Base64 image attachments — injected as vision content alongside the request text. */
+    attachments?: Array<{ mime: string; data: string; filename?: string }>
     taskID?: string
     sessionID?: string
     signal?: AbortSignal
@@ -103,6 +106,7 @@ export namespace DecomposeAgent {
 async function run(input: {
   title: string
   request: string
+  attachments?: Array<{ mime: string; data: string; filename?: string }>
   taskID?: string
   sessionID?: string
   signal?: AbortSignal
@@ -124,7 +128,6 @@ async function run(input: {
   const def = await Provider.defaultModel().catch(() => undefined)
   if (!def) throw new Error("no LLM model available for decompose agent")
   const model = await Provider.getModel(def.providerID, def.modelID)
-  const language = await Provider.getLanguage(model)
 
   if (input.signal?.aborted) throw new Error("decompose agent aborted after model resolution")
 
@@ -149,7 +152,8 @@ async function run(input: {
 
   const systemPrompt = await decomposeSystem()
   const initialPrompt = buildUserPrompt(input, context)
-  let messages: any[] = [{ role: "user" as const, content: initialPrompt }]
+  const initialContent = buildMultimodalContent(initialPrompt, input.attachments)
+  let messages: any[] = [{ role: "user" as const, content: initialContent }]
   let cumulativeToolCalls = 0
 
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
@@ -166,7 +170,7 @@ async function run(input: {
 
     log.info("decompose agent starting", {
       title: input.title,
-      model: language.modelId,
+      model: model.id,
       attempt: attempt + 1,
       retryReason: attempt > 0 && lastQuality ? `score ${lastQuality.score} < ${QUALITY_RETRY_THRESHOLD}` : undefined,
     })
@@ -179,11 +183,10 @@ async function run(input: {
     const abortSignals: AbortSignal[] = [stallController.signal, guard.signal]
     if (input.signal) abortSignals.push(input.signal)
 
-    const stream = streamText({
-      model: language,
+    const stream = await ProviderLLM.stream({
+      model,
       stopWhen: stepCountIs(MAX_STEPS),
       tools: guard.tools,
-      maxOutputTokens: 32768,
       abortSignal: AbortSignal.any(abortSignals),
       system: systemPrompt,
       messages,
@@ -229,7 +232,7 @@ async function run(input: {
     AgentTrace.capture("decompose", attempt + 1,
       { system: systemPrompt, messages: messages.map((m: any) => ({ role: m.role, content: typeof m.content === "string" ? m.content : JSON.stringify(m.content) })) },
       allText,
-      { model: language.modelId, toolCalls: cumulativeToolCalls, finishReason: resultFinishReason },
+      { model: model.id, toolCalls: cumulativeToolCalls, finishReason: resultFinishReason },
     )
 
     // Prefer structured tool-call data over text parsing.
@@ -386,6 +389,33 @@ function goalToContract(g: ParsedGoalContract): GoalContractFields {
     kind: g.kind,
     requirement_ids: g.requirement_ids,
   }
+}
+
+// ---------------------------------------------------------------------------
+// Multimodal content builder
+// ---------------------------------------------------------------------------
+
+/**
+ * Build an AI SDK content array from text + optional image attachments.
+ * When no attachments are present, returns the plain string (more efficient).
+ * When attachments exist, returns a content array with text + file parts.
+ *
+ * AI SDK FilePart: { type: "file", data: base64string, mediaType, filename? }
+ */
+function buildMultimodalContent(
+  text: string,
+  attachments?: Array<{ mime: string; data: string; filename?: string }>,
+) {
+  if (!attachments?.length) return text
+  return [
+    { type: "text" as const, text },
+    ...attachments.map((a) => ({
+      type: "file" as const,
+      data: a.data,
+      mediaType: a.mime,
+      ...(a.filename ? { filename: a.filename } : {}),
+    })),
+  ]
 }
 
 // ---------------------------------------------------------------------------

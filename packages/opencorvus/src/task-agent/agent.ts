@@ -1,21 +1,21 @@
 /**
  * Task Agent — master agent in the Agent Team architecture.
  *
- * Uses streamText() from AI SDK directly (same pattern as spec/planner/goal agents).
- * NOT SessionPrompt — that requires a registered Agent config.
+ * Calls LLM through ProviderLLM.stream() — the unified provider adaptation layer.
  *
  * Triggered by:
  * - Task creation (kind: "created") — new task, agent plans and submits execution
  * - Batch complete (kind: "batch_complete") — goal batch finished (any mix of pass/fail),
- *   agent reads fresh context and decides next action (NOT biased by single-event semantics)
+ *   agent reads fresh context and decides next action
  * - User retry request (kind: "retry")
  *
  * The Task Agent controls the entire pipeline via tools:
- * spec → goals → plan → execute → eval → delivery verify → publish
- * All other agents (spec, goal, plan, eval, delivery) are subordinate workers.
+ * decompose → goals → plan → execute → eval → delivery verify → publish
+ * All other agents (decompose, architect, plan, eval, delivery) are subordinate workers.
  */
-import { streamText, stepCountIs } from "ai"
+import { stepCountIs } from "ai"
 import { Provider } from "@/provider/provider"
+import { ProviderLLM } from "@/provider/llm"
 import { Session } from "@/session"
 import { Instance } from "@/project/instance"
 import { Identifier } from "@/id/id"
@@ -154,14 +154,13 @@ export namespace TaskAgent {
         }
       }
 
-      // 1. Resolve model — same pattern as spec/planner agent
+      // 1. Resolve model
       const def = await Provider.defaultModel().catch(() => undefined)
       if (!def) {
         log.error("task agent: no LLM model available", { taskID })
         return
       }
       const model = await Provider.getModel(def.providerID, def.modelID)
-      const language = await Provider.getLanguage(model)
 
       // 2. Create child session + streaming hooks
       const agentSession = await Session.createNext({
@@ -179,17 +178,30 @@ export namespace TaskAgent {
       await live.start("Task Agent started")
 
       // 3. Create tools (agentSessionID passed so tool sessions become children)
-      const tools = createTaskAgentTools({ taskID, agentSessionID: agentSession.id, signal: ctrl.signal, workflow, workflowState })
-      stopSignal = tools.stopSignal
+      const { tools, stopSignal: dispatchSignal } = createTaskAgentTools({ taskID, agentSessionID: agentSession.id, signal: ctrl.signal, workflow, workflowState })
+      stopSignal = dispatchSignal
       const guard = toolGuard(tools)
 
       // 4. Build prompt — use the user's original request as the user message
       // for "created" triggers (it IS the user's intent). For re-triggers
       // (batch_complete, retry) use a short event description.
       const system = buildSystemPrompt(task, trigger, workflow, workflowState)
-      const userContent = trigger.kind === "created"
+      const userText = trigger.kind === "created"
         ? task.request
         : describeTrigger(task, trigger)
+      // Build multimodal content when task has image attachments (only for initial trigger)
+      const attachments = trigger.kind === "created" && Array.isArray(task.attachments) ? task.attachments : undefined
+      const userContent = attachments?.length
+        ? [
+            { type: "text" as const, text: userText },
+            ...attachments.map((a: any) => ({
+              type: "file" as const,
+              data: a.data as string,
+              mediaType: a.mime as string,
+              ...(a.filename ? { filename: a.filename as string } : {}),
+            })),
+          ]
+        : userText
 
       log.info("task agent starting", {
         taskID,
@@ -199,9 +211,9 @@ export namespace TaskAgent {
         toolCount: Object.keys(tools).length,
       })
 
-      // 5. Call streamText — exact same pattern as spec/planner agents
-      const stream = streamText({
-        model: language,
+      // 5. Call LLM through unified provider layer
+      const stream = await ProviderLLM.stream({
+        model,
         stopWhen: stepCountIs(MAX_STEPS),
         tools: guard.tools as any,
         abortSignal: AbortSignal.any([ctrl.signal, guard.signal, stopSignal]),

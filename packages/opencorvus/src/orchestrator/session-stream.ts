@@ -92,6 +92,8 @@ export function sessionStreamHooks(input: {
   let messageID: string | undefined
   let textPartID: string | undefined
   let textAccumulated = ""
+  let reasoningPartID: string | undefined
+  let reasoningAccumulated = ""
   const toolParts = new Map<string, Message.ToolPart>()
   // AI SDK uses `chunk.id` for tool-input-* events and `chunk.toolCallId` for
   // tool-call/tool-result events. These may differ, so we maintain a mapping
@@ -142,6 +144,32 @@ export function sessionStreamHooks(input: {
             sessionID: input.sessionID,
             messageID: msgID,
             partID: textPartID,
+            field: "text",
+            delta: chunk.text,
+          })
+          return
+        }
+
+        if (chunk.type === "reasoning-delta") {
+          if (!chunk.text) return
+          const msgID = await ensureMessage()
+          if (!reasoningPartID) {
+            const id = Identifier.ascending("part")
+            await Session.updatePart({
+              id,
+              messageID: msgID,
+              sessionID: input.sessionID,
+              type: "reasoning",
+              text: "",
+              time: { start: Date.now() },
+            } as Message.ReasoningPart)
+            reasoningPartID = id
+          }
+          reasoningAccumulated += chunk.text
+          await Session.updatePartDelta({
+            sessionID: input.sessionID,
+            messageID: msgID,
+            partID: reasoningPartID,
             field: "text",
             delta: chunk.text,
           })
@@ -266,6 +294,7 @@ export function sessionStreamHooks(input: {
           if (toolParts.size === 0) {
             messageID = undefined
             textPartID = undefined
+            reasoningPartID = undefined
           }
           return
         }
@@ -284,6 +313,24 @@ export function sessionStreamHooks(input: {
       })
     },
     async flush() {
+      // Flush accumulated reasoning
+      if (messageID && reasoningPartID && reasoningAccumulated) {
+        try {
+          await Session.updatePart({
+            id: reasoningPartID,
+            messageID,
+            sessionID: input.sessionID,
+            type: "reasoning",
+            text: reasoningAccumulated,
+            time: { start: Date.now() },
+          } as Message.ReasoningPart)
+        } catch (err) {
+          log.warn("session-stream flush reasoning failed", {
+            sessionID: input.sessionID,
+            error: String(err),
+          })
+        }
+      }
       // Flush accumulated text
       if (messageID && textPartID && textAccumulated) {
         try {

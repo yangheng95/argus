@@ -1,9 +1,8 @@
-import { Installation } from "@/installation"
 import { Provider } from "@/provider/provider"
+import { ProviderLLM } from "@/provider/llm"
 import { Log } from "@/util/log"
 import {
   streamText,
-  wrapLanguageModel,
   type ModelMessage,
   type StreamTextResult,
   type Tool,
@@ -159,12 +158,7 @@ export namespace LLM {
             "x-opencorvus-request": input.user.id,
             "x-opencorvus-client": Flag.OPENCORVUS_CLIENT,
           }
-        : input.model.providerID !== "anthropic"
-          ? {
-              "User-Agent": `opencorvus/${Installation.VERSION}`,
-            }
-          : undefined),
-      ...input.model.headers,
+        : ProviderLLM.baseHeaders(input.model)),
       ...headers,
     }
     const requestMessages = [
@@ -303,20 +297,7 @@ export namespace LLM {
       headers: requestHeaders,
       maxRetries: input.retries ?? 0,
       messages: requestMessages,
-      model: wrapLanguageModel({
-        model: language,
-        middleware: [
-          {
-            async transformParams(args) {
-              if (args.type === "stream") {
-                // @ts-expect-error
-                args.params.prompt = ProviderTransform.message(args.params.prompt, input.model, options)
-              }
-              return args.params
-            },
-          },
-        ],
-      }),
+      model: ProviderLLM.wrapModel(language, input.model, options),
       experimental_telemetry: {
         isEnabled: cfg.experimental?.openTelemetry,
         metadata: {

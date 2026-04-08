@@ -76,7 +76,7 @@
     "turbo": "2.5.6"
   },
   "dependencies": {
-    "@opencorvus-ai/plugin": "0.0.0-master-202604030241",
+    "@opencorvus-ai/plugin": "0.0.0-master-202604070122",
     "@opencorvus-ai/script": "workspace:*",
     "@opencorvus-ai/sdk": "workspace:*",
     "quansync": "^1.0.0",
