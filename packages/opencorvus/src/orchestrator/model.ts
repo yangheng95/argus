@@ -632,12 +632,20 @@ export const TaskBoardGoalWorkflowStep = z.object({
   summary: z.string().optional(),
 })
 
+export const TaskBoardGoalContract = z.object({
+  key: z.string(),
+  value: z.string(),
+  reason: z.string().optional(),
+})
+
 export const TaskBoardGoalWorkflow = z.object({
   goalID: z.string(),
   goalTitle: z.string(),
   goalStatus: z.string(),
   priority: z.enum(["blocking", "advisory"]),
   steps: TaskBoardGoalWorkflowStep.array(),
+  /** Architect contracts relevant to this specific goal */
+  contracts: TaskBoardGoalContract.array().optional(),
 })
 
 // ---------------------------------------------------------------------------

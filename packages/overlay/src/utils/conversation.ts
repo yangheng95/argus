@@ -3,6 +3,7 @@
 // All data is read from Solid stores (messageStore / boardStore) for reactivity.
 
 import { messageStore, messageById, agentCards, agentCardOrder } from "../store/messages";
+import { devWarn } from "./dev-error";
 
 /** Resolve an agent card message to its live store proxy when available.
  *  Agent card _agentMessages are snapshots in a separate SolidJS store path;
@@ -47,9 +48,14 @@ function buildUserContextMessages(): any[] {
 
   // 1. User's original task request
   if (task?.request) {
+    let taskCreated = task.time?.created;
+    if (!Number.isFinite(taskCreated) || !taskCreated) {
+      devWarn("utils/conversation.ts:buildUserContextMessages", "task.time.created is missing — user-request timestamp will be 0");
+      taskCreated = 0;
+    }
     msgs.push({
       _synthetic: true,
-      info: { id: "ctx:user-request", role: "user", resolvedRole: "user", channel: "main", time: { created: (task.time?.created || 0) - 2 } },
+      info: { id: "ctx:user-request", role: "user", resolvedRole: "user", channel: "main", time: { created: taskCreated - 2 } },
       parts: [{ type: "text", text: task.request }],
     });
   }
@@ -64,16 +70,27 @@ function buildUserContextMessages(): any[] {
 
     const isPlannerClarification = interaction.payload?.planner_clarification === true;
     const interactionRole = isPlannerClarification ? "planner" : "system";
+
+    let requestTime = interaction.time?.created;
+    if (!Number.isFinite(requestTime) || !requestTime) {
+      devWarn("utils/conversation.ts:buildUserContextMessages", `interaction ${interaction.id ?? "?"} has no created time — using Date.now()`);
+      requestTime = Date.now();
+    }
     const request = syntheticTextMessage(
       interactionRole,
-      interaction.time?.created || Date.now(),
+      requestTime,
       interactionRequestText(interaction),
     );
     if (request) msgs.push(request);
     if (interaction.status === "answered" || interaction.status === "rejected") {
+      let resolvedTime = interaction.time?.resolved ?? interaction.time?.updated;
+      if (!Number.isFinite(resolvedTime) || !resolvedTime) {
+        devWarn("utils/conversation.ts:buildUserContextMessages", `interaction ${interaction.id ?? "?"} has no resolved/updated time — using Date.now()`);
+        resolvedTime = Date.now();
+      }
       const response = syntheticTextMessage(
         isPlannerClarification ? "user" : "system",
-        interaction.time?.resolved || interaction.time?.updated || Date.now(),
+        resolvedTime,
         interactionResponseText(interaction),
       );
       if (response) msgs.push(response);
@@ -135,7 +152,13 @@ export function conversationMessages(): any[] {
         resolved.sort((a: any, b: any) => conversationTime(a) - conversationTime(b));
         return { ...child, _agentMessages: resolved };
       });
-      agentCardMsgs.push({ ...card, _agentInternalCards: resolvedChildren });
+      // Also resolve architect messages attached to goal groups
+      let resolvedArchMsgs = card._agentArchitectMessages;
+      if (Array.isArray(resolvedArchMsgs) && resolvedArchMsgs.length > 0) {
+        resolvedArchMsgs = resolvedArchMsgs.map((m: any) => resolveMessage(m));
+        resolvedArchMsgs.sort((a: any, b: any) => conversationTime(a) - conversationTime(b));
+      }
+      agentCardMsgs.push({ ...card, _agentInternalCards: resolvedChildren, _agentArchitectMessages: resolvedArchMsgs });
     } else if (Array.isArray(card._agentMessages) && card._agentMessages.length > 0) {
       // All agent card stages (goal, architect, planner, executor, evaluator,
       // delivery, spec) are kept as collapsible AgentCard items.

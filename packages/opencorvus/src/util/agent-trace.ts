@@ -2,18 +2,19 @@
  * AgentTrace — captures each agent's full input (system prompt + user messages)
  * and full output (complete text) to disk for pipeline debugging.
  *
- * Enable via environment variable:
+ * Always enabled. Default directory: <Instance.directory>/.opencorvus/agent-trace/
+ * Override via environment variable:
  *   OPENCORVUS_AGENT_TRACE_DIR=/path/to/trace/dir
  *
- * When set, each agent invocation writes a formatted markdown file:
+ * Each agent invocation writes a formatted markdown file:
  *   <dir>/<seq>-<agent>-<attempt>.md
- *
- * Internal tool calls are NOT captured — only the agent-level IO boundary.
  */
 import fs from "node:fs"
 import path from "node:path"
+import { Instance } from "@/project/instance"
 
 let seq = 0
+let activeTaskID: string | undefined
 
 function serializeContent(content: unknown): string {
   if (typeof content === "string") return content
@@ -34,6 +35,27 @@ function serializeContent(content: unknown): string {
   return String(content ?? "")
 }
 
+/**
+ * Resolve the trace directory.
+ * Priority: OPENCORVUS_AGENT_TRACE_DIR env > .opencorvus/agent-trace/<taskID>/
+ * Per-task subdirectory avoids filename collisions between concurrent tasks.
+ */
+function resolveTraceDir(): string | undefined {
+  const envDir = process.env.OPENCORVUS_AGENT_TRACE_DIR
+  if (envDir) return envDir
+
+  try {
+    const dir = Instance.directory
+    if (!dir) return undefined
+    const base = path.join(dir, ".opencorvus", "agent-trace")
+    // Per-task subdirectory when a task is active; otherwise write to base
+    return activeTaskID ? path.join(base, activeTaskID) : base
+  } catch {
+    // Instance not initialized yet — skip
+  }
+  return undefined
+}
+
 export namespace AgentTrace {
   export interface AgentInput {
     system: string
@@ -41,7 +63,13 @@ export namespace AgentTrace {
   }
 
   export function enabled(): boolean {
-    return !!process.env.OPENCORVUS_AGENT_TRACE_DIR
+    return !!resolveTraceDir()
+  }
+
+  /** Start tracing for a new task. Resets sequence and sets per-task subdirectory. */
+  export function startTask(taskID: string): void {
+    seq = 0
+    activeTaskID = taskID
   }
 
   /**
@@ -60,7 +88,7 @@ export namespace AgentTrace {
     output: string,
     meta?: Record<string, unknown>,
   ): void {
-    const dir = process.env.OPENCORVUS_AGENT_TRACE_DIR
+    const dir = resolveTraceDir()
     if (!dir) return
 
     try {

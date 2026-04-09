@@ -968,8 +968,16 @@ function buildWorkflowFields(
     goalLoopStepIDs: workflow.goalLoopStepIDs,
   }
 
+  // Read all architect decisions once, then distribute per goal
+  const architectEntries = buildArchitectEntries(task.id)
+  const goalIDSet = new Set(goals.map(g => g.id))
+
   const goalWorkflows = goals.map(goal => {
     const gws = ws.goalSteps[goal.id]
+    // Contracts relevant to this goal: direct goalID match OR mentioned in reason
+    const contracts = architectEntries
+      .filter(e => e.goalID === goal.id || (e.reason && e.reason.includes(goal.id)))
+      .map(e => ({ key: e.key, value: e.value, reason: e.reason }))
     return {
       goalID: goal.id,
       goalTitle: goal.title,
@@ -985,6 +993,7 @@ function buildWorkflowFields(
           completedAt: gws?.steps[s.id]?.completedAt,
           summary: buildStepSummary(goal.id, s.id, gws?.steps[s.id]?.status),
         })),
+      ...(contracts.length > 0 ? { contracts } : {}),
     }
   })
 
@@ -1087,6 +1096,16 @@ function buildStepSummary(goalID: string, stepID: string, status?: string): stri
     }
   } catch { /* best effort */ }
   return undefined
+}
+
+/** Read all architect decision entries for per-goal distribution */
+function buildArchitectEntries(taskID: string): Array<{ goalID: string | null; key: string; value: string; reason: string }> {
+  try {
+    const log = createDecisionLog(taskID)
+    return log.readByPhase("architect")
+  } catch {
+    return []
+  }
 }
 
 /** Build architect summary from Decision Log */

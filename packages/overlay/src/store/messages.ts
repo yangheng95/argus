@@ -8,6 +8,7 @@ import { boardStore } from "../store/board";
 import { clearConversationUiState } from "./conversation-ui";
 import { touchReasoningPart as trackReasoningPart } from "./reasoning";
 import { syncSectionPhases } from "../utils/section";
+import { devWarn, devError } from "../utils/dev-error";
 
 // ── Types ──
 
@@ -51,7 +52,7 @@ export interface AgentCardMessage {
   _agentGoalStatus?: string;
   _agentGoalDescription?: string;
   _agentGoalSteps?: Array<{ stepID: string; label: string; status: string; summary?: string }>;
-  _agentArchitect?: { summary: string; categories?: string[] };
+  _agentContracts?: Array<{ key: string; value: string; reason?: string }>;
   _agentInternalCards?: AgentCardMessage[];
   info: MessageInfo;
   parts: Part[];
@@ -546,11 +547,9 @@ function computeAgentCards(): { cards: Record<string, AgentCardMessage>; order: 
       typeof message?.info?.sessionID === "string" ? message.info.sessionID.trim() : "";
     const fallbackID =
       typeof message?.info?.id === "string" && message.info.id ? message.info.id : hashText(messageSignature(message));
-    const channelID = stage === "executor"
-      ? `${stage}:message:${fallbackID}`
-      : sessionID
-        ? `${stage}:session:${sessionID}`
-        : `${stage}:message:${fallbackID}`;
+    const channelID = sessionID
+      ? `${stage}:session:${sessionID}`
+      : `${stage}:message:${fallbackID}`;
     const round = roundsByStage[stage] || [];
     let entry = round.find((item) => item.channelID === channelID);
     if (!entry) {
@@ -640,6 +639,18 @@ function computeAgentCards(): { cards: Record<string, AgentCardMessage>; order: 
     }
   }
 
+  // Ensure every goal in goalInfoMap has an index — goals from goalsLane
+  // that aren't in goalWorkflows (e.g. no workflow state) need a sequential
+  // index so the UI can display Goal#N.
+  {
+    let nextIdx = goalIndexMap.size > 0 ? Math.max(...goalIndexMap.values()) + 1 : 1;
+    for (const [gid] of goalInfoMap) {
+      if (!goalIndexMap.has(gid)) {
+        goalIndexMap.set(gid, nextIdx++);
+      }
+    }
+  }
+
   /** Resolve goalID for a round: session mapping (executor) → message goalID (bridge) → "" */
   function resolveGoalID(round: AgentRound): string {
     // 1. Session-based (from board lanes, reliable for executor)
@@ -663,8 +674,11 @@ function computeAgentCards(): { cards: Record<string, AgentCardMessage>; order: 
     roundLabel: number,
     status: string,
   ): AgentCardMessage {
-    const created =
-      Number.isFinite(round.startTime) && round.startTime > 0 ? round.startTime : Date.now();
+    let created = round.startTime;
+    if (!Number.isFinite(created) || created <= 0) {
+      devError("store/messages.ts:buildCard", `${stage} round has invalid startTime=${created}, channelID=${round.channelID}. Using Date.now().`);
+      created = Date.now();
+    }
     return {
       _synthetic: true,
       _agentCard: true,
@@ -705,9 +719,11 @@ function computeAgentCards(): { cards: Record<string, AgentCardMessage>; order: 
           entries.push({ stage, card, startTime: round.startTime });
           goalStepCards.set(gid, entries);
         } else {
-          // No goal association — standalone card
-          nextCards[round.channelID] = card;
-          nextOrder.push(round.channelID);
+          // No goal association — data integrity error. Skip standalone card.
+          devError(
+            "store/messages.ts:resolveGoalID",
+            `${stage} round has no goal mapping — sessionID=${round.sessionID}, msgs=${round.messages.length}, channelID=${round.channelID}. Skipped.`,
+          );
         }
       }
     } else {
@@ -740,8 +756,13 @@ function computeAgentCards(): { cards: Record<string, AgentCardMessage>; order: 
     })));
   }
 
-  // Architect summary (shared across all goals)
-  const architectData = boardStore.board?.architect as { summary?: string; categories?: string[] } | undefined;
+  // Per-goal contracts from goalWorkflows (architect decisions from Decision Log)
+  const goalContractsMap = new Map<string, Array<{ key: string; value: string; reason?: string }>>();
+  for (const gw of boardStore.board?.goalWorkflows || []) {
+    if (Array.isArray(gw.contracts) && gw.contracts.length > 0) {
+      goalContractsMap.set(gw.goalID, gw.contracts);
+    }
+  }
 
   // Ensure every board goal has an entry in goalStepCards (may be empty)
   for (const [gid] of goalInfoMap) {
@@ -752,9 +773,22 @@ function computeAgentCards(): { cards: Record<string, AgentCardMessage>; order: 
     entries.sort((a, b) => a.startTime - b.startTime);
     const goalInfo = goalInfoMap.get(gid);
     const groupKey = `goal-group:${gid}`;
-    const groupStart = entries.length > 0
-      ? Math.min(...entries.map(e => e.startTime))
-      : Date.now();
+
+    if (!goalInfo) {
+      devWarn("store/messages.ts:goalGroup", `goal ${gid}: no goalInfo in board — title/status empty`);
+    }
+    if (goalInfo && !goalInfo.title) {
+      devWarn("store/messages.ts:goalGroup", `goal ${gid}: goalInfo exists but title is empty`);
+    }
+
+    let groupStart: number;
+    if (entries.length > 0) {
+      groupStart = Math.min(...entries.map(e => e.startTime));
+    } else {
+      devWarn("store/messages.ts:goalGroup", `goal ${gid}: no step entries, using Date.now() for timestamp`);
+      groupStart = Date.now();
+    }
+
     const groupStatus = entries.length === 0
       ? (goalInfo?.status === "passed" || goalInfo?.status === "failed" ? goalInfo.status : "pending")
       : entries.some(e => e.card._agentStatus === "running")
@@ -763,16 +797,31 @@ function computeAgentCards(): { cards: Record<string, AgentCardMessage>; order: 
           ? "error"
           : "completed";
 
+    if (!goalInfo?.status && groupStatus !== "pending") {
+      devWarn("store/messages.ts:goalGroup", `goal ${gid}: goalInfo.status missing, derived groupStatus=${groupStatus}`);
+    }
+
+    const goalSessionID = entries[0]?.card.info.sessionID;
+    if (!goalSessionID) {
+      devWarn("store/messages.ts:goalGroup", `goal ${gid}: no sessionID from step entries`);
+    }
+
+    let groupCreated = groupStart;
+    if (!Number.isFinite(groupCreated) || groupCreated <= 0) {
+      devError("store/messages.ts:goalGroup", `goal ${gid}: invalid groupStart=${groupStart}, using Date.now()`);
+      groupCreated = Date.now();
+    }
+
     nextCards[groupKey] = {
       _synthetic: true,
       _agentCard: true,
       _agentGoalGroup: true,
       _agentGoalID: gid,
-      _agentGoalTitle: goalInfo?.title || "",
-      _agentGoalStatus: goalInfo?.status || groupStatus,
-      _agentGoalDescription: goalDescMap.get(gid) || "",
+      _agentGoalTitle: goalInfo?.title ?? "",
+      _agentGoalStatus: goalInfo?.status ?? groupStatus,
+      _agentGoalDescription: goalDescMap.get(gid) ?? "",
       _agentGoalSteps: goalStepsMap.get(gid),
-      _agentArchitect: architectData?.summary ? { summary: architectData.summary, categories: architectData.categories } : undefined,
+      _agentContracts: goalContractsMap.get(gid),
       _agentInternalCards: entries.map(e => e.card),
       _agentStage: "executor",
       _agentStatus: groupStatus,
@@ -783,18 +832,29 @@ function computeAgentCards(): { cards: Record<string, AgentCardMessage>; order: 
         id: `agent-card:${groupKey}`,
         role: "agent-card",
         agent: "executor",
-        sessionID: entries[0]?.card.info.sessionID || "",
-        time: { created: Number.isFinite(groupStart) && groupStart > 0 ? groupStart : Date.now() },
+        sessionID: goalSessionID ?? "",
+        time: { created: groupCreated },
       },
       parts: [],
     };
     nextOrder.push(groupKey);
   }
 
-  nextOrder.sort(
-    (left, right) =>
-      messageOrderTime(nextCards[left]) - messageOrderTime(nextCards[right]) || left.localeCompare(right),
-  );
+  // Task-scope stage priority: architect before goal (decompose).
+  // Other stages (executor goal groups, etc.) fall through to chronological order.
+  const TASK_STAGE_PRIORITY: Record<string, number> = { spec: 0, architect: 1, goal: 2 };
+
+  nextOrder.sort((left, right) => {
+    const lCard = nextCards[left];
+    const rCard = nextCards[right];
+    const lPrio = TASK_STAGE_PRIORITY[lCard?._agentStage || ""];
+    const rPrio = TASK_STAGE_PRIORITY[rCard?._agentStage || ""];
+    // When both cards are task-scope stages with defined priority, use that order
+    if (lPrio !== undefined && rPrio !== undefined && lPrio !== rPrio) {
+      return lPrio - rPrio;
+    }
+    return messageOrderTime(lCard) - messageOrderTime(rCard) || left.localeCompare(right);
+  });
 
   return { cards: nextCards, order: nextOrder };
 }
