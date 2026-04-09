@@ -130,6 +130,7 @@ export namespace TaskAgent {
       let workflow: MiniWorkflow | undefined
       let workflowState: WorkflowState | undefined
       if (trigger.kind === "created") {
+        AgentTrace.startTask(taskID)
         const requestedID = (task.metadata as any)?._workflow?.workflowID
         const workflowID = requestedID ?? await WorkflowRegistry.defaultID()
         workflow = await WorkflowRegistry.resolve(workflowID) ?? WorkflowRegistry.resolveSync("standard")

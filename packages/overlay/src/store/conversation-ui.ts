@@ -27,7 +27,7 @@ export function agentCardExpanded(cardID: string, running?: boolean): boolean {
   if (explicit !== undefined && explicit.running === (running === true)) {
     return explicit.value;
   }
-  return running === true;
+  return true;
 }
 
 export function toggleAgentCardExpanded(cardID: string, running: boolean): void {

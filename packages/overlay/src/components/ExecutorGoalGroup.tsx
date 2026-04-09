@@ -5,6 +5,7 @@ import {
   toggleAgentCardExpanded,
 } from "../store/conversation-ui";
 import { setupAutoScroll } from "../utils/dom-utils";
+import { StaticTextPart } from "./TextPart";
 
 interface GoalStepInfo {
   stepID: string;
@@ -13,12 +14,19 @@ interface GoalStepInfo {
   summary?: string;
 }
 
+interface GoalContract {
+  key: string;
+  value: string;
+  reason?: string;
+}
+
 interface ExecutorGoalGroupProps {
   cardID: string;
   goalTitle: string;
   goalDescription?: string;
   goalSteps?: GoalStepInfo[];
-  architect?: { summary: string; categories?: string[] };
+  /** Per-goal architect contracts from Decision Log */
+  contracts?: GoalContract[];
   goalStatus: string;
   status: string;
   /** Per-stage child cards: each has _agentStage and _agentMessages */
@@ -139,21 +147,26 @@ export function ExecutorGoalGroup(props: ExecutorGoalGroupProps) {
         classList={{ "executor-goal-body--preview": !expanded() }}
         ref={(el) => onCleanup(setupAutoScroll(el))}
       >
-        {/* Goal description (done_definition from decompose) */}
+        {/* Goal description (done_definition from decompose) — markdown formatted */}
         <Show when={props.goalDescription}>
-          <div class="executor-goal-description">{props.goalDescription}</div>
+          <div class="executor-goal-description">
+            <StaticTextPart text={props.goalDescription!} />
+          </div>
         </Show>
 
-        {/* Architect decisions (shared across goals) */}
-        <Show when={props.architect?.summary}>
-          <div class="executor-goal-architect">
-            <span class="executor-goal-architect-icon">{"\u2692"}</span>
-            <span class="executor-goal-architect-text">{props.architect!.summary}</span>
-            <Show when={props.architect!.categories?.length}>
-              <span class="executor-goal-architect-cats">
-                {props.architect!.categories!.join(", ")}
-              </span>
-            </Show>
+        {/* Per-goal architect contracts from Decision Log */}
+        <Show when={props.contracts && props.contracts.length > 0}>
+          <div class="executor-goal-contracts">
+            <For each={props.contracts}>
+              {(contract) => (
+                <div class="goal-contract">
+                  <span class="goal-contract-key">{contract.key}</span>
+                  <div class="goal-contract-value">
+                    <StaticTextPart text={contract.value} />
+                  </div>
+                </div>
+              )}
+            </For>
           </div>
         </Show>
 

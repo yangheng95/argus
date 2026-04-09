@@ -53,7 +53,7 @@ export function Conversation(props: { container: HTMLElement }) {
               goalTitle={item()._agentGoalTitle}
               goalDescription={item()._agentGoalDescription}
               goalSteps={item()._agentGoalSteps}
-              architect={item()._agentArchitect}
+              contracts={item()._agentContracts}
               goalStatus={item()._agentGoalStatus}
               status={item()._agentStatus}
               internalCards={item()._agentInternalCards}

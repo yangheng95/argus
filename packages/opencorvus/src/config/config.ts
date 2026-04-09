@@ -1276,7 +1276,7 @@ export namespace Config {
           max_runs: z.number().int().min(1).optional().describe("Maximum total task runs (default: 10)"),
           max_fix_runs: z.number().int().min(0).optional().describe("Maximum fix runs after failure (default: 5)"),
           max_goal_retries: z.number().int().min(0).optional().describe("Maximum retries per individual goal before permanently failing it (default: 3)"),
-          max_executor_groups: z.number().int().min(1).optional().describe("Maximum parallel executor groups (default: 2)"),
+          max_executor_groups: z.number().int().min(1).optional().describe("Maximum parallel executor groups (default: 5)"),
           default_workflow: z.string().optional().describe("Default workflow for new tasks: 'standard', 'quick-fix', 'plan-only', or custom ID (default: 'standard')"),
           workflows: z
             .array(

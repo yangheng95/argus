@@ -7,6 +7,7 @@
  */
 import { For, Show } from "solid-js";
 import { t } from "../utils/i18n";
+import { renderMarkdown } from "../utils/markdown";
 
 interface ArchitectData {
   summary: string;
@@ -46,7 +47,7 @@ export function ArchitectPanel(props: ArchitectPanelProps) {
           </div>
         </Show>
         <Show when={props.architect!.summary}>
-          <p class="arch-detail">{props.architect!.summary}</p>
+          <div class="arch-detail md-content" innerHTML={renderMarkdown(props.architect!.summary)} />
         </Show>
       </Show>
     </div>
