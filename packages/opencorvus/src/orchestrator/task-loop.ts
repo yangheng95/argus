@@ -113,6 +113,23 @@ export async function runTaskLoop(input: {
     // If Task Agent called dispatch tools, goals are now running.
     // We need to wait for them to complete.
     const run = taskAfter.active_run_id ? findRun(taskAfter.active_run_id) : undefined
+
+    // Guard: if active goal runs exist (dispatch gate suppressed Task Agent),
+    // wait before re-checking instead of busy-looping. Active goal runs mean
+    // the executor is still working — poll every 5s until they complete or fail.
+    if (run) {
+      const { listActiveGoalRunsByCoordinator } = await import("./store")
+      const activeRuns = listActiveGoalRunsByCoordinator(run.id)
+      if (activeRuns.length > 0) {
+        log.info("active goal runs present, waiting before re-check", {
+          taskID, activeGoalRuns: activeRuns.length,
+          goalRunIDs: activeRuns.map(gr => gr.id),
+        })
+        await new Promise(r => setTimeout(r, 5_000))
+        trigger = { kind: "batch_complete", runID: run.id, summary: { passed: 0, failed: 0, total: 0 } }
+        continue
+      }
+    }
     if (!run || !run.plan_version_id) {
       // No run or no plan — Task Agent didn't dispatch anything.
       // Could be: still in spec/decompose/architect phase.
@@ -196,13 +213,21 @@ export async function runTaskLoop(input: {
     } else {
       // No ready goals, no running goals — deps not met or all done
       log.info("no dispatchable goals", { taskID, pending: hasPending })
-      if (!hasPending) {
-        // All goals terminal — will be handled at top of next iteration
-      } else {
-        // Pending goals exist but none are ready (deps not met) —
-        // this means dependent goals are waiting for failed goals.
-        // Let Task Agent decide (retry / fail / skip).
+      if (hasPending) {
+        // Pending goals exist but none are ready (deps not met or plan node mismatch).
+        // Feed back to Task Agent as a batch_complete so it can decide to retry/fail/skip.
+        // Without this, the loop would spin indefinitely re-checking the same state.
+        const passed = goals.filter(g => g.status === "passed").length
+        const failed = goals.filter(g => g.status === "failed").length
+        log.warn("pending goals blocked — feeding to Task Agent", { taskID, passed, failed, pending: goals.filter(g => g.status === "pending").length })
+        trigger = {
+          kind: "batch_complete",
+          runID: run.id,
+          summary: { passed, failed, total: goals.length },
+        }
+        continue
       }
+      // All goals terminal — will be handled at top of next iteration
     }
 
     // Dependency cascade removed — Task Agent decides whether to retry, skip,

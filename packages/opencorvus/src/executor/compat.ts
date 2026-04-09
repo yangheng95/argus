@@ -101,6 +101,8 @@ export type ExecutorAdapter = {
     priority?: "high" | "normal" | "low"
     source?: "planner" | "evaluator" | "system"
     cwd?: string
+    /** Per-submission system prompt override — takes precedence over options.system. */
+    system?: string
   }): Promise<{
     sessionID: string
     queueTaskID: string

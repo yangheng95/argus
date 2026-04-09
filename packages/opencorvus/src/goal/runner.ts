@@ -38,6 +38,8 @@ function summary(prefix: string, files: string[]) {
 
 function includeDeliveryFile(file: string) {
   return !file.startsWith(".opencorvus/")
+    && !file.startsWith(".opencorvus-worktrees/")
+    && file !== ".opencorvus-meta.json"
 }
 
 function filterDeliveryDiffs(diffs: z.infer<typeof Snapshot.FileDiff>[]) {

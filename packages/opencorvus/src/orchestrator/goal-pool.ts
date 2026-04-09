@@ -45,12 +45,15 @@ import {
   ensureExecutorSession,
 } from "./persist"
 import { OrchestratorGoalTable, OrchestratorEvaluationTable, OrchestratorPlanNodeTable } from "./orchestrator.sql"
-import { buildFixPrompt, goalRowToContract } from "./helpers"
+import { buildFixPrompt, goalRowToContract, operatorNotesSection } from "./helpers"
 import { buildGoalPrompt, createGoalSession } from "@/goal/runner"
 import { registerGoalRunSession } from "@/server/routes/task-event"
 import { sessionStreamHooks } from "./session-stream"
 import { Event } from "./model"
 import { OrchestratorProtocol } from "./protocol"
+import { projectExecutorEventToSession } from "./runtime"
+import { MemoryInjection } from "@/memory/injection"
+import { TaskPlan } from "@/memory/task-plan"
 import type { GoalContract, PipelineDelivery, PipelineEvent } from "@/pipeline/types"
 
 const log = Log.create({ service: "goal-pool" })
@@ -270,32 +273,34 @@ export class GoalPool {
       })
       worktreeDir = worktreeInfo.directory
 
-      // ── 2b. Apply previous failed delivery (if retry) ──
-      // When a goal is retried, the new worktree branches from HEAD, which
-      // does NOT include the failed goal's previous code attempt (failed
-      // goals don't merge to HEAD). Without this, the executor starts from
-      // scratch and may make the same mistakes. By preserving the last
-      // delivery's diffs INTO the retry worktree, the executor sees its
-      // own buggy code + eval evidence, enabling targeted fixes.
+      // ── 2b. Apply previous delivery as safety net (if retry) ──
+      // Normally, all deliveries (passed or failed) are merged to HEAD in
+      // step 9, so the retry worktree already contains the previous code.
+      // This replay is a defensive fallback for cases where the HEAD merge
+      // failed silently (e.g., git errors). For normal files this is an
+      // idempotent overwrite; merge-strategy files use the merger.
       const prevDelivery = findLatestDeliveryForGoal(entry.goal.id)
       if (prevDelivery) {
         const result = prevDelivery.result as { diffs?: Array<{ file: string; status?: string; after?: string }> } | null
         if (result?.diffs && result.diffs.length > 0) {
           const { applyGoalDelivery } = await import("@/goal/runner")
-          await applyGoalDelivery({
-            directory: worktreeDir,
-            delivery: { diffs: result.diffs as any },
-            ownedPaths: entry.goal.owned_paths ?? [],
-          }).catch((err) => {
-            log.warn("retry: failed to apply previous delivery into worktree", {
+          try {
+            await applyGoalDelivery({
+              directory: worktreeDir,
+              delivery: { diffs: result.diffs as any },
+              ownedPaths: entry.goal.owned_paths ?? [],
+            })
+            log.info("retry: restored previous delivery into worktree", {
+              goalID: entry.goal.id,
+              files: result.diffs.length,
+            })
+          } catch (err) {
+            log.error("retry: FAILED to apply previous delivery — executor starts from scratch", {
               goalID: entry.goal.id,
               error: String(err),
+              diffCount: result.diffs.length,
             })
-          })
-          log.info("retry: restored previous delivery into worktree", {
-            goalID: entry.goal.id,
-            files: result.diffs.length,
-          })
+          }
         }
       }
 
@@ -416,6 +421,26 @@ export class GoalPool {
       }
 
       // ── 6. Submit to executor ──
+      // For managed (external) executors, build enriched system context that
+      // SessionPrompt would normally provide for opencode. This injects the
+      // same memory/task-plan/operator-notes layers that the built-in executor
+      // receives, via the SDK's systemPrompt.append / developerInstructions.
+      let systemOverride: string | undefined
+      if (run.executor !== "opencode") {
+        const sections: string[] = []
+        const notes = operatorNotesSection(task.id)
+        if (notes) sections.push(notes)
+        const memory = await MemoryInjection.systemPromptSection({
+          projectID: Instance.project.id,
+          sessionID: goalSession.id,
+          query: prompt.slice(0, 500),
+        }).catch(() => null)
+        if (memory) sections.push(memory)
+        const taskPlanSection = TaskPlan.toMarkdown(goalSession.id)
+        if (taskPlanSection) sections.push(taskPlanSection)
+        if (sections.length > 0) systemOverride = sections.join("\n\n")
+      }
+
       const executor = ExecutorRegistry.createInstance(run.executor)
       const submission = await executor.submit({
         sessionID: goalSession.id,
@@ -423,6 +448,7 @@ export class GoalPool {
         priority: task.priority,
         source: "planner",
         cwd: worktreeDir,
+        system: systemOverride,
       })
 
       updateGoalRun(goalRun.id, {
@@ -491,6 +517,18 @@ export class GoalPool {
         lastEventTime = Date.now()
         this.lastActivity = Date.now()
         hooks.onExecutorEvent?.(entry.goal.id, event)
+
+        // Bridge managed executor events into Session → Bus → SSE → overlay.
+        // runtime.ts already has the complete bridge (projectExecutorEventToSession)
+        // that handles text, reasoning, tool calls/results, usage, and session lifecycle.
+        // It skips opencode (which manages its own session natively).
+        if (event.type === "executor_event") {
+          projectExecutorEventToSession(task.id, run, goalSession.id, event.event).catch((err) => {
+            log.warn("executor event session projection failed", {
+              goalID: entry.goal.id, eventType: event.event?.type, error: String(err),
+            })
+          })
+        }
 
         if (event.type === "completed") {
           delivery = event.delivery

@@ -23,7 +23,7 @@ export function agentCardExpanded(cardID: string, running?: boolean): boolean {
   const explicit = store.expandedAgentCards[cardID];
   // Only honour the explicit override if it was set while the card was in the
   // same running-state.  When the state changes the override is stale and the
-  // default protocol (running → open, done → closed) resumes automatically.
+  // default protocol (always open) resumes automatically.
   if (explicit !== undefined && explicit.running === (running === true)) {
     return explicit.value;
   }

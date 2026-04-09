@@ -186,7 +186,7 @@ export function GoalWorkflowGroup(props: GoalWorkflowGroupProps) {
     props.goal.goalStatus === "running" || props.goal.goalStatus === "failed";
 
   // Use the same store-based mechanism as AgentCard so that:
-  //   • Cards auto-open when active (running/failed) and auto-close when done.
+  //   • Cards default to open; manual overrides are remembered within the same phase.
   //   • Manual overrides are remembered only within the same active/inactive phase;
   //     a state transition (e.g. failed → running retry) resets to the protocol default.
   // Key is namespaced with "gwg:" so it never collides with conversation-panel keys.

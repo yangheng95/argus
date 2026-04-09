@@ -33,6 +33,8 @@ code_review.txt
 
 # Local dev files
 .opencorvus/
+.opencorvus-worktrees/
+.opencorvus-meta.json
 /opencorvus.json
 /opencorvus.jsonc
 /.zed/
