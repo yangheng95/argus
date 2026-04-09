@@ -26,6 +26,10 @@
 | V8 | 新会话空态引导 | 点击侧边栏"新对话"按钮 | 中间区域显示引导卡片（4 个场景入口），点击任一卡片自动发送对应提示 |
 | V9 | 刷新后会话恢复 | 完成一个场景后刷新页面（F5） | 侧边栏会话列表恢复，点击会话后消息历史完整还原，右栏渲染对应 contentBlocks |
 | V10 | TypeScript 零错误 | 执行 `pnpm tsc --noEmit` | 输出 0 errors |
+| V11 | 暗色/亮色主题切换 | 点击 AppHeader 右侧的月亮/太阳图标 | 整个页面立即切换主题，刷新后恢复上次选择 |
+| V12 | 设置弹窗可用 | 点击 AppHeader 右侧的设置图标 | 弹出设置弹窗，显示 API Key / Tushare Token（密码遮掩）/ Sandbox URL 输入框 + Mock/Real 切换开关，点击"保存"后弹出"设置已保存"提示并关闭弹窗 |
+| V13 | 会话重命名 | 双击侧边栏中任意会话的标题 | 标题变为内联输入框，输入新名称后按 Enter 或点击其他区域即完成重命名 |
+| V14 | 错误消息渲染 | 在 Mock 服务返回 error 事件后（或手动触发）| 聊天区域出现带有红色警告图标的错误提示，不崩溃，可继续发送新消息 |
 
 ---
 
@@ -47,10 +51,12 @@ export interface ExecutionResult { status: 'ok' | 'error' | 'timeout'; stdout: s
 ### 2.2 Stores
 
 **useSessionStore**（`src/stores/session.store.ts`）：
+
 - 状态：`sessionsById`, `sessionOrder`, `currentSessionId`, `isStreaming`, `streamingBlocks`
 - 动作：`createSession()`, `selectSession(id)`, `addUserMessage(content)`, `appendStreamEvent(event)`, `finalizeAssistantMessage(messageId)`, `setStreaming(v)`, `clearStreamingBlocks()`
 
 **useConfigStore**（`src/stores/config.store.ts`）：
+
 - 状态：`useMock`, `anthropicApiKey`
 - 动作：`setUseMock(v)`, `setApiKey(key)`
 
@@ -74,6 +80,72 @@ export function resetServiceCache(): void
 
 - `DISCLAIMER_TEXT`（`src/constants/disclaimer.ts`）
 - `TOOL_DEFINITIONS`（`src/services/tool_definitions.ts`）
+
+### 2.6 UI 基础组件（Button、ScrollArea）
+
+M0-2 多处引用 `@/components/ui/button` 和 `@/components/ui/scroll-area`，使用内联实现，无需 shadcn CLI。
+
+**文件路径：`src/components/ui/button.tsx`**
+
+```tsx
+import { forwardRef } from 'react'
+import { clsx } from 'clsx'
+import { twMerge } from 'tailwind-merge'
+
+type ButtonVariant = 'default' | 'outline' | 'ghost'
+type ButtonSize = 'default' | 'sm' | 'lg'
+
+interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+  variant?: ButtonVariant
+  size?: ButtonSize
+}
+
+export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
+  ({ className, variant = 'default', size = 'default', ...props }, ref) => {
+    return (
+      <button
+        ref={ref}
+        className={twMerge(clsx(
+          'inline-flex items-center justify-center rounded-[6px] font-medium transition-colors duration-[120ms] focus:outline-none focus:ring-[3px] focus:ring-accent-subtle disabled:pointer-events-none disabled:opacity-50',
+          {
+            'bg-accent text-fg-on-accent hover:bg-accent-hover':                           variant === 'default',
+            'border border-border-default bg-base text-fg-default hover:bg-muted':         variant === 'outline',
+            'text-fg-muted hover:bg-muted hover:text-fg-default':                          variant === 'ghost',
+          },
+          {
+            'h-9 px-3 text-sm':  size === 'default',
+            'h-7 px-2 text-xs':  size === 'sm',
+            'h-10 px-4 text-sm': size === 'lg',
+          },
+          className,
+        ))}
+        {...props}
+      />
+    )
+  },
+)
+Button.displayName = 'Button'
+```
+
+**文件路径：`src/components/ui/scroll-area.tsx`**
+
+```tsx
+import { clsx } from 'clsx'
+
+interface ScrollAreaProps {
+  children: React.ReactNode
+  className?: string
+}
+
+// 轻量级实现：原生 overflow-y-auto，无第三方依赖
+export function ScrollArea({ children, className }: ScrollAreaProps) {
+  return (
+    <div className={clsx('overflow-y-auto', className)}>
+      {children}
+    </div>
+  )
+}
+```
 
 ---
 
@@ -166,6 +238,8 @@ import type { ContentBlock } from '@/services/types'
 
 export function useStream() {
   const streamingBlocks = useSessionStore(s => s.streamingBlocks)
+  const streamingToolCalls = useSessionStore(s => s.streamingToolCalls)
+  const streamingThinking = useSessionStore(s => s.streamingThinking)
   const isStreaming = useSessionStore(s => s.isStreaming)
 
   const { currentText, richBlocks } = useMemo(() => {
@@ -186,7 +260,7 @@ export function useStream() {
     }
   }, [streamingBlocks])
 
-  return { currentText, richBlocks, isStreaming }
+  return { currentText, richBlocks, toolCalls: streamingToolCalls, thinking: streamingThinking, isStreaming }
 }
 ```
 
@@ -400,15 +474,11 @@ export function ToolCallBadge({ tool, source, status, params, summary, errorMess
 ```tsx
 import ReactMarkdown from 'react-markdown'
 import { ToolCallBadge } from './ToolCallBadge'
-import type { Message, ContentBlock } from '@/services/types'
+import type { Message } from '@/services/types'
 
 interface MessageBubbleProps {
   message: Message
   isStreaming?: boolean
-}
-
-function renderToolBadgesFromBlocks(blocks: ContentBlock[]): React.ReactNode {
-  return null
 }
 
 export function MessageBubble({ message, isStreaming }: MessageBubbleProps) {
@@ -424,7 +494,30 @@ export function MessageBubble({ message, isStreaming }: MessageBubbleProps) {
 
   return (
     <div className="flex justify-start mb-4">
-      <div className="max-w-full text-sm leading-[22px] text-fg-default">
+      <div className="max-w-full text-sm leading-[22px] text-fg-default space-y-2">
+        {/* 思考过程（历史消息恢复） */}
+        {message.thinkingText && (
+          <div className="text-xs text-fg-subtle italic border-l-2 border-border-muted pl-2">
+            {message.thinkingText}
+          </div>
+        )}
+        {/* 工具调用徽章（历史消息恢复） */}
+        {message.toolCalls && message.toolCalls.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {message.toolCalls.map((tc, i) => (
+              <ToolCallBadge
+                key={i}
+                tool={tc.tool}
+                source={tc.source}
+                status={tc.status}
+                params={tc.params}
+                summary={tc.summary}
+                errorMessage={tc.errorMessage}
+              />
+            ))}
+          </div>
+        )}
+        {/* 文字内容 */}
         {message.contentBlocks ? (
           <div className="space-y-2">
             {message.contentBlocks
@@ -458,60 +551,17 @@ import { MessageBubble } from './MessageBubble'
 import { ToolCallBadge } from './ToolCallBadge'
 import { useStream } from '@/hooks/useStream'
 import { useSessionStore } from '@/stores/session.store'
-import type { Message, ContentBlock, StreamEvent } from '@/services/types'
+import type { Message } from '@/services/types'
 import ReactMarkdown from 'react-markdown'
-
-interface StreamingToolBadge {
-  tool: string
-  source: string
-  status: 'pending' | 'done' | 'error'
-  params?: Record<string, unknown>
-  summary?: string
-  errorMessage?: string
-}
-
-function extractToolBadges(blocks: ContentBlock[], streamingBlocks: ContentBlock[]): StreamingToolBadge[] {
-  return []
-}
 
 export function MessageList() {
   const currentSessionId = useSessionStore(s => s.currentSessionId)
   const session = useSessionStore(s => currentSessionId ? s.sessionsById[currentSessionId] : null)
   const messages = session?.messages ?? []
-  const { currentText, isStreaming } = useStream()
-  const streamingBlocks = useSessionStore(s => s.streamingBlocks)
+  const { currentText, toolCalls, thinking, isStreaming } = useStream()
 
   const parentRef = useRef<HTMLDivElement>(null)
   const scrolledToBottomRef = useRef(true)
-
-  const toolBadges = useMemo(() => {
-    const badges: StreamingToolBadge[] = []
-    const pendingTools = new Map<string, number>()
-
-    for (const block of streamingBlocks) {
-      const raw = block as unknown as StreamEvent
-      if (raw.type === 'tool_start') {
-        badges.push({
-          tool: raw.tool,
-          source: raw.source,
-          status: 'pending',
-          params: raw.params,
-        })
-        pendingTools.set(raw.tool, badges.length - 1)
-      } else if (raw.type === 'tool_end') {
-        const idx = pendingTools.get(raw.tool)
-        if (idx !== undefined) {
-          badges[idx] = { ...badges[idx], status: 'done', summary: raw.summary }
-        }
-      } else if (raw.type === 'tool_error') {
-        const idx = pendingTools.get(raw.tool)
-        if (idx !== undefined) {
-          badges[idx] = { ...badges[idx], status: 'error', errorMessage: raw.error }
-        }
-      }
-    }
-    return badges
-  }, [streamingBlocks])
 
   const items = useMemo(() => {
     const result: Array<{ type: 'message'; message: Message } | { type: 'streaming' }> = messages.map(m => ({
@@ -572,14 +622,22 @@ export function MessageList() {
                   <MessageBubble message={item.message} />
                 ) : (
                   <div className="flex justify-start mb-4">
-                    <div className="max-w-full text-sm leading-[22px] text-fg-default">
-                      {toolBadges.length > 0 && (
-                        <div className="flex flex-wrap gap-2 mb-2">
-                          {toolBadges.map((badge, i) => (
+                    <div className="max-w-full text-sm leading-[22px] text-fg-default space-y-2">
+                      {/* 思考过程 */}
+                      {thinking && (
+                        <div className="text-xs text-fg-subtle italic border-l-2 border-border-muted pl-2">
+                          {thinking}
+                        </div>
+                      )}
+                      {/* 工具调用徽章 */}
+                      {toolCalls.length > 0 && (
+                        <div className="flex flex-wrap gap-2">
+                          {toolCalls.map((badge, i) => (
                             <ToolCallBadge key={i} {...badge} />
                           ))}
                         </div>
                       )}
+                      {/* 流式文字 */}
                       {currentText && (
                         <div className="prose prose-sm max-w-none">
                           <ReactMarkdown>{currentText}</ReactMarkdown>
@@ -1556,25 +1614,27 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
 | 03 | `src/hooks/useChat.ts` | `session.store`, `registry`, `tool_definitions` |
 | 04 | `src/hooks/useStream.ts` | `session.store`, `types` |
 | 05 | `src/hooks/useExecutor.ts` | `session.store`, `registry`, `types` |
-| 06 | `src/components/output/SafeRender.tsx` | React |
-| 07 | `src/components/output/SourceTag.tsx` | 无 |
-| 08 | `src/components/output/Disclaimer.tsx` | `disclaimer.ts` |
-| 09 | `src/components/output/ChartRenderer.tsx` | `plotly.js-dist-min`, `react-plotly.js` |
-| 10 | `src/components/output/CodeBlock.tsx` | `shiki`, `useExecutor`, `ChartRenderer` |
-| 11 | `src/components/output/DataTable.tsx` | `@tanstack/react-table`, `papaparse` |
-| 12 | `src/components/output/OutputPanel.tsx` | `useStream`, `SafeRender`, `CodeBlock`, `ChartRenderer`, `DataTable`, `Disclaimer` |
-| 13 | `src/components/chat/ToolCallBadge.tsx` | `lucide-react` |
-| 14 | `src/components/chat/MessageBubble.tsx` | `react-markdown`, `ToolCallBadge`, `types` |
-| 15 | `src/components/chat/InputBar.tsx` | `useChat`, `useOnlineStatus`, shadcn `Button` |
-| 16 | `src/components/chat/MessageList.tsx` | `@tanstack/react-virtual`, `MessageBubble`, `ToolCallBadge`, `useStream`, `react-markdown` |
-| 17 | `src/components/chat/ChatPanel.tsx` | `MessageList`, `InputBar`, `useChat`, `session.store` |
-| 18 | `src/components/layout/Sidebar.tsx` | `session.store`, `dayjs`, shadcn `Button`/`ScrollArea` |
-| 19 | `src/components/layout/DevToolbar.tsx` | `config.store`, `useChat` |
-| 20 | `src/components/layout/AppShell.tsx` | `react-resizable-panels`, `Sidebar`, `DevToolbar`, `ChatPanel`, `OutputPanel` |
-| 21 | `src/pages/ChatPage.tsx` | `AppShell`, `session.store` |
-| 22 | `src/App.tsx` | `ChatPage`, `tinykeys`, `sonner`, `useChat`, `session.store` |
-| 23 | `src/main.tsx` | `App`, `index.css` |
-| 24 | `src/index.css`（追加 keyframes） | 无 |
+| 06 | `src/components/ui/button.tsx` | `clsx`, `tailwind-merge` |
+| 07 | `src/components/ui/scroll-area.tsx` | `clsx` |
+| 08 | `src/components/output/SafeRender.tsx` | React |
+| 09 | `src/components/output/SourceTag.tsx` | 无 |
+| 10 | `src/components/output/Disclaimer.tsx` | `disclaimer.ts` |
+| 11 | `src/components/output/ChartRenderer.tsx` | `plotly.js-dist-min`, `react-plotly.js` |
+| 12 | `src/components/output/CodeBlock.tsx` | `shiki`, `useExecutor`, `ChartRenderer` |
+| 13 | `src/components/output/DataTable.tsx` | `@tanstack/react-table`, `papaparse` |
+| 14 | `src/components/output/OutputPanel.tsx` | `useStream`, `SafeRender`, `CodeBlock`, `ChartRenderer`, `DataTable`, `Disclaimer` |
+| 15 | `src/components/chat/ToolCallBadge.tsx` | `lucide-react` |
+| 16 | `src/components/chat/MessageBubble.tsx` | `react-markdown`, `ToolCallBadge`, `types` |
+| 17 | `src/components/chat/InputBar.tsx` | `useChat`, `useOnlineStatus`, `Button` |
+| 18 | `src/components/chat/MessageList.tsx` | `@tanstack/react-virtual`, `MessageBubble`, `ToolCallBadge`, `useStream`, `react-markdown` |
+| 19 | `src/components/chat/ChatPanel.tsx` | `MessageList`, `InputBar`, `useChat`, `session.store` |
+| 20 | `src/components/layout/Sidebar.tsx` | `session.store`, `dayjs`, `Button`, `ScrollArea` |
+| 21 | `src/components/layout/DevToolbar.tsx` | `config.store`, `useChat` |
+| 22 | `src/components/layout/AppShell.tsx` | `react-resizable-panels`, `Sidebar`, `DevToolbar`, `ChatPanel`, `OutputPanel` |
+| 23 | `src/pages/ChatPage.tsx` | `AppShell`, `session.store` |
+| 24 | `src/App.tsx` | `ChatPage`, `tinykeys`, `sonner`, `useChat`, `session.store` |
+| 25 | `src/main.tsx` | `App`, `index.css` |
+| 26 | `src/index.css`（追加 keyframes） | 无 |
 
 ---
 
@@ -1683,11 +1743,13 @@ dayjs.locale('zh-cn')
 ### 检查点 1：useChat 能发送消息并消费 Mock 流
 
 1. 在浏览器控制台执行：
+
 ```javascript
 const store = window.__aimecode_sessions ?? (await import('@/stores/session.store')).useSessionStore
 ```
+
 2. 在 InputBar 输入"帮我画一下茅台ROE趋势"，按 Enter
-3. 观察：`isStreaming` 变为 true → streamingBlocks 逐步填充 → 最终 `isStreaming` 变回 false
+2. 观察：`isStreaming` 变为 true → streamingBlocks 逐步填充 → 最终 `isStreaming` 变回 false
 
 ### 检查点 2：单个组件能独立渲染
 
@@ -1722,3 +1784,925 @@ const store = window.__aimecode_sessions ?? (await import('@/stores/session.stor
 | S03 | 帮我封装换手率查询 | 数据表格 + 代码块 + 免责声明 |
 | S04 | 用2015股灾数据跑回撤 | 图表 + 代码块 + 免责声明 |
 | S05 | 对比宁德比亚迪亿纬 | 数据表格 + 免责声明 |
+
+---
+
+## 13. Demo 完整性必备功能
+
+本章将 M0-2 从"Mock 链路功能可用"升级为**可演示的产品级 Demo**，补全主题切换、设置弹窗、会话管理（重命名 + 删除）、错误提示、产物摘要等六项核心交互。
+
+所有改动均为自包含代码，无新增第三方依赖。新文件 7 个，修改文件 5 个，M0-1 最小扩展 2 个。
+
+---
+
+### 13.0 M0-1 最小扩展（先于本章其余内容执行）
+
+#### 13.0.1 `src/stores/config.store.ts`（追加 2 个 setter）
+
+在已有的 `ConfigState` interface 中追加，在 `create()` 的实现中追加对应方法（`setApiKey` 之后）：
+
+```typescript
+// 追加到 interface ConfigState：
+setTushareToken: (token: string) => void
+setSandboxUrl: (url: string) => void
+
+// 追加到 create() 实现（setApiKey 之后）：
+setTushareToken: (token) => set({ tushareToken: token }),
+setSandboxUrl: (url) => set({ sandboxUrl: url }),
+```
+
+完整替换后的文件：
+
+```typescript
+// src/stores/config.store.ts
+import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
+import { resetServiceCache } from '../services/registry'
+
+interface ConfigState {
+  useMock: boolean
+  anthropicApiKey: string
+  tushareToken: string
+  sandboxUrl: string
+
+  setUseMock: (v: boolean) => void
+  setApiKey: (key: string) => void
+  setTushareToken: (token: string) => void
+  setSandboxUrl: (url: string) => void
+}
+
+export const useConfigStore = create<ConfigState>()(
+  persist(
+    (set) => ({
+      useMock: true,
+      anthropicApiKey: '',
+      tushareToken: '',
+      sandboxUrl: 'http://localhost:8001',
+
+      setUseMock: (v) => {
+        set({ useMock: v })
+        resetServiceCache()
+      },
+      setApiKey: (key) => {
+        set({ anthropicApiKey: key })
+        resetServiceCache()
+      },
+      setTushareToken: (token) => set({ tushareToken: token }),
+      setSandboxUrl: (url) => set({ sandboxUrl: url }),
+    }),
+    { name: 'aimecode-config' }
+  )
+)
+```
+
+#### 13.0.2 `src/stores/session.store.ts`（追加 deleteSession + renameSession）
+
+在已有的 `SessionState` interface 中追加，在 `create()` 的实现中追加对应方法：
+
+```typescript
+// 追加到 interface SessionState：
+deleteSession: (id: string) => void
+renameSession: (id: string, title: string) => void
+
+// 追加到 create() 实现（clearStreamingBlocks 之后）：
+deleteSession: (id) => set(state => {
+  const newById = { ...state.sessionsById }
+  delete newById[id]
+  const newOrder = state.sessionOrder.filter(s => s !== id)
+  const newCurrentId = id === state.currentSessionId
+    ? (newOrder[0] ?? null)
+    : state.currentSessionId
+  return { sessionsById: newById, sessionOrder: newOrder, currentSessionId: newCurrentId }
+}),
+
+renameSession: (id, title) => set(state => {
+  const session = state.sessionsById[id]
+  if (!session) return {}
+  return {
+    sessionsById: {
+      ...state.sessionsById,
+      [id]: { ...session, title },
+    },
+  }
+}),
+```
+
+---
+
+### 13.1 主题 Store（新建 `src/stores/theme.store.ts`）
+
+```typescript
+// src/stores/theme.store.ts
+import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
+
+type Theme = 'light' | 'dark'
+
+interface ThemeState {
+  theme: Theme
+  setTheme: (t: Theme) => void
+  toggleTheme: () => void
+}
+
+function applyTheme(t: Theme) {
+  document.documentElement.classList.toggle('dark', t === 'dark')
+}
+
+export const useThemeStore = create<ThemeState>()(
+  persist(
+    (set, get) => ({
+      theme: 'dark',
+
+      setTheme: (t) => {
+        applyTheme(t)
+        set({ theme: t })
+      },
+
+      toggleTheme: () => {
+        const next: Theme = get().theme === 'dark' ? 'light' : 'dark'
+        applyTheme(next)
+        set({ theme: next })
+      },
+    }),
+    {
+      name: 'aimecode-theme',
+      onRehydrateStorage: () => (state) => {
+        if (state) applyTheme(state.theme)
+      },
+    }
+  )
+)
+```
+
+**注意**：M0-1 `tailwind.config.ts` 已包含 `darkMode: ['class', '[data-theme="dark"]']`，`applyTheme` 通过 `classList.toggle('dark', ...)` 即可触发 Tailwind 暗色模式，无需额外配置。
+
+---
+
+### 13.2 通用 Modal 组件（新建 `src/components/ui/modal.tsx`）
+
+```tsx
+// src/components/ui/modal.tsx
+import { useEffect, useRef } from 'react'
+import { X } from 'lucide-react'
+import { clsx } from 'clsx'
+
+interface ModalProps {
+  open: boolean
+  onClose: () => void
+  title?: string
+  children: React.ReactNode
+  className?: string
+}
+
+export function Modal({ open, onClose, title, children, className }: ModalProps) {
+  const panelRef = useRef<HTMLDivElement>(null)
+
+  // ESC 关闭
+  useEffect(() => {
+    if (!open) return
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [open, onClose])
+
+  if (!open) return null
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-[2px]"
+      onMouseDown={(e) => {
+        if (!panelRef.current?.contains(e.target as Node)) onClose()
+      }}
+    >
+      <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal
+        className={clsx(
+          'relative bg-base rounded-[8px] border border-border-muted shadow-2xl',
+          'w-full max-w-md mx-4 p-6 animate-[fadeIn_0.15s_ease-out]',
+          className
+        )}
+      >
+        {title && (
+          <div className="flex items-center justify-between mb-5">
+            <h2 className="text-base font-semibold text-fg-default">{title}</h2>
+            <button
+              onClick={onClose}
+              className="p-1 rounded-[6px] text-fg-muted hover:text-fg-default hover:bg-muted transition-colors"
+              aria-label="关闭"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+        {children}
+      </div>
+    </div>
+  )
+}
+```
+
+---
+
+### 13.3 应用头部（新建 `src/components/layout/AppHeader.tsx`）
+
+```tsx
+// src/components/layout/AppHeader.tsx
+import { Moon, Sun, Settings, Bot } from 'lucide-react'
+import { useThemeStore } from '@/stores/theme.store'
+import { useConfigStore } from '@/stores/config.store'
+import { useSessionStore } from '@/stores/session.store'
+
+interface AppHeaderProps {
+  onSettingsClick: () => void
+}
+
+export function AppHeader({ onSettingsClick }: AppHeaderProps) {
+  const { theme, toggleTheme } = useThemeStore()
+  const useMock = useConfigStore(s => s.useMock)
+  const currentSessionId = useSessionStore(s => s.currentSessionId)
+  const session = useSessionStore(s =>
+    currentSessionId ? s.sessionsById[currentSessionId] : null
+  )
+
+  return (
+    <header className="flex items-center justify-between h-11 px-4 border-b border-border-muted bg-subtle shrink-0">
+      {/* 左侧：Logo + 会话标题 + 模式标签 */}
+      <div className="flex items-center gap-3 min-w-0">
+        <Bot className="w-5 h-5 text-accent shrink-0" />
+        <span className="text-sm font-semibold text-fg-default truncate max-w-[280px]">
+          {session?.title ?? 'AimeCode'}
+        </span>
+        <span
+          className={`shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded-full leading-tight ${
+            useMock
+              ? 'bg-warning/15 text-warning'
+              : 'bg-success/15 text-success'
+          }`}
+        >
+          {useMock ? 'Mock' : 'Real'}
+        </span>
+      </div>
+
+      {/* 右侧：主题切换 + 设置 */}
+      <div className="flex items-center gap-0.5">
+        <button
+          onClick={toggleTheme}
+          className="p-1.5 rounded-[6px] text-fg-muted hover:text-fg-default hover:bg-muted transition-colors"
+          title={theme === 'dark' ? '切换浅色模式' : '切换深色模式'}
+          aria-label={theme === 'dark' ? '切换浅色模式' : '切换深色模式'}
+        >
+          {theme === 'dark'
+            ? <Sun className="w-4 h-4" />
+            : <Moon className="w-4 h-4" />
+          }
+        </button>
+        <button
+          onClick={onSettingsClick}
+          className="p-1.5 rounded-[6px] text-fg-muted hover:text-fg-default hover:bg-muted transition-colors"
+          title="设置"
+          aria-label="设置"
+        >
+          <Settings className="w-4 h-4" />
+        </button>
+      </div>
+    </header>
+  )
+}
+```
+
+---
+
+### 13.4 设置弹窗（新建 `src/components/layout/SettingsModal.tsx`）
+
+```tsx
+// src/components/layout/SettingsModal.tsx
+import { useState } from 'react'
+import { Eye, EyeOff } from 'lucide-react'
+import { toast } from 'sonner'
+import { Modal } from '@/components/ui/modal'
+import { Button } from '@/components/ui/button'
+import { useConfigStore } from '@/stores/config.store'
+
+// 带眼睛图标的密码输入框
+interface MaskedInputProps {
+  label: string
+  value: string
+  onChange: (v: string) => void
+  placeholder?: string
+}
+
+function MaskedInput({ label, value, onChange, placeholder }: MaskedInputProps) {
+  const [visible, setVisible] = useState(false)
+
+  return (
+    <div className="space-y-1.5">
+      <label className="block text-xs font-medium text-fg-muted">{label}</label>
+      <div className="flex items-center gap-2">
+        <input
+          type={visible ? 'text' : 'password'}
+          value={value}
+          onChange={e => onChange(e.target.value)}
+          placeholder={placeholder}
+          autoComplete="off"
+          spellCheck={false}
+          className="flex-1 text-sm px-3 py-2 rounded-[6px] bg-muted border border-border-muted text-fg-default placeholder:text-fg-subtle focus:outline-none focus:ring-1 focus:ring-accent"
+        />
+        <button
+          type="button"
+          onClick={() => setVisible(v => !v)}
+          className="p-2 text-fg-muted hover:text-fg-default transition-colors shrink-0"
+          aria-label={visible ? '隐藏' : '显示'}
+        >
+          {visible ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// CSS-only toggle switch
+interface ToggleSwitchProps {
+  checked: boolean
+  onChange: (v: boolean) => void
+  labelOn: string
+  labelOff: string
+}
+
+function ToggleSwitch({ checked, onChange, labelOn, labelOff }: ToggleSwitchProps) {
+  return (
+    <div className="flex items-center gap-2.5">
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        onClick={() => onChange(!checked)}
+        className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors duration-200 ${
+          checked ? 'bg-warning' : 'bg-success'
+        }`}
+      >
+        <span
+          className={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform duration-200 ${
+            checked ? 'translate-x-1' : 'translate-x-[18px]'
+          }`}
+        />
+      </button>
+      <span className="text-xs text-fg-muted">{checked ? labelOn : labelOff}</span>
+    </div>
+  )
+}
+
+interface SettingsModalProps {
+  open: boolean
+  onClose: () => void
+}
+
+export function SettingsModal({ open, onClose }: SettingsModalProps) {
+  const store = useConfigStore()
+
+  // 本地 draft state，不立即写入 store，只在"保存"时一次性提交
+  const [apiKey, setApiKey] = useState(store.anthropicApiKey)
+  const [tsToken, setTsToken] = useState(store.tushareToken)
+  const [sbUrl, setSbUrl] = useState(store.sandboxUrl)
+  const [useMock, setUseMock] = useState(store.useMock)
+
+  // 每次弹窗打开时同步最新值
+  const [prevOpen, setPrevOpen] = useState(false)
+  if (open && !prevOpen) {
+    setApiKey(store.anthropicApiKey)
+    setTsToken(store.tushareToken)
+    setSbUrl(store.sandboxUrl)
+    setUseMock(store.useMock)
+    setPrevOpen(true)
+  } else if (!open && prevOpen) {
+    setPrevOpen(false)
+  }
+
+  const handleSave = () => {
+    store.setApiKey(apiKey.trim())
+    store.setTushareToken(tsToken.trim())
+    store.setSandboxUrl(sbUrl.trim() || 'http://localhost:8001')
+    store.setUseMock(useMock)
+    toast.success('设置已保存')
+    onClose()
+  }
+
+  return (
+    <Modal open={open} onClose={onClose} title="设置">
+      <div className="space-y-4">
+        <MaskedInput
+          label="Anthropic API Key"
+          value={apiKey}
+          onChange={setApiKey}
+          placeholder="sk-ant-api03-..."
+        />
+        <MaskedInput
+          label="Tushare Token"
+          value={tsToken}
+          onChange={setTsToken}
+          placeholder="your-tushare-token"
+        />
+        <div className="space-y-1.5">
+          <label className="block text-xs font-medium text-fg-muted">
+            Sandbox URL
+          </label>
+          <input
+            type="url"
+            value={sbUrl}
+            onChange={e => setSbUrl(e.target.value)}
+            placeholder="http://localhost:8001"
+            className="w-full text-sm px-3 py-2 rounded-[6px] bg-muted border border-border-muted text-fg-default placeholder:text-fg-subtle focus:outline-none focus:ring-1 focus:ring-accent"
+          />
+        </div>
+
+        <div className="flex items-center justify-between pt-1 border-t border-border-muted">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-medium text-fg-muted">数据服务</span>
+            <ToggleSwitch
+              checked={useMock}
+              onChange={setUseMock}
+              labelOn="Mock 模式"
+              labelOff="Real 模式"
+            />
+          </div>
+          <Button onClick={handleSave} size="sm">
+            保存
+          </Button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+```
+
+---
+
+### 13.5 错误提示组件（新建 `src/components/chat/ErrorMessage.tsx`）
+
+```tsx
+// src/components/chat/ErrorMessage.tsx
+import { AlertCircle } from 'lucide-react'
+
+interface ErrorMessageProps {
+  message: string
+}
+
+export function ErrorMessage({ message }: ErrorMessageProps) {
+  return (
+    <div className="flex items-start gap-2.5 rounded-[6px] border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive mb-4 animate-[fadeIn_0.2s_ease-out]">
+      <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+      <span className="leading-[22px]">{message}</span>
+    </div>
+  )
+}
+```
+
+**CSS 变量依赖**：`--color-destructive` 需在 `src/index.css` 中定义（见 §13.10）。
+
+---
+
+### 13.6 更新：`src/hooks/useChat.ts`（追加错误 toast + 保留原有逻辑）
+
+在原文件基础上追加 `import { toast } from 'sonner'`，并将 error 事件处理从静默改为 toast 提示：
+
+```typescript
+// src/hooks/useChat.ts
+import { useCallback } from 'react'
+import { toast } from 'sonner'
+import { useSessionStore } from '@/stores/session.store'
+import { getLLMService } from '@/services/registry'
+import { TOOL_DEFINITIONS } from '@/services/tool_definitions'
+import type { Message } from '@/services/types'
+
+const MAX_CONTEXT_TURNS = 20
+
+function buildContextMessages(allMessages: Message[]): Message[] {
+  const sliced = allMessages.slice(-MAX_CONTEXT_TURNS * 2)
+  const firstUserIdx = sliced.findIndex(m => m.role === 'user')
+  return firstUserIdx > 0 ? sliced.slice(firstUserIdx) : sliced
+}
+
+export function useChat() {
+  const isStreaming = useSessionStore(s => s.isStreaming)
+  const currentSessionId = useSessionStore(s => s.currentSessionId)
+
+  const sendMessage = useCallback(async (content: string) => {
+    const store = useSessionStore.getState()
+    if (store.isStreaming) return
+    if (!content.trim()) return
+
+    let sessionId = store.currentSessionId
+    if (!sessionId) {
+      sessionId = store.createSession()
+    }
+
+    store.addUserMessage(content)
+    store.setStreaming(true)
+    store.clearStreamingBlocks()
+
+    const session = useSessionStore.getState().sessionsById[sessionId]
+    if (!session) return
+
+    const contextMessages = buildContextMessages(session.messages)
+    const llm = getLLMService()
+
+    try {
+      const stream = llm.chat(contextMessages, { tools: TOOL_DEFINITIONS })
+      for await (const event of stream) {
+        if (!useSessionStore.getState().isStreaming) break
+
+        store.appendStreamEvent(event)
+
+        if (event.type === 'done') {
+          store.finalizeAssistantMessage(event.messageId)
+          return
+        }
+        if (event.type === 'error') {
+          toast.error(event.message ?? '发生未知错误，请重试')
+          store.setStreaming(false)
+          return
+        }
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      toast.error(`请求失败：${msg}`)
+      store.setStreaming(false)
+    }
+  }, [])
+
+  const stopStreaming = useCallback(() => {
+    const store = useSessionStore.getState()
+    if (!store.isStreaming) return
+
+    const llm = getLLMService()
+    llm.abort()
+    store.setStreaming(false)
+    store.clearStreamingBlocks()
+  }, [])
+
+  return { sendMessage, stopStreaming, isStreaming, currentSessionId }
+}
+```
+
+---
+
+### 13.7 更新：`src/components/chat/MessageBubble.tsx`（追加产物指示器 + 沿用原有逻辑）
+
+在 assistant 消息的 `toolCalls` 徽章之后，追加产物指示器 pill，让用户在聊天区快速知晓右栏有哪些内容：
+
+```tsx
+// src/components/chat/MessageBubble.tsx
+import ReactMarkdown from 'react-markdown'
+import { ToolCallBadge } from './ToolCallBadge'
+import type { Message } from '@/services/types'
+
+interface MessageBubbleProps {
+  message: Message
+  isStreaming?: boolean
+}
+
+export function MessageBubble({ message, isStreaming }: MessageBubbleProps) {
+  if (message.role === 'user') {
+    return (
+      <div className="flex justify-end mb-4">
+        <div className="max-w-[80%] rounded-[6px] bg-muted px-3.5 py-2.5 text-sm leading-[22px] text-fg-default">
+          {message.content}
+        </div>
+      </div>
+    )
+  }
+
+  // 计算产物类型（用于快速预览指示器）
+  const hasChart = message.contentBlocks?.some(b => b.type === 'chart') ?? false
+  const hasCode = message.contentBlocks?.some(b => b.type === 'code') ?? false
+  const hasTable = message.contentBlocks?.some(b => b.type === 'table') ?? false
+  const hasArtifacts = hasChart || hasCode || hasTable
+
+  return (
+    <div className="flex justify-start mb-4">
+      <div className="max-w-full text-sm leading-[22px] text-fg-default space-y-2">
+        {/* 思考过程（历史消息恢复） */}
+        {message.thinkingText && (
+          <div className="text-xs text-fg-subtle italic border-l-2 border-border-muted pl-2">
+            {message.thinkingText}
+          </div>
+        )}
+        {/* 工具调用徽章（历史消息恢复） */}
+        {message.toolCalls && message.toolCalls.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {message.toolCalls.map((tc, i) => (
+              <ToolCallBadge
+                key={i}
+                tool={tc.tool}
+                source={tc.source}
+                status={tc.status}
+                params={tc.params}
+                summary={tc.summary}
+                errorMessage={tc.errorMessage}
+              />
+            ))}
+          </div>
+        )}
+        {/* 产物类型指示器（快速预览右栏内容） */}
+        {hasArtifacts && (
+          <div className="flex gap-1.5 flex-wrap">
+            {hasChart && (
+              <span className="text-[11px] px-2 py-0.5 rounded-full bg-muted text-fg-muted leading-5">
+                📊 图表
+              </span>
+            )}
+            {hasCode && (
+              <span className="text-[11px] px-2 py-0.5 rounded-full bg-muted text-fg-muted leading-5">
+                💻 代码
+              </span>
+            )}
+            {hasTable && (
+              <span className="text-[11px] px-2 py-0.5 rounded-full bg-muted text-fg-muted leading-5">
+                📋 数据表
+              </span>
+            )}
+          </div>
+        )}
+        {/* 文字内容 */}
+        {message.contentBlocks ? (
+          <div className="space-y-2">
+            {message.contentBlocks
+              .filter(b => b.type === 'text')
+              .map((block, i) => (
+                <div key={i} className="prose prose-sm max-w-none">
+                  <ReactMarkdown>{(block as { type: 'text'; content: string }).content}</ReactMarkdown>
+                </div>
+              ))}
+          </div>
+        ) : (
+          <div className="prose prose-sm max-w-none">
+            <ReactMarkdown>{message.content}</ReactMarkdown>
+          </div>
+        )}
+        {isStreaming && (
+          <span className="inline-block w-0.5 h-4 bg-fg-default ml-0.5 animate-[blink_1s_step-end_infinite]" />
+        )}
+      </div>
+    </div>
+  )
+}
+```
+
+---
+
+### 13.8 更新：`src/components/layout/Sidebar.tsx`（内联重命名 + 删除确认）
+
+```tsx
+// src/components/layout/Sidebar.tsx
+import { useState, useRef } from 'react'
+import { Plus, Trash2 } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { ScrollArea } from '@/components/ui/scroll-area'
+import { useSessionStore } from '@/stores/session.store'
+import dayjs from 'dayjs'
+import relativeTime from 'dayjs/plugin/relativeTime'
+import 'dayjs/locale/zh-cn'
+
+dayjs.extend(relativeTime)
+dayjs.locale('zh-cn')
+
+export function Sidebar() {
+  const sessionOrder = useSessionStore(s => s.sessionOrder)
+  const sessionsById = useSessionStore(s => s.sessionsById)
+  const currentSessionId = useSessionStore(s => s.currentSessionId)
+  const createSession = useSessionStore(s => s.createSession)
+  const selectSession = useSessionStore(s => s.selectSession)
+  const deleteSession = useSessionStore(s => s.deleteSession)
+  const renameSession = useSessionStore(s => s.renameSession)
+
+  const [renamingId, setRenamingId] = useState<string | null>(null)
+  const [renameValue, setRenameValue] = useState('')
+  const renameInputRef = useRef<HTMLInputElement>(null)
+
+  const startRename = (id: string, currentTitle: string) => {
+    setRenamingId(id)
+    setRenameValue(currentTitle)
+    setTimeout(() => {
+      renameInputRef.current?.focus()
+      renameInputRef.current?.select()
+    }, 0)
+  }
+
+  const commitRename = () => {
+    if (renamingId && renameValue.trim()) {
+      renameSession(renamingId, renameValue.trim())
+    }
+    setRenamingId(null)
+  }
+
+  const handleDelete = (e: React.MouseEvent, id: string) => {
+    e.stopPropagation()
+    if (window.confirm('确认删除此会话？删除后不可恢复。')) {
+      deleteSession(id)
+    }
+  }
+
+  return (
+    <div className="flex flex-col h-full w-[240px] bg-subtle border-r border-border-muted">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-border-muted">
+        <span className="text-sm font-semibold text-fg-default">会话</span>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => createSession()}
+          className="h-7 w-7 p-0 text-fg-muted hover:text-fg-default"
+          title="新建会话"
+        >
+          <Plus className="w-4 h-4" />
+        </Button>
+      </div>
+      <ScrollArea className="flex-1">
+        <div className="px-2 py-2 space-y-0.5">
+          {sessionOrder.map(id => {
+            const session = sessionsById[id]
+            if (!session) return null
+            const isActive = id === currentSessionId
+
+            return (
+              <div
+                key={id}
+                className={`
+                  group relative flex items-center w-full rounded-[6px] transition-colors duration-[120ms]
+                  ${isActive ? 'bg-accent-subtle' : 'hover:bg-muted'}
+                `}
+              >
+                {renamingId === id ? (
+                  <input
+                    ref={renameInputRef}
+                    value={renameValue}
+                    onChange={e => setRenameValue(e.target.value)}
+                    onBlur={commitRename}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') commitRename()
+                      if (e.key === 'Escape') setRenamingId(null)
+                    }}
+                    className="flex-1 mx-2 my-1.5 text-sm bg-transparent text-fg-default outline-none border-b border-accent"
+                  />
+                ) : (
+                  <button
+                    className="flex-1 text-left px-3 py-2 min-w-0"
+                    onClick={() => selectSession(id)}
+                    onDoubleClick={() => startRename(id, session.title)}
+                    title="单击选择，双击重命名"
+                  >
+                    <div className={`text-sm truncate ${isActive ? 'text-fg-default' : 'text-fg-muted'}`}>
+                      {session.title}
+                    </div>
+                    <div className="text-[11px] text-fg-subtle mt-0.5">
+                      {dayjs(session.createdAt).fromNow()}
+                    </div>
+                  </button>
+                )}
+                <button
+                  className="shrink-0 mr-1 p-1 rounded-[4px] opacity-0 group-hover:opacity-100 text-fg-muted hover:text-destructive hover:bg-destructive/10 transition-all duration-[100ms]"
+                  onClick={(e) => handleDelete(e, id)}
+                  title="删除会话"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )
+          })}
+        </div>
+      </ScrollArea>
+    </div>
+  )
+}
+```
+
+---
+
+### 13.9 更新：`src/components/layout/AppShell.tsx`（加入 AppHeader + SettingsModal）
+
+```tsx
+// src/components/layout/AppShell.tsx
+import { useState } from 'react'
+import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels'
+import { Sidebar } from './Sidebar'
+import { DevToolbar } from './DevToolbar'
+import { AppHeader } from './AppHeader'
+import { SettingsModal } from './SettingsModal'
+import { ChatPanel } from '@/components/chat/ChatPanel'
+import { OutputPanel } from '@/components/output/OutputPanel'
+
+export function AppShell() {
+  const [settingsOpen, setSettingsOpen] = useState(false)
+
+  return (
+    <div className="flex flex-col h-screen bg-base text-fg-default">
+      <AppHeader onSettingsClick={() => setSettingsOpen(true)} />
+      <div className="flex flex-1 overflow-hidden">
+        <Sidebar />
+        <PanelGroup direction="horizontal" className="flex-1">
+          <Panel defaultSize={42} minSize={25}>
+            <ChatPanel />
+          </Panel>
+          <PanelResizeHandle className="w-px bg-border-muted hover:w-[3px] hover:bg-accent transition-all duration-[120ms] cursor-col-resize" />
+          <Panel defaultSize={58} minSize={25}>
+            <OutputPanel />
+          </Panel>
+        </PanelGroup>
+      </div>
+      <DevToolbar />
+      <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+    </div>
+  )
+}
+```
+
+---
+
+### 13.10 更新：`src/index.css`（追加 destructive 变量 + 主题过渡动画）
+
+在已有 `@keyframes blink` 和 `@keyframes fadeIn` 之后追加：
+
+```css
+/* ── destructive 颜色变量（亮色 / 暗色） ─────────────────────── */
+:root {
+  --color-destructive: #DC2626;
+}
+.dark {
+  --color-destructive: #F87171;
+}
+
+/* ── 主题切换平滑过渡 ─────────────────────────────────────────── */
+*, *::before, *::after {
+  transition-property: background-color, border-color, color;
+  transition-duration: 150ms;
+  transition-timing-function: ease;
+}
+/* 排除动画相关属性，防止与原有动画冲突 */
+.animate-\[blink_1s_step-end_infinite\],
+.animate-\[fadeIn_0\.15s_ease-out\],
+.animate-\[fadeIn_0\.2s_ease-out\] {
+  transition: none;
+}
+```
+
+同时在 `tailwind.config.ts` 的 `theme.extend.colors` 中追加 `destructive`：
+
+```typescript
+// tailwind.config.ts 追加
+destructive: 'var(--color-destructive)',
+```
+
+---
+
+### 13.11 新增文件创建顺序（在原表第 22 行之前插入）
+
+| # | 文件路径 | 依赖 | 说明 |
+|---|---|---|---|
+| 01.5 | `src/stores/theme.store.ts` | `zustand` | 主题 Store（在 session.store 之后创建） |
+| 08.5 | `src/components/ui/modal.tsx` | `lucide-react`, `clsx` | 通用弹窗（在 scroll-area 之后创建） |
+| 15.5 | `src/components/chat/ErrorMessage.tsx` | `lucide-react` | 错误提示（在 ToolCallBadge 之后创建） |
+| 21.5 | `src/components/layout/AppHeader.tsx` | `theme.store`, `config.store`, `session.store`, `lucide-react` | 应用头部（在 DevToolbar 之后创建） |
+| 21.6 | `src/components/layout/SettingsModal.tsx` | `Modal`, `Button`, `config.store`, `sonner` | 设置弹窗（在 AppHeader 之后创建） |
+
+修改文件（替换已有实现）：`useChat.ts`（#03）、`MessageBubble.tsx`（#16）、`Sidebar.tsx`（#20）、`AppShell.tsx`（#22）
+
+---
+
+### 13.12 验证检查点（新增，对应 V11-V14）
+
+**检查点 6：主题切换（V11）**
+
+1. 默认加载为暗色模式
+2. 点击 AppHeader 右侧的 `<Sun>` 图标，页面即时切换为浅色
+3. 刷新页面，仍保持浅色模式（persist 生效）
+4. 再次点击切回暗色
+
+**检查点 7：设置弹窗（V12）**
+
+1. 点击 `<Settings>` 图标，弹出 Modal
+2. 输入 API Key（masked），点击眼睛图标可直接切换明文/密文
+3. 修改 Mock/Real 开关
+4. 点击"保存"，弹出 "设置已保存" toast，弹窗关闭
+5. 重新打开弹窗，输入框显示刚才保存的值
+6. 按 `Escape` 关闭弹窗，修改未保存
+
+**检查点 8：会话管理（V13）**
+
+1. 创建多个会话
+2. 双击侧边栏中某会话，标题变为内联输入框
+3. 输入新名称，按 Enter，标题更新
+4. Hover 某会话，出现红色垃圾桶图标
+5. 点击垃圾桶，出现浏览器 confirm，确认后会话消失，自动切换至相邻会话
+
+**检查点 9：错误消息渲染（V14）**
+
+```javascript
+// 浏览器控制台手动触发
+const store = window.__aimecode_sessions.getState()
+const id = store.currentSessionId || store.createSession()
+store.appendStreamEvent({ type: 'error', message: '测试错误消息' })
+```
+
+执行后聊天区出现带红色警告图标的错误提示，页面不崩溃，InputBar 可继续使用。

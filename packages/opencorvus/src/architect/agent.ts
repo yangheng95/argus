@@ -123,6 +123,7 @@ async function run(input: {
     abortSignal: AbortSignal.any(abortSignals),
     system: systemPrompt,
     messages: [{ role: "user" as const, content: userPrompt }],
+    cacheKey: input.taskID ? `task-${input.taskID}-architect` : undefined,
     onChunk: async (arg: any) => {
       stallGuard.bump()
       if (input.stream?.onChunk) await (input.stream.onChunk as any)(arg)

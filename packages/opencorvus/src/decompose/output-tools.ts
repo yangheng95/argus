@@ -127,20 +127,6 @@ export function createDecomposeOutputTools(workDir?: string) {
           return `Error: goal "${input.id}" already registered. Use a different ID.`
         }
 
-        // Owned-path overlap check (concurrent goals must be disjoint)
-        const concurrent = collector.goals.filter(
-          g => !input.depends_on.includes(g.id) && !g.depends_on.includes(input.id),
-        )
-        const overlaps: string[] = []
-        for (const other of concurrent) {
-          for (const p of input.owned_paths) {
-            if (other.owned_paths.includes(p)) overlaps.push(`${other.id}:${p}`)
-          }
-        }
-        if (overlaps.length > 0) {
-          return `Error: owned_paths overlap with concurrent goals: ${overlaps.join(", ")}. Concurrent goals MUST have disjoint file ownership.`
-        }
-
         // Path existence check (warning, not error — new projects create files)
         const warnings: string[] = []
         for (const p of input.owned_paths) {

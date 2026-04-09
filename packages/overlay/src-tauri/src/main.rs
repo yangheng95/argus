@@ -346,16 +346,38 @@ fn overlay_create_temp_dir() -> Result<String, String> {
 
 #[tauri::command]
 fn overlay_pick_dir<R: Runtime>(app: AppHandle<R>, start: Option<String>) -> Result<Option<String>, String> {
-    let dialog = if let Some(start) = start.map(|item| item.trim().to_string()).filter(|item| !item.is_empty()) {
-        app.dialog().file().set_directory(start)
+    let start_clean = start
+        .map(|item| item.trim().to_string())
+        .filter(|item| !item.is_empty());
+    let dialog = if let Some(ref dir) = start_clean {
+        app.dialog().file().set_directory(dir)
     } else {
         app.dialog().file()
     };
 
-    Ok(dialog
-        .blocking_pick_folder()
-        .and_then(|item| item.into_path().ok())
-        .map(|item| item.to_string_lossy().to_string()))
+    let picked = dialog.blocking_pick_folder();
+    let result = picked
+        .and_then(|item| {
+            // Try into_path first; fall back to display string for shell/virtual paths
+            match item.into_path() {
+                Ok(p) => Some(p.to_string_lossy().to_string()),
+                Err(item_back) => {
+                    let s = item_back.to_string();
+                    if s.is_empty() { None } else { Some(s) }
+                }
+            }
+        });
+
+    // Guard: if the dialog returned exactly the start directory, treat it as
+    // a cancelled/no-op pick — the user did not select anything new.
+    if let (Some(ref picked_path), Some(ref start_path)) = (&result, &start_clean) {
+        let norm = |s: &str| s.trim_end_matches(['/', '\\']).replace('\\', "/").to_lowercase();
+        if norm(picked_path) == norm(start_path) {
+            return Ok(None);
+        }
+    }
+
+    Ok(result)
 }
 
 fn mime_from_ext(filename: &str) -> &'static str {

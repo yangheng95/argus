@@ -58,7 +58,7 @@ function resolveTraceDir(): string | undefined {
 
 export namespace AgentTrace {
   export interface AgentInput {
-    system: string
+    system: string | string[]
     messages: Array<{ role: string; content: unknown }>
   }
 
@@ -120,7 +120,7 @@ export namespace AgentTrace {
     sections.push("## System Prompt")
     sections.push("")
     sections.push("````")
-    sections.push(input.system)
+    sections.push(Array.isArray(input.system) ? input.system.join("\n") : input.system)
     sections.push("````")
     sections.push("")
 

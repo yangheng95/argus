@@ -95,6 +95,7 @@ export async function planGoal(input: {
     abortSignal: AbortSignal.any(abortSignals),
     system: systemPrompt,
     messages: [{ role: "user" as const, content: userPrompt }],
+    cacheKey: `task-${task.id}-planner`,
     onChunk: async (arg: any) => {
       stallGuard.bump()
       if (input.stream?.onChunk) await (input.stream.onChunk as any)(arg)

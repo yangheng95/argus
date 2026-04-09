@@ -948,9 +948,105 @@ async function sendMessage(content: string) {
 
 ---
 
-## 6. 合约测试
+## 6. 测试基础设施配置
 
-### 6.1 设计原则
+在运行合约测试和 HTCR 评测脚本之前，需完成以下三个文件的配置。
+
+### 6.1 vitest.config.ts
+
+文件路径：`vitest.config.ts`（项目根目录）
+
+```typescript
+import { defineConfig } from 'vitest/config'
+import path from 'path'
+
+export default defineConfig({
+  resolve: {
+    alias: {
+      '@': path.resolve(__dirname, './src'),
+    },
+  },
+  test: {
+    // jsdom 提供 window/fetch/crypto 等浏览器 API，与 Anthropic SDK 兼容
+    environment: 'jsdom',
+    globals: true,
+    setupFiles: ['./tests/setup.ts'],
+
+    // 合约测试调用外部 API，超时设长
+    testTimeout: 60_000,
+
+    // 从项目根目录加载 .env.test 中的环境变量
+    envDir: '.',
+
+    // 默认只跑 unit 测试（不需要真实 API Key）
+    // 合约测试单独运行：vitest run tests/services/ --reporter=verbose
+    include: ['tests/unit/**/*.test.ts'],
+  },
+})
+```
+
+### 6.2 tests/setup.ts
+
+文件路径：`tests/setup.ts`
+
+```typescript
+// 全局测试环境初始化
+// 如需 @testing-library/jest-dom 断言扩展，在此引入
+// import '@testing-library/jest-dom'
+```
+
+### 6.3 .env.test
+
+文件路径：`.env.test`（项目根目录，**不提交到 git**）
+
+```
+# 合约测试 / HTCR 评测所需的真实 API Key
+# 未填写时，Real 测试用例自动跳过，只跑 Mock 测试
+VITE_ANTHROPIC_API_KEY=sk-ant-xxxxxxxx
+VITE_TUSHARE_TOKEN=xxxxxxxx
+```
+
+在 `.gitignore` 中确认已排除：
+```
+.env.test
+.env.*.local
+```
+
+### 6.4 tests/ 目录结构
+
+```
+tests/
+├── setup.ts                          # 全局测试初始化
+├── unit/                             # 纯单元测试（无外部 API，CI 全量跑）
+│   └── services/
+│       └── mock-data.test.ts         # Mock 数据完整性校验（可选）
+├── services/                         # 合约测试（需真实 API Key）
+│   ├── finance.contract.test.ts      # IFinanceService：Mock vs Tushare（§7.2）
+│   └── llm.contract.test.ts          # ILLMService：Mock vs Anthropic（§7.3）
+└── htcr/                             # HTCR 评测集（需真实 API Key）
+    ├── s01-roe-analysis.ts           # S01 标注指令集（§8.2）
+    ├── s05-comparison.ts             # S05 标注指令集（§8.3）
+    └── run-htcr.ts                   # 自动评测脚本（§8.4）
+```
+
+**运行命令**：
+
+```bash
+# 单元测试（CI）
+pnpm vitest run
+
+# 合约测试（需填写 .env.test）
+pnpm vitest run tests/services/ --reporter=verbose
+
+# HTCR 评测
+tsx tests/htcr/run-htcr.ts
+```
+
+---
+
+## 7. 合约测试
+
+### 7.1 设计原则
 
 使用 Vitest `describe.each` 跑 Mock 和 Real 的一致性测试。同一套测试用例验证两种实现返回结构一致、行为兼容。
 
@@ -1223,9 +1319,9 @@ describe.each(services)('%s', (_, service) => {
 
 ---
 
-## 7. HTCR 测试集
+## 8. HTCR 测试集
 
-### 7.1 测试集设计原则
+### 8.1 测试集设计原则
 
 - 覆盖 S01（财报查询 + ROE 分析）和 S05（横向对比）各 10 条，共 20 条
 - 每条标注：输入文本、预期工具调用、预期输出类型、判定规则
@@ -1235,7 +1331,7 @@ describe.each(services)('%s', (_, service) => {
   - 最终输出包含预期类型的结构化内容（代码块/图表/表格，至少一项）
   - 输出不包含任何占位符（`YOUR_TICKER`、`TODO` 等）
 
-### 7.2 S01 场景测试集：财报查询 + ROE 分析（10 条）
+### 8.2 S01 场景测试集：财报查询 + ROE 分析（10 条）
 
 ```typescript
 // tests/htcr/s01-roe-analysis.ts
@@ -1439,7 +1535,7 @@ export const S01_TEST_CASES = [
 ]
 ```
 
-### 7.3 S05 场景测试集：横向对比（10 条）
+### 8.3 S05 场景测试集：横向对比（10 条）
 
 ```typescript
 // tests/htcr/s05-comparison.ts
@@ -1640,7 +1736,7 @@ export const S05_TEST_CASES = [
 ]
 ```
 
-### 7.4 HTCR 自动评测脚本
+### 8.4 HTCR 自动评测脚本
 
 ```typescript
 // tests/htcr/run-htcr.ts
@@ -1820,7 +1916,7 @@ describe('HTCR Summary', () => {
 
 ---
 
-## 8. 文件创建/修改顺序
+## 9. 文件创建/修改顺序
 
 按依赖关系排列，每一步完成后需通过 `pnpm tsc --noEmit` 检查。
 
@@ -1840,7 +1936,7 @@ describe('HTCR Summary', () => {
 
 ---
 
-## 9. 集成陷阱
+## 10. 集成陷阱
 
 ### 9.1 Anthropic SDK 浏览器端 CORS
 
@@ -1889,7 +1985,7 @@ describe('HTCR Summary', () => {
 
 ---
 
-## 10. 验证检查点
+## 11. 验证检查点
 
 ### 检查点 1：TypeScript 编译通过
 

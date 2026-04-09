@@ -6,7 +6,9 @@
  *   - Pool auto-fills slots when one completes (up to concurrency limit)
  *   - drain() blocks until queue empty + all slots idle, returns all results
  *   - Per-goal inactivity timeout (no hard timeout)
- *   - Each completed goal is auto-eval'd before the slot is freed
+ *
+ * Executor completes → goal marked passed/failed based on delivery.
+ * No per-goal evaluator — delivery agent is the single verification gate.
  *
  * The pool is a TOOL — the Task Control Loop calls it, awaits drain(),
  * then feeds results back to the Decision Point. No fire-and-forget.
@@ -16,20 +18,15 @@ import { Log } from "@/util/log"
 import { Instance } from "@/project/instance"
 import { Session } from "@/session"
 import { Database, eq } from "@/storage/db"
-import { Identifier } from "@/id/id"
 import { Worktree } from "@/worktree"
 import { ExecutorRegistry } from "@/executor/registry"
 import { runGoalPipeline } from "@/pipeline"
-import { evaluateGoal } from "@/evaluator/per-goal"
 import { createDecisionLog } from "@/decision-log"
 import { readyGoalNodes, type GoalNodeEntry } from "@/goal/scheduler"
 import { cleanupGoalWorkspace } from "@/goal/runner"
 import {
-  findGoalRun,
   listPlanNodesByPlan,
   listGoalsByPlan,
-  findLatestFailedEvalForGoal,
-  findDeliveryByGoalRun,
   findLatestDeliveryForGoal,
   type TaskRow,
   type RunRow,
@@ -40,12 +37,10 @@ import {
 import {
   createGoalRun,
   updateGoalRun,
-  updateGoalRunExecutorSessionStatus,
-  persistDelivery,
   ensureExecutorSession,
 } from "./persist"
-import { OrchestratorGoalTable, OrchestratorEvaluationTable, OrchestratorPlanNodeTable } from "./orchestrator.sql"
-import { buildFixPrompt, goalRowToContract, operatorNotesSection } from "./helpers"
+import { OrchestratorGoalTable, OrchestratorPlanNodeTable } from "./orchestrator.sql"
+import { goalRowToContract, operatorNotesSection } from "./helpers"
 import { buildGoalPrompt, createGoalSession } from "@/goal/runner"
 import { registerGoalRunSession } from "@/server/routes/task-event"
 import { sessionStreamHooks } from "./session-stream"
@@ -377,7 +372,7 @@ export class GoalPool {
       // ── 4b. Write worktree metadata for traceability ──
       {
         const fs = await import("fs/promises")
-        const metaPath = await import("path").then(p => p.join(worktreeDir, ".opencorvus-meta.json"))
+        const metaPath = await import("path").then(p => p.join(worktreeDir!, ".opencorvus-meta.json"))
         const meta = {
           goalID: entry.goal.id,
           goalRunID: goalRun.id,
@@ -397,9 +392,9 @@ export class GoalPool {
       const slot = this.active.get(entry.goal.id)
       if (slot) slot.goalRunID = goalRun.id
 
-      // ── 5. Build prompt (with eval fix context for retries) ──
+      // ── 5. Build prompt ──
       const allGoals = listGoalsByPlan(plan.id)
-      let prompt = buildGoalPrompt({
+      const prompt = buildGoalPrompt({
         plan: plan as any,
         node: { ...entry.node, brief: planNodeBrief } as any,
         goal: entry.goal as any,
@@ -408,17 +403,6 @@ export class GoalPool {
         allGoals,
         cwd: worktreeDir,
       })
-
-      const failedEvals = findLatestFailedEvalForGoal(entry.goal.id)
-      if (failedEvals.length > 0) {
-        const lastFail = failedEvals[0]!
-        const checks = lastFail.checks as Array<{ name: string; status: string; evidence?: string }> | null
-        const failedChecks = checks?.filter(c => c.status === "failed").map(c => ({
-          name: c.name, status: c.status, evidence: c.evidence ?? "",
-        })) ?? []
-        const fixCtx = failedChecks.length > 0 ? { source: "eval_failure" as const, checks: failedChecks } : undefined
-        prompt += "\n\n---\n\n" + buildFixPrompt(lastFail.summary, fixCtx)
-      }
 
       // ── 6. Submit to executor ──
       // For managed (external) executors, build enriched system context that
@@ -539,28 +523,42 @@ export class GoalPool {
       await stallWatcher.catch(() => {})
 
       if (signal.aborted) {
-        return { goalID: entry.goal.id, goalRunID: goalRun.id, title: entry.goal.title, status: "failed", error: "aborted", attempts: failedEvals.length + 1 }
+        return { goalID: entry.goal.id, goalRunID: goalRun.id, title: entry.goal.title, status: "failed", error: "aborted", attempts: 1 }
       }
 
-      // ── 8. Auto-eval (BEFORE cleanup — worktree still has node_modules) ──
+      // ── 8. Determine goal status from executor result ──
+      // Executor completed with delivery → "passed" (trust executor's self-report).
+      // No delivery → "failed" (executor could not produce output).
+      // Delivery agent is the single verification gate — runs at task level after all goals.
+      const now = Date.now()
       if (!delivery) {
         if (worktreeDir) await cleanupGoalWorkspace(worktreeDir).catch(() => {})
         Database.use(db => db.update(OrchestratorGoalTable)
-          .set({ status: "failed", time_updated: Date.now() })
+          .set({ status: "failed", time_updated: now })
           .where(eq(OrchestratorGoalTable.id, entry.goal.id)).run())
+
+        OrchestratorProtocol.emit(Event.GoalFailed, {
+          taskID: task.id, goalID: entry.goal.id, summary: `${entry.goal.title}: no delivery`,
+        }, { source: "executor" }).catch(() => {})
 
         return {
           goalID: entry.goal.id, goalRunID: goalRun.id, title: entry.goal.title,
-          status: "failed", error: "No delivery", attempts: failedEvals.length + 1,
+          status: "failed", error: "No delivery", attempts: 1,
         }
       }
 
-      const evalResult = await this.evalGoal(task, run, goalRun, entry.goal as GoalRow, delivery, signal, worktreeDir)
+      // Executor produced delivery → mark goal passed
+      Database.use(db => db.update(OrchestratorGoalTable)
+        .set({ status: "passed", time_updated: now })
+        .where(eq(OrchestratorGoalTable.id, entry.goal.id)).run())
+
+      OrchestratorProtocol.emit(Event.GoalPassed, {
+        taskID: task.id, goalID: entry.goal.id, summary: entry.goal.title,
+      }, { source: "executor" }).catch(() => {})
 
       // ── 9. Merge delivery ──
-      const finalGoalRun = findGoalRun(goalRun.id)
-      if (finalGoalRun && delivery && delivery.diffs.length > 0) {
-        await hooks.mergeDelivery(task, run, plan, finalGoalRun, delivery)
+      if (delivery.diffs.length > 0) {
+        await hooks.mergeDelivery(task, run, plan, goalRun, delivery)
       }
 
       // ── 10. Cleanup worktree ──
@@ -570,15 +568,18 @@ export class GoalPool {
         })
       }
 
-      log.info("goal pool: goal eval complete", {
-        goalID: entry.goal.id, verdict: evalResult.status,
+      log.info("goal pool: goal execution complete", {
+        goalID: entry.goal.id, status: "passed", files: delivery.diffs.length,
       })
 
       return {
-        ...evalResult,
+        goalID: entry.goal.id,
         goalRunID: goalRun.id,
         title: entry.goal.title,
-        attempts: failedEvals.length + 1,
+        status: "passed",
+        verdict: "accepted",
+        delivery,
+        attempts: 1,
       }
 
     } catch (err) {
@@ -593,107 +594,6 @@ export class GoalPool {
       return {
         goalID: entry.goal.id, goalRunID: "", title: entry.goal.title,
         status: "failed", error, attempts: 1,
-      }
-    }
-  }
-
-  private async evalGoal(
-    task: TaskRow, run: RunRow, goalRun: GoalRunRow, goal: GoalRow,
-    delivery: PipelineDelivery, signal: AbortSignal, workDir?: string,
-  ): Promise<Omit<GoalResult, "goalRunID" | "title" | "attempts">> {
-    try {
-      const decisionLog = createDecisionLog(task.id)
-      const diffs = delivery.diffs
-      const contract = {
-        goal: { id: goal.id, title: goal.title, done_definition: goal.done_definition ?? "", owned_paths: (goal.owned_paths ?? []) as string[] },
-        task: { id: task.id, title: task.title, request: task.request ?? "" },
-      }
-
-      const evalSession = await Session.createNext({
-        parentID: task.session_id ?? "",
-        title: `Eval: ${goal.title}`,
-        directory: Instance.directory,
-      })
-      registerGoalRunSession(evalSession.id, task.id, "evaluator", goal.id)
-      const evalHooks = sessionStreamHooks({ sessionID: evalSession.id, taskID: task.id, stage: "eval" })
-
-      const verdict = await evaluateGoal({
-        contract: contract as any,
-        delivery: { summary: delivery.summary, diffs },
-        decisionLog,
-        workDir,
-        sessionID: evalSession.id,
-        signal,
-        stream: {
-          onChunk: async (arg: any) => {
-            const chunk = (arg as any)?.chunk
-            if (chunk?.type === "text-delta") {
-              if (evalHooks.onChunk) await evalHooks.onChunk({ chunk: { ...chunk, type: "reasoning-delta" } })
-            } else {
-              if (evalHooks.onChunk) await evalHooks.onChunk(arg as any)
-            }
-          },
-          onError: evalHooks.onError,
-        },
-      })
-      await evalHooks.flush()
-
-      // Persist evaluation
-      const evalID = Identifier.ascending("evaluation")
-      const now = Date.now()
-      Database.use(db => {
-        db.insert(OrchestratorEvaluationTable).values({
-          id: evalID,
-          task_id: task.id,
-          run_id: goalRun.coordinator_run_id,
-          goal_run_id: goalRun.id,
-          delivery_id: findDeliveryByGoalRun(goalRun.id)?.id,
-          status: verdict.pass ? "passed" : "failed",
-          verdict: verdict.pass ? "accepted" : "rejected",
-          summary: verdict.reasoning.slice(0, 500),
-          checks: [
-            { name: "judge", status: verdict.pass ? "passed" : "failed", evidence: verdict.reasoning.slice(0, 500) },
-            { name: "artifact", status: verdict.pass ? "passed" : "failed", evidence: `Delivery: ${diffs.length} file(s) changed` },
-            ...verdict.evidence.map((e, i) => ({
-              name: `evidence_${i + 1}`,
-              status: verdict.evidenceStatus?.[i] ?? (verdict.pass ? "passed" : "failed"),
-              evidence: e,
-            })),
-          ],
-          time_created: now,
-          time_updated: now,
-        }).run()
-
-        db.update(OrchestratorGoalTable)
-          .set({ status: verdict.pass ? "passed" : "failed", time_updated: now })
-          .where(eq(OrchestratorGoalTable.id, goal.id))
-          .run()
-      })
-
-      // Emit overlay event
-      if (verdict.pass) {
-        OrchestratorProtocol.emit(Event.GoalPassed, { taskID: task.id, goalID: goal.id, summary: goal.title }, { source: "auto_eval" }).catch(() => {})
-      } else {
-        OrchestratorProtocol.emit(Event.GoalFailed, { taskID: task.id, goalID: goal.id, summary: `${goal.title}: ${verdict.reasoning}` }, { source: "auto_eval" }).catch(() => {})
-      }
-
-      return {
-        goalID: goal.id,
-        status: verdict.pass ? "passed" : "failed",
-        verdict: verdict.verdict,
-        evidence: verdict.evidence,
-        delivery,
-      }
-    } catch (err) {
-      log.error("auto-eval failed", { goalID: goal.id, error: String(err) })
-      Database.use(db => db.update(OrchestratorGoalTable)
-        .set({ status: "failed", time_updated: Date.now() })
-        .where(eq(OrchestratorGoalTable.id, goal.id)).run())
-
-      return {
-        goalID: goal.id,
-        status: "failed",
-        error: `Eval failed: ${err instanceof Error ? err.message : String(err)}`,
       }
     }
   }

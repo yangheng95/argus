@@ -467,157 +467,6 @@ export function createTaskAgentTools(input: {
     // -----------------------------------------------------------------------
 
 
-    eval_goal: tool({
-      description: "Manually re-evaluate a goal's delivery. Evaluation runs automatically after execution — use this only to re-evaluate after a fix (execute_goal retry). Max 3 evals per goal.",
-      inputSchema: z.object({
-        goalID: z.string().describe("The goal ID to evaluate"),
-        reason: z.string().optional().describe("Why you decided to evaluate this goal"),
-      }),
-      execute: async ({ goalID }) => {
-        const task = requireTask(taskID)
-        const dbGoals = listGoals(taskID)
-        const goal = dbGoals.find(g => g.id === goalID)
-        if (!goal) return `Goal ${goalID} not found.`
-
-        // Check eval attempt count to prevent infinite eval loops
-        const MAX_EVAL_PER_GOAL = 3
-        const { OrchestratorEvaluationTable } = await import("@/orchestrator/orchestrator.sql")
-        const existingEvals = Database.use((db) =>
-          db.select().from(OrchestratorEvaluationTable)
-            .where(and(eq(OrchestratorEvaluationTable.task_id, taskID), eq(OrchestratorEvaluationTable.goal_run_id, goalID)))
-            .all(),
-        )
-        // Count evals for this goal across all goal_runs
-        const { listGoalRunsByTask: listGR } = await import("@/orchestrator/store")
-        const goalRunIDs = new Set(listGR(taskID).filter(gr => gr.goal_id === goalID).map(gr => gr.id))
-        const evalCount = Database.use((db) =>
-          db.select().from(OrchestratorEvaluationTable)
-            .where(eq(OrchestratorEvaluationTable.task_id, taskID))
-            .all(),
-        ).filter(e => e.goal_run_id && goalRunIDs.has(e.goal_run_id)).length
-        if (evalCount >= MAX_EVAL_PER_GOAL) {
-          return `EVAL LIMIT REACHED: Goal "${goal.title}" has been evaluated ${evalCount} times (max ${MAX_EVAL_PER_GOAL}). You MUST either fix the underlying code and re-execute, or fail_task if unrecoverable.`
-        }
-
-        ensureGoalInWorkflow(goalID, goal.title)
-        await trackStepStart("eval_goal", goalID)
-
-        const { evaluateGoal } = await import("@/evaluator/per-goal")
-        const { createDecisionLog } = await import("@/decision-log")
-        const { findDeliveryByGoalRun, listGoalRunsByTask } = await import("@/orchestrator/store")
-        const decisionLog = createDecisionLog(taskID)
-
-        // Find latest goal_run for this goal
-        const allGoalRuns = listGoalRunsByTask(taskID)
-        const goalRuns = allGoalRuns.filter(gr => gr.goal_id === goalID)
-        const latestRun = goalRuns.find(gr => gr.status === "completed") ?? goalRuns[0]
-        if (!latestRun) return `No goal_run found for goal ${goalID}.`
-        const delivery = findDeliveryByGoalRun(latestRun.id)
-        if (!delivery) return `No delivery found for goal ${goalID}.`
-        const diffs = Array.isArray((delivery.result as any)?.diffs) ? (delivery.result as any).diffs : []
-
-        // Create child session for evaluator agent messages
-        const evalSession = await Session.createNext({
-          parentID: input.agentSessionID,
-          title: `Eval: ${goal.title}`,
-          directory: Instance.directory,
-        })
-        registerGoalRunSession(evalSession.id, taskID, "evaluator", goalID)
-        const hooks = sessionStreamHooks({ sessionID: evalSession.id, taskID, stage: "eval" })
-
-        const contract = buildGoalContract(task, goal, dbGoals)
-        let verdict: Awaited<ReturnType<typeof evaluateGoal>>
-        try {
-          verdict = await evaluateGoal({
-            contract,
-            delivery: { summary: delivery.summary, diffs },
-            decisionLog,
-            sessionID: evalSession.id,
-            signal: input.signal,
-            stream: {
-              onChunk: async (arg: any) => {
-                const chunk = (arg as any)?.chunk
-                if (chunk?.type === "text-delta") {
-                  if (hooks.onChunk) await hooks.onChunk({ chunk: { ...chunk, type: "reasoning-delta" } })
-                } else {
-                  if (hooks.onChunk) await hooks.onChunk(arg as any)
-                }
-              },
-              onError: hooks.onError,
-            },
-          })
-        } finally {
-          await hooks.flush()
-        }
-
-        // Persist evaluation to DB
-        const evalID = Identifier.ascending("evaluation")
-        const now = Date.now()
-        Database.use((db) => {
-          db.insert(OrchestratorEvaluationTable).values({
-            id: evalID,
-            task_id: taskID,
-            run_id: latestRun.coordinator_run_id,
-            goal_run_id: latestRun.id,
-            delivery_id: delivery.id,
-            status: verdict.pass ? "passed" : "failed",
-            verdict: verdict.pass ? "accepted" : "rejected",
-            summary: verdict.reasoning.slice(0, 500),
-            checks: [
-              // Inspection panel expected checks: judge, artifact, spec_check
-              {
-                name: "judge",
-                status: verdict.pass ? "passed" : "failed",
-                evidence: verdict.reasoning.slice(0, 500),
-              },
-              {
-                name: "artifact",
-                status: verdict.pass ? "passed" : "failed",
-                evidence: `Delivery: ${diffs.length} file(s) changed`,
-              },
-              {
-                name: "spec_check",
-                status: verdict.pass ? "passed" : "failed",
-                evidence: verdict.evidence[0] || "done_definition check",
-              },
-              // Per-evidence detail items
-              ...verdict.evidence.map((e, i) => ({
-                name: `evidence_${i + 1}`,
-                status: verdict.evidenceStatus?.[i] ?? (verdict.pass ? "passed" : "failed"),
-                evidence: e,
-              })),
-            ],
-            time_created: now,
-            time_updated: now,
-          }).run()
-
-          // Task Agent decision: update goal.status based on eval verdict.
-          // Per architecture spec, goal.status writer is Task Agent — this IS the agent's decision.
-          const goalStatus = verdict.pass ? "passed" : "failed"
-          const { OrchestratorGoalTable: GT } = require("@/orchestrator/orchestrator.sql")
-          db.update(GT)
-            .set({ status: goalStatus, time_updated: now })
-            .where(eq(GT.id, goalID))
-            .run()
-        })
-
-        // Emit event for overlay reactivity
-        const { Event: OrcEvent } = await import("@/orchestrator/model")
-        const { OrchestratorProtocol: Proto } = await import("@/orchestrator/protocol")
-        if (verdict.pass) {
-          Proto.emit(OrcEvent.GoalPassed, { taskID, goalID: goal.id, summary: goal.title }, { source: "eval_goal" }).catch(() => {})
-        } else {
-          Proto.emit(OrcEvent.GoalFailed, { taskID, goalID: goal.id, summary: `${goal.title}: ${verdict.reasoning}` }, { source: "eval_goal" }).catch(() => {})
-        }
-
-        await trackStepComplete("eval_goal", goalID, !verdict.pass)
-        const evidenceStr = verdict.evidence.slice(0, 5).join("; ")
-        return verdict.pass
-          ? `PASS: ${goal.title}. Evidence: ${evidenceStr}`
-          : `FAIL (${verdict.failureClass ?? "unknown"}): ${goal.title}. Reasoning: ${verdict.reasoning.slice(0, 300)}. Evidence: ${evidenceStr}`
-      },
-    }),
-
     add_goal: tool({
       description: "Dynamically add a new goal to the task. Use when you discover missing requirements, infrastructure needs, or integration gaps during execution.",
       inputSchema: z.object({
@@ -694,7 +543,7 @@ export function createTaskAgentTools(input: {
     }),
 
     execute_goal: tool({
-      description: "Execute a pending or failed goal in an isolated git worktree. Creates worktree, submits to executor, returns asynchronously. Only valid for goals in pending or failed status — passed goals are terminal and cannot be re-executed (use eval_goal to re-validate or modify_goal to change the contract). You will be re-triggered when execution completes. STOP after calling this.",
+      description: "Execute a pending or failed goal in an isolated git worktree. Creates worktree, submits to executor, returns asynchronously. Only valid for goals in pending or failed status — passed goals are terminal (use modify_goal to change the contract and reset to pending). You will be re-triggered when execution completes. STOP after calling this.",
       inputSchema: z.object({
         goalID: z.string().describe("The goal ID to execute (must be pending or failed status)"),
         reason: z.string().optional().describe("Why you decided to execute this goal now"),
@@ -707,7 +556,6 @@ export function createTaskAgentTools(input: {
         if (goal.status === "running") return `Goal ${goalID} is already running.`
         if (goal.status === "passed") {
           return `Goal ${goalID} is already passed (terminal success state). ` +
-                 `To re-validate it without changes, use eval_goal(${goalID}). ` +
                  `To change its contract (done_definition, owned_paths), use modify_goal(${goalID}, ...) which will reset to pending automatically. ` +
                  `execute_goal does not re-run passed goals.`
         }
@@ -760,35 +608,34 @@ export function createTaskAgentTools(input: {
     }),
 
     query_failed_goals: tool({
-      description: "Query all currently failed goals with their latest eval evidence. Returns structured data for each failed goal: title, owned_paths, done_definition, latest eval verdict, failed checks with evidence. Use this BEFORE calling retry_failed_goals to understand per-goal failure reasons.",
+      description: "Query all currently failed goals with their delivery info. Returns structured data for each failed goal: title, owned_paths, done_definition, latest delivery summary. Use this BEFORE calling retry_failed_goals to understand per-goal failure reasons.",
       inputSchema: z.object({}),
       execute: async () => {
         const dbGoals = listGoals(taskID)
         const failed = dbGoals.filter(g => g.status === "failed")
         if (failed.length === 0) return "No failed goals."
-        const { findLatestFailedEvalForGoal } = await import("@/orchestrator/store")
+        const { listGoalRunsByTask, findDeliveryByGoalRun } = await import("@/orchestrator/store")
+        const goalRuns = listGoalRunsByTask(taskID)
         const sections: string[] = [`## Failed Goals (${failed.length})`]
         for (const goal of failed) {
           sections.push(`\n### ${goal.id}: ${goal.title}`)
           sections.push(`- done_definition: ${goal.done_definition.slice(0, 300)}`)
           if (goal.owned_paths?.length) sections.push(`- owned_paths: ${goal.owned_paths.join(", ")}`)
-          const evalRows = findLatestFailedEvalForGoal(goal.id)
-          if (evalRows.length === 0) {
-            sections.push(`- eval: no rejected evaluation found`)
-            continue
-          }
-          const row = evalRows[0]!
-          sections.push(`- eval verdict: ${row.verdict}`)
-          sections.push(`- eval summary: ${row.summary}`)
-          const checks = Array.isArray(row.checks) ? row.checks : []
-          const failedChecks = checks.filter((c: any) => c.status === "failed")
-          if (failedChecks.length > 0) {
-            sections.push(`- failed checks:`)
-            for (const c of failedChecks.slice(0, 5)) {
-              const anyC = c as any
-              const ev = anyC.evidence ? String(anyC.evidence).slice(0, 300) : ""
-              sections.push(`  - ${anyC.name}: ${ev}`)
+          // Show latest delivery info for this goal
+          const grs = goalRuns.filter(gr => gr.goal_id === goal.id)
+          const latestGr = grs[0]
+          if (latestGr) {
+            const delivery = findDeliveryByGoalRun(latestGr.id)
+            if (delivery) {
+              sections.push(`- delivery summary: ${delivery.summary}`)
+              const diffs = (delivery.result as any)?.diffs as Array<{ file: string }> | undefined
+              if (diffs?.length) sections.push(`- delivery files: ${diffs.map(f => f.file).join(", ")}`)
+            } else {
+              sections.push(`- delivery: none (executor produced no output)`)
             }
+            sections.push(`- goal_run status: ${latestGr.status}`)
+          } else {
+            sections.push(`- no goal_run found`)
           }
         }
         return sections.join("\n")
@@ -796,7 +643,7 @@ export function createTaskAgentTools(input: {
     }),
 
     retry_failed_goals: tool({
-      description: "Retry ALL currently failed goals in parallel. Each goal is reset to pending with its failure evidence auto-appended to the executor prompt. You MUST first call query_failed_goals to understand each failure, then articulate per-goal root cause analysis in this tool's input. Schema enforces you demonstrate understanding before retry — reflexive retry without analysis is impossible. STOP after calling this.",
+      description: "Retry ALL currently failed goals in parallel. Each goal is reset to pending. You MUST first call query_failed_goals to understand each failure, then articulate per-goal root cause analysis in this tool's input. Schema enforces you demonstrate understanding before retry — reflexive retry without analysis is impossible. STOP after calling this.",
       inputSchema: z.object({
         reason: z.string().min(20).describe("Overall reason for batch retry (min 20 chars, e.g. 'eval caught integration bugs, retrying with fresh context + failure evidence appended')"),
         per_goal_analysis: z.record(
@@ -1029,7 +876,7 @@ export function createTaskAgentTools(input: {
     }),
 
     read_context: tool({
-      description: "Read current task context: goal states, eval verdicts, Decision Log, delivery summaries. Use this to gather information before making decisions.",
+      description: "Read current task context: goal states, delivery verdicts, Decision Log, delivery summaries. Use this to gather information before making decisions.",
       inputSchema: z.object({
         scope: z.enum(["goals", "evaluations", "decisions", "deliveries", "all"]).default("all").describe("What to read"),
       }),
@@ -1241,7 +1088,7 @@ export function createTaskAgentTools(input: {
     }),
 
     deliver: tool({
-      description: "Aggregate all goal deliveries, then run the DeliveryAgent to verify build/test/startup before publication. All goals have already been auto-evaluated by infrastructure — check goal statuses via read_context before calling.",
+      description: "Aggregate all goal deliveries, then run the DeliveryAgent to verify build/test/startup, fix issues, and make final acceptance decision before publication. Delivery agent is the single verification gate. Check goal statuses via read_context before calling.",
       inputSchema: z.object({
         reason: z.string().optional().describe("Why you decided to deliver now"),
       }),
@@ -1475,7 +1322,7 @@ export function createTaskAgentTools(input: {
     }),
 
     publish_delivery: tool({
-      description: "Publish the accepted delivery to git and mark the task as completed. Only call after both eval and delivery verification have passed.",
+      description: "Publish the accepted delivery to git and mark the task as completed. Only call after delivery verification has passed.",
       inputSchema: z.object({
         reason: z.string().optional().describe("Confirmation that both verifications passed"),
       }),

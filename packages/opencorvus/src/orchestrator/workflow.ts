@@ -83,13 +83,13 @@ export interface WorkflowState {
 const STANDARD: MiniWorkflow = {
   id: "standard",
   name: "Standard",
-  description: "完整 requirements → architect → per-goal [execute → eval] → deliver 流程（planning 在 goal 内部自动进行）",
+  description: "完整 requirements → architect → per-goal execute → deliver 流程（planning 在 goal 内部自动进行，delivery agent 做最终验收）",
   steps: [
     {
       id: "requirements",
       tool: "requirements",
       label: "Requirements",
-      hint: "分析输入，提取需求，分解为可执行的 goals with done_definitions。",
+      hint: "分析输入，提取需求，分解为可执行的 goals with acceptance criteria。",
       scope: "task",
       skippable: false,
       after: [],
@@ -107,31 +107,22 @@ const STANDARD: MiniWorkflow = {
       id: "execute",
       tool: "execute_goal",
       label: "Execute",
-      hint: "在隔离 worktree 中执行 goal 实现（含自动 planning）。",
+      hint: "在隔离 worktree 中执行 goal 实现（含自动 planning）。执行器自报成功/失败。",
       scope: "goal",
       skippable: false,
       after: ["architect"],
     },
     {
-      id: "eval",
-      tool: "eval_goal",
-      label: "Evaluate",
-      hint: "验证 goal delivery 是否满足 done_definition。",
-      scope: "goal",
-      skippable: false,
-      after: ["execute"],
-    },
-    {
       id: "deliver",
       tool: "deliver",
       label: "Deliver",
-      hint: "聚合交付物，验证 build/test，发布。",
+      hint: "聚合交付物，delivery agent 端到端测试、修复、验收、发布。",
       scope: "task",
       skippable: false,
-      after: ["eval"],
+      after: ["execute"],
     },
   ],
-  goalLoopStepIDs: ["execute", "eval"],
+  goalLoopStepIDs: ["execute"],
 }
 
 /** quick-fix — 极简修复 */

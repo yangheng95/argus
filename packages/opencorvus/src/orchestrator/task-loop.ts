@@ -71,6 +71,18 @@ export async function runTaskLoop(input: {
   }
   activeLoops.add(taskID)
 
+  // Immediately mark the task as "active" so hasActiveTaskInProject() blocks
+  // subsequent tasks from starting their loops concurrently. Without this,
+  // a task stays "queued" through spec/decompose/architect phases, causing the
+  // serial queue check to miss it and start a second task loop in parallel.
+  {
+    const { updateTask } = await import("@/orchestrator/state")
+    const task = findTask(taskID)
+    if (task && task.status === "queued") {
+      await updateTask(task, { status: "active" }, "Task loop started — marking active for serial queue")
+    }
+  }
+
   log.info("task loop started", { taskID, trigger: trigger.kind })
 
   // ── Main loop: Decision → Pool → Decision ──
@@ -280,8 +292,8 @@ export async function runTaskLoop(input: {
  * Wait for all currently-running goals to reach terminal state.
  *
  * Polls goal_run status (not just goal status) because goals stay "running"
- * until auto-eval runs after all goal_runs in the batch complete. Goal_run
- * status transitions (accepted → running → completed/failed) happen in real-time.
+ * until the executor pipeline completes. Goal_run status transitions
+ * (accepted → running → completed/failed) happen in real-time.
  *
  * Uses inactivity detection: if no goal_run changes status for DECISION_INACTIVITY_MS,
  * we break out and let the loop re-decide.
@@ -314,14 +326,14 @@ async function waitForGoalCompletion(
 
     // All goal_runs done?
     if (activeGoalRuns.length === 0) {
-      // Also check goal status — auto-eval may not have run yet
+      // Also check goal status
       const goals = listGoalsByPlan(plan.id)
       const runningGoals = goals.filter(g => g.status === "running")
       if (runningGoals.length === 0) {
         log.info("all goals completed", { taskID })
         return
       }
-      // Goal_runs done but goals still "running" — auto-eval is probably running.
+      // Goal_runs done but goals still "running" — pipeline may still be wrapping up.
       // Give it some time (don't timeout yet).
       continue
     }
