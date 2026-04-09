@@ -2473,6 +2473,21 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.goal-item-id {
+  font-family: var(--mono);
+  font-size: var(--ui-font-tiny);
+  color: var(--text-muted);
+  opacity: 0.6;
+  cursor: pointer;
+  padding: 1px 4px;
+  border-radius: 3px;
+  flex-shrink: 0;
+  transition: opacity 0.15s, background 0.15s;
+}
+.goal-item-id:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.08);
+}
 
 .goal-item-body {
   padding: calc(4px * var(--ui-scale)) calc(8px * var(--ui-scale)) calc(6px * var(--ui-scale));
@@ -3470,6 +3485,22 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.executor-goal-id {
+  font-family: var(--mono);
+  font-size: var(--ui-font-tiny);
+  color: var(--text-muted);
+  opacity: 0.6;
+  cursor: pointer;
+  padding: 1px 4px;
+  border-radius: 3px;
+  flex-shrink: 0;
+  transition: opacity 0.15s, background 0.15s;
+}
+.executor-goal-id:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .executor-goal-count {
@@ -9280,6 +9311,21 @@ body[data-theme="light"] .section-badge[data-tone="accent"] {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.gwg-id {
+  font-family: var(--mono);
+  font-size: var(--ui-font-tiny);
+  color: var(--text-muted);
+  opacity: 0.6;
+  cursor: pointer;
+  padding: 1px 4px;
+  border-radius: 3px;
+  flex-shrink: 0;
+  transition: opacity 0.15s, background 0.15s;
+}
+.gwg-id:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.08);
 }
 .gwg-priority-badge {
   font-size: var(--ui-font-tiny);

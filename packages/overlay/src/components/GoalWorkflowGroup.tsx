@@ -215,6 +215,16 @@ export function GoalWorkflowGroup(props: GoalWorkflowGroupProps) {
           <span class="gwg-index">#{props.goalIndex}</span>
         </Show>
         <span class="gwg-title">{props.goal.goalTitle}</span>
+        <span
+          class="gwg-id"
+          title={props.goal.goalID}
+          onClick={(e) => {
+            e.stopPropagation();
+            navigator.clipboard.writeText(props.goal.goalID).catch(() => {});
+          }}
+        >
+          {props.goal.goalID.slice(-8)}
+        </span>
         <Show when={props.goal.priority === "advisory"}>
           <span class="gwg-priority-badge">advisory</span>
         </Show>

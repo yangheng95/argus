@@ -140,6 +140,16 @@ export function ExecutorGoalGroup(props: ExecutorGoalGroupProps) {
         <span class="executor-goal-label">
           {(props.goalIndex ?? 0) > 0 ? `Goal#${props.goalIndex} ` : ""}{props.goalTitle || "Goal"}
         </span>
+        <span
+          class="executor-goal-id"
+          title={props.cardID}
+          onClick={(e) => {
+            e.stopPropagation();
+            navigator.clipboard.writeText(props.cardID).catch(() => {});
+          }}
+        >
+          {props.cardID.slice(-8)}
+        </span>
         <span class="executor-goal-chevron" aria-hidden="true">{"\u25BC"}</span>
       </div>
       <div
