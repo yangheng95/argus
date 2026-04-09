@@ -28,6 +28,25 @@ import {
   isAutoReplied,
 } from "./transcript";
 
+// Per-card resolution cache: keyed by card ID, stores fingerprint + resolved object.
+// When card structure hasn't changed (same message count, status, children),
+// we return the cached resolved card instead of re-spreading/re-sorting.
+const _cardResolveCache = new Map<string, { fp: string; resolved: any }>();
+
+function cardFingerprint(card: any): string {
+  const msgs = card._agentMessages || [];
+  const children = card._agentInternalCards || [];
+  const childMsgCount = children.reduce(
+    (acc: number, c: any) => acc + (c._agentMessages?.length || 0),
+    0,
+  );
+  // Include step statuses: they change (pending→running→completed) independently
+  // of message count. Without this, cached cards show stale step progress.
+  const steps = (card._agentGoalSteps || []).map((s: any) => s.status || "").join(",");
+  const contractCount = card._agentContracts?.length || 0;
+  return `${msgs.length}:${children.length}:${childMsgCount}:${card._agentStatus || ""}:${card._agentGoalStatus || ""}:${steps}:${contractCount}`;
+}
+
 const UNTIMED_CONVERSATION_ORDER = Number.MAX_SAFE_INTEGER;
 
 function conversationTime(message: any): number {
@@ -137,39 +156,46 @@ export function conversationMessages(): any[] {
 
   // Agent card messages — all AGENT_CARD_STAGES render as collapsible AgentCard.
   // Parallel executor goal groups get ExecutorGoalGroup rendering.
+  //
+  // Per-card resolution cache: avoids recreating resolved objects when the
+  // underlying card data hasn't structurally changed (same message count,
+  // same status). This eliminates the majority of spread/sort allocations
+  // during streaming where only text content changes, not card structure.
   const agentCardMsgs: any[] = [];
   const currentOrder = agentCardOrder();
   const currentCards = agentCards();
+  const staleKeys = new Set(_cardResolveCache.keys());
   for (const id of currentOrder) {
     const card = currentCards[id];
     if (!card) continue;
+    staleKeys.delete(id);
+    const fp = cardFingerprint(card);
+    const cached = _cardResolveCache.get(id);
+    if (cached && cached.fp === fp) {
+      agentCardMsgs.push(cached.resolved);
+      continue;
+    }
+    let resolved: any;
     if (card._agentGoalGroup && Array.isArray(card._agentInternalCards)) {
-      // Goal groups: resolve messages inside each internal step card so SolidJS
-      // reactivity works, then keep the card structure for per-step rendering.
       const resolvedChildren = card._agentInternalCards.map((child: any) => {
         if (!Array.isArray(child._agentMessages)) return child;
-        const resolved = child._agentMessages.map((m: any) => resolveMessage(m));
-        resolved.sort((a: any, b: any) => conversationTime(a) - conversationTime(b));
-        return { ...child, _agentMessages: resolved };
+        const msgs = child._agentMessages.map((m: any) => resolveMessage(m));
+        msgs.sort((a: any, b: any) => conversationTime(a) - conversationTime(b));
+        return { ...child, _agentMessages: msgs };
       });
-      // Also resolve architect messages attached to goal groups
-      let resolvedArchMsgs = card._agentArchitectMessages;
-      if (Array.isArray(resolvedArchMsgs) && resolvedArchMsgs.length > 0) {
-        resolvedArchMsgs = resolvedArchMsgs.map((m: any) => resolveMessage(m));
-        resolvedArchMsgs.sort((a: any, b: any) => conversationTime(a) - conversationTime(b));
-      }
-      agentCardMsgs.push({ ...card, _agentInternalCards: resolvedChildren, _agentArchitectMessages: resolvedArchMsgs });
+      resolved = { ...card, _agentInternalCards: resolvedChildren };
     } else if (Array.isArray(card._agentMessages) && card._agentMessages.length > 0) {
-      // All agent card stages (goal, architect, planner, executor, evaluator,
-      // delivery, spec) are kept as collapsible AgentCard items.
-      const resolved = card._agentMessages.map((m: any) => resolveMessage(m));
-      resolved.sort((a: any, b: any) => conversationTime(a) - conversationTime(b));
-      agentCardMsgs.push({
-        ...card,
-        _agentMessages: resolved,
-      });
+      const msgs = card._agentMessages.map((m: any) => resolveMessage(m));
+      msgs.sort((a: any, b: any) => conversationTime(a) - conversationTime(b));
+      resolved = { ...card, _agentMessages: msgs };
+    } else {
+      continue;
     }
+    _cardResolveCache.set(id, { fp, resolved });
+    agentCardMsgs.push(resolved);
   }
+  // Evict cache entries for cards that no longer exist
+  for (const key of staleKeys) _cardResolveCache.delete(key);
 
   const result = [...filteredMain, ...contextMsgs, ...agentCardMsgs].sort(
     (a: any, b: any) => conversationTime(a) - conversationTime(b),
