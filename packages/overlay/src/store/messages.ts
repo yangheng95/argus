@@ -795,20 +795,31 @@ function computeAgentCards(): { cards: Record<string, AgentCardMessage>; order: 
   for (const [gid, entries] of goalStepCards) {
     entries.sort((a, b) => a.startTime - b.startTime);
     const goalInfo = goalInfoMap.get(gid);
+
+    // Skip pending goals with no activity — don't show cards before architect alignment
+    if (entries.length === 0 && goalInfo?.status === "pending") {
+      continue;
+    }
+
     const groupKey = `goal-group:${gid}`;
 
-    if (!goalInfo) {
+    if (!goalInfo && entries.length > 0) {
       devWarn("store/messages.ts:goalGroup", `goal ${gid}: no goalInfo in board — title/status empty`);
     }
-    if (goalInfo && !goalInfo.title) {
+    if (goalInfo && !goalInfo.title && entries.length > 0) {
       devWarn("store/messages.ts:goalGroup", `goal ${gid}: goalInfo exists but title is empty`);
     }
+
+    const goalIsActive = goalInfo?.status && goalInfo.status !== "pending";
 
     let groupStart: number;
     if (entries.length > 0) {
       groupStart = Math.min(...entries.map(e => e.startTime));
     } else {
-      devWarn("store/messages.ts:goalGroup", `goal ${gid}: no step entries, using Date.now() for timestamp`);
+      // Only warn when goal is already active — pending goals with no entries is expected
+      if (goalIsActive) {
+        devWarn("store/messages.ts:goalGroup", `goal ${gid}: no step entries (status=${goalInfo!.status}), using Date.now() for timestamp`);
+      }
       groupStart = Date.now();
     }
 
@@ -825,8 +836,8 @@ function computeAgentCards(): { cards: Record<string, AgentCardMessage>; order: 
     }
 
     const goalSessionID = entries[0]?.card.info.sessionID;
-    if (!goalSessionID) {
-      devWarn("store/messages.ts:goalGroup", `goal ${gid}: no sessionID from step entries`);
+    if (!goalSessionID && goalIsActive) {
+      devWarn("store/messages.ts:goalGroup", `goal ${gid}: no sessionID from step entries (status=${goalInfo!.status})`);
     }
 
     let groupCreated = groupStart;

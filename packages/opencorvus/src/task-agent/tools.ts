@@ -380,21 +380,18 @@ export function createTaskAgentTools(input: {
     // -----------------------------------------------------------------------
 
     architect: tool({
-      description: "Coordinate cross-goal contracts. Call after decompose when multiple goals have exports/imports dependencies. Writes precise interface contracts, directory blueprints, and shared type definitions to the Decision Log so parallel goals don't conflict. Skip for single-goal or trivial tasks.",
+      description: "Coordinate cross-goal contracts. Call after decompose when multiple goals have exports/imports dependencies. Writes precise interface contracts, directory blueprints, and shared type definitions to the Decision Log so parallel goals don't conflict. Skip for single-goal or trivial tasks. Always coordinates ALL goals — goal selection is automatic.",
       inputSchema: z.object({
-        goalIDs: z.array(z.string()).optional().describe("Goal IDs to coordinate (default: all goals)"),
         reason: z.string().optional().describe("Why you decided to run architect"),
       }),
-      execute: async ({ goalIDs }) => {
+      execute: async () => {
         const allGoals = listGoals(taskID)
         if (allGoals.length === 0) return "No goals to coordinate. Run requirements first."
         if (allGoals.length === 1) return "Single goal — architect coordination not needed."
 
         await trackStepStart("architect")
 
-        const targetGoals = goalIDs?.length
-          ? allGoals.filter(g => goalIDs.includes(g.id))
-          : allGoals
+        const targetGoals = allGoals
 
         const task = requireTask(taskID)
 
@@ -840,6 +837,41 @@ export function createTaskAgentTools(input: {
         // are permanently failed and excluded from retry.
         const orchCfg = await OrchestratorConfig.get()
         const maxGoalRetries = orchCfg.max_goal_retries
+
+        // ── Repeated root cause detection ──
+        // If the same failure_class for a goal has been recorded 2+ times in
+        // Decision Log, a 3rd retry with the same class will not help. Force
+        // the Task Agent to change strategy instead of looping.
+        {
+          const { createDecisionLog } = await import("@/decision-log")
+          const decisionLog = createDecisionLog(taskID)
+          const retryEntries = decisionLog.readByPhase("retry")
+          const repeatedGoals: string[] = []
+
+          for (const [goalID, analysis] of Object.entries(per_goal_analysis)) {
+            const priorSameClass = retryEntries.filter(e =>
+              e.goalID === goalID &&
+              typeof e.value === "string" &&
+              e.value.startsWith(`[${analysis.failure_class}]`)
+            )
+            if (priorSameClass.length >= 2) {
+              repeatedGoals.push(`"${goalID}" — failure_class="${analysis.failure_class}" repeated ${priorSameClass.length + 1} times`)
+            }
+          }
+
+          if (repeatedGoals.length > 0) {
+            return [
+              `ESCALATION REQUIRED: ${repeatedGoals.length} goal(s) have the same failure class repeating 3+ times:`,
+              ...repeatedGoals.map(s => `  - ${s}`),
+              "",
+              "Retry with the same approach will not fix these. Choose a different strategy:",
+              "  - modify_goal to change done_definition or owned_paths",
+              "  - add_goal to create a prerequisite",
+              "  - fail_task if the issue is fundamental",
+              "  - retry_failed_goals with a DIFFERENT failure_class + expected_fix (prove you changed approach)",
+            ].join("\n")
+          }
+        }
 
         const retryable: typeof failed = []
         const exhausted: typeof failed = []

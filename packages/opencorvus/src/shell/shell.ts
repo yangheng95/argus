@@ -12,7 +12,14 @@ export namespace Shell {
   export interface RunOptions {
     cwd?: string
     env?: NodeJS.ProcessEnv
+    /** Hard wall-clock timeout (ms). Process killed after this regardless of activity. */
     timeoutMs?: number
+    /**
+     * Inactivity timeout (ms). Timer resets on every stdout/stderr data event.
+     * When triggered, `idleTimedOut` is set on the result. Use for commands that
+     * may be long-running servers: they start, produce output, then go idle.
+     */
+    idleTimeoutMs?: number
     abort?: AbortSignal
   }
 
@@ -20,7 +27,10 @@ export namespace Shell {
     exitCode: number
     stdout: string
     stderr: string
+    /** True when hard wall-clock timeoutMs was reached. */
     timedOut: boolean
+    /** True when idleTimeoutMs of inactivity was reached (process went quiet). */
+    idleTimedOut: boolean
     aborted: boolean
   }
 
@@ -108,17 +118,39 @@ export namespace Shell {
     let stdout = ""
     let stderr = ""
     let timedOut = false
+    let idleTimedOut = false
     let aborted = false
     let exited = false
 
+    const kill = () => killTree(proc, { exited: () => exited })
+
+    // ── Idle timeout: reset on every data event ──
+    const idleMs = typeof opts.idleTimeoutMs === "number" && Number.isFinite(opts.idleTimeoutMs) && opts.idleTimeoutMs > 0
+      ? opts.idleTimeoutMs
+      : undefined
+    let idleTimer: ReturnType<typeof setTimeout> | undefined
+
+    function resetIdleTimer() {
+      if (!idleMs) return
+      if (idleTimer) clearTimeout(idleTimer)
+      idleTimer = setTimeout(() => {
+        idleTimedOut = true
+        void kill()
+      }, idleMs)
+      idleTimer.unref?.()
+    }
+
     proc.stdout?.on("data", (chunk) => {
       stdout += chunk.toString()
+      resetIdleTimer()
     })
     proc.stderr?.on("data", (chunk) => {
       stderr += chunk.toString()
+      resetIdleTimer()
     })
 
-    const kill = () => killTree(proc, { exited: () => exited })
+    // Start idle timer after process launch
+    resetIdleTimer()
 
     if (opts.abort?.aborted) {
       aborted = true
@@ -132,6 +164,7 @@ export namespace Shell {
 
     opts.abort?.addEventListener("abort", abortHandler, { once: true })
 
+    // ── Hard wall-clock timeout (safety cap) ──
     const timeoutMs = typeof opts.timeoutMs === "number" && Number.isFinite(opts.timeoutMs) ? opts.timeoutMs : undefined
     const timer = timeoutMs && timeoutMs > 0
       ? setTimeout(() => {
@@ -144,6 +177,7 @@ export namespace Shell {
     const exitCode = await new Promise<number>((resolve, reject) => {
       const cleanup = () => {
         if (timer) clearTimeout(timer)
+        if (idleTimer) clearTimeout(idleTimer)
         opts.abort?.removeEventListener("abort", abortHandler)
       }
 
@@ -165,6 +199,7 @@ export namespace Shell {
       stdout,
       stderr,
       timedOut,
+      idleTimedOut,
       aborted,
     }
   }

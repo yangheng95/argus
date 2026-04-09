@@ -90,7 +90,7 @@ type TranscriptState = {
 
 const transcript = new Map<string, TranscriptState>()
 
-async function projectExecutorEventToSession(taskID: string, run: RunRow, goalSessionID: string, event: {
+export async function projectExecutorEventToSession(taskID: string, run: RunRow, goalSessionID: string, event: {
   type: string
   summary?: string
   payload?: Record<string, unknown>
@@ -764,9 +764,26 @@ export async function mergeGoalDelivery(
     const { $ } = await import("bun")
     const files = delivery.diffs.map((d) => d.file as string)
     if (files.length > 0) {
-      await $`git add -- ${files}`.quiet().cwd(Instance.directory).nothrow()
+      const addResult = await $`git add -- ${files}`.quiet().cwd(Instance.directory).nothrow()
+      if (addResult.exitCode !== 0) {
+        log.error("goal merge: git add failed", {
+          goalRunID: goalRun.id,
+          exitCode: addResult.exitCode,
+          stderr: addResult.stderr.toString().slice(0, 500),
+        })
+      }
       const label = goalRun.goal_id?.slice(-8) ?? "unknown"
-      await $`git -c user.email=opencorvus@local -c user.name=OpenCorvus commit -m ${"goal-merge: " + label}`.quiet().cwd(Instance.directory).nothrow()
+      const commitResult = await $`git -c user.email=opencorvus@local -c user.name=OpenCorvus commit -m ${"goal-merge: " + label}`.quiet().cwd(Instance.directory).nothrow()
+      if (commitResult.exitCode !== 0) {
+        const stderr = commitResult.stderr.toString()
+        if (!stderr.includes("nothing to commit")) {
+          log.error("goal merge: git commit failed", {
+            goalRunID: goalRun.id,
+            exitCode: commitResult.exitCode,
+            stderr: stderr.slice(0, 500),
+          })
+        }
+      }
       log.info("committed goal merge to advance HEAD", { goalRunID: goalRun.id, files: files.length })
     }
   })
