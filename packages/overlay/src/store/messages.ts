@@ -1,7 +1,7 @@
 // ── Message Store ──
 // Solid reactive store for conversation messages, agent events, and SSE state.
 
-import { createStore, produce, reconcile } from "solid-js/store";
+import { createStore, produce } from "solid-js/store";
 import { batch, createMemo, createRoot } from "solid-js";
 import { apiJson, apiUrl } from "../services/api";
 import { boardStore } from "../store/board";
@@ -82,7 +82,22 @@ export { store as messageStore };
 
 const messageIndex = new Map<string, Message>();
 // Buffer for parts that arrive before their parent message.updated event.
-const _pendingParts = new Map<string, any[]>();
+// Each entry tracks creation time for TTL-based cleanup.
+const _pendingParts = new Map<string, { parts: any[]; created: number }>();
+const PENDING_PARTS_TTL_MS = 60_000;
+let _lastPendingPrune = 0;
+
+function prunePendingParts(): void {
+  const now = Date.now();
+  // Throttle: at most once per 10 seconds
+  if (now - _lastPendingPrune < 10_000) return;
+  _lastPendingPrune = now;
+  for (const [key, entry] of _pendingParts) {
+    if (now - entry.created > PENDING_PARTS_TTL_MS) {
+      _pendingParts.delete(key);
+    }
+  }
+}
 
 function rebuildMessageIndex() {
   messageIndex.clear();
@@ -410,8 +425,9 @@ function agentEventToolPart(event: any): any | null {
   };
 }
 
-// Cache live agent messages by content-key to maintain referential stability
-// for Solid's `<For>`, which tracks items by reference.
+// Cache live agent messages by stable key (msgID:kind) to maintain referential
+// stability for Solid's `<For>`. Text changes overwrite the same entry instead
+// of creating new ones, preventing unbounded memory growth during streaming.
 const _agentMsgCache = new Map<string, any>();
 
 function agentMessage(event: any): any | null {
@@ -426,9 +442,16 @@ function agentMessage(event: any): any | null {
   const kind = String(event?.kind || "status").trim().toLowerCase();
   const text = agentEventDisplayText(event).trim();
   const msgID = `agent-event:${stage}:${eventID}`;
-  const cacheKey = `${msgID}:${kind}:${text}`;
-  const cached = _agentMsgCache.get(cacheKey);
-  if (cached) return cached;
+  // Stable key: same event always maps to the same cache slot.
+  const stableKey = `${msgID}:${kind}`;
+  const cached = _agentMsgCache.get(stableKey);
+  if (cached) {
+    // Same source text → return cached reference (referential stability for <Index>/<For>).
+    // Different text → fall through to create a new object so Solid detects the change.
+    // We compare _sourceText (stored alongside the msg) instead of parts[0].text,
+    // because tool parts don't have a .text property.
+    if (cached._sourceText === text) return cached.msg;
+  }
   const resolvedRole = normalizeAgentRole(stage);
   const base = {
     _synthetic: true,
@@ -473,7 +496,7 @@ function agentMessage(event: any): any | null {
     };
   }
 
-  if (msg) _agentMsgCache.set(cacheKey, msg);
+  if (msg) _agentMsgCache.set(stableKey, { msg, _sourceText: text });
   return msg;
 }
 
@@ -998,9 +1021,9 @@ export function applyMessageEvent(event: any): boolean {
       return true;
     }
     // Flush any parts that arrived before this message
-    const buffered = _pendingParts.get(info.id);
-    if (buffered) _pendingParts.delete(info.id);
-    const msg: Message = { info: mergeMessageInfo(undefined, info), parts: buffered || [] };
+    const bufferedEntry = _pendingParts.get(info.id);
+    if (bufferedEntry) _pendingParts.delete(info.id);
+    const msg: Message = { info: mergeMessageInfo(undefined, info), parts: bufferedEntry?.parts || [] };
     let insertIdx = 0;
     setStore(
       "messages",
@@ -1018,9 +1041,14 @@ export function applyMessageEvent(event: any): boolean {
     let message = messageById(part.messageID);
     if (!message) {
       // Buffer: message.updated hasn't arrived yet. Store part for later.
-      const buf = _pendingParts.get(part.messageID) || [];
-      buf.push(part);
-      _pendingParts.set(part.messageID, buf);
+      const existing = _pendingParts.get(part.messageID);
+      if (existing) {
+        existing.parts.push(part);
+      } else {
+        _pendingParts.set(part.messageID, { parts: [part], created: Date.now() });
+      }
+      // Prune stale orphaned entries
+      prunePendingParts();
       return true;
     }
     const idx = store.messages.indexOf(message);
@@ -1432,32 +1460,6 @@ function mergeAgentEvent(existing: AgentEvent, next: AgentEvent): AgentEvent {
   };
 }
 
-function mergeAgentEventList(events: AgentEvent[], raw: any): AgentEvent[] {
-  const event = agentEventEntry(raw);
-  if (!event) return events;
-  if (event.taskID && boardStore.selectedTaskID && event.taskID !== boardStore.selectedTaskID) {
-    return events;
-  }
-  const index = events.findIndex(
-    (item) => item.id === event.id && item.stage === event.stage,
-  );
-  const next: AgentEvent[] =
-    index >= 0
-      ? [
-          ...events.slice(0, index),
-          mergeAgentEvent(events[index], event),
-          ...events.slice(index + 1),
-        ]
-      : [...events, event];
-  const target = index >= 0 ? next[index] : next[next.length - 1];
-  syncAgentText(target);
-  return pruneAgentEvents(
-    next.sort(
-      (a, b) => (a.time?.created || 0) - (b.time?.created || 0),
-    ),
-  );
-}
-
 // ── 16ms agent event batching (mirrors message event batching) ──
 let agentEventQueue: any[] = [];
 let agentFlushTimer: any = null;
@@ -1471,31 +1473,42 @@ function flushAgentEvents(): void {
   agentFlushTimer = null;
   agentLastFlush = Date.now();
 
-  let merged = [...store.agentEvents] as AgentEvent[];
-  for (const raw of queued) {
-    merged = mergeAgentEventList(merged, raw);
+  // Map-based merge: O(n + m) instead of O(n*m) spread-per-event.
+  // Copy current events into a keyed map (avoids store proxy leaks).
+  const byKey = new Map<string, AgentEvent>();
+  for (const e of store.agentEvents as AgentEvent[]) {
+    const key = `${e.stage}:${e.id}`;
+    byKey.set(key, { ...e } as AgentEvent);
   }
-  setStore("agentEvents", reconcile(merged));
 
-  // Schedule live text animation for each queued event
+  // Merge queued events
+  const affectedKeys: string[] = [];
   for (const raw of queued) {
-    const payload = agentEventRecord(raw?.payload)
-      ? raw.payload
-      : agentEventRecord(raw?.properties)
-        ? raw.properties
-        : {};
-    const key = agentEventKey({
-      stage: String(payload.stage || "").trim().toLowerCase(),
-      id:
-        typeof payload.id === "string" && payload.id
-          ? payload.id
-          : typeof raw?.event_id === "string"
-            ? raw.event_id
-            : "",
-    } as Pick<AgentEvent, "stage" | "id">);
-    const target = key
-      ? merged.find((item) => agentEventKey(item as AgentEvent) === key) || null
-      : null;
+    const event = agentEventEntry(raw);
+    if (!event) continue;
+    if (event.taskID && boardStore.selectedTaskID && event.taskID !== boardStore.selectedTaskID) continue;
+    const key = `${event.stage}:${event.id}`;
+    const existing = byKey.get(key);
+    const merged = existing ? mergeAgentEvent(existing, event) : event;
+    syncAgentText(merged);
+    byKey.set(key, merged);
+    affectedKeys.push(key);
+  }
+
+  // Sort + prune once (not per-event)
+  const sorted = [...byKey.values()].sort(
+    (a, b) => (a.time?.created || 0) - (b.time?.created || 0),
+  );
+  const pruned = pruneAgentEvents(sorted);
+
+  // Direct assignment: cheaper than reconcile (avoids O(n) deep comparison).
+  // computeAgentCards() reads the full array anyway, so reconcile's fine-grained
+  // diffing provides no benefit and adds significant overhead.
+  setStore("agentEvents", pruned);
+
+  // Schedule live text animation for affected events
+  for (const key of affectedKeys) {
+    const target = pruned.find((e) => `${e.stage}:${e.id}` === key);
     if (target) scheduleAgentLiveText(target as AgentEvent);
   }
 }
@@ -1518,7 +1531,7 @@ export function setAgentEvents(events: any[]) {
     stopAgentLiveTimer(key);
   }
   const normalized = pruneAgentEvents(Array.isArray(events) ? events as AgentEvent[] : []);
-  setStore("agentEvents", reconcile(normalized));
+  setStore("agentEvents", normalized);
 }
 
 export function clearAgentEvents(): void {

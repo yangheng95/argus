@@ -35,21 +35,27 @@ export { sanitizeDirectoryMode } from "../store/settings";
  */
 export function setupAutoScroll(el: HTMLElement, threshold = 60): () => void {
   let tracking = true;
+  let rafPending = false;
 
   function onScroll() {
     tracking = el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
   }
 
   function scrollDown() {
-    if (tracking) {
-      requestAnimationFrame(() => {
-        el.scrollTop = el.scrollHeight;
-      });
-    }
+    if (!tracking || rafPending) return;
+    rafPending = true;
+    requestAnimationFrame(() => {
+      rafPending = false;
+      el.scrollTop = el.scrollHeight;
+    });
   }
 
   el.addEventListener("scroll", onScroll, { passive: true });
 
+  // characterData is needed: Solid updates text nodes in-place via node.data,
+  // which is a characterData mutation (not childList). The rafPending guard
+  // above coalesces rapid mutations into a single scroll per animation frame,
+  // avoiding the layout thrashing the old code suffered from.
   const observer = new MutationObserver(scrollDown);
   observer.observe(el, { childList: true, subtree: true, characterData: true });
 
