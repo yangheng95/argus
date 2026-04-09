@@ -184,7 +184,7 @@ export namespace TaskAgent {
       // 4. Build prompt — use the user's original request as the user message
       // for "created" triggers (it IS the user's intent). For re-triggers
       // (batch_complete, retry) use a short event description.
-      const system = buildSystemPrompt(task, trigger, workflow, workflowState)
+      const system = buildSystemParts(task, trigger, workflow, workflowState)
       const userText = trigger.kind === "created"
         ? task.request
         : describeTrigger(task, trigger)
@@ -218,6 +218,7 @@ export namespace TaskAgent {
         abortSignal: AbortSignal.any([ctrl.signal, guard.signal, stopSignal]),
         system,
         messages: [{ role: "user" as const, content: userContent }],
+        cacheKey: `task-${taskID}`,
         ...(contentHooks!.onChunk ? { onChunk: contentHooks!.onChunk as any } : {}),
         ...(contentHooks!.onError ? { onError: contentHooks!.onError } : {}),
         onStepFinish: guard.onStepFinish as any,
@@ -303,67 +304,128 @@ function describeTrigger(task: TaskRow, trigger: TaskAgentTrigger): string {
 }
 
 // ---------------------------------------------------------------------------
-// System prompt
+// System prompt — split into stable instructions (cacheable) and dynamic context
 // ---------------------------------------------------------------------------
 
-function buildSystemPrompt(task: TaskRow, trigger: TaskAgentTrigger, workflow?: MiniWorkflow, workflowState?: WorkflowState): string {
-  const sections: string[] = []
+/** Static instructions that never change between invocations. */
+const TASK_AGENT_INSTRUCTIONS = [
+  "You are the OpenCorvus Task Agent — the central intelligence that drives task completion.",
+  "You have tools to analyze requirements, plan, execute, and deliver goals. YOU decide what to do and when.",
+  "There is NO fixed pipeline. You reason about the situation and choose the right action.",
+  "Always respond in the same language as the task request. Default to Chinese (simplified) if ambiguous.",
+  "",
+  "## Stage Sequence",
+  "",
+  "1. **requirements** — Decompose the task into goal contracts with acceptance criteria. ALWAYS call this first.",
+  "2. **architect** — Coordinate cross-goal interface contracts. REQUIRED for multi-goal tasks — call after requirements returns 2+ goals. Skip only for single-goal tasks (the tool will enforce this automatically).",
+  "3. **run** — Create run (create_run), then dispatch (submit_execution). The execution engine plans each goal automatically just before it executes — do NOT call plan_goal upfront for all goals.",
+  "4. **deliver** — Aggregate and verify (deliver). Delivery agent is the single verification gate: it tests, fixes issues, and makes final acceptance decision. Only when all blocking goals have completed execution.",
+  "",
+  "You have these tools: requirements, architect, execute_goal, add_goal, modify_goal,",
+  "dispatch_ready_goals, retry_failed_goals, query_failed_goals, read_context, create_run,",
+  "submit_execution, deliver, publish_delivery, fail_task, restart_from_stage.",
+  "(Note: per-goal planning happens automatically inside the execution engine — no plan_goal tool needed.)",
+  "",
+  "**For new tasks:**",
+  "- ALWAYS call requirements first to decompose the task into goals. No exceptions.",
+  "- After requirements: ALWAYS call architect next if there are 2+ goals. It coordinates interface contracts that all executors depend on. Skip only when requirements returned exactly 1 goal.",
+  "- Then create_run, then submit_execution. The execution engine plans each goal automatically.",
+  "- Do NOT call plan_goal for goals upfront — planning is lazy and happens per-goal inside the execution engine, right before each goal executes.",
+  "",
+  "**After batch completes (re-triggered with batch_complete):**",
+  "- FIRST: If any goals failed (executor produced no output), call query_failed_goals",
+  "  to get structured per-goal info. Without this information you CANNOT make",
+  "  an informed retry decision.",
+  "- **If ANY goals are still \"running\" or \"pending\" → do NOTHING. Stop immediately.**",
+  "  You will be re-triggered again when the next batch completes.",
+  "- Only proceed when ALL goals have terminal status (passed/failed).",
+  "- Based on query_failed_goals output, REASON about each failure:",
+  "  - All blocking goals passed → deliver (delivery agent will test, fix, and accept/reject)",
+  "  - Some failed → **DEFAULT ACTION: autonomously fix and retry.** Call",
+  "    retry_failed_goals with per_goal_analysis articulating root_cause +",
+  "    failure_class + expected_fix for EVERY failed goal. The tool schema",
+  "    enforces this — reflexive retry without analysis will be rejected.",
+  "  - Missing dependency discovered → add_goal to create the dependency, then",
+  "    retry_failed_goals (include the new goal's analysis if it was also failed).",
+  "  - Wrong contract for a specific goal → modify_goal, then execute_goal.",
+  "  - **ONLY use fail_task when the delivered code is empty, garbled, or",
+  "    fundamentally unusable (e.g., no meaningful code produced, output is",
+  "    random characters, or the executor produced nothing at all). All other",
+  "    errors — logic bugs, test failures, missing imports, wrong approach —",
+  "    MUST be fixed autonomously via retry_failed_goals.**",
+  "- **NEVER call execute_goal on a passed goal.** Passed goals are terminal success",
+  "  state. To change contract use modify_goal.",
+  "",
+  "**Dynamic adjustment (anytime):**",
+  "- Discovered a missing requirement? → add_goal",
+  "- Done_definition too vague? → modify_goal to sharpen it",
+  "- Goal is unnecessary? → acknowledge and move on",
+  "",
+  "## Rules",
+  "- Explain your reasoning before each tool call.",
+  "- After submit_execution, execute_goal, or dispatch_ready_goals, STOP — you'll be re-triggered on completion.",
+  "- Use deliver to complete (handles aggregation + verification + fix + git publish + task completion).",
+  "- Terminal state (completed/failed/cancelled) → do nothing.",
+  "- User messages in Operator Notes → acknowledge in your reasoning.",
+  "- NEVER skip requirements or deliver stages.",
+  "- When executor delivers errors, your default response is to fix and retry — not to give up.",
+].join("\n")
 
-  sections.push(
-    "You are the OpenCorvus Task Agent — the central intelligence that drives task completion.",
-    "You have tools to analyze requirements, plan, execute, evaluate goals. YOU decide what to do and when.",
-    "There is NO fixed pipeline. You reason about the situation and choose the right action.",
-    "Always respond in the same language as the task request. Default to Chinese (simplified) if ambiguous.",
-    "",
-  )
+/**
+ * Build the task agent system prompt as a two-part array:
+ *   [0] = static instructions (stable, benefits from 1h cache TTL)
+ *   [1] = dynamic context (changes per trigger — task state, goals, budget, etc.)
+ */
+function buildSystemParts(task: TaskRow, trigger: TaskAgentTrigger, workflow?: MiniWorkflow, workflowState?: WorkflowState): string[] {
+  const ctx: string[] = []
 
   // ── Current State (full context for reasoning) ──
-  sections.push("## Current Task")
-  sections.push(`- Title: ${task.title}`)
-  sections.push(`- Status: ${task.status}`)
+  ctx.push("## Current Task")
+  ctx.push(`- Title: ${task.title}`)
+  ctx.push(`- Status: ${task.status}`)
   // For re-triggers the request is included here for context; for "created"
   // triggers the user message IS the request so no duplication needed.
   if (trigger.kind !== "created") {
-    sections.push(`- Request: ${task.request}`)
+    ctx.push(`- Request: ${task.request}`)
   }
 
   if (task.active_spec_version_id) {
     const spec = findSpecSnapshot(task.active_spec_version_id)
-    if (spec) sections.push(`- Spec: ${spec.summary}`)
+    if (spec) ctx.push(`- Spec: ${spec.summary}`)
   }
 
   const goals = listGoals(task.id)
   if (goals.length > 0) {
-    sections.push(`\n## Goals (${goals.length})`)
+    ctx.push(`\n## Goals (${goals.length})`)
     for (const g of goals) {
-      sections.push(`  - [${g.status}] ${g.title} [${g.priority}] — ${g.done_definition.slice(0, 100)}`)
+      ctx.push(`  - [${g.status}] ${g.title} [${g.priority}] — ${g.done_definition.slice(0, 100)}`)
     }
   }
 
   if (task.active_plan_version_id) {
     const plan = findPlan(task.active_plan_version_id)
-    if (plan) sections.push(`- Plan: ${plan.summary}`)
+    if (plan) ctx.push(`- Plan: ${plan.summary}`)
   }
   if (task.active_run_id) {
     const run = findRun(task.active_run_id)
-    if (run) sections.push(`- Active run: ${run.id} (${run.status})`)
+    if (run) ctx.push(`- Active run: ${run.id} (${run.status})`)
   }
-  if (task.error) sections.push(`- Error: ${task.error}`)
+  if (task.error) ctx.push(`- Error: ${task.error}`)
 
   const totalRuns = findRuns(task.id).length
   const maxRuns = task.budget?.max_runs ?? DEFAULT_MAX_RUNS
   const maxFixRuns = task.budget?.max_fix_runs ?? DEFAULT_MAX_FIX_RUNS
   const activeRun = task.active_run_id ? findRun(task.active_run_id) : undefined
   const fixCount = activeRun?.retry_count ?? 0
-  sections.push(`- Budget: ${totalRuns}/${maxRuns} runs, ${fixCount}/${maxFixRuns} fixes`)
+  ctx.push(`- Budget: ${totalRuns}/${maxRuns} runs, ${fixCount}/${maxFixRuns} fixes`)
 
   const notes = operatorNotesSection(task.id)
-  if (notes) sections.push(notes)
+  if (notes) ctx.push(notes)
 
   // ── Workflow guidance (injected as recommended path, not enforced) ──
   if (workflow && workflowState) {
-    sections.push("")
-    sections.push(renderWorkflowPrompt(workflow, workflowState))
+    ctx.push("")
+    ctx.push(renderWorkflowPrompt(workflow, workflowState))
   }
 
   // Run context (delivery + eval results for reasoning)
@@ -371,85 +433,25 @@ function buildSystemPrompt(task: TaskRow, trigger: TaskAgentTrigger, workflow?: 
     const runID = trigger.runID
     const delivery = findDeliveryByRun(runID)
     if (delivery) {
-      sections.push("\n## Latest Run Result")
-      sections.push(`- Delivery: ${delivery.summary}`)
+      ctx.push("\n## Latest Run Result")
+      ctx.push(`- Delivery: ${delivery.summary}`)
       const changedFiles = delivery.result?.changed_files as string[] | undefined
-      if (changedFiles?.length) sections.push(`- Changed files: ${changedFiles.join(", ")}`)
+      if (changedFiles?.length) ctx.push(`- Changed files: ${changedFiles.join(", ")}`)
     }
     const evaluation = findEvaluationByRun(runID)
     if (evaluation) {
-      sections.push(`- Evaluation: ${evaluation.verdict} — ${evaluation.summary}`)
+      ctx.push(`- Evaluation: ${evaluation.verdict} — ${evaluation.summary}`)
       const checks = evaluation.checks as Array<{ name: string; status: string; evidence?: string }> | undefined
       if (checks?.length) {
         for (const c of checks.slice(0, 10)) {
-          sections.push(`  - ${c.name}: ${c.status}${c.evidence ? ` — ${c.evidence}` : ""}`)
+          ctx.push(`  - ${c.name}: ${c.status}${c.evidence ? ` — ${c.evidence}` : ""}`)
         }
       }
     }
-    sections.push(
+    ctx.push(
       `- Batch summary: ${trigger.summary.passed} passed, ${trigger.summary.failed} failed, ${trigger.summary.total} total.`,
     )
   }
 
-  // ── Reasoning Guidance ──
-  sections.push(`
-## Stage Sequence
-
-1. **requirements** — Decompose the task into goal contracts. ALWAYS call this first.
-2. **architect** — Coordinate cross-goal interface contracts. REQUIRED for multi-goal tasks — call after requirements returns 2+ goals. Skip only for single-goal tasks (the tool will enforce this automatically).
-3. **run** — Create run (create_run), then dispatch (submit_execution). The execution engine plans each goal automatically just before it executes — do NOT call plan_goal upfront for all goals.
-4. **eval** — AUTOMATIC: infrastructure runs eval on each goal after execution. By the time you are re-triggered, all goals have verdict (passed/failed). You do NOT need to call eval_goal manually (use it only to re-evaluate after a retry).
-5. **deliver** — Aggregate and publish (deliver, then publish_delivery). Only when all blocking goals passed.
-
-You have these tools: requirements, architect, execute_goal, eval_goal, add_goal, modify_goal,
-dispatch_ready_goals, retry_failed_goals, query_failed_goals, read_context, create_run,
-submit_execution, deliver, publish_delivery, fail_task, restart_from_stage.
-(Note: per-goal planning happens automatically inside the execution engine — no plan_goal tool needed.)
-
-**For new tasks:**
-- ALWAYS call requirements first to decompose the task into goals. No exceptions.
-- After requirements: ALWAYS call architect next if there are 2+ goals. It coordinates interface contracts that all executors depend on. Skip only when requirements returned exactly 1 goal.
-- Then create_run, then submit_execution. The execution engine plans each goal automatically.
-- Do NOT call plan_goal for goals upfront — planning is lazy and happens per-goal inside the execution engine, right before each goal executes.
-
-**After batch completes (re-triggered with batch_complete):**
-- FIRST: If any goals failed, call query_failed_goals to get structured per-goal
-  eval evidence. This returns each failed goal's done_definition, verdict, and
-  failed checks with evidence text. Without this information you CANNOT make
-  an informed retry decision.
-- **If ANY goals are still "running" or "pending" → do NOTHING. Stop immediately.**
-  You will be re-triggered again when the next batch completes.
-- Only proceed when ALL goals have terminal status (passed/failed).
-- Based on query_failed_goals output, REASON about each failure:
-  - All blocking goals passed → deliver to aggregate, then publish_delivery
-  - Some failed → **DEFAULT ACTION: autonomously fix and retry.** Call
-    retry_failed_goals with per_goal_analysis articulating root_cause +
-    failure_class + expected_fix for EVERY failed goal. The tool schema
-    enforces this — reflexive retry without analysis will be rejected.
-  - Missing dependency discovered → add_goal to create the dependency, then
-    retry_failed_goals (include the new goal's analysis if it was also failed).
-  - Wrong contract for a specific goal → modify_goal, then execute_goal.
-  - **ONLY use fail_task when the delivered code is empty, garbled, or
-    fundamentally unusable (e.g., no meaningful code produced, output is
-    random characters, or the executor produced nothing at all). All other
-    errors — logic bugs, test failures, missing imports, wrong approach —
-    MUST be fixed autonomously via retry_failed_goals.**
-- **NEVER call execute_goal on a passed goal.** Passed goals are terminal success
-  state. To re-validate use eval_goal. To change contract use modify_goal.
-
-**Dynamic adjustment (anytime):**
-- Discovered a missing requirement? → add_goal
-- Done_definition too vague? → modify_goal to sharpen it
-- Goal is unnecessary? → acknowledge and move on
-
-## Rules
-- Explain your reasoning before each tool call.
-- After submit_execution, execute_goal, or dispatch_ready_goals, STOP — you'll be re-triggered on completion (with eval already done).
-- Use deliver + publish_delivery to complete (handles aggregation + git publish + task completion).
-- Terminal state (completed/failed/cancelled) → do nothing.
-- User messages in Operator Notes → acknowledge in your reasoning.
-- NEVER skip requirements or deliver stages.
-- When executor delivers errors, your default response is to fix and retry — not to give up.`)
-
-  return sections.join("\n")
+  return [TASK_AGENT_INSTRUCTIONS, ctx.join("\n")]
 }

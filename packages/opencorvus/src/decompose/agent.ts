@@ -190,6 +190,7 @@ async function run(input: {
       abortSignal: AbortSignal.any(abortSignals),
       system: systemPrompt,
       messages,
+      cacheKey: input.taskID ? `task-${input.taskID}-decompose` : undefined,
       onChunk: async (arg: any) => {
         stallGuard.bump()
         if (input.stream?.onChunk) await (input.stream.onChunk as any)(arg)

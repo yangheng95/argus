@@ -172,7 +172,28 @@ export namespace ProviderTransform {
     const system = msgs.filter((msg) => msg.role === "system").slice(0, 2)
     const final = msgs.filter((msg) => msg.role !== "system").slice(-2)
 
-    const providerOptions = {
+    // System messages use 1h TTL — they are stable across tool-loop steps and
+    // often across multiple invocations within the same task.  Non-system
+    // (conversation tail) messages use the default 5m TTL.
+    const systemOptions = {
+      anthropic: {
+        cacheControl: { type: "ephemeral", ttl: "1h" },
+      },
+      openrouter: {
+        cacheControl: { type: "ephemeral" },
+      },
+      bedrock: {
+        cachePoint: { type: "default" },
+      },
+      openaiCompatible: {
+        cache_control: { type: "ephemeral" },
+      },
+      copilot: {
+        copilot_cache_control: { type: "ephemeral" },
+      },
+    }
+
+    const tailOptions = {
       anthropic: {
         cacheControl: { type: "ephemeral" },
       },
@@ -190,19 +211,22 @@ export namespace ProviderTransform {
       },
     }
 
+    const systemSet: Set<ModelMessage> = new Set(system)
+
     for (const msg of unique([...system, ...final])) {
+      const opts = systemSet.has(msg) ? systemOptions : tailOptions
       const useMessageLevelOptions = model.providerID === "anthropic" || model.providerID.includes("bedrock")
       const shouldUseContentOptions = !useMessageLevelOptions && Array.isArray(msg.content) && msg.content.length > 0
 
       if (shouldUseContentOptions) {
         const lastContent = msg.content[msg.content.length - 1]
         if (lastContent && typeof lastContent === "object") {
-          lastContent.providerOptions = mergeDeep(lastContent.providerOptions ?? {}, providerOptions)
+          lastContent.providerOptions = mergeDeep(lastContent.providerOptions ?? {}, opts)
           continue
         }
       }
 
-      msg.providerOptions = mergeDeep(msg.providerOptions ?? {}, providerOptions)
+      msg.providerOptions = mergeDeep(msg.providerOptions ?? {}, opts)
     }
 
     return msgs

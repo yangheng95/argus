@@ -67,6 +67,11 @@ export namespace ProviderLLM {
     /** Full options override — merged into base options before providerOptions computation.
      *  Used by session/llm.ts to inject plugin-mutated options. */
     optionsOverride?: Record<string, any>
+
+    /** Cache key for providers that use explicit prompt caching (OpenAI, OpenRouter, etc.).
+     *  For agent calls, pass a task-scoped key (e.g. `task-${taskID}`).
+     *  Session-level calls use sessionID directly via ProviderTransform.options(). */
+    cacheKey?: string
   }
 
   /**
@@ -84,7 +89,7 @@ export namespace ProviderLLM {
     // 2. Compute base options (provider-specific: reasoning, caching, store, etc.)
     const baseOptions = ProviderTransform.options({
       model,
-      sessionID: "",
+      sessionID: input.cacheKey || "",
       providerOptions: (await Provider.getProvider(model.providerID).catch(() => ({ options: {} }))).options,
     })
 

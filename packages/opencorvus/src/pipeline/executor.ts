@@ -261,8 +261,7 @@ async function* streamExecutorEvents(
     updateGoalRunExecutorSessionStatus(goalRunID, "failed")
 
     // CRITICAL: also transition goal.status to "failed".
-    // Without this, goal stays "running" forever — auto-eval never runs on failed
-    // executors, so nothing else will transition goal.status. The Task Agent sees
+    // Without this, goal stays "running" forever. The Task Agent sees
     // goals stuck at "running" and loops endlessly.
     try {
       const { OrchestratorGoalTable } = await import("@/orchestrator/orchestrator.sql")
