@@ -369,6 +369,25 @@ export class GoalPool {
         metadata: { worktree_branch: worktreeInfo.branch },
       })
 
+      // ── 4b. Write worktree metadata for traceability ──
+      {
+        const fs = await import("fs/promises")
+        const metaPath = await import("path").then(p => p.join(worktreeDir, ".opencorvus-meta.json"))
+        const meta = {
+          goalID: entry.goal.id,
+          goalRunID: goalRun.id,
+          taskID: task.id,
+          runID: run.id,
+          planID: plan.id,
+          goalTitle: entry.goal.title,
+          worktreeBranch: worktreeInfo.branch,
+          createdAt: new Date().toISOString(),
+        }
+        await fs.writeFile(metaPath, JSON.stringify(meta, null, 2)).catch(err => {
+          log.warn("failed to write worktree meta", { goalID: entry.goal.id, error: String(err) })
+        })
+      }
+
       // Update active slot with goalRunID
       const slot = this.active.get(entry.goal.id)
       if (slot) slot.goalRunID = goalRun.id

@@ -182,6 +182,16 @@ export function PlanPanel(props: PlanPanelProps) {
                         {`Goal#${goal.goalIndex}`}
                       </span>
                       <span class="goal-title-brief">{shortTitle()}</span>
+                      <span
+                        class="goal-item-id"
+                        title={goal.id}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigator.clipboard.writeText(goal.id).catch(() => {});
+                        }}
+                      >
+                        {goal.id.slice(-8)}
+                      </span>
                       <Show when={goalStatus() === "passed"}>
                         <span class="extension-status" data-state="passed">{"\u2713"}</span>
                       </Show>
