@@ -16,6 +16,7 @@ import { Identifier } from "@/id/id"
 import z from "zod"
 import {
   findTask,
+  findLatestFailedEvalForGoal,
   type TaskRow,
   type GoalRow,
   type PlanRow,
@@ -272,6 +273,76 @@ function extractPlanSection(prompt: string, heading: string) {
   return (next >= 0 ? body.slice(0, next) : body).trim()
 }
 
+/**
+ * Compose the "Prior Attempt Failed" section that retries see in their prompt.
+ *
+ * Reads the latest rejected evaluation for this goal and the decision-log
+ * "retry" entries that the Task Agent recorded via retry_failed_goals().
+ * Returns "" on first attempts (no prior failure) — callers should `.filter(Boolean)`.
+ *
+ * No fallback: if `findLatestFailedEvalForGoal` returns nothing we treat it as
+ * "first attempt" and emit nothing. If checks/summary are missing fields, we
+ * still emit the sections we have — never fabricate data.
+ */
+export function buildRetryFeedbackSection(taskID: string, goalID: string): string {
+  const latest = findLatestFailedEvalForGoal(goalID)
+  if (!latest || latest.length === 0) return ""
+  const failed = latest[0]!
+
+  const decisionLog = createDecisionLog(taskID)
+  const retryEntries = decisionLog
+    .readByPhase("retry")
+    .filter((e) => e.goalID === goalID)
+
+  const lines: string[] = []
+  lines.push("## Prior Attempt Failed — Read This Before Implementing")
+  lines.push("")
+  lines.push(
+    "The previous attempt at this goal was rejected by the evaluator. The previous delivery files have already been restored into this worktree — modify them to address the failures below; do NOT start over from a clean slate.",
+  )
+  lines.push("")
+
+  if (failed.summary && failed.summary.trim().length > 0) {
+    lines.push("### Evaluator Summary")
+    lines.push(failed.summary.trim())
+    lines.push("")
+  }
+
+  const checks = Array.isArray(failed.checks) ? failed.checks : []
+  const failedChecks = checks.filter((c) => c && c.status === "failed")
+  if (failedChecks.length > 0) {
+    lines.push("### Failed Checks")
+    for (const check of failedChecks) {
+      lines.push(`- **${check.name}**`)
+      const evidence = (check.evidence ?? "").toString().trim()
+      if (evidence.length > 0) {
+        const truncated = evidence.length > 1500 ? evidence.slice(0, 1500) + "\n…(truncated)" : evidence
+        lines.push("  ```")
+        for (const row of truncated.split("\n")) lines.push("  " + row)
+        lines.push("  ```")
+      }
+    }
+    lines.push("")
+  }
+
+  if (retryEntries.length > 0) {
+    lines.push("### Coordinator Root-Cause Analysis")
+    for (const entry of retryEntries) {
+      const reasonSuffix = entry.reason ? ` — _why: ${entry.reason}_` : ""
+      lines.push(`- ${entry.value}${reasonSuffix}`)
+    }
+    lines.push("")
+  }
+
+  lines.push("### Required For This Retry")
+  lines.push("- Read the failed checks and evidence above before writing any code.")
+  lines.push("- Make the failing checks pass while keeping the previously passing checks intact.")
+  lines.push("- Do NOT repeat an approach that was already tried and rejected above.")
+  lines.push("- If the root cause sits outside your owned_paths, report it as a SCOPE BLOCKER instead of widening scope.")
+
+  return lines.join("\n")
+}
+
 export function buildGoalPrompt(input: {
   plan: PlanRow
   node: PlanNodeRow
@@ -302,7 +373,15 @@ export function buildGoalPrompt(input: {
   // Include architect consensus from Decision Log (interface contracts, directory blueprint, naming conventions).
   // Only populated when Task Agent called architect(); empty string if skipped (single goal / simple task).
   const architectConsensus = input.taskID
-    ? createDecisionLog(input.taskID).phasePromptSection("architect")
+    ? createDecisionLog(input.taskID).phasePromptSection("architect", "Architect Consensus")
+    : ""
+
+  // Retry feedback: surfaces the latest rejected evaluation + Task Agent's
+  // root-cause analysis so the executor sees what failed last round and what
+  // it must change. Empty string on first attempts. Wired into the prompt
+  // BEFORE the Goal section so the executor reads failure context first.
+  const retryFeedback = input.taskID
+    ? buildRetryFeedbackSection(input.taskID, input.goal.id)
     : ""
 
   return [
@@ -322,6 +401,7 @@ export function buildGoalPrompt(input: {
       ? `## Dependencies (completed before this goal)\n\nThese goals completed before yours. Their output is already in your workspace:\n${dependencyContext}`
       : undefined,
     architectConsensus || undefined,
+    retryFeedback || undefined,
     `Goal:
 ${input.goal.title}: ${input.goal.objective}`,
     `Acceptance:

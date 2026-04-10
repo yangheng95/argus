@@ -19,23 +19,6 @@ import { ArchitectPanel } from "./ArchitectPanel";
 
 // ── Types ──
 
-interface CriteriaSpec {
-  key: string;
-  name: string;
-  label: string;
-  kind: string;
-  family: string | undefined;
-  group: string;
-  enabled: boolean;
-  readOnly: boolean;
-}
-
-interface CheckGroup {
-  key: string;
-  label: string;
-  items: CriteriaSpec[];
-}
-
 interface Interaction {
   id: string;
   type: "permission" | "question" | string;
@@ -85,400 +68,6 @@ export function StatusBadge(props: StatusBadgeProps) {
       <span class="status-dot" innerHTML={statusIcon(props.status)} />
       <span class="status-label">{statusLabel(props.status)}</span>
     </span>
-  );
-}
-
-// ── CriteriaPanel helpers ──
-
-const COMMAND_CHECKS = [
-  { key: "build", label: "Build", kind: "command", family: "build" },
-  { key: "test", label: "Unit Tests", kind: "command", family: "test" },
-  { key: "lint", label: "Lint", kind: "command", family: "lint" },
-  { key: "verify_cmd", label: "Verify Command", kind: "command", family: "verify_cmd" },
-];
-
-const TOGGLE_CHECKS = [
-  { key: "startup", label: "Startup", kind: "toggle", family: "runtime" },
-  { key: "artifact", label: "Artifacts", kind: "toggle", family: "artifact" },
-  { key: "visual", label: "Visual Check", kind: "toggle", family: "runtime" },
-  { key: "puppeteer", label: "Puppeteer", kind: "toggle", family: "runtime" },
-  { key: "ui_review", label: "UI Review", kind: "toggle", family: "review" },
-  { key: "code_quality", label: "Code Quality", kind: "toggle", family: "review" },
-  { key: "code_review", label: "Code Review", kind: "toggle", family: "review" },
-  { key: "dead_code_review", label: "Dead Code Review", kind: "toggle", family: "review" },
-  { key: "judge", label: "LLM Judge", kind: "toggle", family: "acceptance" },
-  { key: "spec_check", label: "Spec Check", kind: "toggle", family: "acceptance" },
-];
-
-const CHECK_FAMILIES = [
-  { key: "command", order: 0 },
-  { key: "runtime", order: 1 },
-  { key: "artifact", order: 2 },
-  { key: "review", order: 3 },
-  { key: "acceptance", order: 4 },
-  { key: "custom", order: 5 },
-];
-
-function normalizeCheckName(value: string): string {
-  return String(value || "")
-    .toLowerCase()
-    .replace(/[^a-z0-9_#:-]/g, "_");
-}
-
-function baseCheckName(value: string): string {
-  return normalizeCheckName(value).replace(/#\d+$/, "");
-}
-
-function checkLabel(key: string): string {
-  const known: Record<string, string> = {
-    build: t("checks.build"),
-    test: t("checks.test"),
-    lint: t("checks.lint"),
-    verify_cmd: t("checks.verify_cmd"),
-    py_compile: t("checks.py_compile"),
-    pytest: t("checks.pytest"),
-    typecheck: t("checks.typecheck"),
-    ruff: t("checks.ruff"),
-    mypy: t("checks.mypy"),
-    startup: t("checks.startup"),
-    artifact: t("checks.artifact"),
-    visual: t("checks.visual"),
-    puppeteer: t("checks.puppeteer"),
-    ui_review: t("checks.ui_review"),
-    code_quality: t("checks.code_quality"),
-    code_review: t("checks.code_review"),
-    dead_code_review: t("checks.dead_code_review"),
-    judge: t("checks.judge"),
-    spec_check: t("checks.spec_check"),
-  };
-  if (known[key]) return known[key];
-  return key
-    .split(/[_-]+/)
-    .filter(Boolean)
-    .map((item) => (item[0]?.toUpperCase() ?? "") + item.slice(1))
-    .join(" ");
-}
-
-function checkFamilyKey(family: string, name: string): string {
-  const base = baseCheckName(name);
-  if (
-    ["build", "test", "lint", "verify_cmd"].includes(family) ||
-    ["build", "test", "lint", "verify_cmd"].includes(base)
-  ) {
-    return "command";
-  }
-  if (["runtime", "artifact", "review", "acceptance", "custom"].includes(family)) return family;
-  if (["startup", "visual", "puppeteer"].includes(base)) return "runtime";
-  if (base === "artifact") return "artifact";
-  if (["ui_review", "code_quality", "code_review", "dead_code_review"].includes(base)) return "review";
-  if (base === "judge" || base === "spec_check") return "acceptance";
-  return "custom";
-}
-
-function checkFamilyText(key: string): string {
-  if (key === "command") return t("checks.family.command");
-  if (key === "runtime") return t("checks.family.runtime");
-  if (key === "artifact") return t("checks.family.artifact");
-  if (key === "review") return t("checks.family.review");
-  if (key === "acceptance") return t("checks.family.acceptance");
-  return t("checks.family.custom");
-}
-
-// 14x14 SVG icons for criteria family group headers
-const CHECK_FAMILY_ICONS: Record<string, string> = {
-  command: `<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2.5" width="10" height="9" rx="1.2"/><polyline points="4.5,6 6,7.5 4.5,9"/><line x1="7.5" y1="9" x2="9.5" y2="9"/></svg>`,
-  runtime: `<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 3.5L9.5 7 4.5 10.5Z"/></svg>`,
-  artifact: `<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 4.5L7 2l4.5 2.5v5L7 12l-4.5-2.5Z"/><polyline points="2.5,4.5 7,7 11.5,4.5"/><line x1="7" y1="7" x2="7" y2="12"/></svg>`,
-  review: `<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.2" cy="6.2" r="3.5"/><line x1="9" y1="9" x2="11.5" y2="11.5"/></svg>`,
-  acceptance: `<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="1.5" width="9" height="11" rx="1.2"/><polyline points="5,6.5 6.5,8 9,5.5"/><line x1="5" y1="10" x2="9" y2="10"/></svg>`,
-  custom: `<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="7" r="1"/><path d="M6.1 2.5l-.2 1.2a3.4 3.4 0 0 0-.9.5L3.8 3.8l-.9.9.4 1.2a3.4 3.4 0 0 0-.5.9l-1.2.2v1.2l1.2.2c.1.3.3.6.5.9l-.4 1.2.9.9 1.2-.4c.3.2.6.4.9.5l.2 1.2h1.2l.2-1.2c.3-.1.6-.3.9-.5l1.2.4.9-.9-.4-1.2c.2-.3.4-.6.5-.9l1.2-.2V6.8l-1.2-.2a3.4 3.4 0 0 0-.5-.9l.4-1.2-.9-.9-1.2.4a3.4 3.4 0 0 0-.9-.5L7.9 2.5Z"/></svg>`,
-};
-
-function record(value: any): boolean {
-  return !!value && typeof value === "object" && !Array.isArray(value);
-}
-
-function aggregateCheckStatus(checks: any[], key: string): string {
-  const matches = (Array.isArray(checks) ? checks : []).filter(
-    (item) => baseCheckName(item.name || item.label) === key,
-  );
-  if (matches.length === 0) return "pending";
-  if (matches.some((item) => item.status === "failed")) return "failed";
-  if (matches.some((item) => item.status === "passed")) return "passed";
-  if (matches.every((item) => item.status === "skipped")) return "skipped";
-  return "pending";
-}
-
-function criteriaEnabledValue(key: string, value: any, fallback: boolean): boolean {
-  if (["build", "test", "lint", "verify_cmd"].includes(key)) {
-    return value !== false && (value !== undefined || fallback);
-  }
-  if (["artifact", "judge", "spec_check"].includes(key) && value === undefined) return true;
-  if (value === true) return true;
-  if (!value || !record(value)) return false;
-  return (value as any).enabled !== false;
-}
-
-function criteriaSpecs(task: any, evaluation: any): CriteriaSpec[] {
-  const checksConfig = task?.metadata?.checks;
-  const config =
-    checksConfig && record(checksConfig) ? { ...checksConfig } : {};
-  const named =
-    config.named && record(config.named) ? config.named : {};
-  const seen = new Set<string>();
-  const specs: CriteriaSpec[] = [];
-  const showDefault =
-    Object.keys(config).length === 0 &&
-    (!evaluation?.checks || evaluation.checks.length === 0);
-
-  const push = (spec: CriteriaSpec) => {
-    if (seen.has(spec.key)) return;
-    seen.add(spec.key);
-    specs.push(spec);
-  };
-
-  for (const item of COMMAND_CHECKS) {
-    const value = config[item.key];
-    const visible =
-      value !== undefined ||
-      aggregateCheckStatus(evaluation?.checks, item.key) !== "pending" ||
-      (showDefault && ["build", "test", "lint", "verify_cmd"].includes(item.key));
-    if (!visible) continue;
-    push({
-      key: item.key,
-      name: item.key,
-      label: checkLabel(item.key),
-      kind: item.kind,
-      family: item.family,
-      group: checkFamilyKey(item.family, item.key),
-      enabled: criteriaEnabledValue(item.key, value, showDefault),
-      readOnly: false,
-    });
-  }
-
-  for (const item of TOGGLE_CHECKS) {
-    const value = config[item.key];
-    const canToggle = [
-      "artifact",
-      "ui_review",
-      "code_quality",
-      "code_review",
-      "dead_code_review",
-      "judge",
-      "spec_check",
-    ].includes(item.key);
-    const visible =
-      value !== undefined ||
-      aggregateCheckStatus(evaluation?.checks, item.key) !== "pending" ||
-      canToggle;
-    if (!visible) continue;
-    push({
-      key: item.key,
-      name: item.key,
-      label: checkLabel(item.key),
-      kind: item.kind,
-      family: item.family,
-      group: checkFamilyKey(item.family, item.key),
-      enabled: criteriaEnabledValue(item.key, value, false),
-      readOnly: false,
-    });
-  }
-
-  for (const [key, value] of Object.entries(named)) {
-    if (!value || !record(value)) continue;
-    push({
-      key: `named:${key}`,
-      name: key,
-      label: (value as any).label || checkLabel(key),
-      kind: "named",
-      family: (value as any).family || undefined,
-      group: checkFamilyKey((value as any).family || "", key),
-      enabled: (value as any).enabled !== false,
-      readOnly: false,
-    });
-  }
-
-  for (const check of evaluation?.checks || []) {
-    const key = baseCheckName(check.name || check.label);
-    if (!key) continue;
-    if (seen.has(key) || seen.has(`named:${key}`)) continue;
-    push({
-      key,
-      name: key,
-      label: check.label || checkLabel(key),
-      kind: "named",
-      family: check.family || undefined,
-      group: checkFamilyKey(check.family || "", key),
-      enabled: true,
-      readOnly: true,
-    });
-  }
-
-  return specs;
-}
-
-function groupChecks(items: CriteriaSpec[]): CheckGroup[] {
-  const groups = new Map<string, CheckGroup>();
-  const order = new Map(CHECK_FAMILIES.map((item) => [item.key, item.order]));
-  for (const item of items) {
-    const key = item.group || "custom";
-    if (!groups.has(key)) {
-      groups.set(key, { key, label: checkFamilyText(key), items: [] });
-    }
-    groups.get(key)!.items.push(item);
-  }
-  return [...groups.values()].sort(
-    (a, b) => (order.get(a.key) ?? 99) - (order.get(b.key) ?? 99),
-  );
-}
-
-function criteriaResultText(status: string): string {
-  if (status === "off") return t("checks.off");
-  if (status === "passed") return t("checks.pass");
-  if (status === "failed") return t("checks.fail");
-  if (status === "skipped") return t("checks.skip");
-  return t("checks.pending");
-}
-
-// ── CriteriaPanel ──
-
-interface CriteriaPanelProps {
-  task: any;
-  evaluation: any;
-  onToggle?: (key: string, enabled: boolean) => void;
-}
-
-export function CriteriaPanel(props: CriteriaPanelProps) {
-  const specs = createMemo(() => criteriaSpecs(props.task, props.evaluation));
-  const groups = createMemo(() => groupChecks(specs()));
-
-  const checkStatuses = createMemo(() => {
-    const result: Record<string, string> = {};
-    for (const spec of specs()) {
-      const status = spec.enabled
-        ? aggregateCheckStatus(props.evaluation?.checks, spec.name)
-        : "off";
-      result[spec.key] = status;
-    }
-    return result;
-  });
-
-  return (
-    <Show
-      when={specs().length > 0}
-      fallback={<div class="empty-hint">{t("empty.checks")}</div>}
-    >
-      <For each={groups()}>
-        {(group) => (
-          <section class="criteria-group" data-family={group.key}>
-            <div class="criteria-group-head">
-              <span
-                class="criteria-group-icon"
-                aria-hidden="true"
-                innerHTML={CHECK_FAMILY_ICONS[group.key] || ""}
-              />
-              <div class="criteria-group-title">{group.label}</div>
-              <div class="criteria-group-count">
-                {tc("checks.group_count", group.items.length, { count: group.items.length })}
-              </div>
-            </div>
-            <div class="criteria-group-list">
-              <For each={group.items}>
-                {(spec) => {
-                  const status = () => checkStatuses()[spec.key] || "pending";
-                  return (
-                    <label
-                      class="criteria-item"
-                      data-readonly={spec.readOnly ? "true" : undefined}
-                    >
-                      <input
-                        type="checkbox"
-                        data-check={spec.key}
-                        checked={spec.enabled}
-                        disabled={spec.readOnly}
-                        onChange={(e) =>
-                          props.onToggle?.(spec.key, e.currentTarget.checked)
-                        }
-                      />
-                      <span class="check-mark" />
-                      <span class="criteria-copy">
-                        <span class="criteria-name">{spec.label}</span>
-                        <span class="criteria-desc">
-                          {spec.readOnly
-                            ? t("detail.observed")
-                            : spec.enabled
-                              ? t("detail.enabled")
-                              : t("detail.disabled")}
-                        </span>
-                      </span>
-                      <span class="criteria-status" data-result={status()} />
-                      <span class="criteria-result">{criteriaResultText(status())}</span>
-                    </label>
-                  );
-                }}
-              </For>
-            </div>
-          </section>
-        )}
-      </For>
-    </Show>
-  );
-}
-
-// ── EvaluationPanel ──
-
-function evaluationVerdictLabel(status: string): string {
-  if (status === "accepted") return t("evaluation.verdict.accepted");
-  if (status === "rejected") return t("evaluation.verdict.rejected");
-  return t("evaluation.verdict.pending");
-}
-
-function checkFamilyLabel(family: string, name: string): string {
-  return checkFamilyText(checkFamilyKey(family, name));
-}
-
-interface EvaluationPanelProps {
-  evaluation: any;
-}
-
-export function EvaluationPanel(props: EvaluationPanelProps) {
-  const errors = createMemo(() => {
-    const result: Array<{ name: string; family: string; evidence: string }> = [];
-    for (const check of props.evaluation?.checks || []) {
-      if (check.status === "failed" && check.evidence) {
-        result.push({
-          name: check.label || checkLabel(baseCheckName(check.name || check.label)),
-          family: checkFamilyLabel(check.family || "", check.name || check.label || ""),
-          evidence: check.evidence,
-        });
-      }
-    }
-    return result;
-  });
-
-  return (
-    <Show when={props.evaluation}>
-      <For each={errors()}>
-        {(err) => (
-          <div class="eval-error">
-            <div class="eval-error-name">{"\u2717"} {err.name}</div>
-            <Show when={err.family}>
-              <div class="eval-error-meta">{err.family}</div>
-            </Show>
-            <div
-              class="eval-error-detail md-content"
-              innerHTML={renderMarkdown(err.evidence.slice(0, 400))}
-            />
-          </div>
-        )}
-      </For>
-      <Show when={props.evaluation?.summary}>
-        <div
-          class="eval-summary md-content"
-          innerHTML={renderMarkdown(props.evaluation.summary)}
-        />
-      </Show>
-    </Show>
   );
 }
 
@@ -701,7 +290,6 @@ interface BoardProps {
   onEditGoal?: (id: string, title: string, detail: string) => void;
   onDeleteGoal?: (id: string) => void;
   onOpenSession?: (sessionID: string, goalTitle: string) => void;
-  onToggleCriteria?: (key: string, enabled: boolean) => void;
   onResolveInteraction?: (id: string, action: string) => void;
   onRejectInteraction?: (id: string) => void;
 }
@@ -761,7 +349,6 @@ export function Board(props: BoardProps) {
   const task = () => board()?.task;
   const plan = () => board()?.plan;
   const spec = () => board()?.spec;
-  const evaluation = () => board()?.evaluation;
   const delivery = () => board()?.delivery;
   const interactions = () => board()?.interactions || [];
   const overview = () => board()?.overview;
@@ -858,29 +445,6 @@ export function Board(props: BoardProps) {
     return result;
   });
 
-  // M1.3: broadcasting task-level eval checks to every goal causes the
-  // same eval data to render N+1 times (once per goal in GoalWorkflowList +
-  // once in the global Evaluation section). The proper fix is M3 (per-goal
-  // eval data flowing from the backend), but until that lands we return an
-  // empty mapping so per-goal eval steps stay empty and only the global
-  // EvaluationPanel shows eval results — eliminating the duplication.
-  const goalEvalChecks = createMemo(() => {
-    return {} as Record<string, Array<{ name: string; status: string; evidence?: string }>>;
-  });
-
-  // Evaluation badge (criteria pass ratio) — extracted from duplicated IIFE
-  const evaluationBadge = createMemo(() => {
-    const specs = criteriaSpecs(task(), evaluation());
-    if (specs.length === 0) return { text: "", tone: "" };
-    const enabled = specs.filter((item) => item.enabled).length;
-    if (enabled === 0) return { text: t("checks.zero_enabled"), tone: "" };
-    const passed = specs.filter(
-      (item) => item.enabled && aggregateCheckStatus(evaluation()?.checks, item.name) === "passed",
-    ).length;
-    const tone = passed === enabled ? "good" : passed > 0 ? "warn" : "";
-    return { text: `${passed}/${enabled}`, tone };
-  });
-
   // ── Data-driven visibility signals ──
   // Each section appears when its data exists, independent of mode.
   const showWorkflowProgress = createMemo(() => !!workflow());
@@ -889,14 +453,6 @@ export function Board(props: BoardProps) {
   );
   const showArchitect = createMemo(() => !!architect() || isArchitectGenerating());
   const showGoals = createMemo(() => goalWorkflows().length > 0 || goalsCards().length > 0);
-  const usePerGoalWorkflow = createMemo(() => goalWorkflows().length > 0);
-  // showPlan removed in M2b: per-goal plan content is rendered inside
-  // GoalWorkflowGroup.StepRow (plan step). PlanPanel deleted.
-  // showExecutor removed in M2c (per above).
-  const showEvaluation = createMemo(() => {
-    const specs = criteriaSpecs(task(), evaluation());
-    return specs.length > 0 || !!evaluation();
-  });
   const showDelivery = createMemo(() => !!delivery());
   const showInteractions = createMemo(() =>
     interactions().some((i: any) => i.status === "pending"),
@@ -986,27 +542,10 @@ export function Board(props: BoardProps) {
           <GoalWorkflowList
             goals={goalWorkflows()}
             goalStepMessages={goalStepMessages()}
-            goalEvalChecks={goalEvalChecks()}
+            onOpenSession={props.onOpenSession}
+            onEditGoal={props.onEditGoal}
+            onDeleteGoal={props.onDeleteGoal}
           />
-        </SectionFrame>
-      </Show>
-
-      <Show when={showEvaluation()}>
-        <SectionFrame
-          id="criteriaSection"
-          title={t("section.evaluation")}
-          icon={SECTION_ICONS.criteria}
-          bodyId="criteriaBody"
-          badgeId="criteriaBadge"
-          badgeText={evaluationBadge().text}
-          badgeTone={evaluationBadge().tone}
-        >
-          <CriteriaPanel
-            task={task()}
-            evaluation={evaluation()}
-            onToggle={props.onToggleCriteria}
-          />
-          <EvaluationPanel evaluation={evaluation()} />
         </SectionFrame>
       </Show>
 

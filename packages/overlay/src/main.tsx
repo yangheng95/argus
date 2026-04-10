@@ -556,22 +556,6 @@ if (boardEl) {
             console.error("Failed to delete goal", e);
           }
         }}
-        onToggleCriteria={async (key, enabled) => {
-          const taskID = boardStore.selectedTaskID;
-          if (!taskID) return;
-          try {
-            await apiJson(`task/${taskID}/checks`, {
-              method: "PATCH",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ selection: { [key]: enabled } }),
-              signal: AbortSignal.timeout(30_000),
-            });
-          } catch (err) {
-            console.error("[main] toggleCriteria failed", err);
-          } finally {
-            await loadBoard({ sync: true });
-          }
-        }}
         onResolveInteraction={async (id, action) => {
           try {
             await apiJson(`interaction/${id}/reply`, {

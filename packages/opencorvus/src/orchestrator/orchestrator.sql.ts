@@ -95,6 +95,8 @@ export type OrchestratorExecutorSessionStatus = "active" | "completed" | "failed
 
 export type OrchestratorGoalCheck = {
   name: string
+  label?: string
+  family?: string
   status: "passed" | "failed" | "skipped"
   evidence?: string
 }

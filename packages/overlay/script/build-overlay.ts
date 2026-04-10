@@ -85,22 +85,41 @@ function tauriArgs() {
 }
 
 // ── Step 1: Kill overlay processes ──
+//
+// NOTE: We used to run a PowerShell one-liner via Bun's $ shell, but Bun's
+// shell eagerly expands bare $IDENT sequences (its own env-var substitution,
+// not JS template interpolation). That turned `$_.Kill()` and `$r` into empty
+// strings, producing malformed PowerShell, which threw → the catch printed
+// "no overlay process running" while the real process stayed alive, then
+// Cargo's linker hit LNK1104 on target/release/deps/opencorvus_overlay.exe
+// because the hardlinked release binary was still locked. Use taskkill on
+// Windows — no $-variables involved, exit code tells us if anything was
+// killed, and we verify the process is really gone before proceeding.
 if (!skipKill) {
   step("Kill running overlay processes")
   if (isWindows) {
-    try {
-      await $`powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Get-Process -Name opencorvus-overlay -ErrorAction SilentlyContinue | ForEach-Object { $_.Kill() }; Start-Sleep 2; $r = Get-Process -Name opencorvus-overlay -ErrorAction SilentlyContinue; if ($r) { Write-Host 'WARNING: still running' } else { Write-Host 'All killed' }"`.quiet()
-      console.log("done")
-    } catch {
+    const killed = await $`taskkill /F /IM opencorvus-overlay.exe`.quiet().nothrow()
+    if (killed.exitCode === 0) {
+      console.log("killed running overlay process")
+      // Windows releases file handles asynchronously after process exit.
+      // Give the kernel a moment to drop the lock before the linker writes.
+      await new Promise((r) => setTimeout(r, 2000))
+    } else {
       console.log("no overlay process running")
+    }
+    // Verify: the linker will fail if any opencorvus-overlay.exe is alive.
+    const check = await $`tasklist /FI "IMAGENAME eq opencorvus-overlay.exe" /NH`.quiet().nothrow()
+    const stdout = check.stdout.toString()
+    if (stdout.toLowerCase().includes("opencorvus-overlay.exe")) {
+      throw new Error(
+        `opencorvus-overlay.exe is still running after taskkill:\n${stdout}\n` +
+          `The linker will fail with LNK1104 on deps/opencorvus_overlay.exe ` +
+          `because Cargo hardlinks it to the running release/ binary.`,
+      )
     }
   } else {
-    try {
-      await $`pkill -f opencorvus-overlay || true`.quiet()
-      console.log("done")
-    } catch {
-      console.log("no overlay process running")
-    }
+    await $`pkill -f opencorvus-overlay`.quiet().nothrow()
+    console.log("done")
   }
 }
 
