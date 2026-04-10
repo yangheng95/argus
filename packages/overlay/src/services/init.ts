@@ -198,12 +198,10 @@ export async function loadConfigInfo(): Promise<void> {
       promptEntries: Array.isArray(prompts) ? prompts : [],
     });
 
- // Sync unattended flag from server config to local settings.
-    const remoteUnattended = (config as any)?.unattended;
-    if (typeof remoteUnattended === "boolean") {
-      setSettingsStore("unattended", remoteUnattended);
-      saveSettings();
-    }
+ // Note: `unattended` no longer mirrors into settingsStore.
+ // It lives exclusively in appStore.config.experimental.unattended (Layer 1
+ // of the unified config architecture — see specs/new-arch.svg). Components
+ // read it directly from appStore and call patchConfig() to update.
 
  // Sync tool_permissions from server config into settingsStore.
     const remoteTP = (config as any)?.tool_permissions;

@@ -175,8 +175,12 @@ export async function scaffoldProjectConfig(dir: string): Promise<void> {
   const configFile = base + "/.opencorvus/opencorvus.jsonc";
   const username = settingsStore.username || "";
   const unattended = appStore.config?.experimental?.unattended !== false;
-  // Default values aligned with OrchestratorConfig.defaults on the server.
-  // Keep in sync with packages/opencorvus/src/orchestrator/config.ts DEFAULTS.
+  // Scaffold intentionally leaves `assistant` empty so the server's
+  // OrchestratorConfig.DEFAULTS is the single source of truth. Writing explicit
+  // values here would shadow DEFAULTS via the `??` merge in
+  // packages/opencorvus/src/orchestrator/config.ts and silently drift over time.
+  // Project authors who want to customize agent behavior should add fields
+  // explicitly — the empty `{}` is just a discoverability hint.
   const config = {
     $schema: "https://opencorvus.ai/config.json",
     experimental: {
@@ -186,17 +190,7 @@ export async function scaffoldProjectConfig(dir: string): Promise<void> {
       biome: { disabled: true },
       eslint: { disabled: true },
     },
-    assistant: {
-      decompose: { max_steps: 30, timeout_ms: 300000, quality_threshold: 0.5, max_attempts: 3 },
-      architect: { max_steps: 20, timeout_ms: 180000 },
-      planner: { max_steps: 30, timeout_ms: 300000, quality_threshold: 0.5, max_attempts: 3 },
-      evaluator: { max_steps: 25, timeout_ms: 240000 },
-      delivery: { max_steps: 40, timeout_ms: 600000, max_retries: 2 },
-      max_runs: 10,
-      max_fix_runs: 5,
-      max_executor_groups: 2,
-      default_workflow: "standard",
-    },
+    assistant: {},
     compaction: {
       auto: true,
       prune: true,

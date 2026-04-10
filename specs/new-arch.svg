@@ -404,8 +404,8 @@
   <text class="mono" x="40" y="208">2. Re-trigger Task Agent with DB state snapshot</text>
   <text class="mono" x="40" y="224">3. Agent 读 goal 状态 + goal_run 状态 → 推理从哪里继续 (不是 switch-case)</text>
 
-  <text class="h3" x="40" y="256">取消 + 用户 API (不变)</text>
-  <text class="mono" x="40" y="276">POST /task, GET /task/:id/events (SSE), POST /task/:id/cancel, POST /task/:id/message</text>
+  <text class="h3" x="40" y="256">用户 API</text>
+  <text class="mono" x="40" y="276">POST /task (创建), GET /task/:id/events (SSE), POST /task/:id/cancel, POST /task/:id/message (直达, 详见 Section L)</text>
   </g>
 
   <!-- ================================================================ -->
@@ -1284,6 +1284,53 @@
   <text class="mono" x="952" y="524">2. 无 fallback — 不支持的二进制格式不会静默降级为占位符, 而是直接过滤 (模型完全不收到).</text>
   <text class="mono" x="952" y="540">3. 显式截断 — 超限文本追加截断注释, 模型知晓; 不静默丢失数据.</text>
   <text class="mono" x="952" y="556">4. 能力驱动 — 二进制附件由 model.capabilities.input.{image,pdf} 决定是否发送, 不由硬编码逻辑决定.</text>
+
+  </g>
+
+  <!-- ================================================================ -->
+  <!--  SECTION L: OVERLAY MESSAGE ROUTING — 消息直达架构                   -->
+  <!-- ================================================================ -->
+
+  <g transform="translate(0, 8700)">
+  <line class="sep" x1="20" y1="20" x2="1980" y2="20"/>
+  <text class="h1" x="1000" y="44" style="font-size:14px; fill:#2563eb">OVERLAY MESSAGE ROUTING — 消息直达架构</text>
+  <line class="sep" x1="20" y1="54" x2="1980" y2="54"/>
+
+  <text class="h3" x="40" y="78">设计原则</text>
+  <text class="mono" x="40" y="100">用户在 overlay panel 输入的消息, 直接送达 Task Agent. 不经过 control-plane LLM 意图分类.</text>
+  <text class="mono" x="40" y="116">control-plane LLM 的价值仅限于非 panel surface (Slack/Discord) — 这些场景没有 UI 按钮, 需要 LLM 路由.</text>
+  <text class="mono" x="40" y="132">panel surface 的控制操作 (retry/cancel/replan) 全部通过 UI 按钮执行, 不走文本输入.</text>
+
+  <text class="h3" x="40" y="164">消息路由 (overlay panelMessage)</text>
+
+  <text class="mono" x="40" y="188">panelMessage(text, attachments, metadata)</text>
+  <text class="mono" x="40" y="208">  ├─ 无 task selected</text>
+  <text class="mono" x="40" y="224">  │   └─ POST /task (createTask, 直接 API, 无 LLM)</text>
+  <text class="mono" x="40" y="244">  ├─ task.status = "completed"</text>
+  <text class="mono" x="40" y="260">  │   └─ POST /task (createTask, 已完成的任务不再追加, 创建后续任务)</text>
+  <text class="mono" x="40" y="280">  └─ task.status = active | queued | blocked | cancelled | failed</text>
+  <text class="mono" x="40" y="296">      └─ POST /task/:id/message (直达, 无 control-plane LLM)</text>
+  <text class="mono" x="40" y="316">          ├─ cancelled/failed: 自动重启 task loop</text>
+  <text class="mono" x="40" y="332">          ├─ active + executor resume: 消息注入到 executor session</text>
+  <text class="mono" x="40" y="348">          └─ 其他: 记录 operator note, Task Agent 下次决策时可见</text>
+
+  <text class="h3" x="40" y="380">为什么不经过 control-plane LLM</text>
+  <text class="mono" x="40" y="404">1. 冗余: panel surface 有完整的 UI 按钮 (retry/cancel/replan/view), 文本输入不需要承担路由职责.</text>
+  <text class="mono" x="40" y="420">2. 脆弱: control-plane LLM 在 22 个 action 中选择, 自由文本意图容易分类失败.</text>
+  <text class="mono" x="40" y="436">3. 延迟: 每条消息多一次 LLM round-trip (1-5s), 且与实际任务执行无关.</text>
+  <text class="mono" x="40" y="452">4. 双重分类: control-plane LLM 选 action 后, workbench intent LLM 再分类 goal/plan/note — 第一次分类完全多余.</text>
+
+  <text class="h3" x="40" y="484">control-plane LLM 保留场景</text>
+  <text class="mono" x="40" y="508">仅限非 panel surface (Slack, Discord, Telegram):</text>
+  <text class="mono" x="40" y="524">  这些 surface 没有 UI 按钮, 用户只能通过文本表达 "取消任务" / "查看计划" 等控制意图.</text>
+  <text class="mono" x="40" y="540">  control-plane LLM 在这些场景下仍是必要的意图路由器.</text>
+
+  <text class="h3" x="40" y="572">关键文件</text>
+  <text class="mono" x="40" y="596">overlay/src/services/chat.ts           panelMessage(): 前端路由入口</text>
+  <text class="mono" x="40" y="612">orchestrator/service.ts                handleTaskMessage(): 后端直达处理</text>
+  <text class="mono" x="40" y="628">workbench/intent.ts                    ingestTaskMessage(): goal/plan/note 分类 (保留)</text>
+  <text class="mono" x="40" y="644">control/message.ts                     ControlMessage: control-plane LLM (仅非 panel surface)</text>
+  <text class="mono" x="40" y="660">server/routes/orchestrator.ts          POST /task/:id/message: 直达端点</text>
 
   </g>
 </svg>

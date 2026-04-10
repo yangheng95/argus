@@ -8,7 +8,6 @@ import { boardStore } from "../store/board";
 import { clearConversationUiState } from "./conversation-ui";
 import { touchReasoningPart as trackReasoningPart } from "./reasoning";
 import { syncSectionPhases } from "../utils/section";
-import { devWarn, devError } from "../utils/dev-error";
 
 // ── Types ──
 
@@ -428,21 +427,49 @@ function agentEventToolPart(event: any): any | null {
 // Cache live agent messages by stable key (msgID:kind) to maintain referential
 // stability for Solid's `<For>`. Text changes overwrite the same entry instead
 // of creating new ones, preventing unbounded memory growth during streaming.
+//
+// IMPORTANT: this cache is also pruned by `pruneAgentEvents()` whenever an
+// agent event drops out of `store.agentEvents` (per-stage 12-event cap). The
+// pruning relies on `agentMessageStableKey()` producing the SAME key as the
+// one written here — both must use a deterministic time fallback, never
+// Date.now(), or the prune step won't be able to find the entries to delete
+// and the map will grow unbounded again.
 const _agentMsgCache = new Map<string, any>();
 
-function agentMessage(event: any): any | null {
-  if (!event || typeof event !== "object") return null;
+/** Deterministic stable-key derivation for the agent-message cache. */
+function agentMessageStableKey(event: any): string {
+  if (!event || typeof event !== "object") return "";
   const stage = String(event?.stage || "").trim().toLowerCase();
-  if (!stage) return null;
-  const created = agentEventTime(event) || Date.now();
+  if (!stage) return "";
+  // Use 0 (not Date.now()) when time is missing — must be deterministic so
+  // pruneAgentEvents can compute the same key later.
+  const created = agentEventTime(event) || 0;
   const eventID =
     typeof event?.id === "string" && event.id
       ? event.id
       : `${stage}:${String(event?.kind || "status")}:${created}`;
   const kind = String(event?.kind || "status").trim().toLowerCase();
+  return `agent-event:${stage}:${eventID}:${kind}`;
+}
+
+function agentMessage(event: any): any | null {
+  if (!event || typeof event !== "object") return null;
+  const stage = String(event?.stage || "").trim().toLowerCase();
+  if (!stage) return null;
+  // Use the same deterministic time as agentMessageStableKey (0 fallback,
+  // not Date.now()) so the eventID embedded in msgID matches what prune
+  // computes. The "live" creation timestamp on the synthesized message
+  // itself can still fall back to Date.now() — that field is presentation
+  // only and isn't part of the cache key.
+  const stableTime = agentEventTime(event) || 0;
+  const created = stableTime || Date.now();
+  const eventID =
+    typeof event?.id === "string" && event.id
+      ? event.id
+      : `${stage}:${String(event?.kind || "status")}:${stableTime}`;
+  const kind = String(event?.kind || "status").trim().toLowerCase();
   const text = agentEventDisplayText(event).trim();
   const msgID = `agent-event:${stage}:${eventID}`;
-  // Stable key: same event always maps to the same cache slot.
   const stableKey = `${msgID}:${kind}`;
   const cached = _agentMsgCache.get(stableKey);
   if (cached) {
@@ -697,9 +724,12 @@ function computeAgentCards(): { cards: Record<string, AgentCardMessage>; order: 
     roundLabel: number,
     status: string,
   ): AgentCardMessage {
+    // Fall back to Date.now() if the round had no valid timestamp.
+    // (Was previously a devError; removed because it lived inside a createMemo
+    // body and re-fired on every SSE event, swamping the dev-error overlay.
+    // Real timestamp validation belongs in setMessages/appendAgentEvent.)
     let created = round.startTime;
     if (!Number.isFinite(created) || created <= 0) {
-      devError("store/messages.ts:buildCard", `${stage} round has invalid startTime=${created}, channelID=${round.channelID}. Using Date.now().`);
       created = Date.now();
     }
     return {
@@ -741,13 +771,11 @@ function computeAgentCards(): { cards: Record<string, AgentCardMessage>; order: 
           const entries = goalStepCards.get(gid) || [];
           entries.push({ stage, card, startTime: round.startTime });
           goalStepCards.set(gid, entries);
-        } else {
-          // No goal association — data integrity error. Skip standalone card.
-          devError(
-            "store/messages.ts:resolveGoalID",
-            `${stage} round has no goal mapping — sessionID=${round.sessionID}, msgs=${round.messages.length}, channelID=${round.channelID}. Skipped.`,
-          );
         }
+        // else: no goal association — silently skip the standalone card.
+        // (Was previously devError; that fired on every memo recompute when
+        // a round was momentarily orphaned during SSE settling, accumulating
+        // tens of thousands of dev-error entries during long tasks.)
       }
     } else {
       // Task-scope stages: standalone cards
@@ -803,25 +831,22 @@ function computeAgentCards(): { cards: Record<string, AgentCardMessage>; order: 
 
     const groupKey = `goal-group:${gid}`;
 
-    if (!goalInfo && entries.length > 0) {
-      devWarn("store/messages.ts:goalGroup", `goal ${gid}: no goalInfo in board — title/status empty`);
-    }
-    if (goalInfo && !goalInfo.title && entries.length > 0) {
-      devWarn("store/messages.ts:goalGroup", `goal ${gid}: goalInfo exists but title is empty`);
-    }
+    // Note: previously had several devWarn/devError calls here for:
+    //   - missing goalInfo in board
+    //   - empty title
+    //   - active goal with no step entries
+    //   - missing goalInfo.status
+    //   - missing sessionID
+    //   - invalid groupStart
+    // All of those describe transient states that resolve as more SSE events
+    // arrive (board sync lag, executor session boot, etc.). Because they
+    // lived inside a createMemo body driven by SSE updates, each one fired
+    // hundreds of times per minute on long tasks and crushed the dev-error
+    // overlay. Removed; functional fallbacks (Date.now() etc.) are kept.
 
-    const goalIsActive = goalInfo?.status && goalInfo.status !== "pending";
-
-    let groupStart: number;
-    if (entries.length > 0) {
-      groupStart = Math.min(...entries.map(e => e.startTime));
-    } else {
-      // Only warn when goal is already active — pending goals with no entries is expected
-      if (goalIsActive) {
-        devWarn("store/messages.ts:goalGroup", `goal ${gid}: no step entries (status=${goalInfo!.status}), using Date.now() for timestamp`);
-      }
-      groupStart = Date.now();
-    }
+    const groupStart = entries.length > 0
+      ? Math.min(...entries.map(e => e.startTime))
+      : Date.now();
 
     const groupStatus = entries.length === 0
       ? (goalInfo?.status === "passed" || goalInfo?.status === "failed" ? goalInfo.status : "pending")
@@ -831,20 +856,11 @@ function computeAgentCards(): { cards: Record<string, AgentCardMessage>; order: 
           ? "error"
           : "completed";
 
-    if (!goalInfo?.status && groupStatus !== "pending") {
-      devWarn("store/messages.ts:goalGroup", `goal ${gid}: goalInfo.status missing, derived groupStatus=${groupStatus}`);
-    }
-
     const goalSessionID = entries[0]?.card.info.sessionID;
-    if (!goalSessionID && goalIsActive) {
-      devWarn("store/messages.ts:goalGroup", `goal ${gid}: no sessionID from step entries (status=${goalInfo!.status})`);
-    }
 
-    let groupCreated = groupStart;
-    if (!Number.isFinite(groupCreated) || groupCreated <= 0) {
-      devError("store/messages.ts:goalGroup", `goal ${gid}: invalid groupStart=${groupStart}, using Date.now()`);
-      groupCreated = Date.now();
-    }
+    const groupCreated = (Number.isFinite(groupStart) && groupStart > 0)
+      ? groupStart
+      : Date.now();
 
     nextCards[groupKey] = {
       _synthetic: true,
@@ -1410,10 +1426,30 @@ function pruneAgentEvents(events: AgentEvent[]): AgentEvent[] {
   const kept = Array.from(byStage.values())
     .flatMap((stageEvents) => stageEvents.slice(-MAX_AGENT_EVENTS_PER_STAGE))
     .sort((a, b) => (a.time?.created || 0) - (b.time?.created || 0));
-  const keys = new Set(kept.map((event) => agentEventKey(event)));
+
+  // Stop animation timers for events that no longer exist.
+  const liveKeys = new Set(kept.map((event) => agentEventKey(event)));
   for (const key of [...agentLiveTimers.keys()]) {
-    if (!keys.has(key)) stopAgentLiveTimer(key);
+    if (!liveKeys.has(key)) stopAgentLiveTimer(key);
   }
+
+  // Drop _agentMsgCache entries for events that no longer exist. Without
+  // this, the cache grows unbounded on long tasks (one entry per unique
+  // stableKey ever produced) — agentEvents itself is bounded by the
+  // per-stage 12-event cap above, but the cache wasn't.
+  // Uses agentMessageStableKey() so the formula matches what agentMessage()
+  // wrote when populating the cache.
+  if (_agentMsgCache.size > 0) {
+    const cacheKeys = new Set<string>();
+    for (const event of kept) {
+      const sk = agentMessageStableKey(event);
+      if (sk) cacheKeys.add(sk);
+    }
+    for (const cachedKey of [..._agentMsgCache.keys()]) {
+      if (!cacheKeys.has(cachedKey)) _agentMsgCache.delete(cachedKey);
+    }
+  }
+
   return kept;
 }
 

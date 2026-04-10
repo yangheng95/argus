@@ -306,6 +306,7 @@ export class GoalPool {
       // (not all 24 goals in parallel before any execution starts).
       // Planning is NOT optional — failure propagates and the goal run fails.
       let planNodeBrief: string
+      let plannerSessionID: string
       {
         const allGoalsForPlan = listGoalsByPlan(plan.id)
         const planContract: GoalContract = {
@@ -319,6 +320,7 @@ export class GoalPool {
           title: `Plan: ${entry.goal.title}`,
           directory: Instance.directory,
         })
+        plannerSessionID = planSession.id
         registerGoalRunSession(planSession.id, task.id, "planner", entry.goal.id)
         const planHooks = sessionStreamHooks({ sessionID: planSession.id, taskID: task.id, stage: "plan" })
         try {
@@ -366,7 +368,7 @@ export class GoalPool {
         sessionID: goalSession.id,
         executor: run.executor,
         workspaceDir: worktreeDir,
-        metadata: { worktree_branch: worktreeInfo.branch },
+        metadata: { worktree_branch: worktreeInfo.branch, plannerSessionID },
       })
 
       // ── 4b. Write worktree metadata for traceability ──

@@ -17,14 +17,13 @@ export {
   DecomposeFailureError as RequirementsFailureError,
 } from "@/decompose/service"
 
-export {
-  parseDecomposeText as parseRequirementsText,
-  type DecomposeOutput as RequirementsOutput,
-  type ParsedGoalContract,
-  type DecomposeDecision as RequirementsDecision,
-  type ParsedRequirement,
-  type TraceabilityEntry,
-} from "@/decompose/parse"
+export type {
+  DecomposeOutput as RequirementsOutput,
+  ParsedGoalContract,
+  DecomposeDecision as RequirementsDecision,
+  ParsedRequirement,
+  TraceabilityEntry,
+} from "@/decompose/types"
 
 export {
   reviewFidelity,

@@ -1,6 +1,4 @@
 import { Identifier } from "@/id/id"
-import { Instance } from "@/project/instance"
-import { State } from "@/project/state"
 import { Database, and, asc, desc, eq, gt } from "@/storage/db"
 import { Channel } from "@/util/channel"
 import { withKeyedLock } from "@/util/lock"
@@ -66,22 +64,17 @@ type EventSubscription = {
   close(): void
 }
 
-const live = State.create(
-  () => {
-    try {
-      return Instance.directory
-    } catch {
-      return "__protocol_global__"
-    }
-  },
-  () => ({
-    subscriptions: new Set<EventSubscription>(),
-  }),
-  async (entry) => {
-    for (const subscription of entry.subscriptions) subscription.close()
-    entry.subscriptions.clear()
-  },
-)
+// ── Global subscription registry ──
+// Subscriptions MUST be global (not per-Instance) because:
+// 1. Database is a global singleton — events from any Instance land in the same DB.
+// 2. SSE handlers register subscriptions from one Instance context, but events may
+//    be written from a different Instance context (e.g. cross-Instance bridge in
+//    task-message-protocol-bridge writes events in hostDirectory context while the
+//    SSE client connected from a different directory).
+// 3. matchesEvent() already filters by taskID/runID/sessionID — Instance-level
+//    isolation is redundant and causes real-time events to be silently dropped
+//    when the writer and reader are in different Instance contexts.
+const globalSubscriptions = new Set<EventSubscription>()
 
 function eventKey(input: { aggregate: ProtocolAggregate; aggregate_id: string }) {
   return `${input.aggregate}:${input.aggregate_id}`
@@ -104,7 +97,7 @@ function matchesEvent(event: EventView, filter?: EventFilter) {
 }
 
 function dispatchEvent(event: EventView) {
-  for (const subscription of live().subscriptions) {
+  for (const subscription of globalSubscriptions) {
     if (!matchesEvent(event, subscription.filter)) continue
     subscription.dispatch(event)
   }
@@ -274,7 +267,7 @@ export namespace ProtocolStore {
         controller.abort()
       },
     }
-    live().subscriptions.add(subscription)
+    globalSubscriptions.add(subscription)
     void (async () => {
       for await (const event of events) {
         if (controller.signal.aborted) break
@@ -288,7 +281,7 @@ export namespace ProtocolStore {
       }
     })()
     return () => {
-      if (!live().subscriptions.delete(subscription)) return
+      if (!globalSubscriptions.delete(subscription)) return
       subscription.close()
     }
   }

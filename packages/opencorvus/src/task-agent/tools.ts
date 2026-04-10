@@ -38,6 +38,10 @@ import {
   requireTask,
 } from "@/orchestrator/store"
 import { DEFAULT_MAX_RUNS, DEFAULT_MAX_FIX_RUNS } from "@/orchestrator/helpers"
+import {
+  GoalContractAddInputSchema,
+  GoalContractUpdateSchema,
+} from "@/pipeline/goal-contract.schema"
 import type { OrchestratorBudget } from "@/orchestrator/orchestrator.sql"
 import { updateTask } from "@/orchestrator/state"
 
@@ -365,6 +369,22 @@ export function createTaskAgentTools(input: {
             ensureGoalInWorkflow(dbGoalIDs[i], g.title)
           }
           await trackStepComplete("requirements")
+
+          // Phase-level completion event — Panel uses this to refresh the
+          // Requirements section without tracking individual workflow steps.
+          OrchestratorProtocol.emit(
+            OrchestratorEvent.RequirementsCompleted,
+            {
+              taskID,
+              requirementCount: result.requirements.length,
+              goalCount: result.goals.length,
+              decisionCount: result.decisions.length,
+              traceabilityCount: result.traceability.length,
+              summary: result.summary,
+            },
+            { source: "task-agent.requirements" },
+          )
+
           const nextStep = result.goals.length > 1
             ? "NEXT: call architect to coordinate cross-goal contracts, then create_run + submit_execution."
             : "NEXT: call create_run then submit_execution to start goal execution."
@@ -458,6 +478,21 @@ export function createTaskAgentTools(input: {
         ].filter(Boolean).join("\n")
 
         await trackStepComplete("architect")
+
+        // Phase-level completion event — Panel uses this to refresh the
+        // Architect section without tracking individual workflow steps.
+        OrchestratorProtocol.emit(
+          OrchestratorEvent.ArchitectCompleted,
+          {
+            taskID,
+            contractCount: result.blueprint.contracts.length,
+            categories: [...new Set(result.blueprint.contracts.map(c => c.category))],
+            blueprintSummary: result.blueprint.summary,
+            summary,
+          },
+          { source: "task-agent.architect" },
+        )
+
         return summary
       },
     }),
@@ -468,18 +503,15 @@ export function createTaskAgentTools(input: {
 
 
     add_goal: tool({
-      description: "Dynamically add a new goal to the task. Use when you discover missing requirements, infrastructure needs, or integration gaps during execution.",
-      inputSchema: z.object({
-        title: z.string().describe("Short goal title"),
-        objective: z.string().describe("What this goal accomplishes"),
-        done_definition: z.string().describe("Verifiable pass/fail criteria"),
-        owned_paths: z.array(z.string()).default([]).describe("Files this goal owns exclusively"),
-        depends_on: z.array(z.string()).default([]).describe("Goal IDs this depends on"),
-        priority: z.enum(["blocking", "advisory"]).default("blocking"),
-        kind: z.string().default("feature").describe("bootstrap, feature, verification, integration, system"),
+      description:
+        "Dynamically add a new goal to the task. Use when you discover missing " +
+        "requirements, infrastructure needs, or integration gaps during execution. " +
+        "All fields are validated by the same Zod schema as register_goal — invalid " +
+        "input returns an error without inserting.",
+      inputSchema: GoalContractAddInputSchema.extend({
         reason: z.string().describe("Why you decided to add this goal"),
       }),
-      execute: async ({ title, objective, done_definition, owned_paths, depends_on, priority, kind }) => {
+      execute: async (input) => {
         const task = requireTask(taskID)
         const { insertGoalRows } = await import("@/orchestrator/persist")
         const now = Date.now()
@@ -489,47 +521,53 @@ export function createTaskAgentTools(input: {
           specSnapshotID,
           goals: [{
             goalID: Identifier.ascending("goal"),
-            title,
-            objective,
-            done_definition,
-            owned_paths,
-            depends_on,
-            exports: [],
-            imports: [],
-            kind,
+            title: input.title,
+            objective: input.objective,
+            done_definition: input.done_definition,
+            owned_paths: input.owned_paths,
+            depends_on: input.depends_on,
+            exports: input.exports,
+            imports: input.imports,
+            kind: input.kind,
             requirement_ids: [],
-            priority,
+            priority: input.priority,
             source: "system" as const,
           }],
           now,
         }))
-        return `Goal added: ${goals[0].id} — "${title}"`
+        return `Goal added: ${goals[0].id} — "${input.title}"`
       },
     }),
 
     modify_goal: tool({
-      description: "Modify an existing goal's contract. Use when eval feedback suggests done_definition needs refinement, or owned_paths need adjustment.",
+      description:
+        "Modify an existing goal's contract. Use when eval feedback suggests " +
+        "done_definition needs refinement, or owned_paths need adjustment. " +
+        "Updates are validated by the same Zod schema as register_goal — any " +
+        "field that violates min-length / enum constraints is rejected.",
       inputSchema: z.object({
         goalID: z.string().describe("The goal ID to modify"),
-        updates: z.object({
-          title: z.string().optional(),
-          objective: z.string().optional(),
-          done_definition: z.string().optional(),
-          owned_paths: z.array(z.string()).optional(),
-        }).describe("Fields to update"),
+        updates: GoalContractUpdateSchema.describe(
+          "Fields to update — id is immutable; all other fields optional but validated when present",
+        ),
         reason: z.string().describe("Why you decided to modify this goal"),
       }),
       execute: async ({ goalID, updates }) => {
-        const task = requireTask(taskID)
+        requireTask(taskID)
         const dbGoals = listGoals(taskID)
         const goal = dbGoals.find(g => g.id === goalID)
         if (!goal) return `Goal ${goalID} not found.`
 
         const setValues: Record<string, unknown> = { time_updated: Date.now() }
-        if (updates.title) setValues.title = updates.title
-        if (updates.objective) setValues.objective = updates.objective
-        if (updates.done_definition) setValues.done_definition = updates.done_definition
-        if (updates.owned_paths) setValues.owned_paths = updates.owned_paths
+        if (updates.title !== undefined) setValues.title = updates.title
+        if (updates.objective !== undefined) setValues.objective = updates.objective
+        if (updates.done_definition !== undefined) setValues.done_definition = updates.done_definition
+        if (updates.owned_paths !== undefined) setValues.owned_paths = updates.owned_paths
+        if (updates.depends_on !== undefined) setValues.depends_on = updates.depends_on
+        if (updates.exports !== undefined) setValues.exports = updates.exports
+        if (updates.imports !== undefined) setValues.imports = updates.imports
+        if (updates.priority !== undefined) setValues.priority = updates.priority
+        if (updates.kind !== undefined) setValues.kind = updates.kind
 
         const { OrchestratorGoalTable } = await import("@/orchestrator/orchestrator.sql")
         Database.use((db) =>
@@ -538,7 +576,8 @@ export function createTaskAgentTools(input: {
             .where(eq(OrchestratorGoalTable.id, goalID))
             .run(),
         )
-        return `Goal ${goalID} modified: ${Object.keys(updates).filter(k => (updates as any)[k]).join(", ")}`
+        const changed = Object.keys(setValues).filter(k => k !== "time_updated")
+        return `Goal ${goalID} modified: ${changed.join(", ") || "(no changes)"}`
       },
     }),
 

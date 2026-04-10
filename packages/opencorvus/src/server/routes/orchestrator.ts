@@ -388,23 +388,31 @@ export const OrchestratorRoutes = lazy(() =>
         }
         const all = await Promise.all(sessionIDs.map((id) => Session.messages({ sessionID: id })))
         const messages = all.flat().sort((a, b) => (a.info.time?.created ?? 0) - (b.info.time?.created ?? 0))
-        // Build session→goalID map from goal run records so executor sessions
-        // can be matched to their parent goal during transcript enrichment.
+        // Build session→goalID map from goal run records so executor and planner
+        // sessions can be matched to their parent goal during transcript enrichment.
         const taskID = task.id
         const goalRuns = listGoalRunsByTask(taskID)
         const sessionToGoal = new Map<string, string>()
+        const plannerSessions = new Set<string>()
         for (const gr of goalRuns) {
           if (gr.session_id) sessionToGoal.set(gr.session_id, gr.goal_id)
           const provSid = (gr.metadata as any)?.provider_session_id
           if (typeof provSid === "string" && provSid) sessionToGoal.set(provSid, gr.goal_id)
+          // Planner sessions are stored in GoalRun metadata (added by goal-pool.ts)
+          const plannerSid = (gr.metadata as any)?.plannerSessionID
+          if (typeof plannerSid === "string" && plannerSid) {
+            sessionToGoal.set(plannerSid, gr.goal_id)
+            plannerSessions.add(plannerSid)
+          }
         }
 
-        // Seed the goal-run registry with child sessions (with goalID when known)
+        // Seed the goal-run registry with child sessions (with goalID and correct role)
         // so sessionRole() and sessionGoalID() resolve correctly for enrichment.
         for (const id of sessionIDs) {
           if (id !== rootSessionID) {
             const goalID = sessionToGoal.get(id)
-            registerGoalRunSession(id, taskID, "executor", goalID)
+            const role = plannerSessions.has(id) ? "planner" : "executor"
+            registerGoalRunSession(id, taskID, role, goalID)
           }
         }
         // Enrich each message with resolvedRole/channel/goalID — same logic as the
