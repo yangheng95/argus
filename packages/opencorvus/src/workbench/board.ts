@@ -1005,14 +1005,18 @@ function buildWorkflowFields(
       priority: (goal.priority ?? "blocking") as "blocking" | "advisory",
       steps: workflow.steps
         .filter(s => s.scope === "goal")
-        .map(s => ({
-          stepID: s.id,
-          label: s.label,
-          status: (gws?.steps[s.id]?.status ?? "pending") as "pending" | "running" | "completed" | "skipped" | "failed",
-          startedAt: gws?.steps[s.id]?.startedAt,
-          completedAt: gws?.steps[s.id]?.completedAt,
-          summary: buildStepSummary(goal.id, s.id, gws?.steps[s.id]?.status),
-        })),
+        .map(s => {
+          const stepStatus = (gws?.steps[s.id]?.status ?? "pending") as "pending" | "running" | "completed" | "skipped" | "failed"
+          return {
+            stepID: s.id,
+            label: s.label,
+            status: stepStatus,
+            startedAt: gws?.steps[s.id]?.startedAt,
+            completedAt: gws?.steps[s.id]?.completedAt,
+            summary: buildStepSummary(goal.id, s.id, stepStatus),
+            payload: buildStepPayload(goal.id, s.id, stepStatus),
+          }
+        }),
       contracts,
     }
   })
@@ -1117,6 +1121,86 @@ function buildStepSummary(goalID: string, stepID: string, status?: string): stri
         }
       }
     }
+  } catch { /* best effort */ }
+  return undefined
+}
+
+/**
+ * Per-goal step payload — full structured content for the GoalWorkflowGroup
+ * StepRow to render. This replaces the old PlanPanel / ExecutorSummaryPanel /
+ * CriteriaPanel / EvaluationPanel which read separate top-level fields.
+ *
+ * Per the panel正本清源 plan: every per-goal step carries its own payload so
+ * the frontend never has to cross-reference task-level state. M2b/M2c/M2d
+ * gradually fill out the three step types.
+ */
+export interface GoalStepPayload {
+  // ── plan step ──
+  planNodes?: Array<{ id: string; title: string; brief: string; orderIndex: number }>
+
+  // ── execute step ──
+  executorSessionID?: string
+  changedFiles?: string[]
+  diffStats?: { files?: number; additions?: number; deletions?: number }
+
+  // ── eval step ──
+  checks?: Array<{ name: string; status: string; evidence?: string; family?: string }>
+  evalSummary?: string
+  verdict?: string
+}
+
+function buildStepPayload(goalID: string, stepID: string, status?: string): GoalStepPayload | undefined {
+  if (!status || status === "pending") return undefined
+  try {
+    if (stepID === "plan") {
+      const nodes = Database.use((db: any) =>
+        db.select().from(OrchestratorPlanNodeTable)
+          .where(eq(OrchestratorPlanNodeTable.goal_id, goalID))
+          .all(),
+      )
+      if (nodes?.length) {
+        return {
+          planNodes: nodes.map((n: any) => ({
+            id: n.id,
+            title: n.title,
+            brief: n.brief,
+            orderIndex: n.order_index,
+          })).sort((a: any, b: any) => a.orderIndex - b.orderIndex),
+        }
+      }
+    }
+    if (stepID === "execute") {
+      // Find the latest goal_run for this goal, then read the most recent
+      // executor session and delivery row associated with it.
+      const goalRun = Database.use((db: any) =>
+        db.select().from(OrchestratorGoalRunTable)
+          .where(eq(OrchestratorGoalRunTable.goal_id, goalID))
+          .all(),
+      )
+      const latestGoalRun = goalRun?.length
+        ? [...goalRun].sort((a: any, b: any) => (b.time_created ?? 0) - (a.time_created ?? 0))[0]
+        : undefined
+      if (!latestGoalRun) return undefined
+
+      const delivery = Database.use((db: any) =>
+        db.select().from(OrchestratorDeliveryTable)
+          .where(eq(OrchestratorDeliveryTable.goal_run_id, latestGoalRun.id))
+          .limit(1).get(),
+      )
+      const result = delivery?.result as { changed_files?: string[]; diffs?: any[]; stats?: { additions?: number; deletions?: number } } | null
+      const changedFiles = result?.changed_files
+        ?? (Array.isArray(result?.diffs) ? result.diffs.map((d: any) => d.file).filter((f: any): f is string => typeof f === "string") : undefined)
+      return {
+        executorSessionID: latestGoalRun.session_id ?? undefined,
+        changedFiles,
+        diffStats: {
+          files: changedFiles?.length,
+          additions: result?.stats?.additions,
+          deletions: result?.stats?.deletions,
+        },
+      }
+    }
+    // eval payload added in M2d (after EvaluationPanel deletion plan reviewed)
   } catch { /* best effort */ }
   return undefined
 }
