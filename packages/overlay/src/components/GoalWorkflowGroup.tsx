@@ -51,16 +51,12 @@ interface GoalStep {
   payload?: GoalStepPayload;
 }
 
-interface EvalCheck {
-  name: string;
-  status: string;
-  evidence?: string;
-}
-
 interface GoalWorkflow {
   goalID: string;
   goalTitle: string;
   goalStatus: string;
+  /** Verifiable pass/fail criteria — what "done" means for this goal. */
+  doneDefinition?: string;
   priority: "blocking" | "advisory";
   steps: GoalStep[];
 }
@@ -71,9 +67,13 @@ interface GoalWorkflowGroupProps {
   goalIndex?: number;
   /** Agent card messages grouped by step: { plan: msg[], execute: msg[], eval: msg[] } */
   stepMessages?: Record<string, any[]>;
-  /** Evaluation checks for this goal (from board.evaluation or per-goal eval) */
-  evalChecks?: EvalCheck[];
   defaultOpen?: boolean;
+  /** Optional: jump to the executor session for this goal's execute step. */
+  onOpenSession?: (sessionID: string, goalTitle: string) => void;
+  /** Optional: edit the goal (title + detail). */
+  onEditGoal?: (goalID: string, title: string, detail: string) => void;
+  /** Optional: delete the goal. */
+  onDeleteGoal?: (goalID: string) => void;
 }
 
 // ── Helpers ──
@@ -128,22 +128,36 @@ function checkStatusClass(status: string): string {
   return "gwg-check--pending";
 }
 
+function verdictClass(verdict: string): string {
+  if (verdict === "accepted") return "gwg-verdict--accepted";
+  if (verdict === "rejected") return "gwg-verdict--rejected";
+  return "gwg-verdict--inconclusive";
+}
+
 // ── Step Row (expandable when it has content) ──
 
 function StepRow(props: {
   step: GoalStep;
   messages?: any[];
-  checks?: EvalCheck[];
+  onOpenSession?: (sessionID: string, goalTitle: string) => void;
+  goalTitle?: string;
 }) {
-  // ── Content presence: structured payload (M2b/M2c/M2d) OR streaming messages OR checks ──
+  // ── Content presence: structured payload OR streaming messages ──
   const hasPlanNodes = () =>
     !!props.step.payload?.planNodes && props.step.payload.planNodes.length > 0;
   const hasChangedFiles = () =>
     !!props.step.payload?.changedFiles && props.step.payload.changedFiles.length > 0;
+  const hasChecks = () =>
+    !!props.step.payload?.checks && props.step.payload.checks.length > 0;
+  const hasEvalBody = () =>
+    hasChecks() || !!props.step.payload?.evalSummary || !!props.step.payload?.verdict;
   const hasMessages = () => !!props.messages && props.messages.length > 0;
-  const hasChecks = () => !!props.checks && props.checks.length > 0;
+  const hasOpenSession = () =>
+    props.step.stepID === "execute" &&
+    !!props.step.payload?.executorSessionID &&
+    !!props.onOpenSession;
   const hasContent = createMemo(() =>
-    hasPlanNodes() || hasChangedFiles() || hasMessages() || hasChecks(),
+    hasPlanNodes() || hasChangedFiles() || hasEvalBody() || hasMessages() || hasOpenSession(),
   );
 
   const isActive = () =>
@@ -210,18 +224,33 @@ function StepRow(props: {
               </For>
             </div>
           </Show>
-          {/* Agent messages for this step */}
-          <Show when={hasMessages()}>
-            <div class="gwg-step-messages">
-              <For each={props.messages}>
-                {(msg) => <MessageView message={msg} />}
-              </For>
+          {/* Open session link — jumps to executor session for this goal */}
+          <Show when={hasOpenSession()}>
+            <div class="gwg-open-session">
+              <button
+                type="button"
+                class="gwg-open-session-btn"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  props.onOpenSession!(props.step.payload!.executorSessionID!, props.goalTitle ?? "");
+                }}
+              >
+                {t("goal.open_session")}
+              </button>
             </div>
           </Show>
-          {/* Evaluation checks (only for eval step) */}
+          {/* Eval verdict + summary + checks — backend-driven, replaces legacy EvaluationPanel for this goal */}
+          <Show when={props.step.payload?.verdict}>
+            <div class={`gwg-verdict ${verdictClass(props.step.payload!.verdict!)}`}>
+              {props.step.payload!.verdict}
+            </div>
+          </Show>
+          <Show when={props.step.payload?.evalSummary}>
+            <div class="gwg-eval-summary">{props.step.payload!.evalSummary}</div>
+          </Show>
           <Show when={hasChecks()}>
             <div class="gwg-checks">
-              <For each={props.checks}>
+              <For each={props.step.payload!.checks}>
                 {(check) => (
                   <div class={`gwg-check ${checkStatusClass(check.status)}`}>
                     <span class="gwg-check-icon">{checkStatusIcon(check.status)}</span>
@@ -231,6 +260,14 @@ function StepRow(props: {
                     </Show>
                   </div>
                 )}
+              </For>
+            </div>
+          </Show>
+          {/* Agent messages for this step */}
+          <Show when={hasMessages()}>
+            <div class="gwg-step-messages">
+              <For each={props.messages}>
+                {(msg) => <MessageView message={msg} />}
               </For>
             </div>
           </Show>
@@ -290,16 +327,55 @@ export function GoalWorkflowGroup(props: GoalWorkflowGroupProps) {
         <Show when={props.goal.priority === "advisory"}>
           <span class="gwg-priority-badge">advisory</span>
         </Show>
+        <Show when={props.onEditGoal}>
+          <button
+            type="button"
+            class="gwg-action-btn gwg-action-edit"
+            title={t("goal.edit_button_title")}
+            onClick={(e) => {
+              e.stopPropagation();
+              props.onEditGoal!(
+                props.goal.goalID,
+                props.goal.goalTitle,
+                props.goal.doneDefinition ?? "",
+              );
+            }}
+          >
+            {"\u270E"}
+          </button>
+        </Show>
+        <Show when={props.onDeleteGoal}>
+          <button
+            type="button"
+            class="gwg-action-btn gwg-action-delete"
+            title={t("goal.delete_button_title")}
+            onClick={(e) => {
+              e.stopPropagation();
+              props.onDeleteGoal!(props.goal.goalID);
+            }}
+          >
+            {"\u2715"}
+          </button>
+        </Show>
         <span class="gwg-chevron" aria-hidden="true">{"\u25BC"}</span>
       </div>
       <Show when={expanded()}>
         <div class="gwg-body">
+          <Show when={props.goal.doneDefinition}>
+            <div class="gwg-done-definition">
+              <div class="gwg-done-definition-label">
+                {t("goal.field.done_definition")}
+              </div>
+              <div class="gwg-done-definition-text">{props.goal.doneDefinition}</div>
+            </div>
+          </Show>
           <For each={props.goal.steps}>
             {(step) => (
               <StepRow
                 step={step}
                 messages={props.stepMessages?.[step.stepID]}
-                checks={step.stepID === "eval" ? props.evalChecks : undefined}
+                goalTitle={props.goal.goalTitle}
+                onOpenSession={props.onOpenSession}
               />
             )}
           </For>
@@ -314,8 +390,9 @@ export function GoalWorkflowList(props: {
   goals: GoalWorkflow[];
   /** Per-goal step messages: { [goalID]: { [stepID]: msg[] } } */
   goalStepMessages?: Record<string, Record<string, any[]>>;
-  /** Per-goal eval checks: { [goalID]: EvalCheck[] } */
-  goalEvalChecks?: Record<string, EvalCheck[]>;
+  onOpenSession?: (sessionID: string, goalTitle: string) => void;
+  onEditGoal?: (goalID: string, title: string, detail: string) => void;
+  onDeleteGoal?: (goalID: string) => void;
 }) {
   return (
     <div class="gwg-list">
@@ -325,7 +402,9 @@ export function GoalWorkflowList(props: {
             goal={goal}
             goalIndex={idx() + 1}
             stepMessages={props.goalStepMessages?.[goal.goalID]}
-            evalChecks={props.goalEvalChecks?.[goal.goalID]}
+            onOpenSession={props.onOpenSession}
+            onEditGoal={props.onEditGoal}
+            onDeleteGoal={props.onDeleteGoal}
           />
         )}
       </For>

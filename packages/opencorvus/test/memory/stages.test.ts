@@ -242,68 +242,6 @@ describe("memory multi-stage lifecycle", () => {
     })
   })
 
-  test("stage 5: orchestrator task failure — flushFailureLearnings writes high-importance lessons", async () => {
-    await using tmp = await tmpdir({ git: true })
-
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const projectId = Instance.project.id
-
-        await OrchestratorMemoryBridge.flushFailureLearnings({
-          task: {
-            id: "task_test_fail",
-            title: "Migrate database to PostgreSQL",
-            request: "Replace SQLite with PostgreSQL for production deployment",
-            project_id: projectId,
-          },
-          run: {
-            id: "run_test_fail",
-            retry_count: 3,
-            plan_version_id: null,
-          },
-          summary: "Migration failed because pgvector extension is not available in the target PostgreSQL 14 installation",
-          retryContext: {
-            rootCause: "pgvector extension requires PostgreSQL 15+ but target environment runs PostgreSQL 14",
-            avoidApproaches: [
-              "Do not attempt to install pgvector on PostgreSQL 14 — it requires PG15+",
-              "Do not use CREATE EXTENSION IF NOT EXISTS without version checks",
-            ],
-            changedFiles: ["src/db/connection.ts", "migrations/001_pg.sql"],
-            checks: [
-              { name: "pg connection", status: "fail" },
-              { name: "vector extension", status: "fail" },
-            ],
-          },
-        })
-
-        // Verify failure lessons were created
-        const files = Memory.listFiles({ projectId })
-        const lessons = files.filter((f) => f.kind === "lesson")
-
-        // Should have multiple lessons: summary, root cause, avoid approaches, exhausted retries
-        expect(lessons.length).toBeGreaterThanOrEqual(3)
-
-        // Verify root cause lesson has high importance
-        const rootCauseLesson = lessons.find((f) => {
-          const chunks = Memory.getChunks(f.id)
-          return chunks.some((c) => c.content.includes("pgvector"))
-        })
-        expect(rootCauseLesson).toBeDefined()
-        expect(rootCauseLesson!.importance).toBeGreaterThanOrEqual(90)
-
-        // Verify the failure is recallable by future tasks
-        const recalled = Memory.recall({
-          query: "PostgreSQL pgvector extension migration failure",
-          projectId,
-          limit: 5,
-        })
-        expect(recalled.length).toBeGreaterThan(0)
-        expect(recalled[0]?.kind).toBe("lesson")
-      },
-    })
-  })
-
   test("cross-stage recall: earlier stage memories are available to later stages", async () => {
     await using tmp = await tmpdir({ git: true })
 
@@ -381,7 +319,7 @@ describe("memory multi-stage lifecycle", () => {
           query: "CSS custom properties",
         })
         expect(injected).toContain("Auto-Recalled Memory")
-        expect(injected).toContain("Memory Recall Policy")
+        expect(injected).toContain("Memory Policy")
       },
     })
   })

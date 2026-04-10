@@ -51,8 +51,13 @@ export interface DecisionLogReader {
   readByKey(key: string): DecisionEntry | undefined
   /** Format all decisions as a text block for LLM context injection. */
   toPromptSection(): string
-  /** Format decisions for a specific phase as a prompt section. */
-  phasePromptSection(phase: string): string
+  /**
+   * Format decisions for a specific phase as a prompt section under the
+   * given heading. Caller must supply the heading because the same phase
+   * can be surfaced under different titles depending on context.
+   * Returns "" when no entries exist for the phase.
+   */
+  phasePromptSection(phase: string, heading: string): string
 }
 
 export type DecisionLog = DecisionLogWriter & DecisionLogReader
@@ -122,13 +127,13 @@ export function createDecisionLog(taskID: string): DecisionLog {
       return `## Decision Log (${entries.length} entries)\n\n${lines.join("\n")}`
     },
 
-    phasePromptSection(phase: string): string {
+    phasePromptSection(phase: string, heading: string): string {
       const entries = this.readByPhase(phase)
       if (entries.length === 0) return ""
       const lines = entries.map((e) =>
         `### ${e.key}\n${e.value}${e.reason ? `\n_Why: ${e.reason}_` : ""}${e.goalID ? ` [goal:${e.goalID.slice(-8)}]` : ""}`,
       )
-      return `## Architect Consensus (${entries.length} contracts)\n\n${lines.join("\n\n")}`
+      return `## ${heading} (${entries.length} entries)\n\n${lines.join("\n\n")}`
     },
   }
 }

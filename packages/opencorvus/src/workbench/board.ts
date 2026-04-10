@@ -13,6 +13,7 @@ import {
   OrchestratorPlanNodeTable,
   OrchestratorPlanVersionTable,
   OrchestratorProgressSnapshotTable,
+  OrchestratorRequirementTable,
   OrchestratorRunTable,
   OrchestratorTaskTable,
 } from "@/orchestrator/orchestrator.sql"
@@ -1002,6 +1003,7 @@ function buildWorkflowFields(
       goalID: goal.id,
       goalTitle: goal.title,
       goalStatus: goal.status,
+      doneDefinition: goal.done_definition,
       priority: (goal.priority ?? "blocking") as "blocking" | "advisory",
       steps: workflow.steps
         .filter(s => s.scope === "goal")
@@ -1025,11 +1027,8 @@ function buildWorkflowFields(
     ? buildRequirements(task.id)
     : []
 
-  const architect = buildArchitectSummary(task.id) ?? { contracts: [], summary: "" }
+  const architect = buildArchitectSummary(task.id)
 
-  // Per the panel正本清源 plan: always return all four fields with stable
-  // shapes (empty arrays / objects rather than undefined). Frontend no longer
-  // needs to defend against missing fields.
   return {
     workflow: workflowBoard,
     goalWorkflows,
@@ -1052,76 +1051,76 @@ function deriveGoalScopeStatus(ws: WorkflowState, stepID: string): string {
 
 /** Build structured requirements array from DB */
 function buildRequirements(taskID: string) {
-  try {
-    const { OrchestratorRequirementTable } = require("@/orchestrator/orchestrator.sql")
-    const rows = Database.use((db: any) =>
-      db.select().from(OrchestratorRequirementTable)
-        .where(eq(OrchestratorRequirementTable.task_id, taskID))
-        .all()
-    )
-    if (!rows || rows.length === 0) return undefined
-    return rows.map((r: any) => ({
-      id: r.id ?? r.requirement_id ?? "",
-      description: r.title ?? r.description ?? "",
-      type: r.priority === "blocking" ? "explicit" as const : "inferred" as const,
-      priority: (r.priority ?? "blocking") as "blocking" | "advisory",
-    }))
-  } catch {
-    return undefined
-  }
+  const rows = Database.use((db) =>
+    db.select().from(OrchestratorRequirementTable)
+      .where(eq(OrchestratorRequirementTable.task_id, taskID))
+      .all(),
+  )
+  if (rows.length === 0) return undefined
+  return rows.map((r) => ({
+    id: r.id,
+    description: r.description,
+    type: r.priority === "blocking" ? "explicit" as const : "inferred" as const,
+    priority: r.priority as "blocking" | "advisory",
+  }))
+}
+
+/** Latest goal_run for a goal, ordered by time_created desc. */
+function latestGoalRun(goalID: string) {
+  return Database.use((db) =>
+    db.select().from(OrchestratorGoalRunTable)
+      .where(eq(OrchestratorGoalRunTable.goal_id, goalID))
+      .orderBy(desc(OrchestratorGoalRunTable.time_created))
+      .limit(1).get(),
+  )
+}
+
+/** Latest evaluation row for a goal_run, ordered by time_created desc. */
+function latestEvaluationForGoalRun(goalRunID: string) {
+  return Database.use((db) =>
+    db.select().from(OrchestratorEvaluationTable)
+      .where(eq(OrchestratorEvaluationTable.goal_run_id, goalRunID))
+      .orderBy(desc(OrchestratorEvaluationTable.time_created))
+      .limit(1).get(),
+  )
 }
 
 /** Build per-step summary text (e.g., "5 steps", "12 files", "3/4 checks") */
 function buildStepSummary(goalID: string, stepID: string, status?: string): string | undefined {
   if (!status || status === "pending") return undefined
-  try {
-    if (stepID === "plan") {
-      const nodes = Database.use((db: any) =>
-        db.select().from(OrchestratorPlanNodeTable)
-          .where(eq(OrchestratorPlanNodeTable.goal_id, goalID))
-          .all()
-      )
-      if (nodes?.length) return `${nodes.length} steps`
-    }
-    if (stepID === "execute") {
-      const goalRun = Database.use((db: any) =>
-        db.select().from(OrchestratorGoalRunTable)
-          .where(eq(OrchestratorGoalRunTable.goal_id, goalID))
-          .limit(1).get()
-      )
-      if (goalRun) {
-        const delivery = Database.use((db: any) =>
-          db.select().from(OrchestratorDeliveryTable)
-            .where(eq(OrchestratorDeliveryTable.goal_run_id, goalRun.id))
-            .limit(1).get()
-        )
-        if (delivery) {
-          const result = delivery.result as { changed_files?: string[]; diffs?: unknown[] } | null
-          const fileCount = result?.changed_files?.length ?? result?.diffs?.length ?? 0
-          if (fileCount > 0) return `${fileCount} files`
-        }
-      }
-    }
-    if (stepID === "eval") {
-      const goalRun = Database.use((db: any) =>
-        db.select().from(OrchestratorGoalRunTable)
-          .where(eq(OrchestratorGoalRunTable.goal_id, goalID))
-          .limit(1).get()
-      )
-      if (goalRun) {
-        const evaluation = Database.use((db: any) =>
-          db.select().from(OrchestratorEvaluationTable)
-            .where(eq(OrchestratorEvaluationTable.goal_run_id, goalRun.id))
-            .limit(1).get()
-        )
-        if (evaluation) {
-          const checks = Array.isArray(evaluation.checks) ? evaluation.checks : []
-          const passed = checks.filter((c: any) => c.status === "passed").length
-          return `${passed}/${checks.length} checks`
-        }
-      }
-    }
-  } catch { /* best effort */ }
+  if (stepID === "plan") {
+    const nodes = Database.use((db) =>
+      db.select().from(OrchestratorPlanNodeTable)
+        .where(eq(OrchestratorPlanNodeTable.goal_id, goalID))
+        .all(),
+    )
+    if (nodes.length) return `${nodes.length} steps`
+    return undefined
+  }
+  if (stepID === "execute") {
+    const goalRun = latestGoalRun(goalID)
+    if (!goalRun) return undefined
+    const delivery = Database.use((db) =>
+      db.select().from(OrchestratorDeliveryTable)
+        .where(eq(OrchestratorDeliveryTable.goal_run_id, goalRun.id))
+        .orderBy(desc(OrchestratorDeliveryTable.time_created))
+        .limit(1).get(),
+    )
+    if (!delivery) return undefined
+    const result = delivery.result as { changed_files?: string[]; diffs?: unknown[] } | null
+    const fileCount = result?.changed_files?.length ?? result?.diffs?.length ?? 0
+    if (fileCount > 0) return `${fileCount} files`
+    return undefined
+  }
+  if (stepID === "eval") {
+    const goalRun = latestGoalRun(goalID)
+    if (!goalRun) return undefined
+    const evaluation = latestEvaluationForGoalRun(goalRun.id)
+    if (!evaluation) return undefined
+    const checks = Array.isArray(evaluation.checks) ? evaluation.checks : []
+    const passed = checks.filter((c) => c.status === "passed").length
+    return `${passed}/${checks.length} checks`
+  }
   return undefined
 }
 
@@ -1151,83 +1150,83 @@ export interface GoalStepPayload {
 
 function buildStepPayload(goalID: string, stepID: string, status?: string): GoalStepPayload | undefined {
   if (!status || status === "pending") return undefined
-  try {
-    if (stepID === "plan") {
-      const nodes = Database.use((db: any) =>
-        db.select().from(OrchestratorPlanNodeTable)
-          .where(eq(OrchestratorPlanNodeTable.goal_id, goalID))
-          .all(),
-      )
-      if (nodes?.length) {
-        return {
-          planNodes: nodes.map((n: any) => ({
-            id: n.id,
-            title: n.title,
-            brief: n.brief,
-            orderIndex: n.order_index,
-          })).sort((a: any, b: any) => a.orderIndex - b.orderIndex),
-        }
-      }
+  if (stepID === "plan") {
+    const nodes = Database.use((db) =>
+      db.select().from(OrchestratorPlanNodeTable)
+        .where(eq(OrchestratorPlanNodeTable.goal_id, goalID))
+        .all(),
+    )
+    if (nodes.length === 0) return undefined
+    return {
+      planNodes: nodes
+        .map((n) => ({
+          id: n.id,
+          title: n.title,
+          brief: n.brief,
+          orderIndex: n.order_index,
+        }))
+        .sort((a, b) => a.orderIndex - b.orderIndex),
     }
-    if (stepID === "execute") {
-      // Find the latest goal_run for this goal, then read the most recent
-      // executor session and delivery row associated with it.
-      const goalRun = Database.use((db: any) =>
-        db.select().from(OrchestratorGoalRunTable)
-          .where(eq(OrchestratorGoalRunTable.goal_id, goalID))
-          .all(),
-      )
-      const latestGoalRun = goalRun?.length
-        ? [...goalRun].sort((a: any, b: any) => (b.time_created ?? 0) - (a.time_created ?? 0))[0]
-        : undefined
-      if (!latestGoalRun) return undefined
-
-      const delivery = Database.use((db: any) =>
-        db.select().from(OrchestratorDeliveryTable)
-          .where(eq(OrchestratorDeliveryTable.goal_run_id, latestGoalRun.id))
-          .limit(1).get(),
-      )
-      const result = delivery?.result as { changed_files?: string[]; diffs?: any[]; stats?: { additions?: number; deletions?: number } } | null
-      const changedFiles = result?.changed_files
-        ?? (Array.isArray(result?.diffs) ? result.diffs.map((d: any) => d.file).filter((f: any): f is string => typeof f === "string") : undefined)
-      return {
-        executorSessionID: latestGoalRun.session_id ?? undefined,
-        changedFiles,
-        diffStats: {
-          files: changedFiles?.length,
-          additions: result?.stats?.additions,
-          deletions: result?.stats?.deletions,
-        },
-      }
+  }
+  if (stepID === "execute") {
+    const goalRun = latestGoalRun(goalID)
+    if (!goalRun) return undefined
+    const delivery = Database.use((db) =>
+      db.select().from(OrchestratorDeliveryTable)
+        .where(eq(OrchestratorDeliveryTable.goal_run_id, goalRun.id))
+        .orderBy(desc(OrchestratorDeliveryTable.time_created))
+        .limit(1).get(),
+    )
+    const result = delivery?.result as { changed_files?: string[]; diffs?: { file?: string }[]; stats?: { additions?: number; deletions?: number } } | null
+    const changedFiles = result?.changed_files
+      ?? (Array.isArray(result?.diffs)
+        ? result.diffs.map((d) => d.file).filter((f): f is string => typeof f === "string")
+        : undefined)
+    return {
+      executorSessionID: goalRun.session_id ?? undefined,
+      changedFiles,
+      diffStats: {
+        files: changedFiles?.length,
+        additions: result?.stats?.additions,
+        deletions: result?.stats?.deletions,
+      },
     }
-    // eval payload added in M2d (after EvaluationPanel deletion plan reviewed)
-  } catch { /* best effort */ }
+  }
+  if (stepID === "eval") {
+    const goalRun = latestGoalRun(goalID)
+    if (!goalRun) return undefined
+    const evaluation = latestEvaluationForGoalRun(goalRun.id)
+    if (!evaluation) return undefined
+    const checks = Array.isArray(evaluation.checks) ? evaluation.checks : []
+    return {
+      checks: checks.map((c) => ({
+        name: c.name,
+        status: c.status,
+        evidence: c.evidence,
+        family: c.family,
+      })),
+      evalSummary: evaluation.summary,
+      verdict: evaluation.verdict,
+    }
+  }
   return undefined
 }
 
 /** Read all architect decision entries for per-goal distribution */
 function buildArchitectEntries(taskID: string): Array<{ goalID: string | null; key: string; value: string; reason: string }> {
-  try {
-    const log = createDecisionLog(taskID)
-    return log.readByPhase("architect")
-  } catch {
-    return []
-  }
+  const log = createDecisionLog(taskID)
+  return log.readByPhase("architect")
 }
 
 /** Build architect summary from Decision Log */
 function buildArchitectSummary(taskID: string) {
-  try {
-    const log = createDecisionLog(taskID)
-    const entries = log.readByPhase("architect")
-    if (!entries || entries.length === 0) return undefined
-    const categories = [...new Set(entries.map((e: any) => e.key))]
-    return {
-      summary: `${entries.length} architect decisions across ${categories.length} categories`,
-      contractCount: entries.length,
-      categories,
-    }
-  } catch {
-    return undefined
+  const log = createDecisionLog(taskID)
+  const entries = log.readByPhase("architect")
+  if (entries.length === 0) return undefined
+  const categories = [...new Set(entries.map((e) => e.key))]
+  return {
+    summary: `${entries.length} architect decisions across ${categories.length} categories`,
+    contractCount: entries.length,
+    categories,
   }
 }

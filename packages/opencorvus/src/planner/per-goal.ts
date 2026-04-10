@@ -74,7 +74,7 @@ export async function planGoal(input: {
   let architectSection = ""
   if (input.decisionLog) {
     decisionSection = input.decisionLog.toPromptSection()
-    architectSection = input.decisionLog.phasePromptSection("architect")
+    architectSection = input.decisionLog.phasePromptSection("architect", "Architect Consensus")
   }
 
   const systemPrompt = buildPlannerSystem()

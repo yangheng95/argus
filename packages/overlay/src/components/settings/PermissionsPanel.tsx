@@ -18,11 +18,14 @@ async function patchConfig(patch: Record<string, unknown>): Promise<void> {
 }
 
 // ── Permission key metadata ──
+// i18n convention: labels/descriptions are thunks that call `t()` with a
+// string literal, not stored-then-indirect-lookup. This keeps the static
+// analyzer in check-panel-i18n.ts able to recognise every referenced key.
 
 interface PermRow {
   key: keyof ToolPermsObj;
-  labelKey: string;
-  descKey: string;
+  label: () => string;
+  desc: () => string;
 }
 
 type ToolPermsObj = {
@@ -35,18 +38,18 @@ type ToolPermsObj = {
 };
 
 const PERM_ROWS: PermRow[] = [
-  { key: "websearch",          labelKey: "permissions.websearch",          descKey: "permissions.websearch_desc" },
-  { key: "webfetch",           labelKey: "permissions.webfetch",           descKey: "permissions.webfetch_desc" },
-  { key: "skill",              labelKey: "permissions.skill",              descKey: "permissions.skill_desc" },
-  { key: "external_directory", labelKey: "permissions.external_directory", descKey: "permissions.external_directory_desc" },
-  { key: "task",               labelKey: "permissions.task",               descKey: "permissions.task_desc" },
-  { key: "schedule",           labelKey: "permissions.schedule",           descKey: "permissions.schedule_desc" },
+  { key: "websearch",          label: () => t("permissions.websearch"),          desc: () => t("permissions.websearch_desc") },
+  { key: "webfetch",           label: () => t("permissions.webfetch"),           desc: () => t("permissions.webfetch_desc") },
+  { key: "skill",              label: () => t("permissions.skill"),              desc: () => t("permissions.skill_desc") },
+  { key: "external_directory", label: () => t("permissions.external_directory"), desc: () => t("permissions.external_directory_desc") },
+  { key: "task",               label: () => t("permissions.task"),               desc: () => t("permissions.task_desc") },
+  { key: "schedule",           label: () => t("permissions.schedule"),           desc: () => t("permissions.schedule_desc") },
 ];
 
-const ACTION_OPTIONS: { value: ToolPermAction; labelKey: string }[] = [
-  { value: "allow", labelKey: "permissions.action_allow" },
-  { value: "ask",   labelKey: "permissions.action_ask" },
-  { value: "deny",  labelKey: "permissions.action_deny" },
+const ACTION_OPTIONS: { value: ToolPermAction; label: () => string }[] = [
+  { value: "allow", label: () => t("permissions.action_allow") },
+  { value: "ask",   label: () => t("permissions.action_ask") },
+  { value: "deny",  label: () => t("permissions.action_deny") },
 ];
 
 // ── Helpers ──
@@ -69,8 +72,8 @@ function PermRow(props: PermRow) {
   return (
     <div class="perm-row">
       <div class="perm-row-info">
-        <span class="perm-row-label">{t(props.labelKey) || props.key}</span>
-        <span class="perm-row-desc">{t(props.descKey)}</span>
+        <span class="perm-row-label">{props.label()}</span>
+        <span class="perm-row-desc">{props.desc()}</span>
       </div>
       <div class="perm-row-actions">
         <For each={ACTION_OPTIONS}>
@@ -80,9 +83,9 @@ function PermRow(props: PermRow) {
               data-active={currentAction(props.key) === opt.value ? "true" : undefined}
               data-action={opt.value}
               onClick={() => setPermission(props.key, opt.value)}
-              title={t(opt.labelKey) || opt.value}
+              title={opt.label()}
             >
-              {t(opt.labelKey) || opt.value}
+              {opt.label()}
             </button>
           )}
         </For>

@@ -143,7 +143,7 @@ describe("memory typed recall", () => {
           query: "socket mode xoxb",
         })
         expect(injected).toContain("Auto-Recalled Memory")
-        expect(injected).toContain("Memory Recall Policy")
+        expect(injected).toContain("Memory Policy")
       },
     })
   })
