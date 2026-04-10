@@ -18,6 +18,27 @@ import { agentCardExpanded, toggleAgentCardExpanded } from "../store/conversatio
 
 // ── Types ──
 
+/**
+ * Per-step structured payload — full content the StepRow renders.
+ *
+ * Replaces the legacy PlanPanel / ExecutorSummaryPanel / CriteriaPanel /
+ * EvaluationPanel reading separate top-level board fields. Each goal's
+ * step now carries its own data so the frontend never has to cross-
+ * reference task-level state.
+ */
+interface GoalStepPayload {
+  // plan
+  planNodes?: Array<{ id: string; title: string; brief: string; orderIndex: number }>;
+  // execute
+  executorSessionID?: string;
+  changedFiles?: string[];
+  diffStats?: { files?: number; additions?: number; deletions?: number };
+  // eval
+  checks?: Array<{ name: string; status: string; evidence?: string; family?: string }>;
+  evalSummary?: string;
+  verdict?: string;
+}
+
 interface GoalStep {
   stepID: string;
   label: string;
@@ -26,6 +47,8 @@ interface GoalStep {
   completedAt?: number;
   /** Summary detail: e.g., "5 steps" for plan, "12 files changed" for execute, "3/4 checks passed" for eval */
   summary?: string;
+  /** Structured per-step content — backend-driven, see GoalStepPayload */
+  payload?: GoalStepPayload;
 }
 
 interface EvalCheck {
@@ -112,11 +135,16 @@ function StepRow(props: {
   messages?: any[];
   checks?: EvalCheck[];
 }) {
-  const hasContent = createMemo(() => {
-    const msgs = props.messages;
-    const checks = props.checks;
-    return (msgs && msgs.length > 0) || (checks && checks.length > 0);
-  });
+  // ── Content presence: structured payload (M2b/M2c/M2d) OR streaming messages OR checks ──
+  const hasPlanNodes = () =>
+    !!props.step.payload?.planNodes && props.step.payload.planNodes.length > 0;
+  const hasChangedFiles = () =>
+    !!props.step.payload?.changedFiles && props.step.payload.changedFiles.length > 0;
+  const hasMessages = () => !!props.messages && props.messages.length > 0;
+  const hasChecks = () => !!props.checks && props.checks.length > 0;
+  const hasContent = createMemo(() =>
+    hasPlanNodes() || hasChangedFiles() || hasMessages() || hasChecks(),
+  );
 
   const isActive = () =>
     props.step.status === "running" || props.step.status === "failed";
@@ -143,13 +171,47 @@ function StepRow(props: {
             <span class="gwg-step-summary">{props.step.summary}</span>
           </Show>
           <span class="gwg-step-status">{props.step.status}</span>
-          <Show when={props.messages && props.messages.length > 0}>
+          <Show when={hasMessages()}>
             <span class="gwg-step-count">({props.messages!.length})</span>
           </Show>
         </summary>
         <div class="gwg-step-body">
+          {/* Plan nodes — backend-driven, replaces legacy PlanPanel for this goal */}
+          <Show when={hasPlanNodes()}>
+            <div class="gwg-plan-nodes">
+              <For each={props.step.payload!.planNodes}>
+                {(node) => (
+                  <div class="gwg-plan-node">
+                    <div class="gwg-plan-node-title">{node.title}</div>
+                    <Show when={node.brief}>
+                      <div class="gwg-plan-node-brief">{node.brief}</div>
+                    </Show>
+                  </div>
+                )}
+              </For>
+            </div>
+          </Show>
+          {/* Changed files — backend-driven, replaces legacy ExecutorSummaryPanel for this goal */}
+          <Show when={hasChangedFiles()}>
+            <div class="gwg-changed-files">
+              <Show when={props.step.payload!.diffStats?.files !== undefined}>
+                <div class="gwg-diff-stats">
+                  <span class="gwg-diff-files">{props.step.payload!.diffStats!.files} files</span>
+                  <Show when={props.step.payload!.diffStats?.additions !== undefined}>
+                    <span class="gwg-diff-additions">+{props.step.payload!.diffStats!.additions}</span>
+                  </Show>
+                  <Show when={props.step.payload!.diffStats?.deletions !== undefined}>
+                    <span class="gwg-diff-deletions">-{props.step.payload!.diffStats!.deletions}</span>
+                  </Show>
+                </div>
+              </Show>
+              <For each={props.step.payload!.changedFiles}>
+                {(file) => <div class="gwg-changed-file">{file}</div>}
+              </For>
+            </div>
+          </Show>
           {/* Agent messages for this step */}
-          <Show when={props.messages && props.messages.length > 0}>
+          <Show when={hasMessages()}>
             <div class="gwg-step-messages">
               <For each={props.messages}>
                 {(msg) => <MessageView message={msg} />}
@@ -157,7 +219,7 @@ function StepRow(props: {
             </div>
           </Show>
           {/* Evaluation checks (only for eval step) */}
-          <Show when={props.checks && props.checks.length > 0}>
+          <Show when={hasChecks()}>
             <div class="gwg-checks">
               <For each={props.checks}>
                 {(check) => (

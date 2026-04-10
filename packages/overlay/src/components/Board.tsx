@@ -88,281 +88,6 @@ export function StatusBadge(props: StatusBadgeProps) {
   );
 }
 
-// ── SpecPanel ──
-
-interface SpecPanelProps {
-  spec: any;
-  preview?: string;
-}
-
-export function SpecPanel(props: SpecPanelProps) {
-  const content = () => props.spec?.content || props.preview || "";
-  const isPreview = () => !props.spec?.content && !!props.preview;
-  return (
-    <Show
-      when={content()}
-      fallback={<p class="empty-hint">{t("empty.spec")}</p>}
-    >
-      <TextPart text={content()} />
-      <Show when={!isPreview()}>
-        <div class="plan-version">{stamp(props.spec?.time?.created)}</div>
-      </Show>
-      <Show when={isPreview()}>
-        <div class="plan-version streaming-indicator">{t("common.generating") || "Generating..."}</div>
-      </Show>
-    </Show>
-  );
-}
-
-// ── PlanPanel ──
-// Shows only active (running) goals with their plan context.
-// Each active goal is rendered as "Goal#N Plan VX" + goal title + done definition.
-
-interface PlanPanelProps {
-  plan: any;
-  preview?: string;
-  /** All goal cards from the goals lane */
-  goalCards?: any[];
-  /** Set of currently running goal IDs */
-  runningGoalIDs?: Set<string>;
-}
-
-export function PlanPanel(props: PlanPanelProps) {
-  const isPreview = () => !props.plan?.prompt && !props.plan?.summary && !!props.preview;
-  const hasPlan = () => !!props.plan?.prompt || !!props.plan?.summary;
-
-  // Active goals: running status from goalRuns
-  const activeGoals = createMemo(() => {
-    const cards: any[] = props.goalCards || [];
-    const running = props.runningGoalIDs;
-    if (!running || running.size === 0) return [];
-    return cards
-      .map((card, idx) => ({ ...card, goalIndex: idx + 1 }))
-      .filter((card) => running.has(card.id));
-  });
-
-  // All goals (for display when no goals are explicitly running, e.g. single-executor mode)
-  const allGoals = createMemo(() => {
-    const cards: any[] = props.goalCards || [];
-    return cards.map((card, idx) => ({ ...card, goalIndex: idx + 1 }));
-  });
-
-  const displayGoals = () => activeGoals().length > 0 ? activeGoals() : allGoals();
-
-  const version = () => props.plan?.version;
-
-  return (
-    <>
-      <Show when={isPreview()}>
-        <div class="plan-version streaming-indicator">{t("common.generating") || "Generating..."}</div>
-      </Show>
-      <Show when={!isPreview()}>
-        <Show when={hasPlan() && props.plan?.summary}>
-          <div class="plan-summary md-content" innerHTML={renderMarkdown(props.plan.summary)} />
-        </Show>
-        <Show
-          when={displayGoals().length > 0}
-          fallback={<Show when={!hasPlan()}><p class="empty-hint">{t("empty.plan")}</p></Show>}
-        >
-          <div class="goals-list">
-            <For each={displayGoals()}>
-              {(goal) => {
-                const isRunning = () => props.runningGoalIDs?.has(goal.id);
-                const goalStatus = () => goal.status || (isRunning() ? "running" : "pending");
-                const shortTitle = () => {
-                  const raw = goal.title || "";
-                  const first = raw.split("\n")[0].replace(/^#+\s*/, "").trim();
-                  return first.length > 60 ? first.slice(0, 57) + "..." : first;
-                };
-                return (
-                  <details class="goal-item">
-                    <summary class="goal-item-head">
-                      <span class="goal-item-chevron" aria-hidden="true">{"\u25B6"}</span>
-                      <span class="goal-desc-inline">
-                        {`Goal#${goal.goalIndex}`}
-                      </span>
-                      <span class="goal-title-brief">{shortTitle()}</span>
-                      <span
-                        class="goal-item-id"
-                        title={goal.id}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          navigator.clipboard.writeText(goal.id).catch(() => {});
-                        }}
-                      >
-                        {goal.id.slice(-8)}
-                      </span>
-                      <Show when={goalStatus() === "passed"}>
-                        <span class="extension-status" data-state="passed">{"\u2713"}</span>
-                      </Show>
-                      <Show when={goalStatus() === "failed"}>
-                        <span class="extension-status" data-state="failed">{"\u2717"}</span>
-                      </Show>
-                      <Show when={isRunning()}>
-                        <span class="extension-status" data-state="active">
-                          {t("goal.running")}
-                        </span>
-                      </Show>
-                    </summary>
-                    <div class="goal-item-body">
-                      <div class="goal-content">
-                        <div class="plan-version">{`Plan V${version()}`}</div>
-                        <div
-                          class="goal-desc md-content"
-                          innerHTML={renderMarkdown(goal.title || "")}
-                        />
-                        <Show when={goal.done_definition}>
-                          <div
-                            class="goal-criteria md-content"
-                            innerHTML={renderMarkdown(goal.done_definition)}
-                          />
-                        </Show>
-                      </div>
-                    </div>
-                  </details>
-                );
-              }}
-            </For>
-          </div>
-        </Show>
-      </Show>
-    </>
-  );
-}
-
-// ── GoalIcon helper ──
-
-function goalIcon(status: string): string {
-  if (status === "passed") return "\u2713";
-  if (status === "failed") return "\u2717";
-  return "\u2022";
-}
-
-// ── GoalsPanel ──
-
-interface GoalsPanelProps {
-  cards: any[];
-  /** Running goal IDs from board.goalRuns */
-  runningGoalIDs: Set<string>;
-  onEditGoal?: (id: string, title: string, detail: string) => void;
-  onDeleteGoal?: (id: string) => void;
-  onOpenSession?: (sessionID: string, goalTitle: string) => void;
-}
-
-export function GoalsPanel(props: GoalsPanelProps) {
-  const passed = createMemo(() =>
-    (props.cards || []).filter((c) => c.status === "passed").length,
-  );
-  const total = createMemo(() => (props.cards || []).length);
-
-  return (
-    <Show
-      when={total() > 0}
-      fallback={<p class="empty-hint">{t("empty.goals")}</p>}
-    >
-      <div class="goals-list">
-        <For each={props.cards}>
-          {(card, idx) => (
-            <details class="goal-item">
-              <summary class="goal-item-head">
-                <span class="goal-item-chevron" aria-hidden="true">{"\u25B6"}</span>
-                <span class="goal-desc-inline">{`Goal#${idx() + 1}`}</span>
-                <span class="goal-title-brief">
-                  {(() => {
-                    const raw = card.title || "";
-                    const first = raw.split("\n")[0].replace(/^#+\s*/, "").trim();
-                    return first.length > 50 ? first.slice(0, 47) + "..." : first;
-                  })()}
-                </span>
-                <Show when={card.status === "passed"}>
-                  <span class="extension-status" data-state="passed">{"\u2713"}</span>
-                </Show>
-                <Show when={card.status === "failed"}>
-                  <span class="extension-status" data-state="failed">{"\u2717"}</span>
-                </Show>
-                <Show when={props.runningGoalIDs.has(card.id) && card.status !== "passed" && card.status !== "failed"}>
-                  <span class="extension-status" data-state="active">
-                    {t("goal.running")}
-                  </span>
-                </Show>
-                <Show when={card.metadata?.priority}>
-                  <span
-                    class="goal-priority"
-                    data-priority={card.metadata.priority}
-                  >
-                    {card.metadata.priority}
-                  </span>
-                </Show>
-              </summary>
-              <div class="goal-item-body">
-                <div class="goal-content">
-                  <div
-                    class="goal-desc md-content"
-                    innerHTML={renderMarkdown(card.title || "")}
-                  />
-                  <Show when={card.done_definition}>
-                    <div
-                      class="goal-criteria md-content"
-                      innerHTML={renderMarkdown(card.done_definition)}
-                    />
-                  </Show>
-                </div>
-                <Show when={props.onOpenSession && card.metadata?.sessionID}>
-                  <button
-                    type="button"
-                    class="btn btn-ghost mini"
-                    data-goal-action="view-session"
-                    data-goal-id={card.id}
-                    title="View executor session"
-                    aria-label="View executor session"
-                    onClick={() =>
-                      props.onOpenSession?.(card.metadata.sessionID, card.title || card.id)
-                    }
-                  >
-                    View
-                  </button>
-                </Show>
-                <Show when={props.onEditGoal || props.onDeleteGoal}>
-                  <div class="goal-actions">
-                    <Show when={props.onEditGoal}>
-                      <button
-                        type="button"
-                        class="btn btn-ghost mini"
-                        data-goal-action="edit"
-                        data-goal-id={card.id}
-                        title={t("goal.edit_button_title")}
-                        aria-label={t("goal.edit_button_title")}
-                        onClick={() =>
-                          props.onEditGoal?.(card.id, card.title, card.done_definition || "")
-                        }
-                      >
-                        {t("common.edit")}
-                      </button>
-                    </Show>
-                    <Show when={props.onDeleteGoal}>
-                      <button
-                        type="button"
-                        class="btn btn-ghost mini danger"
-                        data-goal-action="delete"
-                        data-goal-id={card.id}
-                        title={t("goal.delete_button_title")}
-                        aria-label={t("goal.delete_button_title")}
-                        onClick={() => props.onDeleteGoal?.(card.id)}
-                      >
-                        {t("common.delete")}
-                      </button>
-                    </Show>
-                  </div>
-                </Show>
-              </div>
-            </details>
-          )}
-        </For>
-      </div>
-    </Show>
-  );
-}
-
 // ── CriteriaPanel helpers ──
 
 const COMMAND_CHECKS = [
@@ -981,56 +706,6 @@ interface BoardProps {
   onRejectInteraction?: (id: string) => void;
 }
 
-// ── ExecutorSummaryPanel ──
-// Shows executor activity summary: tool calls, running goals.
-
-interface ExecutorSummaryPanelProps {
-  cards: any[];
-  goalCards: any[];
-  status?: string;
-}
-
-function ExecutorSummaryPanel(props: ExecutorSummaryPanelProps) {
-  const toolCalls = createMemo(() => {
-    let count = 0;
-    for (const card of props.cards) {
-      const msgs = Array.isArray(card._agentMessages) ? card._agentMessages : [];
-      for (const msg of msgs) {
-        const parts = Array.isArray(msg?.parts) ? msg.parts : [];
-        count += parts.filter((p: any) => p?.type === "tool").length;
-      }
-    }
-    return count;
-  });
-
-  const isRunning = () => props.status === "running";
-  const hasActivity = () => props.cards.length > 0;
-
-  return (
-    <Show
-      when={hasActivity()}
-      fallback={
-        <p class="empty-hint">
-          {isRunning() ? t("executor.waiting") : t("empty.executor")}
-        </p>
-      }
-    >
-      <div class="executor-summary">
-        <div class="executor-summary-stat">
-          <span class="executor-summary-value">{toolCalls()}</span>
-          <span class="executor-summary-label">{t("executor.tool_calls")}</span>
-        </div>
-        <Show when={props.cards.length > 0}>
-          <div class="executor-summary-stat">
-            <span class="executor-summary-value">{props.cards.length}</span>
-            <span class="executor-summary-label">{t("executor.sessions")}</span>
-          </div>
-        </Show>
-      </div>
-    </Show>
-  );
-}
-
 interface SectionFrameProps {
   id: string;
   title: string;
@@ -1107,50 +782,10 @@ export function Board(props: BoardProps) {
     );
   });
 
- // Badge helpers
-  const goalsBadgeText = createMemo(() => {
-    const cards = goalsCards();
-    if (cards.length === 0) return "";
-    const passed = cards.filter((c: any) => c.status === "passed").length;
-    return `${passed}/${cards.length}`;
-  });
-
-  const goalsBadgeTone = createMemo(() => {
-    const cards = goalsCards();
-    if (cards.length === 0) return "";
-    const passed = cards.filter((c: any) => c.status === "passed").length;
-    return passed === cards.length ? "good" : passed > 0 ? "warn" : "";
-  });
-
- // Executor card data (derived reactively from messages + events)
-  const executorCards = createMemo(() => {
-    const order = agentCardOrder();
-    const cards = agentCards();
-    return order
-      .map((id: string) => cards[id])
-      .filter((c: any) => c && c._agentStage === "executor");
-  });
-
-  const executorBadgeText = createMemo(() => {
-    const cards = executorCards();
-    if (cards.length === 0) return "";
-    const totalMsgs = cards.reduce(
-      (sum: number, c: any) => sum + (Array.isArray(c._agentMessages) ? c._agentMessages.length : 0),
-      0,
-    );
-    const running = cards.some((c: any) => c._agentStatus === "running");
-    if (running) return t("common.active");
-    return totalMsgs > 0 ? String(totalMsgs) : "";
-  });
-
-  const executorBadgeTone = createMemo(() => {
-    const cards = executorCards();
-    if (cards.length === 0) return "";
-    const running = cards.some((c: any) => c._agentStatus === "running");
-    if (running) return "accent";
-    const error = cards.some((c: any) => c._agentStatus === "error");
-    return error ? "bad" : "good";
-  });
+  // executorCards / executorBadge* / showExecutor removed in M2c:
+  // per-goal executor info is now rendered inside GoalWorkflowGroup.StepRow
+  // (execute step) using backend-driven payload (changedFiles + diffStats).
+  // ExecutorSummaryPanel deleted.
 
   // ── Workflow-structured data (new) ──
   const workflow = () => board()?.workflow;
@@ -1255,10 +890,9 @@ export function Board(props: BoardProps) {
   const showArchitect = createMemo(() => !!architect() || isArchitectGenerating());
   const showGoals = createMemo(() => goalWorkflows().length > 0 || goalsCards().length > 0);
   const usePerGoalWorkflow = createMemo(() => goalWorkflows().length > 0);
-  const showPlan = createMemo(() =>
-    !usePerGoalWorkflow() && (!!plan() || !!boardStore.planPreview || runningGoalIDs().size > 0),
-  );
-  const showExecutor = createMemo(() => !usePerGoalWorkflow() && executorCards().length > 0);
+  // showPlan removed in M2b: per-goal plan content is rendered inside
+  // GoalWorkflowGroup.StepRow (plan step). PlanPanel deleted.
+  // showExecutor removed in M2c (per above).
   const showEvaluation = createMemo(() => {
     const specs = criteriaSpecs(task(), evaluation());
     return specs.length > 0 || !!evaluation();
@@ -1303,17 +937,12 @@ export function Board(props: BoardProps) {
           }
           badgeTone={requirements()?.length || isRequirementsGenerating() ? "accent" : ""}
         >
-          <Show
-            when={requirements() || isRequirementsGenerating() || requirementsMessages().length > 0}
-            fallback={<SpecPanel spec={spec()} preview={boardStore.specPreview} />}
-          >
-            <RequirementsPanel
-              requirements={requirements()}
-              specContent={spec()?.content}
-              isGenerating={isRequirementsGenerating()}
-              streamingMessages={requirementsMessages()}
-            />
-          </Show>
+          <RequirementsPanel
+            requirements={requirements()}
+            specContent={spec()?.content}
+            isGenerating={isRequirementsGenerating()}
+            streamingMessages={requirementsMessages()}
+          />
         </SectionFrame>
       </Show>
 
@@ -1332,92 +961,32 @@ export function Board(props: BoardProps) {
       </Show>
 
       <Show when={showGoals()}>
-        <Show
-          when={usePerGoalWorkflow()}
-          fallback={
-            <SectionFrame
-              id="goalsSection"
-              title={t("section.goals")}
-              icon={SECTION_ICONS.goals}
-              bodyId="goalsBody"
-              badgeId="goalsBadge"
-              badgeText={goalsBadgeText()}
-              badgeTone={goalsBadgeTone()}
-            >
-              <GoalsPanel
-                cards={goalsCards()}
-                runningGoalIDs={runningGoalIDs()}
-                onEditGoal={props.onEditGoal}
-                onDeleteGoal={props.onDeleteGoal}
-                onOpenSession={props.onOpenSession}
-              />
-            </SectionFrame>
-          }
-        >
-          <SectionFrame
-            id="goalWorkflowsSection"
-            title={t("workflow.goals") || "Goals"}
-            icon={SECTION_ICONS.goals}
-            bodyId="goalWorkflowsBody"
-            badgeId="goalWorkflowsBadge"
-            badgeText={(() => {
-              const gw = goalWorkflows();
-              const passed = gw.filter((g) => g.goalStatus === "passed").length;
-              return gw.length > 0 ? `${passed}/${gw.length}` : "";
-            })()}
-            badgeTone={(() => {
-              const gw = goalWorkflows();
-              if (gw.length === 0) return "";
-              const passed = gw.filter((g) => g.goalStatus === "passed").length;
-              return passed === gw.length
-                ? "good"
-                : gw.some((g) => g.goalStatus === "failed")
-                  ? "bad"
-                  : "accent";
-            })()}
-          >
-            <GoalWorkflowList
-              goals={goalWorkflows()}
-              goalStepMessages={goalStepMessages()}
-              goalEvalChecks={goalEvalChecks()}
-            />
-          </SectionFrame>
-        </Show>
-      </Show>
-
-      <Show when={showPlan()}>
         <SectionFrame
-          id="planSection"
-          title={t("section.plan")}
-          icon={SECTION_ICONS.plan}
-          bodyId="planBody"
-          badgeId="planBadge"
-          badgeText={runningGoalIDs().size > 0 ? String(runningGoalIDs().size) : ""}
-          badgeTone={runningGoalIDs().size > 0 ? "accent" : ""}
+          id="goalWorkflowsSection"
+          title={t("workflow.goals") || "Goals"}
+          icon={SECTION_ICONS.goals}
+          bodyId="goalWorkflowsBody"
+          badgeId="goalWorkflowsBadge"
+          badgeText={(() => {
+            const gw = goalWorkflows();
+            const passed = gw.filter((g) => g.goalStatus === "passed").length;
+            return gw.length > 0 ? `${passed}/${gw.length}` : "";
+          })()}
+          badgeTone={(() => {
+            const gw = goalWorkflows();
+            if (gw.length === 0) return "";
+            const passed = gw.filter((g) => g.goalStatus === "passed").length;
+            return passed === gw.length
+              ? "good"
+              : gw.some((g) => g.goalStatus === "failed")
+                ? "bad"
+                : "accent";
+          })()}
         >
-          <PlanPanel
-            plan={plan()}
-            preview={boardStore.planPreview}
-            goalCards={goalsCards()}
-            runningGoalIDs={runningGoalIDs()}
-          />
-        </SectionFrame>
-      </Show>
-
-      <Show when={showExecutor()}>
-        <SectionFrame
-          id="executorSection"
-          title={t("section.executor")}
-          icon={SECTION_ICONS.executor}
-          bodyId="executorBody"
-          badgeId="executorBadge"
-          badgeText={executorBadgeText()}
-          badgeTone={executorBadgeTone()}
-        >
-          <ExecutorSummaryPanel
-            cards={executorCards()}
-            goalCards={goalsCards()}
-            status={task()?.status}
+          <GoalWorkflowList
+            goals={goalWorkflows()}
+            goalStepMessages={goalStepMessages()}
+            goalEvalChecks={goalEvalChecks()}
           />
         </SectionFrame>
       </Show>
