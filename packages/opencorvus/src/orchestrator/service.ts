@@ -12,6 +12,7 @@ import { Provider } from "@/provider/provider"
 import { ProtocolStore } from "@/protocol/store"
 import { OrchestratorProtocol } from "./protocol"
 import { ensureGitignore } from "./git"
+import { WorkflowRegistry, createWorkflowState } from "./workflow"
 import { Instance } from "@/project/instance"
 import { Project } from "@/project/project"
 import { Question } from "@/question"
@@ -416,7 +417,28 @@ export namespace OrchestratorService {
       ...(input.metadata ?? {}),
       ...(input.routing ? { routing: input.routing } : {}),
       ...(Object.keys(resolvedChecks).length > 0 ? { checks: resolvedChecks } : {}),
+    } as Record<string, unknown>
+
+    // Initialize workflow state synchronously at task creation, not later in
+    // the agent's trigger=created path. Without this, queued tasks (waiting
+    // for the serial queue) and any task whose agent never reaches its
+    // created trigger end up with task.metadata._workflow=undefined, which
+    // makes board.ts buildWorkflowFields return {} and the entire new panel
+    // suite (WorkflowProgressBar / RequirementsPanel / ArchitectPanel /
+    // GoalWorkflowList) silently disappears for that task.
+    //
+    // Honor caller-provided _workflow if present (e.g. tests, replay), else
+    // initialize to the configured default workflow's pending state.
+    if (!metadata._workflow) {
+      const defaultID = await WorkflowRegistry.defaultID()
+      const defaultWorkflow =
+        (await WorkflowRegistry.resolve(defaultID)) ??
+        WorkflowRegistry.resolveSync("standard")
+      if (defaultWorkflow) {
+        metadata._workflow = createWorkflowState(defaultWorkflow)
+      }
     }
+
     const cfg = await Config.get()
     const tp = cfg.tool_permissions ?? {}
     // Helper: resolve per-tool action; defaults to "allow" unless explicitly configured.

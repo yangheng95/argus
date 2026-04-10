@@ -946,12 +946,31 @@ function buildWorkflowFields(
   task: typeof OrchestratorTaskTable.$inferSelect,
   goals: Array<typeof OrchestratorGoalTable.$inferSelect>,
 ) {
+  // Per the panel正本清源 plan: this function must always return a complete
+  // shape. Previously it returned {} when ws or workflow was missing, which
+  // caused the entire new panel suite to silently disappear for queued /
+  // legacy tasks. M1.1 (createTask now initializes _workflow) plus this
+  // change make the new panels work for every task.state.
   const ws = (task.metadata as any)?._workflow as WorkflowState | undefined
-  if (!ws) return {}
+  const workflow = ws
+    ? WorkflowRegistry.resolveSync(ws.workflowID)
+    : WorkflowRegistry.resolveSync("standard")
 
-  const workflow = WorkflowRegistry.resolveSync(ws.workflowID)
-  if (!workflow) return {}
+  // Final safety net: if even the standard workflow can't be resolved (which
+  // would be a serious config bug), still return an explicit empty shape
+  // rather than {} so the frontend gets a stable contract.
+  if (!workflow) {
+    return {
+      workflow: { id: "standard", name: "Standard", steps: [], goalLoopStepIDs: [] },
+      goalWorkflows: [] as Array<unknown>,
+      requirements: [] as Array<unknown>,
+      architect: { contracts: [] as Array<unknown>, summary: "" },
+    }
+  }
 
+  // ws may still be undefined here for legacy tasks created before M1.1.
+  // In that case all steps are reported as "pending" — the frontend should
+  // treat this as a normal pending task, not as "no workflow".
   const workflowBoard = {
     id: workflow.id,
     name: workflow.name,
@@ -961,19 +980,20 @@ function buildWorkflowFields(
       tool: step.tool,
       scope: step.scope as "task" | "goal",
       skippable: step.skippable,
-      status: (step.scope === "task"
-        ? ws.taskSteps[step.id]?.status ?? "pending"
-        : deriveGoalScopeStatus(ws, step.id)) as "pending" | "running" | "completed" | "skipped" | "failed",
+      status: (ws
+        ? (step.scope === "task"
+          ? ws.taskSteps[step.id]?.status ?? "pending"
+          : deriveGoalScopeStatus(ws, step.id))
+        : "pending") as "pending" | "running" | "completed" | "skipped" | "failed",
     })),
     goalLoopStepIDs: workflow.goalLoopStepIDs,
   }
 
   // Read all architect decisions once, then distribute per goal
   const architectEntries = buildArchitectEntries(task.id)
-  const goalIDSet = new Set(goals.map(g => g.id))
 
   const goalWorkflows = goals.map(goal => {
-    const gws = ws.goalSteps[goal.id]
+    const gws = ws?.goalSteps[goal.id]
     // Contracts relevant to this goal: direct goalID match OR mentioned in reason
     const contracts = architectEntries
       .filter(e => e.goalID === goal.id || (e.reason && e.reason.includes(goal.id)))
@@ -993,21 +1013,24 @@ function buildWorkflowFields(
           completedAt: gws?.steps[s.id]?.completedAt,
           summary: buildStepSummary(goal.id, s.id, gws?.steps[s.id]?.status),
         })),
-      ...(contracts.length > 0 ? { contracts } : {}),
+      contracts,
     }
   })
 
   const requirements = task.active_spec_version_id
     ? buildRequirements(task.id)
-    : undefined
+    : []
 
-  const architect = buildArchitectSummary(task.id)
+  const architect = buildArchitectSummary(task.id) ?? { contracts: [], summary: "" }
 
+  // Per the panel正本清源 plan: always return all four fields with stable
+  // shapes (empty arrays / objects rather than undefined). Frontend no longer
+  // needs to defend against missing fields.
   return {
     workflow: workflowBoard,
-    ...(goalWorkflows.length > 0 ? { goalWorkflows } : {}),
-    ...(requirements ? { requirements } : {}),
-    ...(architect ? { architect } : {}),
+    goalWorkflows,
+    requirements,
+    architect,
   }
 }
 
