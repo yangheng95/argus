@@ -241,22 +241,7 @@ HA_low   = min(low, HA_open, HA_close)
 | `60m` | 60分 | 60 分钟 | `HH:mm` | 合并 60 根 1m |
 | `1d` | 日K | 1 交易日 | `MM/DD` | 合并当日全部 1m |
 
-### 4.2 K 线聚合规则
-
-从 1m bar 聚合为更大周期：
-- `open` = 窗口内首根 bar 的 open
-- `close` = 窗口内末根 bar 的 close
-- `high` = 窗口内所有 bar 的 high 最大值
-- `low` = 窗口内所有 bar 的 low 最小值
-- `volume` = 窗口内所有 bar 的 volume 累加
-
-窗口对齐规则：
-- `5m`：09:30-09:35, 09:35-09:40, …
-- `15m`：09:30-09:45, 09:45-10:00, …
-- `30m`：09:30-10:00, 10:00-10:30, …
-- `60m`：09:30-10:30, 10:30-11:30, 13:00-14:00, 14:00-15:00
-
-### 4.3 周期切换 UI
+### 4.2 周期切换 UI
 
 使用 Apple 风格 Segmented Control，位于工具栏中。
 
@@ -1330,331 +1315,11 @@ MACD(12,26,9): DIF 0.012  DEA 0.008  BAR 0.008
 | 显示指标图例 | Toggle | ✓ 开 | 左上角的指标数值文字 |
 | K 线涨跌色 | 选择 | 红涨绿跌 | 红涨绿跌 / 绿涨红跌（国际惯例） |
 
-### 10.2 最新价标线
-
-在主图区域显示一条水平虚线，标识最新收盘价的位置：
-- 虚线从图表左边界延伸到右边界
-- dashArray："8 4"
-- 颜色：当前涨跌色
-- 右侧 Y 轴上显示价签：
-  - 背景色：涨跌色
-  - 文字色：白色
-  - 圆角 `--radius-xs`
-  - 内边距：4px 8px
-  - 内容：`¥8.52`
-
-### 10.3 涨跌停价线
-
-- 涨停价线：`var(--color-up)`，dashArray "4 4"，0.5px
-  - 右侧标注「涨停 ¥9.35」
-- 跌停价线：`var(--color-down)`，dashArray "4 4"，0.5px
-  - 右侧标注「跌停 ¥7.65」
-- 涨停价 = 开盘价 × 1.10（四舍五入到分）
-- 跌停价 = 开盘价 × 0.90（四舍五入到分）
-
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-## 十一、后端 API 扩展
+## 十一、前端图表组件架构
 
-### 11.1 K 线接口增强
-
-原接口 `GET /api/market/stocks/:code/kline` 需支持新增周期和指标参数。
-
-#### 请求参数
-
-| 参数 | 类型 | 必填 | 默认值 | 说明 |
-|------|------|------|--------|------|
-| period | string | 否 | `1m` | `1m`, `5m`, `15m`, `30m`, `60m`, `1d` |
-| indicators | string | 否 | `ma,macd` | 逗号分隔的指标列表 |
-| ma_periods | string | 否 | `5,10,20` | MA 周期列表 |
-| limit | number | 否 | `240` | 返回 bar 数量上限 |
-
-#### 可请求指标列表
-
-```
-ma, ema, boll, sar, vwap, env, bbi,
-vol, macd, kdj, rsi, wr, dmi, cci,
-obv, trix, dma, bias, vr, cr, psy,
-emv, roc, mtm, brar
-```
-
-#### 响应结构
-
-```json
-{
-  "code": "SH600001",
-  "period": "5m",
-  "data": [
-    {
-      "time": 1712000000,
-      "open": 8.50,
-      "high": 8.55,
-      "low": 8.48,
-      "close": 8.52,
-      "volume": 12345,
-      "prev_close": 8.50
-    }
-  ],
-  "indicators": {
-    "ma": {
-      "5": [null, null, null, null, 8.51, 8.52, ...],
-      "10": [null, null, ..., 8.49, 8.50, ...],
-      "20": [null, null, ..., 8.47, ...]
-    },
-    "ema": {
-      "5": [8.50, 8.51, ...],
-      "10": [8.50, 8.49, ...]
-    },
-    "boll": {
-      "upper": [null, ..., 8.78, ...],
-      "middle": [null, ..., 8.52, ...],
-      "lower": [null, ..., 8.26, ...]
-    },
-    "sar": {
-      "values": [8.35, 8.36, ...],
-      "direction": ["up", "up", ..., "down", ...]
-    },
-    "vwap": [8.48, 8.49, ...],
-    "macd": {
-      "dif": [0.012, ...],
-      "dea": [0.008, ...],
-      "bar": [0.008, ...]
-    },
-    "kdj": {
-      "k": [72.5, ...],
-      "d": [68.3, ...],
-      "j": [80.9, ...]
-    },
-    "rsi": {
-      "6": [65.3, ...],
-      "12": [58.7, ...],
-      "24": [52.1, ...]
-    },
-    "wr": {
-      "10": [-35.2, ...],
-      "6": [-28.7, ...]
-    },
-    "dmi": {
-      "plus_di": [28.3, ...],
-      "minus_di": [18.7, ...],
-      "adx": [35.2, ...],
-      "adxr": [32.1, ...]
-    },
-    "cci": [85.3, ...],
-    "obv": {
-      "obv": [1230000, ...],
-      "ma30": [1150000, ...]
-    },
-    "trix": {
-      "trix": [0.15, ...],
-      "trma": [0.12, ...]
-    },
-    "dma": {
-      "dma": [0.08, ...],
-      "ama": [0.05, ...]
-    },
-    "bias": {
-      "6": [1.25, ...],
-      "12": [0.83, ...],
-      "24": [0.52, ...]
-    },
-    "vr": {
-      "vr": [120.5, ...],
-      "mavr": [115.3, ...]
-    },
-    "cr": {
-      "cr": [150.3, ...],
-      "ma10": [142.5, ...],
-      "ma20": [138.7, ...]
-    },
-    "psy": {
-      "psy": [66.7, ...],
-      "psyma": [58.3, ...]
-    },
-    "emv": {
-      "emv": [0.023, ...],
-      "maemv": [0.018, ...]
-    },
-    "roc": {
-      "roc": [2.35, ...],
-      "maroc": [1.87, ...]
-    },
-    "mtm": {
-      "mtm": [0.15, ...],
-      "mamtm": [0.10, ...]
-    },
-    "brar": {
-      "br": [156.3, ...],
-      "ar": [112.5, ...]
-    }
-  }
-}
-```
-
-#### 性能说明
-
-- 指标数组与 `data` 数组等长，一一对应
-- 前端不需要自行计算任何指标，全部由后端完成
-- 指标计算中数据不足的位置用 `null` 填充（前端跳过 null 不绘制该点）
-- Heikin-Ashi 的 HA_OHLC 也由后端计算，通过独立字段返回：
-  ```json
-  "heikin_ashi": {
-    "ha_open": [...],
-    "ha_high": [...],
-    "ha_low": [...],
-    "ha_close": [...]
-  }
-  ```
-  前端选择 Heikin-Ashi 模式时，传 `indicators=heikin_ashi` 参数
-
-### 11.2 分时数据接口
-
-`GET /api/market/stocks/:code/timeshare`
-
-#### 响应
-
-```json
-{
-  "code": "SH600001",
-  "prev_close": 8.50,
-  "data": [
-    {
-      "time": 1712000000,
-      "price": 8.52,
-      "avg_price": 8.51,
-      "volume": 1234,
-      "amount": 10512.00
-    }
-  ]
-}
-```
-
-- `price`：当前分钟的最新成交价
-- `avg_price`：从开盘到当前的累计 VWAP
-- `volume`：当前分钟成交量（手）
-- `amount`：当前分钟成交额
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-## 十二、后端指标计算引擎
-
-### 12.1 架构
-
-在 `src/` 下新增模块：
-
-```
-src/
-  indicators/
-    index.ts         # 统一入口，按名称分发计算
-    ma.ts            # MA / EMA / BBI
-    boll.ts          # BOLL / ENV
-    sar.ts           # SAR
-    vwap.ts          # VWAP
-    macd.ts          # MACD
-    kdj.ts           # KDJ
-    rsi.ts           # RSI
-    wr.ts            # WR
-    dmi.ts           # DMI（+DI / -DI / ADX / ADXR）
-    cci.ts           # CCI
-    obv.ts           # OBV
-    trix.ts          # TRIX
-    dma.ts           # DMA
-    bias.ts          # BIAS
-    vr.ts            # VR
-    cr.ts            # CR
-    psy.ts           # PSY
-    emv.ts           # EMV
-    roc.ts           # ROC
-    mtm.ts           # MTM
-    brar.ts          # BRAR
-    heikin-ashi.ts   # Heikin-Ashi 变换
-    utils.ts         # SMA / EMA / 标准差 等公共函数
-```
-
-### 12.2 公共计算函数 (`utils.ts`)
-
-```typescript
-/** 简单移动平均 */
-function sma(data: number[], period: number): (number | null)[]
-
-/** 指数移动平均 */
-function ema(data: number[], period: number): (number | null)[]
-
-/** 标准差 */
-function stddev(data: number[], period: number): (number | null)[]
-
-/** 最高值（滑动窗口） */
-function highest(data: number[], period: number): (number | null)[]
-
-/** 最低值（滑动窗口） */
-function lowest(data: number[], period: number): (number | null)[]
-
-/** True Range */
-function trueRange(high: number[], low: number[], close: number[]): number[]
-```
-
-### 12.3 计算入口 (`index.ts`)
-
-```typescript
-interface IndicatorRequest {
-  name: string;          // 指标名称
-  params?: Record<string, number>;  // 自定义参数
-}
-
-interface OHLCV {
-  open: number;
-  high: number;
-  low: number;
-  close: number;
-  volume: number;
-}
-
-function calculateIndicators(
-  data: OHLCV[],
-  requests: IndicatorRequest[]
-): Record<string, any>
-```
-
-### 12.4 数据预热要求
-
-不同指标需要的历史数据量不同。后端在计算时必须确保有足够的前置数据：
-
-| 指标 | 最少需要 N 根 bar（默认参数） |
-|------|------|
-| MA5 | 5 |
-| MA20 | 20 |
-| MA60 | 60 |
-| EMA | 与周期相同（首值用 SMA 替代） |
-| BOLL(20,2) | 20 |
-| SAR | 5（需要初始方向判断） |
-| VWAP | 从当日开盘累计，无需历史 |
-| MACD(12,26,9) | 26 + 9 = 35（严格） / 26（近似可出值） |
-| KDJ(9,3,3) | 9 |
-| RSI(6) | 7（需要 prev_close 计算变化） |
-| RSI(24) | 25 |
-| WR(10) | 10 |
-| DMI(14,6) | 14 + 6 = 20 |
-| CCI(14) | 14 |
-| OBV | 2（需要 prev_close 判断方向） |
-| TRIX(12,9) | 12 × 3 + 9 = 45（三重 EMA + 信号线） |
-| DMA(10,50,10) | 50 + 10 = 60 |
-| BIAS(24) | 24 |
-| VR(26) | 26 |
-| CR(26) | 27（需要 prev bar 计算 MID） |
-| PSY(12) | 12 |
-| EMV(14) | 15（需要 prev bar 计算 MID_MOVE） |
-| ROC(12) | 13 |
-| MTM(12) | 13 |
-| BRAR(26) | 27（需要 prev_close） |
-
-前端请求 `limit=240` 根可见 bar 时，后端实际从 price_history 读取
-`240 + max_preheat` 根数据，计算完指标后截取后 240 根返回。
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-## 十三、前端图表组件架构
-
-### 13.1 组件树
+### 11.1 组件树
 
 ```
 <StockChart>                         # 图表容器（管理布局、缩放、平移）
@@ -1680,7 +1345,7 @@ function calculateIndicators(
 </StockChart>
 ```
 
-### 13.2 数据流
+### 11.2 数据流
 
 ```
 SSE 推送 / 周期切换请求
@@ -1701,31 +1366,7 @@ SSE 推送 / 周期切换请求
   各 Renderer 组件读取对应切片渲染
 ```
 
-### 13.3 useChartData Hook
-
-```typescript
-interface UseChartDataOptions {
-  code: string;
-  period: string;
-  indicators: string[];
-  indicatorParams: Record<string, Record<string, number>>;
-}
-
-interface ChartState {
-  bars: OHLCV[];
-  indicators: Record<string, any>;
-  loading: boolean;
-  error: string | null;
-}
-
-function useChartData(options: UseChartDataOptions): ChartState
-```
-
-- 周期切换时自动 fetch 新数据
-- SSE 推送时更新最后一根 bar（如果是当前展示的周期）
-- 指标参数变更时重新请求（debounce 300ms）
-
-### 13.4 Recharts 实现要点
+### 11.3 Recharts 实现要点
 
 所有图表使用 Recharts `<ComposedChart>` 渲染。关键技术点：
 
@@ -1740,11 +1381,11 @@ function useChartData(options: UseChartDataOptions): ChartState
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-## 十四、指标速查表
+## 十二、指标速查表
 
 一张完整的指标分类与默认参数速查表，供开发快速参考：
 
-### 14.1 主图叠加指标
+### 12.1 主图叠加指标
 
 | 指标 | 中文名 | 默认参数 | 线条数 | 互斥关系 |
 |------|--------|---------|--------|---------|
@@ -1756,7 +1397,7 @@ function useChartData(options: UseChartDataOptions): ChartState
 | ENV | 包络线 | N=20, P=6% | 3 + 填充 | — |
 | BBI | 多空指标 | 3, 6, 12, 24 | 1 | — |
 
-### 14.2 副图指标
+### 12.2 副图指标
 
 | 指标 | 中文名 | 默认参数 | 线条/柱 | Y 轴范围 | 有零轴 | 参考线 |
 |------|--------|---------|---------|---------|--------|--------|
@@ -1781,7 +1422,7 @@ function useChartData(options: UseChartDataOptions): ChartState
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-## 十五、测试要求
+## 十三、测试要求
 
 在 `tests/api.test.ts` 中追加以下图表/指标相关测试用例：
 
@@ -1803,7 +1444,7 @@ function useChartData(options: UseChartDataOptions): ChartState
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-## 十六、验收标准
+## 十四、验收标准
 
 ### 功能验收
 
@@ -1828,13 +1469,6 @@ function useChartData(options: UseChartDataOptions): ChartState
 4. Segmented Control（周期切换）使用 Apple 标准样式
 5. 指标参数面板使用毛玻璃效果
 6. 图表区域的 Tooltip 不遮挡蜡烛主体（固定在角落）
-
-### 后端验收
-
-1. 指标计算全部在后端完成，前端不做任何指标公式计算
-2. 指标数组中 null 值正确填充在数据不足的前 N-1 个位置
-3. 所有指标计算测试通过（14 个测试用例）
-4. K 线请求含指标时，响应时间 < 50ms（240 根 bar + 5 个指标）
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 END OF PRD — 技术指标与专业 K 线

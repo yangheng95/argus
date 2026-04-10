@@ -110,7 +110,7 @@ const DEFAULTS: OrchestratorConfigType = {
     skills: [],
   },
   max_runs: 10,
-  max_fix_runs: 5,
+  max_fix_runs: 20,
   max_goal_retries: 3,
   max_executor_groups: 5,
   default_workflow: "standard",
