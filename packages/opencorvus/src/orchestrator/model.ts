@@ -803,4 +803,31 @@ export const Event = {
   WorkflowSelected: BusEvent.define("workflow.selected", z.object({ taskID: Identifier.schema("task"), workflowID: z.string(), workflowName: z.string(), summary: z.string() })),
   WorkflowStepUpdated: BusEvent.define("workflow.step.updated", z.object({ taskID: Identifier.schema("task"), stepID: z.string(), goalID: z.string().optional(), status: z.enum(["pending", "running", "completed", "skipped", "failed"]), summary: z.string() })),
   GoalWorkflowProgress: BusEvent.define("goal.workflow.progress", z.object({ taskID: Identifier.schema("task"), goalID: Identifier.schema("goal"), completedSteps: z.number(), totalSteps: z.number(), currentStep: z.string().optional(), summary: z.string() })),
+
+  // ── Phase-level completion events (per specs/new-arch.svg "SSE 事件扩展") ──
+  // Emitted when a sub-agent finishes a major phase. The Panel uses these to
+  // refresh its Requirements / Architect sections without having to track
+  // individual workflow steps.
+  RequirementsCompleted: BusEvent.define(
+    "requirements.completed",
+    z.object({
+      taskID: Identifier.schema("task"),
+      requirementCount: z.number(),
+      goalCount: z.number(),
+      decisionCount: z.number(),
+      traceabilityCount: z.number(),
+      fidelityScore: z.number().optional(),
+      summary: z.string(),
+    }),
+  ),
+  ArchitectCompleted: BusEvent.define(
+    "architect.completed",
+    z.object({
+      taskID: Identifier.schema("task"),
+      contractCount: z.number(),
+      categories: z.array(z.string()),
+      blueprintSummary: z.string().optional(),
+      summary: z.string(),
+    }),
+  ),
 }

@@ -10934,9 +10934,6 @@ function clearBoard() {
     changes: []
   });
 }
-function setTasksData(tasks) {
-  setBoardStore("tasks", Array.isArray(tasks) ? tasks : []);
-}
 let boardLoadTimer = null;
 let boardLoadDeadline = 0;
 const BOARD_MAX_DELAY_MS = 2e3;
@@ -10963,7 +10960,7 @@ function rootTaskSessionID() {
   const sessionID = boardStore.board?.task?.sessionID;
   return typeof sessionID === "string" ? sessionID : "";
 }
-function activeDirectory$2() {
+function activeDirectory$1() {
   return boardStore.board?.task?.directory ?? "";
 }
 function setPath(path) {
@@ -11020,7 +11017,7 @@ function isTaskInterruptable() {
 
 const board = /*#__PURE__*/Object.freeze(/*#__PURE__*/Object.defineProperty({
   __proto__: null,
-  activeDirectory: activeDirectory$2,
+  activeDirectory: activeDirectory$1,
   boardStore,
   clearBoard,
   isTaskInterruptable,
@@ -11037,7 +11034,6 @@ const board = /*#__PURE__*/Object.freeze(/*#__PURE__*/Object.defineProperty({
   setPath,
   setSnapshotVersion,
   setTaskSequence,
-  setTasksData,
   setVcs,
   sortedTasks,
   taskUpdated: taskUpdated$1,
@@ -11106,7 +11102,7 @@ function ToolPart(props) {
   const icon = () => displayToolIcon(toolName());
   const statusLabel = () => toolStatusLabel(status());
   const detail = () => {
-    const raw2 = displayToolDetail(toolName(), input(), state(), activeDirectory$2());
+    const raw2 = displayToolDetail(toolName(), input(), state(), activeDirectory$1());
     return raw2 && raw2.toLowerCase() !== toolName().toLowerCase() ? raw2 : "";
   };
   const raw = () => {
@@ -11450,7 +11446,7 @@ function MessageView(props) {
               },
               get children() {
                 var _el$7 = _tmpl$2$l();
-                insert(_el$7, () => "⚙ " + (part().files || []).map((f) => shortRelativePath(f, activeDirectory$2())).join(", "));
+                insert(_el$7, () => "⚙ " + (part().files || []).map((f) => shortRelativePath(f, activeDirectory$1())).join(", "));
                 return _el$7;
               }
             }), createComponent(Match, {
@@ -13783,7 +13779,6 @@ const DEFAULT_SETTINGS = {
   tempDirectory: "",
   workspaceEpoch: 0,
   directoryEpoch: 0,
-  unattended: false,
   toolPermissions: {
     websearch: "allow",
     webfetch: "allow",
@@ -13955,91 +13950,10 @@ function bootstrapOverlaySettings(input = settingsStore) {
     directory: input.savedDirectory || void 0,
     workspaceTaskID: input.workspaceTaskID || void 0,
     workspaceDirectory: input.workspaceDirectory || void 0,
-    unattended: input.unattended ?? DEFAULT_SETTINGS.unattended,
     toolPermissions: input.toolPermissions ?? DEFAULT_SETTINGS.toolPermissions
   };
 }
 
-function chatRequestTimeoutMs() {
-  const overlayTiming = window.__ocOverlayTiming;
-  const testTiming = window.__overlayTest;
-  const override = typeof overlayTiming?.chatTimeoutMs === "number" ? overlayTiming.chatTimeoutMs : typeof testTiming?.chatTimeoutMs === "number" ? testTiming.chatTimeoutMs : void 0;
-  const value = typeof override === "number" ? override : 10 * 60 * 1e3;
-  return Math.max(value, 1e3);
-}
-function activeDirectory$1() {
-  return boardStore.board?.task?.directory || settingsStore.directory || "";
-}
-function inactivityTimeoutError(timeoutMs) {
-  return new DOMException(
-    `Panel stream inactive for ${timeoutMs}ms`,
-    "TimeoutError"
-  );
-}
-function relayAbort(source, controller) {
-  if (!source) return () => void 0;
-  const abort = () => {
-    controller.abort(
-      source.reason instanceof Error ? source.reason : source.reason ?? void 0
-    );
-  };
-  if (source.aborted) {
-    abort();
-    return () => void 0;
-  }
-  source.addEventListener("abort", abort, { once: true });
-  return () => source.removeEventListener("abort", abort);
-}
-async function readWithAbort(reader, signal) {
-  if (signal.aborted) {
-    await reader.cancel(signal.reason).catch(() => void 0);
-    throw signal.reason ?? new DOMException("Aborted", "AbortError");
-  }
-  return new Promise((resolve, reject) => {
-    const abort = () => {
-      signal.removeEventListener("abort", abort);
-      void reader.cancel(signal.reason).catch(() => void 0);
-      reject(signal.reason ?? new DOMException("Aborted", "AbortError"));
-    };
-    signal.addEventListener("abort", abort, { once: true });
-    reader.read().then(
-      (value) => {
-        signal.removeEventListener("abort", abort);
-        resolve(value);
-      },
-      (error) => {
-        signal.removeEventListener("abort", abort);
-        reject(error);
-      }
-    );
-  });
-}
-function panelRequestBody(text, metadata = {}, requestID = "", attachments = [], executor = "opencode") {
-  const taskID = boardStore.selectedTaskID || void 0;
-  const body = {
-    surface: "panel",
-    text,
-    time_created: Date.now(),
-    taskID,
-    executor,
-    request_id: requestID || void 0,
-    allow_create: true,
-    allow_session_mutation: false,
-    directory: activeDirectory$1() || void 0,
-    metadata: {
-      selectedTaskID: taskID,
-      ...metadata
-    }
-  };
-  if (attachments.length > 0) {
-    body.attachments = attachments.map((att) => ({
-      mime: att.mime,
-      url: att.url,
-      ...att.filename ? { filename: att.filename } : {}
-    }));
-  }
-  return body;
-}
 async function selectTask(taskID, options = {}) {
   const nextTaskID = taskID || "";
   if (nextTaskID === boardStore.selectedTaskID && boardStore.board) {
@@ -14083,85 +13997,6 @@ async function deleteTask(taskID) {
   } catch (e) {
     console.error("[deleteTask] failed", { error: String(e), taskID });
     return false;
-  }
-}
-async function submitMessage(text, attachments = [], options = {}) {
-  const requestID = options.requestID ?? crypto.randomUUID();
-  const timeoutMs = chatRequestTimeoutMs();
-  const controller = new AbortController();
-  const cleanupRelay = relayAbort(options.signal, controller);
-  const executor = settingsStore.executor ?? "opencode";
-  let inactivityTimer = null;
-  const markActivity = () => {
-    if (inactivityTimer) clearTimeout(inactivityTimer);
-    inactivityTimer = setTimeout(() => {
-      controller.abort(inactivityTimeoutError(timeoutMs));
-    }, timeoutMs);
-  };
-  const body = JSON.stringify(
-    panelRequestBody(
-      text,
-      options.metadata ?? {},
-      requestID,
-      attachments,
-      executor
-    )
-  );
-  markActivity();
-  try {
-    const res = await fetch(apiUrl("panel/message/stream"), {
-      method: "POST",
-      headers: { ...apiHeaders(), "Content-Type": "application/json" },
-      body,
-      signal: controller.signal
-    });
-    markActivity();
-    if (!res.ok || !res.body) {
-      throw new Error(`Panel stream failed: ${res.status} ${res.statusText}`);
-    }
-    await options.onOpen?.();
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let buf = "";
-    let result = null;
-    const consume = async (chunk, flush = false) => {
-      buf += chunk;
-      const blocks = buf.split(/\r?\n\r?\n/);
-      if (!flush) {
-        buf = blocks.pop() || "";
-      } else {
-        buf = "";
-      }
-      for (const block of blocks) {
-        const data = block.split(/\r?\n/).filter((line) => line.startsWith("data:")).map((line) => line.slice(5).trim()).join("\n");
-        if (!data) continue;
-        try {
-          const ev = JSON.parse(data);
-          markActivity();
-          await options.onEvent?.(ev);
-          if (ev.type === "done") {
-            result = ev.result;
-          }
-        } catch {
-        }
-      }
-    };
-    while (true) {
-      const { done, value } = await readWithAbort(reader, controller.signal);
-      if (done) {
-        await consume(decoder.decode(), true);
-        break;
-      }
-      markActivity();
-      await consume(decoder.decode(value, { stream: true }));
-    }
-    if (!result) {
-      throw new Error("Panel stream ended without a final result");
-    }
-    return result;
-  } finally {
-    if (inactivityTimer) clearTimeout(inactivityTimer);
-    cleanupRelay();
   }
 }
 async function createTask(options) {
@@ -16063,7 +15898,7 @@ function ArchitectPanel(props) {
   })();
 }
 
-var _tmpl$2$d = /* @__PURE__ */ template(`<div class=plan-version>`), _tmpl$3$d = /* @__PURE__ */ template(`<div class="plan-version streaming-indicator">`), _tmpl$4$c = /* @__PURE__ */ template(`<p class=empty-hint>`), _tmpl$5$c = /* @__PURE__ */ template(`<div class="plan-summary md-content">`), _tmpl$6$b = /* @__PURE__ */ template(`<div class=goals-list>`), _tmpl$7$a = /* @__PURE__ */ template(`<span class=extension-status data-state=passed>✓`), _tmpl$8$9 = /* @__PURE__ */ template(`<span class=extension-status data-state=failed>✗`), _tmpl$9$7 = /* @__PURE__ */ template(`<span class=extension-status data-state=active>`), _tmpl$0$4 = /* @__PURE__ */ template(`<div class="goal-criteria md-content">`), _tmpl$1$3 = /* @__PURE__ */ template(`<details class=goal-item><summary class=goal-item-head><span class=goal-item-chevron aria-hidden=true>▶</span><span class=goal-desc-inline></span><span class=goal-title-brief></span><span class=goal-item-id></span></summary><div class=goal-item-body><div class=goal-content><div class=plan-version></div><div class="goal-desc md-content">`), _tmpl$10$2 = /* @__PURE__ */ template(`<span class=goal-priority>`), _tmpl$11$2 = /* @__PURE__ */ template(`<button type=button class="btn btn-ghost mini"data-goal-action=view-session title="View executor session"aria-label="View executor session">View`), _tmpl$12$2 = /* @__PURE__ */ template(`<button type=button class="btn btn-ghost mini"data-goal-action=edit>`), _tmpl$13$2 = /* @__PURE__ */ template(`<button type=button class="btn btn-ghost mini danger"data-goal-action=delete>`), _tmpl$14$1 = /* @__PURE__ */ template(`<div class=goal-actions>`), _tmpl$15$1 = /* @__PURE__ */ template(`<details class=goal-item><summary class=goal-item-head><span class=goal-item-chevron aria-hidden=true>▶</span><span class=goal-desc-inline></span><span class=goal-title-brief></span></summary><div class=goal-item-body><div class=goal-content><div class="goal-desc md-content">`), _tmpl$16$1 = /* @__PURE__ */ template(`<div class=empty-hint>`), _tmpl$17 = /* @__PURE__ */ template(`<section class=criteria-group><div class=criteria-group-head><span class=criteria-group-icon aria-hidden=true></span><div class=criteria-group-title></div><div class=criteria-group-count></div></div><div class=criteria-group-list>`), _tmpl$18 = /* @__PURE__ */ template(`<label class=criteria-item><input type=checkbox><span class=check-mark></span><span class=criteria-copy><span class=criteria-name></span><span class=criteria-desc></span></span><span class=criteria-status></span><span class=criteria-result>`), _tmpl$19 = /* @__PURE__ */ template(`<div class="eval-summary md-content">`), _tmpl$20 = /* @__PURE__ */ template(`<div class=eval-error-meta>`), _tmpl$21 = /* @__PURE__ */ template(`<div class=eval-error><div class=eval-error-name>✗ </div><div class="eval-error-detail md-content">`), _tmpl$22 = /* @__PURE__ */ template(`<div class=delivery-files>`), _tmpl$23 = /* @__PURE__ */ template(`<div class=delivery-card><div class=delivery-title></div><div class="delivery-summary md-content">`), _tmpl$24 = /* @__PURE__ */ template(`<button type=button class="btn btn-primary"data-task-action=retry>`), _tmpl$25 = /* @__PURE__ */ template(`<button type=button class="btn btn-ghost"data-task-action=replan>`), _tmpl$26 = /* @__PURE__ */ template(`<div class=task-actions-buttons>`), _tmpl$27 = /* @__PURE__ */ template(`<div class=task-actions-bar>`), _tmpl$28 = /* @__PURE__ */ template(`<button class="btn btn-primary"data-action=always>`), _tmpl$29 = /* @__PURE__ */ template(`<button class="btn btn-ghost"data-action=once>`), _tmpl$30 = /* @__PURE__ */ template(`<button class="btn btn-ghost"data-action=reject>`), _tmpl$31 = /* @__PURE__ */ template(`<div class=interaction-alert><div class=interaction-title> </div><div class="interaction-body md-content"></div><div class=interaction-actions>`), _tmpl$32 = /* @__PURE__ */ template(`<button class="btn btn-primary"data-action=answer>`), _tmpl$33 = /* @__PURE__ */ template(`<div class=interactions-list>`), _tmpl$34 = /* @__PURE__ */ template(`<div class=executor-summary-stat><span class=executor-summary-value></span><span class=executor-summary-label>`), _tmpl$35 = /* @__PURE__ */ template(`<div class=executor-summary><div class=executor-summary-stat><span class=executor-summary-value></span><span class=executor-summary-label>`), _tmpl$36 = /* @__PURE__ */ template(`<details class=section><summary class=section-head><span class=section-icon aria-hidden=true></span><span class=section-title></span><span class=section-badge></span></summary><div class=section-body>`), _tmpl$37 = /* @__PURE__ */ template(`<div id=taskActionsBar>`);
+var _tmpl$2$d = /* @__PURE__ */ template(`<div class="eval-summary md-content">`), _tmpl$3$d = /* @__PURE__ */ template(`<div class=eval-error-meta>`), _tmpl$4$c = /* @__PURE__ */ template(`<div class=eval-error><div class=eval-error-name>✗ </div><div class="eval-error-detail md-content">`), _tmpl$5$c = /* @__PURE__ */ template(`<div class=delivery-files>`), _tmpl$6$b = /* @__PURE__ */ template(`<div class=delivery-card><div class=delivery-title></div><div class="delivery-summary md-content">`), _tmpl$7$a = /* @__PURE__ */ template(`<p class=empty-hint>`), _tmpl$8$9 = /* @__PURE__ */ template(`<button type=button class="btn btn-primary"data-task-action=retry>`), _tmpl$9$7 = /* @__PURE__ */ template(`<button type=button class="btn btn-ghost"data-task-action=replan>`), _tmpl$0$4 = /* @__PURE__ */ template(`<div class=task-actions-buttons>`), _tmpl$1$3 = /* @__PURE__ */ template(`<div class=task-actions-bar>`), _tmpl$10$2 = /* @__PURE__ */ template(`<button class="btn btn-primary"data-action=always>`), _tmpl$11$2 = /* @__PURE__ */ template(`<button class="btn btn-ghost"data-action=once>`), _tmpl$12$2 = /* @__PURE__ */ template(`<button class="btn btn-ghost"data-action=reject>`), _tmpl$13$2 = /* @__PURE__ */ template(`<div class=interaction-alert><div class=interaction-title> </div><div class="interaction-body md-content"></div><div class=interaction-actions>`), _tmpl$14$1 = /* @__PURE__ */ template(`<button class="btn btn-primary"data-action=answer>`), _tmpl$15$1 = /* @__PURE__ */ template(`<div class=interactions-list>`), _tmpl$16$1 = /* @__PURE__ */ template(`<div class=executor-summary-stat><span class=executor-summary-value></span><span class=executor-summary-label>`), _tmpl$17 = /* @__PURE__ */ template(`<div class=executor-summary><div class=executor-summary-stat><span class=executor-summary-value></span><span class=executor-summary-label>`), _tmpl$18 = /* @__PURE__ */ template(`<details class=section><summary class=section-head><span class=section-icon aria-hidden=true></span><span class=section-title></span><span class=section-badge></span></summary><div class=section-body>`), _tmpl$19 = /* @__PURE__ */ template(`<div id=taskActionsBar>`);
 function statusIcon(status) {
   const activeIcon = `<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path data-fill="true" d="M6 4.6L11.3 8 6 11.4Z"/></svg>`;
   const map = {
@@ -16075,334 +15910,6 @@ function statusIcon(status) {
     cancelled: `<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle data-stroke="true" cx="8" cy="8" r="4.5"/><path data-stroke="true" d="M5.2 10.8l5.6-5.6"/></svg>`
   };
   return map[status] || map.idle;
-}
-function SpecPanel(props) {
-  const content = () => props.spec?.content || props.preview || "";
-  const isPreview = () => !props.spec?.content && !!props.preview;
-  return createComponent(Show, {
-    get when() {
-      return content();
-    },
-    get fallback() {
-      return (() => {
-        var _el$6 = _tmpl$4$c();
-        insert(_el$6, () => t("empty.spec"));
-        return _el$6;
-      })();
-    },
-    get children() {
-      return [createComponent(TextPart, {
-        get text() {
-          return content();
-        }
-      }), createComponent(Show, {
-        get when() {
-          return !isPreview();
-        },
-        get children() {
-          var _el$4 = _tmpl$2$d();
-          insert(_el$4, () => stamp(props.spec?.time?.created));
-          return _el$4;
-        }
-      }), createComponent(Show, {
-        get when() {
-          return isPreview();
-        },
-        get children() {
-          var _el$5 = _tmpl$3$d();
-          insert(_el$5, () => t("common.generating") || "Generating...");
-          return _el$5;
-        }
-      })];
-    }
-  });
-}
-function PlanPanel(props) {
-  const isPreview = () => !props.plan?.prompt && !props.plan?.summary && !!props.preview;
-  const hasPlan = () => !!props.plan?.prompt || !!props.plan?.summary;
-  const activeGoals = createMemo(() => {
-    const cards = props.goalCards || [];
-    const running = props.runningGoalIDs;
-    if (!running || running.size === 0) return [];
-    return cards.map((card, idx) => ({
-      ...card,
-      goalIndex: idx + 1
-    })).filter((card) => running.has(card.id));
-  });
-  const allGoals = createMemo(() => {
-    const cards = props.goalCards || [];
-    return cards.map((card, idx) => ({
-      ...card,
-      goalIndex: idx + 1
-    }));
-  });
-  const displayGoals = () => activeGoals().length > 0 ? activeGoals() : allGoals();
-  const version = () => props.plan?.version;
-  return [createComponent(Show, {
-    get when() {
-      return isPreview();
-    },
-    get children() {
-      var _el$7 = _tmpl$3$d();
-      insert(_el$7, () => t("common.generating") || "Generating...");
-      return _el$7;
-    }
-  }), createComponent(Show, {
-    get when() {
-      return !isPreview();
-    },
-    get children() {
-      return [createComponent(Show, {
-        get when() {
-          return memo(() => !!hasPlan())() && props.plan?.summary;
-        },
-        get children() {
-          var _el$8 = _tmpl$5$c();
-          createRenderEffect(() => _el$8.innerHTML = renderMarkdown(props.plan.summary));
-          return _el$8;
-        }
-      }), createComponent(Show, {
-        get when() {
-          return displayGoals().length > 0;
-        },
-        get fallback() {
-          return createComponent(Show, {
-            get when() {
-              return !hasPlan();
-            },
-            get children() {
-              var _el$0 = _tmpl$4$c();
-              insert(_el$0, () => t("empty.plan"));
-              return _el$0;
-            }
-          });
-        },
-        get children() {
-          var _el$9 = _tmpl$6$b();
-          insert(_el$9, createComponent(For, {
-            get each() {
-              return displayGoals();
-            },
-            children: (goal) => {
-              const isRunning = () => props.runningGoalIDs?.has(goal.id);
-              const goalStatus = () => goal.status || (isRunning() ? "running" : "pending");
-              const shortTitle = () => {
-                const raw = goal.title || "";
-                const first = raw.split("\n")[0].replace(/^#+\s*/, "").trim();
-                return first.length > 60 ? first.slice(0, 57) + "..." : first;
-              };
-              return (() => {
-                var _el$1 = _tmpl$1$3(), _el$10 = _el$1.firstChild, _el$11 = _el$10.firstChild, _el$12 = _el$11.nextSibling, _el$13 = _el$12.nextSibling, _el$14 = _el$13.nextSibling, _el$18 = _el$10.nextSibling, _el$19 = _el$18.firstChild, _el$20 = _el$19.firstChild, _el$21 = _el$20.nextSibling;
-                insert(_el$12, () => `Goal#${goal.goalIndex}`);
-                insert(_el$13, shortTitle);
-                _el$14.$$click = (e) => {
-                  e.stopPropagation();
-                  navigator.clipboard.writeText(goal.id).catch(() => {
-                  });
-                };
-                insert(_el$14, () => goal.id.slice(-8));
-                insert(_el$10, createComponent(Show, {
-                  get when() {
-                    return goalStatus() === "passed";
-                  },
-                  get children() {
-                    return _tmpl$7$a();
-                  }
-                }), null);
-                insert(_el$10, createComponent(Show, {
-                  get when() {
-                    return goalStatus() === "failed";
-                  },
-                  get children() {
-                    return _tmpl$8$9();
-                  }
-                }), null);
-                insert(_el$10, createComponent(Show, {
-                  get when() {
-                    return isRunning();
-                  },
-                  get children() {
-                    var _el$17 = _tmpl$9$7();
-                    insert(_el$17, () => t("goal.running"));
-                    return _el$17;
-                  }
-                }), null);
-                insert(_el$20, () => `Plan V${version()}`);
-                insert(_el$19, createComponent(Show, {
-                  get when() {
-                    return goal.done_definition;
-                  },
-                  get children() {
-                    var _el$22 = _tmpl$0$4();
-                    createRenderEffect(() => _el$22.innerHTML = renderMarkdown(goal.done_definition));
-                    return _el$22;
-                  }
-                }), null);
-                createRenderEffect((_p$) => {
-                  var _v$4 = goal.id, _v$5 = renderMarkdown(goal.title || "");
-                  _v$4 !== _p$.e && setAttribute(_el$14, "title", _p$.e = _v$4);
-                  _v$5 !== _p$.t && (_el$21.innerHTML = _p$.t = _v$5);
-                  return _p$;
-                }, {
-                  e: void 0,
-                  t: void 0
-                });
-                return _el$1;
-              })();
-            }
-          }));
-          return _el$9;
-        }
-      })];
-    }
-  })];
-}
-function GoalsPanel(props) {
-  createMemo(() => (props.cards || []).filter((c) => c.status === "passed").length);
-  const total = createMemo(() => (props.cards || []).length);
-  return createComponent(Show, {
-    get when() {
-      return total() > 0;
-    },
-    get fallback() {
-      return (() => {
-        var _el$24 = _tmpl$4$c();
-        insert(_el$24, () => t("empty.goals"));
-        return _el$24;
-      })();
-    },
-    get children() {
-      var _el$23 = _tmpl$6$b();
-      insert(_el$23, createComponent(For, {
-        get each() {
-          return props.cards;
-        },
-        children: (card, idx) => (() => {
-          var _el$25 = _tmpl$15$1(), _el$26 = _el$25.firstChild, _el$27 = _el$26.firstChild, _el$28 = _el$27.nextSibling, _el$29 = _el$28.nextSibling, _el$34 = _el$26.nextSibling, _el$35 = _el$34.firstChild, _el$36 = _el$35.firstChild;
-          insert(_el$28, () => `Goal#${idx() + 1}`);
-          insert(_el$29, () => {
-            const raw = card.title || "";
-            const first = raw.split("\n")[0].replace(/^#+\s*/, "").trim();
-            return first.length > 50 ? first.slice(0, 47) + "..." : first;
-          });
-          insert(_el$26, createComponent(Show, {
-            get when() {
-              return card.status === "passed";
-            },
-            get children() {
-              return _tmpl$7$a();
-            }
-          }), null);
-          insert(_el$26, createComponent(Show, {
-            get when() {
-              return card.status === "failed";
-            },
-            get children() {
-              return _tmpl$8$9();
-            }
-          }), null);
-          insert(_el$26, createComponent(Show, {
-            get when() {
-              return memo(() => !!(props.runningGoalIDs.has(card.id) && card.status !== "passed"))() && card.status !== "failed";
-            },
-            get children() {
-              var _el$32 = _tmpl$9$7();
-              insert(_el$32, () => t("goal.running"));
-              return _el$32;
-            }
-          }), null);
-          insert(_el$26, createComponent(Show, {
-            get when() {
-              return card.metadata?.priority;
-            },
-            get children() {
-              var _el$33 = _tmpl$10$2();
-              insert(_el$33, () => card.metadata.priority);
-              createRenderEffect(() => setAttribute(_el$33, "data-priority", card.metadata.priority));
-              return _el$33;
-            }
-          }), null);
-          insert(_el$35, createComponent(Show, {
-            get when() {
-              return card.done_definition;
-            },
-            get children() {
-              var _el$37 = _tmpl$0$4();
-              createRenderEffect(() => _el$37.innerHTML = renderMarkdown(card.done_definition));
-              return _el$37;
-            }
-          }), null);
-          insert(_el$34, createComponent(Show, {
-            get when() {
-              return memo(() => !!props.onOpenSession)() && card.metadata?.sessionID;
-            },
-            get children() {
-              var _el$38 = _tmpl$11$2();
-              _el$38.$$click = () => props.onOpenSession?.(card.metadata.sessionID, card.title || card.id);
-              createRenderEffect(() => setAttribute(_el$38, "data-goal-id", card.id));
-              return _el$38;
-            }
-          }), null);
-          insert(_el$34, createComponent(Show, {
-            get when() {
-              return props.onEditGoal || props.onDeleteGoal;
-            },
-            get children() {
-              var _el$39 = _tmpl$14$1();
-              insert(_el$39, createComponent(Show, {
-                get when() {
-                  return props.onEditGoal;
-                },
-                get children() {
-                  var _el$40 = _tmpl$12$2();
-                  _el$40.$$click = () => props.onEditGoal?.(card.id, card.title, card.done_definition || "");
-                  insert(_el$40, () => t("common.edit"));
-                  createRenderEffect((_p$) => {
-                    var _v$6 = card.id, _v$7 = t("goal.edit_button_title"), _v$8 = t("goal.edit_button_title");
-                    _v$6 !== _p$.e && setAttribute(_el$40, "data-goal-id", _p$.e = _v$6);
-                    _v$7 !== _p$.t && setAttribute(_el$40, "title", _p$.t = _v$7);
-                    _v$8 !== _p$.a && setAttribute(_el$40, "aria-label", _p$.a = _v$8);
-                    return _p$;
-                  }, {
-                    e: void 0,
-                    t: void 0,
-                    a: void 0
-                  });
-                  return _el$40;
-                }
-              }), null);
-              insert(_el$39, createComponent(Show, {
-                get when() {
-                  return props.onDeleteGoal;
-                },
-                get children() {
-                  var _el$41 = _tmpl$13$2();
-                  _el$41.$$click = () => props.onDeleteGoal?.(card.id);
-                  insert(_el$41, () => t("common.delete"));
-                  createRenderEffect((_p$) => {
-                    var _v$9 = card.id, _v$0 = t("goal.delete_button_title"), _v$1 = t("goal.delete_button_title");
-                    _v$9 !== _p$.e && setAttribute(_el$41, "data-goal-id", _p$.e = _v$9);
-                    _v$0 !== _p$.t && setAttribute(_el$41, "title", _p$.t = _v$0);
-                    _v$1 !== _p$.a && setAttribute(_el$41, "aria-label", _p$.a = _v$1);
-                    return _p$;
-                  }, {
-                    e: void 0,
-                    t: void 0,
-                    a: void 0
-                  });
-                  return _el$41;
-                }
-              }), null);
-              return _el$39;
-            }
-          }), null);
-          createRenderEffect(() => _el$36.innerHTML = renderMarkdown(card.title || ""));
-          return _el$25;
-        })()
-      }));
-      return _el$23;
-    }
-  });
 }
 const COMMAND_CHECKS = [{
   key: "build",
@@ -16476,25 +15983,6 @@ const TOGGLE_CHECKS = [{
   kind: "toggle",
   family: "acceptance"
 }];
-const CHECK_FAMILIES = [{
-  key: "command",
-  order: 0
-}, {
-  key: "runtime",
-  order: 1
-}, {
-  key: "artifact",
-  order: 2
-}, {
-  key: "review",
-  order: 3
-}, {
-  key: "acceptance",
-  order: 4
-}, {
-  key: "custom",
-  order: 5
-}];
 function normalizeCheckName(value) {
   return String(value || "").toLowerCase().replace(/[^a-z0-9_#:-]/g, "_");
 }
@@ -16546,14 +16034,6 @@ function checkFamilyText(key) {
   if (key === "acceptance") return t("checks.family.acceptance");
   return t("checks.family.custom");
 }
-const CHECK_FAMILY_ICONS = {
-  command: `<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2.5" width="10" height="9" rx="1.2"/><polyline points="4.5,6 6,7.5 4.5,9"/><line x1="7.5" y1="9" x2="9.5" y2="9"/></svg>`,
-  runtime: `<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 3.5L9.5 7 4.5 10.5Z"/></svg>`,
-  artifact: `<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 4.5L7 2l4.5 2.5v5L7 12l-4.5-2.5Z"/><polyline points="2.5,4.5 7,7 11.5,4.5"/><line x1="7" y1="7" x2="7" y2="12"/></svg>`,
-  review: `<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.2" cy="6.2" r="3.5"/><line x1="9" y1="9" x2="11.5" y2="11.5"/></svg>`,
-  acceptance: `<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="1.5" width="9" height="11" rx="1.2"/><polyline points="5,6.5 6.5,8 9,5.5"/><line x1="5" y1="10" x2="9" y2="10"/></svg>`,
-  custom: `<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="7" r="1"/><path d="M6.1 2.5l-.2 1.2a3.4 3.4 0 0 0-.9.5L3.8 3.8l-.9.9.4 1.2a3.4 3.4 0 0 0-.5.9l-1.2.2v1.2l1.2.2c.1.3.3.6.5.9l-.4 1.2.9.9 1.2-.4c.3.2.6.4.9.5l.2 1.2h1.2l.2-1.2c.3-.1.6-.3.9-.5l1.2.4.9-.9-.4-1.2c.2-.3.4-.6.5-.9l1.2-.2V6.8l-1.2-.2a3.4 3.4 0 0 0-.5-.9l.4-1.2-.9-.9-1.2.4a3.4 3.4 0 0 0-.9-.5L7.9 2.5Z"/></svg>`
-};
 function record$2(value) {
   return !!value && typeof value === "object" && !Array.isArray(value);
 }
@@ -16649,110 +16129,6 @@ function criteriaSpecs(task, evaluation) {
   }
   return specs;
 }
-function groupChecks(items) {
-  const groups = /* @__PURE__ */ new Map();
-  const order = new Map(CHECK_FAMILIES.map((item) => [item.key, item.order]));
-  for (const item of items) {
-    const key = item.group || "custom";
-    if (!groups.has(key)) {
-      groups.set(key, {
-        key,
-        label: checkFamilyText(key),
-        items: []
-      });
-    }
-    groups.get(key).items.push(item);
-  }
-  return [...groups.values()].sort((a, b) => (order.get(a.key) ?? 99) - (order.get(b.key) ?? 99));
-}
-function criteriaResultText(status) {
-  if (status === "off") return t("checks.off");
-  if (status === "passed") return t("checks.pass");
-  if (status === "failed") return t("checks.fail");
-  if (status === "skipped") return t("checks.skip");
-  return t("checks.pending");
-}
-function CriteriaPanel(props) {
-  const specs = createMemo(() => criteriaSpecs(props.task, props.evaluation));
-  const groups = createMemo(() => groupChecks(specs()));
-  const checkStatuses = createMemo(() => {
-    const result = {};
-    for (const spec of specs()) {
-      const status = spec.enabled ? aggregateCheckStatus(props.evaluation?.checks, spec.name) : "off";
-      result[spec.key] = status;
-    }
-    return result;
-  });
-  return createComponent(Show, {
-    get when() {
-      return specs().length > 0;
-    },
-    get fallback() {
-      return (() => {
-        var _el$42 = _tmpl$16$1();
-        insert(_el$42, () => t("empty.checks"));
-        return _el$42;
-      })();
-    },
-    get children() {
-      return createComponent(For, {
-        get each() {
-          return groups();
-        },
-        children: (group) => (() => {
-          var _el$43 = _tmpl$17(), _el$44 = _el$43.firstChild, _el$45 = _el$44.firstChild, _el$46 = _el$45.nextSibling, _el$47 = _el$46.nextSibling, _el$48 = _el$44.nextSibling;
-          insert(_el$46, () => group.label);
-          insert(_el$47, () => tc("checks.group_count", group.items.length, {
-            count: group.items.length
-          }));
-          insert(_el$48, createComponent(For, {
-            get each() {
-              return group.items;
-            },
-            children: (spec) => {
-              const status = () => checkStatuses()[spec.key] || "pending";
-              return (() => {
-                var _el$49 = _tmpl$18(), _el$50 = _el$49.firstChild, _el$51 = _el$50.nextSibling, _el$52 = _el$51.nextSibling, _el$53 = _el$52.firstChild, _el$54 = _el$53.nextSibling, _el$55 = _el$52.nextSibling, _el$56 = _el$55.nextSibling;
-                _el$50.addEventListener("change", (e) => props.onToggle?.(spec.key, e.currentTarget.checked));
-                insert(_el$53, () => spec.label);
-                insert(_el$54, (() => {
-                  var _c$ = memo(() => !!spec.readOnly);
-                  return () => _c$() ? t("detail.observed") : memo(() => !!spec.enabled)() ? t("detail.enabled") : t("detail.disabled");
-                })());
-                insert(_el$56, () => criteriaResultText(status()));
-                createRenderEffect((_p$) => {
-                  var _v$12 = spec.readOnly ? "true" : void 0, _v$13 = spec.key, _v$14 = spec.readOnly, _v$15 = status();
-                  _v$12 !== _p$.e && setAttribute(_el$49, "data-readonly", _p$.e = _v$12);
-                  _v$13 !== _p$.t && setAttribute(_el$50, "data-check", _p$.t = _v$13);
-                  _v$14 !== _p$.a && (_el$50.disabled = _p$.a = _v$14);
-                  _v$15 !== _p$.o && setAttribute(_el$55, "data-result", _p$.o = _v$15);
-                  return _p$;
-                }, {
-                  e: void 0,
-                  t: void 0,
-                  a: void 0,
-                  o: void 0
-                });
-                createRenderEffect(() => _el$50.checked = spec.enabled);
-                return _el$49;
-              })();
-            }
-          }));
-          createRenderEffect((_p$) => {
-            var _v$10 = group.key, _v$11 = CHECK_FAMILY_ICONS[group.key] || "";
-            _v$10 !== _p$.e && setAttribute(_el$43, "data-family", _p$.e = _v$10);
-            _v$11 !== _p$.t && (_el$45.innerHTML = _p$.t = _v$11);
-            return _p$;
-          }, {
-            e: void 0,
-            t: void 0
-          });
-          return _el$43;
-        })()
-      });
-    }
-  });
-}
 function checkFamilyLabel(family, name) {
   return checkFamilyText(checkFamilyKey(family, name));
 }
@@ -16780,29 +16156,29 @@ function EvaluationPanel(props) {
           return errors();
         },
         children: (err) => (() => {
-          var _el$58 = _tmpl$21(), _el$59 = _el$58.firstChild; _el$59.firstChild; var _el$63 = _el$59.nextSibling;
-          insert(_el$59, () => err.name, null);
-          insert(_el$58, createComponent(Show, {
+          var _el$5 = _tmpl$4$c(), _el$6 = _el$5.firstChild; _el$6.firstChild; var _el$0 = _el$6.nextSibling;
+          insert(_el$6, () => err.name, null);
+          insert(_el$5, createComponent(Show, {
             get when() {
               return err.family;
             },
             get children() {
-              var _el$62 = _tmpl$20();
-              insert(_el$62, () => err.family);
-              return _el$62;
+              var _el$9 = _tmpl$3$d();
+              insert(_el$9, () => err.family);
+              return _el$9;
             }
-          }), _el$63);
-          createRenderEffect(() => _el$63.innerHTML = renderMarkdown(err.evidence.slice(0, 400)));
-          return _el$58;
+          }), _el$0);
+          createRenderEffect(() => _el$0.innerHTML = renderMarkdown(err.evidence.slice(0, 400)));
+          return _el$5;
         })()
       }), createComponent(Show, {
         get when() {
           return props.evaluation?.summary;
         },
         get children() {
-          var _el$57 = _tmpl$19();
-          createRenderEffect(() => _el$57.innerHTML = renderMarkdown(props.evaluation.summary));
-          return _el$57;
+          var _el$4 = _tmpl$2$d();
+          createRenderEffect(() => _el$4.innerHTML = renderMarkdown(props.evaluation.summary));
+          return _el$4;
         }
       })];
     }
@@ -16821,28 +16197,28 @@ function DeliveryPanel(props) {
     },
     get fallback() {
       return (() => {
-        var _el$68 = _tmpl$4$c();
-        insert(_el$68, () => t("empty.delivery"));
-        return _el$68;
+        var _el$13 = _tmpl$7$a();
+        insert(_el$13, () => t("empty.delivery"));
+        return _el$13;
       })();
     },
     get children() {
-      var _el$64 = _tmpl$23(), _el$65 = _el$64.firstChild, _el$66 = _el$65.nextSibling;
-      insert(_el$65, () => deliveryStatusLabel(props.delivery?.status));
-      insert(_el$64, createComponent(Show, {
+      var _el$1 = _tmpl$6$b(), _el$10 = _el$1.firstChild, _el$11 = _el$10.nextSibling;
+      insert(_el$10, () => deliveryStatusLabel(props.delivery?.status));
+      insert(_el$1, createComponent(Show, {
         get when() {
           return props.delivery?.result?.changedFiles?.length > 0;
         },
         get children() {
-          var _el$67 = _tmpl$22();
-          insert(_el$67, () => tc("delivery.files_changed", props.delivery.result.changedFiles.length, {
+          var _el$12 = _tmpl$5$c();
+          insert(_el$12, () => tc("delivery.files_changed", props.delivery.result.changedFiles.length, {
             count: props.delivery.result.changedFiles.length
           }));
-          return _el$67;
+          return _el$12;
         }
       }), null);
-      createRenderEffect(() => _el$66.innerHTML = renderMarkdown(props.delivery?.summary || props.delivery?.result?.summary || ""));
-      return _el$64;
+      createRenderEffect(() => _el$11.innerHTML = renderMarkdown(props.delivery?.summary || props.delivery?.result?.summary || ""));
+      return _el$1;
     }
   });
 }
@@ -16855,57 +16231,57 @@ function TaskActionsPanel(props) {
       return visible();
     },
     get children() {
-      var _el$69 = _tmpl$27();
-      insert(_el$69, createComponent(Show, {
+      var _el$14 = _tmpl$1$3();
+      insert(_el$14, createComponent(Show, {
         get when() {
           return hasButtons();
         },
         get children() {
-          var _el$70 = _tmpl$26();
-          insert(_el$70, createComponent(Show, {
+          var _el$15 = _tmpl$0$4();
+          insert(_el$15, createComponent(Show, {
             get when() {
               return controls().canRetry;
             },
             get children() {
-              var _el$71 = _tmpl$24();
-              _el$71.$$click = () => props.onRetry?.();
-              insert(_el$71, () => t("task.action.retry"));
+              var _el$16 = _tmpl$8$9();
+              _el$16.$$click = () => props.onRetry?.();
+              insert(_el$16, () => t("task.action.retry"));
               createRenderEffect((_p$) => {
-                var _v$16 = t("task.action.retry_title"), _v$17 = t("task.action.retry_title");
-                _v$16 !== _p$.e && setAttribute(_el$71, "title", _p$.e = _v$16);
-                _v$17 !== _p$.t && setAttribute(_el$71, "aria-label", _p$.t = _v$17);
+                var _v$4 = t("task.action.retry_title"), _v$5 = t("task.action.retry_title");
+                _v$4 !== _p$.e && setAttribute(_el$16, "title", _p$.e = _v$4);
+                _v$5 !== _p$.t && setAttribute(_el$16, "aria-label", _p$.t = _v$5);
                 return _p$;
               }, {
                 e: void 0,
                 t: void 0
               });
-              return _el$71;
+              return _el$16;
             }
           }), null);
-          insert(_el$70, createComponent(Show, {
+          insert(_el$15, createComponent(Show, {
             get when() {
               return controls().canReplan;
             },
             get children() {
-              var _el$72 = _tmpl$25();
-              _el$72.$$click = () => props.onReplan?.();
-              insert(_el$72, () => t("task.action.replan"));
+              var _el$17 = _tmpl$9$7();
+              _el$17.$$click = () => props.onReplan?.();
+              insert(_el$17, () => t("task.action.replan"));
               createRenderEffect((_p$) => {
-                var _v$18 = t("task.action.replan_title"), _v$19 = t("task.action.replan_title");
-                _v$18 !== _p$.e && setAttribute(_el$72, "title", _p$.e = _v$18);
-                _v$19 !== _p$.t && setAttribute(_el$72, "aria-label", _p$.t = _v$19);
+                var _v$6 = t("task.action.replan_title"), _v$7 = t("task.action.replan_title");
+                _v$6 !== _p$.e && setAttribute(_el$17, "title", _p$.e = _v$6);
+                _v$7 !== _p$.t && setAttribute(_el$17, "aria-label", _p$.t = _v$7);
                 return _p$;
               }, {
                 e: void 0,
                 t: void 0
               });
-              return _el$72;
+              return _el$17;
             }
           }), null);
-          return _el$70;
+          return _el$15;
         }
       }));
-      return _el$69;
+      return _el$14;
     }
   });
 }
@@ -16915,100 +16291,100 @@ function interactionIcon$1(interaction) {
 function InteractionAlert(props) {
   const icon = () => interactionIcon$1(props.interaction);
   return (() => {
-    var _el$73 = _tmpl$31(), _el$74 = _el$73.firstChild, _el$75 = _el$74.firstChild, _el$76 = _el$74.nextSibling, _el$77 = _el$76.nextSibling;
-    insert(_el$74, icon, _el$75);
-    insert(_el$74, () => props.interaction.title, null);
-    insert(_el$77, createComponent(Show, {
+    var _el$18 = _tmpl$13$2(), _el$19 = _el$18.firstChild, _el$20 = _el$19.firstChild, _el$21 = _el$19.nextSibling, _el$22 = _el$21.nextSibling;
+    insert(_el$19, icon, _el$20);
+    insert(_el$19, () => props.interaction.title, null);
+    insert(_el$22, createComponent(Show, {
       get when() {
         return props.interaction.type === "permission";
       },
       get fallback() {
         return [(() => {
-          var _el$81 = _tmpl$32();
-          _el$81.$$click = () => props.onResolve?.(props.interaction.id, "answer");
-          insert(_el$81, () => t("interaction.answer"));
+          var _el$26 = _tmpl$14$1();
+          _el$26.$$click = () => props.onResolve?.(props.interaction.id, "answer");
+          insert(_el$26, () => t("interaction.answer"));
           createRenderEffect((_p$) => {
-            var _v$28 = t("interaction.answer_title"), _v$29 = t("interaction.answer_title");
-            _v$28 !== _p$.e && setAttribute(_el$81, "title", _p$.e = _v$28);
-            _v$29 !== _p$.t && setAttribute(_el$81, "aria-label", _p$.t = _v$29);
+            var _v$14 = t("interaction.answer_title"), _v$15 = t("interaction.answer_title");
+            _v$14 !== _p$.e && setAttribute(_el$26, "title", _p$.e = _v$14);
+            _v$15 !== _p$.t && setAttribute(_el$26, "aria-label", _p$.t = _v$15);
             return _p$;
           }, {
             e: void 0,
             t: void 0
           });
-          return _el$81;
+          return _el$26;
         })(), (() => {
-          var _el$82 = _tmpl$30();
-          _el$82.$$click = () => props.onReject?.(props.interaction.id);
-          insert(_el$82, () => t("interaction.skip"));
+          var _el$27 = _tmpl$12$2();
+          _el$27.$$click = () => props.onReject?.(props.interaction.id);
+          insert(_el$27, () => t("interaction.skip"));
           createRenderEffect((_p$) => {
-            var _v$30 = t("interaction.skip_title"), _v$31 = t("interaction.skip_title");
-            _v$30 !== _p$.e && setAttribute(_el$82, "title", _p$.e = _v$30);
-            _v$31 !== _p$.t && setAttribute(_el$82, "aria-label", _p$.t = _v$31);
+            var _v$16 = t("interaction.skip_title"), _v$17 = t("interaction.skip_title");
+            _v$16 !== _p$.e && setAttribute(_el$27, "title", _p$.e = _v$16);
+            _v$17 !== _p$.t && setAttribute(_el$27, "aria-label", _p$.t = _v$17);
             return _p$;
           }, {
             e: void 0,
             t: void 0
           });
-          return _el$82;
+          return _el$27;
         })()];
       },
       get children() {
         return [(() => {
-          var _el$78 = _tmpl$28();
-          _el$78.$$click = () => props.onResolve?.(props.interaction.id, "always");
-          insert(_el$78, () => t("interaction.always_allow"));
+          var _el$23 = _tmpl$10$2();
+          _el$23.$$click = () => props.onResolve?.(props.interaction.id, "always");
+          insert(_el$23, () => t("interaction.always_allow"));
           createRenderEffect((_p$) => {
-            var _v$20 = t("interaction.always_allow_title"), _v$21 = t("interaction.always_allow_title");
-            _v$20 !== _p$.e && setAttribute(_el$78, "title", _p$.e = _v$20);
-            _v$21 !== _p$.t && setAttribute(_el$78, "aria-label", _p$.t = _v$21);
+            var _v$8 = t("interaction.always_allow_title"), _v$9 = t("interaction.always_allow_title");
+            _v$8 !== _p$.e && setAttribute(_el$23, "title", _p$.e = _v$8);
+            _v$9 !== _p$.t && setAttribute(_el$23, "aria-label", _p$.t = _v$9);
             return _p$;
           }, {
             e: void 0,
             t: void 0
           });
-          return _el$78;
+          return _el$23;
         })(), (() => {
-          var _el$79 = _tmpl$29();
-          _el$79.$$click = () => props.onResolve?.(props.interaction.id, "once");
-          insert(_el$79, () => t("interaction.allow_once"));
+          var _el$24 = _tmpl$11$2();
+          _el$24.$$click = () => props.onResolve?.(props.interaction.id, "once");
+          insert(_el$24, () => t("interaction.allow_once"));
           createRenderEffect((_p$) => {
-            var _v$22 = t("interaction.allow_once_title"), _v$23 = t("interaction.allow_once_title");
-            _v$22 !== _p$.e && setAttribute(_el$79, "title", _p$.e = _v$22);
-            _v$23 !== _p$.t && setAttribute(_el$79, "aria-label", _p$.t = _v$23);
+            var _v$0 = t("interaction.allow_once_title"), _v$1 = t("interaction.allow_once_title");
+            _v$0 !== _p$.e && setAttribute(_el$24, "title", _p$.e = _v$0);
+            _v$1 !== _p$.t && setAttribute(_el$24, "aria-label", _p$.t = _v$1);
             return _p$;
           }, {
             e: void 0,
             t: void 0
           });
-          return _el$79;
+          return _el$24;
         })(), (() => {
-          var _el$80 = _tmpl$30();
-          _el$80.$$click = () => props.onReject?.(props.interaction.id);
-          insert(_el$80, () => t("interaction.reject"));
+          var _el$25 = _tmpl$12$2();
+          _el$25.$$click = () => props.onReject?.(props.interaction.id);
+          insert(_el$25, () => t("interaction.reject"));
           createRenderEffect((_p$) => {
-            var _v$24 = t("interaction.reject_title"), _v$25 = t("interaction.reject_title");
-            _v$24 !== _p$.e && setAttribute(_el$80, "title", _p$.e = _v$24);
-            _v$25 !== _p$.t && setAttribute(_el$80, "aria-label", _p$.t = _v$25);
+            var _v$10 = t("interaction.reject_title"), _v$11 = t("interaction.reject_title");
+            _v$10 !== _p$.e && setAttribute(_el$25, "title", _p$.e = _v$10);
+            _v$11 !== _p$.t && setAttribute(_el$25, "aria-label", _p$.t = _v$11);
             return _p$;
           }, {
             e: void 0,
             t: void 0
           });
-          return _el$80;
+          return _el$25;
         })()];
       }
     }));
     createRenderEffect((_p$) => {
-      var _v$26 = props.interaction.id, _v$27 = renderMarkdown(props.interaction.body || "");
-      _v$26 !== _p$.e && setAttribute(_el$73, "data-id", _p$.e = _v$26);
-      _v$27 !== _p$.t && (_el$76.innerHTML = _p$.t = _v$27);
+      var _v$12 = props.interaction.id, _v$13 = renderMarkdown(props.interaction.body || "");
+      _v$12 !== _p$.e && setAttribute(_el$18, "data-id", _p$.e = _v$12);
+      _v$13 !== _p$.t && (_el$21.innerHTML = _p$.t = _v$13);
       return _p$;
     }, {
       e: void 0,
       t: void 0
     });
-    return _el$73;
+    return _el$18;
   })();
 }
 function InteractionsList(props) {
@@ -17018,8 +16394,8 @@ function InteractionsList(props) {
       return pending().length > 0;
     },
     get children() {
-      var _el$83 = _tmpl$33();
-      insert(_el$83, createComponent(For, {
+      var _el$28 = _tmpl$15$1();
+      insert(_el$28, createComponent(For, {
         get each() {
           return pending();
         },
@@ -17033,7 +16409,7 @@ function InteractionsList(props) {
           }
         })
       }));
-      return _el$83;
+      return _el$28;
     }
   });
 }
@@ -17057,30 +16433,30 @@ function ExecutorSummaryPanel(props) {
     },
     get fallback() {
       return (() => {
-        var _el$91 = _tmpl$4$c();
-        insert(_el$91, (() => {
-          var _c$2 = memo(() => !!isRunning());
-          return () => _c$2() ? t("executor.waiting") : t("empty.executor");
+        var _el$36 = _tmpl$7$a();
+        insert(_el$36, (() => {
+          var _c$ = memo(() => !!isRunning());
+          return () => _c$() ? t("executor.waiting") : t("empty.executor");
         })());
-        return _el$91;
+        return _el$36;
       })();
     },
     get children() {
-      var _el$84 = _tmpl$35(), _el$85 = _el$84.firstChild, _el$86 = _el$85.firstChild, _el$87 = _el$86.nextSibling;
-      insert(_el$86, toolCalls);
-      insert(_el$87, () => t("executor.tool_calls"));
-      insert(_el$84, createComponent(Show, {
+      var _el$29 = _tmpl$17(), _el$30 = _el$29.firstChild, _el$31 = _el$30.firstChild, _el$32 = _el$31.nextSibling;
+      insert(_el$31, toolCalls);
+      insert(_el$32, () => t("executor.tool_calls"));
+      insert(_el$29, createComponent(Show, {
         get when() {
           return props.cards.length > 0;
         },
         get children() {
-          var _el$88 = _tmpl$34(), _el$89 = _el$88.firstChild, _el$90 = _el$89.nextSibling;
-          insert(_el$89, () => props.cards.length);
-          insert(_el$90, () => t("executor.sessions"));
-          return _el$88;
+          var _el$33 = _tmpl$16$1(), _el$34 = _el$33.firstChild, _el$35 = _el$34.nextSibling;
+          insert(_el$34, () => props.cards.length);
+          insert(_el$35, () => t("executor.sessions"));
+          return _el$33;
         }
       }), null);
-      return _el$84;
+      return _el$29;
     }
   });
 }
@@ -17093,17 +16469,17 @@ const SECTION_ICONS = {
   delivery: `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 5.5L8 2.5l5.5 3v5L8 13.5l-5.5-3Z"/><polyline points="2.5,5.5 8,8.5 13.5,5.5"/><line x1="8" y1="8.5" x2="8" y2="13.5"/></svg>`};
 function SectionFrame(props) {
   return (() => {
-    var _el$92 = _tmpl$36(), _el$93 = _el$92.firstChild, _el$94 = _el$93.firstChild, _el$95 = _el$94.nextSibling, _el$96 = _el$95.nextSibling, _el$97 = _el$93.nextSibling;
-    insert(_el$95, () => props.title);
-    insert(_el$96, () => props.badgeText || "");
-    insert(_el$97, () => props.children);
+    var _el$37 = _tmpl$18(), _el$38 = _el$37.firstChild, _el$39 = _el$38.firstChild, _el$40 = _el$39.nextSibling, _el$41 = _el$40.nextSibling, _el$42 = _el$38.nextSibling;
+    insert(_el$40, () => props.title);
+    insert(_el$41, () => props.badgeText || "");
+    insert(_el$42, () => props.children);
     createRenderEffect((_p$) => {
-      var _v$32 = props.id, _v$33 = props.icon || "", _v$34 = props.badgeId, _v$35 = props.badgeTone, _v$36 = props.bodyId;
-      _v$32 !== _p$.e && setAttribute(_el$92, "id", _p$.e = _v$32);
-      _v$33 !== _p$.t && (_el$94.innerHTML = _p$.t = _v$33);
-      _v$34 !== _p$.a && setAttribute(_el$96, "id", _p$.a = _v$34);
-      _v$35 !== _p$.o && setAttribute(_el$96, "data-tone", _p$.o = _v$35);
-      _v$36 !== _p$.i && setAttribute(_el$97, "id", _p$.i = _v$36);
+      var _v$18 = props.id, _v$19 = props.icon || "", _v$20 = props.badgeId, _v$21 = props.badgeTone, _v$22 = props.bodyId;
+      _v$18 !== _p$.e && setAttribute(_el$37, "id", _p$.e = _v$18);
+      _v$19 !== _p$.t && (_el$39.innerHTML = _p$.t = _v$19);
+      _v$20 !== _p$.a && setAttribute(_el$41, "id", _p$.a = _v$20);
+      _v$21 !== _p$.o && setAttribute(_el$41, "data-tone", _p$.o = _v$21);
+      _v$22 !== _p$.i && setAttribute(_el$42, "id", _p$.i = _v$22);
       return _p$;
     }, {
       e: void 0,
@@ -17112,13 +16488,12 @@ function SectionFrame(props) {
       o: void 0,
       i: void 0
     });
-    return _el$92;
+    return _el$37;
   })();
 }
 function Board(props) {
   const board = () => boardStore.board;
   const task = () => board()?.task;
-  const plan = () => board()?.plan;
   const spec = () => board()?.spec;
   const evaluation = () => board()?.evaluation;
   const delivery = () => board()?.delivery;
@@ -17129,21 +16504,9 @@ function Board(props) {
     const goalsLane = lanes.find((l) => l.id === "goals");
     return goalsLane?.cards || [];
   });
-  const runningGoalIDs = createMemo(() => {
+  createMemo(() => {
     const goalRuns = board()?.goalRuns || [];
     return new Set(goalRuns.filter((gr) => gr.status === "running" || gr.status === "accepted").map((gr) => gr.goalID).filter(Boolean));
-  });
-  const goalsBadgeText = createMemo(() => {
-    const cards = goalsCards();
-    if (cards.length === 0) return "";
-    const passed = cards.filter((c) => c.status === "passed").length;
-    return `${passed}/${cards.length}`;
-  });
-  const goalsBadgeTone = createMemo(() => {
-    const cards = goalsCards();
-    if (cards.length === 0) return "";
-    const passed = cards.filter((c) => c.status === "passed").length;
-    return passed === cards.length ? "good" : passed > 0 ? "warn" : "";
   });
   const executorCards = createMemo(() => {
     const order = agentCardOrder();
@@ -17258,7 +16621,6 @@ function Board(props) {
   const showArchitect = createMemo(() => !!architect() || isArchitectGenerating());
   const showGoals = createMemo(() => goalWorkflows().length > 0 || goalsCards().length > 0);
   const usePerGoalWorkflow = createMemo(() => goalWorkflows().length > 0);
-  const showPlan = createMemo(() => !usePerGoalWorkflow() && (!!plan() || !!boardStore.planPreview || runningGoalIDs().size > 0));
   const showExecutor = createMemo(() => !usePerGoalWorkflow() && executorCards().length > 0);
   const showEvaluation = createMemo(() => {
     const specs = criteriaSpecs(task(), evaluation());
@@ -17267,8 +16629,8 @@ function Board(props) {
   const showDelivery = createMemo(() => !!delivery());
   const showInteractions = createMemo(() => interactions().some((i) => i.status === "pending"));
   return [(() => {
-    var _el$98 = _tmpl$37();
-    insert(_el$98, createComponent(TaskActionsPanel, {
+    var _el$43 = _tmpl$19();
+    insert(_el$43, createComponent(TaskActionsPanel, {
       get overview() {
         return overview();
       },
@@ -17282,7 +16644,7 @@ function Board(props) {
         return props.onCancel;
       }
     }));
-    return _el$98;
+    return _el$43;
   })(), createComponent(Show, {
     get when() {
       return showWorkflowProgress();
@@ -17316,35 +16678,18 @@ function Board(props) {
           return requirements()?.length || isRequirementsGenerating() ? "accent" : "";
         },
         get children() {
-          return createComponent(Show, {
-            get when() {
-              return requirements() || isRequirementsGenerating() || requirementsMessages().length > 0;
+          return createComponent(RequirementsPanel, {
+            get requirements() {
+              return requirements();
             },
-            get fallback() {
-              return createComponent(SpecPanel, {
-                get spec() {
-                  return spec();
-                },
-                get preview() {
-                  return boardStore.specPreview;
-                }
-              });
+            get specContent() {
+              return spec()?.content;
             },
-            get children() {
-              return createComponent(RequirementsPanel, {
-                get requirements() {
-                  return requirements();
-                },
-                get specContent() {
-                  return spec()?.content;
-                },
-                get isGenerating() {
-                  return isRequirementsGenerating();
-                },
-                get streamingMessages() {
-                  return requirementsMessages();
-                }
-              });
+            get isGenerating() {
+              return isRequirementsGenerating();
+            },
+            get streamingMessages() {
+              return requirementsMessages();
             }
           });
         }
@@ -17388,121 +16733,37 @@ function Board(props) {
       return showGoals();
     },
     get children() {
-      return createComponent(Show, {
-        get when() {
-          return usePerGoalWorkflow();
-        },
-        get fallback() {
-          return createComponent(SectionFrame, {
-            id: "goalsSection",
-            get title() {
-              return t("section.goals");
-            },
-            get icon() {
-              return SECTION_ICONS.goals;
-            },
-            bodyId: "goalsBody",
-            badgeId: "goalsBadge",
-            get badgeText() {
-              return goalsBadgeText();
-            },
-            get badgeTone() {
-              return goalsBadgeTone();
-            },
-            get children() {
-              return createComponent(GoalsPanel, {
-                get cards() {
-                  return goalsCards();
-                },
-                get runningGoalIDs() {
-                  return runningGoalIDs();
-                },
-                get onEditGoal() {
-                  return props.onEditGoal;
-                },
-                get onDeleteGoal() {
-                  return props.onDeleteGoal;
-                },
-                get onOpenSession() {
-                  return props.onOpenSession;
-                }
-              });
-            }
-          });
-        },
-        get children() {
-          return createComponent(SectionFrame, {
-            id: "goalWorkflowsSection",
-            get title() {
-              return t("workflow.goals") || "Goals";
-            },
-            get icon() {
-              return SECTION_ICONS.goals;
-            },
-            bodyId: "goalWorkflowsBody",
-            badgeId: "goalWorkflowsBadge",
-            get badgeText() {
-              const gw = goalWorkflows();
-              const passed = gw.filter((g) => g.goalStatus === "passed").length;
-              return gw.length > 0 ? `${passed}/${gw.length}` : "";
-            },
-            get badgeTone() {
-              const gw = goalWorkflows();
-              if (gw.length === 0) return "";
-              const passed = gw.filter((g) => g.goalStatus === "passed").length;
-              return passed === gw.length ? "good" : gw.some((g) => g.goalStatus === "failed") ? "bad" : "accent";
-            },
-            get children() {
-              return createComponent(GoalWorkflowList, {
-                get goals() {
-                  return goalWorkflows();
-                },
-                get goalStepMessages() {
-                  return goalStepMessages();
-                },
-                get goalEvalChecks() {
-                  return goalEvalChecks();
-                }
-              });
-            }
-          });
-        }
-      });
-    }
-  }), createComponent(Show, {
-    get when() {
-      return showPlan();
-    },
-    get children() {
       return createComponent(SectionFrame, {
-        id: "planSection",
+        id: "goalWorkflowsSection",
         get title() {
-          return t("section.plan");
+          return t("workflow.goals") || "Goals";
         },
         get icon() {
-          return SECTION_ICONS.plan;
+          return SECTION_ICONS.goals;
         },
-        bodyId: "planBody",
-        badgeId: "planBadge",
+        bodyId: "goalWorkflowsBody",
+        badgeId: "goalWorkflowsBadge",
         get badgeText() {
-          return memo(() => runningGoalIDs().size > 0)() ? String(runningGoalIDs().size) : "";
+          const gw = goalWorkflows();
+          const passed = gw.filter((g) => g.goalStatus === "passed").length;
+          return gw.length > 0 ? `${passed}/${gw.length}` : "";
         },
         get badgeTone() {
-          return runningGoalIDs().size > 0 ? "accent" : "";
+          const gw = goalWorkflows();
+          if (gw.length === 0) return "";
+          const passed = gw.filter((g) => g.goalStatus === "passed").length;
+          return passed === gw.length ? "good" : gw.some((g) => g.goalStatus === "failed") ? "bad" : "accent";
         },
         get children() {
-          return createComponent(PlanPanel, {
-            get plan() {
-              return plan();
+          return createComponent(GoalWorkflowList, {
+            get goals() {
+              return goalWorkflows();
             },
-            get preview() {
-              return boardStore.planPreview;
+            get goalStepMessages() {
+              return goalStepMessages();
             },
-            get goalCards() {
-              return goalsCards();
-            },
-            get runningGoalIDs() {
-              return runningGoalIDs();
+            get goalEvalChecks() {
+              return goalEvalChecks();
             }
           });
         }
@@ -17566,21 +16827,11 @@ function Board(props) {
           return evaluationBadge().tone;
         },
         get children() {
-          return [createComponent(CriteriaPanel, {
-            get task() {
-              return task();
-            },
-            get evaluation() {
-              return evaluation();
-            },
-            get onToggle() {
-              return props.onToggleCriteria;
-            }
-          }), createComponent(EvaluationPanel, {
+          return createComponent(EvaluationPanel, {
             get evaluation() {
               return evaluation();
             }
-          })];
+          });
         }
       });
     }
@@ -20325,7 +19576,7 @@ ${newStr}`;
     const toolName = () => pProps.part.tool || "tool";
     const input = () => pProps.part.state?.input ?? {};
     const detail = () => {
-      const raw2 = displayToolDetail(toolName(), input(), pProps.part.state ?? {}, activeDirectory$2());
+      const raw2 = displayToolDetail(toolName(), input(), pProps.part.state ?? {}, activeDirectory$1());
       return raw2 && raw2.toLowerCase() !== toolName().toLowerCase() ? raw2 : "";
     };
     const raw = () => pProps.part.state?.raw || "";
@@ -20540,7 +19791,7 @@ ${newStr}`;
                   },
                   get children() {
                     var _el$27 = _tmpl$11$1();
-                    insert(_el$27, () => "⚙ " + part.files.map((f) => shortRelativePath(f, activeDirectory$2())).join(", "));
+                    insert(_el$27, () => "⚙ " + part.files.map((f) => shortRelativePath(f, activeDirectory$1())).join(", "));
                     return _el$27;
                   }
                 })];
@@ -20873,11 +20124,6 @@ async function loadConfigInfo() {
       channels: Array.isArray(channels) ? channels : [],
       promptEntries: Array.isArray(prompts) ? prompts : []
     });
-    const remoteUnattended = config?.unattended;
-    if (typeof remoteUnattended === "boolean") {
-      setSettingsStore("unattended", remoteUnattended);
-      saveSettings();
-    }
     const remoteTP = config?.tool_permissions;
     if (remoteTP && typeof remoteTP === "object") {
       const def = DEFAULT_SETTINGS.toolPermissions;
@@ -21040,59 +20286,6 @@ async function stopChatRequest(options = {}) {
 function mergeMessages(left, right) {
   return mergeLoadedConversationMessages(left, right);
 }
-function appendPendingAssistantPart(requestID, type, delta) {
-  const chunk = typeof delta === "string" ? delta : "";
-  if (!requestID || !chunk) return;
-  const messageID = `pending-assistant:${requestID}`;
-  const partID = `${messageID}:${type}`;
-  let found = false;
-  const next = store.messages.map((message) => {
-    if (message?.info?.id !== messageID) return message;
-    found = true;
-    const parts = Array.isArray(message?.parts) ? [...message.parts] : [];
-    const index = parts.findIndex((part) => part?.id === partID);
-    if (index >= 0) {
-      const current = parts[index];
-      parts[index] = {
-        ...current,
-        type,
-        text: `${String(current?.text || "")}${chunk}`
-      };
-    } else {
-      parts.push({
-        id: partID,
-        type,
-        text: chunk,
-        messageID,
-        sessionID: ""
-      });
-    }
-    return {
-      ...message,
-      parts
-    };
-  });
-  if (!found) {
-    next.push({
-      _synthetic: true,
-      info: {
-        id: messageID,
-        role: "assistant",
-        time: { created: Date.now() }
-      },
-      parts: [
-        {
-          id: partID,
-          type,
-          text: chunk,
-          messageID,
-          sessionID: ""
-        }
-      ]
-    });
-  }
-  setMessages(next);
-}
 function insertPendingUserMessage(requestID, text) {
   setMessages([
     ...store.messages,
@@ -21101,65 +20294,6 @@ function insertPendingUserMessage(requestID, text) {
       parts: [{ type: "text", text }]
     }
   ]);
-}
-function ensureTaskListEntry(taskID, requestID, requestText, resultMessage) {
-  if (!taskID) return;
-  const task = boardStore.board?.task && boardStore.board.task.id === taskID ? boardStore.board.task : null;
-  const now = Date.now();
-  const created = Number(task?.time?.created || now);
-  const updated = Number(task?.time?.updated || created);
-  const title = String(
-    task?.title || boardStore.board?.overview?.headline || requestText || resultMessage || taskID
-  ).trim();
-  const entry = {
-    task: {
-      id: taskID,
-      requestID: requestID || task?.requestID || "",
-      title,
-      status: task?.status || "active",
-      directory: task?.directory || "",
-      time: {
-        created,
-        updated
-      }
-    },
-    updated_at: updated,
-    pending_interactions: 0
-  };
-  const rest = boardStore.tasks.filter((item) => item?.task?.id !== taskID);
-  setTasksData([entry, ...rest]);
-}
-async function applyPanelResult(result) {
-  const taskID = String(result?.task_id || result?.taskID || "");
-  const requestText = typeof result?._request === "string" ? result._request : "";
-  const requestID = String(result?._requestID || "");
-  if (taskID) {
-    ensureTaskListEntry(taskID, requestID, requestText, String(result?.message || ""));
-    await selectTask(taskID);
-    ensureTaskListEntry(taskID, requestID, requestText, String(result?.message || ""));
-    if (result?.message) {
-      const text = String(result.message);
-      const alreadyVisible = store.messages.some(
-        (item) => (Array.isArray(item?.parts) ? item.parts : []).some(
-          (part) => part?.type === "text" && String(part?.text || "") === text
-        )
-      );
-      if (alreadyVisible) return;
-      setMessages(
-        mergeMessages(store.messages, [
-          syntheticTextMessage("assistant", Date.now(), text)
-        ])
-      );
-    }
-    return;
-  }
-  if (result?.message) {
-    setMessages(
-      mergeMessages(store.messages, [
-        syntheticTextMessage("assistant", Date.now(), String(result.message))
-      ])
-    );
-  }
 }
 async function panelMessage(text, attachmentsOrMeta = [], metadata = {}) {
   const attachments = Array.isArray(attachmentsOrMeta) ? attachmentsOrMeta : [];
@@ -21192,42 +20326,37 @@ async function panelMessage(text, attachmentsOrMeta = [], metadata = {}) {
       throw new Error("Task creation returned no task_id");
     }
     const taskStatus = boardStore.board?.task?.status;
-    if (taskStatus === "cancelled" || taskStatus === "failed") {
-      const result2 = await apiJson(
-        `task/${encodeURIComponent(boardStore.selectedTaskID)}/message`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text, source: "panel" }),
-          signal: controller.signal
-        }
-      );
-      await loadBoard();
-      if (result2?.message) {
-        setMessages(
-          mergeMessages(store.messages, [
-            syntheticTextMessage("assistant", Date.now(), String(result2.message))
-          ])
-        );
+    if (taskStatus === "completed") {
+      const taskID = await createTask({
+        text,
+        attachments,
+        metadata: meta,
+        signal: controller.signal,
+        budget: draftBudget()
+      });
+      if (taskID) {
+        await selectTask(taskID);
+        return { task_id: taskID };
       }
-      return result2;
+      throw new Error("Task creation returned no task_id");
     }
-    const result = await submitMessage(text, attachments, {
-      requestID,
-      metadata: meta,
-      signal: controller.signal,
-      onEvent: async (event) => {
-        const type = String(event?.type || "");
-        if (type === "reasoning_delta") {
-          appendPendingAssistantPart(requestID, "reasoning", String(event?.delta || ""));
-          return;
-        }
-        if (type === "message_delta") {
-          appendPendingAssistantPart(requestID, "text", String(event?.delta || ""));
-        }
+    const result = await apiJson(
+      `task/${encodeURIComponent(boardStore.selectedTaskID)}/message`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text, source: "panel" }),
+        signal: controller.signal
       }
-    });
-    await applyPanelResult({ ...result, _request: text, _requestID: requestID });
+    );
+    await loadBoard();
+    if (result?.message) {
+      setMessages(
+        mergeMessages(store.messages, [
+          syntheticTextMessage("assistant", Date.now(), String(result.message))
+        ])
+      );
+    }
     return result;
   } catch (error) {
     if (request.manualAbort) throw error;
@@ -21881,17 +21010,7 @@ async function scaffoldProjectConfig(dir) {
       biome: { disabled: true },
       eslint: { disabled: true }
     },
-    assistant: {
-      decompose: { max_steps: 30, timeout_ms: 3e5, quality_threshold: 0.5, max_attempts: 3 },
-      architect: { max_steps: 20, timeout_ms: 18e4 },
-      planner: { max_steps: 30, timeout_ms: 3e5, quality_threshold: 0.5, max_attempts: 3 },
-      evaluator: { max_steps: 25, timeout_ms: 24e4 },
-      delivery: { max_steps: 40, timeout_ms: 6e5, max_retries: 2 },
-      max_runs: 10,
-      max_fix_runs: 5,
-      max_executor_groups: 2,
-      default_workflow: "standard"
-    },
+    assistant: {},
     compaction: {
       auto: true,
       prune: true
@@ -24810,10 +23929,10 @@ function boardGitCheckpoints(board) {
   return out.sort((a, b) => a.time - b.time);
 }
 function canInitGit() {
-  return !!activeDirectory$2() && appStore.connected && boardStore.vcs !== null && !boardStore.vcs?.initialized;
+  return !!activeDirectory$1() && appStore.connected && boardStore.vcs !== null && !boardStore.vcs?.initialized;
 }
 async function initGitCurrent(options = {}) {
-  const dir = activeDirectory$2();
+  const dir = activeDirectory$1();
   if (!dir || !canInitGit()) return false;
   try {
     const result = await apiJson("project/current/init-git", { method: "POST" });

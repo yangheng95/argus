@@ -22,7 +22,6 @@ import { appStore, setConnectionStatus } from "../store/app";
 import { workspaceMode } from "./workspace";
 import {
   selectTask,
-  submitMessage,
   createTask,
 } from "./task";
 import { syntheticTextMessage } from "../utils/transcript";
@@ -486,45 +485,43 @@ export async function panelMessage(text: string, attachmentsOrMeta: any[] | Reco
       }
       throw new Error("Task creation returned no task_id");
     }
-    // Fast-path: cancelled/failed tasks — direct API restart, no LLM streaming.
+    // Completed tasks → create a follow-up task (the previous one is done).
     const taskStatus = boardStore.board?.task?.status;
-    if (taskStatus === "cancelled" || taskStatus === "failed") {
-      const result = await apiJson(
-        `task/${encodeURIComponent(boardStore.selectedTaskID)}/message`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text, source: "panel" }),
-          signal: controller.signal,
-        },
-      );
-      await loadBoard();
-      if ((result as any)?.message) {
-        setMessages(
-          mergeMessages(messageStore.messages, [
-            syntheticTextMessage("assistant", Date.now(), String((result as any).message)),
-          ]),
-        );
+    if (taskStatus === "completed") {
+      const taskID = await createTask({
+        text,
+        attachments,
+        metadata: meta,
+        signal: controller.signal,
+        budget: draftBudget(),
+      });
+      if (taskID) {
+        await selectTask(taskID);
+        return { task_id: taskID };
       }
-      return result;
+      throw new Error("Task creation returned no task_id");
     }
-    // If a task is selected, send a follow-up message via the panel stream
-    const result = await submitMessage(text, attachments, {
-      requestID,
-      metadata: meta,
-      signal: controller.signal,
-      onEvent: async (event) => {
-        const type = String(event?.type || "");
-        if (type === "reasoning_delta") {
-          appendPendingAssistantPart(requestID, "reasoning", String(event?.delta || ""));
-          return;
-        }
-        if (type === "message_delta") {
-          appendPendingAssistantPart(requestID, "text", String(event?.delta || ""));
-        }
+    // All other statuses (active, queued, blocked, cancelled, failed) →
+    // send message directly to the task. No control-plane LLM middleman.
+    // The task's own agent handles intent (inject into running executor,
+    // record as operator note, or restart a stopped task).
+    const result = await apiJson(
+      `task/${encodeURIComponent(boardStore.selectedTaskID)}/message`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text, source: "panel" }),
+        signal: controller.signal,
       },
-    });
-    await applyPanelResult({ ...(result as any), _request: text, _requestID: requestID });
+    );
+    await loadBoard();
+    if ((result as any)?.message) {
+      setMessages(
+        mergeMessages(messageStore.messages, [
+          syntheticTextMessage("assistant", Date.now(), String((result as any).message)),
+        ]),
+      );
+    }
     return result;
   } catch (error) {
     if (request.manualAbort) throw error;

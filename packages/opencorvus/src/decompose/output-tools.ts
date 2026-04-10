@@ -18,6 +18,7 @@ import z from "zod"
 import path from "path"
 import fs from "fs"
 import { Instance } from "@/project/instance"
+import { GoalContractFieldsSchema } from "@/pipeline/goal-contract.schema"
 
 // ---------------------------------------------------------------------------
 // Collector — accumulates registered items across tool calls
@@ -96,31 +97,7 @@ export function createDecomposeOutputTools(workDir?: string) {
         "Register a goal contract. Each goal executes in an isolated worktree — " +
         "the objective must be SELF-CONTAINED (executor sees only this goal). " +
         "All fields are schema-validated; invalid input returns an error to fix.",
-      inputSchema: z.object({
-        id: z.string().min(1).describe("Unique goal ID, e.g. goal_bootstrap, goal_api, goal_ui"),
-        title: z.string().min(1).describe("Short human-readable goal title"),
-        objective: z.string().min(50).describe(
-          "Self-contained objective for an isolated executor. " +
-          "Include: what to implement, key interfaces/types, expected behavior, edge cases.",
-        ),
-        done_definition: z.string().min(10).describe(
-          "Concrete pass/fail criteria for Eval Agent. " +
-          "Must be verifiable by running code, not vague.",
-        ),
-        owned_paths: z.array(z.string().min(1)).min(1).describe(
-          "Files this goal has EXCLUSIVE write access to. " +
-          "Must be discovered via tool exploration — do not guess.",
-        ),
-        depends_on: z.array(z.string()).default([]).describe("Goal IDs this depends on (execution order)"),
-        exports: z.array(z.string()).default([]).describe(
-          "Interfaces this goal PROVIDES — function signatures, type definitions. " +
-          "Dependent goals code against these.",
-        ),
-        imports: z.array(z.string()).default([]).describe("Interfaces this goal CONSUMES from dependencies"),
-        priority: z.enum(["blocking", "advisory"]).default("blocking"),
-        kind: z.enum(["bootstrap", "feature", "verification", "integration", "system"]).default("feature"),
-        requirement_ids: z.array(z.string()).default([]).describe("REQ-N references this goal covers"),
-      }),
+      inputSchema: GoalContractFieldsSchema,
       execute: async (input) => {
         // Unique ID check
         if (collector.goals.some(g => g.id === input.id)) {

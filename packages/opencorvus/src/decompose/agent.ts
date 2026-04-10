@@ -25,7 +25,7 @@ import { OrchestratorConfig } from "@/orchestrator/config"
 import { operatorNotesSection } from "@/orchestrator/helpers"
 import { loadStageSkills } from "@/orchestrator/skill-inject"
 import { Config } from "@/config/config"
-import { parseDecomposeText, type DecomposeOutput, type ParsedGoalContract, type DecomposeDecision, type ParsedRequirement, type TraceabilityEntry } from "./parse"
+import type { DecomposeOutput, ParsedGoalContract, DecomposeDecision, ParsedRequirement, TraceabilityEntry } from "./types"
 import { createDecomposeOutputTools, type DecomposeCollector, type RegisteredGoal } from "./output-tools"
 import { parseRecommendedNext } from "@/architect/parse-recommended"
 import type { GoalContractFields } from "@/pipeline/types"
@@ -236,23 +236,30 @@ async function run(input: {
       { model: model.id, toolCalls: cumulativeToolCalls, finishReason: resultFinishReason },
     )
 
-    // Prefer structured tool-call data over text parsing.
-    // If collector has registered goals, use them (schema-validated, anti-hallucination).
-    // Otherwise fall back to text-based section tag parsing (backward compat).
+    // Structured tool-call output is the only supported path. If the LLM did
+    // not register any goals via register_goal, treat this attempt as a hard
+    // failure — no text-parsing fallback (see CLAUDE.md "no fallback" rule).
     const collector = outputToolKit.getCollector()
-    const useStructured = collector.goals.length > 0
-
-    let parsed: DecomposeOutput
-    if (useStructured) {
-      parsed = collectorToOutput(collector)
-      log.info("decompose agent: using structured output", {
-        goals: parsed.goals.length,
-        requirements: parsed.requirements.length,
-        decisions: parsed.decisions.length,
+    if (collector.goals.length === 0) {
+      log.warn("decompose agent: no goals registered via tool calls", {
+        attempt: attempt + 1,
+        toolCalls: cumulativeToolCalls,
+        finishReason: resultFinishReason,
       })
-    } else {
-      parsed = parseDecomposeText(allText)
+      // Force a retry by setting an unusable parsed shape; the quality check
+      // below will reject it and the loop will reset for the next attempt.
+      lastParsed = undefined
+      messages = [{ role: "user" as const, content: initialPrompt }]
+      outputToolKit.reset()
+      continue
     }
+
+    const parsed = collectorToOutput(collector)
+    log.info("decompose agent: using structured output", {
+      goals: parsed.goals.length,
+      requirements: parsed.requirements.length,
+      decisions: parsed.decisions.length,
+    })
     lastParsed = parsed
 
     const quality = validateQuality(parsed, cumulativeToolCalls)
@@ -264,7 +271,6 @@ async function run(input: {
       toolCalls: cumulativeToolCalls,
       quality,
       attempt: attempt + 1,
-      structured: useStructured,
     })
 
     if (quality.score >= QUALITY_RETRY_THRESHOLD || attempt >= MAX_ATTEMPTS - 1) {

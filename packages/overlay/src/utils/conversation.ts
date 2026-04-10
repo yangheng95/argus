@@ -3,7 +3,6 @@
 // All data is read from Solid stores (messageStore / boardStore) for reactivity.
 
 import { messageStore, messageById, agentCards, agentCardOrder } from "../store/messages";
-import { devWarn } from "./dev-error";
 
 /** Resolve an agent card message to its live store proxy when available.
  *  Agent card _agentMessages are snapshots in a separate SolidJS store path;
@@ -58,6 +57,15 @@ function conversationTime(message: any): number {
 }
 
 // ── Internal: build user request + interaction messages ──
+//
+// Note: this function is called from conversationMessages() which is itself
+// reactive — it re-runs whenever board state changes. Several timestamp
+// fallbacks below were previously paired with devWarn() calls, but those
+// fired on every recompute (SSE-driven, hundreds of times per minute) and
+// crushed the dev-error overlay during long tasks. The fallbacks remain;
+// the warnings were removed. Real timestamp validation should happen at
+// mutation time in setBoard / appendInteraction, not here in the derived
+// view layer.
 
 function buildUserContextMessages(): any[] {
   const board = boardStore.board;
@@ -67,11 +75,8 @@ function buildUserContextMessages(): any[] {
 
   // 1. User's original task request
   if (task?.request) {
-    let taskCreated = task.time?.created;
-    if (!Number.isFinite(taskCreated) || !taskCreated) {
-      devWarn("utils/conversation.ts:buildUserContextMessages", "task.time.created is missing — user-request timestamp will be 0");
-      taskCreated = 0;
-    }
+    const rawCreated = task.time?.created;
+    const taskCreated = (Number.isFinite(rawCreated) && rawCreated) ? Number(rawCreated) : 0;
     msgs.push({
       _synthetic: true,
       info: { id: "ctx:user-request", role: "user", resolvedRole: "user", channel: "main", time: { created: taskCreated - 2 } },
@@ -90,11 +95,10 @@ function buildUserContextMessages(): any[] {
     const isPlannerClarification = interaction.payload?.planner_clarification === true;
     const interactionRole = isPlannerClarification ? "planner" : "system";
 
-    let requestTime = interaction.time?.created;
-    if (!Number.isFinite(requestTime) || !requestTime) {
-      devWarn("utils/conversation.ts:buildUserContextMessages", `interaction ${interaction.id ?? "?"} has no created time — using Date.now()`);
-      requestTime = Date.now();
-    }
+    const rawRequestTime = interaction.time?.created;
+    const requestTime = (Number.isFinite(rawRequestTime) && rawRequestTime)
+      ? Number(rawRequestTime)
+      : Date.now();
     const request = syntheticTextMessage(
       interactionRole,
       requestTime,
@@ -102,11 +106,10 @@ function buildUserContextMessages(): any[] {
     );
     if (request) msgs.push(request);
     if (interaction.status === "answered" || interaction.status === "rejected") {
-      let resolvedTime = interaction.time?.resolved ?? interaction.time?.updated;
-      if (!Number.isFinite(resolvedTime) || !resolvedTime) {
-        devWarn("utils/conversation.ts:buildUserContextMessages", `interaction ${interaction.id ?? "?"} has no resolved/updated time — using Date.now()`);
-        resolvedTime = Date.now();
-      }
+      const rawResolvedTime = interaction.time?.resolved ?? interaction.time?.updated;
+      const resolvedTime = (Number.isFinite(rawResolvedTime) && rawResolvedTime)
+        ? Number(rawResolvedTime)
+        : Date.now();
       const response = syntheticTextMessage(
         isPlannerClarification ? "user" : "system",
         resolvedTime,

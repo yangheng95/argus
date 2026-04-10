@@ -26,10 +26,9 @@ import { OrchestratorConfig } from "@/orchestrator/config"
 import { Config } from "@/config/config"
 import type { GoalContractFields } from "@/pipeline/types"
 import type { DecisionLog } from "@/decision-log"
-import type { ArchitectResult, ArchitectBlueprint, ArchitectContract, RecommendedNext, ArchitectDecisionKey } from "./types"
+import type { ArchitectResult, ArchitectBlueprint, RecommendedNext, ArchitectDecisionKey } from "./types"
 import { createArchitectOutputTools } from "./output-tools"
-import { parseYamlLikeList } from "@/util/parse-section-tags"
-import { extractTag } from "@/util/parse-section-tags"
+import { extractTag, parseYamlLikeList } from "@/util/parse-section-tags"
 
 import ARCHITECT_CORE from "@/prompt/core/architect-core.txt"
 
@@ -166,16 +165,26 @@ async function run(input: {
     { model: model.id, toolCalls: toolCallCount, finishReason: resultFinishReason },
   )
 
-  // Prefer structured tool-call data over text parsing.
-  // Collector data is Zod-validated — no YAML-like parsing issues.
+  // Structured tool-call output is the only supported path. If the LLM did not
+  // call register_contract / finalize_blueprint, we surface that as a hard
+  // failure rather than silently text-parsing (CLAUDE.md "no fallback" rule).
   const collector = outputToolKit.getCollector()
-  let blueprint: ArchitectBlueprint
-  if (collector.contracts.length > 0) {
-    blueprint = { contracts: collector.contracts, summary: collector.summary || "Cross-goal coordination" }
-    log.info("architect agent: using structured output", { contracts: collector.contracts.length })
-  } else {
-    blueprint = parseBlueprint(allText)
+  if (collector.contracts.length === 0) {
+    log.warn("architect agent: no contracts registered via tool calls", {
+      taskID: input.taskID,
+      goals: input.goals.length,
+      finishReason: resultFinishReason,
+    })
+    throw new Error(
+      "Architect agent did not register any contracts via register_contract — " +
+      "no text-parsing fallback is available. Check the model's tool-calling behavior or the architect prompt.",
+    )
   }
+  const blueprint: ArchitectBlueprint = {
+    contracts: collector.contracts,
+    summary: collector.summary || "Cross-goal coordination",
+  }
+  log.info("architect agent: using structured output", { contracts: collector.contracts.length })
   const recommendedNext = parseRecommendedNext(allText)
 
   // Write contracts to Decision Log
@@ -252,28 +261,11 @@ async function architectSystem(): Promise<string> {
 // ---------------------------------------------------------------------------
 // Output parsing
 // ---------------------------------------------------------------------------
-
-function parseBlueprint(text: string): ArchitectBlueprint {
-  const summary = extractTag(text, "architect_summary") || "Cross-goal coordination"
-  const contractsRaw = extractTag(text, "contracts") || ""
-
-  const contracts: ArchitectContract[] = []
-  if (contractsRaw.trim()) {
-    const items = parseYamlLikeList(contractsRaw)
-    for (const item of items) {
-      const category = item.category as ArchitectDecisionKey | undefined
-      if (!category || !VALID_CATEGORIES.has(category)) continue
-      contracts.push({
-        category,
-        title: item.title || category,
-        spec: item.spec || "",
-        goalIDs: splitCommaSeparated(item.goal_ids),
-      })
-    }
-  }
-
-  return { contracts, summary }
-}
+//
+// Note: parseBlueprint() was removed — register_contract is the only supported
+// path for architect contract output. recommended_next is still parsed from
+// text below until a Zod tool is added (tracked as a follow-up in the
+// implementation status manual).
 
 function parseRecommendedNext(text: string): RecommendedNext[] {
   const raw = extractTag(text, "recommended_next") || ""
@@ -297,9 +289,4 @@ function parseRecommendedNext(text: string): RecommendedNext[] {
           : "suggested") as RecommendedNext["priority"],
       }
     })
-}
-
-function splitCommaSeparated(value: string | undefined): string[] {
-  if (!value || !value.trim()) return []
-  return value.split(/[,，]\s*/).map((s) => s.trim()).filter(Boolean)
 }
