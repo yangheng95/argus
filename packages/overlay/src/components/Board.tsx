@@ -1223,21 +1223,14 @@ export function Board(props: BoardProps) {
     return result;
   });
 
+  // M1.3: broadcasting task-level eval checks to every goal causes the
+  // same eval data to render N+1 times (once per goal in GoalWorkflowList +
+  // once in the global Evaluation section). The proper fix is M3 (per-goal
+  // eval data flowing from the backend), but until that lands we return an
+  // empty mapping so per-goal eval steps stay empty and only the global
+  // EvaluationPanel shows eval results — eliminating the duplication.
   const goalEvalChecks = createMemo(() => {
-    const ev = evaluation();
-    if (!ev?.checks) return {};
-    // For now, broadcast task-level checks to all goals
-    // (per-goal eval checks would need per-goal evaluation data from board)
-    const checks = Array.isArray(ev.checks) ? ev.checks : [];
-    const result: Record<string, Array<{ name: string; status: string; evidence?: string }>> = {};
-    for (const gw of goalWorkflows()) {
-      result[gw.goalID] = checks.map((c: any) => ({
-        name: c.name || "check",
-        status: c.status || "pending",
-        evidence: c.evidence,
-      }));
-    }
-    return result;
+    return {} as Record<string, Array<{ name: string; status: string; evidence?: string }>>;
   });
 
   // Evaluation badge (criteria pass ratio) — extracted from duplicated IIFE
