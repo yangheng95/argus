@@ -538,9 +538,19 @@ function validateQuality(
   else if (toolCallCount >= 2) score += 0.05
   else if (toolCallCount === 0) reasons.push("No tool calls — goals not grounded in codebase")
 
-  // Goal count (0.05)
-  if (parsed.goals.length >= 1) score += 0.05
-  else reasons.push("No goals produced")
+  // Goal count vs requirement count (0.05) — penalize both under-splitting and over-splitting
+  if (parsed.goals.length === 0) {
+    reasons.push("No goals produced")
+  } else if (parsed.requirements.length >= 20 && parsed.goals.length <= 2) {
+    reasons.push(`Under-split: ${parsed.goals.length} goal(s) for ${parsed.requirements.length} requirements — executor will fail on mega-goals. Need at least 4 goals for this scope.`)
+  } else if (parsed.requirements.length >= 10 && parsed.goals.length <= 1) {
+    reasons.push(`Under-split: 1 goal for ${parsed.requirements.length} requirements — split into at least 3 goals by subsystem.`)
+  } else if (parsed.goals.length > 12) {
+    score += 0.02
+    reasons.push(`Over-split: ${parsed.goals.length} goals is excessive — merge related goals to reduce orchestration overhead.`)
+  } else {
+    score += 0.05
+  }
 
   // Owned paths (0.15)
   const withPaths = parsed.goals.filter((g) => g.owned_paths.length > 0).length

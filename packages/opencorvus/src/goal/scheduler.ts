@@ -38,3 +38,51 @@ export function readyGoalNodes(nodes: PlanNodeRow[], goals: GoalRow[]): GoalNode
     return [{ node, goal }]
   })
 }
+
+// ---------------------------------------------------------------------------
+// Diagnostics — WHY are pending goals not ready?
+// ---------------------------------------------------------------------------
+
+export interface BlockedGoalDiag {
+  goalID: string
+  goalTitle: string
+  unsatisfiedDeps: Array<{
+    depGoalID: string
+    depGoalTitle: string
+    depStatus: string
+  }>
+}
+
+/**
+ * For each pending goal that is NOT ready, return the list of unsatisfied
+ * dependencies. This tells the Task Agent exactly what is blocking progress
+ * so it can retry/modify/fail the blocking goals instead of spinning.
+ */
+export function blockedGoalDiagnostics(nodes: PlanNodeRow[], goals: GoalRow[]): BlockedGoalDiag[] {
+  const ordered = goalNodes(nodes)
+  const result: BlockedGoalDiag[] = []
+
+  for (const node of ordered) {
+    const goal = goals.find((item) => item.id === node.goal_id)
+    if (!goal || goal.status !== "pending") continue
+
+    const unsatisfied: BlockedGoalDiag["unsatisfiedDeps"] = []
+    for (const depID of node.depends_on_ids ?? []) {
+      const dep = ordered.find((item) => item.id === depID)
+      if (!dep) continue
+      const depGoal = goals.find((item) => item.id === dep.goal_id)
+      if (!depGoal || isGoalSatisfied(depGoal)) continue
+      unsatisfied.push({
+        depGoalID: depGoal.id,
+        depGoalTitle: depGoal.title,
+        depStatus: depGoal.status,
+      })
+    }
+
+    if (unsatisfied.length > 0) {
+      result.push({ goalID: goal.id, goalTitle: goal.title, unsatisfiedDeps: unsatisfied })
+    }
+  }
+
+  return result
+}

@@ -36,7 +36,13 @@ const systemThemeMedia: MediaQueryList | null =
 // "light" | "system" → returned as-is; everything else → "dark"
 
 export function sanitizeTheme(value: any): string {
-  if (value === "light" || value === "system" || value === "vscode-dark") return value as string;
+  if (
+    value === "light" ||
+    value === "dark" ||
+    value === "system" ||
+    value === "vscode-dark"
+  )
+    return value as string;
   return "dark";
 }
 

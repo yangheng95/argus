@@ -46,6 +46,7 @@ import { registerGoalRunSession } from "@/server/routes/task-event"
 import { sessionStreamHooks } from "./session-stream"
 import { Event } from "./model"
 import { OrchestratorProtocol } from "./protocol"
+import { markGoalWorkflowStep } from "./workflow"
 import { projectExecutorEventToSession } from "./runtime"
 import { MemoryInjection } from "@/memory/injection"
 import { TaskPlan } from "@/memory/task-plan"
@@ -307,6 +308,7 @@ export class GoalPool {
       // Planning is NOT optional — failure propagates and the goal run fails.
       let planNodeBrief: string
       let plannerSessionID: string
+      await markGoalWorkflowStep(task.id, entry.goal.id, entry.goal.title, "plan", "running").catch(() => undefined)
       {
         const allGoalsForPlan = listGoalsByPlan(plan.id)
         const planContract: GoalContract = {
@@ -351,6 +353,10 @@ export class GoalPool {
             .where(eq(OrchestratorPlanNodeTable.id, entry.node.id))
             .run())
           log.info("goal pool: per-goal plan created", { goalID: entry.goal.id, briefLen: planSteps.brief.length })
+          await markGoalWorkflowStep(task.id, entry.goal.id, entry.goal.title, "plan", "completed").catch(() => undefined)
+        } catch (planErr) {
+          await markGoalWorkflowStep(task.id, entry.goal.id, entry.goal.title, "plan", "failed").catch(() => undefined)
+          throw planErr
         } finally {
           await planHooks.flush()
         }
@@ -427,6 +433,7 @@ export class GoalPool {
         if (sections.length > 0) systemOverride = sections.join("\n\n")
       }
 
+      await markGoalWorkflowStep(task.id, entry.goal.id, entry.goal.title, "execute", "running").catch(() => undefined)
       const executor = ExecutorRegistry.createInstance(run.executor)
       const submission = await executor.submit({
         sessionID: goalSession.id,
@@ -470,6 +477,7 @@ export class GoalPool {
 
       let lastEventTime = Date.now()
       let delivery: PipelineDelivery | undefined
+      let pipelineError: string | undefined
 
       const pipeline = runGoalPipeline(contract, {
         executor,
@@ -519,12 +527,16 @@ export class GoalPool {
         if (event.type === "completed") {
           delivery = event.delivery
         }
+        if (event.type === "failed") {
+          pipelineError = event.error
+        }
       }
 
       stallCtrl.abort()
       await stallWatcher.catch(() => {})
 
       if (signal.aborted) {
+        await markGoalWorkflowStep(task.id, entry.goal.id, entry.goal.title, "execute", "failed").catch(() => undefined)
         return { goalID: entry.goal.id, goalRunID: goalRun.id, title: entry.goal.title, status: "failed", error: "aborted", attempts: 1 }
       }
 
@@ -534,18 +546,20 @@ export class GoalPool {
       // Delivery agent is the single verification gate — runs at task level after all goals.
       const now = Date.now()
       if (!delivery) {
+        const failReason = pipelineError ?? "Executor completed without delivery (no error detail)"
         if (worktreeDir) await cleanupGoalWorkspace(worktreeDir).catch(() => {})
         Database.use(db => db.update(OrchestratorGoalTable)
           .set({ status: "failed", time_updated: now })
           .where(eq(OrchestratorGoalTable.id, entry.goal.id)).run())
 
+        await markGoalWorkflowStep(task.id, entry.goal.id, entry.goal.title, "execute", "failed").catch(() => undefined)
         OrchestratorProtocol.emit(Event.GoalFailed, {
-          taskID: task.id, goalID: entry.goal.id, summary: `${entry.goal.title}: no delivery`,
+          taskID: task.id, goalID: entry.goal.id, summary: `${entry.goal.title}: ${failReason}`,
         }, { source: "executor" }).catch(() => {})
 
         return {
           goalID: entry.goal.id, goalRunID: goalRun.id, title: entry.goal.title,
-          status: "failed", error: "No delivery", attempts: 1,
+          status: "failed", error: failReason, attempts: 1,
         }
       }
 
@@ -554,6 +568,7 @@ export class GoalPool {
         .set({ status: "passed", time_updated: now })
         .where(eq(OrchestratorGoalTable.id, entry.goal.id)).run())
 
+      await markGoalWorkflowStep(task.id, entry.goal.id, entry.goal.title, "execute", "completed").catch(() => undefined)
       OrchestratorProtocol.emit(Event.GoalPassed, {
         taskID: task.id, goalID: entry.goal.id, summary: entry.goal.title,
       }, { source: "executor" }).catch(() => {})

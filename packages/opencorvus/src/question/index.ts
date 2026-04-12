@@ -105,11 +105,14 @@ export namespace Question {
     sessionID: string
     questions: Info[]
     tool?: { messageID: string; callID: string }
+    /** Override auto-reject timeout in ms. Defaults to OPENCORVUS_QUESTION_TIMEOUT_MS (10s). */
+    timeoutMs?: number
   }): Promise<Answer[]> {
     const s = await state()
     const id = Identifier.ascending("question")
+    const timeout = Math.max(input.timeoutMs ?? QUESTION_AUTO_REJECT_MS, QUESTION_MIN_TIMEOUT_MS)
 
-    log.info("asking", { id, questions: input.questions.length })
+    log.info("asking", { id, questions: input.questions.length, timeoutMs: timeout })
 
     return new Promise<Answer[]>((resolve, reject) => {
       const info: Request = {
@@ -135,7 +138,7 @@ export namespace Question {
           })
           reject(new RejectedError())
         }
-      }, QUESTION_AUTO_REJECT_MS)
+      }, timeout)
     })
   }
 

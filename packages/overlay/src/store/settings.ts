@@ -32,6 +32,7 @@ export interface OverlaySettings {
   sidebarCollapsed: boolean;
   sidebarWidth: number | null;
   sectionsWidth: number | null;
+  workspacePanelHeight: number | null;
   opacity: number;
   zoom: number;
   theme: string;
@@ -58,7 +59,12 @@ export interface OverlaySettings {
 
 function sanitizeTheme(value: any): string {
   const text = String(value || "").trim();
-  return text === "light" || text === "dark" || text === "vscode-dark" ? text : "dark";
+  return text === "light" ||
+    text === "dark" ||
+    text === "vscode-dark" ||
+    text === "system"
+    ? text
+    : "dark";
 }
 
 export const MIN_WINDOW_OPACITY = 0.5;
@@ -119,6 +125,7 @@ export const DEFAULT_SETTINGS: OverlaySettings = {
   sidebarCollapsed: false,
   sidebarWidth: null,
   sectionsWidth: null,
+  workspacePanelHeight: null,
   opacity: 0.8,
   zoom: 1,
   theme: "dark",
@@ -176,6 +183,7 @@ export function applySettings(input: Partial<OverlaySettings>): void {
     sidebarCollapsed: input?.sidebarCollapsed === true,
     sidebarWidth: sanitizePaneWidth(input?.sidebarWidth),
     sectionsWidth: sanitizePaneWidth(input?.sectionsWidth),
+    workspacePanelHeight: sanitizePaneWidth(input?.workspacePanelHeight),
     opacity: sanitizeOpacity(input?.opacity),
     zoom: sanitizeZoom(input?.zoom),
     theme: sanitizeTheme(input?.theme),
@@ -216,6 +224,9 @@ export function saveSettings(): void {
   localStorage.removeItem("oc_unattended");
   localStorage.removeItem("oc_auto_permission");
   localStorage.removeItem("oc_auto_question");
+  // Workspace layout was changed from right-column to stacked-above-composer;
+  // the old width value is no longer meaningful and is purged on first save.
+  localStorage.removeItem("oc_workspace_width");
   localStorage.setItem(
     "oc_show_transcript_details",
     String(s.showTranscriptDetails),
@@ -230,6 +241,11 @@ export function saveSettings(): void {
     localStorage.setItem("oc_sections_width", String(s.sectionsWidth));
   } else {
     localStorage.removeItem("oc_sections_width");
+  }
+  if (s.workspacePanelHeight != null) {
+    localStorage.setItem("oc_workspace_height", String(s.workspacePanelHeight));
+  } else {
+    localStorage.removeItem("oc_workspace_height");
   }
   localStorage.setItem("oc_opacity", String(s.opacity));
   localStorage.setItem("oc_zoom", String(s.zoom));
@@ -299,6 +315,9 @@ export function loadSettings(): void {
     ),
     sectionsWidth: sanitizePaneWidth(
       localStorage.getItem("oc_sections_width"),
+    ),
+    workspacePanelHeight: sanitizePaneWidth(
+      localStorage.getItem("oc_workspace_height"),
     ),
     opacity: sanitizeOpacity(localStorage.getItem("oc_opacity")),
     zoom: sanitizeZoom(localStorage.getItem("oc_zoom")),
@@ -376,10 +395,11 @@ export function settingsDirectory(settings: Partial<OverlaySettings> | null | un
 
 export function bootstrapOverlaySettings(
   input: Partial<OverlaySettings> = settingsStore,
-): Omit<OverlaySettings, "savedDirectory" | "tempDirectory" | "workspaceEpoch" | "directoryEpoch"> & {
+): Omit<OverlaySettings, "savedDirectory" | "tempDirectory" | "workspaceEpoch" | "directoryEpoch" | "workspacePanelHeight"> & {
   directory?: string;
   sidebarWidth?: number;
   sectionsWidth?: number;
+  workspacePanelHeight?: number;
   workspaceTaskID?: string;
   workspaceDirectory?: string;
 } {
@@ -395,6 +415,7 @@ export function bootstrapOverlaySettings(
     sidebarCollapsed: input.sidebarCollapsed ?? DEFAULT_SETTINGS.sidebarCollapsed,
     sidebarWidth: input.sidebarWidth || undefined,
     sectionsWidth: input.sectionsWidth || undefined,
+    workspacePanelHeight: input.workspacePanelHeight || undefined,
     opacity: input.opacity ?? DEFAULT_SETTINGS.opacity,
     zoom: input.zoom ?? DEFAULT_SETTINGS.zoom,
     theme: input.theme ?? DEFAULT_SETTINGS.theme,

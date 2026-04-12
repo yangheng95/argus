@@ -23,9 +23,12 @@ import { OrchestratorProtocol } from "@/orchestrator/protocol"
 import { updateGoalRun, updateGoalRunExecutorSessionStatus, persistDelivery } from "@/orchestrator/persist"
 import { Database, eq, and } from "@/storage/db"
 import { Identifier } from "@/id/id"
-import { deliveryFromWorktreeGit, cleanupGoalWorkspace } from "@/goal/runner"
+import { deliveryFromWorktreeGit } from "@/goal/runner"
 
 import type { GoalContract, GoalContractFields, PipelineEvent, PipelineDelivery, PipelineDeps } from "./types"
+
+/** Result from streamExecutorEvents — always carries the real error reason when delivery is absent. */
+type StreamResult = { delivery: PipelineDelivery; error?: undefined } | { delivery?: undefined; error: string }
 
 function goalLabel(goal: GoalContractFields & Record<string, unknown>): string {
   return goal.title || goal.id
@@ -59,25 +62,26 @@ export async function* runGoalPipeline(
     yield { type: "executing" }
     updateGoalRun(goalRunID, { status: "running" })
 
-    const delivery = yield* streamExecutorEvents(contract, deps, goalRunID)
+    const result = yield* streamExecutorEvents(contract, deps, goalRunID)
 
     if (signal.aborted) {
       yield { type: "aborted" }
       return
     }
 
-    if (!delivery) {
+    if (!result.delivery) {
       // Only update goal_run — NOT goal.status (that's the Task Agent's job)
       updateGoalRun(goalRunID, {
         status: "failed",
-        error: "Executor did not produce a delivery",
+        error: result.error,
         time_completed: Date.now(),
       })
       updateGoalRunExecutorSessionStatus(goalRunID, "failed")
-      if (workDir) cleanupGoalWorkspace(workDir).catch(() => {})
-      yield { type: "failed", error: "Executor did not produce a delivery", failureClass: "bug" }
+      yield { type: "failed", error: result.error, failureClass: "bug" }
       return
     }
+
+    const delivery = result.delivery
 
     yield { type: "executed", delivery }
 
@@ -112,7 +116,6 @@ export async function* runGoalPipeline(
       time_completed: Date.now(),
     })
     updateGoalRunExecutorSessionStatus(goalRunID, "failed")
-    if (workDir) cleanupGoalWorkspace(workDir).catch(() => {})
     yield { type: "failed", error, failureClass: "bug" }
   }
 }
@@ -125,7 +128,7 @@ async function* streamExecutorEvents(
   contract: GoalContract,
   deps: PipelineDeps,
   goalRunID: string,
-): AsyncGenerator<PipelineEvent, PipelineDelivery | undefined> {
+): AsyncGenerator<PipelineEvent, StreamResult> {
   const { goal, run, task } = contract
   const { executor, workDir, sessionID, executorSessionID, queueTaskID, signal } = deps
 
@@ -134,11 +137,9 @@ async function* streamExecutorEvents(
       status: "failed" as const, error: "status check failed",
     }))
     if (status.status === "failed") {
-      updateGoalRun(goalRunID, { status: "failed", error: status.error ?? "Executor failed", time_completed: Date.now() })
-      updateGoalRunExecutorSessionStatus(goalRunID, "failed")
-      return undefined
+      return { error: status.error ?? "Executor failed (no event stream)" }
     }
-    return await extractDelivery(goalRunID, workDir, goal.id)
+    return { delivery: await extractDelivery(goalRunID, workDir, goal.id) }
   }
 
   // Completion detection (multi-signal):
@@ -221,7 +222,7 @@ async function* streamExecutorEvents(
   streamAbort.abort("stream ended")
   await poller.catch(() => {})
 
-  if (signal.aborted) return undefined
+  if (signal.aborted) return { error: "Execution aborted" }
 
   // When idle-grace forced completion, the LLM turn finished but the queue task
   // row is still "running" (callback chain stuck). Treat as success and
@@ -240,8 +241,7 @@ async function* streamExecutorEvents(
     } catch (err) {
       log.warn("failed to force-complete queue task row", { queueTaskID, error: String(err) })
     }
-    updateGoalRunExecutorSessionStatus(goalRunID, "completed")
-    return await extractDelivery(goalRunID, workDir, goal.id)
+    return { delivery: await extractDelivery(goalRunID, workDir, goal.id) }
   }
 
   const status = await Promise.race([
@@ -255,32 +255,12 @@ async function* streamExecutorEvents(
   }))
 
   if (status.status !== "completed") {
-    const failError = status.error ?? "Executor failed"
+    const failError = status.error ?? `Executor finished with status "${status.status}" (no error detail)`
     log.error("goal_run executor status not completed", { runID: run.id, goalRunID, goalID: goal.id, statusResult: status.status, error: failError })
-    updateGoalRun(goalRunID, { status: "failed", error: failError, time_completed: Date.now() })
-    updateGoalRunExecutorSessionStatus(goalRunID, "failed")
-
-    // CRITICAL: also transition goal.status to "failed".
-    // Without this, goal stays "running" forever. The Task Agent sees
-    // goals stuck at "running" and loops endlessly.
-    try {
-      const { OrchestratorGoalTable } = await import("@/orchestrator/orchestrator.sql")
-      Database.use((db) => {
-        db.update(OrchestratorGoalTable)
-          .set({ status: "failed", time_updated: Date.now() })
-          .where(eq(OrchestratorGoalTable.id, goal.id))
-          .run()
-      })
-      log.info("goal status transitioned to failed after executor failure", { goalID: goal.id, error: failError })
-    } catch (err) {
-      log.error("failed to transition goal status", { goalID: goal.id, error: String(err) })
-    }
-
-    return undefined
+    return { error: failError }
   }
 
-  updateGoalRunExecutorSessionStatus(goalRunID, "completed")
-  return await extractDelivery(goalRunID, workDir, goal.id)
+  return { delivery: await extractDelivery(goalRunID, workDir, goal.id) }
 }
 
 // ---------------------------------------------------------------------------

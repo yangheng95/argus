@@ -83,8 +83,26 @@ export interface WorkflowState {
 const STANDARD: MiniWorkflow = {
   id: "standard",
   name: "Standard",
-  description: "完整 requirements → architect → per-goal execute → deliver 流程（planning 在 goal 内部自动进行，delivery agent 做最终验收）",
+  description: "完整 design_analysis(可选) → requirements → architect → per-goal [plan → execute] → deliver 流程（per-goal plan 由 GoalPool 的 pipeline-planner 自动运行，delivery agent 做最终验收）",
   steps: [
+    {
+      id: "clarify",
+      tool: "clarify",
+      label: "Clarify",
+      hint: "向用户提出结构化问题，澄清模糊或不完整的输入。输入已足够详细时可跳过。",
+      scope: "task",
+      skippable: true,
+      after: [],
+    },
+    {
+      id: "design_analysis",
+      tool: "design_analysis",
+      label: "Design",
+      hint: "分析视觉参考（图片/URL），提取布局结构、样式标记、组件清单、交互模式。前端/UI 任务且有视觉参考时触发，否则跳过。",
+      scope: "task",
+      skippable: true,
+      after: ["clarify"],
+    },
     {
       id: "requirements",
       tool: "requirements",
@@ -92,7 +110,7 @@ const STANDARD: MiniWorkflow = {
       hint: "分析输入，提取需求，分解为可执行的 goals with acceptance criteria。",
       scope: "task",
       skippable: false,
-      after: [],
+      after: ["design_analysis"],
     },
     {
       id: "architect",
@@ -104,13 +122,26 @@ const STANDARD: MiniWorkflow = {
       after: ["requirements"],
     },
     {
-      id: "execute",
-      tool: "execute_goal",
-      label: "Execute",
-      hint: "在隔离 worktree 中执行 goal 实现（含自动 planning）。执行器自报成功/失败。",
+      // per-goal planning 仍然在 GoalPool 内部 mandatory 运行（pipeline-planner），
+      // 但 UI 需要一个 goal-scope 步骤来显示它的输出。tool 字段是 nominal——
+      // 实际状态由 goal-pool.ts 调用 markGoalWorkflowStep 直接驱动，不依赖 Task
+      // Agent 工具调用。
+      id: "plan",
+      tool: "pipeline_planner",
+      label: "Plan",
+      hint: "pipeline-planner 在 goal worktree 中生成实现步骤（自动运行）。",
       scope: "goal",
       skippable: false,
       after: ["architect"],
+    },
+    {
+      id: "execute",
+      tool: "execute_goal",
+      label: "Execute",
+      hint: "在隔离 worktree 中执行 goal 实现。执行器自报成功/失败。",
+      scope: "goal",
+      skippable: false,
+      after: ["plan"],
     },
     {
       id: "deliver",
@@ -121,8 +152,17 @@ const STANDARD: MiniWorkflow = {
       skippable: false,
       after: ["execute"],
     },
+    {
+      id: "refine",
+      tool: "refine",
+      label: "Refine",
+      hint: "项目完成后探索交付物，分析质量/覆盖度/功能，生成下一轮迭代建议。",
+      scope: "task",
+      skippable: true,
+      after: ["deliver"],
+    },
   ],
-  goalLoopStepIDs: ["execute"],
+  goalLoopStepIDs: ["plan", "execute"],
 }
 
 /** quick-fix — 极简修复 */
@@ -166,7 +206,7 @@ const QUICK_FIX: MiniWorkflow = {
 const PLAN_ONLY: MiniWorkflow = {
   id: "plan-only",
   name: "Plan Only",
-  description: "仅分析和规划，不执行代码：requirements → architect → plan",
+  description: "仅分析和规划，不执行代码：requirements → architect → per-goal plan",
   steps: [
     {
       id: "requirements",
@@ -186,8 +226,17 @@ const PLAN_ONLY: MiniWorkflow = {
       skippable: true,
       after: ["requirements"],
     },
+    {
+      id: "plan",
+      tool: "pipeline_planner",
+      label: "Plan",
+      hint: "pipeline-planner 为每个 goal 生成实现步骤（自动运行）。",
+      scope: "goal",
+      skippable: false,
+      after: ["architect"],
+    },
   ],
-  goalLoopStepIDs: [],
+  goalLoopStepIDs: ["plan"],
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -275,6 +324,68 @@ export function createGoalStepStates(workflow: MiniWorkflow): Record<string, Goa
 /** 根据 tool 名查找 workflow 中对应的 step */
 export function findStepByTool(workflow: MiniWorkflow, toolName: string): MiniWorkflowStep | undefined {
   return workflow.steps.find(s => s.tool === toolName)
+}
+
+/**
+ * 直接驱动一个 goal-scope 步骤的状态，不经过 Task Agent 工具调用。
+ *
+ * 场景：per-goal plan 由 GoalPool 内部的 pipeline-planner 运行，没有对应的
+ * Task Agent 工具调用来触发 trackStepStart/Complete。此 helper 让 goal-pool.ts
+ * 可以手动推进步骤状态，同时持久化到 task.metadata._workflow 并 emit 事件，
+ * 让 UI 与 task-agent 的 workflow 追踪保持一致。
+ *
+ * 若 task 的 _workflow state 中没有此 goal 的条目（legacy 任务），会惰性初始化。
+ * 若对应 step 在 workflow 定义里不存在，则静默跳过（兼容自定义 workflow）。
+ */
+export async function markGoalWorkflowStep(
+  taskID: string,
+  goalID: string,
+  goalTitle: string,
+  stepID: string,
+  status: GoalStepStatus["status"],
+): Promise<void> {
+  const [{ requireTask }, { updateTask }, { OrchestratorProtocol }, { Event }] = await Promise.all([
+    import("./store"),
+    import("./state"),
+    import("./protocol"),
+    import("./model"),
+  ])
+  const task = requireTask(taskID)
+  const raw = (task.metadata as Record<string, unknown> | null | undefined)?._workflow as WorkflowState | undefined
+  const ws: WorkflowState = raw ?? {
+    workflowID: "standard",
+    currentStepID: null,
+    taskSteps: {},
+    goalSteps: {},
+  }
+  const workflow = WorkflowRegistry.resolveSync(ws.workflowID) ?? WorkflowRegistry.resolveSync("standard")
+  if (!workflow) return
+  const step = workflow.steps.find(s => s.id === stepID && s.scope === "goal")
+  if (!step) return
+
+  if (!ws.goalSteps[goalID]) {
+    ws.goalSteps[goalID] = {
+      goalID,
+      goalTitle,
+      goalStatus: "pending",
+      steps: createGoalStepStates(workflow),
+    }
+  }
+  const existing = ws.goalSteps[goalID].steps[stepID] ?? { status: "pending" }
+  const now = Date.now()
+  ws.goalSteps[goalID].steps[stepID] = {
+    ...existing,
+    status,
+    startedAt: status === "running" ? now : existing.startedAt ?? now,
+    completedAt: status === "completed" || status === "failed" || status === "skipped" ? now : existing.completedAt,
+  }
+
+  const meta = { ...(task.metadata ?? {}), _workflow: ws }
+  await updateTask(task, { metadata: meta }, `Goal step ${status}: ${goalID} ${stepID}`)
+  OrchestratorProtocol.emit(Event.WorkflowStepUpdated, {
+    taskID, stepID, goalID, status,
+    summary: `Goal ${goalID}: ${step.label} ${status}`,
+  }, { taskID }).catch(() => undefined)
 }
 
 /**

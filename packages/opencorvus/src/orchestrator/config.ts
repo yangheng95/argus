@@ -57,12 +57,20 @@ export interface DeliveryConfig {
   skills: string[]
 }
 
+export interface DesignAnalystConfig {
+  max_steps: number
+  timeout_ms: number
+  skills: string[]
+  model?: string
+}
+
 export interface OrchestratorConfigType {
   decompose: DecomposeConfig
   architect: ArchitectConfig
   planner: PlannerConfig
   evaluator: EvaluatorConfig
   delivery: DeliveryConfig
+  design_analyst: DesignAnalystConfig
   max_runs: number
   max_fix_runs: number
   /** Max retries per individual goal. Goal permanently fails after this many retries. */
@@ -107,6 +115,11 @@ const DEFAULTS: OrchestratorConfigType = {
     max_steps: 40,
     timeout_ms: 600_000,
     max_retries: 2,
+    skills: [],
+  },
+  design_analyst: {
+    max_steps: 50,
+    timeout_ms: 300_000,
     skills: [],
   },
   max_runs: 10,
@@ -181,6 +194,12 @@ function merge(user?: Config.Info["assistant"]): OrchestratorConfigType {
       timeout_ms: user?.delivery?.timeout_ms ?? DEFAULTS.delivery.timeout_ms,
       max_retries: user?.delivery?.max_retries ?? DEFAULTS.delivery.max_retries,
       skills: user?.delivery?.skills ?? DEFAULTS.delivery.skills,
+    },
+    design_analyst: {
+      max_steps: user?.design_analyst?.max_steps ?? DEFAULTS.design_analyst.max_steps,
+      timeout_ms: user?.design_analyst?.timeout_ms ?? DEFAULTS.design_analyst.timeout_ms,
+      skills: user?.design_analyst?.skills ?? DEFAULTS.design_analyst.skills,
+      model: user?.design_analyst?.model ?? undefined,
     },
     max_runs: user?.max_runs ?? DEFAULTS.max_runs,
     max_fix_runs: user?.max_fix_runs ?? DEFAULTS.max_fix_runs,

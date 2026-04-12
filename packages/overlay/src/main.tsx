@@ -14,7 +14,11 @@ import { TitlebarMenu } from "./components/TitlebarMenu";
 import { ConnectionBadge } from "./components/ConnectionBadge";
 import { ChangesPanel } from "./components/ChangesPanel";
 import { LogViewer } from "./components/LogViewer";
-import { CodingTab } from "./components/CodingTab";
+import {
+  WorkspacePanel,
+  type WorkspaceView,
+} from "./components/WorkspacePanel";
+import type { CodingTabAPI } from "./components/CodingTab";
 import { initApp } from "./services/init";
 import { loadTasks, boardStore, loadBoard, setBoardStore } from "./store/board";
 import {
@@ -53,7 +57,6 @@ import {
   toggleDevtools,
 } from "./services/theme";
 import { settingsStore, setSettingsStore, saveSettings } from "./store/settings";
-import { switchTab } from "./services/tabs";
 import { initPaneResizers, cancelPaneResize, currentUIScale } from "./services/pane";
 import { installBudgetBindings, renderBudget } from "./services/budget";
 import { panelMessage } from "./services/chat";
@@ -94,7 +97,21 @@ import { conversationMessages } from "./utils/conversation";
 // ── Application-level signals (shared across mount points) ──
 
 const [logOpen, setLogOpen] = createSignal(false);
-const [codingActive, setCodingActive] = createSignal(false);
+
+// ── Workspace (secondary panel, stacked above composer) state ──
+// workspaceOpen drives layout visibility; workspaceView is remembered across
+// open/close cycles so reopening restores the last active view.
+const [workspaceOpen, setWorkspaceOpen] = createSignal(false);
+const [workspaceView, setWorkspaceView] = createSignal<WorkspaceView>({
+  kind: "build",
+});
+
+// Which panel receives composer input/stop. Derived: only "build" when the
+// workspace is open AND the Build view is foregrounded AND the user has
+// clicked into the Build scroll area; otherwise "task".
+const [composerTarget, setComposerTarget] = createSignal<"task" | "build">(
+  "task",
+);
 
 type AppDialogOptions = {
   title?: string;
@@ -117,10 +134,46 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value);
 }
 
-function setActiveTab(tab: "control" | "coding"): void {
-  setCodingActive(tab === "coding");
-  switchTab(tab);
+/**
+ * Open the workspace panel, optionally with a specific view. If no view is
+ * supplied, the last-used view is restored.
+ */
+function openWorkspace(view?: WorkspaceView): void {
+  if (view) setWorkspaceView(view);
+  setWorkspaceOpen(true);
+  // Auto-bind composer to Build when entering Build; Diff is read-only so
+  // composer stays on task.
+  const next = view ?? workspaceView();
+  setComposerTarget(next.kind === "build" ? "build" : "task");
 }
+
+/** Close the workspace panel and force the composer back to task. */
+function closeWorkspace(): void {
+  setWorkspaceOpen(false);
+  setComposerTarget("task");
+}
+
+/** Toggle the workspace open/closed, restoring the remembered view. */
+function toggleWorkspace(): void {
+  if (workspaceOpen()) closeWorkspace();
+  else openWorkspace();
+}
+
+/** Switch the foregrounded view without changing open/close state. */
+function setWorkspaceViewAndFocus(view: WorkspaceView): void {
+  setWorkspaceView(view);
+  // Diff view never owns the composer; Build view claims it on entry.
+  setComposerTarget(view.kind === "build" ? "build" : "task");
+}
+
+/** Open (or switch to) a diff file in the workspace. */
+function openWorkspaceDiff(filePath: string): void {
+  openWorkspace({ kind: "diff", filePath });
+}
+
+// Exposed for services and window-level bridges that need to trigger the
+// workspace from outside this module (e.g. ChangesPanel clicks).
+(window as any).openWorkspaceDiff = openWorkspaceDiff;
 
 function installAppDialogBridge(): void {
   const dialog = document.getElementById("appDialog") as HTMLDialogElement | null;
@@ -424,24 +477,25 @@ if (chatScroll) {
   render(() => <Conversation container={chatScroll} />, chatScroll);
 }
 
-// ── Mount: CodingTab ──
+// ── Mount: WorkspacePanel (Build + Diff) ──
 
-import type { CodingTabAPI } from "./components/CodingTab";
 let codingAPI: CodingTabAPI | null = null;
 
-const codingScrollEl = document.getElementById("codingScroll");
-if (codingScrollEl) {
-  codingScrollEl.innerHTML = "";
+const workspaceMountEl = document.getElementById("solidWorkspaceMount");
+if (workspaceMountEl) {
+  workspaceMountEl.innerHTML = "";
   render(
     () => (
-      <CodingTab
-        active={codingActive()}
-        onReady={(api) => {
+      <WorkspacePanel
+        view={workspaceView()}
+        onSelectView={setWorkspaceViewAndFocus}
+        onClose={closeWorkspace}
+        onCodingReady={(api) => {
           codingAPI = api;
         }}
       />
     ),
-    codingScrollEl,
+    workspaceMountEl,
   );
 }
 
@@ -594,21 +648,22 @@ if (boardEl) {
 
 const composerEl = document.getElementById("solidChatComposer");
 if (composerEl) {
+  const isBuildTarget = () => composerTarget() === "build";
   render(
     () => (
       <ChatComposer
-        enabled={codingActive() ? true : canComposeChat()}
-        busy={codingActive() ? (codingAPI?.busy() ?? false) : (!!messageStore.chatRequest || isTaskInterruptable())}
-        stopping={codingActive() ? false : !!(messageStore.chatRequest as any)?.stopping}
+        enabled={isBuildTarget() ? true : canComposeChat()}
+        busy={isBuildTarget() ? (codingAPI?.busy() ?? false) : (!!messageStore.chatRequest || isTaskInterruptable())}
+        stopping={isBuildTarget() ? false : !!(messageStore.chatRequest as any)?.stopping}
         onSubmit={(text, attachments, webSearch) => {
-          if (codingActive() && codingAPI) {
+          if (isBuildTarget() && codingAPI) {
             codingAPI.send(text);
           } else {
             void panelMessage(text, attachments, webSearch ? { web_search: true } : {});
           }
         }}
         onStop={() => {
-          if (codingActive() && codingAPI) {
+          if (isBuildTarget() && codingAPI) {
             codingAPI.stop();
           } else {
             // Abort any in-flight HTTP request first
@@ -846,6 +901,76 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
+ // ── Workspace panel resizer ──
+ // Drag the horizontal divider above the workspace to adjust its height.
+ // Height is persisted to settings.workspacePanelHeight and applied as an
+ // inline style on #solidWorkspaceMount. The workspace is stacked inside
+ // #chatSection between #chatScroll and #solidChatComposer.
+  {
+    const resizer = document.getElementById("workspaceResizer");
+    const mount = document.getElementById("solidWorkspaceMount");
+    const applyHeight = (px: number) => {
+      if (!mount) return;
+      mount.style.height = px + "px";
+      mount.style.minHeight = px + "px";
+      mount.style.maxHeight = px + "px";
+    };
+    // Restore persisted height on startup.
+    if (settingsStore.workspacePanelHeight != null) {
+      applyHeight(settingsStore.workspacePanelHeight);
+    }
+    resizer?.addEventListener("pointerdown", (e) => {
+      if (e.button !== 0 || !mount) return;
+      resizer.dataset.active = "true";
+      // "row" — use row-resize cursor globally during the drag, distinct
+      // from column resizers which set data-resizing="true".
+      document.body.dataset.resizing = "row";
+      e.preventDefault();
+      const chatSection = document.getElementById("chatSection");
+      const composer = document.getElementById("solidChatComposer");
+      function onMove(ev: PointerEvent) {
+        if (!chatSection) return;
+        const rect = chatSection.getBoundingClientRect();
+        const scale = currentUIScale();
+        // Leave room for chat-scroll (minimum) and the composer above/below.
+        const composerH = composer?.getBoundingClientRect().height ?? 0;
+        const chatScrollMin = 160 * scale;
+        const min = 160 * scale;
+        const max = Math.max(
+          min + 40,
+          rect.height - chatScrollMin - composerH,
+        );
+        // Workspace is directly above the composer — its height is measured
+        // from the top edge of the composer upward to the pointer.
+        const composerTop = composer
+          ? composer.getBoundingClientRect().top
+          : rect.bottom;
+        const next = Math.round(
+          Math.min(max, Math.max(min, composerTop - ev.clientY)),
+        );
+        applyHeight(next);
+      }
+      function onUp() {
+        delete resizer!.dataset.active;
+        delete document.body.dataset.resizing;
+        window.removeEventListener("pointermove", onMove);
+        window.removeEventListener("pointerup", onUp);
+        window.removeEventListener("pointercancel", onUp);
+        // Persist the final height.
+        const height = mount && mount.style.height
+          ? parseInt(mount.style.height, 10)
+          : null;
+        if (Number.isFinite(height) && height! > 0) {
+          setSettingsStore("workspacePanelHeight", height);
+          saveSettings();
+        }
+      }
+      window.addEventListener("pointermove", onMove);
+      window.addEventListener("pointerup", onUp);
+      window.addEventListener("pointercancel", onUp);
+    });
+  }
+
  // ── Sidebar buttons ──
   document.getElementById("btnRefreshTasks")?.addEventListener("click", () => {
     void loadTasks();
@@ -863,7 +988,6 @@ document.addEventListener("DOMContentLoaded", () => {
     // Deselect current task and focus the composer — the user types their
     // request directly in the ChatComposer, no modal dialog needed.
     void selectTask("");
-    if (codingActive()) setActiveTab("control");
     const textarea = document.querySelector<HTMLTextAreaElement>("#solidChatComposer textarea");
     textarea?.focus();
   });
@@ -919,12 +1043,12 @@ document.addEventListener("DOMContentLoaded", () => {
     const current = executorCurrentModel(executorID);
     const models = executorModels(executorID);
     const currentLabel = current
-      ? `<div class="engine-model-current">${escapeHtml(t("executor.current_model") || "Current")}: <strong>${escapeHtml(current)}</strong></div>`
+      ? `<div class="engine-model-current">${escapeHtml(t("executor.current_model"))}: <strong>${escapeHtml(current)}</strong></div>`
       : "";
     const items = models.map((mid) =>
       `<button type="button" class="engine-model-item" data-executor-model="${escapeHtml(mid)}" data-active="${mid === current}">${escapeHtml(mid)}</button>`,
     ).join("");
-    panel.innerHTML = currentLabel + (items || `<div class="engine-model-current">${escapeHtml(t("empty.overview") || "No models available")}</div>`);
+    panel.innerHTML = currentLabel + (items || `<div class="engine-model-current">${escapeHtml(t("empty.overview"))}</div>`);
   }
 
   function openModelPanel(executorID: string) {
@@ -995,17 +1119,31 @@ document.addEventListener("DOMContentLoaded", () => {
 
 // ── Initialise application ──
 
-document.getElementById("tabControl")?.addEventListener("click", () => {
-  setActiveTab("control");
-});
-document.getElementById("tabCoding")?.addEventListener("click", () => {
-  setActiveTab("coding");
-});
-document.getElementById("modeToggle")?.addEventListener("click", () => {
-  setActiveTab(codingActive() ? "control" : "coding");
+document.getElementById("btnWorkspaceToggle")?.addEventListener("click", () => {
+  toggleWorkspace();
 });
 document.getElementById("btnChatCopyAll")?.addEventListener("click", () => {
   void copyChatConversation();
+});
+
+// ── Composer target: click into either pane to rebind input ──
+// Rebinding is only meaningful while the workspace is open in Build view.
+// In Diff view the composer is always pinned to task (diff is read-only).
+// Textarea clicks fall through (the composer element is outside both scroll
+// areas) so focusing the composer itself never rebinds the target.
+const BUILD_SCROLL_SELECTOR = "#solidWorkspaceMount .workspace-view[data-kind='build']";
+document.body.addEventListener("pointerdown", (event) => {
+  if (!workspaceOpen()) return;
+  if (workspaceView().kind !== "build") return;
+  const target = event.target as HTMLElement | null;
+  if (!target) return;
+  if (target.closest(BUILD_SCROLL_SELECTOR)) {
+    if (composerTarget() !== "build") setComposerTarget("build");
+    return;
+  }
+  if (target.closest("#chatScroll")) {
+    if (composerTarget() !== "task") setComposerTarget("task");
+  }
 });
 
 // Interaction DOM rendering disabled (InteractionPanel handles UI).
@@ -1091,6 +1229,35 @@ createRoot(() => {
     if (copyBtn) copyBtn.disabled = count === 0;
   });
 
+  // ── Workspace visibility + composer focus indicator ──
+  // Drives the show/hide of the workspace mount + resizer and applies the
+  // "this pane owns the composer" highlight when Build view is active.
+  createEffect(() => {
+    const open = workspaceOpen();
+    const view = workspaceView();
+    const target = composerTarget();
+
+    const mount = document.getElementById("solidWorkspaceMount");
+    const resizer = document.getElementById("workspaceResizer");
+    if (mount) (mount as HTMLElement).hidden = !open;
+    if (resizer) (resizer as HTMLElement).hidden = !open;
+
+    // Reflect open state on the toggle button for visual/a11y feedback.
+    const toggleBtn = document.getElementById("btnWorkspaceToggle");
+    if (toggleBtn) toggleBtn.setAttribute("aria-pressed", open ? "true" : "false");
+
+    // Focus highlight: only meaningful in Build view.
+    const chatEl = document.getElementById("chatScroll");
+    const buildEl = document.querySelector(
+      "#solidWorkspaceMount .workspace-view[data-kind='build']",
+    );
+    const highlightActive = open && view.kind === "build";
+    const chatFocused = highlightActive && target === "task";
+    const buildFocused = highlightActive && target === "build";
+    if (chatEl) chatEl.classList.toggle("chat-scroll--focused", chatFocused);
+    if (buildEl) buildEl.classList.toggle("chat-scroll--focused", buildFocused);
+  });
+
   // ── Task status header (reactive) ──
   createEffect(() => {
     const task = (boardStore.board as any)?.task;
@@ -1100,7 +1267,7 @@ createRoot(() => {
     const status = task?.status || "idle";
 
     if (taskStatus) {
-      (taskStatus as HTMLElement).hidden = !boardStore.selectedTaskID || codingActive();
+      (taskStatus as HTMLElement).hidden = !boardStore.selectedTaskID;
     }
     if (statusIconEl) {
       statusIconEl.dataset.status = status;
@@ -1158,8 +1325,6 @@ const paneCallbacks = {
   },
 };
 initPaneResizers(paneCallbacks);
-
-setActiveTab("control");
 
 // ── Global event listeners (
 

@@ -687,6 +687,13 @@ function computeAgentCards(): { cards: Record<string, AgentCardMessage>; order: 
     if (typeof exSid === "string" && exSid) {
       sessionToGoal.set(exSid, card.id);
     }
+    // pipeline-planner runs in its own child session; without this mapping the
+    // plan step of the goal card stays empty because planner rounds can't be
+    // attached to the goal by sessionID.
+    const plSid = card?.metadata?.plannerSessionID;
+    if (typeof plSid === "string" && plSid) {
+      sessionToGoal.set(plSid, card.id);
+    }
   }
 
   // Ensure every goal in goalInfoMap has an index — goals from goalsLane

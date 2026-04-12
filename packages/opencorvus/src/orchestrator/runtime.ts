@@ -47,6 +47,7 @@ import {
   type TaskRow,
 } from "./store"
 import { applyGoalDelivery, cleanupGoalWorkspace } from "@/goal/runner"
+import { Worktree } from "@/worktree"
 import { Identifier } from "@/id/id"
 
 const log = Log.create({ service: "orchestrator-runtime" })
@@ -559,6 +560,7 @@ export namespace OrchestratorRuntime {
       if (!agentNotifiedRuns.has(run.id)) {
         agentNotifiedRuns.add(run.id)
         stopEventBridge(run.id)
+        mergeLocksPerRun.delete(run.id)
         updateExecutorSessionStatus(run.id, "completed")
         Promise.all([import("@/orchestrator/task-loop"), import("@/orchestrator/state")]).then(([{ runTaskLoop }, { hooks: getHooks }]) => {
           runTaskLoop({
@@ -630,6 +632,7 @@ export namespace OrchestratorRuntime {
       if (!agentNotifiedRuns.has(run.id)) {
         agentNotifiedRuns.add(run.id)
         stopEventBridge(run.id)
+        mergeLocksPerRun.delete(run.id)
         updateExecutorSessionStatus(run.id, "completed")
         await hooks.updateRun(run, { status: "completed", blocking_reason: null, error: null, time_completed: Date.now() }, "Run completed")
         Promise.all([import("@/orchestrator/task-loop"), import("@/orchestrator/state")]).then(([{ runTaskLoop }, { hooks: getHooks }]) => {
@@ -764,27 +767,30 @@ export async function mergeGoalDelivery(
     const { $ } = await import("bun")
     const files = delivery.diffs.map((d) => d.file as string)
     if (files.length > 0) {
-      const addResult = await $`git add -- ${files}`.quiet().cwd(Instance.directory).nothrow()
-      if (addResult.exitCode !== 0) {
-        log.error("goal merge: git add failed", {
-          goalRunID: goalRun.id,
-          exitCode: addResult.exitCode,
-          stderr: addResult.stderr.toString().slice(0, 500),
-        })
-      }
-      const label = goalRun.goal_id?.slice(-8) ?? "unknown"
-      const commitResult = await $`git -c user.email=opencorvus@local -c user.name=OpenCorvus commit -m ${"goal-merge: " + label}`.quiet().cwd(Instance.directory).nothrow()
-      if (commitResult.exitCode !== 0) {
-        const stderr = commitResult.stderr.toString()
-        if (!stderr.includes("nothing to commit")) {
-          log.error("goal merge: git commit failed", {
+      // Git operations serialized with Worktree.create/remove via shared lock
+      await Worktree.lock(async () => {
+        const addResult = await $`git add -- ${files}`.quiet().cwd(Instance.directory).nothrow()
+        if (addResult.exitCode !== 0) {
+          log.error("goal merge: git add failed", {
             goalRunID: goalRun.id,
-            exitCode: commitResult.exitCode,
-            stderr: stderr.slice(0, 500),
+            exitCode: addResult.exitCode,
+            stderr: addResult.stderr.toString().slice(0, 500),
           })
         }
-      }
-      log.info("committed goal merge to advance HEAD", { goalRunID: goalRun.id, files: files.length })
+        const label = goalRun.goal_id?.slice(-8) ?? "unknown"
+        const commitResult = await $`git -c user.email=opencorvus@local -c user.name=OpenCorvus commit -m ${"goal-merge: " + label}`.quiet().cwd(Instance.directory).nothrow()
+        if (commitResult.exitCode !== 0) {
+          const stderr = commitResult.stderr.toString()
+          if (!stderr.includes("nothing to commit")) {
+            log.error("goal merge: git commit failed", {
+              goalRunID: goalRun.id,
+              exitCode: commitResult.exitCode,
+              stderr: stderr.slice(0, 500),
+            })
+          }
+        }
+        log.info("committed goal merge to advance HEAD", { goalRunID: goalRun.id, files: files.length })
+      })
     }
   })
 

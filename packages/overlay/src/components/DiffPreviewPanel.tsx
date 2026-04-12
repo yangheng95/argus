@@ -1,0 +1,84 @@
+// ── DiffPreviewPanel ──
+// Right-hand workspace view that shows the full diff for a single file.
+// Given a file path, it resolves the FileChange from the shared diff service
+// (which lazy-loads from the delivery API when necessary) and renders it
+// through the shared DiffView component.
+
+import { createResource, createMemo, Show } from "solid-js";
+import { DiffView, changeStatusLabel, type FileChange } from "./DiffView";
+import { resolveDiff } from "../services/diff";
+import { t } from "../utils/i18n";
+
+export interface DiffPreviewPanelProps {
+  /** File path to show — null/empty renders the empty state. */
+  filePath: string | null;
+}
+
+export function DiffPreviewPanel(props: DiffPreviewPanelProps) {
+  // Re-resolve whenever the target file path changes. createResource caches
+  // the last value, so switching back to a previously-viewed file is
+  // instantaneous as long as the underlying delivery cache is still warm.
+  const [change] = createResource<FileChange | null, string>(
+    () => props.filePath || "",
+    async (path) => {
+      if (!path) return null;
+      return resolveDiff(path);
+    },
+  );
+
+  const item = createMemo(() => change());
+  const loading = () => change.loading;
+
+  return (
+    <div class="diff-preview-panel">
+      <Show
+        when={props.filePath}
+        fallback={
+          <div class="diff-preview-empty">
+            <p class="empty-hint">{t("diff.select_file")}</p>
+          </div>
+        }
+      >
+        <header class="diff-preview-head">
+          <span class="diff-preview-path" title={props.filePath || ""}>
+            {props.filePath}
+          </span>
+          <Show when={item()}>
+            <span class="diff-preview-meta">
+              <span class="change-status" data-status={item()!.status}>
+                {changeStatusLabel(item()!.status)}
+              </span>
+              <span class="diff-dialog-stat" data-tone="add">
+                +{item()!.additions}
+              </span>
+              <span class="diff-dialog-stat" data-tone="del">
+                -{item()!.deletions}
+              </span>
+            </span>
+          </Show>
+        </header>
+        <div class="diff-preview-body">
+          <Show
+            when={!loading()}
+            fallback={
+              <div class="diff-preview-empty">
+                <p class="empty-hint">{t("diff.loading")}</p>
+              </div>
+            }
+          >
+            <Show
+              when={item()}
+              fallback={
+                <div class="diff-preview-empty">
+                  <p class="empty-hint">{t("diff.no_preview")}</p>
+                </div>
+              }
+            >
+              <DiffView item={item()!} />
+            </Show>
+          </Show>
+        </div>
+      </Show>
+    </div>
+  );
+}

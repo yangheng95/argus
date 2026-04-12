@@ -480,7 +480,7 @@ export function Board(props: BoardProps) {
       <Show when={showRequirements()}>
         <SectionFrame
           id="requirementsSection"
-          title={t("workflow.requirements") || "Requirements"}
+          title={t("workflow.requirements")}
           icon={SECTION_ICONS.spec}
           bodyId="requirementsBody"
           badgeId="requirementsBadge"
@@ -505,7 +505,7 @@ export function Board(props: BoardProps) {
       <Show when={showArchitect()}>
         <SectionFrame
           id="architectSection"
-          title={t("workflow.architect") || "Architect"}
+          title={t("workflow.architect")}
           icon={SECTION_ICONS.plan}
           bodyId="architectBody"
           badgeId="architectBadge"
@@ -519,7 +519,7 @@ export function Board(props: BoardProps) {
       <Show when={showGoals()}>
         <SectionFrame
           id="goalWorkflowsSection"
-          title={t("workflow.goals") || "Goals"}
+          title={t("workflow.goals")}
           icon={SECTION_ICONS.goals}
           bodyId="goalWorkflowsBody"
           badgeId="goalWorkflowsBadge"
@@ -574,7 +574,7 @@ export function Board(props: BoardProps) {
       <Show when={showInteractions()}>
         <SectionFrame
           id="interactionsSection"
-          title={t("workflow.interactions") || "Interactions"}
+          title={t("workflow.interactions")}
           icon={SECTION_ICONS.criteria}
           bodyId="interactionsBody"
           badgeId="interactionsBadge"

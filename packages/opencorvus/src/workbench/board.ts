@@ -445,22 +445,32 @@ function buildBoard(task: typeof OrchestratorTaskTable.$inferSelect) {
               const score = (value: string) => (value === "pending" ? 0 : value === "failed" ? 1 : 2)
               return score(a.status) - score(b.status)
             })
-            .map((goal) => ({
-              id: goal.id,
-              kind: "goal" as const,
-              title: goal.title,
-              detail: goal.done_definition,
-              status: goal.status,
-              time: goal.time_updated,
-              metadata: {
-                ...(goal.metadata as Record<string, unknown> | null ?? {}),
-                sessionID: goalRunSessionMap.get(goal.id) ?? undefined,
-                executorSessionID: (() => {
-                  const goalRun = goalRunByGoalID.get(goal.id)
-                  return goalRun ? goalRunExecutorSessionMap.get(goalRun.id) ?? undefined : undefined
-                })(),
-              },
-            })),
+            .map((goal) => {
+              const goalRun = goalRunByGoalID.get(goal.id)
+              const runMeta = goalRun?.metadata as Record<string, unknown> | null | undefined
+              // pipeline-planner runs in a child session that goal-pool.ts persists
+              // into goal_run.metadata.plannerSessionID. Expose it so the overlay
+              // can map planner-stage messages into the right goal card. Without
+              // this, the planner session's events reach the bridge but never
+              // attach to a goal group — plan step renders blank.
+              const plannerSessionIDRaw = runMeta && typeof runMeta.plannerSessionID === "string"
+                ? runMeta.plannerSessionID
+                : undefined
+              return {
+                id: goal.id,
+                kind: "goal" as const,
+                title: goal.title,
+                detail: goal.done_definition,
+                status: goal.status,
+                time: goal.time_updated,
+                metadata: {
+                  ...(goal.metadata as Record<string, unknown> | null ?? {}),
+                  sessionID: goalRunSessionMap.get(goal.id) ?? undefined,
+                  executorSessionID: goalRun ? goalRunExecutorSessionMap.get(goalRun.id) ?? undefined : undefined,
+                  plannerSessionID: plannerSessionIDRaw,
+                },
+              }
+            }),
         },
         {
           id: "staging",

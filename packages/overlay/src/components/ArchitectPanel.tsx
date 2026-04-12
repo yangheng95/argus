@@ -27,13 +27,13 @@ export function ArchitectPanel(props: ArchitectPanelProps) {
       <Show when={props.isGenerating && !props.architect}>
         <div class="arch-generating">
           <span class="agent-card-spinner" />
-          <span class="arch-generating-label">{t("workflow.architect_generating") || "Coordinating cross-goal contracts..."}</span>
+          <span class="arch-generating-label">{t("workflow.architect_generating")}</span>
         </div>
       </Show>
       <Show when={props.architect}>
         <div class="arch-summary">
           <span class="arch-count">{props.architect!.contractCount}</span>
-          <span class="arch-count-label">{t("workflow.architect_contracts") || "contracts"}</span>
+          <span class="arch-count-label">{t("workflow.architect_contracts")}</span>
         </div>
         <Show when={props.architect!.categories.length > 0}>
           <div class="arch-categories">

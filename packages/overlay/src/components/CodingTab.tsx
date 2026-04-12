@@ -431,7 +431,7 @@ export function CodingTab(props: CodingTabProps) {
     return (
       <article class="turn msg" data-role="user">
         <div class="msg-head">
-          <span class="msg-role">{t("chat.role.user") || "You"}</span>
+          <span class="msg-role">{t("chat.role.user")}</span>
         </div>
         <div class="msg-bubble">
           <div class="msg-body">
@@ -507,7 +507,7 @@ export function CodingTab(props: CodingTabProps) {
               <Show when={isStreaming()}>
                 <div class="msg-thinking-live">
                   <span class="msg-thinking-dot" />
-                  <span>{t("chat.thinking") || "Thinking…"}</span>
+                  <span>{t("chat.thinking")}</span>
                 </div>
               </Show>
             }
@@ -552,7 +552,7 @@ export function CodingTab(props: CodingTabProps) {
   return (
     <div
       class="coding-tab-root"
-      style={{ display: props.active ? "flex" : "none", "flex-direction": "column", height: "100%" }}
+      style={{ display: "flex", "flex-direction": "column", height: "100%", "min-width": 0 }}
     >
       <div
         ref={(el) => onCleanup(setupAutoScroll(el))}
@@ -563,7 +563,7 @@ export function CodingTab(props: CodingTabProps) {
           when={!isEmpty()}
           fallback={
             <div class="chat-empty">
-              {t("coding.empty") || "Build agent — ask anything about the codebase"}
+              {t("coding.empty")}
             </div>
           }
         >

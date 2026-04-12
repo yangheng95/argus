@@ -30,6 +30,7 @@ import {
   createMemo,
   onCleanup,
   onMount,
+  For,
 } from "solid-js";
 import {
   settingsStore,
@@ -45,7 +46,6 @@ import { t } from "../utils/i18n";
 import {
   sanitizeTheme,
   sanitizeOpacity,
-  resolvedTheme,
   applyTheme,
   applyOpacity,
 } from "../services/theme";
@@ -92,13 +92,19 @@ export function TitlebarMenu(props: TitlebarMenuProps) {
 
  // ── Derived ──
 
- // Theme label shown in the menu item (mirrors renderTitlebarMenu btnThemeValue)
+ // Available themes — each entry drives one row in the theme selector.
+  const THEME_OPTIONS: Array<{ id: string; labelKey: string }> = [
+    { id: "system", labelKey: "settings.theme.system" },
+    { id: "light", labelKey: "settings.theme.light" },
+    { id: "dark", labelKey: "settings.theme.dark" },
+    { id: "vscode-dark", labelKey: "settings.theme.vscode_dark" },
+  ];
+
+  const currentTheme = createMemo(() => sanitizeTheme(settingsStore.theme));
   const themeLabel = createMemo(() => {
-    const theme = sanitizeTheme(settingsStore.theme);
-    if (theme === "light") return t("settings.theme.light");
-    if (theme === "system") return t("settings.theme.system");
-    if (theme === "vscode-dark") return t("settings.theme.vscode_dark");
-    return t("settings.theme.dark");
+    const theme = currentTheme();
+    const hit = THEME_OPTIONS.find((opt) => opt.id === theme);
+    return hit ? t(hit.labelKey) : t("settings.theme.dark");
   });
 
  // Pin label (mirrors renderTitlebarMenu btnPinValue)
@@ -150,15 +156,12 @@ export function TitlebarMenu(props: TitlebarMenuProps) {
     closeMenu();
   }
 
- // Theme cycle —
- // resolvedTheme() === "light" → switch to "dark"; otherwise → "light"
-  async function handleThemeToggle() {
-    const next = resolvedTheme() === "light" ? "dark" : "light";
+ // Theme selection — pick an explicit theme from the list
+  function handleThemeSelect(next: string) {
     setSettingsStore("theme", next);
     applyTheme(next);
     applySettings({ ...settingsStore, theme: next });
     saveSettings();
-    closeMenu();
   }
 
  // Settings button —
@@ -335,56 +338,67 @@ export function TitlebarMenu(props: TitlebarMenuProps) {
           </span>
         </button>
 
-        {/* ── Theme ── */}
-        <button
-          type="button"
-          id="btnTheme"
-          class="titlebar-menu-item"
-          title={
-            resolvedTheme() === "light"
-              ? t("titlebar.theme.dark")
-              : t("titlebar.theme.light")
-          }
-          aria-label={
-            resolvedTheme() === "light"
-              ? t("titlebar.theme.dark")
-              : t("titlebar.theme.light")
-          }
-          data-theme={resolvedTheme()}
-          data-mode={sanitizeTheme(settingsStore.theme)}
-          onClick={() => void handleThemeToggle()}
+        {/* ── Theme group ── */}
+        <div
+          class="titlebar-menu-group"
+          id="titlebarThemeGroup"
+          data-mode={currentTheme()}
+          role="radiogroup"
+          aria-label={t("settings.theme")}
         >
-          <span class="titlebar-menu-icon" aria-hidden="true">
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 16 16"
-              fill="none"
-            >
-              <circle
-                cx="8"
-                cy="8"
-                r="3"
-                stroke="currentColor"
-                stroke-width="1.2"
-              />
-              <path
-                d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.1 3.1l1.4 1.4M11.5 11.5l1.4 1.4M3.1 12.9l1.4-1.4M11.5 4.5l1.4-1.4"
-                stroke="currentColor"
-                stroke-width="1.2"
-                stroke-linecap="round"
-              />
-            </svg>
-          </span>
-          <span class="titlebar-menu-copy">
-            <span class="titlebar-menu-title">
-              {t("settings.theme")}
+          <div class="titlebar-menu-group-head">
+            <span class="titlebar-menu-icon" aria-hidden="true">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 16 16"
+                fill="none"
+              >
+                <circle
+                  cx="8"
+                  cy="8"
+                  r="3"
+                  stroke="currentColor"
+                  stroke-width="1.2"
+                />
+                <path
+                  d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.1 3.1l1.4 1.4M11.5 11.5l1.4 1.4M3.1 12.9l1.4-1.4M11.5 4.5l1.4-1.4"
+                  stroke="currentColor"
+                  stroke-width="1.2"
+                  stroke-linecap="round"
+                />
+              </svg>
             </span>
-            <span class="titlebar-menu-meta" id="btnThemeValue">
-              {themeLabel()}
+            <span class="titlebar-menu-copy">
+              <span class="titlebar-menu-title">
+                {t("settings.theme")}
+              </span>
+              <span class="titlebar-menu-meta">{themeLabel()}</span>
             </span>
-          </span>
-        </button>
+          </div>
+          <div class="titlebar-theme-options">
+            <For each={THEME_OPTIONS}>
+              {(opt) => (
+                <button
+                  type="button"
+                  class="titlebar-theme-option"
+                  role="radio"
+                  aria-checked={currentTheme() === opt.id}
+                  data-active={currentTheme() === opt.id ? "true" : "false"}
+                  data-theme-value={opt.id}
+                  title={t(opt.labelKey)}
+                  aria-label={t(opt.labelKey)}
+                  onClick={() => handleThemeSelect(opt.id)}
+                >
+                  <span class="titlebar-theme-option-swatch" data-theme={opt.id} aria-hidden="true" />
+                  <span class="titlebar-theme-option-label">
+                    {t(opt.labelKey)}
+                  </span>
+                </button>
+              )}
+            </For>
+          </div>
+        </div>
 
         {/* ── Server Config ── */}
         <button

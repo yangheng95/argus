@@ -95,7 +95,7 @@ Goals are executed **in parallel, each in an isolated git worktree**. Maximize p
 - Every spec requirement MUST be covered by an explicit goal.
 - Implicit goals MUST exist for infrastructure that explicit goals depend on.
 - Owned paths of concurrent goals (no dependency between them) MUST NOT overlap.
-- **Maximum 10 goals total** (explicit + implicit). If you have more, merge related goals. Fewer, larger goals with clear boundaries are better than many small, interdependent ones.
+- **Right-size goals**: 3–6 for medium features, 5–10 for large PRDs. Maximum ~10 goals. Both under-splitting (1–2 mega-goals for a large PRD) and over-splitting (20+ micro-goals) are failures. Each goal should own one coherent subsystem — not the entire project.
 - Write in the same language as the request.
 
 Output text directly. Do NOT output JSON. Do NOT wrap in code blocks.
