@@ -60,7 +60,7 @@ const MAX_STEPS = 20
 
 export type TaskAgentTrigger =
   | { kind: "created" }
-  | { kind: "batch_complete"; runID: string; summary: { passed: number; failed: number; total: number } }
+  | { kind: "batch_complete"; runID: string; summary: { passed: number; failed: number; total: number }; depBlocked?: Array<{ goalTitle: string; blockedBy: Array<{ title: string; status: string }> }> }
   | { kind: "retry" }
 
 // ---------------------------------------------------------------------------
@@ -289,14 +289,37 @@ function describeTrigger(task: TaskRow, trigger: TaskAgentTrigger): string {
     case "created":
       return "New task created. Process it."
 
-    case "batch_complete":
-      return [
+    case "batch_complete": {
+      const lines = [
         `Goal batch complete on run ${trigger.runID}.`,
         `Summary: ${trigger.summary.passed} passed, ${trigger.summary.failed} failed, ${trigger.summary.total} total.`,
-        "",
-        "Read context (read_context) to see goal statuses and eval evidence.",
-        "Decide next action based on current state — no predetermined action.",
-      ].join("\n")
+      ]
+
+      if (trigger.depBlocked && trigger.depBlocked.length > 0) {
+        lines.push(
+          "",
+          "⚠ BLOCKED GOALS — the following pending goals CANNOT execute because their dependencies failed:",
+        )
+        for (const b of trigger.depBlocked) {
+          const deps = b.blockedBy.map(d => `${d.title} [${d.status}]`).join(", ")
+          lines.push(`  • "${b.goalTitle}" blocked by: ${deps}`)
+        }
+        lines.push(
+          "",
+          "ACTION REQUIRED: You MUST resolve the blocking goals before these can proceed.",
+          "Call query_failed_goals, then either retry_failed_goals (with root cause analysis) or fail_task.",
+          "Dispatching or waiting will NOT help — these goals will never become ready until the blockers are resolved.",
+        )
+      } else {
+        lines.push(
+          "",
+          "Read context (read_context) to see goal statuses and eval evidence.",
+          "Decide next action based on current state — no predetermined action.",
+        )
+      }
+
+      return lines.join("\n")
+    }
 
     case "retry":
       return `User requested retry.${task.error ? ` Previous error: ${task.error}` : ""}\nDecide how to proceed.`
@@ -316,24 +339,34 @@ const TASK_AGENT_INSTRUCTIONS = [
   "",
   "## Stage Sequence",
   "",
-  "1. **requirements** — Decompose the task into goal contracts with acceptance criteria. ALWAYS call this first.",
+  "0. **clarify** (optional, multi-round) — Ask the user structured questions with options to iteratively refine the task. Each round appends answers to the task request. Call again with follow-up questions based on previous answers until you have enough to decompose. 300s timeout per round; on timeout, proceed with best judgment. Supports all input types: natural language, spec, PRD, design, URL, etc.",
+  "0.5. **design_analysis** (optional, auto-triggered) — Analyze visual references (images, URLs) to produce structured design specs (layout tree, style tokens, component inventory, interactions, responsive rules). Enriches the task request before decomposition. See triggering rules below.",
+  "1. **requirements** — Decompose the task into goal contracts with acceptance criteria.",
   "2. **architect** — Coordinate cross-goal interface contracts. REQUIRED for multi-goal tasks — call after requirements returns 2+ goals. Skip only for single-goal tasks (the tool will enforce this automatically).",
   "3. **run** — Create run (create_run), then dispatch (submit_execution). The execution engine plans each goal automatically just before it executes — do NOT call plan_goal upfront for all goals.",
   "4. **deliver** — Aggregate and verify (deliver). Delivery agent is the single verification gate: it tests, fixes issues, and makes final acceptance decision. Only when all blocking goals have completed execution.",
+  "5. **refine** (optional, post-completion) — Explore the delivered project, analyze quality/coverage/features, and suggest next iteration improvements. Use after delivery completes successfully, or when user re-triggers a completed task asking for improvements.",
   "",
-  "You have these tools: requirements, architect, execute_goal, add_goal, modify_goal,",
+  "You have these tools: clarify, design_analysis, requirements, architect, execute_goal, add_goal, modify_goal,",
   "dispatch_ready_goals, retry_failed_goals, query_failed_goals, read_context, create_run,",
-  "submit_execution, deliver, publish_delivery, fail_task, restart_from_stage.",
+  "submit_execution, deliver, publish_delivery, fail_task, restart_from_stage, refine.",
   "(Note: per-goal planning happens automatically inside the execution engine — no plan_goal tool needed.)",
   "",
   "**For new tasks:**",
-  "- ALWAYS call requirements first to decompose the task into goals. No exceptions.",
+  "- DEFAULT: go directly to requirements. Most requests (PRDs, specs, designs, detailed descriptions) have enough information.",
+  "- **Design analysis trigger**: Call design_analysis BEFORE requirements when ALL of these apply:",
+  "  (1) The task is frontend/UI-related (web page, component, dashboard, landing page, etc.),",
+  "  AND (2) visual references exist: image attachments OR a URL to replicate/analyze.",
+  "  The design analyst produces exact layout, colors, typography, component inventory — information",
+  "  that lets the decompose agent create pixel-accurate goals instead of vague 'build the UI' goals.",
+  "  SKIP design_analysis when: no images/URLs, purely backend/API, or the request already contains detailed design specs.",
+  "- ONLY call clarify when the request is genuinely unusable for decomposition — e.g., a single sentence like '做个订单系统' with no scope, no context, no acceptance criteria. If you can extract at least 2-3 concrete requirements from the text, skip clarify.",
   "- After requirements: ALWAYS call architect next if there are 2+ goals. It coordinates interface contracts that all executors depend on. Skip only when requirements returned exactly 1 goal.",
   "- Then create_run, then submit_execution. The execution engine plans each goal automatically.",
   "- Do NOT call plan_goal for goals upfront — planning is lazy and happens per-goal inside the execution engine, right before each goal executes.",
   "",
   "**After batch completes (re-triggered with batch_complete):**",
-  "- FIRST: If any goals failed (executor produced no output), call query_failed_goals",
+  "- FIRST: If any goals failed, call query_failed_goals",
   "  to get structured per-goal info. Without this information you CANNOT make",
   "  an informed retry decision.",
   "- **If ANY goals are still \"running\" or \"pending\" → do NOTHING. Stop immediately.**",
@@ -355,6 +388,13 @@ const TASK_AGENT_INSTRUCTIONS = [
   "    MUST be fixed autonomously via retry_failed_goals.**",
   "- **NEVER call execute_goal on a passed goal.** Passed goals are terminal success",
   "  state. To change contract use modify_goal.",
+  "",
+  "**Post-completion iteration (re-triggered on completed task):**",
+  "- User sent a message to a completed task → you are re-triggered with kind=retry.",
+  "- Call refine to analyze what was built and generate improvement suggestions.",
+  "- Present suggestions to user via clarify — let them pick what to iterate on.",
+  "- With selected improvements, call restart_from_stage(requirements) to begin a new cycle.",
+  "- The full iteration loop: deliver → refine → clarify → restart → requirements → architect → execute → deliver → ...",
   "",
   "**Dynamic adjustment (anytime):**",
   "- Discovered a missing requirement? → add_goal",

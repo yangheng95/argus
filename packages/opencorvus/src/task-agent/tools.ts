@@ -198,7 +198,92 @@ export function createTaskAgentTools(input: {
     ws.goalSteps[goalID] = { goalID, goalTitle, goalStatus: "pending", steps }
   }
 
+  const CLARIFY_TIMEOUT_MS = 300_000 // 300s — user has 5 minutes to respond
+
   const tools = {
+    clarify: tool({
+      description: [
+        "Present structured questions to the user to clarify vague or incomplete task input before decomposition.",
+        "Use this when the task request lacks critical information needed for accurate requirements extraction:",
+        "- Missing target scope (which modules, pages, or features)",
+        "- Ambiguous acceptance criteria",
+        "- Unclear technical constraints (language, framework, deployment)",
+        "- Unknown input format (the request could be natural language, a spec, a PRD, a design, or a URL)",
+        "",
+        "The user has 300 seconds to respond. If they don't respond in time, you receive a timeout",
+        "signal and MUST proceed with your best judgment based on available information.",
+        "",
+        "After receiving answers, update the task request with the clarified information,",
+        "then proceed to requirements.",
+      ].join("\n"),
+      inputSchema: z.object({
+        questions: z.array(z.object({
+          question: z.string().describe("Complete question text"),
+          header: z.string().max(30).describe("Very short label (max 30 chars)"),
+          options: z.array(z.object({
+            label: z.string().describe("Display text (1-5 words, concise)"),
+            description: z.string().describe("Explanation of choice"),
+          })).describe("Available choices"),
+          multiple: z.boolean().optional().describe("Allow selecting multiple choices"),
+          custom: z.boolean().optional().default(true).describe("Allow typing a custom answer (default: true)"),
+        })).min(1).max(10).describe("Questions to ask the user (1-10)"),
+        context: z.string().describe("Brief summary of what you understood so far from the task request"),
+      }),
+      execute: async ({ questions, context }) => {
+        await trackStepStart("clarify")
+        const task = requireTask(taskID)
+
+        log.info("clarify: asking user", { taskID, questionCount: questions.length, context })
+
+        const { Question } = await import("@/question")
+
+        try {
+          const answers = await Question.ask({
+            sessionID: input.agentSessionID,
+            questions: questions.map(q => ({
+              question: q.question,
+              header: q.header,
+              options: q.options,
+              multiple: q.multiple,
+              custom: q.custom,
+            })),
+            timeoutMs: CLARIFY_TIMEOUT_MS,
+          })
+
+          // Build clarification summary to enrich the task request
+          const clarifications: string[] = ["## Clarifications from user"]
+          for (let i = 0; i < questions.length; i++) {
+            const q = questions[i]
+            const a = answers[i] ?? []
+            clarifications.push(`- **${q.header}**: ${a.join(", ") || "(no answer)"}`)
+          }
+          const clarificationText = clarifications.join("\n")
+
+          log.info("clarify: user responded", { taskID, answerCount: answers.length })
+
+          // Re-read task to get latest request (may have been enriched by prior clarify rounds)
+          const freshTask = requireTask(taskID)
+          const enrichedRequest = `${freshTask.request}\n\n${clarificationText}`
+          await updateTask(freshTask, { request: enrichedRequest }, "Task request enriched with user clarifications")
+
+          return [
+            `User clarifications received and appended to task request:`,
+            clarificationText,
+            "",
+            "Decide: if still missing critical details, call clarify again with follow-up questions.",
+            "If enough information for decomposition, proceed to requirements.",
+          ].join("\n")
+        } catch (err) {
+          if (err instanceof Question.RejectedError) {
+            await trackStepComplete("clarify")
+            log.info("clarify: timeout, proceeding with LLM judgment", { taskID })
+            return "User did not respond within 300 seconds. Proceed with your best judgment based on the original request and codebase context. Call requirements now."
+          }
+          throw err
+        }
+      },
+    }),
+
     requirements: tool({
       description: "Explore the codebase, analyze the task, extract requirements, and decompose into executable goal contracts with cross-goal interface declarations.",
       inputSchema: z.object({
@@ -391,6 +476,127 @@ export function createTaskAgentTools(input: {
           return `SUCCESS: ${result.goals.length} goals created. ${nextStep}\n\nSummary: ${result.summary}.\nDecisions: ${result.decisions.map(d => `${d.key}=${d.value}`).join(", ")}`
         } finally {
           guard.clear()
+        }
+      },
+    }),
+
+    // -----------------------------------------------------------------------
+    // Design Analysis — visual reference analysis before decomposition
+    // -----------------------------------------------------------------------
+
+    design_analysis: tool({
+      description: [
+        "Analyze visual references (images, URLs) to produce a structured design specification.",
+        "Call this BEFORE requirements when the task involves frontend/UI development AND:",
+        "  - Image attachments are provided (screenshots, mockups, design files)",
+        "  - The request mentions a URL to replicate or analyze",
+        "  - The request explicitly asks for layout/design analysis",
+        "",
+        "The design specification is appended to the task request, enriching it with",
+        "exact layout structure, style tokens, component inventory, and interaction patterns.",
+        "This enables the decompose agent to produce more accurate, pixel-level goals.",
+        "",
+        "SKIP this step when:",
+        "  - No visual references are available",
+        "  - The task is purely backend/API/infrastructure",
+        "  - The request already contains detailed design specifications",
+      ].join("\n"),
+      inputSchema: z.object({
+        reason: z.string().describe("Why design analysis is needed for this task"),
+        url: z.string().optional().describe("URL to fetch and analyze (live page or design reference)"),
+      }),
+      execute: async ({ reason, url }) => {
+        const task = requireTask(taskID)
+
+        // Guard: skip if no visual input available
+        const hasAttachments = Array.isArray(task.attachments) && task.attachments.length > 0
+        if (!hasAttachments && !url) {
+          return "No visual references available (no image attachments and no URL). Skip design_analysis and proceed to requirements."
+        }
+
+        await trackStepStart("design_analysis")
+
+        log.info("design_analysis: starting", { taskID, hasAttachments, hasUrl: !!url, reason })
+
+        const designSession = await Session.createNext({
+          parentID: input.agentSessionID,
+          title: `Design Analysis: ${task.title}`,
+          directory: Instance.directory,
+        })
+        registerGoalRunSession(designSession.id, taskID, "goal")
+        const hooks = sessionStreamHooks({ sessionID: designSession.id, taskID, stage: "goal" })
+
+        const stallController = new AbortController()
+        const { OrchestratorConfig: OC } = await import("@/orchestrator/config")
+        const daTimeout = (await OC.get()).design_analyst.timeout_ms
+        const guard = createInactivityGuard(daTimeout, () => {
+          log.warn("design analysis inactivity timeout", { taskID })
+          stallController.abort(new Error("design analysis stall timeout"))
+        })
+
+        try {
+          const { DesignAnalystAgent } = await import("@/design-analyst")
+
+          const analysis = await DesignAnalystAgent.analyze({
+            title: task.title,
+            request: task.request,
+            attachments: hasAttachments ? task.attachments as any : undefined,
+            url,
+            taskID,
+            sessionID: designSession.id,
+            signal: input.signal
+              ? AbortSignal.any([input.signal, stallController.signal])
+              : stallController.signal,
+            stream: {
+              onChunk: async (arg: any) => {
+                guard.bump()
+                const chunk = (arg as any)?.chunk
+                if (chunk?.type === "text-delta") {
+                  if (hooks.onChunk) await hooks.onChunk({ chunk: { ...chunk, type: "reasoning-delta" } })
+                } else {
+                  if (hooks.onChunk) await hooks.onChunk(arg)
+                }
+              },
+              onError: async (arg: any) => { if (hooks.onError) await hooks.onError(arg) },
+            },
+            onStatus: () => {},
+          })
+
+          guard.clear()
+          await hooks.flush()
+
+          // Enrich the task request with the design specification
+          const designSpec = DesignAnalystAgent.toPromptSection(analysis)
+          const freshTask = requireTask(taskID)
+          const enrichedRequest = `${freshTask.request}\n\n${designSpec}`
+          await updateTask(freshTask, { request: enrichedRequest }, "Task request enriched with design analysis")
+
+          await trackStepComplete("design_analysis")
+
+          log.info("design_analysis: complete", {
+            taskID,
+            sections: analysis.layout.length,
+            tokens: analysis.tokens.length,
+            components: analysis.components.length,
+          })
+
+          return [
+            `SUCCESS: Design analysis complete.`,
+            `  ${analysis.layout.length} layout sections, ${analysis.tokens.length} style tokens,`,
+            `  ${analysis.components.length} components, ${analysis.interactions.length} interactions.`,
+            `  Design system: ${analysis.designSystem}`,
+            `  Recommended stack: ${analysis.techStack.join(", ")}`,
+            "",
+            "The design specification has been appended to the task request.",
+            "NEXT: proceed to requirements — the decompose agent will use the design spec to produce precise goals.",
+          ].join("\n")
+        } catch (err) {
+          guard.clear()
+          await hooks.flush()
+          await trackStepComplete("design_analysis", undefined, true)
+          const msg = err instanceof Error ? err.message : String(err)
+          log.error("design_analysis: failed", { taskID, error: msg })
+          return `Design analysis failed: ${msg}. Proceeding without design spec — call requirements directly.`
         }
       },
     }),
@@ -670,9 +876,10 @@ export function createTaskAgentTools(input: {
               const diffs = (delivery.result as any)?.diffs as Array<{ file: string }> | undefined
               if (diffs?.length) sections.push(`- delivery files: ${diffs.map(f => f.file).join(", ")}`)
             } else {
-              sections.push(`- delivery: none (executor produced no output)`)
+              sections.push(`- delivery: none`)
             }
             sections.push(`- goal_run status: ${latestGr.status}`)
+            if (latestGr.error) sections.push(`- goal_run error: ${latestGr.error}`)
           } else {
             sections.push(`- no goal_run found`)
           }
@@ -1315,7 +1522,7 @@ export function createTaskAgentTools(input: {
                 await Plugin.trigger("delivery.ready", { taskID, runID: run.id, deliveryID: delivery.id }, { actions: [] }).catch(() => undefined)
                 OrchestratorMemoryBridge.flushTaskLearnings({ task: currentTask, run, delivery, evaluation: findEvaluationByRun(run.id), plan: currentPlan })
                   .catch(err => log.warn("failed to flush task learnings", { error: String(err) }))
-                return `Delivery published and task completed successfully.`
+                return `Delivery published and task completed successfully. You can call refine to analyze the project and suggest improvements for the next iteration.`
               }
               await updateTask(currentTask, { status: "failed", blocking_reason: null, error: publishResult.summary, time_completed: completed }, publishResult.summary)
               return `Publish returned non-delivered status: ${publishResult.summary}`
@@ -1468,11 +1675,136 @@ export function createTaskAgentTools(input: {
             }
           }
 
-          return `Delivery published and task completed successfully.`
+          return `Delivery published and task completed successfully. You can call refine to analyze the project and suggest improvements for the next iteration.`
         }
 
         await updateTask(task, { status: "failed", blocking_reason: null, error: result.summary, time_completed: completed }, result.summary)
         return `Publish returned non-delivered status: ${result.summary}`
+      },
+    }),
+
+    refine: tool({
+      description: [
+        "Explore the completed project, analyze what was built, and suggest improvements for the next iteration.",
+        "Use after task completion (or user re-trigger) to start a new development cycle.",
+        "Reads all goal deliveries, explores the codebase, and produces structured suggestions.",
+        "After receiving suggestions, present them to the user via clarify, then create a new task for the next iteration.",
+      ].join("\n"),
+      inputSchema: z.object({
+        focus: z.enum(["features", "quality", "tests", "performance", "all"]).default("all")
+          .describe("What aspect to focus the analysis on"),
+        reason: z.string().optional().describe("Why you decided to refine"),
+      }),
+      execute: async ({ focus }) => {
+        await trackStepStart("refine")
+        const task = requireTask(taskID)
+
+        // Gather delivery context
+        const goals = listGoals(taskID)
+        const { listGoalRunsByTask, findDeliveryByGoalRun } = await import("@/orchestrator/store")
+        const goalRuns = listGoalRunsByTask(taskID)
+
+        const goalSummaries: string[] = []
+        const allChangedFiles: string[] = []
+        for (const goal of goals) {
+          const gr = goalRuns.find(r => r.goal_id === goal.id)
+          const delivery = gr ? findDeliveryByGoalRun(gr.id) : undefined
+          const files = (delivery?.result as any)?.diffs?.map((d: any) => d.file) ?? []
+          allChangedFiles.push(...files)
+          goalSummaries.push(`- [${goal.status}] ${goal.title}: ${goal.done_definition.slice(0, 150)}`)
+          if (files.length > 0) goalSummaries.push(`  files: ${files.join(", ")}`)
+        }
+
+        // Read Decision Log for architectural context
+        const { createDecisionLog } = await import("@/decision-log")
+        const decisionLog = createDecisionLog(taskID)
+        const decisionSection = decisionLog.toPromptSection() ?? ""
+
+        // Run refine analysis via LLM
+        const { Provider } = await import("@/provider/provider")
+        const { ProviderLLM } = await import("@/provider/llm")
+        const def = await Provider.defaultModel().catch(() => undefined)
+        if (!def) return "No LLM model available for refine analysis."
+        const model = await Provider.getModel(def.providerID, def.modelID)
+
+        const refineSession = await Session.createNext({
+          parentID: input.agentSessionID,
+          title: `Refine: ${task.title}`,
+          directory: Instance.directory,
+        })
+        registerGoalRunSession(refineSession.id, taskID, "assistant")
+        const hooks = sessionStreamHooks({ sessionID: refineSession.id, taskID, stage: "assistant" })
+
+        const systemPrompt = [
+          "You are a project analyst reviewing a completed software project.",
+          "Analyze the delivered code and suggest concrete improvements for the next iteration.",
+          "",
+          "Output a JSON object with this structure:",
+          "{",
+          '  "summary": "one paragraph assessment of current project state",',
+          '  "suggestions": [',
+          "    {",
+          '      "category": "feature|quality|test|performance|refactor",',
+          '      "title": "short title",',
+          '      "description": "what to do and why",',
+          '      "priority": "high|medium|low",',
+          '      "effort": "small|medium|large"',
+          "    }",
+          "  ]",
+          "}",
+          "",
+          `Focus: ${focus}`,
+          "Respond in the same language as the original task request.",
+          "Return ONLY the JSON object, no markdown fences.",
+        ].join("\n")
+
+        const userPrompt = [
+          `## Original Task`,
+          task.request.slice(0, 2000),
+          "",
+          `## Completed Goals (${goals.length})`,
+          ...goalSummaries,
+          "",
+          `## Changed Files (${allChangedFiles.length})`,
+          allChangedFiles.join(", "),
+          "",
+          decisionSection,
+        ].join("\n")
+
+        const stream = await ProviderLLM.stream({
+          model,
+          system: systemPrompt,
+          messages: [{ role: "user" as const, content: userPrompt }],
+          cacheKey: `task-${taskID}-refine`,
+          ...(hooks.onChunk ? { onChunk: hooks.onChunk as any } : {}),
+          ...(hooks.onError ? { onError: hooks.onError } : {}),
+        })
+
+        const resultText = await stream.text
+        await hooks.flush()
+
+        await trackStepComplete("refine")
+
+        // Try to parse suggestions for structured response
+        try {
+          const parsed = JSON.parse(resultText.trim())
+          const suggestions = parsed.suggestions ?? []
+          const lines = [
+            `## Project Analysis`,
+            parsed.summary ?? "",
+            "",
+            `## Suggestions (${suggestions.length})`,
+          ]
+          for (const s of suggestions) {
+            lines.push(`- [${s.priority}] **${s.title}** (${s.category}, ${s.effort}): ${s.description}`)
+          }
+          lines.push("")
+          lines.push("To start the next iteration: present these to the user via clarify, then create a new task with selected improvements.")
+          return lines.join("\n")
+        } catch {
+          // LLM didn't return valid JSON — return raw text
+          return `## Refine Analysis\n\n${resultText}\n\nTo iterate: create a new task based on these suggestions.`
+        }
       },
     }),
   }

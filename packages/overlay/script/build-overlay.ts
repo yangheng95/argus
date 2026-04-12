@@ -8,8 +8,9 @@
  *   2. build:mainjs — compile TSX sources → src/main.js
  *   3. check:i18n — verify locale files match panel revision
  *   4. build:vite — bundle main.js + CSS + HTML → dist-vite/
- *   5. tauri build --no-bundle — compile Rust → overlay binary
- *   6. Copy binary to dist/<platform>/
+ *   5. Remove stale opencorvus binary — force rebuild on every overlay build
+ *   6. tauri build --no-bundle — compile Rust → overlay binary
+ *   7. Copy binary to dist/<platform>/
  *
  * Usage:
  *   bun run build:overlay              # full pipeline
@@ -140,16 +141,24 @@ if (skipTauri) {
   process.exit(0)
 }
 
-// ── Step 5: Tauri build ──
+// ── Step 5: Remove stale opencorvus binary ──
+//
+// The overlay embeds the opencorvus binary at build time via OPENCORVUS_EMBED_PATH.
+// If we skip this step, a stale binary from a previous build is reused — the Tauri
+// overlay compiles successfully but runs old orchestrator/executor code, silently
+// masking source changes. Always delete the binary first to force a fresh rebuild.
+step("Remove stale opencorvus binary")
+const serverDistDir = path.join(opencorvus, "dist", serverDistName)
+await fs.rm(serverDistDir, { recursive: true, force: true })
+console.log(`removed ${serverDistDir}`)
+
+// ── Step 6: Tauri build ──
 step("Tauri build → overlay binary")
 
+console.log("Building opencorvus first...")
+await $`bun run build`.cwd(opencorvus)
 if (!(await exists(distServer))) {
-  console.log(`opencorvus binary not found at ${distServer}`)
-  console.log("Building opencorvus first...")
-  await $`bun run build`.cwd(opencorvus)
-  if (!(await exists(distServer))) {
-    throw new Error(`opencorvus binary still not found at ${distServer}`)
-  }
+  throw new Error(`opencorvus binary still not found at ${distServer}`)
 }
 
 // Clean previous build artifacts that may be locked by Windows
@@ -182,7 +191,7 @@ if (!(await exists(builtOverlay))) {
   throw new Error(`Overlay binary not found at ${builtOverlay}`)
 }
 
-// ── Step 6: Copy to dist/ ──
+// ── Step 7: Copy to dist/ ──
 step("Copy binary to dist/")
 await fs.mkdir(distRoot, { recursive: true })
 await fs.copyFile(builtOverlay, packagedOverlay)

@@ -525,6 +525,15 @@ export namespace Worktree {
     return info
   })
 
+  /**
+   * Acquire the per-project git mutex. Exported so that callers performing
+   * git operations on the shared .git (e.g., mergeGoalDelivery) can serialize
+   * against worktree create/remove operations.
+   */
+  export async function lock<T>(fn: () => Promise<T>): Promise<T> {
+    return withGitLock(fn)
+  }
+
   export const remove = fn(RemoveInput, async (input) => {
     if (Instance.project.vcs !== "git") {
       throw new NotGitError({ message: "Worktrees are only supported for git projects" })
@@ -576,49 +585,52 @@ export namespace Worktree {
       await $`git fsmonitor--daemon stop`.quiet().nothrow().cwd(target)
     }
 
-    const list = await $`git worktree list --porcelain`.quiet().nothrow().cwd(Instance.worktree)
-    if (list.exitCode !== 0) {
-      throw new RemoveFailedError({ message: errorText(list) || "Failed to read git worktrees" })
-    }
-
-    const entry = await locate(list.stdout)
-
-    if (!entry?.path) {
-      const directoryExists = await exists(directory)
-      if (directoryExists) {
-        await stop(directory)
-        await clean(directory)
+    // All git operations serialized to prevent concurrent corruption with create/merge
+    return withGitLock(async () => {
+      const list = await $`git worktree list --porcelain`.quiet().nothrow().cwd(Instance.worktree)
+      if (list.exitCode !== 0) {
+        throw new RemoveFailedError({ message: errorText(list) || "Failed to read git worktrees" })
       }
+
+      const entry = await locate(list.stdout)
+
+      if (!entry?.path) {
+        const directoryExists = await exists(directory)
+        if (directoryExists) {
+          await stop(directory)
+          await clean(directory)
+        }
+        return true
+      }
+
+      await stop(entry.path)
+      const removed = await $`git worktree remove --force ${entry.path}`.quiet().nothrow().cwd(Instance.worktree)
+      if (removed.exitCode !== 0) {
+        const next = await $`git worktree list --porcelain`.quiet().nothrow().cwd(Instance.worktree)
+        if (next.exitCode !== 0) {
+          throw new RemoveFailedError({
+            message: errorText(removed) || errorText(next) || "Failed to remove git worktree",
+          })
+        }
+
+        const stale = await locate(next.stdout)
+        if (stale?.path) {
+          throw new RemoveFailedError({ message: errorText(removed) || "Failed to remove git worktree" })
+        }
+      }
+
+      await clean(entry.path)
+
+      const branch = entry.branch?.replace(/^refs\/heads\//, "")
+      if (branch) {
+        const deleted = await $`git branch -D ${branch}`.quiet().nothrow().cwd(Instance.worktree)
+        if (deleted.exitCode !== 0) {
+          throw new RemoveFailedError({ message: errorText(deleted) || "Failed to delete worktree branch" })
+        }
+      }
+
       return true
-    }
-
-    await stop(entry.path)
-    const removed = await $`git worktree remove --force ${entry.path}`.quiet().nothrow().cwd(Instance.worktree)
-    if (removed.exitCode !== 0) {
-      const next = await $`git worktree list --porcelain`.quiet().nothrow().cwd(Instance.worktree)
-      if (next.exitCode !== 0) {
-        throw new RemoveFailedError({
-          message: errorText(removed) || errorText(next) || "Failed to remove git worktree",
-        })
-      }
-
-      const stale = await locate(next.stdout)
-      if (stale?.path) {
-        throw new RemoveFailedError({ message: errorText(removed) || "Failed to remove git worktree" })
-      }
-    }
-
-    await clean(entry.path)
-
-    const branch = entry.branch?.replace(/^refs\/heads\//, "")
-    if (branch) {
-      const deleted = await $`git branch -D ${branch}`.quiet().nothrow().cwd(Instance.worktree)
-      if (deleted.exitCode !== 0) {
-        throw new RemoveFailedError({ message: errorText(deleted) || "Failed to delete worktree branch" })
-      }
-    }
-
-    return true
+    })
   })
 
   export const reset = fn(ResetInput, async (input) => {

@@ -120,9 +120,9 @@ export function OrchestrationPanel() {
     <div class="orch-panel">
       {/* ── Workflow Selection ── */}
       <section class="orch-section">
-        <h3 class="orch-section-title">{t("orchestration.workflow") || "Workflow"}</h3>
+        <h3 class="orch-section-title">{t("orchestration.workflow")}</h3>
         <div class="orch-field">
-          <label class="orch-field-label">{t("orchestration.default_workflow") || "Default Workflow"}</label>
+          <label class="orch-field-label">{t("orchestration.default_workflow")}</label>
           <select
             class="orch-field-select"
             value={defaultWorkflow()}
@@ -137,11 +137,11 @@ export function OrchestrationPanel() {
 
       {/* ── Agent Configuration ── */}
       <section class="orch-section">
-        <h3 class="orch-section-title">{t("orchestration.agent_config") || "Agent Configuration"}</h3>
+        <h3 class="orch-section-title">{t("orchestration.agent_config")}</h3>
 
         <AgentConfigCard
           name="decompose"
-          label={t("orchestration.agent_requirements") || "Requirements Agent"}
+          label={t("orchestration.agent_requirements")}
           fields={[
             { key: "max_steps", label: "Max Steps", type: "number" },
             { key: "timeout_ms", label: "Timeout (ms)", type: "number" },
@@ -152,7 +152,7 @@ export function OrchestrationPanel() {
 
         <AgentConfigCard
           name="architect"
-          label={t("orchestration.agent_architect") || "Architect Agent"}
+          label={t("orchestration.agent_architect")}
           fields={[
             { key: "max_steps", label: "Max Steps", type: "number" },
             { key: "timeout_ms", label: "Timeout (ms)", type: "number" },
@@ -161,7 +161,7 @@ export function OrchestrationPanel() {
 
         <AgentConfigCard
           name="planner"
-          label={t("orchestration.agent_planner") || "Planner Agent"}
+          label={t("orchestration.agent_planner")}
           fields={[
             { key: "max_steps", label: "Max Steps", type: "number" },
             { key: "timeout_ms", label: "Timeout (ms)", type: "number" },
@@ -171,7 +171,7 @@ export function OrchestrationPanel() {
 
         <AgentConfigCard
           name="evaluator"
-          label={t("orchestration.agent_evaluator") || "Evaluator Agent"}
+          label={t("orchestration.agent_evaluator")}
           fields={[
             { key: "max_steps", label: "Max Steps", type: "number" },
             { key: "timeout_ms", label: "Timeout (ms)", type: "number" },
@@ -181,7 +181,7 @@ export function OrchestrationPanel() {
 
         <AgentConfigCard
           name="delivery"
-          label={t("orchestration.agent_delivery") || "Delivery Agent"}
+          label={t("orchestration.agent_delivery")}
           fields={[
             { key: "max_steps", label: "Max Steps", type: "number" },
             { key: "timeout_ms", label: "Timeout (ms)", type: "number" },
@@ -192,7 +192,7 @@ export function OrchestrationPanel() {
 
       {/* ── Orchestration Limits ── */}
       <section class="orch-section">
-        <h3 class="orch-section-title">{t("orchestration.limits") || "Orchestration Limits"}</h3>
+        <h3 class="orch-section-title">{t("orchestration.limits")}</h3>
         <div class="orch-field">
           <label class="orch-field-label">Max Runs</label>
           <input
@@ -233,20 +233,20 @@ export function OrchestrationPanel() {
 
       {/* ── Behavior (migrated from GeneralPanel) ── */}
       <section class="orch-section">
-        <h3 class="orch-section-title">{t("orchestration.behavior") || "Behavior"}</h3>
+        <h3 class="orch-section-title">{t("orchestration.behavior")}</h3>
         <Toggle
-          label={t("settings.unattended") || "Unattended Mode"}
+          label={t("settings.unattended")}
           checked={!!experimentalConfig().unattended}
           onChange={(v) => void patchConfig({ experimental: { unattended: v } })}
-          description={t("orchestration.unattended_desc") || "Auto-approve permissions and auto-reject stale interactions"}
+          description={t("orchestration.unattended_desc")}
         />
         <Toggle
-          label={t("settings.auto_permission") || "Auto-approve Permissions"}
+          label={t("settings.auto_permission")}
           checked={!!experimentalConfig().auto_permission}
           onChange={(v) => void patchConfig({ experimental: { auto_permission: v } })}
         />
         <Toggle
-          label={t("settings.auto_question") || "Auto-answer Questions"}
+          label={t("settings.auto_question")}
           checked={!!experimentalConfig().auto_question}
           onChange={(v) => void patchConfig({ experimental: { auto_question: v } })}
         />

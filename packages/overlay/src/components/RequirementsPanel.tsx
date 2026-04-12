@@ -47,7 +47,7 @@ export function RequirementsPanel(props: RequirementsPanelProps) {
         <div class="req-streaming">
           <div class="req-streaming-indicator">
             <span class="agent-card-spinner" />
-            <span class="req-streaming-label">{t("workflow.requirements_generating") || "Analyzing requirements..."}</span>
+            <span class="req-streaming-label">{t("workflow.requirements_generating")}</span>
           </div>
           <div class="req-streaming-messages">
             <For each={props.streamingMessages}>
@@ -77,13 +77,13 @@ export function RequirementsPanel(props: RequirementsPanelProps) {
 
       {/* State 3: Pending — no data and not generating */}
       <Show when={!hasData() && !props.isGenerating}>
-        <p class="req-empty">{t("workflow.requirements_pending") || "Requirements analysis pending..."}</p>
+        <p class="req-empty">{t("workflow.requirements_pending")}</p>
       </Show>
 
       {/* Spec content — always available as collapsible detail when present */}
       <Show when={props.specContent}>
         <details class="req-spec-detail">
-          <summary>{t("workflow.spec_detail") || "Spec Detail"}</summary>
+          <summary>{t("workflow.spec_detail")}</summary>
           <pre class="req-spec-content">{props.specContent}</pre>
         </details>
       </Show>

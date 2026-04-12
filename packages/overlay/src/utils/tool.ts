@@ -41,15 +41,6 @@ function toolInputCommand(input: any): string {
     .trim();
 }
 
-function clipText(value: any, limit = 80): string {
-  const text = String(value || "")
-    .replace(/\s+/g, " ")
-    .trim();
-  if (!text) return "";
-  if (text.length <= limit) return text;
-  return `${text.slice(0, Math.max(0, limit - 3)).trim()}...`;
-}
-
 // ── Path helpers ──
 // activeDirectory is provided externally (from board store) to avoid
 // coupling this pure utility to the reactive store.
@@ -125,15 +116,15 @@ export function displayToolDetail(
     "";
   if (path) return shortRelativePath(path, base);
   if (n === "bash" || n === "shellcommand" || n === "runcommand")
-    return clipText(toolInputCommand(safeInput), 80);
+    return toolInputCommand(safeInput);
   if (n === "grep" || n === "searchcode")
     return (safeInput as any).pattern || (safeInput as any).query || (safeInput as any).q || "";
   if (n === "glob" || n === "findfiles")
     return (safeInput as any).pattern || (safeInput as any).glob || "";
   if (n === "agent" || n === "spawnagent")
-    return clipText((safeInput as any).description || (safeInput as any).prompt || "", 80);
+    return (safeInput as any).description || (safeInput as any).prompt || "";
   if (typeof (safeInput as any).raw === "string" && (safeInput as any).raw.trim())
-    return clipText((safeInput as any).raw, 80);
+    return (safeInput as any).raw.trim();
   if (
     ((safeState as any).status === "completed" || (safeState as any).status === "running") &&
     typeof (safeState as any).title === "string"

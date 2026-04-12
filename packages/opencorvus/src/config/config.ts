@@ -1273,6 +1273,15 @@ export namespace Config {
             })
             .optional()
             .describe("Delivery agent configuration"),
+          design_analyst: z
+            .object({
+              max_steps: z.number().int().min(1).optional().describe("Maximum agentic steps for design analyst agent (default: 50)"),
+              timeout_ms: z.number().int().min(1000).optional().describe("Design analyst agent timeout in milliseconds (default: 300000)"),
+              skills: z.array(z.string()).optional().describe("Additional skill paths for design analyst agent"),
+              model: z.string().optional().describe("Model override for design analyst agent"),
+            })
+            .optional()
+            .describe("Design analyst agent configuration — analyzes visual references (images, URLs) to produce structured design specifications"),
           max_runs: z.number().int().min(1).optional().describe("Maximum total task runs (default: 10)"),
           max_fix_runs: z.number().int().min(0).optional().describe("Maximum fix runs after failure (default: 5)"),
           max_goal_retries: z.number().int().min(0).optional().describe("Maximum retries per individual goal before permanently failing it (default: 3)"),

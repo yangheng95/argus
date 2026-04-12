@@ -26,7 +26,6 @@ import {
   TaskEvent,
   Task,
   UpdateGoalInput,
-  UpdateTaskChecksInput,
 } from "@/orchestrator/model"
 import { ExecutorNotConfiguredError, OrchestratorService, PlannerFailureError } from "@/orchestrator/service"
 import { ProtocolStore } from "@/protocol/store"
@@ -525,29 +524,6 @@ export const OrchestratorRoutes = lazy(() =>
       validator("json", InjectMessageInput),
       async (c) => {
         return c.json(await OrchestratorService.injectMessage(c.req.valid("param").taskID, c.req.valid("json").message))
-      },
-    )
-    .patch(
-      "/task/:taskID/checks",
-      describeRoute({
-        summary: "Update task checks",
-        operationId: "task.checks.update",
-        responses: {
-          200: {
-            description: "Task checks updated",
-            content: {
-              "application/json": {
-                schema: resolver(Task),
-              },
-            },
-          },
-          ...errors(400, 404),
-        },
-      }),
-      validator("param", z.object({ taskID: Task.shape.id })),
-      validator("json", UpdateTaskChecksInput),
-      async (c) => {
-        return c.json(await OrchestratorService.updateTaskChecks(c.req.valid("param").taskID, c.req.valid("json")))
       },
     )
     .post(

@@ -99,11 +99,6 @@ export function createDecomposeOutputTools(workDir?: string) {
         "All fields are schema-validated; invalid input returns an error to fix.",
       inputSchema: GoalContractFieldsSchema,
       execute: async (input) => {
-        // Unique ID check
-        if (collector.goals.some(g => g.id === input.id)) {
-          return `Error: goal "${input.id}" already registered. Use a different ID.`
-        }
-
         // Path existence check (warning, not error — new projects create files)
         const warnings: string[] = []
         for (const p of input.owned_paths) {
@@ -115,8 +110,16 @@ export function createDecomposeOutputTools(workDir?: string) {
           } catch { /* cross-platform path issues — skip */ }
         }
 
-        collector.goals.push(input)
-        let msg = `OK: goal "${input.id}" registered (${collector.goals.length} total)`
+        // Upsert: if same ID exists, overwrite (LLM may refine a goal it already registered)
+        const existingIdx = collector.goals.findIndex(g => g.id === input.id)
+        let msg: string
+        if (existingIdx >= 0) {
+          collector.goals[existingIdx] = input
+          msg = `OK: goal "${input.id}" updated (${collector.goals.length} total)`
+        } else {
+          collector.goals.push(input)
+          msg = `OK: goal "${input.id}" registered (${collector.goals.length} total)`
+        }
         if (warnings.length > 0) {
           msg += `\nWarning: paths with no existing parent directory: ${warnings.join(", ")}. Verify these are intentional.`
         }
@@ -189,9 +192,15 @@ export function createDecomposeOutputTools(workDir?: string) {
         }
 
         // Per-goal checks
+        const warnings: string[] = []
         for (const g of collector.goals) {
+          // Goals without exports are fine for verification/system/leaf goals.
+          // Only warn (not block) for feature goals — LLM may have valid reasons.
           if (g.exports.length === 0 && g.kind !== "verification" && g.kind !== "system") {
-            issues.push(`Goal ${g.id}: no exports — dependents can't code against its interfaces`)
+            const hasConsumers = collector.goals.some(other => other.depends_on.includes(g.id))
+            if (hasConsumers) {
+              issues.push(`Goal ${g.id}: has dependents but no exports — dependents can't code against its interfaces`)
+            }
           }
           // Validate depends_on references
           for (const dep of g.depends_on) {

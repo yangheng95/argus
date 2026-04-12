@@ -146,11 +146,7 @@ export interface DomRefs {
   chatEmpty: HTMLElement | null;
   chatCount: HTMLElement | null;
   btnChatCopyAll: HTMLButtonElement | null;
-  chatTabs: HTMLElement | null;
-  tabControl: HTMLElement | null;
-  tabCoding: HTMLElement | null;
-  codingScroll: HTMLElement | null;
-  codingEmpty: HTMLElement | null;
+  btnWorkspaceToggle: HTMLButtonElement | null;
 
  // Chat form
   chatForm: HTMLFormElement | null;
@@ -436,11 +432,7 @@ export function getDomRefs(): DomRefs {
     chatEmpty: $<HTMLElement>("#chatEmpty"),
     chatCount: $<HTMLElement>("#chatCount"),
     btnChatCopyAll: $<HTMLButtonElement>("#btnChatCopyAll"),
-    chatTabs: $<HTMLElement>("#chatTabs"),
-    tabControl: $<HTMLElement>("#tabControl"),
-    tabCoding: $<HTMLElement>("#tabCoding"),
-    codingScroll: $<HTMLElement>("#codingScroll"),
-    codingEmpty: $<HTMLElement>("#codingEmpty"),
+    btnWorkspaceToggle: $<HTMLButtonElement>("#btnWorkspaceToggle"),
 
  // Chat form
     chatForm: $<HTMLFormElement>("#chatForm"),

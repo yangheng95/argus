@@ -21,6 +21,7 @@ import { TaskAgent } from "@/task-agent/agent"
 import { effectiveMaxExecutorGroups } from "./helpers"
 import { mergeGoalDelivery } from "./runtime"
 import { Database, eq } from "@/storage/db"
+import { blockedGoalDiagnostics } from "@/goal/scheduler"
 import {
   findTask,
   findRun,
@@ -57,7 +58,7 @@ const DECISION_INACTIVITY_MS = parseInt(
  */
 export async function runTaskLoop(input: {
   taskID: string
-  trigger: { kind: string; runID?: string; summary?: { passed: number; failed: number; total: number } }
+  trigger: { kind: string; runID?: string; summary?: { passed: number; failed: number; total: number }; depBlocked?: Array<{ goalTitle: string; blockedBy: Array<{ title: string; status: string }> }> }
   signal?: AbortSignal
   hooks: RuntimeHooks
 }) {
@@ -87,6 +88,14 @@ export async function runTaskLoop(input: {
 
   // ── Main loop: Decision → Pool → Decision ──
   let iteration = 0
+  /** Stale-state circuit breaker: fail the task if goal state does not change
+   *  for MAX_STALE_ITERATIONS consecutive decision cycles. This prevents the
+   *  infinite loop where pending goals are blocked by failed deps and the
+   *  Task Agent cannot (or refuses to) resolve the situation. */
+  const MAX_STALE_ITERATIONS = 5
+  let lastGoalSnapshot = ""
+  let staleCount = 0
+
   while (!signal?.aborted) {
     iteration++
     const task = findTask(taskID)
@@ -228,14 +237,53 @@ export async function runTaskLoop(input: {
       if (hasPending) {
         // Pending goals exist but none are ready (deps not met or plan node mismatch).
         // Feed back to Task Agent as a batch_complete so it can decide to retry/fail/skip.
-        // Without this, the loop would spin indefinitely re-checking the same state.
         const passed = goals.filter(g => g.status === "passed").length
         const failed = goals.filter(g => g.status === "failed").length
-        log.warn("pending goals blocked — feeding to Task Agent", { taskID, passed, failed, pending: goals.filter(g => g.status === "pending").length })
+        const nodes = listPlanNodesByPlan(plan.id)
+        const diag = blockedGoalDiagnostics(nodes, goals)
+
+        log.warn("pending goals blocked — feeding to Task Agent", {
+          taskID, passed, failed,
+          pending: goals.filter(g => g.status === "pending").length,
+          blockedGoals: diag.map(d => d.goalTitle),
+        })
+
+        // Stale-state detection: same goal snapshot as last time?
+        const snapshot = goals.map(g => `${g.id}:${g.status}`).sort().join(",")
+        if (snapshot === lastGoalSnapshot) {
+          staleCount++
+          log.warn("stale state detected", { taskID, staleCount, maxStale: MAX_STALE_ITERATIONS })
+          if (staleCount >= MAX_STALE_ITERATIONS) {
+            const blockedSummary = diag.map(d =>
+              `"${d.goalTitle}" blocked by: ${d.unsatisfiedDeps.map(dep => `${dep.depGoalTitle} [${dep.depStatus}]`).join(", ")}`
+            ).join("; ")
+            log.error("stale-state circuit breaker triggered — failing task", {
+              taskID, staleCount, blockedSummary,
+            })
+            const { updateTask } = await import("@/orchestrator/state")
+            await updateTask(task, {
+              status: "failed",
+              error: `Task stuck: ${staleCount} consecutive decision cycles with no progress. Pending goals permanently blocked by failed dependencies: ${blockedSummary}`,
+            }, "Stale-state circuit breaker")
+            break
+          }
+        } else {
+          lastGoalSnapshot = snapshot
+          staleCount = 0
+        }
+
+        // Inject dep-blocked diagnostics into the trigger so the Task Agent
+        // knows exactly which goals are blocked and why.
+        const depBlocked = diag.map(d => ({
+          goalTitle: d.goalTitle,
+          blockedBy: d.unsatisfiedDeps.map(dep => ({ title: dep.depGoalTitle, status: dep.depStatus })),
+        }))
+
         trigger = {
           kind: "batch_complete",
           runID: run.id,
           summary: { passed, failed, total: goals.length },
+          depBlocked: depBlocked.length > 0 ? depBlocked : undefined,
         }
         continue
       }
@@ -258,6 +306,13 @@ export async function runTaskLoop(input: {
       failed: failedGoals.length,
       pending: pendingGoals.length,
     })
+
+    // GoalPool executed goals → state changed → reset stale counter
+    const snapshotAfterPool = goalsAfter.map(g => `${g.id}:${g.status}`).sort().join(",")
+    if (snapshotAfterPool !== lastGoalSnapshot) {
+      lastGoalSnapshot = snapshotAfterPool
+      staleCount = 0
+    }
 
     trigger = {
       kind: "batch_complete",

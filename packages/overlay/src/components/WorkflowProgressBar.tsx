@@ -69,7 +69,7 @@ export function WorkflowProgressBar(props: WorkflowProgressBarProps) {
 
           result.push({
             id: "goal-loop",
-            label: t("workflow.goals_label") || "Goals",
+            label: t("workflow.goals_label"),
             status: aggregateStatus,
             isGoalGroup: true,
           });
