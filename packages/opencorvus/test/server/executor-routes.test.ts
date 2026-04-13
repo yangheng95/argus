@@ -13,7 +13,6 @@ describe("executor routes", () => {
     mock.restore()
     ExecutorRegistry.reset()
     delete process.env.OPENCORVUS_EXECUTOR_CODEX_PROTOCOL
-    delete process.env.OPENCORVUS_EXECUTOR_CLAUDE_PROTOCOL
     await resetDatabase()
   })
 

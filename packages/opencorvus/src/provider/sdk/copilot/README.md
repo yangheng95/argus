@@ -1,5 +1,8 @@
-This is a temporary package used primarily for GitHub Copilot compatibility.
+# In-tree GitHub Copilot SDK adapter
 
-Avoid making changes to these files unless you only want to affect the Copilot provider.
+GitHub Copilot does not publish a `@ai-sdk/copilot` integration. This package
+is the openai-compatible variant we need to talk to Copilot's chat /
+responses endpoints, kept in-tree because there is no upstream alternative.
 
-Also, this should ONLY be used for the Copilot provider.
+Scope: Copilot provider only. Do not import from this directory for any
+other provider — use `@ai-sdk/openai-compatible` instead.

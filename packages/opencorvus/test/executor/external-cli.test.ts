@@ -3,7 +3,6 @@ import fs from "fs/promises"
 import os from "os"
 import path from "path"
 import { CodexCLIExecutor } from "../../src/executor/codex-cli"
-import { ClaudeCLIExecutor } from "../../src/executor/claude-cli"
 
 describe("external cli executors", () => {
   test("codex cli provider parses jsonl events", async () => {
@@ -35,38 +34,6 @@ describe("external cli executors", () => {
     ])
   })
 
-  test("claude cli provider parses stream-json events", async () => {
-    const script = [
-      "console.log(JSON.stringify({ type: 'system', subtype: 'init', session_id: 'sess_1' }))",
-      "console.log(JSON.stringify({ type: 'stream_event', event: { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'Hi' } } }))",
-      "console.log(JSON.stringify({ type: 'result', subtype: 'success', session_id: 'sess_1', result: 'Hi!' }))",
-    ].join(";")
-    const file = await writeScript(script)
-    const provider = ClaudeCLIExecutor.create({
-      command: [runner(), file],
-    })
-
-    const out = []
-    for await (const item of provider.run({
-      model: "claude-sonnet-4-5",
-      prompt: "say hi",
-    })) {
-      out.push(item)
-    }
-
-    expect(out).toEqual([
-      { type: "progress", phase: "init", summary: "init", meta: { type: "system", subtype: "init", session_id: "sess_1" } },
-      { type: "text_delta", text: "Hi" },
-      {
-        type: "done",
-        sessionID: "sess_1",
-        output: "Hi!",
-        costUSD: undefined,
-        turns: undefined,
-        meta: { type: "result", subtype: "success", session_id: "sess_1", result: "Hi!" },
-      },
-    ])
-  })
 })
 
 function runner() {
