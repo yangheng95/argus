@@ -50,9 +50,8 @@ export namespace Log {
   export function file() {
     return logpath
   }
-  let write = (msg: any) => {
+  let write = (msg: string) => {
     process.stderr.write(msg)
-    return msg.length
   }
 
   export async function init(options: Options) {
@@ -65,42 +64,40 @@ export namespace Log {
     )
     await fs.truncate(logpath).catch(() => {})
     const stream = createWriteStream(logpath, { flags: "a" })
-    write = async (msg: any) => {
-      return new Promise((resolve, reject) => {
-        stream.write(msg, (err) => {
-          if (err) reject(err)
-          else resolve(msg.length)
-        })
-      })
+    stream.on("error", (err) => {
+      process.stderr.write(`log stream error: ${err.message}\n`)
+    })
+    write = (msg: string) => {
+      stream.write(msg)
     }
   }
 
+  const KEEP_RECENT = 10
   async function cleanup(dir: string) {
     const files = await Glob.scan("????-??-??T??????.log", {
       cwd: dir,
       absolute: true,
       include: "file",
     })
-    if (files.length <= 5) return
-
-    const filesToDelete = files.slice(0, -10)
+    if (files.length <= KEEP_RECENT) return
+    const filesToDelete = files.slice(0, -KEEP_RECENT)
     await Promise.all(filesToDelete.map((file) => fs.unlink(file).catch(() => {})))
   }
 
   function formatError(error: Error, depth = 0): string {
-    const result = error.message
+    const head = error.stack ?? `${error.name}: ${error.message}`
     return error.cause instanceof Error && depth < 10
-      ? result + " Caused by: " + formatError(error.cause, depth + 1)
-      : result
+      ? head + "\nCaused by: " + formatError(error.cause, depth + 1)
+      : head
   }
 
-  let last = Date.now()
   export function create(tags?: Record<string, any>) {
-    tags = tags || {}
+    const ownTags: Record<string, any> = { ...(tags ?? {}) }
+    let last = Date.now()
 
     function build(message: any, extra?: Record<string, any>) {
       const prefix = Object.entries({
-        ...tags,
+        ...ownTags,
         ...extra,
       })
         .filter(([_, value]) => value !== undefined && value !== null)
@@ -138,11 +135,10 @@ export namespace Log {
         }
       },
       tag(key: string, value: string) {
-        if (tags) tags[key] = value
-        return result
+        return Log.create({ ...ownTags, [key]: value })
       },
       clone() {
-        return Log.create({ ...tags })
+        return Log.create({ ...ownTags })
       },
       time(message: string, extra?: Record<string, any>) {
         const now = Date.now()
