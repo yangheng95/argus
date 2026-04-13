@@ -552,24 +552,13 @@ export namespace OrchestratorRuntime {
     }
 
     if (run.status === "completed") {
-      // Legacy single-executor path: trigger task loop (not fire-and-forget TaskAgent)
-      if (!agentNotifiedRuns.has(run.id)) {
-        agentNotifiedRuns.add(run.id)
-        stopEventBridge(run.id)
-        mergeLocksPerRun.delete(run.id)
-        updateExecutorSessionStatus(run.id, "completed")
-        Promise.all([import("@/orchestrator/task-loop"), import("@/orchestrator/state")]).then(([{ runTaskLoop }, { hooks: getHooks }]) => {
-          runTaskLoop({
-            taskID: task.id,
-            trigger: {
-              kind: "batch_complete",
-              runID: run.id,
-              summary: { passed: 0, failed: 0, total: 0 },
-            },
-            hooks: getHooks(),
-          }).catch(err => log.error("task loop failed", { taskID: task.id, error: String(err) }))
-        })
-      }
+      // Already-completed runs reach this branch only when syncRun's downstream
+      // path (queue.status === "completed", line ~626) hasn't yet handled this
+      // run. That path adds run.id to agentNotifiedRuns in the same syncRun
+      // tick, so by the time we'd otherwise re-enter here the guard would be
+      // true. After process restart, completed runs are filtered out before
+      // syncRun even reaches them (queueTaskID check below). Nothing left for
+      // this branch to do — just return.
       return
     }
 
