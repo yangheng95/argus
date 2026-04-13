@@ -7508,19 +7508,6 @@ export type TaskBoardResponses = {
         updated: number
       }
     }>
-    snapshots: Array<{
-      id: string
-      taskID: string
-      status: "created" | "running" | "blocked" | "completed" | "failed" | "cancelled"
-      summary: string
-      payload?: {
-        [key: string]: unknown
-      }
-      time: {
-        created: number
-        updated: number
-      }
-    }>
     overview: {
       headline: string
       summary: string
@@ -7551,35 +7538,6 @@ export type TaskBoardResponses = {
       content: string
       updated_at: number
     }
-    lanes: Array<{
-      id: string
-      title: string
-      cards: Array<{
-        id: string
-        kind:
-          | "goal"
-          | "goal_run"
-          | "interaction"
-          | "preference"
-          | "note"
-          | "run"
-          | "plan_hint"
-          | "spec"
-          | "plan"
-          | "milestone"
-          | "spec_item"
-          | "check"
-          | "delivery"
-          | "evaluation"
-        title: string
-        detail?: string
-        status?: string
-        time?: number
-        metadata?: {
-          [key: string]: unknown
-        }
-      }>
-    }>
   }
 }
 

@@ -66,8 +66,6 @@ const [store, setStore] = createStore({
   showTranscriptDetails: false,
   agentStatus: null as any,
   sseConnected: false,
-  /** @deprecated No longer used — kept only for store shape compatibility. */
-  conversationUpdatedAt: 0 as number,
  // ── Chat request / attachments (mirrors state.chatRequest / state.chatAttachments) ──
   /** AbortController for the active chat HTTP request; null when idle */
   chatRequest: null as AbortController | null,
@@ -123,11 +121,6 @@ function finiteMessageTime(item: Message | undefined): number | undefined {
 
 function messageOrderTime(item: Message): number {
   return finiteMessageTime(item) ?? UNTIMED_MESSAGE_ORDER;
-}
-
-/** @deprecated Use finiteMessageTime or messageOrderTime instead */
-function messageTime(item: Message): number {
-  return finiteMessageTime(item) ?? 0;
 }
 
 function sortMessages(list: Message[]): Message[] {
@@ -365,7 +358,7 @@ export function activeAgentStages(): Set<string> {
 
 function messageEndTime(message: any): number {
   return Number(
-    message?.info?.time?.completed || message?.info?.time?.updated || messageTime(message),
+    message?.info?.time?.completed || message?.info?.time?.updated || (finiteMessageTime(message) ?? 0),
   );
 }
 
@@ -655,7 +648,7 @@ function computeAgentCards(): { cards: Record<string, AgentCardMessage>; order: 
   }
 
   // ── Goal group assembly ──
-  // Board-driven: use goalWorkflows + lanes for goal info & sessionID→goalID mapping.
+  // Board-driven: use goalWorkflows for goal info & sessionID→goalID mapping.
   // Executor messages are matched to goals via sessionID.
   // Other per-goal stages (planner, evaluator) use message goalID (bridge-stamped).
   // All per-goal stages are collected into goal group cards.
@@ -673,32 +666,15 @@ function computeAgentCards(): { cards: Record<string, AgentCardMessage>; order: 
     goalInfoMap.set(gw.goalID, { id: gw.goalID, title: gw.goalTitle, status: gw.goalStatus });
     goalIndexMap.set(gw.goalID, i + 1);
   }
-  const goalsLane = (boardStore.board?.lanes || []).find((l: any) => l.id === "goals");
-  for (const card of goalsLane?.cards || []) {
-    if (!goalInfoMap.has(card.id)) {
-      goalInfoMap.set(card.id, { id: card.id, title: card.title || "", status: card.status || "pending" });
-    }
-    const sid = card?.metadata?.sessionID;
-    if (typeof sid === "string" && sid) {
-      sessionToGoal.set(sid, card.id);
-    }
-    // Also map executorSessionID (the opencode executor's native session)
-    const exSid = card?.metadata?.executorSessionID;
-    if (typeof exSid === "string" && exSid) {
-      sessionToGoal.set(exSid, card.id);
-    }
-    // pipeline-planner runs in its own child session; without this mapping the
-    // plan step of the goal card stays empty because planner rounds can't be
-    // attached to the goal by sessionID.
-    const plSid = card?.metadata?.plannerSessionID;
-    if (typeof plSid === "string" && plSid) {
-      sessionToGoal.set(plSid, card.id);
-    }
+  // Session-to-goal mapping from goalRuns (executor, planner, and coordinator sessions).
+  for (const gr of boardStore.board?.goalRuns || []) {
+    if (gr.sessionID) sessionToGoal.set(gr.sessionID, gr.goalID);
+    if (gr.executorSessionID) sessionToGoal.set(gr.executorSessionID, gr.goalID);
+    if (gr.plannerSessionID) sessionToGoal.set(gr.plannerSessionID, gr.goalID);
   }
 
-  // Ensure every goal in goalInfoMap has an index — goals from goalsLane
-  // that aren't in goalWorkflows (e.g. no workflow state) need a sequential
-  // index so the UI can display Goal#N.
+  // Ensure every goal in goalInfoMap has an index. goalWorkflows populated above
+  // is authoritative; goals without workflow state won't render here.
   {
     let nextIdx = goalIndexMap.size > 0 ? Math.max(...goalIndexMap.values()) + 1 : 1;
     for (const [gid] of goalInfoMap) {
@@ -710,7 +686,7 @@ function computeAgentCards(): { cards: Record<string, AgentCardMessage>; order: 
 
   /** Resolve goalID for a round: session mapping (executor) → message goalID (bridge) → "" */
   function resolveGoalID(round: AgentRound): string {
-    // 1. Session-based (from board lanes, reliable for executor)
+    // 1. Session-based (from board goalWorkflows, reliable for executor)
     if (round.sessionID && sessionToGoal.has(round.sessionID)) {
       return sessionToGoal.get(round.sessionID)!;
     }
@@ -799,12 +775,8 @@ function computeAgentCards(): { cards: Record<string, AgentCardMessage>; order: 
 
   // Build goal group cards — board-driven: every goal from board gets a card,
   // even if no planner/executor/evaluator messages have arrived yet.
-  // Look up goal descriptions from board lanes
+  // Goal descriptions are carried on goalWorkflows.contracts or derived from title.
   const goalDescMap = new Map<string, string>();
-  for (const gc of goalsLane?.cards || []) {
-    const desc = gc.detail || gc.description;
-    if (gc.id && desc) goalDescMap.set(gc.id, desc);
-  }
 
   // Build per-goal step info from goalWorkflows
   const goalStepsMap = new Map<string, Array<{ stepID: string; label: string; status: string; summary?: string }>>();

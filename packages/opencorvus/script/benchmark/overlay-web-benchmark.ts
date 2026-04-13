@@ -150,18 +150,23 @@ function validateFlags(): void {
 }
 validateFlags()
 
-// No overall hard timeout. The only execution gate is stall: if there is no
-// event/progress/log activity for stallTimeoutMs, the benchmark aborts.
-// All stage timeouts (spec, planner, standby) default to effectively unlimited
-// so that slow models are never killed mid-thought.
+// Two independent stall tiers; whichever fires first aborts the benchmark.
+// Neither tier resets on raw text deltas — only on signals that prove the
+// task moved (tool call, status change, workflow step transition). This
+// keeps the watchdog honest when a model loops in "talking but not acting".
 //
-// --planning-stall-timeout-ms: separate (usually longer) stall timeout applied
-// while the task is in early pipeline statuses (queued/active before execution
-// begins). The Task Agent may be making tool calls (decompose, plan_goal, etc.)
-// without visible progress changes — using the normal stallTimeoutMs causes
-// false stalls.
-const stallTimeoutMs = Number(flag("--stall-timeout-ms")) || 20 * 60 * 1000
-const planningStallTimeoutMs = Number(flag("--planning-stall-timeout-ms")) || stallTimeoutMs
+// Per-agent guards (decompose 5min progress / 10min absolute, architect 3min,
+// design-analyst 5min) fire first on real stalls; this monitor is the backstop
+// that catches whatever escapes — so its caps must be tight enough that an
+// escaped stall is noticed within a few minutes of the agent guard firing.
+//
+// --stall-timeout-ms: progress-stall budget after the task enters execution
+// (status outside queued/active). Each sub-agent should be making real tool
+// calls in this phase — anything longer than 8 min is almost certainly a hang.
+const stallTimeoutMs = Number(flag("--stall-timeout-ms")) || 8 * 60 * 1000
+// --planning-stall-timeout-ms: stall budget while task status is queued/active.
+// Decompose can legitimately take ~5min progress / 10min absolute; pad slightly.
+const planningStallTimeoutMs = Number(flag("--planning-stall-timeout-ms")) || 12 * 60 * 1000
 // Tier 1 alive stall: the SSE stream is producing nothing at all (not even
 // token deltas). This is a connection-level hang, separate from the progress
 // stall above. Short by design — if the LLM is truly working we'll see deltas.
@@ -1251,10 +1256,7 @@ async function buildBenchmarkReport(error?: unknown) {
       boardTaskID: currentBoard?.task?.id || "",
       boardStatus: currentBoard?.task?.status || "",
       specVersion: currentBoard?.spec?.version ?? null,
-      goalCount: (() => {
-        const lane = Array.isArray(currentBoard?.lanes) ? currentBoard.lanes.find((l: any) => l.id === "goals") : undefined
-        return Array.isArray(lane?.cards) ? lane.cards.length : 0
-      })(),
+      goalCount: Array.isArray(currentBoard?.goalWorkflows) ? currentBoard.goalWorkflows.length : 0,
       goalRunCount: Array.isArray(currentBoard?.goalRuns) ? currentBoard.goalRuns.length : 0,
       criteriaCount: (() => {
         const evalChecks = currentBoard?.evaluation?.checks
