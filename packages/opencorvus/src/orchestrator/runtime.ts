@@ -401,9 +401,6 @@ export function hasActiveSessions(): boolean {
 }
 
 export namespace OrchestratorRuntime {
-  // Legacy alias — kept so existing callers compile; routes to monitorRuns.
-  export const poll = monitorRuns
-
   /**
    * Monitor active runs (executor status). No pipeline advancement.
    * Pipeline advancement is now driven by the Task Agent.
@@ -571,7 +568,7 @@ export namespace OrchestratorRuntime {
               summary: { passed: 0, failed: 0, total: 0 },
             },
             hooks: getHooks(),
-          }).catch(err => log.error("task loop failed (legacy syncRun)", { taskID: task.id, error: String(err) }))
+          }).catch(err => log.error("task loop failed", { taskID: task.id, error: String(err) }))
         })
       }
       return
@@ -602,13 +599,13 @@ export namespace OrchestratorRuntime {
     }
 
     if (queue.status === "running") {
-      // Legacy single-session run: use DB timestamps for inactivity detection.
+      // Single-session operator runs: use DB timestamps for inactivity detection.
       // (GoalPool-managed runs don't reach this path.)
-      const LEGACY_RUN_STALL_MS = 30 * 60 * 1000 // 30 min
+      const RUN_STALL_MS = 30 * 60 * 1000 // 30 min
       const lastActivity = run.time_updated ?? run.time_started ?? run.time_created ?? Date.now()
       const inactiveMs = Date.now() - lastActivity
-      if (inactiveMs > LEGACY_RUN_STALL_MS) {
-        log.warn("run stalled — no activity (legacy syncRun)", { runID: run.id, inactiveMs })
+      if (inactiveMs > RUN_STALL_MS) {
+        log.warn("run stalled — no activity", { runID: run.id, inactiveMs })
         try { await executor.abort({ sessionID: run.session_id ?? undefined, queueTaskID }) } catch {}
         await failRun(run, `Run stalled — no activity for ${Math.round(inactiveMs / 60000)}min`, hooks)
         return
@@ -628,7 +625,7 @@ export namespace OrchestratorRuntime {
     }
 
     if (queue.status === "completed") {
-      // Legacy single-executor path: mark run completed and trigger task loop.
+      // Single-executor path: mark run completed and trigger task loop.
       if (!agentNotifiedRuns.has(run.id)) {
         agentNotifiedRuns.add(run.id)
         stopEventBridge(run.id)
@@ -640,7 +637,7 @@ export namespace OrchestratorRuntime {
             taskID: task.id,
             trigger: { kind: "batch_complete", runID: run.id, summary: { passed: 0, failed: 0, total: 0 } },
             hooks: getHooks(),
-          }).catch(err => log.error("task loop failed (legacy syncRun completed)", { taskID: task.id, error: String(err) }))
+          }).catch(err => log.error("task loop failed on completion", { taskID: task.id, error: String(err) }))
         })
       }
     }

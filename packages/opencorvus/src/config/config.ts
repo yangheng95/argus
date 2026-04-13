@@ -138,7 +138,6 @@ export namespace Config {
     }
 
     result.agent = result.agent || {}
-    result.mode = result.mode || {}
     result.plugin = result.plugin || []
 
     const directories = await ConfigPaths.directories(Instance.directory, Instance.worktree)
@@ -157,7 +156,6 @@ export namespace Config {
           result = mergeConfigConcatArrays(result, await loadFile(path.join(dir, file)))
           // to satisfy the type checker
           result.agent ??= {}
-          result.mode ??= {}
           result.plugin ??= []
         }
       }
@@ -208,16 +206,6 @@ export namespace Config {
       log.warn("managed config directory exists but cannot be accessed", { path: managedDir })
     }
 
-    // Migrate deprecated mode field to agent field
-    for (const [name, mode] of Object.entries(result.mode ?? {})) {
-      result.agent = mergeDeep(result.agent ?? {}, {
-        [name]: {
-          ...mode,
-          mode: "primary" as const,
-        },
-      })
-    }
-
     if (Flag.OPENCORVUS_PERMISSION) {
       result.permission = mergeDeep(
         (result.permission ?? {}) as object,
@@ -225,26 +213,7 @@ export namespace Config {
       ) as Config.Permission
     }
 
-    // Backwards compatibility: legacy top-level `tools` config
-    if (result.tools) {
-      const perms: Record<string, Config.PermissionAction> = {}
-      for (const [tool, enabled] of Object.entries(result.tools)) {
-        const action: Config.PermissionAction = enabled ? "allow" : "deny"
-        if (tool === "write" || tool === "edit" || tool === "patch" || tool === "multiedit") {
-          perms.edit = action
-          continue
-        }
-        perms[tool] = action
-      }
-      result.permission = mergeDeep(perms as object, (result.permission ?? {}) as object) as Config.Permission
-    }
-
     if (!result.username) result.username = os.userInfo().username
-
-    // Handle migration from autoshare to share field
-    if (result.autoshare === true && !result.share) {
-      result.share = "auto"
-    }
 
     // Apply flag overrides for compaction settings
     if (Flag.OPENCORVUS_DISABLE_AUTOCOMPACT) {
@@ -701,7 +670,6 @@ export namespace Config {
       temperature: z.number().optional(),
       top_p: z.number().optional(),
       prompt: z.string().optional(),
-      tools: z.record(z.string(), z.boolean()).optional().describe("@deprecated Use 'permission' field instead"),
       disable: z.boolean().optional(),
       description: z.string().optional().describe("Description of when to use the agent"),
       mode: z.enum(["subagent", "primary", "all"]).optional(),
@@ -723,7 +691,6 @@ export namespace Config {
         .positive()
         .optional()
         .describe("Maximum number of agentic iterations before forcing text-only response"),
-      maxSteps: z.number().int().positive().optional().describe("@deprecated Use 'steps' field instead."),
       permission: Permission.optional(),
     })
     .catchall(z.any())
@@ -740,11 +707,9 @@ export namespace Config {
         "hidden",
         "color",
         "steps",
-        "maxSteps",
         "options",
         "permission",
         "disable",
-        "tools",
       ])
 
       // Extract unknown properties into options
@@ -753,23 +718,7 @@ export namespace Config {
         if (!knownKeys.has(key)) options[key] = value
       }
 
-      // Convert legacy tools config to permissions
-      const permission: Permission = {}
-      for (const [tool, enabled] of Object.entries(agent.tools ?? {})) {
-        const action = enabled ? "allow" : "deny"
-        // write, edit, patch, multiedit all map to edit permission
-        if (tool === "write" || tool === "edit" || tool === "patch" || tool === "multiedit") {
-          permission.edit = action
-        } else {
-          permission[tool] = action
-        }
-      }
-      Object.assign(permission, agent.permission)
-
-      // Convert legacy maxSteps to steps
-      const steps = agent.steps ?? agent.maxSteps
-
-      return { ...agent, options, permission, steps } as typeof agent & {
+      return { ...agent, options } as typeof agent & {
         options?: Record<string, unknown>
         permission?: Permission
         steps?: number
@@ -1069,10 +1018,6 @@ export namespace Config {
         .describe(
           "Control sharing behavior:'manual' allows manual sharing via commands, 'auto' enables automatic sharing, 'disabled' disables all sharing",
         ),
-      autoshare: z
-        .boolean()
-        .optional()
-        .describe("@deprecated Use 'share' field instead. Share newly created sessions automatically"),
       autoupdate: z
         .union([z.boolean(), z.literal("notify")])
         .optional()
@@ -1098,14 +1043,6 @@ export namespace Config {
         .string()
         .optional()
         .describe("Custom username to display in conversations instead of system username"),
-      mode: z
-        .object({
-          build: Agent.optional(),
-          plan: Agent.optional(),
-        })
-        .catchall(Agent)
-        .optional()
-        .describe("@deprecated Use `agent` field instead."),
       agent: z
         .object({
           // primary
@@ -1196,7 +1133,6 @@ export namespace Config {
         .describe("System-scope prompt overrides keyed by prompt identifier (e.g. core_header)"),
       instructions: z.array(z.string()).optional().describe("Additional instruction files or patterns to include"),
       permission: Permission.optional(),
-      tools: z.record(z.string(), z.boolean()).optional(),
       tool_permissions: z
         .object({
           websearch:          PermissionAction.optional(),
@@ -1377,23 +1313,6 @@ export namespace Config {
       mergeDeep(await loadFile(path.join(Global.Path.config, "opencorvus.jsonc"))),
     )
 
-    const legacy = path.join(Global.Path.config, "config")
-    if (existsSync(legacy)) {
-      await import(pathToFileURL(legacy).href, {
-        with: {
-          type: "toml",
-        },
-      })
-        .then(async (mod) => {
-          const { provider, model, ...rest } = mod.default
-          if (provider && model) result.model = `${provider}/${model}`
-          result["$schema"] = "https://opencorvus.ai/config.json"
-          result = mergeDeep(result, rest)
-          await Filesystem.writeJson(path.join(Global.Path.config, "config.json"), result)
-          await fs.unlink(legacy)
-        })
-    }
-
     return result
   })
 
@@ -1415,19 +1334,7 @@ export namespace Config {
       "path" in options ? options.path : { source: options.source, dir: options.dir },
     )
 
-    const normalized = (() => {
-      if (!data || typeof data !== "object" || Array.isArray(data)) return data
-      const copy = { ...(data as Record<string, unknown>) }
-      const hadLegacy = "theme" in copy || "keybinds" in copy || "tui" in copy
-      if (!hadLegacy) return copy
-      delete copy.theme
-      delete copy.keybinds
-      delete copy.tui
-      log.warn("tui keys in opencorvus config are deprecated; move them to tui.json", { path: source })
-      return copy
-    })()
-
-    const parsed = Info.safeParse(normalized)
+    const parsed = Info.safeParse(data)
     if (parsed.success) {
       if (!parsed.data.$schema && isFile) {
         parsed.data.$schema = "https://opencorvus.ai/config.json"
