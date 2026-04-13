@@ -1,8 +1,8 @@
 /**
- * DecomposeService — wraps DecomposeAgent with error handling,
+ * RequirementsService — wraps RequirementsAgent with error handling,
  * fidelity review, Decision Log injection, and orchestrator lifecycle management.
  *
- * Timeout policy lives in DecomposeAgent's AgentRuntime invocation: three
+ * Timeout policy lives in RequirementsAgent's AgentRuntime invocation: three
  * independent tiers (alive / progress / absolute) via createProgressGuard,
  * so delta-only loops do not defer the stall timer indefinitely.
  *
@@ -10,23 +10,23 @@
  */
 import type { TextHooks } from "@/llm/api"
 import { Log } from "@/util/log"
-import { DecomposeAgent, type DecomposeResult, type RedecomposeContext } from "./agent"
+import { RequirementsAgent, type RequirementsResult, type RedecomposeContext } from "./agent"
 import { reviewFidelity, applyFidelityCorrections } from "./fidelity"
 import type { DecisionLog } from "@/decision-log"
 
 const log = Log.create({ service: "decompose-service" })
 
-export class DecomposeFailureError extends Error {
+export class RequirementsFailureError extends Error {
   constructor(message: string, options?: ErrorOptions) {
     super(message, options)
-    this.name = "DecomposeFailureError"
+    this.name = "RequirementsFailureError"
   }
 }
 
-export namespace DecomposeService {
+export namespace RequirementsService {
   /**
    * Decompose a task into goal contracts.
-   * Wraps DecomposeAgent.decompose() with fidelity review and error handling.
+   * Wraps RequirementsAgent.decompose() with fidelity review and error handling.
    *
    * No hard timeout — the agent's own inactivity guard handles stalls.
    * The caller's AbortSignal is the only cancellation mechanism.
@@ -42,9 +42,7 @@ export namespace DecomposeService {
     stream?: TextHooks
     onStatus?: (summary: string) => void | Promise<void>
     decisionLog?: DecisionLog
-    /** @deprecated — ignored. Inactivity timeout is inside the agent. */
-    timeoutMs?: number
-  }): Promise<DecomposeResult> {
+  }): Promise<RequirementsResult> {
     log.info("decompose service starting", {
       taskID: input.taskID,
       title: input.title,
@@ -52,7 +50,7 @@ export namespace DecomposeService {
 
     const start = Date.now()
     try {
-      const result = await DecomposeAgent.decompose({
+      const result = await RequirementsAgent.decompose({
         title: input.title,
         request: input.request,
         attachments: input.attachments,
@@ -65,7 +63,7 @@ export namespace DecomposeService {
       })
 
       if (result.goals.length === 0) {
-        throw new DecomposeFailureError("decompose produced no goals")
+        throw new RequirementsFailureError("decompose produced no goals")
       }
 
       // Fidelity Review — LLM verifies goals cover the original user request
@@ -96,8 +94,8 @@ export namespace DecomposeService {
 
       return result
     } catch (err) {
-      if (err instanceof DecomposeFailureError) throw err
-      throw new DecomposeFailureError(
+      if (err instanceof RequirementsFailureError) throw err
+      throw new RequirementsFailureError(
         `decompose failed: ${err instanceof Error ? err.message : String(err)}`,
         { cause: err },
       )
@@ -118,9 +116,7 @@ export namespace DecomposeService {
     stream?: TextHooks
     onStatus?: (summary: string) => void | Promise<void>
     decisionLog?: DecisionLog
-    /** @deprecated — ignored. Inactivity timeout is inside the agent. */
-    timeoutMs?: number
-  }): Promise<DecomposeResult> {
+  }): Promise<RequirementsResult> {
     log.info("redecompose service starting", {
       taskID: input.taskID,
       title: input.title,
@@ -128,7 +124,7 @@ export namespace DecomposeService {
 
     const start = Date.now()
     try {
-      const result = await DecomposeAgent.decompose({
+      const result = await RequirementsAgent.decompose({
         title: input.title,
         request: input.request,
         attachments: input.attachments,
@@ -149,8 +145,8 @@ export namespace DecomposeService {
 
       return result
     } catch (err) {
-      if (err instanceof DecomposeFailureError) throw err
-      throw new DecomposeFailureError(
+      if (err instanceof RequirementsFailureError) throw err
+      throw new RequirementsFailureError(
         `redecompose failed: ${err instanceof Error ? err.message : String(err)}`,
         { cause: err },
       )

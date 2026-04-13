@@ -1,12 +1,12 @@
 /**
- * DecomposeAgent — the single entry point for task decomposition.
+ * RequirementsAgent — the single entry point for task decomposition.
  *
  * Replaces the old Spec Agent + Goal Agent two-stage pipeline.
  * Takes a raw user request and produces GoalContractFields[] directly,
  * seeding the Decision Log with foundational technical decisions.
  *
  * Architecture invariants (from specs/new-arch.svg):
- * ① DecomposeAgent is the sole producer of GoalContractFields.
+ * ① RequirementsAgent is the sole producer of GoalContractFields.
  * ② DB mapping is lossless: each field gets its own column.
  * ③ done_definition must be Eval Agent executable.
  * ④ owned_paths is the hard write boundary for Executor.
@@ -24,8 +24,8 @@ import { AgentRuntime } from "@/agent/runtime"
 import { operatorNotesSection } from "@/orchestrator/helpers"
 import { loadStageSkills } from "@/orchestrator/skill-inject"
 import { Config } from "@/config/config"
-import type { DecomposeOutput, ParsedGoalContract, DecomposeDecision, ParsedRequirement, TraceabilityEntry } from "./types"
-import { createDecomposeOutputTools, type DecomposeCollector, type RegisteredGoal } from "./output-tools"
+import type { RequirementsOutput, ParsedGoalContract, RequirementsDecision, ParsedRequirement, TraceabilityEntry } from "./types"
+import { createRequirementsOutputTools, type RequirementsCollector, type RegisteredGoal } from "./output-tools"
 import { parseRecommendedNext } from "@/architect/parse-recommended"
 import type { GoalContractFields } from "@/pipeline/types"
 import type { DecisionLog } from "@/decision-log"
@@ -39,12 +39,12 @@ const log = Log.create({ service: "decompose-agent" })
 // Result type
 // ---------------------------------------------------------------------------
 
-export interface DecomposeResult {
+export interface RequirementsResult {
   summary: string
   /** All requirements extracted from user input (explicit + implicit) */
   requirements: ParsedRequirement[]
   goals: GoalContractFields[]
-  decisions: DecomposeDecision[]
+  decisions: RequirementsDecision[]
   /** Requirement → Goal traceability matrix */
   traceability: TraceabilityEntry[]
   /** Recommended next actions for Task Agent */
@@ -71,10 +71,10 @@ export interface RedecomposeContext {
 }
 
 // ---------------------------------------------------------------------------
-// DecomposeAgent public API
+// RequirementsAgent public API
 // ---------------------------------------------------------------------------
 
-export namespace DecomposeAgent {
+export namespace RequirementsAgent {
   /**
    * Decompose a task request into executable goal contracts.
    * Single entry point — replaces SpecAgent.initial() + GoalAgent.initial().
@@ -93,7 +93,7 @@ export namespace DecomposeAgent {
     decisionLog?: DecisionLog
     /** Optional re-decompose context for retry after failure. */
     redecomposeContext?: RedecomposeContext
-  }): Promise<DecomposeResult> {
+  }): Promise<RequirementsResult> {
     return run(input)
   }
 }
@@ -113,7 +113,7 @@ async function run(input: {
   onStatus?: (summary: string) => void | Promise<void>
   decisionLog?: DecisionLog
   redecomposeContext?: RedecomposeContext
-}): Promise<DecomposeResult> {
+}): Promise<RequirementsResult> {
   if (input.signal?.aborted) throw new Error("decompose agent aborted before model resolution")
 
   const orchCfg = await OrchestratorConfig.get()
@@ -139,14 +139,14 @@ async function run(input: {
   // Merge planner tools (codebase exploration) + structured output tools (goal registration).
   // Each registration tool call is small (~500 bytes) — no buffering risk.
   const plannerTools = createPlannerTools(taskWorkDir, input.sessionID)
-  const outputToolKit = createDecomposeOutputTools(taskWorkDir)
+  const outputToolKit = createRequirementsOutputTools(taskWorkDir)
   const guard = toolGuard({ ...plannerTools, ...outputToolKit.tools })
 
   if (input.signal?.aborted) throw new Error("decompose agent aborted before context prefetch")
 
   const context = prefetchContext(input.title, input.request)
 
-  let lastParsed: DecomposeOutput | undefined
+  let lastParsed: RequirementsOutput | undefined
   let lastQuality: { score: number; reasons: string[] } | undefined
 
   const systemPrompt = await decomposeSystem()
@@ -177,7 +177,7 @@ async function run(input: {
     const abortSignals: AbortSignal[] = [guard.signal]
     if (input.signal) abortSignals.push(input.signal)
 
-    // DecomposeAgent is always invoked nested: the caller (task-agent or
+    // RequirementsAgent is always invoked nested: the caller (task-agent or
      // requirements service) owns persistence via its own session-hooks and
      // forwards chunks through `input.stream`. We therefore wrap those into
      // a passthrough hooks object so AgentRuntime neither creates a duplicate
@@ -300,10 +300,10 @@ async function run(input: {
 }
 
 // ---------------------------------------------------------------------------
-// Convert parsed output to DecomposeResult
+// Convert parsed output to RequirementsResult
 // ---------------------------------------------------------------------------
 
-function toResult(parsed: DecomposeOutput, rawText?: string): DecomposeResult {
+function toResult(parsed: RequirementsOutput, rawText?: string): RequirementsResult {
   const goals = parsed.goals.map(goalToContract)
   // Generate recommended_next from LLM output or default heuristic
   let recommendedNext: RecommendedNext[] = []
@@ -338,10 +338,10 @@ function toResult(parsed: DecomposeOutput, rawText?: string): DecomposeResult {
 }
 
 // ---------------------------------------------------------------------------
-// Convert structured collector → DecomposeOutput (same shape as text parsing)
+// Convert structured collector → RequirementsOutput (same shape as text parsing)
 // ---------------------------------------------------------------------------
 
-function collectorToOutput(collector: DecomposeCollector): DecomposeOutput {
+function collectorToOutput(collector: RequirementsCollector): RequirementsOutput {
   return {
     summary: collector.summary,
     requirements: collector.requirements.map(r => ({
@@ -507,7 +507,7 @@ function buildRetryMessage(
 // ---------------------------------------------------------------------------
 
 function validateQuality(
-  parsed: DecomposeOutput,
+  parsed: RequirementsOutput,
   toolCallCount: number,
 ): { score: number; reasons: string[] } {
   let score = 0
@@ -582,7 +582,7 @@ function validateQuality(
 // System prompt
 // ---------------------------------------------------------------------------
 
-export const DECOMPOSE_SYSTEM = DECOMPOSE_CORE
+export const REQUIREMENTS_SYSTEM = DECOMPOSE_CORE
 
 async function decomposeSystem(): Promise<string> {
   const config = await Config.get()
