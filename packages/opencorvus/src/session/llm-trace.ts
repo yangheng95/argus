@@ -166,10 +166,6 @@ export namespace LLMTrace {
     }) => {
       if (done) return
       done = true
-      // Legacy session-scoped JSONL writes have been retired — Trace is now
-      // the single source of truth. The 5 LLMTrace.read() consumers still
-      // load any pre-existing <sessionID>.jsonl files for backward compat,
-      // but new calls only stream into the per-task Trace JSONL.
       Trace.event({
         ...traceMeta,
         category: result.status === "error" ? "llm.error" : result.status === "aborted" ? "llm.error" : "llm.finish",
