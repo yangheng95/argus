@@ -18,7 +18,6 @@ import { Provider } from "@/provider/provider"
 import { createPlannerTools, prefetchContext } from "@/planner/tools"
 import { Log } from "@/util/log"
 import { toolGuard } from "@/util/tool-guard"
-import { AgentTrace } from "@/util/agent-trace"
 import { OrchestratorConfig } from "@/orchestrator/config"
 import { AttachmentStore } from "@/storage/attachment-store"
 import { AgentRuntime } from "@/agent/runtime"
@@ -229,12 +228,6 @@ async function run(input: {
       cumulativeToolCalls,
       attempt: attempt + 1,
     })
-
-    AgentTrace.capture("decompose", attempt + 1,
-      { system: systemPrompt, messages: messages.map((m: any) => ({ role: m.role, content: typeof m.content === "string" ? m.content : JSON.stringify(m.content) })) },
-      allText,
-      { model: model.id, toolCalls: cumulativeToolCalls, finishReason: resultFinishReason },
-    )
 
     // Structured tool-call output is the only supported path. If the LLM did
     // not register any goals via register_goal, treat this attempt as a hard

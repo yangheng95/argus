@@ -1,14 +1,10 @@
-import fs from "fs/promises"
 import path from "path"
 import type { ModelMessage } from "ai"
 import { Global } from "@/global"
-import { Log } from "@/util/log"
 import { Filesystem } from "@/util/filesystem"
 import { Trace } from "@/trace"
 
-const log = Log.create({ service: "session.llm-trace" })
 const TRACE_DIR = path.join(Global.Path.data, "llm-trace")
-const FLAG = "OPENCORVUS_LLM_TRACE"
 
 const MAX_DEPTH = 8
 const MAX_ARRAY = 120
@@ -132,22 +128,17 @@ export namespace LLMTrace {
     error(error: unknown): void
   }
 
-  const writes = new Map<string, Promise<void>>()
-
-  function on(value: string | undefined) {
-    if (!value) return false
-    const lower = value.trim().toLowerCase()
-    return lower === "1" || lower === "true" || lower === "yes" || lower === "on"
-  }
-
-  export function enabled() {
-    return on(process.env[FLAG])
-  }
-
   export function filepath(sessionID: string) {
     return path.join(TRACE_DIR, `${sessionID}.jsonl`)
   }
 
+  /**
+   * Read pre-existing legacy session-scoped JSONL files. New runs no longer
+   * write here — Trace is the single source of truth — but historic files
+   * are still parsed so cli/cmd/export, orchestrator/publisher, server/
+   * routes/{export,session-management-share}, tool/panel can render
+   * archived sessions captured before the migration.
+   */
   export async function read(sessionID: string): Promise<CallRecord[]> {
     const raw = await Filesystem.readText(filepath(sessionID)).catch(() => "")
     if (!raw.trim()) return []
@@ -162,25 +153,6 @@ export namespace LLMTrace {
           return []
         }
       })
-  }
-
-  function enqueue(sessionID: string, record: CallRecord) {
-    const file = filepath(sessionID)
-    const row = `${JSON.stringify(record)}\n`
-    const prev = writes.get(file) ?? Promise.resolve()
-    const next = prev
-      .then(async () => {
-        await fs.mkdir(path.dirname(file), { recursive: true })
-        await fs.appendFile(file, row, "utf8")
-      })
-      .catch((error) => {
-        log.error("trace write failed", {
-          sessionID,
-          file,
-          error: normalizeError(error),
-        })
-      })
-    writes.set(file, next)
   }
 
   function trimText(text: string) {
@@ -242,26 +214,6 @@ export namespace LLMTrace {
     return normalize(error)
   }
 
-  function normalizeStep(step: StepLike, index: number) {
-    return {
-      index,
-      finish_reason: step.finishReason,
-      usage: normalize(step.usage),
-      request_body: normalize(step.request?.body),
-      response: {
-        id: step.response.id,
-        timestamp: step.response.timestamp.toISOString(),
-        model_id: step.response.modelId,
-        headers: step.response.headers,
-      },
-      text: trimText(step.text),
-      reasoning_text: step.reasoningText ? trimText(step.reasoningText) : undefined,
-      tool_calls: normalize(step.toolCalls),
-      tool_results: normalize(step.toolResults),
-      warnings: normalize(step.warnings),
-    }
-  }
-
   export function begin(input: StartInput): Recorder {
     const start = Date.now()
     const steps: StepLike[] = []
@@ -289,34 +241,6 @@ export namespace LLMTrace {
       },
     })
 
-    const base = {
-      version: 1 as const,
-      type: "llm_call" as const,
-      call_id: input.callID,
-      session_id: input.sessionID,
-      user_message_id: input.userMessageID,
-      started_at: start,
-      model: {
-        provider_id: input.model.providerID,
-        model_id: input.model.modelID,
-      },
-      agent: input.agent,
-      small: input.small,
-      request: {
-        system: input.request.system.map((item) => trimText(item)),
-        messages: normalize(input.request.messages),
-        tools: input.request.tools,
-        tool_choice: input.request.toolChoice,
-        max_retries: input.request.maxRetries,
-        max_output_tokens: input.request.maxOutputTokens,
-        temperature: input.request.temperature,
-        top_p: input.request.topP,
-        top_k: input.request.topK,
-        headers: input.request.headers,
-        provider_options: normalize(input.request.providerOptions),
-      },
-    }
-
     const finalize = (result: {
       status: CallRecord["status"]
       finishReason: string | null
@@ -326,19 +250,10 @@ export namespace LLMTrace {
     }) => {
       if (done) return
       done = true
-      // Legacy session-scoped JSONL only when explicitly enabled.
-      // Trace.event already streams the same data into the per-task JSONL.
-      if (enabled()) {
-        enqueue(input.sessionID, {
-          ...base,
-          ended_at: Date.now(),
-          status: result.status,
-          steps: result.stepData.map((item, index) => normalizeStep(item, index + 1)),
-          finish_reason: result.finishReason,
-          total_usage: normalize(result.totalUsage),
-          error: normalize(result.error),
-        })
-      }
+      // Legacy session-scoped JSONL writes have been retired — Trace is now
+      // the single source of truth. The 5 LLMTrace.read() consumers still
+      // load any pre-existing <sessionID>.jsonl files for backward compat,
+      // but new calls only stream into the per-task Trace JSONL.
       Trace.event({
         ...traceMeta,
         category: result.status === "error" ? "llm.error" : result.status === "aborted" ? "llm.error" : "llm.finish",
