@@ -176,17 +176,16 @@ interface InteractionAlertProps {
   onReject?: (id: string) => void;
 }
 
-function interactionIcon(interaction: Interaction): string {
-  return interaction.type === "permission" ? "\uD83D\uDD12" : "\u2753";
-}
-
 function InteractionAlert(props: InteractionAlertProps) {
-  const icon = () => interactionIcon(props.interaction);
+  const iconGlyph = () => props.interaction.type === "permission" ? "\uD83D\uDD12" : "\u2753";
+  const iconLabel = () => props.interaction.type === "permission"
+    ? t("interaction.icon.permission")
+    : t("interaction.icon.question");
 
   return (
     <div class="interaction-alert" data-id={props.interaction.id}>
       <div class="interaction-title">
-        {icon()} {props.interaction.title}
+        <span role="img" aria-label={iconLabel()}>{iconGlyph()}</span> {props.interaction.title}
       </div>
       <div
         class="interaction-body md-content"

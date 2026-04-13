@@ -137,7 +137,9 @@ function TaskRow(props: {
           <span class="status-dot" data-status={status()} aria-hidden="true" />
           <strong>{title()}</strong>
         </div>
-        <span>{taskListBadge(props.item, props.queuePos)}</span>
+        <span class="task-row-badge" aria-live="polite" aria-atomic="true">
+          {taskListBadge(props.item, props.queuePos)}
+        </span>
         <small>{taskListMeta(props.item)}</small>
       </button>
       <Show when={!!id() && !!props.onDeleteTask}>
