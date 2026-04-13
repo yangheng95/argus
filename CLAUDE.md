@@ -167,3 +167,46 @@ benchmark 至少必须包含：
 - 涉及已有设计决策的改动前已检查相关方案。
 - 发现的明显死代码、无意义代码、过时代码或废弃逻辑，已经明确记录并与用户确认处理方式。
 - 没有发现新的明显问题或未解释的异常。
+
+  设计一个 Gateway Agent（daemon 层），收口用户交互与任务分发  
+
+  目前代码里
+  OrchestratorService（src/orchestrator/service.ts）+
+  TaskAgent（src/task-agent/agent.ts）承担协调与执行；ChannelIn
+  gress（src/channel/ingress.ts）负责 Slack/Discord 等 channel
+  消息入口；FIFO + cwd 隔离队列已在
+  src/orchestrator/queue.ts:68 claimNextForCwd() 实现；build
+  已是内置 primary agent（src/agent/agent.ts:107）。现在缺一个
+  面向用户的统一对话入口。
+
+  Gateway 定位：位于 ChannelIngress 与 OrchestratorService
+  之间的通用对话 agent，不执行编程任务，只做调度与承接。
+
+  UI 布局：Gateway 对话面板在上，任务列表面板（复用
+  dialog-session-list.tsx 逻辑）在下，项目顶部显示当前
+  cwd，点击 cwd 可跳转至对应工作目录的任务流。
+
+  Gateway 职责：
+
+  1. 任务接收与分发 — 整理用户输入，按 FIFO 入队（复用
+  claimNextForCwd），不同 cwd 并行、同 cwd 串行。
+  2. 用户请求承接 —
+  查询任务状态、取消任务、列出队列等。复用/补齐
+  src/server/routes/session-interaction.ts 的 API。
+  3. Clarification 收口 — 移除
+  MiniWorkflow（src/orchestrator/workflow.ts:83）中的 clarify
+  步骤，以及 src/task-agent/tools.ts:203 的 clarify
+  工具；所有澄清统一由 Gateway 对接用户，workflow
+  内部不再中断提问。auto-reply.ts 的 unattended
+  回退同步迁移或废弃。
+  4. 轻量任务直通 build agent —
+  一次性编辑、问答、简单修复等无明确 workflow 的任务，Gateway
+  直接调用 build agent（绕过
+  decompose→design→architect→execute→deliver 管道）。
+  5. 对话式交互 — Gateway 本身是 LLM 驱动的对话
+  agent，不是硬编码 state
+  machine（参照"禁止固定流水线调度器"约束）。
+
+  开放问题：Gateway / Task List / Build Session
+  三层的视觉层级与导航路径如何划分才合理？Gateway
+  会话与单任务会话是否共用同一条消息流，还是分开？

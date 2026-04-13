@@ -23,11 +23,11 @@ import z from "zod"
 import TurndownService from "turndown"
 import type { TextHooks } from "@/llm/api"
 import { Provider } from "@/provider/provider"
-import { ProviderLLM } from "@/provider/llm"
 import { createPlannerTools } from "@/planner/tools"
 import { Log } from "@/util/log"
 import { toolGuard } from "@/util/tool-guard"
-import { createInactivityGuard } from "@/util/inactivity-guard"
+import { AttachmentStore } from "@/storage/attachment-store"
+import { AgentRuntime } from "@/agent/runtime"
 import { AgentTrace } from "@/util/agent-trace"
 import { OrchestratorConfig } from "@/orchestrator/config"
 import { loadStageSkills } from "@/orchestrator/skill-inject"
@@ -55,9 +55,12 @@ export namespace DesignAnalystAgent {
     title: string
     /** Original task request text */
     request: string
-    /** Base64 image attachments — screenshots, mockups, design exports */
-    attachments?: Array<{ mime: string; data: string; filename?: string }>
-    /** URL to fetch and analyze (live page or design reference) */
+    /** Visual references already materialized into the task's attachment store
+     *  (user uploads, Figma-rendered frames, URL screenshots — any source). */
+    attachments?: Array<{ sha: string; url: string; mime: string; size: number; filename?: string; intent?: string; source?: string }>
+    /** URL to fetch and analyze (live page or design reference). Note:
+     *  Figma URLs are materialized into `attachments` upstream by the
+     *  design_analysis tool — design-analyst itself does not re-fetch them. */
     url?: string
     taskID?: string
     sessionID?: string
@@ -148,7 +151,7 @@ export namespace DesignAnalystAgent {
 async function run(input: {
   title: string
   request: string
-  attachments?: Array<{ mime: string; data: string; filename?: string }>
+  attachments?: Array<{ sha: string; url: string; mime: string; size: number; filename?: string; intent?: string; source?: string }>
   url?: string
   taskID?: string
   sessionID?: string
@@ -186,7 +189,7 @@ async function run(input: {
 
   const systemPrompt = await designAnalystSystem()
   const userPrompt = buildUserPrompt(input)
-  const userContent = buildMultimodalContent(userPrompt, input.attachments)
+  const userContent = await buildMultimodalContent(userPrompt, input.attachments)
 
   log.info("design analyst starting", {
     title: input.title,
@@ -195,45 +198,38 @@ async function run(input: {
     hasUrl: !!input.url,
   })
 
-  const stallController = new AbortController()
-  const stallGuard = createInactivityGuard(TIMEOUT_MS, () => {
-    log.warn("design analyst stall timeout", { taskID: input.taskID })
-    stallController.abort(new Error("stall timeout"))
-  })
-  const abortSignals: AbortSignal[] = [stallController.signal, guard.signal]
+  const abortSignals: AbortSignal[] = [guard.signal]
   if (input.signal) abortSignals.push(input.signal)
 
-  const stream = await ProviderLLM.stream({
+  const passthroughHooks = {
+    onChunk: input.stream?.onChunk,
+    onError: input.stream?.onError,
+    flush: async () => {},
+    failures: { snapshot: () => ({ count: 0, items: [] as any[] }) },
+  } as any
+  const runResult = await AgentRuntime.run({
+    agent: "design-analyst",
     model,
-    stopWhen: stepCountIs(MAX_STEPS),
-    tools: guard.tools,
-    abortSignal: AbortSignal.any(abortSignals),
     system: systemPrompt,
     messages: [{ role: "user" as const, content: userContent }],
+    tools: guard.tools,
+    stopWhen: stepCountIs(MAX_STEPS),
     cacheKey: input.taskID ? `task-${input.taskID}-design-analyst` : undefined,
-    onChunk: async (arg: any) => {
-      stallGuard.bump()
-      if (input.stream?.onChunk) await (input.stream.onChunk as any)(arg)
-    },
-    ...(input.stream?.onError ? { onError: input.stream.onError } : {}),
+    sessionID: input.sessionID ?? "",
+    taskID: input.taskID,
+    stage: "design-analyst",
+    signal: AbortSignal.any(abortSignals),
     onStepFinish: guard.onStepFinish as any,
+    hooks: passthroughHooks,
+    policies: {
+      progressTimeoutMs: TIMEOUT_MS,
+      failurePolicy: "collect",
+    },
   })
-
-  let resultText: string, resultSteps: any[], resultFinishReason: any
-  try {
-    ;[resultText, resultSteps, resultFinishReason] = await Promise.all([
-      stream.text,
-      stream.steps,
-      stream.finishReason,
-    ])
-  } finally {
-    stallGuard.clear()
-  }
-
-  const toolCallCount = resultSteps.reduce(
-    (sum, s) => sum + (Array.isArray((s as any).toolCalls) ? (s as any).toolCalls.length : 0),
-    0,
-  )
+  const resultText = runResult.text
+  const resultSteps = runResult.steps
+  const resultFinishReason = runResult.finishReason
+  const toolCallCount = runResult.toolCallCount
 
   log.info("design analyst finished", {
     steps: resultSteps.length,
@@ -268,20 +264,23 @@ async function run(input: {
 // Multimodal content builder (same pattern as decompose agent)
 // ---------------------------------------------------------------------------
 
-function buildMultimodalContent(
+async function buildMultimodalContent(
   text: string,
-  attachments?: Array<{ mime: string; data: string; filename?: string }>,
+  attachments?: Array<{ sha: string; url: string; mime: string; size: number; filename?: string }>,
 ) {
   if (!attachments?.length) return text
-  return [
-    { type: "text" as const, text },
-    ...attachments.map((a) => ({
+  const fileParts = await Promise.all(attachments.map(async (a) => {
+    const located = AttachmentStore.nameFromUrl(a.url)
+    if (!located) throw new Error(`attachment has no resolvable url: ${a.filename ?? a.sha}`)
+    const bytes = await AttachmentStore.read(located.projectID, located.name)
+    return {
       type: "file" as const,
-      data: a.data,
+      data: bytes,
       mediaType: a.mime,
       ...(a.filename ? { filename: a.filename } : {}),
-    })),
-  ]
+    }
+  }))
+  return [{ type: "text" as const, text }, ...fileParts]
 }
 
 // ---------------------------------------------------------------------------

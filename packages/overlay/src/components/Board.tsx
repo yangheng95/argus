@@ -16,6 +16,7 @@ import { WorkflowProgressBar } from "./WorkflowProgressBar";
 import { GoalWorkflowList } from "./GoalWorkflowGroup";
 import { RequirementsPanel } from "./RequirementsPanel";
 import { ArchitectPanel } from "./ArchitectPanel";
+import { EvaluationCriteriaPanel } from "./EvaluationCriteriaPanel";
 
 // ── Types ──
 
@@ -352,6 +353,12 @@ export function Board(props: BoardProps) {
   const delivery = () => board()?.delivery;
   const interactions = () => board()?.interactions || [];
   const overview = () => board()?.overview;
+  // Task-level evaluation criteria rollup. Backend aggregates per-goal
+  // evaluator outcomes, delivery agent verifications, and external quality
+  // gates (PATCH /task/:id/criteria — visual-diff etc.) into one list.
+  const criteriaResults = () => board()?.criteriaResults as
+    | Array<{ name: string; label?: string; family?: string; status: "passed" | "failed" | "skipped"; evidence?: string }>
+    | undefined;
 
   const goalsCards = createMemo(() => {
     const lanes: any[] = board()?.lanes || [];
@@ -546,6 +553,30 @@ export function Board(props: BoardProps) {
             onEditGoal={props.onEditGoal}
             onDeleteGoal={props.onDeleteGoal}
           />
+        </SectionFrame>
+      </Show>
+
+      <Show when={(criteriaResults()?.length ?? 0) > 0}>
+        <SectionFrame
+          id="evaluationCriteriaSection"
+          title={t("section.criteria") || "评估指标"}
+          icon={SECTION_ICONS.criteria}
+          bodyId="evaluationCriteriaBody"
+          badgeId="evaluationCriteriaBadge"
+          badgeText={(() => {
+            const list = criteriaResults() ?? [];
+            const failed = list.filter((c) => c.status === "failed").length;
+            const passed = list.filter((c) => c.status === "passed").length;
+            return failed > 0 ? `${failed} failed` : `${passed}/${list.length}`;
+          })()}
+          badgeTone={(() => {
+            const list = criteriaResults() ?? [];
+            const failed = list.filter((c) => c.status === "failed").length;
+            const passed = list.filter((c) => c.status === "passed").length;
+            return failed > 0 ? "bad" : passed === list.length ? "good" : "accent";
+          })()}
+        >
+          <EvaluationCriteriaPanel checks={criteriaResults() ?? []} />
         </SectionFrame>
       </Show>
 

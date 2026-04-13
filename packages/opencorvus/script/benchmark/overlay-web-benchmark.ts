@@ -69,9 +69,86 @@ import { parseSSE } from "../../src/control-plane/sse"
 import { inactivityAgeMs } from "../../src/util/activity-timeout"
 import { auditWorkspace, deriveRunMetrics, evaluateQualityGates, moduleBlocksFromRequest } from "./quality-gates"
 
+// Accept either `--name=value` or `--name value`. The old version quietly
+// returned undefined for the space form, which masked typos and mis-quoted
+// paths in benchmark invocations — by the time the task ran with a wrong
+// default you had no idea a flag was dropped. Any unrecognised top-level
+// --flag is surfaced as a hard error at startup (see validateFlags below).
 function flag(name: string) {
-  return process.argv.find((item) => item.startsWith(`${name}=`))?.slice(name.length + 1)
+  const eq = process.argv.find((item) => item.startsWith(`${name}=`))
+  if (eq) return eq.slice(name.length + 1)
+  const idx = process.argv.indexOf(name)
+  if (idx !== -1 && idx + 1 < process.argv.length) return process.argv[idx + 1]
+  return undefined
 }
+
+// Authoritative list of every CLI flag the benchmark recognises. Anything
+// else on the command line is a typo or a dropped/quoted value (e.g.
+// `--reference-images "C:/path with space.png"` getting split). We refuse
+// to start in that case rather than silently using defaults.
+const KNOWN_FLAGS = new Set<string>([
+  "--alive-stall-timeout-ms",
+  "--completion-hard-timeout-ms",
+  "--delivery-verify-cmd",
+  "--executor",
+  "--max-executor-groups",
+  "--max-fix-runs",
+  "--max-runs",
+  "--planner-max-steps",
+  "--planner-timeout-ms",
+  "--planning-stall-timeout-ms",
+  "--planning-timeout-ms",
+  "--project-dir",
+  "--reference-images",
+  "--report",
+  "--request-file",
+  "--request-timeout-ms",
+  "--resume-home-dir",
+  "--resume-message",
+  "--resume-task-id",
+  "--spec-max-steps",
+  "--spec-timeout-ms",
+  "--stall-timeout-ms",
+  "--standby-timeout-ms",
+  "--task-create-timeout-ms",
+  "--task-resume-timeout-ms",
+  "--title",
+  "--tool-timeout-ms",
+  "--figma-url",
+  // boolean (no value) switches
+  "--no-keep",
+  "--skip-local-verify",
+])
+
+function validateFlags(): void {
+  // process.argv layout: [bun, scriptPath, ...userArgs]
+  const userArgs = process.argv.slice(2)
+  const unknown: string[] = []
+  for (let i = 0; i < userArgs.length; i++) {
+    const arg = userArgs[i]
+    if (!arg.startsWith("--")) continue
+    const key = arg.includes("=") ? arg.slice(0, arg.indexOf("=")) : arg
+    if (KNOWN_FLAGS.has(key)) {
+      // Skip the value slot for `--name value` form so we don't mistake the
+      // value for an unknown flag if it happens to start with "--".
+      if (!arg.includes("=") && i + 1 < userArgs.length && !userArgs[i + 1].startsWith("--")) {
+        i += 1
+      }
+      continue
+    }
+    unknown.push(arg)
+  }
+  if (unknown.length > 0) {
+    const known = [...KNOWN_FLAGS].sort().join("\n  ")
+    process.stderr.write(
+      `[overlay-benchmark] unknown flag(s): ${unknown.join(" ")}\n` +
+      `Known flags:\n  ${known}\n` +
+      `Hint: use either --name=value or --name value; quote paths that contain spaces.\n`,
+    )
+    process.exit(2)
+  }
+}
+validateFlags()
 
 // No overall hard timeout. The only execution gate is stall: if there is no
 // event/progress/log activity for stallTimeoutMs, the benchmark aborts.
@@ -85,6 +162,10 @@ function flag(name: string) {
 // false stalls.
 const stallTimeoutMs = Number(flag("--stall-timeout-ms")) || 20 * 60 * 1000
 const planningStallTimeoutMs = Number(flag("--planning-stall-timeout-ms")) || stallTimeoutMs
+// Tier 1 alive stall: the SSE stream is producing nothing at all (not even
+// token deltas). This is a connection-level hang, separate from the progress
+// stall above. Short by design — if the LLM is truly working we'll see deltas.
+const aliveStallTimeoutMs = Number(flag("--alive-stall-timeout-ms")) || 2 * 60 * 1000
 const requestTimeoutMs = Number(flag("--request-timeout-ms")) || 30_000
 // Legacy: spec/planner timeouts from the old fixed-pipeline architecture.
 // Kept for backward compatibility — config may still read these env vars.
@@ -115,6 +196,7 @@ const executor = (flag("--executor") || "opencode") as
   | "claude-code"
 const requestFile = flag("--request-file")
 const referenceImages = flag("--reference-images")?.split(",").map(s => s.trim()).filter(Boolean) ?? []
+const figmaUrl = flag("--figma-url")?.trim() || undefined
 const deliveryVerifyCmd = flag("--delivery-verify-cmd")
 const skipLocalVerify = process.argv.includes("--skip-local-verify")
 const noBrowser = false
@@ -180,10 +262,13 @@ if (referenceImages.length > 0) {
   TASK_REQUEST += `\n\n## Reference Images\nThe following reference images are attached as visual input. They show the target UI style:\n${refLines}`
 }
 const TASK_TITLE = flag("--title")?.trim() || (requestFile ? path.parse(requestFile).name : DEFAULT_TASK_TITLE)
-// DELIVERY_VERIFY_CMD: runs only at final quality gate (buildBenchmarkReport).
-// Never passed to the orchestrator as per-goal checks — per-goal evaluation uses the LLM judge only.
-// For the default NoteStore task, use bun test as the acceptance command.
-const DELIVERY_VERIFY_CMD = skipLocalVerify ? "" : (deliveryVerifyCmd?.trim() || (requestFile ? "" : "bun test ./src/note-store.test.ts"))
+// DELIVERY_VERIFY_CMD is assigned after temp.dir is initialized (see below).
+// Auto-registration rules when no explicit --delivery-verify-cmd is supplied:
+//   1. reference-images provided → visual-diff SSIM gate (web/fig2code tasks)
+//   2. otherwise, default NoteStore task → bun test
+//   3. external --request-file without reference images → no auto-verify
+// Fig2code SSIM thresholds (mean 0.85, worst-5% 0.55) come from visual-diff defaults.
+let DELIVERY_VERIFY_CMD = ""
 // Legacy: TASK_GOALS used the old { description, criteria, priority } format
 // to hint the Goal Agent. In the new agent-driven architecture, the Decompose
 // Agent infers goals entirely from the request text — no hints needed.
@@ -296,7 +381,7 @@ process.env.OPENCORVUS_SPEC_AGENT_MAX_STEPS = String(specMaxSteps)
 process.env.OPENCORVUS_PLANNER_AGENT_MAX_STEPS = String(plannerMaxSteps)
 
 console.log(
-  `[overlay-benchmark] config model=${model} executor=${executor} groups=${maxExecutorGroups ?? "config-default"} stall=${stallTimeoutMs / 1000}s planning-stall=${planningStallTimeoutMs / 1000}s tool=${toolTimeoutMs / 1000}s standby=${standbyTimeoutMs === 86400000 ? "∞" : standbyTimeoutMs / 1000 + "s"} request=${requestTimeoutMs / 1000}s hard=${completionHardTimeoutMs > 0 ? completionHardTimeoutMs / 1000 + "s" : "none"}`,
+  `[overlay-benchmark] config model=${model} executor=${executor} groups=${maxExecutorGroups ?? "config-default"} alive-stall=${aliveStallTimeoutMs / 1000}s progress-stall=${stallTimeoutMs / 1000}s planning-progress-stall=${planningStallTimeoutMs / 1000}s tool=${toolTimeoutMs / 1000}s standby=${standbyTimeoutMs === 86400000 ? "∞" : standbyTimeoutMs / 1000 + "s"} request=${requestTimeoutMs / 1000}s hard=${completionHardTimeoutMs > 0 ? completionHardTimeoutMs / 1000 + "s" : "none"}`,
 )
 
 // Force-remove SQLite WAL/SHM before reset — prevents previous benchmark's
@@ -350,6 +435,46 @@ const marks = {
 }
 let taskID = ""
 const reportFile = report ? path.resolve(report) : path.join(process.cwd(), `overlay-web-benchmark-report-${Date.now()}.json`)
+
+// Now that temp.dir and reportFile are known, resolve DELIVERY_VERIFY_CMD.
+{
+  const visualDiffScript = path.join(import.meta.dir, "visual-diff.ts")
+  // The verify command is executed through `cmd /c <string>` on Windows, where
+  // double-quoted paths get treated as literal characters by `bun.exe`'s argv
+  // parser unless the surrounding shell collapses them — and it doesn't,
+  // reliably. We only quote a path when it actually contains a space or a
+  // shell-significant character; otherwise we hand bare paths to bun.exe.
+  // All paths involved here (script dir, project worktree under %TEMP%, the
+  // reference image, the output dir) are validated below to ensure they have
+  // no spaces; if they ever do, we fall back to single-quoting (works on
+  // bash, which we use on macOS/Linux) and document the failure mode.
+  const SHELL_SAFE = /^[A-Za-z0-9_.:/\\-]+$/
+  const safe = (s: string): string => {
+    if (SHELL_SAFE.test(s)) return s
+    if (process.platform === "win32") {
+      // cmd /c can't escape inner double quotes safely. We can only
+      // round-trip paths that lack whitespace and metacharacters; bail loudly
+      // rather than emit a command that will silently mangle.
+      throw new Error(
+        `[overlay-benchmark] cannot safely embed path in cmd /c command line: ${s}\n` +
+        `Move the file to a path without spaces or shell metacharacters.`,
+      )
+    }
+    return `'${s.replace(/'/g, "'\\''")}'`
+  }
+  const buildVisualDiffCmd = (ref: string) => {
+    const visualOut = path.join(path.dirname(reportFile), path.basename(reportFile, ".json") + ".visual-diff-out")
+    return `bun run ${safe(visualDiffScript)} --rendered-dir=${safe(temp.dir)} --reference=${safe(path.resolve(ref))} --out=${safe(visualOut)}`
+  }
+  DELIVERY_VERIFY_CMD = skipLocalVerify
+    ? ""
+    : (deliveryVerifyCmd?.trim()
+      || (referenceImages.length > 0 ? buildVisualDiffCmd(referenceImages[0]) : "")
+      || (requestFile ? "" : "bun test ./src/note-store.test.ts"))
+  if (DELIVERY_VERIFY_CMD) {
+    console.log(`[overlay-benchmark] delivery_verify_cmd=${DELIVERY_VERIFY_CMD}`)
+  }
+}
 _emergencyReportPath = reportFile.endsWith(".json")
   ? reportFile.slice(0, -".json".length) + ".emergency.json"
   : `${reportFile}.emergency.json`
@@ -370,6 +495,12 @@ const events: Array<Record<string, unknown>> = []
 let flushed = Promise.resolve()
 let lastEventAt = Date.now()
 let lastProgressAt = Date.now()
+// Progress-event clock: advanced only by chunks that prove the task is
+// actually moving (tool_call/tool_result/status + orchestrator.task.updated,
+// goal.progress, run.updated) — NOT by raw delta traffic. Without this tier
+// a model stuck in a tool-call retry loop would keep both the event and the
+// progress clock "alive" (both reset by every delta) and never stall.
+let lastProgressEventAt = Date.now()
 let lastProgressSignature = ""
 let lastLogAt = Date.now()
 let lastActivityLogAt = Date.now()
@@ -520,6 +651,25 @@ const onEvent = ({ payload }: { payload: unknown }) => {
     lastActivityLogAt = Date.now()
     lastLogAt = lastActivityLogAt
   }
+  // Progress-event tier: advance only on signals that prove the task moved,
+  // not on incremental text chunks. Keeps stall detection honest while
+  // tolerating slow reasoning models.
+  const isProgressKind = entry.kind === "tool_call" || entry.kind === "tool_result" || entry.kind === "status"
+  const isProgressType =
+    entry.type === "orchestrator.task.updated" ||
+    entry.type === "orchestrator.run.updated" ||
+    entry.type === "orchestrator.goal.progress" ||
+    entry.type === "orchestrator.goal.passed" ||
+    entry.type === "orchestrator.goal.failed" ||
+    entry.type === "orchestrator.goal.created" ||
+    entry.type === "orchestrator.goal.updated" ||
+    entry.type === "orchestrator.plan.created" ||
+    entry.type === "orchestrator.plan.activated" ||
+    entry.type === "orchestrator.interaction.requested" ||
+    entry.type === "orchestrator.interaction.resolved"
+  if (isProgressKind || isProgressType) {
+    lastProgressEventAt = Date.now()
+  }
   flushed = flushed
     .then(() => fs.appendFile(eventLogFile, `${JSON.stringify(entry)}\n`))
     .catch(() => undefined)
@@ -668,7 +818,14 @@ try {
           maxFixRuns,
           ...(maxExecutorGroups != null && maxExecutorGroups > 1 ? { maxExecutorGroups } : {}),
         },
-        ...(DELIVERY_VERIFY_CMD ? { metadata: { delivery_verify_cmd: DELIVERY_VERIFY_CMD } } : {}),
+        ...(DELIVERY_VERIFY_CMD || figmaUrl
+          ? {
+              metadata: {
+                ...(DELIVERY_VERIFY_CMD ? { delivery_verify_cmd: DELIVERY_VERIFY_CMD } : {}),
+                ...(figmaUrl ? { figma_url: figmaUrl } : {}),
+              },
+            }
+          : {}),
       }),
     })
       .then((res) => res.json())
@@ -1375,6 +1532,7 @@ async function waitForFinal(
     if (signature !== lastProgressSignature) {
       lastProgressSignature = signature
       lastProgressAt = Date.now()
+      lastProgressEventAt = Date.now()
       activityLine(`[overlay-benchmark] progress=${signature}`)
     }
     if (progress.task.status !== lastStatus) {
@@ -1382,26 +1540,34 @@ async function waitForFinal(
       activityLine(`[overlay-benchmark] status=${lastStatus}`)
     }
     const now = Date.now()
-    const silentFor = inactivityAgeMs(now, lastEventAt, lastProgressAt)
-    const logSilentFor = inactivityAgeMs(now, lastActivityLogAt)
-    // Use a separate (usually longer) stall timeout while the Task Agent is in
-    // early stages (queued/active). During "active" the Task Agent may be invoking
-    // tools (decompose, plan_goal, etc.) without visible progress changes, so the
-    // normal stallTimeoutMs causes false stalls.
+    // Tier 1 (alive): any SSE chunk — detects connection-level hangs.
+    const aliveAgeMs = inactivityAgeMs(now, lastEventAt)
+    // Tier 2 (progress): only semantic-progress events — detects "model is
+    // emitting tokens but getting nowhere" loops.
+    const progressAgeMs = inactivityAgeMs(now, lastProgressEventAt, lastProgressAt)
+    // Use a separate (usually longer) progress-stall timeout while the Task
+    // Agent is in early stages (queued/active). During "active" the Task
+    // Agent may be invoking tools (decompose, plan_goal, etc.) where tool
+    // events arrive intermittently.
     const taskStatus = progress?.task?.status || ""
     const pipelineStatuses = ["queued", "active"]
-    const effectiveStallMs = pipelineStatuses.includes(taskStatus) ? planningStallTimeoutMs : stallTimeoutMs
+    const effectiveProgressMs = pipelineStatuses.includes(taskStatus) ? planningStallTimeoutMs : stallTimeoutMs
     if (now - lastHeartbeatAt >= 60_000) {
       lastHeartbeatAt = now
       const retryCount = progress?.run?.retryCount ?? progress?.activeRun?.retryCount ?? 0
       const maxFixRuns = (progress?.task as any)?.budget?.maxFixRuns ?? "?"
       logLine(
-        `[overlay-benchmark] heartbeat status=${taskStatus} retry=${retryCount}/${maxFixRuns} signal_age_ms=${silentFor} activity_log_age_ms=${logSilentFor} log_age_ms=${now - lastLogAt} effective_stall_ms=${effectiveStallMs} last_progress=${lastProgressSignature || "none"}`,
+        `[overlay-benchmark] heartbeat status=${taskStatus} retry=${retryCount}/${maxFixRuns} alive_age_ms=${aliveAgeMs} progress_age_ms=${progressAgeMs} alive_cap_ms=${aliveStallTimeoutMs} progress_cap_ms=${effectiveProgressMs} last_progress=${lastProgressSignature || "none"}`,
       )
     }
-    if (silentFor >= effectiveStallMs || logSilentFor >= effectiveStallMs) {
+    if (aliveAgeMs >= aliveStallTimeoutMs) {
       throw new Error(
-        `Task stalled: no event/progress change for ${effectiveStallMs}ms or no activity log output for ${effectiveStallMs}ms (status: ${taskStatus}, last progress: ${lastProgressSignature || "none"}, activity log age: ${logSilentFor}ms, last log age: ${now - lastLogAt}ms)`,
+        `Task alive stall: no SSE activity for ${aliveAgeMs}ms (cap ${aliveStallTimeoutMs}ms, status: ${taskStatus}, last progress: ${lastProgressSignature || "none"})`,
+      )
+    }
+    if (progressAgeMs >= effectiveProgressMs) {
+      throw new Error(
+        `Task progress stall: no semantic-progress event for ${progressAgeMs}ms (cap ${effectiveProgressMs}ms, status: ${taskStatus}, last progress: ${lastProgressSignature || "none"})`,
       )
     }
     if (completionHardTimeoutMs > 0 && (now - startedAt) >= completionHardTimeoutMs) {

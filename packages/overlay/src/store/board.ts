@@ -329,35 +329,6 @@ export function bumpTasksSeq(): void {
   setBoardStore("tasksSeq", (n) => n + 1);
 }
 
-// ── Criteria DOM helpers ──
-// (lines 7070–7089). These operate on DOM elements rendered by
-// criteria list; they are placed here because they relate to board/task
-// evaluation state.
-
-/**
- * Read the enabled/checked state of a criteria list item element.
- * Returns true when the inner checkbox is checked.
- */
-export function isCriteriaEnabled(item: Element | null): boolean {
-  const input = item?.querySelector<HTMLInputElement>('input[type="checkbox"][data-check]');
-  return !!input?.checked;
-}
-
-/**
- * Update the visual status indicator and result text inside a criteria list
- * item element.
- */
-export function setCriteriaResult(item: Element | null, status: string): void {
-  const statusDot = item?.querySelector<HTMLElement>(".criteria-status");
-  const text = item?.querySelector<HTMLElement>(".criteria-result");
-  if (!statusDot || !text) return;
-  statusDot.dataset.result = status;
- // Direct i18n lookup — replaces .
-  const key = `criteria.result.${status}`;
-  const label = t(key);
-  text.textContent = label !== key ? label : status;
-}
-
 // ── Task list derived utilities ──
 
 /**

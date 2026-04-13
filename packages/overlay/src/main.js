@@ -10148,9 +10148,36 @@ d.use({
       if (!language) return `<pre><code>${escapeHtml(text)}</code></pre>`;
       const highlighted = HighlightJS.highlight(text, { language }).value;
       return `<pre><code class="hljs language-${language}">${highlighted}</code></pre>`;
+    },
+    codespan({ text }) {
+      const path = extractFilePath$1(text);
+      if (path) {
+        const { display, target } = path;
+        return `<code><a class="file-link" href="#" data-file-path="${escapeAttr(target)}">${escapeHtml(display)}</a></code>`;
+      }
+      return `<code>${escapeHtml(text)}</code>`;
     }
   }
 });
+function escapeAttr(s) {
+  return escapeHtml(s).replace(/'/g, "&#39;");
+}
+const FILE_EXT_RE = /\.(?:ts|tsx|js|jsx|mts|cts|mjs|cjs|json|jsonc|md|mdx|css|scss|less|html|htm|xml|svg|yaml|yml|toml|py|pyi|rs|go|java|c|h|cpp|cc|cxx|hpp|sh|bash|zsh|sql|rb|php|lua|kt|swift|dart|vue|astro|conf|ini|env|lock|txt)$/i;
+function extractFilePath$1(text) {
+  const s = text.trim();
+  if (!s) return null;
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(s)) return null;
+  if (/\s/.test(s)) return null;
+  if (s.startsWith("-")) return null;
+  const locMatch = s.match(/^(.+?)(:\d+(?::\d+)?)$/);
+  const pathPart = locMatch ? locMatch[1] : s;
+  if (!/^[\w./\\@~-]+$/.test(pathPart)) return null;
+  const hasSlash = /[\/\\]/.test(pathPart);
+  const hasFileExt = FILE_EXT_RE.test(pathPart);
+  if (!hasSlash && !hasFileExt) return null;
+  if (/^\.\w+$/.test(pathPart)) return null;
+  return { display: s, target: pathPart };
+}
 function escapeHtml(str) {
   if (!str) return "";
   return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -10167,7 +10194,7 @@ function renderCodeBlock(content, lang, maxLines = CODE_TRUNCATE_LINES) {
   return { html, truncated, totalLines: lines.length };
 }
 
-var _tmpl$$u = /* @__PURE__ */ template(`<div class=msg-text>`);
+var _tmpl$$v = /* @__PURE__ */ template(`<div class=msg-text>`);
 function splitBlocks(text) {
   if (!text) return [];
   const blocks = [];
@@ -10243,7 +10270,7 @@ function TextPart(props) {
     prevBlockCount = 0;
   });
   return (() => {
-    var _el$ = _tmpl$$u();
+    var _el$ = _tmpl$$v();
     var _ref$ = containerRef;
     typeof _ref$ === "function" ? use(_ref$, _el$) : containerRef = _el$;
     return _el$;
@@ -10252,7 +10279,7 @@ function TextPart(props) {
 function StaticTextPart(props) {
   const html = createMemo(() => renderMarkdown(props.text));
   return (() => {
-    var _el$2 = _tmpl$$u();
+    var _el$2 = _tmpl$$v();
     createRenderEffect(() => _el$2.innerHTML = html());
     return _el$2;
   })();
@@ -11215,7 +11242,7 @@ function toggleToolOutputExpanded(partID) {
   setStore$1("expandedToolOutputs", partID, (value) => value !== true);
 }
 
-var _tmpl$$t = /* @__PURE__ */ template(`<span class=tool-detail>`), _tmpl$2$r = /* @__PURE__ */ template(`<div class=msg-tool><span class=tool-icon></span><span class=tool-name></span><span class=tool-status>`), _tmpl$3$o = /* @__PURE__ */ template(`<div class=msg-tool-input>`), _tmpl$4$m = /* @__PURE__ */ template(`<div class="msg-tool-code md-content">`), _tmpl$5$j = /* @__PURE__ */ template(`<button class=msg-tool-expand>+<!> 行 · 展开全部`), _tmpl$6$f = /* @__PURE__ */ template(`<div class=msg-tool-output>`), _tmpl$7$d = /* @__PURE__ */ template(`<div class=msg-tool-error>`);
+var _tmpl$$u = /* @__PURE__ */ template(`<span class=tool-detail>`), _tmpl$2$s = /* @__PURE__ */ template(`<div class=msg-tool><span class=tool-icon></span><span class=tool-name></span><span class=tool-status>`), _tmpl$3$p = /* @__PURE__ */ template(`<div class=msg-tool-input>`), _tmpl$4$n = /* @__PURE__ */ template(`<div class="msg-tool-code md-content">`), _tmpl$5$k = /* @__PURE__ */ template(`<button class=msg-tool-expand>+<!> 行 · 展开全部`), _tmpl$6$f = /* @__PURE__ */ template(`<div class=msg-tool-output>`), _tmpl$7$d = /* @__PURE__ */ template(`<div class=msg-tool-error>`);
 const FILE_WRITE_TOOLS = /* @__PURE__ */ new Set(["write", "writefile"]);
 const FILE_EDIT_TOOLS = /* @__PURE__ */ new Set(["edit", "editfile", "applypatch"]);
 const FILE_READ_TOOLS = /* @__PURE__ */ new Set(["read", "readfile"]);
@@ -11269,7 +11296,7 @@ function ToolPart(props) {
     return renderCodeBlock(content, lang, expanded() ? Infinity : 100);
   });
   return [(() => {
-    var _el$ = _tmpl$2$r(), _el$2 = _el$.firstChild, _el$3 = _el$2.nextSibling, _el$5 = _el$3.nextSibling;
+    var _el$ = _tmpl$2$s(), _el$2 = _el$.firstChild, _el$3 = _el$2.nextSibling, _el$5 = _el$3.nextSibling;
     insert(_el$2, icon);
     insert(_el$3, toolName);
     insert(_el$, createComponent(Show, {
@@ -11277,7 +11304,7 @@ function ToolPart(props) {
         return detail();
       },
       get children() {
-        var _el$4 = _tmpl$$t();
+        var _el$4 = _tmpl$$u();
         insert(_el$4, detail);
         return _el$4;
       }
@@ -11298,7 +11325,7 @@ function ToolPart(props) {
       return memo(() => status() === "pending")() && raw();
     },
     get children() {
-      var _el$6 = _tmpl$3$o();
+      var _el$6 = _tmpl$3$p();
       insert(_el$6, raw);
       return _el$6;
     }
@@ -11308,7 +11335,7 @@ function ToolPart(props) {
     },
     get children() {
       return [(() => {
-        var _el$7 = _tmpl$4$m();
+        var _el$7 = _tmpl$4$n();
         createRenderEffect(() => _el$7.innerHTML = codeResult().html);
         return _el$7;
       })(), createComponent(Show, {
@@ -11316,7 +11343,7 @@ function ToolPart(props) {
           return codeResult().truncated;
         },
         get children() {
-          var _el$8 = _tmpl$5$j(), _el$9 = _el$8.firstChild, _el$1 = _el$9.nextSibling; _el$1.nextSibling;
+          var _el$8 = _tmpl$5$k(), _el$9 = _el$8.firstChild, _el$1 = _el$9.nextSibling; _el$1.nextSibling;
           _el$8.$$click = () => toggleToolOutputExpanded(props.part?.id || "");
           insert(_el$8, () => codeResult().totalLines - 100, _el$1);
           return _el$8;
@@ -11368,7 +11395,7 @@ function touchReasoningPart$1(part) {
   setReasoningRevision((r) => r + 1);
 }
 
-var _tmpl$$s = /* @__PURE__ */ template(`<div class="reasoning-text md-content">`), _tmpl$2$q = /* @__PURE__ */ template(`<div class=msg-reasoning><div class=reasoning-label> `);
+var _tmpl$$t = /* @__PURE__ */ template(`<div class="reasoning-text md-content">`), _tmpl$2$r = /* @__PURE__ */ template(`<div class=msg-reasoning><div class=reasoning-label> `);
 function isEmptyReasoning(s) {
   return !s.replace(/[\[\]\s]/g, "");
 }
@@ -11385,7 +11412,7 @@ function ReasoningPart(props) {
       return memo(() => !!(text().trim() && !isEmptyReasoning(text())))() && !hidden();
     },
     get children() {
-      var _el$ = _tmpl$2$q(), _el$2 = _el$.firstChild, _el$3 = _el$2.firstChild;
+      var _el$ = _tmpl$2$r(), _el$2 = _el$.firstChild, _el$3 = _el$2.firstChild;
       _el$2.$$click = () => setExpanded(!expanded());
       insert(_el$2, label, _el$3);
       insert(_el$2, () => expanded() ? "▼" : "▶", null);
@@ -11394,7 +11421,7 @@ function ReasoningPart(props) {
           return expanded();
         },
         get children() {
-          var _el$4 = _tmpl$$s();
+          var _el$4 = _tmpl$$t();
           createRenderEffect(() => _el$4.innerHTML = renderMarkdown(text()));
           return _el$4;
         }
@@ -11509,7 +11536,7 @@ function formatDuration(ms) {
   return t("time.duration.second", { seconds: s });
 }
 
-var _tmpl$$r = /* @__PURE__ */ template(`<article class="turn msg"><div class=msg-head><span class=msg-role></span><span class=msg-time></span></div><div class=msg-bubble><div class=msg-body>`), _tmpl$2$p = /* @__PURE__ */ template(`<div class=msg-patch>`), _tmpl$3$n = /* @__PURE__ */ template(`<div>`), _tmpl$4$l = /* @__PURE__ */ template(`<div class=msg-tool><span class=tool-icon>→</span><span class=tool-name>Subtask</span><span class=tool-detail>`);
+var _tmpl$$s = /* @__PURE__ */ template(`<article class="turn msg"><div class=msg-head><span class=msg-role></span><span class=msg-time></span></div><div class=msg-bubble><div class=msg-body>`), _tmpl$2$q = /* @__PURE__ */ template(`<div class=msg-patch>`), _tmpl$3$o = /* @__PURE__ */ template(`<div>`), _tmpl$4$m = /* @__PURE__ */ template(`<div class=msg-tool><span class=tool-icon>→</span><span class=tool-name>Subtask</span><span class=tool-detail>`);
 function renderFilePart(part) {
   const url = part.url || part.filename || "";
   const name = part.filename || url || "file";
@@ -11542,7 +11569,7 @@ function MessageView(props) {
       return hasContent();
     },
     get children() {
-      var _el$ = _tmpl$$r(), _el$2 = _el$.firstChild, _el$3 = _el$2.firstChild, _el$4 = _el$3.nextSibling, _el$5 = _el$2.nextSibling, _el$6 = _el$5.firstChild;
+      var _el$ = _tmpl$$s(), _el$2 = _el$.firstChild, _el$3 = _el$2.firstChild, _el$4 = _el$3.nextSibling, _el$5 = _el$2.nextSibling, _el$6 = _el$5.firstChild;
       insert(_el$3, () => roleLabel(role()));
       insert(_el$4, time);
       insert(_el$6, createComponent(Index, {
@@ -11590,7 +11617,7 @@ function MessageView(props) {
                 return memo(() => part().type === "patch")() && (part().files || []).length > 0;
               },
               get children() {
-                var _el$7 = _tmpl$2$p();
+                var _el$7 = _tmpl$2$q();
                 insert(_el$7, () => "⚙ " + (part().files || []).map((f) => shortRelativePath(f, activeDirectory$1())).join(", "));
                 return _el$7;
               }
@@ -11599,7 +11626,7 @@ function MessageView(props) {
                 return part().type === "file";
               },
               get children() {
-                var _el$8 = _tmpl$3$n();
+                var _el$8 = _tmpl$3$o();
                 createRenderEffect(() => _el$8.innerHTML = renderFilePart(part()));
                 return _el$8;
               }
@@ -11608,7 +11635,7 @@ function MessageView(props) {
                 return part().type === "subtask";
               },
               get children() {
-                var _el$9 = _tmpl$4$l(), _el$0 = _el$9.firstChild, _el$1 = _el$0.nextSibling, _el$10 = _el$1.nextSibling;
+                var _el$9 = _tmpl$4$m(), _el$0 = _el$9.firstChild, _el$1 = _el$0.nextSibling, _el$10 = _el$1.nextSibling;
                 insert(_el$10, () => part().description || part().prompt || "");
                 return _el$9;
               }
@@ -14136,7 +14163,7 @@ function pathBreadcrumb(value) {
   `;
 }
 
-var _tmpl$$q = /* @__PURE__ */ template(`<span>`), _tmpl$2$o = /* @__PURE__ */ template(`<span class=agent-card-round>#`), _tmpl$3$m = /* @__PURE__ */ template(`<article class="turn msg agent-card"data-role=agent-card><div class=agent-card-header role=button tabindex=0><span class=agent-card-label></span><span class=agent-card-count></span><span class=agent-card-chevron aria-hidden=true>▼</span></div><div class=agent-card-body>`), _tmpl$4$k = /* @__PURE__ */ template(`<span class="agent-card-badge agent-card-badge--running"title=Running><span class=agent-card-spinner>`);
+var _tmpl$$r = /* @__PURE__ */ template(`<span>`), _tmpl$2$p = /* @__PURE__ */ template(`<span class=agent-card-round>#`), _tmpl$3$n = /* @__PURE__ */ template(`<article class="turn msg agent-card"data-role=agent-card><div class=agent-card-header role=button tabindex=0><span class=agent-card-label></span><span class=agent-card-count></span><span class=agent-card-chevron aria-hidden=true>▼</span></div><div class=agent-card-body>`), _tmpl$4$l = /* @__PURE__ */ template(`<span class="agent-card-badge agent-card-badge--running"title=Running><span class=agent-card-spinner>`);
 function AgentCard(props) {
   const expanded = () => agentCardExpanded(props.cardID, props.status === "running");
   const toggle = () => {
@@ -14153,7 +14180,7 @@ function AgentCard(props) {
     return "✓";
   };
   return (() => {
-    var _el$ = _tmpl$3$m(), _el$2 = _el$.firstChild, _el$4 = _el$2.firstChild, _el$7 = _el$4.nextSibling, _el$8 = _el$2.nextSibling;
+    var _el$ = _tmpl$3$n(), _el$2 = _el$.firstChild, _el$4 = _el$2.firstChild, _el$7 = _el$4.nextSibling, _el$8 = _el$2.nextSibling;
     _el$2.$$keydown = (e) => {
       if (e.key === "Enter" || e.key === " ") {
         e.preventDefault();
@@ -14166,10 +14193,10 @@ function AgentCard(props) {
         return props.status !== "running";
       },
       get fallback() {
-        return _tmpl$4$k();
+        return _tmpl$4$l();
       },
       get children() {
-        var _el$3 = _tmpl$$q();
+        var _el$3 = _tmpl$$r();
         insert(_el$3, badgeContent);
         createRenderEffect((_p$) => {
           var _v$ = badgeClass(), _v$2 = props.status;
@@ -14189,7 +14216,7 @@ function AgentCard(props) {
         return props.round > 0;
       },
       get children() {
-        var _el$5 = _tmpl$2$o(); _el$5.firstChild;
+        var _el$5 = _tmpl$2$p(); _el$5.firstChild;
         insert(_el$5, () => props.round, null);
         return _el$5;
       }
@@ -14229,7 +14256,7 @@ function AgentCard(props) {
 }
 delegateEvents(["click", "keydown"]);
 
-var _tmpl$$p = /* @__PURE__ */ template(`<span>`), _tmpl$2$n = /* @__PURE__ */ template(`<div class=executor-goal-description>`), _tmpl$3$l = /* @__PURE__ */ template(`<div class=executor-goal-contracts>`), _tmpl$4$j = /* @__PURE__ */ template(`<article class="turn msg executor-goal-block"data-role=executor-goal-group><div class=executor-goal-header role=button tabindex=0><span class=executor-goal-label></span><span class=executor-goal-id></span><span class=executor-goal-chevron aria-hidden=true>▼</span></div><div class=executor-goal-body>`), _tmpl$5$i = /* @__PURE__ */ template(`<span class="executor-goal-badge executor-goal-badge--running"title=Running><span class=agent-card-spinner>`), _tmpl$6$e = /* @__PURE__ */ template(`<div class=goal-contract><span class=goal-contract-key></span><div class=goal-contract-value>`), _tmpl$7$c = /* @__PURE__ */ template(`<span class=goal-step-icon>`), _tmpl$8$a = /* @__PURE__ */ template(`<span class=goal-step-summary>`), _tmpl$9$8 = /* @__PURE__ */ template(`<div class=goal-step-body>`), _tmpl$0$5 = /* @__PURE__ */ template(`<div><div class=goal-step-header><span class=goal-step-label>`), _tmpl$1$4 = /* @__PURE__ */ template(`<span class="goal-step-icon goal-step-icon--running"><span class=agent-card-spinner>`);
+var _tmpl$$q = /* @__PURE__ */ template(`<span>`), _tmpl$2$o = /* @__PURE__ */ template(`<div class=executor-goal-description>`), _tmpl$3$m = /* @__PURE__ */ template(`<div class=executor-goal-contracts>`), _tmpl$4$k = /* @__PURE__ */ template(`<article class="turn msg executor-goal-block"data-role=executor-goal-group><div class=executor-goal-header role=button tabindex=0><span class=executor-goal-label></span><span class=executor-goal-id></span><span class=executor-goal-chevron aria-hidden=true>▼</span></div><div class=executor-goal-body>`), _tmpl$5$j = /* @__PURE__ */ template(`<span class="executor-goal-badge executor-goal-badge--running"title=Running><span class=agent-card-spinner>`), _tmpl$6$e = /* @__PURE__ */ template(`<div class=goal-contract><span class=goal-contract-key></span><div class=goal-contract-value>`), _tmpl$7$c = /* @__PURE__ */ template(`<span class=goal-step-icon>`), _tmpl$8$a = /* @__PURE__ */ template(`<span class=goal-step-summary>`), _tmpl$9$8 = /* @__PURE__ */ template(`<div class=goal-step-body>`), _tmpl$0$5 = /* @__PURE__ */ template(`<div><div class=goal-step-header><span class=goal-step-label>`), _tmpl$1$4 = /* @__PURE__ */ template(`<span class="goal-step-icon goal-step-icon--running"><span class=agent-card-spinner>`);
 const STEP_ORDER = ["planner", "executor", "evaluator"];
 function stepIDToStage(stepID) {
   if (stepID === "plan") return "planner";
@@ -14285,7 +14312,7 @@ function ExecutorGoalGroup(props) {
     return cards.slice().sort((a, b) => STEP_ORDER.indexOf(a._agentStage) - STEP_ORDER.indexOf(b._agentStage));
   };
   return (() => {
-    var _el$ = _tmpl$4$j(), _el$2 = _el$.firstChild, _el$4 = _el$2.firstChild, _el$5 = _el$4.nextSibling, _el$6 = _el$2.nextSibling;
+    var _el$ = _tmpl$4$k(), _el$2 = _el$.firstChild, _el$4 = _el$2.firstChild, _el$5 = _el$4.nextSibling, _el$6 = _el$2.nextSibling;
     _el$2.$$keydown = (e) => {
       if (e.key === "Enter" || e.key === " ") {
         e.preventDefault();
@@ -14298,10 +14325,10 @@ function ExecutorGoalGroup(props) {
         return props.status !== "running";
       },
       get fallback() {
-        return _tmpl$5$i();
+        return _tmpl$5$j();
       },
       get children() {
-        var _el$3 = _tmpl$$p();
+        var _el$3 = _tmpl$$q();
         insert(_el$3, badgeContent);
         createRenderEffect((_p$) => {
           var _v$ = badgeClass(), _v$2 = props.status;
@@ -14332,7 +14359,7 @@ function ExecutorGoalGroup(props) {
         return props.goalDescription;
       },
       get children() {
-        var _el$7 = _tmpl$2$n();
+        var _el$7 = _tmpl$2$o();
         insert(_el$7, createComponent(StaticTextPart, {
           get text() {
             return props.goalDescription;
@@ -14346,7 +14373,7 @@ function ExecutorGoalGroup(props) {
         return memo(() => !!props.contracts)() && props.contracts.length > 0;
       },
       get children() {
-        var _el$8 = _tmpl$3$l();
+        var _el$8 = _tmpl$3$m();
         insert(_el$8, createComponent(For, {
           get each() {
             return props.contracts;
@@ -14964,7 +14991,7 @@ function conversationMessages() {
   return result;
 }
 
-var _tmpl$$o = /* @__PURE__ */ template(`<div class=chat-empty>`);
+var _tmpl$$p = /* @__PURE__ */ template(`<div class=chat-empty>`);
 function Conversation(props) {
   const el = props.container;
   const items = createMemo(() => conversationMessages());
@@ -14978,7 +15005,7 @@ function Conversation(props) {
       return items().length === 0;
     },
     get children() {
-      var _el$ = _tmpl$$o();
+      var _el$ = _tmpl$$p();
       insert(_el$, emptyText);
       return _el$;
     }
@@ -15058,7 +15085,7 @@ function Conversation(props) {
   })];
 }
 
-var _tmpl$$n = /* @__PURE__ */ template(`<button type=button class=task-row-delete><span class=task-row-delete-icon data-icon=delete aria-hidden=true><svg width=12 height=12 viewBox="0 0 16 16"fill=none><path d="M3.5 4.5h9"stroke=currentColor stroke-width=1.2 stroke-linecap=round></path><path d="M6 4.5V3.6c0-.5.4-.9.9-.9h2.2c.5 0 .9.4.9.9v.9"stroke=currentColor stroke-width=1.2 stroke-linecap=round></path><path d="M5.2 6.2l.4 5.4c0 .5.4.9.9.9h2.9c.5 0 .9-.4.9-.9l.4-5.4"stroke=currentColor stroke-width=1.2 stroke-linecap=round>`), _tmpl$2$m = /* @__PURE__ */ template(`<div class="task-row-mini global-task-row"><button type=button class=task-row-main><div class=task-row-head><span class=status-dot aria-hidden=true></span><strong></strong></div><span></span><small>`), _tmpl$3$k = /* @__PURE__ */ template(`<section class=sidebar-list-group><div class=sidebar-list-heading></div><div class=sidebar-list-cluster>`), _tmpl$4$i = /* @__PURE__ */ template(`<div class=task-list-panel>`), _tmpl$5$h = /* @__PURE__ */ template(`<div class=empty-hint>`);
+var _tmpl$$o = /* @__PURE__ */ template(`<button type=button class=task-row-delete><span class=task-row-delete-icon data-icon=delete aria-hidden=true><svg width=12 height=12 viewBox="0 0 16 16"fill=none><path d="M3.5 4.5h9"stroke=currentColor stroke-width=1.2 stroke-linecap=round></path><path d="M6 4.5V3.6c0-.5.4-.9.9-.9h2.2c.5 0 .9.4.9.9v.9"stroke=currentColor stroke-width=1.2 stroke-linecap=round></path><path d="M5.2 6.2l.4 5.4c0 .5.4.9.9.9h2.9c.5 0 .9-.4.9-.9l.4-5.4"stroke=currentColor stroke-width=1.2 stroke-linecap=round>`), _tmpl$2$n = /* @__PURE__ */ template(`<div class="task-row-mini global-task-row"><button type=button class=task-row-main><div class=task-row-head><span class=status-dot aria-hidden=true></span><strong></strong></div><span></span><small>`), _tmpl$3$l = /* @__PURE__ */ template(`<section class=sidebar-list-group><div class=sidebar-list-heading></div><div class=sidebar-list-cluster>`), _tmpl$4$j = /* @__PURE__ */ template(`<div class=task-list-panel>`), _tmpl$5$i = /* @__PURE__ */ template(`<div class=empty-hint>`);
 const COMPLETED_STATUSES = /* @__PURE__ */ new Set(["completed", "failed", "cancelled"]);
 function clipText$1(value, limit = 80) {
   const text = String(value || "").replace(/\s+/g, " ").trim();
@@ -15106,7 +15133,7 @@ function taskListMeta(item) {
 }
 function DeleteButton(props) {
   return (() => {
-    var _el$ = _tmpl$$n();
+    var _el$ = _tmpl$$o();
     _el$.$$click = (e) => {
       e.stopPropagation();
       props.onDelete(props.id);
@@ -15132,7 +15159,7 @@ function TaskRow(props) {
   const title = () => taskListTitle(props.item) || id();
   const isActive = () => !pending() && props.selectedTaskID === id();
   return (() => {
-    var _el$2 = _tmpl$2$m(), _el$3 = _el$2.firstChild, _el$4 = _el$3.firstChild, _el$5 = _el$4.firstChild, _el$6 = _el$5.nextSibling, _el$7 = _el$4.nextSibling, _el$8 = _el$7.nextSibling;
+    var _el$2 = _tmpl$2$n(), _el$3 = _el$2.firstChild, _el$4 = _el$3.firstChild, _el$5 = _el$4.firstChild, _el$6 = _el$5.nextSibling, _el$7 = _el$4.nextSibling, _el$8 = _el$7.nextSibling;
     _el$3.$$click = () => {
       if (!pending() && id()) props.onSelectTask(id());
     };
@@ -15182,7 +15209,7 @@ function TaskSection(props) {
       return props.items.length > 0;
     },
     get children() {
-      var _el$9 = _tmpl$3$k(), _el$0 = _el$9.firstChild, _el$1 = _el$0.nextSibling;
+      var _el$9 = _tmpl$3$l(), _el$0 = _el$9.firstChild, _el$1 = _el$0.nextSibling;
       insert(_el$0, () => props.label);
       insert(_el$1, createComponent(For, {
         get each() {
@@ -15233,14 +15260,14 @@ function TaskList(props) {
   });
   const selectedID = () => boardStore.selectedTaskID;
   return (() => {
-    var _el$10 = _tmpl$4$i();
+    var _el$10 = _tmpl$4$j();
     insert(_el$10, createComponent(Show, {
       get when() {
         return sortedItems().length > 0;
       },
       get fallback() {
         return (() => {
-          var _el$11 = _tmpl$5$h();
+          var _el$11 = _tmpl$5$i();
           insert(_el$11, () => t("task.none"));
           return _el$11;
         })();
@@ -15289,7 +15316,7 @@ function TaskList(props) {
 }
 delegateEvents(["click"]);
 
-var _tmpl$$m = /* @__PURE__ */ template(`<div class=wf-progress><div class=wf-progress-label></div><div class=wf-progress-steps>`), _tmpl$2$l = /* @__PURE__ */ template(`<span class=wf-step-connector>`), _tmpl$3$j = /* @__PURE__ */ template(`<span><span class=wf-step-icon></span><span class=wf-step-label>`);
+var _tmpl$$n = /* @__PURE__ */ template(`<div class=wf-progress><div class=wf-progress-label></div><div class=wf-progress-steps>`), _tmpl$2$m = /* @__PURE__ */ template(`<span class=wf-step-connector>`), _tmpl$3$k = /* @__PURE__ */ template(`<span><span class=wf-step-icon></span><span class=wf-step-label>`);
 function stepStatusClass(status) {
   switch (status) {
     case "completed":
@@ -15363,7 +15390,7 @@ function WorkflowProgressBar(props) {
       return props.workflow;
     },
     get children() {
-      var _el$ = _tmpl$$m(), _el$2 = _el$.firstChild, _el$3 = _el$2.nextSibling;
+      var _el$ = _tmpl$$n(), _el$2 = _el$.firstChild, _el$3 = _el$2.nextSibling;
       insert(_el$2, () => props.workflow.name);
       insert(_el$3, createComponent(For, {
         get each() {
@@ -15374,10 +15401,10 @@ function WorkflowProgressBar(props) {
             return i() > 0;
           },
           get children() {
-            return _tmpl$2$l();
+            return _tmpl$2$m();
           }
         }), (() => {
-          var _el$5 = _tmpl$3$j(), _el$6 = _el$5.firstChild, _el$7 = _el$6.nextSibling;
+          var _el$5 = _tmpl$3$k(), _el$6 = _el$5.firstChild, _el$7 = _el$6.nextSibling;
           insert(_el$6, () => stepStatusIcon(step.status));
           insert(_el$7, () => step.label);
           createRenderEffect((_p$) => {
@@ -15397,7 +15424,7 @@ function WorkflowProgressBar(props) {
   });
 }
 
-var _tmpl$$l = /* @__PURE__ */ template(`<span class=gwg-step-summary>`), _tmpl$2$k = /* @__PURE__ */ template(`<span class=gwg-step-count>(<!>)`), _tmpl$3$i = /* @__PURE__ */ template(`<div class=gwg-plan-nodes>`), _tmpl$4$h = /* @__PURE__ */ template(`<span class=gwg-diff-additions>+`), _tmpl$5$g = /* @__PURE__ */ template(`<span class=gwg-diff-deletions>-`), _tmpl$6$d = /* @__PURE__ */ template(`<div class=gwg-diff-stats><span class=gwg-diff-files> files`), _tmpl$7$b = /* @__PURE__ */ template(`<div class=gwg-changed-files>`), _tmpl$8$9 = /* @__PURE__ */ template(`<div class=gwg-open-session><button type=button class=gwg-open-session-btn>`), _tmpl$9$7 = /* @__PURE__ */ template(`<div>`), _tmpl$0$4 = /* @__PURE__ */ template(`<div class=gwg-eval-summary>`), _tmpl$1$3 = /* @__PURE__ */ template(`<div class=gwg-checks>`), _tmpl$10$3 = /* @__PURE__ */ template(`<div class=gwg-step-messages>`), _tmpl$11$3 = /* @__PURE__ */ template(`<details><summary><span class=gwg-step-icon></span><span class=gwg-step-label></span><span class=gwg-step-status></span></summary><div class=gwg-step-body>`), _tmpl$12$3 = /* @__PURE__ */ template(`<div><span class=gwg-step-icon></span><span class=gwg-step-label></span><span class=gwg-step-status>`), _tmpl$13$3 = /* @__PURE__ */ template(`<div class=gwg-plan-node-brief>`), _tmpl$14$2 = /* @__PURE__ */ template(`<div class=gwg-plan-node><div class=gwg-plan-node-title>`), _tmpl$15$1 = /* @__PURE__ */ template(`<div class=gwg-changed-file>`), _tmpl$16$1 = /* @__PURE__ */ template(`<span class=gwg-check-evidence>`), _tmpl$17 = /* @__PURE__ */ template(`<div><span class=gwg-check-icon></span><span class=gwg-check-name>`), _tmpl$18 = /* @__PURE__ */ template(`<span class=gwg-index>#`), _tmpl$19 = /* @__PURE__ */ template(`<span class=gwg-priority-badge>advisory`), _tmpl$20 = /* @__PURE__ */ template(`<button type=button class="gwg-action-btn gwg-action-edit">✎`), _tmpl$21 = /* @__PURE__ */ template(`<button type=button class="gwg-action-btn gwg-action-delete">✕`), _tmpl$22 = /* @__PURE__ */ template(`<div class=gwg-done-definition><div class=gwg-done-definition-label></div><div class=gwg-done-definition-text>`), _tmpl$23 = /* @__PURE__ */ template(`<div class=gwg-body>`), _tmpl$24 = /* @__PURE__ */ template(`<div><div class=gwg-header role=button tabindex=0><span class=gwg-status-icon></span><span class=gwg-title></span><span class=gwg-id></span><span class=gwg-chevron aria-hidden=true>▼`), _tmpl$25 = /* @__PURE__ */ template(`<div class=gwg-list>`);
+var _tmpl$$m = /* @__PURE__ */ template(`<span class=gwg-step-summary>`), _tmpl$2$l = /* @__PURE__ */ template(`<span class=gwg-step-count>(<!>)`), _tmpl$3$j = /* @__PURE__ */ template(`<div class=gwg-plan-nodes>`), _tmpl$4$i = /* @__PURE__ */ template(`<span class=gwg-diff-additions>+`), _tmpl$5$h = /* @__PURE__ */ template(`<span class=gwg-diff-deletions>-`), _tmpl$6$d = /* @__PURE__ */ template(`<div class=gwg-diff-stats><span class=gwg-diff-files> files`), _tmpl$7$b = /* @__PURE__ */ template(`<div class=gwg-changed-files>`), _tmpl$8$9 = /* @__PURE__ */ template(`<div class=gwg-open-session><button type=button class=gwg-open-session-btn>`), _tmpl$9$7 = /* @__PURE__ */ template(`<div>`), _tmpl$0$4 = /* @__PURE__ */ template(`<div class=gwg-eval-summary>`), _tmpl$1$3 = /* @__PURE__ */ template(`<div class=gwg-checks>`), _tmpl$10$3 = /* @__PURE__ */ template(`<div class=gwg-step-messages>`), _tmpl$11$3 = /* @__PURE__ */ template(`<details><summary><span class=gwg-step-icon></span><span class=gwg-step-label></span><span class=gwg-step-status></span></summary><div class=gwg-step-body>`), _tmpl$12$3 = /* @__PURE__ */ template(`<div><span class=gwg-step-icon></span><span class=gwg-step-label></span><span class=gwg-step-status>`), _tmpl$13$3 = /* @__PURE__ */ template(`<div class=gwg-plan-node-brief>`), _tmpl$14$2 = /* @__PURE__ */ template(`<div class=gwg-plan-node><div class=gwg-plan-node-title>`), _tmpl$15$1 = /* @__PURE__ */ template(`<div class=gwg-changed-file>`), _tmpl$16$1 = /* @__PURE__ */ template(`<span class=gwg-check-evidence>`), _tmpl$17 = /* @__PURE__ */ template(`<div><span class=gwg-check-icon></span><span class=gwg-check-name>`), _tmpl$18 = /* @__PURE__ */ template(`<span class=gwg-index>#`), _tmpl$19 = /* @__PURE__ */ template(`<span class=gwg-priority-badge>advisory`), _tmpl$20 = /* @__PURE__ */ template(`<button type=button class="gwg-action-btn gwg-action-edit">✎`), _tmpl$21 = /* @__PURE__ */ template(`<button type=button class="gwg-action-btn gwg-action-delete">✕`), _tmpl$22 = /* @__PURE__ */ template(`<div class=gwg-done-definition><div class=gwg-done-definition-label></div><div class=gwg-done-definition-text>`), _tmpl$23 = /* @__PURE__ */ template(`<div class=gwg-body>`), _tmpl$24 = /* @__PURE__ */ template(`<div><div class=gwg-header role=button tabindex=0><span class=gwg-status-icon></span><span class=gwg-title></span><span class=gwg-id></span><span class=gwg-chevron aria-hidden=true>▼`), _tmpl$25 = /* @__PURE__ */ template(`<div class=gwg-list>`);
 function stepIcon(status) {
   switch (status) {
     case "completed":
@@ -15488,7 +15515,7 @@ function StepRow(props) {
             return props.step.summary;
           },
           get children() {
-            var _el$28 = _tmpl$$l();
+            var _el$28 = _tmpl$$m();
             insert(_el$28, () => props.step.summary);
             return _el$28;
           }
@@ -15507,7 +15534,7 @@ function StepRow(props) {
           return props.step.summary;
         },
         get children() {
-          var _el$5 = _tmpl$$l();
+          var _el$5 = _tmpl$$m();
           insert(_el$5, () => props.step.summary);
           return _el$5;
         }
@@ -15518,7 +15545,7 @@ function StepRow(props) {
           return hasMessages();
         },
         get children() {
-          var _el$7 = _tmpl$2$k(), _el$8 = _el$7.firstChild, _el$0 = _el$8.nextSibling; _el$0.nextSibling;
+          var _el$7 = _tmpl$2$l(), _el$8 = _el$7.firstChild, _el$0 = _el$8.nextSibling; _el$0.nextSibling;
           insert(_el$7, () => props.messages.length, _el$0);
           return _el$7;
         }
@@ -15528,7 +15555,7 @@ function StepRow(props) {
           return hasPlanNodes();
         },
         get children() {
-          var _el$10 = _tmpl$3$i();
+          var _el$10 = _tmpl$3$j();
           insert(_el$10, createComponent(For, {
             get each() {
               return props.step.payload.planNodes;
@@ -15570,7 +15597,7 @@ function StepRow(props) {
                   return props.step.payload.diffStats?.additions !== void 0;
                 },
                 get children() {
-                  var _el$15 = _tmpl$4$h(); _el$15.firstChild;
+                  var _el$15 = _tmpl$4$i(); _el$15.firstChild;
                   insert(_el$15, () => props.step.payload.diffStats.additions, null);
                   return _el$15;
                 }
@@ -15580,7 +15607,7 @@ function StepRow(props) {
                   return props.step.payload.diffStats?.deletions !== void 0;
                 },
                 get children() {
-                  var _el$17 = _tmpl$5$g(); _el$17.firstChild;
+                  var _el$17 = _tmpl$5$h(); _el$17.firstChild;
                   insert(_el$17, () => props.step.payload.diffStats.deletions, null);
                   return _el$17;
                 }
@@ -15851,7 +15878,7 @@ function GoalWorkflowList(props) {
 }
 delegateEvents(["click", "keydown"]);
 
-var _tmpl$$k = /* @__PURE__ */ template(`<div class=req-streaming><div class=req-streaming-indicator><span class=agent-card-spinner></span><span class=req-streaming-label></span></div><div class=req-streaming-messages>`), _tmpl$2$j = /* @__PURE__ */ template(`<div class=req-list>`), _tmpl$3$h = /* @__PURE__ */ template(`<p class=req-empty>`), _tmpl$4$g = /* @__PURE__ */ template(`<details class=req-spec-detail><summary></summary><pre class=req-spec-content>`), _tmpl$5$f = /* @__PURE__ */ template(`<div class=req-panel>`), _tmpl$6$c = /* @__PURE__ */ template(`<span class=req-priority>advisory`), _tmpl$7$a = /* @__PURE__ */ template(`<div class=req-item><span class=req-id></span><span></span><span class=req-desc>`);
+var _tmpl$$l = /* @__PURE__ */ template(`<div class=req-streaming><div class=req-streaming-indicator><span class=agent-card-spinner></span><span class=req-streaming-label></span></div><div class=req-streaming-messages>`), _tmpl$2$k = /* @__PURE__ */ template(`<div class=req-list>`), _tmpl$3$i = /* @__PURE__ */ template(`<p class=req-empty>`), _tmpl$4$h = /* @__PURE__ */ template(`<details class=req-spec-detail><summary></summary><pre class=req-spec-content>`), _tmpl$5$g = /* @__PURE__ */ template(`<div class=req-panel>`), _tmpl$6$c = /* @__PURE__ */ template(`<span class=req-priority>advisory`), _tmpl$7$a = /* @__PURE__ */ template(`<div class=req-item><span class=req-id></span><span></span><span class=req-desc>`);
 function typeBadgeClass(type) {
   switch (type) {
     case "explicit":
@@ -15868,13 +15895,13 @@ function RequirementsPanel(props) {
   const hasData = () => props.requirements && props.requirements.length > 0;
   const hasStream = () => props.streamingMessages && props.streamingMessages.length > 0;
   return (() => {
-    var _el$ = _tmpl$5$f();
+    var _el$ = _tmpl$5$g();
     insert(_el$, createComponent(Show, {
       get when() {
         return memo(() => !!(props.isGenerating && hasStream()))() && !hasData();
       },
       get children() {
-        var _el$2 = _tmpl$$k(), _el$3 = _el$2.firstChild, _el$4 = _el$3.firstChild, _el$5 = _el$4.nextSibling, _el$6 = _el$3.nextSibling;
+        var _el$2 = _tmpl$$l(), _el$3 = _el$2.firstChild, _el$4 = _el$3.firstChild, _el$5 = _el$4.nextSibling, _el$6 = _el$3.nextSibling;
         insert(_el$5, () => t("workflow.requirements_generating"));
         insert(_el$6, createComponent(For, {
           get each() {
@@ -15892,7 +15919,7 @@ function RequirementsPanel(props) {
         return hasData();
       },
       get children() {
-        var _el$7 = _tmpl$2$j();
+        var _el$7 = _tmpl$2$k();
         insert(_el$7, createComponent(For, {
           get each() {
             return props.requirements;
@@ -15922,7 +15949,7 @@ function RequirementsPanel(props) {
         return memo(() => !!!hasData())() && !props.isGenerating;
       },
       get children() {
-        var _el$8 = _tmpl$3$h();
+        var _el$8 = _tmpl$3$i();
         insert(_el$8, () => t("workflow.requirements_pending"));
         return _el$8;
       }
@@ -15932,7 +15959,7 @@ function RequirementsPanel(props) {
         return props.specContent;
       },
       get children() {
-        var _el$9 = _tmpl$4$g(), _el$0 = _el$9.firstChild, _el$1 = _el$0.nextSibling;
+        var _el$9 = _tmpl$4$h(), _el$0 = _el$9.firstChild, _el$1 = _el$0.nextSibling;
         insert(_el$0, () => t("workflow.spec_detail"));
         insert(_el$1, () => props.specContent);
         return _el$9;
@@ -15942,16 +15969,16 @@ function RequirementsPanel(props) {
   })();
 }
 
-var _tmpl$$j = /* @__PURE__ */ template(`<div class=arch-generating><span class=agent-card-spinner></span><span class=arch-generating-label>`), _tmpl$2$i = /* @__PURE__ */ template(`<div class=arch-summary><span class=arch-count></span><span class=arch-count-label>`), _tmpl$3$g = /* @__PURE__ */ template(`<div class=arch-categories>`), _tmpl$4$f = /* @__PURE__ */ template(`<div class="arch-detail md-content">`), _tmpl$5$e = /* @__PURE__ */ template(`<div class=arch-panel>`), _tmpl$6$b = /* @__PURE__ */ template(`<span class=arch-cat-badge>`);
+var _tmpl$$k = /* @__PURE__ */ template(`<div class=arch-generating><span class=agent-card-spinner></span><span class=arch-generating-label>`), _tmpl$2$j = /* @__PURE__ */ template(`<div class=arch-summary><span class=arch-count></span><span class=arch-count-label>`), _tmpl$3$h = /* @__PURE__ */ template(`<div class=arch-categories>`), _tmpl$4$g = /* @__PURE__ */ template(`<div class="arch-detail md-content">`), _tmpl$5$f = /* @__PURE__ */ template(`<div class=arch-panel>`), _tmpl$6$b = /* @__PURE__ */ template(`<span class=arch-cat-badge>`);
 function ArchitectPanel(props) {
   return (() => {
-    var _el$ = _tmpl$5$e();
+    var _el$ = _tmpl$5$f();
     insert(_el$, createComponent(Show, {
       get when() {
         return memo(() => !!props.isGenerating)() && !props.architect;
       },
       get children() {
-        var _el$2 = _tmpl$$j(), _el$3 = _el$2.firstChild, _el$4 = _el$3.nextSibling;
+        var _el$2 = _tmpl$$k(), _el$3 = _el$2.firstChild, _el$4 = _el$3.nextSibling;
         insert(_el$4, () => t("workflow.architect_generating"));
         return _el$2;
       }
@@ -15962,7 +15989,7 @@ function ArchitectPanel(props) {
       },
       get children() {
         return [(() => {
-          var _el$5 = _tmpl$2$i(), _el$6 = _el$5.firstChild, _el$7 = _el$6.nextSibling;
+          var _el$5 = _tmpl$2$j(), _el$6 = _el$5.firstChild, _el$7 = _el$6.nextSibling;
           insert(_el$6, () => props.architect.contractCount);
           insert(_el$7, () => t("workflow.architect_contracts"));
           return _el$5;
@@ -15971,7 +15998,7 @@ function ArchitectPanel(props) {
             return props.architect.categories.length > 0;
           },
           get children() {
-            var _el$8 = _tmpl$3$g();
+            var _el$8 = _tmpl$3$h();
             insert(_el$8, createComponent(For, {
               get each() {
                 return props.architect.categories;
@@ -15990,7 +16017,7 @@ function ArchitectPanel(props) {
             return props.architect.summary;
           },
           get children() {
-            var _el$9 = _tmpl$4$f();
+            var _el$9 = _tmpl$4$g();
             createRenderEffect(() => _el$9.innerHTML = renderMarkdown(props.architect.summary));
             return _el$9;
           }
@@ -16001,7 +16028,7 @@ function ArchitectPanel(props) {
   })();
 }
 
-var _tmpl$2$h = /* @__PURE__ */ template(`<div class=delivery-files>`), _tmpl$3$f = /* @__PURE__ */ template(`<div class=delivery-card><div class=delivery-title></div><div class="delivery-summary md-content">`), _tmpl$4$e = /* @__PURE__ */ template(`<p class=empty-hint>`), _tmpl$5$d = /* @__PURE__ */ template(`<button type=button class="btn btn-primary"data-task-action=retry>`), _tmpl$6$a = /* @__PURE__ */ template(`<button type=button class="btn btn-ghost"data-task-action=replan>`), _tmpl$7$9 = /* @__PURE__ */ template(`<div class=task-actions-buttons>`), _tmpl$8$8 = /* @__PURE__ */ template(`<div class=task-actions-bar>`), _tmpl$9$6 = /* @__PURE__ */ template(`<button class="btn btn-primary"data-action=always>`), _tmpl$0$3 = /* @__PURE__ */ template(`<button class="btn btn-ghost"data-action=once>`), _tmpl$1$2 = /* @__PURE__ */ template(`<button class="btn btn-ghost"data-action=reject>`), _tmpl$10$2 = /* @__PURE__ */ template(`<div class=interaction-alert><div class=interaction-title> </div><div class="interaction-body md-content"></div><div class=interaction-actions>`), _tmpl$11$2 = /* @__PURE__ */ template(`<button class="btn btn-primary"data-action=answer>`), _tmpl$12$2 = /* @__PURE__ */ template(`<div class=interactions-list>`), _tmpl$13$2 = /* @__PURE__ */ template(`<details class=section><summary class=section-head><span class=section-icon aria-hidden=true></span><span class=section-title></span><span class=section-badge></span></summary><div class=section-body>`), _tmpl$14$1 = /* @__PURE__ */ template(`<div id=taskActionsBar>`);
+var _tmpl$2$i = /* @__PURE__ */ template(`<div class=delivery-files>`), _tmpl$3$g = /* @__PURE__ */ template(`<div class=delivery-card><div class=delivery-title></div><div class="delivery-summary md-content">`), _tmpl$4$f = /* @__PURE__ */ template(`<p class=empty-hint>`), _tmpl$5$e = /* @__PURE__ */ template(`<button type=button class="btn btn-primary"data-task-action=retry>`), _tmpl$6$a = /* @__PURE__ */ template(`<button type=button class="btn btn-ghost"data-task-action=replan>`), _tmpl$7$9 = /* @__PURE__ */ template(`<div class=task-actions-buttons>`), _tmpl$8$8 = /* @__PURE__ */ template(`<div class=task-actions-bar>`), _tmpl$9$6 = /* @__PURE__ */ template(`<button class="btn btn-primary"data-action=always>`), _tmpl$0$3 = /* @__PURE__ */ template(`<button class="btn btn-ghost"data-action=once>`), _tmpl$1$2 = /* @__PURE__ */ template(`<button class="btn btn-ghost"data-action=reject>`), _tmpl$10$2 = /* @__PURE__ */ template(`<div class=interaction-alert><div class=interaction-title> </div><div class="interaction-body md-content"></div><div class=interaction-actions>`), _tmpl$11$2 = /* @__PURE__ */ template(`<button class="btn btn-primary"data-action=answer>`), _tmpl$12$2 = /* @__PURE__ */ template(`<div class=interactions-list>`), _tmpl$13$2 = /* @__PURE__ */ template(`<details class=section><summary class=section-head><span class=section-icon aria-hidden=true></span><span class=section-title></span><span class=section-badge></span></summary><div class=section-body>`), _tmpl$14$1 = /* @__PURE__ */ template(`<div id=taskActionsBar>`);
 function statusIcon(status) {
   const activeIcon = `<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path data-fill="true" d="M6 4.6L11.3 8 6 11.4Z"/></svg>`;
   const map = {
@@ -16027,20 +16054,20 @@ function DeliveryPanel(props) {
     },
     get fallback() {
       return (() => {
-        var _el$8 = _tmpl$4$e();
+        var _el$8 = _tmpl$4$f();
         insert(_el$8, () => t("empty.delivery"));
         return _el$8;
       })();
     },
     get children() {
-      var _el$4 = _tmpl$3$f(), _el$5 = _el$4.firstChild, _el$6 = _el$5.nextSibling;
+      var _el$4 = _tmpl$3$g(), _el$5 = _el$4.firstChild, _el$6 = _el$5.nextSibling;
       insert(_el$5, () => deliveryStatusLabel(props.delivery?.status));
       insert(_el$4, createComponent(Show, {
         get when() {
           return props.delivery?.result?.changedFiles?.length > 0;
         },
         get children() {
-          var _el$7 = _tmpl$2$h();
+          var _el$7 = _tmpl$2$i();
           insert(_el$7, () => tc("delivery.files_changed", props.delivery.result.changedFiles.length, {
             count: props.delivery.result.changedFiles.length
           }));
@@ -16073,7 +16100,7 @@ function TaskActionsPanel(props) {
               return controls().canRetry;
             },
             get children() {
-              var _el$1 = _tmpl$5$d();
+              var _el$1 = _tmpl$5$e();
               _el$1.$$click = () => props.onRetry?.();
               insert(_el$1, () => t("task.action.retry"));
               createRenderEffect((_p$) => {
@@ -16564,7 +16591,7 @@ function Board(props) {
 }
 delegateEvents(["click"]);
 
-var _tmpl$$i = /* @__PURE__ */ template(`<div class=chat-attachments id=chatAttachments>`), _tmpl$2$g = /* @__PURE__ */ template(`<svg width=14 height=14 viewBox="0 0 16 16"fill=none aria-hidden=true><path d="M4 6l4 4 4-4"stroke=currentColor stroke-width=1.3 stroke-linecap=round stroke-linejoin=round>`), _tmpl$3$e = /* @__PURE__ */ template(`<svg width=16 height=16 viewBox="0 0 16 16"fill=none><rect x=4.25 y=4.25 width=7.5 height=7.5 rx=1.2 fill=currentColor>`), _tmpl$4$d = /* @__PURE__ */ template(`<form id=chatForm class=chat-input><input id=chatFileInput type=file multiple hidden><div class=chat-compose-row><textarea id=chatTextarea class=chat-textarea rows=2></textarea><div class=chat-icon-col><button type=button id=btnChatAttach class=chat-toolbar-btn><svg width=14 height=14 viewBox="0 0 16 16"fill=none aria-hidden=true><path d="M13.5 7.5l-5.8 5.8a3.2 3.2 0 01-4.5-4.5L9 3a2 2 0 012.8 2.8L6 11.6a.8.8 0 01-1.1-1.1L10.5 5"stroke=currentColor stroke-width=1.2 stroke-linecap=round stroke-linejoin=round></path></svg></button><button type=button id=btnWebSearch class=chat-toolbar-btn><svg width=14 height=14 viewBox="0 0 16 16"fill=none aria-hidden=true><circle cx=8 cy=8 r=6.5 stroke=currentColor stroke-width=1.2></circle><path d="M8 1.5C8 1.5 5.5 4.5 5.5 8S8 14.5 8 14.5M8 1.5C8 1.5 10.5 4.5 10.5 8S8 14.5 8 14.5"stroke=currentColor stroke-width=1.2 stroke-linecap=round stroke-linejoin=round></path><path d="M1.5 8h13"stroke=currentColor stroke-width=1.2 stroke-linecap=round></path></svg></button><button type=button class=chat-toolbar-btn></button></div><button><span class=chat-send-icon aria-hidden=true></span><span class=chat-send-label></span></button></div><div class=chat-compose-meta><div class=chat-compose-meta-left><span class=chat-version id=chatVersion></span><span class=chat-author>杨恒@代码生成组</span></div><div class=chat-compose-tip>`), _tmpl$5$c = /* @__PURE__ */ template(`<img class=chat-attachment-thumb>`), _tmpl$6$9 = /* @__PURE__ */ template(`<div class=chat-attachment-item><span class=chat-attachment-name></span><button type=button class=chat-attachment-remove aria-label=Remove>&times;`), _tmpl$7$8 = /* @__PURE__ */ template(`<span class=chat-attachment-icon>`), _tmpl$8$7 = /* @__PURE__ */ template(`<svg width=14 height=14 viewBox="0 0 16 16"fill=none aria-hidden=true><path d="M4 10l4-4 4 4"stroke=currentColor stroke-width=1.3 stroke-linecap=round stroke-linejoin=round>`), _tmpl$9$5 = /* @__PURE__ */ template(`<svg width=16 height=16 viewBox="0 0 16 16"fill=none><path d="M2 8l10-5-3 5 3 5z"fill=currentColor>`);
+var _tmpl$$j = /* @__PURE__ */ template(`<div class=chat-attachments id=chatAttachments>`), _tmpl$2$h = /* @__PURE__ */ template(`<svg width=14 height=14 viewBox="0 0 16 16"fill=none aria-hidden=true><path d="M4 6l4 4 4-4"stroke=currentColor stroke-width=1.3 stroke-linecap=round stroke-linejoin=round>`), _tmpl$3$f = /* @__PURE__ */ template(`<svg width=16 height=16 viewBox="0 0 16 16"fill=none><rect x=4.25 y=4.25 width=7.5 height=7.5 rx=1.2 fill=currentColor>`), _tmpl$4$e = /* @__PURE__ */ template(`<form id=chatForm class=chat-input><input id=chatFileInput type=file multiple hidden><div class=chat-compose-row><textarea id=chatTextarea class=chat-textarea rows=2></textarea><div class=chat-icon-col><button type=button id=btnChatAttach class=chat-toolbar-btn><svg width=14 height=14 viewBox="0 0 16 16"fill=none aria-hidden=true><path d="M13.5 7.5l-5.8 5.8a3.2 3.2 0 01-4.5-4.5L9 3a2 2 0 012.8 2.8L6 11.6a.8.8 0 01-1.1-1.1L10.5 5"stroke=currentColor stroke-width=1.2 stroke-linecap=round stroke-linejoin=round></path></svg></button><button type=button id=btnWebSearch class=chat-toolbar-btn><svg width=14 height=14 viewBox="0 0 16 16"fill=none aria-hidden=true><circle cx=8 cy=8 r=6.5 stroke=currentColor stroke-width=1.2></circle><path d="M8 1.5C8 1.5 5.5 4.5 5.5 8S8 14.5 8 14.5M8 1.5C8 1.5 10.5 4.5 10.5 8S8 14.5 8 14.5"stroke=currentColor stroke-width=1.2 stroke-linecap=round stroke-linejoin=round></path><path d="M1.5 8h13"stroke=currentColor stroke-width=1.2 stroke-linecap=round></path></svg></button><button type=button class=chat-toolbar-btn></button></div><button><span class=chat-send-icon aria-hidden=true></span><span class=chat-send-label></span></button></div><div class=chat-compose-meta><div class=chat-compose-meta-left><span class=chat-version id=chatVersion></span><span class=chat-author>杨恒@代码生成组</span></div><div class=chat-compose-tip>`), _tmpl$5$d = /* @__PURE__ */ template(`<img class=chat-attachment-thumb>`), _tmpl$6$9 = /* @__PURE__ */ template(`<div class=chat-attachment-item><span class=chat-attachment-name></span><button type=button class=chat-attachment-remove aria-label=Remove>&times;`), _tmpl$7$8 = /* @__PURE__ */ template(`<span class=chat-attachment-icon>`), _tmpl$8$7 = /* @__PURE__ */ template(`<svg width=14 height=14 viewBox="0 0 16 16"fill=none aria-hidden=true><path d="M4 10l4-4 4 4"stroke=currentColor stroke-width=1.3 stroke-linecap=round stroke-linejoin=round>`), _tmpl$9$5 = /* @__PURE__ */ template(`<svg width=16 height=16 viewBox="0 0 16 16"fill=none><path d="M2 8l10-5-3 5 3 5z"fill=currentColor>`);
 const MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024;
 const FILE_ACCEPT = ["image/*", ".pdf", ".txt", ".md", ".json", ".csv", ".xml", ".yaml", ".yml", ".log", ".ts", ".js", ".py", ".go", ".rs", ".c", ".cpp", ".h", ".java", ".rb", ".sh", ".bat", ".ps1", ".html", ".css", ".sql", ".toml"].join(",");
 function fileToDataUrl(file) {
@@ -16660,7 +16687,7 @@ function ChatComposer(props) {
   const sendAriaLabel = () => props.busy ? t("chat.stop_label") : t("chat.send_label");
   const sendLabel = () => props.busy ? t("chat.stop_label") : t("chat.send_label");
   return (() => {
-    var _el$ = _tmpl$4$d(), _el$3 = _el$.firstChild, _el$4 = _el$3.nextSibling, _el$5 = _el$4.firstChild, _el$6 = _el$5.nextSibling, _el$7 = _el$6.firstChild, _el$8 = _el$7.nextSibling, _el$9 = _el$8.nextSibling, _el$1 = _el$6.nextSibling, _el$10 = _el$1.firstChild, _el$12 = _el$10.nextSibling, _el$13 = _el$4.nextSibling, _el$14 = _el$13.firstChild, _el$15 = _el$14.nextSibling;
+    var _el$ = _tmpl$4$e(), _el$3 = _el$.firstChild, _el$4 = _el$3.nextSibling, _el$5 = _el$4.firstChild, _el$6 = _el$5.nextSibling, _el$7 = _el$6.firstChild, _el$8 = _el$7.nextSibling, _el$9 = _el$8.nextSibling, _el$1 = _el$6.nextSibling, _el$10 = _el$1.firstChild, _el$12 = _el$10.nextSibling, _el$13 = _el$4.nextSibling, _el$14 = _el$13.firstChild, _el$15 = _el$14.nextSibling;
     _el$.addEventListener("drop", handleDrop);
     _el$.addEventListener("dragleave", handleDragLeave);
     _el$.addEventListener("dragover", handleDragOver);
@@ -16672,7 +16699,7 @@ function ChatComposer(props) {
         return attachments().length > 0;
       },
       get children() {
-        var _el$2 = _tmpl$$i();
+        var _el$2 = _tmpl$$j();
         insert(_el$2, createComponent(For, {
           get each() {
             return attachments();
@@ -16691,7 +16718,7 @@ function ChatComposer(props) {
                 })();
               },
               get children() {
-                var _el$17 = _tmpl$5$c();
+                var _el$17 = _tmpl$5$d();
                 createRenderEffect((_p$) => {
                   var _v$20 = att.url, _v$21 = att.filename;
                   _v$20 !== _p$.e && setAttribute(_el$17, "src", _p$.e = _v$20);
@@ -16735,7 +16762,7 @@ function ChatComposer(props) {
         return _tmpl$8$7();
       },
       get children() {
-        return _tmpl$2$g();
+        return _tmpl$2$h();
       }
     }));
     _el$1.$$click = (e) => {
@@ -16752,7 +16779,7 @@ function ChatComposer(props) {
         return _tmpl$9$5();
       },
       get children() {
-        return _tmpl$3$e();
+        return _tmpl$3$f();
       }
     }));
     insert(_el$12, sendLabel);
@@ -16810,7 +16837,7 @@ function ChatComposer(props) {
 }
 delegateEvents(["input", "keydown", "click"]);
 
-var _tmpl$$h = /* @__PURE__ */ template(`<button type=button id=btnPin class=titlebar-btn><svg width=12 height=12 viewBox="0 0 16 16"fill=none aria-hidden=true><path d="M9.5 2L14 6.5l-4 1.5-4 4-1.5-1.5 4-4L7 2.5 9.5 2z"stroke=currentColor stroke-width=1.3 stroke-linejoin=round></path><line x1=2 y1=14 x2=6 y2=10 stroke=currentColor stroke-width=1.3 stroke-linecap=round>`), _tmpl$2$f = /* @__PURE__ */ template(`<button type=button id=btnMinimize class=titlebar-btn><svg width=11 height=11 viewBox="0 0 11 11"fill=none aria-hidden=true><line x1=1 y1=5.5 x2=10 y2=5.5 stroke=currentColor stroke-width=1.3 stroke-linecap=round>`), _tmpl$3$d = /* @__PURE__ */ template(`<button type=button id=btnMaximize class=titlebar-btn>`), _tmpl$4$c = /* @__PURE__ */ template(`<button type=button id=btnClose class="titlebar-btn titlebar-close"><svg width=11 height=11 viewBox="0 0 11 11"fill=none aria-hidden=true><line x1=1 y1=1 x2=10 y2=10 stroke=currentColor stroke-width=1.3 stroke-linecap=round></line><line x1=10 y1=1 x2=1 y2=10 stroke=currentColor stroke-width=1.3 stroke-linecap=round>`), _tmpl$5$b = /* @__PURE__ */ template(`<div class=titlebar-window-controls data-no-drag=true>`);
+var _tmpl$$i = /* @__PURE__ */ template(`<button type=button id=btnPin class=titlebar-btn><svg width=12 height=12 viewBox="0 0 16 16"fill=none aria-hidden=true><path d="M9.5 2L14 6.5l-4 1.5-4 4-1.5-1.5 4-4L7 2.5 9.5 2z"stroke=currentColor stroke-width=1.3 stroke-linejoin=round></path><line x1=2 y1=14 x2=6 y2=10 stroke=currentColor stroke-width=1.3 stroke-linecap=round>`), _tmpl$2$g = /* @__PURE__ */ template(`<button type=button id=btnMinimize class=titlebar-btn><svg width=11 height=11 viewBox="0 0 11 11"fill=none aria-hidden=true><line x1=1 y1=5.5 x2=10 y2=5.5 stroke=currentColor stroke-width=1.3 stroke-linecap=round>`), _tmpl$3$e = /* @__PURE__ */ template(`<button type=button id=btnMaximize class=titlebar-btn>`), _tmpl$4$d = /* @__PURE__ */ template(`<button type=button id=btnClose class="titlebar-btn titlebar-close"><svg width=11 height=11 viewBox="0 0 11 11"fill=none aria-hidden=true><line x1=1 y1=1 x2=10 y2=10 stroke=currentColor stroke-width=1.3 stroke-linecap=round></line><line x1=10 y1=1 x2=1 y2=10 stroke=currentColor stroke-width=1.3 stroke-linecap=round>`), _tmpl$5$c = /* @__PURE__ */ template(`<div class=titlebar-window-controls data-no-drag=true>`);
 const CLOSE_HINT_KEY = "oc_close_hint_seen";
 async function currentTauriWindow$3() {
   const getCurrent = window.__TAURI__?.window?.getCurrentWindow;
@@ -16925,13 +16952,13 @@ function WindowControls() {
   const pinLabel = () => settingsStore.alwaysOnTop ? t("titlebar.pin.unpin") : t("titlebar.pin.pin");
   const maxLabel = () => maximizeLabel(isMaximized());
   return (() => {
-    var _el$ = _tmpl$5$b();
+    var _el$ = _tmpl$5$c();
     insert(_el$, createComponent(Show, {
       get when() {
         return tauriWin() !== null;
       },
       get children() {
-        var _el$2 = _tmpl$$h();
+        var _el$2 = _tmpl$$i();
         _el$2.$$click = () => void handlePin();
         createRenderEffect((_p$) => {
           var _v$ = settingsStore.alwaysOnTop ? "true" : "false", _v$2 = pinLabel(), _v$3 = pinLabel();
@@ -16952,7 +16979,7 @@ function WindowControls() {
         return tauriWin() !== null;
       },
       get children() {
-        var _el$3 = _tmpl$2$f();
+        var _el$3 = _tmpl$2$g();
         _el$3.$$click = handleMinimize;
         createRenderEffect((_p$) => {
           var _v$4 = t("titlebar.minimize"), _v$5 = t("titlebar.minimize");
@@ -16971,7 +16998,7 @@ function WindowControls() {
         return tauriWin() !== null;
       },
       get children() {
-        var _el$4 = _tmpl$3$d();
+        var _el$4 = _tmpl$3$e();
         _el$4.$$click = () => void handleMaximize();
         createRenderEffect((_p$) => {
           var _v$6 = isMaximized() ? "true" : "false", _v$7 = maxLabel(), _v$8 = maxLabel(), _v$9 = maximizeIcon(isMaximized());
@@ -16994,7 +17021,7 @@ function WindowControls() {
         return tauriWin() !== null;
       },
       get children() {
-        var _el$5 = _tmpl$4$c();
+        var _el$5 = _tmpl$4$d();
         _el$5.$$click = () => void handleClose();
         createRenderEffect((_p$) => {
           var _v$0 = t("titlebar.close"), _v$1 = t("titlebar.close");
@@ -17138,7 +17165,7 @@ async function applyWindowOpacity(opacity) {
   return ok;
 }
 
-var _tmpl$$g = /* @__PURE__ */ template(`<div class=titlebar-menu-wrap data-no-drag=true><button type=button id=btnTitlebarMenu class=titlebar-btn aria-controls=titlebarMenu aria-haspopup=true><svg width=14 height=14 viewBox="0 0 16 16"fill=none aria-hidden=true><circle cx=3.5 cy=8 r=1.2 fill=currentColor></circle><circle cx=8 cy=8 r=1.2 fill=currentColor></circle><circle cx=12.5 cy=8 r=1.2 fill=currentColor></circle></svg></button><div id=titlebarMenu class=titlebar-menu-panel data-no-drag=true><button type=button id=btnLocale class=titlebar-menu-item><span class=titlebar-menu-icon aria-hidden=true>A</span><span class=titlebar-menu-copy><span class=titlebar-menu-title></span><span class=titlebar-menu-meta id=btnLocaleLabel></span></span></button><div class=titlebar-menu-group id=titlebarThemeGroup role=radiogroup><div class=titlebar-menu-group-head><span class=titlebar-menu-icon aria-hidden=true><svg width=14 height=14 viewBox="0 0 16 16"fill=none><circle cx=8 cy=8 r=3 stroke=currentColor stroke-width=1.2></circle><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.1 3.1l1.4 1.4M11.5 11.5l1.4 1.4M3.1 12.9l1.4-1.4M11.5 4.5l1.4-1.4"stroke=currentColor stroke-width=1.2 stroke-linecap=round></path></svg></span><span class=titlebar-menu-copy><span class=titlebar-menu-title></span><span class=titlebar-menu-meta></span></span></div><div class=titlebar-theme-options></div></div><button type=button id=btnSettings class=titlebar-menu-item><span class=titlebar-menu-icon aria-hidden=true><svg width=14 height=14 viewBox="0 0 16 16"fill=none><path d="M3 4h10M3 8h10M3 12h10"stroke=currentColor stroke-width=1.2 stroke-linecap=round></path><circle cx=6 cy=4 r=1.6 fill=currentColor></circle><circle cx=10 cy=8 r=1.6 fill=currentColor></circle><circle cx=7.5 cy=12 r=1.6 fill=currentColor></circle></svg></span><span class=titlebar-menu-copy><span class=titlebar-menu-title></span><span class=titlebar-menu-meta></span></span></button><button type=button id=btnLog class=titlebar-menu-item><span class=titlebar-menu-icon aria-hidden=true><svg width=14 height=14 viewBox="0 0 16 16"fill=none><path d="M3 3h10M3 6.5h8M3 10h6M3 13.5h9"stroke=currentColor stroke-width=1.2 stroke-linecap=round></path></svg></span><span class=titlebar-menu-copy><span class=titlebar-menu-title></span><span class=titlebar-menu-meta></span></span></button><button type=button id=btnPin class=titlebar-menu-item><span class=titlebar-menu-icon aria-hidden=true><svg width=14 height=14 viewBox="0 0 16 16"fill=none><path d="M8 1v6M5.5 7h5l-.5 4H6l-.5-4z"stroke=currentColor stroke-width=1.2 stroke-linecap=round stroke-linejoin=round></path><path d="M8 11v4"stroke=currentColor stroke-width=1.2 stroke-linecap=round></path></svg></span><span class=titlebar-menu-copy><span class=titlebar-menu-title></span><span class=titlebar-menu-meta id=btnPinValue></span></span></button><div class=titlebar-menu-divider aria-hidden=true></div><label class=titlebar-menu-toggle for=chkUnattended><span class=titlebar-menu-copy><span class=titlebar-menu-title></span><span class=titlebar-menu-meta></span></span><input class=titlebar-menu-check id=chkUnattended type=checkbox></label><label class=titlebar-menu-toggle for=chkAutoPermission><span class=titlebar-menu-copy><span class=titlebar-menu-title></span><span class=titlebar-menu-meta></span></span><input class=titlebar-menu-check id=chkAutoPermission type=checkbox></label><label class=titlebar-menu-toggle for=chkAutoQuestion><span class=titlebar-menu-copy><span class=titlebar-menu-title></span><span class=titlebar-menu-meta></span></span><input class=titlebar-menu-check id=chkAutoQuestion type=checkbox></label><label class=titlebar-menu-toggle for=chkShowTranscriptDetails><span class=titlebar-menu-copy><span class=titlebar-menu-title></span><span class=titlebar-menu-meta></span></span><input class=titlebar-menu-check id=chkShowTranscriptDetails type=checkbox></label><label class=titlebar-menu-range for=opacityRange><span class=titlebar-menu-copy><span class=titlebar-menu-title></span><span class=titlebar-menu-meta></span></span><span class=titlebar-menu-range-control><input class=titlebar-menu-slider id=opacityRange type=range min=50 max=100 step=5><span class=titlebar-menu-value id=opacityValue>%`), _tmpl$2$e = /* @__PURE__ */ template(`<button type=button class=titlebar-theme-option role=radio><span class=titlebar-theme-option-swatch aria-hidden=true></span><span class=titlebar-theme-option-label>`);
+var _tmpl$$h = /* @__PURE__ */ template(`<div class=titlebar-menu-wrap data-no-drag=true><button type=button id=btnTitlebarMenu class=titlebar-btn aria-controls=titlebarMenu aria-haspopup=true><svg width=14 height=14 viewBox="0 0 16 16"fill=none aria-hidden=true><circle cx=3.5 cy=8 r=1.2 fill=currentColor></circle><circle cx=8 cy=8 r=1.2 fill=currentColor></circle><circle cx=12.5 cy=8 r=1.2 fill=currentColor></circle></svg></button><div id=titlebarMenu class=titlebar-menu-panel data-no-drag=true><button type=button id=btnLocale class=titlebar-menu-item><span class=titlebar-menu-icon aria-hidden=true>A</span><span class=titlebar-menu-copy><span class=titlebar-menu-title></span><span class=titlebar-menu-meta id=btnLocaleLabel></span></span></button><div class=titlebar-menu-group id=titlebarThemeGroup role=radiogroup><div class=titlebar-menu-group-head><span class=titlebar-menu-icon aria-hidden=true><svg width=14 height=14 viewBox="0 0 16 16"fill=none><circle cx=8 cy=8 r=3 stroke=currentColor stroke-width=1.2></circle><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.1 3.1l1.4 1.4M11.5 11.5l1.4 1.4M3.1 12.9l1.4-1.4M11.5 4.5l1.4-1.4"stroke=currentColor stroke-width=1.2 stroke-linecap=round></path></svg></span><span class=titlebar-menu-copy><span class=titlebar-menu-title></span><span class=titlebar-menu-meta></span></span></div><div class=titlebar-theme-options></div></div><button type=button id=btnSettings class=titlebar-menu-item><span class=titlebar-menu-icon aria-hidden=true><svg width=14 height=14 viewBox="0 0 16 16"fill=none><path d="M3 4h10M3 8h10M3 12h10"stroke=currentColor stroke-width=1.2 stroke-linecap=round></path><circle cx=6 cy=4 r=1.6 fill=currentColor></circle><circle cx=10 cy=8 r=1.6 fill=currentColor></circle><circle cx=7.5 cy=12 r=1.6 fill=currentColor></circle></svg></span><span class=titlebar-menu-copy><span class=titlebar-menu-title></span><span class=titlebar-menu-meta></span></span></button><button type=button id=btnLog class=titlebar-menu-item><span class=titlebar-menu-icon aria-hidden=true><svg width=14 height=14 viewBox="0 0 16 16"fill=none><path d="M3 3h10M3 6.5h8M3 10h6M3 13.5h9"stroke=currentColor stroke-width=1.2 stroke-linecap=round></path></svg></span><span class=titlebar-menu-copy><span class=titlebar-menu-title></span><span class=titlebar-menu-meta></span></span></button><button type=button id=btnPin class=titlebar-menu-item><span class=titlebar-menu-icon aria-hidden=true><svg width=14 height=14 viewBox="0 0 16 16"fill=none><path d="M8 1v6M5.5 7h5l-.5 4H6l-.5-4z"stroke=currentColor stroke-width=1.2 stroke-linecap=round stroke-linejoin=round></path><path d="M8 11v4"stroke=currentColor stroke-width=1.2 stroke-linecap=round></path></svg></span><span class=titlebar-menu-copy><span class=titlebar-menu-title></span><span class=titlebar-menu-meta id=btnPinValue></span></span></button><div class=titlebar-menu-divider aria-hidden=true></div><label class=titlebar-menu-toggle for=chkUnattended><span class=titlebar-menu-copy><span class=titlebar-menu-title></span><span class=titlebar-menu-meta></span></span><input class=titlebar-menu-check id=chkUnattended type=checkbox></label><label class=titlebar-menu-toggle for=chkAutoPermission><span class=titlebar-menu-copy><span class=titlebar-menu-title></span><span class=titlebar-menu-meta></span></span><input class=titlebar-menu-check id=chkAutoPermission type=checkbox></label><label class=titlebar-menu-toggle for=chkAutoQuestion><span class=titlebar-menu-copy><span class=titlebar-menu-title></span><span class=titlebar-menu-meta></span></span><input class=titlebar-menu-check id=chkAutoQuestion type=checkbox></label><label class=titlebar-menu-toggle for=chkShowTranscriptDetails><span class=titlebar-menu-copy><span class=titlebar-menu-title></span><span class=titlebar-menu-meta></span></span><input class=titlebar-menu-check id=chkShowTranscriptDetails type=checkbox></label><label class=titlebar-menu-range for=opacityRange><span class=titlebar-menu-copy><span class=titlebar-menu-title></span><span class=titlebar-menu-meta></span></span><span class=titlebar-menu-range-control><input class=titlebar-menu-slider id=opacityRange type=range min=50 max=100 step=5><span class=titlebar-menu-value id=opacityValue>%`), _tmpl$2$f = /* @__PURE__ */ template(`<button type=button class=titlebar-theme-option role=radio><span class=titlebar-theme-option-swatch aria-hidden=true></span><span class=titlebar-theme-option-label>`);
 async function currentTauriWindow$1() {
   const getCurrent = window.__TAURI__?.window?.getCurrentWindow;
   if (typeof getCurrent === "function") {
@@ -17323,7 +17350,7 @@ function TitlebarMenu(props) {
     });
   });
   return (() => {
-    var _el$ = _tmpl$$g(), _el$2 = _el$.firstChild, _el$3 = _el$2.nextSibling, _el$4 = _el$3.firstChild, _el$5 = _el$4.firstChild, _el$6 = _el$5.nextSibling, _el$7 = _el$6.firstChild, _el$8 = _el$7.nextSibling, _el$9 = _el$4.nextSibling, _el$0 = _el$9.firstChild, _el$1 = _el$0.firstChild, _el$10 = _el$1.nextSibling, _el$11 = _el$10.firstChild, _el$12 = _el$11.nextSibling, _el$13 = _el$0.nextSibling, _el$14 = _el$9.nextSibling, _el$15 = _el$14.firstChild, _el$16 = _el$15.nextSibling, _el$17 = _el$16.firstChild, _el$18 = _el$17.nextSibling, _el$19 = _el$14.nextSibling, _el$20 = _el$19.firstChild, _el$21 = _el$20.nextSibling, _el$22 = _el$21.firstChild, _el$23 = _el$22.nextSibling, _el$24 = _el$19.nextSibling, _el$25 = _el$24.firstChild, _el$26 = _el$25.nextSibling, _el$27 = _el$26.firstChild, _el$28 = _el$27.nextSibling, _el$29 = _el$24.nextSibling, _el$30 = _el$29.nextSibling, _el$31 = _el$30.firstChild, _el$32 = _el$31.firstChild, _el$33 = _el$32.nextSibling, _el$34 = _el$31.nextSibling, _el$35 = _el$30.nextSibling, _el$36 = _el$35.firstChild, _el$37 = _el$36.firstChild, _el$38 = _el$37.nextSibling, _el$39 = _el$36.nextSibling, _el$40 = _el$35.nextSibling, _el$41 = _el$40.firstChild, _el$42 = _el$41.firstChild, _el$43 = _el$42.nextSibling, _el$44 = _el$41.nextSibling, _el$45 = _el$40.nextSibling, _el$46 = _el$45.firstChild, _el$47 = _el$46.firstChild, _el$48 = _el$47.nextSibling, _el$49 = _el$46.nextSibling, _el$50 = _el$45.nextSibling, _el$51 = _el$50.firstChild, _el$52 = _el$51.firstChild, _el$53 = _el$52.nextSibling, _el$54 = _el$51.nextSibling, _el$55 = _el$54.firstChild, _el$56 = _el$55.nextSibling, _el$57 = _el$56.firstChild;
+    var _el$ = _tmpl$$h(), _el$2 = _el$.firstChild, _el$3 = _el$2.nextSibling, _el$4 = _el$3.firstChild, _el$5 = _el$4.firstChild, _el$6 = _el$5.nextSibling, _el$7 = _el$6.firstChild, _el$8 = _el$7.nextSibling, _el$9 = _el$4.nextSibling, _el$0 = _el$9.firstChild, _el$1 = _el$0.firstChild, _el$10 = _el$1.nextSibling, _el$11 = _el$10.firstChild, _el$12 = _el$11.nextSibling, _el$13 = _el$0.nextSibling, _el$14 = _el$9.nextSibling, _el$15 = _el$14.firstChild, _el$16 = _el$15.nextSibling, _el$17 = _el$16.firstChild, _el$18 = _el$17.nextSibling, _el$19 = _el$14.nextSibling, _el$20 = _el$19.firstChild, _el$21 = _el$20.nextSibling, _el$22 = _el$21.firstChild, _el$23 = _el$22.nextSibling, _el$24 = _el$19.nextSibling, _el$25 = _el$24.firstChild, _el$26 = _el$25.nextSibling, _el$27 = _el$26.firstChild, _el$28 = _el$27.nextSibling, _el$29 = _el$24.nextSibling, _el$30 = _el$29.nextSibling, _el$31 = _el$30.firstChild, _el$32 = _el$31.firstChild, _el$33 = _el$32.nextSibling, _el$34 = _el$31.nextSibling, _el$35 = _el$30.nextSibling, _el$36 = _el$35.firstChild, _el$37 = _el$36.firstChild, _el$38 = _el$37.nextSibling, _el$39 = _el$36.nextSibling, _el$40 = _el$35.nextSibling, _el$41 = _el$40.firstChild, _el$42 = _el$41.firstChild, _el$43 = _el$42.nextSibling, _el$44 = _el$41.nextSibling, _el$45 = _el$40.nextSibling, _el$46 = _el$45.firstChild, _el$47 = _el$46.firstChild, _el$48 = _el$47.nextSibling, _el$49 = _el$46.nextSibling, _el$50 = _el$45.nextSibling, _el$51 = _el$50.firstChild, _el$52 = _el$51.firstChild, _el$53 = _el$52.nextSibling, _el$54 = _el$51.nextSibling, _el$55 = _el$54.firstChild, _el$56 = _el$55.nextSibling, _el$57 = _el$56.firstChild;
     _el$2.$$click = (event) => {
       event.preventDefault();
       event.stopPropagation();
@@ -17337,7 +17364,7 @@ function TitlebarMenu(props) {
     insert(_el$13, createComponent(For, {
       each: THEME_OPTIONS,
       children: (opt) => (() => {
-        var _el$58 = _tmpl$2$e(), _el$59 = _el$58.firstChild, _el$60 = _el$59.nextSibling;
+        var _el$58 = _tmpl$2$f(), _el$59 = _el$58.firstChild, _el$60 = _el$59.nextSibling;
         _el$58.$$click = () => handleThemeSelect(opt.id);
         insert(_el$60, () => t(opt.labelKey));
         createRenderEffect((_p$) => {
@@ -17431,7 +17458,7 @@ function TitlebarMenu(props) {
 }
 delegateEvents(["click", "input"]);
 
-var _tmpl$$f = /* @__PURE__ */ template(`<span id=connBadge class=conn-badge aria-live=polite>`);
+var _tmpl$$g = /* @__PURE__ */ template(`<span id=connBadge class=conn-badge aria-live=polite>`);
 function statusLabel(status) {
   if (status === "online") return t("titlebar.connection.online");
   if (status === "connecting") return t("titlebar.connection.connecting");
@@ -17465,7 +17492,7 @@ function ConnectionBadge(props) {
   });
   const label = createMemo(() => statusLabel(status()));
   return (() => {
-    var _el$ = _tmpl$$f();
+    var _el$ = _tmpl$$g();
     _el$.$$dblclick = () => {
       void handleRestart();
     };
@@ -18231,7 +18258,7 @@ async function resolveDiff(filePath) {
   }
 }
 
-var _tmpl$$e = /* @__PURE__ */ template(`<div class=diff-lines>`), _tmpl$2$d = /* @__PURE__ */ template(`<div class=diff-empty><p class=empty-hint>`), _tmpl$3$c = /* @__PURE__ */ template(`<div class=diff-row><div class=diff-gutter></div><div class=diff-num></div><div class=diff-num></div><div class=diff-code>`), _tmpl$4$b = /* @__PURE__ */ template(`<div class=diff-row data-kind=skip><div class=diff-gutter>...</div><div class=diff-num></div><div class=diff-num></div><div class=diff-code>`);
+var _tmpl$$f = /* @__PURE__ */ template(`<div class=diff-lines>`), _tmpl$2$e = /* @__PURE__ */ template(`<div class=diff-empty><p class=empty-hint>`), _tmpl$3$d = /* @__PURE__ */ template(`<div class=diff-row><div class=diff-gutter></div><div class=diff-num></div><div class=diff-num></div><div class=diff-code>`), _tmpl$4$c = /* @__PURE__ */ template(`<div class=diff-row data-kind=skip><div class=diff-gutter>...</div><div class=diff-num></div><div class=diff-num></div><div class=diff-code>`);
 function splitDiffLines(text) {
   const value = String(text || "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
   if (!value) return [];
@@ -18408,13 +18435,13 @@ function DiffView(props) {
     },
     get fallback() {
       return (() => {
-        var _el$2 = _tmpl$2$d(), _el$3 = _el$2.firstChild;
+        var _el$2 = _tmpl$2$e(), _el$3 = _el$2.firstChild;
         insert(_el$3, () => t("diff.no_preview"));
         return _el$2;
       })();
     },
     get children() {
-      var _el$ = _tmpl$$e();
+      var _el$ = _tmpl$$f();
       insert(_el$, createComponent(For, {
         get each() {
           return ops();
@@ -18425,13 +18452,13 @@ function DiffView(props) {
           },
           get fallback() {
             return (() => {
-              var _el$9 = _tmpl$4$b(), _el$0 = _el$9.firstChild, _el$1 = _el$0.nextSibling, _el$10 = _el$1.nextSibling, _el$11 = _el$10.nextSibling;
+              var _el$9 = _tmpl$4$c(), _el$0 = _el$9.firstChild, _el$1 = _el$0.nextSibling, _el$10 = _el$1.nextSibling, _el$11 = _el$10.nextSibling;
               insert(_el$11, () => tc("diff.unchanged_hidden", line.count ?? 0));
               return _el$9;
             })();
           },
           get children() {
-            var _el$4 = _tmpl$3$c(), _el$5 = _el$4.firstChild, _el$6 = _el$5.nextSibling, _el$7 = _el$6.nextSibling, _el$8 = _el$7.nextSibling;
+            var _el$4 = _tmpl$3$d(), _el$5 = _el$4.firstChild, _el$6 = _el$5.nextSibling, _el$7 = _el$6.nextSibling, _el$8 = _el$7.nextSibling;
             insert(_el$5, (() => {
               var _c$ = memo(() => line.kind === "add");
               return () => _c$() ? "+" : line.kind === "del" ? "-" : " ";
@@ -18449,7 +18476,7 @@ function DiffView(props) {
   });
 }
 
-var _tmpl$$d = /* @__PURE__ */ template(`<div class=changes-summary><span></span><span class=changes-total><span data-tone=add>+</span><span data-tone=del>-`), _tmpl$2$c = /* @__PURE__ */ template(`<div class=changes-list>`), _tmpl$3$b = /* @__PURE__ */ template(`<div class=changes-panel>`), _tmpl$4$a = /* @__PURE__ */ template(`<p class=empty-hint>`), _tmpl$5$a = /* @__PURE__ */ template(`<button type=button class=change-row><span class=change-main><span class=change-path></span></span><span class=change-meta><span class=change-status></span><span class=diff-dialog-stat data-tone=add>+</span><span class=diff-dialog-stat data-tone=del>-`);
+var _tmpl$$e = /* @__PURE__ */ template(`<div class=changes-summary><span></span><span class=changes-total><span data-tone=add>+</span><span data-tone=del>-`), _tmpl$2$d = /* @__PURE__ */ template(`<div class=changes-list>`), _tmpl$3$c = /* @__PURE__ */ template(`<div class=changes-panel>`), _tmpl$4$b = /* @__PURE__ */ template(`<p class=empty-hint>`), _tmpl$5$b = /* @__PURE__ */ template(`<button type=button class=change-row><span class=change-main><span class=change-path></span></span><span class=change-meta><span class=change-status></span><span class=diff-dialog-stat data-tone=add>+</span><span class=diff-dialog-stat data-tone=del>-`);
 function ChangesPanel(props) {
   const files = createMemo(() => {
     if (props.changes !== void 0) return props.changes;
@@ -18464,14 +18491,14 @@ function ChangesPanel(props) {
     openWorkspaceDiff(item.file);
   }
   return (() => {
-    var _el$ = _tmpl$3$b();
+    var _el$ = _tmpl$3$c();
     insert(_el$, createComponent(Show, {
       get when() {
         return files().length > 0;
       },
       get fallback() {
         return (() => {
-          var _el$0 = _tmpl$4$a();
+          var _el$0 = _tmpl$4$b();
           insert(_el$0, (() => {
             var _c$ = memo(() => !!props.hasSelectedTask);
             return () => _c$() ? t("files.unavailable") : t("files.select_target");
@@ -18481,19 +18508,19 @@ function ChangesPanel(props) {
       },
       get children() {
         return [(() => {
-          var _el$2 = _tmpl$$d(), _el$3 = _el$2.firstChild, _el$4 = _el$3.nextSibling, _el$5 = _el$4.firstChild; _el$5.firstChild; var _el$7 = _el$5.nextSibling; _el$7.firstChild;
+          var _el$2 = _tmpl$$e(), _el$3 = _el$2.firstChild, _el$4 = _el$3.nextSibling, _el$5 = _el$4.firstChild; _el$5.firstChild; var _el$7 = _el$5.nextSibling; _el$7.firstChild;
           insert(_el$3, () => tc("files.changed", files().length));
           insert(_el$5, totalAdditions, null);
           insert(_el$7, totalDeletions, null);
           return _el$2;
         })(), (() => {
-          var _el$9 = _tmpl$2$c();
+          var _el$9 = _tmpl$2$d();
           insert(_el$9, createComponent(For, {
             get each() {
               return files();
             },
             children: (item, index) => (() => {
-              var _el$1 = _tmpl$5$a(), _el$10 = _el$1.firstChild, _el$11 = _el$10.firstChild, _el$12 = _el$10.nextSibling, _el$13 = _el$12.firstChild, _el$14 = _el$13.nextSibling; _el$14.firstChild; var _el$16 = _el$14.nextSibling; _el$16.firstChild;
+              var _el$1 = _tmpl$5$b(), _el$10 = _el$1.firstChild, _el$11 = _el$10.firstChild, _el$12 = _el$10.nextSibling, _el$13 = _el$12.firstChild, _el$14 = _el$13.nextSibling; _el$14.firstChild; var _el$16 = _el$14.nextSibling; _el$16.firstChild;
               _el$1.$$click = () => void handleRowClick(item);
               insert(_el$11, () => item.file);
               insert(_el$13, () => changeStatusLabel(item.status));
@@ -18522,7 +18549,7 @@ function ChangesPanel(props) {
 }
 delegateEvents(["click"]);
 
-var _tmpl$$c = /* @__PURE__ */ template(`<div class=log-fields>`), _tmpl$2$b = /* @__PURE__ */ template(`<div class=log-detail-block><div class=log-detail-title></div><pre class=log-detail-pre>`), _tmpl$3$a = /* @__PURE__ */ template(`<details class=log-detail><summary></summary><div class=log-detail-block><div class=log-detail-title></div><pre class=log-detail-pre>`), _tmpl$4$9 = /* @__PURE__ */ template(`<span class=log-chip>=`), _tmpl$5$9 = /* @__PURE__ */ template(`<span class=log-delta>`), _tmpl$6$8 = /* @__PURE__ */ template(`<span class=log-service>`), _tmpl$7$7 = /* @__PURE__ */ template(`<div class=log-line><div class=log-line-head><span class=log-source></span><span>[<!>]</span><span class=log-ts></span></div><div class=log-msg>`), _tmpl$8$6 = /* @__PURE__ */ template(`<dialog id=logDialog class="dialog dialog-wide"><div class=dialog-form><div class=dialog-header><span class=dialog-title></span><div class=dialog-header-actions><select id=logLevelFilter class="select select-sm"><option value=debug>DEBUG</option><option value=info>INFO</option><option value=warn>WARN</option><option value=error>ERROR</option></select><button type=button id=btnLogServerLogs class="btn btn-ghost mini"></button><button type=button id=btnLogRefresh class="btn btn-ghost mini"></button><button type=button id=btnLogCopy class="btn btn-ghost mini"></button><button type=button id=btnLogClear class="btn btn-ghost mini danger"></button><button type=button id=btnCloseLog class="btn btn-ghost mini"></button></div></div><div id=logViewerBody class=log-viewer>`), _tmpl$9$4 = /* @__PURE__ */ template(`<div class=empty-hint>`);
+var _tmpl$$d = /* @__PURE__ */ template(`<div class=log-fields>`), _tmpl$2$c = /* @__PURE__ */ template(`<div class=log-detail-block><div class=log-detail-title></div><pre class=log-detail-pre>`), _tmpl$3$b = /* @__PURE__ */ template(`<details class=log-detail><summary></summary><div class=log-detail-block><div class=log-detail-title></div><pre class=log-detail-pre>`), _tmpl$4$a = /* @__PURE__ */ template(`<span class=log-chip>=`), _tmpl$5$a = /* @__PURE__ */ template(`<span class=log-delta>`), _tmpl$6$8 = /* @__PURE__ */ template(`<span class=log-service>`), _tmpl$7$7 = /* @__PURE__ */ template(`<div class=log-line><div class=log-line-head><span class=log-source></span><span>[<!>]</span><span class=log-ts></span></div><div class=log-msg>`), _tmpl$8$6 = /* @__PURE__ */ template(`<dialog id=logDialog class="dialog dialog-wide"><div class=dialog-form><div class=dialog-header><span class=dialog-title></span><div class=dialog-header-actions><select id=logLevelFilter class="select select-sm"><option value=debug>DEBUG</option><option value=info>INFO</option><option value=warn>WARN</option><option value=error>ERROR</option></select><button type=button id=btnLogServerLogs class="btn btn-ghost mini"></button><button type=button id=btnLogRefresh class="btn btn-ghost mini"></button><button type=button id=btnLogCopy class="btn btn-ghost mini"></button><button type=button id=btnLogClear class="btn btn-ghost mini danger"></button><button type=button id=btnCloseLog class="btn btn-ghost mini"></button></div></div><div id=logViewerBody class=log-viewer>`), _tmpl$9$4 = /* @__PURE__ */ template(`<div class=empty-hint>`);
 let _serverLogLines = [];
 async function loadServerLogs() {
   try {
@@ -18776,13 +18803,13 @@ function LogEntryDetail(props) {
     },
     get children() {
       return [(() => {
-        var _el$ = _tmpl$$c();
+        var _el$ = _tmpl$$d();
         insert(_el$, createComponent(For, {
           get each() {
             return items().slice(0, 6);
           },
           children: ([key, value]) => (() => {
-            var _el$13 = _tmpl$4$9(), _el$14 = _el$13.firstChild;
+            var _el$13 = _tmpl$4$a(), _el$14 = _el$13.firstChild;
             insert(_el$13, key, _el$14);
             insert(_el$13, () => logPreviewValue(value), null);
             return _el$13;
@@ -18790,7 +18817,7 @@ function LogEntryDetail(props) {
         }));
         return _el$;
       })(), (() => {
-        var _el$2 = _tmpl$3$a(), _el$3 = _el$2.firstChild, _el$4 = _el$3.nextSibling, _el$5 = _el$4.firstChild, _el$6 = _el$5.nextSibling;
+        var _el$2 = _tmpl$3$b(), _el$3 = _el$2.firstChild, _el$4 = _el$3.nextSibling, _el$5 = _el$4.firstChild, _el$6 = _el$5.nextSibling;
         insert(_el$3, () => t("log.details"));
         insert(_el$5, () => t("log.fields"));
         insert(_el$6, () => stringifyLogValue(fields(), 2));
@@ -18799,7 +18826,7 @@ function LogEntryDetail(props) {
             return !!props.entry.raw;
           },
           get children() {
-            var _el$7 = _tmpl$2$b(), _el$8 = _el$7.firstChild, _el$9 = _el$8.nextSibling;
+            var _el$7 = _tmpl$2$c(), _el$8 = _el$7.firstChild, _el$9 = _el$8.nextSibling;
             insert(_el$8, () => t("log.raw"));
             insert(_el$9, () => props.entry.raw);
             return _el$7;
@@ -18813,7 +18840,7 @@ function LogEntryDetail(props) {
       return memo(() => items().length === 0)() && !!props.entry.raw;
     },
     get children() {
-      var _el$0 = _tmpl$3$a(), _el$1 = _el$0.firstChild, _el$10 = _el$1.nextSibling, _el$11 = _el$10.firstChild, _el$12 = _el$11.nextSibling;
+      var _el$0 = _tmpl$3$b(), _el$1 = _el$0.firstChild, _el$10 = _el$1.nextSibling, _el$11 = _el$10.firstChild, _el$12 = _el$11.nextSibling;
       insert(_el$1, () => t("log.details"));
       insert(_el$11, () => t("log.raw"));
       insert(_el$12, () => props.entry.raw);
@@ -18831,7 +18858,7 @@ function LogLine(props) {
         return !!props.entry.delta;
       },
       get children() {
-        var _el$22 = _tmpl$5$9();
+        var _el$22 = _tmpl$5$a();
         insert(_el$22, () => props.entry.delta);
         return _el$22;
       }
@@ -18976,7 +19003,7 @@ function LogViewer(props) {
 }
 delegateEvents(["click"]);
 
-var _tmpl$$b = /* @__PURE__ */ template(`<span class=tool-detail>`), _tmpl$2$a = /* @__PURE__ */ template(`<div class=msg-tool><span class=tool-icon></span><span class=tool-name></span><span class=tool-status>`), _tmpl$3$9 = /* @__PURE__ */ template(`<div class=msg-tool-input>`), _tmpl$4$8 = /* @__PURE__ */ template(`<div class="msg-tool-code md-content">`), _tmpl$5$8 = /* @__PURE__ */ template(`<button class=msg-tool-expand>+<!> 行 · 展开全部`), _tmpl$6$7 = /* @__PURE__ */ template(`<div class=msg-tool-output>`), _tmpl$7$6 = /* @__PURE__ */ template(`<div class=msg-tool-error>`), _tmpl$8$5 = /* @__PURE__ */ template(`<article class="turn msg"data-role=user><div class=msg-head><span class=msg-role></span></div><div class=msg-bubble><div class=msg-body>`), _tmpl$9$3 = /* @__PURE__ */ template(`<span>`), _tmpl$0$2 = /* @__PURE__ */ template(`<article class="turn msg agent-card"data-role=assistant data-agent-stage=executor><div class=agent-card-header role=button tabindex=0><span class=agent-card-label></span><span class=agent-card-count></span><span class=agent-card-chevron aria-hidden=true>▼</span></div><div class=agent-card-body>`), _tmpl$1$1 = /* @__PURE__ */ template(`<span class="agent-card-badge agent-card-badge--running"title=Running><span class=agent-card-spinner>`), _tmpl$10$1 = /* @__PURE__ */ template(`<div class=msg-thinking-live><span class=msg-thinking-dot></span><span>`), _tmpl$11$1 = /* @__PURE__ */ template(`<div class=msg-patch>`), _tmpl$12$1 = /* @__PURE__ */ template(`<div class=coding-tab-root style=display:flex;flex-direction:column;height:100%;min-width:0><div class="chat-scroll coding-scroll"style="flex:1 1 auto;overflow:auto">`), _tmpl$13$1 = /* @__PURE__ */ template(`<div class=chat-empty>`);
+var _tmpl$$c = /* @__PURE__ */ template(`<span class=tool-detail>`), _tmpl$2$b = /* @__PURE__ */ template(`<div class=msg-tool><span class=tool-icon></span><span class=tool-name></span><span class=tool-status>`), _tmpl$3$a = /* @__PURE__ */ template(`<div class=msg-tool-input>`), _tmpl$4$9 = /* @__PURE__ */ template(`<div class="msg-tool-code md-content">`), _tmpl$5$9 = /* @__PURE__ */ template(`<button class=msg-tool-expand>+<!> 行 · 展开全部`), _tmpl$6$7 = /* @__PURE__ */ template(`<div class=msg-tool-output>`), _tmpl$7$6 = /* @__PURE__ */ template(`<div class=msg-tool-error>`), _tmpl$8$5 = /* @__PURE__ */ template(`<article class="turn msg"data-role=user><div class=msg-head><span class=msg-role></span></div><div class=msg-bubble><div class=msg-body>`), _tmpl$9$3 = /* @__PURE__ */ template(`<span>`), _tmpl$0$2 = /* @__PURE__ */ template(`<article class="turn msg agent-card"data-role=assistant data-agent-stage=executor><div class=agent-card-header role=button tabindex=0><span class=agent-card-label></span><span class=agent-card-count></span><span class=agent-card-chevron aria-hidden=true>▼</span></div><div class=agent-card-body>`), _tmpl$1$1 = /* @__PURE__ */ template(`<span class="agent-card-badge agent-card-badge--running"title=Running><span class=agent-card-spinner>`), _tmpl$10$1 = /* @__PURE__ */ template(`<div class=msg-thinking-live><span class=msg-thinking-dot></span><span>`), _tmpl$11$1 = /* @__PURE__ */ template(`<div class=msg-patch>`), _tmpl$12$1 = /* @__PURE__ */ template(`<div class=coding-tab-root style=display:flex;flex-direction:column;height:100%;min-width:0><div class="chat-scroll coding-scroll"style="flex:1 1 auto;overflow:auto">`), _tmpl$13$1 = /* @__PURE__ */ template(`<div class=chat-empty>`);
 function CodingTab(props) {
   const [store, setStore] = createStore({
     messages: [],
@@ -19223,7 +19250,7 @@ ${newStr}`;
       return renderCodeBlock(content, lang, isExpanded() ? Infinity : 100);
     });
     return [(() => {
-      var _el$ = _tmpl$2$a(), _el$2 = _el$.firstChild, _el$3 = _el$2.nextSibling, _el$5 = _el$3.nextSibling;
+      var _el$ = _tmpl$2$b(), _el$2 = _el$.firstChild, _el$3 = _el$2.nextSibling, _el$5 = _el$3.nextSibling;
       insert(_el$2, () => displayToolIcon(toolName()));
       insert(_el$3, toolName);
       insert(_el$, createComponent(Show, {
@@ -19231,7 +19258,7 @@ ${newStr}`;
           return detail();
         },
         get children() {
-          var _el$4 = _tmpl$$b();
+          var _el$4 = _tmpl$$c();
           insert(_el$4, detail);
           return _el$4;
         }
@@ -19252,7 +19279,7 @@ ${newStr}`;
         return memo(() => status() === "pending")() && raw();
       },
       get children() {
-        var _el$6 = _tmpl$3$9();
+        var _el$6 = _tmpl$3$a();
         insert(_el$6, raw);
         return _el$6;
       }
@@ -19262,7 +19289,7 @@ ${newStr}`;
       },
       get children() {
         return [(() => {
-          var _el$7 = _tmpl$4$8();
+          var _el$7 = _tmpl$4$9();
           createRenderEffect(() => _el$7.innerHTML = codeResult().html);
           return _el$7;
         })(), createComponent(Show, {
@@ -19270,7 +19297,7 @@ ${newStr}`;
             return codeResult().truncated;
           },
           get children() {
-            var _el$8 = _tmpl$5$8(), _el$9 = _el$8.firstChild, _el$1 = _el$9.nextSibling; _el$1.nextSibling;
+            var _el$8 = _tmpl$5$9(), _el$9 = _el$8.firstChild, _el$1 = _el$9.nextSibling; _el$1.nextSibling;
             _el$8.$$click = () => toggleToolOutputExpanded(partKey());
             insert(_el$8, () => codeResult().totalLines - 100, _el$1);
             return _el$8;
@@ -19488,7 +19515,7 @@ ${newStr}`;
 }
 delegateEvents(["click", "keydown"]);
 
-var _tmpl$$a = /* @__PURE__ */ template(`<span class=diff-preview-meta><span class=change-status></span><span class=diff-dialog-stat data-tone=add>+</span><span class=diff-dialog-stat data-tone=del>-`), _tmpl$2$9 = /* @__PURE__ */ template(`<header class=diff-preview-head><span class=diff-preview-path>`), _tmpl$3$8 = /* @__PURE__ */ template(`<div class=diff-preview-body>`), _tmpl$4$7 = /* @__PURE__ */ template(`<div class=diff-preview-panel>`), _tmpl$5$7 = /* @__PURE__ */ template(`<div class=diff-preview-empty><p class=empty-hint>`);
+var _tmpl$$b = /* @__PURE__ */ template(`<span class=diff-preview-meta><span class=change-status></span><span class=diff-dialog-stat data-tone=add>+</span><span class=diff-dialog-stat data-tone=del>-`), _tmpl$2$a = /* @__PURE__ */ template(`<header class=diff-preview-head><span class=diff-preview-path>`), _tmpl$3$9 = /* @__PURE__ */ template(`<div class=diff-preview-body>`), _tmpl$4$8 = /* @__PURE__ */ template(`<div class=diff-preview-panel>`), _tmpl$5$8 = /* @__PURE__ */ template(`<div class=diff-preview-empty><p class=empty-hint>`);
 function DiffPreviewPanel(props) {
   const [change] = createResource(() => props.filePath || "", async (path) => {
     if (!path) return null;
@@ -19497,28 +19524,28 @@ function DiffPreviewPanel(props) {
   const item = createMemo(() => change());
   const loading = () => change.loading;
   return (() => {
-    var _el$ = _tmpl$4$7();
+    var _el$ = _tmpl$4$8();
     insert(_el$, createComponent(Show, {
       get when() {
         return props.filePath;
       },
       get fallback() {
         return (() => {
-          var _el$1 = _tmpl$5$7(), _el$10 = _el$1.firstChild;
+          var _el$1 = _tmpl$5$8(), _el$10 = _el$1.firstChild;
           insert(_el$10, () => t("diff.select_file"));
           return _el$1;
         })();
       },
       get children() {
         return [(() => {
-          var _el$2 = _tmpl$2$9(), _el$3 = _el$2.firstChild;
+          var _el$2 = _tmpl$2$a(), _el$3 = _el$2.firstChild;
           insert(_el$3, () => props.filePath);
           insert(_el$2, createComponent(Show, {
             get when() {
               return item();
             },
             get children() {
-              var _el$4 = _tmpl$$a(), _el$5 = _el$4.firstChild, _el$6 = _el$5.nextSibling; _el$6.firstChild; var _el$8 = _el$6.nextSibling; _el$8.firstChild;
+              var _el$4 = _tmpl$$b(), _el$5 = _el$4.firstChild, _el$6 = _el$5.nextSibling; _el$6.firstChild; var _el$8 = _el$6.nextSibling; _el$8.firstChild;
               insert(_el$5, () => changeStatusLabel(item().status));
               insert(_el$6, () => item().additions, null);
               insert(_el$8, () => item().deletions, null);
@@ -19529,14 +19556,14 @@ function DiffPreviewPanel(props) {
           createRenderEffect(() => setAttribute(_el$3, "title", props.filePath || ""));
           return _el$2;
         })(), (() => {
-          var _el$0 = _tmpl$3$8();
+          var _el$0 = _tmpl$3$9();
           insert(_el$0, createComponent(Show, {
             get when() {
               return !loading();
             },
             get fallback() {
               return (() => {
-                var _el$11 = _tmpl$5$7(), _el$12 = _el$11.firstChild;
+                var _el$11 = _tmpl$5$8(), _el$12 = _el$11.firstChild;
                 insert(_el$12, () => t("diff.loading"));
                 return _el$11;
               })();
@@ -19548,7 +19575,7 @@ function DiffPreviewPanel(props) {
                 },
                 get fallback() {
                   return (() => {
-                    var _el$13 = _tmpl$5$7(), _el$14 = _el$13.firstChild;
+                    var _el$13 = _tmpl$5$8(), _el$14 = _el$13.firstChild;
                     insert(_el$14, () => t("diff.no_preview"));
                     return _el$13;
                   })();
@@ -19571,11 +19598,116 @@ function DiffPreviewPanel(props) {
   })();
 }
 
-var _tmpl$$9 = /* @__PURE__ */ template(`<span class=workspace-tab-file> · `), _tmpl$2$8 = /* @__PURE__ */ template(`<section class=workspace id=workspacePanel><header class=workspace-header><div class=workspace-tabs role=tablist><button type=button class=workspace-tab role=tab><span class=workspace-tab-label></span></button><button type=button class=workspace-tab role=tab><span class=workspace-tab-label></span></button></div><button type=button class=workspace-close>×</button></header><div class=workspace-body><div class=workspace-view data-kind=build></div><div class=workspace-view data-kind=diff>`);
+var _tmpl$$a = /* @__PURE__ */ template(`<header class=file-view-head><span class=file-view-path>`), _tmpl$2$9 = /* @__PURE__ */ template(`<div class=file-view-body>`), _tmpl$3$8 = /* @__PURE__ */ template(`<div class=file-view-panel>`), _tmpl$4$7 = /* @__PURE__ */ template(`<div class=file-view-empty><p class=empty-hint>`), _tmpl$5$7 = /* @__PURE__ */ template(`<div class=file-view-content>`);
+async function fetchFileContent(path) {
+  return await apiJson(`/file/content?path=${encodeURIComponent(path)}`);
+}
+function FileViewPanel(props) {
+  const [file] = createResource(() => props.filePath || "", async (path) => {
+    if (!path) return null;
+    return fetchFileContent(path);
+  });
+  const loading = () => file.loading;
+  const err = () => file.error;
+  return (() => {
+    var _el$ = _tmpl$3$8();
+    insert(_el$, createComponent(Show, {
+      get when() {
+        return props.filePath;
+      },
+      get fallback() {
+        return (() => {
+          var _el$5 = _tmpl$4$7(), _el$6 = _el$5.firstChild;
+          insert(_el$6, () => t("workspace.file_empty"));
+          return _el$5;
+        })();
+      },
+      get children() {
+        return [(() => {
+          var _el$2 = _tmpl$$a(), _el$3 = _el$2.firstChild;
+          insert(_el$3, () => props.filePath);
+          createRenderEffect(() => setAttribute(_el$3, "title", props.filePath || ""));
+          return _el$2;
+        })(), (() => {
+          var _el$4 = _tmpl$2$9();
+          insert(_el$4, createComponent(Show, {
+            get when() {
+              return !loading();
+            },
+            get fallback() {
+              return (() => {
+                var _el$7 = _tmpl$4$7(), _el$8 = _el$7.firstChild;
+                insert(_el$8, () => t("workspace.file_loading"));
+                return _el$7;
+              })();
+            },
+            get children() {
+              return createComponent(Show, {
+                get when() {
+                  return !err();
+                },
+                get fallback() {
+                  return (() => {
+                    var _el$9 = _tmpl$4$7(), _el$0 = _el$9.firstChild;
+                    insert(_el$0, () => t("workspace.file_error", {
+                      message: err()?.message ?? ""
+                    }));
+                    return _el$9;
+                  })();
+                },
+                get children() {
+                  return createComponent(Show, {
+                    get when() {
+                      return memo(() => !!file())() && file().type === "text";
+                    },
+                    get fallback() {
+                      return (() => {
+                        var _el$1 = _tmpl$4$7(), _el$10 = _el$1.firstChild;
+                        insert(_el$10, () => t("workspace.file_binary"));
+                        return _el$1;
+                      })();
+                    },
+                    get children() {
+                      return createComponent(FileBody, {
+                        get path() {
+                          return props.filePath;
+                        },
+                        get content() {
+                          return file().content;
+                        }
+                      });
+                    }
+                  });
+                }
+              });
+            }
+          }));
+          return _el$4;
+        })()];
+      }
+    }));
+    return _el$;
+  })();
+}
+function FileBody(props) {
+  const rendered = () => {
+    const lang = extToLang(props.path);
+    return renderCodeBlock(props.content, lang, Number.MAX_SAFE_INTEGER).html;
+  };
+  return (() => {
+    var _el$11 = _tmpl$5$7();
+    createRenderEffect(() => _el$11.innerHTML = rendered());
+    return _el$11;
+  })();
+}
+
+var _tmpl$$9 = /* @__PURE__ */ template(`<span class=workspace-tab-file> · `), _tmpl$2$8 = /* @__PURE__ */ template(`<section class=workspace id=workspacePanel><header class=workspace-header><div class=workspace-tabs role=tablist><button type=button class=workspace-tab role=tab><span class=workspace-tab-label></span></button><button type=button class=workspace-tab role=tab><span class=workspace-tab-label></span></button><button type=button class=workspace-tab role=tab><span class=workspace-tab-label></span></button></div><button type=button class=workspace-close>×</button></header><div class=workspace-body><div class=workspace-view data-kind=build></div><div class=workspace-view data-kind=diff></div><div class=workspace-view data-kind=file>`);
 function WorkspacePanel(props) {
   const isBuild = () => props.view.kind === "build";
   const isDiff = () => props.view.kind === "diff";
+  const isFile = () => props.view.kind === "file";
   const diffFilePath = () => props.view.kind === "diff" ? props.view.filePath : null;
+  const fileFilePath = () => props.view.kind === "file" ? props.view.filePath : null;
   function selectBuild() {
     if (props.view.kind !== "build") props.onSelectView({
       kind: "build"
@@ -19589,8 +19721,16 @@ function WorkspacePanel(props) {
       });
     }
   }
+  function selectFile() {
+    if (props.view.kind !== "file") {
+      props.onSelectView({
+        kind: "file",
+        filePath: ""
+      });
+    }
+  }
   return (() => {
-    var _el$ = _tmpl$2$8(), _el$2 = _el$.firstChild, _el$3 = _el$2.firstChild, _el$4 = _el$3.firstChild, _el$5 = _el$4.firstChild, _el$6 = _el$4.nextSibling, _el$7 = _el$6.firstChild, _el$0 = _el$3.nextSibling, _el$1 = _el$2.nextSibling, _el$10 = _el$1.firstChild, _el$11 = _el$10.nextSibling;
+    var _el$ = _tmpl$2$8(), _el$2 = _el$.firstChild, _el$3 = _el$2.firstChild, _el$4 = _el$3.firstChild, _el$5 = _el$4.firstChild, _el$6 = _el$4.nextSibling, _el$7 = _el$6.firstChild, _el$0 = _el$6.nextSibling, _el$1 = _el$0.firstChild, _el$12 = _el$3.nextSibling, _el$13 = _el$2.nextSibling, _el$14 = _el$13.firstChild, _el$15 = _el$14.nextSibling, _el$16 = _el$15.nextSibling;
     _el$4.$$click = selectBuild;
     insert(_el$5, () => t("workspace.build"));
     _el$6.$$click = selectDiff;
@@ -19605,8 +19745,20 @@ function WorkspacePanel(props) {
         return _el$8;
       }
     }), null);
-    addEventListener(_el$0, "click", props.onClose, true);
-    insert(_el$10, createComponent(CodingTab, {
+    _el$0.$$click = selectFile;
+    insert(_el$1, () => t("workspace.file"), null);
+    insert(_el$1, createComponent(Show, {
+      get when() {
+        return fileFilePath();
+      },
+      get children() {
+        var _el$10 = _tmpl$$9(); _el$10.firstChild;
+        insert(_el$10, () => shortFileName(fileFilePath() || ""), null);
+        return _el$10;
+      }
+    }), null);
+    addEventListener(_el$12, "click", props.onClose, true);
+    insert(_el$14, createComponent(CodingTab, {
       get active() {
         return isBuild();
       },
@@ -19614,21 +19766,29 @@ function WorkspacePanel(props) {
         return props.onCodingReady;
       }
     }));
-    insert(_el$11, createComponent(DiffPreviewPanel, {
+    insert(_el$15, createComponent(DiffPreviewPanel, {
       get filePath() {
         return diffFilePath();
       }
     }));
+    insert(_el$16, createComponent(FileViewPanel, {
+      get filePath() {
+        return fileFilePath();
+      }
+    }));
     createRenderEffect((_p$) => {
-      var _v$ = isBuild(), _v$2 = isBuild() ? "true" : "false", _v$3 = isDiff(), _v$4 = isDiff() ? "true" : "false", _v$5 = t("workspace.close"), _v$6 = t("workspace.close"), _v$7 = isBuild() ? "flex" : "none", _v$8 = isDiff() ? "flex" : "none";
+      var _v$ = isBuild(), _v$2 = isBuild() ? "true" : "false", _v$3 = isDiff(), _v$4 = isDiff() ? "true" : "false", _v$5 = isFile(), _v$6 = isFile() ? "true" : "false", _v$7 = t("workspace.close"), _v$8 = t("workspace.close"), _v$9 = isBuild() ? "flex" : "none", _v$0 = isDiff() ? "flex" : "none", _v$1 = isFile() ? "flex" : "none";
       _v$ !== _p$.e && setAttribute(_el$4, "aria-selected", _p$.e = _v$);
       _v$2 !== _p$.t && setAttribute(_el$4, "data-active", _p$.t = _v$2);
       _v$3 !== _p$.a && setAttribute(_el$6, "aria-selected", _p$.a = _v$3);
       _v$4 !== _p$.o && setAttribute(_el$6, "data-active", _p$.o = _v$4);
-      _v$5 !== _p$.i && setAttribute(_el$0, "title", _p$.i = _v$5);
-      _v$6 !== _p$.n && setAttribute(_el$0, "aria-label", _p$.n = _v$6);
-      _v$7 !== _p$.s && setStyleProperty(_el$10, "display", _p$.s = _v$7);
-      _v$8 !== _p$.h && setStyleProperty(_el$11, "display", _p$.h = _v$8);
+      _v$5 !== _p$.i && setAttribute(_el$0, "aria-selected", _p$.i = _v$5);
+      _v$6 !== _p$.n && setAttribute(_el$0, "data-active", _p$.n = _v$6);
+      _v$7 !== _p$.s && setAttribute(_el$12, "title", _p$.s = _v$7);
+      _v$8 !== _p$.h && setAttribute(_el$12, "aria-label", _p$.h = _v$8);
+      _v$9 !== _p$.r && setStyleProperty(_el$14, "display", _p$.r = _v$9);
+      _v$0 !== _p$.d && setStyleProperty(_el$15, "display", _p$.d = _v$0);
+      _v$1 !== _p$.l && setStyleProperty(_el$16, "display", _p$.l = _v$1);
       return _p$;
     }, {
       e: void 0,
@@ -19638,7 +19798,10 @@ function WorkspacePanel(props) {
       i: void 0,
       n: void 0,
       s: void 0,
-      h: void 0
+      h: void 0,
+      r: void 0,
+      d: void 0,
+      l: void 0
     });
     return _el$;
   })();
@@ -24669,7 +24832,24 @@ function openWorkspaceDiff(filePath) {
     filePath
   });
 }
+function openWorkspaceFile(filePath) {
+  openWorkspace({
+    kind: "file",
+    filePath
+  });
+}
 window.openWorkspaceDiff = openWorkspaceDiff;
+window.openWorkspaceFile = openWorkspaceFile;
+document.addEventListener("click", (ev) => {
+  const target = ev.target;
+  if (!target) return;
+  const link = target.closest("[data-file-path]");
+  if (!link) return;
+  const path = link.getAttribute("data-file-path");
+  if (!path) return;
+  ev.preventDefault();
+  openWorkspaceFile(path);
+});
 function installAppDialogBridge() {
   const dialog = document.getElementById("appDialog");
   const titleEl = document.getElementById("appDialogTitle");

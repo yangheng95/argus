@@ -16,9 +16,13 @@ const BASE_URL = "https://aimemodeldev.myhexin.com/litellm/v1"
 const API_KEY = "sk-eq7WQu0ylelH6uyedbf6PA"
 
 // > 1024 tokens 的 system prompt，确保超过 Anthropic prompt caching 最低阈值
-const LONG_SYSTEM = `You are a senior financial analyst specializing in quantitative trading strategies. ` +
-  `Your expertise includes technical analysis, fundamental analysis, risk management, and portfolio optimization. `.repeat(40) +
-  `Always respond concisely.`
+const LONG_SYSTEM = (
+  `You are a senior financial analyst specializing in quantitative trading strategies. ` +
+  `Your expertise includes technical analysis, fundamental analysis, risk management, and portfolio optimization. ` +
+  `You understand derivatives, fixed income instruments, equity valuation, macroeconomic indicators, and market microstructure. ` +
+  `You are familiar with Python, pandas, numpy, scipy, statsmodels, and common backtesting frameworks like backtrader and vectorbt. ` +
+  `You can explain complex concepts such as Black-Scholes, Monte Carlo simulation, mean-variance optimization, and factor models. `
+).repeat(20) + `Always respond concisely in one word.`
 
 interface UsageInfo {
   prompt_tokens?: number

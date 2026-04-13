@@ -2,10 +2,9 @@
  * DecomposeService — wraps DecomposeAgent with error handling,
  * fidelity review, Decision Log injection, and orchestrator lifecycle management.
  *
- * NO hard timeout — the DecomposeAgent has its own inactivity guard
- * (createInactivityGuard) that aborts on stall. A hard deadline is harmful
- * for complex PRDs where the agent is actively working (making tool calls)
- * but the total wall-clock time is long.
+ * Timeout policy lives in DecomposeAgent's AgentRuntime invocation: three
+ * independent tiers (alive / progress / absolute) via createProgressGuard,
+ * so delta-only loops do not defer the stall timer indefinitely.
  *
  * Single entry point replaces old SpecService + GoalService pipeline.
  */
@@ -36,7 +35,7 @@ export namespace DecomposeService {
     title: string
     request: string
     /** Base64 image attachments — injected as vision content alongside the request text. */
-    attachments?: Array<{ mime: string; data: string; filename?: string }>
+    attachments?: Array<{ sha: string; url: string; mime: string; size: number; filename?: string }>
     taskID?: string
     sessionID?: string
     signal?: AbortSignal
@@ -111,7 +110,7 @@ export namespace DecomposeService {
   export async function redecompose(input: {
     title: string
     request: string
-    attachments?: Array<{ mime: string; data: string; filename?: string }>
+    attachments?: Array<{ sha: string; url: string; mime: string; size: number; filename?: string }>
     taskID?: string
     sessionID?: string
     redecomposeContext: RedecomposeContext

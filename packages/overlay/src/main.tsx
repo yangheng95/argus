@@ -171,9 +171,30 @@ function openWorkspaceDiff(filePath: string): void {
   openWorkspace({ kind: "diff", filePath });
 }
 
+/** Open (or switch to) a file preview in the workspace. */
+function openWorkspaceFile(filePath: string): void {
+  openWorkspace({ kind: "file", filePath });
+}
+
 // Exposed for services and window-level bridges that need to trigger the
 // workspace from outside this module (e.g. ChangesPanel clicks).
 (window as any).openWorkspaceDiff = openWorkspaceDiff;
+(window as any).openWorkspaceFile = openWorkspaceFile;
+
+// Delegate clicks on rendered-markdown file links (see utils/markdown.ts —
+// codespans that look like file paths are emitted with data-file-path).
+// A single document-level listener keeps this decoupled from the message
+// rendering path, which re-runs on every stream tick.
+document.addEventListener("click", (ev) => {
+  const target = ev.target as HTMLElement | null;
+  if (!target) return;
+  const link = target.closest<HTMLElement>("[data-file-path]");
+  if (!link) return;
+  const path = link.getAttribute("data-file-path");
+  if (!path) return;
+  ev.preventDefault();
+  openWorkspaceFile(path);
+});
 
 function installAppDialogBridge(): void {
   const dialog = document.getElementById("appDialog") as HTMLDialogElement | null;

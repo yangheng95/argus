@@ -515,6 +515,10 @@ function buildBoard(task: typeof OrchestratorTaskTable.$inferSelect) {
           })),
         },
       ],
+      // Task-level criteria rollup. Sourced from `task.metadata.criteria_results`,
+      // which is populated by per-goal evaluator outcomes, the delivery agent,
+      // and external quality gates (PATCH /task/:id/criteria — visual-diff etc).
+      criteriaResults: boardChecks((task.metadata as any)?.criteria_results),
   }
 }
 

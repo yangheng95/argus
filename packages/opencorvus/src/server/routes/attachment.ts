@@ -1,0 +1,75 @@
+import { Hono } from "hono"
+import { describeRoute } from "hono-openapi"
+import { stat, readFile } from "node:fs/promises"
+import path from "node:path"
+import { AttachmentStore } from "@/storage/attachment-store"
+import { lazy } from "../../util/lazy"
+
+const MIME_FROM_EXT: Record<string, string> = {
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  webp: "image/webp",
+  gif: "image/gif",
+  bmp: "image/bmp",
+  svg: "image/svg+xml",
+  pdf: "application/pdf",
+  txt: "text/plain; charset=utf-8",
+  md: "text/markdown; charset=utf-8",
+  csv: "text/csv; charset=utf-8",
+  json: "application/json; charset=utf-8",
+  mp3: "audio/mpeg",
+  wav: "audio/wav",
+  weba: "audio/webm",
+  oga: "audio/ogg",
+  mp4: "video/mp4",
+  webm: "video/webm",
+  mov: "video/quicktime",
+  bin: "application/octet-stream",
+}
+
+function mimeFromName(name: string): string {
+  const ext = path.extname(name).replace(/^\./, "").toLowerCase()
+  return MIME_FROM_EXT[ext] ?? "application/octet-stream"
+}
+
+/**
+ * GET /attachment/:projectID/:name
+ * Serves a content-addressed attachment previously written by AttachmentStore.
+ * Content-Type is derived from the stored file extension (which in turn was
+ * chosen from the original MIME at write time), so what comes out matches what
+ * went in. 404 when the project or file is unknown — no fallback lookups.
+ */
+export const AttachmentRoutes = lazy(() =>
+  new Hono().get(
+    "/:projectID/:name",
+    describeRoute({
+      summary: "Fetch a task attachment",
+      operationId: "attachment.get",
+      responses: {
+        200: { description: "Attachment bytes" },
+        404: { description: "Not found" },
+      },
+    }),
+    async (c) => {
+      const projectID = c.req.param("projectID")
+      const name = c.req.param("name")
+      if (!projectID || !name || name.includes("/") || name.includes("\\")) {
+        return c.text("Not found", 404)
+      }
+      const abs = AttachmentStore.resolveAbsolute(projectID, name)
+      if (!abs) return c.text("Not found", 404)
+      const info = await stat(abs).catch(() => undefined)
+      if (!info || !info.isFile()) return c.text("Not found", 404)
+      const body = await readFile(abs)
+      return new Response(body as unknown as BodyInit, {
+        status: 200,
+        headers: {
+          "content-type": mimeFromName(name),
+          "content-length": String(info.size),
+          "cache-control": "public, max-age=31536000, immutable",
+        },
+      })
+    },
+  ),
+)

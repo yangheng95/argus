@@ -534,6 +534,23 @@ export async function deliveryFromWorktreeGit(
     return { summary: `${prefix}: no changes`, diffs: [] }
   }
 
+  // Real additions/deletions come from git numstat, not line-count deltas.
+  const numstatOutput = await $`git diff --cached --numstat --no-renames ${base} -- .`
+    .quiet().cwd(worktreeDir).nothrow().text()
+  const numstat = new Map<string, { additions: number; deletions: number }>()
+  for (const line of numstatOutput.trim().split("\n")) {
+    if (!line.trim()) continue
+    const [adds, dels, file] = line.split("\t")
+    if (!file) continue
+    const isBinary = adds === "-" && dels === "-"
+    const a = isBinary ? 0 : parseInt(adds, 10)
+    const d = isBinary ? 0 : parseInt(dels, 10)
+    numstat.set(file, {
+      additions: Number.isFinite(a) ? a : 0,
+      deletions: Number.isFinite(d) ? d : 0,
+    })
+  }
+
   // Read file contents for diffs
   const diffs: z.infer<typeof Snapshot.FileDiff>[] = []
   for (const { file, status } of files) {
@@ -541,14 +558,13 @@ export async function deliveryFromWorktreeGit(
     const after = status === "deleted" ? "" : await fs.readFile(fullPath, "utf-8").catch(() => "")
     const before = status === "added" || !hasHead ? "" : await $`git show HEAD:${file}`.quiet().cwd(worktreeDir).nothrow().text().catch(() => "")
 
-    const afterLines = after.split("\n")
-    const beforeLines = before.split("\n")
+    const stats = numstat.get(file) ?? { additions: 0, deletions: 0 }
     diffs.push({
       file,
       before,
       after,
-      additions: Math.max(0, afterLines.length - beforeLines.length),
-      deletions: Math.max(0, beforeLines.length - afterLines.length),
+      additions: stats.additions,
+      deletions: stats.deletions,
       status,
     })
   }

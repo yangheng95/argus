@@ -6,17 +6,18 @@
  */
 import { tool } from "ai"
 import z from "zod"
+import path from "node:path"
 import { Session } from "@/session"
 import { Database, eq, and } from "@/storage/db"
 import { Identifier } from "@/id/id"
 import { Instance } from "@/project/instance"
 import { Log } from "@/util/log"
-import { createInactivityGuard } from "@/util/inactivity-guard"
+import { OrchestratorService } from "@/orchestrator/service"
 import { registerGoalRunSession } from "@/server/routes/task-event"
 import { Publisher } from "@/orchestrator/publisher"
 import { OrchestratorGit } from "@/orchestrator/git"
 import { OrchestratorMemoryBridge } from "@/orchestrator/memory-bridge"
-import { sessionStreamHooks } from "@/orchestrator/session-stream"
+import { sessionStreamHooks } from "@/agent/runtime"
 import { withStageRetry } from "@/orchestrator/strategy"
 import { Event as OrchestratorEvent } from "@/orchestrator/model"
 import { OrchestratorConfig } from "@/orchestrator/config"
@@ -298,11 +299,10 @@ export function createTaskAgentTools(input: {
 
         await trackStepStart("requirements")
         task = await updateTask(task, { status: "active" }, "Requirements analysis started")
-        const stallController = new AbortController()
-        const guard = createInactivityGuard(stageTimeout("goal"), () => {
-          log.warn("decompose stage inactivity timeout", { taskID })
-          stallController.abort(new Error("decompose stall timeout"))
-        })
+        // The DecomposeService runs inside AgentRuntime which owns its own
+        // ProgressGuard (alive/progress/absolute tiers). No caller-level
+        // inactivity guard here — that was the same "delta = activity"
+        // hazard we just eliminated.
         try {
           const decomposeSession = await Session.createNext({
             parentID: input.agentSessionID,
@@ -325,13 +325,10 @@ export function createTaskAgentTools(input: {
               attachments: Array.isArray(task.attachments) ? task.attachments as any : undefined,
               taskID,
               sessionID: decomposeSession.id,
-              signal: input.signal
-                ? AbortSignal.any([input.signal, stallController.signal])
-                : stallController.signal,
+              signal: input.signal,
               decisionLog,
               stream: {
                 onChunk: async (arg: any) => {
-                  guard.bump()
                   const chunk = (arg as any)?.chunk
                   // Re-emit text-delta as reasoning-delta so it renders in a collapsible
                   // thinking block, visually separated from tool calls.
@@ -347,7 +344,6 @@ export function createTaskAgentTools(input: {
             }),
             { signal: input.signal },
           )
-          guard.clear()
           await hooks.flush()
 
 
@@ -475,7 +471,7 @@ export function createTaskAgentTools(input: {
             : "NEXT: call create_run then submit_execution to start goal execution."
           return `SUCCESS: ${result.goals.length} goals created. ${nextStep}\n\nSummary: ${result.summary}.\nDecisions: ${result.decisions.map(d => `${d.key}=${d.value}`).join(", ")}`
         } finally {
-          guard.clear()
+          // No caller-level guard: AgentRuntime enforces progress/absolute timeouts.
         }
       },
     }),
@@ -504,19 +500,72 @@ export function createTaskAgentTools(input: {
       inputSchema: z.object({
         reason: z.string().describe("Why design analysis is needed for this task"),
         url: z.string().optional().describe("URL to fetch and analyze (live page or design reference)"),
+        figma_url: z.string().optional().describe(
+          "Figma file URL to render via the Figma REST API (figma.com/file/... or figma.com/design/...). " +
+          "Requires FIGMA_API_TOKEN in env. The frame PNG is added as an in-line vision attachment.",
+        ),
       }),
-      execute: async ({ reason, url }) => {
+      execute: async ({ reason, url, figma_url }) => {
         const task = requireTask(taskID)
 
-        // Guard: skip if no visual input available
+        // Guard: skip if no visual input available. Figma URL counts as visual.
         const hasAttachments = Array.isArray(task.attachments) && task.attachments.length > 0
-        if (!hasAttachments && !url) {
-          return "No visual references available (no image attachments and no URL). Skip design_analysis and proceed to requirements."
+        // Auto-detect: a `figma.com` URL passed via `url` is treated as figma_url.
+        const meta = (task.metadata as Record<string, unknown> | null) ?? {}
+        const metaFigma = typeof meta.figma_url === "string" ? meta.figma_url : undefined
+        const figmaUrl = figma_url
+          ?? metaFigma
+          ?? (url && /(^|\.)figma\.com\//i.test(url) ? url : undefined)
+        const liveUrl = url && figmaUrl === url ? undefined : url
+        if (!hasAttachments && !liveUrl && !figmaUrl) {
+          return "No visual references available (no image attachments, no URL, no Figma URL). Skip design_analysis and proceed to requirements."
         }
 
         await trackStepStart("design_analysis")
 
-        log.info("design_analysis: starting", { taskID, hasAttachments, hasUrl: !!url, reason })
+        log.info("design_analysis: starting", { taskID, hasAttachments, hasUrl: !!url, hasFigma: !!figmaUrl, reason })
+
+        // Reference materialization: any external visual source (Figma frame
+        // / URL screenshot) gets pulled, written to AttachmentStore, and
+        // attached to the task with intent="visual_reference". Two wins:
+        //   1. design-analyst (and any later vision agent) reads it as a
+        //      normal task attachment — no special-cased fetch path.
+        //   2. The deliver-time visual SSIM gate picks it up automatically
+        //      (it walks task.attachments looking for visual references).
+        // Same pattern can be extended to other reference kinds (api
+        // contract, test fixture, …) by writing with a different intent.
+        if (figmaUrl) {
+          try {
+            const { fetchFigmaFrame } = await import("@/design-analyst/figma-fetch")
+            const { AttachmentStore } = await import("@/storage/attachment-store")
+            const frame = await fetchFigmaFrame({ url: figmaUrl })
+            const ref = await AttachmentStore.write(
+              Instance.project.id,
+              Instance.directory,
+              frame.png,
+              "image/png",
+              `figma-${frame.fileKey}-${frame.nodeId.replace(/[^a-zA-Z0-9]/g, "_")}.png`,
+            )
+            await OrchestratorService.appendTaskAttachment(taskID, {
+              ...ref,
+              intent: "visual_reference",
+              source: "figma",
+            })
+            log.info("design_analysis: figma frame materialized", {
+              taskID, fileKey: frame.fileKey, nodeId: frame.nodeId, sha: ref.sha, size: ref.size,
+            })
+          } catch (figmaErr) {
+            log.warn("design_analysis: figma materialization failed", {
+              taskID,
+              figmaUrl,
+              error: figmaErr instanceof Error ? figmaErr.message : String(figmaErr),
+            })
+          }
+        }
+
+        // Refresh task to pick up any newly-attached references.
+        const enrichedTask = requireTask(taskID)
+        const enrichedHasAttachments = Array.isArray(enrichedTask.attachments) && enrichedTask.attachments.length > 0
 
         const designSession = await Session.createNext({
           parentID: input.agentSessionID,
@@ -526,30 +575,23 @@ export function createTaskAgentTools(input: {
         registerGoalRunSession(designSession.id, taskID, "goal")
         const hooks = sessionStreamHooks({ sessionID: designSession.id, taskID, stage: "goal" })
 
-        const stallController = new AbortController()
-        const { OrchestratorConfig: OC } = await import("@/orchestrator/config")
-        const daTimeout = (await OC.get()).design_analyst.timeout_ms
-        const guard = createInactivityGuard(daTimeout, () => {
-          log.warn("design analysis inactivity timeout", { taskID })
-          stallController.abort(new Error("design analysis stall timeout"))
-        })
-
+        // DesignAnalystAgent runs inside AgentRuntime which owns its own
+        // alive/progress/absolute timers. No caller inactivity guard.
         try {
           const { DesignAnalystAgent } = await import("@/design-analyst")
 
           const analysis = await DesignAnalystAgent.analyze({
             title: task.title,
             request: task.request,
-            attachments: hasAttachments ? task.attachments as any : undefined,
-            url,
+            attachments: enrichedHasAttachments ? enrichedTask.attachments as any : undefined,
+            url: liveUrl,
+            // figmaUrl is now materialized into task.attachments above —
+            // design-analyst reads it from there like any other reference.
             taskID,
             sessionID: designSession.id,
-            signal: input.signal
-              ? AbortSignal.any([input.signal, stallController.signal])
-              : stallController.signal,
+            signal: input.signal,
             stream: {
               onChunk: async (arg: any) => {
-                guard.bump()
                 const chunk = (arg as any)?.chunk
                 if (chunk?.type === "text-delta") {
                   if (hooks.onChunk) await hooks.onChunk({ chunk: { ...chunk, type: "reasoning-delta" } })
@@ -562,7 +604,6 @@ export function createTaskAgentTools(input: {
             onStatus: () => {},
           })
 
-          guard.clear()
           await hooks.flush()
 
           // Enrich the task request with the design specification
@@ -591,7 +632,6 @@ export function createTaskAgentTools(input: {
             "NEXT: proceed to requirements — the decompose agent will use the design spec to produce precise goals.",
           ].join("\n")
         } catch (err) {
-          guard.clear()
           await hooks.flush()
           await trackStepComplete("design_analysis", undefined, true)
           const msg = err instanceof Error ? err.message : String(err)
@@ -1406,6 +1446,84 @@ export function createTaskAgentTools(input: {
           diffs: allDiffs.map(d => ({ file: d.file, diff: d.diff })),
         }
 
+        // Visual gate: if the task carried any image attachments, run an
+        // SSIM check against the rendered output and record the result on
+        // task.metadata.criteria_results so the delivery agent's
+        // `query_criteria` tool sees it before it forms a verdict. We do
+        // this in-process (no benchmark dependency, no shell) and only when
+        // there's an actual reference to compare against.
+        try {
+          // Re-read task to pick up references materialized during
+          // design_analysis (e.g. Figma frames).
+          const liveTask = requireTask(taskID)
+          const taskAttachments = Array.isArray(liveTask.attachments) ? liveTask.attachments as any[] : []
+          // Prefer attachments explicitly tagged as visual_reference. Fall
+          // back to any image-MIME attachment for older tasks created
+          // before the intent field existed.
+          const tagged = taskAttachments.filter((a) =>
+            a?.intent === "visual_reference" && typeof a?.url === "string",
+          )
+          const imageAttachments = tagged.length > 0
+            ? tagged
+            : taskAttachments.filter((a) =>
+                typeof a?.mime === "string" && a.mime.startsWith("image/") && typeof a?.url === "string",
+              )
+          if (imageAttachments.length > 0) {
+            const { findRenderedIndex, runVisualDiff, summarizeVisualReport } = await import("@/evaluator/visual")
+            const { AttachmentStore } = await import("@/storage/attachment-store")
+            const renderedHtml = await findRenderedIndex(Instance.directory)
+            if (!renderedHtml) {
+              await OrchestratorService.upsertTaskCriteria(taskID, [{
+                name: "visual_diff",
+                family: "runtime",
+                status: "skipped",
+                evidence: `no index.html found under ${Instance.directory} — visual gate cannot run`,
+              }])
+            } else {
+              // Reference: first image attachment. Resolve its on-disk path
+              // through the attachment store rather than fetching the URL
+              // (delivery runs in-process so the file is already local).
+              const ref = imageAttachments[0]
+              const located = AttachmentStore.nameFromUrl(String(ref.url))
+              const refPath = located
+                ? AttachmentStore.resolveAbsolute(located.projectID, located.name)
+                : undefined
+              if (!refPath) {
+                await OrchestratorService.upsertTaskCriteria(taskID, [{
+                  name: "visual_diff",
+                  family: "runtime",
+                  status: "skipped",
+                  evidence: `attachment ${ref.url} could not be resolved to a local path`,
+                }])
+              } else {
+                const visualOut = path.join(Instance.directory, ".opencorvus", "visual-diff")
+                const report = await runVisualDiff({
+                  rendered: renderedHtml,
+                  reference: refPath,
+                  outDir: visualOut,
+                })
+                await OrchestratorService.upsertTaskCriteria(taskID, [{
+                  name: "visual_diff",
+                  family: "runtime",
+                  status: report.passed ? "passed" : "failed",
+                  evidence: `${summarizeVisualReport(report)} | rendered=${renderedHtml} reference=${refPath}`,
+                }])
+              }
+            }
+          }
+        } catch (visualErr) {
+          // Recording the failure is more useful than swallowing it — the
+          // delivery agent will see "visual_diff failed" via query_criteria
+          // and can decide whether that's a hard fail or an environment
+          // issue (e.g. headless Chrome unavailable).
+          await OrchestratorService.upsertTaskCriteria(taskID, [{
+            name: "visual_diff",
+            family: "runtime",
+            status: "failed",
+            evidence: `visual gate threw: ${visualErr instanceof Error ? visualErr.message : String(visualErr)}`,
+          }]).catch(() => undefined)
+        }
+
         const deliverySession = await Session.createNext({
           parentID: input.agentSessionID,
           title: `Delivery verification: ${task.title}`,
@@ -1418,7 +1536,7 @@ export function createTaskAgentTools(input: {
         try {
           const { DeliveryService } = await import("@/delivery/service")
           const verdict = await DeliveryService.verify({
-            task: { title: task.title, request: task.request, sessionID: task.session_id ?? undefined, metadata: task.metadata ?? undefined },
+            task: { id: task.id, title: task.title, request: task.request, sessionID: task.session_id ?? undefined, metadata: task.metadata ?? undefined },
             goals: goalInfos,
             delivery: deliveryInfo,
             signal: input.signal,

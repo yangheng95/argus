@@ -15,13 +15,13 @@
 import { stepCountIs } from "ai"
 import type { TextHooks } from "@/llm/api"
 import { Provider } from "@/provider/provider"
-import { ProviderLLM } from "@/provider/llm"
 import { createPlannerTools, prefetchContext } from "@/planner/tools"
 import { Log } from "@/util/log"
 import { toolGuard } from "@/util/tool-guard"
-import { createInactivityGuard } from "@/util/inactivity-guard"
 import { AgentTrace } from "@/util/agent-trace"
 import { OrchestratorConfig } from "@/orchestrator/config"
+import { AttachmentStore } from "@/storage/attachment-store"
+import { AgentRuntime } from "@/agent/runtime"
 import { operatorNotesSection } from "@/orchestrator/helpers"
 import { loadStageSkills } from "@/orchestrator/skill-inject"
 import { Config } from "@/config/config"
@@ -84,7 +84,7 @@ export namespace DecomposeAgent {
     title: string
     request: string
     /** Base64 image attachments — injected as vision content alongside the request text. */
-    attachments?: Array<{ mime: string; data: string; filename?: string }>
+    attachments?: Array<{ sha: string; url: string; mime: string; size: number; filename?: string }>
     taskID?: string
     sessionID?: string
     signal?: AbortSignal
@@ -106,7 +106,7 @@ export namespace DecomposeAgent {
 async function run(input: {
   title: string
   request: string
-  attachments?: Array<{ mime: string; data: string; filename?: string }>
+  attachments?: Array<{ sha: string; url: string; mime: string; size: number; filename?: string }>
   taskID?: string
   sessionID?: string
   signal?: AbortSignal
@@ -152,7 +152,7 @@ async function run(input: {
 
   const systemPrompt = await decomposeSystem()
   const initialPrompt = buildUserPrompt(input, context)
-  const initialContent = buildMultimodalContent(initialPrompt, input.attachments)
+  const initialContent = await buildMultimodalContent(initialPrompt, input.attachments)
   let messages: any[] = [{ role: "user" as const, content: initialContent }]
   let cumulativeToolCalls = 0
 
@@ -175,46 +175,46 @@ async function run(input: {
       retryReason: attempt > 0 && lastQuality ? `score ${lastQuality.score} < ${QUALITY_RETRY_THRESHOLD}` : undefined,
     })
 
-    const stallController = new AbortController()
-    const stallGuard = createInactivityGuard(TIMEOUT_MS, () => {
-      log.warn("decompose agent stall timeout", { taskID: input.taskID })
-      stallController.abort(new Error("stall timeout"))
-    })
-    const abortSignals: AbortSignal[] = [stallController.signal, guard.signal]
+    const abortSignals: AbortSignal[] = [guard.signal]
     if (input.signal) abortSignals.push(input.signal)
 
-    const stream = await ProviderLLM.stream({
+    // DecomposeAgent is always invoked nested: the caller (task-agent or
+     // requirements service) owns persistence via its own session-hooks and
+     // forwards chunks through `input.stream`. We therefore wrap those into
+     // a passthrough hooks object so AgentRuntime neither creates a duplicate
+     // hooks nor requires a sessionID of its own.
+    const passthroughHooks = {
+      onChunk: input.stream?.onChunk,
+      onError: input.stream?.onError,
+      flush: async () => {},
+      failures: { snapshot: () => ({ count: 0, items: [] as any[] }) },
+    } as any
+    const runResult = await AgentRuntime.run({
+      agent: "decompose",
       model,
-      stopWhen: stepCountIs(MAX_STEPS),
-      tools: guard.tools,
-      abortSignal: AbortSignal.any(abortSignals),
       system: systemPrompt,
       messages,
+      tools: guard.tools,
+      stopWhen: stepCountIs(MAX_STEPS),
       cacheKey: input.taskID ? `task-${input.taskID}-decompose` : undefined,
-      onChunk: async (arg: any) => {
-        stallGuard.bump()
-        if (input.stream?.onChunk) await (input.stream.onChunk as any)(arg)
-      },
-      ...(input.stream?.onError ? { onError: input.stream.onError } : {}),
+      sessionID: input.sessionID ?? "",
+      taskID: input.taskID,
+      stage: "decompose",
+      signal: AbortSignal.any(abortSignals),
       onStepFinish: guard.onStepFinish as any,
+      hooks: passthroughHooks,
+      policies: {
+        progressTimeoutMs: TIMEOUT_MS,
+        // Caller-side hooks do their own failure accounting; don't let runtime
+        // throw here — the caller will surface any persist errors.
+        failurePolicy: "collect",
+      },
     })
 
-    let resultText: string, resultSteps: any[], resultFinishReason: any
-    try {
-      ;[resultText, resultSteps, resultFinishReason] = await Promise.all([
-        stream.text,
-        stream.steps,
-        stream.finishReason,
-      ])
-    } finally {
-      stallGuard.clear()
-    }
-
-    const toolCallCount = resultSteps.reduce(
-      (sum, s) => sum + (Array.isArray((s as any).toolCalls) ? (s as any).toolCalls.length : 0),
-      0,
-    )
-    cumulativeToolCalls += toolCallCount
+    const resultText = runResult.text
+    const resultSteps = runResult.steps
+    const resultFinishReason = runResult.finishReason
+    cumulativeToolCalls += runResult.toolCallCount
 
     let allText = resultText?.trim() || ""
     if (!allText) {
@@ -225,7 +225,7 @@ async function run(input: {
       steps: resultSteps.length,
       finishReason: resultFinishReason,
       textLength: allText.length,
-      toolCalls: toolCallCount,
+      toolCalls: runResult.toolCallCount,
       cumulativeToolCalls,
       attempt: attempt + 1,
     })
@@ -403,26 +403,30 @@ function goalToContract(g: ParsedGoalContract): GoalContractFields {
 // ---------------------------------------------------------------------------
 
 /**
- * Build an AI SDK content array from text + optional image attachments.
+ * Build an AI SDK content array from text + optional attachment references.
  * When no attachments are present, returns the plain string (more efficient).
- * When attachments exist, returns a content array with text + file parts.
+ * Otherwise reads the bytes back from AttachmentStore (the canonical location
+ * on disk) and emits base64 file parts alongside the text part.
  *
  * AI SDK FilePart: { type: "file", data: base64string, mediaType, filename? }
  */
-function buildMultimodalContent(
+async function buildMultimodalContent(
   text: string,
-  attachments?: Array<{ mime: string; data: string; filename?: string }>,
+  attachments?: Array<{ sha: string; url: string; mime: string; size: number; filename?: string }>,
 ) {
   if (!attachments?.length) return text
-  return [
-    { type: "text" as const, text },
-    ...attachments.map((a) => ({
+  const fileParts = await Promise.all(attachments.map(async (a) => {
+    const located = AttachmentStore.nameFromUrl(a.url)
+    if (!located) throw new Error(`attachment has no resolvable url: ${a.filename ?? a.sha}`)
+    const bytes = await AttachmentStore.read(located.projectID, located.name)
+    return {
       type: "file" as const,
-      data: a.data,
+      data: bytes,
       mediaType: a.mime,
       ...(a.filename ? { filename: a.filename } : {}),
-    })),
-  ]
+    }
+  }))
+  return [{ type: "text" as const, text }, ...fileParts]
 }
 
 // ---------------------------------------------------------------------------

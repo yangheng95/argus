@@ -15,6 +15,10 @@ import { Instance } from "@/project/instance"
 import { Shell } from "@/shell/shell"
 import { Filesystem } from "@/util/filesystem"
 import { Log } from "@/util/log"
+import { OrchestratorService } from "@/orchestrator/service"
+import { findTask } from "@/orchestrator/store"
+
+const FIX_CHAIN_DEPTH_LIMIT = 3
 
 const log = Log.create({ service: "delivery-tools" })
 
@@ -27,13 +31,123 @@ const log = Log.create({ service: "delivery-tools" })
  * - 2 memory tools: memory_search, memory_write
  * - 1 execution tool: run_command (for builds, startup checks)
  */
-export function createDeliveryTools(input?: { sessionID?: string }) {
+export function createDeliveryTools(input?: { sessionID?: string; taskID?: string }) {
   const codebase = createCodebaseTools()
   const projectId = Instance.project.id
   const projectDir = Filesystem.resolve(Instance.directory)
+  const taskID = input?.taskID
 
   return {
     ...codebase,
+
+    query_criteria: tool({
+      description:
+        "Read every quality criterion that has been recorded for the current task — " +
+        "per-goal evaluator outcomes, delivery checks already submitted, and external " +
+        "quality gates such as visual-diff. Call this BEFORE deciding the verdict so " +
+        "you have a full picture of which criteria passed, failed, or were skipped, " +
+        "with their evidence.",
+      inputSchema: z.object({}),
+      execute: async () => {
+        if (!taskID) return "query_criteria: no task context available"
+        const task = findTask(taskID)
+        if (!task) return `query_criteria: task ${taskID} not found`
+        const meta = (task.metadata as Record<string, unknown> | null) ?? {}
+        const list = Array.isArray(meta.criteria_results) ? (meta.criteria_results as any[]) : []
+        if (list.length === 0) {
+          return "query_criteria: no criteria recorded yet for this task"
+        }
+        const counts = list.reduce(
+          (acc, c) => {
+            const s = String(c?.status ?? "unknown")
+            acc[s] = (acc[s] ?? 0) + 1
+            return acc
+          },
+          {} as Record<string, number>,
+        )
+        const lines = list.map((c) => {
+          const family = c?.family ? `[${c.family}] ` : ""
+          const ev = c?.evidence ? ` — ${String(c.evidence).slice(0, 400)}` : ""
+          return `${family}${c?.name ?? "?"} = ${c?.status ?? "?"}${ev}`
+        })
+        return `criteria summary: ${JSON.stringify(counts)}\n${lines.join("\n")}`
+      },
+    }),
+
+    submit_fix_task: tool({
+      description:
+        "Spawn a new fix task in the same project to repair the issues found by " +
+        "this verification round. Use this when query_criteria shows failed " +
+        "criteria that the executor needs another pass to fix. The new task is " +
+        "created with priority=critical so it jumps the project's serial queue " +
+        "ahead of normal/high work, but it never preempts the currently active " +
+        "task. A `metadata.fix_for` link points back to this task; the task " +
+        "agent will see the fix context and the failed criteria evidence in its " +
+        "next prompt. Limit applies — the chain stops at depth " + FIX_CHAIN_DEPTH_LIMIT +
+        " to prevent infinite repair loops.",
+      inputSchema: z.object({
+        summary: z.string().describe(
+          "Short title describing the fix task, e.g. 'Repair sidebar layout to match design'.",
+        ),
+        failed_criteria: z.array(z.string()).describe(
+          "Names of the criteria that failed — must match `name` from query_criteria. Evidence is auto-attached.",
+        ),
+        scope_files: z.array(z.string()).optional().describe(
+          "Optional list of files the fix should focus on (relative to project root).",
+        ),
+      }),
+      execute: async ({ summary, failed_criteria, scope_files }) => {
+        if (!taskID) return "submit_fix_task: no task context available"
+        const original = findTask(taskID)
+        if (!original) return `submit_fix_task: original task ${taskID} not found`
+        const meta = (original.metadata as Record<string, unknown> | null) ?? {}
+        const depth = typeof meta.fix_chain_depth === "number" ? meta.fix_chain_depth : 0
+        if (depth >= FIX_CHAIN_DEPTH_LIMIT) {
+          return `submit_fix_task: fix chain depth ${depth} reached limit ${FIX_CHAIN_DEPTH_LIMIT}; refusing to spawn another fix task`
+        }
+        const allCriteria = Array.isArray(meta.criteria_results) ? (meta.criteria_results as any[]) : []
+        const wantedNames = new Set(failed_criteria)
+        const matched = allCriteria.filter((c) => wantedNames.has(String(c?.name ?? "")))
+        const evidenceBlock = matched.length > 0
+          ? matched
+              .map((c) => `- **${c.name}** (${c.family ?? "custom"}): ${c.status}\n  evidence: ${String(c.evidence ?? "(none)").slice(0, 600)}`)
+              .join("\n")
+          : failed_criteria.map((n) => `- **${n}**: (no recorded evidence — query_criteria first)`).join("\n")
+        const scopeBlock = scope_files && scope_files.length > 0
+          ? `\n\n## Scope (focus area)\n${scope_files.map((f) => `- ${f}`).join("\n")}`
+          : ""
+        const request = [
+          `# Fix task — derived from \`${original.id}\` ("${original.title}")`,
+          ``,
+          summary,
+          ``,
+          `## Original request`,
+          original.request,
+          ``,
+          `## Failed criteria from previous verification`,
+          evidenceBlock,
+          scopeBlock,
+          ``,
+          `Address every failed criterion above. Do not regress passing criteria.`,
+        ].join("\n")
+        // We don't carry an executor field on the original task row; the new
+        // task picks the configured default at create time, which matches how
+        // user-initiated tasks are dispatched.
+        const newTaskID = await OrchestratorService.createTask({
+          title: `Fix: ${summary.slice(0, 80)}`,
+          request,
+          priority: "critical",
+          metadata: {
+            ...meta,
+            fix_for: original.id,
+            fix_chain_depth: depth + 1,
+            failed_criteria,
+            ...(scope_files ? { fix_scope_files: scope_files } : {}),
+          },
+        })
+        return `submit_fix_task: created new fix task ${newTaskID} (priority=critical, fix_chain_depth=${depth + 1}). It will run after the currently active task finishes.`
+      },
+    }),
 
     memory_search: tool({
       description:

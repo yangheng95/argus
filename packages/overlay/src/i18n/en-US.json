@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "en-US",
-    "panel_revision": "a51ef56654e79c42"
+    "panel_revision": "bf97c3036fba74a9"
   },
   "about.author_name": "Yang, Heng",
   "about.go_version": "Go Version",
@@ -395,6 +395,7 @@
   "prompt.title": "Prompts",
   "section.budget": "Task Budget",
   "section.delivery": "Delivery",
+  "section.criteria": "Evaluation Criteria",
   "section.files": "Files",
   "sections.title": "Inspector",
   "settings.always_on_top": "Always on top",
@@ -521,6 +522,11 @@
   "workspace.build": "Build",
   "workspace.close": "Close workspace",
   "workspace.diff": "Diff",
+  "workspace.file": "File",
+  "workspace.file_empty": "Click a file link in the timeline to preview it here.",
+  "workspace.file_loading": "Loading file…",
+  "workspace.file_binary": "Binary file — preview not supported.",
+  "workspace.file_error": "Failed to load file: {{message}}",
   "workspace.toggle": "Toggle workspace",
   "workflow.architect": "Architect",
   "workflow.architect_contracts": "contracts",

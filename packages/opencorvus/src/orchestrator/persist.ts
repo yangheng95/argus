@@ -599,6 +599,16 @@ export function persistDelivery(input: {
   }
   now: number
 }) {
+  const stats = input.delivery.diffs.reduce(
+    (acc, d) => {
+      const a = typeof (d as any).additions === "number" ? (d as any).additions : 0
+      const r = typeof (d as any).deletions === "number" ? (d as any).deletions : 0
+      acc.additions += a
+      acc.deletions += r
+      return acc
+    },
+    { additions: 0, deletions: 0 },
+  )
   Database.transaction((db) => {
     db.insert(OrchestratorDeliveryTable)
       .values({
@@ -612,6 +622,7 @@ export function persistDelivery(input: {
           summary: input.delivery.summary,
           changed_files: input.delivery.diffs.map((item) => item.file),
           diffs: input.delivery.diffs,
+          stats,
         },
         time_created: input.now,
         time_updated: input.now,

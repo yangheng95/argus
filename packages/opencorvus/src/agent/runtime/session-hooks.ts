@@ -1,17 +1,37 @@
 /**
- * Session-stream adapter — routes AI SDK stream events into the session/message
- * system so that all agent output is persisted and delivered via the standard
- * message.part.* SSE path.
+ * Session stream hooks — route AI SDK onChunk events into the session/message
+ * persistence layer. Replaces the old `src/orchestrator/session-stream.ts`
+ * implementation (which is now a thin re-export wrapper).
  *
- * This is the SINGLE data channel for all agent → overlay communication.
- * There is no separate "agent-stream" — all content AND status events go
- * through the session, bridged to SSE by task-message-protocol-bridge.
+ * Behavioural changes vs. the old implementation:
+ *
+ *   - tool-call `chunk.input` is normalized at the protocol boundary
+ *     (`protocol-norm.ts`). A non-object that cannot be JSON-decoded to an
+ *     object no longer throws inside Zod — it is persisted as an explicit
+ *     `status: "error"` tool part, and recorded in the failure tracker.
+ *     This makes the overlay show the failure and lets AgentRuntime fail
+ *     the run instead of silently looping.
+ *
+ *   - Every thrown exception inside an onChunk handler is recorded on the
+ *     tracker rather than swallowed into a WARN log. The try/catch is still
+ *     there so one bad chunk does not take down the whole stream, but the
+ *     agent sees the failure at the end via `.failures.snapshot()`.
+ *
+ *   - The hook object now exposes `.failures.snapshot()` so AgentRuntime can
+ *     honour its `failurePolicy` setting.
+ *
+ *   - Per-chunk progress/alive signalling is delegated to a ProgressGuard
+ *     when one is supplied — see `AgentRuntime.run`.
  */
 import type { TextHooks } from "@/llm/api"
 import { Session } from "@/session"
 import { Message } from "@/session/message"
 import { Identifier } from "@/id/id"
 import { Log } from "@/util/log"
+import { normalizeToolInput, normalizeToolOutput } from "./protocol-norm"
+import type { StreamFailureTracker, StreamFailureSnapshot } from "./stream-failures"
+import { createStreamFailureTracker } from "./stream-failures"
+import type { ProgressGuard } from "./progress-guard"
 
 const log = Log.create({ service: "session-stream" })
 
@@ -50,7 +70,7 @@ function resolvePendingToolPart(
   toolParts: Map<string, Message.ToolPart>,
   toolName: string,
   toolCallID: string,
-  input: unknown,
+  input: Record<string, unknown>,
 ): { inputID?: string; part?: Message.ToolPart } {
   const direct = toolParts.get(toolCallID)
   if (direct) return { inputID: toolCallID, part: direct }
@@ -60,8 +80,8 @@ function resolvePendingToolPart(
   )
   if (pending.length === 0) return {}
 
-  const normalizedInput = record(input) ? stableStringify(input) : ""
-  if (normalizedInput) {
+  const normalizedInput = stableStringify(input)
+  if (normalizedInput !== "{}") {
     const exact = pending.find(([, part]) => stableStringify(pendingToolInput(part) ?? {}) === normalizedInput)
     if (exact) return { inputID: exact[0], part: exact[1] }
   }
@@ -73,23 +93,32 @@ function resolvePendingToolPart(
   return {}
 }
 
-/**
- * Create TextHooks that write streaming content (text deltas, tool calls,
- * tool results) into a session as Message parts.
- *
- * Events are persisted to DB and published via Bus → SSE automatically
- * through Session.updatePart / Session.updatePartDelta.
- */
 export type SessionStreamHooks = TextHooks & {
-  /** Flush accumulated text to DB. Must be called after stream ends. */
+  /** Flush accumulated text / tool parts to DB. Must be called after stream
+   *  ends, regardless of success/abort path (put this in a `finally`). */
   flush(): Promise<void>
+  /** Inspect whatever failures piled up during the stream. AgentRuntime uses
+   *  this to decide whether to throw vs. return the snapshot. */
+  failures: {
+    snapshot(): StreamFailureSnapshot
+  }
 }
 
-export function sessionStreamHooks(input: {
+export interface SessionStreamHooksInput {
   sessionID: string
   taskID: string
   stage?: string
-}): SessionStreamHooks {
+  /** Optional guard to ping on every chunk (alive) and on semantic progress
+   *  chunks (progress). AgentRuntime owns the guard; callers who only want
+   *  persistence can omit this. */
+  guard?: ProgressGuard
+  /** Inject a caller-provided tracker to merge with other sources (e.g.
+   *  runtime-level failures). Defaults to a fresh tracker. */
+  failures?: StreamFailureTracker
+}
+
+export function sessionStreamHooks(input: SessionStreamHooksInput): SessionStreamHooks {
+  const failures = input.failures ?? createStreamFailureTracker()
   let messageID: string | undefined
   let textPartID: string | undefined
   let textAccumulated = ""
@@ -123,8 +152,40 @@ export function sessionStreamHooks(input: {
     return id
   }
 
+  async function persistErrorToolPart(opts: {
+    toolName: string
+    toolCallId: string
+    error: string
+    input: Record<string, unknown>
+    existing?: Message.ToolPart
+  }) {
+    const msgID = await ensureMessage()
+    const partID = opts.existing?.id ?? Identifier.ascending("part")
+    const now = Date.now()
+    await Session.updatePart({
+      ...(opts.existing ?? {}),
+      id: partID,
+      messageID: msgID,
+      sessionID: input.sessionID,
+      type: "tool",
+      tool: opts.toolName,
+      callID: opts.toolCallId,
+      state: {
+        status: "error",
+        input: opts.input,
+        error: opts.error,
+        time: {
+          start: (opts.existing?.state as any)?.time?.start ?? now,
+          end: now,
+        },
+      },
+    } as Message.ToolPart)
+    toolParts.delete(opts.toolCallId)
+  }
+
   return {
     onChunk: async ({ chunk }: { chunk: any }) => {
+      input.guard?.alive()
       try {
         if (chunk.type === "text-delta") {
           if (!chunk.text) return
@@ -179,7 +240,6 @@ export function sessionStreamHooks(input: {
 
         if (chunk.type === "tool-input-start") {
           const msgID = await ensureMessage()
-          // Persist accumulated text before switching to tool
           if (textPartID && textAccumulated) {
             await Session.updatePart({
               id: textPartID,
@@ -190,7 +250,6 @@ export function sessionStreamHooks(input: {
             } as Message.TextPart)
             textAccumulated = ""
           }
-          // Pause text accumulation — next text-delta after tools should create a new part
           textPartID = undefined
           const partID = Identifier.ascending("part")
           const part = await Session.updatePart({
@@ -227,8 +286,30 @@ export function sessionStreamHooks(input: {
         }
 
         if (chunk.type === "tool-call") {
+          input.guard?.progress()
+          const norm = normalizeToolInput(chunk.input)
+          if (!norm.ok) {
+            failures.record({
+              kind: "protocol-normalize",
+              reason: norm.reason,
+              chunkType: "tool-call",
+              toolName: chunk.toolName,
+              toolCallId: chunk.toolCallId,
+              raw: norm.raw,
+            })
+            const existing = toolParts.get(chunk.toolCallId)
+              ?? resolvePendingToolPart(toolParts, chunk.toolName, chunk.toolCallId, {}).part
+            await persistErrorToolPart({
+              toolName: chunk.toolName,
+              toolCallId: chunk.toolCallId,
+              error: norm.reason,
+              input: {},
+              existing,
+            })
+            return
+          }
           const msgID = await ensureMessage()
-          const resolved = resolvePendingToolPart(toolParts, chunk.toolName, chunk.toolCallId, chunk.input)
+          const resolved = resolvePendingToolPart(toolParts, chunk.toolName, chunk.toolCallId, norm.value)
           const existing = resolved.part
           if (resolved.inputID && resolved.inputID !== chunk.toolCallId) {
             inputIdToCallId.set(resolved.inputID, chunk.toolCallId)
@@ -245,7 +326,7 @@ export function sessionStreamHooks(input: {
             callID: chunk.toolCallId,
             state: {
               status: "running",
-              input: chunk.input ?? {},
+              input: norm.value,
               time: { start: Date.now() },
             },
           } as Message.ToolPart)
@@ -254,30 +335,32 @@ export function sessionStreamHooks(input: {
         }
 
         if (chunk.type === "tool-result") {
+          input.guard?.progress()
           const existing = toolParts.get(chunk.toolCallId)
           if (!existing) return
-          // chunk.output is the tool execute() return value: { output: string, title: string, metadata: object }
-          // Extract properties matching SessionProcessor's handling of tool-result
-          const toolOutput = chunk.output
-          const outputStr = typeof toolOutput === "string"
-            ? toolOutput
-            : toolOutput && typeof toolOutput === "object" && "output" in toolOutput
-              ? String((toolOutput as any).output ?? "")
-              : toolOutput != null ? JSON.stringify(toolOutput) : ""
-          const title = toolOutput && typeof toolOutput === "object" && "title" in toolOutput
-            ? String((toolOutput as any).title ?? "")
-            : (chunk.toolName ?? existing.tool)
-          const metadata = toolOutput && typeof toolOutput === "object" && "metadata" in toolOutput
-            ? ((toolOutput as any).metadata ?? {})
-            : {}
+          const inputNorm = normalizeToolInput(chunk.input)
+          if (!inputNorm.ok) {
+            failures.record({
+              kind: "protocol-normalize",
+              reason: inputNorm.reason,
+              chunkType: "tool-result",
+              toolName: chunk.toolName ?? existing.tool,
+              toolCallId: chunk.toolCallId,
+              raw: inputNorm.raw,
+            })
+          }
+          const fallbackInput = inputNorm.ok
+            ? inputNorm.value
+            : (record(existing.state?.input) ? existing.state.input : {})
+          const out = normalizeToolOutput(chunk.output, chunk.toolName ?? existing.tool)
           await Session.updatePart({
             ...existing,
             state: {
               status: "completed",
-              input: chunk.input ?? existing.state?.input ?? {},
-              output: outputStr,
-              title,
-              metadata,
+              input: fallbackInput,
+              output: out.output,
+              title: out.title ?? (chunk.toolName ?? existing.tool),
+              metadata: out.metadata,
               time: {
                 start: (existing.state as any)?.time?.start ?? Date.now(),
                 end: Date.now(),
@@ -285,13 +368,9 @@ export function sessionStreamHooks(input: {
             },
           } as Message.ToolPart)
           toolParts.delete(chunk.toolCallId)
-          // Clean up id mapping
           for (const [k, v] of inputIdToCallId) {
             if (v === chunk.toolCallId) { inputIdToCallId.delete(k); break }
           }
-          // When all parallel tools complete, start a new message for the next step.
-          // This splits each agent invocation into per-step messages so the overlay
-          // can render them as separate timeline cards.
           if (toolParts.size === 0) {
             messageID = undefined
             textPartID = undefined
@@ -300,21 +379,27 @@ export function sessionStreamHooks(input: {
           return
         }
       } catch (err) {
+        const reason = err instanceof Error ? err.message : String(err)
+        failures.record({
+          kind: "persist-part",
+          reason,
+          chunkType: chunk?.type,
+          toolName: chunk?.toolName,
+          toolCallId: chunk?.toolCallId ?? chunk?.id,
+        })
         log.warn("session-stream onChunk failed", {
           type: chunk?.type,
           sessionID: input.sessionID,
-          error: String(err),
+          error: reason,
         })
       }
     },
     onError: async ({ error }: { error: unknown }) => {
-      log.warn("session-stream onError", {
-        sessionID: input.sessionID,
-        error: String(error),
-      })
+      const reason = error instanceof Error ? error.message : String(error)
+      failures.record({ kind: "on-error", reason })
+      log.warn("session-stream onError", { sessionID: input.sessionID, error: reason })
     },
     async flush() {
-      // Flush accumulated reasoning
       if (messageID && reasoningPartID && reasoningAccumulated) {
         try {
           await Session.updatePart({
@@ -326,13 +411,11 @@ export function sessionStreamHooks(input: {
             time: { start: Date.now() },
           } as Message.ReasoningPart)
         } catch (err) {
-          log.warn("session-stream flush reasoning failed", {
-            sessionID: input.sessionID,
-            error: String(err),
-          })
+          const reason = err instanceof Error ? err.message : String(err)
+          failures.record({ kind: "flush", reason, chunkType: "reasoning" })
+          log.warn("session-stream flush reasoning failed", { sessionID: input.sessionID, error: reason })
         }
       }
-      // Flush accumulated text
       if (messageID && textPartID && textAccumulated) {
         try {
           await Session.updatePart({
@@ -348,24 +431,30 @@ export function sessionStreamHooks(input: {
             chars: textAccumulated.length,
           })
         } catch (err) {
-          log.warn("session-stream flush text failed", {
-            sessionID: input.sessionID,
-            error: String(err),
-          })
+          const reason = err instanceof Error ? err.message : String(err)
+          failures.record({ kind: "flush", reason, chunkType: "text" })
+          log.warn("session-stream flush text failed", { sessionID: input.sessionID, error: reason })
         }
       }
-      // Finalize any tool parts still in running/pending state
-      // (e.g. stream ended or agent aborted before tool-result chunk arrived)
       for (const [, part] of toolParts) {
         const currentState = part.state && typeof part.state === "object" ? part.state : {} as Record<string, unknown>
         const status = (currentState as any).status
         if (status === "running" || status === "pending" || !status) {
           try {
+            // ToolStateCompleted requires an `input` record. A `pending` part
+            // never had one assigned (only a streaming `raw` JSON string), so
+            // we recover the parsed args via `pendingToolInput` when possible
+            // and fall back to `{}` rather than letting `undefined` leak into
+            // Zod's `.parse(...)`.
+            const recoveredInput = ((currentState as any).input as Record<string, unknown> | undefined)
+              ?? pendingToolInput(part)
+              ?? {}
             await Session.updatePart({
               ...part,
               state: {
                 ...currentState,
                 status: "completed",
+                input: recoveredInput,
                 output: (currentState as any).output ?? "",
                 time: {
                   start: (currentState as any).time?.start ?? Date.now(),
@@ -374,16 +463,20 @@ export function sessionStreamHooks(input: {
               },
             } as Message.ToolPart)
           } catch (err) {
+            const reason = err instanceof Error ? err.message : String(err)
+            failures.record({ kind: "flush", reason, chunkType: "tool", toolCallId: part.callID })
             log.warn("session-stream flush tool part failed", {
               sessionID: input.sessionID,
               partID: part.id,
-              error: String(err),
+              error: reason,
             })
           }
         }
       }
       toolParts.clear()
     },
+    failures: {
+      snapshot: () => failures.snapshot(),
+    },
   }
 }
-
