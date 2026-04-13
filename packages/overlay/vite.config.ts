@@ -43,12 +43,13 @@ function copyLegacyAssets(entries: string[]): Plugin {
 export default defineConfig({
   plugins: [
     solidPlugin(),
-    copyLegacyAssets([
-      "opencorvus-logo-light.svg",
-      "i18n",
-    ]),
+    copyLegacyAssets(["i18n"]),
   ],
   root: "src",
+  server: {
+    port: 5173,
+    strictPort: true,
+  },
   build: {
     outDir: "../dist-vite",
     emptyDirBeforeBuild: true,

@@ -76,7 +76,6 @@ function tauriArgs() {
   return [
     "--config",
     JSON.stringify({
-      build: { frontendDist: "../dist-vite" },
       bundle: { resources: [] },
     }),
   ]
@@ -116,7 +115,6 @@ if (!(await exists(distServer))) {
   throw new Error(`Bundled opencorvus binary not found at ${distServer}`)
 }
 
-await $`bun run build:mainjs`.cwd(dir)
 await $`bun run build:vite`.cwd(dir)
 
 await fs.rm(distRoot, { recursive: true, force: true }).catch(() => undefined)
