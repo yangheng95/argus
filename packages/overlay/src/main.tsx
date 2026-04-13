@@ -4,12 +4,11 @@
 // Self-sufficient — no external script dependencies.
 
 import { render } from "solid-js/web";
-import { createEffect, createRoot, createSignal, onCleanup, Show } from "solid-js";
+import { createEffect, createRoot, createSignal, onCleanup } from "solid-js";
 import { Conversation } from "./components/Conversation";
 import { TaskList } from "./components/TaskList";
 import { Board, statusIcon as statusIconSvg } from "./components/Board";
 import { ChatComposer } from "./components/ChatComposer";
-import { useGatewaySession } from "./services/gateway";
 import { WindowControls } from "./components/WindowControls";
 import { TitlebarMenu } from "./components/TitlebarMenu";
 import { ConnectionBadge } from "./components/ConnectionBadge";
@@ -32,7 +31,6 @@ import {
 import { appStore, setAppStore } from "./store/app";
 import {
   selectTask,
-  deleteTask,
   retryTask,
   replanTask,
   cancelTask,
@@ -548,18 +546,6 @@ if (taskListEl) {
       <TaskList
         onSelectTask={(taskID) => void selectTask(taskID)}
         onCancelTask={(taskID) => void cancelTask(taskID)}
-        onDeleteTask={async (taskID) => {
-          const showAppDialog = (window as any).showAppDialog;
-          if (typeof showAppDialog !== "function") return;
-          const result = await showAppDialog({
-            title: t("task.delete_button_title"),
-            message: t("task.delete_confirm"),
-            cancel: true,
-            kind: "warning",
-          });
-          if (!result?.confirmed) return;
-          void deleteTask(taskID);
-        }}
       />
     ),
     taskListEl,
@@ -693,59 +679,42 @@ if (boardEl) {
   );
 }
 
-// ── Mount: ChatComposer (layout B — Gateway收口) ──
-//
-// The single composer is the daemon's input. All user text is routed to
-// Gateway (sendShared in services/gateway.ts), which decides whether to
-// dispatch a new task, forward to an existing task (forward_to_task tool),
-// answer directly, etc. The legacy panelMessage path was deleted along
-// with the previous "input goes to currently selected task" behaviour;
-// task chat panels are now read-only agent streams.
-//
-// Build target (the coding workspace's own composer) is preserved — that
-// path drives codingAPI directly and is unrelated to the daemon.
+// ── Mount: ChatComposer ──
 
 const composerEl = document.getElementById("solidChatComposer");
 if (composerEl) {
   const isBuildTarget = () => composerTarget() === "build";
-  const gw = useGatewaySession();
   render(
     () => (
-      <>
-        <Show when={!isBuildTarget()}>
-          <div class="composer-target-bar" role="status" aria-live="polite">
-            <span class="composer-target-icon" aria-hidden="true">→</span>
-            <span class="composer-target-label">Gateway</span>
-            <Show when={messageStore.selectedTaskID}>
-              <span class="composer-target-sep" aria-hidden="true">·</span>
-              <span class="composer-target-context">
-                上下文 task {String(messageStore.selectedTaskID).slice(0, 8)}
-              </span>
-            </Show>
-          </div>
-        </Show>
-        <ChatComposer
-          enabled={isBuildTarget() ? true : !gw.busy()}
-          busy={isBuildTarget() ? (codingAPI?.busy() ?? false) : gw.busy()}
-          stopping={false}
-          onSubmit={(text, _attachments, _webSearch) => {
-            if (isBuildTarget() && codingAPI) {
-              codingAPI.send(text);
+      <ChatComposer
+        enabled={isBuildTarget() ? true : canComposeChat()}
+        busy={isBuildTarget() ? (codingAPI?.busy() ?? false) : (!!messageStore.chatRequest || isTaskInterruptable())}
+        stopping={isBuildTarget() ? false : !!(messageStore.chatRequest as any)?.stopping}
+        onSubmit={(text, attachments, webSearch) => {
+          if (isBuildTarget() && codingAPI) {
+            codingAPI.send(text);
+          } else {
+            void panelMessage(text, attachments, webSearch ? { web_search: true } : {});
+          }
+        }}
+        onStop={() => {
+          if (isBuildTarget() && codingAPI) {
+            codingAPI.stop();
+          } else {
+            // Abort any in-flight HTTP request first
+            if (messageStore.chatRequest) {
+              void stopChatRequest({ remote: false });
+            }
+            // Cancel the task via direct API
+            const id = boardStore.selectedTaskID;
+            if (id) {
+              void interruptTask(id);
             } else {
-              // Attachments + web_search flag are not yet wired through
-              // sendGatewayMessage — Gateway reads attachments from the
-              // task creation tools instead. Leave that for a follow-up.
-              void gw.send(text);
+              void stopChatRequest();
             }
-          }}
-          onStop={() => {
-            if (isBuildTarget() && codingAPI) {
-              codingAPI.stop();
-            }
-            // Gateway turns are short; no client-side abort plumbed yet.
-          }}
-        />
-      </>
+          }
+        }}
+      />
     ),
     composerEl,
   );
@@ -1518,14 +1487,5 @@ void (async () => {
   }
 })();
 
-// ── Gateway sidebar tail (latest layout: composer in left column) ──
-// Sidebar holds: Tasks list (top, scrollable) → Gateway tail (recent
-// daemon replies + task chips) → composer-target-bar → composer.
-// All user input goes to Gateway via the same shared session.
-import { GatewaySidebarTail } from "./components/GatewaySidebarTail";
-
-const sidebarGatewayTailEl = document.getElementById("sidebarGatewayTail");
-if (sidebarGatewayTailEl) {
-  sidebarGatewayTailEl.innerHTML = "";
-  render(() => <GatewaySidebarTail />, sidebarGatewayTailEl);
-}
+// Gateway sidebar tail + composer wiring 已临时收起 (2026-04-13)；
+// GatewayPanel / GatewaySidebarTail / services/gateway.ts 仍保留在仓库里以便后续恢复。

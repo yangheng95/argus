@@ -1,0 +1,76 @@
+{
+  "ok": false,
+  "model": "alibaba-coding-plan-cn/kimi-k2.5",
+  "startedAt": 1776094121990,
+  "finishedAt": 1776094169846,
+  "durationMs": 47856,
+  "server": "http://127.0.0.1:7878/",
+  "projectDir": "C:\\Users\\hengu\\AppData\\Local\\Temp\\gw-bench-proj-Mxl0WN",
+  "userID": "gw-bench-jeho4cg7",
+  "sessionID": "ses_2788a6ff8ffeullF6O4CTjywzO",
+  "taskID": "tsk_d87759f91001wGVbu3NOOCwn91",
+  "steps": [
+    {
+      "name": "enqueue",
+      "passed": true,
+      "durationMs": 6162,
+      "details": {
+        "taskID": "tsk_d87759f91001wGVbu3NOOCwn91",
+        "kind": "workflow",
+        "toolCalls": 1,
+        "tools": [
+          "enqueue_workflow_task"
+        ]
+      }
+    },
+    {
+      "name": "list",
+      "passed": true,
+      "durationMs": 6145,
+      "details": {
+        "toolCalls": 1,
+        "tools": [
+          "list_tasks"
+        ],
+        "rowCount": 1
+      }
+    },
+    {
+      "name": "get",
+      "passed": true,
+      "durationMs": 15354,
+      "details": {
+        "toolCalls": 1,
+        "tools": [
+          "get_task"
+        ]
+      }
+    },
+    {
+      "name": "dispatch-build",
+      "passed": true,
+      "durationMs": 6705,
+      "details": {
+        "buildTaskID": "tsk_d87760bc800103jW7d55Hyjvr0",
+        "kind": "build",
+        "toolCalls": 1
+      }
+    },
+    {
+      "name": "switch-cwd",
+      "passed": true,
+      "durationMs": 8053,
+      "details": {
+        "newCwd": "C:\\Users\\hengu\\AppData\\Local\\Temp\\gw-bench-alt-Omlb6m",
+        "toolCalls": 1
+      }
+    },
+    {
+      "name": "cancel",
+      "passed": false,
+      "durationMs": 5428,
+      "details": {},
+      "error": "Error: HTTP 500 /gateway/message: {\"name\":\"UnknownError\",\"data\":{\"message\":\"AgentStreamFailureError: agent \\\"gateway\\\" stream produced 4 failures: flush — [\\n  {\\n    \\\"expected\\\": \\\"string\\\",\\n    \\\"code\\\": \\\"invalid_type\\\",\\n    \\\"path\\\": [\\n      \\\"state\\\",\\n      \\\"title\\\"\\n    ],\\n    \\\"message\\\": \\\"Invalid input: expected string, received undefined\\\"\\n  },\\n  {\\n    \\\"expected\\\": \\\"record\\\",\\n    \\\"code\\\": \\\"invalid_type\\\",\\n    \\\"path\\\": [\\n      \\\"state\\\",\\n      \\\"metadata\\\"\\n    ],\\n    \\\"message\\\": \\\"Invalid input: expected record, received undefined\\\"\\n  }\\n]\\n    at run (D:\\\\myhexin-local\\\\argus-opencode\\\\packages\\\\opencorvus\\\\src\\\\agent\\\\runtime\\\\runtime.ts:190:19)\\n    at processTicksAndRejections (native:7:39)\"}}\n    at api (D:\\myhexin-local\\argus-opencode\\packages\\opencorvus\\script\\benchmark\\gateway-benchmark.ts:123:15)\n    at async chat (D:\\myhexin-local\\argus-opencode\\packages\\opencorvus\\script\\benchmark\\gateway-benchmark.ts:131:21)\n    at async chatAndGetTurnCalls (D:\\myhexin-local\\argus-opencode\\packages\\opencorvus\\script\\benchmark\\gateway-benchmark.ts:182:23)\n    at async <anonymous> (D:\\myhexin-local\\argus-opencode\\packages\\opencorvus\\script\\benchmark\\gateway-benchmark.ts:394:36)\n    at async runStep (D:\\myhexin-local\\argus-opencode\\packages\\opencorvus\\script\\benchmark\\gateway-benchmark.ts:205:27)\n    at processTicksAndRejections (native:7:39)"
+    }
+  ]
+}
