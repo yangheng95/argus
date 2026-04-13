@@ -4,7 +4,10 @@
   "version": "0.0.1",
   "identifier": "ai.opencorvus.overlay",
   "build": {
-    "frontendDist": "../src"
+    "frontendDist": "../dist-vite",
+    "devUrl": "http://localhost:5173",
+    "beforeDevCommand": "bun run dev:vite",
+    "beforeBuildCommand": "bun run build:vite"
   },
   "app": {
     "withGlobalTauri": true,
