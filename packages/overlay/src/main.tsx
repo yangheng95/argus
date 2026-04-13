@@ -94,6 +94,23 @@ import { executorSelectable, executorCurrentModel, setExecutorModel } from "./se
 import { syncExecutorWidth } from "./services/window";
 import { conversationMessages } from "./utils/conversation";
 
+// ── Module teardown ──
+// Centralised cleanup for top-level document/window listeners and Solid roots.
+// Triggered on beforeunload and on Vite HMR dispose so subsequent module
+// re-executions don't stack duplicate handlers and effects.
+const moduleTeardown = new AbortController();
+const disposers: Array<() => void> = [];
+function runModuleTeardown() {
+  if (!moduleTeardown.signal.aborted) moduleTeardown.abort();
+  for (const d of disposers.splice(0)) {
+    try { d(); } catch { /* best-effort cleanup */ }
+  }
+}
+if ((import.meta as any).hot) {
+  (import.meta as any).hot.dispose(runModuleTeardown);
+}
+const listenerOpts = { signal: moduleTeardown.signal } as const;
+
 // ── Application-level signals (shared across mount points) ──
 
 const [logOpen, setLogOpen] = createSignal(false);
@@ -194,7 +211,7 @@ document.addEventListener("click", (ev) => {
   if (!path) return;
   ev.preventDefault();
   openWorkspaceFile(path);
-});
+}, listenerOpts);
 
 function installAppDialogBridge(): void {
   const dialog = document.getElementById("appDialog") as HTMLDialogElement | null;
@@ -529,7 +546,16 @@ if (taskListEl) {
     () => (
       <TaskList
         onSelectTask={(taskID) => void selectTask(taskID)}
-        onDeleteTask={(taskID) => {
+        onDeleteTask={async (taskID) => {
+          const showAppDialog = (window as any).showAppDialog;
+          if (typeof showAppDialog !== "function") return;
+          const result = await showAppDialog({
+            title: t("task.delete_button_title"),
+            message: t("task.delete_confirm"),
+            cancel: true,
+            kind: "warning",
+          });
+          if (!result?.confirmed) return;
           void deleteTask(taskID);
         }}
       />
@@ -1132,10 +1158,10 @@ document.addEventListener("DOMContentLoaded", () => {
   document.addEventListener("click", (e) => {
     if ((e.target as HTMLElement)?.closest?.("[data-executor-caret]") || (e.target as HTMLElement)?.closest?.(".engine-model-panel")) return;
     closeAllModelPanels();
-  });
+  }, listenerOpts);
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") closeAllModelPanels();
-  });
+  }, listenerOpts);
 });
 
 // ── Initialise application ──
@@ -1204,7 +1230,7 @@ Object.assign(window as any, {
   refreshInteractionAttention: interactionBridge.refreshInteractionAttention,
 });
 
-createRoot(() => {
+disposers.push(createRoot((dispose) => {
   createEffect(() => {
     document.body.dataset.workspace = !appStore.connected
       ? "offline"
@@ -1329,7 +1355,9 @@ createRoot(() => {
     appStore.budgetSaving;
     renderBudget((boardStore.board as any)?.task);
   });
-});
+
+  return dispose;
+}));
 
 const paneCallbacks = {
   getState: () => ({
@@ -1349,20 +1377,24 @@ initPaneResizers(paneCallbacks);
 
 // ── Global event listeners (
 
-window.addEventListener("keydown", handleZoomHotkey);
+window.addEventListener("keydown", handleZoomHotkey, listenerOpts);
 window.addEventListener("keydown", (e: KeyboardEvent) => {
   if (e.key === "F12") { e.preventDefault(); void toggleDevtools(); }
-});
+}, listenerOpts);
 const onResize = () => applyZoom(settingsStore.zoom);
-window.addEventListener("resize", onResize);
-if (window.visualViewport) window.visualViewport.addEventListener("resize", onResize);
-window.addEventListener("focus", () => { void (window as any).refreshInteractionAttention?.(); });
+window.addEventListener("resize", onResize, listenerOpts);
+if (window.visualViewport) window.visualViewport.addEventListener("resize", onResize, listenerOpts);
+window.addEventListener("focus", () => { void (window as any).refreshInteractionAttention?.(); }, listenerOpts);
 window.addEventListener("blur", () => {
   void cancelPaneResize(paneCallbacks);
   void (window as any).refreshInteractionAttention?.();
+}, listenerOpts);
+window.addEventListener("beforeunload", () => {
+  runModuleTeardown();
+  teardownApp();
+  stopTimers();
 });
-window.addEventListener("beforeunload", () => { teardownApp(); stopTimers(); });
-document.addEventListener("visibilitychange", () => { void (window as any).refreshInteractionAttention?.(); });
+document.addEventListener("visibilitychange", () => { void (window as any).refreshInteractionAttention?.(); }, listenerOpts);
 installSystemThemeListener(() => applyTheme(settingsStore.theme));
 
 // ── Directory action buttons (#taskDir, #recentDirPanel, #taskGit) ──
@@ -1446,7 +1478,7 @@ document.addEventListener("click", (e) => {
   const target = e.target as HTMLElement | null;
   if (target?.closest?.('[data-path-action="recent"]') || target?.closest?.(".recent-dir-panel")) return;
   closeRecentDirPanel();
-});
+}, listenerOpts);
 
 document.getElementById("taskGit")?.addEventListener("click", () => {
   void initGitCurrent({ notify: true });

@@ -12,7 +12,6 @@ import {
   onCleanup,
   For,
   Show,
-  onMount,
 } from "solid-js";
 import { setupAutoScroll } from "../utils/dom-utils";
 import { appStore, setAppStore, filteredLogEntries } from "../store/app";
@@ -454,13 +453,6 @@ export function LogViewer(props: LogViewerProps) {
     const select = e.target as HTMLSelectElement;
     setAppStore("logFilterLevel", select.value as LogLevel);
   };
-
-  onMount(async () => {
-    if (props.open) {
-      await refresh();
-      dialogRef?.showModal();
-    }
-  });
 
   createEffect(() => {
     const dialog = dialogRef;

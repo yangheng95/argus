@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "en-US",
-    "panel_revision": "bf97c3036fba74a9"
+    "panel_revision": "c65b57b72db71367"
   },
   "about.author_name": "Yang, Heng",
   "about.go_version": "Go Version",
@@ -234,6 +234,8 @@
   "interaction.answer_title": "Send your answer back to the assistant.",
   "interaction.auto_reply": "Auto Reply",
   "interaction.error": "Error: {{message}}",
+  "interaction.icon.permission": "Permission request",
+  "interaction.icon.question": "Question",
   "interaction.processing_suffix": " (processing…)",
   "interaction.reject": "Reject",
   "interaction.reject_title": "Reject this request.",
@@ -467,6 +469,7 @@
   "task.action.retry": "Retry",
   "task.action.retry_title": "Re-run with the existing plan.",
   "task.delete_button_title": "Delete this task and all its history.",
+  "task.delete_confirm": "Delete this task and all its history? This cannot be undone.",
   "task.group.active": "Active",
   "task.group.recent": "Recent",
   "task.new": "New Task",

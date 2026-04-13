@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "zh-CN",
-    "panel_revision": "bf97c3036fba74a9"
+    "panel_revision": "c65b57b72db71367"
   },
   "about.author_name": "杨恒",
   "about.go_version": "Go 版本",
@@ -234,6 +234,8 @@
   "interaction.answer_title": "将输入的回复发送给助手。",
   "interaction.auto_reply": "自动回复",
   "interaction.error": "出错：{{message}}",
+  "interaction.icon.permission": "权限请求",
+  "interaction.icon.question": "提问",
   "interaction.processing_suffix": "（处理中…）",
   "interaction.reject": "拒绝",
   "interaction.reject_title": "拒绝此请求。",
@@ -467,6 +469,7 @@
   "task.action.retry": "重试",
   "task.action.retry_title": "沿用当前 Plan 重新执行一轮。",
   "task.delete_button_title": "删除此任务及全部历史记录。",
+  "task.delete_confirm": "确定删除此任务及全部历史记录吗？该操作不可撤销。",
   "task.group.active": "进行中",
   "task.group.recent": "最近",
   "task.new": "新建任务",

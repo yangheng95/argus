@@ -1,4 +1,4 @@
-import { createMemo, Index, Show, onMount, onCleanup } from "solid-js";
+import { createMemo, For, Show, onMount, onCleanup } from "solid-js";
 import { MessageView } from "./MessageView";
 import { AgentCard } from "./AgentCard";
 import { ExecutorGoalGroup } from "./ExecutorGoalGroup";
@@ -29,39 +29,39 @@ export function Conversation(props: { container: HTMLElement }) {
       <Show when={items().length === 0}>
         <div class="chat-empty">{emptyText()}</div>
       </Show>
-      <Index each={items()}>
+      <For each={items()}>
         {(item) => (
           <Show
-            when={item()?._agentGoalGroup}
+            when={item?._agentGoalGroup}
             fallback={
               <Show
-                when={item()?._agentCard && (item()._agentMessages || []).length > 0}
-                fallback={<MessageView message={item()} />}
+                when={item?._agentCard && (item._agentMessages || []).length > 0}
+                fallback={<MessageView message={item} />}
               >
                 <AgentCard
-                  cardID={item()._agentCardKey}
-                  stage={item()._agentStage}
-                  status={item()._agentStatus}
-                  messages={item()._agentMessages || []}
-                  round={item()._agentRound || 0}
+                  cardID={item._agentCardKey}
+                  stage={item._agentStage}
+                  status={item._agentStatus}
+                  messages={item._agentMessages || []}
+                  round={item._agentRound || 0}
                 />
               </Show>
             }
           >
             <ExecutorGoalGroup
-              cardID={item()._agentCardKey}
-              goalTitle={item()._agentGoalTitle}
-              goalDescription={item()._agentGoalDescription}
-              goalSteps={item()._agentGoalSteps}
-              contracts={item()._agentContracts}
-              goalStatus={item()._agentGoalStatus}
-              status={item()._agentStatus}
-              internalCards={item()._agentInternalCards}
-              goalIndex={item()._agentRound || 0}
+              cardID={item._agentCardKey}
+              goalTitle={item._agentGoalTitle}
+              goalDescription={item._agentGoalDescription}
+              goalSteps={item._agentGoalSteps}
+              contracts={item._agentContracts}
+              goalStatus={item._agentGoalStatus}
+              status={item._agentStatus}
+              internalCards={item._agentInternalCards}
+              goalIndex={item._agentRound || 0}
             />
           </Show>
         )}
-      </Index>
+      </For>
     </>
   );
 }

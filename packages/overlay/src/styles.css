@@ -4336,8 +4336,10 @@ code .file-link:hover {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: calc(24px * var(--ui-scale));
-  height: calc(24px * var(--ui-scale));
+  /* WCAG 2.5.5: 44x44 CSS px hit area.
+     SVG inside keeps its own HTML width/height (14) so the glyph stays small. */
+  width: calc(44px * var(--ui-scale));
+  height: calc(44px * var(--ui-scale));
   border: none;
   border-radius: calc(6px * var(--ui-scale));
   background: transparent;
@@ -7593,6 +7595,10 @@ body[data-theme="light"] .config-close-btn:hover {
   gap: 6px;
   padding: 10px 0;
   border-bottom: 1px solid var(--border-subtle, rgba(255,255,255,0.04));
+  /* Native lazy-render: browser skips layout/paint for off-screen rows.
+     contain-intrinsic-size reserves ~48px so the scrollbar stays accurate. */
+  content-visibility: auto;
+  contain-intrinsic-size: 0 48px;
 }
 .log-line:last-child {
   border-bottom: none;
@@ -8192,10 +8198,15 @@ body[data-resizing="true"] * {
 
 .global-task-row .status-dot[data-status="failed"] {
   background: var(--danger);
+  /* Inner white ring so failed is distinguishable from completed without colour.
+     Matters for colourblind users who see red/green as similar. */
+  box-shadow: inset 0 0 0 calc(1.5px * var(--ui-scale)) rgba(255, 255, 255, 0.75);
 }
 
 .global-task-row .status-dot[data-status="queued"] {
-  background: var(--info, var(--accent));
+  background: transparent;
+  border: calc(1.5px * var(--ui-scale)) dashed var(--info, var(--accent));
+  box-sizing: border-box;
 }
 
 @keyframes pulse-dot {
