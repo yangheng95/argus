@@ -118,12 +118,6 @@ export function setLocaleData(locale: string, data: Record<string, any>): void {
   messages[locale] = data;
 }
 
-/** Sync locale from app.js state (called by bridge code). */
-export function syncLocaleFromLegacy(locale: string, allMessages: Record<string, any>): void {
-  currentLocale = sanitizeLocale(locale);
-  messages = { ...allMessages };
-}
-
 // ── DOM helpers ──
 
 /**

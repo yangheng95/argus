@@ -5,6 +5,9 @@ import { ControlMessageInput, ControlMessageResult } from "@/control/message-sch
 import { Database, and, eq } from "@/storage/db"
 import z from "zod"
 import { ChannelId } from "./catalog"
+import { Gateway } from "@/gateway"
+import { Instance } from "@/project/instance"
+import { channelKey } from "@/session/channel-key"
 
 export const MessageAttachmentInput = z.object({
   filename: z.string().trim().min(1),
@@ -32,10 +35,6 @@ export const ChannelIngressInput = z.object({
 
 export const ChannelIngressResult = ControlMessageResult
 
-// Legacy aliases
-export const MessageInput = ChannelIngressInput
-export const MessageResult = ChannelIngressResult
-
 export namespace ChannelIngress {
   export async function message(raw: z.input<typeof ChannelIngressInput>) {
     const input = ChannelIngressInput.parse(raw)
@@ -52,6 +51,40 @@ export namespace ChannelIngress {
     if (binding) {
       const result = await tryReplyInteraction(binding.task_id, input.text)
       if (result) return ChannelIngressResult.parse(result)
+    }
+
+    // New thread with an identified user → Gateway.
+    // The Gateway dispatcher decides whether to enqueue a workflow task,
+    // dispatch a build task, answer a pending clarification, etc. Bound
+    // threads continue through ControlMessage so legacy task-binding
+    // channels (and the still-pending-interaction fallthrough above) keep
+    // working. Threads with no user_id fall through to ControlMessage too —
+    // Gateway requires identity to maintain the per-(channel, user) singleton.
+    if (!binding && input.user_id) {
+      const ck = channelKey({
+        platform: input.platform,
+        channel: input.channel,
+        userID: input.user_id,
+      })
+      const reply = await Gateway.handleMessage({
+        channelKey: ck,
+        defaultCwd: Instance.directory,
+        text: input.text,
+        // Pass channel coordinates so any task Gateway creates this turn is
+        // bound to the originating thread. Without this, follow-up messages
+        // on the same thread would not find a binding and Gateway would
+        // route them as fresh user input — duplicating tasks. (Issue C2.)
+        channelBinding: {
+          platform: input.platform,
+          channel: input.channel,
+          thread: input.thread,
+          payload: input.metadata,
+        },
+      })
+      return ChannelIngressResult.parse({
+        kind: "panel_response",
+        message: reply.text || "(gateway received message)",
+      })
     }
 
     return ChannelIngressResult.parse(

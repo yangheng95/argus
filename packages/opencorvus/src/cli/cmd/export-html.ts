@@ -121,7 +121,7 @@ export async function buildSessionTraceHtml(input: {
           ].join("")
         })
         .join("")
-    : `<div class="card empty">No LLM trace file found. Set <code>OPENCORVUS_LLM_TRACE=1</code> before running the session.</div>`
+    : `<div class="card empty">No LLM trace events found for this session.</div>`
 
   return [
     "<!doctype html>",

@@ -1,6 +1,6 @@
 import { Hono } from "hono"
 import { describeRoute, resolver, validator } from "hono-openapi"
-import { ChannelIngress, MessageInput, MessageResult } from "@/channel/ingress"
+import { ChannelIngress, ChannelIngressInput, ChannelIngressResult } from "@/channel/ingress"
 import { ChannelRegistry } from "@/channel/registry"
 import { ChannelSupervisor } from "@/channel/supervisor"
 import { ChannelAttachment } from "@/channel/attachment"
@@ -103,13 +103,13 @@ export const ChannelRoutes = lazy(() =>
             description: "Message handled",
             content: {
               "application/json": {
-                schema: resolver(MessageResult),
+                schema: resolver(ChannelIngressResult),
               },
             },
           },
         },
       }),
-      validator("json", MessageInput),
+      validator("json", ChannelIngressInput),
       async (c) => {
         return c.json(await ChannelIngress.message(c.req.valid("json")))
       },
