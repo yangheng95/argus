@@ -42,6 +42,9 @@ export const BUNDLED_PROVIDERS: Record<string, (options: any) => SDK> = {
   "@ai-sdk/perplexity": createPerplexity,
   "@ai-sdk/vercel": createVercel,
   "@gitlab/gitlab-ai-provider": createGitLab,
-  // @ts-ignore (TODO: kill this code so we dont have to maintain it)
-  "@ai-sdk/github-copilot": createGitHubCopilotOpenAICompatible,
+  // In-tree Copilot SDK (./sdk/copilot) — Copilot does not publish a proper
+  // @ai-sdk integration, so we ship our own openai-compatible variant. The
+  // factory's return type doesn't structurally match Vercel's `Provider`
+  // alias, so widen via cast rather than @ts-ignore.
+  "@ai-sdk/github-copilot": createGitHubCopilotOpenAICompatible as unknown as (options: any) => SDK,
 }
