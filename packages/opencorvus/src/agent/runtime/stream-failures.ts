@@ -63,7 +63,7 @@ export function createStreamFailureTracker(): StreamFailureTracker {
 /**
  * Thrown by AgentRuntime when `failurePolicy === "throw"` and the stream
  * accumulated at least one failure. Carries the snapshot so the caller can
- * surface the details (UI / logs / re-decompose context).
+ * surface the details (UI / logs / requirements retry context).
  */
 export class AgentStreamFailureError extends Error {
   readonly snapshot: StreamFailureSnapshot

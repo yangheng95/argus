@@ -18,8 +18,8 @@ describe("Trace.event", () => {
       fn: async () => {
         const taskID = "t-monotonic"
         Trace.event({ taskID, category: "task.start" })
-        Trace.event({ taskID, category: "agent.start", agent: "decompose" })
-        Trace.event({ taskID, category: "llm.step", agent: "decompose", round: 1 })
+        Trace.event({ taskID, category: "agent.start", agent: "requirements" })
+        Trace.event({ taskID, category: "llm.step", agent: "requirements", round: 1 })
         Trace.event({ taskID, category: "task.finish" })
 
         await Trace.flush()
@@ -33,7 +33,7 @@ describe("Trace.event", () => {
           "llm.step",
           "task.finish",
         ])
-        expect(events[1].agent).toBe("decompose")
+        expect(events[1].agent).toBe("requirements")
         expect(events[2].round).toBe(1)
       },
     })

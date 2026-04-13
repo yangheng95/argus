@@ -74,7 +74,7 @@ export async function runTaskLoop(input: {
 
   // Immediately mark the task as "active" so hasActiveTaskInProject() blocks
   // subsequent tasks from starting their loops concurrently. Without this,
-  // a task stays "queued" through spec/decompose/architect phases, causing the
+  // a task stays "queued" through spec/requirements/architect phases, causing the
   // serial queue check to miss it and start a second task loop in parallel.
   {
     const { updateTask } = await import("@/orchestrator/state")
@@ -153,8 +153,8 @@ export async function runTaskLoop(input: {
     }
     if (!run || !run.plan_version_id) {
       // No run or no plan — Task Agent didn't dispatch anything.
-      // Could be: still in spec/decompose/architect phase.
-      // The Task Agent's tool calls (spec, decompose, etc.) are handled within processTask.
+      // Could be: still in spec/requirements/architect phase.
+      // The Task Agent's tool calls (spec, requirements, etc.) are handled within processTask.
       // Loop back to decision point.
       log.info("no active run with plan, re-triggering", { taskID })
       trigger = { kind: "batch_complete", runID: run?.id ?? "", summary: { passed: 0, failed: 0, total: 0 } }

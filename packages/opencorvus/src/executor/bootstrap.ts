@@ -7,6 +7,7 @@ import { CodexCLIExecutor } from "./codex-cli"
 import { CodexAppServerClientProcess } from "./codex-app-server-client"
 import { CodexAppServerExecutor } from "./codex-app-server"
 import { ClaudeAgentExecutor } from "./claude-agent"
+import { MCPServe } from "@/mcp/serve"
 
 const log = Log.create({ service: "executor.bootstrap" })
 
@@ -22,7 +23,7 @@ export namespace ExecutorBootstrap {
 
     const found = await ExecutorDiscovery.scan()
 
-    if (found.codex.available && found.codex.command) {
+    if (found.codex.available && found.codex.command && !ExecutorRegistry.has("codex")) {
       ExecutorRegistry.registerCoding("codex", codexProvider(found.codex.command), {
         model: () => process.env.OPENCORVUS_EXECUTOR_CODEX_MODEL,
         cwd: () => Instance.directory,
@@ -46,7 +47,7 @@ export namespace ExecutorBootstrap {
       })
     }
 
-    if (found["claude-code"].available && found["claude-code"].command) {
+    if (found["claude-code"].available && found["claude-code"].command && !ExecutorRegistry.has("claude-code")) {
       ExecutorRegistry.registerCoding("claude-code", claudeProvider(found["claude-code"].command), {
         model: () => process.env.OPENCORVUS_EXECUTOR_CLAUDE_MODEL,
         cwd: () => Instance.directory,
@@ -84,12 +85,23 @@ function codexProvider(command: string[]) {
   if (process.env.OPENCORVUS_EXECUTOR_CODEX_PROTOCOL === "cli") {
     return CodexCLIExecutor.create({ command })
   }
-  return CodexAppServerExecutor.create((cwd?: string) =>
-    CodexAppServerClientProcess.create({
-      command: [...command, "app-server", "--listen", "stdio://"],
+  return CodexAppServerExecutor.create((cwd?: string) => {
+    const mcp = MCPServe.command(cwd ?? Instance.directory)
+    const mcpArgs = JSON.stringify(mcp.args)
+    return CodexAppServerClientProcess.create({
+      command: [
+        ...command,
+        "app-server",
+        "--listen",
+        "stdio://",
+        "-c",
+        `mcp_servers.opencorvus.command="${mcp.command}"`,
+        "-c",
+        `mcp_servers.opencorvus.args=${mcpArgs}`,
+      ],
       cwd,
-    }),
-  )
+    })
+  })
 }
 
 function claudeProvider(command: string[]) {

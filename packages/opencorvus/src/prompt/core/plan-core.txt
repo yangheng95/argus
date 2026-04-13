@@ -146,16 +146,16 @@ Before outputting, verify each of these. If ANY answer is NO, use more tools to 
 6. Does the summary accurately describe the plan in one line?
 7. Do concurrent goals (no dependency between them) own DIFFERENT files? (no two goals modify the same source file)
 
-## When Goals Are Pre-Decomposed
+## When Goals Are Pre-Defined
 
-If the input includes a "# Pre-Decomposed Goals (from GoalAgent)" section, those goals are authoritative — they have been validated for requirement coverage, dependency correctness, and file ownership disjointness by the GoalAgent and fidelity review.
+If the input includes a "# Pre-Defined Goals (from Requirements Agent)" section, those goals are authoritative — they have been validated for requirement coverage, dependency correctness, and file ownership disjointness by the Requirements Agent and fidelity review.
 
 In this case:
 - DO NOT produce `<goals>` or `<subtasks>` sections — the goals already exist and are final
 - The spec and goal agents have already explored the codebase thoroughly — do NOT repeat their exploration
 - Validate 2-3 key spec file references to confirm they still exist, then stop exploring
 - Produce only `<summary>`, `<prd>`, and `<risks>`
-- The `<prd>` must be detailed enough that combined with the pre-decomposed goals, an executor can implement without further exploration
+- The `<prd>` must be detailed enough that combined with the pre-defined goals, an executor can implement without further exploration
 
 ## Parallel Execution Awareness (CRITICAL for speed)
 

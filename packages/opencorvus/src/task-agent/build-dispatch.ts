@@ -1,7 +1,7 @@
 /**
  * Build-task dispatcher — fast path for `task.kind === "build"`.
  *
- * Bypasses the workflow pipeline (decompose → design → architect → execute →
+ * Bypasses the workflow pipeline (requirements → design → architect → execute →
  * deliver) and instead runs the build agent directly on `task.request`.
  *
  * The task still:
@@ -10,7 +10,7 @@
  *   - persists its trace into a child session under task.session_id
  *
  * What it does NOT do:
- *   - decompose the request into goals
+ *   - analyze the request into goals
  *   - allocate plan_versions / milestones / runs / goal_runs
  *   - register evaluators or delivery gates
  *

@@ -38,7 +38,7 @@ describe("panel tool", () => {
                 source: "panel",
                 title: `${prefix}${index + 1}`,
                 request: `${prefix}${index + 1}`,
-                status: "running" as const,
+                status: "active" as const,
                 priority: "normal" as const,
                 time_created: now,
                 time_updated: now,

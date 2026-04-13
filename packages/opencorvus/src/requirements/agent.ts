@@ -1,5 +1,5 @@
 /**
- * RequirementsAgent — the single entry point for task decomposition.
+ * RequirementsAgent — the single entry point for task requirements analysis.
  *
  * Replaces the old Spec Agent + Goal Agent two-stage pipeline.
  * Takes a raw user request and produces GoalContractFields[] directly,
@@ -10,7 +10,7 @@
  * ② DB mapping is lossless: each field gets its own column.
  * ③ done_definition must be Eval Agent executable.
  * ④ owned_paths is the hard write boundary for Executor.
- * ⑤ Contract is immutable once created. Only re-decompose can change it.
+ * ⑤ Contract is immutable once created. Only re-running requirements analysis can change it.
  */
 import { stepCountIs } from "ai"
 import type { TextHooks } from "@/llm/api"
@@ -26,14 +26,12 @@ import { loadStageSkills } from "@/orchestrator/skill-inject"
 import { Config } from "@/config/config"
 import type { RequirementsOutput, ParsedGoalContract, RequirementsDecision, ParsedRequirement, TraceabilityEntry } from "./types"
 import { createRequirementsOutputTools, type RequirementsCollector, type RegisteredGoal } from "./output-tools"
-import { parseRecommendedNext } from "@/architect/parse-recommended"
 import type { GoalContractFields } from "@/pipeline/types"
 import type { DecisionLog } from "@/decision-log"
-import type { RecommendedNext } from "@/architect/types"
 
-import DECOMPOSE_CORE from "@/prompt/core/decompose-core.txt"
+import REQUIREMENTS_CORE from "@/prompt/core/requirements-core.txt"
 
-const log = Log.create({ service: "decompose-agent" })
+const log = Log.create({ service: "requirements-agent" })
 
 // ---------------------------------------------------------------------------
 // Result type
@@ -47,15 +45,13 @@ export interface RequirementsResult {
   decisions: RequirementsDecision[]
   /** Requirement → Goal traceability matrix */
   traceability: TraceabilityEntry[]
-  /** Recommended next actions for Task Agent */
-  recommendedNext: RecommendedNext[]
 }
 
 // ---------------------------------------------------------------------------
-// Redecompose context — for retry after failed execution
+// Retry context — for re-running requirements analysis after failed execution
 // ---------------------------------------------------------------------------
 
-export interface RedecomposeContext {
+export interface RequirementsRetryContext {
   previousGoals: Array<{
     title: string
     status: string
@@ -76,10 +72,10 @@ export interface RedecomposeContext {
 
 export namespace RequirementsAgent {
   /**
-   * Decompose a task request into executable goal contracts.
+   * Analyze a task request into executable goal contracts.
    * Single entry point — replaces SpecAgent.initial() + GoalAgent.initial().
    */
-  export async function decompose(input: {
+  export async function run(input: {
     title: string
     request: string
     /** Base64 image attachments — injected as vision content alongside the request text. */
@@ -91,10 +87,10 @@ export namespace RequirementsAgent {
     onStatus?: (summary: string) => void | Promise<void>
     /** Optional Decision Log — seeded with foundational decisions. */
     decisionLog?: DecisionLog
-    /** Optional re-decompose context for retry after failure. */
-    redecomposeContext?: RedecomposeContext
+    /** Optional retry context for re-running requirements after failure. */
+    retryContext?: RequirementsRetryContext
   }): Promise<RequirementsResult> {
-    return run(input)
+    return runInternal(input)
   }
 }
 
@@ -102,7 +98,7 @@ export namespace RequirementsAgent {
 // Internal implementation
 // ---------------------------------------------------------------------------
 
-async function run(input: {
+async function runInternal(input: {
   title: string
   request: string
   attachments?: Array<{ sha: string; url: string; mime: string; size: number; filename?: string }>
@@ -112,9 +108,9 @@ async function run(input: {
   stream?: TextHooks
   onStatus?: (summary: string) => void | Promise<void>
   decisionLog?: DecisionLog
-  redecomposeContext?: RedecomposeContext
+  retryContext?: RequirementsRetryContext
 }): Promise<RequirementsResult> {
-  if (input.signal?.aborted) throw new Error("decompose agent aborted before model resolution")
+  if (input.signal?.aborted) throw new Error("requirements agent aborted before model resolution")
 
   const orchCfg = await OrchestratorConfig.get()
   const {
@@ -122,13 +118,13 @@ async function run(input: {
     timeout_ms: TIMEOUT_MS,
     quality_threshold: QUALITY_RETRY_THRESHOLD,
     max_attempts: MAX_ATTEMPTS,
-  } = orchCfg.decompose
+  } = orchCfg.requirements
 
   const def = await Provider.defaultModel().catch(() => undefined)
-  if (!def) throw new Error("no LLM model available for decompose agent")
+  if (!def) throw new Error("no LLM model available for requirements agent")
   const model = await Provider.getModel(def.providerID, def.modelID)
 
-  if (input.signal?.aborted) throw new Error("decompose agent aborted after model resolution")
+  if (input.signal?.aborted) throw new Error("requirements agent aborted after model resolution")
 
   // Extract working directory from request
   const cwdMatch =
@@ -142,23 +138,23 @@ async function run(input: {
   const outputToolKit = createRequirementsOutputTools(taskWorkDir)
   const guard = toolGuard({ ...plannerTools, ...outputToolKit.tools })
 
-  if (input.signal?.aborted) throw new Error("decompose agent aborted before context prefetch")
+  if (input.signal?.aborted) throw new Error("requirements agent aborted before context prefetch")
 
   const context = prefetchContext(input.title, input.request)
 
   let lastParsed: RequirementsOutput | undefined
   let lastQuality: { score: number; reasons: string[] } | undefined
 
-  const systemPrompt = await decomposeSystem()
+  const systemPrompt = await requirementsSystem()
   const initialPrompt = buildUserPrompt(input, context)
   const initialContent = await buildMultimodalContent(initialPrompt, input.attachments)
   let messages: any[] = [{ role: "user" as const, content: initialContent }]
   let cumulativeToolCalls = 0
 
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-    if (input.signal?.aborted) throw new Error("decompose agent aborted before attempt " + (attempt + 1))
+    if (input.signal?.aborted) throw new Error("requirements agent aborted before attempt " + (attempt + 1))
 
-    await input.onStatus?.(`Decompose agent attempt ${attempt + 1}/${MAX_ATTEMPTS}`)
+    await input.onStatus?.(`Requirements agent attempt ${attempt + 1}/${MAX_ATTEMPTS}`)
 
     if (attempt > 0 && lastQuality) {
       messages.push({
@@ -167,7 +163,7 @@ async function run(input: {
       })
     }
 
-    log.info("decompose agent starting", {
+    log.info("requirements agent starting", {
       title: input.title,
       model: model.id,
       attempt: attempt + 1,
@@ -178,10 +174,10 @@ async function run(input: {
     if (input.signal) abortSignals.push(input.signal)
 
     // RequirementsAgent is always invoked nested: the caller (task-agent or
-     // requirements service) owns persistence via its own session-hooks and
-     // forwards chunks through `input.stream`. We therefore wrap those into
-     // a passthrough hooks object so AgentRuntime neither creates a duplicate
-     // hooks nor requires a sessionID of its own.
+    // requirements service) owns persistence via its own session-hooks and
+    // forwards chunks through `input.stream`. We therefore wrap those into
+    // a passthrough hooks object so AgentRuntime neither creates a duplicate
+    // hooks nor requires a sessionID of its own.
     const passthroughHooks = {
       onChunk: input.stream?.onChunk,
       onError: input.stream?.onError,
@@ -189,16 +185,16 @@ async function run(input: {
       failures: { snapshot: () => ({ count: 0, items: [] as any[] }) },
     } as any
     const runResult = await AgentRuntime.run({
-      agent: "decompose",
+      agent: "requirements",
       model,
       system: systemPrompt,
       messages,
       tools: guard.tools,
       stopWhen: stepCountIs(MAX_STEPS),
-      cacheKey: input.taskID ? `task-${input.taskID}-decompose` : undefined,
+      cacheKey: input.taskID ? `task-${input.taskID}-requirements` : undefined,
       sessionID: input.sessionID ?? "",
       taskID: input.taskID,
-      stage: "decompose",
+      stage: "requirements",
       signal: AbortSignal.any(abortSignals),
       onStepFinish: guard.onStepFinish as any,
       hooks: passthroughHooks,
@@ -210,20 +206,14 @@ async function run(input: {
       },
     })
 
-    const resultText = runResult.text
     const resultSteps = runResult.steps
     const resultFinishReason = runResult.finishReason
     cumulativeToolCalls += runResult.toolCallCount
 
-    let allText = resultText?.trim() || ""
-    if (!allText) {
-      allText = resultSteps.map((s) => s.text).filter(Boolean).join("\n")
-    }
-
-    log.info("decompose agent finished", {
+    log.info("requirements agent finished", {
       steps: resultSteps.length,
       finishReason: resultFinishReason,
-      textLength: allText.length,
+      textLength: (runResult.text?.trim() || "").length,
       toolCalls: runResult.toolCallCount,
       cumulativeToolCalls,
       attempt: attempt + 1,
@@ -234,7 +224,7 @@ async function run(input: {
     // failure — no text-parsing fallback (see CLAUDE.md "no fallback" rule).
     const collector = outputToolKit.getCollector()
     if (collector.goals.length === 0) {
-      log.warn("decompose agent: no goals registered via tool calls", {
+      log.warn("requirements agent: no goals registered via tool calls", {
         attempt: attempt + 1,
         toolCalls: cumulativeToolCalls,
         finishReason: resultFinishReason,
@@ -248,7 +238,7 @@ async function run(input: {
     }
 
     const parsed = collectorToOutput(collector)
-    log.info("decompose agent: using structured output", {
+    log.info("requirements agent: using structured output", {
       goals: parsed.goals.length,
       requirements: parsed.requirements.length,
       decisions: parsed.decisions.length,
@@ -258,7 +248,7 @@ async function run(input: {
     const quality = validateQuality(parsed, cumulativeToolCalls)
     lastQuality = quality
 
-    log.info("decompose agent output", {
+    log.info("requirements agent output", {
       goals: parsed.goals.length,
       decisions: parsed.decisions.length,
       toolCalls: cumulativeToolCalls,
@@ -267,13 +257,13 @@ async function run(input: {
     })
 
     if (quality.score >= QUALITY_RETRY_THRESHOLD || attempt >= MAX_ATTEMPTS - 1) {
-      const result = toResult(parsed, allText)
+      const result = toResult(parsed)
 
       // Seed Decision Log with foundational decisions
       if (input.decisionLog && result.decisions.length > 0) {
         for (const decision of result.decisions) {
           input.decisionLog.append({
-            phase: "decompose",
+            phase: "requirements",
             key: decision.key,
             value: decision.value,
             reason: decision.reason,
@@ -288,52 +278,28 @@ async function run(input: {
     messages = [{ role: "user" as const, content: initialPrompt }]
     outputToolKit.reset()
 
-    log.warn("decompose: quality below threshold, retrying", {
+    log.warn("requirements: quality below threshold, retrying", {
       score: quality.score,
       threshold: QUALITY_RETRY_THRESHOLD,
       reasons: quality.reasons,
     })
   }
 
-  if (!lastParsed) throw new Error("Decompose agent produced no output after all attempts")
-  return toResult(lastParsed, "")
+  if (!lastParsed) throw new Error("Requirements agent produced no output after all attempts")
+  return toResult(lastParsed)
 }
 
 // ---------------------------------------------------------------------------
 // Convert parsed output to RequirementsResult
 // ---------------------------------------------------------------------------
 
-function toResult(parsed: RequirementsOutput, rawText?: string): RequirementsResult {
-  const goals = parsed.goals.map(goalToContract)
-  // Generate recommended_next from LLM output or default heuristic
-  let recommendedNext: RecommendedNext[] = []
-  if (rawText) {
-    recommendedNext = parseRecommendedNext(rawText)
-  }
-  // Default recommendation: multi-goal → architect, single-goal → create_run + submit_execution
-  // (per-goal planning happens automatically inside the execution engine, not as a Task Agent step)
-  if (recommendedNext.length === 0 && goals.length > 1) {
-    recommendedNext.push({
-      agent: "architect",
-      reason: `${goals.length} goals with cross-dependencies — architect coordination recommended`,
-      confidence: 0.9,
-      priority: "required",
-    })
-  } else if (recommendedNext.length === 0 && goals.length === 1) {
-    recommendedNext.push({
-      agent: "create_run",
-      reason: "Single goal — create run then submit_execution (planning happens automatically inside execution)",
-      confidence: 0.9,
-      priority: "required",
-    })
-  }
+function toResult(parsed: RequirementsOutput): RequirementsResult {
   return {
     summary: parsed.summary || "Task decomposition",
     requirements: parsed.requirements,
-    goals,
+    goals: parsed.goals.map(goalToContract),
     decisions: parsed.decisions,
     traceability: parsed.traceability,
-    recommendedNext,
   }
 }
 
@@ -431,7 +397,7 @@ function buildUserPrompt(
     title: string
     request: string
     taskID?: string
-    redecomposeContext?: RedecomposeContext
+    retryContext?: RequirementsRetryContext
   },
   context: string,
 ): string {
@@ -446,11 +412,11 @@ function buildUserPrompt(
     sections.push(`# Project Context (Pre-fetched)\n\n${context}`)
   }
 
-  if (input.redecomposeContext) {
-    const ctx = input.redecomposeContext
+  if (input.retryContext) {
+    const ctx = input.retryContext
     sections.push(
       [
-        "# Redecomposition Context",
+        "# Requirements Retry Context",
         "",
         "The previous execution FAILED. Restructure goals to address the failure.",
         "",
@@ -490,7 +456,7 @@ function buildRetryMessage(
   attempt: number,
 ): string {
   return [
-    "# QUALITY RETRY — Previous Decomposition Was Insufficient",
+    "# QUALITY RETRY — Previous Requirements Analysis Was Insufficient",
     "",
     `Score: ${lastQuality.score.toFixed(2)} / ${qualityThreshold}. Attempt ${attempt + 1}.`,
     "",
@@ -516,7 +482,7 @@ function validateQuality(
   // Requirement extraction (0.15) — did the agent parse the input exhaustively?
   if (parsed.requirements.length >= 3) score += 0.15
   else if (parsed.requirements.length >= 1) score += 0.07
-  else reasons.push("No requirements extracted from user input — decompose must parse input line by line")
+  else reasons.push("No requirements extracted from user input — requirements agent must parse input line by line")
 
   // Traceability (0.15) — every requirement mapped to a goal?
   if (parsed.requirements.length > 0 && parsed.traceability.length > 0) {
@@ -582,15 +548,15 @@ function validateQuality(
 // System prompt
 // ---------------------------------------------------------------------------
 
-export const REQUIREMENTS_SYSTEM = DECOMPOSE_CORE
+export const REQUIREMENTS_SYSTEM = REQUIREMENTS_CORE
 
-async function decomposeSystem(): Promise<string> {
+async function requirementsSystem(): Promise<string> {
   const config = await Config.get()
   const systemOverride = (config as Record<string, unknown>).prompt as Record<string, unknown> | undefined
-  if (typeof systemOverride?.decompose_system === "string") return systemOverride.decompose_system
-  const agentPrompt = (config.agent as Record<string, any> | undefined)?.decompose?.prompt
-  const core = typeof agentPrompt === "string" ? agentPrompt : DECOMPOSE_CORE
+  if (typeof systemOverride?.requirements_system === "string") return systemOverride.requirements_system
+  const agentPrompt = (config.agent as Record<string, any> | undefined)?.requirements?.prompt
+  const core = typeof agentPrompt === "string" ? agentPrompt : REQUIREMENTS_CORE
   const orchCfg = await OrchestratorConfig.get()
-  const skills = await loadStageSkills(orchCfg.decompose.skills, "decompose")
+  const skills = await loadStageSkills(orchCfg.requirements.skills, "requirements")
   return core + skills
 }

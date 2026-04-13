@@ -783,6 +783,23 @@ CREATE TABLE IF NOT EXISTS workbench_brief_snapshot (
 CREATE INDEX IF NOT EXISTS workbench_brief_task_idx ON workbench_brief_snapshot (task_id);
 CREATE INDEX IF NOT EXISTS workbench_brief_run_idx  ON workbench_brief_snapshot (run_id);
 
+-- ===== quick note =====
+
+CREATE TABLE IF NOT EXISTS quick_note (
+  id           text PRIMARY KEY,
+  project_id   text,
+  content      text NOT NULL,
+  summary      text NOT NULL,
+  tags         text NOT NULL DEFAULT '[]',
+  status       text NOT NULL DEFAULT 'draft',
+  user_id      text,
+  time_created integer NOT NULL,
+  time_updated integer NOT NULL
+);
+CREATE INDEX IF NOT EXISTS quick_note_project_idx ON quick_note (project_id);
+CREATE INDEX IF NOT EXISTS quick_note_user_idx    ON quick_note (user_id);
+CREATE INDEX IF NOT EXISTS quick_note_status_idx  ON quick_note (status);
+
 -- ===== protocol event store =====
 
 CREATE TABLE IF NOT EXISTS protocol_event (

@@ -5,16 +5,14 @@
  * Timeout policy lives in RequirementsAgent's AgentRuntime invocation: three
  * independent tiers (alive / progress / absolute) via createProgressGuard,
  * so delta-only loops do not defer the stall timer indefinitely.
- *
- * Single entry point replaces old SpecService + GoalService pipeline.
  */
 import type { TextHooks } from "@/llm/api"
 import { Log } from "@/util/log"
-import { RequirementsAgent, type RequirementsResult, type RedecomposeContext } from "./agent"
+import { RequirementsAgent, type RequirementsResult, type RequirementsRetryContext } from "./agent"
 import { reviewFidelity, applyFidelityCorrections } from "./fidelity"
 import type { DecisionLog } from "@/decision-log"
 
-const log = Log.create({ service: "decompose-service" })
+const log = Log.create({ service: "requirements-service" })
 
 export class RequirementsFailureError extends Error {
   constructor(message: string, options?: ErrorOptions) {
@@ -25,13 +23,13 @@ export class RequirementsFailureError extends Error {
 
 export namespace RequirementsService {
   /**
-   * Decompose a task into goal contracts.
-   * Wraps RequirementsAgent.decompose() with fidelity review and error handling.
+   * Analyze a task into goal contracts.
+   * Wraps RequirementsAgent.run() with fidelity review and error handling.
    *
    * No hard timeout — the agent's own inactivity guard handles stalls.
    * The caller's AbortSignal is the only cancellation mechanism.
    */
-  export async function decompose(input: {
+  export async function run(input: {
     title: string
     request: string
     /** Base64 image attachments — injected as vision content alongside the request text. */
@@ -43,14 +41,14 @@ export namespace RequirementsService {
     onStatus?: (summary: string) => void | Promise<void>
     decisionLog?: DecisionLog
   }): Promise<RequirementsResult> {
-    log.info("decompose service starting", {
+    log.info("requirements service starting", {
       taskID: input.taskID,
       title: input.title,
     })
 
     const start = Date.now()
     try {
-      const result = await RequirementsAgent.decompose({
+      const result = await RequirementsAgent.run({
         title: input.title,
         request: input.request,
         attachments: input.attachments,
@@ -63,7 +61,7 @@ export namespace RequirementsService {
       })
 
       if (result.goals.length === 0) {
-        throw new RequirementsFailureError("decompose produced no goals")
+        throw new RequirementsFailureError("requirements agent produced no goals")
       }
 
       // Fidelity Review — LLM verifies goals cover the original user request
@@ -84,7 +82,7 @@ export namespace RequirementsService {
         result.goals = applyFidelityCorrections(result.goals, fidelity)
       }
 
-      log.info("decompose service completed", {
+      log.info("requirements service completed", {
         taskID: input.taskID,
         goalCount: result.goals.length,
         decisionCount: result.decisions.length,
@@ -96,35 +94,35 @@ export namespace RequirementsService {
     } catch (err) {
       if (err instanceof RequirementsFailureError) throw err
       throw new RequirementsFailureError(
-        `decompose failed: ${err instanceof Error ? err.message : String(err)}`,
+        `requirements failed: ${err instanceof Error ? err.message : String(err)}`,
         { cause: err },
       )
     }
   }
 
   /**
-   * Re-decompose after a failed execution.
+   * Re-run requirements analysis after a failed execution.
    */
-  export async function redecompose(input: {
+  export async function retry(input: {
     title: string
     request: string
     attachments?: Array<{ sha: string; url: string; mime: string; size: number; filename?: string }>
     taskID?: string
     sessionID?: string
-    redecomposeContext: RedecomposeContext
+    retryContext: RequirementsRetryContext
     signal?: AbortSignal
     stream?: TextHooks
     onStatus?: (summary: string) => void | Promise<void>
     decisionLog?: DecisionLog
   }): Promise<RequirementsResult> {
-    log.info("redecompose service starting", {
+    log.info("requirements retry starting", {
       taskID: input.taskID,
       title: input.title,
     })
 
     const start = Date.now()
     try {
-      const result = await RequirementsAgent.decompose({
+      const result = await RequirementsAgent.run({
         title: input.title,
         request: input.request,
         attachments: input.attachments,
@@ -134,10 +132,10 @@ export namespace RequirementsService {
         stream: input.stream,
         onStatus: input.onStatus,
         decisionLog: input.decisionLog,
-        redecomposeContext: input.redecomposeContext,
+        retryContext: input.retryContext,
       })
 
-      log.info("redecompose service completed", {
+      log.info("requirements retry completed", {
         taskID: input.taskID,
         goalCount: result.goals.length,
         durationMs: Date.now() - start,
@@ -147,7 +145,7 @@ export namespace RequirementsService {
     } catch (err) {
       if (err instanceof RequirementsFailureError) throw err
       throw new RequirementsFailureError(
-        `redecompose failed: ${err instanceof Error ? err.message : String(err)}`,
+        `requirements retry failed: ${err instanceof Error ? err.message : String(err)}`,
         { cause: err },
       )
     }

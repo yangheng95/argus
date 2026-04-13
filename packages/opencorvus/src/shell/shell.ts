@@ -282,6 +282,15 @@ export namespace Shell {
     return "/bin/sh"
   }
 
+  export function fromEnv(shell: string | undefined, platform: NodeJS.Platform): string | undefined {
+    if (!shell) return undefined
+    if (platform === "win32") {
+      const base = path.win32.basename(shell).toLowerCase()
+      if (base === "powershell.exe" || base === "pwsh.exe" || base === "cmd.exe") return undefined
+    }
+    return shell
+  }
+
   export const preferred = lazy(() => {
     const s = process.env.SHELL
     if (s) return s

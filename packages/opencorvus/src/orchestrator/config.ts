@@ -1,7 +1,7 @@
 /**
  * OrchestratorConfig — 编排 agent 的统一配置中心
  *
- * 所有 agent（decompose / planner / evaluator / delivery）和编排策略的默认值
+ * 所有 agent（requirements / planner / evaluator / delivery）和编排策略的默认值
  * 集中定义在此，并从 opencorvus.jsonc 的 `assistant` 字段加载用户自定义值。
  *
  * 优先级：环境变量 > opencorvus.jsonc > 此处硬编码默认值
@@ -9,7 +9,7 @@
  * 使用方式：
  *   import { OrchestratorConfig } from "@/orchestrator/config"
  *   const cfg = await OrchestratorConfig.get()
- *   cfg.decompose.max_steps   // 100 (或用户自定义值)
+ *   cfg.requirements.max_steps   // 100 (或用户自定义值)
  */
 import { Config } from "@/config/config"
 import type { MiniWorkflow } from "./workflow"
@@ -18,7 +18,7 @@ import type { MiniWorkflow } from "./workflow"
 // 类型定义
 // ═══════════════════════════════════════════════════════════════════
 
-export interface DecomposeConfig {
+export interface RequirementsConfig {
   max_steps: number
   timeout_ms: number
   quality_threshold: number
@@ -65,7 +65,7 @@ export interface DesignAnalystConfig {
 }
 
 export interface OrchestratorConfigType {
-  decompose: DecomposeConfig
+  requirements: RequirementsConfig
   architect: ArchitectConfig
   planner: PlannerConfig
   evaluator: EvaluatorConfig
@@ -87,7 +87,7 @@ export interface OrchestratorConfigType {
 // ═══════════════════════════════════════════════════════════════════
 
 const DEFAULTS: OrchestratorConfigType = {
-  decompose: {
+  requirements: {
     max_steps: 100,
     timeout_ms: 300_000,
     quality_threshold: 0.5,
@@ -165,12 +165,12 @@ export namespace OrchestratorConfig {
 
 function merge(user?: Config.Info["assistant"]): OrchestratorConfigType {
   return {
-    decompose: {
-      max_steps: user?.decompose?.max_steps ?? DEFAULTS.decompose.max_steps,
-      timeout_ms: user?.decompose?.timeout_ms ?? DEFAULTS.decompose.timeout_ms,
-      quality_threshold: user?.decompose?.quality_threshold ?? DEFAULTS.decompose.quality_threshold,
-      max_attempts: user?.decompose?.max_attempts ?? DEFAULTS.decompose.max_attempts,
-      skills: user?.decompose?.skills ?? DEFAULTS.decompose.skills,
+    requirements: {
+      max_steps: user?.requirements?.max_steps ?? DEFAULTS.requirements.max_steps,
+      timeout_ms: user?.requirements?.timeout_ms ?? DEFAULTS.requirements.timeout_ms,
+      quality_threshold: user?.requirements?.quality_threshold ?? DEFAULTS.requirements.quality_threshold,
+      max_attempts: user?.requirements?.max_attempts ?? DEFAULTS.requirements.max_attempts,
+      skills: user?.requirements?.skills ?? DEFAULTS.requirements.skills,
     },
     architect: {
       max_steps: user?.architect?.max_steps ?? DEFAULTS.architect.max_steps,

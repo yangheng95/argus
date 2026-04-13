@@ -5,7 +5,7 @@
 import { messageStore, messageById, agentCards, agentCardOrder } from "../store/messages";
 
 /** Resolve an agent card message to its live store proxy when available.
- *  Agent card _agentMessages are snapshots in a separate SolidJS store path;
+ *  Agent card `messages` snapshots live in a separate SolidJS store path;
  *  part status updates (running→completed) don't propagate to those copies.
  *  Looking up by ID from store.messages returns the canonical proxy where
  *  fine-grained reactivity works correctly. Synthetic messages (from live
@@ -33,25 +33,27 @@ import {
 const _cardResolveCache = new Map<string, { fp: string; resolved: any }>();
 
 function cardFingerprint(card: any): string {
-  const msgs = card._agentMessages || [];
-  const children = card._agentInternalCards || [];
+  const msgs = card.messages || [];
+  const children = card.internalCards || [];
   const childMsgCount = children.reduce(
-    (acc: number, c: any) => acc + (c._agentMessages?.length || 0),
+    (acc: number, c: any) => acc + (c.messages?.length || 0),
     0,
   );
   // Include step statuses: they change (pending→running→completed) independently
   // of message count. Without this, cached cards show stale step progress.
-  const steps = (card._agentGoalSteps || []).map((s: any) => s.status || "").join(",");
-  const contractCount = card._agentContracts?.length || 0;
-  return `${msgs.length}:${children.length}:${childMsgCount}:${card._agentStatus || ""}:${card._agentGoalStatus || ""}:${steps}:${contractCount}`;
+  const steps = (card.goalSteps || []).map((s: any) => s.status || "").join(",");
+  const contractCount = card.contracts?.length || 0;
+  return `${msgs.length}:${children.length}:${childMsgCount}:${card.status || ""}:${card.goalStatus || ""}:${steps}:${contractCount}`;
 }
 
 const UNTIMED_CONVERSATION_ORDER = Number.MAX_SAFE_INTEGER;
 
-function conversationTime(message: any): number {
-  const created = message?.info?.time?.created;
+function conversationTime(item: any): number {
+  // AgentCardData carries `time` directly; raw Message uses info.time.created.
+  if (Number.isFinite(item?.time)) return Number(item.time);
+  const created = item?.info?.time?.created;
   if (Number.isFinite(created)) return Number(created);
-  const updated = message?.info?.time?.updated;
+  const updated = item?.info?.time?.updated;
   if (Number.isFinite(updated)) return Number(updated);
   return UNTIMED_CONVERSATION_ORDER;
 }
@@ -179,18 +181,18 @@ export function conversationMessages(): any[] {
       continue;
     }
     let resolved: any;
-    if (card._agentGoalGroup && Array.isArray(card._agentInternalCards)) {
-      const resolvedChildren = card._agentInternalCards.map((child: any) => {
-        if (!Array.isArray(child._agentMessages)) return child;
-        const msgs = child._agentMessages.map((m: any) => resolveMessage(m));
+    if (card.kind === "goal" && Array.isArray(card.internalCards)) {
+      const resolvedChildren = card.internalCards.map((child: any) => {
+        if (!Array.isArray(child.messages)) return child;
+        const msgs = child.messages.map((m: any) => resolveMessage(m));
         msgs.sort((a: any, b: any) => conversationTime(a) - conversationTime(b));
-        return { ...child, _agentMessages: msgs };
+        return { ...child, messages: msgs };
       });
-      resolved = { ...card, _agentInternalCards: resolvedChildren };
-    } else if (Array.isArray(card._agentMessages) && card._agentMessages.length > 0) {
-      const msgs = card._agentMessages.map((m: any) => resolveMessage(m));
+      resolved = { ...card, internalCards: resolvedChildren };
+    } else if (card.kind === "agent" && Array.isArray(card.messages) && card.messages.length > 0) {
+      const msgs = card.messages.map((m: any) => resolveMessage(m));
       msgs.sort((a: any, b: any) => conversationTime(a) - conversationTime(b));
-      resolved = { ...card, _agentMessages: msgs };
+      resolved = { ...card, messages: msgs };
     } else {
       continue;
     }

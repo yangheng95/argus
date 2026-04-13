@@ -55,6 +55,9 @@ body[data-theme="light"],
   margin: var(--card-gap) 0;
   overflow: hidden;
   transition: background-color 120ms ease, border-color 120ms ease;
+  /* Chat / coding containers are flex-column; keep cards at their natural
+     content height instead of being shrunk to fit. */
+  flex: none;
 }
 
 .card[data-depth="0"] {

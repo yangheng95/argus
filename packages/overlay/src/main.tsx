@@ -9,6 +9,7 @@ import { Conversation } from "./components/Conversation";
 import { TaskList } from "./components/TaskList";
 import { Board, statusIcon as statusIconSvg } from "./components/Board";
 import { ChatComposer } from "./components/ChatComposer";
+import { useGatewaySession } from "./services/gateway";
 import { WindowControls } from "./components/WindowControls";
 import { TitlebarMenu } from "./components/TitlebarMenu";
 import { ConnectionBadge } from "./components/ConnectionBadge";
@@ -546,6 +547,7 @@ if (taskListEl) {
     () => (
       <TaskList
         onSelectTask={(taskID) => void selectTask(taskID)}
+        onCancelTask={(taskID) => void cancelTask(taskID)}
         onDeleteTask={async (taskID) => {
           const showAppDialog = (window as any).showAppDialog;
           if (typeof showAppDialog !== "function") return;
@@ -691,42 +693,59 @@ if (boardEl) {
   );
 }
 
-// ── Mount: ChatComposer ──
+// ── Mount: ChatComposer (layout B — Gateway收口) ──
+//
+// The single composer is the daemon's input. All user text is routed to
+// Gateway (sendShared in services/gateway.ts), which decides whether to
+// dispatch a new task, forward to an existing task (forward_to_task tool),
+// answer directly, etc. The legacy panelMessage path was deleted along
+// with the previous "input goes to currently selected task" behaviour;
+// task chat panels are now read-only agent streams.
+//
+// Build target (the coding workspace's own composer) is preserved — that
+// path drives codingAPI directly and is unrelated to the daemon.
 
 const composerEl = document.getElementById("solidChatComposer");
 if (composerEl) {
   const isBuildTarget = () => composerTarget() === "build";
+  const gw = useGatewaySession();
   render(
     () => (
-      <ChatComposer
-        enabled={isBuildTarget() ? true : canComposeChat()}
-        busy={isBuildTarget() ? (codingAPI?.busy() ?? false) : (!!messageStore.chatRequest || isTaskInterruptable())}
-        stopping={isBuildTarget() ? false : !!(messageStore.chatRequest as any)?.stopping}
-        onSubmit={(text, attachments, webSearch) => {
-          if (isBuildTarget() && codingAPI) {
-            codingAPI.send(text);
-          } else {
-            void panelMessage(text, attachments, webSearch ? { web_search: true } : {});
-          }
-        }}
-        onStop={() => {
-          if (isBuildTarget() && codingAPI) {
-            codingAPI.stop();
-          } else {
-            // Abort any in-flight HTTP request first
-            if (messageStore.chatRequest) {
-              void stopChatRequest({ remote: false });
-            }
-            // Cancel the task via direct API
-            const id = boardStore.selectedTaskID;
-            if (id) {
-              void interruptTask(id);
+      <>
+        <Show when={!isBuildTarget()}>
+          <div class="composer-target-bar" role="status" aria-live="polite">
+            <span class="composer-target-icon" aria-hidden="true">→</span>
+            <span class="composer-target-label">Gateway</span>
+            <Show when={messageStore.selectedTaskID}>
+              <span class="composer-target-sep" aria-hidden="true">·</span>
+              <span class="composer-target-context">
+                上下文 task {String(messageStore.selectedTaskID).slice(0, 8)}
+              </span>
+            </Show>
+          </div>
+        </Show>
+        <ChatComposer
+          enabled={isBuildTarget() ? true : !gw.busy()}
+          busy={isBuildTarget() ? (codingAPI?.busy() ?? false) : gw.busy()}
+          stopping={false}
+          onSubmit={(text, _attachments, _webSearch) => {
+            if (isBuildTarget() && codingAPI) {
+              codingAPI.send(text);
             } else {
-              void stopChatRequest();
+              // Attachments + web_search flag are not yet wired through
+              // sendGatewayMessage — Gateway reads attachments from the
+              // task creation tools instead. Leave that for a follow-up.
+              void gw.send(text);
             }
-          }
-        }}
-      />
+          }}
+          onStop={() => {
+            if (isBuildTarget() && codingAPI) {
+              codingAPI.stop();
+            }
+            // Gateway turns are short; no client-side abort plumbed yet.
+          }}
+        />
+      </>
     ),
     composerEl,
   );
@@ -1499,71 +1518,14 @@ void (async () => {
   }
 })();
 
-// ── Gateway view (Phase 6 Option C) ──
-// Default user-facing surface. Layout per spec:
-//   • TopBar with current cwd (clickable to switch project)
-//   • Gateway dialog panel on top
-//   • Task list panel below (vertical stack)
-//   • #task/<id> hash → full-screen TaskDetailOverlay covering Gateway
-//   • #legacy hash → escape hatch back to the legacy panel for diagnosis
-// The legacy panel still mounts under #legacy; the Gateway view is opaque
-// over it by default so users land directly in the new flow.
-import { GatewayPanel } from "./components/GatewayPanel";
-import { TopBar } from "./components/TopBar";
-import { TaskDrawer } from "./components/TaskDrawer";
-import { TaskDetailOverlay } from "./components/TaskDetailOverlay";
+// ── Gateway sidebar tail (latest layout: composer in left column) ──
+// Sidebar holds: Tasks list (top, scrollable) → Gateway tail (recent
+// daemon replies + task chips) → composer-target-bar → composer.
+// All user input goes to Gateway via the same shared session.
+import { GatewaySidebarTail } from "./components/GatewaySidebarTail";
 
-(function mountGatewayView() {
-  // Container appended to body, fixed-positioned over the legacy panel.
-  const root = document.createElement("div");
-  root.id = "gatewayRoot";
-  root.dataset.active = "true";
-  document.body.appendChild(root);
-
-  function parseHash(): { view: "legacy" | "gateway"; taskID?: string } {
-    const h = window.location.hash.replace(/^#/, "");
-    if (h === "legacy") return { view: "legacy" };
-    if (h.startsWith("task/")) return { view: "gateway", taskID: decodeURIComponent(h.slice("task/".length)) };
-    return { view: "gateway" };
-  }
-
-  const [route, setRoute] = createSignal(parseHash());
-  function onHashChange() { setRoute(parseHash()); }
-  window.addEventListener("hashchange", onHashChange);
-
-  createRoot(() => {
-    createEffect(() => {
-      root.dataset.active = route().view === "gateway" ? "true" : "false";
-    });
-
-    render(
-      () => (
-        <div class="gateway-shell">
-          <TopBar
-            rightSlot={() => (
-              <button
-                type="button"
-                class="top-bar-legacy-link"
-                onClick={() => { window.location.hash = "legacy"; }}
-                title="Open the legacy panel (diagnostics / settings)"
-              >
-                Legacy ⤴
-              </button>
-            )}
-          />
-          <main class="gateway-shell-main">
-            <GatewayPanel />
-          </main>
-          <TaskDrawer />
-          <Show when={route().view === "gateway" && route().taskID}>
-            <TaskDetailOverlay
-              taskID={route().taskID!}
-              onClose={() => { window.location.hash = ""; }}
-            />
-          </Show>
-        </div>
-      ),
-      root,
-    );
-  });
-})();
+const sidebarGatewayTailEl = document.getElementById("sidebarGatewayTail");
+if (sidebarGatewayTailEl) {
+  sidebarGatewayTailEl.innerHTML = "";
+  render(() => <GatewaySidebarTail />, sidebarGatewayTailEl);
+}

@@ -905,7 +905,7 @@ test("overlay chrome keeps opacity, header, version, and capsule controls aligne
         goalToolbarCount: document.querySelectorAll("#goalsBody .section-actions").length,
         goalsHeadHeight: size("#goalsSection > .section-head").height,
         planHeadHeight: size("#planSection > .section-head").height,
-        sidebarHeaderHeight: size(".sidebar-header").height,
+        sidebarHeaderHeight: size(".sidebar-section-gateway > .sidebar-section-header").height,
         chatHeaderHeight: size(".chat-header").height,
         sectionsHeaderHeight: size(".sections-header").height,
         sectionsGap: Number.parseFloat(getComputedStyle(pick(".sections-stack")).rowGap),

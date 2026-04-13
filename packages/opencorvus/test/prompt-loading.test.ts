@@ -50,7 +50,7 @@ describe("Core prompt composition", () => {
 
   test("plan core contains shared identity", () => {
     expect(PLAN_CORE).toContain("OpenCorvus")
-    expect(PLAN_CORE).toContain("EXPLORE")
+    expect(PLAN_CORE).toContain("VALIDATE")
     expect(PLAN_CORE).toContain("<goals>")
   })
 })

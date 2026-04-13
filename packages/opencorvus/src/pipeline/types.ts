@@ -11,14 +11,14 @@ import type { ExecutorAdapter } from "@/executor/compat"
 import type { DecisionLog } from "@/decision-log"
 
 // ---------------------------------------------------------------------------
-// Goal Contract — the ONLY interface between Decompose and Pipeline.
+// Goal Contract — the ONLY interface between Requirements and Pipeline.
 //
 // Invariants (from architecture spec):
-// ① Decompose Agent is the sole producer, GoalPipeline is the sole consumer.
+// ① Requirements Agent is the sole producer, GoalPipeline is the sole consumer.
 // ② DB mapping is lossless: each field gets its own column, no compression.
 // ③ done_definition must be executable/judgeable by Eval Agent.
 // ④ owned_paths is the hard write boundary for Executor.
-// ⑤ Contract is immutable once created. Only re-decompose can change it.
+// ⑤ Contract is immutable once created. Only re-running requirements can change it.
 // ---------------------------------------------------------------------------
 
 export interface GoalContractFields {
@@ -42,7 +42,7 @@ export interface GoalContractFields {
   requirement_ids: string[]
   /**
    * Interfaces this goal EXPORTS for dependent goals.
-   * Declared at decompose time so dependents can code against them before this goal completes.
+   * Declared at requirements time so dependents can code against them before this goal completes.
    * Example: ["getStocks(): Stock[]", "type Stock = { id: string; name: string; price: number }"]
    */
   exports: string[]
@@ -58,7 +58,7 @@ export interface GoalContractFields {
  * Contains the contract fields + runtime context (run, task, plan, sibling goals).
  */
 export interface GoalContract {
-  /** The goal contract fields (from Decompose Agent → DB → Pipeline). */
+  /** The goal contract fields (from Requirements Agent → DB → Pipeline). */
   goal: GoalContractFields & Record<string, unknown>
   /** The plan node for this goal (may be empty if per-goal planner hasn't run yet). */
   planNode: PlanNodeRow | null

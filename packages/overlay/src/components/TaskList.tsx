@@ -101,7 +101,35 @@ function DeleteButton(props: { id: string; onDelete: (id: string) => void }) {
   );
 }
 
+// ── CancelButton (SVG) ──
+// Stop / abort an in-flight task. Distinct from delete: cancel transitions
+// the task to status="cancelled" but keeps its history; delete removes the
+// row entirely. Surfaced only on active/queued rows.
+function CancelButton(props: { id: string; onCancel: (id: string) => void }) {
+  return (
+    <button
+      type="button"
+      class="task-row-cancel"
+      data-task-cancel={props.id}
+      title={t("common.cancel")}
+      aria-label={t("common.cancel")}
+      onClick={(e) => {
+        e.stopPropagation();
+        props.onCancel(props.id);
+      }}
+    >
+      <span class="task-row-cancel-icon" aria-hidden="true">
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+          <rect x="4.5" y="4.5" width="7" height="7" rx="1" stroke="currentColor" stroke-width="1.3" />
+        </svg>
+      </span>
+    </button>
+  );
+}
+
 // ── TaskRow ──
+
+const ACTIVE_STATUSES = new Set(["active", "queued", "running", "executing"]);
 
 function TaskRow(props: {
   item: any;
@@ -109,6 +137,7 @@ function TaskRow(props: {
   queuePos?: number;
   onSelectTask: (id: string) => void;
   onDeleteTask?: (id: string) => void;
+  onCancelTask?: (id: string) => void;
 }) {
   const id = () => props.item?.task?.id || "";
   const pending = () => props.item?._pending === true;
@@ -142,6 +171,9 @@ function TaskRow(props: {
         </span>
         <small>{taskListMeta(props.item)}</small>
       </button>
+      <Show when={!!id() && !!props.onCancelTask && ACTIVE_STATUSES.has(status())}>
+        <CancelButton id={id()} onCancel={props.onCancelTask!} />
+      </Show>
       <Show when={!!id() && !!props.onDeleteTask}>
         <DeleteButton id={id()} onDelete={props.onDeleteTask!} />
       </Show>
@@ -158,6 +190,7 @@ function TaskSection(props: {
   queuePositions?: Map<string, number>;
   onSelectTask: (id: string) => void;
   onDeleteTask?: (id: string) => void;
+  onCancelTask?: (id: string) => void;
 }) {
   return (
     <Show when={props.items.length > 0}>
@@ -172,6 +205,7 @@ function TaskSection(props: {
                 queuePos={props.queuePositions?.get(item?.task?.id || "")}
                 onSelectTask={props.onSelectTask}
                 onDeleteTask={props.onDeleteTask}
+                onCancelTask={props.onCancelTask}
               />
             )}
           </For>
@@ -188,6 +222,8 @@ export interface TaskListProps {
   onSelectTask: (taskID: string) => void;
   /** Optional: called when the user clicks the delete button on a task row. */
   onDeleteTask?: (taskID: string) => void;
+  /** Optional: called when the user clicks the cancel button (active rows only). */
+  onCancelTask?: (taskID: string) => void;
 }
 
 export function TaskList(props: TaskListProps) {
@@ -236,6 +272,7 @@ export function TaskList(props: TaskListProps) {
           queuePositions={queuePositions()}
           onSelectTask={props.onSelectTask}
           onDeleteTask={props.onDeleteTask}
+          onCancelTask={props.onCancelTask}
         />
         <TaskSection
           label={t("task.group.recent")}
@@ -243,6 +280,7 @@ export function TaskList(props: TaskListProps) {
           selectedTaskID={selectedID()}
           onSelectTask={props.onSelectTask}
           onDeleteTask={props.onDeleteTask}
+          onCancelTask={props.onCancelTask}
         />
       </Show>
     </div>

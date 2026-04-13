@@ -12,9 +12,10 @@
  *   - Step content comes from agentCards() (real-time message stream)
  */
 import { For, Show, createMemo, JSX } from "solid-js";
-import { MessageView } from "./MessageView";
+import { CardParts } from "./CardParts";
 import { t } from "../utils/i18n";
-import { agentCardExpanded, toggleAgentCardExpanded } from "../store/conversation-ui";
+import { cardExpanded, toggleCard } from "../store/conversation-ui";
+import { orderedMessageParts } from "../utils/message";
 
 // ── Types ──
 
@@ -267,7 +268,7 @@ function StepRow(props: {
           <Show when={hasMessages()}>
             <div class="gwg-step-messages">
               <For each={props.messages}>
-                {(msg) => <MessageView message={msg} />}
+                {(msg) => <CardParts parts={orderedMessageParts(msg)} depth={1} />}
               </For>
             </div>
           </Show>
@@ -280,19 +281,15 @@ function StepRow(props: {
 // ── Main GoalWorkflowGroup ──
 
 export function GoalWorkflowGroup(props: GoalWorkflowGroupProps) {
-  // "active" means running or failed — both warrant the card being open.
-  const active = () =>
-    props.goal.goalStatus === "running" || props.goal.goalStatus === "failed";
-
-  // Use the same store-based mechanism as AgentCard so that:
-  //   • Cards default to open; manual overrides are remembered within the same phase.
-  //   • Manual overrides are remembered only within the same active/inactive phase;
-  //     a state transition (e.g. failed → running retry) resets to the protocol default.
+  // Default expanded when active (running/failed); manual overrides discarded
+  // on goalStatus transitions via the unified card-fold store.
   // Key is namespaced with "gwg:" so it never collides with conversation-panel keys.
   const cardKey = () => `gwg:${props.goal.goalID}`;
-  const expanded = () =>
-    props.defaultOpen ?? agentCardExpanded(cardKey(), active());
-  const toggle = () => toggleAgentCardExpanded(cardKey(), active());
+  const status = () => props.goal.goalStatus;
+  const defaultOpen = () =>
+    props.defaultOpen ?? (status() === "running" || status() === "failed");
+  const expanded = () => cardExpanded(cardKey(), status(), defaultOpen());
+  const toggle = () => toggleCard(cardKey(), status(), defaultOpen());
 
   return (
     <div

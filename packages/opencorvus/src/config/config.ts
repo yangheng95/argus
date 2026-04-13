@@ -1160,7 +1160,7 @@ export namespace Config {
         .optional(),
       assistant: z
         .object({
-          decompose: z
+          requirements: z
             .object({
               max_steps: z.number().int().min(1).optional().describe("Maximum agentic steps for requirements agent (default: 30)"),
               timeout_ms: z.number().int().min(1000).optional().describe("Requirements agent timeout in milliseconds (default: 300000)"),
@@ -1246,7 +1246,7 @@ export namespace Config {
             .describe("Custom workflow definitions. Override built-in workflows by matching ID."),
         })
         .optional()
-        .describe("Assistant agent configuration — controls decompose, planner, evaluator, and delivery agent behavior"),
+        .describe("Assistant agent configuration — controls requirements, planner, evaluator, and delivery agent behavior"),
       experimental: z
         .object({
           disable_paste_summary: z.boolean().optional(),

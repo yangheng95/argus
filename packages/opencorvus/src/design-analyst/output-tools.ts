@@ -1,7 +1,7 @@
 /**
  * Structured output tools for the Design Analyst Agent.
  *
- * Same pattern as decompose/output-tools.ts — the LLM registers each design
+ * Same pattern as requirements/output-tools.ts — the LLM registers each design
  * element via a Zod-validated tool call. Benefits:
  *
  * ① Schema validation per call — required fields, enums, min lengths enforced

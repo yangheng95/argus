@@ -1,6 +1,6 @@
 // ── TaskDetailOverlay (Phase 6) ──
 // Full-screen drawer that slides in over the Gateway view when the user
-// opens a task (via Gateway message chip or right-side TaskDrawer).
+// opens a task (via Gateway message chip or the TaskListPane).
 //
 // Composes the existing <Board> component to show the task's pipeline panels
 // (workflow / requirements / architect / criteria / deliveries). Closing the
@@ -8,6 +8,7 @@
 
 import { Show, createEffect, onCleanup, createSignal } from "solid-js";
 import { Board } from "./Board";
+import { Conversation } from "./Conversation";
 import { selectTask } from "../services/task";
 import { messageStore } from "../store/messages";
 
@@ -55,12 +56,29 @@ export function TaskDetailOverlay(props: TaskDetailOverlayProps) {
           <span class="task-overlay-loading">loading…</span>
         </Show>
       </div>
-      <div class="task-overlay-body">
-        {/* Board renders the goals / pipeline panels for whatever task is
-            selectedTaskID in the messageStore. selectTask above keeps the
-            two in sync. */}
-        <Board />
+      <div class="task-overlay-body task-overlay-body-split">
+        <div class="task-overlay-board">
+          {/* Board renders the goals / pipeline panels for whatever task is
+              selectedTaskID in the messageStore. selectTask above keeps the
+              two in sync. */}
+          <Board />
+        </div>
+        <ConversationPane />
       </div>
+    </div>
+  );
+}
+
+// Conversation needs a host container reference for autoscroll, but JSX ref
+// runs after the parent mounts. Wrap it so the container resolves before the
+// child component renders.
+function ConversationPane() {
+  const [host, setHost] = createSignal<HTMLDivElement>();
+  return (
+    <div class="task-overlay-conversation chat-scroll" ref={setHost}>
+      <Show when={host()}>
+        <Conversation container={host()!} />
+      </Show>
     </div>
   );
 }

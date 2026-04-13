@@ -140,7 +140,7 @@ export function OrchestrationPanel() {
         <h3 class="orch-section-title">{t("orchestration.agent_config")}</h3>
 
         <AgentConfigCard
-          name="decompose"
+          name="requirements"
           label={t("orchestration.agent_requirements")}
           fields={[
             { key: "max_steps", label: "Max Steps", type: "number" },

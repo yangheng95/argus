@@ -82,7 +82,6 @@ export namespace PromptCatalog {
         return PROMPT_GENERATE
       case "spec_system":
       case "goal_system":
-      case "decompose_system":
       case "requirements_system": {
         const { REQUIREMENTS_SYSTEM } = await import("@/requirements")
         return REQUIREMENTS_SYSTEM

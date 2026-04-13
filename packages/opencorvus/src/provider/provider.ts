@@ -502,6 +502,9 @@ export namespace Provider {
       const candidates = isDashScope ? [...provider.env, ...dashscopeCommonKeys] : provider.env
       const apiKey = candidates.map((item) => env[item]?.trim()).find(Boolean)
       if (!apiKey) continue
+      // When the provider declares more than one env candidate (e.g. ["AZURE_KEY", "OPENAI_KEY"]),
+      // we cannot guess which one carries the active credential. Leave key unset and let the SDK pick.
+      if (!isDashScope && provider.env.length > 1) continue
       mergeProvider(providerID, {
         source: "env",
         key: apiKey,
@@ -983,7 +986,8 @@ export namespace Provider {
       return { providerID: entry.providerID, modelID: entry.modelID }
     }
 
-    const provider = objectValues(providers).find((p) => !cfg.provider || Object.keys(cfg.provider).includes(p.id))
+    const configured = cfg.provider && Object.keys(cfg.provider).length > 0 ? Object.keys(cfg.provider) : null
+    const provider = objectValues(providers).find((p) => !configured || configured.includes(p.id))
     if (!provider)
       throw new ModelNotFoundError({
         providerID: "",

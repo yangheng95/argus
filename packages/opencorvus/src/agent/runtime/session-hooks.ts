@@ -1,27 +1,16 @@
 /**
  * Session stream hooks — route AI SDK onChunk events into the session/message
- * persistence layer. Replaces the old `src/orchestrator/session-stream.ts`
- * implementation (which is now a thin re-export wrapper).
+ * persistence layer.
  *
- * Behavioural changes vs. the old implementation:
- *
+ * Invariants:
  *   - tool-call `chunk.input` is normalized at the protocol boundary
- *     (`protocol-norm.ts`). A non-object that cannot be JSON-decoded to an
- *     object no longer throws inside Zod — it is persisted as an explicit
- *     `status: "error"` tool part, and recorded in the failure tracker.
- *     This makes the overlay show the failure and lets AgentRuntime fail
- *     the run instead of silently looping.
- *
- *   - Every thrown exception inside an onChunk handler is recorded on the
- *     tracker rather than swallowed into a WARN log. The try/catch is still
- *     there so one bad chunk does not take down the whole stream, but the
- *     agent sees the failure at the end via `.failures.snapshot()`.
- *
- *   - The hook object now exposes `.failures.snapshot()` so AgentRuntime can
- *     honour its `failurePolicy` setting.
- *
- *   - Per-chunk progress/alive signalling is delegated to a ProgressGuard
- *     when one is supplied — see `AgentRuntime.run`.
+ *     (`protocol-norm.ts`); non-decodable input is persisted as a
+ *     `status: "error"` tool part and recorded in the failure tracker.
+ *   - Exceptions inside an onChunk handler are recorded on the tracker;
+ *     the surrounding try/catch keeps one bad chunk from taking down the
+ *     whole stream, and AgentRuntime inspects `.failures.snapshot()` at end.
+ *   - When a `ProgressGuard` is supplied, per-chunk alive/progress signalling
+ *     is delegated to it — see `AgentRuntime.run`.
  */
 import type { TextHooks } from "@/llm/api"
 import { Session } from "@/session"

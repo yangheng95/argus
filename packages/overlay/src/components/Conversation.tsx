@@ -31,7 +31,14 @@ export function Conversation(props: { container: HTMLElement }) {
   return (
     <>
       <Show when={items().length === 0}>
-        <div class="chat-empty">{emptyText()}</div>
+        <div class="chat-empty">
+          <svg class="chat-empty-icon" width="40" height="40" viewBox="0 0 40 40" fill="none" aria-hidden="true">
+            <rect x="4" y="5" width="32" height="22" rx="3.5" stroke="currentColor" stroke-width="1.6"/>
+            <path d="M4 27l7-6h22l7 6" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+            <path d="M13 15h14M13 19.5h10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+          </svg>
+          <span class="chat-empty-text">{emptyText()}</span>
+        </div>
       </Show>
       <For each={tree()}>{(node) => <Card node={node} depth={0} />}</For>
     </>

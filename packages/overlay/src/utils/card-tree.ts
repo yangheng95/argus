@@ -163,14 +163,14 @@ function stepTitle(stage: string, step?: { label?: string }): string {
 // ── Conversion entry points ──
 
 function goalToNode(item: any): CardNode {
-  const cardID = String(item._agentCardKey || item.info?.id || "goal");
-  const status = normStatus(item._agentStatus) ?? "pending";
-  const goalStatus = normGoalStatus(item._agentGoalStatus);
-  const steps = Array.isArray(item._agentGoalSteps) ? item._agentGoalSteps : [];
+  const cardID = String(item.id || "goal");
+  const status = normStatus(item.status) ?? "pending";
+  const goalStatus = normGoalStatus(item.goalStatus);
+  const steps = Array.isArray(item.goalSteps) ? item.goalSteps : [];
 
   const internalByStage = new Map<string, any>();
-  for (const c of item._agentInternalCards || []) {
-    if (c?._agentStage) internalByStage.set(String(c._agentStage), c);
+  for (const c of item.internalCards || []) {
+    if (c?.stage) internalByStage.set(String(c.stage), c);
   }
 
   const children: CardNode[] = [];
@@ -180,7 +180,7 @@ function goalToNode(item: any): CardNode {
       const stage = stepIDToStage(step.stepID);
       const internal = internalByStage.get(stage);
       const stepStatus =
-        normStatus(internal?._agentStatus) ?? normStatus(step.status) ?? "pending";
+        normStatus(internal?.status) ?? normStatus(step.status) ?? "pending";
       children.push({
         id: `${cardID}:step:${step.stepID}`,
         kind: "step",
@@ -188,28 +188,27 @@ function goalToNode(item: any): CardNode {
         status: stepStatus,
         title: stepTitle(stage, step),
         subtitle: step.summary || undefined,
-        parts: flattenMessages(internal?._agentMessages || []),
+        parts: flattenMessages(internal?.messages || []),
         children: [],
       });
     }
   } else {
-    // Fallback: no workflow step metadata — sort internal cards in canonical
-    // order and render each as a step.
-    const sorted = (item._agentInternalCards || []).slice().sort(
+    // No workflow step metadata — sort internal cards into canonical order.
+    const sorted = (item.internalCards || []).slice().sort(
       (a: any, b: any) =>
-        STEP_ORDER.indexOf(String(a._agentStage)) -
-        STEP_ORDER.indexOf(String(b._agentStage)),
+        STEP_ORDER.indexOf(String(a.stage)) -
+        STEP_ORDER.indexOf(String(b.stage)),
     );
     for (const c of sorted) {
-      const stage = String(c._agentStage || "");
-      const st = normStatus(c._agentStatus) ?? "pending";
+      const stage = String(c.stage || "");
+      const st = normStatus(c.status) ?? "pending";
       children.push({
-        id: String(c._agentCardKey || `${cardID}:step:${stage}`),
+        id: String(c.id || `${cardID}:step:${stage}`),
         kind: "step",
         stage,
         status: st,
         title: agentStageLabel(stage),
-        parts: flattenMessages(c._agentMessages || []),
+        parts: flattenMessages(c.messages || []),
         children: [],
       });
     }
@@ -220,23 +219,23 @@ function goalToNode(item: any): CardNode {
     kind: "goal",
     stage: "goal",
     status: goalStatus ?? status,
-    title: String(item._agentGoalTitle || "Goal"),
+    title: String(item.goalTitle || "Goal"),
     subtitle: cardID.length > 8 ? cardID.slice(-8) : undefined,
-    round: Number(item._agentRound) || 0,
-    goalDescription: item._agentGoalDescription || undefined,
-    contracts: Array.isArray(item._agentContracts) ? item._agentContracts : undefined,
+    round: Number(item.round) || 0,
+    goalDescription: item.goalDescription || undefined,
+    contracts: Array.isArray(item.contracts) ? item.contracts : undefined,
     steps: steps.length > 0 ? steps : undefined,
     parts: [],
     children,
-    time: Number(item?.info?.time?.created) || undefined,
+    time: Number(item.time) || undefined,
   };
 }
 
 function agentCardToNode(item: any): CardNode {
-  const stage = String(item._agentStage || "assistant");
-  const cardID = String(item._agentCardKey || item.info?.id || `agent:${stage}`);
-  const status = normStatus(item._agentStatus) ?? "pending";
-  const messages = item._agentMessages || [];
+  const stage = String(item.stage || "assistant");
+  const cardID = String(item.id || `agent:${stage}`);
+  const status = normStatus(item.status) ?? "pending";
+  const messages = item.messages || [];
   return {
     id: cardID,
     kind: "agent",
@@ -244,10 +243,10 @@ function agentCardToNode(item: any): CardNode {
     stage,
     status,
     title: agentStageLabel(stage),
-    round: Number(item._agentRound) || 0,
+    round: Number(item.round) || 0,
     parts: flattenMessages(messages),
     children: [],
-    time: Number(item?.info?.time?.created) || undefined,
+    time: Number(item.time) || undefined,
   };
 }
 
@@ -273,14 +272,15 @@ function messageToNode(item: any): CardNode {
 }
 
 /** Build the full card tree from conversation items (the output of
- *  conversationMessages()). The order of `items` is preserved. */
+ *  conversationMessages()). The order of `items` is preserved.
+ *  Items are either AgentCardData (kind="agent"|"goal") or raw Message. */
 export function toCardTree(items: any[]): CardNode[] {
   const tree: CardNode[] = [];
   for (const item of items || []) {
     if (!item) continue;
-    if (item._agentGoalGroup) {
+    if (item.kind === "goal") {
       tree.push(goalToNode(item));
-    } else if (item._agentCard && (item._agentMessages || []).length > 0) {
+    } else if (item.kind === "agent" && (item.messages || []).length > 0) {
       tree.push(agentCardToNode(item));
     } else {
       tree.push(messageToNode(item));

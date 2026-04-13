@@ -8,7 +8,7 @@
  * - Carries WHY (reason), not just WHAT (value).
  *
  * Lifecycle:
- * 1. Decompose Agent seeds: runtime, stack, frontend, test framework.
+ * 1. Requirements Agent seeds: runtime, stack, frontend, test framework.
  * 2. Per-goal Eval Agent appends: discovered API contracts, DB paths, test commands.
  * 3. Subsequent goal Planners read: avoid re-discovering known decisions.
  */
@@ -45,7 +45,7 @@ export interface DecisionLogWriter {
 export interface DecisionLogReader {
   /** Read all decisions for this task, ordered by creation time. */
   read(): DecisionEntry[]
-  /** Read all decisions for a specific phase (e.g., "architect", "decompose"). */
+  /** Read all decisions for a specific phase (e.g., "architect", "requirements"). */
   readByPhase(phase: string): DecisionEntry[]
   /** Read the latest decision for a specific key. */
   readByKey(key: string): DecisionEntry | undefined

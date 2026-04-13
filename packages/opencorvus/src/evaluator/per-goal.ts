@@ -481,7 +481,7 @@ export async function evaluateGoal(input: {
  * Locate a visual reference image for a goal. Looks at goal.metadata.visual
  * (caller-supplied absolute path) first, then falls back to scanning the
  * task's attachment store via metadata.visual_attachment_sha when the
- * decompose agent tagged a reference attachment for this specific goal.
+ * requirements agent tagged a reference attachment for this specific goal.
  *
  * Returns an absolute filesystem path or undefined when the goal has no
  * visual reference (most goals don't — only fig2code-style work does).

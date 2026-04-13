@@ -8,7 +8,7 @@
  * From SVG spec:
  *   Observation domain:
  *   • user ORIGINAL input
- *   • compiled goal draft (from Decompose Agent)
+ *   • compiled goal draft (from Requirements Agent)
  *   • (no tools — pure LLM verification pass)
  *   • auto-correction: modify / split / add missing goals
  */

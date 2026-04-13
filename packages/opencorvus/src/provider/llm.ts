@@ -4,7 +4,7 @@
  * Two entry points:
  *
  * 1. `ProviderLLM.stream()` — agent-level streamText with full provider
- *    adaptation.  Used by task-agent, decompose, architect, planner.
+ *    adaptation.  Used by task-agent, requirements, architect, planner.
  *
  * 2. `ProviderLLM.wrapModel()` / `ProviderLLM.baseHeaders()` — low-level
  *    helpers reused by session/llm.ts which needs its own streamText call

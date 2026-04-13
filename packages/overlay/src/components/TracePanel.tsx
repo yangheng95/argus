@@ -67,7 +67,7 @@ export function TracePanel(props: TracePanelProps) {
   createEffect(() => {
     const taskID = props.taskID;
     setEvents([]);
-    setExpanded(new Set());
+    setExpanded(new Set<number>());
     if (!taskID) {
       setStatus("idle");
       return;

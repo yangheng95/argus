@@ -1,30 +1,12 @@
 /**
  * Architect Agent types — cross-goal coordination contracts.
  *
- * The Architect Agent sits between Decompose and Plan:
+ * The Architect Agent sits between Requirements and Plan:
  * - Reads ALL GoalContracts (full set, not per-goal)
  * - Resolves abstract exports/imports into precise contracts
  * - Writes binding consensus to Decision Log
  * - Outputs ArchitectBlueprint for Planner context injection
  */
-
-// ---------------------------------------------------------------------------
-// RecommendedNext — every sub-agent outputs call recommendations
-// ---------------------------------------------------------------------------
-
-/** A recommendation from a sub-agent for what the Task Agent should do next. */
-export interface RecommendedNext {
-  /** Target agent/tool name. */
-  agent: string
-  /** Arguments to pass (e.g., { goalID: "..." }). */
-  args?: Record<string, unknown>
-  /** Why this is recommended. */
-  reason: string
-  /** 0-1 confidence score. */
-  confidence: number
-  /** How strongly the agent recommends this action. */
-  priority: "required" | "suggested" | "optional"
-}
 
 // ---------------------------------------------------------------------------
 // Architect Decision Log key categories
@@ -74,6 +56,4 @@ export interface ArchitectResult {
   blueprint: ArchitectBlueprint
   /** Number of Decision Log entries written. */
   entriesWritten: number
-  /** Recommended next actions for Task Agent. */
-  recommendedNext: RecommendedNext[]
 }

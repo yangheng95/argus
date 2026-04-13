@@ -412,9 +412,9 @@ export function Board(props: BoardProps) {
     for (const cardID of order) {
       const card = cards[cardID];
       if (!card) continue;
-      const stage: string = card._agentStage || "";
+      const stage: string = card.stage || "";
       if (stage === "spec" || stage === "goal") {
-        const m = Array.isArray(card._agentMessages) ? card._agentMessages : [];
+        const m = Array.isArray((card as any).messages) ? (card as any).messages : [];
         msgs.push(...m);
       }
     }
@@ -438,17 +438,19 @@ export function Board(props: BoardProps) {
     for (const cardID of order) {
       const card = cards[cardID];
       if (!card) continue;
-      const stage: string = card._agentStage || "";
+      const stage: string = card.stage || "";
       const stepID = STAGE_TO_STEP[stage];
       if (!stepID) continue;
 
-      // Try to extract goalID from card metadata or session mapping
-      const goalID: string | undefined = card._agentGoalID;
+      // goalID only exists on kind="goal" cards; stage cards (kind="agent")
+      // never carry it. This branch was dead by construction in the legacy
+      // schema and remains so under the typed AgentCardData union.
+      const goalID = card.kind === "goal" ? card.goalID : undefined;
       if (!goalID) continue;
 
       if (!result[goalID]) result[goalID] = {};
       if (!result[goalID][stepID]) result[goalID][stepID] = [];
-      const msgs = Array.isArray(card._agentMessages) ? card._agentMessages : [];
+      const msgs = Array.isArray((card as any).messages) ? (card as any).messages : [];
       result[goalID][stepID].push(...msgs);
     }
     return result;

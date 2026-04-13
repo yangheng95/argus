@@ -19,7 +19,7 @@ The output must be self-contained, opinionated, and grounded in real research �
 - The user describes a product, feature, MVP, or system at a high level (one sentence to one paragraph).
 - The user asks for "PRD", "spec", "design doc", "需求文档", "规格说明", "设计方案", "立项".
 - The request mentions "research", "investigate", "调研", "竞品", "选型", "best practice".
-- A downstream stage (decompose / architect / executor) is about to begin and there is no concrete spec yet.
+- A downstream stage (requirements / architect / executor) is about to begin and there is no concrete spec yet.
 
 ## When NOT to Activate
 
@@ -282,7 +282,7 @@ DECISION db = sqlite via bun:sqlite — zero-ops, fits single-tenant scope (B11/
 …
 ```
 
-These lines live at the bottom of `docs/SPEC.md` under a `## Decisions` heading and mirror the per-decision ADRs in `docs/adr/`. Their purpose: the decompose / architect / evaluator stages can grep them without having to re-parse the full spec.
+These lines live at the bottom of `docs/SPEC.md` under a `## Decisions` heading and mirror the per-decision ADRs in `docs/adr/`. Their purpose: the requirements / architect / evaluator stages can grep them without having to re-parse the full spec.
 
 ---
 

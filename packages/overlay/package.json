@@ -19,7 +19,7 @@
     "vite-plugin-solid": "^2"
   },
   "dependencies": {
-    "@opencorvus-ai/plugin": "workspace:*",
+    "@opencorvus-ai/plugin": "0.0.1",
     "highlight.js": "^11.11.1",
     "marked": "^17.0.1",
     "solid-js": "^1"

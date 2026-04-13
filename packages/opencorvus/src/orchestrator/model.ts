@@ -207,7 +207,7 @@ export const TaskAttachmentInput = z.object({
 /**
  * Persisted attachment reference. Once the bytes live in AttachmentStore
  * (`<projectDir>/.opencorvus/attachments/<sha>.<ext>`), every downstream layer
- * — queue table row, task loop, task-agent, design-analyst, decompose — only
+ * — queue table row, task loop, task-agent, design-analyst, requirements — only
  * carries this small, URL-addressable reference. Agents that need the raw
  * bytes for multimodal LLM input read them back through AttachmentStore.
  *
@@ -281,7 +281,7 @@ export const Task = z.object({
   request: z.string(),
   status: z.enum(["queued", "active", "completed", "failed", "cancelled"]),
   priority: z.enum(["critical", "high", "normal", "low"]),
-  /** "workflow" — runs the full decompose→design→architect→execute→deliver pipeline.
+  /** "workflow" — runs the full requirements→design→architect→execute→deliver pipeline.
    *  "build" — bypasses the pipeline and runs the build agent directly. Used by
    *  Gateway for one-shot edits / Q&A / quick fixes. Both kinds share the same
    *  task table and queue, so cancel/list/audit are uniform. */

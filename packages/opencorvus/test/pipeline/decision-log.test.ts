@@ -38,7 +38,7 @@ describe("DecisionLog", () => {
       id: "dlog_test",
       taskID: "task_1",
       goalID: null,
-      phase: "decompose",
+      phase: "requirements",
       key: "runtime",
       value: "Bun",
       reason: "PRD specifies Bun as runtime",

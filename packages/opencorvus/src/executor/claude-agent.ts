@@ -104,7 +104,11 @@ export namespace ClaudeAgentExecutor {
   export function createSdk(executablePath?: string): CodingProvider {
     return create({
       run(input) {
-        const mode = permissionMode()
+        // Read-only planning runs (no tools, read-only sandbox) force "plan" mode
+        // regardless of OPENCORVUS_EXECUTOR_CLAUDE_PERMISSION_MODE override.
+        const mode = input.toolMode === "none" && input.sandbox === "read-only"
+          ? "plan"
+          : permissionMode()
         const allowed = input.toolMode === "none"
           ? []
           : split(process.env.OPENCORVUS_EXECUTOR_CLAUDE_ALLOWED_TOOLS)
