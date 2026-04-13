@@ -92,8 +92,7 @@ function buildUserContextMessages(): any[] {
       isAutoReplied(interaction);
     if (isAutoPermission) continue;
 
-    const isPlannerClarification = interaction.payload?.planner_clarification === true;
-    const interactionRole = isPlannerClarification ? "planner" : "system";
+    const interactionRole = "system";
 
     const rawRequestTime = interaction.time?.created;
     const requestTime = (Number.isFinite(rawRequestTime) && rawRequestTime)
@@ -111,7 +110,7 @@ function buildUserContextMessages(): any[] {
         ? Number(rawResolvedTime)
         : Date.now();
       const response = syntheticTextMessage(
-        isPlannerClarification ? "user" : "system",
+        "system",
         resolvedTime,
         interactionResponseText(interaction),
       );

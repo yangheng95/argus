@@ -59,7 +59,8 @@ import {
 import { mergeTaskChecks, writeTaskChecks } from "./checks"
 import { GoalService } from "./goal-service"
 import { OrchestratorInteraction } from "./interaction"
-import { AutoReply } from "./auto-reply"
+import { AutoPermission } from "./auto-permission"
+import { subscribeGatewayNotifier } from "@/gateway"
 import { OrchestratorRuntime } from "./runtime"
 import { hooks, updateRun, updateTask } from "./state"
 import { persistQueuedTask, abortTaskPipeline, awaitPipelineSettled } from "./pipeline"
@@ -346,7 +347,11 @@ export namespace OrchestratorService {
     const current = orchestratorState()
     if (!current.booted) {
       OrchestratorInteraction.subscribe(hooks())
-      AutoReply.subscribe()
+      AutoPermission.subscribe()
+      // Gateway notifier owns Question routing: render to gateway dialog when
+      // the task has a gateway session attached, fall through to LLM auto-reply
+      // when unattended, otherwise let the question time out (no fallback).
+      subscribeGatewayNotifier()
       current.booted = true
     }
     // Monitor active runs (executor status) — no pipeline advancement.
@@ -407,7 +412,9 @@ export namespace OrchestratorService {
     const title = input.title?.trim() || deriveTitle(input.request)
     const executor = input.executor ?? "opencode"
     if (executor !== "opencode" && !ExecutorRegistry.has(executor)) {
-      await ExecutorBootstrap.autoRegister(true).catch(() => undefined)
+      await ExecutorBootstrap.autoRegister(true).catch((err) => {
+        log.warn("executor autoRegister failed", { executor, error: String(err) })
+      })
     }
     ExecutorRegistry.require(executor)
     const session = await Session.create({ title })
@@ -430,7 +437,10 @@ export namespace OrchestratorService {
     //
     // Honor caller-provided _workflow if present (e.g. tests, replay), else
     // initialize to the configured default workflow's pending state.
-    if (!metadata._workflow) {
+    //
+    // `kind === "build"` skips this entirely — build tasks bypass the
+    // workflow pipeline so seeding state would lie about what's running.
+    if (input.kind !== "build" && !metadata._workflow) {
       const defaultID = await WorkflowRegistry.defaultID()
       const defaultWorkflow =
         (await WorkflowRegistry.resolve(defaultID)) ??
@@ -516,7 +526,7 @@ export namespace OrchestratorService {
         request: input.request,
         attachments: attachmentRefs.length ? attachmentRefs : undefined,
         requestID, source: input.source,
-        priority: input.priority, budget: input.budget, metadata,
+        priority: input.priority, kind: input.kind, budget: input.budget, metadata,
         channelBinding: input.channelBinding, milestones: input.milestones,
         goals: input.goals, routing: input.routing,
         projectID: Instance.project.id,
@@ -870,11 +880,6 @@ export namespace OrchestratorService {
     if (row.request_type === "question") {
       const answers = input.answers ?? answersFromMessage(input.message)
       if (!answers) throw new Error("answers or message are required for question replies")
-      // Legacy planner clarifications are no longer supported — the Task Agent
-      // handles all planning decisions directly.
-      if (row.payload?.planner_clarification === true) {
-        throw new Error("Planner clarifications are no longer supported in the new architecture")
-      }
       await Question.reply({
         requestID: row.external_id,
         answers,
@@ -900,9 +905,6 @@ export namespace OrchestratorService {
       })
     }
     if (row.request_type === "question") {
-      if (row.payload?.planner_clarification === true) {
-        throw new Error("Planner clarifications are no longer supported in the new architecture")
-      }
       await Question.reject(row.external_id)
     }
     await OrchestratorRuntime.syncTask(row.task_id, hooks())
@@ -1008,11 +1010,6 @@ export namespace OrchestratorService {
     return viewTask(requireTask(taskID))
   }
 
-  /** @deprecated Replan is no longer supported. Use retryTask instead. */
-  export async function replanTask(taskID: string) {
-    return retryTask(taskID)
-  }
-
   export async function recordOperatorNote(taskID: string, note: string) {
     const task = requireTask(taskID)
     const run = task.active_run_id ? findRun(task.active_run_id) : undefined
@@ -1050,7 +1047,7 @@ export namespace OrchestratorService {
         taskID: task.id,
         trigger: { kind: "retry", runID: nextRunID },
         hooks: hooks(),
-      }).catch(() => {})
+      }).catch((err) => log.error("task loop failed on retry", { taskID: task.id, error: String(err) }))
     })
     return { resumed: true, status: "active" as const }
   }

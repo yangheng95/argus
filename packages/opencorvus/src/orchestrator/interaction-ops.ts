@@ -162,11 +162,6 @@ export async function replyInteraction(interactionID: string, raw: z.input<typeo
   if (row.request_type === "question") {
     const answers = input.answers ?? answersFromMessage(input.message)
     if (!answers) throw new Error("answers or message are required for question replies")
-    // Legacy planner clarifications are no longer supported — the Task Agent
-    // handles all planning decisions directly.
-    if (row.payload?.planner_clarification === true) {
-      throw new Error("Planner clarifications are no longer supported in the new architecture")
-    }
     await Question.reply({
       requestID: row.external_id,
       answers,
@@ -192,9 +187,6 @@ export async function rejectInteraction(interactionID: string, raw?: z.input<typ
     })
   }
   if (row.request_type === "question") {
-    if (row.payload?.planner_clarification === true) {
-      throw new Error("Planner clarifications are no longer supported in the new architecture")
-    }
     await Question.reject(row.external_id)
   }
   await OrchestratorRuntime.syncTask(row.task_id, hooks())
