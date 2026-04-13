@@ -51,7 +51,6 @@ export namespace SessionRetry {
           }
         }
 
-        return RETRY_INITIAL_DELAY * Math.pow(RETRY_BACKOFF_FACTOR, attempt - 1)
       }
     }
 
@@ -69,33 +68,25 @@ export namespace SessionRetry {
     }
 
     const json = iife(() => {
+      if (typeof error.data?.message !== "string") return undefined
       try {
-        if (typeof error.data?.message === "string") {
-          const parsed = JSON.parse(error.data.message)
-          return parsed
-        }
-
         return JSON.parse(error.data.message)
       } catch {
         return undefined
       }
     })
-    try {
-      if (!json || typeof json !== "object") return undefined
-      const code = typeof json.code === "string" ? json.code : ""
+    if (!json || typeof json !== "object") return undefined
+    const code = typeof json.code === "string" ? json.code : ""
 
-      if (json.type === "error" && json.error?.type === "too_many_requests") {
-        return "Too Many Requests"
-      }
-      if (code.includes("exhausted") || code.includes("unavailable")) {
-        return "Provider is overloaded"
-      }
-      if (json.type === "error" && json.error?.code?.includes("rate_limit")) {
-        return "Rate Limited"
-      }
-      return JSON.stringify(json)
-    } catch {
-      return undefined
+    if (json.type === "error" && json.error?.type === "too_many_requests") {
+      return "Too Many Requests"
     }
+    if (code.includes("exhausted") || code.includes("unavailable")) {
+      return "Provider is overloaded"
+    }
+    if (json.type === "error" && json.error?.code?.includes("rate_limit")) {
+      return "Rate Limited"
+    }
+    return JSON.stringify(json)
   }
 }
