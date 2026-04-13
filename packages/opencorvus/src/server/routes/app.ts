@@ -35,6 +35,7 @@ import { PanelKnowledgeRoutes } from "./panel-knowledge"
 import { ControlRoutes } from "./control"
 import { CodingRoutes } from "./coding"
 import { AttachmentRoutes } from "./attachment"
+import { TraceRoutes } from "./trace"
 
 const log = Log.create({ service: "server" })
 
@@ -81,6 +82,7 @@ export function AppRoutes(root: Hono) {
     .route("/export", ExportRoutes())
     .route("/", FileRoutes())
     .route("/attachment", AttachmentRoutes())
+    .route("/trace", TraceRoutes())
     .route("/mcp", McpRoutes())
     .route("/tui", TuiRoutes())
     .post(
