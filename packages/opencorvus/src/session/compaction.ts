@@ -116,7 +116,6 @@ export namespace SessionCompaction {
       role: "assistant",
       parentID: input.parentID,
       sessionID: input.sessionID,
-      mode: "compaction",
       agent: "compaction",
       variant: userMessage.variant,
       summary: true,

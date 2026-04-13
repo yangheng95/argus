@@ -81,7 +81,6 @@ export namespace SessionShell {
       id: Identifier.ascending("message"),
       sessionID: input.sessionID,
       parentID: userMsg.id,
-      mode: input.agent,
       agent: input.agent,
       cost: 0,
       path: {

@@ -310,7 +310,6 @@ async function ensureTranscriptState(taskID: string, run: RunRow, sessionID: str
     parentID,
     modelID: run.executor,
     providerID: run.executor,
-    mode: run.executor,
     agent: run.executor,
     path: {
       cwd: Instance.directory,

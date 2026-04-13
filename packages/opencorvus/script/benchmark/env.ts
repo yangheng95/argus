@@ -53,13 +53,11 @@ export function env(...keys: string[]) {
 }
 
 export function prepareDashscopeEnv() {
-  // Keys should be set directly in .env with the exact names models.dev expects:
+  // Keys are read directly from .env with the names models.dev expects:
   //   ALIBABA_CODING_PLAN_API_KEY  (for alibaba-coding-plan / alibaba-coding-plan-cn)
   //   DASHSCOPE_API_KEY            (for alibaba / alibaba-cn)
   // No implicit copying between variable names — each provider reads its own env var.
-  // Legacy aliases are still checked for backward compatibility but no longer copied.
-  const url = env("DASHSCOPE_API_URL", "CODING_DASHSCOPE_API_URL")
-  if (url) process.env.DASHSCOPE_API_URL ??= url
+  // No-op kept as the public surface so callers don't need conditional imports.
 }
 
 /**

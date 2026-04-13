@@ -417,10 +417,6 @@ export namespace Message {
     parentID: z.string(),
     modelID: z.string(),
     providerID: z.string(),
-    /**
-     * @deprecated
-     */
-    mode: z.string(),
     agent: z.string(),
     path: z.object({
       cwd: z.string(),
