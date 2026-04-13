@@ -1,0 +1,21 @@
+{
+  "ok": false,
+  "model": "alibaba-coding-plan-cn/kimi-k2.5",
+  "startedAt": 1776092756777,
+  "finishedAt": 1776092763860,
+  "durationMs": 7083,
+  "server": "http://127.0.0.1:7878/",
+  "projectDir": "C:\\Users\\hengu\\AppData\\Local\\Temp\\gw-bench-proj-MOTccs",
+  "userID": "gw-bench-skj7xlqn",
+  "sessionID": "ses_2789f44d5ffe2ZXcddrDjSibjV",
+  "taskID": "",
+  "steps": [
+    {
+      "name": "enqueue",
+      "passed": false,
+      "durationMs": 7076,
+      "details": {},
+      "error": "Error: expected enqueue_workflow_task call, got []\n    at <anonymous> (D:\\myhexin-local\\argus-opencode\\packages\\opencorvus\\script\\benchmark\\gateway-benchmark.ts:234:17)\n    at async runStep (D:\\myhexin-local\\argus-opencode\\packages\\opencorvus\\script\\benchmark\\gateway-benchmark.ts:193:27)\n    at processTicksAndRejections (native:7:39)"
+    }
+  ]
+}

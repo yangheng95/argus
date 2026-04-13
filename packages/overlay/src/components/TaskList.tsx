@@ -65,42 +65,6 @@ function taskListMeta(item: any): string {
   return joinBullet([stamp(taskUpdated(item)), shortPath(item?.task?.directory || "")]);
 }
 
-// ── DeleteButton (SVG) ──
-
-function DeleteButton(props: { id: string; onDelete: (id: string) => void }) {
-  return (
-    <button
-      type="button"
-      class="task-row-delete"
-      data-task-delete={props.id}
-      title={t("task.delete_button_title")}
-      aria-label={t("task.delete_button_title")}
-      onClick={(e) => {
-        e.stopPropagation();
-        props.onDelete(props.id);
-      }}
-    >
-      <span class="task-row-delete-icon" data-icon="delete" aria-hidden="true">
-        <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-          <path d="M3.5 4.5h9" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" />
-          <path
-            d="M6 4.5V3.6c0-.5.4-.9.9-.9h2.2c.5 0 .9.4.9.9v.9"
-            stroke="currentColor"
-            stroke-width="1.2"
-            stroke-linecap="round"
-          />
-          <path
-            d="M5.2 6.2l.4 5.4c0 .5.4.9.9.9h2.9c.5 0 .9-.4.9-.9l.4-5.4"
-            stroke="currentColor"
-            stroke-width="1.2"
-            stroke-linecap="round"
-          />
-        </svg>
-      </span>
-    </button>
-  );
-}
-
 // ── CancelButton (SVG) ──
 // Stop / abort an in-flight task. Distinct from delete: cancel transitions
 // the task to status="cancelled" but keeps its history; delete removes the
@@ -136,7 +100,6 @@ function TaskRow(props: {
   selectedTaskID: string;
   queuePos?: number;
   onSelectTask: (id: string) => void;
-  onDeleteTask?: (id: string) => void;
   onCancelTask?: (id: string) => void;
 }) {
   const id = () => props.item?.task?.id || "";
@@ -174,9 +137,6 @@ function TaskRow(props: {
       <Show when={!!id() && !!props.onCancelTask && ACTIVE_STATUSES.has(status())}>
         <CancelButton id={id()} onCancel={props.onCancelTask!} />
       </Show>
-      <Show when={!!id() && !!props.onDeleteTask}>
-        <DeleteButton id={id()} onDelete={props.onDeleteTask!} />
-      </Show>
     </div>
   );
 }
@@ -189,7 +149,6 @@ function TaskSection(props: {
   selectedTaskID: string;
   queuePositions?: Map<string, number>;
   onSelectTask: (id: string) => void;
-  onDeleteTask?: (id: string) => void;
   onCancelTask?: (id: string) => void;
 }) {
   return (
@@ -204,7 +163,6 @@ function TaskSection(props: {
                 selectedTaskID={props.selectedTaskID}
                 queuePos={props.queuePositions?.get(item?.task?.id || "")}
                 onSelectTask={props.onSelectTask}
-                onDeleteTask={props.onDeleteTask}
                 onCancelTask={props.onCancelTask}
               />
             )}
@@ -220,8 +178,6 @@ function TaskSection(props: {
 export interface TaskListProps {
   /** Called when the user clicks a task row. */
   onSelectTask: (taskID: string) => void;
-  /** Optional: called when the user clicks the delete button on a task row. */
-  onDeleteTask?: (taskID: string) => void;
   /** Optional: called when the user clicks the cancel button (active rows only). */
   onCancelTask?: (taskID: string) => void;
 }
@@ -271,7 +227,6 @@ export function TaskList(props: TaskListProps) {
           selectedTaskID={selectedID()}
           queuePositions={queuePositions()}
           onSelectTask={props.onSelectTask}
-          onDeleteTask={props.onDeleteTask}
           onCancelTask={props.onCancelTask}
         />
         <TaskSection
@@ -279,7 +234,6 @@ export function TaskList(props: TaskListProps) {
           items={recentTasks()}
           selectedTaskID={selectedID()}
           onSelectTask={props.onSelectTask}
-          onDeleteTask={props.onDeleteTask}
           onCancelTask={props.onCancelTask}
         />
       </Show>

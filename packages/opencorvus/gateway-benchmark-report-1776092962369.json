@@ -1,0 +1,59 @@
+{
+  "ok": true,
+  "model": "alibaba-coding-plan-cn/kimi-k2.5",
+  "startedAt": 1776092967623,
+  "finishedAt": 1776092993752,
+  "durationMs": 26129,
+  "server": "http://127.0.0.1:7878/",
+  "projectDir": "C:\\Users\\hengu\\AppData\\Local\\Temp\\gw-bench-proj-i8q1mF",
+  "userID": "gw-bench-5byx0xw8",
+  "sessionID": "ses_2789c0d37ffeMBn5xLqMlzzYiH",
+  "taskID": "tsk_d87640052001tjjfYISGdG2mMv",
+  "steps": [
+    {
+      "name": "enqueue",
+      "passed": true,
+      "durationMs": 6455,
+      "details": {
+        "taskID": "tsk_d87640052001tjjfYISGdG2mMv",
+        "kind": "workflow",
+        "toolCalls": 1,
+        "tools": [
+          "enqueue_workflow_task"
+        ]
+      }
+    },
+    {
+      "name": "list",
+      "passed": true,
+      "durationMs": 6397,
+      "details": {
+        "toolCalls": 1,
+        "tools": [
+          "list_tasks"
+        ],
+        "rowCount": 1
+      }
+    },
+    {
+      "name": "get",
+      "passed": true,
+      "durationMs": 7577,
+      "details": {
+        "toolCalls": 1,
+        "tools": [
+          "get_task"
+        ]
+      }
+    },
+    {
+      "name": "cancel",
+      "passed": true,
+      "durationMs": 5693,
+      "details": {
+        "toolCalls": 1,
+        "finalStatus": "cancelled"
+      }
+    }
+  ]
+}

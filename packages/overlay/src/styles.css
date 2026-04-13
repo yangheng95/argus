@@ -109,10 +109,10 @@
   --ui-chat-min-height: calc(58px * var(--ui-scale));
   --ui-chat-max-height: calc(140px * var(--ui-scale));
   --ui-select-padding-right: calc(28px * var(--ui-scale));
-  --ui-rail-width: clamp(calc(220px * var(--ui-scale)), 20vw, calc(320px * var(--ui-scale)));
-  --ui-rail-min-width: calc(160px * var(--ui-scale));
-  --ui-chat-priority-width: calc(480px * var(--ui-scale));
-  --ui-chat-min-width: calc(320px * var(--ui-scale));
+  --ui-rail-width: clamp(calc(300px * var(--ui-scale)), 28vw, calc(460px * var(--ui-scale)));
+  --ui-rail-min-width: calc(180px * var(--ui-scale));
+  --ui-chat-priority-width: calc(520px * var(--ui-scale));
+  --ui-chat-min-width: calc(420px * var(--ui-scale));
   --ui-sidebar-width: var(--ui-rail-width);
   --ui-sections-width: var(--ui-rail-width);
   --ui-resizer-width: calc(4px * var(--ui-scale));
@@ -2090,7 +2090,7 @@ body[data-theme="light"] .section-badge {
   padding: calc(4px * var(--ui-scale)) calc(10px * var(--ui-scale));
   border-bottom: 1px solid var(--border);
   background:
-    linear-gradient(180deg, rgba(91, 141, 239, 0.07), rgba(91, 141, 239, 0) 70%),
+    linear-gradient(180deg, rgba(91, 141, 239, 0.04), rgba(91, 141, 239, 0) 58%),
     var(--surface);
   flex-shrink: 0;
 }
@@ -2306,9 +2306,7 @@ body[data-theme="light"] .section-badge {
 .empty-hint {
   font-size: var(--ui-font-control);
   color: var(--text-muted);
-  padding: calc(20px * var(--ui-scale)) calc(12px * var(--ui-scale));
-  text-align: center;
-  line-height: 1.5;
+  padding: calc(4px * var(--ui-scale)) 0;
 }
 
 /* ── Plan Body ── */
@@ -3342,11 +3340,8 @@ code .file-link:hover {
 .chat-empty {
   flex: 1;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: calc(10px * var(--ui-scale));
-  padding: calc(32px * var(--ui-scale));
   color: var(--text-muted);
   font-size: var(--ui-font-body);
 }
@@ -3478,6 +3473,19 @@ code .file-link:hover {
   background: transparent;
   border-color: transparent;
   box-shadow: none;
+}
+
+.agent-card-spinner {
+  display: inline-block;
+  width: calc(10px * var(--ui-scale));
+  height: calc(10px * var(--ui-scale));
+  border: 1.5px solid rgba(84, 138, 247, 0.30);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: agent-card-spin 0.8s linear infinite;
+}
+@keyframes agent-card-spin {
+  to { transform: rotate(360deg); }
 }
 
 .msg-head {
@@ -3778,6 +3786,342 @@ code .file-link:hover {
   font-size: var(--ui-font-small);
   color: var(--text-soft, #888);
 }
+/* ── Executor Goal Block (collapsible per-goal container) ── */
+.executor-goal-block {
+  --executor-accent: rgba(230, 140, 50, 0.80);
+  --executor-bg: rgba(230, 140, 50, 0.08);
+  --executor-border: rgba(230, 140, 50, 0.22);
+  width: 100%;
+  display: block;
+}
+
+.executor-goal-header {
+  display: flex;
+  align-items: center;
+  gap: calc(8px * var(--ui-scale));
+  padding: calc(8px * var(--ui-scale)) calc(12px * var(--ui-scale));
+  background: var(--executor-bg);
+  border: 1px solid var(--executor-border);
+  border-radius: calc(6px * var(--ui-scale));
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s ease, border-color 0.15s ease;
+  font-size: var(--ui-font-control);
+  line-height: 1.5;
+}
+.executor-goal-header:hover {
+  background: color-mix(in srgb, var(--executor-bg) 70%, white 6%);
+  border-color: var(--executor-accent);
+}
+
+.executor-goal-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(20px * var(--ui-scale));
+  height: calc(20px * var(--ui-scale));
+  font-size: var(--ui-font-control);
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.executor-goal-badge--done { background: rgba(95, 173, 86, 0.22); color: var(--good); }
+.executor-goal-badge--error { background: rgba(220, 70, 70, 0.22); color: var(--bad); }
+.executor-goal-badge--running { background: rgba(230, 140, 50, 0.18); }
+.executor-goal-badge--pending { background: rgba(255, 255, 255, 0.08); color: var(--text-muted); }
+
+.executor-goal-label {
+  font-weight: 600;
+  color: var(--executor-accent);
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.executor-goal-id {
+  font-family: var(--mono);
+  font-size: var(--ui-font-tiny);
+  color: var(--text-muted);
+  opacity: 0.6;
+  cursor: pointer;
+  padding: 1px 4px;
+  border-radius: 3px;
+  flex-shrink: 0;
+  transition: opacity 0.15s, background 0.15s;
+}
+.executor-goal-id:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.executor-goal-count {
+  color: var(--text-soft);
+  font-size: var(--ui-font-control);
+  font-family: var(--mono);
+}
+
+.executor-goal-chevron {
+  font-size: var(--ui-font-control);
+  color: var(--text-soft);
+  margin-left: auto;
+  transition: transform 0.2s ease;
+}
+.executor-goal-block--expanded .executor-goal-chevron {
+  transform: rotate(180deg);
+}
+
+/* Tool item list */
+.executor-goal-body {
+  margin-top: calc(4px * var(--ui-scale));
+  padding: calc(4px * var(--ui-scale)) calc(8px * var(--ui-scale));
+  background: var(--executor-bg);
+  border: 1px solid color-mix(in srgb, var(--executor-border) 60%, transparent);
+  border-radius: calc(6px * var(--ui-scale));
+  max-height: min(60vh, calc(800px * var(--ui-scale)));
+  overflow-y: auto;
+}
+.executor-goal-body::-webkit-scrollbar { width: 4px; }
+.executor-goal-body::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 2px;
+}
+.executor-goal-body--preview {
+  max-height: calc(68px * var(--ui-scale));
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to bottom, black 40%, transparent 100%);
+  mask-image: linear-gradient(to bottom, black 40%, transparent 100%);
+}
+.executor-goal-description {
+  font-size: var(--ui-font-control);
+  color: var(--text-soft);
+  padding: calc(4px * var(--ui-scale)) calc(6px * var(--ui-scale));
+  margin-bottom: calc(4px * var(--ui-scale));
+  border-left: 2px solid var(--border-strong);
+  line-height: 1.4;
+  white-space: pre-wrap;
+}
+/* ── Per-goal architect contracts ── */
+.executor-goal-contracts {
+  display: flex;
+  flex-direction: column;
+  gap: calc(4px * var(--ui-scale));
+  margin-bottom: calc(6px * var(--ui-scale));
+}
+.goal-contract {
+  font-size: var(--ui-font-control);
+  border-left: 2px solid rgba(0, 180, 180, 0.35);
+  padding: calc(3px * var(--ui-scale)) calc(6px * var(--ui-scale));
+  line-height: 1.3;
+}
+.goal-contract-key {
+  display: inline-block;
+  font-size: var(--ui-font-meta);
+  color: rgba(0, 150, 150, 0.9);
+  background: rgba(0, 180, 180, 0.08);
+  padding: 0 calc(4px * var(--ui-scale));
+  border-radius: calc(2px * var(--ui-scale));
+  margin-bottom: calc(2px * var(--ui-scale));
+}
+.goal-contract-value {
+  color: var(--text-soft);
+}
+.goal-contract-value .msg-text h2 {
+  font-size: var(--ui-font-control);
+  margin: 0 0 calc(2px * var(--ui-scale)) 0;
+  color: var(--text-primary);
+}
+.goal-contract-value .msg-text p {
+  margin: 0;
+}
+.goal-step-summary {
+  font-size: var(--ui-font-meta);
+  color: var(--text-muted);
+  margin-left: auto;
+}
+
+/* ── Goal Step (per-step inside goal group) ── */
+.goal-step {
+  margin: calc(4px * var(--ui-scale)) 0;
+  border-left: 2px solid var(--border);
+  padding-left: calc(8px * var(--ui-scale));
+}
+.goal-step-header {
+  display: flex;
+  align-items: center;
+  gap: calc(6px * var(--ui-scale));
+  padding: calc(4px * var(--ui-scale)) calc(6px * var(--ui-scale));
+  font-size: var(--ui-font-control);
+}
+.goal-step-icon {
+  width: calc(16px * var(--ui-scale));
+  text-align: center;
+  flex-shrink: 0;
+}
+.goal-step-icon--running {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(16px * var(--ui-scale));
+}
+.goal-step-label {
+  font-weight: 500;
+  opacity: 0.9;
+}
+.goal-step-count {
+  opacity: 0.5;
+  font-size: var(--ui-font-small);
+}
+.goal-step-body {
+  padding: calc(4px * var(--ui-scale)) 0 calc(4px * var(--ui-scale)) calc(4px * var(--ui-scale));
+}
+
+/* Step status colors */
+.goal-step--done {
+  border-left-color: rgba(80, 190, 100, 0.5);
+}
+.goal-step--done .goal-step-icon { color: rgba(80, 190, 100, 0.9); }
+.goal-step--running {
+  border-left-color: rgba(110, 183, 255, 0.5);
+}
+.goal-step--running .goal-step-icon { color: rgba(110, 183, 255, 0.9); }
+.goal-step--error {
+  border-left-color: rgba(240, 80, 80, 0.5);
+}
+.goal-step--error .goal-step-icon { color: rgba(240, 80, 80, 0.9); }
+.goal-step--pending {
+  border-left-color: rgba(255, 255, 255, 0.08);
+}
+.goal-step--pending .goal-step-icon { opacity: 0.3; }
+
+/* ── Agent Card (single-session stage container) ── */
+.agent-card {
+  --agent-accent: rgba(110, 183, 255, 0.82);
+  --agent-bg: rgba(110, 183, 255, 0.08);
+  --agent-border: rgba(110, 183, 255, 0.22);
+  width: 100%;
+  display: block;
+}
+
+.agent-card[data-agent-stage="goal"] {
+  --agent-accent: rgba(140, 110, 220, 0.80);
+  --agent-bg: rgba(140, 110, 220, 0.08);
+  --agent-border: rgba(140, 110, 220, 0.22);
+}
+
+.agent-card[data-agent-stage="architect"] {
+  --agent-accent: rgba(80, 170, 160, 0.80);
+  --agent-bg: rgba(80, 170, 160, 0.08);
+  --agent-border: rgba(80, 170, 160, 0.22);
+}
+
+.agent-card[data-agent-stage="planner"] {
+  --agent-accent: rgba(100, 160, 220, 0.80);
+  --agent-bg: rgba(100, 160, 220, 0.08);
+  --agent-border: rgba(100, 160, 220, 0.22);
+}
+
+.agent-card[data-agent-stage="executor"] {
+  --agent-accent: rgba(230, 140, 50, 0.80);
+  --agent-bg: rgba(230, 140, 50, 0.08);
+  --agent-border: rgba(230, 140, 50, 0.22);
+}
+
+.agent-card[data-agent-stage="evaluator"] {
+  --agent-accent: rgba(200, 180, 60, 0.80);
+  --agent-bg: rgba(200, 180, 60, 0.08);
+  --agent-border: rgba(200, 180, 60, 0.22);
+}
+
+.agent-card[data-agent-stage="delivery"] {
+  --agent-accent: rgba(80, 190, 100, 0.80);
+  --agent-bg: rgba(80, 190, 100, 0.08);
+  --agent-border: rgba(80, 190, 100, 0.22);
+}
+
+.agent-card-header {
+  display: flex;
+  align-items: center;
+  gap: calc(8px * var(--ui-scale));
+  padding: calc(8px * var(--ui-scale)) calc(12px * var(--ui-scale));
+  background: var(--agent-bg);
+  border: 1px solid var(--agent-border);
+  border-radius: calc(6px * var(--ui-scale));
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s ease, border-color 0.15s ease;
+  font-size: var(--ui-font-control);
+  line-height: 1.5;
+}
+
+.agent-card-header:hover {
+  background: color-mix(in srgb, var(--agent-bg) 70%, white 6%);
+  border-color: var(--agent-accent);
+}
+
+.agent-card-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(20px * var(--ui-scale));
+  height: calc(20px * var(--ui-scale));
+  font-size: var(--ui-font-control);
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.agent-card-badge--done { background: rgba(95, 173, 86, 0.22); color: var(--good); }
+.agent-card-badge--error { background: rgba(220, 70, 70, 0.22); color: var(--bad); }
+.agent-card-badge--running { background: rgba(230, 140, 50, 0.18); }
+
+.agent-card-label {
+  font-weight: 600;
+  color: var(--agent-accent);
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-card-round,
+.agent-card-count {
+  color: var(--text-soft);
+  font-size: var(--ui-font-control);
+  font-family: var(--mono);
+}
+
+.agent-card-chevron {
+  font-size: var(--ui-font-control);
+  color: var(--text-soft);
+  margin-left: auto;
+  transition: transform 0.2s ease;
+}
+
+.agent-card--expanded .agent-card-chevron {
+  transform: rotate(180deg);
+}
+
+.agent-card-body {
+  margin-top: calc(4px * var(--ui-scale));
+  padding: calc(4px * var(--ui-scale)) calc(8px * var(--ui-scale));
+  background: var(--agent-bg);
+  border: 1px solid color-mix(in srgb, var(--agent-border) 60%, transparent);
+  border-radius: calc(6px * var(--ui-scale));
+  max-height: min(60vh, calc(800px * var(--ui-scale)));
+  overflow-y: auto;
+}
+
+.agent-card-body::-webkit-scrollbar { width: 4px; }
+.agent-card-body::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 2px;
+}
+.agent-card-body--preview {
+  max-height: calc(68px * var(--ui-scale));
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to bottom, black 40%, transparent 100%);
+  mask-image: linear-gradient(to bottom, black 40%, transparent 100%);
+}
+
 /* Individual tool entries — item row + optional output block */
 .executor-tool-entry {
   border-radius: calc(4px * var(--ui-scale));
@@ -7402,7 +7746,7 @@ body[data-theme="light"] .config-close-btn:hover {
 
 /* Sidebar workspace layout */
 .workspace-main {
-  flex: 1 1 0;
+  flex: 1;
   min-width: 0;
   min-height: 0;
   display: flex;
@@ -7483,6 +7827,29 @@ body[data-resizing="true"] * {
   cursor: col-resize !important;
 }
 
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  gap: calc(8px * var(--ui-scale));
+  padding: calc(8px * var(--ui-scale)) calc(10px * var(--ui-scale));
+  border-bottom: 1px solid var(--border);
+  background:
+    linear-gradient(180deg, rgba(91, 141, 239, 0.04), rgba(91, 141, 239, 0) 58%),
+    var(--surface);
+}
+
+.sidebar-toolset {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(2px * var(--ui-scale));
+  padding: calc(2px * var(--ui-scale));
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background:
+    linear-gradient(180deg, var(--surface-strong), var(--surface));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
 .sidebar-tool {
   display: inline-flex;
   align-items: center;
@@ -7510,6 +7877,43 @@ body[data-resizing="true"] * {
 .sidebar-btn:focus-visible {
   outline: none;
   box-shadow: 0 0 0 2px rgba(91, 141, 239, 0.16);
+}
+
+.sidebar-copy {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.sidebar-title {
+  font-size: var(--title-size);
+  font-weight: var(--title-weight);
+  color: var(--text-strong);
+  letter-spacing: var(--title-track);
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sidebar-subtitle {
+  font-size: var(--ui-font-meta);
+  color: var(--text-muted);
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sidebar-header-actions {
+  display: flex;
+  align-items: center;
+  gap: calc(5px * var(--ui-scale));
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+  flex-shrink: 0;
 }
 
 .sidebar-btn {
@@ -7552,6 +7956,16 @@ body[data-resizing="true"] * {
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+}
+
+.sidebar-body {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  padding: calc(12px * var(--ui-scale));
+  display: flex;
+  flex-direction: column;
+  gap: 0;
 }
 
 .sidebar-list {
@@ -7718,46 +8132,6 @@ body[data-resizing="true"] * {
   flex-shrink: 0;
 }
 
-/* Cancel button — same shape as delete but stop-icon, sits left of delete. */
-.task-row-cancel {
-  width: calc(30px * var(--ui-scale));
-  min-width: calc(30px * var(--ui-scale));
-  height: calc(30px * var(--ui-scale));
-  min-height: calc(30px * var(--ui-scale));
-  position: absolute;
-  top: calc(5px * var(--ui-scale));
-  right: calc(40px * var(--ui-scale));
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  border: none;
-  border-radius: calc(var(--radius) - 2px);
-  background: var(--subtle-2);
-  color: var(--warn, #ffb450);
-  cursor: pointer;
-  opacity: 0;
-  pointer-events: none;
-  transition: background 80ms, color 80ms;
-}
-.task-row-mini:hover .task-row-cancel,
-.task-row-mini:focus-within .task-row-cancel,
-.task-row-mini[data-active="true"] .task-row-cancel {
-  opacity: 1;
-  pointer-events: auto;
-}
-.task-row-cancel:hover {
-  background: var(--warn-bg, rgba(255,180,80,0.18));
-}
-@media (hover: none), (pointer: coarse) {
-  .task-row-cancel { opacity: 1; pointer-events: auto; }
-}
-.task-row-cancel-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
 .task-row-delete-icon[data-icon="confirm"] {
   display: none;
 }
@@ -7861,27 +8235,26 @@ body[data-resizing="true"] * {
   margin-top: calc(2px * var(--ui-scale));
 }
 
-.sidebar[data-collapsed="true"] .sidebar-section-title,
-.sidebar[data-collapsed="true"] .sidebar-section-meta,
-.sidebar[data-collapsed="true"] .sidebar-subsection-heading,
-.sidebar[data-collapsed="true"] .sidebar-gateway-tail,
-.sidebar[data-collapsed="true"] #taskListPanel,
-.sidebar[data-collapsed="true"] .sidebar-composer,
+.sidebar[data-collapsed="true"] .sidebar-copy,
+.sidebar[data-collapsed="true"] .sidebar-body,
 .sidebar[data-collapsed="true"] .sidebar-btn-label {
   display: none;
 }
 
-.sidebar[data-collapsed="true"] .sidebar-section-header {
+.sidebar[data-collapsed="true"] .sidebar-header {
   flex-direction: column;
   align-items: stretch;
   padding: calc(8px * var(--ui-scale)) calc(6px * var(--ui-scale));
 }
 
-.sidebar[data-collapsed="true"] .sidebar-section-actions {
+.sidebar[data-collapsed="true"] .sidebar-header-actions {
   width: 100%;
   flex-direction: column;
   gap: calc(8px * var(--ui-scale));
-  margin-left: 0;
+}
+
+.sidebar[data-collapsed="true"] .sidebar-toolset {
+  width: 100%;
 }
 
 .sidebar[data-collapsed="true"] .sidebar-tool {
@@ -7920,6 +8293,11 @@ body[data-resizing="true"] * {
   font-size: var(--ui-font-small);
 }
 
+.sidebar-title {
+  font-size: var(--title-size);
+}
+
+.sidebar-subtitle,
 .sidebar-btn {
   font-size: var(--ui-font-meta);
 }
@@ -8074,6 +8452,7 @@ body::after,
 .titlebar-btn,
 .task-git,
 .task-flag,
+.sidebar-toolset,
 .sidebar-tool,
 .extension-head,
 .extension-row,
@@ -8158,6 +8537,7 @@ body[data-theme="light"] .engine-chip[data-active="true"] {
   box-shadow: var(--shadow);
 }
 
+.sidebar-title,
 .chat-title,
 .config-toggle-label,
 .sidebar-btn {
@@ -8181,6 +8561,7 @@ body[data-theme="light"] {
 .chat,
 .brand-channel-group,
 .titlebar-menu-panel,
+.sidebar-toolset,
 .section,
 .section-head,
 .section-body,
@@ -8246,6 +8627,7 @@ body[data-theme="light"] {
 .config-section-body,
 .config-subsection,
 .config-subsection-body,
+.sidebar-body,
 .chat-scroll,
 .dialog-form,
 .task-row-main,
@@ -8264,6 +8646,7 @@ body[data-theme="light"] {
 .criteria-list > *,
 .config-section-body > *,
 .config-subsection-body > *,
+.sidebar-body > *,
 .chat-scroll > * {
   min-width: 0;
   max-width: 100%;
@@ -8628,7 +9011,7 @@ body[data-theme="light"]::after {
   display: none;
 }
 
-.sidebar-section-header,
+.sidebar-header,
 .chat-header,
 .sections-header,
 .section-head {
@@ -8636,7 +9019,7 @@ body[data-theme="light"]::after {
   overflow: hidden;
 }
 
-.sidebar-section-header > *,
+.sidebar-header > *,
 .chat-header > *,
 .sections-header > *,
 .section-head > * {
@@ -8756,7 +9139,7 @@ body[data-theme="light"] .tech-sweep {
 }
 
 /* ── Disable GPU-heavy background/gradient animations ── */
-/* Keep: pulse, pulse-dot, card-spin (card spinner), sectionPhasePulse (all lightweight) */
+/* Keep: pulse, pulse-dot, agent-card-spin (goal-group spinner), sectionPhasePulse (all lightweight) */
 .tech-grid::before,
 .tech-sweep,
 .tech-orbit-a,
@@ -8935,7 +9318,7 @@ body[data-theme="light"] .section-badge[data-tone="accent"] {
   border-color: rgba(91, 126, 244, 0.2);
 }
 
-.sidebar-section-header,
+.sidebar-header,
 .chat-header,
 .sections-header {
   height: var(--ui-panel-header-height);
@@ -8944,10 +9327,20 @@ body[data-theme="light"] .section-badge[data-tone="accent"] {
   box-sizing: border-box;
 }
 
+.sidebar-copy {
+  justify-content: center;
+  gap: 0;
+}
+
+.sidebar-title,
 .chat-title {
   display: inline-flex;
   align-items: center;
   min-height: calc(16px * var(--ui-scale));
+  line-height: 1;
+}
+
+.sidebar-subtitle {
   line-height: 1;
 }
 
@@ -9898,263 +10291,3 @@ body[data-theme="light"] .section-badge[data-tone="accent"] {
   max-height: 40vh;
   overflow-y: auto;
 }
-
-/* ── Sidebar Gateway section + composer ──
-   Sidebar layout (top to bottom):
-     · sidebar-section-gateway
-         · sidebar-section-header (Gateway title + tasks toolbar actions)
-         · sidebar-gateway-tail (latest daemon replies + chips)
-         · sidebar-subsection-heading (Tasks label)
-         · #taskListPanel (sub-list, capped ~35%)
-     · sidebar-composer (composer-target-bar + ChatComposer form) */
-
-.sidebar { display: flex; flex-direction: column; min-height: 0; }
-
-/* ── Sidebar sections (Gateway / Tasks / Composer) ──
-   Unified header + body padding (10px 14px / 8px 14px) so vertical
-   alignment is consistent across the column. */
-.sidebar-section { display: flex; flex-direction: column; flex: 0 0 auto; min-height: 0; }
-.sidebar-section-header {
-  display: flex; align-items: center; gap: 8px;
-  padding: 9px 14px;
-  border-bottom: 1px solid var(--border, rgba(255,255,255,0.06));
-  background: var(--surface, rgba(255,255,255,0.015));
-}
-.sidebar-section-dot {
-  width: 7px; height: 7px; border-radius: 50%;
-  background: var(--accent, #569cd6);
-  box-shadow: 0 0 6px var(--accent, #569cd6);
-  flex: 0 0 auto;
-}
-.sidebar-section-title {
-  font-weight: 600;
-  color: var(--text-strong, #fff);
-  font-size: 12.5px;
-  letter-spacing: 0.02em;
-}
-.sidebar-section-meta {
-  margin-left: auto;
-  font-size: 10.5px;
-  color: var(--text-muted, #8b95a8);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-}
-
-/* Gateway section sits at the top and IS the main content — Tasks are
-   now an attached sub-list under it. Gateway tail grows; Tasks shrinks. */
-.sidebar-section-gateway {
-  flex: 1 1 auto;
-  min-height: 0;
-  background: linear-gradient(180deg, rgba(84, 138, 247, 0.05), transparent 60%);
-}
-
-.sidebar-gateway-tail {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  padding: 8px 14px;
-}
-
-/* Tasks are an attached sub-list under Gateway — capped height,
-   reduced visual weight. The taskListPanel lives directly inside
-   sidebar-section-gateway (no wrapping sidebar-body). */
-.sidebar-section-gateway .sidebar-subsection-heading {
-  padding: 6px 14px 4px;
-  border-top: 1px solid var(--border, rgba(255,255,255,0.06));
-  font-size: 10.5px;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--text-muted, #8b95a8);
-  background: var(--surface, rgba(255,255,255,0.015));
-}
-.sidebar-section-gateway > #taskListPanel {
-  flex: 0 1 35%;
-  max-height: 35%;
-  min-height: 80px;
-  overflow-y: auto;
-}
-/* Actions cluster in the Gateway section header (refresh / collapse / new). */
-.sidebar-section-actions {
-  display: flex; align-items: center; gap: 4px;
-  margin-left: auto;
-}
-/* The section-meta was previously pushed to the right via margin-left:auto.
-   Now actions own the right side, so meta sits inline. */
-.sidebar-section-gateway .sidebar-section-meta { margin-left: 0; }
-.sidebar-gateway-tail-inner {
-  display: flex; flex-direction: column; gap: 6px;
-}
-.sidebar-gateway-tail-empty {
-  font-size: 11px;
-  line-height: 1.45;
-  color: var(--text-muted, #8b95a8);
-  padding: 2px 0;
-}
-
-/* Log-style entry: meta line (time + role + task chips) on top, text body
-   below. Inspired by structured log viewers — each Gateway turn is one
-   timestamped row so the user can scan the daemon's activity. */
-.sidebar-gateway-tail-entry {
-  display: flex; flex-direction: column;
-  gap: 2px;
-  padding: 5px 0;
-  border-bottom: 1px dashed rgba(255,255,255,0.05);
-}
-.sidebar-gateway-tail-entry:last-child { border-bottom: none; }
-.sidebar-gateway-tail-meta {
-  display: flex; align-items: center; gap: 6px;
-  flex-wrap: wrap;
-  font-size: 10.5px;
-  color: var(--text-muted, #8b95a8);
-  font-family: var(--ui-font-mono, monospace);
-}
-.sidebar-gateway-tail-time { opacity: 0.7; }
-.sidebar-gateway-tail-role {
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  font-weight: 600;
-  font-size: 9.5px;
-  padding: 1px 5px;
-  border-radius: 3px;
-  background: var(--surface-inset, rgba(255,255,255,0.04));
-}
-.sidebar-gateway-tail-entry[data-role="user"] .sidebar-gateway-tail-role {
-  color: var(--text-muted, #aab3c5);
-}
-.sidebar-gateway-tail-entry[data-role="assistant"] .sidebar-gateway-tail-role {
-  color: var(--accent, #569cd6);
-}
-.sidebar-gateway-tail-chip {
-  display: inline-flex; align-items: center; gap: 4px;
-  padding: 1px 6px; border-radius: 3px;
-  background: var(--surface-inset, rgba(255,255,255,0.05));
-  border: 1px solid var(--border, rgba(255,255,255,0.08));
-  color: var(--accent, #569cd6);
-  font-size: 10px; font-family: var(--ui-font-mono, monospace);
-  cursor: pointer;
-}
-.sidebar-gateway-tail-chip:hover { background: var(--surface-active, rgba(255,255,255,0.09)); }
-.sidebar-gateway-tail-chip-tag {
-  margin-left: 2px; padding: 0 4px; border-radius: 999px;
-  background: var(--warn-bg, rgba(255,180,80,0.18));
-  color: var(--warn, #ffb450); font-size: 9px;
-}
-.sidebar-gateway-tail-text {
-  font-size: 11.5px; line-height: 1.45;
-  color: var(--text, #d8dde6);
-  white-space: pre-wrap; word-wrap: break-word;
-  display: -webkit-box;
-  -webkit-line-clamp: 4;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-.sidebar-gateway-tail-entry[data-role="user"] .sidebar-gateway-tail-text {
-  color: var(--text-muted, #aab3c5);
-  font-style: italic;
-  -webkit-line-clamp: 2;
-}
-
-.sidebar-composer {
-  flex: 0 0 auto;
-  display: flex; flex-direction: column;
-  padding: 8px 10px 10px;
-  border-top: 1px solid var(--border, rgba(255,255,255,0.06));
-  background: var(--surface, rgba(255,255,255,0.02));
-}
-/* Hide the version/author/tip footer inside the narrow sidebar column —
-   it's redundant with the title-bar version chip, and packs awkwardly
-   under the textarea at ~220px width. */
-.sidebar-composer .chat-compose-meta { display: none; }
-
-/* ── Compose row: stack textarea on top, controls on a second row ──
-   In the wide chat layout the textarea sits left of the icon column
-   and the send button. In the narrow sidebar column we stack instead:
-       row 1: textarea (full width)
-       row 2: icon column (left) + send button (right)               */
-.sidebar-composer .chat-compose-row {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  grid-template-rows: auto auto;
-  gap: 6px 6px;
-  align-items: stretch;
-}
-.sidebar-composer .chat-compose-row .chat-textarea {
-  grid-row: 1;
-  grid-column: 1 / -1;
-  width: 100%;
-  font-size: 12.5px;
-  min-height: 64px;
-  resize: none;
-  border: none;
-  border-radius: 0;
-  background: transparent;
-  padding: 4px 2px;
-}
-.sidebar-composer .chat-compose-row .chat-textarea:focus {
-  outline: none;
-  border-color: transparent;
-  box-shadow: none;
-  background: transparent;
-}
-.sidebar-composer .chat-compose-row .chat-icon-col {
-  grid-row: 2;
-  grid-column: 1;
-  display: flex;
-  flex-direction: row;
-  gap: 4px;
-  align-items: center;
-}
-.sidebar-composer .chat-compose-row .chat-send {
-  grid-row: 2;
-  grid-column: 2;
-  justify-self: end;
-  align-self: center;
-}
-/* Send button label is too wide for the column — show only the icon. */
-.sidebar-composer .chat-send-label { display: none; }
-/* Smaller toolbar buttons under the composer in the narrow column. */
-.sidebar-composer .chat-toolbar-btn {
-  padding: 4px 6px;
-}
-
-/* ── Composer target bar (layout B) ──
-   Sits directly above the chat composer; tells the user the next message
-   will be sent to the Gateway daemon (not directly to the selected task).
-   Subtle by design — informational chip, not interactive. */
-
-.composer-target-bar {
-  display: flex; align-items: center; gap: 6px;
-  padding: 5px 14px;
-  font-size: 11px;
-  color: var(--text-muted, #8b95a8);
-  border-top: 1px solid var(--border, rgba(255,255,255,0.06));
-  background: linear-gradient(
-    90deg,
-    rgba(84, 138, 247, 0.06) 0%,
-    rgba(84, 138, 247, 0.02) 40%,
-    transparent 100%
-  );
-}
-.composer-target-icon {
-  color: var(--accent, #569cd6);
-  font-weight: 600;
-}
-.composer-target-label {
-  color: var(--text, #d8dde6);
-  font-weight: 600;
-  letter-spacing: 0.02em;
-}
-.composer-target-sep {
-  color: var(--text-muted, #8b95a8);
-  margin: 0 2px;
-}
-.composer-target-context {
-  color: var(--text-muted, #aab3c5);
-  font-family: var(--ui-font-mono, monospace);
-  font-size: 10.5px;
-}
-.composer-target-hint {
-  color: var(--text-muted, #8b95a8);
-  font-size: 10.5px;
-}
-
