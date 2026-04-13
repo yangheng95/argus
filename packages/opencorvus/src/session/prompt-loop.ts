@@ -56,7 +56,6 @@ async function runSubtask(input: {
     role: "assistant",
     parentID: input.lastUser.id,
     sessionID: input.sessionID,
-    mode: input.task.agent,
     agent: input.task.agent,
     variant: input.lastUser.variant,
     path: {
@@ -280,7 +279,6 @@ async function processTurn(input: {
       id: Identifier.ascending("message"),
       parentID: input.lastUser.id,
       role: "assistant",
-      mode: agent.name,
       agent: agent.name,
       variant: input.lastUser.variant,
       path: {

@@ -201,30 +201,19 @@ export function applyFidelityCorrections(
 // ---------------------------------------------------------------------------
 
 function parseFidelityOutput(text: string): FidelityResult {
-  // Try JSON parse first
+  // Strict JSON only — no text-parsing fallback (CLAUDE.md "no fallback").
+  // The system prompt mandates a JSON block; if the model returns plain prose
+  // we treat the attempt as failed and let the retry loop re-prompt.
   const jsonMatch = text.match(/```json\s*([\s\S]*?)```/) || text.match(/\{[\s\S]*"verdict"[\s\S]*\}/)
-  if (jsonMatch) {
-    try {
-      const json = JSON.parse(jsonMatch[1] || jsonMatch[0])
-      return {
-        verdict: json.verdict === "faithful" ? "faithful" : "needs_correction",
-        issues: Array.isArray(json.issues) ? json.issues : [],
-        corrections: Array.isArray(json.corrections) ? json.corrections : [],
-        missingGoals: Array.isArray(json.missing_goals ?? json.missingGoals) ? (json.missing_goals ?? json.missingGoals) : [],
-      }
-    } catch { /* fall through to text parsing */ }
+  if (!jsonMatch) {
+    throw new Error("fidelity reviewer returned no JSON block")
   }
-
-  // Text parsing fallback
-  const lowerText = text.toLowerCase()
-  const hasFaithful = lowerText.includes("faithful") && !lowerText.includes("not faithful") && !lowerText.includes("needs_correction")
-  const hasIssues = lowerText.includes("uncovered") || lowerText.includes("missing") || lowerText.includes("distorted")
-
+  const json = JSON.parse(jsonMatch[1] || jsonMatch[0])
   return {
-    verdict: hasFaithful && !hasIssues ? "faithful" : "needs_correction",
-    issues: hasIssues ? [{ type: "uncovered", description: "Issues detected — see LLM output for details" }] : [],
-    corrections: [],
-    missingGoals: [],
+    verdict: json.verdict === "faithful" ? "faithful" : "needs_correction",
+    issues: Array.isArray(json.issues) ? json.issues : [],
+    corrections: Array.isArray(json.corrections) ? json.corrections : [],
+    missingGoals: Array.isArray(json.missing_goals ?? json.missingGoals) ? (json.missing_goals ?? json.missingGoals) : [],
   }
 }
 

@@ -13,12 +13,7 @@ export const PromptInput = z.object({
     .optional(),
   agent: z.string().optional(),
   noReply: z.boolean().optional(),
-  tools: z
-    .record(z.string(), z.boolean())
-    .optional()
-    .describe(
-      "@deprecated tools and permissions have been merged, you can set permissions on the session itself now",
-    ),
+  tools: z.record(z.string(), z.boolean()).optional(),
   format: Message.Format.optional(),
   system: z.string().optional(),
   variant: z.string().optional(),

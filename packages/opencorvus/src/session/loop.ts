@@ -103,7 +103,6 @@ export namespace SessionLoop {
       role: "assistant",
       parentID: input.lastUser.id,
       sessionID: input.sessionID,
-      mode: input.task.agent,
       agent: input.task.agent,
       variant: input.lastUser.variant,
       path: {
@@ -289,7 +288,6 @@ export namespace SessionLoop {
         id: Identifier.ascending("message"),
         parentID: input.lastUser.id,
         role: "assistant",
-        mode: agent.name,
         agent: agent.name,
         variant: input.lastUser.variant,
         path: {

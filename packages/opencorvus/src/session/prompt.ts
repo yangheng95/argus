@@ -51,12 +51,7 @@ export namespace SessionPrompt {
       .optional(),
     agent: z.string().optional(),
     noReply: z.boolean().optional(),
-    tools: z
-      .record(z.string(), z.boolean())
-      .optional()
-      .describe(
-        "@deprecated tools and permissions have been merged, you can set permissions on the session itself now",
-      ),
+    tools: z.record(z.string(), z.boolean()).optional(),
     format: Message.Format.optional(),
     system: z.string().optional(),
     variant: z.string().optional(),
@@ -115,6 +110,8 @@ export namespace SessionPrompt {
     const message = await createUserMessage(input)
     await Session.touch(input.sessionID)
 
+    // Convenience: callers may pass a `tools: { name: enabled }` map; we
+    // translate it to per-tool permission rules and store on the session.
     const permissions: PermissionNext.Ruleset = []
     for (const [tool, enabled] of Object.entries(input.tools ?? {})) {
       permissions.push({

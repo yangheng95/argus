@@ -126,7 +126,6 @@ async function createToolContext(agent: Agent.Info) {
     parentID: messageID,
     modelID: model.modelID,
     providerID: model.providerID,
-    mode: "debug",
     agent: agent.name,
     path: {
       cwd: Instance.directory,
