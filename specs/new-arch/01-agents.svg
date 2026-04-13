@@ -1,0 +1,183 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1240 900" width="100%" height="100%">
+  <defs>
+    <style>
+      text { font-family: 'Segoe UI', Arial, sans-serif; }
+      .ingress { fill: #fef3c7; stroke: #f59e0b; stroke-width: 1.5; rx: 8; }
+      .gateway { fill: #dbeafe; stroke: #2563eb; stroke-width: 2; rx: 8; }
+      .service { fill: #ede9fe; stroke: #7c3aed; stroke-width: 2; rx: 10; }
+      .loop    { fill: #f5f3ff; stroke: #8b5cf6; stroke-width: 1.5; rx: 8; }
+      .fast    { fill: #fef2f2; stroke: #dc2626; stroke-width: 1.5; rx: 8; }
+      .sub     { fill: #e0e7ff; stroke: #6366f1; stroke-width: 1.5; rx: 8; }
+      .infra   { fill: #f1f5f9; stroke: #94a3b8; stroke-width: 1.2; rx: 8; }
+      .exec    { fill: #ecfdf5; stroke: #10b981; stroke-width: 1.5; rx: 8; }
+      .log     { fill: #fefce8; stroke: #ca8a04; stroke-width: 1.5; rx: 8; }
+      .arrow   { stroke: #475569; stroke-width: 1.6; fill: none; marker-end: url(#ar); }
+      .dispatch{ stroke: #7c3aed; stroke-width: 1.6; fill: none; marker-end: url(#ap); stroke-dasharray: 4 3; }
+      .dep     { stroke: #94a3b8; stroke-width: 1.2; fill: none; stroke-dasharray: 6 3; }
+      .h1 { font-size: 15px; font-weight: 700; fill: #0f172a; text-anchor: middle; }
+      .h2 { font-size: 13px; font-weight: 600; fill: #1e293b; text-anchor: middle; }
+      .h3 { font-size: 11px; font-weight: 600; fill: #334155; text-anchor: middle; }
+      .body { font-size: 10.5px; fill: #475569; text-anchor: middle; }
+      .tag  { font-size: 10px; fill: #64748b; text-anchor: middle; }
+      .code { font-family: 'Cascadia Code',Consolas,monospace; font-size: 10px; fill: #334155; text-anchor: middle; }
+      .title{ font-size: 18px; font-weight: 700; fill: #0f172a; text-anchor: middle; }
+      .subtitle{ font-size: 12px; fill: #64748b; text-anchor: middle; }
+      .note { font-size: 10px; fill: #94a3b8; text-anchor: start; font-style: italic; }
+    </style>
+    <marker id="ar" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#475569"/></marker>
+    <marker id="ap" markerWidth="7" markerHeight="5" refX="7" refY="2.5" orient="auto"><polygon points="0 0,7 2.5,0 5" fill="#7c3aed"/></marker>
+  </defs>
+
+  <!-- Title -->
+  <text class="title" x="620" y="28">图 1 — Agent 家族调用链</text>
+  <text class="subtitle" x="620" y="48">入站 → 任务创建 → Task Agent 决策循环 → sub-agents → 外部执行器</text>
+
+  <!-- ================== 入站层 ================== -->
+  <text class="h3" x="60" y="84" style="text-anchor:start;fill:#64748b">入站（两个入口）</text>
+  <line x1="50" y1="90" x2="1180" y2="90" stroke="#e2e8f0"/>
+
+  <!-- ChannelIngress -->
+  <rect class="ingress" x="140" y="106" width="280" height="78"/>
+  <text class="h2" x="280" y="126">ChannelIngress.message()</text>
+  <text class="code" x="280" y="142">channel/ingress.ts</text>
+  <text class="body" x="280" y="160">外部渠道（Slack / HTTP / bot）</text>
+  <text class="body" x="280" y="174">确定性路由 · 不过 LLM</text>
+
+  <!-- Gateway Agent -->
+  <rect class="gateway" x="820" y="106" width="280" height="78"/>
+  <text class="h2" x="960" y="126" style="fill:#1d4ed8">Gateway Agent (LLM)</text>
+  <text class="code" x="960" y="142">gateway/agent.ts</text>
+  <text class="body" x="960" y="160">本地用户对话层</text>
+  <text class="body" x="960" y="174">channel_key 单例 · 7 个 tools</text>
+
+  <!-- ================== 任务创建 ================== -->
+  <rect class="service" x="460" y="220" width="320" height="64"/>
+  <text class="h1" x="620" y="242" style="fill:#5b21b6">OrchestratorService.createTask</text>
+  <text class="code" x="620" y="258">orchestrator/service.ts</text>
+  <text class="body" x="620" y="274">写入 orchestrator_task 行 · 路由 by kind</text>
+
+  <!-- 入站 → createTask 箭头 -->
+  <path class="arrow" d="M 280 184 Q 280 210 460 246"/>
+  <path class="arrow" d="M 960 184 Q 960 210 780 246"/>
+
+  <!-- ================== 两种 kind ================== -->
+  <text class="h3" x="60" y="310" style="text-anchor:start;fill:#64748b">按 kind 分叉</text>
+  <line x1="50" y1="316" x2="1180" y2="316" stroke="#e2e8f0"/>
+
+  <!-- workflow -->
+  <rect class="loop" x="100" y="332" width="480" height="68"/>
+  <text class="h2" x="340" y="352" style="fill:#6d28d9">kind = "workflow" → Task Control Loop</text>
+  <text class="code" x="340" y="368">orchestrator/task-loop.ts</text>
+  <text class="body" x="340" y="386">Decision Point → GoalPool → repeat · inactivity timeout</text>
+
+  <!-- build-dispatch -->
+  <rect class="fast" x="660" y="332" width="480" height="68"/>
+  <text class="h2" x="900" y="352" style="fill:#b91c1c">kind = "build" → build-dispatch (快通道)</text>
+  <text class="code" x="900" y="368">task-agent/build-dispatch.ts</text>
+  <text class="body" x="900" y="386">绕过 decompose / plan / eval · 直跑 build agent</text>
+
+  <path class="arrow" d="M 560 284 Q 560 310 340 332"/>
+  <path class="arrow" d="M 680 284 Q 680 310 900 332"/>
+
+  <!-- ================== Task Agent 决策循环（左侧展开） ================== -->
+  <rect class="loop" x="100" y="436" width="480" height="300" style="stroke-dasharray:6 3"/>
+  <text class="h2" x="340" y="458" style="fill:#6d28d9">Task Control Loop 展开</text>
+
+  <!-- Decision Point -->
+  <rect class="service" x="140" y="474" width="400" height="72"/>
+  <text class="h2" x="340" y="494" style="fill:#5b21b6">Decision Point — Task Agent LLM</text>
+  <text class="code" x="340" y="510">task-agent/agent.ts</text>
+  <text class="body" x="340" y="528">触发 kind: created / batch_complete / retry</text>
+  <text class="body" x="340" y="542">读全量上下文 + decision-log → 推理下一步</text>
+
+  <!-- GoalPool -->
+  <rect class="infra" x="140" y="568" width="180" height="64"/>
+  <text class="h2" x="230" y="588">GoalPool</text>
+  <text class="code" x="230" y="602">goal-pool.ts</text>
+  <text class="body" x="230" y="618">submit → drain</text>
+
+  <!-- Eval -->
+  <rect class="infra" x="360" y="568" width="180" height="64"/>
+  <text class="h2" x="450" y="588">Evaluator (no LLM)</text>
+  <text class="code" x="450" y="602">evaluator/</text>
+  <text class="body" x="450" y="618">exit code → pass/fail</text>
+
+  <!-- 循环箭头 -->
+  <path class="dispatch" d="M 230 546 L 230 568"/>
+  <path class="arrow" d="M 320 600 L 360 600"/>
+  <path class="dispatch" d="M 450 632 Q 450 700 340 700 Q 140 700 140 510 L 140 510"/>
+  <text class="note" x="112" y="694">loop back with new context</text>
+
+  <!-- Loop 消灭的旧机制 -->
+  <rect x="140" y="712" width="400" height="18" fill="#fafafa" stroke="#e2e8f0" rx="4"/>
+  <text class="tag" x="340" y="724" style="fill:#94a3b8">替代: recoverOrphanedTasks · notifyGoalResult · agentNotifiedRuns · dispatch gate</text>
+
+  <!-- ================== sub-agents（右侧） ================== -->
+  <rect class="infra" x="660" y="436" width="480" height="300" style="fill:#fafafa"/>
+  <text class="h2" x="900" y="458">Sub-agents — 由 Task Agent tools 按需调用</text>
+  <text class="note" x="676" y="474">task-agent/tools.ts</text>
+
+  <!-- 6 个 sub-agent box (2x3) -->
+  <rect class="sub" x="680" y="490" width="140" height="60"/>
+  <text class="h3" x="750" y="510">Requirements</text>
+  <text class="code" x="750" y="524">decompose/</text>
+  <text class="body" x="750" y="540">Goals[] + 追溯</text>
+
+  <rect class="sub" x="830" y="490" width="140" height="60"/>
+  <text class="h3" x="900" y="510">Architect</text>
+  <text class="code" x="900" y="524">architect/</text>
+  <text class="body" x="900" y="540">接口契约 + 目录</text>
+
+  <rect class="sub" x="980" y="490" width="140" height="60"/>
+  <text class="h3" x="1050" y="510">Design Analyst</text>
+  <text class="code" x="1050" y="524">design-analyst/</text>
+  <text class="body" x="1050" y="540">Figma → 设计意图</text>
+
+  <rect class="sub" x="680" y="560" width="140" height="60"/>
+  <text class="h3" x="750" y="580">Planner</text>
+  <text class="code" x="750" y="594">planner/per-goal</text>
+  <text class="body" x="750" y="610">per-goal steps</text>
+
+  <rect class="sub" x="830" y="560" width="140" height="60"/>
+  <text class="h3" x="900" y="580">Evaluator</text>
+  <text class="code" x="900" y="594">evaluator/</text>
+  <text class="body" x="900" y="610">确定性 · no LLM</text>
+
+  <rect class="sub" x="980" y="560" width="140" height="60"/>
+  <text class="h3" x="1050" y="580">Delivery</text>
+  <text class="code" x="1050" y="594">delivery/</text>
+  <text class="body" x="1050" y="610">diff 验收 + 回修</text>
+
+  <!-- Decision Log -->
+  <rect class="log" x="680" y="636" width="440" height="44"/>
+  <text class="h3" x="900" y="654">Decision Log — append-only 全局共享上下文</text>
+  <text class="code" x="900" y="670">decision-log/ · 传 WHY 不只 WHAT</text>
+
+  <!-- Task Agent → sub-agents 箭头 -->
+  <path class="dispatch" d="M 540 510 Q 600 510 680 510"/>
+  <text class="note" x="546" y="504">tool call</text>
+
+  <!-- ================== 外部执行器 ================== -->
+  <text class="h3" x="60" y="768" style="text-anchor:start;fill:#64748b">外部执行器（worktree 隔离）</text>
+  <line x1="50" y1="774" x2="1180" y2="774" stroke="#e2e8f0"/>
+
+  <rect class="exec" x="100" y="790" width="1040" height="88"/>
+  <text class="h2" x="620" y="812">Executor — pipeline/executor.ts → executor/registry.ts</text>
+
+  <rect fill="#fff" stroke="#10b981" stroke-width="1" x="140" y="826" width="300" height="40" rx="6"/>
+  <text class="h3" x="290" y="842">claude-code</text>
+  <text class="code" x="290" y="858">claude-cli · claude-agent · claude-code</text>
+
+  <rect fill="#fff" stroke="#10b981" stroke-width="1" x="470" y="826" width="300" height="40" rx="6"/>
+  <text class="h3" x="620" y="842">codex</text>
+  <text class="code" x="620" y="858">codex-cli · codex-app-server (+client)</text>
+
+  <rect fill="#fff" stroke="#10b981" stroke-width="1" x="800" y="826" width="300" height="40" rx="6"/>
+  <text class="h3" x="950" y="842">opencode</text>
+  <text class="code" x="950" y="858">opencode.ts</text>
+
+  <path class="arrow" d="M 230 632 Q 230 760 620 790"/>
+
+  <!-- 详情指引 -->
+  <text class="note" x="60" y="894">详细内容见 01-agents.md · 数据见 02-data.md · 入站路由见 03-control.md · 执行器与扩展见 04-extensions.md</text>
+</svg>
