@@ -131,8 +131,11 @@ export namespace Provider {
     "@ai-sdk/perplexity": createPerplexity,
     "@ai-sdk/vercel": createVercel,
     "@gitlab/gitlab-ai-provider": createGitLab,
-    // @ts-ignore (TODO: kill this code so we dont have to maintain it)
-    "@ai-sdk/github-copilot": createGitHubCopilotOpenAICompatible,
+    // In-tree Copilot SDK (./sdk/copilot) — Copilot does not publish a proper
+    // @ai-sdk integration, so we ship our own openai-compatible variant. The
+    // factory's return type doesn't structurally match Vercel's `Provider`
+    // alias, so widen via cast rather than @ts-ignore.
+    "@ai-sdk/github-copilot": createGitHubCopilotOpenAICompatible as unknown as (options: any) => SDK,
   }
 
   export const Model = z
@@ -504,8 +507,8 @@ export namespace Provider {
     // load env
     const env = Env.all()
     // DashScope providers share keys via fallback: try provider-specific env vars first,
-    // then common CODING_DASHSCOPE_API_KEY / DASHSCOPE_API_KEY.
-    const dashscopeCommonKeys = ["CODING_DASHSCOPE_API_KEY", "DASHSCOPE_API_KEY"]
+    // then the shared DASHSCOPE_API_KEY.
+    const dashscopeCommonKeys = ["DASHSCOPE_API_KEY"]
     for (const [providerID, provider] of entries(database)) {
       if (disabled.has(providerID)) continue
       // DashScope detection: any model in this provider uses a dashscope API URL.

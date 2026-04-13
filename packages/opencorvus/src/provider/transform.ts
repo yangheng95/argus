@@ -401,7 +401,10 @@ export namespace ProviderTransform {
       id.includes("glm") ||
       id.includes("mistral") ||
       id.includes("kimi") ||
-      // TODO: Remove this after models.dev data is fixed to use "kimi-k2.5" instead of "k2p5"
+      // models.dev currently ships the Kimi K2.5 release as "k2p5" (the
+      // dot is escaped because the registry uses dots as path separators).
+      // Match both forms so the family detection works regardless of which
+      // ID the upstream catalog returns this week.
       id.includes("k2p5")
     )
       return {}
