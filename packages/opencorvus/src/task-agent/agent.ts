@@ -108,7 +108,7 @@ export namespace TaskAgent {
     // calling processTask, so legitimate completion triggers pass naturally.
     // failRun() marks all active goal_runs as failed before calling, so it
     // also passes. Only spurious triggers (orphan recovery, user retry,
-    // legacy syncRun) are blocked.
+    // redundant syncRun re-notifications) are blocked.
     const gateTask = findTask(taskID)
     if (gateTask?.active_run_id) {
       const activeGoalRuns = listActiveGoalRunsByCoordinator(gateTask.active_run_id)

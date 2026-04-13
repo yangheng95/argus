@@ -55,11 +55,11 @@ export namespace ChannelIngress {
 
     // New thread with an identified user → Gateway.
     // The Gateway dispatcher decides whether to enqueue a workflow task,
-    // dispatch a build task, answer a pending clarification, etc. Bound
-    // threads continue through ControlMessage so legacy task-binding
-    // channels (and the still-pending-interaction fallthrough above) keep
-    // working. Threads with no user_id fall through to ControlMessage too —
-    // Gateway requires identity to maintain the per-(channel, user) singleton.
+    // dispatch a build task, answer a pending clarification, etc. Already-bound
+    // threads continue through ControlMessage so their existing task binding
+    // (and the still-pending-interaction fallthrough above) keeps working.
+    // Threads with no user_id fall through to ControlMessage too — Gateway
+    // requires identity to maintain the per-(channel, user) singleton.
     if (!binding && input.user_id) {
       const ck = channelKey({
         platform: input.platform,
