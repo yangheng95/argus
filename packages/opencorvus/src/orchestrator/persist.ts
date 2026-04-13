@@ -1,7 +1,7 @@
 import { selectorList, selectorsSatisfied } from "@/check/policy"
 import { Identifier } from "@/id/id"
 import { executorLeaseAvailable, executorLeaseHeldByOther, executorLeaseOwner, executorLeaseUntil } from "./lease"
-import { type GoalJudgmentType, type CheckReport } from "@/types/evaluator"
+import { type GoalJudgmentType, type EvaluationOutput } from "@/types/evaluator"
 import { protocolInfo, type ProtocolCapabilitiesInfo, type ProtocolRefsInfo, type ProtocolSettingsInfo, ProtocolTransport } from "@/executor/protocol"
 import { writeEvaluationSnapshot, writeGoalSnapshot } from "@/orchestrator/docs"
 import { type Requirement } from "@/types/spec"
@@ -299,7 +299,7 @@ export function persistEvaluation(input: {
     summary: string
     diffs: Array<{ file: string; [key: string]: unknown }>
   }
-  result: CheckReport
+  result: EvaluationOutput
   analysis?: GoalJudgmentType
   analysisError?: string
   finalVerdict: string
