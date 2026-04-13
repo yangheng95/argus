@@ -28,7 +28,6 @@ describe("mcp.serve", () => {
           "fetch_url",
           "find_files",
           "memory",
-          "preference",
           "read_file",
           "search_code",
           "shell_command",

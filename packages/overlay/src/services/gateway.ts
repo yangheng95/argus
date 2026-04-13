@@ -5,7 +5,7 @@
 // Backend: src/server/routes/gateway.ts (POST /gateway/message) and the
 // existing /session/:id/message endpoints.
 
-import { createSignal, onCleanup, type Accessor } from "solid-js";
+import { createSignal, type Accessor } from "solid-js";
 import { apiJson, apiUrl, apiHeaders } from "./api";
 
 // Identifier the local user uses to scope their gateway session. The backend
@@ -94,14 +94,54 @@ export function subscribeGatewaySession(
   return () => es.close();
 }
 
+// ── Module-level singleton state ──
+// The Gateway is one daemon shared across the whole overlay, so its
+// messages, busy flag, and SSE subscription live at module scope. Both the
+// side panel (which reads the stream) and the chat composer (which now
+// routes user input here per layout B) reference the same signals so
+// everyone updates together.
+
+const [gwMessages, setGwMessages] = createSignal<GatewayMessage[]>([]);
+const [gwSessionID, setGwSessionID] = createSignal<string | undefined>(undefined);
+const [gwBusy, setGwBusy] = createSignal(false);
+let gwUnsub: (() => void) | undefined;
+
+async function refreshShared() {
+  const sid = gwSessionID();
+  if (!sid) return;
+  try {
+    const list = await loadGatewayMessages(sid);
+    setGwMessages(list);
+  } catch (err) {
+    console.warn("[gateway] refresh failed", err);
+  }
+}
+
+async function sendShared(text: string): Promise<void> {
+  if (!text.trim() || gwBusy()) return;
+  setGwBusy(true);
+  try {
+    const resp = await sendGatewayMessage(text);
+    if (gwSessionID() !== resp.sessionID) {
+      // First send establishes the session — subscribe + initial load.
+      setGwSessionID(resp.sessionID);
+      if (gwUnsub) gwUnsub();
+      gwUnsub = subscribeGatewaySession(resp.sessionID, () => {
+        void refreshShared();
+      });
+    }
+    await refreshShared();
+  } finally {
+    setGwBusy(false);
+  }
+}
+
 /**
- * Reactive hook: returns an Accessor that reflects the current gateway
- * session messages, plus helpers to send a turn / refresh manually.
+ * Hook returning accessors backed by the module-level singleton above.
+ * Multiple callers (side panel, composer) share the same state.
  *
- * Intended use inside a Solid component:
- *
- *     const { messages, sessionID, send, refresh } = useGatewaySession();
- *     <For each={messages()}>{(m) => <MessageBubble msg={m} />}</For>
+ * `onCleanup` is intentionally omitted — the daemon outlives any single
+ * component, and the SSE subscription is reused across mount/unmount.
  */
 export function useGatewaySession(): {
   messages: Accessor<GatewayMessage[]>;
@@ -110,44 +150,11 @@ export function useGatewaySession(): {
   send: (text: string) => Promise<void>;
   refresh: () => Promise<void>;
 } {
-  const [messages, setMessages] = createSignal<GatewayMessage[]>([]);
-  const [sessionID, setSessionID] = createSignal<string | undefined>(undefined);
-  const [busy, setBusy] = createSignal(false);
-  let unsub: (() => void) | undefined;
-
-  async function refresh() {
-    const sid = sessionID();
-    if (!sid) return;
-    try {
-      const list = await loadGatewayMessages(sid);
-      setMessages(list);
-    } catch (err) {
-      console.warn("[gateway] refresh failed", err);
-    }
-  }
-
-  async function send(text: string) {
-    if (!text.trim() || busy()) return;
-    setBusy(true);
-    try {
-      const resp = await sendGatewayMessage(text);
-      if (sessionID() !== resp.sessionID) {
-        // First send establishes the session — subscribe + initial load.
-        setSessionID(resp.sessionID);
-        if (unsub) unsub();
-        unsub = subscribeGatewaySession(resp.sessionID, () => {
-          void refresh();
-        });
-      }
-      await refresh();
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  onCleanup(() => {
-    if (unsub) unsub();
-  });
-
-  return { messages, sessionID, busy, send, refresh };
+  return {
+    messages: gwMessages,
+    sessionID: gwSessionID,
+    busy: gwBusy,
+    send: sendShared,
+    refresh: refreshShared,
+  };
 }

@@ -4,10 +4,6 @@ import {
   toggleCard,
   setCardExpanded,
   clearConversationUiState,
-  agentCardExpanded,
-  toggleAgentCardExpanded,
-  toolOutputExpanded,
-  toggleToolOutputExpanded,
 } from "../src/store/conversation-ui";
 
 beforeEach(() => {
@@ -60,34 +56,12 @@ describe("cardExpanded / toggleCard", () => {
     expect(cardExpanded("card-4", "running", true)).toBe(true);
   });
 
-  test("clearConversationUiState resets all three stores", () => {
+  test("clearConversationUiState resets fold state", () => {
     toggleCard("c1", "running", true);
-    toggleAgentCardExpanded("a1", true);
-    toggleToolOutputExpanded("t1");
-
     expect(cardExpanded("c1", "running", true)).toBe(false);
-    expect(agentCardExpanded("a1", true)).toBe(false);
-    expect(toolOutputExpanded("t1")).toBe(true);
 
     clearConversationUiState();
 
     expect(cardExpanded("c1", "running", true)).toBe(true);
-    expect(agentCardExpanded("a1", true)).toBe(true);
-    expect(toolOutputExpanded("t1")).toBe(false);
-  });
-});
-
-describe("legacy APIs unaffected", () => {
-  test("agentCardExpanded keeps its running-state-scoped protocol", () => {
-    toggleAgentCardExpanded("agent-1", true); // default → false
-    expect(agentCardExpanded("agent-1", true)).toBe(false);
-    expect(agentCardExpanded("agent-1", false)).toBe(true); // running state changed
-  });
-
-  test("toolOutputExpanded independent from unified store", () => {
-    toggleToolOutputExpanded("tool-1");
-    expect(toolOutputExpanded("tool-1")).toBe(true);
-    // unified store entry should not exist
-    expect(cardExpanded("tool-1", undefined, false)).toBe(false);
   });
 });

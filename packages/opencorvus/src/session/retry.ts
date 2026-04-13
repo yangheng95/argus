@@ -84,9 +84,11 @@ export namespace SessionRetry {
     if (code.includes("exhausted") || code.includes("unavailable")) {
       return "Provider is overloaded"
     }
-    if (json.type === "error" && json.error?.code?.includes("rate_limit")) {
+    if (json.type === "error" && typeof json.error?.code === "string" && json.error.code.includes("rate_limit")) {
       return "Rate Limited"
     }
+    // Typed error envelopes (type=error) without a recognized retry signal are not retryable.
+    if (json.type === "error") return undefined
     return JSON.stringify(json)
   }
 }

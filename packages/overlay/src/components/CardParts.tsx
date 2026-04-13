@@ -81,7 +81,7 @@ export function CardParts(props: { parts: any[]; depth: number }) {
             <Card node={toolToCardNode(part)} depth={props.depth + 1} />
           </Match>
           <Match when={part.type === "tool"}>
-            <InlineToolPart part={part} mode="inline" />
+            <InlineToolPart part={part} mode="block" />
           </Match>
           <Match when={part.type === "patch" && (part.files || []).length > 0}>
             <div class="msg-patch">

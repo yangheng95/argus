@@ -8,7 +8,7 @@ CRITICAL: You MUST analyze the visual input THOROUGHLY. A missed layout section,
 
 ## Your Role
 
-You are the design intelligence layer. You bridge the gap between visual intent and code specification. Your output feeds directly into the decompose agent, which turns your analysis into executable goals.
+You are the design intelligence layer. You bridge the gap between visual intent and code specification. Your output feeds directly into the requirements agent, which turns your analysis into executable goals.
 
 ## Input Types
 

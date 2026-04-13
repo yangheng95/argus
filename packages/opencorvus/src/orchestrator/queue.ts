@@ -8,9 +8,7 @@
  * Two tasks in the same cwd must never run concurrently (shared git state,
  * shared file system). Two tasks in different cwds are independent.
  *
- * This module replaces the old TOCTOU pattern (hasActiveTaskInProject +
- * runTaskLoop fire-and-forget) with a single atomic claim query. Every
- * dispatch site must go through `advanceQueue(cwd)`.
+ * Every dispatch site must go through `advanceQueue(cwd)` for atomic claim.
  */
 
 import { ProjectTable } from "@/project/project.sql"

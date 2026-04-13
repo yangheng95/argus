@@ -3,7 +3,7 @@ import { Identifier } from "@/id/id"
 import { executorLeaseAvailable, executorLeaseHeldByOther, executorLeaseOwner, executorLeaseUntil } from "./lease"
 import { type GoalJudgmentType, type EvaluationOutput } from "@/evaluator/types"
 
-/** Input shape for persisting a decomposed requirement into
+/** Input shape for persisting a requirement extracted by the Requirements agent into
  *  orchestrator_requirement. Mirrors the table columns plus an optional
  *  check_selector stored inside metadata. */
 export interface Requirement {

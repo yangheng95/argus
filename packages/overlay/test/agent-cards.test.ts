@@ -3,8 +3,8 @@ import { conversationMessages } from "../src/utils/conversation"
 import { agentCards, agentCardOrder, clearAgentEvents, setMessages, setAgentEvents, setSelectedTaskID } from "../src/store/messages"
 import {
   clearConversationUiState,
-  toggleToolOutputExpanded,
-  toolOutputExpanded,
+  toggleCard,
+  cardExpanded,
 } from "../src/store/conversation-ui"
 import { setBoardStore } from "../src/store/board"
 import { routeSSEEvent } from "../src/services/events"
@@ -67,17 +67,17 @@ test("store agentCards merges same-session messages into one card", () => {
   // 1 message → 1 card
   setMessages([specMsg("m1", 100, "a")])
   expect(agentCardOrder()).toEqual(["spec:session:s1"])
-  expect(agentCards()["spec:session:s1"]._agentMessages).toHaveLength(1)
+  expect(agentCards()["spec:session:s1"].messages).toHaveLength(1)
 
   // 2 messages same session → still 1 card with 2 messages
   setMessages([specMsg("m1", 100, "a"), specMsg("m2", 200, "b")])
   expect(agentCardOrder()).toEqual(["spec:session:s1"])
-  expect(agentCards()["spec:session:s1"]._agentMessages).toHaveLength(2)
+  expect(agentCards()["spec:session:s1"].messages).toHaveLength(2)
 
   // 3 messages same session → still 1 card with 3 messages
   setMessages([specMsg("m1", 100, "a"), specMsg("m2", 200, "b"), specMsg("m3", 300, "c")])
   expect(agentCardOrder()).toEqual(["spec:session:s1"])
-  expect(agentCards()["spec:session:s1"]._agentMessages).toHaveLength(3)
+  expect(agentCards()["spec:session:s1"].messages).toHaveLength(3)
 })
 
 // ── Executor Goal Group tests ──
@@ -127,19 +127,19 @@ test("multiple executor sessions auto-group by sessionID (no board dependency)",
 
   // 2 session groups (grouped by sessionID, not by board goal data)
   const goalGroups = Object.values(agentCards()).filter(
-    (card: any) => card._agentGoalGroup,
+    (card: any) => card.kind === "goal",
   )
   expect(goalGroups).toHaveLength(2)
 
   const groupA = agentCards()["executor:session:exec-session-a"]
   expect(groupA).toBeDefined()
-  expect(groupA._agentGoalGroup).toBe(true)
-  expect(groupA._agentInternalCards).toHaveLength(2)
-  expect(groupA._agentInternalCards![0]._agentMessages[0].parts[0].text).toBe("Reading auth.ts")
+  expect(groupA.kind).toBe("goal")
+  expect(groupA.internalCards).toHaveLength(2)
+  expect(groupA.internalCards![0].messages[0].parts[0].text).toBe("Reading auth.ts")
 
   const groupB = agentCards()["executor:session:exec-session-b"]
   expect(groupB).toBeDefined()
-  expect(groupB._agentInternalCards).toHaveLength(1)
+  expect(groupB.internalCards).toHaveLength(1)
 })
 
 test("goal title comes from board when available", () => {
@@ -177,10 +177,10 @@ test("goal title comes from board when available", () => {
 
   // Group A has title from board, group B has empty title (no board match)
   const groupA = agentCards()["executor:session:exec-session-a"]
-  expect(groupA._agentGoalTitle).toBe("Implement auth")
+  expect(groupA.goalTitle).toBe("Implement auth")
 
   const groupB = agentCards()["executor:session:exec-session-b"]
-  expect(groupB._agentGoalTitle).toBe("")
+  expect(groupB.goalTitle).toBe("")
 })
 
 test("single executor session merges into one card (no grouping)", () => {
@@ -204,16 +204,16 @@ test("single executor session merges into one card (no grouping)", () => {
 
   // Single session → merged into one flat card, no goal group
   const goalGroups = Object.values(agentCards()).filter(
-    (card: any) => card._agentGoalGroup,
+    (card: any) => card.kind === "goal",
   )
   expect(goalGroups).toHaveLength(0)
 
   const cards = Object.values(agentCards()).filter(
-    (card: any) => card._agentStage === "executor",
+    (card: any) => card.stage === "executor",
   )
   expect(cards).toHaveLength(1)
-  expect(cards[0]._agentMessages).toHaveLength(2)
-  expect(cards[0]._agentRound).toBe(0)
+  expect(cards[0].messages).toHaveLength(2)
+  expect(cards[0].round).toBe(0)
 })
 
 test("conversation keeps single executor session as a collapsible card", () => {
@@ -239,11 +239,10 @@ test("conversation keeps single executor session as a collapsible card", () => {
   const items = conversationMessages()
 
   expect(items).toHaveLength(1)
-  expect(items[0]?._agentCard).toBe(true)
-  expect(items[0]?._agentGoalGroup).toBeUndefined()
-  expect(items[0]?._agentStage).toBe("executor")
-  expect(items[0]?._agentMessages).toHaveLength(2)
-  expect(items[0]?._agentMessages[0]?.parts[0]?.text).toBe("Step 1")
+  expect(items[0]?.kind).toBe("agent")
+  expect(items[0]?.stage).toBe("executor")
+  expect(items[0]?.messages).toHaveLength(2)
+  expect(items[0]?.messages[0]?.parts[0]?.text).toBe("Step 1")
 })
 
 test("conversation still flattens non-executor agent cards", () => {
@@ -265,7 +264,7 @@ test("conversation still flattens non-executor agent cards", () => {
   const items = conversationMessages()
 
   expect(items).toHaveLength(1)
-  expect(items[0]?._agentCard).toBeUndefined()
+  expect(items[0]?.kind).not.toBe("agent")
   expect(items[0]?.info?.id).toBe("spec-1")
 })
 
@@ -295,9 +294,9 @@ test("goal group status reflects child card states", () => {
 
   const group = agentCards()["executor:session:sess-a"]
   expect(group).toBeDefined()
-  expect(group._agentStatus).toBe("running")
-  expect(group._agentInternalCards![0]._agentStatus).toBe("completed")
-  expect(group._agentInternalCards![1]._agentStatus).toBe("running")
+  expect(group.status).toBe("running")
+  expect(group.internalCards![0].status).toBe("completed")
+  expect(group.internalCards![1].status).toBe("running")
 })
 
 test("coding executor ids classify as executor cards", () => {
@@ -324,8 +323,8 @@ test("coding executor ids classify as executor cards", () => {
 
     const card = agentCards()[`executor:session:session-${agent}`]
     expect(card).toBeDefined()
-    expect(card?._agentStage).toBe("executor")
-    expect(card?._agentMessages[0]?.parts[0]?.text).toBe(`${agent} text`)
+    expect(card?.stage).toBe("executor")
+    expect(card?.messages[0]?.parts[0]?.text).toBe(`${agent} text`)
   }
 })
 
@@ -355,9 +354,9 @@ test("live agent.updated events render agent cards before transcript persistence
 
   const items = conversationMessages()
   expect(items).toHaveLength(1)
-  expect(items[0]?._agentCard).toBe(true)
-  expect(items[0]?._agentStage).toBe("architect")
-  expect(items[0]?._agentMessages).toHaveLength(1)
+  expect(items[0]?.kind).toBe("agent")
+  expect(items[0]?.stage).toBe("architect")
+  expect(items[0]?.messages).toHaveLength(1)
 })
 
 test("run.progress keeps executor messages attached to the real goal session", async () => {
@@ -405,20 +404,22 @@ test("run.progress keeps executor messages attached to the real goal session", a
 
   const group = agentCards()["goal-group:goal-1"]
   expect(group).toBeDefined()
-  expect(group._agentGoalGroup).toBe(true)
-  expect(group._agentInternalCards).toHaveLength(1)
-  expect(group._agentInternalCards?.[0]?._agentStage).toBe("executor")
+  expect(group.kind).toBe("goal")
+  expect(group.internalCards).toHaveLength(1)
+  expect(group.internalCards?.[0]?.stage).toBe("executor")
 })
 
-test("conversation ui state resets on task switch and tracks tool output expansion externally", () => {
-  toggleToolOutputExpanded("tool-part-1")
-  expect(toolOutputExpanded("tool-part-1")).toBe(true)
+test("conversation ui state resets on task switch", () => {
+  // Default for an unknown card is true; toggling flips to false (override stored).
+  toggleCard("card-1", "completed", true)
+  expect(cardExpanded("card-1", "completed", true)).toBe(false)
 
   setSelectedTaskID("task-a")
-  expect(toolOutputExpanded("tool-part-1")).toBe(false)
+  // After task switch the override store is cleared → default returns.
+  expect(cardExpanded("card-1", "completed", true)).toBe(true)
 
-  toggleToolOutputExpanded("tool-part-1")
-  expect(toolOutputExpanded("tool-part-1")).toBe(true)
+  toggleCard("card-1", "completed", true)
+  expect(cardExpanded("card-1", "completed", true)).toBe(false)
   setSelectedTaskID("task-b")
-  expect(toolOutputExpanded("tool-part-1")).toBe(false)
+  expect(cardExpanded("card-1", "completed", true)).toBe(true)
 })

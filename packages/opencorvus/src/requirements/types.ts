@@ -1,9 +1,9 @@
 /**
- * Decompose data shapes — canonical types shared by the agent and its
+ * Requirements data shapes — canonical types shared by the agent and its
  * structured tool collector.
  *
  * These were previously co-located with a YAML-like text parser in
- * `decompose/parse.ts`. The parser has been removed (Zod tool calls are now
+ * `requirements/parse.ts`. The parser has been removed (Zod tool calls are now
  * the only path); the types live here so multiple modules can import the
  * shape without dragging in dead parsing code.
  */

@@ -1732,14 +1732,20 @@ async function overlaySnapshot(page: Page) {
   return page.evaluate(() => {
     try {
       const state = window.eval("state")
-      const visibleTurns = [...document.querySelectorAll(".turn[data-role]")]
-        .map((node) => {
-          const element = node as HTMLElement
-          const role = element.dataset.role || ""
-          const text = element.querySelector(".msg-body")?.textContent?.trim()
-            || element.querySelector(".agent-card-label")?.textContent?.trim()
-            || element.querySelector(".executor-goal-label")?.textContent?.trim()
-            || element.textContent?.trim().slice(0, 200)
+      // Overlay conversation cards are rendered as `<article class="card" data-kind=...
+      // data-role=... data-stage=... data-depth="N">` via components/Card.tsx. Top-level
+      // items live at data-depth="0". Text for assistant/agent/goal/tool streams lives
+      // inside `.card__body` using `.msg-text` / `.reasoning-text` classes from CardParts
+      // and ReasoningPart. User-message cards carry data-role="user" and are excluded.
+      const visibleTurns = [...document.querySelectorAll<HTMLElement>('.card[data-depth="0"]')]
+        .map((element) => {
+          const role = element.dataset.role || element.dataset.kind || ""
+          const body = element.querySelector(".card__body")
+          const text = body?.querySelector(".msg-text")?.textContent?.trim()
+            || body?.querySelector(".reasoning-text")?.textContent?.trim()
+            || element.querySelector(".card__goal-desc")?.textContent?.trim()
+            || body?.textContent?.trim().slice(0, 200)
+            || element.querySelector(".card__title")?.textContent?.trim()
             || ""
           return { role, text }
         })
@@ -1751,6 +1757,8 @@ async function overlaySnapshot(page: Page) {
         workspaceDirectory: localStorage.getItem("oc_workspace_directory") || "",
         workspaceTaskID: localStorage.getItem("oc_workspace_task") || "",
       }
+      const firstText = (sel: string) =>
+        document.querySelector(sel)?.textContent?.trim() || ""
       return {
         directory: state.directory || "",
         savedDirectory: state.savedDirectory || "",
@@ -1761,12 +1769,15 @@ async function overlaySnapshot(page: Page) {
           ? state.tasks.map((item: { task?: { id?: string } }) => item?.task?.id || "").filter(Boolean).slice(0, 5)
           : [],
         taskList: document.querySelector("#taskListPanel")?.textContent?.trim() || "",
-        reasoning: document.querySelector('.turn[data-role="assistant"] .reasoning-text')?.textContent?.trim()
-          || document.querySelector('.turn[data-role="agent-card"] .reasoning-text')?.textContent?.trim() || "",
-        assistantText: document.querySelector('.turn[data-role="assistant"] .msg-text')?.textContent?.trim()
-          || document.querySelector('.turn[data-role="agent-card"] .msg-text')?.textContent?.trim()
-          || document.querySelector('.turn[data-role="agent-card"]')?.textContent?.trim()
-          || document.querySelector('.turn[data-role="executor-goal-group"]')?.textContent?.trim() || "",
+        reasoning: firstText('.card[data-role="assistant"] .reasoning-text')
+          || firstText('.card[data-kind="agent"] .reasoning-text')
+          || firstText('.card[data-kind="goal"] .reasoning-text')
+          || firstText('.card[data-depth="0"] .reasoning-text'),
+        assistantText: firstText('.card[data-role="assistant"] .msg-text')
+          || firstText('.card[data-kind="agent"] .msg-text')
+          || firstText('.card[data-kind="goal"] .msg-text')
+          || firstText('.card[data-kind="tool"] .msg-text')
+          || firstText('.card[data-depth="0"]:not([data-role="user"]) .card__body'),
         liveRole: liveTurn.role,
         liveText: liveTurn.text,
         visibleTurns: visibleTurns.slice(-5),

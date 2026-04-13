@@ -108,7 +108,7 @@ export function createGatewayTools(ctx: GatewayToolsContext) {
 
     enqueue_workflow_task: tool({
       description:
-        "Create a full-pipeline task (decompose → design → architect → execute → deliver). " +
+        "Create a full-pipeline task (requirements → design → architect → execute → deliver). " +
         "Use for multi-step engineering work: building a feature, replicating a UI from a " +
         "screenshot, refactoring across files, anything that benefits from goals + " +
         "evaluators. NOT for one-shot edits or questions — use dispatch_build_task for those.",
@@ -138,7 +138,7 @@ export function createGatewayTools(ctx: GatewayToolsContext) {
 
     dispatch_build_task: tool({
       description:
-        "Run the build agent directly on a one-shot prompt — bypasses decompose / design / " +
+        "Run the build agent directly on a one-shot prompt — bypasses requirements / design / " +
         "architect / deliver. Use for: single-file edits, code Q&A, quick fixes, lookups, " +
         "anything that is NOT a multi-goal feature. The task still appears in the task list " +
         "and supports cancel; the only difference is the pipeline shortcut.",
@@ -161,6 +161,27 @@ export function createGatewayTools(ctx: GatewayToolsContext) {
               channelBinding: ctx.channelBinding,
               metadata: { gateway: { sessionID: ctx.sessionID } },
             }),
+        }),
+    }),
+
+    forward_to_task: tool({
+      description:
+        "Forward a user message as additional context to a running or stopped task. " +
+        "Use when the user is continuing a conversation about an in-flight task " +
+        "(adding constraints, answering an agent question, supplying missing info, " +
+        "asking the agent to retry differently). Equivalent to typing into the task's " +
+        "own chat panel. Routes through OrchestratorService.handleTaskMessage so the " +
+        "task's own intent classifier picks it up. NOT for clarifications raised via " +
+        "Question.ask — use forward_clarification for those.",
+      inputSchema: z.object({
+        taskID: z.string().describe("Target task ID."),
+        text: z.string().describe("The user's message verbatim, minus any '@task' prefix."),
+        cwd: z.string().optional(),
+      }),
+      execute: async ({ taskID, text, cwd }) =>
+        Instance.provide({
+          directory: resolveCwd(cwd),
+          fn: () => OrchestratorService.handleTaskMessage(taskID, { text, source: "gateway" }),
         }),
     }),
 

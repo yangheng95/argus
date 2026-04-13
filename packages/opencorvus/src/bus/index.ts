@@ -109,6 +109,17 @@ export namespace Bus {
     return raw("*", callback)
   }
 
+  export function once<Definition extends BusEvent.Definition>(
+    def: Definition,
+    callback: (event: { type: Definition["type"]; properties: z.infer<Definition["properties"]> }) => unknown | Promise<unknown>,
+  ) {
+    const unsub = raw(def.type, async (event) => {
+      const result = await callback(event)
+      if (result === "done") unsub()
+    })
+    return unsub
+  }
+
   function raw(type: string, callback: (event: any) => void) {
     log.debug("subscribing", { type })
     if (isBusTraceEnabled()) {

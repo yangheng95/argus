@@ -1,13 +1,7 @@
 /**
- * Structured output tools for the Architect Agent.
- *
- * Replaces YAML-like text output with Zod-validated tool calls.
- * Particularly critical for the `spec` field which contains TypeScript code —
- * the old parseYamlLikeList() mangled multi-line code blocks because lines
- * like `id: string` inside TypeScript were parsed as new YAML keys.
- *
- * Each tool call is small (~500 bytes), avoiding the buffering hang from
- * monolithic tool schemas (see parse-section-tags.ts header comment).
+ * Zod-validated tool calls for Architect Agent structured output.
+ * Small tool calls (~500 bytes) avoid streaming buffering issues that monolithic
+ * tool schemas would produce for TypeScript code in the `spec` field.
  */
 import { tool } from "ai"
 import z from "zod"

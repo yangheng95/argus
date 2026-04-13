@@ -1,12 +1,12 @@
 /**
  * Architect Agent — cross-goal consensus coordination.
  *
- * Position: After Decompose, before Plan. Task Agent decides when to invoke.
+ * Position: After Requirements, before Plan. Task Agent decides when to invoke.
  * Reads ALL GoalContracts, explores codebase, resolves abstract exports/imports
  * into precise TypeScript contracts, writes binding consensus to Decision Log.
  *
  * Hard boundaries (from architecture spec):
- * ✗ Cannot modify GoalContracts (immutable after Decompose)
+ * ✗ Cannot modify GoalContracts (immutable after Requirements)
  * ✗ Cannot execute code/commands
  * ✗ Cannot write/modify files
  * ✗ Cannot call other agents
@@ -24,9 +24,8 @@ import { OrchestratorConfig } from "@/orchestrator/config"
 import { Config } from "@/config/config"
 import type { GoalContractFields } from "@/pipeline/types"
 import type { DecisionLog } from "@/decision-log"
-import type { ArchitectResult, ArchitectBlueprint, RecommendedNext, ArchitectDecisionKey } from "./types"
+import type { ArchitectResult, ArchitectBlueprint, ArchitectDecisionKey } from "./types"
 import { createArchitectOutputTools } from "./output-tools"
-import { extractTag, parseYamlLikeList } from "@/util/parse-section-tags"
 
 import ARCHITECT_CORE from "@/prompt/core/architect-core.txt"
 
@@ -138,21 +137,13 @@ async function run(input: {
   const resultFinishReason = runResult.finishReason
   const toolCallCount = runResult.toolCallCount
 
-  let allText = resultText?.trim() || ""
-  if (!allText) {
-    allText = resultSteps.map((s) => s.text).filter(Boolean).join("\n")
-  }
-
   log.info("architect agent finished", {
     steps: resultSteps.length,
     finishReason: resultFinishReason,
-    textLength: allText.length,
+    textLength: (resultText?.trim() || "").length,
     toolCalls: toolCallCount,
   })
 
-  // Structured tool-call output is the only supported path. If the LLM did not
-  // call register_contract / finalize_blueprint, we surface that as a hard
-  // failure rather than silently text-parsing (CLAUDE.md "no fallback" rule).
   const collector = outputToolKit.getCollector()
   if (collector.contracts.length === 0) {
     log.warn("architect agent: no contracts registered via tool calls", {
@@ -161,18 +152,15 @@ async function run(input: {
       finishReason: resultFinishReason,
     })
     throw new Error(
-      "Architect agent did not register any contracts via register_contract — " +
-      "no text-parsing fallback is available. Check the model's tool-calling behavior or the architect prompt.",
+      "Architect agent did not register any contracts via register_contract. " +
+      "Check the model's tool-calling behavior or the architect prompt.",
     )
   }
   const blueprint: ArchitectBlueprint = {
     contracts: collector.contracts,
     summary: collector.summary || "Cross-goal coordination",
   }
-  log.info("architect agent: using structured output", { contracts: collector.contracts.length })
-  const recommendedNext = parseRecommendedNext(allText)
 
-  // Write contracts to Decision Log
   let entriesWritten = 0
   for (const contract of blueprint.contracts) {
     if (!VALID_CATEGORIES.has(contract.category)) continue
@@ -189,11 +177,9 @@ async function run(input: {
   log.info("architect agent output", {
     contracts: blueprint.contracts.length,
     entriesWritten,
-    recommendedNext: recommendedNext.length,
-    structured: collector.contracts.length > 0,
   })
 
-  return { blueprint, entriesWritten, recommendedNext }
+  return { blueprint, entriesWritten }
 }
 
 // ---------------------------------------------------------------------------
@@ -241,37 +227,4 @@ async function architectSystem(): Promise<string> {
   const config = await Config.get()
   const agentPrompt = (config.agent as Record<string, any> | undefined)?.architect?.prompt
   return typeof agentPrompt === "string" ? agentPrompt : ARCHITECT_CORE
-}
-
-// ---------------------------------------------------------------------------
-// Output parsing
-// ---------------------------------------------------------------------------
-//
-// Note: parseBlueprint() was removed — register_contract is the only supported
-// path for architect contract output. recommended_next is still parsed from
-// text below until a Zod tool is added (tracked as a follow-up in the
-// implementation status manual).
-
-function parseRecommendedNext(text: string): RecommendedNext[] {
-  const raw = extractTag(text, "recommended_next") || ""
-  if (!raw.trim()) return []
-
-  const items = parseYamlLikeList(raw)
-  return items
-    .filter((item) => item.agent)
-    .map((item) => {
-      let args: Record<string, unknown> | undefined
-      if (item.args) {
-        try { args = JSON.parse(item.args) } catch { args = undefined }
-      }
-      return {
-        agent: item.agent!,
-        args,
-        reason: item.reason || "",
-        confidence: Math.min(1, Math.max(0, parseFloat(item.confidence || "0.5"))),
-        priority: (["required", "suggested", "optional"].includes(item.priority || "")
-          ? item.priority
-          : "suggested") as RecommendedNext["priority"],
-      }
-    })
 }

@@ -2,7 +2,7 @@
 // Solid reactive store for conversation messages, agent events, and SSE state.
 
 import { createStore, produce } from "solid-js/store";
-import { batch, createMemo, createRoot } from "solid-js";
+import { batch, createMemo } from "solid-js";
 import { apiJson, apiUrl } from "../services/api";
 import { boardStore } from "../store/board";
 import { clearConversationUiState } from "./conversation-ui";
@@ -37,25 +37,39 @@ export interface Message {
   _synthetic?: boolean;
 }
 
-export interface AgentCardMessage {
-  _synthetic: true;
-  _agentCard: true;
-  _agentStage: string;
-  _agentStatus: string;
-  _agentRound: number;
-  _agentCardKey: string;
-  _agentMessages: any[];
-  _agentGoalGroup?: true;
-  _agentGoalID?: string;
-  _agentGoalTitle?: string;
-  _agentGoalStatus?: string;
-  _agentGoalDescription?: string;
-  _agentGoalSteps?: Array<{ stepID: string; label: string; status: string; summary?: string }>;
-  _agentContracts?: Array<{ key: string; value: string; reason?: string }>;
-  _agentInternalCards?: AgentCardMessage[];
-  info: MessageInfo;
-  parts: Part[];
-}
+/** Synthesised UI snapshot of an agent's contribution to a task — derived
+ *  from store.messages + agentEvents + boardStore by computeAgentCards().
+ *
+ *  `kind` discriminates a single-stage round ("agent") from a per-goal
+ *  container of stage cards ("goal"). All consumers (conversation.ts,
+ *  card-tree.ts, Board.tsx) read this struct, never raw Message objects. */
+export type AgentCardData =
+  | {
+      kind: "agent";
+      id: string;
+      stage: string;
+      status: string;
+      round: number;
+      messages: any[];
+      sessionID: string;
+      time: number;
+    }
+  | {
+      kind: "goal";
+      id: string;
+      stage: "executor";
+      status: string;
+      round: number;
+      sessionID: string;
+      time: number;
+      goalID: string;
+      goalTitle: string;
+      goalStatus: string;
+      goalDescription: string;
+      goalSteps?: Array<{ stepID: string; label: string; status: string; summary?: string }>;
+      contracts?: Array<{ key: string; value: string; reason?: string }>;
+      internalCards: AgentCardData[];
+    };
 
 // ── Store ──
 
@@ -575,7 +589,7 @@ function mergeAgentReasoningDeltas(events: any[]): any[] {
 // guarantees that consumers always see a consistent snapshot — no manual rebuild
 // calls, no timing gaps between source updates and derived state.
 
-function computeAgentCards(): { cards: Record<string, AgentCardMessage>; order: string[] } {
+function computeAgentCards(): { cards: Record<string, AgentCardData>; order: string[] } {
   const roundsByStage: Record<string, AgentRound[]> = {};
   const latestEventByStage = new Map<string, any>();
 
@@ -652,7 +666,7 @@ function computeAgentCards(): { cards: Record<string, AgentCardMessage>; order: 
   // Executor messages are matched to goals via sessionID.
   // Other per-goal stages (planner, evaluator) use message goalID (bridge-stamped).
   // All per-goal stages are collected into goal group cards.
-  // Task-scope stages (goal/decompose, architect, delivery, spec) stay standalone.
+  // Task-scope stages (goal/requirements, architect, delivery, spec) stay standalone.
 
   const PER_GOAL_STAGES = new Set(["planner", "executor", "evaluator"]);
 
@@ -698,7 +712,7 @@ function computeAgentCards(): { cards: Record<string, AgentCardMessage>; order: 
     return "";
   }
 
-  const nextCards: Record<string, AgentCardMessage> = {};
+  const nextCards: Record<string, AgentCardData> = {};
   const nextOrder: string[] = [];
 
   function buildCard(
@@ -706,38 +720,29 @@ function computeAgentCards(): { cards: Record<string, AgentCardMessage>; order: 
     round: AgentRound,
     roundLabel: number,
     status: string,
-  ): AgentCardMessage {
+  ): AgentCardData {
     // Fall back to Date.now() if the round had no valid timestamp.
-    // (Was previously a devError; removed because it lived inside a createMemo
-    // body and re-fired on every SSE event, swamping the dev-error overlay.
-    // Real timestamp validation belongs in setMessages/appendAgentEvent.)
+    // Real timestamp validation belongs in setMessages/appendAgentEvent.
     let created = round.startTime;
     if (!Number.isFinite(created) || created <= 0) {
       created = Date.now();
     }
     return {
-      _synthetic: true,
-      _agentCard: true,
-      _agentStage: stage,
-      _agentStatus: status,
-      _agentRound: roundLabel,
-      _agentCardKey: round.channelID,
-      _agentMessages: round.messages
+      kind: "agent",
+      id: round.channelID,
+      stage,
+      status,
+      round: roundLabel,
+      sessionID: round.sessionID,
+      time: created,
+      messages: round.messages
         .slice()
         .sort((left, right) => messageOrderTime(left) - messageOrderTime(right)),
-      info: {
-        id: `agent-card:${round.channelID}`,
-        role: "agent-card",
-        agent: stage,
-        sessionID: round.sessionID,
-        time: { created },
-      },
-      parts: [],
     };
   }
 
   // Collect per-goal step cards: goalID → step entries
-  const goalStepCards = new Map<string, { stage: string; card: AgentCardMessage; startTime: number }[]>();
+  const goalStepCards = new Map<string, { stage: string; card: AgentCardData; startTime: number }[]>();
 
   for (const [stage, rounds] of Object.entries(roundsByStage)) {
     rounds.sort((left, right) => left.startTime - right.startTime);
@@ -829,78 +834,67 @@ function computeAgentCards(): { cards: Record<string, AgentCardMessage>; order: 
 
     const groupStatus = entries.length === 0
       ? (goalInfo?.status === "passed" || goalInfo?.status === "failed" ? goalInfo.status : "pending")
-      : entries.some(e => e.card._agentStatus === "running")
+      : entries.some(e => e.card.status === "running")
         ? "running"
-        : entries.some(e => e.card._agentStatus === "error")
+        : entries.some(e => e.card.status === "error")
           ? "error"
           : "completed";
 
-    const goalSessionID = entries[0]?.card.info.sessionID;
+    const goalSessionID = entries[0]?.card.sessionID;
 
     const groupCreated = (Number.isFinite(groupStart) && groupStart > 0)
       ? groupStart
       : Date.now();
 
     nextCards[groupKey] = {
-      _synthetic: true,
-      _agentCard: true,
-      _agentGoalGroup: true,
-      _agentGoalID: gid,
-      _agentGoalTitle: goalInfo?.title ?? "",
-      _agentGoalStatus: goalInfo?.status ?? groupStatus,
-      _agentGoalDescription: goalDescMap.get(gid) ?? "",
-      _agentGoalSteps: goalStepsMap.get(gid),
-      _agentContracts: goalContractsMap.get(gid),
-      _agentInternalCards: entries.map(e => e.card),
-      _agentStage: "executor",
-      _agentStatus: groupStatus,
-      _agentRound: goalIndexMap.get(gid) ?? 0,
-      _agentCardKey: groupKey,
-      _agentMessages: [],
-      info: {
-        id: `agent-card:${groupKey}`,
-        role: "agent-card",
-        agent: "executor",
-        sessionID: goalSessionID ?? "",
-        time: { created: groupCreated },
-      },
-      parts: [],
+      kind: "goal",
+      id: groupKey,
+      stage: "executor",
+      status: groupStatus,
+      round: goalIndexMap.get(gid) ?? 0,
+      sessionID: goalSessionID ?? "",
+      time: groupCreated,
+      goalID: gid,
+      goalTitle: goalInfo?.title ?? "",
+      goalStatus: goalInfo?.status ?? groupStatus,
+      goalDescription: goalDescMap.get(gid) ?? "",
+      goalSteps: goalStepsMap.get(gid),
+      contracts: goalContractsMap.get(gid),
+      internalCards: entries.map(e => e.card),
     };
     nextOrder.push(groupKey);
   }
 
-  // Task-scope stage priority: architect before goal (decompose).
+  // Task-scope stage priority: architect before goal (requirements).
   // Other stages (executor goal groups, etc.) fall through to chronological order.
   const TASK_STAGE_PRIORITY: Record<string, number> = { spec: 0, architect: 1, goal: 2 };
 
   nextOrder.sort((left, right) => {
     const lCard = nextCards[left];
     const rCard = nextCards[right];
-    const lPrio = TASK_STAGE_PRIORITY[lCard?._agentStage || ""];
-    const rPrio = TASK_STAGE_PRIORITY[rCard?._agentStage || ""];
-    // When both cards are task-scope stages with defined priority, use that order
+    const lPrio = TASK_STAGE_PRIORITY[lCard?.stage || ""];
+    const rPrio = TASK_STAGE_PRIORITY[rCard?.stage || ""];
     if (lPrio !== undefined && rPrio !== undefined && lPrio !== rPrio) {
       return lPrio - rPrio;
     }
-    return messageOrderTime(lCard) - messageOrderTime(rCard) || left.localeCompare(right);
+    return (lCard?.time ?? 0) - (rCard?.time ?? 0) || left.localeCompare(right);
   });
 
   return { cards: nextCards, order: nextOrder };
 }
 
-// createRoot keeps the memo alive outside of a component tree (module-level singleton).
-const agentCardsMemo = createRoot(() =>
-  createMemo(computeAgentCards, { cards: {} as Record<string, AgentCardMessage>, order: [] as string[] }),
-);
-
-/** Reactive accessor: agent cards derived from messages + events + board. */
-export function agentCards(): Record<string, AgentCardMessage> {
-  return agentCardsMemo().cards;
+// Agent-card derivation: pure synchronous read of messages + agentEvents +
+// board. We deliberately do NOT wrap this in createMemo / createRoot — the
+// only consumer that benefits from caching is conversationMessages(), which
+// already lives inside its own createMemo and only re-runs when its tracked
+// dependencies change. Returning a fresh object here also makes test
+// assertions deterministic (no dangling memo to flush).
+export function agentCards(): Record<string, AgentCardData> {
+  return computeAgentCards().cards;
 }
 
-/** Reactive accessor: ordered agent card IDs. */
 export function agentCardOrder(): string[] {
-  return agentCardsMemo().order;
+  return computeAgentCards().order;
 }
 
 // ── Full load from transcript ──

@@ -7,7 +7,8 @@
  * 3. Pending — shows "pending" hint when no data and not generating
  */
 import { For, Show } from "solid-js";
-import { MessageView } from "./MessageView";
+import { CardParts } from "./CardParts";
+import { orderedMessageParts } from "../utils/message";
 import { t } from "../utils/i18n";
 
 interface Requirement {
@@ -46,12 +47,12 @@ export function RequirementsPanel(props: RequirementsPanelProps) {
       <Show when={props.isGenerating && hasStream() && !hasData()}>
         <div class="req-streaming">
           <div class="req-streaming-indicator">
-            <span class="agent-card-spinner" />
+            <span class="card__spinner" />
             <span class="req-streaming-label">{t("workflow.requirements_generating")}</span>
           </div>
           <div class="req-streaming-messages">
             <For each={props.streamingMessages}>
-              {(msg) => <MessageView message={msg} />}
+              {(msg) => <CardParts parts={orderedMessageParts(msg)} depth={1} />}
             </For>
           </div>
         </div>

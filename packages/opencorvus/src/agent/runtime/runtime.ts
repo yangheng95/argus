@@ -1,5 +1,5 @@
 /**
- * AgentRuntime — single entry point that every agent (decompose, architect,
+ * AgentRuntime — single entry point that every agent (requirements, architect,
  * design-analyst, planner/per-goal, delivery, task-agent) runs through.
  *
  * Responsibilities, previously duplicated across 7 files:
@@ -16,7 +16,7 @@
  *
  *   - Does NOT own tool wiring, system prompts, or result collection — each
  *     agent keeps its specialized output assembly (design analysis layout,
- *     decompose goal synthesis, plan file writes, etc.).
+ *     requirements goal synthesis, plan file writes, etc.).
  *   - Does NOT replace `ProviderLLM.stream`; it composes it.
  */
 import { ProviderLLM } from "@/provider/llm"

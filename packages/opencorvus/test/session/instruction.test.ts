@@ -2,7 +2,6 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import path from "path"
 import { InstructionPrompt } from "../../src/session/instruction"
 import { Instance } from "../../src/project/instance"
-import { Global } from "../../src/global"
 import { tmpdir } from "../fixture/fixture"
 
 describe("InstructionPrompt.resolve", () => {
@@ -99,8 +98,8 @@ describe("InstructionPrompt.systemPaths OPENCORVUS_CONFIG_DIR", () => {
     await using projectTmp = await tmpdir()
 
     process.env["OPENCORVUS_CONFIG_DIR"] = profileTmp.path
-    const originalGlobalConfig = Global.Path.config
-    ;(Global.Path as { config: string }).config = globalTmp.path
+    const originalGlobalConfigDir = process.env["OPENCORVUS_GLOBAL_CONFIG_DIR"]
+    process.env["OPENCORVUS_GLOBAL_CONFIG_DIR"] = globalTmp.path
 
     try {
       await Instance.provide({
@@ -112,7 +111,8 @@ describe("InstructionPrompt.systemPaths OPENCORVUS_CONFIG_DIR", () => {
         },
       })
     } finally {
-      ;(Global.Path as { config: string }).config = originalGlobalConfig
+      if (originalGlobalConfigDir === undefined) delete process.env["OPENCORVUS_GLOBAL_CONFIG_DIR"]
+      else process.env["OPENCORVUS_GLOBAL_CONFIG_DIR"] = originalGlobalConfigDir
     }
   })
 
@@ -126,8 +126,8 @@ describe("InstructionPrompt.systemPaths OPENCORVUS_CONFIG_DIR", () => {
     await using projectTmp = await tmpdir()
 
     process.env["OPENCORVUS_CONFIG_DIR"] = profileTmp.path
-    const originalGlobalConfig = Global.Path.config
-    ;(Global.Path as { config: string }).config = globalTmp.path
+    const originalGlobalConfigDir = process.env["OPENCORVUS_GLOBAL_CONFIG_DIR"]
+    process.env["OPENCORVUS_GLOBAL_CONFIG_DIR"] = globalTmp.path
 
     try {
       await Instance.provide({
@@ -139,7 +139,8 @@ describe("InstructionPrompt.systemPaths OPENCORVUS_CONFIG_DIR", () => {
         },
       })
     } finally {
-      ;(Global.Path as { config: string }).config = originalGlobalConfig
+      if (originalGlobalConfigDir === undefined) delete process.env["OPENCORVUS_GLOBAL_CONFIG_DIR"]
+      else process.env["OPENCORVUS_GLOBAL_CONFIG_DIR"] = originalGlobalConfigDir
     }
   })
 
@@ -152,8 +153,8 @@ describe("InstructionPrompt.systemPaths OPENCORVUS_CONFIG_DIR", () => {
     await using projectTmp = await tmpdir()
 
     delete process.env["OPENCORVUS_CONFIG_DIR"]
-    const originalGlobalConfig = Global.Path.config
-    ;(Global.Path as { config: string }).config = globalTmp.path
+    const originalGlobalConfigDir = process.env["OPENCORVUS_GLOBAL_CONFIG_DIR"]
+    process.env["OPENCORVUS_GLOBAL_CONFIG_DIR"] = globalTmp.path
 
     try {
       await Instance.provide({
@@ -164,7 +165,8 @@ describe("InstructionPrompt.systemPaths OPENCORVUS_CONFIG_DIR", () => {
         },
       })
     } finally {
-      ;(Global.Path as { config: string }).config = originalGlobalConfig
+      if (originalGlobalConfigDir === undefined) delete process.env["OPENCORVUS_GLOBAL_CONFIG_DIR"]
+      else process.env["OPENCORVUS_GLOBAL_CONFIG_DIR"] = originalGlobalConfigDir
     }
   })
 })

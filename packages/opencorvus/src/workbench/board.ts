@@ -762,7 +762,7 @@ function boardOverview(input: {
 // ═══════════════════════════════════════════════════════════════════
 // MiniWorkflow board fields — workflow state, per-goal workflows,
 // requirements list, and architect summary. Empty when task has no
-// _workflow metadata (e.g. simple tasks that skip decompose).
+// _workflow metadata (e.g. simple tasks that skip requirements analysis).
 // ═══════════════════════════════════════════════════════════════════
 
 function buildWorkflowFields(

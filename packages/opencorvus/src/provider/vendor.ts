@@ -108,10 +108,7 @@ export const CUSTOM_LOADERS: Record<string, CustomLoader> = {
     const awsBearerToken = iife(() => {
       const envToken = process.env.AWS_BEARER_TOKEN_BEDROCK
       if (envToken) return envToken
-      if (auth?.type === "api") {
-        process.env.AWS_BEARER_TOKEN_BEDROCK = auth.key
-        return auth.key
-      }
+      if (auth?.type === "api") return auth.key
       return undefined
     })
 
@@ -128,7 +125,9 @@ export const CUSTOM_LOADERS: Record<string, CustomLoader> = {
       region: defaultRegion,
     }
 
-    if (!awsBearerToken) {
+    if (awsBearerToken) {
+      providerOptions.apiKey = awsBearerToken
+    } else {
       const credentialProviderOptions = profile ? { profile } : {}
 
       providerOptions.credentialProvider = fromNodeProviderChain(credentialProviderOptions)
@@ -299,10 +298,7 @@ export const CUSTOM_LOADERS: Record<string, CustomLoader> = {
     const envServiceKey = iife(() => {
       const envAICoreServiceKey = process.env.AICORE_SERVICE_KEY
       if (envAICoreServiceKey) return envAICoreServiceKey
-      if (auth?.type === "api") {
-        process.env.AICORE_SERVICE_KEY = auth.key
-        return auth.key
-      }
+      if (auth?.type === "api") return auth.key
       return undefined
     })
     const deploymentId = process.env.AICORE_DEPLOYMENT_ID
@@ -310,7 +306,7 @@ export const CUSTOM_LOADERS: Record<string, CustomLoader> = {
 
     return {
       autoload: !!envServiceKey,
-      options: envServiceKey ? { deploymentId, resourceGroup } : {},
+      options: envServiceKey ? { apiKey: envServiceKey, deploymentId, resourceGroup } : {},
       async getModel(sdk: any, modelID: string) {
         return sdk(modelID)
       },

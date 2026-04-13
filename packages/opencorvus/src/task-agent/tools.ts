@@ -207,7 +207,7 @@ export function createTaskAgentTools(input: {
 
   const tools = {
     requirements: tool({
-      description: "Explore the codebase, analyze the task, extract requirements, and decompose into executable goal contracts with cross-goal interface declarations.",
+      description: "Explore the codebase, analyze the task, extract requirements, and produce executable goal contracts with cross-goal interface declarations.",
       inputSchema: z.object({
         reason: z.string().optional().describe("Why you decided to analyze requirements"),
       }),
@@ -225,13 +225,13 @@ export function createTaskAgentTools(input: {
         // inactivity guard here — that was the same "delta = activity"
         // hazard we just eliminated.
         try {
-          const decomposeSession = await Session.createNext({
+          const requirementsSession = await Session.createNext({
             parentID: input.agentSessionID,
-            title: `Decompose: ${task.title}`,
+            title: `Requirements: ${task.title}`,
             directory: Instance.directory,
           })
-          registerGoalRunSession(decomposeSession.id, taskID, "goal")
-          const hooks = sessionStreamHooks({ sessionID: decomposeSession.id, taskID, stage: "goal" })
+          registerGoalRunSession(requirementsSession.id, taskID, "goal")
+          const hooks = sessionStreamHooks({ sessionID: requirementsSession.id, taskID, stage: "goal" })
 
 
           const { RequirementsService } = await import("@/requirements")
@@ -239,12 +239,12 @@ export function createTaskAgentTools(input: {
           const decisionLog = createDecisionLog(taskID)
 
           const result = await withStageRetry("goal", () =>
-            RequirementsService.decompose({
+            RequirementsService.run({
               title: task.title,
               request: task.request,
               attachments: Array.isArray(task.attachments) ? task.attachments as any : undefined,
               taskID,
-              sessionID: decomposeSession.id,
+              sessionID: requirementsSession.id,
               signal: input.signal,
               decisionLog,
               stream: {
@@ -273,7 +273,7 @@ export function createTaskAgentTools(input: {
           const now = Date.now()
           const specSnapshotID = Identifier.ascending("spec")
 
-          // Build spec content from decompose output
+          // Build spec content from requirements output
           const specContent = [
             `# ${task.title}`,
             "",
@@ -359,7 +359,7 @@ export function createTaskAgentTools(input: {
               .where(eq(OrchestratorTaskTable.id, taskID))
               .run()
             Database.effect(() =>
-              OrchestratorProtocol.emit(OrchestratorEvent.TaskUpdated, { taskID, status: task.status, summary: "Goals defined" }, { source: "task-agent.decompose" }),
+              OrchestratorProtocol.emit(OrchestratorEvent.TaskUpdated, { taskID, status: task.status, summary: "Goals defined" }, { source: "task-agent.requirements" }),
             )
           }) } catch (dbErr) {
             log.error("requirements: failed to persist goals to DB", { taskID, error: dbErr instanceof Error ? dbErr.message : String(dbErr), stack: dbErr instanceof Error ? dbErr.stack : undefined })
@@ -410,7 +410,7 @@ export function createTaskAgentTools(input: {
         "",
         "The design specification is appended to the task request, enriching it with",
         "exact layout structure, style tokens, component inventory, and interaction patterns.",
-        "This enables the decompose agent to produce more accurate, pixel-level goals.",
+        "This enables the requirements agent to produce more accurate, pixel-level goals.",
         "",
         "SKIP this step when:",
         "  - No visual references are available",
@@ -549,7 +549,7 @@ export function createTaskAgentTools(input: {
             `  Recommended stack: ${analysis.techStack.join(", ")}`,
             "",
             "The design specification has been appended to the task request.",
-            "NEXT: proceed to requirements — the decompose agent will use the design spec to produce precise goals.",
+            "NEXT: proceed to requirements — the requirements agent will use the design spec to produce precise goals.",
           ].join("\n")
         } catch (err) {
           await hooks.flush()
@@ -566,7 +566,7 @@ export function createTaskAgentTools(input: {
     // -----------------------------------------------------------------------
 
     architect: tool({
-      description: "Coordinate cross-goal contracts. Call after decompose when multiple goals have exports/imports dependencies. Writes precise interface contracts, directory blueprints, and shared type definitions to the Decision Log so parallel goals don't conflict. Skip for single-goal or trivial tasks. Always coordinates ALL goals — goal selection is automatic.",
+      description: "Coordinate cross-goal contracts. Call after requirements when multiple goals have exports/imports dependencies. Writes precise interface contracts, directory blueprints, and shared type definitions to the Decision Log so parallel goals don't conflict. Skip for single-goal or trivial tasks. Always coordinates ALL goals — goal selection is automatic.",
       inputSchema: z.object({
         reason: z.string().optional().describe("Why you decided to run architect"),
       }),
@@ -637,9 +637,6 @@ export function createTaskAgentTools(input: {
           result.blueprint.summary,
           result.blueprint.contracts.length > 0
             ? `Categories: ${[...new Set(result.blueprint.contracts.map(c => c.category))].join(", ")}`
-            : "",
-          result.recommendedNext.length > 0
-            ? `Recommended next: ${result.recommendedNext.map(r => `${r.agent}(${r.priority})`).join(", ")}`
             : "",
         ].filter(Boolean).join("\n")
 

@@ -6,7 +6,7 @@ import { SCHEMA_DDL } from "../../src/storage/ddl"
 describe("protocol.v2", () => {
   test("parses protocol envelope and companion records", () => {
     const envelope = ProtocolEnvelope.parse({
-      id: "pte_000000000001abcdefghijklmn",
+      id: "pev_000000000001abcdefghijklmn",
       kind: "event",
       type: "run.started",
       aggregate: "run",
@@ -19,7 +19,7 @@ describe("protocol.v2", () => {
       payload: { hello: "world" },
     })
     const inbox = ProtocolInboxMessage.parse({
-      id: "pin_000000000001abcdefghijklmn",
+      id: "pib_000000000001abcdefghijklmn",
       envelope_id: envelope.id,
       actor: "run",
       actor_id: envelope.aggregate_id,

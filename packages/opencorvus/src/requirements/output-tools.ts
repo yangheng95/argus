@@ -1,5 +1,5 @@
 /**
- * Structured output tools for the Decompose Agent.
+ * Structured output tools for the Requirements Agent.
  *
  * Instead of producing YAML-like text parsed by regex, the LLM registers each
  * item via a Zod-validated tool call. Benefits over text-based output:

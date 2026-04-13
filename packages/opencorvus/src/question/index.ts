@@ -80,20 +80,34 @@ export namespace Question {
     ),
   }
 
-  const state = Instance.state(async () => {
-    const pending: Record<
-      string,
-      {
-        info: Request
-        resolve: (answers: Answer[]) => void
-        reject: (e: any) => void
-      }
-    > = {}
+  const state = Instance.state(
+    async () => {
+      const pending: Record<
+        string,
+        {
+          info: Request
+          resolve: (answers: Answer[]) => void
+          reject: (e: any) => void
+          timer: ReturnType<typeof setTimeout>
+        }
+      > = {}
 
-    return {
-      pending,
-    }
-  })
+      return {
+        pending,
+      }
+    },
+    async (s) => {
+      // Cancel any pending question timers when the instance is disposed so that
+      // late-firing auto-reject timeouts cannot bleed into the next test/run.
+      // We deliberately do NOT call entry.reject — by the time dispose runs, callers
+      // have abandoned their await, and rejecting would surface as an unhandled rejection.
+      for (const id of Object.keys(s.pending)) {
+        const entry = s.pending[id]
+        clearTimeout(entry.timer)
+        delete s.pending[id]
+      }
+    },
+  )
 
   const QUESTION_MIN_TIMEOUT_MS = 1000
   const QUESTION_AUTO_REJECT_MS = Math.max(
@@ -121,14 +135,7 @@ export namespace Question {
         questions: input.questions,
         tool: input.tool,
       }
-      s.pending[id] = {
-        info,
-        resolve,
-        reject,
-      }
-      Bus.publish(Event.Asked, info)
-      // Auto-reject questions after timeout so executor proceeds without blocking (always ≥ 1s)
-      setTimeout(() => {
+      const timer = setTimeout(() => {
         if (s.pending[id]) {
           log.info("auto-reject timeout", { id, questions: input.questions.length })
           delete s.pending[id]
@@ -139,6 +146,14 @@ export namespace Question {
           reject(new RejectedError())
         }
       }, timeout)
+      timer.unref?.()
+      s.pending[id] = {
+        info,
+        resolve,
+        reject,
+        timer,
+      }
+      Bus.publish(Event.Asked, info)
     })
   }
 
@@ -149,6 +164,7 @@ export namespace Question {
       log.warn("reply for unknown request", { requestID: input.requestID })
       return
     }
+    clearTimeout(existing.timer)
     delete s.pending[input.requestID]
 
     log.info("replied", { requestID: input.requestID, answers: input.answers })

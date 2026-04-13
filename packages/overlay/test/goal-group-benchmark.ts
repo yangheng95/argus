@@ -14,7 +14,10 @@ const { default: puppeteer } = await import(
   new URL("../../opencorvus/node_modules/puppeteer-core/lib/esm/puppeteer/puppeteer-core.js", import.meta.url).href
 )
 
-const src = new URL("../src/", import.meta.url)
+// Static assets: serve from dist-vite/ (built bundle) so the browser receives
+// already-compiled JS/CSS instead of raw .tsx that no browser can parse.
+// Run `bun run build:vite` in packages/overlay before launching this benchmark.
+const src = new URL("../dist-vite/", import.meta.url)
 const types: Record<string, string> = {
   ".css": "text/css; charset=utf-8",
   ".html": "text/html; charset=utf-8",
@@ -101,6 +104,41 @@ const boardData = {
     { id: "staging", title: "Staging", cards: [] },
     { id: "interactions", title: "Interactions", cards: [] },
     { id: "history", title: "History", cards: [] },
+  ],
+  goalWorkflows: [
+    {
+      goalID: "goal-auth",
+      goalTitle: "Implement JWT authentication module",
+      goalStatus: "running",
+      priority: "blocking",
+      steps: [
+        { stepID: "plan", label: "Plan", status: "completed" },
+        { stepID: "execute", label: "Execute", status: "running" },
+        { stepID: "eval", label: "Eval", status: "pending" },
+      ],
+    },
+    {
+      goalID: "goal-api",
+      goalTitle: "Add REST API endpoints for dashboard",
+      goalStatus: "running",
+      priority: "blocking",
+      steps: [
+        { stepID: "plan", label: "Plan", status: "completed" },
+        { stepID: "execute", label: "Execute", status: "running" },
+        { stepID: "eval", label: "Eval", status: "pending" },
+      ],
+    },
+    {
+      goalID: "goal-rbac",
+      goalTitle: "Implement role-based access control",
+      goalStatus: "running",
+      priority: "blocking",
+      steps: [
+        { stepID: "plan", label: "Plan", status: "pending" },
+        { stepID: "execute", label: "Execute", status: "running" },
+        { stepID: "eval", label: "Eval", status: "pending" },
+      ],
+    },
   ],
   overview: [],
   brief: { content: "", updated_at: Date.now() },
@@ -410,10 +448,14 @@ if (!exe) {
   process.exit(1)
 }
 
+// Set OVERLAY_BENCHMARK_SHOT=1 to run headless and dump screenshots to
+// docs/cards-visual/, then exit. Useful for non-interactive verification.
+const SHOT_MODE = process.env.OVERLAY_BENCHMARK_SHOT === "1"
+
 const browser = await puppeteer.launch({
   executablePath: exe,
-  headless: false,
-  defaultViewport: { width: 800, height: 900 },
+  headless: SHOT_MODE,
+  defaultViewport: { width: 900, height: 1200, deviceScaleFactor: 2 },
   args: ["--no-sandbox", "--no-first-run", "--no-default-browser-check"],
 })
 
@@ -473,6 +515,117 @@ await page.evaluate((taskID: string) => {
     if (taskRow) taskRow.click()
   }, 500)
 }, TASK_ID)
+
+// Give the overlay a moment to render the selected task's transcript.
+await new Promise((r) => setTimeout(r, 1500))
+
+if (SHOT_MODE) {
+  const path = await import("node:path")
+  const outDir = path.resolve(
+    new URL("../../../docs/cards-visual/", import.meta.url).pathname.replace(/^\/+/, ""),
+  )
+  await Bun.$`mkdir -p ${outDir}`.quiet().catch(() => {})
+
+  const overview = path.join(outDir, "benchmark-overview.png")
+  await page.screenshot({ path: overview as `${string}.png`, fullPage: true })
+  console.log(`  shot → ${overview}`)
+
+  // Expand and screenshot each top-level card (full content, not just header).
+  // Plain element.screenshot() gives the bounding box at current scroll
+  // position — for tall cards we resize the chat container to fit them.
+  const cardCount = await page.$$eval(".card[data-depth='0']", (els) => els.length)
+  console.log(`  found ${cardCount} top-level cards`)
+  for (let i = 0; i < cardCount; i++) {
+    const sel = `.card[data-depth='0']:nth-of-type(${i + 1})`
+    // Click header if collapsed so child content renders.
+    await page.evaluate((s) => {
+      const el = document.querySelector(s) as HTMLElement | null
+      if (el && !el.classList.contains("card--expanded")) {
+        const head = el.querySelector(".card__head") as HTMLElement | null
+        head?.click()
+      }
+      el?.scrollIntoView()
+    }, sel)
+    await new Promise((r) => setTimeout(r, 100))
+    const handle = await page.$(sel)
+    if (!handle) continue
+    const out = path.join(outDir, `benchmark-card-${i + 1}.png`)
+    await handle.screenshot({ path: out as `${string}.png` })
+    console.log(`  shot → ${out}`)
+  }
+
+  // Scroll the chat container to top so all cards are visible from the start.
+  await page.evaluate(() => {
+    const c = document.querySelector("#chatScroll, .chat-scroll") as HTMLElement | null
+    if (c) c.scrollTop = 0
+  })
+  await new Promise((r) => setTimeout(r, 200))
+
+  // Whole conversation container as one tall image (full scrollHeight).
+  const chat = await page.$("#chatScroll, .chat-scroll")
+  if (chat) {
+    const out = path.join(outDir, "benchmark-chat.png")
+    await chat.screenshot({ path: out as `${string}.png` })
+    console.log(`  shot → ${out}`)
+  }
+
+  // Diagnostic: also dump scroll vs visible heights to find the squeeze.
+  const goalDiag = await page.$$eval(".card[data-kind='goal']", (els) =>
+    els.map((el) => {
+      const r = (el as HTMLElement).getBoundingClientRect()
+      const cs = getComputedStyle(el)
+      const parent = (el as HTMLElement).parentElement!
+      const pCS = getComputedStyle(parent)
+      return {
+        title: el.querySelector(".card__title")?.textContent?.trim(),
+        clientH: (el as HTMLElement).clientHeight,
+        scrollH: (el as HTMLElement).scrollHeight,
+        offsetH: (el as HTMLElement).offsetHeight,
+        rectH: Math.round(r.height),
+        cssHeight: cs.height,
+        cssMaxH: cs.maxHeight,
+        parentDisplay: pCS.display,
+        parentGridRows: pCS.gridTemplateRows,
+        parentAlign: pCS.alignItems,
+      }
+    }),
+  )
+  console.log("\n  goal card diag:", JSON.stringify(goalDiag, null, 2))
+
+  // Diagnostic: dump the card tree structure with rect dimensions.
+  const tree = await page.$$eval(".card", (els) =>
+    els.map((el) => {
+      const r = (el as HTMLElement).getBoundingClientRect()
+      const cs = getComputedStyle(el)
+      const body = el.querySelector(":scope > .card__body") as HTMLElement | null
+      const bodyR = body?.getBoundingClientRect()
+      const bodyCS = body ? getComputedStyle(body) : null
+      return {
+        depth: (el as HTMLElement).dataset.depth,
+        kind: (el as HTMLElement).dataset.kind,
+        stage: (el as HTMLElement).dataset.stage,
+        status: (el as HTMLElement).dataset.status,
+        title: el.querySelector(".card__title")?.textContent?.trim(),
+        childCardCount: el.querySelectorAll(":scope > .card__body .card").length,
+        expanded: el.classList.contains("card--expanded"),
+        w: Math.round(r.width),
+        h: Math.round(r.height),
+        overflow: cs.overflow,
+        bodyH: bodyR ? Math.round(bodyR.height) : "no-body",
+        bodyOverflow: bodyCS?.overflow ?? "n/a",
+        bodyMaxH: bodyCS?.maxHeight ?? "n/a",
+      }
+    }),
+  )
+  console.log("\n  card tree (depth/kind/stage/status/title/childCardCount):")
+  for (const t of tree) {
+    console.log(`    ${"  ".repeat(Number(t.depth))}d=${t.depth} ${t.kind}/${t.stage} [${t.status}] "${t.title}" ch=${t.childCardCount} ${t.w}x${t.h} exp=${t.expanded} bodyH=${t.bodyH} bodyOv=${t.bodyOverflow} bodyMaxH=${t.bodyMaxH}`)
+  }
+
+  await browser.close()
+  server.stop()
+  process.exit(0)
+}
 
 console.log(`  Task auto-selected. Overlay should show goal-grouped executor cards.`)
 console.log(`\n  Visual verification checklist:`)

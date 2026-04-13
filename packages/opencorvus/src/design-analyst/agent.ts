@@ -1,7 +1,7 @@
 /**
  * Design Analyst Agent — layout and style analysis from visual references.
  *
- * Position: Before Decompose, after Clarify. Task Agent invokes when:
+ * Position: Before Requirements, after Clarify. Task Agent invokes when:
  * ① Image attachments are present AND the request is frontend/design-related
  * ② A URL is provided for a design reference or existing page to replicate
  * ③ The request explicitly mentions layout analysis, design replication, or UI specs
@@ -9,7 +9,7 @@
  * The agent:
  * - Accepts images (screenshots, mockups) and/or URLs
  * - Analyzes layout structure, style tokens, components, interactions, responsive behavior
- * - Produces a structured DesignAnalysis that enriches the task request for Decompose
+ * - Produces a structured DesignAnalysis that enriches the task request for Requirements
  *
  * Architecture constraints:
  * ✗ Cannot modify files or execute code
@@ -47,7 +47,7 @@ export namespace DesignAnalystAgent {
    * Analyze visual references and produce a structured design specification.
    *
    * Accepts image attachments, a URL, or both. The analysis result is a
-   * DesignAnalysis object suitable for injection into the decompose prompt.
+   * DesignAnalysis object suitable for injection into the requirements prompt.
    */
   export async function analyze(input: {
     /** Task title — for context */
@@ -72,7 +72,7 @@ export namespace DesignAnalystAgent {
 
   /**
    * Render a DesignAnalysis into a text section suitable for injection
-   * into the decompose/task-agent prompt.
+   * into the requirements/task-agent prompt.
    */
   export function toPromptSection(analysis: DesignAnalysis): string {
     const sections: string[] = []
@@ -254,7 +254,7 @@ async function run(input: {
 }
 
 // ---------------------------------------------------------------------------
-// Multimodal content builder (same pattern as decompose agent)
+// Multimodal content builder (same pattern as requirements agent)
 // ---------------------------------------------------------------------------
 
 async function buildMultimodalContent(

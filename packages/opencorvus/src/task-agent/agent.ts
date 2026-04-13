@@ -10,8 +10,8 @@
  * - User retry request (kind: "retry")
  *
  * The Task Agent controls the entire pipeline via tools:
- * decompose → goals → plan → execute → eval → delivery verify → publish
- * All other agents (decompose, architect, plan, eval, delivery) are subordinate workers.
+ * requirements → goals → plan → execute → eval → delivery verify → publish
+ * All other agents (requirements, architect, plan, eval, delivery) are subordinate workers.
  */
 import { stepCountIs } from "ai"
 import { Provider } from "@/provider/provider"
@@ -138,7 +138,7 @@ export namespace TaskAgent {
 
       // ── kind dispatch ──
       // `task.kind === "build"` tasks are Gateway-issued one-shots that bypass
-      // the entire workflow pipeline (decompose / design / architect / execute /
+      // the entire workflow pipeline (requirements / design / architect / execute /
       // deliver). They still go through the same task table + queue so cancel
       // and audit are uniform; the only fork is which agent handles execution.
       if (task.kind === "build") {
@@ -282,7 +282,7 @@ export namespace TaskAgent {
         policies: {
           // Task-agent is the root coordinator: it sits in `tool.execute`
           // for minutes at a time while sub-agents (design-analyst /
-          // decompose / planner / executor) run. The root stream emits no
+          // requirements / planner / executor) run. The root stream emits no
           // chunks during those gaps, so a tight Tier-1 alive timer would
           // false-trigger. Each sub-agent carries its own alive guard, so
           // we collapse Tier 1 into Tier 2 here (alive == progress).
@@ -447,7 +447,7 @@ const TASK_AGENT_INSTRUCTIONS = [
   "",
   "(Clarification is owned by Gateway, not by this agent. If the request is incomplete, surface that fact in your reasoning — Gateway resolves the dialog with the user before re-issuing the task. Do not attempt to ask the user yourself.)",
   "0.5. **design_analysis** (optional, auto-triggered) — Analyze visual references (images, URLs) to produce structured design specs (layout tree, style tokens, component inventory, interactions, responsive rules). Enriches the task request before decomposition. See triggering rules below.",
-  "1. **requirements** — Decompose the task into goal contracts with acceptance criteria.",
+  "1. **requirements** — Analyze the task into goal contracts with acceptance criteria.",
   "2. **architect** — Coordinate cross-goal interface contracts. REQUIRED for multi-goal tasks — call after requirements returns 2+ goals. Skip only for single-goal tasks (the tool will enforce this automatically).",
   "3. **run** — Create run (create_run), then dispatch (submit_execution). The execution engine plans each goal automatically just before it executes — do NOT call plan_goal upfront for all goals.",
   "4. **deliver** — Aggregate and verify (deliver). Delivery agent is the single verification gate: it tests, fixes issues, and makes final acceptance decision. Only when all blocking goals have completed execution.",
@@ -464,7 +464,7 @@ const TASK_AGENT_INSTRUCTIONS = [
   "  (1) The task is frontend/UI-related (web page, component, dashboard, landing page, etc.),",
   "  AND (2) visual references exist: image attachments OR a URL to replicate/analyze.",
   "  The design analyst produces exact layout, colors, typography, component inventory — information",
-  "  that lets the decompose agent create pixel-accurate goals instead of vague 'build the UI' goals.",
+  "  that lets the requirements agent create pixel-accurate goals instead of vague 'build the UI' goals.",
   "  SKIP design_analysis when: no images/URLs, purely backend/API, or the request already contains detailed design specs.",
   "- If the request is genuinely unusable for decomposition (e.g., a single sentence like '做个订单系统' with no scope or context), bail out early and let Gateway pull a clarification from the user. This agent does not own the dialog channel.",
   "- After requirements: ALWAYS call architect next if there are 2+ goals. It coordinates interface contracts that all executors depend on. Skip only when requirements returned exactly 1 goal.",

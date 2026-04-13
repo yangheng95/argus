@@ -53,7 +53,7 @@ export namespace Global {
     get bin() { return path.join(dataPath(), "bin") },
     get log() { return path.join(dataPath(), "log") },
     get cache() { return cachePath() },
-    get config() { return cwd },
+    get config() { return process.env.OPENCORVUS_GLOBAL_CONFIG_DIR?.trim() || cwd },
     get state() { return statePath() },
   }
 }

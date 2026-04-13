@@ -1,0 +1,36 @@
+Build a pixel-accurate replica of the Claude Settings → Usage page shown in the attached reference image `usage.png`.
+
+## Stack
+- React 18 + TypeScript + Vite
+- Tailwind CSS for styling
+- Lucide React for icons
+- No backend, no routing — a single static page rendered at `/`
+
+## Visual target
+- Overall canvas: cream/off-white background (~#faf9f7), left sidebar (~260px) + main content area.
+- Left sidebar: settings navigation list; the "Usage" item is the active one (light beige/gray highlight, rounded corners).
+- Main column: centered max-width container (~720–820px) with the serif title "Settings" at the top and three stacked sections below.
+- Primary accent color: blue ~#2f6fed — used for progress bar fill, links, toggle-on state, and the "Up to 30% off" badge.
+- Text: dark ~#1f1f1f for primary, medium ~#6b6b6b for secondary; links are blue and underlined.
+- Typography: serif (Georgia-like) for the "Settings" title; sans-serif (Inter-like) for everything else.
+- Generous whitespace, flat design, subtle 1px borders where dividers are shown in the reference.
+
+## Required sections (match the reference exactly, in order)
+1. **Current session** — shows session usage with a blue progress bar (partial fill), a small "i" info icon next to the label, and a "Last updated …" line with a refresh icon.
+2. **Plan usage limits** — a larger progress bar (majority filled in blue), supporting copy, and an "Adjust limit" outlined button.
+3. **Extra usage** — an iOS-style toggle switch (off by default), explanatory copy, a "Buy extra usage" filled button with a blue "Up to 30% off" badge attached.
+
+Include the small circular "i" info icons and the refresh icon shown in the reference. Match the three progress bar fill proportions visible in the reference (roughly 14% / 63% / 15%).
+
+## File layout (keep it minimal — do not add unrelated files)
+- `index.html`, `vite.config.ts`, `tsconfig.json`, `tailwind.config.js`, `postcss.config.js`, `package.json`
+- `src/main.tsx`, `src/App.tsx`, `src/index.css`
+- `src/components/` for Sidebar, ProgressBar, ToggleSwitch, Badge, Button, InfoIcon
+- `src/sections/` for the three content sections
+- `src/styles/designTokens.ts` for color + spacing tokens
+
+## Acceptance
+- Running `vite build` produces a static `dist/` with an `index.html` that renders the full page.
+- Visual similarity of the rendered page vs. `references/usage.png` must pass the SSIM gate (mean ≥ 0.85, worst-5% ≥ 0.55).
+- No placeholder copy ("lorem ipsum", "TODO"), no extra pages, no unused dependencies.
+- Do not add READMEs, docs, or CI config unless strictly required for the build.

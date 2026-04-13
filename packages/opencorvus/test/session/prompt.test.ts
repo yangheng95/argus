@@ -219,7 +219,9 @@ describe("session.prompt agent variant", () => {
   }, 20000)
 })
 
-describe("session.prompt plan mode reminders", () => {
+// plan/spec reminder feature was removed: src/session/prompt/plan-reminder-anthropic.txt
+// and spec-reminder-anthropic.txt no longer exist. Skipping until reminders are reintroduced.
+describe.skip("session.prompt plan mode reminders", () => {
   test("injects the plan-mode reminder when entering plan mode", async () => {
     await using tmp = await tmpdir({ git: true })
 

@@ -26,7 +26,7 @@ export function ArchitectPanel(props: ArchitectPanelProps) {
     <div class="arch-panel">
       <Show when={props.isGenerating && !props.architect}>
         <div class="arch-generating">
-          <span class="agent-card-spinner" />
+          <span class="card__spinner" />
           <span class="arch-generating-label">{t("workflow.architect_generating")}</span>
         </div>
       </Show>
