@@ -12,10 +12,10 @@ type SessionLike = {
 
 /**
  * Render an offline HTML report combining the conversation transcript and the
- * raw Trace events captured during the session. Replaces the older
- * CallRecord-based renderer; events are grouped by call_id (which the runtime
- * stamps onto every llm.step / tool.call / tool.result emitted from one LLM
- * invocation) so each "call" block reconstructs from streaming events.
+ * raw Trace events captured during the session. Events are grouped by call_id
+ * (which the runtime stamps onto every llm.step / tool.call / tool.result
+ * emitted from one LLM invocation) so each "call" block reconstructs from
+ * streaming events.
  */
 export async function buildSessionTraceHtml(input: {
   session: SessionLike
