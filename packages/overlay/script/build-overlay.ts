@@ -4,17 +4,16 @@
  * Full overlay build script — single command for the complete pipeline.
  *
  * Steps:
- *   1. Kill running overlay processes (Windows: PowerShell Kill())
- *   2. build:mainjs — compile TSX sources → src/main.js
- *   3. check:i18n — verify locale files match panel revision
- *   4. build:vite — bundle main.js + CSS + HTML → dist-vite/
- *   5. Remove stale opencorvus binary — force rebuild on every overlay build
- *   6. tauri build --no-bundle — compile Rust → overlay binary
- *   7. Copy binary to dist/<platform>/
+ *   1. Kill running overlay processes (Windows: taskkill)
+ *   2. check:i18n — verify locale files match panel revision
+ *   3. build:vite — bundle main.tsx + CSS + HTML → dist-vite/
+ *   4. Remove stale opencorvus binary — force rebuild on every overlay build
+ *   5. tauri build --no-bundle — compile Rust → overlay binary
+ *   6. Copy binary to dist/<platform>/
  *
  * Usage:
  *   bun run build:overlay              # full pipeline
- *   bun run build:overlay --skip-tauri  # UI only (steps 1-4)
+ *   bun run build:overlay --skip-tauri  # UI only (steps 1-3)
  *   bun run build:overlay --skip-kill   # skip process kill
  */
 
@@ -124,15 +123,11 @@ if (!skipKill) {
   }
 }
 
-// ── Step 2: build:mainjs ──
-step("Compile TSX → main.js")
-await $`bun run build:mainjs`.cwd(dir)
-
-// ── Step 3: check:i18n ──
+// ── Step 2: check:i18n ──
 step("Check i18n")
 await $`bun run check:i18n`.cwd(dir)
 
-// ── Step 4: build:vite ──
+// ── Step 3: build:vite ──
 step("Build Vite → dist-vite/")
 await $`bun run build:vite`.cwd(dir)
 
