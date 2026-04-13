@@ -26,7 +26,7 @@ import { OrchestratorConfig } from "@/orchestrator/config"
 import { operatorNotesSection } from "@/orchestrator/helpers"
 import { loadStageSkills } from "@/orchestrator/skill-inject"
 import { collectText, countToolCalls, firstContentLine, sectionBody } from "@/util/agent-text"
-import type { GoalJudgmentType, GoalInfo, DeliveryInfo } from "@/types/evaluator"
+import type { GoalJudgmentType, GoalInfo, DeliveryInfo } from "@/evaluator/types"
 
 const log = Log.create({ service: "delivery-agent" })
 

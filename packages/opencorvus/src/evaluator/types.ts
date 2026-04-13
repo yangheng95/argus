@@ -1,9 +1,6 @@
 /**
- * Shared evaluator type definitions.
- *
- * Migrated from evaluator/agent.ts and evaluator/shared.ts so that persist,
- * delivery, docs, and other modules can use these types without depending on
- * the full evaluator agent implementation.
+ * Evaluator type definitions — consumed by evaluator/discovery, delivery
+ * agent + service, and orchestrator persist + docs.
  */
 import z from "zod"
 import { CheckConfig, EvaluationCheck, NamedCheckFamily } from "@/orchestrator/model"

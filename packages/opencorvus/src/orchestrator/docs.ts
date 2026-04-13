@@ -1,6 +1,6 @@
 import { mkdirSync, writeFileSync } from "fs"
 import path from "path"
-import type { GoalJudgmentType } from "@/types/evaluator"
+import type { GoalJudgmentType } from "@/evaluator/types"
 import { evaluationGroups } from "@/orchestrator/evaluation-group"
 import { Instance } from "@/project/instance"
 import { Log } from "@/util/log"
