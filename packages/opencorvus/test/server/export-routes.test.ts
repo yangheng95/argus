@@ -255,7 +255,6 @@ test("GET /export/task/:taskID includes goal-snapshot evaluations and QA groups 
         plan?: { id: string }
         coordinatorRun?: { id: string }
         goals: Array<{ id: string }>
-        planNodes: Array<{ id: string }>
         deliveries: Array<{ id: string; goalRunID?: string }>
         evaluations: Array<{ id: string; goalRunID?: string; groups?: Array<{ id: string }> }>
       }
@@ -263,7 +262,6 @@ test("GET /export/task/:taskID includes goal-snapshot evaluations and QA groups 
       expect(body.plan).toBeUndefined()
       expect(body.coordinatorRun?.id).toBe(runID)
       expect(body.goals).toEqual([])
-      expect(body.planNodes).toHaveLength(0)
       expect(body.deliveries).toHaveLength(2)
       expect(body.deliveries.map((item) => item.id).sort()).toEqual([deliveryID, goalDeliveryID].sort())
       expect(body.deliveries.some((item) => item.goalRunID === goalRunID)).toBe(true)

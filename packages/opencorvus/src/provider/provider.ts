@@ -26,7 +26,6 @@ import { createVertexAnthropic } from "@ai-sdk/google-vertex/anthropic"
 import { createOpenAI } from "@ai-sdk/openai"
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible"
 import { createOpenRouter, type LanguageModelV2 } from "@openrouter/ai-sdk-provider"
-import { createOpenaiCompatible as createGitHubCopilotOpenAICompatible } from "./sdk/copilot"
 import { createXai } from "@ai-sdk/xai"
 import { createMistral } from "@ai-sdk/mistral"
 import { createGroq } from "@ai-sdk/groq"
@@ -131,11 +130,6 @@ export namespace Provider {
     "@ai-sdk/perplexity": createPerplexity,
     "@ai-sdk/vercel": createVercel,
     "@gitlab/gitlab-ai-provider": createGitLab,
-    // In-tree Copilot SDK (./sdk/copilot) — Copilot does not publish a proper
-    // @ai-sdk integration, so we ship our own openai-compatible variant. The
-    // factory's return type doesn't structurally match Vercel's `Provider`
-    // alias, so widen via cast rather than @ts-ignore.
-    "@ai-sdk/github-copilot": createGitHubCopilotOpenAICompatible as unknown as (options: any) => SDK,
   }
 
   export const Model = z
@@ -327,20 +321,6 @@ export namespace Provider {
     log.info("init")
 
     const configProviders = entries((config.provider ?? {}) as NonNullable<Config.Info["provider"]>)
-
-    // Add GitHub Copilot Enterprise provider that inherits from GitHub Copilot
-    if (database["github-copilot"]) {
-      const githubCopilot = database["github-copilot"]
-      database["github-copilot-enterprise"] = {
-        ...githubCopilot,
-        id: "github-copilot-enterprise",
-        name: "GitHub Copilot Enterprise",
-        models: mapValues(githubCopilot.models, (model) => ({
-          ...model,
-          providerID: "github-copilot-enterprise",
-        })),
-      }
-    }
 
     // Built-in: Hexin OpenAI Gateway
     if (!database["hexin"]) {
@@ -571,46 +551,14 @@ export namespace Provider {
       const providerID = plugin.auth.provider
       if (disabled.has(providerID)) continue
 
-      // For github-copilot plugin, check if auth exists for either github-copilot or github-copilot-enterprise
-      let hasAuth = false
       const auth = await Auth.get(providerID)
-      if (auth) hasAuth = true
-
-      // Special handling for github-copilot: also check for enterprise auth
-      if (providerID === "github-copilot" && !hasAuth) {
-        const enterpriseAuth = await Auth.get("github-copilot-enterprise")
-        if (enterpriseAuth) hasAuth = true
-      }
-
-      if (!hasAuth) continue
+      if (!auth) continue
       if (!plugin.auth.loader) continue
 
-      // Load for the main provider if auth exists
-      if (auth) {
-        const options = await plugin.auth.loader(() => Auth.get(providerID) as any, database[plugin.auth.provider])
-        const opts = options ?? {}
-        const patch: Partial<Info> = providers[providerID] ? { options: opts } : { source: "custom", options: opts }
-        mergeProvider(providerID, patch)
-      }
-
-      // If this is github-copilot plugin, also register for github-copilot-enterprise if auth exists
-      if (providerID === "github-copilot") {
-        const enterpriseProviderID = "github-copilot-enterprise"
-        if (!disabled.has(enterpriseProviderID)) {
-          const enterpriseAuth = await Auth.get(enterpriseProviderID)
-          if (enterpriseAuth) {
-            const enterpriseOptions = await plugin.auth.loader(
-              () => Auth.get(enterpriseProviderID) as any,
-              database[enterpriseProviderID],
-            )
-            const opts = enterpriseOptions ?? {}
-            const patch: Partial<Info> = providers[enterpriseProviderID]
-              ? { options: opts }
-              : { source: "custom", options: opts }
-            mergeProvider(enterpriseProviderID, patch)
-          }
-        }
-      }
+      const options = await plugin.auth.loader(() => Auth.get(providerID) as any, database[plugin.auth.provider])
+      const opts = options ?? {}
+      const patch: Partial<Info> = providers[providerID] ? { options: opts } : { source: "custom", options: opts }
+      mergeProvider(providerID, patch)
     }
 
     for (const [providerID, fn] of Object.entries(CUSTOM_LOADERS)) {
@@ -743,8 +691,8 @@ export namespace Provider {
         const configuredTimeout = (options["timeout"] !== undefined && options["timeout"] !== null)
           ? options["timeout"]
           : DEFAULT_INACTIVITY_TIMEOUT_MS
-        // Enforce a minimum inactivity timeout: upstream SDKs (e.g., copilot) may
-        // set very short timeouts (30s) which abort during model thinking.
+        // Enforce a minimum inactivity timeout: upstream SDKs may set very
+        // short timeouts (30s) which abort during model thinking.
         // 5 minutes minimum covers extended thinking models (sonnet, opus).
         const MIN_INACTIVITY_TIMEOUT_MS = 300_000
         const inactivityMs = configuredTimeout !== false && typeof configuredTimeout === "number" && configuredTimeout > 0

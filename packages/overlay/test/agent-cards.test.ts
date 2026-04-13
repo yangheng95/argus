@@ -1,6 +1,6 @@
 import { beforeEach, expect, test } from "bun:test"
 import { conversationMessages } from "../src/utils/conversation"
-import { agentCards, clearAgentEvents, messageStore, setMessages, setAgentEvents, setSelectedTaskID } from "../src/store/messages"
+import { agentCards, agentCardOrder, clearAgentEvents, setMessages, setAgentEvents, setSelectedTaskID } from "../src/store/messages"
 import {
   clearConversationUiState,
   toggleToolOutputExpanded,
@@ -37,7 +37,6 @@ test("root task request stays ahead of untimed agent transcript cards", () => {
       time: { created: 1000 },
     },
     interactions: [],
-    lanes: [],
   })
 
   setMessages([
@@ -67,18 +66,18 @@ test("store agentCards merges same-session messages into one card", () => {
 
   // 1 message → 1 card
   setMessages([specMsg("m1", 100, "a")])
-  expect(messageStore.agentCardOrder).toEqual(["spec:session:s1"])
-  expect(messageStore.agentCards["spec:session:s1"]._agentMessages).toHaveLength(1)
+  expect(agentCardOrder()).toEqual(["spec:session:s1"])
+  expect(agentCards()["spec:session:s1"]._agentMessages).toHaveLength(1)
 
   // 2 messages same session → still 1 card with 2 messages
   setMessages([specMsg("m1", 100, "a"), specMsg("m2", 200, "b")])
-  expect(messageStore.agentCardOrder).toEqual(["spec:session:s1"])
-  expect(messageStore.agentCards["spec:session:s1"]._agentMessages).toHaveLength(2)
+  expect(agentCardOrder()).toEqual(["spec:session:s1"])
+  expect(agentCards()["spec:session:s1"]._agentMessages).toHaveLength(2)
 
   // 3 messages same session → still 1 card with 3 messages
   setMessages([specMsg("m1", 100, "a"), specMsg("m2", 200, "b"), specMsg("m3", 300, "c")])
-  expect(messageStore.agentCardOrder).toEqual(["spec:session:s1"])
-  expect(messageStore.agentCards["spec:session:s1"]._agentMessages).toHaveLength(3)
+  expect(agentCardOrder()).toEqual(["spec:session:s1"])
+  expect(agentCards()["spec:session:s1"]._agentMessages).toHaveLength(3)
 })
 
 // ── Executor Goal Group tests ──
@@ -90,7 +89,6 @@ test("multiple executor sessions auto-group by sessionID (no board dependency)",
       status: "running",
       sessionID: "root-session",
     },
-    lanes: [],
   })
 
   // Executor messages with different sessionIDs → auto-grouped
@@ -128,18 +126,18 @@ test("multiple executor sessions auto-group by sessionID (no board dependency)",
   ])
 
   // 2 session groups (grouped by sessionID, not by board goal data)
-  const goalGroups = Object.values(messageStore.agentCards).filter(
+  const goalGroups = Object.values(agentCards()).filter(
     (card: any) => card._agentGoalGroup,
   )
   expect(goalGroups).toHaveLength(2)
 
-  const groupA = messageStore.agentCards["executor:session:exec-session-a"]
+  const groupA = agentCards()["executor:session:exec-session-a"]
   expect(groupA).toBeDefined()
   expect(groupA._agentGoalGroup).toBe(true)
   expect(groupA._agentInternalCards).toHaveLength(2)
   expect(groupA._agentInternalCards![0]._agentMessages[0].parts[0].text).toBe("Reading auth.ts")
 
-  const groupB = messageStore.agentCards["executor:session:exec-session-b"]
+  const groupB = agentCards()["executor:session:exec-session-b"]
   expect(groupB).toBeDefined()
   expect(groupB._agentInternalCards).toHaveLength(1)
 })
@@ -150,15 +148,19 @@ test("goal title comes from board when available", () => {
       status: "running",
       sessionID: "root-session",
     },
-    lanes: [{
-      id: "goals",
-      title: "Goals",
-      cards: [{
-        id: "goal-a",
-        title: "Implement auth",
-        status: "running",
-        metadata: { sessionID: "exec-session-a" },
-      }],
+    goalWorkflows: [{
+      goalID: "goal-a",
+      goalTitle: "Implement auth",
+      goalStatus: "running",
+      priority: "blocking",
+      steps: [],
+    }],
+    goalRuns: [{
+      id: "gr-a",
+      goalID: "goal-a",
+      status: "running",
+      sessionID: "exec-session-a",
+      time: { created: 1000, updated: 1000 },
     }],
   })
 
@@ -174,10 +176,10 @@ test("goal title comes from board when available", () => {
   ])
 
   // Group A has title from board, group B has empty title (no board match)
-  const groupA = messageStore.agentCards["executor:session:exec-session-a"]
+  const groupA = agentCards()["executor:session:exec-session-a"]
   expect(groupA._agentGoalTitle).toBe("Implement auth")
 
-  const groupB = messageStore.agentCards["executor:session:exec-session-b"]
+  const groupB = agentCards()["executor:session:exec-session-b"]
   expect(groupB._agentGoalTitle).toBe("")
 })
 
@@ -187,7 +189,6 @@ test("single executor session merges into one card (no grouping)", () => {
       status: "running",
       sessionID: "root-session",
     },
-    lanes: [],
   })
 
   setMessages([
@@ -202,12 +203,12 @@ test("single executor session merges into one card (no grouping)", () => {
   ])
 
   // Single session → merged into one flat card, no goal group
-  const goalGroups = Object.values(messageStore.agentCards).filter(
+  const goalGroups = Object.values(agentCards()).filter(
     (card: any) => card._agentGoalGroup,
   )
   expect(goalGroups).toHaveLength(0)
 
-  const cards = Object.values(messageStore.agentCards).filter(
+  const cards = Object.values(agentCards()).filter(
     (card: any) => card._agentStage === "executor",
   )
   expect(cards).toHaveLength(1)
@@ -222,7 +223,6 @@ test("conversation keeps single executor session as a collapsible card", () => {
       sessionID: "root-session",
     },
     interactions: [],
-    lanes: [],
   })
 
   setMessages([
@@ -253,7 +253,6 @@ test("conversation still flattens non-executor agent cards", () => {
       sessionID: "root-session",
     },
     interactions: [],
-    lanes: [],
   })
 
   setMessages([
@@ -276,7 +275,6 @@ test("goal group status reflects child card states", () => {
       status: "running",
       sessionID: "root-session",
     },
-    lanes: [],
   })
 
   // Two sessions so grouping triggers
@@ -295,7 +293,7 @@ test("goal group status reflects child card states", () => {
     },
   ])
 
-  const group = messageStore.agentCards["executor:session:sess-a"]
+  const group = agentCards()["executor:session:sess-a"]
   expect(group).toBeDefined()
   expect(group._agentStatus).toBe("running")
   expect(group._agentInternalCards![0]._agentStatus).toBe("completed")
@@ -308,7 +306,6 @@ test("coding executor ids classify as executor cards", () => {
       status: "running",
       sessionID: "root-session",
     },
-    lanes: [],
   })
 
   for (const agent of ["opencode", "codex", "claude-code"]) {
@@ -325,7 +322,7 @@ test("coding executor ids classify as executor cards", () => {
       },
     ])
 
-    const card = messageStore.agentCards[`executor:session:session-${agent}`]
+    const card = agentCards()[`executor:session:session-${agent}`]
     expect(card).toBeDefined()
     expect(card?._agentStage).toBe("executor")
     expect(card?._agentMessages[0]?.parts[0]?.text).toBe(`${agent} text`)
@@ -342,7 +339,6 @@ test("live agent.updated events render agent cards before transcript persistence
       sessionID: "root-session",
     },
     interactions: [],
-    lanes: [],
   })
 
   expect(routeSSEEvent({
@@ -381,15 +377,12 @@ test("run.progress keeps executor messages attached to the real goal session", a
       priority: "blocking",
       steps: [],
     }],
-    lanes: [{
-      id: "goals",
-      title: "Goals",
-      cards: [{
-        id: "goal-1",
-        title: "Implement auth",
-        status: "running",
-        metadata: { sessionID: "goal-session-1" },
-      }],
+    goalRuns: [{
+      id: "gr-1",
+      goalID: "goal-1",
+      status: "running",
+      sessionID: "goal-session-1",
+      time: { created: 1000, updated: 1000 },
     }],
   })
 

@@ -145,8 +145,7 @@ export namespace LLM {
       },
     )
 
-    const maxOutputTokens =
-      provider.id.includes("github-copilot") ? undefined : ProviderTransform.maxOutputTokens(input.model)
+    const maxOutputTokens = ProviderTransform.maxOutputTokens(input.model)
 
     const tools = await resolveTools(input)
     const providerOptions = ProviderTransform.providerOptions(input.model, params.options)

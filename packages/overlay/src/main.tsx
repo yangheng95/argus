@@ -4,7 +4,7 @@
 // Self-sufficient — no external script dependencies.
 
 import { render } from "solid-js/web";
-import { createEffect, createRoot, createSignal, onCleanup } from "solid-js";
+import { createEffect, createRoot, createSignal, onCleanup, Show } from "solid-js";
 import { Conversation } from "./components/Conversation";
 import { TaskList } from "./components/TaskList";
 import { Board, statusIcon as statusIconSvg } from "./components/Board";
@@ -1497,4 +1497,73 @@ void (async () => {
     await waitForLogDrain();
     (window as any).__overlayInitSettled = true;
   }
+})();
+
+// ── Gateway view (Phase 6 Option C) ──
+// Default user-facing surface. Layout per spec:
+//   • TopBar with current cwd (clickable to switch project)
+//   • Gateway dialog panel on top
+//   • Task list panel below (vertical stack)
+//   • #task/<id> hash → full-screen TaskDetailOverlay covering Gateway
+//   • #legacy hash → escape hatch back to the legacy panel for diagnosis
+// The legacy panel still mounts under #legacy; the Gateway view is opaque
+// over it by default so users land directly in the new flow.
+import { GatewayPanel } from "./components/GatewayPanel";
+import { TopBar } from "./components/TopBar";
+import { TaskDrawer } from "./components/TaskDrawer";
+import { TaskDetailOverlay } from "./components/TaskDetailOverlay";
+
+(function mountGatewayView() {
+  // Container appended to body, fixed-positioned over the legacy panel.
+  const root = document.createElement("div");
+  root.id = "gatewayRoot";
+  root.dataset.active = "true";
+  document.body.appendChild(root);
+
+  function parseHash(): { view: "legacy" | "gateway"; taskID?: string } {
+    const h = window.location.hash.replace(/^#/, "");
+    if (h === "legacy") return { view: "legacy" };
+    if (h.startsWith("task/")) return { view: "gateway", taskID: decodeURIComponent(h.slice("task/".length)) };
+    return { view: "gateway" };
+  }
+
+  const [route, setRoute] = createSignal(parseHash());
+  function onHashChange() { setRoute(parseHash()); }
+  window.addEventListener("hashchange", onHashChange);
+
+  createRoot(() => {
+    createEffect(() => {
+      root.dataset.active = route().view === "gateway" ? "true" : "false";
+    });
+
+    render(
+      () => (
+        <div class="gateway-shell">
+          <TopBar
+            rightSlot={() => (
+              <button
+                type="button"
+                class="top-bar-legacy-link"
+                onClick={() => { window.location.hash = "legacy"; }}
+                title="Open the legacy panel (diagnostics / settings)"
+              >
+                Legacy ⤴
+              </button>
+            )}
+          />
+          <main class="gateway-shell-main">
+            <GatewayPanel />
+          </main>
+          <TaskDrawer />
+          <Show when={route().view === "gateway" && route().taskID}>
+            <TaskDetailOverlay
+              taskID={route().taskID!}
+              onClose={() => { window.location.hash = ""; }}
+            />
+          </Show>
+        </div>
+      ),
+      root,
+    );
+  });
 })();

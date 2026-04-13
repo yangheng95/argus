@@ -10,6 +10,21 @@ import path from "path"
 import fs from "fs"
 import { Instance } from "@/project/instance"
 
+function detectBinaryKind(buf: Buffer, filePath: string): string | null {
+  if (buf.length >= 8 && buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) return "a PNG image"
+  if (buf.length >= 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return "a JPEG image"
+  if (buf.length >= 4 && buf[0] === 0x47 && buf[1] === 0x49 && buf[2] === 0x46 && buf[3] === 0x38) return "a GIF image"
+  if (buf.length >= 12 && buf[0] === 0x52 && buf[1] === 0x49 && buf[2] === 0x46 && buf[3] === 0x46 && buf[8] === 0x57 && buf[9] === 0x45 && buf[10] === 0x42 && buf[11] === 0x50) return "a WebP image"
+  if (buf.length >= 4 && buf[0] === 0x25 && buf[1] === 0x50 && buf[2] === 0x44 && buf[3] === 0x46) return "a PDF document"
+  if (buf.length >= 2 && buf[0] === 0x50 && buf[1] === 0x4b) return "a ZIP/Office archive"
+  // NUL-heavy probe — text files should not contain NUL bytes in the first 4KB
+  const sample = buf.subarray(0, Math.min(buf.length, 4096))
+  let nul = 0
+  for (const b of sample) if (b === 0) nul++
+  if (nul > 4) return `a binary file (${nul} NUL bytes in first ${sample.length}B, path=${filePath})`
+  return null
+}
+
 export function createCodebaseTools(projectDir?: string) {
   const dir = projectDir ?? Instance.directory
 
@@ -36,7 +51,16 @@ export function createCodebaseTools(projectDir?: string) {
         const abs = safePath(filePath)
         if (!abs) return "Error: path is outside the project boundary."
         try {
-          const content = fs.readFileSync(abs, "utf-8")
+          const buf = fs.readFileSync(abs)
+          // Refuse known binary signatures and NUL-heavy content — decoding
+          // a PNG/JPG/zip as UTF-8 produces garbage that wastes LLM context
+          // and sends agents chasing nonsense. Image-like inputs must flow
+          // via a vision channel, not read_file.
+          const kind = detectBinaryKind(buf, filePath)
+          if (kind) {
+            return `Error: ${filePath} is ${kind}. read_file returns text only; use a vision/multimodal channel or a dedicated binary tool.`
+          }
+          const content = buf.toString("utf-8")
           const lines = content.split("\n")
           const limit = max_lines ?? 300
           const slice = lines.slice(0, limit)

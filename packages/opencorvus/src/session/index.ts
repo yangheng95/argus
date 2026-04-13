@@ -66,6 +66,9 @@ export namespace Session {
       parentID: row.parent_id ?? undefined,
       title: row.title,
       version: row.version,
+      kind: row.kind ?? "task",
+      channelKey: row.channel_key ?? undefined,
+      metadata: row.metadata ?? undefined,
       summary,
       share,
       revert,
@@ -88,6 +91,9 @@ export namespace Session {
       directory: info.directory,
       title: info.title,
       version: info.version,
+      kind: info.kind ?? "task",
+      channel_key: info.channelKey ?? null,
+      metadata: info.metadata ?? null,
       share_url: info.share?.url,
       summary_additions: info.summary?.additions,
       summary_deletions: info.summary?.deletions,
@@ -134,6 +140,14 @@ export namespace Session {
         .optional(),
       title: z.string(),
       version: z.string(),
+      kind: z.enum(["gateway", "task"]).default("task"),
+      /** Composite key `${platform}:${channel}:${userID}` (or `local:${userID}`)
+       *  used to enforce per-(platform, channel, user) singleton for gateway
+       *  sessions. Always undefined for kind="task". */
+      channelKey: z.string().optional(),
+      /** Free-form per-session state. Gateway sessions use `metadata.gateway.cwd`
+       *  to track the current cwd context for tool calls. */
+      metadata: z.record(z.string(), z.any()).optional(),
       time: z.object({
         created: z.number(),
         updated: z.number(),
@@ -290,6 +304,11 @@ export namespace Session {
     parentID?: string
     directory: string
     permission?: PermissionNext.Ruleset
+    /** Defaults to "task". Pass "gateway" to create a Gateway dialog session. */
+    kind?: "gateway" | "task"
+    /** Required when kind="gateway": composite (platform, channel, user) key.
+     *  The DB has a partial unique index that rejects duplicates. */
+    channelKey?: string
   }) {
     const result: Info = {
       id: Identifier.descending("session", input.id),
@@ -299,6 +318,8 @@ export namespace Session {
       directory: input.directory,
       parentID: input.parentID,
       title: input.title ?? createDefaultTitle(!!input.parentID),
+      kind: input.kind ?? "task",
+      channelKey: input.channelKey,
       permission: input.permission,
       time: {
         created: Date.now(),
@@ -349,6 +370,36 @@ export namespace Session {
           .get()
         if (!row) throw new NotFoundError({ message: `Session not found: ${input.sessionID}` })
         const info = fromRow(row)
+        Database.effect(() => Bus.publish(Event.Updated, { info }))
+        return info
+      })
+    },
+  )
+
+  /**
+   * Merge `patch` into `session.metadata`, preserving keys not listed in patch.
+   * Atomic at row-level (single UPDATE under transaction). Caller-side merges
+   * race with concurrent writers; collapse all metadata writes for one session
+   * through the same code path to avoid lost updates.
+   */
+  export const mergeMetadata = fn(
+    z.object({
+      sessionID: Identifier.schema("session"),
+      patch: z.record(z.string(), z.any()),
+    }),
+    async (input) => {
+      return Database.transaction((db) => {
+        const row = db.select().from(SessionTable).where(eq(SessionTable.id, input.sessionID)).get()
+        if (!row) throw new NotFoundError({ message: `Session not found: ${input.sessionID}` })
+        const current = (row.metadata ?? {}) as Record<string, unknown>
+        const next = { ...current, ...input.patch }
+        const updated = db
+          .update(SessionTable)
+          .set({ metadata: next })
+          .where(eq(SessionTable.id, input.sessionID))
+          .returning()
+          .get()!
+        const info = fromRow(updated)
         Database.effect(() => Bus.publish(Event.Updated, { info }))
         return info
       })

@@ -19,7 +19,6 @@ import { createVercel } from "@ai-sdk/vercel"
 import { createXai } from "@ai-sdk/xai"
 import { createGitLab } from "@gitlab/gitlab-ai-provider"
 import { createOpenRouter } from "@openrouter/ai-sdk-provider"
-import { createOpenaiCompatible as createGitHubCopilotOpenAICompatible } from "./sdk/copilot"
 
 export const BUNDLED_PROVIDERS: Record<string, (options: any) => SDK> = {
   "@ai-sdk/amazon-bedrock": createAmazonBedrock,
@@ -42,9 +41,4 @@ export const BUNDLED_PROVIDERS: Record<string, (options: any) => SDK> = {
   "@ai-sdk/perplexity": createPerplexity,
   "@ai-sdk/vercel": createVercel,
   "@gitlab/gitlab-ai-provider": createGitLab,
-  // In-tree Copilot SDK (./sdk/copilot) — Copilot does not publish a proper
-  // @ai-sdk integration, so we ship our own openai-compatible variant. The
-  // factory's return type doesn't structurally match Vercel's `Provider`
-  // alias, so widen via cast rather than @ts-ignore.
-  "@ai-sdk/github-copilot": createGitHubCopilotOpenAICompatible as unknown as (options: any) => SDK,
 }

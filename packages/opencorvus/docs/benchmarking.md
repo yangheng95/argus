@@ -21,7 +21,7 @@ Load order:
 2. `packages/opencorvus/.env`
 3. current working directory `.env`
 
-Shell env still wins over file-loaded values. The helper also normalizes DashScope aliases into `DASHSCOPE_API_KEY` and `ALIBABA_CODING_PLAN_API_KEY`.
+Shell env still wins over file-loaded values. DashScope provider reads `DASHSCOPE_API_KEY`; alibaba-coding-plan* providers read `ALIBABA_CODING_PLAN_API_KEY`.
 
 ## Commands
 

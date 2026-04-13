@@ -17,6 +17,7 @@ import { Glob } from "../util/glob"
 import { channelBundles } from "./builtin/channel"
 import panelMd from "./builtin/panel.md" with { type: "text" }
 import specResearchMd from "./builtin/spec-research.md" with { type: "text" }
+import prdSpecMd from "./builtin/prd-spec.md" with { type: "text" }
 import deliveryVerifyWebMd from "./builtin/delivery-verify-web.md" with { type: "text" }
 import deliveryVerifyApiMd from "./builtin/delivery-verify-api.md" with { type: "text" }
 
@@ -74,6 +75,7 @@ export namespace Skill {
     ...channelBundles,
     { skill: panelMd, files: {} },
     { skill: specResearchMd, files: {} },
+    { skill: prdSpecMd, files: {} },
     { skill: deliveryVerifyWebMd, files: {} },
     { skill: deliveryVerifyApiMd, files: {} },
   ] as const

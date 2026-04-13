@@ -228,7 +228,7 @@ export async function runTaskLoop(input: {
         failed: results.filter(r => r.status === "failed").length,
       })
     } else if (hasActive) {
-      // Goals already running (legacy path or previous iteration) — wait via polling
+      // Goals from a previous iteration are still running — wait via polling
       log.info("waiting for already-running goals", { taskID })
       await waitForGoalCompletion(taskID, run, plan, signal)
     } else {

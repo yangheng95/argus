@@ -19,15 +19,13 @@ import { OrchestratorService } from "../../src/orchestrator/service"
 import { Instance } from "../../src/project/instance"
 import { Provider } from "../../src/provider/provider"
 import { Log } from "../../src/util/log"
-import { dashscopeCodingKey, env, loadBenchmarkEnv, prepareDashscopeEnv } from "../../script/benchmark/env"
+import { dashscopeCodingKey, env, loadBenchmarkEnv } from "../../script/benchmark/env"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 
 Log.init({ print: true })
 
 await loadBenchmarkEnv(import.meta.dir)
-
-prepareDashscopeEnv()
 
 // ---------------------------------------------------------------------------
 // 凭证 & 配置（硬编码）
@@ -41,16 +39,15 @@ async function resolveModel() {
       const explicit = env("OPENCORVUS_E2E_MODEL")
       if (explicit) {
         if (explicit.includes("/")) return explicit
-        const preferred = ["alibaba-cn", "google", "deepseek", "gitlab", "moonshotai-cn", "moonshotai", "huggingface", "github-copilot"]
+        const preferred = ["alibaba-cn", "google", "deepseek", "gitlab", "moonshotai-cn", "moonshotai", "huggingface"]
         for (const providerID of preferred) {
           const provider = providers[providerID]
           if (provider?.models[explicit]) return `${providerID}/${explicit}`
         }
         for (const provider of Object.values(providers)) {
-          if (provider.id === "openai-codex") continue
           if (provider.models[explicit]) return `${provider.id}/${explicit}`
         }
-        throw new Error(`OPENCORVUS_E2E_MODEL not found outside openai-codex: ${explicit}`)
+        throw new Error(`OPENCORVUS_E2E_MODEL not found: ${explicit}`)
       }
 
       if (dashscopeCodingKey() && providers["alibaba-cn"]?.models["qwen3.5-plus"]) {
@@ -65,15 +62,7 @@ async function resolveModel() {
       }
 
       const def = await Provider.defaultModel()
-      if (!["openai-codex", "github-copilot"].includes(def.providerID)) return `${def.providerID}/${def.modelID}`
-
-      for (const provider of Object.values(providers)) {
-        if (provider.id === "openai-codex" || provider.id === "github-copilot") continue
-        const [model] = Provider.sort(Object.values(provider.models))
-        if (model) return `${provider.id}/${model.id}`
-      }
-
-      throw new Error("No non-codex live model available for E2E")
+      return `${def.providerID}/${def.modelID}`
     },
   })
 }

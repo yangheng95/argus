@@ -156,8 +156,9 @@ export function conversationMessages(): any[] {
   // User request + interaction messages from board state
   const contextMsgs = buildUserContextMessages();
 
-  // Agent card messages — all AGENT_CARD_STAGES render as collapsible AgentCard.
-  // Parallel executor goal groups get ExecutorGoalGroup rendering.
+  // Agent card messages — all AGENT_CARD_STAGES produce collapsible
+  // CardNode entries (kind="agent"). Parallel executor goal groups produce
+  // CardNode entries (kind="goal") with step children.
   //
   // Per-card resolution cache: avoids recreating resolved objects when the
   // underlying card data hasn't structurally changed (same message count,

@@ -82,7 +82,13 @@ export async function completeHeadlessText<TOOLS extends ToolSet>(input: {
   label: string
   model: Provider.Model
   language: LanguageModelV2
-  prompt: string
+  /**
+   * User message content. A plain string becomes a text-only user message.
+   * An array form is forwarded verbatim so callers can pass multimodal
+   * content (`[{ type: "text", ... }, { type: "file", data, mediaType, ... }]`)
+   * for vision-capable models.
+   */
+  prompt: string | Extract<ModelMessage, { role: "user" }>["content"]
   system: string | string[]
   sessionID?: string
   tools: TOOLS

@@ -11,7 +11,7 @@ function ttlMs() {
 }
 
 export async function dashscopeKey(env: Record<string, string | undefined>) {
-  const direct = env["CODING_DASHSCOPE_API_KEY"]?.trim() || env["DASHSCOPE_API_KEY"]?.trim()
+  const direct = env["DASHSCOPE_API_KEY"]?.trim()
   if (direct) return direct
 
   const key = process.env.OPENCORVUS_EMBEDDED_DASHSCOPE_KEY?.trim()

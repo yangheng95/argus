@@ -75,16 +75,6 @@ function buildBoard(task: typeof OrchestratorTaskTable.$inferSelect) {
           .orderBy(OrchestratorGoalTable.order_index)
           .all(),
       )
-  const planNodes = plan
-    ? Database.use((db) =>
-        db
-          .select()
-          .from(OrchestratorPlanNodeTable)
-          .where(eq(OrchestratorPlanNodeTable.plan_version_id, plan.id))
-          .orderBy(OrchestratorPlanNodeTable.order_index)
-          .all(),
-      )
-    : []
   const goalRunRows = run
     ? Database.use((db) =>
         db
@@ -195,17 +185,6 @@ function buildBoard(task: typeof OrchestratorTaskTable.$inferSelect) {
               .all(),
           )
         : []
-  const snapshots = Database.use((db) =>
-    db
-      .select()
-      .from(OrchestratorProgressSnapshotTable)
-      .where(eq(OrchestratorProgressSnapshotTable.task_id, task.id))
-      .orderBy(desc(OrchestratorProgressSnapshotTable.time_created))
-      .limit(BOARD_SNAPSHOT_LIMIT * 4)
-      .all()
-      .reverse(),
-  )
-  const compactSnapshots = compactBoardSnapshots(snapshots).slice(-BOARD_SNAPSHOT_LIMIT)
   const pendingInteractions = interactions.filter((item) => item.status === "pending")
   const currentFailure = boardFailure({
     task,
@@ -289,28 +268,26 @@ function buildBoard(task: typeof OrchestratorTaskTable.$inferSelect) {
             },
           }
         : undefined,
-      planNodes: planNodes.map((node) => ({
-        id: node.id,
-        goalID: node.goal_id ?? undefined,
-        kind: node.kind,
-        title: node.title,
-        brief: node.brief,
-        orderIndex: node.order_index,
-      })),
-      goalRuns: goalRunRows.map((gr) => ({
-        id: gr.id,
-        goalID: gr.goal_id,
-        status: gr.status,
-        sessionID: gr.session_id ?? undefined,
-        workspaceDir: gr.workspace_dir ?? undefined,
-        error: gr.error ?? undefined,
-        time: {
-          created: gr.time_created,
-          updated: gr.time_updated,
-          started: gr.time_started ?? undefined,
-          completed: gr.time_completed ?? undefined,
-        },
-      })),
+      goalRuns: goalRunRows.map((gr) => {
+        const meta = gr.metadata as Record<string, unknown> | null | undefined
+        const plannerSessionID = meta && typeof meta.plannerSessionID === "string" ? meta.plannerSessionID : undefined
+        return {
+          id: gr.id,
+          goalID: gr.goal_id,
+          status: gr.status,
+          sessionID: gr.session_id ?? undefined,
+          executorSessionID: goalRunExecutorSessionMap.get(gr.id) ?? undefined,
+          plannerSessionID,
+          workspaceDir: gr.workspace_dir ?? undefined,
+          error: gr.error ?? undefined,
+          time: {
+            created: gr.time_created,
+            updated: gr.time_updated,
+            started: gr.time_started ?? undefined,
+            completed: gr.time_completed ?? undefined,
+          },
+        }
+      }),
       run: run
         ? {
             id: run.id,
@@ -386,135 +363,11 @@ function buildBoard(task: typeof OrchestratorTaskTable.$inferSelect) {
           updated: item.time_updated,
         },
       })),
-      snapshots: compactSnapshots.map((item) => ({
-        id: item.id,
-        taskID: item.task_id,
-        status: item.status,
-        summary: item.summary,
-        payload: compactSnapshotPayload(item.payload),
-        time: {
-          created: item.time_created,
-          updated: item.time_updated,
-        },
-      })),
       overview,
       brief: {
         content: brief.content,
         updated_at: brief.updatedAt ?? Date.now(),
       },
-      lanes: [
-        {
-          id: "run",
-          title: "Run",
-          cards: run
-            ? [
-                {
-                  id: run.id,
-                  kind: "run" as const,
-                  title: `${run.executor} / ${run.phase}`,
-                  detail: run.error ?? task.blocking_reason ?? undefined,
-                  status: run.status,
-                  time: run.time_updated,
-                  metadata: run.executor_ref ?? undefined,
-                },
-              ]
-            : [],
-        },
-        {
-          id: "delivery",
-          title: "Delivery",
-          cards: latestDelivery
-            ? [
-                {
-                  id: latestDelivery.id,
-                  kind: "note" as const,
-                  title: latestDelivery.status,
-                  detail: latestDelivery.summary,
-                  status: latestDelivery.status,
-                  time: latestDelivery.time_updated,
-                  metadata: latestDelivery.result ?? undefined,
-                },
-              ]
-            : [],
-        },
-        {
-          id: "goals",
-          title: "Dynamic Goals",
-          cards: goals
-            .toSorted((a, b) => {
-              const score = (value: string) => (value === "pending" ? 0 : value === "failed" ? 1 : 2)
-              return score(a.status) - score(b.status)
-            })
-            .map((goal) => {
-              const goalRun = goalRunByGoalID.get(goal.id)
-              const runMeta = goalRun?.metadata as Record<string, unknown> | null | undefined
-              // pipeline-planner runs in a child session that goal-pool.ts persists
-              // into goal_run.metadata.plannerSessionID. Expose it so the overlay
-              // can map planner-stage messages into the right goal card. Without
-              // this, the planner session's events reach the bridge but never
-              // attach to a goal group — plan step renders blank.
-              const plannerSessionIDRaw = runMeta && typeof runMeta.plannerSessionID === "string"
-                ? runMeta.plannerSessionID
-                : undefined
-              return {
-                id: goal.id,
-                kind: "goal" as const,
-                title: goal.title,
-                detail: goal.done_definition,
-                status: goal.status,
-                time: goal.time_updated,
-                metadata: {
-                  ...(goal.metadata as Record<string, unknown> | null ?? {}),
-                  sessionID: goalRunSessionMap.get(goal.id) ?? undefined,
-                  executorSessionID: goalRun ? goalRunExecutorSessionMap.get(goalRun.id) ?? undefined : undefined,
-                  plannerSessionID: plannerSessionIDRaw,
-                },
-              }
-            }),
-        },
-        {
-          id: "staging",
-          title: "Staging",
-          cards: staging.slice(-8).map((note) => ({
-            id: note.id,
-            kind: note.kind === "plan_hint" ? ("plan_hint" as const) : ("note" as const),
-            title: note.kind,
-            detail: note.content,
-            status: note.source,
-            time: note.time_created,
-            metadata: note.metadata ?? undefined,
-          })),
-        },
-        {
-          id: "blockers",
-          title: "Blockers",
-          cards: interactions
-            .filter((item) => item.status === "pending")
-            .map((item) => ({
-              id: item.id,
-              kind: "interaction" as const,
-              title: item.title,
-              detail: item.body,
-              status: item.status,
-              time: item.time_updated,
-              metadata: {
-                type: item.request_type,
-              },
-            })),
-        },
-        {
-          id: "notes",
-          title: "History",
-          cards: history.slice(-8).map((note) => ({
-            id: note.id,
-            kind: note.kind === "plan_hint" ? ("plan_hint" as const) : ("note" as const),
-            title: note.kind,
-            detail: note.content,
-            status: note.source,
-            time: note.time_created,
-          })),
-        },
-      ],
       // Task-level criteria rollup. Sourced from `task.metadata.criteria_results`,
       // which is populated by per-goal evaluator outcomes, the delivery agent,
       // and external quality gates (PATCH /task/:id/criteria — visual-diff etc).
@@ -668,51 +521,6 @@ function boardTagForTask(task: typeof OrchestratorTaskTable.$inferSelect) {
 function clipBoard(input: string) {
   if (input.length <= BOARD_SUMMARY_LIMIT) return input
   return `${input.slice(0, BOARD_SUMMARY_LIMIT)}\n...[truncated]`
-}
-
-function compactBoardSnapshots(
-  input: Array<{
-    id: string
-    task_id: string
-    status: string
-    summary: string
-    payload: unknown
-    time_created: number
-    time_updated: number
-  }>,
-) {
-  return input.reduce<typeof input>((acc, item) => {
-    const prev = acc.at(-1)
-    if (prev && prev.status === item.status && prev.summary === item.summary) {
-      acc[acc.length - 1] = item
-      return acc
-    }
-    acc.push(item)
-    return acc
-  }, [])
-}
-
-function compactSnapshotPayload(input: unknown) {
-  if (!input || typeof input !== "object") return undefined
-  const item = input as Record<string, unknown>
-  return {
-    kind: typeof item.kind === "string" ? item.kind : undefined,
-    stage: typeof item.stage === "string" ? item.stage : undefined,
-    mode: typeof item.mode === "string" ? item.mode : undefined,
-    branch: typeof item.branch === "string" ? item.branch : undefined,
-    commit: typeof item.commit === "string" ? item.commit : undefined,
-    message: typeof item.message === "string" ? clipBoard(item.message) : undefined,
-    snapshot: typeof item.snapshot === "string" ? item.snapshot : undefined,
-    note: typeof item.note === "string" ? clipBoard(item.note) : undefined,
-    description: typeof item.description === "string" ? clipBoard(item.description) : undefined,
-    status: typeof item.status === "string" ? item.status : undefined,
-    blockingReason: typeof item.blockingReason === "string" ? clipBoard(item.blockingReason) : undefined,
-    error: typeof item.error === "string" ? clipBoard(item.error) : undefined,
-    activeRunID: typeof item.activeRunID === "string" ? item.activeRunID : undefined,
-    conflicts: typeof item.conflicts === "number" ? item.conflicts : undefined,
-    dirty: typeof item.dirty === "boolean" ? item.dirty : undefined,
-    deliveryID: typeof item.deliveryID === "string" ? item.deliveryID : undefined,
-  }
 }
 
 function compactArtifactPayload(kind: string, input: unknown) {
@@ -961,11 +769,6 @@ function buildWorkflowFields(
   task: typeof OrchestratorTaskTable.$inferSelect,
   goals: Array<typeof OrchestratorGoalTable.$inferSelect>,
 ) {
-  // Per the panel正本清源 plan: this function must always return a complete
-  // shape. Previously it returned {} when ws or workflow was missing, which
-  // caused the entire new panel suite to silently disappear for queued /
-  // legacy tasks. M1.1 (createTask now initializes _workflow) plus this
-  // change make the new panels work for every task.state.
   const ws = (task.metadata as any)?._workflow as WorkflowState | undefined
   const workflow = ws
     ? WorkflowRegistry.resolveSync(ws.workflowID)
@@ -983,9 +786,7 @@ function buildWorkflowFields(
     }
   }
 
-  // ws may still be undefined here for legacy tasks created before M1.1.
-  // In that case all steps are reported as "pending" — the frontend should
-  // treat this as a normal pending task, not as "no workflow".
+  // Simple tasks without _workflow metadata get reported with all steps "pending".
   const workflowBoard = {
     id: workflow.id,
     name: workflow.name,

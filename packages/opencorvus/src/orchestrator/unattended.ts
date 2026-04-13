@@ -30,8 +30,8 @@ function disabled(value: string | undefined) {
 export async function unattendedProject() {
   if (disabled(process.env.OPENCORVUS_UNATTENDED)) return false
   if (enabled(process.env.OPENCORVUS_UNATTENDED)) return true
-  const config = await Config.get().catch(() => undefined)
-  if (config?.experimental?.unattended === false) return false
+  const config = await Config.get()
+  if (config.experimental?.unattended === false) return false
   return true
 }
 

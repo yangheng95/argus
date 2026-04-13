@@ -1,10 +1,6 @@
 /**
  * Shared utilities for parsing LLM text output with section tags.
- *
  * LLM agents output structured text using <tag>content</tag> markers.
- * This replaces the previous approach of using large tool call schemas
- * (submit_spec, submit_plan) which caused hangs on providers that buffer
- * tool call arguments (e.g., GitHub Copilot's OpenAI compatibility layer).
  */
 
 /**

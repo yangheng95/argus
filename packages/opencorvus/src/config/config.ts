@@ -967,7 +967,6 @@ export namespace Config {
         .object({
           apiKey: z.string().optional(),
           baseURL: z.string().optional(),
-          enterpriseUrl: z.string().optional().describe("GitHub Enterprise URL for copilot authentication"),
           setCacheKey: z.boolean().optional().describe("Enable promptCacheKey for this provider (default false)"),
           timeout: z
             .union([
@@ -1194,7 +1193,7 @@ export namespace Config {
             .object({
               max_steps: z.number().int().min(1).optional().describe("Maximum agentic steps for evaluator agent (default: 25)"),
               timeout_ms: z.number().int().min(1000).optional().describe("Evaluator agent timeout in milliseconds (default: 240000)"),
-              model: z.string().optional().describe("Model to use for evaluator agent (e.g. 'github-copilot/claude-haiku-4-5'). Defaults to the project default model."),
+              model: z.string().optional().describe("Model to use for evaluator agent. Defaults to the project default model."),
               tier: z.enum(["core", "standard", "full"]).optional().describe("Evaluation tier: 'core' (build/test/lint only), 'standard' (+ judge/spec_check), 'full' (all checks). Default: 'standard'."),
               skills: z.array(z.string()).optional().describe("Additional skill paths for evaluator agent"),
             })

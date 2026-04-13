@@ -79,21 +79,19 @@ export interface WorkflowState {
 // 内置 Workflow 定义
 // ═══════════════════════════════════════════════════════════════════
 
-/** standard — 完整开发流程（默认） */
+/** standard — 完整开发流程（默认）。
+ *
+ *  Clarification is no longer a workflow step — Gateway now owns user dialog,
+ *  including any clarification round-trips. Tasks reaching this workflow are
+ *  expected to have a fully-formed request; if the agent still needs to ask,
+ *  it does so via `Question.ask`, and the Gateway notifier renders the
+ *  question into the owning Gateway dialog (or auto-replies in unattended
+ *  mode). The workflow itself does not pause for input. */
 const STANDARD: MiniWorkflow = {
   id: "standard",
   name: "Standard",
   description: "完整 design_analysis(可选) → requirements → architect → per-goal [plan → execute] → deliver 流程（per-goal plan 由 GoalPool 的 pipeline-planner 自动运行，delivery agent 做最终验收）",
   steps: [
-    {
-      id: "clarify",
-      tool: "clarify",
-      label: "Clarify",
-      hint: "向用户提出结构化问题，澄清模糊或不完整的输入。输入已足够详细时可跳过。",
-      scope: "task",
-      skippable: true,
-      after: [],
-    },
     {
       id: "design_analysis",
       tool: "design_analysis",
@@ -101,7 +99,7 @@ const STANDARD: MiniWorkflow = {
       hint: "分析视觉参考（图片/URL），提取布局结构、样式标记、组件清单、交互模式。前端/UI 任务且有视觉参考时触发，否则跳过。",
       scope: "task",
       skippable: true,
-      after: ["clarify"],
+      after: [],
     },
     {
       id: "requirements",
@@ -334,8 +332,9 @@ export function findStepByTool(workflow: MiniWorkflow, toolName: string): MiniWo
  * 可以手动推进步骤状态，同时持久化到 task.metadata._workflow 并 emit 事件，
  * 让 UI 与 task-agent 的 workflow 追踪保持一致。
  *
- * 若 task 的 _workflow state 中没有此 goal 的条目（legacy 任务），会惰性初始化。
- * 若对应 step 在 workflow 定义里不存在，则静默跳过（兼容自定义 workflow）。
+ * 若 task 的 _workflow state 中尚未包含此 goal 条目，会惰性初始化
+ * （覆盖 goal-pool 并发启动时尚未落库的短暂窗口）。
+ * 若对应 step 在当前 workflow 定义里不存在，则静默跳过（兼容自定义 workflow）。
  */
 export async function markGoalWorkflowStep(
   taskID: string,

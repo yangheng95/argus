@@ -1455,10 +1455,19 @@ export function createTaskAgentTools(input: {
 
         try {
           const { DeliveryService } = await import("@/delivery/service")
+          // Re-read the task row to pick up attachments that may have been
+          // materialized during design_analysis (Figma frames, URL screenshots).
+          const taskForDelivery = requireTask(taskID)
+          const deliveryAttachments = Array.isArray(taskForDelivery.attachments)
+            ? (taskForDelivery.attachments as Array<{ sha: string; url: string; mime: string; size: number; filename?: string; intent?: string; source?: string }>).filter(
+                (a) => typeof a?.mime === "string" && a.mime.startsWith("image/") && typeof a?.url === "string",
+              )
+            : []
           const verdict = await DeliveryService.verify({
             task: { id: task.id, title: task.title, request: task.request, sessionID: task.session_id ?? undefined, metadata: task.metadata ?? undefined },
             goals: goalInfos,
             delivery: deliveryInfo,
+            attachments: deliveryAttachments,
             signal: input.signal,
             stream: {
               onChunk: async (arg: any) => {

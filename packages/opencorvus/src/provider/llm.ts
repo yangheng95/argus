@@ -105,10 +105,7 @@ export namespace ProviderLLM {
     }
 
     // 4. Compute maxOutputTokens
-    const isGithubCopilot = model.providerID.includes("github-copilot")
-    const maxOutputTokens = isGithubCopilot
-      ? undefined
-      : (input.maxOutputTokens ?? ProviderTransform.maxOutputTokens(model))
+    const maxOutputTokens = input.maxOutputTokens ?? ProviderTransform.maxOutputTokens(model)
 
     // 5. Build request headers
     const autoHeaders: Record<string, string> = {

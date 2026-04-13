@@ -7,22 +7,20 @@ import { Server } from "../server/server"
 import { BunProc } from "../bun"
 import { Instance } from "../project/instance"
 import { Flag } from "../flag/flag"
-import { CodexAuthPlugin } from "./codex"
 import { Session } from "../session"
 import { NamedError } from "@opencorvus-ai/util/error"
-import { CopilotAuthPlugin } from "./copilot"
 import { gitlabAuthPlugin as GitlabAuthPlugin } from "@gitlab/opencode-gitlab-auth"
 import { IN_PROCESS_BASE_URL, createInProcessFetch } from "@/server/in-process-client"
 
 export namespace Plugin {
   const log = Log.create({ service: "plugin" })
 
-  const BUILTIN = ["opencorvus-anthropic-auth@0.0.13"]
+  const BUILTIN = ["opencode-anthropic-auth@0.0.13"]
 
   // Built-in plugins that are directly imported (not installed from npm)
   // GitlabAuthPlugin is compiled against an older @opencode-ai/plugin version whose
   // OpencodeClient type is a strict subset of the current one — safe to cast.
-  const INTERNAL_PLUGINS: PluginInstance[] = [CodexAuthPlugin, CopilotAuthPlugin, GitlabAuthPlugin as unknown as PluginInstance]
+  const INTERNAL_PLUGINS: PluginInstance[] = [GitlabAuthPlugin as unknown as PluginInstance]
 
   const state = Instance.state(async () => {
     const client = createOpenCorvusClient({
@@ -56,8 +54,6 @@ export namespace Plugin {
     }
 
     for (let plugin of plugins) {
-      // ignore old codex plugin since it is supported first party now
-      if (plugin.includes("opencorvus-openai-codex-auth") || plugin.includes("opencorvus-copilot-auth")) continue
       log.info("loading plugin", { path: plugin })
       if (!plugin.startsWith("file://")) {
         const lastAtIndex = plugin.lastIndexOf("@")

@@ -256,6 +256,9 @@ export const CreateTaskInput = z.object({
   //                next queued slot.
   //  - "high"/"normal"/"low": user-facing levels.
   priority: z.enum(["critical", "high", "normal", "low"]).optional(),
+  /** Defaults to "workflow" (full pipeline). Pass "build" to bypass the pipeline
+   *  and run the build agent directly — used by Gateway for one-shot edits. */
+  kind: z.enum(["workflow", "build"]).optional(),
   budget: Budget.optional(),
   checks: CheckConfig.optional(),
   routing: StageRouting.optional(),
@@ -278,6 +281,11 @@ export const Task = z.object({
   request: z.string(),
   status: z.enum(["queued", "active", "completed", "failed", "cancelled"]),
   priority: z.enum(["critical", "high", "normal", "low"]),
+  /** "workflow" — runs the full decompose→design→architect→execute→deliver pipeline.
+   *  "build" — bypasses the pipeline and runs the build agent directly. Used by
+   *  Gateway for one-shot edits / Q&A / quick fixes. Both kinds share the same
+   *  task table and queue, so cancel/list/audit are uniform. */
+  kind: z.enum(["workflow", "build"]).default("workflow"),
   blockingReason: z.string().optional(),
   error: z.string().optional(),
   budget: Budget.optional(),
@@ -562,22 +570,6 @@ export const TaskChannelBinding = z.object({
   }),
 })
 
-export const TaskBoardCard = z.object({
-  id: z.string(),
-  kind: z.enum(["goal", "interaction", "note", "run", "plan_hint"]),
-  title: z.string(),
-  detail: z.string().optional(),
-  status: z.string().optional(),
-  time: z.number().optional(),
-  metadata: z.record(z.string(), z.any()).optional(),
-})
-
-export const TaskBoardLane = z.object({
-  id: z.string(),
-  title: z.string(),
-  cards: TaskBoardCard.array(),
-})
-
 export const TaskBoardFailure = z.object({
   source: z.enum(["task", "run", "interaction", "evaluation"]),
   title: z.string(),
@@ -617,6 +609,10 @@ export const TaskBoardGoalRun = z.object({
   goalID: z.string(),
   status: z.string(),
   sessionID: z.string().optional(),
+  /** opencode executor's native session (distinct from run session). */
+  executorSessionID: z.string().optional(),
+  /** Pipeline-planner child session — required so planner rounds attach to the goal. */
+  plannerSessionID: z.string().optional(),
   workspaceDir: z.string().optional(),
   error: z.string().optional(),
   time: z.object({
@@ -625,15 +621,6 @@ export const TaskBoardGoalRun = z.object({
     started: z.number().optional(),
     completed: z.number().optional(),
   }),
-})
-
-export const TaskBoardPlanNode = z.object({
-  id: z.string(),
-  goalID: z.string().optional(),
-  kind: z.string(),
-  title: z.string(),
-  brief: z.string(),
-  orderIndex: z.number(),
 })
 
 // ---------------------------------------------------------------------------
@@ -704,8 +691,6 @@ export const TaskBoard = z.object({
   task: Task,
   spec: SpecSnapshot.optional(),
   plan: PlanVersion.optional(),
-  /** @deprecated — use goalWorkflows instead */
-  planNodes: TaskBoardPlanNode.array().optional(),
   goalRuns: TaskBoardGoalRun.array().optional(),
   run: Run.optional(),
   delivery: Delivery.optional(),
@@ -715,15 +700,11 @@ export const TaskBoard = z.object({
   interactions: Interaction.array(),
   channels: TaskChannelBinding.array(),
   artifacts: Artifact.array(),
-  /** @deprecated — workflow step statuses provide better progress tracking */
-  snapshots: ProgressSnapshot.array(),
   overview: TaskBoardOverview,
   brief: z.object({
     content: z.string(),
     updated_at: z.number(),
   }),
-  /** @deprecated — replaced by workflow-structured view */
-  lanes: TaskBoardLane.array(),
 
   // ── New workflow-structured fields ──
   /** Active workflow state (from task.metadata._workflow + WorkflowRegistry) */

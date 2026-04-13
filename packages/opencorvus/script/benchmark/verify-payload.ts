@@ -4,7 +4,7 @@
 //   bun run script/benchmark/verify-payload.ts tsk_d78397f1c001mHvcFp4khEvQfx
 
 import path from "path"
-import { loadBenchmarkEnv, prepareDashscopeEnv } from "./env"
+import { loadBenchmarkEnv } from "./env"
 
 const taskID = process.argv[2]
 if (!taskID) {
@@ -13,7 +13,6 @@ if (!taskID) {
 }
 
 await loadBenchmarkEnv(import.meta.dir)
-prepareDashscopeEnv()
 
 const { Instance } = await import("../../src/project/instance")
 const { InstanceBootstrap } = await import("../../src/project/bootstrap")

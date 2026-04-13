@@ -66,6 +66,8 @@ CREATE TABLE IF NOT EXISTS session (
   directory          text NOT NULL,
   title              text NOT NULL,
   version            text NOT NULL,
+  kind               text NOT NULL DEFAULT 'task',
+  channel_key        text,
   share_url          text,
   summary_additions  integer,
   summary_deletions  integer,
@@ -73,6 +75,7 @@ CREATE TABLE IF NOT EXISTS session (
   summary_diffs      text,
   revert             text,
   permission         text,
+  metadata           text,
   time_created       integer NOT NULL,
   time_updated       integer NOT NULL,
   time_compacting    integer,
@@ -81,6 +84,10 @@ CREATE TABLE IF NOT EXISTS session (
 );
 CREATE INDEX IF NOT EXISTS session_project_idx ON session (project_id);
 CREATE INDEX IF NOT EXISTS session_parent_idx  ON session (parent_id);
+CREATE INDEX IF NOT EXISTS session_kind_idx    ON session (kind);
+CREATE UNIQUE INDEX IF NOT EXISTS session_gateway_singleton_idx
+  ON session (channel_key)
+  WHERE kind = 'gateway' AND channel_key IS NOT NULL;
 
 -- ===== message =====
 
@@ -352,6 +359,7 @@ CREATE TABLE IF NOT EXISTS orchestrator_task (
   title                  text NOT NULL,
   request                text NOT NULL,
   attachments            text,
+  kind                   text NOT NULL DEFAULT 'workflow',
   status                 text NOT NULL DEFAULT 'queued',
   priority               text NOT NULL DEFAULT 'normal',
   blocking_reason        text,
@@ -368,6 +376,7 @@ CREATE TABLE IF NOT EXISTS orchestrator_task (
 );
 CREATE INDEX IF NOT EXISTS orchestrator_task_project_idx ON orchestrator_task (project_id);
 CREATE INDEX IF NOT EXISTS orchestrator_task_status_idx  ON orchestrator_task (status);
+CREATE INDEX IF NOT EXISTS orchestrator_task_kind_idx    ON orchestrator_task (kind);
 CREATE UNIQUE INDEX IF NOT EXISTS orchestrator_task_project_request_idx
   ON orchestrator_task (project_id, request_id);
 
@@ -847,4 +856,3 @@ CREATE INDEX IF NOT EXISTS protocol_stream_chunk_run_idx               ON protoc
 CREATE INDEX IF NOT EXISTS protocol_stream_chunk_session_idx           ON protocol_stream_chunk (session_id, chunk_seq);
 
 `
-

@@ -589,7 +589,7 @@ export const OrchestratorRoutes = lazy(() =>
       }),
       validator("param", z.object({ taskID: Task.shape.id })),
       async (c) => {
-        return c.json(await OrchestratorService.replanTask(c.req.valid("param").taskID).catch((error) => {
+        return c.json(await OrchestratorService.retryTask(c.req.valid("param").taskID).catch((error) => {
           if (error instanceof PlannerFailureError) {
             throw new HTTPException(503, {
               message: error.message,
