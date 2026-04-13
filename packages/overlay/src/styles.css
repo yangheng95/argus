@@ -4336,10 +4336,8 @@ code .file-link:hover {
   display: flex;
   align-items: center;
   justify-content: center;
-  /* WCAG 2.5.5: 44x44 CSS px hit area.
-     SVG inside keeps its own HTML width/height (14) so the glyph stays small. */
-  width: calc(44px * var(--ui-scale));
-  height: calc(44px * var(--ui-scale));
+  width: calc(24px * var(--ui-scale));
+  height: calc(24px * var(--ui-scale));
   border: none;
   border-radius: calc(6px * var(--ui-scale));
   background: transparent;
@@ -4401,7 +4399,10 @@ code .file-link:hover {
   flex: 1;
   min-width: 0;
   min-height: var(--ui-chat-min-height);
-  resize: none;
+  /* Native vertical-only resize handle at bottom-right.
+     max-height prevents dragging past 60% viewport (keeps chat visible). */
+  resize: vertical;
+  max-height: 60vh;
   border: 1px solid var(--border);
   border-radius: calc(14px * var(--ui-scale));
   background: var(--surface-inset);
