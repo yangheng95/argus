@@ -45,7 +45,7 @@ interface CheckResult {
   command: string
   passed: boolean
   output: string
-  source: "done_definition" | "project_discovery"
+  source: "done_definition" | "project_discovery" | "visual"
 }
 
 interface DiscoveredCommand {
@@ -398,6 +398,53 @@ export async function evaluateGoal(input: {
     })
   }
 
+  // ── 6c. Visual similarity check ──
+  // When a goal carries a visual reference (image attachment or absolute
+  // path in goal.metadata.visual), render whatever index.html the executor
+  // produced inside the goal's owned scope and SSIM-compare against the
+  // reference. The result joins the same `results` list — no separate gate,
+  // no fallback when the browser isn't available (we record an explicit
+  // failure so the agent can react).
+  const visualRef = resolveVisualReference(goal, contract)
+  if (visualRef) {
+    if (signal?.aborted) throw new Error("eval aborted")
+    const { findRenderedIndex, runVisualDiff, summarizeVisualReport } = await import("./visual")
+    const renderedHtml = await findRenderedIndex(evalDir)
+    if (!renderedHtml) {
+      results.push({
+        name: "visual_diff",
+        command: `visual-diff against ${visualRef}`,
+        passed: false,
+        output: `no index.html found under ${evalDir} — executor must produce a renderable entry point`,
+        source: "visual",
+      })
+    } else {
+      const visualOut = await import("node:path").then((p) => p.join(evalDir, ".opencorvus", "visual-diff"))
+      try {
+        const report = await runVisualDiff({
+          rendered: renderedHtml,
+          reference: visualRef,
+          outDir: visualOut,
+        })
+        results.push({
+          name: "visual_diff",
+          command: `visual-diff rendered=${renderedHtml} reference=${visualRef}`,
+          passed: report.passed,
+          output: summarizeVisualReport(report),
+          source: "visual",
+        })
+      } catch (err) {
+        results.push({
+          name: "visual_diff",
+          command: `visual-diff rendered=${renderedHtml} reference=${visualRef}`,
+          passed: false,
+          output: `visual-diff failed to run: ${err instanceof Error ? err.message : String(err)}`,
+          source: "visual",
+        })
+      }
+    }
+  }
+
   // ── 7. Build verdict ──
   const allPassed = results.every((r) => r.passed)
   const failed = results.filter((r) => !r.passed)
@@ -429,6 +476,24 @@ export async function evaluateGoal(input: {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+/**
+ * Locate a visual reference image for a goal. Looks at goal.metadata.visual
+ * (caller-supplied absolute path) first, then falls back to scanning the
+ * task's attachment store via metadata.visual_attachment_sha when the
+ * decompose agent tagged a reference attachment for this specific goal.
+ *
+ * Returns an absolute filesystem path or undefined when the goal has no
+ * visual reference (most goals don't — only fig2code-style work does).
+ */
+function resolveVisualReference(goal: GoalContract["goal"], _contract: GoalContract): string | undefined {
+  const meta = (goal.metadata as Record<string, unknown> | undefined) ?? {}
+  const direct = typeof meta.visual === "string" ? meta.visual : undefined
+  if (direct) return direct
+  const ref = typeof meta.visual_reference === "string" ? meta.visual_reference : undefined
+  if (ref) return ref
+  return undefined
+}
 
 /**
  * Determine if an eval command passed.

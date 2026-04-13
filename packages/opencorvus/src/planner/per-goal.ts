@@ -15,11 +15,10 @@
  */
 import { stepCountIs } from "ai"
 import { Provider } from "@/provider/provider"
-import { ProviderLLM } from "@/provider/llm"
 import { createPlannerTools, prefetchContext } from "@/planner/tools"
 import { toolGuard } from "@/util/tool-guard"
 import { Log } from "@/util/log"
-import { createInactivityGuard } from "@/util/inactivity-guard"
+import { AgentRuntime } from "@/agent/runtime"
 import { AgentTrace } from "@/util/agent-trace"
 import { OrchestratorConfig } from "@/orchestrator/config"
 import { operatorNotesSection } from "@/orchestrator/helpers"
@@ -80,49 +79,42 @@ export async function planGoal(input: {
   const systemPrompt = buildPlannerSystem()
   const userPrompt = buildPlannerPrompt(contract, context, decisionSection, task.request, architectSection)
 
-  const stallController = new AbortController()
-  const stallGuard = createInactivityGuard(TIMEOUT_MS, () => {
-    log.warn("planner agent stall timeout", { goalID: input.contract.goal.id })
-    stallController.abort(new Error("stall timeout"))
-  })
-  const abortSignals: AbortSignal[] = [stallController.signal, guard.signal]
+  const abortSignals: AbortSignal[] = [guard.signal]
   if (signal) abortSignals.push(signal)
 
-  const stream = await ProviderLLM.stream({
+  const passthroughHooks = {
+    onChunk: input.stream?.onChunk,
+    onError: input.stream?.onError,
+    flush: async () => {},
+    failures: { snapshot: () => ({ count: 0, items: [] as any[] }) },
+  } as any
+  const runResult = await AgentRuntime.run({
+    agent: "planner",
     model,
-    stopWhen: stepCountIs(MAX_STEPS),
-    tools: guard.tools,
-    abortSignal: AbortSignal.any(abortSignals),
     system: systemPrompt,
     messages: [{ role: "user" as const, content: userPrompt }],
+    tools: guard.tools,
+    stopWhen: stepCountIs(MAX_STEPS),
     cacheKey: `task-${task.id}-planner`,
-    onChunk: async (arg: any) => {
-      stallGuard.bump()
-      if (input.stream?.onChunk) await (input.stream.onChunk as any)(arg)
-    },
-    ...(input.stream?.onError ? { onError: input.stream.onError } : {}),
+    sessionID: "",
+    taskID: task.id,
+    stage: "planner",
+    signal: AbortSignal.any(abortSignals),
     onStepFinish: guard.onStepFinish as any,
+    hooks: passthroughHooks,
+    policies: {
+      progressTimeoutMs: TIMEOUT_MS,
+      failurePolicy: "collect",
+    },
   })
-
-  let resultText: string, resultSteps: any[]
-  try {
-    ;[resultText, resultSteps] = await Promise.all([
-      stream.text,
-      stream.steps,
-    ])
-  } finally {
-    stallGuard.clear()
-  }
+  const resultText = runResult.text
+  const resultSteps = runResult.steps
+  const toolCallCount = runResult.toolCallCount
 
   let allText = resultText?.trim() || ""
   if (!allText) {
     allText = resultSteps.map((s) => s.text).filter(Boolean).join("\n")
   }
-
-  const toolCallCount = resultSteps.reduce(
-    (sum, s) => sum + (Array.isArray((s as any).toolCalls) ? (s as any).toolCalls.length : 0),
-    0,
-  )
 
   log.info("per-goal planner finished", {
     goalID: goal.id,

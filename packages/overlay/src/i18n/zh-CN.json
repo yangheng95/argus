@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "zh-CN",
-    "panel_revision": "a51ef56654e79c42"
+    "panel_revision": "bf97c3036fba74a9"
   },
   "about.author_name": "杨恒",
   "about.go_version": "Go 版本",
@@ -395,6 +395,7 @@
   "prompt.title": "Prompt 管理",
   "section.budget": "任务预算",
   "section.delivery": "交付",
+  "section.criteria": "评估指标",
   "section.files": "文件变更",
   "sections.title": "检视面板",
   "settings.always_on_top": "窗口置顶",
@@ -521,6 +522,11 @@
   "workspace.build": "Build",
   "workspace.close": "关闭工作区",
   "workspace.diff": "Diff",
+  "workspace.file": "文件",
+  "workspace.file_empty": "点击时间线中的文件链接可在此预览。",
+  "workspace.file_loading": "加载文件中…",
+  "workspace.file_binary": "二进制文件，无法预览。",
+  "workspace.file_error": "加载文件失败：{{message}}",
   "workspace.toggle": "切换工作区",
   "workflow.architect": "架构协调",
   "workflow.architect_contracts": "契约",

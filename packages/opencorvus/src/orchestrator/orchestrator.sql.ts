@@ -19,7 +19,7 @@ export type OrchestratorTaskStatus =
   | "failed"
   | "cancelled"
 
-export type OrchestratorTaskPriority = "high" | "normal" | "low"
+export type OrchestratorTaskPriority = "critical" | "high" | "normal" | "low"
 export type OrchestratorExecutor = "opencode" | "codex" | "claude-code"
 export type OrchestratorPlanStatus = "active" | "superseded"
 export type OrchestratorGoalPriority = "blocking" | "advisory"
@@ -125,8 +125,13 @@ export const OrchestratorTaskTable = sqliteTable(
     source: text().notNull().default("api"),
     title: text().notNull(),
     request: text().notNull(),
-    /** JSON array of { mime, data, filename? } — base64 image attachments for multimodal input */
-    attachments: text({ mode: "json" }).$type<Array<{ mime: string; data: string; filename?: string }>>(),
+    /** JSON array of AttachmentStore references — { sha, url, mime, size, filename?, intent?, source? }.
+     *  Base64 bytes are never stored here; they live on disk under the project's
+     *  .opencorvus/attachments directory and are fetched via the /attachment route.
+     *  `intent` controls which evaluator gate consumes the file (e.g.
+     *  "visual_reference" → deliver visual SSIM gate). `source` records where
+     *  the attachment came from (user-upload / figma / url-screenshot). */
+    attachments: text({ mode: "json" }).$type<Array<{ sha: string; url: string; mime: string; size: number; filename?: string; intent?: string; source?: string }>>(),
     status: text().notNull().$type<OrchestratorTaskStatus>().default("queued"),
     priority: text().notNull().$type<OrchestratorTaskPriority>().default("normal"),
     blocking_reason: text(),

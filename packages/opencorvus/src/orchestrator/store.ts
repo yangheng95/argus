@@ -509,8 +509,15 @@ export function hasActiveTaskInProject(projectID: string): boolean {
 }
 
 /**
- * Find the next queued task for a project, ordered by priority (high→normal→low)
- * then by creation time (FIFO). Used by the serial task queue to pick the next task.
+ * Find the next queued task for a project, ordered by priority then creation
+ * time (FIFO within the same priority). The serial queue calls this when an
+ * active task ends.
+ *
+ * Priority order (highest first): critical → high → normal → low.
+ *
+ * `critical` is reserved for fix tasks emitted by `submit_fix_task` from the
+ * delivery agent — they jump ahead of any normal/high queued work but never
+ * preempt an already-active task in the project.
  */
 export function findNextQueuedTaskForProject(projectID: string): TaskRow | undefined {
   return Database.use((db) =>
@@ -519,7 +526,7 @@ export function findNextQueuedTaskForProject(projectID: string): TaskRow | undef
       .from(OrchestratorTaskTable)
       .where(and(eq(OrchestratorTaskTable.project_id, projectID), eq(OrchestratorTaskTable.status, "queued")))
       .orderBy(
-        asc(sql`CASE ${OrchestratorTaskTable.priority} WHEN 'high' THEN 0 WHEN 'normal' THEN 1 ELSE 2 END`),
+        asc(sql`CASE ${OrchestratorTaskTable.priority} WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'normal' THEN 2 ELSE 3 END`),
         asc(OrchestratorTaskTable.time_created),
       )
       .limit(1)

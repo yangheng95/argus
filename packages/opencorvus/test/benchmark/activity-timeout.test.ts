@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { exceededInactivityTimeout, inactivityAgeMs, latestActivityAt } from "@/util/activity-timeout"
-import { createInactivityGuard } from "@/util/inactivity-guard"
+import { createProgressGuard } from "@/agent/runtime"
 
 describe("activity timeout helpers", () => {
   test("uses the latest activity timestamp instead of start time", () => {
@@ -23,20 +23,81 @@ describe("activity timeout helpers", () => {
     expect(exceededInactivityTimeout(now, 60_000, lastActivityAt)).toBe(false)
     expect(exceededInactivityTimeout(now, 49_000, lastActivityAt)).toBe(true)
   })
+})
 
-  test("resettable inactivity guard tracks recent activity instead of start time", async () => {
-    let fired = 0
-    const guard = createInactivityGuard(40, () => {
-      fired += 1
+describe("createProgressGuard", () => {
+  test("alive-only traffic trips the progress timer, not the alive timer", async () => {
+    const fires: Array<{ reason: string; tier: string }> = []
+    const guard = createProgressGuard({
+      aliveTimeoutMs: 200,
+      progressTimeoutMs: 80,
+      absoluteTimeoutMs: 1000,
+      checkIntervalMs: 10,
+      onTimeout: (reason, tier) => { fires.push({ reason, tier }) },
     })
 
-    await Bun.sleep(25)
-    guard.bump()
-    await Bun.sleep(25)
-    expect(fired).toBe(0)
-
-    await Bun.sleep(30)
-    expect(fired).toBe(1)
+    // Heartbeat alive() fast enough to keep alive-timer reset, but never call
+    // progress() — the progress tier should fire.
+    const ticker = setInterval(() => guard.alive(), 20)
+    await Bun.sleep(150)
+    clearInterval(ticker)
     guard.clear()
+
+    expect(fires.length).toBe(1)
+    expect(fires[0].tier).toBe("progress")
+  })
+
+  test("silence trips the alive timer", async () => {
+    const fires: Array<{ reason: string; tier: string }> = []
+    const guard = createProgressGuard({
+      aliveTimeoutMs: 50,
+      progressTimeoutMs: 5000,
+      absoluteTimeoutMs: 5000,
+      checkIntervalMs: 10,
+      onTimeout: (reason, tier) => { fires.push({ reason, tier }) },
+    })
+    await Bun.sleep(120)
+    guard.clear()
+    expect(fires.length).toBe(1)
+    expect(fires[0].tier).toBe("alive")
+  })
+
+  test("continuous progress eventually trips the absolute ceiling", async () => {
+    const fires: Array<{ reason: string; tier: string }> = []
+    const guard = createProgressGuard({
+      aliveTimeoutMs: 2000,
+      progressTimeoutMs: 2000,
+      absoluteTimeoutMs: 120,
+      checkIntervalMs: 10,
+      onTimeout: (reason, tier) => { fires.push({ reason, tier }) },
+    })
+    const ticker = setInterval(() => guard.progress(), 20)
+    await Bun.sleep(200)
+    clearInterval(ticker)
+    guard.clear()
+    expect(fires.length).toBe(1)
+    expect(fires[0].tier).toBe("absolute")
+  })
+
+  test("clear() is idempotent and prevents further fires", async () => {
+    let fireCount = 0
+    const guard = createProgressGuard({
+      aliveTimeoutMs: 30,
+      progressTimeoutMs: 30,
+      absoluteTimeoutMs: 30,
+      checkIntervalMs: 10,
+      onTimeout: () => { fireCount += 1 },
+    })
+    guard.clear()
+    guard.clear()
+    await Bun.sleep(80)
+    expect(fireCount).toBe(0)
+  })
+
+  test("rejects non-positive timeout configuration", () => {
+    const noop = () => {}
+    expect(() => createProgressGuard({ aliveTimeoutMs: 0, progressTimeoutMs: 100, onTimeout: noop })).toThrow()
+    expect(() => createProgressGuard({ aliveTimeoutMs: 100, progressTimeoutMs: -1, onTimeout: noop })).toThrow()
+    expect(() => createProgressGuard({ aliveTimeoutMs: 100, progressTimeoutMs: 100, absoluteTimeoutMs: 0, onTimeout: noop })).toThrow()
   })
 })

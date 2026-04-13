@@ -114,6 +114,7 @@ import {
   type InteractionRow,
 } from "./store"
 import { Identifier } from "@/id/id"
+import { AttachmentStore } from "@/storage/attachment-store"
 
 const log = Log.create({ service: "assistant" })
 
@@ -460,11 +461,60 @@ export namespace OrchestratorService {
         { permission: "schedule",           pattern: "*", action: toolAction("schedule") },
       ],
     })
+    // Decode any base64 attachments exactly once: persist the bytes under the
+    // project's .opencorvus/attachments directory, then carry only references
+    // (sha/url/mime/size/filename) through the queue and into every agent.
+    // The same references are also materialized as FilePart entries on a user
+    // message so the overlay renders the attachment alongside the request.
+    const attachmentRefs: AttachmentStore.Reference[] = []
+    if (input.attachments?.length) {
+      const projectID = Instance.project.id
+      const projectDir = Instance.project.worktree
+      for (const att of input.attachments) {
+        const bytes = Buffer.from(att.data, "base64")
+        const ref = await AttachmentStore.write(projectID, projectDir, bytes, att.mime, att.filename)
+        // Default intent: image MIMEs are visual references (SSIM gate
+        // consumes them). Anything else is generic spec material until a
+        // specific evaluator gate claims it.
+        const intent = att.mime.startsWith("image/") ? "visual_reference" : "spec_artifact"
+        attachmentRefs.push({ ...ref, intent, source: "user-upload" })
+      }
+      const agentName = await Agent.defaultAgent()
+      const model = await Provider.defaultModel()
+      const userMessageID = Identifier.ascending("message")
+      await Session.updateMessage({
+        id: userMessageID,
+        sessionID: session.id,
+        role: "user",
+        time: { created: now },
+        agent: agentName,
+        model,
+      })
+      await Session.updatePart({
+        id: Identifier.ascending("part"),
+        messageID: userMessageID,
+        sessionID: session.id,
+        type: "text",
+        text: input.request,
+      })
+      for (const ref of attachmentRefs) {
+        await Session.updatePart({
+          id: Identifier.ascending("part"),
+          messageID: userMessageID,
+          sessionID: session.id,
+          type: "file",
+          mime: ref.mime,
+          url: ref.url,
+          filename: ref.filename,
+        })
+      }
+    }
     // Async pipeline: persist task immediately, run stages in background
     try {
       persistQueuedTask({
         taskID, sessionID: session.id, now, executor, title,
-        request: input.request, attachments: input.attachments,
+        request: input.request,
+        attachments: attachmentRefs.length ? attachmentRefs : undefined,
         requestID, source: input.source,
         priority: input.priority, budget: input.budget, metadata,
         channelBinding: input.channelBinding, milestones: input.milestones,
@@ -507,6 +557,51 @@ export namespace OrchestratorService {
     const task = requireTask(taskID)
     const item = listTaskRows([task])[0]
     return viewTask(task, { directory: item?.directory })
+  }
+
+  /**
+   * Append an attachment reference to a task's `attachments` array. Used by
+   * the design_analysis tool to register Figma-rendered frames so they
+   * become first-class task attachments — visible in the overlay, queryable
+   * by downstream agents, and picked up automatically by the deliver-time
+   * visual SSIM gate as the reference image.
+   *
+   * No-op when the same sha is already attached (sha-based dedupe).
+   */
+  export async function appendTaskAttachment(
+    taskID: string,
+    attachment: { sha: string; url: string; mime: string; size: number; filename?: string; intent?: string; source?: string },
+  ) {
+    const task = requireTask(taskID)
+    const prev = Array.isArray(task.attachments) ? (task.attachments as any[]) : []
+    if (prev.some((a) => a?.sha === attachment.sha)) return prev
+    const next = [...prev, attachment]
+    await updateTask(task, { attachments: next as any }, `attachment appended: ${attachment.filename ?? attachment.sha}`)
+    return next
+  }
+
+  /**
+   * Merge a batch of evaluation checks into `task.metadata.criteria_results`.
+   * Upsert by `name` — the latest write for a given check name wins. Used by
+   * external quality gates (visual-diff, custom validators) and by the
+   * delivery agent's `submit_check_result` path. Does not change task.status.
+   */
+  export async function upsertTaskCriteria(
+    taskID: string,
+    checks: Array<{ name: string; label?: string; family?: string; status: "passed" | "failed" | "skipped"; evidence?: string }>,
+  ) {
+    const task = requireTask(taskID)
+    const meta = ((task.metadata as Record<string, unknown> | null) ?? {}) as Record<string, unknown>
+    const prev = Array.isArray(meta.criteria_results) ? (meta.criteria_results as any[]) : []
+    const byName = new Map<string, any>(prev.map((c) => [String(c?.name ?? ""), c]))
+    for (const incoming of checks) {
+      byName.set(incoming.name, { ...byName.get(incoming.name), ...incoming })
+    }
+    const merged = [...byName.values()].filter((c) => c && typeof c.name === "string" && c.name)
+    await updateTask(task, {
+      metadata: { ...meta, criteria_results: merged },
+    }, `criteria upsert: ${checks.map((c) => `${c.name}=${c.status}`).join(", ")}`)
+    return merged
   }
 
   export async function getProgress(taskID: string) {

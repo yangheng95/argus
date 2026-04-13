@@ -43,7 +43,7 @@ import { OrchestratorGoalTable, OrchestratorPlanNodeTable } from "./orchestrator
 import { goalRowToContract, operatorNotesSection } from "./helpers"
 import { buildGoalPrompt, createGoalSession } from "@/goal/runner"
 import { registerGoalRunSession } from "@/server/routes/task-event"
-import { sessionStreamHooks } from "./session-stream"
+import { sessionStreamHooks } from "@/agent/runtime"
 import { Event } from "./model"
 import { OrchestratorProtocol } from "./protocol"
 import { markGoalWorkflowStep } from "./workflow"

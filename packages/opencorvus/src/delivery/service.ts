@@ -13,7 +13,7 @@ import { Log } from "@/util/log"
 import { Env } from "@/env"
 import { type TextHooks } from "@/llm/api"
 import { mergeTextHooks } from "@/llm/tool-hooks"
-import { createInactivityGuard } from "@/util/inactivity-guard"
+import { createProgressGuard } from "@/agent/runtime"
 
 const log = Log.create({ service: "delivery-service" })
 
@@ -31,7 +31,7 @@ export class DeliveryFailureError extends Error {
 
 export namespace DeliveryService {
   export async function verify(input: {
-    task: { title: string; request: string; sessionID?: string; metadata?: Record<string, unknown> }
+    task: { id?: string; title: string; request: string; sessionID?: string; metadata?: Record<string, unknown> }
     goals: GoalInfo[]
     delivery: DeliveryInfo
     checkResults?: Array<{ name: string; status: string; evidence?: string }>
@@ -43,24 +43,21 @@ export namespace DeliveryService {
     const timeoutMs = deliveryTimeoutMs(input.timeoutMs)
     const controller = new AbortController()
     let timedOut = false
-    const guard = createInactivityGuard(timeoutMs, () => {
-      timedOut = true
-      controller.abort(new DeliveryFailureError(`delivery agent stalled after ${timeoutMs}ms without activity`))
+    const guard = createProgressGuard({
+      aliveTimeoutMs: 120_000,
+      progressTimeoutMs: timeoutMs,
+      absoluteTimeoutMs: timeoutMs * 2,
+      onTimeout: (reason) => {
+        timedOut = true
+        controller.abort(new DeliveryFailureError(`delivery agent timed out: ${reason}`))
+      },
     })
     const signal = input.signal ? AbortSignal.any([input.signal, controller.signal]) : controller.signal
     const stream = mergeTextHooks(input.stream, {
-      onChunk: async () => {
-        guard.bump()
-      },
-      onStepFinish: async () => {
-        guard.bump()
-      },
-      onFinish: async () => {
-        guard.bump()
-      },
-      onError: async () => {
-        guard.bump()
-      },
+      onChunk: async () => { guard.alive() },
+      onStepFinish: async () => { guard.progress() },
+      onFinish: async () => { guard.progress() },
+      // onError is not progress — a failing stream should not defer the timeout.
     })
 
     log.info("delivery service verify starting", {

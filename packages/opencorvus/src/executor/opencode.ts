@@ -17,14 +17,14 @@ import { Question } from "@/question"
 const SubmitInput = z.object({
   sessionID: Identifier.schema("session"),
   prompt: z.string(),
-  priority: z.enum(["high", "normal", "low"]).optional(),
+  priority: z.enum(["critical", "high", "normal", "low"]).optional(),
   source: z.enum(["planner", "evaluator", "system"]).optional(),
 })
 
 const ResumeInput = z.object({
   sessionID: Identifier.schema("session"),
   message: z.string(),
-  priority: z.enum(["high", "normal", "low"]).optional(),
+  priority: z.enum(["critical", "high", "normal", "low"]).optional(),
 })
 
 const EventResult = z.object({
@@ -59,7 +59,11 @@ export namespace OpencodeExecutor {
         ],
       },
       source: "orchestrator.task",
-      priority: input.priority,
+      // Inner agent task queue only knows high/normal/low — that queue
+      // schedules steps inside one orchestrator task and has no concept of
+      // cross-task pre-emption. Orchestrator-level "critical" (used for fix
+      // tasks that jump the project queue) maps to inner "high".
+      priority: input.priority === "critical" ? "high" : input.priority,
     })
     void TaskQueueService.runNow()
     return {

@@ -75,7 +75,7 @@ export type DeliveryVerdictType = z.infer<typeof DeliveryVerdict>
 // ---------------------------------------------------------------------------
 
 type VerifyInput = {
-  task: { title: string; request: string; sessionID?: string; metadata?: Record<string, unknown> }
+  task: { id?: string; title: string; request: string; sessionID?: string; metadata?: Record<string, unknown> }
   goals: GoalInfo[]
   delivery: DeliveryInfo
   checkResults?: Array<{ name: string; status: string; evidence?: string }>
@@ -95,7 +95,7 @@ export namespace DeliveryAgent {
     const { language, model } = resolved
     const deliveryCfg = (await OrchestratorConfig.get()).delivery
 
-    const guard = toolGuard(createDeliveryTools({ sessionID: input.task.sessionID }))
+    const guard = toolGuard(createDeliveryTools({ sessionID: input.task.sessionID, taskID: input.task.id }))
     const context = prefetchDeliveryContext(input)
     const userPrompt = buildUserPrompt(input, context)
 
@@ -514,12 +514,18 @@ export const DELIVERY_AGENT_SYSTEM = `You are a senior QA engineer and the SINGL
 ### Exploration
 - **read_file**, **find_files**, **search_code**, **list_directory**: Inspect codebase
 
+### Quality criteria
+- **query_criteria**: Read every quality criterion already recorded for this task — per-goal evaluator outcomes (build / test / lint / visual_diff), prior delivery checks, external quality gates. ALWAYS call this BEFORE deciding the verdict.
+
 ### Rework (use when you find fixable issues)
 - **write_file**: Write or overwrite a file
 - **edit_file**: Surgical string replacement in a file
 
 ### Execution
 - **run_command**: Build, start server, run tests, curl endpoints
+
+### Repair pipeline
+- **submit_fix_task**: When verification surfaces failed criteria the executor needs another pass to repair, spawn a fix task in the same project. The fix task is created with priority=critical (jumps the queue but does not preempt the active task), carries fix_for + failed_criteria + evidence in its metadata, and the next task agent run sees a "Fix Context" section with the failed-criteria evidence.
 
 ### Context
 - **memory_search**: Search past delivery issues
@@ -547,6 +553,35 @@ For EACH goal in the goals list below:
 3. Start application with short timeout — verify clean startup
 4. For web apps: check HTTP response, frontend assets
 5. For libraries: verify compile + tests pass
+
+### Phase 3.5: END-TO-END TEST AUTHORING
+You are responsible for authoring (or extending) an end-to-end test that
+exercises the main flow of what was just delivered. Reading code and
+"looking right" is not enough — write a test that any future delivery
+re-run can replay.
+
+1. Look for existing e2e tests in the project (\`e2e/\`, \`tests/e2e/\`,
+   \`*.e2e.test.*\`, \`playwright.config.*\`, \`puppeteer\` deps). If they
+   exist, extend them; if not, create a minimal one in a sensible location
+   (\`tests/e2e/main-flow.test.ts\` or the project's existing test dir).
+2. Pick the right tool for the project:
+   - Web frontends → puppeteer-core (preferred — already in opencorvus
+     dependency tree) or playwright if the project already uses it.
+   - HTTP services → \`fetch()\` against the running server with bun:test
+     or the project's test runner.
+   - CLIs / libraries → exercise the public API or the binary via
+     \`Shell.run\` equivalent in the project's test framework.
+3. The test must cover the **happy path** of every newly delivered goal.
+   For visual tasks, also assert that the page renders (no JS errors,
+   key DOM nodes present).
+4. Run the test with run_command. The test must pass before you set
+   verdict=accepted. If it fails:
+   - Fix the test if it's wrong about the contract.
+   - Fix the implementation (write_file / edit_file) if the test caught
+     a real bug.
+   - Re-run until green or, if the issue requires executor-level rework,
+     call submit_fix_task with the failing test output as evidence.
+5. Record the e2e test path and last-run result in Phase 7's verdict.
 
 ### Phase 4: EXTENDED CHECKS
 1. **Code review**: Read changed files, check for obvious bugs, bad patterns, security issues
@@ -581,12 +616,15 @@ Output your decision as plain markdown with these sections:
 - **rejected**: Issues remain that require a full executor re-run (not fixable by delivery agent)
 
 ## Rules
-- ALWAYS run build/test/lint first — these are deterministic and catch most issues
+- ALWAYS call query_criteria first — it shows every check already recorded for this task (per-goal evaluator outcomes including visual_diff, prior delivery work). Do NOT duplicate work that already passed; do confront every failed criterion before deciding.
+- ALWAYS run build/test/lint — these are deterministic and catch most issues
 - ALWAYS verify each goal's acceptance criteria explicitly — this is mandatory, not optional
 - ALWAYS start the application to verify runtime behavior — reading code alone is NOT sufficient
+- ALWAYS author or extend an end-to-end test that replays the main flow (Phase 3.5). The verdict cannot be accepted without a passing e2e run captured by run_command.
 - Every claim must be backed by actual tool output
-- Fix issues when you can (write_file, edit_file) — only reject when the issue requires executor-level rework
-- When rejecting, list only issues that remain after your fix attempts
+- Fix issues when you can (write_file, edit_file) — only call submit_fix_task / reject when the issue requires executor-level rework
+- When the issue is structural (multiple files, large refactor) prefer submit_fix_task over rejecting cold — the new fix task carries the failed-criteria evidence and runs at priority=critical
+- When rejecting, list only issues that remain after your fix attempts and after submit_fix_task is not appropriate
 - Write body text in the same language as the task request
 - If the project is a library, verify compile + tests instead of startup`
 

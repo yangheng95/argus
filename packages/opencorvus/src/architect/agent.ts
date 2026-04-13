@@ -16,11 +16,10 @@
 import { stepCountIs } from "ai"
 import type { TextHooks } from "@/llm/api"
 import { Provider } from "@/provider/provider"
-import { ProviderLLM } from "@/provider/llm"
 import { createPlannerTools } from "@/planner/tools"
 import { Log } from "@/util/log"
 import { toolGuard } from "@/util/tool-guard"
-import { createInactivityGuard } from "@/util/inactivity-guard"
+import { AgentRuntime } from "@/agent/runtime"
 import { AgentTrace } from "@/util/agent-trace"
 import { OrchestratorConfig } from "@/orchestrator/config"
 import { Config } from "@/config/config"
@@ -107,50 +106,43 @@ async function run(input: {
     model: model.id,
   })
 
-  const stallController = new AbortController()
-  const stallGuard = createInactivityGuard(TIMEOUT_MS, () => {
-    log.warn("architect agent stall timeout", { taskID: input.taskID })
-    stallController.abort(new Error("stall timeout"))
-  })
-  const abortSignals: AbortSignal[] = [stallController.signal, guard.signal]
+  const abortSignals: AbortSignal[] = [guard.signal]
   if (input.signal) abortSignals.push(input.signal)
 
-  const stream = await ProviderLLM.stream({
+  const passthroughHooks = {
+    onChunk: input.stream?.onChunk,
+    onError: input.stream?.onError,
+    flush: async () => {},
+    failures: { snapshot: () => ({ count: 0, items: [] as any[] }) },
+  } as any
+  const runResult = await AgentRuntime.run({
+    agent: "architect",
     model,
-    stopWhen: stepCountIs(MAX_STEPS),
-    tools: guard.tools,
-    abortSignal: AbortSignal.any(abortSignals),
     system: systemPrompt,
     messages: [{ role: "user" as const, content: userPrompt }],
+    tools: guard.tools,
+    stopWhen: stepCountIs(MAX_STEPS),
     cacheKey: input.taskID ? `task-${input.taskID}-architect` : undefined,
-    onChunk: async (arg: any) => {
-      stallGuard.bump()
-      if (input.stream?.onChunk) await (input.stream.onChunk as any)(arg)
-    },
-    ...(input.stream?.onError ? { onError: input.stream.onError } : {}),
+    sessionID: "",
+    taskID: input.taskID,
+    stage: "architect",
+    signal: AbortSignal.any(abortSignals),
     onStepFinish: guard.onStepFinish as any,
+    hooks: passthroughHooks,
+    policies: {
+      progressTimeoutMs: TIMEOUT_MS,
+      failurePolicy: "collect",
+    },
   })
-
-  let resultText: string, resultSteps: any[], resultFinishReason: any
-  try {
-    ;[resultText, resultSteps, resultFinishReason] = await Promise.all([
-      stream.text,
-      stream.steps,
-      stream.finishReason,
-    ])
-  } finally {
-    stallGuard.clear()
-  }
+  const resultText = runResult.text
+  const resultSteps = runResult.steps
+  const resultFinishReason = runResult.finishReason
+  const toolCallCount = runResult.toolCallCount
 
   let allText = resultText?.trim() || ""
   if (!allText) {
     allText = resultSteps.map((s) => s.text).filter(Boolean).join("\n")
   }
-
-  const toolCallCount = resultSteps.reduce(
-    (sum, s) => sum + (Array.isArray((s as any).toolCalls) ? (s as any).toolCalls.length : 0),
-    0,
-  )
 
   log.info("architect agent finished", {
     steps: resultSteps.length,

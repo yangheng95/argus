@@ -189,14 +189,53 @@ export const CheckConfig = z.object({
   timeout_ms: z.number().int().positive().optional(),
 })
 
-/** A base64-encoded image attachment for multimodal task input. */
-export const TaskAttachment = z.object({
-  /** MIME type, e.g. "image/png", "image/jpeg" */
+/**
+ * API-boundary attachment payload. Callers that cannot upload out-of-band (HTTP
+ * clients, benchmark scripts, channel ingress) send the raw bytes base64-encoded.
+ * The orchestrator decodes them exactly once at task-creation time, writes them
+ * to AttachmentStore, and never carries base64 further into the system.
+ */
+export const TaskAttachmentInput = z.object({
+  /** MIME type, e.g. "image/png", "application/pdf", "audio/mpeg" */
   mime: z.string(),
-  /** Base64-encoded file data (no data-URL prefix) */
+  /** Base64-encoded file bytes (no data-URL prefix) */
   data: z.string(),
-  /** Optional display name */
+  /** Optional display name shown in the overlay message and LLM file part */
   filename: z.string().optional(),
+})
+
+/**
+ * Persisted attachment reference. Once the bytes live in AttachmentStore
+ * (`<projectDir>/.opencorvus/attachments/<sha>.<ext>`), every downstream layer
+ * — queue table row, task loop, task-agent, design-analyst, decompose — only
+ * carries this small, URL-addressable reference. Agents that need the raw
+ * bytes for multimodal LLM input read them back through AttachmentStore.
+ *
+ * `intent` lets evaluator gates and downstream agents consume the same
+ * attachment store with different semantics. Today three intents are wired:
+ *   - "visual_reference" — picked up by the deliver-time visual SSIM gate
+ *     (user-uploaded screenshots, Figma frames, URL screenshots).
+ *   - "design_token"     — design-analyst input only, not a verification gate.
+ *   - "spec_artifact"    — generic supporting material (request docs etc).
+ * Other intents may appear later (api_contract, test_fixture, …); leaving
+ * the field free-form keeps that extension cheap. Missing intent defaults
+ * to `visual_reference` for image MIMEs and `spec_artifact` otherwise.
+ */
+export const TaskAttachment = z.object({
+  /** sha256 hex digest of the file bytes */
+  sha: z.string(),
+  /** Server-relative URL the overlay (and AI SDK) can GET to fetch the bytes */
+  url: z.string(),
+  /** MIME type, preserved from the original upload */
+  mime: z.string(),
+  /** Byte length of the stored file */
+  size: z.number().int().nonnegative(),
+  /** Optional display name shown in the overlay message */
+  filename: z.string().optional(),
+  /** Semantic role for downstream consumers. See struct comment above. */
+  intent: z.string().optional(),
+  /** Where the attachment came from. Useful for UI labelling and audit. */
+  source: z.string().optional(),
 })
 
 export const CreateTaskInput = z.object({
@@ -206,9 +245,17 @@ export const CreateTaskInput = z.object({
   executor: ExecutorName.optional(),
   title: z.string().optional(),
   request: z.string(),
-  /** Image attachments sent as first-class vision content to all agents. */
-  attachments: TaskAttachment.array().optional(),
-  priority: z.enum(["high", "normal", "low"]).optional(),
+  /** File attachments (images / PDF / text / audio / video). Base64 bytes are
+   *  decoded once at task creation, stored under the project's attachment dir,
+   *  and downstream always use references — not base64. */
+  attachments: TaskAttachmentInput.array().optional(),
+  // Priority levels (highest first):
+  //  - "critical": fix tasks emitted by `submit_fix_task` — jump the queued
+  //                serial queue ahead of normal/high. Never preempts an
+  //                already-active task in the same project; only takes the
+  //                next queued slot.
+  //  - "high"/"normal"/"low": user-facing levels.
+  priority: z.enum(["critical", "high", "normal", "low"]).optional(),
   budget: Budget.optional(),
   checks: CheckConfig.optional(),
   routing: StageRouting.optional(),
@@ -230,7 +277,7 @@ export const Task = z.object({
   title: z.string(),
   request: z.string(),
   status: z.enum(["queued", "active", "completed", "failed", "cancelled"]),
-  priority: z.enum(["high", "normal", "low"]),
+  priority: z.enum(["critical", "high", "normal", "low"]),
   blockingReason: z.string().optional(),
   error: z.string().optional(),
   budget: Budget.optional(),
@@ -687,6 +734,12 @@ export const TaskBoard = z.object({
   architect: TaskBoardArchitect.optional(),
   /** Per-goal workflow groups with step-level progress */
   goalWorkflows: TaskBoardGoalWorkflow.array().optional(),
+  /** Task-level rollup of every quality criterion that touched this task —
+   *  per-goal evaluator outcomes, delivery agent verifications, and external
+   *  quality gates (e.g. visual-diff). Persisted in task.metadata.criteria_results
+   *  and exposed here so the overlay's EvaluationCriteriaPanel and the delivery
+   *  agent's `query_criteria` tool both read from the same place. */
+  criteriaResults: EvaluationCheck.array().optional(),
 })
 
 export const TaskProject = z.object({

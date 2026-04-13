@@ -15,7 +15,7 @@
  */
 import { stepCountIs } from "ai"
 import { Provider } from "@/provider/provider"
-import { ProviderLLM } from "@/provider/llm"
+import { AgentRuntime } from "@/agent/runtime"
 import { Session } from "@/session"
 import { Instance } from "@/project/instance"
 import { Identifier } from "@/id/id"
@@ -23,8 +23,9 @@ import { Log } from "@/util/log"
 import { toolGuard } from "@/util/tool-guard"
 import { AgentTrace } from "@/util/agent-trace"
 import { registerGoalRunSession } from "@/server/routes/task-event"
-import { sessionStreamHooks } from "@/orchestrator/session-stream"
+import { sessionStreamHooks } from "@/agent/runtime"
 import { createTaskAgentTools } from "./tools"
+import { AttachmentStore } from "@/storage/attachment-store"
 import { operatorNotesSection } from "@/orchestrator/helpers"
 import {
   findDeliveryByRun,
@@ -188,18 +189,28 @@ export namespace TaskAgent {
       const userText = trigger.kind === "created"
         ? task.request
         : describeTrigger(task, trigger)
-      // Build multimodal content when task has image attachments (only for initial trigger)
+      // Build multimodal content when task has file attachments (only for initial trigger).
+      // Attachments arrive as AttachmentStore references; we read the raw
+      // `Buffer` (Uint8Array-compatible) from disk and hand it to the provider.
+      // AI SDK's DataContent accepts Uint8Array, which avoids holding both a
+      // Buffer and its base64 string in memory at the same time — meaningful
+      // for large mp4 / pdf attachments.
       const attachments = trigger.kind === "created" && Array.isArray(task.attachments) ? task.attachments : undefined
-      const userContent = attachments?.length
-        ? [
-            { type: "text" as const, text: userText },
-            ...attachments.map((a: any) => ({
+      const attachmentParts = attachments?.length
+        ? await Promise.all(attachments.map(async (a: any) => {
+            const located = AttachmentStore.nameFromUrl(String(a.url ?? ""))
+            if (!located) throw new Error(`task attachment has no resolvable url: ${a.filename ?? a.sha}`)
+            const bytes = await AttachmentStore.read(located.projectID, located.name)
+            return {
               type: "file" as const,
-              data: a.data as string,
+              data: bytes,
               mediaType: a.mime as string,
               ...(a.filename ? { filename: a.filename as string } : {}),
-            })),
-          ]
+            }
+          }))
+        : []
+      const userContent = attachmentParts.length
+        ? [{ type: "text" as const, text: userText }, ...attachmentParts]
         : userText
 
       log.info("task agent starting", {
@@ -210,33 +221,41 @@ export namespace TaskAgent {
         toolCount: Object.keys(tools).length,
       })
 
-      // 5. Call LLM through unified provider layer
-      const stream = await ProviderLLM.stream({
+      // 5. Run through AgentRuntime — unified guard / failure / persistence wiring.
+      const taskAgentProgressMs = 20 * 60 * 1000
+      const runResult = await AgentRuntime.run({
+        agent: "task-agent",
         model,
-        stopWhen: stepCountIs(MAX_STEPS),
-        tools: guard.tools as any,
-        abortSignal: AbortSignal.any([ctrl.signal, guard.signal, stopSignal]),
         system,
         messages: [{ role: "user" as const, content: userContent }],
+        tools: guard.tools as any,
+        stopWhen: stepCountIs(MAX_STEPS),
         cacheKey: `task-${taskID}`,
-        ...(contentHooks!.onChunk ? { onChunk: contentHooks!.onChunk as any } : {}),
-        ...(contentHooks!.onError ? { onError: contentHooks!.onError } : {}),
+        sessionID: agentSession.id,
+        taskID,
+        stage: "assistant",
+        signal: AbortSignal.any([ctrl.signal, guard.signal, stopSignal]),
         onStepFinish: guard.onStepFinish as any,
+        hooks: contentHooks,
+        policies: {
+          // Task-agent is the root coordinator: it sits in `tool.execute`
+          // for minutes at a time while sub-agents (design-analyst /
+          // decompose / planner / executor) run. The root stream emits no
+          // chunks during those gaps, so a tight Tier-1 alive timer would
+          // false-trigger. Each sub-agent carries its own alive guard, so
+          // we collapse Tier 1 into Tier 2 here (alive == progress).
+          aliveTimeoutMs: taskAgentProgressMs,
+          progressTimeoutMs: taskAgentProgressMs,
+          absoluteTimeoutMs: taskAgentProgressMs * 3,
+          // Root agent: surface child failures as collected state; the task
+          // loop handles escalation, not the runtime.
+          failurePolicy: "collect",
+        },
       })
-
-      // 6. Await completion
-      const [resultText, resultSteps, resultFinishReason] = await Promise.all([
-        stream.text,
-        stream.steps,
-        stream.finishReason,
-      ])
-      await contentHooks!.flush()
-
-
-      const toolCallCount = resultSteps.reduce(
-        (sum, s) => sum + (Array.isArray((s as any).toolCalls) ? (s as any).toolCalls.length : 0),
-        0,
-      )
+      const resultText = runResult.text
+      const resultSteps = runResult.steps
+      const resultFinishReason = runResult.finishReason
+      const toolCallCount = runResult.toolCallCount
       log.info("task agent finished", {
         taskID,
         trigger: trigger.kind,
@@ -244,7 +263,44 @@ export namespace TaskAgent {
         toolCalls: toolCallCount,
         finishReason: resultFinishReason,
         textLength: resultText?.length ?? 0,
+        streamFailures: runResult.failures.count,
+        timeoutTier: runResult.timeout?.tier,
       })
+
+      // Critical stream failures (tool-call protocol violations, mid-stream
+      // persist failures, provider onError, progress-guard timeouts) mean
+      // the agent's view of the run is incoherent and we must fail the task.
+      // `flush` failures happen in the cleanup path after the LLM has already
+      // returned — they reflect a persistence hiccup, not a task outcome,
+      // and should not retroactively turn a successful run into "failed".
+      const critical = runResult.failures.items.filter((item) => item.kind !== "flush")
+      const flushOnly = runResult.failures.items.filter((item) => item.kind === "flush")
+      if (flushOnly.length > 0) {
+        log.warn("task agent: post-stream flush hiccup (non-fatal)", {
+          taskID,
+          flushFailures: flushOnly.length,
+          firstFlushKind: flushOnly[0]?.chunkType,
+          firstFlushReason: flushOnly[0]?.reason,
+        })
+      }
+      if (critical.length > 0 || runResult.timeout) {
+        const first = critical[0]
+        const reason = runResult.timeout?.reason
+          ?? (first ? `${first.kind}: ${first.reason}` : "unknown stream failure")
+        log.warn("task agent surfaced stream failures", {
+          taskID,
+          criticalCount: critical.length,
+          timeoutTier: runResult.timeout?.tier,
+          firstFailureKind: first?.kind,
+        })
+        const current = requireTask(taskID)
+        if (current.status !== "completed" && current.status !== "failed" && current.status !== "cancelled") {
+          await updateTask(current, {
+            status: "failed",
+            error: `Task Agent stream failure: ${reason}`,
+          }, `Task Agent stream failure: ${reason}`)
+        }
+      }
 
       AgentTrace.capture("task-agent", 1,
         { system, messages: [{ role: "user", content: userContent }] },
@@ -418,6 +474,25 @@ const TASK_AGENT_INSTRUCTIONS = [
  */
 function buildSystemParts(task: TaskRow, trigger: TaskAgentTrigger, workflow?: MiniWorkflow, workflowState?: WorkflowState): string[] {
   const ctx: string[] = []
+
+  // ── Fix-task context ──
+  // When the delivery agent's `submit_fix_task` spawned this task, we attach
+  // the predecessor task id, the failed-criteria evidence, and any focused
+  // scope so the executor knows it's a targeted repair, not a fresh build.
+  const meta = (task.metadata as Record<string, unknown> | null) ?? {}
+  const fixFor = typeof meta.fix_for === "string" ? meta.fix_for : undefined
+  if (fixFor) {
+    const failed = Array.isArray(meta.failed_criteria) ? (meta.failed_criteria as string[]) : []
+    const scope = Array.isArray(meta.fix_scope_files) ? (meta.fix_scope_files as string[]) : []
+    const depth = typeof meta.fix_chain_depth === "number" ? meta.fix_chain_depth : undefined
+    ctx.push("## Fix Context")
+    ctx.push(`- This task repairs predecessor task: ${fixFor}`)
+    if (depth !== undefined) ctx.push(`- Fix chain depth: ${depth}`)
+    if (failed.length > 0) ctx.push(`- Failed criteria from previous verification: ${failed.join(", ")}`)
+    if (scope.length > 0) ctx.push(`- Suggested scope (focus area): ${scope.join(", ")}`)
+    ctx.push(`- Address every failed criterion. Do not regress passing criteria.`)
+    ctx.push("")
+  }
 
   // ── Current State (full context for reasoning) ──
   ctx.push("## Current Task")

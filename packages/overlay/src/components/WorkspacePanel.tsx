@@ -7,11 +7,13 @@
 import { Show } from "solid-js";
 import { CodingTab, type CodingTabAPI } from "./CodingTab";
 import { DiffPreviewPanel } from "./DiffPreviewPanel";
+import { FileViewPanel } from "./FileViewPanel";
 import { t } from "../utils/i18n";
 
 export type WorkspaceView =
   | { kind: "build" }
-  | { kind: "diff"; filePath: string };
+  | { kind: "diff"; filePath: string }
+  | { kind: "file"; filePath: string };
 
 export interface WorkspacePanelProps {
   /** Current view to foreground. */
@@ -27,8 +29,11 @@ export interface WorkspacePanelProps {
 export function WorkspacePanel(props: WorkspacePanelProps) {
   const isBuild = () => props.view.kind === "build";
   const isDiff = () => props.view.kind === "diff";
+  const isFile = () => props.view.kind === "file";
   const diffFilePath = () =>
     props.view.kind === "diff" ? props.view.filePath : null;
+  const fileFilePath = () =>
+    props.view.kind === "file" ? props.view.filePath : null;
 
   // When the user clicks the Build tab while already viewing a diff, we want
   // to keep the previously-loaded diff around so that clicking Diff again
@@ -41,6 +46,11 @@ export function WorkspacePanel(props: WorkspacePanelProps) {
     if (props.view.kind !== "diff") {
       // No file has been picked yet — enter Diff with an empty placeholder.
       props.onSelectView({ kind: "diff", filePath: "" });
+    }
+  }
+  function selectFile() {
+    if (props.view.kind !== "file") {
+      props.onSelectView({ kind: "file", filePath: "" });
     }
   }
 
@@ -76,6 +86,24 @@ export function WorkspacePanel(props: WorkspacePanelProps) {
               </Show>
             </span>
           </button>
+          <button
+            type="button"
+            class="workspace-tab"
+            role="tab"
+            aria-selected={isFile()}
+            data-active={isFile() ? "true" : "false"}
+            onClick={selectFile}
+          >
+            <span class="workspace-tab-label">
+              {t("workspace.file")}
+              <Show when={fileFilePath()}>
+                <span class="workspace-tab-file">
+                  {" · "}
+                  {shortFileName(fileFilePath() || "")}
+                </span>
+              </Show>
+            </span>
+          </button>
         </div>
         <button
           type="button"
@@ -103,6 +131,14 @@ export function WorkspacePanel(props: WorkspacePanelProps) {
           style={{ display: isDiff() ? "flex" : "none" }}
         >
           <DiffPreviewPanel filePath={diffFilePath()} />
+        </div>
+        {/* File view — lazy fetches file content via /file/content */}
+        <div
+          class="workspace-view"
+          data-kind="file"
+          style={{ display: isFile() ? "flex" : "none" }}
+        >
+          <FileViewPanel filePath={fileFilePath()} />
         </div>
       </div>
     </section>

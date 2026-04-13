@@ -85,7 +85,7 @@ export function persistQueuedTask(input: {
   executor: RunRow["executor"]
   title: string
   request: string
-  attachments?: Array<{ mime: string; data: string; filename?: string }>
+  attachments?: Array<{ sha: string; url: string; mime: string; size: number; filename?: string }>
   requestID?: string
   source?: z.infer<typeof CreateTaskInput>["source"]
   priority?: PriorityInput

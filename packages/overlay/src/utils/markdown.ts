@@ -64,8 +64,58 @@ marked.use({
       const highlighted = hljs.highlight(text, { language }).value;
       return `<pre><code class="hljs language-${language}">${highlighted}</code></pre>`;
     },
+    codespan({ text }: { text: string }) {
+      // `text` is the raw codespan content (before HTML escaping). Always
+      // escape before emitting — the default renderer does the same.
+      const path = extractFilePath(text);
+      if (path) {
+        const { display, target } = path;
+        return `<code><a class="file-link" href="#" data-file-path="${escapeAttr(target)}">${escapeHtml(display)}</a></code>`;
+      }
+      return `<code>${escapeHtml(text)}</code>`;
+    },
   },
 });
+
+function escapeAttr(s: string): string {
+  return escapeHtml(s).replace(/'/g, "&#39;");
+}
+
+// File-ish extensions we treat as path indicators when no slash is present.
+const FILE_EXT_RE =
+  /\.(?:ts|tsx|js|jsx|mts|cts|mjs|cjs|json|jsonc|md|mdx|css|scss|less|html|htm|xml|svg|yaml|yml|toml|py|pyi|rs|go|java|c|h|cpp|cc|cxx|hpp|sh|bash|zsh|sql|rb|php|lua|kt|swift|dart|vue|astro|conf|ini|env|lock|txt)$/i;
+
+/**
+ * Decide whether a codespan's text is a file path reference. Returns the
+ * path to open (stripped of trailing ":line[:col]") and the display label
+ * (original text). Returns null for non-path content (commands, identifiers,
+ * URLs, etc.).
+ */
+function extractFilePath(
+  text: string,
+): { display: string; target: string } | null {
+  const s = text.trim();
+  if (!s) return null;
+  // Reject URLs and protocol-ish strings.
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(s)) return null;
+  // Reject whitespace (multi-word commands) and shell flags.
+  if (/\s/.test(s)) return null;
+  if (s.startsWith("-")) return null;
+  // Strip trailing :line[:col] for the target path.
+  const locMatch = s.match(/^(.+?)(:\d+(?::\d+)?)$/);
+  const pathPart = locMatch ? locMatch[1] : s;
+  // Must look like a valid file token (letters/digits/underscore/dot/dash
+  // plus path separators and optional './' or '../' prefix).
+  if (!/^[\w./\\@~-]+$/.test(pathPart)) return null;
+  const hasSlash = /[\/\\]/.test(pathPart);
+  const hasFileExt = FILE_EXT_RE.test(pathPart);
+  // Require either a path separator OR a recognisable file extension —
+  // this filters out bare identifiers like `foo` or `useState`.
+  if (!hasSlash && !hasFileExt) return null;
+  // Reject isolated extensions like ".ts".
+  if (/^\.\w+$/.test(pathPart)) return null;
+  return { display: s, target: pathPart };
+}
 
 // ── Core rendering functions ──
 

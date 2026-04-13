@@ -98,7 +98,7 @@ export type ExecutorAdapter = {
   submit(input: {
     sessionID: string
     prompt: string
-    priority?: "high" | "normal" | "low"
+    priority?: "critical" | "high" | "normal" | "low"
     source?: "planner" | "evaluator" | "system"
     cwd?: string
     /** Per-submission system prompt override — takes precedence over options.system. */
@@ -120,7 +120,7 @@ export type ExecutorAdapter = {
   resume(input: {
     sessionID: string
     message: string
-    priority?: "high" | "normal" | "low"
+    priority?: "critical" | "high" | "normal" | "low"
   }): Promise<{
     sessionID: string
     queueTaskID: string
