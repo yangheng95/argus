@@ -1,10 +1,24 @@
 import { selectorList, selectorsSatisfied } from "@/check/policy"
 import { Identifier } from "@/id/id"
 import { executorLeaseAvailable, executorLeaseHeldByOther, executorLeaseOwner, executorLeaseUntil } from "./lease"
-import { type GoalJudgmentType, type EvaluationOutput } from "@/types/evaluator"
+import { type GoalJudgmentType, type EvaluationOutput } from "@/evaluator/types"
+
+/** Input shape for persisting a decomposed requirement into
+ *  orchestrator_requirement. Mirrors the table columns plus an optional
+ *  check_selector stored inside metadata. */
+export interface Requirement {
+  id: string
+  title: string
+  description: string
+  acceptance: string[]
+  evidence_refs: string[]
+  non_goals?: string[]
+  priority?: "blocking" | "advisory"
+  check_selector?: string[]
+  metadata?: Record<string, unknown>
+}
 import { protocolInfo, type ProtocolCapabilitiesInfo, type ProtocolRefsInfo, type ProtocolSettingsInfo, ProtocolTransport } from "@/executor/protocol"
 import { writeEvaluationSnapshot, writeGoalSnapshot } from "@/orchestrator/docs"
-import { type Requirement } from "@/types/spec"
 import { Database, and, desc, eq, inArray, isNull, lte, or } from "@/storage/db"
 import { Log } from "@/util/log"
 import { Event } from "./model"

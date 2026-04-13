@@ -7,7 +7,6 @@ import { ExecutorNotConfiguredError } from "@/executor/compat"
 import { ExecutorBootstrap } from "@/executor/bootstrap"
 import { ExecutorRegistry } from "@/executor/registry"
 import { PermissionNext } from "@/permission/next"
-import { PlannerFailureError } from "@/types/planner"
 import { Provider } from "@/provider/provider"
 import { ProtocolStore } from "@/protocol/store"
 import { OrchestratorProtocol } from "./protocol"
@@ -340,6 +339,16 @@ async function taskChecks(checks?: z.input<typeof CheckConfig>) {
   }
 
   return CheckConfig.parse(next)
+}
+
+/** Thrown when the planner agent cannot produce a valid plan. Server routes
+ *  map this to a 4xx so the user sees the planner failure rather than a
+ *  generic 500. */
+export class PlannerFailureError extends Error {
+  constructor(message: string, options?: { cause?: unknown }) {
+    super(message, options)
+    this.name = "PlannerFailureError"
+  }
 }
 
 export namespace OrchestratorService {
@@ -1155,7 +1164,7 @@ export namespace OrchestratorService {
   }
 }
 
-export { ExecutorNotConfiguredError, PlannerFailureError }
+export { ExecutorNotConfiguredError }
 
 function slackUser(metadata: Record<string, unknown>) {
   const channel = metadata.channel

@@ -8,7 +8,7 @@
  *   - verify() — Verify the delivery works end-to-end before publishing
  */
 import { DeliveryAgent, type DeliveryVerdictType } from "./agent"
-import type { GoalJudgmentType, GoalInfo, DeliveryInfo } from "@/types/evaluator"
+import type { GoalJudgmentType, GoalInfo, DeliveryInfo } from "@/evaluator/types"
 import { Log } from "@/util/log"
 import { Env } from "@/env"
 import { type TextHooks } from "@/llm/api"

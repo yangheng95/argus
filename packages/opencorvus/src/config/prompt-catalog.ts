@@ -88,11 +88,11 @@ export namespace PromptCatalog {
         return REQUIREMENTS_SYSTEM
       }
       case "planner_system": {
-        const { PLANNER_SYSTEM_DEFAULT } = await import("@/types/planner")
-        return PLANNER_SYSTEM_DEFAULT
+        const PLAN_CORE = (await import("@/prompt/core/plan-core.txt")).default
+        return PLAN_CORE
       }
       case "evaluator_system": {
-        const { EVALUATOR_DEFAULT_SYSTEM } = await import("@/types/evaluator")
+        const { EVALUATOR_DEFAULT_SYSTEM } = await import("@/evaluator/types")
         return EVALUATOR_DEFAULT_SYSTEM
       }
       case "delivery_system": {
