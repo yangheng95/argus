@@ -148,12 +148,6 @@ export type EvaluationOutput = {
   artifacts: EvaluationArtifact[]
 }
 
-/** Structured check report used by persist layer for evaluation persistence. */
-export type CheckReport = EvaluationOutput
-
-/** Alias for EvaluationDelivery for backward compatibility. */
-export type CheckDelivery = EvaluationDelivery
-
 export type PluginCheck = {
   name: string
   mode: "soft" | "strict"
