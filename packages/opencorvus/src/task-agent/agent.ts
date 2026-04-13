@@ -22,6 +22,7 @@ import { Identifier } from "@/id/id"
 import { Log } from "@/util/log"
 import { toolGuard } from "@/util/tool-guard"
 import { AgentTrace } from "@/util/agent-trace"
+import { Trace } from "@/trace"
 import { registerGoalRunSession } from "@/server/routes/task-event"
 import { sessionStreamHooks } from "@/agent/runtime"
 import { createTaskAgentTools } from "./tools"
@@ -51,6 +52,11 @@ import {
 } from "@/orchestrator/workflow"
 import { OrchestratorProtocol } from "@/orchestrator/protocol"
 import { Event as OrchestratorEvent } from "@/orchestrator/model"
+// Namespace-style import is intentional: tests use `spyOn(BuildDispatch,
+// "runBuildTask")` to intercept the call without spinning up the real build
+// agent (which would issue a live LLM stream). Named imports would capture
+// the binding at module load and bypass the spy.
+import * as BuildDispatch from "./build-dispatch"
 
 const log = Log.create({ service: "task-agent" })
 const MAX_STEPS = 20
@@ -69,6 +75,10 @@ export type TaskAgentTrigger =
 // ---------------------------------------------------------------------------
 
 const running = new Map<string, AbortController>()
+// Tracks tasks that have already emitted Trace.event("task.finish"); the
+// task-agent can be re-triggered after a task reaches terminal status, and
+// without dedupe each re-trigger would emit a redundant finish event.
+const finishEmitted = new Set<string>()
 // Cooldown: when the Task Agent last finished for each task.
 // Orphan recovery checks this to avoid re-triggering immediately.
 const lastFinished = new Map<string, number>()
@@ -127,11 +137,46 @@ export namespace TaskAgent {
         return
       }
 
+      // ── kind dispatch ──
+      // `task.kind === "build"` tasks are Gateway-issued one-shots that bypass
+      // the entire workflow pipeline (decompose / design / architect / execute /
+      // deliver). They still go through the same task table + queue so cancel
+      // and audit are uniform; the only fork is which agent handles execution.
+      if (task.kind === "build") {
+        if (trigger.kind !== "created") {
+          // Build tasks are single-shot: re-triggers indicate a control bug
+          // (queue replay, retry storm). Log and bail rather than silently
+          // re-running and clobbering whatever the original run produced.
+          log.warn("build task re-triggered; ignoring", { taskID, trigger: trigger.kind })
+          return
+        }
+        AgentTrace.startTask(taskID)
+        Trace.bindSession(task.session_id, taskID)
+        Trace.event({ taskID, sessionID: task.session_id, category: "task.start",
+          payload: { kind: "build", request: task.request } })
+        try {
+          await BuildDispatch.runBuildTask({ task, signal: ctrl.signal })
+        } finally {
+          Trace.event({ taskID, sessionID: task.session_id, category: "task.finish",
+            payload: { kind: "build", status: findTask(taskID)?.status } })
+          Trace.unbindSession(task.session_id)
+        }
+        return
+      }
+
       // 0. Initialize workflow state on new task creation
       let workflow: MiniWorkflow | undefined
       let workflowState: WorkflowState | undefined
       if (trigger.kind === "created") {
         AgentTrace.startTask(taskID)
+        finishEmitted.delete(taskID)
+        Trace.bindSession(task.session_id, taskID)
+        Trace.event({
+          taskID,
+          sessionID: task.session_id,
+          category: "task.start",
+          payload: { kind: task.kind, request: task.request },
+        })
         const requestedID = (task.metadata as any)?._workflow?.workflowID
         const workflowID = requestedID ?? await WorkflowRegistry.defaultID()
         workflow = await WorkflowRegistry.resolve(workflowID) ?? WorkflowRegistry.resolveSync("standard")
@@ -332,6 +377,19 @@ export namespace TaskAgent {
       } catch { /* task may have been deleted */ }
     } finally {
       running.delete(taskID)
+      const finalTask = findTask(taskID)
+      const isTerminal = !!finalTask && (finalTask.status === "completed" || finalTask.status === "failed" || finalTask.status === "cancelled")
+      if (isTerminal && !finishEmitted.has(taskID)) {
+        finishEmitted.add(taskID)
+        const sid = finalTask?.session_id ?? undefined
+        Trace.event({
+          taskID,
+          sessionID: sid,
+          category: "task.finish",
+          payload: { status: finalTask?.status, error: finalTask?.error ?? null },
+        })
+        if (sid) Trace.unbindSession(sid)
+      }
     }
   }
 }
@@ -395,7 +453,7 @@ const TASK_AGENT_INSTRUCTIONS = [
   "",
   "## Stage Sequence",
   "",
-  "0. **clarify** (optional, multi-round) — Ask the user structured questions with options to iteratively refine the task. Each round appends answers to the task request. Call again with follow-up questions based on previous answers until you have enough to decompose. 300s timeout per round; on timeout, proceed with best judgment. Supports all input types: natural language, spec, PRD, design, URL, etc.",
+  "(Clarification is owned by Gateway, not by this agent. If the request is incomplete, surface that fact in your reasoning — Gateway resolves the dialog with the user before re-issuing the task. Do not attempt to ask the user yourself.)",
   "0.5. **design_analysis** (optional, auto-triggered) — Analyze visual references (images, URLs) to produce structured design specs (layout tree, style tokens, component inventory, interactions, responsive rules). Enriches the task request before decomposition. See triggering rules below.",
   "1. **requirements** — Decompose the task into goal contracts with acceptance criteria.",
   "2. **architect** — Coordinate cross-goal interface contracts. REQUIRED for multi-goal tasks — call after requirements returns 2+ goals. Skip only for single-goal tasks (the tool will enforce this automatically).",
@@ -403,7 +461,7 @@ const TASK_AGENT_INSTRUCTIONS = [
   "4. **deliver** — Aggregate and verify (deliver). Delivery agent is the single verification gate: it tests, fixes issues, and makes final acceptance decision. Only when all blocking goals have completed execution.",
   "5. **refine** (optional, post-completion) — Explore the delivered project, analyze quality/coverage/features, and suggest next iteration improvements. Use after delivery completes successfully, or when user re-triggers a completed task asking for improvements.",
   "",
-  "You have these tools: clarify, design_analysis, requirements, architect, execute_goal, add_goal, modify_goal,",
+  "You have these tools: design_analysis, requirements, architect, execute_goal, add_goal, modify_goal,",
   "dispatch_ready_goals, retry_failed_goals, query_failed_goals, read_context, create_run,",
   "submit_execution, deliver, publish_delivery, fail_task, restart_from_stage, refine.",
   "(Note: per-goal planning happens automatically inside the execution engine — no plan_goal tool needed.)",
@@ -416,7 +474,7 @@ const TASK_AGENT_INSTRUCTIONS = [
   "  The design analyst produces exact layout, colors, typography, component inventory — information",
   "  that lets the decompose agent create pixel-accurate goals instead of vague 'build the UI' goals.",
   "  SKIP design_analysis when: no images/URLs, purely backend/API, or the request already contains detailed design specs.",
-  "- ONLY call clarify when the request is genuinely unusable for decomposition — e.g., a single sentence like '做个订单系统' with no scope, no context, no acceptance criteria. If you can extract at least 2-3 concrete requirements from the text, skip clarify.",
+  "- If the request is genuinely unusable for decomposition (e.g., a single sentence like '做个订单系统' with no scope or context), bail out early and let Gateway pull a clarification from the user. This agent does not own the dialog channel.",
   "- After requirements: ALWAYS call architect next if there are 2+ goals. It coordinates interface contracts that all executors depend on. Skip only when requirements returned exactly 1 goal.",
   "- Then create_run, then submit_execution. The execution engine plans each goal automatically.",
   "- Do NOT call plan_goal for goals upfront — planning is lazy and happens per-goal inside the execution engine, right before each goal executes.",
@@ -448,9 +506,9 @@ const TASK_AGENT_INSTRUCTIONS = [
   "**Post-completion iteration (re-triggered on completed task):**",
   "- User sent a message to a completed task → you are re-triggered with kind=retry.",
   "- Call refine to analyze what was built and generate improvement suggestions.",
-  "- Present suggestions to user via clarify — let them pick what to iterate on.",
-  "- With selected improvements, call restart_from_stage(requirements) to begin a new cycle.",
-  "- The full iteration loop: deliver → refine → clarify → restart → requirements → architect → execute → deliver → ...",
+  "- Surface the suggestions in your reply — Gateway routes them to the user and collects which to iterate on.",
+  "- Once the user replies with selected improvements (Gateway will push them back into the task), call restart_from_stage(requirements) to begin a new cycle.",
+  "- The full iteration loop: deliver → refine → (Gateway dialog) → restart → requirements → architect → execute → deliver → ...",
   "",
   "**Dynamic adjustment (anytime):**",
   "- Discovered a missing requirement? → add_goal",
