@@ -1,5 +1,5 @@
 import type { Message } from "../../session/message"
-import type { CallRecord } from "../../session/llm-trace"
+import type { TraceEvent } from "../../trace"
 
 type SessionLike = {
   id: string
@@ -10,12 +10,18 @@ type SessionLike = {
   }
 }
 
+/**
+ * Render an offline HTML report combining the conversation transcript and the
+ * raw Trace events captured during the session. Replaces the older
+ * CallRecord-based renderer; events are grouped by call_id (which the runtime
+ * stamps onto every llm.step / tool.call / tool.result emitted from one LLM
+ * invocation) so each "call" block reconstructs from streaming events.
+ */
 export async function buildSessionTraceHtml(input: {
   session: SessionLike
   messages: Message.WithParts[]
-  calls: CallRecord[]
+  events: TraceEvent[]
 }) {
-  const calls = [...input.calls].sort((a, b) => a.started_at - b.started_at)
   const messageHtml = (
     await Promise.all(
       input.messages.map(async (message, index) => {
@@ -52,76 +58,10 @@ export async function buildSessionTraceHtml(input: {
     )
   ).join("")
 
+  const calls = groupEventsByCall(input.events)
   const callHtml = calls.length
-    ? calls
-        .map((call, index) => {
-          const header = [
-            `#${index + 1}`,
-            `${call.model.provider_id}/${call.model.model_id}`,
-            call.status.toUpperCase(),
-            `${call.steps.length} step`,
-            formatDate(call.started_at),
-          ].join(" | ")
-          const system = call.request.system
-            .map(
-              (item, idx) =>
-                `<details class="card sub"><summary>system[${idx}] (${item.length} chars)</summary><pre>${escape(item)}</pre></details>`,
-            )
-            .join("")
-          const steps = call.steps
-            .map((step) =>
-              [
-                `<details class="card sub">`,
-                `<summary>step ${step.index} | ${escape(step.finish_reason)} | model ${escape(step.response.model_id)}</summary>`,
-                `<div class="meta">`,
-                `<span><b>response_id:</b> ${escape(step.response.id)}</span>`,
-                `<span><b>time:</b> ${escape(step.response.timestamp)}</span>`,
-                `</div>`,
-                `<details class="card tiny"><summary>request.body</summary><pre>${json(step.request_body)}</pre></details>`,
-                `<details class="card tiny"><summary>tool_calls</summary><pre>${json(step.tool_calls)}</pre></details>`,
-                `<details class="card tiny"><summary>tool_results</summary><pre>${json(step.tool_results)}</pre></details>`,
-                `<details class="card tiny"><summary>usage</summary><pre>${json(step.usage)}</pre></details>`,
-                `<details class="card tiny"><summary>warnings</summary><pre>${json(step.warnings)}</pre></details>`,
-                `<details class="card tiny"><summary>text</summary><pre>${escape(step.text)}</pre></details>`,
-                `</details>`,
-              ].join(""),
-            )
-            .join("")
-
-          return [
-            `<details class="card call">`,
-            `<summary>${escape(header)}</summary>`,
-            `<div class="meta">`,
-            `<span><b>session:</b> ${escape(call.session_id)}</span>`,
-            `<span><b>user_message:</b> ${escape(call.user_message_id)}</span>`,
-            `<span><b>agent:</b> ${escape(call.agent.name)} (${escape(call.agent.mode)})</span>`,
-            `<span><b>small:</b> ${call.small ? "yes" : "no"}</span>`,
-            `<span><b>finish_reason:</b> ${escape(call.finish_reason ?? "-")}</span>`,
-            `</div>`,
-            `<details class="card sub"><summary>request.system (${call.request.system.length})</summary>${system || `<p class="empty">none</p>`}</details>`,
-            `<details class="card sub"><summary>request.messages</summary><pre>${json(call.request.messages)}</pre></details>`,
-            `<details class="card sub"><summary>request.settings</summary><pre>${json({
-              tools: call.request.tools,
-              tool_choice: call.request.tool_choice,
-              max_retries: call.request.max_retries,
-              max_output_tokens: call.request.max_output_tokens,
-              temperature: call.request.temperature,
-              top_p: call.request.top_p,
-              top_k: call.request.top_k,
-              headers: call.request.headers,
-              provider_options: call.request.provider_options,
-            })}</pre></details>`,
-            `<details class="card sub" open><summary>steps (${call.steps.length})</summary>${steps}</details>`,
-            `<details class="card sub"><summary>result</summary><pre>${json({
-              status: call.status,
-              total_usage: call.total_usage,
-              error: call.error,
-            })}</pre></details>`,
-            `</details>`,
-          ].join("")
-        })
-        .join("")
-    : `<div class="card empty">No LLM trace events found for this session.</div>`
+    ? calls.map((call, index) => renderCall(call, index)).join("")
+    : `<div class="card empty">No LLM trace events for this session.</div>`
 
   return [
     "<!doctype html>",
@@ -129,9 +69,9 @@ export async function buildSessionTraceHtml(input: {
     "<head>",
     `<meta charset="utf-8" />`,
     `<meta name="viewport" content="width=device-width, initial-scale=1" />`,
-    `<title>${escape(input.session.title)} | LLM Trace</title>`,
+    `<title>${escape(input.session.title)} | Trace</title>`,
     `<style>
-      :root { --bg:#0e1116; --panel:#161b22; --panel2:#0f141b; --text:#e6edf3; --muted:#9fb0c3; --line:#30363d; --accent:#58a6ff; }
+      :root { --bg:#0e1116; --panel:#161b22; --panel2:#0f141b; --text:#e6edf3; --muted:#9fb0c3; --line:#30363d; --accent:#58a6ff; --ok:#3fb950; --err:#f85149; }
       * { box-sizing: border-box; }
       body { margin:0; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; background:var(--bg); color:var(--text); }
       main { max-width: 1300px; margin: 0 auto; padding: 16px; }
@@ -150,6 +90,8 @@ export async function buildSessionTraceHtml(input: {
       pre { white-space: pre-wrap; word-break: break-word; background:#0b0f14; border:1px solid var(--line); border-radius:8px; padding:8px; margin:8px 0 0; font-size:12px; line-height:1.45; }
       .meta { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
       .meta span { background:#101620; border:1px solid var(--line); border-radius:999px; padding:3px 8px; color:var(--muted); font-size:12px; }
+      .status-finished, .status-ok { color: var(--ok); }
+      .status-error, .status-aborted { color: var(--err); }
       .parts { margin-top: 8px; }
       .part { border:1px solid var(--line); border-radius:8px; background:#0c1118; margin:8px 0; padding:8px; }
       .part h4 { margin:0; font-size:12px; color:var(--accent); }
@@ -163,7 +105,7 @@ export async function buildSessionTraceHtml(input: {
     "</head>",
     "<body>",
     "<main>",
-    `<h1>Session LLM Trace Report</h1>`,
+    `<h1>Session Trace Report</h1>`,
     `<div class="summary">`,
     `<div><b>session_id</b><br/>${escape(input.session.id)}</div>`,
     `<div><b>title</b><br/>${escape(input.session.title)}</div>`,
@@ -171,6 +113,7 @@ export async function buildSessionTraceHtml(input: {
     `<div><b>updated</b><br/>${escape(formatDate(input.session.time.updated))}</div>`,
     `<div><b>messages</b><br/>${input.messages.length}</div>`,
     `<div><b>llm calls</b><br/>${calls.length}</div>`,
+    `<div><b>trace events</b><br/>${input.events.length}</div>`,
     `</div>`,
     `<div class="toolbar">`,
     `<button onclick="toggleAll(true)">Expand All</button>`,
@@ -189,6 +132,111 @@ export async function buildSessionTraceHtml(input: {
     "</body>",
     "</html>",
   ].join("\n")
+}
+
+// ── Event grouping ──────────────────────────────────────────────────────────
+// Trace emits agent.start → llm.step × N (with tool.call/result interleaved)
+// → llm.finish/error → agent.finish, all sharing the same call_id in payload.
+// Group them so the report renders each LLM invocation as one block.
+
+interface CallGroup {
+  call_id: string
+  agent: string | undefined
+  start: TraceEvent | undefined
+  finish: TraceEvent | undefined
+  steps: TraceEvent[]
+  toolCalls: TraceEvent[]
+  toolResults: TraceEvent[]
+  startedAt: number
+}
+
+function callIDOf(ev: TraceEvent): string | undefined {
+  const p = ev.payload as { call_id?: string } | undefined
+  return p?.call_id
+}
+
+function groupEventsByCall(events: TraceEvent[]): CallGroup[] {
+  const groups = new Map<string, CallGroup>()
+  for (const ev of events) {
+    const id = callIDOf(ev)
+    if (!id) continue
+    let g = groups.get(id)
+    if (!g) {
+      g = { call_id: id, agent: ev.agent, start: undefined, finish: undefined, steps: [], toolCalls: [], toolResults: [], startedAt: ev.ts }
+      groups.set(id, g)
+    }
+    if (ev.category === "agent.start") g.start = ev
+    else if (ev.category === "llm.finish" || ev.category === "llm.error") g.finish = ev
+    else if (ev.category === "llm.step") g.steps.push(ev)
+    else if (ev.category === "tool.call") g.toolCalls.push(ev)
+    else if (ev.category === "tool.result" || ev.category === "tool.error") g.toolResults.push(ev)
+  }
+  return [...groups.values()].sort((a, b) => a.startedAt - b.startedAt)
+}
+
+function renderCall(call: CallGroup, index: number): string {
+  const startPayload = (call.start?.payload ?? {}) as Record<string, unknown>
+  const finishPayload = (call.finish?.payload ?? {}) as Record<string, unknown>
+  const status = (finishPayload.status as string) ?? (call.finish ? "finished" : "running")
+  const model = (startPayload.model ?? {}) as { providerID?: string; modelID?: string }
+  const modelLabel = model.providerID ? `${model.providerID}/${model.modelID}` : "?"
+  const header = [
+    `#${index + 1}`,
+    modelLabel,
+    status.toUpperCase(),
+    `${call.steps.length} step`,
+    formatDate(call.startedAt),
+  ].join(" | ")
+
+  const stepsHtml = call.steps
+    .map((step) => {
+      const p = (step.payload ?? {}) as Record<string, unknown>
+      const round = step.round ?? "-"
+      const finishReason = (p.finish_reason as string) ?? "-"
+      return [
+        `<details class="card sub">`,
+        `<summary>step ${round} | ${escape(finishReason)}</summary>`,
+        `<pre>${json(p)}</pre>`,
+        `</details>`,
+      ].join("")
+    })
+    .join("")
+
+  const toolsHtml = renderTools(call.toolCalls, call.toolResults)
+
+  return [
+    `<details class="card call">`,
+    `<summary>${escape(header)}</summary>`,
+    `<div class="meta">`,
+    call.agent ? `<span><b>agent:</b> ${escape(call.agent)}</span>` : "",
+    `<span><b>call_id:</b> ${escape(call.call_id)}</span>`,
+    `<span class="status-${escape(status)}"><b>status:</b> ${escape(status)}</span>`,
+    typeof startPayload.tool_count === "number" ? `<span><b>tools:</b> ${startPayload.tool_count}</span>` : "",
+    typeof startPayload.message_count === "number" ? `<span><b>messages:</b> ${startPayload.message_count}</span>` : "",
+    typeof finishPayload.duration_ms === "number" ? `<span><b>duration:</b> ${finishPayload.duration_ms}ms</span>` : "",
+    `</div>`,
+    `<details class="card sub" open><summary>steps (${call.steps.length})</summary>${stepsHtml || `<p class="empty">none</p>`}</details>`,
+    toolsHtml,
+    `<details class="card sub"><summary>start payload</summary><pre>${json(startPayload)}</pre></details>`,
+    `<details class="card sub"><summary>finish payload</summary><pre>${json(finishPayload)}</pre></details>`,
+    `</details>`,
+  ].filter(Boolean).join("")
+}
+
+function renderTools(calls: TraceEvent[], results: TraceEvent[]): string {
+  if (calls.length === 0 && results.length === 0) return ""
+  const items = [...calls, ...results].sort((a, b) => a.seq - b.seq).map((ev) => {
+    const p = (ev.payload ?? {}) as Record<string, unknown>
+    const tool = (p.tool as string) ?? "?"
+    const id = (p.call_id as string) ?? ""
+    return [
+      `<details class="card tiny">`,
+      `<summary>${escape(ev.category)} | ${escape(tool)} | ${escape(id)}</summary>`,
+      `<pre>${json(p)}</pre>`,
+      `</details>`,
+    ].join("")
+  }).join("")
+  return `<details class="card sub"><summary>tools (${calls.length} calls, ${results.length} results)</summary>${items}</details>`
 }
 
 async function renderPart(part: Message.Part) {

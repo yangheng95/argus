@@ -1,11 +1,7 @@
-import path from "path"
 import type { ModelMessage } from "ai"
-import { Global } from "@/global"
-import { Filesystem } from "@/util/filesystem"
 import { Trace } from "@/trace"
 
-const TRACE_DIR = path.join(Global.Path.data, "llm-trace")
-
+// Normalisation limits — keep payloads within Trace's 1MB per-event cap.
 const MAX_DEPTH = 8
 const MAX_ARRAY = 120
 const MAX_KEYS = 120
@@ -37,59 +33,6 @@ type FinishLike = StepLike & {
 
 type AbortLike = {
   steps: readonly StepLike[]
-}
-
-export type CallRecord = {
-  version: 1
-  type: "llm_call"
-  call_id: string
-  session_id: string
-  user_message_id: string
-  started_at: number
-  ended_at: number
-  status: "finished" | "aborted" | "error"
-  model: {
-    provider_id: string
-    model_id: string
-  }
-  agent: {
-    name: string
-    mode: string
-  }
-  small: boolean
-  request: {
-    system: string[]
-    messages: unknown
-    tools: string[]
-    tool_choice: string | null
-    max_retries: number
-    max_output_tokens: number | null
-    temperature: number | null
-    top_p: number | null
-    top_k: number | null
-    headers: Record<string, string>
-    provider_options: unknown
-  }
-  steps: Array<{
-    index: number
-    finish_reason: string
-    usage: unknown
-    request_body: unknown
-    response: {
-      id: string
-      timestamp: string
-      model_id: string
-      headers?: Record<string, string>
-    }
-    text: string
-    reasoning_text: string | undefined
-    tool_calls: unknown
-    tool_results: unknown
-    warnings: unknown
-  }>
-  finish_reason: string | null
-  total_usage: unknown
-  error: unknown
 }
 
 export namespace LLMTrace {
@@ -126,33 +69,6 @@ export namespace LLMTrace {
     finish(step: FinishLike): void
     abort(step: AbortLike): void
     error(error: unknown): void
-  }
-
-  export function filepath(sessionID: string) {
-    return path.join(TRACE_DIR, `${sessionID}.jsonl`)
-  }
-
-  /**
-   * Read pre-existing legacy session-scoped JSONL files. New runs no longer
-   * write here — Trace is the single source of truth — but historic files
-   * are still parsed so cli/cmd/export, orchestrator/publisher, server/
-   * routes/{export,session-management-share}, tool/panel can render
-   * archived sessions captured before the migration.
-   */
-  export async function read(sessionID: string): Promise<CallRecord[]> {
-    const raw = await Filesystem.readText(filepath(sessionID)).catch(() => "")
-    if (!raw.trim()) return []
-    return raw
-      .split(/\r?\n/)
-      .filter((line) => line.trim().length > 0)
-      .flatMap((line) => {
-        try {
-          const value = JSON.parse(line) as CallRecord
-          return value.type === "llm_call" ? [value] : []
-        } catch {
-          return []
-        }
-      })
   }
 
   function trimText(text: string) {
@@ -242,7 +158,7 @@ export namespace LLMTrace {
     })
 
     const finalize = (result: {
-      status: CallRecord["status"]
+      status: "finished" | "aborted" | "error"
       finishReason: string | null
       totalUsage: unknown
       error: unknown

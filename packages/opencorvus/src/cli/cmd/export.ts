@@ -7,7 +7,7 @@ import * as prompts from "@clack/prompts"
 import { EOL } from "os"
 import path from "path"
 import { Filesystem } from "../../util/filesystem"
-import { LLMTrace } from "../../session/llm-trace"
+import { Trace } from "../../trace"
 import { buildSessionTraceHtml } from "./export-html"
 
 export const ExportCommand = cmd({
@@ -85,7 +85,7 @@ export const ExportCommand = cmd({
         const html = args.html === true
 
         if (html) {
-          const calls = await LLMTrace.read(sessionID!)
+          const events = await Trace.read(Trace.taskIDForSession(sessionID!))
           const report = await buildSessionTraceHtml({
             session: {
               id: sessionInfo.id,
@@ -93,7 +93,7 @@ export const ExportCommand = cmd({
               time: sessionInfo.time,
             },
             messages,
-            calls,
+            events,
           })
           const out = path.resolve(process.cwd(), String(args.out ?? `opencorvus-trace-${sessionID}.html`))
           await Filesystem.write(out, report)
