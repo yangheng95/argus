@@ -2,7 +2,7 @@ import path from "path"
 import { createTwoFilesPatch } from "diff"
 import { buildSessionTraceHtml } from "@/cli/cmd/export-html"
 import { Global } from "@/global"
-import { LLMTrace } from "@/session/llm-trace"
+import { Trace } from "@/trace"
 import { Session } from "@/session"
 import { Vcs } from "@/project/vcs"
 import { Filesystem } from "@/util/filesystem"
@@ -129,11 +129,11 @@ const artifactExportAdapter: DeliveryAdapter = {
     }
     const session = await Session.get(ctx.run.session_id)
     const messages = await Session.messages({ sessionID: ctx.run.session_id })
-    const calls = await LLMTrace.read(ctx.run.session_id)
+    const events = await Trace.read(Trace.taskIDForSession(ctx.run.session_id))
     const report = await buildSessionTraceHtml({
       session: { id: session.id, title: session.title, time: session.time },
       messages,
-      calls,
+      events,
     })
     const out = path.join(Global.Path.data, "delivery", `${ctx.delivery.id}.html`)
     await Filesystem.write(out, report)

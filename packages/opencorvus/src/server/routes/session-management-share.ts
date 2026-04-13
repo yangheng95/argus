@@ -8,7 +8,7 @@ import { SessionRevert } from "../../session/revert"
 import { SessionSummary } from "@/session/summary"
 import { Agent } from "../../agent/agent"
 import { Snapshot } from "@/snapshot"
-import { LLMTrace } from "@/session/llm-trace"
+import { Trace } from "@/trace"
 import { Filesystem } from "../../util/filesystem"
 import { buildSessionTraceHtml } from "../../cli/cmd/export-html"
 import { errors } from "../error"
@@ -97,7 +97,7 @@ export const SessionManagementShareRoutes = lazy(() =>
         const body = c.req.valid("json") ?? {}
         const session = await Session.get(sessionID)
         const messages = await Session.messages({ sessionID })
-        const calls = await LLMTrace.read(sessionID)
+        const events = await Trace.read(Trace.taskIDForSession(sessionID))
         const report = await buildSessionTraceHtml({
           session: {
             id: session.id,
@@ -105,7 +105,7 @@ export const SessionManagementShareRoutes = lazy(() =>
             time: session.time,
           },
           messages,
-          calls,
+          events,
         })
         const out = path.resolve(process.cwd(), String(body.out ?? `opencorvus-trace-${sessionID}.html`))
         await Filesystem.write(out, report)

@@ -4,7 +4,7 @@ import { OrchestratorService } from "@/orchestrator/service"
 import { Session } from "@/session"
 import { Filesystem } from "@/util/filesystem"
 import { Global } from "@/global"
-import { LLMTrace } from "@/session/llm-trace"
+import { Trace } from "@/trace"
 import { buildSessionTraceHtml } from "@/cli/cmd/export-html"
 import { captureWindowScreenshot } from "@/gui/screenshot"
 import { PanelActionSchema } from "@/panel/capability"
@@ -19,14 +19,14 @@ export const PanelTool = Tool.define("panel", {
     switch (params.action) {
       case "view_plan": {
         const board = await OrchestratorService.getBoard(params.taskID)
-        const goals = board.lanes.find((item) => item.id === "goals")?.cards ?? []
+        const goals = board.goalWorkflows ?? []
         return {
           title: "Plan",
           output: [
             `Task: ${board.task.title}`,
             board.plan ? `Plan: ${board.plan.summary}` : "Plan unavailable",
             goals.length > 0 ? "Goals:" : undefined,
-            ...goals.map((goal, index) => `${index + 1}. ${goal.title}${goal.detail ? ` — ${goal.detail}` : ""} [${goal.status || "pending"}]`),
+            ...goals.map((goal, index) => `${index + 1}. ${goal.goalTitle} [${goal.goalStatus || "pending"}]`),
           ].filter(Boolean).join("\n"),
           metadata: {},
         }
@@ -161,7 +161,7 @@ export const PanelTool = Tool.define("panel", {
         await OrchestratorService.retryTask(params.taskID)
         return { title: "Retry queued", output: JSON.stringify({ kind: "message", task_id: params.taskID, message: "Retry queued." }), metadata: {} }
       case "replan_task":
-        await OrchestratorService.replanTask(params.taskID)
+        await OrchestratorService.retryTask(params.taskID)
         return { title: "Replan queued", output: JSON.stringify({ kind: "message", task_id: params.taskID, message: "Replan queued." }), metadata: {} }
       case "cancel_task":
         await OrchestratorService.cancelTask(params.taskID)
@@ -322,7 +322,7 @@ export const PanelTool = Tool.define("panel", {
 async function exportSessionHtml(sessionID: string) {
   const session = await Session.get(sessionID)
   const messages = await Session.messages({ sessionID })
-  const calls = await LLMTrace.read(sessionID)
+  const events = await Trace.read(Trace.taskIDForSession(sessionID))
   const report = await buildSessionTraceHtml({
     session: {
       id: session.id,
@@ -330,7 +330,7 @@ async function exportSessionHtml(sessionID: string) {
       time: session.time,
     },
     messages,
-    calls,
+    events,
   })
   const out = `${Global.Path.data}/panel-${sessionID}.html`
   await Filesystem.write(out, report)
