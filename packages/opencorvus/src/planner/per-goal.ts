@@ -19,7 +19,6 @@ import { createPlannerTools, prefetchContext } from "@/planner/tools"
 import { toolGuard } from "@/util/tool-guard"
 import { Log } from "@/util/log"
 import { AgentRuntime } from "@/agent/runtime"
-import { AgentTrace } from "@/util/agent-trace"
 import { OrchestratorConfig } from "@/orchestrator/config"
 import { operatorNotesSection } from "@/orchestrator/helpers"
 import { extractTag } from "@/util/parse-section-tags"
@@ -121,12 +120,6 @@ export async function planGoal(input: {
     textLength: allText.length,
     toolCalls: toolCallCount,
   })
-
-  AgentTrace.capture("pipeline-planner", 1,
-    { system: systemPrompt, messages: [{ role: "user", content: userPrompt }] },
-    allText,
-    { goalID: goal.id, model: model.id, toolCalls: toolCallCount },
-  )
 
   // Parse output — extract plan section or use full text
   const planBrief = extractTag(allText, "plan_steps") || extractTag(allText, "plan") || extractTag(allText, "steps") || allText

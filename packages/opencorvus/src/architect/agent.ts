@@ -20,7 +20,6 @@ import { createPlannerTools } from "@/planner/tools"
 import { Log } from "@/util/log"
 import { toolGuard } from "@/util/tool-guard"
 import { AgentRuntime } from "@/agent/runtime"
-import { AgentTrace } from "@/util/agent-trace"
 import { OrchestratorConfig } from "@/orchestrator/config"
 import { Config } from "@/config/config"
 import type { GoalContractFields } from "@/pipeline/types"
@@ -150,12 +149,6 @@ async function run(input: {
     textLength: allText.length,
     toolCalls: toolCallCount,
   })
-
-  AgentTrace.capture("architect", 1,
-    { system: systemPrompt, messages: [{ role: "user", content: userPrompt }] },
-    allText,
-    { model: model.id, toolCalls: toolCallCount, finishReason: resultFinishReason },
-  )
 
   // Structured tool-call output is the only supported path. If the LLM did not
   // call register_contract / finalize_blueprint, we surface that as a hard

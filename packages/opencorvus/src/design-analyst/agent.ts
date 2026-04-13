@@ -28,7 +28,6 @@ import { Log } from "@/util/log"
 import { toolGuard } from "@/util/tool-guard"
 import { AttachmentStore } from "@/storage/attachment-store"
 import { AgentRuntime } from "@/agent/runtime"
-import { AgentTrace } from "@/util/agent-trace"
 import { OrchestratorConfig } from "@/orchestrator/config"
 import { loadStageSkills } from "@/orchestrator/skill-inject"
 import { Config } from "@/config/config"
@@ -236,12 +235,6 @@ async function run(input: {
     finishReason: resultFinishReason,
     toolCalls: toolCallCount,
   })
-
-  AgentTrace.capture("design-analyst", 1,
-    { system: systemPrompt, messages: [{ role: "user", content: typeof userContent === "string" ? userContent : JSON.stringify(userContent) }] },
-    resultText ?? "",
-    { model: model.id, toolCalls: toolCallCount, finishReason: resultFinishReason },
-  )
 
   // Structured tool-call output is the only path. No text-parsing fallback.
   const collector = outputToolKit.getCollector()

@@ -21,7 +21,6 @@ import { Instance } from "@/project/instance"
 import { Identifier } from "@/id/id"
 import { Log } from "@/util/log"
 import { toolGuard } from "@/util/tool-guard"
-import { AgentTrace } from "@/util/agent-trace"
 import { Trace } from "@/trace"
 import { registerGoalRunSession } from "@/server/routes/task-event"
 import { sessionStreamHooks } from "@/agent/runtime"
@@ -150,7 +149,6 @@ export namespace TaskAgent {
           log.warn("build task re-triggered; ignoring", { taskID, trigger: trigger.kind })
           return
         }
-        AgentTrace.startTask(taskID)
         Trace.bindSession(task.session_id, taskID)
         Trace.event({ taskID, sessionID: task.session_id, category: "task.start",
           payload: { kind: "build", request: task.request } })
@@ -168,7 +166,6 @@ export namespace TaskAgent {
       let workflow: MiniWorkflow | undefined
       let workflowState: WorkflowState | undefined
       if (trigger.kind === "created") {
-        AgentTrace.startTask(taskID)
         finishEmitted.delete(taskID)
         Trace.bindSession(task.session_id, taskID)
         Trace.event({
@@ -347,11 +344,6 @@ export namespace TaskAgent {
         }
       }
 
-      AgentTrace.capture("task-agent", 1,
-        { system, messages: [{ role: "user", content: userContent }] },
-        resultText ?? "",
-        { trigger: trigger.kind, taskID, toolCalls: toolCallCount, finishReason: resultFinishReason },
-      )
     } catch (error) {
       // Finalize any tool parts stuck in running/pending before returning
       await contentHooks?.flush().catch(() => undefined)

@@ -15,7 +15,6 @@
 import { generateText } from "ai"
 import { Provider } from "@/provider/provider"
 import { Log } from "@/util/log"
-import { AgentTrace } from "@/util/agent-trace"
 import type { GoalContractFields } from "@/pipeline/types"
 
 const log = Log.create({ service: "fidelity-review" })
@@ -106,12 +105,6 @@ export async function reviewFidelity(input: {
       })
 
       const text = result.text?.trim() || ""
-
-      AgentTrace.capture("fidelity-review", attempts,
-        { system: systemPrompt, messages: [{ role: "user", content: userPrompt }] },
-        text,
-        { goalCount: goals.length, model: language.modelId },
-      )
 
       const parsed = parseFidelityOutput(text)
 
