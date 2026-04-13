@@ -26,6 +26,7 @@ import { OrchestratorConfig } from "@/orchestrator/config"
 import { operatorNotesSection } from "@/orchestrator/helpers"
 import { loadStageSkills } from "@/orchestrator/skill-inject"
 import { collectText, countToolCalls, firstContentLine, sectionBody } from "@/util/agent-text"
+import { AttachmentStore } from "@/storage/attachment-store"
 import type { GoalJudgmentType, GoalInfo, DeliveryInfo } from "@/evaluator/types"
 
 const log = Log.create({ service: "delivery-agent" })
@@ -79,6 +80,11 @@ type VerifyInput = {
   delivery: DeliveryInfo
   checkResults?: Array<{ name: string; status: string; evidence?: string }>
   analysis?: GoalJudgmentType
+  /** Visual-reference attachments (already materialized under the attachment store).
+   *  When provided, the delivery agent receives the image bytes as a multimodal
+   *  `file` content part so it can actually see the target — text-only read_file
+   *  on a PNG returns UTF-8 garbage and is not a substitute. */
+  attachments?: Array<{ sha: string; url: string; mime: string; size: number; filename?: string; intent?: string; source?: string }>
   stream?: TextHooks
   signal?: AbortSignal
 }
@@ -96,7 +102,8 @@ export namespace DeliveryAgent {
 
     const guard = toolGuard(createDeliveryTools({ sessionID: input.task.sessionID, taskID: input.task.id }))
     const context = prefetchDeliveryContext(input)
-    const userPrompt = buildUserPrompt(input, context)
+    const textPrompt = buildUserPrompt({ ...input, attachments: input.attachments }, context)
+    const userPrompt = await buildMultimodalPrompt(textPrompt, input.attachments)
 
     log.info("delivery agent starting", {
       title: input.task.title,
@@ -381,6 +388,42 @@ function prefetchDeliveryContext(input: {
 // Prompt building
 // ---------------------------------------------------------------------------
 
+/**
+ * Merge the text prompt with any visual-reference attachments into the
+ * multimodal user content the LLM expects. Falls back to the plain string
+ * when there are no image attachments so non-vision stages are unchanged.
+ */
+async function buildMultimodalPrompt(
+  text: string,
+  attachments?: Array<{ sha: string; url: string; mime: string; size: number; filename?: string }>,
+): Promise<string | Array<{ type: "text"; text: string } | { type: "file"; data: Buffer; mediaType: string; filename?: string }>> {
+  if (!attachments?.length) return text
+  const images = attachments.filter((a) => typeof a.mime === "string" && a.mime.startsWith("image/"))
+  if (images.length === 0) return text
+  const parts: Array<{ type: "text"; text: string } | { type: "file"; data: Buffer; mediaType: string; filename?: string }> = [
+    { type: "text", text },
+  ]
+  for (const a of images) {
+    const located = AttachmentStore.nameFromUrl(a.url)
+    if (!located) {
+      log.warn("delivery: attachment url did not resolve", { url: a.url, filename: a.filename })
+      continue
+    }
+    try {
+      const bytes = await AttachmentStore.read(located.projectID, located.name)
+      parts.push({
+        type: "file",
+        data: bytes,
+        mediaType: a.mime,
+        ...(a.filename ? { filename: a.filename } : {}),
+      })
+    } catch (err) {
+      log.warn("delivery: attachment read failed", { url: a.url, filename: a.filename, err: String(err) })
+    }
+  }
+  return parts.length > 1 ? parts : text
+}
+
 function buildUserPrompt(
   input: {
     task: { title: string; request: string; metadata?: Record<string, unknown> }
@@ -388,6 +431,7 @@ function buildUserPrompt(
     delivery: DeliveryInfo
     checkResults?: Array<{ name: string; status: string; evidence?: string }>
     analysis?: GoalJudgmentType
+    attachments?: Array<{ sha: string; mime: string; filename?: string }>
   },
   context?: string,
 ): string {
@@ -396,6 +440,21 @@ function buildUserPrompt(
   sections.push(
     `# Task\n\nTitle: ${input.task.title}\n\nRequest:\n${input.task.request}`,
   )
+
+  // Inline hint: when the user message carries image attachments (attached
+  // as file parts alongside this text), steer the model to reason over them
+  // visually instead of trying to read_file on the binary path.
+  const images = (input.attachments ?? []).filter((a) => typeof a?.mime === "string" && a.mime.startsWith("image/"))
+  if (images.length > 0) {
+    const list = images.map((a) => `- ${a.filename ?? a.sha} (${a.mime})`).join("\n")
+    sections.push(
+      `# Visual Reference\n\n` +
+      `The target design is attached to this message as image content (not as a project file). ` +
+      `Compare the rendered output against it using your vision, NOT read_file — ` +
+      `read_file on a binary returns garbage. The full-pixel SSIM result is already ` +
+      `available via query_criteria.\n\nAttached images:\n${list}`,
+    )
+  }
 
   // Core check results — delivery agent must fix failures before proceeding
   if (input.checkResults && input.checkResults.length > 0) {
@@ -477,6 +536,35 @@ function buildUserPrompt(
       "4. If it crashes, investigate and fix the issue\n" +
       "5. Re-verify after any fix\n" +
       "6. Produce your final verdict",
+  )
+
+  // Step budget is finite — the agent is cut off after `delivery.max_steps`
+  // tool calls. Without an explicit final-emission rule it can spend every
+  // step on rework and never write the structured verdict, which makes the
+  // whole stage fail extraction. Reserve the last step for the verdict.
+  sections.push(
+    "## Final Output (REQUIRED)\n\n" +
+    "Before you stop, you MUST emit the verdict in the structured format the " +
+    "extractor expects. Use these exact section headers (Markdown), in order:\n\n" +
+    "### Verdict\n" +
+    "accepted\n" +
+    "(or: rejected)\n\n" +
+    "### Summary\n" +
+    "<one paragraph: what works, what's left>\n\n" +
+    "### Launch Command\n" +
+    "`<the verified start command, e.g. bun dev>`\n\n" +
+    "### Startup Verification\n" +
+    "- attempted: true|false\n" +
+    "- success: true|false\n" +
+    "- output: <relevant log excerpt>\n\n" +
+    "### Frontend Check\n" +
+    "- attempted: true|false\n" +
+    "- renders_correctly: true|false\n" +
+    "- issues: <bullet list or 'none'>\n\n" +
+    "### Issues Found\n" +
+    "- <bullet list, or write 'none'>\n\n" +
+    "Do NOT skip any header. Do NOT wrap the verdict in JSON unless you " +
+    "have already finished all rework — plain Markdown sections are fine.",
   )
 
   return sections.join("\n\n")

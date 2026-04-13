@@ -1,4 +1,5 @@
-import { sqliteTable, text, integer, index, primaryKey } from "drizzle-orm/sqlite-core"
+import { sqliteTable, text, integer, index, primaryKey, uniqueIndex } from "drizzle-orm/sqlite-core"
+import { sql } from "drizzle-orm"
 import { ProjectTable } from "../project/project.sql"
 import type { Message } from "./message"
 import type { Snapshot } from "@/snapshot"
@@ -20,6 +21,14 @@ export const SessionTable = sqliteTable(
     directory: text().notNull(),
     title: text().notNull(),
     version: text().notNull(),
+    /** "gateway" sessions are per-(platform, channel, user) singletons that hold
+     *  the long-lived dialog with the user. "task" sessions are 1:1 with an
+     *  OrchestratorTask and hold the task's execution trace. */
+    kind: text().notNull().$type<"gateway" | "task">().default("task"),
+    /** Composite key `${platform}:${channel}:${userID}` (or `local:${userID}`).
+     *  Only populated for gateway sessions; the partial unique index enforces
+     *  one gateway session per channel_key. */
+    channel_key: text(),
     share_url: text(),
     summary_additions: integer(),
     summary_deletions: integer(),
@@ -27,11 +36,22 @@ export const SessionTable = sqliteTable(
     summary_diffs: text({ mode: "json" }).$type<Snapshot.FileDiff[]>(),
     revert: text({ mode: "json" }).$type<{ messageID: string; partID?: string; snapshot?: string; diff?: string }>(),
     permission: text({ mode: "json" }).$type<PermissionNext.Ruleset>(),
+    /** Free-form per-session metadata. Used today by Gateway sessions to track
+     *  the current cwd context (`metadata.gateway.cwd`); future per-session
+     *  state should live here rather than spawning new tables. */
+    metadata: text({ mode: "json" }).$type<Record<string, unknown>>(),
     ...Timestamps,
     time_compacting: integer(),
     time_archived: integer(),
   },
-  (table) => [index("session_project_idx").on(table.project_id), index("session_parent_idx").on(table.parent_id)],
+  (table) => [
+    index("session_project_idx").on(table.project_id),
+    index("session_parent_idx").on(table.parent_id),
+    index("session_kind_idx").on(table.kind),
+    uniqueIndex("session_gateway_singleton_idx")
+      .on(table.channel_key)
+      .where(sql`${table.kind} = 'gateway' AND ${table.channel_key} IS NOT NULL`),
+  ],
 )
 
 export const MessageTable = sqliteTable(

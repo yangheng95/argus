@@ -132,6 +132,11 @@ export const OrchestratorTaskTable = sqliteTable(
      *  "visual_reference" → deliver visual SSIM gate). `source` records where
      *  the attachment came from (user-upload / figma / url-screenshot). */
     attachments: text({ mode: "json" }).$type<Array<{ sha: string; url: string; mime: string; size: number; filename?: string; intent?: string; source?: string }>>(),
+    /** "workflow" tasks go through decompose→design→architect→execute→deliver.
+     *  "build" tasks bypass the pipeline and run the build agent directly —
+     *  used by Gateway for one-shot edits / Q&A / quick fixes. Both kinds
+     *  share the same task table and queue so cancel/list/audit are uniform. */
+    kind: text().notNull().$type<"workflow" | "build">().default("workflow"),
     status: text().notNull().$type<OrchestratorTaskStatus>().default("queued"),
     priority: text().notNull().$type<OrchestratorTaskPriority>().default("normal"),
     blocking_reason: text(),
@@ -148,6 +153,7 @@ export const OrchestratorTaskTable = sqliteTable(
   (table) => [
     index("orchestrator_task_project_idx").on(table.project_id),
     index("orchestrator_task_status_idx").on(table.status),
+    index("orchestrator_task_kind_idx").on(table.kind),
     uniqueIndex("orchestrator_task_project_request_idx").on(table.project_id, table.request_id),
   ],
 )

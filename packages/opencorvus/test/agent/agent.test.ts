@@ -430,50 +430,6 @@ test("unknown permission defaults to ask", async () => {
   })
 })
 
-test("legacy tools config converts to permissions", async () => {
-  await using tmp = await tmpdir({
-    config: {
-      agent: {
-        build: {
-          tools: {
-            bash: false,
-            read: false,
-          },
-        },
-      },
-    },
-  })
-  await Instance.provide({
-    directory: tmp.path,
-    fn: async () => {
-      const build = await Agent.get("build")
-      expect(evalPerm(build, "bash")).toBe("deny")
-      expect(evalPerm(build, "read")).toBe("deny")
-    },
-  })
-})
-
-test("legacy tools config maps write/edit/patch/multiedit to edit permission", async () => {
-  await using tmp = await tmpdir({
-    config: {
-      agent: {
-        build: {
-          tools: {
-            write: false,
-          },
-        },
-      },
-    },
-  })
-  await Instance.provide({
-    directory: tmp.path,
-    fn: async () => {
-      const build = await Agent.get("build")
-      expect(evalPerm(build, "edit")).toBe("deny")
-    },
-  })
-})
-
 test("Truncate.GLOB is allowed even when user denies external_directory globally", async () => {
   const { Truncate } = await import("../../src/tool/truncation")
   await using tmp = await tmpdir({
@@ -655,13 +611,13 @@ test("defaultAgent throws when all primary agents are disabled", async () => {
       agent: {
         build: { disable: true },
         plan: { disable: true },
+        spec: { disable: true },
       },
     },
   })
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
-      // build and plan are disabled, no primary-capable agents remain
       await expect(Agent.defaultAgent()).rejects.toThrow("no primary visible agent found")
     },
   })

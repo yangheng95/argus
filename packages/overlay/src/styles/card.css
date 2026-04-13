@@ -1,0 +1,361 @@
+/* ─────────────────────────────────────────────────────────────
+   Unified Card Primitive
+   Single stylesheet for all conversation cards: agent stage,
+   goal groups, goal steps, promoted tool calls, message bubbles.
+   Applied via [data-kind], [data-stage], [data-role], [data-depth].
+   ───────────────────────────────────────────────────────────── */
+
+:root {
+  --card-gap: calc(8px * var(--ui-scale, 1));
+  --card-radius: calc(9px * var(--ui-scale, 1));
+  --card-pad-x: calc(12px * var(--ui-scale, 1));
+  --card-pad-y: calc(9px * var(--ui-scale, 1));
+  --card-indent: calc(14px * var(--ui-scale, 1));
+  --card-bg-0: rgba(255, 255, 255, 0.045);
+  --card-bg-1: rgba(255, 255, 255, 0.065);
+  --card-bg-hover: rgba(255, 255, 255, 0.085);
+  --card-border: rgba(255, 255, 255, 0.09);
+  --card-border-strong: rgba(255, 255, 255, 0.14);
+  --card-line: rgba(255, 255, 255, 0.14);
+  --card-line-dim: rgba(255, 255, 255, 0.07);
+
+  --card-title-size: clamp(12px, calc(12.5px * var(--ui-scale, 1)), 14px);
+  --card-sub-size: clamp(11px, calc(11px * var(--ui-scale, 1)), 12px);
+  --card-meta-size: clamp(10px, calc(10px * var(--ui-scale, 1)), 11px);
+
+  --card-stage-assistant: #6ea3ff;
+  --card-stage-spec: #6ec1e4;
+  --card-stage-architect: #b584f3;
+  --card-stage-planner: #7dbcff;
+  --card-stage-goal: #a78bfa;
+  --card-stage-executor: #f2994a;
+  --card-stage-evaluator: #2dd4bf;
+  --card-stage-delivery: #5fad56;
+  --card-stage-tool: #8b92a0;
+}
+
+body[data-theme="light"],
+[data-theme="light"] {
+  --card-bg-0: rgba(0, 0, 0, 0.035);
+  --card-bg-1: rgba(0, 0, 0, 0.05);
+  --card-bg-hover: rgba(0, 0, 0, 0.07);
+  --card-border: rgba(0, 0, 0, 0.1);
+  --card-border-strong: rgba(0, 0, 0, 0.18);
+  --card-line: rgba(0, 0, 0, 0.16);
+  --card-line-dim: rgba(0, 0, 0, 0.09);
+}
+
+/* ── Container ────────────────────────────────────────────── */
+
+.card {
+  display: block;
+  border-radius: var(--card-radius);
+  border: 1px solid var(--card-border);
+  background: var(--card-bg-0);
+  margin: var(--card-gap) 0;
+  overflow: hidden;
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+.card[data-depth="0"] {
+  background: var(--card-bg-0);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.2) inset, 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+body[data-theme="light"] .card[data-depth="0"] {
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.6) inset, 0 2px 6px rgba(0, 0, 0, 0.06);
+}
+
+/* Nested cards: remove outer border, use a left accent rail instead.
+   Depth fades the rail colour so deep nesting stays readable. */
+.card:not([data-depth="0"]) {
+  border: none;
+  border-left: 2px solid var(--card-line);
+  border-radius: 0;
+  margin: 4px 0;
+  background: transparent;
+}
+.card[data-depth="2"] { border-left-color: var(--card-line); }
+.card[data-depth="3"] { border-left-color: var(--card-line-dim); }
+.card[data-depth="4"],
+.card[data-depth="5"] { border-left-color: var(--card-line-dim); opacity: 0.9; }
+
+/* ── Header ──────────────────────────────────────────────── */
+
+.card__head {
+  display: flex;
+  align-items: center;
+  gap: calc(8px * var(--ui-scale, 1));
+  padding: var(--card-pad-y) var(--card-pad-x);
+  font-size: var(--card-title-size);
+  color: var(--text-strong);
+  user-select: none;
+  cursor: pointer;
+  line-height: 1.35;
+  min-height: calc(32px * var(--ui-scale, 1));
+  box-sizing: border-box;
+}
+.card__head[role="button"]:hover {
+  background-color: var(--card-bg-hover);
+}
+.card:not([data-depth="0"]) .card__head {
+  padding: calc(var(--card-pad-y) - 2px) calc(var(--card-pad-x) - 2px) calc(var(--card-pad-y) - 2px) 12px;
+  min-height: calc(28px * var(--ui-scale, 1));
+}
+
+.card__head[tabindex] {
+  outline: none;
+}
+.card__head[tabindex]:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--accent-dim);
+}
+
+.card__title {
+  flex: 0 0 auto;
+  font-weight: 600;
+  letter-spacing: 0.005em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 40%;
+}
+
+.card__icon {
+  font-size: calc(var(--card-title-size) + 1px);
+  opacity: 0.9;
+  flex: none;
+  line-height: 1;
+}
+
+.card__round {
+  font-variant-numeric: tabular-nums;
+  font-size: var(--card-meta-size);
+  color: var(--text-soft);
+  flex: none;
+  padding: 1px 5px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 3px;
+}
+body[data-theme="light"] .card__round {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.card__subtitle {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--card-sub-size);
+  color: var(--text-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 400;
+}
+
+.card__chevron {
+  flex: none;
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--text-muted);
+  transition: transform 140ms ease;
+  padding-left: 6px;
+}
+.card--expanded > .card__head .card__chevron {
+  transform: rotate(0deg);
+}
+.card--collapsed > .card__head .card__chevron {
+  transform: rotate(-90deg);
+}
+
+/* ── Badge ───────────────────────────────────────────────── */
+
+.card__badge {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(18px * var(--ui-scale, 1));
+  height: calc(18px * var(--ui-scale, 1));
+  border-radius: 50%;
+  font-size: calc(10px * var(--ui-scale, 1));
+  font-weight: 700;
+  line-height: 1;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-muted);
+}
+.card__badge--done { background: rgba(95, 173, 86, 0.28); color: #7cc373; box-shadow: 0 0 0 1px rgba(95, 173, 86, 0.35) inset; }
+.card__badge--error { background: rgba(247, 84, 100, 0.28); color: #ff8896; box-shadow: 0 0 0 1px rgba(247, 84, 100, 0.35) inset; }
+.card__badge--running { background: rgba(242, 153, 74, 0.28); box-shadow: 0 0 0 1px rgba(242, 153, 74, 0.35) inset; }
+.card__badge--pending { background: rgba(255, 255, 255, 0.08); color: var(--text-muted); box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.1) inset; }
+.card__badge--skipped { background: rgba(255, 255, 255, 0.06); color: var(--text-muted); }
+.card__badge--neutral { background: transparent; color: transparent; width: 6px; height: 6px; }
+
+.card__spinner {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1.6px solid rgba(242, 153, 74, 0.22);
+  border-top-color: #f2994a;
+  animation: card-spin 0.8s linear infinite;
+}
+@keyframes card-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── Stage accent (left border) ──────────────────────────── */
+/* Top-level cards: left border colour picked from stage.
+   Nested cards inherit from their parent container. */
+
+.card[data-depth="0"][data-kind="agent"][data-stage="assistant"] { border-left: 3px solid var(--card-stage-assistant); }
+.card[data-depth="0"][data-kind="agent"][data-stage="spec"]      { border-left: 3px solid var(--card-stage-spec); }
+.card[data-depth="0"][data-kind="agent"][data-stage="architect"] { border-left: 3px solid var(--card-stage-architect); }
+.card[data-depth="0"][data-kind="agent"][data-stage="planner"]   { border-left: 3px solid var(--card-stage-planner); }
+.card[data-depth="0"][data-kind="agent"][data-stage="executor"]  { border-left: 3px solid var(--card-stage-executor); }
+.card[data-depth="0"][data-kind="agent"][data-stage="evaluator"] { border-left: 3px solid var(--card-stage-evaluator); }
+.card[data-depth="0"][data-kind="agent"][data-stage="delivery"]  { border-left: 3px solid var(--card-stage-delivery); }
+.card[data-depth="0"][data-kind="goal"]                          { border-left: 3px solid var(--card-stage-goal); }
+
+/* Stage colour also tints the title at top level */
+.card[data-depth="0"][data-kind="agent"][data-stage="assistant"] > .card__head > .card__title { color: var(--card-stage-assistant); }
+.card[data-depth="0"][data-kind="agent"][data-stage="spec"]      > .card__head > .card__title { color: var(--card-stage-spec); }
+.card[data-depth="0"][data-kind="agent"][data-stage="architect"] > .card__head > .card__title { color: var(--card-stage-architect); }
+.card[data-depth="0"][data-kind="agent"][data-stage="planner"]   > .card__head > .card__title { color: var(--card-stage-planner); }
+.card[data-depth="0"][data-kind="agent"][data-stage="executor"]  > .card__head > .card__title { color: var(--card-stage-executor); }
+.card[data-depth="0"][data-kind="agent"][data-stage="evaluator"] > .card__head > .card__title { color: var(--card-stage-evaluator); }
+.card[data-depth="0"][data-kind="agent"][data-stage="delivery"]  > .card__head > .card__title { color: var(--card-stage-delivery); }
+.card[data-depth="0"][data-kind="goal"]                          > .card__head > .card__title { color: var(--card-stage-goal); }
+
+/* Nested step cards: use stage accent on the left rail */
+.card:not([data-depth="0"])[data-kind="step"][data-stage="planner"]   { border-left-color: var(--card-stage-planner); }
+.card:not([data-depth="0"])[data-kind="step"][data-stage="executor"]  { border-left-color: var(--card-stage-executor); }
+.card:not([data-depth="0"])[data-kind="step"][data-stage="evaluator"] { border-left-color: var(--card-stage-evaluator); }
+
+/* Tool card: muted grey */
+.card[data-kind="tool"] { border-left-color: var(--card-stage-tool); }
+.card[data-kind="tool"] .card__title { font-family: var(--mono); font-weight: 500; font-size: var(--ui-font-small); }
+
+/* ── Body ────────────────────────────────────────────────── */
+
+.card__body {
+  padding: calc(var(--card-pad-y) - 1px) var(--card-pad-x) var(--card-pad-y) var(--card-pad-x);
+  border-top: 1px solid var(--card-line-dim);
+  font-size: var(--card-sub-size);
+  color: var(--text-strong);
+  line-height: 1.45;
+}
+.card:not([data-depth="0"]) > .card__body {
+  padding: calc(var(--card-pad-y) - 3px) 12px calc(var(--card-pad-y) - 2px) 12px;
+  border-top: none;
+}
+
+.card__children {
+  margin-top: calc(var(--card-pad-y) - 2px);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* ── Goal preamble ───────────────────────────────────────── */
+
+.card__goal-desc {
+  margin: 4px 0 8px 0;
+  padding: 6px 8px;
+  background: var(--card-bg-1);
+  border-radius: 6px;
+  font-size: var(--ui-font-small);
+  color: var(--text-soft);
+}
+
+.card__contracts {
+  margin-bottom: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.card__contract {
+  padding: 5px 8px;
+  background: var(--card-bg-1);
+  border-radius: 6px;
+  border-left: 2px solid var(--card-stage-architect);
+}
+.card__contract-key {
+  display: block;
+  font-size: var(--ui-font-tiny);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  margin-bottom: 2px;
+}
+.card__contract-value {
+  font-size: var(--ui-font-small);
+  color: var(--text-strong);
+}
+
+/* ── Boundary separator between flattened messages ──────── */
+
+.card-boundary {
+  display: flex;
+  align-items: baseline;
+  gap: var(--ui-gap-sm);
+  padding: 3px 0 2px 0;
+  font-size: var(--ui-font-tiny);
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.card-boundary:not(:first-child) {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--card-line-dim);
+}
+.card-boundary-role {
+  font-weight: 600;
+}
+.card-boundary-time {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.7;
+}
+
+/* ── Message bubble variant (kind=message, role=user/system) ── */
+
+.card[data-kind="message"] {
+  border-left: none;
+  border: 1px solid var(--card-border);
+  background: var(--card-bg-0);
+}
+.card[data-kind="message"][data-role="user"] {
+  background: var(--accent-dim);
+  border-color: transparent;
+}
+.card[data-kind="message"][data-role="user"] > .card__head {
+  cursor: default;
+  padding-bottom: 2px;
+}
+.card[data-kind="message"][data-role="user"] > .card__head .card__badge,
+.card[data-kind="message"][data-role="user"] > .card__head .card__chevron {
+  display: none;
+}
+.card[data-kind="message"][data-role="user"] > .card__head .card__title {
+  font-size: var(--ui-font-tiny);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--accent);
+  font-weight: 600;
+}
+.card[data-kind="message"][data-role="user"] > .card__body {
+  border-top: none;
+  padding-top: 0;
+  color: var(--text-strong);
+}
+.card[data-kind="message"][data-role="system"] > .card__head .card__title {
+  color: var(--text-soft);
+}
+
+/* ── Compatibility: make sure inline tool chips inside a card
+      still look okay (they were styled against .msg-bubble before).
+      Most rules are already in styles.css; only tweak spacing here. ── */
+
+.card__body .msg-tool {
+  margin: 2px 0;
+}
+.card__body .msg-text {
+  margin: 2px 0;
+}

@@ -36,6 +36,7 @@ export namespace DeliveryService {
     delivery: DeliveryInfo
     checkResults?: Array<{ name: string; status: string; evidence?: string }>
     analysis?: GoalJudgmentType
+    attachments?: Array<{ sha: string; url: string; mime: string; size: number; filename?: string; intent?: string; source?: string }>
     timeoutMs?: number
     signal?: AbortSignal
     stream?: TextHooks
@@ -73,6 +74,7 @@ export namespace DeliveryService {
         delivery: input.delivery,
         checkResults: input.checkResults,
         analysis: input.analysis,
+        attachments: input.attachments,
         stream,
         signal,
       })

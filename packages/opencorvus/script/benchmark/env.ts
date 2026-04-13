@@ -52,14 +52,6 @@ export function env(...keys: string[]) {
   }
 }
 
-export function prepareDashscopeEnv() {
-  // Keys are read directly from .env with the names models.dev expects:
-  //   ALIBABA_CODING_PLAN_API_KEY  (for alibaba-coding-plan / alibaba-coding-plan-cn)
-  //   DASHSCOPE_API_KEY            (for alibaba / alibaba-cn)
-  // No implicit copying between variable names — each provider reads its own env var.
-  // No-op kept as the public surface so callers don't need conditional imports.
-}
-
 /**
  * Write custom local provider configs into the benchmark's OPENCORVUS_CONFIG_DIR
  * so they are available during Instance.provide() calls.
@@ -107,7 +99,7 @@ export async function prepareLocalProviders() {
 }
 
 export function dashscopeCodingKey() {
-  const key = env("DASHSCOPE_API_KEY", "CODING_DASHSCOPE_API_KEY", "ALIBABA_CODING_PLAN_API_KEY", "OPENCORVUS_EMBEDDED_DASHSCOPE_KEY")
+  const key = env("DASHSCOPE_API_KEY", "OPENCORVUS_EMBEDDED_DASHSCOPE_KEY")
   return key?.startsWith("sk-sp-") ? key : undefined
 }
 
@@ -122,7 +114,6 @@ const preferredProviders = [
   "moonshotai-cn",
   "moonshotai",
   "huggingface",
-  "github-copilot",
 ]
 
 async function providerList() {
@@ -142,7 +133,6 @@ async function resetBenchmarkState() {
 function explicitModel(
   providers: Awaited<ReturnType<typeof providerList>>,
   explicit: string,
-  allowOpenAICodex = false,
 ) {
   if (explicit.includes("/")) return explicit
   for (const providerID of preferredProviders) {
@@ -150,7 +140,6 @@ function explicitModel(
     if (provider?.models[explicit]) return `${providerID}/${explicit}`
   }
   for (const provider of Object.values(providers)) {
-    if (!allowOpenAICodex && provider.id === "openai-codex") continue
     if (provider.models[explicit]) return `${provider.id}/${explicit}`
   }
   throw new Error(`benchmark model not found: ${explicit}`)
@@ -161,7 +150,6 @@ export async function resolveBenchmarkModel(
   options?: {
     cwd?: string
     explicitKeys?: string[]
-    allowOpenAICodex?: boolean
   },
 ) {
   await resetBenchmarkState()
@@ -175,7 +163,7 @@ export async function resolveBenchmarkModel(
     fn: async () => {
       const providers = await Provider.list()
       const explicit = env(...(options?.explicitKeys ?? ["OPENCORVUS_BENCHMARK_MODEL", "OPENCORVUS_E2E_MODEL"]))
-      if (explicit) return explicitModel(providers, explicit, options?.allowOpenAICodex)
+      if (explicit) return explicitModel(providers, explicit)
       if (providers["alibaba-coding-plan-cn"]?.models["kimi-k2.5"]) return "alibaba-coding-plan-cn/kimi-k2.5"
       if (providers["alibaba-coding-plan-cn"]?.models["glm-5"]) return "alibaba-coding-plan-cn/glm-5"
       if (providers["hexin"]?.models["gpt-5.4-mini"]) return "hexin/gpt-5.4-mini"
@@ -188,17 +176,7 @@ export async function resolveBenchmarkModel(
       }
 
       const fallback = await Provider.defaultModel()
-      if (options?.allowOpenAICodex || !["openai-codex", "github-copilot"].includes(fallback.providerID)) {
-        return `${fallback.providerID}/${fallback.modelID}`
-      }
-
-      for (const provider of Object.values(providers)) {
-        if (provider.id === "openai-codex" || provider.id === "github-copilot") continue
-        const [model] = Provider.sort(Object.values(provider.models))
-        if (model) return `${provider.id}/${model.id}`
-      }
-
-      throw new Error("No live benchmark model available")
+      return `${fallback.providerID}/${fallback.modelID}`
     },
   })
 }

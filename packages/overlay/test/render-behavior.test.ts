@@ -1154,7 +1154,6 @@ test("event-driven board refresh requests a synced snapshot", async () => {
           window.__overlayTest.sync.push(url.searchParams.get("sync") || "")
           return new Response(JSON.stringify({
             task: { id: "task-1", status: "running", time: {} },
-            lanes: [],
             interactions: [],
           }), {
             status: 200,
@@ -1225,7 +1224,6 @@ test("task SSE resumes from the latest board sequence", async () => {
             snapshotVersion: "board-7",
             lastSequence: 7,
             task: { id: "task-1", status: "running", time: {} },
-            lanes: [],
             interactions: [],
           }), {
             status: 200,
@@ -2324,7 +2322,6 @@ test("task conversation streams agent stage output before falling back to board 
           time: { created: 3 },
           metadata: {},
         },
-        lanes: [],
         interactions: [],
       }
 
@@ -2418,7 +2415,6 @@ test("task conversation renders live agent tool calls as structured tool cards",
           time: { created: 1, updated: 5 },
         },
         plan: null,
-        lanes: [],
         interactions: [],
       }
 
@@ -2600,7 +2596,6 @@ test("task conversation does not duplicate the original user request", async () 
         },
         overview: null,
         plan: null,
-        lanes: [],
         evaluation: null,
         delivery: null,
         acceptedDelivery: null,
@@ -2678,7 +2673,6 @@ test("task chat includes historical executor progress events", async () => {
             },
             overview: null,
             plan: null,
-            lanes: [],
             evaluation: null,
             delivery: null,
             acceptedDelivery: null,
@@ -2770,7 +2764,6 @@ test("task SSE run progress appends visible process messages", async () => {
         },
         overview: null,
         plan: null,
-        lanes: [],
         evaluation: null,
         delivery: null,
         acceptedDelivery: null,
@@ -2859,7 +2852,6 @@ test("task chat renders ungrouped executor tool calls as tool cards", async () =
         },
         overview: null,
         plan: null,
-        lanes: [],
         evaluation: null,
         delivery: null,
         acceptedDelivery: null,
@@ -2950,7 +2942,6 @@ test("task chat renders readable shell tool results", async () => {
             },
             overview: null,
             plan: null,
-            lanes: [],
             evaluation: null,
             delivery: null,
             acceptedDelivery: null,
@@ -3070,7 +3061,6 @@ test("task SSE command progress renders real command lines", async () => {
         },
         overview: null,
         plan: null,
-        lanes: [],
         evaluation: null,
         delivery: null,
         acceptedDelivery: null,
@@ -3156,7 +3146,6 @@ test("task SSE renders parallel executor process cards with independent output",
         },
         overview: null,
         plan: null,
-        lanes: [],
         evaluation: null,
         delivery: null,
         acceptedDelivery: null,
@@ -3314,7 +3303,6 @@ test("task SSE keeps colliding source ids separate across parallel goal runs", a
         },
         overview: null,
         plan: null,
-        lanes: [],
         evaluation: null,
         delivery: null,
         acceptedDelivery: null,
@@ -3458,7 +3446,6 @@ test("task SSE streams executor reasoning as visible assistant reasoning", async
         },
         overview: null,
         plan: null,
-        lanes: [],
         evaluation: null,
         delivery: null,
         acceptedDelivery: null,
@@ -3643,7 +3630,6 @@ test("task SSE merges repeated executor text updates for the same event id", asy
         },
         overview: null,
         plan: null,
-        lanes: [],
         evaluation: null,
         delivery: null,
         acceptedDelivery: null,
@@ -3738,7 +3724,6 @@ test("parallel executor cards keep DOM identity when an earlier goal inserts ahe
         },
         overview: null,
         plan: null,
-        lanes: [],
         evaluation: null,
         delivery: null,
         acceptedDelivery: null,
@@ -3868,7 +3853,6 @@ test("task SSE drops non-text executor payloads instead of rendering object garb
         },
         overview: null,
         plan: null,
-        lanes: [],
         evaluation: null,
         delivery: null,
         acceptedDelivery: null,
@@ -4043,7 +4027,6 @@ test("child session prompts render as planner turns instead of impersonating the
           request: "创建一个个人主页",
           time: { created: 1, updated: 3 },
         },
-        lanes: [],
         interactions: [],
       }
       state.messages = [
@@ -4351,7 +4334,6 @@ test("applyPanelResult keeps the new task alive while auto-selecting it", async 
               headline: "创建一个个人主页",
             },
             plan: null,
-            lanes: [],
             evaluation: null,
             delivery: null,
             interactions: [],
@@ -4473,7 +4455,6 @@ test("applyPanelResult keeps pending messages visible until task history is avai
               headline: "创建一个个人主页",
             },
             plan: null,
-            lanes: [],
             evaluation: null,
             delivery: null,
             interactions: [],
@@ -5287,7 +5268,6 @@ test("task conversation keeps the original user request ahead of synthetic spec 
           content: "Spec after create",
           time: { created: 201 },
         },
-        lanes: [],
         interactions: [],
       }
       state.serverUrl = window.location.origin
@@ -5917,7 +5897,6 @@ test("overlay recovers a created task even when the panel stream never finishes"
       content: "",
       updated_at: taskReadyAt,
     },
-    lanes: [],
   })
   const timeline = () => [
     {
@@ -6214,7 +6193,6 @@ test("empty-start chat shows a pending task row and streams reasoning before the
       content: "",
       updated_at: taskReadyAt,
     },
-    lanes: [],
   })
   const timeline = () => [
     {

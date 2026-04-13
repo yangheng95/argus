@@ -360,9 +360,12 @@ export function Board(props: BoardProps) {
     | undefined;
 
   const goalsCards = createMemo(() => {
-    const lanes: any[] = board()?.lanes || [];
-    const goalsLane = lanes.find((l) => l.id === "goals");
-    return goalsLane?.cards || [];
+    const gws: any[] = board()?.goalWorkflows || [];
+    return gws.map((gw) => ({
+      id: gw.goalID,
+      title: gw.goalTitle,
+      status: gw.goalStatus,
+    }));
   });
 
   const runningGoalIDs = createMemo(() => {

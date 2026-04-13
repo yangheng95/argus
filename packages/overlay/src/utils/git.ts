@@ -81,14 +81,11 @@ export interface GitCheckpoint {
 
 /**
  * Extract and normalise all git checkpoint entries from a board object.
- * Sources checked (in order):
- * 1. `board.task.metadata.git.baseline` / `board.task.metadata.git.result`
- * 2. `board.snapshots[]` entries where `payload.kind === "git"`
+ * Source: `board.task.metadata.git.baseline` / `board.task.metadata.git.result`.
  * Returns checkpoints sorted by creation time (ascending).
  */
 export function boardGitCheckpoints(board: any): GitCheckpoint[] {
   const out: GitCheckpoint[] = [];
-  const seen = new Set<string>();
   const meta = record(board?.task?.metadata) ? board.task.metadata : null;
   const git = record(meta?.git) ? meta.git : null;
 
@@ -104,24 +101,6 @@ export function boardGitCheckpoints(board: any): GitCheckpoint[] {
       commit: typeof item.commit === "string" ? item.commit : "",
       message: typeof item.message === "string" ? item.message : "",
       snapshot: typeof item.snapshot === "string" ? item.snapshot : "",
-      time,
-    });
-    seen.add(stage);
-  }
-
-  for (const snap of Array.isArray(board?.snapshots) ? board.snapshots : []) {
-    const payload = record(snap?.payload) ? snap.payload : null;
-    const stage = typeof payload?.stage === "string" ? payload.stage : "";
-    if (payload?.kind !== "git" || !stage || seen.has(stage)) continue;
-    const time = Number(snap?.time?.created);
-    if (!Number.isFinite(time)) continue;
-    out.push({
-      stage,
-      mode: typeof payload.mode === "string" ? payload.mode : "recorded_head",
-      branch: typeof payload.branch === "string" ? payload.branch : "",
-      commit: typeof payload.commit === "string" ? payload.commit : "",
-      message: typeof payload.message === "string" ? payload.message : "",
-      snapshot: typeof payload.snapshot === "string" ? payload.snapshot : "",
       time,
     });
   }

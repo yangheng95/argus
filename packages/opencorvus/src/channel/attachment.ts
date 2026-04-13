@@ -74,8 +74,8 @@ export namespace ChannelAttachment {
 async function publicUrl() {
   const direct = text(process.env.OPENCORVUS_PUBLIC_URL)
   if (direct) return trim(direct)
-  const config = await Config.get().catch(() => undefined)
-  const configured = text(config?.server?.publicUrl)
+  const config = await Config.get()
+  const configured = text(config.server?.publicUrl)
   if (configured) return trim(configured)
   const current = text(process.env.OPENCORVUS_SERVER_URL)
   if (!current) return

@@ -115,9 +115,6 @@ benchmark 至少必须包含：
 
 7. 如果调试工具本身异常，先修工具。
    - 例如 git、rg、测试命令、运行器不可用时，应主动修复工具链，再继续任务。
-   - 已知陷阱：drizzle `$inferSelect` 类型在 schema 列变化后可能因 turbo / bun /
-     tsgo 缓存 stale 而仍报"Property X does not exist"。复现/修复时跑
-     `bun run typecheck:fresh` 一键清缓存重跑。
 
 8. benchmark 通过后仍必须复核交付物。
    - 二次 review 不通过，不算完成。

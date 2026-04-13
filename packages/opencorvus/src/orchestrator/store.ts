@@ -735,6 +735,7 @@ export function viewTask(row: TaskRow, input?: { directory?: string }) {
     request: row.request,
     status: row.status,
     priority: row.priority,
+    kind: row.kind ?? "workflow",
     blockingReason: row.blocking_reason ?? undefined,
     error: row.error ?? undefined,
     budget: budgetModel(row.budget),

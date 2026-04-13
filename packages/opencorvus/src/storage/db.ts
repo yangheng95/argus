@@ -57,7 +57,6 @@ export namespace Database {
     sqlite.run("PRAGMA foreign_keys = ON")
     sqlite.run("PRAGMA wal_checkpoint(PASSIVE)")
 
-    // Create all tables (IF NOT EXISTS — idempotent)
     sqlite.exec(SCHEMA_DDL)
     log.info("schema applied")
 

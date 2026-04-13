@@ -5,7 +5,7 @@
  * calls PlannerAgent.plan() with a real LLM, and verifies the output
  * is detailed and task-specific (NOT a shallow generic plan).
  *
- * Requires: DASHSCOPE_API_KEY or CODING_DASHSCOPE_API_KEY env var.
+ * Requires: DASHSCOPE_API_KEY env var.
  * Timeout: 120s per test (LLM calls + tool exploration).
  */
 import { afterEach, describe, expect, test } from "bun:test"
@@ -22,11 +22,7 @@ import path from "path"
 // Show logs so we can see what happens during the test
 Log.init({ print: true })
 
-// The key — from env or fallback
-const DASHSCOPE_KEY =
-  process.env.DASHSCOPE_API_KEY ||
-  process.env.CODING_DASHSCOPE_API_KEY ||
-  ""
+const DASHSCOPE_KEY = process.env.DASHSCOPE_API_KEY || ""
 
 const hasKey = DASHSCOPE_KEY.length > 0
 

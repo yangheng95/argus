@@ -112,7 +112,11 @@ const DEFAULTS: OrchestratorConfigType = {
     skills: [],
   },
   delivery: {
-    max_steps: 40,
+    // Vision-driven fig2code delivery loops can spend many steps comparing
+    // the rendered output against the reference image and editing CSS/layout
+    // before producing the final verdict. 40 was hit with the vision channel
+    // enabled; raise to 80 to leave room for both rework and verdict emission.
+    max_steps: 80,
     timeout_ms: 600_000,
     max_retries: 2,
     skills: [],
@@ -145,9 +149,8 @@ export namespace OrchestratorConfig {
    * 因此运行时修改 opencorvus.jsonc 后下一次调用即生效。
    */
   export async function get(): Promise<OrchestratorConfigType> {
-    const cfg = await Config.get().catch(() => ({} as Config.Info))
-    const user = cfg.assistant
-    return merge(user)
+    const cfg = await Config.get()
+    return merge(cfg.assistant)
   }
 
   /** 同步获取硬编码默认值（不读取配置文件），用于模块初始化阶段无法 await 的场景 */

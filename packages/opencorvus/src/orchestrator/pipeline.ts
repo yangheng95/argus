@@ -89,6 +89,8 @@ export function persistQueuedTask(input: {
   requestID?: string
   source?: z.infer<typeof CreateTaskInput>["source"]
   priority?: PriorityInput
+  /** "workflow" runs the full pipeline; "build" bypasses to the build agent. */
+  kind?: "workflow" | "build"
   budget?: BudgetInput
   metadata: Record<string, unknown>
   channelBinding?: ChannelBindingInput
@@ -115,6 +117,7 @@ export function persistQueuedTask(input: {
         title: input.title,
         request: input.request,
         attachments: input.attachments?.length ? input.attachments : undefined,
+        kind: input.kind ?? "workflow",
         status: "queued",
         priority: input.priority ?? "normal",
         budget: budgetRow(input.budget),

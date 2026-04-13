@@ -18,7 +18,7 @@ export type AgentRole =
   | "delivery"
   | "system";
 
-/** Stages that get their own collapsible AgentCard in the conversation view. */
+/** Stages that get their own collapsible agent card in the conversation view. */
 export const AGENT_CARD_STAGES = new Set<AgentRole>(["assistant", "spec", "architect", "planner", "goal", "executor", "evaluator", "delivery"]);
 
 /**
@@ -110,7 +110,7 @@ export function roleLabel(role: string): string {
  * Single classification function — replaces classifyAgentStage and classifyMessage.
  *
  * Returns:
- * - An AgentRole string (e.g. "spec", "planner") → message belongs to that AgentCard
+ * - An AgentRole string (e.g. "spec", "planner") → message belongs to that agent card
  * - "main" → message belongs to the main conversation
  */
 export function classifyMessage(msg: any, rootSessionID: string): string {

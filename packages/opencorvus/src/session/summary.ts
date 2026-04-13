@@ -1,5 +1,6 @@
 import { fn } from "@/util/fn"
 import z from "zod"
+import { Log } from "@/util/log"
 import { Session } from "."
 
 import { Message } from "./message"
@@ -10,6 +11,8 @@ import { Storage } from "@/storage/storage"
 import { Bus } from "@/bus"
 
 export namespace SessionSummary {
+  const log = Log.create({ service: "session.summary" })
+
   function unquoteGitPath(input: string) {
     if (!input.startsWith('"')) return input
     if (!input.endsWith('"')) return input
@@ -127,7 +130,9 @@ export namespace SessionSummary {
         }
       })
       const changed = next.some((item, i) => item.file !== diffs[i]?.file)
-      if (changed) Storage.write(["session_diff", input.sessionID], next).catch(() => {})
+      if (changed) Storage.write(["session_diff", input.sessionID], next).catch((err) => {
+        log.warn("session_diff storage write failed", { sessionID: input.sessionID, error: String(err) })
+      })
       return next
     },
   )

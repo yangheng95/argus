@@ -7,7 +7,7 @@ import path from "path"
 import os from "node:os"
 import fs from "node:fs/promises"
 
-const { ensureBenchmarkModel, loadBenchmarkEnv, prepareDashscopeEnv, resolveBenchmarkModel } = await import("./env")
+const { ensureBenchmarkModel, loadBenchmarkEnv, resolveBenchmarkModel } = await import("./env")
 const { Log } = await import("../../src/util/log")
 Log.init({ print: true })
 const { Instance } = await import("../../src/project/instance")
@@ -17,8 +17,7 @@ const { resetDatabase } = await import("../../test/fixture/db")
 const { ExecutorBootstrap } = await import("../../src/executor/bootstrap")
 
 await loadBenchmarkEnv(import.meta.dir)
-prepareDashscopeEnv()
-const model = process.env.OPENCORVUS_BENCHMARK_MODEL || await resolveBenchmarkModel(import.meta.dir, { allowOpenAICodex: false }).catch(() => "github-copilot/gemini-3-flash-preview")
+const model = process.env.OPENCORVUS_BENCHMARK_MODEL || await resolveBenchmarkModel(import.meta.dir)
 process.env.OPENCORVUS_BENCHMARK_MODEL = model
 console.log(`[doctor] model: ${model}`)
 

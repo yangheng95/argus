@@ -36,6 +36,7 @@ import { ControlRoutes } from "./control"
 import { CodingRoutes } from "./coding"
 import { AttachmentRoutes } from "./attachment"
 import { TraceRoutes } from "./trace"
+import { GatewayRoutes } from "./gateway"
 
 const log = Log.create({ service: "server" })
 
@@ -83,6 +84,7 @@ export function AppRoutes(root: Hono) {
     .route("/", FileRoutes())
     .route("/attachment", AttachmentRoutes())
     .route("/trace", TraceRoutes())
+    .route("/gateway", GatewayRoutes())
     .route("/mcp", McpRoutes())
     .route("/tui", TuiRoutes())
     .post(

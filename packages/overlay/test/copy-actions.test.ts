@@ -59,7 +59,6 @@ test("copying chat and logs does not open the dialog", async () => {
       },
       plan: null,
       spec: null,
-      lanes: [],
       evaluation: null,
       delivery: null,
       interactions: [],

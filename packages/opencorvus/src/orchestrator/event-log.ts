@@ -87,11 +87,15 @@ export namespace OrchestratorEventLog {
   }
 
   function tl(ctx: TaskCtx, line: string) {
-    try { appendFileSync(ctx.timeline, line + "\n", "utf-8") } catch {}
+    try { appendFileSync(ctx.timeline, line + "\n", "utf-8") } catch (err) {
+      log.warn("timeline append failed", { path: ctx.timeline, error: String(err) })
+    }
   }
 
   function nd(ctx: TaskCtx, entry: Record<string, unknown>) {
-    try { appendFileSync(ctx.ndjson, JSON.stringify(entry) + "\n", "utf-8") } catch {}
+    try { appendFileSync(ctx.ndjson, JSON.stringify(entry) + "\n", "utf-8") } catch (err) {
+      log.warn("ndjson append failed", { path: ctx.ndjson, error: String(err) })
+    }
   }
 
   function clip(s: string, max = 120) {

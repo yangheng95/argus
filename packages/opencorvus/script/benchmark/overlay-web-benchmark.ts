@@ -351,7 +351,7 @@ if (referenceImages.length > 0) {
   await fs.mkdir(tempDataDir, { recursive: true })
   await fs.copyFile(realAuth, path.join(tempDataDir, "auth.json")).catch(() => undefined)
 }
-const { ensureBenchmarkModel, loadBenchmarkEnv, prepareDashscopeEnv, prepareLocalProviders, resolveBenchmarkModel } = await import("./env")
+const { ensureBenchmarkModel, loadBenchmarkEnv, prepareLocalProviders, resolveBenchmarkModel } = await import("./env")
 const { Log } = await import("../../src/util/log")
 Log.init({ print: true })
 const { ExecutorBootstrap } = await import("../../src/executor/bootstrap")
@@ -361,7 +361,6 @@ const { Server } = await import("../../src/server/server")
 const { resetDatabase } = await import("../../test/fixture/db")
 
 await loadBenchmarkEnv(import.meta.dir)
-prepareDashscopeEnv()
 process.env.OPENCORVUS_CONFIG_DIR = temp.config
 await prepareLocalProviders()
 const model = await resolveBenchmarkModel(import.meta.dir, {
