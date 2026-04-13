@@ -578,7 +578,7 @@ export namespace Memory {
         source: input.source,
       })
     } else {
-      // Legacy path: derive atomics as facts with flat importance
+      // Heuristic path: caller didn't supply structured atomics, derive from text as facts with flat importance
       derived = deriveAtomicMemories({
         title: input.title,
         content: input.content,

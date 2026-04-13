@@ -69,8 +69,9 @@ export namespace AgentRuntime {
     /** Pipe stream chunks up to a parent agent (nested streams, e.g.
      *  task-agent observing a design-analyst run). */
     forwardChunk?: (arg: { chunk: any }) => void | Promise<void>
-    /** Optional override for the session hooks — advanced callers (tests,
-     *  legacy bridges) may supply their own to inject a shared tracker. */
+    /** Optional override for the session hooks — advanced callers (tests
+     *  or gateway/sub-agent bridges) may supply their own to inject a shared
+     *  tracker. */
     hooks?: SessionStreamHooks
     policies: Policies
   }
