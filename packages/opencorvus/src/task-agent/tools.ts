@@ -199,92 +199,13 @@ export function createTaskAgentTools(input: {
     ws.goalSteps[goalID] = { goalID, goalTitle, goalStatus: "pending", steps }
   }
 
-  const CLARIFY_TIMEOUT_MS = 300_000 // 300s — user has 5 minutes to respond
+  // Clarification is owned by Gateway. Agents that still need to ask the
+  // user a question can do so directly via `Question.ask` — Gateway's notifier
+  // (src/gateway/notifier.ts) routes those events into the owning Gateway
+  // dialog (attended) or auto-replies via LLM (unattended). Workflow steps
+  // never pause for input here.
 
   const tools = {
-    clarify: tool({
-      description: [
-        "Present structured questions to the user to clarify vague or incomplete task input before decomposition.",
-        "Use this when the task request lacks critical information needed for accurate requirements extraction:",
-        "- Missing target scope (which modules, pages, or features)",
-        "- Ambiguous acceptance criteria",
-        "- Unclear technical constraints (language, framework, deployment)",
-        "- Unknown input format (the request could be natural language, a spec, a PRD, a design, or a URL)",
-        "",
-        "The user has 300 seconds to respond. If they don't respond in time, you receive a timeout",
-        "signal and MUST proceed with your best judgment based on available information.",
-        "",
-        "After receiving answers, update the task request with the clarified information,",
-        "then proceed to requirements.",
-      ].join("\n"),
-      inputSchema: z.object({
-        questions: z.array(z.object({
-          question: z.string().describe("Complete question text"),
-          header: z.string().max(30).describe("Very short label (max 30 chars)"),
-          options: z.array(z.object({
-            label: z.string().describe("Display text (1-5 words, concise)"),
-            description: z.string().describe("Explanation of choice"),
-          })).describe("Available choices"),
-          multiple: z.boolean().optional().describe("Allow selecting multiple choices"),
-          custom: z.boolean().optional().default(true).describe("Allow typing a custom answer (default: true)"),
-        })).min(1).max(10).describe("Questions to ask the user (1-10)"),
-        context: z.string().describe("Brief summary of what you understood so far from the task request"),
-      }),
-      execute: async ({ questions, context }) => {
-        await trackStepStart("clarify")
-        const task = requireTask(taskID)
-
-        log.info("clarify: asking user", { taskID, questionCount: questions.length, context })
-
-        const { Question } = await import("@/question")
-
-        try {
-          const answers = await Question.ask({
-            sessionID: input.agentSessionID,
-            questions: questions.map(q => ({
-              question: q.question,
-              header: q.header,
-              options: q.options,
-              multiple: q.multiple,
-              custom: q.custom,
-            })),
-            timeoutMs: CLARIFY_TIMEOUT_MS,
-          })
-
-          // Build clarification summary to enrich the task request
-          const clarifications: string[] = ["## Clarifications from user"]
-          for (let i = 0; i < questions.length; i++) {
-            const q = questions[i]
-            const a = answers[i] ?? []
-            clarifications.push(`- **${q.header}**: ${a.join(", ") || "(no answer)"}`)
-          }
-          const clarificationText = clarifications.join("\n")
-
-          log.info("clarify: user responded", { taskID, answerCount: answers.length })
-
-          // Re-read task to get latest request (may have been enriched by prior clarify rounds)
-          const freshTask = requireTask(taskID)
-          const enrichedRequest = `${freshTask.request}\n\n${clarificationText}`
-          await updateTask(freshTask, { request: enrichedRequest }, "Task request enriched with user clarifications")
-
-          return [
-            `User clarifications received and appended to task request:`,
-            clarificationText,
-            "",
-            "Decide: if still missing critical details, call clarify again with follow-up questions.",
-            "If enough information for decomposition, proceed to requirements.",
-          ].join("\n")
-        } catch (err) {
-          if (err instanceof Question.RejectedError) {
-            await trackStepComplete("clarify")
-            log.info("clarify: timeout, proceeding with LLM judgment", { taskID })
-            return "User did not respond within 300 seconds. Proceed with your best judgment based on the original request and codebase context. Call requirements now."
-          }
-          throw err
-        }
-      },
-    }),
-
     requirements: tool({
       description: "Explore the codebase, analyze the task, extract requirements, and decompose into executable goal contracts with cross-goal interface declarations.",
       inputSchema: z.object({
@@ -299,7 +220,7 @@ export function createTaskAgentTools(input: {
 
         await trackStepStart("requirements")
         task = await updateTask(task, { status: "active" }, "Requirements analysis started")
-        // The DecomposeService runs inside AgentRuntime which owns its own
+        // The RequirementsService runs inside AgentRuntime which owns its own
         // ProgressGuard (alive/progress/absolute tiers). No caller-level
         // inactivity guard here — that was the same "delta = activity"
         // hazard we just eliminated.
@@ -314,12 +235,11 @@ export function createTaskAgentTools(input: {
 
 
           const { RequirementsService } = await import("@/requirements")
-          const DecomposeService = RequirementsService
           const { createDecisionLog } = await import("@/decision-log")
           const decisionLog = createDecisionLog(taskID)
 
           const result = await withStageRetry("goal", () =>
-            DecomposeService.decompose({
+            RequirementsService.decompose({
               title: task.title,
               request: task.request,
               attachments: Array.isArray(task.attachments) ? task.attachments as any : undefined,
@@ -1806,7 +1726,7 @@ export function createTaskAgentTools(input: {
         "Explore the completed project, analyze what was built, and suggest improvements for the next iteration.",
         "Use after task completion (or user re-trigger) to start a new development cycle.",
         "Reads all goal deliveries, explores the codebase, and produces structured suggestions.",
-        "After receiving suggestions, present them to the user via clarify, then create a new task for the next iteration.",
+        "After receiving suggestions, surface them in your reply — Gateway routes them to the user and creates the follow-up task.",
       ].join("\n"),
       inputSchema: z.object({
         focus: z.enum(["features", "quality", "tests", "performance", "all"]).default("all")
@@ -1917,7 +1837,7 @@ export function createTaskAgentTools(input: {
             lines.push(`- [${s.priority}] **${s.title}** (${s.category}, ${s.effort}): ${s.description}`)
           }
           lines.push("")
-          lines.push("To start the next iteration: present these to the user via clarify, then create a new task with selected improvements.")
+          lines.push("To start the next iteration: surface these suggestions to the user (Gateway will route the dialog) and let them pick which to roll into a new task.")
           return lines.join("\n")
         } catch {
           // LLM didn't return valid JSON — return raw text

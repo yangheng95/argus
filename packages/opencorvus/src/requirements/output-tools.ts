@@ -24,7 +24,7 @@ import { GoalContractFieldsSchema } from "@/pipeline/goal-contract.schema"
 // Collector — accumulates registered items across tool calls
 // ---------------------------------------------------------------------------
 
-export interface DecomposeCollector {
+export interface RequirementsCollector {
   requirements: RegisteredRequirement[]
   goals: RegisteredGoal[]
   decisions: RegisteredDecision[]
@@ -64,7 +64,7 @@ export interface RegisteredTraceability {
   goalIDs: string[]
 }
 
-function emptyCollector(): DecomposeCollector {
+function emptyCollector(): RequirementsCollector {
   return { requirements: [], goals: [], decisions: [], traceability: [], summary: "", finalized: false }
 }
 
@@ -72,7 +72,7 @@ function emptyCollector(): DecomposeCollector {
 // Tool factory
 // ---------------------------------------------------------------------------
 
-export function createDecomposeOutputTools(workDir?: string) {
+export function createRequirementsOutputTools(workDir?: string) {
   let collector = emptyCollector()
   const dir = workDir ?? Instance.directory
 

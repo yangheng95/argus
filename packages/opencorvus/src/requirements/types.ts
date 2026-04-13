@@ -14,7 +14,7 @@ export interface ParsedRequirement {
   description: string
 }
 
-export interface DecomposeDecision {
+export interface RequirementsDecision {
   key: string
   value: string
   reason: string
@@ -40,10 +40,10 @@ export interface TraceabilityEntry {
   goalIDs: string[]
 }
 
-export interface DecomposeOutput {
+export interface RequirementsOutput {
   summary: string
   requirements: ParsedRequirement[]
-  decisions: DecomposeDecision[]
+  decisions: RequirementsDecision[]
   goals: ParsedGoalContract[]
   traceability: TraceabilityEntry[]
 }
