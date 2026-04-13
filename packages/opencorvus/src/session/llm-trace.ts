@@ -4,6 +4,7 @@ import type { ModelMessage } from "ai"
 import { Global } from "@/global"
 import { Log } from "@/util/log"
 import { Filesystem } from "@/util/filesystem"
+import { Trace } from "@/trace"
 
 const log = Log.create({ service: "session.llm-trace" })
 const TRACE_DIR = path.join(Global.Path.data, "llm-trace")
@@ -262,18 +263,31 @@ export namespace LLMTrace {
   }
 
   export function begin(input: StartInput): Recorder {
-    if (!enabled()) {
-      return {
-        step() {},
-        finish() {},
-        abort() {},
-        error() {},
-      }
-    }
-
     const start = Date.now()
     const steps: StepLike[] = []
     let done = false
+
+    // Resolve which task owns this session — Trace routes events into that
+    // task's JSONL. Unbound sessions fall back to sessionID as the trace key
+    // so orphan calls still get captured (see Trace.taskIDForSession).
+    const taskID = Trace.taskIDForSession(input.sessionID)
+    const traceMeta = {
+      taskID,
+      sessionID: input.sessionID,
+      agent: input.agent.name,
+    }
+
+    Trace.event({
+      ...traceMeta,
+      category: "agent.start",
+      payload: {
+        call_id: input.callID,
+        model: { providerID: input.model.providerID, modelID: input.model.modelID },
+        small: input.small,
+        tool_count: input.request.tools.length,
+        message_count: input.request.messages.length,
+      },
+    })
 
     const base = {
       version: 1 as const,
@@ -312,14 +326,36 @@ export namespace LLMTrace {
     }) => {
       if (done) return
       done = true
-      enqueue(input.sessionID, {
-        ...base,
-        ended_at: Date.now(),
-        status: result.status,
-        steps: result.stepData.map((item, index) => normalizeStep(item, index + 1)),
-        finish_reason: result.finishReason,
-        total_usage: normalize(result.totalUsage),
-        error: normalize(result.error),
+      // Legacy session-scoped JSONL only when explicitly enabled.
+      // Trace.event already streams the same data into the per-task JSONL.
+      if (enabled()) {
+        enqueue(input.sessionID, {
+          ...base,
+          ended_at: Date.now(),
+          status: result.status,
+          steps: result.stepData.map((item, index) => normalizeStep(item, index + 1)),
+          finish_reason: result.finishReason,
+          total_usage: normalize(result.totalUsage),
+          error: normalize(result.error),
+        })
+      }
+      Trace.event({
+        ...traceMeta,
+        category: result.status === "error" ? "llm.error" : result.status === "aborted" ? "llm.error" : "llm.finish",
+        payload: {
+          call_id: input.callID,
+          status: result.status,
+          finish_reason: result.finishReason,
+          total_usage: normalize(result.totalUsage),
+          duration_ms: Date.now() - start,
+          step_count: result.stepData.length,
+          error: normalize(result.error),
+        },
+      })
+      Trace.event({
+        ...traceMeta,
+        category: "agent.finish",
+        payload: { call_id: input.callID, status: result.status },
       })
     }
 
@@ -327,6 +363,48 @@ export namespace LLMTrace {
       step(step) {
         if (done) return
         steps.push(step)
+        Trace.event({
+          ...traceMeta,
+          category: "llm.step",
+          round: steps.length,
+          payload: {
+            call_id: input.callID,
+            finish_reason: step.finishReason,
+            text_len: step.text?.length ?? 0,
+            reasoning_len: step.reasoningText?.length ?? 0,
+            tool_call_count: step.toolCalls?.length ?? 0,
+            tool_result_count: step.toolResults?.length ?? 0,
+            usage: normalize(step.usage),
+          },
+        })
+        for (const call of step.toolCalls ?? []) {
+          const c = call as { toolCallId?: string; toolName?: string; input?: unknown }
+          Trace.event({
+            ...traceMeta,
+            category: "tool.call",
+            round: steps.length,
+            payload: {
+              call_id: c.toolCallId,
+              tool: c.toolName,
+              input: normalize(c.input),
+              llm_call_id: input.callID,
+            },
+          })
+        }
+        for (const result of step.toolResults ?? []) {
+          const r = result as { toolCallId?: string; toolName?: string; output?: unknown; isError?: boolean }
+          Trace.event({
+            ...traceMeta,
+            category: r.isError ? "tool.error" : "tool.result",
+            round: steps.length,
+            payload: {
+              call_id: r.toolCallId,
+              tool: r.toolName,
+              output: normalize(r.output),
+              llm_call_id: input.callID,
+            },
+          })
+        }
       },
       finish(step) {
         finalize({

@@ -58,6 +58,30 @@ export namespace Trace {
   // benchmark can verify "no gaps" without coordinating across tasks.
   const counters = new Map<string, number>()
 
+  // sessionID → taskID lookup. Populated by task-agent at task creation.
+  // session/llm-trace.ts uses this so an LLM call originating from any
+  // session can be routed to its owning task's JSONL.
+  const sessionToTask = new Map<string, string>()
+
+  /** Bind a session to a task so LLM events from that session land in the task's trace. */
+  export function bindSession(sessionID: string, taskID: string): void {
+    sessionToTask.set(sessionID, taskID)
+  }
+
+  /** Stop routing this session's events. Called when a task ends. */
+  export function unbindSession(sessionID: string): void {
+    sessionToTask.delete(sessionID)
+  }
+
+  /**
+   * Resolve the task that owns a session. Returns the sessionID itself when
+   * unbound — orphan LLM activity still gets a self-named JSONL rather than
+   * being silently dropped.
+   */
+  export function taskIDForSession(sessionID: string): string {
+    return sessionToTask.get(sessionID) ?? sessionID
+  }
+
   // Per-file write queue — appends are chained so concurrent events for the
   // same task land in JSONL in the order Trace.event() was called, not the
   // order the kernel happened to flush. Key is absolute file path so multiple
