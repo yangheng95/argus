@@ -201,28 +201,52 @@ export namespace TaskAgent {
         ? task.request
         : describeTrigger(task, trigger)
       // Build multimodal content when task has file attachments (only for initial trigger).
-      // Attachments arrive as AttachmentStore references; we read the raw
-      // `Buffer` (Uint8Array-compatible) from disk and hand it to the provider.
-      // AI SDK's DataContent accepts Uint8Array, which avoids holding both a
-      // Buffer and its base64 string in memory at the same time — meaningful
-      // for large mp4 / pdf attachments.
-      const attachments = trigger.kind === "created" && Array.isArray(task.attachments) ? task.attachments : undefined
-      const attachmentParts = attachments?.length
-        ? await Promise.all(attachments.map(async (a: any) => {
+      // Attachments split into two buckets:
+      //   • multimodal-supported (image / pdf / audio / video) → inline as
+      //     AI SDK file parts so the LLM can perceive them directly.
+      //   • everything else (text/*, application/json, …) → only listed by
+      //     URL in the user prompt; the agent must call the read tool with the
+      //     attachment URL to fetch the bytes. Inlining a text/* file part as
+      //     multimodal is silently rejected by openai-compatible providers and
+      //     surfaces as "No output generated" — see AttachmentStore.isMultimodalSupported.
+      const attachments = trigger.kind === "created" && Array.isArray(task.attachments)
+        ? (task.attachments as Array<{ sha?: string; url?: string; mime?: string; size?: number; filename?: string }>)
+        : undefined
+      const multimodal = attachments?.filter((a) => AttachmentStore.isMultimodalSupported(String(a.mime ?? ""))) ?? []
+      const referenceOnly = attachments?.filter((a) => !AttachmentStore.isMultimodalSupported(String(a.mime ?? ""))) ?? []
+      const attachmentParts = multimodal.length
+        ? await Promise.all(multimodal.map(async (a) => {
             const located = AttachmentStore.nameFromUrl(String(a.url ?? ""))
             if (!located) throw new Error(`task attachment has no resolvable url: ${a.filename ?? a.sha}`)
             const bytes = await AttachmentStore.read(located.projectID, located.name)
             return {
               type: "file" as const,
               data: bytes,
-              mediaType: a.mime as string,
-              ...(a.filename ? { filename: a.filename as string } : {}),
+              mediaType: String(a.mime),
+              ...(a.filename ? { filename: a.filename } : {}),
             }
           }))
         : []
+      // Task Agent is the orchestrator; it does NOT own a `read` tool.
+      // Attachments are forwarded automatically to the sub-agents it dispatches
+      // (requirements / design_analysis / architect via the `requirements` /
+      // `design_analysis` / `architect` tools), which DO have read access. We
+      // surface the inventory here purely so the Task Agent can reason about
+      // what's available when deciding which sub-agent to invoke.
+      const referenceText = referenceOnly.length
+        ? "\n\n## Task Attachments (forwarded to sub-agents automatically)\n" +
+          referenceOnly
+            .map((a) => {
+              const sizeKb = typeof a.size === "number" ? `${Math.max(1, Math.round(a.size / 1024))} KB, ` : ""
+              return `- ${a.filename ?? a.sha ?? "(unnamed)"} — ${a.mime ?? "application/octet-stream"} — ${sizeKb}url: ${a.url}`
+            })
+            .join("\n") +
+          "\n\nDo NOT attempt to read these yourself — invoke the appropriate sub-agent (requirements / design_analysis / architect) which receives the attachments and can read them via its `read` tool."
+        : ""
+      const enrichedUserText = userText + referenceText
       const userContent = attachmentParts.length
-        ? [{ type: "text" as const, text: userText }, ...attachmentParts]
-        : userText
+        ? [{ type: "text" as const, text: enrichedUserText }, ...attachmentParts]
+        : enrichedUserText
 
       log.info("task agent starting", {
         taskID,

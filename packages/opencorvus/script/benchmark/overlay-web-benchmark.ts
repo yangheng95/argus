@@ -101,6 +101,7 @@ const KNOWN_FLAGS = new Set<string>([
   "--project-dir",
   "--reference-images",
   "--report",
+  "--request-attachment",
   "--request-file",
   "--request-timeout-ms",
   "--resume-home-dir",
@@ -200,7 +201,12 @@ const executor = (flag("--executor") || "opencode") as
   | "codex"
   | "claude-code"
 const requestFile = flag("--request-file")
+const requestAttachment = flag("--request-attachment")
 const referenceImages = flag("--reference-images")?.split(",").map(s => s.trim()).filter(Boolean) ?? []
+if (requestFile && requestAttachment) {
+  process.stderr.write("[overlay-benchmark] cannot pass both --request-file and --request-attachment\n")
+  process.exit(2)
+}
 const figmaUrl = flag("--figma-url")?.trim() || undefined
 const deliveryVerifyCmd = flag("--delivery-verify-cmd")
 const skipLocalVerify = process.argv.includes("--skip-local-verify")
@@ -245,6 +251,35 @@ Acceptance:
 let TASK_REQUEST = requestFile ? (await Bun.file(path.resolve(requestFile)).text()).trim() : DEFAULT_TASK_REQUEST
 // Build base64 attachments from reference images (sent as multimodal vision content)
 const TASK_ATTACHMENTS: Array<{ mime: string; data: string; filename: string }> = []
+
+// --request-attachment: upload the file as a real task attachment instead of
+// inlining its text into request. Exercises the read-tool attachment-URL path
+// so sub-agents (planner, architect, executor) can re-read the source via
+// AttachmentStore. The request itself just points the agent at the attachment.
+if (requestAttachment) {
+  const src = path.resolve(requestAttachment)
+  const bytes = await Bun.file(src).arrayBuffer()
+  const ext = path.extname(src).toLowerCase().replace(".", "") || "txt"
+  const filename = path.basename(src)
+  const mime =
+    ext === "txt" || ext === "md" || ext === "log" ? "text/plain" :
+    ext === "json" ? "application/json" :
+    ext === "pdf"  ? "application/pdf"  :
+    ext === "html" || ext === "htm" ? "text/html" :
+    ext === "csv" ? "text/csv" :
+    "application/octet-stream"
+  TASK_ATTACHMENTS.push({
+    mime,
+    data: Buffer.from(bytes).toString("base64"),
+    filename,
+  })
+  console.log(`[overlay-benchmark] request-attachment ${filename} ${mime} ${Math.round(bytes.byteLength / 1024)}KB`)
+  TASK_REQUEST =
+    `The full task brief is attached as the file "${filename}" (${mime}, ${Math.round(bytes.byteLength / 1024)} KB). ` +
+    `It contains the complete requirements, scope, and acceptance criteria — treat it as the authoritative source of truth. ` +
+    `Run the standard pipeline (requirements → architect → planner → executor → delivery); the attachment is ` +
+    `forwarded automatically to each sub-agent and they will read it via their \`read\` tool when needed.`
+}
 if (referenceImages.length > 0) {
   for (const img of referenceImages) {
     const src = path.resolve(img)
@@ -266,7 +301,10 @@ if (referenceImages.length > 0) {
   const refLines = referenceImages.map(img => `- ${path.basename(img)}`).join("\n")
   TASK_REQUEST += `\n\n## Reference Images\nThe following reference images are attached as visual input. They show the target UI style:\n${refLines}`
 }
-const TASK_TITLE = flag("--title")?.trim() || (requestFile ? path.parse(requestFile).name : DEFAULT_TASK_TITLE)
+const TASK_TITLE = flag("--title")?.trim()
+  || (requestFile ? path.parse(requestFile).name : undefined)
+  || (requestAttachment ? path.parse(requestAttachment).name : undefined)
+  || DEFAULT_TASK_TITLE
 // DELIVERY_VERIFY_CMD is assigned after temp.dir is initialized (see below).
 // Auto-registration rules when no explicit --delivery-verify-cmd is supplied:
 //   1. reference-images provided → visual-diff SSIM gate (web/fig2code tasks)

@@ -262,7 +262,20 @@ async function buildMultimodalContent(
   attachments?: Array<{ sha: string; url: string; mime: string; size: number; filename?: string }>,
 ) {
   if (!attachments?.length) return text
-  const fileParts = await Promise.all(attachments.map(async (a) => {
+  // text/* and application/json attachments are NOT inlined as multimodal —
+  // openai-compatible providers reject them and the LLM emits no output.
+  // Reference them by URL so the agent can call the read tool when needed.
+  const multimodal = attachments.filter((a) => AttachmentStore.isMultimodalSupported(a.mime))
+  const referenceOnly = attachments.filter((a) => !AttachmentStore.isMultimodalSupported(a.mime))
+  const referenceText = referenceOnly.length
+    ? "\n\n## Task Attachments (read via the `read` tool when you need their content)\n" +
+      referenceOnly
+        .map((a) => `- ${a.filename ?? a.sha} — ${a.mime} — ${Math.max(1, Math.round(a.size / 1024))} KB, url: ${a.url}`)
+        .join("\n")
+    : ""
+  const enrichedText = text + referenceText
+  if (!multimodal.length) return enrichedText
+  const fileParts = await Promise.all(multimodal.map(async (a) => {
     const located = AttachmentStore.nameFromUrl(a.url)
     if (!located) throw new Error(`attachment has no resolvable url: ${a.filename ?? a.sha}`)
     const bytes = await AttachmentStore.read(located.projectID, located.name)
@@ -273,7 +286,7 @@ async function buildMultimodalContent(
       ...(a.filename ? { filename: a.filename } : {}),
     }
   }))
-  return [{ type: "text" as const, text }, ...fileParts]
+  return [{ type: "text" as const, text: enrichedText }, ...fileParts]
 }
 
 // ---------------------------------------------------------------------------
