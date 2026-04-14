@@ -8,7 +8,6 @@ import {
   OrchestratorTaskTable,
 } from "@/orchestrator/orchestrator.sql"
 import { WorkbenchBriefSnapshotTable, WorkbenchTaskNoteTable } from "./workbench.sql"
-import { planHints } from "./note-store"
 
 const BRIEF_VERSION = "brief-v2"
 
@@ -103,9 +102,6 @@ export function compileBrief(input: {
       "- Do not create extra user-facing commits unless explicitly requested.",
       "- If you do create a commit, use a concise, meaningful message grounded in the task request and plan.",
     ].join("\n"),
-    planHints(plan?.metadata).length > 0
-      ? "Plan hints:\n" + planHints(plan?.metadata).map((item) => `- ${item}`).join("\n")
-      : "",
     goals.length > 0
       ? "Goals:\n" +
         goals

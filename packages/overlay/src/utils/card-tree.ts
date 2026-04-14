@@ -186,6 +186,22 @@ function stepTitle(stage: string, step?: { label?: string }): string {
 
 // ── Conversion entry points ──
 
+/** Highest per-turn `tokens.input` across a message list. Represents the
+ *  high-water mark of context size the LLM had to reason over — summing
+ *  would double-count because each turn's input already includes prior
+ *  turns. Returns undefined when no message carries a finite token count. */
+function maxContextTokens(messages: any[] | undefined): number | undefined {
+  if (!Array.isArray(messages)) return undefined;
+  let max: number | undefined = undefined;
+  for (const m of messages) {
+    const t = (m as any)?.info?.tokens?.input;
+    if (typeof t === "number" && Number.isFinite(t) && (max === undefined || t > max)) {
+      max = t;
+    }
+  }
+  return max;
+}
+
 function goalToNode(item: any): CardNode {
   const cardID = String(item.id || "goal");
   const status = normStatus(item.status) ?? "pending";
@@ -198,6 +214,11 @@ function goalToNode(item: any): CardNode {
   }
 
   const children: CardNode[] = [];
+  let goalContextTokens: number | undefined = undefined;
+  const accumulate = (value: number | undefined) => {
+    if (value === undefined) return;
+    if (goalContextTokens === undefined || value > goalContextTokens) goalContextTokens = value;
+  };
 
   if (steps.length > 0) {
     for (const step of steps) {
@@ -205,6 +226,8 @@ function goalToNode(item: any): CardNode {
       const internal = internalByStage.get(stage);
       const stepStatus =
         normStatus(internal?.status) ?? normStatus(step.status) ?? "pending";
+      const stepContextTokens = maxContextTokens(internal?.messages);
+      accumulate(stepContextTokens);
       children.push({
         id: `${cardID}:step:${step.stepID}`,
         kind: "step",
@@ -215,6 +238,7 @@ function goalToNode(item: any): CardNode {
         subtitle: step.summary || undefined,
         parts: flattenMessages(internal?.messages || []),
         children: [],
+        contextTokens: stepContextTokens,
       });
     }
   } else {
@@ -227,6 +251,8 @@ function goalToNode(item: any): CardNode {
     for (const c of sorted) {
       const stage = String(c.stage || "");
       const st = normStatus(c.status) ?? "pending";
+      const stepContextTokens = maxContextTokens(c.messages);
+      accumulate(stepContextTokens);
       children.push({
         id: String(c.id || `${cardID}:step:${stage}`),
         kind: "step",
@@ -236,6 +262,7 @@ function goalToNode(item: any): CardNode {
         title: agentStageLabel(stage),
         parts: flattenMessages(c.messages || []),
         children: [],
+        contextTokens: stepContextTokens,
       });
     }
   }
@@ -255,6 +282,7 @@ function goalToNode(item: any): CardNode {
     parts: [],
     children,
     time: Number(item.time) || undefined,
+    contextTokens: goalContextTokens,
   };
 }
 
@@ -263,17 +291,7 @@ function agentCardToNode(item: any): CardNode {
   const cardID = String(item.id || `agent:${stage}`);
   const status = normStatus(item.status) ?? "pending";
   const messages = item.messages || [];
-  // An agent card may aggregate several assistant turns. Surface the LARGEST
-  // per-turn context size as the card's token estimate — it represents the
-  // high-water mark the LLM had to reason over inside this stage. Summing
-  // would double-count since each turn's input already includes prior turns.
-  let contextTokens: number | undefined = undefined
-  for (const m of messages) {
-    const t = (m as any)?.info?.tokens?.input
-    if (typeof t === "number" && Number.isFinite(t) && (contextTokens === undefined || t > contextTokens)) {
-      contextTokens = t
-    }
-  }
+  const contextTokens = maxContextTokens(messages);
   return {
     id: cardID,
     kind: "agent",

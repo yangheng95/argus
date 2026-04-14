@@ -1,5 +1,4 @@
 import { recordNote as _recordNote } from "./note-store"
-import { ingestTaskMessage as _ingestTaskMessage } from "./intent"
 import { compileBrief as _compileBrief } from "./brief"
 import { compileBoard as _compileBoard, boardTag as _boardTag } from "./board"
 
@@ -14,7 +13,6 @@ export namespace WorkbenchService {
       userID: input.userID,
     })
   }
-  export const ingestTaskMessage = _ingestTaskMessage
   export const compileBrief = _compileBrief
   export const compileBoard = _compileBoard
   export const boardTag = _boardTag

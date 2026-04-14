@@ -351,14 +351,14 @@ try {
   })
 
   // ── Step 4b: forward_to_task on the queued workflow task ────────────────
-  // A `/plan …` prefix short-circuits WorkbenchService.ingestTaskMessage to
-  // its plan-hint fast-path so this step does not require a real LLM
-  // classification round-trip. Task is still queued (no cancel yet), so
+  // All user messages now flow as operator notes verbatim; the Task Agent reads
+  // them in-context and decides what to do. No keyword prefix dispatch, no
+  // LLM intent classifier. Task is still queued (no cancel yet), so
   // continueTaskMessage returns cleanly without starting a task loop.
   await runStep("forward-to-task", async () => {
     const hint = "use extreme caution during execution"
     const { reply, calls } = await chatAndGetTurnCalls(
-      `Forward this exact message verbatim to task ${taskID}: "/plan ${hint}". ` +
+      `Forward this exact message verbatim to task ${taskID}: "${hint}". ` +
         "Call forward_to_task exactly once with that taskID and that text. Do not invoke any other tools.",
     )
     const fwd = calls.find((c) => c.tool === "forward_to_task")

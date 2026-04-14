@@ -113,6 +113,26 @@ function buildUserContextMessages(): any[] {
     const requestTime = (Number.isFinite(rawRequestTime) && rawRequestTime)
       ? Number(rawRequestTime)
       : Date.now();
+
+    // Pending questions are rendered inline as an interactive system message
+    // (see InteractionQuestionPart). The right-side InteractionPanel handles
+    // only permission requests. Answered/rejected questions fall through to
+    // the text-based transcript path below.
+    if (interaction.type === "question" && interaction.status === "pending") {
+      msgs.push({
+        _synthetic: true,
+        info: {
+          id: `ctx:interaction:${interaction.id}`,
+          role: interactionRole,
+          resolvedRole: interactionRole,
+          channel: "main",
+          time: { created: requestTime },
+        },
+        parts: [{ type: "interaction-question", interaction }],
+      });
+      continue;
+    }
+
     const request = syntheticTextMessage(
       interactionRole,
       requestTime,

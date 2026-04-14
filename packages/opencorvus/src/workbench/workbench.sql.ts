@@ -5,7 +5,6 @@ import { Timestamps } from "@/storage/schema.sql"
 export type WorkbenchNoteKind =
   | "user_request"
   | "operator_note"
-  | "plan_hint"
   | "goal_update"
   | "constraint"
   | "decision"
