@@ -76,13 +76,26 @@ function buildUserContextMessages(): any[] {
   const { task } = board;
 
   // 1. User's original task request
+  // task.request + task.attachments are the authoritative representation of
+  // the user's input. Render both into a single synthetic bubble — never
+  // duplicate by also writing a session message on the backend.
   if (task?.request) {
     const rawCreated = task.time?.created;
     const taskCreated = (Number.isFinite(rawCreated) && rawCreated) ? Number(rawCreated) : 0;
+    const parts: any[] = [{ type: "text", text: task.request }];
+    const attachments = Array.isArray((task as any).attachments) ? (task as any).attachments : [];
+    for (const a of attachments) {
+      parts.push({
+        type: "file",
+        url: a?.url,
+        mime: a?.mime,
+        filename: a?.filename,
+      });
+    }
     msgs.push({
       _synthetic: true,
       info: { id: "ctx:user-request", role: "user", resolvedRole: "user", channel: "main", time: { created: taskCreated - 2 } },
-      parts: [{ type: "text", text: task.request }],
+      parts,
     });
   }
 

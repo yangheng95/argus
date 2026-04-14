@@ -4,6 +4,7 @@
 
 import { createMemo, createSignal, onCleanup, For, Show } from "solid-js";
 import { boardStore, visibleTasks } from "../store/board";
+import { settingsStore } from "../store/settings";
 import { t } from "../utils/i18n";
 import { stamp } from "../utils/time";
 
@@ -62,7 +63,29 @@ function taskListBadge(item: any, queuePos?: number): string {
 }
 
 function taskListMeta(item: any): string {
-  return joinBullet([stamp(taskUpdated(item)), shortPath(item?.task?.directory || "")]);
+  return joinBullet([stamp(taskUpdated(item))]);
+}
+
+function projectDirectoryOf(item: any): string {
+  const dir = item?.task?.directory;
+  if (typeof dir === "string" && dir.trim()) return dir;
+  // Pending tasks have no server-assigned directory yet; attribute them to the
+  // currently active project so the user sees them grouped correctly.
+  return settingsStore.directory || "";
+}
+
+function projectLabel(directory: string): { name: string; parent: string } {
+  const normalized = (directory || "").replace(/\\/g, "/").replace(/\/+$/, "");
+  if (!normalized) return { name: t("task.project.unknown"), parent: "" };
+  const parts = normalized.split("/").filter(Boolean);
+  const name = parts[parts.length - 1] || normalized;
+  const parent =
+    parts.length > 1
+      ? parts.length > 3
+        ? ".../" + parts.slice(-3, -1).join("/")
+        : parts.slice(0, -1).join("/")
+      : "";
+  return { name, parent };
 }
 
 // ── DeleteButton (two-step inline confirm) ──
@@ -132,7 +155,67 @@ function DeleteButton(props: { id: string; onDelete: (id: string) => void }) {
   );
 }
 
+// ── CancelButton (two-step inline confirm) ──
+// Mirrors DeleteButton shape/behavior so the row's two actions read as a
+// coherent pair. Shown only for interruptable tasks (queued / active).
+
+function CancelButton(props: { id: string; onCancel: (id: string) => void }) {
+  const [armed, setArmed] = createSignal(false);
+  let resetTimer: ReturnType<typeof setTimeout> | undefined;
+
+  function disarm() {
+    if (resetTimer) {
+      clearTimeout(resetTimer);
+      resetTimer = undefined;
+    }
+    setArmed(false);
+  }
+
+  onCleanup(disarm);
+
+  return (
+    <button
+      type="button"
+      class="task-row-cancel"
+      data-task-cancel={props.id}
+      data-confirm={armed() ? "true" : undefined}
+      title={t("task.cancel_button_title")}
+      aria-label={t("task.cancel_button_title")}
+      onClick={(e) => {
+        e.stopPropagation();
+        if (armed()) {
+          disarm();
+          props.onCancel(props.id);
+          return;
+        }
+        setArmed(true);
+        resetTimer = setTimeout(disarm, CONFIRM_WINDOW_MS);
+      }}
+      onBlur={disarm}
+    >
+      <span class="task-row-cancel-icon" data-icon="cancel" aria-hidden="true">
+        <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+          <rect x="4" y="4" width="8" height="8" rx="1.2" fill="currentColor" />
+        </svg>
+      </span>
+      <span class="task-row-cancel-icon" data-icon="confirm" aria-hidden="true">
+        <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+          <path
+            d="M3.5 8.5l2.9 2.9 6.1-6.1"
+            stroke="currentColor"
+            stroke-width="1.6"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </svg>
+      </span>
+    </button>
+  );
+}
+
 // ── TaskRow ──
+
+const INTERRUPTABLE_TASK_STATUSES = new Set(["queued", "active"]);
 
 function TaskRow(props: {
   item: any;
@@ -140,12 +223,15 @@ function TaskRow(props: {
   queuePos?: number;
   onSelectTask: (id: string) => void;
   onDeleteTask?: (id: string) => void;
+  onCancelTask?: (id: string) => void;
 }) {
   const id = () => props.item?.task?.id || "";
   const pending = () => props.item?._pending === true;
   const status = () => (pending() ? "active" : props.item?.task?.status || "idle");
   const title = () => taskListTitle(props.item) || id();
   const isActive = () => !pending() && props.selectedTaskID === id();
+  const canCancel = () =>
+    !pending() && !!id() && !!props.onCancelTask && INTERRUPTABLE_TASK_STATUSES.has(status());
 
   return (
     <div
@@ -173,6 +259,9 @@ function TaskRow(props: {
         </span>
         <small>{taskListMeta(props.item)}</small>
       </button>
+      <Show when={canCancel()}>
+        <CancelButton id={id()} onCancel={props.onCancelTask!} />
+      </Show>
       <Show when={!pending() && !!id() && !!props.onDeleteTask}>
         <DeleteButton id={id()} onDelete={props.onDeleteTask!} />
       </Show>
@@ -189,6 +278,7 @@ function TaskSection(props: {
   queuePositions?: Map<string, number>;
   onSelectTask: (id: string) => void;
   onDeleteTask?: (id: string) => void;
+  onCancelTask?: (id: string) => void;
 }) {
   return (
     <Show when={props.items.length > 0}>
@@ -203,6 +293,7 @@ function TaskSection(props: {
                 queuePos={props.queuePositions?.get(item?.task?.id || "")}
                 onSelectTask={props.onSelectTask}
                 onDeleteTask={props.onDeleteTask}
+                onCancelTask={props.onCancelTask}
               />
             )}
           </For>
@@ -219,21 +310,15 @@ export interface TaskListProps {
   onSelectTask: (taskID: string) => void;
   /** Called when the user confirms deletion via the row's delete button. */
   onDeleteTask?: (taskID: string) => void;
+  /** Called when the user confirms cancellation via the row's cancel button. */
+  onCancelTask?: (taskID: string) => void;
 }
 
 export function TaskList(props: TaskListProps) {
   const sortedItems = createMemo<any[]>(() => visibleTasks());
 
-  const activeTasks = createMemo(() =>
-    sortedItems().filter((item) => !COMPLETED_STATUSES.has(item?.task?.status || "")),
-  );
-
-  const recentTasks = createMemo(() =>
-    sortedItems().filter((item) => COMPLETED_STATUSES.has(item?.task?.status || "")),
-  );
-
-  // Compute queue positions for "queued" tasks: sort by priority (high=0,normal=1,low=2)
-  // then by creation time (FIFO), assign 1-based position numbers.
+  // Queue positions are computed globally (across projects) since the backend
+  // serial queue is per-project but the UI surfaces a unified list.
   const queuePositions = createMemo<Map<string, number>>(() => {
     const PRIORITY_ORDER: Record<string, number> = { high: 0, normal: 1, low: 2 };
     const queued = sortedItems()
@@ -252,7 +337,34 @@ export function TaskList(props: TaskListProps) {
     return map;
   });
 
+  // Group tasks by project directory. Active project first, then others by
+  // most-recent activity. Within each project, active tasks precede recent.
+  type Group = { directory: string; latest: number; active: any[]; recent: any[] };
+  const grouped = createMemo<Group[]>(() => {
+    const byDir = new Map<string, Group>();
+    for (const item of sortedItems()) {
+      const dir = projectDirectoryOf(item);
+      let g = byDir.get(dir);
+      if (!g) {
+        g = { directory: dir, latest: 0, active: [], recent: [] };
+        byDir.set(dir, g);
+      }
+      const status = item?.task?.status || "";
+      if (item?._pending || !COMPLETED_STATUSES.has(status)) g.active.push(item);
+      else g.recent.push(item);
+      const updated = taskUpdated(item);
+      if (updated > g.latest) g.latest = updated;
+    }
+    const activeDir = settingsStore.directory || "";
+    return [...byDir.values()].sort((a, b) => {
+      if (a.directory === activeDir && b.directory !== activeDir) return -1;
+      if (b.directory === activeDir && a.directory !== activeDir) return 1;
+      return b.latest - a.latest;
+    });
+  });
+
   const selectedID = () => boardStore.selectedTaskID;
+  const activeDir = () => settingsStore.directory || "";
 
   return (
     <div class="task-list-panel">
@@ -260,21 +372,46 @@ export function TaskList(props: TaskListProps) {
         when={sortedItems().length > 0}
         fallback={<div class="empty-hint">{t("task.none")}</div>}
       >
-        <TaskSection
-          label={t("task.group.active")}
-          items={activeTasks()}
-          selectedTaskID={selectedID()}
-          queuePositions={queuePositions()}
-          onSelectTask={props.onSelectTask}
-          onDeleteTask={props.onDeleteTask}
-        />
-        <TaskSection
-          label={t("task.group.recent")}
-          items={recentTasks()}
-          selectedTaskID={selectedID()}
-          onSelectTask={props.onSelectTask}
-          onDeleteTask={props.onDeleteTask}
-        />
+        <For each={grouped()}>
+          {(group) => {
+            const label = projectLabel(group.directory);
+            const isActiveProject = group.directory === activeDir();
+            return (
+              <section
+                class="sidebar-list-group project-group"
+                data-active-project={isActiveProject ? "true" : undefined}
+              >
+                <div class="project-group-heading" title={group.directory}>
+                  <span class="project-group-name">{label.name}</span>
+                  <Show when={label.parent}>
+                    <span class="project-group-parent">{label.parent}</span>
+                  </Show>
+                </div>
+                <Show when={group.active.length > 0}>
+                  <TaskSection
+                    label={t("task.group.active")}
+                    items={group.active}
+                    selectedTaskID={selectedID()}
+                    queuePositions={queuePositions()}
+                    onSelectTask={props.onSelectTask}
+                    onDeleteTask={props.onDeleteTask}
+                    onCancelTask={props.onCancelTask}
+                  />
+                </Show>
+                <Show when={group.recent.length > 0}>
+                  <TaskSection
+                    label={t("task.group.recent")}
+                    items={group.recent}
+                    selectedTaskID={selectedID()}
+                    onSelectTask={props.onSelectTask}
+                    onDeleteTask={props.onDeleteTask}
+                    onCancelTask={props.onCancelTask}
+                  />
+                </Show>
+              </section>
+            );
+          }}
+        </For>
       </Show>
     </div>
   );

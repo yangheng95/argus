@@ -81,9 +81,11 @@
     <section class="task-bar">
       <div class="task-meta">
         <div class="task-cwd">
-          <div class="task-dir-shell">
+          <div class="task-dir-shell task-cwd-dropdown" id="taskCwdDropdown" data-open="false" role="button" tabindex="0" aria-haspopup="listbox" aria-expanded="false" data-i18n-aria-label="cwd.recent" data-i18n-title="cwd.recent">
             <span class="task-dir" id="taskDir" title="" data-i18n="cwd.unavailable">Working directory unavailable</span>
-            <div class="task-dir-actions"></div>
+            <div class="task-dir-actions">
+              <span class="task-cwd-caret" id="taskCwdCaret" aria-hidden="true">▾</span>
+            </div>
           </div>
           <span class="task-workspace" id="taskWorkspaceDir" hidden></span>
         </div>
@@ -161,6 +163,14 @@
 
       <!-- Chat Window (always visible) -->
       <section class="chat" id="chatSection">
+        <div
+          class="task-switch-progress"
+          id="taskSwitchProgress"
+          role="progressbar"
+          aria-label="Loading task"
+          aria-busy="false"
+          data-active="false"
+        ></div>
         <header class="chat-header">
           <span class="chat-title" data-i18n="chat.title">任务</span>
           <div class="chat-header-status">

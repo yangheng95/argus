@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "en-US",
-    "panel_revision": "5dab46fd57a6d9e0"
+    "panel_revision": "612ae6fe782bff1e"
   },
   "about.author_name": "Yang, Heng",
   "about.go_version": "Go Version",
@@ -119,6 +119,7 @@
   ],
   "chat.role.architect": "Architect",
   "chat.role.assistant": "Assistant",
+  "chat.role.build": "Build",
   "chat.role.delivery": "Delivery",
   "chat.role.evaluator": "Evaluator",
   "chat.role.executor": "Executor",
@@ -488,6 +489,7 @@
   "task.action.replan_title": "Generate a fresh plan before continuing.",
   "task.action.retry": "Retry",
   "task.action.retry_title": "Re-run with the existing plan.",
+  "task.cancel_button_title": "Cancel this running task (click twice to confirm).",
   "task.delete_button_title": "Delete this task and its full history (click twice to confirm).",
   "trace.empty_no_events": "No trace events yet.",
   "trace.empty_no_task": "Select a task to view its trace.",
@@ -496,6 +498,7 @@
   "task.group.recent": "Recent",
   "task.new": "New Task",
   "task.none": "No tasks yet",
+  "task.project.unknown": "Unassigned project",
   "task.status.active": "Active",
   "task.status.blocked": "Blocked",
   "task.status.cancelled": "Cancelled",

@@ -457,7 +457,7 @@ CREATE TABLE IF NOT EXISTS orchestrator_goal (
   milestone_id     text,
   title            text NOT NULL,
   objective        text NOT NULL,
-  done_definition  text NOT NULL,
+  acceptance_specs text NOT NULL DEFAULT '[]',
   owned_paths      text NOT NULL DEFAULT '[]',
   depends_on       text NOT NULL DEFAULT '[]',
   exports          text NOT NULL DEFAULT '[]',

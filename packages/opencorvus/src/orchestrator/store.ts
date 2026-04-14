@@ -773,7 +773,7 @@ export function viewGoal(row: GoalRow) {
     milestoneID: row.milestone_id ?? undefined,
     title: row.title,
     objective: row.objective,
-    done_definition: row.done_definition,
+    acceptance_specs: row.acceptance_specs,
     owned_paths: row.owned_paths,
     depends_on: row.depends_on,
     exports: row.exports,

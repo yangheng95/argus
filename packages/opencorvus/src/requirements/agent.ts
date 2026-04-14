@@ -8,7 +8,7 @@
  * Architecture invariants (from specs/new-arch.svg):
  * ① RequirementsAgent is the sole producer of GoalContractFields.
  * ② DB mapping is lossless: each field gets its own column.
- * ③ done_definition must be Eval Agent executable.
+ * ③ acceptance_specs are the typed source of truth (heuristic + rubric).
  * ④ owned_paths is the hard write boundary for Executor.
  * ⑤ Contract is immutable once created. Only re-running requirements analysis can change it.
  */
@@ -324,7 +324,7 @@ function collectorToOutput(collector: RequirementsCollector): RequirementsOutput
       id: g.id,
       title: g.title,
       objective: g.objective,
-      done_definition: g.done_definition,
+      acceptance_specs: g.acceptance_specs,
       owned_paths: g.owned_paths,
       depends_on: g.depends_on,
       exports: g.exports,
@@ -346,7 +346,7 @@ function goalToContract(g: ParsedGoalContract): GoalContractFields {
     id: g.id,
     title: g.title,
     objective: g.objective,
-    done_definition: g.done_definition,
+    acceptance_specs: g.acceptance_specs,
     owned_paths: g.owned_paths,
     depends_on: g.depends_on,
     exports: g.exports,
@@ -523,11 +523,11 @@ function validateQuality(
   else if (withPaths > 0) { score += 0.07; reasons.push(`${parsed.goals.length - withPaths} goal(s) missing owned_paths`) }
   else if (parsed.goals.length > 0) reasons.push("No goals have owned_paths")
 
-  // Done definitions (0.15)
-  const withDone = parsed.goals.filter((g) => g.done_definition.length > 10).length
-  if (withDone === parsed.goals.length && parsed.goals.length > 0) score += 0.15
-  else if (withDone > 0) { score += 0.07; reasons.push(`${parsed.goals.length - withDone} goal(s) missing done_definition`) }
-  else if (parsed.goals.length > 0) reasons.push("No goals have done_definition")
+  // Acceptance specs (0.15) — every goal must have at least one spec.
+  const withSpecs = parsed.goals.filter((g) => g.acceptance_specs.length > 0).length
+  if (withSpecs === parsed.goals.length && parsed.goals.length > 0) score += 0.15
+  else if (withSpecs > 0) { score += 0.07; reasons.push(`${parsed.goals.length - withSpecs} goal(s) missing acceptance_specs`) }
+  else if (parsed.goals.length > 0) reasons.push("No goals have acceptance_specs")
 
   // Exports declared (0.10)
   const withExports = parsed.goals.filter((g) => g.exports.length > 0).length

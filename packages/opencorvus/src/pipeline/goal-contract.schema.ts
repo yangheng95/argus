@@ -17,6 +17,7 @@
  * input boundaries (tool inputs) where strictness is meaningful.
  */
 import { z } from "zod"
+import { AcceptanceSpecSchema } from "@/acceptance/types"
 
 export const GOAL_KINDS = [
   "bootstrap",
@@ -45,12 +46,12 @@ export const GoalContractFieldsSchema = z.object({
       "Self-contained objective for an isolated executor. " +
         "Include: what to implement, key interfaces/types, expected behavior, edge cases.",
     ),
-  done_definition: z
-    .string()
-    .min(10)
+  acceptance_specs: z
+    .array(AcceptanceSpecSchema)
+    .min(1)
     .describe(
-      "Concrete pass/fail criteria for Eval Agent. " +
-        "Must be verifiable by running code, not vague.",
+      "Typed acceptance specs. At least one spec is required — a goal " +
+        "without acceptance criteria cannot be evaluated.",
     ),
   owned_paths: z
     .array(z.string().min(1))

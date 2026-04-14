@@ -17,7 +17,7 @@ let initialized = false
 /** Canonical display roles for the overlay UI. */
 type OverlayRole =
   | "user" | "assistant" | "spec" | "architect" | "planner" | "goal"
-  | "executor" | "evaluator" | "delivery" | "system"
+  | "executor" | "evaluator" | "delivery" | "build" | "system"
 
 /** Map raw agent name → canonical overlay role. Single source of truth. */
 export function resolveRole(agent: string): OverlayRole {
@@ -29,7 +29,8 @@ export function resolveRole(agent: string): OverlayRole {
   if (a === "architect" || a === "architecture" || a === "coordination") return "architect"
   if (a === "planner" || a === "plan" || a === "planning" || a === "replan") return "planner"
   if (a === "goal" || a === "goal_gate") return "goal"
-  if (a === "executor" || a === "build" || a === "coding" || a === "general" || a === "explore" || a === "execute" || a === "opencode" || a === "codex" || a === "claude-code") return "executor"
+  if (a === "build") return "build"
+  if (a === "executor" || a === "coding" || a === "general" || a === "explore" || a === "execute" || a === "opencode" || a === "codex" || a === "claude-code") return "executor"
   if (a === "judge" || a === "evaluator" || a === "evaluation" || a === "scheduler" || a === "review" || a === "evaluate") return "evaluator"
   if (a === "delivery" || a === "deliver" || a === "files" || a === "publish") return "delivery"
   if (a === "system" || a === "compaction" || a === "title" || a === "summary") return "system"
@@ -37,7 +38,7 @@ export function resolveRole(agent: string): OverlayRole {
 }
 
 /** Stages that get their own AgentCard in the overlay. */
-const CARD_STAGES = new Set<OverlayRole>(["assistant", "spec", "architect", "planner", "goal", "executor", "evaluator", "delivery"])
+const CARD_STAGES = new Set<OverlayRole>(["assistant", "spec", "architect", "planner", "goal", "executor", "evaluator", "delivery", "build"])
 
 /**
  * Compute overlay metadata for a message event.

@@ -157,7 +157,7 @@ export namespace LLM {
             "x-opencorvus-request": input.user.id,
             "x-opencorvus-client": Flag.OPENCORVUS_CLIENT,
           }
-        : ProviderLLM.baseHeaders(input.model)),
+        : ProviderLLM.baseHeaders(input.model, input.sessionID)),
       ...headers,
     }
     const requestMessages = [

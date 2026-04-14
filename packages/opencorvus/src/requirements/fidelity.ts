@@ -16,6 +16,8 @@ import { generateText } from "ai"
 import { Provider } from "@/provider/provider"
 import { Log } from "@/util/log"
 import type { GoalContractFields } from "@/pipeline/types"
+import type { AcceptanceSpec } from "@/acceptance/types"
+import { renderSpecsAsText } from "@/acceptance/types"
 
 const log = Log.create({ service: "fidelity-review" })
 
@@ -35,13 +37,13 @@ export interface GoalCorrection {
   goalID: string
   reason: string
   /** Updated fields (for modify action) */
-  updates?: Partial<Pick<GoalContractFields, "title" | "objective" | "done_definition" | "owned_paths">>
+  updates?: Partial<Pick<GoalContractFields, "title" | "objective" | "acceptance_specs" | "owned_paths">>
 }
 
 export interface MissingGoal {
   title: string
   objective: string
-  done_definition: string
+  acceptance_specs: AcceptanceSpec[]
   owned_paths: string[]
   kind: string
   priority: "blocking" | "advisory"
@@ -182,7 +184,7 @@ export function applyFidelityCorrections(
       id: `goal_fidelity_${corrected.length + 1}`,
       title: missing.title,
       objective: missing.objective,
-      done_definition: missing.done_definition,
+      acceptance_specs: missing.acceptance_specs,
       owned_paths: missing.owned_paths,
       depends_on: [],
       exports: [],
@@ -245,10 +247,10 @@ function buildFidelitySystem(): string {
     "  ],",
     "  \"corrections\": [",
     "    { \"action\": \"modify\" | \"split\" | \"remove\", \"goalID\": \"...\", \"reason\": \"...\",",
-    "      \"updates\": { \"title\": \"...\", \"objective\": \"...\", \"done_definition\": \"...\" } }",
+    "      \"updates\": { \"title\": \"...\", \"objective\": \"...\", \"acceptance_specs\": [<AcceptanceSpec>] } }",
     "  ],",
     "  \"missing_goals\": [",
-    "    { \"title\": \"...\", \"objective\": \"...\", \"done_definition\": \"...\", \"owned_paths\": [],",
+    "    { \"title\": \"...\", \"objective\": \"...\", \"acceptance_specs\": [<AcceptanceSpec>], \"owned_paths\": [],",
     "      \"kind\": \"feature\", \"priority\": \"blocking\", \"reason\": \"...\" }",
     "  ]",
     "}",
@@ -272,7 +274,7 @@ function buildFidelityPrompt(input: {
     sections.push([
       `## ${goal.id}: ${goal.title}`,
       `Objective: ${goal.objective}`,
-      `Done Definition: ${goal.done_definition}`,
+      `Acceptance Specs:\n${renderSpecsAsText(goal.acceptance_specs ?? [])}`,
       `Owned Paths: ${goal.owned_paths.join(", ") || "(none)"}`,
       `Priority: ${goal.priority}`,
       `Kind: ${goal.kind}`,

@@ -103,19 +103,17 @@ async function upsertQuestion(request: Question.Request, hooks: RuntimeHooks) {
         time_updated: now,
       })
       .run()
-    // Protocol envelope requires runID — skip persistence when Task Agent asks
-    // without an active run (the interaction row itself still drives UI).
-    if (runID) {
-      Database.effect(() =>
-        OrchestratorProtocol.emit(Event.InteractionRequested, {
-          taskID: taskID!,
-          runID,
-          interactionID,
-          requestType: "question",
-          summary: title,
-        }, { taskID: taskID!, runID, interactionID, source: "interaction.question" }),
-      )
-    }
+    // Always emit — overlay only filters by taskID, and a Task-Agent clarification
+    // before any run has started still needs to surface in the InteractionPanel.
+    Database.effect(() =>
+      OrchestratorProtocol.emit(Event.InteractionRequested, {
+        taskID: taskID!,
+        ...(runID ? { runID } : {}),
+        interactionID,
+        requestType: "question",
+        summary: title,
+      }, { taskID: taskID!, ...(runID ? { runID } : {}), interactionID, source: "interaction.question" }),
+    )
   })
   if (runID) await OrchestratorRuntime.syncRun(runID, hooks)
   else await OrchestratorRuntime.syncTask(taskID!, hooks)
@@ -153,18 +151,16 @@ async function resolveInteraction(
       })
       .where(eq(OrchestratorInteractionRequestTable.id, interaction.id))
       .run()
-    if (interaction.run_id) {
-      const runID = interaction.run_id
-      Database.effect(() =>
-        OrchestratorProtocol.emit(Event.InteractionResolved, {
-          taskID: interaction.task_id,
-          runID,
-          interactionID: interaction.id,
-          status,
-          summary: status === "answered" ? "Interaction answered" : "Interaction rejected",
-        }, { taskID: interaction.task_id, runID, interactionID: interaction.id, source: "interaction.resolve" }),
-      )
-    }
+    const runID = interaction.run_id ?? undefined
+    Database.effect(() =>
+      OrchestratorProtocol.emit(Event.InteractionResolved, {
+        taskID: interaction.task_id,
+        ...(runID ? { runID } : {}),
+        interactionID: interaction.id,
+        status,
+        summary: status === "answered" ? "Interaction answered" : "Interaction rejected",
+      }, { taskID: interaction.task_id, ...(runID ? { runID } : {}), interactionID: interaction.id, source: "interaction.resolve" }),
+    )
   })
   if (interaction.run_id) await OrchestratorRuntime.syncRun(interaction.run_id, hooks)
   else await OrchestratorRuntime.syncTask(interaction.task_id, hooks)

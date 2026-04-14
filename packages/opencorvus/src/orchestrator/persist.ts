@@ -47,7 +47,7 @@ export interface GoalRowInput {
   goalID?: string
   title: string
   objective: string
-  done_definition: string
+  acceptance_specs: import("@/acceptance/types").AcceptanceSpec[]
   owned_paths?: string[]
   depends_on?: string[]
   exports?: string[]
@@ -84,7 +84,7 @@ export function insertGoalRows(
         spec_snapshot_id: input.specSnapshotID,
         title: goal.title,
         objective: goal.objective,
-        done_definition: goal.done_definition,
+        acceptance_specs: goal.acceptance_specs,
         owned_paths: goal.owned_paths ?? [],
         depends_on: deps,
         exports: goal.exports ?? [],
@@ -107,7 +107,7 @@ export function insertGoalRows(
       id: goalID,
       title: goal.title,
       objective: goal.objective,
-      done_definition: goal.done_definition,
+      acceptance_specs: goal.acceptance_specs,
       priority: goal.priority,
       metadata,
     }

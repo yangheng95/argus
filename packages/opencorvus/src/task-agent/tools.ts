@@ -49,6 +49,7 @@ import { updateTask } from "@/orchestrator/state"
 
 import { findStepByTool, type WorkflowState, type MiniWorkflow } from "@/orchestrator/workflow"
 import { Question } from "@/question"
+import { renderSpecsAsText, type AcceptanceSpec } from "@/acceptance/types"
 
 const log = Log.create({ service: "task-tools" })
 
@@ -63,7 +64,7 @@ function buildGoalContract(task: any, goal: any, allGoals: any[]): import("@/pip
       id: goal.id,
       title: goal.title,
       objective: goal.objective,
-      done_definition: goal.done_definition,
+      acceptance_specs: (goal.acceptance_specs ?? []) as AcceptanceSpec[],
       owned_paths: goal.owned_paths ?? [],
       depends_on: goal.depends_on ?? [],
       exports: goal.exports ?? [],
@@ -77,7 +78,8 @@ function buildGoalContract(task: any, goal: any, allGoals: any[]): import("@/pip
     task,
     plan: { id: task.active_plan_version_id ?? "" } as any,
     allGoals: allGoals.map(g => ({
-      id: g.id, title: g.title, objective: g.objective, done_definition: g.done_definition,
+      id: g.id, title: g.title, objective: g.objective,
+      acceptance_specs: (g.acceptance_specs ?? []) as AcceptanceSpec[],
       owned_paths: g.owned_paths ?? [], depends_on: g.depends_on ?? [],
       exports: g.exports ?? [], imports: g.imports ?? [],
       priority: g.priority ?? "blocking", kind: g.kind ?? "feature",
@@ -340,7 +342,7 @@ export function createTaskAgentTools(input: {
                 goalID: dbGoalIDs[index],
                 title: goal.title,
                 objective: goal.objective,
-                done_definition: goal.done_definition,
+                acceptance_specs: goal.acceptance_specs,
                 owned_paths: goal.owned_paths,
                 depends_on: goal.depends_on.flatMap(dep => {
                   const dbID = llmToDBID.get(dep)
@@ -603,7 +605,7 @@ export function createTaskAgentTools(input: {
             id: g.id,
             title: g.title,
             objective: g.objective,
-            done_definition: g.done_definition,
+            acceptance_specs: (typeof g.acceptance_specs === "string" ? JSON.parse(g.acceptance_specs) : (g.acceptance_specs ?? [])) as AcceptanceSpec[],
             owned_paths: typeof g.owned_paths === "string" ? JSON.parse(g.owned_paths) : (g.owned_paths ?? []),
             depends_on: typeof g.depends_on === "string" ? JSON.parse(g.depends_on) : (g.depends_on ?? []),
             exports: typeof g.exports === "string" ? JSON.parse(g.exports) : (g.exports ?? []),
@@ -688,7 +690,7 @@ export function createTaskAgentTools(input: {
             goalID: Identifier.ascending("goal"),
             title: input.title,
             objective: input.objective,
-            done_definition: input.done_definition,
+            acceptance_specs: input.acceptance_specs,
             owned_paths: input.owned_paths,
             depends_on: input.depends_on,
             exports: input.exports,
@@ -707,7 +709,7 @@ export function createTaskAgentTools(input: {
     modify_goal: tool({
       description:
         "Modify an existing goal's contract. Use when eval feedback suggests " +
-        "done_definition needs refinement, or owned_paths need adjustment. " +
+        "acceptance_specs need refinement, or owned_paths need adjustment. " +
         "Updates are validated by the same Zod schema as register_goal — any " +
         "field that violates min-length / enum constraints is rejected.",
       inputSchema: z.object({
@@ -726,7 +728,7 @@ export function createTaskAgentTools(input: {
         const setValues: Record<string, unknown> = { time_updated: Date.now() }
         if (updates.title !== undefined) setValues.title = updates.title
         if (updates.objective !== undefined) setValues.objective = updates.objective
-        if (updates.done_definition !== undefined) setValues.done_definition = updates.done_definition
+        if (updates.acceptance_specs !== undefined) setValues.acceptance_specs = updates.acceptance_specs
         if (updates.owned_paths !== undefined) setValues.owned_paths = updates.owned_paths
         if (updates.depends_on !== undefined) setValues.depends_on = updates.depends_on
         if (updates.exports !== undefined) setValues.exports = updates.exports
@@ -760,7 +762,7 @@ export function createTaskAgentTools(input: {
         if (goal.status === "running") return `Goal ${goalID} is already running.`
         if (goal.status === "passed") {
           return `Goal ${goalID} is already passed (terminal success state). ` +
-                 `To change its contract (done_definition, owned_paths), use modify_goal(${goalID}, ...) which will reset to pending automatically. ` +
+                 `To change its contract (acceptance_specs, owned_paths), use modify_goal(${goalID}, ...) which will reset to pending automatically. ` +
                  `execute_goal does not re-run passed goals.`
         }
 
@@ -812,7 +814,7 @@ export function createTaskAgentTools(input: {
     }),
 
     query_failed_goals: tool({
-      description: "Query all currently failed goals with their delivery info. Returns structured data for each failed goal: title, owned_paths, done_definition, latest delivery summary. Use this BEFORE calling retry_failed_goals to understand per-goal failure reasons.",
+      description: "Query all currently failed goals with their delivery info. Returns structured data for each failed goal: title, owned_paths, acceptance_specs, latest delivery summary. Use this BEFORE calling retry_failed_goals to understand per-goal failure reasons.",
       inputSchema: z.object({}),
       execute: async () => {
         const dbGoals = listGoals(taskID)
@@ -823,7 +825,7 @@ export function createTaskAgentTools(input: {
         const sections: string[] = [`## Failed Goals (${failed.length})`]
         for (const goal of failed) {
           sections.push(`\n### ${goal.id}: ${goal.title}`)
-          sections.push(`- done_definition: ${goal.done_definition.slice(0, 300)}`)
+          sections.push(`- acceptance_specs:\n${renderSpecsAsText((goal.acceptance_specs ?? []) as AcceptanceSpec[]).slice(0, 600)}`)
           if (goal.owned_paths?.length) sections.push(`- owned_paths: ${goal.owned_paths.join(", ")}`)
           // Show latest delivery info for this goal
           const grs = goalRuns.filter(gr => gr.goal_id === goal.id)
@@ -917,7 +919,7 @@ export function createTaskAgentTools(input: {
               ...repeatedGoals.map(s => `  - ${s}`),
               "",
               "Retry with the same approach will not fix these. Choose a different strategy:",
-              "  - modify_goal to change done_definition or owned_paths",
+              "  - modify_goal to change acceptance_specs or owned_paths",
               "  - add_goal to create a prerequisite",
               "  - fail_task if the issue is fundamental",
               "  - retry_failed_goals with a DIFFERENT failure_class + expected_fix (prove you changed approach)",
@@ -1095,7 +1097,7 @@ export function createTaskAgentTools(input: {
           for (const g of goals) {
             sections.push(`- [${g.status}] ${g.id}: ${g.title} [${g.priority}]`)
             sections.push(`  objective: ${g.objective.slice(0, 200)}`)
-            sections.push(`  done_definition: ${g.done_definition.slice(0, 200)}`)
+            sections.push(`  acceptance_specs:\n${renderSpecsAsText((g.acceptance_specs ?? []) as AcceptanceSpec[]).slice(0, 400)}`)
             if (g.owned_paths?.length) sections.push(`  owned_paths: ${g.owned_paths.join(", ")}`)
             if (g.depends_on?.length) sections.push(`  depends_on: ${g.depends_on.join(", ")}`)
           }
@@ -1207,7 +1209,7 @@ export function createTaskAgentTools(input: {
               kind: "goal",
               goal_id: goal.id,
               title: goal.title,
-              brief: goal.done_definition,
+              brief: renderSpecsAsText((goal.acceptance_specs ?? []) as AcceptanceSpec[]),
               depends_on_ids: resolvedDeps.length > 0 ? resolvedDeps : undefined,
               order_index: index,
               metadata: {},
@@ -1356,7 +1358,7 @@ export function createTaskAgentTools(input: {
         const allGoals = listGoals(taskID)
         const goalInfos = allGoals.map(g => ({
           description: g.objective,
-          criteria: g.done_definition,
+          criteria: renderSpecsAsText((g.acceptance_specs ?? []) as AcceptanceSpec[]),
           priority: g.priority as "blocking" | "advisory",
         }))
         const deliveryInfo = {
@@ -1757,7 +1759,7 @@ export function createTaskAgentTools(input: {
           const delivery = gr ? findDeliveryByGoalRun(gr.id) : undefined
           const files = (delivery?.result as any)?.diffs?.map((d: any) => d.file) ?? []
           allChangedFiles.push(...files)
-          goalSummaries.push(`- [${goal.status}] ${goal.title}: ${goal.done_definition.slice(0, 150)}`)
+          goalSummaries.push(`- [${goal.status}] ${goal.title}: ${renderSpecsAsText((goal.acceptance_specs ?? []) as AcceptanceSpec[]).slice(0, 300)}`)
           if (files.length > 0) goalSummaries.push(`  files: ${files.join(", ")}`)
         }
 
@@ -1952,7 +1954,10 @@ export function createTaskAgentTools(input: {
           title: `Build: ${task.title}`,
           directory: Instance.directory,
         })
-        registerGoalRunSession(buildSession.id, taskID, "assistant")
+        // role="build" makes the bridge resolve this session's messages to the
+        // standalone "build" agent card rather than collapsing them into the
+        // task-agent's own "assistant" card (which would hide the build run).
+        registerGoalRunSession(buildSession.id, taskID, "build")
 
         try {
           await SessionPrompt.prompt({

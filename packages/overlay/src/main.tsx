@@ -35,7 +35,6 @@ import {
   cancelTask,
   createTask,
   deleteTask,
-  interruptTask,
 } from "./services/task";
 import { canComposeChat, stopChatRequest } from "./services/chat";
 import { isTaskInterruptable } from "./store/board";
@@ -523,6 +522,7 @@ if (taskListEl) {
       <TaskList
         onSelectTask={(taskID) => void selectTask(taskID)}
         onDeleteTask={(taskID) => void deleteTask(taskID)}
+        onCancelTask={(taskID) => void cancelTask(taskID)}
       />
     ),
     taskListEl,
@@ -701,7 +701,12 @@ if (composerEl) {
     () => (
       <ChatComposer
         enabled={canComposeChat()}
-        busy={!!messageStore.chatRequest || isTaskInterruptable()}
+        // Composer busy ≡ a send request is in flight (SSE stream open).
+        // A running task no longer disables the composer: the user can queue
+        // additional messages; `panelMessage` routes them as operator notes /
+        // inject via `task/:id/message`. Task cancellation lives on the task
+        // row's CancelButton, not in the composer.
+        busy={!!messageStore.chatRequest}
         stopping={!!(messageStore.chatRequest as any)?.stopping}
         pendingSuggestion={pendingSuggestion()}
         onSuggestionConsumed={() => setPendingSuggestion("")}
@@ -709,16 +714,11 @@ if (composerEl) {
           void panelMessage(text, attachments, webSearch ? { web_search: true } : {});
         }}
         onStop={() => {
-          // Abort any in-flight HTTP request first
+          // Abort the in-flight send request ONLY — no remote cancel. Task-level
+          // interrupt is an explicit action on the task row's CancelButton so a
+          // stray composer stop never tears down the underlying task.
           if (messageStore.chatRequest) {
             void stopChatRequest({ remote: false });
-          }
-          // Cancel the task via direct API
-          const id = boardStore.selectedTaskID;
-          if (id) {
-            void interruptTask(id);
-          } else {
-            void stopChatRequest();
           }
         }}
       />
@@ -1245,6 +1245,18 @@ disposers.push(createRoot((dispose) => {
     if (copyBtn) copyBtn.disabled = count === 0;
   });
 
+  // ── Task-switch progress bar (non-blocking) ──
+  // Reflects boardStore.taskSwitching (set synchronously at selectTask entry,
+  // cleared when the async load chain completes). The bar lives in a fixed
+  // slot above the chat header so user input is never gated on load.
+  createEffect(() => {
+    const active = boardStore.taskSwitching;
+    const bar = document.getElementById("taskSwitchProgress");
+    if (!bar) return;
+    bar.setAttribute("data-active", active ? "true" : "false");
+    bar.setAttribute("aria-busy", active ? "true" : "false");
+  });
+
   // ── Workspace visibility ──
   // Drives the show/hide of the workspace mount + resizer.
   createEffect(() => {
@@ -1374,13 +1386,16 @@ function renderRecentDirPanel(): void {
 function openRecentDirPanel(): void {
   const panel = document.getElementById("recentDirPanel");
   if (!panel) return;
-  if (!panel.hidden) { panel.hidden = true; return; }
+  if (!panel.hidden) { closeRecentDirPanel(); return; }
   renderRecentDirPanel();
-  const trigger = document.getElementById("taskDir")?.querySelector('[data-path-action="recent"]');
-  if (trigger) {
-    const rect = trigger.getBoundingClientRect();
+  const wrap = document.getElementById("taskCwdDropdown");
+  if (wrap) {
+    const rect = wrap.getBoundingClientRect();
     panel.style.top = Math.round(rect.bottom + 4) + "px";
-    panel.style.left = Math.round(Math.max(4, rect.left - 60)) + "px";
+    panel.style.left = Math.round(Math.max(4, rect.left)) + "px";
+    panel.style.width = Math.round(rect.width) + "px";
+    wrap.dataset.open = "true";
+    wrap.setAttribute("aria-expanded", "true");
   }
   panel.hidden = false;
 }
@@ -1388,14 +1403,34 @@ function openRecentDirPanel(): void {
 function closeRecentDirPanel(): void {
   const panel = document.getElementById("recentDirPanel");
   if (panel) panel.hidden = true;
+  const wrap = document.getElementById("taskCwdDropdown");
+  if (wrap) {
+    wrap.dataset.open = "false";
+    wrap.setAttribute("aria-expanded", "false");
+  }
 }
+
+document.getElementById("taskCwdDropdown")?.addEventListener("click", (event) => {
+  const target = event.target as HTMLElement | null;
+  if (!target) return;
+  if (target.closest("[data-path-action],[data-path-open],[data-path-set]")) return;
+  event.stopPropagation();
+  openRecentDirPanel();
+});
+document.getElementById("taskCwdDropdown")?.addEventListener("keydown", (event) => {
+  const e = event as KeyboardEvent;
+  if (e.key !== "Enter" && e.key !== " ") return;
+  const target = event.target as HTMLElement | null;
+  if (target && target.closest("[data-path-action],[data-path-open],[data-path-set]")) return;
+  e.preventDefault();
+  openRecentDirPanel();
+});
 
 document.getElementById("taskDir")?.addEventListener("click", async (event) => {
   const button = eventClosest(event, "[data-path-action],[data-path-open],[data-path-set]");
   if (!button || (button as HTMLButtonElement).disabled) return;
   const el = button as HTMLElement;
   const action = el.dataset.pathAction || "";
-  if (action === "recent") { event.stopPropagation(); openRecentDirPanel(); return; }
   if (action === "browse") { await browseDirectory(); return; }
   if (action === "create") { await createDirectory(); return; }
   if (action === "reset") { await resetDirectory(); return; }
@@ -1431,7 +1466,7 @@ document.getElementById("recentDirPanel")?.addEventListener("click", async (even
 
 document.addEventListener("click", (e) => {
   const target = e.target as HTMLElement | null;
-  if (target?.closest?.('[data-path-action="recent"]') || target?.closest?.(".recent-dir-panel")) return;
+  if (target?.closest?.("#taskCwdDropdown") || target?.closest?.(".recent-dir-panel")) return;
   closeRecentDirPanel();
 }, listenerOpts);
 

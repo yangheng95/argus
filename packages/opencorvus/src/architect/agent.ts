@@ -24,6 +24,7 @@ import { OrchestratorConfig } from "@/orchestrator/config"
 import { Config } from "@/config/config"
 import type { GoalContractFields } from "@/pipeline/types"
 import type { DecisionLog } from "@/decision-log"
+import { renderSpecsAsText } from "@/acceptance/types"
 import type { ArchitectResult, ArchitectBlueprint, ArchitectDecisionKey } from "./types"
 import { createArchitectOutputTools } from "./output-tools"
 
@@ -196,12 +197,12 @@ function buildUserPrompt(input: {
 
   sections.push(`# Task\n\nTitle: ${input.taskTitle}\n\nRequest:\n${input.taskRequest}`)
 
-  // All goals — include done_definition so architect can see exact acceptance
-  // criteria and produce contracts that match what eval will verify.
+  // All goals — include acceptance_specs so architect can see exact criteria
+  // and produce contracts that match what eval will verify.
   const goalsText = input.goals.map((g) => [
     `## ${g.id}: ${g.title}`,
     `objective: ${g.objective}`,
-    `done_definition: ${g.done_definition}`,
+    `acceptance_specs:\n${renderSpecsAsText(g.acceptance_specs ?? [])}`,
     `owned_paths: ${g.owned_paths.join(", ") || "(none)"}`,
     `exports: ${g.exports.join("; ") || "(none)"}`,
     `imports: ${g.imports.join("; ") || "(none)"}`,

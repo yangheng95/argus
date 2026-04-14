@@ -29,8 +29,9 @@ use base64::{engine::general_purpose::STANDARD, Engine as _};
 use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_opener::OpenerExt;
 
-const LOCAL_SERVER_HOST: &str = "127.0.0.1";
-const DEFAULT_SERVER_PORT: u16 = 7878;
+include!(concat!(env!("OUT_DIR"), "/server_defaults.rs"));
+
+const LOCAL_SERVER_HOST: &str = DEFAULT_SERVER_HOST;
 const TRAY_ID: &str = "main-tray";
 const TRAY_TOOLTIP_DEFAULT: &str = "OpenCorvus";
 const TRAY_TOOLTIP_ALERT: &str = "OpenCorvus - Action required";

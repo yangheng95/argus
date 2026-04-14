@@ -5,7 +5,7 @@
  * INSIDE each GoalPipeline, producing plan_node steps scoped to one goal.
  *
  * Observation domain (from SVG spec):
- *   • GoalContract full (objective + done_definition + owned_paths)
+ *   • GoalContract full (objective + acceptance_specs + owned_paths)
  *   • user original input (task.request)
  *   • Decision Log (full)
  *   • predecessor code (HEAD — available in worktree)
@@ -23,6 +23,7 @@ import { OrchestratorConfig } from "@/orchestrator/config"
 import { clarificationTranscriptSection, operatorNotesSection } from "@/orchestrator/helpers"
 import { extractTag } from "@/util/parse-section-tags"
 import type { TextHooks } from "@/llm/api"
+import { renderSpecsAsText } from "@/acceptance/types"
 import type { GoalContract } from "@/pipeline/types"
 import type { DecisionLog } from "@/decision-log"
 
@@ -148,7 +149,7 @@ function buildPlannerSystem(): string {
     "- Reference specific file paths, function names, and types",
     "- Steps must be concrete and actionable (not vague)",
     "- Each step should be independently verifiable",
-    "- Consider the done_definition — your steps must lead to it being satisfied",
+    "- Consider the acceptance_specs — your steps must lead to all scorers passing",
     "- If the Decision Log has tech stack decisions, respect them",
     "",
     "Output format:",
@@ -169,7 +170,7 @@ function buildPlannerPrompt(
   const { goal, allGoals } = contract
   const sections: string[] = []
 
-  sections.push(`# Goal Contract\n\n**${goal.title}**\n\nObjective: ${goal.objective}\n\nDone Definition: ${goal.done_definition}`)
+  sections.push(`# Goal Contract\n\n**${goal.title}**\n\nObjective: ${goal.objective}\n\nAcceptance Specs:\n${renderSpecsAsText(goal.acceptance_specs ?? [])}`)
 
   if (goal.owned_paths.length > 0) {
     sections.push(`## Owned Paths (EXCLUSIVE write access)\n\n${goal.owned_paths.map(p => `- ${p}`).join("\n")}`)

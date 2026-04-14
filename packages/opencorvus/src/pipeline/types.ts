@@ -9,6 +9,7 @@
 import type { GoalRunRow, PlanRow, RunRow, TaskRow, PlanNodeRow } from "@/orchestrator/store"
 import type { ExecutorAdapter } from "@/executor/compat"
 import type { DecisionLog } from "@/decision-log"
+import type { AcceptanceSpec } from "@/acceptance/types"
 
 // ---------------------------------------------------------------------------
 // Goal Contract — the ONLY interface between Requirements and Pipeline.
@@ -16,7 +17,7 @@ import type { DecisionLog } from "@/decision-log"
 // Invariants (from architecture spec):
 // ① Requirements Agent is the sole producer, GoalPipeline is the sole consumer.
 // ② DB mapping is lossless: each field gets its own column, no compression.
-// ③ done_definition must be executable/judgeable by Eval Agent.
+// ③ acceptance_specs must be Eval Agent executable (deterministic shell + rubric).
 // ④ owned_paths is the hard write boundary for Executor.
 // ⑤ Contract is immutable once created. Only re-running requirements can change it.
 // ---------------------------------------------------------------------------
@@ -28,8 +29,11 @@ export interface GoalContractFields {
   title: string
   /** What this goal accomplishes — the full objective statement. */
   objective: string
-  /** Verifiable pass/fail criteria. Must be Eval Agent executable, not vague. */
-  done_definition: string
+  /**
+   * Typed acceptance specs (IR). Evaluator translates these to heuristic
+   * commands and rubric checks — no free-form text interpretation.
+   */
+  acceptance_specs: AcceptanceSpec[]
   /** Files this goal owns exclusively. Executor hard write boundary. */
   owned_paths: string[]
   /** Goal IDs this depends on (must complete before this goal starts). */
