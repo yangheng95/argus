@@ -32,6 +32,11 @@
   --card-stage-evaluator: #2dd4bf;
   --card-stage-delivery: #5fad56;
   --card-stage-tool: #8b92a0;
+
+  /* System meta-note palette (interactions, compaction summaries, etc.) */
+  --card-system-rail: #d6a84e;
+  --card-system-bg: rgba(214, 168, 78, 0.08);
+  --card-system-border: rgba(214, 168, 78, 0.22);
 }
 
 body[data-theme="light"],
@@ -43,6 +48,9 @@ body[data-theme="light"],
   --card-border-strong: rgba(0, 0, 0, 0.18);
   --card-line: rgba(0, 0, 0, 0.16);
   --card-line-dim: rgba(0, 0, 0, 0.09);
+  --card-system-rail: #b4802c;
+  --card-system-bg: rgba(180, 128, 44, 0.07);
+  --card-system-border: rgba(180, 128, 44, 0.2);
 }
 
 /* ── Container ────────────────────────────────────────────── */
@@ -161,6 +169,39 @@ body[data-theme="light"] .card__round {
   transition: transform 140ms ease;
   padding-left: 6px;
 }
+
+.card__copy {
+  flex: none;
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: 4px;
+  opacity: 0;
+  transition: opacity 120ms ease, color 120ms ease, background-color 120ms ease;
+}
+.card__head:hover .card__copy,
+.card__copy:focus-visible,
+.card__copy--done {
+  opacity: 1;
+}
+.card__copy:hover {
+  color: var(--text-strong);
+  background: var(--surface-hover, rgba(255, 255, 255, 0.06));
+}
+.card__copy--done {
+  color: var(--accent-success, #5ac8a8);
+}
+.card__copy + .card__chevron {
+  margin-left: 0;
+}
 .card--expanded > .card__head .card__chevron {
   transform: rotate(0deg);
 }
@@ -204,34 +245,24 @@ body[data-theme="light"] .card__round {
 }
 
 /* ── Stage accent (left border) ──────────────────────────── */
-/* Top-level cards: left border colour picked from stage.
-   Nested cards inherit from their parent container. */
+/* Top-level cards: the accent colour is injected as an inline --card-stage
+   CSS variable by <Card> (see card-color.ts / card-tree.ts). Known stages
+   resolve to the palette below via `var(--card-stage-<name>)`; unknown
+   stages (custom subagents) get a deterministic HSL accent.
+   Nested cards inherit their parent container unless they have their own
+   --card-stage set. */
 
-.card[data-depth="0"][data-kind="agent"][data-stage="assistant"] { border-left: 3px solid var(--card-stage-assistant); }
-.card[data-depth="0"][data-kind="agent"][data-stage="spec"]      { border-left: 3px solid var(--card-stage-spec); }
-.card[data-depth="0"][data-kind="agent"][data-stage="architect"] { border-left: 3px solid var(--card-stage-architect); }
-.card[data-depth="0"][data-kind="agent"][data-stage="planner"]   { border-left: 3px solid var(--card-stage-planner); }
-.card[data-depth="0"][data-kind="agent"][data-stage="executor"]  { border-left: 3px solid var(--card-stage-executor); }
-.card[data-depth="0"][data-kind="agent"][data-stage="evaluator"] { border-left: 3px solid var(--card-stage-evaluator); }
-.card[data-depth="0"][data-kind="agent"][data-stage="delivery"]  { border-left: 3px solid var(--card-stage-delivery); }
-.card[data-depth="0"][data-kind="goal"]                          { border-left: 3px solid var(--card-stage-goal); }
+.card[data-depth="0"][data-kind="agent"][data-stage] { border-left: 3px solid var(--card-stage, var(--card-border-strong)); }
+.card[data-depth="0"][data-kind="goal"]              { border-left: 3px solid var(--card-stage, var(--card-stage-goal)); }
 
 /* Stage colour also tints the title at top level */
-.card[data-depth="0"][data-kind="agent"][data-stage="assistant"] > .card__head > .card__title { color: var(--card-stage-assistant); }
-.card[data-depth="0"][data-kind="agent"][data-stage="spec"]      > .card__head > .card__title { color: var(--card-stage-spec); }
-.card[data-depth="0"][data-kind="agent"][data-stage="architect"] > .card__head > .card__title { color: var(--card-stage-architect); }
-.card[data-depth="0"][data-kind="agent"][data-stage="planner"]   > .card__head > .card__title { color: var(--card-stage-planner); }
-.card[data-depth="0"][data-kind="agent"][data-stage="executor"]  > .card__head > .card__title { color: var(--card-stage-executor); }
-.card[data-depth="0"][data-kind="agent"][data-stage="evaluator"] > .card__head > .card__title { color: var(--card-stage-evaluator); }
-.card[data-depth="0"][data-kind="agent"][data-stage="delivery"]  > .card__head > .card__title { color: var(--card-stage-delivery); }
-.card[data-depth="0"][data-kind="goal"]                          > .card__head > .card__title { color: var(--card-stage-goal); }
+.card[data-depth="0"][data-kind="agent"][data-stage] > .card__head > .card__title { color: var(--card-stage, var(--text-strong)); }
+.card[data-depth="0"][data-kind="goal"]              > .card__head > .card__title { color: var(--card-stage, var(--card-stage-goal)); }
 
 /* Nested step cards: use stage accent on the left rail */
-.card:not([data-depth="0"])[data-kind="step"][data-stage="planner"]   { border-left-color: var(--card-stage-planner); }
-.card:not([data-depth="0"])[data-kind="step"][data-stage="executor"]  { border-left-color: var(--card-stage-executor); }
-.card:not([data-depth="0"])[data-kind="step"][data-stage="evaluator"] { border-left-color: var(--card-stage-evaluator); }
+.card:not([data-depth="0"])[data-kind="step"][data-stage] { border-left-color: var(--card-stage, var(--card-line)); }
 
-/* Tool card: muted grey */
+/* Tool card: muted grey (no --card-stage injected for tool nodes) */
 .card[data-kind="tool"] { border-left-color: var(--card-stage-tool); }
 .card[data-kind="tool"] .card__title { font-family: var(--mono); font-weight: 500; font-size: var(--ui-font-small); }
 
@@ -320,13 +351,15 @@ body[data-theme="light"] .card__round {
 /* ── Message bubble variant (kind=message, role=user/system) ── */
 
 .card[data-kind="message"] {
-  border-left: none;
   border: 1px solid var(--card-border);
   background: var(--card-bg-0);
 }
+
+/* User: accent bubble — solid left rail, stronger tint, accent title. */
 .card[data-kind="message"][data-role="user"] {
   background: var(--accent-dim);
-  border-color: transparent;
+  border-color: var(--accent-dim);
+  border-left: 3px solid var(--accent);
 }
 .card[data-kind="message"][data-role="user"] > .card__head {
   cursor: default;
@@ -337,9 +370,6 @@ body[data-theme="light"] .card__round {
   display: none;
 }
 .card[data-kind="message"][data-role="user"] > .card__head .card__title {
-  font-size: var(--ui-font-tiny);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
   color: var(--accent);
   font-weight: 600;
 }
@@ -348,8 +378,31 @@ body[data-theme="light"] .card__round {
   padding-top: 0;
   color: var(--text-strong);
 }
+
+/* System: muted meta-note — dashed left rail, faint amber tint, tiny uppercase title. */
+.card[data-kind="message"][data-role="system"] {
+  background: var(--card-system-bg);
+  border-color: var(--card-system-border);
+  border-left: 2px dashed var(--card-system-rail);
+}
+.card[data-kind="message"][data-role="system"] > .card__head {
+  padding-bottom: 2px;
+}
 .card[data-kind="message"][data-role="system"] > .card__head .card__title {
+  font-size: var(--ui-font-tiny);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--card-system-rail);
+  font-weight: 600;
+}
+.card[data-kind="message"][data-role="system"] > .card__head .card__badge {
+  display: none;
+}
+.card[data-kind="message"][data-role="system"] > .card__body {
+  border-top: none;
+  padding-top: 0;
   color: var(--text-soft);
+  font-style: italic;
 }
 
 /* ── Compatibility: make sure inline tool chips inside a card
@@ -361,4 +414,55 @@ body[data-theme="light"] .card__round {
 }
 .card__body .msg-text {
   margin: 2px 0;
+}
+
+/* ── Context-token hint ──
+   Low-contrast footer marker pinned to the card's bottom-right corner.
+   Intentionally not interactive — pointer-events: none keeps it out of the
+   fold-toggle hit area. The font is small and desaturated so it reads as
+   metadata rather than content. The "est." qualifier is part of the visible
+   label (see Card.tsx) to signal the number is a provider estimate. */
+.card {
+  position: relative;
+}
+.card__token-hint {
+  position: absolute;
+  right: 8px;
+  bottom: 4px;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  color: var(--text-soft, #888);
+  opacity: 0.45;
+  pointer-events: none;
+  white-space: nowrap;
+  user-select: none;
+}
+.card:hover > .card__token-hint {
+  opacity: 0.7;
+}
+
+/* ── Compaction card ──
+   Distinct visual treatment for context-compaction events: dashed rail +
+   small ⤺ glyph in the title. Distinguishing the compaction trigger
+   (role=user CompactionPart) from the resulting summary (Assistant.summary ===
+   true) is done by title text in Card.tsx; both share this styling. */
+.card[data-kind="compaction"] {
+  background: var(--card-system-bg, rgba(140, 110, 80, 0.05));
+  border-left: 2px dashed var(--card-system-rail, #b08a5a);
+}
+.card[data-kind="compaction"] > .card__head .card__title {
+  font-size: var(--ui-font-tiny);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--card-system-rail, #b08a5a);
+  font-weight: 600;
+}
+.card[data-kind="compaction"] > .card__head .card__title::before {
+  content: "⤺ ";
+  margin-right: 2px;
+}
+.card[data-kind="compaction"] > .card__body {
+  color: var(--text-soft);
+  font-style: italic;
 }

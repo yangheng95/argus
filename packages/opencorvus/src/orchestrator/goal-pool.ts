@@ -40,7 +40,7 @@ import {
   ensureExecutorSession,
 } from "./persist"
 import { OrchestratorGoalTable, OrchestratorPlanNodeTable } from "./orchestrator.sql"
-import { goalRowToContract, operatorNotesSection } from "./helpers"
+import { clarificationTranscriptSection, goalRowToContract, operatorNotesSection } from "./helpers"
 import { buildGoalPrompt, createGoalSession } from "@/goal/runner"
 import { registerGoalRunSession } from "@/server/routes/task-event"
 import { sessionStreamHooks } from "@/agent/runtime"
@@ -311,11 +311,15 @@ export class GoalPool {
       await markGoalWorkflowStep(task.id, entry.goal.id, entry.goal.title, "plan", "running").catch(() => undefined)
       {
         const allGoalsForPlan = listGoalsByPlan(plan.id)
+        const goalContract = goalRowToContract(entry.goal)
+        const dependsOn = (Array.isArray(goalContract.depends_on) ? goalContract.depends_on : []) as string[]
         const planContract: GoalContract = {
-          goal: goalRowToContract(entry.goal),
+          goal: goalContract,
           planNode: entry.node as any,
           run, task, plan,
-          allGoals: allGoalsForPlan.map(goalRowToContract),
+          dependencies: dependsOn.length > 0
+            ? allGoalsForPlan.filter((g) => dependsOn.includes(g.id)).map(goalRowToContract)
+            : [],
         }
         const planSession = await Session.createNext({
           parentID: sessionID,
@@ -401,14 +405,22 @@ export class GoalPool {
       if (slot) slot.goalRunID = goalRun.id
 
       // ── 5. Build prompt ──
-      const allGoals = listGoalsByPlan(plan.id)
+      // Pass only direct dependency rows so the executor prompt does not
+      // inflate with N-1 sibling contracts. buildGoalPrompt only ever looks
+      // up the goal's depends_on entries; passing the full list was waste.
+      const dependencyIDs = Array.isArray((entry.goal as { depends_on?: unknown }).depends_on)
+        ? ((entry.goal as { depends_on: string[] }).depends_on)
+        : []
+      const dependencyGoals = dependencyIDs.length > 0
+        ? listGoalsByPlan(plan.id).filter((g) => dependencyIDs.includes(g.id))
+        : []
       const prompt = buildGoalPrompt({
         plan: plan as any,
         node: { ...entry.node, brief: planNodeBrief } as any,
         goal: entry.goal as any,
         taskRequest: plan.prompt,
         taskID: task.id,
-        allGoals,
+        dependencies: dependencyGoals,
         cwd: worktreeDir,
       })
 
@@ -420,6 +432,8 @@ export class GoalPool {
       let systemOverride: string | undefined
       if (run.executor !== "opencode") {
         const sections: string[] = []
+        const clarifications = clarificationTranscriptSection(task.id)
+        if (clarifications) sections.push(clarifications)
         const notes = operatorNotesSection(task.id)
         if (notes) sections.push(notes)
         const memory = await MemoryInjection.systemPromptSection({
@@ -468,11 +482,15 @@ export class GoalPool {
       registerGoalRunSession(executorSession.id, task.id, "executor", entry.goal.id)
 
       // ── 7. Run pipeline with inactivity detection ──
+      const execGoal = goalRowToContract(entry.goal)
+      const execDeps = (Array.isArray(execGoal.depends_on) ? execGoal.depends_on : []) as string[]
       const contract: GoalContract = {
-        goal: goalRowToContract(entry.goal),
+        goal: execGoal,
         planNode: entry.node as any,
         run, task, plan,
-        allGoals: listGoalsByPlan(plan.id).map(goalRowToContract),
+        dependencies: execDeps.length > 0
+          ? listGoalsByPlan(plan.id).filter((g) => execDeps.includes(g.id)).map(goalRowToContract)
+          : [],
       }
 
       let lastEventTime = Date.now()

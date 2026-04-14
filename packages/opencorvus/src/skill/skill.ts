@@ -14,7 +14,6 @@ import { Bus } from "@/bus"
 import { Session } from "@/session"
 import { Discovery } from "./discovery"
 import { Glob } from "../util/glob"
-import { channelBundles } from "./builtin/channel"
 import panelMd from "./builtin/panel.md" with { type: "text" }
 import specResearchMd from "./builtin/spec-research.md" with { type: "text" }
 import prdSpecMd from "./builtin/prd-spec.md" with { type: "text" }
@@ -72,7 +71,6 @@ export namespace Skill {
   const BUILTIN_PATH = path.join(Global.Path.cache, "builtin-skills")
 
   const builtins = [
-    ...channelBundles,
     { skill: panelMd, files: {} },
     { skill: specResearchMd, files: {} },
     { skill: prdSpecMd, files: {} },

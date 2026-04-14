@@ -784,6 +784,182 @@ describe("session.message.toModelMessage", () => {
       },
     ])
   })
+
+  test("projects earlier stateful-snapshot tool results to a superseded note", () => {
+    const firstAssistant = "m-a1"
+    const secondUser = "m-u2"
+    const secondAssistant = "m-a2"
+
+    const input: Message.WithParts[] = [
+      {
+        info: userInfo("m-u1"),
+        parts: [
+          { ...basePart("m-u1", "u1"), type: "text", text: "check state" },
+        ] as Message.Part[],
+      },
+      {
+        info: assistantInfo(firstAssistant, "m-u1"),
+        parts: [
+          {
+            ...basePart(firstAssistant, "a1-tool"),
+            type: "tool",
+            callID: "call-first",
+            tool: "read_context",
+            state: {
+              status: "completed",
+              input: { scope: "all" },
+              output: "SNAPSHOT_OLD: goals + decisions + deliveries (4000 tokens of state)",
+              title: "read_context",
+              metadata: {},
+              time: { start: 0, end: 1 },
+            },
+          },
+        ] as Message.Part[],
+      },
+      {
+        info: userInfo(secondUser),
+        parts: [
+          { ...basePart(secondUser, "u2"), type: "text", text: "check again" },
+        ] as Message.Part[],
+      },
+      {
+        info: assistantInfo(secondAssistant, secondUser),
+        parts: [
+          {
+            ...basePart(secondAssistant, "a2-tool"),
+            type: "tool",
+            callID: "call-latest",
+            tool: "read_context",
+            state: {
+              status: "completed",
+              input: { scope: "all" },
+              output: "SNAPSHOT_LATEST: current state",
+              title: "read_context",
+              metadata: {},
+              time: { start: 2, end: 3 },
+            },
+          },
+        ] as Message.Part[],
+      },
+    ]
+
+    const out = Message.toModelMessages(input, model)
+    // Find the two tool-result messages and inspect their output values.
+    const toolResults = out
+      .filter((m) => m.role === "tool")
+      .flatMap((m) => (Array.isArray(m.content) ? m.content : []))
+      .filter((c: any) => c.type === "tool-result") as Array<{ toolCallId: string; output: { type: string; value: string } }>
+
+    expect(toolResults.length).toBe(2)
+    const first = toolResults.find((r) => r.toolCallId === "call-first")!
+    const latest = toolResults.find((r) => r.toolCallId === "call-latest")!
+    expect(first.output.value).toBe("[read_context snapshot superseded by a later call in this session]")
+    expect(latest.output.value).toBe("SNAPSHOT_LATEST: current state")
+    // Make sure we did not drop the old payload's original bytes before projection ran
+    expect(first.output.value).not.toContain("SNAPSHOT_OLD")
+  })
+
+  test("does not project non-stateful tool results (e.g. bash) across turns", () => {
+    const input: Message.WithParts[] = [
+      {
+        info: userInfo("m-u1"),
+        parts: [
+          { ...basePart("m-u1", "u1"), type: "text", text: "run" },
+        ] as Message.Part[],
+      },
+      {
+        info: assistantInfo("m-a1", "m-u1"),
+        parts: [
+          {
+            ...basePart("m-a1", "a1"),
+            type: "tool",
+            callID: "bash-1",
+            tool: "bash",
+            state: {
+              status: "completed",
+              input: { cmd: "ls" },
+              output: "OUTPUT_FIRST",
+              title: "Bash",
+              metadata: {},
+              time: { start: 0, end: 1 },
+            },
+          },
+        ] as Message.Part[],
+      },
+      {
+        info: userInfo("m-u2"),
+        parts: [
+          { ...basePart("m-u2", "u2"), type: "text", text: "again" },
+        ] as Message.Part[],
+      },
+      {
+        info: assistantInfo("m-a2", "m-u2"),
+        parts: [
+          {
+            ...basePart("m-a2", "a2"),
+            type: "tool",
+            callID: "bash-2",
+            tool: "bash",
+            state: {
+              status: "completed",
+              input: { cmd: "pwd" },
+              output: "OUTPUT_SECOND",
+              title: "Bash",
+              metadata: {},
+              time: { start: 2, end: 3 },
+            },
+          },
+        ] as Message.Part[],
+      },
+    ]
+
+    const out = Message.toModelMessages(input, model)
+    const toolResults = out
+      .filter((m) => m.role === "tool")
+      .flatMap((m) => (Array.isArray(m.content) ? m.content : []))
+      .filter((c: any) => c.type === "tool-result") as Array<{ toolCallId: string; output: { type: string; value: string } }>
+    expect(toolResults.length).toBe(2)
+    expect(toolResults[0].output.value).toBe("OUTPUT_FIRST")
+    expect(toolResults[1].output.value).toBe("OUTPUT_SECOND")
+  })
+
+  test("keeps a single stateful-snapshot call unchanged when it is the only one", () => {
+    const input: Message.WithParts[] = [
+      {
+        info: userInfo("m-u1"),
+        parts: [
+          { ...basePart("m-u1", "u1"), type: "text", text: "check state once" },
+        ] as Message.Part[],
+      },
+      {
+        info: assistantInfo("m-a1", "m-u1"),
+        parts: [
+          {
+            ...basePart("m-a1", "a1"),
+            type: "tool",
+            callID: "only",
+            tool: "query_failed_goals",
+            state: {
+              status: "completed",
+              input: {},
+              output: "FAILED_GOALS_SNAPSHOT",
+              title: "query_failed_goals",
+              metadata: {},
+              time: { start: 0, end: 1 },
+            },
+          },
+        ] as Message.Part[],
+      },
+    ]
+
+    const out = Message.toModelMessages(input, model)
+    const toolResults = out
+      .filter((m) => m.role === "tool")
+      .flatMap((m) => (Array.isArray(m.content) ? m.content : []))
+      .filter((c: any) => c.type === "tool-result") as Array<{ toolCallId: string; output: { type: string; value: string } }>
+    expect(toolResults.length).toBe(1)
+    expect(toolResults[0].output.value).toBe("FAILED_GOALS_SNAPSHOT")
+  })
 })
 
 describe("session.message.fromError", () => {

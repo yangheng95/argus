@@ -1,16 +1,17 @@
 /**
- * Per-goal deterministic evaluator.
+ * Per-goal evaluator — runs the typed `acceptance_specs` attached to a goal.
  *
- * Three information sources, in priority order:
- *   1. done_definition — extract executable commands from the goal's acceptance criteria.
- *   2. Project discovery — discover build/test/lint commands from the correct package root.
- *   3. Semantic criteria — noted as evidence but do NOT affect pass/fail verdict.
+ * Pipeline:
+ *   1. Translate AcceptanceSpec[] → heuristic commands + rubric checks.
+ *   2. Resolve the correct working directory (nearest project root inside
+ *      owned_paths) and discover supplementary build/test commands.
+ *   3. Execute on_goal heuristics via Shell; deferred (on_delivery) ones are
+ *      reported as evidence but skipped here.
+ *   4. Execute on_goal rubric scorers via llm-judge-runner.
+ *   5. Aggregate verdict by severity: any failing strict scorer rejects the
+ *      goal; soft failures annotate the verdict with concerns.
  *
- * The evaluator resolves the correct working directory by walking up from the goal's
- * owned_paths to find the nearest package.json/pyproject.toml, fixing monorepo/subdirectory
- * scenarios where the worktree root is not the project root.
- *
- * No LLM. No autonomous inference. Deterministic exit-code verdicts.
+ * No free-form text parsing. No fallback. Specs are the single source of truth.
  */
 import path from "path"
 import { Shell } from "@/shell/shell"
@@ -19,25 +20,14 @@ import { which } from "@/util/which"
 import type { TextHooks } from "@/llm/api"
 import type { GoalContract, PipelineDelivery, EvalVerdict } from "@/pipeline/types"
 import type { DecisionLog } from "@/decision-log"
+import { translateSpecs, type TranslatedHeuristic, type TranslatedRubric } from "@/acceptance/translator"
+import { runRubric } from "@/evaluator/llm-judge-runner"
 
 const log = Log.create({ service: "pipeline-evaluator" })
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-interface ParsedCommand {
-  /** Human-readable label for evidence (the original criterion text) */
-  label: string
-  /** Extracted shell command to run */
+interface DiscoveredCommand {
+  name: string
   command: string
-}
-
-interface ParsedDoneDefinition {
-  /** Commands that can be executed and checked via exit code */
-  executable: ParsedCommand[]
-  /** Semantic criteria that cannot be verified deterministically */
-  semantic: string[]
 }
 
 interface CheckResult {
@@ -45,118 +35,19 @@ interface CheckResult {
   command: string
   passed: boolean
   output: string
-  source: "done_definition" | "project_discovery" | "visual"
-}
-
-interface DiscoveredCommand {
-  name: string
-  command: string
+  source: "spec_heuristic" | "spec_rubric" | "project_discovery" | "visual"
+  mode: "soft" | "strict"
+  severity?: TranslatedHeuristic["severity"]
 }
 
 // ---------------------------------------------------------------------------
-// parseDoneDefinition — extract executable commands from done_definition text
+// resolveEvalDir — find the nearest project root inside the goal's owned_paths
 // ---------------------------------------------------------------------------
 
-/** Known command runner prefixes (case-insensitive first token match). */
-const CMD_PREFIXES = new Set([
-  "pnpm", "npm", "npx", "bun", "yarn", "tsc", "node",
-  "pytest", "python", "python3", "py", "make", "cargo", "go",
-  "deno", "vitest", "jest", "mocha", "eslint", "prettier", "ruff", "mypy",
-])
-
-/**
- * Split done_definition into individual criteria. Handles:
- *   - Numbered lists: "1. xxx 2. yyy"
- *   - Period-separated sentences (English)
- *   - Chinese punctuation: ，(comma) ；(semicolon) 。(period)
- *   - Newline-separated items
- */
-function splitCriteria(text: string): string[] {
-  // First try numbered list: "1. ...", "2. ..."
-  const numbered = text.split(/(?:^|\.\s+)(?=\d+\.\s)/m).filter(Boolean)
-  if (numbered.length > 1) {
-    return numbered.map(s => s.replace(/^\d+\.\s*/, "").trim()).filter(Boolean)
-  }
-
-  // Period-then-capital or period-then-number (English)
-  const sentences = text.split(/\.\s+(?=[A-Z\d`])/).map(s => s.replace(/\.$/, "").trim()).filter(Boolean)
-  if (sentences.length > 1) return sentences
-
-  // Chinese punctuation: full-width comma ，, semicolon ；, period 。
-  const chinese = text.split(/[，；。]\s*/).map(s => s.trim()).filter(Boolean)
-  if (chinese.length > 1) return chinese
-
-  // Single criterion
-  return [text.trim()].filter(Boolean)
-}
-
-/**
- * Extract all executable shell commands from a single criterion string.
- * Returns an array of command strings (may be empty).
- *
- * Handles multiple backtick-wrapped commands in a single criterion
- * (e.g., "执行 `pnpm dev` 且 `pnpm tsc --noEmit` 通过").
- */
-function extractCommands(criterion: string): string[] {
-  const commands: string[] = []
-
-  // Pattern 1: all backtick-wrapped commands (matchAll, not match)
-  for (const m of criterion.matchAll(/`([^`]+)`/g)) {
-    const inner = m[1].trim()
-    const firstToken = inner.split(/\s+/)[0]?.toLowerCase() ?? ""
-    if (CMD_PREFIXES.has(firstToken)) commands.push(inner)
-  }
-  if (commands.length > 0) return commands
-
-  // Pattern 2: line starts with known command prefix (bare command)
-  const trimmed = criterion.replace(/^\d+\.\s*/, "").trim()
-  const firstToken = trimmed.split(/\s+/)[0]?.toLowerCase().replace(/['"]/g, "") ?? ""
-  if (CMD_PREFIXES.has(firstToken)) {
-    const cmdPart = trimmed.replace(/\s+(passes|succeeds|should|must|exits?\s).*$/i, "").trim()
-    commands.push(cmdPart)
-  }
-
-  return commands
-}
-
-export function parseDoneDefinition(text: string): ParsedDoneDefinition {
-  if (!text || text.trim().length === 0) {
-    return { executable: [], semantic: [] }
-  }
-
-  const criteria = splitCriteria(text)
-  const executable: ParsedCommand[] = []
-  const semantic: string[] = []
-
-  for (const criterion of criteria) {
-    const cmds = extractCommands(criterion)
-    if (cmds.length > 0) {
-      for (const cmd of cmds) {
-        executable.push({ label: criterion, command: cmd })
-      }
-    } else {
-      semantic.push(criterion)
-    }
-  }
-
-  return { executable, semantic }
-}
-
-// ---------------------------------------------------------------------------
-// resolveEvalDir — find the correct directory to run commands in
-// ---------------------------------------------------------------------------
-
-/**
- * Find the nearest package root by walking up from the common prefix of owned_paths.
- * Adapted from discovery.ts:discoverPackageRoot but uses owned_paths (statically known)
- * instead of changed files (which may not exist yet).
- */
 export async function resolveEvalDir(workDir: string, ownedPaths: string[]): Promise<string> {
   if (ownedPaths.length === 0) return workDir
 
-  // Compute common directory prefix of all owned paths
-  const dirs = ownedPaths.map(p => {
-    // Strip glob portions (e.g., "aimecode/src/**/*.ts" → "aimecode/src")
+  const dirs = ownedPaths.map((p) => {
     const clean = p.replace(/[*?[\]{}]/g, "").replace(/\/+$/, "")
     return path.dirname(clean)
   })
@@ -174,16 +65,13 @@ export async function resolveEvalDir(workDir: string, ownedPaths: string[]): Pro
     if (!common) return workDir
   }
 
-  // Walk up from common prefix, looking for project markers
   const markers = ["package.json", "pyproject.toml", "setup.py", "Cargo.toml", "go.mod"]
   let current = path.resolve(workDir, common)
   const root = path.resolve(workDir)
 
   while (current.length >= root.length && current.startsWith(root)) {
     for (const marker of markers) {
-      if (await fileExists(path.join(current, marker))) {
-        return current
-      }
+      if (await fileExists(path.join(current, marker))) return current
     }
     const parent = path.dirname(current)
     if (parent === current) break
@@ -194,13 +82,11 @@ export async function resolveEvalDir(workDir: string, ownedPaths: string[]): Pro
 }
 
 // ---------------------------------------------------------------------------
-// discoverCommands — find build/test/lint from package.json (existing logic)
+// Project discovery — supplementary build/test/lint commands
 // ---------------------------------------------------------------------------
 
 async function discoverCommands(workDir: string): Promise<DiscoveredCommand[]> {
-  const pkg = await readJson<{ scripts?: Record<string, string> }>(
-    path.join(workDir, "package.json"),
-  )
+  const pkg = await readJson<{ scripts?: Record<string, string> }>(path.join(workDir, "package.json"))
   if (pkg?.scripts) {
     const commands: DiscoveredCommand[] = []
     const s = pkg.scripts
@@ -210,7 +96,6 @@ async function discoverCommands(workDir: string): Promise<DiscoveredCommand[]> {
     if (s.lint) commands.push({ name: "lint", command: "bun run lint" })
     if (commands.length > 0) return commands
   }
-
   return discoverPythonCommands(workDir)
 }
 
@@ -223,52 +108,39 @@ async function discoverPythonCommands(workDir: string): Promise<DiscoveredComman
     fileExists(path.join(workDir, "pytest.ini")),
     fileExists(path.join(workDir, "tests")),
   ])
-
   if (!markers.some(Boolean)) return []
 
   const commands: DiscoveredCommand[] = []
   const python = findPython()
-  if (python) {
-    commands.push({ name: "py_compile", command: `${python} -m compileall .` })
-  }
+  if (python) commands.push({ name: "py_compile", command: `${python} -m compileall .` })
 
   const pytest = findPyTool("pytest")
   if (pytest && (markers[4] || markers[5])) {
     commands.push({ name: "pytest", command: `${pytest} -q` })
   }
-
   return commands
 }
 
-// ---------------------------------------------------------------------------
-// deduplication — avoid running the same command twice
-// ---------------------------------------------------------------------------
-
-/**
- * Remove discovered commands that are already covered by done_definition commands.
- * Comparison is by normalized command string containment.
- */
 function deduplicateDiscovered(
-  doneDefCommands: ParsedCommand[],
+  specCommands: TranslatedHeuristic[],
   discovered: DiscoveredCommand[],
 ): DiscoveredCommand[] {
-  const doneDefNormalized = doneDefCommands.map(c => normalizeCmd(c.command))
-  return discovered.filter(d => {
+  const specNormalized = specCommands.map((c) => normalizeCmd(c.command))
+  return discovered.filter((d) => {
     const norm = normalizeCmd(d.command)
-    return !doneDefNormalized.some(dd =>
-      dd.includes(norm) || norm.includes(dd),
-    )
+    return !specNormalized.some((sc) => sc.includes(norm) || norm.includes(sc))
   })
 }
 
 function normalizeCmd(cmd: string): string {
-  return cmd.toLowerCase()
+  return cmd
+    .toLowerCase()
     .replace(/^(pnpm|npm|npx|bun|yarn)\s+(run\s+)?/i, "")
     .trim()
 }
 
 // ---------------------------------------------------------------------------
-// evaluateGoal — main entry point
+// evaluateGoal — main entry
 // ---------------------------------------------------------------------------
 
 export async function evaluateGoal(input: {
@@ -280,96 +152,122 @@ export async function evaluateGoal(input: {
   signal?: AbortSignal
   stream?: TextHooks
 }): Promise<EvalVerdict> {
-  const { contract, signal } = input
+  const { contract, delivery, signal } = input
   const { goal } = contract
 
   if (signal?.aborted) throw new Error("eval aborted")
 
   const workDir = input.workDir ?? (await import("@/project/instance")).Instance.directory
-
-  // ── 1. Parse done_definition ──
-  const parsed = parseDoneDefinition(goal.done_definition ?? "")
-  log.info("parsed done_definition", {
-    goalID: goal.id,
-    executable: parsed.executable.length,
-    semantic: parsed.semantic.length,
-  })
-
-  // ── 2. Resolve correct eval directory ──
   const ownedPaths = (goal.owned_paths ?? []) as string[]
   const evalDir = await resolveEvalDir(workDir, ownedPaths)
   if (evalDir !== workDir) {
-    log.info("resolved eval directory from owned_paths", {
-      goalID: goal.id,
-      workDir,
-      evalDir,
-    })
+    log.info("resolved eval directory from owned_paths", { goalID: goal.id, workDir, evalDir })
   }
 
-  // ── 3. Discover project commands (in the correct directory) ──
-  const discovered = await discoverCommands(evalDir)
+  // ── 1. Translate specs ──
+  const specs = goal.acceptance_specs ?? []
+  const plan = translateSpecs(specs)
+  log.info("translated acceptance specs", {
+    goalID: goal.id,
+    specs: specs.length,
+    heuristic: plan.heuristic.length,
+    rubric: plan.rubric.length,
+  })
 
-  // ── 4. Merge: done_definition first, then non-duplicate discovered ──
-  const supplementCommands = deduplicateDiscovered(parsed.executable, discovered)
+  // ── 2. Discover supplementary project commands (build/test/lint), but
+  //      only when there are NO heuristic specs already. Specs win — if the
+  //      requirements agent declared the build matters, it must say so.
+  const discovered = plan.heuristic.length === 0 ? await discoverCommands(evalDir) : []
+  const supplement = deduplicateDiscovered(plan.heuristic, discovered)
 
-  // ── 5. Build execution plan ──
-  const hasExecutableChecks = parsed.executable.length > 0 || supplementCommands.length > 0
-
-  if (!hasExecutableChecks) {
-    log.info("no executable checks found, passing by default", { goalID: goal.id })
-    const evidence = parsed.semantic.length > 0
-      ? [`No executable commands found.`, ...parsed.semantic.map(s => `[semantic, deferred] ${s}`)]
-      : ["No discoverable build/test commands — pass by default"]
-    return {
-      pass: true,
-      verdict: "accepted",
-      evidence,
-      evidenceStatus: evidence.map(() => undefined),
-      reasoning: parsed.semantic.length > 0
-        ? `No executable commands in done_definition or project. ${parsed.semantic.length} semantic criterion/criteria deferred to delivery agent.`
-        : "No build or test scripts found in project.",
-    }
-  }
-
-  // ── 6. Execute all commands ──
   const results: CheckResult[] = []
 
-  // 6a. done_definition commands (highest priority)
-  for (const { label, command } of parsed.executable) {
+  // ── 3. Execute on_goal heuristic scorers ──
+  for (const item of plan.heuristic) {
     if (signal?.aborted) throw new Error("eval aborted")
 
-    const run = await Shell.run(command, {
-      cwd: evalDir,
+    if (item.trigger === "on_delivery") {
+      results.push({
+        name: item.name,
+        command: item.command,
+        passed: true,
+        output: "deferred to delivery — not executed at goal stage",
+        source: "spec_heuristic",
+        mode: item.mode,
+        severity: item.severity,
+      })
+      continue
+    }
+
+    const cwd = item.cwd ? path.resolve(evalDir, item.cwd) : evalDir
+    const run = await Shell.run(item.command, {
+      cwd,
       env: process.env,
-      idleTimeoutMs: 15_000,    // inactivity-based: 15s of no output → done
-      timeoutMs: 300_000,       // hard safety cap: 5 min max
+      idleTimeoutMs: 15_000,
+      timeoutMs: 300_000,
       abort: signal,
     })
 
-    const passed = evalCommandPassed(run)
-    const outputParts = [
-      run.stdout.trim().slice(0, 3000),
-      run.stderr.trim().slice(0, 1000),
-    ].filter(Boolean)
-
+    const passed = scorerPassed(run, item.expectedExitCode)
     results.push({
-      name: `done_def: ${label.slice(0, 60)}`,
-      command,
+      name: item.name,
+      command: item.command,
       passed,
-      output: outputParts.join("\n"),
-      source: "done_definition",
+      output: [run.stdout.trim().slice(0, 3000), run.stderr.trim().slice(0, 1000)].filter(Boolean).join("\n"),
+      source: "spec_heuristic",
+      mode: item.mode,
+      severity: item.severity,
     })
 
-    log.info("eval check (done_definition)", {
-      goalID: goal.id, command, exitCode: run.exitCode,
-      timedOut: run.timedOut, idleTimedOut: run.idleTimedOut, passed,
+    log.info("eval heuristic", {
+      goalID: goal.id,
+      name: item.name,
+      command: item.command,
+      exitCode: run.exitCode,
+      timedOut: run.timedOut,
+      idleTimedOut: run.idleTimedOut,
+      passed,
     })
   }
 
-  // 6b. Supplementary project discovery commands
-  for (const { name, command } of supplementCommands) {
+  // ── 4. Execute on_goal rubric scorers ──
+  for (const item of plan.rubric) {
     if (signal?.aborted) throw new Error("eval aborted")
 
+    if (item.trigger === "on_delivery") {
+      results.push({
+        name: item.name,
+        command: `rubric:${item.kind}`,
+        passed: true,
+        output: "deferred to delivery — not executed at goal stage",
+        source: "spec_rubric",
+        mode: item.mode,
+        severity: item.severity,
+      })
+      continue
+    }
+
+    const out = await runRubric(item, {
+      deliverySummary: delivery.summary,
+      changedFiles: delivery.diffs?.map((d) => d.file),
+      requirementText: requirementTextFor(contract, item),
+      signal,
+    })
+
+    results.push({
+      name: item.name,
+      command: `rubric:${item.kind}`,
+      passed: out.status === "passed",
+      output: out.evidence,
+      source: "spec_rubric",
+      mode: item.mode,
+      severity: item.severity,
+    })
+  }
+
+  // ── 5. Supplementary project commands ──
+  for (const { name, command } of supplement) {
+    if (signal?.aborted) throw new Error("eval aborted")
     const run = await Shell.run(command, {
       cwd: evalDir,
       env: process.env,
@@ -377,35 +275,20 @@ export async function evaluateGoal(input: {
       timeoutMs: 300_000,
       abort: signal,
     })
-
-    const passed = evalCommandPassed(run)
-    const outputParts = [
-      run.stdout.trim().slice(0, 3000),
-      run.stderr.trim().slice(0, 1000),
-    ].filter(Boolean)
-
+    const passed = scorerPassed(run, 0)
     results.push({
       name,
       command,
       passed,
-      output: outputParts.join("\n"),
+      output: [run.stdout.trim().slice(0, 3000), run.stderr.trim().slice(0, 1000)].filter(Boolean).join("\n"),
       source: "project_discovery",
+      mode: "soft",
     })
-
-    log.info("eval check (project_discovery)", {
-      goalID: goal.id, name, command, exitCode: run.exitCode,
-      timedOut: run.timedOut, idleTimedOut: run.idleTimedOut, passed,
-    })
+    log.info("eval discovery", { goalID: goal.id, name, command, exitCode: run.exitCode, passed })
   }
 
-  // ── 6c. Visual similarity check ──
-  // When a goal carries a visual reference (image attachment or absolute
-  // path in goal.metadata.visual), render whatever index.html the executor
-  // produced inside the goal's owned scope and SSIM-compare against the
-  // reference. The result joins the same `results` list — no separate gate,
-  // no fallback when the browser isn't available (we record an explicit
-  // failure so the agent can react).
-  const visualRef = resolveVisualReference(goal, contract)
+  // ── 6. Visual diff (unchanged from old evaluator — orthogonal to specs) ──
+  const visualRef = resolveVisualReference(goal)
   if (visualRef) {
     if (signal?.aborted) throw new Error("eval aborted")
     const { findRenderedIndex, runVisualDiff, summarizeVisualReport } = await import("./visual")
@@ -417,21 +300,19 @@ export async function evaluateGoal(input: {
         passed: false,
         output: `no index.html found under ${evalDir} — executor must produce a renderable entry point`,
         source: "visual",
+        mode: "strict",
       })
     } else {
-      const visualOut = await import("node:path").then((p) => p.join(evalDir, ".opencorvus", "visual-diff"))
+      const visualOut = path.join(evalDir, ".opencorvus", "visual-diff")
       try {
-        const report = await runVisualDiff({
-          rendered: renderedHtml,
-          reference: visualRef,
-          outDir: visualOut,
-        })
+        const report = await runVisualDiff({ rendered: renderedHtml, reference: visualRef, outDir: visualOut })
         results.push({
           name: "visual_diff",
           command: `visual-diff rendered=${renderedHtml} reference=${visualRef}`,
           passed: report.passed,
           output: summarizeVisualReport(report),
           source: "visual",
+          mode: "strict",
         })
       } catch (err) {
         results.push({
@@ -440,36 +321,51 @@ export async function evaluateGoal(input: {
           passed: false,
           output: `visual-diff failed to run: ${err instanceof Error ? err.message : String(err)}`,
           source: "visual",
+          mode: "strict",
         })
       }
     }
   }
 
-  // ── 7. Build verdict ──
-  const allPassed = results.every((r) => r.passed)
-  const failed = results.filter((r) => !r.passed)
+  // ── 7. Verdict aggregation by mode (severity) ──
+  // If no scorers ran at all, the goal contract is malformed: the schema
+  // mandates `acceptance_specs.min(1)` (goal-contract.schema.ts), so reaching
+  // here means a producer wrote a goal with empty specs AND project discovery
+  // found no fallback build/test command. Returning pass-by-default would
+  // hide a configuration bug — explicitly reject so the operator notices.
+  if (results.length === 0) {
+    return {
+      pass: false,
+      verdict: "rejected",
+      evidence: ["Goal has no acceptance scorers and no discoverable build/test commands."],
+      evidenceStatus: ["failed"],
+      reasoning:
+        "Cannot evaluate this goal — its acceptance_specs are empty and project discovery found nothing to run. " +
+        "Re-run requirements (or add specs via add_goal/modify_goal) before retrying.",
+      failureClass: "goal_wrong",
+    }
+  }
 
-  // Evidence: executable results + semantic criteria (deferred)
-  const evidence = [
-    ...results.map((r) => `[${r.source}] ${r.name}: ${r.command}`),
-    ...parsed.semantic.map((s) => `[semantic, deferred] ${s}`),
-  ]
-  const evidenceStatus: Array<"passed" | "failed" | undefined> = [
-    ...results.map((r) => (r.passed ? "passed" as const : "failed" as const)),
-    ...parsed.semantic.map(() => undefined),
-  ]
+  const strictFailed = results.filter((r) => !r.passed && r.mode === "strict")
+  const softFailed = results.filter((r) => !r.passed && r.mode === "soft")
+  const passedAllStrict = strictFailed.length === 0
+
+  const evidence = results.map((r) => `[${r.source}${r.severity ? `:${r.severity}` : ""}] ${r.name}: ${r.command}`)
+  const evidenceStatus: Array<"passed" | "failed" | undefined> = results.map((r) => (r.passed ? "passed" : "failed"))
 
   return {
-    pass: allPassed,
-    verdict: allPassed ? "accepted" : "rejected",
+    pass: passedAllStrict,
+    verdict: passedAllStrict ? "accepted" : "rejected",
     evidence,
     evidenceStatus,
-    reasoning: allPassed
-      ? `All ${results.length} check(s) passed.${parsed.semantic.length > 0 ? ` ${parsed.semantic.length} semantic criterion/criteria deferred to delivery agent.` : ""}`
-      : `${failed.length} of ${results.length} check(s) failed:\n${failed
+    reasoning: passedAllStrict
+      ? `All ${results.length} check(s) passed${
+          softFailed.length > 0 ? `; ${softFailed.length} soft scorer(s) failed (annotated, non-blocking).` : "."
+        }`
+      : `${strictFailed.length} of ${results.length} strict check(s) failed:\n${strictFailed
           .map((r) => `- [${r.source}] ${r.name}: ${r.output.slice(0, 500)}`)
           .join("\n")}`,
-    failureClass: allPassed ? undefined : inferFailureClass(results),
+    failureClass: passedAllStrict ? undefined : "bug",
   }
 }
 
@@ -477,16 +373,14 @@ export async function evaluateGoal(input: {
 // Helpers
 // ---------------------------------------------------------------------------
 
-/**
- * Locate a visual reference image for a goal. Looks at goal.metadata.visual
- * (caller-supplied absolute path) first, then falls back to scanning the
- * task's attachment store via metadata.visual_attachment_sha when the
- * requirements agent tagged a reference attachment for this specific goal.
- *
- * Returns an absolute filesystem path or undefined when the goal has no
- * visual reference (most goals don't — only fig2code-style work does).
- */
-function resolveVisualReference(goal: GoalContract["goal"], _contract: GoalContract): string | undefined {
+function requirementTextFor(_contract: GoalContract, _item: TranslatedRubric): string | undefined {
+  // Future: look up the requirement row by ID and return its description.
+  // For now return undefined; the rubric scorer's `inputs` controls whether
+  // requirement_text is even requested.
+  return undefined
+}
+
+function resolveVisualReference(goal: GoalContract["goal"]): string | undefined {
   const meta = (goal.metadata as Record<string, unknown> | undefined) ?? {}
   const direct = typeof meta.visual === "string" ? meta.visual : undefined
   if (direct) return direct
@@ -495,38 +389,11 @@ function resolveVisualReference(goal: GoalContract["goal"], _contract: GoalContr
   return undefined
 }
 
-/**
- * Determine if an eval command passed.
- *
- * Two paths:
- *   1. Process exited on its own → trust the exit code (0 = pass)
- *   2. Process went idle (idleTimedOut) after producing stdout → pass.
- *      Idle timeout means the process finished its observable work (startup,
- *      output) then went quiet. The exit code is from our kill signal, not
- *      from the process itself — so we don't use it. The process completed
- *      what it was going to do. If it had a fatal error, it would have
- *      exited on its own with a non-zero code (path 1).
- *   3. Hard timeout (still actively running after safety cap) → fail.
- *   4. No output + idle timeout → fail (nothing happened).
- */
-function evalCommandPassed(run: Shell.RunResult): boolean {
-  // Process exited on its own — trust exit code
-  if (!run.timedOut && !run.idleTimedOut) return run.exitCode === 0
-
-  // Process went idle after producing output — it finished its work
-  if (run.idleTimedOut && run.stdout.length > 0) return true
-
-  // Hard timeout or idle with no output
+function scorerPassed(run: Shell.RunResult, expectedExitCode?: number): boolean {
+  const wanted = expectedExitCode ?? 0
+  if (!run.timedOut && !run.idleTimedOut) return run.exitCode === wanted
+  if (run.idleTimedOut && run.stdout.length > 0) return wanted === 0
   return false
-}
-
-function inferFailureClass(
-  _results: Array<{ passed: boolean; source: string; name: string; command: string }>,
-): "bug" | "plan_wrong" | "goal_wrong" {
-  // Currently all deterministic eval failures are classified as "bug".
-  // Future: could infer "goal_wrong" if all discovery commands are missing
-  // (suggesting the project structure doesn't match done_definition).
-  return "bug"
 }
 
 function findPython(): string | undefined {

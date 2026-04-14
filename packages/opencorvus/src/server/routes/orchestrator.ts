@@ -665,6 +665,28 @@ export const OrchestratorRoutes = lazy(() =>
         }))
       },
     )
+    .post(
+      "/task/:taskID/followup",
+      describeRoute({
+        summary: "Generate follow-up suggestion",
+        operationId: "task.followup",
+        responses: {
+          200: {
+            description: "A single short follow-up suggestion string",
+            content: {
+              "application/json": {
+                schema: resolver(z.object({ suggestion: z.string() })),
+              },
+            },
+          },
+          ...errors(404),
+        },
+      }),
+      validator("param", z.object({ taskID: Task.shape.id })),
+      async (c) => {
+        return c.json(await OrchestratorService.generateFollowup(c.req.valid("param").taskID))
+      },
+    )
     .get(
       "/run/:runID",
       describeRoute({

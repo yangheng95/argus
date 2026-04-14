@@ -23,7 +23,7 @@
  *    owning gateway session so the user sees progress without having to
  *    actively poll. Tasks not created via Gateway are ignored — we identify
  *    Gateway-owned tasks by the `metadata.gateway.sessionID` field set by
- *    `enqueue_workflow_task` / `dispatch_build_task`.
+ *    `enqueue_task`.
  */
 
 import { Log } from "@/util/log"

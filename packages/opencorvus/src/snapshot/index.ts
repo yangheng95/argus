@@ -12,7 +12,10 @@ import { Scheduler } from "../scheduler"
 export namespace Snapshot {
   const log = Log.create({ service: "snapshot" })
   const hour = 60 * 60 * 1000
-  const prune = "7.days"
+  // Snapshots are an agent-only cache: every tree object written by `track()`
+  // is dangling (no ref) from the moment it is written, so the classic 7-day
+  // grace period has no value here. `--prune=now` reclaims disk immediately.
+  const prune = "now"
   const coreAutocrlf =
     process.env.OPENCORVUS_SNAPSHOT_CORE_AUTOCRLF || (process.platform === "win32" ? "input" : "false")
   const coreSymlinks =
@@ -300,18 +303,59 @@ export namespace Snapshot {
     else await cmd
   }
 
+  // Baseline exclude rules layered on top of the user project's own
+  // .gitignore / .git/info/exclude. These are the paths that every modern
+  // language ecosystem treats as disposable build output or dependency cache:
+  // blobs here have no value as a version-history waypoint, and silently
+  // including them is what bloats snapshots from ~1 MB to ~200 MB+.
+  //
+  // The list is intentionally conservative — only well-known directory names
+  // and unambiguous binary extensions. Source material never lives here under
+  // conventional layouts, so false positives are unlikely. If a future
+  // project legitimately wants one of these tracked, it can override via its
+  // own `.git/info/exclude` (negation rules apply the usual gitignore
+  // precedence).
+  const BASELINE_EXCLUDE = [
+    "# --- opencorvus snapshot baseline (auto-managed, do not edit) ---",
+    "node_modules/",
+    "dist/",
+    "build/",
+    "out/",
+    "target/",
+    ".next/",
+    ".nuxt/",
+    ".svelte-kit/",
+    ".turbo/",
+    ".parcel-cache/",
+    ".cache/",
+    ".venv/",
+    "venv/",
+    "__pycache__/",
+    "*.pyc",
+    "coverage/",
+    ".nyc_output/",
+    "*.exe",
+    "*.dll",
+    "*.dylib",
+    "*.pdb",
+    "# --- end baseline ---",
+    "",
+  ].join("\n")
+
   async function syncExclude(git: string) {
     const file = await excludes()
     const target = path.join(git, "info", "exclude")
     await fs.mkdir(path.join(git, "info"), { recursive: true })
-    if (!file) {
-      await Bun.write(target, "")
-      return
-    }
-    const text = await Bun.file(file)
-      .text()
-      .catch(() => "")
-    await Bun.write(target, text)
+    const userText = file
+      ? await Bun.file(file)
+          .text()
+          .catch(() => "")
+      : ""
+    // Baseline FIRST, user rules AFTER. gitignore later-rule-wins semantics
+    // means the user's `.git/info/exclude` (and any negation via `!path`)
+    // continues to take precedence — the baseline is a floor, not a ceiling.
+    const merged = BASELINE_EXCLUDE + (userText.endsWith("\n") ? userText : userText + (userText ? "\n" : ""))
+    await Bun.write(target, merged)
   }
 
   async function excludes() {

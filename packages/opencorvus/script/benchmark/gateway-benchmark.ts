@@ -2,10 +2,12 @@
 
 /**
  * Gateway E2E benchmark — exercises /gateway/message through a real LLM
- * dispatcher and verifies the four user-facing capabilities:
+ * dispatcher and verifies the user-facing capabilities:
  *
- *   1. enqueue  — LLM calls `enqueue_workflow_task`; a matching task appears
- *                 in the project's orchestrator store with kind="workflow".
+ *   1. enqueue  — LLM calls `enqueue_task`; a matching task appears in the
+ *                 project's orchestrator store with kind="workflow". The
+ *                 task-agent itself decides internally whether to run the
+ *                 pipeline or route through its build tool.
  *   2. list     — LLM calls `list_tasks`; the previously enqueued task ID is
  *                 present in the tool's structured result.
  *   3. get      — LLM calls `get_task` against the enqueued ID.
@@ -236,19 +238,19 @@ try {
     )
 
     const { reply, calls } = await chatAndGetTurnCalls(
-      "Please enqueue a workflow task on this project. " +
+      "Please enqueue a task on this project. " +
         'Set title to "gw-e2e-probe" and request to ' +
         '"Gateway end-to-end benchmark probe. Do not start real work; this task will be cancelled immediately.". ' +
         "Use priority high. Do not invoke any other tools.",
     )
-    const enqueue = calls.find((c) => c.tool === "enqueue_workflow_task")
+    const enqueue = calls.find((c) => c.tool === "enqueue_task")
     if (!enqueue) {
       throw new Error(
-        `expected enqueue_workflow_task call, got [${calls.map((c) => c.tool).join(", ")}]`,
+        `expected enqueue_task call, got [${calls.map((c) => c.tool).join(", ")}]`,
       )
     }
     if (enqueue.state !== "completed") {
-      throw new Error(`enqueue_workflow_task state=${enqueue.state}, output=${JSON.stringify(enqueue.output)}`)
+      throw new Error(`enqueue_task state=${enqueue.state}, output=${JSON.stringify(enqueue.output)}`)
     }
 
     const afterIDs = await Instance.provide({
@@ -346,41 +348,6 @@ try {
       throw new Error(`get_task was invoked with taskID=${input?.taskID}, expected ${taskID}`)
     }
     return { toolCalls: reply.toolCalls, tools: calls.map((c) => c.tool) }
-  })
-
-  // ── Step 4: dispatch build task ─────────────────────────────────────────
-  let buildTaskID = ""
-  await runStep("dispatch-build", async () => {
-    const preIDs = new Set(
-      await Instance.provide({
-        directory: projectDir,
-        fn: async () => listProjectTasks(Instance.project.id, 200).map((r) => r.id),
-      }),
-    )
-    const { reply, calls } = await chatAndGetTurnCalls(
-      'Dispatch a one-shot build task. Set title to "gw-e2e-build" and prompt to ' +
-        '"Echo hello — build agent probe. This will be cancelled.". ' +
-        "Use dispatch_build_task, not enqueue_workflow_task. Do not invoke any other tools.",
-    )
-    const dispatch = calls.find((c) => c.tool === "dispatch_build_task")
-    if (!dispatch) {
-      throw new Error(`expected dispatch_build_task call, got [${calls.map((c) => c.tool).join(", ")}]`)
-    }
-    if (dispatch.state !== "completed") {
-      throw new Error(`dispatch_build_task state=${dispatch.state}, output=${JSON.stringify(dispatch.output)}`)
-    }
-    const afterIDs = await Instance.provide({
-      directory: projectDir,
-      fn: async () => listProjectTasks(Instance.project.id, 200).map((r) => r.id),
-    })
-    const newIDs = afterIDs.filter((id) => !preIDs.has(id))
-    if (newIDs.length !== 1) {
-      throw new Error(`expected exactly 1 new task, found ${newIDs.length}: ${JSON.stringify(newIDs)}`)
-    }
-    buildTaskID = newIDs[0]
-    const row = await getTask(buildTaskID)
-    if (row.kind !== "build") throw new Error(`expected kind=build, got ${row.kind}`)
-    return { buildTaskID, kind: row.kind, toolCalls: reply.toolCalls }
   })
 
   // ── Step 4b: forward_to_task on the queued workflow task ────────────────
@@ -555,35 +522,6 @@ try {
       )
     }
     return { state: cancel.state, toolCalls: reply.toolCalls }
-  })
-
-  // Also verify the build task we dispatched earlier can be cancelled via
-  // the same gateway path — proves cancel works for kind=build too.
-  await runStep("cancel-build", async () => {
-    const { reply, calls } = await chatAndGetTurnCalls(
-      `Cancel task ${buildTaskID}. Call cancel_task exactly once with that taskID. Do not invoke any other tools.`,
-    )
-    const cancel = calls.find((c) => c.tool === "cancel_task")
-    if (!cancel) throw new Error(`expected cancel_task call, got [${calls.map((c) => c.tool).join(", ")}]`)
-    if (cancel.state !== "completed") throw new Error(`cancel_task state=${cancel.state}`)
-    let lastStatus: string | undefined
-    let lastChangeAt = Date.now()
-    while (true) {
-      const row = await getTask(buildTaskID)
-      if (row.status !== lastStatus) {
-        lastStatus = row.status
-        lastChangeAt = Date.now()
-      }
-      if (row.status === "cancelled") return { toolCalls: reply.toolCalls, finalStatus: row.status }
-      if (row.status === "completed" || row.status === "failed") {
-        throw new Error(`build task reached terminal ${row.status} instead of cancelled`)
-      }
-      const idleMs = Date.now() - lastChangeAt
-      if (idleMs >= CANCEL_STALL_MS) {
-        throw new Error(`build cancel idle ${idleMs}ms, last=${lastStatus}`)
-      }
-      await Bun.sleep(CANCEL_POLL_MS)
-    }
   })
 
   // ── switch_cwd on an unregistered path surfaces an error ────────────────

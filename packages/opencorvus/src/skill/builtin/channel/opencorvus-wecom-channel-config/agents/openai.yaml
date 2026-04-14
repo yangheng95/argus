@@ -1,6 +1,0 @@
-interface:
-  display_name: "OpenCorvus WeCom Channel Config"
-  short_description: "Configure WeCom channel integration for OpenCorvus"
-  default_prompt: "Use $opencorvus-wecom-channel-config to set up or debug WeCom channel integration for OpenCorvus."
-
-

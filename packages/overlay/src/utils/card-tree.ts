@@ -5,8 +5,9 @@
 
 import { orderedMessageParts, effectiveRole, roleLabel, agentStageLabel } from "./message";
 import { toolNameKey } from "./tool";
+import { stageAccent } from "./card-color";
 
-export type CardKind = "agent" | "goal" | "step" | "tool" | "message";
+export type CardKind = "agent" | "goal" | "step" | "tool" | "message" | "compaction";
 export type CardStatus = "pending" | "running" | "completed" | "error" | "skipped";
 
 /** A synthetic "part" inserted between messages when flattening multiple
@@ -27,6 +28,10 @@ export interface CardNode {
   role?: string;
   /** Raw stage name (planner/executor/…) — drives per-stage accents. */
   stage?: string;
+  /** Resolved accent colour (CSS value) for this card's stage. Undefined when
+   *  the node has no stage (e.g. plain message bubble). Written into an
+   *  inline `--card-stage` CSS variable by <Card>, consumed by card.css. */
+  accent?: string;
   status?: CardStatus;
   /** Header primary label. */
   title: string;
@@ -50,6 +55,24 @@ export interface CardNode {
   /** Raw tool part for kind="tool" nodes — rendered by <Card> via
    *  InlineToolPart mode="body". Always undefined for non-tool kinds. */
   toolPart?: any;
+  /**
+   * Estimated prompt-context size the LLM saw at this message, in tokens.
+   * Populated from Assistant.tokens.input (which already represents the
+   * cumulative context sent up to and including this turn — providers bill
+   * per turn on the fully-assembled message array, so there is nothing to
+   * sum client-side). Left undefined for turns that never hit the model
+   * (user bubbles, synthetic system notes). The UI renders it with low
+   * contrast and an "est." marker because the number is a provider-reported
+   * estimate and can drift slightly against actual billed tokens.
+   */
+  contextTokens?: number
+  /**
+   * True when this card represents a conversation-compaction summary
+   * (Assistant.summary === true). The summary card replaces the compacted
+   * history; surfacing it as a distinct card tells the operator exactly
+   * where the window was reset.
+   */
+  isCompactionSummary?: boolean
 }
 
 // ── Status normalisation ──
@@ -78,6 +101,7 @@ function normGoalStatus(raw: any): CardStatus | undefined {
 
 const ALWAYS_PROMOTE_TOOLS = new Set([
   "task", "agent", "spawnagent", "subagent",
+  "build",
 ]);
 const CODE_WRITE_TOOLS = new Set([
   "write", "writefile", "edit", "editfile", "applypatch",
@@ -185,6 +209,7 @@ function goalToNode(item: any): CardNode {
         id: `${cardID}:step:${step.stepID}`,
         kind: "step",
         stage,
+        accent: stageAccent(stage),
         status: stepStatus,
         title: stepTitle(stage, step),
         subtitle: step.summary || undefined,
@@ -206,6 +231,7 @@ function goalToNode(item: any): CardNode {
         id: String(c.id || `${cardID}:step:${stage}`),
         kind: "step",
         stage,
+        accent: stageAccent(stage),
         status: st,
         title: agentStageLabel(stage),
         parts: flattenMessages(c.messages || []),
@@ -218,6 +244,7 @@ function goalToNode(item: any): CardNode {
     id: cardID,
     kind: "goal",
     stage: "goal",
+    accent: stageAccent("goal"),
     status: goalStatus ?? status,
     title: String(item.goalTitle || "Goal"),
     subtitle: cardID.length > 8 ? cardID.slice(-8) : undefined,
@@ -236,17 +263,30 @@ function agentCardToNode(item: any): CardNode {
   const cardID = String(item.id || `agent:${stage}`);
   const status = normStatus(item.status) ?? "pending";
   const messages = item.messages || [];
+  // An agent card may aggregate several assistant turns. Surface the LARGEST
+  // per-turn context size as the card's token estimate — it represents the
+  // high-water mark the LLM had to reason over inside this stage. Summing
+  // would double-count since each turn's input already includes prior turns.
+  let contextTokens: number | undefined = undefined
+  for (const m of messages) {
+    const t = (m as any)?.info?.tokens?.input
+    if (typeof t === "number" && Number.isFinite(t) && (contextTokens === undefined || t > contextTokens)) {
+      contextTokens = t
+    }
+  }
   return {
     id: cardID,
     kind: "agent",
     role: stage,
     stage,
+    accent: stageAccent(stage),
     status,
     title: agentStageLabel(stage),
     round: Number(item.round) || 0,
     parts: flattenMessages(messages),
     children: [],
     time: Number(item.time) || undefined,
+    contextTokens,
   };
 }
 
@@ -256,6 +296,32 @@ function messageToNode(item: any): CardNode {
   // For a plain message card we do NOT drop user role — the whole point is
   // that this IS a user / synthetic bubble.
   const parts = orderedMessageParts(item);
+  const isCompactionSummary = item?.info?.summary === true;
+  const hasCompactionPart = Array.isArray(parts) && parts.some((p: any) => p?.type === "compaction");
+  const tokens = item?.info?.tokens;
+  const contextTokens = typeof tokens?.input === "number" && Number.isFinite(tokens.input)
+    ? tokens.input
+    : undefined;
+
+  // A user-side `compaction` part (the trigger) and an assistant-side
+  // summary=true message (the result) are both rendered as their own
+  // distinct card so operators can see where context was reset.
+  if (hasCompactionPart || isCompactionSummary) {
+    return {
+      id,
+      kind: "compaction",
+      role,
+      status: "completed",
+      title: isCompactionSummary ? "Compaction summary" : "Context compaction",
+      parts,
+      children: [],
+      time: Number(item?.info?.time?.created) || undefined,
+      defaultExpanded: isCompactionSummary,
+      contextTokens,
+      isCompactionSummary,
+    };
+  }
+
   return {
     id,
     kind: "message",
@@ -268,6 +334,7 @@ function messageToNode(item: any): CardNode {
     // User / synthetic bubbles: always "expanded"; the header is the bubble
     // itself, not a fold trigger (<Card> CSS handles visual in S2).
     defaultExpanded: true,
+    contextTokens,
   };
 }
 
@@ -300,4 +367,42 @@ export function defaultExpandedForNode(node: CardNode): boolean {
   if (node.kind === "message") return true;
   // step / tool defaults: collapsed when completed, open when running.
   return node.status !== "completed";
+}
+
+// ── Text collection (for copy-to-clipboard) ──
+// Walks a card node and its descendants, emitting the human-readable prose
+// parts: text / reasoning, plus goal description and contracts for goal
+// cards. Tool input/output and binary parts (patch/file) are skipped —
+// they rarely belong in a pasted transcript.
+
+function partText(part: any): string {
+  if (!part) return "";
+  if (part.type === "text" || part.type === "reasoning") {
+    return String(part.text || "").trim();
+  }
+  return "";
+}
+
+export function collectCardText(node: CardNode): string {
+  if (!node) return "";
+  const chunks: string[] = [];
+  if (node.kind === "goal" && node.goalDescription) {
+    chunks.push(String(node.goalDescription).trim());
+  }
+  if (node.kind === "goal" && node.contracts?.length) {
+    for (const c of node.contracts) {
+      const key = String(c.key || "").trim();
+      const value = String(c.value || "").trim();
+      if (key || value) chunks.push(key ? `${key}: ${value}` : value);
+    }
+  }
+  for (const part of node.parts || []) {
+    const text = partText(part);
+    if (text) chunks.push(text);
+  }
+  for (const child of node.children || []) {
+    const sub = collectCardText(child);
+    if (sub) chunks.push(sub);
+  }
+  return chunks.filter(Boolean).join("\n\n");
 }

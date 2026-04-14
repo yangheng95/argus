@@ -220,8 +220,8 @@ export const OrchestratorGoalTable = sqliteTable(
     title: text().notNull(),
     /** Full objective statement — what this goal accomplishes. */
     objective: text().notNull(),
-    /** Verifiable pass/fail criteria. Must be Eval Agent executable. */
-    done_definition: text().notNull(),
+    /** Typed acceptance specs (AcceptanceSpec[] JSON). Eval source of truth. */
+    acceptance_specs: text({ mode: "json" }).$type<import("@/acceptance/types").AcceptanceSpec[]>().notNull().default([]),
     /** Files this goal owns exclusively. Executor hard write boundary. */
     owned_paths: text({ mode: "json" }).$type<string[]>().notNull().default([]),
     /** Goal IDs this depends on (must complete before this goal starts). */
@@ -242,7 +242,7 @@ export const OrchestratorGoalTable = sqliteTable(
     /** Per-goal retry counter. Incremented each time retry_failed_goals resets this goal. */
     retry_count: integer().notNull().default(0),
     order_index: integer().notNull().default(0),
-    /** Remaining metadata (qa_profile, check_selector, etc.) */
+    /** Remaining metadata (check_selector, visual hints, etc.) */
     metadata: text({ mode: "json" }).$type<OrchestratorMetadata>(),
     ...Timestamps,
   },
@@ -399,9 +399,7 @@ export const OrchestratorInteractionRequestTable = sqliteTable(
     task_id: text()
       .notNull()
       .references(() => OrchestratorTaskTable.id, { onDelete: "cascade" }),
-    run_id: text()
-      .notNull()
-      .references(() => OrchestratorRunTable.id, { onDelete: "cascade" }),
+    run_id: text().references(() => OrchestratorRunTable.id, { onDelete: "cascade" }),
     session_id: text().references(() => SessionTable.id, { onDelete: "set null" }),
     external_id: text().notNull(),
     request_type: text().notNull().$type<OrchestratorInteractionType>(),

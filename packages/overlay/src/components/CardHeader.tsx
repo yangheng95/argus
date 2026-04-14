@@ -1,6 +1,7 @@
-import { Show } from "solid-js";
+import { Show, createSignal } from "solid-js";
 import { displayToolIcon } from "../utils/tool";
-import type { CardNode } from "../utils/card-tree";
+import { collectCardText, type CardNode } from "../utils/card-tree";
+import { t } from "../utils/i18n";
 
 function statusBadge(node: CardNode): { tone: string; glyph: string } {
   const s = node.status;
@@ -18,6 +19,15 @@ function leadingGlyph(node: CardNode): string {
   return "";
 }
 
+async function writeClipboard(text: string): Promise<boolean> {
+  if (!text) return false;
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return true;
+  }
+  return false;
+}
+
 export function CardHeader(props: {
   node: CardNode;
   expanded: boolean;
@@ -26,6 +36,18 @@ export function CardHeader(props: {
 }) {
   const badge = () => statusBadge(props.node);
   const glyph = () => leadingGlyph(props.node);
+  const [copied, setCopied] = createSignal(false);
+  const canCopy = () => !!collectCardText(props.node);
+
+  const onCopy = async (e: MouseEvent | KeyboardEvent) => {
+    e.stopPropagation();
+    const text = collectCardText(props.node);
+    if (!text) return;
+    const ok = await writeClipboard(text);
+    if (!ok) return;
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1200);
+  };
 
   return (
     <div
@@ -63,6 +85,36 @@ export function CardHeader(props: {
       </Show>
       <Show when={props.node.subtitle}>
         <span class="card__subtitle">{props.node.subtitle}</span>
+      </Show>
+      <Show when={canCopy()}>
+        <button
+          type="button"
+          class="card__copy"
+          classList={{ "card__copy--done": copied() }}
+          title={copied() ? t("common.copied") : t("common.copy")}
+          aria-label={copied() ? t("common.copied") : t("common.copy")}
+          onClick={onCopy}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              void onCopy(e);
+            }
+          }}
+        >
+          <Show
+            when={copied()}
+            fallback={
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <rect x="5" y="3" width="8" height="10" rx="1.3" stroke="currentColor" stroke-width="1.3" />
+                <path d="M3.5 5.5V12a1.5 1.5 0 0 0 1.5 1.5h5.5" stroke="currentColor" stroke-width="1.3" fill="none" />
+              </svg>
+            }
+          >
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path d="M3.5 8.5l3 3 6-6.5" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+          </Show>
+        </button>
       </Show>
       <Show when={props.collapsible}>
         <span class="card__chevron" aria-hidden="true">

@@ -8,7 +8,7 @@ You produce BINDING consensus written to the Decision Log. Every Planner and Exe
 
 ## What You Can See
 
-- All GoalContracts[] (full set — id, title, objective, done_definition, owned_paths, exports, imports, depends_on)
+- All GoalContracts[] (full set — id, title, objective, acceptance_specs, owned_paths, exports, imports, depends_on)
 - User's original request
 - Decision Log (requirements has already seeded runtime, stack decisions)
 - The codebase (via tools: read_file, find_files, search_code)

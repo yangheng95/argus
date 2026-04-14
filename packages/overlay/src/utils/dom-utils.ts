@@ -26,19 +26,40 @@ export { sanitizeDirectoryMode } from "../store/settings";
  * Set up auto-scroll-to-bottom on a scrollable container.
  *
  * Behavior:
- * - Automatically scrolls to the bottom when new content appears
- * - If the user scrolls up, auto-scroll pauses
- * - When the user scrolls back to the bottom, auto-scroll resumes
+ * - Automatically scrolls to the bottom when new content appears.
+ * - As soon as the user scrolls up (even by a few pixels), auto-follow pauses.
+ * - Auto-follow only resumes when the user drags the scrollbar all the way
+ *   back to the bottom. A small sub-pixel tolerance is allowed so that
+ *   rounded scroll positions still count as "at bottom".
  *
- * Uses MutationObserver to detect DOM changes (works with SolidJS reactivity).
- * Returns a cleanup function that removes the listener and disconnects the observer.
+ * Program-initiated scrolls (our own scrollTop writes) are distinguished
+ * from user scrolls by tracking the last landing position we set. Scroll
+ * events that land within `PROGRAM_TOLERANCE` px of that position are
+ * treated as program-echo and never flip tracking off — otherwise a
+ * sub-pixel mismatch after el.scrollTop = el.scrollHeight could mark the
+ * container as "not at bottom" and silently disable auto-follow.
  */
-export function setupAutoScroll(el: HTMLElement, threshold = 60): () => void {
+const BOTTOM_TOLERANCE = 8;
+const PROGRAM_TOLERANCE = 2;
+
+export function setupAutoScroll(el: HTMLElement): () => void {
   let tracking = true;
   let rafPending = false;
+  let expectedTop = el.scrollTop;
+
+  function distanceFromBottom(): number {
+    return el.scrollHeight - el.clientHeight - el.scrollTop;
+  }
 
   function onScroll() {
-    tracking = el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
+    if (Math.abs(el.scrollTop - expectedTop) <= PROGRAM_TOLERANCE) {
+      // Program-echo: our own scrollTop write landed here. Do not let
+      // rounding flip tracking off.
+      expectedTop = el.scrollTop;
+      return;
+    }
+    tracking = distanceFromBottom() <= BOTTOM_TOLERANCE;
+    expectedTop = el.scrollTop;
   }
 
   function scrollDown() {
@@ -46,7 +67,9 @@ export function setupAutoScroll(el: HTMLElement, threshold = 60): () => void {
     rafPending = true;
     requestAnimationFrame(() => {
       rafPending = false;
+      if (!tracking) return;
       el.scrollTop = el.scrollHeight;
+      expectedTop = el.scrollTop;
     });
   }
 
@@ -59,8 +82,11 @@ export function setupAutoScroll(el: HTMLElement, threshold = 60): () => void {
   const observer = new MutationObserver(scrollDown);
   observer.observe(el, { childList: true, subtree: true, characterData: true });
 
-  // Initial scroll to bottom
-  scrollDown();
+  // Initial snap-to-bottom.
+  requestAnimationFrame(() => {
+    el.scrollTop = el.scrollHeight;
+    expectedTop = el.scrollTop;
+  });
 
   return () => {
     el.removeEventListener("scroll", onScroll);
@@ -200,7 +226,7 @@ export function pathItems(value: string): Array<{ label: string; path: string }>
 
 /**
  * Return an inline SVG string for the given path-action button kind.
- * Supported kinds: "browse" | "new" | "history" | any (returns × close icon).
+ * Supported kinds: "browse" | "new" | any (returns × close icon).
  */
 export function pathIcon(kind: string): string {
   if (kind === "browse") {
@@ -211,13 +237,6 @@ export function pathIcon(kind: string): string {
   if (kind === "new") {
     return `<svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
       <path d="M8 3.2v9.6M3.2 8h9.6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
-    </svg>`;
-  }
-  if (kind === "history") {
-    return `<svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path d="M8 4v4l2.5 1.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
-      <path d="M3.05 8a5 5 0 1 1 .5 2.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
-      <path d="M3 10.5L3.05 8 1 9" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
     </svg>`;
   }
   return `<svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
@@ -233,10 +252,8 @@ export function pathBreadcrumb(value: string): string {
   const browse = escapeHtml(t("cwd.browse"));
   const create = escapeHtml(t("cwd.new"));
   const reset = escapeHtml(t("cwd.reset"));
-  const recent = escapeHtml(t("cwd.recent"));
   const directory = settingsStore.directory;
   const actions = [
-    `<button type="button" class="task-dir-tool" data-path-action="recent" title="${recent}" aria-label="${recent}">${pathIcon("history")}</button>`,
     `<button type="button" class="task-dir-tool" data-path-action="browse" title="${browse}" aria-label="${browse}">${pathIcon("browse")}</button>`,
     `<button type="button" class="task-dir-tool" data-path-action="create" title="${create}" aria-label="${create}">${pathIcon("new")}</button>`,
     directory

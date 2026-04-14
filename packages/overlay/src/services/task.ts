@@ -24,9 +24,11 @@ import {
   clearBoard,
   boardStore,
   setBoardStore,
+  taskByID,
 } from "../store/board";
 import { settingsStore } from "../store/settings";
 import { appStore, setAppStore } from "../store/app";
+import { applyDirectory } from "./workspace";
 
 // ── Types ──
 
@@ -188,49 +190,77 @@ export async function selectTask(
 ): Promise<void> {
   const nextTaskID = taskID || "";
 
- // Guard: skip if already on this task and board is loaded
-  if (nextTaskID === boardStore.selectedTaskID && boardStore.board) {
+  // Guard: skip if already on this task. Board-loaded OR switch-in-flight
+  // both count as "nothing to do" — without the taskSwitching check a user
+  // clicking the same task before the first load finishes would interrupt
+  // and restart their own load.
+  if (
+    nextTaskID === boardStore.selectedTaskID &&
+    (boardStore.board || boardStore.taskSwitching)
+  ) {
     return;
   }
 
- // Abort any in-flight chat request so the composer does not remain "busy".
+  // ── Synchronous phase ────────────────────────────────────────────────
+  // Everything the UI needs to feel "switched instantly" happens here:
+  // cancel in-flight work, wipe task-scoped stores, flip the selected ID,
+  // flip taskSwitching=true so the top progress bar appears. Any async work
+  // is deferred to the next phase under epoch guard so rapid-fire clicks
+  // don't trample each other.
   abortChatRequest();
-  // Clear attachments staged for the previous task.
   setChatAttachments([]);
-
- // Stop any running SSE stream.
   stopSSE();
-
- // Clear all task-scoped state.
   clearBoard();
   clearMessages();
   clearAgentEvents();
-  // Reset budget dirty flag so the new task's budget values populate correctly.
-  // Without this, stale budgetDirty=true from a previous task edit would
-  // prevent setBudgetInputs from running inside renderBudget.
-  if (appStore.budgetDirty) {
-    setAppStore("budgetDirty", false);
-  }
+  if (appStore.budgetDirty) setAppStore("budgetDirty", false);
   setSelectedTaskID(nextTaskID);
   setBoardStore("selectedTaskID", nextTaskID);
 
   if (!nextTaskID) {
- // Deselecting — nothing further to load
+    // Deselection has no async work; make sure any lingering progress UI
+    // from a superseded switch is cleared.
+    setBoardStore("taskSwitching", false);
     return;
   }
 
- // Load board + transcript in parallel (best-effort; failures are logged)
-  await Promise.all([
-    loadBoard({ sync: true }).catch((e) =>
-      console.error("[selectTask] loadBoard failed:", e),
-    ),
-    syncTask(nextTaskID).catch((e) =>
-      console.error("[selectTask] syncTask failed:", e),
-    ),
-  ]);
+  const epoch = boardStore.selectEpoch + 1;
+  setBoardStore("selectEpoch", epoch);
+  setBoardStore("taskSwitching", true);
 
- // Start SSE for the newly selected task
-  startSSE(nextTaskID);
+  // ── Async phase ──────────────────────────────────────────────────────
+  const stale = () => boardStore.selectEpoch !== epoch;
+
+  try {
+    // Cross-project switch: apply the new directory so every project-scoped
+    // API (config, permissions, meta, executors) targets the correct
+    // backend Instance before we load the new task's board.
+    const taskItem = taskByID(nextTaskID);
+    const taskDirectory =
+      typeof taskItem?.task?.directory === "string" ? taskItem.task.directory : "";
+    if (taskDirectory && taskDirectory !== settingsStore.directory) {
+      await applyDirectory(taskDirectory, { save: true });
+      if (stale()) return;
+    }
+
+    await Promise.all([
+      loadBoard({ sync: true }).catch((e) =>
+        console.error("[selectTask] loadBoard failed:", e),
+      ),
+      syncTask(nextTaskID).catch((e) =>
+        console.error("[selectTask] syncTask failed:", e),
+      ),
+    ]);
+    if (stale()) return;
+
+    startSSE(nextTaskID);
+  } finally {
+    // Only clear the progress flag if we are still the active selection.
+    // A newer selectTask() call has taken over and will manage its own flag.
+    if (boardStore.selectEpoch === epoch) {
+      setBoardStore("taskSwitching", false);
+    }
+  }
 }
 
 // ── Public: deleteTask ──

@@ -13,7 +13,6 @@ import { tool } from "ai"
 import z from "zod"
 import { createCodebaseTools } from "@/orchestrator/codebase-tools"
 import { Memory } from "@/memory"
-import { Question } from "@/question"
 import { Instance } from "@/project/instance"
 import { Log } from "@/util/log"
 
@@ -32,7 +31,7 @@ const EXA_BASE_URL = "https://mcp.exa.ai"
  * - 2 memory tools: memory_search, memory_get
  * - 1 web search tool: web_search
  */
-export function createPlannerTools(taskWorkDir?: string, sessionID?: string) {
+export function createPlannerTools(taskWorkDir?: string) {
   const codebase = createCodebaseTools(taskWorkDir)
   let projectId: string
   try {
@@ -158,42 +157,6 @@ export function createPlannerTools(taskWorkDir?: string, sessionID?: string) {
         },
       }),
     } : {}),
-
-    // --- Clarification questions ---
-    ...(sessionID
-      ? {
-          question: tool({
-            description:
-              "Ask a clarification question when the task is ambiguous or you need user input to make the right decision. " +
-              "In unattended mode, questions are automatically answered by the orchestrator. " +
-              "Provide clear options when possible.",
-            inputSchema: z.object({
-              questions: z.array(
-                z.object({
-                  question: z.string().describe("Complete question"),
-                  header: z.string().describe("Very short label (max 30 chars)"),
-                  options: z.array(
-                    z.object({
-                      label: z.string().describe("Display text (1-5 words)"),
-                      description: z.string().describe("Explanation of choice"),
-                    }),
-                  ).describe("Available choices"),
-                }),
-              ).describe("Questions to ask"),
-            }),
-            execute: async ({ questions }) => {
-              try {
-                const answers = await Question.ask({ sessionID: sessionID!, questions })
-                return questions
-                  .map((q, i) => `"${q.question}" → ${answers[i]?.join(", ") ?? "Unanswered"}`)
-                  .join("\n")
-              } catch {
-                return "Question was dismissed. Proceed with reasonable defaults."
-              }
-            },
-          }),
-        }
-      : {}),
   }
 }
 

@@ -108,6 +108,16 @@ export default function SkillMarketPanel() {
   const builtinCount = createMemo(() => skills().length - customSkills().length);
   const mcpEntries = createMemo(() => Object.entries(mcp()));
 
+  // Mirror live counts into the configArea summary badge (sibling DOM node).
+  createEffect(() => {
+    const el = document.getElementById("extensionsSummary");
+    if (!el) return;
+    el.textContent = t("extensions.summary", {
+      skills: skills().length,
+      mcp: mcpEntries().length,
+    });
+  });
+
   async function reloadAll() {
     setLoading(true);
     try {
@@ -326,7 +336,7 @@ export default function SkillMarketPanel() {
       </Show>
 
       {/* ── Installed Skills ── */}
-      <details class="config-subsection" open>
+      <details class="config-subsection">
         <summary class="config-subsection-head">{t("skill.title")}</summary>
         <div class="config-subsection-body">
           <div class="extension-head">
@@ -465,7 +475,7 @@ export default function SkillMarketPanel() {
       </details>
 
       {/* ── MCP Servers ── */}
-      <details class="config-subsection" open>
+      <details class="config-subsection">
         <summary class="config-subsection-head">{t("mcp.title")}</summary>
         <div class="config-subsection-body">
           <div class="extension-head">

@@ -2,6 +2,10 @@
 // Provides server URL detection, auth headers,
 // and typed fetch helpers for the OpenCorvus overlay.
 
+import serverDefaults from "../../../opencorvus/server-defaults.json";
+
+const DEFAULT_LOCAL_SERVER_URL = `http://${serverDefaults.host}:${serverDefaults.port}`;
+
 export const DEFAULT_SERVER = (() => {
   if (
     typeof window !== "undefined" &&
@@ -10,7 +14,7 @@ export const DEFAULT_SERVER = (() => {
   ) {
     return window.location.origin;
   }
-  return "http://127.0.0.1:7878";
+  return DEFAULT_LOCAL_SERVER_URL;
 })();
 
 let serverUrl = DEFAULT_SERVER;
@@ -37,7 +41,11 @@ export function apiUrl(path: string): string {
   const base = serverUrl.replace(/\/+$/, "");
   const next = path.replace(/^\/+/, "");
   const url = new URL(`${base}/${next}`);
-  if (directoryContext && !url.searchParams.has("directory")) {
+  // Routes under /global and /auth run outside the Instance.provide middleware
+  // and are explicitly cross-project; injecting ?directory= would cause
+  // /global/tasks to be filtered to a single project.
+  const isCrossProject = next.startsWith("global/") || next === "global" || next.startsWith("auth/") || next === "auth";
+  if (!isCrossProject && directoryContext && !url.searchParams.has("directory")) {
     url.searchParams.set("directory", directoryContext);
   }
   return url.toString();

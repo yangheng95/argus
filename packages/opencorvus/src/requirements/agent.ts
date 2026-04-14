@@ -8,7 +8,7 @@
  * Architecture invariants (from specs/new-arch.svg):
  * ① RequirementsAgent is the sole producer of GoalContractFields.
  * ② DB mapping is lossless: each field gets its own column.
- * ③ done_definition must be Eval Agent executable.
+ * ③ acceptance_specs are the typed source of truth (heuristic + rubric).
  * ④ owned_paths is the hard write boundary for Executor.
  * ⑤ Contract is immutable once created. Only re-running requirements analysis can change it.
  */
@@ -21,7 +21,7 @@ import { toolGuard } from "@/util/tool-guard"
 import { OrchestratorConfig } from "@/orchestrator/config"
 import { AttachmentStore } from "@/storage/attachment-store"
 import { AgentRuntime } from "@/agent/runtime"
-import { operatorNotesSection } from "@/orchestrator/helpers"
+import { clarificationTranscriptSection, operatorNotesSection } from "@/orchestrator/helpers"
 import { loadStageSkills } from "@/orchestrator/skill-inject"
 import { Config } from "@/config/config"
 import type { RequirementsOutput, ParsedGoalContract, RequirementsDecision, ParsedRequirement, TraceabilityEntry } from "./types"
@@ -134,7 +134,7 @@ async function runInternal(input: {
 
   // Merge planner tools (codebase exploration) + structured output tools (goal registration).
   // Each registration tool call is small (~500 bytes) — no buffering risk.
-  const plannerTools = createPlannerTools(taskWorkDir, input.sessionID)
+  const plannerTools = createPlannerTools(taskWorkDir)
   const outputToolKit = createRequirementsOutputTools(taskWorkDir)
   const guard = toolGuard({ ...plannerTools, ...outputToolKit.tools })
 
@@ -324,7 +324,7 @@ function collectorToOutput(collector: RequirementsCollector): RequirementsOutput
       id: g.id,
       title: g.title,
       objective: g.objective,
-      done_definition: g.done_definition,
+      acceptance_specs: g.acceptance_specs,
       owned_paths: g.owned_paths,
       depends_on: g.depends_on,
       exports: g.exports,
@@ -346,7 +346,7 @@ function goalToContract(g: ParsedGoalContract): GoalContractFields {
     id: g.id,
     title: g.title,
     objective: g.objective,
-    done_definition: g.done_definition,
+    acceptance_specs: g.acceptance_specs,
     owned_paths: g.owned_paths,
     depends_on: g.depends_on,
     exports: g.exports,
@@ -373,19 +373,11 @@ async function buildMultimodalContent(
   text: string,
   attachments?: Array<{ sha: string; url: string; mime: string; size: number; filename?: string }>,
 ) {
-  if (!attachments?.length) return text
-  const fileParts = await Promise.all(attachments.map(async (a) => {
-    const located = AttachmentStore.nameFromUrl(a.url)
-    if (!located) throw new Error(`attachment has no resolvable url: ${a.filename ?? a.sha}`)
-    const bytes = await AttachmentStore.read(located.projectID, located.name)
-    return {
-      type: "file" as const,
-      data: bytes,
-      mediaType: a.mime,
-      ...(a.filename ? { filename: a.filename } : {}),
-    }
-  }))
-  return [{ type: "text" as const, text }, ...fileParts]
+  const { multimodal, referenceOnly } = AttachmentStore.partition(attachments)
+  const enrichedText = text + AttachmentStore.renderReferenceList(referenceOnly)
+  const fileParts = await AttachmentStore.loadFileParts(multimodal)
+  if (fileParts.length === 0) return enrichedText
+  return [{ type: "text" as const, text: enrichedText }, ...fileParts]
 }
 
 // ---------------------------------------------------------------------------
@@ -404,6 +396,8 @@ function buildUserPrompt(
   const sections = [`# Task\n\nTitle: ${input.title}\n\nRequest:\n${input.request}`]
 
   if (input.taskID) {
+    const clarifications = clarificationTranscriptSection(input.taskID)
+    if (clarifications) sections.push(clarifications)
     const notes = operatorNotesSection(input.taskID)
     if (notes) sections.push(notes)
   }
@@ -521,11 +515,11 @@ function validateQuality(
   else if (withPaths > 0) { score += 0.07; reasons.push(`${parsed.goals.length - withPaths} goal(s) missing owned_paths`) }
   else if (parsed.goals.length > 0) reasons.push("No goals have owned_paths")
 
-  // Done definitions (0.15)
-  const withDone = parsed.goals.filter((g) => g.done_definition.length > 10).length
-  if (withDone === parsed.goals.length && parsed.goals.length > 0) score += 0.15
-  else if (withDone > 0) { score += 0.07; reasons.push(`${parsed.goals.length - withDone} goal(s) missing done_definition`) }
-  else if (parsed.goals.length > 0) reasons.push("No goals have done_definition")
+  // Acceptance specs (0.15) — every goal must have at least one spec.
+  const withSpecs = parsed.goals.filter((g) => g.acceptance_specs.length > 0).length
+  if (withSpecs === parsed.goals.length && parsed.goals.length > 0) score += 0.15
+  else if (withSpecs > 0) { score += 0.07; reasons.push(`${parsed.goals.length - withSpecs} goal(s) missing acceptance_specs`) }
+  else if (parsed.goals.length > 0) reasons.push("No goals have acceptance_specs")
 
   // Exports declared (0.10)
   const withExports = parsed.goals.filter((g) => g.exports.length > 0).length

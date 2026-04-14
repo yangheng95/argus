@@ -1,6 +1,7 @@
 import { Identifier } from "@/id/id"
 import { OrchestratorGoalTable, OrchestratorProgressSnapshotTable, OrchestratorTaskTable } from "@/orchestrator/orchestrator.sql"
 import { Database, desc, eq } from "@/storage/db"
+import type { AcceptanceSpec } from "@/acceptance/types"
 
 export namespace GoalService {
   export function addOperatorGoal(input: { taskID: string; description: string }) {
@@ -27,7 +28,23 @@ export namespace GoalService {
           plan_version_id: planVersionID,
           title: input.description,
           objective: input.description,
-          done_definition: "This operator-provided goal is satisfied and acceptance checks still pass.",
+          acceptance_specs: [
+            {
+              id: `acc-operator-${Identifier.ascending("spec")}`,
+              source_requirement_id: "operator",
+              goal_id: "operator",
+              title: input.description.slice(0, 80),
+              severity: "essential",
+              scorers: [
+                {
+                  type: "llm_judge",
+                  name: "operator-intent",
+                  criteria: `The delivery satisfies this operator-provided goal: ${input.description}`,
+                  inputs: ["delivery_summary", "changed_files"],
+                },
+              ],
+            },
+          ],
           owned_paths: [],
           depends_on: [],
           exports: [],
@@ -68,14 +85,14 @@ export namespace GoalService {
   export function updateGoal(input: {
     goalID: string
     title: string
-    done_definition: string
+    acceptance_specs: AcceptanceSpec[]
   }) {
     return Database.use((db) =>
       db
         .update(OrchestratorGoalTable)
         .set({
           title: input.title,
-          done_definition: input.done_definition,
+          acceptance_specs: input.acceptance_specs,
           time_updated: Date.now(),
         })
         .where(eq(OrchestratorGoalTable.id, input.goalID))

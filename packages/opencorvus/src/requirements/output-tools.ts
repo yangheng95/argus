@@ -19,6 +19,7 @@ import path from "path"
 import fs from "fs"
 import { Instance } from "@/project/instance"
 import { GoalContractFieldsSchema } from "@/pipeline/goal-contract.schema"
+import type { AcceptanceSpec } from "@/acceptance/types"
 
 // ---------------------------------------------------------------------------
 // Collector — accumulates registered items across tool calls
@@ -43,7 +44,7 @@ export interface RegisteredGoal {
   id: string
   title: string
   objective: string
-  done_definition: string
+  acceptance_specs: AcceptanceSpec[]
   owned_paths: string[]
   depends_on: string[]
   exports: string[]

@@ -106,7 +106,8 @@ This is the core phase. For EVERY requirement from Phase 1, assign it to a goal.
 - `id`: Unique identifier (e.g., goal_bootstrap, goal_api, goal_ui)
 - `title`: Short name
 - `objective`: What this goal accomplishes — detailed enough for an executor who sees ONLY this goal
-- `done_definition`: Concrete, verifiable pass/fail criteria. The Eval Agent uses this.
+- `acceptance_specs`: Typed acceptance specs (AcceptanceSpec[]). Each spec attaches one or more
+  scorers (heuristic shell, llm_judge rubric, or prebuilt) that the Eval Agent runs deterministically.
 - `owned_paths`: Files this goal has EXCLUSIVE write access to (discovered from exploration)
 - `depends_on`: Goal IDs this depends on (must complete first)
 - `exports`: Interfaces this goal PROVIDES for dependent goals (function signatures, types)
@@ -116,7 +117,7 @@ This is the core phase. For EVERY requirement from Phase 1, assign it to a goal.
 - `requirement_ids`: REQ-N references this goal covers (MANDATORY — empty = implicit goal)
 
 **The objective field is critical.** Each goal executes in an isolated worktree. The executor sees ONLY:
-- This goal's objective + done_definition
+- This goal's objective + acceptance_specs
 - This goal's owned_paths
 - The shared Decision Log
 - A summary of ALL sibling goals (so it knows what others are doing)
@@ -129,18 +130,20 @@ Therefore, the objective must be self-contained. Include:
 
 ### Phase 4.5: UNIT TESTS (MANDATORY for new projects)
 
-Every feature goal's `done_definition` MUST include unit test requirements. Tests are not optional extras — they are core acceptance criteria.
+Every feature goal's `acceptance_specs` MUST include at least one heuristic spec that runs the project's unit tests for the goal's owned files. Tests are not optional extras — they are core acceptance criteria expressed as a heuristic shell scorer.
 
 **Rules:**
-- Each feature goal that creates new functions/classes/modules MUST include "unit tests pass" in its `done_definition`.
+- Each feature goal that creates new functions/classes/modules MUST include a `heuristic` scorer that runs the test command (e.g. `bun test src/api/`).
 - Tests belong to the goal that owns the code under test — do NOT create separate test-only goals unless the project has a dedicated test suite spanning multiple modules.
-- The executor writes tests as part of implementing the goal. The done_definition tells it what to test.
+- The executor writes tests as part of implementing the goal; the acceptance scorers tell it what to verify.
 - For existing codebases: follow existing test patterns (test framework, file locations, naming).
 - For new projects: specify the test framework in a `register_decision` (e.g., bun:test, vitest, jest, pytest).
 
-**Example done_definition with tests:**
-```
-"All API endpoints return correct status codes and response shapes. Unit tests cover: GET /stocks (200 with list, 404), POST /order (201, 400 validation). Tests pass with `bun test src/api/`."
+**Example heuristic scorer for tests:**
+```json
+{ "type": "heuristic", "name": "unit-tests",
+  "spec": { "kind": "shell", "cmd": "bun test src/api/" },
+  "expect": { "exit_code": 0 } }
 ```
 
 ### Phase 5: IMPLICIT GOALS
@@ -213,18 +216,50 @@ register_decision({ key: "runtime", value: "Bun", reason: "package.json specifie
 ### Step 3: Register goals
 Call `register_goal` once per goal. All fields are validated:
 - objective must be >= 50 chars (self-contained for isolated executor)
-- done_definition must be >= 10 chars (verifiable by Eval Agent)
+- acceptance_specs must contain >= 1 spec (typed, eval-executable)
 - owned_paths must have >= 1 entry (discovered via tool exploration)
 - kind must be: bootstrap | feature | verification | integration | system
 - priority must be: blocking | advisory
 
-Example:
+**AcceptanceSpec shape (passed inside acceptance_specs[]):**
+```
+{
+  id: "acc-types-build",                     // unique within goal
+  source_requirement_id: "REQ-3",            // REQ-N this spec derives from
+  goal_id: "goal_types",                     // owning goal id
+  title: "Types compile cleanly",
+  scenario: { given: ["..."], when: ["..."], then: ["..."] },  // optional Gherkin
+  severity: "essential",                     // essential | important | optional | pitfall
+  scorers: [
+    { "type": "heuristic", "name": "tsc",
+      "spec": { "kind": "shell", "cmd": "bun run typecheck" },
+      "expect": { "exit_code": 0 } },
+    { "type": "llm_judge", "name": "type-doc-quality",
+      "criteria": "Each exported type has a JSDoc comment explaining purpose and invariants.",
+      "rubric": [
+        { "score": 0, "label": "missing", "anchor": "no JSDoc on exports", "passes": false },
+        { "score": 1, "label": "partial", "anchor": "some exports documented", "passes": false },
+        { "score": 2, "label": "complete", "anchor": "all exports documented with intent", "passes": true }
+      ],
+      "inputs": ["delivery_summary", "changed_files"] }
+  ]
+}
+```
+
+Example register_goal call:
 ```
 register_goal({
   id: "goal_types",
   title: "Shared types and interfaces",
   objective: "Create shared TypeScript type definitions for the Stock, Portfolio, and Trade entities. These types are consumed by all other goals. Define them in src/types/ with full JSDoc documentation. Stock must include id, name, price, volume fields. Portfolio tracks holdings with current value computation.",
-  done_definition: "All types compile with tsc --noEmit, are importable from src/types/index.ts, and include all fields specified in the requirements",
+  acceptance_specs: [
+    { id: "acc-types-build", source_requirement_id: "REQ-3", goal_id: "goal_types",
+      title: "Types compile cleanly", severity: "essential",
+      scorers: [
+        { type: "heuristic", name: "tsc",
+          spec: { kind: "shell", cmd: "bun run typecheck" }, expect: { exit_code: 0 } }
+      ] }
+  ],
   owned_paths: ["src/types/index.ts", "src/types/stock.ts"],
   depends_on: [],
   exports: ["type Stock = { id: string; name: string; price: number; volume: number }", "type Portfolio"],
@@ -286,7 +321,7 @@ Before calling finalize_decomposition, verify ALL of these. If ANY answer is NO,
 2. Does EVERY REQ-N appear in at least one goal's requirement_ids (or is covered by an implicit goal)?
 3. Is the traceability matrix complete — no orphaned requirements?
 4. Does every goal have owned_paths discovered via tools (not guessed)?
-5. Does each goal have a concrete, verifiable done_definition?
+5. Does each goal have at least one acceptance_spec (with executable scorers)?
 6. Is each goal's objective self-contained enough for an executor who sees ONLY that goal?
 7. Are dependencies correct (bootstrap before consumers)?
 8. Do exports/imports align across dependent goals?

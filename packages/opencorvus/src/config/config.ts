@@ -1268,10 +1268,6 @@ export namespace Config {
             .boolean()
             .optional()
             .describe("Auto-approve permission requests in unattended mode (default: false)"),
-          auto_question: z
-            .boolean()
-            .optional()
-            .describe("Auto-answer clarification questions in unattended mode (default: false)"),
           mcp_timeout: z
             .number()
             .int()

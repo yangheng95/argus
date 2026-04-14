@@ -1,4 +1,5 @@
 import z from "zod"
+import { generateObject } from "ai"
 import { Agent } from "@/agent/agent"
 import { Bus } from "@/bus"
 import { Config } from "@/config/config"
@@ -17,6 +18,7 @@ import { Project } from "@/project/project"
 import { Question } from "@/question"
 import { Scheduler } from "@/scheduler"
 import { Session } from "@/session"
+import { Snapshot } from "@/snapshot"
 import { Message } from "@/session/message"
 import { Database, NotFoundError, and, eq, inArray } from "@/storage/db"
 import { Log } from "@/util/log"
@@ -118,12 +120,20 @@ import { AttachmentStore } from "@/storage/attachment-store"
 
 const log = Log.create({ service: "assistant" })
 
-async function continueTaskMessage(taskID: string, text: string) {
+async function continueTaskMessage(
+  taskID: string,
+  text: string,
+  attachments: AttachmentStore.Reference[] = [],
+) {
   const task = requireTask(taskID)
   const run = task.active_run_id ? findRun(task.active_run_id) : undefined
 
-  // If executor is running and supports resume → inject directly
-  const injected = run ? await injectRunningTaskMessage(task, run, text) : false
+  // Inject fast path is text-only: executor.resume() has no attachment channel.
+  // When attachments are present we must write them to session first so the
+  // next Task Agent turn sees the full user message (text + file parts), and
+  // fall through to the queued-note path to trigger that turn.
+  const injected =
+    attachments.length === 0 && run ? await injectRunningTaskMessage(task, run, text) : false
   if (injected) {
     return {
       mode: "injected" as const,
@@ -133,7 +143,7 @@ async function continueTaskMessage(taskID: string, text: string) {
   }
 
   // Always store the message in session history so Task Agent can see it later
-  await appendTaskSessionMessage(task, text)
+  await appendTaskSessionMessage(task, text, attachments)
 
   // If task is in a terminal/blocked state → wake up Task Agent to handle the message
   if (["failed", "cancelled"].includes(task.status)) {
@@ -199,7 +209,11 @@ async function injectRunningTaskMessage(task: TaskRow, run: RunRow, message: str
   return true
 }
 
-async function appendTaskSessionMessage(task: TaskRow, text: string) {
+async function appendTaskSessionMessage(
+  task: TaskRow,
+  text: string,
+  attachments: AttachmentStore.Reference[] = [],
+) {
   if (!task.session_id) return
   const ctx = await messageContext(task.session_id)
   if (!ctx) return
@@ -213,14 +227,27 @@ async function appendTaskSessionMessage(task: TaskRow, text: string) {
     agent: ctx.agent,
     model: ctx.model,
   } satisfies Message.User)
-  await Session.updatePart({
-    id: Identifier.ascending("part"),
-    messageID: msg.id,
-    sessionID: task.session_id,
-    type: "text",
-    text,
-    kind: "user_content",
-  } satisfies Message.TextPart)
+  if (text.length > 0) {
+    await Session.updatePart({
+      id: Identifier.ascending("part"),
+      messageID: msg.id,
+      sessionID: task.session_id,
+      type: "text",
+      text,
+      kind: "user_content",
+    } satisfies Message.TextPart)
+  }
+  for (const ref of attachments) {
+    await Session.updatePart({
+      id: Identifier.ascending("part"),
+      messageID: msg.id,
+      sessionID: task.session_id,
+      type: "file",
+      mime: ref.mime,
+      url: ref.url,
+      filename: ref.filename,
+    })
+  }
   await Session.touch(task.session_id)
 }
 
@@ -445,11 +472,10 @@ export namespace OrchestratorService {
     // GoalWorkflowList) silently disappears for that task.
     //
     // Honor caller-provided _workflow if present (e.g. tests, replay), else
-    // initialize to the configured default workflow's pending state.
-    //
-    // `kind === "build"` skips this entirely — build tasks bypass the
-    // workflow pipeline so seeding state would lie about what's running.
-    if (input.kind !== "build" && !metadata._workflow) {
+    // initialize to the configured default workflow's pending state. The
+    // task-agent may still skip the pipeline by calling its `build` tool — the
+    // workflow state here is a scaffold that the agent chooses whether to use.
+    if (!metadata._workflow) {
       const defaultID = await WorkflowRegistry.defaultID()
       const defaultWorkflow =
         (await WorkflowRegistry.resolve(defaultID)) ??
@@ -483,8 +509,8 @@ export namespace OrchestratorService {
     // Decode any base64 attachments exactly once: persist the bytes under the
     // project's .opencorvus/attachments directory, then carry only references
     // (sha/url/mime/size/filename) through the queue and into every agent.
-    // The same references are also materialized as FilePart entries on a user
-    // message so the overlay renders the attachment alongside the request.
+    // The overlay renders attachments directly from task.attachments via the
+    // synthetic user-request bubble — no session message needed (was a dupe).
     const attachmentRefs: AttachmentStore.Reference[] = []
     if (input.attachments?.length) {
       const projectID = Instance.project.id
@@ -497,35 +523,6 @@ export namespace OrchestratorService {
         // specific evaluator gate claims it.
         const intent = att.mime.startsWith("image/") ? "visual_reference" : "spec_artifact"
         attachmentRefs.push({ ...ref, intent, source: "user-upload" })
-      }
-      const agentName = await Agent.defaultAgent()
-      const model = await Provider.defaultModel()
-      const userMessageID = Identifier.ascending("message")
-      await Session.updateMessage({
-        id: userMessageID,
-        sessionID: session.id,
-        role: "user",
-        time: { created: now },
-        agent: agentName,
-        model,
-      })
-      await Session.updatePart({
-        id: Identifier.ascending("part"),
-        messageID: userMessageID,
-        sessionID: session.id,
-        type: "text",
-        text: input.request,
-      })
-      for (const ref of attachmentRefs) {
-        await Session.updatePart({
-          id: Identifier.ascending("part"),
-          messageID: userMessageID,
-          sessionID: session.id,
-          type: "file",
-          mime: ref.mime,
-          url: ref.url,
-          filename: ref.filename,
-        })
       }
     }
     // Async pipeline: persist task immediately, run stages in background
@@ -784,7 +781,7 @@ export namespace OrchestratorService {
     GoalService.updateGoal({
       goalID,
       title: body.description,
-      done_definition: body.criteria,
+      acceptance_specs: body.acceptance_specs,
     })
     return true
   }
@@ -814,6 +811,17 @@ export namespace OrchestratorService {
     Database.use((db) =>
       db.delete(OrchestratorTaskTable).where(eq(OrchestratorTaskTable.id, taskID)).run(),
     )
+    // Fire-and-forget snapshot prune: every tree object written by this task's
+    // `Snapshot.track()` calls is dangling (no ref) so `git gc --prune=now`
+    // reclaims its disk footprint. Running detached keeps the caller's
+    // response path unblocked — this is a cleanup hint, not a correctness-
+    // critical step, so a failure here only shows up in the log.
+    void Snapshot.cleanup().catch((error) => {
+      log.warn("snapshot cleanup after deleteTask failed", {
+        taskID,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    })
     return true
   }
 
@@ -1064,6 +1072,21 @@ export namespace OrchestratorService {
   export async function handleTaskMessage(taskID: string, raw: z.input<typeof TaskMessageInput>) {
     const input = TaskMessageInput.parse(raw)
 
+    // Decode base64 attachments once, write bytes to AttachmentStore, and carry
+    // references downstream. Mirrors createTask so that follow-up messages and
+    // new-task messages share the same persistence shape.
+    const attachmentRefs: AttachmentStore.Reference[] = []
+    if (input.attachments?.length) {
+      const projectID = Instance.project.id
+      const projectDir = Instance.project.worktree
+      for (const att of input.attachments) {
+        const bytes = Buffer.from(att.data, "base64")
+        const ref = await AttachmentStore.write(projectID, projectDir, bytes, att.mime, att.filename)
+        const intent = att.mime.startsWith("image/") ? "visual_reference" : "spec_artifact"
+        attachmentRefs.push({ ...ref, intent, source: "user-upload" })
+      }
+    }
+
     // Fast-path: cancelled/failed tasks skip LLM intent classification.
     // Any message to a stopped task is an unambiguous restart signal.
     const task = requireTask(taskID)
@@ -1075,7 +1098,7 @@ export namespace OrchestratorService {
         text: input.text,
         summary: "User message on stopped task",
       }, { taskID, source: "service.message" })
-      const note = await continueTaskMessage(taskID, input.text)
+      const note = await continueTaskMessage(taskID, input.text, attachmentRefs)
       return {
         kind: "note" as const,
         message: note.resumed
@@ -1101,7 +1124,7 @@ export namespace OrchestratorService {
     if (!result.should_resume) {
       return result
     }
-    const note = await continueTaskMessage(taskID, input.text)
+    const note = await continueTaskMessage(taskID, input.text, attachmentRefs)
     return {
       ...result,
       message: result.kind === "note"
@@ -1127,6 +1150,62 @@ export namespace OrchestratorService {
     if (resumed) return { resumed: true, status: "active" as const }
     await appendTaskSessionMessage(task, message)
     return recordOperatorNote(taskID, message)
+  }
+
+  /**
+   * 基于任务结束时的状态推断用户最可能想让 AI 继续做的下一步，返回单条
+   * 可直接填入输入框的简短中文建议。仅面向 overlay 输入框体验，不修改
+   * 任何任务状态。LLM 失败会抛出错误，调用方自行处理（禁止 fallback）。
+   */
+  export async function generateFollowup(taskID: string): Promise<{ suggestion: string }> {
+    const task = requireTask(taskID)
+    const modelRef = await Provider.defaultModel()
+    const model = await Provider.getModel(modelRef.providerID, modelRef.modelID)
+    const language = await Provider.getLanguage(model)
+
+    const sessionID = task.session_id ?? undefined
+    const messages = sessionID
+      ? await Session.messages({ sessionID, limit: 6 })
+      : []
+    const transcript = messages
+      .flatMap((msg) => {
+        const role = msg.info.role
+        return msg.parts
+          .filter((p: any) => p.type === "text" && typeof p.text === "string")
+          .map((p: any) => String(p.text).trim())
+          .filter((text: string) => text.length > 0)
+          .map((text: string) => `${role}: ${text.slice(0, 600)}`)
+      })
+      .slice(-6)
+
+    const run = task.active_run_id ? findRun(task.active_run_id) : undefined
+    const context = [
+      `title: ${task.title}`,
+      `request: ${(task.request ?? "").slice(0, 400)}`,
+      `status: ${task.status}`,
+      task.error ? `error: ${String(task.error).slice(0, 240)}` : "",
+      run?.blocking_reason ? `blocking: ${run.blocking_reason}` : "",
+      transcript.length > 0 ? `transcript:\n${transcript.join("\n")}` : "",
+    ]
+      .filter((part) => part.length > 0)
+      .join("\n")
+
+    const result = await generateObject({
+      model: language,
+      temperature: model.providerID.startsWith("moonshotai") ? 1 : 0,
+      messages: [
+        {
+          role: "system",
+          content:
+            "你是协作中的助手。基于任务刚刚结束时的状态，推断用户最可能想让 AI 做的下一步，给出一条第一人称口吻的简短中文指令，直接作为用户发给 AI 的消息。要求：不超过 30 字；不使用引号；不解释；当任务明显已无后续时返回空字符串。",
+        },
+        { role: "user", content: context },
+      ],
+      schema: z.object({ suggestion: z.string() }),
+    })
+
+    const suggestion = (result.object?.suggestion ?? "").trim()
+    return { suggestion }
   }
 
   export async function abortRun(runID: string) {
@@ -1186,6 +1265,7 @@ function answersFromMessage(message?: string) {
 }
 
 async function resolveProtocolInteraction(row: InteractionRow, input: z.infer<typeof ReplyInteractionInput>) {
+  if (!row.run_id) throw new Error(`protocol interaction ${row.id} has no run`)
   const run = requireRun(row.run_id)
   const executor = ExecutorRegistry.require(run.executor)
   if (!executor.resolve) throw new Error(`executor ${run.executor} does not support interaction resolution`)
@@ -1239,6 +1319,7 @@ async function resolveProtocolInteraction(row: InteractionRow, input: z.infer<ty
 }
 
 async function rejectProtocolInteraction(row: InteractionRow, message?: string) {
+  if (!row.run_id) throw new Error(`protocol interaction ${row.id} has no run`)
   const run = requireRun(row.run_id)
   const executor = ExecutorRegistry.require(run.executor)
   if (!executor.resolve) throw new Error(`executor ${run.executor} does not support interaction resolution`)
@@ -1287,15 +1368,18 @@ function markProtocolInteraction(
       })
       .where(eq(OrchestratorInteractionRequestTable.id, row.id))
       .run()
-    Database.effect(() =>
-      OrchestratorProtocol.emit(Event.InteractionResolved, {
-        taskID: row.task_id,
-        runID: row.run_id,
-        interactionID: row.id,
-        status,
-        summary: status === "answered" ? "Interaction answered" : "Interaction rejected",
-      }, { taskID: row.task_id, runID: row.run_id, interactionID: row.id, source: "service.interaction" }),
-    )
+    if (row.run_id) {
+      const runID = row.run_id
+      Database.effect(() =>
+        OrchestratorProtocol.emit(Event.InteractionResolved, {
+          taskID: row.task_id,
+          runID,
+          interactionID: row.id,
+          status,
+          summary: status === "answered" ? "Interaction answered" : "Interaction rejected",
+        }, { taskID: row.task_id, runID, interactionID: row.id, source: "service.interaction" }),
+      )
+    }
   })
 }
 
