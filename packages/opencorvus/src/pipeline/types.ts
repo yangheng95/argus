@@ -72,8 +72,14 @@ export interface GoalContract {
   task: TaskRow
   /** The plan version (summary, prompt, metadata). */
   plan: PlanRow
-  /** All goals in this task (for dependency context). */
-  allGoals: Array<GoalContractFields & Record<string, unknown>>
+  /**
+   * Direct dependency goals only (subset of task's goals where this goal
+   * lists them in depends_on). Carries each dependency's exports/title so
+   * planner/executor can code against sibling interfaces without seeing
+   * unrelated goals — the previous `allGoals` shape inflated every per-goal
+   * prompt with N-1 irrelevant contracts.
+   */
+  dependencies: Array<GoalContractFields & Record<string, unknown>>
 }
 
 // ---------------------------------------------------------------------------

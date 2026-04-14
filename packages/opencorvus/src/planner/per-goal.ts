@@ -68,12 +68,16 @@ export async function planGoal(input: {
   const guard = toolGuard(createPlannerTools(input.workDir))
   const context = prefetchContext(task.title, task.request)
 
-  // Build Decision Log section — architect consensus gets its own prominent section
+  // Build Decision Log section — goal-scoped reads only. The full task log
+  // (toPromptSection) was previously injected wholesale into every per-goal
+  // planner, so each planner's prompt grew O(N goals × M decisions). We now
+  // include only entries that are task-scoped (no goalID) or attached to
+  // THIS goal — peer goals' local notes belong in their own planner runs.
   let decisionSection = ""
   let architectSection = ""
   if (input.decisionLog) {
-    decisionSection = input.decisionLog.toPromptSection()
-    architectSection = input.decisionLog.phasePromptSection("architect", "Architect Consensus")
+    decisionSection = input.decisionLog.phasePromptSectionForGoal("requirements", contract.goal.id, "Decisions (relevant to this goal)")
+    architectSection = input.decisionLog.phasePromptSectionForGoal("architect", contract.goal.id, "Architect Consensus")
   }
 
   const systemPrompt = buildPlannerSystem()
@@ -167,7 +171,7 @@ function buildPlannerPrompt(
   taskRequest: string,
   architectSection?: string,
 ): string {
-  const { goal, allGoals } = contract
+  const { goal, dependencies } = contract
   const sections: string[] = []
 
   sections.push(`# Goal Contract\n\n**${goal.title}**\n\nObjective: ${goal.objective}\n\nAcceptance Specs:\n${renderSpecsAsText(goal.acceptance_specs ?? [])}`)
@@ -176,14 +180,10 @@ function buildPlannerPrompt(
     sections.push(`## Owned Paths (EXCLUSIVE write access)\n\n${goal.owned_paths.map(p => `- ${p}`).join("\n")}`)
   }
 
-  if (goal.depends_on.length > 0) {
-    const deps = goal.depends_on
-      .map(id => allGoals.find(g => g.id === id))
-      .filter(Boolean)
-      .map(g => `- **${g!.title}**: ${g!.objective}${g!.exports?.length ? ` (exports: ${g!.exports.join(", ")})` : ""}`)
-    if (deps.length > 0) {
-      sections.push(`## Dependencies (completed before this goal)\n\n${deps.join("\n")}`)
-    }
+  if (dependencies.length > 0) {
+    const deps = dependencies
+      .map(g => `- **${g.title}**: ${g.objective}${g.exports?.length ? ` (exports: ${g.exports.join(", ")})` : ""}`)
+    sections.push(`## Dependencies (completed before this goal)\n\n${deps.join("\n")}`)
   }
 
   if (goal.imports?.length) {

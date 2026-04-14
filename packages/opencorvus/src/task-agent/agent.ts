@@ -26,6 +26,7 @@ import { Trace } from "@/trace"
 import { registerGoalRunSession } from "@/server/routes/task-event"
 import { sessionStreamHooks } from "@/agent/runtime"
 import { createTaskAgentTools } from "./tools"
+import { SubAgentProtocol } from "@/agent/sub-agent-protocol"
 import { AttachmentStore } from "@/storage/attachment-store"
 import { clarificationTranscriptSection, operatorNotesSection } from "@/orchestrator/helpers"
 import {
@@ -201,46 +202,26 @@ export namespace TaskAgent {
         ? task.request
         : describeTrigger(task, trigger)
       // Build multimodal content when task has file attachments (only for initial trigger).
-      // Attachments split into two buckets:
-      //   • multimodal-supported (image / pdf / audio / video) → inline as
-      //     AI SDK file parts so the LLM can perceive them directly.
-      //   • everything else (text/*, application/json, …) → only listed by
-      //     URL in the user prompt; the agent must call the read tool with the
-      //     attachment URL to fetch the bytes. Inlining a text/* file part as
-      //     multimodal is silently rejected by openai-compatible providers and
-      //     surfaces as "No output generated" — see AttachmentStore.isMultimodalSupported.
+      // AttachmentStore.partition routes image/audio/video/pdf to inline file
+      // parts and text/* / json to a URL-only reference list; see helper
+      // comments for the silent-rejection rationale.
       const attachments = trigger.kind === "created" && Array.isArray(task.attachments)
         ? (task.attachments as Array<{ sha?: string; url?: string; mime?: string; size?: number; filename?: string }>)
         : undefined
-      const multimodal = attachments?.filter((a) => AttachmentStore.isMultimodalSupported(String(a.mime ?? ""))) ?? []
-      const referenceOnly = attachments?.filter((a) => !AttachmentStore.isMultimodalSupported(String(a.mime ?? ""))) ?? []
-      const attachmentParts = multimodal.length
-        ? await Promise.all(multimodal.map(async (a) => {
-            const located = AttachmentStore.nameFromUrl(String(a.url ?? ""))
-            if (!located) throw new Error(`task attachment has no resolvable url: ${a.filename ?? a.sha}`)
-            const bytes = await AttachmentStore.read(located.projectID, located.name)
-            return {
-              type: "file" as const,
-              data: bytes,
-              mediaType: String(a.mime),
-              ...(a.filename ? { filename: a.filename } : {}),
-            }
-          }))
-        : []
+      const { multimodal, referenceOnly } = AttachmentStore.partition(attachments)
+      const attachmentParts = await AttachmentStore.loadFileParts(multimodal)
       // Task Agent is the orchestrator; it does NOT own a `read` tool.
       // Attachments are forwarded automatically to the sub-agents it dispatches
       // (requirements / design_analysis / architect via the `requirements` /
-      // `design_analysis` / `architect` tools), which DO have read access. We
-      // surface the inventory here purely so the Task Agent can reason about
-      // what's available when deciding which sub-agent to invoke.
+      // `design_analysis` / `architect` tools), which DO have read access. The
+      // inventory below tells the Task Agent what's available when deciding
+      // which sub-agent to invoke; the trailing instruction is a HARD design
+      // constraint (no read tool here), not a fallback hint.
       const referenceText = referenceOnly.length
-        ? "\n\n## Task Attachments (forwarded to sub-agents automatically)\n" +
-          referenceOnly
-            .map((a) => {
-              const sizeKb = typeof a.size === "number" ? `${Math.max(1, Math.round(a.size / 1024))} KB, ` : ""
-              return `- ${a.filename ?? a.sha ?? "(unnamed)"} — ${a.mime ?? "application/octet-stream"} — ${sizeKb}url: ${a.url}`
-            })
-            .join("\n") +
+        ? AttachmentStore.renderReferenceList(referenceOnly).replace(
+            "## Task Attachments (read via the `read` tool when you need their content)",
+            "## Task Attachments (forwarded to sub-agents automatically)",
+          ) +
           "\n\nDo NOT attempt to read these yourself — invoke the appropriate sub-agent (requirements / design_analysis / architect) which receives the attachments and can read them via its `read` tool."
         : ""
       const enrichedUserText = userText + referenceText
@@ -509,6 +490,7 @@ const TASK_AGENT_INSTRUCTIONS = [
   "- Call `ask_user` with the suggestions as multi-select options so the user picks which to roll in.",
   "- Once you have the selection, call restart_from_stage(requirements) to begin a new cycle with the chosen scope.",
   "- The full iteration loop: deliver → refine → ask_user → restart → requirements → architect → execute → deliver → ...",
+  "- **If refine throws** (LLM returned non-JSON output): do NOT retry refine in a loop — that burns tokens on a likely-deterministic formatting failure. Instead call `ask_user` directly with a short question asking what the operator wants to improve, then proceed with `restart_from_stage(requirements)` based on the answer. If the operator has no specific request, end the turn without restarting.",
   "",
   "**Dynamic adjustment (anytime):**",
   "- Discovered a missing requirement? → add_goal",
@@ -603,29 +585,51 @@ function buildSystemParts(task: TaskRow, trigger: TaskAgentTrigger, workflow?: M
     ctx.push(renderWorkflowPrompt(workflow, workflowState))
   }
 
-  // Run context (delivery + eval results for reasoning)
+  // Run context (delivery + eval results for reasoning).
+  //
+  // This block was the largest single source of system-prompt growth in
+  // the task-agent prior to the SubAgentProtocol introduction: a batch
+  // complete trigger could embed kilobytes of LLM-generated delivery
+  // prose, hundreds of changed-file paths, and ten checks each carrying
+  // multi-paragraph evidence. The yielded summary is now framed as a
+  // sub-agent-protocol message — same shape, same per-message ceiling
+  // as a tool return — with explicit pointers back to the persistent
+  // delivery / evaluation rows for full content.
   if (trigger.kind === "batch_complete") {
     const runID = trigger.runID
     const delivery = findDeliveryByRun(runID)
-    if (delivery) {
-      ctx.push("\n## Latest Run Result")
-      ctx.push(`- Delivery: ${delivery.summary}`)
-      const changedFiles = delivery.result?.changed_files as string[] | undefined
-      if (changedFiles?.length) ctx.push(`- Changed files: ${changedFiles.join(", ")}`)
-    }
     const evaluation = findEvaluationByRun(runID)
+
+    const fields: Array<[string, string | string[]]> = []
+    if (delivery) {
+      fields.push(["delivery_summary", delivery.summary])
+      const changedFiles = delivery.result?.changed_files as string[] | undefined
+      if (changedFiles?.length) fields.push(["changed_files", changedFiles])
+    }
     if (evaluation) {
-      ctx.push(`- Evaluation: ${evaluation.verdict} — ${evaluation.summary}`)
+      fields.push([`evaluation_${evaluation.verdict}`, evaluation.summary])
       const checks = evaluation.checks as Array<{ name: string; status: string; evidence?: string }> | undefined
       if (checks?.length) {
-        for (const c of checks.slice(0, 10)) {
-          ctx.push(`  - ${c.name}: ${c.status}${c.evidence ? ` — ${c.evidence}` : ""}`)
-        }
+        const lines = checks.map((c) => `${c.name}=${c.status}${c.evidence ? `: ${c.evidence}` : ""}`)
+        fields.push(["check_results", lines])
       }
     }
-    ctx.push(
-      `- Batch summary: ${trigger.summary.passed} passed, ${trigger.summary.failed} failed, ${trigger.summary.total} total.`,
-    )
+    fields.push([
+      "batch_totals",
+      `${trigger.summary.passed} passed / ${trigger.summary.failed} failed / ${trigger.summary.total} total`,
+    ])
+
+    const pointerHints: string[] = []
+    if (delivery) pointerHints.push(`read_context scope=deliveries (delivery row ${delivery.id})`)
+    if (evaluation) pointerHints.push(`read_context scope=evaluations (evaluation row ${evaluation.id})`)
+    const pointer = pointerHints.length > 0 ? pointerHints.join("; ") : "read_context"
+
+    ctx.push("")
+    ctx.push(SubAgentProtocol.yieldResult({
+      headline: `## Latest Run Result (run ${runID})`,
+      fields,
+      pointer,
+    }))
   }
 
   return [TASK_AGENT_INSTRUCTIONS, ctx.join("\n")]

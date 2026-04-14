@@ -740,6 +740,7 @@ export function viewTask(row: TaskRow, input?: { directory?: string }) {
     error: row.error ?? undefined,
     budget: budgetModel(row.budget),
     metadata: row.metadata ?? undefined,
+    attachments: row.attachments ?? undefined,
     time: {
       created: row.time_created,
       updated: row.time_updated,

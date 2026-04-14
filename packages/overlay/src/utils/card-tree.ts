@@ -7,7 +7,7 @@ import { orderedMessageParts, effectiveRole, roleLabel, agentStageLabel } from "
 import { toolNameKey } from "./tool";
 import { stageAccent } from "./card-color";
 
-export type CardKind = "agent" | "goal" | "step" | "tool" | "message";
+export type CardKind = "agent" | "goal" | "step" | "tool" | "message" | "compaction";
 export type CardStatus = "pending" | "running" | "completed" | "error" | "skipped";
 
 /** A synthetic "part" inserted between messages when flattening multiple
@@ -55,6 +55,24 @@ export interface CardNode {
   /** Raw tool part for kind="tool" nodes — rendered by <Card> via
    *  InlineToolPart mode="body". Always undefined for non-tool kinds. */
   toolPart?: any;
+  /**
+   * Estimated prompt-context size the LLM saw at this message, in tokens.
+   * Populated from Assistant.tokens.input (which already represents the
+   * cumulative context sent up to and including this turn — providers bill
+   * per turn on the fully-assembled message array, so there is nothing to
+   * sum client-side). Left undefined for turns that never hit the model
+   * (user bubbles, synthetic system notes). The UI renders it with low
+   * contrast and an "est." marker because the number is a provider-reported
+   * estimate and can drift slightly against actual billed tokens.
+   */
+  contextTokens?: number
+  /**
+   * True when this card represents a conversation-compaction summary
+   * (Assistant.summary === true). The summary card replaces the compacted
+   * history; surfacing it as a distinct card tells the operator exactly
+   * where the window was reset.
+   */
+  isCompactionSummary?: boolean
 }
 
 // ── Status normalisation ──
@@ -245,6 +263,17 @@ function agentCardToNode(item: any): CardNode {
   const cardID = String(item.id || `agent:${stage}`);
   const status = normStatus(item.status) ?? "pending";
   const messages = item.messages || [];
+  // An agent card may aggregate several assistant turns. Surface the LARGEST
+  // per-turn context size as the card's token estimate — it represents the
+  // high-water mark the LLM had to reason over inside this stage. Summing
+  // would double-count since each turn's input already includes prior turns.
+  let contextTokens: number | undefined = undefined
+  for (const m of messages) {
+    const t = (m as any)?.info?.tokens?.input
+    if (typeof t === "number" && Number.isFinite(t) && (contextTokens === undefined || t > contextTokens)) {
+      contextTokens = t
+    }
+  }
   return {
     id: cardID,
     kind: "agent",
@@ -257,6 +286,7 @@ function agentCardToNode(item: any): CardNode {
     parts: flattenMessages(messages),
     children: [],
     time: Number(item.time) || undefined,
+    contextTokens,
   };
 }
 
@@ -266,6 +296,32 @@ function messageToNode(item: any): CardNode {
   // For a plain message card we do NOT drop user role — the whole point is
   // that this IS a user / synthetic bubble.
   const parts = orderedMessageParts(item);
+  const isCompactionSummary = item?.info?.summary === true;
+  const hasCompactionPart = Array.isArray(parts) && parts.some((p: any) => p?.type === "compaction");
+  const tokens = item?.info?.tokens;
+  const contextTokens = typeof tokens?.input === "number" && Number.isFinite(tokens.input)
+    ? tokens.input
+    : undefined;
+
+  // A user-side `compaction` part (the trigger) and an assistant-side
+  // summary=true message (the result) are both rendered as their own
+  // distinct card so operators can see where context was reset.
+  if (hasCompactionPart || isCompactionSummary) {
+    return {
+      id,
+      kind: "compaction",
+      role,
+      status: "completed",
+      title: isCompactionSummary ? "Compaction summary" : "Context compaction",
+      parts,
+      children: [],
+      time: Number(item?.info?.time?.created) || undefined,
+      defaultExpanded: isCompactionSummary,
+      contextTokens,
+      isCompactionSummary,
+    };
+  }
+
   return {
     id,
     kind: "message",
@@ -278,6 +334,7 @@ function messageToNode(item: any): CardNode {
     // User / synthetic bubbles: always "expanded"; the header is the bubble
     // itself, not a fold trigger (<Card> CSS handles visual in S2).
     defaultExpanded: true,
+    contextTokens,
   };
 }
 
