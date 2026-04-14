@@ -13,21 +13,20 @@ Windows 用户：请用 `python`，**不要用 `python3`**（Store stub 会拦�
 
 ## 安装方式
 
-### 一键脚本
+### 一键脚本与包管理器
+
+README 声称以下安装方式（`README.md:42-53`）：
 
 ```bash
 curl -fsSL https://opencorvus.ai/install | bash
-```
-
-### 包管理器
-
-```bash
-npm  i -g opencorvus-ai@latest
+npm  i -g opencorvus-ai@latest       # ← 唯一在仓库内可验证的发布路径（package.json 的 name 字段）
 bun  i -g opencorvus-ai@latest
 brew install yangheng95/tap/opencorvus
 scoop install opencorvus
 choco install opencorvus
 ```
+
+> ⚠️ 除 npm 包名外，install 脚本、Homebrew tap、Scoop bucket、Chocolatey package 的**分发渠道在本仓库外维护**，未在源码中验证。使用前请确认相应渠道真实存在或改用源码编译。
 
 ### 从源码编译
 

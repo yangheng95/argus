@@ -55,9 +55,12 @@ Full walkthrough: [Quickstart](./start/quickstart.md).
 ## Doc map
 
 - **[Start](./start/install.md)** — install, first task
-- **[Concepts](./concepts/architecture.md)** — architecture, data model, agentic loop
-- **[OpenCorvus core](./opencorvus/configuration.md)** — config, providers, permissions, evaluator
+- **[Concepts](./concepts/architecture.md)** — architecture, [data model](./concepts/goal-run-task.md), [agentic loop](./concepts/agent-loop.md)
+- **[OpenCorvus core](./opencorvus/configuration.md)** — [config](./opencorvus/configuration.md), [providers](./opencorvus/providers.md), [permissions](./opencorvus/permissions.md), [evaluator](./opencorvus/evaluator.md)
+  - [Skills](./opencorvus/skills.md)
+  - [Plugins](./opencorvus/plugins.md)
+  - [MCP](./opencorvus/mcp.md)
 - **[Overlay](./overlay/overview.md)** — Tauri desktop app
 - **[Channels](./channels/overview.md)** — integrations for 14 IM platforms
-- **[Operations](./operations/benchmark.md)** — benchmark, troubleshooting
-- **[Reference](./reference/env.md)** — env vars, CLI
+- **[Operations](./operations/benchmark.md)** — [benchmark](./operations/benchmark.md), [troubleshooting](./operations/troubleshooting.md), [GitHub Action](./operations/github-action.md), [ACP](./operations/acp.md)
+- **[Reference](./reference/env.md)** — [env vars](./reference/env.md), [CLI](./reference/cli.md), [HTTP API](./reference/api.md), [SDK](./reference/sdk.md)

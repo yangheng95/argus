@@ -13,21 +13,20 @@ On Windows: use `python`, **not `python3`** (the Store stub intercepts it).
 
 ## Install methods
 
-### One-liner
+### One-liner and package managers
+
+README claims these install paths (`README.md:42-53`):
 
 ```bash
 curl -fsSL https://opencorvus.ai/install | bash
-```
-
-### Package managers
-
-```bash
-npm  i -g opencorvus-ai@latest
+npm  i -g opencorvus-ai@latest       # ← the only path verifiable inside this repo (package.json name field)
 bun  i -g opencorvus-ai@latest
 brew install yangheng95/tap/opencorvus
 scoop install opencorvus
 choco install opencorvus
 ```
+
+> ⚠️ Beyond the npm package name, the install script, Homebrew tap, Scoop bucket, and Chocolatey package are **distributed through channels outside this repo**; not verified in source. Confirm each channel exists, or build from source.
 
 ### From source
 

@@ -31,11 +31,16 @@ opencorvus serve [flags]
 
 | flag | default | purpose |
 |---|---|---|
-| `--hostname` | `127.0.0.1` | Listen address |
-| `--port` | `7878` | Listen port |
+| `--hostname` | `127.0.0.1` | Listen address (switched to `0.0.0.0` when `--mdns` is on) |
+| `--port` | `0` (auto) | Listen port; **conventionally 7878**, but the flag default is `0` (ephemeral) |
 | `--project-dir` | `cwd()` | Target repo |
 | `--mdns` | off | Enable mDNS discovery |
-| `--password` | — | HTTP Basic Auth (prefer `OPENCORVUS_SERVER_PASSWORD`) |
+| `--mdns-domain` | `opencorvus.local` | mDNS domain |
+| `--cors` | off | Enable CORS |
+
+Set `OPENCORVUS_SERVER_PASSWORD` via environment variable (not a CLI flag).
+
+Verified against `packages/opencorvus/src/cli/network.ts:4-31`.
 
 Endpoints:
 - `POST /task` — create
@@ -118,15 +123,34 @@ Direct SQLite access.
 opencorvus db --query "SELECT id, status FROM task ORDER BY id DESC LIMIT 20"
 ```
 
+### Additional subcommands
+
+`packages/opencorvus/src/index.ts:106-127` also registers these. Flags vary by version; run with `--help`:
+
+| Command | Purpose |
+|---|---|
+| `opencorvus stats` | Statistics |
+| `opencorvus upgrade` | Self-upgrade |
+| `opencorvus uninstall` | Uninstall |
+| `opencorvus import` | Import sessions / tasks |
+| `opencorvus github` | GitHub Action runtime (typically invoked by the Action itself) |
+| `opencorvus pr` | PR helpers |
+| `opencorvus attach` | Attach to an existing session |
+| `opencorvus tui-thread` | TUI thread mode |
+| `opencorvus mcp` | MCP subcommand group (`mcp serve` / `mcp auth` / `mcp status` / `mcp remove-auth`) |
+| `opencorvus session` | Session management |
+
 ## Exit codes
+
+The code calls `process.exit(1)` only on error paths (`packages/opencorvus/src/index.ts:144, 186, 192`):
 
 | code | meaning |
 |---|---|
-| 0 | Success |
-| 1 | Generic failure |
-| 2 | Config error |
-| 3 | Task failure (evaluator rejected + budget exhausted) |
-| 130 | Interrupted (Ctrl+C) |
+| 0 | Success (default) |
+| 1 | Any runtime error |
+| 130 | Interrupted via Ctrl+C (Bun default signal behavior) |
+
+> Earlier drafts planned `2` (config error) and `3` (task failure). **Not implemented today.**
 
 ## Shell completions
 

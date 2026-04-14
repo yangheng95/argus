@@ -1,0 +1,83 @@
+# Plugins
+
+Plugins are OpenCorvus's deep extension mechanism. Unlike Skills (Markdown instructions), a plugin is TypeScript/JavaScript code that hooks into core event chains — register tools, modify LLM request params, intercept permissions, subscribe to evaluation results, or fully replace evaluation analysis.
+
+Source: `packages/opencorvus/src/plugin/index.ts`, `packages/plugin/src/index.ts` (interface)
+
+## Plugin vs Skill
+
+| Dimension | Skill | Plugin |
+|---|---|---|
+| Implementation | Markdown + YAML | TypeScript/JavaScript module |
+| Lifetime | Session-scoped | Process-wide, loaded at startup |
+| Capabilities | Instructions | Hook LLM requests, register tools, intercept events |
+| Dev effort | Zero code | Must implement `Plugin` function |
+
+## Default plugins
+
+**`opencode-anthropic-auth`** (npm) — auto-installed at startup (`src/plugin/index.ts:18`). Provides Anthropic OAuth. Disable in offline/CI (see §6).
+
+**GitLab Auth** (internal) — `@gitlab/opencode-gitlab-auth` statically imported, no npm install (`src/plugin/index.ts:12-23`).
+
+## Writing a plugin
+
+```typescript
+import { Plugin, tool } from "@opencorvus-ai/plugin"
+
+export const MyPlugin: Plugin = async (ctx) => {
+  return {
+    tool: {
+      my_tool: tool({
+        description: "Describe what this tool does",
+        args: { query: tool.schema.string() },
+        async execute(args) { return `Result: ${args.query}` },
+      }),
+    },
+    "chat.params": async (_input, output) => { output.temperature = 0.3 },
+    "evaluation.checks": async (_input, output) => {
+      output.checks.push({
+        name: "my-check", mode: "soft",
+        run: async () => ({ status: "passed", evidence: "ok" }),
+      })
+    },
+    "delivery.ready": async (input, output) => {
+      output.actions.push({ name: "deploy", status: "ok", summary: "deployed" })
+    },
+  }
+}
+```
+
+Full hooks: `packages/plugin/src/index.ts:148-337`.
+
+| Hook | When |
+|---|---|
+| `tool` | Register static tools |
+| `chat.params` / `chat.headers` | Modify LLM request |
+| `permission.ask` | Override ask → allow/deny |
+| `shell.env` | Inject env before shell |
+| `evaluation.checks` | Add custom checks |
+| `evaluation.analysis` | Fully replace evaluator |
+| `delivery.ready` | Post-delivery hook |
+| `experimental.chat.system.transform` | Append to system prompt |
+
+## Declaring plugins
+
+```jsonc
+{
+  "plugin": ["my-npm-plugin@1.0.0", "file:///path/to/my-plugin.ts"]
+}
+```
+
+Files in `.opencorvus/plugin/*.{ts,js}` auto-discovered (`src/config/config.ts:467-479`).
+
+## Disabling defaults
+
+```bash
+OPENCORVUS_DISABLE_DEFAULT_PLUGINS=1 opencorvus serve
+```
+
+Skips `opencode-anthropic-auth` install & load (`src/plugin/index.ts:52-54`). Required in CI, offline environments, or when running benchmarks.
+
+## Relation to providers and executors
+
+Plugins don't directly replace providers or executors. They influence them via `auth` (custom auth flows), `chat.headers`/`chat.params` (request mutation), `evaluation.analysis` (full replacement), and `delivery.ready` (post-delivery hooks). Executor choice stays under the orchestrator.

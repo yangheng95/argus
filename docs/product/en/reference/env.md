@@ -27,11 +27,12 @@ All variables, grouped by category. Sources: `packages/opencorvus/src/flag/flag.
 | `OPENCORVUS_AUTO_DISCOVER_EXECUTORS` | Auto-discover codex / claude-code | `0` |
 | `OPENCORVUS_EXECUTOR_CLAUDE_PERMISSION_MODE` | Claude executor permission | `ask` |
 | `OPENCORVUS_EXECUTOR_CODEX_PERMISSION_MODE` | Codex executor permission | `ask` |
-| `OPENCORVUS_SPEC_TIMEOUT_MS` | Spec agent inactivity timeout | 120000 |
-| `OPENCORVUS_PLANNER_TIMEOUT_MS` | Planner agent inactivity timeout | 300000 |
-| `OPENCORVUS_TOOL_TIMEOUT_MS` | Per-tool inactivity timeout | 30000 |
+| `OPENCORVUS_SPEC_TIMEOUT_MS` | Spec agent inactivity timeout | no global default (set per-agent) |
+| `OPENCORVUS_PLANNER_TIMEOUT_MS` | Planner agent inactivity timeout | no global default (set per-agent) |
+| `OPENCORVUS_TOOL_TIMEOUT_MS` | Per-tool inactivity timeout | no global default (per-tool) |
 | `OPENCORVUS_GOAL_RUN_TIMEOUT_MS` | Goal run hard cap | unlimited |
-| `OPENCORVUS_DECISION_INACTIVITY_MS` | Task Agent decision inactivity | 600000 |
+| `OPENCORVUS_DECISION_INACTIVITY_MS` | Task Agent decision inactivity | 600000 (`src/orchestrator/task-loop.ts:49`) |
+| `OPENCORVUS_INTERACTION_TIMEOUT_MS` | Interaction request timeout | 30000 (`src/orchestrator/runtime.ts:76`) |
 
 ## Permission
 

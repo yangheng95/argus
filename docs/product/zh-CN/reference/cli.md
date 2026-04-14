@@ -31,11 +31,16 @@ opencorvus serve [flags]
 
 | flag | 默认 | 说明 |
 |---|---|---|
-| `--hostname` | `127.0.0.1` | 监听地址 |
-| `--port` | `7878` | 监听端口 |
+| `--hostname` | `127.0.0.1` | 监听地址（启用 `--mdns` 时改为 `0.0.0.0`） |
+| `--port` | `0`（自动） | 监听端口；**惯例上用 7878**，但 flag 默认是 `0`（自动分配空闲端口） |
 | `--project-dir` | `cwd()` | 工作仓库路径 |
 | `--mdns` | off | 启用 mDNS 服务发现 |
-| `--password` | 无 | HTTP Basic Auth（推荐走 env `OPENCORVUS_SERVER_PASSWORD`） |
+| `--mdns-domain` | `opencorvus.local` | mDNS 域名 |
+| `--cors` | off | 启用 CORS |
+
+`OPENCORVUS_SERVER_PASSWORD` 通过**环境变量**设置（非 CLI flag）。
+
+核对于 `packages/opencorvus/src/cli/network.ts:4-31`。
 
 暴露端点：
 - `POST /task` — 创建任务
@@ -138,15 +143,34 @@ opencorvus export --format html
 opencorvus db --query "SELECT id, status FROM task ORDER BY id DESC LIMIT 20"
 ```
 
+### 其他子命令
+
+`packages/opencorvus/src/index.ts:106-127` 还注册了以下子命令，参数随版本迭代变化，以 `--help` 为准：
+
+| 命令 | 用途 |
+|---|---|
+| `opencorvus stats` | 统计信息 |
+| `opencorvus upgrade` | 升级自身 |
+| `opencorvus uninstall` | 卸载 |
+| `opencorvus import` | 导入 session / task |
+| `opencorvus github` | GitHub Action runtime 入口（通常由 Action 内部调用） |
+| `opencorvus pr` | PR 相关辅助 |
+| `opencorvus attach` | attach 到现有 session |
+| `opencorvus tui-thread` | TUI thread 模式 |
+| `opencorvus mcp` | MCP 子命令族（`mcp serve` / `mcp auth` / `mcp status` / `mcp remove-auth`） |
+| `opencorvus session` | session 管理 |
+
 ## 退出码
+
+代码仅在错误路径显式调用 `process.exit(1)`（`packages/opencorvus/src/index.ts:144, 186, 192`）：
 
 | code | 语义 |
 |---|---|
-| 0 | 成功 |
-| 1 | 通用错误 |
-| 2 | 配置错误 |
-| 3 | 任务失败（evaluator rejected 且预算耗尽） |
-| 130 | 被 Ctrl+C 中断 |
+| 0 | 成功（默认） |
+| 1 | 任何运行时错误 |
+| 130 | 被 Ctrl+C 中断（Bun 默认信号行为） |
+
+> 历史版本曾规划 `2`（配置错误）与 `3`（任务失败），**当前未实装**。
 
 ## Shell 补全
 
