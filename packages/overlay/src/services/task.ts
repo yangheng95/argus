@@ -184,11 +184,25 @@ export function panelRequestBody(
  * start SSE for the new task.
  * Pass an empty string to deselect all tasks.
  */
+// Task IDs are opencorvus identifiers: a lowercase prefix, an underscore, and
+// a ULID/base32 body, optionally with hyphens (requestIDs). Anything outside
+// [A-Za-z0-9_-] (path separators, whitespace, colons, etc.) indicates the
+// caller passed a corrupted value — for example a gateway message metadata
+// field polluted with a filesystem path. Fail loudly so the call stack points
+// directly at the source instead of triggering silent 400-request floods.
+const TASK_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
+
 export async function selectTask(
   taskID: string,
   options: SelectTaskOptions = {},
 ): Promise<void> {
   const nextTaskID = taskID || "";
+
+  if (nextTaskID && !TASK_ID_PATTERN.test(nextTaskID)) {
+    throw new Error(
+      `selectTask: invalid taskID ${JSON.stringify(nextTaskID)} — expected [A-Za-z0-9_-]{1,128}`,
+    );
+  }
 
   // Guard: skip if already on this task. Board-loaded OR switch-in-flight
   // both count as "nothing to do" — without the taskSwitching check a user

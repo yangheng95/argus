@@ -5,6 +5,7 @@ import { InlineToolPart } from "./InlineToolPart";
 import { InteractionQuestionPart } from "./InteractionQuestionPart";
 import { Card } from "./Card";
 import { shouldPromoteTool, type CardNode } from "../utils/card-tree";
+import { estimateTextTokens } from "../utils/tokens";
 import { stamp } from "../utils/time";
 import { toolNameKey, displayToolDetail, shortRelativePath } from "../utils/tool";
 import { escapeHtml } from "../utils/markdown";
@@ -43,6 +44,21 @@ function toolToCardNode(part: any): CardNode {
     : detail && detail.toLowerCase() !== toolName.toLowerCase()
       ? detail
       : undefined;
+  // Token estimate for a promoted tool card: scan the rendered surface
+  // (tool input + output + any error) so the corner hint matches what the
+  // body actually displays. Tool parts never carry provider-reported usage
+  // of their own, so the figure is always an estimate.
+  const asToolText = (v: unknown) =>
+    v === null || v === undefined
+      ? ""
+      : typeof v === "string"
+        ? v
+        : JSON.stringify(v);
+  const toolText = [
+    asToolText(state?.input),
+    asToolText(state?.output),
+    asToolText(state?.error),
+  ].join("\n");
   return {
     id: String(part?.id || `tool:${toolName}:${Math.random().toString(36).slice(2)}`),
     kind: "tool",
@@ -53,6 +69,8 @@ function toolToCardNode(part: any): CardNode {
     parts: [],
     children: [],
     toolPart: part,
+    contextTokens: estimateTextTokens(toolText),
+    contextTokensEstimated: true,
   };
 }
 
