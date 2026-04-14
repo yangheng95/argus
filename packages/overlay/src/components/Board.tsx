@@ -5,13 +5,11 @@
 // renderInteractions, statusIcon, statusLabel.
 // Data is read from boardStore (store/board.ts); no direct DOM manipulation.
 
-import { createMemo, For, Show, createSignal, onMount, onCleanup } from "solid-js";
+import { createMemo, For, Show, onMount } from "solid-js";
 import { boardStore } from "../store/board";
-import { messageStore, agentCards, agentCardOrder } from "../store/messages";
+import { agentCards, agentCardOrder } from "../store/messages";
 import { t, tc } from "../utils/i18n";
 import { renderMarkdown } from "../utils/markdown";
-import { stamp } from "../utils/time";
-import { TextPart } from "./TextPart";
 import { WorkflowProgressBar } from "./WorkflowProgressBar";
 import { GoalWorkflowList } from "./GoalWorkflowGroup";
 import { RequirementsPanel } from "./RequirementsPanel";
@@ -302,6 +300,9 @@ interface SectionFrameProps {
   badgeId?: string;
   badgeText?: string;
   badgeTone?: string;
+  phaseState?: "active" | "related" | "";
+  /** Initial open state at mount only; user toggle is preserved afterwards. */
+  defaultOpen?: boolean;
   children: any;
 }
 
@@ -319,8 +320,21 @@ const SECTION_ICONS: Record<string, string> = {
 };
 
 function SectionFrame(props: SectionFrameProps) {
+  let detailsEl: HTMLDetailsElement | undefined;
+  onMount(() => {
+    if (!detailsEl) return;
+    // Apply defaultOpen once at mount; afterwards user toggle is preserved.
+    if (props.defaultOpen ?? props.phaseState === "active") {
+      detailsEl.open = true;
+    }
+  });
   return (
-    <details class="section" id={props.id}>
+    <details
+      ref={detailsEl}
+      class="section"
+      id={props.id}
+      attr:data-phase-state={props.phaseState || undefined}
+    >
       <summary class="section-head">
         <span
           class="section-icon"
@@ -346,8 +360,6 @@ function SectionFrame(props: SectionFrameProps) {
 export function Board(props: BoardProps) {
   const board = () => boardStore.board;
 
-  const task = () => board()?.task;
-  const plan = () => board()?.plan;
   const spec = () => board()?.spec;
   const delivery = () => board()?.delivery;
   const interactions = () => board()?.interactions || [];
@@ -358,30 +370,6 @@ export function Board(props: BoardProps) {
   const criteriaResults = () => board()?.criteriaResults as
     | Array<{ name: string; label?: string; family?: string; status: "passed" | "failed" | "skipped"; evidence?: string }>
     | undefined;
-
-  const goalsCards = createMemo(() => {
-    const gws: any[] = board()?.goalWorkflows || [];
-    return gws.map((gw) => ({
-      id: gw.goalID,
-      title: gw.goalTitle,
-      status: gw.goalStatus,
-    }));
-  });
-
-  const runningGoalIDs = createMemo(() => {
-    const goalRuns: any[] = board()?.goalRuns || [];
-    return new Set<string>(
-      goalRuns
-        .filter((gr) => gr.status === "running" || gr.status === "accepted")
-        .map((gr) => gr.goalID)
-        .filter(Boolean),
-    );
-  });
-
-  // executorCards / executorBadge* / showExecutor removed in M2c:
-  // per-goal executor info is now rendered inside GoalWorkflowGroup.StepRow
-  // (execute step) using backend-driven payload (changedFiles + diffStats).
-  // ExecutorSummaryPanel deleted.
 
   // ── Workflow-structured data (new) ──
   const workflow = () => board()?.workflow;
@@ -402,6 +390,39 @@ export function Board(props: BoardProps) {
     const archStep = wf.steps.find((s: any) => s.id === "architect");
     return archStep?.status === "running";
   });
+
+  // ── Active section tracking ──
+  // Map the workflow's current (running) step to a right-pane section id so
+  // the section gets `data-phase-state="active"` highlighting. Falls back to
+  // the most recently completed/failed step when nothing is running.
+  const STEP_TO_SECTION: Record<string, string> = {
+    design_analysis: "requirements",
+    requirements: "requirements",
+    architect: "architect",
+    plan: "goalWorkflows",
+    execute: "goalWorkflows",
+    eval: "goalWorkflows",
+    deliver: "delivery",
+    refine: "delivery",
+  };
+  const activeSection = createMemo<string>(() => {
+    const interactionsPending = interactions().some(
+      (i: any) => i.status === "pending",
+    );
+    if (interactionsPending) return "interactions";
+    const wf = workflow();
+    if (!wf || !Array.isArray(wf.steps)) return "";
+    const running = wf.steps.find((s: any) => s.status === "running");
+    if (running) return STEP_TO_SECTION[running.id] ?? "";
+    let lastDone: any = null;
+    for (const s of wf.steps) {
+      if (s.status === "completed" || s.status === "failed") lastDone = s;
+    }
+    if (lastDone) return STEP_TO_SECTION[lastDone.id] ?? "";
+    return "";
+  });
+  const phaseFor = (id: string): "active" | "" =>
+    activeSection() === id ? "active" : "";
 
   // Collect agent messages for requirements stage (spec/goal stages map to requirements).
   // Data-driven: emit whenever spec/goal cards exist, independent of workflow mode.
@@ -456,19 +477,6 @@ export function Board(props: BoardProps) {
     return result;
   });
 
-  // ── Data-driven visibility signals ──
-  // Each section appears when its data exists, independent of mode.
-  const showWorkflowProgress = createMemo(() => !!workflow());
-  const showRequirements = createMemo(() =>
-    !!requirements() || !!spec() || isRequirementsGenerating() || requirementsMessages().length > 0,
-  );
-  const showArchitect = createMemo(() => !!architect() || isArchitectGenerating());
-  const showGoals = createMemo(() => goalWorkflows().length > 0 || goalsCards().length > 0);
-  const showDelivery = createMemo(() => !!delivery());
-  const showInteractions = createMemo(() =>
-    interactions().some((i: any) => i.status === "pending"),
-  );
-
   return (
     <>
       <div id="taskActionsBar">
@@ -484,145 +492,141 @@ export function Board(props: BoardProps) {
       {/* Sections appear based on their data availability, not a mode flag. */}
       {/* Matches Task Agent's adaptive pipeline (per specs/new-arch.svg). */}
 
-      <Show when={showWorkflowProgress()}>
-        <WorkflowProgressBar workflow={workflow()} />
-      </Show>
+      <WorkflowProgressBar workflow={workflow()} />
 
-      <Show when={showRequirements()}>
-        <SectionFrame
-          id="requirementsSection"
-          title={t("workflow.requirements")}
-          icon={SECTION_ICONS.spec}
-          bodyId="requirementsBody"
-          badgeId="requirementsBadge"
-          badgeText={
-            requirements()?.length
-              ? String(requirements()!.length)
-              : isRequirementsGenerating()
-                ? t("common.active")
+      <SectionFrame
+        id="requirementsSection"
+        title={t("workflow.requirements")}
+        icon={SECTION_ICONS.spec}
+        bodyId="requirementsBody"
+        badgeId="requirementsBadge"
+        phaseState={phaseFor("requirements")}
+        badgeText={
+          requirements()?.length
+            ? String(requirements()!.length)
+            : isRequirementsGenerating()
+              ? t("common.active")
+              : ""
+        }
+        badgeTone={requirements()?.length || isRequirementsGenerating() ? "accent" : ""}
+      >
+        <RequirementsPanel
+          requirements={requirements()}
+          specContent={spec()?.content}
+          isGenerating={isRequirementsGenerating()}
+          streamingMessages={requirementsMessages()}
+        />
+      </SectionFrame>
+
+      <SectionFrame
+        id="architectSection"
+        title={t("workflow.architect")}
+        icon={SECTION_ICONS.plan}
+        bodyId="architectBody"
+        badgeId="architectBadge"
+        phaseState={phaseFor("architect")}
+        badgeText={architect() ? String(architect()!.contractCount) : ""}
+        badgeTone={architect() ? "accent" : ""}
+      >
+        <ArchitectPanel architect={architect()} isGenerating={isArchitectGenerating()} />
+      </SectionFrame>
+
+      <SectionFrame
+        id="goalWorkflowsSection"
+        title={t("workflow.goals")}
+        icon={SECTION_ICONS.goals}
+        bodyId="goalWorkflowsBody"
+        badgeId="goalWorkflowsBadge"
+        phaseState={phaseFor("goalWorkflows")}
+        badgeText={(() => {
+          const gw = goalWorkflows();
+          const passed = gw.filter((g) => g.goalStatus === "passed").length;
+          return gw.length > 0 ? `${passed}/${gw.length}` : "";
+        })()}
+        badgeTone={(() => {
+          const gw = goalWorkflows();
+          if (gw.length === 0) return "";
+          const passed = gw.filter((g) => g.goalStatus === "passed").length;
+          return passed === gw.length
+            ? "good"
+            : gw.some((g) => g.goalStatus === "failed")
+              ? "bad"
+              : "accent";
+        })()}
+      >
+        <GoalWorkflowList
+          goals={goalWorkflows()}
+          goalStepMessages={goalStepMessages()}
+          onOpenSession={props.onOpenSession}
+          onEditGoal={props.onEditGoal}
+          onDeleteGoal={props.onDeleteGoal}
+        />
+      </SectionFrame>
+
+      <SectionFrame
+        id="evaluationCriteriaSection"
+        title={t("section.criteria") || "评估指标"}
+        icon={SECTION_ICONS.criteria}
+        bodyId="evaluationCriteriaBody"
+        badgeId="evaluationCriteriaBadge"
+        badgeText={(() => {
+          const list = criteriaResults() ?? [];
+          if (list.length === 0) return "";
+          const failed = list.filter((c) => c.status === "failed").length;
+          const passed = list.filter((c) => c.status === "passed").length;
+          return failed > 0 ? `${failed} failed` : `${passed}/${list.length}`;
+        })()}
+        badgeTone={(() => {
+          const list = criteriaResults() ?? [];
+          if (list.length === 0) return "";
+          const failed = list.filter((c) => c.status === "failed").length;
+          const passed = list.filter((c) => c.status === "passed").length;
+          return failed > 0 ? "bad" : passed === list.length ? "good" : "accent";
+        })()}
+      >
+        <EvaluationCriteriaPanel checks={criteriaResults() ?? []} />
+      </SectionFrame>
+
+      <SectionFrame
+        id="deliverySection"
+        title={t("section.delivery")}
+        icon={SECTION_ICONS.delivery}
+        bodyId="deliveryBody"
+        badgeId="deliveryBadge"
+        phaseState={phaseFor("delivery")}
+        badgeText={delivery() ? deliveryStatusLabel(delivery()?.status) : ""}
+        badgeTone={
+          delivery()?.status === "delivered"
+            ? "good"
+            : delivery()?.status === "failed"
+              ? "bad"
+              : delivery()
+                ? "accent"
                 : ""
-          }
-          badgeTone={requirements()?.length || isRequirementsGenerating() ? "accent" : ""}
-        >
-          <RequirementsPanel
-            requirements={requirements()}
-            specContent={spec()?.content}
-            isGenerating={isRequirementsGenerating()}
-            streamingMessages={requirementsMessages()}
-          />
-        </SectionFrame>
-      </Show>
+        }
+      >
+        <DeliveryPanel delivery={delivery()} />
+      </SectionFrame>
 
-      <Show when={showArchitect()}>
-        <SectionFrame
-          id="architectSection"
-          title={t("workflow.architect")}
-          icon={SECTION_ICONS.plan}
-          bodyId="architectBody"
-          badgeId="architectBadge"
-          badgeText={architect() ? String(architect()!.contractCount) : ""}
-          badgeTone={architect() ? "accent" : ""}
-        >
-          <ArchitectPanel architect={architect()} isGenerating={isArchitectGenerating()} />
-        </SectionFrame>
-      </Show>
-
-      <Show when={showGoals()}>
-        <SectionFrame
-          id="goalWorkflowsSection"
-          title={t("workflow.goals")}
-          icon={SECTION_ICONS.goals}
-          bodyId="goalWorkflowsBody"
-          badgeId="goalWorkflowsBadge"
-          badgeText={(() => {
-            const gw = goalWorkflows();
-            const passed = gw.filter((g) => g.goalStatus === "passed").length;
-            return gw.length > 0 ? `${passed}/${gw.length}` : "";
-          })()}
-          badgeTone={(() => {
-            const gw = goalWorkflows();
-            if (gw.length === 0) return "";
-            const passed = gw.filter((g) => g.goalStatus === "passed").length;
-            return passed === gw.length
-              ? "good"
-              : gw.some((g) => g.goalStatus === "failed")
-                ? "bad"
-                : "accent";
-          })()}
-        >
-          <GoalWorkflowList
-            goals={goalWorkflows()}
-            goalStepMessages={goalStepMessages()}
-            onOpenSession={props.onOpenSession}
-            onEditGoal={props.onEditGoal}
-            onDeleteGoal={props.onDeleteGoal}
-          />
-        </SectionFrame>
-      </Show>
-
-      <Show when={(criteriaResults()?.length ?? 0) > 0}>
-        <SectionFrame
-          id="evaluationCriteriaSection"
-          title={t("section.criteria") || "评估指标"}
-          icon={SECTION_ICONS.criteria}
-          bodyId="evaluationCriteriaBody"
-          badgeId="evaluationCriteriaBadge"
-          badgeText={(() => {
-            const list = criteriaResults() ?? [];
-            const failed = list.filter((c) => c.status === "failed").length;
-            const passed = list.filter((c) => c.status === "passed").length;
-            return failed > 0 ? `${failed} failed` : `${passed}/${list.length}`;
-          })()}
-          badgeTone={(() => {
-            const list = criteriaResults() ?? [];
-            const failed = list.filter((c) => c.status === "failed").length;
-            const passed = list.filter((c) => c.status === "passed").length;
-            return failed > 0 ? "bad" : passed === list.length ? "good" : "accent";
-          })()}
-        >
-          <EvaluationCriteriaPanel checks={criteriaResults() ?? []} />
-        </SectionFrame>
-      </Show>
-
-      <Show when={showDelivery()}>
-        <SectionFrame
-          id="deliverySection"
-          title={t("section.delivery")}
-          icon={SECTION_ICONS.delivery}
-          bodyId="deliveryBody"
-          badgeId="deliveryBadge"
-          badgeText={delivery() ? deliveryStatusLabel(delivery()?.status) : ""}
-          badgeTone={
-            delivery()?.status === "delivered"
-              ? "good"
-              : delivery()?.status === "failed"
-                ? "bad"
-                : delivery()
-                  ? "accent"
-                  : ""
-          }
-        >
-          <DeliveryPanel delivery={delivery()} />
-        </SectionFrame>
-      </Show>
-
-      <Show when={showInteractions()}>
-        <SectionFrame
-          id="interactionsSection"
-          title={t("workflow.interactions")}
-          icon={SECTION_ICONS.criteria}
-          bodyId="interactionsBody"
-          badgeId="interactionsBadge"
-          badgeText={String(interactions().filter((i: any) => i.status === "pending").length)}
-          badgeTone="warn"
-        >
-          <InteractionsList
-            interactions={interactions()}
-            onResolve={props.onResolveInteraction}
-            onReject={props.onRejectInteraction}
-          />
-        </SectionFrame>
-      </Show>
+      <SectionFrame
+        id="interactionsSection"
+        title={t("workflow.interactions")}
+        icon={SECTION_ICONS.criteria}
+        bodyId="interactionsBody"
+        badgeId="interactionsBadge"
+        phaseState={phaseFor("interactions")}
+        badgeText={(() => {
+          const n = interactions().filter((i: any) => i.status === "pending").length;
+          return n > 0 ? String(n) : "";
+        })()}
+        badgeTone="warn"
+      >
+        <InteractionsList
+          interactions={interactions()}
+          onResolve={props.onResolveInteraction}
+          onReject={props.onRejectInteraction}
+        />
+      </SectionFrame>
     </>
   );
 }

@@ -399,9 +399,7 @@ export const OrchestratorInteractionRequestTable = sqliteTable(
     task_id: text()
       .notNull()
       .references(() => OrchestratorTaskTable.id, { onDelete: "cascade" }),
-    run_id: text()
-      .notNull()
-      .references(() => OrchestratorRunTable.id, { onDelete: "cascade" }),
+    run_id: text().references(() => OrchestratorRunTable.id, { onDelete: "cascade" }),
     session_id: text().references(() => SessionTable.id, { onDelete: "set null" }),
     external_id: text().notNull(),
     request_type: text().notNull().$type<OrchestratorInteractionType>(),

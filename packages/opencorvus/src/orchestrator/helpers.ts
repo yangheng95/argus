@@ -1,10 +1,14 @@
 import z from "zod"
 import { Instance } from "@/project/instance"
-import { Database, eq, desc } from "@/storage/db"
+import { Database, and, eq, desc } from "@/storage/db"
 import { WorkbenchTaskNoteTable } from "@/workbench/workbench.sql"
 import { Budget } from "./model"
 import { OrchestratorConfig } from "./config"
-import type { OrchestratorBudget, OrchestratorTaskStatus } from "./orchestrator.sql"
+import {
+  OrchestratorInteractionRequestTable,
+  type OrchestratorBudget,
+  type OrchestratorTaskStatus,
+} from "./orchestrator.sql"
 import type { TaskRow, GoalRow } from "./store"
 import type { GoalContractFields } from "@/pipeline/types"
 
@@ -86,6 +90,64 @@ export function operatorNotesSection(taskID: string): string {
     .map((n) => `- [${new Date(n.time_created).toISOString()}] ${n.content}`)
     .join("\n")
   return `\n\n## Operator Notes\n\nThe following messages were sent by the operator during task execution. Incorporate these instructions into your analysis and decisions.\n\n${items}\n`
+}
+
+/**
+ * Query answered clarification interactions for a task and format as a prompt section.
+ * Single source of truth for all clarification Q&A: every agent (Task Agent, Requirements,
+ * Architect, Design Analyst, per-goal planner, Delivery) reads the same transcript so
+ * downstream agents never duplicate questions already answered upstream.
+ *
+ * Returns "" when no answered question interactions exist.
+ */
+export function clarificationTranscriptSection(taskID: string): string {
+  const rows = Database.use((db) =>
+    db
+      .select()
+      .from(OrchestratorInteractionRequestTable)
+      .where(
+        and(
+          eq(OrchestratorInteractionRequestTable.task_id, taskID),
+          eq(OrchestratorInteractionRequestTable.request_type, "question"),
+          eq(OrchestratorInteractionRequestTable.status, "answered"),
+        ),
+      )
+      .orderBy(OrchestratorInteractionRequestTable.time_resolved)
+      .all(),
+  )
+  if (rows.length === 0) return ""
+  const entries: string[] = []
+  for (const row of rows) {
+    const payload = (row.payload ?? {}) as Record<string, unknown>
+    const response = (row.response ?? {}) as Record<string, unknown>
+    const questions = Array.isArray(payload.questions) ? payload.questions : []
+    const rawAnswers = response.answers
+    const answerList = Array.isArray(rawAnswers) ? rawAnswers : []
+    for (let i = 0; i < questions.length; i++) {
+      const q = questions[i] as Record<string, unknown> | undefined
+      const questionText = typeof q?.question === "string" ? q.question : ""
+      if (!questionText) continue
+      const raw = answerList[i]
+      const answerText = Array.isArray(raw)
+        ? raw.filter((item) => typeof item === "string" && item.trim()).join(", ")
+        : typeof raw === "string"
+          ? raw
+          : ""
+      entries.push(`- Q: ${questionText}\n  A: ${answerText || "(no answer)"}`)
+    }
+  }
+  if (entries.length === 0) return ""
+  return [
+    "",
+    "",
+    "## Clarifications Already Answered",
+    "",
+    "The operator has already answered these questions for this task. Treat the answers",
+    "as authoritative requirements. Do NOT ask the user again; build on them directly.",
+    "",
+    entries.join("\n"),
+    "",
+  ].join("\n")
 }
 
 export function goalRowToContract(row: GoalRow | ({ id: string; title: string } & Record<string, unknown>)): GoalContractFields & Record<string, unknown> {

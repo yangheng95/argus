@@ -5,7 +5,7 @@ import { Filesystem } from "@/util/filesystem"
 import { Log } from "@/util/log"
 import { dict } from "@/util/object"
 import { selectorList } from "@/check/policy"
-import { operatorNotesSection } from "@/orchestrator/helpers"
+import { clarificationTranscriptSection, operatorNotesSection } from "@/orchestrator/helpers"
 import { createDecisionLog } from "@/decision-log"
 import { Instance } from "@/project/instance"
 import { Project } from "@/project/project"
@@ -386,6 +386,7 @@ export function buildGoalPrompt(input: {
 
   return [
     "You are executing one goal in an isolated workspace (git worktree) for the coordinator.",
+    input.taskID ? clarificationTranscriptSection(input.taskID) || undefined : undefined,
     input.taskID ? operatorNotesSection(input.taskID) || undefined : undefined,
     input.cwd
       ? `Your working directory is: ${input.cwd}\nAll file paths MUST be relative to this directory or use this absolute prefix. Never write files outside this directory.`

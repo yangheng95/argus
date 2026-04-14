@@ -212,15 +212,6 @@ export function TitlebarMenu(props: TitlebarMenuProps) {
     closeMenu();
   }
 
- // Auto-question toggle — PATCH server config
-  async function handleAutoQuestionChange(checked: boolean) {
-    try {
-      const { patchConfig } = await import("../services/config");
-      await patchConfig({ experimental: { auto_question: checked } });
-    } catch (e) { console.error("[titlebar] failed to update auto_question", e); }
-    closeMenu();
-  }
-
  // Show transcript details toggle —
   async function handleShowTranscriptDetailsChange(checked: boolean) {
     setSettingsStore("showTranscriptDetails", checked);
@@ -526,7 +517,7 @@ export function TitlebarMenu(props: TitlebarMenuProps) {
             class="titlebar-menu-check"
             id="chkUnattended"
             type="checkbox"
-            checked={appStore.config?.experimental?.unattended !== false}
+            checked={appStore.config?.experimental?.unattended === true}
             onChange={(e) =>
               void handleUnattendedChange(
                 (e.target as HTMLInputElement).checked,
@@ -552,29 +543,6 @@ export function TitlebarMenu(props: TitlebarMenuProps) {
             checked={appStore.config?.experimental?.auto_permission === true}
             onChange={(e) =>
               void handleAutoPermissionChange(
-                (e.target as HTMLInputElement).checked,
-              )
-            }
-          />
-        </label>
-
-        {/* ── Auto-confirm questions toggle ── */}
-        <label class="titlebar-menu-toggle" for="chkAutoQuestion">
-          <span class="titlebar-menu-copy">
-            <span class="titlebar-menu-title">
-              {t("titlebar.auto_question")}
-            </span>
-            <span class="titlebar-menu-meta">
-              {t("titlebar.auto_question_hint")}
-            </span>
-          </span>
-          <input
-            class="titlebar-menu-check"
-            id="chkAutoQuestion"
-            type="checkbox"
-            checked={appStore.config?.experimental?.auto_question === true}
-            onChange={(e) =>
-              void handleAutoQuestionChange(
                 (e.target as HTMLInputElement).checked,
               )
             }

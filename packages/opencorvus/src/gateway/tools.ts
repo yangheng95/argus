@@ -4,13 +4,13 @@
  * Design rules:
  *  - Every tool delegates to existing OrchestratorService / Question / Session APIs.
  *    No new business logic lives here; the Gateway is purely a router.
- *  - All tasks (workflow + build) go through the same OrchestratorService.createTask
- *    so cancel / list / audit are uniform — the only difference is `kind`.
+ *  - Tasks are enqueued with `kind: "workflow"`; the task-agent itself chooses
+ *    between a direct build and the full pipeline via its `build` tool.
  *  - cwd resolution: tools accept an explicit `cwd`; if missing, the agent layer
  *    fills in the session's current cwd (see agent.ts).
- *  - No fallback decisions: if the LLM picks the wrong tool (e.g. workflow vs
- *    build for a given prompt), the wrong task gets enqueued. The system prompt
- *    + tool descriptions carry the rules; the runtime does not silently rewrite.
+ *  - No fallback decisions: if the LLM picks the wrong gateway tool the wrong
+ *    thing happens. System prompt + tool descriptions carry the rules; the
+ *    runtime does not silently rewrite.
  */
 
 import { tool } from "ai"
@@ -106,12 +106,12 @@ export function createGatewayTools(ctx: GatewayToolsContext) {
         }),
     }),
 
-    enqueue_workflow_task: tool({
+    enqueue_task: tool({
       description:
-        "Create a full-pipeline task (requirements → design → architect → execute → deliver). " +
-        "Use for multi-step engineering work: building a feature, replicating a UI from a " +
-        "screenshot, refactoring across files, anything that benefits from goals + " +
-        "evaluators. NOT for one-shot edits or questions — use dispatch_build_task for those.",
+        "Create a new task for the user's request. The task-agent decides internally whether the " +
+        "work runs as a direct build (single-shot edit/debug via the build agent) or as a full " +
+        "pipeline (requirements → architect → execute → deliver). Gateway does NOT make that choice — " +
+        "it just enqueues the task with the user's verbatim request.",
       inputSchema: z.object({
         request: z.string().describe("The full task request, paraphrased and clarified by Gateway."),
         title: z.string().describe("Short title (≤80 chars) for task lists."),
@@ -129,34 +129,6 @@ export function createGatewayTools(ctx: GatewayToolsContext) {
               priority,
               attachments,
               kind: "workflow",
-              source: "gateway",
-              channelBinding: ctx.channelBinding,
-              metadata: { gateway: { sessionID: ctx.sessionID } },
-            }),
-        }),
-    }),
-
-    dispatch_build_task: tool({
-      description:
-        "Run the build agent directly on a one-shot prompt — bypasses requirements / design / " +
-        "architect / deliver. Use for: single-file edits, code Q&A, quick fixes, lookups, " +
-        "anything that is NOT a multi-goal feature. The task still appears in the task list " +
-        "and supports cancel; the only difference is the pipeline shortcut.",
-      inputSchema: z.object({
-        prompt: z.string().describe("The exact prompt to feed the build agent."),
-        title: z.string().describe("Short title (≤80 chars)."),
-        cwd: z.string().optional(),
-        attachments: AttachmentInput.array().optional(),
-      }),
-      execute: async ({ prompt, title, cwd, attachments }) =>
-        Instance.provide({
-          directory: resolveCwd(cwd),
-          fn: () =>
-            OrchestratorService.createTask({
-              request: prompt,
-              title,
-              attachments,
-              kind: "build",
               source: "gateway",
               channelBinding: ctx.channelBinding,
               metadata: { gateway: { sessionID: ctx.sessionID } },

@@ -110,8 +110,11 @@ export namespace Question {
   )
 
   const QUESTION_MIN_TIMEOUT_MS = 1000
+  // 30 minutes — covers human-in-the-loop clarifications raised by Task Agent
+  // during long-running workflows. Callers that need shorter/longer windows
+  // pass `timeoutMs` explicitly (e.g. unattended auto-reply paths).
   const QUESTION_AUTO_REJECT_MS = Math.max(
-    parseInt(process.env.OPENCORVUS_QUESTION_TIMEOUT_MS || "10000", 10),
+    parseInt(process.env.OPENCORVUS_QUESTION_TIMEOUT_MS || "1800000", 10),
     QUESTION_MIN_TIMEOUT_MS,
   )
 

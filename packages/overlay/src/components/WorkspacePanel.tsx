@@ -1,11 +1,13 @@
 // ── WorkspacePanel ──
-// Right-hand secondary workspace. Hosts multiple views (Build, Diff) behind a
-// shared tab bar with a close affordance. CodingTab and DiffPreviewPanel are
-// both mounted simultaneously and display-toggled so that Build streaming
-// state is preserved when the user switches to Diff and back.
+// Right-hand secondary workspace. Hosts Diff / File / Trace views behind a
+// shared tab bar with a close affordance. Each view is display-toggled so
+// that cache/resource state is preserved when switching tabs.
+//
+// The former "Build" tab (a Copilot-style direct coding pane) was removed —
+// build is now a task-agent tool; its output renders as a card in the task
+// conversation, not in a secondary panel.
 
 import { Show } from "solid-js";
-import { CodingTab, type CodingTabAPI } from "./CodingTab";
 import { DiffPreviewPanel } from "./DiffPreviewPanel";
 import { FileViewPanel } from "./FileViewPanel";
 import { TracePanel } from "./TracePanel";
@@ -13,7 +15,6 @@ import { boardStore } from "../store/board";
 import { t } from "../utils/i18n";
 
 export type WorkspaceView =
-  | { kind: "build" }
   | { kind: "diff"; filePath: string }
   | { kind: "file"; filePath: string }
   | { kind: "trace" };
@@ -25,12 +26,9 @@ export interface WorkspacePanelProps {
   onSelectView: (view: WorkspaceView) => void;
   /** Called when the user clicks the close (×) button. */
   onClose: () => void;
-  /** Exposes the CodingTab imperative handle to the parent composer. */
-  onCodingReady?: (api: CodingTabAPI) => void;
 }
 
 export function WorkspacePanel(props: WorkspacePanelProps) {
-  const isBuild = () => props.view.kind === "build";
   const isDiff = () => props.view.kind === "diff";
   const isFile = () => props.view.kind === "file";
   const isTrace = () => props.view.kind === "trace";
@@ -39,16 +37,8 @@ export function WorkspacePanel(props: WorkspacePanelProps) {
   const fileFilePath = () =>
     props.view.kind === "file" ? props.view.filePath : null;
 
-  // When the user clicks the Build tab while already viewing a diff, we want
-  // to keep the previously-loaded diff around so that clicking Diff again
-  // goes back to the same file. The parent holds the authoritative view
-  // state; this component just reports clicks.
-  function selectBuild() {
-    if (props.view.kind !== "build") props.onSelectView({ kind: "build" });
-  }
   function selectDiff() {
     if (props.view.kind !== "diff") {
-      // No file has been picked yet — enter Diff with an empty placeholder.
       props.onSelectView({ kind: "diff", filePath: "" });
     }
   }
@@ -67,16 +57,6 @@ export function WorkspacePanel(props: WorkspacePanelProps) {
     <section class="workspace" id="workspacePanel">
       <header class="workspace-header">
         <div class="workspace-tabs" role="tablist">
-          <button
-            type="button"
-            class="workspace-tab"
-            role="tab"
-            aria-selected={isBuild()}
-            data-active={isBuild() ? "true" : "false"}
-            onClick={selectBuild}
-          >
-            <span class="workspace-tab-label">{t("workspace.build")}</span>
-          </button>
           <button
             type="button"
             class="workspace-tab"
@@ -135,14 +115,6 @@ export function WorkspacePanel(props: WorkspacePanelProps) {
         </button>
       </header>
       <div class="workspace-body">
-        {/* Build view — always mounted so streaming state survives tab switches */}
-        <div
-          class="workspace-view"
-          data-kind="build"
-          style={{ display: isBuild() ? "flex" : "none" }}
-        >
-          <CodingTab active={isBuild()} onReady={props.onCodingReady} />
-        </div>
         {/* Diff view — always mounted so resource cache is retained */}
         <div
           class="workspace-view"

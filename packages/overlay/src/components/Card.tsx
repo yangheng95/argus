@@ -48,6 +48,7 @@ export function Card(props: { node: CardNode; depth: number }) {
       data-stage={props.node.stage || undefined}
       data-status={props.node.status || "none"}
       data-depth={props.depth}
+      style={props.node.accent ? { "--card-stage": props.node.accent } : undefined}
       classList={{ "card--expanded": expanded(), "card--collapsed": !expanded() }}
     >
       <CardHeader

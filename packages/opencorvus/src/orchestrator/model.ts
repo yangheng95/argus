@@ -530,6 +530,7 @@ export const TaskMessageInput = z.object({
   text: z.string(),
   source: z.string().optional(),
   user_id: z.string().optional(),
+  attachments: TaskAttachmentInput.array().optional(),
 })
 
 export const InjectMessageInput = z.object({

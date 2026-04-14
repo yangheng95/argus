@@ -22,7 +22,9 @@ import { t } from "../utils/i18n";
 export interface InteractionQuestion {
   header?: string;
   question?: string;
-  options?: Array<{ label: string; [key: string]: any }>;
+  options?: Array<{ label: string; description?: string; [key: string]: any }>;
+  multiple?: boolean;
+  custom?: boolean;
 }
 
 export interface InteractionPayload {
@@ -121,33 +123,10 @@ function interactionReplyLabel(reply: string): string {
   return t("interaction.allow_once");
 }
 
-function autoInteractionAnswers(
-  interaction: Interaction,
-): (string[] | null)[] | null {
-  const payload = isRecord(interaction?.payload) ? interaction.payload! : null;
-  const questions = Array.isArray(payload?.questions) ? payload!.questions! : [];
-  if (questions.length === 0) return null;
-  return questions.map((item) => {
-    const question = isRecord(item) ? item : null;
-    const options = Array.isArray(question?.options) ? question!.options! : [];
-    const selected = options.find(
-      (option) =>
-        isRecord(option) &&
-        typeof option.label === "string" &&
-        option.label.trim(),
-    );
-    if (selected && typeof selected.label === "string")
-      return [selected.label.trim()];
-    return null;
-  });
-}
-
 function shouldAutoResolve(interaction: Interaction): boolean {
   if (!interaction || interaction.status !== "pending") return false;
   const exp = appStore.config?.experimental;
   if (interaction.type === "permission") return exp?.auto_permission === true;
-  if (interaction.type === "question")
-    return exp?.auto_question === true || exp?.unattended !== false;
   return false;
 }
 
@@ -172,9 +151,56 @@ interface InteractionPanelProps {
 export function InteractionPanel(props: InteractionPanelProps) {
   const [busy, setBusy] = createSignal(false);
   const [errorMap, setErrorMap] = createSignal<Record<string, string>>({});
+  // Per-interaction per-question draft: drafts[interactionID][questionIndex] = selected option labels
+  const [drafts, setDrafts] = createSignal<Record<string, string[][]>>({});
+  // Per-interaction per-question free-text input
+  const [customText, setCustomText] = createSignal<Record<string, string[]>>({});
  // Track auto-resolve failures per interaction ID → timestamp
   const autoResolveFailed = new Map<string, number>();
   const COOLDOWN_MS = 10_000;
+
+  function getSelected(iid: string, qIdx: number): string[] {
+    return drafts()[iid]?.[qIdx] ?? [];
+  }
+
+  function toggleOption(iid: string, qIdx: number, label: string, multiple: boolean) {
+    setDrafts((prev) => {
+      const all = { ...prev };
+      const perInteraction = [...(all[iid] ?? [])];
+      const current = perInteraction[qIdx] ?? [];
+      if (multiple) {
+        perInteraction[qIdx] = current.includes(label)
+          ? current.filter((x) => x !== label)
+          : [...current, label];
+      } else {
+        perInteraction[qIdx] = current.includes(label) ? [] : [label];
+      }
+      all[iid] = perInteraction;
+      return all;
+    });
+  }
+
+  function setCustomAt(iid: string, qIdx: number, value: string) {
+    setCustomText((prev) => {
+      const all = { ...prev };
+      const arr = [...(all[iid] ?? [])];
+      arr[qIdx] = value;
+      all[iid] = arr;
+      return all;
+    });
+  }
+
+  function submitQuestion(interaction: Interaction) {
+    const payload = isRecord(interaction.payload) ? interaction.payload! : null;
+    const questions = Array.isArray(payload?.questions) ? payload!.questions! : [];
+    const answers: string[][] = questions.map((_, idx) => {
+      const picked = getSelected(interaction.id, idx);
+      const custom = (customText()[interaction.id]?.[idx] ?? "").trim();
+      const combined = custom ? [...picked, custom] : picked;
+      return combined;
+    });
+    void resolveInteraction(interaction.id, "answer", { answers });
+  }
 
   const pendingInteractions = createMemo<Interaction[]>(() => {
     const raw = boardStore.board?.interactions;
@@ -289,22 +315,7 @@ export function InteractionPanel(props: InteractionPanelProps) {
     if (interaction.type === "permission") {
       const reply = appStore.config?.experimental?.auto_permission ? "always" : "once";
       void resolveInteraction(interaction.id, reply);
-      return;
     }
-
- // question auto-resolve: requires structured options
-    const answers = autoInteractionAnswers(interaction);
-    if (
-      !answers ||
-      answers.some((item) => !Array.isArray(item) || item.length === 0)
-    ) {
-      console.warn(
-        "[InteractionPanel] Skipping auto question reply — missing structured options",
-        { interactionID: interaction.id },
-      );
-      return;
-    }
-    void resolveInteraction(interaction.id, "answer", { answers: answers as string[][] });
   }
 
  // Attempt auto-resolve whenever the pending list changes
@@ -340,6 +351,57 @@ export function InteractionPanel(props: InteractionPanelProps) {
                 })}
               </div>
             </Show>
+            <Show when={interaction.type === "question" && Array.isArray(interaction.payload?.questions)}>
+              <div class="interaction-questions">
+                <For each={interaction.payload!.questions!}>
+                  {(q, qIdx) => {
+                    const multi = q.multiple === true;
+                    const allowCustom = q.custom !== false;
+                    const opts = Array.isArray(q.options) ? q.options : [];
+                    return (
+                      <div class="interaction-question">
+                        <Show when={q.question}>
+                          <div class="interaction-question-text">{q.question}</div>
+                        </Show>
+                        <Show when={opts.length > 0}>
+                          <div class="interaction-options">
+                            <For each={opts}>
+                              {(opt) => (
+                                <label class="interaction-option">
+                                  <input
+                                    type={multi ? "checkbox" : "radio"}
+                                    name={`iq-${interaction.id}-${qIdx()}`}
+                                    checked={getSelected(interaction.id, qIdx()).includes(opt.label)}
+                                    disabled={busy()}
+                                    onChange={() => toggleOption(interaction.id, qIdx(), opt.label, multi)}
+                                  />
+                                  <span class="interaction-option-label">{opt.label}</span>
+                                  <Show when={opt.description}>
+                                    <span class="interaction-option-desc">{opt.description}</span>
+                                  </Show>
+                                </label>
+                              )}
+                            </For>
+                          </div>
+                        </Show>
+                        <Show when={allowCustom}>
+                          <textarea
+                            class="interaction-custom-input"
+                            placeholder={t("interaction.custom_placeholder")}
+                            rows={opts.length > 0 ? 1 : 3}
+                            disabled={busy()}
+                            value={customText()[interaction.id]?.[qIdx()] ?? ""}
+                            onInput={(e) =>
+                              setCustomAt(interaction.id, qIdx(), (e.currentTarget as HTMLTextAreaElement).value)
+                            }
+                          />
+                        </Show>
+                      </div>
+                    );
+                  }}
+                </For>
+              </div>
+            </Show>
             <div class="interaction-actions">
               <Show
                 when={interaction.type === "permission"}
@@ -350,9 +412,7 @@ export function InteractionPanel(props: InteractionPanelProps) {
                       disabled={busy()}
                       title={t("interaction.answer_title")}
                       aria-label={t("interaction.answer_title")}
-                      onClick={() =>
-                        resolveInteraction(interaction.id, "answer")
-                      }
+                      onClick={() => submitQuestion(interaction)}
                     >
                       {t("interaction.answer")}
                     </button>

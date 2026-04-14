@@ -18,7 +18,6 @@ import {
   WorkspacePanel,
   type WorkspaceView,
 } from "./components/WorkspacePanel";
-import type { CodingTabAPI } from "./components/CodingTab";
 import { initApp } from "./services/init";
 import { loadTasks, boardStore, loadBoard, setBoardStore } from "./store/board";
 import {
@@ -35,6 +34,7 @@ import {
   replanTask,
   cancelTask,
   createTask,
+  deleteTask,
   interruptTask,
 } from "./services/task";
 import { canComposeChat, stopChatRequest } from "./services/chat";
@@ -64,10 +64,10 @@ import ChannelsPanel from "./components/settings/ChannelsPanel";
 import SkillMarketPanel from "./components/settings/SkillMarketPanel";
 import ProvidersPanel from "./components/settings/ProvidersPanel";
 import GeneralPanel from "./components/settings/GeneralPanel";
-import { OrchestrationPanel } from "./components/settings/OrchestrationPanel";
 import { PermissionsPanel } from "./components/settings/PermissionsPanel";
 import { MemoryPanel } from "./components/MemoryPanel";
 import { InteractionPanel } from "./components/InteractionPanel";
+import { WelcomeToast } from "./components/WelcomeToast";
 import { waitForLogDrain, AppLog } from "./utils/log";
 import { teardownApp } from "./services/init";
 import { stopTimers } from "./services/sync";
@@ -119,15 +119,9 @@ const [logOpen, setLogOpen] = createSignal(false);
 // open/close cycles so reopening restores the last active view.
 const [workspaceOpen, setWorkspaceOpen] = createSignal(false);
 const [workspaceView, setWorkspaceView] = createSignal<WorkspaceView>({
-  kind: "build",
+  kind: "diff",
+  filePath: "",
 });
-
-// Which panel receives composer input/stop. Derived: only "build" when the
-// workspace is open AND the Build view is foregrounded AND the user has
-// clicked into the Build scroll area; otherwise "task".
-const [composerTarget, setComposerTarget] = createSignal<"task" | "build">(
-  "task",
-);
 
 type AppDialogOptions = {
   title?: string;
@@ -157,29 +151,17 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function openWorkspace(view?: WorkspaceView): void {
   if (view) setWorkspaceView(view);
   setWorkspaceOpen(true);
-  // Auto-bind composer to Build when entering Build; Diff is read-only so
-  // composer stays on task.
-  const next = view ?? workspaceView();
-  setComposerTarget(next.kind === "build" ? "build" : "task");
 }
 
-/** Close the workspace panel and force the composer back to task. */
+/** Close the workspace panel. */
 function closeWorkspace(): void {
   setWorkspaceOpen(false);
-  setComposerTarget("task");
 }
 
 /** Toggle the workspace open/closed, restoring the remembered view. */
 function toggleWorkspace(): void {
   if (workspaceOpen()) closeWorkspace();
   else openWorkspace();
-}
-
-/** Switch the foregrounded view without changing open/close state. */
-function setWorkspaceViewAndFocus(view: WorkspaceView): void {
-  setWorkspaceView(view);
-  // Diff view never owns the composer; Build view claims it on entry.
-  setComposerTarget(view.kind === "build" ? "build" : "task");
 }
 
 /** Open (or switch to) a diff file in the workspace. */
@@ -514,9 +496,7 @@ if (chatScroll) {
   render(() => <Conversation container={chatScroll} />, chatScroll);
 }
 
-// ── Mount: WorkspacePanel (Build + Diff) ──
-
-let codingAPI: CodingTabAPI | null = null;
+// ── Mount: WorkspacePanel (Diff / File / Trace) ──
 
 const workspaceMountEl = document.getElementById("solidWorkspaceMount");
 if (workspaceMountEl) {
@@ -525,11 +505,8 @@ if (workspaceMountEl) {
     () => (
       <WorkspacePanel
         view={workspaceView()}
-        onSelectView={setWorkspaceViewAndFocus}
+        onSelectView={setWorkspaceView}
         onClose={closeWorkspace}
-        onCodingReady={(api) => {
-          codingAPI = api;
-        }}
       />
     ),
     workspaceMountEl,
@@ -545,7 +522,7 @@ if (taskListEl) {
     () => (
       <TaskList
         onSelectTask={(taskID) => void selectTask(taskID)}
-        onCancelTask={(taskID) => void cancelTask(taskID)}
+        onDeleteTask={(taskID) => void deleteTask(taskID)}
       />
     ),
     taskListEl,
@@ -681,37 +658,67 @@ if (boardEl) {
 
 // ── Mount: ChatComposer ──
 
+// One-shot follow-up suggestion the composer should pre-fill after a task
+// finishes. Populated by a busy→idle effect below; cleared by the composer
+// via onSuggestionConsumed after it either injects or drops the value.
+const [pendingSuggestion, setPendingSuggestion] = createSignal("");
+// Track the previous task-busy state so we only fire once per finish edge.
+let lastTaskBusy = false;
+let lastSuggestionTaskID: string | null = null;
+createEffect(() => {
+  const busyNow =
+    !!messageStore.chatRequest || isTaskInterruptable();
+  const wasBusy = lastTaskBusy;
+  lastTaskBusy = busyNow;
+  // Each busy→true edge resets the guard so the next finish is eligible for
+  // a fresh suggestion even if it's the same task.
+  if (busyNow && !wasBusy) {
+    lastSuggestionTaskID = null;
+    return;
+  }
+  if (!wasBusy || busyNow) return;
+  const taskID = boardStore.selectedTaskID;
+  if (!taskID) return;
+  if (lastSuggestionTaskID === taskID) return;
+  lastSuggestionTaskID = taskID;
+  void apiJson(`task/${encodeURIComponent(taskID)}/followup`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: "{}",
+  })
+    .then((data: any) => {
+      const text = typeof data?.suggestion === "string" ? data.suggestion.trim() : "";
+      if (text) setPendingSuggestion(text);
+    })
+    .catch((err) => {
+      AppLog.warn("main", "followup suggestion failed", err);
+    });
+});
+
 const composerEl = document.getElementById("solidChatComposer");
 if (composerEl) {
-  const isBuildTarget = () => composerTarget() === "build";
   render(
     () => (
       <ChatComposer
-        enabled={isBuildTarget() ? true : canComposeChat()}
-        busy={isBuildTarget() ? (codingAPI?.busy() ?? false) : (!!messageStore.chatRequest || isTaskInterruptable())}
-        stopping={isBuildTarget() ? false : !!(messageStore.chatRequest as any)?.stopping}
+        enabled={canComposeChat()}
+        busy={!!messageStore.chatRequest || isTaskInterruptable()}
+        stopping={!!(messageStore.chatRequest as any)?.stopping}
+        pendingSuggestion={pendingSuggestion()}
+        onSuggestionConsumed={() => setPendingSuggestion("")}
         onSubmit={(text, attachments, webSearch) => {
-          if (isBuildTarget() && codingAPI) {
-            codingAPI.send(text);
-          } else {
-            void panelMessage(text, attachments, webSearch ? { web_search: true } : {});
-          }
+          void panelMessage(text, attachments, webSearch ? { web_search: true } : {});
         }}
         onStop={() => {
-          if (isBuildTarget() && codingAPI) {
-            codingAPI.stop();
+          // Abort any in-flight HTTP request first
+          if (messageStore.chatRequest) {
+            void stopChatRequest({ remote: false });
+          }
+          // Cancel the task via direct API
+          const id = boardStore.selectedTaskID;
+          if (id) {
+            void interruptTask(id);
           } else {
-            // Abort any in-flight HTTP request first
-            if (messageStore.chatRequest) {
-              void stopChatRequest({ remote: false });
-            }
-            // Cancel the task via direct API
-            const id = boardStore.selectedTaskID;
-            if (id) {
-              void interruptTask(id);
-            } else {
-              void stopChatRequest();
-            }
+            void stopChatRequest();
           }
         }}
       />
@@ -810,12 +817,6 @@ if (generalBody) {
   render(() => <GeneralPanel />, generalBody);
 }
 
-const orchestrationBody = document.getElementById("orchestrationBody");
-if (orchestrationBody) {
-  orchestrationBody.innerHTML = "";
-  render(() => <OrchestrationPanel />, orchestrationBody);
-}
-
 const permissionsBody = document.getElementById("permissionsBody");
 if (permissionsBody) {
   permissionsBody.innerHTML = "";
@@ -828,10 +829,10 @@ if (channelConfigBody) {
   render(() => <ChannelsPanel />, channelConfigBody);
 }
 
-const extensionsBody = document.getElementById("extensionsBody");
-if (extensionsBody) {
-  extensionsBody.innerHTML = "";
-  render(() => <SkillMarketPanel />, extensionsBody);
+const extensionsConfigBody = document.getElementById("extensionsConfigBody");
+if (extensionsConfigBody) {
+  extensionsConfigBody.innerHTML = "";
+  render(() => <SkillMarketPanel />, extensionsConfigBody);
 }
 
 const memoryBody = document.getElementById("memoryBody");
@@ -1161,26 +1162,6 @@ document.getElementById("btnChatCopyAll")?.addEventListener("click", () => {
   void copyChatConversation();
 });
 
-// ── Composer target: click into either pane to rebind input ──
-// Rebinding is only meaningful while the workspace is open in Build view.
-// In Diff view the composer is always pinned to task (diff is read-only).
-// Textarea clicks fall through (the composer element is outside both scroll
-// areas) so focusing the composer itself never rebinds the target.
-const BUILD_SCROLL_SELECTOR = "#solidWorkspaceMount .workspace-view[data-kind='build']";
-document.body.addEventListener("pointerdown", (event) => {
-  if (!workspaceOpen()) return;
-  if (workspaceView().kind !== "build") return;
-  const target = event.target as HTMLElement | null;
-  if (!target) return;
-  if (target.closest(BUILD_SCROLL_SELECTOR)) {
-    if (composerTarget() !== "build") setComposerTarget("build");
-    return;
-  }
-  if (target.closest("#chatScroll")) {
-    if (composerTarget() !== "task") setComposerTarget("task");
-  }
-});
-
 // Interaction DOM rendering disabled (InteractionPanel handles UI).
 // Kept alive for resolveInteraction/rejectInteraction window globals
 // consumed by services/session.ts.
@@ -1264,13 +1245,10 @@ disposers.push(createRoot((dispose) => {
     if (copyBtn) copyBtn.disabled = count === 0;
   });
 
-  // ── Workspace visibility + composer focus indicator ──
-  // Drives the show/hide of the workspace mount + resizer and applies the
-  // "this pane owns the composer" highlight when Build view is active.
+  // ── Workspace visibility ──
+  // Drives the show/hide of the workspace mount + resizer.
   createEffect(() => {
     const open = workspaceOpen();
-    const view = workspaceView();
-    const target = composerTarget();
 
     const mount = document.getElementById("solidWorkspaceMount");
     const resizer = document.getElementById("workspaceResizer");
@@ -1280,17 +1258,6 @@ disposers.push(createRoot((dispose) => {
     // Reflect open state on the toggle button for visual/a11y feedback.
     const toggleBtn = document.getElementById("btnWorkspaceToggle");
     if (toggleBtn) toggleBtn.setAttribute("aria-pressed", open ? "true" : "false");
-
-    // Focus highlight: only meaningful in Build view.
-    const chatEl = document.getElementById("chatScroll");
-    const buildEl = document.querySelector(
-      "#solidWorkspaceMount .workspace-view[data-kind='build']",
-    );
-    const highlightActive = open && view.kind === "build";
-    const chatFocused = highlightActive && target === "task";
-    const buildFocused = highlightActive && target === "build";
-    if (chatEl) chatEl.classList.toggle("chat-scroll--focused", chatFocused);
-    if (buildEl) buildEl.classList.toggle("chat-scroll--focused", buildFocused);
   });
 
   // ── Task status header (reactive) ──
@@ -1479,6 +1446,10 @@ void (async () => {
   try {
     await initApp();
     renderAboutVersion();
+    const welcomeHost = document.createElement("div");
+    welcomeHost.id = "welcomeHost";
+    document.body.appendChild(welcomeHost);
+    render(() => <WelcomeToast />, welcomeHost);
   } catch (error) {
     console.error(error);
   } finally {

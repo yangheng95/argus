@@ -474,6 +474,22 @@ export async function createTempDirectory(): Promise<string> {
   return typeof created === "string" ? created.trim() : "";
 }
 
+/**
+ * Ask the Tauri backend to delete a previously-created overlay temp directory.
+ * The backend validates the path lives under the system temp root and carries
+ * the `opencorvus-overlay-` prefix; any other path is rejected.
+ */
+export async function releaseTempDirectory(path: string): Promise<boolean> {
+  const trimmed = path?.trim();
+  if (!trimmed) return false;
+  if (!hasTauriRuntime()) return false;
+  const released = await tauriInvoke("overlay_release_temp_dir", { path: trimmed }).catch((err) => {
+    AppLog.debug("ui", "overlay_release_temp_dir failed", { path: trimmed, error: String(err) });
+    return false;
+  });
+  return released === true;
+}
+
 // ── Tauri file / directory pickers ──
 
 /**
@@ -708,6 +724,15 @@ export async function applyDirectory(
   }
 
   console.log("[applyDir] switching", { from: curDir, to: next, save, temp });
+
+  // Release the previous overlay temp directory BEFORE we lose the reference
+  // in the settings store. This fires only when the temp slot is explicitly
+  // changing (temp !== null && temp !== curTemp): a plain directory-switch
+  // that leaves tempDirectory untouched keeps the old temp around so the user
+  // can still return to it.
+  if (temp !== null && curTemp && curTemp !== temp) {
+    void releaseTempDirectory(curTemp);
+  }
 
   setSettingsStore("directoryEpoch", (n: number) => n + 1);
   setSettingsStore("directory", next);

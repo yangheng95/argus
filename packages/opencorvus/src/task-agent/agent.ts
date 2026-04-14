@@ -26,7 +26,7 @@ import { registerGoalRunSession } from "@/server/routes/task-event"
 import { sessionStreamHooks } from "@/agent/runtime"
 import { createTaskAgentTools } from "./tools"
 import { AttachmentStore } from "@/storage/attachment-store"
-import { operatorNotesSection } from "@/orchestrator/helpers"
+import { clarificationTranscriptSection, operatorNotesSection } from "@/orchestrator/helpers"
 import {
   findDeliveryByRun,
   findEvaluationByRun,
@@ -51,11 +51,6 @@ import {
 } from "@/orchestrator/workflow"
 import { OrchestratorProtocol } from "@/orchestrator/protocol"
 import { Event as OrchestratorEvent } from "@/orchestrator/model"
-// Namespace-style import is intentional: tests use `spyOn(BuildDispatch,
-// "runBuildTask")` to intercept the call without spinning up the real build
-// agent (which would issue a live LLM stream). Named imports would capture
-// the binding at module load and bypass the spy.
-import * as BuildDispatch from "./build-dispatch"
 
 const log = Log.create({ service: "task-agent" })
 const MAX_STEPS = 20
@@ -136,38 +131,11 @@ export namespace TaskAgent {
         return
       }
 
-      // ── kind dispatch ──
-      // `task.kind === "build"` tasks are Gateway-issued one-shots that bypass
-      // the entire workflow pipeline (requirements / design / architect / execute /
-      // deliver). They still go through the same task table + queue so cancel
-      // and audit are uniform; the only fork is which agent handles execution.
-      if (task.kind === "build") {
-        if (trigger.kind !== "created") {
-          // Build tasks are single-shot: re-triggers indicate a control bug
-          // (queue replay, retry storm). Log and bail rather than silently
-          // re-running and clobbering whatever the original run produced.
-          log.warn("build task re-triggered; ignoring", { taskID, trigger: trigger.kind })
-          return
-        }
-        Trace.bindSession(task.session_id, taskID)
-        Trace.event({ taskID, sessionID: task.session_id, category: "task.start",
-          payload: { kind: "build", request: task.request } })
-        try {
-          await BuildDispatch.runBuildTask({ task, signal: ctrl.signal })
-        } finally {
-          Trace.event({ taskID, sessionID: task.session_id, category: "task.finish",
-            payload: { kind: "build", status: findTask(taskID)?.status } })
-          Trace.unbindSession(task.session_id)
-        }
-        return
-      }
-
       // 0. Initialize workflow state on new task creation
       let workflow: MiniWorkflow | undefined
       let workflowState: WorkflowState | undefined
       if (trigger.kind === "created") {
         finishEmitted.delete(taskID)
-        Trace.bindSession(task.session_id, taskID)
         Trace.event({
           taskID,
           sessionID: task.session_id,
@@ -380,7 +348,6 @@ export namespace TaskAgent {
           category: "task.finish",
           payload: { status: finalTask?.status, error: finalTask?.error ?? null },
         })
-        if (sid) Trace.unbindSession(sid)
       }
     }
   }
@@ -443,9 +410,24 @@ const TASK_AGENT_INSTRUCTIONS = [
   "There is NO fixed pipeline. You reason about the situation and choose the right action.",
   "Always respond in the same language as the task request. Default to Chinese (simplified) if ambiguous.",
   "",
-  "## Stage Sequence",
+  "## Route Decision (FIRST, exactly once)",
   "",
-  "(Clarification is owned by Gateway, not by this agent. If the request is incomplete, surface that fact in your reasoning — Gateway resolves the dialog with the user before re-issuing the task. Do not attempt to ask the user yourself.)",
+  "Before anything else, decide whether the task needs planning or can be handled directly.",
+  "",
+  "- **Direct build path** — call `build` with the user's request and a one-sentence `reason`. Use when the task is a single-file edit, bug fix, small refactor in place, typo/comment/config tweak, short debug-and-fix, or a lookup-then-edit. The build agent has read/write/edit/bash and solves it end-to-end. No requirements, no architect, no goals, no deliver. Call `build` AT MOST ONCE; when it returns, stop.",
+  "- **Pipeline path** — go to requirements. Use when the task has multiple files, acceptance criteria, a UI to replicate from a design, cross-module refactor, new subsystem, or explicit non-functional goals.",
+  "- **Can't tell** — prefer the pipeline. Requirements can still decompose into a single goal and the cost is marginal; a misrouted direct build skips verification entirely and is harder to recover from.",
+  "",
+  "Never do both paths. Never call `build` after entering requirements, and never call requirements after `build` has returned successfully.",
+  "",
+  "## Stage Sequence (pipeline path)",
+  "",
+  "**Clarification via `ask_user`** — when you genuinely cannot proceed without a human decision, call the `ask_user` tool. It renders option buttons in the task's InteractionPanel and blocks until the user answers. Use it SPARINGLY, only at these checkpoints:",
+  "  (a) BEFORE requirements when the incoming request is too vague to decompose (e.g. a single sentence with no scope).",
+  "  (b) DURING execute when you discover a missing critical input (conflicting goals, unspecified tech stack, unclear data source) that cannot be inferred from the codebase.",
+  "  (c) BEFORE deliver when multiple viable approaches exist and the user should pick.",
+  "  (d) AFTER refine to let the user select which improvement suggestions to roll into the next iteration.",
+  "Do NOT ask the user for information you could reasonably derive from read_context, the task request, or existing goals. Prefer one well-structured question with options over a cascade of free-text prompts.",
   "0.5. **design_analysis** (optional, auto-triggered) — Analyze visual references (images, URLs) to produce structured design specs (layout tree, style tokens, component inventory, interactions, responsive rules). Enriches the task request before decomposition. See triggering rules below.",
   "1. **requirements** — Analyze the task into goal contracts with acceptance criteria.",
   "2. **architect** — Coordinate cross-goal interface contracts. REQUIRED for multi-goal tasks — call after requirements returns 2+ goals. Skip only for single-goal tasks (the tool will enforce this automatically).",
@@ -453,20 +435,21 @@ const TASK_AGENT_INSTRUCTIONS = [
   "4. **deliver** — Aggregate and verify (deliver). Delivery agent is the single verification gate: it tests, fixes issues, and makes final acceptance decision. Only when all blocking goals have completed execution.",
   "5. **refine** (optional, post-completion) — Explore the delivered project, analyze quality/coverage/features, and suggest next iteration improvements. Use after delivery completes successfully, or when user re-triggers a completed task asking for improvements.",
   "",
-  "You have these tools: design_analysis, requirements, architect, execute_goal, add_goal, modify_goal,",
+  "You have these tools: build, design_analysis, requirements, architect, execute_goal, add_goal, modify_goal,",
   "dispatch_ready_goals, retry_failed_goals, query_failed_goals, read_context, create_run,",
-  "submit_execution, deliver, publish_delivery, fail_task, restart_from_stage, refine.",
+  "submit_execution, deliver, publish_delivery, fail_task, restart_from_stage, refine, ask_user.",
   "(Note: per-goal planning happens automatically inside the execution engine — no plan_goal tool needed.)",
   "",
   "**For new tasks:**",
-  "- DEFAULT: go directly to requirements. Most requests (PRDs, specs, designs, detailed descriptions) have enough information.",
+  "- FIRST: apply the Route Decision rule above. Direct-build candidates call `build`; everything else goes to requirements.",
+  "- Pipeline DEFAULT: go directly to requirements. Most non-trivial requests (PRDs, specs, designs, detailed descriptions) have enough information.",
   "- **Design analysis trigger**: Call design_analysis BEFORE requirements when ALL of these apply:",
   "  (1) The task is frontend/UI-related (web page, component, dashboard, landing page, etc.),",
   "  AND (2) visual references exist: image attachments OR a URL to replicate/analyze.",
   "  The design analyst produces exact layout, colors, typography, component inventory — information",
   "  that lets the requirements agent create pixel-accurate goals instead of vague 'build the UI' goals.",
   "  SKIP design_analysis when: no images/URLs, purely backend/API, or the request already contains detailed design specs.",
-  "- If the request is genuinely unusable for decomposition (e.g., a single sentence like '做个订单系统' with no scope or context), bail out early and let Gateway pull a clarification from the user. This agent does not own the dialog channel.",
+  "- If the request is genuinely unusable for decomposition (e.g., a single sentence like '做个订单系统' with no scope or context), call `ask_user` with 2-3 targeted questions (scope, target users, key constraints) — then proceed to requirements once answered.",
   "- After requirements: ALWAYS call architect next if there are 2+ goals. It coordinates interface contracts that all executors depend on. Skip only when requirements returned exactly 1 goal.",
   "- Then create_run, then submit_execution. The execution engine plans each goal automatically.",
   "- Do NOT call plan_goal for goals upfront — planning is lazy and happens per-goal inside the execution engine, right before each goal executes.",
@@ -498,9 +481,9 @@ const TASK_AGENT_INSTRUCTIONS = [
   "**Post-completion iteration (re-triggered on completed task):**",
   "- User sent a message to a completed task → you are re-triggered with kind=retry.",
   "- Call refine to analyze what was built and generate improvement suggestions.",
-  "- Surface the suggestions in your reply — Gateway routes them to the user and collects which to iterate on.",
-  "- Once the user replies with selected improvements (Gateway will push them back into the task), call restart_from_stage(requirements) to begin a new cycle.",
-  "- The full iteration loop: deliver → refine → (Gateway dialog) → restart → requirements → architect → execute → deliver → ...",
+  "- Call `ask_user` with the suggestions as multi-select options so the user picks which to roll in.",
+  "- Once you have the selection, call restart_from_stage(requirements) to begin a new cycle with the chosen scope.",
+  "- The full iteration loop: deliver → refine → ask_user → restart → requirements → architect → execute → deliver → ...",
   "",
   "**Dynamic adjustment (anytime):**",
   "- Discovered a missing requirement? → add_goal",
@@ -584,6 +567,8 @@ function buildSystemParts(task: TaskRow, trigger: TaskAgentTrigger, workflow?: M
   const fixCount = activeRun?.retry_count ?? 0
   ctx.push(`- Budget: ${totalRuns}/${maxRuns} runs, ${fixCount}/${maxFixRuns} fixes`)
 
+  const clarifications = clarificationTranscriptSection(task.id)
+  if (clarifications) ctx.push(clarifications)
   const notes = operatorNotesSection(task.id)
   if (notes) ctx.push(notes)
 

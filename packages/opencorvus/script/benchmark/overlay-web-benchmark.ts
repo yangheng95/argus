@@ -1465,6 +1465,9 @@ async function launchBrowser() {
       "--disable-dev-shm-usage",
       "--disable-setuid-sandbox",
       "--disable-extensions",
+      // Without these, Windows under DPI scaling drops the window in the bottom-right corner.
+      "--window-position=0,0",
+      "--window-size=1600,1200",
     ],
   })
 }

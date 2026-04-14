@@ -5,6 +5,7 @@
 
 import { orderedMessageParts, effectiveRole, roleLabel, agentStageLabel } from "./message";
 import { toolNameKey } from "./tool";
+import { stageAccent } from "./card-color";
 
 export type CardKind = "agent" | "goal" | "step" | "tool" | "message";
 export type CardStatus = "pending" | "running" | "completed" | "error" | "skipped";
@@ -27,6 +28,10 @@ export interface CardNode {
   role?: string;
   /** Raw stage name (planner/executor/…) — drives per-stage accents. */
   stage?: string;
+  /** Resolved accent colour (CSS value) for this card's stage. Undefined when
+   *  the node has no stage (e.g. plain message bubble). Written into an
+   *  inline `--card-stage` CSS variable by <Card>, consumed by card.css. */
+  accent?: string;
   status?: CardStatus;
   /** Header primary label. */
   title: string;
@@ -78,6 +83,7 @@ function normGoalStatus(raw: any): CardStatus | undefined {
 
 const ALWAYS_PROMOTE_TOOLS = new Set([
   "task", "agent", "spawnagent", "subagent",
+  "build",
 ]);
 const CODE_WRITE_TOOLS = new Set([
   "write", "writefile", "edit", "editfile", "applypatch",
@@ -185,6 +191,7 @@ function goalToNode(item: any): CardNode {
         id: `${cardID}:step:${step.stepID}`,
         kind: "step",
         stage,
+        accent: stageAccent(stage),
         status: stepStatus,
         title: stepTitle(stage, step),
         subtitle: step.summary || undefined,
@@ -206,6 +213,7 @@ function goalToNode(item: any): CardNode {
         id: String(c.id || `${cardID}:step:${stage}`),
         kind: "step",
         stage,
+        accent: stageAccent(stage),
         status: st,
         title: agentStageLabel(stage),
         parts: flattenMessages(c.messages || []),
@@ -218,6 +226,7 @@ function goalToNode(item: any): CardNode {
     id: cardID,
     kind: "goal",
     stage: "goal",
+    accent: stageAccent("goal"),
     status: goalStatus ?? status,
     title: String(item.goalTitle || "Goal"),
     subtitle: cardID.length > 8 ? cardID.slice(-8) : undefined,
@@ -241,6 +250,7 @@ function agentCardToNode(item: any): CardNode {
     kind: "agent",
     role: stage,
     stage,
+    accent: stageAccent(stage),
     status,
     title: agentStageLabel(stage),
     round: Number(item.round) || 0,
@@ -300,4 +310,42 @@ export function defaultExpandedForNode(node: CardNode): boolean {
   if (node.kind === "message") return true;
   // step / tool defaults: collapsed when completed, open when running.
   return node.status !== "completed";
+}
+
+// ── Text collection (for copy-to-clipboard) ──
+// Walks a card node and its descendants, emitting the human-readable prose
+// parts: text / reasoning, plus goal description and contracts for goal
+// cards. Tool input/output and binary parts (patch/file) are skipped —
+// they rarely belong in a pasted transcript.
+
+function partText(part: any): string {
+  if (!part) return "";
+  if (part.type === "text" || part.type === "reasoning") {
+    return String(part.text || "").trim();
+  }
+  return "";
+}
+
+export function collectCardText(node: CardNode): string {
+  if (!node) return "";
+  const chunks: string[] = [];
+  if (node.kind === "goal" && node.goalDescription) {
+    chunks.push(String(node.goalDescription).trim());
+  }
+  if (node.kind === "goal" && node.contracts?.length) {
+    for (const c of node.contracts) {
+      const key = String(c.key || "").trim();
+      const value = String(c.value || "").trim();
+      if (key || value) chunks.push(key ? `${key}: ${value}` : value);
+    }
+  }
+  for (const part of node.parts || []) {
+    const text = partText(part);
+    if (text) chunks.push(text);
+  }
+  for (const child of node.children || []) {
+    const sub = collectCardText(child);
+    if (sub) chunks.push(sub);
+  }
+  return chunks.filter(Boolean).join("\n\n");
 }

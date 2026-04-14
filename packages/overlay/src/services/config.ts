@@ -174,7 +174,7 @@ export async function scaffoldProjectConfig(dir: string): Promise<void> {
   const base = dir.replace(/[\\/]+$/, "");
   const configFile = base + "/.opencorvus/opencorvus.jsonc";
   const username = settingsStore.username || "";
-  const unattended = appStore.config?.experimental?.unattended !== false;
+  const unattended = appStore.config?.experimental?.unattended === true;
   // Scaffold intentionally leaves `assistant` empty so the server's
   // OrchestratorConfig.DEFAULTS is the single source of truth. Writing explicit
   // values here would shadow DEFAULTS via the `??` merge in

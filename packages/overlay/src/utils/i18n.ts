@@ -54,6 +54,12 @@ export function t(key: string, vars?: Record<string, any>): string {
   return fillTemplate(value, vars);
 }
 
+export function tArray(key: string): string[] {
+  const value = localeValue(key) ?? localeValue(key, "en-US");
+  if (Array.isArray(value)) return value.filter((v): v is string => typeof v === "string");
+  return [];
+}
+
 export function tc(key: string, count: number, vars?: Record<string, any>): string {
   const value = localeValue(key) ?? localeValue(key, "en-US");
   if (record(value)) {
