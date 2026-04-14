@@ -85,18 +85,8 @@ export namespace Capability {
   }
 
   async function bunPty() {
-    try {
-      await import("bun-pty")
-      return line("bun_pty", "PTY native module", "ok", "bun-pty")
-    } catch (err) {
-      return line(
-        "bun_pty",
-        "PTY native module",
-        "warn",
-        `bun-pty unavailable: ${text(err)}`,
-        "PTY falls back to pipe spawning — resize/signals unavailable. Install bun-pty for full terminal features.",
-      )
-    }
+    await import("bun-pty")
+    return line("bun_pty", "PTY native module", "ok", "bun-pty")
   }
 
   async function screenCapture() {

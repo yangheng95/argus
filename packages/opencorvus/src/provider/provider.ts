@@ -326,7 +326,8 @@ export namespace Provider {
     if (!database["hexin"]) {
       const hexinModel = (id: string, name: string): Model => ({
         id,
-        api: { id, npm: "@ai-sdk/openai-compatible", url: "https://aimemodeldev.myhexin.com/litellm/v1" },
+        // api: { id, npm: "@ai-sdk/openai-compatible", url: "https://aimemodeldev.myhexin.com/litellm/v1" },
+        api: { id, npm: "@ai-sdk/openai-compatible", url: "https://arsenal-openai.10jqka.com.cn:8443/ai-gateway/v1" },
         status: "active",
         name,
         providerID: "hexin",
@@ -349,7 +350,8 @@ export namespace Provider {
       })
       const hexinClaude = (id: string, name: string, context: number, output: number): Model => ({
         id,
-        api: { id, npm: "@ai-sdk/openai-compatible", url: "https://aimemodeldev.myhexin.com/litellm/v1" },
+        // api: { id, npm: "@ai-sdk/openai-compatible", url: "https://aimemodeldev.myhexin.com/litellm/v1" },
+        api: { id, npm: "@ai-sdk/openai-compatible", url: "https://arsenal-openai.10jqka.com.cn:8443/ai-gateway/v1" },
         status: "active",
         name,
         providerID: "hexin",

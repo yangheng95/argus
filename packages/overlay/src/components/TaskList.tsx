@@ -3,7 +3,7 @@
 // Displays active and recently-completed tasks from boardStore.
 
 import { createMemo, createSignal, onCleanup, For, Show } from "solid-js";
-import { boardStore, visibleTasks } from "../store/board";
+import { boardStore, visibleTasks, loadTasks } from "../store/board";
 import { settingsStore } from "../store/settings";
 import { t } from "../utils/i18n";
 import { stamp } from "../utils/time";
@@ -366,11 +366,44 @@ export function TaskList(props: TaskListProps) {
   const selectedID = () => boardStore.selectedTaskID;
   const activeDir = () => settingsStore.directory || "";
 
+  const [retrying, setRetrying] = createSignal(false);
+  async function handleRetry() {
+    if (retrying()) return;
+    setRetrying(true);
+    try {
+      await loadTasks();
+    } catch {
+      // error surface already lives in boardStore.tasksError — re-render
+      // will pick it up; no need to swallow/transform here.
+    } finally {
+      setRetrying(false);
+    }
+  }
+
   return (
     <div class="task-list-panel">
+      <Show when={boardStore.tasksError}>
+        <div class="task-list-error" role="alert">
+          <div class="task-list-error-msg">
+            {t("task.load_failed") || "Failed to load tasks"}: {boardStore.tasksError}
+          </div>
+          <button
+            type="button"
+            class="task-list-error-retry"
+            disabled={retrying()}
+            onClick={handleRetry}
+          >
+            {retrying() ? (t("common.loading") || "…") : (t("common.retry") || "Retry")}
+          </button>
+        </div>
+      </Show>
       <Show
         when={sortedItems().length > 0}
-        fallback={<div class="empty-hint">{t("task.none")}</div>}
+        fallback={
+          <Show when={!boardStore.tasksError}>
+            <div class="empty-hint">{t("task.none")}</div>
+          </Show>
+        }
       >
         <For each={grouped()}>
           {(group) => {

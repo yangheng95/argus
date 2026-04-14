@@ -9,7 +9,11 @@
  * The agent:
  * - Accepts images (screenshots, mockups) and/or URLs
  * - Analyzes layout structure, style tokens, components, interactions, responsive behavior
- * - Produces a structured DesignAnalysis that enriches the task request for Requirements
+ * - Produces a structured DesignAnalysis that is handed to the Requirements agent
+ *   as a separate `designSpec` input. The user's original task.request is NOT
+ *   mutated — the spec travels through task.metadata.design_spec so downstream
+ *   sub-agents (architect / deliver / refine / per-goal runner) don't pick it
+ *   up unless they explicitly opt in.
  *
  * Architecture constraints:
  * ✗ Cannot modify files or execute code
@@ -72,13 +76,25 @@ export namespace DesignAnalystAgent {
 
   /**
    * Render a DesignAnalysis into a text section suitable for injection
-   * into the requirements/task-agent prompt.
+   * into the requirements agent's prompt.
+   *
+   * Budgeting: the fully structured analysis for a rich UI can reach
+   * 30-50K chars across hundreds of layout / token / component lines.
+   * Each subsection is capped below so the aggregate stays within
+   * {@link PROMPT_SECTION_CAP}. Overruns surface as "(+N more, see
+   * artifact)" trailers — never a silent drop — and the full analysis
+   * object remains persisted in its artifact row for downstream agents
+   * that want to drill in.
    */
+  export const PROMPT_SECTION_CAP = 12_000
+  const PER_SUBSECTION_ITEM_CAP = 40
+  const PER_LINE_CAP = 220
+
   export function toPromptSection(analysis: DesignAnalysis): string {
     const sections: string[] = []
 
     sections.push(`# Design Analysis\n`)
-    sections.push(`**Summary:** ${analysis.summary}`)
+    sections.push(`**Summary:** ${clipLine(analysis.summary)}`)
     sections.push(`**Source:** ${analysis.sourceType}${analysis.sourceUrl ? ` (${analysis.sourceUrl})` : ""}`)
     sections.push(`**Design System:** ${analysis.designSystem}`)
     sections.push(`**Recommended Stack:** ${analysis.techStack.join(", ")}`)
@@ -86,20 +102,26 @@ export namespace DesignAnalystAgent {
     // Layout tree
     if (analysis.layout.length > 0) {
       sections.push("\n## Layout Structure")
-      for (const s of analysis.layout) {
+      const shown = analysis.layout.slice(0, PER_SUBSECTION_ITEM_CAP)
+      for (const s of shown) {
         const children = s.children.length > 0 ? ` → [${s.children.join(", ")}]` : ""
         sections.push(
-          `- **${s.id}** (${s.type}, ${s.layoutMethod}): ${s.position}, ${s.dimensions}${children}` +
-          (s.notes ? ` — ${s.notes}` : ""),
+          clipLine(
+            `- **${s.id}** (${s.type}, ${s.layoutMethod}): ${s.position}, ${s.dimensions}${children}` +
+            (s.notes ? ` — ${s.notes}` : ""),
+          ),
         )
       }
+      const more = analysis.layout.length - shown.length
+      if (more > 0) sections.push(`- (+${more} more layout sections; see design analysis artifact)`)
     }
 
     // Style tokens
     if (analysis.tokens.length > 0) {
       sections.push("\n## Design Tokens")
-      const grouped = new Map<string, typeof analysis.tokens>()
-      for (const t of analysis.tokens) {
+      const shown = analysis.tokens.slice(0, PER_SUBSECTION_ITEM_CAP)
+      const grouped = new Map<string, DesignAnalysis["tokens"]>()
+      for (const t of shown) {
         const group = t.category.split("-")[0]
         if (!grouped.has(group)) grouped.set(group, [])
         grouped.get(group)!.push(t)
@@ -107,39 +129,68 @@ export namespace DesignAnalystAgent {
       for (const [group, tokens] of grouped) {
         sections.push(`\n### ${group}`)
         for (const t of tokens) {
-          sections.push(`- **${t.name}** (${t.category}): \`${t.value}\` — ${t.usage}`)
+          sections.push(clipLine(`- **${t.name}** (${t.category}): \`${t.value}\` — ${t.usage}`))
         }
       }
+      const more = analysis.tokens.length - shown.length
+      if (more > 0) sections.push(`- (+${more} more tokens; see design analysis artifact)`)
     }
 
     // Components
     if (analysis.components.length > 0) {
       sections.push("\n## UI Components")
-      for (const c of analysis.components) {
+      const shown = analysis.components.slice(0, PER_SUBSECTION_ITEM_CAP)
+      for (const c of shown) {
         sections.push(
-          `- **${c.id}** (${c.type}, ${c.variant}) in ${c.sectionId}: ${c.props}` +
-          (c.notes ? ` — ${c.notes}` : ""),
+          clipLine(
+            `- **${c.id}** (${c.type}, ${c.variant}) in ${c.sectionId}: ${c.props}` +
+            (c.notes ? ` — ${c.notes}` : ""),
+          ),
         )
       }
+      const more = analysis.components.length - shown.length
+      if (more > 0) sections.push(`- (+${more} more components; see design analysis artifact)`)
     }
 
     // Interactions
     if (analysis.interactions.length > 0) {
       sections.push("\n## Interaction Patterns")
-      for (const i of analysis.interactions) {
-        sections.push(`- **${i.trigger}** → ${i.effect} on [${i.targetComponentIds.join(", ")}]: ${i.description}`)
+      const shown = analysis.interactions.slice(0, PER_SUBSECTION_ITEM_CAP)
+      for (const i of shown) {
+        sections.push(
+          clipLine(
+            `- **${i.trigger}** → ${i.effect} on [${i.targetComponentIds.join(", ")}]: ${i.description}`,
+          ),
+        )
       }
+      const more = analysis.interactions.length - shown.length
+      if (more > 0) sections.push(`- (+${more} more interactions; see design analysis artifact)`)
     }
 
     // Responsive
     if (analysis.responsive.length > 0) {
       sections.push("\n## Responsive Rules")
-      for (const r of analysis.responsive) {
-        sections.push(`- **${r.breakpoint}**: ${r.layoutChanges} (affects: ${r.affectedSectionIds.join(", ")})`)
+      const shown = analysis.responsive.slice(0, PER_SUBSECTION_ITEM_CAP)
+      for (const r of shown) {
+        sections.push(
+          clipLine(
+            `- **${r.breakpoint}**: ${r.layoutChanges} (affects: ${r.affectedSectionIds.join(", ")})`,
+          ),
+        )
       }
+      const more = analysis.responsive.length - shown.length
+      if (more > 0) sections.push(`- (+${more} more responsive rules; see design analysis artifact)`)
     }
 
-    return sections.join("\n")
+    const rendered = sections.join("\n")
+    if (rendered.length <= PROMPT_SECTION_CAP) return rendered
+    const omitted = rendered.length - PROMPT_SECTION_CAP
+    return `${rendered.slice(0, PROMPT_SECTION_CAP)}\n\n… [+${omitted} chars truncated; full design analysis in task.metadata.design_spec]`
+  }
+
+  function clipLine(s: string): string {
+    if (s.length <= PER_LINE_CAP) return s
+    return s.slice(0, PER_LINE_CAP) + "…"
   }
 }
 

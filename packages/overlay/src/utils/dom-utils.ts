@@ -18,7 +18,6 @@ import { selectTask } from "../services/task";
 import { settingsStore } from "../store/settings";
 import { t } from "./i18n";
 import { escapeHtml } from "./markdown";
-export { sanitizeDirectoryMode } from "../store/settings";
 
 // ── Auto-scroll ──
 
@@ -251,17 +250,10 @@ export function pathIcon(kind: string): string {
 export function pathBreadcrumb(value: string): string {
   const browse = escapeHtml(t("cwd.browse"));
   const create = escapeHtml(t("cwd.new"));
-  const reset = escapeHtml(t("cwd.reset"));
-  const directory = settingsStore.directory;
   const actions = [
     `<button type="button" class="task-dir-tool" data-path-action="browse" title="${browse}" aria-label="${browse}">${pathIcon("browse")}</button>`,
     `<button type="button" class="task-dir-tool" data-path-action="create" title="${create}" aria-label="${create}">${pathIcon("new")}</button>`,
-    directory
-      ? `<button type="button" class="task-dir-tool danger" data-path-action="reset" title="${reset}" aria-label="${reset}">${pathIcon("reset")}</button>`
-      : "",
-  ]
-    .filter(Boolean)
-    .join("");
+  ].join("");
   if (!value) {
     return `
       <span class="task-dir-shell" data-empty="true">

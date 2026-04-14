@@ -1,4 +1,4 @@
-export * from "./compat"
+export * from "./contract"
 export * from "./codex"
 export * from "./codex-app-server"
 export * from "./codex-app-server-client"

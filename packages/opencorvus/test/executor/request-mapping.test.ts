@@ -10,7 +10,7 @@ function feed(items: unknown[]): AsyncIterable<unknown> {
   }
 }
 
-describe("executor compatibility", () => {
+describe("executor request mapping", () => {
   test("codex request maps function and builtin tools", () => {
     const req = CodexExecutor.request({
       model: "gpt-5.2-codex",

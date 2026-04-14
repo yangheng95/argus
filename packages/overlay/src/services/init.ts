@@ -36,7 +36,7 @@ import { loadExtensions } from "./extensions";
 import { loadExecutors } from "./executor";
 import { ensureWorkspaceDirectory } from "./workspace";
 import { ensureDefaultDirectory } from "./workspace";
-import { workspaceRestoreDirectory } from "./workspace";
+import { workspaceRestoreDirectory } from "../store/settings";
 import { selectTask } from "./task";
 
 // ── Types ──
@@ -76,8 +76,12 @@ function syncApiConfig(): void {
  * Load all initial data in parallel after connection is established.
  */
 async function loadInitialData(): Promise<void> {
-  await ensureDefaultDirectory().catch(() => false);
-  await ensureWorkspaceDirectory().catch(() => settingsStore.directory || "");
+  // Let-it-crash: init-time failures must not be swallowed, otherwise the
+  // UI boots into an inconsistent state (e.g. directory unset but tasks loaded
+  // against a stale cwd). Errors propagate to initApp's caller which decides
+  // how to surface them.
+  await ensureDefaultDirectory();
+  await ensureWorkspaceDirectory();
   syncApiConfig();
   await Promise.all([
     loadTasks(),
@@ -118,12 +122,7 @@ export async function initApp(options: InitOptions = {}): Promise<void> {
     const nativeSettings = await invoke("overlay_settings_load").catch(() => null);
     if (nativeSettings && typeof nativeSettings === "object" && !Array.isArray(nativeSettings)) {
       applySettings(nativeSettings as any);
-      setSavedDirectory(
-        savedDirectoryValue(
-          (nativeSettings as any).directory,
-          (nativeSettings as any).directoryMode,
-        ),
-      );
+      setSavedDirectory(savedDirectoryValue((nativeSettings as any).directory));
     }
   }
 

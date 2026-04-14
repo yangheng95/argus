@@ -504,7 +504,7 @@ a { color: inherit; text-decoration: none; }
   border-radius: calc(12px * var(--ui-scale));
   background:
     linear-gradient(180deg, rgba(91, 141, 239, 0.12), rgba(91, 141, 239, 0) 44%),
-    var(--surface-strong);
+    var(--menu-panel-bg);
   box-shadow: var(--shadow-lg);
   color: var(--text);
   text-align: left;
@@ -534,7 +534,7 @@ a { color: inherit; text-decoration: none; }
   left: calc(20px * var(--ui-scale));
   width: calc(12px * var(--ui-scale));
   height: calc(12px * var(--ui-scale));
-  background: var(--surface-strong);
+  background: var(--menu-panel-bg);
   border-left: 1px solid var(--hover-accent-border);
   border-top: 1px solid var(--hover-accent-border);
   transform: rotate(45deg);
@@ -680,11 +680,10 @@ a { color: inherit; text-decoration: none; }
   gap: calc(3px * var(--ui-scale));
   width: calc(264px * var(--ui-scale));
   padding: calc(4px * var(--ui-scale));
-  background: color-mix(in srgb, var(--chrome) 92%, transparent);
+  background: var(--menu-panel-bg);
   border: 1px solid var(--border);
   border-radius: calc(7px * var(--ui-scale));
   box-shadow: 0 calc(10px * var(--ui-scale)) calc(22px * var(--ui-scale)) rgba(15, 23, 42, 0.24);
-  backdrop-filter: blur(14px);
   pointer-events: auto;
 }
 
@@ -1282,7 +1281,7 @@ a { color: inherit; text-decoration: none; }
   max-width: calc(400px * var(--ui-scale));
   max-height: calc(260px * var(--ui-scale));
   overflow-y: auto;
-  background: var(--surface-1);
+  background: var(--menu-panel-bg);
   border: 1px solid var(--border-strong);
   border-radius: calc(10px * var(--ui-scale));
   padding: calc(4px * var(--ui-scale));
@@ -1576,7 +1575,7 @@ a { color: inherit; text-decoration: none; }
   max-width: calc(260px * var(--ui-scale));
   max-height: calc(280px * var(--ui-scale));
   overflow-y: auto;
-  background: var(--surface-1);
+  background: var(--menu-panel-bg);
   border: 1px solid var(--border-strong);
   border-radius: calc(10px * var(--ui-scale));
   padding: calc(4px * var(--ui-scale));
@@ -1743,14 +1742,12 @@ body[data-theme="light"] .engine-model-item:hover {
   max-height: calc(360px * var(--ui-scale));
   overflow-y: auto;
   padding: calc(4px * var(--ui-scale));
-  background: color-mix(in srgb, var(--chrome) 92%, transparent);
+  background: var(--menu-panel-bg);
   border: 1px solid var(--border);
   border-radius: calc(9px * var(--ui-scale));
   box-shadow:
     0 calc(10px * var(--ui-scale)) calc(28px * var(--ui-scale)) rgba(15, 23, 42, 0.28),
     0 0 0 1px rgba(255, 255, 255, 0.04) inset;
-  -webkit-backdrop-filter: blur(14px);
-  backdrop-filter: blur(14px);
   scrollbar-width: thin;
   scrollbar-color: var(--subtle-5) transparent;
 }
@@ -1880,7 +1877,7 @@ body[data-theme="light"] .titlebar-btn:hover {
 }
 
 body[data-theme="light"] .titlebar-menu-panel {
-  background: color-mix(in srgb, var(--surface) 96%, white 4%);
+  background: var(--menu-panel-bg);
 }
 
 body[data-theme="light"] .titlebar-menu-item:hover,
@@ -2264,6 +2261,37 @@ body[data-theme="light"] .section-badge {
   font-size: var(--ui-font-control);
   color: var(--text-muted);
   padding: calc(4px * var(--ui-scale)) 0;
+}
+
+.task-list-error {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: calc(8px * var(--ui-scale));
+  padding: calc(8px * var(--ui-scale)) calc(10px * var(--ui-scale));
+  margin: calc(6px * var(--ui-scale)) 0;
+  border: 1px solid #d9534f;
+  border-radius: calc(6px * var(--ui-scale));
+  background: rgba(217, 83, 79, 0.08);
+  font-size: var(--ui-font-control);
+  color: var(--text-primary, inherit);
+}
+.task-list-error-msg {
+  flex: 1 1 auto;
+  word-break: break-word;
+}
+.task-list-error-retry {
+  flex: 0 0 auto;
+  padding: calc(2px * var(--ui-scale)) calc(10px * var(--ui-scale));
+  border: 1px solid #d9534f;
+  border-radius: calc(4px * var(--ui-scale));
+  background: transparent;
+  color: #d9534f;
+  cursor: pointer;
+}
+.task-list-error-retry:disabled {
+  opacity: 0.5;
+  cursor: progress;
 }
 
 /* ── Plan Body ── */
@@ -5508,7 +5536,7 @@ select.field-input option {
 }
 
 .interaction-modal {
-  background: var(--surface-strong);
+  background: var(--dialog-bg);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-lg);
   padding: 16px 20px;
@@ -8295,7 +8323,7 @@ body[data-resizing="true"] * {
   --subtle-4: rgba(255, 255, 255, 0.09);
   --subtle-5: rgba(255, 255, 255, 0.12);
   --dialog-backdrop: rgba(0, 0, 0, 0.38);
-  --dialog-bg: rgba(40, 42, 46, 0.84);
+  --dialog-bg: #282a2e;
   --menu-panel-bg: #202226;
   --divider-soft: rgba(255, 255, 255, 0.06);
   --title-weight: 600;
@@ -8359,7 +8387,7 @@ body[data-theme="light"] {
   --subtle-4: rgba(15, 23, 42, 0.09);
   --subtle-5: rgba(15, 23, 42, 0.12);
   --dialog-backdrop: rgba(15, 23, 42, 0.22);
-  --dialog-bg: rgba(255, 255, 255, 0.98);
+  --dialog-bg: #ffffff;
   --menu-panel-bg: #ffffff;
   --divider-soft: rgba(15, 23, 42, 0.06);
   --panel-fill: var(--surface);
@@ -8722,7 +8750,7 @@ body[data-theme="light"] {
   --subtle-4: rgba(255, 255, 255, 0.096);
   --subtle-5: rgba(255, 255, 255, 0.13);
   --dialog-backdrop: rgba(8, 10, 11, 0.5);
-  --dialog-bg: rgba(18, 21, 23, 0.9);
+  --dialog-bg: #121517;
   --menu-panel-bg: #1d2123;
   --divider-soft: rgba(223, 228, 223, 0.08);
   --panel-fill:
@@ -8784,7 +8812,7 @@ body[data-theme="light"] {
   --subtle-4: rgba(90, 79, 59, 0.095);
   --subtle-5: rgba(90, 79, 59, 0.13);
   --dialog-backdrop: rgba(90, 79, 59, 0.14);
-  --dialog-bg: rgba(252, 248, 242, 0.92);
+  --dialog-bg: #fcf8f2;
   --menu-panel-bg: #f8f4ee;
   --divider-soft: rgba(95, 79, 59, 0.08);
   --panel-fill:
@@ -10557,19 +10585,13 @@ body[data-theme="light"] .section-badge[data-tone="accent"] {
   max-width: min(520px, calc(100vw - 48px));
   padding: calc(18px * var(--ui-scale)) calc(22px * var(--ui-scale));
   padding-right: calc(38px * var(--ui-scale));
-  background: linear-gradient(
-    155deg,
-    color-mix(in srgb, var(--surface-strong) 94%, transparent),
-    color-mix(in srgb, var(--surface) 94%, transparent)
-  );
+  background: var(--dialog-bg);
   border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--border-strong));
   border-radius: calc(14px * var(--ui-scale));
   box-shadow:
     0 24px 56px -16px rgba(0, 0, 0, 0.55),
     0 2px 8px rgba(0, 0, 0, 0.25),
     inset 0 1px 0 rgba(255, 255, 255, 0.04);
-  backdrop-filter: blur(8px) saturate(120%);
-  -webkit-backdrop-filter: blur(8px) saturate(120%);
   opacity: 0;
   pointer-events: auto;
   transition: opacity 320ms ease, transform 320ms ease;

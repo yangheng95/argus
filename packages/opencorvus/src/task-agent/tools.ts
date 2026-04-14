@@ -262,11 +262,19 @@ export function createTaskAgentTools(input: {
           const { createDecisionLog } = await import("@/decision-log")
           const decisionLog = createDecisionLog(taskID)
 
+          // Pick up a design spec produced by a prior `design_analysis` call.
+          // The spec is stored on task.metadata rather than concatenated into
+          // task.request so it only reaches agents that opt in — here, just
+          // Requirements (for decomposition accuracy) and nobody else.
+          const reqMeta = (task.metadata as Record<string, unknown> | null) ?? {}
+          const designSpec = typeof reqMeta.design_spec === "string" ? reqMeta.design_spec : undefined
+
           const result = await withStageRetry("goal", () =>
             RequirementsService.run({
               title: task.title,
               request: task.request,
               attachments: Array.isArray(task.attachments) ? task.attachments as any : undefined,
+              designSpec,
               taskID,
               sessionID: requirementsSession.id,
               signal: input.signal,
@@ -561,11 +569,22 @@ export function createTaskAgentTools(input: {
 
           await hooks.flush()
 
-          // Enrich the task request with the design specification
+          // Store the design spec in task.metadata instead of mutating
+          // task.request. Rationale: task.request is the user's original
+          // intent and is replayed into every downstream sub-agent's prompt
+          // (architect, deliver, refine, per-goal runner). Previously
+          // appending the full design spec here meant a rich UI analysis
+          // (30-50K chars) permanently inflated every downstream prompt
+          // even though only the Requirements agent actually needs it.
+          // Now the spec lives in task.metadata.design_spec (capped via
+          // DesignAnalystAgent.toPromptSection), and the `requirements`
+          // tool forwards it as a dedicated `designSpec` arg — scoped to
+          // the one consumer that needs it.
           const designSpec = DesignAnalystAgent.toPromptSection(analysis)
           const freshTask = requireTask(taskID)
-          const enrichedRequest = `${freshTask.request}\n\n${designSpec}`
-          await updateTask(freshTask, { request: enrichedRequest }, "Task request enriched with design analysis")
+          const prevMeta = (freshTask.metadata as Record<string, unknown> | null) ?? {}
+          const nextMeta = { ...prevMeta, design_spec: designSpec }
+          await updateTask(freshTask, { metadata: nextMeta }, "Design spec stored in task.metadata")
 
           await trackStepComplete("design_analysis")
 
@@ -574,12 +593,14 @@ export function createTaskAgentTools(input: {
             sections: analysis.layout.length,
             tokens: analysis.tokens.length,
             components: analysis.components.length,
+            designSpecChars: designSpec.length,
           })
 
           return SubAgentProtocol.yieldResult({
             headline:
-              "SUCCESS: Design analysis complete. The design specification has been appended to the task request. " +
-              "NEXT: proceed to requirements — the requirements agent will use the design spec to produce precise goals.",
+              "SUCCESS: Design analysis complete. The design spec is stored in task.metadata.design_spec " +
+              "and will be forwarded to the requirements agent. " +
+              "NEXT: call requirements — it picks up the design spec automatically.",
             fields: [
               ["layout_sections", String(analysis.layout.length)],
               ["style_tokens", String(analysis.tokens.length)],
@@ -588,7 +609,7 @@ export function createTaskAgentTools(input: {
               ["design_system", analysis.designSystem],
               ["recommended_stack", analysis.techStack],
             ],
-            pointer: "task.request (enriched with full design spec)",
+            pointer: "task.metadata.design_spec (full capped design spec); design analysis artifact for full object",
           })
         } catch (err) {
           await hooks.flush()

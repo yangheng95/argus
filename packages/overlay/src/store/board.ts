@@ -54,6 +54,10 @@ export const [boardStore, setBoardStore] = createStore({
   planPreview: "" as string,
   /** Streaming preview text for the spec section */
   specPreview: "" as string,
+  /** Last error from loadTasks(); non-empty means the list is stale and UI
+   *  must surface the error instead of rendering an empty list. Cleared on
+   *  the next successful reload. */
+  tasksError: "" as string,
 });
 
 // ── Loaders ──
@@ -169,6 +173,9 @@ export async function loadBoard(options: LoadBoardOptions = {}): Promise<void> {
 }
 
 export async function loadTasks(): Promise<void> {
+  // Let-it-crash: any fetch/parse error lands in boardStore.tasksError so the
+  // UI surfaces the failure explicitly. The previous silent catch left the UI
+  // stuck on an empty list with no indication that the backend was unreachable.
   try {
     const data = await apiJson("global/tasks");
     const tasks = sortedTasks(data);
@@ -182,9 +189,11 @@ export async function loadTasks(): Promise<void> {
       pendingTasks: boardStore.pendingTasks.filter(
         (item: any) => !seen.has(item?.requestID),
       ),
+      tasksError: "",
     });
   } catch (e) {
-    console.error("loadTasks failed", e);
+    setBoardStore("tasksError", e instanceof Error ? e.message : String(e));
+    throw e;
   }
 }
 

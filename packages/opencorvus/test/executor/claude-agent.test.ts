@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import type { CodingEventInfo } from "../../src/executor/compat"
+import type { CodingEventInfo } from "../../src/executor/contract"
 import type { ClaudeAgentClient, ClaudeAgentHandle } from "../../src/executor/claude-agent"
 import { ClaudeAgentExecutor } from "../../src/executor/claude-agent"
 import { ManagedCodingExecutor } from "../../src/executor/managed"

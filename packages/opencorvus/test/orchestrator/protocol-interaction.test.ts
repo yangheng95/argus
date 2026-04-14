@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
 import { Database, eq } from "../../src/storage/db"
-import { type CodingProvider } from "../../src/executor/compat"
-import { type ExecutorAdapter } from "../../src/executor/compat"
+import { type CodingProvider } from "../../src/executor/contract"
+import { type ExecutorAdapter } from "../../src/executor/contract"
 import { ExecutorRegistry } from "../../src/executor/registry"
 import { Identifier } from "../../src/id/id"
 import {

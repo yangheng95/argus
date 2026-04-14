@@ -1,6 +1,6 @@
 import z from "zod"
 import { BusEvent } from "@/bus/bus-event"
-import { ExecutorName } from "@/executor/compat"
+import { ExecutorName } from "@/executor/contract"
 import { ProtocolCapabilities, ProtocolRefs, ProtocolSettings } from "@/executor/protocol"
 import { Identifier } from "@/id/id"
 import { PermissionNext } from "@/permission/next"

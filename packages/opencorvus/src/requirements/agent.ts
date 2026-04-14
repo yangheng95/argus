@@ -80,6 +80,11 @@ export namespace RequirementsAgent {
     request: string
     /** Base64 image attachments — injected as vision content alongside the request text. */
     attachments?: Array<{ sha: string; url: string; mime: string; size: number; filename?: string }>
+    /** Capped design spec from an earlier design_analysis call. Rendered as a
+     *  dedicated prompt section so it's visible to this agent only — it is
+     *  NOT concatenated into task.request, so downstream sub-agents stay
+     *  unaffected. */
+    designSpec?: string
     taskID?: string
     sessionID?: string
     signal?: AbortSignal
@@ -102,6 +107,7 @@ async function runInternal(input: {
   title: string
   request: string
   attachments?: Array<{ sha: string; url: string; mime: string; size: number; filename?: string }>
+  designSpec?: string
   taskID?: string
   sessionID?: string
   signal?: AbortSignal
@@ -388,12 +394,20 @@ function buildUserPrompt(
   input: {
     title: string
     request: string
+    designSpec?: string
     taskID?: string
     retryContext?: RequirementsRetryContext
   },
   context: string,
 ): string {
   const sections = [`# Task\n\nTitle: ${input.title}\n\nRequest:\n${input.request}`]
+
+  if (input.designSpec && input.designSpec.trim()) {
+    // Design spec is scoped to this agent (see RequirementsAgent.run docs).
+    // It is capped at source (DesignAnalystAgent.PROMPT_SECTION_CAP) — safe
+    // to inline verbatim here.
+    sections.push(input.designSpec)
+  }
 
   if (input.taskID) {
     const clarifications = clarificationTranscriptSection(input.taskID)

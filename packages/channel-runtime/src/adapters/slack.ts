@@ -139,11 +139,6 @@ export class SlackAdapter implements ChannelAdapter {
     return result.ts!
   }
 
-  /** Backward-compatible alias used by older call sites. */
-  async postAndGetTs(channel: string, text: string): Promise<string> {
-    return this.startThread(channel, text)
-  }
-
   async uploadImage(
     channel: string,
     thread: string,

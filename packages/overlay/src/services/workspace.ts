@@ -91,8 +91,6 @@ export function setWorkspaceDirectory(
     setSettingsStore({
       directory: next,
       savedDirectory: next,
-      tempDirectory: next ? "" : settingsStore.tempDirectory,
-      directoryMode: next ? "custom" : "temp",
     });
   } else {
     setSettingsStore("directory", next);
@@ -115,25 +113,11 @@ export function restoreWorkspaceDirectory(): string {
     settingsStore.savedDirectory.trim()
       ? settingsStore.savedDirectory.trim()
       : "";
-  const temp =
-    typeof settingsStore.tempDirectory === "string" &&
-    settingsStore.tempDirectory.trim()
-      ? settingsStore.tempDirectory.trim()
-      : "";
-
- // Resolve: prefer the persisted baseline directory, then the temp directory,
- // then fall back to the current active directory.
   const next =
     saved ||
-    temp ||
     (settingsStore.directory ? settingsStore.directory.trim() : "");
   if (!next) return settingsStore.directory;
-
-  setSettingsStore({
-    directory: next,
-    directoryMode: saved ? "custom" : "temp",
-  });
-
+  setSettingsStore("directory", next);
   return next;
 }
 
@@ -464,33 +448,6 @@ async function nativeOpen(target: string): Promise<boolean> {
   }
 }
 
-// ── Temp directory ──
-
-/**
- * Ask the Tauri backend to create a new temporary directory.
- * Returns the path, or an empty string on failure.
- */
-export async function createTempDirectory(): Promise<string> {
-  const created = await tauriInvoke("overlay_create_temp_dir").catch(() => undefined);
-  return typeof created === "string" ? created.trim() : "";
-}
-
-/**
- * Ask the Tauri backend to delete a previously-created overlay temp directory.
- * The backend validates the path lives under the system temp root and carries
- * the `opencorvus-overlay-` prefix; any other path is rejected.
- */
-export async function releaseTempDirectory(path: string): Promise<boolean> {
-  const trimmed = path?.trim();
-  if (!trimmed) return false;
-  if (!hasTauriRuntime()) return false;
-  const released = await tauriInvoke("overlay_release_temp_dir", { path: trimmed }).catch((err) => {
-    AppLog.debug("ui", "overlay_release_temp_dir failed", { path: trimmed, error: String(err) });
-    return false;
-  });
-  return released === true;
-}
-
 // ── Tauri file / directory pickers ──
 
 /**
@@ -522,88 +479,6 @@ export async function pickFiles(start?: string): Promise<string[]> {
  */
 export function activeDirectory(): string {
   return settingsStore.directory;
-}
-
-/**
- * Returns "custom" when `directory` is non-empty, otherwise returns the
- * default directoryMode ("temp").
- */
-export function sanitizeDirectoryMode(
-  value: unknown,
-  directory: string,
-): "custom" | "temp" {
-  if (value === "custom") return "custom";
-  if (typeof value === "string" && value.trim() === "temp") return "temp";
-  return typeof directory === "string" && directory.trim() ? "custom" : "temp";
-}
-
-/**
- * Returns the "saved directory" value: non-empty only when the mode resolves
- * to "custom".
- */
-export function savedDirectoryValue(directory: string, mode: unknown): string {
-  const next = typeof directory === "string" ? directory.trim() : "";
-  if (!next) return "";
-  return sanitizeDirectoryMode(mode, next) === "custom" ? next : "";
-}
-
-/**
- * Extract and trim the `directory` field from a settings object.
- */
-export function settingsDirectory(settings: Record<string, unknown> | null | undefined): string {
-  return typeof settings?.directory === "string" ? settings.directory.trim() : "";
-}
-
-// ── Workspace memory (rememberWorkspace / workspaceRestoreDirectory) ──
-
-/**
- * Returns true when the path looks like a goal-workspace execution directory
- * (contains a "goal-workspace" path segment).
- */
-export function looksLikeExecutionWorkspace(value: unknown): boolean {
-  const text = String(value || "").trim();
-  if (!text) return false;
-  return /(^|[\\/])goal-workspace([\\/]|$)/i.test(text);
-}
-
-/**
- * Returns `value` unless it looks like a goal-workspace execution directory,
- * in which case returns an empty string.
- */
-export function workspaceRestoreDirectory(value: unknown): string {
-  const text = typeof value === "string" ? value.trim() : "";
-  if (!text) return "";
-  if (looksLikeExecutionWorkspace(text)) return "";
-  return text;
-}
-
-export interface RememberWorkspaceInput {
-  taskID?: string;
-  directory?: string;
-}
-
-/**
- * Persist the current task + directory as the "workspace memory" so it can be
- * restored after an overlay restart.
- */
-export function rememberWorkspace(input: RememberWorkspaceInput = {}): void {
-  const taskID =
-    typeof input.taskID === "string"
-      ? input.taskID.trim()
-      : boardStore.selectedTaskID || settingsStore.workspaceTaskID || "";
-
-  const rawDir =
-    typeof input.directory === "string"
-      ? input.directory.trim()
-      : settingsStore.savedDirectory || activeDirectory() || settingsStore.directory || "";
-
-  const directory =
-    workspaceRestoreDirectory(rawDir) ||
-    workspaceRestoreDirectory(settingsStore.savedDirectory || "") ||
-    "";
-
-  setSettingsStore("workspaceTaskID", taskID);
-  setSettingsStore("workspaceDirectory", taskID ? directory : "");
 }
 
 // ── Recent directories ──
@@ -668,26 +543,20 @@ export function removeRecentDirectory(dir: string): void {
 
 export interface ApplyDirectoryOptions {
   /**
- * When true, `next` is written as the saved directory.
- * When false, the saved directory is cleared.
- * When omitted (null/undefined), the saved directory is unchanged.
- */
+   * When true, `next` is written as the saved directory.
+   * When false, the saved directory is cleared.
+   * When omitted (null/undefined), the saved directory is unchanged.
+   */
   save?: boolean;
   /**
- * When true, `next` is written as the temp directory.
- * When false, the temp directory is cleared.
- * When omitted (null/undefined), the temp directory is unchanged.
- */
-  temp?: boolean;
-  /**
- * When false, skip persisting overlay settings after the switch.
- * Defaults to true.
- */
+   * When false, skip persisting overlay settings after the switch.
+   * Defaults to true.
+   */
   persist?: boolean;
   /**
- * When false, skip restoring the initial workspace after the reload.
- * Defaults to true.
- */
+   * When false, skip restoring the initial workspace after the reload.
+   * Defaults to true.
+   */
   restoreWorkspace?: boolean;
 }
 
@@ -701,48 +570,20 @@ export async function applyDirectory(
 ): Promise<void> {
   const save =
     options.save === true ? next : options.save === false ? "" : null;
-  const temp =
-    options.temp === true ? next : options.temp === false ? "" : null;
 
   const curDir = settingsStore.directory;
   const curSaved = settingsStore.savedDirectory;
-  const curTemp = settingsStore.tempDirectory;
 
-  if (
-    next === curDir &&
-    (save === null || save === curSaved) &&
-    (temp === null || temp === curTemp)
-  ) {
-    console.log("[applyDir] skipped (same)", {
-      next,
-      save,
-      temp,
-      dir: curDir,
-      saved: curSaved,
-      tempDir: curTemp,
-    });
+  if (next === curDir && (save === null || save === curSaved)) {
+    console.log("[applyDir] skipped (same)", { next, save, dir: curDir, saved: curSaved });
     return;
   }
 
-  console.log("[applyDir] switching", { from: curDir, to: next, save, temp });
-
-  // Release the previous overlay temp directory BEFORE we lose the reference
-  // in the settings store. This fires only when the temp slot is explicitly
-  // changing (temp !== null && temp !== curTemp): a plain directory-switch
-  // that leaves tempDirectory untouched keeps the old temp around so the user
-  // can still return to it.
-  if (temp !== null && curTemp && curTemp !== temp) {
-    void releaseTempDirectory(curTemp);
-  }
+  console.log("[applyDir] switching", { from: curDir, to: next, save });
 
   setSettingsStore("directoryEpoch", (n: number) => n + 1);
   setSettingsStore("directory", next);
   if (save !== null) setSettingsStore("savedDirectory", save);
-  if (temp !== null) setSettingsStore("tempDirectory", temp);
-  setSettingsStore(
-    "directoryMode",
-    settingsStore.savedDirectory ? "custom" : "temp",
-  );
 
  // Sync the API client's directory context immediately so all subsequent
  // API calls (checkConnection, reloadProjectScope, etc.) target the new
@@ -871,7 +712,7 @@ export async function createDirectory(): Promise<void> {
   }
 }
 
-// ── openDirectory / resetDirectory ──
+// ── openDirectory ──
 
 /**
  * Open the given directory (or the current active directory) with the
@@ -896,92 +737,36 @@ export async function openDirectory(target?: string): Promise<void> {
   }
 }
 
-/**
- * Reset the working directory to a fresh temp directory.
- */
-export async function resetDirectory(): Promise<void> {
-  try {
-    await setTempDirectory();
-  } catch (e) {
-    AppLog.error("ui", "Failed to reset working directory", { error: String(e) });
-    await nativeMessage(errorText("cwd.reset_failed", e), {
-      title: t("cwd.title"),
-      kind: "error",
-    });
-  }
-}
-
-// ── setDirectory / setTempDirectory ──
+// ── setDirectory ──
 
 /**
- * Set the working directory to `value`. When `value` is empty, falls back to
- * the existing temp directory or creates a new one.
+ * Set the working directory to `value`. `value` must be a non-empty path the
+ * user explicitly chose; passing an empty string throws rather than silently
+ * creating a temp workspace (that fallback was removed — see CHANGELOG for
+ * the temp-workspace deletion rationale).
  */
 export async function setDirectory(
   value: string,
   options: ApplyDirectoryOptions = {},
 ): Promise<void> {
   const next = typeof value === "string" ? value.trim() : "";
-  if (!next) {
-    if (settingsStore.tempDirectory) {
-      await applyDirectory(settingsStore.tempDirectory, { ...options, save: false });
-      return;
-    }
-    await setTempDirectory(options);
-    return;
-  }
-  await applyDirectory(next, { ...options, save: true, temp: false });
+  if (!next) throw new Error(t("cwd.path_required") || "Directory path required");
+  await applyDirectory(next, { ...options, save: true });
 }
 
-/**
- * Create a new temporary directory (via Tauri) and switch to it.
- */
-export async function setTempDirectory(
-  options: ApplyDirectoryOptions = {},
-): Promise<void> {
-  if (!hasTauriRuntime()) {
-    await applyDirectory("", { ...options, save: false, temp: false });
-    return;
-  }
-  const next = await createTempDirectory();
-  if (!next) throw new Error(t("cwd.create_unavailable"));
-  const { scaffoldProjectConfig } = await import("./config");
-  await scaffoldProjectConfig(next);
-  await applyDirectory(next, { ...options, save: false, temp: true });
-}
-
-// ── ensureDefaultDirectory / ensureWorkspaceDirectory ──
+// ── ensureDefaultDirectory ──
 
 /**
- * Ensure a default working directory is set, creating a temp directory if
- * neither a saved nor temp directory is available.
- * Returns true when a new temp directory was created.
+ * Restore the user's last saved working directory. Returns false when none is
+ * available — in which case `settingsStore.directory` stays empty and the UI
+ * must surface a "select directory" CTA.
  */
 export async function ensureDefaultDirectory(): Promise<boolean> {
   if (settingsStore.savedDirectory) {
     setSettingsStore("directory", settingsStore.savedDirectory);
-    setSettingsStore("directoryMode", "custom");
-    return false;
+    return true;
   }
-  if (settingsStore.tempDirectory) {
-    setSettingsStore("directory", settingsStore.tempDirectory);
-    setSettingsStore("directoryMode", "temp");
-    return false;
-  }
-  if (!hasTauriRuntime()) return false;
-  const next = await createTempDirectory();
-  if (!next) return false;
-  const scaffoldProjectConfig = (window as any).scaffoldProjectConfig;
-  if (typeof scaffoldProjectConfig === "function") {
-    await scaffoldProjectConfig(next);
-  }
-  setSettingsStore("tempDirectory", next);
-  setSettingsStore("directory", next);
-  setSettingsStore("savedDirectory", "");
-  setSettingsStore("directoryMode", "temp");
-  const persistFn = (window as any).persistOverlaySettings;
-  if (typeof persistFn === "function") await persistFn();
-  return true;
+  return false;
 }
 
 /**

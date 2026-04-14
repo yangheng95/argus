@@ -33,7 +33,6 @@ async function proxySessionRequest(req: Request) {
 }
 
 export const SessionProxyMiddleware: MiddlewareHandler = async (c, next) => {
-  // Only available in development for now
   if (!Installation.isLocal()) {
     return next()
   }

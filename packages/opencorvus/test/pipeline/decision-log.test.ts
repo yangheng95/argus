@@ -144,4 +144,122 @@ describe("DecisionLog.toPromptSection truncation", () => {
       },
     })
   })
+
+  test("toPromptSection caps each entry's value body", async () => {
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const log = createDecisionLog(taskID)
+        const bigValue = "X".repeat(2000)
+        log.append({ phase: "architect", key: "fat", value: bigValue, reason: "long" })
+        const section = log.toPromptSection({ valueCap: 200 })
+        expect(section.length).toBeLessThan(2000)
+        expect(section).toContain("truncated")
+      },
+    })
+  })
+})
+
+describe("DecisionLog.phasePromptSectionForGoal bounded", () => {
+  let tmp: Awaited<ReturnType<typeof tmpdir>>
+  let projectID = ""
+  let taskID = ""
+
+  function seed() {
+    const now = Date.now()
+    Database.use((db) =>
+      db.insert(ProjectTable).values({
+        id: projectID,
+        worktree: process.cwd(),
+        vcs: "git",
+        name: "DecisionLog Phase Test",
+        sandboxes: "[]",
+        time_created: now,
+        time_updated: now,
+      }).run(),
+    )
+    Database.use((db) =>
+      db.insert(OrchestratorTaskTable).values({
+        id: taskID,
+        project_id: projectID,
+        source: "test",
+        title: "phase test",
+        request: "phase prompt section test",
+        status: "active",
+        priority: "normal",
+        time_created: now,
+        time_updated: now,
+      }).run(),
+    )
+  }
+
+  beforeEach(async () => {
+    await resetDatabase()
+    tmp = await tmpdir()
+    const stamp = Date.now().toString(16)
+    projectID = `project_dlp_${stamp}`
+    taskID = `tsk_${stamp}dlp`
+    seed()
+  })
+
+  afterEach(async () => {
+    await resetDatabase()
+    await tmp?.[Symbol.asyncDispose]?.()
+  })
+
+  test("honors entry-count limit, keeping latest architect contracts", async () => {
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const log = createDecisionLog(taskID)
+        const goalID = "goal_x"
+        for (let i = 0; i < 20; i++) {
+          log.append({ phase: "architect", goalID, key: `contract_${i}`, value: `v${i}`, reason: `r${i}` })
+          if (i % 5 === 4) await new Promise((r) => setTimeout(r, 2))
+        }
+        const section = log.phasePromptSectionForGoal("architect", goalID, "Architect Consensus", { limit: 5 })
+        expect(section).toContain("latest 5 of 20")
+        expect(section).toContain("15 older omitted")
+        for (let i = 15; i < 20; i++) expect(section).toContain(`contract_${i}`)
+        for (let i = 0; i < 10; i++) expect(section).not.toContain(`### contract_${i}\n`)
+      },
+    })
+  })
+
+  test("caps per-entry value body", async () => {
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const log = createDecisionLog(taskID)
+        const goalID = "goal_y"
+        log.append({
+          phase: "architect",
+          goalID,
+          key: "huge_contract",
+          value: "Y".repeat(5000),
+          reason: "long",
+        })
+        const section = log.phasePromptSectionForGoal("architect", goalID, "Architect Consensus", { valueCap: 200 })
+        expect(section.length).toBeLessThan(2000)
+        expect(section).toContain("truncated")
+      },
+    })
+  })
+
+  test("default limit keeps the hot path bounded without explicit opts", async () => {
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const log = createDecisionLog(taskID)
+        const goalID = "goal_z"
+        for (let i = 0; i < 40; i++) {
+          log.append({ phase: "architect", goalID, key: `c_${i}`, value: `v${i}`, reason: "r" })
+          if (i % 5 === 4) await new Promise((r) => setTimeout(r, 2))
+        }
+        const section = log.phasePromptSectionForGoal("architect", goalID, "Architect Consensus")
+        // default limit is 15 — some entries MUST be omitted
+        expect(section).toContain("older omitted")
+      },
+    })
+  })
 })
