@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "zh-CN",
-    "panel_revision": "5dab46fd57a6d9e0"
+    "panel_revision": "612ae6fe782bff1e"
   },
   "about.author_name": "杨恒",
   "about.go_version": "Go 版本",
@@ -119,6 +119,7 @@
   ],
   "chat.role.architect": "架构",
   "chat.role.assistant": "助手",
+  "chat.role.build": "直接构建",
   "chat.role.delivery": "交付",
   "chat.role.evaluator": "评估",
   "chat.role.executor": "执行器",
@@ -488,6 +489,7 @@
   "task.action.replan_title": "生成新 Plan 后再继续执行。",
   "task.action.retry": "重试",
   "task.action.retry_title": "沿用当前 Plan 重新执行一轮。",
+  "task.cancel_button_title": "取消此运行中的任务（点两次确认）。",
   "task.delete_button_title": "删除此任务及全部历史记录（点两次确认）。",
   "trace.empty_no_events": "暂无 trace 事件。",
   "trace.empty_no_task": "请选择任务查看其 trace。",
@@ -496,6 +498,7 @@
   "task.group.recent": "最近",
   "task.new": "新建任务",
   "task.none": "暂无任务",
+  "task.project.unknown": "未指定项目",
   "task.status.active": "进行中",
   "task.status.blocked": "阻塞",
   "task.status.cancelled": "已取消",

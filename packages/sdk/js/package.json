@@ -30,6 +30,11 @@
       "types": "./dist/v2/server.d.ts",
       "import": "./src/v2/server.ts",
       "default": "./src/v2/server.ts"
+    },
+    "./v2/defaults": {
+      "types": "./dist/v2/defaults.d.ts",
+      "import": "./src/v2/defaults.ts",
+      "default": "./src/v2/defaults.ts"
     }
   },
   "files": [

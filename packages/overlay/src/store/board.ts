@@ -14,6 +14,15 @@ export const [boardStore, setBoardStore] = createStore({
   selectedTaskID: "" as string,
   taskSequence: 0 as number,
   loading: false,
+  /** Monotonic counter incremented on each selectTask() call. Used to detect
+   *  superseded loads when the user rapidly switches tasks: async phases
+   *  capture the epoch at entry and bail out when boardStore.selectEpoch has
+   *  advanced past it. */
+  selectEpoch: 0 as number,
+  /** True between selectTask() entry and its async load chain completing
+   *  (applyDirectory + loadBoard + syncTask + startSSE). Drives the top-of-
+   *  pane progress bar so cross-project task switches feel non-blocking. */
+  taskSwitching: false,
  // ── Task list internals (mirrors state.pendingTasks / state.tasksSeq) ──
   /** Tasks that have been created locally but not yet confirmed by the server */
   pendingTasks: [] as any[],
@@ -161,7 +170,7 @@ export async function loadBoard(options: LoadBoardOptions = {}): Promise<void> {
 
 export async function loadTasks(): Promise<void> {
   try {
-    const data = await apiJson("tasks");
+    const data = await apiJson("global/tasks");
     const tasks = sortedTasks(data);
     const seen = new Set(
       tasks

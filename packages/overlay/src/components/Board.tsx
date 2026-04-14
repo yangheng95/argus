@@ -424,6 +424,15 @@ export function Board(props: BoardProps) {
   const phaseFor = (id: string): "active" | "" =>
     activeSection() === id ? "active" : "";
 
+  // Goal-derived step status. The board always has goals once a task has
+  // been planned; downstream section badges must render progress as
+  // "done/total goals" so the panel is never blank when execution artifacts
+  // (delivery rows, evaluation rows) haven't been produced yet.
+  const stepStatus = (g: any, id: string): string =>
+    g?.steps?.find((s: any) => s.stepID === id)?.status ?? "pending";
+  const stepDone = (g: any, id: string): boolean =>
+    stepStatus(g, id) === "completed";
+
   // Collect agent messages for requirements stage (spec/goal stages map to requirements).
   // Data-driven: emit whenever spec/goal cards exist, independent of workflow mode.
   const requirementsMessages = createMemo(() => {
@@ -501,14 +510,22 @@ export function Board(props: BoardProps) {
         bodyId="requirementsBody"
         badgeId="requirementsBadge"
         phaseState={phaseFor("requirements")}
-        badgeText={
-          requirements()?.length
-            ? String(requirements()!.length)
-            : isRequirementsGenerating()
-              ? t("common.active")
-              : ""
-        }
-        badgeTone={requirements()?.length || isRequirementsGenerating() ? "accent" : ""}
+        badgeText={(() => {
+          const rs = requirements() ?? [];
+          if (rs.length > 0) {
+            const passed = rs.filter((r: any) => r.status === "passed").length;
+            return `${passed}/${rs.length}`;
+          }
+          if (isRequirementsGenerating()) return t("common.active");
+          return goalWorkflows().length > 0 ? "—" : "";
+        })()}
+        badgeTone={(() => {
+          const rs = requirements() ?? [];
+          if (rs.length === 0) return isRequirementsGenerating() ? "accent" : "";
+          const passed = rs.filter((r: any) => r.status === "passed").length;
+          const failed = rs.filter((r: any) => r.status === "failed").length;
+          return failed > 0 ? "bad" : passed === rs.length ? "good" : "accent";
+        })()}
       >
         <RequirementsPanel
           requirements={requirements()}
@@ -525,8 +542,20 @@ export function Board(props: BoardProps) {
         bodyId="architectBody"
         badgeId="architectBadge"
         phaseState={phaseFor("architect")}
-        badgeText={architect() ? String(architect()!.contractCount) : ""}
-        badgeTone={architect() ? "accent" : ""}
+        badgeText={(() => {
+          const gs = goalWorkflows();
+          if (gs.length === 0) {
+            return architect() ? String(architect()!.contractCount) : "";
+          }
+          const bound = gs.filter((g: any) => (g.contracts?.length ?? 0) > 0).length;
+          return `${bound}/${gs.length}`;
+        })()}
+        badgeTone={(() => {
+          const gs = goalWorkflows();
+          if (gs.length === 0) return architect() ? "accent" : "";
+          const bound = gs.filter((g: any) => (g.contracts?.length ?? 0) > 0).length;
+          return bound === gs.length ? "good" : bound > 0 ? "accent" : "";
+        })()}
       >
         <ArchitectPanel architect={architect()} isGenerating={isArchitectGenerating()} />
       </SectionFrame>
@@ -571,17 +600,28 @@ export function Board(props: BoardProps) {
         badgeId="evaluationCriteriaBadge"
         badgeText={(() => {
           const list = criteriaResults() ?? [];
-          if (list.length === 0) return "";
-          const failed = list.filter((c) => c.status === "failed").length;
-          const passed = list.filter((c) => c.status === "passed").length;
-          return failed > 0 ? `${failed} failed` : `${passed}/${list.length}`;
+          if (list.length > 0) {
+            const failed = list.filter((c) => c.status === "failed").length;
+            const passed = list.filter((c) => c.status === "passed").length;
+            return failed > 0 ? `${failed} failed` : `${passed}/${list.length}`;
+          }
+          const gs = goalWorkflows();
+          if (gs.length === 0) return "";
+          const passed = gs.filter((g: any) => stepDone(g, "eval")).length;
+          return `${passed}/${gs.length}`;
         })()}
         badgeTone={(() => {
           const list = criteriaResults() ?? [];
-          if (list.length === 0) return "";
-          const failed = list.filter((c) => c.status === "failed").length;
-          const passed = list.filter((c) => c.status === "passed").length;
-          return failed > 0 ? "bad" : passed === list.length ? "good" : "accent";
+          if (list.length > 0) {
+            const failed = list.filter((c) => c.status === "failed").length;
+            const passed = list.filter((c) => c.status === "passed").length;
+            return failed > 0 ? "bad" : passed === list.length ? "good" : "accent";
+          }
+          const gs = goalWorkflows();
+          if (gs.length === 0) return "";
+          const failed = gs.filter((g: any) => stepStatus(g, "eval") === "failed").length;
+          const passed = gs.filter((g: any) => stepDone(g, "eval")).length;
+          return failed > 0 ? "bad" : passed === gs.length ? "good" : passed > 0 ? "accent" : "";
         })()}
       >
         <EvaluationCriteriaPanel checks={criteriaResults() ?? []} />
@@ -594,16 +634,33 @@ export function Board(props: BoardProps) {
         bodyId="deliveryBody"
         badgeId="deliveryBadge"
         phaseState={phaseFor("delivery")}
-        badgeText={delivery() ? deliveryStatusLabel(delivery()?.status) : ""}
-        badgeTone={
-          delivery()?.status === "delivered"
-            ? "good"
-            : delivery()?.status === "failed"
-              ? "bad"
-              : delivery()
-                ? "accent"
-                : ""
-        }
+        badgeText={(() => {
+          const gs = goalWorkflows();
+          if (gs.length === 0) {
+            return delivery() ? deliveryStatusLabel(delivery()?.status) : "";
+          }
+          const delivered = gs.filter(
+            (g: any) => stepDone(g, "execute") || g.goalStatus === "passed",
+          ).length;
+          return `${delivered}/${gs.length}`;
+        })()}
+        badgeTone={(() => {
+          const gs = goalWorkflows();
+          if (gs.length === 0) {
+            return delivery()?.status === "delivered"
+              ? "good"
+              : delivery()?.status === "failed"
+                ? "bad"
+                : delivery()
+                  ? "accent"
+                  : "";
+          }
+          const failed = gs.filter((g: any) => stepStatus(g, "execute") === "failed").length;
+          const delivered = gs.filter(
+            (g: any) => stepDone(g, "execute") || g.goalStatus === "passed",
+          ).length;
+          return failed > 0 ? "bad" : delivered === gs.length ? "good" : delivered > 0 ? "accent" : "";
+        })()}
       >
         <DeliveryPanel delivery={delivery()} />
       </SectionFrame>

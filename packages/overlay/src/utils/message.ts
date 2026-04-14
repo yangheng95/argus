@@ -16,10 +16,11 @@ export type AgentRole =
   | "executor"
   | "evaluator"
   | "delivery"
+  | "build"
   | "system";
 
 /** Stages that get their own collapsible agent card in the conversation view. */
-export const AGENT_CARD_STAGES = new Set<AgentRole>(["assistant", "spec", "architect", "planner", "goal", "executor", "evaluator", "delivery"]);
+export const AGENT_CARD_STAGES = new Set<AgentRole>(["assistant", "spec", "architect", "planner", "goal", "executor", "evaluator", "delivery", "build"]);
 
 /**
  * Map any backend agent name to a canonical AgentRole.
@@ -34,7 +35,8 @@ export function normalizeAgentRole(name: string): AgentRole {
   if (text === "architect" || text === "architecture" || text === "coordination") return "architect";
   if (text === "planner" || text === "plan" || text === "planning" || text === "replan") return "planner";
   if (text === "goal" || text === "goal_gate") return "goal";
-  if (text === "executor" || text === "build" || text === "coding" ||
+  if (text === "build") return "build";
+  if (text === "executor" || text === "coding" ||
       text === "general" || text === "explore" || text === "execute" ||
       text === "opencode" || text === "codex" || text === "claude-code") return "executor";
   if (text === "judge" || text === "evaluator" || text === "evaluation" || text === "eval" ||
@@ -100,6 +102,7 @@ export function roleLabel(role: string): string {
   if (role === "system") return t("chat.role.system");
   if (role === "goal" || role === "goal_gate") return t("chat.role.goal");
   if (role === "executor") return t("chat.role.executor");
+  if (role === "build") return t("chat.role.build");
   return t("chat.role.assistant");
 }
 
@@ -153,6 +156,7 @@ export function agentStageLabel(stage: string): string {
   if (role === "evaluator") return t("chat.role.evaluator");
   if (role === "delivery") return t("chat.role.delivery");
   if (role === "executor") return t("chat.role.executor");
+  if (role === "build") return t("chat.role.build");
   return t("chat.role.assistant");
 }
 

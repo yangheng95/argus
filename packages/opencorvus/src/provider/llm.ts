@@ -107,13 +107,8 @@ export namespace ProviderLLM {
     // 4. Compute maxOutputTokens
     const maxOutputTokens = input.maxOutputTokens ?? ProviderTransform.maxOutputTokens(model)
 
-    // 5. Build request headers
-    const autoHeaders: Record<string, string> = {
-      ...(model.providerID !== "anthropic"
-        ? { "User-Agent": `opencorvus/${Installation.VERSION}` }
-        : undefined),
-      ...model.headers,
-    }
+    // 5. Build request headers (baseHeaders handles hexin sticky routing)
+    const autoHeaders = baseHeaders(model, input.cacheKey)
     const headers = input.extraHeaders
       ? { ...autoHeaders, ...input.extraHeaders }
       : autoHeaders
@@ -209,13 +204,26 @@ export namespace ProviderLLM {
   /**
    * Compute default request headers for a model.
    * Does NOT include opencorvus project/session headers — those are session-specific.
+   *
+   * @param stickyKey optional stable identifier used for upstream-key sticky
+   *   routing at LiteLLM-fronted gateways (currently only hexin). Pass
+   *   sessionID for session calls, taskID for agent calls.
    */
-  export function baseHeaders(model: Provider.Model): Record<string, string> {
-    return {
+  export function baseHeaders(model: Provider.Model, stickyKey?: string): Record<string, string> {
+    const headers: Record<string, string> = {
       ...(model.providerID !== "anthropic"
         ? { "User-Agent": `opencorvus/${Installation.VERSION}` }
         : undefined),
       ...model.headers,
     }
+    // hexin LiteLLM gateway hashes `x-user` for sticky upstream-key routing.
+    // Without it, round-robin lands each request on a cold Anthropic cache,
+    // paying cache-creation (~1.25× input) every time. Empirically took
+    // claude-sonnet-4-6 hit ratio from ~60% to 100%. Scoped to hexin only so
+    // other openai-compatible providers aren't affected.
+    if (model.providerID === "hexin" && stickyKey) {
+      headers["x-user"] = stickyKey
+    }
+    return headers
   }
 }

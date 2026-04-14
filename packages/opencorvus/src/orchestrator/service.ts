@@ -509,8 +509,8 @@ export namespace OrchestratorService {
     // Decode any base64 attachments exactly once: persist the bytes under the
     // project's .opencorvus/attachments directory, then carry only references
     // (sha/url/mime/size/filename) through the queue and into every agent.
-    // The same references are also materialized as FilePart entries on a user
-    // message so the overlay renders the attachment alongside the request.
+    // The overlay renders attachments directly from task.attachments via the
+    // synthetic user-request bubble — no session message needed (was a dupe).
     const attachmentRefs: AttachmentStore.Reference[] = []
     if (input.attachments?.length) {
       const projectID = Instance.project.id
@@ -523,35 +523,6 @@ export namespace OrchestratorService {
         // specific evaluator gate claims it.
         const intent = att.mime.startsWith("image/") ? "visual_reference" : "spec_artifact"
         attachmentRefs.push({ ...ref, intent, source: "user-upload" })
-      }
-      const agentName = await Agent.defaultAgent()
-      const model = await Provider.defaultModel()
-      const userMessageID = Identifier.ascending("message")
-      await Session.updateMessage({
-        id: userMessageID,
-        sessionID: session.id,
-        role: "user",
-        time: { created: now },
-        agent: agentName,
-        model,
-      })
-      await Session.updatePart({
-        id: Identifier.ascending("part"),
-        messageID: userMessageID,
-        sessionID: session.id,
-        type: "text",
-        text: input.request,
-      })
-      for (const ref of attachmentRefs) {
-        await Session.updatePart({
-          id: Identifier.ascending("part"),
-          messageID: userMessageID,
-          sessionID: session.id,
-          type: "file",
-          mime: ref.mime,
-          url: ref.url,
-          filename: ref.filename,
-        })
       }
     }
     // Async pipeline: persist task immediately, run stages in background
@@ -810,7 +781,7 @@ export namespace OrchestratorService {
     GoalService.updateGoal({
       goalID,
       title: body.description,
-      done_definition: body.criteria,
+      acceptance_specs: body.acceptance_specs,
     })
     return true
   }

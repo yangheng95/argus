@@ -14,6 +14,7 @@
 import { settingsStore, setSettingsStore } from "../store/settings";
 import { boardStore, setBoardStore } from "../store/board";
 import { clearMessages } from "../store/messages";
+import { setAppStore } from "../store/app";
 import { AppLog } from "../utils/log";
 import { t } from "../utils/i18n";
 import { apiJson, configure as configureApi } from "./api";
@@ -748,6 +749,12 @@ export async function applyDirectory(
  // directory on the backend.
   configureApi({ directory: next });
   setBoardStore("pendingTasks", []);
+
+ // Clear transient provider-test state so a result from the previous project
+ // does not linger in the Settings › Providers panel after the switch. The
+ // providerCatalog / providerAuth fields are reloaded by reloadProjectScope
+ // below; providerTest is user-triggered-only and otherwise never refreshed.
+  setAppStore("providerTest", null);
 
  // Clear stale workspace memory so restoreInitialWorkspace() won't revert the switch.
   setSettingsStore("workspaceTaskID", "");

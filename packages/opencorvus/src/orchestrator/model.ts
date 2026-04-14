@@ -37,11 +37,7 @@ export const StageRouting = z.object({
 
 export const GoalKind = z.enum(["bootstrap", "feature", "verification", "integration", "system"])
 
-export const GoalQaProfile = z.object({
-  rule_selectors: z.array(z.string()),
-  goal_check_prompt: z.string().optional(),
-  spec_scope: z.enum(["mapped_requirements"]),
-})
+import { AcceptanceSpecSchema } from "@/acceptance/types"
 
 export const GoalInput = z.object({
   description: z.string(),
@@ -53,8 +49,7 @@ export const GoalInput = z.object({
   requirement_ids: z.array(z.string()).optional(),
   depends_on_goal_ids: z.array(z.string()).optional(),
   owned_paths: z.array(z.string()).optional(),
-  done_definition: z.string().optional(),
-  qa_profile: GoalQaProfile.optional(),
+  acceptance_specs: z.array(AcceptanceSpecSchema).optional(),
   kind: GoalKind.optional(),
   metadata: z
     .object({
@@ -514,7 +509,7 @@ export const RejectInteractionInput = z.object({
 
 export const UpdateGoalInput = z.object({
   description: z.string().min(1),
-  criteria: z.string().min(1),
+  acceptance_specs: z.array(AcceptanceSpecSchema).min(1),
 })
 
 export const UpdateTaskChecksInput = z.object({
@@ -825,8 +820,8 @@ export const Event = {
   MilestoneFailed: BusEvent.define("milestone.failed", z.object({ taskID: Identifier.schema("task"), milestoneID: z.string(), summary: z.string() })),
   RunCreated: BusEvent.define("run.created", z.object({ taskID: Identifier.schema("task"), runID: Identifier.schema("run"), status: Run.shape.status, summary: z.string() })),
   RunUpdated: BusEvent.define("run.updated", z.object({ taskID: Identifier.schema("task"), runID: Identifier.schema("run"), status: Run.shape.status, summary: z.string() })),
-  InteractionRequested: BusEvent.define("interaction.requested", z.object({ taskID: Identifier.schema("task"), runID: Identifier.schema("run"), interactionID: Identifier.schema("interaction"), requestType: Interaction.shape.type, summary: z.string() })),
-  InteractionResolved: BusEvent.define("interaction.resolved", z.object({ taskID: Identifier.schema("task"), runID: Identifier.schema("run"), interactionID: Identifier.schema("interaction"), status: Interaction.shape.status, summary: z.string() })),
+  InteractionRequested: BusEvent.define("interaction.requested", z.object({ taskID: Identifier.schema("task"), runID: Identifier.schema("run").optional(), interactionID: Identifier.schema("interaction"), requestType: Interaction.shape.type, summary: z.string() })),
+  InteractionResolved: BusEvent.define("interaction.resolved", z.object({ taskID: Identifier.schema("task"), runID: Identifier.schema("run").optional(), interactionID: Identifier.schema("interaction"), status: Interaction.shape.status, summary: z.string() })),
   DeliveryReady: BusEvent.define("delivery.ready", z.object({ taskID: Identifier.schema("task"), runID: Identifier.schema("run"), deliveryID: Identifier.schema("delivery"), summary: z.string() })),
   EvaluationCompleted: BusEvent.define("evaluation.completed", z.object({ taskID: Identifier.schema("task"), runID: Identifier.schema("run"), evaluationID: Identifier.schema("evaluation"), status: Evaluation.shape.status, verdict: Evaluation.shape.verdict, summary: z.string() })),
   TaskMessageRecorded: BusEvent.define("task.message", z.object({ taskID: Identifier.schema("task"), kind: TaskMessageResult.shape.kind, source: z.string(), text: z.string(), summary: z.string() })),

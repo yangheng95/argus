@@ -157,7 +157,7 @@ export function goalRowToContract(row: GoalRow | ({ id: string; title: string } 
     id: row.id,
     title: row.title,
     objective: (r.objective as string) ?? "",
-    done_definition: (r.done_definition as string) ?? "",
+    acceptance_specs: (r.acceptance_specs as import("@/acceptance/types").AcceptanceSpec[]) ?? [],
     owned_paths: (r.owned_paths as string[]) ?? [],
     depends_on: (r.depends_on as string[]) ?? [],
     priority: ((r.priority as string) ?? "blocking") as "blocking" | "advisory",

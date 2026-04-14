@@ -370,9 +370,6 @@ body[data-theme="light"] .card__round {
   display: none;
 }
 .card[data-kind="message"][data-role="user"] > .card__head .card__title {
-  font-size: var(--ui-font-tiny);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
   color: var(--accent);
   font-weight: 600;
 }

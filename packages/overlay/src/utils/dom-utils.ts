@@ -226,7 +226,7 @@ export function pathItems(value: string): Array<{ label: string; path: string }>
 
 /**
  * Return an inline SVG string for the given path-action button kind.
- * Supported kinds: "browse" | "new" | "history" | any (returns × close icon).
+ * Supported kinds: "browse" | "new" | any (returns × close icon).
  */
 export function pathIcon(kind: string): string {
   if (kind === "browse") {
@@ -237,13 +237,6 @@ export function pathIcon(kind: string): string {
   if (kind === "new") {
     return `<svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
       <path d="M8 3.2v9.6M3.2 8h9.6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
-    </svg>`;
-  }
-  if (kind === "history") {
-    return `<svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path d="M8 4v4l2.5 1.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
-      <path d="M3.05 8a5 5 0 1 1 .5 2.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
-      <path d="M3 10.5L3.05 8 1 9" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
     </svg>`;
   }
   return `<svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
@@ -259,10 +252,8 @@ export function pathBreadcrumb(value: string): string {
   const browse = escapeHtml(t("cwd.browse"));
   const create = escapeHtml(t("cwd.new"));
   const reset = escapeHtml(t("cwd.reset"));
-  const recent = escapeHtml(t("cwd.recent"));
   const directory = settingsStore.directory;
   const actions = [
-    `<button type="button" class="task-dir-tool" data-path-action="recent" title="${recent}" aria-label="${recent}">${pathIcon("history")}</button>`,
     `<button type="button" class="task-dir-tool" data-path-action="browse" title="${browse}" aria-label="${browse}">${pathIcon("browse")}</button>`,
     `<button type="button" class="task-dir-tool" data-path-action="create" title="${create}" aria-label="${create}">${pathIcon("new")}</button>`,
     directory

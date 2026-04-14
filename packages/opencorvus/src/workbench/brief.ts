@@ -1,5 +1,6 @@
 import { Identifier } from "@/id/id"
 import { Memory } from "@/memory"
+import { renderSpecsAsText, type AcceptanceSpec } from "@/acceptance/types"
 import { Database, desc, eq } from "@/storage/db"
 import {
   OrchestratorGoalTable,
@@ -89,7 +90,7 @@ export function compileBrief(input: {
       ? "Goals:\n" +
         goals
           .map((goal) =>
-            `- ${goal.title} (criteria: ${goal.done_definition}${
+            `- ${goal.title} (acceptance:\n${renderSpecsAsText((goal.acceptance_specs ?? []) as AcceptanceSpec[])}${
               Array.isArray((goal.metadata as Record<string, unknown> | null | undefined)?.check_selector)
                 ? `; checks: ${(((goal.metadata as Record<string, unknown>).check_selector as unknown[]) ?? [])
                     .filter((item): item is string => typeof item === "string")

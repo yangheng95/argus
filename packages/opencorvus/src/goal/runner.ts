@@ -5,6 +5,7 @@ import { Filesystem } from "@/util/filesystem"
 import { Log } from "@/util/log"
 import { dict } from "@/util/object"
 import { selectorList } from "@/check/policy"
+import { renderSpecsAsText } from "@/acceptance/types"
 import { clarificationTranscriptSection, operatorNotesSection } from "@/orchestrator/helpers"
 import { createDecisionLog } from "@/decision-log"
 import { Instance } from "@/project/instance"
@@ -406,7 +407,7 @@ export function buildGoalPrompt(input: {
     `Goal:
 ${input.goal.title}: ${input.goal.objective}`,
     `Acceptance:
-${input.goal.done_definition}`,
+${renderSpecsAsText(input.goal.acceptance_specs ?? [])}`,
     // Plan node brief — the planner's specific implementation steps for this goal.
     // Without this, the executor only sees the goal's description/criteria from the
     // goal decomposition stage and misses the planner's detailed guidance.

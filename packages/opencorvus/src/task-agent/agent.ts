@@ -15,6 +15,7 @@
  */
 import { stepCountIs } from "ai"
 import { Provider } from "@/provider/provider"
+import { renderSpecsAsText, type AcceptanceSpec } from "@/acceptance/types"
 import { AgentRuntime } from "@/agent/runtime"
 import { Session } from "@/session"
 import { Instance } from "@/project/instance"
@@ -546,7 +547,7 @@ function buildSystemParts(task: TaskRow, trigger: TaskAgentTrigger, workflow?: M
   if (goals.length > 0) {
     ctx.push(`\n## Goals (${goals.length})`)
     for (const g of goals) {
-      ctx.push(`  - [${g.status}] ${g.title} [${g.priority}] — ${g.done_definition.slice(0, 100)}`)
+      ctx.push(`  - [${g.status}] ${g.title} [${g.priority}] — ${renderSpecsAsText((g.acceptance_specs ?? []) as AcceptanceSpec[]).slice(0, 200)}`)
     }
   }
 

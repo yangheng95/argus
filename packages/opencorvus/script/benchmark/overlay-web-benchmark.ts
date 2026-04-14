@@ -360,6 +360,13 @@ const { InstanceBootstrap } = await import("../../src/project/bootstrap")
 const { Server } = await import("../../src/server/server")
 const { resetDatabase } = await import("../../test/fixture/db")
 
+// Start the HTTP server before anything calls Instance.provide.
+// resolveBenchmarkModel / ensureBenchmarkModel / InstanceBootstrap all go
+// through Plugin.state, whose initializer reads Server.url(). If the server
+// hasn't called listen() yet, Server.url() throws and the provider init
+// silently half-completes (missing plugin hooks).
+const server = Server.listen({ port: 0, hostname: "127.0.0.1" })
+
 await loadBenchmarkEnv(import.meta.dir)
 process.env.OPENCORVUS_CONFIG_DIR = temp.config
 await prepareLocalProviders()
@@ -419,8 +426,6 @@ await Instance.provide({
     await ExecutorBootstrap.autoRegister(true)
   },
 })
-
-const server = Server.listen({ port: 0, hostname: "127.0.0.1" })
 const browser = await launchBrowser()
 let page = await browser.newPage()
 if (page) await page.setViewport({ width: 1600, height: 1200 })

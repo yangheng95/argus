@@ -1,6 +1,7 @@
 import { Instance } from "@/project/instance"
 import { Installation } from "@/installation"
 import { Log } from "@/util/log"
+import { Server } from "@/server/server"
 import { ChannelCatalog, channelEnv } from "./catalog"
 
 const log = Log.create({ service: "channel.supervisor" })
@@ -111,7 +112,7 @@ function desired(config?: Record<string, unknown>) {
     }
   }
 
-  env.OPENCORVUS_CHANNEL_SERVER_URL = process.env.OPENCORVUS_SERVER_URL || "http://127.0.0.1:7878"
+  env.OPENCORVUS_CHANNEL_SERVER_URL = Server.url().toString().replace(/\/+$/, "")
   env.OPENCORVUS_CHANNEL_PROTOCOL = "1"
   env.OPENCORVUS_PROJECT_DIR = Instance.directory
   env.OPENCORVUS_CONFIG_CONTENT = JSON.stringify(config ?? {})
