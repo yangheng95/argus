@@ -110,20 +110,22 @@ export function Card(props: { node: CardNode; depth: number }) {
           </Show>
         </div>
       </Show>
-      {/* Estimated context-token hint — low-contrast footer marker. Shown
-          when the backend reported a tokens.input for this turn/stage so the
-          operator can gauge how much context the LLM was reasoning over. The
-          "est." qualifier is deliberate: provider token counts are billed
-          estimates, not an exact char-count of our prompt. */}
-      <Show when={typeof props.node.contextTokens === "number" && (props.node.contextTokens as number) > 0}>
-        <span
-          class="card__token-hint"
-          title={t("card.context_tokens_tooltip", { value: String(props.node.contextTokens) })}
-          aria-label={t("card.context_tokens_tooltip", { value: String(props.node.contextTokens) })}
-        >
-          ~{formatTokenCount(props.node.contextTokens as number)} tok · est.
-        </span>
-      </Show>
+      {/* Per-card token hint — rendered unconditionally on every card and
+          every nesting level. Real provider-reported usage is shown as
+          plain "N tok"; values that fell back to a text-length estimate
+          (user bubbles, in-flight turns, aggregates covering either) are
+          suffixed "· est." so the number is never mistaken for billing
+          data. See utils/tokens.ts for the char→token heuristic. */}
+      <span
+        class="card__token-hint"
+        classList={{ "card__token-hint--estimated": props.node.contextTokensEstimated }}
+        title={t("card.context_tokens_tooltip", { value: String(props.node.contextTokens) })}
+        aria-label={t("card.context_tokens_tooltip", { value: String(props.node.contextTokens) })}
+      >
+        {props.node.contextTokensEstimated ? "~" : ""}
+        {formatTokenCount(props.node.contextTokens)} tok
+        {props.node.contextTokensEstimated ? " · est." : ""}
+      </span>
     </article>
   );
 }

@@ -416,12 +416,15 @@ body[data-theme="light"] .card__round {
   margin: 2px 0;
 }
 
-/* ── Context-token hint ──
-   Low-contrast footer marker pinned to the card's bottom-right corner.
-   Intentionally not interactive — pointer-events: none keeps it out of the
-   fold-toggle hit area. The font is small and desaturated so it reads as
-   metadata rather than content. The "est." qualifier is part of the visible
-   label (see Card.tsx) to signal the number is a provider estimate. */
+/* ── Per-card token hint ──
+   Rendered on every card and every nesting level (see Card.tsx). Pinned to
+   the card's bottom-right corner as metadata, not content. Legibility has
+   to survive the semi-transparent Overlay background, so the baseline
+   opacity is high enough to actually read while the muted colour + tabular
+   numerals keep it from competing with the body. The modifier
+   `card__token-hint--estimated` marks cards whose figure fell back to a
+   text-length estimate (e.g. user bubbles, in-flight turns); they read
+   one step softer than provider-reported numbers. */
 .card {
   position: relative;
 }
@@ -429,17 +432,24 @@ body[data-theme="light"] .card__round {
   position: absolute;
   right: 8px;
   bottom: 4px;
-  font-size: 10px;
+  font-size: 11px;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.02em;
   color: var(--text-soft, #888);
-  opacity: 0.45;
+  opacity: 0.85;
   pointer-events: none;
   white-space: nowrap;
   user-select: none;
 }
+.card__token-hint--estimated {
+  opacity: 0.6;
+  font-style: italic;
+}
 .card:hover > .card__token-hint {
-  opacity: 0.7;
+  opacity: 1;
+}
+.card:hover > .card__token-hint--estimated {
+  opacity: 0.85;
 }
 
 /* ── Compaction card ──

@@ -6,6 +6,7 @@
 import { orderedMessageParts, effectiveRole, roleLabel, agentStageLabel } from "./message";
 import { toolNameKey } from "./tool";
 import { stageAccent } from "./card-color";
+import { messageTokens, sumMessageTokens, estimateTextTokens } from "./tokens";
 
 export type CardKind = "agent" | "goal" | "step" | "tool" | "message" | "compaction";
 export type CardStatus = "pending" | "running" | "completed" | "error" | "skipped";
@@ -56,16 +57,19 @@ export interface CardNode {
    *  InlineToolPart mode="body". Always undefined for non-tool kinds. */
   toolPart?: any;
   /**
-   * Estimated prompt-context size the LLM saw at this message, in tokens.
-   * Populated from Assistant.tokens.input (which already represents the
-   * cumulative context sent up to and including this turn — providers bill
-   * per turn on the fully-assembled message array, so there is nothing to
-   * sum client-side). Left undefined for turns that never hit the model
-   * (user bubbles, synthetic system notes). The UI renders it with low
-   * contrast and an "est." marker because the number is a provider-reported
-   * estimate and can drift slightly against actual billed tokens.
+   * Per-card token count shown in the bottom-right hint. Always a number
+   * so every card renders a figure — no gating by "data present".
+   *   - leaf message cards: provider-reported `output + reasoning` for
+   *     completed assistant turns; text-length estimate otherwise
+   *   - aggregate cards (goal / step / agent): sum of their children's
+   *     counts, so the goal total equals the sum of its steps
+   *
+   * `contextTokensEstimated` is true whenever any leaf in this card's
+   * subtree was estimated rather than provider-reported — a sum is no more
+   * precise than its worst input. Drives the "est." suffix in Card.tsx.
    */
-  contextTokens?: number
+  contextTokens: number
+  contextTokensEstimated: boolean
   /**
    * True when this card represents a conversation-compaction summary
    * (Assistant.summary === true). The summary card replaces the compacted
@@ -186,20 +190,16 @@ function stepTitle(stage: string, step?: { label?: string }): string {
 
 // ── Conversion entry points ──
 
-/** Highest per-turn `tokens.input` across a message list. Represents the
- *  high-water mark of context size the LLM had to reason over — summing
- *  would double-count because each turn's input already includes prior
- *  turns. Returns undefined when no message carries a finite token count. */
-function maxContextTokens(messages: any[] | undefined): number | undefined {
-  if (!Array.isArray(messages)) return undefined;
-  let max: number | undefined = undefined;
-  for (const m of messages) {
-    const t = (m as any)?.info?.tokens?.input;
-    if (typeof t === "number" && Number.isFinite(t) && (max === undefined || t > max)) {
-      max = t;
-    }
-  }
-  return max;
+/** Per-card token count (and estimate flag) for a single leaf message. */
+function leafTokens(msg: any): { tokens: number; estimated: boolean } {
+  return messageTokens(msg);
+}
+
+/** Aggregate helper: fold a child's tokens into a running total, promoting
+ *  the estimated flag if any child is estimated. */
+function addTokens(acc: { tokens: number; estimated: boolean }, child: { tokens: number; estimated: boolean }) {
+  acc.tokens += child.tokens;
+  if (child.estimated) acc.estimated = true;
 }
 
 function goalToNode(item: any): CardNode {
@@ -214,11 +214,20 @@ function goalToNode(item: any): CardNode {
   }
 
   const children: CardNode[] = [];
-  let goalContextTokens: number | undefined = undefined;
-  const accumulate = (value: number | undefined) => {
-    if (value === undefined) return;
-    if (goalContextTokens === undefined || value > goalContextTokens) goalContextTokens = value;
-  };
+  const goalTotal = { tokens: 0, estimated: false };
+
+  // A goal with no child messages anywhere (just the descriptor itself) still
+  // has a body — its goalDescription — that contributes to the prompt. Seed
+  // the goal total with that so an "empty" goal card still shows a non-zero
+  // figure instead of reading as 0 at every nesting level.
+  if (typeof item.goalDescription === "string" && item.goalDescription) {
+    goalTotal.tokens += estimateTextTokens(item.goalDescription);
+    goalTotal.estimated = true;
+  }
+  if (typeof item.goalTitle === "string" && item.goalTitle) {
+    goalTotal.tokens += estimateTextTokens(item.goalTitle);
+    goalTotal.estimated = true;
+  }
 
   if (steps.length > 0) {
     for (const step of steps) {
@@ -226,8 +235,8 @@ function goalToNode(item: any): CardNode {
       const internal = internalByStage.get(stage);
       const stepStatus =
         normStatus(internal?.status) ?? normStatus(step.status) ?? "pending";
-      const stepContextTokens = maxContextTokens(internal?.messages);
-      accumulate(stepContextTokens);
+      const stepTotal = sumMessageTokens(internal?.messages);
+      addTokens(goalTotal, stepTotal);
       children.push({
         id: `${cardID}:step:${step.stepID}`,
         kind: "step",
@@ -238,7 +247,8 @@ function goalToNode(item: any): CardNode {
         subtitle: step.summary || undefined,
         parts: flattenMessages(internal?.messages || []),
         children: [],
-        contextTokens: stepContextTokens,
+        contextTokens: stepTotal.tokens,
+        contextTokensEstimated: stepTotal.estimated,
       });
     }
   } else {
@@ -251,8 +261,8 @@ function goalToNode(item: any): CardNode {
     for (const c of sorted) {
       const stage = String(c.stage || "");
       const st = normStatus(c.status) ?? "pending";
-      const stepContextTokens = maxContextTokens(c.messages);
-      accumulate(stepContextTokens);
+      const stepTotal = sumMessageTokens(c.messages);
+      addTokens(goalTotal, stepTotal);
       children.push({
         id: String(c.id || `${cardID}:step:${stage}`),
         kind: "step",
@@ -262,7 +272,8 @@ function goalToNode(item: any): CardNode {
         title: agentStageLabel(stage),
         parts: flattenMessages(c.messages || []),
         children: [],
-        contextTokens: stepContextTokens,
+        contextTokens: stepTotal.tokens,
+        contextTokensEstimated: stepTotal.estimated,
       });
     }
   }
@@ -282,7 +293,8 @@ function goalToNode(item: any): CardNode {
     parts: [],
     children,
     time: Number(item.time) || undefined,
-    contextTokens: goalContextTokens,
+    contextTokens: goalTotal.tokens,
+    contextTokensEstimated: goalTotal.estimated,
   };
 }
 
@@ -291,7 +303,7 @@ function agentCardToNode(item: any): CardNode {
   const cardID = String(item.id || `agent:${stage}`);
   const status = normStatus(item.status) ?? "pending";
   const messages = item.messages || [];
-  const contextTokens = maxContextTokens(messages);
+  const agentTotal = sumMessageTokens(messages);
   return {
     id: cardID,
     kind: "agent",
@@ -304,7 +316,8 @@ function agentCardToNode(item: any): CardNode {
     parts: flattenMessages(messages),
     children: [],
     time: Number(item.time) || undefined,
-    contextTokens,
+    contextTokens: agentTotal.tokens,
+    contextTokensEstimated: agentTotal.estimated,
   };
 }
 
@@ -316,10 +329,7 @@ function messageToNode(item: any): CardNode {
   const parts = orderedMessageParts(item);
   const isCompactionSummary = item?.info?.summary === true;
   const hasCompactionPart = Array.isArray(parts) && parts.some((p: any) => p?.type === "compaction");
-  const tokens = item?.info?.tokens;
-  const contextTokens = typeof tokens?.input === "number" && Number.isFinite(tokens.input)
-    ? tokens.input
-    : undefined;
+  const leaf = leafTokens({ ...item, parts });
 
   // A user-side `compaction` part (the trigger) and an assistant-side
   // summary=true message (the result) are both rendered as their own
@@ -335,7 +345,8 @@ function messageToNode(item: any): CardNode {
       children: [],
       time: Number(item?.info?.time?.created) || undefined,
       defaultExpanded: isCompactionSummary,
-      contextTokens,
+      contextTokens: leaf.tokens,
+      contextTokensEstimated: leaf.estimated,
       isCompactionSummary,
     };
   }
@@ -352,7 +363,8 @@ function messageToNode(item: any): CardNode {
     // User / synthetic bubbles: always "expanded"; the header is the bubble
     // itself, not a fold trigger (<Card> CSS handles visual in S2).
     defaultExpanded: true,
-    contextTokens,
+    contextTokens: leaf.tokens,
+    contextTokensEstimated: leaf.estimated,
   };
 }
 
