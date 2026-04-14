@@ -55,9 +55,12 @@ opencorvus serve
 ## 文档地图
 
 - **[Start](./start/install.md)** — 安装、最小可跑示例
-- **[Concepts](./concepts/architecture.md)** — 架构、数据模型、agentic loop
-- **[OpenCorvus 核心](./opencorvus/configuration.md)** — 配置、provider、权限、评估
+- **[Concepts](./concepts/architecture.md)** — 架构、[数据模型](./concepts/goal-run-task.md)、[agentic loop](./concepts/agent-loop.md)
+- **[OpenCorvus 核心](./opencorvus/configuration.md)** — [配置](./opencorvus/configuration.md)、[provider](./opencorvus/providers.md)、[权限](./opencorvus/permissions.md)、[评估](./opencorvus/evaluator.md)
+  - [Skills（技能扩展）](./opencorvus/skills.md)
+  - [Plugins（插件扩展）](./opencorvus/plugins.md)
+  - [MCP（Model Context Protocol）](./opencorvus/mcp.md)
 - **[Overlay 桌面端](./overlay/overview.md)** — Tauri 图形界面
 - **[Channels](./channels/overview.md)** — 14 个 IM channel 的接入指南
-- **[Operations](./operations/benchmark.md)** — benchmark、故障排查
-- **[Reference](./reference/env.md)** — 环境变量、CLI 全集
+- **[Operations](./operations/benchmark.md)** — [benchmark](./operations/benchmark.md)、[故障排查](./operations/troubleshooting.md)、[GitHub Action](./operations/github-action.md)、[ACP](./operations/acp.md)
+- **[Reference](./reference/env.md)** — [环境变量](./reference/env.md)、[CLI](./reference/cli.md)、[HTTP API](./reference/api.md)、[SDK](./reference/sdk.md)

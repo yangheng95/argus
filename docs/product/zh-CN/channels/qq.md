@@ -10,12 +10,15 @@ QQ 适配器接入 **QQ 官方机器人平台**（`bot.q.qq.com`），走 WebSoc
 
 ## 环境变量
 
-参考 `packages/channel-config/src/index.ts` 中 `qq` 的字段声明：
+来自 `packages/channel-config/src/index.ts`：
 
 ```bash
-export QQ_APP_ID=...
-export QQ_BOT_TOKEN=...
-export QQ_BOT_SECRET=...          # 可选，仅 Webhook 模式需要
+export QQ_BOT_APP_ID=...           # 必填：AppID
+export QQ_BOT_APP_SECRET=...       # 必填：AppSecret
+export QQ_SANDBOX=0                # 可选：沙箱模式（默认 0）
+export QQ_WEBHOOK_HOST=0.0.0.0     # 可选：webhook 模式监听地址
+export QQ_WEBHOOK_PORT=16674       # 可选
+export QQ_WEBHOOK_PATH=/qq         # 可选
 ```
 
 ## Thread 语义

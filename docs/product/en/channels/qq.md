@@ -10,12 +10,15 @@ QQ adapter integrates with the **official QQ Bot Platform** (`bot.q.qq.com`) via
 
 ## Environment
 
-See the `qq` entry in `packages/channel-config/src/index.ts`:
+From `packages/channel-config/src/index.ts`:
 
 ```bash
-export QQ_APP_ID=...
-export QQ_BOT_TOKEN=...
-export QQ_BOT_SECRET=...          # optional, for webhook mode
+export QQ_BOT_APP_ID=...           # required: AppID
+export QQ_BOT_APP_SECRET=...       # required: AppSecret
+export QQ_SANDBOX=0                # optional: sandbox mode (default 0)
+export QQ_WEBHOOK_HOST=0.0.0.0     # optional: webhook mode listen host
+export QQ_WEBHOOK_PORT=16674       # optional
+export QQ_WEBHOOK_PATH=/qq         # optional
 ```
 
 ## Thread semantics
