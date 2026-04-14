@@ -83,9 +83,6 @@ export function compileBrief(input: {
       "- Do not create extra user-facing commits unless explicitly requested.",
       "- If you do create a commit, use a concise, meaningful message grounded in the task request and plan.",
     ].join("\n"),
-    planHints(plan?.metadata).length > 0
-      ? "Plan hints:\n" + planHints(plan?.metadata).map((item) => `- ${item}`).join("\n")
-      : "",
     goals.length > 0
       ? "Goals:\n" +
         goals
@@ -207,9 +204,3 @@ function recallMemory(task: typeof OrchestratorTaskTable.$inferSelect) {
   }
 }
 
-function planHints(metadata: unknown) {
-  if (!metadata || typeof metadata !== "object") return []
-  const hints = (metadata as Record<string, unknown>).operator_hints
-  if (!Array.isArray(hints)) return []
-  return hints.filter((item): item is string => typeof item === "string" && item.length > 0)
-}

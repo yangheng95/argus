@@ -125,7 +125,7 @@ function buildBoard(task: typeof OrchestratorTaskTable.$inferSelect) {
     sessionID: task.session_id ?? undefined,
   })
   const staging = notes.filter((note) =>
-    ["plan_hint", "goal_update", "operator_note", "constraint", "decision"].includes(note.kind),
+    ["goal_update", "operator_note", "constraint", "decision"].includes(note.kind),
   )
   const history = notes.filter((note) => ["user_request", "summary"].includes(note.kind))
   const allDeliveries = Database.use((db) =>

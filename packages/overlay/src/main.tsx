@@ -42,7 +42,6 @@ import { setLocale } from "./utils/i18n";
 import { apiJson, configure as configureApi } from "./services/api";
 import { t } from "./utils/i18n";
 import { formatDuration } from "./utils/time";
-import { createOverlayInteractions } from "./services/interactions";
 import { renderMarkdown, escapeHtml } from "./utils/markdown";
 import { copyChatConversation } from "./utils/transcript";
 import {
@@ -312,7 +311,6 @@ function installAppDialogBridge(): void {
 
 function installGlobalBridges(): void {
   installAppDialogBridge();
-  (window as any).createOverlayInteractions = createOverlayInteractions;
   (window as any).renderMarkdown = renderMarkdown;
   (window as any).persistOverlaySettings = async () => {
     saveSettings();
@@ -1185,43 +1183,6 @@ document.getElementById("btnChatCopyAll")?.addEventListener("click", () => {
   void copyChatConversation();
 });
 
-// Interaction DOM rendering disabled (InteractionPanel handles UI).
-// Kept alive for resolveInteraction/rejectInteraction window globals
-// consumed by services/session.ts.
-const interactionBridge = createOverlayInteractions({
-  document,
-  dom: { goalsBody: null },
-  escapeHtml,
-  renderMarkdown,
-  t,
-  record: isRecord,
-  loadBoard,
-  nativePrompt: async (message, options = {}) => {
-    const showAppDialog = (window as any).showAppDialog;
-    if (typeof showAppDialog !== "function") return null;
-    const result = await showAppDialog({
-      title: options.title,
-      message,
-      cancel: true,
-      input: true,
-      okLabel: options.okLabel,
-      cancelLabel: options.cancelLabel,
-      inputLabel: options.inputLabel,
-    });
-    return result?.confirmed ? result.value : null;
-  },
-});
-
-Object.assign(window as any, {
-  renderInteractions: interactionBridge.renderInteractions,
-  showInteractionModal: interactionBridge.showInteractionModal,
-  dismissInteractionModal: interactionBridge.dismissInteractionModal,
-  resolveInteraction: interactionBridge.resolveInteraction,
-  rejectInteraction: interactionBridge.rejectInteraction,
-  isInteractionBusy: interactionBridge.isInteractionBusy,
-  refreshInteractionAttention: interactionBridge.refreshInteractionAttention,
-});
-
 disposers.push(createRoot((dispose) => {
   createEffect(() => {
     document.body.dataset.workspace = !appStore.connected
@@ -1374,17 +1335,14 @@ window.addEventListener("keydown", (e: KeyboardEvent) => {
 const onResize = () => applyZoom(settingsStore.zoom);
 window.addEventListener("resize", onResize, listenerOpts);
 if (window.visualViewport) window.visualViewport.addEventListener("resize", onResize, listenerOpts);
-window.addEventListener("focus", () => { void (window as any).refreshInteractionAttention?.(); }, listenerOpts);
 window.addEventListener("blur", () => {
   void cancelPaneResize(paneCallbacks);
-  void (window as any).refreshInteractionAttention?.();
 }, listenerOpts);
 window.addEventListener("beforeunload", () => {
   runModuleTeardown();
   teardownApp();
   stopTimers();
 });
-document.addEventListener("visibilitychange", () => { void (window as any).refreshInteractionAttention?.(); }, listenerOpts);
 installSystemThemeListener(() => applyTheme(settingsStore.theme));
 
 // ── Directory action buttons (#taskDir, #recentDirPanel, #taskGit) ──

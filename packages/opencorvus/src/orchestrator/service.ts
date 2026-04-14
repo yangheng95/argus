@@ -1087,53 +1087,40 @@ export namespace OrchestratorService {
       }
     }
 
-    // Fast-path: cancelled/failed tasks skip LLM intent classification.
-    // Any message to a stopped task is an unambiguous restart signal.
+    // All free-text user messages are recorded verbatim as operator notes and
+    // forwarded to the Task Agent. The agent reads notes in-context and decides
+    // whether the message implies a goal change, a plan hint, or is mere
+    // context — no separate LLM-based intent classifier, no keyword dispatch.
+    // This removes the "Intent analysis failed" failure mode and the /goal
+    // /plan prefix handlers (keyword-matching is forbidden by project rule 12).
     const task = requireTask(taskID)
-    if (task.status === "cancelled" || task.status === "failed") {
-      await OrchestratorProtocol.emit(Event.TaskMessageRecorded, {
-        taskID,
-        kind: "note",
-        source: input.source ?? "user_message",
-        text: input.text,
-        summary: "User message on stopped task",
-      }, { taskID, source: "service.message" })
-      const note = await continueTaskMessage(taskID, input.text, attachmentRefs)
-      return {
-        kind: "note" as const,
-        message: note.resumed
-          ? "Task restarted with your message."
-          : "Message recorded.",
-        should_resume: note.resumed,
-      }
-    }
-
-    const result = await WorkbenchService.ingestTaskMessage({
+    WorkbenchService.recordNote({
       taskID,
-      text: input.text,
+      kind: "operator_note",
+      content: input.text,
       source: input.source ?? "user_message",
       userID: input.user_id,
     })
     await OrchestratorProtocol.emit(Event.TaskMessageRecorded, {
       taskID,
-      kind: result.kind,
+      kind: "note",
       source: input.source ?? "user_message",
       text: input.text,
-      summary: result.message,
+      summary: "Operator note recorded",
     }, { taskID, source: "service.message" })
-    if (!result.should_resume) {
-      return result
-    }
     const note = await continueTaskMessage(taskID, input.text, attachmentRefs)
-    return {
-      ...result,
-      message: result.kind === "note"
-        ? note.mode === "injected"
+    const message =
+      task.status === "cancelled" || task.status === "failed"
+        ? note.resumed ? "Task restarted with your message." : "Message recorded."
+        : note.mode === "injected"
           ? "Operator message injected into the running task."
           : note.resumed
             ? "Operator note recorded. Queued a follow-up run."
             : "Operator note recorded."
-        : result.message,
+    return {
+      kind: "note" as const,
+      message,
+      should_resume: note.resumed,
     }
   }
 
