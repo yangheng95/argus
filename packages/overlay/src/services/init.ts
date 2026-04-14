@@ -14,6 +14,7 @@ import {
   startConnectionMonitor,
   stopConnectionMonitor,
 } from "./connection";
+import { startTaskListSSE, stopTaskListSSE } from "./sse";
 import { loadAllLocales, setLocale } from "../utils/i18n";
 import {
   loadSettings,
@@ -143,6 +144,7 @@ export async function initApp(options: InitOptions = {}): Promise<void> {
     await loadInitialData();
     await restoreInitialWorkspace();
     await onConnected?.();
+    startTaskListSSE();
   }
 
  // 7. Start reconnect loop
@@ -152,6 +154,7 @@ export async function initApp(options: InitOptions = {}): Promise<void> {
     await loadInitialData();
     await restoreInitialWorkspace();
     await onReconnect?.();
+    startTaskListSSE();
   }, reconnectInterval);
 }
 
@@ -161,6 +164,7 @@ export async function initApp(options: InitOptions = {}): Promise<void> {
  */
 export function teardownApp(): void {
   stopConnectionMonitor();
+  stopTaskListSSE();
 }
 
 /**

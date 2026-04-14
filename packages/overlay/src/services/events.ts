@@ -402,6 +402,7 @@ function eventSequence(event: any): number {
 
 function boardInvalidatingEvent(type: string): boolean {
   return (
+    type === "task.created" ||
     type === "task.updated" ||
     type === "task.completed" ||
     type === "task.failed" ||
