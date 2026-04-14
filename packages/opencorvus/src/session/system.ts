@@ -88,7 +88,6 @@ export namespace SystemPrompt {
         `  Shell: ${shell}`,
         ...(display ? [`  Display-Server: ${display}`] : []),
         `  Today's date: ${now.toDateString()}`,
-        `  Current time (ISO-8601): ${now.toISOString()}`,
         `  Local timezone: ${zone} (UTC${utcOffset(now)})`,
         `</env>`,
       ].join("\n"),

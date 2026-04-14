@@ -107,6 +107,23 @@ export namespace AttachmentStore {
     return await fs.readFile(abs)
   }
 
+  /**
+   * Whether a MIME type can be sent as an LLM multimodal file part.
+   *
+   * AI SDK provider wrappers (notably the openai-compatible one used by Kimi /
+   * Alibaba models) only accept image, audio, video, and PDF as inline `file`
+   * parts; text/* and application/json are silently rejected by the upstream
+   * API and surface as "No output generated" errors. Callers must route
+   * non-multimodal attachments through their URL/filename in the prompt and
+   * let the agent fetch them via the read tool.
+   */
+  export function isMultimodalSupported(mime: string): boolean {
+    if (!mime) return false
+    const m = mime.toLowerCase()
+    if (m === "application/pdf") return true
+    return m.startsWith("image/") || m.startsWith("audio/") || m.startsWith("video/")
+  }
+
   /** Extract the stored filename (`<sha>.<ext>`) from a reference URL. */
   export function nameFromUrl(url: string): { projectID: string; name: string } | undefined {
     const prefix = `${ROUTE_PREFIX}/`
