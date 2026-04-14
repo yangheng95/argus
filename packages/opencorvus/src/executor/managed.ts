@@ -1,8 +1,8 @@
 import { Identifier } from "@/id/id"
 import { Snapshot } from "@/snapshot"
 import { Log } from "@/util/log"
-import { PlanningCapabilities, type CodingEventInfo, type CodingProvider, type CodingToolInfo, type ExecutorStatusInfo } from "./compat"
-import type { ExecutorAdapter } from "./compat"
+import { PlanningCapabilities, type CodingEventInfo, type CodingProvider, type CodingToolInfo, type ExecutorStatusInfo } from "./contract"
+import type { ExecutorAdapter } from "./contract"
 
 const log = Log.create({ service: "managed-executor" })
 

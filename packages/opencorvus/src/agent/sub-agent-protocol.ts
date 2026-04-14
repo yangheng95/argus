@@ -59,17 +59,39 @@ export namespace SubAgentProtocol {
   export const POINTER_RESERVE = 250
   /** Default body chars helpers aim for after reserving the marker. */
   export const SAFE_BODY_CAP = HARD_CHAR_CAP - POINTER_RESERVE
+  /** Headline hard cap. Headlines are status-line text — anything longer is a
+   * smell; keep a real ceiling so no caller can sneak a transcript into the
+   * headline slot. */
+  export const HEADLINE_CAP = 500
+
+  /** Exact marker appended by `trimText` when it truncates. Having the caller
+   * account for marker bytes (rather than guessing "~60 chars") is how the
+   * yieldResult budget loop below stays honest: we subtract this when sizing
+   * a slice so the final line length actually fits in `remaining`. */
+  export function truncationMarker(omitted: number, pointer: string): string {
+    return `… [+${omitted} chars truncated; full content at ${pointer}]`
+  }
 
   /**
    * Trim a single text body. `pointer` is the human-readable handle the
    * caller can use to fetch the full content (DB row id, file path,
    * "use read_context with scope=X", etc.). Returns the input unchanged
    * if it already fits.
+   *
+   * `cap` is the target total output length (slice + marker). Callers that
+   * pass a pathologically small cap get an empty-ish slice plus the marker
+   * — the marker always renders so readers can see truncation happened.
    */
   export function trimText(text: string, pointer: string, cap: number = SAFE_BODY_CAP): string {
     if (text.length <= cap) return text
-    const omitted = text.length - cap
-    return `${text.slice(0, cap)}… [+${omitted} chars truncated; full content at ${pointer}]`
+    // Pick a slice length that leaves room for the marker. For any reasonable
+    // cap this is a no-op adjustment; for tiny caps it keeps the output from
+    // exceeding `cap` by the full marker width.
+    const probeOmitted = text.length - cap
+    const markerLen = truncationMarker(probeOmitted, pointer).length
+    const sliceLen = Math.max(0, cap - markerLen)
+    const omitted = text.length - sliceLen
+    return `${text.slice(0, sliceLen)}${truncationMarker(omitted, pointer)}`
   }
 
   /**
@@ -112,7 +134,9 @@ export namespace SubAgentProtocol {
     pointer: string
   }): string {
     const lines: string[] = []
-    lines.push(input.headline)
+    // Headline is status-line text; cap it so a careless caller can't stuff a
+    // transcript into the one field yieldResult never trimmed before.
+    lines.push(trimText(input.headline, input.pointer, HEADLINE_CAP))
 
     if (input.summary && input.summary.trim()) {
       // Reserve roughly half the body budget for free-form summary text so
@@ -123,20 +147,29 @@ export namespace SubAgentProtocol {
 
     let charsUsed = lines.reduce((sum, l) => sum + l.length + 1, 0)
     const fields = input.fields ?? []
+    // Minimum width a field line needs to carry real content (key prefix +
+    // truncation marker). Below this we stop emitting fields rather than
+    // producing marker-only lines that still cost bytes without carrying
+    // signal. The "4" is the literal "- " + ": " framing.
+    const markerProbe = truncationMarker(0, input.pointer).length
     for (let i = 0; i < fields.length; i++) {
       const [key, value] = fields[i]
       const remaining = SAFE_BODY_CAP - charsUsed
-      if (remaining <= 0) {
+      const minLineWidth = 2 + key.length + 2 + markerProbe
+      if (remaining < minLineWidth) {
         const skipped = fields.length - i
         lines.push(`- … [${skipped} more fields omitted; see ${input.pointer}]`)
         break
       }
+      const valueCap = remaining - key.length - 4
       const rendered = Array.isArray(value)
         ? trimList(value, input.pointer, { listCap: 10, itemCap: 120 })
-        : trimText(value, input.pointer, Math.min(remaining - key.length - 4, 1000))
+        : trimText(value, input.pointer, Math.min(valueCap, 1000))
       const line = `- ${key}: ${rendered}`
       if (line.length > remaining) {
-        lines.push(`- ${key}: ${trimText(rendered, input.pointer, remaining - key.length - 4)}`)
+        // Trim once more against the real remaining budget. trimText reserves
+        // marker width internally so the result respects `valueCap`.
+        lines.push(`- ${key}: ${trimText(rendered, input.pointer, valueCap)}`)
         const skipped = fields.length - i - 1
         if (skipped > 0) lines.push(`- … [${skipped} more fields omitted; see ${input.pointer}]`)
         break

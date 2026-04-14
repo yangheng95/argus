@@ -58,7 +58,7 @@ export namespace Workspace {
     async (input) => {
       const id = Identifier.ascending("workspace", input.id)
 
-      const { config, init } = await getAdaptor(input.config).create(input.config, input.branch)
+      const { config } = await getAdaptor(input.config).create(input.config, input.branch)
 
       const info: Info = {
         id,
@@ -68,8 +68,6 @@ export namespace Workspace {
       }
 
       setTimeout(async () => {
-        await init()
-
         Database.use((db) => {
           db.insert(WorkspaceTable)
             .values({

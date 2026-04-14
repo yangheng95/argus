@@ -1,7 +1,7 @@
 import z from "zod"
 import { query, type ElicitationRequest, type ElicitationResult, type PermissionResult } from "@anthropic-ai/claude-agent-sdk"
-import { CodingCapabilities, CodingRunInput, CodingResumeInput, type CodingEventInfo, type CodingProvider } from "./compat"
-import { record, text } from "./compat"
+import { CodingCapabilities, CodingRunInput, CodingResumeInput, type CodingEventInfo, type CodingProvider } from "./contract"
+import { record, text } from "./contract"
 import { ToolAdapterRegistry } from "./protocol"
 
 export type ClaudeAgentHandle = {

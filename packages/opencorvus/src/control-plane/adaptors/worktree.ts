@@ -12,9 +12,6 @@ export const WorktreeAdaptor: Adaptor<WorktreeConfig> = {
         type: "worktree",
         directory: next.directory,
       },
-      // Hack for now: `Worktree.create` puts all its async code in a
-      // `setTimeout` so it doesn't use this, but we should change that
-      init: async () => {},
     }
   },
   async remove(config: WorktreeConfig) {

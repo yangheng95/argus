@@ -34,6 +34,9 @@ export namespace RequirementsService {
     request: string
     /** Base64 image attachments — injected as vision content alongside the request text. */
     attachments?: Array<{ sha: string; url: string; mime: string; size: number; filename?: string }>
+    /** Capped design spec from a prior design_analysis call. Scoped to this
+     *  agent — never flows into task.request or any other sub-agent. */
+    designSpec?: string
     taskID?: string
     sessionID?: string
     signal?: AbortSignal
@@ -44,6 +47,7 @@ export namespace RequirementsService {
     log.info("requirements service starting", {
       taskID: input.taskID,
       title: input.title,
+      hasDesignSpec: !!input.designSpec,
     })
 
     const start = Date.now()
@@ -52,6 +56,7 @@ export namespace RequirementsService {
         title: input.title,
         request: input.request,
         attachments: input.attachments,
+        designSpec: input.designSpec,
         taskID: input.taskID,
         sessionID: input.sessionID,
         signal: input.signal,
@@ -107,6 +112,7 @@ export namespace RequirementsService {
     title: string
     request: string
     attachments?: Array<{ sha: string; url: string; mime: string; size: number; filename?: string }>
+    designSpec?: string
     taskID?: string
     sessionID?: string
     retryContext: RequirementsRetryContext
@@ -118,6 +124,7 @@ export namespace RequirementsService {
     log.info("requirements retry starting", {
       taskID: input.taskID,
       title: input.title,
+      hasDesignSpec: !!input.designSpec,
     })
 
     const start = Date.now()
@@ -126,6 +133,7 @@ export namespace RequirementsService {
         title: input.title,
         request: input.request,
         attachments: input.attachments,
+        designSpec: input.designSpec,
         taskID: input.taskID,
         sessionID: input.sessionID,
         signal: input.signal,

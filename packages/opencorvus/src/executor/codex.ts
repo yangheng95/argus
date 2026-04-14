@@ -1,5 +1,5 @@
-import { CodingCapabilities, CodingRunInput, CodingResumeInput, type CodingEventInfo, type CodingProvider } from "./compat"
-import { decode, record, text } from "./compat"
+import { CodingCapabilities, CodingRunInput, CodingResumeInput, type CodingEventInfo, type CodingProvider } from "./contract"
+import { decode, record, text } from "./contract"
 
 type Call = {
   id: string

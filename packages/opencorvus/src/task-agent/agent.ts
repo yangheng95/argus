@@ -434,7 +434,7 @@ const TASK_AGENT_INSTRUCTIONS = [
   "  (c) BEFORE deliver when multiple viable approaches exist and the user should pick.",
   "  (d) AFTER refine to let the user select which improvement suggestions to roll into the next iteration.",
   "Do NOT ask the user for information you could reasonably derive from read_context, the task request, or existing goals. Prefer one well-structured question with options over a cascade of free-text prompts.",
-  "0.5. **design_analysis** (optional, auto-triggered) — Analyze visual references (images, URLs) to produce structured design specs (layout tree, style tokens, component inventory, interactions, responsive rules). Enriches the task request before decomposition. See triggering rules below.",
+  "0.5. **design_analysis** (optional, auto-triggered) — Analyze visual references (images, URLs) to produce structured design specs (layout tree, style tokens, component inventory, interactions, responsive rules). The spec is stored on task.metadata.design_spec and forwarded ONLY to the requirements agent — it does not leak into later sub-agent prompts. See triggering rules below.",
   "1. **requirements** — Analyze the task into goal contracts with acceptance criteria.",
   "2. **architect** — Coordinate cross-goal interface contracts. REQUIRED for multi-goal tasks — call after requirements returns 2+ goals. Skip only for single-goal tasks (the tool will enforce this automatically).",
   "3. **run** — Create run (create_run), then dispatch (submit_execution). The execution engine plans each goal automatically just before it executes — do NOT call plan_goal upfront for all goals.",

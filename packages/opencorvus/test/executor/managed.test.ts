@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import { ClaudeCodeExecutor } from "../../src/executor/claude-code"
 import { CodexExecutor } from "../../src/executor/codex"
-import type { CodingEventInfo, CodingProvider } from "../../src/executor/compat"
+import type { CodingEventInfo, CodingProvider } from "../../src/executor/contract"
 import { ExecutorRegistry } from "../../src/executor/registry"
 
 function feed(items: unknown[], wait = 0): AsyncIterable<unknown> {

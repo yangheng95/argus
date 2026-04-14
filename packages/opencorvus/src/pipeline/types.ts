@@ -7,7 +7,7 @@
  */
 
 import type { GoalRunRow, PlanRow, RunRow, TaskRow, PlanNodeRow } from "@/orchestrator/store"
-import type { ExecutorAdapter } from "@/executor/compat"
+import type { ExecutorAdapter } from "@/executor/contract"
 import type { DecisionLog } from "@/decision-log"
 import type { AcceptanceSpec } from "@/acceptance/types"
 

@@ -1,4 +1,4 @@
-import { record, text, type CodingEventInfo, type CodingProvider } from "./compat"
+import { record, text, type CodingEventInfo, type CodingProvider } from "./contract"
 import { jsonLines } from "./external-process"
 
 export namespace CodexCLIExecutor {

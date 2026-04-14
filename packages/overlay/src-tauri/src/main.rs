@@ -9,7 +9,7 @@ use std::{
     process::{Child, Command, Stdio},
     sync::Mutex,
     thread,
-    time::{Duration, SystemTime, UNIX_EPOCH},
+    time::Duration,
 };
 
 #[cfg(windows)]
@@ -315,159 +315,6 @@ fn overlay_write_file(path: String, content: String) -> Result<bool, String> {
     }
     fs::write(p, content).map_err(|err| err.to_string())?;
     Ok(true)
-}
-
-#[tauri::command]
-fn overlay_create_temp_dir() -> Result<String, String> {
-    let root = std::env::temp_dir();
-    let stamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_err(|err| err.to_string())?
-        .as_millis();
-
-    for attempt in 0..64 {
-        let suffix = if attempt == 0 {
-            format!("{stamp}-{}", std::process::id())
-        } else {
-            format!("{stamp}-{}-{attempt}", std::process::id())
-        };
-        let path = root.join(format!("opencorvus-overlay-{suffix}"));
-        match fs::create_dir(&path) {
-            Ok(()) => return Ok(path.to_string_lossy().to_string()),
-            Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => continue,
-            Err(err) => return Err(err.to_string()),
-        }
-    }
-
-    Err("failed to create overlay temp directory".into())
-}
-
-// Caller-supplied path is validated to live under the system temp root AND to
-// carry the `opencorvus-overlay-` prefix, so a misuse can never delete an
-// arbitrary directory. Errors surface to the caller instead of being swallowed.
-#[tauri::command]
-fn overlay_release_temp_dir(path: String) -> Result<bool, String> {
-    let trimmed = path.trim();
-    if trimmed.is_empty() {
-        return Ok(false);
-    }
-    let target = PathBuf::from(trimmed);
-    let canonical_target = match fs::canonicalize(&target) {
-        Ok(p) => p,
-        Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(false),
-        Err(err) => return Err(err.to_string()),
-    };
-    let root = std::env::temp_dir();
-    let canonical_root = fs::canonicalize(&root).map_err(|err| err.to_string())?;
-    if !canonical_target.starts_with(&canonical_root) {
-        return Err(format!(
-            "refused: {} is not under temp root",
-            canonical_target.display()
-        ));
-    }
-    let name = canonical_target
-        .file_name()
-        .and_then(|n| n.to_str())
-        .unwrap_or("");
-    if !name.starts_with("opencorvus-overlay-") {
-        return Err(format!("refused: {} is not an overlay temp dir", name));
-    }
-    fs::remove_dir_all(&canonical_target).map_err(|err| err.to_string())?;
-    Ok(true)
-}
-
-// Sweep stale `opencorvus-overlay-*` directories left behind by previous overlay
-// runs. Runs synchronously at startup, BEFORE the Tauri event loop / WebView2
-// initialises — that way we never fight ourselves for file locks on Windows.
-//
-// Safety rails:
-//   - Only touches direct children of `std::env::temp_dir()` whose basename
-//     starts with `opencorvus-overlay-`.
-//   - Skips any directory whose basename contains the current process id —
-//     defensive against concurrent sibling startup that writes the same prefix
-//     (even though `overlay_create_temp_dir` is called later in the lifecycle).
-//   - Skips directories younger than `max_age` so that a currently-running
-//     sibling overlay's fresh temp dir is never raced.
-//   - Per-entry failure is logged and skipped; one locked directory must not
-//     abort the sweep. This is NOT a silent fallback — every failure is printed
-//     so the root cause can be diagnosed.
-fn sweep_orphan_overlay_temp_dirs(max_age: Duration) {
-    let root = std::env::temp_dir();
-    let entries = match fs::read_dir(&root) {
-        Ok(e) => e,
-        Err(err) => {
-            eprintln!("[overlay-temp-gc] read_dir {} failed: {err}", root.display());
-            return;
-        }
-    };
-    let now = SystemTime::now();
-    let my_pid = std::process::id().to_string();
-    let mut removed = 0usize;
-    let mut skipped = 0usize;
-    for entry in entries.flatten() {
-        let name = entry.file_name();
-        let name_str = match name.to_str() {
-            Some(s) => s,
-            None => continue,
-        };
-        if !name_str.starts_with("opencorvus-overlay-") {
-            continue;
-        }
-        if name_str.ends_with(&format!("-{my_pid}"))
-            || name_str.contains(&format!("-{my_pid}-"))
-        {
-            continue;
-        }
-        let metadata = match entry.metadata() {
-            Ok(m) => m,
-            Err(err) => {
-                eprintln!("[overlay-temp-gc] stat {} failed: {err}", name_str);
-                skipped += 1;
-                continue;
-            }
-        };
-        if !metadata.is_dir() {
-            continue;
-        }
-        let mtime = match metadata.modified() {
-            Ok(m) => m,
-            Err(_) => continue,
-        };
-        let age = match now.duration_since(mtime) {
-            Ok(d) => d,
-            Err(_) => continue,
-        };
-        if age < max_age {
-            continue;
-        }
-        let path = entry.path();
-        match fs::remove_dir_all(&path) {
-            Ok(()) => removed += 1,
-            Err(err) => {
-                eprintln!(
-                    "[overlay-temp-gc] remove {} failed: {err}",
-                    path.display()
-                );
-                skipped += 1;
-            }
-        }
-    }
-    if removed > 0 || skipped > 0 {
-        eprintln!(
-            "[overlay-temp-gc] removed={} skipped={} root={}",
-            removed,
-            skipped,
-            root.display()
-        );
-    }
-}
-
-fn overlay_temp_max_age() -> Duration {
-    let hours = std::env::var("OPENCORVUS_OVERLAY_TEMP_MAX_AGE_HOURS")
-        .ok()
-        .and_then(|s| s.trim().parse::<u64>().ok())
-        .unwrap_or(24);
-    Duration::from_secs(hours.saturating_mul(3600))
 }
 
 #[tauri::command]
@@ -1077,18 +924,6 @@ fn overlay_toggle_devtools<R: Runtime>(app: AppHandle<R>) -> Result<bool, String
 }
 
 fn main() {
-    // Run the stale-temp-dir sweep on a background thread so startup never
-    // blocks on hundreds of `remove_dir_all` calls. The sweep is read-only
-    // until it actually deletes a target, and every target is gated by the
-    // max-age + pid filter, so concurrent operation with the main thread is
-    // safe.
-    {
-        let max_age = overlay_temp_max_age();
-        thread::spawn(move || {
-            sweep_orphan_overlay_temp_dirs(max_age);
-        });
-    }
-
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
@@ -1100,8 +935,6 @@ fn main() {
             overlay_open_path,
             overlay_open_url,
             overlay_create_dir,
-            overlay_create_temp_dir,
-            overlay_release_temp_dir,
             overlay_write_file,
             overlay_pick_dir,
             overlay_pick_files,

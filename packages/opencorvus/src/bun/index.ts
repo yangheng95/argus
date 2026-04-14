@@ -93,7 +93,7 @@ export namespace BunProc {
       "add",
       "--force",
       "--exact",
-      // TODO: get rid of this case (see: https://github.com/oven-sh/bun/issues/19936)
+      // Workaround for bun issue oven-sh/bun#19936: --no-cache required under proxy/CI.
       ...(proxied() || process.env.CI ? ["--no-cache"] : []),
       "--cwd",
       Global.Path.cache,

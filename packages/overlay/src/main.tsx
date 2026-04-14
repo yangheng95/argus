@@ -79,7 +79,6 @@ import {
   browseDirectory,
   createDirectory,
   openDirectory,
-  resetDirectory,
   setDirectory,
   activeDirectory,
   loadRecentDirectories,
@@ -1457,7 +1456,6 @@ document.getElementById("taskDir")?.addEventListener("click", async (event) => {
   const action = el.dataset.pathAction || "";
   if (action === "browse") { await browseDirectory(); return; }
   if (action === "create") { await createDirectory(); return; }
-  if (action === "reset") { await resetDirectory(); return; }
   if (el.dataset.pathOpen) { await openDirectory(el.dataset.pathOpen); return; }
   const target = el.dataset.pathSet || "";
   if (!target) return;

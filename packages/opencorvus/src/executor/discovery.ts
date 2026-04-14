@@ -2,7 +2,7 @@ import os from "os"
 import path from "path"
 import fs from "fs"
 import { Process } from "@/util/process"
-import type { ExecutorNameInfo } from "./compat"
+import type { ExecutorNameInfo } from "./contract"
 import { which } from "@/util/which"
 
 type Found = {

@@ -171,7 +171,8 @@ export function applyFidelityCorrections(
     } else if (correction.action === "remove") {
       corrected = corrected.filter(g => g.id !== correction.goalID)
     }
-    // "split" is complex — we skip it for now and rely on missing goals
+    // "split" actions are not applied directly; the upstream fidelity pass lists
+    // the resulting sub-goals in missingGoals and they are added below.
   }
 
   // Add missing goals
