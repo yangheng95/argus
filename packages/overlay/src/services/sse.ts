@@ -89,3 +89,52 @@ export function stopSSE() {
   setSseConnected(false);
   clearEventQueue();
 }
+
+// ── Global task-list change stream ──
+// One long-lived EventSource connected to GET /task/events.
+// On every persisted task aggregate event, the server emits a tiny
+// {type, taskID, sequence} notification; we translate that into a
+// debounced loadTasks(). This closes the gap where status changes on
+// non-selected tasks (or new tasks created by other clients) would
+// otherwise only arrive via manual refresh.
+
+let taskListSource: EventSource | null = null;
+let taskListRetryTimer: any = null;
+
+export function startTaskListSSE() {
+  stopTaskListSSE();
+  const url = apiUrl("task/events");
+  const source = new EventSource(url);
+  taskListSource = source;
+  source.onmessage = (e) => {
+    try {
+      const event = JSON.parse(e.data);
+      if (event.type === "task-list.heartbeat" || event.type === "task-list.connected") return;
+      handleEventStreamEvent(event);
+    } catch {
+      // malformed — skip
+    }
+  };
+  source.onerror = () => {
+    if (source !== taskListSource) return;
+    if (source.readyState === EventSource.CLOSED) {
+      taskListSource = null;
+      if (taskListRetryTimer) clearTimeout(taskListRetryTimer);
+      taskListRetryTimer = setTimeout(() => {
+        taskListRetryTimer = null;
+        startTaskListSSE();
+      }, 3000);
+    }
+  };
+}
+
+export function stopTaskListSSE() {
+  if (taskListRetryTimer) {
+    clearTimeout(taskListRetryTimer);
+    taskListRetryTimer = null;
+  }
+  if (taskListSource) {
+    taskListSource.close();
+  }
+  taskListSource = null;
+}

@@ -189,6 +189,72 @@ export const OrchestratorRoutes = lazy(() =>
       },
     )
     .get(
+      "/task/events",
+      describeRoute({
+        summary: "Subscribe to global task-list change notifications",
+        description:
+          "Pure change-notification SSE for the task list sidebar. Emits " +
+          "`{type, taskID, sequence}` whenever any task aggregate event is " +
+          "persisted (created/updated/completed/failed/cancelled/...). No " +
+          "replay — clients call /task separately to fetch the refreshed list.",
+        operationId: "task.list.events",
+        responses: {
+          200: {
+            description: "Task-list change stream",
+            content: {
+              "text/event-stream": {
+                schema: resolver(
+                  z.object({
+                    type: z.string(),
+                    taskID: z.string().nullable(),
+                    sequence: z.number(),
+                  }),
+                ),
+              },
+            },
+          },
+        },
+      }),
+      async (c) => {
+        c.header("X-Accel-Buffering", "no")
+        c.header("X-Content-Type-Options", "nosniff")
+        return streamSSE(c, async (stream) => {
+          let writes = Promise.resolve()
+          const writeData = (data: string) => {
+            writes = writes.then(() => stream.writeSSE({ data }))
+            return writes
+          }
+          const stop = ProtocolStore.subscribeEvents(
+            (event) => {
+              const payload = JSON.stringify({
+                type: event.type,
+                taskID: event.taskID ?? null,
+                sequence: event.sequence,
+              })
+              void writeData(payload)
+            },
+            { aggregate: "task" },
+          )
+          await writeData(
+            JSON.stringify({ type: "task-list.connected", taskID: null, sequence: 0 }),
+          )
+          const heartbeat = setInterval(() => {
+            void writeData(
+              JSON.stringify({ type: "task-list.heartbeat", taskID: null, sequence: 0 }),
+            )
+          }, 10_000)
+          await new Promise<void>((resolve) => {
+            stream.onAbort(() => {
+              clearInterval(heartbeat)
+              stop()
+              resolve()
+            })
+          })
+          await writes
+        })
+      },
+    )
+    .get(
       "/task/:taskID/events",
       describeRoute({
         summary: "Subscribe to task events",
