@@ -328,13 +328,21 @@ export async function evaluateGoal(input: {
   }
 
   // ── 7. Verdict aggregation by mode (severity) ──
+  // If no scorers ran at all, the goal contract is malformed: the schema
+  // mandates `acceptance_specs.min(1)` (goal-contract.schema.ts), so reaching
+  // here means a producer wrote a goal with empty specs AND project discovery
+  // found no fallback build/test command. Returning pass-by-default would
+  // hide a configuration bug — explicitly reject so the operator notices.
   if (results.length === 0) {
     return {
-      pass: true,
-      verdict: "accepted",
-      evidence: ["No acceptance specs and no discoverable commands — pass by default."],
-      evidenceStatus: [undefined],
-      reasoning: "Goal has no scorers to evaluate.",
+      pass: false,
+      verdict: "rejected",
+      evidence: ["Goal has no acceptance scorers and no discoverable build/test commands."],
+      evidenceStatus: ["failed"],
+      reasoning:
+        "Cannot evaluate this goal — its acceptance_specs are empty and project discovery found nothing to run. " +
+        "Re-run requirements (or add specs via add_goal/modify_goal) before retrying.",
+      failureClass: "goal_wrong",
     }
   }
 

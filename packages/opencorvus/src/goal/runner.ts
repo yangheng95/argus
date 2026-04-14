@@ -350,7 +350,8 @@ export function buildGoalPrompt(input: {
   goal: GoalRow
   taskRequest?: string
   taskID?: string
-  allGoals?: GoalRow[]
+  /** Direct dependencies only — caller already filtered by goal.depends_on. */
+  dependencies?: GoalRow[]
   cwd?: string
 }) {
   const meta = dict(input.node.metadata)
@@ -363,18 +364,16 @@ export function buildGoalPrompt(input: {
   const allowedPaths = allowedRequestPaths(input.taskRequest ?? "")
   // Extract owned_paths and dependency context from goal metadata
   const ownedPaths = Array.isArray(goalMeta.owned_paths) ? goalMeta.owned_paths as string[] : []
-  const dependsOnIds = Array.isArray(goalMeta.depends_on_goal_ids) ? goalMeta.depends_on_goal_ids as string[] : []
-  const dependencyContext = dependsOnIds.length > 0 && input.allGoals
-    ? dependsOnIds
-        .map((id) => input.allGoals!.find((g) => g.id === id))
-        .filter(Boolean)
-        .map((g) => `- "${g!.title}" (completed, output in your workspace)`)
+  const dependencyContext = input.dependencies && input.dependencies.length > 0
+    ? input.dependencies
+        .map((g) => `- "${g.title}" (completed, output in your workspace)`)
         .join("\n")
     : ""
   // Include architect consensus from Decision Log (interface contracts, directory blueprint, naming conventions).
   // Only populated when Task Agent called architect(); empty string if skipped (single goal / simple task).
+  // Goal-scoped read: peer goals' private architect notes do not bleed into this executor's prompt.
   const architectConsensus = input.taskID
-    ? createDecisionLog(input.taskID).phasePromptSection("architect", "Architect Consensus")
+    ? createDecisionLog(input.taskID).phasePromptSectionForGoal("architect", input.goal.id, "Architect Consensus")
     : ""
 
   // Retry feedback: surfaces the latest rejected evaluation + Task Agent's

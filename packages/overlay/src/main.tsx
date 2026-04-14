@@ -455,19 +455,43 @@ function installGoalFormHandlers(): void {
     if (!boardStore.selectedTaskID) return;
     const goalID = (document.getElementById("goalId") as HTMLInputElement | null)?.value.trim() || "";
     const title = (document.getElementById("goalDescription") as HTMLTextAreaElement | null)?.value.trim() || "";
-    const doneDefinition = (document.getElementById("goalCriteria") as HTMLTextAreaElement | null)?.value.trim() || "";
+    const acceptanceText = (document.getElementById("goalCriteria") as HTMLTextAreaElement | null)?.value.trim() || "";
     if (!title) return;
 
     try {
       if (goalID) {
+        // The backend's UpdateGoalInput requires acceptance_specs[].min(1).
+        // Wrap the operator's free-text criterion into a single essential
+        // llm_judge spec — same shape that addOperatorGoal synthesizes when
+        // an operator-defined goal arrives without structured specs. We
+        // intentionally keep the form simple (one textarea) rather than
+        // expose the full spec editor; richer authoring belongs to the
+        // requirements agent's structured tools.
+        const fallbackCriterion = "The requested change is implemented and acceptance checks pass.";
+        const criterion = acceptanceText || fallbackCriterion;
+        const acceptanceSpec = {
+          id: `acc-operator-${goalID}-${Date.now()}`,
+          source_requirement_id: "operator",
+          goal_id: goalID,
+          title: title.slice(0, 80),
+          severity: "essential",
+          scorers: [
+            {
+              type: "llm_judge",
+              name: "operator-acceptance",
+              criteria: criterion,
+              inputs: ["delivery_summary", "changed_files"],
+            },
+          ],
+        };
         await panelMessage(`Update goal ${goalID}.`, {
           goalID,
-          title,
-          done_definition: doneDefinition || "The requested change is implemented and acceptance checks pass.",
+          description: title,
+          acceptance_specs: [acceptanceSpec],
           taskID: boardStore.selectedTaskID || undefined,
         });
       } else {
-        const payload = doneDefinition ? `/goal ${title}\nCriteria: ${doneDefinition}` : `/goal ${title}`;
+        const payload = acceptanceText ? `/goal ${title}\nAcceptance: ${acceptanceText}` : `/goal ${title}`;
         await panelMessage(payload, {
           taskID: boardStore.selectedTaskID || undefined,
         });

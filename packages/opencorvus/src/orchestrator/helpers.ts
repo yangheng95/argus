@@ -71,9 +71,19 @@ export function effectiveMaxExecutorGroups(task: TaskRow): number {
 }
 
 /**
+ * Per-note content cap. Operator notes are free-text; a long pasted log or
+ * multi-page instruction here would balloon every sub-agent prompt that
+ * includes this section. We trim individual notes and surface an "[N chars
+ * omitted]" marker so the operator can see truncation occurred without
+ * silently dropping intent.
+ */
+const OPERATOR_NOTE_CHAR_CAP = 1000
+
+/**
  * Query operator notes for a task and format as a prompt section.
  * Returns "" if no notes exist.
  */
+
 export function operatorNotesSection(taskID: string): string {
   const notes = Database.use((db) =>
     db
@@ -87,7 +97,12 @@ export function operatorNotesSection(taskID: string): string {
   if (notes.length === 0) return ""
   const items = notes
     .reverse()
-    .map((n) => `- [${new Date(n.time_created).toISOString()}] ${n.content}`)
+    .map((n) => {
+      const body = n.content.length > OPERATOR_NOTE_CHAR_CAP
+        ? n.content.slice(0, OPERATOR_NOTE_CHAR_CAP) + `… [${n.content.length - OPERATOR_NOTE_CHAR_CAP} chars omitted]`
+        : n.content
+      return `- [${new Date(n.time_created).toISOString()}] ${body}`
+    })
     .join("\n")
   return `\n\n## Operator Notes\n\nThe following messages were sent by the operator during task execution. Incorporate these instructions into your analysis and decisions.\n\n${items}\n`
 }
@@ -100,6 +115,18 @@ export function operatorNotesSection(taskID: string): string {
  *
  * Returns "" when no answered question interactions exist.
  */
+/**
+ * Caps for clarification transcript. Every sub-agent (task-agent,
+ * requirements, architect, delivery, per-goal planner) reads this section
+ * into its own system prompt; an unbounded transcript would get multiplied
+ * across N parallel prompts and amplify token cost linearly in both
+ * question count and active sub-agent count. We keep the most recent
+ * questions (operators usually refine over time, latest is authoritative)
+ * and trim per-entry question/answer text.
+ */
+const CLARIFICATION_MAX_ENTRIES = 30
+const CLARIFICATION_QA_CHAR_CAP = 800
+
 export function clarificationTranscriptSection(taskID: string): string {
   const rows = Database.use((db) =>
     db
@@ -117,6 +144,10 @@ export function clarificationTranscriptSection(taskID: string): string {
   )
   if (rows.length === 0) return ""
   const entries: string[] = []
+  const trim = (s: string) =>
+    s.length > CLARIFICATION_QA_CHAR_CAP
+      ? s.slice(0, CLARIFICATION_QA_CHAR_CAP) + `… [${s.length - CLARIFICATION_QA_CHAR_CAP} chars omitted]`
+      : s
   for (const row of rows) {
     const payload = (row.payload ?? {}) as Record<string, unknown>
     const response = (row.response ?? {}) as Record<string, unknown>
@@ -133,10 +164,16 @@ export function clarificationTranscriptSection(taskID: string): string {
         : typeof raw === "string"
           ? raw
           : ""
-      entries.push(`- Q: ${questionText}\n  A: ${answerText || "(no answer)"}`)
+      entries.push(`- Q: ${trim(questionText)}\n  A: ${trim(answerText) || "(no answer)"}`)
     }
   }
   if (entries.length === 0) return ""
+  // Keep the most recent N entries; transcripts are ordered ascending by
+  // time_resolved so the tail is most recent. Drop older entries with an
+  // explicit count so the operator sees the cap is biting.
+  const omitted = entries.length - CLARIFICATION_MAX_ENTRIES
+  const shown = omitted > 0 ? entries.slice(-CLARIFICATION_MAX_ENTRIES) : entries
+  if (omitted > 0) shown.unshift(`- (${omitted} older Q&A entries omitted — they are superseded by the more recent ones below)`)
   return [
     "",
     "",
@@ -145,7 +182,7 @@ export function clarificationTranscriptSection(taskID: string): string {
     "The operator has already answered these questions for this task. Treat the answers",
     "as authoritative requirements. Do NOT ask the user again; build on them directly.",
     "",
-    entries.join("\n"),
+    shown.join("\n"),
     "",
   ].join("\n")
 }

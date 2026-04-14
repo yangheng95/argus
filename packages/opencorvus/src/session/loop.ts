@@ -15,6 +15,7 @@ import { Plugin } from "../plugin"
 import MAX_STEPS from "../session/prompt/max-steps.txt"
 import { defer } from "../util/defer"
 import { ToolRegistry } from "../tool/registry"
+import { Env } from "../env"
 import { MCP } from "../mcp"
 import { ulid } from "ulid"
 import { NamedError } from "@opencorvus-ai/util/error"
@@ -378,19 +379,70 @@ export namespace SessionLoop {
       .map((part) => part.text)
       .join(" ")
       .trim()
+    // Live session-state blocks. These change between turns (memory hits depend
+    // on query, scratchpad mutates, taskplan tracks progress). Until 2026-04
+    // they were pushed onto `system` after the cached entries (env, TUI), but
+    // applyCaching only puts cache_control on the first 2 system messages —
+    // anything after lives inside the second cache breakpoint, which spans
+    // the rest of system + all messages. Mutating any of these blocks
+    // therefore invalidated the entire prefix every turn, costing fresh
+    // cache_creation tokens for the full system + message history. Keeping
+    // them out of `system` and prepending them as a synthetic preamble to
+    // the latest user message means: (1) `system` stays byte-identical
+    // across turns and gets cached once per hour, (2) only the tail
+    // breakpoint absorbs the per-turn delta — exactly what the 5m TTL is
+    // for. We label the preamble with explicit fences so the model knows
+    // it's session state injected by the runtime, not user content.
     const memoryInstruction = await MemoryInjection.systemPromptSection({
       projectID: Instance.project.id,
       sessionID: input.sessionID,
       query: memoryQuery || input.session.title || input.lastUser.id,
     })
-    if (memoryInstruction) system.push(memoryInstruction)
     const scratchpadSection = Scratchpad.systemPromptSection(input.sessionID)
-    if (scratchpadSection) system.push(scratchpadSection)
     const taskPlanSection = TaskPlan.toMarkdown(input.sessionID)
-    if (taskPlanSection) system.push(taskPlanSection)
+    const dynamicContextBlocks = [memoryInstruction, scratchpadSection, taskPlanSection]
+      .filter((s): s is string => typeof s === "string" && s.trim().length > 0)
+    const dynamicContextText = dynamicContextBlocks.length > 0
+      ? [
+          "<session-state>",
+          "These blocks are runtime-injected views of long-lived session state",
+          "(retrieved memory, scratchpad notes, current task plan). They are",
+          "not new user instructions — treat them as background context.",
+          "",
+          dynamicContextBlocks.join("\n\n"),
+          "</session-state>",
+        ].join("\n")
+      : ""
+
+    const baseModelMessages = Message.toModelMessages(input.msgs, input.model)
+    if (dynamicContextText) {
+      // Prepend to the LAST user message's text content so the live state sits
+      // adjacent to the request the model is responding to. This keeps the
+      // earlier conversation history (and its system prefix) byte-stable for
+      // the prefix cache; only the last user message — which is part of the
+      // 5m tail breakpoint anyway — absorbs the per-turn delta.
+      for (let i = baseModelMessages.length - 1; i >= 0; i--) {
+        const msg = baseModelMessages[i]
+        if (msg.role !== "user") continue
+        if (typeof msg.content === "string") {
+          msg.content = `${dynamicContextText}\n\n${msg.content}`
+        } else if (Array.isArray(msg.content)) {
+          const firstTextIdx = msg.content.findIndex(
+            (p): p is { type: "text"; text: string } => typeof p === "object" && p !== null && (p as any).type === "text",
+          )
+          if (firstTextIdx >= 0) {
+            const part = msg.content[firstTextIdx] as { type: "text"; text: string }
+            msg.content[firstTextIdx] = { ...part, text: `${dynamicContextText}\n\n${part.text}` }
+          } else {
+            msg.content = [{ type: "text", text: dynamicContextText }, ...msg.content]
+          }
+        }
+        break
+      }
+    }
 
     const modelMessages = [
-      ...Message.toModelMessages(input.msgs, input.model),
+      ...baseModelMessages,
       ...(isLastStep
         ? [
             {
@@ -401,50 +453,99 @@ export namespace SessionLoop {
         : []),
     ]
 
-    {
-      const systemChars = system.reduce((sum, s) => sum + s.length, 0)
-      const systemTokensEst = Math.round(systemChars / 4)
-      const toolCount = Object.keys(tools).length
-      let userMsgCount = 0
-      let assistantMsgCount = 0
-      let totalContentChars = 0
-      let imageCount = 0
-      let toolCallCount = 0
+    const systemChars = system.reduce((sum, s) => sum + s.length, 0)
+    const systemTokensEst = Math.round(systemChars / 4)
+    const toolCount = Object.keys(tools).length
+    let userMsgCount = 0
+    let assistantMsgCount = 0
+    let totalContentChars = 0
+    let imageCount = 0
+    let toolCallCount = 0
 
-      for (const msg of modelMessages) {
-        if (msg.role === "user") userMsgCount++
-        if (msg.role === "assistant") assistantMsgCount++
+    for (const msg of modelMessages) {
+      if (msg.role === "user") userMsgCount++
+      if (msg.role === "assistant") assistantMsgCount++
 
-        if (typeof msg.content === "string") {
-          totalContentChars += msg.content.length
-        } else if (Array.isArray(msg.content)) {
-          for (const part of msg.content) {
-            if ("text" in part && typeof part.text === "string") totalContentChars += part.text.length
-            if ("type" in part && part.type === "image") imageCount++
-            if ("type" in part && part.type === "tool-result") toolCallCount++
-          }
+      if (typeof msg.content === "string") {
+        totalContentChars += msg.content.length
+      } else if (Array.isArray(msg.content)) {
+        for (const part of msg.content) {
+          if ("text" in part && typeof part.text === "string") totalContentChars += part.text.length
+          if ("type" in part && part.type === "image") imageCount++
+          if ("type" in part && part.type === "tool-result") toolCallCount++
         }
       }
+    }
 
-      const contentTokensEst = Math.round(totalContentChars / 4)
-      const imageTokensEst = imageCount * 1600
-      log.info("context-diagnostics", {
-        step: input.step,
-        systemPromptParts: system.length,
-        systemChars,
-        systemTokensEst,
-        toolCount,
-        toolNames: Object.keys(tools).join(","),
-        messageCount: modelMessages.length,
-        userMsgCount,
-        assistantMsgCount,
-        totalContentChars,
-        contentTokensEst,
-        imageCount,
-        imageTokensEst,
-        toolCallCount,
-        totalTokensEst: systemTokensEst + contentTokensEst + imageTokensEst,
-      })
+    const contentTokensEst = Math.round(totalContentChars / 4)
+    const imageTokensEst = imageCount * 1600
+    const totalTokensEst = systemTokensEst + contentTokensEst + imageTokensEst
+    log.info("context-diagnostics", {
+      step: input.step,
+      systemPromptParts: system.length,
+      systemChars,
+      systemTokensEst,
+      toolCount,
+      toolNames: Object.keys(tools).join(","),
+      messageCount: modelMessages.length,
+      userMsgCount,
+      assistantMsgCount,
+      totalContentChars,
+      contentTokensEst,
+      imageCount,
+      imageTokensEst,
+      toolCallCount,
+      totalTokensEst,
+    })
+
+    // ── Predictive compaction ────────────────────────────────────────────────
+    // Decide whether the *next* LLM call would exceed the model's input budget
+    // BEFORE we issue it. The historical compaction trigger only inspected
+    // `lastFinished.tokens` *after* a turn returned, which means the offending
+    // call had already burned the context window. We instead skip this turn
+    // and queue a compaction message; the outer loop will pick it up on the
+    // next iteration and the post-compaction continuation re-enters with a
+    // shrunk history.
+    //
+    // Threshold defaults to 0.90 of the model's reported input budget — late
+    // enough that the prompt-cache prefix stays stable for most of a session
+    // (compacting earlier rewrites the prefix and forces cache_write at 12.5×
+    // the cache_read rate, which dominates any token-count savings). Claude
+    // Code uses 0.95; we leave a touch more headroom for tool-call burst.
+    // Override via env for benchmarks. `lastFinished.summary === true` means
+    // the previous turn was already a compaction summary — skip the predictive
+    // trigger so we don't loop forever compacting an already-compact session.
+    // When neither model.limit.input nor model.limit.context is reported
+    // (provider/model registry incomplete), fall back to a conservative
+    // 100 K-token assumption rather than disabling predictive compaction
+    // entirely. 100 K is the smallest published context across major modern
+    // models, so the trigger is correct-on-the-safe-side until the model
+    // catalog is updated.
+    const PREDICTIVE_FALLBACK_BUDGET = 100_000
+    const usableBudget =
+      input.model.limit.input
+      || input.model.limit.context
+      || PREDICTIVE_FALLBACK_BUDGET
+    if (input.lastFinished?.summary !== true) {
+      const envThreshold = Number(Env.get("OPENCORVUS_COMPACTION_PREDICTIVE_THRESHOLD") ?? "")
+      const threshold = Number.isFinite(envThreshold) && envThreshold > 0 && envThreshold <= 1 ? envThreshold : 0.9
+      const limit = Math.floor(usableBudget * threshold)
+      if (totalTokensEst > limit) {
+        log.warn("predictive-compaction-triggered", {
+          step: input.step,
+          totalTokensEst,
+          limit,
+          threshold,
+          usableBudget,
+        })
+        await SessionCompaction.create({
+          sessionID: input.sessionID,
+          agent: input.lastUser.agent,
+          model: input.lastUser.model,
+          auto: true,
+        })
+        return "continue" as const
+      }
     }
 
     const result = await processor.process({

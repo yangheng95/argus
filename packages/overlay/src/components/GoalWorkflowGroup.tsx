@@ -52,14 +52,42 @@ interface GoalStep {
   payload?: GoalStepPayload;
 }
 
+interface AcceptanceScorerLike {
+  type?: string;
+  name?: string;
+  criteria?: string;
+  spec?: { kind?: string; cmd?: string; path?: string };
+}
+
+interface AcceptanceSpecLike {
+  id?: string;
+  title?: string;
+  severity?: string;
+  scorers?: AcceptanceScorerLike[];
+}
+
 interface GoalWorkflow {
   goalID: string;
   goalTitle: string;
   goalStatus: string;
-  /** Verifiable pass/fail criteria — what "done" means for this goal. */
-  doneDefinition?: string;
+  /** Typed acceptance specs from the backend (board.ts). */
+  acceptanceSpecs?: AcceptanceSpecLike[];
   priority: "blocking" | "advisory";
   steps: GoalStep[];
+}
+
+/** Reduce an AcceptanceSpec[] to a single short human-readable line for the
+ *  per-goal panel preview and the goal-edit textarea seed. We pick the first
+ *  scorer's criteria/command so operators see the most actionable signal. */
+function previewAcceptance(specs: AcceptanceSpecLike[] | undefined): string {
+  if (!Array.isArray(specs) || specs.length === 0) return "";
+  const first = specs[0];
+  const scorer = first.scorers?.[0];
+  if (!scorer) return first.title ?? "";
+  if (scorer.type === "llm_judge" && scorer.criteria) return scorer.criteria;
+  if (scorer.type === "heuristic" && scorer.spec?.kind === "shell" && scorer.spec.cmd) return scorer.spec.cmd;
+  if (scorer.type === "heuristic" && scorer.spec?.kind === "script_ref" && scorer.spec.path) return scorer.spec.path;
+  return first.title ?? "";
 }
 
 interface GoalWorkflowGroupProps {
@@ -334,7 +362,7 @@ export function GoalWorkflowGroup(props: GoalWorkflowGroupProps) {
               props.onEditGoal!(
                 props.goal.goalID,
                 props.goal.goalTitle,
-                props.goal.doneDefinition ?? "",
+                previewAcceptance(props.goal.acceptanceSpecs),
               );
             }}
           >
@@ -358,12 +386,12 @@ export function GoalWorkflowGroup(props: GoalWorkflowGroupProps) {
       </div>
       <Show when={expanded()}>
         <div class="gwg-body">
-          <Show when={props.goal.doneDefinition}>
+          <Show when={previewAcceptance(props.goal.acceptanceSpecs)}>
             <div class="gwg-done-definition">
               <div class="gwg-done-definition-label">
-                {t("goal.field.done_definition")}
+                {t("goal.field.acceptance")}
               </div>
-              <div class="gwg-done-definition-text">{props.goal.doneDefinition}</div>
+              <div class="gwg-done-definition-text">{previewAcceptance(props.goal.acceptanceSpecs)}</div>
             </div>
           </Show>
           <For each={props.goal.steps}>

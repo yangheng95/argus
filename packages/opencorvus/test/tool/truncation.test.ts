@@ -7,11 +7,29 @@ import path from "path"
 
 const FIXTURES_DIR = path.join(import.meta.dir, "fixtures")
 
+// Truncate.output now refuses to silently lose data: an agent without the
+// `task` tool or both `read`+`grep` has no way to re-fetch the saved file,
+// so calling Truncate from such an agent is a CLAUDE.md rule #1 violation
+// and throws. Tests that exercise the truncation logic itself supply an
+// agent that owns task permission to satisfy the recovery-path contract.
+const AGENT_WITH_TASK = {
+  name: "test-agent",
+  permission: [{ permission: "task", pattern: "*", action: "allow" as const }],
+} as any
+
+const AGENT_WITH_READ_GREP = {
+  name: "test-agent-rg",
+  permission: [
+    { permission: "read", pattern: "*", action: "allow" as const },
+    { permission: "grep", pattern: "*", action: "allow" as const },
+  ],
+} as any
+
 describe("Truncate", () => {
   describe("output", () => {
     test("truncates large json file by bytes", async () => {
       const content = await Filesystem.readText(path.join(FIXTURES_DIR, "models-api.json"))
-      const result = await Truncate.output(content)
+      const result = await Truncate.output(content, {}, AGENT_WITH_TASK)
 
       expect(result.truncated).toBe(true)
       expect(result.content).toContain("truncated...")
@@ -28,7 +46,7 @@ describe("Truncate", () => {
 
     test("truncates by line count", async () => {
       const lines = Array.from({ length: 100 }, (_, i) => `line${i}`).join("\n")
-      const result = await Truncate.output(lines, { maxLines: 10 })
+      const result = await Truncate.output(lines, { maxLines: 10 }, AGENT_WITH_TASK)
 
       expect(result.truncated).toBe(true)
       expect(result.content).toContain("...90 lines truncated...")
@@ -36,15 +54,15 @@ describe("Truncate", () => {
 
     test("truncates by byte count", async () => {
       const content = "a".repeat(1000)
-      const result = await Truncate.output(content, { maxBytes: 100 })
+      const result = await Truncate.output(content, { maxBytes: 100 }, AGENT_WITH_TASK)
 
       expect(result.truncated).toBe(true)
       expect(result.content).toContain("truncated...")
     })
 
-    test("truncates from head by default", async () => {
+    test("truncates from head when explicitly requested", async () => {
       const lines = Array.from({ length: 10 }, (_, i) => `line${i}`).join("\n")
-      const result = await Truncate.output(lines, { maxLines: 3 })
+      const result = await Truncate.output(lines, { maxLines: 3, direction: "head" }, AGENT_WITH_TASK)
 
       expect(result.truncated).toBe(true)
       expect(result.content).toContain("line0")
@@ -53,9 +71,9 @@ describe("Truncate", () => {
       expect(result.content).not.toContain("line9")
     })
 
-    test("truncates from tail when direction is tail", async () => {
+    test("truncates from tail by default (most-relevant-info-last for logs/errors)", async () => {
       const lines = Array.from({ length: 10 }, (_, i) => `line${i}`).join("\n")
-      const result = await Truncate.output(lines, { maxLines: 3, direction: "tail" })
+      const result = await Truncate.output(lines, { maxLines: 3 }, AGENT_WITH_TASK)
 
       expect(result.truncated).toBe(true)
       expect(result.content).toContain("line7")
@@ -71,7 +89,7 @@ describe("Truncate", () => {
 
     test("large single-line file truncates with byte message", async () => {
       const content = await Filesystem.readText(path.join(FIXTURES_DIR, "models-api.json"))
-      const result = await Truncate.output(content)
+      const result = await Truncate.output(content, {}, AGENT_WITH_TASK)
 
       expect(result.truncated).toBe(true)
       expect(result.content).toContain("bytes truncated...")
@@ -80,7 +98,7 @@ describe("Truncate", () => {
 
     test("writes full output to file when truncated", async () => {
       const lines = Array.from({ length: 100 }, (_, i) => `line${i}`).join("\n")
-      const result = await Truncate.output(lines, { maxLines: 10 })
+      const result = await Truncate.output(lines, { maxLines: 10 }, AGENT_WITH_TASK)
 
       expect(result.truncated).toBe(true)
       expect(result.content).toContain("The tool call succeeded but the output was truncated")
@@ -93,6 +111,58 @@ describe("Truncate", () => {
       expect(written).toBe(lines)
     })
 
+    test("throws when truncation needed but agent has no recovery path (no task / no read+grep)", async () => {
+      const lines = Array.from({ length: 100 }, (_, i) => `line${i}`).join("\n")
+      // No agent passed → cannot recover the saved copy. Silent truncation
+      // here would be a CLAUDE.md rule #1 fallback. Surface the failure.
+      await expect(Truncate.output(lines, { maxLines: 10 })).rejects.toThrow(
+        /silently lose data/,
+      )
+    })
+
+    test("throws when agent explicitly denies all recovery tools", async () => {
+      const lines = Array.from({ length: 100 }, (_, i) => `line${i}`).join("\n")
+      // Explicit deny on every recovery tool — no other ruleset overrides.
+      const denyAll = {
+        name: "deny-all",
+        permission: [
+          { permission: "task", pattern: "*", action: "deny" as const },
+          { permission: "read", pattern: "*", action: "deny" as const },
+          { permission: "grep", pattern: "*", action: "deny" as const },
+        ],
+      } as any
+      await expect(Truncate.output(lines, { maxLines: 10 }, denyAll)).rejects.toThrow(
+        /silently lose data/,
+      )
+    })
+
+    test("throws when no agent context is supplied at all", async () => {
+      const lines = Array.from({ length: 100 }, (_, i) => `line${i}`).join("\n")
+      // No agent → no permission ruleset → cannot prove recovery path exists.
+      // Per CLAUDE.md rule #1 we surface the failure rather than silently
+      // dropping the tail of the output.
+      await expect(Truncate.output(lines, { maxLines: 10 })).rejects.toThrow(
+        /silently lose data/,
+      )
+    })
+
+    test("permits truncation when agent has read AND grep but task is denied", async () => {
+      const lines = Array.from({ length: 100 }, (_, i) => `line${i}`).join("\n")
+      const rgOnly = {
+        name: "rg",
+        permission: [
+          { permission: "task", pattern: "*", action: "deny" as const },
+          { permission: "read", pattern: "*", action: "allow" as const },
+          { permission: "grep", pattern: "*", action: "allow" as const },
+        ],
+      } as any
+      const result = await Truncate.output(lines, { maxLines: 10 }, rgOnly)
+      expect(result.truncated).toBe(true)
+      expect(result.content).toContain("Grep")
+      // No "Task tool" hint when task is denied
+      expect(result.content).not.toContain("Task tool")
+    })
+
     test("suggests Task tool when agent has task permission", async () => {
       const lines = Array.from({ length: 100 }, (_, i) => `line${i}`).join("\n")
       const agent = { permission: [{ permission: "task", pattern: "*", action: "allow" as const }] }
@@ -103,9 +173,16 @@ describe("Truncate", () => {
       expect(result.content).toContain("Task tool")
     })
 
-    test("omits Task tool hint when agent lacks task permission", async () => {
+    test("omits Task tool hint when agent has read+grep but task is denied", async () => {
       const lines = Array.from({ length: 100 }, (_, i) => `line${i}`).join("\n")
-      const agent = { permission: [{ permission: "task", pattern: "*", action: "deny" as const }] }
+      const agent = {
+        name: "rg-only",
+        permission: [
+          { permission: "task", pattern: "*", action: "deny" as const },
+          { permission: "read", pattern: "*", action: "allow" as const },
+          { permission: "grep", pattern: "*", action: "allow" as const },
+        ],
+      }
       const result = await Truncate.output(lines, { maxLines: 10 }, agent as any)
 
       expect(result.truncated).toBe(true)

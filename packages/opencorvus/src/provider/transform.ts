@@ -167,7 +167,24 @@ export namespace ProviderTransform {
   }
 
   function applyCaching(msgs: ModelMessage[], model: Provider.Model): ModelMessage[] {
-    const system = msgs.filter((msg) => msg.role === "system").slice(0, 2)
+    // Anthropic allows up to 4 cache_control breakpoints per request. Layout:
+    //   1. system[0]        — env/model header (stable per session)
+    //   2. system[last]     — last system message; covers the WHOLE system
+    //                          tail (skills, instructions, structured-output
+    //                          rules) at 1h TTL. Without this breakpoint the
+    //                          stable middle of system would only get the
+    //                          5m TTL coverage from breakpoint #3.
+    //   3. messages[-2]     — second-to-last user/assistant message at 5m
+    //   4. messages[-1]     — last user/assistant message at 5m
+    // When system has only 1-2 entries, the system slice naturally collapses
+    // (deduped via a Set below) so we don't waste budget.
+    const allSystem = msgs.filter((msg) => msg.role === "system")
+    const systemEdges =
+      allSystem.length === 0
+        ? []
+        : allSystem.length === 1
+          ? [allSystem[0]]
+          : [allSystem[0], allSystem[allSystem.length - 1]]
     const final = msgs.filter((msg) => msg.role !== "system").slice(-2)
 
     // System messages use 1h TTL — they are stable across tool-loop steps and
@@ -203,9 +220,9 @@ export namespace ProviderTransform {
       },
     }
 
-    const systemSet: Set<ModelMessage> = new Set(system)
+    const systemSet: Set<ModelMessage> = new Set(systemEdges)
 
-    for (const msg of unique([...system, ...final])) {
+    for (const msg of unique([...systemEdges, ...final])) {
       const opts = systemSet.has(msg) ? systemOptions : tailOptions
       const useMessageLevelOptions = model.providerID === "anthropic" || model.providerID.includes("bedrock")
       const shouldUseContentOptions = !useMessageLevelOptions && Array.isArray(msg.content) && msg.content.length > 0

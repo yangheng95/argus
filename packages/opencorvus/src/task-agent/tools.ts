@@ -19,6 +19,7 @@ import { Publisher } from "@/orchestrator/publisher"
 import { OrchestratorGit } from "@/orchestrator/git"
 import { OrchestratorMemoryBridge } from "@/orchestrator/memory-bridge"
 import { sessionStreamHooks } from "@/agent/runtime"
+import { SubAgentProtocol } from "@/agent/sub-agent-protocol"
 import { withStageRetry } from "@/orchestrator/strategy"
 import { Event as OrchestratorEvent } from "@/orchestrator/model"
 import { OrchestratorConfig } from "@/orchestrator/config"
@@ -57,8 +58,21 @@ const log = Log.create({ service: "task-tools" })
 // Helpers (from pipeline.ts)
 // ---------------------------------------------------------------------------
 
-/** Build a GoalContract from DB rows for use by per-goal tools. */
+/**
+ * Build a GoalContract from DB rows for use by per-goal tools.
+ *
+ * `dependencies` is filtered down to the goals that THIS goal directly
+ * declares in `depends_on` — passing all sibling goals (the previous
+ * shape) bloated every executor/planner prompt with N-1 irrelevant
+ * contracts and was the single biggest contributor to per-goal token
+ * inflation. Sibling exports beyond direct dependencies belong in the
+ * Decision Log, not in every contract.
+ */
 function buildGoalContract(task: any, goal: any, allGoals: any[]): import("@/pipeline/types").GoalContract {
+  const dependsOnIds: string[] = Array.isArray(goal.depends_on) ? goal.depends_on : []
+  const dependencyRows = dependsOnIds.length > 0
+    ? allGoals.filter((g) => dependsOnIds.includes(g.id))
+    : []
   return {
     goal: {
       id: goal.id,
@@ -77,7 +91,7 @@ function buildGoalContract(task: any, goal: any, allGoals: any[]): import("@/pip
     run: { id: task.active_run_id ?? "", task_id: task.id } as any,
     task,
     plan: { id: task.active_plan_version_id ?? "" } as any,
-    allGoals: allGoals.map(g => ({
+    dependencies: dependencyRows.map(g => ({
       id: g.id, title: g.title, objective: g.objective,
       acceptance_specs: (g.acceptance_specs ?? []) as AcceptanceSpec[],
       owned_paths: g.owned_paths ?? [], depends_on: g.depends_on ?? [],
@@ -93,6 +107,12 @@ function stageTimeout(stage: "requirements" | "goal" | "plan"): number {
   const defaults = { requirements: 300_000, goal: 180_000, plan: 300_000 }
   return parseInt(process.env[env[stage]] || String(defaults[stage]), 10)
 }
+
+// Re-export the stateful-tool registry (defined in a dependency-free module
+// so `session/message.ts` can import it without creating a circular graph
+// through `@/session`). Surfacing it from this module keeps it visible to
+// developers reading tool definitions.
+export { STATEFUL_SNAPSHOT_TOOL_NAMES, type StatefulSnapshotToolName } from "./stateful-tool-names"
 
 // ---------------------------------------------------------------------------
 // Tool factory
@@ -393,7 +413,18 @@ export function createTaskAgentTools(input: {
           const nextStep = result.goals.length > 1
             ? "NEXT: call architect to coordinate cross-goal contracts, then create_run + submit_execution."
             : "NEXT: call create_run then submit_execution to start goal execution."
-          return `SUCCESS: ${result.goals.length} goals created. ${nextStep}\n\nSummary: ${result.summary}.\nDecisions: ${result.decisions.map(d => `${d.key}=${d.value}`).join(", ")}`
+          // Sub-agent → caller boundary: yield a structured short conclusion.
+          // Full requirements / decisions live in the spec snapshot + decision
+          // log; the caller fetches them via read_context when needed.
+          return SubAgentProtocol.yieldResult({
+            headline: `SUCCESS: ${result.goals.length} goals created. ${nextStep}`,
+            summary: result.summary,
+            fields: [
+              ["decisions", result.decisions.map((d) => `${d.key}=${d.value}`)],
+              ["traceability_links", String(result.traceability.length)],
+            ],
+            pointer: `read_context scope=decisions, scope=goals (spec ${specSnapshotID})`,
+          })
         } finally {
           // No caller-level guard: AgentRuntime enforces progress/absolute timeouts.
         }
@@ -545,16 +576,20 @@ export function createTaskAgentTools(input: {
             components: analysis.components.length,
           })
 
-          return [
-            `SUCCESS: Design analysis complete.`,
-            `  ${analysis.layout.length} layout sections, ${analysis.tokens.length} style tokens,`,
-            `  ${analysis.components.length} components, ${analysis.interactions.length} interactions.`,
-            `  Design system: ${analysis.designSystem}`,
-            `  Recommended stack: ${analysis.techStack.join(", ")}`,
-            "",
-            "The design specification has been appended to the task request.",
-            "NEXT: proceed to requirements — the requirements agent will use the design spec to produce precise goals.",
-          ].join("\n")
+          return SubAgentProtocol.yieldResult({
+            headline:
+              "SUCCESS: Design analysis complete. The design specification has been appended to the task request. " +
+              "NEXT: proceed to requirements — the requirements agent will use the design spec to produce precise goals.",
+            fields: [
+              ["layout_sections", String(analysis.layout.length)],
+              ["style_tokens", String(analysis.tokens.length)],
+              ["components", String(analysis.components.length)],
+              ["interactions", String(analysis.interactions.length)],
+              ["design_system", analysis.designSystem],
+              ["recommended_stack", analysis.techStack],
+            ],
+            pointer: "task.request (enriched with full design spec)",
+          })
         } catch (err) {
           await hooks.flush()
           await trackStepComplete("design_analysis", undefined, true)
@@ -636,13 +671,18 @@ export function createTaskAgentTools(input: {
         await hooks.flush()
 
 
-        const summary = [
-          `Architect coordination complete: ${result.entriesWritten} contracts written to Decision Log.`,
-          result.blueprint.summary,
-          result.blueprint.contracts.length > 0
-            ? `Categories: ${[...new Set(result.blueprint.contracts.map(c => c.category))].join(", ")}`
-            : "",
-        ].filter(Boolean).join("\n")
+        // Sub-agent → caller boundary. Full blueprint prose is already
+        // persisted under the Decision Log (architect phase) and surfaces
+        // to per-goal executors via phasePromptSectionForGoal. The
+        // task-agent only needs a structured short ack.
+        const summary = SubAgentProtocol.yieldResult({
+          headline: `Architect coordination complete: ${result.entriesWritten} contracts written to Decision Log.`,
+          summary: result.blueprint.summary,
+          fields: result.blueprint.contracts.length > 0
+            ? [["categories", [...new Set(result.blueprint.contracts.map((c) => c.category))]]]
+            : [],
+          pointer: "read_context scope=decisions (architect phase entries)",
+        })
 
         await trackStepComplete("architect")
 
@@ -814,7 +854,7 @@ export function createTaskAgentTools(input: {
     }),
 
     query_failed_goals: tool({
-      description: "Query all currently failed goals with their delivery info. Returns structured data for each failed goal: title, owned_paths, acceptance_specs, latest delivery summary. Use this BEFORE calling retry_failed_goals to understand per-goal failure reasons.",
+      description: "Query all currently failed goals with their latest delivery info. Returns one block per failed goal (acceptance_specs truncated, only latest run). Use BEFORE retry_failed_goals to understand per-goal failure reasons.",
       inputSchema: z.object({}),
       execute: async () => {
         const dbGoals = listGoals(taskID)
@@ -823,19 +863,24 @@ export function createTaskAgentTools(input: {
         const { listGoalRunsByTask, findDeliveryByGoalRun } = await import("@/orchestrator/store")
         const goalRuns = listGoalRunsByTask(taskID)
         const sections: string[] = [`## Failed Goals (${failed.length})`]
+        const ACCEPTANCE_SPEC_CAP = 300
+        const DELIVERY_FILES_CAP = 10
         for (const goal of failed) {
           sections.push(`\n### ${goal.id}: ${goal.title}`)
-          sections.push(`- acceptance_specs:\n${renderSpecsAsText((goal.acceptance_specs ?? []) as AcceptanceSpec[]).slice(0, 600)}`)
+          sections.push(`- acceptance_specs:\n${renderSpecsAsText((goal.acceptance_specs ?? []) as AcceptanceSpec[]).slice(0, ACCEPTANCE_SPEC_CAP)}`)
           if (goal.owned_paths?.length) sections.push(`- owned_paths: ${goal.owned_paths.join(", ")}`)
-          // Show latest delivery info for this goal
-          const grs = goalRuns.filter(gr => gr.goal_id === goal.id)
-          const latestGr = grs[0]
+          // listGoalRunsByTask is desc by time_created; first match is latest.
+          const latestGr = goalRuns.find(gr => gr.goal_id === goal.id)
           if (latestGr) {
             const delivery = findDeliveryByGoalRun(latestGr.id)
             if (delivery) {
               sections.push(`- delivery summary: ${delivery.summary}`)
               const diffs = (delivery.result as any)?.diffs as Array<{ file: string }> | undefined
-              if (diffs?.length) sections.push(`- delivery files: ${diffs.map(f => f.file).join(", ")}`)
+              if (diffs?.length) {
+                const shown = diffs.slice(0, DELIVERY_FILES_CAP).map(f => f.file).join(", ")
+                const more = diffs.length > DELIVERY_FILES_CAP ? ` (+${diffs.length - DELIVERY_FILES_CAP} more)` : ""
+                sections.push(`- delivery files: ${shown}${more}`)
+              }
             } else {
               sections.push(`- delivery: none`)
             }
@@ -845,7 +890,9 @@ export function createTaskAgentTools(input: {
             sections.push(`- no goal_run found`)
           }
         }
-        return sections.join("\n")
+        const result = sections.join("\n")
+        SubAgentProtocol.report(result, "tool:query_failed_goals")
+        return result
       },
     }),
 
@@ -1083,13 +1130,21 @@ export function createTaskAgentTools(input: {
     }),
 
     read_context: tool({
-      description: "Read current task context: goal states, delivery verdicts, Decision Log, delivery summaries. Use this to gather information before making decisions.",
+      description: "Read current task context: goal states, delivery verdicts, Decision Log, delivery summaries. Use this to gather information before making decisions. Returns only the latest state per goal — historical evaluations/deliveries older than the latest per-goal entry are omitted to keep prompts bounded.",
       inputSchema: z.object({
         scope: z.enum(["goals", "evaluations", "decisions", "deliveries", "all"]).default("all").describe("What to read"),
       }),
       execute: async ({ scope }) => {
         const task = requireTask(taskID)
         const sections: string[] = []
+        // Source-level caps on read_context output. Rationale: this tool is
+        // called every task-agent turn; tool results live forever in session
+        // history. Unbounded accumulation (every historical eval, every run's
+        // delivery, every decision) was the dominant contributor to the
+        // task-agent session growing from ~10K to 125K tokens across 16 turns.
+        // Caps below preserve the LATEST state per goal rather than history.
+        const DECISIONS_LIMIT = 20
+        const EVAL_CHECK_EVIDENCE_CAP = 200
 
         if (scope === "goals" || scope === "all") {
           const goals = listGoals(taskID)
@@ -1104,16 +1159,36 @@ export function createTaskAgentTools(input: {
         }
 
         if (scope === "evaluations" || scope === "all") {
-          const { findEvaluationsByTask } = await import("@/orchestrator/store")
-          const evals = findEvaluationsByTask(taskID)
+          const { findEvaluationsByTask, listGoalRunsByTask } = await import("@/orchestrator/store")
+          const evals = findEvaluationsByTask(taskID) // desc by time_created
           if (evals.length > 0) {
-            sections.push(`\n## Evaluations (${evals.length})`)
+            // Dedup to latest eval per underlying goal. Multiple evals for
+            // the same goal across retries only clutter — the latest verdict
+            // is what drives next decisions. goal_run_id → goal_id lookup
+            // avoids a SQL join by walking the task's goal_runs once.
+            const runToGoal = new Map<string, string>()
+            for (const gr of listGoalRunsByTask(taskID)) runToGoal.set(gr.id, gr.goal_id)
+            const seenGoals = new Set<string>()
+            const latestPerGoal: typeof evals = []
             for (const e of evals) {
+              const goalID = e.goal_run_id ? runToGoal.get(e.goal_run_id) : undefined
+              const key = goalID ?? `__run:${e.goal_run_id ?? e.id}`
+              if (seenGoals.has(key)) continue
+              seenGoals.add(key)
+              latestPerGoal.push(e)
+            }
+            const omitted = evals.length - latestPerGoal.length
+            const header = omitted > 0
+              ? `\n## Evaluations (latest ${latestPerGoal.length} of ${evals.length}; ${omitted} superseded omitted)`
+              : `\n## Evaluations (${latestPerGoal.length})`
+            sections.push(header)
+            for (const e of latestPerGoal) {
               sections.push(`- [${e.verdict}] ${e.summary}`)
               const checks = e.checks as Array<{ name: string; status: string; evidence?: string }> | undefined
               if (checks) {
                 for (const c of checks.slice(0, 5)) {
-                  sections.push(`  - ${c.name}: ${c.status}${c.evidence ? ` — ${c.evidence}` : ""}`)
+                  const evidence = c.evidence ? c.evidence.slice(0, EVAL_CHECK_EVIDENCE_CAP) : ""
+                  sections.push(`  - ${c.name}: ${c.status}${evidence ? ` — ${evidence}` : ""}`)
                 }
               }
             }
@@ -1123,18 +1198,27 @@ export function createTaskAgentTools(input: {
         if (scope === "decisions" || scope === "all") {
           const { createDecisionLog } = await import("@/decision-log")
           const log = createDecisionLog(taskID)
-          const section = log.toPromptSection()
+          const section = log.toPromptSection({ limit: DECISIONS_LIMIT })
           if (section) sections.push(`\n${section}`)
         }
 
         if (scope === "deliveries" || scope === "all") {
           const { listGoalRunsByTask, findDeliveryByGoalRun } = await import("@/orchestrator/store")
-          const goalRuns = listGoalRunsByTask(taskID)
-          const deliveries = goalRuns
-            .map(gr => ({ goalRunID: gr.id, goalID: gr.goal_id, status: gr.status, delivery: findDeliveryByGoalRun(gr.id) }))
-            .filter(d => d.delivery)
+          const goalRuns = listGoalRunsByTask(taskID) // desc by time_created
+          // Keep only the latest delivery per goal. Previous runs' deliveries
+          // are historical noise once superseded; the task-agent decides from
+          // current state, not delivery history.
+          const seenGoals = new Set<string>()
+          const deliveries: Array<{ goalRunID: string; goalID: string; status: string; delivery: ReturnType<typeof findDeliveryByGoalRun> }> = []
+          for (const gr of goalRuns) {
+            if (seenGoals.has(gr.goal_id)) continue
+            const delivery = findDeliveryByGoalRun(gr.id)
+            if (!delivery) continue
+            seenGoals.add(gr.goal_id)
+            deliveries.push({ goalRunID: gr.id, goalID: gr.goal_id, status: gr.status, delivery })
+          }
           if (deliveries.length > 0) {
-            sections.push(`\n## Deliveries (${deliveries.length})`)
+            sections.push(`\n## Deliveries (${deliveries.length} — latest per goal)`)
             for (const d of deliveries) {
               const diffs = (d.delivery!.result as any)?.diffs as Array<{ file: string }> | undefined
               sections.push(`- goal_run ${d.goalRunID} [${d.status}]: ${d.delivery!.summary}`)
@@ -1143,7 +1227,12 @@ export function createTaskAgentTools(input: {
           }
         }
 
-        return sections.length > 0 ? sections.join("\n") : "No context available yet."
+        const result = sections.length > 0 ? sections.join("\n") : "No context available yet."
+        // Telemetry: read_context is structurally bounded by the per-section
+        // caps above, but if a future change blows through the budget the
+        // protocol layer surfaces it instead of letting it slip silently.
+        SubAgentProtocol.report(result, "tool:read_context")
+        return result
       },
     }),
 
@@ -1580,16 +1669,22 @@ export function createTaskAgentTools(input: {
               return `Delivery verified and ACCEPTED but publish failed: ${msg}. Call publish_delivery to retry.`
             }
           }
-          const issues = verdict.issues_found.join("; ")
           await trackStepComplete("deliver", undefined, true)
-          // "rejected" means the delivery agent exhausted its own retries and determined
-          // the code does not work end-to-end. This is a task failure — the executor needs
-          // to re-run. We set the task to "failed" here rather than returning a message
-          // for the LLM to interpret, because:
+          // Sub-agent → caller boundary. Full verdict (issues, evidence,
+          // startup logs) is persisted under verdictArtifactId; the yield
+          // carries enough context for the coordinator to decide fate.
+          // "rejected" means the delivery agent exhausted its own retries
+          // and determined the code does not work end-to-end. We set the
+          // task to "failed" here rather than returning a message for the
+          // LLM to interpret, because:
           //   1. The LLM has no mechanism to fix the code from here (goals are "passed").
           //   2. Returning a message causes the outer task-loop to re-trigger, which calls
           //      deliver again on the exact same diffs → infinite loop.
-          const failMsg = `Delivery rejected: ${verdict.summary}. Issues: ${issues}`
+          const failMsg = SubAgentProtocol.yieldResult({
+            headline: `Delivery rejected: ${verdict.summary}`,
+            fields: [["issues_found", verdict.issues_found]],
+            pointer: `verdict artifact ${verdictArtifactId} (full evidence + logs)`,
+          })
           const currentTaskR = requireTask(taskID)
           if (currentTaskR.status === "active") {
             await updateTask(currentTaskR, { status: "failed", error: failMsg, time_completed: Date.now() }, failMsg)
@@ -1763,10 +1858,12 @@ export function createTaskAgentTools(input: {
           if (files.length > 0) goalSummaries.push(`  files: ${files.join(", ")}`)
         }
 
-        // Read Decision Log for architectural context
+        // Read Decision Log for architectural context. Refine runs once per
+        // task (not per turn), but an unbounded decision log can still push
+        // this prompt past the model context; cap matches read_context.
         const { createDecisionLog } = await import("@/decision-log")
         const decisionLog = createDecisionLog(taskID)
-        const decisionSection = decisionLog.toPromptSection() ?? ""
+        const decisionSection = decisionLog.toPromptSection({ limit: 30 }) ?? ""
 
         // Run refine analysis via LLM
         const { Provider } = await import("@/provider/provider")
@@ -1833,26 +1930,43 @@ export function createTaskAgentTools(input: {
 
         await trackStepComplete("refine")
 
-        // Try to parse suggestions for structured response
+        // Parse the structured suggestions. Refine's contract with the LLM
+        // is a JSON object {summary, suggestions[]}; anything else is an
+        // upstream model failure. Returning the raw prose here was a silent
+        // fallback that piped unbounded text into the task-agent session —
+        // forbidden per project rules. Throwing surfaces the failure so the
+        // task-agent can retry or fail_task based on its own policy.
+        let parsed: { summary?: unknown; suggestions?: unknown }
         try {
-          const parsed = JSON.parse(resultText.trim())
-          const suggestions = parsed.suggestions ?? []
-          const lines = [
-            `## Project Analysis`,
-            parsed.summary ?? "",
-            "",
-            `## Suggestions (${suggestions.length})`,
-          ]
-          for (const s of suggestions) {
-            lines.push(`- [${s.priority}] **${s.title}** (${s.category}, ${s.effort}): ${s.description}`)
-          }
-          lines.push("")
-          lines.push("To start the next iteration: surface these suggestions to the user (Gateway will route the dialog) and let them pick which to roll into a new task.")
-          return lines.join("\n")
-        } catch {
-          // LLM didn't return valid JSON — return raw text
-          return `## Refine Analysis\n\n${resultText}\n\nTo iterate: create a new task based on these suggestions.`
+          parsed = JSON.parse(resultText.trim())
+        } catch (parseErr) {
+          const preview = resultText.slice(0, 200)
+          throw new Error(
+            `refine: LLM did not return valid JSON for {summary, suggestions}. ` +
+            `Parse error: ${parseErr instanceof Error ? parseErr.message : String(parseErr)}. ` +
+            `Output preview: ${preview}${resultText.length > 200 ? "…" : ""}`,
+          )
         }
+        if (!Array.isArray(parsed.suggestions)) {
+          throw new Error(
+            `refine: LLM output missing or invalid "suggestions" array (got ${typeof parsed.suggestions}).`,
+          )
+        }
+        const suggestions = parsed.suggestions as Array<{
+          priority?: string; title?: string; category?: string; effort?: string; description?: string
+        }>
+        const summaryRaw = typeof parsed.summary === "string" ? parsed.summary : ""
+        const suggestionLines = suggestions.map((s) =>
+          `[${s.priority ?? "?"}] ${s.title ?? "(untitled)"} (${s.category ?? "?"}, ${s.effort ?? "?"}): ${s.description ?? ""}`,
+        )
+        return SubAgentProtocol.yieldResult({
+          headline:
+            "Project Analysis complete. To start the next iteration: surface these suggestions to the user " +
+            "(Gateway will route the dialog) and let them pick which to roll into a new task.",
+          summary: summaryRaw,
+          fields: [["suggestions", suggestionLines]],
+          pointer: "refine session id (full LLM output) — narrow focus param and re-run to see filtered subsets",
+        })
       },
     }),
 

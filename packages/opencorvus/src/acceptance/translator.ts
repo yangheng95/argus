@@ -115,12 +115,19 @@ export function buildHeuristicCommand(scorer: HeuristicScorer): string {
 }
 
 function normalizeScriptPath(p: string): string {
-  // Ensure the path is a relative POSIX-style reference. Absolute paths from
-  // LLMs are a correctness hazard (they bind to a specific worktree); reject.
+  // Ensure the path is a relative POSIX-style reference within the repo.
+  // Absolute paths bind to a specific worktree (reject), and `..` segments
+  // can escape the repo into arbitrary filesystem locations (reject) — both
+  // are correctness/safety hazards when produced by an LLM.
   if (path.isAbsolute(p)) {
     throw new Error(`script_ref path must be repo-relative, got absolute: ${p}`)
   }
-  return p.split(path.sep).join("/")
+  const normalized = p.split(path.sep).join("/")
+  const segments = normalized.split("/").filter((seg) => seg !== "" && seg !== ".")
+  if (segments.some((seg) => seg === "..")) {
+    throw new Error(`script_ref path must not contain '..' segments: ${p}`)
+  }
+  return normalized
 }
 
 function quoteArg(arg: string): string {

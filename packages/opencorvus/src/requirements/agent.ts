@@ -373,36 +373,10 @@ async function buildMultimodalContent(
   text: string,
   attachments?: Array<{ sha: string; url: string; mime: string; size: number; filename?: string }>,
 ) {
-  if (!attachments?.length) return text
-  // Split attachments: only image / pdf / audio / video can be inlined as
-  // multimodal file parts; text/* and application/json get listed by URL so
-  // the agent fetches them via the read tool. Inlining a text MIME silently
-  // breaks openai-compatible providers (Kimi/Alibaba) — the upstream API
-  // rejects the request and the LLM emits no output.
-  const multimodal = attachments.filter((a) => AttachmentStore.isMultimodalSupported(a.mime))
-  const referenceOnly = attachments.filter((a) => !AttachmentStore.isMultimodalSupported(a.mime))
-  const referenceText = referenceOnly.length
-    ? "\n\n## Task Attachments (read via the `read` tool when you need their content)\n" +
-      referenceOnly
-        .map((a) => {
-          const sizeKb = `${Math.max(1, Math.round(a.size / 1024))} KB`
-          return `- ${a.filename ?? a.sha} — ${a.mime} — ${sizeKb}, url: ${a.url}`
-        })
-        .join("\n")
-    : ""
-  const enrichedText = text + referenceText
-  if (!multimodal.length) return enrichedText
-  const fileParts = await Promise.all(multimodal.map(async (a) => {
-    const located = AttachmentStore.nameFromUrl(a.url)
-    if (!located) throw new Error(`attachment has no resolvable url: ${a.filename ?? a.sha}`)
-    const bytes = await AttachmentStore.read(located.projectID, located.name)
-    return {
-      type: "file" as const,
-      data: bytes,
-      mediaType: a.mime,
-      ...(a.filename ? { filename: a.filename } : {}),
-    }
-  }))
+  const { multimodal, referenceOnly } = AttachmentStore.partition(attachments)
+  const enrichedText = text + AttachmentStore.renderReferenceList(referenceOnly)
+  const fileParts = await AttachmentStore.loadFileParts(multimodal)
+  if (fileParts.length === 0) return enrichedText
   return [{ type: "text" as const, text: enrichedText }, ...fileParts]
 }
 
