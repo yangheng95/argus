@@ -40,7 +40,7 @@ import {
   ensureExecutorSession,
 } from "./persist"
 import { OrchestratorGoalTable, OrchestratorPlanNodeTable } from "./orchestrator.sql"
-import { goalRowToContract, operatorNotesSection } from "./helpers"
+import { clarificationTranscriptSection, goalRowToContract, operatorNotesSection } from "./helpers"
 import { buildGoalPrompt, createGoalSession } from "@/goal/runner"
 import { registerGoalRunSession } from "@/server/routes/task-event"
 import { sessionStreamHooks } from "@/agent/runtime"
@@ -420,6 +420,8 @@ export class GoalPool {
       let systemOverride: string | undefined
       if (run.executor !== "opencode") {
         const sections: string[] = []
+        const clarifications = clarificationTranscriptSection(task.id)
+        if (clarifications) sections.push(clarifications)
         const notes = operatorNotesSection(task.id)
         if (notes) sections.push(notes)
         const memory = await MemoryInjection.systemPromptSection({

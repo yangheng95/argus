@@ -10,6 +10,7 @@ import { Instance } from "./instance"
 import { Vcs } from "./vcs"
 import { Log } from "@/util/log"
 import { Snapshot } from "../snapshot"
+import { ProjectGC } from "./gc"
 import { Truncate } from "../tool/truncation"
 import { CronService } from "../scheduler/cron-service"
 import { EventService } from "../scheduler/event-service"
@@ -28,6 +29,7 @@ export async function InstanceBootstrap() {
   File.init()
   Vcs.init()
   Snapshot.init()
+  ProjectGC.init()
   Truncate.init()
   CronService.init()
   EventService.init()

@@ -23,7 +23,7 @@ import { Env } from "@/env"
 import { type TextHooks } from "@/llm/api"
 import { Config } from "@/config/config"
 import { OrchestratorConfig } from "@/orchestrator/config"
-import { operatorNotesSection } from "@/orchestrator/helpers"
+import { clarificationTranscriptSection, operatorNotesSection } from "@/orchestrator/helpers"
 import { loadStageSkills } from "@/orchestrator/skill-inject"
 import { collectText, countToolCalls, firstContentLine, sectionBody } from "@/util/agent-text"
 import { AttachmentStore } from "@/storage/attachment-store"
@@ -480,6 +480,8 @@ function buildUserPrompt(
   // Operator notes — user messages sent during task execution
   const taskID = input.task.metadata?.taskID as string | undefined
   if (taskID) {
+    const clarifications = clarificationTranscriptSection(taskID)
+    if (clarifications) sections.push(clarifications)
     const notes = operatorNotesSection(taskID)
     if (notes) sections.push(notes)
   }

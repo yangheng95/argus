@@ -21,7 +21,7 @@ import { toolGuard } from "@/util/tool-guard"
 import { OrchestratorConfig } from "@/orchestrator/config"
 import { AttachmentStore } from "@/storage/attachment-store"
 import { AgentRuntime } from "@/agent/runtime"
-import { operatorNotesSection } from "@/orchestrator/helpers"
+import { clarificationTranscriptSection, operatorNotesSection } from "@/orchestrator/helpers"
 import { loadStageSkills } from "@/orchestrator/skill-inject"
 import { Config } from "@/config/config"
 import type { RequirementsOutput, ParsedGoalContract, RequirementsDecision, ParsedRequirement, TraceabilityEntry } from "./types"
@@ -134,7 +134,7 @@ async function runInternal(input: {
 
   // Merge planner tools (codebase exploration) + structured output tools (goal registration).
   // Each registration tool call is small (~500 bytes) — no buffering risk.
-  const plannerTools = createPlannerTools(taskWorkDir, input.sessionID)
+  const plannerTools = createPlannerTools(taskWorkDir)
   const outputToolKit = createRequirementsOutputTools(taskWorkDir)
   const guard = toolGuard({ ...plannerTools, ...outputToolKit.tools })
 
@@ -404,6 +404,8 @@ function buildUserPrompt(
   const sections = [`# Task\n\nTitle: ${input.title}\n\nRequest:\n${input.request}`]
 
   if (input.taskID) {
+    const clarifications = clarificationTranscriptSection(input.taskID)
+    if (clarifications) sections.push(clarifications)
     const notes = operatorNotesSection(input.taskID)
     if (notes) sections.push(notes)
   }

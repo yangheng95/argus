@@ -595,7 +595,7 @@ CREATE INDEX IF NOT EXISTS orchestrator_goal_run_status_idx      ON orchestrator
 CREATE TABLE IF NOT EXISTS orchestrator_interaction_request (
   id            text PRIMARY KEY,
   task_id       text NOT NULL,
-  run_id        text NOT NULL,
+  run_id        text,
   session_id    text,
   external_id   text NOT NULL,
   request_type  text NOT NULL,

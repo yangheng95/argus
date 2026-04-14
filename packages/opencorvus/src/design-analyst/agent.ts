@@ -178,7 +178,7 @@ async function run(input: {
   if (input.signal?.aborted) throw new Error("design analyst aborted after model resolution")
 
   // Merge planner tools (codebase exploration) + webfetch + design output tools
-  const plannerTools = createPlannerTools(undefined, input.sessionID)
+  const plannerTools = createPlannerTools()
   const outputToolKit = createDesignOutputTools()
   const guard = toolGuard({ ...plannerTools, ...createWebfetchTool(), ...outputToolKit.tools })
 

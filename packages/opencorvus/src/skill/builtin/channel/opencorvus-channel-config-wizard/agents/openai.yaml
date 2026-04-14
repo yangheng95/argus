@@ -1,6 +1,0 @@
-interface:
-  display_name: "OpenCorvus Channel Config Wizard"
-  short_description: "Unified overlay-guided channel setup with text fallback"
-  default_prompt: "Use $opencorvus-channel-config-wizard to configure chat channels through Channel Config -> Environment Variables, then validate in Runtime."
-
-

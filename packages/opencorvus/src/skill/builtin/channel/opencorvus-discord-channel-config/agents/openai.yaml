@@ -1,4 +1,0 @@
-interface:
-  display_name: "OpenCorvus Discord Channel Config"
-  short_description: "Configure Discord channel integration for OpenCorvus"
-  default_prompt: "Use $opencorvus-discord-channel-config to set up or debug Discord channel integration for OpenCorvus."

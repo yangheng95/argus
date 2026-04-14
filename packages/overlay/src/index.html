@@ -325,6 +325,13 @@
               <div class="config-inline-popup" id="llmNotice" role="status" aria-live="polite"></div>
             </div>
           </details>
+          <details class="config-section" id="extensionsSection">
+            <summary class="config-section-head config-section-head-centered config-section-head-llm">
+              <span class="config-section-head-text" data-i18n="extensions.title">Extensions</span>
+              <span class="config-section-summary" id="extensionsSummary"></span>
+            </summary>
+            <div class="config-section-body" id="extensionsConfigBody"></div>
+          </details>
           <div class="config-toggle" id="btnConfigToggle" role="button" tabindex="0" title="Open Config &amp; Settings" data-i18n-title="config.open">
             <span class="config-toggle-label" data-i18n="config.title">Config &amp; Settings</span>
             <span class="config-toggle-meta" id="configToggleMeta"></span>
@@ -456,10 +463,6 @@
             <svg class="config-nav-icon" viewBox="0 0 24 24" fill="none"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" stroke="currentColor" stroke-width="1.5"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.5"/></svg>
             <span data-i18n="settings.title">General</span>
           </button>
-          <button class="config-nav-item" data-config-tab="orchestration">
-            <svg class="config-nav-icon" viewBox="0 0 24 24" fill="none"><path d="M3 12h4l3-9 4 18 3-9h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            <span data-i18n="orchestration.workflow">Orchestration</span>
-          </button>
           <button class="config-nav-item" data-config-tab="permissions">
             <svg class="config-nav-icon" viewBox="0 0 24 24" fill="none"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
             <span data-i18n="permissions.title">Permissions</span>
@@ -472,11 +475,6 @@
           <button class="config-nav-item" data-config-tab="channel">
             <svg class="config-nav-icon" viewBox="0 0 24 24" fill="none"><path d="M4 11a9 9 0 0 1 9-9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M4 16a14 14 0 0 1 14-14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="5" cy="19" r="2" stroke="currentColor" stroke-width="1.5"/></svg>
             <span data-i18n="channel.title">Channel</span>
-          </button>
-          <button class="config-nav-item" data-config-tab="extensions">
-            <svg class="config-nav-icon" viewBox="0 0 24 24" fill="none"><path d="M13.5 2H10v4a2 2 0 1 1-4 0V2H2v4.5C2 7.9 3.1 9 4.5 9S7 7.9 7 6.5V6h4v.5C11 7.9 12.1 9 13.5 9S16 7.9 16 6.5V2h-2.5z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" transform="translate(2,2) scale(0.85)"/><rect x="3" y="13" width="8" height="8" rx="1.5" stroke="currentColor" stroke-width="1.5"/><path d="M14 16h6M17 13v6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
-            <span data-i18n="extensions.title">Extensions</span>
-            <span class="config-nav-badge" id="extensionsBadge"></span>
           </button>
           <button class="config-nav-item" data-config-tab="memory">
             <svg class="config-nav-icon" viewBox="0 0 24 24" fill="none"><path d="M12 2a7 7 0 0 1 7 7c0 2.5-1.3 4.7-3.2 6H8.2C6.3 13.7 5 11.5 5 9a7 7 0 0 1 7-7z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M9 18h6M10 21h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
@@ -497,10 +495,6 @@
         <div class="config-content" id="configContent">
           <div class="config-tab-panel active" data-config-panel="general">
             <div class="config-section-body" id="generalBody"></div>
-          </div>
-
-          <div class="config-tab-panel" data-config-panel="orchestration">
-            <div class="config-section-body" id="orchestrationBody"></div>
           </div>
 
           <div class="config-tab-panel" data-config-panel="permissions">
@@ -543,42 +537,6 @@
               <div class="extension-list" id="channelList">
                 <div class="empty-hint" data-i18n="channel.none">No channels available</div>
               </div>
-            </div>
-          </div>
-
-          <div class="config-tab-panel" data-config-panel="extensions">
-            <div class="config-section-body" id="extensionsBody">
-              <details class="config-subsection" id="skillSubsection">
-                <summary class="config-subsection-head" data-i18n="skill.title">Skills</summary>
-                <div class="config-subsection-body">
-                  <div class="extension-head">
-                    <div class="dialog-actions compact">
-                      <button type="button" class="btn btn-ghost mini" id="btnSkillMarket" data-i18n="skill.market.button" data-i18n-title="skill.market.button_title" data-i18n-aria-label="skill.market.button_title">Market</button>
-                      <button type="button" class="btn btn-ghost mini" id="btnOpenSkillRoot" data-i18n="skill.open_dir" data-i18n-title="skill.open_dir_title" data-i18n-aria-label="skill.open_dir_title">Open Dir</button>
-                      <button type="button" class="btn btn-ghost mini" id="btnReloadSkills" data-i18n="common.reload" data-i18n-title="skill.reload_title" data-i18n-aria-label="skill.reload_title">Reload</button>
-                      <button type="button" class="btn btn-ghost mini" id="btnAddSkill" data-i18n="skill.add" data-i18n-title="skill.add_button_title" data-i18n-aria-label="skill.add_button_title">Add Skill</button>
-                      <button type="button" class="btn btn-ghost mini danger" id="btnDeleteAllSkills" data-i18n="common.delete_all" data-i18n-title="skill.delete_all_button_title" data-i18n-aria-label="skill.delete_all_button_title">Delete All</button>
-                    </div>
-                  </div>
-                  <div class="extension-list" id="skillList">
-                    <div class="empty-hint" data-i18n="skill.none_custom">No custom skills configured</div>
-                  </div>
-                </div>
-              </details>
-              <details class="config-subsection" id="mcpSubsection">
-                <summary class="config-subsection-head" data-i18n="mcp.title">MCP Servers</summary>
-                <div class="config-subsection-body">
-                  <div class="extension-head">
-                    <div class="dialog-actions compact">
-                      <button type="button" class="btn btn-ghost mini" id="btnAddMcp" data-i18n="mcp.add_action" data-i18n-title="mcp.add_action_title" data-i18n-aria-label="mcp.add_action_title">Add MCP</button>
-                      <button type="button" class="btn btn-ghost mini danger" id="btnDeleteAllMcp" data-i18n="common.delete_all" data-i18n-title="mcp.delete_all_button_title" data-i18n-aria-label="mcp.delete_all_button_title">Delete All</button>
-                    </div>
-                  </div>
-                  <div class="extension-list" id="mcpList">
-                    <div class="empty-hint" data-i18n="mcp.none">No MCP servers configured</div>
-                  </div>
-                </div>
-              </details>
             </div>
           </div>
 

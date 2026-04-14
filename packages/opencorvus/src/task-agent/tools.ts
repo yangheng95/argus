@@ -8,6 +8,7 @@ import { tool } from "ai"
 import z from "zod"
 import path from "node:path"
 import { Session } from "@/session"
+import { SessionPrompt } from "@/session/prompt"
 import { Database, eq, and } from "@/storage/db"
 import { Identifier } from "@/id/id"
 import { Instance } from "@/project/instance"
@@ -47,6 +48,7 @@ import type { OrchestratorBudget } from "@/orchestrator/orchestrator.sql"
 import { updateTask } from "@/orchestrator/state"
 
 import { findStepByTool, type WorkflowState, type MiniWorkflow } from "@/orchestrator/workflow"
+import { Question } from "@/question"
 
 const log = Log.create({ service: "task-tools" })
 
@@ -1848,6 +1850,122 @@ export function createTaskAgentTools(input: {
         } catch {
           // LLM didn't return valid JSON — return raw text
           return `## Refine Analysis\n\n${resultText}\n\nTo iterate: create a new task based on these suggestions.`
+        }
+      },
+    }),
+
+    ask_user: tool({
+      description:
+        "Ask the user one or more clarification questions and block until they answer. " +
+        "The questions appear in the task's InteractionPanel (with option buttons + free-text input). " +
+        "Use SPARINGLY — only when you genuinely cannot proceed without a human decision. " +
+        "Valid triggers: (1) incoming request is too vague for requirements decomposition, " +
+        "(2) mid-execute missing critical info (tech stack, data source, conflicting goals), " +
+        "(3) pre-deliver you have multiple viable approaches and need the user to pick, " +
+        "(4) post-refine suggestions — let the user select which improvements to roll in. " +
+        "Each question may provide options for click-selection; omit options for free-text. " +
+        "Set multiple=true to allow multi-select. Returns the answers in the same order as questions. " +
+        "Timeout: 30 minutes; rejected questions throw an error you must handle.",
+      inputSchema: z.object({
+        questions: z
+          .array(
+            z.object({
+              question: z.string().describe("The complete question text to show the user."),
+              header: z.string().describe("Short label (≤30 chars) used as a chip/title."),
+              options: z
+                .array(
+                  z.object({
+                    label: z.string().describe("Display text (1-5 words)."),
+                    description: z.string().describe("Explanation of this choice."),
+                  }),
+                )
+                .default([])
+                .describe("Click-selectable options. Leave empty for free-text-only answers."),
+              multiple: z.boolean().optional().describe("Allow multi-select (default false)."),
+              custom: z.boolean().optional().describe("Allow a custom typed answer (default true)."),
+            }),
+          )
+          .min(1)
+          .max(4)
+          .describe("1-4 questions to ask in a single turn."),
+        reason: z
+          .string()
+          .optional()
+          .describe("Why you're asking (short, shown in logs — not to the user)."),
+      }),
+      execute: async ({ questions, reason }) => {
+        log.info("ask_user", { taskID, count: questions.length, reason })
+        try {
+          const answers = await Question.ask({
+            sessionID: input.agentSessionID,
+            questions: questions.map((q) => ({
+              question: q.question,
+              header: q.header,
+              options: q.options ?? [],
+              multiple: q.multiple,
+              custom: q.custom,
+            })),
+          })
+          const formatted = questions
+            .map((q, i) => `"${q.question}" → ${(answers[i] ?? []).join(", ") || "(no answer)"}`)
+            .join("\n")
+          return `User answered:\n${formatted}`
+        } catch (err) {
+          if (err instanceof Question.RejectedError) {
+            return "User dismissed the questions without answering. Decide how to proceed based on available context."
+          }
+          throw err
+        }
+      },
+    }),
+
+    build: tool({
+      description:
+        "Direct-to-code execution for simple, single-shot work — the conventional coding-assistant path. " +
+        "USE WHEN: single-file edit, bug fix, small refactor in place, typo/comment fix, config tweak, " +
+        "short debug/investigation that ends in a fix, or a lookup-and-edit. The build agent runs the " +
+        "prompt directly with read/write/edit/bash tools; NO requirements analysis, NO goal decomposition, " +
+        "NO architect, NO evaluator pipeline. Cheaper and faster for work that does not need planning. " +
+        "DO NOT USE FOR: multi-file features, UI replication from designs, anything needing acceptance " +
+        "criteria, cross-module refactors, new subsystems, or tasks with explicit non-functional goals — " +
+        "those must go through requirements → architect → execute → deliver. " +
+        "Call this AT MOST ONCE per task, as the first tool call. If build completes the task, stop; " +
+        "do NOT then invoke requirements.",
+      inputSchema: z.object({
+        request: z
+          .string()
+          .describe(
+            "The prompt to feed the build agent — usually the user's original request verbatim, optionally paraphrased for clarity. Do not strip technical details.",
+          ),
+        reason: z
+          .string()
+          .describe(
+            "One sentence explaining why this qualifies as a direct build task (not a pipeline task). Shown in the Route Decision card.",
+          ),
+      }),
+      execute: async ({ request, reason }) => {
+        const task = requireTask(taskID)
+        log.info("build tool invoked", { taskID, reason, requestLen: request.length })
+
+        const buildSession = await Session.createNext({
+          parentID: input.agentSessionID,
+          title: `Build: ${task.title}`,
+          directory: Instance.directory,
+        })
+        registerGoalRunSession(buildSession.id, taskID, "assistant")
+
+        try {
+          await SessionPrompt.prompt({
+            sessionID: buildSession.id,
+            agent: "build",
+            parts: [{ type: "text", text: request, kind: "user_content" }],
+          })
+          await Session.touch(buildSession.id).catch(() => undefined)
+          return `Build agent completed (session ${buildSession.id}). The request was handled directly without the goals/architect/deliver pipeline — reason: ${reason}. Do not call requirements; stop or proceed to deliver only if the task explicitly needs verification beyond what build already did.`
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err)
+          log.error("build tool failed", { taskID, error: msg })
+          throw err
         }
       },
     }),

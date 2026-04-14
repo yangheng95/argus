@@ -2,7 +2,7 @@
 // Solid.js port of renderTaskList / taskSection / taskRow / visibleTasks
 // Displays active and recently-completed tasks from boardStore.
 
-import { createMemo, For, Show } from "solid-js";
+import { createMemo, createSignal, onCleanup, For, Show } from "solid-js";
 import { boardStore, visibleTasks } from "../store/board";
 import { t } from "../utils/i18n";
 import { stamp } from "../utils/time";
@@ -65,26 +65,67 @@ function taskListMeta(item: any): string {
   return joinBullet([stamp(taskUpdated(item)), shortPath(item?.task?.directory || "")]);
 }
 
-// ── CancelButton (SVG) ──
-// Stop / abort an in-flight task. Distinct from delete: cancel transitions
-// the task to status="cancelled" but keeps its history; delete removes the
-// row entirely. Surfaced only on active/queued rows.
-function CancelButton(props: { id: string; onCancel: (id: string) => void }) {
+// ── DeleteButton (two-step inline confirm) ──
+// First click arms the button (data-confirm="true") and shows the confirm
+// icon; a second click within CONFIRM_WINDOW_MS fires the delete. The state
+// auto-resets after the window or when the user clicks elsewhere, so there's
+// no modal round-trip.
+
+const CONFIRM_WINDOW_MS = 3000;
+
+function DeleteButton(props: { id: string; onDelete: (id: string) => void }) {
+  const [armed, setArmed] = createSignal(false);
+  let resetTimer: ReturnType<typeof setTimeout> | undefined;
+
+  function disarm() {
+    if (resetTimer) {
+      clearTimeout(resetTimer);
+      resetTimer = undefined;
+    }
+    setArmed(false);
+  }
+
+  onCleanup(disarm);
+
   return (
     <button
       type="button"
-      class="task-row-cancel"
-      data-task-cancel={props.id}
-      title={t("common.cancel")}
-      aria-label={t("common.cancel")}
+      class="task-row-delete"
+      data-task-delete={props.id}
+      data-confirm={armed() ? "true" : undefined}
+      title={t("task.delete_button_title")}
+      aria-label={t("task.delete_button_title")}
       onClick={(e) => {
         e.stopPropagation();
-        props.onCancel(props.id);
+        if (armed()) {
+          disarm();
+          props.onDelete(props.id);
+          return;
+        }
+        setArmed(true);
+        resetTimer = setTimeout(disarm, CONFIRM_WINDOW_MS);
       }}
+      onBlur={disarm}
     >
-      <span class="task-row-cancel-icon" aria-hidden="true">
-        <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-          <rect x="4.5" y="4.5" width="7" height="7" rx="1" stroke="currentColor" stroke-width="1.3" />
+      <span class="task-row-delete-icon" data-icon="delete" aria-hidden="true">
+        <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+          <path
+            d="M4.5 4.5l7 7M11.5 4.5l-7 7"
+            stroke="currentColor"
+            stroke-width="1.5"
+            stroke-linecap="round"
+          />
+        </svg>
+      </span>
+      <span class="task-row-delete-icon" data-icon="confirm" aria-hidden="true">
+        <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+          <path
+            d="M3.5 8.5l2.9 2.9 6.1-6.1"
+            stroke="currentColor"
+            stroke-width="1.6"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
         </svg>
       </span>
     </button>
@@ -93,14 +134,12 @@ function CancelButton(props: { id: string; onCancel: (id: string) => void }) {
 
 // ── TaskRow ──
 
-const ACTIVE_STATUSES = new Set(["active", "queued", "running", "executing"]);
-
 function TaskRow(props: {
   item: any;
   selectedTaskID: string;
   queuePos?: number;
   onSelectTask: (id: string) => void;
-  onCancelTask?: (id: string) => void;
+  onDeleteTask?: (id: string) => void;
 }) {
   const id = () => props.item?.task?.id || "";
   const pending = () => props.item?._pending === true;
@@ -134,8 +173,8 @@ function TaskRow(props: {
         </span>
         <small>{taskListMeta(props.item)}</small>
       </button>
-      <Show when={!!id() && !!props.onCancelTask && ACTIVE_STATUSES.has(status())}>
-        <CancelButton id={id()} onCancel={props.onCancelTask!} />
+      <Show when={!pending() && !!id() && !!props.onDeleteTask}>
+        <DeleteButton id={id()} onDelete={props.onDeleteTask!} />
       </Show>
     </div>
   );
@@ -149,7 +188,7 @@ function TaskSection(props: {
   selectedTaskID: string;
   queuePositions?: Map<string, number>;
   onSelectTask: (id: string) => void;
-  onCancelTask?: (id: string) => void;
+  onDeleteTask?: (id: string) => void;
 }) {
   return (
     <Show when={props.items.length > 0}>
@@ -163,7 +202,7 @@ function TaskSection(props: {
                 selectedTaskID={props.selectedTaskID}
                 queuePos={props.queuePositions?.get(item?.task?.id || "")}
                 onSelectTask={props.onSelectTask}
-                onCancelTask={props.onCancelTask}
+                onDeleteTask={props.onDeleteTask}
               />
             )}
           </For>
@@ -178,8 +217,8 @@ function TaskSection(props: {
 export interface TaskListProps {
   /** Called when the user clicks a task row. */
   onSelectTask: (taskID: string) => void;
-  /** Optional: called when the user clicks the cancel button (active rows only). */
-  onCancelTask?: (taskID: string) => void;
+  /** Called when the user confirms deletion via the row's delete button. */
+  onDeleteTask?: (taskID: string) => void;
 }
 
 export function TaskList(props: TaskListProps) {
@@ -227,14 +266,14 @@ export function TaskList(props: TaskListProps) {
           selectedTaskID={selectedID()}
           queuePositions={queuePositions()}
           onSelectTask={props.onSelectTask}
-          onCancelTask={props.onCancelTask}
+          onDeleteTask={props.onDeleteTask}
         />
         <TaskSection
           label={t("task.group.recent")}
           items={recentTasks()}
           selectedTaskID={selectedID()}
           onSelectTask={props.onSelectTask}
-          onCancelTask={props.onCancelTask}
+          onDeleteTask={props.onDeleteTask}
         />
       </Show>
     </div>

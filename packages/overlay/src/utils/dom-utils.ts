@@ -26,19 +26,40 @@ export { sanitizeDirectoryMode } from "../store/settings";
  * Set up auto-scroll-to-bottom on a scrollable container.
  *
  * Behavior:
- * - Automatically scrolls to the bottom when new content appears
- * - If the user scrolls up, auto-scroll pauses
- * - When the user scrolls back to the bottom, auto-scroll resumes
+ * - Automatically scrolls to the bottom when new content appears.
+ * - As soon as the user scrolls up (even by a few pixels), auto-follow pauses.
+ * - Auto-follow only resumes when the user drags the scrollbar all the way
+ *   back to the bottom. A small sub-pixel tolerance is allowed so that
+ *   rounded scroll positions still count as "at bottom".
  *
- * Uses MutationObserver to detect DOM changes (works with SolidJS reactivity).
- * Returns a cleanup function that removes the listener and disconnects the observer.
+ * Program-initiated scrolls (our own scrollTop writes) are distinguished
+ * from user scrolls by tracking the last landing position we set. Scroll
+ * events that land within `PROGRAM_TOLERANCE` px of that position are
+ * treated as program-echo and never flip tracking off — otherwise a
+ * sub-pixel mismatch after el.scrollTop = el.scrollHeight could mark the
+ * container as "not at bottom" and silently disable auto-follow.
  */
-export function setupAutoScroll(el: HTMLElement, threshold = 60): () => void {
+const BOTTOM_TOLERANCE = 8;
+const PROGRAM_TOLERANCE = 2;
+
+export function setupAutoScroll(el: HTMLElement): () => void {
   let tracking = true;
   let rafPending = false;
+  let expectedTop = el.scrollTop;
+
+  function distanceFromBottom(): number {
+    return el.scrollHeight - el.clientHeight - el.scrollTop;
+  }
 
   function onScroll() {
-    tracking = el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
+    if (Math.abs(el.scrollTop - expectedTop) <= PROGRAM_TOLERANCE) {
+      // Program-echo: our own scrollTop write landed here. Do not let
+      // rounding flip tracking off.
+      expectedTop = el.scrollTop;
+      return;
+    }
+    tracking = distanceFromBottom() <= BOTTOM_TOLERANCE;
+    expectedTop = el.scrollTop;
   }
 
   function scrollDown() {
@@ -46,7 +67,9 @@ export function setupAutoScroll(el: HTMLElement, threshold = 60): () => void {
     rafPending = true;
     requestAnimationFrame(() => {
       rafPending = false;
+      if (!tracking) return;
       el.scrollTop = el.scrollHeight;
+      expectedTop = el.scrollTop;
     });
   }
 
@@ -59,8 +82,11 @@ export function setupAutoScroll(el: HTMLElement, threshold = 60): () => void {
   const observer = new MutationObserver(scrollDown);
   observer.observe(el, { childList: true, subtree: true, characterData: true });
 
-  // Initial scroll to bottom
-  scrollDown();
+  // Initial snap-to-bottom.
+  requestAnimationFrame(() => {
+    el.scrollTop = el.scrollHeight;
+    expectedTop = el.scrollTop;
+  });
 
   return () => {
     el.removeEventListener("scroll", onScroll);

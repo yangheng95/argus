@@ -14,9 +14,9 @@ import { Log } from "../../src/util/log"
 Log.init({ print: false })
 
 // Phase 2 tool invariants:
-//  - enqueue_workflow_task creates a task with kind="workflow"
-//  - dispatch_build_task creates a task with kind="build"
-//  - both go through OrchestratorService.createTask + appear in listProjectTasks
+//  - enqueue_task creates a task with kind="workflow" (task-agent itself decides
+//    whether to run the pipeline or route to its build tool)
+//  - it goes through OrchestratorService.createTask + appears in listProjectTasks
 //  - forward_clarification unblocks an awaiting Question.ask
 //  - switch_cwd persists to gateway session metadata
 //  - cancel_task on unknown ID surfaces an error (no silent fallback)
@@ -41,9 +41,9 @@ async function withGatewayContext<T>(
 }
 
 describe("Gateway tools (Phase 2)", () => {
-  test("enqueue_workflow_task creates a kind='workflow' task", async () => {
+  test("enqueue_task creates a kind='workflow' task", async () => {
     await withGatewayContext(async ({ tools }) => {
-      const taskID = await tools.enqueue_workflow_task.execute(
+      const taskID = await tools.enqueue_task.execute(
         { request: "Build a counter", title: "counter", priority: "low" } as any,
         {} as any,
       )
@@ -52,22 +52,6 @@ describe("Gateway tools (Phase 2)", () => {
       const row = tasks.find((t) => t.id === taskID)
       expect(row).toBeDefined()
       expect(row!.kind).toBe("workflow")
-      await OrchestratorService.cancelTask(taskID).catch(() => undefined)
-      await OrchestratorService.deleteTask(taskID).catch(() => undefined)
-    })
-  })
-
-  test("dispatch_build_task creates a kind='build' task", async () => {
-    await withGatewayContext(async ({ tools }) => {
-      const taskID = await tools.dispatch_build_task.execute(
-        { prompt: "Print hello", title: "hello-cli" } as any,
-        {} as any,
-      )
-      expect(typeof taskID).toBe("string")
-      const tasks = listProjectTasks(Instance.project.id, 50)
-      const row = tasks.find((t) => t.id === taskID)
-      expect(row).toBeDefined()
-      expect(row!.kind).toBe("build")
       await OrchestratorService.cancelTask(taskID).catch(() => undefined)
       await OrchestratorService.deleteTask(taskID).catch(() => undefined)
     })

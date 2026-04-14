@@ -92,7 +92,7 @@ async function run(input: {
   // Read-only codebase tools + structured output tools (architect cannot write files)
   const goalIDs = input.goals.map(g => g.id)
   const outputToolKit = createArchitectOutputTools(goalIDs)
-  const guard = toolGuard({ ...createPlannerTools(undefined, undefined), ...outputToolKit.tools })
+  const guard = toolGuard({ ...createPlannerTools(), ...outputToolKit.tools })
 
   await input.onStatus?.("Architect agent: coordinating cross-goal contracts")
 

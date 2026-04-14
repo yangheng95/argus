@@ -20,7 +20,7 @@ import { toolGuard } from "@/util/tool-guard"
 import { Log } from "@/util/log"
 import { AgentRuntime } from "@/agent/runtime"
 import { OrchestratorConfig } from "@/orchestrator/config"
-import { operatorNotesSection } from "@/orchestrator/helpers"
+import { clarificationTranscriptSection, operatorNotesSection } from "@/orchestrator/helpers"
 import { extractTag } from "@/util/parse-section-tags"
 import type { TextHooks } from "@/llm/api"
 import type { GoalContract } from "@/pipeline/types"
@@ -64,7 +64,7 @@ export async function planGoal(input: {
   if (!def) throw new Error("no LLM model available for per-goal planner")
   const model = await Provider.getModel(def.providerID, def.modelID)
 
-  const guard = toolGuard(createPlannerTools(input.workDir, input.sessionID))
+  const guard = toolGuard(createPlannerTools(input.workDir))
   const context = prefetchContext(task.title, task.request)
 
   // Build Decision Log section — architect consensus gets its own prominent section
@@ -209,6 +209,8 @@ function buildPlannerPrompt(
     sections.push(`## Pre-fetched Context\n\n${context}`)
   }
 
+  const clarifications = clarificationTranscriptSection(contract.task.id)
+  if (clarifications) sections.push(clarifications)
   const notes = operatorNotesSection(contract.task.id)
   if (notes) sections.push(notes)
 

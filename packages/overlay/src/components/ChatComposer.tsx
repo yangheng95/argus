@@ -2,8 +2,8 @@
 // Solid.js port of renderChatComposer / renderChatAttachments / chatForm submit
 // and related attachment/keyboard logic
 
-import { createSignal, createMemo, For, Show, onMount, onCleanup } from "solid-js";
-import { t } from "../utils/i18n";
+import { createSignal, createMemo, createEffect, For, Show, onMount, onCleanup } from "solid-js";
+import { t, tArray } from "../utils/i18n";
 
 // ── Types ──
 
@@ -31,6 +31,17 @@ export interface ChatComposerProps {
   onSubmit: (text: string, attachments: ChatAttachment[], webSearch: boolean) => void;
   /** Called when the user clicks the stop button while busy. */
   onStop?: () => void;
+  /**
+   * One-shot suggestion to inject into the empty composer (used after a
+   * task finishes — parent provides an LLM-generated follow-up). Written
+   * into the textarea only when the current text is empty so we never
+   * overwrite the user's in-progress input.
+   */
+  pendingSuggestion?: string;
+  /** Called once the pending suggestion has been applied (or intentionally
+   *  dropped because the user was already typing). Parent should clear its
+   *  signal to avoid re-applying the same suggestion. */
+  onSuggestionConsumed?: () => void;
 }
 
 // ── Constants ──
@@ -90,9 +101,106 @@ export function ChatComposer(props: ChatComposerProps) {
   const [dragover, setDragover] = createSignal(false);
   const [webSearch, setWebSearch] = createSignal(false);
   const [expanded, setExpanded] = createSignal(false);
+  const [focused, setFocused] = createSignal(false);
+  const [hintText, setHintText] = createSignal("");
 
   const hasText = createMemo(() => text().trim().length > 0);
   const stopping = () => props.stopping === true;
+
+  // ── Typewriter placeholder ──
+  // Cycles through a shuffled list of project-level examples when the
+  // composer is empty and unfocused. Cleared the moment the user engages.
+  let hintTimer: ReturnType<typeof setTimeout> | undefined;
+  let hintOrder: number[] = [];
+  let hintCursor = 0;
+  const reducedMotion =
+    typeof window !== "undefined" && window.matchMedia
+      ? window.matchMedia("(prefers-reduced-motion: reduce)").matches
+      : false;
+
+  function shuffleIndices(n: number): number[] {
+    const arr = Array.from({ length: n }, (_, i) => i);
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+  }
+
+  function stopHint() {
+    if (hintTimer) {
+      clearTimeout(hintTimer);
+      hintTimer = undefined;
+    }
+  }
+
+  function runTypewriter(examples: string[]) {
+    stopHint();
+    if (examples.length === 0) {
+      setHintText("");
+      return;
+    }
+    if (hintOrder.length !== examples.length) {
+      hintOrder = shuffleIndices(examples.length);
+      hintCursor = 0;
+    }
+    if (reducedMotion) {
+      setHintText(examples[hintOrder[hintCursor % hintOrder.length]]);
+      return;
+    }
+    const typeChar = (full: string, n: number) => {
+      setHintText(full.slice(0, n));
+      if (n < full.length) {
+        hintTimer = setTimeout(() => typeChar(full, n + 1), 28 + Math.random() * 32);
+      } else {
+        hintTimer = setTimeout(() => eraseChar(full, n), 1600);
+      }
+    };
+    const eraseChar = (full: string, n: number) => {
+      setHintText(full.slice(0, n));
+      if (n > 0) {
+        hintTimer = setTimeout(() => eraseChar(full, n - 1), 14);
+      } else {
+        hintCursor = (hintCursor + 1) % hintOrder.length;
+        const next = examples[hintOrder[hintCursor]];
+        hintTimer = setTimeout(() => typeChar(next, 0), 320);
+      }
+    };
+    const current = examples[hintOrder[hintCursor % hintOrder.length]];
+    typeChar(current, 0);
+  }
+
+  const showHint = createMemo(
+    () => props.enabled && !props.busy && !focused() && text().length === 0,
+  );
+
+  createEffect(() => {
+    const examples = tArray("chat.placeholder_projects");
+    if (showHint() && examples.length > 0) {
+      runTypewriter(examples);
+    } else {
+      stopHint();
+      setHintText("");
+    }
+  });
+
+  onCleanup(() => stopHint());
+
+  // ── Pending suggestion injection ──
+  // When the parent supplies a non-empty suggestion and the composer is
+  // idle & empty, pre-fill the textarea so the user can tweak or send.
+  // Either way, call onSuggestionConsumed so the parent clears its signal
+  // and we don't re-apply on subsequent unrelated re-renders.
+  createEffect(() => {
+    const pending = props.pendingSuggestion?.trim();
+    if (!pending) return;
+    if (!props.enabled || props.busy) return;
+    if (text().length === 0) {
+      setText(pending);
+      if (textareaRef) textareaRef.value = pending;
+    }
+    props.onSuggestionConsumed?.();
+  });
 
  // ── Attachment handling ──
 
@@ -252,21 +360,31 @@ export function ChatComposer(props: ChatComposerProps) {
 
       {/* Compose row: textarea + icon column + send */}
       <div class="chat-compose-row">
-        <textarea
-          ref={textareaRef}
-          id="chatTextarea"
-          class="chat-textarea"
-          data-expanded={expanded() ? "true" : undefined}
-          rows={2}
-          disabled={!props.enabled}
-          placeholder={props.enabled ? t("chat.placeholder") : t("chat.placeholder_disabled")}
-          value={text()}
-          onInput={(e) => {
-            setText(e.currentTarget.value);
-          }}
-          onKeyDown={handleKeyDown}
-          onPaste={handlePaste}
-        />
+        <div class="chat-textarea-wrap" data-expanded={expanded() ? "true" : undefined}>
+          <textarea
+            ref={textareaRef}
+            id="chatTextarea"
+            class="chat-textarea"
+            data-expanded={expanded() ? "true" : undefined}
+            rows={2}
+            disabled={!props.enabled}
+            placeholder={props.enabled ? "" : t("chat.placeholder_disabled")}
+            value={text()}
+            onInput={(e) => {
+              setText(e.currentTarget.value);
+            }}
+            onFocus={() => setFocused(true)}
+            onBlur={() => setFocused(false)}
+            onKeyDown={handleKeyDown}
+            onPaste={handlePaste}
+          />
+          <Show when={showHint()}>
+            <div class="chat-placeholder-float" aria-hidden="true">
+              <span class="chat-placeholder-text">{hintText()}</span>
+              <span class="chat-placeholder-caret" />
+            </div>
+          </Show>
+        </div>
 
         {/* Icon column: attach / web search / expand */}
         <div class="chat-icon-col">
