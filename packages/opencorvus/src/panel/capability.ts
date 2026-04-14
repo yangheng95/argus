@@ -256,13 +256,13 @@ export const PanelCapabilityRegistry = list(
   }),
   item({
     action: "update_goal",
-    description: "Update a goal description and criteria.",
+    description: "Update a goal description and acceptance specs.",
     kind: "mutation",
     surfaces: all,
     params: {
       goalID: z.string(),
       description: z.string(),
-      criteria: z.string(),
+      acceptance_specs: z.array(z.unknown()).min(1),
     },
   }),
   item({

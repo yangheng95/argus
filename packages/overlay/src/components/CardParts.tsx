@@ -33,15 +33,21 @@ function toolToCardNode(part: any): CardNode {
   })();
   const toolName = String(part?.tool || "tool");
   const state = part?.state || {};
+  const isBuild = toolNameKey(toolName) === "build";
+  const reason = isBuild ? String(state?.input?.reason || "").trim() : "";
+  const title = isBuild ? "直接构建 · Route: build" : toolName;
   const detail = displayToolDetail(toolName, state.input || {}, state, activeDirectory());
-  const subtitle =
-    detail && detail.toLowerCase() !== toolName.toLowerCase() ? detail : undefined;
+  const subtitle = isBuild
+    ? reason || "task-agent 判定无需完整 pipeline，直接走 build"
+    : detail && detail.toLowerCase() !== toolName.toLowerCase()
+      ? detail
+      : undefined;
   return {
     id: String(part?.id || `tool:${toolName}:${Math.random().toString(36).slice(2)}`),
     kind: "tool",
     stage: toolNameKey(toolName),
     status,
-    title: toolName,
+    title,
     subtitle,
     parts: [],
     children: [],

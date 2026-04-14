@@ -1,5 +1,6 @@
 import { spawn, execSync } from "node:child_process"
 import { type Config } from "./gen/types.gen.js"
+import { DEFAULT_SERVER_HOST, DEFAULT_SERVER_PORT } from "./defaults.js"
 
 export type ServerOptions = {
   hostname?: string
@@ -32,8 +33,8 @@ function resolveCommand() {
 export async function createOpenCorvusServer(options?: ServerOptions) {
   options = Object.assign(
     {
-      hostname: "127.0.0.1",
-      port: 7878,
+      hostname: DEFAULT_SERVER_HOST,
+      port: DEFAULT_SERVER_PORT,
       timeout: 5000,
     },
     options ?? {},

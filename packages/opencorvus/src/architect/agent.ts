@@ -24,6 +24,7 @@ import { OrchestratorConfig } from "@/orchestrator/config"
 import { Config } from "@/config/config"
 import type { GoalContractFields } from "@/pipeline/types"
 import type { DecisionLog } from "@/decision-log"
+import { renderSpecsAsText } from "@/acceptance/types"
 import type { ArchitectResult, ArchitectBlueprint, ArchitectDecisionKey } from "./types"
 import { createArchitectOutputTools } from "./output-tools"
 
@@ -92,7 +93,7 @@ async function run(input: {
   // Read-only codebase tools + structured output tools (architect cannot write files)
   const goalIDs = input.goals.map(g => g.id)
   const outputToolKit = createArchitectOutputTools(goalIDs)
-  const guard = toolGuard({ ...createPlannerTools(undefined, undefined), ...outputToolKit.tools })
+  const guard = toolGuard({ ...createPlannerTools(), ...outputToolKit.tools })
 
   await input.onStatus?.("Architect agent: coordinating cross-goal contracts")
 
@@ -164,12 +165,20 @@ async function run(input: {
   let entriesWritten = 0
   for (const contract of blueprint.contracts) {
     if (!VALID_CATEGORIES.has(contract.category)) continue
+    // goalID dispatch:
+    //   • Single-goal contract → tag with that goal so per-goal sub-agents
+    //     reading `phasePromptSectionForGoal` see it.
+    //   • Multi-goal contract → tag as task-scoped (omit goalID). Per-goal
+    //     reads include `goal_id IS NULL` rows, so all goals see it. Tagging
+    //     to only the first goal would hide cross-goal interface contracts
+    //     from every other goal's executor.
+    const tagAsGoalID = contract.goalIDs.length === 1 ? contract.goalIDs[0] : undefined
     input.decisionLog.append({
-      goalID: contract.goalIDs[0] || undefined,
+      goalID: tagAsGoalID,
       phase: "architect",
       key: contract.category,
       value: `## ${contract.title}\n${contract.spec}`,
-      reason: `Architect consensus for goals: ${contract.goalIDs.join(", ")}`,
+      reason: `Architect consensus for goals: ${contract.goalIDs.join(", ") || "(task-wide)"}`,
     })
     entriesWritten++
   }
@@ -196,18 +205,33 @@ function buildUserPrompt(input: {
 
   sections.push(`# Task\n\nTitle: ${input.taskTitle}\n\nRequest:\n${input.taskRequest}`)
 
-  // All goals — include done_definition so architect can see exact acceptance
-  // criteria and produce contracts that match what eval will verify.
-  const goalsText = input.goals.map((g) => [
-    `## ${g.id}: ${g.title}`,
-    `objective: ${g.objective}`,
-    `done_definition: ${g.done_definition}`,
-    `owned_paths: ${g.owned_paths.join(", ") || "(none)"}`,
-    `exports: ${g.exports.join("; ") || "(none)"}`,
-    `imports: ${g.imports.join("; ") || "(none)"}`,
-    `depends_on: ${g.depends_on.join(", ") || "(none)"}`,
-    `kind: ${g.kind}`,
-  ].join("\n")).join("\n\n")
+  // Architect resolves cross-goal interfaces. It does not grade acceptance,
+  // but it DOES need to see each goal's acceptance criteria text because
+  // contracts (exports, types, file layout) must be consistent with what
+  // the evaluator will ultimately verify. Earlier the full spec body was
+  // dropped in favour of a plain count; that saved tokens but left the
+  // architect system prompt claiming inputs it no longer received. Cap
+  // per-goal spec text at 600 chars (enough for one interface-level
+  // acceptance line; longer prose bodies live in the spec snapshot and
+  // are available to downstream per-goal planners / evaluators).
+  const ARCHITECT_SPECS_CAP = 600
+  const goalsText = input.goals.map((g) => {
+    const specs = (g.acceptance_specs ?? [])
+    const specsRaw = renderSpecsAsText(specs)
+    const specsTrim = specsRaw.length > ARCHITECT_SPECS_CAP
+      ? specsRaw.slice(0, ARCHITECT_SPECS_CAP) + `… (truncated; ${specs.length} specs total, full bodies in spec snapshot)`
+      : specsRaw
+    return [
+      `## ${g.id}: ${g.title}`,
+      `objective: ${g.objective}`,
+      `acceptance_specs (${specs.length}):\n${specsTrim}`,
+      `owned_paths: ${g.owned_paths.join(", ") || "(none)"}`,
+      `exports: ${g.exports.join("; ") || "(none)"}`,
+      `imports: ${g.imports.join("; ") || "(none)"}`,
+      `depends_on: ${g.depends_on.join(", ") || "(none)"}`,
+      `kind: ${g.kind}`,
+    ].join("\n")
+  }).join("\n\n")
 
   sections.push(`# GoalContracts (${input.goals.length} goals)\n\n${goalsText}`)
 

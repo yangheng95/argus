@@ -5,7 +5,8 @@ import { Filesystem } from "@/util/filesystem"
 import { Log } from "@/util/log"
 import { dict } from "@/util/object"
 import { selectorList } from "@/check/policy"
-import { operatorNotesSection } from "@/orchestrator/helpers"
+import { renderSpecsAsText } from "@/acceptance/types"
+import { clarificationTranscriptSection, operatorNotesSection } from "@/orchestrator/helpers"
 import { createDecisionLog } from "@/decision-log"
 import { Instance } from "@/project/instance"
 import { Project } from "@/project/project"
@@ -349,7 +350,8 @@ export function buildGoalPrompt(input: {
   goal: GoalRow
   taskRequest?: string
   taskID?: string
-  allGoals?: GoalRow[]
+  /** Direct dependencies only — caller already filtered by goal.depends_on. */
+  dependencies?: GoalRow[]
   cwd?: string
 }) {
   const meta = dict(input.node.metadata)
@@ -362,18 +364,16 @@ export function buildGoalPrompt(input: {
   const allowedPaths = allowedRequestPaths(input.taskRequest ?? "")
   // Extract owned_paths and dependency context from goal metadata
   const ownedPaths = Array.isArray(goalMeta.owned_paths) ? goalMeta.owned_paths as string[] : []
-  const dependsOnIds = Array.isArray(goalMeta.depends_on_goal_ids) ? goalMeta.depends_on_goal_ids as string[] : []
-  const dependencyContext = dependsOnIds.length > 0 && input.allGoals
-    ? dependsOnIds
-        .map((id) => input.allGoals!.find((g) => g.id === id))
-        .filter(Boolean)
-        .map((g) => `- "${g!.title}" (completed, output in your workspace)`)
+  const dependencyContext = input.dependencies && input.dependencies.length > 0
+    ? input.dependencies
+        .map((g) => `- "${g.title}" (completed, output in your workspace)`)
         .join("\n")
     : ""
   // Include architect consensus from Decision Log (interface contracts, directory blueprint, naming conventions).
   // Only populated when Task Agent called architect(); empty string if skipped (single goal / simple task).
+  // Goal-scoped read: peer goals' private architect notes do not bleed into this executor's prompt.
   const architectConsensus = input.taskID
-    ? createDecisionLog(input.taskID).phasePromptSection("architect", "Architect Consensus")
+    ? createDecisionLog(input.taskID).phasePromptSectionForGoal("architect", input.goal.id, "Architect Consensus")
     : ""
 
   // Retry feedback: surfaces the latest rejected evaluation + Task Agent's
@@ -386,6 +386,7 @@ export function buildGoalPrompt(input: {
 
   return [
     "You are executing one goal in an isolated workspace (git worktree) for the coordinator.",
+    input.taskID ? clarificationTranscriptSection(input.taskID) || undefined : undefined,
     input.taskID ? operatorNotesSection(input.taskID) || undefined : undefined,
     input.cwd
       ? `Your working directory is: ${input.cwd}\nAll file paths MUST be relative to this directory or use this absolute prefix. Never write files outside this directory.`
@@ -405,7 +406,7 @@ export function buildGoalPrompt(input: {
     `Goal:
 ${input.goal.title}: ${input.goal.objective}`,
     `Acceptance:
-${input.goal.done_definition}`,
+${renderSpecsAsText(input.goal.acceptance_specs ?? [])}`,
     // Plan node brief — the planner's specific implementation steps for this goal.
     // Without this, the executor only sees the goal's description/criteria from the
     // goal decomposition stage and misses the planner's detailed guidance.

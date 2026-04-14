@@ -14,6 +14,7 @@ import { type SystemError } from "bun"
 import type { Provider } from "@/provider/provider"
 import { textForModel } from "./part-visibility"
 import { isDecodableText } from "./text-mime"
+import { STATEFUL_SNAPSHOT_TOOL_NAMES } from "@/task-agent/stateful-tool-names"
 
 export namespace Message {
   export const OutputLengthError = NamedError.create("MessageOutputLengthError", z.object({}))
@@ -493,9 +494,52 @@ export namespace Message {
   })
   export type WithParts = z.infer<typeof WithParts>
 
+  /**
+   * Tools whose output is a snapshot of current task state (no side effects,
+   * no delta value once superseded). Older calls' outputs are projected to a
+   * short "superseded" note when a later call to the same tool exists in the
+   * same session — this prevents tool results from piling up in the prompt
+   * as the task agent reads state every turn. DB rows are NOT modified;
+   * projection runs only at prompt-assembly time so UI / audit keeps full
+   * fidelity.
+   *
+   * The source-of-truth for membership is `STATEFUL_SNAPSHOT_TOOL_NAMES` in
+   * `task-agent/tools.ts`, co-located with the tool definitions so adding
+   * or renaming a stateful tool forces the developer to look at this list.
+   * We import it (rather than re-declaring) so the two cannot drift apart.
+   */
+  export const STATEFUL_SNAPSHOT_TOOLS: ReadonlySet<string> = new Set(STATEFUL_SNAPSHOT_TOOL_NAMES)
+
   export function toModelMessages(input: WithParts[], model: Provider.Model): ModelMessage[] {
     const result: UIMessage[] = []
     const toolNames = new Set<string>()
+
+    // Pre-pass: for each stateful-snapshot tool, find the callID of its
+    // latest invocation. Any earlier invocation's output will be projected
+    // to a short "[superseded by later call]" note below, keeping only the
+    // live snapshot's full text in the prompt. Walking in reverse lets us
+    // short-circuit once we have the latest for every tool we've seen.
+    // Both completed and error states are treated as "a call happened" —
+    // an older error result is just as obsolete as an older success once a
+    // newer call exists, and leaving it in the prompt encourages the model
+    // to reason about stale failures.
+    const latestStatefulCallIDs = new Set<string>()
+    const seenStatefulTools = new Set<string>()
+    for (let i = input.length - 1; i >= 0; i--) {
+      const msg = input[i]
+      for (let j = msg.parts.length - 1; j >= 0; j--) {
+        const p = msg.parts[j]
+        if (
+          p.type === "tool" &&
+          STATEFUL_SNAPSHOT_TOOLS.has(p.tool) &&
+          (p.state.status === "completed" || p.state.status === "error") &&
+          !seenStatefulTools.has(p.tool)
+        ) {
+          seenStatefulTools.add(p.tool)
+          latestStatefulCallIDs.add(p.callID)
+        }
+      }
+    }
     // Track media from tool results that need to be injected as user messages
     // for providers that don't support media in tool results.
     //
@@ -634,12 +678,19 @@ export namespace Message {
             toolNames.add(part.tool)
             if (part.state.status === "completed") {
               let outputText: string
+              const isSupersededStatefulSnapshot =
+                STATEFUL_SNAPSHOT_TOOLS.has(part.tool) && !latestStatefulCallIDs.has(part.callID)
               if (part.state.time.compacted) {
                 outputText = "[Old tool result content cleared]"
+              } else if (isSupersededStatefulSnapshot) {
+                outputText = `[${part.tool} snapshot superseded by a later call in this session]`
               } else {
                 outputText = part.state.output
               }
-              const attachments = part.state.time.compacted ? [] : (part.state.attachments ?? [])
+              const attachments =
+                part.state.time.compacted || isSupersededStatefulSnapshot
+                  ? []
+                  : (part.state.attachments ?? [])
 
               // For providers that don't support media in tool results, extract media files
               // (images, PDFs) to be sent as a separate user message
@@ -669,15 +720,21 @@ export namespace Message {
                 ...(differentModel ? {} : { callProviderMetadata: part.metadata }),
               })
             }
-            if (part.state.status === "error")
+            if (part.state.status === "error") {
+              const isSupersededStatefulError =
+                STATEFUL_SNAPSHOT_TOOLS.has(part.tool) && !latestStatefulCallIDs.has(part.callID)
+              const errorText = isSupersededStatefulError
+                ? `[${part.tool} error superseded by a later call in this session]`
+                : part.state.error
               assistantMessage.parts.push({
                 type: ("tool-" + part.tool) as `tool-${string}`,
                 state: "output-error",
                 toolCallId: part.callID,
                 input: part.state.input,
-                errorText: part.state.error,
+                errorText,
                 ...(differentModel ? {} : { callProviderMetadata: part.metadata }),
               })
+            }
             // Handle pending/running tool calls to prevent dangling tool_use blocks
             // Anthropic/Claude APIs require every tool_use to have a corresponding tool_result
             if (part.state.status === "pending" || part.state.status === "running")

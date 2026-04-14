@@ -457,7 +457,7 @@ CREATE TABLE IF NOT EXISTS orchestrator_goal (
   milestone_id     text,
   title            text NOT NULL,
   objective        text NOT NULL,
-  done_definition  text NOT NULL,
+  acceptance_specs text NOT NULL DEFAULT '[]',
   owned_paths      text NOT NULL DEFAULT '[]',
   depends_on       text NOT NULL DEFAULT '[]',
   exports          text NOT NULL DEFAULT '[]',
@@ -595,7 +595,7 @@ CREATE INDEX IF NOT EXISTS orchestrator_goal_run_status_idx      ON orchestrator
 CREATE TABLE IF NOT EXISTS orchestrator_interaction_request (
   id            text PRIMARY KEY,
   task_id       text NOT NULL,
-  run_id        text NOT NULL,
+  run_id        text,
   session_id    text,
   external_id   text NOT NULL,
   request_type  text NOT NULL,

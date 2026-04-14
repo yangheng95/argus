@@ -1,6 +1,0 @@
-interface:
-  display_name: "OpenCorvus WhatsApp Channel Config"
-  short_description: "Configure WhatsApp channel integration for OpenCorvus"
-  default_prompt: "Use $opencorvus-whatsapp-channel-config to set up or debug WhatsApp channel integration for OpenCorvus."
-
-

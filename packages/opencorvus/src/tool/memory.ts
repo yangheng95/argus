@@ -11,10 +11,17 @@ const DESCRIPTION = `Scoped memory store for project knowledge.
 
 **Proactive writing**: Write memory whenever you discover useful knowledge — do not wait until task end. Write test commands, build steps, deployment procedures, environment configs, non-obvious gotchas, root causes, effective patterns, task summaries, historical decisions, inspirations, and ideas.
 
+**Always-save categories** — when you observe any of these, save immediately (do not batch, do not defer):
+- **Credentials / API keys / tokens**: the concrete value if seen, plus where it loads from (env var name, .env path, credential-manager entry, vault ID). Use \`kind: "fact"\`, \`key: "credential:<name>"\`.
+- **Tool / CLI invocation quirks**: non-default flags, required env vars, path workarounds, platform-specific overrides (e.g. Windows-only PowerShell replacements for taskkill). Use \`kind: "fact"\`, \`key: "tool:<name>"\`.
+- **High-frequency errors**: any error you see more than once or that costs noticeable time — capture the symptom, the trigger, the root cause, and the fix. Use \`kind: "lesson"\`, \`key: "error:<short-id>"\`.
+
+Using the \`key\` field for these three categories enables idempotent updates (same key → overwrite) instead of accumulating duplicates.
+
 Actions:
 - **search**: Search session memory, global memory, or both. Use BEFORE answering from memory.
 - **get**: Retrieve full content of a memory file by ID. Use after search to read detailed content.
-- **write**: Save important knowledge. Prefer typed memory: lesson (gotchas, patterns, inspirations), fact (setup, config, env, test/deploy commands), episode (task summaries, history), profile (stable constraints).
+- **write**: Save important knowledge. Prefer typed memory: lesson (gotchas, patterns, inspirations, recurring errors), fact (setup, config, env, test/deploy commands, credentials, tool quirks), episode (task summaries, history), profile (stable constraints).
 - **list**: Browse saved memory files by scope.
 - **delete**: Remove outdated or incorrect memory by file ID.`
 
@@ -51,6 +58,10 @@ export const MemoryTool = Tool.define("memory", {
         .enum(["global", "session"])
         .optional()
         .describe("Storage scope (default: global)"),
+      key: z
+        .string()
+        .optional()
+        .describe("Stable identifier for idempotent upserts (same key + scope + kind → overwrite existing entry). Use 'credential:<name>', 'tool:<name>', 'error:<short-id>' for the always-save categories."),
     }),
     z.object({
       action: z.literal("list"),
@@ -154,6 +165,7 @@ export const MemoryTool = Tool.define("memory", {
           scope,
           sessionID: scope === "session" ? ctx.sessionID : undefined,
           kind: params.kind,
+          key: params.key,
         })
         return {
           title: `Saved: ${params.title}`,

@@ -5,7 +5,7 @@
  * INSIDE each GoalPipeline, producing plan_node steps scoped to one goal.
  *
  * Observation domain (from SVG spec):
- *   • GoalContract full (objective + done_definition + owned_paths)
+ *   • GoalContract full (objective + acceptance_specs + owned_paths)
  *   • user original input (task.request)
  *   • Decision Log (full)
  *   • predecessor code (HEAD — available in worktree)
@@ -20,9 +20,10 @@ import { toolGuard } from "@/util/tool-guard"
 import { Log } from "@/util/log"
 import { AgentRuntime } from "@/agent/runtime"
 import { OrchestratorConfig } from "@/orchestrator/config"
-import { operatorNotesSection } from "@/orchestrator/helpers"
+import { clarificationTranscriptSection, operatorNotesSection } from "@/orchestrator/helpers"
 import { extractTag } from "@/util/parse-section-tags"
 import type { TextHooks } from "@/llm/api"
+import { renderSpecsAsText } from "@/acceptance/types"
 import type { GoalContract } from "@/pipeline/types"
 import type { DecisionLog } from "@/decision-log"
 
@@ -64,15 +65,19 @@ export async function planGoal(input: {
   if (!def) throw new Error("no LLM model available for per-goal planner")
   const model = await Provider.getModel(def.providerID, def.modelID)
 
-  const guard = toolGuard(createPlannerTools(input.workDir, input.sessionID))
+  const guard = toolGuard(createPlannerTools(input.workDir))
   const context = prefetchContext(task.title, task.request)
 
-  // Build Decision Log section — architect consensus gets its own prominent section
+  // Build Decision Log section — goal-scoped reads only. The full task log
+  // (toPromptSection) was previously injected wholesale into every per-goal
+  // planner, so each planner's prompt grew O(N goals × M decisions). We now
+  // include only entries that are task-scoped (no goalID) or attached to
+  // THIS goal — peer goals' local notes belong in their own planner runs.
   let decisionSection = ""
   let architectSection = ""
   if (input.decisionLog) {
-    decisionSection = input.decisionLog.toPromptSection()
-    architectSection = input.decisionLog.phasePromptSection("architect", "Architect Consensus")
+    decisionSection = input.decisionLog.phasePromptSectionForGoal("requirements", contract.goal.id, "Decisions (relevant to this goal)")
+    architectSection = input.decisionLog.phasePromptSectionForGoal("architect", contract.goal.id, "Architect Consensus")
   }
 
   const systemPrompt = buildPlannerSystem()
@@ -148,7 +153,7 @@ function buildPlannerSystem(): string {
     "- Reference specific file paths, function names, and types",
     "- Steps must be concrete and actionable (not vague)",
     "- Each step should be independently verifiable",
-    "- Consider the done_definition — your steps must lead to it being satisfied",
+    "- Consider the acceptance_specs — your steps must lead to all scorers passing",
     "- If the Decision Log has tech stack decisions, respect them",
     "",
     "Output format:",
@@ -166,23 +171,19 @@ function buildPlannerPrompt(
   taskRequest: string,
   architectSection?: string,
 ): string {
-  const { goal, allGoals } = contract
+  const { goal, dependencies } = contract
   const sections: string[] = []
 
-  sections.push(`# Goal Contract\n\n**${goal.title}**\n\nObjective: ${goal.objective}\n\nDone Definition: ${goal.done_definition}`)
+  sections.push(`# Goal Contract\n\n**${goal.title}**\n\nObjective: ${goal.objective}\n\nAcceptance Specs:\n${renderSpecsAsText(goal.acceptance_specs ?? [])}`)
 
   if (goal.owned_paths.length > 0) {
     sections.push(`## Owned Paths (EXCLUSIVE write access)\n\n${goal.owned_paths.map(p => `- ${p}`).join("\n")}`)
   }
 
-  if (goal.depends_on.length > 0) {
-    const deps = goal.depends_on
-      .map(id => allGoals.find(g => g.id === id))
-      .filter(Boolean)
-      .map(g => `- **${g!.title}**: ${g!.objective}${g!.exports?.length ? ` (exports: ${g!.exports.join(", ")})` : ""}`)
-    if (deps.length > 0) {
-      sections.push(`## Dependencies (completed before this goal)\n\n${deps.join("\n")}`)
-    }
+  if (dependencies.length > 0) {
+    const deps = dependencies
+      .map(g => `- **${g.title}**: ${g.objective}${g.exports?.length ? ` (exports: ${g.exports.join(", ")})` : ""}`)
+    sections.push(`## Dependencies (completed before this goal)\n\n${deps.join("\n")}`)
   }
 
   if (goal.imports?.length) {
@@ -209,6 +210,8 @@ function buildPlannerPrompt(
     sections.push(`## Pre-fetched Context\n\n${context}`)
   }
 
+  const clarifications = clarificationTranscriptSection(contract.task.id)
+  if (clarifications) sections.push(clarifications)
   const notes = operatorNotesSection(contract.task.id)
   if (notes) sections.push(notes)
 

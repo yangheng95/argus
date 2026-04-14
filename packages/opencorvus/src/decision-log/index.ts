@@ -47,17 +47,31 @@ export interface DecisionLogReader {
   read(): DecisionEntry[]
   /** Read all decisions for a specific phase (e.g., "architect", "requirements"). */
   readByPhase(phase: string): DecisionEntry[]
+  /**
+   * Read decisions for a specific phase that are either task-scoped
+   * (goalID null — applies to all goals) or scoped to the given goalID.
+   * This is the goal-scoped read used by per-goal sub-agents to avoid
+   * inheriting peer goals' private decisions.
+   */
+  readByPhaseAndGoal(phase: string, goalID: string): DecisionEntry[]
   /** Read the latest decision for a specific key. */
   readByKey(key: string): DecisionEntry | undefined
-  /** Format all decisions as a text block for LLM context injection. */
-  toPromptSection(): string
   /**
-   * Format decisions for a specific phase as a prompt section under the
-   * given heading. Caller must supply the heading because the same phase
-   * can be surfaced under different titles depending on context.
-   * Returns "" when no entries exist for the phase.
+   * Format all decisions as a text block for LLM context injection.
+   * When `options.limit` is given, keeps the latest N entries (by
+   * time_created, desc) and appends a short note about how many older
+   * entries were omitted. Callers on hot paths (task-agent read_context)
+   * must pass a limit to avoid unbounded prompt growth as the log grows.
    */
-  phasePromptSection(phase: string, heading: string): string
+  toPromptSection(options?: { limit?: number }): string
+  /**
+   * Format decisions for a specific phase, scoped to entries that are
+   * either task-wide (no goalID) or attached to `goalID`. Per-goal
+   * planners and executors use this so each prompt carries only the
+   * decisions relevant to that goal — not every peer goal's local notes.
+   * Returns "" when no entries match.
+   */
+  phasePromptSectionForGoal(phase: string, goalID: string, heading: string): string
 }
 
 export type DecisionLog = DecisionLogWriter & DecisionLogReader
@@ -108,6 +122,20 @@ export function createDecisionLog(taskID: string): DecisionLog {
       ).map(rowToEntry)
     },
 
+    readByPhaseAndGoal(phase: string, goalID: string): DecisionEntry[] {
+      // SQL goal_id IS NULL covers task-scoped entries; equality covers
+      // entries owned by this specific goal. We deliberately exclude entries
+      // owned by peer goals so each per-goal prompt stays narrow.
+      return Database.use((db) =>
+        db.select().from(DecisionLogTable)
+          .where(and(eq(DecisionLogTable.task_id, taskID), eq(DecisionLogTable.phase, phase)))
+          .orderBy(DecisionLogTable.time_created)
+          .all(),
+      )
+        .filter((row) => row.goal_id === null || row.goal_id === goalID)
+        .map(rowToEntry)
+    },
+
     readByKey(key: string): DecisionEntry | undefined {
       const row = Database.use((db) =>
         db.select().from(DecisionLogTable)
@@ -118,17 +146,27 @@ export function createDecisionLog(taskID: string): DecisionLog {
       return row ? rowToEntry(row) : undefined
     },
 
-    toPromptSection(): string {
-      const entries = this.read()
-      if (entries.length === 0) return ""
+    toPromptSection(options?: { limit?: number }): string {
+      const all = this.read()
+      if (all.length === 0) return ""
+      const limit = options?.limit
+      // `read()` returns ascending by time_created. Keep the latest slice so
+      // recent decisions win when the log outgrows the budget.
+      const entries = typeof limit === "number" && all.length > limit
+        ? all.slice(all.length - limit)
+        : all
+      const omitted = all.length - entries.length
       const lines = entries.map((e) =>
         `- **${e.key}**: ${e.value}${e.reason ? ` (${e.reason})` : ""}${e.goalID ? ` [goal:${e.goalID.slice(-8)}]` : ""}`,
       )
-      return `## Decision Log (${entries.length} entries)\n\n${lines.join("\n")}`
+      const header = omitted > 0
+        ? `## Decision Log (latest ${entries.length} of ${all.length}; ${omitted} older omitted)`
+        : `## Decision Log (${entries.length} entries)`
+      return `${header}\n\n${lines.join("\n")}`
     },
 
-    phasePromptSection(phase: string, heading: string): string {
-      const entries = this.readByPhase(phase)
+    phasePromptSectionForGoal(phase: string, goalID: string, heading: string): string {
+      const entries = this.readByPhaseAndGoal(phase, goalID)
       if (entries.length === 0) return ""
       const lines = entries.map((e) =>
         `### ${e.key}\n${e.value}${e.reason ? `\n_Why: ${e.reason}_` : ""}${e.goalID ? ` [goal:${e.goalID.slice(-8)}]` : ""}`,

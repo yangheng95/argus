@@ -4,6 +4,7 @@ import type { GoalJudgmentType } from "@/evaluator/types"
 import { evaluationGroups } from "@/orchestrator/evaluation-group"
 import { Instance } from "@/project/instance"
 import { Log } from "@/util/log"
+import { renderSpecsAsText } from "@/acceptance/types"
 import type { EvaluationRow, GoalRow, MilestoneRow, PlanRow, RunRow, TaskRow } from "./store"
 
 const log = Log.create({ service: "orchestrator.docs" })
@@ -26,6 +27,11 @@ function list(input: unknown) {
     const value = text(item)
     return value ? [value] : []
   })
+}
+
+function indent(block: string, spaces: number): string {
+  const prefix = " ".repeat(spaces)
+  return block.split("\n").map((line) => (line ? prefix + line : line)).join("\n")
 }
 
 function obj(input: unknown) {
@@ -124,7 +130,7 @@ function goalText(input: {
     const checks = selectors(meta)
     const origin = text(meta?.origin)
     lines.push(`${index + 1}. [${goal.status}] [${goal.priority}] ${goal.title}`)
-    lines.push(`   - Done Definition: ${goal.done_definition}`)
+    lines.push(`   - Acceptance:\n${indent(renderSpecsAsText(goal.acceptance_specs ?? []), 5)}`)
     if (checks.length > 0) lines.push(`   - Checks: ${checks.join(", ")}`)
     if (origin) lines.push(`   - Origin: ${origin}`)
   }
@@ -209,7 +215,9 @@ function evaluationText(input: {
     for (const item of statuses) {
       const goal = input.goals[item.goal_index]
       lines.push(`- [${item.status}] ${goal?.title || `Goal ${item.goal_index + 1}`}`)
-      if (goal?.done_definition) lines.push(`  - Done Definition: ${goal.done_definition}`)
+      if (goal?.acceptance_specs && goal.acceptance_specs.length > 0) {
+        lines.push(`  - Acceptance:\n${indent(renderSpecsAsText(goal.acceptance_specs), 4)}`)
+      }
       if (text(item.evidence)) lines.push(`  - Evidence: ${item.evidence}`)
       if (text(item.reasoning)) lines.push(`  - Reasoning: ${item.reasoning}`)
     }

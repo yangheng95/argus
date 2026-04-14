@@ -19,6 +19,7 @@ import { GlobalRoutes } from "./routes/global"
 import { MDNS } from "./mdns"
 import { muteAISdkWarnings } from "@/runtime/shims"
 import { OverlayUI } from "./overlay-ui"
+import { DEFAULT_SERVER_PORT } from "./defaults"
 
 muteAISdkWarnings()
 
@@ -29,7 +30,8 @@ export namespace Server {
   let _corsWhitelist: string[] = []
 
   export function url(): URL {
-    return _url ?? new URL("http://localhost:7878")
+    if (!_url) throw new Error("Server.url() called before serve() — server not started")
+    return _url
   }
 
   function decodeDirectory(raw: string) {
@@ -157,7 +159,7 @@ export namespace Server {
         return undefined
       }
     }
-    const server = opts.port === 0 ? (tryServe(7878) ?? tryServe(0)) : tryServe(opts.port)
+    const server = opts.port === 0 ? (tryServe(DEFAULT_SERVER_PORT) ?? tryServe(0)) : tryServe(opts.port)
     if (!server) {
       const detail = failure instanceof Error ? failure.message : failure ? String(failure) : "unknown"
       throw new Error(`Failed to start server on port ${opts.port}: ${detail}`)

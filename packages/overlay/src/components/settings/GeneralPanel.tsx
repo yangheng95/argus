@@ -1,18 +1,10 @@
-// ── GeneralPanel ──
-// Solid.js component for general overlay settings.
-// Mirrors the original titlebar-menu settings from app.js, reorganised into
-// card-based groups inside the config dialog General tab:
-//   - Connection: server URL, username, password
-//   - Appearance: theme, locale, opacity
-//   - Behaviour: always-on-top, transcript details (unattended/auto-* moved to OrchestrationPanel)
-
 import { createSignal } from "solid-js";
 import { t } from "../../utils/i18n";
 import { settingsStore, setSettingsStore, saveSettings } from "../../store/settings";
 import { appStore } from "../../store/app";
 import { configure as configureApi } from "../../services/api";
 import { checkConnection } from "../../services/connection";
-import { reloadProjectScope } from "../../services/config";
+import { reloadProjectScope, patchConfig } from "../../services/config";
 
 export default function GeneralPanel() {
   const [saved, setSaved] = createSignal(false);
@@ -75,6 +67,12 @@ export default function GeneralPanel() {
   }
 
   const opacityPercent = () => Math.round(settingsStore.opacity * 100);
+
+  const experimental = () => (appStore.config as any)?.experimental ?? {};
+
+  function handleExperimentalToggle(key: "unattended" | "auto_permission", e: Event) {
+    void patchConfig({ experimental: { [key]: (e.currentTarget as HTMLInputElement).checked } });
+  }
 
   return (
     <div class="general-panel">
@@ -187,8 +185,6 @@ export default function GeneralPanel() {
               />
             </label>
 
-            {/* Unattended / Auto-permission / Auto-question moved to Orchestration tab */}
-
             <label class="config-toggle-list-item">
               <span class="toggle-label">{t("settings.show_transcript_details")}</span>
               <input
@@ -197,6 +193,25 @@ export default function GeneralPanel() {
                 onChange={(e) => handleToggle("showTranscriptDetails", e)}
               />
             </label>
+
+            <label class="config-toggle-list-item">
+              <span class="toggle-label">{t("settings.unattended")}</span>
+              <input
+                type="checkbox"
+                checked={!!experimental().unattended}
+                onChange={(e) => handleExperimentalToggle("unattended", e)}
+              />
+            </label>
+
+            <label class="config-toggle-list-item">
+              <span class="toggle-label">{t("settings.auto_permission")}</span>
+              <input
+                type="checkbox"
+                checked={!!experimental().auto_permission}
+                onChange={(e) => handleExperimentalToggle("auto_permission", e)}
+              />
+            </label>
+
           </div>
         </div>
       </div>

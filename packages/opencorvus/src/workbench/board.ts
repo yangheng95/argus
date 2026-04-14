@@ -818,7 +818,7 @@ function buildWorkflowFields(
       goalID: goal.id,
       goalTitle: goal.title,
       goalStatus: goal.status,
-      doneDefinition: goal.done_definition,
+      acceptanceSpecs: goal.acceptance_specs,
       priority: (goal.priority ?? "blocking") as "blocking" | "advisory",
       steps: workflow.steps
         .filter(s => s.scope === "goal")
@@ -877,6 +877,7 @@ function buildRequirements(taskID: string) {
     description: r.description,
     type: r.priority === "blocking" ? "explicit" as const : "inferred" as const,
     priority: r.priority as "blocking" | "advisory",
+    status: r.status,
   }))
 }
 

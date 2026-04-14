@@ -740,6 +740,7 @@ export function viewTask(row: TaskRow, input?: { directory?: string }) {
     error: row.error ?? undefined,
     budget: budgetModel(row.budget),
     metadata: row.metadata ?? undefined,
+    attachments: row.attachments ?? undefined,
     time: {
       created: row.time_created,
       updated: row.time_updated,
@@ -773,7 +774,7 @@ export function viewGoal(row: GoalRow) {
     milestoneID: row.milestone_id ?? undefined,
     title: row.title,
     objective: row.objective,
-    done_definition: row.done_definition,
+    acceptance_specs: row.acceptance_specs,
     owned_paths: row.owned_paths,
     depends_on: row.depends_on,
     exports: row.exports,

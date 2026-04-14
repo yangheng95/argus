@@ -20,11 +20,13 @@ export interface RequirementsDecision {
   reason: string
 }
 
+import type { AcceptanceSpec } from "@/acceptance/types"
+
 export interface ParsedGoalContract {
   id: string
   title: string
   objective: string
-  done_definition: string
+  acceptance_specs: AcceptanceSpec[]
   owned_paths: string[]
   depends_on: string[]
   exports: string[]

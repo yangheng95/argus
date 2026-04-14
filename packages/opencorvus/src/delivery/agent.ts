@@ -23,7 +23,7 @@ import { Env } from "@/env"
 import { type TextHooks } from "@/llm/api"
 import { Config } from "@/config/config"
 import { OrchestratorConfig } from "@/orchestrator/config"
-import { operatorNotesSection } from "@/orchestrator/helpers"
+import { clarificationTranscriptSection, operatorNotesSection } from "@/orchestrator/helpers"
 import { loadStageSkills } from "@/orchestrator/skill-inject"
 import { collectText, countToolCalls, firstContentLine, sectionBody } from "@/util/agent-text"
 import { AttachmentStore } from "@/storage/attachment-store"
@@ -398,12 +398,16 @@ async function buildMultimodalPrompt(
   attachments?: Array<{ sha: string; url: string; mime: string; size: number; filename?: string }>,
 ): Promise<string | Array<{ type: "text"; text: string } | { type: "file"; data: Buffer; mediaType: string; filename?: string }>> {
   if (!attachments?.length) return text
-  const images = attachments.filter((a) => typeof a.mime === "string" && a.mime.startsWith("image/"))
-  if (images.length === 0) return text
+  // Mirror task-agent / requirements / design-analyst routing: only inline
+  // MIMEs the provider actually accepts as multimodal (image / audio / video
+  // / PDF). The previous image-only filter dropped PDFs that delivery agents
+  // legitimately need to inspect.
+  const inlineable = attachments.filter((a) => AttachmentStore.isMultimodalSupported(typeof a.mime === "string" ? a.mime : ""))
+  if (inlineable.length === 0) return text
   const parts: Array<{ type: "text"; text: string } | { type: "file"; data: Buffer; mediaType: string; filename?: string }> = [
     { type: "text", text },
   ]
-  for (const a of images) {
+  for (const a of inlineable) {
     const located = AttachmentStore.nameFromUrl(a.url)
     if (!located) {
       log.warn("delivery: attachment url did not resolve", { url: a.url, filename: a.filename })
@@ -480,6 +484,8 @@ function buildUserPrompt(
   // Operator notes — user messages sent during task execution
   const taskID = input.task.metadata?.taskID as string | undefined
   if (taskID) {
+    const clarifications = clarificationTranscriptSection(taskID)
+    if (clarifications) sections.push(clarifications)
     const notes = operatorNotesSection(taskID)
     if (notes) sections.push(notes)
   }
@@ -495,9 +501,19 @@ function buildUserPrompt(
         .join("\n\n---\n\n"),
   )
 
+  // Cap the changed-files list so a wide refactor (hundreds of touched files)
+  // does not flood the prompt. The diff section below already shows up to 8
+  // representative files; the full path list is reference material, not the
+  // signal delivery reasons over.
+  const CHANGED_FILES_PROMPT_CAP = 80
+  const filesShown = input.delivery.changedFiles.slice(0, CHANGED_FILES_PROMPT_CAP)
+  const filesOmitted = input.delivery.changedFiles.length - filesShown.length
+  const filesHeader = filesOmitted > 0
+    ? `Changed files (${input.delivery.changedFiles.length} total; first ${filesShown.length} listed, ${filesOmitted} omitted):`
+    : `Changed files (${input.delivery.changedFiles.length}):`
   sections.push(
-    `# Delivery\n\nSummary: ${input.delivery.summary}\n\nChanged files (${input.delivery.changedFiles.length}):\n` +
-      input.delivery.changedFiles.map((f) => `- ${f}`).join("\n"),
+    `# Delivery\n\nSummary: ${input.delivery.summary}\n\n${filesHeader}\n` +
+      filesShown.map((f) => `- ${f}`).join("\n"),
   )
 
   if (input.delivery.diffs && input.delivery.diffs.length > 0) {

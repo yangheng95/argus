@@ -372,16 +372,6 @@ function appendPendingAssistantPart(
   setMessages(next);
 }
 
-function insertPendingUserMessage(requestID: string, text: string): void {
-  setMessages([
-    ...messageStore.messages,
-    {
-      info: { id: `pending-user:${requestID}`, role: "user", time: { created: Date.now() } },
-      parts: [{ type: "text", text }],
-    },
-  ]);
-}
-
 function ensureTaskListEntry(
   taskID: string,
   requestID: string,
@@ -466,7 +456,6 @@ export async function panelMessage(text: string, attachmentsOrMeta: any[] | Reco
     aborted: false,
     manualAbort: false,
   };
-  insertPendingUserMessage(requestID, text);
   setConnectionStatus("online");
   setChatRequest(request as any);
   try {
@@ -510,7 +499,19 @@ export async function panelMessage(text: string, attachmentsOrMeta: any[] | Reco
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text, source: "panel" }),
+        body: JSON.stringify({
+          text,
+          source: "panel",
+          ...(attachments.length > 0
+            ? {
+                attachments: attachments.map((att) => ({
+                  mime: att.mime,
+                  data: att.url.includes(",") ? att.url.split(",")[1] : att.url,
+                  ...(att.filename ? { filename: att.filename } : {}),
+                })),
+              }
+            : {}),
+        }),
         signal: controller.signal,
       },
     );

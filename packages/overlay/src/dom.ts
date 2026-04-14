@@ -64,7 +64,6 @@ export interface DomRefs {
 
  // Task meta
   taskStatus: HTMLElement | null;
-  extensionsBadge: HTMLElement | null;
 
  // Config dialog
   btnConfigToggle: HTMLButtonElement | null;
@@ -98,15 +97,6 @@ export interface DomRefs {
 
  // Lists
   channelList: HTMLElement | null;
-  skillList: HTMLElement | null;
-  btnSkillMarket: HTMLButtonElement | null;
-  btnOpenSkillRoot: HTMLButtonElement | null;
-  btnReloadSkills: HTMLButtonElement | null;
-  btnDeleteAllSkills: HTMLButtonElement | null;
-  mcpList: HTMLElement | null;
-  btnAddSkill: HTMLButtonElement | null;
-  btnAddMcp: HTMLButtonElement | null;
-  btnDeleteAllMcp: HTMLButtonElement | null;
 
  // Status bar
   statusDot: HTMLElement | null;
@@ -350,7 +340,6 @@ export function getDomRefs(): DomRefs {
 
  // Task meta
     taskStatus: $<HTMLElement>("#taskStatus"),
-    extensionsBadge: $<HTMLElement>("#extensionsBadge"),
 
  // Config dialog
     btnConfigToggle: $<HTMLButtonElement>("#btnConfigToggle"),
@@ -384,15 +373,6 @@ export function getDomRefs(): DomRefs {
 
  // Lists
     channelList: $<HTMLElement>("#channelList"),
-    skillList: $<HTMLElement>("#skillList"),
-    btnSkillMarket: $<HTMLButtonElement>("#btnSkillMarket"),
-    btnOpenSkillRoot: $<HTMLButtonElement>("#btnOpenSkillRoot"),
-    btnReloadSkills: $<HTMLButtonElement>("#btnReloadSkills"),
-    btnDeleteAllSkills: $<HTMLButtonElement>("#btnDeleteAllSkills"),
-    mcpList: $<HTMLElement>("#mcpList"),
-    btnAddSkill: $<HTMLButtonElement>("#btnAddSkill"),
-    btnAddMcp: $<HTMLButtonElement>("#btnAddMcp"),
-    btnDeleteAllMcp: $<HTMLButtonElement>("#btnDeleteAllMcp"),
 
  // Status bar
     statusDot: $<HTMLElement>("#statusIcon"),

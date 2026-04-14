@@ -73,6 +73,33 @@ export namespace Database {
     Client.reset()
   }
 
+  /**
+   * Run `PRAGMA wal_checkpoint(TRUNCATE)` to collapse the WAL back into the
+   * main DB file and truncate it on disk. Only meaningful after bulk
+   * DELETEs that shift many pages to free-list. Must run outside a
+   * transaction — caller is responsible for not holding one.
+   */
+  export function checkpointTruncate() {
+    // Forcing Client() ensures the sqlite handle is initialised; we cannot use
+    // `use()` here because checkpoint must not run inside a transaction ctx.
+    Client()
+    const sqlite = state.sqlite
+    if (!sqlite) return
+    sqlite.run("PRAGMA wal_checkpoint(TRUNCATE)")
+  }
+
+  /**
+   * Run `VACUUM` to rebuild the DB file and reclaim free pages into the
+   * filesystem. Expensive; call only after large-scale deletes. Must run
+   * outside a transaction.
+   */
+  export function vacuum() {
+    Client()
+    const sqlite = state.sqlite
+    if (!sqlite) return
+    sqlite.run("VACUUM")
+  }
+
   export type TxOrDb = Transaction | Client
 
   const ctx = Context.create<{

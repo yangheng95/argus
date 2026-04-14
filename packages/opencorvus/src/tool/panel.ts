@@ -309,7 +309,7 @@ export const PanelTool = Tool.define("panel", {
       case "update_goal":
         await OrchestratorService.updateGoal(params.goalID, {
           description: params.description,
-          criteria: params.criteria,
+          acceptance_specs: params.acceptance_specs as import("@/acceptance/types").AcceptanceSpec[],
         })
         return { title: "Goal updated", output: JSON.stringify({ kind: "panel_response", message: "Goal updated." }), metadata: {} }
       case "delete_goal":

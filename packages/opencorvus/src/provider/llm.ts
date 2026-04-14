@@ -27,9 +27,99 @@ import { Provider } from "./provider"
 import { ProviderTransform } from "./transform"
 import { Installation } from "@/installation"
 import { Flag } from "@/flag/flag"
+import { Env } from "@/env"
 import { Log } from "@/util/log"
 
 const log = Log.create({ service: "provider-llm" })
+
+// ── Sub-agent context pruning ─────────────────────────────────────────────
+// AI SDK runs an internal multi-step loop (controlled by `stopWhen`) inside
+// a single `streamText` call. Each step appends new tool calls + tool results
+// to the conversation, then re-sends the FULL accumulated history to the LLM.
+// For long-running sub-agents (requirements doing 20+ codebase explorations)
+// this drives input from ~9 KB to ~100 KB across one session — the cost
+// problem documented in the screenshot from 2026-04-14.
+//
+// Vercel AI SDK 5 ships `prepareStep` for exactly this — called before each
+// step, can return `{ messages }` to override what the LLM sees. We use it to
+// evict OLD tool results (replace `output` with a "[evicted]" stub) once the
+// step number passes a small threshold. `toolCallId` / `toolName` stay intact
+// so the tool_use ↔ tool_result pairing the provider expects isn't broken.
+//
+// Anthropic offers a native server-side equivalent via providerOptions
+// `context_management.edits = [{type: "clear_tool_uses_20250919", ...}]`
+// (beta header `context-management-2025-06-27`). Most of our paths go through
+// openai-compatible LiteLLM adapters today, so the native edits payload would
+// be silently dropped — we ship the universal client-side prune instead. When
+// we add a direct `@ai-sdk/anthropic` provider, layer the native edits on top
+// for double protection (server-side eviction is more accurate because it
+// happens after token counting, not before).
+
+const PRUNE_KEEP_RECENT_ROUNDS_DEFAULT = 4
+const PRUNE_MIN_STEP_TO_TRIGGER = 4
+const EVICTED_TEXT = "[evicted: old tool result removed by sub-agent context pruning]"
+
+/**
+ * Walk `messages` and replace every tool-result `output` that lives BEFORE
+ * the last `keepLastToolRounds` tool messages with an `[evicted]` text stub.
+ * Keeps the assistant tool-call envelopes and `toolCallId` pairings intact —
+ * providers that validate tool_use/tool_result pairing (Anthropic) will still
+ * accept the prompt. Returns a new array; never mutates input.
+ */
+function pruneStaleToolResults(
+  messages: ModelMessage[],
+  keepLastToolRounds: number,
+): ModelMessage[] {
+  // Identify tool-message indices in chronological order.
+  const toolIdxs: number[] = []
+  for (let i = 0; i < messages.length; i++) {
+    if (messages[i]?.role === "tool") toolIdxs.push(i)
+  }
+  if (toolIdxs.length <= keepLastToolRounds) return messages
+
+  // Cutoff: any tool message at index <= cutoffIdx is stale.
+  const firstKeptToolIdx = toolIdxs[toolIdxs.length - keepLastToolRounds]
+
+  let evictedCount = 0
+  const next = messages.map((msg, i) => {
+    if (msg.role !== "tool" || i >= firstKeptToolIdx) return msg
+    const content = msg.content
+    if (!Array.isArray(content)) return msg
+    const newContent = content.map((part: any) => {
+      if (part?.type !== "tool-result") return part
+      // Skip already-evicted (idempotent across multiple prepareStep invocations).
+      const cur = part.output
+      if (cur && cur.type === "text" && typeof cur.value === "string" && cur.value.startsWith("[evicted")) {
+        return part
+      }
+      evictedCount += 1
+      return {
+        ...part,
+        output: { type: "text" as const, value: EVICTED_TEXT },
+      }
+    })
+    return { ...msg, content: newContent } as ModelMessage
+  })
+
+  if (evictedCount > 0) {
+    log.info("prune-stale-tool-results", {
+      total: messages.length,
+      toolCount: toolIdxs.length,
+      keepLastToolRounds,
+      evicted: evictedCount,
+    })
+  }
+  return next
+}
+
+function resolvePruneOptions(): { enabled: boolean; keepLastToolRounds: number; minStep: number } {
+  const env = Env.get("OPENCORVUS_SUBAGENT_PRUNE_KEEP_TOOL_ROUNDS")
+  const fromEnv = env !== undefined ? Number(env) : NaN
+  const keep = Number.isFinite(fromEnv) && fromEnv >= 1 ? fromEnv : PRUNE_KEEP_RECENT_ROUNDS_DEFAULT
+  const enabledRaw = Env.get("OPENCORVUS_SUBAGENT_PRUNE")
+  const enabled = enabledRaw === undefined ? true : enabledRaw !== "0" && enabledRaw.toLowerCase() !== "false"
+  return { enabled, keepLastToolRounds: keep, minStep: PRUNE_MIN_STEP_TO_TRIGGER }
+}
 
 export namespace ProviderLLM {
 
@@ -107,13 +197,8 @@ export namespace ProviderLLM {
     // 4. Compute maxOutputTokens
     const maxOutputTokens = input.maxOutputTokens ?? ProviderTransform.maxOutputTokens(model)
 
-    // 5. Build request headers
-    const autoHeaders: Record<string, string> = {
-      ...(model.providerID !== "anthropic"
-        ? { "User-Agent": `opencorvus/${Installation.VERSION}` }
-        : undefined),
-      ...model.headers,
-    }
+    // 5. Build request headers (baseHeaders handles hexin sticky routing)
+    const autoHeaders = baseHeaders(model, input.cacheKey)
     const headers = input.extraHeaders
       ? { ...autoHeaders, ...input.extraHeaders }
       : autoHeaders
@@ -154,7 +239,25 @@ export namespace ProviderLLM {
       messageCount: input.messages.length,
     })
 
-    // 8. Call streamText — the ONLY streamText call site for agent code
+    // 8. Call streamText — the ONLY streamText call site for agent code.
+    //
+    // Intentionally NO prepareStep mutation. An earlier attempt evicted old
+    // tool results between AI SDK loop steps — it cut input bytes ~50% but
+    // ALSO mutated the cached message prefix, invalidating the Anthropic
+    // prompt cache (4 breakpoints set in ProviderTransform.applyCaching).
+    // Net cost rose ~4× per turn because cache_read at $0.30/MTok flipped to
+    // cache_write at $3.75/MTok every step. The cache savings dwarf the
+    // savings from message trimming.
+    //
+    // For real cost control we must EITHER:
+    //   (a) keep the prefix byte-stable so cache_read keeps hitting (current
+    //       behaviour — verbose but cheap), or
+    //   (b) use Anthropic's native server-side `context_management` edits
+    //       (beta header context-management-2025-06-27) which evict tool uses
+    //       in a cache-aware way. Currently we can't reach that path because
+    //       all Claude calls go through LiteLLM/openai-compat shims that drop
+    //       the providerOptions field. Re-enable when @ai-sdk/anthropic
+    //       direct provider lands.
     return streamText({
       model: wrappedModel,
       providerOptions,
@@ -209,13 +312,26 @@ export namespace ProviderLLM {
   /**
    * Compute default request headers for a model.
    * Does NOT include opencorvus project/session headers — those are session-specific.
+   *
+   * @param stickyKey optional stable identifier used for upstream-key sticky
+   *   routing at LiteLLM-fronted gateways (currently only hexin). Pass
+   *   sessionID for session calls, taskID for agent calls.
    */
-  export function baseHeaders(model: Provider.Model): Record<string, string> {
-    return {
+  export function baseHeaders(model: Provider.Model, stickyKey?: string): Record<string, string> {
+    const headers: Record<string, string> = {
       ...(model.providerID !== "anthropic"
         ? { "User-Agent": `opencorvus/${Installation.VERSION}` }
         : undefined),
       ...model.headers,
     }
+    // hexin LiteLLM gateway hashes `x-user` for sticky upstream-key routing.
+    // Without it, round-robin lands each request on a cold Anthropic cache,
+    // paying cache-creation (~1.25× input) every time. Empirically took
+    // claude-sonnet-4-6 hit ratio from ~60% to 100%. Scoped to hexin only so
+    // other openai-compatible providers aren't affected.
+    if (model.providerID === "hexin" && stickyKey) {
+      headers["x-user"] = stickyKey
+    }
+    return headers
   }
 }

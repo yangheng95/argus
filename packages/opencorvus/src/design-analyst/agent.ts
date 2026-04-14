@@ -178,7 +178,7 @@ async function run(input: {
   if (input.signal?.aborted) throw new Error("design analyst aborted after model resolution")
 
   // Merge planner tools (codebase exploration) + webfetch + design output tools
-  const plannerTools = createPlannerTools(undefined, input.sessionID)
+  const plannerTools = createPlannerTools()
   const outputToolKit = createDesignOutputTools()
   const guard = toolGuard({ ...plannerTools, ...createWebfetchTool(), ...outputToolKit.tools })
 
@@ -261,19 +261,11 @@ async function buildMultimodalContent(
   text: string,
   attachments?: Array<{ sha: string; url: string; mime: string; size: number; filename?: string }>,
 ) {
-  if (!attachments?.length) return text
-  const fileParts = await Promise.all(attachments.map(async (a) => {
-    const located = AttachmentStore.nameFromUrl(a.url)
-    if (!located) throw new Error(`attachment has no resolvable url: ${a.filename ?? a.sha}`)
-    const bytes = await AttachmentStore.read(located.projectID, located.name)
-    return {
-      type: "file" as const,
-      data: bytes,
-      mediaType: a.mime,
-      ...(a.filename ? { filename: a.filename } : {}),
-    }
-  }))
-  return [{ type: "text" as const, text }, ...fileParts]
+  const { multimodal, referenceOnly } = AttachmentStore.partition(attachments)
+  const enrichedText = text + AttachmentStore.renderReferenceList(referenceOnly)
+  const fileParts = await AttachmentStore.loadFileParts(multimodal)
+  if (fileParts.length === 0) return enrichedText
+  return [{ type: "text" as const, text: enrichedText }, ...fileParts]
 }
 
 // ---------------------------------------------------------------------------

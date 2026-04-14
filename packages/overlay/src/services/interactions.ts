@@ -149,38 +149,12 @@ export function createOverlayInteractions(deps: InteractionsDeps) {
 
  // ── Auto-resolve helpers ──
 
-  function autoInteractionAnswers(
-    interaction: Interaction,
-  ): (string[] | null)[] | null {
-    const payload = deps.record(interaction?.payload) ? interaction.payload! : null;
-    const questions = Array.isArray(payload?.questions) ? payload!.questions! : [];
-    if (questions.length === 0) return null;
-    return questions.map((item) => {
-      const question = deps.record(item) ? item : null;
-      const options = Array.isArray(question?.options) ? question!.options! : [];
-      const selected = options.find(
-        (option) =>
-          deps.record(option) &&
-          typeof option.label === "string" &&
-          option.label.trim(),
-      );
-      if (selected && typeof selected.label === "string")
-        return [selected.label.trim()];
-      return null;
-    });
-  }
-
   function shouldAutoResolveInteraction(interaction: Interaction): boolean {
     if (!interaction || interaction.status !== "pending") return false;
     const exp = appStore.config?.experimental;
     if (interaction.type === "permission") {
       return stateFlag("autoPermission", exp?.auto_permission === true);
     }
-    if (interaction.type === "question")
-      return (
-        stateFlag("autoQuestion", exp?.auto_question === true) ||
-        stateFlag("unattended", exp?.unattended !== false)
-      );
     return false;
   }
 
@@ -428,30 +402,7 @@ export function createOverlayInteractions(deps: InteractionsDeps) {
         return;
       }
       dismissInteractionModal();
-      if (pending[0].type === "permission") {
-        void resolveInteraction(
-          pending[0].id,
-          autoPermissionReplyAction(),
-        );
-        return;
-      }
-      const answers = autoInteractionAnswers(pending[0]);
-      if (
-        !answers ||
-        answers.some((item) => !Array.isArray(item) || item.length === 0)
-      ) {
-        logger.warn(
-          "ui",
-          "Skipping automatic question reply due to missing structured options",
-          { interactionID: pending[0].id },
-        );
-        pendingInteraction = pending[0];
-        showInteractionModal(pending[0]);
-        return;
-      }
-      void resolveInteraction(pending[0].id, "answer", {
-        answers: answers as string[][],
-      });
+      void resolveInteraction(pending[0].id, autoPermissionReplyAction());
       return;
     }
 

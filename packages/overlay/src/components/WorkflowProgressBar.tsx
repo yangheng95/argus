@@ -36,14 +36,12 @@ function stepStatusClass(status: string): string {
   }
 }
 
-function stepStatusIcon(status: string): string {
-  switch (status) {
-    case "completed": return "\u2713"; // checkmark
-    case "running": return "\u25CB";   // circle
-    case "failed": return "\u2717";    // cross
-    case "skipped": return "\u2014";   // dash
-    default: return "\u00B7";          // middle dot
-  }
+function connectorClass(left: string, right: string): string {
+  const leftPassed = left === "completed" || left === "skipped";
+  const rightPassed = right === "completed" || right === "skipped";
+  if (leftPassed && rightPassed) return "wf-step-connector--done";
+  if (leftPassed && right === "running") return "wf-step-connector--progress";
+  return "";
 }
 
 export function WorkflowProgressBar(props: WorkflowProgressBarProps) {
@@ -96,13 +94,18 @@ export function WorkflowProgressBar(props: WorkflowProgressBarProps) {
             {(step, i) => (
               <>
                 <Show when={i() > 0}>
-                  <span class="wf-step-connector" />
+                  <span
+                    class={`wf-step-connector ${connectorClass(
+                      displaySteps()[i() - 1].status,
+                      step.status,
+                    )}`}
+                  />
                 </Show>
                 <span
                   class={`wf-step ${stepStatusClass(step.status)}`}
                   title={`${step.label}: ${step.status}`}
                 >
-                  <span class="wf-step-icon">{stepStatusIcon(step.status)}</span>
+                  <span class="wf-step-dot" aria-hidden="true" />
                   <span class="wf-step-label">{step.label}</span>
                 </span>
               </>

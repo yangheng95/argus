@@ -101,7 +101,7 @@ function callParam(input: ts.Expression | undefined, param: string): boolean {
 }
 
 function wrapperNames(source: ts.SourceFile) {
-  const names = new Set(["t", "tc", "errorText"])
+  const names = new Set(["t", "tc", "tArray", "errorText"])
   let changed = true
   while (changed) {
     changed = false
