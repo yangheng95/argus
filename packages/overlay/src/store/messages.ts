@@ -687,16 +687,14 @@ function computeAgentCards(): { cards: Record<string, AgentCardData>; order: str
 
   /** Every agent message is stamped with goalID by the backend's
    *  enrichProperties bridge (reading the in-memory goalRunSessionRegistry
-   *  populated by goal-pool.ts at dispatch time). This is the single source
-   *  of truth — the earlier board-snapshot session→goal map was only there
-   *  to mask a backend clobber in the SSE reseed path (now fixed via
-   *  ensureTaskSession). */
+   *  populated by goal-pool.ts at dispatch time, no longer clobbered after
+   *  the ensureTaskSession fix). O(1) — we only need to inspect the first
+   *  message; all messages in a goal-scoped round share the same goalID.
+   *  Walking the whole round turned computeAgentCards into an O(N·M) hot
+   *  loop on long tasks and froze the overlay. */
   function resolveGoalID(round: AgentRound): string {
-    for (const msg of round.messages) {
-      const gid = typeof msg?.info?.goalID === "string" ? msg.info.goalID : "";
-      if (gid) return gid;
-    }
-    return "";
+    const first = round.messages[0];
+    return typeof first?.info?.goalID === "string" ? first.info.goalID : "";
   }
 
   const nextCards: Record<string, AgentCardData> = {};
