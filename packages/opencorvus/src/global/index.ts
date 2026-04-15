@@ -80,16 +80,17 @@ const CACHE_VERSION = "21"
 const version = await Filesystem.readText(path.join(Global.Path.cache, "version")).catch(() => "0")
 
 if (version !== CACHE_VERSION) {
-  try {
-    const contents = await fs.readdir(Global.Path.cache)
-    await Promise.all(
-      contents.map((item) =>
-        fs.rm(path.join(Global.Path.cache, item), {
-          recursive: true,
-          force: true,
-        }),
-      ),
-    )
-  } catch (e) {}
+  const contents = await fs.readdir(Global.Path.cache).catch((err) => {
+    if ((err as NodeJS.ErrnoException)?.code === "ENOENT") return [] as string[]
+    throw err
+  })
+  await Promise.all(
+    contents.map((item) =>
+      fs.rm(path.join(Global.Path.cache, item), {
+        recursive: true,
+        force: true,
+      }),
+    ),
+  )
   await Filesystem.write(path.join(Global.Path.cache, "version"), CACHE_VERSION)
 }

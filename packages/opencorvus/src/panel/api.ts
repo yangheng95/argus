@@ -26,7 +26,6 @@ const routes = [
   { method: "GET", path: "panel/knowledge/memory", description: "List memory entries." },
   { method: "POST", path: "panel/knowledge/memory/search", description: "Search memory entries." },
   { method: "GET", path: "path", description: "Read current directory/worktree path context." },
-  { method: "POST", path: "path/open", description: "Open a local path with the host OS." },
   { method: "GET", path: "vcs", description: "Read current VCS status." },
   { method: "GET", path: "log/tail", description: "Read recent server logs." },
   { method: "GET", path: "global/health", description: "Read global health and version info." },

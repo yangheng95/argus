@@ -12,7 +12,6 @@ import { withTimeout } from "@/util/timeout"
 import { $ } from "bun"
 import { Flag } from "@/flag/flag"
 import { readdir } from "fs/promises"
-import type { FSWatcher } from "chokidar"
 
 const SUBSCRIBE_TIMEOUT_MS = 10_000
 
@@ -35,25 +34,11 @@ export namespace FileWatcher {
     unsubscribe: () => Promise<void>
   }
 
-  const parcel = lazy((): typeof import("@parcel/watcher") | undefined => {
-    try {
-      const binding = require(
-        `@parcel/watcher-${process.platform}-${process.arch}${process.platform === "linux" ? `-${OPENCORVUS_LIBC || "glibc"}` : ""}`,
-      )
-      return createWrapper(binding) as typeof import("@parcel/watcher")
-    } catch (error) {
-      log.error("failed to load watcher binding", { error })
-      return
-    }
-  })
-
-  const chokidar = lazy((): typeof import("chokidar") | undefined => {
-    try {
-      return require("chokidar") as typeof import("chokidar")
-    } catch (error) {
-      log.error("failed to load chokidar fallback", { error })
-      return
-    }
+  const parcel = lazy((): typeof import("@parcel/watcher") => {
+    const binding = require(
+      `@parcel/watcher-${process.platform}-${process.arch}${process.platform === "linux" ? `-${OPENCORVUS_LIBC || "glibc"}` : ""}`,
+    )
+    return createWrapper(binding) as typeof import("@parcel/watcher")
   })
 
   function publish(evt: { type: string; path: string }) {
@@ -62,26 +47,12 @@ export namespace FileWatcher {
     if (evt.type === "delete" || evt.type === "unlink") Bus.publish(Event.Updated, { file: evt.path, event: "unlink" })
   }
 
-  function ignored(dir: string, patterns: string[]) {
-    return (input: string) => {
-      const rel = path.relative(dir, input).replaceAll("\\", "/")
-      if (!rel || rel === ".") return false
-      if (rel.startsWith("../")) return false
-      const name = rel.split("/").at(0)
-      if (name && patterns.includes(name)) return true
-      for (const item of patterns) {
-        if (path.isAbsolute(item) && input.startsWith(item)) return true
-      }
-      return FileIgnore.match(rel, { extra: patterns })
-    }
-  }
-
   async function subscribeWithParcel(
     watcher: typeof import("@parcel/watcher"),
     dir: string,
     ignore: string[],
     backend: "windows" | "fs-events" | "inotify",
-  ) {
+  ): Promise<Subscription> {
     const pending = watcher.subscribe(
       dir,
       (err, evts) => {
@@ -93,33 +64,10 @@ export namespace FileWatcher {
         backend,
       },
     )
-    const sub = await withTimeout(pending, SUBSCRIBE_TIMEOUT_MS).catch((err) => {
-      log.error("failed to subscribe via parcel", { error: err, dir, backend })
-      pending.then((s) => s.unsubscribe()).catch(() => {})
-      return undefined
-    })
-    if (!sub) return
+    const sub = await withTimeout(pending, SUBSCRIBE_TIMEOUT_MS)
     return {
       unsubscribe: () => sub.unsubscribe(),
-    } satisfies Subscription
-  }
-
-  function subscribeWithChokidar(watcher: typeof import("chokidar"), dir: string, ignore: string[]) {
-    const instance: FSWatcher = watcher.watch(dir, {
-      ignoreInitial: true,
-      ignored: ignored(dir, ignore),
-    })
-    instance.on("add", (item) => publish({ type: "add", path: item }))
-    instance.on("change", (item) => publish({ type: "change", path: item }))
-    instance.on("unlink", (item) => publish({ type: "unlink", path: item }))
-    instance.on("error", (error) => {
-      log.error("chokidar watch error", { error, dir })
-    })
-    return {
-      unsubscribe: async () => {
-        await instance.close()
-      },
-    } satisfies Subscription
+    }
   }
 
   const state = Instance.state(
@@ -130,31 +78,19 @@ export namespace FileWatcher {
         if (process.platform === "win32") return "windows"
         if (process.platform === "darwin") return "fs-events"
         if (process.platform === "linux") return "inotify"
+        throw new Error(`watcher backend not supported on platform: ${process.platform}`)
       })()
-      if (!backend) {
-        log.error("watcher backend not supported", { platform: process.platform })
-        return {}
-      }
 
       const parcelWatcher = parcel()
-      const chokidarWatcher = parcelWatcher ? undefined : chokidar()
-      if (!parcelWatcher && !chokidarWatcher) return {}
-      log.info("watcher backend", {
-        platform: process.platform,
-        backend,
-        runtime: parcelWatcher ? "parcel" : "chokidar",
-      })
+      log.info("watcher backend", { platform: process.platform, backend })
 
       const subs: Subscription[] = []
       const cfgIgnores = cfg.watcher?.ignore ?? []
-      const subscribe = async (dir: string, ignore: string[]) => {
-        if (parcelWatcher) return subscribeWithParcel(parcelWatcher, dir, ignore, backend)
-        if (chokidarWatcher) return subscribeWithChokidar(chokidarWatcher, dir, ignore)
-      }
+      const subscribe = (dir: string, ignore: string[]) =>
+        subscribeWithParcel(parcelWatcher, dir, ignore, backend)
 
       if (Flag.OPENCORVUS_EXPERIMENTAL_FILEWATCHER) {
-        const sub = await subscribe(Instance.directory, [...FileIgnore.PATTERNS, ...cfgIgnores])
-        if (sub) subs.push(sub)
+        subs.push(await subscribe(Instance.directory, [...FileIgnore.PATTERNS, ...cfgIgnores]))
       }
 
       if (Instance.project.vcs === "git") {
@@ -164,12 +100,10 @@ export namespace FileWatcher {
           .cwd(Instance.worktree)
           .text()
           .then((x) => path.resolve(Instance.worktree, x.trim()))
-          .catch(() => undefined)
         if (vcsDir && !cfgIgnores.includes(".git") && !cfgIgnores.includes(vcsDir)) {
-          const gitDirContents = await readdir(vcsDir).catch(() => [])
+          const gitDirContents = await readdir(vcsDir)
           const ignoreList = gitDirContents.filter((entry) => entry !== "HEAD")
-          const sub = await subscribe(vcsDir, ignoreList)
-          if (sub) subs.push(sub)
+          subs.push(await subscribe(vcsDir, ignoreList))
         }
       }
 
@@ -177,7 +111,7 @@ export namespace FileWatcher {
     },
     async (state) => {
       if (!state.subs) return
-      await Promise.all(state.subs.map((sub) => sub?.unsubscribe()))
+      await Promise.all(state.subs.map((sub) => sub.unsubscribe()))
     },
   )
 

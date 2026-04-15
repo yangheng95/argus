@@ -18,6 +18,8 @@ import { setAppStore } from "../store/app";
 import { AppLog } from "../utils/log";
 import { t } from "../utils/i18n";
 import { apiJson, configure as configureApi } from "./api";
+import { nativeMessage } from "./app-dialog";
+import { nativeOpen, nativePrompt } from "../utils/native";
 
 // ── Types ──
 
@@ -358,96 +360,6 @@ function joinPath(base: string, value: string): string {
   return `${base}${sep}${value}`;
 }
 
-// ── Native dialog helpers (internal) ──
-
-interface NativeMessageOptions {
-  title?: string;
-  kind?: "info" | "warning" | "error";
-  okLabel?: string;
-}
-
-interface NativePromptOptions {
-  title?: string;
-  kind?: "info" | "warning" | "error";
-  okLabel?: string;
-  cancelLabel?: string;
-  inputLabel?: string;
-  inputPlaceholder?: string;
-  inputValue?: string;
-}
-
-/**
- * Show an application-level notification dialog.
- * Delegates to `showAppDialog` via the `window` global to
- * avoid a circular import during the.
- */
-async function nativeMessage(message: string, options?: NativeMessageOptions): Promise<void> {
-  const showAppDialog = (window as any).showAppDialog;
-  if (typeof showAppDialog === "function") {
-    await showAppDialog({
-      title: options?.title || t("dialog.notice"),
-      message,
-      kind: options?.kind || "info",
-      okLabel: options?.okLabel || t("common.ok"),
-    });
-  }
-}
-
-/**
- * Show an input prompt dialog.
- * Returns the trimmed string entered by the user, or null if cancelled.
- * Uses showAppDialog window global.
- */
-async function nativePrompt(
-  message: string,
-  options?: NativePromptOptions,
-): Promise<string | null> {
-  const showAppDialog = (window as any).showAppDialog;
-  if (typeof showAppDialog !== "function") return null;
-  const result = await showAppDialog({
-    title: options?.title || t("dialog.input"),
-    message,
-    kind: options?.kind || "info",
-    okLabel: options?.okLabel || t("common.submit"),
-    cancelLabel: options?.cancelLabel || t("common.cancel"),
-    cancel: true,
-    input: true,
-    inputLabel: options?.inputLabel || t("dialog.value"),
-    inputPlaceholder: options?.inputPlaceholder || "",
-    inputValue: options?.inputValue || "",
-  });
-  return result?.confirmed ? result.value : null;
-}
-
-/**
- * Open a local path or URL using native OS facilities.
- */
-async function nativeOpen(target: string): Promise<boolean> {
-  if (!target) return false;
-  const url = /^https?:\/\//i.test(target);
-  try {
-    const opened = url
-      ? await tauriInvoke("overlay_open_url", { url: target })
-      : await tauriInvoke("overlay_open_path", { path: target });
-    if (opened) return true;
-  } catch { /* Tauri not available */ }
-  if (url) {
-    window.open(target, "_blank", "noopener");
-    return true;
-  }
-  try {
-    const result = await apiJson("path/open", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ path: target }),
-    });
-    return (result as any)?.opened === true;
-  } catch (openErr) {
-    AppLog.debug("ui", "path/open fallback failed", { target, error: String(openErr) });
-    return false;
-  }
-}
-
 // ── Tauri file / directory pickers ──
 
 /**
@@ -720,14 +632,9 @@ export async function createDirectory(): Promise<void> {
  */
 export async function openDirectory(target?: string): Promise<void> {
   const dir = target ?? activeDirectory();
+  if (!dir) return;
   try {
-    if (!dir) return;
-    const opened = await nativeOpen(dir);
-    if (opened) return;
-    await nativeMessage(dir, {
-      title: t("cwd.title"),
-      kind: "info",
-    });
+    await nativeOpen(dir);
   } catch (e) {
     AppLog.error("ui", "Failed to open working directory", { error: String(e) });
     await nativeMessage(errorText("cwd.open_failed", e), {

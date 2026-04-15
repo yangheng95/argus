@@ -47,10 +47,7 @@ export interface FigmaFrame {
 }
 
 /**
- * Parse a Figma file URL.
- *
- * Accepts both legacy and modern shapes:
- *   https://www.figma.com/file/<key>/<slug>?node-id=12-34
+ * Parse a Figma file URL of the form:
  *   https://www.figma.com/design/<key>/<slug>?node-id=12-34
  *
  * `node-id` may use `-` or `:` as separator; we normalize to `:`.
@@ -66,10 +63,9 @@ export function parseFigmaUrl(url: string): { fileKey: string; nodeId?: string }
     throw new FigmaFetchError(`not a figma.com URL: ${url}`)
   }
   const segments = parsed.pathname.split("/").filter(Boolean)
-  // Path: ["file" | "design" | "proto", "<key>", "<slug>", ...]
-  const idx = segments.findIndex((s) => s === "file" || s === "design" || s === "proto")
+  const idx = segments.findIndex((s) => s === "design")
   if (idx === -1 || !segments[idx + 1]) {
-    throw new FigmaFetchError(`Figma URL missing /file or /design segment: ${url}`)
+    throw new FigmaFetchError(`Figma URL missing /design segment: ${url}`)
   }
   const fileKey = segments[idx + 1]
   const rawNode = parsed.searchParams.get("node-id") ?? undefined

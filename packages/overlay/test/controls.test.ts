@@ -719,7 +719,6 @@ test("overlay controls trigger without runtime failures", async () => {
         }
         return send({ created: true })
       }
-      if (path === "/path/open") return send({ opened: true })
       if (path === "/restart") {
         data.counters.restart += 1
         return send({ ok: true })

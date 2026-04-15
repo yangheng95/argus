@@ -227,33 +227,14 @@ fn overlay_settings_path(directory: Option<String>) -> Result<PathBuf, String> {
         })
 }
 
-fn legacy_overlay_settings_path() -> Result<PathBuf, String> {
-    std::env::current_dir()
-        .map(|dir| dir.join("overlay.json"))
-        .map_err(|err| err.to_string())
-}
-
 #[tauri::command]
 fn overlay_settings_load(directory: Option<String>) -> Result<OverlaySettings, String> {
     let path = overlay_settings_path(directory)?;
-    if path.exists() {
-        let text = fs::read_to_string(path).map_err(|err| err.to_string())?;
-        return serde_json::from_str(&text).map_err(|err| err.to_string());
-    }
-
-    let legacy = legacy_overlay_settings_path()?;
-    if !legacy.exists() {
+    if !path.exists() {
         return Ok(OverlaySettings::default());
     }
-
-    let text = fs::read_to_string(&legacy).map_err(|err| err.to_string())?;
-    let settings: OverlaySettings = serde_json::from_str(&text).map_err(|err| err.to_string())?;
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|err| err.to_string())?;
-    }
-    fs::write(&path, text).map_err(|err| err.to_string())?;
-    let _ = fs::remove_file(legacy);
-    Ok(settings)
+    let text = fs::read_to_string(path).map_err(|err| err.to_string())?;
+    serde_json::from_str(&text).map_err(|err| err.to_string())
 }
 
 #[tauri::command]
@@ -264,11 +245,6 @@ fn overlay_settings_save(settings: OverlaySettings, directory: Option<String>) -
     }
     let text = serde_json::to_string_pretty(&settings).map_err(|err| err.to_string())?;
     fs::write(&path, text).map_err(|err| err.to_string())?;
-    if let Ok(legacy) = legacy_overlay_settings_path() {
-        if legacy != path {
-            let _ = fs::remove_file(legacy);
-        }
-    }
     Ok(true)
 }
 

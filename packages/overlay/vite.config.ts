@@ -3,17 +3,7 @@ import solidPlugin from "vite-plugin-solid";
 import path from "path";
 import fs from "fs";
 
-/**
- * Copies legacy assets into the build output.
- *
- * Legacy JS files are loaded via classic <script> tags and cannot be
- * processed as ES modules due to duplicate declarations and
- * global-scope patterns (IIFEs attaching to window).
- *
- * Other assets (i18n JSON, SVGs) are fetched at runtime by the legacy
- * scripts and must be present at their original relative paths.
- */
-function copyLegacyAssets(entries: string[]): Plugin {
+function copyStaticAssets(entries: string[]): Plugin {
   function copyRecursive(src: string, dest: string) {
     if (fs.statSync(src).isDirectory()) {
       fs.mkdirSync(dest, { recursive: true });
@@ -26,7 +16,7 @@ function copyLegacyAssets(entries: string[]): Plugin {
   }
 
   return {
-    name: "copy-legacy-assets",
+    name: "copy-static-assets",
     writeBundle(options) {
       const outDir = options.dir ?? path.resolve(__dirname, "dist-vite");
       for (const entry of entries) {
@@ -43,7 +33,7 @@ function copyLegacyAssets(entries: string[]): Plugin {
 export default defineConfig({
   plugins: [
     solidPlugin(),
-    copyLegacyAssets(["i18n"]),
+    copyStaticAssets(["i18n"]),
   ],
   root: "src",
   server: {

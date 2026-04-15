@@ -6,6 +6,7 @@ import { t } from "./i18n";
 import { apiJson } from "../services/api";
 import { appStore } from "../store/app";
 import { boardStore, activeDirectory } from "../store/board";
+import { showAppDialog } from "../services/app-dialog";
 
 // ── Internal helpers ──
 
@@ -134,22 +135,16 @@ export async function initGitCurrent(options: { notify?: boolean } = {}): Promis
     clearProjectScopeData();
     await reloadProjectScope({ restoreWorkspace: false });
     if (options.notify !== false) {
-      const showAppDialog = (window as any).showAppDialog;
-      if (typeof showAppDialog === "function") {
-        const msg = result?.created
-          ? t("git.init_done", { dir })
-          : t("git.init_exists", { dir });
-        await showAppDialog({ title: t("git.init"), message: msg, kind: "info" });
-      }
+      const msg = result?.created
+        ? t("git.init_done", { dir })
+        : t("git.init_exists", { dir });
+      await showAppDialog({ title: t("git.init"), message: msg, kind: "info" });
     }
     return true;
   } catch (e) {
     console.error("[git] Failed to initialize Git", e);
     if (options.notify !== false) {
-      const showAppDialog = (window as any).showAppDialog;
-      if (typeof showAppDialog === "function") {
-        await showAppDialog({ title: t("git.init"), message: String(e), kind: "error" });
-      }
+      await showAppDialog({ title: t("git.init"), message: String(e), kind: "error" });
     }
     return false;
   }

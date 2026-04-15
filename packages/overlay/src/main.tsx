@@ -72,6 +72,7 @@ import { waitForLogDrain, AppLog } from "./utils/log";
 import { teardownApp } from "./services/init";
 import { stopTimers } from "./services/sync";
 import { nativePrompt } from "./utils/native";
+import { installAppDialogBridge } from "./services/app-dialog";
 import { eventClosest } from "./utils/dom-utils";
 import { shortPath } from "./utils/tool";
 import { initGitCurrent } from "./utils/git";
@@ -121,23 +122,6 @@ const [workspaceView, setWorkspaceView] = createSignal<WorkspaceView>({
   kind: "diff",
   filePath: "",
 });
-
-type AppDialogOptions = {
-  title?: string;
-  message?: string;
-  kind?: string;
-  okLabel?: string;
-  cancelLabel?: string;
-  cancel?: boolean;
-  input?: boolean;
-  inputLabel?: string;
-  inputPlaceholder?: string;
-  inputValue?: string;
-  select?: boolean;
-  selectLabel?: string;
-  selectValue?: string;
-  selectOptions?: Array<{ value: string; label?: string }>;
-};
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value);
@@ -192,124 +176,6 @@ document.addEventListener("click", (ev) => {
   ev.preventDefault();
   openWorkspaceFile(path);
 }, listenerOpts);
-
-function installAppDialogBridge(): void {
-  const dialog = document.getElementById("appDialog") as HTMLDialogElement | null;
-  const titleEl = document.getElementById("appDialogTitle");
-  const bodyEl = document.getElementById("appDialogBody");
-  const inputField = document.getElementById("appDialogInputField");
-  const inputLabel = document.getElementById("appDialogInputLabel");
-  const inputEl = document.getElementById("appDialogInput") as HTMLInputElement | null;
-  const selectField = document.getElementById("appDialogSelectField");
-  const selectLabel = document.getElementById("appDialogSelectLabel");
-  const selectEl = document.getElementById("appDialogSelect") as HTMLSelectElement | null;
-  const okBtn = document.getElementById("btnAppDialogOk") as HTMLButtonElement | null;
-  const cancelBtn = document.getElementById("btnAppDialogCancel") as HTMLButtonElement | null;
-  if (!dialog || !titleEl || !bodyEl || !okBtn || !cancelBtn) return;
-  if (dialog.dataset.bridgeBound === "true") return;
-  dialog.dataset.bridgeBound = "true";
-
-  let resolver:
-    | ((value: { confirmed: boolean; value: string | null }) => void)
-    | null = null;
-  let restoreConfigDialog = false;
-
-  const settle = (confirmed: boolean) => {
-    const resolve = resolver;
-    resolver = null;
-    const value = inputField?.classList.contains("hidden")
-      ? selectField?.classList.contains("hidden")
-        ? null
-        : (selectEl?.value ?? null)
-      : (inputEl?.value ?? null);
-    dialog.close();
-    resolve?.({ confirmed, value });
-  };
-
-  cancelBtn.addEventListener("click", () => settle(false));
-  okBtn.addEventListener("click", () => settle(true));
-  dialog.addEventListener("close", () => {
-    const shouldRestoreConfigDialog = restoreConfigDialog;
-    restoreConfigDialog = false;
-    if (resolver) {
-      const resolve = resolver;
-      resolver = null;
-      resolve({ confirmed: false, value: null });
-    }
-    if (shouldRestoreConfigDialog) {
-      queueMicrotask(() => openConfigDialog());
-    }
-  });
-
-  const showAppDialog = (options: AppDialogOptions = {}) => {
-    if (resolver) {
-      const resolve = resolver;
-      resolver = null;
-      resolve({ confirmed: false, value: null });
-    }
-
-    const configDialog = document.getElementById(
-      "configDialog",
-    ) as HTMLDialogElement | null;
-    restoreConfigDialog = configDialog?.open === true;
-    if (restoreConfigDialog) {
-      configDialog?.close();
-    }
-
-    titleEl.textContent = options.title || t("dialog.notice");
-    bodyEl.textContent = options.message || "";
-    okBtn.textContent = options.okLabel || t("common.ok");
-    cancelBtn.textContent = options.cancelLabel || t("common.cancel");
-    cancelBtn.hidden = options.cancel !== true;
-
-    if (inputField && inputEl && inputLabel) {
-      inputField.classList.toggle("hidden", options.input !== true);
-      inputLabel.textContent = options.inputLabel || t("dialog.input");
-      inputEl.placeholder = options.inputPlaceholder || "";
-      inputEl.value = options.inputValue || "";
-    }
-
-    if (selectField && selectEl && selectLabel) {
-      selectField.classList.toggle("hidden", options.select !== true);
-      selectLabel.textContent = options.selectLabel || t("dialog.input");
-      selectEl.innerHTML = "";
-      for (const item of options.selectOptions || []) {
-        if (!item?.value) continue;
-        const option = document.createElement("option");
-        option.value = item.value;
-        option.textContent = item.label || item.value;
-        option.selected = item.value === (options.selectValue || "");
-        selectEl.appendChild(option);
-      }
-      if (!selectEl.value && selectEl.options.length > 0) {
-        selectEl.value = options.selectValue || selectEl.options[0].value;
-      }
-    }
-
-    dialog.showModal();
-    if (options.input && inputEl) {
-      queueMicrotask(() => inputEl.focus());
-    } else {
-      queueMicrotask(() => okBtn.focus());
-    }
-
-    return new Promise<{ confirmed: boolean; value: string | null }>((resolve) => {
-      resolver = resolve;
-    });
-  };
-
-  (window as any).showAppDialog = showAppDialog;
-  (window as any).nativeMessage = async (
-    message: string,
-    options: { title?: string; kind?: string; okLabel?: string } = {},
-  ) =>
-    showAppDialog({
-      title: options.title,
-      message,
-      kind: options.kind,
-      okLabel: options.okLabel,
-    });
-}
 
 function installGlobalBridges(): void {
   installAppDialogBridge();

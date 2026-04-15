@@ -57,7 +57,13 @@ export const ListTool = Tool.define("list", {
       },
     })
 
-    const ignoreGlobs = IGNORE_PATTERNS.map((p) => `!${p}*`).concat(params.ignore?.map((p) => `!${p}`) || [])
+    const ignoreGlobs = IGNORE_PATTERNS.flatMap((p) => {
+      if (p.endsWith("/")) {
+        const name = p.slice(0, -1)
+        return [`!${name}`, `!${name}/**`, `!**/${name}`, `!**/${name}/**`]
+      }
+      return [`!${p}`, `!**/${p}`]
+    }).concat(params.ignore?.map((p) => `!${p}`) || [])
     const files: string[] = []
     for await (const file of Ripgrep.files({ cwd: searchPath, glob: ignoreGlobs, signal: ctx.abort })) {
       files.push(file)

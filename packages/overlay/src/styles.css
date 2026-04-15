@@ -1859,196 +1859,6 @@ body[data-theme="light"] .engine-model-item:hover {
   color: #0f172a;
 }
 
-/* ── Model Picker (global, deprecated) ──────────────────────── */
-.model-picker {
-  position: relative;
-  display: inline-flex;
-}
-
-.model-picker-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: calc(5px * var(--ui-scale));
-  padding: calc(6px * var(--ui-scale)) calc(12px * var(--ui-scale));
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: var(--surface-strong);
-  color: var(--text-soft);
-  font-size: var(--ui-font-control);
-  font-weight: 600;
-  cursor: pointer;
-  max-width: calc(220px * var(--ui-scale));
-  white-space: nowrap;
-  transition: background 100ms, color 100ms, border-color 100ms;
-}
-
-.model-picker-btn:hover {
-  background: var(--subtle-4);
-  color: var(--text-strong);
-  border-color: var(--border-strong);
-}
-
-.model-picker-btn[aria-expanded="true"] {
-  background: var(--subtle-4);
-  color: var(--text-strong);
-  border-color: var(--border-strong);
-}
-
-.model-picker-icon {
-  flex-shrink: 0;
-  opacity: 0.65;
-}
-
-.model-picker-label {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  flex: 1;
-  font-family: var(--mono);
-  font-size: var(--ui-font-control);
-  font-weight: 500;
-  letter-spacing: 0;
-}
-
-.model-picker-caret {
-  flex-shrink: 0;
-  opacity: 0.5;
-  transition: transform 150ms;
-}
-
-.model-picker-btn[aria-expanded="true"] .model-picker-caret {
-  transform: rotate(180deg);
-}
-
-.model-picker-panel {
-  position: absolute;
-  top: calc(100% + calc(6px * var(--ui-scale)));
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 4;
-  display: flex;
-  flex-direction: column;
-  width: calc(280px * var(--ui-scale));
-  max-height: calc(360px * var(--ui-scale));
-  overflow-y: auto;
-  padding: calc(4px * var(--ui-scale));
-  background: var(--menu-panel-bg);
-  border: 1px solid var(--border);
-  border-radius: calc(9px * var(--ui-scale));
-  box-shadow:
-    0 calc(10px * var(--ui-scale)) calc(28px * var(--ui-scale)) rgba(15, 23, 42, 0.28),
-    0 0 0 1px rgba(255, 255, 255, 0.04) inset;
-  scrollbar-width: thin;
-  scrollbar-color: var(--subtle-5) transparent;
-}
-
-.model-picker-panel::-webkit-scrollbar {
-  width: 4px;
-}
-
-.model-picker-panel::-webkit-scrollbar-thumb {
-  background: var(--subtle-5);
-  border-radius: 4px;
-}
-
-.model-picker-section {
-  display: flex;
-  flex-direction: column;
-}
-
-.model-picker-section + .model-picker-section {
-  border-top: 1px solid var(--border);
-  margin-top: calc(2px * var(--ui-scale));
-  padding-top: calc(2px * var(--ui-scale));
-}
-
-.model-picker-section-label {
-  display: flex;
-  align-items: center;
-  gap: calc(5px * var(--ui-scale));
-  padding: calc(6px * var(--ui-scale)) calc(8px * var(--ui-scale)) calc(2px * var(--ui-scale));
-  color: var(--text-muted);
-  font-size: var(--ui-font-small);
-  font-weight: 600;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  user-select: none;
-}
-
-.model-picker-section-dot {
-  flex-shrink: 0;
-  width: calc(5px * var(--ui-scale));
-  height: calc(5px * var(--ui-scale));
-  border-radius: 50%;
-  background: var(--border-strong);
-}
-
-.model-picker-section-dot[data-status="connected"] {
-  background: var(--good);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--good) 25%, transparent);
-}
-
-.model-picker-item {
-  display: block;
-  width: 100%;
-  text-align: left;
-  padding: calc(6px * var(--ui-scale)) calc(10px * var(--ui-scale));
-  border-radius: calc(6px * var(--ui-scale));
-  border: 1px solid transparent;
-  background: transparent;
-  color: var(--text-soft);
-  font-family: var(--mono);
-  font-size: var(--ui-font-body);
-  cursor: pointer;
-  transition: background 80ms, color 80ms, border-color 80ms;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.model-picker-item:hover {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(255, 255, 255, 0.08);
-  color: var(--text-strong);
-}
-
-.model-picker-item[data-active="true"] {
-  background: linear-gradient(135deg, rgba(146, 184, 252, 0.18), rgba(86, 126, 196, 0.15) 58%, rgba(66, 100, 159, 0.15));
-  border-color: rgba(146, 184, 252, 0.25);
-  color: rgba(196, 215, 252, 0.96);
-  font-weight: 600;
-}
-
-.model-picker-item[data-active="true"]:hover {
-  background: linear-gradient(135deg, rgba(146, 184, 252, 0.26), rgba(86, 126, 196, 0.22) 58%, rgba(66, 100, 159, 0.22));
-}
-
-.model-picker-empty {
-  padding: calc(12px * var(--ui-scale)) calc(10px * var(--ui-scale));
-  color: var(--text-muted);
-  font-size: var(--ui-font-small);
-  text-align: center;
-}
-
-body[data-theme="light"] .model-picker-btn {
-  border-color: var(--border);
-  background: var(--subtle-3);
-  color: #475569;
-}
-
-body[data-theme="light"] .model-picker-btn:hover,
-body[data-theme="light"] .model-picker-btn[aria-expanded="true"] {
-  background: var(--subtle-5);
-  color: #0f172a;
-}
-
-body[data-theme="light"] .model-picker-item:hover {
-  background: var(--subtle-5);
-  border-color: var(--border);
-  color: #0f172a;
-}
-
 body[data-theme="light"] .brand-channel-group {
   border-color: var(--border);
   background: var(--surface);
@@ -2831,7 +2641,7 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
 .criteria-item--skipped .criteria-name { color: var(--text-muted); }
 .criteria-evidence { grid-column: 2; font-family: var(--mono); font-size: calc(var(--ui-font-small) * 0.92); color: var(--text-soft); white-space: pre-wrap; word-break: break-word; margin-top: calc(2px * var(--ui-scale)); }
 
-/* ── Criteria Checkboxes (legacy CriteriaPanel — kept for status dot reuse) ── */
+/* ── Criteria Checkboxes ── */
 .criteria-list {
   display: flex;
   flex-direction: row;
@@ -4248,8 +4058,6 @@ code .file-link:hover {
   line-height: 1;
 }
 .chat-attachment-remove:hover { color: var(--text-strong); }
-
-/* Legacy .chat-attach-btn / .chat-web-search-btn removed — replaced by .chat-toolbar-btn */
 
 /* ── Chat icon column + toolbar buttons ── */
 
@@ -8541,7 +8349,6 @@ body[data-resizing="true"] * {
   font-size: var(--ui-font-meta);
 }
 
-/* Legacy visual restore */
 :root {
   --bg: rgba(26, 27, 30, 0.78);
   --surface: rgba(38, 40, 44, 0.74);

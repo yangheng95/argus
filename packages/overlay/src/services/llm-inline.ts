@@ -17,6 +17,7 @@ import {
 import { loadConfigInfo } from "./init";
 import { updateConfig } from "./config";
 import { nativeConfirm, nativeOpen, nativePrompt, nativeSelect } from "../utils/native";
+import { nativeMessage } from "./app-dialog";
 import { apiJson } from "./api";
 
 const HIDE_EYE_SVG =
@@ -508,13 +509,10 @@ export function installInlineLlmConfig(): void {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error || "");
       showLlmNotice(message, "error", 3200);
-      const nativeMessage = (window as any).nativeMessage;
-      if (typeof nativeMessage === "function") {
-        await nativeMessage(message, {
-          title: t("llm.title"),
-          kind: "error",
-        });
-      }
+      await nativeMessage(message, {
+        title: t("llm.title"),
+        kind: "error",
+      });
     }
   });
 

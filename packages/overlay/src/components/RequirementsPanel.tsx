@@ -20,7 +20,7 @@ interface Requirement {
 
 interface RequirementsPanelProps {
   requirements: Requirement[] | undefined;
-  /** Spec content (legacy, shown as collapsible detail) */
+  /** Spec content shown as a collapsible detail below the requirements list. */
   specContent?: string;
   /** Whether the requirements step is currently running */
   isGenerating?: boolean;
