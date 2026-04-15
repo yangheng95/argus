@@ -46,6 +46,13 @@ export interface EvaluatorConfig {
   skills: string[]
   /** Evaluation tier: "core" (build/test/lint only), "standard" (+ judge/spec_check/code_review), "full" (all checks). Default: "standard". */
   tier?: "core" | "standard" | "full"
+  /** Run the deterministic per-goal evaluator (`evaluateGoal`) inside the
+   *  goal-pool dispatch loop, AFTER the executor produces a delivery and
+   *  BEFORE the goal is marked passed. When false, goal-pool falls back to
+   *  the legacy "executor returned OK → passed" shortcut — intended as a
+   *  debugging gate so the per-goal path can be toggled while downstream
+   *  code paths are being stabilized. Default: false. */
+  per_goal_enabled?: boolean
 }
 
 export interface DeliveryConfig {
@@ -113,6 +120,7 @@ const DEFAULTS: OrchestratorConfigType = {
     max_steps: 60,         // was 25
     timeout_ms: 480_000,   // 8 min (was 4)
     skills: [],
+    per_goal_enabled: false, // debug gate — per-goal eval is implemented in goal-pool but off until the path is stabilized
   },
   delivery: {
     // Vision-driven fig2code delivery loops compare rendered output against
@@ -191,6 +199,7 @@ function merge(user?: Config.Info["assistant"]): OrchestratorConfigType {
       timeout_ms: user?.evaluator?.timeout_ms ?? DEFAULTS.evaluator.timeout_ms,
       skills: user?.evaluator?.skills ?? DEFAULTS.evaluator.skills,
       tier: user?.evaluator?.tier ?? "standard",
+      per_goal_enabled: user?.evaluator?.per_goal_enabled ?? DEFAULTS.evaluator.per_goal_enabled ?? false,
     },
     delivery: {
       max_steps: user?.delivery?.max_steps ?? DEFAULTS.delivery.max_steps,

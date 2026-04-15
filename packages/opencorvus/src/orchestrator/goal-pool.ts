@@ -21,6 +21,9 @@ import { Database, eq } from "@/storage/db"
 import { Worktree } from "@/worktree"
 import { ExecutorRegistry } from "@/executor/registry"
 import { runGoalPipeline } from "@/pipeline"
+import { evaluateGoal } from "@/evaluator/per-goal"
+import { OrchestratorConfig } from "./config"
+import { OrchestratorService } from "./service"
 import { createDecisionLog } from "@/decision-log"
 import { readyGoalNodes, type GoalNodeEntry } from "@/goal/scheduler"
 import { cleanupGoalWorkspace } from "@/goal/runner"
@@ -606,7 +609,93 @@ export class GoalPool {
         }
       }
 
-      // Executor produced delivery → mark goal passed
+      // ── Per-goal deterministic evaluator (gated) ──
+      // The legacy path treats "executor produced delivery" as sufficient for
+      // a passed goal. Per design (01-agents.md L111 + docs/product/.../evaluator.md):
+      // evaluator is the deterministic command runner that verifies each
+      // goal's acceptance_specs BEFORE marking passed. Gated by
+      // `evaluator.per_goal_enabled` so the path can be flipped on when
+      // downstream consumers (criteria panel, retry pipeline) are stable.
+      const orchCfgForEval = await OrchestratorConfig.get().catch(() => undefined)
+      if (orchCfgForEval?.evaluator?.per_goal_enabled) {
+        try {
+          const allGoalsForContract = listGoalsByPlan(plan.id)
+          const goalFields = goalRowToContract(entry.goal)
+          const depIds: string[] = Array.isArray(goalFields.depends_on) ? goalFields.depends_on : []
+          const dependencies = allGoalsForContract
+            .filter((g) => depIds.includes(g.id))
+            .map((g) => goalRowToContract(g))
+          const contract: GoalContract = {
+            goal: goalFields,
+            planNode: null,
+            run,
+            task,
+            plan,
+            dependencies,
+          }
+          const verdict = await evaluateGoal({
+            contract,
+            delivery,
+            signal,
+            tier: orchCfgForEval.evaluator.tier,
+          })
+
+          // Sink each check into task.metadata.criteria_results so the overlay
+          // Quality Gates panel reflects deterministic per-goal outcomes.
+          if (verdict.checks.length > 0) {
+            await OrchestratorService.upsertTaskCriteria(task.id, verdict.checks.map((c) => ({
+              name: `${entry.goal.id}.${c.name}`,
+              status: c.passed ? "passed" as const : "failed" as const,
+              family: "goal_eval",
+              evidence: c.output,
+              label: `${entry.goal.title} · ${c.name}`,
+            }))).catch((err) => {
+              log.warn("per-goal eval: sink criteria failed (non-fatal)", {
+                goalID: entry.goal.id, error: String(err),
+              })
+            })
+          }
+
+          if (!verdict.pass) {
+            const failReason = verdict.reasoning || `Per-goal evaluator rejected: ${verdict.verdict}`
+            if (worktreeDir) await cleanupGoalWorkspace(worktreeDir).catch(() => {})
+            Database.use(db => db.update(OrchestratorGoalTable)
+              .set({ status: "failed", time_updated: now })
+              .where(eq(OrchestratorGoalTable.id, entry.goal.id)).run())
+            await markGoalWorkflowStep(task.id, entry.goal.id, entry.goal.title, "execute", "failed").catch(() => undefined)
+            OrchestratorProtocol.emit(Event.GoalFailed, {
+              taskID: task.id, goalID: entry.goal.id, summary: `${entry.goal.title}: ${failReason}`,
+            }, { source: "evaluator" }).catch(() => {})
+            return {
+              goalID: entry.goal.id, goalRunID: goalRun.id, title: entry.goal.title,
+              status: "failed", verdict: verdict.verdict, error: failReason, evidence: verdict.evidence,
+              delivery, attempts: 1,
+            }
+          }
+        } catch (evalErr) {
+          // Evaluator infrastructure failure (shell missing, worktree vanished,
+          // llm-judge provider down). Surface loud — do NOT silently pass the
+          // goal. Operator needs to see why eval could not run.
+          const msg = evalErr instanceof Error ? evalErr.message : String(evalErr)
+          log.error("per-goal eval threw; marking goal failed", {
+            goalID: entry.goal.id, error: msg,
+          })
+          if (worktreeDir) await cleanupGoalWorkspace(worktreeDir).catch(() => {})
+          Database.use(db => db.update(OrchestratorGoalTable)
+            .set({ status: "failed", time_updated: now })
+            .where(eq(OrchestratorGoalTable.id, entry.goal.id)).run())
+          await markGoalWorkflowStep(task.id, entry.goal.id, entry.goal.title, "execute", "failed").catch(() => undefined)
+          OrchestratorProtocol.emit(Event.GoalFailed, {
+            taskID: task.id, goalID: entry.goal.id, summary: `${entry.goal.title}: evaluator threw: ${msg}`,
+          }, { source: "evaluator" }).catch(() => {})
+          return {
+            goalID: entry.goal.id, goalRunID: goalRun.id, title: entry.goal.title,
+            status: "failed", error: `evaluator threw: ${msg}`, delivery, attempts: 1,
+          }
+        }
+      }
+
+      // Executor produced delivery (and evaluator passed if enabled) → mark goal passed
       Database.use(db => db.update(OrchestratorGoalTable)
         .set({ status: "passed", time_updated: now })
         .where(eq(OrchestratorGoalTable.id, entry.goal.id)).run())

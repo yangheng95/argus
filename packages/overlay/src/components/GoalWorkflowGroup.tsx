@@ -17,6 +17,7 @@ import { StepPayloadBody } from "./StepPayloadBody";
 import { t } from "../utils/i18n";
 import { cardExpanded, toggleCard } from "../store/conversation-ui";
 import { orderedMessageParts } from "../utils/message";
+import { openExecutorSessionDialog } from "../services/dialog";
 
 // ── Types ──
 
@@ -197,11 +198,27 @@ function StepRow(props: {
           </Show>
         </summary>
         <div class="gwg-step-body">
-          <StepPayloadBody
-            payload={props.step.payload}
-            stepID={props.step.stepID}
-            goalTitle={props.goalTitle}
-          />
+          <StepPayloadBody payload={props.step.payload} stepID={props.step.stepID} />
+          {/* Sidebar-only affordance: jump to the executor session dialog.
+              The main-conversation Card already renders the session inline,
+              so it doesn't need this button. */}
+          <Show when={hasOpenSession()}>
+            <div class="gwg-open-session">
+              <button
+                type="button"
+                class="gwg-open-session-btn"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void openExecutorSessionDialog(
+                    props.step.payload!.executorSessionID!,
+                    props.goalTitle ?? "",
+                  );
+                }}
+              >
+                {t("goal.open_session")}
+              </button>
+            </div>
+          </Show>
           {/* Agent messages for this step */}
           <Show when={hasMessages()}>
             <div class="gwg-step-messages">

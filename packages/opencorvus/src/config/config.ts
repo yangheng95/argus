@@ -1194,6 +1194,7 @@ export namespace Config {
               timeout_ms: z.number().int().min(1000).optional().describe("Evaluator agent timeout in milliseconds (default: 240000)"),
               tier: z.enum(["core", "standard", "full"]).optional().describe("Evaluation tier: 'core' (build/test/lint only), 'standard' (+ judge/spec_check), 'full' (all checks). Default: 'standard'."),
               skills: z.array(z.string()).optional().describe("Additional skill paths for evaluator agent"),
+              per_goal_enabled: z.boolean().optional().describe("When true, runs the deterministic per-goal evaluator inside the goal-pool loop after the executor returns — goal fails if acceptance_specs strict scorers reject. Default: false (debug gate, legacy 'executor OK → passed' path is used)."),
             })
             .optional()
             .describe("Evaluator agent configuration. Model is configured via agent.evaluator.model."),
