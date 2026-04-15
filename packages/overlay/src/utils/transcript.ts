@@ -20,6 +20,7 @@ import { roleLabel } from "./message";
 import { displayToolDetail, toolStatusLabel } from "./tool";
 import { conversationMessages } from "./conversation";
 import { AppLog } from "./log";
+import { nativeMessage } from "../services/app-dialog";
 
 // ── Internal helpers ──
 
@@ -139,14 +140,6 @@ async function copyText(text: string): Promise<boolean> {
   const ok = document.execCommand("copy");
   textarea.remove();
   return ok;
-}
-
-/** Bridge to app.js nativeMessage — only available when app.js is loaded. */
-async function nativeMessage(message: string, options: { title?: string; kind?: string }): Promise<void> {
-  const fn = (window as any).nativeMessage;
-  if (typeof fn === "function") {
-    await fn(message, options);
-  }
 }
 
 function errorText(key: string, error: unknown): string {

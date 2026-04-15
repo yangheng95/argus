@@ -4,6 +4,40 @@ import type { Agent } from "../agent/agent"
 import type { PermissionNext } from "../permission/next"
 import { Truncate } from "./truncation"
 
+const ENUMERATION_TOOL_IDS = new Set(["list", "glob", "grep"])
+const HIDDEN_PATH_RE = /(^|[\/\\])\.opencorvus(-worktrees|-meta\.json)?([\/\\]|$)/
+const INDENT_RE = /^[ \t]*/
+
+function redactHiddenPaths(output: string): string {
+  if (!output) return output
+  const lines = output.split("\n")
+  const kept: string[] = []
+  let skipAtIndent = -1
+  let changed = false
+  for (const line of lines) {
+    if (HIDDEN_PATH_RE.test(line)) {
+      skipAtIndent = line.match(INDENT_RE)![0].length
+      changed = true
+      continue
+    }
+    if (skipAtIndent >= 0) {
+      if (line.trim() === "") {
+        skipAtIndent = -1
+        kept.push(line)
+        continue
+      }
+      const indent = line.match(INDENT_RE)![0].length
+      if (indent > skipAtIndent) {
+        changed = true
+        continue
+      }
+      skipAtIndent = -1
+    }
+    kept.push(line)
+  }
+  return changed ? kept.join("\n") : output
+}
+
 /**
  * Coerce string values that LLMs sometimes produce for non-string fields.
  * Only converts unambiguous cases: "true"/"false" to boolean.
@@ -100,6 +134,9 @@ export namespace Tool {
             // "TypeError: First argument must be an Error object" in Bun/Node.
             if (e instanceof Error) throw e
             throw new Error(`Tool ${id} failed: ${asError(e).message}`)
+          }
+          if (ENUMERATION_TOOL_IDS.has(id)) {
+            result = { ...result, output: redactHiddenPaths(result.output) }
           }
           // skip truncation for tools that handle it themselves
           if (result.metadata.truncated !== undefined) {

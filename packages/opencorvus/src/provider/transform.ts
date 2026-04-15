@@ -6,7 +6,6 @@ import type { Provider } from "./provider"
 import type { ModelsDev } from "./models"
 import { iife } from "@/util/iife"
 import { Flag } from "@/flag/flag"
-import { Filesystem } from "@/util/filesystem"
 
 type Modality = NonNullable<ModelsDev.Model["modalities"]>["input"][number]
 
@@ -265,44 +264,7 @@ export namespace ProviderTransform {
         const mime = part.type === "image" ? part.image.toString().split(";")[0].replace("data:", "") : part.mediaType
         const filename = part.type === "file" ? part.filename : undefined
         const modality = mimeToModality(mime)
-        if (!modality) {
-          // Safety net: text-like MIME file parts (e.g. text/typescript, application/json)
-          // should have been converted to text parts in prompt.ts, but older persisted
-          // messages or tool result attachments may still carry these MIMEs.
-          if (Filesystem.isTextLikeMime(mime) && part.type === "file") {
-            try {
-              // part.data can be string (data URL or base64), Uint8Array, ArrayBuffer, or URL
-              const data = part.data
-              let text: string | undefined
-              if (data instanceof ArrayBuffer) {
-                text = Buffer.from(data).toString("utf-8")
-              } else if (data instanceof Uint8Array) {
-                text = Buffer.from(data.buffer, data.byteOffset, data.byteLength).toString("utf-8")
-              } else {
-                const str = data instanceof URL ? data.toString() : typeof data === "string" ? data : ""
-                if (str.startsWith("data:") && str.includes(",")) {
-                  const base64Data = str.slice(str.indexOf(",") + 1)
-                  text = Buffer.from(base64Data, "base64").toString("utf-8")
-                } else if (str.length > 0) {
-                  // Might be raw base64 or already text
-                  text = str
-                }
-              }
-              if (text) {
-                const label = filename ? `File: ${filename}\n` : ""
-                return { type: "text" as const, text: label + text }
-              }
-            } catch {
-              // fall through to error
-            }
-            const name = filename ? `"${filename}"` : "file"
-            return {
-              type: "text" as const,
-              text: `ERROR: Cannot inline ${name} (unsupported file type: ${mime}). Inform the user.`,
-            }
-          }
-          return part
-        }
+        if (!modality) return part
         if (model.capabilities.input[modality]) return part
 
         const name = filename ? `"${filename}"` : modality

@@ -331,10 +331,6 @@ export function findStepByTool(workflow: MiniWorkflow, toolName: string): MiniWo
  * Task Agent 工具调用来触发 trackStepStart/Complete。此 helper 让 goal-pool.ts
  * 可以手动推进步骤状态，同时持久化到 task.metadata._workflow 并 emit 事件，
  * 让 UI 与 task-agent 的 workflow 追踪保持一致。
- *
- * 若 task 的 _workflow state 中尚未包含此 goal 条目，会惰性初始化
- * （覆盖 goal-pool 并发启动时尚未落库的短暂窗口）。
- * 若对应 step 在当前 workflow 定义里不存在，则静默跳过（兼容自定义 workflow）。
  */
 export async function markGoalWorkflowStep(
   taskID: string,
@@ -357,10 +353,14 @@ export async function markGoalWorkflowStep(
     taskSteps: {},
     goalSteps: {},
   }
-  const workflow = WorkflowRegistry.resolveSync(ws.workflowID) ?? WorkflowRegistry.resolveSync("standard")
-  if (!workflow) return
+  const workflow = WorkflowRegistry.resolveSync(ws.workflowID)
+  if (!workflow) {
+    throw new Error(`workflow "${ws.workflowID}" not found`)
+  }
   const step = workflow.steps.find(s => s.id === stepID && s.scope === "goal")
-  if (!step) return
+  if (!step) {
+    throw new Error(`goal-scope step "${stepID}" not found in workflow "${ws.workflowID}"`)
+  }
 
   if (!ws.goalSteps[goalID]) {
     ws.goalSteps[goalID] = {

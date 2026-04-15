@@ -225,23 +225,6 @@ export function handleZoomHotkey(event: KeyboardEvent): void {
   setZoom(1);
 }
 
-// ── shouldMigrateOpacity ──
-// Returns true when the persisted opacity value is a legacy sub-0.3 value that
-// should be migrated upward to the minimum supported value.
-
-const OPACITY_MIGRATION_KEY = "oc_opacity_migrated_v1";
-const LEGACY_WINDOW_OPACITY = 0.3;
-
-export function shouldMigrateOpacity(value: unknown): boolean {
-  if (typeof localStorage === "undefined") return false;
-  if (localStorage.getItem(OPACITY_MIGRATION_KEY) === "true") return false;
-  const next =
-    typeof value === "number"
-      ? value
-      : Number.parseFloat(String(value ?? ""));
-  return Number.isFinite(next) && next <= LEGACY_WINDOW_OPACITY;
-}
-
 // ── applyWindowPin ──
 // Apply the alwaysOnTop state to the native Tauri window.
 // side effects, which remain.

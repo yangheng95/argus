@@ -90,25 +90,35 @@ export async function reviewFidelity(input: {
   const systemPrompt = buildFidelitySystem()
   const userPrompt = buildFidelityPrompt(input)
 
+  // Conversation state: each retry appends the validation feedback from the
+  // previous attempt as a user message so the LLM sees exactly which entries
+  // it malformed and what to fix. Bounded by MAX_ATTEMPTS to prevent an
+  // unrecoverable model from looping forever (loud-fail is preferable to
+  // silent corruption per CLAUDE.md "no fallback").
+  const messages: Array<{ role: "user" | "assistant"; content: string }> = [
+    { role: "user", content: userPrompt },
+  ]
   let attempts = 0
   const MAX_ATTEMPTS = 3
+  let lastParseError: unknown = undefined
+  let lastValidationFeedback: string[] = []
+  let lastResult: FidelityResult | undefined
 
   while (attempts < MAX_ATTEMPTS) {
     attempts++
     if (signal?.aborted) throw new Error("fidelity review aborted")
 
     try {
-      const result = await generateText({
+      const llmResult = await generateText({
         model: language,
         maxOutputTokens: 8192,
         abortSignal: signal,
         system: systemPrompt,
-        messages: [{ role: "user" as const, content: userPrompt }],
+        messages,
       })
 
-      const text = result.text?.trim() || ""
-
-      const parsed = parseFidelityOutput(text)
+      const text = llmResult.text?.trim() || ""
+      const { result: parsed, validationFeedback } = parseFidelityOutput(text)
 
       // Reconcile: if there are corrections/missing but verdict says faithful, fix it
       if (parsed.verdict === "faithful" && (parsed.corrections.length > 0 || parsed.missingGoals.length > 0)) {
@@ -123,26 +133,73 @@ export async function reviewFidelity(input: {
       const goalIDs = new Set(goals.map(g => g.id))
       parsed.corrections = parsed.corrections.filter(c => goalIDs.has(c.goalID))
 
-      log.info("fidelity review completed", {
+      lastResult = parsed
+      lastValidationFeedback = validationFeedback
+
+      log.info("fidelity review attempt completed", {
         verdict: parsed.verdict,
         issues: parsed.issues.length,
         corrections: parsed.corrections.length,
         missingGoals: parsed.missingGoals.length,
+        validationDrops: validationFeedback.length,
         attempt: attempts,
       })
 
-      return parsed
+      // If every spec validated, return immediately. Otherwise: append
+      // assistant turn + a structured user follow-up that names every
+      // dropped entry so the next attempt can repair the malformed specs.
+      if (validationFeedback.length === 0) {
+        return parsed
+      }
+
+      if (attempts >= MAX_ATTEMPTS) {
+        log.error("fidelity review: validation drops persisted across all attempts", {
+          attempts,
+          drops: validationFeedback.length,
+          firstFew: validationFeedback.slice(0, 5),
+        })
+        // Loud return: keep validated entries, but verdict reflects that the
+        // reviewer could not produce a fully-valid correction set. Operator
+        // sees "needs_correction" + log lists exactly what failed.
+        return { ...parsed, verdict: "needs_correction" }
+      }
+
+      messages.push({ role: "assistant", content: text })
+      messages.push({
+        role: "user",
+        content: [
+          "Your previous output was almost right, but the following entries were DROPPED because their `acceptance_specs` did not match the required schema. Re-emit the FULL JSON output (verdict + issues + corrections + missing_goals) with these entries fixed:",
+          "",
+          ...validationFeedback.map((f, i) => `${i + 1}. ${f}`),
+          "",
+          "Re-read the AcceptanceSpec shape in the system prompt. Every spec MUST include `id`, `source_requirement_id`, `goal_id`, `title`, `severity`, and a non-empty `scorers` array. Default to one heuristic shell scorer per spec. Do not omit any required field.",
+        ].join("\n"),
+      })
     } catch (err) {
       if (signal?.aborted) throw err
+      lastParseError = err
       log.warn("fidelity review parse error, retrying", { attempt: attempts, error: String(err) })
       if (attempts >= MAX_ATTEMPTS) {
         log.error("fidelity review failed after all attempts", { error: String(err) })
-        return { verdict: "faithful", issues: [], corrections: [], missingGoals: [] }
+        // Loud-fail: surface the parse error rather than silently claiming
+        // "faithful". The caller (requirements agent) can decide whether to
+        // proceed on the un-reviewed goal set or surface a task error.
+        throw new Error(
+          `fidelity review unrecoverable after ${MAX_ATTEMPTS} attempts: ${String(err)}`,
+        )
       }
+      // Append the error as feedback so the next attempt knows to re-emit JSON
+      messages.push({
+        role: "user",
+        content: `Your previous output could not be parsed: ${String(err)}. Emit a single fenced \`\`\`json block as specified in the system prompt and nothing else outside it.`,
+      })
     }
   }
 
-  return { verdict: "faithful", issues: [], corrections: [], missingGoals: [] }
+  // Loop exited without returning — should be unreachable because every
+  // branch above either returns or throws. Guard anyway.
+  if (lastResult) return lastResult
+  throw new Error(`fidelity review exhausted retries: ${String(lastParseError ?? "unknown error")}`)
 }
 
 // ---------------------------------------------------------------------------
@@ -203,7 +260,17 @@ export function applyFidelityCorrections(
 // Parse LLM output
 // ---------------------------------------------------------------------------
 
-function parseFidelityOutput(text: string): FidelityResult {
+/** Output of one fidelity-output parse pass. Carries:
+ *  - `result`: what survived schema validation
+ *  - `validationFeedback`: human-readable per-drop messages, fed back to the
+ *    LLM on the next attempt so it can correct the malformed entries.
+ *    Empty when nothing was dropped. */
+interface ParsedFidelityOutput {
+  result: FidelityResult
+  validationFeedback: string[]
+}
+
+function parseFidelityOutput(text: string): ParsedFidelityOutput {
   // Strict JSON only — no text-parsing fallback (CLAUDE.md "no fallback").
   // The system prompt mandates a JSON block; if the model returns plain prose
   // we treat the attempt as failed and let the retry loop re-prompt.
@@ -217,20 +284,28 @@ function parseFidelityOutput(text: string): FidelityResult {
   // same Zod schema register_goal uses — otherwise the LLM can produce a
   // missing/malformed `scorers` field, the bad spec gets persisted, and
   // downstream consumers (renderSpecsAsText, translateSpecs, architect tool,
-  // create_run tool) crash with "spec.scorers is undefined". Drop corrections
-  // / missingGoals whose specs fail validation; let the retry loop fetch a
-  // clean correction instead of poisoning the goal set.
+  // create_run tool) crash with "spec.scorers is undefined". Drops are
+  // reported via `validationFeedback` so the retry loop can re-prompt the
+  // model with the validation errors — silent drop would be a fallback.
+  const validationFeedback: string[] = []
   const validateSpecs = (raw: unknown, where: string): AcceptanceSpec[] | null => {
-    if (!Array.isArray(raw)) return null
+    if (!Array.isArray(raw)) {
+      validationFeedback.push(
+        `${where}: \`acceptance_specs\` must be a non-empty array of AcceptanceSpec objects (received ${raw === undefined ? "undefined" : typeof raw}).`,
+      )
+      return null
+    }
     const out: AcceptanceSpec[] = []
     for (let i = 0; i < raw.length; i++) {
       const parsed = AcceptanceSpecSchema.safeParse(raw[i])
       if (!parsed.success) {
-        log.warn("fidelity: dropping correction with invalid acceptance_spec", {
+        const issues = parsed.error.issues.map((it) => `${it.path.join(".")}: ${it.message}`).join("; ")
+        log.warn("fidelity: dropping entry with invalid acceptance_spec", {
           where,
           index: i,
           issues: parsed.error.issues.map((it) => `${it.path.join(".")}: ${it.message}`),
         })
+        validationFeedback.push(`${where}.acceptance_specs[${i}]: ${issues}`)
         return null
       }
       out.push(parsed.data)
@@ -267,12 +342,13 @@ function parseFidelityOutput(text: string): FidelityResult {
     missingGoals.push({ ...m, acceptance_specs: validated } as MissingGoal)
   }
 
-  return {
+  const result: FidelityResult = {
     verdict: json.verdict === "faithful" ? "faithful" : "needs_correction",
     issues: Array.isArray(json.issues) ? json.issues : [],
     corrections,
     missingGoals,
   }
+  return { result, validationFeedback }
 }
 
 // ---------------------------------------------------------------------------
@@ -293,6 +369,38 @@ function buildFidelitySystem(): string {
     "3. **Completeness**: Goals must not merge unrelated requirements (losing granularity)",
     "4. **No hallucination**: Goals must not add requirements the user didn't ask for",
     "",
+    "## AcceptanceSpec — REQUIRED shape for every spec you emit",
+    "",
+    "Every entry in `acceptance_specs` (whether inside `corrections.updates` or",
+    "`missing_goals`) MUST have ALL these fields. Specs missing any required field",
+    "are dropped — your correction is wasted.",
+    "",
+    "```json",
+    "{",
+    "  \"id\": \"acc-<short-slug>\",",
+    "  \"source_requirement_id\": \"REQ-N\",         // REQ id this spec derives from",
+    "  \"goal_id\": \"<owning goal id>\",            // for corrections: the goal being modified; for missing_goals: re-state your proposed goal id",
+    "  \"title\": \"Short, executable acceptance statement\",",
+    "  \"severity\": \"essential\",                   // essential | important | optional | pitfall",
+    "  \"scorers\": [",
+    "    { \"type\": \"heuristic\", \"name\": \"build\",",
+    "      \"spec\": { \"kind\": \"shell\", \"cmd\": \"bun run build\" },",
+    "      \"expect\": { \"exit_code\": 0 } }",
+    "  ]",
+    "}",
+    "```",
+    "",
+    "Default to ONE heuristic scorer per spec. Only add `scenario` (Gherkin),",
+    "`llm_judge` scorers, or multi-level `rubric` when the heuristic genuinely",
+    "cannot verify the requirement. Every field listed above is REQUIRED — do",
+    "NOT omit `id`, `source_requirement_id`, `goal_id`, `title`, `severity`,",
+    "or `scorers` (array with at least one entry).",
+    "",
+    "For `missing_goals`, the proposed goal also needs `owned_paths` (at least one",
+    "concrete file path discovered from the user request — not a guess), `kind`",
+    "(`bootstrap` | `feature` | `verification` | `integration` | `system`), and",
+    "`priority` (`blocking` | `advisory`).",
+    "",
     "## Output Format (JSON)",
     "",
     "```json",
@@ -306,7 +414,7 @@ function buildFidelitySystem(): string {
     "      \"updates\": { \"title\": \"...\", \"objective\": \"...\", \"acceptance_specs\": [<AcceptanceSpec>] } }",
     "  ],",
     "  \"missing_goals\": [",
-    "    { \"title\": \"...\", \"objective\": \"...\", \"acceptance_specs\": [<AcceptanceSpec>], \"owned_paths\": [],",
+    "    { \"title\": \"...\", \"objective\": \"...\", \"acceptance_specs\": [<AcceptanceSpec>], \"owned_paths\": [\"...\"],",
     "      \"kind\": \"feature\", \"priority\": \"blocking\", \"reason\": \"...\" }",
     "  ]",
     "}",

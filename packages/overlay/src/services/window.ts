@@ -8,6 +8,8 @@
 // fitBrandVersion — shrink the brand-version element to fit its container
 // syncExecutorWidth — equalise executor chip button widths
 
+import { t } from "../utils/i18n";
+
 // ── Helpers ──
 
 function hasTauriRuntime(): boolean {
@@ -46,17 +48,9 @@ export async function setTrayAttention(active: boolean): Promise<boolean> {
 
 // ── setConnStatus ──
 // Update the DOM connection badge to reflect the current connection state.
-// The badge element's text is set t() i18n global to avoid
-// importing the full i18n module during migration.
 
 export function setConnStatus(status: "online" | "offline" | "connecting"): void {
   if (typeof document === "undefined") return;
-  const legacyT = (window as any).t as
-    | ((key: string) => string)
-    | undefined;
-  const t = (key: string) =>
-    typeof legacyT === "function" ? legacyT(key) : key;
-
   document.body.dataset.connection = status;
   const badge = document.getElementById("solidConnBadge") as HTMLElement | null;
   if (!badge) return;

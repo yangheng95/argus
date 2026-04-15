@@ -8,7 +8,6 @@ import { LSP } from "@/lsp"
 import { Command } from "@/command"
 import { Format } from "@/format"
 import { Log } from "@/util/log"
-import { Process } from "@/util/process"
 import { Hono } from "hono"
 import { describeRoute, openAPIRouteHandler, resolver, validator } from "hono-openapi"
 import { streamSSE } from "hono/streaming"
@@ -39,12 +38,6 @@ import { TraceRoutes } from "./trace"
 import { GatewayRoutes } from "./gateway"
 
 const log = Log.create({ service: "server" })
-
-export function openPathCommand(target: string) {
-  if (process.platform === "win32") return ["cmd", "/c", "start", "", target]
-  if (process.platform === "darwin") return ["open", target]
-  return ["xdg-open", target]
-}
 
 export const AppDocumentation = {
   info: {
@@ -193,44 +186,6 @@ export function AppRoutes(root: Hono) {
       async (c) => {
         const commands = await Command.list()
         return c.json(commands)
-      },
-    )
-    .post(
-      "/path/open",
-      describeRoute({
-        summary: "Open a local path",
-        description: "Open a local file or directory using the host operating system.",
-        operationId: "path.open",
-        responses: {
-          200: {
-            description: "Path opened",
-            content: {
-              "application/json": {
-                schema: resolver(z.object({ opened: z.boolean() })),
-              },
-            },
-          },
-          ...errors(400),
-        },
-      }),
-      validator(
-        "json",
-        z.object({
-          path: z.string().trim().min(1),
-        }),
-      ),
-      async (c) => {
-        const target = c.req.valid("json").path
-        const result = await Process.run(openPathCommand(target), {
-          nothrow: true,
-          stdin: "ignore",
-          timeout: 1_000,
-        })
-        if (result.code !== 0) {
-          const detail = result.stderr.toString().trim() || `Failed to open path: ${target}`
-          throw new Error(detail)
-        }
-        return c.json({ opened: true })
       },
     )
     .post(

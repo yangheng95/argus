@@ -6,6 +6,7 @@
 import { createSignal, onCleanup, onMount, Show } from "solid-js";
 import { settingsStore, setSettingsStore, saveSettings } from "../store/settings";
 import { t } from "../utils/i18n";
+import { nativeMessage } from "../services/app-dialog";
 
 // ── Constants ──
 
@@ -26,12 +27,6 @@ async function currentTauriWindow(): Promise<any | null> {
   return null;
 }
 
-/** Show a native dialog via Tauri's dialog plugin (if available). */
-async function nativeMessage(message: string, options?: { title?: string }): Promise<void> {
-  const notify = (window as any).nativeMessage;
-  if (typeof notify !== "function") return;
-  await notify(message, options).catch(() => undefined);
-}
 
 // ── Label helpers (
 

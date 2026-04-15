@@ -115,6 +115,8 @@ export const ReadTool = Tool.define("read", {
           preview: sliced.slice(0, 20).join("\n"),
           truncated,
           loaded: [] as string[],
+          lines: sliced.length,
+          totalLines: entries.length,
         },
       }
     }
@@ -134,6 +136,8 @@ export const ReadTool = Tool.define("read", {
           preview: msg,
           truncated: false,
           loaded: instructions.map((i) => i.filepath),
+          lines: 0,
+          totalLines: 0,
         },
         attachments: [
           {
@@ -231,6 +235,8 @@ export const ReadTool = Tool.define("read", {
         preview,
         truncated,
         loaded: instructions.map((i) => i.filepath),
+        lines: raw.length,
+        totalLines,
       },
     }
   },

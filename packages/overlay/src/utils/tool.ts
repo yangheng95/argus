@@ -126,11 +126,22 @@ export function displayToolDetail(
       const limit = (safeInput as any).limit;
       const hasOffset = typeof offset === "number" && Number.isFinite(offset);
       const hasLimit = typeof limit === "number" && Number.isFinite(limit);
+      const meta = record((safeState as any).metadata) ? (safeState as any).metadata : {};
+      const readLines = (meta as any).lines;
+      const totalLines = (meta as any).totalLines;
+      const hasReadLines = typeof readLines === "number" && Number.isFinite(readLines);
+      const hasTotal = typeof totalLines === "number" && Number.isFinite(totalLines);
+      const linesSuffix = hasReadLines
+        ? hasTotal && totalLines !== readLines
+          ? ` (${readLines}/${totalLines} lines)`
+          : ` (${readLines} lines)`
+        : "";
       if (hasOffset || hasLimit) {
         const start = hasOffset ? offset : 1;
         const span = hasLimit ? `+${limit}` : "";
-        return `${shortPath} @${start}${span}`;
+        return `${shortPath} @${start}${span}${linesSuffix}`;
       }
+      return `${shortPath}${linesSuffix}`;
     }
     return shortPath;
   }

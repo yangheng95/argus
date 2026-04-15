@@ -8,6 +8,7 @@ import { sameBudget, draftBudget, type Budget } from "../utils/budget";
 import { apiJson } from "./api";
 import { patchConfig } from "./config";
 import { t } from "../utils/i18n";
+import { nativeMessage } from "./app-dialog";
 
 function taskBudget(task: any = boardStore.board?.task): Budget | undefined {
   const budget = task?.budget;
@@ -146,13 +147,10 @@ export function installBudgetBindings(): void {
       setAppStore("budgetDirty", false);
     } catch (error) {
       console.error("Failed to update budget", error);
-      const nativeMessage = (window as any).nativeMessage;
-      if (typeof nativeMessage === "function") {
-        await nativeMessage(budgetSaveError(error), {
-          title: t("section.budget"),
-          kind: "error",
-        });
-      }
+      await nativeMessage(budgetSaveError(error), {
+        title: t("section.budget"),
+        kind: "error",
+      });
     } finally {
       setAppStore("budgetSaving", false);
       renderBudgetState(boardStore.board?.task);
