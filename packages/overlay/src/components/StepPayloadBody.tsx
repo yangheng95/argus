@@ -1,14 +1,15 @@
 // ── StepPayloadBody ──
-// Single renderer for a workflow step's structured payload. Used by both the
-// main conversation (via Card) and the sidebar Goals panel (via
-// GoalWorkflowGroup) so per-step detail (plan nodes / changed files /
-// diffstats / eval checks / verdict / executor session link) is emitted from
-// one place — no drift between the two surfaces.
+// Single renderer for a workflow step's structured content: plan nodes,
+// changed files + diffstats, eval checks + verdict + summary.
+//
+// Deliberately does NOT render the "Open session" button — that's a
+// sidebar-only affordance (the main conversation IS the session, so the
+// button would be redundant and the sidebar-tuned styling looks out of
+// place there). The sidebar Goals panel renders its own button next to
+// this component.
 
 import { For, Show } from "solid-js";
 import type { StepPayload } from "../utils/card-tree";
-import { t } from "../utils/i18n";
-import { openExecutorSessionDialog } from "../services/dialog";
 
 function verdictClass(verdict: string): string {
   if (verdict === "accepted") return "gwg-verdict--accepted";
@@ -31,14 +32,11 @@ function checkStatusClass(status: string): string {
 export function StepPayloadBody(props: {
   payload: StepPayload | undefined;
   stepID: string;
-  goalTitle?: string;
 }) {
   const hasPlanNodes = () => !!props.payload?.planNodes?.length;
   const hasChangedFiles = () => !!props.payload?.changedFiles?.length;
   const hasDiffStats = () => props.payload?.diffStats?.files !== undefined;
   const hasChecks = () => !!props.payload?.checks?.length;
-  const hasOpenSession = () =>
-    props.stepID === "execute" && !!props.payload?.executorSessionID;
 
   return (
     <Show when={props.payload}>
@@ -76,25 +74,6 @@ export function StepPayloadBody(props: {
             <For each={props.payload!.changedFiles}>
               {(file) => <div class="gwg-changed-file">{file}</div>}
             </For>
-          </div>
-        </Show>
-
-        {/* Open executor session */}
-        <Show when={hasOpenSession()}>
-          <div class="gwg-open-session">
-            <button
-              type="button"
-              class="gwg-open-session-btn"
-              onClick={(e) => {
-                e.stopPropagation();
-                void openExecutorSessionDialog(
-                  props.payload!.executorSessionID!,
-                  props.goalTitle ?? "",
-                );
-              }}
-            >
-              {t("goal.open_session")}
-            </button>
           </div>
         </Show>
 

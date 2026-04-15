@@ -676,7 +676,6 @@ function computeAgentCards(): { cards: Record<string, AgentCardData>; order: str
   // goalID and fall through to root rendering — see the `gid` branch below.
   const PER_GOAL_STAGES = new Set(["planner", "executor", "evaluator", "build"]);
 
-  // goalID→info + goalID→display-index maps from board data.
   const goalInfoMap = new Map<string, { id: string; title: string; status: string }>();
   const goalIndexMap = new Map<string, number>();
 
@@ -686,11 +685,12 @@ function computeAgentCards(): { cards: Record<string, AgentCardData>; order: str
     goalIndexMap.set(gw.goalID, i + 1);
   }
 
-  /** Resolve goalID for a round from bridge-stamped msg.info.goalID.
-   *  The backend registers every goal-scoped session (planner/executor/goal/
-   *  build) and enrichProperties stamps goalID on every outgoing message, so
-   *  per-message lookup is both sufficient and strictly more accurate than
-   *  waiting for a board snapshot to propagate session→goal links. */
+  /** Every agent message is stamped with goalID by the backend's
+   *  enrichProperties bridge (reading the in-memory goalRunSessionRegistry
+   *  populated by goal-pool.ts at dispatch time). This is the single source
+   *  of truth — the earlier board-snapshot session→goal map was only there
+   *  to mask a backend clobber in the SSE reseed path (now fixed via
+   *  ensureTaskSession). */
   function resolveGoalID(round: AgentRound): string {
     for (const msg of round.messages) {
       const gid = typeof msg?.info?.goalID === "string" ? msg.info.goalID : "";

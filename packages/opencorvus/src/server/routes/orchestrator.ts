@@ -33,7 +33,7 @@ import { Session } from "@/session"
 import { Message } from "@/session/message"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
-import { registerGoalRunSession, sessionRole, taskSession } from "./task-event"
+import { ensureTaskSession, registerGoalRunSession, sessionRole, taskSession } from "./task-event"
 import { ensureTaskMessageProtocolBridge, overlayMeta } from "./task-message-protocol-bridge"
 import { listGoalRunsByTask } from "@/orchestrator/store"
 
@@ -280,11 +280,16 @@ export const OrchestratorRoutes = lazy(() =>
           const sessionID = taskSession(taskID)
           // Seed the goal-run registry with any existing child sessions so
           // reconnecting SSE streams pick up events for already-running goals.
+          // Use ensureTaskSession (not registerGoalRunSession) so we don't
+          // overwrite the role/goalID that goal-pool.ts set at dispatch time —
+          // enrichProperties reads that goalID to stamp msg.info.goalID, and
+          // losing it on reconnect is what left the overlay's Execute card
+          // without streaming detail.
           if (sessionID) {
             const queue = [sessionID]
             while (queue.length > 0) {
               const id = queue.shift()!
-              if (id !== sessionID) registerGoalRunSession(id, taskID)
+              if (id !== sessionID) ensureTaskSession(id, taskID)
               const children = await Session.children(id)
               queue.push(...children.map((child) => child.id))
             }

@@ -18,6 +18,26 @@ export function registerGoalRunSession(sessionID: string, taskID: string, role =
   cacheTaskSessions(taskID, role, goalID, sessionID)
 }
 
+/**
+ * Ensure `sessionID` is registered under `taskID` WITHOUT clobbering an
+ * already-recorded role or goalID. Use this from bulk reseed paths (e.g.
+ * the task SSE endpoint walking Session.children()) that only know the
+ * taskID — otherwise they would overwrite the goalID that goal-pool.ts
+ * set at dispatch time, which is what enrichProperties stamps onto every
+ * outgoing message.
+ */
+export function ensureTaskSession(sessionID: string, taskID: string): void {
+  if (!sessionID) return
+  const existing = goalRunSessionRegistry.get(sessionID)
+  if (existing) {
+    if (existing.taskID !== taskID) {
+      goalRunSessionRegistry.set(sessionID, { ...existing, taskID })
+    }
+    return
+  }
+  goalRunSessionRegistry.set(sessionID, { taskID, role: "assistant", goalID: undefined })
+}
+
 /** Look up the registered role for a session (e.g. "executor", "assistant"). */
 export function sessionRole(sessionID: string): string | undefined {
   return goalRunSessionRegistry.get(sessionID)?.role
