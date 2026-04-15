@@ -553,6 +553,13 @@ let lastLogAt = Date.now()
 let lastActivityLogAt = Date.now()
 let lastHeartbeatAt = 0
 let lastActivityLine = ""
+// Terminal signal — resolved by onEvent when orchestrator.task.updated carries
+// a FINAL status (completed/failed/cancelled). waitForFinal races its 2s sleep
+// against this promise so the poll loop exits immediately on failure instead of
+// waiting for the next 2s poll tick — and sets terminalReached=true so stall
+// checks are suppressed while the progress endpoint catches up.
+let terminalSignalResolver: (() => void) | null = null
+let terminalReached = false
 let planning: any = null
 let streaming: any = null
 let board: any = null
@@ -686,6 +693,15 @@ const onEvent = ({ payload }: { payload: unknown }) => {
     goalRunID: eventValue(normalized.payload, normalized.props, "goalRunID"),
   }
   events.push(entry)
+  if (entry.type === "orchestrator.task.updated" && FINAL.has(entry.status)) {
+    if (!terminalReached) {
+      terminalReached = true
+      activityLine(`[overlay-benchmark] terminal-signal status=${entry.status} — stall checks suppressed`)
+    }
+    const resolver = terminalSignalResolver
+    terminalSignalResolver = null
+    if (resolver) resolver()
+  }
   const line = formatEventLine(entry)
   if (line && line !== lastActivityLine) {
     lastActivityLine = line
@@ -1556,6 +1572,29 @@ async function waitForFinal(
 ) {
   const startedAt = Date.now()
   let lastStatus = ""
+  // Scope stall clocks to this wait — stale timestamps from earlier phases
+  // (planning, browser bootstrap) must not count against the execution stall
+  // budget. terminalReached is reset in case of a resumed/subsequent call.
+  const entryNow = Date.now()
+  lastEventAt = entryNow
+  lastProgressAt = entryNow
+  lastProgressEventAt = entryNow
+  lastProgressSignature = ""
+  lastHeartbeatAt = 0
+  terminalReached = false
+  let terminalAt = 0
+  const terminalPromise = new Promise<void>((resolve) => {
+    terminalSignalResolver = () => {
+      terminalAt = Date.now()
+      resolve()
+    }
+  })
+  // Hard cap on the gap between a terminal SSE signal and the /progress
+  // endpoint reflecting the terminal status. The event is emitted from the
+  // same DB transaction that writes the row, so divergence longer than this
+  // indicates a real bug — fail loudly rather than loop forever.
+  const TERMINAL_PROGRESS_GRACE_MS = 30_000
+  try {
   while (true) {
     let progress: any
     try {
@@ -1607,20 +1646,42 @@ async function waitForFinal(
         `[overlay-benchmark] heartbeat status=${taskStatus} retry=${retryCount}/${maxFixRuns} alive_age_ms=${aliveAgeMs} progress_age_ms=${progressAgeMs} alive_cap_ms=${aliveStallTimeoutMs} progress_cap_ms=${effectiveProgressMs} last_progress=${lastProgressSignature || "none"}`,
       )
     }
-    if (aliveAgeMs >= aliveStallTimeoutMs) {
-      throw new Error(
-        `Task alive stall: no SSE activity for ${aliveAgeMs}ms (cap ${aliveStallTimeoutMs}ms, status: ${taskStatus}, last progress: ${lastProgressSignature || "none"})`,
-      )
+    // Once the orchestrator has emitted a terminal task.updated event, the
+    // task is definitionally done — suppress stall checks while the progress
+    // endpoint catches up. Otherwise a slow progress poll after failure could
+    // fire a spurious stall error even though the run is already over.
+    if (!terminalReached) {
+      if (aliveAgeMs >= aliveStallTimeoutMs) {
+        throw new Error(
+          `Task alive stall: no SSE activity for ${aliveAgeMs}ms (cap ${aliveStallTimeoutMs}ms, status: ${taskStatus}, last progress: ${lastProgressSignature || "none"})`,
+        )
+      }
+      if (progressAgeMs >= effectiveProgressMs) {
+        throw new Error(
+          `Task progress stall: no semantic-progress event for ${progressAgeMs}ms (cap ${effectiveProgressMs}ms, status: ${taskStatus}, last progress: ${lastProgressSignature || "none"})`,
+        )
+      }
+      if (completionHardTimeoutMs > 0 && (now - startedAt) >= completionHardTimeoutMs) {
+        throw new Error(`Task exceeded optional hard completion timeout of ${completionHardTimeoutMs}ms`)
+      }
     }
-    if (progressAgeMs >= effectiveProgressMs) {
-      throw new Error(
-        `Task progress stall: no semantic-progress event for ${progressAgeMs}ms (cap ${effectiveProgressMs}ms, status: ${taskStatus}, last progress: ${lastProgressSignature || "none"})`,
-      )
+    // When terminal signal has fired, shorten the poll cadence so the final
+    // progress snapshot is fetched promptly. Otherwise race sleep vs signal so
+    // the loop exits immediately on task.updated terminal.
+    if (terminalReached) {
+      const sinceTerminal = Date.now() - terminalAt
+      if (sinceTerminal >= TERMINAL_PROGRESS_GRACE_MS) {
+        throw new Error(
+          `Task terminal SSE fired but /progress still reports non-final for ${sinceTerminal}ms (cap ${TERMINAL_PROGRESS_GRACE_MS}ms, status: ${taskStatus})`,
+        )
+      }
+      await Bun.sleep(250)
+    } else {
+      await Promise.race([Bun.sleep(2_000), terminalPromise])
     }
-    if (completionHardTimeoutMs > 0 && (now - startedAt) >= completionHardTimeoutMs) {
-      throw new Error(`Task exceeded optional hard completion timeout of ${completionHardTimeoutMs}ms`)
-    }
-    await Bun.sleep(2_000)
+  }
+  } finally {
+    terminalSignalResolver = null
   }
 }
 
