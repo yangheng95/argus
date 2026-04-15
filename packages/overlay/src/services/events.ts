@@ -65,6 +65,16 @@ function convertExecutorEventToMessages(event: any, properties: any): any[] {
   const timestamp = Number(event.timestamp || Date.now());
   const msgID = executorMessageID(properties);
   const sessionID = executorSessionID(properties);
+  // Propagate the backend-stamped goalID so computeAgentCards can attach
+  // these synthesized executor messages to their goal card. Without this,
+  // external-executor tool_call/tool_result events create messages with
+  // no goalID and computeAgentCards drops the entire round.
+  const goalID =
+    typeof properties.goalID === "string" && properties.goalID
+      ? properties.goalID
+      : typeof event?.goalID === "string" && event.goalID
+        ? event.goalID
+        : "";
 
   // Ensure the message exists with executor agent identity
   const messageEvent = {
@@ -77,6 +87,7 @@ function convertExecutorEventToMessages(event: any, properties: any): any[] {
         resolvedRole: "executor",
         agent: "executor",
         time: { created: timestamp },
+        ...(goalID ? { goalID } : {}),
       },
     },
   };
