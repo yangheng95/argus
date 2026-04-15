@@ -23,7 +23,7 @@ import { Identifier } from "@/id/id"
 import { Log } from "@/util/log"
 import { toolGuard } from "@/util/tool-guard"
 import { Trace } from "@/trace"
-import { registerGoalRunSession } from "@/server/routes/task-event"
+import { clearTaskSessions, registerGoalRunSession } from "@/server/routes/task-event"
 import { sessionStreamHooks } from "@/agent/runtime"
 import { createTaskAgentTools } from "./tools"
 import { SubAgentProtocol } from "@/agent/sub-agent-protocol"
@@ -354,6 +354,15 @@ export namespace TaskAgent {
           category: "task.finish",
           payload: { status: finalTask?.status, error: finalTask?.error ?? null },
         })
+        // Per-task in-memory bookkeeping built up during the run:
+        //   • goalRunSessionRegistry (task-event.ts): ~10+ sub-sessions per task
+        //   • Trace.counters / Trace.writes: per-taskID seq counter + write queue
+        // None of the register call sites pair with an unregister, so without
+        // this the maps grow unboundedly across benchmark runs. Release must
+        // happen AFTER the task.finish Trace.event above so that event's
+        // append syscall is already chained into Trace.writes.
+        clearTaskSessions(taskID)
+        Trace.clearTask(taskID)
       }
     }
   }
