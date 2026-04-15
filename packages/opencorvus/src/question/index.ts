@@ -217,4 +217,36 @@ export namespace Question {
   export async function list() {
     return state().then((x) => objectValues(x.pending).map((item) => item.info))
   }
+
+  /**
+   * Ask the user and return both the formatted LLM-facing summary and the raw
+   * answers. Shared by the executor-side QuestionTool and the task-agent's
+   * `question` tool so both code paths render the same final string; the raw
+   * `answers` are used by the TUI/overlay to re-render the tool card.
+   *
+   * When the user dismisses the dialog, `answers` is null and `output` carries
+   * a user-dismissed message the LLM can act on.
+   */
+  export async function askAndFormat(input: {
+    sessionID: string
+    questions: Info[]
+    tool?: { messageID: string; callID: string }
+    timeoutMs?: number
+  }): Promise<{ output: string; answers: Answer[] | null }> {
+    try {
+      const answers = await ask(input)
+      const lines = input.questions
+        .map((q, i) => `"${q.question}" → ${(answers[i] ?? []).join(", ") || "(no answer)"}`)
+        .join("\n")
+      return { output: `User answered:\n${lines}`, answers }
+    } catch (err) {
+      if (err instanceof RejectedError) {
+        return {
+          output: "User dismissed the questions without answering. Decide how to proceed based on available context.",
+          answers: null,
+        }
+      }
+      throw err
+    }
+  }
 }

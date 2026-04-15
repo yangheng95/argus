@@ -450,46 +450,6 @@ if (boardEl) {
           goalCrit.value = detail || "";
           goalDialog.showModal();
         }}
-        onOpenSession={async (sessionID, goalTitle) => {
-          const dialog = document.getElementById("sessionDialog") as HTMLDialogElement | null;
-          const titleEl = document.getElementById("sessionDialogTitle");
-          const bodyEl = document.getElementById("sessionDialogBody");
-          if (!dialog || !titleEl || !bodyEl) return;
-          titleEl.textContent = goalTitle || "Executor Session";
-          bodyEl.innerHTML = '<p class="empty-hint">Loading…</p>';
-          dialog.showModal();
-          try {
-            // API returns Message.WithParts[]: each element is { info: { role, ... }, parts: [...] }
-            const messages: any[] = await apiJson(`session/${sessionID}/message`);
-            if (!messages || messages.length === 0) {
-              bodyEl.innerHTML = '<p class="empty-hint">No messages yet.</p>';
-              return;
-            }
-            const html = messages.map((msg: any) => {
-              const role: string = msg.info?.role ?? msg.role ?? "unknown";
-              const parts: any[] = Array.isArray(msg.parts) ? msg.parts : [];
-              const textParts = parts
-                .filter((p) => p.type === "text" && p.text && p.audience?.ui !== false)
-                .map((p) => `<div class="session-msg-text md-content">${renderMarkdown(p.text)}</div>`)
-                .join("");
-              const toolParts = parts
-                .filter((p) => p.type === "tool-invocation" || p.type === "tool-call")
-                .map((p) => {
-                  const name = p.toolName ?? p.tool ?? "tool";
-                  return `<p class="session-msg-tool">⚙ ${escapeHtml(name)}</p>`;
-                })
-                .join("");
-              if (!textParts && !toolParts) return "";
-              return `<div class="session-msg" data-role="${escapeHtml(role)}">
-                <span class="session-msg-role">${escapeHtml(role)}</span>
-                ${textParts}${toolParts}
-              </div>`;
-            }).filter(Boolean).join("");
-            bodyEl.innerHTML = html || '<p class="empty-hint">No displayable messages.</p>';
-          } catch (e) {
-            bodyEl.innerHTML = `<p class="empty-hint">Failed to load session: ${escapeHtml(String(e))}</p>`;
-          }
-        }}
         onDeleteGoal={async (goalId) => {
           if (!goalId || !boardStore.selectedTaskID) return;
           const nativeConfirm = (window as any).nativeConfirm;
@@ -746,11 +706,10 @@ if (providersConfigBody) {
   render(() => <ProvidersPanel />, providersConfigBody);
 }
 
-const agentModelsBody = document.getElementById("agentModelsBody");
-if (agentModelsBody) {
-  agentModelsBody.innerHTML = "";
-  render(() => <AgentModelsPanel />, agentModelsBody);
-}
+// AgentModelsPanel auto-fetches at mount via createResource. Defer mount until
+// initApp() has run syncApiConfig(), otherwise the initial /agent +
+// /config/providers fetches go out before credentials/serverUrl are set —
+// which hangs the WebView when Basic auth is configured.
 
 // ── Mount: PermissionAutoResolver (headless) ──
 // Permission cards render inline in the conversation via
@@ -1334,6 +1293,11 @@ document.getElementById("taskGit")?.addEventListener("click", () => {
 void (async () => {
   try {
     await initApp();
+    const agentModelsBody = document.getElementById("agentModelsBody");
+    if (agentModelsBody) {
+      agentModelsBody.innerHTML = "";
+      render(() => <AgentModelsPanel />, agentModelsBody);
+    }
     renderAboutVersion();
     const welcomeHost = document.createElement("div");
     welcomeHost.id = "welcomeHost";

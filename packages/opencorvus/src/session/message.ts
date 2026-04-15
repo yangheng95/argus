@@ -15,6 +15,19 @@ import type { Provider } from "@/provider/provider"
 import { textForModel } from "./part-visibility"
 import { isDecodableText } from "./text-mime"
 import { STATEFUL_SNAPSHOT_TOOL_NAMES } from "@/task-agent/stateful-tool-names"
+import { normalizeToolInput } from "@/agent/runtime/protocol-norm"
+
+/** Coerce a persisted tool_use.input into a dict for outbound AI-SDK messages.
+ *  Downstream gateways (notably hexin → litellm → Bedrock) reject tool_use
+ *  whose input is not a JSON object with HTTP 400 — so any legacy row that
+ *  somehow stored a string / null / partial payload must be flattened to `{}`
+ *  before it re-enters the LLM conversation. `normalizeToolInput` is the same
+ *  boundary used on the ingress side (session-hooks), so the invariant is
+ *  enforced symmetrically. */
+function safeToolInput(raw: unknown): Record<string, unknown> {
+  const norm = normalizeToolInput(raw)
+  return norm.ok ? norm.value : {}
+}
 
 export namespace Message {
   export const OutputLengthError = NamedError.create("MessageOutputLengthError", z.object({}))
@@ -715,7 +728,7 @@ export namespace Message {
                 type: ("tool-" + part.tool) as `tool-${string}`,
                 state: "output-available",
                 toolCallId: part.callID,
-                input: part.state.input,
+                input: safeToolInput(part.state.input),
                 output,
                 ...(differentModel ? {} : { callProviderMetadata: part.metadata }),
               })
@@ -730,7 +743,7 @@ export namespace Message {
                 type: ("tool-" + part.tool) as `tool-${string}`,
                 state: "output-error",
                 toolCallId: part.callID,
-                input: part.state.input,
+                input: safeToolInput(part.state.input),
                 errorText,
                 ...(differentModel ? {} : { callProviderMetadata: part.metadata }),
               })
@@ -742,7 +755,7 @@ export namespace Message {
                 type: ("tool-" + part.tool) as `tool-${string}`,
                 state: "output-error",
                 toolCallId: part.callID,
-                input: part.state.input,
+                input: safeToolInput(part.state.input),
                 errorText: "[Tool execution was interrupted]",
                 ...(differentModel ? {} : { callProviderMetadata: part.metadata }),
               })

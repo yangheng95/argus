@@ -16,7 +16,7 @@ import { Log } from "../util/log"
 import { Filesystem } from "../util/filesystem"
 import { Global } from "../global"
 import type { Provider as ProviderNS } from "./provider"
-import { profileFor, pickDefaultHaiku } from "./hexin-profiles"
+import { profileFor } from "./hexin-profiles"
 
 const log = Log.create({ service: "hexin-discovery" })
 
@@ -163,11 +163,6 @@ function toModelMap(ids: string[]): Record<string, Model> {
   const out: Record<string, Model> = {}
   for (const id of ids) out[id] = buildModel(id)
   return out
-}
-
-/** Returns the preferred haiku-class modelID present in the given model set. */
-export function defaultHaikuModelID(models: Record<string, Model>): string | undefined {
-  return pickDefaultHaiku(Object.keys(models))
 }
 
 /** Exposed so UI can trigger a refresh without restarting the process. */

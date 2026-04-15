@@ -66,7 +66,7 @@ export type AgentCardData =
       goalTitle: string;
       goalStatus: string;
       goalDescription: string;
-      goalSteps?: Array<{ stepID: string; label: string; status: string; summary?: string }>;
+      goalSteps?: Array<{ stepID: string; label: string; status: string; summary?: string; payload?: any }>;
       contracts?: Array<{ key: string; value: string; reason?: string }>;
       internalCards: AgentCardData[];
     };
@@ -676,8 +676,7 @@ function computeAgentCards(): { cards: Record<string, AgentCardData>; order: str
   // goalID and fall through to root rendering — see the `gid` branch below.
   const PER_GOAL_STAGES = new Set(["planner", "executor", "evaluator", "build"]);
 
-  // Build sessionID→goalID + goalID→info maps from board data
-  const sessionToGoal = new Map<string, string>();
+  // goalID→info + goalID→display-index maps from board data.
   const goalInfoMap = new Map<string, { id: string; title: string; status: string }>();
   const goalIndexMap = new Map<string, number>();
 
@@ -686,31 +685,13 @@ function computeAgentCards(): { cards: Record<string, AgentCardData>; order: str
     goalInfoMap.set(gw.goalID, { id: gw.goalID, title: gw.goalTitle, status: gw.goalStatus });
     goalIndexMap.set(gw.goalID, i + 1);
   }
-  // Session-to-goal mapping from goalRuns (executor, planner, and coordinator sessions).
-  for (const gr of boardStore.board?.goalRuns || []) {
-    if (gr.sessionID) sessionToGoal.set(gr.sessionID, gr.goalID);
-    if (gr.executorSessionID) sessionToGoal.set(gr.executorSessionID, gr.goalID);
-    if (gr.plannerSessionID) sessionToGoal.set(gr.plannerSessionID, gr.goalID);
-  }
 
-  // Ensure every goal in goalInfoMap has an index. goalWorkflows populated above
-  // is authoritative; goals without workflow state won't render here.
-  {
-    let nextIdx = goalIndexMap.size > 0 ? Math.max(...goalIndexMap.values()) + 1 : 1;
-    for (const [gid] of goalInfoMap) {
-      if (!goalIndexMap.has(gid)) {
-        goalIndexMap.set(gid, nextIdx++);
-      }
-    }
-  }
-
-  /** Resolve goalID for a round: session mapping (executor) → message goalID (bridge) → "" */
+  /** Resolve goalID for a round from bridge-stamped msg.info.goalID.
+   *  The backend registers every goal-scoped session (planner/executor/goal/
+   *  build) and enrichProperties stamps goalID on every outgoing message, so
+   *  per-message lookup is both sufficient and strictly more accurate than
+   *  waiting for a board snapshot to propagate session→goal links. */
   function resolveGoalID(round: AgentRound): string {
-    // 1. Session-based (from board goalWorkflows, reliable for executor)
-    if (round.sessionID && sessionToGoal.has(round.sessionID)) {
-      return sessionToGoal.get(round.sessionID)!;
-    }
-    // 2. Message-based (bridge-stamped goalID, for planner/evaluator)
     for (const msg of round.messages) {
       const gid = typeof msg?.info?.goalID === "string" ? msg.info.goalID : "";
       if (gid) return gid;
@@ -798,11 +779,13 @@ function computeAgentCards(): { cards: Record<string, AgentCardData>; order: str
   // Goal descriptions are carried on goalWorkflows.contracts or derived from title.
   const goalDescMap = new Map<string, string>();
 
-  // Build per-goal step info from goalWorkflows
-  const goalStepsMap = new Map<string, Array<{ stepID: string; label: string; status: string; summary?: string }>>();
+  // Build per-goal step info from goalWorkflows. `payload` carries the
+  // structured content for each step (planNodes / changedFiles / diffStats /
+  // checks / verdict / executorSessionID) as emitted by workbench/board.ts.
+  const goalStepsMap = new Map<string, Array<{ stepID: string; label: string; status: string; summary?: string; payload?: any }>>();
   for (const gw of boardStore.board?.goalWorkflows || []) {
     goalStepsMap.set(gw.goalID, (gw.steps || []).map((s: any) => ({
-      stepID: s.stepID, label: s.label, status: s.status, summary: s.summary,
+      stepID: s.stepID, label: s.label, status: s.status, summary: s.summary, payload: s.payload,
     })));
   }
 

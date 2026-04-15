@@ -159,14 +159,19 @@ export namespace AgentRuntime {
 
       // AI SDK delivers `tool-error` content parts only via `stream.steps`
       // (never through onChunk, see AI SDK v5 StreamTextOnChunkCallback).
-      // Walk the steps once here and record them so downstream policy
-      // (throw / collect) can treat them the same as persistence failures.
+      // Tool-error means inputSchema (Zod) rejected the model's tool call —
+      // the SDK has ALREADY fed the validation error back to the model as
+      // the tool's result, so the model sees it on the next step and can
+      // self-correct. We record it with `tool-input-validation` kind so
+      // downstream policy (task-agent critical filter) keeps the task
+      // running; step-cap bounds unrecoverable loops, so this is NOT a
+      // silent fallback.
       for (const step of steps) {
         const content = Array.isArray((step as any).content) ? (step as any).content : []
         for (const part of content) {
           if (part?.type === "tool-error") {
             failures.record({
-              kind: "protocol-normalize",
+              kind: "tool-input-validation",
               reason: part.error instanceof Error ? part.error.message : String(part.error ?? "tool-error"),
               chunkType: "tool-error",
               toolName: part.toolName,

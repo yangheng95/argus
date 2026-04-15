@@ -972,22 +972,20 @@ export function createTaskAgentTools(input: {
           z.string(),
           z.object({
             root_cause: z.string().min(30).describe("What went wrong in this specific goal (min 30 chars). Cite specific eval evidence."),
-            failure_class: z.enum([
-              "code_bug",
-              "test_failure",
-              "missing_dependency",
-              "wrong_approach",
-              "cross_goal_integration",
-              "flaky_environment",
-              "executor_incomplete",
-            ]).describe(
-              "Category of failure. Use `executor_incomplete` when the executor " +
-              "session ended without producing the goal's deliverable (e.g. the " +
-              "executor reported status='running' but never finalized, was " +
-              "interrupted, hit a stall timeout, or otherwise exited mid-work). " +
-              "This is distinct from `code_bug` (executor finished but the code " +
-              "is wrong) and `flaky_environment` (the executor's environment " +
-              "itself was unstable, e.g. transient network/disk failure).",
+            failure_class: z.string().describe(
+              "Short snake_case category of failure. Decision-log groups retries " +
+              "by this value — pick a stable label so repeated failures of the " +
+              "same kind get detected (2+ same class triggers a 'change strategy' " +
+              "gate). Recommended values: " +
+              "`code_bug` (executor finished but the code is wrong), " +
+              "`test_failure` (build passed but tests failed), " +
+              "`missing_dependency` (import/package resolution), " +
+              "`wrong_approach` (goal contract needs revision), " +
+              "`cross_goal_integration` (conflict with sibling goal's output), " +
+              "`flaky_environment` (transient network/disk/api), " +
+              "`executor_incomplete` (session ended without producing a " +
+              "deliverable — interrupted, stall, never finalized). " +
+              "Coin a new snake_case label only when none of the above fit.",
             ),
             expected_fix: z.string().min(20).describe("What should retry do differently (min 20 chars)"),
           }),
@@ -2132,7 +2130,7 @@ export function createTaskAgentTools(input: {
       },
     }),
 
-    ask_user: tool({
+    question: tool({
       description:
         "Ask the user one or more clarification questions and block until they answer. " +
         "The questions appear in the task's InteractionPanel (with option buttons + free-text input). " +
@@ -2172,28 +2170,18 @@ export function createTaskAgentTools(input: {
           .describe("Why you're asking (short, shown in logs — not to the user)."),
       }),
       execute: async ({ questions, reason }) => {
-        log.info("ask_user", { taskID, count: questions.length, reason })
-        try {
-          const answers = await Question.ask({
-            sessionID: input.agentSessionID,
-            questions: questions.map((q) => ({
-              question: q.question,
-              header: q.header,
-              options: q.options ?? [],
-              multiple: q.multiple,
-              custom: q.custom,
-            })),
-          })
-          const formatted = questions
-            .map((q, i) => `"${q.question}" → ${(answers[i] ?? []).join(", ") || "(no answer)"}`)
-            .join("\n")
-          return `User answered:\n${formatted}`
-        } catch (err) {
-          if (err instanceof Question.RejectedError) {
-            return "User dismissed the questions without answering. Decide how to proceed based on available context."
-          }
-          throw err
-        }
+        log.info("question", { taskID, count: questions.length, reason })
+        const { output } = await Question.askAndFormat({
+          sessionID: input.agentSessionID,
+          questions: questions.map((q) => ({
+            question: q.question,
+            header: q.header,
+            options: q.options ?? [],
+            multiple: q.multiple,
+            custom: q.custom,
+          })),
+        })
+        return output
       },
     }),
 

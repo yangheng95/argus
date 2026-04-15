@@ -928,10 +928,15 @@ function buildStepSummary(goalID: string, stepID: string, status?: string): stri
         .orderBy(desc(OrchestratorDeliveryTable.time_created))
         .limit(1).get(),
     )
-    if (!delivery) return undefined
-    const result = delivery.result as { changed_files?: string[]; diffs?: unknown[] } | null
-    const fileCount = result?.changed_files?.length ?? result?.diffs?.length ?? 0
-    if (fileCount > 0) return `${fileCount} files`
+    if (delivery) {
+      const result = delivery.result as { changed_files?: string[]; diffs?: unknown[] } | null
+      const fileCount = result?.changed_files?.length ?? result?.diffs?.length ?? 0
+      if (fileCount > 0) return `${fileCount} files`
+    }
+    // Executor is running (or crashed without delivering): surface the session
+    // presence instead of an empty subtitle, so the operator can tell the
+    // difference between "not started" and "in flight".
+    if (status === "running") return "running…"
     return undefined
   }
   if (stepID === "eval") {

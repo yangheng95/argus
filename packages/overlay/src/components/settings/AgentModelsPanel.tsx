@@ -3,8 +3,8 @@
 // provider+model selector, persisted to opencorvus.jsonc under agent.<name>.model.
 //
 // Groups agents into three tiers (Core / Lightweight / Internal) for readability.
-// Core agents (task/build/delivery/general) default to the project's strong
-// model; all others default to the hexin haiku discovered at startup.
+// All tiers inherit the project-wide default (top-level `model` in config)
+// when no explicit override is set.
 
 import { createSignal, createResource, For, Show } from "solid-js";
 import { apiJson } from "../../services/api";
@@ -35,7 +35,8 @@ interface ProvidersPayload {
   default: Record<string, string>;
 }
 
-// Tiers — must match STRONG_AGENTS in packages/opencorvus/src/agent/model.ts.
+// Tier groupings are display-only: they organize the UI list but no longer
+// affect default model resolution (all agents inherit the project default).
 const CORE_AGENTS = ["task", "build", "delivery", "general"];
 const INTERNAL_AGENTS = ["compaction", "title", "summary"];
 
@@ -52,8 +53,8 @@ const TIER_ORDER: Array<"core" | "lightweight" | "internal"> = [
 ];
 
 const TIER_LABEL: Record<string, string> = {
-  core: "Core — strong model by default",
-  lightweight: "Lightweight — haiku by default",
+  core: "Core — main coding agents",
+  lightweight: "Lightweight — spec/plan/explore/etc.",
   internal: "Internal — background tasks",
 };
 
@@ -189,8 +190,8 @@ export default function AgentModelsPanel() {
           </button>
         </h4>
         <p style="margin: 4px 0 12px 0; font-size: var(--ui-font-meta); opacity: 0.75;">
-          Choose which LLM each agent uses. Leave unset to inherit the system default
-          (Core agents use the project model; others use the Hexin haiku model).
+          Choose which LLM each agent uses. Leave unset to inherit the
+          project default (top-level `model` in opencorvus.jsonc).
         </p>
         <Show when={refreshMsg()}>
           <div

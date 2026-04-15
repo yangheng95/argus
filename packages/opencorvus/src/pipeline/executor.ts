@@ -162,6 +162,7 @@ async function* streamExecutorEvents(
   let lastActivityAt = Date.now()
   let idleSince: number | undefined
   let idleGraceExceeded = false
+  let inactivityTimeoutExceeded = false
 
   // Status poller + inactivity watchdog + idle-grace detector
   const poller = (async () => {
@@ -188,10 +189,13 @@ async function* streamExecutorEvents(
           break
         }
       }
-      // Inactivity watchdog: if no event activity for INACTIVITY_TIMEOUT_MS, abort
+      // Inactivity watchdog: if no event activity for INACTIVITY_TIMEOUT_MS, abort.
+      // Same remediation as idle-grace — reporting "executor stuck in running"
+      // is almost always a stuck callback chain, not a real LLM failure.
       const inactiveMs = Date.now() - lastActivityAt
       if (inactiveMs >= INACTIVITY_TIMEOUT_MS) {
-        log.warn("inactivity timeout — no executor events", { goalRunID, inactiveMs })
+        log.warn("inactivity timeout — forcing completion", { goalRunID, inactiveMs })
+        inactivityTimeoutExceeded = true
         streamAbort.abort("inactivity timeout")
         break
       }
@@ -224,11 +228,19 @@ async function* streamExecutorEvents(
 
   if (signal.aborted) return { error: "Execution aborted" }
 
-  // When idle-grace forced completion, the LLM turn finished but the queue task
-  // row is still "running" (callback chain stuck). Treat as success and
-  // sync the DB so task-queue-service doesn't re-run the stale row.
-  if (idleGraceExceeded) {
-    log.info("idle-grace forced — proceeding to extract delivery", { goalRunID })
+  // Force-complete paths:
+  //   - idleGraceExceeded: session.idle fired + queue task still running
+  //     (callback chain stuck). LLM turn is genuinely done.
+  //   - inactivityTimeoutExceeded: no events for 90s. Either a stuck callback
+  //     chain (same root cause) or a truly dead LLM. Either way, reporting
+  //     "executor finished with status running" is a false negative — extract
+  //     whatever diffs exist and let goal-pool decide based on delivery
+  //     contents (empty delivery is surfaced explicitly downstream).
+  if (idleGraceExceeded || inactivityTimeoutExceeded) {
+    log.info("forced completion — proceeding to extract delivery", {
+      goalRunID,
+      reason: idleGraceExceeded ? "idle-grace" : "inactivity-timeout",
+    })
     try {
       const { TaskQueueTable } = await import("@/scheduler/task-queue.sql")
       Database.use((db) =>

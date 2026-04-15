@@ -6,6 +6,7 @@ import { CardHeader } from "./CardHeader";
 import { CardParts } from "./CardParts";
 import { InlineToolPart } from "./InlineToolPart";
 import { StaticTextPart } from "./TextPart";
+import { StepPayloadBody } from "./StepPayloadBody";
 
 /**
  * Unified recursive card primitive.
@@ -83,6 +84,17 @@ export function Card(props: { node: CardNode; depth: number }) {
           {/* Tool card body: delegate to InlineToolPart body mode */}
           <Show when={isTool() && toolPart()}>
             <InlineToolPart part={toolPart()} mode="body" />
+          </Show>
+
+          {/* Step payload: plan nodes / changed files / diff stats / eval
+              checks / verdict / "Open session" button — same renderer as the
+              sidebar Goals panel, so a step's detail is identical across
+              surfaces. */}
+          <Show when={props.node.kind === "step" && props.node.stepPayload && props.node.stepID}>
+            <StepPayloadBody
+              payload={props.node.stepPayload}
+              stepID={props.node.stepID!}
+            />
           </Show>
 
           {/* Generic parts */}

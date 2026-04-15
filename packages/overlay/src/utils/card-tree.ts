@@ -25,6 +25,21 @@ export interface BoundaryPart {
   time?: number;
 }
 
+/** Structured content for a workflow step node (kind="step").
+ *  Mirrors workbench/board.ts GoalStepPayload — see that file for invariants. */
+export interface StepPayload {
+  // plan
+  planNodes?: Array<{ id: string; title: string; brief: string; orderIndex: number }>;
+  // execute
+  executorSessionID?: string;
+  changedFiles?: string[];
+  diffStats?: { files?: number; additions?: number; deletions?: number };
+  // eval
+  checks?: Array<{ name: string; status: string; evidence?: string; family?: string }>;
+  evalSummary?: string;
+  verdict?: string;
+}
+
 export interface CardNode {
   /** Stable folding key. */
   id: string;
@@ -48,6 +63,15 @@ export interface CardNode {
   goalDescription?: string;
   contracts?: Array<{ key: string; value: string; reason?: string }>;
   steps?: Array<{ stepID: string; label: string; status: string; summary?: string }>;
+  /** Structured per-step content. Only set for kind="step" nodes — drives
+   *  the step body render path (changed files, diff stats, plan nodes, eval
+   *  checks, etc.) so the main conversation shows the same detail as the
+   *  sidebar Goals panel. */
+  stepPayload?: StepPayload;
+  /** For kind="step" with stepPayload.executorSessionID — exposed so the
+   *  Card renderer can wire an "Open session" button without re-reading
+   *  board state. */
+  stepID?: string;
   /** Flattened leaf parts (text / reasoning / tool / patch / file / subtask / boundary). */
   parts: any[];
   /** Nested child cards. */
@@ -201,6 +225,38 @@ function stepTitle(stage: string, step?: { label?: string }): string {
   return agentStageLabel(stage);
 }
 
+/** Fall-back subtitle when the backend hasn't emitted `step.summary` yet —
+ *  which happens during the entire runtime of a step because summaries are
+ *  derived from committed DB rows (plan nodes / delivery / evaluation) that
+ *  only land once the step finishes. Without this, long-running Execute rows
+ *  render completely empty. */
+function deriveStepSubtitle(
+  stepID: string,
+  status: CardStatus,
+  payload: StepPayload | undefined,
+): string | undefined {
+  if (stepID === "execute") {
+    if (payload?.diffStats?.files !== undefined && payload.diffStats.files > 0) {
+      return `${payload.diffStats.files} files`;
+    }
+    if (payload?.changedFiles?.length) {
+      return `${payload.changedFiles.length} files`;
+    }
+    if (payload?.executorSessionID && status === "running") return "running…";
+  }
+  if (stepID === "eval") {
+    if (payload?.checks?.length) {
+      const passed = payload.checks.filter((c) => c.status === "passed").length;
+      return `${passed}/${payload.checks.length} checks`;
+    }
+    if (payload?.verdict) return payload.verdict;
+  }
+  if (stepID === "plan") {
+    if (payload?.planNodes?.length) return `${payload.planNodes.length} steps`;
+  }
+  return undefined;
+}
+
 // ── Conversion entry points ──
 
 /** Highest per-turn `tokens.input` across a message list. Represents the
@@ -283,6 +339,15 @@ function goalToNode(item: any): CardNode {
         normStatus(internal?.status) ?? normStatus(step.status) ?? "pending";
       const stepCtx = maxContextTokens(internal?.messages);
       accumulate(stepCtx);
+      const payload: StepPayload | undefined =
+        step.payload && typeof step.payload === "object" ? step.payload : undefined;
+      // Derive a subtitle: prefer backend-computed summary; otherwise synthesise
+      // a running-state hint from the payload so the operator isn't staring at
+      // a blank row while the step is in-flight.
+      const subtitle =
+        step.summary ||
+        deriveStepSubtitle(step.stepID, stepStatus, payload) ||
+        undefined;
       children.push({
         id: `${cardID}:step:${step.stepID}`,
         kind: "step",
@@ -290,11 +355,13 @@ function goalToNode(item: any): CardNode {
         accent: stageAccent(stage),
         status: stepStatus,
         title: stepTitle(stage, step),
-        subtitle: step.summary || undefined,
+        subtitle,
         parts: flattenMessages(internal?.messages || []),
         children: [],
         contextTokens: stepCtx.value,
         contextTokensEstimated: stepCtx.estimated,
+        stepPayload: payload,
+        stepID: step.stepID,
       });
     }
   } else {

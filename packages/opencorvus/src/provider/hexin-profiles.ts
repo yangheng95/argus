@@ -200,31 +200,3 @@ export function profileFor(id: string): HexinModelProfile {
   return { ...DEFAULT_PROFILE, name: displayName(id) }
 }
 
-/** Preferred default model for sub-agent tier (requirements/architect/planner/etc).
- *  Renamed conceptually from "haiku-class": small/cheap was undersized for
- *  large-PRD workflows (hit 16k output cap on register_goal bursts). Sonnet
- *  has more output headroom and better tool-input fidelity; the cost is real
- *  but acceptable for these structured-output stages. Keep haiku as fallback
- *  when sonnet is not available. */
-export const DEFAULT_HAIKU_MODEL_PRIORITY = [
-  "claude-sonnet-4-6",
-  /^claude-sonnet-4-6/i,
-  /^claude-sonnet/i,
-  "claude-haiku-4-5-20251001",
-  /^claude-haiku/i,
-  /haiku/i,
-  "gpt-5.4-mini",
-  /^gpt-.*-mini/i,
-]
-
-export function pickDefaultHaiku(modelIDs: string[]): string | undefined {
-  for (const matcher of DEFAULT_HAIKU_MODEL_PRIORITY) {
-    if (typeof matcher === "string") {
-      if (modelIDs.includes(matcher)) return matcher
-    } else {
-      const hit = modelIDs.find((id) => matcher.test(id))
-      if (hit) return hit
-    }
-  }
-  return undefined
-}

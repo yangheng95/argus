@@ -287,7 +287,6 @@ interface BoardProps {
   onCancel?: () => void;
   onEditGoal?: (id: string, title: string, detail: string) => void;
   onDeleteGoal?: (id: string) => void;
-  onOpenSession?: (sessionID: string, goalTitle: string) => void;
   onResolveInteraction?: (id: string, action: string) => void;
   onRejectInteraction?: (id: string) => void;
 }
@@ -460,6 +459,7 @@ export function Board(props: BoardProps) {
   const STAGE_TO_STEP: Record<string, string> = {
     planner: "plan",
     executor: "execute",
+    build: "execute",
     evaluator: "eval",
   };
 
@@ -583,7 +583,6 @@ export function Board(props: BoardProps) {
         <GoalWorkflowList
           goals={goalWorkflows()}
           goalStepMessages={goalStepMessages()}
-          onOpenSession={props.onOpenSession}
           onEditGoal={props.onEditGoal}
           onDeleteGoal={props.onDeleteGoal}
         />
