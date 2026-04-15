@@ -50,7 +50,8 @@ export function createArchitectOutputTools(goalIDs: string[]) {
       description:
         "Register a cross-goal consensus contract. Each contract is written to " +
         "the Decision Log and becomes BINDING for all Planners and Executors. " +
-        "For interface_contract and shared_type categories, spec MUST be actual TypeScript code.",
+        "For interface_contract and shared_type categories, spec MUST be actual " +
+        "source code in the project's language, wrapped in a fenced code block.",
       inputSchema: z.object({
         category: z.enum([
           "directory_blueprint",
@@ -62,9 +63,13 @@ export function createArchitectOutputTools(goalIDs: string[]) {
         ] as const).describe("Contract category — determines how it's used downstream"),
         title: z.string().min(1).describe("Short title for this contract"),
         spec: z.string().min(10).describe(
-          "The contract specification. For interface_contract and shared_type, " +
-          "this MUST be actual TypeScript code (not English description). " +
-          "For directory_blueprint, use path → description format.",
+          "The contract specification. Rendered as Markdown downstream — wrap " +
+          "source code in a fenced block tagged with the project's actual " +
+          "language (```ts, ```py, ```go, ```rs, ```java, ```sql, ...) and " +
+          "directory trees / ASCII layouts in ```text. Single newlines outside " +
+          "a fence are collapsed. For interface_contract and shared_type, this " +
+          "MUST be actual source code (not English description). For " +
+          "directory_blueprint, use path → description format inside a ```text fence.",
         ),
         goal_ids: z.array(z.string().min(1)).min(1).describe(
           "Goal IDs this contract relates to (producer + consumers)",
@@ -77,13 +82,14 @@ export function createArchitectOutputTools(goalIDs: string[]) {
           return `Error: goal IDs not found: ${unknown.join(", ")}. Available: ${goalIDs.join(", ")}`
         }
 
-        // TypeScript code check for type categories
+        // Code-category contracts must contain a fenced code block.
+        // Language-agnostic — we don't try to detect specific keywords because
+        // the project may be Python, Go, Rust, Java, SQL, etc. The fence is
+        // both the rendering requirement and a strong signal that the spec is
+        // actual code rather than prose.
         if ((category === "interface_contract" || category === "shared_type") &&
-            !spec.includes("interface") && !spec.includes("type") &&
-            !spec.includes("function") && !spec.includes("export") &&
-            !spec.includes("class") && !spec.includes("enum") &&
-            !spec.includes("const")) {
-          return `Warning: ${category} contracts should contain TypeScript code, not English descriptions. Consider adding actual type/interface definitions.`
+            !spec.includes("```")) {
+          return `Warning: ${category} spec must contain a fenced code block (\`\`\`<lang> ... \`\`\`) with actual source code, not an English description.`
         }
 
         collector.contracts.push({ category, title, spec, goalIDs: goal_ids })

@@ -36,6 +36,47 @@
     <div class="titlebar-brand" data-tauri-drag-region>
       <img class="brand-logo" src="opencorvus-logo-dark.svg" alt="OpenCorvus logo" data-i18n-alt="brand.logo_alt">
       <div class="brand-heading">
+        <div class="brand-guide" tabindex="0" data-no-drag="true" data-i18n-aria-label="brand.guide_trigger">
+          <span class="brand-name">OpenCorvus</span>
+          <div class="brand-guide-card" aria-hidden="true">
+            <div class="brand-guide-kicker" data-i18n="brand.guide_kicker">Quick Guide</div>
+            <div class="brand-guide-section">
+              <div class="brand-guide-title" data-i18n="brand.guide_positioning_title">What This Panel Is For</div>
+              <p class="brand-guide-copy" data-i18n="brand.guide_positioning_body">
+                This is the task cockpit, not decorative chrome: left selects tasks, center drives execution, right verifies spec, plan, evaluation, and file changes so the agent does not drift.
+              </p>
+            </div>
+            <div class="brand-guide-section">
+              <div class="brand-guide-title" data-i18n="brand.guide_usage_title">Fast Path</div>
+              <div class="brand-guide-steps">
+                <div class="brand-guide-step">
+                  <span class="brand-guide-step-index" aria-hidden="true">1</span>
+                  <span class="brand-guide-step-copy" data-i18n="brand.guide_usage_1">
+                    Set scope first: pick the task on the left, or start a new one, and verify the working directory before you send anything.
+                  </span>
+                </div>
+                <div class="brand-guide-step">
+                  <span class="brand-guide-step-index" aria-hidden="true">2</span>
+                  <span class="brand-guide-step-copy" data-i18n="brand.guide_usage_2">
+                    Then give a real brief: choose an executor and send the goal, constraints, and acceptance bar, not just a vague prompt.
+                  </span>
+                </div>
+                <div class="brand-guide-step">
+                  <span class="brand-guide-step-index" aria-hidden="true">3</span>
+                  <span class="brand-guide-step-copy" data-i18n="brand.guide_usage_3">
+                    Watch the right side while it runs: Spec checks understanding, Plan checks route, Goals and Evaluation catch drift, Files shows what actually changed.
+                  </span>
+                </div>
+                <div class="brand-guide-step">
+                  <span class="brand-guide-step-index" aria-hidden="true">4</span>
+                  <span class="brand-guide-step-copy" data-i18n="brand.guide_usage_4">
+                    The titlebar actions are operational tools: Channels for delivery, Settings and Logs for debugging, pin-to-top for long-running supervision.
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
         <span id="solidConnBadge"></span>
       </div>
     </div>
@@ -90,6 +131,7 @@
           <span class="task-workspace" id="taskWorkspaceDir" hidden></span>
         </div>
         <div class="task-meta-actions">
+          <span id="solidSessionTokenBadge"></span>
           <button type="button" class="task-git" id="taskGit" data-state="idle" data-actionable="false" disabled data-i18n="git.unavailable">Git unavailable</button>
         </div>
       </div>
@@ -228,7 +270,7 @@
 
         <!-- Board: rendered entirely by Solid Board component -->
         <div id="solidBoardMount"></div>
-        <!-- InteractionPanel: auto-resolve layer, independent of Board internals -->
+        <!-- PermissionAutoResolver: headless auto-approval driver (no visible UI) -->
         <div id="solidInteractionMount"></div>
 
         <!-- Files -->
@@ -337,7 +379,7 @@
           </details>
           <details class="config-section" id="extensionsSection">
             <summary class="config-section-head config-section-head-centered config-section-head-llm">
-              <span class="config-section-head-text" data-i18n="extensions.title">Extensions</span>
+              <span class="config-section-head-text" data-i18n="extensions.title">Skill / Memory / MCP</span>
               <span class="config-section-summary" id="extensionsSummary"></span>
             </summary>
             <div class="config-section-body" id="extensionsConfigBody"></div>
@@ -495,6 +537,10 @@
             <svg class="config-nav-icon" viewBox="0 0 24 24" fill="none"><path d="M12 2L2 7l10 5 10-5-10-5z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 17l10 5 10-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 12l10 5 10-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
             <span>Providers</span>
           </button>
+          <button class="config-nav-item" data-config-tab="agent-models">
+            <svg class="config-nav-icon" viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="16" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M7 9h10M7 13h6M7 17h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+            <span>Agent Models</span>
+          </button>
           <div class="config-nav-spacer"></div>
           <button class="config-nav-item" data-config-tab="about">
             <svg class="config-nav-icon" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.5"/><path d="M12 16v-4M12 8h.01" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
@@ -567,6 +613,9 @@
             <div class="config-section-body" id="providersConfigBody"></div>
           </div>
 
+          <div class="config-tab-panel" data-config-panel="agent-models">
+            <div class="config-section-body" id="agentModelsBody"></div>
+          </div>
 
           <div class="config-tab-panel" data-config-panel="about">
             <div class="config-section-body about-body" id="aboutBody">

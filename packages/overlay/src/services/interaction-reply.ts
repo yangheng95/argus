@@ -1,6 +1,7 @@
 // ── Interaction reply/reject helper ──
-// Shared low-level API wrappers used by InteractionPanel (right-side panel,
-// permission cards) and InteractionQuestionPart (inline in conversation).
+// Shared low-level API wrappers used by the inline conversation cards
+// (InteractionPermissionPart, InteractionQuestionPart) and the headless
+// PermissionAutoResolver.
 
 import { apiJson } from "./api";
 

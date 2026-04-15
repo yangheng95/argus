@@ -24,6 +24,7 @@ import { runGoalPipeline } from "@/pipeline"
 import { createDecisionLog } from "@/decision-log"
 import { readyGoalNodes, type GoalNodeEntry } from "@/goal/scheduler"
 import { cleanupGoalWorkspace } from "@/goal/runner"
+import { writeIntentBundle } from "@/goal/intent-bundle"
 import {
   listPlanNodesByPlan,
   listGoalsByPlan,
@@ -300,6 +301,23 @@ export class GoalPool {
         }
       }
 
+      // ── 2c-pre. Mount the intent bundle at .opencorvus/intent/ BEFORE planning ──
+      // Every subsequent stage (per-goal planner, executor) runs inside this
+      // worktree and its tools may read the mounted files. The bundle must
+      // exist before any of them start so prompts that reference
+      // `.opencorvus/intent/request.md` by section are immediately valid.
+      // Failure here is not swallowed: if the bundle does not land, downstream
+      // prompts will point at a nonexistent path, so a write error must abort
+      // this goal's launch rather than silently proceed.
+      await writeIntentBundle({
+        worktreeDir: worktreeDir!,
+        taskID: task.id,
+        title: task.title,
+        request: task.request,
+        clarifications: clarificationTranscriptSection(task.id),
+        operatorNotes: operatorNotesSection(task.id),
+      })
+
       // ── 2c. Per-goal planning (mandatory — runs just before execution, not upfront) ──
       // Planning is tightly coupled to execution: it runs inside the pool with the
       // actual worktree available for codebase exploration. This ensures plans are
@@ -332,6 +350,11 @@ export class GoalPool {
         try {
           const { planGoal } = await import("@/planner/per-goal")
           const plannerDL = createDecisionLog(task.id)
+          // CONTRACT: planGoal / buildGoalPrompt require `.opencorvus/intent/`
+          // to be populated under workDir. That was done by the writeIntentBundle
+          // call above (step 2c-pre), which throws on failure so reaching this
+          // point means the bundle is present and will still be present when
+          // the executor starts after this planner finishes.
           const planSteps = await planGoal({
             contract: planContract,
             decisionLog: plannerDL,
@@ -427,15 +450,17 @@ export class GoalPool {
       // ── 6. Submit to executor ──
       // For managed (external) executors, build enriched system context that
       // SessionPrompt would normally provide for opencode. This injects the
-      // same memory/task-plan/operator-notes layers that the built-in executor
-      // receives, via the SDK's systemPrompt.append / developerInstructions.
+      // memory and task-plan layers that the built-in executor receives, via
+      // the SDK's systemPrompt.append / developerInstructions.
+      //
+      // Clarifications and operator notes are NOT injected here: the intent
+      // bundle mounted above already exposes them as files in the worktree,
+      // and `buildGoalPrompt` above skips its inline copies when the bundle
+      // is mounted. Injecting them a third time via systemOverride would
+      // recreate the triple-exposure we deliberately removed.
       let systemOverride: string | undefined
       if (run.executor !== "opencode") {
         const sections: string[] = []
-        const clarifications = clarificationTranscriptSection(task.id)
-        if (clarifications) sections.push(clarifications)
-        const notes = operatorNotesSection(task.id)
-        if (notes) sections.push(notes)
         const memory = await MemoryInjection.systemPromptSection({
           projectID: Instance.project.id,
           sessionID: goalSession.id,

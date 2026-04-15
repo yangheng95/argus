@@ -1,5 +1,8 @@
 import type { ModelMessage } from "ai"
 import { Trace } from "@/trace"
+import { Log } from "@/util/log"
+
+const log = Log.create({ service: "llm-trace" })
 
 // Normalisation limits — keep payloads within Trace's 1MB per-event cap.
 const MAX_DEPTH = 8
@@ -139,10 +142,29 @@ export namespace LLMTrace {
     let stepCount = 0
     let done = false
 
-    // Resolve which task owns this session — Trace routes events into that
-    // task's JSONL. Unbound sessions fall back to sessionID as the trace key
-    // so orphan calls still get captured (see Trace.taskIDForSession).
+    // Resolve which task owns this session. If resolution fails the LLM call
+    // is orphaned — no registry entry, no DB row, no parent chain. Silently
+    // attributing the trace to the sessionID (old behaviour) routed events to
+    // a ses_*.jsonl file the overlay never subscribes to, so the Trace tab
+    // looked empty while the work ran. We now refuse to emit and log the
+    // call site loudly so the missing registerGoalRunSession() gets fixed at
+    // the source.
     const taskID = Trace.taskIDForSession(input.sessionID)
+    if (!taskID) {
+      log.error("llm-trace: sessionID could not be resolved to a taskID — skipping trace emission", {
+        sessionID: input.sessionID,
+        agent: input.agent.name,
+        callID: input.callID,
+        providerID: input.model.providerID,
+        modelID: input.model.modelID,
+      })
+      return {
+        step() {},
+        finish() {},
+        abort() {},
+        error() {},
+      }
+    }
     const traceMeta = {
       taskID,
       sessionID: input.sessionID,

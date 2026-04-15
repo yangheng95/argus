@@ -233,6 +233,7 @@ function buildBoard(task: typeof OrchestratorTaskTable.$inferSelect) {
         activeRunID: task.active_run_id ?? undefined,
         requestID: task.request_id ?? undefined,
         source: task.source,
+        kind: task.kind,
         title: task.title,
         request: task.request,
         status: task.status,
@@ -369,8 +370,13 @@ function buildBoard(task: typeof OrchestratorTaskTable.$inferSelect) {
         updated_at: brief.updatedAt ?? Date.now(),
       },
       // Task-level criteria rollup. Sourced from `task.metadata.criteria_results`,
-      // which is populated by per-goal evaluator outcomes, the delivery agent,
-      // and external quality gates (PATCH /task/:id/criteria — visual-diff etc).
+      // populated by:
+      //   - delivery agent verdict (deferred_checks + rejection_details + overall),
+      //     sunk via task-agent/tools.ts → sinkDeliveryVerdictToCriteria()
+      //   - in-process visual-diff gate (task-agent/tools.ts, when task carries
+      //     image attachments and a rendered index.html exists)
+      // Hidden in the overlay for kind=build tasks (build self-verifies; this
+      // panel only applies to workflow tasks running through delivery).
       criteriaResults: boardChecks((task.metadata as any)?.criteria_results),
   }
 }

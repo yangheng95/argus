@@ -114,7 +114,26 @@ export function displayToolDetail(
     (safeInput as any).path ||
     (safeInput as any).filename ||
     "";
-  if (path) return shortRelativePath(path, base);
+  if (path) {
+    const shortPath = shortRelativePath(path, base);
+    // Read calls on the same file can fire multiple times when the file
+    // exceeds the per-call byte cap (50KB) — without slice info every
+    // entry looks identical and the operator cannot tell which range was
+    // fetched. Surface offset/limit when present so the user sees
+    // "@1+2000", "@2001+2000" etc on the inline pill.
+    if (n === "read" || n === "readfile") {
+      const offset = (safeInput as any).offset;
+      const limit = (safeInput as any).limit;
+      const hasOffset = typeof offset === "number" && Number.isFinite(offset);
+      const hasLimit = typeof limit === "number" && Number.isFinite(limit);
+      if (hasOffset || hasLimit) {
+        const start = hasOffset ? offset : 1;
+        const span = hasLimit ? `+${limit}` : "";
+        return `${shortPath} @${start}${span}`;
+      }
+    }
+    return shortPath;
+  }
   if (n === "bash" || n === "shellcommand" || n === "runcommand")
     return toolInputCommand(safeInput);
   if (n === "grep" || n === "searchcode")

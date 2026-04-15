@@ -1,0 +1,57 @@
+# Counter Library — Mini PRD
+
+构建一个轻量计数器工具库，由三个独立模块组成，每个模块在隔离 worktree 里实现，
+并附带可执行的验收命令。这个 PRD 的目的是验证 OpenCorvus 的 workflow 流水线
+（requirements → architect → planner → executor → delivery）能跑通到底，
+所以**故意把规模压到能让 LLM 一次完成的最小集**。
+
+## 范围
+
+只创建以下三个文件，不要碰 package.json、tsconfig.json、README、文档：
+
+- `src/counter/core.ts`
+- `src/counter/persistence.ts`
+- `src/counter/__tests__/counter.test.ts`
+
+Bun 运行时和 bun:test 已就绪。不要装新依赖。
+
+## 三个目标（必须分别成 goal）
+
+### Goal 1 — Core Counter（src/counter/core.ts）
+
+实现一个内存中的计数器：
+
+- `export class Counter`
+- `constructor(initial: number = 0)`
+- `get value(): number` —— 返回当前值
+- `increment(by: number = 1): number` —— 增加并返回新值
+- `decrement(by: number = 1): number` —— 减少并返回新值
+- `reset(): void` —— 归零
+
+约束：`increment(0)` 和 `decrement(0)` 不改变值；负数参数抛 `RangeError`。
+
+### Goal 2 — Persistence Adapter（src/counter/persistence.ts）
+
+实现 Counter 的持久化包装：
+
+- `export function snapshot(counter: Counter): { value: number; at: number }`
+- `export function restore(snapshot: { value: number; at: number }): Counter`
+
+约束：`restore(snapshot(c)).value === c.value`；snapshot.at 必须是 `Date.now()` 时刻的毫秒数。
+
+### Goal 3 — Tests（src/counter/__tests__/counter.test.ts）
+
+用 `bun:test` 写测试覆盖 Goal 1 + Goal 2：
+
+- core: increment / decrement / reset / 边界（0、负数）
+- persistence: snapshot 后 restore 等值，时间戳合理（在调用前后之间）
+
+## 验收
+
+每个 goal 必须有可执行的 acceptance scorer：
+
+- Goal 1: `bun build src/counter/core.ts --target=bun --outdir /tmp/_counter_build_g1`（exit 0）
+- Goal 2: `bun build src/counter/persistence.ts --target=bun --outdir /tmp/_counter_build_g2`（exit 0）
+- Goal 3: `bun test src/counter/__tests__/counter.test.ts`（exit 0）
+
+任务级验收：上述三条命令全部 exit 0。

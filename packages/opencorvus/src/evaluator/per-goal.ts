@@ -18,7 +18,7 @@ import { Shell } from "@/shell/shell"
 import { Log } from "@/util/log"
 import { which } from "@/util/which"
 import type { TextHooks } from "@/llm/api"
-import type { GoalContract, PipelineDelivery, EvalVerdict } from "@/pipeline/types"
+import type { GoalContract, PipelineDelivery, EvalVerdict, EvalCheckResult } from "@/pipeline/types"
 import type { DecisionLog } from "@/decision-log"
 import { translateSpecs, type TranslatedHeuristic, type TranslatedRubric } from "@/acceptance/translator"
 import { runRubric } from "@/evaluator/llm-judge-runner"
@@ -30,15 +30,9 @@ interface DiscoveredCommand {
   command: string
 }
 
-interface CheckResult {
-  name: string
-  command: string
-  passed: boolean
-  output: string
-  source: "spec_heuristic" | "spec_rubric" | "project_discovery" | "visual"
-  mode: "soft" | "strict"
-  severity?: TranslatedHeuristic["severity"]
-}
+// Local alias — EvalCheckResult lives in pipeline/types so consumers don't
+// need to depend on this evaluator file just for the shape.
+type CheckResult = EvalCheckResult
 
 // ---------------------------------------------------------------------------
 // resolveEvalDir — find the nearest project root inside the goal's owned_paths
@@ -143,6 +137,20 @@ function normalizeCmd(cmd: string): string {
 // evaluateGoal — main entry
 // ---------------------------------------------------------------------------
 
+export type EvaluatorTier = "core" | "standard" | "full"
+
+/** Map from tier → which discovered commands evaluator runs. Spec-declared
+ *  scorers (heuristic + rubric) ALWAYS run regardless of tier — tier only
+ *  controls auto-discovered fallback commands. Extended checks listed in
+ *  evaluator.md (ui_review/code_quality/code_review/dead_code_review/startup)
+ *  belong to delivery agent's "deferred_checks" surface, not evaluator. */
+function tierAllowsDiscovered(name: string, tier: EvaluatorTier): boolean {
+  if (tier === "core") {
+    return name === "build" || name === "test" || name === "py_compile" || name === "pytest"
+  }
+  return true
+}
+
 export async function evaluateGoal(input: {
   contract: GoalContract
   delivery: PipelineDelivery
@@ -151,6 +159,10 @@ export async function evaluateGoal(input: {
   sessionID?: string
   signal?: AbortSignal
   stream?: TextHooks
+  /** Evaluation tier. Defaults to "standard" (build/test/lint/typecheck
+   *  discovery if no spec heuristic supplied them). Read from
+   *  `OrchestratorConfig.evaluator.tier` by callers. */
+  tier?: EvaluatorTier
 }): Promise<EvalVerdict> {
   const { contract, delivery, signal } = input
   const { goal } = contract
@@ -177,7 +189,11 @@ export async function evaluateGoal(input: {
   // ── 2. Discover supplementary project commands (build/test/lint), but
   //      only when there are NO heuristic specs already. Specs win — if the
   //      requirements agent declared the build matters, it must say so.
-  const discovered = plan.heuristic.length === 0 ? await discoverCommands(evalDir) : []
+  //      Tier filters which discovered commands actually run: tier=core keeps
+  //      build/test only; tier=standard/full keeps everything discovered.
+  const tier: EvaluatorTier = input.tier ?? "standard"
+  const discoveredAll = plan.heuristic.length === 0 ? await discoverCommands(evalDir) : []
+  const discovered = discoveredAll.filter((d) => tierAllowsDiscovered(d.name, tier))
   const supplement = deduplicateDiscovered(plan.heuristic, discovered)
 
   const results: CheckResult[] = []
@@ -252,6 +268,7 @@ export async function evaluateGoal(input: {
       changedFiles: delivery.diffs?.map((d) => d.file),
       requirementText: requirementTextFor(contract, item),
       signal,
+      cacheKey: `goal-${goal.id}-evaluator`,
     })
 
     results.push({
@@ -343,6 +360,7 @@ export async function evaluateGoal(input: {
         "Cannot evaluate this goal — its acceptance_specs are empty and project discovery found nothing to run. " +
         "Re-run requirements (or add specs via add_goal/modify_goal) before retrying.",
       failureClass: "goal_wrong",
+      checks: [],
     }
   }
 
@@ -366,6 +384,7 @@ export async function evaluateGoal(input: {
           .map((r) => `- [${r.source}] ${r.name}: ${r.output.slice(0, 500)}`)
           .join("\n")}`,
     failureClass: passedAllStrict ? undefined : "bug",
+    checks: results,
   }
 }
 

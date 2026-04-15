@@ -145,50 +145,6 @@ export const OrchestratorRoutes = lazy(() =>
       },
     )
     .get(
-      "/task/:taskID",
-      describeRoute({
-        summary: "Get task",
-        operationId: "task.get",
-        responses: {
-          200: {
-            description: "Task",
-            content: {
-              "application/json": {
-                schema: resolver(Task),
-              },
-            },
-          },
-          ...errors(404),
-        },
-      }),
-      validator("param", z.object({ taskID: Task.shape.id })),
-      async (c) => {
-        return c.json(await OrchestratorService.getTask(c.req.valid("param").taskID))
-      },
-    )
-    .get(
-      "/task/:taskID/progress",
-      describeRoute({
-        summary: "Get task progress",
-        operationId: "task.progress",
-        responses: {
-          200: {
-            description: "Task progress",
-            content: {
-              "application/json": {
-                schema: resolver(Progress),
-              },
-            },
-          },
-          ...errors(404),
-        },
-      }),
-      validator("param", z.object({ taskID: Task.shape.id })),
-      async (c) => {
-        return c.json(await OrchestratorService.getProgress(c.req.valid("param").taskID))
-      },
-    )
-    .get(
       "/task/events",
       describeRoute({
         summary: "Subscribe to global task-list change notifications",
@@ -252,6 +208,50 @@ export const OrchestratorRoutes = lazy(() =>
           })
           await writes
         })
+      },
+    )
+    .get(
+      "/task/:taskID",
+      describeRoute({
+        summary: "Get task",
+        operationId: "task.get",
+        responses: {
+          200: {
+            description: "Task",
+            content: {
+              "application/json": {
+                schema: resolver(Task),
+              },
+            },
+          },
+          ...errors(404),
+        },
+      }),
+      validator("param", z.object({ taskID: Task.shape.id })),
+      async (c) => {
+        return c.json(await OrchestratorService.getTask(c.req.valid("param").taskID))
+      },
+    )
+    .get(
+      "/task/:taskID/progress",
+      describeRoute({
+        summary: "Get task progress",
+        operationId: "task.progress",
+        responses: {
+          200: {
+            description: "Task progress",
+            content: {
+              "application/json": {
+                schema: resolver(Progress),
+              },
+            },
+          },
+          ...errors(404),
+        },
+      }),
+      validator("param", z.object({ taskID: Task.shape.id })),
+      async (c) => {
+        return c.json(await OrchestratorService.getProgress(c.req.valid("param").taskID))
       },
     )
     .get(

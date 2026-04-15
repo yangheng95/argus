@@ -7,7 +7,7 @@
  *   is complete enough to reconstruct what every workflow agent did.
  *
  * Trace file layout (assumed by the unified Trace module, to be built):
- *   <Instance.directory>/.opencorvus/trace/<taskID>.jsonl
+ *   <Instance.directory>/.opencorvus/task/<taskID>/trace.jsonl
  *   Each line is one TraceEvent: { ts, seq, taskID, sessionID?, agent?, round?, category, payload }
  *
  * Pass criteria (all must hold):
@@ -151,25 +151,32 @@ function evaluate(taskID: string, file: string, events: TraceEvent[]): Verdict {
   }
 }
 
-function findTraceDir(baseDir: string): string {
+function findTaskRoot(baseDir: string): string {
   const env = process.env.OPENCORVUS_TRACE_DIR
   if (env) return env
-  return path.join(baseDir, ".opencorvus", "trace")
+  return path.join(baseDir, ".opencorvus", "task")
 }
 
-async function pickLatestTask(traceDir: string): Promise<string> {
-  const entries = await fs.readdir(traceDir).catch(() => null)
-  if (!entries) throw new Error(`trace dir not found: ${traceDir}`)
-  const jsonl = entries.filter((name) => name.endsWith(".jsonl"))
-  if (jsonl.length === 0) throw new Error(`no .jsonl files in ${traceDir}`)
-  const stats = await Promise.all(
-    jsonl.map(async (name) => ({
-      name,
-      mtime: (await fs.stat(path.join(traceDir, name))).mtimeMs,
-    })),
-  )
+function traceFileFor(taskRoot: string, taskID: string): string {
+  return path.join(taskRoot, taskID, "trace.jsonl")
+}
+
+async function pickLatestTask(taskRoot: string): Promise<string> {
+  const entries = await fs.readdir(taskRoot, { withFileTypes: true }).catch(() => null)
+  if (!entries) throw new Error(`task root not found: ${taskRoot}`)
+  const dirs = entries.filter((e) => e.isDirectory()).map((e) => e.name)
+  const stats = (
+    await Promise.all(
+      dirs.map(async (name) => {
+        const jsonl = traceFileFor(taskRoot, name)
+        const stat = await fs.stat(jsonl).catch(() => null)
+        return stat ? { name, mtime: stat.mtimeMs } : null
+      }),
+    )
+  ).filter((s): s is { name: string; mtime: number } => s !== null)
+  if (stats.length === 0) throw new Error(`no trace.jsonl files under ${taskRoot}`)
   stats.sort((a, b) => b.mtime - a.mtime)
-  return stats[0].name.replace(/\.jsonl$/, "")
+  return stats[0].name
 }
 
 function printHuman(v: Verdict) {
@@ -196,12 +203,12 @@ async function main() {
   const dirIdx = args.indexOf("--dir")
   const baseDir = dirIdx >= 0 ? path.resolve(args[dirIdx + 1]) : process.cwd()
   const positional = args.filter((a, i) => !a.startsWith("--") && args[i - 1] !== "--dir")
-  const traceDir = findTraceDir(baseDir)
+  const taskRoot = findTaskRoot(baseDir)
 
   let taskID: string
   try {
     if (latest) {
-      taskID = await pickLatestTask(traceDir)
+      taskID = await pickLatestTask(taskRoot)
     } else if (positional[0]) {
       taskID = positional[0]
     } else {
@@ -211,15 +218,15 @@ async function main() {
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     if (json) {
-      console.log(JSON.stringify({ pass: false, error: msg, traceDir }, null, 2))
+      console.log(JSON.stringify({ pass: false, error: msg, taskRoot }, null, 2))
     } else {
       console.log(`\x1b[31m✗ FAIL\x1b[0m  ${msg}`)
-      console.log(`       traceDir=${traceDir}`)
+      console.log(`       taskRoot=${taskRoot}`)
     }
     process.exit(2)
   }
 
-  const file = path.join(traceDir, `${taskID}.jsonl`)
+  const file = traceFileFor(taskRoot, taskID)
   let events: TraceEvent[]
   try {
     events = await readJsonl(file)

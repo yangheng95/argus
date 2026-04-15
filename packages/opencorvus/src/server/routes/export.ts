@@ -125,7 +125,8 @@ export const ExportRoutes = lazy(() =>
         const sessionID = c.req.valid("param").sessionID
         const session = await Session.get(sessionID)
         const messages = await Session.messages({ sessionID })
-        const events = await Trace.read(Trace.taskIDForSession(sessionID)).catch(() => [])
+        const traceTaskID = Trace.taskIDForSession(sessionID)
+        const events = traceTaskID ? await Trace.read(traceTaskID).catch(() => []) : []
 
         return c.json({
           session: {

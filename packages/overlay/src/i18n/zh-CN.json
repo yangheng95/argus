@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "zh-CN",
-    "panel_revision": "5b2c25cbac005103"
+    "panel_revision": "d98bb0b0a7f14fdd"
   },
   "about.author_name": "杨恒",
   "about.go_version": "Go 版本",
@@ -29,6 +29,15 @@
   "about.shortcut_zoom_reset": "重置缩放",
   "about.shortcuts": "快捷键",
   "about.title": "关于",
+  "brand.guide_kicker": "快速上手",
+  "brand.guide_positioning_body": "这不是装饰——左栏选任务，中栏推执行，右栏盯 Spec、Plan、评估和文件变更，防止 agent 跑偏。",
+  "brand.guide_positioning_title": "面板是干什么的",
+  "brand.guide_trigger": "查看 OpenCorvus overlay 操作指南",
+  "brand.guide_usage_1": "先定范围：左侧选任务或新建，第一步确认工作目录没选错。",
+  "brand.guide_usage_2": "再下指令：选好执行器，把目标、约束和验收标准说清楚——别只丢一句话。",
+  "brand.guide_usage_3": "跑起来盯右侧：Spec 看理解对不对，Plan 看路线对不对，Goals 和 Evaluation 看有没有偏航，Files 看落地了什么。",
+  "brand.guide_usage_4": "标题栏按钮是运维入口：Channels 管投递，Settings 和 Logs 排障，置顶适合长任务值守。",
+  "brand.guide_usage_title": "最快上手",
   "brand.logo_alt": "OpenCorvus 标志",
   "budget.hint": "为下一个新任务配置运行预算，留空则沿用全局默认值。",
   "budget.hint_readonly": "任务启动后预算已锁定，不可修改。",
@@ -226,7 +235,7 @@
   "executor.not_detected": "未检测到",
   "executor.version": "v{{version}}",
   "extensions.summary": "{{skills}} 技能 · {{mcp}} MCP",
-  "extensions.title": "扩展",
+  "extensions.title": "Skill / Memory / MCP",
   "files.changed": {
     "one": "{{count}} 个文件",
     "other": "{{count}} 个文件"
@@ -512,6 +521,8 @@
   "time.duration.second": "{{seconds}} 秒",
   "titlebar.auto_permission": "自动批准权限",
   "titlebar.auto_permission_hint": "权限弹窗出现时自动以持久方式放行。",
+  "titlebar.auto_question": "自动跳过问题",
+  "titlebar.auto_question_hint": "问题无人应答超过 10 分钟后自动拒绝；关闭则一直等待用户回答。",
   "titlebar.background_notice": "OpenCorvus 仍在后台运行。点击系统托盘图标可重新打开，或在托盘菜单中选择退出以彻底关闭。",
   "titlebar.background_notice_title": "后台运行中",
   "titlebar.close": "关闭",
@@ -534,7 +545,8 @@
   "titlebar.unattended": "无人值守",
   "titlebar.unattended_hint": "自动采用默认假设推进任务，跳过人工确认。",
   "transcript.compaction": "[上下文压缩]",
-  "card.context_tokens_tooltip": "本轮约 {value} 个提示词 token（服务商估算，实际计费可能略有偏差）",
+  "card.context_tokens_tooltip": "本轮约 {value} 个提示词 token（服务商上报，实际计费可能略有偏差）",
+  "card.context_tokens_tooltip_estimated": "本轮约 {value} 个提示词 token（本地按字符数估算，服务商尚未返回精确值）",
   "transcript.file": "[文件] {{value}}",
   "transcript.patch": "[补丁] {{value}}",
   "transcript.patch_empty": "[补丁]",

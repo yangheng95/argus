@@ -7,7 +7,9 @@
  * Tools:
  *   runGoalPipeline  — execute a goal (worktree + executor + delivery)
  *   planGoal          — create implementation steps for a goal (optional)
- *   evaluateGoal      — deterministic command runner (used by delivery agent, not auto-gated)
+ *   evaluateGoal      — deterministic command runner; the deliver tool
+ *                       (task-agent/tools.ts) drives it per-goal before
+ *                       handing checkResults to the delivery agent.
  */
 
 export { runGoalPipeline } from "./executor"
@@ -19,6 +21,7 @@ export type {
   PipelineEvent,
   PipelineDelivery,
   EvalVerdict,
+  EvalCheckResult,
   FailureClass,
   PipelineDeps,
 } from "./types"

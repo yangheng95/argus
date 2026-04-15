@@ -1,5 +1,6 @@
 import { Bus } from "@/bus"
 import { BusEvent } from "@/bus/bus-event"
+import { Config } from "@/config/config"
 import { Identifier } from "@/id/id"
 import { Instance } from "@/project/instance"
 import { Log } from "@/util/log"
@@ -88,7 +89,7 @@ export namespace Question {
           info: Request
           resolve: (answers: Answer[]) => void
           reject: (e: any) => void
-          timer: ReturnType<typeof setTimeout>
+          timer: ReturnType<typeof setTimeout> | undefined
         }
       > = {}
 
@@ -114,7 +115,7 @@ export namespace Question {
   // during long-running workflows. Callers that need shorter/longer windows
   // pass `timeoutMs` explicitly (e.g. unattended auto-reply paths).
   const QUESTION_AUTO_REJECT_MS = Math.max(
-    parseInt(process.env.OPENCORVUS_QUESTION_TIMEOUT_MS || "1800000", 10),
+    parseInt(process.env.OPENCORVUS_QUESTION_TIMEOUT_MS || "600000", 10),
     QUESTION_MIN_TIMEOUT_MS,
   )
 
@@ -122,14 +123,16 @@ export namespace Question {
     sessionID: string
     questions: Info[]
     tool?: { messageID: string; callID: string }
-    /** Override auto-reject timeout in ms. Defaults to OPENCORVUS_QUESTION_TIMEOUT_MS (10s). */
+    /** Override auto-reject timeout in ms. Defaults to OPENCORVUS_QUESTION_TIMEOUT_MS (10min). */
     timeoutMs?: number
   }): Promise<Answer[]> {
     const s = await state()
     const id = Identifier.ascending("question")
     const timeout = Math.max(input.timeoutMs ?? QUESTION_AUTO_REJECT_MS, QUESTION_MIN_TIMEOUT_MS)
+    const cfg = await Config.get()
+    const autoRejectOnTimeout = cfg.experimental?.auto_question === true
 
-    log.info("asking", { id, questions: input.questions.length, timeoutMs: timeout })
+    log.info("asking", { id, questions: input.questions.length, timeoutMs: timeout, autoReject: autoRejectOnTimeout })
 
     return new Promise<Answer[]>((resolve, reject) => {
       const info: Request = {
@@ -138,18 +141,23 @@ export namespace Question {
         questions: input.questions,
         tool: input.tool,
       }
-      const timer = setTimeout(() => {
-        if (s.pending[id]) {
-          log.info("auto-reject timeout", { id, questions: input.questions.length })
-          delete s.pending[id]
-          Bus.publish(Event.Rejected, {
-            sessionID: input.sessionID,
-            requestID: id,
-          })
-          reject(new RejectedError())
-        }
-      }, timeout)
-      timer.unref?.()
+      // Auto-reject timeout only applies when experimental.auto_question is on.
+      // With the switch off the request waits indefinitely for a user reply —
+      // no silent fallback.
+      const timer = autoRejectOnTimeout
+        ? setTimeout(() => {
+            if (s.pending[id]) {
+              log.info("auto-reject timeout", { id, questions: input.questions.length })
+              delete s.pending[id]
+              Bus.publish(Event.Rejected, {
+                sessionID: input.sessionID,
+                requestID: id,
+              })
+              reject(new RejectedError())
+            }
+          }, timeout)
+        : undefined
+      timer?.unref?.()
       s.pending[id] = {
         info,
         resolve,

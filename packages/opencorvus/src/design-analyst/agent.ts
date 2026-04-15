@@ -214,17 +214,10 @@ async function run(input: {
   const orchCfg = await OrchestratorConfig.get()
   const { max_steps: MAX_STEPS, timeout_ms: TIMEOUT_MS } = orchCfg.design_analyst
 
-  // Resolve model — use design_analyst-specific model if configured, else default
-  const daModel = orchCfg.design_analyst.model
-  let def: { providerID: string; modelID: string } | undefined
-  if (daModel) {
-    const [providerID, ...rest] = daModel.split("/")
-    const modelID = rest.join("/")
-    if (providerID && modelID) def = { providerID, modelID }
-  }
-  if (!def) def = await Provider.defaultModel().catch(() => undefined)
-  if (!def) throw new Error("no LLM model available for design analyst agent")
-  const model = await Provider.getModel(def.providerID, def.modelID)
+  // Resolve model — per-agent model from Agent.Info (config: agent."design-analyst".model)
+  const { resolveAgentModel } = await import("@/agent/model")
+  const model = await resolveAgentModel("design-analyst").catch(() => undefined)
+  if (!model) throw new Error("no LLM model available for design analyst agent")
 
   if (input.signal?.aborted) throw new Error("design analyst aborted after model resolution")
 

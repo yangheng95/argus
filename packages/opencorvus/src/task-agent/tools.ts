@@ -14,7 +14,7 @@ import { Identifier } from "@/id/id"
 import { Instance } from "@/project/instance"
 import { Log } from "@/util/log"
 import { OrchestratorService } from "@/orchestrator/service"
-import { registerGoalRunSession } from "@/server/routes/task-event"
+import { registerGoalRunSession, sessionGoalID } from "@/server/routes/task-event"
 import { Publisher } from "@/orchestrator/publisher"
 import { OrchestratorGit } from "@/orchestrator/git"
 import { OrchestratorMemoryBridge } from "@/orchestrator/memory-bridge"
@@ -106,6 +106,53 @@ function stageTimeout(stage: "requirements" | "goal" | "plan"): number {
   const env = { requirements: "OPENCORVUS_REQUIREMENTS_TIMEOUT_MS", goal: "OPENCORVUS_GOAL_TIMEOUT_MS", plan: "OPENCORVUS_PLAN_TIMEOUT_MS" }
   const defaults = { requirements: 300_000, goal: 180_000, plan: 300_000 }
   return parseInt(process.env[env[stage]] || String(defaults[stage]), 10)
+}
+
+// The delivery agent emits a structured DeliveryVerdict with three typed
+// surfaces (deferred_checks, rejection_details, the verdict itself). Each is
+// already per-check-shaped — flatten all three into task.metadata.criteria_results
+// so the panel reflects what was actually verified, not just an aggregate bit.
+async function sinkDeliveryVerdictToCriteria(
+  taskID: string,
+  verdict: import("@/delivery/agent").DeliveryVerdictType,
+): Promise<void> {
+  const checks: Array<{
+    name: string
+    status: "passed" | "failed" | "skipped"
+    family: string
+    evidence?: string
+    label?: string
+  }> = []
+
+  for (const dc of verdict.deferred_checks ?? []) {
+    checks.push({
+      name: dc.name,
+      status: dc.result,
+      family: "delivery",
+      evidence: dc.evidence,
+    })
+  }
+
+  for (const rd of verdict.rejection_details ?? []) {
+    const fileSuffix = rd.file ? ` @ ${rd.file}` : ""
+    const suggestion = rd.suggestion ? ` → ${rd.suggestion}` : ""
+    checks.push({
+      name: `${rd.category}${fileSuffix}`,
+      status: "failed",
+      family: rd.category,
+      evidence: `${rd.error}${suggestion}`,
+    })
+  }
+
+  checks.push({
+    name: "delivery_verdict",
+    status: verdict.verdict === "accepted" ? "passed" : "failed",
+    family: "delivery",
+    evidence: verdict.summary,
+    label: "Delivery agent overall verdict",
+  })
+
+  await OrchestratorService.upsertTaskCriteria(taskID, checks)
 }
 
 // Re-export the stateful-tool registry (defined in a dependency-free module
@@ -932,7 +979,16 @@ export function createTaskAgentTools(input: {
               "wrong_approach",
               "cross_goal_integration",
               "flaky_environment",
-            ]).describe("Category of failure"),
+              "executor_incomplete",
+            ]).describe(
+              "Category of failure. Use `executor_incomplete` when the executor " +
+              "session ended without producing the goal's deliverable (e.g. the " +
+              "executor reported status='running' but never finalized, was " +
+              "interrupted, hit a stall timeout, or otherwise exited mid-work). " +
+              "This is distinct from `code_bug` (executor finished but the code " +
+              "is wrong) and `flaky_environment` (the executor's environment " +
+              "itself was unstable, e.g. transient network/disk failure).",
+            ),
             expected_fix: z.string().min(20).describe("What should retry do differently (min 20 chars)"),
           }),
         ).describe("Per-goal analysis keyed by goalID. MUST include an entry for each currently-failed goal."),
@@ -1555,6 +1611,85 @@ export function createTaskAgentTools(input: {
           }]).catch(() => undefined)
         }
 
+        // ── Deterministic per-goal evaluator (per specs/new-arch/01-agents.md L111
+        //    "Evaluator: 确定性命令 runner（无 LLM）, delivery agent 调用").
+        // Runs each goal's acceptance_specs against the merged worktree BEFORE
+        // delivery agent sees the diff. Results feed delivery agent as
+        // checkResults (so it does not duplicate work) and are sunk into
+        // task.metadata.criteria_results under family="goal_eval" so the
+        // overlay panel reflects what was actually verified deterministically.
+        const evaluatorCheckResults: Array<{ name: string; status: "passed" | "failed" | "skipped"; evidence?: string }> = []
+        const evaluatorCriteriaSink: Array<{ name: string; status: "passed" | "failed" | "skipped"; family: string; evidence?: string; label?: string }> = []
+        {
+          const { evaluateGoal } = await import("@/evaluator/per-goal")
+          const evaluatorTier = (await OrchestratorConfig.get()).evaluator.tier ?? "standard"
+          const evalDelivery = {
+            summary: deliveryInfo.summary,
+            diffs: deliveryInfo.diffs as Array<{ file: string; [key: string]: unknown }>,
+          }
+          for (const goal of allGoals) {
+            if (input.signal?.aborted) break
+            try {
+              const contract = buildGoalContract(task, goal, allGoals)
+              const verdict = await evaluateGoal({
+                contract,
+                delivery: evalDelivery,
+                signal: input.signal,
+                tier: evaluatorTier,
+              })
+              for (const check of verdict.checks) {
+                const namespaced = `${goal.id}.${check.name}`
+                evaluatorCheckResults.push({
+                  name: namespaced,
+                  status: check.passed ? "passed" : "failed",
+                  evidence: check.output,
+                })
+                evaluatorCriteriaSink.push({
+                  name: namespaced,
+                  status: check.passed ? "passed" : "failed",
+                  family: "goal_eval",
+                  evidence: check.output,
+                  label: `${goal.title} · ${check.name}`,
+                })
+              }
+              if (verdict.checks.length === 0) {
+                // Goal had no scorers AND no project-discovery fallback. Per the
+                // evaluator's own contract this is verdict=rejected with no
+                // checks — surface as a single failed criterion so the operator
+                // sees the goal_wrong cause in the panel rather than just an
+                // empty section.
+                evaluatorCheckResults.push({
+                  name: `${goal.id}.no_scorers`,
+                  status: "failed",
+                  evidence: verdict.reasoning,
+                })
+                evaluatorCriteriaSink.push({
+                  name: `${goal.id}.no_scorers`,
+                  status: "failed",
+                  family: "goal_eval",
+                  evidence: verdict.reasoning,
+                  label: `${goal.title} · no acceptance scorers`,
+                })
+              }
+            } catch (evalErr) {
+              const msg = evalErr instanceof Error ? evalErr.message : String(evalErr)
+              log.warn("evaluateGoal threw at delivery time", { goalID: goal.id, error: msg })
+              const name = `${goal.id}.evaluator_error`
+              evaluatorCheckResults.push({ name, status: "failed", evidence: msg })
+              evaluatorCriteriaSink.push({
+                name,
+                status: "failed",
+                family: "goal_eval",
+                evidence: msg,
+                label: `${goal.title} · evaluator threw`,
+              })
+            }
+          }
+          if (evaluatorCriteriaSink.length > 0) {
+            await OrchestratorService.upsertTaskCriteria(taskID, evaluatorCriteriaSink)
+          }
+        }
+
         const deliverySession = await Session.createNext({
           parentID: input.agentSessionID,
           title: `Delivery verification: ${task.title}`,
@@ -1578,6 +1713,7 @@ export function createTaskAgentTools(input: {
             task: { id: task.id, title: task.title, request: task.request, sessionID: task.session_id ?? undefined, metadata: task.metadata ?? undefined },
             goals: goalInfos,
             delivery: deliveryInfo,
+            checkResults: evaluatorCheckResults.length > 0 ? evaluatorCheckResults : undefined,
             attachments: deliveryAttachments,
             signal: input.signal,
             stream: {
@@ -1611,6 +1747,12 @@ export function createTaskAgentTools(input: {
               time_updated: Date.now(),
             }).run()
           )
+
+          // Sink delivery agent's structured verdict into task.metadata.criteria_results.
+          // The verdict carries three distinct typed surfaces — flatten them into the
+          // unified criteria stream so the overlay's Quality Gates panel reflects what
+          // the agent actually verified, not just a single pass/fail bit.
+          await sinkDeliveryVerdictToCriteria(taskID, verdict)
 
           const passedCount = goals.filter(g => g.status === "passed").length
           const failedCount = goals.filter(g => g.status === "failed").length
@@ -1887,11 +2029,10 @@ export function createTaskAgentTools(input: {
         const decisionSection = decisionLog.toPromptSection({ limit: 30 }) ?? ""
 
         // Run refine analysis via LLM
-        const { Provider } = await import("@/provider/provider")
         const { ProviderLLM } = await import("@/provider/llm")
-        const def = await Provider.defaultModel().catch(() => undefined)
-        if (!def) return "No LLM model available for refine analysis."
-        const model = await Provider.getModel(def.providerID, def.modelID)
+        const { resolveAgentModel } = await import("@/agent/model")
+        const model = await resolveAgentModel("task").catch(() => undefined)
+        if (!model) return "No LLM model available for refine analysis."
 
         const refineSession = await Session.createNext({
           parentID: input.agentSessionID,
@@ -2079,10 +2220,16 @@ export function createTaskAgentTools(input: {
           .describe(
             "One sentence explaining why this qualifies as a direct build task (not a pipeline task). Shown in the Route Decision card.",
           ),
+        goalID: z
+          .string()
+          .optional()
+          .describe(
+            "Optional goal id this build is scoped to. Pass when the build runs inside a goal's execution (e.g. follow-up fix for a specific goal) so the overlay nests the build card as a sibling step of planner/executor/evaluator under that goal. Omit for task-level fast-path builds that bypass goals entirely.",
+          ),
       }),
-      execute: async ({ request, reason }) => {
+      execute: async ({ request, reason, goalID }) => {
         const task = requireTask(taskID)
-        log.info("build tool invoked", { taskID, reason, requestLen: request.length })
+        log.info("build tool invoked", { taskID, reason, requestLen: request.length, goalID: goalID || "" })
 
         const buildSession = await Session.createNext({
           parentID: input.agentSessionID,
@@ -2092,7 +2239,13 @@ export function createTaskAgentTools(input: {
         // role="build" makes the bridge resolve this session's messages to the
         // standalone "build" agent card rather than collapsing them into the
         // task-agent's own "assistant" card (which would hide the build run).
-        registerGoalRunSession(buildSession.id, taskID, "build")
+        // If an explicit goalID was passed (or inheritable from the parent
+        // agent session), attach it so the overlay renders the build card as
+        // a nested step alongside planner/executor/evaluator instead of
+        // floating at the conversation root.
+        const inheritedGoalID = sessionGoalID(input.agentSessionID)
+        const attachedGoalID = goalID || inheritedGoalID
+        registerGoalRunSession(buildSession.id, taskID, "build", attachedGoalID)
 
         try {
           await SessionPrompt.prompt({
@@ -2101,10 +2254,34 @@ export function createTaskAgentTools(input: {
             parts: [{ type: "text", text: request, kind: "user_content" }],
           })
           await Session.touch(buildSession.id).catch(() => undefined)
-          return `Build agent completed (session ${buildSession.id}). The request was handled directly without the goals/architect/deliver pipeline — reason: ${reason}. Do not call requirements; stop or proceed to deliver only if the task explicitly needs verification beyond what build already did.`
+          // kind=build is a fast path: the build agent self-verifies and the
+          // task is done when it returns. Without this transition the task
+          // would stay status="active" with no run/plan, which sends the
+          // task-loop's "no active run" branch into a fallback re-trigger
+          // (iteration=2 trigger=batch_complete) — that fallback wrongly
+          // pushes the LLM into the workflow pipeline (requirements/planner/
+          // executor/delivery) on a task that was explicitly routed away
+          // from it. Marking the task completed here is the structural fix:
+          // build owns its own terminal state.
+          await updateTask(
+            requireTask(taskID),
+            { status: "completed", time_completed: Date.now(), error: null, blocking_reason: null },
+            `Build agent completed (session ${buildSession.id}) — ${reason}`,
+          )
+          stopAfterDispatch.abort("build_completed")
+          return `Build agent completed (session ${buildSession.id}). Task marked completed — direct build path took ownership of this task. Do not call requirements/planner/deliver; the task is finished.`
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err)
           log.error("build tool failed", { taskID, error: msg })
+          // Same reasoning as the success branch: build owns terminal state.
+          // On failure, transition to "failed" so task-loop exits cleanly
+          // instead of falling through to the workflow pipeline.
+          await updateTask(
+            requireTask(taskID),
+            { status: "failed", error: msg, time_completed: Date.now() },
+            `Build agent failed: ${msg}`,
+          ).catch(() => undefined)
+          stopAfterDispatch.abort("build_failed")
           throw err
         }
       },

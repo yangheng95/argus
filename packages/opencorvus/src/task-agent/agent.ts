@@ -167,13 +167,14 @@ export namespace TaskAgent {
         }
       }
 
-      // 1. Resolve model
-      const def = await Provider.defaultModel().catch(() => undefined)
-      if (!def) {
-        log.error("task agent: no LLM model available", { taskID })
-        return
-      }
-      const model = await Provider.getModel(def.providerID, def.modelID)
+      // 1. Resolve model — respects agent.task.model in user config; falls
+      //    through to Provider.defaultModel() per STRONG_AGENTS policy.
+      const { resolveAgentModel } = await import("@/agent/model")
+      const model = await resolveAgentModel("task").catch((e) => {
+        log.error("task agent: no LLM model available", { taskID, error: e instanceof Error ? e.message : String(e) })
+        return undefined
+      })
+      if (!model) return
 
       // 2. Create child session + streaming hooks
       const agentSession = await Session.createNext({
@@ -233,7 +234,7 @@ export namespace TaskAgent {
         taskID,
         trigger: trigger.kind,
         sessionID: agentSession.id,
-        model: `${def.providerID}/${def.modelID}`,
+        model: `${model.providerID}/${model.id}`,
         toolCount: Object.keys(tools).length,
       })
 

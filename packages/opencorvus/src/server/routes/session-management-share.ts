@@ -97,7 +97,8 @@ export const SessionManagementShareRoutes = lazy(() =>
         const body = c.req.valid("json") ?? {}
         const session = await Session.get(sessionID)
         const messages = await Session.messages({ sessionID })
-        const events = await Trace.read(Trace.taskIDForSession(sessionID))
+        const traceTaskID = Trace.taskIDForSession(sessionID)
+        const events = traceTaskID ? await Trace.read(traceTaskID) : []
         const report = await buildSessionTraceHtml({
           session: {
             id: session.id,

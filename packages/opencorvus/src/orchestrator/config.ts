@@ -30,7 +30,6 @@ export interface ArchitectConfig {
   max_steps: number
   timeout_ms: number
   skills: string[]
-  model?: string
 }
 
 export interface PlannerConfig {
@@ -45,7 +44,6 @@ export interface EvaluatorConfig {
   max_steps: number
   timeout_ms: number
   skills: string[]
-  model?: string
   /** Evaluation tier: "core" (build/test/lint only), "standard" (+ judge/spec_check/code_review), "full" (all checks). Default: "standard". */
   tier?: "core" | "standard" | "full"
 }
@@ -61,7 +59,6 @@ export interface DesignAnalystConfig {
   max_steps: number
   timeout_ms: number
   skills: string[]
-  model?: string
 }
 
 export interface OrchestratorConfigType {
@@ -176,7 +173,6 @@ function merge(user?: Config.Info["assistant"]): OrchestratorConfigType {
       max_steps: user?.architect?.max_steps ?? DEFAULTS.architect.max_steps,
       timeout_ms: user?.architect?.timeout_ms ?? DEFAULTS.architect.timeout_ms,
       skills: user?.architect?.skills ?? DEFAULTS.architect.skills,
-      model: user?.architect?.model ?? undefined,
     },
     planner: {
       max_steps: user?.planner?.max_steps ?? DEFAULTS.planner.max_steps,
@@ -189,7 +185,6 @@ function merge(user?: Config.Info["assistant"]): OrchestratorConfigType {
       max_steps: user?.evaluator?.max_steps ?? DEFAULTS.evaluator.max_steps,
       timeout_ms: user?.evaluator?.timeout_ms ?? DEFAULTS.evaluator.timeout_ms,
       skills: user?.evaluator?.skills ?? DEFAULTS.evaluator.skills,
-      model: user?.evaluator?.model ?? undefined,
       tier: user?.evaluator?.tier ?? "standard",
     },
     delivery: {
@@ -202,7 +197,6 @@ function merge(user?: Config.Info["assistant"]): OrchestratorConfigType {
       max_steps: user?.design_analyst?.max_steps ?? DEFAULTS.design_analyst.max_steps,
       timeout_ms: user?.design_analyst?.timeout_ms ?? DEFAULTS.design_analyst.timeout_ms,
       skills: user?.design_analyst?.skills ?? DEFAULTS.design_analyst.skills,
-      model: user?.design_analyst?.model ?? undefined,
     },
     max_runs: user?.max_runs ?? DEFAULTS.max_runs,
     max_fix_runs: user?.max_fix_runs ?? DEFAULTS.max_fix_runs,

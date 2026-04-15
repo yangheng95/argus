@@ -7,7 +7,7 @@ use std::{
     net::TcpListener,
     path::PathBuf,
     process::{Child, Command, Stdio},
-    sync::Mutex,
+    sync::{Condvar, Mutex, OnceLock},
     thread,
     time::Duration,
 };
@@ -175,7 +175,10 @@ struct TrayAttentionState {
     flashing: bool,
 }
 
-struct TrayAttention(Mutex<TrayAttentionState>);
+struct TrayAttention {
+    state: Mutex<TrayAttentionState>,
+    cvar: Condvar,
+}
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -549,13 +552,7 @@ fn next_server_port() -> Result<u16, String> {
 
 fn stop_server<R: Runtime>(app: &AppHandle<R>) {
     let state = app.state::<Server>();
-    let mut lock = match state.0.lock() {
-        Ok(guard) => guard,
-        Err(poisoned) => {
-            eprintln!("overlay: server mutex poisoned in stop_server, recovering");
-            poisoned.into_inner()
-        }
-    };
+    let mut lock = state.0.lock().unwrap();
 
     // Windows: drop the Job Object handle → KILL_ON_JOB_CLOSE terminates every
     // process in the job (direct child + all grandchildren).
@@ -632,13 +629,7 @@ fn start_server<R: Runtime>(app: &AppHandle<R>) -> Result<OverlayServerInfo, Str
 
     let info = server_info(port);
     let state = app.state::<Server>();
-    let mut lock = match state.0.lock() {
-        Ok(guard) => guard,
-        Err(poisoned) => {
-            eprintln!("overlay: server mutex poisoned in start_server, recovering");
-            poisoned.into_inner()
-        }
-    };
+    let mut lock = state.0.lock().unwrap();
     lock.child = Some(child);
     lock.port = Some(port);
     #[cfg(windows)]
@@ -656,13 +647,7 @@ fn restart_server<R: Runtime>(app: &AppHandle<R>) -> Result<OverlayServerInfo, S
 fn ensure_server<R: Runtime>(app: &AppHandle<R>) -> Result<OverlayServerInfo, String> {
     {
         let state = app.state::<Server>();
-        let mut lock = match state.0.lock() {
-            Ok(guard) => guard,
-            Err(poisoned) => {
-                eprintln!("overlay: server mutex poisoned in ensure_server, recovering");
-                poisoned.into_inner()
-            }
-        };
+        let mut lock = state.0.lock().unwrap();
         if let Some(child) = lock.child.as_mut() {
             match child.try_wait() {
                 Ok(None) => {
@@ -868,36 +853,26 @@ fn apply_tray_attention<R: Runtime>(app: &AppHandle<R>, active: bool) {
 }
 
 fn clear_tray_attention<R: Runtime>(app: &AppHandle<R>) {
-    let state = app.state::<TrayAttention>();
-    let mut lock = match state.0.lock() {
-        Ok(guard) => guard,
-        Err(poisoned) => {
-            eprintln!("overlay: tray attention mutex poisoned while clearing, recovering");
-            poisoned.into_inner()
-        }
-    };
+    let attention = app.state::<TrayAttention>();
+    let mut lock = attention.state.lock().unwrap();
     lock.active = false;
     lock.flashing = false;
     drop(lock);
+    attention.cvar.notify_one();
     apply_tray_attention(app, false);
     request_attention(app, false);
 }
 
 #[tauri::command]
 fn overlay_attention_set<R: Runtime>(app: AppHandle<R>, active: bool) -> Result<bool, String> {
-    let state = app.state::<TrayAttention>();
-    let mut lock = match state.0.lock() {
-        Ok(guard) => guard,
-        Err(poisoned) => {
-            eprintln!("overlay: tray attention mutex poisoned while updating, recovering");
-            poisoned.into_inner()
-        }
-    };
+    let attention = app.state::<TrayAttention>();
+    let mut lock = attention.state.lock().unwrap();
     lock.active = active;
     if !active {
         lock.flashing = false;
     }
     drop(lock);
+    attention.cvar.notify_one();
 
     if active {
         request_attention(&app, true);
@@ -943,7 +918,10 @@ fn main() {
         ])
         .setup(|app| {
             app.manage(Server(Mutex::new(ServerState::default())));
-            app.manage(TrayAttention(Mutex::new(TrayAttentionState::default())));
+            app.manage(TrayAttention {
+                state: Mutex::new(TrayAttentionState::default()),
+                cvar: Condvar::new(),
+            });
             let handle = app.handle().clone();
             restart_server(&handle)?;
 
@@ -1047,31 +1025,25 @@ fn main() {
             {
                 let app = app.handle().clone();
                 thread::spawn(move || loop {
-                    thread::sleep(Duration::from_millis(700));
-                    let next = {
-                        let state = app.state::<TrayAttention>();
-                        let mut lock = match state.0.lock() {
-                            Ok(guard) => guard,
-                            Err(poisoned) => {
-                                eprintln!("overlay: tray attention mutex poisoned in flasher, recovering");
-                                poisoned.into_inner()
-                            }
-                        };
-                        if !lock.active {
-                            if !lock.flashing {
-                                None
-                            } else {
-                                lock.flashing = false;
-                                Some(false)
-                            }
-                        } else {
-                            lock.flashing = !lock.flashing;
-                            Some(lock.flashing)
-                        }
-                    };
-                    if let Some(active) = next {
-                        apply_tray_attention(&app, active);
-                    }
+                    let attention = app.state::<TrayAttention>();
+                    // Block until attention becomes active. No polling, no
+                    // wake-ups while idle — set/clear notify the cvar.
+                    let mut lock = attention
+                        .cvar
+                        .wait_while(attention.state.lock().unwrap(), |s| !s.active)
+                        .unwrap();
+                    lock.flashing = !lock.flashing;
+                    let next = lock.active && lock.flashing;
+                    drop(lock);
+                    apply_tray_attention(&app, next);
+                    // Sleep 700ms; set/clear can wake us early via notify_one
+                    // so a clear takes effect on the next iteration without
+                    // waiting out the remainder of this tick.
+                    let lock = attention.state.lock().unwrap();
+                    let _ = attention
+                        .cvar
+                        .wait_timeout(lock, Duration::from_millis(700))
+                        .unwrap();
                 });
             }
 
@@ -1086,10 +1058,26 @@ fn main() {
         })
 }
 
-/// Build a tray-specific icon by stripping the flat background from the bundled logo.
-fn create_tray_icon() -> tauri::image::Image<'static> {
+// Tray icons are decoded once (PNG decode + Lanczos3 resize + flood-fill) and
+// cached for the lifetime of the process. The flasher swaps icons every 700ms
+// while attention is active, so re-running the pipeline each call burned CPU
+// for no reason.
+
+struct CachedIcon {
+    rgba: Vec<u8>,
+    width: u32,
+    height: u32,
+}
+
+fn cached_icon_image(cached: &'static CachedIcon) -> tauri::image::Image<'static> {
+    tauri::image::Image::new(cached.rgba.as_slice(), cached.width, cached.height)
+}
+
+fn build_normal_tray_icon() -> CachedIcon {
     if let Some(icon) = tray_icon_from_bundle() {
-        return icon;
+        let width = icon.width();
+        let height = icon.height();
+        return CachedIcon { rgba: icon.rgba().to_vec(), width, height };
     }
 
     let size: u32 = 32;
@@ -1119,23 +1107,25 @@ fn create_tray_icon() -> tauri::image::Image<'static> {
         }
     }
 
-    tauri::image::Image::new_owned(rgba, size, size)
+    CachedIcon { rgba, width: size, height: size }
 }
 
-fn create_attention_tray_icon() -> tauri::image::Image<'static> {
-    let size: u32 = 32;
-    let mut rgba = create_tray_icon().rgba().to_vec();
-    let cx = 24.0;
-    let cy = 8.0;
-    let outer = 6.0;
-    let inner = 3.0;
+fn build_attention_tray_icon() -> CachedIcon {
+    let base = build_normal_tray_icon();
+    let mut rgba = base.rgba.clone();
+    let width = base.width;
+    let height = base.height;
+    let cx = 24.0_f64;
+    let cy = 8.0_f64;
+    let outer = 6.0_f64;
+    let inner = 3.0_f64;
 
-    for y in 0..size {
-        for x in 0..size {
+    for y in 0..height {
+        for x in 0..width {
             let dx = x as f64 - cx;
             let dy = y as f64 - cy;
             let dist = (dx * dx + dy * dy).sqrt();
-            let idx = ((y * size + x) * 4) as usize;
+            let idx = ((y * width + x) * 4) as usize;
 
             if dist <= outer {
                 rgba[idx] = 0xf8;
@@ -1152,5 +1142,15 @@ fn create_attention_tray_icon() -> tauri::image::Image<'static> {
         }
     }
 
-    tauri::image::Image::new_owned(rgba, size, size)
+    CachedIcon { rgba, width, height }
+}
+
+fn create_tray_icon() -> tauri::image::Image<'static> {
+    static CACHED: OnceLock<CachedIcon> = OnceLock::new();
+    cached_icon_image(CACHED.get_or_init(build_normal_tray_icon))
+}
+
+fn create_attention_tray_icon() -> tauri::image::Image<'static> {
+    static CACHED: OnceLock<CachedIcon> = OnceLock::new();
+    cached_icon_image(CACHED.get_or_init(build_attention_tray_icon))
 }

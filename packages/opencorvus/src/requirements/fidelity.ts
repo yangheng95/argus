@@ -17,7 +17,7 @@ import { Provider } from "@/provider/provider"
 import { Log } from "@/util/log"
 import type { GoalContractFields } from "@/pipeline/types"
 import type { AcceptanceSpec } from "@/acceptance/types"
-import { renderSpecsAsText } from "@/acceptance/types"
+import { AcceptanceSpecSchema, renderSpecsAsText } from "@/acceptance/types"
 
 const log = Log.create({ service: "fidelity-review" })
 
@@ -79,12 +79,12 @@ export async function reviewFidelity(input: {
     return { verdict: "needs_correction", issues: [{ type: "uncovered", description: "No goals produced" }], corrections: [], missingGoals: [] }
   }
 
-  const def = await Provider.defaultModel().catch(() => undefined)
-  if (!def) {
+  const { resolveAgentModel } = await import("@/agent/model")
+  const model = await resolveAgentModel("requirements").catch(() => undefined)
+  if (!model) {
     log.warn("no LLM available for fidelity review, skipping")
     return { verdict: "faithful", issues: [], corrections: [], missingGoals: [] }
   }
-  const model = await Provider.getModel(def.providerID, def.modelID)
   const language = await Provider.getLanguage(model)
 
   const systemPrompt = buildFidelitySystem()
@@ -212,11 +212,66 @@ function parseFidelityOutput(text: string): FidelityResult {
     throw new Error("fidelity reviewer returned no JSON block")
   }
   const json = JSON.parse(jsonMatch[1] || jsonMatch[0])
+
+  // Acceptance specs that come in via fidelity must be validated against the
+  // same Zod schema register_goal uses — otherwise the LLM can produce a
+  // missing/malformed `scorers` field, the bad spec gets persisted, and
+  // downstream consumers (renderSpecsAsText, translateSpecs, architect tool,
+  // create_run tool) crash with "spec.scorers is undefined". Drop corrections
+  // / missingGoals whose specs fail validation; let the retry loop fetch a
+  // clean correction instead of poisoning the goal set.
+  const validateSpecs = (raw: unknown, where: string): AcceptanceSpec[] | null => {
+    if (!Array.isArray(raw)) return null
+    const out: AcceptanceSpec[] = []
+    for (let i = 0; i < raw.length; i++) {
+      const parsed = AcceptanceSpecSchema.safeParse(raw[i])
+      if (!parsed.success) {
+        log.warn("fidelity: dropping correction with invalid acceptance_spec", {
+          where,
+          index: i,
+          issues: parsed.error.issues.map((it) => `${it.path.join(".")}: ${it.message}`),
+        })
+        return null
+      }
+      out.push(parsed.data)
+    }
+    return out
+  }
+
+  const rawCorrections = Array.isArray(json.corrections) ? json.corrections : []
+  const corrections: GoalCorrection[] = []
+  for (const c of rawCorrections) {
+    if (!c || typeof c !== "object") continue
+    if (c.action === "modify" && c.updates && "acceptance_specs" in c.updates) {
+      const validated = validateSpecs(c.updates.acceptance_specs, `correction.modify ${c.goalID}`)
+      if (validated === null) continue
+      corrections.push({
+        action: "modify",
+        goalID: String(c.goalID ?? ""),
+        reason: String(c.reason ?? ""),
+        updates: { ...c.updates, acceptance_specs: validated },
+      })
+    } else {
+      corrections.push(c as GoalCorrection)
+    }
+  }
+
+  const rawMissing = Array.isArray(json.missing_goals ?? json.missingGoals)
+    ? (json.missing_goals ?? json.missingGoals)
+    : []
+  const missingGoals: MissingGoal[] = []
+  for (const m of rawMissing) {
+    if (!m || typeof m !== "object") continue
+    const validated = validateSpecs(m.acceptance_specs, `missing_goal "${m.title}"`)
+    if (validated === null) continue
+    missingGoals.push({ ...m, acceptance_specs: validated } as MissingGoal)
+  }
+
   return {
     verdict: json.verdict === "faithful" ? "faithful" : "needs_correction",
     issues: Array.isArray(json.issues) ? json.issues : [],
-    corrections: Array.isArray(json.corrections) ? json.corrections : [],
-    missingGoals: Array.isArray(json.missing_goals ?? json.missingGoals) ? (json.missing_goals ?? json.missingGoals) : [],
+    corrections,
+    missingGoals,
   }
 }
 

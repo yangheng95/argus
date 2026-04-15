@@ -126,9 +126,9 @@ async function runInternal(input: {
     max_attempts: MAX_ATTEMPTS,
   } = orchCfg.requirements
 
-  const def = await Provider.defaultModel().catch(() => undefined)
-  if (!def) throw new Error("no LLM model available for requirements agent")
-  const model = await Provider.getModel(def.providerID, def.modelID)
+  const { resolveAgentModel } = await import("@/agent/model")
+  const model = await resolveAgentModel("requirements").catch(() => undefined)
+  if (!model) throw new Error("no LLM model available for requirements agent")
 
   if (input.signal?.aborted) throw new Error("requirements agent aborted after model resolution")
 

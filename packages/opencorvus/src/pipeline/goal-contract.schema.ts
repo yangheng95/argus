@@ -43,8 +43,15 @@ export const GoalContractFieldsSchema = z.object({
     .string()
     .min(50)
     .describe(
-      "Self-contained objective for an isolated executor. " +
-        "Include: what to implement, key interfaces/types, expected behavior, edge cases.",
+      "Execution directive for THIS goal. Write ONLY: " +
+        "(a) what this goal implements, (b) constraints specific to this goal, " +
+        "(c) edge cases the executor must handle. " +
+        "Do NOT restate the user's request — the executor has the full user " +
+        "intent bundle at .opencorvus/intent/ and can reference it. " +
+        "Do NOT describe interface signatures or type definitions here — put " +
+        "those in the exports/imports fields (structured, not prose). " +
+        "Do NOT paraphrase what other goals do — dependents read exports, " +
+        "not your objective.",
     ),
   acceptance_specs: z
     .array(AcceptanceSpecSchema)
@@ -68,13 +75,21 @@ export const GoalContractFieldsSchema = z.object({
     .array(z.string())
     .default([])
     .describe(
-      "Interfaces this goal PROVIDES — function signatures, type definitions. " +
-        "Dependent goals code against these.",
+      "Interfaces this goal PROVIDES — each entry is one actual signature or " +
+        "type definition (e.g. 'getStocks(): Stock[]', " +
+        "'type Stock = { id: string; name: string }'). " +
+        "Every cross-goal contract MUST appear here; do not describe interfaces " +
+        "in the objective field. Dependents read this list as their import surface.",
     ),
   imports: z
     .array(z.string())
     .default([])
-    .describe("Interfaces this goal CONSUMES from dependencies"),
+    .describe(
+      "Interfaces this goal CONSUMES from dependencies. Each entry names one " +
+        "signature/type from a dependency's exports. " +
+        "Do not paraphrase dependency behavior — the executor sees the " +
+        "dependency's declared exports directly.",
+    ),
   priority: z.enum(GOAL_PRIORITIES).default("blocking"),
   kind: z.enum(GOAL_KINDS).default("feature"),
   requirement_ids: z

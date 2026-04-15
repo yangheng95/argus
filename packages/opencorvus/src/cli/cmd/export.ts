@@ -85,7 +85,8 @@ export const ExportCommand = cmd({
         const html = args.html === true
 
         if (html) {
-          const events = await Trace.read(Trace.taskIDForSession(sessionID!))
+          const traceTaskID = Trace.taskIDForSession(sessionID!)
+          const events = traceTaskID ? await Trace.read(traceTaskID) : []
           const report = await buildSessionTraceHtml({
             session: {
               id: sessionInfo.id,

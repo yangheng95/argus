@@ -9,6 +9,7 @@
 import z from "zod"
 import { generateObject } from "@/llm/api"
 import { Provider } from "@/provider/provider"
+import { ProviderLLM } from "@/provider/llm"
 import { Log } from "@/util/log"
 import type { LlmJudgeScorer, PrebuiltScorer, RubricLevel } from "@/acceptance/types"
 import type { TranslatedRubric } from "@/acceptance/translator"
@@ -23,6 +24,9 @@ export interface RubricEvaluationInput {
   /** Original requirement text when scorer.inputs includes "requirement_text". */
   requirementText?: string
   signal?: AbortSignal
+  /** Sticky-routing key for LiteLLM-fronted gateways. Without it each judge
+   *  round-robins to a cold upstream cache. Pass `task-${taskID}-evaluator`. */
+  cacheKey?: string
 }
 
 export interface RubricEvaluationResult {
@@ -60,20 +64,22 @@ async function runLlmJudge(
   scorer: LlmJudgeScorer,
   input: RubricEvaluationInput,
 ): Promise<RubricEvaluationResult> {
-  const ref = await Provider.defaultModel().catch(() => undefined)
-  if (!ref) {
+  const { resolveAgentModel } = await import("@/agent/model")
+  const model = await resolveAgentModel("evaluator").catch(() => undefined)
+  if (!model) {
     log.warn("no default model — rubric skipped", { name })
     return { name, status: "skipped", evidence: "no LLM available for rubric evaluation" }
   }
-  const model = await Provider.getModel(ref.providerID, ref.modelID)
   const language = await Provider.getLanguage(model)
 
   const system = buildJudgeSystemPrompt(scorer)
   const user = buildJudgeUserPrompt(scorer, input)
 
+  const headers = ProviderLLM.baseHeaders(model, input.cacheKey)
   const result = await generateObject({
     model: language,
     abortSignal: input.signal,
+    headers,
     schema: JudgeOutputSchema,
     system,
     prompt: user,

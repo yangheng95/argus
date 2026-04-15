@@ -129,7 +129,8 @@ const artifactExportAdapter: DeliveryAdapter = {
     }
     const session = await Session.get(ctx.run.session_id)
     const messages = await Session.messages({ sessionID: ctx.run.session_id })
-    const events = await Trace.read(Trace.taskIDForSession(ctx.run.session_id))
+    const traceTaskID = Trace.taskIDForSession(ctx.run.session_id)
+    const events = traceTaskID ? await Trace.read(traceTaskID) : []
     const report = await buildSessionTraceHtml({
       session: { id: session.id, title: session.title, time: session.time },
       messages,

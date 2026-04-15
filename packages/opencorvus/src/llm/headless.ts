@@ -3,6 +3,7 @@ import type { ModelMessage, ToolSet } from "ai"
 import { Config } from "@/config/config"
 import { completeText, type TextHooks } from "@/llm/api"
 import { Provider } from "@/provider/provider"
+import { ProviderLLM } from "@/provider/llm"
 import { ProviderTransform } from "@/provider/transform"
 import { Instance } from "@/project/instance"
 import { Message } from "@/session/message"
@@ -96,9 +97,13 @@ export async function completeHeadlessText<TOOLS extends ToolSet>(input: {
   maxOutputTokens?: number
   timeoutMs?: number | false
   abortSignal?: AbortSignal
+  /** Sticky-routing key for LiteLLM-fronted gateways (hexin). Without it each
+   *  call round-robins to a cold upstream cache. Pass `task-${taskID}-<label>`. */
+  cacheKey?: string
 } & TextHooks<TOOLS>) {
   const {
     abortSignal,
+    cacheKey,
     label,
     language,
     maxOutputTokens,
@@ -155,9 +160,12 @@ export async function completeHeadlessText<TOOLS extends ToolSet>(input: {
     }
   }
 
+  const headers = ProviderLLM.baseHeaders(model, cacheKey ?? sessionID)
+
   return completeText<TOOLS>({
     ...hooks,
     abortSignal,
+    headers,
     maxOutputTokens: maxOutputTokens ?? ProviderTransform.maxOutputTokens(model),
     model: language,
     messages,

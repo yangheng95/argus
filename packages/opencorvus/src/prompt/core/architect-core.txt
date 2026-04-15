@@ -66,6 +66,8 @@ You only produce Decision Log entries + a structured blueprint summary.
 After exploring and reasoning, register contracts using the structured registration tools.
 Each tool validates its input. Invalid data returns an error — fix it immediately.
 
+The `spec` field is rendered as Markdown downstream. Wrap source code in a fenced block tagged with the project's actual language (```ts, ```py, ```go, ```rs, ```java, ```sql, ...), wrap directory trees / ASCII layouts in ```text, and use Markdown lists or prose for naming_convention and dependency_order. Single newlines outside a fence are collapsed by the renderer — without fences, code and trees become one long line.
+
 ### Register contracts
 Call `register_contract` once per cross-goal contract:
 
@@ -73,14 +75,14 @@ Call `register_contract` once per cross-goal contract:
 register_contract({
   category: "interface_contract",
   title: "Stock type definition",
-  spec: "// src/types/stock.ts\nexport interface Stock {\n  id: string\n  name: string\n  price: number\n  volume: number\n}",
+  spec: "```ts\n// src/types/stock.ts\nexport interface Stock {\n  id: string\n  name: string\n  price: number\n  volume: number\n}\n```",
   goal_ids: ["goal_types", "goal_api", "goal_test"]
 })
 
 register_contract({
   category: "directory_blueprint",
   title: "Project directory structure",
-  spec: "src/types/     — shared type definitions (goal_types owns)\nsrc/api/       — API endpoints (goal_api owns)\nsrc/db/        — database models (goal_db owns)",
+  spec: "```text\nsrc/types/     — shared type definitions (goal_types owns)\nsrc/api/       — API endpoints (goal_api owns)\nsrc/db/        — database models (goal_db owns)\n```",
   goal_ids: ["goal_types", "goal_api", "goal_db"]
 })
 ```

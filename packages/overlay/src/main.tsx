@@ -12,6 +12,7 @@ import { ChatComposer } from "./components/ChatComposer";
 import { WindowControls } from "./components/WindowControls";
 import { TitlebarMenu } from "./components/TitlebarMenu";
 import { ConnectionBadge } from "./components/ConnectionBadge";
+import { SessionTokenBadge } from "./components/SessionTokenBadge";
 import { ChangesPanel } from "./components/ChangesPanel";
 import { LogViewer } from "./components/LogViewer";
 import {
@@ -62,9 +63,10 @@ import ChannelsPanel from "./components/settings/ChannelsPanel";
 import SkillMarketPanel from "./components/settings/SkillMarketPanel";
 import ProvidersPanel from "./components/settings/ProvidersPanel";
 import GeneralPanel from "./components/settings/GeneralPanel";
+import AgentModelsPanel from "./components/settings/AgentModelsPanel";
 import { PermissionsPanel } from "./components/settings/PermissionsPanel";
 import { MemoryPanel } from "./components/MemoryPanel";
-import { InteractionPanel } from "./components/InteractionPanel";
+import { PermissionAutoResolver } from "./components/PermissionAutoResolver";
 import { WelcomeToast } from "./components/WelcomeToast";
 import { waitForLogDrain, AppLog } from "./utils/log";
 import { teardownApp } from "./services/init";
@@ -799,6 +801,13 @@ if (connBadgeEl) {
   render(() => <ConnectionBadge />, connBadgeEl);
 }
 
+// ── Mount: SessionTokenBadge ──
+
+const sessionTokenBadgeEl = document.getElementById("solidSessionTokenBadge");
+if (sessionTokenBadgeEl) {
+  render(() => <SessionTokenBadge />, sessionTokenBadgeEl);
+}
+
 // ── Mount: ChangesPanel ──
 
 const changesPanelEl = document.getElementById("solidChangesPanel");
@@ -871,21 +880,20 @@ if (providersConfigBody) {
   render(() => <ProvidersPanel />, providersConfigBody);
 }
 
-// ── Mount: InteractionPanel (auto-resolve layer) ──
-// Uses a dedicated mount point independent of Board's internal DOM.
+const agentModelsBody = document.getElementById("agentModelsBody");
+if (agentModelsBody) {
+  agentModelsBody.innerHTML = "";
+  render(() => <AgentModelsPanel />, agentModelsBody);
+}
+
+// ── Mount: PermissionAutoResolver (headless) ──
+// Permission cards render inline in the conversation via
+// InteractionPermissionPart. This mount only drives auto-approval when
+// experimental.auto_permission is enabled — it renders nothing.
 
 const interactionMountEl = document.getElementById("solidInteractionMount");
 if (interactionMountEl) {
-  render(
-    () => (
-      <InteractionPanel
-        onRespond={async () => {
-          await loadBoard();
-        }}
-      />
-    ),
-    interactionMountEl,
-  );
+  render(() => <PermissionAutoResolver />, interactionMountEl);
 }
 
 // ── Native dialog close handlers ──
@@ -1296,9 +1304,9 @@ disposers.push(createRoot((dispose) => {
   }, 1000);
   onCleanup(() => clearInterval(elapsedInterval));
 
- // interactionBridge.renderInteractions removed — InteractionPanel handles
- // interaction display and auto-resolve reactively. Keeping both active
- // would cause double auto-resolve race conditions.
+ // interactionBridge.renderInteractions removed — inline conversation
+ // cards (InteractionQuestionPart / InteractionPermissionPart) render the
+ // UI and PermissionAutoResolver handles auto-approval.
 
   createEffect(() => {
     settingsStore.locale;

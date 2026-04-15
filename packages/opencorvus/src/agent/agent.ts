@@ -288,6 +288,51 @@ export namespace Agent {
         native: true,
         hidden: true,
       },
+      task: {
+        name: "task",
+        description: "Task orchestrator agent. Drives the end-to-end task lifecycle (requirements → architect → planner → executor → evaluator → delivery).",
+        options: {},
+        permission: PermissionNext.merge(defaults, user),
+        mode: "primary",
+        native: true,
+        hidden: true,
+      },
+      requirements: {
+        name: "requirements",
+        description: "Requirements agent. Analyzes user input and decomposes it into typed GoalContracts with acceptance specs.",
+        options: {},
+        permission: PermissionNext.merge(defaults, user),
+        mode: "primary",
+        native: true,
+        hidden: true,
+      },
+      architect: {
+        name: "architect",
+        description: "Architect agent. Resolves cross-goal interfaces, file layout, and shared types into binding Decision Log entries.",
+        options: {},
+        permission: PermissionNext.merge(defaults, user),
+        mode: "primary",
+        native: true,
+        hidden: true,
+      },
+      planner: {
+        name: "planner",
+        description: "Planner agent. Produces per-goal implementation plans from GoalContracts + Architect decisions.",
+        options: {},
+        permission: PermissionNext.merge(defaults, user),
+        mode: "primary",
+        native: true,
+        hidden: true,
+      },
+      "design-analyst": {
+        name: "design-analyst",
+        description: "Design analyst agent. Analyzes visual references (images, URLs) to produce structured design specifications.",
+        options: {},
+        permission: PermissionNext.merge(defaults, user),
+        mode: "primary",
+        native: true,
+        hidden: true,
+      },
     }
 
     for (const [key, value] of entries((cfg.agent ?? {}) as NonNullable<Config.Info["agent"]>)) {
@@ -335,6 +380,31 @@ export namespace Agent {
       )
     }
 
+    // Inject the hexin haiku default for any agent that (a) is not in
+    // STRONG_AGENTS and (b) does not already have a model explicitly set.
+    // STRONG_AGENTS (task/build/delivery/general) intentionally fall through
+    // to Provider.defaultModel() so the powerful project model is used.
+    const STRONG_AGENTS = new Set(["task", "build", "delivery", "general"])
+    try {
+      const haikuModelID = await Provider.hexinDefaultHaiku()
+      if (haikuModelID) {
+        for (const name in result) {
+          if (STRONG_AGENTS.has(name)) continue
+          if (result[name].model) continue
+          result[name].model = { providerID: "hexin", modelID: haikuModelID }
+        }
+      } else {
+        // Discovery succeeded but returned no haiku candidate — leave models
+        // unset so callers fall through to Provider.defaultModel().
+      }
+    } catch (err) {
+      // Hexin discovery failure is non-fatal; log so operators can tell.
+      // Agents with no .model fall through to Provider.defaultModel() at
+      // resolveAgentModel() time.
+      // eslint-disable-next-line no-console
+      console.warn("agent.state: hexin haiku injection skipped", err)
+    }
+
     return result
   })
 
@@ -357,6 +427,12 @@ export namespace Agent {
     if (static_ !== undefined) return static_
     // For agents loaded dynamically (evaluator, delivery), the prompt is populated in state()
     return undefined
+  }
+
+  /** Invalidate the memoized Agent.state(). Call after config changes so the
+   *  next Agent.get()/list() call rebuilds with the fresh user overrides. */
+  export function reset() {
+    ;(state as any).reset()
   }
 
   export async function get(agent: string) {
