@@ -212,6 +212,8 @@ If ANY REQ-N has no goal → you MUST add a goal or expand an existing one.
 After exploration, register your outputs using the structured registration tools.
 Each tool validates its input with a schema. Invalid data returns an error — fix it immediately.
 
+**Batch independent calls in parallel.** When you need to register many requirements, decisions, goals, or traceability rows, emit them as **multiple tool_use blocks in a single response** rather than one per step. Independent registrations (no data dependency between them) must be parallelized — a PRD with 30 requirements should fit in 2–4 tool-use turns, not 30 sequential ones. Step budget is finite: sequential emission wastes it and causes under-decomposition when the budget runs out. Only serialize when a later call genuinely depends on an earlier one's return value (rare for registrations).
+
 ### Step 1: Register requirements
 Call `register_requirement` once per requirement:
 ```

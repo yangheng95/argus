@@ -11,6 +11,7 @@ import { checkConnection } from "./connection";
 import { reloadProjectScope } from "./config";
 import { apiJson, configure as configureApi } from "./api";
 import { t } from "../utils/i18n";
+import { renderMarkdown, escapeHtml } from "../utils/markdown";
 
 // ── Public API ──
 
@@ -239,6 +240,58 @@ export function installSettingsFormHandlers(): void {
 /**
  * Attach a click-to-close handler to every `dialog.dialog` element.
  */
+/**
+ * Open the Executor Session dialog, loading messages for a given session.
+ * Shared by the sidebar Goals panel (GoalWorkflowGroup "Open session" button)
+ * and the main conversation (Card step body) so the render logic isn't
+ * duplicated across surfaces.
+ */
+export async function openExecutorSessionDialog(
+  sessionID: string,
+  title: string,
+): Promise<void> {
+  const dialog = document.getElementById("sessionDialog") as HTMLDialogElement | null;
+  const titleEl = document.getElementById("sessionDialogTitle");
+  const bodyEl = document.getElementById("sessionDialogBody");
+  if (!dialog || !titleEl || !bodyEl) return;
+  titleEl.textContent = title || "Executor Session";
+  bodyEl.innerHTML = '<p class="empty-hint">Loading…</p>';
+  dialog.showModal();
+  try {
+    const messages: any[] = await apiJson(`session/${sessionID}/message`);
+    if (!messages || messages.length === 0) {
+      bodyEl.innerHTML = '<p class="empty-hint">No messages yet.</p>';
+      return;
+    }
+    const html = messages
+      .map((msg: any) => {
+        const role: string = msg.info?.role ?? msg.role ?? "unknown";
+        const parts: any[] = Array.isArray(msg.parts) ? msg.parts : [];
+        const textParts = parts
+          .filter((p) => p.type === "text" && p.text && p.audience?.ui !== false)
+          .map((p) => `<div class="session-msg-text md-content">${renderMarkdown(p.text)}</div>`)
+          .join("");
+        const toolParts = parts
+          .filter((p) => p.type === "tool-invocation" || p.type === "tool-call")
+          .map((p) => {
+            const name = p.toolName ?? p.tool ?? "tool";
+            return `<p class="session-msg-tool">⚙ ${escapeHtml(name)}</p>`;
+          })
+          .join("");
+        if (!textParts && !toolParts) return "";
+        return `<div class="session-msg" data-role="${escapeHtml(role)}">
+          <span class="session-msg-role">${escapeHtml(role)}</span>
+          ${textParts}${toolParts}
+        </div>`;
+      })
+      .filter(Boolean)
+      .join("");
+    bodyEl.innerHTML = html || '<p class="empty-hint">No displayable messages.</p>';
+  } catch (e) {
+    bodyEl.innerHTML = `<p class="empty-hint">Failed to load session: ${escapeHtml(String(e))}</p>`;
+  }
+}
+
 export function setupDialogBackdropClose(): void {
   document.querySelectorAll("dialog.dialog").forEach((dialog) => {
     const el = dialog as HTMLDialogElement;

@@ -41,7 +41,7 @@ import { ProviderTransform } from "./transform"
 import { applyProviderPolicy } from "./policy"
 import { CUSTOM_LOADERS, smallModelPriority, type CustomModelLoader } from "./vendor"
 import { installProvider, loadProviderModule } from "./install"
-import { discoverHexinModels, HEXIN_BUILTIN_KEY, defaultHaikuModelID } from "./hexin-discovery"
+import { discoverHexinModels, HEXIN_BUILTIN_KEY } from "./hexin-discovery"
 
 export namespace Provider {
   const log = Log.create({ service: "provider" })
@@ -608,14 +608,6 @@ export namespace Provider {
     const models = await refreshHexinCache()
     reset()
     return Object.keys(models)
-  }
-
-  /** Returns the preferred haiku-class modelID in the hexin provider, if available. */
-  export async function hexinDefaultHaiku(): Promise<string | undefined> {
-    const s = await state()
-    const hexin = s.providers["hexin"]
-    if (!hexin) return undefined
-    return defaultHaikuModelID(hexin.models)
   }
 
   export async function list() {

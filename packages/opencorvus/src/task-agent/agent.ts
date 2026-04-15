@@ -168,7 +168,7 @@ export namespace TaskAgent {
       }
 
       // 1. Resolve model — respects agent.task.model in user config; falls
-      //    through to Provider.defaultModel() per STRONG_AGENTS policy.
+      //    through to Provider.defaultModel() otherwise.
       const { resolveAgentModel } = await import("@/agent/model")
       const model = await resolveAgentModel("task").catch((e) => {
         log.error("task agent: no LLM model available", { taskID, error: e instanceof Error ? e.message : String(e) })
@@ -284,13 +284,22 @@ export namespace TaskAgent {
         timeoutTier: runResult.timeout?.tier,
       })
 
-      // Critical stream failures (tool-call protocol violations, mid-stream
-      // persist failures, provider onError, progress-guard timeouts) mean
-      // the agent's view of the run is incoherent and we must fail the task.
-      // `flush` failures happen in the cleanup path after the LLM has already
-      // returned — they reflect a persistence hiccup, not a task outcome,
-      // and should not retroactively turn a successful run into "failed".
-      const critical = runResult.failures.items.filter((item) => item.kind !== "flush")
+      // Critical stream failures (mid-stream protocol violations, persist
+      // failures, provider onError, progress-guard timeouts) mean the
+      // agent's view of the run is incoherent and we must fail the task.
+      // Excluded from critical:
+      //   - `flush`: cleanup-path persistence hiccup after the LLM already
+      //     returned; doesn't retroactively invalidate a successful run.
+      //   - `tool-input-validation`: AI-SDK rejected a tool call's input
+      //     against its Zod inputSchema; the SDK has already fed the error
+      //     back to the model as the tool result, so the model self-corrects
+      //     on the next step. Bounded by stopWhen=stepCountIs — unrecoverable
+      //     models still loud-fail via step-cap, not silently. Failing hard
+      //     here would short-circuit the "Task Agent is the sole decision-
+      //     maker, independent reasoning" design (01-agents.md).
+      const critical = runResult.failures.items.filter(
+        (item) => item.kind !== "flush" && item.kind !== "tool-input-validation",
+      )
       const flushOnly = runResult.failures.items.filter((item) => item.kind === "flush")
       if (flushOnly.length > 0) {
         log.warn("task agent: post-stream flush hiccup (non-fatal)", {
@@ -438,7 +447,7 @@ const TASK_AGENT_INSTRUCTIONS = [
   "",
   "## Stage Sequence (pipeline path)",
   "",
-  "**Clarification via `ask_user`** — when you genuinely cannot proceed without a human decision, call the `ask_user` tool. It renders option buttons in the task's InteractionPanel and blocks until the user answers. Use it SPARINGLY, only at these checkpoints:",
+  "**Clarification via `question`** — when you genuinely cannot proceed without a human decision, call the `question` tool. It renders option buttons in the task's InteractionPanel and blocks until the user answers. Use it SPARINGLY, only at these checkpoints:",
   "  (a) BEFORE requirements when the incoming request is too vague to decompose (e.g. a single sentence with no scope).",
   "  (b) DURING execute when you discover a missing critical input (conflicting goals, unspecified tech stack, unclear data source) that cannot be inferred from the codebase.",
   "  (c) BEFORE deliver when multiple viable approaches exist and the user should pick.",
@@ -453,7 +462,7 @@ const TASK_AGENT_INSTRUCTIONS = [
   "",
   "You have these tools: build, design_analysis, requirements, architect, execute_goal, add_goal, modify_goal,",
   "dispatch_ready_goals, retry_failed_goals, query_failed_goals, read_context, create_run,",
-  "submit_execution, deliver, publish_delivery, fail_task, restart_from_stage, refine, ask_user.",
+  "submit_execution, deliver, publish_delivery, fail_task, restart_from_stage, refine, question.",
   "(Note: per-goal planning happens automatically inside the execution engine — no plan_goal tool needed.)",
   "",
   "**For new tasks:**",
@@ -465,7 +474,7 @@ const TASK_AGENT_INSTRUCTIONS = [
   "  The design analyst produces exact layout, colors, typography, component inventory — information",
   "  that lets the requirements agent create pixel-accurate goals instead of vague 'build the UI' goals.",
   "  SKIP design_analysis when: no images/URLs, purely backend/API, or the request already contains detailed design specs.",
-  "- If the request is genuinely unusable for decomposition (e.g., a single sentence like '做个订单系统' with no scope or context), call `ask_user` with 2-3 targeted questions (scope, target users, key constraints) — then proceed to requirements once answered.",
+  "- If the request is genuinely unusable for decomposition (e.g., a single sentence like '做个订单系统' with no scope or context), call `question` with 2-3 targeted questions (scope, target users, key constraints) — then proceed to requirements once answered.",
   "- After requirements: ALWAYS call architect next if there are 2+ goals. It coordinates interface contracts that all executors depend on. Skip only when requirements returned exactly 1 goal.",
   "- Then create_run, then submit_execution. The execution engine plans each goal automatically.",
   "- Do NOT call plan_goal for goals upfront — planning is lazy and happens per-goal inside the execution engine, right before each goal executes.",
@@ -497,10 +506,10 @@ const TASK_AGENT_INSTRUCTIONS = [
   "**Post-completion iteration (re-triggered on completed task):**",
   "- User sent a message to a completed task → you are re-triggered with kind=retry.",
   "- Call refine to analyze what was built and generate improvement suggestions.",
-  "- Call `ask_user` with the suggestions as multi-select options so the user picks which to roll in.",
+  "- Call `question` with the suggestions as multi-select options so the user picks which to roll in.",
   "- Once you have the selection, call restart_from_stage(requirements) to begin a new cycle with the chosen scope.",
-  "- The full iteration loop: deliver → refine → ask_user → restart → requirements → architect → execute → deliver → ...",
-  "- **If refine throws** (LLM returned non-JSON output): do NOT retry refine in a loop — that burns tokens on a likely-deterministic formatting failure. Instead call `ask_user` directly with a short question asking what the operator wants to improve, then proceed with `restart_from_stage(requirements)` based on the answer. If the operator has no specific request, end the turn without restarting.",
+  "- The full iteration loop: deliver → refine → question → restart → requirements → architect → execute → deliver → ...",
+  "- **If refine throws** (LLM returned non-JSON output): do NOT retry refine in a loop — that burns tokens on a likely-deterministic formatting failure. Instead call `question` directly with a short question asking what the operator wants to improve, then proceed with `restart_from_stage(requirements)` based on the answer. If the operator has no specific request, end the turn without restarting.",
   "",
   "**Dynamic adjustment (anytime):**",
   "- Discovered a missing requirement? → add_goal",

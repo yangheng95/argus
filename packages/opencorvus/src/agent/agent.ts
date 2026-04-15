@@ -380,31 +380,6 @@ export namespace Agent {
       )
     }
 
-    // Inject the hexin haiku default for any agent that (a) is not in
-    // STRONG_AGENTS and (b) does not already have a model explicitly set.
-    // STRONG_AGENTS (task/build/delivery/general) intentionally fall through
-    // to Provider.defaultModel() so the powerful project model is used.
-    const STRONG_AGENTS = new Set(["task", "build", "delivery", "general"])
-    try {
-      const haikuModelID = await Provider.hexinDefaultHaiku()
-      if (haikuModelID) {
-        for (const name in result) {
-          if (STRONG_AGENTS.has(name)) continue
-          if (result[name].model) continue
-          result[name].model = { providerID: "hexin", modelID: haikuModelID }
-        }
-      } else {
-        // Discovery succeeded but returned no haiku candidate — leave models
-        // unset so callers fall through to Provider.defaultModel().
-      }
-    } catch (err) {
-      // Hexin discovery failure is non-fatal; log so operators can tell.
-      // Agents with no .model fall through to Provider.defaultModel() at
-      // resolveAgentModel() time.
-      // eslint-disable-next-line no-console
-      console.warn("agent.state: hexin haiku injection skipped", err)
-    }
-
     return result
   })
 
