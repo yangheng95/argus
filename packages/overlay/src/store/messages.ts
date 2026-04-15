@@ -678,21 +678,34 @@ function computeAgentCards(): { cards: Record<string, AgentCardData>; order: str
 
   const goalInfoMap = new Map<string, { id: string; title: string; status: string }>();
   const goalIndexMap = new Map<string, number>();
+  // sessionID → goalID, built from the board snapshot (board.goalRuns). This
+  // is the authoritative O(1) index — goal-pool.ts persists goalRun rows at
+  // dispatch time, so every running executor/planner session resolves here.
+  const sessionToGoal = new Map<string, string>();
 
   for (let i = 0; i < (boardStore.board?.goalWorkflows || []).length; i++) {
     const gw = boardStore.board!.goalWorkflows![i];
     goalInfoMap.set(gw.goalID, { id: gw.goalID, title: gw.goalTitle, status: gw.goalStatus });
     goalIndexMap.set(gw.goalID, i + 1);
   }
+  for (const gr of boardStore.board?.goalRuns || []) {
+    if (gr.sessionID) sessionToGoal.set(gr.sessionID, gr.goalID);
+    if (gr.executorSessionID) sessionToGoal.set(gr.executorSessionID, gr.goalID);
+    if (gr.plannerSessionID) sessionToGoal.set(gr.plannerSessionID, gr.goalID);
+  }
 
-  /** Every agent message is stamped with goalID by the backend's
-   *  enrichProperties bridge (reading the in-memory goalRunSessionRegistry
-   *  populated by goal-pool.ts at dispatch time, no longer clobbered after
-   *  the ensureTaskSession fix). O(1) — we only need to inspect the first
-   *  message; all messages in a goal-scoped round share the same goalID.
-   *  Walking the whole round turned computeAgentCards into an O(N·M) hot
-   *  loop on long tasks and froze the overlay. */
+  /** Two O(1) lookups, both feed from the same goal-pool registration:
+   *   1. sessionToGoal — DB snapshot; covers planner/executor once board
+   *      sync catches up.
+   *   2. first message's info.goalID — live stamp from the bridge; catches
+   *      rounds whose session hasn't landed in the board snapshot yet.
+   *  All messages in a round share the same goalID, so checking only the
+   *  first one is sufficient (and keeps computeAgentCards O(rounds), not
+   *  O(rounds·messages)). */
   function resolveGoalID(round: AgentRound): string {
+    if (round.sessionID && sessionToGoal.has(round.sessionID)) {
+      return sessionToGoal.get(round.sessionID)!;
+    }
     const first = round.messages[0];
     return typeof first?.info?.goalID === "string" ? first.info.goalID : "";
   }
