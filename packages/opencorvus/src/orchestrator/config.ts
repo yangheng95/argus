@@ -84,48 +84,53 @@ export interface OrchestratorConfigType {
 // ═══════════════════════════════════════════════════════════════════
 
 const DEFAULTS: OrchestratorConfigType = {
+  // Step / time budgets sized for sonnet-tier sub-agents on large PRDs.
+  // Sonnet deliberates more per step than haiku (deeper exploration, more
+  // reasoning text) and large attachments push step counts into the dozens
+  // before structured output begins. The previous budgets were sized for
+  // haiku and starved sonnet — observed: requirements stopped at 60 steps
+  // for a 30-requirement PRD with only 2 register_goal emitted.
   requirements: {
-    max_steps: 100,
-    timeout_ms: 300_000,
+    max_steps: 200,        // was 100 — sonnet needs headroom for PRD scan + register passes
+    timeout_ms: 600_000,   // 10 min (was 5)
     quality_threshold: 0.5,
     max_attempts: 3,
     skills: [],
   },
   architect: {
-    max_steps: 20,
-    timeout_ms: 180_000,
+    max_steps: 60,         // was 20 — ~10 goals × 2-3 contract registrations
+    timeout_ms: 360_000,   // 6 min (was 3)
     skills: [],
   },
   planner: {
-    max_steps: 30,
-    timeout_ms: 300_000,
+    max_steps: 80,         // was 30
+    timeout_ms: 600_000,   // 10 min (was 5)
     quality_threshold: 0.5,
     max_attempts: 3,
     skills: [],
   },
   evaluator: {
-    max_steps: 25,
-    timeout_ms: 240_000,
+    max_steps: 60,         // was 25
+    timeout_ms: 480_000,   // 8 min (was 4)
     skills: [],
   },
   delivery: {
-    // Vision-driven fig2code delivery loops can spend many steps comparing
-    // the rendered output against the reference image and editing CSS/layout
-    // before producing the final verdict. 40 was hit with the vision channel
-    // enabled; raise to 80 to leave room for both rework and verdict emission.
-    max_steps: 80,
-    timeout_ms: 600_000,
+    // Vision-driven fig2code delivery loops compare rendered output against
+    // the reference image and edit CSS/layout before producing verdict.
+    // Now also runs evaluator's deterministic checks before the LLM verifies.
+    max_steps: 160,        // was 80
+    timeout_ms: 1_200_000, // 20 min (was 10)
     max_retries: 2,
     skills: [],
   },
   design_analyst: {
-    max_steps: 50,
-    timeout_ms: 300_000,
+    max_steps: 80,         // was 50
+    timeout_ms: 480_000,   // 8 min (was 5)
     skills: [],
   },
-  max_runs: 10,
+  max_runs: 15,            // was 10
   max_fix_runs: 20,
-  max_goal_retries: 3,
+  max_goal_retries: 5,     // was 3
   max_executor_groups: 5,
   default_workflow: "standard",
   workflows: [],

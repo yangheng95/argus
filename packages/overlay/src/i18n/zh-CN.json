@@ -204,7 +204,6 @@
   "detail.pending_interactions": "待处理交互",
   "dialog.input": "输入",
   "dialog.notice": "提示",
-  "dialog.value": "值",
   "diff.empty": "选择文件查看差异。",
   "diff.loading": "正在加载差异…",
   "diff.no_preview": "该文件无法预览。",

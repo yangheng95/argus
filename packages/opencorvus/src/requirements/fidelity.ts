@@ -12,8 +12,7 @@
  *   • (no tools — pure LLM verification pass)
  *   • auto-correction: modify / split / add missing goals
  */
-import { generateText } from "ai"
-import { Provider } from "@/provider/provider"
+import { ProviderLLM } from "@/provider/llm"
 import { Log } from "@/util/log"
 import type { GoalContractFields } from "@/pipeline/types"
 import type { AcceptanceSpec } from "@/acceptance/types"
@@ -72,6 +71,13 @@ export async function reviewFidelity(input: {
   taskTitle: string
   goals: GoalContractFields[]
   signal?: AbortSignal
+  /** Task ID for cache stickiness — same key requirements used keeps hexin
+   *  on the same upstream pool, so prompt cache hits across stages. */
+  taskID?: string
+  /** Stream hooks so the fidelity LLM's tokens flow into the same agent
+   *  card the user is watching. Without this, fidelity runs invisibly and
+   *  the operator only sees the verdict line in logs. */
+  stream?: import("@/llm/api").TextHooks
 }): Promise<FidelityResult> {
   const { goals, signal } = input
 
@@ -85,7 +91,6 @@ export async function reviewFidelity(input: {
     log.warn("no LLM available for fidelity review, skipping")
     return { verdict: "faithful", issues: [], corrections: [], missingGoals: [] }
   }
-  const language = await Provider.getLanguage(model)
 
   const systemPrompt = buildFidelitySystem()
   const userPrompt = buildFidelityPrompt(input)
@@ -109,15 +114,24 @@ export async function reviewFidelity(input: {
     if (signal?.aborted) throw new Error("fidelity review aborted")
 
     try {
-      const llmResult = await generateText({
-        model: language,
-        maxOutputTokens: 8192,
-        abortSignal: signal,
+      // ProviderLLM.stream is the ONLY sanctioned LLM entry point — direct
+      // generateText/streamText bypass auth headers (hexin sticky x-user),
+      // providerOptions, maxOutputTokens normalization, and tracing. That
+      // bypass produced a recurring HTTP 401 here when fidelity reviewed
+      // hexin-routed sonnet-4-6 because the gateway's per-key sticky
+      // routing rejected requests without `x-user`. Stream hooks forward
+      // the LLM's chunks into the visible agent card.
+      const llmResult = await ProviderLLM.stream({
+        model,
         system: systemPrompt,
         messages,
+        maxOutputTokens: 8192,
+        abortSignal: signal,
+        cacheKey: input.taskID,
+        onChunk: input.stream?.onChunk,
+        onError: input.stream?.onError,
       })
-
-      const text = llmResult.text?.trim() || ""
+      const text = (await llmResult.text)?.trim() || ""
       const { result: parsed, validationFeedback } = parseFidelityOutput(text)
 
       // Reconcile: if there are corrections/missing but verdict says faithful, fix it

@@ -470,21 +470,15 @@ export function Board(props: BoardProps) {
 
     for (const cardID of order) {
       const card = cards[cardID];
-      if (!card) continue;
-      const stage: string = card.stage || "";
-      const stepID = STAGE_TO_STEP[stage];
-      if (!stepID) continue;
+      if (!card || card.kind !== "goal") continue;
 
-      // goalID only exists on kind="goal" cards; stage cards (kind="agent")
-      // never carry it. This branch was dead by construction in the legacy
-      // schema and remains so under the typed AgentCardData union.
-      const goalID = card.kind === "goal" ? card.goalID : undefined;
-      if (!goalID) continue;
-
-      if (!result[goalID]) result[goalID] = {};
-      if (!result[goalID][stepID]) result[goalID][stepID] = [];
-      const msgs = Array.isArray((card as any).messages) ? (card as any).messages : [];
-      result[goalID][stepID].push(...msgs);
+      const bucket = (result[card.goalID] ??= {});
+      for (const inner of card.internalCards) {
+        const stepID = STAGE_TO_STEP[inner.stage];
+        if (!stepID) continue;
+        if (inner.kind !== "agent") continue;
+        (bucket[stepID] ??= []).push(...inner.messages);
+      }
     }
     return result;
   });
