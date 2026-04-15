@@ -204,7 +204,6 @@
   "detail.pending_interactions": "Pending Interactions",
   "dialog.input": "Input",
   "dialog.notice": "Notice",
-  "dialog.value": "Value",
   "diff.empty": "Select a file to view its diff.",
   "diff.loading": "Loading diff…",
   "diff.no_preview": "No preview available for this file.",

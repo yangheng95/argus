@@ -69,12 +69,17 @@ export namespace RequirementsService {
         throw new RequirementsFailureError("requirements agent produced no goals")
       }
 
-      // Fidelity Review — LLM verifies goals cover the original user request
+      // Fidelity Review — LLM verifies goals cover the original user request.
+      // Stream + taskID propagate so the fidelity LLM's tokens land in the
+      // same visible agent card and reuse the requirements stage's hexin
+      // cache stickiness (avoids cold-cache cost + 401 from missing x-user).
       const fidelity = await reviewFidelity({
         userRequest: input.request,
         taskTitle: input.title,
         goals: result.goals,
         signal: input.signal,
+        taskID: input.taskID,
+        stream: input.stream,
       })
 
       if (fidelity.verdict === "needs_correction") {
