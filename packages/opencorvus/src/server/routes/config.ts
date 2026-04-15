@@ -5,6 +5,7 @@ import { Config } from "../../config/config"
 import { OrchestratorConfig } from "../../orchestrator/config"
 import { ChannelSupervisor } from "@/channel/supervisor"
 import { Provider } from "../../provider/provider"
+import { Agent } from "../../agent/agent"
 import { PromptCatalog } from "../../config/prompt-catalog"
 import { mapValues } from "remeda"
 import { errors } from "../error"
@@ -51,7 +52,8 @@ export const ConfigRoutes = lazy(() =>
       "/",
       describeRoute({
         summary: "Update configuration (JSON Merge Patch)",
-        description: "Partially update OpenCorvus configuration. Accepts a partial config object (RFC 7396 JSON Merge Patch) — only include fields to change.",
+        description:
+          "Partially update OpenCorvus configuration per RFC 7396. Only include fields to change; set a field to null to delete it.",
         operationId: "config.update",
         responses: {
           200: {
@@ -65,13 +67,19 @@ export const ConfigRoutes = lazy(() =>
           ...errors(400),
         },
       }),
-      validator("json", Config.Info.partial()),
+      // Accept arbitrary object shape — RFC 7396 merge patches legitimately
+      // contain null sentinels at any depth to signal deletion, which the
+      // strict Config.Info.partial() validator would reject. Semantic
+      // correctness is enforced downstream when the merged file is re-parsed
+      // by writeConfigFile → parseConfig.
+      validator("json", z.record(z.string(), z.unknown())),
       async (c) => {
-        const partial = c.req.valid("json")
+        const partial = c.req.valid("json") as Record<string, unknown>
         // Config.update() internally reads current config and deep-merges
         await Config.update(partial as Config.Info)
         const updated = await Config.get()
         Provider.reset()
+        Agent.reset()
         await ChannelSupervisor.sync(updated).catch((error) => {
           log.warn("channel runtime sync failed", { error: String(error) })
         })

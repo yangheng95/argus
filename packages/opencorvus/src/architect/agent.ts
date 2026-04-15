@@ -75,18 +75,10 @@ async function run(input: {
   const orchCfg = await OrchestratorConfig.get()
   const { max_steps: MAX_STEPS, timeout_ms: TIMEOUT_MS } = orchCfg.architect
 
-  // Resolve model — use architect-specific model if configured, else default
-  const archModel = orchCfg.architect.model
-  let def: { providerID: string; modelID: string } | undefined
-  if (archModel) {
-    const [providerID, ...rest] = archModel.split("/")
-    const modelID = rest.join("/")
-    if (providerID && modelID) def = { providerID, modelID }
-  }
-  if (!def) def = await Provider.defaultModel().catch(() => undefined)
-  if (!def) throw new Error("no LLM model available for architect agent")
-
-  const model = await Provider.getModel(def.providerID, def.modelID)
+  // Resolve model — per-agent model from Agent.Info (config: agent.architect.model)
+  const { resolveAgentModel } = await import("@/agent/model")
+  const model = await resolveAgentModel("architect").catch(() => undefined)
+  if (!model) throw new Error("no LLM model available for architect agent")
 
   if (input.signal?.aborted) throw new Error("architect agent aborted after model resolution")
 

@@ -32,93 +32,156 @@ import { Log } from "@/util/log"
 
 const log = Log.create({ service: "provider-llm" })
 
-// ── Sub-agent context pruning ─────────────────────────────────────────────
-// AI SDK runs an internal multi-step loop (controlled by `stopWhen`) inside
-// a single `streamText` call. Each step appends new tool calls + tool results
-// to the conversation, then re-sends the FULL accumulated history to the LLM.
-// For long-running sub-agents (requirements doing 20+ codebase explorations)
-// this drives input from ~9 KB to ~100 KB across one session — the cost
-// problem documented in the screenshot from 2026-04-14.
+// ── Sub-agent context pruning (batched drop) ──────────────────────────────
+// AI SDK runs an internal multi-step loop inside a single `streamText` call.
+// Each step appends a new (assistant with tool_calls, tool message with
+// tool_results) pair and re-sends the FULL history. Sub-agents that do 20+
+// codebase explorations push input from ~9 KB to ~100 KB per session.
 //
-// Vercel AI SDK 5 ships `prepareStep` for exactly this — called before each
-// step, can return `{ messages }` to override what the LLM sees. We use it to
-// evict OLD tool results (replace `output` with a "[evicted]" stub) once the
-// step number passes a small threshold. `toolCallId` / `toolName` stay intact
-// so the tool_use ↔ tool_result pairing the provider expects isn't broken.
+// `prepareStep` drops OLD (assistant+tool) round pairs entirely — not a stub,
+// not partial eviction, the whole pair. This is safe because Anthropic's API
+// only requires each `tool_use` be matched by a `tool_result` in the request;
+// dropping both sides of the pair preserves the invariant.
 //
-// Anthropic offers a native server-side equivalent via providerOptions
-// `context_management.edits = [{type: "clear_tool_uses_20250919", ...}]`
-// (beta header `context-management-2025-06-27`). Most of our paths go through
-// openai-compatible LiteLLM adapters today, so the native edits payload would
-// be silently dropped — we ship the universal client-side prune instead. When
-// we add a direct `@ai-sdk/anthropic` provider, layer the native edits on top
-// for double protection (server-side eviction is more accurate because it
-// happens after token counting, not before).
+// Cutoff is batched: we maintain a monotonic `evictedCallIds` set that only
+// grows at step boundaries every `batchInterval` steps. Between growth events
+// the set is stable, so repeatedly re-applying the (idempotent) drop yields a
+// byte-identical prefix — Anthropic prompt cache keeps hitting. At each
+// growth we pay one cache_write, then cache_read for the next interval.
+// Break-even vs no eviction is ~K=4 at current Anthropic pricing; default K=8
+// leaves margin.
+//
+// Anthropic offers a server-side equivalent via providerOptions
+// `context_management.edits` (beta header context-management-2025-06-27),
+// but most sub-agent traffic here goes through LiteLLM / openai-compatible
+// shims that drop provider-specific payloads. Client-side drop is universal.
 
 const PRUNE_KEEP_RECENT_ROUNDS_DEFAULT = 4
 const PRUNE_MIN_STEP_TO_TRIGGER = 4
-const EVICTED_TEXT = "[evicted: old tool result removed by sub-agent context pruning]"
+const PRUNE_BATCH_INTERVAL_DEFAULT = 8
+
+type ToolResultPart = { type: "tool-result"; toolCallId: string }
+type ToolCallPart = { type: "tool-call"; toolCallId: string }
 
 /**
- * Walk `messages` and replace every tool-result `output` that lives BEFORE
- * the last `keepLastToolRounds` tool messages with an `[evicted]` text stub.
- * Keeps the assistant tool-call envelopes and `toolCallId` pairings intact —
- * providers that validate tool_use/tool_result pairing (Anthropic) will still
- * accept the prompt. Returns a new array; never mutates input.
+ * Grow `evictedIds` with the toolCallIds from every tool-role message EXCEPT
+ * the last `keepRounds`. Idempotent — re-adding an existing id is a no-op.
  */
-function pruneStaleToolResults(
+function growEvictedCallIds(
   messages: ModelMessage[],
-  keepLastToolRounds: number,
+  keepRounds: number,
+  evictedIds: Set<string>,
+): void {
+  const toolMsgCallIds: string[][] = []
+  for (const m of messages) {
+    if (m.role !== "tool") continue
+    if (!Array.isArray(m.content)) continue
+    const ids: string[] = []
+    for (const part of m.content as ToolResultPart[]) {
+      if (part?.type === "tool-result" && typeof part.toolCallId === "string") {
+        ids.push(part.toolCallId)
+      }
+    }
+    toolMsgCallIds.push(ids)
+  }
+  const dropCount = toolMsgCallIds.length - keepRounds
+  if (dropCount <= 0) return
+  for (let k = 0; k < dropCount; k++) {
+    for (const id of toolMsgCallIds[k]) evictedIds.add(id)
+  }
+}
+
+/**
+ * Drop every tool-role message whose tool-result parts are ALL in `evictedIds`,
+ * and the paired assistant message that produced those tool-calls. The pair is
+ * always adjacent in AI SDK output (`assistant(calls) → tool(results)`), but
+ * we still verify by call-id membership so we never strand a tool_use without
+ * its tool_result.
+ */
+function dropEvictedRounds(
+  messages: ModelMessage[],
+  evictedIds: Set<string>,
 ): ModelMessage[] {
-  // Identify tool-message indices in chronological order.
-  const toolIdxs: number[] = []
+  if (evictedIds.size === 0) return messages
+  const keep = new Array<boolean>(messages.length).fill(true)
+  let droppedRounds = 0
+
   for (let i = 0; i < messages.length; i++) {
-    if (messages[i]?.role === "tool") toolIdxs.push(i)
+    const m = messages[i]
+    if (m.role !== "tool") continue
+    if (!Array.isArray(m.content)) continue
+    let allEvicted = true
+    let anyResult = false
+    for (const part of m.content as ToolResultPart[]) {
+      if (part?.type !== "tool-result") continue
+      anyResult = true
+      if (!evictedIds.has(part.toolCallId)) {
+        allEvicted = false
+        break
+      }
+    }
+    if (!anyResult || !allEvicted) continue
+    keep[i] = false
+
+    // Find the paired assistant: nearest preceding still-kept assistant whose
+    // tool-call ids are all in evictedIds. Almost always i-1.
+    for (let j = i - 1; j >= 0; j--) {
+      if (!keep[j]) continue
+      const am = messages[j]
+      if (am.role !== "assistant") break
+      if (!Array.isArray(am.content)) break
+      const callIds: string[] = []
+      for (const part of am.content as ToolCallPart[]) {
+        if (part?.type === "tool-call" && typeof part.toolCallId === "string") {
+          callIds.push(part.toolCallId)
+        }
+      }
+      if (callIds.length === 0) break
+      if (callIds.every((id) => evictedIds.has(id))) {
+        keep[j] = false
+        droppedRounds += 1
+      }
+      break
+    }
   }
-  if (toolIdxs.length <= keepLastToolRounds) return messages
 
-  // Cutoff: any tool message at index <= cutoffIdx is stale.
-  const firstKeptToolIdx = toolIdxs[toolIdxs.length - keepLastToolRounds]
-
-  let evictedCount = 0
-  const next = messages.map((msg, i) => {
-    if (msg.role !== "tool" || i >= firstKeptToolIdx) return msg
-    const content = msg.content
-    if (!Array.isArray(content)) return msg
-    const newContent = content.map((part: any) => {
-      if (part?.type !== "tool-result") return part
-      // Skip already-evicted (idempotent across multiple prepareStep invocations).
-      const cur = part.output
-      if (cur && cur.type === "text" && typeof cur.value === "string" && cur.value.startsWith("[evicted")) {
-        return part
-      }
-      evictedCount += 1
-      return {
-        ...part,
-        output: { type: "text" as const, value: EVICTED_TEXT },
-      }
-    })
-    return { ...msg, content: newContent } as ModelMessage
+  if (droppedRounds === 0) return messages
+  const next = messages.filter((_, i) => keep[i])
+  log.info("drop-evicted-tool-rounds", {
+    droppedRounds,
+    evictedCallIds: evictedIds.size,
+    before: messages.length,
+    after: next.length,
   })
-
-  if (evictedCount > 0) {
-    log.info("prune-stale-tool-results", {
-      total: messages.length,
-      toolCount: toolIdxs.length,
-      keepLastToolRounds,
-      evicted: evictedCount,
-    })
-  }
   return next
 }
 
-function resolvePruneOptions(): { enabled: boolean; keepLastToolRounds: number; minStep: number } {
-  const env = Env.get("OPENCORVUS_SUBAGENT_PRUNE_KEEP_TOOL_ROUNDS")
-  const fromEnv = env !== undefined ? Number(env) : NaN
-  const keep = Number.isFinite(fromEnv) && fromEnv >= 1 ? fromEnv : PRUNE_KEEP_RECENT_ROUNDS_DEFAULT
+function resolvePruneOptions(): {
+  enabled: boolean
+  keepLastToolRounds: number
+  minStep: number
+  batchInterval: number
+} {
+  const keepRaw = Env.get("OPENCORVUS_SUBAGENT_PRUNE_KEEP_TOOL_ROUNDS")
+  const keepNum = keepRaw !== undefined ? Number(keepRaw) : NaN
+  const keepLastToolRounds = Number.isFinite(keepNum) && keepNum >= 1 ? keepNum : PRUNE_KEEP_RECENT_ROUNDS_DEFAULT
+
+  const intervalRaw = Env.get("OPENCORVUS_SUBAGENT_PRUNE_BATCH_INTERVAL")
+  const intervalNum = intervalRaw !== undefined ? Number(intervalRaw) : NaN
+  const batchInterval = Number.isFinite(intervalNum) && intervalNum >= 1 ? intervalNum : PRUNE_BATCH_INTERVAL_DEFAULT
+
   const enabledRaw = Env.get("OPENCORVUS_SUBAGENT_PRUNE")
   const enabled = enabledRaw === undefined ? true : enabledRaw !== "0" && enabledRaw.toLowerCase() !== "false"
-  return { enabled, keepLastToolRounds: keep, minStep: PRUNE_MIN_STEP_TO_TRIGGER }
+
+  return { enabled, keepLastToolRounds, minStep: PRUNE_MIN_STEP_TO_TRIGGER, batchInterval }
+}
+
+// Test-only exports — DO NOT use from application code. Keep the leading
+// underscore so linters flag unintended consumers.
+export const __pruneInternal = {
+  growEvictedCallIds,
+  dropEvictedRounds,
+  resolvePruneOptions,
 }
 
 export namespace ProviderLLM {
@@ -241,23 +304,27 @@ export namespace ProviderLLM {
 
     // 8. Call streamText — the ONLY streamText call site for agent code.
     //
-    // Intentionally NO prepareStep mutation. An earlier attempt evicted old
-    // tool results between AI SDK loop steps — it cut input bytes ~50% but
-    // ALSO mutated the cached message prefix, invalidating the Anthropic
-    // prompt cache (4 breakpoints set in ProviderTransform.applyCaching).
-    // Net cost rose ~4× per turn because cache_read at $0.30/MTok flipped to
-    // cache_write at $3.75/MTok every step. The cache savings dwarf the
-    // savings from message trimming.
-    //
-    // For real cost control we must EITHER:
-    //   (a) keep the prefix byte-stable so cache_read keeps hitting (current
-    //       behaviour — verbose but cheap), or
-    //   (b) use Anthropic's native server-side `context_management` edits
-    //       (beta header context-management-2025-06-27) which evict tool uses
-    //       in a cache-aware way. Currently we can't reach that path because
-    //       all Claude calls go through LiteLLM/openai-compat shims that drop
-    //       the providerOptions field. Re-enable when @ai-sdk/anthropic
-    //       direct provider lands.
+    // `prepareStep` drops old (assistant+tool) round pairs whose toolCallIds
+    // have fallen into `evictedCallIds`. The set only grows at batch
+    // boundaries, so between boundaries the drop function returns a
+    // byte-identical prefix and Anthropic's prompt cache keeps hitting.
+    const pruneOpts = resolvePruneOptions()
+    const evictedCallIds = new Set<string>()
+    const prepareStep = pruneOpts.enabled
+      ? ({ stepNumber, messages: stepMessages }: { stepNumber: number; messages: ModelMessage[] }) => {
+          if (stepNumber < pruneOpts.minStep) return undefined
+          const sinceMinStep = stepNumber - pruneOpts.minStep
+          const isBoundary = sinceMinStep % pruneOpts.batchInterval === 0
+          if (isBoundary) {
+            growEvictedCallIds(stepMessages, pruneOpts.keepLastToolRounds, evictedCallIds)
+          }
+          if (evictedCallIds.size === 0) return undefined
+          const next = dropEvictedRounds(stepMessages, evictedCallIds)
+          if (next === stepMessages) return undefined
+          return { messages: next }
+        }
+      : undefined
+
     return streamText({
       model: wrappedModel,
       providerOptions,
@@ -271,6 +338,7 @@ export namespace ProviderLLM {
       topP: input.topP,
       topK: input.topK,
       abortSignal: input.abortSignal,
+      ...(prepareStep ? { prepareStep } : {}),
       ...(input.stopWhen ? { stopWhen: input.stopWhen } : {}),
       ...(input.onChunk ? { onChunk: input.onChunk } : {}),
       ...(input.onError ? { onError: input.onError } : {}),

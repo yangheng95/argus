@@ -596,10 +596,13 @@ function formatEventLine(entry: {
   toolName: string
   goalRunID: string
 }) {
+  // message.part.updated / message.updated fire on every token chunk during
+  // streaming — printing each one floods stdout and obscures real milestones.
+  // Drop them entirely; the SSE counters + per-stage logs already capture
+  // progress at a higher signal level. A tool call kicking off shows up via
+  // the dedicated "tool=" path below.
   if (entry.type === "orchestrator.message.part.updated" || entry.type === "orchestrator.message.updated") {
-    const detail = entry.toolName || entry.summary || entry.kind || entry.status
-    if (!detail || STREAM_PLACEHOLDERS.has(detail)) return ""
-    return `[overlay-benchmark] message-event=${entry.toolName ? `tool=${entry.toolName}` : ""}${entry.kind ? ` kind=${entry.kind}` : ""} ${clipText(detail, 200)}`
+    return ""
   }
   // Architect contracts: show category + spec excerpt for tool_result
   if (entry.stage === "architect" && entry.kind === "tool_result" && entry.toolName === "register_contract") {

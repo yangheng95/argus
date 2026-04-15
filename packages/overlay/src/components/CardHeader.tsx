@@ -19,6 +19,15 @@ function leadingGlyph(node: CardNode): string {
   return "";
 }
 
+/** Compact token count — "8.4k" rather than "8432", so the low-contrast
+ *  header hint reads at a glance without dominating the row. */
+function formatTokenCount(n: number): string {
+  if (!Number.isFinite(n) || n < 0) return "—";
+  if (n < 1000) return String(n);
+  if (n < 10_000) return (n / 1000).toFixed(1) + "k";
+  return Math.round(n / 1000) + "k";
+}
+
 async function writeClipboard(text: string): Promise<boolean> {
   if (!text) return false;
   if (navigator.clipboard?.writeText) {
@@ -85,6 +94,27 @@ export function CardHeader(props: {
       </Show>
       <Show when={props.node.subtitle}>
         <span class="card__subtitle">{props.node.subtitle}</span>
+      </Show>
+      <Show when={typeof props.node.contextTokens === "number" && (props.node.contextTokens as number) > 0}>
+        <span
+          class="card__token-hint"
+          data-estimated={props.node.contextTokensEstimated ? "true" : "false"}
+          title={t(
+            props.node.contextTokensEstimated
+              ? "card.context_tokens_tooltip_estimated"
+              : "card.context_tokens_tooltip",
+            { value: String(props.node.contextTokens) },
+          )}
+          aria-label={t(
+            props.node.contextTokensEstimated
+              ? "card.context_tokens_tooltip_estimated"
+              : "card.context_tokens_tooltip",
+            { value: String(props.node.contextTokens) },
+          )}
+          onClick={(e) => e.stopPropagation()}
+        >
+          ~{formatTokenCount(props.node.contextTokens as number)} tok{props.node.contextTokensEstimated ? " · est." : ""}
+        </span>
       </Show>
       <Show when={canCopy()}>
         <button

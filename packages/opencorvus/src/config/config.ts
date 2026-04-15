@@ -1143,8 +1143,8 @@ export namespace Config {
         })
         .optional()
         .describe(
-          "Default tool permission actions for new tasks. When not set, defaults to 'allow'. " +
-          "Set a tool to 'ask' to require confirmation at runtime, or 'deny' to block it entirely.",
+          "Default tool permission actions for new tasks. When not set, defaults to 'ask'. " +
+          "Set a tool to 'allow' to skip confirmation, or 'deny' to block it entirely.",
         ),
       compaction: z
         .object({
@@ -1175,10 +1175,9 @@ export namespace Config {
               max_steps: z.number().int().min(1).optional().describe("Maximum agentic steps for architect agent (default: 20)"),
               timeout_ms: z.number().int().min(1000).optional().describe("Architect agent timeout in milliseconds (default: 180000)"),
               skills: z.array(z.string()).optional().describe("Additional skill paths for architect agent"),
-              model: z.string().optional().describe("Model override for architect agent"),
             })
             .optional()
-            .describe("Architect agent configuration — cross-goal coordination, interface contracts"),
+            .describe("Architect agent configuration — cross-goal coordination, interface contracts. Model is configured via agent.architect.model."),
           planner: z
             .object({
               max_steps: z.number().int().min(1).optional().describe("Maximum agentic steps for planner agent (default: 30)"),
@@ -1193,12 +1192,11 @@ export namespace Config {
             .object({
               max_steps: z.number().int().min(1).optional().describe("Maximum agentic steps for evaluator agent (default: 25)"),
               timeout_ms: z.number().int().min(1000).optional().describe("Evaluator agent timeout in milliseconds (default: 240000)"),
-              model: z.string().optional().describe("Model to use for evaluator agent. Defaults to the project default model."),
               tier: z.enum(["core", "standard", "full"]).optional().describe("Evaluation tier: 'core' (build/test/lint only), 'standard' (+ judge/spec_check), 'full' (all checks). Default: 'standard'."),
               skills: z.array(z.string()).optional().describe("Additional skill paths for evaluator agent"),
             })
             .optional()
-            .describe("Evaluator agent configuration"),
+            .describe("Evaluator agent configuration. Model is configured via agent.evaluator.model."),
           delivery: z
             .object({
               max_steps: z.number().int().min(1).optional().describe("Maximum agentic steps for delivery agent (default: 40)"),
@@ -1213,10 +1211,9 @@ export namespace Config {
               max_steps: z.number().int().min(1).optional().describe("Maximum agentic steps for design analyst agent (default: 50)"),
               timeout_ms: z.number().int().min(1000).optional().describe("Design analyst agent timeout in milliseconds (default: 300000)"),
               skills: z.array(z.string()).optional().describe("Additional skill paths for design analyst agent"),
-              model: z.string().optional().describe("Model override for design analyst agent"),
             })
             .optional()
-            .describe("Design analyst agent configuration — analyzes visual references (images, URLs) to produce structured design specifications"),
+            .describe("Design analyst agent configuration — analyzes visual references (images, URLs). Model is configured via agent.\"design-analyst\".model."),
           max_runs: z.number().int().min(1).optional().describe("Maximum total task runs (default: 10)"),
           max_fix_runs: z.number().int().min(0).optional().describe("Maximum fix runs after failure (default: 5)"),
           max_goal_retries: z.number().int().min(0).optional().describe("Maximum retries per individual goal before permanently failing it (default: 3)"),
@@ -1267,7 +1264,13 @@ export namespace Config {
           auto_permission: z
             .boolean()
             .optional()
-            .describe("Auto-approve permission requests in unattended mode (default: false)"),
+            .default(true)
+            .describe("Auto-approve permission requests in unattended mode (default: true)"),
+          auto_question: z
+            .boolean()
+            .optional()
+            .default(true)
+            .describe("Auto-reject unanswered questions after the stale timeout (default: true). When false, questions wait indefinitely for a user reply."),
           mcp_timeout: z
             .number()
             .int()
@@ -1429,7 +1432,10 @@ export namespace Config {
 
   function patchJsonc(input: string, patch: unknown, path: string[] = []): string {
     if (!isRecord(patch)) {
-      const edits = modify(input, path, patch, {
+      // RFC 7396: a null value in the patch signals deletion of that key.
+      // jsonc-parser's modify() removes the key when the value is undefined.
+      const valueToWrite = patch === null ? undefined : patch
+      const edits = modify(input, path, valueToWrite, {
         formattingOptions: {
           insertSpaces: true,
           tabSize: 2,
@@ -1478,6 +1484,23 @@ export namespace Config {
     })
   }
 
+  // RFC 7396-compatible deep merge: null values in the source delete the
+  // corresponding key from the target, matching patchJsonc's behavior.
+  function mergeWithNullDelete(target: any, source: any): any {
+    if (!isRecord(target) || !isRecord(source)) return source
+    const result: Record<string, unknown> = { ...target }
+    for (const [k, v] of Object.entries(source)) {
+      if (v === null) {
+        delete result[k]
+      } else if (isRecord(v) && isRecord(result[k])) {
+        result[k] = mergeWithNullDelete(result[k], v)
+      } else {
+        result[k] = v
+      }
+    }
+    return result
+  }
+
   async function writeConfigFile(filepath: string, config: Info) {
     const before = await Filesystem.readText(filepath).catch((err: NodeJS.ErrnoException) => {
       if (err.code === "ENOENT") return "{}"
@@ -1493,7 +1516,7 @@ export namespace Config {
         })()
       : (async () => {
           const existing = parseConfig(before, filepath)
-          const merged = mergeDeep(existing, config)
+          const merged = mergeWithNullDelete(existing, config)
           await Filesystem.writeJson(filepath, merged)
           return merged
         })()

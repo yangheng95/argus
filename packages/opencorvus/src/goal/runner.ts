@@ -6,7 +6,6 @@ import { Log } from "@/util/log"
 import { dict } from "@/util/object"
 import { selectorList } from "@/check/policy"
 import { renderSpecsAsText } from "@/acceptance/types"
-import { clarificationTranscriptSection, operatorNotesSection } from "@/orchestrator/helpers"
 import { createDecisionLog } from "@/decision-log"
 import { Instance } from "@/project/instance"
 import { Project } from "@/project/project"
@@ -344,6 +343,19 @@ export function buildRetryFeedbackSection(taskID: string, goalID: string): strin
   return lines.join("\n")
 }
 
+/**
+ * Build the executor's prompt for a single goal.
+ *
+ * CONTRACT: The caller MUST have written the intent bundle at
+ * `<cwd>/.opencorvus/intent/` before invoking this. The prompt
+ * unconditionally references the bundle (clarifications.md,
+ * operator-notes.md, request.md) as the executor's authoritative
+ * channel for the user's original material. If the caller forgets
+ * to mount the bundle, the executor will fail to read the files and
+ * surface a loud error — that is the correct failure mode. Do NOT
+ * add a conditional to suppress the bundle reference: there is no
+ * supported mode where executor runs without a mounted bundle.
+ */
 export function buildGoalPrompt(input: {
   plan: PlanRow
   node: PlanNodeRow
@@ -386,11 +398,17 @@ export function buildGoalPrompt(input: {
 
   return [
     "You are executing one goal in an isolated workspace (git worktree) for the coordinator.",
-    input.taskID ? clarificationTranscriptSection(input.taskID) || undefined : undefined,
-    input.taskID ? operatorNotesSection(input.taskID) || undefined : undefined,
     input.cwd
       ? `Your working directory is: ${input.cwd}\nAll file paths MUST be relative to this directory or use this absolute prefix. Never write files outside this directory.`
       : undefined,
+    // Intent bundle — the authoritative user-provided task material.
+    // The caller contract (see function docstring) guarantees that
+    // .opencorvus/intent/ is populated before this prompt runs, so the
+    // advertisement is unconditional. Goal objectives and plan steps
+    // deliberately omit restatement of the user's request — the bundle
+    // is the single authoritative channel for original wording,
+    // clarifications, and operator notes.
+    "## User Intent Bundle\n\nThe user's original request and any clarifications / operator notes for this task are mounted at `.opencorvus/intent/`:\n- `intent/request.md` — the original request, verbatim\n- `intent/clarifications.md` — operator answers (if any)\n- `intent/operator-notes.md` — operator notes added during execution (if any)\n- `intent/README.md` — index of the bundle\n\nRead these files when the goal objective or plan steps reference a section or detail (e.g. \"see intent/request.md §13\"). Do not treat them as read-only hints — they are the authoritative source of truth for user intent.",
     "Other goals may be executing in parallel in separate worktrees.",
     "Treat the goal contract below as the only implementation target for this stage.",
     // Explicit file scope from goal decomposition

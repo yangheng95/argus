@@ -6,16 +6,6 @@ import { CardHeader } from "./CardHeader";
 import { CardParts } from "./CardParts";
 import { InlineToolPart } from "./InlineToolPart";
 import { StaticTextPart } from "./TextPart";
-import { t } from "../utils/i18n";
-
-/** Compact token count — "8.4k" rather than "8432", so the low-contrast
- *  footer hint reads at a glance without dominating the card. */
-function formatTokenCount(n: number): string {
-  if (!Number.isFinite(n) || n < 0) return "—";
-  if (n < 1000) return String(n);
-  if (n < 10_000) return (n / 1000).toFixed(1) + "k";
-  return Math.round(n / 1000) + "k";
-}
 
 /**
  * Unified recursive card primitive.
@@ -109,20 +99,6 @@ export function Card(props: { node: CardNode; depth: number }) {
             </div>
           </Show>
         </div>
-      </Show>
-      {/* Estimated context-token hint — low-contrast footer marker. Shown
-          when the backend reported a tokens.input for this turn/stage so the
-          operator can gauge how much context the LLM was reasoning over. The
-          "est." qualifier is deliberate: provider token counts are billed
-          estimates, not an exact char-count of our prompt. */}
-      <Show when={typeof props.node.contextTokens === "number" && (props.node.contextTokens as number) > 0}>
-        <span
-          class="card__token-hint"
-          title={t("card.context_tokens_tooltip", { value: String(props.node.contextTokens) })}
-          aria-label={t("card.context_tokens_tooltip", { value: String(props.node.contextTokens) })}
-        >
-          ~{formatTokenCount(props.node.contextTokens as number)} tok · est.
-        </span>
       </Show>
     </article>
   );

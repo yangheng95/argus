@@ -487,13 +487,13 @@ export namespace OrchestratorService {
 
     const cfg = await Config.get()
     const tp = cfg.tool_permissions ?? {}
-    // Helper: resolve per-tool action; defaults to "allow" unless explicitly configured.
+    // Helper: resolve per-tool action; defaults to "ask" unless explicitly configured.
     const toolAction = (key: keyof NonNullable<typeof tp>): "allow" | "ask" | "deny" =>
-      tp[key] ?? "allow"
+      tp[key] ?? "ask"
     await Session.setPermission({
       sessionID: session.id,
       permission: [
-        { permission: "*",                  pattern: "*", action: "allow" },
+        { permission: "*",                  pattern: "*", action: "ask" },
         { permission: "skill",              pattern: "*", action: toolAction("skill") },
         { permission: "external_directory", pattern: "*", action: toolAction("external_directory") },
         { permission: "webfetch",           pattern: "*", action: toolAction("webfetch") },
@@ -598,9 +598,11 @@ export namespace OrchestratorService {
 
   /**
    * Merge a batch of evaluation checks into `task.metadata.criteria_results`.
-   * Upsert by `name` — the latest write for a given check name wins. Used by
-   * external quality gates (visual-diff, custom validators) and by the
-   * delivery agent's `submit_check_result` path. Does not change task.status.
+   * Upsert by `name` — the latest write for a given check name wins. Called
+   * by the in-process visual-diff gate (task-agent/tools.ts) and by the
+   * delivery-verdict sink that flattens DeliveryVerdict.deferred_checks +
+   * rejection_details into the unified criteria stream. Does not change
+   * task.status.
    */
   export async function upsertTaskCriteria(
     taskID: string,
@@ -1146,8 +1148,8 @@ export namespace OrchestratorService {
    */
   export async function generateFollowup(taskID: string): Promise<{ suggestion: string }> {
     const task = requireTask(taskID)
-    const modelRef = await Provider.defaultModel()
-    const model = await Provider.getModel(modelRef.providerID, modelRef.modelID)
+    const { resolveAgentModel } = await import("@/agent/model")
+    const model = await resolveAgentModel("summary")
     const language = await Provider.getLanguage(model)
 
     const sessionID = task.session_id ?? undefined

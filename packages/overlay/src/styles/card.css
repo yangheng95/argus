@@ -29,6 +29,7 @@
   --card-stage-planner: #7dbcff;
   --card-stage-goal: #a78bfa;
   --card-stage-executor: #f2994a;
+  --card-stage-build: #e5844d;
   --card-stage-evaluator: #2dd4bf;
   --card-stage-delivery: #5fad56;
   --card-stage-tool: #8b92a0;
@@ -417,29 +418,28 @@ body[data-theme="light"] .card__round {
 }
 
 /* ── Context-token hint ──
-   Low-contrast footer marker pinned to the card's bottom-right corner.
-   Intentionally not interactive — pointer-events: none keeps it out of the
-   fold-toggle hit area. The font is small and desaturated so it reads as
-   metadata rather than content. The "est." qualifier is part of the visible
-   label (see Card.tsx) to signal the number is a provider estimate. */
+   Low-contrast metadata slot inside the card header, placed to the right
+   of the title before the copy / chevron controls. Earlier revisions
+   absolutely-positioned this to the card's bottom-right, which read as
+   floating debris against the card border; keeping it in the header flow
+   aligns it with the status/title row. */
 .card {
   position: relative;
 }
 .card__token-hint {
-  position: absolute;
-  right: 8px;
-  bottom: 4px;
+  margin-left: auto;
+  padding: 0 6px;
   font-size: 10px;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.02em;
   color: var(--text-soft, #888);
-  opacity: 0.45;
-  pointer-events: none;
+  opacity: 0.55;
   white-space: nowrap;
   user-select: none;
+  flex-shrink: 0;
 }
-.card:hover > .card__token-hint {
-  opacity: 0.7;
+.card__head:hover .card__token-hint {
+  opacity: 0.85;
 }
 
 /* ── Compaction card ──

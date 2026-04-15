@@ -4,6 +4,7 @@ import z from "zod"
 import { streamText } from "ai"
 import { Config } from "../../config/config"
 import { Provider } from "../../provider/provider"
+import { Agent } from "../../agent/agent"
 import { ModelsDev } from "../../provider/models"
 import { ProviderAuth } from "../../provider/auth"
 import { Auth } from "../../auth"
@@ -85,6 +86,45 @@ export const ProviderRoutes = lazy(() =>
       }),
       async (c) => {
         return c.json(await ProviderAuth.methods())
+      },
+    )
+    .post(
+      "/hexin/refresh",
+      describeRoute({
+        summary: "Refresh hexin gateway model list",
+        description:
+          "Force a re-fetch of the Hexin OpenAI Gateway /v1/models endpoint, bypassing the 24h cache, then reset provider state so downstream callers see the updated list.",
+        operationId: "provider.hexin.refresh",
+        responses: {
+          200: {
+            description: "Refresh result",
+            content: {
+              "application/json": {
+                schema: resolver(
+                  z.object({
+                    ok: z.boolean(),
+                    count: z.number(),
+                    ids: z.array(z.string()),
+                    error: z.string().optional(),
+                  }),
+                ),
+              },
+            },
+          },
+        },
+      }),
+      async (c) => {
+        try {
+          const ids = await Provider.refreshHexin()
+          // Agent.state() captures the default haiku at construction — if the
+          // hexin model list changed, reset so the injected default picks up
+          // any renamed/removed haiku model on the next Agent.list() call.
+          Agent.reset()
+          return c.json({ ok: true, count: ids.length, ids })
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error)
+          return c.json({ ok: false, count: 0, ids: [], error: message })
+        }
       },
     )
     .post(

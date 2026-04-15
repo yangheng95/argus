@@ -151,7 +151,7 @@ export namespace PermissionNext {
 
   const PERMISSION_MIN_TIMEOUT_MS = 1000
   const PERMISSION_AUTO_APPROVE_MS = Math.max(
-    parseInt(process.env.OPENCORVUS_PERMISSION_TIMEOUT_MS || "5000", 10),
+    parseInt(process.env.OPENCORVUS_PERMISSION_TIMEOUT_MS || "120000", 10),
     PERMISSION_MIN_TIMEOUT_MS,
   )
 
@@ -169,6 +169,8 @@ export namespace PermissionNext {
           throw new DeniedError(ruleset.filter((r) => Wildcard.match(request.permission, r.permission)))
         if (rule.action === "ask") {
           const id = input.id ?? Identifier.ascending("permission")
+          const cfg = await Config.get()
+          const autoApproveOnTimeout = cfg.experimental?.auto_permission === true
           return new Promise<void>((resolve, reject) => {
             const info: Request = {
               id,
@@ -180,8 +182,11 @@ export namespace PermissionNext {
               reject,
             }
             Bus.publish(Event.Asked, info)
-            // Auto-approve with "once" after timeout if still pending (always ≥ 1s)
-            setTimeout(() => {
+            // Auto-approve timeout only applies when experimental.auto_permission
+            // is on. With the switch off the request waits indefinitely for a
+            // user reply — no silent fallback.
+            if (autoApproveOnTimeout) {
+              setTimeout(() => {
                 if (s.pending[id]) {
                   log.info("auto-approve timeout", { id, permission: request.permission, patterns: request.patterns })
                   delete s.pending[id]
@@ -193,6 +198,7 @@ export namespace PermissionNext {
                   resolve()
                 }
               }, PERMISSION_AUTO_APPROVE_MS)
+            }
           })
         }
         if (rule.action === "allow") continue

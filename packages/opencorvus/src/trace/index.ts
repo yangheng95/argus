@@ -14,7 +14,7 @@ import { taskIDForSession as resolveTaskID } from "@/server/routes/task-event"
  * (session-level JSONL). Every workflow event — task start/finish, agent
  * boundaries, llm.step deltas, tool.call/result, phase changes — flows
  * through the same Trace.event() API. Each call:
- *   1. appends a JSON line to <Instance.directory>/.opencorvus/trace/<taskID>.jsonl
+ *   1. appends a JSON line to <Instance.directory>/.opencorvus/task/<taskID>/trace.jsonl
  *   2. broadcasts via Bus.publish so overlay SSE consumers get it live
  *
  * The runtime (session/llm.ts) hooks every LLM call so individual agents
@@ -67,11 +67,13 @@ export namespace Trace {
    * therefore routes its LLM traces into the task's JSONL automatically —
    * no per-site binding required.
    *
-   * Returns the sessionID itself when resolution fails so orphan LLM
-   * activity still gets a self-named JSONL rather than being dropped.
+   * Returns undefined if no owning task can be found. Callers must decide
+   * how to handle the unresolved case — do NOT fall back to using the
+   * sessionID in place of a taskID: that hides missing-registration bugs
+   * and routes trace events to a JSONL the overlay never subscribes to.
    */
-  export function taskIDForSession(sessionID: string): string {
-    return resolveTaskID(sessionID) ?? sessionID
+  export function taskIDForSession(sessionID: string): string | undefined {
+    return resolveTaskID(sessionID)
   }
 
   // Per-file write queue — appends are chained so concurrent events for the
@@ -90,20 +92,25 @@ export namespace Trace {
     return next
   }
 
-  function traceDir(): string | undefined {
+  // Project-scoped task root: <Instance.directory>/.opencorvus/task/.
+  // Each task gets its own subdirectory (task/<taskID>/) so future per-task
+  // artifacts (trace, logs, outputs) live together and a task's on-disk state
+  // can be wiped by removing a single directory. OPENCORVUS_TRACE_DIR still
+  // overrides the root for tests; subdirectory layout is preserved under it.
+  function taskRoot(): string | undefined {
     const override = process.env.OPENCORVUS_TRACE_DIR?.trim()
     if (override) return override
     try {
-      return path.join(Instance.directory, ".opencorvus", "trace")
+      return path.join(Instance.directory, ".opencorvus", "task")
     } catch {
       return undefined
     }
   }
 
   export function file(taskID: string): string | undefined {
-    const dir = traceDir()
-    if (!dir) return undefined
-    return path.join(dir, `${taskID}.jsonl`)
+    const root = taskRoot()
+    if (!root) return undefined
+    return path.join(root, taskID, "trace.jsonl")
   }
 
   function enqueue(file: string, line: string) {
@@ -187,22 +194,27 @@ export namespace Trace {
   }
 
   /**
-   * List recent task IDs (by JSONL mtime, newest first). Used by overlay's
-   * "pick a task to view trace" picker and by `--latest` in benchmarks.
+   * List recent task IDs (by trace.jsonl mtime, newest first). Used by the
+   * overlay's "pick a task to view trace" picker and by `--latest` in
+   * benchmarks. Enumerates task/<taskID>/trace.jsonl under taskRoot().
    */
   export async function listTasks(): Promise<string[]> {
-    const dir = traceDir()
-    if (!dir) return []
-    const entries = await fs.readdir(dir).catch(() => [])
+    const root = taskRoot()
+    if (!root) return []
+    const entries = await fs.readdir(root, { withFileTypes: true }).catch(() => [])
     const stats = await Promise.all(
       entries
-        .filter((name) => name.endsWith(".jsonl"))
-        .map(async (name) => ({
-          taskID: name.replace(/\.jsonl$/, ""),
-          mtime: (await fs.stat(path.join(dir, name)).catch(() => null))?.mtimeMs ?? 0,
-        })),
+        .filter((e) => e.isDirectory())
+        .map(async (e) => {
+          const jsonl = path.join(root, e.name, "trace.jsonl")
+          const stat = await fs.stat(jsonl).catch(() => null)
+          return stat ? { taskID: e.name, mtime: stat.mtimeMs } : null
+        }),
     )
-    return stats.sort((a, b) => b.mtime - a.mtime).map((s) => s.taskID)
+    return stats
+      .filter((s): s is { taskID: string; mtime: number } => s !== null)
+      .sort((a, b) => b.mtime - a.mtime)
+      .map((s) => s.taskID)
   }
 
   /**

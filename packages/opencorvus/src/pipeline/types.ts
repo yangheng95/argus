@@ -105,8 +105,21 @@ export interface PipelineDelivery {
 }
 
 // ---------------------------------------------------------------------------
-// Eval Verdict — what the eval agent produces
+// Eval Verdict — what the deterministic evaluator produces
 // ---------------------------------------------------------------------------
+
+/** Per-check structured row carried alongside the verdict so consumers can
+ *  sink results into criteria_results / forward to the delivery agent without
+ *  re-parsing the formatted evidence strings. */
+export interface EvalCheckResult {
+  name: string
+  command: string
+  passed: boolean
+  output: string
+  source: "spec_heuristic" | "spec_rubric" | "project_discovery" | "visual"
+  mode: "soft" | "strict"
+  severity?: "essential" | "important" | "optional" | "pitfall"
+}
 
 export interface EvalVerdict {
   pass: boolean
@@ -117,6 +130,9 @@ export interface EvalVerdict {
   reasoning: string
   /** Eval agent's classification of why it failed (used by retry policy). */
   failureClass?: FailureClass
+  /** Structured per-check rows — populated by evaluateGoal so the deliver
+   *  tool can sink results into criteria_results without parsing evidence. */
+  checks: EvalCheckResult[]
 }
 
 // ---------------------------------------------------------------------------

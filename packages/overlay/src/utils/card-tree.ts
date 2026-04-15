@@ -6,6 +6,11 @@
 import { orderedMessageParts, effectiveRole, roleLabel, agentStageLabel } from "./message";
 import { toolNameKey } from "./tool";
 import { stageAccent } from "./card-color";
+import {
+  charsToTokens,
+  estimateMessageChars,
+  providerContextTokens,
+} from "./tokens-estimate";
 
 export type CardKind = "agent" | "goal" | "step" | "tool" | "message" | "compaction";
 export type CardStatus = "pending" | "running" | "completed" | "error" | "skipped";
@@ -67,6 +72,14 @@ export interface CardNode {
    */
   contextTokens?: number
   /**
+   * True when contextTokens came from a local chars/token approximation
+   * rather than a provider-reported figure. Drives the "est." label so
+   * the operator knows which value they're looking at. When a card
+   * aggregates children, the flag is true only if no provider-reported
+   * value contributed to the aggregate maximum.
+   */
+  contextTokensEstimated?: boolean
+  /**
    * True when this card represents a conversation-compaction summary
    * (Assistant.summary === true). The summary card replaces the compacted
    * history; surfacing it as a distinct card tells the operator exactly
@@ -101,7 +114,6 @@ function normGoalStatus(raw: any): CardStatus | undefined {
 
 const ALWAYS_PROMOTE_TOOLS = new Set([
   "task", "agent", "spawnagent", "subagent",
-  "build",
 ]);
 const CODE_WRITE_TOOLS = new Set([
   "write", "writefile", "edit", "editfile", "applypatch",
@@ -170,12 +182,17 @@ function flattenMessages(messages: any[], opts: { dropUser?: boolean } = {}): an
 
 // ── Goal steps ──
 
-const STEP_ORDER = ["planner", "executor", "evaluator"];
+// Stage order used when a goal has internal cards but no explicit
+// goalSteps metadata. "build" slots between executor and evaluator —
+// when a goal's executor spawns a build sub-session it happens right
+// after (or as part of) execution, before evaluation runs.
+const STEP_ORDER = ["planner", "executor", "build", "evaluator"];
 
 function stepIDToStage(stepID: string): string {
   if (stepID === "plan") return "planner";
   if (stepID === "execute") return "executor";
   if (stepID === "eval") return "evaluator";
+  if (stepID === "build") return "build";
   return stepID;
 }
 
@@ -189,17 +206,51 @@ function stepTitle(stage: string, step?: { label?: string }): string {
 /** Highest per-turn `tokens.input` across a message list. Represents the
  *  high-water mark of context size the LLM had to reason over — summing
  *  would double-count because each turn's input already includes prior
- *  turns. Returns undefined when no message carries a finite token count. */
-function maxContextTokens(messages: any[] | undefined): number | undefined {
-  if (!Array.isArray(messages)) return undefined;
+ *  turns.
+ *
+ *  For turns that didn't hit the model (or haven't yet), fall back to a
+ *  running chars/token estimate computed cumulatively within this message
+ *  list. This keeps the card token hint populated on user bubbles,
+ *  in-flight streams and stages that haven't returned token accounting
+ *  yet, which is why callers also receive a `estimated` flag so the UI
+ *  can tag approximated values. */
+function maxContextTokens(messages: any[] | undefined): {
+  value?: number;
+  estimated: boolean;
+} {
+  if (!Array.isArray(messages) || messages.length === 0) {
+    return { value: undefined, estimated: false };
+  }
   let max: number | undefined = undefined;
+  let maxFromProvider = false;
+  let runningChars = 0;
   for (const m of messages) {
-    const t = (m as any)?.info?.tokens?.input;
-    if (typeof t === "number" && Number.isFinite(t) && (max === undefined || t > max)) {
-      max = t;
+    runningChars += estimateMessageChars(m);
+    const provided = providerContextTokens(m);
+    if (provided !== undefined) {
+      if (max === undefined || provided > max) {
+        max = provided;
+        maxFromProvider = true;
+      }
+      continue;
+    }
+    const est = charsToTokens(runningChars);
+    if (est > 0 && (max === undefined || est > max)) {
+      max = est;
+      maxFromProvider = false;
     }
   }
-  return max;
+  return { value: max, estimated: max !== undefined && !maxFromProvider };
+}
+
+/** Estimate a single message's contribution as a cumulative figure when no
+ *  provider value is available. Used for plain message bubbles (user /
+ *  synthetic) where there is no surrounding conversation context to sum. */
+function singleMessageContext(message: any): { value?: number; estimated: boolean } {
+  const provided = providerContextTokens(message);
+  if (provided !== undefined) return { value: provided, estimated: false };
+  const est = charsToTokens(estimateMessageChars(message));
+  return est > 0 ? { value: est, estimated: true } : { value: undefined, estimated: false };
 }
 
 function goalToNode(item: any): CardNode {
@@ -215,9 +266,13 @@ function goalToNode(item: any): CardNode {
 
   const children: CardNode[] = [];
   let goalContextTokens: number | undefined = undefined;
-  const accumulate = (value: number | undefined) => {
-    if (value === undefined) return;
-    if (goalContextTokens === undefined || value > goalContextTokens) goalContextTokens = value;
+  let goalFromProvider = false;
+  const accumulate = (ctx: { value?: number; estimated: boolean }) => {
+    if (ctx.value === undefined) return;
+    if (goalContextTokens === undefined || ctx.value > goalContextTokens) {
+      goalContextTokens = ctx.value;
+      goalFromProvider = !ctx.estimated;
+    }
   };
 
   if (steps.length > 0) {
@@ -226,8 +281,8 @@ function goalToNode(item: any): CardNode {
       const internal = internalByStage.get(stage);
       const stepStatus =
         normStatus(internal?.status) ?? normStatus(step.status) ?? "pending";
-      const stepContextTokens = maxContextTokens(internal?.messages);
-      accumulate(stepContextTokens);
+      const stepCtx = maxContextTokens(internal?.messages);
+      accumulate(stepCtx);
       children.push({
         id: `${cardID}:step:${step.stepID}`,
         kind: "step",
@@ -238,7 +293,8 @@ function goalToNode(item: any): CardNode {
         subtitle: step.summary || undefined,
         parts: flattenMessages(internal?.messages || []),
         children: [],
-        contextTokens: stepContextTokens,
+        contextTokens: stepCtx.value,
+        contextTokensEstimated: stepCtx.estimated,
       });
     }
   } else {
@@ -251,8 +307,8 @@ function goalToNode(item: any): CardNode {
     for (const c of sorted) {
       const stage = String(c.stage || "");
       const st = normStatus(c.status) ?? "pending";
-      const stepContextTokens = maxContextTokens(c.messages);
-      accumulate(stepContextTokens);
+      const stepCtx = maxContextTokens(c.messages);
+      accumulate(stepCtx);
       children.push({
         id: String(c.id || `${cardID}:step:${stage}`),
         kind: "step",
@@ -262,7 +318,8 @@ function goalToNode(item: any): CardNode {
         title: agentStageLabel(stage),
         parts: flattenMessages(c.messages || []),
         children: [],
-        contextTokens: stepContextTokens,
+        contextTokens: stepCtx.value,
+        contextTokensEstimated: stepCtx.estimated,
       });
     }
   }
@@ -283,6 +340,7 @@ function goalToNode(item: any): CardNode {
     children,
     time: Number(item.time) || undefined,
     contextTokens: goalContextTokens,
+    contextTokensEstimated: goalContextTokens !== undefined && !goalFromProvider,
   };
 }
 
@@ -291,7 +349,7 @@ function agentCardToNode(item: any): CardNode {
   const cardID = String(item.id || `agent:${stage}`);
   const status = normStatus(item.status) ?? "pending";
   const messages = item.messages || [];
-  const contextTokens = maxContextTokens(messages);
+  const ctx = maxContextTokens(messages);
   return {
     id: cardID,
     kind: "agent",
@@ -304,7 +362,8 @@ function agentCardToNode(item: any): CardNode {
     parts: flattenMessages(messages),
     children: [],
     time: Number(item.time) || undefined,
-    contextTokens,
+    contextTokens: ctx.value,
+    contextTokensEstimated: ctx.estimated,
   };
 }
 
@@ -316,10 +375,9 @@ function messageToNode(item: any): CardNode {
   const parts = orderedMessageParts(item);
   const isCompactionSummary = item?.info?.summary === true;
   const hasCompactionPart = Array.isArray(parts) && parts.some((p: any) => p?.type === "compaction");
-  const tokens = item?.info?.tokens;
-  const contextTokens = typeof tokens?.input === "number" && Number.isFinite(tokens.input)
-    ? tokens.input
-    : undefined;
+  const ctx = singleMessageContext(item);
+  const contextTokens = ctx.value;
+  const contextTokensEstimated = ctx.estimated;
 
   // A user-side `compaction` part (the trigger) and an assistant-side
   // summary=true message (the result) are both rendered as their own
@@ -336,6 +394,7 @@ function messageToNode(item: any): CardNode {
       time: Number(item?.info?.time?.created) || undefined,
       defaultExpanded: isCompactionSummary,
       contextTokens,
+      contextTokensEstimated,
       isCompactionSummary,
     };
   }
@@ -353,6 +412,7 @@ function messageToNode(item: any): CardNode {
     // itself, not a fold trigger (<Card> CSS handles visual in S2).
     defaultExpanded: true,
     contextTokens,
+    contextTokensEstimated,
   };
 }
 

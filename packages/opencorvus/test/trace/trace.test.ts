@@ -90,7 +90,7 @@ describe("Trace.event", () => {
         fn: async () => {
           Trace.event({ taskID: "t-env", category: "task.start" })
           await Trace.flush()
-          const file = path.join(overrideDir, "t-env.jsonl")
+          const file = path.join(overrideDir, "t-env", "trace.jsonl")
           const stat = await fs.stat(file).catch(() => null)
           expect(stat?.isFile()).toBe(true)
         },

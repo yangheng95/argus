@@ -770,18 +770,15 @@ export async function ensureDefaultDirectory(): Promise<boolean> {
 }
 
 /**
- * Ensure the workspace directory is resolved. If the active directory is
- * already set, returns it immediately; otherwise loads meta from the server
- * and falls back to the `path.directory` value returned by the server.
+ * Ensure the workspace directory is resolved. Returns the active directory
+ * restored by `ensureDefaultDirectory()` (the user's last saved choice).
+ * When no saved directory exists, returns an empty string so the UI can
+ * surface a "select directory" CTA — we do NOT fall back to the server's
+ * cwd, because a sidecar-launched server inherits the overlay binary's
+ * launch directory (e.g. `target/release`), which is never a valid project
+ * root and silently cancels any task that is started against it.
  */
 export async function ensureWorkspaceDirectory(): Promise<string> {
-  if (activeDirectory()) return activeDirectory();
- // Load meta via (sets boardStore.path).
-  const { loadMeta } = await import("./meta");
-  if (typeof loadMeta === "function") await loadMeta();
-  if (!settingsStore.directory && (boardStore.path as any)?.directory) {
-    setSettingsStore("directory", (boardStore.path as any).directory);
-  }
   return activeDirectory();
 }
 

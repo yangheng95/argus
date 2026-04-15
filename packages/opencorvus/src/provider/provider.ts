@@ -41,6 +41,7 @@ import { ProviderTransform } from "./transform"
 import { applyProviderPolicy } from "./policy"
 import { CUSTOM_LOADERS, smallModelPriority, type CustomModelLoader } from "./vendor"
 import { installProvider, loadProviderModule } from "./install"
+import { discoverHexinModels, HEXIN_BUILTIN_KEY, defaultHaikuModelID } from "./hexin-discovery"
 
 export namespace Provider {
   const log = Log.create({ service: "provider" })
@@ -322,68 +323,22 @@ export namespace Provider {
 
     const configProviders = entries((config.provider ?? {}) as NonNullable<Config.Info["provider"]>)
 
-    // Built-in: Hexin OpenAI Gateway
-    if (!database["hexin"]) {
-      const hexinModel = (id: string, name: string): Model => ({
-        id,
-        // api: { id, npm: "@ai-sdk/openai-compatible", url: "https://aimemodeldev.myhexin.com/litellm/v1" },
-        api: { id, npm: "@ai-sdk/openai-compatible", url: "https://arsenal-openai.10jqka.com.cn:8443/ai-gateway/v1" },
-        status: "active",
-        name,
-        providerID: "hexin",
-        capabilities: {
-          temperature: true,
-          reasoning: false,
-          attachment: false,
-          toolcall: true,
-          input: { text: true, audio: false, image: false, video: false, pdf: false },
-          output: { text: true, audio: false, image: false, video: false, pdf: false },
-          interleaved: false,
-        },
-        cost: { input: 0, output: 0, cache: { read: 0, write: 0 } },
-        options: {},
-        limit: { context: 128000, output: 16384 },
-        headers: {},
-        family: "gpt-5",
-        release_date: "",
-        variants: {},
-      })
-      const hexinClaude = (id: string, name: string, context: number, output: number): Model => ({
-        id,
-        // api: { id, npm: "@ai-sdk/openai-compatible", url: "https://aimemodeldev.myhexin.com/litellm/v1" },
-        api: { id, npm: "@ai-sdk/openai-compatible", url: "https://arsenal-openai.10jqka.com.cn:8443/ai-gateway/v1" },
-        status: "active",
-        name,
-        providerID: "hexin",
-        capabilities: {
-          temperature: true,
-          reasoning: true,
-          attachment: true,
-          toolcall: true,
-          input: { text: true, audio: false, image: true, video: false, pdf: true },
-          output: { text: true, audio: false, image: false, video: false, pdf: false },
-          interleaved: false,
-        },
-        cost: { input: 0, output: 0, cache: { read: 0, write: 0 } },
-        options: {},
-        limit: { context, output },
-        headers: {},
-        family: "claude",
-        release_date: "",
-        variants: {},
-      })
-      database["hexin"] = {
-        id: "hexin",
-        name: "Hexin OpenAI Gateway",
-        env: ["HEXIN_API_KEY"],
-        options: {},
-        source: "custom",
-        models: {
-          "gpt-5.4-mini": hexinModel("gpt-5.4-mini", "GPT-5.4 Mini"),
-          "gpt-5.4": hexinModel("gpt-5.4", "GPT-5.4"),
-          "claude-sonnet-4-6": hexinClaude("claude-sonnet-4-6", "Claude Sonnet 4.6", 200000, 16384),
-          "claude-opus-4-6": hexinClaude("claude-opus-4-6", "Claude Opus 4.6", 200000, 16384),
-        },
+    // Built-in: Hexin OpenAI Gateway — models discovered dynamically from /v1/models
+    if (!database["hexin"] && !disabled.has("hexin")) {
+      try {
+        const models = await discoverHexinModels()
+        database["hexin"] = {
+          id: "hexin",
+          name: "Hexin OpenAI Gateway",
+          env: ["HEXIN_API_KEY"],
+          options: {},
+          source: "custom",
+          models,
+        }
+      } catch (err) {
+        log.error("hexin provider unavailable — /v1/models fetch failed and no cache present", {
+          error: err instanceof Error ? err.message : String(err),
+        })
       }
     }
 
@@ -517,7 +472,7 @@ export namespace Provider {
     if (!disabled.has("hexin") && !providers["hexin"]) {
       mergeProvider("hexin", {
         source: "custom",
-        key: "sk-eq7WQu0ylelH6uyedbf6PA",
+        key: HEXIN_BUILTIN_KEY,
       })
     }
 
@@ -645,6 +600,22 @@ export namespace Provider {
 
   export function reset() {
     ;(state as any).reset()
+  }
+
+  /** Re-fetch the hexin /v1/models list bypassing cache, then reset provider state. */
+  export async function refreshHexin(): Promise<string[]> {
+    const { refreshHexinCache } = await import("./hexin-discovery")
+    const models = await refreshHexinCache()
+    reset()
+    return Object.keys(models)
+  }
+
+  /** Returns the preferred haiku-class modelID in the hexin provider, if available. */
+  export async function hexinDefaultHaiku(): Promise<string | undefined> {
+    const s = await state()
+    const hexin = s.providers["hexin"]
+    if (!hexin) return undefined
+    return defaultHaikuModelID(hexin.models)
   }
 
   export async function list() {

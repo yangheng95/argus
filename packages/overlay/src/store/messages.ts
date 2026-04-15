@@ -668,7 +668,13 @@ function computeAgentCards(): { cards: Record<string, AgentCardData>; order: str
   // All per-goal stages are collected into goal group cards.
   // Task-scope stages (goal/requirements, architect, delivery, spec) stay standalone.
 
-  const PER_GOAL_STAGES = new Set(["planner", "executor", "evaluator"]);
+  // Stages that nest into a goal card when they carry a goalID. "build" is
+  // here because a goal's executor may spawn a build sub-session for direct
+  // code edits; when goal-scoped it belongs next to planner/executor/evaluator
+  // under the goal rather than as a rootless agent card. Task-level fast-path
+  // builds (task-agent routing a simple request straight to `build`) carry no
+  // goalID and fall through to root rendering — see the `gid` branch below.
+  const PER_GOAL_STAGES = new Set(["planner", "executor", "evaluator", "build"]);
 
   // Build sessionID→goalID + goalID→info maps from board data
   const sessionToGoal = new Map<string, string>();
@@ -759,11 +765,20 @@ function computeAgentCards(): { cards: Record<string, AgentCardData>; order: str
           const entries = goalStepCards.get(gid) || [];
           entries.push({ stage, card, startTime: round.startTime });
           goalStepCards.set(gid, entries);
+          continue;
         }
-        // else: no goal association — silently skip the standalone card.
-        // (Was previously devError; that fired on every memo recompute when
-        // a round was momentarily orphaned during SSE settling, accumulating
-        // tens of thousands of dev-error entries during long tasks.)
+        // No goal association. For planner/executor/evaluator this is a
+        // transient SSE-settling state that resolves when the goalID event
+        // arrives — silently drop to avoid a flicker. For "build" it's the
+        // task-level fast-path (task-agent routed the request directly to
+        // the build agent, bypassing goals) and must render at root,
+        // otherwise the card vanishes whenever build is called without a
+        // goal context.
+        if (stage === "build") {
+          const cardID = round.channelID;
+          nextCards[cardID] = card;
+          nextOrder.push(cardID);
+        }
       }
     } else {
       // Task-scope stages: standalone cards

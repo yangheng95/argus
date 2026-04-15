@@ -364,12 +364,15 @@ export function Board(props: BoardProps) {
   const delivery = () => board()?.delivery;
   const interactions = () => board()?.interactions || [];
   const overview = () => board()?.overview;
-  // Task-level evaluation criteria rollup. Backend aggregates per-goal
-  // evaluator outcomes, delivery agent verifications, and external quality
-  // gates (PATCH /task/:id/criteria — visual-diff etc.) into one list.
+  // Task-level criteria rollup. Backend (workbench/board.ts) folds the
+  // delivery-agent verdict (deferred_checks + rejection_details + overall
+  // verdict) and the in-process visual-diff gate into one list per task.
+  // Hidden entirely for kind=build tasks since build self-verifies and does
+  // not produce delivery-stage criteria.
   const criteriaResults = () => board()?.criteriaResults as
     | Array<{ name: string; label?: string; family?: string; status: "passed" | "failed" | "skipped"; evidence?: string }>
     | undefined;
+  const taskKind = () => (board()?.task as { kind?: string } | undefined)?.kind;
 
   // ── Workflow-structured data (new) ──
   const workflow = () => board()?.workflow;
@@ -592,40 +595,35 @@ export function Board(props: BoardProps) {
         />
       </SectionFrame>
 
-      <SectionFrame
-        id="evaluationCriteriaSection"
-        title={t("section.criteria") || "评估指标"}
-        icon={SECTION_ICONS.criteria}
-        bodyId="evaluationCriteriaBody"
-        badgeId="evaluationCriteriaBadge"
-        badgeText={(() => {
-          const list = criteriaResults() ?? [];
-          if (list.length > 0) {
+      <Show when={taskKind() !== "build"}>
+        <SectionFrame
+          id="evaluationCriteriaSection"
+          title={t("section.criteria") || "评估指标"}
+          icon={SECTION_ICONS.criteria}
+          bodyId="evaluationCriteriaBody"
+          badgeId="evaluationCriteriaBadge"
+          badgeText={(() => {
+            // badge MUST read the same source as the body (criteriaResults)
+            // — falling back to goalWorkflows when criteria is empty made
+            // the badge claim "0/1" while the body showed nothing, which
+            // is a pure fallback (CLAUDE.md 1) that lied to operators.
+            const list = criteriaResults() ?? [];
+            if (list.length === 0) return "";
             const failed = list.filter((c) => c.status === "failed").length;
             const passed = list.filter((c) => c.status === "passed").length;
             return failed > 0 ? `${failed} failed` : `${passed}/${list.length}`;
-          }
-          const gs = goalWorkflows();
-          if (gs.length === 0) return "";
-          const passed = gs.filter((g: any) => stepDone(g, "eval")).length;
-          return `${passed}/${gs.length}`;
-        })()}
-        badgeTone={(() => {
-          const list = criteriaResults() ?? [];
-          if (list.length > 0) {
+          })()}
+          badgeTone={(() => {
+            const list = criteriaResults() ?? [];
+            if (list.length === 0) return "";
             const failed = list.filter((c) => c.status === "failed").length;
             const passed = list.filter((c) => c.status === "passed").length;
             return failed > 0 ? "bad" : passed === list.length ? "good" : "accent";
-          }
-          const gs = goalWorkflows();
-          if (gs.length === 0) return "";
-          const failed = gs.filter((g: any) => stepStatus(g, "eval") === "failed").length;
-          const passed = gs.filter((g: any) => stepDone(g, "eval")).length;
-          return failed > 0 ? "bad" : passed === gs.length ? "good" : passed > 0 ? "accent" : "";
-        })()}
-      >
-        <EvaluationCriteriaPanel checks={criteriaResults() ?? []} />
-      </SectionFrame>
+          })()}
+        >
+          <EvaluationCriteriaPanel checks={criteriaResults() ?? []} />
+        </SectionFrame>
+      </Show>
 
       <SectionFrame
         id="deliverySection"

@@ -1,6 +1,7 @@
 import { existsSync } from "fs"
 import path from "path"
 import { Bus } from "@/bus"
+import { Config } from "@/config/config"
 import { ExecutorRegistry } from "@/executor/registry"
 
 import { Instance } from "@/project/instance"
@@ -518,7 +519,18 @@ export namespace OrchestratorRuntime {
     const pending = findPendingInteractions(run.id)
     if (pending.length > 0) {
       const now = Date.now()
-      const stale = pending.filter((p) => (now - (p.time_created ?? 0)) > INTERACTION_STALE_MS)
+      // Stale-interaction auto-reject is gated per-type: permissions need
+      // experimental.auto_permission, questions need experimental.auto_question.
+      // With the switch off the interaction waits indefinitely for the user.
+      const cfg = await Config.get()
+      const allowAutoPermission = cfg.experimental?.auto_permission === true
+      const allowAutoQuestion = cfg.experimental?.auto_question === true
+      const stale = pending.filter((p) => {
+        if ((now - (p.time_created ?? 0)) <= INTERACTION_STALE_MS) return false
+        if (p.request_type === "permission") return allowAutoPermission
+        if (p.request_type === "question") return allowAutoQuestion
+        return false
+      })
       if (stale.length > 0) {
         for (const interaction of stale) {
           log.info("auto-rejecting stale interaction", { id: interaction.id, type: interaction.request_type, ageMs: now - (interaction.time_created ?? 0) })
