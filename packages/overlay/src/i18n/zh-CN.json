@@ -534,7 +534,7 @@
   "titlebar.unattended": "无人值守",
   "titlebar.unattended_hint": "自动采用默认假设推进任务，跳过人工确认。",
   "transcript.compaction": "[上下文压缩]",
-  "card.context_tokens_tooltip": "本卡片 {value} 个 token · 优先显示服务商上报值，缺失时从文本估算",
+  "card.context_tokens_tooltip": "本轮约 {value} 个提示词 token（服务商估算，实际计费可能略有偏差）",
   "transcript.file": "[文件] {{value}}",
   "transcript.patch": "[补丁] {{value}}",
   "transcript.patch_empty": "[补丁]",

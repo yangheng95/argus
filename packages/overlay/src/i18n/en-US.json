@@ -534,7 +534,7 @@
   "titlebar.unattended": "Unattended mode",
   "titlebar.unattended_hint": "Use default assumptions to keep tasks moving without manual confirmation.",
   "transcript.compaction": "[Compaction]",
-  "card.context_tokens_tooltip": "{value} tokens for this card · provider-reported usage when available, otherwise estimated from text",
+  "card.context_tokens_tooltip": "~{value} prompt tokens at this turn (provider estimate; actual billing may differ)",
   "transcript.file": "[File] {{value}}",
   "transcript.patch": "[Patch] {{value}}",
   "transcript.patch_empty": "[Patch]",
