@@ -132,7 +132,11 @@ export namespace LLMTrace {
 
   export function begin(input: StartInput): Recorder {
     const start = Date.now()
-    const steps: StepLike[] = []
+    // Count only — we emit per-step Trace events as they arrive, so nothing
+    // downstream reads back the raw StepLike[]. Retaining the objects held
+    // full request.body / response / toolResults in memory for the entire
+    // LLM call (reasoning models can do 20+ rounds with large tool outputs).
+    let stepCount = 0
     let done = false
 
     // Resolve which task owns this session — Trace routes events into that
@@ -162,7 +166,7 @@ export namespace LLMTrace {
       finishReason: string | null
       totalUsage: unknown
       error: unknown
-      stepData: readonly StepLike[]
+      stepCount: number
     }) => {
       if (done) return
       done = true
@@ -175,7 +179,7 @@ export namespace LLMTrace {
           finish_reason: result.finishReason,
           total_usage: normalize(result.totalUsage),
           duration_ms: Date.now() - start,
-          step_count: result.stepData.length,
+          step_count: result.stepCount,
           error: normalize(result.error),
         },
       })
@@ -189,11 +193,11 @@ export namespace LLMTrace {
     return {
       step(step) {
         if (done) return
-        steps.push(step)
+        stepCount += 1
         Trace.event({
           ...traceMeta,
           category: "llm.step",
-          round: steps.length,
+          round: stepCount,
           payload: {
             call_id: input.callID,
             finish_reason: step.finishReason,
@@ -209,7 +213,7 @@ export namespace LLMTrace {
           Trace.event({
             ...traceMeta,
             category: "tool.call",
-            round: steps.length,
+            round: stepCount,
             payload: {
               call_id: c.toolCallId,
               tool: c.toolName,
@@ -223,7 +227,7 @@ export namespace LLMTrace {
           Trace.event({
             ...traceMeta,
             category: r.isError ? "tool.error" : "tool.result",
-            round: steps.length,
+            round: stepCount,
             payload: {
               call_id: r.toolCallId,
               tool: r.toolName,
@@ -239,7 +243,7 @@ export namespace LLMTrace {
           finishReason: step.finishReason,
           totalUsage: step.totalUsage,
           error: null,
-          stepData: step.steps.length > 0 ? step.steps : steps,
+          stepCount: step.steps.length > 0 ? step.steps.length : stepCount,
         })
       },
       abort(step) {
@@ -248,7 +252,7 @@ export namespace LLMTrace {
           finishReason: null,
           totalUsage: null,
           error: null,
-          stepData: step.steps.length > 0 ? step.steps : steps,
+          stepCount: step.steps.length > 0 ? step.steps.length : stepCount,
         })
       },
       error(error) {
@@ -257,7 +261,7 @@ export namespace LLMTrace {
           finishReason: null,
           totalUsage: null,
           error: normalizeError(error),
-          stepData: steps,
+          stepCount: stepCount,
         })
       },
     }

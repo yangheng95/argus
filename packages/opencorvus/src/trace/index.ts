@@ -214,6 +214,22 @@ export namespace Trace {
   }
 
   /**
+   * Release per-task bookkeeping once the task has reached a terminal state.
+   * Called from the task-agent terminal finally block alongside
+   * clearTaskSessions(). The in-flight fs.appendFile for the task.finish
+   * event has already been chained into `writes` by the preceding
+   * Trace.event call; dropping the map entry releases the Promise-chain
+   * reference but does NOT cancel the underlying append — Node continues
+   * the resolved syscall. No further events can reach this taskID because
+   * the registry entry is gone.
+   */
+  export function clearTask(taskID: string): void {
+    counters.delete(taskID)
+    const f = file(taskID)
+    if (f) writes.delete(f)
+  }
+
+  /**
    * For tests only — wipe the per-task seq counter and write queue. Lets
    * a test re-emit events for the same taskID with seq starting at 1.
    */

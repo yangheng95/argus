@@ -6025,17 +6025,16 @@ select.field-input option {
     var(--subtle-1);
 }
 
-#extensionsSection[open] {
-  display: flex;
-  flex-direction: column;
-  height: calc(360px * var(--ui-scale));
-  min-height: calc(360px * var(--ui-scale));
-  max-height: calc(360px * var(--ui-scale));
-}
+/* Extensions section scroll: relying on `<details> { display: flex }` +
+   `flex: 1 1 0; min-height: 0; overflow-y: auto` on the body is unreliable
+   in WebView2 — the summary's implicit content-box interaction sometimes
+   fails to size the body, so internal overflow never triggers. Set the
+   body's own max-height + overflow instead, independent of details flex
+   layout. */
 #extensionsSection[open] > .config-section-body {
-  flex: 1 1 0;
-  min-height: 0;
+  max-height: calc(320px * var(--ui-scale));
   overflow-y: auto;
+  overflow-x: hidden;
 }
 
 /* ── Config Dialog: Sidebar + Content Layout ── */

@@ -32,6 +32,19 @@ export function unregisterGoalRunSession(sessionID: string) {
   goalRunSessionRegistry.delete(sessionID)
 }
 
+/**
+ * Drop every session previously registered for `taskID`. Called from the
+ * task-agent terminal path so the registry doesn't grow unboundedly across
+ * benchmark runs — each task spawns ~10+ sub-sessions (planner, executor,
+ * requirements, design, architect, delivery, refine, build, assistant) and
+ * none of the register call sites pair with an unregister.
+ */
+export function clearTaskSessions(taskID: string) {
+  for (const [sessionID, entry] of goalRunSessionRegistry) {
+    if (entry.taskID === taskID) goalRunSessionRegistry.delete(sessionID)
+  }
+}
+
 export function taskSession(taskID: string) {
   const row = Database.use((db) =>
     db
