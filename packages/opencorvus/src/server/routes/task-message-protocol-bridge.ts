@@ -53,13 +53,12 @@ export function resolveRole(agent: string): OverlayRole {
  */
 export function overlayMeta(
   sessionID: string,
-  taskID: string,
+  rootSessionID: string,
   info: { role?: string; agent?: string; sessionID?: string },
 ) {
-  const rootSessionID = taskSession(taskID) || ""
   const role = String(info.role || "assistant")
   const agent = String(info.agent || "")
-  const isRoot = !rootSessionID || sessionID === rootSessionID
+  const isRoot = !!rootSessionID && sessionID === rootSessionID
 
   if (role === "user") {
     if (isRoot) return { resolvedRole: "user" as OverlayRole, channel: "main" }
@@ -149,7 +148,8 @@ function enrichProperties(properties: Record<string, unknown>, sessionID: string
   // sub-sessions for nested sub-agent calls) keep the engine's self-stamp.
   const registeredRole = sessionRole(sessionID)
   if (registeredRole) info.agent = registeredRole
-  const meta = overlayMeta(sessionID, taskID, info)
+  const rootSessionID = taskSession(taskID) || ""
+  const meta = overlayMeta(sessionID, rootSessionID, info)
   const goalID = sessionGoalID(sessionID)
   const parentSessionID = sessionParentID(sessionID)
   const enriched = { ...properties }
@@ -188,13 +188,16 @@ async function bridgeEvent<Definition extends typeof Message.Event[keyof typeof 
     return
   }
   const enriched = enrichProperties(properties, sessionID, taskID)
-  const meta = overlayMeta(sessionID, taskID, infoForEvent(properties))
   log.info("bridge → protocol", {
     type: def.type,
     sessionID,
     taskID,
-    resolvedRole: meta.resolvedRole,
-    channel: meta.channel,
+    // Read from the enriched payload so the log reflects what SSE actually
+    // emits. Re-computing overlayMeta from raw `properties` here would miss
+    // the registry-based agent override applied inside enrichProperties and
+    // silently misreport the channel.
+    resolvedRole: (enriched as Record<string, unknown>).resolvedRole,
+    channel: (enriched as Record<string, unknown>).channel,
     msgID: (properties.info as any)?.id ?? (properties.part as any)?.messageID ?? "",
   })
   await OrchestratorProtocol.emit(def as any, enriched as any, {

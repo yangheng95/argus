@@ -620,12 +620,14 @@ export class GoalPool {
       }
 
       // ── 8. Determine goal status from executor result ──
-      // Executor completed with delivery → "passed" (trust executor's self-report).
-      // No delivery → "failed" (executor could not produce output).
-      // Delivery agent is the single verification gate — runs at task level after all goals.
+      // No delivery OR empty delivery → "failed".
+      // A goal that produced zero file changes is not "passed" — the executor
+      // either crashed, hung on permissions, or genuinely did nothing.
       const now = Date.now()
-      if (!delivery) {
-        const failReason = pipelineError ?? "Executor completed without delivery (no error detail)"
+      if (!delivery || delivery.diffs.length === 0) {
+        const failReason = !delivery
+          ? (pipelineError ?? "Executor completed without delivery (no error detail)")
+          : (pipelineError ?? "Executor completed but produced zero file changes")
         if (worktreeDir) await cleanupGoalWorkspace(worktreeDir).catch(() => {})
         Database.use(db => db.update(OrchestratorGoalTable)
           .set({ status: "failed", time_updated: now })
@@ -725,6 +727,36 @@ export class GoalPool {
             goalID: entry.goal.id, goalRunID: goalRun.id, title: entry.goal.title,
             status: "failed", error: `evaluator threw: ${msg}`, delivery, attempts: 1,
           }
+        }
+      }
+
+      // Executor produced nothing → FAIL the goal, don't leak a ghost "passed".
+      //
+      // pipeline/executor.ts:240-258 forces completion after inactivity /
+      // idle-grace, leaving diffs=[] when the LLM hung silently. The comment
+      // there promises "surfaced explicitly downstream" — THIS is that
+      // downstream. Marking passed would push an empty delivery into the
+      // delivery agent, which would then improvise files via write_file and
+      // hide the real failure (provider disconnect, rate limit, etc.). Fail
+      // here so Task Agent sees the ground truth and can retry with a fresh
+      // goal run or stop the task.
+      if (delivery.diffs.length === 0) {
+        const reason = "Executor produced no files. Likely cause: executor LLM call " +
+          "hung or errored silently (see pipeline/executor.ts forced-completion path)."
+        if (worktreeDir) await cleanupGoalWorkspace(worktreeDir).catch(() => {})
+        Database.use(db => db.update(OrchestratorGoalTable)
+          .set({ status: "failed", time_updated: now })
+          .where(eq(OrchestratorGoalTable.id, entry.goal.id)).run())
+        await markGoalWorkflowStep(task.id, entry.goal.id, entry.goal.title, "execute", "failed").catch(() => undefined)
+        OrchestratorProtocol.emit(Event.GoalFailed, {
+          taskID: task.id, goalID: entry.goal.id, summary: `${entry.goal.title}: ${reason}`,
+        }, { source: "executor" }).catch(() => {})
+        log.warn("goal pool: goal failed — empty delivery", {
+          goalID: entry.goal.id, goalRunID: goalRun.id, reason,
+        })
+        return {
+          goalID: entry.goal.id, goalRunID: goalRun.id, title: entry.goal.title,
+          status: "failed", error: reason, delivery, attempts: 1,
         }
       }
 

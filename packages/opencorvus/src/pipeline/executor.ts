@@ -229,19 +229,10 @@ async function* streamExecutorEvents(
 
   if (signal.aborted) return { error: "Execution aborted" }
 
-  // Force-complete paths:
-  //   - idleGraceExceeded: session.idle fired + queue task still running
-  //     (callback chain stuck). LLM turn is genuinely done.
-  //   - inactivityTimeoutExceeded: no events for 90s. Either a stuck callback
-  //     chain (same root cause) or a truly dead LLM. Either way, reporting
-  //     "executor finished with status running" is a false negative — extract
-  //     whatever diffs exist and let goal-pool decide based on delivery
-  //     contents (empty delivery is surfaced explicitly downstream).
-  if (idleGraceExceeded || inactivityTimeoutExceeded) {
-    log.info("forced completion — proceeding to extract delivery", {
-      goalRunID,
-      reason: idleGraceExceeded ? "idle-grace" : "inactivity-timeout",
-    })
+  // idleGraceExceeded: session.idle fired → LLM turn genuinely done, but
+  // the queue-task callback chain is stuck. Extract delivery normally.
+  if (idleGraceExceeded) {
+    log.info("session idle grace exceeded — extracting delivery", { goalRunID })
     try {
       const { TaskQueueTable } = await import("@/scheduler/task-queue.sql")
       Database.use((db) =>
@@ -255,6 +246,14 @@ async function* streamExecutorEvents(
       log.warn("failed to force-complete queue task row", { queueTaskID, error: String(err) })
     }
     return { delivery: await extractDelivery(goalRunID, workDir, goal.id, baseRef) }
+  }
+
+  // inactivityTimeoutExceeded: no events for INACTIVITY_TIMEOUT_MS. The executor
+  // is dead — permission hang, LLM crash, network failure. Fail loud.
+  if (inactivityTimeoutExceeded) {
+    const reason = `Executor produced no events for ${INACTIVITY_TIMEOUT_MS / 1000}s — session is dead (possible causes: permission hang, LLM timeout, network failure)`
+    log.error("inactivity timeout — failing goal_run", { goalRunID, reason })
+    return { error: reason }
   }
 
   const status = await Promise.race([

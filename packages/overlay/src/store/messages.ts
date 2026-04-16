@@ -2,7 +2,7 @@
 // Solid reactive store for conversation messages, agent events, and SSE state.
 
 import { createStore, produce } from "solid-js/store";
-import { batch, createMemo } from "solid-js";
+import { batch, createMemo, createRoot, type Accessor } from "solid-js";
 import { apiJson, apiUrl } from "../services/api";
 import { boardStore } from "../store/board";
 import { clearConversationUiState } from "./conversation-ui";
@@ -88,7 +88,25 @@ export type AgentCardData =
 // ── Store ──
 
 const [store, setStore] = createStore({
+  /**
+   * Chronologically sorted flat list of all messages. Primary source of truth
+   * for message content. Consumers that need all messages (synthetic-message
+   * merging in chat.ts, section phase sync, etc.) read this.
+   */
   messages: [] as Message[],
+  /**
+   * Parallel session-indexed view into `messages` — values are references to
+   * the same Message objects, grouped and sorted per sessionID. Maintained
+   * by applyMessageEvent / setMessages alongside the flat array.
+   *
+   * Why both: the flat list supports "show me everything" consumers; the
+   * per-session view is what unlocks Solid's fine-grained reactivity. When
+   * a memo reads `messagesBySession[sid]`, Solid tracks only that key's
+   * sub-tree — a part delta on session A does not fan out to session B's
+   * downstream work. The old single-array iteration model re-ran every
+   * card memo on every SSE delta; this shape is the structural fix.
+   */
+  messagesBySession: {} as Record<string, Message[]>,
   agentEvents: [] as any[],
   selectedTaskID: "" as string,
   showTranscriptDetails: false,
@@ -121,6 +139,26 @@ function rebuildMessageIndex() {
 
 export function messageById(id: string): Message | undefined {
   return messageIndex.get(id);
+}
+
+/**
+ * Resolve a message's session bucket key. Messages without an info.sessionID
+ * fall into the "" bucket (rare; transcript reconstruction edge cases).
+ */
+function sessionKeyOf(message: Message | undefined): string {
+  const sid = message?.info?.sessionID;
+  return typeof sid === "string" ? sid : "";
+}
+
+/**
+ * Locate an already-stored message within its session bucket. Returns -1 if
+ * the bucket is empty or the message isn't present. Uses reference equality
+ * on Message objects — the flat `messages` array and `messagesBySession`
+ * share the same object references.
+ */
+function sessionBucketIndexOf(sid: string, msg: Message): number {
+  const bucket = store.messagesBySession[sid];
+  return bucket ? bucket.indexOf(msg) : -1;
 }
 
 // ── Sorting ──
@@ -522,14 +560,23 @@ function mergeAgentReasoningDeltas(events: any[]): any[] {
 
 // ── Agent cards: session-tree-driven derivation ──
 //
-// One card per agent session. Nesting follows session.parentID as stamped
-// by `task-message-protocol-bridge.ts` (see `parentSessionID` on info).
-// Cards carrying a `goalID` are routed into the matching Goal container
-// (stronger grouping than session tree); everything else forms a tree under
-// the root task-agent card.
+// Two-layer Solid reactive design to eliminate the "single giant memo iterates
+// store.messages" bottleneck that caused multi-second freezes during streaming:
 //
-// Derived purely from store.messages + store.agentEvents + boardStore.board;
-// Solid's reactive graph fires this synchronously when any source changes.
+//   Layer 1 (fine-grained) — `getSessionBucketCardMemo(sid)`:
+//     Per-session createMemo wrapped in createRoot so it survives outer memo
+//     re-runs. Reads only `store.messagesBySession[sid]` plus per-session
+//     board slices. When a part delta fires on session A, only session A's
+//     memo re-runs; sessions B..Z do not re-evaluate.
+//
+//   Layer 2 (assembly) — `computeAgentCards()`:
+//     Reads memo outputs for each known sessionID plus board goalWorkflows,
+//     assembles goal groups and root ordering. Light work; no raw iteration
+//     of `store.messages` or per-message field access.
+//
+// Nesting still follows session.parentID (bridge-stamped via parentSessionID
+// on info). Cards carrying a goalID route into the matching Goal container;
+// everything else forms a tree under the root task-agent card.
 
 type SessionBucket = {
   sessionID: string;
@@ -542,167 +589,178 @@ type SessionBucket = {
 };
 
 /**
- * Derive a card's lifecycle status from structured signals only:
- *   - a discrete `error` kind on the latest live event, OR
- *   - any message part whose `state.status` is currently "running", OR
- *   - any message carrying a finite `info.time.completed` timestamp.
+ * Derive lifecycle status from structured signals on messages + parts only:
+ *   - any part whose `state.status === "error"` → "error"
+ *   - any part whose `state.status === "running"` → "running"
+ *   - any message carrying a finite `info.time.completed` → "completed"
+ *   - otherwise "running" (in-flight / waiting on first response)
  *
- * Deliberately refuses to parse the event's `summary` text — matching
- * natural-language phrases like "finished"/"done" would violate CLAUDE.md
- * principle 12 (no keyword/heuristic matching). The authoritative completion
- * signal is the message timestamp written by the session runtime; if that
- * signal is missing for a completed stage, fix the backend emitter rather
- * than text-match around it here.
+ * Deliberately free of agent-event dependency — if it read store.agentEvents
+ * each session memo would invalidate on every live event, defeating the
+ * point of per-session granularity. Per CLAUDE.md principle 12 also refuses
+ * to match summary text; completion signal is the message timestamp.
  */
-function bucketStatus(bucket: SessionBucket, latestStageEvent: any): string {
-  const latestKind = String(latestStageEvent?.kind || "").trim().toLowerCase();
-  if (latestKind === "error") return "error";
-  const hasRunningPart = bucket.messages.some((m: any) =>
-    (m.parts || []).some((p: any) => p?.state?.status === "running"),
-  );
-  if (hasRunningPart) return "running";
-  const anyCompleted = bucket.messages.some((m: any) => Number.isFinite(m?.info?.time?.completed));
-  return anyCompleted ? "completed" : "running";
+function bucketStatus(bucket: SessionBucket): string {
+  let hasRunning = false;
+  let hasError = false;
+  let hasCompleted = false;
+  for (const m of bucket.messages) {
+    for (const p of (m.parts || [])) {
+      const s = p?.state?.status;
+      if (s === "error") hasError = true;
+      else if (s === "running") hasRunning = true;
+    }
+    if (Number.isFinite(m?.info?.time?.completed)) hasCompleted = true;
+  }
+  if (hasError) return "error";
+  if (hasRunning) return "running";
+  return hasCompleted ? "completed" : "running";
+}
+
+// Per-session card memos — created lazily, cached across outer-memo runs via
+// createRoot (so Solid doesn't dispose them when the outer computation
+// re-runs), cleared when the selected task changes.
+const sessionBucketMemos = new Map<string, Accessor<AgentCardData | null>>();
+const sessionBucketMemoDisposers: Array<() => void> = [];
+
+function clearSessionBucketMemos(): void {
+  while (sessionBucketMemoDisposers.length > 0) {
+    const dispose = sessionBucketMemoDisposers.pop();
+    try { dispose?.(); } catch { /* ignore */ }
+  }
+  sessionBucketMemos.clear();
+}
+
+function getSessionBucketCardMemo(sid: string): Accessor<AgentCardData | null> {
+  const existing = sessionBucketMemos.get(sid);
+  if (existing) return existing;
+  let memo!: Accessor<AgentCardData | null>;
+  createRoot((dispose) => {
+    memo = createMemo(() => buildSessionBucketCard(sid));
+    sessionBucketMemoDisposers.push(dispose);
+  });
+  sessionBucketMemos.set(sid, memo);
+  return memo;
+}
+
+/**
+ * Build an AgentCardData for a single session. All reactive reads confined
+ * to that session's own bucket + the session's goalRun row + rootSessionID.
+ * Cross-session state (ordering, goal grouping) is NOT touched here — it
+ * belongs to the outer assembly memo.
+ */
+function buildSessionBucketCard(sid: string): AgentCardData | null {
+  const bucket = store.messagesBySession[sid];
+  if (!bucket || bucket.length === 0) return null;
+
+  const rootSID = rootTaskSessionID();
+  const msgs: Message[] = [];
+  let stage = "";
+  let parentSessionID = "";
+  let goalID = "";
+  let startTime = Infinity;
+  let endTime = 0;
+  for (const m of bucket) {
+    const s = String(m.info?.channel || classifyMessage(m, rootSID));
+    if (s === "main" || s === "filtered") continue;
+    if (String(m.info?.role || "").toLowerCase() === "user") continue;
+    if (!stage) stage = s;
+    if (!parentSessionID && typeof m.info?.parentSessionID === "string") {
+      parentSessionID = m.info.parentSessionID;
+    }
+    if (!goalID && typeof m.info?.goalID === "string") {
+      goalID = m.info.goalID;
+    }
+    msgs.push(m);
+    const t = finiteMessageTime(m) ?? Infinity;
+    if (t < startTime) startTime = t;
+    const e = messageEndTime(m);
+    if (e > endTime) endTime = e;
+  }
+  if (msgs.length === 0) return null;
+
+  // Back-fill goalID from board.goalRuns when the bridge stamp isn't on the
+  // message yet (common for transcripts loaded before registration).
+  if (!goalID) {
+    for (const gr of boardStore.board?.goalRuns || []) {
+      if (gr.sessionID === sid || gr.executorSessionID === sid || gr.plannerSessionID === sid) {
+        goalID = gr.goalID;
+        break;
+      }
+    }
+  }
+
+  msgs.sort((l, r) => messageOrderTime(l) - messageOrderTime(r));
+  const bucketObj: SessionBucket = {
+    sessionID: sid,
+    stage,
+    parentSessionID,
+    goalID,
+    messages: msgs,
+    startTime,
+    endTime,
+  };
+  const status = bucketStatus(bucketObj);
+  const start = Number.isFinite(startTime) && startTime > 0 ? startTime : Date.now();
+  return {
+    kind: "agent",
+    id: `${stage}:session:${sid}`,
+    stage,
+    status,
+    round: 0,
+    sessionID: sid,
+    parentSessionID,
+    goalID,
+    time: start,
+    messages: msgs,
+    children: [],
+  };
 }
 
 function computeAgentCards(): { cards: Record<string, AgentCardData>; order: string[] } {
-  const rootSID = rootTaskSessionID();
-
-  // 1. Bucket messages by sessionID. Each session = one agent card.
-  const bySession = new Map<string, SessionBucket>();
-  // Messages without a sessionID (legacy / synthetic transcript rows) get one
-  // bucket per fallback message-id key so they still surface.
-  const orphanBuckets: Array<SessionBucket & { channelID: string }> = [];
-
-  for (const message of store.messages) {
-    const stage = String(message.info?.channel || classifyMessage(message, rootSID));
-    if (stage === "main" || stage === "filtered") continue;
-    if (String(message.info?.role || "").toLowerCase() === "user") continue;
-
-    const sessionID = typeof message?.info?.sessionID === "string" ? message.info.sessionID.trim() : "";
-    const parentSessionID = typeof message?.info?.parentSessionID === "string" ? message.info.parentSessionID.trim() : "";
-    const goalID = typeof message?.info?.goalID === "string" ? message.info.goalID.trim() : "";
-    const created = finiteMessageTime(message) ?? Infinity;
-    const completed = messageEndTime(message);
-
-    if (!sessionID) {
-      const fallbackID = typeof message?.info?.id === "string" && message.info.id
-        ? message.info.id
-        : hashText(messageSignature(message));
-      orphanBuckets.push({
-        sessionID: "",
-        stage,
-        parentSessionID: "",
-        goalID,
-        messages: [message],
-        startTime: Number.isFinite(created) ? created : Date.now(),
-        endTime: completed || Date.now(),
-        channelID: `${stage}:message:${fallbackID}`,
-      });
-      continue;
-    }
-
-    let bucket = bySession.get(sessionID);
-    if (!bucket) {
-      bucket = {
-        sessionID,
-        stage,
-        parentSessionID,
-        goalID,
-        messages: [],
-        startTime: Infinity,
-        endTime: 0,
-      };
-      bySession.set(sessionID, bucket);
-    }
-    bucket.messages.push(message);
-    if (!bucket.parentSessionID && parentSessionID) bucket.parentSessionID = parentSessionID;
-    if (!bucket.goalID && goalID) bucket.goalID = goalID;
-    if (created < bucket.startTime) bucket.startTime = created;
-    if (completed > bucket.endTime) bucket.endTime = completed;
+  // 1. Per-session agent cards from memo cache. Reading each memo tracks only
+  //    that one session's bucket — outer assembly reruns narrowly when any
+  //    single session's card output changes.
+  const allAgentCards: AgentCardData[] = [];
+  for (const sid of Object.keys(store.messagesBySession)) {
+    const card = getSessionBucketCardMemo(sid)();
+    if (card) allAgentCards.push(card);
   }
 
-  // 2. Back-fill goalID from board.goalRuns for sessions whose stamp hadn't
-  //    landed yet when messages arrived (transcripts loaded pre-registration).
-  const sessionToGoal = new Map<string, string>();
-  for (const gr of boardStore.board?.goalRuns || []) {
-    if (gr.sessionID) sessionToGoal.set(gr.sessionID, gr.goalID);
-    if (gr.executorSessionID) sessionToGoal.set(gr.executorSessionID, gr.goalID);
-    if (gr.plannerSessionID) sessionToGoal.set(gr.plannerSessionID, gr.goalID);
-  }
-  for (const bucket of bySession.values()) {
-    if (!bucket.goalID && sessionToGoal.has(bucket.sessionID)) {
-      bucket.goalID = sessionToGoal.get(bucket.sessionID)!;
-    }
-  }
-
-  // 3. Live agent events — bootstrap state before any real session message
-  //    exists for a given stage. Once messages land, the live bucket is
-  //    dropped in favour of the real one.
+  // 2. Live agent-event-only stages — keeps overlay responsive during the
+  //    bootstrap window where events arrive before any session emits messages.
+  //    Dropped once a real session bucket for that stage exists.
   const liveEventsByStage = new Map<string, any[]>();
-  const latestEventByStage = new Map<string, any>();
   for (const event of store.agentEvents) {
     const stage = String(event?.stage || "").trim().toLowerCase();
     if (!stage) continue;
-    const list = liveEventsByStage.get(stage) || [];
-    list.push(event);
-    liveEventsByStage.set(stage, list);
-    latestEventByStage.set(stage, event);
+    const list = liveEventsByStage.get(stage);
+    if (list) list.push(event);
+    else liveEventsByStage.set(stage, [event]);
   }
-  const hasSessionForStage = (stage: string): boolean => {
-    for (const b of bySession.values()) if (b.stage === stage) return true;
-    return false;
-  };
-  const liveBuckets: Array<SessionBucket & { synthID: string }> = [];
+  const stagesWithSessions = new Set<string>();
+  for (const c of allAgentCards) if (c.kind === "agent") stagesWithSessions.add(c.stage);
   for (const [stage, events] of liveEventsByStage) {
-    if (hasSessionForStage(stage)) continue;
+    if (stagesWithSessions.has(stage)) continue;
     const merged = mergeAgentReasoningDeltas(
       events.slice().sort((l, r) => agentEventTime(l) - agentEventTime(r)),
     );
-    const messages = merged.map((e) => agentMessage(e)).filter((m): m is Message => !!m);
-    if (messages.length === 0) continue;
+    const msgs = merged.map((e) => agentMessage(e)).filter((m): m is Message => !!m);
+    if (msgs.length === 0) continue;
     const startTime = agentEventTime(merged[0]) || Date.now();
-    const endTime = agentEventTime(merged[merged.length - 1]) || Date.now();
-    liveBuckets.push({
-      sessionID: "",
+    allAgentCards.push({
+      kind: "agent",
+      id: `${stage}:live`,
       stage,
+      status: "running",
+      round: 0,
+      sessionID: "",
       parentSessionID: "",
       goalID: "",
-      messages,
-      startTime,
-      endTime,
-      synthID: `${stage}:live`,
-    });
-  }
-
-  // 4. Build one AgentCardData per bucket.
-  function buildAgentCard(cardID: string, b: SessionBucket, statusOverride?: string): AgentCardData {
-    const status = statusOverride ?? bucketStatus(b, latestEventByStage.get(b.stage));
-    const start = Number.isFinite(b.startTime) && b.startTime > 0 ? b.startTime : Date.now();
-    return {
-      kind: "agent",
-      id: cardID,
-      stage: b.stage,
-      status,
-      round: 0,
-      sessionID: b.sessionID,
-      parentSessionID: b.parentSessionID,
-      goalID: b.goalID,
-      time: start,
-      messages: b.messages.slice().sort((l, r) => messageOrderTime(l) - messageOrderTime(r)),
+      time: startTime,
+      messages: msgs,
       children: [],
-    };
-  }
-
-  const allAgentCards: AgentCardData[] = [];
-  for (const b of bySession.values()) {
-    allAgentCards.push(buildAgentCard(`${b.stage}:session:${b.sessionID}`, b));
-  }
-  for (const b of liveBuckets) {
-    allAgentCards.push(buildAgentCard(b.synthID, b, "running"));
-  }
-  for (const o of orphanBuckets) {
-    allAgentCards.push(buildAgentCard(o.channelID, o));
+    });
   }
 
   // 5. Goal cards — one per board.goalWorkflows entry.
@@ -956,15 +1014,24 @@ export function applyMessageEvent(event: any): boolean {
         ? event.payload
         : {};
 
+  // All mutation branches below touch two reactive views in lock-step:
+  //   1. `store.messages` — flat chronological array (legacy consumers)
+  //   2. `store.messagesBySession[sid]` — per-session bucket (card memos)
+  // Both hold references to the SAME Message objects, but Solid tracks
+  // them as independent reactive slots. Writing only one side leaves the
+  // other's subscribers unnotified — so every write is mirrored.
+
   if (type === "message.updated") {
     const info = properties.info;
     if (!info?.id) return false;
     const existing = messageById(info.id);
     if (existing) {
+      const merged = mergeMessageInfo(existing.info, info);
       const idx = store.messages.indexOf(existing);
-      if (idx >= 0) {
-        setStore("messages", idx, "info", mergeMessageInfo(existing.info, info));
-      }
+      if (idx >= 0) setStore("messages", idx, "info", merged);
+      const sid = sessionKeyOf(existing);
+      const sIdx = sessionBucketIndexOf(sid, existing);
+      if (sIdx >= 0) setStore("messagesBySession", sid, sIdx, "info", merged);
       return true;
     }
     // Flush any parts that arrived before this message
@@ -978,7 +1045,24 @@ export function applyMessageEvent(event: any): boolean {
         insertIdx = insertSorted(msgs, msg);
       }),
     );
-    messageIndex.set(info.id, store.messages[insertIdx]);
+    // The object we put into the session bucket must be the SAME reference
+    // Solid wrapped in the flat array — otherwise sub-path updates on either
+    // side won't propagate to the other.
+    const stored = store.messages[insertIdx];
+    messageIndex.set(info.id, stored);
+    const sid = sessionKeyOf(stored);
+    const existingBucket = store.messagesBySession[sid];
+    if (!existingBucket) {
+      setStore("messagesBySession", sid, [stored]);
+    } else {
+      setStore(
+        "messagesBySession",
+        sid,
+        produce((arr: Message[]) => {
+          insertSorted(arr, stored);
+        }),
+      );
+    }
     return true;
   }
 
@@ -997,9 +1081,12 @@ export function applyMessageEvent(event: any): boolean {
       return true;
     }
     const idx = store.messages.indexOf(message);
+    const sid = sessionKeyOf(message);
+    const sIdx = sessionBucketIndexOf(sid, message);
     const partIdx = message.parts.findIndex((p: Part) => p.id === part.id);
     if (partIdx >= 0) {
       setStore("messages", idx, "parts", partIdx, part);
+      if (sIdx >= 0) setStore("messagesBySession", sid, sIdx, "parts", partIdx, part);
     } else {
       setStore(
         "messages",
@@ -1009,6 +1096,17 @@ export function applyMessageEvent(event: any): boolean {
           parts.push(part);
         }),
       );
+      if (sIdx >= 0) {
+        setStore(
+          "messagesBySession",
+          sid,
+          sIdx,
+          "parts",
+          produce((parts: Part[]) => {
+            parts.push(part);
+          }),
+        );
+      }
     }
     return true;
   }
@@ -1025,6 +1123,8 @@ export function applyMessageEvent(event: any): boolean {
     }
 
     const msgIdx = store.messages.indexOf(message);
+    const sid = sessionKeyOf(message);
+    const sIdx = sessionBucketIndexOf(sid, message);
     const partIdx = message.parts.findIndex(
       (p: Part) => p.id === properties.partID,
     );
@@ -1033,46 +1133,47 @@ export function applyMessageEvent(event: any): boolean {
       if (partIdx < 0) return false;
       const part = message.parts[partIdx];
       if (part.type !== "tool" || !part.state) return false;
-      setStore(
-        "messages",
-        msgIdx,
-        "parts",
-        partIdx,
-        "state",
-        "raw",
-        (prev: string) => (prev || "") + properties.delta,
-      );
+      const append = (prev: string) => (prev || "") + properties.delta;
+      setStore("messages", msgIdx, "parts", partIdx, "state", "raw", append);
+      if (sIdx >= 0) setStore("messagesBySession", sid, sIdx, "parts", partIdx, "state", "raw", append);
       return true;
     }
 
- // text delta
+    // text delta
     if (partIdx < 0) {
- // Create placeholder part
+      // Create placeholder part on both views.
+      const newPart: Part = {
+        id: properties.partID,
+        type: "text",
+        text: properties.delta,
+        sessionID: properties.sessionID,
+        messageID: properties.messageID,
+      };
       setStore(
         "messages",
         msgIdx,
         "parts",
         produce((parts: Part[]) => {
-          parts.push({
-            id: properties.partID,
-            type: "text",
-            text: properties.delta,
-            sessionID: properties.sessionID,
-            messageID: properties.messageID,
-          });
+          parts.push(newPart);
         }),
       );
+      if (sIdx >= 0) {
+        setStore(
+          "messagesBySession",
+          sid,
+          sIdx,
+          "parts",
+          produce((parts: Part[]) => {
+            parts.push(newPart);
+          }),
+        );
+      }
       return true;
     }
 
-    setStore(
-      "messages",
-      msgIdx,
-      "parts",
-      partIdx,
-      "text",
-      (prev: string) => (prev || "") + properties.delta,
-    );
+    const append = (prev: string) => (prev || "") + properties.delta;
+    setStore("messages", msgIdx, "parts", partIdx, "text", append);
+    if (sIdx >= 0) setStore("messagesBySession", sid, sIdx, "parts", partIdx, "text", append);
     return true;
   }
 
@@ -1524,12 +1625,26 @@ export function setMessages(messages: any[]) {
     msgs.sort((a, b) => messageOrderTime(a) - messageOrderTime(b));
   }));
   rebuildMessageIndex();
+  // Rebuild the per-session view from scratch — bulk transcript loads are
+  // infrequent (task switch, resume) so the full rebuild is acceptable, and
+  // the alternative (incrementally reconciling every session bucket) is
+  // brittle. Same Message refs as `store.messages` so sub-path reactivity
+  // via either view stays consistent afterwards.
+  const nextBySession: Record<string, Message[]> = {};
+  for (const m of store.messages) {
+    const sid = sessionKeyOf(m);
+    (nextBySession[sid] ??= []).push(m);
+  }
+  setStore("messagesBySession", nextBySession);
 }
 
 export function setSelectedTaskID(taskID: string) {
   if (store.selectedTaskID !== taskID) {
     clearConversationUiState();
     clearKnownChildSessions();
+    // Session memos belong to the previous task's session set; disposing them
+    // here lets the new task start with a clean cache.
+    clearSessionBucketMemos();
   }
   setStore("selectedTaskID", taskID);
 }
@@ -1548,8 +1663,10 @@ export function setSseConnected(connected: boolean) {
 
 export function clearMessages() {
   setStore("messages", []);
+  setStore("messagesBySession", {});
   messageIndex.clear();
   _pendingParts.clear();
+  clearSessionBucketMemos();
 }
 
 // ── Chat request helpers ──

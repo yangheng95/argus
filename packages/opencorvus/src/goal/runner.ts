@@ -180,13 +180,13 @@ export async function createGoalSession(task: TaskRow, goal: GoalRow, directory?
     title: `${task.title}: ${goal.title}`,
     directory: directory ?? (await import("@/project/instance")).Instance.directory,
   })
-  const parent = task.session_id ? await Session.get(task.session_id) : undefined
-  if (parent?.permission) {
-    await Session.setPermission({
-      sessionID: session.id,
-      permission: parent.permission,
-    })
-  }
+  // Goal sessions run unattended in worktrees — no interactive UI subscriber.
+  // Parent session's "ask" rules would block tool calls forever (permission
+  // prompt goes to a void). Unconditionally allow all permissions.
+  await Session.setPermission({
+    sessionID: session.id,
+    permission: [{ permission: "*", pattern: "*", action: "allow" as const }],
+  })
   // Register so SSE can match this session's events to the task
   registerGoalRunSession(session.id, task.id, "executor", goal.id)
   return session
@@ -505,6 +505,16 @@ ${compactPlanContext(input.plan)}`,
       "- Do not create README.md files, module-level documentation, or scaffold documentation (e.g. src/<module>/README.md, tests/README.md) unless the request explicitly requires documentation. Focus on source code and tests only.",
     ].join("\n"),
     "Do not redefine the goal or broaden scope. Implement only what is needed for this stage, verify it, and stop.",
+    [
+      "Mandatory output — every goal MUST produce both:",
+      "1. **Deliverables**: the source files, configs, tests, or other artifacts required by this goal. A goal that produces zero file changes is automatically marked FAILED by the system — no exceptions.",
+      "2. **Report**: after implementation is complete (or if blocked), you MUST end your turn with a structured report in your response text. The report MUST include:",
+      "   - Files created or modified (list each path)",
+      "   - Checks run and their results (pass/fail with evidence)",
+      "   - If blocked: the exact blocker, what you tried, and why it cannot be resolved within your scope",
+      "   - If any owned_paths were left unmodified: why",
+      "Do not skip the report. Do not produce only the report without deliverables. Both are mandatory.",
+    ].join("\n"),
   ].filter(Boolean).join("\n\n")
 }
 
