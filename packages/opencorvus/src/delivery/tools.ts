@@ -18,7 +18,7 @@ import { Log } from "@/util/log"
 import { OrchestratorService } from "@/orchestrator/service"
 import { findTask } from "@/orchestrator/store"
 
-const FIX_CHAIN_DEPTH_LIMIT = 3
+const TASK_CHAIN_DEPTH_LIMIT = 3
 
 const log = Log.create({ service: "delivery-tools" })
 
@@ -74,78 +74,94 @@ export function createDeliveryTools(input?: { sessionID?: string; taskID?: strin
       },
     }),
 
-    submit_fix_task: tool({
+    submit_next_task: tool({
       description:
-        "Spawn a new fix task in the same project to repair the issues found by " +
-        "this verification round. Use this when query_criteria shows failed " +
-        "criteria that the executor needs another pass to fix. The new task is " +
-        "created with priority=critical so it jumps the project's serial queue " +
-        "ahead of normal/high work, but it never preempts the currently active " +
-        "task. A `metadata.fix_for` link points back to this task; the task " +
-        "agent will see the fix context and the failed criteria evidence in its " +
-        "next prompt. Limit applies — the chain stops at depth " + FIX_CHAIN_DEPTH_LIMIT +
-        " to prevent infinite repair loops.",
+        "Spawn a follow-up task in the same project. Use this whenever what " +
+        "needs to happen next belongs in a fresh task rather than inside this " +
+        "one. Common shapes:\n" +
+        "  - Fix: repair failed acceptance criteria that need another executor " +
+        "pass. Pick priority='critical' so it jumps the queue ahead of new " +
+        "user work (but never preempts an already-active task).\n" +
+        "  - Iterate: continue the project's work — next milestone, hardening " +
+        "pass, follow-up feature surfaced during this round. Normal priority.\n" +
+        "  - Recommend: surface a suggested next step to the user. Low " +
+        "priority; it waits for the user (or queue) to promote it.\n" +
+        "The new task links back via `metadata.parent_task`, and chain depth " +
+        "is bounded to " + TASK_CHAIN_DEPTH_LIMIT + " to prevent runaway chains. " +
+        "When `failed_criteria` is provided, the matching evidence from " +
+        "query_criteria is appended to the new task's request so the " +
+        "downstream agent sees exactly what must be fixed.",
       inputSchema: z.object({
-        summary: z.string().describe(
-          "Short title describing the fix task, e.g. 'Repair sidebar layout to match design'.",
+        title: z.string().describe(
+          "Short task title, e.g. 'Repair sidebar layout' or 'Add filter chip to feed'.",
         ),
-        failed_criteria: z.array(z.string()).describe(
-          "Names of the criteria that failed — must match `name` from query_criteria. Evidence is auto-attached.",
+        request: z.string().describe(
+          "Full task description — what the new task should accomplish, with " +
+          "enough context that a fresh agent run (not this one) can act on it.",
+        ),
+        priority: z.enum(["critical", "high", "normal", "low"]).describe(
+          "Queue priority. 'critical' jumps ahead of all user-submitted work — " +
+          "reserve it for repairing verification failures. 'high'/'normal'/'low' " +
+          "for iteration and recommendation tasks, matching urgency.",
+        ),
+        failed_criteria: z.array(z.string()).optional().describe(
+          "Optional: names of failed criteria from query_criteria. When " +
+          "provided, the criterion evidence is auto-attached to the request.",
         ),
         scope_files: z.array(z.string()).optional().describe(
-          "Optional list of files the fix should focus on (relative to project root).",
+          "Optional list of files the next task should focus on (relative to project root).",
         ),
       }),
-      execute: async ({ summary, failed_criteria, scope_files }) => {
-        if (!taskID) return "submit_fix_task: no task context available"
+      execute: async ({ title, request, priority, failed_criteria, scope_files }) => {
+        if (!taskID) return "submit_next_task: no task context available"
         const original = findTask(taskID)
-        if (!original) return `submit_fix_task: original task ${taskID} not found`
+        if (!original) return `submit_next_task: original task ${taskID} not found`
         const meta = (original.metadata as Record<string, unknown> | null) ?? {}
-        const depth = typeof meta.fix_chain_depth === "number" ? meta.fix_chain_depth : 0
-        if (depth >= FIX_CHAIN_DEPTH_LIMIT) {
-          return `submit_fix_task: fix chain depth ${depth} reached limit ${FIX_CHAIN_DEPTH_LIMIT}; refusing to spawn another fix task`
+        const depth = typeof meta.task_chain_depth === "number" ? meta.task_chain_depth : 0
+        if (depth >= TASK_CHAIN_DEPTH_LIMIT) {
+          return `submit_next_task: task chain depth ${depth} reached limit ${TASK_CHAIN_DEPTH_LIMIT}; refusing to spawn another follow-up task`
         }
-        const allCriteria = Array.isArray(meta.criteria_results) ? (meta.criteria_results as any[]) : []
-        const wantedNames = new Set(failed_criteria)
-        const matched = allCriteria.filter((c) => wantedNames.has(String(c?.name ?? "")))
-        const evidenceBlock = matched.length > 0
-          ? matched
-              .map((c) => `- **${c.name}** (${c.family ?? "custom"}): ${c.status}\n  evidence: ${String(c.evidence ?? "(none)").slice(0, 600)}`)
-              .join("\n")
-          : failed_criteria.map((n) => `- **${n}**: (no recorded evidence — query_criteria first)`).join("\n")
+        let evidenceBlock = ""
+        if (failed_criteria && failed_criteria.length > 0) {
+          const allCriteria = Array.isArray(meta.criteria_results) ? (meta.criteria_results as any[]) : []
+          const wantedNames = new Set(failed_criteria)
+          const matched = allCriteria.filter((c) => wantedNames.has(String(c?.name ?? "")))
+          evidenceBlock = matched.length > 0
+            ? "\n\n## Failed criteria from previous verification\n" + matched
+                .map((c) => `- **${c.name}** (${c.family ?? "custom"}): ${c.status}\n  evidence: ${String(c.evidence ?? "(none)").slice(0, 600)}`)
+                .join("\n") + "\n\nAddress every failed criterion above. Do not regress passing criteria."
+            : "\n\n## Failed criteria (no recorded evidence — query_criteria first)\n" +
+              failed_criteria.map((n) => `- **${n}**`).join("\n")
+        }
         const scopeBlock = scope_files && scope_files.length > 0
           ? `\n\n## Scope (focus area)\n${scope_files.map((f) => `- ${f}`).join("\n")}`
           : ""
-        const request = [
-          `# Fix task — derived from \`${original.id}\` ("${original.title}")`,
+        const fullRequest = [
+          `# Follow-up task — derived from \`${original.id}\` ("${original.title}")`,
           ``,
-          summary,
+          request,
           ``,
           `## Original request`,
           original.request,
-          ``,
-          `## Failed criteria from previous verification`,
           evidenceBlock,
           scopeBlock,
-          ``,
-          `Address every failed criterion above. Do not regress passing criteria.`,
         ].join("\n")
         // We don't carry an executor field on the original task row; the new
         // task picks the configured default at create time, which matches how
         // user-initiated tasks are dispatched.
         const newTaskID = await OrchestratorService.createTask({
-          title: `Fix: ${summary.slice(0, 80)}`,
-          request,
-          priority: "critical",
+          title: title.slice(0, 80),
+          request: fullRequest,
+          priority,
           metadata: {
             ...meta,
-            fix_for: original.id,
-            fix_chain_depth: depth + 1,
-            failed_criteria,
-            ...(scope_files ? { fix_scope_files: scope_files } : {}),
+            parent_task: original.id,
+            task_chain_depth: depth + 1,
+            ...(failed_criteria && failed_criteria.length > 0 ? { failed_criteria } : {}),
+            ...(scope_files && scope_files.length > 0 ? { next_task_scope_files: scope_files } : {}),
           },
         })
-        return `submit_fix_task: created new fix task ${newTaskID} (priority=critical, fix_chain_depth=${depth + 1}). It will run after the currently active task finishes.`
+        return `submit_next_task: created new task ${newTaskID} (priority=${priority}, task_chain_depth=${depth + 1}). It enters the queue at the requested priority.`
       },
     }),
 

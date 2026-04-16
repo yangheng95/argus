@@ -245,11 +245,12 @@ export const CreateTaskInput = z.object({
    *  and downstream always use references — not base64. */
   attachments: TaskAttachmentInput.array().optional(),
   // Priority levels (highest first):
-  //  - "critical": fix tasks emitted by `submit_fix_task` — jump the queued
-  //                serial queue ahead of normal/high. Never preempts an
-  //                already-active task in the same project; only takes the
-  //                next queued slot.
-  //  - "high"/"normal"/"low": user-facing levels.
+  //  - "critical": repair-shaped follow-ups emitted by `submit_next_task` —
+  //                jump the queued serial queue ahead of normal/high. Never
+  //                preempts an already-active task in the same project; only
+  //                takes the next queued slot.
+  //  - "high"/"normal"/"low": user-facing levels; also used by iteration /
+  //                recommendation follow-ups from `submit_next_task`.
   priority: z.enum(["critical", "high", "normal", "low"]).optional(),
   /** Defaults to "workflow" (full pipeline). Pass "build" to bypass the pipeline
    *  and run the build agent directly — used by Gateway for one-shot edits. */

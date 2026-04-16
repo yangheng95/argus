@@ -509,89 +509,46 @@ ${compactPlanContext(input.plan)}`,
 }
 
 /**
- * Extract delivery diffs using the worktree's native git.
- * This is the reliable path for worktree-based goal execution.
+ * Extract delivery diffs via the Snapshot subsystem.
  *
- * The Snapshot system shares a single git object store across worktrees,
- * causing index race conditions. The worktree's own git correctly tracks
- * all changes the executor made.
+ * Snapshot uses a project-scoped git-dir at `data/snapshot/<project.id>/`,
+ * completely decoupled from the user project's own `.git` and from the
+ * per-goal worktree's HEAD. Each `Snapshot.track()` call uses a private
+ * `GIT_INDEX_FILE=index-<ts>-<rand>` so concurrent goals cannot corrupt
+ * each other's staging state.
+ *
+ * Caller contract: must wrap with `Instance.provide({ directory: worktreeDir, ... })`
+ * so that `Snapshot.track()` reads files from the per-goal worktree. The
+ * `baseRef` must have been captured (also inside `Instance.provide(worktreeDir)`)
+ * immediately before the executor started — otherwise there is no stable
+ * "before" tree to diff against, and the result is meaningless.
+ *
+ * Why not `git add -A; git diff --cached HEAD` on the worktree's own git?
+ * Because it depends on the worktree's HEAD being the exact "pre-execution"
+ * tree. If the executor (or any hook) advances HEAD, the diff collapses to
+ * empty — silently producing a false-negative delivery. Snapshot tree-hash
+ * diffs are immune: `baseRef` is a committed tree hash, immutable.
  */
-export async function deliveryFromWorktreeGit(
-  worktreeDir: string,
+export async function deliveryFromSnapshot(
+  baseRef: string | undefined,
   prefix: string,
-): Promise<{ summary: string; diffs: z.infer<typeof Snapshot.FileDiff>[] }> {
-  const { $ } = await import("bun")
-
-  // Stage all changes (including new files) so we can diff
-  await $`git add -A`.quiet().cwd(worktreeDir).nothrow()
-
-  // Determine the base to diff against.
-  // If HEAD exists (repo has commits), diff against HEAD.
-  // Otherwise (empty repo), diff against the git empty tree hash.
-  const hasHead = (await $`git rev-parse --verify HEAD`.quiet().cwd(worktreeDir).nothrow()).exitCode === 0
-  const base = hasHead ? "HEAD" : "4b825dc642cb6eb9a060e54bf899d69f82cf022c"
-
-  // Get list of changed files with status
-  const statusOutput = await $`git diff --cached --name-status --no-renames ${base} -- .`
-    .quiet().cwd(worktreeDir).nothrow().text()
-
-  const files: Array<{ file: string; status: "added" | "modified" | "deleted" }> = []
-  for (const line of statusOutput.trim().split("\n")) {
-    if (!line.trim()) continue
-    const [code, file] = line.split("\t")
-    if (!code || !file) continue
-    const status = code.startsWith("A") ? "added" as const
-      : code.startsWith("D") ? "deleted" as const
-      : "modified" as const
-    if (includeDeliveryFile(file)) {
-      files.push({ file, status })
-    }
+): Promise<{ mergeRef: string | undefined; delivery: { summary: string; diffs: z.infer<typeof Snapshot.FileDiff>[] } }> {
+  if (!baseRef) {
+    throw new Error("deliveryFromSnapshot: baseRef is required — it must be captured via Snapshot.track() BEFORE executor starts, inside Instance.provide({ directory: worktreeDir }). Missing baseRef means the upstream dispatch code forgot to snapshot the pre-execution tree.")
   }
-
-  if (files.length === 0) {
-    log.warn("worktree delivery: no changed files detected", { worktreeDir })
-    return { summary: `${prefix}: no changes`, diffs: [] }
+  const mergeRef = await Snapshot.track()
+  if (!mergeRef) {
+    throw new Error("deliveryFromSnapshot: Snapshot.track() returned empty — the project is not a git repo or snapshot is disabled in config, which is incompatible with per-goal worktree delivery extraction.")
   }
-
-  // Real additions/deletions come from git numstat, not line-count deltas.
-  const numstatOutput = await $`git diff --cached --numstat --no-renames ${base} -- .`
-    .quiet().cwd(worktreeDir).nothrow().text()
-  const numstat = new Map<string, { additions: number; deletions: number }>()
-  for (const line of numstatOutput.trim().split("\n")) {
-    if (!line.trim()) continue
-    const [adds, dels, file] = line.split("\t")
-    if (!file) continue
-    const isBinary = adds === "-" && dels === "-"
-    const a = isBinary ? 0 : parseInt(adds, 10)
-    const d = isBinary ? 0 : parseInt(dels, 10)
-    numstat.set(file, {
-      additions: Number.isFinite(a) ? a : 0,
-      deletions: Number.isFinite(d) ? d : 0,
-    })
-  }
-
-  // Read file contents for diffs
-  const diffs: z.infer<typeof Snapshot.FileDiff>[] = []
-  for (const { file, status } of files) {
-    const fullPath = path.join(worktreeDir, file)
-    const after = status === "deleted" ? "" : await fs.readFile(fullPath, "utf-8").catch(() => "")
-    const before = status === "added" || !hasHead ? "" : await $`git show HEAD:${file}`.quiet().cwd(worktreeDir).nothrow().text().catch(() => "")
-
-    const stats = numstat.get(file) ?? { additions: 0, deletions: 0 }
-    diffs.push({
-      file,
-      before,
-      after,
-      additions: stats.additions,
-      deletions: stats.deletions,
-      status,
-    })
-  }
-
-  log.info("worktree delivery extracted", { worktreeDir, files: diffs.length, fileNames: diffs.map((d) => d.file) })
+  const rawDiffs = await Snapshot.diffFull(baseRef, mergeRef)
+  const diffs = filterDeliveryDiffs(rawDiffs)
+  log.info("snapshot delivery extracted", { baseRef, mergeRef, files: diffs.length, fileNames: diffs.map((d) => d.file) })
   return {
-    summary: summary(prefix, diffs.map((d) => d.file)),
-    diffs,
+    mergeRef,
+    delivery: {
+      summary: summary(prefix, diffs.map((d) => d.file)),
+      diffs,
+    },
   }
 }
 

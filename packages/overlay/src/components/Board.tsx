@@ -468,17 +468,24 @@ export function Board(props: BoardProps) {
     const order = agentCardOrder();
     const result: Record<string, Record<string, any[]>> = {};
 
+    // Walk the nested session tree under each goal so a stage like "build"
+    // (child of executor) still lands in the matching step bucket via
+    // STAGE_TO_STEP. Recursion is required because internalCards is no
+    // longer flat — sub-agents nest under their parent session's card.
+    const collect = (node: any, bucket: Record<string, any[]>) => {
+      if (!node || node.kind !== "agent") return;
+      const stepID = STAGE_TO_STEP[node.stage];
+      if (stepID) {
+        (bucket[stepID] ??= []).push(...(node.messages || []));
+      }
+      for (const child of node.children || []) collect(child, bucket);
+    };
+
     for (const cardID of order) {
       const card = cards[cardID];
       if (!card || card.kind !== "goal") continue;
-
       const bucket = (result[card.goalID] ??= {});
-      for (const inner of card.internalCards) {
-        const stepID = STAGE_TO_STEP[inner.stage];
-        if (!stepID) continue;
-        if (inner.kind !== "agent") continue;
-        (bucket[stepID] ??= []).push(...inner.messages);
-      }
+      for (const inner of card.internalCards || []) collect(inner, bucket);
     }
     return result;
   });

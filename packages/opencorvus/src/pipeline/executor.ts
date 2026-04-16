@@ -23,7 +23,8 @@ import { OrchestratorProtocol } from "@/orchestrator/protocol"
 import { updateGoalRun, updateGoalRunExecutorSessionStatus, persistDelivery } from "@/orchestrator/persist"
 import { Database, eq, and } from "@/storage/db"
 import { Identifier } from "@/id/id"
-import { deliveryFromWorktreeGit } from "@/goal/runner"
+import { deliveryFromSnapshot } from "@/goal/runner"
+import { Instance } from "@/project/instance"
 
 import type { GoalContract, GoalContractFields, PipelineEvent, PipelineDelivery, PipelineDeps } from "./types"
 
@@ -130,7 +131,7 @@ async function* streamExecutorEvents(
   goalRunID: string,
 ): AsyncGenerator<PipelineEvent, StreamResult> {
   const { goal, run, task } = contract
-  const { executor, workDir, sessionID, executorSessionID, queueTaskID, signal } = deps
+  const { executor, workDir, sessionID, executorSessionID, queueTaskID, signal, baseRef } = deps
 
   if (!executor.capabilities().events) {
     const status = await executor.status(queueTaskID).catch(() => ({
@@ -139,7 +140,7 @@ async function* streamExecutorEvents(
     if (status.status === "failed") {
       return { error: status.error ?? "Executor failed (no event stream)" }
     }
-    return { delivery: await extractDelivery(goalRunID, workDir, goal.id) }
+    return { delivery: await extractDelivery(goalRunID, workDir, goal.id, baseRef) }
   }
 
   // Completion detection (multi-signal):
@@ -253,7 +254,7 @@ async function* streamExecutorEvents(
     } catch (err) {
       log.warn("failed to force-complete queue task row", { queueTaskID, error: String(err) })
     }
-    return { delivery: await extractDelivery(goalRunID, workDir, goal.id) }
+    return { delivery: await extractDelivery(goalRunID, workDir, goal.id, baseRef) }
   }
 
   const status = await Promise.race([
@@ -272,24 +273,44 @@ async function* streamExecutorEvents(
     return { error: failError }
   }
 
-  return { delivery: await extractDelivery(goalRunID, workDir, goal.id) }
+  return { delivery: await extractDelivery(goalRunID, workDir, goal.id, baseRef) }
 }
 
 // ---------------------------------------------------------------------------
-// Extract delivery diffs from worktree
+// Extract delivery diffs via Snapshot subsystem
+//
+// Snapshot keeps a project-scoped git-dir separate from the user project's
+// own `.git`. `Snapshot.track()` hashes the current worktree contents into
+// a tree-hash using a per-call temporary index (no cross-worktree index
+// corruption). `Snapshot.diffFull(baseRef, mergeRef)` returns the real
+// before/after FileDiff[] between the two tree hashes.
+//
+// The caller must have captured `baseRef` via `Snapshot.track()` inside
+// `Instance.provide({ directory: workDir })` immediately before the
+// executor started. Missing baseRef or missing workDir is a dispatch bug
+// and we fail loud (no silent empty-delivery fallback).
 // ---------------------------------------------------------------------------
 
 async function extractDelivery(
   goalRunID: string,
   workDir: string | undefined,
   goalID: string,
+  baseRef: string,
 ): Promise<PipelineDelivery> {
   if (!workDir) {
-    return { summary: "No worktree — empty delivery", diffs: [] }
+    throw new Error(`extractDelivery: workDir is required (goalRunID=${goalRunID}, goalID=${goalID}). Per-goal dispatch must create a worktree before running the executor — an absent worktree is a dispatch-time bug, not a runtime condition.`)
   }
-  const delivery = await deliveryFromWorktreeGit(workDir, `Goal ${goalID.slice(-8)}`)
-  log.info("delivery extracted", { goalRunID, files: delivery.diffs.length })
-  return delivery
+  const result = await Instance.provide({
+    directory: workDir,
+    fn: () => deliveryFromSnapshot(baseRef, `Goal ${goalID.slice(-8)}`),
+  })
+  log.info("delivery extracted", {
+    goalRunID,
+    files: result.delivery.diffs.length,
+    baseRef,
+    mergeRef: result.mergeRef,
+  })
+  return result.delivery
 }
 
 // ---------------------------------------------------------------------------

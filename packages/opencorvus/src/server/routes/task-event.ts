@@ -48,6 +48,36 @@ export function sessionGoalID(sessionID: string): string | undefined {
   return goalRunSessionRegistry.get(sessionID)?.goalID
 }
 
+/**
+ * Look up the parent session id. Root task-agent sessions have no parent
+ * (returns undefined). Drives overlay card nesting: a card's position in
+ * the tree is literally its parent session's position + 1 level of nesting.
+ *
+ * Reads from SessionTable (the authoritative child→parent edge), with a
+ * process-local cache so we don't hit sqlite on every SSE event.
+ */
+const sessionParentCache = new Map<string, string | null>()
+
+export function sessionParentID(sessionID: string): string | undefined {
+  if (!sessionID) return undefined
+  const cached = sessionParentCache.get(sessionID)
+  if (cached !== undefined) return cached === null ? undefined : cached
+  const row = Database.use((db) =>
+    db
+      .select({ parentID: SessionTable.parent_id })
+      .from(SessionTable)
+      .where(eq(SessionTable.id, sessionID))
+      .get(),
+  )
+  const parentID = typeof row?.parentID === "string" && row.parentID ? row.parentID : null
+  sessionParentCache.set(sessionID, parentID)
+  return parentID ?? undefined
+}
+
+export function invalidateSessionParent(sessionID: string): void {
+  sessionParentCache.delete(sessionID)
+}
+
 export function unregisterGoalRunSession(sessionID: string) {
   goalRunSessionRegistry.delete(sessionID)
 }
