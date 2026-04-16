@@ -5,7 +5,7 @@ import { OrchestratorProtocol } from "@/orchestrator/protocol"
 import { ProtocolStore } from "@/protocol/store"
 import { Message } from "@/session/message"
 import { Log } from "@/util/log"
-import { taskIDForSession, taskSession, sessionRole, sessionGoalID } from "./task-event"
+import { taskIDForSession, taskSession, sessionRole, sessionGoalID, sessionParentID } from "./task-event"
 
 const log = Log.create({ service: "task-message-protocol-bridge" })
 let initialized = false
@@ -37,12 +37,19 @@ export function resolveRole(agent: string): OverlayRole {
   return "assistant"
 }
 
-/** Stages that get their own AgentCard in the overlay. */
-const CARD_STAGES = new Set<OverlayRole>(["assistant", "spec", "architect", "planner", "goal", "executor", "evaluator", "delivery", "build"])
-
 /**
  * Compute overlay metadata for a message event.
- * Returns { resolvedRole, channel } to be injected into the event payload.
+ *
+ * Contract (session-tree driven):
+ * - User messages on the root task session → channel "main". User bubbles are
+ *   the only thing that lives outside an agent card.
+ * - Every assistant message — root task-agent included — routes to an agent
+ *   card keyed by its resolved role. The root task-agent gets its own
+ *   top-level card; sub-agents nest under it (or under the Goal they belong
+ *   to) via `parentSessionID` / `goalID` stamped in `enrichProperties`.
+ * - Child-session user messages are orchestrator prompts dispatched by the
+ *   task-agent into a sub-agent. They belong inside the sub-agent's card
+ *   so the prompt is visible next to the reply.
  */
 export function overlayMeta(
   sessionID: string,
@@ -54,31 +61,28 @@ export function overlayMeta(
   const agent = String(info.agent || "")
   const isRoot = !rootSessionID || sessionID === rootSessionID
 
-  // User messages: root session → main conversation, child session → parent agent's card
   if (role === "user") {
     if (isRoot) return { resolvedRole: "user" as OverlayRole, channel: "main" }
-    // Child session user messages are orchestrator prompts — route to the
-    // agent card that owns this session so they are visible alongside replies.
+    // Child-session user messages MUST have a registered session role. The
+    // register-before-emit invariant is maintained by the dispatch call
+    // sites in `task-agent/tools.ts` (registerGoalRunSession runs before
+    // SessionPrompt.prompt publishes any message). If the invariant breaks,
+    // let it crash here — don't silently route to a wrong card.
     const parentRole = sessionRole(sessionID)
-    const resolved = parentRole ? resolveRole(parentRole) : ("user" as OverlayRole)
-    // Route to the parent stage's card if it has one; otherwise these are
-    // internal orchestrator prompts (e.g. Task Agent → child) that should
-    // NOT appear in the main conversation — mark as "filtered".
-    const channel = CARD_STAGES.has(resolved) ? resolved : "filtered"
-    return { resolvedRole: "user" as OverlayRole, channel }
+    if (!parentRole) {
+      throw new Error(
+        `overlayMeta: child session ${sessionID} has no registered role; ` +
+        `registerGoalRunSession must run before the session emits messages`,
+      )
+    }
+    return { resolvedRole: "user" as OverlayRole, channel: resolveRole(parentRole) }
   }
 
-  // Root session assistant messages stay as-is
-  if (isRoot) {
-    const resolved = resolveRole(agent)
-    const channel = CARD_STAGES.has(resolved) ? resolved : "main"
-    return { resolvedRole: resolved, channel }
-  }
-
-  // Child session — agent field is authoritative, same logic as root
+  // Assistant messages — one contract regardless of whether the sender is
+  // root task-agent or a descendant sub-agent. The overlay's session-tree
+  // renderer sorts out nesting via parentSessionID.
   const resolved = resolveRole(agent)
-  const channel = CARD_STAGES.has(resolved) ? resolved : "main"
-  return { resolvedRole: resolved, channel }
+  return { resolvedRole: resolved, channel: resolved }
 }
 
 function sessionFromProperties(properties: Record<string, unknown>) {
@@ -137,13 +141,17 @@ function infoForEvent(properties: Record<string, unknown>): { role: string; agen
  */
 function enrichProperties(properties: Record<string, unknown>, sessionID: string, taskID: string): Record<string, unknown> {
   const info = infoForEvent(properties)
-  // External executor processes don't stamp agent — fill from session registry
-  if (!info.agent) {
-    const role = sessionRole(sessionID)
-    if (role) info.agent = role
-  }
+  // Session registry is the orchestrator's authoritative role-for-sessionID
+  // mapping. It always wins over whatever the inner engine (opencode / codex /
+  // claude-code) self-stamped on the message — those engines use their own
+  // internal agent names ("build", "general", etc.) that don't match the
+  // orchestrator's stage taxonomy. Unregistered sessions (e.g. opencode's own
+  // sub-sessions for nested sub-agent calls) keep the engine's self-stamp.
+  const registeredRole = sessionRole(sessionID)
+  if (registeredRole) info.agent = registeredRole
   const meta = overlayMeta(sessionID, taskID, info)
   const goalID = sessionGoalID(sessionID)
+  const parentSessionID = sessionParentID(sessionID)
   const enriched = { ...properties }
 
   // message.updated: stamp into info object directly
@@ -153,12 +161,14 @@ function enrichProperties(properties: Record<string, unknown>, sessionID: string
       resolvedRole: meta.resolvedRole,
       channel: meta.channel,
       ...(goalID ? { goalID } : {}),
+      ...(parentSessionID ? { parentSessionID } : {}),
     }
   }
   // Always set at top level so part/delta events also carry the metadata
   enriched.resolvedRole = meta.resolvedRole
   enriched.channel = meta.channel
   if (goalID) enriched.goalID = goalID
+  if (parentSessionID) enriched.parentSessionID = parentSessionID
   return enriched
 }
 

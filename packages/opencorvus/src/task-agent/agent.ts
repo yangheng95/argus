@@ -534,22 +534,25 @@ const TASK_AGENT_INSTRUCTIONS = [
 function buildSystemParts(task: TaskRow, trigger: TaskAgentTrigger, workflow?: MiniWorkflow, workflowState?: WorkflowState): string[] {
   const ctx: string[] = []
 
-  // ── Fix-task context ──
-  // When the delivery agent's `submit_fix_task` spawned this task, we attach
-  // the predecessor task id, the failed-criteria evidence, and any focused
-  // scope so the executor knows it's a targeted repair, not a fresh build.
+  // ── Follow-up task context ──
+  // When the delivery agent's `submit_next_task` spawned this task (for any
+  // reason — repair, iteration, or a queued recommendation), we attach the
+  // predecessor task id, any failed-criteria evidence, and scope hints so
+  // the agent knows what came before and what (if anything) must be fixed.
   const meta = (task.metadata as Record<string, unknown> | null) ?? {}
-  const fixFor = typeof meta.fix_for === "string" ? meta.fix_for : undefined
-  if (fixFor) {
+  const parentTask = typeof meta.parent_task === "string" ? meta.parent_task : undefined
+  if (parentTask) {
     const failed = Array.isArray(meta.failed_criteria) ? (meta.failed_criteria as string[]) : []
-    const scope = Array.isArray(meta.fix_scope_files) ? (meta.fix_scope_files as string[]) : []
-    const depth = typeof meta.fix_chain_depth === "number" ? meta.fix_chain_depth : undefined
-    ctx.push("## Fix Context")
-    ctx.push(`- This task repairs predecessor task: ${fixFor}`)
-    if (depth !== undefined) ctx.push(`- Fix chain depth: ${depth}`)
-    if (failed.length > 0) ctx.push(`- Failed criteria from previous verification: ${failed.join(", ")}`)
+    const scope = Array.isArray(meta.next_task_scope_files) ? (meta.next_task_scope_files as string[]) : []
+    const depth = typeof meta.task_chain_depth === "number" ? meta.task_chain_depth : undefined
+    ctx.push("## Follow-up Context")
+    ctx.push(`- Predecessor task: ${parentTask}`)
+    if (depth !== undefined) ctx.push(`- Task chain depth: ${depth}`)
+    if (failed.length > 0) {
+      ctx.push(`- Failed criteria from previous verification: ${failed.join(", ")}`)
+      ctx.push(`- Address every failed criterion. Do not regress passing criteria.`)
+    }
     if (scope.length > 0) ctx.push(`- Suggested scope (focus area): ${scope.join(", ")}`)
-    ctx.push(`- Address every failed criterion. Do not regress passing criteria.`)
     ctx.push("")
   }
 

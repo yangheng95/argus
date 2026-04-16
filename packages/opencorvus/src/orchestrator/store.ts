@@ -515,9 +515,10 @@ export function hasActiveTaskInProject(projectID: string): boolean {
  *
  * Priority order (highest first): critical → high → normal → low.
  *
- * `critical` is reserved for fix tasks emitted by `submit_fix_task` from the
- * delivery agent — they jump ahead of any normal/high queued work but never
- * preempt an already-active task in the project.
+ * `critical` is reserved for repair-shaped follow-ups emitted by the delivery
+ * agent's `submit_next_task` — they jump ahead of any normal/high queued work
+ * but never preempt an already-active task in the project. `high`/`normal`/
+ * `low` follow-ups from the same tool share the user-facing levels.
  */
 export function findNextQueuedTaskForProject(projectID: string): TaskRow | undefined {
   return Database.use((db) =>

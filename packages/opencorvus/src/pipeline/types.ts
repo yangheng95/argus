@@ -160,4 +160,13 @@ export interface PipelineDeps {
   signal: AbortSignal
   /** Decision Log (injected, scoped to task). */
   decisionLog?: DecisionLog
+  /**
+   * Snapshot tree hash captured via Snapshot.track() INSIDE
+   * `Instance.provide({ directory: workDir })` immediately before the
+   * executor runs. Required for delivery extraction — without it there is
+   * no stable "before" reference to diff against. Missing baseRef is a
+   * dispatch-time bug, not a runtime condition, so extractDelivery will
+   * throw rather than silently return an empty delivery.
+   */
+  baseRef: string
 }

@@ -28,6 +28,7 @@ import { createDecisionLog } from "@/decision-log"
 import { readyGoalNodes, type GoalNodeEntry } from "@/goal/scheduler"
 import { cleanupGoalWorkspace } from "@/goal/runner"
 import { writeIntentBundle } from "@/goal/intent-bundle"
+import { Snapshot } from "@/snapshot"
 import {
   listPlanNodesByPlan,
   listGoalsByPlan,
@@ -394,6 +395,14 @@ export class GoalPool {
 
       // ── 3. Create goal session ──
       const goalSession = await createGoalSession(task as any, entry.goal as any, worktreeDir)
+      // Register the session role BEFORE any code path can emit messages on it.
+      // `executor.submit()` (step 6 below) dispatches the prompt and opencode
+      // immediately starts emitting message events using `goalSession.id`. If
+      // we registered after submit, the bridge would see the first events with
+      // `sessionRole(sessionID)` returning undefined → `info.agent` stays as
+      // whatever opencode self-stamped (often "build") → channel routes to
+      // the wrong overlay card. Registering here closes the race window.
+      registerGoalRunSession(goalSession.id, task.id, "executor", entry.goal.id)
 
       // ── 4. Create GoalRun record ──
       const goalRun = createGoalRun({
@@ -475,6 +484,27 @@ export class GoalPool {
         if (sections.length > 0) systemOverride = sections.join("\n\n")
       }
 
+      // Capture the pre-execution tree hash in the per-goal worktree.
+      // This is the only "before" reference for delivery extraction — the
+      // executor's edits are diffed against it. Must happen AFTER retry
+      // replay + intent bundle + per-goal planning writes land, and BEFORE
+      // the executor submits its first tool call, otherwise the diff is
+      // polluted by orchestrator-internal writes (intent bundle, plan notes)
+      // or misses the very first file the executor writes.
+      //
+      // Fails loud if Snapshot.track() returns empty — the project must be
+      // a git repo with snapshot enabled, which is a dispatch-time invariant
+      // for per-goal worktree execution. A silent empty baseRef would produce
+      // silent empty deliveries downstream.
+      const baseRef = await Instance.provide({
+        directory: worktreeDir,
+        fn: () => Snapshot.track(),
+      })
+      if (!baseRef) {
+        throw new Error(`goal-pool: Snapshot.track() returned empty for worktree ${worktreeDir}. Per-goal dispatch requires the project to be a git repo with snapshot enabled — current state is incompatible with delivery extraction.`)
+      }
+      updateGoalRun(goalRun.id, { base_ref: baseRef })
+
       await markGoalWorkflowStep(task.id, entry.goal.id, entry.goal.title, "execute", "running").catch(() => undefined)
       const executor = ExecutorRegistry.createInstance(run.executor)
       const submission = await executor.submit({
@@ -506,7 +536,9 @@ export class GoalPool {
         goalRunID: goalRun.id,
       })
 
-      registerGoalRunSession(goalSession.id, task.id, "executor", entry.goal.id)
+      // goalSession.id is already registered before executor.submit() above.
+      // executorSession is created after submit() returns (via ensureExecutorSession),
+      // so it couldn't have emitted anything yet — no race window here.
       registerGoalRunSession(executorSession.id, task.id, "executor", entry.goal.id)
 
       // ── 7. Run pipeline with inactivity detection ──
@@ -532,6 +564,7 @@ export class GoalPool {
         executorSessionID: executorSession.id,
         queueTaskID: submission.queueTaskID,
         signal,
+        baseRef,
       })
 
       // Inactivity watchdog — runs in parallel

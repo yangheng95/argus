@@ -27,25 +27,6 @@ import {
   isAutoReplied,
 } from "./transcript";
 
-// Per-card resolution cache: keyed by card ID, stores fingerprint + resolved object.
-// When card structure hasn't changed (same message count, status, children),
-// we return the cached resolved card instead of re-spreading/re-sorting.
-const _cardResolveCache = new Map<string, { fp: string; resolved: any }>();
-
-function cardFingerprint(card: any): string {
-  const msgs = card.messages || [];
-  const children = card.internalCards || [];
-  const childMsgCount = children.reduce(
-    (acc: number, c: any) => acc + (c.messages?.length || 0),
-    0,
-  );
-  // Include step statuses: they change (pending→running→completed) independently
-  // of message count. Without this, cached cards show stale step progress.
-  const steps = (card.goalSteps || []).map((s: any) => s.status || "").join(",");
-  const contractCount = card.contracts?.length || 0;
-  return `${msgs.length}:${children.length}:${childMsgCount}:${card.status || ""}:${card.goalStatus || ""}:${steps}:${contractCount}`;
-}
-
 const UNTIMED_CONVERSATION_ORDER = Number.MAX_SAFE_INTEGER;
 
 function conversationTime(item: any): number {
@@ -199,49 +180,39 @@ export function conversationMessages(): any[] {
   // User request + interaction messages from board state
   const contextMsgs = buildUserContextMessages();
 
-  // Agent card messages — all AGENT_CARD_STAGES produce collapsible
-  // CardNode entries (kind="agent"). Parallel executor goal groups produce
-  // CardNode entries (kind="goal") with step children.
-  //
-  // Per-card resolution cache: avoids recreating resolved objects when the
-  // underlying card data hasn't structurally changed (same message count,
-  // same status). This eliminates the majority of spread/sort allocations
-  // during streaming where only text content changes, not card structure.
+  // Agent card tree — walk recursively so nested sub-agent cards (e.g. build
+  // under executor) get the same live-proxy resolution and chronological sort
+  // as top-level cards. Messages come directly from the reactive store;
+  // resolveMessage() is a no-op for anything already in messageIndex and only
+  // matters for synthetic live-event messages.
+  const resolveCardTree = (card: any): any => {
+    if (!card) return card;
+    if (card.kind === "goal" && Array.isArray(card.internalCards)) {
+      const children = card.internalCards.map((c: any) => resolveCardTree(c));
+      return { ...card, internalCards: children };
+    }
+    if (card.kind === "agent") {
+      const msgs = Array.isArray(card.messages) ? card.messages.map((m: any) => resolveMessage(m)) : [];
+      msgs.sort((a: any, b: any) => conversationTime(a) - conversationTime(b));
+      const children = Array.isArray(card.children) ? card.children.map((c: any) => resolveCardTree(c)) : [];
+      return { ...card, messages: msgs, children };
+    }
+    return card;
+  };
+
   const agentCardMsgs: any[] = [];
   const currentOrder = agentCardOrder();
   const currentCards = agentCards();
-  const staleKeys = new Set(_cardResolveCache.keys());
   for (const id of currentOrder) {
     const card = currentCards[id];
     if (!card) continue;
-    staleKeys.delete(id);
-    const fp = cardFingerprint(card);
-    const cached = _cardResolveCache.get(id);
-    if (cached && cached.fp === fp) {
-      agentCardMsgs.push(cached.resolved);
-      continue;
+    if (card.kind === "agent") {
+      const hasMessages = Array.isArray(card.messages) && card.messages.length > 0;
+      const hasChildren = Array.isArray((card as any).children) && (card as any).children.length > 0;
+      if (!hasMessages && !hasChildren) continue;
     }
-    let resolved: any;
-    if (card.kind === "goal" && Array.isArray(card.internalCards)) {
-      const resolvedChildren = card.internalCards.map((child: any) => {
-        if (!Array.isArray(child.messages)) return child;
-        const msgs = child.messages.map((m: any) => resolveMessage(m));
-        msgs.sort((a: any, b: any) => conversationTime(a) - conversationTime(b));
-        return { ...child, messages: msgs };
-      });
-      resolved = { ...card, internalCards: resolvedChildren };
-    } else if (card.kind === "agent" && Array.isArray(card.messages) && card.messages.length > 0) {
-      const msgs = card.messages.map((m: any) => resolveMessage(m));
-      msgs.sort((a: any, b: any) => conversationTime(a) - conversationTime(b));
-      resolved = { ...card, messages: msgs };
-    } else {
-      continue;
-    }
-    _cardResolveCache.set(id, { fp, resolved });
-    agentCardMsgs.push(resolved);
+    agentCardMsgs.push(resolveCardTree(card));
   }
-  // Evict cache entries for cards that no longer exist
-  for (const key of staleKeys) _cardResolveCache.delete(key);
 
   const result = [...filteredMain, ...contextMsgs, ...agentCardMsgs].sort(
     (a: any, b: any) => conversationTime(a) - conversationTime(b),

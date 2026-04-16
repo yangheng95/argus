@@ -52,7 +52,21 @@ export type AgentCardData =
       round: number;
       messages: any[];
       sessionID: string;
+      /** Parent session id (bridge-stamped). Drives card nesting: a card's
+       *  position in the tree is literally its parent session's position + 1
+       *  level of nesting, unless the card has a goalID (then it lives in
+       *  that goal's container instead). Empty string for root sessions and
+       *  for synthetic live-event cards that don't map to a real session. */
+      parentSessionID: string;
+      /** Goal membership (bridge-stamped or from board.goalRuns). When set,
+       *  this card is routed into the matching Goal card, not the session
+       *  tree — Goal is the stronger container. */
+      goalID: string;
       time: number;
+      /** Nested sub-agent cards. Populated by computeAgentCards() once all
+       *  sessions are assembled; consumed by card-tree.ts to render a
+       *  recursive Card node tree. */
+      children: AgentCardData[];
     }
   | {
       kind: "goal";
@@ -93,22 +107,10 @@ export { store as messageStore };
 
 const messageIndex = new Map<string, Message>();
 // Buffer for parts that arrive before their parent message.updated event.
-// Each entry tracks creation time for TTL-based cleanup.
-const _pendingParts = new Map<string, { parts: any[]; created: number }>();
-const PENDING_PARTS_TTL_MS = 60_000;
-let _lastPendingPrune = 0;
-
-function prunePendingParts(): void {
-  const now = Date.now();
-  // Throttle: at most once per 10 seconds
-  if (now - _lastPendingPrune < 10_000) return;
-  _lastPendingPrune = now;
-  for (const [key, entry] of _pendingParts) {
-    if (now - entry.created > PENDING_PARTS_TTL_MS) {
-      _pendingParts.delete(key);
-    }
-  }
-}
+// Cleared on task switch (clearMessages). No TTL — SSE is meant to deliver
+// message.updated first; if it doesn't, that's a backend-ordering bug to fix
+// at the source, not a symptom to paper over here.
+const _pendingParts = new Map<string, { parts: any[] }>();
 
 function rebuildMessageIndex() {
   messageIndex.clear();
@@ -342,33 +344,8 @@ export function mergeLoadedConversationMessages(
   return normalizeLoadedMessages(result);
 }
 
-import { normalizeAgentRole, AGENT_CARD_STAGES, classifyMessage } from "../utils/message";
+import { normalizeAgentRole, classifyMessage } from "../utils/message";
 import { rootTaskSessionID } from "../store/board";
-
-const MAX_LIVE_AGENT_MESSAGES = 12;
-
-type AgentRound = {
-  channelID: string;
-  stage: string;
-  sessionID: string;
-  messages: any[];
-  startTime: number;
-  endTime: number;
-};
-
-/** Active pipeline stages — derived from session messages with running tool parts. */
-export function activeAgentStages(): Set<string> {
-  const status = String(boardStore.board?.task?.status || "").trim().toLowerCase();
-  if (status !== "active") return new Set();
-  const stages = new Set<string>();
-  for (const msg of store.messages) {
-    const role = normalizeAgentRole(String(msg?.info?.resolvedRole || msg?.info?.channel || ""));
-    if (!AGENT_CARD_STAGES.has(role as any)) continue;
-    const hasRunning = (msg.parts || []).some((p: any) => p?.state?.status === "running");
-    if (hasRunning) stages.add(role);
-  }
-  return stages;
-}
 
 function messageEndTime(message: any): number {
   return Number(
@@ -433,41 +410,20 @@ function agentEventToolPart(event: any): any | null {
 
 // Cache live agent messages by stable key (msgID:kind) to maintain referential
 // stability for Solid's `<For>`. Text changes overwrite the same entry instead
-// of creating new ones, preventing unbounded memory growth during streaming.
-//
-// IMPORTANT: this cache is also pruned by `pruneAgentEvents()` whenever an
-// agent event drops out of `store.agentEvents` (per-stage 12-event cap). The
-// pruning relies on `agentMessageStableKey()` producing the SAME key as the
-// one written here — both must use a deterministic time fallback, never
-// Date.now(), or the prune step won't be able to find the entries to delete
-// and the map will grow unbounded again.
+// of creating new ones. Per-task lifetime: cleared by `clearAgentEvents()` on
+// task switch; no per-stage cap, because persisted messages are the
+// authoritative source (see specs/new-arch/02-data.md) and any truncation of
+// the live buffer would be a fallback layer papering over that.
 const _agentMsgCache = new Map<string, any>();
-
-/** Deterministic stable-key derivation for the agent-message cache. */
-function agentMessageStableKey(event: any): string {
-  if (!event || typeof event !== "object") return "";
-  const stage = String(event?.stage || "").trim().toLowerCase();
-  if (!stage) return "";
-  // Use 0 (not Date.now()) when time is missing — must be deterministic so
-  // pruneAgentEvents can compute the same key later.
-  const created = agentEventTime(event) || 0;
-  const eventID =
-    typeof event?.id === "string" && event.id
-      ? event.id
-      : `${stage}:${String(event?.kind || "status")}:${created}`;
-  const kind = String(event?.kind || "status").trim().toLowerCase();
-  return `agent-event:${stage}:${eventID}:${kind}`;
-}
 
 function agentMessage(event: any): any | null {
   if (!event || typeof event !== "object") return null;
   const stage = String(event?.stage || "").trim().toLowerCase();
   if (!stage) return null;
-  // Use the same deterministic time as agentMessageStableKey (0 fallback,
-  // not Date.now()) so the eventID embedded in msgID matches what prune
-  // computes. The "live" creation timestamp on the synthesized message
-  // itself can still fall back to Date.now() — that field is presentation
-  // only and isn't part of the cache key.
+  // Deterministic time embedded in the synthesized eventID (0 fallback, not
+  // Date.now()), so repeated lookups for the same logical event compute the
+  // same key. The `created` time written onto the presentation record can
+  // still fall back to Date.now() — it's not part of the cache key.
   const stableTime = agentEventTime(event) || 0;
   const created = stableTime || Date.now();
   const eventID =
@@ -534,25 +490,6 @@ function agentMessage(event: any): any | null {
   return msg;
 }
 
-function agentRoundStatus(
-  stage: string,
-  round: AgentRound,
-  roundIndex: number,
-  rounds: AgentRound[],
-  latestStageEvent: any,
-): string {
-  if (roundIndex < rounds.length - 1) return "completed";
-  const active = activeAgentStages().has(stage);
-  const latestKind = String(latestStageEvent?.kind || "").trim().toLowerCase();
-  const latestSummary = String(latestStageEvent?.summary || "");
-  if (latestKind === "error") return "error";
-  if (latestKind === "status" && /finished|completed|done/i.test(latestSummary)) {
-    return "completed";
-  }
-  if (active) return "running";
-  return "completed";
-}
-
 /**
  * Merge consecutive reasoning_delta events into a single accumulated event.
  * Prevents fragmented rendering where each token appears as a separate message.
@@ -583,276 +520,266 @@ function mergeAgentReasoningDeltas(events: any[]): any[] {
   return result;
 }
 
-// ── Agent cards: reactive derivation ──
-// agentCards is a pure computation derived from store.messages, store.agentEvents,
-// boardStore.board (goal titles), and rootTaskSessionID(). Solid's reactive graph
-// guarantees that consumers always see a consistent snapshot — no manual rebuild
-// calls, no timing gaps between source updates and derived state.
+// ── Agent cards: session-tree-driven derivation ──
+//
+// One card per agent session. Nesting follows session.parentID as stamped
+// by `task-message-protocol-bridge.ts` (see `parentSessionID` on info).
+// Cards carrying a `goalID` are routed into the matching Goal container
+// (stronger grouping than session tree); everything else forms a tree under
+// the root task-agent card.
+//
+// Derived purely from store.messages + store.agentEvents + boardStore.board;
+// Solid's reactive graph fires this synchronously when any source changes.
+
+type SessionBucket = {
+  sessionID: string;
+  stage: string;
+  parentSessionID: string;
+  goalID: string;
+  messages: Message[];
+  startTime: number;
+  endTime: number;
+};
+
+/**
+ * Derive a card's lifecycle status from structured signals only:
+ *   - a discrete `error` kind on the latest live event, OR
+ *   - any message part whose `state.status` is currently "running", OR
+ *   - any message carrying a finite `info.time.completed` timestamp.
+ *
+ * Deliberately refuses to parse the event's `summary` text — matching
+ * natural-language phrases like "finished"/"done" would violate CLAUDE.md
+ * principle 12 (no keyword/heuristic matching). The authoritative completion
+ * signal is the message timestamp written by the session runtime; if that
+ * signal is missing for a completed stage, fix the backend emitter rather
+ * than text-match around it here.
+ */
+function bucketStatus(bucket: SessionBucket, latestStageEvent: any): string {
+  const latestKind = String(latestStageEvent?.kind || "").trim().toLowerCase();
+  if (latestKind === "error") return "error";
+  const hasRunningPart = bucket.messages.some((m: any) =>
+    (m.parts || []).some((p: any) => p?.state?.status === "running"),
+  );
+  if (hasRunningPart) return "running";
+  const anyCompleted = bucket.messages.some((m: any) => Number.isFinite(m?.info?.time?.completed));
+  return anyCompleted ? "completed" : "running";
+}
 
 function computeAgentCards(): { cards: Record<string, AgentCardData>; order: string[] } {
-  const roundsByStage: Record<string, AgentRound[]> = {};
-  const latestEventByStage = new Map<string, any>();
-
   const rootSID = rootTaskSessionID();
+
+  // 1. Bucket messages by sessionID. Each session = one agent card.
+  const bySession = new Map<string, SessionBucket>();
+  // Messages without a sessionID (legacy / synthetic transcript rows) get one
+  // bucket per fallback message-id key so they still surface.
+  const orphanBuckets: Array<SessionBucket & { channelID: string }> = [];
+
   for (const message of store.messages) {
-    const stage = message.info?.channel || classifyMessage(message, rootSID);
+    const stage = String(message.info?.channel || classifyMessage(message, rootSID));
     if (stage === "main" || stage === "filtered") continue;
-    // Skip user-role messages inside agent cards — they are internal orchestrator
-    // prompts (goal prompts, trigger messages), never actual user input.
     if (String(message.info?.role || "").toLowerCase() === "user") continue;
-    const sessionID =
-      typeof message?.info?.sessionID === "string" ? message.info.sessionID.trim() : "";
-    const fallbackID =
-      typeof message?.info?.id === "string" && message.info.id ? message.info.id : hashText(messageSignature(message));
-    const channelID = sessionID
-      ? `${stage}:session:${sessionID}`
-      : `${stage}:message:${fallbackID}`;
-    const round = roundsByStage[stage] || [];
-    let entry = round.find((item) => item.channelID === channelID);
-    if (!entry) {
-      entry = {
-        channelID,
+
+    const sessionID = typeof message?.info?.sessionID === "string" ? message.info.sessionID.trim() : "";
+    const parentSessionID = typeof message?.info?.parentSessionID === "string" ? message.info.parentSessionID.trim() : "";
+    const goalID = typeof message?.info?.goalID === "string" ? message.info.goalID.trim() : "";
+    const created = finiteMessageTime(message) ?? Infinity;
+    const completed = messageEndTime(message);
+
+    if (!sessionID) {
+      const fallbackID = typeof message?.info?.id === "string" && message.info.id
+        ? message.info.id
+        : hashText(messageSignature(message));
+      orphanBuckets.push({
+        sessionID: "",
         stage,
+        parentSessionID: "",
+        goalID,
+        messages: [message],
+        startTime: Number.isFinite(created) ? created : Date.now(),
+        endTime: completed || Date.now(),
+        channelID: `${stage}:message:${fallbackID}`,
+      });
+      continue;
+    }
+
+    let bucket = bySession.get(sessionID);
+    if (!bucket) {
+      bucket = {
         sessionID,
+        stage,
+        parentSessionID,
+        goalID,
         messages: [],
         startTime: Infinity,
         endTime: 0,
       };
-      round.push(entry);
-      roundsByStage[stage] = round;
+      bySession.set(sessionID, bucket);
     }
-    entry.messages.push(message);
-    const created = finiteMessageTime(message) ?? Infinity;
-    if (created < entry.startTime) entry.startTime = created;
-    const completed = messageEndTime(message);
-    if (completed > entry.endTime) entry.endTime = completed;
+    bucket.messages.push(message);
+    if (!bucket.parentSessionID && parentSessionID) bucket.parentSessionID = parentSessionID;
+    if (!bucket.goalID && goalID) bucket.goalID = goalID;
+    if (created < bucket.startTime) bucket.startTime = created;
+    if (completed > bucket.endTime) bucket.endTime = completed;
   }
 
-  const liveEventsByStage = new Map<string, any[]>();
-  for (const event of store.agentEvents) {
-    const stage = String(event?.stage || "").trim().toLowerCase();
-    if (!stage) continue;
-    const stageEvents = liveEventsByStage.get(stage) || [];
-    stageEvents.push(event);
-    liveEventsByStage.set(stage, stageEvents);
-    latestEventByStage.set(stage, event);
-  }
-
-  for (const [stage, events] of liveEventsByStage) {
-    if ((roundsByStage[stage]?.length ?? 0) > 0) continue;
-    const merged = mergeAgentReasoningDeltas(
-      events
-        .slice()
-        .sort((left, right) => agentEventTime(left) - agentEventTime(right)),
-    );
-    const messages = merged
-      .map((event) => agentMessage(event))
-      .filter((message): message is Message => !!message);
-    if (messages.length === 0) continue;
-    const startTime = agentEventTime(merged[0]);
-    const endTime = agentEventTime(merged[merged.length - 1]);
-    roundsByStage[stage] = [{
-      channelID: `${stage}:live`,
-      stage,
-      sessionID: "",
-      messages,
-      startTime: Number.isFinite(startTime) && startTime > 0 ? startTime : Date.now(),
-      endTime: Number.isFinite(endTime) && endTime > 0 ? endTime : Date.now(),
-    }];
-  }
-
-  // ── Goal group assembly ──
-  // Board-driven: use goalWorkflows for goal info & sessionID→goalID mapping.
-  // Executor messages are matched to goals via sessionID.
-  // Other per-goal stages (planner, evaluator) use message goalID (bridge-stamped).
-  // All per-goal stages are collected into goal group cards.
-  // Task-scope stages (goal/requirements, architect, delivery, spec) stay standalone.
-
-  // Stages that nest into a goal card when they carry a goalID. "build" is
-  // here because a goal's executor may spawn a build sub-session for direct
-  // code edits; when goal-scoped it belongs next to planner/executor/evaluator
-  // under the goal rather than as a rootless agent card. Task-level fast-path
-  // builds (task-agent routing a simple request straight to `build`) carry no
-  // goalID and fall through to root rendering — see the `gid` branch below.
-  const PER_GOAL_STAGES = new Set(["planner", "executor", "evaluator", "build"]);
-
-  const goalInfoMap = new Map<string, { id: string; title: string; status: string }>();
-  const goalIndexMap = new Map<string, number>();
-  // sessionID → goalID, built from the board snapshot (board.goalRuns). This
-  // is the authoritative O(1) index — goal-pool.ts persists goalRun rows at
-  // dispatch time, so every running executor/planner session resolves here.
+  // 2. Back-fill goalID from board.goalRuns for sessions whose stamp hadn't
+  //    landed yet when messages arrived (transcripts loaded pre-registration).
   const sessionToGoal = new Map<string, string>();
-
-  for (let i = 0; i < (boardStore.board?.goalWorkflows || []).length; i++) {
-    const gw = boardStore.board!.goalWorkflows![i];
-    goalInfoMap.set(gw.goalID, { id: gw.goalID, title: gw.goalTitle, status: gw.goalStatus });
-    goalIndexMap.set(gw.goalID, i + 1);
-  }
   for (const gr of boardStore.board?.goalRuns || []) {
     if (gr.sessionID) sessionToGoal.set(gr.sessionID, gr.goalID);
     if (gr.executorSessionID) sessionToGoal.set(gr.executorSessionID, gr.goalID);
     if (gr.plannerSessionID) sessionToGoal.set(gr.plannerSessionID, gr.goalID);
   }
-
-  /** Two O(1) lookups, both feed from the same goal-pool registration:
-   *   1. sessionToGoal — DB snapshot; covers planner/executor once board
-   *      sync catches up.
-   *   2. first message's info.goalID — live stamp from the bridge; catches
-   *      rounds whose session hasn't landed in the board snapshot yet.
-   *  All messages in a round share the same goalID, so checking only the
-   *  first one is sufficient (and keeps computeAgentCards O(rounds), not
-   *  O(rounds·messages)). */
-  function resolveGoalID(round: AgentRound): string {
-    if (round.sessionID && sessionToGoal.has(round.sessionID)) {
-      return sessionToGoal.get(round.sessionID)!;
+  for (const bucket of bySession.values()) {
+    if (!bucket.goalID && sessionToGoal.has(bucket.sessionID)) {
+      bucket.goalID = sessionToGoal.get(bucket.sessionID)!;
     }
-    const first = round.messages[0];
-    return typeof first?.info?.goalID === "string" ? first.info.goalID : "";
   }
 
-  const nextCards: Record<string, AgentCardData> = {};
-  const nextOrder: string[] = [];
+  // 3. Live agent events — bootstrap state before any real session message
+  //    exists for a given stage. Once messages land, the live bucket is
+  //    dropped in favour of the real one.
+  const liveEventsByStage = new Map<string, any[]>();
+  const latestEventByStage = new Map<string, any>();
+  for (const event of store.agentEvents) {
+    const stage = String(event?.stage || "").trim().toLowerCase();
+    if (!stage) continue;
+    const list = liveEventsByStage.get(stage) || [];
+    list.push(event);
+    liveEventsByStage.set(stage, list);
+    latestEventByStage.set(stage, event);
+  }
+  const hasSessionForStage = (stage: string): boolean => {
+    for (const b of bySession.values()) if (b.stage === stage) return true;
+    return false;
+  };
+  const liveBuckets: Array<SessionBucket & { synthID: string }> = [];
+  for (const [stage, events] of liveEventsByStage) {
+    if (hasSessionForStage(stage)) continue;
+    const merged = mergeAgentReasoningDeltas(
+      events.slice().sort((l, r) => agentEventTime(l) - agentEventTime(r)),
+    );
+    const messages = merged.map((e) => agentMessage(e)).filter((m): m is Message => !!m);
+    if (messages.length === 0) continue;
+    const startTime = agentEventTime(merged[0]) || Date.now();
+    const endTime = agentEventTime(merged[merged.length - 1]) || Date.now();
+    liveBuckets.push({
+      sessionID: "",
+      stage,
+      parentSessionID: "",
+      goalID: "",
+      messages,
+      startTime,
+      endTime,
+      synthID: `${stage}:live`,
+    });
+  }
 
-  function buildCard(
-    stage: string,
-    round: AgentRound,
-    roundLabel: number,
-    status: string,
-  ): AgentCardData {
-    // Fall back to Date.now() if the round had no valid timestamp.
-    // Real timestamp validation belongs in setMessages/appendAgentEvent.
-    let created = round.startTime;
-    if (!Number.isFinite(created) || created <= 0) {
-      created = Date.now();
-    }
+  // 4. Build one AgentCardData per bucket.
+  function buildAgentCard(cardID: string, b: SessionBucket, statusOverride?: string): AgentCardData {
+    const status = statusOverride ?? bucketStatus(b, latestEventByStage.get(b.stage));
+    const start = Number.isFinite(b.startTime) && b.startTime > 0 ? b.startTime : Date.now();
     return {
       kind: "agent",
-      id: round.channelID,
-      stage,
+      id: cardID,
+      stage: b.stage,
       status,
-      round: roundLabel,
-      sessionID: round.sessionID,
-      time: created,
-      messages: round.messages
-        .slice()
-        .sort((left, right) => messageOrderTime(left) - messageOrderTime(right)),
+      round: 0,
+      sessionID: b.sessionID,
+      parentSessionID: b.parentSessionID,
+      goalID: b.goalID,
+      time: start,
+      messages: b.messages.slice().sort((l, r) => messageOrderTime(l) - messageOrderTime(r)),
+      children: [],
     };
   }
 
-  // Collect per-goal step cards: goalID → step entries
-  const goalStepCards = new Map<string, { stage: string; card: AgentCardData; startTime: number }[]>();
-
-  for (const [stage, rounds] of Object.entries(roundsByStage)) {
-    rounds.sort((left, right) => left.startTime - right.startTime);
-
-    if (PER_GOAL_STAGES.has(stage)) {
-      for (let index = 0; index < rounds.length; index += 1) {
-        const round = rounds[index];
-        const gid = resolveGoalID(round);
-        const roundLabel = rounds.length > 1 ? index + 1 : 0;
-        const status = agentRoundStatus(stage, round, index, rounds, latestEventByStage.get(stage));
-        const card = buildCard(stage, round, roundLabel, status);
-
-        if (gid) {
-          const entries = goalStepCards.get(gid) || [];
-          entries.push({ stage, card, startTime: round.startTime });
-          goalStepCards.set(gid, entries);
-          continue;
-        }
-        // No goal association. For planner/executor/evaluator this is a
-        // transient SSE-settling state that resolves when the goalID event
-        // arrives — silently drop to avoid a flicker. For "build" it's the
-        // task-level fast-path (task-agent routed the request directly to
-        // the build agent, bypassing goals) and must render at root,
-        // otherwise the card vanishes whenever build is called without a
-        // goal context.
-        if (stage === "build") {
-          const cardID = round.channelID;
-          nextCards[cardID] = card;
-          nextOrder.push(cardID);
-        }
-      }
-    } else {
-      // Task-scope stages: standalone cards
-      for (let index = 0; index < rounds.length; index += 1) {
-        const round = rounds[index];
-        const roundLabel = rounds.length > 1 ? index + 1 : 0;
-        const status = agentRoundStatus(stage, round, index, rounds, latestEventByStage.get(stage));
-        const cardID = round.channelID;
-        nextCards[cardID] = buildCard(stage, round, roundLabel, status);
-        nextOrder.push(cardID);
-      }
-    }
+  const allAgentCards: AgentCardData[] = [];
+  for (const b of bySession.values()) {
+    allAgentCards.push(buildAgentCard(`${b.stage}:session:${b.sessionID}`, b));
+  }
+  for (const b of liveBuckets) {
+    allAgentCards.push(buildAgentCard(b.synthID, b, "running"));
+  }
+  for (const o of orphanBuckets) {
+    allAgentCards.push(buildAgentCard(o.channelID, o));
   }
 
-  // Build goal group cards — board-driven: every goal from board gets a card,
-  // even if no planner/executor/evaluator messages have arrived yet.
-  // Goal descriptions are carried on goalWorkflows.contracts or derived from title.
-  const goalDescMap = new Map<string, string>();
-
-  // Build per-goal step info from goalWorkflows. `payload` carries the
-  // structured content for each step (planNodes / changedFiles / diffStats /
-  // checks / verdict / executorSessionID) as emitted by workbench/board.ts.
+  // 5. Goal cards — one per board.goalWorkflows entry.
+  const goalInfoMap = new Map<string, { id: string; title: string; status: string; index: number }>();
   const goalStepsMap = new Map<string, Array<{ stepID: string; label: string; status: string; summary?: string; payload?: any }>>();
-  for (const gw of boardStore.board?.goalWorkflows || []) {
+  const goalContractsMap = new Map<string, Array<{ key: string; value: string; reason?: string }>>();
+  for (let i = 0; i < (boardStore.board?.goalWorkflows || []).length; i++) {
+    const gw = boardStore.board!.goalWorkflows![i];
+    goalInfoMap.set(gw.goalID, { id: gw.goalID, title: gw.goalTitle, status: gw.goalStatus, index: i + 1 });
     goalStepsMap.set(gw.goalID, (gw.steps || []).map((s: any) => ({
       stepID: s.stepID, label: s.label, status: s.status, summary: s.summary, payload: s.payload,
     })));
-  }
-
-  // Per-goal contracts from goalWorkflows (architect decisions from Decision Log)
-  const goalContractsMap = new Map<string, Array<{ key: string; value: string; reason?: string }>>();
-  for (const gw of boardStore.board?.goalWorkflows || []) {
     if (Array.isArray(gw.contracts) && gw.contracts.length > 0) {
       goalContractsMap.set(gw.goalID, gw.contracts);
     }
   }
 
-  // Ensure every board goal has an entry in goalStepCards (may be empty)
-  for (const [gid] of goalInfoMap) {
-    if (!goalStepCards.has(gid)) goalStepCards.set(gid, []);
+  // Partition agent cards by goal membership.
+  const goalBuckets = new Map<string, AgentCardData[]>();
+  const looseCards: AgentCardData[] = [];
+  for (const card of allAgentCards) {
+    if (card.kind !== "agent") continue;
+    if (card.goalID && goalInfoMap.has(card.goalID)) {
+      const list = goalBuckets.get(card.goalID) || [];
+      list.push(card);
+      goalBuckets.set(card.goalID, list);
+    } else {
+      looseCards.push(card);
+    }
   }
 
-  for (const [gid, entries] of goalStepCards) {
-    entries.sort((a, b) => a.startTime - b.startTime);
-    const goalInfo = goalInfoMap.get(gid);
-
-    // Skip pending goals with no activity — don't show cards before architect alignment
-    if (entries.length === 0 && goalInfo?.status === "pending") {
-      continue;
+  /** Nest agent cards within a bucket according to session parent links.
+   *  A card whose parentSessionID is another card in the same bucket
+   *  becomes that card's child. Cards whose parent is not in the bucket
+   *  (e.g. executor whose parent is task-agent at root) surface as bucket
+   *  roots. Sorts chronologically at every level. */
+  function nestWithinBucket(cards: AgentCardData[]): AgentCardData[] {
+    const byID = new Map<string, AgentCardData>();
+    for (const c of cards) {
+      if (c.kind === "agent" && c.sessionID) byID.set(c.sessionID, c);
     }
+    const roots: AgentCardData[] = [];
+    for (const c of cards) {
+      if (c.kind !== "agent") continue;
+      const parent = c.parentSessionID ? byID.get(c.parentSessionID) : undefined;
+      if (parent && parent !== c) {
+        parent.children.push(c);
+      } else {
+        roots.push(c);
+      }
+    }
+    for (const c of cards) {
+      if (c.kind === "agent") c.children.sort((a, b) => (a.time || 0) - (b.time || 0));
+    }
+    roots.sort((a, b) => (a.time || 0) - (b.time || 0));
+    return roots;
+  }
 
+  const nextCards: Record<string, AgentCardData> = {};
+  const nextOrder: string[] = [];
+
+  // Goal group cards in board order. Pending goals with no activity are
+  // skipped so the overlay doesn't show empty shells before anything starts.
+  const goalEntries = [...goalInfoMap.entries()].sort((a, b) => a[1].index - b[1].index);
+  for (const [gid, info] of goalEntries) {
+    const bucket = goalBuckets.get(gid) || [];
+    if (bucket.length === 0 && info.status === "pending") continue;
+
+    const internalCards = nestWithinBucket(bucket);
     const groupKey = `goal-group:${gid}`;
-
-    // Note: previously had several devWarn/devError calls here for:
-    //   - missing goalInfo in board
-    //   - empty title
-    //   - active goal with no step entries
-    //   - missing goalInfo.status
-    //   - missing sessionID
-    //   - invalid groupStart
-    // All of those describe transient states that resolve as more SSE events
-    // arrive (board sync lag, executor session boot, etc.). Because they
-    // lived inside a createMemo body driven by SSE updates, each one fired
-    // hundreds of times per minute on long tasks and crushed the dev-error
-    // overlay. Removed; functional fallbacks (Date.now() etc.) are kept.
-
-    const groupStart = entries.length > 0
-      ? Math.min(...entries.map(e => e.startTime))
-      : Date.now();
-
-    const groupStatus = entries.length === 0
-      ? (goalInfo?.status === "passed" || goalInfo?.status === "failed" ? goalInfo.status : "pending")
-      : entries.some(e => e.card.status === "running")
-        ? "running"
-        : entries.some(e => e.card.status === "error")
-          ? "error"
-          : "completed";
-
-    const goalSessionID = entries[0]?.card.sessionID;
-
-    const groupCreated = (Number.isFinite(groupStart) && groupStart > 0)
-      ? groupStart
+    const groupStatus = bucket.length === 0
+      ? (info.status === "passed" || info.status === "failed" ? info.status : "pending")
+      : bucket.some((c) => c.status === "running") ? "running"
+      : bucket.some((c) => c.status === "error") ? "error"
+      : "completed";
+    const groupStart = internalCards.length > 0
+      ? Math.min(...internalCards.map((c) => c.time || Infinity))
       : Date.now();
 
     nextCards[groupKey] = {
@@ -860,33 +787,44 @@ function computeAgentCards(): { cards: Record<string, AgentCardData>; order: str
       id: groupKey,
       stage: "executor",
       status: groupStatus,
-      round: goalIndexMap.get(gid) ?? 0,
-      sessionID: goalSessionID ?? "",
-      time: groupCreated,
+      round: info.index,
+      sessionID: internalCards[0]?.kind === "agent" ? internalCards[0].sessionID : "",
+      time: Number.isFinite(groupStart) && groupStart > 0 ? groupStart : Date.now(),
       goalID: gid,
-      goalTitle: goalInfo?.title ?? "",
-      goalStatus: goalInfo?.status ?? groupStatus,
-      goalDescription: goalDescMap.get(gid) ?? "",
+      goalTitle: info.title,
+      goalStatus: info.status,
+      goalDescription: "",
       goalSteps: goalStepsMap.get(gid),
       contracts: goalContractsMap.get(gid),
-      internalCards: entries.map(e => e.card),
+      internalCards,
     };
     nextOrder.push(groupKey);
   }
 
-  // Task-scope stage priority: architect before goal (requirements).
-  // Other stages (executor goal groups, etc.) fall through to chronological order.
-  const TASK_STAGE_PRIORITY: Record<string, number> = { spec: 0, architect: 1, goal: 2 };
+  // Loose cards: nest by session parent. Roots become top-level overlay cards.
+  const looseRoots = nestWithinBucket(looseCards);
+  for (const c of looseRoots) {
+    if (c.kind !== "agent") continue;
+    nextCards[c.id] = c;
+    nextOrder.push(c.id);
+  }
 
+  // Final root ordering: root task-agent card first, then goal cards in
+  // board order, then other root agent cards chronologically.
+  const priority = (c: AgentCardData | undefined): number => {
+    if (!c) return 3;
+    if (c.kind === "agent" && c.stage === "assistant" && !c.parentSessionID) return 0;
+    if (c.kind === "goal") return 1;
+    return 2;
+  };
   nextOrder.sort((left, right) => {
-    const lCard = nextCards[left];
-    const rCard = nextCards[right];
-    const lPrio = TASK_STAGE_PRIORITY[lCard?.stage || ""];
-    const rPrio = TASK_STAGE_PRIORITY[rCard?.stage || ""];
-    if (lPrio !== undefined && rPrio !== undefined && lPrio !== rPrio) {
-      return lPrio - rPrio;
-    }
-    return (lCard?.time ?? 0) - (rCard?.time ?? 0) || left.localeCompare(right);
+    const ca = nextCards[left];
+    const cb = nextCards[right];
+    const pa = priority(ca);
+    const pb = priority(cb);
+    if (pa !== pb) return pa - pb;
+    if (ca?.kind === "goal" && cb?.kind === "goal") return ca.round - cb.round;
+    return (ca?.time || 0) - (cb?.time || 0);
   });
 
   return { cards: nextCards, order: nextOrder };
@@ -1032,7 +970,7 @@ export function applyMessageEvent(event: any): boolean {
     // Flush any parts that arrived before this message
     const bufferedEntry = _pendingParts.get(info.id);
     if (bufferedEntry) _pendingParts.delete(info.id);
-    const msg: Message = { info: mergeMessageInfo(undefined, info), parts: bufferedEntry?.parts || [] };
+    const msg: Message = { info: mergeMessageInfo(undefined, info), parts: bufferedEntry?.parts ?? [] };
     let insertIdx = 0;
     setStore(
       "messages",
@@ -1054,10 +992,8 @@ export function applyMessageEvent(event: any): boolean {
       if (existing) {
         existing.parts.push(part);
       } else {
-        _pendingParts.set(part.messageID, { parts: [part], created: Date.now() });
+        _pendingParts.set(part.messageID, { parts: [part] });
       }
-      // Prune stale orphaned entries
-      prunePendingParts();
       return true;
     }
     const idx = store.messages.indexOf(message);
@@ -1246,7 +1182,6 @@ interface AgentEvent {
 }
 
 const AGENT_LIVE_INTERVAL = 32;
-const MAX_AGENT_EVENTS_PER_STAGE = 12;
 const agentLiveTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
 function agentEventKey(event: Pick<AgentEvent, "stage" | "id"> | null | undefined): string {
@@ -1398,41 +1333,14 @@ function agentEventEntry(raw: any): AgentEvent | null {
   };
 }
 
+/** Sort events chronologically. No per-stage truncation: persistent messages
+ *  are the authoritative source (see specs/new-arch/02-data.md) and live
+ *  agentEvents are a single task's working set, bounded naturally by task
+ *  lifetime. `clearAgentEvents()` on task switch drops everything at once. */
 function pruneAgentEvents(events: AgentEvent[]): AgentEvent[] {
-  const byStage = new Map<string, AgentEvent[]>();
-  for (const event of events) {
-    const stageEvents = byStage.get(event.stage) || [];
-    stageEvents.push(event);
-    byStage.set(event.stage, stageEvents);
-  }
-  const kept = Array.from(byStage.values())
-    .flatMap((stageEvents) => stageEvents.slice(-MAX_AGENT_EVENTS_PER_STAGE))
+  return events
+    .slice()
     .sort((a, b) => (a.time?.created || 0) - (b.time?.created || 0));
-
-  // Stop animation timers for events that no longer exist.
-  const liveKeys = new Set(kept.map((event) => agentEventKey(event)));
-  for (const key of [...agentLiveTimers.keys()]) {
-    if (!liveKeys.has(key)) stopAgentLiveTimer(key);
-  }
-
-  // Drop _agentMsgCache entries for events that no longer exist. Without
-  // this, the cache grows unbounded on long tasks (one entry per unique
-  // stableKey ever produced) — agentEvents itself is bounded by the
-  // per-stage 12-event cap above, but the cache wasn't.
-  // Uses agentMessageStableKey() so the formula matches what agentMessage()
-  // wrote when populating the cache.
-  if (_agentMsgCache.size > 0) {
-    const cacheKeys = new Set<string>();
-    for (const event of kept) {
-      const sk = agentMessageStableKey(event);
-      if (sk) cacheKeys.add(sk);
-    }
-    for (const cachedKey of [..._agentMsgCache.keys()]) {
-      if (!cacheKeys.has(cachedKey)) _agentMsgCache.delete(cachedKey);
-    }
-  }
-
-  return kept;
 }
 
 function mergeAgentEvent(existing: AgentEvent, next: AgentEvent): AgentEvent {

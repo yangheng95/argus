@@ -348,6 +348,13 @@ function goalToNode(item: any): CardNode {
         step.summary ||
         deriveStepSubtitle(step.stepID, stepStatus, payload) ||
         undefined;
+      // Nested sub-agent cards (e.g. a build session spawned by executor)
+      // surface as children of this step. Session-tree nesting is computed
+      // in computeAgentCards() — here we just recurse into the pre-built
+      // `children` array.
+      const stepChildren: CardNode[] = Array.isArray(internal?.children)
+        ? internal.children.map((c: any) => agentCardToNode(c))
+        : [];
       children.push({
         id: `${cardID}:step:${step.stepID}`,
         kind: "step",
@@ -357,7 +364,7 @@ function goalToNode(item: any): CardNode {
         title: stepTitle(stage, step),
         subtitle,
         parts: flattenMessages(internal?.messages || []),
-        children: [],
+        children: stepChildren,
         contextTokens: stepCtx.value,
         contextTokensEstimated: stepCtx.estimated,
         stepPayload: payload,
@@ -365,29 +372,17 @@ function goalToNode(item: any): CardNode {
       });
     }
   } else {
-    // No workflow step metadata — sort internal cards into canonical order.
+    // No workflow step metadata — sort internal cards into canonical order
+    // and render each as its own agent card (with its own subtree).
     const sorted = (item.internalCards || []).slice().sort(
       (a: any, b: any) =>
         STEP_ORDER.indexOf(String(a.stage)) -
         STEP_ORDER.indexOf(String(b.stage)),
     );
     for (const c of sorted) {
-      const stage = String(c.stage || "");
-      const st = normStatus(c.status) ?? "pending";
       const stepCtx = maxContextTokens(c.messages);
       accumulate(stepCtx);
-      children.push({
-        id: String(c.id || `${cardID}:step:${stage}`),
-        kind: "step",
-        stage,
-        accent: stageAccent(stage),
-        status: st,
-        title: agentStageLabel(stage),
-        parts: flattenMessages(c.messages || []),
-        children: [],
-        contextTokens: stepCtx.value,
-        contextTokensEstimated: stepCtx.estimated,
-      });
+      children.push(agentCardToNode(c));
     }
   }
 
@@ -417,6 +412,10 @@ function agentCardToNode(item: any): CardNode {
   const status = normStatus(item.status) ?? "pending";
   const messages = item.messages || [];
   const ctx = maxContextTokens(messages);
+  // Recurse into nested sub-agent cards built by computeAgentCards().
+  const children: CardNode[] = Array.isArray(item.children)
+    ? item.children.map((c: any) => agentCardToNode(c))
+    : [];
   return {
     id: cardID,
     kind: "agent",
@@ -427,7 +426,7 @@ function agentCardToNode(item: any): CardNode {
     title: agentStageLabel(stage),
     round: Number(item.round) || 0,
     parts: flattenMessages(messages),
-    children: [],
+    children,
     time: Number(item.time) || undefined,
     contextTokens: ctx.value,
     contextTokensEstimated: ctx.estimated,
