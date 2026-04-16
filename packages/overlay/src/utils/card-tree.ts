@@ -486,6 +486,7 @@ function messageToNode(item: any): CardNode {
  *  conversationMessages()). The order of `items` is preserved.
  *  Items are either AgentCardData (kind="agent"|"goal") or raw Message. */
 export function toCardTree(items: any[]): CardNode[] {
+  const _t0 = performance.now();
   const tree: CardNode[] = [];
   for (const item of items || []) {
     if (!item) continue;
@@ -496,6 +497,10 @@ export function toCardTree(items: any[]): CardNode[] {
     } else {
       tree.push(messageToNode(item));
     }
+  }
+  const _dt = performance.now() - _t0;
+  if (_dt > 5) {
+    console.warn(`[perf] toCardTree: ${_dt.toFixed(1)}ms, ${tree.length} nodes`);
   }
   return tree;
 }

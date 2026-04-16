@@ -717,7 +717,8 @@ function buildSessionBucketCard(sid: string): AgentCardData | null {
   };
 }
 
-function computeAgentCards(): { cards: Record<string, AgentCardData>; order: string[] } {
+export function computeAgentCards(): { cards: Record<string, AgentCardData>; order: string[] } {
+  const _t0 = performance.now();
   // 1. Per-session agent cards from memo cache. Reading each memo tracks only
   //    that one session's bucket — outer assembly reruns narrowly when any
   //    single session's card output changes.
@@ -885,22 +886,17 @@ function computeAgentCards(): { cards: Record<string, AgentCardData>; order: str
     return (ca?.time || 0) - (cb?.time || 0);
   });
 
+  const _dt = performance.now() - _t0;
+  if (_dt > 5) {
+    console.warn(`[perf] computeAgentCards: ${_dt.toFixed(1)}ms, ${nextOrder.length} cards`);
+  }
   return { cards: nextCards, order: nextOrder };
 }
 
-// Agent-card derivation: pure synchronous read of messages + agentEvents +
-// board. We deliberately do NOT wrap this in createMemo / createRoot — the
-// only consumer that benefits from caching is conversationMessages(), which
-// already lives inside its own createMemo and only re-runs when its tracked
-// dependencies change. Returning a fresh object here also makes test
-// assertions deterministic (no dangling memo to flush).
-export function agentCards(): Record<string, AgentCardData> {
-  return computeAgentCards().cards;
-}
-
-export function agentCardOrder(): string[] {
-  return computeAgentCards().order;
-}
+// Note: agentCards() and agentCardOrder() wrappers removed — all callers
+// now use computeAgentCards() directly to avoid the double-call overhead
+// (each wrapper called computeAgentCards() independently, doubling the work
+// when both cards and order were needed in the same reactive context).
 
 // ── Full load from transcript ──
 

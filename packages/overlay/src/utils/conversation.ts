@@ -2,7 +2,7 @@
 // Assembles the conversation view from the message store.
 // All data is read from Solid stores (messageStore / boardStore) for reactivity.
 
-import { messageStore, messageById, agentCards, agentCardOrder } from "../store/messages";
+import { messageStore, messageById, computeAgentCards } from "../store/messages";
 
 /** Resolve an agent card message to its live store proxy when available.
  *  Agent card `messages` snapshots live in a separate SolidJS store path;
@@ -148,6 +148,7 @@ function buildUserContextMessages(): any[] {
 // ── Public: conversationMessages ──
 
 export function conversationMessages(): any[] {
+  const _t0 = performance.now();
   const allMessages = messageStore.messages || [];
   const rootSID = rootTaskSessionID();
   const showTranscriptDetails = messageStore.showTranscriptDetails;
@@ -201,8 +202,9 @@ export function conversationMessages(): any[] {
   };
 
   const agentCardMsgs: any[] = [];
-  const currentOrder = agentCardOrder();
-  const currentCards = agentCards();
+  const computed = computeAgentCards();
+  const currentOrder = computed.order;
+  const currentCards = computed.cards;
   for (const id of currentOrder) {
     const card = currentCards[id];
     if (!card) continue;
@@ -217,6 +219,11 @@ export function conversationMessages(): any[] {
   const result = [...filteredMain, ...contextMsgs, ...agentCardMsgs].sort(
     (a: any, b: any) => conversationTime(a) - conversationTime(b),
   );
+
+  const _dt = performance.now() - _t0;
+  if (_dt > 5) {
+    console.warn(`[perf] conversationMessages: ${_dt.toFixed(1)}ms, ${allMessages.length} msgs`);
+  }
 
   return result;
 }

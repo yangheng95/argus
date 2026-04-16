@@ -7,7 +7,7 @@
 
 import { createMemo, For, Show, onMount } from "solid-js";
 import { boardStore } from "../store/board";
-import { agentCards, agentCardOrder } from "../store/messages";
+import { computeAgentCards } from "../store/messages";
 import { t, tc } from "../utils/i18n";
 import { renderMarkdown } from "../utils/markdown";
 import { WorkflowProgressBar } from "./WorkflowProgressBar";
@@ -438,8 +438,9 @@ export function Board(props: BoardProps) {
   // Collect agent messages for requirements stage (spec/goal stages map to requirements).
   // Data-driven: emit whenever spec/goal cards exist, independent of workflow mode.
   const requirementsMessages = createMemo(() => {
-    const cards = agentCards();
-    const order = agentCardOrder();
+    const computed = computeAgentCards();
+    const cards = computed.cards;
+    const order = computed.order;
     const msgs: any[] = [];
     for (const cardID of order) {
       const card = cards[cardID];
@@ -464,8 +465,9 @@ export function Board(props: BoardProps) {
   };
 
   const goalStepMessages = createMemo(() => {
-    const cards = agentCards();
-    const order = agentCardOrder();
+    const computed = computeAgentCards();
+    const cards = computed.cards;
+    const order = computed.order;
     const result: Record<string, Record<string, any[]>> = {};
 
     // Walk the nested session tree under each goal so a stage like "build"
