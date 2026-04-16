@@ -45,7 +45,7 @@ The migration will be implemented in small, verifiable slices. Each slice must p
 - Phase 4 is done.
 - Phase 5 is done.
 - Landed shared contracts for `Requirement`, `GoalSnapshot`, `GoalQaProfile`, and enriched goal metadata.
-- Added persistence scaffolding for `orchestrator_requirement` and `orchestrator_goal_snapshot`.
+- Added persistence scaffolding for `engine_requirement` and `engine_goal_snapshot`.
 - Added routing / checks scaffolding for `goal` stage and `goal_check`.
 - Added store and board-level exposure needed for later cutovers.
 - Cut spec generation over to formulation-first `requirements[]`.
@@ -66,33 +66,33 @@ The migration will be implemented in small, verifiable slices. Each slice must p
 ### Files Landed In Phase 1
 
 - `src/id/id.ts`
-- `src/orchestrator/model.ts`
-- `src/orchestrator/orchestrator.sql.ts`
+- `src/engine/model.ts`
+- `src/engine/orchestrator.sql.ts`
 - `src/storage/ddl.ts`
 - `src/storage/schema.ts`
-- `src/orchestrator/store.ts`
-- `src/orchestrator/checks.ts`
+- `src/engine/store.ts`
+- `src/engine/checks.ts`
 - `src/workbench/board.ts`
 
 ### Files Landed In Phase 2
 
 - `src/spec/agent.ts`
 - `src/spec/service.ts`
-- `src/orchestrator/persist.ts`
-- `src/orchestrator/service.ts`
+- `src/engine/persist.ts`
+- `src/task-api/index.ts`
 - `src/planner/service.ts`
 
 ### Files Landed In Phase 3
 
 - `src/goal/service.ts`
 - `src/goal/runner.ts`
-- `src/orchestrator/persist.ts`
-- `src/orchestrator/runtime.ts`
-- `src/orchestrator/service.ts`
+- `src/engine/persist.ts`
+- `src/engine/runtime.ts`
+- `src/task-api/index.ts`
 - `src/orchestrator/spec-goal-service.ts`
-- `src/orchestrator/store.ts`
+- `src/engine/store.ts`
 - `src/orchestrator/agent-stream.ts`
-- `src/orchestrator/model.ts`
+- `src/engine/model.ts`
 - `src/server/routes/export.ts`
 - `src/workbench/board.ts`
 
@@ -119,7 +119,7 @@ The migration will be implemented in small, verifiable slices. Each slice must p
 
 - Add first-class `Requirement`, `GoalSnapshot`, `GoalContract`, and `GoalQaProfile` schemas.
 - Add `goal` routing, `goal_check`, and scoped `spec_check` config.
-- Add persistence scaffolding for `orchestrator_requirement` and `orchestrator_goal_snapshot`.
+- Add persistence scaffolding for `engine_requirement` and `engine_goal_snapshot`.
 - Expose new requirement / goal-snapshot views in the store layer.
 - Do not cut over runtime behavior in this phase.
 
@@ -146,7 +146,7 @@ Checks:
 
 - `bunx tsc --noEmit`
 - spec-stage focused tests
-- touched-file error scan for `src/spec/*`, `src/orchestrator/persist.ts`, and any updated store/model files
+- touched-file error scan for `src/spec/*`, `src/engine/persist.ts`, and any updated store/model files
 
 Stop condition:
 

@@ -32,32 +32,32 @@ describe("PermissionNext.evaluate for permission.task", () => {
   })
 
   test("matches wildcard patterns with deny", () => {
-    const ruleset = createRuleset({ "orchestrator-*": "deny" })
-    expect(PermissionNext.evaluate("task", "orchestrator-fast", ruleset).action).toBe("deny")
-    expect(PermissionNext.evaluate("task", "orchestrator-slow", ruleset).action).toBe("deny")
+    const ruleset = createRuleset({ "engine-*": "deny" })
+    expect(PermissionNext.evaluate("task", "engine-fast", ruleset).action).toBe("deny")
+    expect(PermissionNext.evaluate("task", "engine-slow", ruleset).action).toBe("deny")
     expect(PermissionNext.evaluate("task", "general", ruleset).action).toBe("ask")
   })
 
   test("matches wildcard patterns with allow", () => {
-    const ruleset = createRuleset({ "orchestrator-*": "allow" })
-    expect(PermissionNext.evaluate("task", "orchestrator-fast", ruleset).action).toBe("allow")
-    expect(PermissionNext.evaluate("task", "orchestrator-slow", ruleset).action).toBe("allow")
+    const ruleset = createRuleset({ "engine-*": "allow" })
+    expect(PermissionNext.evaluate("task", "engine-fast", ruleset).action).toBe("allow")
+    expect(PermissionNext.evaluate("task", "engine-slow", ruleset).action).toBe("allow")
   })
 
   test("matches wildcard patterns with ask", () => {
-    const ruleset = createRuleset({ "orchestrator-*": "ask" })
-    expect(PermissionNext.evaluate("task", "orchestrator-fast", ruleset).action).toBe("ask")
+    const ruleset = createRuleset({ "engine-*": "ask" })
+    expect(PermissionNext.evaluate("task", "engine-fast", ruleset).action).toBe("ask")
     const globalRuleset = createRuleset({ "*": "ask" })
     expect(PermissionNext.evaluate("task", "code-reviewer", globalRuleset).action).toBe("ask")
   })
 
   test("later rules take precedence (last match wins)", () => {
     const ruleset = createRuleset({
-      "orchestrator-*": "deny",
-      "orchestrator-fast": "allow",
+      "engine-*": "deny",
+      "engine-fast": "allow",
     })
-    expect(PermissionNext.evaluate("task", "orchestrator-fast", ruleset).action).toBe("allow")
-    expect(PermissionNext.evaluate("task", "orchestrator-slow", ruleset).action).toBe("deny")
+    expect(PermissionNext.evaluate("task", "engine-fast", ruleset).action).toBe("allow")
+    expect(PermissionNext.evaluate("task", "engine-slow", ruleset).action).toBe("deny")
   })
 
   test("matches global wildcard", () => {
@@ -82,7 +82,7 @@ describe("PermissionNext.disabled for task tool", () => {
     // When "*": "deny" exists, the task tool is disabled because the disabled() function
     // only checks for wildcard deny patterns - it doesn't consider that specific subagents might be allowed
     const ruleset = createRuleset({
-      "orchestrator-*": "allow",
+      "engine-*": "allow",
       "*": "deny",
     })
     const disabled = PermissionNext.disabled(["task", "bash", "read"], ruleset)
@@ -92,7 +92,7 @@ describe("PermissionNext.disabled for task tool", () => {
 
   test("task tool is disabled when global deny pattern exists (even with ask overrides)", () => {
     const ruleset = createRuleset({
-      "orchestrator-*": "ask",
+      "engine-*": "ask",
       "*": "deny",
     })
     const disabled = PermissionNext.disabled(["task"], ruleset)
@@ -110,7 +110,7 @@ describe("PermissionNext.disabled for task tool", () => {
     // The disabled() function only disables tools when pattern: "*" && action: "deny"
     // Specific subagent denies don't disable the task tool - those are handled at runtime
     const ruleset = createRuleset({
-      "orchestrator-*": "deny",
+      "engine-*": "deny",
       general: "deny",
     })
     const disabled = PermissionNext.disabled(["task"], ruleset)
@@ -127,12 +127,12 @@ describe("PermissionNext.disabled for task tool", () => {
     // Last matching rule wins - if wildcard allow comes after wildcard deny, tool is enabled
     const ruleset = createRuleset({
       "*": "deny",
-      "orchestrator-coder": "allow",
+      "engine-coder": "allow",
     })
     const disabled = PermissionNext.disabled(["task"], ruleset)
     // The disabled() function uses findLast and checks if the last matching rule
     // has pattern: "*" and action: "deny". In this case, the last rule matching
-    // "task" permission has pattern "orchestrator-coder", not "*", so not disabled
+    // "task" permission has pattern "engine-coder", not "*", so not disabled
     expect(disabled.has("task")).toBe(false)
   })
 })
@@ -158,7 +158,7 @@ describe("permission.task with real config files", () => {
         const ruleset = PermissionNext.fromConfig(config.permission ?? {})
         // general and orchestrator-fast should be allowed, code-reviewer denied
         expect(PermissionNext.evaluate("task", "general", ruleset).action).toBe("allow")
-        expect(PermissionNext.evaluate("task", "orchestrator-fast", ruleset).action).toBe("allow")
+        expect(PermissionNext.evaluate("task", "engine-fast", ruleset).action).toBe("allow")
         expect(PermissionNext.evaluate("task", "code-reviewer", ruleset).action).toBe("deny")
       },
     })
@@ -171,7 +171,7 @@ describe("permission.task with real config files", () => {
         permission: {
           task: {
             "*": "ask",
-            "orchestrator-*": "deny",
+            "engine-*": "deny",
           },
         },
       },
@@ -184,7 +184,7 @@ describe("permission.task with real config files", () => {
         // general and code-reviewer should be ask, orchestrator-* denied
         expect(PermissionNext.evaluate("task", "general", ruleset).action).toBe("ask")
         expect(PermissionNext.evaluate("task", "code-reviewer", ruleset).action).toBe("ask")
-        expect(PermissionNext.evaluate("task", "orchestrator-fast", ruleset).action).toBe("deny")
+        expect(PermissionNext.evaluate("task", "engine-fast", ruleset).action).toBe("deny")
       },
     })
   })

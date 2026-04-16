@@ -21,7 +21,7 @@ describe("plan mode read-only enforcement", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const parent = await Session.create({ title: "parent" })
+        const parent = await Session.create({ kind: "assistant", title: "parent" })
         const user: Message.User = {
           id: Identifier.ascending("message"),
           sessionID: parent.id,

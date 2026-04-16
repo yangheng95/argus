@@ -12,7 +12,7 @@
 
 export type StreamFailureKind =
   | "protocol-normalize"     // tool-call/tool-result chunk was not a valid object (model emitted unparseable JSON mid-stream)
-  | "tool-input-validation"  // AI SDK rejected a tool call's input against its Zod inputSchema. RECOVERABLE: the SDK already fed the validation error back to the model as the tool's result; the model corrects on the next step. Bounded by stopWhen=stepCountIs(...), so an unrecoverable model still loud-fails via step-cap instead of looping forever. Treating this as fatal short-circuits the model's own self-correction loop, which is exactly the "Task Agent is the sole decision-maker, independent reasoning" design (01-agents.md).
+  | "tool-input-validation"  // AI SDK rejected a tool call's input against its Zod inputSchema. RECOVERABLE: the SDK already fed the validation error back to the model as the tool's result; the model corrects on the next step. Bounded by stopWhen=stepCountIs(...), so an unrecoverable model still loud-fails via step-cap instead of looping forever. Treating this as fatal short-circuits the model's own self-correction loop, which is exactly the "Orchestrator is the sole decision-maker, independent reasoning" design (01-agents.md).
   | "persist-part"           // Session.updatePart threw (Zod, FK, etc.)
   | "persist-message"        // Session.updateMessage threw
   | "hook-other"             // any other throw inside an onChunk handler

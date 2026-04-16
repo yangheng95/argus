@@ -5,29 +5,29 @@
 
 ## 核心原则
 
-### 1. Task Agent 是唯一决策者
+### 1. Orchestrator 是唯一决策者
 
-- Sub-agents 有独立推理，但**何时调用谁由 Task Agent 决定**
+- Sub-agents 有独立推理，但**何时调用谁由 Orchestrator 决定**
 - Infrastructure 只执行，不决策，不自动 dispatch
 - 没有固定 pipeline，没有机械 retry，没有自动流转
 
 ### 2. Sub-agents 是 agent，不是 tool
 
 - Requirements / Architect / Planner / Delivery 各有自己的 LLM + tools + 推理循环
-- 它们返回结构化结果，Task Agent 据此推理下一步
+- 它们返回结构化结果，Orchestrator 据此推理下一步
 - 禁止把 sub-agent 降级为 tool function
 
 ### 3. Goal 并行执行，依赖驱动调度
 
 - 依赖满足的 goals 在独立 worktree 中并行执行（不限层，跨层依赖满足即可 dispatch）
-- 当前 batch 全部完成后 Task Agent 决定 dispatch 下一批
+- 当前 batch 全部完成后 Orchestrator 决定 dispatch 下一批
 - `owned_paths` 不重叠：并行 goals 不写同一文件
 
 ### 4. 没有固定 pipeline
 
-- 简单任务：Task Agent 直接 execute，跳过 requirements + plan
-- 失败处理：Task Agent 读 evidence 推理，不是 `if bug→re-exec`
-- 动态调整：Task Agent 随时 `add_goal` / `modify_goal`
+- 简单任务：Orchestrator 直接 execute，跳过 requirements + plan
+- 失败处理：Orchestrator 读 evidence 推理，不是 `if bug→re-exec`
+- 动态调整：Orchestrator 随时 `add_goal` / `modify_goal`
 
 ### 5. Requirements 必须穷尽提取
 
@@ -49,13 +49,13 @@
 ### 执行与调度层
 
 - ✗ **Fire-and-forget 触发**
-  - `TaskAgent.processTask().catch()` 已删除，用 Task Control Loop 替代
+  - `Orchestrator.processTask().catch()` 已删除，用 Task Control Loop 替代
   - 任何 `.catch(() => {})` 吞错误、脱离主循环的代码都是这个反模式
 - ✗ **硬超时 / 绝对超时**
   - 所有超时必须是 **inactivity-based**，从不从进程启动计时
   - 理由：LLM 调用时长不可预测，硬超时会在正常推理中途杀进程
 - ✗ **硬编码状态机**
-  - `if status==evaluating → if pass → complete else retry` — 把决策交给 Task Agent
+  - `if status==evaluating → if pass → complete else retry` — 把决策交给 Orchestrator
 - ✗ **机械 RetryPolicy**
   - `bug → re-execute` · `plan_wrong → re-plan` — agent 读 evidence 决定，不是查表
 - ✗ **Sub-agent 降级为 tool function**

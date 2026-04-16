@@ -49,6 +49,7 @@ import {
   applyTheme,
   applyOpacity,
 } from "../services/theme";
+import { patchConfig } from "../services/config";
 
 // ── Prop types ──
 
@@ -197,7 +198,6 @@ export function TitlebarMenu(props: TitlebarMenuProps) {
  // Unattended toggle — PATCH server config (behavior setting)
   async function handleUnattendedChange(checked: boolean) {
     try {
-      const { patchConfig } = await import("../services/config");
       await patchConfig({ experimental: { unattended: checked } });
     } catch (e) { console.error("[titlebar] failed to update unattended", e); }
     closeMenu();
@@ -206,7 +206,6 @@ export function TitlebarMenu(props: TitlebarMenuProps) {
  // Auto-permission toggle — PATCH server config
   async function handleAutoPermissionChange(checked: boolean) {
     try {
-      const { patchConfig } = await import("../services/config");
       await patchConfig({ experimental: { auto_permission: checked } });
     } catch (e) { console.error("[titlebar] failed to update auto_permission", e); }
     closeMenu();
@@ -215,7 +214,6 @@ export function TitlebarMenu(props: TitlebarMenuProps) {
  // Auto-question toggle — PATCH server config
   async function handleAutoQuestionChange(checked: boolean) {
     try {
-      const { patchConfig } = await import("../services/config");
       await patchConfig({ experimental: { auto_question: checked } });
     } catch (e) { console.error("[titlebar] failed to update auto_question", e); }
     closeMenu();

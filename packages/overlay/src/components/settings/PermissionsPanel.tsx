@@ -9,13 +9,7 @@ import { For } from "solid-js";
 import { appStore } from "../../store/app";
 import { t } from "../../utils/i18n";
 import type { ToolPermAction } from "../../store/settings";
-
-// ── Config PATCH helper ──
-
-async function patchConfig(patch: Record<string, unknown>): Promise<void> {
-  const { patchConfig: doPatch } = await import("../../services/config");
-  await doPatch(patch);
-}
+import { patchConfig } from "../../services/config";
 
 // ── Permission key metadata ──
 // i18n convention: labels/descriptions are thunks that call `t()` with a

@@ -60,7 +60,7 @@ export interface DecisionLogReader {
    * Format all decisions as a text block for LLM context injection.
    * When `options.limit` is given, keeps the latest N entries (by
    * time_created, desc) and appends a short note about how many older
-   * entries were omitted. Callers on hot paths (task-agent read_context)
+   * entries were omitted. Callers on hot paths (orchestrator read_context)
    * must pass a limit to avoid unbounded prompt growth as the log grows.
    */
   toPromptSection(options?: { limit?: number; valueCap?: number }): string

@@ -76,7 +76,7 @@ export function InteractionQuestionPart(props: InteractionQuestionPartProps) {
         const custom = (customText()[idx] ?? "").trim();
         return custom ? [...picked, custom] : picked;
       });
-      await replyInteraction(props.interaction.id, "answer", { answers });
+      await replyInteraction(props.interaction.id, "answer", false, { answers });
       await loadBoard();
     } catch (err: any) {
       setError(err?.message || String(err));
@@ -90,7 +90,7 @@ export function InteractionQuestionPart(props: InteractionQuestionPartProps) {
     setBusy(true);
     setError("");
     try {
-      await rejectInteraction(props.interaction.id);
+      await rejectInteraction(props.interaction.id, false);
       await loadBoard();
     } catch (err: any) {
       setError(err?.message || String(err));

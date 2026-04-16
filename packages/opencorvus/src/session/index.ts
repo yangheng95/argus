@@ -11,7 +11,7 @@ import { Installation } from "../installation"
 
 import { Database, NotFoundError, eq, and, gte, isNull, desc, like, inArray, lt } from "../storage/db"
 import type { SQL } from "../storage/db"
-import { SessionTable, MessageTable, PartTable } from "./session.sql"
+import { SessionTable, MessageTable, PartTable, type SessionKind } from "./session.sql"
 import { ProjectTable } from "../project/project.sql"
 import { Storage } from "@/storage/storage"
 import { Log } from "../util/log"
@@ -66,8 +66,8 @@ export namespace Session {
       parentID: row.parent_id ?? undefined,
       title: row.title,
       version: row.version,
-      kind: row.kind ?? "task",
-      channelKey: row.channel_key ?? undefined,
+      kind: row.kind,
+      goalID: row.goal_id ?? undefined,
       metadata: row.metadata ?? undefined,
       summary,
       share,
@@ -91,8 +91,8 @@ export namespace Session {
       directory: info.directory,
       title: info.title,
       version: info.version,
-      kind: info.kind ?? "task",
-      channel_key: info.channelKey ?? null,
+      kind: info.kind,
+      goal_id: info.goalID ?? null,
       metadata: info.metadata ?? null,
       share_url: info.share?.url,
       summary_additions: info.summary?.additions,
@@ -140,13 +140,25 @@ export namespace Session {
         .optional(),
       title: z.string(),
       version: z.string(),
-      kind: z.enum(["gateway", "task"]).default("task"),
-      /** Composite key `${platform}:${channel}:${userID}` (or `local:${userID}`)
-       *  used to enforce per-(platform, channel, user) singleton for gateway
-       *  sessions. Always undefined for kind="task". */
-      channelKey: z.string().optional(),
-      /** Free-form per-session state. Gateway sessions use `metadata.gateway.cwd`
-       *  to track the current cwd context for tool calls. */
+      /** Session's role/purpose, fixed at creation. Authoritative source of
+       *  "what is this session for"; UI channel and LLM-trace routing read
+       *  this column directly. See SessionKind in session.sql.ts. */
+      kind: z.enum([
+        "root",
+        "assistant",
+        "planner",
+        "goal",
+        "architect",
+        "delivery",
+        "executor",
+        "build",
+        "evaluator",
+        "system",
+      ]),
+      /** Goal this session belongs to (planner/executor/build only); drives
+       *  overlay card nesting. Fixed at creation. */
+      goalID: Identifier.schema("goal").optional(),
+      /** Free-form per-session state. */
       metadata: z.record(z.string(), z.any()).optional(),
       time: z.object({
         created: z.number(),
@@ -223,19 +235,21 @@ export namespace Session {
   }
 
   export const create = fn(
-    z
-      .object({
-        parentID: Identifier.schema("session").optional(),
-        title: z.string().optional(),
-        permission: Info.shape.permission,
-      })
-      .optional(),
+    z.object({
+      kind: Info.shape.kind,
+      goalID: Info.shape.goalID,
+      parentID: Identifier.schema("session").optional(),
+      title: z.string().optional(),
+      permission: Info.shape.permission,
+    }),
     async (input) => {
       return createNext({
-        parentID: input?.parentID,
+        kind: input.kind,
+        goalID: input.goalID,
+        parentID: input.parentID,
         directory: Instance.directory,
-        title: input?.title,
-        permission: input?.permission,
+        title: input.title,
+        permission: input.permission,
       })
     },
   )
@@ -249,9 +263,14 @@ export namespace Session {
       const original = await get(input.sessionID)
       if (!original) throw new Error("session not found")
       const title = getForkedTitle(original.title)
+      // fork = clone: inherits the original session's kind and goal. This
+      // is the session's identity, not a default — forking a "delivery"
+      // session into an "executor" would be semantically broken.
       const session = await createNext({
         directory: Instance.directory,
         parentID: input.sessionID,
+        kind: original.kind,
+        goalID: original.goalID,
         title,
       })
       const msgs = await messages({ sessionID: input.sessionID })
@@ -299,16 +318,19 @@ export namespace Session {
   })
 
   export async function createNext(input: {
+    /** Required. The session's role/purpose — see SessionKind in session.sql.ts.
+     *  Authoritative for UI channel routing and trace resolution. There is
+     *  NO default: every caller must state what the session is for. */
+    kind: SessionKind
+    /** Goal this session belongs to (planner/executor/build only). Pass it
+     *  at creation so sessionGoalID() is a pure DB lookup — never inferred
+     *  from parent chains or registry state. */
+    goalID?: string
     id?: string
     title?: string
     parentID?: string
     directory: string
     permission?: PermissionNext.Ruleset
-    /** Defaults to "task". Pass "gateway" to create a Gateway dialog session. */
-    kind?: "gateway" | "task"
-    /** Required when kind="gateway": composite (platform, channel, user) key.
-     *  The DB has a partial unique index that rejects duplicates. */
-    channelKey?: string
   }) {
     const result: Info = {
       id: Identifier.descending("session", input.id),
@@ -318,8 +340,8 @@ export namespace Session {
       directory: input.directory,
       parentID: input.parentID,
       title: input.title ?? createDefaultTitle(!!input.parentID),
-      kind: input.kind ?? "task",
-      channelKey: input.channelKey,
+      kind: input.kind,
+      goalID: input.goalID,
       permission: input.permission,
       time: {
         created: Date.now(),

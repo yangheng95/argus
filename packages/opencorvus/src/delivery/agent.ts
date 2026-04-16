@@ -13,7 +13,8 @@
 import { stepCountIs } from "ai"
 import z from "zod"
 import { extractRawJSON, repairTruncatedJSON, sanitizeJSON, trimToLastComplete, tryParseJSON } from "@/llm/json-repair"
-import { completeHeadlessText, resolveHeadlessLanguageModel } from "@/llm/headless"
+import { resolveAgentModel } from "@/agent/model"
+import { AgentRuntime } from "@/agent/runtime"
 import { createDeliveryTools } from "./tools"
 import { Memory } from "@/memory"
 import { Instance } from "@/project/instance"
@@ -22,12 +23,12 @@ import { toolGuard } from "@/util/tool-guard"
 import { Env } from "@/env"
 import { type TextHooks } from "@/llm/api"
 import { Config } from "@/config/config"
-import { OrchestratorConfig } from "@/orchestrator/config"
-import { clarificationTranscriptSection, operatorNotesSection } from "@/orchestrator/helpers"
-import { loadStageSkills } from "@/orchestrator/skill-inject"
+import { EngineConfig } from "@/engine/config"
+import { clarificationTranscriptSection, operatorNotesSection } from "@/engine/helpers"
+import { loadStageSkills } from "@/engine/skill-inject"
 import { collectText, countToolCalls, firstContentLine, sectionBody } from "@/util/agent-text"
 import { AttachmentStore } from "@/storage/attachment-store"
-import type { GoalJudgmentType, GoalInfo, DeliveryInfo } from "@/evaluator/types"
+import type { GoalJudgmentType, GoalInfo, DeliveryInfo } from "@/delivery/checks/types"
 
 const log = Log.create({ service: "delivery-agent" })
 
@@ -92,92 +93,99 @@ type VerifyInput = {
 export namespace DeliveryAgent {
   export async function verify(input: VerifyInput): Promise<DeliveryVerdictType> {
     // Per-agent model override: if config sets agent.delivery.model, honor it;
-    // otherwise inherit from the task session / default model.
-    const { Agent } = await import("@/agent/agent")
-    const deliveryAgent = await Agent.get("delivery").catch(() => undefined)
-    const resolved = await resolveHeadlessLanguageModel({
-      label: "delivery",
-      model: deliveryAgent?.model,
-      metadata: input.task.metadata,
-      sessionID: input.task.sessionID,
-    })
-    if (!resolved) throw new Error("Delivery verification model is unavailable")
-    const { language, model } = resolved
-    const deliveryCfg = (await OrchestratorConfig.get()).delivery
+    // otherwise inherit the user's most recent in-session model pick from the
+    // task session; otherwise fall through to Provider.defaultModel().
+    const model = await resolveAgentModel("delivery", { sessionID: input.task.sessionID })
+    const deliveryCfg = (await EngineConfig.get()).delivery
 
     const guard = toolGuard(createDeliveryTools({ sessionID: input.task.sessionID, taskID: input.task.id }))
     const context = prefetchDeliveryContext(input)
     const textPrompt = buildUserPrompt({ ...input, attachments: input.attachments }, context)
     const userPrompt = await buildMultimodalPrompt(textPrompt, input.attachments)
+    const systemPrompt = await deliveryAgentSystem()
 
     log.info("delivery agent starting", {
       title: input.task.title,
       goals: input.goals.length,
       changedFiles: input.delivery.changedFiles.length,
-      model: language.modelId,
+      model: model.id,
       config: deliveryCfg,
     })
+
+    // Stream hooks the caller (DeliveryService) supplied — tunneled through
+    // AgentRuntime so the same chunk/step callbacks reach this run.
+    // AgentRuntime already owns progress-guard wiring (alive/progress/absolute
+    // tiers) and signal composition, so we no longer construct an
+    // AbortSignal.timeout here.
+    const passthroughHooks = {
+      onChunk: input.stream?.onChunk,
+      onError: input.stream?.onError,
+      flush: async () => {},
+      failures: { snapshot: () => ({ count: 0, items: [] as any[] }) },
+    } as any
+
+    const externalSignal = input.signal
+    const abortSignals: AbortSignal[] = [guard.signal]
+    if (externalSignal) abortSignals.push(externalSignal)
 
     const MAX_RETRIES = deliveryCfg.max_retries
     let parsed: DeliveryVerdictType | undefined
     let lastError: Error | undefined
     let toolCallCount = 0
 
-    // Combine the per-attempt timeout with any external abort signal (e.g. from the orchestrator)
-    const externalSignal = input.signal
+    // Retry loop here covers OUTPUT-PARSE failures (the agent ran, returned
+    // text, but the structured verdict wasn't extractable). Stream-level
+    // failures and timeouts are handled by AgentRuntime's failure tracker
+    // and progress guard — we propagate them as thrown errors and only retry
+    // the parse path.
     for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
       if (attempt > 0) {
-        // Don't retry if the external abort signal has already fired — it would fail instantly
         if (externalSignal?.aborted) break
         log.info("delivery agent retrying", { attempt, reason: lastError?.message })
       }
 
-      let result: {
-        text?: string
-        finishReason?: string
-        steps: Array<{ text?: string; toolCalls?: unknown[]; toolResults?: unknown[] }>
-      }
-      const attemptSignal = externalSignal
-        ? AbortSignal.any([externalSignal, AbortSignal.timeout(deliveryCfg.timeout_ms), guard.signal])
-        : AbortSignal.any([AbortSignal.timeout(deliveryCfg.timeout_ms), guard.signal])
+      let runResult: Awaited<ReturnType<typeof AgentRuntime.run>>
       try {
-        result = await completeHeadlessText({
-          label: "delivery",
+        runResult = await AgentRuntime.run({
+          agent: "delivery",
           model,
-          language,
-          sessionID: input.task.sessionID,
-          cacheKey: `task-${input.task.id}-delivery`,
-          stopWhen: [stepCountIs(deliveryCfg.max_steps)],
+          system: systemPrompt,
+          messages: [{ role: "user" as const, content: userPrompt }],
           tools: guard.tools,
-          maxOutputTokens: 16384,
-          timeoutMs: false,
-          abortSignal: attemptSignal,
-          system: await deliveryAgentSystem(),
-          prompt: userPrompt,
-          ...(input.stream as TextHooks<typeof guard.tools> | undefined),
+          stopWhen: stepCountIs(deliveryCfg.max_steps),
+          cacheKey: `task-${input.task.id}-delivery`,
+          sessionID: input.task.sessionID ?? "",
+          taskID: input.task.id,
+          stage: "delivery",
+          signal: AbortSignal.any(abortSignals),
           onStepFinish: guard.onStepFinish as any,
+          hooks: passthroughHooks,
+          policies: {
+            progressTimeoutMs: deliveryCfg.timeout_ms,
+            failurePolicy: "collect",
+          },
         })
       } catch (err) {
         lastError = err instanceof Error ? err : new Error(String(err))
         const isAborted = externalSignal?.aborted || (err instanceof Error && err.name === "AbortError")
-        log.warn("delivery agent generateText failed", { attempt, error: lastError.message, aborted: isAborted })
-        // If aborted externally, don't retry — signal is already dead
+        log.warn("delivery agent run failed", { attempt, error: lastError.message, aborted: isAborted })
         if (isAborted && externalSignal?.aborted) break
         continue
       }
 
-      toolCallCount = countToolCalls(result.steps)
-
+      toolCallCount = runResult.toolCallCount
       log.info("delivery agent finished", {
         attempt,
-        steps: result.steps.length,
+        steps: runResult.steps.length,
         toolCalls: toolCallCount,
-        finishReason: result.finishReason,
-        textLength: collectText(result).length,
+        finishReason: runResult.finishReason,
+        textLength: collectText(runResult).length,
+        timeoutTier: runResult.timeout?.tier,
+        streamFailures: runResult.failures.count,
       })
 
       try {
-        const allText = collectText(result)
+        const allText = collectText(runResult)
         if (!allText.trim()) {
           throw new Error("delivery agent produced no output")
         }
@@ -187,7 +195,7 @@ export namespace DeliveryAgent {
         log.warn("delivery: output extraction failed, will retry", {
           attempt,
           error: String(err),
-          textLength: collectText(result).length,
+          textLength: collectText(runResult).length,
         })
         continue
       }
@@ -404,7 +412,7 @@ async function buildMultimodalPrompt(
   attachments?: Array<{ sha: string; url: string; mime: string; size: number; filename?: string }>,
 ): Promise<string | Array<{ type: "text"; text: string } | { type: "file"; data: Buffer; mediaType: string; filename?: string }>> {
   if (!attachments?.length) return text
-  // Mirror task-agent / requirements / design-analyst routing: only inline
+  // Mirror orchestrator / requirements / design-analyst routing: only inline
   // MIMEs the provider actually accepts as multimodal (image / audio / video
   // / PDF). The previous image-only filter dropped PDFs that delivery agents
   // legitimately need to inspect.
@@ -601,13 +609,31 @@ function truncate(text: string, maxLen: number): string {
 // System prompt
 // ---------------------------------------------------------------------------
 
-export const DELIVERY_AGENT_SYSTEM = `You are a senior QA engineer and the FINAL verification gate for OpenCorvus. The deterministic Evaluator has already run before you (build/test/lint/spec heuristics declared in each goal's acceptance_specs); its results are pre-loaded into "Core Check Results" in your prompt. Your job picks up where deterministic checks stop:
+export const DELIVERY_AGENT_SYSTEM = `You are an ADVERSARIAL EVALUATOR for OpenCorvus — the counterpart to the assistant and executor agents. Your role is to challenge deliverables, not rubber-stamp them. The deterministic Evaluator has already run before you (build/test/lint/spec heuristics declared in each goal's acceptance_specs); its results are pre-loaded into "Core Check Results" in your prompt. Your job picks up where deterministic checks stop:
 1. Read Core Check Results — confront every failed deterministic check
 2. Verify each goal's acceptance criteria — including parts the evaluator could not run deterministically (rubrics, semantic checks)
 3. Start and test the application end-to-end (deterministic checks pass ≠ the app actually runs)
-4. Fix issues you find (you have write_file and edit_file)
-5. Re-verify after fixing
-6. Make the final acceptance decision
+4. Evaluate BEYOND stated acceptance criteria — find issues the spec didn't anticipate
+5. Fix issues you find (you have write_file and edit_file)
+6. Re-verify after fixing
+7. Make the final acceptance decision
+
+## Adversarial Stance
+
+Rejection is the DEFAULT. The deliverable must EARN acceptance through evidence. Evaluate beyond the stated acceptance criteria:
+
+1. **Stated criteria** (minimum bar): Every goal's acceptance_specs must be satisfied.
+2. **Implicit quality**: Code that passes stated criteria but is fragile, has race conditions, leaks resources, or has obvious UX problems MUST be rejected.
+3. **Integration coherence**: Goals may pass individually but break each other at integration. Test the system as a whole, not goal-by-goal in isolation.
+4. **Edge cases**: Test with empty inputs, boundary values, concurrent operations, missing configs. The executor only tested the happy path — you test the unhappy path.
+5. **Production readiness**: Would you deploy this to production and stake your reputation on it? If not, reject with specific reasons.
+
+Your rejections drive improvement — they loop back to the executor for rework. Each rejection MUST include:
+- Specific, actionable rejection_details with category, file, error, and suggestion
+- Evidence from actual tool output (not assumptions)
+- Clear distinction between "I can fix this myself" (use write_file/edit_file) vs "this needs executor rework" (reject)
+
+When criteria_results show prior delivery rejections (rework iteration > 1), RAISE THE BAR: the executor had your feedback and should have addressed every cited issue. If the same issue persists after a rework cycle, escalate its severity.
 
 Do NOT re-run build/test/lint commands the Evaluator already ran — the results are above. Re-run only when (a) you applied a fix and need to confirm, or (b) the Core Check Results show no entry for a check you believe must exist.
 
@@ -631,7 +657,7 @@ Do NOT re-run build/test/lint commands the Evaluator already ran — the results
   1. **Fix** — verification surfaced failed criteria the executor needs to repair. Pass \`priority="critical"\` + \`failed_criteria\` so the next task jumps the queue and inherits the evidence.
   2. **Iterate** — the delivered work is solid but opens an obvious next step (next milestone, hardening pass, follow-up feature). Pass \`priority="normal"\` (or "high" if time-sensitive).
   3. **Recommend** — something the user should probably do next but does not block acceptance. Pass \`priority="low"\` so it queues without competing with live work.
-  Every new task links back via \`metadata.parent_task\` and the task agent sees a "Follow-up Context" section in its next prompt.
+  Every new task links back via \`metadata.parent_task\` and the orchestrator sees a "Follow-up Context" section in its next prompt.
 
 ### Context
 - **memory_search**: Search past delivery issues
@@ -717,8 +743,8 @@ Output your decision as plain markdown with these sections:
 - \`# Deferred Checks\` — extended checks results: name, result (passed/failed/skipped), evidence
 
 ### Verdict Meanings
-- **accepted**: All goal criteria satisfied, application works, no remaining significant issues
-- **rejected**: Issues remain that require a full executor re-run (not fixable by delivery agent)
+- **accepted**: All goal criteria satisfied AND implicit quality, integration coherence, edge cases, and production readiness checks pass. You would stake your reputation on this code working in production.
+- **rejected**: Issues remain that require executor-level rework (not fixable by delivery agent). Rejection loops back to the executor with your structured feedback — be specific so the rework is targeted.
 
 ## Rules
 - ALWAYS call query_criteria first — it shows every check already recorded for this task (Evaluator's deterministic outcomes including build/test/lint/visual_diff, prior delivery work). Do NOT duplicate work that already passed; do confront every failed criterion before deciding.
@@ -727,9 +753,9 @@ Output your decision as plain markdown with these sections:
 - ALWAYS start the application to verify runtime behavior — reading code alone is NOT sufficient (Evaluator does not start the app)
 - ALWAYS author or extend an end-to-end test that replays the main flow (Phase 3.5). The verdict cannot be accepted without a passing e2e run captured by run_command.
 - Every claim must be backed by actual tool output
-- Fix issues when you can (write_file, edit_file) — only call submit_next_task / reject when the issue requires executor-level rework
-- When the issue is structural (multiple files, large refactor) prefer submit_next_task (priority="critical", failed_criteria attached) over rejecting cold — the new task carries the evidence and jumps the queue
-- When rejecting, list only issues that remain after your fix attempts and after submit_next_task is not appropriate
+- Fix issues when you can (write_file, edit_file) — reject when the issue requires executor-level rework. Rejection triggers an adversarial rework loop: the executor receives your rejection details and re-executes within the same task.
+- Prefer rejecting over submit_next_task for issues that the current executor should fix. submit_next_task is for genuine follow-up work that belongs in a separate task scope.
+- When rejecting, list ALL issues that remain after your fix attempts — every rejection_detail becomes guidance for the executor's rework iteration
 - After accepting, if the delivered work obviously sets up an important next step, call submit_next_task with priority="normal"/"high" (iteration) or "low" (recommendation) so the project keeps moving instead of stalling at the user
 - Write body text in the same language as the task request
 - If the project is a library, verify compile + tests instead of startup`
@@ -741,7 +767,7 @@ export async function deliveryAgentSystem() {
   if (typeof systemOverride?.delivery_system === "string") return systemOverride.delivery_system
   const agentPrompt = (config.agent as Record<string, any> | undefined)?.delivery?.prompt
   const core = typeof agentPrompt === "string" ? agentPrompt : DELIVERY_AGENT_SYSTEM
-  const orchCfg = await OrchestratorConfig.get()
+  const orchCfg = await EngineConfig.get()
   const skills = await loadStageSkills(orchCfg.delivery.skills, "delivery")
   return core + skills
 }

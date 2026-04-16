@@ -80,7 +80,7 @@ async function createTask(raw) {
 ```
 
 `persistQueuedTask()` 只做：
-- INSERT orchestrator_task (status="queued")
+- INSERT engine_task (status="queued")
 - INSERT orchestrator_progress_snapshot
 - persist channel binding
 - emit Event.TaskCreated
@@ -137,9 +137,9 @@ async function runSpecStage(task, pipeline, hooks) {
     const specSnapshotID = Identifier.ascending("spec")
     Database.transaction(db => {
       persistSpecSnapshot(db, { taskID: task.id, specSnapshotID, specDraft, ... })
-      db.update(OrchestratorTaskTable)
+      db.update(EngineTaskTable)
         .set({ active_spec_version_id: specSnapshotID })
-        .where(eq(OrchestratorTaskTable.id, task.id))
+        .where(eq(EngineTaskTable.id, task.id))
         .run()
     })
 
@@ -170,11 +170,11 @@ const runningStages = new Map<string, Promise<void>>()  // taskID → stage prom
 export async function poll(hooks) {
   // 1. 查找 pipeline 状态的 task
   const pipelineTasks = Database.use(db =>
-    db.select({ id: OrchestratorTaskTable.id, status: OrchestratorTaskTable.status })
-      .from(OrchestratorTaskTable)
+    db.select({ id: EngineTaskTable.id, status: EngineTaskTable.status })
+      .from(EngineTaskTable)
       .where(and(
-        eq(OrchestratorTaskTable.project_id, Instance.project.id),
-        inArray(OrchestratorTaskTable.status,
+        eq(EngineTaskTable.project_id, Instance.project.id),
+        inArray(EngineTaskTable.status,
           ["queued", "spec_generating", "goal_decomposing", "planning", "planned"]),
       ))
       .all()
@@ -266,9 +266,9 @@ recovery 条件：
 ```typescript
 function recoverStrandedTasks(hooks) {
   const stranded = Database.use(db =>
-    db.select().from(OrchestratorTaskTable).where(and(
-      eq(OrchestratorTaskTable.project_id, Instance.project.id),
-      inArray(OrchestratorTaskTable.status, [
+    db.select().from(EngineTaskTable).where(and(
+      eq(EngineTaskTable.project_id, Instance.project.id),
+      inArray(EngineTaskTable.status, [
         "spec_generating", "goal_decomposing", "planning",  // pipeline
         "evaluating", "delivering",                          // execution
       ]),
@@ -337,12 +337,12 @@ global.reset()  // 只重置配置缓存，不 dispose instance
 // runtime.ts 或 instance-guard.ts
 export function hasActiveSessions(): boolean {
   return Database.use(db =>
-    db.select({ id: OrchestratorRunTable.id })
-      .from(OrchestratorRunTable)
-      .innerJoin(OrchestratorTaskTable, eq(OrchestratorRunTable.task_id, OrchestratorTaskTable.id))
+    db.select({ id: EngineRunTable.id })
+      .from(EngineRunTable)
+      .innerJoin(EngineTaskTable, eq(EngineRunTable.task_id, EngineTaskTable.id))
       .where(and(
-        eq(OrchestratorTaskTable.project_id, Instance.project.id),
-        inArray(OrchestratorRunTable.status, ["accepted", "running"]),
+        eq(EngineTaskTable.project_id, Instance.project.id),
+        inArray(EngineRunTable.status, ["accepted", "running"]),
       ))
       .limit(1)
       .get()
@@ -540,7 +540,7 @@ Replan 仍使用 `compileTransition()` + `persistReplanTransition()`（同步执
 | `TASK_TERMINAL_STATUSES` | `blocked`, `completed`, `failed`, `cancelled` | 不变（新状态不是 terminal） |
 | `model.ts` Task.status Zod enum | 9 个值 | 加 `spec_generating`, `goal_decomposing`, `planned` |
 | `model.ts` ProgressSnapshot.status Zod enum | 6 个值 | 加 pipeline 状态 |
-| `orchestrator.sql.ts` OrchestratorTaskStatus | 9 个值 | 加 3 个 |
+| `orchestrator.sql.ts` EngineTaskStatus | 9 个值 | 加 3 个 |
 | `helpers.ts` progressStatus() | 只映射 5 个 | 加 pipeline 状态映射 |
 | overlay-web-benchmark | 检查 taskStatus | 需要等待 pipeline 状态过渡，不把 `spec_generating` 当作 stall |
 

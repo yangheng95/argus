@@ -30,7 +30,7 @@
 
   <!-- Title -->
   <text class="title" x="620" y="28">图 1 — Agent 家族调用链</text>
-  <text class="subtitle" x="620" y="48">入站 → 任务创建 → Task Agent 决策循环 → sub-agents → 外部执行器</text>
+  <text class="subtitle" x="620" y="48">入站 → 任务创建 → Orchestrator 决策循环 → sub-agents → 外部执行器</text>
 
   <!-- ================== 入站层 ================== -->
   <text class="h3" x="60" y="84" style="text-anchor:start;fill:#64748b">入站（两个入口）</text>
@@ -52,9 +52,9 @@
 
   <!-- ================== 任务创建 ================== -->
   <rect class="service" x="460" y="220" width="320" height="64"/>
-  <text class="h1" x="620" y="242" style="fill:#5b21b6">OrchestratorService.createTask</text>
+  <text class="h1" x="620" y="242" style="fill:#5b21b6">EngineService.createTask</text>
   <text class="code" x="620" y="258">orchestrator/service.ts</text>
-  <text class="body" x="620" y="274">写入 orchestrator_task 行 · 路由 by kind</text>
+  <text class="body" x="620" y="274">写入 engine_task 行 · 路由 by kind</text>
 
   <!-- 入站 → createTask 箭头 -->
   <path class="arrow" d="M 280 184 Q 280 210 460 246"/>
@@ -73,20 +73,20 @@
   <!-- build-dispatch -->
   <rect class="fast" x="660" y="332" width="480" height="68"/>
   <text class="h2" x="900" y="352" style="fill:#b91c1c">kind = "build" → build-dispatch (快通道)</text>
-  <text class="code" x="900" y="368">task-agent/build-dispatch.ts</text>
+  <text class="code" x="900" y="368">orchestrator/build-dispatch.ts</text>
   <text class="body" x="900" y="386">绕过 decompose / plan / eval · 直跑 build agent</text>
 
   <path class="arrow" d="M 560 284 Q 560 310 340 332"/>
   <path class="arrow" d="M 680 284 Q 680 310 900 332"/>
 
-  <!-- ================== Task Agent 决策循环（左侧展开） ================== -->
+  <!-- ================== Orchestrator 决策循环（左侧展开） ================== -->
   <rect class="loop" x="100" y="436" width="480" height="300" style="stroke-dasharray:6 3"/>
   <text class="h2" x="340" y="458" style="fill:#6d28d9">Task Control Loop 展开</text>
 
   <!-- Decision Point -->
   <rect class="service" x="140" y="474" width="400" height="72"/>
-  <text class="h2" x="340" y="494" style="fill:#5b21b6">Decision Point — Task Agent LLM</text>
-  <text class="code" x="340" y="510">task-agent/agent.ts</text>
+  <text class="h2" x="340" y="494" style="fill:#5b21b6">Decision Point — Orchestrator LLM</text>
+  <text class="code" x="340" y="510">orchestrator/agent.ts</text>
   <text class="body" x="340" y="528">触发 kind: created / batch_complete / retry</text>
   <text class="body" x="340" y="542">读全量上下文 + decision-log → 推理下一步</text>
 
@@ -114,8 +114,8 @@
 
   <!-- ================== sub-agents（右侧） ================== -->
   <rect class="infra" x="660" y="436" width="480" height="300" style="fill:#fafafa"/>
-  <text class="h2" x="900" y="458">Sub-agents — 由 Task Agent tools 按需调用</text>
-  <text class="note" x="676" y="474">task-agent/tools.ts</text>
+  <text class="h2" x="900" y="458">Sub-agents — 由 Orchestrator tools 按需调用</text>
+  <text class="note" x="676" y="474">orchestrator/tools.ts</text>
 
   <!-- 6 个 sub-agent box (2x3) -->
   <rect class="sub" x="680" y="490" width="140" height="60"/>
@@ -153,7 +153,7 @@
   <text class="h3" x="900" y="654">Decision Log — append-only 全局共享上下文</text>
   <text class="code" x="900" y="670">decision-log/ · 传 WHY 不只 WHAT</text>
 
-  <!-- Task Agent → sub-agents 箭头 -->
+  <!-- Orchestrator → sub-agents 箭头 -->
   <path class="dispatch" d="M 540 510 Q 600 510 680 510"/>
   <text class="note" x="546" y="504">tool call</text>
 

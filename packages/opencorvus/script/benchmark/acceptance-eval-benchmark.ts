@@ -341,7 +341,7 @@ await runStage("llm-judge-calibration", async (tick) => {
       input: { deliverySummary: string; changedFiles?: string[]; requirementText?: string },
     ) => Promise<{ status: "passed" | "failed" | "skipped"; evidence?: string }>
   }>(
-    "../../src/evaluator/llm-judge-runner",
+    "../../src/delivery/checks/llm-judge-runner",
     "export async function runRubric(entry, input) — single-criterion rubric evaluator",
   )
   const translatorMod = await tryImport<{

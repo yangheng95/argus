@@ -1,7 +1,7 @@
 /**
  * Architect Agent — cross-goal consensus coordination.
  *
- * Position: After Requirements, before Plan. Task Agent decides when to invoke.
+ * Position: After Requirements, before Plan. Orchestrator decides when to invoke.
  * Reads ALL GoalContracts, explores codebase, resolves abstract exports/imports
  * into precise TypeScript contracts, writes binding consensus to Decision Log.
  *
@@ -17,10 +17,12 @@ import { stepCountIs } from "ai"
 import type { TextHooks } from "@/llm/api"
 import { Provider } from "@/provider/provider"
 import { createPlannerTools } from "@/planner/tools"
+import { filterAgentTools } from "@/agent/filter-tools"
 import { Log } from "@/util/log"
 import { toolGuard } from "@/util/tool-guard"
 import { AgentRuntime } from "@/agent/runtime"
-import { OrchestratorConfig } from "@/orchestrator/config"
+import { resolveAgentModel } from "@/agent/model"
+import { EngineConfig } from "@/engine/config"
 import { Config } from "@/config/config"
 import type { GoalContractFields } from "@/pipeline/types"
 import type { DecisionLog } from "@/decision-log"
@@ -72,12 +74,13 @@ async function run(input: {
 }): Promise<ArchitectResult> {
   if (input.signal?.aborted) throw new Error("architect agent aborted")
 
-  const orchCfg = await OrchestratorConfig.get()
+  const orchCfg = await EngineConfig.get()
   const { max_steps: MAX_STEPS, timeout_ms: TIMEOUT_MS } = orchCfg.architect
 
-  // Resolve model — per-agent model from Agent.Info (config: agent.architect.model)
-  const { resolveAgentModel } = await import("@/agent/model")
-  const model = await resolveAgentModel("architect").catch(() => undefined)
+  // Resolve model — per-agent model from Agent.Info (config: agent.architect.model),
+  // falling back to the user's most recent in-session model pick when no per-agent
+  // override is configured.
+  const model = await resolveAgentModel("architect", { taskID: input.taskID }).catch(() => undefined)
   if (!model) throw new Error("no LLM model available for architect agent")
 
   if (input.signal?.aborted) throw new Error("architect agent aborted after model resolution")
@@ -85,7 +88,8 @@ async function run(input: {
   // Read-only codebase tools + structured output tools (architect cannot write files)
   const goalIDs = input.goals.map(g => g.id)
   const outputToolKit = createArchitectOutputTools(goalIDs)
-  const guard = toolGuard({ ...createPlannerTools(), ...outputToolKit.tools })
+  const plannerTools = await filterAgentTools(createPlannerTools(), "architect")
+  const guard = toolGuard({ ...plannerTools, ...outputToolKit.tools })
 
   await input.onStatus?.("Architect agent: coordinating cross-goal contracts")
 

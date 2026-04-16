@@ -111,7 +111,7 @@ export namespace Question {
   )
 
   const QUESTION_MIN_TIMEOUT_MS = 1000
-  // 30 minutes — covers human-in-the-loop clarifications raised by Task Agent
+  // 30 minutes — covers human-in-the-loop clarifications raised by Orchestrator
   // during long-running workflows. Callers that need shorter/longer windows
   // pass `timeoutMs` explicitly (e.g. unattended auto-reply paths).
   const QUESTION_AUTO_REJECT_MS = Math.max(
@@ -220,7 +220,7 @@ export namespace Question {
 
   /**
    * Ask the user and return both the formatted LLM-facing summary and the raw
-   * answers. Shared by the executor-side QuestionTool and the task-agent's
+   * answers. Shared by the executor-side QuestionTool and the orchestrator's
    * `question` tool so both code paths render the same final string; the raw
    * `answers` are used by the TUI/overlay to re-render the tool card.
    *

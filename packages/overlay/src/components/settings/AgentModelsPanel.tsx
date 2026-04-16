@@ -37,7 +37,7 @@ interface ProvidersPayload {
 
 // Tier groupings are display-only: they organize the UI list but no longer
 // affect default model resolution (all agents inherit the project default).
-const CORE_AGENTS = ["task", "build", "delivery", "general"];
+const CORE_AGENTS = ["orchestrator", "build", "delivery", "general"];
 const INTERNAL_AGENTS = ["compaction", "title", "summary"];
 
 function tierOf(name: string): "core" | "internal" | "lightweight" {

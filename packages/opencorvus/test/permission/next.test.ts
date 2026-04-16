@@ -559,6 +559,7 @@ test("reply - once resolves the pending ask", async () => {
       await PermissionNext.reply({
         requestID: "permission_test1",
         reply: "once",
+        autoReply: false,
       })
 
       await expect(askPromise).resolves.toBeUndefined()
@@ -584,6 +585,7 @@ test("reply - reject throws RejectedError", async () => {
       await PermissionNext.reply({
         requestID: "permission_test2",
         reply: "reject",
+        autoReply: false,
       })
 
       await expect(askPromise).rejects.toBeInstanceOf(PermissionNext.RejectedError)
@@ -609,6 +611,7 @@ test("reply - always persists approval and resolves", async () => {
       await PermissionNext.reply({
         requestID: "permission_test3",
         reply: "always",
+        autoReply: false,
       })
 
       await expect(askPromise).resolves.toBeUndefined()
@@ -665,6 +668,7 @@ test("reply - reject cancels all pending for same session", async () => {
       await PermissionNext.reply({
         requestID: "permission_test4a",
         reply: "reject",
+        autoReply: false,
       })
 
       // Both should be rejected

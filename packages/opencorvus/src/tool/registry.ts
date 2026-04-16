@@ -157,9 +157,19 @@ export namespace ToolRegistry {
     },
     agent?: Agent.Info,
   ) {
-    const tools = await all()
+    let items = await all()
+
+    // Agent tool adapter: filter by agent's declared tool set
+    if (agent?.tools?.include) {
+      const set = new Set(agent.tools.include)
+      items = items.filter((t) => set.has(t.id))
+    } else if (agent?.tools?.exclude) {
+      const set = new Set(agent.tools.exclude)
+      items = items.filter((t) => !set.has(t.id))
+    }
+
     const result = await Promise.all(
-      tools
+      items
         .filter((t) => {
           // use apply tool in same format as codex
           const usePatch =

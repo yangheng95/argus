@@ -56,12 +56,6 @@ export namespace PromptCatalog {
       description: "System prompt used by the planner when it builds execution plans",
     },
     {
-      key: "evaluator_system",
-      label: "Evaluator Agent",
-      group: "assistant",
-      description: "System prompt used by the evaluator when it decides acceptance or replanning",
-    },
-    {
       key: "delivery_system",
       label: "Delivery Agent",
       group: "assistant",
@@ -89,10 +83,6 @@ export namespace PromptCatalog {
       case "planner_system": {
         const PLAN_CORE = (await import("@/prompt/core/plan-core.txt")).default
         return PLAN_CORE
-      }
-      case "evaluator_system": {
-        const { EVALUATOR_DEFAULT_SYSTEM } = await import("@/evaluator/types")
-        return EVALUATOR_DEFAULT_SYSTEM
       }
       case "delivery_system": {
         const { DELIVERY_AGENT_SYSTEM } = await import("@/delivery/agent")

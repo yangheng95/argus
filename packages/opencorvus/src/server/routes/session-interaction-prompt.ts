@@ -3,9 +3,6 @@ import { describeRoute, validator, resolver } from "hono-openapi"
 import z from "zod"
 import { Message } from "../../session/message"
 import { SessionPrompt } from "../../session/prompt"
-import { Session } from "../../session"
-import { Gateway } from "@/gateway"
-import { Instance } from "@/project/instance"
 import { errors } from "../error"
 import { TaskQueueService } from "@/scheduler/task-queue-service"
 import { TaskQueueTable } from "@/scheduler/task-queue.sql"
@@ -46,36 +43,6 @@ export function SessionInteractionPromptRoutes() {
       async (c) => {
         const sessionID = c.req.valid("param").sessionID
         const body = c.req.valid("json")
-        // Gateway sessions short-circuit the executor pipeline: the message is
-        // a user turn in the dispatcher dialog, not a prompt for the build
-        // agent. We extract the first text part as the user input and let
-        // Gateway.handleMessage run its own LLM + tools loop. The response
-        // shape here is the user message Gateway persisted (so existing
-        // clients can keep treating the route's return as `{info, parts}`).
-        const session = await Session.get(sessionID)
-        if (session.kind === "gateway") {
-          const text = (body.parts ?? [])
-            .map((p) => (p.type === "text" ? p.text : ""))
-            .filter(Boolean)
-            .join("\n")
-          if (!text) {
-            return c.json({ error: "gateway message requires at least one text part" }, 400)
-          }
-          if (!session.channelKey) {
-            return c.json({ error: "gateway session missing channel_key" }, 400)
-          }
-          await Gateway.handleMessage({
-            channelKey: session.channelKey,
-            defaultCwd: session.directory || Instance.directory,
-            text,
-          })
-          // Return the latest assistant message so the route signature stays
-          // compatible with `{info, parts}` callers.
-          const messages = await Session.messages({ sessionID, limit: 1 })
-          const last = messages[messages.length - 1]
-          if (!last) return c.json({ error: "gateway produced no message" }, 500)
-          return c.json(last)
-        }
         const msg = await TaskQueueService.executePrompt({
           sessionID,
           prompt: body,

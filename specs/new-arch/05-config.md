@@ -1,6 +1,6 @@
 # 05 — Unified Config
 
-> 对应代码：`src/config/config.ts` · `src/orchestrator/config.ts` · `overlay/src/stores/app.ts` ·
+> 对应代码：`src/config/config.ts` · `src/engine/config.ts` · `overlay/src/stores/app.ts` ·
 > `src/panel/` (注：`panel/settings.ts` 已按本文档删除)
 
 ## 统一设计 — 三层分离
@@ -70,7 +70,7 @@ experimental: unattended · auto_permission · auto_question · batch_tool
 ```
 opencorvus.jsonc ──→ Config.get() ──→ Zod 验证 + 层级合并 ──→ 缓存
                       │
-                      ├─→ OrchestratorConfig.get()     合并 DEFAULTS，返回完整 typed config
+                      ├─→ EngineConfig.get()     合并 DEFAULTS，返回完整 typed config
                       ├─→ GET  /config                  → Overlay appStore.config (reactive)
                       ├─→ PATCH /config {partial diff}  → mergeDeep → 写文件 → 重置缓存
                       └─→ Bus "config.changed"          → SSE → 所有 Overlay 实例刷新
@@ -79,7 +79,7 @@ opencorvus.jsonc ──→ Config.get() ──→ Zod 验证 + 层级合并 ─�
 **关键变化**：
 1. Overlay 不再 `GET→clone→mutate→PATCH` 全量，只发变化字段
 2. Config 变更后 SSE 推送，所有 Overlay 自动 `setAppStore("config", newConfig)`
-3. `scaffoldProjectConfig` 直接导入 `OrchestratorConfig.defaults`，不硬编码
+3. `scaffoldProjectConfig` 直接导入 `EngineConfig.defaults`，不硬编码
 
 ## 并发策略
 

@@ -1,10 +1,10 @@
 import { Instance } from "@/project/instance"
 import { Database, desc, eq, and, like } from "@/storage/db"
 import {
-  OrchestratorTaskTable,
-  OrchestratorEvaluationTable,
-  OrchestratorGoalTable,
-} from "@/orchestrator/orchestrator.sql"
+  EngineTaskTable,
+  EngineEvaluationTable,
+  EngineGoalTable,
+} from "@/engine/engine.sql"
 import { Tool } from "./tool"
 import z from "zod"
 
@@ -39,7 +39,7 @@ export const AnalyticsTool = Tool.define("analytics", {
 
     if (args.action === "summary") {
       const tasks = Database.use((db) =>
-        db.select().from(OrchestratorTaskTable).where(eq(OrchestratorTaskTable.project_id, projectID)).all(),
+        db.select().from(EngineTaskTable).where(eq(EngineTaskTable.project_id, projectID)).all(),
       )
       const total = tasks.length
       const completed = tasks.filter((t) => t.status === "completed").length
@@ -59,13 +59,13 @@ export const AnalyticsTool = Tool.define("analytics", {
       const evals = Database.use((db) =>
         db
           .select()
-          .from(OrchestratorEvaluationTable)
-          .innerJoin(OrchestratorTaskTable, eq(OrchestratorEvaluationTable.task_id, OrchestratorTaskTable.id))
-          .where(eq(OrchestratorTaskTable.project_id, projectID))
+          .from(EngineEvaluationTable)
+          .innerJoin(EngineTaskTable, eq(EngineEvaluationTable.task_id, EngineTaskTable.id))
+          .where(eq(EngineTaskTable.project_id, projectID))
           .all(),
       )
       const totalEvals = evals.length
-      const passedEvals = evals.filter((e) => e.orchestrator_evaluation.status === "passed").length
+      const passedEvals = evals.filter((e) => e.engine_evaluation.status === "passed").length
 
       return {
         title: "Project Analytics Summary",
@@ -86,16 +86,16 @@ export const AnalyticsTool = Tool.define("analytics", {
 
     if (args.action === "search") {
       const limit = args.limit ?? 20
-      const conditions = [eq(OrchestratorTaskTable.project_id, projectID)]
-      if (args.status) conditions.push(eq(OrchestratorTaskTable.status, args.status))
-      if (args.query) conditions.push(like(OrchestratorTaskTable.title, `%${args.query}%`))
+      const conditions = [eq(EngineTaskTable.project_id, projectID)]
+      if (args.status) conditions.push(eq(EngineTaskTable.status, args.status))
+      if (args.query) conditions.push(like(EngineTaskTable.title, `%${args.query}%`))
 
       const tasks = Database.use((db) =>
         db
           .select()
-          .from(OrchestratorTaskTable)
+          .from(EngineTaskTable)
           .where(and(...conditions))
-          .orderBy(desc(OrchestratorTaskTable.time_updated))
+          .orderBy(desc(EngineTaskTable.time_updated))
           .limit(limit)
           .all(),
       )
@@ -121,17 +121,17 @@ export const AnalyticsTool = Tool.define("analytics", {
       const goals = Database.use((db) =>
         db
           .select()
-          .from(OrchestratorGoalTable)
-          .innerJoin(OrchestratorTaskTable, eq(OrchestratorGoalTable.task_id, OrchestratorTaskTable.id))
-          .where(eq(OrchestratorTaskTable.project_id, projectID))
+          .from(EngineGoalTable)
+          .innerJoin(EngineTaskTable, eq(EngineGoalTable.task_id, EngineTaskTable.id))
+          .where(eq(EngineTaskTable.project_id, projectID))
           .all(),
       )
       const total = goals.length
-      const passed = goals.filter((g) => g.orchestrator_goal.status === "passed").length
-      const failed = goals.filter((g) => g.orchestrator_goal.status === "failed").length
-      const pending = goals.filter((g) => g.orchestrator_goal.status === "pending").length
-      const blocking = goals.filter((g) => g.orchestrator_goal.priority === "blocking").length
-      const advisory = goals.filter((g) => g.orchestrator_goal.priority === "advisory").length
+      const passed = goals.filter((g) => g.engine_goal.status === "passed").length
+      const failed = goals.filter((g) => g.engine_goal.status === "failed").length
+      const pending = goals.filter((g) => g.engine_goal.status === "pending").length
+      const blocking = goals.filter((g) => g.engine_goal.priority === "blocking").length
+      const advisory = goals.filter((g) => g.engine_goal.priority === "advisory").length
 
       return {
         title: "Goal Statistics",

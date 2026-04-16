@@ -9,14 +9,14 @@ import { tool } from "ai"
 import z from "zod"
 import fs from "fs/promises"
 import path from "path"
-import { createCodebaseTools } from "@/orchestrator/codebase-tools"
+import { createCodebaseTools } from "@/engine/codebase-tools"
 import { Memory } from "@/memory"
 import { Instance } from "@/project/instance"
 import { Shell } from "@/shell/shell"
 import { Filesystem } from "@/util/filesystem"
 import { Log } from "@/util/log"
-import { OrchestratorService } from "@/orchestrator/service"
-import { findTask } from "@/orchestrator/store"
+import { EngineService } from "@/task-api"
+import { findTask } from "@/engine/store"
 
 const TASK_CHAIN_DEPTH_LIMIT = 3
 
@@ -149,7 +149,7 @@ export function createDeliveryTools(input?: { sessionID?: string; taskID?: strin
         // We don't carry an executor field on the original task row; the new
         // task picks the configured default at create time, which matches how
         // user-initiated tasks are dispatched.
-        const newTaskID = await OrchestratorService.createTask({
+        const newTaskID = await EngineService.createTask({
           title: title.slice(0, 80),
           request: fullRequest,
           priority,

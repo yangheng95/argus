@@ -1,45 +1,45 @@
 # 02 — 数据面
 
-> 对应代码：`src/orchestrator/orchestrator.sql.ts` · `src/session/session.sql.ts` · `src/trace/` ·
+> 对应代码：`src/engine/orchestrator.sql.ts` · `src/session/session.sql.ts` · `src/trace/` ·
 > `src/bus/` · `src/decision-log/` · `src/storage/`
 
 ## orchestrator 域（18 表）
 
-所有表定义在 `src/orchestrator/orchestrator.sql.ts`，命名前缀 `orchestrator_`。
+所有表定义在 `src/engine/orchestrator.sql.ts`，命名前缀 `orchestrator_`。
 
 ### 顶层与规格
 | 表 | 关键字段 / 状态 |
 |---|---|
-| `orchestrator_task` | status ∈ {queued, active, completed, failed, cancelled}; priority ∈ {critical,high,normal,low}; executor ∈ {opencode, codex, claude-code}; kind ∈ {workflow, build} |
-| `orchestrator_spec_snapshot` | 规格快照（requirements 输出） |
-| `orchestrator_spec_item` | 规格明细项 |
+| `engine_task` | status ∈ {queued, active, completed, failed, cancelled}; priority ∈ {critical,high,normal,low}; executor ∈ {opencode, codex, claude-code}; kind ∈ {workflow, build} |
+| `engine_spec_snapshot` | 规格快照（requirements 输出） |
+| `engine_spec_item` | 规格明细项 |
 
 ### 计划与目标
 | 表 | 关键字段 / 状态 |
 |---|---|
-| `orchestrator_plan_version` | status ∈ {active, superseded} |
-| `orchestrator_milestone` | status ∈ {pending, active, passed, failed} |
-| `orchestrator_goal` | priority ∈ {blocking, advisory}; status ∈ {pending, running, passed, failed} |
-| `orchestrator_requirement` | 需求追溯记录 |
-| `orchestrator_goal_snapshot` | goal 快照 |
-| `orchestrator_plan_node` | 计划步骤 |
+| `engine_plan_version` | status ∈ {active, superseded} |
+| `engine_milestone` | status ∈ {pending, active, passed, failed} |
+| `engine_goal` | priority ∈ {blocking, advisory}; status ∈ {pending, running, passed, failed} |
+| `engine_requirement` | 需求追溯记录 |
+| `engine_goal_snapshot` | goal 快照 |
+| `engine_plan_node` | 计划步骤 |
 
 ### 执行与交付
 | 表 | 关键字段 / 状态 |
 |---|---|
-| `orchestrator_run` | status ∈ {queued, accepted, running, blocked, completed, failed, aborted}; phase ∈ {plan, execute, evaluate, deliver, dispatch, retry} |
-| `orchestrator_goal_run` | goal × run 关联 |
-| `orchestrator_delivery` | 交付记录 |
-| `orchestrator_artifact` | 产物 |
-| `orchestrator_evaluation` | 评估结果 |
+| `engine_run` | status ∈ {queued, accepted, running, blocked, completed, failed, aborted}; phase ∈ {plan, execute, evaluate, deliver, dispatch, retry} |
+| `engine_goal_run` | goal × run 关联 |
+| `engine_delivery` | 交付记录 |
+| `engine_artifact` | 产物 |
+| `engine_evaluation` | 评估结果 |
 | `orchestrator_progress_snapshot` | 进度快照 |
-| `orchestrator_executor_session` | 执行器会话绑定 |
+| `engine_executor_session` | 执行器会话绑定 |
 
 ### 交互与绑定
 | 表 | 关键字段 / 状态 |
 |---|---|
-| `orchestrator_interaction_request` | type ∈ {permission, question}; status ∈ {pending, ...} |
-| `orchestrator_channel_binding` | 外部 channel ↔ task 绑定；ChannelIngress 查询入口 |
+| `engine_interaction_request` | type ∈ {permission, question}; status ∈ {pending, ...} |
+| `engine_channel_binding` | 外部 channel ↔ task 绑定；ChannelIngress 查询入口 |
 
 **唯一写入者**：`orchestrator/service.ts` 和 `orchestrator/store.ts`。
 禁止其他模块直接写 orchestrator_* 表。
@@ -63,7 +63,7 @@
 
 | 表 | 文件 | 作用 |
 |---|---|---|
-| `workspace` | `control-plane/workspace.sql.ts` | 多工作区代理元数据 |
+| `workspace` | `workspace/workspace.sql.ts` | 多工作区代理元数据 |
 | `control_account` | `control/control.sql.ts` | 外部控制账号（email + url） |
 | `control_message` | `control/control.sql.ts` | 外部控制消息 |
 | `project` | `project/project.sql.ts` | 项目根 |

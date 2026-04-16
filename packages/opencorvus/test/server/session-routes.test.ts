@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, mock, test } from "bun:test"
 import { Database, eq } from "../../src/storage/db"
 import { Identifier } from "../../src/id/id"
-import { OrchestratorTaskTable } from "../../src/orchestrator/orchestrator.sql"
+import { EngineTaskTable } from "../../src/engine/engine.sql"
 import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
 import { SessionTable } from "../../src/session/session.sql"
@@ -25,7 +25,7 @@ describe("session routes", () => {
       directory: tmp.path,
       fn: async () => {
         const app = Server.App()
-        const session = await Session.create({ title: "log-session" })
+        const session = await Session.create({ kind: "assistant", title: "log-session" })
 
         const response = await app.request(`/session/${session.id}`, {
           headers: {
@@ -64,11 +64,11 @@ describe("session routes", () => {
       directory: tmp.path,
       fn: async () => {
         const app = Server.App()
-        const session = await Session.create({ title: "delete-me" })
+        const session = await Session.create({ kind: "assistant", title: "delete-me" })
         const taskID = Identifier.ascending("task")
         const now = Date.now()
         Database.use((db) =>
-          db.insert(OrchestratorTaskTable).values({
+          db.insert(EngineTaskTable).values({
             id: taskID,
             project_id: Instance.project.id,
             session_id: session.id,
@@ -91,7 +91,7 @@ describe("session routes", () => {
 
         expect(removed.status).toBe(200)
         expect(Database.use((db) =>
-          db.select().from(OrchestratorTaskTable).where(eq(OrchestratorTaskTable.id, taskID)).get(),
+          db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get(),
         )).toBeUndefined()
         expect(Database.use((db) =>
           db.select().from(SessionTable).where(eq(SessionTable.id, session.id)).get(),
@@ -107,11 +107,11 @@ describe("session routes", () => {
       directory: tmp.path,
       fn: async () => {
         const app = Server.App()
-        const session = await Session.create({ title: "keep-task" })
+        const session = await Session.create({ kind: "assistant", title: "keep-task" })
         const taskID = Identifier.ascending("task")
         const now = Date.now()
         Database.use((db) =>
-          db.insert(OrchestratorTaskTable).values({
+          db.insert(EngineTaskTable).values({
             id: taskID,
             project_id: Instance.project.id,
             session_id: session.id,
@@ -138,7 +138,7 @@ describe("session routes", () => {
         )).toBeUndefined()
 
         const task = Database.use((db) =>
-          db.select().from(OrchestratorTaskTable).where(eq(OrchestratorTaskTable.id, taskID)).get(),
+          db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get(),
         )
         expect(task?.session_id).toBeNull()
 

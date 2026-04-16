@@ -1,0 +1,788 @@
+/**
+ * Orchestrator — master agent in the Agent Team architecture.
+ *
+ * Calls LLM through ProviderLLM.stream() — the unified provider adaptation layer.
+ *
+ * Triggered by:
+ * - Task creation (kind: "created") — new task, agent plans and submits execution
+ * - Batch complete (kind: "batch_complete") — goal batch finished (any mix of pass/fail),
+ *   agent reads fresh context and decides next action
+ * - User retry request (kind: "retry")
+ *
+ * The Orchestrator controls the entire pipeline via tools:
+ * requirements → goals → plan → execute → eval → delivery verify → publish
+ * All other agents (requirements, architect, plan, eval, delivery) are subordinate workers.
+ */
+import { stepCountIs } from "ai"
+import { Provider } from "@/provider/provider"
+import { renderSpecsAsText, type AcceptanceSpec } from "@/acceptance/types"
+import { AgentRuntime } from "@/agent/runtime"
+import { resolveAgentModel } from "@/agent/model"
+import { Session } from "@/session"
+import { Instance } from "@/project/instance"
+import { Identifier } from "@/id/id"
+import { Log } from "@/util/log"
+import { toolGuard } from "@/util/tool-guard"
+import { Trace } from "@/trace"
+import { sessionStreamHooks } from "@/agent/runtime"
+import { createOrchestratorTools } from "./tools"
+import { SubAgentProtocol } from "@/agent/sub-agent-protocol"
+import { AttachmentStore } from "@/storage/attachment-store"
+import { clarificationTranscriptSection, operatorNotesSection } from "@/engine/helpers"
+import {
+  findDeliveryByRun,
+  findEvaluationByRun,
+  findPlan,
+  findRun,
+  findRuns,
+  findSpecSnapshot,
+  findTask,
+  listActiveGoalRunsByCoordinator,
+  listGoals,
+  requireTask,
+  type TaskRow,
+} from "@/engine/store"
+import { DEFAULT_MAX_RUNS, DEFAULT_MAX_FIX_RUNS } from "@/engine/helpers"
+import { updateTask } from "@/engine/state"
+import {
+  WorkflowRegistry,
+  createWorkflowState,
+  renderWorkflowPrompt,
+  type WorkflowState,
+  type MiniWorkflow,
+} from "@/engine/workflow"
+import { EngineProtocol } from "@/engine/protocol"
+import { Event as EngineEvent } from "@/engine/model"
+
+const log = Log.create({ service: "orchestrator" })
+const MAX_STEPS = 20
+
+// ---------------------------------------------------------------------------
+// Trigger types
+// ---------------------------------------------------------------------------
+
+export type OrchestratorTrigger =
+  | { kind: "created" }
+  | { kind: "batch_complete"; runID: string; summary: { passed: number; failed: number; total: number }; depBlocked?: Array<{ goalTitle: string; blockedBy: Array<{ title: string; status: string }> }> }
+  | { kind: "delivery_rejected"; runID: string; feedback: Record<string, unknown> }
+  | { kind: "retry" }
+
+// ---------------------------------------------------------------------------
+// Concurrency guard
+// ---------------------------------------------------------------------------
+
+const running = new Map<string, AbortController>()
+// Tracks tasks that have already emitted Trace.event("task.finish"); the
+// orchestrator can be re-triggered after a task reaches terminal status, and
+// without dedupe each re-trigger would emit a redundant finish event.
+const finishEmitted = new Set<string>()
+// Cooldown: when the Orchestrator last finished for each task.
+// Orphan recovery checks this to avoid re-triggering immediately.
+const lastFinished = new Map<string, number>()
+
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
+
+export namespace Orchestrator {
+  export function abort(taskID: string): void {
+    const ctrl = running.get(taskID)
+    if (ctrl) {
+      ctrl.abort("orchestrator aborted")
+      running.delete(taskID)
+      log.info("orchestrator aborted", { taskID })
+    }
+  }
+
+  export function isRunning(taskID: string): boolean {
+    return running.has(taskID)
+  }
+
+  export async function processTask(taskID: string, trigger: OrchestratorTrigger): Promise<void> {
+    // ── Dispatch gate: suppress wake-up while goals are executing ──
+    // When goals are running in parallel, the Orchestrator has nothing useful
+    // to do — it would waste API tokens asking LLM to spin-wait.
+    // notifyGoalResult() ensures all goal_runs are in terminal state before
+    // calling processTask, so legitimate completion triggers pass naturally.
+    // failRun() marks all active goal_runs as failed before calling, so it
+    // also passes. Only spurious triggers (orphan recovery, user retry,
+    // redundant syncRun re-notifications) are blocked.
+    const gateTask = findTask(taskID)
+    if (gateTask?.active_run_id) {
+      const activeGoalRuns = listActiveGoalRunsByCoordinator(gateTask.active_run_id)
+      if (activeGoalRuns.length > 0) {
+        log.info("orchestrator suppressed by dispatch gate", {
+          taskID,
+          trigger: trigger.kind,
+          activeGoalRuns: activeGoalRuns.length,
+          goalRunIDs: activeGoalRuns.map(gr => gr.id),
+        })
+        return
+      }
+    }
+
+    abort(taskID)
+    const ctrl = new AbortController()
+    running.set(taskID, ctrl)
+
+    let contentHooks: ReturnType<typeof sessionStreamHooks> | undefined
+    let stopSignal: AbortSignal | undefined
+    try {
+      const task = requireTask(taskID)
+      if (!task.session_id) {
+        log.error("orchestrator: no session_id on task", { taskID })
+        return
+      }
+
+      // 0. Initialize workflow state on new task creation
+      let workflow: MiniWorkflow | undefined
+      let workflowState: WorkflowState | undefined
+      if (trigger.kind === "created") {
+        finishEmitted.delete(taskID)
+        Trace.event({
+          taskID,
+          sessionID: task.session_id,
+          category: "task.start",
+          payload: { kind: task.kind, request: task.request },
+        })
+        const requestedID = (task.metadata as any)?._workflow?.workflowID
+        const workflowID = requestedID ?? await WorkflowRegistry.defaultID()
+        workflow = await WorkflowRegistry.resolve(workflowID) ?? WorkflowRegistry.resolveSync("pipeline")
+        if (workflow) {
+          workflowState = createWorkflowState(workflow)
+          const meta = { ...(task.metadata ?? {}), _workflow: workflowState }
+          await updateTask(task, { metadata: meta }, `Workflow selected: ${workflow.name}`)
+          EngineProtocol.emit(EngineEvent.WorkflowSelected, {
+            taskID,
+            workflowID: workflow.id,
+            workflowName: workflow.name,
+            summary: `Workflow "${workflow.name}" selected`,
+          })
+        }
+      } else {
+        // Load existing workflow state for re-triggers
+        const existingState = (task.metadata as any)?._workflow as WorkflowState | undefined
+        if (existingState) {
+          workflow = await WorkflowRegistry.resolve(existingState.workflowID) ?? WorkflowRegistry.resolveSync(existingState.workflowID)
+          workflowState = existingState
+        }
+      }
+
+      // 1. Resolve model — respects agent.task.model in user config; otherwise
+      //    inherits the user's most recent in-session model pick from the
+      //    originating task session; otherwise Provider.defaultModel().
+      const model = await resolveAgentModel("orchestrator", { sessionID: task.session_id }).catch((e) => {
+        log.error("orchestrator: no LLM model available", { taskID, error: e instanceof Error ? e.message : String(e) })
+        return undefined
+      })
+      if (!model) return
+
+      // 2. Create child session + streaming hooks.
+      //    Each processTask invocation uses a fresh child session.
+      //    LLM context is reconstructed from DB state (goals, runs, deliveries,
+      //    decision log) via buildSystemParts on each invocation — the session
+      //    is only for UI/audit persistence, not for LLM context accumulation.
+      const agentSession = await Session.createNext({
+        kind: "assistant",
+        parentID: task.session_id,
+        title: `Agent: ${task.title}`,
+        directory: Instance.directory,
+      })
+      contentHooks = sessionStreamHooks({
+        sessionID: agentSession.id,
+        taskID,
+        stage: "assistant",
+      })
+
+
+      // 3. Create tools (agentSessionID passed so tool sessions become children)
+      const { tools, stopSignal: dispatchSignal } = createOrchestratorTools({ taskID, agentSessionID: agentSession.id, signal: ctrl.signal, workflow, workflowState })
+      stopSignal = dispatchSignal
+      const guard = toolGuard(tools)
+
+      // 4. Build prompt — use the user's original request as the user message
+      // for "created" triggers (it IS the user's intent). For re-triggers
+      // (batch_complete, retry) use a short event description.
+      const system = buildSystemParts(task, trigger, workflow, workflowState)
+      const userText = trigger.kind === "created"
+        ? task.request
+        : describeTrigger(task, trigger)
+      // Build multimodal content when task has file attachments (only for initial trigger).
+      // AttachmentStore.partition routes image/audio/video/pdf to inline file
+      // parts and text/* / json to a URL-only reference list; see helper
+      // comments for the silent-rejection rationale.
+      const attachments = trigger.kind === "created" && Array.isArray(task.attachments)
+        ? (task.attachments as Array<{ sha?: string; url?: string; mime?: string; size?: number; filename?: string }>)
+        : undefined
+      const { multimodal, referenceOnly } = AttachmentStore.partition(attachments)
+      const attachmentParts = await AttachmentStore.loadFileParts(multimodal)
+      // Orchestrator is the orchestrator; it does NOT own a `read` tool.
+      // Attachments are forwarded automatically to the sub-agents it dispatches
+      // (requirements / design_analysis / architect via the `requirements` /
+      // `design_analysis` / `architect` tools), which DO have read access. The
+      // inventory below tells the Orchestrator what's available when deciding
+      // which sub-agent to invoke; the trailing instruction is a HARD design
+      // constraint (no read tool here), not a fallback hint.
+      const referenceText = referenceOnly.length
+        ? AttachmentStore.renderReferenceList(referenceOnly).replace(
+            "## Task Attachments (read via the `read` tool when you need their content)",
+            "## Task Attachments (forwarded to sub-agents automatically)",
+          ) +
+          "\n\nDo NOT attempt to read these yourself — invoke the appropriate sub-agent (requirements / design_analysis / architect) which receives the attachments and can read them via its `read` tool."
+        : ""
+      const enrichedUserText = userText + referenceText
+      const userContent = attachmentParts.length
+        ? [{ type: "text" as const, text: enrichedUserText }, ...attachmentParts]
+        : enrichedUserText
+
+      log.info("orchestrator starting", {
+        taskID,
+        trigger: trigger.kind,
+        sessionID: agentSession.id,
+        model: `${model.providerID}/${model.id}`,
+        toolCount: Object.keys(tools).length,
+      })
+
+      // 5. Run through AgentRuntime — unified guard / failure / persistence wiring.
+      const taskAgentProgressMs = 20 * 60 * 1000
+      const runResult = await AgentRuntime.run({
+        agent: "orchestrator",
+        model,
+        system,
+        messages: [{ role: "user" as const, content: userContent }],
+        tools: guard.tools as any,
+        stopWhen: stepCountIs(MAX_STEPS),
+        cacheKey: `task-${taskID}`,
+        sessionID: agentSession.id,
+        taskID,
+        stage: "assistant",
+        signal: AbortSignal.any([ctrl.signal, guard.signal, stopSignal]),
+        onStepFinish: guard.onStepFinish as any,
+        hooks: contentHooks,
+        policies: {
+          // Orchestrator is the root coordinator: it sits in `tool.execute`
+          // for minutes at a time while sub-agents (design-analyst /
+          // requirements / planner / executor) run. The root stream emits no
+          // chunks during those gaps, so a tight Tier-1 alive timer would
+          // false-trigger. Each sub-agent carries its own alive guard, so
+          // we collapse Tier 1 into Tier 2 here (alive == progress).
+          aliveTimeoutMs: taskAgentProgressMs,
+          progressTimeoutMs: taskAgentProgressMs,
+          absoluteTimeoutMs: taskAgentProgressMs * 3,
+          // Root agent: surface child failures as collected state; the task
+          // loop handles escalation, not the runtime.
+          failurePolicy: "collect",
+        },
+      })
+      const resultText = runResult.text
+      const resultSteps = runResult.steps
+      const resultFinishReason = runResult.finishReason
+      const toolCallCount = runResult.toolCallCount
+      log.info("orchestrator finished", {
+        taskID,
+        trigger: trigger.kind,
+        steps: resultSteps.length,
+        toolCalls: toolCallCount,
+        finishReason: resultFinishReason,
+        textLength: resultText?.length ?? 0,
+        streamFailures: runResult.failures.count,
+        timeoutTier: runResult.timeout?.tier,
+      })
+
+      // Critical stream failures (mid-stream protocol violations, persist
+      // failures, provider onError, progress-guard timeouts) mean the
+      // agent's view of the run is incoherent and we must fail the task.
+      // Excluded from critical:
+      //   - `flush`: cleanup-path persistence hiccup after the LLM already
+      //     returned; doesn't retroactively invalidate a successful run.
+      //   - `tool-input-validation`: AI-SDK rejected a tool call's input
+      //     against its Zod inputSchema; the SDK has already fed the error
+      //     back to the model as the tool result, so the model self-corrects
+      //     on the next step. Bounded by stopWhen=stepCountIs — unrecoverable
+      //     models still loud-fail via step-cap, not silently. Failing hard
+      //     here would short-circuit the "Orchestrator is the sole decision-
+      //     maker, independent reasoning" design (01-agents.md).
+      const critical = runResult.failures.items.filter(
+        (item) => item.kind !== "flush" && item.kind !== "tool-input-validation",
+      )
+      const flushOnly = runResult.failures.items.filter((item) => item.kind === "flush")
+      if (flushOnly.length > 0) {
+        log.warn("orchestrator: post-stream flush hiccup (non-fatal)", {
+          taskID,
+          flushFailures: flushOnly.length,
+          firstFlushKind: flushOnly[0]?.chunkType,
+          firstFlushReason: flushOnly[0]?.reason,
+        })
+      }
+      if (critical.length > 0 || runResult.timeout) {
+        const first = critical[0]
+        const reason = runResult.timeout?.reason
+          ?? (first ? `${first.kind}: ${first.reason}` : "unknown stream failure")
+        log.warn("orchestrator surfaced stream failures", {
+          taskID,
+          criticalCount: critical.length,
+          timeoutTier: runResult.timeout?.tier,
+          firstFailureKind: first?.kind,
+        })
+        const current = requireTask(taskID)
+        if (current.status !== "completed" && current.status !== "failed" && current.status !== "cancelled") {
+          await updateTask(current, {
+            status: "failed",
+            error: `Orchestrator stream failure: ${reason}`,
+          }, `Orchestrator stream failure: ${reason}`)
+        }
+      }
+
+    } catch (error) {
+      // Finalize any tool parts stuck in running/pending before returning
+      await contentHooks?.flush().catch(() => undefined)
+      if (ctrl.signal.aborted) {
+        log.info("orchestrator was aborted", { taskID })
+        return
+      }
+      // stopSignal abort is a normal termination (submit_execution/dispatch/execute_goal
+      // dispatched work). NOT an error — the agent will be re-triggered on completion.
+      if (stopSignal?.aborted) {
+        log.info("orchestrator stopped after dispatch", { taskID, trigger: trigger.kind })
+        return
+      }
+      const msg = error instanceof Error ? error.message : String(error)
+      log.error("orchestrator failed", { taskID, trigger: trigger.kind, error: msg })
+      // Surface the error on the task so UI/orphan-recovery can see it.
+      // Don't change task status — let orphan recovery decide the next step.
+      try {
+        const current = requireTask(taskID)
+        if (current.status !== "completed" && current.status !== "failed" && current.status !== "cancelled") {
+          await updateTask(current, { error: `Orchestrator error: ${msg}` }, `Orchestrator failed: ${msg}`)
+        }
+      } catch { /* task may have been deleted */ }
+    } finally {
+      running.delete(taskID)
+      const finalTask = findTask(taskID)
+      const isTerminal = !!finalTask && (finalTask.status === "completed" || finalTask.status === "failed" || finalTask.status === "cancelled")
+      if (isTerminal && !finishEmitted.has(taskID)) {
+        finishEmitted.add(taskID)
+        const sid = finalTask?.session_id ?? undefined
+        Trace.event({
+          taskID,
+          sessionID: sid,
+          category: "task.finish",
+          payload: { status: finalTask?.status, error: finalTask?.error ?? null },
+        })
+      }
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Trigger description
+// ---------------------------------------------------------------------------
+
+function describeTrigger(task: TaskRow, trigger: OrchestratorTrigger): string {
+  switch (trigger.kind) {
+    case "created":
+      return "New task created. Process it."
+
+    case "batch_complete": {
+      const lines = [
+        `Goal batch complete on run ${trigger.runID}.`,
+        `Summary: ${trigger.summary.passed} passed, ${trigger.summary.failed} failed, ${trigger.summary.total} total.`,
+      ]
+
+      if (trigger.depBlocked && trigger.depBlocked.length > 0) {
+        lines.push(
+          "",
+          "⚠ BLOCKED GOALS — the following pending goals CANNOT execute because their dependencies failed:",
+        )
+        for (const b of trigger.depBlocked) {
+          const deps = b.blockedBy.map(d => `${d.title} [${d.status}]`).join(", ")
+          lines.push(`  • "${b.goalTitle}" blocked by: ${deps}`)
+        }
+        lines.push(
+          "",
+          "ACTION REQUIRED: You MUST resolve the blocking goals before these can proceed.",
+          "Call query_failed_goals, then either retry_failed_goals (with root cause analysis) or fail_task.",
+          "Dispatching or waiting will NOT help — these goals will never become ready until the blockers are resolved.",
+        )
+      } else {
+        lines.push(
+          "",
+          "Read context (read_context) to see goal statuses and eval evidence.",
+          "Decide next action based on current state — no predetermined action.",
+        )
+      }
+
+      return lines.join("\n")
+    }
+
+    case "delivery_rejected": {
+      const fb = trigger.feedback
+      const iteration = fb.iteration ?? "?"
+      const maxIter = fb.max_iterations ?? "?"
+      const issues = Array.isArray(fb.issues_found) ? fb.issues_found as string[] : []
+      const details = Array.isArray(fb.rejection_details) ? fb.rejection_details as Array<{ category?: string; file?: string; error?: string; suggestion?: string }> : []
+
+      const lines = [
+        `## DELIVERY REJECTED (iteration ${iteration}/${maxIter})`,
+        "",
+        "The delivery agent (adversarial evaluator) rejected the integrated deliverable.",
+        "Goals are NOT auto-reset — YOU must re-plan based on the feedback below.",
+        "",
+        `**Summary**: ${fb.verdict_summary ?? "No summary"}`,
+        "",
+        `**Issues found** (${issues.length}):`,
+        ...issues.map((issue: string) => `  - ${issue}`),
+      ]
+
+      if (details.length > 0) {
+        lines.push("", "**Structured rejection details**:")
+        for (const d of details) {
+          const filePart = d.file ? ` [${d.file}]` : ""
+          const sugPart = d.suggestion ? ` → Suggested: ${d.suggestion}` : ""
+          lines.push(`  - [${d.category ?? "unknown"}]${filePart}: ${d.error ?? "no description"}${sugPart}`)
+        }
+      }
+
+      lines.push(
+        "",
+        "## RE-PLAN REQUIRED",
+        "",
+        "Analyze each rejection detail and decide the appropriate remediation:",
+        "",
+        "- **Contract gap / missing criteria** → modify_goal on affected goals (auto-resets to pending)",
+        "- **Missing functionality** → add_goal to create the gap coverage",
+        "- **Wrong approach / architecture issue** → restart_from_stage(requirements) or (plan)",
+        "- **Implementation bug in a passed goal** → modify_goal with tightened criteria to force re-execution",
+        "",
+        "Then: create_run → submit_execution. After goals complete, call deliver again.",
+        "",
+        "Focus on the SPECIFIC issues. Do NOT rework everything blindly.",
+      )
+
+      return lines.join("\n")
+    }
+
+    case "retry":
+      return `User requested retry.${task.error ? ` Previous error: ${task.error}` : ""}\nDecide how to proceed.`
+  }
+}
+
+// ---------------------------------------------------------------------------
+// System prompt — split into stable instructions (cacheable) and dynamic context
+// ---------------------------------------------------------------------------
+
+/** Static instructions that never change between invocations. */
+const ORCHESTRATOR_INSTRUCTIONS = [
+  "You are the OpenCorvus Orchestrator — the central intelligence that drives task completion.",
+  "There are exactly TWO workflows. Pick one, execute it, iterate until deliver accepts or budget exhausts.",
+  "Always respond in the same language as the task request. Default to Chinese (simplified) if ambiguous.",
+  "",
+  "## Workflow Choice (FIRST, exactly once)",
+  "",
+  "**(1) Direct workflow** — `build → deliver` (adversarial loop):",
+  "  Call `build` with the user's request, then `deliver`. If deliver rejects, call `build` again with the",
+  "  rejection feedback, then `deliver` again. Loop until accepted or max_delivery_iterations exhausts.",
+  "  USE WHEN: single-file edit, bug fix, small refactor in place, typo/comment/config tweak, short debug-and-fix.",
+  "  No requirements, no architect, no goals — `build` does the work in-process.",
+  "",
+  "**(2) Pipeline workflow** — `(design_analysis) → requirements → architect → per-goal[build] → deliver` (loop):",
+  "  Decompose into goals first; each goal is implemented by an isolated build invocation in its own worktree;",
+  "  deliver verifies the integrated result and rejection re-dispatches affected goals.",
+  "  USE WHEN: multi-file features, UI replication from designs, cross-module refactors, new subsystems,",
+  "  anything with explicit acceptance criteria or non-functional goals.",
+  "",
+  "  **Can't tell?** Prefer pipeline. Requirements can decompose into a single goal — cheap. Misrouted direct",
+  "  build skips verification entirely — expensive to recover from.",
+  "",
+  "## Workflow switching",
+  "",
+  "Pick ONE workflow up front and ride it. Don't churn between paths within a single deliver iteration.",
+  "Switching is allowed only after the current workflow's iteration loop has produced clear evidence",
+  "that the chosen path won't converge:",
+  "",
+  "- **Pipeline → re-run pipeline (preferred)**: per-goal failures, contract gaps, missing dependencies →",
+  "  use `modify_goal` / `add_goal` / `retry_failed_goals` / `restart_from_stage` and dispatch again.",
+  "  This is the FIRST response to any failure.",
+  "- **Pipeline → fall back to direct (`build`)**: legitimate when the pipeline keeps rejecting on issues",
+  "  that goal-scoped fixes can't address — e.g. integration glue between goals that no single goal owns,",
+  "  or the deliver agent's rejection_details point to whole-task changes (renames, cross-cutting refactors).",
+  "  Trigger this only AFTER at least one full pipeline iteration produced a rejected delivery, and only",
+  "  when the rejection makes per-goal repair impractical. When falling back, call `build` once with the",
+  "  rejection feedback as part of the prompt, then `deliver`. The pipeline goals stay in place — build",
+  "  is the rework hammer, not a reset.",
+  "- **Direct → fall back to pipeline**: when build cannot complete in one shot because the work obviously",
+  "  needs decomposition (multiple files, ambiguous acceptance, design replication uncovered mid-flight).",
+  "  Call `requirements` to introduce structure; from then on this task is on the pipeline.",
+  "",
+  "Do NOT re-enter `requirements` or `architect` if you're already mid-pipeline unless the rejection",
+  "indicates a fundamental contract problem. Both stages are expensive — exhaust goal-level repair first.",
+  "",
+  "## Tools",
+  "",
+  "- **build** — direct-path implementer. Single in-process call with read/write/edit/bash. Returns; does NOT auto-complete the task — you must call deliver next.",
+  "- **design_analysis** — extract layout / style / component spec from image attachments or URLs. Pipeline only, before requirements, only when visual references exist.",
+  "- **requirements** — decompose task into goal contracts with acceptance criteria.",
+  "- **architect** — coordinate cross-goal interface contracts. Required for 2+ goals; skip for single-goal.",
+  "- **create_run + submit_execution** — start per-goal dispatch. GoalPool runs each goal's build in its worktree.",
+  "- **execute_goal / dispatch_ready_goals / retry_failed_goals / modify_goal / add_goal** — per-goal manipulation after the initial dispatch.",
+  "- **query_failed_goals / read_context** — observation; call before any retry decision.",
+  "- **deliver** — adversarial verification + fix + publish. The single verdict gate; always required.",
+  "- **publish_delivery / fail_task / restart_from_stage / refine / question** — terminal / control / clarification.",
+  "",
+  "(Per-goal planning runs automatically inside GoalPool — no `plan_goal` tool exists.)",
+  "",
+  "## New task — execution",
+  "",
+  "1. Pick workflow per the rule above.",
+  "2. **Direct**: call `build` once → call `deliver` → (if rejected, restart from build with the rejection feedback) → loop.",
+  "3. **Pipeline**:",
+  "   - design_analysis BEFORE requirements ONLY when ALL apply: (a) frontend/UI task, (b) image attachments or URL exist. Otherwise skip.",
+  "   - requirements (always)",
+  "   - architect (always for 2+ goals)",
+  "   - create_run → submit_execution",
+  "   - STOP and wait for batch_complete re-trigger",
+  "4. If the request is genuinely unusable for decomposition (e.g. one ambiguous sentence), call `question` first with 2-3 targeted options, then proceed.",
+  "",
+  "## After batch completes (re-triggered with batch_complete)",
+  "",
+  "- If ANY goal is still `running` or `pending` → do NOTHING. Wait for the next batch_complete.",
+  "- Once ALL goals are terminal (passed/failed):",
+  "  - All blocking goals passed → call **deliver** (delivery agent verifies and accepts or rejects).",
+  "  - Some failed → call **query_failed_goals** first, then **retry_failed_goals** with per-goal analysis (root_cause + failure_class + expected_fix). Reflexive retry without analysis is rejected by the tool.",
+  "  - Missing dependency discovered → **add_goal** then **retry_failed_goals**.",
+  "  - Wrong contract for a goal → **modify_goal** then **execute_goal**.",
+  "  - **fail_task** ONLY when the executor produced empty / garbled / fundamentally unusable output. Logic bugs, test failures, missing imports = fix and retry, never fail_task.",
+  "- **NEVER execute_goal on a passed goal** — passed is terminal. Use modify_goal to change contract.",
+  "",
+  "## After delivery rejection (re-triggered with delivery_rejected)",
+  "",
+  "Direct workflow:",
+  "  - Call `build` again with the rejection feedback as part of the request. Then call `deliver` again.",
+  "  - The rejection details are pre-loaded in your trigger context (do not re-fetch).",
+  "",
+  "Pipeline workflow — DEFAULT response is to re-plan and re-dispatch within pipeline:",
+  "  - Specific goal contract gaps → **modify_goal** on affected goals (auto-resets to pending).",
+  "  - Missing functionality → **add_goal** for the gap.",
+  "  - Wrong approach / architecture → **restart_from_stage(requirements)**.",
+  "  - Implementation bugs in passed goals → **modify_goal** with tightened criteria.",
+  "  - Then **create_run** + **submit_execution**.",
+  "",
+  "Pipeline workflow — fall back to direct **build** when goal-level repair clearly won't fix the rejection:",
+  "  - Cross-goal integration glue that no single goal owns.",
+  "  - Whole-task changes (renames, cross-cutting refactors, project-wide config edits).",
+  "  - Two consecutive pipeline iterations rejected on the same root cause.",
+  "  - Call `build` once with the rejection feedback in the prompt; goals stay in place; then `deliver` again.",
+  "",
+  "After re-execution completes you will be re-triggered — call **deliver** again. Loop until accepted",
+  "or max_delivery_iterations exhausts. Focus on the SPECIFIC issues cited; do NOT rework everything",
+  "blindly; do NOT re-run requirements or architect unless the rejection indicates a fundamental contract problem.",
+  "",
+  "## Post-completion iteration (re-triggered on completed task)",
+  "",
+  "- User sent a message to a completed task → call **refine** to analyze and generate improvement suggestions.",
+  "- Call **question** with suggestions as multi-select options so the user picks which to roll in.",
+  "- Then **restart_from_stage(requirements)** to begin a new cycle.",
+  "- If refine throws (non-JSON output), do NOT retry it — call question directly asking what to improve, then restart_from_stage based on the answer. If no specific request, end the turn.",
+  "",
+  "## Clarification (`question`)",
+  "",
+  "Call SPARINGLY, only at:",
+  "  (a) BEFORE requirements when the request is too vague to decompose,",
+  "  (b) DURING execute when a critical input cannot be inferred from the codebase,",
+  "  (c) BEFORE deliver when multiple viable approaches exist,",
+  "  (d) AFTER refine to pick which improvements to apply.",
+  "Do NOT ask for info you could derive from read_context / task.request / existing goals.",
+  "",
+  "## Rules",
+  "",
+  "- Explain your reasoning before each tool call.",
+  "- After submit_execution / execute_goal / dispatch_ready_goals → STOP. You'll be re-triggered.",
+  "- Both workflows END with deliver acceptance — never declare a task done without deliver accepting.",
+  "- `build` (direct) does NOT auto-complete the task — you MUST call deliver after.",
+  "- Terminal state (completed/failed/cancelled) → do nothing.",
+  "- User messages in Operator Notes → acknowledge in your reasoning.",
+  "- When executor returns errors, default action is fix-and-retry, not give up.",
+].join("\n")
+
+/**
+ * Build the orchestrator system prompt as a two-part array:
+ *   [0] = static instructions (stable, benefits from 1h cache TTL)
+ *   [1] = dynamic context (changes per trigger — task state, goals, budget, etc.)
+ */
+function buildSystemParts(task: TaskRow, trigger: OrchestratorTrigger, workflow?: MiniWorkflow, workflowState?: WorkflowState): string[] {
+  const ctx: string[] = []
+
+  // ── Follow-up task context ──
+  // When the delivery agent's `submit_next_task` spawned this task (for any
+  // reason — repair, iteration, or a queued recommendation), we attach the
+  // predecessor task id, any failed-criteria evidence, and scope hints so
+  // the agent knows what came before and what (if anything) must be fixed.
+  const meta = (task.metadata as Record<string, unknown> | null) ?? {}
+  const parentTask = typeof meta.parent_task === "string" ? meta.parent_task : undefined
+  if (parentTask) {
+    const failed = Array.isArray(meta.failed_criteria) ? (meta.failed_criteria as string[]) : []
+    const scope = Array.isArray(meta.next_task_scope_files) ? (meta.next_task_scope_files as string[]) : []
+    const depth = typeof meta.task_chain_depth === "number" ? meta.task_chain_depth : undefined
+    ctx.push("## Follow-up Context")
+    ctx.push(`- Predecessor task: ${parentTask}`)
+    if (depth !== undefined) ctx.push(`- Task chain depth: ${depth}`)
+    if (failed.length > 0) {
+      ctx.push(`- Failed criteria from previous verification: ${failed.join(", ")}`)
+      ctx.push(`- Address every failed criterion. Do not regress passing criteria.`)
+    }
+    if (scope.length > 0) ctx.push(`- Suggested scope (focus area): ${scope.join(", ")}`)
+    ctx.push("")
+  }
+
+  // ── Delivery rework history ──
+  // This is the adversarial loop's only growing source of LLM context
+  // (each rework iteration appends verdict_summary + issues + details).
+  // Bound the rendered size so system-prompt growth is sub-linear in
+  // iteration count: the latest RENDER_DETAIL_RECENT iterations are
+  // rendered in full; earlier iterations collapse to one-line summaries.
+  // Raw history in task.metadata is preserved for audit; this only
+  // controls what the LLM sees.
+  const reworkHistory = Array.isArray(meta._delivery_rework_history)
+    ? (meta._delivery_rework_history as Array<Record<string, unknown>>)
+    : []
+  if (reworkHistory.length > 0) {
+    const RENDER_DETAIL_RECENT = 2
+    ctx.push("## Delivery Rework History")
+    ctx.push(`${reworkHistory.length} prior delivery rejection(s).`)
+
+    const recent = reworkHistory.slice(-RENDER_DETAIL_RECENT)
+    const older = reworkHistory.slice(0, -RENDER_DETAIL_RECENT)
+
+    if (older.length > 0) {
+      ctx.push("", `### Earlier iterations (${older.length}, summarized):`)
+      for (const entry of older) {
+        const iter = entry.iteration ?? "?"
+        const summary = entry.verdict_summary ?? "(no summary)"
+        const issueCount = Array.isArray(entry.issues_found) ? (entry.issues_found as unknown[]).length : 0
+        ctx.push(`  - iter ${iter}: ${summary} (${issueCount} issues)`)
+      }
+    }
+
+    for (const entry of recent) {
+      const iter = entry.iteration ?? "?"
+      ctx.push("", `### Iteration ${iter} (detailed)`)
+      const summary = entry.verdict_summary
+      if (typeof summary === "string" && summary) ctx.push(`Summary: ${summary}`)
+      const issues = Array.isArray(entry.issues_found) ? entry.issues_found as string[] : []
+      if (issues.length > 0) {
+        ctx.push("Issues found:")
+        for (const issue of issues) ctx.push(`  - ${issue}`)
+      }
+      const details = Array.isArray(entry.rejection_details) ? entry.rejection_details as Array<Record<string, string>> : []
+      if (details.length > 0) {
+        ctx.push("Rejection details:")
+        for (const d of details) {
+          const filePart = d.file ? ` [${d.file}]` : ""
+          const sugPart = d.suggestion ? ` → ${d.suggestion}` : ""
+          ctx.push(`  - [${d.category ?? "unknown"}]${filePart}: ${d.error ?? "no description"}${sugPart}`)
+        }
+      }
+    }
+    ctx.push("")
+  }
+
+  // ── Current State (full context for reasoning) ──
+  ctx.push("## Current Task")
+  ctx.push(`- Title: ${task.title}`)
+  ctx.push(`- Status: ${task.status}`)
+  // For re-triggers the request is included here for context; for "created"
+  // triggers the user message IS the request so no duplication needed.
+  if (trigger.kind !== "created") {
+    ctx.push(`- Request: ${task.request}`)
+  }
+
+  if (task.active_spec_version_id) {
+    const spec = findSpecSnapshot(task.active_spec_version_id)
+    if (spec) ctx.push(`- Spec: ${spec.summary}`)
+  }
+
+  const goals = listGoals(task.id)
+  if (goals.length > 0) {
+    ctx.push(`\n## Goals (${goals.length})`)
+    for (const g of goals) {
+      ctx.push(`  - [${g.status}] ${g.title} [${g.priority}] — ${renderSpecsAsText((g.acceptance_specs ?? []) as AcceptanceSpec[]).slice(0, 200)}`)
+    }
+  }
+
+  if (task.active_plan_version_id) {
+    const plan = findPlan(task.active_plan_version_id)
+    if (plan) ctx.push(`- Plan: ${plan.summary}`)
+  }
+  if (task.active_run_id) {
+    const run = findRun(task.active_run_id)
+    if (run) ctx.push(`- Active run: ${run.id} (${run.status})`)
+  }
+  if (task.error) ctx.push(`- Error: ${task.error}`)
+
+  const totalRuns = findRuns(task.id).length
+  const maxRuns = task.budget?.max_runs ?? DEFAULT_MAX_RUNS
+  const maxFixRuns = task.budget?.max_fix_runs ?? DEFAULT_MAX_FIX_RUNS
+  const activeRun = task.active_run_id ? findRun(task.active_run_id) : undefined
+  const fixCount = activeRun?.retry_count ?? 0
+  ctx.push(`- Budget: ${totalRuns}/${maxRuns} runs, ${fixCount}/${maxFixRuns} fixes`)
+
+  const clarifications = clarificationTranscriptSection(task.id)
+  if (clarifications) ctx.push(clarifications)
+  const notes = operatorNotesSection(task.id)
+  if (notes) ctx.push(notes)
+
+  // ── Workflow guidance (injected as recommended path, not enforced) ──
+  if (workflow && workflowState) {
+    ctx.push("")
+    ctx.push(renderWorkflowPrompt(workflow, workflowState))
+  }
+
+  // Run context (delivery + eval results for reasoning).
+  //
+  // This block was the largest single source of system-prompt growth in
+  // the orchestrator prior to the SubAgentProtocol introduction: a batch
+  // complete trigger could embed kilobytes of LLM-generated delivery
+  // prose, hundreds of changed-file paths, and ten checks each carrying
+  // multi-paragraph evidence. The yielded summary is now framed as a
+  // sub-agent-protocol message — same shape, same per-message ceiling
+  // as a tool return — with explicit pointers back to the persistent
+  // delivery / evaluation rows for full content.
+  if (trigger.kind === "batch_complete") {
+    const runID = trigger.runID
+    const delivery = findDeliveryByRun(runID)
+    const evaluation = findEvaluationByRun(runID)
+
+    const fields: Array<[string, string | string[]]> = []
+    if (delivery) {
+      fields.push(["delivery_summary", delivery.summary])
+      const changedFiles = delivery.result?.changed_files as string[] | undefined
+      if (changedFiles?.length) fields.push(["changed_files", changedFiles])
+    }
+    if (evaluation) {
+      fields.push([`evaluation_${evaluation.verdict}`, evaluation.summary])
+      const checks = evaluation.checks as Array<{ name: string; status: string; evidence?: string }> | undefined
+      if (checks?.length) {
+        const lines = checks.map((c) => `${c.name}=${c.status}${c.evidence ? `: ${c.evidence}` : ""}`)
+        fields.push(["check_results", lines])
+      }
+    }
+    fields.push([
+      "batch_totals",
+      `${trigger.summary.passed} passed / ${trigger.summary.failed} failed / ${trigger.summary.total} total`,
+    ])
+
+    const pointerHints: string[] = []
+    if (delivery) pointerHints.push(`read_context scope=deliveries (delivery row ${delivery.id})`)
+    if (evaluation) pointerHints.push(`read_context scope=evaluations (evaluation row ${evaluation.id})`)
+    const pointer = pointerHints.length > 0 ? pointerHints.join("; ") : "read_context"
+
+    ctx.push("")
+    ctx.push(SubAgentProtocol.yieldResult({
+      headline: `## Latest Run Result (run ${runID})`,
+      fields,
+      pointer,
+    }))
+  }
+
+  return [ORCHESTRATOR_INSTRUCTIONS, ctx.join("\n")]
+}

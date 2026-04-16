@@ -97,9 +97,18 @@ export async function resolveTools(input: ResolveToolsInput) {
   // When a tools filter is provided (e.g. from ControlMessage), only include
   // tools explicitly set to true.  This prevents sending 30+ tool definitions
   // to the LLM when only a small subset is needed (e.g. panel-only mode).
-  const filteredTools = input.tools
+  let filteredTools = input.tools
     ? allRegistryTools.filter((t) => input.tools![t.id] === true)
     : allRegistryTools
+
+  // Session-level deny rules remove tools from LLM visibility
+  // (e.g. build fast-path denying "task" to prevent sub-agent dispatch)
+  if (input.session.permission?.length) {
+    filteredTools = filteredTools.filter((t) => {
+      const rule = PermissionNext.evaluate(t.id, "*", input.session.permission!)
+      return rule.action !== "deny"
+    })
+  }
 
   for (const item of filteredTools) {
     const schema = ProviderTransform.schema(input.model, z.toJSONSchema(item.parameters))

@@ -3,7 +3,7 @@ import { createDecisionLog } from "../../src/decision-log"
 import { Database } from "../../src/storage/db"
 import { Instance } from "../../src/project/instance"
 import { ProjectTable } from "../../src/project/project.sql"
-import { OrchestratorTaskTable } from "../../src/orchestrator/orchestrator.sql"
+import { EngineTaskTable } from "../../src/engine/engine.sql"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 
@@ -58,7 +58,7 @@ describe("DecisionLog.toPromptSection truncation", () => {
       }).run(),
     )
     Database.use((db) =>
-      db.insert(OrchestratorTaskTable).values({
+      db.insert(EngineTaskTable).values({
         id: taskID,
         project_id: projectID,
         source: "test",
@@ -179,7 +179,7 @@ describe("DecisionLog.phasePromptSectionForGoal bounded", () => {
       }).run(),
     )
     Database.use((db) =>
-      db.insert(OrchestratorTaskTable).values({
+      db.insert(EngineTaskTable).values({
         id: taskID,
         project_id: projectID,
         source: "test",

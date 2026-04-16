@@ -55,22 +55,11 @@ export type TraceEvent = z.infer<typeof TraceEventSchema>
 export namespace Trace {
   export const Event = BusEvent.define("trace.event", TraceEventSchema)
 
-  // Per-taskID monotonic counter. Sequence numbers reset per task so the
-  // benchmark can verify "no gaps" without coordinating across tasks.
-  const counters = new Map<string, number>()
-
   /**
-   * Resolve the task that owns a session by walking the session parent chain
-   * (delegated to `server/routes/task-event.taskIDForSession`, which hits
-   * the goal-run registry → OrchestratorTaskTable → SessionTable.parent_id
-   * in that order with memoisation). Any descendant of a task's session
-   * therefore routes its LLM traces into the task's JSONL automatically —
-   * no per-site binding required.
-   *
-   * Returns undefined if no owning task can be found. Callers must decide
-   * how to handle the unresolved case — do NOT fall back to using the
-   * sessionID in place of a taskID: that hides missing-registration bugs
-   * and routes trace events to a JSONL the overlay never subscribes to.
+   * Resolve the task that owns a session — walks `session.parent_id` to the
+   * root and joins to `engine_task.session_id`. Returns undefined only
+   * when the session row is genuinely orphaned (a real bug), in which case
+   * the caller MUST throw rather than silently dropping events.
    */
   export function taskIDForSession(sessionID: string): string | undefined {
     return resolveTaskID(sessionID)
@@ -86,10 +75,13 @@ export namespace Trace {
   // captured a base64 blob or full file contents — truncate, don't write.
   const MAX_LINE_BYTES = 1_048_576
 
-  function nextSeq(taskID: string): number {
-    const next = (counters.get(taskID) ?? 0) + 1
-    counters.set(taskID, next)
-    return next
+  // Per-process monotonic sequence — only used as a tiebreaker for events
+  // that share a millisecond timestamp. Across process restarts the counter
+  // resets, but `ts` still orders events from different runs correctly, so
+  // readers should sort by (ts, seq).
+  let seqCounter = 0
+  function nextSeq(): number {
+    return ++seqCounter
   }
 
   // Project-scoped task root: <Instance.directory>/.opencorvus/task/.
@@ -141,7 +133,7 @@ export namespace Trace {
   }): void {
     const ev: TraceEvent = {
       ts: Date.now(),
-      seq: nextSeq(input.taskID),
+      seq: nextSeq(),
       taskID: input.taskID,
       sessionID: input.sessionID,
       agent: input.agent,
@@ -226,31 +218,11 @@ export namespace Trace {
   }
 
   /**
-   * Release per-task bookkeeping once the task has reached a terminal state.
-   * Called from the task-agent terminal finally block alongside
-   * clearTaskSessions(). The in-flight fs.appendFile for the task.finish
-   * event has already been chained into `writes` by the preceding
-   * Trace.event call; dropping the map entry releases the Promise-chain
-   * reference but does NOT cancel the underlying append — Node continues
-   * the resolved syscall. No further events can reach this taskID because
-   * the registry entry is gone.
+   * For tests only — wipe the write queue and reset the seq counter. Lets
+   * a test re-emit events without leftover queued promises from prior runs.
    */
-  export function clearTask(taskID: string): void {
-    counters.delete(taskID)
-    const f = file(taskID)
-    if (f) writes.delete(f)
-  }
-
-  /**
-   * For tests only — wipe the per-task seq counter and write queue. Lets
-   * a test re-emit events for the same taskID with seq starting at 1.
-   */
-  export function _resetForTests(taskID?: string): void {
-    if (taskID) {
-      counters.delete(taskID)
-    } else {
-      counters.clear()
-      writes.clear()
-    }
+  export function _resetForTests(): void {
+    seqCounter = 0
+    writes.clear()
   }
 }

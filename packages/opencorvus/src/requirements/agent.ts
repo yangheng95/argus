@@ -16,13 +16,15 @@ import { stepCountIs } from "ai"
 import type { TextHooks } from "@/llm/api"
 import { Provider } from "@/provider/provider"
 import { createPlannerTools, prefetchContext } from "@/planner/tools"
+import { filterAgentTools } from "@/agent/filter-tools"
 import { Log } from "@/util/log"
 import { toolGuard } from "@/util/tool-guard"
-import { OrchestratorConfig } from "@/orchestrator/config"
+import { EngineConfig } from "@/engine/config"
 import { AttachmentStore } from "@/storage/attachment-store"
 import { AgentRuntime } from "@/agent/runtime"
-import { clarificationTranscriptSection, operatorNotesSection } from "@/orchestrator/helpers"
-import { loadStageSkills } from "@/orchestrator/skill-inject"
+import { resolveAgentModel } from "@/agent/model"
+import { clarificationTranscriptSection, operatorNotesSection } from "@/engine/helpers"
+import { loadStageSkills } from "@/engine/skill-inject"
 import { Config } from "@/config/config"
 import type { RequirementsOutput, ParsedGoalContract, RequirementsDecision, ParsedRequirement, TraceabilityEntry } from "./types"
 import { createRequirementsOutputTools, type RequirementsCollector, type RegisteredGoal } from "./output-tools"
@@ -118,7 +120,7 @@ async function runInternal(input: {
 }): Promise<RequirementsResult> {
   if (input.signal?.aborted) throw new Error("requirements agent aborted before model resolution")
 
-  const orchCfg = await OrchestratorConfig.get()
+  const orchCfg = await EngineConfig.get()
   const {
     max_steps: MAX_STEPS,
     timeout_ms: TIMEOUT_MS,
@@ -126,8 +128,10 @@ async function runInternal(input: {
     max_attempts: MAX_ATTEMPTS,
   } = orchCfg.requirements
 
-  const { resolveAgentModel } = await import("@/agent/model")
-  const model = await resolveAgentModel("requirements").catch(() => undefined)
+  // Resolve model — per-agent model from Agent.Info (config: agent.requirements.model),
+  // falling back to the user's most recent in-session model pick when no per-agent
+  // override is configured.
+  const model = await resolveAgentModel("requirements", { taskID: input.taskID }).catch(() => undefined)
   if (!model) throw new Error("no LLM model available for requirements agent")
 
   if (input.signal?.aborted) throw new Error("requirements agent aborted after model resolution")
@@ -140,7 +144,7 @@ async function runInternal(input: {
 
   // Merge planner tools (codebase exploration) + structured output tools (goal registration).
   // Each registration tool call is small (~500 bytes) — no buffering risk.
-  const plannerTools = createPlannerTools(taskWorkDir)
+  const plannerTools = await filterAgentTools(createPlannerTools(taskWorkDir), "requirements")
   const outputToolKit = createRequirementsOutputTools(taskWorkDir)
   const guard = toolGuard({ ...plannerTools, ...outputToolKit.tools })
 
@@ -179,7 +183,7 @@ async function runInternal(input: {
     const abortSignals: AbortSignal[] = [guard.signal]
     if (input.signal) abortSignals.push(input.signal)
 
-    // RequirementsAgent is always invoked nested: the caller (task-agent or
+    // RequirementsAgent is always invoked nested: the caller (orchestrator or
     // requirements service) owns persistence via its own session-hooks and
     // forwards chunks through `input.stream`. We therefore wrap those into
     // a passthrough hooks object so AgentRuntime neither creates a duplicate
@@ -564,7 +568,7 @@ async function requirementsSystem(): Promise<string> {
   if (typeof systemOverride?.requirements_system === "string") return systemOverride.requirements_system
   const agentPrompt = (config.agent as Record<string, any> | undefined)?.requirements?.prompt
   const core = typeof agentPrompt === "string" ? agentPrompt : REQUIREMENTS_CORE
-  const orchCfg = await OrchestratorConfig.get()
+  const orchCfg = await EngineConfig.get()
   const skills = await loadStageSkills(orchCfg.requirements.skills, "requirements")
   return core + skills
 }

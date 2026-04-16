@@ -6,6 +6,12 @@ import { appStore, setAppStore } from "../store/app";
 import { settingsStore } from "../store/settings";
 import { AppLog } from "../utils/log";
 import { t } from "../utils/i18n";
+import { loadConfigInfo } from "./init";
+import { loadExtensions } from "./extensions";
+import { loadMeta } from "./meta";
+import { loadExecutors } from "./executor";
+import { restoreWorkspaceDirectory } from "./workspace";
+import { loadTasks } from "../store/board";
 
 // ── Helpers ──
 
@@ -176,7 +182,7 @@ export async function scaffoldProjectConfig(dir: string): Promise<void> {
   const username = settingsStore.username || "";
   const unattended = appStore.config?.experimental?.unattended === true;
   // Scaffold intentionally leaves `assistant` empty so the server's
-  // OrchestratorConfig.DEFAULTS is the single source of truth. Writing explicit
+  // EngineConfig.DEFAULTS is the single source of truth. Writing explicit
   // values here would shadow DEFAULTS via the `??` merge in
   // packages/opencorvus/src/orchestrator/config.ts and silently drift over time.
   // Project authors who want to customize agent behavior should add fields
@@ -217,11 +223,6 @@ export async function scaffoldProjectConfig(dir: string): Promise<void> {
 export async function reloadProjectScope(options: { restoreWorkspace?: boolean } = {}): Promise<void> {
  // Mirrors loadInitialData's parallel reload — must load all project-scope
  // data including tasks and executors so the UI fully reflects the new directory.
-  const { loadConfigInfo } = await import("./init");
-  const { loadExtensions } = await import("./extensions");
-  const { loadMeta } = await import("./meta");
-  const { loadTasks } = await import("../store/board");
-  const { loadExecutors } = await import("./executor");
   await Promise.all([
     loadConfigInfo().catch((e: unknown) => console.error("[reloadProjectScope] loadConfigInfo", e)),
     loadExtensions().catch((e: unknown) => console.error("[reloadProjectScope] loadExtensions", e)),
@@ -230,7 +231,6 @@ export async function reloadProjectScope(options: { restoreWorkspace?: boolean }
     loadExecutors().catch((e: unknown) => console.error("[reloadProjectScope] loadExecutors", e)),
   ]);
   if (options.restoreWorkspace) {
-    const { restoreWorkspaceDirectory } = await import("./workspace");
     try {
       restoreWorkspaceDirectory();
     } catch (e: unknown) {

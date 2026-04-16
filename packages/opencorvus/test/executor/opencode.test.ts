@@ -25,7 +25,7 @@ describe("executor.opencode", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const session = await Session.create({ title: "executor test" })
+        const session = await Session.create({ kind: "assistant", title: "executor test" })
         const result = await OpencodeExecutor.resume({
           sessionID: session.id,
           message: "continue with the latest operator note",
@@ -33,7 +33,7 @@ describe("executor.opencode", () => {
         expect(result.sessionID).toBe(session.id)
         const row = Database.use((db) => db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, result.queueTaskID)).get())
         expect(row?.session_id).toBe(session.id)
-        expect(row?.source).toBe("orchestrator.task")
+        expect(row?.source).toBe("engine.task")
       },
     })
   })
@@ -44,7 +44,7 @@ describe("executor.opencode", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const session = await Session.create({ title: "executor events" })
+        const session = await Session.create({ kind: "assistant", title: "executor events" })
         const stream = OpencodeExecutor.events({ sessionID: session.id })
         const next = stream.next()
         await Bus.publish(Message.Event.PartDelta, {
@@ -69,8 +69,8 @@ describe("executor.opencode", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const session = await Session.create({ title: "executor permissions" })
-        const other = await Session.create({ title: "other session" })
+        const session = await Session.create({ kind: "assistant", title: "executor permissions" })
+        const other = await Session.create({ kind: "assistant", title: "other session" })
         const stream = OpencodeExecutor.events({ sessionID: session.id })
         const next = stream.next()
         await Bus.publish(PermissionNext.Event.Asked, {

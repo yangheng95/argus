@@ -1,16 +1,16 @@
 import { afterEach, expect, test } from "bun:test"
 import { Database } from "../../src/storage/db"
 import {
-  OrchestratorDeliveryTable,
-  OrchestratorEvaluationTable,
-  OrchestratorGoalRunTable,
-  OrchestratorGoalTable,
-  OrchestratorPlanNodeTable,
-  OrchestratorPlanVersionTable,
-  OrchestratorRunTable,
-  OrchestratorSpecSnapshotTable,
-  OrchestratorTaskTable,
-} from "../../src/orchestrator/orchestrator.sql"
+  EngineDeliveryTable,
+  EngineEvaluationTable,
+  EngineGoalRunTable,
+  EngineGoalTable,
+  EnginePlanNodeTable,
+  EnginePlanVersionTable,
+  EngineRunTable,
+  EngineSpecSnapshotTable,
+  EngineTaskTable,
+} from "../../src/engine/engine.sql"
 import { Identifier } from "../../src/id/id"
 import { Instance } from "../../src/project/instance"
 import { Server } from "../../src/server/server"
@@ -43,7 +43,7 @@ test.skip("GET /export/task/:taskID includes goal-snapshot evaluations and QA gr
     directory: tmp.path,
     fn: async () => {
       Database.use((db) => {
-        db.insert(OrchestratorTaskTable)
+        db.insert(EngineTaskTable)
           .values({
             id: taskID,
             project_id: Instance.project.id,
@@ -60,7 +60,7 @@ test.skip("GET /export/task/:taskID includes goal-snapshot evaluations and QA gr
             time_completed: now,
           })
           .run()
-        db.insert(OrchestratorSpecSnapshotTable)
+        db.insert(EngineSpecSnapshotTable)
           .values({
             id: specID,
             task_id: taskID,
@@ -73,7 +73,7 @@ test.skip("GET /export/task/:taskID includes goal-snapshot evaluations and QA gr
             time_updated: now,
           })
           .run()
-        db.insert(OrchestratorGoalTable)
+        db.insert(EngineGoalTable)
           .values({
             id: goalID,
             task_id: taskID,
@@ -89,7 +89,7 @@ test.skip("GET /export/task/:taskID includes goal-snapshot evaluations and QA gr
             time_updated: now,
           })
           .run()
-        db.insert(OrchestratorPlanVersionTable)
+        db.insert(EnginePlanVersionTable)
           .values({
             id: planID,
             task_id: taskID,
@@ -102,7 +102,7 @@ test.skip("GET /export/task/:taskID includes goal-snapshot evaluations and QA gr
             time_updated: now,
           })
           .run()
-        db.insert(OrchestratorPlanNodeTable)
+        db.insert(EnginePlanNodeTable)
           .values({
             id: nodeID,
             task_id: taskID,
@@ -116,7 +116,7 @@ test.skip("GET /export/task/:taskID includes goal-snapshot evaluations and QA gr
             time_updated: now,
           })
           .run()
-        db.insert(OrchestratorRunTable)
+        db.insert(EngineRunTable)
           .values([
             {
               id: oldRunID,
@@ -144,7 +144,7 @@ test.skip("GET /export/task/:taskID includes goal-snapshot evaluations and QA gr
             },
           ])
           .run()
-        db.insert(OrchestratorGoalRunTable)
+        db.insert(EngineGoalRunTable)
           .values({
             id: goalRunID,
             task_id: taskID,
@@ -159,7 +159,7 @@ test.skip("GET /export/task/:taskID includes goal-snapshot evaluations and QA gr
             time_completed: now,
           })
           .run()
-        db.insert(OrchestratorDeliveryTable)
+        db.insert(EngineDeliveryTable)
           .values([
             {
               id: deliveryID,
@@ -194,7 +194,7 @@ test.skip("GET /export/task/:taskID includes goal-snapshot evaluations and QA gr
             },
           ])
           .run()
-        db.insert(OrchestratorEvaluationTable)
+        db.insert(EngineEvaluationTable)
           .values([
             {
               id: evaluationID,

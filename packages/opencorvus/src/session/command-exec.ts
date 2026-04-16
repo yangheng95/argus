@@ -10,7 +10,7 @@ import { $ } from "bun"
 import { ConfigMarkdown } from "../config/markdown"
 import { NamedError } from "@opencorvus-ai/util/error"
 import { Session } from "."
-import { SessionPromptState } from "./prompt-state"
+import { SessionPromptState } from "./prompt/state"
 
 export namespace SessionCommand {
   const { log, lastModel } = SessionPromptState

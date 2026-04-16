@@ -35,7 +35,7 @@
   <text class="subtitle" x="620" y="48">入站消息路由 · 多工作区代理 · 事件总线 · 四条扩展入口</text>
 
   <!-- ================== 入站入口（顶部四列） ================== -->
-  <text class="h1" x="40" y="84" style="fill:#64748b;font-size:12px">入站入口（4 条路径，最终都汇入 OrchestratorService / Session）</text>
+  <text class="h1" x="40" y="84" style="fill:#64748b;font-size:12px">入站入口（4 条路径，最终都汇入 EngineService / Session）</text>
   <line x1="40" y1="90" x2="1200" y2="90" stroke="#e2e8f0"/>
 
   <rect class="ingress" x="40" y="104" width="280" height="96"/>
@@ -72,7 +72,7 @@
 
   <!-- ================== 核心汇聚 ================== -->
   <rect class="core" x="360" y="266" width="520" height="60"/>
-  <text class="h2" x="620" y="290" style="fill:#5b21b6">OrchestratorService / Session / Question</text>
+  <text class="h2" x="620" y="290" style="fill:#5b21b6">EngineService / Session / Question</text>
   <text class="code" x="620" y="310">orchestrator/service.ts · session/ · question/</text>
 
   <path class="arrow" d="M 180 200 Q 180 240 420 266"/>
@@ -87,7 +87,7 @@
   <!-- control-plane -->
   <rect class="cp" x="40" y="380" width="380" height="150"/>
   <text class="h2" x="230" y="402" style="fill:#6d28d9">control-plane — 多工作区代理</text>
-  <text class="code" x="230" y="418">control-plane/</text>
+  <text class="code" x="230" y="418">workspace/</text>
   <text class="body" x="230" y="440">workspace 表 + workspace-server/</text>
   <text class="body" x="230" y="456">session-proxy-middleware (SSE 透传)</text>
   <text class="body" x="230" y="472">adaptors/ (worktree 适配)</text>

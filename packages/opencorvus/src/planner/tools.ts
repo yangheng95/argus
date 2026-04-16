@@ -11,7 +11,7 @@
  */
 import { tool } from "ai"
 import z from "zod"
-import { createCodebaseTools } from "@/orchestrator/codebase-tools"
+import { createCodebaseTools } from "@/engine/codebase-tools"
 import { Memory } from "@/memory"
 import { Instance } from "@/project/instance"
 import { Log } from "@/util/log"

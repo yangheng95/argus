@@ -6,7 +6,7 @@
  * The orchestrator only sees PipelineEvent — it never reaches into pipeline internals.
  */
 
-import type { GoalRunRow, PlanRow, RunRow, TaskRow, PlanNodeRow } from "@/orchestrator/store"
+import type { GoalRunRow, PlanRow, RunRow, TaskRow, PlanNodeRow } from "@/engine/store"
 import type { ExecutorAdapter } from "@/executor/contract"
 import type { DecisionLog } from "@/decision-log"
 import type { AcceptanceSpec } from "@/acceptance/types"
@@ -136,7 +136,7 @@ export interface EvalVerdict {
 }
 
 // ---------------------------------------------------------------------------
-// Failure classification (used by eval verdict, read by Task Agent for reasoning)
+// Failure classification (used by eval verdict, read by Orchestrator for reasoning)
 // ---------------------------------------------------------------------------
 
 export type FailureClass = "bug" | "plan_wrong" | "goal_wrong"

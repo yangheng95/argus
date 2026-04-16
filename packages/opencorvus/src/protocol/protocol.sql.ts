@@ -1,6 +1,6 @@
 import { integer, index, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core"
 import { Identifier } from "@/id/id"
-import { OrchestratorGoalRunTable, OrchestratorInteractionRequestTable, OrchestratorRunTable, OrchestratorTaskTable } from "@/orchestrator/orchestrator.sql"
+import { EngineGoalRunTable, EngineInteractionRequestTable, EngineRunTable, EngineTaskTable } from "@/engine/engine.sql"
 import { SessionTable } from "@/session/session.sql"
 import { Timestamps } from "@/storage/schema.sql"
 import type { ProtocolAggregate, ProtocolInboxStatus, ProtocolKind, ProtocolStreamKind } from "./schema"
@@ -15,11 +15,11 @@ export const ProtocolEventTable = sqliteTable(
     type: text().notNull(),
     aggregate_type: text().notNull().$type<ProtocolAggregate>(),
     aggregate_id: text().notNull(),
-    task_id: text().references(() => OrchestratorTaskTable.id, { onDelete: "cascade" }),
-    run_id: text().references(() => OrchestratorRunTable.id, { onDelete: "set null" }),
-    goal_run_id: text().references(() => OrchestratorGoalRunTable.id, { onDelete: "set null" }),
+    task_id: text().references(() => EngineTaskTable.id, { onDelete: "cascade" }),
+    run_id: text().references(() => EngineRunTable.id, { onDelete: "set null" }),
+    goal_run_id: text().references(() => EngineGoalRunTable.id, { onDelete: "set null" }),
     session_id: text().references(() => SessionTable.id, { onDelete: "set null" }),
-    interaction_id: text().references(() => OrchestratorInteractionRequestTable.id, { onDelete: "set null" }),
+    interaction_id: text().references(() => EngineInteractionRequestTable.id, { onDelete: "set null" }),
     stream_id: text(),
     source: text().notNull(),
     target: text(),
@@ -72,9 +72,9 @@ export const ProtocolStreamChunkTable = sqliteTable(
   {
     id: text().primaryKey().$default(() => Identifier.ascending("protocol_stream_chunk")),
     stream_id: text().notNull(),
-    task_id: text().references(() => OrchestratorTaskTable.id, { onDelete: "cascade" }),
-    run_id: text().references(() => OrchestratorRunTable.id, { onDelete: "set null" }),
-    goal_run_id: text().references(() => OrchestratorGoalRunTable.id, { onDelete: "set null" }),
+    task_id: text().references(() => EngineTaskTable.id, { onDelete: "cascade" }),
+    run_id: text().references(() => EngineRunTable.id, { onDelete: "set null" }),
+    goal_run_id: text().references(() => EngineGoalRunTable.id, { onDelete: "set null" }),
     session_id: text().references(() => SessionTable.id, { onDelete: "set null" }),
     kind: text().notNull().$type<ProtocolStreamKind>(),
     chunk_seq: integer().notNull(),

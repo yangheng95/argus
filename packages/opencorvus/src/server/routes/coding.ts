@@ -56,7 +56,7 @@ export function CodingRoutes() {
 
           // Create or reuse session
           if (!sessionID) {
-            const session = await Session.create({ title: "Coding assistant" })
+            const session = await Session.create({ kind: "assistant", title: "Coding assistant" })
             sessionID = session.id
           }
 

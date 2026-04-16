@@ -130,7 +130,7 @@ export namespace AttachmentStore {
   }
 
   // ── LLM-side packaging ─────────────────────────────────────────────────
-  // Producer-agent code (task-agent / requirements / design-analyst /
+  // Producer-agent code (orchestrator / requirements / design-analyst /
   // delivery) historically had three near-identical copies of the
   // "split attachments by mime, inline the multimodal ones, list the
   // text/* ones by URL" routine. The duplication kept drifting (e.g. one

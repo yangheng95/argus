@@ -213,10 +213,15 @@ function flattenMessages(messages: any[], opts: { dropUser?: boolean } = {}): an
 const STEP_ORDER = ["planner", "executor", "build", "evaluator"];
 
 function stepIDToStage(stepID: string): string {
+  // Pipeline workflow now has ONE goal-scope step: `build`. The build card
+  // hosts planner + executor + evaluator nested sub-sessions. The `build`
+  // step itself maps to the `build` stage (where session.kind="build" lives);
+  // legacy step IDs (plan/execute/eval) are kept so historical task data still
+  // renders correctly.
+  if (stepID === "build") return "build";
   if (stepID === "plan") return "planner";
   if (stepID === "execute") return "executor";
   if (stepID === "eval") return "evaluator";
-  if (stepID === "build") return "build";
   return stepID;
 }
 
@@ -235,13 +240,22 @@ function deriveStepSubtitle(
   status: CardStatus,
   payload: StepPayload | undefined,
 ): string | undefined {
-  if (stepID === "execute") {
+  // The `build` step is the new umbrella for plan + execute + eval. It can
+  // surface any of those fields. Legacy `plan` / `execute` / `eval` IDs are
+  // kept so historical tasks render correctly.
+  if (stepID === "build" || stepID === "execute") {
     if (payload?.diffStats?.files !== undefined && payload.diffStats.files > 0) {
       return `${payload.diffStats.files} files`;
     }
     if (payload?.changedFiles?.length) {
       return `${payload.changedFiles.length} files`;
     }
+    if (payload?.checks?.length) {
+      const passed = payload.checks.filter((c) => c.status === "passed").length;
+      return `${passed}/${payload.checks.length} checks`;
+    }
+    if (payload?.verdict) return payload.verdict;
+    if (payload?.planNodes?.length) return `${payload.planNodes.length} steps`;
     if (payload?.executorSessionID && status === "running") return "running…";
   }
   if (stepID === "eval") {

@@ -22,9 +22,8 @@ import {
   type PlanRow,
   type GoalRunRow,
   type PlanNodeRow,
-} from "@/orchestrator/store"
-import { updateGoalRun } from "@/orchestrator/persist"
-import { registerGoalRunSession, unregisterGoalRunSession } from "@/server/routes/task-event"
+} from "@/engine/store"
+import { updateGoalRun } from "@/engine/persist"
 
 const log = Log.create({ service: "goal-runner" })
 const GOAL_RUN_RETENTION_MS = 72 * 60 * 60 * 1000
@@ -176,6 +175,8 @@ export async function cleanupGoalWorkspace(directory?: string) {
 
 export async function createGoalSession(task: TaskRow, goal: GoalRow, directory?: string) {
   const session = await Session.createNext({
+    kind: "executor",
+    goalID: goal.id,
     parentID: task.session_id ?? undefined,
     title: `${task.title}: ${goal.title}`,
     directory: directory ?? (await import("@/project/instance")).Instance.directory,
@@ -187,8 +188,6 @@ export async function createGoalSession(task: TaskRow, goal: GoalRow, directory?
     sessionID: session.id,
     permission: [{ permission: "*", pattern: "*", action: "allow" as const }],
   })
-  // Register so SSE can match this session's events to the task
-  registerGoalRunSession(session.id, task.id, "executor", goal.id)
   return session
 }
 
@@ -277,7 +276,7 @@ function extractPlanSection(prompt: string, heading: string) {
  * Compose the "Prior Attempt Failed" section that retries see in their prompt.
  *
  * Reads the latest rejected evaluation for this goal and the decision-log
- * "retry" entries that the Task Agent recorded via retry_failed_goals().
+ * "retry" entries that the Orchestrator recorded via retry_failed_goals().
  * Returns "" on first attempts (no prior failure) — callers should `.filter(Boolean)`.
  *
  * No fallback: if `findLatestFailedEvalForGoal` returns nothing we treat it as
@@ -382,13 +381,13 @@ export function buildGoalPrompt(input: {
         .join("\n")
     : ""
   // Include architect consensus from Decision Log (interface contracts, directory blueprint, naming conventions).
-  // Only populated when Task Agent called architect(); empty string if skipped (single goal / simple task).
+  // Only populated when Orchestrator called architect(); empty string if skipped (single goal / simple task).
   // Goal-scoped read: peer goals' private architect notes do not bleed into this executor's prompt.
   const architectConsensus = input.taskID
     ? createDecisionLog(input.taskID).phasePromptSectionForGoal("architect", input.goal.id, "Architect Consensus")
     : ""
 
-  // Retry feedback: surfaces the latest rejected evaluation + Task Agent's
+  // Retry feedback: surfaces the latest rejected evaluation + Orchestrator's
   // root-cause analysis so the executor sees what failed last round and what
   // it must change. Empty string on first attempts. Wired into the prompt
   // BEFORE the Goal section so the executor reads failure context first.

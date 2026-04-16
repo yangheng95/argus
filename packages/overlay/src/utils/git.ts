@@ -7,6 +7,8 @@ import { apiJson } from "../services/api";
 import { appStore } from "../store/app";
 import { boardStore, activeDirectory } from "../store/board";
 import { showAppDialog } from "../services/app-dialog";
+import { clearProjectScopeData } from "../services/workspace";
+import { reloadProjectScope } from "../services/config";
 
 // ── Internal helpers ──
 
@@ -130,8 +132,6 @@ export async function initGitCurrent(options: { notify?: boolean } = {}): Promis
   try {
     const result = await apiJson("project/current/init-git", { method: "POST" });
  // Reload project scope after git init (config, extensions, meta).
-    const { clearProjectScopeData } = await import("../services/workspace");
-    const { reloadProjectScope } = await import("../services/config");
     clearProjectScopeData();
     await reloadProjectScope({ restoreWorkspace: false });
     if (options.notify !== false) {

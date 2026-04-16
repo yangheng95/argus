@@ -1,13 +1,10 @@
-import { OrchestratorChannelBindingTable } from "@/orchestrator/orchestrator.sql"
-import { OrchestratorService } from "@/orchestrator/service"
+import { EngineChannelBindingTable } from "@/engine/engine.sql"
+import { EngineService } from "@/task-api"
 import { ControlMessage } from "@/control/message"
 import { ControlMessageInput, ControlMessageResult } from "@/control/message-schema"
 import { Database, and, eq } from "@/storage/db"
 import z from "zod"
 import { ChannelId } from "./catalog"
-import { Gateway } from "@/gateway"
-import { Instance } from "@/project/instance"
-import { channelKey } from "@/session/channel-key"
 
 export const MessageAttachmentInput = z.object({
   filename: z.string().trim().min(1),
@@ -53,40 +50,6 @@ export namespace ChannelIngress {
       if (result) return ChannelIngressResult.parse(result)
     }
 
-    // New thread with an identified user → Gateway.
-    // The Gateway dispatcher decides whether to enqueue a workflow task,
-    // dispatch a build task, answer a pending clarification, etc. Already-bound
-    // threads continue through ControlMessage so their existing task binding
-    // (and the still-pending-interaction fallthrough above) keeps working.
-    // Threads with no user_id fall through to ControlMessage too — Gateway
-    // requires identity to maintain the per-(channel, user) singleton.
-    if (!binding && input.user_id) {
-      const ck = channelKey({
-        platform: input.platform,
-        channel: input.channel,
-        userID: input.user_id,
-      })
-      const reply = await Gateway.handleMessage({
-        channelKey: ck,
-        defaultCwd: Instance.directory,
-        text: input.text,
-        // Pass channel coordinates so any task Gateway creates this turn is
-        // bound to the originating thread. Without this, follow-up messages
-        // on the same thread would not find a binding and Gateway would
-        // route them as fresh user input — duplicating tasks. (Issue C2.)
-        channelBinding: {
-          platform: input.platform,
-          channel: input.channel,
-          thread: input.thread,
-          payload: input.metadata,
-        },
-      })
-      return ChannelIngressResult.parse({
-        kind: "panel_response",
-        message: reply.text || "(gateway received message)",
-      })
-    }
-
     return ChannelIngressResult.parse(
       await ControlMessage.handle(ControlMessageInput.parse({
         surface: input.platform,
@@ -115,7 +78,7 @@ export namespace ChannelIngress {
     taskID: string
     payload?: Record<string, unknown>
   }) {
-    const { OrchestratorChannelBindingTable: T } = require("@/orchestrator/orchestrator.sql")
+    const { EngineChannelBindingTable: T } = require("@/engine/engine.sql")
     const { Identifier } = require("@/id/id")
     Database.use((db) => {
       const existing = db
@@ -163,22 +126,22 @@ async function tryReplyInteraction(
   taskID: string,
   text: string,
 ): Promise<z.infer<typeof ControlMessageResult> | undefined> {
-  const interactions = await OrchestratorService.listTaskInteractions(taskID)
+  const interactions = await EngineService.listTaskInteractions(taskID)
   const pending = interactions.find((item) => item.status === "pending")
   if (!pending) return undefined
 
   const value = text.trim().toLowerCase()
   if (pending.type === "permission") {
     if (["allow", "approve", "yes", "y", "once"].includes(value)) {
-      const result = await OrchestratorService.replyInteraction(pending.id, { reply: "once" })
+      const result = await EngineService.replyInteraction(pending.id, { reply: "once", autoReply: false })
       return { kind: "interaction", message: "Permission granted.", task_id: taskID, interaction_id: result.id }
     }
     if (["always", "allow always", "approve always"].includes(value)) {
-      const result = await OrchestratorService.replyInteraction(pending.id, { reply: "always" })
+      const result = await EngineService.replyInteraction(pending.id, { reply: "always", autoReply: false })
       return { kind: "interaction", message: "Permission granted (always).", task_id: taskID, interaction_id: result.id }
     }
     if (["reject", "deny", "no", "n"].includes(value)) {
-      const result = await OrchestratorService.rejectInteraction(pending.id, {})
+      const result = await EngineService.rejectInteraction(pending.id, { autoReply: false })
       return { kind: "interaction", message: "Permission rejected.", task_id: taskID, interaction_id: result.id }
     }
     // Unrecognized permission reply — fall through to LLM
@@ -186,7 +149,8 @@ async function tryReplyInteraction(
   }
 
   // Question interaction — pass message text; service will derive answers
-  const result = await OrchestratorService.replyInteraction(pending.id, {
+  const result = await EngineService.replyInteraction(pending.id, {
+    autoReply: false,
     message: text,
   })
   return { kind: "interaction", message: "Answer recorded.", task_id: taskID, interaction_id: result.id }
@@ -196,12 +160,12 @@ function find(platform: string, channel: string, thread: string) {
   return Database.use((db) =>
     db
       .select()
-      .from(OrchestratorChannelBindingTable)
+      .from(EngineChannelBindingTable)
       .where(
         and(
-          eq(OrchestratorChannelBindingTable.platform, platform),
-          eq(OrchestratorChannelBindingTable.channel, channel),
-          eq(OrchestratorChannelBindingTable.thread, thread),
+          eq(EngineChannelBindingTable.platform, platform),
+          eq(EngineChannelBindingTable.channel, channel),
+          eq(EngineChannelBindingTable.thread, thread),
         ),
       )
       .get(),

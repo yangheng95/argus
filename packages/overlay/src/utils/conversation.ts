@@ -220,6 +220,14 @@ export function conversationMessages(): any[] {
     (a: any, b: any) => conversationTime(a) - conversationTime(b),
   );
 
+  // Runtime invariant: IDs must be unique. If this ever fires, something upstream
+  // is emitting the same item twice and <For> will render it twice.
+  const _ids = result.map((r: any) => r.info?.id || r.id || "?");
+  const _dupes = _ids.filter((id: string, i: number) => _ids.indexOf(id) !== i);
+  if (_dupes.length > 0) {
+    console.error("[overlay] duplicate items in conversationMessages:", _dupes);
+  }
+
   const _dt = performance.now() - _t0;
   if (_dt > 5) {
     console.warn(`[perf] conversationMessages: ${_dt.toFixed(1)}ms, ${allMessages.length} msgs`);

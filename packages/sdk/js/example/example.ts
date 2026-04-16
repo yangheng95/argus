@@ -1,4 +1,4 @@
-import { createOpenCorvusClient, createOpenCorvusServer } from "@opencorvus-ai/sdk/v2"
+import { createOpenCorvusClient, createOpenCorvusServer } from "@opencorvus-ai/sdk"
 import { pathToFileURL } from "bun"
 
 const server = await createOpenCorvusServer()

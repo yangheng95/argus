@@ -7,7 +7,7 @@ import { SessionPrompt } from "@/session/prompt"
 import { Skill } from "@/skill"
 import { ToolRegistry } from "@/tool/registry"
 import { Database, eq } from "@/storage/db"
-import { OrchestratorTaskTable } from "@/orchestrator/orchestrator.sql"
+import { EngineTaskTable } from "@/engine/engine.sql"
 import { panelCapabilityPrompt } from "@/panel/capability"
 import { ControlMessageInput, ControlMessageResult } from "./message-schema"
 import { ControlTimeline } from "./timeline"
@@ -350,6 +350,7 @@ async function resolveSession(input: z.infer<typeof ControlMessageInput>) {
     } satisfies ControlSession
   }
   const info = await Session.create({
+    kind: "assistant",
     title: `Panel control (${input.surface})`,
   })
   return {
@@ -439,9 +440,9 @@ function taskSession(taskID?: string) {
   if (!taskID) return
   const row = Database.use((db) =>
     db
-      .select({ sessionID: OrchestratorTaskTable.session_id })
-      .from(OrchestratorTaskTable)
-      .where(eq(OrchestratorTaskTable.id, taskID))
+      .select({ sessionID: EngineTaskTable.session_id })
+      .from(EngineTaskTable)
+      .where(eq(EngineTaskTable.id, taskID))
       .get(),
   )
   return row?.sessionID ?? undefined

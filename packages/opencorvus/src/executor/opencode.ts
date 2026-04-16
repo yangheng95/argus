@@ -58,7 +58,7 @@ export namespace OpencodeExecutor {
           },
         ],
       },
-      source: "orchestrator.task",
+      source: "engine.task",
       // Inner agent task queue only knows high/normal/low — that queue
       // schedules steps inside one orchestrator task and has no concept of
       // cross-task pre-emption. Orchestrator-level "critical" (used for fix

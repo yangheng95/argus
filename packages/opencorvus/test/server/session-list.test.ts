@@ -12,12 +12,12 @@ describe("Session.list", () => {
     await Instance.provide({
       directory: projectRoot,
       fn: async () => {
-        const first = await Session.create({})
+        const first = await Session.create({ kind: "assistant" })
 
         const otherDir = path.join(projectRoot, "..", "__session_list_other")
         const second = await Instance.provide({
           directory: otherDir,
-          fn: async () => Session.create({}),
+          fn: async () => Session.create({ kind: "assistant" }),
         })
 
         const sessions = [...Session.list({ directory: projectRoot })]
@@ -33,8 +33,8 @@ describe("Session.list", () => {
     await Instance.provide({
       directory: projectRoot,
       fn: async () => {
-        const root = await Session.create({ title: "root-session" })
-        const child = await Session.create({ title: "child-session", parentID: root.id })
+        const root = await Session.create({ kind: "assistant", title: "root-session" })
+        const child = await Session.create({ kind: "assistant", title: "child-session", parentID: root.id })
 
         const sessions = [...Session.list({ roots: true })]
         const ids = sessions.map((s) => s.id)
@@ -49,7 +49,7 @@ describe("Session.list", () => {
     await Instance.provide({
       directory: projectRoot,
       fn: async () => {
-        await Session.create({ title: "new-session" })
+        await Session.create({ kind: "assistant", title: "new-session" })
         const futureStart = Date.now() + 86400000
 
         const sessions = [...Session.list({ start: futureStart })]
@@ -62,8 +62,8 @@ describe("Session.list", () => {
     await Instance.provide({
       directory: projectRoot,
       fn: async () => {
-        await Session.create({ title: "unique-search-term-abc" })
-        await Session.create({ title: "other-session-xyz" })
+        await Session.create({ kind: "assistant", title: "unique-search-term-abc" })
+        await Session.create({ kind: "assistant", title: "other-session-xyz" })
 
         const sessions = [...Session.list({ search: "unique-search" })]
         const titles = sessions.map((s) => s.title)
@@ -78,9 +78,9 @@ describe("Session.list", () => {
     await Instance.provide({
       directory: projectRoot,
       fn: async () => {
-        await Session.create({ title: "session-1" })
-        await Session.create({ title: "session-2" })
-        await Session.create({ title: "session-3" })
+        await Session.create({ kind: "assistant", title: "session-1" })
+        await Session.create({ kind: "assistant", title: "session-2" })
+        await Session.create({ kind: "assistant", title: "session-3" })
 
         const sessions = [...Session.list({ limit: 2 })]
         expect(sessions.length).toBe(2)

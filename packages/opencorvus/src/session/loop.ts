@@ -33,7 +33,7 @@ import { Scratchpad } from "@/memory/scratchpad"
 import { TaskPlan } from "@/memory/task-plan"
 import { messageControlOnly, textForBoth } from "./part-visibility"
 import { SessionSummary } from "./summary"
-import { SessionPromptState } from "./prompt-state"
+import { SessionPromptState } from "./prompt/state"
 import { muteAISdkWarnings } from "@/runtime/shims"
 
 muteAISdkWarnings()
@@ -811,7 +811,11 @@ export namespace SessionLoop {
       { modelID: input.model.api.id, providerID: input.model.providerID },
       input.agent,
     )) {
-      if (input.tools !== undefined && !input.tools[item.id]) continue
+      // Session-level deny rules take precedence (e.g. build fast-path denying "task")
+      if (input.session.permission?.length) {
+        const rule = PermissionNext.evaluate(item.id, "*", input.session.permission)
+        if (rule.action === "deny") continue
+      }
       const schema = ProviderTransform.schema(input.model, z.toJSONSchema(item.parameters))
       tools[item.id] = tool({
         id: item.id as any,

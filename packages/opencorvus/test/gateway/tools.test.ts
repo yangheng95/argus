@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test"
 import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
-import { OrchestratorService } from "../../src/orchestrator/service"
-import { listProjectTasks } from "../../src/orchestrator/store"
+import { EngineService } from "@/task-api"
+import { listProjectTasks } from "../../src/engine/store"
 import { Question } from "../../src/question"
 import { ensureGatewaySession } from "../../src/gateway/session"
 import { createGatewayTools } from "../../src/gateway/tools"
@@ -14,9 +14,9 @@ import { Log } from "../../src/util/log"
 Log.init({ print: false })
 
 // Phase 2 tool invariants:
-//  - enqueue_task creates a task with kind="workflow" (task-agent itself decides
+//  - enqueue_task creates a task with kind="workflow" (orchestrator itself decides
 //    whether to run the pipeline or route to its build tool)
-//  - it goes through OrchestratorService.createTask + appears in listProjectTasks
+//  - it goes through EngineService.createTask + appears in listProjectTasks
 //  - forward_clarification unblocks an awaiting Question.ask
 //  - switch_cwd persists to gateway session metadata
 //  - cancel_task on unknown ID surfaces an error (no silent fallback)
@@ -52,8 +52,8 @@ describe("Gateway tools (Phase 2)", () => {
       const row = tasks.find((t) => t.id === taskID)
       expect(row).toBeDefined()
       expect(row!.kind).toBe("workflow")
-      await OrchestratorService.cancelTask(taskID).catch(() => undefined)
-      await OrchestratorService.deleteTask(taskID).catch(() => undefined)
+      await EngineService.cancelTask(taskID).catch(() => undefined)
+      await EngineService.deleteTask(taskID).catch(() => undefined)
     })
   })
 

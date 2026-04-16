@@ -17,7 +17,6 @@ import { Installation } from "./installation"
 import { NamedError } from "@opencorvus-ai/util/error"
 import { FormatError } from "./cli/error"
 import { ServeCommand } from "./cli/cmd/serve"
-import { WorkspaceServeCommand } from "./cli/cmd/workspace-serve"
 import { DebugCommand } from "./cli/cmd/debug"
 import { StatsCommand } from "./cli/cmd/stats"
 import { DoctorCommand } from "./cli/cmd/doctor"
@@ -125,10 +124,6 @@ let cli = yargs(hideBin(process.argv))
   .command(SessionCommand)
   .command(DbCommand)
   .command(SlackCommand)
-
-if (Installation.isLocal()) {
-  cli = cli.command(WorkspaceServeCommand)
-}
 
 cli = cli
   .fail((msg, err) => {

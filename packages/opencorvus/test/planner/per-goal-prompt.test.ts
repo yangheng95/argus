@@ -1,5 +1,5 @@
 import { describe, test, expect } from "bun:test"
-import { buildPlannerPrompt, buildPlannerSystem } from "@/planner/per-goal"
+import { buildPlannerPrompt, buildPlannerSystem } from "@/planner/agent"
 import type { GoalContract, GoalContractFields } from "@/pipeline/types"
 
 function mkGoal(overrides: Partial<GoalContractFields> = {}): GoalContractFields {

@@ -1,12 +1,12 @@
 # 03 — 控制面与消息路由
 
 > 对应代码：`src/channel/` · `src/gateway/` · `src/bus/` · `src/trace/` ·
-> `src/control/` · `src/control-plane/` · `src/server/` · `src/session/channel-key.ts`
+> `src/control/` · `src/workspace/` · `src/server/` · `src/session/channel-key.ts`
 
 ## 设计原则
 
 1. **消息直达**。外部消息进入 channel 后不经过无关 LLM 二次推理，直接路由到目标 task session。
-2. **Gateway 只做对话层路由**。业务逻辑在 OrchestratorService / Session / Question 等现有 API。
+2. **Gateway 只做对话层路由**。业务逻辑在 EngineService / Session / Question 等现有 API。
 3. **control-plane ≠ control**。前者是多工作区代理层；后者是外部控制账号。命名易混，注意区分。
 
 ## 入站路径总览
@@ -32,7 +32,7 @@
              │                                       │
              └───────────────┬───────────────────────┘
                              ▼
-                  OrchestratorService.createTask
+                  EngineService.createTask
                   (orchestrator/service.ts)
 ```
 
@@ -43,7 +43,7 @@
 | **ChannelIngress** | 外部 bot / HTTP webhook；消息已有明确语义（reply/新 task） | 否（确定性路由） |
 | **Gateway Agent** | 用户自然语言对话；需要理解意图（listing vs creating vs cancelling） | 是 |
 
-两者最终都汇入 `OrchestratorService.createTask` 或现有 session API。
+两者最终都汇入 `EngineService.createTask` 或现有 session API。
 
 ## channel_key — Gateway session 单例
 
@@ -83,7 +83,7 @@ channelKey(input) → "platform:channel:userID"
 
 ## control-plane —— 多工作区代理
 
-**代码**：`src/control-plane/`
+**代码**：`src/workspace/`
 
 | 文件 | 作用 |
 |---|---|
@@ -138,7 +138,7 @@ channel/ingress.ts              入站确定性路由
 gateway/agent.ts                对话层 LLM 路由
 session/channel-key.ts          channel_key 派生
 session/session.sql.ts          session_gateway_singleton_idx
-control-plane/workspace.ts      多工作区
+workspace/workspace.ts      多工作区
 control/message.ts              外部账号消息
 bus/bus-event.ts                事件总线
 trace/index.ts                  JSONL + Bus 双写
@@ -147,5 +147,5 @@ server/routes/task-event.ts     SSE 端点
 
 ## 相关文档
 
-- [01-agents.md](01-agents.md) — Gateway 之后的 Task Agent 生命周期
+- [01-agents.md](01-agents.md) — Gateway 之后的 Orchestrator 生命周期
 - [04-extensions.md](04-extensions.md) — channel 类型与 ACP/MCP/plugin 的边界

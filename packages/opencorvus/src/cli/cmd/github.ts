@@ -517,6 +517,7 @@ export const GithubRunCommand = cmd({
         // Setup opencorvus session
         const repoData = await fetchRepo()
         session = await Session.create({
+          kind: "assistant",
           permission: [
             {
               permission: "question",

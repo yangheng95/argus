@@ -176,25 +176,20 @@ const AgentCreateCommand = cmd({
           mode = modeResult
         }
 
-        // Build tools config
-        const tools: Record<string, boolean> = {}
-        for (const tool of AVAILABLE_TOOLS) {
-          if (!selectedTools.includes(tool)) {
-            tools[tool] = false
-          }
-        }
+        // Build tools config — exclude tools not selected
+        const excluded = AVAILABLE_TOOLS.filter((t) => !selectedTools.includes(t))
 
         // Build frontmatter
         const frontmatter: {
           description: string
           mode: AgentMode
-          tools?: Record<string, boolean>
+          tools?: { exclude: string[] }
         } = {
           description: generated.whenToUse,
           mode,
         }
-        if (Object.keys(tools).length > 0) {
-          frontmatter.tools = tools
+        if (excluded.length > 0) {
+          frontmatter.tools = { exclude: excluded }
         }
 
         // Write file

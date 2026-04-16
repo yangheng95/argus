@@ -1,5 +1,5 @@
 import { integer, sqliteTable, text, index } from "drizzle-orm/sqlite-core"
-import { OrchestratorPlanVersionTable, OrchestratorRunTable, OrchestratorTaskTable } from "@/orchestrator/orchestrator.sql"
+import { EnginePlanVersionTable, EngineRunTable, EngineTaskTable } from "@/engine/engine.sql"
 import { Timestamps } from "@/storage/schema.sql"
 
 export type WorkbenchNoteKind =
@@ -16,8 +16,8 @@ export const WorkbenchTaskNoteTable = sqliteTable(
     id: text().primaryKey(),
     task_id: text()
       .notNull()
-      .references(() => OrchestratorTaskTable.id, { onDelete: "cascade" }),
-    run_id: text().references(() => OrchestratorRunTable.id, { onDelete: "set null" }),
+      .references(() => EngineTaskTable.id, { onDelete: "cascade" }),
+    run_id: text().references(() => EngineRunTable.id, { onDelete: "set null" }),
     kind: text().notNull().$type<WorkbenchNoteKind>(),
     source: text().notNull().default("user_message"),
     user_id: text(),
@@ -38,9 +38,9 @@ export const WorkbenchBriefSnapshotTable = sqliteTable(
     id: text().primaryKey(),
     task_id: text()
       .notNull()
-      .references(() => OrchestratorTaskTable.id, { onDelete: "cascade" }),
-    plan_version_id: text().references(() => OrchestratorPlanVersionTable.id, { onDelete: "set null" }),
-    run_id: text().references(() => OrchestratorRunTable.id, { onDelete: "set null" }),
+      .references(() => EngineTaskTable.id, { onDelete: "cascade" }),
+    plan_version_id: text().references(() => EnginePlanVersionTable.id, { onDelete: "set null" }),
+    run_id: text().references(() => EngineRunTable.id, { onDelete: "set null" }),
     content: text().notNull(),
     inputs: text({ mode: "json" }).$type<Record<string, unknown>>(),
     ...Timestamps,

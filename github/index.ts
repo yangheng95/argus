@@ -7,7 +7,7 @@ import * as github from "@actions/github"
 import type { Context as GitHubContext } from "@actions/github/lib/context"
 import type { IssueCommentEvent, PullRequestReviewCommentEvent } from "@octokit/webhooks-types"
 import { createOpenCorvusClient } from "@opencorvus-ai/sdk"
-import { DEFAULT_SERVER_HOST, DEFAULT_SERVER_PORT } from "@opencorvus-ai/sdk/v2/defaults"
+import { DEFAULT_SERVER_HOST, DEFAULT_SERVER_PORT } from "@opencorvus-ai/sdk/defaults"
 import { spawn } from "node:child_process"
 
 type GitHubAuthor = {

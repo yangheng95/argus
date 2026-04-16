@@ -171,7 +171,7 @@ export const GlobalRoutes = lazy(() =>
         },
       }),
       async (c) => {
-        const { hasActiveSessions } = await import("@/orchestrator/runtime")
+        const { hasActiveSessions } = await import("@/engine/runtime")
         if (hasActiveSessions()) {
           return c.json({ error: "Active executor sessions exist, skipping dispose" }, 409)
         }

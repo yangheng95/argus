@@ -44,6 +44,7 @@ export namespace SessionWake {
     let sessionID = input.sessionID
     if (!sessionID) {
       const session = await Session.createNext({
+        kind: "assistant",
         directory: Instance.directory,
         title: `Scheduled: ${input.prompt.slice(0, 60)}`,
       })

@@ -33,15 +33,15 @@
   <text class="code-s" x="56" y="110">orchestrator/orchestrator.sql.ts · 唯一写入者: service.ts + store.ts</text>
 
   <rect class="hot" x="56" y="120" width="240" height="40"/>
-  <text class="h3" x="176" y="136">orchestrator_task</text>
+  <text class="h3" x="176" y="136">engine_task</text>
   <text class="code" x="176" y="152">queued→active→completed/failed/cancelled · kind: workflow/build</text>
 
   <rect class="tbl" x="310" y="120" width="246" height="40"/>
-  <text class="h3" x="433" y="136">orchestrator_spec_snapshot</text>
+  <text class="h3" x="433" y="136">engine_spec_snapshot</text>
   <text class="code" x="433" y="152">规格快照（requirements 输出）</text>
 
   <rect class="tbl" x="568" y="120" width="240" height="40"/>
-  <text class="h3" x="688" y="136">orchestrator_spec_item</text>
+  <text class="h3" x="688" y="136">engine_spec_item</text>
   <text class="code" x="688" y="152">规格明细项</text>
 
   <!-- 计划与目标 -->
@@ -148,7 +148,7 @@
 
   <rect class="tbl" x="856" y="364" width="328" height="36"/>
   <text class="h3" x="1020" y="380">workspace</text>
-  <text class="code" x="1020" y="394">control-plane/workspace.sql.ts</text>
+  <text class="code" x="1020" y="394">workspace/workspace.sql.ts</text>
 
   <rect class="tbl" x="856" y="410" width="160" height="36"/>
   <text class="h3" x="936" y="426">control_account</text>

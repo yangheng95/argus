@@ -18,7 +18,7 @@ const TraceEventOut = z.object({
 })
 
 /**
- * Trace routes — overlay UI consumes these to render the per-task agent
+ * Trace routes — overlay UI consumes these to render the per-orchestrator
  * decision tree. Two endpoints:
  *
  *   GET /trace                       List recent task IDs (newest first).

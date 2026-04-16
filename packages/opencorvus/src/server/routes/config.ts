@@ -2,7 +2,7 @@ import { Hono } from "hono"
 import { describeRoute, validator, resolver } from "hono-openapi"
 import z from "zod"
 import { Config } from "../../config/config"
-import { OrchestratorConfig } from "../../orchestrator/config"
+import { EngineConfig } from "../../engine/config"
 import { ChannelSupervisor } from "@/channel/supervisor"
 import { Provider } from "../../provider/provider"
 import { Agent } from "../../agent/agent"
@@ -34,7 +34,7 @@ export const ConfigRoutes = lazy(() =>
         },
       }),
       async (c) => {
-        const [raw, orch] = await Promise.all([Config.get(), OrchestratorConfig.get()])
+        const [raw, orch] = await Promise.all([Config.get(), EngineConfig.get()])
         // Merge effective scalar assistant values so the frontend can display correct defaults.
         // Spread userAsst first so that the explicitly-computed ?? fallbacks always win.
         const userAsst = raw.assistant || {}

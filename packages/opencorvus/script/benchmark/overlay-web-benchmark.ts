@@ -65,7 +65,7 @@ import fs from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import puppeteer, { type Page } from "puppeteer-core"
-import { parseSSE } from "../../src/control-plane/sse"
+import { parseSSE } from "../../src/util/sse"
 import { inactivityAgeMs } from "../../src/util/activity-timeout"
 import { auditWorkspace, deriveRunMetrics, evaluateQualityGates, moduleBlocksFromRequest } from "./quality-gates"
 

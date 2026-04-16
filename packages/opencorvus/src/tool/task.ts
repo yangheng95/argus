@@ -62,7 +62,10 @@ export const TaskTool = Tool.define("task", async (ctx) => {
       const agent = await Agent.get(params.subagent_type)
       if (!agent) throw new Error(`Unknown agent type: ${params.subagent_type} is not a valid agent type`)
 
-      const hasTaskPermission = agent.permission.some((rule) => rule.permission === "task")
+      // Stage agents (no permission ruleset) cannot be the target of the
+      // task-tool dispatch — that path is for SessionPrompt-driven agents
+      // (build/spec/plan/general/explore). Treat undefined as "no task perm".
+      const hasTaskPermission = agent.permission?.some((rule) => rule.permission === "task") ?? false
 
       const session = await iife(async () => {
         if (params.task_id) {
@@ -71,6 +74,7 @@ export const TaskTool = Tool.define("task", async (ctx) => {
         }
 
         return await Session.create({
+          kind: "assistant",
           parentID: ctx.sessionID,
           title: params.description + ` (@${agent.name} subagent)`,
           permission: [

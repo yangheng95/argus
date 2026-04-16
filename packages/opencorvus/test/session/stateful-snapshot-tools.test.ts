@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import path from "path"
 import { Instance } from "../../src/project/instance"
-import { createTaskAgentTools } from "../../src/task-agent/tools"
+import { createOrchestratorTools } from "../../src/orchestrator/tools"
 import { Message } from "../../src/session/message"
 import { Log } from "../../src/util/log"
 
@@ -16,11 +16,11 @@ Log.init({ print: false })
  * usage regresses. These tests make that class of bug loud.
  */
 describe("STATEFUL_SNAPSHOT_TOOLS registry consistency", () => {
-  test("every name in STATEFUL_SNAPSHOT_TOOLS is a real task-agent tool", async () => {
+  test("every name in STATEFUL_SNAPSHOT_TOOLS is a real orchestrator tool", async () => {
     await Instance.provide({
       directory: projectRoot,
       fn: async () => {
-        const { tools } = createTaskAgentTools({
+        const { tools } = createOrchestratorTools({
           taskID: "tsk_stateful_test",
           agentSessionID: "ses_stateful_test",
           signal: new AbortController().signal,

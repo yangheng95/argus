@@ -25,7 +25,7 @@ describe("StructuredOutput Integration", () => {
     "produces structured output with simple schema",
     async () => {
       await withInstance(async () => {
-        const session = await Session.create({ title: "Structured Output Test" })
+        const session = await Session.create({ kind: "assistant", title: "Structured Output Test" })
 
         const result = await SessionPrompt.prompt({
           sessionID: session.id,
@@ -73,7 +73,7 @@ describe("StructuredOutput Integration", () => {
     "produces structured output with nested objects",
     async () => {
       await withInstance(async () => {
-        const session = await Session.create({ title: "Nested Schema Test" })
+        const session = await Session.create({ kind: "assistant", title: "Nested Schema Test" })
 
         const result = await SessionPrompt.prompt({
           sessionID: session.id,
@@ -136,7 +136,7 @@ describe("StructuredOutput Integration", () => {
     "works with text outputFormat (default)",
     async () => {
       await withInstance(async () => {
-        const session = await Session.create({ title: "Text Output Test" })
+        const session = await Session.create({ kind: "assistant", title: "Text Output Test" })
 
         const result = await SessionPrompt.prompt({
           sessionID: session.id,
@@ -172,7 +172,7 @@ describe("StructuredOutput Integration", () => {
     "stores outputFormat on user message",
     async () => {
       await withInstance(async () => {
-        const session = await Session.create({ title: "OutputFormat Storage Test" })
+        const session = await Session.create({ kind: "assistant", title: "OutputFormat Storage Test" })
 
         await SessionPrompt.prompt({
           sessionID: session.id,

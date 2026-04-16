@@ -23,7 +23,7 @@
  *      see the same fields and pointers, and authors aren't tempted to
  *      stuff the sub-agent's transcript into the return value.
  *
- *   3. Parent context (task-agent): persistent across the task
+ *   3. Parent context (orchestrator): persistent across the task
  *      lifecycle. The sequence of sub-agent yields it absorbs is what
  *      its prompt cache covers. Each yield is small by construction
  *      (it's a conclusion, not a transcript), so this works.

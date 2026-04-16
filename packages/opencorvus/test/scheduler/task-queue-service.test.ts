@@ -28,7 +28,7 @@ describe("scheduler.task-queue-service", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const session = await Session.create({})
+        const session = await Session.create({ kind: "assistant" })
         const id = TaskQueueService.enqueuePrompt({
           sessionID: session.id,
           prompt: {
@@ -57,7 +57,7 @@ describe("scheduler.task-queue-service", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const session = await Session.create({})
+        const session = await Session.create({ kind: "assistant" })
         await TaskQueueService.executePrompt({
           sessionID: session.id,
           prompt: {
@@ -83,7 +83,7 @@ describe("scheduler.task-queue-service", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const session = await Session.create({})
+        const session = await Session.create({ kind: "assistant" })
         const id = TaskQueueService.enqueuePrompt({
           sessionID: session.id,
           prompt: {
@@ -122,7 +122,7 @@ describe("scheduler.task-queue-service", () => {
     await Instance.provide({
       directory: two.path,
       fn: async () => {
-        const session = await Session.create({})
+        const session = await Session.create({ kind: "assistant" })
         id = TaskQueueService.enqueuePrompt({
           sessionID: session.id,
           prompt: {
@@ -167,8 +167,8 @@ describe("scheduler.task-queue-service", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const a = await Session.create({})
-        const b = await Session.create({})
+        const a = await Session.create({ kind: "assistant" })
+        const b = await Session.create({ kind: "assistant" })
         TaskQueueService.enqueuePrompt({
           sessionID: a.id,
           prompt: {
@@ -209,7 +209,7 @@ describe("scheduler.task-queue-service", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const session = await Session.create({})
+        const session = await Session.create({ kind: "assistant" })
         first = TaskQueueService.enqueuePrompt({
           sessionID: session.id,
           prompt: {
@@ -264,7 +264,7 @@ describe("scheduler.task-queue-service", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const session = await Session.create({})
+        const session = await Session.create({ kind: "assistant" })
         low = TaskQueueService.enqueuePrompt({
           sessionID: session.id,
           prompt: {
@@ -315,8 +315,8 @@ describe("scheduler.task-queue-service", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const a = await Session.create({})
-        const b = await Session.create({})
+        const a = await Session.create({ kind: "assistant" })
+        const b = await Session.create({ kind: "assistant" })
         const now = Date.now()
         const bulk = Array.from({ length: 340 }, (_, i) => ({
           id: `task_a_${i}_${Math.random().toString(36).slice(2)}`,
@@ -379,7 +379,7 @@ describe("scheduler.task-queue-service", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const session = await Session.create({})
+        const session = await Session.create({ kind: "assistant" })
         const now = Date.now()
         const runningID = "task_running_" + Math.random().toString(36).slice(2)
         const queuedID = "task_queued_" + Math.random().toString(36).slice(2)
@@ -450,8 +450,8 @@ describe("scheduler.task-queue-service", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const blocked = await Session.create({})
-        const ready = await Session.create({})
+        const blocked = await Session.create({ kind: "assistant" })
+        const ready = await Session.create({ kind: "assistant" })
         const now = Date.now()
         const blockedRunning = "task_blocked_running_" + Math.random().toString(36).slice(2)
         const blockedQueued = "task_blocked_queued_" + Math.random().toString(36).slice(2)
@@ -545,7 +545,7 @@ describe("scheduler.task-queue-service", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const session = await Session.create({})
+        const session = await Session.create({ kind: "assistant" })
         const now = Date.now()
         const freshID = "task_fresh_" + Math.random().toString(36).slice(2)
         const staleID = "task_stale_" + Math.random().toString(36).slice(2)

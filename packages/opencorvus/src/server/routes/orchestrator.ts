@@ -26,18 +26,17 @@ import {
   TaskEvent,
   Task,
   UpdateGoalInput,
-} from "@/orchestrator/model"
-import { ExecutorNotConfiguredError, OrchestratorService, PlannerFailureError } from "@/orchestrator/service"
+} from "@/engine/model"
+import { ExecutorNotConfiguredError, EngineService, PlannerFailureError } from "@/task-api"
 import { ProtocolStore } from "@/protocol/store"
 import { Session } from "@/session"
 import { Message } from "@/session/message"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
-import { ensureTaskSession, registerGoalRunSession, sessionRole, taskSession } from "./task-event"
+import { sessionGoalID, taskSession } from "./task-event"
 import { ensureTaskMessageProtocolBridge, overlayMeta } from "./task-message-protocol-bridge"
-import { listGoalRunsByTask } from "@/orchestrator/store"
 
-export const OrchestratorRoutes = lazy(() =>
+export const EngineRoutes = lazy(() =>
   new Hono()
     .use(async (c, next) => {
       // Initialize bridge lazily on first request — Instance context is available here
@@ -65,7 +64,7 @@ export const OrchestratorRoutes = lazy(() =>
       async (c) => {
         const input = c.req.valid("json")
         const requestID = c.req.header("x-opencorvus-request-id") ?? undefined
-        const taskID = await OrchestratorService.createTask({
+        const taskID = await EngineService.createTask({
           ...input,
           requestID: input.requestID ?? requestID,
         }).catch((error) => {
@@ -104,7 +103,7 @@ export const OrchestratorRoutes = lazy(() =>
         const query = c.req.query("q") || undefined
         const status = c.req.query("status") || undefined
         const limit = c.req.query("limit") ? parseInt(c.req.query("limit")!, 10) : undefined
-        return c.json(await OrchestratorService.getProjectBoard({ query, status, limit }))
+        return c.json(await EngineService.getProjectBoard({ query, status, limit }))
       },
     )
     .get(
@@ -135,7 +134,7 @@ export const OrchestratorRoutes = lazy(() =>
       ),
       async (c) => {
         const query = c.req.valid("query")
-        return c.json(await OrchestratorService.getGlobalTaskBoard({
+        return c.json(await EngineService.getGlobalTaskBoard({
           directory: query.directory,
           query: query.q,
           status: query.status,
@@ -229,7 +228,7 @@ export const OrchestratorRoutes = lazy(() =>
       }),
       validator("param", z.object({ taskID: Task.shape.id })),
       async (c) => {
-        return c.json(await OrchestratorService.getTask(c.req.valid("param").taskID))
+        return c.json(await EngineService.getTask(c.req.valid("param").taskID))
       },
     )
     .get(
@@ -251,7 +250,7 @@ export const OrchestratorRoutes = lazy(() =>
       }),
       validator("param", z.object({ taskID: Task.shape.id })),
       async (c) => {
-        return c.json(await OrchestratorService.getProgress(c.req.valid("param").taskID))
+        return c.json(await EngineService.getProgress(c.req.valid("param").taskID))
       },
     )
     .get(
@@ -278,22 +277,10 @@ export const OrchestratorRoutes = lazy(() =>
         c.header("X-Content-Type-Options", "nosniff")
         return streamSSE(c, async (stream) => {
           const sessionID = taskSession(taskID)
-          // Seed the goal-run registry with any existing child sessions so
-          // reconnecting SSE streams pick up events for already-running goals.
-          // Use ensureTaskSession (not registerGoalRunSession) so we don't
-          // overwrite the role/goalID that goal-pool.ts set at dispatch time —
-          // enrichProperties reads that goalID to stamp msg.info.goalID, and
-          // losing it on reconnect is what left the overlay's Execute card
-          // without streaming detail.
-          if (sessionID) {
-            const queue = [sessionID]
-            while (queue.length > 0) {
-              const id = queue.shift()!
-              if (id !== sessionID) ensureTaskSession(id, taskID)
-              const children = await Session.children(id)
-              queue.push(...children.map((child) => child.id))
-            }
-          }
+          // No registry to reseed: sessionRole/sessionGoalID/taskIDForSession
+          // all read directly from session.kind / session.goal_id / session
+          // parent chain in the DB, so reconnecting picks up running goals
+          // without any in-process state restoration.
           let cursor = after
           let ready = false
           const buffered: Array<{ sequence: number; data: string }> = []
@@ -388,7 +375,7 @@ export const OrchestratorRoutes = lazy(() =>
       }),
       validator("param", z.object({ taskID: Task.shape.id })),
       async (c) => {
-        return c.json(await OrchestratorService.getBrief({ taskID: c.req.valid("param").taskID }))
+        return c.json(await EngineService.getBrief({ taskID: c.req.valid("param").taskID }))
       },
     )
     .get(
@@ -412,7 +399,7 @@ export const OrchestratorRoutes = lazy(() =>
       async (c) => {
         const taskID = c.req.valid("param").taskID
         const sync = c.req.query("sync") !== "0"
-        const etag = await OrchestratorService.getBoardTag(taskID, { sync })
+        const etag = await EngineService.getBoardTag(taskID, { sync })
         if (c.req.header("if-none-match") === etag) {
           return new Response(null, {
             status: 304,
@@ -422,7 +409,7 @@ export const OrchestratorRoutes = lazy(() =>
           })
         }
         c.header("ETag", etag)
-        return c.json(await OrchestratorService.getBoard(taskID, { sync: false }))
+        return c.json(await EngineService.getBoard(taskID, { sync: false }))
       },
     )
     .get(
@@ -444,7 +431,7 @@ export const OrchestratorRoutes = lazy(() =>
       }),
       validator("param", z.object({ taskID: Task.shape.id })),
       async (c) => {
-        const task = await OrchestratorService.getTask(c.req.valid("param").taskID)
+        const task = await EngineService.getTask(c.req.valid("param").taskID)
         const rootSessionID = task.sessionID
         if (!rootSessionID) return c.json([])
         // Collect all session IDs in the tree (primary + goal run children)
@@ -458,50 +445,15 @@ export const OrchestratorRoutes = lazy(() =>
         }
         const all = await Promise.all(sessionIDs.map((id) => Session.messages({ sessionID: id })))
         const messages = all.flat().sort((a, b) => (a.info.time?.created ?? 0) - (b.info.time?.created ?? 0))
-        // Build session→goalID map from goal run records so executor and planner
-        // sessions can be matched to their parent goal during transcript enrichment.
+        // Enrich each message with resolvedRole/channel/goalID — derived from
+        // session.kind / session.goal_id (the only authoritative source).
         const taskID = task.id
-        const goalRuns = listGoalRunsByTask(taskID)
-        const sessionToGoal = new Map<string, string>()
-        const plannerSessions = new Set<string>()
-        for (const gr of goalRuns) {
-          if (gr.session_id) sessionToGoal.set(gr.session_id, gr.goal_id)
-          const provSid = (gr.metadata as any)?.provider_session_id
-          if (typeof provSid === "string" && provSid) sessionToGoal.set(provSid, gr.goal_id)
-          // Planner sessions are stored in GoalRun metadata (added by goal-pool.ts)
-          const plannerSid = (gr.metadata as any)?.plannerSessionID
-          if (typeof plannerSid === "string" && plannerSid) {
-            sessionToGoal.set(plannerSid, gr.goal_id)
-            plannerSessions.add(plannerSid)
-          }
-        }
-
-        // Seed the goal-run registry with child sessions (with goalID and correct role)
-        // so sessionRole() and sessionGoalID() resolve correctly for enrichment.
-        for (const id of sessionIDs) {
-          if (id !== rootSessionID) {
-            const goalID = sessionToGoal.get(id)
-            const role = plannerSessions.has(id) ? "planner" : "executor"
-            registerGoalRunSession(id, taskID, role, goalID)
-          }
-        }
-        // Enrich each message with resolvedRole/channel/goalID — same logic as the
-        // SSE bridge so the overlay receives identical metadata regardless of
-        // whether messages arrive via SSE or transcript reload.
         for (const msg of messages) {
           const sid = msg.info.sessionID || ""
-          // Fill missing agent from session registry — matches bridge enrichment
-          // in task-message-protocol-bridge.ts enrichProperties().
-          let agent = (msg.info as any).agent || ""
-          if (!agent) {
-            const role = sessionRole(sid)
-            if (role) agent = role
-          }
-          const meta = overlayMeta(sid, taskID, { role: msg.info.role, agent })
+          const meta = overlayMeta(sid, rootSessionID, { role: msg.info.role })
           ;(msg.info as any).resolvedRole = meta.resolvedRole
           ;(msg.info as any).channel = meta.channel
-          // Stamp goalID so the overlay can group executor messages into their goal card
-          const goalID = sessionToGoal.get(sid)
+          const goalID = sessionGoalID(sid)
           if (goalID) (msg.info as any).goalID = goalID
         }
         return c.json(messages)
@@ -526,7 +478,7 @@ export const OrchestratorRoutes = lazy(() =>
       }),
       validator("param", z.object({ taskID: Task.shape.id })),
       async (c) => {
-        return c.json(await OrchestratorService.listRuns(c.req.valid("param").taskID))
+        return c.json(await EngineService.listRuns(c.req.valid("param").taskID))
       },
     )
     .get(
@@ -548,7 +500,7 @@ export const OrchestratorRoutes = lazy(() =>
       }),
       validator("param", z.object({ taskID: Task.shape.id })),
       async (c) => {
-        return c.json(await OrchestratorService.listTaskInteractions(c.req.valid("param").taskID))
+        return c.json(await EngineService.listTaskInteractions(c.req.valid("param").taskID))
       },
     )
     .post(
@@ -571,7 +523,7 @@ export const OrchestratorRoutes = lazy(() =>
       validator("param", z.object({ taskID: Task.shape.id })),
       validator("json", TaskMessageInput),
       async (c) => {
-        return c.json(await OrchestratorService.handleTaskMessage(c.req.valid("param").taskID, c.req.valid("json")))
+        return c.json(await EngineService.handleTaskMessage(c.req.valid("param").taskID, c.req.valid("json")))
       },
     )
     .post(
@@ -594,7 +546,7 @@ export const OrchestratorRoutes = lazy(() =>
       validator("param", z.object({ taskID: Task.shape.id })),
       validator("json", InjectMessageInput),
       async (c) => {
-        return c.json(await OrchestratorService.injectMessage(c.req.valid("param").taskID, c.req.valid("json").message))
+        return c.json(await EngineService.injectMessage(c.req.valid("param").taskID, c.req.valid("json").message))
       },
     )
     .post(
@@ -616,7 +568,7 @@ export const OrchestratorRoutes = lazy(() =>
       }),
       validator("param", z.object({ taskID: Task.shape.id })),
       async (c) => {
-        return c.json(await OrchestratorService.cancelTask(c.req.valid("param").taskID))
+        return c.json(await EngineService.cancelTask(c.req.valid("param").taskID))
       },
     )
     .post(
@@ -638,7 +590,7 @@ export const OrchestratorRoutes = lazy(() =>
       }),
       validator("param", z.object({ taskID: Task.shape.id })),
       async (c) => {
-        return c.json(await OrchestratorService.retryTask(c.req.valid("param").taskID))
+        return c.json(await EngineService.retryTask(c.req.valid("param").taskID))
       },
     )
     .post(
@@ -660,7 +612,7 @@ export const OrchestratorRoutes = lazy(() =>
       }),
       validator("param", z.object({ taskID: Task.shape.id })),
       async (c) => {
-        return c.json(await OrchestratorService.retryTask(c.req.valid("param").taskID).catch((error) => {
+        return c.json(await EngineService.retryTask(c.req.valid("param").taskID).catch((error) => {
           if (error instanceof PlannerFailureError) {
             throw new HTTPException(503, {
               message: error.message,
@@ -689,7 +641,7 @@ export const OrchestratorRoutes = lazy(() =>
       }),
       validator("param", z.object({ taskID: Task.shape.id })),
       async (c) => {
-        return c.json(await OrchestratorService.generateFollowup(c.req.valid("param").taskID))
+        return c.json(await EngineService.generateFollowup(c.req.valid("param").taskID))
       },
     )
     .get(
@@ -711,7 +663,7 @@ export const OrchestratorRoutes = lazy(() =>
       }),
       validator("param", z.object({ runID: Run.shape.id })),
       async (c) => {
-        return c.json(await OrchestratorService.getRun(c.req.valid("param").runID))
+        return c.json(await EngineService.getRun(c.req.valid("param").runID))
       },
     )
     .get(
@@ -733,7 +685,7 @@ export const OrchestratorRoutes = lazy(() =>
       }),
       validator("param", z.object({ runID: Run.shape.id })),
       async (c) => {
-        return c.json(await OrchestratorService.getExecutorSession(c.req.valid("param").runID))
+        return c.json(await EngineService.getExecutorSession(c.req.valid("param").runID))
       },
     )
     .get(
@@ -756,8 +708,8 @@ export const OrchestratorRoutes = lazy(() =>
       validator("param", z.object({ runID: Run.shape.id })),
       async (c) => {
         const runID = c.req.valid("param").runID
-        const run = await OrchestratorService.getRun(runID)
-        return c.json(await OrchestratorService.getBrief({ taskID: run.taskID, runID }))
+        const run = await EngineService.getRun(runID)
+        return c.json(await EngineService.getBrief({ taskID: run.taskID, runID }))
       },
     )
     .post(
@@ -779,7 +731,7 @@ export const OrchestratorRoutes = lazy(() =>
       }),
       validator("param", z.object({ runID: Run.shape.id })),
       async (c) => {
-        return c.json(await OrchestratorService.abortRun(c.req.valid("param").runID))
+        return c.json(await EngineService.abortRun(c.req.valid("param").runID))
       },
     )
     .get(
@@ -801,7 +753,7 @@ export const OrchestratorRoutes = lazy(() =>
       }),
       validator("param", z.object({ runID: Run.shape.id })),
       async (c) => {
-        return c.json(await OrchestratorService.getDelivery(c.req.valid("param").runID))
+        return c.json(await EngineService.getDelivery(c.req.valid("param").runID))
       },
     )
     .get(
@@ -823,7 +775,7 @@ export const OrchestratorRoutes = lazy(() =>
       }),
       validator("param", z.object({ runID: Run.shape.id })),
       async (c) => {
-        return c.json(await OrchestratorService.listArtifacts(c.req.valid("param").runID))
+        return c.json(await EngineService.listArtifacts(c.req.valid("param").runID))
       },
     )
     .get(
@@ -845,7 +797,7 @@ export const OrchestratorRoutes = lazy(() =>
       }),
       validator("param", z.object({ runID: Run.shape.id })),
       async (c) => {
-        return c.json(await OrchestratorService.listEvaluations(c.req.valid("param").runID))
+        return c.json(await EngineService.listEvaluations(c.req.valid("param").runID))
       },
     )
     .post(
@@ -869,7 +821,7 @@ export const OrchestratorRoutes = lazy(() =>
       validator("json", ReplyInteractionInput),
       async (c) => {
         return c.json(
-          await OrchestratorService.replyInteraction(c.req.valid("param").interactionID, c.req.valid("json")),
+          await EngineService.replyInteraction(c.req.valid("param").interactionID, c.req.valid("json")),
         )
       },
     )
@@ -894,7 +846,7 @@ export const OrchestratorRoutes = lazy(() =>
       validator("json", RejectInteractionInput),
       async (c) => {
         return c.json(
-          await OrchestratorService.rejectInteraction(c.req.valid("param").interactionID, c.req.valid("json")),
+          await EngineService.rejectInteraction(c.req.valid("param").interactionID, c.req.valid("json")),
         )
       },
     )
@@ -903,14 +855,14 @@ export const OrchestratorRoutes = lazy(() =>
       validator("param", z.object({ goalID: z.string() })),
       validator("json", UpdateGoalInput),
       async (c) => {
-        return c.json(await OrchestratorService.updateGoal(c.req.valid("param").goalID, c.req.valid("json")))
+        return c.json(await EngineService.updateGoal(c.req.valid("param").goalID, c.req.valid("json")))
       },
     )
     .delete(
       "/goal/:goalID",
       validator("param", z.object({ goalID: z.string() })),
       async (c) => {
-        return c.json(await OrchestratorService.deleteGoal(c.req.valid("param").goalID))
+        return c.json(await EngineService.deleteGoal(c.req.valid("param").goalID))
       },
     )
     .delete(
@@ -925,7 +877,7 @@ export const OrchestratorRoutes = lazy(() =>
       }),
       validator("param", z.object({ taskID: Task.shape.id })),
       async (c) => {
-        return c.json(await OrchestratorService.deleteTask(c.req.valid("param").taskID))
+        return c.json(await EngineService.deleteTask(c.req.valid("param").taskID))
       },
     )
     .patch(
@@ -942,7 +894,7 @@ export const OrchestratorRoutes = lazy(() =>
       validator("json", z.object({ budget: Budget.nullable() })),
       async (c) => {
         const { budget } = c.req.valid("json")
-        return c.json(await OrchestratorService.updateTaskBudget(c.req.valid("param").taskID, budget))
+        return c.json(await EngineService.updateTaskBudget(c.req.valid("param").taskID, budget))
       },
     )
 )
@@ -952,7 +904,7 @@ function taskEvent(taskID: string, event: { type: string; properties: Record<str
     event_id: `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
     task_id: taskID,
     run_id: typeof event.properties.runID === "string" ? event.properties.runID : undefined,
-    type: event.type.replace("orchestrator.", ""),
+    type: event.type.replace("engine.", ""),
     timestamp: Date.now(),
     sequence: sequence ?? 0,
     summary: typeof event.properties.summary === "string" ? event.properties.summary : event.type,
@@ -965,7 +917,7 @@ function protocolTaskEvent(event: ReturnType<typeof ProtocolStore.listTaskEvents
     event_id: event.id,
     task_id: event.taskID,
     run_id: event.runID,
-    type: event.type.replace("orchestrator.", ""),
+    type: event.type.replace("engine.", ""),
     timestamp: event.time.emitted || event.time.created || Date.now(),
     sequence: event.sequence,
     summary: event.summary,
